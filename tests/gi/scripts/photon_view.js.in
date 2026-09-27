@@ -1,0 +1,204 @@
+// photon.view — THE PHOTON VIEW FROM THE SCRIPT SIDE (PHOTON-VIEW-1): world.setPhotonView
+// paints the lighting's own debug pictures over the finished frame, and 'off' is the
+// picture it was.
+//
+// Every picture is the editor's own shot ("scene" grade, the post chain the photon view
+// paints in) at 160 x 90 with EVERY pixel probed (its centre), so "changed" is a pixel
+// count and "the same picture" is every pixel equal.
+//   (a) THE DEFAULT SCENE at the High Photon tier (deterministic, the atom.view rule):
+//       every mode that can paint changes pixels, and 'off' after each is the 'off'
+//       picture, pixel for pixel — the screen-probe discs restart the gather's rest and
+//       the shot waits for it to settle again;
+//   (b) SHOWROOM 2 at the High Photon tier, from an eye-level pose among the spheres:
+//       each of the seven modes repaints more than 20 % of the picture against 'off';
+//   (c) the refusals, each naming why: an unknown name; 'probes' with the irradiance
+//       field off; 'cards' with the cards row off; 'hits' and 'screenProbes' with ray
+//       tracing off; every mode at the Low world mode (its viewport draws no post
+//       chain); 'voxels' with GI off — and world.giStatus() reports the view and the
+//       reasons;
+//   (d) the project's save (its thumbnail shot parks the view Off) leaves the view on;
+//   (e) THE PROBES AFTER A FOLLOW (the fix round's F1): the irradiance field is a toroidal
+//       window, and after the camera walks it SCROLLS (ifdScrolls > 0) — a probe's atlas
+//       tile is then not its lattice position. In the dark (no lights, a black sky) with
+//       one red emissive cube, the spheres round the cube must read red; a picture that
+//       draws tile i at position i (the defect) shows them dark (measured on the rig: 0
+//       red sphere pixels round the cube with the offset ignored, 237 with it honoured).
+// Frames, never time: every shot renders until the scene is at rest.
+
+function assert(cond, msg) {
+    if (!cond) throw new Error("assert failed: " + msg);
+    console.log("ok: " + msg);
+}
+function J(x) { return JSON.stringify(x); }
+
+var SHOWROOM = "@PHOTON_VIEW_SHOWROOM@";
+var W = 160, H = 90;
+var probes = [];
+for (var y = 0; y < H; ++y)
+    for (var x = 0; x < W; ++x) probes.push({ x: (x + 0.5) / W, y: (y + 0.5) / H });
+
+function shot(name) {
+    var r = editor.screenshot("photon_view_" + name + ".png", W, H, probes, "scene");
+    assert(r && r.probes && r.probes.length === W * H, "shot " + name + " read every pixel");
+    return r.probes;
+}
+function changed(a, b) {
+    var n = 0;
+    for (var i = 0; i < a.length; ++i)
+        if (a[i].r !== b[i].r || a[i].g !== b[i].g || a[i].b !== b[i].b) ++n;
+    return n;
+}
+function settle() {
+    var st = world.giStatus();
+    for (var i = 0; i < 200 && !st.giAtRest; ++i) { editor.frame(3); st = world.giStatus(); }
+    return st;
+}
+// A change of row reaches the engine a few frames later: wait, in frames, until the
+// scene says the view cannot paint (at most 180 frames), then ask the verb.
+function refusedWith(view, pattern) {
+    for (var i = 0; i < 60 && world.giStatus().viewRefusals[view] === ""; ++i) editor.frame(3);
+    try { world.setPhotonView(view); } catch (e) { return pattern.test(String(e)); }
+    return false;
+}
+
+var MODES = ["voxels", "probes", "cards", "screenProbes", "diffuse", "reflections", "hits"];
+
+// ---- (a) the default scene: every mode that can paint, and 'off' exact ------------
+var proj = project.create("Photon View " + Date.now());
+assert(proj.length > 10, "project.create");
+world.gi({ tier: "high" });
+var st = settle();
+assert(st.view === "off" && world.photonView() === "off", "a new scene starts with the view off");
+console.log("default scene refusals: " + J(st.viewRefusals));
+var off = shot("default_off");
+var painted = 0;
+for (var m = 0; m < MODES.length; ++m) {
+    if (st.viewRefusals[MODES[m]] !== "") {
+        console.log("default scene: '" + MODES[m] + "' cannot paint here — " + st.viewRefusals[MODES[m]]);
+        continue;
+    }
+    assert(world.setPhotonView(MODES[m]) === true, "world.setPhotonView('" + MODES[m] + "')");
+    assert(world.photonView() === MODES[m] && world.giStatus().view === MODES[m],
+           "world.photonView and giStatus().view say " + MODES[m]);
+    var pic = shot("default_" + MODES[m]);
+    var n = changed(off, pic);
+    console.log("default " + MODES[m] + ": " + (100 * n / (W * H)).toFixed(1) + " % of pixels changed");
+    assert(n > 0, "default scene: '" + MODES[m] + "' paints something (" + n + " pixels)");
+    ++painted;
+    assert(world.setPhotonView("off") === true, "world.setPhotonView('off')");
+    var back = shot("default_off_after_" + MODES[m]);
+    assert(changed(off, back) === 0, "default scene: 'off' after '" + MODES[m] +
+           "' restores the off picture exactly (" + changed(off, back) + " pixels differ)");
+}
+assert(painted >= 5, "the default scene painted at least five modes (" + painted + ")");
+
+// ---- (c) the refusals ---------------------------------------------------------------
+var unknown = false;
+try { world.setPhotonView("wireframe"); } catch (e) { unknown = /unknown view/.test(String(e)); }
+assert(unknown && world.photonView() === "off", "an unknown view is refused, by name, and changes nothing");
+
+world.gi({ ddgi: "off" });
+settle();
+assert(refusedWith("probes", /irradiance field/) && world.photonView() === "off",
+       "'probes' is refused with the irradiance field off, naming it");
+world.gi({ ddgi: "auto" });
+world.gi({ cards: "off" });
+settle();
+assert(refusedWith("cards", /surface cache/), "'cards' is refused with the cards row off, naming the cache");
+world.gi({ cards: "auto" });
+world.rayTracing("off");
+editor.frame(6);
+settle();
+var noRays = world.giStatus().viewRefusals;
+console.log("refusals without rays: " + J(noRays));
+assert(refusedWith("hits", /traces reflections/), "'hits' is refused with ray tracing off");
+assert(refusedWith("screenProbes", /gather/), "'screenProbes' is refused with ray tracing off");
+world.rayTracing("auto");
+editor.frame(6);
+world.mode({ mode: "low" });
+editor.frame(6);
+settle();
+for (var r = 0; r < MODES.length; ++r)
+    assert(refusedWith(MODES[r], /post chain/), "at the Low world mode '" + MODES[r] + "' is refused");
+world.mode({ mode: "epic" });
+world.gi({ tier: "high" });
+editor.frame(6);
+settle();
+world.photon({ enabled: false });
+editor.frame(6);
+settle();
+assert(refusedWith("voxels", /voxel lighting/), "'voxels' is refused with GI off, naming the voxels");
+world.photon({ enabled: true });
+settle();
+
+// ---- (b) Showroom 2 at the High tier: every mode repaints > 20 % ---------------------
+var imported = project.importArchive(SHOWROOM);
+assert(imported && imported.guid, "importArchive(Showroom 2)");
+assert(project.open(imported.guid) === true, "project.open(Showroom 2)");
+world.gi({ tier: "high" });
+// EYE LEVEL AMONG THE SPHERES: the finest voxel cascade is a box of ten metres centred on
+// the eye, so its voxels fill the frame only from where a person would stand.
+editor.setCamera({ position: { x: 0, y: 1.5, z: -2.5 }, lookAt: { x: 0, y: 1.0, z: 3.0 } });
+var ss = settle();
+console.log("Showroom 2 refusals: " + J(ss.viewRefusals) + " cascades " + ss.cascades.length);
+var srOff = shot("showroom_off");
+for (var k = 0; k < MODES.length; ++k) {
+    assert(ss.viewRefusals[MODES[k]] === "", "Showroom 2 at High can paint '" + MODES[k] + "' (" +
+           ss.viewRefusals[MODES[k]] + ")");
+    assert(world.setPhotonView(MODES[k]) === true, "Showroom 2: world.setPhotonView('" + MODES[k] + "')");
+    var sp = shot("showroom_" + MODES[k]);
+    var frac = changed(srOff, sp) / (W * H);
+    console.log("Showroom 2 " + MODES[k] + ": " + (100 * frac).toFixed(1) + " % of pixels changed");
+    assert(frac > 0.2, "Showroom 2: '" + MODES[k] + "' repaints more than 20 % (" + (100 * frac).toFixed(1) + " %)");
+}
+
+// ---- (d) the thumbnail parks the view ------------------------------------------------
+assert(world.setPhotonView("probes") === true, "probes on for the save");
+assert(project.save() === true, "project.save (its thumbnail shot parks the view)");
+assert(world.photonView() === "probes", "the view is back on after the thumbnail shot");
+assert(world.setPhotonView("off") === true, "off at the end");
+
+// ---- (e) the probes after a follow ------------------------------------------------------
+assert(project.create("Photon View follow " + Date.now()).length > 10, "project.create (the follow arm)");
+world.gi({ tier: "high" });
+var lights = scene.nodes();
+for (var li = 0; li < lights.length; ++li)
+    if (/light/i.test(lights[li].type)) node.setProperty(lights[li].id, "visible", false);
+world.sky("color", { color: "#000000" });
+var cube = scene.addPrimitive("cube", { position: { x: 4.5, y: 0.3, z: 6.5 }, scale: { x: 0.6, y: 0.6, z: 0.6 } });
+material.set(cube, { baseColor: "#000000", emissiveColor: "#ff0000", emissiveIntensity: 3 });
+function walkTo(x, z) {
+    editor.setCamera({ position: { x: x, y: 3.0, z: z }, lookAt: { x: x + 1.5, y: 0.3, z: z - 5 } });
+}
+settle();
+// THE WALK, a step a couple of frames, then the field at rest.
+for (var wk = 1; wk <= 30; ++wk) { walkTo(0.1 * wk, 14 - 0.13 * wk); editor.frame(2); }
+editor.frame(3);
+var fs = settle();
+console.log("follow arm: ifdFollows " + fs.ifdFollows + " ifdScrolls " + fs.ifdScrolls + " field " +
+            J(fs.ifdMin) + " .. " + J(fs.ifdMax));
+assert(fs.ifdScrolls > 0, "the walk scrolled the field (" + fs.ifdScrolls + " scrolls)");
+var fOff = shot("follow_off");
+assert(world.setPhotonView("probes") === true, "probes on after the follow");
+var fPro = shot("follow_probes");
+assert(world.setPhotonView("off") === true, "off after the follow arm");
+function redness(p) { return Math.max(0, p.r - Math.max(p.g, p.b)); }
+// The cube where the off picture shows it; the RED SPHERE PIXELS within 30 pixels of it,
+// off the cube's own pixels (a pixel the off picture does not show red, that the probes
+// picture shows red: a sphere lit by the cube).
+var ccx = 0, ccy = 0, ccn = 0;
+for (var ci = 0; ci < fOff.length; ++ci)
+    if (redness(fOff[ci]) > 80) { ccx += ci % W; ccy += Math.floor(ci / W); ++ccn; }
+assert(ccn > 200, "the emissive cube is in the off picture (" + ccn + " pixels)");
+ccx /= ccn; ccy /= ccn;
+var nearRed = 0, allRed = 0;
+for (var pi = 0; pi < fPro.length; ++pi) {
+    if (redness(fOff[pi]) >= 40 || redness(fPro[pi]) <= 40) continue;
+    ++allRed;
+    var dx = pi % W - ccx, dy = Math.floor(pi / W) - ccy;
+    if (dx * dx + dy * dy <= 900) ++nearRed;
+}
+console.log("follow arm: " + nearRed + " red sphere pixels round the cube (" + allRed + " in the picture)");
+assert(nearRed > 60, "the spheres nearest the emissive cube read red after the follow (" + nearRed +
+       " red sphere pixels within 30 of it; the offset ignored measured 0)");
+"ok";

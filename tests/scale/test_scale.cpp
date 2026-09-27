@@ -29,6 +29,7 @@
 #include <cfloat>
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <functional>
 #include <map>
@@ -424,7 +425,22 @@ static void geometryDoc(Env &env)
 
 /// The id pass's drawn triangles and GPU ms, and the decode's GPU ms, over `frames`
 /// still frames (medians; the id pass row's triangles are the GPU's own count).
-struct IdRead { double tris = -1, idMs = -1, decodeMs = -1; unsigned survivors = 0; };
+/// THE DECODE'S MS is the OPAQUE SIDE: the screen decode pass in front of the opaque
+/// pass (ATOM-DECODE-CLASS-1, "Jahshaka atom decode": the classifier when no prepass
+/// ran, and the bucket draws) PLUS the opaque pass — the one number that reads the
+/// same before the classification (the bucket draws were the opaque pass's first)
+/// and after it. `decodePassMs` is the decode pass alone.
+struct IdRead { double tris = -1, idMs = -1, decodeMs = -1, decodePassMs = -1; unsigned survivors = 0; };
+/// The opaque side of one frame (see IdRead): negative when the opaque pass carries
+/// no GPU sample.
+static double opaqueSideMs(const FrameRecord &r, double *decodePassMs = nullptr)
+{
+    const FramePass *o = passNamed(r, "Jahshaka opaque");
+    if (!o || o->gpuMs < 0) return -1;
+    const FramePass *d = passNamed(r, "Jahshaka atom decode");
+    if (decodePassMs) *decodePassMs = d && d->gpuMs >= 0 ? d->gpuMs : -1;
+    return o->gpuMs + (d && d->gpuMs >= 0 ? d->gpuMs : 0.0);
+}
 /// A GPU reading for a report line: its ms, or "unsampled" (never a -1 as a number).
 static std::string msText(double ms)
 {
@@ -445,7 +461,7 @@ static IdRead readIdPass(Env &env, int frames)
     static const size_t kWant = 8;
     static const int kMaxFrames = 600;
     IdRead out;
-    std::vector<double> tris, id, dec;
+    std::vector<double> tris, id, dec, decPass;
     int drawn = 0;
     unsigned dropped = 0;
     size_t records = 0;
@@ -459,14 +475,17 @@ static IdRead readIdPass(Env &env, int frames)
                 tris.push_back(double(p->triangles));
                 if (p->gpuMs >= 0) id.push_back(p->gpuMs);
             }
-            if (const FramePass *p = passNamed(r, "Jahshaka opaque"))
-                if (p->gpuMs >= 0) dec.push_back(p->gpuMs);
+            double dp = -1;
+            const double ms = opaqueSideMs(r, &dp);
+            if (ms >= 0) dec.push_back(ms);
+            if (dp >= 0) decPass.push_back(dp);
         }
         if (id.size() >= kWant && dec.size() >= kWant) break;
     }
     out.tris = stats(tris).median;
     out.idMs = stats(id).median;
     out.decodeMs = stats(dec).median;
+    out.decodePassMs = decPass.empty() ? -1.0 : stats(decPass).median;
     if (id.size() < kWant || dec.size() < kWant)
         std::printf("   (GPU samples short after %d frames: %zu records, id %zu, decode %zu, %u GPU marks dropped)\n",
                     drawn, records, id.size(), dec.size(), dropped);
@@ -782,9 +801,9 @@ static int decodeMain()
         const AtomDrawStatus st = env.scene->atomDrawStatus();
         const IdRead r = readIdPass(env, 60);
         std::printf("W6 materials %4d textures %4d -> buckets %4u screen draws %4u decode draws %4u | decode GPU %s"
-                    " (id %s)\n",
+                    " (the decode pass alone %s; id %s)\n",
                     a.materials, a.textures, st.buckets, st.screenDraws, st.decodeDraws, msText(r.decodeMs).c_str(),
-                    msText(r.idMs).c_str());
+                    msText(r.decodePassMs).c_str(), msText(r.idMs).c_str());
         rows.push_back({ st.buckets, r.decodeMs });
         const std::string what = "decode GPU ms at " + std::to_string(st.buckets) + " buckets (1080p)";
         target("W6", r.decodeMs, "ms", what.c_str());
@@ -795,66 +814,361 @@ static int decodeMain()
         std::printf("W6 slope: %.4f ms per bucket at 1920x1080 (%.4f ms per bucket per Mpx)\n", slope,
                     slope / (1920.0 * 1080.0 / 1e6));
         target("W6", slope, "ms/bucket", "the decode's cost per bucket at 1080p");
+        // THE CLASSIFICATION'S BAR (ATOM-DECODE-CLASS-1): the decode's cost independent
+        // of the bucket count — the most buckets within 1.5x of the fewest.
+        if (rows.front().second > 0)
+            target("W6", rows.back().second / rows.front().second, "x",
+                   "the decode at the most buckets over the fewest (1080p)", "<= 1.5");
     }
     shutdown(env);
     return failures ? 1 : 0;
 }
 
 // ===========================================================================
-// scale.occlusion — W7: NO OCCLUSION CULLING.
-// Anchor: irisgl/engine/src/OgreAtomIdPass.cpp:523 (req.hzbLevels = 0u: frustum only);
-// no view builds the HZB (PostFxDesc::hzb is set by nothing in Studio or the mirror).
-// Number: on the walk, the triangles the id pass draws (frustum only — its own cull,
-// replayed through Engine::gpuCull with the id pass's predicates) against what the SAME
-// cull draws with the depth pyramid the cull already supports (the view's HZB switched on
-// for the measurement only) — the instance-level answer occlusion would give.
+// atom.decode_exact — THE CLASSIFICATION CHANGES WHO SHADES A PIXEL, NEVER WHAT IT
+// SHADES (ATOM-DECODE-CLASS-1). D1's world (10,000 instances) wearing ~200 buckets,
+// one still pose, both chain shapes — no prepass (the opaque decode pass classifies)
+// and the SSR prepass (the prepass's decode pass classifies, the opaque one loads).
+// THE PROOF THAT THE PICTURE IS THE LATE-DISCARD LOOP'S was this suite's first form,
+// run before that loop was deleted (in one process, both shapes, byte for byte under a
+// magenta clear: 0 px — spikes/atom-decode-class-1/decode-exact-pre-deletion.log).
+// What stays is what can be asked of the classified decode alone:
+//   STILL   each shape's picture repeats byte for byte (a class that flickers between
+//           buckets, or a missed EQUAL test, would not);
+//   HOLES   (no prepass) a pixel the id pass covered that follows the clear colour is
+//           one no draw wrote — a bucket draw's EQUAL test that missed its surface, or
+//           a surface handed to the wrong bucket (the decode's guard discards it). The
+//           Atom view (Objects), which paints every covered pixel, says which pixels
+//           follow the clear anyway (this world's night sky is the clear). Bloom, SMAA
+//           and SSAO off for it (each carries a neighbour into a pixel). The base's own
+//           seams are the bar (below); the NEGATIVE CONTROL (JAHSHAKA_ATOM_DECODE_OFF:
+//           no decode at all) must see the Atom items.
+// A DETERMINISTIC PICTURE: every term that moves between frames of a still pose is
+// off and the same in every read — the output dither (JAHSHAKA_NO_DITHER), the ray
+// tier (JAHSHAKA_NO_RAY_QUERY: stochastic reflections), Photon (the field's and the
+// voxels' updates), the auto exposure (Manual). A picture is taken when it stops
+// moving: read every 16 frames until two consecutive reads are the same bytes (at
+// most 12 reads).
 // ===========================================================================
+static int decodeExactMain()
+{
+    setenv("JAHSHAKA_NO_DITHER", "1", 1);
+    setenv("JAHSHAKA_NO_RAY_QUERY", "1", 1);
+    unsetenv("JAHSHAKA_ATOM_DECODE_OFF");
+    Env env;
+    World w;
+    WorldSpec spec;
+    spec.materials = 1;
+    if (!bootWorld(env, w, "test-atom-decode-exact-ogre.log", spec)) return 1;
+    applyMaterials(w, 200, 200);
+    env.doc->exposureMode = iris::ExposureMode::Manual;
+    worldmodes::setMode(env.doc, worldmodes::Mode::High);
+    worldmodes::setPhoton(env.doc, false, worldmodes::PhotonTier::High);
+
+    auto meanOf = [](const Image &img) {
+        double mean = 0;
+        for (size_t i = 0; i < img.rgba.size(); i += 4) mean += img.rgba[i] + img.rgba[i + 1] + img.rgba[i + 2];
+        return mean / double(std::max<size_t>(1, img.rgba.size() / 4 * 3));
+    };
+    auto differing = [](const Image &x, const Image &y) {
+        size_t n = 0;
+        if (x.rgba.size() != y.rgba.size()) return size_t(~0ull);
+        for (size_t i = 0; i < x.rgba.size(); i += 4) n += std::memcmp(&x.rgba[i], &y.rgba[i], 4) != 0;
+        return n;
+    };
+    auto still = [&](const char *what, Image &img) {
+        Image prev;
+        // A switch compiles the other arm's permutations and a clear-colour change
+        // rebuilds the chain: 64 frames before the first read.
+        frame(env, 64);
+        if (!env.view->readPixels(prev) || !prev.width) return false;
+        for (int t = 1; t <= 12; ++t) {
+            frame(env, 16);
+            if (!env.view->readPixels(img) || !img.width) return false;
+            const size_t moved = differing(img, prev);
+            if (moved == 0u) {
+                std::printf("decode_exact:   %s: still after %d reads (mean %.2f)\n", what, t + 1, meanOf(img));
+                return true;
+            }
+            std::printf("decode_exact:   %s: read %d moved %zu px (mean %.2f)\n", what, t, moved, meanOf(img));
+            prev.rgba.swap(img.rgba);
+        }
+        return false;
+    };
+    auto save = [&](const Image &img, const std::string &name) {
+        if (qgetenv("JAH_SCALE_SHOT").isEmpty()) return;
+        QImage q(img.rgba.data(), int(img.width), int(img.height), QImage::Format_RGBA8888);
+        q.save(QString::fromLocal8Bit(qgetenv("JAH_SCALE_SHOT")) + QString::fromStdString(name));
+    };
+    const Colour bgA(0.0f, 0.0f, 0.0f, 1.0f), bgB(1.0f, 0.0f, 1.0f, 1.0f);
+    for (int shape = 0; shape < 2; ++shape) {
+        const char *shapeName = shape ? "the SSR prepass" : "no prepass";
+        worldmodes::setRowValue(env.doc, QStringLiteral("ssr"), shape ? 1 : 0);
+        env.view->setBackground(bgA);
+        // SETTLED: the 200 textures landed (a datablock still baking is PENDING and
+        // drawn by PBS; every landing re-routes items) and the frames after it.
+        int settle = 0;
+        for (; settle < 3000; ++settle) {
+            frame(env, 1);
+            if (settle > 300 && env.scene->atomDrawStatus().pending == 0u) break;
+        }
+        pathStill(env, 120);
+        const AtomDrawStatus st = env.scene->atomDrawStatus();
+        bool prepassRan = false, decodeRan = false;
+        {
+            const auto recs = collect(env, [&] { frame(env, 2); });
+            for (const FrameRecord &r : recs) {
+                prepassRan = prepassRan || passNamed(r, "Jahshaka atom decode prepass");
+                decodeRan = decodeRan || passNamed(r, "Jahshaka atom decode");
+            }
+        }
+        std::printf("decode_exact: [%s] settled %d frames | buckets %u, screen draws %u, atom items %u | decode passes: "
+                    "prepass %d, opaque %d\n", shapeName, settle, st.buckets, st.screenDraws, st.atomItems,
+                    int(prepassRan), int(decodeRan));
+        REQUIRE(st.buckets >= 150u && st.screenDraws == st.buckets, "[%s] the world wears ~200 buckets, one draw each",
+                shapeName);
+        REQUIRE(decodeRan && prepassRan == (shape == 1), "[%s] the chain carries its decode passes", shapeName);
+
+        // STILL: the classified picture repeats.
+        Image a;
+        const bool sa = still("classified", a);
+        REQUIRE(sa, "[%s] the classified picture stopped moving", shapeName);
+        save(a, std::string("decode-exact-") + (shape ? "prepass" : "fwd") + "-classified.png");
+    }
+    // HOLES (no prepass): bloom, SMAA and SSAO off (each carries a neighbour into a
+    // pixel), then the pixels that follow the clear with the Atom view on (never
+    // covered by the id pass) and off. A pixel counts as COVERED only when every pixel
+    // within two of it is too: the view's quad places its mask off the scene's along a
+    // silhouette (measured: rings of one to two pixels along silhouettes against the
+    // sky, nothing inside a surface) — a bucket's EQUAL test that missed would leave
+    // its surfaces, not their outlines.
+    const char *shapeName = "no prepass";
+    worldmodes::setRowValue(env.doc, QStringLiteral("ssr"), 0);
+    worldmodes::setRowValue(env.doc, QStringLiteral("bloom"), 0);
+    worldmodes::setRowValue(env.doc, QStringLiteral("smaa"), 0);
+    worldmodes::setRowValue(env.doc, QStringLiteral("ssao"), 0);
+    pathStill(env, 120);
+    auto follow = [&](const char *what, std::vector<bool> &mask) {
+        Image pb, pm;
+        env.view->setBackground(bgA);
+        bool ok = still(what, pb);
+        env.view->setBackground(bgB);
+        ok = still(what, pm) && ok;
+        env.view->setBackground(bgA);
+        mask.assign(pb.rgba.size() / 4, false);
+        for (size_t i = 0; i < mask.size() && i * 4 + 3 < pm.rgba.size(); ++i)
+            mask[i] = std::memcmp(&pb.rgba[i * 4], &pm.rgba[i * 4], 4) != 0;
+        return ok;
+    };
+    std::vector<bool> uncovered, classifiedFollow, noDecodeFollow;
+    env.scene->setAtomView(AtomView::Objects);
+    const bool su = follow("the Atom view", uncovered);
+    env.scene->setAtomView(AtomView::Off);
+    const bool sf = follow("classified", classifiedFollow);
+    setenv("JAHSHAKA_ATOM_DECODE_OFF", "1", 1);
+    const bool sn = follow("no decode", noDecodeFollow);
+    unsetenv("JAHSHAKA_ATOM_DECODE_OFF");
+    if (!qgetenv("JAH_SCALE_SHOT").isEmpty()) {
+        Image m;
+        m.width = 1920; m.height = 1080;
+        m.rgba.assign(size_t(m.width) * m.height * 4, 0);
+        for (size_t i = 0; i < uncovered.size() && i < m.rgba.size() / 4; ++i) {
+            m.rgba[i * 4 + 0] = (!uncovered[i] && classifiedFollow[i]) ? 255 : 0;   // before the erosion
+            m.rgba[i * 4 + 1] = uncovered[i] ? 60 : 0;
+            m.rgba[i * 4 + 3] = 255;
+        }
+        save(m, "decode-exact-holes.png");
+    }
+    size_t sky = 0, holes = 0, controlHoles = 0;
+    const int W = 1920, H = 1080;
+    auto coveredCore = [&](int x, int y) {
+        for (int dy = -2; dy <= 2; ++dy)
+            for (int dx = -2; dx <= 2; ++dx) {
+                const int nx = std::clamp(x + dx, 0, W - 1), ny = std::clamp(y + dy, 0, H - 1);
+                if (uncovered[size_t(ny) * W + nx]) return false;
+            }
+        return true;
+    };
+    if (uncovered.size() != size_t(W) * H) uncovered.assign(size_t(W) * H, true);   // an unread picture covers nothing
+    for (size_t i = 0; i < uncovered.size(); ++i) {
+        sky += uncovered[i];
+        if (!coveredCore(int(i % W), int(i / W))) continue;
+        holes += i < classifiedFollow.size() && classifiedFollow[i];
+        controlHoles += i < noDecodeFollow.size() && noDecodeFollow[i];
+    }
+    std::printf("decode_exact: [%s] never covered (the Atom view follows the clear) %zu px | holes %zu | the negative "
+                "control (no decode) %zu\n", shapeName, sky, holes, controlHoles);
+    REQUIRE(su && sf && sn, "[%s] the hole pictures stopped moving", shapeName);
+    // THE BAR IS NOT ZERO: 99 px of one- to two-pixel seams INSIDE surfaces the id
+    // pass covered, which the decode's own covering test refuses, measured identical
+    // on the late-discard loop (the first form's EXACT arms, under the magenta clear)
+    // — a pre-existing finding of ATOM-DECODE-CLASS-1's. A bucket whose EQUAL test
+    // missed leaves its surfaces.
+    REQUIRE(holes <= 1000u, "[%s] no surface the id pass covered is left unwritten (%zu px)", shapeName, holes);
+    REQUIRE(controlHoles > 100000u, "[%s] the hole test sees the Atom items when nothing decodes them", shapeName);
+    shutdown(env);
+    return failures ? 1 : 0;
+}
+
+// ===========================================================================
+// scale.occlusion — W7, CLOSED BY ATOM-OCCLUSION-1: THE ID PASS DRAWS WHAT THE CAMERA CAN SEE.
+// The id pass culls the Atom queue against the depth pyramid in the two-pass form
+// (OgreAtomIdPass.cpp: the previous frame's pyramid, then the rejected set again against
+// the one built from the first pass's depth). Three arms over the SAME 8 poses of the walk,
+// one process (the measuring door world.setAtomOcclusion = Scene::setAtomOcclusionEnabled):
+//   OFF  the door shut: the frustum-only id pass (before this lane), with the view's own
+//        pyramid of the COMPLETE depth switched on so that THE REFERENCE can be taken —
+//        the id pass's own request (the cut, mode 3) replayed through Engine::gpuCull
+//        against that pyramid: what a single cull against this frame's whole depth keeps;
+//   ON   the product: the door open, no pyramid of the view's own (the id pass's alone);
+//   ON+  the door open WITH the view's complete-depth pyramid rebuilt after the opaque pass
+//        (the design question: does the first cull gain from the complete depth).
+// THE BAR (brief §1): the ON arm draws within 1.25x of the reference (median over the
+// walk), and its SETTLED id image equals the OFF arm's word for word at every pose. The
+// frame-by-frame proof — the first frame after a camera cut included — is
+// atom.occlusion_exact's (two worlds in lockstep): this world's first frames after a jump
+// are not a picture of the pose even frustum-only (settledIds says why).
+// ===========================================================================
+static bool readIdsAt(Env &env, std::vector<uint32_t> &ids)
+{
+    unsigned w = 0, h = 0;
+    return env.engine->readAtomIds(env.view, ids, w, h) && !ids.empty();
+}
+static size_t idDiff(const std::vector<uint32_t> &a, const std::vector<uint32_t> &b, size_t &missing)
+{
+    missing = 0;
+    if (a.size() != b.size()) return ~size_t(0);
+    size_t d = 0;
+    for (size_t p = 0; p + 1 < a.size(); p += 2)
+        if (a[p] != b[p] || a[p + 1] != b[p + 1]) {
+            ++d;
+            if (a[p] == 0xFFFFFFFFu) ++missing;
+        }
+    return d;
+}
+/// THE SETTLED ID IMAGE at a still pose: frames until two CONSECUTIVE images are equal
+/// (at most 40). NOT a formality — the finding this lane reports: on the base (cee4f48fd)
+/// the 10k world's id image is intermittently GARBAGE for a few frames after a camera jump
+/// (frames 1, 4, 7 after it; up to the whole image; both readback routes), with the
+/// occlusion door shut as well — so one read after N frames is not a picture of the pose.
+/// `unstable` counts the reads that disagreed with the frame after them.
+static bool settledIds(Env &env, std::vector<uint32_t> &ids, unsigned &unstable)
+{
+    std::vector<uint32_t> prev;
+    frame(env, 1);
+    if (!readIdsAt(env, prev)) return false;
+    for (int f = 0; f < 40; ++f) {
+        frame(env, 1);
+        if (!readIdsAt(env, ids)) return false;
+        size_t m = 0;
+        if (idDiff(ids, prev, m) == 0) return true;
+        ++unstable;
+        prev.swap(ids);
+    }
+    return false;
+}
+
 static int occlusionMain()
 {
     Env env;
     World w;
     if (!bootWorld(env, w, "test-scale-occlusion-ogre.log")) return 1;
-    env.fxOverride = [](PostFxDesc &fx) { fx.hzb = true; fx.hzbFarthest = true; };
-    frame(env, 10);
-    HzbStatus hz;
-    const bool hasHzb = env.engine->hzbStatus(env.view, hz);
-    REQUIRE(hasHzb && hz.built, "the measurement's depth pyramid is built (%u levels)", hz.levels);
-    std::vector<double> frustum, occl, ratio;
-    unsigned sampled = 0;
-    for (int s = 0; s < 8; ++s) {
+    const int kPoses = 8, kSettle = 10;
+    auto pose = [&](int s) {
         const float x = -90.0f + 25.0f * float(s);
         setCamera(env, iris::Vec3(x, 1.7f, 0.0f), iris::Vec3(x + 10.0f, 1.7f, -2.0f));
-        frame(env, 4);
-        env.engine->hzbStatus(env.view, hz);
+    };
+    std::vector<std::vector<uint32_t>> offIds(kPoses);
+    std::vector<double> offTris(kPoses, 0.0), refTris(kPoses, 0.0), onTris(kPoses, 0.0), onPlusTris(kPoses, 0.0);
+    std::vector<unsigned> occluded(kPoses, 0u), disoccluded(kPoses, 0u), refOccluded(kPoses, 0u);
+    unsigned bad = 0, missingPx = 0, comparedPoses = 0, unstableOff = 0, unstableOn = 0;
+
+    // ---- OFF + the reference ------------------------------------------------------
+    env.scene->setAtomOcclusionEnabled(false);
+    env.fxOverride = [](PostFxDesc &fx) { fx.hzb = true; fx.hzbFarthest = true; };
+    frame(env, 10);
+    for (int s = 0; s < kPoses; ++s) {
+        pose(s);
+        frame(env, kSettle);
+        const AtomDrawStatus st = env.scene->atomDrawStatus();
+        offTris[s] = double(st.cutTriangles);
+        if (!settledIds(env, offIds[s], unstableOff)) offIds[s].clear();
+        HzbStatus hz;
         GpuCullRequest req;
-        if (!env.engine->fillCullView(env.view, req)) continue;
-        req.flagsRequired = 1u | 512u;   // visible | ATOM (GpuSceneEntry::flags, Types.h)
-        req.pixelTolerance = kLodBudgetPixels * env.scene->lodBias();
-        req.mode = 2u;
-        GpuCullResult a, b;
-        req.hzbLevels = 0u;
-        const bool okA = env.engine->gpuCull(env.scene, env.view, req, true, a);
-        req.hzbLevels = hz.primed ? hz.levels : 0u;
-        const bool okB = hz.primed && env.engine->gpuCull(env.scene, env.view, req, true, b);
-        if (!okA || !okB) continue;
-        auto tris = [](const GpuCullResult &r) {
-            double t = 0;
-            for (size_t i = 0; i + 4 < r.drawCommands.size(); i += 5) t += double(r.drawCommands[i]) / 3.0;
-            return t;
-        };
-        const double ta = tris(a), tb = tris(b);
-        frustum.push_back(ta);
-        occl.push_back(tb);
-        ratio.push_back(tb > 0 ? ta / tb : 0.0);
-        ++sampled;
-        std::printf("W7 x %6.1f: frustum-only %6u instances %11.0f tris | with the HZB %6u instances %11.0f tris | "
-                    "drawn/occlusion-kept %.2fx\n",
-                    double(x), a.survivors, ta, b.survivors, tb, tb > 0 ? ta / tb : 0.0);
+        if (env.engine->hzbStatus(env.view, hz) && hz.primed && env.engine->fillCullView(env.view, req)) {
+            req.flagsRequired = 1u | 512u;   // visible | ATOM (GpuSceneEntry::flags, Types.h): the id pass's
+            req.pixelTolerance = kLodBudgetPixels * env.scene->lodBias();
+            req.mode = 3u;
+            req.hzbLevels = hz.levels;
+            GpuCullResult ref;
+            if (env.engine->gpuCull(env.scene, env.view, req, false, ref)) {
+                refTris[s] = double(ref.cutTriangles);
+                refOccluded[s] = ref.occluded;
+            }
+        }
     }
-    REQUIRE(sampled > 0, "the walk was sampled (%u poses)", sampled);
-    target("W7", stats(frustum).median, "tris", "drawn per frame on the walk (frustum only: today)");
-    target("W7", stats(occl).median, "tris", "what the HZB cull keeps at the same poses (instance level)");
-    target("W7", stats(ratio).median, "x", "drawn / occlusion-kept, median over the walk");
+    // ---- ON (the product) -----------------------------------------------------------
+    env.scene->setAtomOcclusionEnabled(true);
+    env.fxOverride = nullptr;
+    frame(env, 10);
+    for (int s = 0; s < kPoses; ++s) {
+        pose(s);
+        frame(env, kSettle);
+        const AtomDrawStatus st = env.scene->atomDrawStatus();
+        onTris[s] = double(st.cutTriangles);
+        occluded[s] = st.occluded;
+        disoccluded[s] = st.disoccluded;
+        std::vector<uint32_t> settled;
+        const bool ok = settledIds(env, settled, unstableOn);
+        size_t m = 0;
+        const size_t d = ok && !offIds[s].empty() ? idDiff(settled, offIds[s], m) : ~size_t(0);
+        if (d != ~size_t(0)) ++comparedPoses;
+        if (d) ++bad;
+        missingPx += unsigned(m);
+        std::printf("W7 x %6.1f: frustum-only %9.0f tris | reference (one cull, this frame's whole depth) %9.0f "
+                    "(%u rejected) | two-pass %9.0f (occluded %u, disoccluded %u) = %.2fx the reference, %.2fx fewer "
+                    "than frustum-only | id image vs frustum-only: %zu px differ (%zu empty with the occlusion)\n",
+                    -90.0 + 25.0 * s, offTris[s], refTris[s], refOccluded[s], onTris[s], occluded[s], disoccluded[s],
+                    refTris[s] > 0 ? onTris[s] / refTris[s] : 0.0, onTris[s] > 0 ? offTris[s] / onTris[s] : 0.0,
+                    d == ~size_t(0) ? size_t(0) : d, m);
+    }
+    // ---- ON+ (the complete-depth pyramid rebuilt after the opaque pass too) ---------
+    env.fxOverride = [](PostFxDesc &fx) { fx.hzb = true; fx.hzbFarthest = true; };
+    frame(env, 10);
+    for (int s = 0; s < kPoses; ++s) {
+        pose(s);
+        frame(env, kSettle);
+        onPlusTris[s] = double(env.scene->atomDrawStatus().cutTriangles);
+    }
+    env.fxOverride = nullptr;
+
+    std::vector<double> ratio, gain, ratioPlus;
+    for (int s = 0; s < kPoses; ++s) {
+        if (refTris[s] > 0 && onTris[s] > 0) {
+            ratio.push_back(onTris[s] / refTris[s]);
+            gain.push_back(offTris[s] / onTris[s]);
+        }
+        if (refTris[s] > 0 && onPlusTris[s] > 0) ratioPlus.push_back(onPlusTris[s] / refTris[s]);
+        std::printf("W7 x %6.1f: the ON+ arm (the complete-depth pyramid first) %9.0f tris = %.2fx the reference\n",
+                    -90.0 + 25.0 * s, onPlusTris[s], refTris[s] > 0 ? onPlusTris[s] / refTris[s] : 0.0);
+    }
+    std::printf("W7 settle: reads that disagreed with the next frame's before two agreed — frustum-only %u, two-pass %u "
+                "(the base's id-image transient after a jump; see settledIds)\n", unstableOff, unstableOn);
+    const double medRatio = stats(ratio).median;
+    REQUIRE(comparedPoses == unsigned(kPoses), "every pose's settled id images were read in both arms (%u of %d)",
+            comparedPoses, kPoses);
+    REQUIRE(bad == 0u,
+            "the settled id image with the occlusion equals the frustum-only one at every pose (%u differ; %u pixels "
+            "empty with the occlusion)", bad, missingPx);
+    REQUIRE(!ratio.empty() && medRatio <= 1.25,
+            "the two-pass id pass draws within 1.25x of the reference cull (median %.3fx over %zu poses)", medRatio,
+            ratio.size());
+    target("W7", stats(offTris).median, "tris", "drawn per frame on the walk, frustum only (the door shut)");
+    target("W7", stats(refTris).median, "tris", "the reference: one cull against this frame's whole depth");
+    target("W7", stats(onTris).median, "tris", "drawn per frame on the walk, the two-pass occlusion (the product)");
+    target("W7", stats(gain).median, "x", "frustum-only / two-pass, median over the walk");
+    target("W7", medRatio, "x", "two-pass / the reference, median over the walk", "<= 1.25");
+    target("W7", stats(ratioPlus).median, "x", "the ON+ arm (the complete-depth pyramid first) / the reference");
     shutdown(env);
     return failures ? 1 : 0;
 }
@@ -1331,14 +1645,22 @@ static int latticeOwedMain()
         worldmodes::setPhoton(env.doc, true, t);
         for (int f = 0; f < 900; ++f) { frame(env, 1); if (f > 30 && env.scene->giStatus().giAtRest) break; }
         const AtomDrawStatus st = env.scene->atomDrawStatus();
-        std::vector<double> dec, id;
+        std::vector<double> dec, id, pre;
         unsigned decodePasses = 0;
         const auto recs = collect(env, [&] { frame(env, 90); });
         for (const FrameRecord &r : recs) {
+            // The PREPASS SIDE too, when the tier carries one: its decode pass + the prepass.
+            if (const FramePass *p = passNamed(r, "Jahshaka SSR prepass")) {
+                const FramePass *dp = passNamed(r, "Jahshaka atom decode prepass");
+                if (p->gpuMs >= 0) pre.push_back(p->gpuMs + (dp && dp->gpuMs >= 0 ? dp->gpuMs : 0.0));
+            }
             unsigned passes = 0;
             double ms = 0;
+            // The opaque side (IdRead): the screen decode pass + the opaque pass.
             for (const FramePass &p : r.passes)
                 if (p.pass == "Jahshaka opaque" && p.gpuMs >= 0) { ms += p.gpuMs; ++passes; }
+            if (const FramePass *p = passNamed(r, "Jahshaka atom decode"))
+                if (passes && p->gpuMs >= 0) ms += p->gpuMs;
             if (passes) { dec.push_back(ms); decodePasses = std::max(decodePasses, passes); }
             if (const FramePass *p = passNamed(r, "Jahshaka atom id")) if (p->gpuMs >= 0) id.push_back(p->gpuMs);
         }
@@ -1348,6 +1670,8 @@ static int latticeOwedMain()
                     "passes)\n",
                     tierArm ? "Epic" : "High", st.buckets, decodePasses, d, stats(id).median,
                     d / std::max(1u, st.buckets * decodePasses), d / std::max(1u, st.buckets * decodePasses) / mpx);
+        if (!pre.empty())
+            std::printf("   ... the prepass side (its decode pass + the prepass) GPU ms med %.3f\n", stats(pre).median);
     }
     worldmodes::setMode(env.doc, worldmodes::Mode::High);
     worldmodes::setPhoton(env.doc, true, worldmodes::PhotonTier::High);
@@ -1389,6 +1713,101 @@ static int latticeOwedMain()
     return 0;
 }
 
+
+// ===========================================================================
+// scale.occlusion_cost — ATOM-OCCLUSION-1's COST TABLE: the door open / shut in ONE
+// process, alternating, twice (paired arms), on the WORLD (its still pose and the 8 walk
+// poses) and the LATTICE; per arm the frame's GPU ms (the monitor's passes summed) and the
+// occlusion's own passes — the first id pass, the pyramid's build (every "Jahshaka atom HZB"
+// pass), the late id pass — and the triangles each id pass drew. `W H` (optional) boots
+// the view at another size: the pyramid's cost at the Quest Pro's eye (1800 x 1920).
+// ===========================================================================
+struct OcclArm {
+    std::vector<double> frame, id, late, hzb, idTris, lateTris;
+};
+static void occlCollect(Env &env, OcclArm &arm, const std::function<void()> &body)
+{
+    for (const FrameRecord &r : collect(env, body)) {
+        if (r.gpuMs >= 0) arm.frame.push_back(r.gpuMs);
+        double hz = 0.0;
+        bool anyHz = false;
+        for (const FramePass &p : r.passes) {
+            if (p.gpuMs < 0) continue;
+            if (p.pass == "Jahshaka atom id") { arm.id.push_back(p.gpuMs); arm.idTris.push_back(double(p.triangles)); }
+            else if (p.pass == "Jahshaka atom id late") { arm.late.push_back(p.gpuMs); arm.lateTris.push_back(double(p.triangles)); }
+            else if (p.pass.rfind("Jahshaka atom HZB", 0) == 0) { hz += p.gpuMs; anyHz = true; }
+        }
+        if (anyHz) arm.hzb.push_back(hz);
+    }
+}
+static void occlPrint(const char *label, const char *arm, int rep, const OcclArm &a)
+{
+    std::printf("COST %-8s %-3s #%d: frame GPU med %.3f ms (p95 %.3f, %zu frames) | id %.4f ms (%.0f tris) | pyramid %.4f ms "
+                "| late %.4f ms (%.0f tris)\n",
+                label, arm, rep, stats(a.frame).median, stats(a.frame).p95, a.frame.size(), stats(a.id).median,
+                stats(a.idTris).median, a.hzb.empty() ? 0.0 : stats(a.hzb).median, a.late.empty() ? 0.0 : stats(a.late).median,
+                a.lateTris.empty() ? 0.0 : stats(a.lateTris).median);
+    std::fflush(stdout);
+}
+
+static int occlusionCostMain(int w, int h)
+{
+    Env env;
+    World world;
+    if (!bootWorld(env, world, "test-scale-occlcost-ogre.log", WorldSpec())) return 1;
+    (void)w; (void)h;
+    REQUIRE(gpuTimed(env), "the frame monitor has GPU timing");
+    for (int rep = 0; rep < 2; ++rep)
+        for (int arm = 0; arm < 2; ++arm) {
+            env.scene->setAtomOcclusionEnabled(arm == 0);
+            frame(env, 30);
+            OcclArm still, walk;
+            occlCollect(env, still, [&] { pathStill(env, 120); });
+            occlCollect(env, walk, [&] {
+                for (int s = 0; s < 8; ++s) {
+                    const float x = -90.0f + 25.0f * float(s);
+                    setCamera(env, iris::Vec3(x, 1.7f, 0.0f), iris::Vec3(x + 10.0f, 1.7f, -2.0f));
+                    frame(env, 20);
+                }
+            });
+            occlPrint("world", arm == 0 ? "on" : "off", rep, still);
+            occlPrint("walk", arm == 0 ? "on" : "off", rep, walk);
+        }
+    env.scene->setAtomOcclusionEnabled(true);
+    // THE LATTICE (8,000 cubes, the S3-DRAW cost fixture) in the same process.
+    buildLattice(env);
+    armMonitor(env);
+    for (int rep = 0; rep < 2; ++rep)
+        for (int arm = 0; arm < 2; ++arm) {
+            env.scene->setAtomOcclusionEnabled(arm == 0);
+            frame(env, 30);
+            OcclArm lat;
+            occlCollect(env, lat, [&] { frame(env, 120); });
+            occlPrint("lattice", arm == 0 ? "on" : "off", rep, lat);
+        }
+    shutdown(env);
+    return failures ? 1 : 0;
+}
+
+/// THE PYRAMID AT ANOTHER SIZE (the Quest Pro's eye, 1800 x 1920): the lattice (cheap to
+/// build) at `w` x `h`, the door open, the "Jahshaka atom HZB" passes' GPU ms.
+static int occlusionPyramidMain(int w, int h)
+{
+    Env env;
+    if (!boot(env, "test-scale-occlpyr-ogre.log", w, h)) return 1;
+    buildLattice(env);
+    armMonitor(env);
+    REQUIRE(gpuTimed(env), "the frame monitor has GPU timing");
+    frame(env, 30);
+    OcclArm lat;
+    occlCollect(env, lat, [&] { frame(env, 120); });
+    char label[32];
+    std::snprintf(label, sizeof(label), "%dx%d", w, h);
+    occlPrint(label, "on", 0, lat);
+    shutdown(env);
+    return failures ? 1 : 0;
+}
+
 int main(int argc, char **argv)
 {
     qputenv("QT_QPA_PLATFORM", "offscreen");
@@ -1403,6 +1822,9 @@ int main(int argc, char **argv)
     if (mode == "--residency") return residencyMain();
     if (mode == "--decode") return decodeMain();
     if (mode == "--occlusion") return occlusionMain();
+    if (mode == "--occlusion-cost") return occlusionCostMain(0, 0);
+    if (mode == "--occlusion-pyramid")
+        return occlusionPyramidMain(argc > 3 ? std::atoi(argv[2]) : 1800, argc > 3 ? std::atoi(argv[3]) : 1920);
     if (mode == "--tlas") return tlasMain();
     if (mode == "--atlas") return atlasMain();
     if (mode == "--far-field") return farFieldMain();
@@ -1410,6 +1832,7 @@ int main(int argc, char **argv)
     if (mode == "--hit-list") return hitListMain();
     if (mode == "--cpu-walks") return cpuWalksMain();
     if (mode == "--lattice-owed") return latticeOwedMain();
+    if (mode == "--decode-exact") return decodeExactMain();
     std::printf("usage: test_scale --world|--voxel-scroll|--lights|--cluster-cut|--levels|--cut-cost|--residency|--decode|"
                 "--occlusion|--tlas|--atlas|--far-field|--bake|--hit-list|--cpu-walks|--lattice-owed\n");
     return 2;

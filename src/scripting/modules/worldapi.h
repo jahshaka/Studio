@@ -52,8 +52,12 @@ public:
     Q_INVOKABLE QVariantMap atomStatus();
     /// THE SPLIT'S MEASUREMENT DOOR (ATOM S3-DRAW): paired arms in one process.
     Q_INVOKABLE bool setAtomDraw(bool on);
+    Q_INVOKABLE bool setAtomOcclusion(bool on);
     Q_INVOKABLE bool setAtomView(const QString &view);
     Q_INVOKABLE QString atomView();
+    /// THE PHOTON VIEW (PHOTON-VIEW-1): the lighting's debug pictures.
+    Q_INVOKABLE bool setPhotonView(const QString &view, const QVariantMap &options = QVariantMap());
+    Q_INVOKABLE QString photonView();
     Q_INVOKABLE bool refreshGi();
     /// Re-render every cached point/spot shadow map once (ENGINE_CACHE_POLICY_SPEC P2).
     Q_INVOKABLE bool refreshShadows();
@@ -124,6 +128,8 @@ public:
     Q_INVOKABLE QVariantList lookCatalogue();
 
 private:
+    /// giStatus without the photon view's two keys (giStatus adds them).
+    QVariantMap giStatusBase();
     iris::ScenePtr sceneOrFail(const QString &verb);
     /// Resolves a texture ASSET GUID to {guid, pinned absolute path}; false
     /// when the guid names no row or no stored bytes. (It also matched file
