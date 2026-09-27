@@ -133,6 +133,13 @@ jah_scale_row(scale.hit_list     --hit-list      ${SCALE_T_HIT}          FALSE) 
 jah_scale_row(scale.cpu_walks    --cpu-walks     ${SCALE_T_WALKS}        TRUE)   # W13
 jah_no_display(scale.bake)
 
+# atom.decode_exact — ATOM-DECODE-CLASS-1: the world at ~200 buckets, the classified
+# decode's picture against the late-discard loop's, byte for byte, in one process.
+# A pixel suite (no time measured): never the GPU lock. ~90 s (the world's boot).
+add_test(NAME atom.decode_exact COMMAND test_scale --decode-exact WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(atom.decode_exact PROPERTIES TIMEOUT 600 LABELS "engine"
+                     ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
 # W14 — the real binary over MCP, the UI thread's gaps: locked (open.responsive's class).
 jah_gpu_exclusive_test(NAME scale.library RUN_TIMEOUT ${SCALE_T_LIBRARY} COMMAND test_scale_library
                        WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
