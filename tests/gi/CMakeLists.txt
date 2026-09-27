@@ -784,7 +784,8 @@ set_tests_properties(gi.field_follows PROPERTIES TIMEOUT 300 LABELS "engine" RES
 jah_gpu_exclusive_test(NAME gi.field_follows.timing RUN_TIMEOUT 300 COMMAND test_gi_field_follows
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.field_follows.timing PROPERTIES
-    ENVIRONMENT "JAHSHAKA_TIMING_BARS=1" LABELS "engine;nightly;quiet-box" RESOURCE_LOCK gi_chain)
+    ENVIRONMENT "JAHSHAKA_TIMING_BARS=1" LABELS "engine;nightly;quiet-box")
+set_property(TEST gi.field_follows.timing APPEND PROPERTY RESOURCE_LOCK gi_chain)
 # gi.field_scroll — THE IRRADIANCE FIELD SCROLLS (PHOTON-WRITER-1, FIELD-SCROLL):
 # a cascade-0 step keeps the probes that stay in the field's toroidal window byte
 # for byte and integrates only the planes that entered; three steps out and back

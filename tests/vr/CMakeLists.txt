@@ -424,10 +424,10 @@ jah_gpu_exclusive_test(NAME vr.warmup.timing RUN_TIMEOUT 600
     WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(vr.warmup.timing PROPERTIES
     LABELS "scripting;nightly;quiet-box"
-    RESOURCE_LOCK monado
     SKIP_RETURN_CODE 77
     FIXTURES_REQUIRED vrwarmuptimingFreshHome
     ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}HOME=${_vr_warm_timing_home};JAHSHAKA_DATA_ROOT=${_vr_warm_timing_home}/.local/share/Jahshaka")
+set_property(TEST vr.warmup.timing APPEND PROPERTY RESOURCE_LOCK monado)
 
 # vr.frame_budget — THE 90 Hz BAR'S RIG ARMS (lane V1-RIG item 5;
 # SPECS/PHOTON_SPEC.md §11 item 8, MASTER_QUEUE §681-C).
@@ -439,6 +439,9 @@ set_tests_properties(vr.warmup.timing PROPERTIES
 # ledger wants and asserts only the rig-independent one — no frame over three
 # times the run's own median. Its header says why a red against 11.1 ms on an
 # Xvfb rig with free clocks would be a red about the rig.
+# NIGHTLY and in the GPU-timing lock (lane D6B-GATE-SHAPE; audit §3c/R3, verdict NIGHTLY):
+# 105 s of two capture bundles whose one assertion is a timing ratio — a measurement,
+# so `quiet-box` too: no scoped gate runs it on a shared box.
 set(_vr_budget_home "${CMAKE_CURRENT_BINARY_DIR}/vr-budget-home")
 set(JAH_VR_BUDGET_DIR "${CMAKE_CURRENT_BINARY_DIR}/vr-budget-bundles")
 set(JAH_VR_BUDGET_SHOWROOM "${CMAKE_SOURCE_DIR}/scenes/Showroom 2.zip")
@@ -451,24 +454,24 @@ set_target_properties(test_vr_frame_budget PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 target_link_libraries(test_vr_frame_budget PRIVATE Qt6::Core)
 
-add_test(NAME vr.frame_budget
+# It renders 2 x (240 settle + 200 recorded) stereo frames at 10.26 Mpx and imports
+# Showroom 2 on the way, on a rig whose present copy is 10-27 ms a frame: this is the
+# longest VR suite there is (run budget 900 s; the lock's wait rides on top).
+jah_gpu_exclusive_test(NAME vr.frame_budget RUN_TIMEOUT 900
          COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/run_vr_budget.sh"
                  "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" "${JAH_MONADO_MANIFEST}"
                  "${CMAKE_CURRENT_BINARY_DIR}/vr_frame_budget.js"
                  "$<TARGET_FILE:test_vr_frame_budget>" "${JAH_VR_BUDGET_DIR}"
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(vr.frame_budget PROPERTIES
-    LABELS "scripting"
-    # It renders 2 x (240 settle + 200 recorded) stereo frames at 10.26 Mpx and
-    # imports Showroom 2 on the way, on a rig whose present copy is 10-27 ms a
-    # frame: this is the longest VR suite there is.
-    TIMEOUT 900
-    RESOURCE_LOCK monado COST ${JAH_COST_MONADO}
+    LABELS "scripting;nightly;quiet-box"
     SKIP_RETURN_CODE 77
     # JAHSHAKA_PERF_ROOT is what lets the script's `out` land in the suite's own
     # scratch: a capture's `out` is confined to the capture root, and the
     # default root is under the user's home.
     ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}HOME=${_vr_budget_home};JAHSHAKA_DATA_ROOT=${_vr_budget_home}/.local/share/Jahshaka;JAHSHAKA_PERF_ROOT=${JAH_VR_BUDGET_DIR}")
+# APPENDED beside the helper's gpu_timing lock (a set_tests_properties would replace it).
+set_property(TEST vr.frame_budget APPEND PROPERTY RESOURCE_LOCK monado)
 
 # ---------------------------------------------------------------------------
 # vr.eye_grade — THE WEARER'S PICTURE IS THE PROJECT'S PICTURE (lane

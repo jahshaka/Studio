@@ -1504,13 +1504,15 @@ set_tests_properties(gi.pcc_mirror.ray_tier PROPERTIES
 # default scene and Showroom 2 at High (PHOTON-WRITER-1 SWEEPS-3; the room half is
 # gi.chain_converge): from a perturbed history a second sweep changes no byte of
 # any cascade's light (world.giVoxelStats's lightDigest). Fresh home per run.
+# NIGHTLY (lane D6B-GATE-SHAPE; audit §3c, verdict NIGHTLY): 80 s for the claim gi.chain_converge
+# (9 s) holds at every push; an engine change still selects it in its own scoped gate.
 set(JAH_CONVERGE_SHOWROOM "${CMAKE_SOURCE_DIR}/scenes/Showroom 2.zip")
 configure_file(scripts/gi_chain_converge_scenes.js.in ${CMAKE_CURRENT_BINARY_DIR}/gi_chain_converge_scenes.js @ONLY)
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-chain_converge_scenes)
 add_test(NAME gi.chain_converge_scenes.fresh_home
          COMMAND sh -c "rm -rf '${_home}' && mkdir -p '${_home}/run'")
 set_tests_properties(gi.chain_converge_scenes.fresh_home PROPERTIES
-    FIXTURES_SETUP chain_converge_scenes_home LABELS "scripting" TIMEOUT 60)
+    FIXTURES_SETUP chain_converge_scenes_home LABELS "scripting;nightly" TIMEOUT 60)
 file(MAKE_DIRECTORY ${_home}/run)
 add_test(NAME gi.chain_converge_scenes
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/gi_chain_converge_scenes.js
@@ -1518,7 +1520,7 @@ add_test(NAME gi.chain_converge_scenes
 set_tests_properties(gi.chain_converge_scenes PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
     FIXTURES_REQUIRED chain_converge_scenes_home
-    LABELS "scripting"
+    LABELS "scripting;nightly"
     TIMEOUT 600)
 
 # ANIMATION CLIPS AS A LIBRARY TYPE (ModelTypes::Animation): the import that

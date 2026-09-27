@@ -238,7 +238,7 @@ set(JAH_GPU_EXCLUSIVE_SUITES
     # the nightly timing rows: the wall-clock benchmark, the stereo frame budget, and the
     # millisecond halves of the suites whose counts stay at push (tests/support/timingbars.h;
     # audit §5 — F17's seven and the six beside them).
-    scenegraph.benchmark rigperf.benchmark gi.gather_cost
+    scenegraph.benchmark rigperf.benchmark gi.gather_cost vr.frame_budget
     open.responsive.timing archive.responsive.timing avatar.responsive.timing
     chain.hzb.timing engine.gpu_cull.timing gi.field_follows.timing ui.properties_filter.timing
     ui.components.timing meshbake.cards.timing app.update_check.timing app.shutdown_order.timing
@@ -445,7 +445,7 @@ add_subdirectory(vr)
 # jq/Xvfb, vr.warmup.timing the VR stack — absent without them).
 add_subdirectory(tooling)
 get_property(_gpu_registered GLOBAL PROPERTY JAH_GPU_EXCLUSIVE_REGISTERED)
-set(_gpu_optional app.input_keys app.play_select vr.warmup.timing)
+set(_gpu_optional app.input_keys app.play_select vr.warmup.timing vr.frame_budget)
 foreach(_t IN LISTS JAH_GPU_EXCLUSIVE_SUITES)
     # The rows registered only when their tools exist (the private-Xvfb input drivers, the
     # VR stack) are exempt: a box without them registers neither the row nor the lock.
