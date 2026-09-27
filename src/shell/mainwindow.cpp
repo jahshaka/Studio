@@ -154,7 +154,6 @@ For more information see the LICENSE file
 #include "irisgl/document/scenegraph/scene.h"
 #include "irisgl/document/physics/environment.h"
 #include "irisgl/document/input/inputmap.h"
-#include "irisgl/thirdparty/bullet3/src/btBulletDynamicsCommon.h"
 
 #include "modules/materials/effectspage.h"
 #include "modules/materials/materialsmodule.h"

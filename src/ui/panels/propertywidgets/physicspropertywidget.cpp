@@ -21,9 +21,6 @@ For more information see the LICENSE file
 #include "ui/controls/hfloatsliderwidget.h"
 #include "ui/controls/comboboxwidget.h"
 
-#include "irisgl/thirdparty/bullet3/src/btBulletDynamicsCommon.h"
-#include "BulletCollision/CollisionShapes/btConvexHullShape.h"
-#include "BulletCollision/CollisionShapes/btShapeHull.h"
 #include "irisgl/document/physics/physicshelper.h"
 #include "irisgl/document/scenegraph/scenenode.h"
 #include "ui/panels/propertywidgets/panelundo.h"
