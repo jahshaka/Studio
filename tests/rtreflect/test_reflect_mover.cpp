@@ -51,6 +51,20 @@
 //      mean's mover age), so the lobe's tail inside the reflection no longer
 //      restarts single pixels (the interior grain); the trailing edge pays one
 //      frame of trail for it.
+//
+// WHAT IS NOT MET (the lead's Fable read): the BRIEF'S OWN METRIC — the frame-to-
+// frame flicker within 1.5x the still case's — is not met by the shipped form:
+// FLICKER reads x7 to x93 (0.4-2.0 codes a frame moving against 0.01-0.2 still).
+// The gated bars are the error against the settled frame and its grain. The rays
+// glossy floor's settled bar of 8.0 was set AFTER the first two measurements
+// failed tighter ones; it guards the trail's return (22.7 codes before the lane).
+//
+// THE KNOWN LIMIT (REFLECT-MOVERS-2): a surface's OWN motion is read from the id
+// image, and the id pass draws only Atom-routed items — anything it does not draw
+// (skinned, alpha-tested, two-sided) takes the camera path: an animated
+// CHARACTER's glossy surface still dithers and its march reflection still lags.
+// (A HIT on any mover is followed — the hit record carries the slot.)
+//
 //   F3 the GATHER on a moving matte object: 0.33-0.49 codes moving against
 //      0.000 still (the sphere disk line of the reflected arms) — accepted
 //      unchanged: a diffuse pixel's irradiance does not depend on the eye, and
@@ -484,7 +498,52 @@ int main(int argc, char **argv)
             enginetest::setNodePosition(s, sphere, pathAt(frame + 400));
             render(e, kSettleFrames);
             enginetest::setNodePosition(s, sphere, pathAt(frame));
-            render(e, kRunIn - kFlickerFrames - 1);
+            // THE PARKED POSE'S GHOST (the Fable read's F2): where the sphere's
+            // reflection sat for kSettleFrames, the floor must reflect the room
+            // again within TWO frames of the sphere leaving (the mover age's
+            // departure rule) — measured against the settled frame, over the old
+            // reflected footprint clear of the new one.
+            int ghostFrames = kRunIn - kFlickerFrames - 1;
+            if (arm.region == Region::Reflected) {
+                const Vec3 away = pathAt(frame + 400), here = pathAt(frame);
+                std::vector<unsigned> ghost;
+                {
+                    float gx, gy, gr, hx, hy, hr, sx, sy, sr;
+                    diskOf(Vec3(away.x, -away.y, away.z), kSphereR, gx, gy, gr);
+                    diskOf(Vec3(here.x, -here.y, here.z), kSphereR, hx, hy, hr);
+                    diskOf(here, kSphereR, sx, sy, sr);
+                    for (unsigned y = 0; y < kHeight; ++y)
+                        for (unsigned x = 0; x < kWidth; ++x) {
+                            const float fx = float(x) + 0.5f, fy = float(y) + 0.5f;
+                            if (std::hypot(fx - gx, fy - gy) < gr - 2.0f && std::hypot(fx - hx, fy - hy) > hr + 6.0f &&
+                                std::hypot(fx - sx, fy - sy) > sr + 3.0f)
+                                ghost.push_back(y * kWidth + x);
+                        }
+                }
+                float g[4] = {};
+                for (int k = 0; k < 4; ++k) {
+                    render(e, 1);
+                    Image img;
+                    view->readPixels(img);
+                    g[k] = meanDiff(img, settled, ghost);
+                }
+                ghostFrames -= 4;
+                std::printf("      the parked pose's ghost (%zu px) against the settled frame, frames 1-4 after "
+                            "leaving: %.3f %.3f %.3f %.3f codes\n", ghost.size(), g[0], g[1], g[2], g[3]);
+                // DRAINED BY FRAME 2: under 15 % of the first frame's error and no
+                // longer falling (frame 2 against frame 4 within 0.8 codes) — what is
+                // left is a restarted glossy pixel's own noise and the floor's
+                // non-reflection terms (the mirror arm, which keeps no history,
+                // reads 0-1.1 there). Before the mover age counted PARKED movers the
+                // ghost drained at the mean's 1/32 and still showed after 60 frames.
+                if (!arm.march && !ghost.empty())
+                    // (a MIRROR keeps no history: its frame-1 error is already the floor's
+                    // own, so only "no longer falling" applies to it)
+                    CHECK_MSG((arm.floorRough < 0.1f || g[1] < 0.15f * g[0]) && g[1] - g[3] < 0.8f,
+                              "[%s] the parked pose's reflection is drained two frames after the sphere left "
+                              "(%.3f -> %.3f -> %.3f codes)", arm.name, g[0], g[1], g[3]);
+            }
+            render(e, ghostFrames);
             {
                 Image a, b;
                 view->readPixels(a);
