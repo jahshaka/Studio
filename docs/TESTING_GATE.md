@@ -538,7 +538,9 @@ gate live); "pooled" is the pool row in one run of every pool at -j4 on a quiet 
 the Low World Mode (after the reader, the `world.mode` path) and the window boots 1280x720. An
 Epic pool has no test tier (the product's own tiers). At every boot the row prints
 `MEM <pool> gpuPoolUsed=<MB> textures=<MB> processMiB=<MiB> tier=<t>` and the run log records it
-(`mem`). Measured on this box (warm cache, one process, nvidia-smi per pid): Epic 1,532 MiB at
+(`mem`); after every arm's baseline it prints `MEM <pool>.<arm> gpuPoolUsed=<MB> textures=<MB>` (the
+arm's `mem`), and a climb past the largest single arm's step is the FINDING `LEAK <pool> +<MB> over
+<n> arms` (the row's `leak`; not a red until runs say it is real). Measured on this box (warm cache, one process, nvidia-smi per pid): Epic 1,532 MiB at
 boot (peak 1,672), gpuPoolUsed 1,445 MB, textures 1,093 MB; Low 280 MiB at boot (peak 468),
 gpuPoolUsed 323-327 MB, textures 40 MB. The split: LOW = editor, player, assets_import,
 avatar_anim, vr_noruntime, cameras (every arm the same verdict and `ok` count as at Epic); EPIC =

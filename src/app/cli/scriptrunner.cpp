@@ -305,19 +305,24 @@ int runScriptPool(MainWindow &window, QApplication &app, const QString &scripts,
     // own nvidia-smi figure beside it). gpuPoolUsed = the VaoManager pools'
     // capacity minus their free bytes (textures included on Vulkan); textures =
     // every texture the texture manager knows.
+    //
+    // ...AND AFTER EVERY ARM (the leak probe): the same two figures once the arm's baseline
+    // has held — the project closed, the deferred deletes delivered — as
+    // `POOL-MEM <pool>.<arm> gpuPoolUsed=<MB> textures=<MB>`, so the pool's VRAM across its
+    // arms is a curve at one comparable state, and run_pool.py can call a monotonic climb.
+    auto memFigures = [&]() -> QString {
+        if (headless) return QStringLiteral("headless");
+        const ScriptResult m = engine->evaluate(
+            QStringLiteral("(function(){var m = app.memoryStats(); var t = app.textureMemory({top: 1});"
+                           "return 'gpuPoolUsed=' + Math.round((m.gpuPoolCapacityBytes - m.gpuPoolFreeBytes) / 1048576)"
+                           " + ' textures=' + Math.round(t.totalBytes / 1048576);})()"),
+            QStringLiteral("<pool-mem>"), false, 0, ScriptRunPolicy::Off);
+        return m.ok ? m.value.toString()
+                    : QStringLiteral("unavailable (%1)").arg(m.toString().simplified());
+    };
     {
         const QString tier = testtier::active() ? testtier::name() : QStringLiteral("document");
-        QString mem = QStringLiteral("headless");
-        if (!headless) {
-            const ScriptResult m = engine->evaluate(
-                QStringLiteral("(function(){var m = app.memoryStats(); var t = app.textureMemory({top: 1});"
-                               "return 'gpuPoolUsed=' + Math.round((m.gpuPoolCapacityBytes - m.gpuPoolFreeBytes) / 1048576)"
-                               " + ' textures=' + Math.round(t.totalBytes / 1048576);})()"),
-                QStringLiteral("<pool-mem>"), false, 0, ScriptRunPolicy::Off);
-            mem = m.ok ? m.value.toString()
-                       : QStringLiteral("unavailable (%1)").arg(m.toString().simplified());
-        }
-        armLine("POOL-MEM %s %s tier=%s\n", poolUtf8, mem.toUtf8(), tier.toUtf8());
+        armLine("POOL-MEM %s %s tier=%s\n", poolUtf8, memFigures().toUtf8(), tier.toUtf8());
     }
 
     for (int i = 0; i < arms.size(); ++i) {
@@ -415,6 +420,8 @@ int runScriptPool(MainWindow &window, QApplication &app, const QString &scripts,
         // counted a previous arm's node leaving during its own burst).
         QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
         app.processEvents();
+        if (!headless)
+            armLine("POOL-MEM %s.%s %s\n", poolUtf8, armUtf8, memFigures().toUtf8());
         if (!base.ok || !base.value.toBool()) {
             armLine("POOL-BASELINE-LOST %s.%s %s\n", poolUtf8, armUtf8,
                     (base.ok ? QStringLiteral("a project is still open after project.close()")

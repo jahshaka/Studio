@@ -49,6 +49,11 @@ _ARM_BEGIN = re.compile(r"^\s*ARM-BEGIN\s+(\S+)\s*$")
 # A pool's boot footprint (TEST-TIER-1, run_pool.py): `MEM <pool> gpuPoolUsed=<MB> textures=<MB>
 # processMiB=<MiB|?> tier=<t>`, once per process the pool started; the row records the largest.
 _MEM = re.compile(r"^\s*MEM\s+\S+\s+gpuPoolUsed=(\d+)\s+textures=(\d+)\s+processMiB=(\d+|\?)\s+tier=(\S+)")
+# ...and the leak probe (run_pool.py): `MEM <pool>.<arm> gpuPoolUsed=<MB> textures=<MB>` after every
+# arm's baseline (recorded on the ARM's record as `mem`), and the FINDING line `LEAK <pool> +<MB> over
+# <n> arms` (recorded on the pool's row as `leak`).
+_ARM_MEM = re.compile(r"^\s*MEM\s+(\S+\.\S+)\s+gpuPoolUsed=(\d+)\s+textures=(\d+)\s*$")
+_LEAK = re.compile(r"^\s*LEAK\s+\S+\s+\+(\d+)\s+over\s+(\d+)\s+arms")
 _GPU = re.compile(r"^\s*gpu_ms:\s*([0-9.]+)")
 _TARGET = re.compile(r"^\s*target:\s*(.+?)\s*$")
 
@@ -181,6 +186,24 @@ def _mem_of(text):
     return mem
 
 
+def _arm_mems(text):
+    """arm -> {gpuPoolUsedMB, texturesMB}: the leak probe's point after that arm (the last, if a
+    restart printed it twice)."""
+    out = {}
+    for line in (text or "").splitlines():
+        m = _ARM_MEM.match(line)
+        if m:
+            out[m.group(1)] = {"gpuPoolUsedMB": int(m.group(2)), "texturesMB": int(m.group(3))}
+    return out
+
+
+def _leaks_of(text):
+    """A pool row's `leak` field: every LEAK finding line as {riseMB, arms}, or None."""
+    found = [{"riseMB": int(m.group(1)), "arms": int(m.group(2))}
+             for m in (_LEAK.match(l) for l in (text or "").splitlines()) if m]
+    return found or None
+
+
 def _suite_facts(text):
     gpu, target, arms, begun = None, None, [], []
     for line in (text or "").splitlines():
@@ -277,12 +300,19 @@ def run_ctest(cmd, cwd, tier, lane, jobs, reasons=None, gating=None, rng=None, r
         mem = _mem_of(outputs.get(name, ""))
         if mem is not None:
             row["mem"] = mem
+        leak = _leaks_of(outputs.get(name, ""))
+        if leak is not None:
+            row["leak"] = leak
         recs.append(row)
+        arm_mem = _arm_mems(outputs.get(name, ""))
         for arm, v, s in arms:
             # an arm's reason: the selector's for that arm (`<row>::<arm>`), else its row's
             ar = reasons.get(f"{name}::{arm.split('.', 1)[-1]}", base["reason"])
-            recs.append(dict(base, arm=arm, verdict=v, status=v, seconds=s, gpu_ms=None, target=None,
-                             reason=ar))
+            rec = dict(base, arm=arm, verdict=v, status=v, seconds=s, gpu_ms=None, target=None,
+                       reason=ar)
+            if arm in arm_mem:
+                rec["mem"] = arm_mem[arm]
+            recs.append(rec)
     if recs:
         path = append_records(recs, tier, shas["studio"])
         if echo:

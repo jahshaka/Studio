@@ -116,7 +116,11 @@ An arm that needs Epic lives in an Epic pool — MOVE it, never mix (a Low pool 
 GI assertion: the irradiance field and the chain differ by tier). At every boot the pool prints
 `MEM <pool> gpuPoolUsed=<MB> textures=<MB> processMiB=<MiB> tier=<t>` — the boot footprint
 through `app.memoryStats`/`app.textureMemory` and the process's own `nvidia-smi` line — and the
-run log records it on the pool's row (`mem`). A `--script` row takes the same switch as
+run log records it on the pool's row (`mem`). THE LEAK PROBE: after every arm's baseline (the
+project closed, the deferred deletes delivered) the pool prints `MEM <pool>.<arm> gpuPoolUsed=<MB>
+textures=<MB>`, recorded on the arm's record, so a process's VRAM across its arms is a curve in the
+run log; when the last arm's figure exceeds the first's by more than the largest single step, the
+driver prints the FINDING line `LEAK <pool> +<MB> over <n> arms` (the row's `leak`) — not a red. A `--script` row takes the same switch as
 `JAHSHAKA_TEST_TIER=low` in its ENVIRONMENT (the flag wins where both are given).
 
 A pool's arms SHARE its home (fresh every run, the shader cache kept warm), so an arm never

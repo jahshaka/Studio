@@ -26,6 +26,12 @@ prints one line per arm; this driver owns what the app cannot:
     `MEM <pool> gpuPoolUsed=<MB> textures=<MB> processMiB=<MiB> tier=<t>`, the last figure
     the process's own nvidia-smi line, and the run log (scripts/gate_runlog.py) records it on
     the pool's row.
+  * THE LEAK PROBE. After every arm's baseline the app prints `POOL-MEM <pool>.<arm>
+    gpuPoolUsed=<MB> textures=<MB>`; this driver prints it as `MEM <pool>.<arm> …` (the run log
+    records it on the arm) and, per process, compares the LAST arm's figure with the FIRST's:
+    a rise larger than the largest single arm's own step (the boot -> first arm included) is a
+    monotonic climb, not one arm's working set, and is printed as a FINDING line
+    `LEAK <pool> +<MB> over <n> arms` — never a red (the first runs decide whether it is real).
   * THE VERDICT, PER ARM, ON ONE CHANNEL: each arm's final `ARM <pool>.<arm>
     PASS|FAIL|CRASH|TIMEOUT <ms> [why]` line is printed exactly once, by this driver
     (the app's own result line is echoed as `arm-result …`, which no reader counts) —
@@ -55,6 +61,7 @@ ARM_BEGIN = re.compile(r"^ARM-BEGIN (\S+)\.(\S+)\s*$")
 ARM_END = re.compile(r"^ARM (\S+)\.(\S+) (PASS|FAIL) (\d+)(?: (.*))?$")
 BASELINE_LOST = re.compile(r"^POOL-BASELINE-LOST (\S+)\.(\S+) (.*)$")
 POOL_MEM = re.compile(r"^POOL-MEM (\S+) (.*?) tier=(\S+)\s*$")
+ARM_MEM = re.compile(r"^POOL-MEM (\S+)\.(\S+) gpuPoolUsed=(\d+) textures=(\d+)\s*$")
 TIERS = ("low", "epic")
 
 
@@ -149,6 +156,20 @@ def process_mib(pid):
     return None
 
 
+def leak_of(boot_mb, curve):
+    """The leak probe over one process: `curve` is [(arm, gpuPoolUsed MB)] in arm order, `boot_mb`
+    the boot's figure (or None). (rise, arms) when the last arm's figure exceeds the first's by
+    more than the largest single step (boot -> first arm, then arm -> arm); else None."""
+    if len(curve) < 2:
+        return None
+    points = ([boot_mb] if boot_mb is not None else []) + [mb for _, mb in curve]
+    steps = [b - a for a, b in zip(points, points[1:])]
+    rise = curve[-1][1] - curve[0][1]
+    if rise > 0 and rise > max(steps):
+        return rise, len(curve)
+    return None
+
+
 def say(text):
     sys.stdout.write(text + "\n")
     sys.stdout.flush()
@@ -218,6 +239,8 @@ def main():
         deadline = started + opt["boot"]
         killed_for = None       # "arm:<name>", "baseline:<name>" or "boot"
         began_any = False
+        curve = []              # the leak probe: [(arm, gpuPoolUsed MB)] after each arm's baseline
+        boot_mb = None
         fails_here = 0
         lost = None
         while True:
@@ -248,8 +271,15 @@ def main():
                 # process's end) is due within the boot budget.
                 deadline = time.monotonic() + opt["boot"]
                 continue
+            m = ARM_MEM.match(line)
+            if m and m.group(1) == pool:
+                curve.append((m.group(2), int(m.group(3))))
+                say("MEM %s.%s gpuPoolUsed=%s textures=%s" % (pool, m.group(2), m.group(3), m.group(4)))
+                continue
             m = POOL_MEM.match(line)
             if m and m.group(1) == pool:
+                bm = re.match(r"gpuPoolUsed=(\d+)", m.group(2))
+                boot_mb = int(bm.group(1)) if bm else None
                 mib = process_mib(proc.pid) if not opt["headless"] else 0
                 body = m.group(2)
                 if body == "headless": body = "gpuPoolUsed=0 textures=0"
@@ -273,6 +303,10 @@ def main():
                 continue
         rc = proc.wait()
         t.join(timeout=5)
+        leak = leak_of(boot_mb, curve)
+        if leak:
+            say("LEAK %s +%d over %d arms (process %d: %s)" % (pool, leak[0], leak[1], process,
+                " ".join("%s=%d" % (a, mb) for a, mb in curve)))
         plog.close()
         how = ("signal %d" % -rc) if rc < 0 else ("exit %d" % rc)
 
