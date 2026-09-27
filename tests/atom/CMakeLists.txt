@@ -309,6 +309,7 @@ add_test(NAME atom.view
 set_tests_properties(atom.view PROPERTIES
     TIMEOUT 240 LABELS "scripting"
     ENVIRONMENT "HOME=${_atom_view_home};JAHSHAKA_DATA_ROOT=${_atom_view_home}/.local/share/Jahshaka")
+jah_pool_arm(atom view ${CMAKE_CURRENT_SOURCE_DIR}/scripts/atom_view.js 33)
 
 # ---------------------------------------------------------------------------
 # atom.lod_switch — THE LOD RULES IN THE VIEWPORT (ATOM-LOD-BOUND-1; ATOM-CLUSTER-CUT). A

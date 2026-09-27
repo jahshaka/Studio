@@ -544,6 +544,23 @@ set_tests_properties(vr.spike_1a PROPERTIES
 # EVERY ROW OF THIS DIRECTORY CARRIES THE `vr` LABEL (lane D6B-GATE-SHAPE; audit §8: the VR
 # rows were labelled `scripting`, `engine` or `services` and there was no way to say "the VR
 # suites" to ctest). Appended here, after every registration above, so a new row cannot miss it.
+# ---- THE SHARED MONADO SESSION (lane SUITE-POOL-1): four runtime suites, ONE runtime and ONE
+# app process (`--vr`), four arms. ORDER IS LOAD-BEARING for one arm: player_session asserts
+# `player.play({vr:true})` refuses from a Player page that has never been shown IN THIS PROCESS,
+# so it is the pool's FIRST arm. A later session of a process is paced at 20 Hz by Monado's null compositor
+# (see vr.player_session); every arm counts frames, never time. The rows that stay their own:
+# the warm-up pair (the control cannot share a process), and the suites that latch an
+# environment variable at boot (mirror_live, input_session, no_picture_start).
+jah_pool_arm(vr_session player_session ${CMAKE_SOURCE_DIR}/tests/scripting/scripts/e2e_player_vr_session.js 20 FIRST)
+jah_pool_arm(vr_session verbs_session ${CMAKE_SOURCE_DIR}/tests/scripting/scripts/e2e_vr_session_verbs.js 30)
+jah_pool_arm(vr_session photon_view ${CMAKE_SOURCE_DIR}/tests/scripting/scripts/e2e_vr_photon_view.js 20)
+jah_pool_arm(vr_session sample_open ${CMAKE_CURRENT_SOURCE_DIR}/vr_sample_open.js 10)
+jah_add_pool(vr_session LABELS scripting
+    LAUNCHER "${CMAKE_CURRENT_SOURCE_DIR}/run_vr_app.sh" --launch "${JAH_MONADO_MANIFEST}" --
+    APP_ARGS --vr
+    ENV "${JAH_TEST_DISPLAY_ENV}"
+    PROPS RESOURCE_LOCK monado COST ${JAH_COST_MONADO} SKIP_RETURN_CODE 77)
+
 get_property(_vr_rows DIRECTORY PROPERTY TESTS)
 foreach(_t IN LISTS _vr_rows)
     set_property(TEST ${_t} APPEND PROPERTY LABELS vr)

@@ -195,6 +195,7 @@ set_tests_properties(cameras.e2e PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
     LABELS "scripting"
     TIMEOUT 900)
+jah_pool_arm(cameras e2e ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_cameras.js 23)
 
 # ---- cameras.e2e.lens -----------------------------------------------------
 # CAMERA_LENS_SPEC §3 (P1 + P2) through the verbs in the real binary: the preset
@@ -211,6 +212,7 @@ set_tests_properties(cameras.e2e.lens PROPERTIES
     ENVIRONMENT "HOME=${_lens_home};JAHSHAKA_DATA_ROOT=${_lens_home}/.local/share/Jahshaka"
     LABELS "scripting"
     TIMEOUT 300)
+jah_pool_arm(cameras lens ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_camera_lens.js 22)
 
 # ---- cameras.e2e.postfx ---------------------------------------------------
 # CAMERA_LENS_SPEC §4 + §5 through the verbs in the real binary: the exposure
@@ -227,6 +229,7 @@ set_tests_properties(cameras.e2e.postfx PROPERTIES
     ENVIRONMENT "HOME=${_post_home};JAHSHAKA_DATA_ROOT=${_post_home}/.local/share/Jahshaka"
     LABELS "scripting"
     TIMEOUT 180)
+jah_pool_arm(cameras postfx ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_camera_postfx.js 32)
 
 # ---- cameras.e2e.pilot ----------------------------------------------------
 # Phase 3 (D4/D8) and the phase-2c preview preference, through the verbs, in
@@ -240,6 +243,7 @@ set_tests_properties(cameras.e2e.pilot PROPERTIES
     ENVIRONMENT "HOME=${_pilot_home};JAHSHAKA_DATA_ROOT=${_pilot_home}/.local/share/Jahshaka"
     LABELS "scripting"
     TIMEOUT 300)
+jah_pool_arm(cameras pilot ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_camera_pilot.js 19)
 
 # ---- cameras.e2e.axis_lock ------------------------------------------------
 # THE AXIS-VIEW ROTATION LOCK (owner report 2026-09-08) through the verbs, in
@@ -259,3 +263,9 @@ set_tests_properties(cameras.e2e.axis_lock PROPERTIES
     ENVIRONMENT "HOME=${_axis_home};JAHSHAKA_DATA_ROOT=${_axis_home}/.local/share/Jahshaka"
     LABELS "scripting"
     TIMEOUT 300)
+jah_pool_arm(cameras axis_lock ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_axis_view_lock.js 20)
+
+# ---- THE POOL (lane SUITE-POOL-1): cameras.e2e and its four siblings (lens, postfx, pilot,
+# axis_lock) were five boots of the same verb module on the same scratch-home contract; they are
+# five arms of ONE process now (SPECS/audits/SUITE_REDUNDANCY_AUDIT_2026-09-27.md §6).
+jah_add_pool(cameras LABELS scripting)

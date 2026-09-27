@@ -177,6 +177,7 @@ set_tests_properties(app.scene_switch_after_play PROPERTIES
     ENVIRONMENT "HOME=${_ssap_home};JAHSHAKA_DATA_ROOT=${_ssap_home}/.local/share/Jahshaka"
     LABELS "app"
     TIMEOUT 300)
+jah_pool_arm(player scene_switch_after_play ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_scene_switch_after_play.js 21)
 
 # ---- app.multiselect_outline ------------------------------------------------
 # EVERY member of a selection SET is outlined, not just the primary
@@ -196,6 +197,7 @@ set_tests_properties(app.multiselect_outline PROPERTIES
     ENVIRONMENT "HOME=${_mso_home};JAHSHAKA_DATA_ROOT=${_mso_home}/.local/share/Jahshaka"
     LABELS "app"
     TIMEOUT 300)
+jah_pool_arm(editor_view multiselect_outline ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_multiselect_outline.js 4)
 
 # ---- app.window_fits --------------------------------------------------------
 # A FRESH PROFILE'S WINDOW FITS ON ITS SCREEN (hygiene lane, 2026-09-09).
@@ -214,3 +216,4 @@ set_tests_properties(app.window_fits PROPERTIES
     LABELS "app"
     TIMEOUT 120)
 jah_no_display(app.window_fits)
+jah_pool_arm(doc window_fits ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_window_fits.js 9 HEADLESS)

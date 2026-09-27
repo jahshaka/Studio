@@ -316,6 +316,7 @@ set_tests_properties(shadergraph.selection_verbs PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
     LABELS "shadergraph"
     TIMEOUT 120)
+jah_pool_arm(doc_assets selection_verbs ${CMAKE_CURRENT_BINARY_DIR}/e2e_graph_selection.js 4 HEADLESS)
 
 # graph.settings/setBlendMode verbs end-to-end (Unreal-parity blend modes,
 # IMAGE_PLANE_SPEC §9): master-panel blend state round-trips through the verbs
@@ -330,6 +331,7 @@ set_tests_properties(shadergraph.blend_verbs PROPERTIES
     ENVIRONMENT "HOME=${_home_blend};JAHSHAKA_DATA_ROOT=${_home_blend}/.local/share/Jahshaka"
     LABELS "shadergraph"
     TIMEOUT 120)
+jah_pool_arm(doc_assets blend_verbs ${CMAKE_CURRENT_BINARY_DIR}/e2e_blend_settings.js 9 HEADLESS)
 
 # (The `resave_presets` tool is DELETED — PRESET-UNIFY-1. It was the one-shot
 # §3b migration that re-saved the shipped `.effect` TEMPLATES through the node

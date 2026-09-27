@@ -853,4 +853,12 @@ assert(vr.interactionMode().installed === true,
        + "to do it) and stepping");
 assert(scene.nodes().length >= 2, "the scene still has its cubes");
 
+// PUT BACK WHAT THIS RUN CHANGED IN THE PROCESS (it runs as an arm of the
+// vr_noruntime pool, SUITE-POOL-1): the injected hands stay until they are
+// cleared (vr.inject(hand) with no state), and the gestures above moved the
+// editor's gizmo mode. The next arm starts from what a fresh process has.
+vr.inject("left");
+vr.inject("right");
+editor.setGizmoMode("translate");
+
 console.log("scripting.e2e.vr_input_headless: PASS");
