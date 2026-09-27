@@ -550,18 +550,19 @@ target_link_libraries(test_gi_cascades PRIVATE JahshakaEngine)
 add_dependencies(test_gi_cascades JahshakaEngineMedia)
 add_test(NAME gi.cascades COMMAND test_gi_cascades
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-# RUN_SERIAL and a wide timeout: the chain holds four voxel volumes at once
-# (the VRAM-contention class, CLAUDE.md) and the teleport case renders and reads
-# back a frame at a time.
-set_tests_properties(gi.cascades PROPERTIES TIMEOUT 300 LABELS "engine" RUN_SERIAL ON)
+# THE gi_chain FAMILY (tests/CMakeLists.txt): one cascade-chain suite at a time,
+# the rest of the gate beside it (the old VRAM reason was measured false,
+# DEVPROCESS-1). A wide timeout: the teleport case renders and reads back a frame
+# at a time.
+set_tests_properties(gi.cascades PROPERTIES TIMEOUT 300 LABELS "engine" RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
 
 # ATOM STAGE 1'S CONSUMER: WHICH MESH LOD A CASCADE VOXELISES (NANITE_SPEC §7
 # stage 1's hand-off, ogre-patch 0064). A cascade hands the voxeliser the
 # coarsest baked level whose error is below half its own cell — the authored
 # geometry at the finest cell, a simplified one at the coarse ones — and the LOD
 # BIAS, which is a dial over what is drawn, must not reach it. The A/B is in one
-# process (GiParams::cascadeVoxelLod). RUN_SERIAL like every cascade suite: the
-# chain holds four voxel volumes at once.
+# process (GiParams::cascadeVoxelLod). In the gi_chain family like every cascade
+# suite.
 add_executable(test_gi_cascade_lod test_gi_cascade_lod.cpp)
 set_target_properties(test_gi_cascade_lod PROPERTIES
     AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
@@ -576,7 +577,7 @@ target_link_libraries(test_gi_cascade_lod PRIVATE JahshakaEngine)
 add_dependencies(test_gi_cascade_lod JahshakaEngineMedia)
 add_test(NAME gi.cascade_lod COMMAND test_gi_cascade_lod
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(gi.cascade_lod PROPERTIES TIMEOUT 300 LABELS "engine" RUN_SERIAL ON)
+set_tests_properties(gi.cascade_lod PROPERTIES TIMEOUT 300 LABELS "engine" RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
 
 # gi.voxel_resident — ATOM P4: the voxeliser reads the RASTER's own vertex and
 # index buffers through their device addresses, so the vertex format and the index
@@ -596,12 +597,12 @@ target_link_libraries(test_gi_voxel_resident PRIVATE JahshakaEngine)
 add_dependencies(test_gi_voxel_resident JahshakaEngineMedia)
 add_test(NAME gi.voxel_resident COMMAND test_gi_voxel_resident
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(gi.voxel_resident PROPERTIES TIMEOUT 300 LABELS "engine" RUN_SERIAL ON)
+set_tests_properties(gi.voxel_resident PROPERTIES TIMEOUT 300 LABELS "engine" RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
 
 # gi.material_swap — MATERIAL-SWAP-GI-1: Scene::setNodeMaterial swaps the datablock
 # on the live Item and invalidates the item's OWN box, so under the chain only
 # the cascades that contain it re-voxelise; the old path (attachMesh) rebuilds
-# every cascade and is the control. RUN_SERIAL like every cascade suite.
+# every cascade and is the control. In the gi_chain family like every cascade suite.
 add_executable(test_gi_material_swap test_gi_material_swap.cpp)
 set_target_properties(test_gi_material_swap PROPERTIES
     AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
@@ -616,13 +617,13 @@ target_link_libraries(test_gi_material_swap PRIVATE JahshakaEngine)
 add_dependencies(test_gi_material_swap JahshakaEngineMedia)
 add_test(NAME gi.material_swap COMMAND test_gi_material_swap
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(gi.material_swap PROPERTIES TIMEOUT 300 LABELS "engine" RUN_SERIAL ON)
+set_tests_properties(gi.material_swap PROPERTIES TIMEOUT 300 LABELS "engine" RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
 
 # AN EDIT UNDER THE CHAIN COSTS AT MOST ONE CASCADE PER FRAME (PHOTON_SPEC §7 G1,
 # and E2's own suite row). gi.cascades is about the camera SCROLL; this is about
 # the four kinds of EDIT — geometry, material, spawn, light — each of which used
-# to tear down N voxelisers and rebuild them in ONE frame. RUN_SERIAL like every
-# cascade suite: the chain holds four voxel volumes at once.
+# to tear down N voxelisers and rebuild them in ONE frame. In the gi_chain
+# family like every cascade suite.
 add_executable(test_gi_cascade_dirty test_gi_cascade_dirty.cpp)
 set_target_properties(test_gi_cascade_dirty PROPERTIES
     AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
@@ -637,15 +638,15 @@ target_link_libraries(test_gi_cascade_dirty PRIVATE JahshakaEngine)
 add_dependencies(test_gi_cascade_dirty JahshakaEngineMedia)
 add_test(NAME gi.cascade_dirty COMMAND test_gi_cascade_dirty
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(gi.cascade_dirty PROPERTIES TIMEOUT 300 LABELS "engine" RUN_SERIAL ON)
+set_tests_properties(gi.cascade_dirty PROPERTIES TIMEOUT 300 LABELS "engine" RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
 
 # gi.drag_cadence — WHAT A DRAG COSTS THE CACHES (DRAG-1, render audit REFLECT
 # F2/F3): a dragged STILL item spends NO probe captures while it is moving (the
 # staleness is recorded and the whole grid is re-captured at the settle, one per
 # frame), a NON-motion input reaches the probes mid-drag anyway, and under a
 # cascade chain the moving light tick never writes a second, different answer
-# over the cascade the scheduler just rebuilt. RUN_SERIAL: the suite counts
-# captures per frame.
+# over the cascade the scheduler just rebuilt. In the gi_chain family like
+# every cascade suite (its per-frame capture counts are in-process).
 add_executable(test_gi_drag_cadence test_gi_drag_cadence.cpp)
 set_target_properties(test_gi_drag_cadence PROPERTIES
     AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
@@ -660,7 +661,7 @@ target_link_libraries(test_gi_drag_cadence PRIVATE JahshakaEngine)
 add_dependencies(test_gi_drag_cadence JahshakaEngineMedia)
 add_test(NAME gi.drag_cadence COMMAND test_gi_drag_cadence
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(gi.drag_cadence PROPERTIES TIMEOUT 300 LABELS "engine" RUN_SERIAL ON)
+set_tests_properties(gi.drag_cadence PROPERTIES TIMEOUT 300 LABELS "engine" RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
 
 # gi.drag_mover — A DRAGGED STILL ON THE MOVER CHANNEL (MOVER-1, the render
 # audit's PHOTON F3 second half). The rule is OFF by default and this suite
@@ -669,7 +670,7 @@ set_tests_properties(gi.drag_cadence PROPERTIES TIMEOUT 300 LABELS "engine" RUN_
 # never a gesture; the object is on the mover channel while it is dragged and
 # still world again at rest, with the DOCUMENT's own mobility untouched; and the
 # picture at rest is the same picture either way (the assertion the whole trade
-# rests on). RUN_SERIAL like every cascade suite.
+# rests on). In the gi_chain family like every cascade suite.
 add_executable(test_gi_drag_mover test_gi_drag_mover.cpp)
 set_target_properties(test_gi_drag_mover PROPERTIES
     AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
@@ -684,14 +685,14 @@ target_link_libraries(test_gi_drag_mover PRIVATE JahshakaEngine)
 add_dependencies(test_gi_drag_mover JahshakaEngineMedia)
 add_test(NAME gi.drag_mover COMMAND test_gi_drag_mover
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(gi.drag_mover PROPERTIES TIMEOUT 300 LABELS "engine" RUN_SERIAL ON)
+set_tests_properties(gi.drag_mover PROPERTIES TIMEOUT 300 LABELS "engine" RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
 
 # THE CHAIN'S BOUNCE IS A FUNCTION OF THE LIGHT, NOT OF ITS OWN HISTORY
 # (ogre-patch 0060). The pin binds the EXTRA CASCADES' light voxels once and
 # never again, while every cascade swaps its own on every bounce iteration, so
 # at an ODD per-cascade count — which is what Photon's Epic tier produces,
 # 1/3/7 on a four-cascade chain — the cross-cascade term integrates the previous
-# injection's radiance. RUN_SERIAL like every cascade suite.
+# injection's radiance. In the gi_chain family like every cascade suite.
 add_executable(test_gi_cascade_bounce_bindings test_gi_cascade_bounce_bindings.cpp)
 set_target_properties(test_gi_cascade_bounce_bindings PROPERTIES
     AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
@@ -707,7 +708,7 @@ add_dependencies(test_gi_cascade_bounce_bindings JahshakaEngineMedia)
 add_test(NAME gi.cascade_bounce_bindings COMMAND test_gi_cascade_bounce_bindings
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.cascade_bounce_bindings PROPERTIES
-    TIMEOUT 300 LABELS "engine" RUN_SERIAL ON)
+    TIMEOUT 300 LABELS "engine" RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
 
 # ONE AT-REST SWEEP IS THE CHAIN'S FIXED POINT, BYTE FOR BYTE (PHOTON-WRITER-1
 # SWEEPS-3; derived in EnginePrivate.h beside kAtRestSweeps): from a perturbed
@@ -715,7 +716,7 @@ set_tests_properties(gi.cascade_bounce_bindings PROPERTIES
 # (GiVoxelStats::lightDigest), at Medium and at High; a lamp that travelled
 # leaves the bytes the same lamp jumped there leaves. (The old _target row's
 # claim - one sweep within half a code of ten - is this row's assertion now.)
-# RUN_SERIAL like every cascade suite.
+# In the gi_chain family like every cascade suite.
 add_executable(test_gi_chain_converge test_gi_chain_converge.cpp)
 set_target_properties(test_gi_chain_converge PROPERTIES
     AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
@@ -731,12 +732,12 @@ add_dependencies(test_gi_chain_converge JahshakaEngineMedia)
 add_test(NAME gi.chain_converge COMMAND test_gi_chain_converge
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.chain_converge PROPERTIES
-    TIMEOUT 300 LABELS "engine" RUN_SERIAL ON)
+    TIMEOUT 300 LABELS "engine" RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
 
 # THE SAME SCENE VOXELISES TO THE SAME PICTURE (ogre-patches 0061 and 0062): a
 # cascade SCROLLED to a place renders what a cascade BUILT at it renders, two
 # builds of one scene agree, and the attach order does not decide the answer.
-# RUN_SERIAL like every cascade suite.
+# In the gi_chain family like every cascade suite.
 add_executable(test_gi_cascade_determinism test_gi_cascade_determinism.cpp)
 set_target_properties(test_gi_cascade_determinism PROPERTIES
     AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
@@ -752,7 +753,7 @@ add_dependencies(test_gi_cascade_determinism JahshakaEngineMedia)
 add_test(NAME gi.cascade_determinism COMMAND test_gi_cascade_determinism
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.cascade_determinism PROPERTIES
-    TIMEOUT 300 LABELS "engine" RUN_SERIAL ON)
+    TIMEOUT 300 LABELS "engine" RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
 
 # THE IRRADIANCE FIELD RIDES CASCADE 0 (SPECS/PHOTON_SPEC.md E1): under a chain
 # the field is built over the INNERMOST cascade's box and follows it as the
@@ -774,10 +775,9 @@ target_link_libraries(test_gi_field_follows PRIVATE JahshakaEngine)
 add_dependencies(test_gi_field_follows JahshakaEngineMedia)
 add_test(NAME gi.field_follows COMMAND test_gi_field_follows
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-# RUN_SERIAL and a wide timeout for gi.cascades' reasons: four voxel volumes at
-# once (the VRAM-contention class, CLAUDE.md) plus a 14 MB probe atlas, and the
-# walk renders a frame at a time.
-set_tests_properties(gi.field_follows PROPERTIES TIMEOUT 300 LABELS "engine" RUN_SERIAL ON)
+# In the gi_chain family like every cascade suite, and a wide timeout: the walk
+# renders a frame at a time.
+set_tests_properties(gi.field_follows PROPERTIES TIMEOUT 300 LABELS "engine" RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
 # gi.field_scroll — THE IRRADIANCE FIELD SCROLLS (PHOTON-WRITER-1, FIELD-SCROLL):
 # a cascade-0 step keeps the probes that stay in the field's toroidal window byte
 # for byte and integrates only the planes that entered; three steps out and back
@@ -806,7 +806,7 @@ set_tests_properties(gi.field_scroll PROPERTIES LABELS "engine" RUN_SERIAL ON)
 # emissive wall at four probe spacings, three lateral offsets, against the
 # authored wall's analytic irradiance times what the directional coverage model
 # predicts the probe reads (PHOTON-VOXEL-3). Its own binary like every
-# GI suite; RUN_SERIAL like every cascade suite.
+# GI suite; in the gi_chain family like every cascade suite.
 add_executable(test_gi_field_thin_wall test_gi_field_thin_wall.cpp)
 set_target_properties(test_gi_field_thin_wall PROPERTIES
     AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
@@ -821,7 +821,7 @@ target_link_libraries(test_gi_field_thin_wall PRIVATE JahshakaEngine)
 add_dependencies(test_gi_field_thin_wall JahshakaEngineMedia)
 add_test(NAME gi.field_thin_wall COMMAND test_gi_field_thin_wall wall
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(gi.field_thin_wall PROPERTIES TIMEOUT 300 LABELS "engine" RUN_SERIAL ON)
+set_tests_properties(gi.field_thin_wall PROPERTIES TIMEOUT 300 LABELS "engine" RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
 # gi.field_alias — ONE RAY THAT DOES NOT ALIAS (PHOTON-FIELD-ROTATE-1 part 2): the
 # same fixture and binary; the noise of one integration at 1 and 2 rays (rotated)
 # and at 1 ray static, the target sample count derived from it, convergence at
@@ -829,7 +829,7 @@ set_tests_properties(gi.field_thin_wall PROPERTIES TIMEOUT 300 LABELS "engine" R
 # of one whole-field integration at 1 and 2 rays in one process.
 add_test(NAME gi.field_alias COMMAND test_gi_field_thin_wall alias
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(gi.field_alias PROPERTIES TIMEOUT 300 LABELS "engine" RUN_SERIAL ON)
+set_tests_properties(gi.field_alias PROPERTIES TIMEOUT 300 LABELS "engine" RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
 # THE FIELD'S LEAK FIX SURVIVES THE MOVE ONTO A CASCADE (PHOTON_SPEC E1's bar,
 # promoted from the PHOTON-S2 spike harness): a sealed room with a lamp outside
 # it, four wall thicknesses, measured with the scene-fitted single volume and
@@ -849,9 +849,9 @@ target_link_libraries(test_gi_leak_room PRIVATE JahshakaEngine)
 add_dependencies(test_gi_leak_room JahshakaEngineMedia)
 add_test(NAME gi.leak_room COMMAND test_gi_leak_room
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-# RUN_SERIAL and a wide timeout: eight full GI builds (four rooms x two arms),
-# each with a shadowed room, a chain and a 14 MB probe atlas.
-set_tests_properties(gi.leak_room PROPERTIES TIMEOUT 600 LABELS "engine" RUN_SERIAL ON)
+# In the gi_chain family, and a wide timeout: eight full GI builds (four rooms x
+# two arms), each with a shadowed room, a chain and a 14 MB probe atlas.
+set_tests_properties(gi.leak_room PROPERTIES TIMEOUT 600 LABELS "engine" RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
 
 # A SHADOW-ATLAS REBUILD IS NOT A GI REBUILD (PHOTON_SPEC gate G2, audit C
 # finding 2): the atlas change drops only the WORKSPACES that instantiate the
@@ -873,9 +873,9 @@ target_link_libraries(test_gi_atlas_voxels PRIVATE JahshakaEngine)
 add_dependencies(test_gi_atlas_voxels JahshakaEngineMedia)
 add_test(NAME gi.atlas_keeps_voxels COMMAND test_gi_atlas_voxels
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-# RUN_SERIAL like gi.cascades: it holds the cascade chain AND a shadowed probe
-# grid at once, which is the VRAM-contention class (CLAUDE.md).
-set_tests_properties(gi.atlas_keeps_voxels PROPERTIES TIMEOUT 300 LABELS "engine" RUN_SERIAL ON)
+# In the gi_chain family like gi.cascades: it holds the cascade chain AND a
+# shadowed probe grid at once.
+set_tests_properties(gi.atlas_keeps_voxels PROPERTIES TIMEOUT 300 LABELS "engine" RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
 
 # THE CASCADE SUITE UNDER ASan (PHOTON_SPEC G1, round-2 F1). The per-cascade
 # dirty path replaces a live cascade's VOXELISER under a kept VctLighting, and
@@ -905,7 +905,7 @@ if(JAHSHAKA_ASAN AND TARGET JahshakaEngineAsan)
     # only leaks are inside libdbus via the Vulkan loader's device-select layer);
     # use-after-free detection is the point and stays on.
     set_tests_properties(gi.cascades_asan PROPERTIES TIMEOUT 600 LABELS "engine"
-        RUN_SERIAL ON
+        RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN}
         ENVIRONMENT "${JAH_ASAN_ENGINE_OPTIONS}")
 endif()
 
@@ -967,7 +967,7 @@ if(JAHSHAKA_ASAN)
     add_test(NAME gi.rayquery_asan COMMAND test_gi_rayquery_asan
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
     set_tests_properties(gi.rayquery_asan PROPERTIES TIMEOUT 300 LABELS "engine"
-        RUN_SERIAL ON
+        RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN}
         ENVIRONMENT "${JAH_ASAN_ENGINE_OPTIONS}")
 endif()
 
@@ -994,10 +994,9 @@ target_link_libraries(test_gi_reenable PRIVATE JahshakaEngine)
 add_dependencies(test_gi_reenable JahshakaEngineMedia)
 add_test(NAME gi.reenable COMMAND test_gi_reenable
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-# RUN_SERIAL and a wide timeout for the same reason as gi.cascades: the chain
-# holds several voxel volumes at once (the VRAM-contention class, CLAUDE.md) and
-# this suite builds the arm six times over.
-set_tests_properties(gi.reenable PROPERTIES TIMEOUT 300 LABELS "engine" RUN_SERIAL ON)
+# In the gi_chain family like gi.cascades, and a wide timeout: this suite builds
+# the arm six times over.
+set_tests_properties(gi.reenable PROPERTIES TIMEOUT 300 LABELS "engine" RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
 
 # gi.chain_face — PHOTON-E3 item 0 (ii): the chain-to-world face and the faces
 # inside the chain, under a REAL sky (audit B8). Its own binary like every GI
@@ -1016,7 +1015,7 @@ target_link_libraries(test_gi_chain_face PRIVATE JahshakaEngine)
 add_dependencies(test_gi_chain_face JahshakaEngineMedia)
 add_test(NAME gi.chain_face COMMAND test_gi_chain_face
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(gi.chain_face PROPERTIES TIMEOUT 300 LABELS "engine" RUN_SERIAL TRUE)
+set_tests_properties(gi.chain_face PROPERTIES TIMEOUT 300 LABELS "engine" RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
 
 # gi.chain_face_target — THE SAME BINARY, THE CORRECT BAR (PHOTON phase A, A1
 # §0; lane FENCE-1). Every face ratio = 1.0 +- 0.05 under a real sky AND under a
@@ -1032,7 +1031,7 @@ set_tests_properties(gi.chain_face PROPERTIES TIMEOUT 300 LABELS "engine" RUN_SE
 add_test(NAME gi.chain_face_target COMMAND test_gi_chain_face --target
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.chain_face_target PROPERTIES
-    TIMEOUT 300 LABELS "engine;photon-target" RUN_SERIAL TRUE)
+    TIMEOUT 300 LABELS "engine;photon-target" RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
 
 # gi.field_follows_energy — `gi.field_follows`' EXISTENCE BAR, REPLACED BY ENERGY
 # (PHOTON phase A, A1 section 1.2; lane FENCE-1). A sunlit matte floor lights a
@@ -1063,15 +1062,15 @@ add_dependencies(test_gi_field_energy JahshakaEngineMedia)
 add_test(NAME gi.field_follows_energy COMMAND test_gi_field_energy
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.field_follows_energy PROPERTIES
-    TIMEOUT 300 LABELS "engine;photon-target" RUN_SERIAL TRUE)
+    TIMEOUT 300 LABELS "engine;photon-target" RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
 
 # gi.boot_textures — THE ARM WAITS FOR THE ALBEDO IT IS ABOUT TO VOXELISE
 # (BOOTVOX-1). The voxeliser reads a material's albedo and emissive maps, and a
 # scene that binds one and pushes its GI in the same frame used to voxelise
 # without it and then re-voxelise EVERY cascade when the pixels arrived — which
 # is what the shipped default scene did on every boot (its ground's tile.png).
-# RUN_SERIAL like every cascade suite: the chain holds four voxel volumes at
-# once and the case counts rebuilds per frame.
+# In the gi_chain family like every cascade suite (the case counts rebuilds
+# per frame, in-process).
 add_executable(test_gi_boot_textures test_gi_boot_textures.cpp)
 set_target_properties(test_gi_boot_textures PROPERTIES
     AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
@@ -1086,7 +1085,7 @@ target_link_libraries(test_gi_boot_textures PRIVATE JahshakaEngine)
 add_dependencies(test_gi_boot_textures JahshakaEngineMedia)
 add_test(NAME gi.boot_textures COMMAND test_gi_boot_textures
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(gi.boot_textures PROPERTIES TIMEOUT 300 LABELS "engine" RUN_SERIAL ON)
+set_tests_properties(gi.boot_textures PROPERTIES TIMEOUT 300 LABELS "engine" RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
 
 # gi.stream_edit — AN EDIT THAT ARRIVES WHILE THE ARM IS STILL BEING BUILT
 # (SPECS/OPEN_COVER_SPEC.md §2 A; lane OPEN-COVER-2a's fix round item 1).
@@ -1100,7 +1099,7 @@ set_tests_properties(gi.boot_textures PROPERTIES TIMEOUT 300 LABELS "engine" RUN
 # the frame pace itself, which a script cannot (editor.frame is always Complete,
 # and that is the property case 4 pins).
 #
-# RUN_SERIAL like every cascade suite: the chain holds four voxel volumes.
+# In the gi_chain family like every cascade suite.
 add_executable(test_gi_stream_edit test_gi_stream_edit.cpp)
 set_target_properties(test_gi_stream_edit PROPERTIES
     AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
@@ -1115,12 +1114,12 @@ target_link_libraries(test_gi_stream_edit PRIVATE JahshakaEngine)
 add_dependencies(test_gi_stream_edit JahshakaEngineMedia)
 add_test(NAME gi.stream_edit COMMAND test_gi_stream_edit
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(gi.stream_edit PROPERTIES TIMEOUT 300 LABELS "engine" RUN_SERIAL ON)
+set_tests_properties(gi.stream_edit PROPERTIES TIMEOUT 300 LABELS "engine" RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
 
 # SURFACE-CACHE phase 2 (SURFACE-CACHE-1b) — the capture Component's gates.
 # SEVEN ctest names (gi.card_lighting + _indirect: PHOTON-CARDS-1's lit card; gi.cone_integrator_parity, gi.card_read_parity: PHOTON-CARDS-2) out of ONE binary, selected by argv: five different scenes
 # are needed, one process each — while the fixture scaffolding is the same in
-# all five. RUN_SERIAL on the shadow case: it renders a shadow atlas per capture.
+# all five. The shadow case is in the gi_chain family: it renders a shadow atlas per capture.
 # PHOTON-CARDS-4: a mover's shadow on the cached surfaces (the mirror umbra vs the
 # raster, the slide at 0 frames' latency, rest costs nothing, a missed footprint
 # relights nothing, a still crate's move recaptured). `--cost` is not a row.
@@ -1157,7 +1156,7 @@ add_test(NAME gi.card_capture COMMAND test_gi_cards capture
 set_tests_properties(gi.card_capture PROPERTIES TIMEOUT 300 LABELS "engine")
 add_test(NAME gi.card_shadow COMMAND test_gi_cards shadow
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(gi.card_shadow PROPERTIES TIMEOUT 300 LABELS "engine" RUN_SERIAL ON)
+set_tests_properties(gi.card_shadow PROPERTIES TIMEOUT 300 LABELS "engine" RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
 add_test(NAME gi.card_budget COMMAND test_gi_cards budget
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.card_budget PROPERTIES TIMEOUT 300 LABELS "engine")
@@ -1394,7 +1393,7 @@ target_link_libraries(test_gi_voxel_coverage PRIVATE JahshakaEngine)
 add_dependencies(test_gi_voxel_coverage JahshakaEngineMedia)
 add_test(NAME gi.voxel_coverage COMMAND test_gi_voxel_coverage
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(gi.voxel_coverage PROPERTIES TIMEOUT 300 LABELS "engine" RUN_SERIAL ON)
+set_tests_properties(gi.voxel_coverage PROPERTIES TIMEOUT 300 LABELS "engine" RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
 # gi.voxel_lab — THE VOXEL LAB (PHOTON-VOXEL-4): the reader's plane march on the CPU
 # (tests/support/voxel_lab.h) over analytic stores - gi.ddgi_ambient's sealed shell per
 # surface class and its open scene per cone set, on the cone-trace reference and the
@@ -1431,8 +1430,8 @@ add_dependencies(voxel_dial_measure JahshakaEngineMedia)
 # hits clipped — read in the bytes (`giVoxelStats().peakEmissive`), because a
 # clipped emitter draws a picture that is merely dimmer.
 #
-# RUN_SERIAL like every cascade suite: it drives a full chain and downloads
-# whole volumes.
+# In the gi_chain family like every cascade suite: it drives a full chain and
+# downloads whole volumes.
 add_executable(test_gi_voxel_emissive test_gi_voxel_emissive.cpp)
 set_target_properties(test_gi_voxel_emissive PROPERTIES
     AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
@@ -1448,7 +1447,7 @@ add_dependencies(test_gi_voxel_emissive JahshakaEngineMedia)
 add_test(NAME gi.voxel_emissive COMMAND test_gi_voxel_emissive
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.voxel_emissive PROPERTIES
-    TIMEOUT 600 LABELS "engine" RUN_SERIAL ON)
+    TIMEOUT 600 LABELS "engine" RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
 
 # gi.voxel_feed — THE VOXELISER IS FED ON THE DEVICE (ATOM P4b, SPECS/atom/
 # A5b_VOXELISER_FEED_AND_FAR_BLAS_DESIGN.md §2-§3). The gather jobs' own counts
@@ -1457,7 +1456,7 @@ set_tests_properties(gi.voxel_emissive PROPERTIES
 # fixture; a hide leaves the next gather by itself; and a from-scratch rebuild of
 # a still scene copies nothing into the GPU scene's tables.
 #
-# RUN_SERIAL like every cascade suite.
+# In the gi_chain family like every cascade suite.
 add_executable(test_gi_voxel_feed test_gi_voxel_feed.cpp)
 set_target_properties(test_gi_voxel_feed PROPERTIES
     AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
@@ -1473,7 +1472,7 @@ add_dependencies(test_gi_voxel_feed JahshakaEngineMedia)
 add_test(NAME gi.voxel_feed COMMAND test_gi_voxel_feed
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.voxel_feed PROPERTIES
-    TIMEOUT 600 LABELS "engine" RUN_SERIAL ON)
+    TIMEOUT 600 LABELS "engine" RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
 
 # gi.env_cone — THE ONE ENVIRONMENT'S CONE LOOKUP, MEASURED (PHOTON-ENV-1).
 # jahEnvCone reads the GGX-prefiltered sky chain at the mip whose lobe matches a
@@ -1565,7 +1564,7 @@ target_link_libraries(test_gi_env_one PRIVATE JahshakaEngine)
 add_dependencies(test_gi_env_one JahshakaEngineMedia)
 add_test(NAME gi.env_one COMMAND test_gi_env_one
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(gi.env_one PROPERTIES TIMEOUT 300 LABELS "engine" RUN_SERIAL ON)
+set_tests_properties(gi.env_one PROPERTIES TIMEOUT 300 LABELS "engine" RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
 
 # ---------------------------------------------------------------------------
 # THE GATHER'S FOUR CORRECTNESS FINDINGS (PHOTON-GATHER-1b item 1; C2 design

@@ -135,9 +135,10 @@ add_test(NAME vr.session
 set_tests_properties(vr.session PROPERTIES
     LABELS "engine"
     TIMEOUT 600
-    # A second Vulkan instance (the runtime's compositor) and one IPC socket:
-    # never two of these at once.
-    RUN_SERIAL TRUE
+    # One Monado at a time (the family lock, tests/CMakeLists.txt): the runtime's
+    # IPC socket is private to the run (run_vr_session.sh's own XDG_RUNTIME_DIR),
+    # so nothing else in the gate has to stop for it.
+    RESOURCE_LOCK monado COST ${JAH_COST_MONADO}
     SKIP_RETURN_CODE 77
     ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}JAHSHAKA_DATA_ROOT=${CMAKE_CURRENT_BINARY_DIR}/vr-session-home")
 
@@ -157,7 +158,7 @@ add_test(NAME vr.session_undithered
 set_tests_properties(vr.session_undithered PROPERTIES
     LABELS "engine"
     TIMEOUT 600
-    RUN_SERIAL TRUE
+    RESOURCE_LOCK monado COST ${JAH_COST_MONADO}
     SKIP_RETURN_CODE 77
     ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}JAHSHAKA_NO_DITHER=1;JAHSHAKA_DATA_ROOT=${CMAKE_CURRENT_BINARY_DIR}/vr-session-nodither-home")
 
@@ -187,7 +188,7 @@ add_test(NAME vr.gather_stereo
 set_tests_properties(vr.gather_stereo PROPERTIES
     LABELS "engine"
     TIMEOUT 600
-    RUN_SERIAL TRUE
+    RESOURCE_LOCK monado COST ${JAH_COST_MONADO}
     SKIP_RETURN_CODE 77
     ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}JAHSHAKA_DATA_ROOT=${CMAKE_CURRENT_BINARY_DIR}/vr-gather-home")
 
@@ -214,7 +215,7 @@ add_test(NAME vr.verbs_session
 set_tests_properties(vr.verbs_session PROPERTIES
     LABELS "scripting"
     TIMEOUT 600
-    RUN_SERIAL TRUE
+    RESOURCE_LOCK monado COST ${JAH_COST_MONADO}
     SKIP_RETURN_CODE 77
     ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}HOME=${_vr_verbs_home};JAHSHAKA_DATA_ROOT=${_vr_verbs_home}/.local/share/Jahshaka")
 
@@ -239,7 +240,7 @@ set_tests_properties(vr.player_session PROPERTIES
     # 20 Hz), so it is longer than a desktop suite — it measured 16 s — but it
     # is not in the class that needs 900.
     TIMEOUT 600
-    RUN_SERIAL TRUE
+    RESOURCE_LOCK monado COST ${JAH_COST_MONADO}
     SKIP_RETURN_CODE 77
     ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}HOME=${_vr_player_home};JAHSHAKA_DATA_ROOT=${_vr_player_home}/.local/share/Jahshaka")
 
@@ -258,7 +259,7 @@ add_test(NAME vr.photon_view
 set_tests_properties(vr.photon_view PROPERTIES
     LABELS "scripting"
     TIMEOUT 600
-    RUN_SERIAL TRUE
+    RESOURCE_LOCK monado COST ${JAH_COST_MONADO}
     SKIP_RETURN_CODE 77
     ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}HOME=${_vr_photon_home};JAHSHAKA_DATA_ROOT=${_vr_photon_home}/.local/share/Jahshaka")
 
@@ -282,7 +283,7 @@ add_test(NAME vr.no_picture_start
 set_tests_properties(vr.no_picture_start PROPERTIES
     LABELS "scripting"
     TIMEOUT 600
-    RUN_SERIAL TRUE
+    RESOURCE_LOCK monado COST ${JAH_COST_MONADO}
     SKIP_RETURN_CODE 77
     WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
     # ...AND A BLINKING RUNTIME (JAHSHAKA_VR_TEST_BLINK_EVERY, lane V1-RIG fix
@@ -318,7 +319,7 @@ add_test(NAME vr.mirror_live
 set_tests_properties(vr.mirror_live PROPERTIES
     LABELS "scripting"
     TIMEOUT 600
-    RUN_SERIAL TRUE
+    RESOURCE_LOCK monado COST ${JAH_COST_MONADO}
     SKIP_RETURN_CODE 77
     ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}HOME=${_vr_mirror_home};JAHSHAKA_DATA_ROOT=${_vr_mirror_home}/.local/share/Jahshaka;JAHSHAKA_VR_TEST_BLINK_EVERY=30;JAHSHAKA_VR_TEST_BLINK_FRAMES=12")
 
@@ -351,7 +352,7 @@ add_test(NAME vr.input_session
 set_tests_properties(vr.input_session PROPERTIES
     LABELS "scripting"
     TIMEOUT 600
-    RUN_SERIAL TRUE
+    RESOURCE_LOCK monado COST ${JAH_COST_MONADO}
     SKIP_RETURN_CODE 77
     ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}HOME=${_vr_input_home};JAHSHAKA_DATA_ROOT=${_vr_input_home}/.local/share/Jahshaka;JAHSHAKA_VR_TEST_INJECT=1")
 
@@ -400,7 +401,7 @@ foreach(_arm warmup warmup_control)
     set_tests_properties(vr.${_arm} PROPERTIES
         LABELS "scripting"
         TIMEOUT 600
-        RUN_SERIAL TRUE
+        RESOURCE_LOCK monado COST ${JAH_COST_MONADO}
         SKIP_RETURN_CODE 77
         FIXTURES_REQUIRED vr${_arm}FreshHome
         ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}HOME=${_vr_warm_home};JAHSHAKA_DATA_ROOT=${_vr_warm_home}/.local/share/Jahshaka")
@@ -440,7 +441,7 @@ set_tests_properties(vr.frame_budget PROPERTIES
     # imports Showroom 2 on the way, on a rig whose present copy is 10-27 ms a
     # frame: this is the longest VR suite there is.
     TIMEOUT 900
-    RUN_SERIAL TRUE
+    RESOURCE_LOCK monado COST ${JAH_COST_MONADO}
     SKIP_RETURN_CODE 77
     # JAHSHAKA_PERF_ROOT is what lets the script's `out` land in the suite's own
     # scratch: a capture's `out` is confined to the capture root, and the
@@ -486,7 +487,7 @@ set_tests_properties(vr.eye_grade PROPERTIES
     # Five arms, each settling and then rendering a ~90-frame mono control for
     # the eye screenshot, on a rig whose present copy is 10-27 ms a frame.
     TIMEOUT 900
-    RUN_SERIAL TRUE
+    RESOURCE_LOCK monado COST ${JAH_COST_MONADO}
     SKIP_RETURN_CODE 77
     ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}HOME=${_vr_grade_home};JAHSHAKA_DATA_ROOT=${_vr_grade_home}/.local/share/Jahshaka")
 
@@ -506,15 +507,16 @@ add_test(NAME vr.sample_open
 set_tests_properties(vr.sample_open PROPERTIES
     LABELS "scripting"
     TIMEOUT 600
-    RUN_SERIAL TRUE
+    RESOURCE_LOCK monado COST ${JAH_COST_MONADO}
     SKIP_RETURN_CODE 77
     ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}HOME=${_vr_sample_home};JAHSHAKA_DATA_ROOT=${_vr_sample_home}/.local/share/Jahshaka")
 
 set_tests_properties(vr.spike_1a PROPERTIES
     LABELS "engine"
     TIMEOUT 600
-    # The runtime is a SECOND Vulkan instance (its compositor) beside ours, and
-    # it owns an IPC socket: never two of these at once (the VRAM law).
-    RUN_SERIAL TRUE
+    # The runtime is a SECOND Vulkan instance beside ours; its IPC socket lives
+    # in the runner's private XDG_RUNTIME_DIR. One Monado at a time (the family
+    # lock, tests/CMakeLists.txt); the rest of the gate keeps running.
+    RESOURCE_LOCK monado COST ${JAH_COST_MONADO}
     SKIP_RETURN_CODE 77
     ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}JAHSHAKA_DATA_ROOT=${CMAKE_CURRENT_BINARY_DIR}/vr-home")

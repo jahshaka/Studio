@@ -273,6 +273,26 @@ function(jah_gpu_exclusive_test)
     set_property(GLOBAL APPEND PROPERTY JAH_GPU_EXCLUSIVE_REGISTERED ${G_NAME})
 endfunction()
 
+# THE SERIAL FAMILIES (lane D6B-GATE-SHAPE; SPECS/audits/GATE_SUITES_AUDIT_2026-09-26.md §4
+# R1/R2). RUN_SERIAL stops EVERY other suite of the gate while one runs: 54 rows carried it,
+# 1,487 s of a 3,125 s gate at -j4, and 48 % of that gate's wall had ONE suite running with three
+# slots idle. A group of suites that must not overlap EACH OTHER takes a ctest RESOURCE_LOCK
+# instead: its members still run one at a time, and the other slots keep working through them.
+# Like RUN_SERIAL, a RESOURCE_LOCK reaches only inside one ctest process — which is all these
+# claims ever needed (neither is a timing claim; timing suites take the GPU lock above).
+#   monado   — every suite that starts a Monado runtime (tests/vr). Each runner gives its
+#              runtime a PRIVATE XDG_RUNTIME_DIR (run_vr_*.sh: mktemp -d /tmp/jahvr.XXXXXX), so
+#              the old "one IPC socket" reason was void; two runtimes at once is unmeasured,
+#              so the family stays mutually exclusive.
+#   gi_chain — the cascade-chain suites (tests/gi, engine.gi_scan). Their reason was VRAM ("the
+#              chain holds four voxel volumes"), which DEVPROCESS-1 measured false (2.3 of 16 GB
+#              with three GPU processes live); they stay exclusive among themselves.
+# THE COST PUTS A FAMILY FIRST. A locked family is a CHAIN (the monado one is ~12 min end to
+# end), and a chain that starts late is the gate's tail: ctest starts rows in descending COST,
+# so a family's cost sits above every measured suite's and the longest chain's highest of all.
+set(JAH_COST_MONADO 100000)
+set(JAH_COST_GI_CHAIN 90000)
+
 function(jah_no_display)
     foreach(_t IN LISTS ARGV)
         set_property(TEST ${_t} APPEND PROPERTY ENVIRONMENT_MODIFICATION

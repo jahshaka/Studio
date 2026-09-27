@@ -181,9 +181,10 @@ target_link_libraries(test_engine_gi_scan PRIVATE JahshakaEngine)
 add_dependencies(test_engine_gi_scan JahshakaEngineMedia)
 add_test(NAME engine.gi_scan COMMAND test_engine_gi_scan
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-# RUN_SERIAL like every cascade suite (it holds a voxel volume) and 300 s: the
-# 1k-item arm voxelises once in a Debug build.
-set_tests_properties(engine.gi_scan PROPERTIES TIMEOUT 300 LABELS "engine" RUN_SERIAL ON)
+# In the gi_chain family like every cascade suite (tests/CMakeLists.txt) and
+# 300 s: the 1k-item arm voxelises once in a Debug build.
+set_tests_properties(engine.gi_scan PROPERTIES TIMEOUT 300 LABELS "engine"
+                     RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
 
 # THE GPU SCENE'S TABLES (lane GPU-SCENE-1; ENGINE V2's V2-2 pulled forward into
 # phase A of the Atom and Photon builds). Its own binary because it reads the
