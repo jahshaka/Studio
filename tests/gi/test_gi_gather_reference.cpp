@@ -623,7 +623,7 @@ int main()
     // standard errors (2 x 1.6 %) is 0.912, so the floor is 0.90; nothing in the
     // chain adds light but the blur (+1.3 %) and two standard errors (+3.2 %),
     // so the ceiling is 1.05. The brief's 1.00 +- 0.05 at every point is the
-    // TARGET row (gi.gather_reference_target, label photon-target).
+    // target row (gi.gather_reference_target; green, gating since D6B-GATE-SHAPE).
     const bool targetRow = std::getenv("JAH_GATHER_REFERENCE_TARGET") != nullptr;
     for (size_t i = 0; i < points.size(); ++i) {
         const double a = points[i].analytic;

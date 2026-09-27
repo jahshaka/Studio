@@ -34,8 +34,12 @@ target_compile_definitions(test_open_responsive PRIVATE
 
 set(_open_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-open)
 file(MAKE_DIRECTORY ${_open_home}/run)
-# DEVPROCESS-1: registered through the GPU-timing lock; TIMEOUT = RUN_TIMEOUT + the lock's 900 s wait.
-jah_gpu_exclusive_test(NAME open.responsive RUN_TIMEOUT 400 COMMAND test_open_responsive
+# THE PUSH ROW ASSERTS THE COUNTS, THE NIGHTLY ROW THE MILLISECONDS (lane D6B-GATE-SHAPE;
+# audit §5, verdict FIX-TIME): open.responsive runs every count, structure and ledger
+# assertion and prints each UI-gap / frame / watchdog reading; open.responsive.timing
+# (below) is the same binary with JAHSHAKA_TIMING_BARS=1 — the bars armed, on a quiet box,
+# under the GPU-timing lock. The push row measures no time, so it left the lock.
+add_test(NAME open.responsive COMMAND test_open_responsive
          WORKING_DIRECTORY ${_open_home}/run)
 # TIMEOUT 400, from the MEASUREMENT and not from an estimate. OPEN-ASSIMP-1
 # added the seven remaining shipped samples (import + a synchronous open each,
@@ -52,13 +56,22 @@ jah_gpu_exclusive_test(NAME open.responsive RUN_TIMEOUT 400 COMMAND test_open_re
 # its own control measurement and settle — about 45 s solo. 400 still stands.
 set_tests_properties(open.responsive PROPERTIES
     ENVIRONMENT "HOME=${_open_home};JAHSHAKA_DATA_ROOT=${_open_home}/.local/share/Jahshaka"
-    LABELS "openasync")
+    TIMEOUT 400 LABELS "openasync")
+# open.responsive.timing — the millisecond bars (nightly; `quiet-box`: never a scoped gate).
+# Its own home, so the nightly run and a lane's push-row run never share a library.
+set(_open_timing_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-open-timing)
+file(MAKE_DIRECTORY ${_open_timing_home}/run)
+jah_gpu_exclusive_test(NAME open.responsive.timing RUN_TIMEOUT 400 COMMAND test_open_responsive
+         WORKING_DIRECTORY ${_open_timing_home}/run)
+set_tests_properties(open.responsive.timing PROPERTIES
+    ENVIRONMENT "HOME=${_open_timing_home};JAHSHAKA_DATA_ROOT=${_open_timing_home}/.local/share/Jahshaka;JAHSHAKA_TIMING_BARS=1"
+    LABELS "openasync;nightly;quiet-box")
 
 # The race lane (scripts/sanitize.sh tsan): a threaded open racing a main-thread
 # heartbeat is exactly what TSan is for. Note the 500 ms gap budget above is a
 # WALL-CLOCK assertion — under TSan's 5-15x slowdown it can legitimately fail
 # while proving no race; read the race reports, not the verdict.
-jah_tsan_blocked(open.responsive)   # spawns the app: see jah_tsan_blocked
+jah_tsan_blocked(open.responsive open.responsive.timing)   # spawns the app: see jah_tsan_blocked
 
 # app.create_loop — FORTY CREATES BACK TO BACK, AND THE APP IS STILL UP (lane
 # CREATE-CRASH-1). The D1 library generator's create loop died at the 33rd
@@ -79,10 +92,7 @@ target_compile_definitions(test_create_loop PRIVATE
     JAHSHAKA_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
     JAHSHAKA_BINARY="$<TARGET_FILE:${CMAKE_PROJECT_NAME}>")
 set(_create_loop_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-create-loop)
-add_test(NAME app.create_loop.fresh_home
-         COMMAND sh -c "rm -rf '${_create_loop_home}' && mkdir -p '${_create_loop_home}/run'")
-set_tests_properties(app.create_loop.fresh_home PROPERTIES
-    FIXTURES_SETUP createLoopFreshHome LABELS "openasync")
+jah_fresh_home_fixture(app.create_loop.fresh_home createLoopFreshHome "${_create_loop_home}" LABELS "openasync")
 add_test(NAME app.create_loop COMMAND test_create_loop
          WORKING_DIRECTORY ${_create_loop_home}/run)
 # TIMEOUT 750: six times the measured 125 s (solo on the rig display beside one
@@ -117,11 +127,10 @@ jah_tsan_blocked(open.frames)   # spawns the app: see jah_tsan_blocked
 
 # open.crash_soak — the crash itself, N times, under glibc's heap checks.
 #
-# NIGHTLY, and labelled `benchmark` because that label IS this tree's nightly
-# marker: the MERGE and PUSH tiers both run with
-# -LE "^(benchmark|shadercache-attack)$", so a suite that needs a quiet box and
-# minutes of it carries one of those two labels rather than a third that would
-# have to be added to every tier's command line (docs/TESTING_GATE.md).
+# NIGHTLY (label `nightly`, D6B-GATE-SHAPE — it was labelled `benchmark` when that label
+# doubled as the nightly marker): out of the MERGE and PUSH tiers (`gate-scope.py
+# --merge-tier`), and — being minutes of one process rather than a measurement — still
+# selected by the scoped gate of a change to its own directory.
 #
 # PROBABILISTIC ON THE BASE, deterministic-ish on the fix: 9 failures in 12 runs
 # before the slice boundary drove a frame, 0 in 12 after, measured twice. Read a
@@ -134,5 +143,5 @@ add_test(NAME open.crash_soak
                  ${CMAKE_SOURCE_DIR}/scenes
                  ${CMAKE_CURRENT_BINARY_DIR}/soak 12)
 set_tests_properties(open.crash_soak PROPERTIES
-    TIMEOUT 900 RUN_SERIAL TRUE LABELS "benchmark")
+    TIMEOUT 900 RUN_SERIAL TRUE LABELS "nightly")
 jah_tsan_blocked(open.crash_soak)

@@ -55,7 +55,7 @@ add_test(NAME log.events
          WORKING_DIRECTORY ${_le_home}/run)
 set_tests_properties(log.events PROPERTIES
     ENVIRONMENT "HOME=${_le_home};JAHSHAKA_DATA_ROOT=${_le_home}/.local/share/Jahshaka"
-    TIMEOUT 300
+    TIMEOUT 240
     LABELS "log")
 
 # log.engine — the engine half (SESSION_LOG_SPEC §10 phase 3 gate): the Ogre
@@ -73,7 +73,7 @@ add_test(NAME log.engine
          WORKING_DIRECTORY ${_lg_home}/run)
 set_tests_properties(log.engine PROPERTIES
     ENVIRONMENT "HOME=${_lg_home};JAHSHAKA_DATA_ROOT=${_lg_home}/.local/share/Jahshaka"
-    TIMEOUT 400
+    TIMEOUT 300
     LABELS "log")
 
 # log.perf — the periodic performance sampler (SESSION_LOG_SPEC §10 phase 4
@@ -96,7 +96,7 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
                  WORKING_DIRECTORY ${_lp_home}/run)
         set_tests_properties(log.perf PROPERTIES
             ENVIRONMENT "HOME=${_lp_home};JAHSHAKA_DATA_ROOT=${_lp_home}/.local/share/Jahshaka"
-            TIMEOUT 400
+            TIMEOUT 360
             LABELS "log")
     else()
         message(STATUS "log.perf skipped: needs curl and jq")

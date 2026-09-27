@@ -23,6 +23,15 @@ add_test(NAME app.shutdown_order COMMAND test_shutdown_order
 set_tests_properties(app.shutdown_order PROPERTIES
     ENVIRONMENT "HOME=${_order_home};JAHSHAKA_DATA_ROOT=${_order_home}/.local/share/Jahshaka"
     TIMEOUT 120 LABELS "shutdown")
+# app.shutdown_order.timing — the client's 900 ms bar, nightly (lane D6B-GATE-SHAPE; audit §5
+# FIX-TIME): the same binary with JAHSHAKA_TIMING_BARS=1, quiet box, the GPU-timing lock.
+set(_order_timing_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-order-timing)
+file(MAKE_DIRECTORY ${_order_timing_home}/run)
+jah_gpu_exclusive_test(NAME app.shutdown_order.timing RUN_TIMEOUT 120 COMMAND test_shutdown_order
+         WORKING_DIRECTORY ${_order_timing_home}/run)
+set_tests_properties(app.shutdown_order.timing PROPERTIES
+    ENVIRONMENT "HOME=${_order_timing_home};JAHSHAKA_DATA_ROOT=${_order_timing_home}/.local/share/Jahshaka;JAHSHAKA_TIMING_BARS=1"
+    LABELS "shutdown;nightly;quiet-box")
 
 # app.watchdog_stall — Lane 5: a 3 s UI-thread block produces exactly one
 # [warn] and a non-empty stack OF THE UI THREAD; a 100 ms block produces none.
@@ -57,4 +66,4 @@ set_tests_properties(app.watchdog_stall PROPERTIES
 # The race lane (scripts/sanitize.sh tsan): teardown ordering and the watchdog
 # are pure thread-interaction contracts, and shutdown is where read-after-destroy
 # across threads traditionally hides.
-jah_tsan_blocked(app.shutdown_order app.watchdog_stall)   # spawn the app
+jah_tsan_blocked(app.shutdown_order app.shutdown_order.timing app.watchdog_stall)   # spawn the app

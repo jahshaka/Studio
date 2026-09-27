@@ -65,12 +65,14 @@ target_compile_definitions(test_mirror_scale PRIVATE
     JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_mirror_scale PRIVATE IrisGL JahshakaEngine Qt6::Gui Qt6::OpenGL)
 add_dependencies(test_mirror_scale JahshakaEngineMedia)
-add_test(NAME mirror.scale COMMAND test_mirror_scale WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-# RUN_SERIAL: it is a TIMING suite. The ratios are load-tolerant by construction
-# (every arm pays the same contention) but a suite sharing a core with four
-# Vulkan gates measures the scheduler, not the walk.
+# THE GPU-TIMING LOCK: it is a TIMING suite (lane D6B-GATE-SHAPE; audit §4 R3 — it was
+# RUN_SERIAL, which reaches only inside one ctest). The ratios are load-tolerant by
+# construction (every arm pays the same contention), and the lock keeps every other
+# measurement on the box out of its window.
+jah_gpu_exclusive_test(NAME mirror.scale RUN_TIMEOUT 300 COMMAND test_mirror_scale
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(mirror.scale PROPERTIES
-    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 300 RUN_SERIAL TRUE LABELS "mirror")
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "mirror")
 
 # mirror.dirty_equals_full — THE DIFFERENTIAL TEST of the dirty-set mirror
 # (SPECS/DIRTY_SET_MIRROR_SPEC.md §7.1). For every class of mutation the
@@ -95,7 +97,7 @@ add_dependencies(test_dirty_mirror JahshakaEngineMedia)
 add_test(NAME mirror.dirty_equals_full COMMAND test_dirty_mirror
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(mirror.dirty_equals_full PROPERTIES
-    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 180 LABELS "mirror")
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "mirror")
 
 # mirror.grid_floor — THE GROUND GRID ON TOP OF THE FLOOR (GIZMO-2 item 5, owner
 # §370). The grid sits at exactly y=0 now and wins against the coplanar floor
@@ -164,7 +166,7 @@ target_link_libraries(test_sun_night PRIVATE IrisGL JahshakaEngine Qt6::Gui Qt6:
 add_dependencies(test_sun_night JahshakaEngineMedia)
 add_test(NAME mirror.sun_night COMMAND test_sun_night WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(mirror.sun_night PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
-                     TIMEOUT 300 LABELS "mirror")
+                     TIMEOUT 120 LABELS "mirror")
 
 # mirror.vr_proxies — THE WEARER, DRAWN AT THE DESK AND IN EVERY EYE (VR_SPEC
 # §5 phase 4, lane VR-4). The two HAND markers the editor's VR preview shows
@@ -200,4 +202,4 @@ add_dependencies(test_vr_proxies JahshakaEngineMedia)
 add_test(NAME mirror.vr_proxies COMMAND test_vr_proxies
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(mirror.vr_proxies PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
-                     TIMEOUT 180 LABELS "mirror")
+                     TIMEOUT 120 LABELS "mirror")

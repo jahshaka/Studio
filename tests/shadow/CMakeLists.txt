@@ -65,7 +65,7 @@ set_tests_properties(lights.shadows PROPERTIES TIMEOUT 120 LABELS "engine")
 # observation away from every case after it.
 add_test(NAME shadow.atlas_rebuilds COMMAND test_shadow_maps t3x
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(shadow.atlas_rebuilds PROPERTIES TIMEOUT 180 LABELS "engine")
+set_tests_properties(shadow.atlas_rebuilds PROPERTIES TIMEOUT 120 LABELS "engine")
 
 # shadow.atlas_binding — T3y, the other half of the same contract: nothing
 # rebuilds the atlas while a world is still BINDING (no view has presented), and
@@ -74,4 +74,4 @@ set_tests_properties(shadow.atlas_rebuilds PROPERTIES TIMEOUT 180 LABELS "engine
 # can be observed.
 add_test(NAME shadow.atlas_binding COMMAND test_shadow_maps t3y
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(shadow.atlas_binding PROPERTIES TIMEOUT 180 LABELS "engine")
+set_tests_properties(shadow.atlas_binding PROPERTIES TIMEOUT 120 LABELS "engine")

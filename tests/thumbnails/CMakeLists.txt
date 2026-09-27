@@ -237,4 +237,4 @@ target_link_libraries(test_preview_environment PRIVATE IrisGL JahshakaEngine Qt6
 add_dependencies(test_preview_environment JahshakaEngineMedia)
 add_test(NAME thumbnails.studio_env COMMAND ${CMAKE_BINARY_DIR}/bin/test_preview_environment
          WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
-set_tests_properties(thumbnails.studio_env PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 180 LABELS "mirror")
+set_tests_properties(thumbnails.studio_env PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "mirror")

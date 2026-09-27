@@ -24,7 +24,7 @@ jahshaka_hdr_test(test_hdr_drag test_hdr_drag.cpp)
 target_link_libraries(test_hdr_drag PRIVATE JahshakaEngine)
 add_test(NAME hdr.drag_stable COMMAND test_hdr_drag
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(hdr.drag_stable PROPERTIES TIMEOUT 180 LABELS "engine")
+set_tests_properties(hdr.drag_stable PROPERTIES TIMEOUT 120 LABELS "engine")
 
 if(JAHSHAKA_ASAN)
     jahshaka_hdr_test(test_hdr_drag_asan test_hdr_drag.cpp)
@@ -35,7 +35,7 @@ if(JAHSHAKA_ASAN)
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
     # Same reason as tests/engine and tests/ssr: the only leaks LSan finds here
     # are libdbus-1 allocations reached from the Vulkan loader's device-select layer.
-    set_tests_properties(hdr.drag_stable_asan PROPERTIES TIMEOUT 300 LABELS "engine"
+    set_tests_properties(hdr.drag_stable_asan PROPERTIES TIMEOUT 180 LABELS "engine"
                          ENVIRONMENT "${JAH_ASAN_ENGINE_OPTIONS}")
 endif()
 
@@ -47,7 +47,7 @@ jahshaka_hdr_test(test_hdr_meter test_hdr_meter.cpp)
 target_link_libraries(test_hdr_meter PRIVATE JahshakaEngine)
 add_test(NAME hdr.meter COMMAND test_hdr_meter
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(hdr.meter PROPERTIES TIMEOUT 300 LABELS "engine")
+set_tests_properties(hdr.meter PROPERTIES TIMEOUT 180 LABELS "engine")
 
 if(JAHSHAKA_ASAN)
     jahshaka_hdr_test(test_hdr_meter_asan test_hdr_meter.cpp)
@@ -56,7 +56,7 @@ if(JAHSHAKA_ASAN)
     target_link_options(test_hdr_meter_asan PRIVATE -fsanitize=address)
     add_test(NAME hdr.meter_asan COMMAND test_hdr_meter_asan
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-    set_tests_properties(hdr.meter_asan PROPERTIES TIMEOUT 600 LABELS "engine"
+    set_tests_properties(hdr.meter_asan PROPERTIES TIMEOUT 180 LABELS "engine"
                          ENVIRONMENT "${JAH_ASAN_ENGINE_OPTIONS}")
 endif()
 
@@ -72,7 +72,7 @@ jahshaka_hdr_test(test_hdr_dither test_hdr_dither.cpp)
 target_link_libraries(test_hdr_dither PRIVATE JahshakaEngine)
 add_test(NAME hdr.dither COMMAND test_hdr_dither
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(hdr.dither PROPERTIES TIMEOUT 180 LABELS "engine")
+set_tests_properties(hdr.dither PROPERTIES TIMEOUT 120 LABELS "engine")
 
 # THE BLOOM COMPOSITE TAKES AN AMOUNT (lane BLOOM-AMOUNT-1, ogre-patch 0082).
 # One bright emissive square on black, rendered four ways in ONE process —
@@ -86,7 +86,7 @@ jahshaka_hdr_test(test_hdr_bloom_amount test_hdr_bloom_amount.cpp)
 target_link_libraries(test_hdr_bloom_amount PRIVATE JahshakaEngine)
 add_test(NAME hdr.bloom_amount COMMAND test_hdr_bloom_amount
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(hdr.bloom_amount PROPERTIES TIMEOUT 180 LABELS "engine")
+set_tests_properties(hdr.bloom_amount PROPERTIES TIMEOUT 120 LABELS "engine")
 
 if(JAHSHAKA_ASAN)
     jahshaka_hdr_test(test_hdr_bloom_amount_asan test_hdr_bloom_amount.cpp)
@@ -95,7 +95,7 @@ if(JAHSHAKA_ASAN)
     target_link_options(test_hdr_bloom_amount_asan PRIVATE -fsanitize=address)
     add_test(NAME hdr.bloom_amount_asan COMMAND test_hdr_bloom_amount_asan
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-    set_tests_properties(hdr.bloom_amount_asan PROPERTIES TIMEOUT 300 LABELS "engine"
+    set_tests_properties(hdr.bloom_amount_asan PROPERTIES TIMEOUT 120 LABELS "engine"
                          ENVIRONMENT "${JAH_ASAN_ENGINE_OPTIONS}")
 endif()
 
@@ -106,6 +106,6 @@ if(JAHSHAKA_ASAN)
     target_link_options(test_hdr_dither_asan PRIVATE -fsanitize=address)
     add_test(NAME hdr.dither_asan COMMAND test_hdr_dither_asan
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-    set_tests_properties(hdr.dither_asan PROPERTIES TIMEOUT 300 LABELS "engine"
+    set_tests_properties(hdr.dither_asan PROPERTIES TIMEOUT 120 LABELS "engine"
                          ENVIRONMENT "${JAH_ASAN_ENGINE_OPTIONS}")
 endif()

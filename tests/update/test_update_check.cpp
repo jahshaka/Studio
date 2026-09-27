@@ -26,6 +26,7 @@
 #include <cstdio>
 
 #include "app/updatechecker.h"
+#include "../support/timingbars.h"
 
 static int failures = 0;
 #define CHECK(cond, msg) do { if (cond) std::printf("ok:   %s\n", msg); else { std::printf("FAIL: %s\n", msg); ++failures; } } while (0)
@@ -72,7 +73,11 @@ int main(int argc, char **argv)
     const qint64 returnedAfterMs = timer.elapsed();
     std::printf("info: checkForUpdate() returned in %lld ms\n",
                 static_cast<long long>(returnedAfterMs));
-    CHECK(returnedAfterMs < 500,
+    // The millisecond bars are NIGHTLY (lane D6B-GATE-SHAPE; tests/support/timingbars.h):
+    // app.update_check.timing arms them on a quiet box. What stays here is load-proof —
+    // a check in flight when the verb returned, the TimeoutError inside the pump's 10 s
+    // (Qt's own default is 30 s), and a timeout that never fires EARLY (> 500 ms).
+    JAH_TIMING_CHECK("app.update_check", returnedAfterMs < 500,
           "the verb RETURNED immediately — the check never waits on the calling thread");
     CHECK(checker.checkInFlight(), "a check is in flight");
 
@@ -88,7 +93,8 @@ int main(int argc, char **argv)
     // get it wrong the other way round (CLAUDE.md, HARNESS-1 2026-09-15).
     CHECK(error == QNetworkReply::TimeoutError,
           "... and reports QNetworkReply::TimeoutError");
-    CHECK(endedAfterMs > 500 && endedAfterMs < 5000,
+    CHECK(endedAfterMs > 500, "... not before the timeout THIS CHECK set (1,000 ms)");
+    JAH_TIMING_CHECK("app.update_check", endedAfterMs < 5000,
           "... on the timeout THIS CHECK set, not Qt's 30 s default");
     CHECK(!updateOffered, "no update was offered, so no dialog can be raised");
 

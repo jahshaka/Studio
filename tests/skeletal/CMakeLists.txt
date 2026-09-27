@@ -187,7 +187,7 @@ jahshaka_share_test(test_skeleton_share)
 target_link_libraries(test_skeleton_share PRIVATE JahshakaEngine)
 add_test(NAME skeletal.share COMMAND test_skeleton_share
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(skeletal.share PROPERTIES TIMEOUT 300 LABELS "engine")
+set_tests_properties(skeletal.share PROPERTIES TIMEOUT 120 LABELS "engine")
 jah_no_display(skeletal.share)
 
 if(JAHSHAKA_ASAN)

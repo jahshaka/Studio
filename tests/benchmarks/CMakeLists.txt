@@ -18,8 +18,8 @@
 #
 # TWO ROWS PER BENCH SINCE 2026-09-09 (TEST_GATE_AUDIT.md §5 step 1):
 #
-#   <bench>.benchmark  --assert  LABELS "benchmark"        NIGHTLY, RUN_SERIAL
-#   <bench>.smoke      --smoke   LABELS "benchmark-smoke"  MERGE, parallel
+#   <bench>.benchmark  --assert  LABELS "nightly;quiet-box" NIGHTLY, RUN_SERIAL, the GPU lock
+#   <bench>.smoke      --smoke   LABELS "benchmark-smoke"   MERGE, parallel
 #
 # The full `--assert` run is a TIMING VERDICT: five minutes of scene-graph
 # measurement compared against a committed baseline, RUN_SERIAL because a
@@ -31,8 +31,10 @@
 # runs, at one scale, in about fifteen seconds, with no baseline compare and no
 # dispersion bound, so it neither needs nor deserves RUN_SERIAL.
 #
-# `ctest -LE benchmark` therefore still skips the minutes and now KEEPS the
-# structure; a nightly / pre-tag run drops -LE and gets the verdict.
+# The MERGE tier's -LE (`gate-scope.py --merge-tier`, label `nightly`) therefore skips
+# the minutes and KEEPS the structure; the nightly tier (`--nightly-tier`) gets the
+# verdict. (The rows were labelled `benchmark` until D6B-GATE-SHAPE, when that label
+# was also the tree's nightly marker for rows that are not benchmarks at all.)
 find_package(Qt6 REQUIRED COMPONENTS Gui)
 
 # The fingerprint the baseline file records. Resolved at CONFIGURE time — a
@@ -75,7 +77,7 @@ jah_gpu_exclusive_test(NAME scenegraph.benchmark RUN_TIMEOUT 1200 COMMAND bench_
 # box still can — a red here under external load is retried on a quiet box
 # before it is believed (gate protocol).
 set_tests_properties(scenegraph.benchmark PROPERTIES
-    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "benchmark"
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "nightly;quiet-box"
     RUN_SERIAL TRUE)
 
 add_test(NAME scenegraph.smoke COMMAND bench_scenegraph --smoke
@@ -85,7 +87,7 @@ file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/smoke")
 # parallel schedule cannot change its answer. Its own working directory because
 # both rows write an Ogre log.
 set_tests_properties(scenegraph.smoke PROPERTIES
-    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 300 LABELS "benchmark-smoke")
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "benchmark-smoke")
 
 # THE RIG-PERF BENCH (SPECS/AVATAR_RIG_PERF_SPEC.md P0 / P3).
 #
@@ -114,12 +116,13 @@ target_compile_definitions(bench_rigperf PRIVATE
 target_link_libraries(bench_rigperf PRIVATE IrisGL JahshakaEngine Qt6::Gui)
 add_dependencies(bench_rigperf JahshakaEngineMedia)
 
-add_test(NAME rigperf.benchmark COMMAND bench_rigperf --assert
-         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 # RUN_SERIAL for the same reason scenegraph.benchmark is: it times wall clock,
-# and a parallel ctest schedule turns the dispersion bound into a coin flip.
+# and a parallel ctest schedule turns the dispersion bound into a coin flip — and
+# the GPU-timing lock like it (D6B-GATE-SHAPE: the lock list is the timing list).
+jah_gpu_exclusive_test(NAME rigperf.benchmark RUN_TIMEOUT 600 COMMAND bench_rigperf --assert
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(rigperf.benchmark PROPERTIES
-    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 600 LABELS "benchmark"
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "nightly;quiet-box"
     RUN_SERIAL TRUE)
 
 add_test(NAME rigperf.smoke COMMAND bench_rigperf --smoke

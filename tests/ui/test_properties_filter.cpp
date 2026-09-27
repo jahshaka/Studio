@@ -66,6 +66,7 @@ For more information see the LICENSE file
 #include "ui/style/thememanager.h"
 
 #include "../support/documentgraph.h"
+#include "../support/timingbars.h"
 
 static int failures = 0;
 #define CHECK(cond, name) do { \
@@ -513,10 +514,13 @@ int main(int argc, char **argv)
         turn();
         const double worldMs = typeCost(Tab::World, QStringLiteral("ssr"));
         std::printf("      keystroke: world %.3f ms, mesh selection %.3f ms\n", worldMs, meshMs);
-        CHECK(worldMs < 5.0,
+        // THE 5 ms BARS ARE NIGHTLY (lane D6B-GATE-SHAPE; tests/support/timingbars.h): a
+        // keystroke's wall clock reads the box's load too. ui.properties_filter.timing arms
+        // them on a quiet box; this row prints them (the no-rebuild claim is the counts above).
+        JAH_TIMING_CHECK("ui.properties_filter", worldMs < 5.0,
               QStringLiteral("properties_filter: a keystroke on the World tab costs "
                              "%1 ms (< 5)").arg(worldMs, 0, 'f', 3).toUtf8().constData());
-        CHECK(meshMs < 5.0,
+        JAH_TIMING_CHECK("ui.properties_filter", meshMs < 5.0,
               QStringLiteral("properties_filter: a keystroke on a mesh's Selection tab costs "
                              "%1 ms (< 5)").arg(meshMs, 0, 'f', 3).toUtf8().constData());
     }

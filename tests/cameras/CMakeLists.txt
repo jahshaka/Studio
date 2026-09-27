@@ -164,7 +164,7 @@ add_dependencies(test_camera_exposure JahshakaEngineMedia)
 add_test(NAME cameras.exposure COMMAND test_camera_exposure
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(cameras.exposure PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
-    TIMEOUT 900 LABELS "mirror")
+    TIMEOUT 120 LABELS "mirror")
 
 # ---- cameras.e2e ----------------------------------------------------------
 # The real app binary, --script, with HOME redirected to a scratch dir so the
@@ -226,7 +226,7 @@ add_test(NAME cameras.e2e.postfx
 set_tests_properties(cameras.e2e.postfx PROPERTIES
     ENVIRONMENT "HOME=${_post_home};JAHSHAKA_DATA_ROOT=${_post_home}/.local/share/Jahshaka"
     LABELS "scripting"
-    TIMEOUT 300)
+    TIMEOUT 180)
 
 # ---- cameras.e2e.pilot ----------------------------------------------------
 # Phase 3 (D4/D8) and the phase-2c preview preference, through the verbs, in

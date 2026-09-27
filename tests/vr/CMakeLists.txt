@@ -134,10 +134,11 @@ add_test(NAME vr.session
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(vr.session PROPERTIES
     LABELS "engine"
-    TIMEOUT 600
-    # A second Vulkan instance (the runtime's compositor) and one IPC socket:
-    # never two of these at once.
-    RUN_SERIAL TRUE
+    TIMEOUT 480
+    # One Monado at a time (the family lock, tests/CMakeLists.txt): the runtime's
+    # IPC socket is private to the run (run_vr_session.sh's own XDG_RUNTIME_DIR),
+    # so nothing else in the gate has to stop for it.
+    RESOURCE_LOCK monado COST ${JAH_COST_MONADO}
     SKIP_RETURN_CODE 77
     ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}JAHSHAKA_DATA_ROOT=${CMAKE_CURRENT_BINARY_DIR}/vr-session-home")
 
@@ -148,16 +149,17 @@ set_tests_properties(vr.session PROPERTIES
 # picture needs would wave both through. The switch cannot be flipped mid-run
 # for the session's View — it is not a View the engine's frame loop drives, so
 # it is never armed with a per-view push (measured in the arm's own comment) —
-# so the strong form gets its own process. Everything else the suite asserts is
-# asserted twice, which costs one VR run and is the price of keeping the bar.
+# so the strong form gets its own process — and ONLY the strong form: the binary
+# returns after the worldScale-0 arm under JAHSHAKA_NO_DITHER (lane D6B-GATE-SHAPE;
+# audit verdict MERGE — every other case used to be asserted twice, 61 s a gate).
 add_test(NAME vr.session_undithered
          COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/run_vr_session.sh"
                  "$<TARGET_FILE:test_vr_session>" "${JAH_MONADO_MANIFEST}"
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(vr.session_undithered PROPERTIES
     LABELS "engine"
-    TIMEOUT 600
-    RUN_SERIAL TRUE
+    TIMEOUT 420
+    RESOURCE_LOCK monado COST ${JAH_COST_MONADO}
     SKIP_RETURN_CODE 77
     ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}JAHSHAKA_NO_DITHER=1;JAHSHAKA_DATA_ROOT=${CMAKE_CURRENT_BINARY_DIR}/vr-session-nodither-home")
 
@@ -186,8 +188,8 @@ add_test(NAME vr.gather_stereo
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(vr.gather_stereo PROPERTIES
     LABELS "engine"
-    TIMEOUT 600
-    RUN_SERIAL TRUE
+    TIMEOUT 540
+    RESOURCE_LOCK monado COST ${JAH_COST_MONADO}
     SKIP_RETURN_CODE 77
     ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}JAHSHAKA_DATA_ROOT=${CMAKE_CURRENT_BINARY_DIR}/vr-gather-home")
 
@@ -213,8 +215,8 @@ add_test(NAME vr.verbs_session
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(vr.verbs_session PROPERTIES
     LABELS "scripting"
-    TIMEOUT 600
-    RUN_SERIAL TRUE
+    TIMEOUT 480
+    RESOURCE_LOCK monado COST ${JAH_COST_MONADO}
     SKIP_RETURN_CODE 77
     ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}HOME=${_vr_verbs_home};JAHSHAKA_DATA_ROOT=${_vr_verbs_home}/.local/share/Jahshaka")
 
@@ -238,8 +240,8 @@ set_tests_properties(vr.player_session PROPERTIES
     # RUNTIME (Monado's null compositor runs the second session of a process at
     # 20 Hz), so it is longer than a desktop suite — it measured 16 s — but it
     # is not in the class that needs 900.
-    TIMEOUT 600
-    RUN_SERIAL TRUE
+    TIMEOUT 480
+    RESOURCE_LOCK monado COST ${JAH_COST_MONADO}
     SKIP_RETURN_CODE 77
     ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}HOME=${_vr_player_home};JAHSHAKA_DATA_ROOT=${_vr_player_home}/.local/share/Jahshaka")
 
@@ -257,8 +259,8 @@ add_test(NAME vr.photon_view
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(vr.photon_view PROPERTIES
     LABELS "scripting"
-    TIMEOUT 600
-    RUN_SERIAL TRUE
+    TIMEOUT 420
+    RESOURCE_LOCK monado COST ${JAH_COST_MONADO}
     SKIP_RETURN_CODE 77
     ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}HOME=${_vr_photon_home};JAHSHAKA_DATA_ROOT=${_vr_photon_home}/.local/share/Jahshaka")
 
@@ -281,8 +283,8 @@ add_test(NAME vr.no_picture_start
                  "${CMAKE_SOURCE_DIR}/tests/scripting/scripts/e2e_vr_no_picture_start.js")
 set_tests_properties(vr.no_picture_start PROPERTIES
     LABELS "scripting"
-    TIMEOUT 600
-    RUN_SERIAL TRUE
+    TIMEOUT 360
+    RESOURCE_LOCK monado COST ${JAH_COST_MONADO}
     SKIP_RETURN_CODE 77
     WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
     # ...AND A BLINKING RUNTIME (JAHSHAKA_VR_TEST_BLINK_EVERY, lane V1-RIG fix
@@ -317,8 +319,8 @@ add_test(NAME vr.mirror_live
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(vr.mirror_live PROPERTIES
     LABELS "scripting"
-    TIMEOUT 600
-    RUN_SERIAL TRUE
+    TIMEOUT 300
+    RESOURCE_LOCK monado COST ${JAH_COST_MONADO}
     SKIP_RETURN_CODE 77
     ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}HOME=${_vr_mirror_home};JAHSHAKA_DATA_ROOT=${_vr_mirror_home}/.local/share/Jahshaka;JAHSHAKA_VR_TEST_BLINK_EVERY=30;JAHSHAKA_VR_TEST_BLINK_FRAMES=12")
 
@@ -350,8 +352,8 @@ add_test(NAME vr.input_session
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(vr.input_session PROPERTIES
     LABELS "scripting"
-    TIMEOUT 600
-    RUN_SERIAL TRUE
+    TIMEOUT 480
+    RESOURCE_LOCK monado COST ${JAH_COST_MONADO}
     SKIP_RETURN_CODE 77
     ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}HOME=${_vr_input_home};JAHSHAKA_DATA_ROOT=${_vr_input_home}/.local/share/Jahshaka;JAHSHAKA_VR_TEST_INJECT=1")
 
@@ -388,10 +390,7 @@ foreach(_arm warmup warmup_control)
     else()
         set(_vr_warm_script "${CMAKE_SOURCE_DIR}/tests/scripting/scripts/e2e_vr_warmup_control.js")
     endif()
-    add_test(NAME vr.${_arm}.fresh_home
-             COMMAND sh -c "rm -rf '${_vr_warm_home}' && mkdir -p '${_vr_warm_home}'")
-    set_tests_properties(vr.${_arm}.fresh_home PROPERTIES
-        FIXTURES_SETUP vr${_arm}FreshHome LABELS "scripting")
+    jah_fresh_home_fixture(vr.${_arm}.fresh_home vr${_arm}FreshHome "${_vr_warm_home}" LABELS "scripting")
     add_test(NAME vr.${_arm}
              COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/run_vr_app.sh"
                      "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" "${JAH_MONADO_MANIFEST}"
@@ -400,11 +399,30 @@ foreach(_arm warmup warmup_control)
     set_tests_properties(vr.${_arm} PROPERTIES
         LABELS "scripting"
         TIMEOUT 600
-        RUN_SERIAL TRUE
+        RESOURCE_LOCK monado COST ${JAH_COST_MONADO}
         SKIP_RETURN_CODE 77
         FIXTURES_REQUIRED vr${_arm}FreshHome
         ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}HOME=${_vr_warm_home};JAHSHAKA_DATA_ROOT=${_vr_warm_home}/.local/share/Jahshaka")
 endforeach()
+# vr.warmup.timing — the warmed arm's 250 ms worst-frame bar, nightly (lane D6B-GATE-SHAPE;
+# audit §5 F17 FIX-TIME). The COUNT (no compile on a shown frame) is vr.warmup's at push; this
+# is a generated copy of the same script with the bar armed (jah_timing_script), on its own
+# wiped home (the bar means something only cold, like the count), quiet box, the GPU lock.
+set(_vr_warm_timing_home "${CMAKE_CURRENT_BINARY_DIR}/vr-warmup-timing-home")
+jah_timing_script("${CMAKE_SOURCE_DIR}/tests/scripting/scripts/e2e_vr_warmup.js"
+                  "${CMAKE_CURRENT_BINARY_DIR}/e2e_vr_warmup.timing.js")
+jah_fresh_home_fixture(vr.warmup.timing.fresh_home vrwarmuptimingFreshHome "${_vr_warm_timing_home}" LABELS "scripting;nightly;quiet-box")
+jah_gpu_exclusive_test(NAME vr.warmup.timing RUN_TIMEOUT 600
+    COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/run_vr_app.sh"
+            "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" "${JAH_MONADO_MANIFEST}"
+            "${CMAKE_CURRENT_BINARY_DIR}/e2e_vr_warmup.timing.js"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(vr.warmup.timing PROPERTIES
+    LABELS "scripting;nightly;quiet-box"
+    SKIP_RETURN_CODE 77
+    FIXTURES_REQUIRED vrwarmuptimingFreshHome
+    ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}HOME=${_vr_warm_timing_home};JAHSHAKA_DATA_ROOT=${_vr_warm_timing_home}/.local/share/Jahshaka")
+set_property(TEST vr.warmup.timing APPEND PROPERTY RESOURCE_LOCK monado)
 
 # vr.frame_budget — THE 90 Hz BAR'S RIG ARMS (lane V1-RIG item 5;
 # SPECS/PHOTON_SPEC.md §11 item 8, MASTER_QUEUE §681-C).
@@ -416,6 +434,9 @@ endforeach()
 # ledger wants and asserts only the rig-independent one — no frame over three
 # times the run's own median. Its header says why a red against 11.1 ms on an
 # Xvfb rig with free clocks would be a red about the rig.
+# NIGHTLY and in the GPU-timing lock (lane D6B-GATE-SHAPE; audit §3c/R3, verdict NIGHTLY):
+# 105 s of two capture bundles whose one assertion is a timing ratio — a measurement,
+# so `quiet-box` too: no scoped gate runs it on a shared box.
 set(_vr_budget_home "${CMAKE_CURRENT_BINARY_DIR}/vr-budget-home")
 set(JAH_VR_BUDGET_DIR "${CMAKE_CURRENT_BINARY_DIR}/vr-budget-bundles")
 set(JAH_VR_BUDGET_SHOWROOM "${CMAKE_SOURCE_DIR}/scenes/Showroom 2.zip")
@@ -428,24 +449,24 @@ set_target_properties(test_vr_frame_budget PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 target_link_libraries(test_vr_frame_budget PRIVATE Qt6::Core)
 
-add_test(NAME vr.frame_budget
+# It renders 2 x (240 settle + 200 recorded) stereo frames at 10.26 Mpx and imports
+# Showroom 2 on the way, on a rig whose present copy is 10-27 ms a frame: this is the
+# longest VR suite there is (run budget 900 s; the lock's wait rides on top).
+jah_gpu_exclusive_test(NAME vr.frame_budget RUN_TIMEOUT 900
          COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/run_vr_budget.sh"
                  "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" "${JAH_MONADO_MANIFEST}"
                  "${CMAKE_CURRENT_BINARY_DIR}/vr_frame_budget.js"
                  "$<TARGET_FILE:test_vr_frame_budget>" "${JAH_VR_BUDGET_DIR}"
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(vr.frame_budget PROPERTIES
-    LABELS "scripting"
-    # It renders 2 x (240 settle + 200 recorded) stereo frames at 10.26 Mpx and
-    # imports Showroom 2 on the way, on a rig whose present copy is 10-27 ms a
-    # frame: this is the longest VR suite there is.
-    TIMEOUT 900
-    RUN_SERIAL TRUE
+    LABELS "scripting;nightly;quiet-box"
     SKIP_RETURN_CODE 77
     # JAHSHAKA_PERF_ROOT is what lets the script's `out` land in the suite's own
     # scratch: a capture's `out` is confined to the capture root, and the
     # default root is under the user's home.
     ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}HOME=${_vr_budget_home};JAHSHAKA_DATA_ROOT=${_vr_budget_home}/.local/share/Jahshaka;JAHSHAKA_PERF_ROOT=${JAH_VR_BUDGET_DIR}")
+# APPENDED beside the helper's gpu_timing lock (a set_tests_properties would replace it).
+set_property(TEST vr.frame_budget APPEND PROPERTY RESOURCE_LOCK monado)
 
 # ---------------------------------------------------------------------------
 # vr.eye_grade — THE WEARER'S PICTURE IS THE PROJECT'S PICTURE (lane
@@ -486,7 +507,7 @@ set_tests_properties(vr.eye_grade PROPERTIES
     # Five arms, each settling and then rendering a ~90-frame mono control for
     # the eye screenshot, on a rig whose present copy is 10-27 ms a frame.
     TIMEOUT 900
-    RUN_SERIAL TRUE
+    RESOURCE_LOCK monado COST ${JAH_COST_MONADO}
     SKIP_RETURN_CODE 77
     ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}HOME=${_vr_grade_home};JAHSHAKA_DATA_ROOT=${_vr_grade_home}/.local/share/Jahshaka")
 
@@ -505,16 +526,25 @@ add_test(NAME vr.sample_open
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(vr.sample_open PROPERTIES
     LABELS "scripting"
-    TIMEOUT 600
-    RUN_SERIAL TRUE
+    TIMEOUT 180
+    RESOURCE_LOCK monado COST ${JAH_COST_MONADO}
     SKIP_RETURN_CODE 77
     ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}HOME=${_vr_sample_home};JAHSHAKA_DATA_ROOT=${_vr_sample_home}/.local/share/Jahshaka")
 
 set_tests_properties(vr.spike_1a PROPERTIES
     LABELS "engine"
-    TIMEOUT 600
-    # The runtime is a SECOND Vulkan instance (its compositor) beside ours, and
-    # it owns an IPC socket: never two of these at once (the VRAM law).
-    RUN_SERIAL TRUE
+    TIMEOUT 120
+    # The runtime is a SECOND Vulkan instance beside ours; its IPC socket lives
+    # in the runner's private XDG_RUNTIME_DIR. One Monado at a time (the family
+    # lock, tests/CMakeLists.txt); the rest of the gate keeps running.
+    RESOURCE_LOCK monado COST ${JAH_COST_MONADO}
     SKIP_RETURN_CODE 77
     ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}JAHSHAKA_DATA_ROOT=${CMAKE_CURRENT_BINARY_DIR}/vr-home")
+
+# EVERY ROW OF THIS DIRECTORY CARRIES THE `vr` LABEL (lane D6B-GATE-SHAPE; audit §8: the VR
+# rows were labelled `scripting`, `engine` or `services` and there was no way to say "the VR
+# suites" to ctest). Appended here, after every registration above, so a new row cannot miss it.
+get_property(_vr_rows DIRECTORY PROPERTY TESTS)
+foreach(_t IN LISTS _vr_rows)
+    set_property(TEST ${_t} APPEND PROPERTY LABELS vr)
+endforeach()
