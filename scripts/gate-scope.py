@@ -1184,6 +1184,12 @@ def main():
         print(nightly_tier()); return
     build = resolve_build(a.build)
     lane = a.lane or gate_runlog._git(["rev-parse", "--abbrev-ref", "HEAD"])
+    # the run log records the range by sha (HEAD moves; the record must not)
+    log_range = a.range
+    if a.range and ".." in a.range:
+        b_, t_ = a.range.split("..", 1)
+        log_range = "%s..%s" % (gate_runlog._git(["rev-parse", "--short=9", b_]) or b_,
+                                gate_runlog._git(["rev-parse", "--short=9", t_]) or t_)
     if a.solo:
         rc = 0
         for s in a.solo:
@@ -1191,7 +1197,7 @@ def main():
                 rx = "^" + re.escape(s) + "$"
                 r = gate_runlog.run_ctest(f"ctest -j1 --timeout 900 --output-on-failure --no-tests=error -R '{rx}'",
                                           build, a.tier or "scoped", lane, 1, reasons={s: "solo retry"},
-                                          rng=a.range, retry=True)
+                                          rng=log_range, retry=True)
                 rc = rc or r
         sys.exit(rc)
     if not (a.range or a.files):
@@ -1259,7 +1265,7 @@ def main():
         print(f"\n{tier}")
         if a.run:
             sys.exit(gate_runlog.run_ctest(tier, build, a.tier or "merge", lane, a.jobs,
-                                           reasons={}, rng=a.range, labels={n: t["labels"] for n, t in inv.items()}))
+                                           reasons={}, rng=log_range, labels={n: t["labels"] for n, t in inv.items()}))
     if S.full_tier and not S.fallback:
         print("\nTHE MERGE TIER BY RULE (the change reaches every suite):")
         for f in S.full_tier: print(f"  {f}")
@@ -1307,13 +1313,13 @@ def main():
             for arm in subsets[r]: reasons[f"{r}::{arm}"] = S.arms[r][arm]
         env = dict(os.environ, JAH_POOL_ARMS=pool_env) if pool_env else None
         rc = gate_runlog.run_ctest(cmd.split(" ", 1)[1] if pool_env else cmd, build, a.tier or "scoped", lane,
-                                   a.jobs, reasons=reasons, rng=a.range, labels=labels, env=env) if cmd else 0
+                                   a.jobs, reasons=reasons, rng=log_range, labels=labels, env=env) if cmd else 0
         if target_cmd:
             # THE TARGETS' RUN IS A REPORT. Its exit code is printed and thrown away.
             print("\n=== target tests (label %s): reported, not gating ==="
                   % "/".join(sorted(TARGET_LABELS)))
             trc = gate_runlog.run_ctest(target_cmd, build, a.tier or "scoped", lane, 1,
-                                        reasons=selected_targets, rng=a.range, labels=labels,
+                                        reasons=selected_targets, rng=log_range, labels=labels,
                                         gating=lambda n: False)
             print("=== target tests exited %d — NOT part of this gate's verdict ===" % trc)
         sys.exit(rc)
