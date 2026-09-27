@@ -549,7 +549,10 @@ def _scopes(lines):
 
 _DECL_FN = re.compile(r"([A-Za-z_~][\w]*)\s*\(")
 _DECL_VAR = re.compile(r"([A-Za-z_]\w*)\s*(?:\[[^\]]*\]\s*)*(?:=[^;]*|\{[^;]*\})?\s*[;,]\s*$")
-_DECL_TYPE = re.compile(r"\b(?:struct|class|union|enum(?:\s+class|\s+struct)?|using|namespace|typedef)\s+(?:\w+\s+)*?([A-Za-z_]\w*)")
+_DECL_TYPE = re.compile(r"\b(?:struct|class|union|enum(?:\s+class|\s+struct)?)\s+(?:\w+\s+)*?([A-Za-z_]\w*)")
+_DECL_USING = re.compile(r"\busing\s+([A-Za-z_]\w*)\s*=")
+_DECL_TYPEDEF = re.compile(r"\btypedef\b.*?([A-Za-z_]\w*)\s*;\s*$")
+_NAMESPACE = re.compile(r"^(?:inline\s+)?namespace\b|^using\s+namespace\b|^extern\s+\"C\"")
 _DECL_DEFINE = re.compile(r"^#\s*define\s+([A-Za-z_]\w*)")
 _DECL_ENUMERATOR = re.compile(r"^([A-Za-z_]\w*)\s*(?:=\s*[^,]*)?,?$")
 
@@ -561,7 +564,11 @@ def declared_names(line, in_function):
     user of the struct, so the struct selects; a method's declaration selects by the method.
     A line inside a function body declares nothing a family can name: its function selects."""
     if in_function: return set(), True
+    if _NAMESPACE.match(line):
+        return set(), False          # a namespace names every file in it: never a selector
     m = _DECL_DEFINE.match(line)
+    if m: return {m.group(1)}, False
+    m = _DECL_USING.search(line) or _DECL_TYPEDEF.search(line)
     if m: return {m.group(1)}, False
     out = set(m.group(1) for m in _DECL_TYPE.finditer(line))
     if out: return out, False

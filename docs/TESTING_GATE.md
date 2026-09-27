@@ -212,15 +212,16 @@ scoped selection missed is a SELECTOR DEFECT: it is fixed in `gate-scope.py` and
 cases file** — never answered with a wider rule "to be safe". `source.gate_scope_rules` guards the
 tool's own traps (the empty inventory, `--build .`, the targets' split, the fallback's -j).
 
-**Measured at the landing** (twelve recorded diffs of D's last ten lanes, costed with the
-per-row seconds of a -j4 MERGE-tier run; `spikes/modular-gate-1/table.md`): the four that FELL
-BACK (tests/CMakeLists ×2, irisgl/CMakeLists, tests/support) now select 3, 143, 492 and 613 rows
-(VIEWS-DEPTH-1 57 → 1 min, IMPORT-SPEED-1 57 → 13 min); an ENGINE lane selects 502-613 of the
-tier's 653 rows (51-57 min) — the engine's facade puts every engine object into every executable
-that uses the engine, and every rendering app row runs the chain, so that IS its reach (the old
-path rules ran 436-620 and missed the app-spawning harnesses); a fork pin bump is the tier by
-rule. Summed over the twelve: 620 → 538 min. The selector does not make an engine lane short;
-the pools (fewer app boots) and a stage-level full tier are what the engine lanes' time rests on.
+**Measured at the landing** (thirteen recorded diffs of D's last eleven lanes, costed with the
+per-row seconds of a -j4 MERGE-tier run; `spikes/modular-gate-1/table.md`): the five that FELL
+BACK (tests/CMakeLists ×2, irisgl/CMakeLists, tests/support, irisgl/irisglfwd.h) now select 3,
+143, 444, 492 and 584 rows (VIEWS-DEPTH-1 57 → 1 min, IMPORT-SPEED-1 57 → 13, D5-IRISGL-CRUD
+57 → 45); an ENGINE lane selects 502-612 of the tier's 653 rows = 54-57 of its 57 minutes — the
+engine's facade puts every engine object into every executable that uses the engine, and every
+rendering app row runs the chain, so that IS its reach (the old path rules ran 436-620 rows and
+missed the app-spawning harnesses); a fork pin bump is the tier by rule. Summed: 677 → 580 min.
+The selector does not make an engine lane short; the pools (fewer app boots) are what an engine
+lane's time rests on.
 
 ## 3b. Re-gating after a fix (2026-09-11, owner: "no double checking")
 

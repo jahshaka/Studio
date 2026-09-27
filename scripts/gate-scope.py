@@ -726,6 +726,12 @@ class Selection:
         graph_input = (not is_cxx and self.graph is not None and not p.startswith("tests/")
                        and "/media/" not in p and self.graph.known(os.path.join(ROOT, p))
                        and bool(self.graph.reach(os.path.join(ROOT, p))))
+        if is_cxx and self.revs.base and depth == 0 and self._deleted(p):
+            # A DELETED C/C++ file: whatever used it had to change in this same diff (or the
+            # build breaks), so it reaches nothing of its own; the source lints ride
+            self.expand(["hygiene"], [], f"{tag}: deleted")
+            self.rationale.append((p, "deleted → what used it is in this diff (the source lints ride)"))
+            return
         if is_cxx or graph_input:
             # comments/whitespace only → nothing reached (the lints still ride)
             if is_cxx and self.revs.base and depth == 0:
@@ -771,6 +777,11 @@ class Selection:
                 self.fallback.append(f"{tag}: no rule, no symbol, no graph owner")
                 notes.append("NO RULE, no symbol, no graph owner → merge tier")
         if depth == 0: self.rationale.append((p, "; ".join(notes)))
+
+    def _deleted(self, p):
+        """True when the range deletes the file (it is at the base and not at the tip)."""
+        a, b = self.revs.texts(p)
+        return bool(a) and not b
 
     def tests_path(self, p, tag, notes, hit_argv):
         parts = p.split("/")
@@ -838,6 +849,20 @@ class Selection:
         stem = os.path.splitext(p)[0]
         for ext in (".cpp", ".cc", ".mm"):
             if os.path.exists(os.path.join(ROOT, stem + ext)): naming.setdefault(stem + ext, set()).add("(companion)")
+        # A NAME COUNTS ONLY WHERE THIS HEADER IS READ: a source that names `DefaultMaterial`
+        # but never includes this header is naming another declaration (measured: without this
+        # an irisglfwd.h hunk reached the engine through its own DefaultMaterial). The graph's
+        # deps log says who reads the header; scripts (verbs by name) always count.
+        if self.graph is not None and self.graph.known(os.path.join(ROOT, p)):
+            readers = {os.path.relpath(self.graph.obj_src.get(o, ""), ROOT)
+                       for o in self.graph.includers(os.path.join(ROOT, p))}
+            def reads(f):
+                if f.endswith((".js", ".js.in")): return True
+                if f.endswith(HEADER_EXT):
+                    st = os.path.splitext(f)[0]
+                    return any(st + e in readers for e in (".cpp", ".cc", ".mm"))
+                return f in readers
+            naming = {f: v for f, v in naming.items() if reads(f)}
         reached = sorted(f for f in naming if f != p)
         shown = sorted(ids)[:12]
         notes.append(f"symbols {shown}{' …' if len(ids) > 12 else ''} named by {len(reached)} file(s)")
