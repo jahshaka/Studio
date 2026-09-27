@@ -6,12 +6,13 @@
 // renderer through SceneMirror, and the mirror must push a clock so the surface
 // moves. That is what this renders.
 //
-// The comparison is about MOTION, and the clock is FRAME-COUNTED: the mirror
-// advances the shader clock by one grid step (1/60 s) per sync — the engine
-// has no wall clock (trap 7) — unless a scrubbed timeline or a test pins it
-// with setShaderTimeOverride. So what a real editor gets is "the surface
-// changes on its own", by exactly one step a frame. The control is the same
-// scene with a material that has no piece — its pixels must not move at all.
+// The comparison is about MOTION, and the clock is the DOCUMENT's: the mirror
+// accumulates the SimulationClock's frameSeconds() — the whole 1/60 s steps
+// each host frame bought (no wall clock, trap 7) — unless a scrubbed timeline
+// or a test pins it with setShaderTimeOverride. So what a real editor gets is
+// "the surface changes on its own" at simulated speed, whatever the frame rate.
+// The control is the same scene with a material that has no piece — its
+// pixels must not move at all.
 #include <QApplication>
 #include <QColor>
 #include <QDir>
@@ -84,9 +85,10 @@ iris::PbrMaterialPtr pulsingMaterial(const QString &dir, QString *pathOut)
     return material;
 }
 
-/// Renders for `seconds` of WALL clock, sampling the centre pixel, and returns
-/// how far the samples spread. The mirror's clock is the wall clock unless a
-/// caller pins it, so this is what a user sees.
+/// Renders `frames` frames of one grid step each, sampling the centre pixel,
+/// and returns how far the samples spread. The mirror's clock is the
+/// document's SimulationClock unless a caller pins it, so this is what a user
+/// sees.
 int spread(EngineMaterialPreviewScene &preview, Engine &engine, View *view, int frames)
 {
     int lo = 255, hi = 0;
@@ -180,6 +182,15 @@ int main(int argc, char **argv)
         std::printf("    shader clock advanced %.6f s over %d frames\n", double(advanced), n);
         CHECK(std::fabs(advanced - float(n) / 60.0f) < 1e-4f,
               "the mirror's shader clock advances one 1/60 s grid step per frame (no wall clock)");
+        // A FRAME THAT BUYS TWO STEPS (a 30 fps host) advances it two steps:
+        // the clock is the document's simulated time, not a count of syncs.
+        const float before2 = preview.engineScene()->shaderTime();
+        preview.step(2.0f / 60.0f, int(view->width()), int(view->height()));
+        engine->renderOneFrame();
+        const float advanced2 = preview.engineScene()->shaderTime() - before2;
+        std::printf("    one frame of 2/60 s advanced the shader clock %.6f s\n", double(advanced2));
+        CHECK(std::fabs(advanced2 - 2.0f / 60.0f) < 1e-4f,
+              "a frame that buys two grid steps advances the shader clock 2/60 s (stepped, not sync-counted)");
     }
 
     // ---- and back: dropping the piece stops the motion ----------------------
