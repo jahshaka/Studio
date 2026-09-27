@@ -22,7 +22,7 @@ target_link_libraries(test_shader_cache PRIVATE JahshakaEngine)
 add_dependencies(test_shader_cache JahshakaEngineMedia)
 add_test(NAME shadercache.container COMMAND test_shader_cache
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(shadercache.container PROPERTIES TIMEOUT 180 LABELS "shadercache")
+set_tests_properties(shadercache.container PROPERTIES TIMEOUT 720 LABELS "shadercache")
 
 if(JAHSHAKA_ASAN)
     # The sanitised twin. "A corrupt file did not crash us" is not a claim you

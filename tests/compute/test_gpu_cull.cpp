@@ -38,6 +38,7 @@
 //   6. THE COST at 8,001 instances, per job.
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
+#include "../support/timingbars.h"
 
 #include <algorithm>
 #include <cmath>
@@ -251,7 +252,10 @@ int main()
                 res.instances, ref.survivors.size(), res.requestMs);
     CHECK(res.survivors == unsigned(got.size()), "the count the GPU wrote is the list's length");
     CHECK(got == ref.survivors, "the survivor set is the CPU cull's, instance by instance");
-    CHECK(res.requestMs < 1.0, "the host's whole share of a request is under a millisecond");
+    // The host-time bars are NIGHTLY (lane D6B-GATE-SHAPE; tests/support/timingbars.h):
+    // engine.gpu_cull.timing arms them on a quiet box; the counts above are this row's.
+    JAH_TIMING_CHECK("engine.gpu_cull", res.requestMs < 1.0,
+                     "the host's whole share of a request is under a millisecond");
 
     // ---- 3. mode 1: the levels --------------------------------------------
     std::printf("\n== mode 1: the level rule ==\n");
@@ -515,7 +519,8 @@ int main()
                         "dispatches)\n", big.testMs, big.compactMs, big.drawsMs);
             std::printf("   the host's share: %.4f ms\n", big.requestMs);
             CHECK(n >= 8001u, "the table grew to 8,001 instances");
-            CHECK(big.requestMs < 1.0, "the request stays a small write at 8,001 instances");
+            JAH_TIMING_CHECK("engine.gpu_cull", big.requestMs < 1.0,
+                             "the request stays a small write at 8,001 instances");
         }
     }
 

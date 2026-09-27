@@ -68,6 +68,17 @@ THE FOUR CASES, and each one is a rule of the tool rather than a number:
       tests/openasync/test_open_responsive.cpp selects open.responsive. FAILS
       BEFORE the fix (the backtrace's add_test frame is tests/CMakeLists.txt).
 
+  11. THE SUBJECTS SELECT THEIR SUITES (D6B-GATE-SHAPE; the suites audit's S1/S2). A change
+      to the engine chain selects the Atom suites and the exposure-default picture; a change
+      to the mesh bake selects the cluster suites and the LOD-rule parity; the archiver and
+      the avatar import/switch select their `*.responsive` harnesses. Each FAILED before
+      (measured by the audit: OgreChain.cpp selected 415 suites and no tests/atom row).
+
+  12. THE NIGHTLY LABELS SAY WHAT THEY MEAN (D6B-GATE-SHAPE; audit §8). `nightly` leaves
+      the MERGE/PUSH tiers; `quiet-box` beside it keeps a MEASUREMENT out of every scoped
+      gate. A change to test_open_responsive.cpp selects open.responsive (the counts) and
+      NOT open.responsive.timing (its millisecond bars); `--nightly-tier` names `nightly`.
+
 Run: gate_scope_rules.py <source-dir> <build-dir>
 """
 
@@ -193,7 +204,7 @@ def main(source, build):
     for line in out2.splitlines():
         if line.startswith("ctest -j4 ") and "-LE" in line:
             merge = line
-    check("photon-target" in plain(merge) and "benchmark" in plain(merge),
+    check("photon-target" in plain(merge) and "nightly" in plain(merge),
           "the MERGE tier's -LE carries photon-target beside the nightly labels")
 
     # 7. THE FALLBACK HONOURS -j (DEVPROCESS-1 item 2). A lane beside other live
@@ -240,7 +251,8 @@ def main(source, build):
           "...and it names `gate-scope.py --merge-tier` as the tier's command")
     code, out, err = run([tool, "--merge-tier", "-j", "2"], source)
     check(code == 0 and out.strip().startswith("ctest -j2 ") and "photon-target" in plain(out)
-          and "benchmark" in plain(out) and "shadercache-attack" in plain(out),
+          and "nightly" in plain(out) and "shadercache-attack" in plain(out)
+          and "benchmark" not in plain(out),
           "`--merge-tier -j 2` prints the MERGE tier at -j2 with every excluded label (%r)" % out.strip())
     code, out, err = run([tool, "--files", "docs/TESTING_GATE.md", "--build", build], source)
     check(code == 0 and "source.gate_scope_rules" in plain(out),
@@ -261,6 +273,49 @@ def main(source, build):
             doc = {}
         check(code == 0 and suite in doc.get("suites", []),
               "%s selects its own GPU-lock suite %s (%d suites selected)" % (path, suite, len(doc.get("suites", []))))
+
+    # 11. THE SUBJECTS SELECT THEIR SUITES (audit S1/S2). Only suites this build registers
+    # are asked for: the Atom rows exist only where the Vulkan stack does, and a box without
+    # them must not red on their absence.
+    inventory = set()
+    try:
+        raw = subprocess.run(["ctest", "--show-only=json-v1"], cwd=build, capture_output=True, text=True).stdout
+        inventory = {t["name"] for t in json.loads(raw).get("tests", [])}
+    except (ValueError, OSError):
+        pass
+    for path, suites in (
+            ("irisgl/engine/src/OgreChain.cpp", ("engine.atom_draw", "engine.atom_parity", "defaults.exposure_plane")),
+            ("irisgl/import/meshbake.cpp", ("atom.cluster_cut", "atom.cluster_crack", "engine.lod_rule_parity")),
+            ("src/services/projectarchiver.cpp", ("archive.responsive",)),
+            ("src/services/avatarassets.cpp", ("avatar.responsive",)),
+            ("src/modules/avatar/api/avatarapi.cpp", ("avatar.responsive",)),
+            ("src/modules/avatar/avatarmodule.cpp", ("avatar.responsive",))):
+        code, out, err = run([tool, "--files", path, "--build", build, "--json"], source)
+        try:
+            doc = json.loads(out)
+        except ValueError:
+            doc = {}
+        chosen = set(doc.get("suites", [])) | set(doc.get("targets", []))
+        for suite in suites:
+            if suite not in inventory:
+                print("  (skip: %s is not registered in this build)" % suite)
+                continue
+            check(code == 0 and not doc.get("fallback") and suite in chosen,
+                  "%s selects %s (%d suites selected)" % (path, suite, len(chosen)))
+
+    # 12. THE NIGHTLY LABELS (D6B-GATE-SHAPE).
+    code, out, err = run([tool, "--files", "tests/openasync/test_open_responsive.cpp",
+                          "--build", build, "--json"], source)
+    try:
+        doc = json.loads(out)
+    except ValueError:
+        doc = {}
+    chosen = set(doc.get("suites", [])) | set(doc.get("targets", []))
+    check("open.responsive" in chosen and "open.responsive.timing" not in chosen,
+          "the push row is scoped, its quiet-box millisecond twin is not")
+    code, out, err = run([tool, "--nightly-tier"], source)
+    check(code == 0 and "-L " in out and "nightly" in plain(out) and "-j1" in out,
+          "`--nightly-tier` prints the nightly tier (%r)" % out.strip())
 
     if FAILURES:
         print("source.gate_scope_rules: FAILED (%d)" % len(FAILURES))

@@ -27,7 +27,7 @@ add_dependencies(test_exposure_plane JahshakaEngineMedia)
 add_test(NAME defaults.exposure_plane COMMAND test_exposure_plane
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(defaults.exposure_plane PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
-    TIMEOUT 600 LABELS "mirror")
+    TIMEOUT 120 LABELS "mirror")
 
 # defaults.primitive_table — THE ONE PRIMITIVE TABLE as a contract (owner review
 # R6 / answer Q4, lane SMALL-UI-A). No engine and no display: the app's own

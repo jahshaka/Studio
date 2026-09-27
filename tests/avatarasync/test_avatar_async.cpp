@@ -41,6 +41,7 @@
 // HTTP request the app can only answer between slices, so the polls are a
 // second, independent proof.
 #include "../support/mcpharness.h"
+#include "../support/timingbars.h"
 #include <QCoreApplication>
 #include <QDir>
 #include <QElapsedTimer>
@@ -62,6 +63,15 @@ static int failures = 0;
 using namespace mcpharness;
 
 #define CHECK(cond, msg) do { if (cond) std::printf("ok:   %s\n", msg); else { std::printf("FAIL: %s\n", msg); ++failures; } } while (0)
+
+/// THE MILLISECOND BARS ARE NIGHTLY (lane D6B-GATE-SHAPE; tests/support/timingbars.h):
+/// "the verb returned in < 1,000 ms" and the UI-gap budgets read the box's load as much
+/// as the threading. The push row (avatar.responsive) asserts the job started, the app
+/// answered while it was in flight, the UI thread ticked, the result and each avatar's
+/// animations, and PRINTS the milliseconds; avatar.responsive.timing (nightly, quiet
+/// box, the GPU lock) arms the bars.
+static const bool gTimingBars = jahtest::timingBarsArmed();
+#define TIMING_CHECK(cond, msg) JAH_TIMING_CHECK("avatar.responsive", cond, msg)
 
 /// THE BUDGET. The largest block the avatar paths may still put on the UI
 /// thread is one import COMMIT slice (the CAS ingest of one already-hashed
@@ -380,13 +390,13 @@ int main(int argc, char **argv)
     std::printf("info: the verb returned in %lld ms: %s\n", static_cast<long long>(verbMs),
                 QJsonDocument(started).toJson(QJsonDocument::Compact).constData());
     CHECK(started.value("started").toBool(), "avatar.importAvatar({async:true}) started a job");
-    CHECK(verbMs < 1000, "... and RETURNED immediately instead of importing inline");
+    TIMING_CHECK(verbMs < 1000, "... and RETURNED immediately instead of importing inline");
 
     const JobStats imported = waitForJob(mcp, "import", compiledBeforeImport);
     CHECK(imported.done, "the threaded avatar import completed");
     CHECK(imported.polls >= 2, "the app answered requests WHILE the import was in flight");
     CHECK(imported.ticks > 0, "the UI thread kept ticking during the import");
-    CHECK(withinControlBudget(mcp, imported.maxGap, "import", imported.logMark),
+    TIMING_CHECK(withinControlBudget(mcp, imported.maxGap, "import", imported.logMark),
           "no UI-thread gap beyond the budget during the threaded import");
 
     const QJsonObject result = imported.last.value("result").toObject();
@@ -484,10 +494,10 @@ int main(int argc, char **argv)
           "avatar.open({async:true}) has the definition open when it returns");
     std::printf("info: avatar.open({async:true}) returned in %lld ms\n",
                 static_cast<long long>(openMs));
-    CHECK(openMs < 1000, "... and returned immediately instead of parsing inline");
+    TIMING_CHECK(openMs < 1000, "... and returned immediately instead of parsing inline");
     const JobStats switched = waitForJob(mcp, "switch", compiledBeforeSwitch);
     CHECK(switched.done, "the threaded avatar switch completed");
-    CHECK(withinControlBudget(mcp, switched.maxGap, "switch", switched.logMark),
+    TIMING_CHECK(withinControlBudget(mcp, switched.maxGap, "switch", switched.logMark),
           "no UI-thread gap beyond the budget during the switch");
     CHECK(mcp.integer(QStringLiteral("avatar.preview().bones")) > 10,
           "the switched-to character is loaded in the preview");

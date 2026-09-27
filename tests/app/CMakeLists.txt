@@ -37,14 +37,15 @@ set(JAH_SELFTEST_ENV "${JAH_SELFTEST_ENV}JAHSHAKA_DATA_ROOT=${_selftest_root};")
 # self-test with its ground deliberately broken and requires exit 1: the
 # self-test used to pass a groundless default scene because the sky alone
 # satisfies its centre-pixel check (engine_selftest.sh says why, in full).
-# DEVPROCESS-1: registered through the GPU-timing lock; TIMEOUT = RUN_TIMEOUT + the lock's 900 s wait.
-jah_gpu_exclusive_test(NAME app.engine_selftest_validation RUN_TIMEOUT 180
+# OUT OF THE GPU-TIMING LOCK (lane D6B-GATE-SHAPE; audit §4 R4, FIX-LOCK): it measures no time
+# (a hash-free selftest under the layer; it was in the lock by flake history only).
+add_test(NAME app.engine_selftest_validation
          COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/engine_selftest.sh"
                  "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" "${CMAKE_CURRENT_BINARY_DIR}"
          WORKING_DIRECTORY "$<TARGET_FILE_DIR:${CMAKE_PROJECT_NAME}>")
 set_tests_properties(app.engine_selftest_validation PROPERTIES
     ENVIRONMENT "${JAH_SELFTEST_ENV}VK_INSTANCE_LAYERS=VK_LAYER_KHRONOS_validation"
-    LABELS "app")
+    TIMEOUT 660 LABELS "app")  # 6x measured (D6B fix round F1; spikes/d6b-gate-shape/f1-timeouts.txt)
 
 # app.startup_quiet — the boot log stays clean (STABILITY_PROGRAM_SPEC lanes
 # 6a/6b/6c). Three noise sources were fixed together and all three are only
@@ -139,13 +140,16 @@ endif()
 # gesture ARRIVES — the routing under test is QMouseEvent delivery into the
 # viewport widget, which no function call can stand in for. Same shape as
 # app.input_keys above: its own private Xvfb (never JAH_TEST_DISPLAY, which may
-# name a developer's session), an ephemeral MCP port read back from the log,
-# RUN_SERIAL because synthesised input goes wherever the server has focus.
+# name a developer's session), an ephemeral MCP port read back from the log, and
+# THE GPU-TIMING LOCK like input_keys (lane D6B-GATE-SHAPE; audit §4 R5): its
+# gestures are a chain of fixed sleeps whose ARRIVAL is the timing class. It was
+# RUN_SERIAL "because synthesised input goes wherever the server has focus" —
+# void: the server is its own.
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     if(JAH_XDOTOOL AND JAH_CURL AND JAH_JQ AND JAH_XVFB)
         set(_ps_home ${CMAKE_CURRENT_BINARY_DIR}/play-select-home)
         file(MAKE_DIRECTORY ${_ps_home}/run)
-        add_test(NAME app.play_select
+        jah_gpu_exclusive_test(NAME app.play_select RUN_TIMEOUT 400
                  COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/play_select.sh"
                          "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" 0
                  WORKING_DIRECTORY ${_ps_home}/run)
@@ -154,8 +158,6 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
         # which a loaded box stretches. 400 s against a ~50 s measured run.
         set_tests_properties(app.play_select PROPERTIES
             ENVIRONMENT "HOME=${_ps_home};JAHSHAKA_DATA_ROOT=${_ps_home}/.local/share/Jahshaka"
-            RUN_SERIAL TRUE
-            TIMEOUT 400
             LABELS "app")
     else()
         message(STATUS "app.play_select skipped: needs xdotool, curl, jq and Xvfb")
@@ -176,25 +178,15 @@ set_tests_properties(app.scene_switch_after_play PROPERTIES
     LABELS "app"
     TIMEOUT 300)
 
-# ---- app.selection_outline --------------------------------------------------
-# The isBuiltIn outline-suppression regression gate (2026-09-06): selecting an
-# Add-menu primitive must draw the outline; selecting the ground must not.
-set(_selo_home ${CMAKE_CURRENT_BINARY_DIR}/selection-outline-home)
-file(MAKE_DIRECTORY ${_selo_home}/run)
-add_test(NAME app.selection_outline
-         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_selection_outline.js
-         WORKING_DIRECTORY ${_selo_home}/run)
-set_tests_properties(app.selection_outline PROPERTIES
-    ENVIRONMENT "HOME=${_selo_home};JAHSHAKA_DATA_ROOT=${_selo_home}/.local/share/Jahshaka"
-    LABELS "app"
-    TIMEOUT 300)
-
 # ---- app.multiselect_outline ------------------------------------------------
 # EVERY member of a selection SET is outlined, not just the primary
 # (EDITOR_MULTISELECT_SPEC §2.3/D4 a). Two cubes, one per half of the frame,
 # probed in their own half — a secondary that quietly stopped drawing would pass
-# every verb suite in the program and fail only here. Same hull<->wireframe
-# style-toggle trick as app.selection_outline, so the gizmo cancels out.
+# every verb suite in the program and fail only here. The hull<->wireframe
+# style-toggle trick, so the gizmo cancels out. It also carries the two claims of
+# the old app.selection_outline (lane D6B-GATE-SHAPE; audit verdict MERGE): an
+# Add-menu primitive IS outlined (the isBuiltIn regression gate of 2026-09-06 — its
+# "one selected" arm) and the GROUND never is (its ground arm).
 set(_mso_home ${CMAKE_CURRENT_BINARY_DIR}/multiselect-outline-home)
 file(MAKE_DIRECTORY ${_mso_home}/run)
 add_test(NAME app.multiselect_outline

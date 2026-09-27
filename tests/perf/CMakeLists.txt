@@ -17,7 +17,7 @@ target_link_libraries(test_frame_pacing PRIVATE Qt6::Core)
 add_test(NAME perf.pacing COMMAND test_frame_pacing
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(perf.pacing PROPERTIES
-    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "services")
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "perf")
 
 # perf.offscreen_isolation — a thumbnail/screenshot readback must not redraw
 # (and present) the editor's on-screen view (fps audit F5). Engine up, its own
@@ -31,7 +31,7 @@ add_test(NAME perf.offscreen_isolation
          WORKING_DIRECTORY ${_home}/run)
 set_tests_properties(perf.offscreen_isolation PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
-    LABELS "scripting"
+    LABELS "perf"
     TIMEOUT 240)
 
 # perf.epic_steady_state — the GROWTH-ONLY steady-state gate (fps audit F11).
@@ -50,34 +50,28 @@ set_tests_properties(perf.offscreen_isolation PROPERTIES
 #     comparison is one sample of a run against another sample of the SAME run —
 #     so it is machine-independent, costs ~350 frames of one small scene, and
 #     belongs in the ordinary gate rather than behind `ctest -LE benchmark`.
-#   * RUN_SERIAL anyway. The equalities do not need it (an object count does not
-#     care what else the box is doing), but the cost ratio it prints and the one
-#     inequality it asserts do, and a number nobody can trust is worse than no
-#     number. Serial keeps ctest's own suites off its back.
+#   * THE GPU-TIMING LOCK (lane D6B-GATE-SHAPE; audit §4 R3). The equalities do not
+#     need it (an object count does not care what else the box is doing), but the
+#     cost ratio it prints and the one inequality it asserts do, and a number
+#     nobody can trust is worse than no number. It used to be RUN_SERIAL, which
+#     keeps only this ctest's own rows off it; the lock is box-wide.
 set(SOURCE_DIR ${CMAKE_SOURCE_DIR})
 configure_file(epic_steady_state.js.in
                ${CMAKE_CURRENT_BINARY_DIR}/epic_steady_state.js @ONLY)
 set(_ess_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-epic_steady_state)
 
-# Reuses the samples suite's wipe script rather than copying it: "a scratch HOME
-# that is virgin every run" is one idea and deserves one implementation.
-add_test(NAME perf.freshhome.epic_steady_state
-         COMMAND ${CMAKE_COMMAND} -DHOME_DIR=${_ess_home}
-                 -P ${CMAKE_SOURCE_DIR}/tests/samples/freshhome.cmake)
-set_tests_properties(perf.freshhome.epic_steady_state PROPERTIES
-    FIXTURES_SETUP perf_home_epic_steady_state
-    LABELS "perf")
+# "A scratch HOME that is virgin every run" is one idea and has one implementation
+# (tests/support/fresh_home.sh through jah_fresh_home_fixture).
+jah_fresh_home_fixture(perf.freshhome.epic_steady_state perf_home_epic_steady_state "${_ess_home}" LABELS "perf")
 
-add_test(NAME perf.epic_steady_state
+jah_gpu_exclusive_test(NAME perf.epic_steady_state RUN_TIMEOUT 300
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
                  --script ${CMAKE_CURRENT_BINARY_DIR}/epic_steady_state.js
          WORKING_DIRECTORY ${_ess_home}/run)
 set_tests_properties(perf.epic_steady_state PROPERTIES
     ENVIRONMENT "HOME=${_ess_home};JAHSHAKA_DATA_ROOT=${_ess_home}/.local/share/Jahshaka"
     FIXTURES_REQUIRED perf_home_epic_steady_state
-    LABELS "perf"
-    RUN_SERIAL TRUE
-    TIMEOUT 300)
+    LABELS "perf")
 
 # ---------------------------------------------------------------------------
 # perf.drag_mirror_room — WHAT A DRAG COSTS A FRAME (the render audit's A13
@@ -96,9 +90,10 @@ set_tests_properties(perf.epic_steady_state PROPERTIES
 #     archive itself, so a surviving HOME would make it a re-import and would
 #     carry the previous run's shader cache into the first arm's timings).
 #   * ENGINE UP (no --headless): the subject is a frame being rendered.
-#   * RUN_SERIAL, and this one is not politeness: it is the only suite here
-#     that asserts a TIMING RATIO, and a sibling Vulkan suite sharing the GPU
-#     moves the percentile it compares. Serial keeps ctest's own rows off it.
+#   * THE GPU-TIMING LOCK, and this one is not politeness: it asserts a TIMING
+#     RATIO, and a sibling measurement sharing the GPU moves the percentile it
+#     compares. It used to be RUN_SERIAL, which reaches only inside one ctest
+#     (lane D6B-GATE-SHAPE; audit §4 R3).
 #   * `perf` label only — NOT `benchmark`: it has no baseline file and nothing
 #     to re-record, so it belongs in the merge tier rather than the nightly one.
 #   * TIMEOUT 600: 420 rendered frames of the Mirror Room at Epic plus the
@@ -109,23 +104,16 @@ configure_file(drag_mirror_room.js.in
                ${CMAKE_CURRENT_BINARY_DIR}/drag_mirror_room.js @ONLY)
 set(_drag_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-drag_mirror_room)
 
-add_test(NAME perf.freshhome.drag_mirror_room
-         COMMAND ${CMAKE_COMMAND} -DHOME_DIR=${_drag_home}
-                 -P ${CMAKE_SOURCE_DIR}/tests/samples/freshhome.cmake)
-set_tests_properties(perf.freshhome.drag_mirror_room PROPERTIES
-    FIXTURES_SETUP perf_home_drag_mirror_room
-    LABELS "perf")
+jah_fresh_home_fixture(perf.freshhome.drag_mirror_room perf_home_drag_mirror_room "${_drag_home}" LABELS "perf")
 
-add_test(NAME perf.drag_mirror_room
+jah_gpu_exclusive_test(NAME perf.drag_mirror_room RUN_TIMEOUT 600
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
                  --script ${CMAKE_CURRENT_BINARY_DIR}/drag_mirror_room.js
          WORKING_DIRECTORY ${_drag_home}/run)
 set_tests_properties(perf.drag_mirror_room PROPERTIES
     ENVIRONMENT "HOME=${_drag_home};JAHSHAKA_DATA_ROOT=${_drag_home}/.local/share/Jahshaka"
     FIXTURES_REQUIRED perf_home_drag_mirror_room
-    LABELS "perf"
-    RUN_SERIAL TRUE
-    TIMEOUT 600)
+    LABELS "perf")
 
 # ---------------------------------------------------------------------------
 # perf.hide_soak — HIDING AND SHOWING, TWO HUNDRED TIMES (the render audit's
@@ -148,19 +136,13 @@ set_tests_properties(perf.drag_mirror_room PROPERTIES
 #
 # MEASURED: 40.4 s (the archive import, 60 warm-up frames and 800 rendered
 # frames of the Showroom at Epic — the soak itself is 20.2 s of that), which is
-# why the timeout is 600 and why it is RUN_SERIAL: 800 Epic frames beside
-# sibling Vulkan suites at -j4 is the VRAM-contention class this tree has a
-# documented flake list for (CLAUDE.md), and a soak that trips it proves
-# nothing about hiding.
+# why the timeout is 600. NOT serial and not locked (lane D6B-GATE-SHAPE; audit
+# FIX-SERIAL): its counters are growth-only and measure no time, and its old
+# reason — VRAM contention beside sibling suites — DEVPROCESS-1 measured false.
 configure_file(hide_soak.js.in ${CMAKE_CURRENT_BINARY_DIR}/hide_soak.js @ONLY)
 set(_hide_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-hide_soak)
 
-add_test(NAME perf.freshhome.hide_soak
-         COMMAND ${CMAKE_COMMAND} -DHOME_DIR=${_hide_home}
-                 -P ${CMAKE_SOURCE_DIR}/tests/samples/freshhome.cmake)
-set_tests_properties(perf.freshhome.hide_soak PROPERTIES
-    FIXTURES_SETUP perf_home_hide_soak
-    LABELS "perf")
+jah_fresh_home_fixture(perf.freshhome.hide_soak perf_home_hide_soak "${_hide_home}" LABELS "perf")
 
 add_test(NAME perf.hide_soak
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
@@ -170,7 +152,6 @@ set_tests_properties(perf.hide_soak PROPERTIES
     ENVIRONMENT "HOME=${_hide_home};JAHSHAKA_DATA_ROOT=${_hide_home}/.local/share/Jahshaka"
     FIXTURES_REQUIRED perf_home_hide_soak
     LABELS "perf"
-    RUN_SERIAL TRUE
     TIMEOUT 600)
 
 # ---------------------------------------------------------------------------
@@ -230,7 +211,13 @@ set(JAH_TEST_BUNDLE ${_off_home}/perf/bundle)
 configure_file(capture_off_is_free.js.in
                ${CMAKE_CURRENT_BINARY_DIR}/capture_off_is_free.js @ONLY)
 file(MAKE_DIRECTORY ${_off_home}/run)
-add_test(NAME perf.capture_off_is_free
+# THE GPU-TIMING LOCK because it MEASURES (lane D6B-GATE-SHAPE; audit §4 R3 — it was
+# RUN_SERIAL, which reaches only inside one ctest): the two off windows are compared
+# against each other in the same run, which survives a loaded box far better than an
+# absolute number would — but a sibling measurement sharing the GPU can still make one
+# window of 60 frames twice the other's for reasons that have nothing to do with the
+# monitor.
+jah_gpu_exclusive_test(NAME perf.capture_off_is_free RUN_TIMEOUT 300
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
                  --script ${CMAKE_CURRENT_BINARY_DIR}/capture_off_is_free.js
          WORKING_DIRECTORY ${_off_home}/run)
@@ -239,11 +226,4 @@ set_tests_properties(perf.capture_off_is_free PROPERTIES
     # creates directories and truncates files in whatever it is pointed at), so
     # the suite says where its own root is.
     ENVIRONMENT "HOME=${_off_home};JAHSHAKA_DATA_ROOT=${_off_home}/.local/share/Jahshaka;JAHSHAKA_PERF_ROOT=${_off_home}/perf"
-    LABELS "perf"
-    # RUN_SERIAL because it MEASURES: the two off windows are compared against
-    # each other in the same run, which survives a loaded box far better than an
-    # absolute number would — but four Vulkan suites sharing the GPU can still
-    # make one window of 60 frames twice the other's for reasons that have
-    # nothing to do with the monitor.
-    RUN_SERIAL TRUE
-    TIMEOUT 300)
+    LABELS "perf")

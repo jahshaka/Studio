@@ -4,8 +4,9 @@
     scripts/gate-scope.sh <base>..<tip> [--build build-linux] [--run] [--json]
     scripts/gate-scope.sh --files path [path ...]
 
-The owner's rule (2026-09-09 night): the full gate (298 suites, ~25 min wall) runs once
-per BATCH before a push; a lane gates on what its work can break. This tool turns a git
+The owner's rule (2026-09-09 night): the full gate (the MERGE tier, `--merge-tier`; its row
+count and measured wall live in docs/TESTING_GATE.md §5, never here) runs once per BATCH
+before a push; a lane gates on what its work can break. This tool turns a git
 range (or a file list) into an exact `ctest -R '^(a|b|c)$'` selection, with one rationale
 line per touched path, an estimated wall time from scripts/gate-times.txt (a full-gate snapshot) and the build dir's last run, and a
 loud FALLBACK to the MERGE tier whenever a path matches nothing precise (a rule that
@@ -39,8 +40,11 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # the ray arm reads from the voxels and two scoped gates came back green while
 # gi.rt_reflect was red. The entries are test DIRECTORY names, not ctest labels, so a
 # suite whose dir is not named is invisible however it is labelled.
+# `atom` and `defaults` (D6B-GATE-SHAPE; audit S2): the visibility buffer IS the product's
+# opaque path (engine.atom_draw) and defaults.exposure_plane is an exposure picture — an
+# OgreChain.cpp change selected 415 suites and none of tests/atom before.
 ENGINE_FAMILY = ["engine", "gi", "rtreflect", "lights", "looks", "distortion", "planar", "ssr", "shadow",
-                 "shadercache", "compute", "hdr", "sky", "pieces", "vr",
+                 "shadercache", "compute", "hdr", "sky", "pieces", "vr", "atom", "defaults",
                  "mirror", "cameras", "samples", "picking", "skeletal", "particles", "thumbnails",
                  "materialpreview", "player", "sockets", "threading", "perf", "gizmo", "assets", "log",
                  "shutdown", "openasync", "*vulkan-scripts"]
@@ -71,9 +75,14 @@ AREA_RULES = [
     # bake's format version is HAND-bumped, and the lane that has to bump it is
     # exactly a lane whose scoped selection comes from these rules. Five
     # display-free shell scripts, well under a second.
+    # `atom` and `compute` (D6B-GATE-SHAPE; audit S2): irisgl/import/meshbake.cpp carries the
+    # cluster-DAG bake, and atom.cluster_cut / atom.cluster_crack / engine.lod_rule_parity are
+    # its only guards — nightly-labelled or not, a change to the bake selects them (§1 of
+    # docs/TESTING_GATE.md: a `nightly` row still rides the scoped gate of its own subject).
     (r"^irisgl/import/",
      ["importer", "importasync", "meshbake", "avatar", "skeletal", "assetdelete", "assetgc",
-      "assetmeta", "assetmigrate", "assetpaths", "assets", "samples", "thumbnails", "hygiene"],
+      "assetmeta", "assetmigrate", "assetpaths", "assets", "samples", "thumbnails", "hygiene",
+      "atom", "compute"],
      ["assets", "avatar", "anim"]),
     (r"^irisgl/document/(physics|animation)/",
      ["document", "skeletal", "avatar", "particles", "player", "cameras", "samples",
@@ -99,13 +108,21 @@ AREA_RULES = [
     (r"^irisgl/CMakeLists|^irisgl/cmake/|^irisgl/irisglfwd", ["*merge-tier"], []),
     # --- Studio ---------------------------------------------------------------------------
     (r"^src/scripting/modules/([a-z]+)api\.(cpp|h)$", ["api"], ["$1"]),   # $1 = module name
+    # THE THREADED AVATAR IMPORT/SWITCH (D6B-GATE-SHAPE; audit S1): avatar.responsive's subject
+    # is avatarapi.cpp + the module + services/avatarassets.cpp, and no path selected it.
+    (r"^src/modules/avatar/api/avatarapi\.(cpp|h)$", ["api", "avatarasync"], ["$module"]),
     (r"^src/(modules/[a-z]+/(api/)?[a-z]+api|player/api/playerapi)\.(cpp|h)$", ["api"], ["$module"]),
     (r"^src/scripting/(mcp/|claude/)", ["mcp", "claudechat", "api"], ["app"]),
     (r"^src/scripting/", ["api", "*all-scripts", "mcp"], []),
     (r"^src/services/import/", ["importer", "importasync", "assetdelete", "assetgc", "assetmeta",
                                 "assetmigrate", "assetpaths", "assets", "drawers", "thumbnails",
                                 "meshbake", "samples"], ["assets", "project"]),
-    (r"^src/services/(asset|projectassets|thumbnail|meshbake|audiopeaks|videoutils|rigsignature|animationfile|avatarassets|extentmeasure)",
+    (r"^src/services/avatarassets",
+     ["assetdelete", "assetgc", "assetmeta", "assetmigrate", "assetpaths", "assets", "drawers",
+      "thumbnails", "importer", "importasync", "export", "avatar", "reopen", "samples",
+      "avatarasync"],
+     ["assets", "project", "avatar"]),
+    (r"^src/services/(asset|projectassets|thumbnail|meshbake|audiopeaks|videoutils|rigsignature|animationfile|extentmeasure)",
      ["assetdelete", "assetgc", "assetmeta", "assetmigrate", "assetpaths", "assets", "drawers",
       "thumbnails", "importer", "importasync", "export", "avatar", "reopen", "samples"],
      ["assets", "project", "avatar"]),
@@ -123,6 +140,11 @@ AREA_RULES = [
      ["editor", "scene", "node"]),
     (r"^src/services/(looks|worldmodes|sunlink|planarreflectors|gibounds|lightbindings|iesprofile|sceneextents)",
      ["services", "looks", "planar", "lights", "gi"], ["world", "scene", "node"]),
+    # THE THREADED ARCHIVER (D6B-GATE-SHAPE; audit S1): projectarchiver.cpp is archive.responsive's
+    # subject, and the generic project rule below never named tests/archiveasync.
+    (r"^src/services/projectarchiv",
+     ["archiveasync", "services", "app", "apppaths", "openasync", "export", "hygiene"],
+     ["app", "project"]),
     (r"^src/services/(project|sceneopen|apppaths|sessionheader|sessionmarkers|jahlog|loadtimeline|perfsampler|framepacing|mainthread|engineerror|ogresamples|shutdown)",
      ["services", "app", "apppaths", "log", "perf", "shutdown", "openasync", "hygiene", "threading"],
      ["app", "project"]),
@@ -158,7 +180,7 @@ AREA_RULES = [
                                   "materialbundle", "assets", "assetdelete", "assetgc",
                                   "assettray", "thumbnails"],
      ["materials", "material", "graph"]),
-    (r"^src/modules/avatar/", ["avatar", "skeletal", "ui"], ["avatar", "anim"]),
+    (r"^src/modules/avatar/", ["avatar", "skeletal", "ui", "avatarasync"], ["avatar", "anim"]),
     (r"^src/modules/vr/", ["vr", "player", "app"], ["vr", "player"]),
     (r"^src/(modules/publish|export)/", ["export", "ui"], ["project", "publish"]),
     # …and here because source.panel_rows_guarded and source.db_pointers_initialised
@@ -193,10 +215,21 @@ AREA_RULES = [
 # Cheap smoke suites always added when src/ or irisgl/ moved (a boot that renders + the
 # contract of the scripting surface), ~15 s together.
 ALWAYS_ON_CODE = ["app.startup_quiet", "api.contract"]
-# Anchored: `benchmark` alone would also drop the `benchmark-smoke` rows and `shadercache`
-# would drop the product-contract cache suites (code review 2026-09-10). `--timeout 120` is
-# ctest's DEFAULT for the rows that set no TIMEOUT (46 of them) — a hang costs 2 min, not 25.
-NIGHTLY_LABELS = {"benchmark", "shadercache-attack"}
+# THE NIGHTLY TIER (D6B-GATE-SHAPE; audit §8 — `benchmark` used to be overloaded as this
+# marker, so open.crash_soak and gi.gather_cost carried a label that said the wrong thing).
+#   `nightly`     — every row the MERGE and PUSH tiers leave out: minutes of one process whose
+#                   push-time guard lives elsewhere, or a millisecond bar that needs a quiet box.
+#   `quiet-box`   — beside `nightly` on the rows that MEASURE (the wall-clock benchmarks, the
+#                   `<suite>.timing` millisecond rows, a GPU clock). A scoped gate never runs
+#                   them: it shares the box with other lanes by construction.
+# A `nightly` row WITHOUT `quiet-box` still rides the scoped gate of its own subject — it is
+# that change's guard (atom.cluster_cut for a bake change: audit §3c's condition for the move).
+# Anchored in the -LE: `shadercache` alone would drop the product-contract cache suites (code
+# review 2026-09-10). `--timeout 120` is ctest's DEFAULT for the rows that set no TIMEOUT — a
+# hang costs 2 min, not 25.
+NIGHTLY_LABELS = {"nightly", "shadercache-attack"}
+# Never selected by a scoped gate (the shader-cache attack is minutes under ASan).
+SCOPE_EXCLUDED_LABELS = {"quiet-box", "shadercache-attack"}
 
 # TARGET TESTS (PHOTON phase A, A1 §0; the label's ONE definition lives here).
 #
@@ -229,6 +262,13 @@ NIGHTLY_LABEL_RE = "|".join(sorted(re.escape(l) for l in NIGHTLY_LABELS | TARGET
 def merge_tier(jobs=4):
     return (f'ctest -j{jobs} --timeout 120 --output-on-failure '
             f'-LE "^({NIGHTLY_LABEL_RE})$"')
+
+
+# The NIGHTLY tier: every `nightly` row, one at a time (they are minutes of one process or a
+# measurement that wants the box), on a quiet box, by the lead.
+def nightly_tier():
+    rx = "|".join(sorted(re.escape(l) for l in NIGHTLY_LABELS))
+    return f'ctest -j1 --output-on-failure -L "^({rx})$"'
 
 
 def sh(cmd, cwd=ROOT):
@@ -462,11 +502,15 @@ def main():
     ap.add_argument("--merge-tier", action="store_true",
                     help="print the MERGE tier's ctest command (at -j) and exit — the one source "
                          "docs/TESTING_GATE.md quotes instead of a copy of the -LE set")
+    ap.add_argument("--nightly-tier", action="store_true",
+                    help="print the NIGHTLY tier's ctest command (every `nightly` row, -j1) and exit")
     a = ap.parse_args()
     if a.record_times:
         record_times(a.record_times); return
     if a.merge_tier:
         print(merge_tier(a.jobs)); return
+    if a.nightly_tier:
+        print(nightly_tier()); return
     build = resolve_build(a.build)
     if not (a.range or a.files):
         ap.error("give a range (base..tip) or --files")
@@ -475,8 +519,11 @@ def main():
                  if p in ("CMakeLists.txt", "irisgl/CMakeLists.txt", "tests/CMakeLists.txt")
                  and cmake_list_only(a.range, p)}
 
-    inv = load_inventory(build)
+    # THE COSTS FIRST (D6B-GATE-SHAPE; audit H4): load_inventory's `ctest --show-only`
+    # TRUNCATES Testing/Temporary/LastTest.log, so the last run's overlay read an empty file
+    # whenever it came second.
     costs = load_costs(build)
+    inv = load_inventory(build)
     refs = cmake_src_refs()
     by_dir = collections.defaultdict(list)
     for n, t in inv.items(): by_dir[t["dir"]].append(n)
@@ -576,10 +623,9 @@ def main():
         rationale.append((p, "; ".join(hit) or "NO RULE → merge tier"))
     if code_moved: add(ALWAYS_ON_CODE, "code moved: smoke + contract")
 
-    # The nightly guards never ride a scoped gate (they are the PUSH/NIGHTLY tier's).
-    # (gi.ddgi_raster used to be named here beside them; the suite was deleted with the
-    # irradiance field's rasterised probe source on 2026-09-17, lane FIELD-RASTER-CRUD.)
-    nightly = [n for n in selected if inv[n]["labels"] & NIGHTLY_LABELS]
+    # The quiet-box measurements never ride a scoped gate (see NIGHTLY_LABELS). A `nightly`
+    # row without `quiet-box` stays: its subject changed, and it is that change's guard.
+    nightly = [n for n in selected if inv[n]["labels"] & SCOPE_EXCLUDED_LABELS]
     for n in nightly: selected.pop(n)
     # TARGET TESTS ARE SPLIT OUT, NOT DROPPED (see TARGET_LABELS): they run, they
     # print their value, and their exit code is not the gate's.
@@ -615,7 +661,7 @@ def main():
         return
     if skipped_ubiquitous:
         print(f"\n(modules called by >40% of scripts select nothing on their own: {sorted(skipped_ubiquitous)})")
-    if nightly: print(f"\n(nightly-tier suites left out: {sorted(nightly)})")
+    if nightly: print(f"\n(quiet-box / nightly measurements left out: {sorted(nightly)})")
     if targets:
         print(f"\nTARGET TESTS (label {'/'.join(sorted(TARGET_LABELS))}) — they RUN and PRINT their "
               f"value, and they do NOT decide this gate:")

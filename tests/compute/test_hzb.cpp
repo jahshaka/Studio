@@ -60,6 +60,7 @@
 //      way, because a budget nobody can see is not a measurement.
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
+#include "../support/timingbars.h"
 
 #include <algorithm>
 #include <cmath>
@@ -350,7 +351,10 @@ int main()
     if (bestMs >= 0.0f) {
         std::printf("   HZB GPU cost at 1920x1080: %.4f ms (best of %u measured frames)\n",
                     bestMs, measuredFrames);
-        CHECK(bestMs < 0.3f, "the pyramid costs less than 0.3 ms at 1920x1080");
+        // A GPU-TIME bar: NIGHTLY (lane D6B-GATE-SHAPE; tests/support/timingbars.h) —
+        // chain.hzb.timing arms it on a quiet box under the GPU-timing lock.
+        JAH_TIMING_CHECK("chain.hzb", bestMs < 0.3f,
+                         "the pyramid costs less than 0.3 ms at 1920x1080");
     } else {
         // Not a failure: GPU timestamps are a build/device capability
         // (FramePass::gpuMs is negative when unmeasured, never faked as 0).

@@ -1106,8 +1106,17 @@ assert(cost.totalMs >= cost.setViewport.ms + cost.setHierarchy.ms,
 // lane, of which 5.2 was re-showing blades that had not changed and 1.7 three
 // synchronous timeline repaints; the two SET consumers, untouched by that
 // work, are 0.011 ms of the total).
-assert(cost.perSelectionMs < 11.0,
-    "a selection change fits inside a 90 Hz frame (" + cost.perSelectionMs.toFixed(2) + " ms)");
+// THE FRAME BAR IS NIGHTLY (lane D6B-GATE-SHAPE): a wall-clock reading of a -j4 gate's box.
+// scripting.e2e.editor_controls.timing runs a copy of this script with JAH_TIMING_BARS
+// defined (tests/CMakeLists.txt, jah_timing_script); here it prints. The structural half
+// just below ("attaches NO blades") is this row's guard of the same claim.
+var perSelectionOk = cost.perSelectionMs < 11.0;
+var perSelectionMsg = "a selection change fits inside a 90 Hz frame (" + cost.perSelectionMs.toFixed(2) + " ms)";
+if (typeof JAH_TIMING_BARS !== "undefined" && JAH_TIMING_BARS)
+    assert(perSelectionOk, perSelectionMsg);
+else
+    console.log("time: " + (perSelectionOk ? "within" : "OVER") + ": " + perSelectionMsg +
+                " (a millisecond bar: scripting.e2e.editor_controls.timing asserts it)");
 // ...and the column re-points the blades it already has rather than showing
 // them again: the structural half of the same claim, machine-independent.
 assert(editor.propertiesStats().attached === 0,

@@ -93,6 +93,7 @@
 #include "irisgl/import/importsettings.h"
 #include "irisgl/import/meshbake.h"
 #include "irisgl/import/modelsceneinfo.h"
+#include "../support/timingbars.h"
 
 static int failures = 0;
 static int checks = 0;
@@ -1407,10 +1408,12 @@ static void surfaceCards()
         CHECK_LOUD(covered,
                    "the same surface reads the same coverage at every density — the raster's "
                    "ceiling does not buy its bound with coverage");
-        CHECK_LOUD(bounded,
+        // Both wall-clock bars are NIGHTLY (lane D6B-GATE-SHAPE; tests/support/timingbars.h):
+        // meshbake.cards.timing arms them on a quiet box; this row asserts the coverage.
+        JAH_TIMING_CHECK("meshbake.cards", bounded,
                    "and the cost stops tracking the triangle count: 4x the triangles is less "
                    "than 4x the time, at every step");
-        CHECK_LOUD(underCeiling,
+        JAH_TIMING_CHECK("meshbake.cards", underCeiling,
                    "no density takes seconds (the unbounded raster did, on the UI thread)");
     }
 }

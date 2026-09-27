@@ -32,6 +32,7 @@
 // Its own binary like every GI suite.
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
+#include "../support/timingbars.h"
 
 #include <algorithm>
 #include <cmath>
@@ -344,7 +345,11 @@ int main() {
                     recs.size(), worstMs, followRows, followProbes, worstFollowMs, worstFollowGpu,
                     worstCascadeMs, worstCascadeGpu);
         CHECK(followRows > 0, "the re-integration is filed as its own monitor row");
-        CHECK(worstMs < kTierBudgetMs, "NO FRAME OF THE WALK COSTS MORE THAN THE TIER'S BUDGET");
+        // The frame-time bars are NIGHTLY (lane D6B-GATE-SHAPE; tests/support/timingbars.h):
+        // a frame's wall clock reads a -j4 gate's CPU load too (this bar reddened under it).
+        // gi.field_follows.timing arms them on a quiet box, under the GPU-timing lock.
+        JAH_TIMING_CHECK("gi.field_follows", worstMs < kTierBudgetMs,
+                         "NO FRAME OF THE WALK COSTS MORE THAN THE TIER'S BUDGET");
     }
 
     // =====================================================================
@@ -643,7 +648,8 @@ int main() {
                         recs.size(), recs.empty() ? 0.0f : sum / float(recs.size()), worst,
                         nGpu ? sumGpu / float(nGpu) : -1.0f, worstGpu, nGpu);
             CHECK(!recs.empty(), "the monitor recorded the 1080p walk");
-            CHECK(worst < kTierBudgetMs, "NO FRAME OF A 1080p WALK EXCEEDS THE TIER'S BUDGET");
+            JAH_TIMING_CHECK("gi.field_follows", worst < kTierBudgetMs,
+                             "NO FRAME OF A 1080p WALK EXCEEDS THE TIER'S BUDGET");
             big->setScene(nullptr);
             e->destroyView(big);
         }

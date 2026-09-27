@@ -37,10 +37,7 @@ file(MAKE_DIRECTORY ${_home}/run)
 # accumulate ~15 assets per run; after enough gates the browse_assets row this
 # suite asserts on fell below the tool's 12-row default and the suite went
 # red on nothing (found by the 2026-09-05 gate). The setup fixture wipes it.
-add_test(NAME mcp.e2e.fresh_home
-         COMMAND sh -c "rm -rf '${_home}' && mkdir -p '${_home}/run'")
-set_tests_properties(mcp.e2e.fresh_home PROPERTIES
-    FIXTURES_SETUP mcpFreshHome LABELS "mcp")
+jah_fresh_home_fixture(mcp.e2e.fresh_home mcpFreshHome "${_home}" LABELS "mcp")
 add_test(NAME mcp.e2e COMMAND test_mcp_e2e
          WORKING_DIRECTORY ${_home}/run)
 set_tests_properties(mcp.e2e PROPERTIES

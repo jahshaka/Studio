@@ -44,7 +44,8 @@ command -v convert       >/dev/null 2>&1 || { echo "SKIP: ImageMagick's convert 
 [ -x "$APP" ]      || { echo "SKIP: the app binary was not built ($APP)"; exit 77; }
 [ -x "$JUDGE" ]    || { echo "SKIP: the reader was not built ($JUDGE)"; exit 77; }
 [ -r "$SCRIPT" ]   || { echo "SKIP: no script at $SCRIPT"; exit 77; }
-[ -n "${DISPLAY:-}" ] || { echo "SKIP: a Vulkan engine cannot boot with no display"; exit 77; }
+command -v Xvfb          >/dev/null 2>&1 || { echo "SKIP: Xvfb is not installed (its own display, below)"; exit 77; }
+command -v xdpyinfo      >/dev/null 2>&1 || { echo "SKIP: xdpyinfo is not installed (x11-utils)"; exit 77; }
 
 rm -rf "$OUTDIR"
 mkdir -p "$OUTDIR" || exit 1
@@ -54,15 +55,43 @@ chmod 700 "$XDG_DIR"
 
 MON_PID=""
 APP_PID=""
+XVFB_PID=""
 cleanup() {
     # ONLY THE PIDS THIS SCRIPT SPAWNED, by the value recorded at spawn (the
     # display-number law's sibling rule for processes).
     [ -n "$APP_PID" ] && kill "$APP_PID" 2>/dev/null
     [ -n "$MON_PID" ] && kill "$MON_PID" 2>/dev/null
     [ -n "$MON_PID" ] && { sleep 1; kill -9 "$MON_PID" 2>/dev/null; }
+    [ -n "$XVFB_PID" ] && kill "$XVFB_PID" 2>/dev/null
     rm -rf "$XDG_DIR"
 }
 trap cleanup EXIT
+
+# ITS OWN DISPLAY (lane D6B-GATE-SHAPE). The capture below is `xwd -id` of the
+# compositor's window, and an X server without a compositing manager hands back
+# whatever covers a window: while this suite ran RUN_SERIAL nothing else was on
+# the rig's display, but the VR family now runs beside the rest of the gate
+# (RESOURCE_LOCK monado), and any sibling suite's window over the "Monado" one
+# would be captured as the runtime's picture. So the whole run — runtime, app
+# and capture — lives on a private Xvfb at the rig's geometry (the app.play_select
+# pattern; its range is 171-240, this one 241-299).
+DISP=""
+for n in $(seq 241 299); do
+    [ -e "/tmp/.X11-unix/X${n}" ] && continue
+    [ -e "/tmp/.X${n}-lock" ] && continue
+    Xvfb ":${n}" -screen 0 1920x1080x24 -nolisten tcp > /dev/null 2>&1 &
+    XVFB_PID=$!
+    for _ in $(seq 1 40); do
+        if DISPLAY=":${n}" xdpyinfo > /dev/null 2>&1; then DISP=":${n}"; break; fi
+        kill -0 "$XVFB_PID" 2>/dev/null || break
+        sleep 0.25
+    done
+    [ -n "$DISP" ] && break
+    kill "$XVFB_PID" 2>/dev/null; XVFB_PID=""
+done
+[ -n "$DISP" ] || { echo "eye_grade: could not start an Xvfb of my own"; exit 1; }
+export DISPLAY="$DISP"
+echo "eye_grade: own display $DISP (pid $XVFB_PID)"
 
 XDG_RUNTIME_DIR="$XDG_DIR" SIMULATED_ENABLE=1 SIMULATED_LEFT=simple SIMULATED_RIGHT=simple \
     XRT_COMPOSITOR_FORCE_XCB=1 XRT_COMPOSITOR_XCB_DISPLAY="$DISPLAY" XRT_NO_STDIN=1 \
