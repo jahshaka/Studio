@@ -21,6 +21,7 @@
 
 #include <QColor>
 #include <QElapsedTimer>
+#include <QFile>
 #include <QGuiApplication>
 #include <QImage>
 
@@ -1900,6 +1901,340 @@ static int occlusionPyramidMain(int w, int h)
     return failures ? 1 : 0;
 }
 
+// ===========================================================================
+// atom.coverage_trace — ATOM-BLACK-FRAMES-1: THE 10k WORLD NEVER RENDERS A FRAME WITHOUT ITS
+// ATOM SURFACE. D1's world at ~200 buckets (atom.decode_exact's deterministic config), the
+// decode's DISCRIMINATOR on (JAHSHAKA_ATOM_DISCRIMINATE, HlmsAtom::preparePassHash): every
+// pixel a bucket draw reaches is painted — code 0 where every validity term holds, else the
+// code of the FIRST term that failed (800.Atom_piece_ps.any, AtomDeclDecode) — and every
+// frame read back: the id image says which pixels the id pass COVERED, the picture what the
+// decode made of them. The codes' colours are LEARNT first from the door's chart (value 2:
+// the code of each pixel's column band) and the clear's colour from the uncovered pixels, so
+// the post chain's curve is never guessed. A covered pixel is then OK (code 0), FAILED (a
+// code, or the clear showing through: no bucket draw reached it), or OTHER (something drawn
+// in front of the Atom surface: a lamp's icon, an item PBS draws while its textures land).
+// The engine's event trace (JAHSHAKA_ATOM_TRACE, the Ogre log) stamps each table/buffer
+// event with the frame AtomDrawStatus::frame names — what a failing row is read against.
+// THE PHASES (brief §3.3): the 200 materials landing (the base's F1 window); then a 2,000-
+// frame walk (6 m/s) with a 25 m teleport every 150 frames (held 20), a DAG mesh RELEASED
+// mid-walk (its 625 items leave: the cluster tables rebuild and every later dag rebases)
+// and re-added, a NEW mesh added (a new entry, a new DAG) and released, and the cut's
+// budget forced SMALL twice (the main region overflows: the root cut from the reserve, the
+// stats ring's 4-frame-late report, the budget's re-create).
+// THE BAR: no frame FAILS more than 0.5 % of the pixels the id pass covered (the base's
+// black frames failed 90-99 %; its own seams are ~100 px), and no walk step loses half the
+// previous frame's coverage (a teleport frame and the first frames of a phase are exempt:
+// their picture is another place).
+// ===========================================================================
+struct CodeChart {
+    std::vector<std::array<unsigned char, 3>> colour;   // per code 0..16
+    std::array<unsigned char, 3> clear{ { 0, 0, 0 } };
+    size_t covered = 0;   ///< the chart frame's covered pixels (the coverage floor's reference)
+};
+static constexpr int kCodes = 17;
+static bool learnChart(Env &env, CodeChart &chart)
+{
+    setenv("JAHSHAKA_ATOM_DISCRIMINATE", "2", 1);
+    frame(env, 64);
+    Image img;
+    std::vector<uint32_t> ids;
+    const bool read = env.view->readPixels(img) && img.width && readIdsAt(env, ids);
+    setenv("JAHSHAKA_ATOM_DISCRIMINATE", "1", 1);
+    if (!read) return false;
+    const unsigned W = img.width, H = img.height;
+    auto key = [](const unsigned char *px) { return uint32_t(px[0]) | uint32_t(px[1]) << 8 | uint32_t(px[2]) << 16; };
+    auto rgb = [](uint32_t k) {
+        return std::array<unsigned char, 3>{ { (unsigned char)(k & 0xFF), (unsigned char)((k >> 8) & 0xFF),
+                                                (unsigned char)((k >> 16) & 0xFF) } };
+    };
+    bool ok = true;
+    chart.colour.assign(kCodes, { { 0, 0, 0 } });
+    std::vector<std::map<uint32_t, size_t>> seen(kCodes);
+    std::map<uint32_t, size_t> clear;
+    chart.covered = 0;
+    for (size_t p = 0; p < size_t(W) * H; ++p) chart.covered += ids[p * 2] != 0xFFFFFFFFu;
+    for (unsigned y = 0; y < H; y += 2)
+        for (unsigned x = 0; x < W; ++x) {
+            const size_t p = size_t(y) * W + x;
+            if (ids[p * 2] == 0xFFFFFFFFu) ++clear[key(&img.rgba[p * 4])];
+            else if (y >= H / 2) ++seen[int(x * 17u / W)][key(&img.rgba[p * 4])];
+        }
+    for (int c = 0; c < kCodes; ++c) {
+        uint32_t best = 0;
+        size_t bestN = 0, total = 0;
+        for (auto &kv : seen[c]) {
+            total += kv.second;
+            if (kv.second > bestN) { bestN = kv.second; best = kv.first; }
+        }
+        chart.colour[c] = rgb(best);
+        std::printf("coverage_trace: chart code %2d = (%3u,%3u,%3u)  %zu of %zu px\n", c, best & 0xFF, (best >> 8) & 0xFF,
+                    (best >> 16) & 0xFF, bestN, total);
+        if (!bestN || bestN * 2 < total) ok = false;
+        for (int d = 0; d < c; ++d)
+            if (chart.colour[d] == chart.colour[c]) ok = false;
+    }
+    uint32_t best = 0;
+    size_t bestN = 0;
+    for (auto &kv : clear)
+        if (kv.second > bestN) { bestN = kv.second; best = kv.first; }
+    chart.clear = rgb(best);
+    std::printf("coverage_trace: the clear = (%3u,%3u,%3u) over %zu uncovered px\n", best & 0xFF, (best >> 8) & 0xFF,
+                (best >> 16) & 0xFF, bestN);
+    for (int c = 0; c < kCodes; ++c)
+        if (chart.colour[c] == chart.clear) ok = false;
+    return ok;
+}
+
+struct FrameCodes {
+    size_t covered = 0, ok = 0, clear = 0, other = 0, failed = 0;
+    size_t code[kCodes] = {};
+};
+static void classify(const CodeChart &chart, const Image &img, const std::vector<uint32_t> &ids, FrameCodes &fc)
+{
+    fc = FrameCodes();
+    const size_t n = std::min(ids.size() / 2, img.rgba.size() / 4);
+    const auto &okc = chart.colour[0];
+    for (size_t p = 0; p < n; ++p) {
+        if (ids[p * 2] == 0xFFFFFFFFu) continue;
+        ++fc.covered;
+        const unsigned char *px = &img.rgba[p * 4];
+        if (px[0] == okc[0] && px[1] == okc[1] && px[2] == okc[2]) { ++fc.ok; continue; }
+        if (px[0] == chart.clear[0] && px[1] == chart.clear[1] && px[2] == chart.clear[2]) { ++fc.clear; continue; }
+        int best = -1, bestD = 1 << 30;
+        for (int c = 0; c < kCodes; ++c) {
+            const int dr = int(px[0]) - chart.colour[c][0], dg = int(px[1]) - chart.colour[c][1],
+                      db = int(px[2]) - chart.colour[c][2];
+            const int d = dr * dr + dg * dg + db * db;
+            if (d < bestD) { bestD = d; best = c; }
+        }
+        if (best >= 0 && bestD <= 3 * 12 * 12) {
+            if (best == 0) ++fc.ok;
+            else ++fc.code[best];
+        } else {
+            ++fc.other;
+        }
+    }
+    fc.failed = fc.clear;
+    for (int c = 1; c < kCodes; ++c) fc.failed += fc.code[c];
+}
+
+static int coverageTraceMain()
+{
+    setenv("JAHSHAKA_NO_DITHER", "1", 1);
+    setenv("JAHSHAKA_NO_RAY_QUERY", "1", 1);
+    setenv("JAHSHAKA_ATOM_TRACE", "1", 1);
+    setenv("JAHSHAKA_ATOM_DISCRIMINATE", "1", 1);
+    unsetenv("JAHSHAKA_ATOM_DECODE_OFF");
+    auto knob = [](const char *name, int dflt) { return std::getenv(name) ? std::atoi(std::getenv(name)) : dflt; };
+    const int walkFrames = knob("JAH_TRACE_FRAMES", 2000);
+    const int landingFrames = knob("JAH_TRACE_LANDING", 600);
+    const int budgetAt = knob("JAH_TRACE_BUDGET_AT", 1100);
+    // SMALL, NOT TINY (measured): at walk 1100 the world asks ~582,000 indices, the main
+    // region holds 437,500, and the 62,500-index reserve holds the ~30 overflowing
+    // survivors' root cuts (232 indices a world instance on average, 2.33 M over all
+    // 10,127) — they draw COARSE until the stats ring's report, four frames late, grows
+    // the budget to 1 M. A budget under the reserve's floor (JAH_TRACE_BUDGET=60000) is
+    // the "fits neither" arm: up to 1,845 objects MISSING, counted apart, for the five
+    // frames the report takes — the design's stated limit, reported by the lane.
+    const unsigned smallBudget = unsigned(knob("JAH_TRACE_BUDGET", 500000));
+    Env env;
+    World w;
+    WorldSpec spec;
+    spec.materials = 1;
+    if (!bootWorld(env, w, "test-atom-coverage-trace-ogre.log", spec)) return 1;
+    env.doc->exposureMode = iris::ExposureMode::Manual;
+    worldmodes::setMode(env.doc, worldmodes::Mode::High);
+    worldmodes::setPhoton(env.doc, false, worldmodes::PhotonTier::High);
+    for (const char *row : { "ssr", "bloom", "smaa", "ssao" }) worldmodes::setRowValue(env.doc, QString::fromLatin1(row), 0);
+    env.view->setBackground(Colour(1.0f, 0.0f, 1.0f, 1.0f));   // the clear: magenta, never a code
+    pathStill(env, 30);
+    CodeChart chart;
+    const bool charted = learnChart(env, chart);
+    REQUIRE(charted, "the discriminator's code chart and the clear were learnt (18 distinct colours)");
+    if (!charted) { shutdown(env); return 1; }
+
+    size_t frames = 0, badFrames = 0, dropFrames = 0, worstFailedPx = 0, worstOther = 0;
+    double worstFailedShare = 0.0;
+    size_t prevCovered = 0;
+    int exempt = 1;   // steps whose picture is another place (a phase's first frame, a teleport)
+    unsigned maxCoarse = 0, maxMissing = 0;
+    auto sample = [&](const char *phase, int step) {
+        frame(env, 1);
+        Image img;
+        std::vector<uint32_t> ids;
+        if (!env.view->readPixels(img) || !img.width || !readIdsAt(env, ids)) {
+            std::printf("coverage_trace: %s %d: READ FAILED\n", phase, step);
+            ++badFrames;
+            return;
+        }
+        FrameCodes fc;
+        classify(chart, img, ids, fc);
+        const AtomDrawStatus st = env.scene->atomDrawStatus();
+        const double failedShare = fc.covered ? double(fc.failed) / double(fc.covered) : 0.0;
+        const bool isBad = failedShare > 0.005;
+        // THE FLOOR (the Fable read's W1): a frame whose id image went EMPTY fails nothing
+        // and, exempt, drops nothing — so a non-exempt frame must cover at least HALF the
+        // chart frame's pixels. Measured: the lowest non-exempt frame of the fixed traces
+        // covers 1,029,120 px against the chart's ~1.1 M (the ground alone is ~0.8 M), i.e.
+        // 0.93; half leaves the walk's own change a 2x margin.
+        const bool isDrop = exempt <= 0 && ((prevCovered > 20000u && fc.covered * 2u < prevCovered) ||
+                                            fc.covered * 2u < chart.covered);
+        ++frames;
+        badFrames += isBad;
+        dropFrames += isDrop;
+        worstFailedShare = std::max(worstFailedShare, failedShare);
+        worstFailedPx = std::max(worstFailedPx, fc.failed);
+        worstOther = std::max(worstOther, fc.other);
+        maxCoarse = std::max(maxCoarse, st.cutOverflow);
+        maxMissing = std::max(maxMissing, st.cutMissing);
+        std::string codes;
+        for (int c = 1; c < kCodes; ++c)
+            if (fc.code[c]) codes += " c" + std::to_string(c) + "=" + std::to_string(fc.code[c]);
+        std::printf("trace %s %4d frame %llu covered %7zu ok %7zu failed %zu (clear %zu%s) other %zu | cut budget %u "
+                    "coarse %u missing %u | atom %u pbs %u pending %u draws %u%s%s\n",
+                    phase, step, st.frame, fc.covered, fc.ok, fc.failed, fc.clear, codes.c_str(), fc.other,
+                    st.cutIndexBudget, st.cutOverflow, st.cutMissing, st.atomItems, st.pbsItems, st.pending,
+                    st.screenDraws, isBad ? " BAD" : "", isDrop ? " DROP" : "");
+        std::fflush(stdout);
+        // EVIDENCE (JAH_SCALE_SHOT): the first bad frames, the picture and the id image.
+        static int shots = 0;
+        if (isBad && !qgetenv("JAH_SCALE_SHOT").isEmpty() && shots++ < 3) {
+            const QString dir = QString::fromLocal8Bit(qgetenv("JAH_SCALE_SHOT"));
+            const QString tag = QStringLiteral("coverage-%1-%2").arg(QString::fromLatin1(phase)).arg(step);
+            QImage(img.rgba.data(), int(img.width), int(img.height), QImage::Format_RGBA8888)
+                .save(dir + tag + "-picture.png");
+            QImage v(int(img.width), int(img.height), QImage::Format_RGB888);
+            for (unsigned y = 0; y < img.height; ++y)
+                for (unsigned x = 0; x < img.width; ++x) {
+                    const size_t p = size_t(y) * img.width + x;
+                    uint32_t h = ids[p * 2] == 0xFFFFFFFFu
+                                     ? 0u
+                                     : ((ids[p * 2] & 0xFFFFFFu) * 2654435761u ^ (ids[p * 2 + 1] >> 8) * 40503u);
+                    h ^= h >> 13;
+                    v.setPixel(int(x), int(y), h ? ((h & 0xFFFFFFu) | 0x202020u) : 0u);
+                }
+            v.save(dir + tag + "-ids.png");
+        }
+        prevCovered = fc.covered;
+        --exempt;
+    };
+
+    // ---- 1. THE MATERIALS LANDING (the base's F1 window: ~300-460 frames after) --------
+    applyMaterials(w, 200, 200);
+    exempt = 2;
+    for (int f = 0; f < landingFrames; ++f) sample("landing", f);
+
+    // ---- 1b. A NODE TAKEN OUT OF THE DOCUMENT (the Fable read's W3): removeChild alone,
+    // no setMesh(null) — does the GPU scene's mesh entry go? Every item of one DAG mesh
+    // leaves the document for 20 frames; the engine's trace names the release (or not).
+    bool removeChildReleased = false;
+    {
+        const iris::MeshPtr probeMesh = w.items.size() > 4 ? w.items[4]->getMesh() : iris::MeshPtr();
+        std::vector<iris::MeshNodePtr> gone;
+        auto releasesInLog = [] {
+            QFile f(QStringLiteral("test-atom-coverage-trace-ogre.log"));
+            if (!f.open(QIODevice::ReadOnly)) return -1;
+            return int(f.readAll().count("mesh released:"));
+        };
+        const int before = releasesInLog();
+        for (auto &it : w.items)
+            if (it->getMesh() == probeMesh) { gone.push_back(it); env.doc->getRootNode()->removeChild(it); }
+        for (int f = 0; f < 20; ++f) sample("removechild", f);
+        const int after = releasesInLog();
+        removeChildReleased = before >= 0 && after > before;
+        std::printf("coverage_trace: removeChild of %zu items of one mesh: the GPU scene's entry %s (\"mesh released\" "
+                    "lines %d -> %d)\n", gone.size(), removeChildReleased ? "RELEASED" : "KEPT", before, after);
+        for (auto &it : gone) env.doc->getRootNode()->addChild(it);
+        exempt = 2;
+        for (int f = 0; f < 10; ++f) sample("readd", f);
+    }
+
+    // ---- 2. THE WALK, with teleports, mesh releases/adds and a forced small budget ------
+    iris::MeshPtr extra = bakedMesh(QStringLiteral(JAHSHAKA_SOURCE_DIR "/app/models/head.obj"), "head");
+    std::vector<iris::MeshNodePtr> extraItems, released;
+    const iris::MeshPtr releaseMesh = w.items.size() > 3 ? w.items[3]->getMesh() : iris::MeshPtr();
+    const float x0 = -120.0f, speed = 0.1f;   // metres a frame (6 m/s: 200 m over the walk)
+    unsigned atomBefore = 0, atomReleased = 0, atomExtra = 0;
+    exempt = 2;
+    for (int f = 0; f < walkFrames; ++f) {
+        float x = x0 + float(f) * speed;
+        // A 25 m TELEPORT every 150 frames, held for 20 frames (then the walk resumes).
+        const int inCycle = f % 150;
+        const bool teleported = inCycle >= 100 && inCycle < 120;
+        if (teleported) x += 25.0f;
+        if (inCycle == 100 || inCycle == 120) exempt = 2;
+        setCamera(env, iris::Vec3(x, 1.7f, 0.0f), iris::Vec3(x + 10.0f, 1.7f, -2.0f));
+        if (f == 300 && !releaseMesh.isNull()) {
+            atomBefore = env.scene->atomDrawStatus().atomItems;
+            // THE MESH LEAVES (not just its nodes: a node taken out of the document keeps
+            // its engine Item hidden): every item of it drops the mesh, the last reference
+            // releases the GPU scene's entry and its DAG.
+            for (auto &it : w.items)
+                if (it->getMesh() == releaseMesh) { released.push_back(it); it->setMesh(iris::MeshPtr()); }
+            std::printf("coverage_trace: walk %d: RELEASED %zu items of one mesh\n", f, released.size());
+        }
+        if (f == 310) atomReleased = env.scene->atomDrawStatus().atomItems;
+        if (f == 390) {
+            for (auto &it : released) it->setMesh(releaseMesh);
+            std::printf("coverage_trace: walk %d: RE-ADDED %zu items\n", f, released.size());
+            released.clear();
+        }
+        if (f == 700 && !extra.isNull()) {
+            for (int k = 0; k < 40; ++k) {
+                auto n = iris::MeshNode::create();
+                n->setName(QStringLiteral("extra%1").arg(k));
+                n->setMesh(extra);
+                // A MESH NODE WITHOUT A MATERIAL CRASHES THE MIRROR (SceneMirror::materialSyncFor
+                // dereferences it — finding, ATOM-BLACK-FRAMES-1): the editor always gives one.
+                n->setMaterial(w.items[size_t(k)]->getMaterial());
+                n->setLocalPos(iris::Vec3(x + 6.0f + float(k % 8) * 1.5f, 1.0f, -3.0f - float(k / 8) * 1.5f));
+                env.doc->getRootNode()->addChild(n);
+                extraItems.push_back(n);
+            }
+            std::printf("coverage_trace: walk %d: ADDED %zu items of a new mesh\n", f, extraItems.size());
+        }
+        if (f == 720) atomExtra = env.scene->atomDrawStatus().atomItems;
+        if (f == 900) {
+            for (auto &it : extraItems) {
+                it->setMesh(iris::MeshPtr());
+                env.doc->getRootNode()->removeChild(it);
+            }
+            std::printf("coverage_trace: walk %d: RELEASED the new mesh's %zu items\n", f, extraItems.size());
+            extraItems.clear();
+        }
+        if (f == budgetAt || f == budgetAt + 500) {
+            env.scene->setAtomCutBudgetForTest(smallBudget);
+            std::printf("coverage_trace: walk %d: the cut budget forced to %u indices\n", f, smallBudget);
+        }
+        sample(teleported ? "jump" : "walk", f);
+    }
+    std::printf("coverage_trace: %zu frames | %zu BAD (failed > 0.5 %% of the covered px) | %zu DROP | worst failed "
+                "share %.4f (%zu px) | most drawn in front (other) %zu px | coarse max %u, missing max %u | atom items "
+                "%u -> %u released -> %u with the new mesh\n",
+                frames, badFrames, dropFrames, worstFailedShare, worstFailedPx, worstOther, maxCoarse, maxMissing,
+                atomBefore, atomReleased, atomExtra);
+    REQUIRE(badFrames == 0u, "no frame fails more than 0.5 %% of the pixels the id pass covered (%zu of %zu frames)",
+            badFrames, frames);
+    REQUIRE(dropFrames == 0u, "no walk step loses half the previous frame's coverage (%zu)", dropFrames);
+    if (walkFrames > 900) {
+        REQUIRE(atomReleased + 600u <= atomBefore && atomExtra >= atomBefore + 30u,
+                "the mesh release and the new mesh reached the split (atom items %u -> %u, then %u)", atomBefore,
+                atomReleased, atomExtra);
+        REQUIRE(maxCoarse > 0u, "the forced small budget overflowed the main region (%u drawn coarse)", maxCoarse);
+    }
+    // MEASURED (ATOM-BLACK-FRAMES-1, the Fable read's W3): removeChild takes the items out of
+    // the split and the picture at once (atom 10,001 -> 9,376) but the GPU scene keeps the
+    // mesh's entry and its DAG for the whole window — the mirror keeps the hidden Item —
+    // and releases it only when the mesh itself leaves (setMesh(null), the walk's arm).
+    // Reported as a defect, not asserted here: this suite's subject is the picture.
+    std::printf("coverage_trace: FINDING removeChild %s the GPU scene's mesh entry\n",
+                removeChildReleased ? "releases" : "does NOT release");
+    unsetenv("JAHSHAKA_ATOM_DISCRIMINATE");
+    unsetenv("JAHSHAKA_ATOM_TRACE");
+    shutdown(env);
+    return failures ? 1 : 0;
+}
+
 int main(int argc, char **argv)
 {
     qputenv("QT_QPA_PLATFORM", "offscreen");
@@ -1927,7 +2262,9 @@ int main(int argc, char **argv)
     if (mode == "--frame-arms-world") return frameArmsMain(false);
     if (mode == "--frame-arms-lattice") return frameArmsMain(true);
     if (mode == "--decode-exact") return decodeExactMain();
+    if (mode == "--coverage-trace") return coverageTraceMain();
     std::printf("usage: test_scale --world|--voxel-scroll|--lights|--cluster-cut|--levels|--cut-cost|--residency|--decode|"
-                "--occlusion|--tlas|--atlas|--far-field|--bake|--hit-list|--cpu-walks|--lattice-owed\n");
+                "--occlusion|--tlas|--atlas|--far-field|--bake|--hit-list|--cpu-walks|--lattice-owed|--decode-exact|"
+                "--coverage-trace\n");
     return 2;
 }
