@@ -163,6 +163,26 @@ add_test(NAME engine.frame_catch COMMAND test_engine_frame_catch
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(engine.frame_catch PROPERTIES TIMEOUT 120 LABELS "engine")
 
+# AN OUT-OF-MEMORY IS NOT A DEVICE LOSS (lane FORK-OOM-1): the Vulkan render
+# system's own failure path, driven through Engine::setFrameFault. Its own
+# binary because its negative control REALLY latches the device and ends the
+# process like a host. Exit 77 = no Vulkan render system linked (nothing to
+# prove), never a pass.
+add_executable(test_engine_oom_is_not_loss test_engine_oom_is_not_loss.cpp)
+set_target_properties(test_engine_oom_is_not_loss PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH "${OGRE_NEXT_PREFIX}/lib" INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_engine_oom_is_not_loss PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_engine_oom_is_not_loss PRIVATE JahshakaEngine)
+add_dependencies(test_engine_oom_is_not_loss JahshakaEngineMedia)
+add_test(NAME engine.oom_is_not_loss COMMAND test_engine_oom_is_not_loss
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(engine.oom_is_not_loss PROPERTIES TIMEOUT 120 LABELS "engine"
+    SKIP_RETURN_CODE 77)
+
 # WHAT COUNTS AS SCENE MOVEMENT (lane VR-SCAN-1): the movement epoch's
 # precision, which is a 90 Hz bill in a VR session — the controller proxies and
 # the pointing ray are written inside every frame that locates a hand, and a
