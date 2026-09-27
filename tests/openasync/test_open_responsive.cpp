@@ -762,6 +762,18 @@ int main(int argc, char **argv)
                       ledger.contains("counter:closePrevious:teardown") &&
                       ledger.contains("counter:closePrevious:switch"),
                   "app.openTimings() of a create carries its closePrevious stage and marks");
+
+            // THE COLUMN THE CREATE-LOOP SIGSEGV WAS IN (CREATE-CRASH-1; its mechanism's
+            // deterministic red is ui.show_walk): after 40+ creates in one process the editor's
+            // Properties column is shown, mounted, and owes nothing.
+            mcp.runScript(QStringLiteral("editor.frame(2)"));
+            const QJsonObject props = mcp.runScript(QStringLiteral("editor.propertiesStats()"))
+                                          .value("result").toObject();
+            std::printf("info: [full library] editor.propertiesStats() %s\n",
+                        QJsonDocument(props).toJson(QJsonDocument::Compact).constData());
+            CHECK(props.value("visible").toBool() && !props.value("pending").toBool()
+                      && !props.value("deferredHidden").toBool() && props.value("rows").toInt() > 0,
+                  "the Properties column is on screen, mounted, with nothing owed");
         }
 
         // THE CREATE IS IN THE LEDGER, with the open's own stage names
