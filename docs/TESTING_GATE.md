@@ -221,7 +221,7 @@ rule …`, `symbols [FogDesc, density] named by 7 file(s)`, `names 2 row(s)`, `t
 rows, ~S of ~T suite-seconds`, costs from THE RUN LOG's 14-day medians over
 `scripts/gate-times.txt`).
 
-**THE RUN LOG (TESTING_V2 T8).** `--run`, `--solo` and the rc-gate tiers
+**THE RUN LOG (TESTING_V2 T8).** `--run` (its tier `scoped`, or `scoped-fallback` / `scoped-tier` when a scoped gate ran the whole tier), `--solo` and the rc-gate tiers
 (`scripts/gate_runlog.py run --tier <t> -- <ctest line>`) append one JSON record per row and per
 pool arm to `<workspace>/testing/runs/<date>-<tier>-<tip>.jsonl`: verdict (PASS | FAIL | CRASH |
 TIMEOUT | NOTRUN), retries, wall seconds, `gpu_ms` (a suite's `gpu_ms:` line), a target's value,

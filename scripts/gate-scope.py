@@ -1452,7 +1452,11 @@ def main():
         tier = merge_tier(a.jobs)
         print(f"\n{tier}")
         if a.run:
-            sys.exit(gate_runlog.run_ctest(tier, build, a.tier or "merge", lane, a.jobs,
+            # a SCOPED gate that ran the whole tier is logged as such — "scoped-fallback" (no rule,
+            # no symbol, no graph owner) or "scoped-tier" (the tier by rule: a fork pin) — so the
+            # run log tells it from the lead's MERGE tier runs
+            sys.exit(gate_runlog.run_ctest(tier, build, a.tier or ("scoped-fallback" if reason == "fallback"
+                                                                   else "scoped-tier"), lane, a.jobs,
                                            reasons={}, rng=log_range, labels={n: t["labels"] for n, t in inv.items()}))
     if S.full_tier and not S.fallback:
         print("\nTHE MERGE TIER BY RULE (the change reaches every suite):")
