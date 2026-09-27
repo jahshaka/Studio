@@ -143,6 +143,15 @@ add_test(NAME atom.decode_exact COMMAND test_scale --decode-exact WORKING_DIRECT
 set_tests_properties(atom.decode_exact PROPERTIES TIMEOUT 600 LABELS "engine"
                      ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
+# atom.coverage_trace — ATOM-BLACK-FRAMES-1: 2,600 frames of the world (the 200 materials
+# landing, a 2,000-frame walk with teleports, a DAG mesh released and re-added, a new mesh
+# added and released, the cut's budget forced small twice) with the decode's discriminator
+# on: no frame fails more than 0.5 % of what the id pass covered. A pixel suite (no time
+# measured): never the GPU lock. ~180 s.
+add_test(NAME atom.coverage_trace COMMAND test_scale --coverage-trace WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(atom.coverage_trace PROPERTIES TIMEOUT 900 LABELS "engine"
+                     ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
 # W14 — the real binary over MCP, the UI thread's gaps: locked (open.responsive's class).
 jah_gpu_exclusive_test(NAME scale.library RUN_TIMEOUT ${SCALE_T_LIBRARY} COMMAND test_scale_library
                        WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
