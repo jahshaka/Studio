@@ -180,6 +180,7 @@ For more information see the LICENSE file
 #include "services/services.h"
 #include "services/shortcutregistry.h"
 #include "services/worldmodes.h"
+#include "services/testtier.h"
 #include "viewport/snapsettings.h"
 #include "viewport/cameraspeed.h"
 #include "services/subscriber.h"
@@ -2616,6 +2617,14 @@ void MainWindow::setScene(QSharedPointer<iris::Scene> scene)
     // scene changes. (The scanner's own null-scene reset stays: that is the
     // close path, and this one is the open path.)
     SceneIssues::instance().reset();
+
+    // THE PROCESS'S TEST TIER (TEST-TIER-1, services/testtier.h): a test process
+    // that asked for one puts EVERY scene it binds on that World Mode — new or
+    // opened, after the reader, through the call world.mode makes — before the
+    // viewport below hands it to the engine, so the Epic chain is never built.
+    // A process with none (the product) keeps the scene's own tier.
+    if (scene && testtier::active())
+        worldmodes::setMode(scene, worldmodes::modeFromName(testtier::name()));
 
     this->scene = scene;
     //this->sceneView->context()->setShareContext(loadingContext);

@@ -91,6 +91,13 @@ CliOptions CliOptions::parse(int argc, char *argv[])
         else if (qstrcmp(argv[i], "--no-log") == 0) o.noLog = true;
         else if (qstrcmp(argv[i], "--no-ray-query") == 0) o.noRayQuery = true;
         else if (qstrcmp(argv[i], "--vr") == 0) o.vr = true;
+        else if (qstrncmp(argv[i], "--test-tier=", 12) == 0) o.testTier = QString::fromLocal8Bit(argv[i] + 12);
+        else if (qstrcmp(argv[i], "--test-tier") == 0) {
+            // A bare flag is refused, like --mcp-port: dropping it would boot the
+            // Epic chain the caller asked to be spared.
+            if (i + 1 < argc) o.testTier = QString::fromLocal8Bit(argv[++i]);
+            else o.errors << QStringLiteral("--test-tier: needs a World Mode after it (low, medium, high, epic)");
+        }
         else if (qstrncmp(argv[i], "--viewport", 10) == 0) {
             // Accepted for compatibility; the engine viewport is the only
             // renderer since the legacy GL viewport was deleted (step 14).

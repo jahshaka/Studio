@@ -82,6 +82,25 @@ set_tests_properties(app.startup_quiet PROPERTIES
     TIMEOUT 300
     LABELS "app")
 
+# app.shader_gate_warm — THE STARTUP SHADER GATE KNOWS A WARM CACHE (TEST-TIER-1): a cold boot
+# (--clear-shader-cache) compiles and runs the GI warm-up; the second boot in the same home compiles
+# ZERO programs and skips it. A ROW of its own: its claim is two boots of one home, the first
+# with its shader cache wiped (a pool process cannot reboot). The home is fresh every run; the
+# row's own first boot is what makes the cache cold. At the document's tier (Epic): the race the
+# gate had is the Epic lighting arm's.
+set(_sgw_home ${CMAKE_CURRENT_BINARY_DIR}/shader-gate-warm-home)
+file(MAKE_DIRECTORY ${_sgw_home}/run)
+jah_gpu_row(app.shader_gate_warm CLASS app
+         COMMAND sh ${JAH_FRESH_HOME} --warm ${_sgw_home} --
+                 bash "${CMAKE_CURRENT_SOURCE_DIR}/shader_gate_warm.sh"
+                 "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>"
+                 "${CMAKE_CURRENT_SOURCE_DIR}/startup_quiet.js"
+         WORKING_DIRECTORY ${_sgw_home}/run)
+set_tests_properties(app.shader_gate_warm PROPERTIES
+    ENVIRONMENT "HOME=${_sgw_home};JAHSHAKA_DATA_ROOT=${_sgw_home}/.local/share/Jahshaka"
+    TIMEOUT 195   # 6x the measured 32 s (two boots, the first cold; spikes/test-tier-1/shader_gate_warm.log)
+    LABELS "app")
+
 # app.input_keys — EVERY INPUT-SYNTHESIS ASSERTION THE EDITOR HAS, ON ONE BOOT.
 #
 # This was three ctest rows until 2026-09-09: app.pacing_undo (the frame-pacing
@@ -117,7 +136,7 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
         # it back; two suites both naming 8751 is what made -j4 unsafe
         # (TEST_GATE_AUDIT.md §4.1).
         # DEVPROCESS-1: registered through the GPU-timing lock; TIMEOUT = RUN_TIMEOUT + the lock's 900 s wait.
-        jah_gpu_exclusive_test(NAME app.input_keys CLASS app RUN_TIMEOUT 600
+        jah_gpu_exclusive_test(NAME app.input_keys CLASS app TIER low RUN_TIMEOUT 600
                  COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/input_keys.sh"
                          "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" 0
                  WORKING_DIRECTORY ${_ik_home}/run)
@@ -126,7 +145,8 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
         # fixed sleeps between them, and a loaded box stretches every one of
         # them. 600 s against a ~40 s measured run.
         set_tests_properties(app.input_keys PROPERTIES
-            ENVIRONMENT "HOME=${_ik_home};JAHSHAKA_DATA_ROOT=${_ik_home}/.local/share/Jahshaka"
+            # JAHSHAKA_TEST_TIER=low (TEST-TIER-1): no claim here needs the shipped picture — the same verdict and ok count at Low (spikes/test-tier-1/solo-okcount.txt)
+            ENVIRONMENT "HOME=${_ik_home};JAHSHAKA_DATA_ROOT=${_ik_home}/.local/share/Jahshaka;JAHSHAKA_TEST_TIER=low"
             RUN_SERIAL TRUE
             LABELS "app")
     else()
@@ -149,7 +169,7 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     if(JAH_XDOTOOL AND JAH_CURL AND JAH_JQ AND JAH_XVFB)
         set(_ps_home ${CMAKE_CURRENT_BINARY_DIR}/play-select-home)
         file(MAKE_DIRECTORY ${_ps_home}/run)
-        jah_gpu_exclusive_test(NAME app.play_select CLASS app RUN_TIMEOUT 400
+        jah_gpu_exclusive_test(NAME app.play_select CLASS app TIER low RUN_TIMEOUT 400
                  COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/play_select.sh"
                          "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" 0
                  WORKING_DIRECTORY ${_ps_home}/run)
@@ -157,7 +177,8 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
         # of synthesised gestures with fixed sleeps between them, every one of
         # which a loaded box stretches. 400 s against a ~50 s measured run.
         set_tests_properties(app.play_select PROPERTIES
-            ENVIRONMENT "HOME=${_ps_home};JAHSHAKA_DATA_ROOT=${_ps_home}/.local/share/Jahshaka"
+            # JAHSHAKA_TEST_TIER=low (TEST-TIER-1): no claim here needs the shipped picture — the same verdict and ok count at Low (spikes/test-tier-1/solo-okcount.txt)
+            ENVIRONMENT "HOME=${_ps_home};JAHSHAKA_DATA_ROOT=${_ps_home}/.local/share/Jahshaka;JAHSHAKA_TEST_TIER=low"
             LABELS "app")
     else()
         message(STATUS "app.play_select skipped: needs xdotool, curl, jq and Xvfb")

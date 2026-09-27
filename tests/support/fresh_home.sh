@@ -2,7 +2,7 @@
 # fresh_home.sh — A SUITE'S HOME, FRESH FOR EVERY RUN (lane D6B-GATE-SHAPE; the suites audit
 # SPECS/audits/GATE_SUITES_AUDIT_2026-09-26.md §9 H1). The ONE implementation of the wipe:
 # it replaced 27 hand-copied `sh -c "rm -rf …"` fixtures and tests/samples/freshhome.cmake,
-# and it is add_script_e2e's default.
+# and it is every pool's and one-script row's default.
 #
 #   fresh_home.sh [--warm] [--reset <dir>]... [--rm <file>]... [--mkdir <dir>]... <home>
 #                 [-- <command> [args...]]

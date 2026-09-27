@@ -56,6 +56,8 @@ For more information see the LICENSE file
 #include "ui/style/thememanager.h"
 #include "services/framepacing.h"
 #include "services/jahlog.h"
+#include "services/testtier.h"
+#include "services/worldmodes.h"
 #include "services/sessionheader.h"
 
 
@@ -94,6 +96,25 @@ int main(int argc, char *argv[])
         for (const QString &e : cli.errors)
             std::fprintf(stderr, "Jahshaka: %s\n", qPrintable(e));
         return 2;
+    }
+    // THE PROCESS'S TEST TIER (TEST-TIER-1, services/testtier.h): the flag, else
+    // JAHSHAKA_TEST_TIER; validated here, where the World Mode names are known,
+    // and refused like any other argument the app cannot honour.
+    {
+        const QString tier = !cli.testTier.isEmpty()
+            ? cli.testTier
+            : QString::fromLocal8Bit(qgetenv(testtier::kEnvVar)).trimmed();
+        if (!tier.isEmpty()) {
+            bool ok = false;
+            const worldmodes::Mode m = worldmodes::modeFromName(tier, &ok);
+            if (!ok || m == worldmodes::Mode::Custom) {
+                std::fprintf(stderr, "Jahshaka: --test-tier/%s: '%s' is not a World Mode (%s)\n",
+                             testtier::kEnvVar, qPrintable(tier),
+                             qPrintable(worldmodes::modeNames().join(QStringLiteral(", "))));
+                return 2;
+            }
+            testtier::set(worldmodes::modeName(m));
+        }
     }
     cli.applyPlatformPolicy();
     // WHETHER A PERSON IS LOOKING AT THIS PROCESS, recorded once for everything

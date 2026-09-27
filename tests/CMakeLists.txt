@@ -282,15 +282,16 @@ set(JAH_GPU_LOCK_WAIT_S 900)
 #   app      2  an app process or pool process at the document default (Epic) — `Jahshaka
 #               --script`, a harness that spawns it. THIN MARGIN: measured per pid median
 #               2,000 / p90 2,270 / max 2,600 MiB against 2 x 1,090 = 2,180; TEST-TIER-1's Low
-#               tier (~0.65 GB) is what widens it.
+#               tier (280 MiB at boot, 468 peak, measured) is what widens it.
 #   selftest 2  `--engine-selftest` (the app's route at Epic)
 #   engine   1  a headless engine suite (its own tier, mostly Medium: ~0.6-1.2 GB)
 #   vr       3  a VR / Monado row (app + stereo views + the runtime's compositor, ~2 GB)
 #   none     0  RenderSystem_NULL / no display — such a row carries jah_no_display() and is
 #               not registered through jah_gpu_row at all; `none` exists only for a GPU-timing
 #               row (jah_gpu_exclusive_test) that runs with no display (a CPU-time claim).
-# A pool's TIER (TEST-TIER-1: the test tier boots Low, ~0.65 GB) lowers an app-class process
-# to 1 token; the lookup below is the one place that says so. A row MEASURED heavier than its
+# A pool's TIER (TEST-TIER-1: the test tier boots Low — measured 280 MiB at boot, 468 peak, per
+# pid) lowers an app-class process to 1 token, and so does `TIER low` on a solo row that sets
+# JAHSHAKA_TEST_TIER=low; the lookup below is the one place that says so. A row MEASURED heavier than its
 # class (GATE-ADMIT-1's two-tier run, nvidia-smi per pid: the gather family at Epic, 2-3.6 GB)
 # says `TOKENS <k>` beside its CLASS, with the measured number in its comment — round(GB).
 set(JAH_GPU_ADMIT "${CMAKE_SOURCE_DIR}/scripts/gpu-admit.sh")
@@ -380,7 +381,7 @@ function(jah_gpu_row _row)
     _jah_vram_register(${_row} ${G_CLASS} ${_k})
 endfunction()
 
-# jah_gpu_exclusive_test(NAME <suite> CLASS <class> RUN_TIMEOUT <s> COMMAND <exe-or-target> [args...]
+# jah_gpu_exclusive_test(NAME <suite> CLASS <class> [TIER <tier>] RUN_TIMEOUT <s> COMMAND <exe-or-target> [args...]
 #                        [WORKING_DIRECTORY <dir>])
 # add_test() through the lock AND the VRAM budget (the lock for exclusivity, the tokens for
 # memory: the lock is taken FIRST, so a queued timing row holds no tokens while it waits for it).
@@ -389,7 +390,7 @@ endfunction()
 # $<TARGET_FILE:...> (it is an argument of the wrapper now, and add_test resolves target names
 # only in the command position). A name outside JAH_GPU_EXCLUSIVE_SUITES is a configure error.
 function(jah_gpu_exclusive_test)
-    cmake_parse_arguments(G "" "NAME;CLASS;TOKENS;RUN_TIMEOUT;WORKING_DIRECTORY" "COMMAND" ${ARGN})
+    cmake_parse_arguments(G "" "NAME;CLASS;TIER;TOKENS;RUN_TIMEOUT;WORKING_DIRECTORY" "COMMAND" ${ARGN})
     if(NOT G_NAME IN_LIST JAH_GPU_EXCLUSIVE_SUITES)
         message(FATAL_ERROR "jah_gpu_exclusive_test(${G_NAME}): not in JAH_GPU_EXCLUSIVE_SUITES "
                             "(tests/CMakeLists.txt) — the GPU-timing list changes by a verdict only")
@@ -397,7 +398,7 @@ function(jah_gpu_exclusive_test)
     if(NOT G_RUN_TIMEOUT OR NOT G_COMMAND OR NOT G_CLASS)
         message(FATAL_ERROR "jah_gpu_exclusive_test(${G_NAME}): CLASS, RUN_TIMEOUT and COMMAND are required")
     endif()
-    jah_vram_tokens(${G_CLASS} _k)
+    jah_vram_tokens(${G_CLASS} _k TIER "${G_TIER}")
     if(G_TOKENS)
         set(_k ${G_TOKENS})
     endif()
@@ -456,8 +457,8 @@ set(JAH_COST_GI_CHAIN 90000)
 #     sequence of suites (A writes, B reads) or a suite that is not a plain `--script` run.
 #     Without WARM it wipes the caches too (a suite that asserts on a COLD shader cache);
 #     ARGS are fresh_home.sh's --reset/--rm/--mkdir; THEN runs after the wipe.
-#   * `${JAH_FRESH_HOME} --warm <home> -- <command…>` as a row's COMMAND — add_script_e2e's
-#     default: the wipe happens inside the row (no extra ctest row), keeping the shader caches.
+#   * `${JAH_FRESH_HOME} --warm <home> -- <command…>` as a row's COMMAND — a one-script
+#     row's default: the wipe happens inside the row (no extra ctest row), keeping the shader caches.
 set(JAH_FRESH_HOME "${CMAKE_SOURCE_DIR}/tests/support/fresh_home.sh")
 function(jah_fresh_home_fixture row fixture home)
     cmake_parse_arguments(F "WARM" "" "ARGS;THEN;LABELS" ${ARGN})
@@ -514,8 +515,8 @@ endfunction()
 #       — one arm, declared WHERE ITS SUITE'S COMMENT LIVES (the comment says what it claims).
 #         Arms run in declaration order; FIRST puts the one arm whose claim is about the
 #         PROCESS ("the Player page has never been shown") before every other (one per pool).
-#   jah_add_pool(<pool> [HEADLESS] [BASELINE <script>] [LABELS <label…>] [ENV <k=v…>]
-#                [LAUNCHER <cmd…>] [APP_ARGS <arg…>] [PROPS <property value…>])
+#   jah_add_pool(<pool> [HEADLESS] [TIER low|epic] [CLASS app|vr] [BASELINE <script>] [LABELS <label…>]
+#                [ENV <k=v…>] [LAUNCHER <cmd…>] [APP_ARGS <arg…>] [PROPS <property value…>])
 #       — the row, after its arms (in the family's CMakeLists, so gate-scope's "a file under
 #         tests/<dir>/ selects that dir's rows" keeps holding). LAUNCHER runs the driver inside
 #         a fixture process (tests/vr/run_vr_app.sh --launch: a Monado runtime for the pool's
@@ -523,12 +524,21 @@ endfunction()
 #         ctest properties (a RESOURCE_LOCK, a SKIP_RETURN_CODE). BASELINE is a script the app
 #         runs after EVERY arm, green or red (--pool-baseline): what the family's arms change in
 #         the process and cannot put back on a red path.
+#         TIER (lane TEST-TIER-1; SPECS/audits/GPU_LOSS_AUDIT_2026-09-27.md §A2) is REQUIRED on an
+#         engine-up pool: `low` = every process runs `--test-tier low` (every scene it binds on
+#         the Low World Mode, the window 1280x720 — services/testtier.h; its measured VRAM is the
+#         `MEM` line run_pool.py prints at every boot) — for arms whose claims are verbs, UI
+#         state, counts, open/close; `epic` = no test tier, each scene keeps its own (a new one
+#         is Epic) — for an arm that asserts a picture, GI, Atom or a shipped-tier number. An
+#         arm that needs Epic lives in an Epic pool: MOVE it, never mix. A headless pool has no
+#         chain and takes no TIER. The tier is readable as the GLOBAL property
+#         JAH_POOL_<pool>_TIER (low|epic|headless) — the VRAM admission's class reads it.
 #
 # <seconds> is the arm's MEASURED time INSIDE its pool (whole seconds, rounded up — the pool's
 # `ARM … <ms>` lines are the measurement). THE BUDGETS ARE DERIVED, NEVER TYPED: an arm is
 # killed past 6x its measured time (never under 30 s), and the row's TIMEOUT is the sum of the
 # arms' budgets plus one boot budget (300 s). A slower arm is re-measured, never re-budgeted.
-# The home is fresh every run (fresh_home.sh --warm, as add_script_e2e); the arms SHARE it, so
+# The home is fresh every run (fresh_home.sh --warm, as a one-script row); the arms SHARE it, so
 # an arm never asserts on what another arm left behind — each pool was proved arm by arm against
 # its solo suites before they were deleted (spikes/suite-pool-1/).
 #
@@ -585,15 +595,27 @@ function(jah_add_pool pool)
     set(_modeflag)
     # THE VRAM BUDGET (GATE-ADMIT-1): run_pool.py takes the class's tokens once per APP PROCESS
     # (a restart re-takes them; the driver itself holds none). A HEADLESS pool boots the NULL
-    # render system and takes none. CLASS defaults to app; a VR pool says `CLASS vr`.
+    # render system and takes none. CLASS defaults to app; a VR pool says `CLASS vr`. THE CLASS
+    # FOLLOWS THE POOL'S TIER (TEST-TIER-1): an app pool declared `TIER low` boots the Low chain
+    # (~0.3 GB measured) and takes JAH_VRAM_TOKENS_LOW_TIER.
     if(NOT P_CLASS)
         set(P_CLASS app)
     endif()
     jah_vram_tokens(${P_CLASS} _vram TIER "${P_TIER}")
+    set(_tier headless)
     if(P_HEADLESS)
         set(_want headless)
         set(_modeflag --headless)
         set(_vram 0)
+        if(P_TIER)
+            message(FATAL_ERROR "jah_add_pool(${pool}): a HEADLESS pool has no chain and takes no TIER")
+        endif()
+    elseif(NOT P_TIER MATCHES "^(low|epic)$")
+        message(FATAL_ERROR "jah_add_pool(${pool}): TIER low|epic is required on an engine-up pool "
+                            "(low = no arm asserts a picture, GI, Atom or a shipped-tier number)")
+    else()
+        set(_tier ${P_TIER})
+        list(APPEND _modeflag --tier ${P_TIER})
     endif()
     set(_home ${CMAKE_CURRENT_BINARY_DIR}/pool-home-${pool})
     file(MAKE_DIRECTORY ${_home}/run)
@@ -646,6 +668,7 @@ function(jah_add_pool pool)
         set_tests_properties(pool.${pool} PROPERTIES ${P_PROPS})
     endif()
     set_property(GLOBAL PROPERTY JAH_POOL_${pool}_ADDED TRUE)
+    set_property(GLOBAL PROPERTY JAH_POOL_${pool}_TIER ${_tier})
     if(NOT P_HEADLESS)
         _jah_vram_register(pool.${pool} ${P_CLASS} ${_vram})
     endif()

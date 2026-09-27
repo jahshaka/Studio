@@ -47,6 +47,7 @@ For more information see the LICENSE file
 #include "services/libraryreset.h"
 #include "data/constants.h"
 #include "services/ogresamples.h"
+#include "services/testtier.h"
 #include "irisgl/core/irisutils.h"
 #include <QApplication>
 #include <QDir>
@@ -573,6 +574,19 @@ QVector<VerbInfo> AppApi::verbs() const
           "on working (editor.editGate reports it). `runPolicy` is the policy of the run asking — which is what the "
           "setting gave THIS run, and is 'off' for a --script run unless it was started with "
           "--script-live.",
+          Needs::Document },
+        { "testTier", "app.testTier() -> string",
+          "THE PROCESS'S TEST TIER (TEST-TIER-1): the World Mode ('low', 'medium', 'high', "
+          "'epic') this process puts EVERY scene it binds on — a new scene or an opened one, "
+          "after the reader, through the same call world.mode makes, so rows the scene pinned "
+          "with world.override survive — or '' when the process has none and each scene keeps "
+          "its own tier (the product's behaviour: new scenes start Epic, an opened scene at "
+          "what it saved). Set per PROCESS by `--test-tier <mode>` or JAHSHAKA_TEST_TIER (the "
+          "flag wins); a windowed script run under a test tier also boots its window at "
+          "1280x720. It exists for test processes whose claims need no shipped picture — "
+          "verbs, UI state, counts — so they do not each hold the Epic chain's ~1.5 GB of VRAM; "
+          "a pixel test runs with none. Reads only: it cannot be changed from a script, and "
+          "world.mode still switches the open scene as usual.",
           Needs::Document },
         { "window", "app.window() -> {x, y, width, height, minWidth, minHeight, visible, fullScreen, fits, screen:{name, width, height, availWidth, availHeight}}",
           "The main window's geometry and the screen it is on, in pixels — the coordinates a rig "
@@ -1161,6 +1175,11 @@ QVariantMap AppApi::mcpLogging(const QVariantMap &options)
     out["sessionLog"] = sessionLog.isEmpty() ? QVariant() : QVariant(sessionLog);
     out["sessionId"] = log.sessionId().isEmpty() ? QVariant() : QVariant(log.sessionId());
     return out;
+}
+
+QString AppApi::testTier()
+{
+    return testtier::name();
 }
 
 QVariantMap AppApi::window()

@@ -18,6 +18,20 @@ prints one line per arm; this driver owns what the app cannot:
     environment (so `JAH_POOL_ARMS=gi_verbs.gi_status ctest -R '^pool\\.gi_verbs$'`
     is the solo retry of one arm, through the real row). A pool the variable does
     not name runs every arm; `<pool>` alone names the whole pool.
+  * THE TIER (TEST-TIER-1). `--tier low` starts every process with `--test-tier low`
+    (every scene it binds on the Low World Mode, the window 1280x720 — services/testtier.h);
+    `--tier epic` (the default) passes nothing, so each scene keeps its own tier — the
+    pixel pools. At every boot the app prints `POOL-MEM <pool> gpuPoolUsed=<MB>
+    textures=<MB> tier=<t>` (app.memoryStats / app.textureMemory); this driver prints it as
+    `MEM <pool> gpuPoolUsed=<MB> textures=<MB> processMiB=<MiB> tier=<t>`, the last figure
+    the process's own nvidia-smi line, and the run log (scripts/gate_runlog.py) records it on
+    the pool's row.
+  * THE LEAK PROBE. After every arm's baseline the app prints `POOL-MEM <pool>.<arm>
+    gpuPoolUsed=<MB> textures=<MB>`; this driver prints it as `MEM <pool>.<arm> …` (the run log
+    records it on the arm) and, per process, compares the LAST arm's figure with the FIRST's:
+    a rise larger than the largest single arm's own step (the boot -> first arm included) is a
+    monotonic climb, not one arm's working set, and is printed as a FINDING line
+    `LEAK <pool> +<MB> over <n> arms` — never a red (the first runs decide whether it is real).
   * THE VRAM BUDGET (lane GATE-ADMIT-1; docs/TESTING_GATE.md §4b). `--vram-tokens <k>`: before
     every app process the driver takes k box-wide VRAM tokens (scripts/vram_tokens.py — the
     same flock files as scripts/gpu-admit.sh), all or nothing, waiting (one `vram: waiting …`
@@ -41,7 +55,7 @@ prints one line per arm; this driver owns what the app cannot:
 
 Usage:
   run_pool.py --pool <name> --app <Jahshaka> [--headless] [--arms a,b] [--baseline <js>]
-              [--boot-budget <s>] [--vram-tokens <k>] --arm <name> <script> <budget-s> [--arm ...]
+              [--boot-budget <s>] [--tier low|epic] [--vram-tokens <k>] --arm <name> <script> <budget-s> [--arm ...]
               [-- <extra app args>]
 
 --baseline <js>: the pool's own baseline script, run by the app after EVERY arm, green
@@ -65,6 +79,9 @@ XID = re.compile(r"^(\d+(?:\.\d+)?)\s.*NVRM: Xid \([^)]*\): (\d+), pid=(\d+),")
 ARM_BEGIN = re.compile(r"^ARM-BEGIN (\S+)\.(\S+)\s*$")
 ARM_END = re.compile(r"^ARM (\S+)\.(\S+) (PASS|FAIL) (\d+)(?: (.*))?$")
 BASELINE_LOST = re.compile(r"^POOL-BASELINE-LOST (\S+)\.(\S+) (.*)$")
+POOL_MEM = re.compile(r"^POOL-MEM (\S+) (.*?) tier=(\S+)\s*$")
+ARM_MEM = re.compile(r"^POOL-MEM (\S+)\.(\S+) gpuPoolUsed=(\d+) textures=(\d+)\s*$")
+TIERS = ("low", "epic")
 
 
 def usage(msg):
@@ -74,7 +91,7 @@ def usage(msg):
 
 def parse(argv):
     opt = {"pool": None, "app": None, "headless": False, "arms": None,
-           "boot": 300.0, "list": [], "extra": [], "baseline": None, "vram": 0}
+           "boot": 300.0, "list": [], "extra": [], "baseline": None, "tier": "epic", "vram": 0}
     i = 0
     while i < len(argv):
         a = argv[i]
@@ -87,6 +104,10 @@ def parse(argv):
             opt["app"] = argv[i + 1]; i += 2
         elif a == "--baseline":
             opt["baseline"] = argv[i + 1]; i += 2
+        elif a == "--tier":
+            opt["tier"] = argv[i + 1]; i += 2
+            if opt["tier"] not in TIERS:
+                usage("--tier: '%s' is not one of %s" % (opt["tier"], ", ".join(TIERS)))
         elif a == "--headless":
             opt["headless"] = True; i += 1
         elif a == "--arms":
@@ -137,6 +158,37 @@ def reader(stream, q):
     for raw in iter(stream.readline, b""):
         q.put(raw.decode("utf-8", "replace").rstrip("\n"))
     q.put(None)
+
+
+def process_mib(pid):
+    """The process's own VRAM as nvidia-smi reports it (MiB), or None (no GPU, no tool, or a
+    process the driver does not list — a headless one)."""
+    try:
+        out = subprocess.run(["nvidia-smi", "--query-compute-apps=pid,used_memory",
+                              "--format=csv,noheader,nounits"], capture_output=True, text=True,
+                             timeout=10).stdout
+    except (OSError, subprocess.SubprocessError):
+        return None
+    for row in out.splitlines():
+        parts = [x.strip() for x in row.split(",")]
+        if len(parts) == 2 and parts[0] == str(pid):
+            try: return int(parts[1])
+            except ValueError: return None
+    return None
+
+
+def leak_of(boot_mb, curve):
+    """The leak probe over one process: `curve` is [(arm, gpuPoolUsed MB)] in arm order, `boot_mb`
+    the boot's figure (or None). (rise, arms) when the last arm's figure exceeds the first's by
+    more than the largest single step (boot -> first arm, then arm -> arm); else None."""
+    if len(curve) < 2:
+        return None
+    points = ([boot_mb] if boot_mb is not None else []) + [mb for _, mb in curve]
+    steps = [b - a for a, b in zip(points, points[1:])]
+    rise = curve[-1][1] - curve[0][1]
+    if rise > 0 and rise > max(steps):
+        return rise, len(curve)
+    return None
 
 
 def kernel_xids(since, pids):
@@ -255,6 +307,8 @@ def main():
         cmd = [opt["app"], "--scripts", spec, "--pool", pool]
         if opt["headless"]:
             cmd.append("--headless")
+        if opt["tier"] != "epic":
+            cmd += ["--test-tier", opt["tier"]]
         if opt["baseline"]:
             cmd += ["--pool-baseline", opt["baseline"]]
         cmd += opt["extra"]
@@ -294,6 +348,8 @@ def main():
         deadline = started + opt["boot"]
         killed_for = None       # "arm:<name>", "baseline:<name>" or "boot"
         began_any = False
+        curve = []              # the leak probe: [(arm, gpuPoolUsed MB)] after each arm's baseline
+        boot_mb = None
         fails_here = 0
         lost = None
         while True:
@@ -324,6 +380,21 @@ def main():
                 # process's end) is due within the boot budget.
                 deadline = time.monotonic() + opt["boot"]
                 continue
+            m = ARM_MEM.match(line)
+            if m and m.group(1) == pool:
+                curve.append((m.group(2), int(m.group(3))))
+                say("MEM %s.%s gpuPoolUsed=%s textures=%s" % (pool, m.group(2), m.group(3), m.group(4)))
+                continue
+            m = POOL_MEM.match(line)
+            if m and m.group(1) == pool:
+                bm = re.match(r"gpuPoolUsed=(\d+)", m.group(2))
+                boot_mb = int(bm.group(1)) if bm else None
+                mib = process_mib(proc.pid) if not opt["headless"] else 0
+                body = m.group(2)
+                if body == "headless": body = "gpuPoolUsed=0 textures=0"
+                say("MEM %s %s processMiB=%s tier=%s" % (pool, body,
+                                                         "?" if mib is None else mib, m.group(3)))
+                continue
             m = BASELINE_LOST.match(line)
             if m and m.group(1) == pool:
                 lost = (m.group(2), m.group(3))
@@ -343,6 +414,10 @@ def main():
         rc = proc.wait()
         vram_tokens.release(tokens)
         t.join(timeout=5)
+        leak = leak_of(boot_mb, curve)
+        if leak:
+            say("LEAK %s +%d over %d arms (process %d: %s)" % (pool, leak[0], leak[1], process,
+                " ".join("%s=%d" % (a, mb) for a, mb in curve)))
         plog.close()
         how = ("signal %d" % -rc) if rc < 0 else ("exit %d" % rc)
 

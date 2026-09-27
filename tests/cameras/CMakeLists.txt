@@ -207,4 +207,4 @@ jah_pool_arm(cameras axis_lock ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_axis_view
 # ---- THE POOL (lane SUITE-POOL-1): cameras.e2e and its four siblings (lens, postfx, pilot,
 # axis_lock) were five boots of the same verb module on the same scratch-home contract; they are
 # five arms of ONE process now (SPECS/audits/SUITE_REDUNDANCY_AUDIT_2026-09-27.md §6).
-jah_add_pool(cameras LABELS scripting)
+jah_add_pool(cameras TIER low LABELS scripting)

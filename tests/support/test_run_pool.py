@@ -55,6 +55,7 @@ base = [sys.executable, driver, "--pool", "selftest", "--app", app, "--headless"
 
 # ---- part 1: the real app -------------------------------------------------------------
 rc, out = run(base + arms, {"JAH_POOL_ARMS": ""})
+out1 = out
 show(out)
 v = verdicts(out)
 check(rc == 1, "the pool row fails when an arm fails (driver exit %d)" % rc)
@@ -130,6 +131,65 @@ check(out.count("POOL fake RESTART ") == 6, "every restart is a named line (%d)"
 check(rc == 1 and "solo retry: JAH_POOL_ARMS=fake.crash,fake.hang,fake.lost" in out,
       "the row fails and prints the solo retry")
 
+# ---- part 3: the pool's TIER and its MEM line (lane TEST-TIER-1) -------------------------
+# The real app's headless boot (part 1) prints its footprint as `headless`: the driver's MEM line
+# reads it as zero, at the document's tier.
+check(any(l.startswith("MEM selftest gpuPoolUsed=0 textures=0 processMiB=0 tier=document")
+          for l in out1.splitlines()), "a headless pool's MEM line: zero, at the document's tier")
+tierapp = tempfile.NamedTemporaryFile("w", suffix=".py", delete=False)
+tierapp.write(r'''#!/usr/bin/env python3
+import sys
+a = sys.argv; pool = a[a.index("--pool") + 1]
+tier = a[a.index("--test-tier") + 1] if "--test-tier" in a else "document"
+print("POOL-MEM %s gpuPoolUsed=%d textures=40 tier=%s" % (pool, 300 if tier == "low" else 1445, tier), flush=True)
+for i, e in enumerate(a[a.index("--scripts") + 1].split(",")):
+    n = e.split("=", 1)[0]
+    print("ARM-BEGIN %s.%s" % (pool, n), flush=True)
+    print("ARM %s.%s PASS 1" % (pool, n), flush=True)
+    # the leak probe's point after the arm: a Low process CLIMBS 20 MB an arm, an Epic one is flat
+    print("POOL-MEM %s.%s gpuPoolUsed=%d textures=40" % (pool, n, 300 + 20 * (i + 1) if tier == "low" else 1445), flush=True)
+''')
+tierapp.close()
+os.chmod(tierapp.name, 0o755)
+mems, outs = {}, {}
+for t in ("low", "epic"):
+    rc3, out3 = run([sys.executable, driver, "--pool", "tiered", "--app", tierapp.name, "--tier", t,
+                     "--arm", "a1", "x.js", "30", "--arm", "a2", "x.js", "30", "--arm", "a3", "x.js", "30"],
+                    {"JAH_POOL_ARMS": ""})
+    show(out3)
+    outs[t] = out3
+    mems[t] = [l for l in out3.splitlines() if l.startswith("MEM tiered ")]
+    check(rc3 == 0, "--tier %s: the pool runs" % t)
+arm_mems = [l for l in outs["low"].splitlines() if l.startswith("MEM tiered.")]
+check(arm_mems == ["MEM tiered.a1 gpuPoolUsed=320 textures=40", "MEM tiered.a2 gpuPoolUsed=340 textures=40",
+                   "MEM tiered.a3 gpuPoolUsed=360 textures=40"],
+      "the leak probe: one `MEM <pool>.<arm>` line after every arm (%s)" % arm_mems)
+check(any(l.startswith("LEAK tiered +40 over 3 arms") for l in outs["low"].splitlines()),
+      "a climb past the largest single step (20 MB) is a LEAK finding line")
+check(not any(l.startswith("LEAK ") for l in outs["epic"].splitlines()),
+      "a flat curve is no LEAK")
+check("LEAK" not in "".join(l for l in outs["low"].splitlines() if l.startswith("POOL tiered:")) and
+      "0 not PASS" in outs["low"], "a LEAK is a finding, never a red")
+os.unlink(tierapp.name)
+mems = {t: [l for l in v if not l.startswith("MEM tiered.")] for t, v in mems.items()}
+check(len(mems["low"]) == 1 and mems["low"][0].startswith("MEM tiered gpuPoolUsed=300 textures=40 processMiB=")
+      and mems["low"][0].endswith("tier=low"),
+      "TIER low: every process gets --test-tier low, and the boot's MEM line is printed once (%s)" % mems["low"])
+check(len(mems["epic"]) == 1 and mems["epic"][0].endswith("tier=document") and "gpuPoolUsed=1445" in mems["epic"][0],
+      "TIER epic: no --test-tier is passed (the document's own tier) (%s)" % mems["epic"])
+rc4, out4 = run([sys.executable, driver, "--pool", "x", "--app", "true", "--tier", "medium",
+                 "--arm", "a", "x.js", "30"])
+check(rc4 == 2 and "--tier" in out4, "a TIER the driver does not know is refused (exit %d)" % rc4)
+# ...and the run log reads the field (scripts/gate_runlog.py, the `mem` of a pool's row).
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(driver)))), "scripts"))
+import gate_runlog
+m = gate_runlog._mem_of("\n".join(mems["low"] + ["MEM tiered gpuPoolUsed=310 textures=41 processMiB=? tier=low"]))
+check(m is not None and m["gpuPoolUsedMB"] == 310 and m["tier"] == "low" and m["boots"] == 2,
+      "the run log records a pool row's MEM: the largest over its boots (%s)" % m)
+am = gate_runlog._arm_mems(outs["low"])
+lk = gate_runlog._leaks_of(outs["low"])
+check(am.get("tiered.a3") == {"gpuPoolUsedMB": 360, "texturesMB": 40} and lk == [{"riseMB": 40, "arms": 3}],
+      "...each arm's MEM on the arm's record, the LEAK on the row's (%s, %s)" % (am, lk))
 # ---- part 3: THE VRAM BUDGET and THE KERNEL'S WORD (lane GATE-ADMIT-1) --------------------
 # A private token directory (never the box's /tmp/jah-vram): the stand-in app reports the token
 # files IT holds open (inherited from the driver) and, in arm `xid`, writes a kernel-journal line
