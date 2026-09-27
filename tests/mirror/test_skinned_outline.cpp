@@ -44,7 +44,7 @@
 #include "irisgl/document/assets/skeleton.h"
 #include "irisgl/document/assets/vertexbuffer.h"
 #include "irisgl/document/assets/vertexlayout.h"
-#include "irisgl/document/materials/defaultmaterial.h"
+#include "irisgl/document/materials/pbrmaterial.h"
 #include "irisgl/document/scenegraph/meshnode.h"
 #include "irisgl/document/scenegraph/scene.h"
 #include "irisgl/mirror/scenemirror.h"
@@ -208,8 +208,8 @@ int main(int argc, char **argv)
     auto body = iris::MeshNode::create();
     body->setName(QStringLiteral("tube"));
     body->setMesh(mesh);
-    auto mat = iris::DefaultMaterial::create();
-    mat->setDiffuseColor(QColor(200, 0, 0));
+    auto mat = iris::PbrMaterial::create();
+    mat->setBaseColor(QColor(200, 0, 0));
     body->setMaterial(mat);
     {   // the bone scene nodes an imported rig carries
         auto jointRoot = iris::SceneNode::create();

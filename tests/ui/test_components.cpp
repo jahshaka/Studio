@@ -75,6 +75,7 @@ For more information see the LICENSE file
 #include "viewport/headlesseditorviewport.h"
 
 #include "../support/documentgraph.h"
+#include "../support/timingbars.h"
 
 static int failures = 0;
 #define CHECK(cond, name) do { \
@@ -478,7 +479,9 @@ int main(int argc, char **argv)
     // signature and one highlight repaint. Half a millisecond of headroom over
     // the same panel without it, on a four-part model, is generous and still
     // catches a rebuild-per-pick regression (a rebuild costs milliseconds).
-    CHECK(median(groupMs) < median(plainMs) + 0.5,
+    // THE HALF-MILLISECOND BAR IS NIGHTLY (lane D6B-GATE-SHAPE; tests/support/timingbars.h):
+    // the rebuild count above is the push-tier guard; ui.components.timing arms this one.
+    JAH_TIMING_CHECK("ui.components", median(groupMs) < median(plainMs) + 0.5,
           "...and the section adds under 0.5 ms to a pick");
 
     std::printf(failures ? "ui.components: FAILED (%d)\n" : "ui.components: PASS\n", failures);

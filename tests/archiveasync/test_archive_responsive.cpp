@@ -24,6 +24,7 @@
 // And correctness is not allowed to move: what comes back out of an archive
 // this wrote is the same world, and a cancelled import leaves no orphan.
 #include "../support/mcpharness.h"
+#include "../support/timingbars.h"
 #include <QCoreApplication>
 #include <QDir>
 #include <QDirIterator>
@@ -52,6 +53,14 @@ static int failures = 0;
 using namespace mcpharness;
 
 #define CHECK(cond, msg) do { if (cond) std::printf("ok:   %s\n", msg); else { std::printf("FAIL: %s\n", msg); ++failures; } } while (0)
+
+/// THE UI-GAP BUDGETS ARE NIGHTLY (lane D6B-GATE-SHAPE; tests/support/timingbars.h): a
+/// wall-clock gap reads the box's load as much as the archiver. The push row
+/// (archive.responsive) asserts the round trip, the manifest, the cancel, the quit and
+/// that the probe measured every operation, and PRINTS each gap against its budget;
+/// archive.responsive.timing (nightly, quiet box, the GPU lock) arms the budgets.
+static const bool gTimingBars = jahtest::timingBarsArmed();
+#define TIMING_CHECK(cond, msg) JAH_TIMING_CHECK("archive.responsive", cond, msg)
 
 /// THE BUDGET, and why this number.
 ///
@@ -415,8 +424,9 @@ int main(int argc, char **argv)
     // The control is measured HERE, right after the import and before anything
     // else touches the app: same app, same box, same second, the UI thread
     // doing the same kind of work with nothing in flight (see kControlFactor).
-    CHECK(withinControlBudget(mcp, imported.maxGap, "import", imported.logMark),
-          "no UI-thread gap beyond the budget during the threaded import");
+    CHECK(imported.maxGap > 0.0, "the heartbeat probe measured the import");
+    TIMING_CHECK(withinControlBudget(mcp, imported.maxGap, "import", imported.logMark),
+                 "no UI-thread gap beyond the budget during the threaded import");
 
     const QJsonObject importResult = mcp.runScript(QStringLiteral("project.archiveResult()"))
                                          .value("result").toObject();
@@ -460,8 +470,9 @@ int main(int argc, char **argv)
     CHECK(exported.ticks > 0 || exported.elapsedMs < kHeartbeatMs,
           "the UI thread kept ticking during the export (or the export finished "
           "inside the first heartbeat interval)");
-    CHECK(withinControlBudget(mcp, exported.maxGap, "export", exported.logMark),
-          "no UI-thread gap beyond the budget during the threaded export");
+    CHECK(exported.maxGap > 0.0, "the heartbeat probe measured the export");
+    TIMING_CHECK(withinControlBudget(mcp, exported.maxGap, "export", exported.logMark),
+                 "no UI-thread gap beyond the budget during the threaded export");
 
     const QJsonObject exportResult = mcp.runScript(QStringLiteral("project.archiveResult()"))
                                          .value("result").toObject();

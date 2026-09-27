@@ -15,7 +15,11 @@ For more information see the LICENSE file
 #include <cstdlib>
 
 #include <QApplication>
+#include <QEvent>
+#include <QDir>
+#include <QElapsedTimer>
 #include <QFile>
+#include <QFileInfo>
 #include <QThread>
 #include <QThreadPool>
 
@@ -152,6 +156,238 @@ int runScriptFile(MainWindow &window, QApplication &app, const QString &path, bo
 
     if (editorBoot) window.endEngineSelftest();   // symmetrical with the begin above
     return finalizeAppExit(rc);
+}
+
+namespace {
+
+struct PoolArm { QString name; QString path; };
+
+// "e2e_gi_status.js" -> "gi_status"; "e2e_x.js.in" was configured to "e2e_x.js".
+QString armNameFor(const QString &path)
+{
+    QString base = QFileInfo(path).fileName();
+    if (base.endsWith(QLatin1String(".js"))) base.chop(3);
+    if (base.startsWith(QLatin1String("e2e_"))) base.remove(0, 4);
+    return base;
+}
+
+QList<PoolArm> poolArmsFrom(const QString &scripts)
+{
+    QList<PoolArm> arms;
+    const QFileInfo asDir(scripts);
+    if (asDir.isDir()) {
+        const QStringList files = QDir(scripts).entryList({ QStringLiteral("*.js") },
+                                                          QDir::Files, QDir::Name);
+        for (const QString &f : files) {
+            const QString path = QDir(scripts).filePath(f);
+            arms.append({ armNameFor(path), path });
+        }
+        return arms;
+    }
+    for (const QString &entry : scripts.split(QLatin1Char(','), Qt::SkipEmptyParts)) {
+        const int eq = entry.indexOf(QLatin1Char('='));
+        if (eq > 0) arms.append({ entry.left(eq), entry.mid(eq + 1) });
+        else        arms.append({ armNameFor(entry), entry });
+    }
+    return arms;
+}
+
+void armLine(const char *fmt, const QByteArray &a, const QByteArray &b = {}, const QByteArray &c = {})
+{
+    std::fprintf(stdout, fmt, a.constData(), b.constData(), c.constData());
+    std::fflush(stdout);
+}
+
+// The engine-up boot a one-script process gets (runScriptFile): the editor page
+// shown on a new default scene, ten settling frames.
+bool beginEditorBoot(MainWindow &window, QApplication &app, QString &why)
+{
+    if (!window.beginEngineSelftest(why)) return false;
+    for (int frame = 0; frame < 10; ++frame) {
+        app.processEvents(QEventLoop::AllEvents, 50);
+        QThread::msleep(16);
+    }
+    return true;
+}
+
+}   // namespace
+
+int runScriptPool(MainWindow &window, QApplication &app, const QString &scripts,
+                  const QString &poolIn, const QStringList &only, const QString &poolBaseline,
+                  bool headless, bool live)
+{
+    const QString pool = poolIn.isEmpty() ? QStringLiteral("pool") : poolIn;
+    const QByteArray poolUtf8 = pool.toUtf8();
+    QList<PoolArm> arms = poolArmsFrom(scripts);
+    int failed = 0;
+
+    // --arms: the named subset, in the POOL's order. A name the pool does not
+    // have is a FAIL line of its own — a typo in a solo retry must not read as
+    // "nothing failed".
+    if (!only.isEmpty()) {
+        QList<PoolArm> picked;
+        for (const PoolArm &arm : arms)
+            if (only.contains(arm.name)) picked.append(arm);
+        for (const QString &name : only) {
+            bool known = false;
+            for (const PoolArm &arm : arms) known = known || arm.name == name;
+            if (!known) {
+                armLine("ARM %s.%s FAIL 0 no such arm in this pool\n", poolUtf8, name.toUtf8());
+                ++failed;
+            }
+        }
+        arms = picked;
+    }
+    if (arms.isEmpty() && failed == 0) {
+        std::fprintf(stderr, "pool %s: no arms in '%s'\n", poolUtf8.constData(), qPrintable(scripts));
+        return finalizeAppExit(1);
+    }
+
+    window.show();
+    app.processEvents();
+
+    const bool noEditorBoot = qEnvironmentVariableIntValue("JAHSHAKA_TEST_NO_EDITOR_BOOT") > 0;
+    const bool editorBoot = !headless && !noEditorBoot;
+    if (editorBoot) {
+        QString why;
+        if (!beginEditorBoot(window, app, why)) {
+            std::fprintf(stderr, "pool %s: %s\n", poolUtf8.constData(), qPrintable(why));
+            return finalizeAppExit(1);
+        }
+    }
+
+    ScriptEngine *engine = window.scripting();
+    QObject::connect(engine, &ScriptEngine::consoleOutput, [](const QString &t) {
+        std::fprintf(stdout, "%s\n", qPrintable(t));
+        std::fflush(stdout);
+    });
+    const ScriptRunPolicy policy = live ? ScriptRunPolicy::Live : ScriptRunPolicy::Off;
+    QString bootWindow;     // "<w>x<h>" as the boot had it (engine-up pools)
+    QString poolBaselineSource;
+    if (!poolBaseline.isEmpty()) {
+        QFile f(poolBaseline);
+        if (!f.open(QIODevice::ReadOnly | QIODevice::Text)) {
+            std::fprintf(stderr, "pool %s: cannot open --pool-baseline %s\n", poolUtf8.constData(),
+                         qPrintable(poolBaseline));
+            return finalizeAppExit(1);
+        }
+        poolBaselineSource = QString::fromUtf8(f.readAll());
+    }
+    if (editorBoot) {
+        const ScriptResult w = engine->evaluate(
+            QStringLiteral("(function(){var w = app.window(); return w.width + 'x' + w.height;})()"),
+            QStringLiteral("<pool-baseline>"), false, 0, ScriptRunPolicy::Off);
+        if (w.ok) bootWindow = w.value.toString();
+    }
+
+    for (int i = 0; i < arms.size(); ++i) {
+        const PoolArm &arm = arms.at(i);
+        const QByteArray armUtf8 = arm.name.toUtf8();
+        armLine("ARM-BEGIN %s.%s\n", poolUtf8, armUtf8);
+        QElapsedTimer clock;
+        clock.start();
+
+        // THE ARM'S BASELINE, part 1 — NOT a second boot. The first arm has the
+        // boot a one-script process gets; a later arm starts where the previous
+        // arm's baseline left the window (the project closed, the desktop page
+        // up) and reaches the editor through the product's own route, the
+        // `project.create`/`project.open` it begins with. Re-showing the editor
+        // page directly (the selftest's begin, which sets the stacked page
+        // without switchSpace) after an arm had a second engine View up — the
+        // Player's, a camera PIP's — lost the device with an Xid 13 "3D WIDTH ZT
+        // Violation" three times out of three (lane SUITE-POOL-1's first run,
+        // spikes/suite-pool-1/xid/): a path no user takes is not a baseline.
+        // ...part 2: a fresh JavaScript realm — no global of an earlier arm.
+        if (!engine->resetScriptContext()) {
+            armLine("POOL-BASELINE-LOST %s.%s %s\n", poolUtf8, armUtf8,
+                    QByteArrayLiteral("the script realm could not be reset"));
+            return finalizeAppExit(qBound(1, failed + 1, 255));
+        }
+
+        QString failure;
+        QFile file(arm.path);
+        if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+            failure = QStringLiteral("cannot open %1").arg(arm.path);
+        } else {
+            const QString source = QString::fromUtf8(file.readAll());
+            const ScriptResult result = engine->evaluate(source, arm.path, true, 0, policy);
+            if (!result.ok) {
+                std::fprintf(stderr, "%s\n", qPrintable(result.toString()));
+                if (!result.stack.isEmpty()) std::fprintf(stderr, "%s\n", qPrintable(result.stack));
+                failure = result.toString().section(QLatin1Char('\n'), 0, 0);
+            } else {
+                // The one-script contract: a numeric completion value is the
+                // exit code, so a non-zero one is this arm's failure count.
+                const int typeId = result.value.typeId();
+                if ((typeId == QMetaType::Int || typeId == QMetaType::Double ||
+                     typeId == QMetaType::LongLong) && result.value.toInt() != 0)
+                    failure = QStringLiteral("completion value %1").arg(result.value.toInt());
+            }
+        }
+        const QByteArray ms = QByteArray::number(clock.elapsed());
+        if (failure.isEmpty()) {
+            armLine("ARM %s.%s PASS %s\n", poolUtf8, armUtf8, ms);
+        } else {
+            ++failed;
+            armLine("ARM %s.%s FAIL %s", poolUtf8, armUtf8, ms);
+            armLine(" %s\n", failure.simplified().toUtf8());
+        }
+
+        // THE POOL'S OWN BASELINE FIRST (--pool-baseline), after every arm,
+        // green or red: what a family's arms change in the process and cannot
+        // put back on a red path (a throw skips a script's own tail). Its
+        // failure is a lost baseline like the runner's.
+        if (!poolBaselineSource.isEmpty()) {
+            const ScriptResult pb = engine->evaluate(poolBaselineSource, poolBaseline, false, 0,
+                                                     ScriptRunPolicy::Off);
+            if (!pb.ok) {
+                armLine("POOL-BASELINE-LOST %s.%s %s\n", poolUtf8, armUtf8,
+                        pb.toString().simplified().toUtf8());
+                if (editorBoot) window.endEngineSelftest();
+                return finalizeAppExit(qBound(1, failed, 255));
+            }
+        }
+
+        // THE BASELINE AFTER THE ARM, THROUGH THE VERBS (API-first: the pool
+        // uses what a script uses). Whatever project the arm left open is
+        // closed; if one is still open afterwards the next arm cannot start
+        // from the boot's state, so the process ends here and the driver
+        // restarts it for the arms that remain.
+        //
+        // THE WINDOW TOO (engine-up): an arm that resized the window or left it
+        // in immersive full screen (editor_controls does both) would hand the
+        // next arm a different viewport — its framing, its pick pixels. Put
+        // back to the size the boot had, through the same verbs.
+        QString windowBaseline;
+        if (editorBoot && !bootWindow.isEmpty()) {
+            windowBaseline = QStringLiteral(
+                "if (editor.fullscreen()) editor.fullscreen(false);"
+                "(function(){var w = app.window(); if (w.width + 'x' + w.height !== '%1') app.resizeWindow(%2, %3);})();")
+                .arg(bootWindow, bootWindow.section(QLatin1Char('x'), 0, 0),
+                     bootWindow.section(QLatin1Char('x'), 1, 1));
+        }
+        const ScriptResult base = engine->evaluate(
+            windowBaseline +
+                QStringLiteral("if (project.current()) project.close(); !project.current()"),
+            QStringLiteral("<pool-baseline>"), false, 0, ScriptRunPolicy::Off);
+        // ...and what the close handed to the event loop to delete is deleted
+        // now, not in the middle of the next arm's measurement (doc.memory
+        // counted a previous arm's node leaving during its own burst).
+        QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
+        app.processEvents();
+        if (!base.ok || !base.value.toBool()) {
+            armLine("POOL-BASELINE-LOST %s.%s %s\n", poolUtf8, armUtf8,
+                    (base.ok ? QStringLiteral("a project is still open after project.close()")
+                             : base.toString()).simplified().toUtf8());
+            if (i + 1 < arms.size()) {
+                if (editorBoot) window.endEngineSelftest();
+                return finalizeAppExit(qBound(1, failed, 255));
+            }
+        }
+    }
+
+    if (editorBoot) window.endEngineSelftest();
+    return finalizeAppExit(qBound(0, failed, 255));
 }
 
 int runMcpServe(MainWindow &window, QApplication &app, unsigned short port, bool headless)

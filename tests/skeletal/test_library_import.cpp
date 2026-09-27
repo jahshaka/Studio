@@ -26,7 +26,7 @@
 #include "irisgl/document/scenegraph/meshnode.h"
 #include "irisgl/document/assets/mesh.h"
 #include "irisgl/document/assets/skeleton.h"
-#include "irisgl/document/materials/defaultmaterial.h"
+#include "irisgl/document/materials/pbrmaterial.h"
 #include "irisgl/document/animation/animation.h"
 #include "irisgl/document/animation/clipextractor.h"
 
@@ -42,7 +42,7 @@ static const QString kProp = QStringLiteral(JAHSHAKA_TEST_SOURCE_DIR "/tests/imp
 
 static iris::MaterialPtr makeMat(iris::MeshPtr, iris::MeshMaterialData &)
 {
-    return iris::DefaultMaterial::create();
+    return iris::PbrMaterial::create();
 }
 
 static iris::MeshNodePtr findSkinned(const iris::SceneNodePtr &n)

@@ -24,7 +24,7 @@ jahshaka_rt_reflect_test(test_rt_reflect)
 target_link_libraries(test_rt_reflect PRIVATE JahshakaEngine)
 add_test(NAME gi.rt_reflect COMMAND test_rt_reflect
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(gi.rt_reflect PROPERTIES TIMEOUT 300 LABELS "engine")
+set_tests_properties(gi.rt_reflect PROPERTIES TIMEOUT 120 LABELS "engine")
 
 # THE LAMP ARM — A RAY-TRACED MIRROR IS A RADIOMETER (PHOTON phase A, A1
 # section 1.2; lane FENCE-1). Same binary, its own fixture and its own process:
@@ -42,19 +42,19 @@ set_tests_properties(gi.rt_reflect PROPERTIES TIMEOUT 300 LABELS "engine")
 #                             and that form is deleted.
 add_test(NAME gi.rt_reflect_lamp COMMAND test_rt_reflect --lamp
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(gi.rt_reflect_lamp PROPERTIES TIMEOUT 300 LABELS "engine")
+set_tests_properties(gi.rt_reflect_lamp PROPERTIES TIMEOUT 120 LABELS "engine")
 
 add_test(NAME gi.rt_reflect_lamp_clip COMMAND test_rt_reflect --lamp --target
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.rt_reflect_lamp_clip PROPERTIES
-                     TIMEOUT 300 LABELS "engine")
+                     TIMEOUT 120 LABELS "engine")
 
 # F1-HITRES (PHOTON-CARDS-2 part B): a perfect mirror's hit reads the hit
 # surface's CARD — the reflected panel's row held to the card's closed form pixel
 # by pixel, its edge a two-pixel step (the voxel read's numbers printed beside).
 add_test(NAME gi.rt_reflect_hitres COMMAND test_rt_reflect --hitres
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(gi.rt_reflect_hitres PROPERTIES TIMEOUT 300 LABELS "engine")
+set_tests_properties(gi.rt_reflect_hitres PROPERTIES TIMEOUT 120 LABELS "engine")
 
 # RAY-FMT-CHECK (PHOTON P3): the availability gate asks the device for STORAGE
 # support of the tier's history formats and refuses with a log line — a
@@ -65,11 +65,11 @@ set(_rt_lvp_icd "/usr/share/vulkan/icd.d/lvp_icd.json")
 if(EXISTS "${_rt_lvp_icd}")
     add_test(NAME gi.rt_reflect_format_lavapipe COMMAND test_rt_reflect --format-check
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-    set_tests_properties(gi.rt_reflect_format_lavapipe PROPERTIES TIMEOUT 300 LABELS "engine"
+    set_tests_properties(gi.rt_reflect_format_lavapipe PROPERTIES TIMEOUT 120 LABELS "engine"
                          ENVIRONMENT "VK_ICD_FILENAMES=${_rt_lvp_icd}")
     add_test(NAME gi.rt_reflect_format_refused_lavapipe COMMAND test_rt_reflect --format-check
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-    set_tests_properties(gi.rt_reflect_format_refused_lavapipe PROPERTIES TIMEOUT 300
+    set_tests_properties(gi.rt_reflect_format_refused_lavapipe PROPERTIES TIMEOUT 120
                          LABELS "engine"
                          ENVIRONMENT "VK_ICD_FILENAMES=${_rt_lvp_icd};JAHSHAKA_RAY_DENY_STORAGE_FORMAT=R32G32_SFLOAT")
 endif()
@@ -81,12 +81,12 @@ endif()
 # the measured split-sum residual + 25 % above) — see envRayMatchMain.
 add_test(NAME gi.env_ray_match COMMAND test_rt_reflect --env-ray-match
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(gi.env_ray_match PROPERTIES TIMEOUT 300 LABELS "engine")
+set_tests_properties(gi.env_ray_match PROPERTIES TIMEOUT 120 LABELS "engine")
 
 add_test(NAME gi.rt_reflect_norays COMMAND test_rt_reflect
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.rt_reflect_norays PROPERTIES
-                     TIMEOUT 300 LABELS "engine"
+                     TIMEOUT 120 LABELS "engine"
                      ENVIRONMENT "JAHSHAKA_NO_RAY_QUERY=1")
 
 # REFLECTIONS UNDER A MOVING CAMERA (PAN-SMEAR-1): the moving frame against the
@@ -106,7 +106,7 @@ add_dependencies(test_reflect_motion JahshakaEngineMedia)
 target_link_libraries(test_reflect_motion PRIVATE JahshakaEngine)
 add_test(NAME gi.reflect_motion COMMAND test_reflect_motion
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(gi.reflect_motion PROPERTIES TIMEOUT 300 LABELS "engine")
+set_tests_properties(gi.reflect_motion PROPERTIES TIMEOUT 120 LABELS "engine")
 # THE LETTERBOX (SSR-LETTERBOX-1): both rows run a 2.4:1 "the rectangle IS the
 # shot" arm and a 2.39:1 moving-vs-settled arm, and both gate them — the march
 # takes the shot's uv in its pass buffer, the ray tier its image basis expanded
@@ -114,7 +114,7 @@ set_tests_properties(gi.reflect_motion PROPERTIES TIMEOUT 300 LABELS "engine")
 add_test(NAME gi.reflect_motion_norays COMMAND test_reflect_motion
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.reflect_motion_norays PROPERTIES
-                     TIMEOUT 300 LABELS "engine"
+                     TIMEOUT 120 LABELS "engine"
                      ENVIRONMENT "JAHSHAKA_NO_RAY_QUERY=1")
 
 # A MOVING OBJECT'S REFLECTIONS (REFLECT-MOVERS-1): a sphere on a circle over a
@@ -165,6 +165,6 @@ if(JAHSHAKA_ASAN)
     add_test(NAME gi.rt_reflect_asan COMMAND test_rt_reflect_asan
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
     set_tests_properties(gi.rt_reflect_asan PROPERTIES
-                         TIMEOUT 600 LABELS "engine"
+                         TIMEOUT 180 LABELS "engine"
                          ENVIRONMENT "${JAH_ASAN_ENGINE_OPTIONS}")
 endif()

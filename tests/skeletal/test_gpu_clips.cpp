@@ -25,7 +25,7 @@
 #include "irisgl/document/animation/clipextractor.h"
 #include "irisgl/document/animation/skeletalanimation.h"
 #include "irisgl/document/scenegraph/scene.h"
-#include "irisgl/document/materials/defaultmaterial.h"
+#include "irisgl/document/materials/pbrmaterial.h"
 #include "irisgl/document/scenegraph/meshnode.h"
 #include "irisgl/mirror/scenemirror.h"
 #include "jahshaka/engine/Engine.h"
@@ -590,7 +590,7 @@ int main(int argc, char **argv)
         auto fragment = iris::MeshNode::loadAsSceneFragment(
             QStringLiteral(JAHSHAKA_TEST_SOURCE_DIR "/tests/skeletal/fixtures/pivot_rig.fbx"),
             [](iris::MeshPtr, iris::MeshMaterialData &) -> iris::MaterialPtr {
-                return iris::DefaultMaterial::create();
+                return iris::PbrMaterial::create();
             },
             nullptr, nullptr, QString());
         CHECK(!fragment.isNull(), "the FBX pivot fixture loads");
@@ -674,7 +674,7 @@ int main(int argc, char **argv)
         auto fragment = iris::MeshNode::loadAsSceneFragment(
             QStringLiteral(JAHSHAKA_TEST_SOURCE_DIR "/tests/skeletal/fixtures/mixamo_tpose.fbx"),
             [](iris::MeshPtr, iris::MeshMaterialData &) -> iris::MaterialPtr {
-                return iris::DefaultMaterial::create();
+                return iris::PbrMaterial::create();
             },
             nullptr, nullptr, QString());
         CHECK(!fragment.isNull(), "the Mixamo T-pose fixture loads");

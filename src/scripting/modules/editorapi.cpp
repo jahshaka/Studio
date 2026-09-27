@@ -895,7 +895,7 @@ QVector<VerbInfo> EditorApi::verbs() const
           "that spawns an image plane for a dropped picture. Same pixels as editor.dropPointAt, "
           "which answers WHERE the same drop would place a new object.",
           Needs::Engine },
-        { "screenshot", "editor.screenshot(path, w=256, h=256, probes=[], grade=\"plain\") -> {path, width, height, grade, encoding, center:{r,g,b}, probes:[{x,y,r,g,b}]}",
+        { "screenshot", "editor.screenshot(path, w=256, h=256, probes=[], grade=\"plain\", {radiance}) -> {path, width, height, grade, encoding, center:{r,g,b}, probes:[{x,y,r,g,b,radiance?}]}",
           "Offscreen render of the editor scene to a PNG; returns the centre pixel, plus the pixel at each probe point ({x,y} in normalized 0..1 image coordinates), so scripts can assert on colours. Headless-safe. "
           "A SCREENSHOT IS THE PICTURE AT REST: before the editor camera's shot the verb renders frames OFFSCREEN - nothing is presented, the document's clock does not move - until world.giStatus().giAtRest is true - no GI rebuild, settle or irradiance-field refinement still owed - at most 2000 frames, so two shots of a still scene are the same picture. A scene with something moving every frame (an animation, a socket rider, a physics body) never comes to rest: where the screen-probe gather runs, its shot is taken once the gather's history has settled (16 frames after its last restart) and shows that settled history, which is NOT byte-stable from one shot to the next by nature. "
           "`grade` says HOW THE SHOT IS DEVELOPED, and the default is deliberately the dullest answer, because this verb is a measuring instrument: "
@@ -904,6 +904,7 @@ QVector<VerbInfo> EditorApi::verbs() const
           "\"scene\" is THE EDITOR'S OWN PICTURE and what the Screenshot button in the editor takes: the scene's WHOLE post chain exactly as the world has it — global illumination, screen-space reflections, ambient occlusion, bloom, SMAA, the looks stack, HDR and the tonemap — at this camera's pose and lens, graded at the exposure the on-screen viewport has currently converged on (carried across as a constant, so the shot is repeatable). A world with HDR switched off photographs ungraded, like the viewport. "
           "\"viewport\" (or true) is the same whole chain but with the chain's OWN adaptive exposure re-seeded from the scene's (or the driving camera's) exposure value; an offscreen view lives about two frames and cannot converge, so it grades at that seed. It exists for camera.screenshot, where there is no on-screen view measuring the camera in question — for the editor camera prefer \"scene\". "
           "The editor's own Screenshot action uses \"scene\"; project preview tiles and asset thumbnails use \"tonemap\". "
+          "{radiance: true} (the plain grade only, the editor's own picture only) ALSO READS THE SCENE RADIANCE IN FLOAT — the linear value the plain bytes are an 8-bit store of, unclipped — and every probe gains `radiance:{r,g,b}`, the float mean of the same 5x5 block. It is for a measurement that lives inside one code of the bytes (an A/B whose whole effect is a fraction of a code, a transmittance); the bytes and the PNG are unchanged. "
           "THE TWO COLOUR SPACES, MEASURED (PLAIN-GRADE-1, 2026-09-18): the graded answers (\"tonemap\", \"scene\", \"viewport\") are THE WINDOW'S OWN BYTES — a flat sky picked as #8000C0 reads (50, 0, 114) in a \"scene\" shot and (50, 0, 114) in an xwd grab of the live window, the same bytes — while \"plain\" is LINEAR RADIANCE: the same sky reads (55, 0, 134), which is the sRGB decode of the colour the user picked. So a plain shot is not a dark picture of the scene, it is a MEASUREMENT in a different space, and that — not a missing sRGB encode — is why every offscreen diagnosis in this tree has read \"too dark\" (this engine's window swapchain is not sRGB either; the tonemapper's output IS the display code). The answer reports `grade` and `encoding` (\"linear\" or \"display\") so a reader is told which space it is holding. "
           ,
           Needs::Engine },
@@ -3004,7 +3005,8 @@ QVariantMap EditorApi::issueBar()
 }
 
 QVariantMap EditorApi::screenshot(const QString &path, int width, int height,
-                                  const QVariantList &probes, const QVariant &grade)
+                                  const QVariantList &probes, const QVariant &grade,
+                                  const QVariantMap &options)
 {
     QVariantMap out;
     if (!requireEngine()) return out;
@@ -3047,6 +3049,26 @@ QVariantMap EditorApi::screenshot(const QString &path, int width, int height,
     // OFFSCREEN, through the shot's own view with the on-screen views quiet, and
     // the scene's GI advances through that view (IEditorViewport::
     // settleGiBeforeNextScreenshot). No frame moves the document's clock.
+    // THE RADIANCE DOOR (options.radiance, FOG-ATMO-1 fix round): the plain
+    // grade's probes ALSO read the scene radiance in float — the value before the
+    // 8-bit store — for a measurement that lives inside one code of the bytes.
+    for (auto it = options.constBegin(); it != options.constEnd(); ++it) {
+        if (it.key() != QLatin1String("radiance")) {
+            fail(QStringLiteral("editor.screenshot: unknown option '%1' (radiance)").arg(it.key()));
+            return out;
+        }
+    }
+    const bool radiance = options.value(QStringLiteral("radiance")).toBool();
+    if (radiance && (mode != IEditorViewport::ScreenshotGrade::Plain || playerHasTheScreen())) {
+        fail(QStringLiteral("editor.screenshot: {radiance: true} reads the PLAIN grade of the "
+                            "editor's picture (the float target before any grade) — not '%1'%2")
+                 .arg(IEditorViewport::gradeName(mode),
+                      playerHasTheScreen() ? QStringLiteral(" and not while the Player owns the screen")
+                                           : QString()));
+        return out;
+    }
+    if (radiance) host.viewport->readRadianceWithNextScreenshot();
+
     if (!playerHasTheScreen()) {
         static const int kScreenshotSettleFrames = 2000;
         host.viewport->settleGiBeforeNextScreenshot(kScreenshotSettleFrames);
@@ -3088,6 +3110,13 @@ QVariantMap EditorApi::screenshot(const QString &path, int width, int height,
     // fidelity through these — the gold dragon must be gold, not fallback grey.
     // Each probe returns the average of the 5x5 pixel block around the point
     // so the assertions are stable across drivers and minor framing drift.
+    int radW = 0, radH = 0;
+    const QVector<float> rad =
+        radiance ? host.viewport->takeScreenshotRadiance(&radW, &radH) : QVector<float>();
+    if (radiance && (rad.isEmpty() || radW != img.width() || radH != img.height())) {
+        fail("editor.screenshot: the view could not read its radiance back");
+        return out;
+    }
     QVariantList probeResults;
     for (const QVariant &p : probes) {
         const QVariantMap pm = p.toMap();
@@ -3105,8 +3134,22 @@ QVariantMap EditorApi::screenshot(const QString &path, int width, int height,
             }
         }
         if (n > 0) { r /= n; g /= n; b /= n; }
-        probeResults.append(QVariantMap{ { "x", px }, { "y", py },
-                                         { "r", r }, { "g", g }, { "b", b } });
+        QVariantMap probe{ { "x", px }, { "y", py }, { "r", r }, { "g", g }, { "b", b } };
+        if (radiance) {
+            // The same 5x5 block, in float and without the integer mean.
+            double fr = 0.0, fg = 0.0, fb = 0.0;
+            int fn = 0;
+            for (int dy = -2; dy <= 2; ++dy)
+                for (int dx = -2; dx <= 2; ++dx) {
+                    const int x = ix + dx, y = iy + dy;
+                    if (x < 0 || y < 0 || x >= radW || y >= radH) continue;
+                    const int i = (y * radW + x) * 4;
+                    fr += rad[i]; fg += rad[i + 1]; fb += rad[i + 2]; ++fn;
+                }
+            if (fn > 0) { fr /= fn; fg /= fn; fb /= fn; }
+            probe["radiance"] = QVariantMap{ { "r", fr }, { "g", fg }, { "b", fb } };
+        }
+        probeResults.append(probe);
     }
     if (!probeResults.isEmpty()) out["probes"] = probeResults;
     return out;

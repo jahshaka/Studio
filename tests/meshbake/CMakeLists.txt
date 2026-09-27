@@ -95,25 +95,15 @@ add_test(NAME meshbake.cards COMMAND test_mesh_bake --cards
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(meshbake.cards PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen;HOME=${_bake_home};JAHSHAKA_DATA_ROOT=${_bake_home}/.local/share/Jahshaka"
-    TIMEOUT 180 LABELS "meshbake")
-
-# THE MEASURED LOD BOUND (ATOM P1's AT-A5) — `atom.error_bound`. Its own test name
-# because it is its own claim: for every level of every shipped mesh, an AREA-ONLY
-# sampling eight times as dense as the bake's finds no point of that level further
-# from level 0 than the length the bake stored. It also prints the bound-versus-
-# quadric ratio table, which is the evidence AT-A5 was missing.
-#
-# IT IS A REGRESSION CHECK, NOT AN INDEPENDENT DERIVATION: the dense re-measure walks
-# the same exact removed vertices, so where that term carries the maximum it reads
-# 1.0000 by construction; what it judges is the sampling margin and the pipeline
-# (sampler, grid, floor, monotonicity). The physics bar is atom.lod_bound_bar below.
-# In tests/meshbake because the subject is the BAKE and needs no engine; the name
-# is the design's (SPECS/atom/A2_HONEST_GEOMETRY_AND_EVERY_ASSET_DESIGN.md §1.1).
-add_test(NAME atom.error_bound COMMAND test_mesh_bake --error-bound
+    TIMEOUT 120 LABELS "meshbake")
+# meshbake.cards.timing — the bake's two wall-clock bars (the 4x-triangles-not-4x-time
+# ratio and the 4,000 ms ceiling), nightly (lane D6B-GATE-SHAPE; audit §5 FIX-TIME):
+# the same binary with JAHSHAKA_TIMING_BARS=1, quiet box, the GPU-timing lock.
+jah_gpu_exclusive_test(NAME meshbake.cards.timing RUN_TIMEOUT 180 COMMAND test_mesh_bake --cards
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(atom.error_bound PROPERTIES
-    ENVIRONMENT "QT_QPA_PLATFORM=offscreen;HOME=${_bake_home};JAHSHAKA_DATA_ROOT=${_bake_home}/.local/share/Jahshaka"
-    TIMEOUT 600 LABELS "meshbake")
+set_tests_properties(meshbake.cards.timing PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen;HOME=${_bake_home};JAHSHAKA_DATA_ROOT=${_bake_home}/.local/share/Jahshaka;JAHSHAKA_TIMING_BARS=1"
+    LABELS "meshbake;nightly;quiet-box")
 
 # THE LOD BOUND'S PHYSICS BAR (ATOM-LOD-BOUND-1) — `atom.lod_bound_bar`. Every
 # level of the shipped primitives, the Stanford dragon and a scan stand-in (a floor,
@@ -122,11 +112,17 @@ set_tests_properties(atom.error_bound PROPERTIES
 # on the stand-in (c) no dropped island is bigger than its level's bound and level 1
 # is affordable by 150 m on a 1080-line view. Chains only (no DAG/SDF/cards), so it
 # is the bound's own claim; the dragon's chain dominates the run.
+# ITS SECOND ARM IS THE MEASURED BOUND (ATOM P1's AT-A5; test_mesh_bake.cpp section 9; it
+# was the atom.error_bound row): through the BAKE's own route (MeshBake::buildFromFile) every
+# subject carries one bound and one quadric per level, the bounds non-decreasing, every level
+# inside its stored bound under an 8x-dense re-measure, and the bound-versus-quadric ratio
+# table — the evidence AT-A5 was missing — is printed. A regression check, not an independent
+# derivation (the dense re-measure walks the same exact removed vertices).
 add_test(NAME atom.lod_bound_bar COMMAND test_mesh_bake --bound-bar
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(atom.lod_bound_bar PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen;HOME=${_bake_home};JAHSHAKA_DATA_ROOT=${_bake_home}/.local/share/Jahshaka"
-    TIMEOUT 600 LABELS "meshbake")
+    TIMEOUT 120 LABELS "meshbake")
 jah_no_display(atom.lod_bound_bar)
 
 # THE SAME BAR ON THE CLUSTER DAG'S GROUPS (ATOM-CLUSTER-CUT) — `atom.dag_bound_bar`:
@@ -142,7 +138,7 @@ add_test(NAME atom.dag_bound_bar COMMAND test_mesh_bake --dag-bar
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(atom.dag_bound_bar PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen;HOME=${_bake_home};JAHSHAKA_DATA_ROOT=${_bake_home}/.local/share/Jahshaka"
-    TIMEOUT 900 LABELS "meshbake")
+    TIMEOUT 180 LABELS "meshbake")
 jah_no_display(atom.dag_bound_bar)
 add_test(NAME atom.dag_bound_target COMMAND test_mesh_bake --dag-bar --target
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
@@ -159,7 +155,7 @@ add_test(NAME meshbake.sdf COMMAND test_mesh_bake --sdf
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(meshbake.sdf PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen;HOME=${_bake_home};JAHSHAKA_DATA_ROOT=${_bake_home}/.local/share/Jahshaka"
-    TIMEOUT 300 LABELS "meshbake")
+    TIMEOUT 120 LABELS "meshbake")
 
 # ATOM P2 — THE SEED AND WHAT IT OWES (the design's §2.3 acceptance).
 #
@@ -185,13 +181,13 @@ add_test(NAME meshbake.primitives_baked COMMAND test_mesh_bake --primitives-bake
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(meshbake.primitives_baked PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen;HOME=${_bake_home};JAHSHAKA_DATA_ROOT=${_bake_home}/.local/share/Jahshaka"
-    TIMEOUT 300 LABELS "meshbake")
+    TIMEOUT 120 LABELS "meshbake")
 
 add_test(NAME meshbake.rebake_generation COMMAND test_mesh_bake --rebake-generation
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(meshbake.rebake_generation PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen;HOME=${_bake_home};JAHSHAKA_DATA_ROOT=${_bake_home}/.local/share/Jahshaka"
-    TIMEOUT 180 LABELS "meshbake")
+    TIMEOUT 120 LABELS "meshbake")
 
 add_test(NAME meshbake.hemisphere_winding COMMAND test_mesh_bake --hemisphere-winding
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
@@ -208,7 +204,7 @@ add_test(NAME bake.determinism COMMAND test_mesh_bake --determinism
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(bake.determinism PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen;HOME=${_bake_home};JAHSHAKA_DATA_ROOT=${_bake_home}/.local/share/Jahshaka"
-    TIMEOUT 600 LABELS "meshbake")
+    TIMEOUT 480 LABELS "meshbake")
 jah_no_display(bake.determinism)
 
 jah_no_display(meshbake.primitives_baked)
@@ -216,6 +212,5 @@ jah_no_display(meshbake.rebake_generation)
 jah_no_display(meshbake.hemisphere_winding)
 
 jah_no_display(meshbake.roundtrip)
-jah_no_display(meshbake.cards)
-jah_no_display(atom.error_bound)
+jah_no_display(meshbake.cards meshbake.cards.timing)
 jah_no_display(meshbake.sdf)

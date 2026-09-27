@@ -25,7 +25,8 @@ directories it had decided to skip.
 THE FOUR CASES, and each one is a rule of the tool rather than a number:
 
   1. A CODE PATH SELECTS SUITES. `src/services/vrworld.cpp` selects the vr
-     suites (its area rule) and always the smoke pair.
+     app suites (its area rule) and always the smoke pair — and NOT the compiled
+     vr.session, whose executable the build graph says does not contain it.
   2. `--build .` FROM INSIDE THE BUILD DIR MEANS THE BUILD DIR — the same
      selection as the absolute form, byte for byte. FAILS BEFORE the fix.
   3. A DIRECTORY THAT IS NOT A BUILD DIR IS AN ERROR, not an empty answer
@@ -56,7 +57,8 @@ THE FOUR CASES, and each one is a rule of the tool rather than a number:
      falls back reports a MERGE-tier `command` at -j2, and the printed tier line
      follows `-j` too; `--run` runs that same string.
 
-  8. The decode's own suite (engine.atom_parity) rides the Atom media, HlmsAtom and the pin.
+  8. The decode's own suite (engine.atom_parity) rides the Atom media and HlmsAtom; the fork
+     pin selects the whole MERGE tier by rule (MODULAR-GATE-1; contract §7b rule 4).
 
   9. THE TIER DOC QUOTES THE SCRIPT (POST-C-FIXES-1): docs/TESTING_GATE.md carries
      no literal `-LE` label list — it names `gate-scope.py --merge-tier`, which
@@ -67,6 +69,17 @@ THE FOUR CASES, and each one is a rule of the tool rather than a number:
       belongs to the directory that CALLS the helper: a change to
       tests/openasync/test_open_responsive.cpp selects open.responsive. FAILS
       BEFORE the fix (the backtrace's add_test frame is tests/CMakeLists.txt).
+
+  11. THE SUBJECTS SELECT THEIR SUITES (D6B-GATE-SHAPE; the suites audit's S1/S2). A change
+      to the engine chain selects the Atom suites and the exposure-default picture; a change
+      to the mesh bake selects the cluster suites and the LOD-rule parity; the archiver and
+      the avatar import/switch select their `*.responsive` harnesses. Each FAILED before
+      (measured by the audit: OgreChain.cpp selected 415 suites and no tests/atom row).
+
+  12. THE NIGHTLY LABELS SAY WHAT THEY MEAN (D6B-GATE-SHAPE; audit §8). `nightly` leaves
+      the MERGE/PUSH tiers; `quiet-box` beside it keeps a MEASUREMENT out of every scoped
+      gate. A change to test_open_responsive.cpp selects open.responsive (the counts) and
+      NOT open.responsive.timing (its millisecond bars); `--nightly-tier` names `nightly`.
 
 Run: gate_scope_rules.py <source-dir> <build-dir>
 """
@@ -105,7 +118,13 @@ def main(source, build):
     check(code == 0, "a code path exits 0 (%d)%s" % (code, ("\n" + err) if code else ""))
     check("SCOPED tier:" in out and "NOTHING to gate" not in out,
           "a code path selects a scoped tier rather than nothing")
-    check("vr.session" in out, "the vr suites are in it (the file's own area rule)")
+    # MODULAR-GATE-1: the rule picks the APP rows (the vr_session pool runs the app — its
+    # verbs_session arm was the vr.verbs_session row until SUITE-POOL-1); a compiled
+    # row runs only when the build graph says its executable contains the file — test_vr_session
+    # does not compile vrworld.cpp, so vr.session is not in (it used to be, by directory).
+    check("pool.vr_session" in out, "the vr app suites are in it (the file's own area rule)")
+    check("vr.session " not in out and "vr.session|" not in out.replace("\\", "") and "vr.session)" not in out.replace("\\", ""),
+          "...and the compiled vr.session is not: its executable does not contain vrworld.cpp (the graph)")
     check("app.startup_quiet" in out and "api.contract" in out,
           "the smoke pair rides every code path")
     absolute_form = out
@@ -193,7 +212,7 @@ def main(source, build):
     for line in out2.splitlines():
         if line.startswith("ctest -j4 ") and "-LE" in line:
             merge = line
-    check("photon-target" in plain(merge) and "benchmark" in plain(merge),
+    check("photon-target" in plain(merge) and "nightly" in plain(merge),
           "the MERGE tier's -LE carries photon-target beside the nightly labels")
 
     # 7. THE FALLBACK HONOURS -j (DEVPROCESS-1 item 2). A lane beside other live
@@ -218,10 +237,20 @@ def main(source, build):
     # the fork pin (Ogre's Pbs pieces are the decode's text too) select engine.atom_parity;
     # a lane that changed all three gated without it once.
     for path in ("irisgl/engine/media/Hlms/Atom/Any/800.Atom_piece_ps.any",
-                 "irisgl/engine/src/HlmsAtom.cpp", "irisgl/thirdparty/ogre-next"):
+                 "irisgl/engine/src/HlmsAtom.cpp"):
         code, out, err = run([tool, "--files", path, "--build", build], source)
         check(code == 0 and ("engine.atom_parity|" in plain(out) or "engine.atom_parity)" in plain(out)),
               "%s selects engine.atom_parity" % path)
+    # the fork pin reaches everything: the MERGE tier BY RULE (PHOTON_ATOM_CONTRACT §7b rule 4),
+    # which carries engine.atom_parity — not a fallback, and said so
+    code, out, err = run([tool, "--files", "irisgl/thirdparty/ogre-next", "--build", build, "--json"], source)
+    try:
+        doc = json.loads(out)
+    except ValueError:
+        doc = {}
+    check(code == 0 and doc.get("full_tier") and not doc.get("fallback")
+          and "-LE" in doc.get("command", ""),
+          "irisgl/thirdparty/ogre-next selects the MERGE tier by rule (the tier carries engine.atom_parity)")
 
     # 9. THE TIER DOC QUOTES THE SCRIPT, NEVER A COPY OF ITS SET (POST-C-FIXES-1).
     # docs/TESTING_GATE.md's MERGE row carried a literal
@@ -240,7 +269,8 @@ def main(source, build):
           "...and it names `gate-scope.py --merge-tier` as the tier's command")
     code, out, err = run([tool, "--merge-tier", "-j", "2"], source)
     check(code == 0 and out.strip().startswith("ctest -j2 ") and "photon-target" in plain(out)
-          and "benchmark" in plain(out) and "shadercache-attack" in plain(out),
+          and "nightly" in plain(out) and "shadercache-attack" in plain(out)
+          and "benchmark" not in plain(out),
           "`--merge-tier -j 2` prints the MERGE tier at -j2 with every excluded label (%r)" % out.strip())
     code, out, err = run([tool, "--files", "docs/TESTING_GATE.md", "--build", build], source)
     check(code == 0 and "source.gate_scope_rules" in plain(out),
@@ -261,6 +291,53 @@ def main(source, build):
             doc = {}
         check(code == 0 and suite in doc.get("suites", []),
               "%s selects its own GPU-lock suite %s (%d suites selected)" % (path, suite, len(doc.get("suites", []))))
+
+    # 11. THE SUBJECTS SELECT THEIR SUITES (audit S1/S2). Only suites this build registers
+    # are asked for: the Atom rows exist only where the Vulkan stack does, and a box without
+    # them must not red on their absence.
+    inventory = set()
+    try:
+        # from a copy of the CTestTestfile tree: a listing in the build dir truncates the
+        # LastTest.log of the gate this guard runs inside (gate_graph.ctest_inventory)
+        sys.path.insert(0, os.path.join(source, "scripts"))
+        import gate_graph
+        raw = gate_graph.ctest_inventory(build)[0]
+        inventory = {t["name"] for t in json.loads(raw).get("tests", [])}
+    except (ValueError, OSError):
+        pass
+    for path, suites in (
+            ("irisgl/engine/src/OgreChain.cpp", ("engine.atom_draw", "engine.atom_parity", "defaults.exposure_plane")),
+            ("irisgl/import/meshbake.cpp", ("atom.cluster_cut", "atom.cluster_crack", "engine.lod_rule_parity")),
+            ("src/services/projectarchiver.cpp", ("archive.responsive",)),
+            ("src/services/avatarassets.cpp", ("avatar.responsive",)),
+            ("src/modules/avatar/api/avatarapi.cpp", ("avatar.responsive",)),
+            ("src/modules/avatar/avatarmodule.cpp", ("avatar.responsive",))):
+        code, out, err = run([tool, "--files", path, "--build", build, "--json"], source)
+        try:
+            doc = json.loads(out)
+        except ValueError:
+            doc = {}
+        chosen = set(doc.get("suites", [])) | set(doc.get("targets", []))
+        for suite in suites:
+            if suite not in inventory:
+                print("  (skip: %s is not registered in this build)" % suite)
+                continue
+            check(code == 0 and not doc.get("fallback") and suite in chosen,
+                  "%s selects %s (%d suites selected)" % (path, suite, len(chosen)))
+
+    # 12. THE NIGHTLY LABELS (D6B-GATE-SHAPE).
+    code, out, err = run([tool, "--files", "tests/openasync/test_open_responsive.cpp",
+                          "--build", build, "--json"], source)
+    try:
+        doc = json.loads(out)
+    except ValueError:
+        doc = {}
+    chosen = set(doc.get("suites", [])) | set(doc.get("targets", []))
+    check("open.responsive" in chosen and "open.responsive.timing" not in chosen,
+          "the push row is scoped, its quiet-box millisecond twin is not")
+    code, out, err = run([tool, "--nightly-tier"], source)
+    check(code == 0 and "-L " in out and "nightly" in plain(out) and "-j1" in out,
+          "`--nightly-tier` prints the nightly tier (%r)" % out.strip())
 
     if FAILURES:
         print("source.gate_scope_rules: FAILED (%d)" % len(FAILURES))

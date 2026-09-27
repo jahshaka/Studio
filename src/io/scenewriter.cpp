@@ -35,7 +35,6 @@ For more information see the LICENSE file
 #include "irisgl/document/assets/texture2d.h"
 #include "irisgl/document/materials/renderstates.h"
 #include "irisgl/document/materials/rasterizerstate.h"
-#include "irisgl/import/graphicshelper.h"
 #include "irisgl/core/viewport.h"
 #include "irisgl/document/animation/animableproperty.h"
 #include "irisgl/document/animation/animation.h"
@@ -51,8 +50,6 @@ For more information see the LICENSE file
 #include "irisgl/document/scenegraph/meshnode.h"
 #include "irisgl/document/scenegraph/particlesystemnode.h"
 
-#include "irisgl/document/materials/postprocess.h"
-#include "irisgl/document/materials/postprocessmanager.h"
 
 #include "io/assetiobase.h"
 #include "data/constants.h"
@@ -86,7 +83,6 @@ QString SceneWriter::relativeToStaticBase(QString filename)
 
 QByteArray SceneWriter::getSceneObject(QString projectPath,
                                        iris::ScenePtr scene,
-                                       iris::PostProcessManagerPtr postMan,
                                        EditorData *editorData)
 {
     dir = projectPath;
@@ -116,10 +112,6 @@ QByteArray SceneWriter::getSceneObject(QString projectPath,
         QJsonObject editorObj = projectObj["editor"].toObject();
         scenefolders::writeEditorBlock(editorObj, scene);
         projectObj["editor"] = editorObj;
-    }
-
-    if (!!postMan) {
-        writePostProcessData(projectObj, postMan);
     }
 
     return QJsonDocument(projectObj).toJson();
@@ -168,14 +160,12 @@ void SceneWriter::writeScene(QJsonObject& projectObj, iris::ScenePtr scene)
     sceneObj["gravity"] = scene->gravity;
 
     sceneObj["fogColor"] = jsonColor(scene->fogColor);
-    // (`fogStart`/`fogEnd`, the retired LINEAR pair, are no longer written —
-    // the fields are gone from the document, CRUD law. `fogDensity` below is
-    // the whole fog; the reader still READS the old pair, once, to derive a
-    // density for a file that predates this key.)
+    // (`fogStart`/`fogEnd`, the retired LINEAR pair, and `fogAtmosphere`, the
+    // retired aerial switch, are neither written nor read — CRUD law.
+    // `fogDensity` below is the whole distance fog.)
     sceneObj["fogEnabled"] = scene->fogEnabled;
     sceneObj["fogDensity"] = scene->fogDensity;
     sceneObj["fogHeightDensity"] = scene->fogHeightDensity;
-    sceneObj["fogAtmosphere"] = scene->fogAtmosphere;
     sceneObj["fogHeightFalloff"] = scene->fogHeightFalloff;
     sceneObj["fogHeightLevel"] = scene->fogHeightLevel;
     sceneObj["fogBreakMinBrightness"] = scene->fogBreakMinBrightness;
@@ -223,9 +213,7 @@ void SceneWriter::writeScene(QJsonObject& projectObj, iris::ScenePtr scene)
     sceneObj["smaaPreset"] = scene->smaaPreset;
     sceneObj["ssrMode"] = scene->ssrMode;
     sceneObj["ssrMarch"] = scene->ssrMarch;
-    // ONE name, the World row's (lane SMALL-ITEMS D). The old
-    // `rayReflectRoughness` key is still READ (sceneformat.h) and never written
-    // again, so one save retires the old spelling per document.
+    // ONE name, the World row's (lane SMALL-ITEMS D).
     sceneObj["reflectionRoughnessCutoff"] = scene->reflectionRoughnessCutoff;
     sceneObj["refractionsMode"] = scene->refractionsMode;
     sceneObj["distortionMode"] = scene->distortionMode;
@@ -330,29 +318,6 @@ void SceneWriter::writeScene(QJsonObject& projectObj, iris::ScenePtr scene)
     sceneObj["rootNode"] = rootNodeObj;
 
     projectObj["scene"] = sceneObj;
-}
-
-void SceneWriter::writePostProcessData(QJsonObject &projectObj, iris::PostProcessManagerPtr postMan)
-{
-    QJsonArray processesObj;
-
-    for(auto process : postMan->getPostProcesses()) {
-        QJsonObject processObj;
-
-        processObj["name"] = process->getName();
-
-        QJsonObject props;
-
-        for ( auto prop : process->getProperties()) {
-            props.insert(prop->name, QJsonValue::fromVariant(prop->getValue()));
-        }
-
-        processObj["properties"] = props;
-
-        processesObj.append(processObj);
-    }
-
-    projectObj["postprocesses"] = processesObj;
 }
 
 void SceneWriter::writeEditorData(QJsonObject& projectObj, EditorData* editorData)

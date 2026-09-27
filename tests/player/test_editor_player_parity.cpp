@@ -61,7 +61,7 @@
 #include "irisgl/document/scenegraph/meshnode.h"
 #include "irisgl/document/scenegraph/lightnode.h"
 #include "irisgl/document/scenegraph/cameranode.h"
-#include "irisgl/document/materials/defaultmaterial.h"
+#include "irisgl/document/materials/pbrmaterial.h"
 #include "irisgl/mirror/scenemirror.h"
 #include "jahshaka/engine/Engine.h"
 #include "player/engineplayerscene.h"
@@ -226,8 +226,8 @@ int main(int argc, char **argv)
     auto cube = iris::MeshNode::create();
     cube->setName("cube");
     cube->setMesh(previewmesh::load(":assets/models/cube.obj"));
-    auto grey = iris::DefaultMaterial::create();
-    grey->setDiffuseColor(QColor(230, 230, 230));
+    auto grey = iris::PbrMaterial::create();
+    grey->setBaseColor(QColor(230, 230, 230));
     cube->setMaterial(grey);
     CHECK(!!cube->getMesh(), "cube.obj loaded into the document");
     const float r = cube->getMeshRadius();
@@ -243,8 +243,8 @@ int main(int argc, char **argv)
     floor->setName("mirror floor");
     floor->setMesh(previewmesh::load(QStringLiteral(JAHSHAKA_SOURCE_DIR "/app/content/primitives/plane.obj")));
     {
-        auto mirrorMat = iris::DefaultMaterial::create();
-        mirrorMat->setDiffuseColor(QColor(30, 30, 34));
+        auto mirrorMat = iris::PbrMaterial::create();
+        mirrorMat->setBaseColor(QColor(30, 30, 34));
         floor->setMaterial(mirrorMat);
     }
     floor->setLocalScale(iris::Vec3(8, 1, 8));

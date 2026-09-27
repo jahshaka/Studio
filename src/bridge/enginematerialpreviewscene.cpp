@@ -16,7 +16,7 @@
 #include "viewport/previeworbit.h"
 #include "irisgl/core/irisutils.h"
 #include "irisgl/document/assets/mesh.h"
-#include "irisgl/document/materials/defaultmaterial.h"
+#include "irisgl/document/materials/pbrmaterial.h"
 #include "irisgl/document/scenegraph/scene.h"
 #include "irisgl/document/scenegraph/scenenode.h"
 #include "irisgl/document/scenegraph/meshnode.h"
@@ -100,7 +100,7 @@ void EngineMaterialPreviewScene::buildDocument()
     mOrbit.set(yaw, pitch);
     mOrbit.apply(mCamera);
 
-    mMaterial = iris::DefaultMaterial::create();
+    mMaterial = iris::PbrMaterial::create();
     setPreviewMesh(PreviewMesh::Sphere);
 }
 

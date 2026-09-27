@@ -226,6 +226,10 @@ int main(int argc, char **argv)
     services.undo = &undo;
 
     auto scene = iris::Scene::create();
+    // The fog rows are greyed while the fog is off (World > Fog), and the
+    // World fog is OFF by default (FOG-ATMO-1): these cases drag the rows, so
+    // the fog they belong to is switched on first.
+    scene->fogEnabled = true;
     worldmodes::setMode(scene, worldmodes::Mode::Epic);
 
     // ---- 1. THE FOG SECTION -------------------------------------------------

@@ -56,6 +56,11 @@ CliOptions CliOptions::parse(int argc, char *argv[])
     for (int i = 1; i < argc; ++i) {
         if (qstrcmp(argv[i], "--engine-selftest") == 0 && i + 1 < argc) o.selftestPng = QString::fromLocal8Bit(argv[++i]);
         else if (qstrcmp(argv[i], "--script") == 0 && i + 1 < argc) o.scriptPath = QString::fromLocal8Bit(argv[++i]);
+        else if (qstrcmp(argv[i], "--scripts") == 0 && i + 1 < argc) o.poolScripts = QString::fromLocal8Bit(argv[++i]);
+        else if (qstrcmp(argv[i], "--pool-baseline") == 0 && i + 1 < argc) o.poolBaseline = QString::fromLocal8Bit(argv[++i]);
+        else if (qstrcmp(argv[i], "--pool") == 0 && i + 1 < argc) o.poolName = QString::fromLocal8Bit(argv[++i]);
+        else if (qstrcmp(argv[i], "--arms") == 0 && i + 1 < argc)
+            o.poolArms = QString::fromLocal8Bit(argv[++i]).split(QLatin1Char(','), Qt::SkipEmptyParts);
         else if (qstrcmp(argv[i], "--headless") == 0) o.headlessScript = true;
         else if (qstrcmp(argv[i], "--script-live") == 0) o.liveScript = true;
         else if (qstrcmp(argv[i], "--dump-api-docs") == 0 && i + 1 < argc) o.dumpDocsPath = QString::fromLocal8Bit(argv[++i]);
@@ -93,12 +98,19 @@ CliOptions CliOptions::parse(int argc, char *argv[])
                 qWarning("--viewport=legacy: the legacy GL viewport was removed; using the engine viewport.");
         }
     }
+    // ONE SCRIPT RUN AT A TIME: `--script` and `--scripts` are two shapes of
+    // the same run, and a command line naming both has no one meaning.
+    if (!o.scriptPath.isEmpty() && !o.poolScripts.isEmpty())
+        o.errors << QStringLiteral("--script and --scripts: pass one or the other, not both");
+    if ((!o.poolName.isEmpty() || !o.poolArms.isEmpty() || !o.poolBaseline.isEmpty()) &&
+        o.poolScripts.isEmpty())
+        o.errors << QStringLiteral("--pool/--arms/--pool-baseline: need --scripts <dir-or-list>");
     return o;
 }
 
 void CliOptions::applyPlatformPolicy() const
 {
-    if ((headlessScript && (!scriptPath.isEmpty() || mcpPort > 0)) || !dumpDocsPath.isEmpty())
+    if ((headlessScript && (isScriptRun() || mcpPort > 0)) || !dumpDocsPath.isEmpty())
         qputenv("QT_QPA_PLATFORM", "offscreen");
 
 #ifdef Q_OS_LINUX

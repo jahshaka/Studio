@@ -19,6 +19,7 @@
 // engine does" guarantee did not hold. It runs BEFORE EngineHostRelease, which
 // is the whole point, and steps 4-8 shifted up by one.
 #include "../support/mcpharness.h"
+#include "../support/timingbars.h"
 
 #include <QFile>
 #include <QRegularExpression>
@@ -94,7 +95,11 @@ int main(int argc, char **argv)
         std::printf("info: the short-budget request gave up after %lld ms: %s\n",
                     static_cast<long long>(tookMs),
                     QJsonDocument(late).toJson(QJsonDocument::Compact).constData());
-        CHECK(tookMs < 900, "a request that outlives the transfer timeout RETURNS at the timeout");
+        // The 900 ms bar is NIGHTLY (lane D6B-GATE-SHAPE; tests/support/timingbars.h):
+        // app.shutdown_order.timing arms it on a quiet box; the "no reply within" error
+        // below is this row's proof that the request gave up at its timeout.
+        JAH_TIMING_CHECK("app.shutdown_order", tookMs < 900,
+                         "a request that outlives the transfer timeout RETURNS at the timeout");
         CHECK(!late.isEmpty(), "... and does not return a blank object");
         CHECK(!late.value("ok").toBool(), "... it reads as a failure");
         CHECK(late.value("error").toString().contains(QStringLiteral("no reply within")),

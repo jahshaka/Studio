@@ -29,7 +29,17 @@ add_test(NAME archive.responsive COMMAND test_archive_responsive
 set_tests_properties(archive.responsive PROPERTIES
     ENVIRONMENT "HOME=${_archive_home};JAHSHAKA_DATA_ROOT=${_archive_home}/.local/share/Jahshaka"
     TIMEOUT 300 LABELS "archive")
+# archive.responsive.timing — THE UI-GAP BUDGETS, nightly (lane D6B-GATE-SHAPE; audit §5,
+# FIX-TIME): the same binary with JAHSHAKA_TIMING_BARS=1, on a quiet box, under the
+# GPU-timing lock; the push row above asserts everything else and prints the gaps.
+set(_archive_timing_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-archive-timing)
+file(MAKE_DIRECTORY ${_archive_timing_home}/run)
+jah_gpu_exclusive_test(NAME archive.responsive.timing RUN_TIMEOUT 300 COMMAND test_archive_responsive
+         WORKING_DIRECTORY ${_archive_timing_home}/run)
+set_tests_properties(archive.responsive.timing PROPERTIES
+    ENVIRONMENT "HOME=${_archive_timing_home};JAHSHAKA_DATA_ROOT=${_archive_timing_home}/.local/share/Jahshaka;JAHSHAKA_TIMING_BARS=1"
+    LABELS "archive;nightly;quiet-box")
 
 # The race lane (scripts/sanitize.sh tsan): the threaded export/import runner
 # plus its cancel path. Same wall-clock caveat as open.responsive.
-jah_tsan_blocked(archive.responsive)   # spawns the app: see jah_tsan_blocked
+jah_tsan_blocked(archive.responsive archive.responsive.timing)   # spawns the app: see jah_tsan_blocked

@@ -100,23 +100,7 @@ ALLOWED = [
     ('float(rot["y"].toDouble(0.0))', 'the identity quaternion'),
     ('float(rot["z"].toDouble(0.0))', 'the identity quaternion'),
 
-    # --- retired keys, read once on the way to the bin -----------------------
-    ('sceneObj.value("fogStart").toDouble(100.0)',
-     'the RETIRED linear fog pair. There is no fogStart field any more '
-     '(CRUD, render audit I-6): the two keys are read into locals to derive a '
-     'density for a file that predates fogDensity, and forgotten. 100/180 is '
-     'the shape of that old fog, not a default of anything that exists'),
-    ('sceneObj.value("fogEnd").toDouble(180.0)', 'the retired linear fog pair'),
-    ('sceneObj.value("giAutoRefresh").toBool(true)',
-     'a RETIRED key mapped onto giUpdateBudget: `false` meant budget 0 and '
-     'absent meant the pre-fix-wave behaviour, which is what true expresses. '
-     'Never written again'),
-
     # --- sentinels and enum parsing, not values ------------------------------
-    ('casc.toInt(-1) < 0',
-     "the cascade key's four historical spellings (absent / null / bool / "
-     "int); -1 is the UNRESOLVED sentinel the tier resolves below, not a value"),
-    ('casc.toInt(0) != 0', 'the same tri-state parse'),
     ('nodeObj["type"].toString("empty")',
      'a node TYPE, which selects a class — not a default value of a field'),
     ('mat["materialType"].toString("custom")',
@@ -140,11 +124,6 @@ ALLOWED = [
 # of the line, and why the implicit 0/false is not a second definition of a
 # document default.
 ALLOWED_NOARG = [
-    ('casc.isBool()                      ? (casc.toBool() ? 1 : 0)',
-     "the giCascades key's four historical spellings (absent / null / bool / int) "
-     "— this arm asks the JSON value what KIND it is and converts it; the "
-     "unresolved case is the -1 sentinel two lines down"),
-
     ('scene->giCascadeSet.append(iris::Vec3(float(row.at(0).toDouble())',
      'ARRAY DATA, not a field: a cascade row is three numbers read out of the '
      'file, and a row with fewer than three is skipped by the guard above. '

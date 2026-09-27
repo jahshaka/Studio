@@ -1,0 +1,364 @@
+{
+ "about": "gate.selection's recorded cases (MODULAR-GATE-1). Each LANE case is a lane's diff as it merged into d-build (merge^1..merge) or as its own scoped gate ran, the suites its gates found RED with a verdict of REAL (must: the selector must include every one — a miss is a selector defect, fixed in scripts/gate-scope.py and never by editing this list), the reds judged ENVIRONMENTAL (env: reported, not required — contention, a GPU-time bar under load, a persistent home), and the lane's own named suites. The evidence for every verdict is the lane's spike (named per case) and the ledger entry. A FILES case is the suites audit's S1/S2 (SPECS/audits/GATE_SUITES_AUDIT_2026-09-26.md §7): a subject path must select its suites. When a suite is renamed or becomes a pool's arm, rename it here in the same commit.",
+ "lanes": [
+  {
+   "lane": "D1-SCALE-FIXTURES",
+   "range": "3f6043817..6a5cb7fa0",
+   "ledger": "§1241",
+   "evidence": "spikes/d1-scale-fixtures/gate-f.log",
+   "must": [
+    "scale.world",
+    "scale.cpu_walks"
+   ],
+   "env": [
+    "gi.field_follows"
+   ],
+   "note": "the merge's gate fell back to the MERGE tier on tests/CMakeLists.txt (a suite list + add_subdirectory(scale)); gi.field_follows a wall-clock bar under load (3x red, then 4/4)"
+  },
+  {
+   "lane": "IMPORT-SPEED-1",
+   "range": "6a5cb7fa0..f0d8ab83a",
+   "ledger": "§1242 §1246",
+   "evidence": "spikes/import-speed-1/gate-scope.log",
+   "must": [
+    "bake.determinism",
+    "meshbake.roundtrip"
+   ],
+   "env": [
+    "shadergraph.bake_output"
+   ],
+   "note": "fell back on irisgl/CMakeLists.txt (-O2 + -ffp-contract=off on the bake's TUs and meshoptimizer); shadergraph.bake_output is the material PREVIEW bake's 150 ms CPU bar under -j2 load, 3/3 solo — the mesh bake's code does not reach it"
+  },
+  {
+   "lane": "CREATE-CRASH-1",
+   "range": "f0d8ab83a..2a036f26e",
+   "ledger": "§1248",
+   "evidence": "spikes/create-crash-1/gate-scoped.log",
+   "must": [
+    "ui.show_walk",
+    "open.responsive"
+   ],
+   "env": [],
+   "note": "scoped 170/170"
+  },
+  {
+   "lane": "ATOM-CLUSTER-CUT",
+   "range": "2a036f26e..cee4f48fd",
+   "ledger": "§1249 §1252",
+   "evidence": "spikes/atom-cluster-cut/EVIDENCE.txt (gate-1: four reds, all the lane's)",
+   "must": [
+    "engine.lod_hysteresis",
+    "atom.cluster_crack",
+    "shadercache.warmup_pass",
+    "scenegraph.smoke"
+   ],
+   "env": [
+    "open.responsive"
+   ],
+   "note": "gate-1 and the merge gate fell back on tests/CMakeLists.txt (one name in the GPU-lock list)"
+  },
+  {
+   "lane": "PHOTON-VIEW-1 (its scoped gate)",
+   "range": "2a036f26e..e22d83829",
+   "ledger": "§1253",
+   "evidence": "spikes/photon-view-1/gate.log",
+   "must": [
+    "photon.view"
+   ],
+   "env": [
+    "open.responsive"
+   ],
+   "note": "photon.view's ScreenProbes 0 % under load: REAL, fixed in 74d06b020"
+  },
+  {
+   "lane": "PHOTON-VIEW-1 (merge, fork pin 2d6c921a5)",
+   "range": "cee4f48fd..cdf56d173",
+   "ledger": "§1264",
+   "evidence": "spikes/photon-view-1/gate-fix.log",
+   "must": [
+    "photon.view"
+   ],
+   "env": [
+    "open.responsive"
+   ],
+   "whole_tier": true,
+   "note": "the fork pin moved: the MERGE tier by rule (contract §7b.4)"
+  },
+  {
+   "lane": "ATOM-DECODE-CLASS-1",
+   "range": "cdf56d173..b1a872cd3",
+   "ledger": "§1267 §1273",
+   "evidence": "spikes/atom-decode-class-1/EVIDENCE.txt",
+   "must": [
+    "gi.gather_nest"
+   ],
+   "env": [
+    "open.responsive",
+    "vr.session_undithered",
+    "threading.newproject_stall",
+    "gi.field_scroll"
+   ],
+   "note": "gi.gather_nest REAL (the ray tier's pass-scoped registrations reached the planar mirrors)"
+  },
+  {
+   "lane": "ATOM-OCCLUSION-1",
+   "range": "b1a872cd3..f0552f6a7",
+   "ledger": "§1274",
+   "evidence": "spikes/atom-occlusion-1/EVIDENCE.txt",
+   "must": [
+    "engine.window",
+    "shadercache.warmup_pass",
+    "chain.hzb",
+    "atom.occlusion_exact"
+   ],
+   "env": [
+    "gi.rt_reflect_cost",
+    "threading.import_soak",
+    "open.responsive"
+   ],
+   "note": "engine.window + shadercache.warmup_pass (gate-1) and chain.hzb (the fix gate) were the lane's"
+  },
+  {
+   "lane": "FOG-ATMO-1 (its scoped gate)",
+   "range": "cee4f48fd..d74a4c1f8",
+   "ledger": "§1263",
+   "evidence": "spikes/fog-atmo-1/NOTES.txt",
+   "must": [
+    "document.reader_defaults",
+    "scripting.e2e.sky_swap_transient",
+    "gi_verbs.gather_default",
+    "sky.aerial_perspective"
+   ],
+   "env": [
+    "gi.rt_reflect_cost",
+    "open.responsive"
+   ],
+   "note": "reader_defaults + sky_swap_transient the lane's (fixed); gi.gather_default deterministic red on an 8-bit bar the fog moved (fixture re-authored in part 3)"
+  },
+  {
+   "lane": "FOG-ATMO-1 (merge, fork pin cd5eae355)",
+   "range": "f0552f6a7..51e9f2c49",
+   "ledger": "§1277 §1278",
+   "evidence": "spikes/fog-atmo-1/gate-scope-fix3.log",
+   "must": [
+    "api.contract",
+    "gi_verbs.gather_default"
+   ],
+   "env": [
+    "app.engine_selftest_validation",
+    "gi.field_follows",
+    "gi.rt_reflect_cost"
+   ],
+   "whole_tier": true,
+   "note": "api.contract red at the merge (SCRIPTING.md kept from the wrong side); the fork pin moved: the MERGE tier by rule"
+  },
+  {
+   "lane": "VIEWS-DEPTH-1",
+   "range": "51e9f2c49..3756b2f18",
+   "ledger": "§1299",
+   "evidence": "spikes/views-depth-1/EVIDENCE.txt",
+   "must": [
+    "photon.view"
+   ],
+   "env": [],
+   "max_rows": 10,
+   "note": "the old selector fell back on tests/support/no_xid_run.sh; the change is one suite's registration, its script and its wrapper"
+  },
+  {
+   "lane": "ATOM-CPU-WALKS-1",
+   "range": "3756b2f18..f0ff405ce",
+   "ledger": "§1297 §1301",
+   "evidence": "spikes/atom-cpu-walks-1/EVIDENCE.txt",
+   "must": [
+    "shadercache.warmup",
+    "shadercache.warmup_pass",
+    "scale.cpu_walks"
+   ],
+   "env": [
+    "gi.rt_reflect_cost",
+    "threading.newproject_stall",
+    "vr.input_session",
+    "vr.warmup",
+    "gi.field_follows",
+    "gi.field_scroll",
+    "source.one_material_resolve"
+   ],
+   "note": "the warm-up pair (the TLAS job compiled inside the first traced frame) and scale.cpu_walks' still bar were the lane's"
+  },
+  {
+   "lane": "D5-IRISGL-CRUD",
+   "range": "4c60fed56..bf2af9f08",
+   "ledger": "§1308 §1310 §1314",
+   "evidence": "spikes/d5-irisgl-crud/E13-verdicts.txt",
+   "must": [
+    "pieces.mirror",
+    "skeletal.clip_extract",
+    "document.characterisation",
+    "mirror.document_to_engine"
+   ],
+   "env": [
+    "gi.rt_reflect_cost",
+    "open.responsive",
+    "threading.newproject_stall",
+    "assets_import.desktops",
+    "world_light.light_masks",
+    "gi_verbs.gi_status",
+    "gi_movers.movable_lamp_rest",
+    "gi_verbs.field_every_tier",
+    "editor_view.presentation_state",
+    "world_light.sun_light",
+    "world_sky.clouds_2d",
+    "world_sky.world_rows_follow",
+    "editor_view.scene_issues",
+    "scripting.e2e.texture_missing"
+   ],
+   "note": "fell back on irisgl/irisglfwd.h (-1,188 lines, eleven files deleted); 14 reds all green solo (VRAM 14.2/16.4 GB with three gates live: device lost, no Xid); a deleted C/C++ file reaches nothing of its own (its users are in the diff)"
+  }
+ ],
+ "files": [
+  {
+   "case": "S1 archiver",
+   "files": [
+    "src/services/projectarchiver.cpp"
+   ],
+   "must": [
+    "archive.responsive"
+   ]
+  },
+  {
+   "case": "S1 avatar assets",
+   "files": [
+    "src/services/avatarassets.cpp"
+   ],
+   "must": [
+    "avatar.responsive"
+   ]
+  },
+  {
+   "case": "S1 avatar api",
+   "files": [
+    "src/modules/avatar/api/avatarapi.cpp"
+   ],
+   "must": [
+    "avatar.responsive"
+   ]
+  },
+  {
+   "case": "S1 avatar module",
+   "files": [
+    "src/modules/avatar/avatarmodule.cpp"
+   ],
+   "must": [
+    "avatar.responsive"
+   ]
+  },
+  {
+   "case": "S2 the chain",
+   "files": [
+    "irisgl/engine/src/OgreChain.cpp"
+   ],
+   "must": [
+    "engine.atom_draw",
+    "engine.atom_parity",
+    "defaults.exposure_plane"
+   ]
+  },
+  {
+   "case": "S2 the bake",
+   "files": [
+    "irisgl/import/meshbake.cpp"
+   ],
+   "must": [
+    "atom.cluster_cut",
+    "atom.cluster_crack",
+    "engine.lod_rule_parity"
+   ]
+  },
+  {
+   "case": "the graph's precision: a Studio service no compiled vr test contains",
+   "files": [
+    "src/services/vrworld.cpp"
+   ],
+   "must": [
+    "vr_session.verbs_session"
+   ],
+   "must_not": [
+    "vr.session"
+   ]
+  },
+  {
+   "case": "the graph's precision: the bake is not in a document-only executable",
+   "files": [
+    "irisgl/import/meshbake.cpp"
+   ],
+   "must": [
+    "meshbake.roundtrip"
+   ],
+   "must_not": [
+    "document.reader_defaults",
+    "math.parity"
+   ]
+  },
+  {
+   "case": "U2 engine media reaches every executable that extracts the engine (the Fable read)",
+   "files": [
+    "irisgl/engine/media/Hlms/Jahshaka/JahshakaIbl.compositor"
+   ],
+   "must": [
+    "atom.decode_exact",
+    "scale.cpu_walks",
+    "scale.occlusion",
+    "scenegraph.smoke",
+    "rigperf.smoke",
+    "engine.atom_parity"
+   ]
+  },
+  {
+   "case": "SMALL(a) a data fixture outside tests/ selects the tests that load it by name",
+   "files": [
+    "app/content/primitives/cube.obj"
+   ],
+   "must": [
+    "gi.budget",
+    "gi.coalesce",
+    "gi.overlay",
+    "gi.probe_inputs"
+   ]
+  }
+ ],
+ "hunks": [
+  {
+   "case": "U1-A a body line of a header-only helper reaches the callers of its WRAPPER (the Fable read: 120 rows missed)",
+   "file": "tests/support/enginetesthelpers.h",
+   "old": "    const Vec3 upW{ 0.f, 1.f, 0.f };\n",
+   "new": "    const Vec3 upW{ 0.f, 0.f, 1.f };\n",
+   "must": [
+    "engine.atom_parity",
+    "engine.window",
+    "defaults.exposure_plane",
+    "distortion.engine",
+    "gi.card_capture"
+   ]
+  },
+  {
+   "case": "U1-B a struct member's default reaches every reader of the header-only helper that names the struct (enginetesthelpers.h boxCards names MeshCardDesc)",
+   "file": "irisgl/engine/include/jahshaka/engine/Types.h",
+   "old": "    float halfDepth = 0.0f;       ///< half the depth range the capture must cover\n",
+   "new": "    float halfDepth = 0.5f;       ///< half the depth range the capture must cover\n",
+   "must": [
+    "ui.presets_favorites",
+    "vr.grab_maths"
+   ],
+   "note": "the Fable read's GiVoxelVolume -> gi.voxel_lab case is NOT a dependency: voxel_lab.h includes no engine header and names GiVoxelVolume in a comment only (line 173); test_gi_voxel_lab cannot see Types.h. Replaced by the same class on a real include chain."
+  },
+  {
+   "case": "SMALL(c) a changed script path on an add_test COMMAND line is a changed row, not a source-list entry",
+   "file": "tests/log/CMakeLists.txt",
+   "old": "                 \"${CMAKE_CURRENT_SOURCE_DIR}/e2e_log_events.js\"\n",
+   "new": "                 \"${CMAKE_CURRENT_SOURCE_DIR}/e2e_log_events_v2.js\"\n",
+   "must": [
+    "log.events"
+   ]
+  }
+ ]
+}

@@ -170,6 +170,14 @@ assert(moved >= 3, "the field arm's power change moved the picture (" + moved + 
 // and never an unwritten cube. GI off again, as for the first six arms: the
 // chain's own settle after a change is not what this arm measures.
 world.gi({ mode: "off" });
+// ...AND THE WORLD FOG OFF (FOG-ATMO-1). Under the realistic sky the fog is the
+// SKY's own radiance for each pixel's ray, read from the sky's constants in the
+// frame they change — it moves with the dome, at once, as it must (a fog held
+// back with the environment set would draw a seam against the dome all through
+// a drag). It is not a member of the set this arm isolates, and the default
+// scene's World fog puts a quarter of it on these ground probes; off, what is
+// left is the air's own haze, 0.8 % at this camera's 56 m.
+world.fog({ enabled: false });
 editor.frame(8, 1 / 60);
 world.sky("realistic", { power: 2.2 });
 var dragA = camShot("drag_a");                 // the first change, landed (lone)

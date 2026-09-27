@@ -188,6 +188,9 @@ editor.select(cube);
 editor.setGizmoMode("translate");
 sendAim({ from: hand, at: pivot });
 assert(editor.gizmoMode() === "translate", "back in translate mode");
+// `modes` counts the cycles of the whole PROCESS (an earlier arm of the pool may
+// have cycled it); the three below are counted from here.
+var modesBefore = vr.gizmo().modes;
 sendAim({ from: hand, at: pivot, menu: true });         // down for one frame
 sendAim({ from: hand, at: pivot });                     // ...and up: a SHORT press
 assert(editor.gizmoMode() === "rotate",
@@ -198,7 +201,7 @@ assert(editor.gizmoMode() === "scale", "...rotate -> scale");
 sendAim({ from: hand, at: pivot, menu: true });
 sendAim({ from: hand, at: pivot });
 assert(editor.gizmoMode() === "translate", "...and scale -> translate: the Space key's own cycle");
-assert(vr.gizmo().modes === 3, "three cycles, counted");
+assert(vr.gizmo().modes - modesBefore === 3, "three cycles, counted");
 
 // A LONG press does NOT cycle: 0.25 s at the nominal 1/90 s a scripted step
 // charges is 23 frames, so 30 of them is a hold.

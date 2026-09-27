@@ -101,6 +101,15 @@ public:
     /// Idempotent; called automatically by the first evaluate().
     void installApi();
 
+    /// A FRESH JAVASCRIPT REALM: the worker's QJSEngine is destroyed and a new
+    /// one installed with the same shims, so no global a previous run declared
+    /// (a `const`, a `function assert`, a `var guid`) survives into the next.
+    /// The pool runner calls it at every arm boundary (lane SUITE-POOL-1), so an
+    /// arm sees exactly the globals a one-script process gives it. Refused
+    /// (false) while a run is in flight. The console's REPL never calls it: its
+    /// globals persisting between lines is the point of a REPL.
+    bool resetScriptContext();
+
     /// Runs a script and returns when it is done. wrapUndoMacro=true (the
     /// default) makes the whole run one undo step when the host has an undo
     /// stack; pass false for REPL fragments that should not create empty undo
@@ -168,6 +177,9 @@ private:
     ScriptWorker *mWorker = nullptr;
     VerbDispatcher *mDispatcher = nullptr;
     bool mInstalled = false;
+    /// The shim spec (one {name, verbs} map per module) — built once, from the
+    /// registry, on this thread; installApi and resetScriptContext hand it over.
+    QVariantList moduleSpecs() const;
     bool mRunning = false;
     bool mStopped = false;
     ScriptRunPolicy mInteractivePolicy = ScriptRunPolicy::Live;

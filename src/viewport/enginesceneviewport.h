@@ -210,6 +210,8 @@ public:
     QImage takeScreenshot(QSize dimension) override;
     QImage takeScreenshot(int width, int height, ScreenshotGrade grade) override;
     void settleGiBeforeNextScreenshot(int maxFrames) override { mShotSettleFrames = maxFrames; }
+    void readRadianceWithNextScreenshot() override { mShotRadianceWanted = true; }
+    QVector<float> takeScreenshotRadiance(int *width, int *height) override;
     int sampleCount() const override
     { return view() ? int(view()->sampleCount()) : 1; }
     bool isOffscreen() const override
@@ -641,6 +643,10 @@ private:
     qulonglong mFrameEpoch = 0;
     /// settleGiBeforeNextScreenshot's cap, consumed by the next takeScreenshot.
     int mShotSettleFrames = 0;
+    /// readRadianceWithNextScreenshot's request, and what the shot read.
+    bool mShotRadianceWanted = false;
+    QVector<float> mShotRadiance;
+    int mShotRadianceW = 0, mShotRadianceH = 0;
     /// The frame delta syncFrame last pushed (the settle freezes the engine's
     /// clock for its frames and hands this back).
     float mLastFrameDelta = 1.0f / 60.0f;

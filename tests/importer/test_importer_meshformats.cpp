@@ -54,7 +54,7 @@
 
 #include "irisgl/irisglfwd.h"
 #include "irisgl/document/assets/mesh.h"
-#include "irisgl/document/materials/defaultmaterial.h"
+#include "irisgl/document/materials/pbrmaterial.h"
 #include "irisgl/document/scenegraph/meshnode.h"
 #include "irisgl/import/importflags.h"
 #include "irisgl/mirror/scenemirror.h"
@@ -84,7 +84,7 @@ static bool nearly(float a, float b, float eps = 1e-3f) { return std::fabs(a - b
 
 static iris::MaterialPtr defaultMaterialFor(iris::MeshPtr, iris::MeshMaterialData &)
 {
-    return iris::DefaultMaterial::create();
+    return iris::PbrMaterial::create();
 }
 
 int main(int argc, char **argv)

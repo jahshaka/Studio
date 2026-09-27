@@ -307,29 +307,13 @@ set_tests_properties(shadergraph.selection PROPERTIES ENVIRONMENT "QT_QPA_PLATFO
 # scripting e2e suites).
 set(SOURCE_DIR ${CMAKE_SOURCE_DIR})
 configure_file(e2e_graph_selection.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_graph_selection.js @ONLY)
-set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-selection)
-file(MAKE_DIRECTORY ${_home}/run)
-add_test(NAME shadergraph.selection_verbs
-         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_graph_selection.js --headless
-         WORKING_DIRECTORY ${_home}/run)
-set_tests_properties(shadergraph.selection_verbs PROPERTIES
-    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
-    LABELS "shadergraph"
-    TIMEOUT 120)
+jah_pool_arm(doc_assets selection_verbs ${CMAKE_CURRENT_BINARY_DIR}/e2e_graph_selection.js 1 HEADLESS)
 
 # graph.settings/setBlendMode verbs end-to-end (Unreal-parity blend modes,
 # IMAGE_PLANE_SPEC §9): master-panel blend state round-trips through the verbs
 # and lands on the evaluated material's alphaMode.
 configure_file(e2e_blend_settings.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_blend_settings.js @ONLY)
-set(_home_blend ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-blend)
-file(MAKE_DIRECTORY ${_home_blend}/run)
-add_test(NAME shadergraph.blend_verbs
-         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_blend_settings.js --headless
-         WORKING_DIRECTORY ${_home_blend}/run)
-set_tests_properties(shadergraph.blend_verbs PROPERTIES
-    ENVIRONMENT "HOME=${_home_blend};JAHSHAKA_DATA_ROOT=${_home_blend}/.local/share/Jahshaka"
-    LABELS "shadergraph"
-    TIMEOUT 120)
+jah_pool_arm(doc_assets blend_verbs ${CMAKE_CURRENT_BINARY_DIR}/e2e_blend_settings.js 1 HEADLESS)
 
 # (The `resave_presets` tool is DELETED — PRESET-UNIFY-1. It was the one-shot
 # §3b migration that re-saved the shipped `.effect` TEMPLATES through the node
@@ -359,7 +343,7 @@ jah_lsan_blocked(shadergraph.pbr_evaluator shadergraph.node_regressions
 # jah_no_display runs these with DISPLAY and WAYLAND_DISPLAY UNSET, which turns
 # the claim into a gate. Verified 2026-09-09: each of these passes displayless
 # with the same assertion count it has with a display.
-jah_no_display(shadergraph.ao_removed shadergraph.bake_output shadergraph.baker_parity shadergraph.blend_verbs shadergraph.node_regressions shadergraph.panel_migration shadergraph.pbr_evaluator shadergraph.selection shadergraph.selection_verbs)
+jah_no_display(shadergraph.ao_removed shadergraph.bake_output shadergraph.baker_parity shadergraph.node_regressions shadergraph.panel_migration shadergraph.pbr_evaluator shadergraph.selection)
 
 # shadergraph.asset_widget_db — DBPTR-1: the Materials page's shader list keeps
 # the library handle it is given (its setter used to drop it whenever no scene

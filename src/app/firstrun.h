@@ -54,7 +54,7 @@ namespace FirstRun {
 ///   1. a data root was forced (`--data-root` / `JAHSHAKA_DATA_ROOT`) — the
 ///      hermetic-run flag; every app-spawning suite and every rig launch passes
 ///      it, and nothing else does.
-///   2. `--script` / `--headless` — a script run.
+///   2. `--script` / `--scripts` / `--headless` — a script run.
 ///   3. `--dump-api-docs` — the docs generator.
 ///   4. `--mcp-port` — an MCP session; the client on the other end has no hands.
 ///   5. `--engine-selftest`, or `QT_QPA_PLATFORM=offscreen` — there is no screen
@@ -62,7 +62,7 @@ namespace FirstRun {
 inline bool isDrivenSession(const CliOptions &cli)
 {
     if (AppPaths::isOverridden())            return true;
-    if (!cli.scriptPath.isEmpty())            return true;
+    if (cli.isScriptRun())                    return true;
     if (cli.headlessScript)                   return true;
     if (!cli.dumpDocsPath.isEmpty())          return true;
     if (cli.mcpServe)                         return true;

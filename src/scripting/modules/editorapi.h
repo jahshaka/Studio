@@ -142,7 +142,8 @@ public:
     Q_INVOKABLE QVariantMap issueBar();
     Q_INVOKABLE QVariantMap screenshot(const QString &path, int width = 256, int height = 256,
                                        const QVariantList &probes = QVariantList(),
-                                       const QVariant &grade = QVariant());
+                                       const QVariant &grade = QVariant(),
+                                       const QVariantMap &options = QVariantMap());
     Q_INVOKABLE bool beginBatch();
     Q_INVOKABLE bool endBatch();
     Q_INVOKABLE bool importAssets(const QVariant &paths);

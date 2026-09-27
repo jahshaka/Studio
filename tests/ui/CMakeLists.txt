@@ -123,11 +123,12 @@ target_include_directories(test_media_lazy PRIVATE
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
 target_link_libraries(test_media_lazy
     PRIVATE IrisGL Qt6::Widgets Qt6::Multimedia Qt6::Test)
-# DEVPROCESS-1: registered through the GPU-timing lock; TIMEOUT = RUN_TIMEOUT + the lock's 900 s wait.
-jah_gpu_exclusive_test(NAME ui.media_lazy RUN_TIMEOUT 120 COMMAND test_media_lazy
+# OUT OF THE GPU-TIMING LOCK (lane D6B-GATE-SHAPE; audit §4 R4, FIX-LOCK): it measures no time
+# (0.8 s of work; it waited 88.2 s for the lock at the audit's gate).
+add_test(NAME ui.media_lazy COMMAND test_media_lazy
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(ui.media_lazy PROPERTIES
-    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "ui")
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "ui")
 
 # ui.engine_view_winid — the View is rebuilt when Qt hands the widget a NEW
 # native window (deep audit area 7). The ONE suite that drives EngineViewWidget
@@ -546,7 +547,7 @@ jah_document_graph(test_selection_cost)
 add_test(NAME ui.selection_cost COMMAND test_selection_cost
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(ui.selection_cost PROPERTIES
-    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 300 LABELS "ui")
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "ui")
 
 # THE STAGED ICONS, REACHABLE FROM A TEST BINARY (COMPONENTS-1). Every icon in
 # this app is resolved against applicationDirPath (IrisUtils::getAbsoluteAssetPath)
@@ -590,8 +591,15 @@ jah_document_graph(test_components)
 add_test(NAME ui.components COMMAND test_components
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(ui.components PROPERTIES
-    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 300 LABELS "ui")
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "ui")
 jah_no_display(ui.components)
+# ui.components.timing — the pick's half-millisecond bar, nightly (lane D6B-GATE-SHAPE; audit
+# §5 FIX-TIME): the same binary with JAHSHAKA_TIMING_BARS=1, quiet box, the GPU-timing lock.
+jah_gpu_exclusive_test(NAME ui.components.timing RUN_TIMEOUT 300 COMMAND test_components
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(ui.components.timing PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen;JAHSHAKA_TIMING_BARS=1" LABELS "ui;nightly;quiet-box")
+jah_no_display(ui.components.timing)
 jah_no_display(ui.selection_cost)
 
 # ui.show_walk — SHOWING THE PROPERTIES DOCK DESTROYS NOTHING WHILE QT IS STILL
@@ -754,7 +762,7 @@ jah_document_graph(test_panel_undo)
 add_test(NAME ui.panel_undo COMMAND test_panel_undo
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(ui.panel_undo PROPERTIES
-    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 300 LABELS "ui")
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "ui")
 jah_no_display(ui.panel_undo)
 
 # ui.panel_lifetime — A PANEL NEVER TOUCHES A ROW IT HAS RETIRED
@@ -886,7 +894,7 @@ jah_document_graph(test_panel_lifetime)
 add_test(NAME ui.panel_lifetime COMMAND test_panel_lifetime
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(ui.panel_lifetime PROPERTIES
-    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 300 LABELS "ui")
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "ui")
 jah_no_display(ui.panel_lifetime)
 
 
@@ -1094,6 +1102,13 @@ add_test(NAME ui.properties_filter COMMAND test_properties_filter
 set_tests_properties(ui.properties_filter PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "ui")
 jah_no_display(ui.properties_filter)
+# ui.properties_filter.timing — the keystroke's 5 ms bars, nightly (lane D6B-GATE-SHAPE;
+# audit §5 F17 FIX-TIME): the same binary with JAHSHAKA_TIMING_BARS=1, quiet box, the lock.
+jah_gpu_exclusive_test(NAME ui.properties_filter.timing RUN_TIMEOUT 120 COMMAND test_properties_filter
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(ui.properties_filter.timing PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen;JAHSHAKA_TIMING_BARS=1" LABELS "ui;nightly;quiet-box")
+jah_no_display(ui.properties_filter.timing)
 
 
 # ui.db_handles — A LIBRARY A PANEL NEVER GOT IS A NULL, NOT A GUESS (lane
@@ -1456,7 +1471,7 @@ add_test(NAME ui.space_docks COMMAND test_space_docks
          WORKING_DIRECTORY ${_space_docks_home}/run)
 set_tests_properties(ui.space_docks PROPERTIES
     ENVIRONMENT "HOME=${_space_docks_home};JAHSHAKA_DATA_ROOT=${_space_docks_home}/.local/share/Jahshaka"
-    TIMEOUT 600 LABELS "ui")
+    TIMEOUT 480 LABELS "ui")
 jah_tsan_blocked(ui.space_docks)   # spawns the app
 jah_lsan_blocked(ui.space_docks)   # spawns the app
 
@@ -1507,7 +1522,7 @@ add_test(NAME ui.material_drag COMMAND test_material_drag
          WORKING_DIRECTORY ${_matdrag_home}/run)
 set_tests_properties(ui.material_drag PROPERTIES
     ENVIRONMENT "HOME=${_matdrag_home};JAHSHAKA_DATA_ROOT=${_matdrag_home}/.local/share/Jahshaka"
-    TIMEOUT 300 LABELS "ui")
+    TIMEOUT 240 LABELS "ui")
 jah_tsan_blocked(ui.material_drag)   # spawns the app
 jah_lsan_blocked(ui.material_drag)   # spawns the app
 

@@ -32,6 +32,7 @@
 //   3. Quitting with an open IN FLIGHT terminates the process, bounded and
 //      clean (the import.shutdown zombie, applied to the open runner).
 #include "../support/mcpharness.h"
+#include "../support/timingbars.h"
 #include <QCoreApplication>
 #include <QDir>
 #include <QDateTime>
@@ -56,6 +57,22 @@ static int failures = 0;
 using namespace mcpharness;
 
 #define CHECK(cond, msg) do { if (cond) std::printf("ok:   %s\n", msg); else { std::printf("FAIL: %s\n", msg); ++failures; } } while (0)
+
+/// THE MILLISECOND ARMS ARE NIGHTLY (lane D6B-GATE-SHAPE; tests/support/timingbars.h).
+/// The UI-gap budgets, the frame budgets and the watchdog's 2,000 ms stall trigger below
+/// are readings of the BOX as much as of the open — EXCEPT the two regression CEILINGS
+/// (kColdCeilingMs, kSampleCeilingMs), which sit 5-10x above any box noise and are the
+/// guard against the 12,500 ms frozen open itself: those stay CHECKs at push (fix round F2).
+/// For the others: at -j4 the 300 ms create-frame bar
+/// read 605 ms cold on a UI thread that was not blocked. The push-tier row
+/// (open.responsive) asserts the COUNTS — the open loads the world, the app answers
+/// while it is in flight, no model is parsed on the UI thread, the create rebuilds no
+/// grid and leaves one tile per project, the ledgers, the quit — and PRINTS each
+/// millisecond reading; `open.responsive.timing` (nightly, quiet box, the GPU lock)
+/// runs the same binary with the bars armed. A bar that reds only on a loaded box is
+/// read there, never widened here.
+static const bool gTimingBars = jahtest::timingBarsArmed();
+#define TIMING_CHECK(cond, msg) JAH_TIMING_CHECK("open.responsive", cond, msg)
 
 /// The gap budget. GNOME's "not responding" prompt follows ~5 s of unanswered
 /// pings; 500 ms is the lane's contract and leaves an order of magnitude of
@@ -297,8 +314,9 @@ int main(int argc, char **argv)
     // same app, same box, same second, the thread doing the same kind of work
     // with nothing in flight (see kControlFactor).
     const double warmBudget = budgetFor(kMaxGapMs, measureControlGap(mcp, "warm"), "warm");
+    CHECK(warm.maxGap > 0.0, "the heartbeat probe measured the warm open");
     bool withinBudget = warm.maxGap > 0.0 && warm.maxGap < warmBudget;
-    if (!withinBudget) {
+    if (!withinBudget && gTimingBars) {
         // ONE REPEAT, and only on the way to a red. Both the gap and the
         // control are single rolls of a shared box's scheduler: at load average
         // 37-46 the same build measured 486/375, 673/527 and 764/319 in three
@@ -315,8 +333,8 @@ int main(int argc, char **argv)
         const double budget2 = budgetFor(kMaxGapMs, measureControlGap(mcp, "warm-2"), "warm-2");
         withinBudget = warm2.done && warm2.maxGap > 0.0 && warm2.maxGap < budget2;
     }
-    CHECK(withinBudget,
-          "no UI-thread gap beyond the budget during a warm threaded open");
+    TIMING_CHECK(withinBudget,
+                 "no UI-thread gap beyond the budget during a warm threaded open");
 
     // ---- 2. the SYNCHRONOUS verb is unchanged -----------------------------
     CHECK(mcp.runScript(QStringLiteral("project.close()")).value("ok").toBool(),
@@ -639,8 +657,9 @@ int main(int argc, char **argv)
 
         const auto warmCreate = createAndMeasure("warm");
         CHECK(warmCreate.ok, "project.create made a world with the cover off (warm)");
+        CHECK(warmCreate.gap > 0.0, "the heartbeat probe measured the create");
         bool createWithin = warmCreate.gap > 0.0 && warmCreate.gap < warmCreate.budget;
-        if (!createWithin) {
+        if (!createWithin && gTimingBars) {
             // ONE REPEAT before the red, for the reason kControlFactor gives:
             // the gap and the control are single rolls of a shared box's
             // scheduler, and a blocking regression fails every attempt.
@@ -649,10 +668,11 @@ int main(int argc, char **argv)
             const auto again = createAndMeasure("warm-2");
             createWithin = again.ok && again.gap > 0.0 && again.gap < again.budget;
         }
-        CHECK(createWithin, "no UI-thread gap beyond the budget during a create (cover off)");
-        CHECK(warmCreate.worst > 0.0 && warmCreate.worst < kStreamFrameMs,
-              "and no single FRAME of a create is over 300 ms — the world streams in "
-              "instead of arriving in one");
+        TIMING_CHECK(createWithin, "no UI-thread gap beyond the budget during a create (cover off)");
+        CHECK(warmCreate.worst > 0.0, "the frame stats recorded the create's frames");
+        TIMING_CHECK(warmCreate.worst < kStreamFrameMs,
+                     "and no single FRAME of a create is over 300 ms — the world streams in "
+                     "instead of arriving in one");
 
         // ---- THE FULL LIBRARY (CREATE-GAP-1) ---------------------------------
         //
@@ -693,7 +713,7 @@ int main(int argc, char **argv)
             const int buildsBefore = gridBuilds();
             auto full = createAndMeasure("full library");
             bool fullWithin = full.ok && full.gap > 0.0 && full.gap < full.budget;
-            if (!fullWithin) {
+            if (!fullWithin && gTimingBars) {
                 // ONE REPEAT before the red, as the arms above.
                 std::printf("info: the full-library create's worst gap (%.1f ms) exceeded its "
                             "budget (%.1f ms) — repeating once\n", full.gap, full.budget);
@@ -707,8 +727,9 @@ int main(int argc, char **argv)
                         "total %d); tiles now %d (projects %d)\n", buildsAfter - buildsBefore,
                         buildsAfter, tilesAfter, onDesktop());
             CHECK(full.ok, "project.create made a world over a 40-project desktop");
-            CHECK(fullWithin,
-                  "no UI-thread gap beyond the budget during a create over a 40-project desktop");
+            CHECK(full.gap > 0.0, "the heartbeat probe measured the full-library create");
+            TIMING_CHECK(fullWithin,
+                         "no UI-thread gap beyond the budget during a create over a 40-project desktop");
             CHECK(buildsBefore >= 1 && buildsAfter == buildsBefore,
                   "the create's close rebuilt NO grid (desktop.gridStats().builds unchanged)");
             CHECK(tilesAfter == onDesktop() && tilesAfter >= 41,
@@ -733,6 +754,18 @@ int main(int argc, char **argv)
                       ledger.contains("counter:closePrevious:teardown") &&
                       ledger.contains("counter:closePrevious:switch"),
                   "app.openTimings() of a create carries its closePrevious stage and marks");
+
+            // THE COLUMN THE CREATE-LOOP SIGSEGV WAS IN (CREATE-CRASH-1; its mechanism's
+            // deterministic red is ui.show_walk): after 40+ creates in one process the editor's
+            // Properties column is shown, mounted, and owes nothing.
+            mcp.runScript(QStringLiteral("editor.frame(2)"));
+            const QJsonObject props = mcp.runScript(QStringLiteral("editor.propertiesStats()"))
+                                          .value("result").toObject();
+            std::printf("info: [full library] editor.propertiesStats() %s\n",
+                        QJsonDocument(props).toJson(QJsonDocument::Compact).constData());
+            CHECK(props.value("visible").toBool() && !props.value("pending").toBool()
+                      && !props.value("deferredHidden").toBool() && props.value("rows").toInt() > 0,
+                  "the Properties column is on screen, mounted, with nothing owed");
         }
 
         // THE CREATE IS IN THE LEDGER, with the open's own stage names
@@ -843,12 +876,13 @@ int main(int argc, char **argv)
             CHECK(opened, "Grand Showroom 2 opened with the cover off");
             CHECK(view.value("cover").toString() == QLatin1String("none"),
                   "no cover was drawn for the open");
+            CHECK(worst > 0.0, "the frame stats recorded the Showroom 2 open's frames");
             if (rayTier)
-                CHECK(worst > 0.0 && worst < bar,
+                TIMING_CHECK(worst < bar,
                       "AT A RAY TIER no single frame of the Showroom 2 open is over 300 ms — no "
                       "probe grid is placed, fitted or captured (PHOTON-F12-PCC)");
             else
-                CHECK(worst > 0.0 && worst < bar,
+                TIMING_CHECK(worst < bar,
                       "no single frame of the Showroom 2 open is over 600 ms (the residual is the "
                       "probe fit + the closing capture — PCC-BUDGET-1 owes the 300)");
             // THE WATCHDOG SAW NOTHING. Its default threshold is 2,000 ms, and
@@ -858,8 +892,9 @@ int main(int argc, char **argv)
             const int reportsAfter = watchAfter.value("reports").toInt();
             std::printf("info: watchdog reports %d -> %d across the open\n",
                         reportsBefore, reportsAfter);
-            CHECK(reportsAfter == reportsBefore,
-                  "the main-thread watchdog reported no stall across an open with the cover off");
+            TIMING_CHECK(reportsAfter == reportsBefore,
+                         "the main-thread watchdog reported no stall across an open with the "
+                         "cover off (its trigger is a 2,000 ms wall-clock block)");
         }
         // THE PREFERENCE'S OWN CONTRACT, ON A REAL ON-SCREEN VIEWPORT — which
         // is why it lives here and not in the `--script` suite, whose viewport

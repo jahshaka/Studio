@@ -64,19 +64,10 @@ configure_file(mode.js.in ${CMAKE_CURRENT_BINARY_DIR}/mode.js @ONLY)
 set(_thr_home_par ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-threading_mode)
 set(_thr_home_ser ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-threading_mode_serial)
 
-# Reuses the samples suite's wipe script rather than copying it, exactly like
-# perf.epic_steady_state does.
-add_test(NAME threading.freshhome.mode
-         COMMAND ${CMAKE_COMMAND} -DHOME_DIR=${_thr_home_par}
-                 -P ${CMAKE_SOURCE_DIR}/tests/samples/freshhome.cmake)
-set_tests_properties(threading.freshhome.mode PROPERTIES
-    FIXTURES_SETUP threading_home_mode LABELS "threading")
+# The one fresh-home wipe (tests/support/fresh_home.sh, jah_fresh_home_fixture).
+jah_fresh_home_fixture(threading.freshhome.mode threading_home_mode "${_thr_home_par}" LABELS "threading")
 
-add_test(NAME threading.freshhome.mode_serial
-         COMMAND ${CMAKE_COMMAND} -DHOME_DIR=${_thr_home_ser}
-                 -P ${CMAKE_SOURCE_DIR}/tests/samples/freshhome.cmake)
-set_tests_properties(threading.freshhome.mode_serial PROPERTIES
-    FIXTURES_SETUP threading_home_mode_serial LABELS "threading")
+jah_fresh_home_fixture(threading.freshhome.mode_serial threading_home_mode_serial "${_thr_home_ser}" LABELS "threading")
 
 add_test(NAME threading.mode
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
@@ -136,18 +127,13 @@ configure_file(gi_resolve.js.in ${CMAKE_CURRENT_BINARY_DIR}/gi_resolve.js @ONLY)
 set(_gir_home_par ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-threading_gi_resolve)
 set(_gir_home_ser ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-threading_gi_resolve_serial)
 
-add_test(NAME threading.freshhome.gi_resolve
-         COMMAND ${CMAKE_COMMAND} -DHOME_DIR=${_gir_home_par}
-                 -P ${CMAKE_SOURCE_DIR}/tests/samples/freshhome.cmake)
-set_tests_properties(threading.freshhome.gi_resolve PROPERTIES
-    FIXTURES_SETUP threading_home_gi_resolve LABELS "threading")
+jah_fresh_home_fixture(threading.freshhome.gi_resolve threading_home_gi_resolve "${_gir_home_par}" LABELS "threading")
 
-add_test(NAME threading.freshhome.gi_resolve_serial
-         COMMAND ${CMAKE_COMMAND} -DHOME_DIR=${_gir_home_ser}
-                 -P ${CMAKE_SOURCE_DIR}/tests/samples/freshhome.cmake)
-set_tests_properties(threading.freshhome.gi_resolve_serial PROPERTIES
-    FIXTURES_SETUP threading_home_gi_resolve_serial LABELS "threading")
+jah_fresh_home_fixture(threading.freshhome.gi_resolve_serial threading_home_gi_resolve_serial "${_gir_home_ser}" LABELS "threading")
 
+# RUN_SERIAL on both halves (threading.gi_resolve and threading.gi_resolve_serial), for the
+# mode pair's reason above: each opens a project at Epic and compiles a few dozen shaders (not a
+# timing gate).
 add_test(NAME threading.gi_resolve
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
                  --script ${CMAKE_CURRENT_BINARY_DIR}/gi_resolve.js
@@ -156,7 +142,7 @@ set_tests_properties(threading.gi_resolve PROPERTIES
     ENVIRONMENT "HOME=${_gir_home_par};JAHSHAKA_DATA_ROOT=${_gir_home_par}/.local/share/Jahshaka"
     FIXTURES_REQUIRED threading_home_gi_resolve
     FIXTURES_SETUP threading_shot_gi_parallel
-    LABELS "threading" RUN_SERIAL TRUE TIMEOUT 300)
+    LABELS "threading" RUN_SERIAL TRUE TIMEOUT 240)
 
 add_test(NAME threading.gi_resolve_serial
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
@@ -166,7 +152,7 @@ set_tests_properties(threading.gi_resolve_serial PROPERTIES
     ENVIRONMENT "HOME=${_gir_home_ser};JAHSHAKA_DATA_ROOT=${_gir_home_ser}/.local/share/Jahshaka;JAHSHAKA_SCENE_THREADS=1"
     FIXTURES_REQUIRED threading_home_gi_resolve_serial
     FIXTURES_SETUP threading_shot_gi_serial
-    LABELS "threading" RUN_SERIAL TRUE TIMEOUT 300)
+    LABELS "threading" RUN_SERIAL TRUE TIMEOUT 240)
 
 add_test(NAME threading.gi_resolve_pixels
          COMMAND ${CMAKE_COMMAND} -E compare_files
@@ -206,11 +192,7 @@ configure_file(newproject_stall.js.in ${CMAKE_CURRENT_BINARY_DIR}/newproject_sta
 set(_thr_home_soak ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-threading_import_soak)
 set(_thr_home_stall ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-threading_newproject_stall)
 
-add_test(NAME threading.freshhome.import_soak
-         COMMAND ${CMAKE_COMMAND} -DHOME_DIR=${_thr_home_soak}
-                 -P ${CMAKE_SOURCE_DIR}/tests/samples/freshhome.cmake)
-set_tests_properties(threading.freshhome.import_soak PROPERTIES
-    FIXTURES_SETUP threading_home_import_soak LABELS "threading")
+jah_fresh_home_fixture(threading.freshhome.import_soak threading_home_import_soak "${_thr_home_soak}" LABELS "threading")
 
 # NOT RUN_SERIAL (TEST_GATE_AUDIT.md §2, 2026-09-09). threading.mode and
 # threading.mode_serial keep theirs and the reason is written above them — four
@@ -228,11 +210,7 @@ set_tests_properties(threading.import_soak PROPERTIES
     FIXTURES_REQUIRED threading_home_import_soak
     LABELS "threading" TIMEOUT 300)   # 20 iterations x a 30 s budget each: the timeout must not undercut the suite's own budget (code review 2026-09-10)
 
-add_test(NAME threading.freshhome.newproject_stall
-         COMMAND ${CMAKE_COMMAND} -DHOME_DIR=${_thr_home_stall}
-                 -P ${CMAKE_SOURCE_DIR}/tests/samples/freshhome.cmake)
-set_tests_properties(threading.freshhome.newproject_stall PROPERTIES
-    FIXTURES_SETUP threading_home_newproject_stall LABELS "threading")
+jah_fresh_home_fixture(threading.freshhome.newproject_stall threading_home_newproject_stall "${_thr_home_stall}" LABELS "threading")
 
 # DEVPROCESS-1: registered through the GPU-timing lock; TIMEOUT = RUN_TIMEOUT + the lock's 900 s wait.
 jah_gpu_exclusive_test(NAME threading.newproject_stall RUN_TIMEOUT 300
@@ -252,11 +230,7 @@ set_tests_properties(threading.newproject_stall PROPERTIES
 # would never end.
 set(_thr_home_wd ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-threading_texture_wait_watchdog)
 
-add_test(NAME threading.freshhome.texture_wait_watchdog
-         COMMAND ${CMAKE_COMMAND} -DHOME_DIR=${_thr_home_wd}
-                 -P ${CMAKE_SOURCE_DIR}/tests/samples/freshhome.cmake)
-set_tests_properties(threading.freshhome.texture_wait_watchdog PROPERTIES
-    FIXTURES_SETUP threading_home_texture_wait_watchdog LABELS "threading")
+jah_fresh_home_fixture(threading.freshhome.texture_wait_watchdog threading_home_texture_wait_watchdog "${_thr_home_wd}" LABELS "threading")
 
 add_test(NAME threading.texture_wait_watchdog
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
@@ -265,22 +239,29 @@ add_test(NAME threading.texture_wait_watchdog
 set_tests_properties(threading.texture_wait_watchdog PROPERTIES
     ENVIRONMENT "HOME=${_thr_home_wd};JAHSHAKA_DATA_ROOT=${_thr_home_wd}/.local/share/Jahshaka;JAH_TEXTURE_WAIT_FAULT=1;JAH_TEXTURE_WAIT_MS=300"
     FIXTURES_REQUIRED threading_home_texture_wait_watchdog
-    LABELS "threading" TIMEOUT 300)
+    LABELS "threading" TIMEOUT 240)
 
 # The SEGV's precondition, greped off the logs both runs just wrote
-# (nogrouplesstexture.cmake carries the mechanism). FIXTURES_REQUIRED on the run
-# it inspects, so it can never pass by looking at an empty directory.
+# (nogrouplesstexture.cmake carries the mechanism, and fails on an empty directory).
+# DEPENDS on the run it inspects (ordering: it reads THIS gate's logs, and it still
+# runs when that run went red — the grep is its own claim) AND FIXTURES_REQUIRED on
+# the run's fresh-home wipe (D6B-GATE-SHAPE: the comment used to claim a fixture the
+# row did not have, so a -R of the inspector alone read the PREVIOUS run's logs; now
+# the wipe runs first and an inspector without its run fails on the empty directory
+# instead of passing on a stale one).
 add_test(NAME threading.import_soak.no_groupless_texture
          COMMAND ${CMAKE_COMMAND} -DLOG_DIR=${_thr_home_soak}/run/logs
                  -P ${CMAKE_SOURCE_DIR}/tests/threading/nogrouplesstexture.cmake)
 set_tests_properties(threading.import_soak.no_groupless_texture PROPERTIES
-    DEPENDS threading.import_soak LABELS "threading" TIMEOUT 60)
+    DEPENDS threading.import_soak FIXTURES_REQUIRED threading_home_import_soak
+    LABELS "threading" TIMEOUT 60)
 
 add_test(NAME threading.newproject_stall.no_groupless_texture
          COMMAND ${CMAKE_COMMAND} -DLOG_DIR=${_thr_home_stall}/run/logs
                  -P ${CMAKE_SOURCE_DIR}/tests/threading/nogrouplesstexture.cmake)
 set_tests_properties(threading.newproject_stall.no_groupless_texture PROPERTIES
-    DEPENDS threading.newproject_stall LABELS "threading" TIMEOUT 60)
+    DEPENDS threading.newproject_stall FIXTURES_REQUIRED threading_home_newproject_stall
+    LABELS "threading" TIMEOUT 60)
 
 # Same toolchain quarantine as threading.mode: the real binary cannot start
 # under GCC 15's libtsan.

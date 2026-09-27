@@ -14,7 +14,6 @@ For more information see the LICENSE file
 
 #include "irisgl/irisglfwd.h"
 #include "irisgl/document/scenegraph/meshnode.h"
-#include "irisgl/document/materials/defaultmaterial.h"
 
 #include <QObject>
 #include <QImage>
