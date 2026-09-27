@@ -16,6 +16,10 @@ WHAT IT REPLAYS (tests/hygiene/gate_selection_cases.json):
     with `max_rows` must stay under it (the precision the lane is there to prove).
   * FILES: the suites audit's S1/S2 subjects, and the graph's precision (a compiled row whose
     executable does not contain the file is NOT selected).
+  * HUNKS: a real file with one edit applied IN MEMORY (the Fable read's negative cases: a
+    header-only helper's callers, a struct a header-only helper names, a changed add_test COMMAND
+    line) — each `must` set is what a past selector missed.
+  * NM: without `nm` the selector refuses (H1).
   * ARMS: a pool row is selected arm by arm where a script or an API module selects, and whole
     where a directory or a group does (a synthetic pool of two real scripts).
   * IDENTIFIERS: the symbol reader on fixed texts — a comment-only hunk touches nothing; a
@@ -108,6 +112,63 @@ def arm_cases(gs, graph, build, inv0):
                   inv=copy.deepcopy(inv), quiet_graph=True)
     check("pool.synth" in S.selected and "pool.synth" not in S.arm_subsets(),
           "an engine rule's app group selects the pool whole (every arm)")
+
+
+def hunk_cases(gs, graph, build, inv0, cases):
+    """SIMULATED HUNKS (the Fable read's negative cases): a real file of the tree with one edit
+    applied in memory — the selector reads the two texts and git's -U0 diff of them, the tree is
+    never written. Each `must` set is what the change reaches and a past version of the selector
+    missed."""
+    import tempfile
+    print("\nhunks (simulated edits of real files; the tree is never written):")
+    for c in cases.get("hunks", []):
+        path = c["file"]
+        a = open(os.path.join(gs.ROOT, path), errors="replace").read()
+        check(c["old"] in a, "%s: the recorded text is still in %s" % (c["case"][:40], path))
+        if c["old"] not in a: continue
+        b = a.replace(c["old"], c["new"], 1)
+
+        class FakeRevs(gs.Revs):
+            def __init__(self, rng):
+                super().__init__(rng); self.base, self.tip = "BASE", "TIP"
+            def pair(self, p): return ("BASE", "TIP")
+            def texts(self, p):
+                if p == path: return a, b
+                try: t = open(os.path.join(gs.ROOT, p), errors="replace").read()
+                except OSError: t = ""
+                return t, t
+            def diff_u0(self, p):
+                if p != path: return ""
+                with tempfile.TemporaryDirectory() as d:
+                    open(os.path.join(d, "a"), "w").write(a); open(os.path.join(d, "b"), "w").write(b)
+                    return subprocess.run(["git", "diff", "--no-index", "-U0", "a", "b"], cwd=d,
+                                          capture_output=True, text=True).stdout
+        real = gs.Revs
+        gs.Revs = FakeRevs
+        try:
+            S = gs.select([path], "BASE..TIP", build, 4, graph=graph, inv=copy.deepcopy(inv0), quiet_graph=True)
+        finally:
+            gs.Revs = real
+        check(not S.fallback, "%s: no fallback (%s)" % (c["case"][:60], S.fallback[:1]))
+        miss = [m for m in c["must"] if m not in S.selected and not S.full_tier]
+        check(not miss, "%s: selects %s (%d rows; missing %s)" % (c["case"][:60], c["must"], len(S.selected), miss))
+
+
+def nm_refusal(source, build):
+    """H1: without `nm` the link graph cannot be read — the selector must REFUSE, never answer from
+    empty symbol tables (an engine .cpp would select no compiled row, silently and persistently)."""
+    import shutil
+    import tempfile
+    print("\nnm refusal (a PATH without nm):")
+    with tempfile.TemporaryDirectory() as d:
+        for tool in ("git", "ctest", "ninja", "cmake", sys.executable.split("/")[-1]):
+            w = shutil.which(tool)
+            if w: os.symlink(w, os.path.join(d, tool))
+        p = subprocess.run([sys.executable, os.path.join(source, "scripts", "gate-scope.py"), "--files",
+                            "irisgl/engine/src/OgreChain.cpp", "--build", build, "--json"],
+                           cwd=source, capture_output=True, text=True, env=dict(os.environ, PATH=d))
+        check(p.returncode != 0 and "nm" in p.stderr, "no nm -> the selector refuses with the reason (exit %d: %s)"
+              % (p.returncode, p.stderr.strip().splitlines()[-1:] if p.stderr.strip() else ""))
 
 
 def joint_case(gs, build, cases):
@@ -211,6 +272,8 @@ def main(source, build):
             check(not chosen(S, m), "%s: %s does NOT select %s (%s)" % (c["case"], c["files"][0], m,
                                                                          S.selected.get(m, "")))
     arm_cases(gs, graph, build, inv0)
+    hunk_cases(gs, graph, build, inv0, cases)
+    nm_refusal(source, build)
     joint_case(gs, build, cases)
     print("\n  the MERGE tier: %d rows, ~%.0f suite-seconds" % (len(tier_rows), tier_s))
     if FAILURES:

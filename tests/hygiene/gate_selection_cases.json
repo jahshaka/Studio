@@ -298,6 +298,65 @@
     "document.reader_defaults",
     "math.parity"
    ]
+  },
+  {
+   "case": "U2 engine media reaches every executable that extracts the engine (the Fable read)",
+   "files": [
+    "irisgl/engine/media/Hlms/Jahshaka/JahshakaIbl.compositor"
+   ],
+   "must": [
+    "atom.decode_exact",
+    "scale.cpu_walks",
+    "scale.occlusion",
+    "scenegraph.smoke",
+    "rigperf.smoke",
+    "engine.atom_parity"
+   ]
+  },
+  {
+   "case": "SMALL(a) a data fixture outside tests/ selects the tests that load it by name",
+   "files": [
+    "app/content/primitives/cube.obj"
+   ],
+   "must": [
+    "gi.budget",
+    "gi.coalesce",
+    "gi.overlay",
+    "gi.probe_inputs"
+   ]
+  }
+ ],
+ "hunks": [
+  {
+   "case": "U1-A a body line of a header-only helper reaches the callers of its WRAPPER (the Fable read: 120 rows missed)",
+   "file": "tests/support/enginetesthelpers.h",
+   "old": "    const Vec3 upW{ 0.f, 1.f, 0.f };\n",
+   "new": "    const Vec3 upW{ 0.f, 0.f, 1.f };\n",
+   "must": [
+    "engine.atom_parity",
+    "engine.window",
+    "defaults.exposure_plane",
+    "distortion.engine",
+    "gi.card_capture"
+   ]
+  },
+  {
+   "case": "U1-B a struct member's default reaches the header-only helper that names the struct (gi.voxel_lab links no engine)",
+   "file": "irisgl/engine/include/jahshaka/engine/Types.h",
+   "old": "    /// The store's normalisation k (a voxel holds k x the surface's radiance).\n    float multiplier = 0.0f;\n",
+   "new": "    /// The store's normalisation k (a voxel holds k x the surface's radiance).\n    float multiplier = 1.0f;\n",
+   "must": [
+    "gi.voxel_lab"
+   ]
+  },
+  {
+   "case": "SMALL(c) a changed script path on an add_test COMMAND line is a changed row, not a source-list entry",
+   "file": "tests/log/CMakeLists.txt",
+   "old": "                 \"${CMAKE_CURRENT_SOURCE_DIR}/e2e_log_events.js\"\n",
+   "new": "                 \"${CMAKE_CURRENT_SOURCE_DIR}/e2e_log_events_v2.js\"\n",
+   "must": [
+    "log.events"
+   ]
   }
  ]
 }
