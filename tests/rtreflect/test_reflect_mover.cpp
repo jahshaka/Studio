@@ -36,6 +36,25 @@
 //   glossy/mirror floor, march  5.58 / 4.38 -> 4.42 / 4.38: THE MARCH'S one-frame
 //     object lag (JahSsrResolve_ps.glsl), printed as `target:`, not gated.
 // The four selftest hashes are unchanged (no still pixel moves).
+//
+// FIX ROUND (the lead's F1-F3), measured the same way:
+//   F1 the MARCH's arms: the resolve now reads the object motion at the hit
+//      (jahSsrVelocity, rq_motion.comp): settled 4.42 / 4.38 -> ~1.9 / 1.84
+//      codes, gated at 2.8. Their GRAIN stays ~7x the still case's: the still
+//      case is the march's deterministic picture (0.14 codes), and what moves
+//      is the ray tier filling the march's holes (the streaks on the reflected
+//      sphere) plus the bilinear resample of the previous frame at a sub-pixel
+//      offset — printed as `target:`.
+//   F2 the rays-only glossy floor: grain 2.18x -> ~1.3x the still case's (bar
+//      1.5), settled 3.78 -> ~5.8 codes: a ray that MISSES a moving thing's
+//      reflection restarts the mean only on its second consecutive miss (the
+//      mean's mover age), so the lobe's tail inside the reflection no longer
+//      restarts single pixels (the interior grain); the trailing edge pays one
+//      frame of trail for it.
+//   F3 the GATHER on a moving matte object: 0.33-0.49 codes moving against
+//      0.000 still (the sphere disk line of the reflected arms) — accepted
+//      unchanged: a diffuse pixel's irradiance does not depend on the eye, and
+//      the gather's history is a quantity of the surface point.
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
 
@@ -273,28 +292,44 @@ static int costMain(Engine *e)
     PostFxDesc fx; fx.allowOffscreen = true; fx.ssr = 2;
     view->setPostFx(fx);
     enginetest::testCameraLookAt(view, kCamPos, kCamTarget);
+    // THE LANE'S GPU TIME, by its own timestamps: the reflection's pair spans the
+    // trace (the mover branches), the hit decode and the filter (the restart
+    // band); the march's object-motion job has a pair of its own. Every branch is
+    // behind the one switch (JAH_R5_NO_MOTION, read per frame), so ONE process
+    // holds both arms (trap 12), alternating 30-frame blocks; each block's first
+    // 10 frames are skipped (the timestamps come back a few frames late). The
+    // withheld arm runs no motion job: its share is zero, not its last reading.
     int frame = 0;
-    const auto step = [&](int n, double *sum, int *count) {
+    double on = 0.0, off = 0.0, onMotion = 0.0;
+    int nOn = 0, nOff = 0, nMotion = 0;
+    const auto step = [&](int n, bool motion, bool measure) {
         for (int i = 0; i < n; ++i) {
             enginetest::setNodePosition(s, sphere, pathAt(++frame));
             e->renderOneFrame();
-            const float ms = s->rayQueryStatus().reflectMs;
-            if (sum && i >= 10 && ms > 0.0f) { *sum += ms; ++*count; }   // the timestamps lag a few frames
+            if (!measure || i < 10) continue;
+            const RayQueryStatus st = s->rayQueryStatus();
+            if (st.reflectMs <= 0.0f) continue;
+            if (motion) {
+                on += st.reflectMs; ++nOn;
+                if (st.reflectMotionMs > 0.0f) { onMotion += st.reflectMotionMs; ++nMotion; }
+            } else {
+                off += st.reflectMs; ++nOff;
+            }
         }
     };
-    step(120, nullptr, nullptr);
-    double on = 0.0, off = 0.0;
-    int nOn = 0, nOff = 0;
+    step(120, true, false);
     for (int round = 0; round < 24; ++round) {
         unsetenv("JAH_R5_NO_MOTION");
-        step(30, &on, &nOn);
+        step(30, true, true);
         setenv("JAH_R5_NO_MOTION", "1", 1);
-        step(30, &off, &nOff);
+        step(30, false, true);
     }
     unsetenv("JAH_R5_NO_MOTION");
-    const double a = nOn ? on / nOn : -1.0, b = nOff ? off / nOff : -1.0;
-    std::printf("target: the reflection pass at 1920x1080, a moving glossy sphere: motion read %.4f ms, "
-                "withheld %.4f ms, cost %+.4f ms (bar 0.1) [%d / %d frames]\n", a, b, a - b, nOn, nOff);
+    const double a = nOn ? on / nOn : -1.0, b = nOff ? off / nOff : -1.0,
+                 m = nMotion ? onMotion / nMotion : 0.0;
+    std::printf("target: 1920x1080, a moving glossy sphere over a glossy floor: the reflection %.4f ms on / "
+                "%.4f ms off, the motion job %.4f ms; cost %+.4f ms (bar 0.1) [%d / %d frames]\n",
+                a, b, m, a + m - b, nOn, nOff);
     return 0;
 }
 
@@ -382,9 +417,9 @@ int main(int argc, char **argv)
         // (JahSsrResolve_ps.glsl: "what still lags by a frame is a moving OBJECT's
         // own motion") — not this lane's text, so printed as a target.
         { "march: glossy floor 0.2, the sphere's reflection", 1.0f, 0.2f, 0.0f, 0.8f, Region::Reflected,
-          true, 0.0f, 0.0f },
+          true, 2.8f, 0.0f },
         { "march: mirror floor 0.05, the sphere's reflection", 1.0f, 0.05f, 0.0f, 0.8f, Region::Reflected,
-          true, 0.0f, 0.0f },
+          true, 2.8f, 0.0f },
         // THE RAY TIER'S OWN: a glossy mover's reflection of the world (the owner's
         // dither: 5.94 codes and 2.2x the still grain before), and a floor's
         // reflection of a mover where only the rays answer (a headset; 22.8 codes of
@@ -392,7 +427,7 @@ int main(int argc, char **argv)
         { "glossy sphere 0.25, its own reflection", 0.0f, 0.9f, 1.0f, 0.25f, Region::Sphere, true, 3.0f,
           1.6f },
         { "rays: glossy floor 0.2, the sphere's reflection", 1.0f, 0.2f, 0.0f, 0.8f, Region::Reflected,
-          false, 8.0f, 0.0f },
+          false, 8.0f, 1.5f },
         { "rays: mirror floor 0.05, the sphere's reflection", 1.0f, 0.05f, 0.0f, 0.8f, Region::Reflected,
           false, 0.0f, 1.5f },
         { "rays: glossy sphere 0.25, its own reflection", 0.0f, 0.9f, 1.0f, 0.25f, Region::Sphere, false,
@@ -463,6 +498,23 @@ int main(int argc, char **argv)
                 still = a;
             }
             const std::vector<unsigned> px = regionAt(pathAt(frame), arm.region);
+            // THE PICTURE EXISTS: every bar here compares two frames, and two BLACK
+            // frames (a lost device, a shader that failed to compile) agree
+            // perfectly. The settled region must hold a lit picture.
+            {
+                double lum = 0.0;
+                for (unsigned i : px)
+                    lum += settled.rgba.size() > size_t(i) * 4u + 2u
+                               ? (double(settled.rgba[size_t(i) * 4u]) + settled.rgba[size_t(i) * 4u + 1] +
+                                  settled.rgba[size_t(i) * 4u + 2]) / 3.0
+                               : 0.0;
+                lum = px.empty() ? 0.0 : lum / double(px.size());
+                if (!(lum > 12.0)) {
+                    std::printf("FAIL: [%s] frame %d: the settled region is not a lit picture (mean %.1f codes)\n",
+                                arm.name, frame, lum);
+                    ++failures;
+                }
+            }
             const float em = meanDiff(moving, settled, px);
             const float es = meanDiff(still, settled, px);
             const float hm = hfDiff(moving, settled, px), hs = hfDiff(still, settled, px);
@@ -501,8 +553,9 @@ int main(int argc, char **argv)
             CHECK_MSG(hm < arm.hfRatioBar * std::max(hs, 0.05f),
                       "[%s] its grain is within %.2fx the still case's (%.3f against %.3f)", arm.name,
                       arm.hfRatioBar, hm, hs);
-        if (arm.settledBar <= 0.0f && arm.hfRatioBar <= 0.0f)
-            std::printf("target: [%s] moving %.3f codes against the settled frame (still %.3f)\n", arm.name, m, st);
+        if (arm.hfRatioBar <= 0.0f)
+            std::printf("target: [%s] grain %.2fx the still case's (bar 1.5)\n", arm.name,
+                        hm / std::max(hs, 0.05f));
         ++armIdx;
     }
     std::printf("%s\n", failures ? "FAILED" : "PASSED");
