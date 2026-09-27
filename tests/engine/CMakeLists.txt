@@ -239,7 +239,7 @@ if(JAHSHAKA_ASAN)
     # libdbus-1, reached from the Vulkan loader's Mesa device-select layer — not ours.
     # Use-after-free / overflow detection is the point here and stays on.
     set_tests_properties(test_engine_asan PROPERTIES
-        ENVIRONMENT "${JAH_ASAN_ENGINE_OPTIONS}")
+        ENVIRONMENT "${JAH_ASAN_ENGINE_OPTIONS}" TIMEOUT 420)  # 6x measured (D6B fix round F1; spikes/d6b-gate-shape/f1-timeouts.txt)
     target_compile_options(test_engine_asan PRIVATE -fsanitize=address -fno-omit-frame-pointer)
     target_link_options(test_engine_asan PRIVATE -fsanitize=address)
 endif()

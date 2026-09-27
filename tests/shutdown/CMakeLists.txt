@@ -22,7 +22,7 @@ add_test(NAME app.shutdown_order COMMAND test_shutdown_order
          WORKING_DIRECTORY ${_order_home}/run)
 set_tests_properties(app.shutdown_order PROPERTIES
     ENVIRONMENT "HOME=${_order_home};JAHSHAKA_DATA_ROOT=${_order_home}/.local/share/Jahshaka"
-    TIMEOUT 120 LABELS "shutdown")
+    TIMEOUT 300 LABELS "shutdown")  # 6x measured (D6B fix round F1; spikes/d6b-gate-shape/f1-timeouts.txt)
 # app.shutdown_order.timing — the client's 900 ms bar, nightly (lane D6B-GATE-SHAPE; audit §5
 # FIX-TIME): the same binary with JAHSHAKA_TIMING_BARS=1, quiet box, the GPU-timing lock.
 set(_order_timing_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-order-timing)

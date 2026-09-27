@@ -463,12 +463,14 @@ add_script_e2e(presentation_state e2e_presentation_state.js)
 # directional light to the realistic sky's sun, the light follows the dials,
 # unlinking gives manual control back, and the link is a document field.
 add_script_e2e(sun_light e2e_sun_light.js)   # out of the GPU-timing lock: it measures no time (audit §4 R4)
+set_tests_properties(scripting.e2e.sun_light PROPERTIES TIMEOUT 720)  # 6x measured (D6B fix round F1; spikes/d6b-gate-shape/f1-timeouts.txt)
 # THE 2D CLOUD LAYER (CLOUDS-2D-1): the world.clouds block (defaults, clamps,
 # refusals, undo, save/reopen), coverage 0 byte-identical to no layer, the
 # environment SH moving with the coverage, the ground shadow against the sun's
 # measured direct term, the scroll and its capture cadence, an image sky
 # ignoring the block, and the export bake.
 add_script_e2e(clouds_2d e2e_clouds_2d.js)
+set_tests_properties(scripting.e2e.clouds_2d PROPERTIES TIMEOUT 600)  # 6x measured (D6B fix round F1; spikes/d6b-gate-shape/f1-timeouts.txt)
 # HARD SUN CONTACT SHADOWS (PHOTON-RAYS-1): world.sunContact's contract — off by
 # default, validation, one undo step, the file round trip, and what the renderer
 # did (gi.sun_contact is the picture).
@@ -1905,6 +1907,7 @@ jah_no_display(scripting.e2e.live_textures)
 # writes creates no new engine texture. Engine UP (no --headless): the whole
 # point is what the renderer does with the generation counter.
 add_script_e2e(live_texture_pixels e2e_live_texture_pixels.js)
+set_tests_properties(scripting.e2e.live_texture_pixels PROPERTIES TIMEOUT 480)  # 6x measured (D6B fix round F1; spikes/d6b-gate-shape/f1-timeouts.txt)
 
 # RENDER_PIPELINE_AUDIT 3.2 (smoke lane L12): a DUPLICATE RENDERS LIKE ITS
 # ORIGINAL. Every duplicate path (node.duplicate, Ctrl+D / Alt+drag through
@@ -2189,7 +2192,7 @@ set_tests_properties(scripting.e2e.material_tabs PROPERTIES
     FIXTURES_REQUIRED materialTabsHome
     FIXTURES_SETUP materialTabsSession
     LABELS "scripting"
-    TIMEOUT 300)
+    TIMEOUT 1080)  # 6x measured (D6B fix round F1; spikes/d6b-gate-shape/f1-timeouts.txt)
 
 # ...and a SECOND process on the same home: the tab set is persisted in the
 # app's settings, and only a relaunch can prove it is read back.

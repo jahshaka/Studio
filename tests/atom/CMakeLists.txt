@@ -316,7 +316,7 @@ add_test(NAME atom.lod_switch
 # 60-shot walks (ATOM-CLUSTER-CUT, ~100 s of the 234 s measured solo) are the run.
 set_tests_properties(atom.lod_switch PROPERTIES
     FIXTURES_REQUIRED atomLodSwitchHome
-    TIMEOUT 480 LABELS "scripting"
+    TIMEOUT 1560 LABELS "scripting"  # 6x measured (D6B fix round F1; spikes/d6b-gate-shape/f1-timeouts.txt)
     ENVIRONMENT "HOME=${_lod_switch_home};JAHSHAKA_DATA_ROOT=${_lod_switch_home}/.local/share/Jahshaka")
 
 # ---------------------------------------------------------------------------

@@ -56,12 +56,14 @@ add_test(NAME open.responsive COMMAND test_open_responsive
 # its own control measurement and settle — about 45 s solo. 400 still stands.
 set_tests_properties(open.responsive PROPERTIES
     ENVIRONMENT "HOME=${_open_home};JAHSHAKA_DATA_ROOT=${_open_home}/.local/share/Jahshaka"
-    TIMEOUT 400 LABELS "openasync")
+    # 1740: 6x the worst measured run (281 s, -j4 beside other lanes; D6B fix round F1 —
+    # the lock used to add 900 s on top of 400, so leaving it cut the budget below 3x).
+    TIMEOUT 1740 LABELS "openasync")
 # open.responsive.timing — the millisecond bars (nightly; `quiet-box`: never a scoped gate).
 # Its own home, so the nightly run and a lane's push-row run never share a library.
 set(_open_timing_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-open-timing)
 file(MAKE_DIRECTORY ${_open_timing_home}/run)
-jah_gpu_exclusive_test(NAME open.responsive.timing RUN_TIMEOUT 400 COMMAND test_open_responsive
+jah_gpu_exclusive_test(NAME open.responsive.timing RUN_TIMEOUT 1740 COMMAND test_open_responsive
          WORKING_DIRECTORY ${_open_timing_home}/run)
 set_tests_properties(open.responsive.timing PROPERTIES
     ENVIRONMENT "HOME=${_open_timing_home};JAHSHAKA_DATA_ROOT=${_open_timing_home}/.local/share/Jahshaka;JAHSHAKA_TIMING_BARS=1"
