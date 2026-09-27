@@ -34,6 +34,7 @@ For more information see the LICENSE file
 #include <QStringList>
 
 #include <cstdio>
+#include <string>
 #include <unistd.h>
 
 #include "jahshaka/engine/Engine.h"
@@ -59,38 +60,64 @@ inline bool sessionHasAUser()
 }
 
 /// Ends the session loudly. Called at most once; never returns when it fires.
-inline void endNow()
+///
+/// TWO FATAL GPU FAULTS, said apart (lane FORK-OOM-1): a LOST DEVICE (exit 3,
+/// as since XID-2) and an OUT-OF-MEMORY INSIDE A FRAME (exit 1) -- the device
+/// is fine there, but the renderer's frame state is not whole after it, and a
+/// next frame crashes; until the evict/retry lane makes that recoverable the
+/// session ends the same clean way, with the engine's own honest text
+/// ("GPU out of memory (VK_ERROR_OUT_OF_DEVICE_MEMORY; the device is NOT lost
+/// - <the pool>) ...") in the log, so the run log and the rig class it as an
+/// OOM and never as a loss.
+inline void endNow(jahshaka::engine::GpuFault fault, const std::string &engineText)
 {
     static bool ending = false;
     if (ending) return;
     ending = true;
 
-    JAH_LOG(JahLog::engine, Error,
-            QStringLiteral("THE GRAPHICS DEVICE WAS LOST \u2014 ending the session (the renderer "
-                           "does not recreate a lost device; look for an 'NVRM: Xid' line in the "
-                           "system log: journalctl -k | grep -i xid)"));
-    std::fprintf(stderr, "FATAL: the graphics device was lost; ending the session.\n");
+    const bool oom = fault == jahshaka::engine::GpuFault::OutOfMemoryInFrame;
+    if (oom) {
+        JAH_LOG(JahLog::engine, Error,
+                QStringLiteral("THE GPU RAN OUT OF MEMORY INSIDE A FRAME \u2014 ending the session "
+                               "(the device is NOT lost; a mid-frame out-of-memory is not "
+                               "recoverable yet): %1").arg(QString::fromStdString(engineText)));
+        std::fprintf(stderr, "FATAL: %s; ending the session.\n", engineText.c_str());
+    } else {
+        JAH_LOG(JahLog::engine, Error,
+                QStringLiteral("THE GRAPHICS DEVICE WAS LOST \u2014 ending the session (the renderer "
+                               "does not recreate a lost device; look for an 'NVRM: Xid' line in the "
+                               "system log: journalctl -k | grep -i xid)"));
+        std::fprintf(stderr, "FATAL: the graphics device was lost; ending the session.\n");
+    }
     std::fflush(stderr);
 
     if (sessionHasAUser()) {
         QMessageBox::critical(
             nullptr, QStringLiteral("Jahshaka"),
-            QStringLiteral("The graphics device was lost.\n\n"
-                           "Jahshaka cannot continue this session \u2014 the renderer does not "
-                           "recreate a lost device. Your project on disk is unaffected; reopen it "
-                           "after restarting.\n\n"
-                           "If this repeats, the system log usually names the cause "
-                           "(journalctl -k | grep -i xid)."));
+            oom ? QStringLiteral("The graphics card ran out of memory.\n\n"
+                                 "Jahshaka cannot continue this session \u2014 the renderer cannot "
+                                 "yet recover from running out of video memory in the middle of a "
+                                 "frame. Your project on disk is unaffected; reopen it after "
+                                 "restarting.\n\n"
+                                 "Closing other programs that use the GPU usually helps.")
+                : QStringLiteral("The graphics device was lost.\n\n"
+                                 "Jahshaka cannot continue this session \u2014 the renderer does not "
+                                 "recreate a lost device. Your project on disk is unaffected; reopen it "
+                                 "after restarting.\n\n"
+                                 "If this repeats, the system log usually names the cause "
+                                 "(journalctl -k | grep -i xid)."));
     }
 
     std::fflush(nullptr);
-    ::_exit(3);   // NO DESTRUCTORS, deliberately -- see the note at the top.
+    ::_exit(oom ? 1 : 3);   // NO DESTRUCTORS, deliberately -- see the note at the top.
 }
 
 /// The one line every render loop carries after `renderOneFrame()`.
 inline void checkAfterFrame(const jahshaka::engine::Engine *engine)
 {
-    if (engine && engine->deviceLost()) endNow();
+    if (!engine) return;
+    const jahshaka::engine::GpuFault fault = engine->gpuFault();
+    if (fault != jahshaka::engine::GpuFault::None) endNow(fault, engine->lastError());
 }
 
 }   // namespace devicelossend

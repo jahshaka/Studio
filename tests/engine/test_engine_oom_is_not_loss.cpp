@@ -18,22 +18,30 @@
 //      of memory", and the device is NOT latched as lost;
 //   2. the process carries on and the frames after it render the SAME bytes as
 //      the settled picture before it;
+//   2b. AN OOM INSIDE THE FRAME'S RECORDING IS TERMINAL (FORK-OOM-1's lead
+//      call): Ogre's frame state is not whole after it (the MERGE tier on a
+//      full card: 12 runs crashed in the NEXT frame), so the engine latches
+//      GpuFault::OutOfMemoryInFrame, renders nothing more, and the host ends
+//      the process with exit 1 and the honest text — never a signal, never
+//      "device lost". Run in a CHILD process (this binary, `--in-record`),
+//      because the arm ends its process.
 //   3. THE NEGATIVE CONTROL: `FrameFault::VulkanDeviceLost` — the same call with
 //      VK_ERROR_DEVICE_LOST — still latches, the engine says so, and (like
 //      every host, devicelossend.h) the process ends WITHOUT an orderly
 //      teardown. It REALLY latches the render system, which is why it is last
 //      and why this is its own binary.
 //
-// WHAT IT CANNOT PROVE: that Ogre's own state is whole after an OOM raised
-// from the MIDDLE of a recording (allocateVbo called from inside a pass) —
-// the fault is raised after the frame was recorded and submitted. Surviving
-// that, evicting and retrying under pressure, is the later lane.
+// The in-record door fires from Ogre's `frameRenderingQueued` (inside
+// `Root::_updateAllRenderTargets`, before the swap) — the nearest point a
+// frame listener reaches to an allocateVbo called from inside a pass.
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
 
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <string>
+#include <sys/wait.h>
 #include <unistd.h>
 
 using namespace jahshaka::engine;
@@ -71,8 +79,80 @@ static void endLikeAHost(const char *why)
     ::_exit(failures ? 1 : 0);   // NO DESTRUCTORS after a real latch — devicelossend.h's rule
 }
 
-int main()
+/// The child: boot, settle, an OOM INSIDE the recording, then end like a host.
+static int inRecordChild()
 {
+    std::string err;
+    EngineConfig cfg;
+    cfg.pluginDir = JAHSHAKA_TEST_PLUGIN_DIR;
+    cfg.hlmsMediaDir = JAHSHAKA_TEST_MEDIA_DIR;
+    cfg.logFile = "test-engine-oom-in-record-ogre.log";
+    auto engine = Engine::create(cfg, err);
+    if (!engine) { std::printf("CHILD-FAIL: engine create: %s\n", err.c_str()); return 2; }
+    engine->setFixedFrameDelta(1.0f / 60.0f);
+    Engine *e = engine.get();
+    View *view = e->createOffscreenView("oom_rec", kSize, kSize, Colour(0.10f, 0.12f, 0.16f, 1.0f));
+    Scene *scene = view ? e->createScene("oom_rec") : nullptr;
+    if (!scene) { std::printf("CHILD-FAIL: fixture: %s\n", e->lastError().c_str()); return 2; }
+    view->setScene(scene);
+    enginetest::addDirectionalLight(scene, Vec3(-0.4f, -1.0f, -0.55f), 3.14159f);
+    enginetest::addTestCube(scene, Colour(0.8f, 0.3f, 0.2f), 0.0f, 0.5f);
+    view->setCamera(enginetest::testCameraDescLookAt(Vec3(1.6f, 1.4f, 2.2f), Vec3(0, 0, 0)));
+    for (int i = 0; i < 8; ++i) e->renderOneFrame();
+    if (e->gpuFault() != GpuFault::None) { std::printf("CHILD-FAIL: a fault before the door\n"); return 2; }
+
+    e->setFrameFault(FrameFault::VulkanOutOfDeviceMemoryInRecord, 1u);
+    e->renderOneFrame();
+    std::printf("CHILD gpuFault=%d deviceLost=%d\n", int(e->gpuFault()), int(e->deviceLost()));
+    std::printf("CHILD lastError=%s\n", e->lastError().c_str());
+    // A latched engine renders nothing: this call must return, not crash.
+    const unsigned long long frames = view->framesPresented();
+    e->renderOneFrame();
+    std::printf("CHILD survived-next-frame=%d\n", view->framesPresented() == frames ? 1 : 0);
+    // THE HOST'S END (src/viewport/devicelossend.h): exit 1 for an OOM, no teardown.
+    std::fflush(nullptr);
+    ::_exit(e->gpuFault() == GpuFault::OutOfMemoryInFrame ? 1 : 2);
+}
+
+int main(int argc, char **argv)
+{
+    if (argc > 1 && std::strcmp(argv[1], "--in-record") == 0) return inRecordChild();
+
+    // =====================================================================
+    // CASE 2b — AN OOM INSIDE THE RECORDING ENDS THE PROCESS CLEANLY (child)
+    // =====================================================================
+    {
+        const std::string cmd = std::string("'") + argv[0] + "' --in-record 2>&1";
+        FILE *pipe = ::popen(cmd.c_str(), "r");
+        std::string out;
+        if (pipe) {
+            char buf[4096];
+            size_t n;
+            while ((n = std::fread(buf, 1, sizeof buf, pipe)) > 0) out.append(buf, n);
+        }
+        const int status = pipe ? ::pclose(pipe) : -1;
+        const bool exited = status != -1 && WIFEXITED(status);
+        const int code = exited ? WEXITSTATUS(status) : -1;
+        std::printf("child: exited=%d code=%d signalled=%d\n", int(exited), code,
+                    int(status != -1 && WIFSIGNALED(status)));
+        const size_t at = out.find("CHILD lastError=");
+        std::printf("%s\n", at == std::string::npos ? "(no CHILD lastError line)"
+                                                     : out.substr(at, out.find('\n', at) - at).c_str());
+        if (!has(out, "VK_ERROR_") && has(out, "injected frame fault")) {
+            std::printf("SKIP: this engine has no Vulkan render system linked; nothing to prove\n");
+            return 77;
+        }
+        CHECK(exited && code == 1,
+              "AN OOM INSIDE THE RECORDING ENDS THE PROCESS WITH EXIT 1 (not a signal, not a crash)");
+        CHECK(has(out, "CHILD gpuFault=2 deviceLost=0"),
+              "...latched as GpuFault::OutOfMemoryInFrame, and NOT as a device loss");
+        CHECK(has(out, "CHILD lastError=GPU out of memory (VK_ERROR_OUT_OF_DEVICE_MEMORY; the device is NOT lost - ") &&
+              has(out, "67108864-byte pool"),
+              "...with the honest text first, naming the pool");
+        CHECK(has(out, "CHILD survived-next-frame=1"),
+              "...and a frame asked for after the latch returns without touching Ogre");
+    }
+
     std::string err;
     EngineConfig cfg;
     cfg.pluginDir = JAHSHAKA_TEST_PLUGIN_DIR;
