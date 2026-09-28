@@ -1,5 +1,5 @@
 // THE HDR AUTO-EXPOSURE MUST BE STABLE WHILE A LIGHT MOVES (lane HDR-1,
-// ogre-patch 0042) — the owner's "with HDR on, dragging the light makes the
+// fork feab041c6 (was 0042)) — the owner's "with HDR on, dragging the light makes the
 // materials flicker/shimmer, and it settles when I stop".
 //
 // WHAT WAS WRONG, and therefore what this suite is shaped to catch. The HDR
@@ -16,7 +16,7 @@
 //     neighbourhood comes back BELOW ZERO, whose log() is a NaN too.
 //
 // An unusable measurement was then read as "the darkest scene this chain admits"
-// (ogre-patch 0034), which is the LARGEST exposure it can produce — so every
+// (fork feab041c6 (was 0034)), which is the LARGEST exposure it can produce — so every
 // measurement failure yanked the grade towards its brightest limit, visibly, on
 // a fraction of the frames of every drag.
 //
@@ -182,7 +182,7 @@ int main()
     // (HdrUtils::setExposure: exposure.x = 1024 * e^(exposure-2),
     // exposure.y = 7.5 - exposureMax). An adapted luminance sitting on THIS
     // number is not a measurement of anything - it is the chain saying "I could
-    // not measure this frame", and before ogre-patch 0042 that is what a single
+    // not measure this frame", and before fork feab041c6 (was 0042) that is what a single
     // unusable sample made it say about every frame.
     // THE ADAPTATION WINDOW IS WIDE ON PURPOSE. At the shipped default
     // (+/-2.5) this fixture's geometric-mean luminance sits ON the floor, so the
@@ -288,7 +288,7 @@ int main()
             // THE ASSERTION THIS SUITE EXISTS FOR. A few pixels of unusable
             // radiance - a specular lobe past what RGBA16F can say, or a sum of
             // shading terms that came out below zero - must not decide the
-            // exposure of the whole picture. Before ogre-patch 0042 the meter's
+            // exposure of the whole picture. Before fork feab041c6 (was 0042) the meter's
             // mean carried the NaN to every one of its 4096 texels and the chain
             // fell back to "the darkest scene I admit", which is its BRIGHTEST
             // exposure: measured on this fixture, 30.25 against a real

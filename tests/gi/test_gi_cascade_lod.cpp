@@ -1,6 +1,6 @@
 // gi.cascade_lod — ATOM STAGE 1'S CONSUMER: A CASCADE VOXELISES THE BAKED LEVEL
 // THAT FITS ITS OWN CELL (SPECS/NANITE_SPEC.md §7 stage 1's hand-off row,
-// SPECS/PHOTON_SPEC.md §7 E2; ogre-patch 0064).
+// SPECS/PHOTON_SPEC.md §7 E2; fork ad452604a+0338ca7f2 (was 0064)).
 //
 // THE CLAIM UNDER TEST, in one sentence: the coarse cascades of Photon's chain
 // hand the voxeliser a SIMPLIFIED mesh — the coarsest baked level whose error is

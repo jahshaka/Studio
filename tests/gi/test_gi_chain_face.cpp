@@ -264,7 +264,7 @@ int main(int argc, char **argv)
     // What the chain is allowed to do. Its faces are E3's measurement, pinned loosely (they are a
     // known artefact with a number, not a target) so that a regression which
     // doubles them reds and an improvement never does.
-    // RE-ANCHORED BY SEAM-1 (2026-09-16, ogre-patch 0066: the cascade march
+    // RE-ANCHORED BY SEAM-1 (2026-09-16, fork 8f09c0cd4 (was 0066): the cascade march
     // carries the cone's escape opacity and its age across a hop). Before it the
     // chain's faces ran 0.591-1.328 and there was one at EVERY cascade — a
     // staircase, a factor 1.9 from the far world to the eye. After it they run
@@ -275,7 +275,7 @@ int main(int argc, char **argv)
     // 128^3 -> 64^3 cell-size jump in the tier's cascade table (0.821-0.839x),
     // which is a table question and not a march one. The bracket is tight around
     // those: a regression toward the old staircase reds.
-    // RE-ANCHORED 1.05 -> 1.08 BY PHOTON-M2 (patch 0077), measured 1.057 here.
+    // RE-ANCHORED 1.05 -> 1.08 BY PHOTON-M2 (fork 8f09c0cd4+155a56bf8 (was 0077)), measured 1.057 here.
     // The specular cone's ESCAPE ambient used to be multiplied by 0.31831 =
     // 1/pi on its way into envColourS -- upstream's eye-tuned cancellation of
     // the light injection's missing 1/pi, which 0077 fixes at the cause -- so

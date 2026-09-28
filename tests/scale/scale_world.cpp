@@ -247,7 +247,6 @@ bool boot(Env &env, const char *logFile, int w, int h)
     const bool window = qgetenv("JAH_SCALE_WINDOW") == "1";
     std::string err;
     EngineConfig cfg;
-    cfg.backend = Backend::Vulkan;
     cfg.pluginDir = JAHSHAKA_TEST_PLUGIN_DIR;
     cfg.hlmsMediaDir = JAHSHAKA_TEST_MEDIA_DIR;
     cfg.logFile = logFile;

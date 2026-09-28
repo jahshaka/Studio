@@ -228,13 +228,9 @@ int main(int argc, char *argv[])
     // THE --no-ray-query OVERRIDE (SPECS/PHOTON_SPEC.md §7 R1), before any
     // engine exists. It sets the ENGINE CONFIG for this run through a process
     // latch EngineHost::resolveConfig reads — not the persisted preference,
-    // which is the user's and which a test run must not rewrite. It also sets
-    // the environment variable, because ogre-patch 0038 honours the switch at
-    // vkCreateDevice and the pin cannot see our config.
-    if (cli.noRayQuery) {
-        setCliNoRayQuery(true);
-        qputenv("JAHSHAKA_NO_RAY_QUERY", "1");
-    }
+    // which is the user's and which a test run must not rewrite (the engine
+    // carries the config to the device itself).
+    if (cli.noRayQuery) setCliNoRayQuery(true);
     // THE --vr LATCH (SPECS/VR_SPEC.md §4.1), the same shape and the same
     // reason: EngineConfig::vr is decided before any engine exists, because on
     // the OpenXR route the runtime creates the Vulkan instance and device the

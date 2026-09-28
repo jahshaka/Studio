@@ -1,4 +1,4 @@
-// THE BLOOM COMPOSITE TAKES AN AMOUNT (lane BLOOM-AMOUNT-1, ogre-patch 0082).
+// THE BLOOM COMPOSITE TAKES AN AMOUNT (lane BLOOM-AMOUNT-1, fork feab041c6 (was 0082)).
 //
 // THE OWNER'S REQUEST (review 2026-09-18, R17): "bloom also needs a value
 // setting next to its check box so we can change the amount of bloom from 0 to

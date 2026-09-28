@@ -147,7 +147,7 @@ assert(dumpKs.indexOf("\"specular\"") >= 0,
 // shading model the workflow selects.
 // FIVE PROBES, NOT ONE (PHOTON-M2). The centre pixel alone was a coincidence
 // waiting to happen and it happened: with the voxel injection storing radiance
-// instead of pi times it (ogre-patch 0077) the two workflows agree at the ball's
+// instead of pi times it (fork 8f09c0cd4+155a56bf8 (was 0077)) the two workflows agree at the ball's
 // CENTRE to the bit — rgb(13,13,15) both — while the two IMAGES differ on 46.7 %
 // of their pixels by up to 169/255 (measured on this very fixture's two shots).
 // A full metal has no diffuse at all and a dielectric does, so where they differ

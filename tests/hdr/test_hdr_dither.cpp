@@ -1,4 +1,4 @@
-// THE GRADE'S 8-BIT WRITE IS DITHERED (lane DITHER-1, ogre-patch 0079).
+// THE GRADE'S 8-BIT WRITE IS DITHERED (lane DITHER-1, fork feab041c6 (was 0079)).
 //
 // THE DEFECT. The renderer computes in RGBA16F and every target a person's eye
 // ever sees is 8-bit UNORM — the window, the offscreen render target, the VR

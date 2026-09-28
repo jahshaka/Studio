@@ -3,7 +3,7 @@
 # Engine-level, no Qt, no app: it drives Engine::create/saveShaderCache/
 # shaderCacheStats directly and mangles the files on disk between cycles. The
 # whole test is sequential Engine create/destroy in one process, which only
-# works because of ogre-patch 0002 (see test_engine_recreate).
+# works because of fork d014b064f (was 0002) (see test_engine_recreate).
 #
 # TIMEOUT is 6x the measured run with a 60 s floor, like every other row since
 # TEST_GATE_AUDIT.md §3: the corruption cases restore a byte snapshot of the
@@ -91,7 +91,7 @@ jah_gpu_row(shadercache.warmup CLASS engine COMMAND test_warm_up
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(shadercache.warmup PROPERTIES TIMEOUT 120 LABELS "shadercache")
 
-# THE SAME SUITE, THE OTHER ROUTE (SHADER_CACHE_AUDIT F2). ogre-patch 0016 makes
+# THE SAME SUITE, THE OTHER ROUTE (SHADER_CACHE_AUDIT F2). fork 8282f6d70 (was 0016) makes
 # Ogre's CompositorPassWarmUp usable at all — without it the very first
 # View::warmUpShaders() SEGVs in ForwardPlusBase::getGridBuffer, which is the
 # crash this patch exists to remove and which this run is the proof of. The

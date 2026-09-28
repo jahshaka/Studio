@@ -230,7 +230,7 @@ int main()
         enginetest::leakroom::Room room = enginetest::leakroom::build(s, view, T, shifts[a]);
 
         // THE ACCOUNTING RULE. A pixel gets exactly ONE diffuse-GI term, and
-        // since ogre-patch 0086 that is true of the FIELD too: the listener
+        // since fork b6c409c1f (was 0086) that is true of the FIELD too: the listener
         // compiles the cone diffuse out under the gather's pass property
         // (`vct_disable_diffuse`) and the patch's cage gate stands the field's
         // eight-probe cage down on every pixel a probe answered for. The three

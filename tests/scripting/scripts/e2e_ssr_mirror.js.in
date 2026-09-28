@@ -137,7 +137,7 @@ for (var j = 0; j < fOn.length; ++j)
 console.log("   the rest of the frame: worst SSR delta " + fWorst);
 // RE-ANCHORED BY LANE SSR-3, with the verdict: this bar was 10 and the band
 // measured 20. The march used to decode the G-buffer's GGX alpha with the
-// pre-ogre-patch-0043 range and never square-root it, so its cutoff of 0.35
+// pre-fork 16d8e29d4 (was 0043) range and never square-root it, so its cutoff of 0.35
 // was a band on PERCEPTUAL roughness 0.581; it is now the World row's 0.40, in
 // the perceptual number the row is stated in. This sample's GreenTeapot is
 // authored at exactly 0.40 — comfortably inside the old band, exactly ON the

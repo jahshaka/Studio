@@ -24,7 +24,7 @@
 // WHY A SUITE OF ITS OWN, AND WHY THE DEFAULT SCENE'S SELF-TEST CANNOT BE IT.
 // `--engine-selftest` runs under the validation layer already
 // (app.engine_selftest_validation) and it does NOT see this: its default scene
-// is the matte ground and the sky, and patch 0028's probe gate means a material
+// is the matte ground and the sky, and fork 36162ff37+16d8e29d4 (was 0028)'s probe gate means a material
 // that cannot reflect never gets the env-probe permutation — no sampler, no
 // error. The shape that bites needs a REFLECTIVE material in a scene with a
 // sky, which is what this builds.
@@ -88,7 +88,7 @@ int main()
 
     // A MIRROR CUBE, filling the centre of the frame: metal 1 at roughness 0.02
     // is the material that samples `texEnvProbeMap` at mip 0 — the permutation
-    // patch 0028's probe gate lets through, and the one the matte default
+    // fork 36162ff37+16d8e29d4 (was 0028)'s probe gate lets through, and the one the matte default
     // ground never reaches.
     const NodeId cube = enginetest::addTestCube(s, Colour(1.0f, 1.0f, 1.0f), 1.0f, 0.02f);
     if (!cube) { std::printf("FAIL: the mirror cube\n"); return 1; }

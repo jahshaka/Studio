@@ -124,7 +124,7 @@ set_tests_properties(perf.drag_mirror_room PROPERTIES
 # horizon's release, the ray-traced instance list. Two real defects came out of
 # exactly this gesture — a hide counted as a DEATH (invalidateGiCaches bumping
 # the destruction generation, DRAG-1 item 5) and the owner's hide sequence
-# losing the device through a transient 3D storage image (XID-2, patch 0071) —
+# losing the device through a transient 3D storage image (XID-2, fork ad452604a+0338ca7f2+c4c80b5f7 (was 0071)) —
 # and nothing repeated it enough times to catch either.
 #
 # It asserts NO ABSOLUTE NUMBER: the cycles' own counters against each other

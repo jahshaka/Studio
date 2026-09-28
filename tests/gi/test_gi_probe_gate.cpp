@@ -1,9 +1,9 @@
 // gi.probe_gate — REFLECTION PROBES ONLY REACH MATERIALS THAT CAN REFLECT THEM
-// (owner decision 2026-09-13 Q1, SPECS/REFLECTION_PROBE_AUDIT.md; ogre-patch
-// 0028).
+// (owner decision 2026-09-13 Q1, SPECS/REFLECTION_PROBE_AUDIT.md; fork 36162ff37+16d8e29d4
+// (was 0028)).
 //
 // Owner: "[reflection probes] should only affect reflective objects in a
-// scene." Before patch 0028 there was NO material-side gate anywhere in the
+// scene." Before fork 36162ff37+16d8e29d4 (was 0028) there was NO material-side gate anywhere in the
 // chain: `use_envprobe_map` was set for every datablock from a PASS property and
 // the per-pixel probe loop was inserted for every lit pixel of every object,
 // however matte. The gate is the material's own reflectance — specular colour
@@ -303,7 +303,7 @@ int main()
     // while the SHADER stayed gated, and the floor went on reflecting nothing
     // until some unrelated edit happened to flush it.
     //
-    // Patch 0028 mirrors upstream's own `setClearCoat` idiom: evaluate
+    // fork 36162ff37+16d8e29d4 (was 0028) mirrors upstream's own `setClearCoat` idiom: evaluate
     // `hasZeroSpecularResponse()` before and after, flush only when it CROSSES.
     // Measured without that fix, on this exact case: the plate stayed black
     // (r-g +0.0000) after the edit.
@@ -399,7 +399,7 @@ int main()
     }
 
     // ---- (g) CLEAR COAT IS INSIDE THE GATE, AND THE A/B THAT PROVES IT -----
-    // Patch 0028 originally EXCLUDED clear-coated materials, on the stated
+    // fork 36162ff37+16d8e29d4 (was 0028) originally EXCLUDED clear-coated materials, on the stated
     // grounds that "clearCoatEnvColourS is not multiplied by kS". It is
     // (200.BRDFs_piece_ps.any:334, this pin):
     //     Rs += pixelData.clearCoatEnvColourS * pixelData.specular.xyz *
@@ -563,7 +563,7 @@ int main()
               "(h) ...and it renders like a material the gate cannot touch (the residual is\n"
               "          the F0 push's own, not a missing environment term)");
         // AND IT IS NOT BLACK. Said separately from the A/B above because this
-        // is the permutation that did not COMPILE until ogre-patch 0031 (see
+        // is the permutation that did not COMPILE until fork 4d5fbef16 (was 0031) (see
         // (i)): a diffuse decal on a material in the NON-separate Fresnel
         // workflow — which is exactly what the F0 push three lines up makes
         // this panel.
@@ -616,7 +616,7 @@ int main()
         std::printf("   shader compile errors in the Ogre log: %d\n", compileErrors);
         CHECK(compileErrors == 0,
               "(i) EVERY shader permutation this scene generates COMPILES "
-              "(ogre-patch 0031 — eight failed here before it)");
+              "(fork 4d5fbef16 (was 0031) — eight failed here before it)");
     }
 
     std::printf(failures ? "\nFAILURES: %d\n" : "\nall ok\n", failures);

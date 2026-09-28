@@ -2355,8 +2355,8 @@ void MainWindow::startOpenRun(bool playMode)
 	// and paying those compiles either way — and the warm open pays nothing.
 	//
 	// Note what this route is NOT: Ogre's CompositorPassWarmUp, which renders a
-	// 4x4 target and reaches permutations the camera cannot see. ogre-patch
-	// 0016 makes that route run at all, but a second upstream read-after-destroy
+	// 4x4 target and reaches permutations the camera cannot see. fork 8282f6d70
+	// (was 0016) makes that route run at all, but a second upstream read-after-destroy
 	// kills the app on the second world of a session, so it ships behind
 	// JAHSHAKA_WARMUP_PASS=1 (the crash is documented in OgreChain.cpp).
 	// The switch stays in Preferences -> Cache for anyone who wants it off.

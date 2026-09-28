@@ -110,7 +110,7 @@ set_tests_properties(threading.mode_pixels PROPERTIES
 # `world.refreshGi()` issued EXACTLY ONE rendered frame after the compile burst.
 # The script's header explains the defect and what "wrong" looks like.
 #
-# WHAT IT CAUGHT, AND WHAT FIXED IT (Ogre patch 0041). The defect was NOT in the
+# WHAT IT CAUGHT, AND WHAT FIXED IT (Ogre fork 1bccc3f93+a98e2b0af (was 0041)). The defect was NOT in the
 # irradiance field where the search started: VctVoxelizer's VCT/AabbCalculator compute
 # dispatch was handed a foreign uniform texel buffer for `inMeshBuffer` — Vulkan core
 # validation, "requires UINT component type, but bound descriptor format is
@@ -119,7 +119,7 @@ set_tests_properties(threading.mode_pixels PROPERTIES
 # table had been handed the ADDRESS of the irradiance field's destroyed
 # integration-taps buffer. Every mesh AABB then came back as the sentinel and the
 # voxelization wrote ZERO voxels: centre pixel 54,36,1 parallel against 46,32,1
-# serial. Patch 0041 gives BufferPacked a creation serial that the descriptor slots
+# serial. fork 1bccc3f93+a98e2b0af (was 0041) gives BufferPacked a creation serial that the descriptor slots
 # carry and compare, so a recycled address can never be mistaken for the dead buffer.
 # Both halves now read 54,36,1 and the PNGs are byte-identical.
 configure_file(gi_resolve.js.in ${CMAKE_CURRENT_BINARY_DIR}/gi_resolve.js @ONLY)

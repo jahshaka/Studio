@@ -155,7 +155,7 @@ jah_pool_arm(world_sky default_ground ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_de
 # the split's measuring door — the editor's shot agrees with the split on and off.
 jah_pool_arm(atom atom_draw ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_atom_draw.js 4)
 # CUBE-SHADE-1: the two things the owner saw on a cube (review R8) — a flat
-# face shaded as two triangles (ogre-patch 0083, the diffuse cone basis) and the
+# face shaded as two triangles (fork 8f09c0cd4 (was 0083), the diffuse cone basis) and the
 # dark climb up its sides (the AO radius, now a contact scale). Needs a camera
 # and the whole post chain, so it is an engine-up e2e and not a headless one.
 # a one-script row's old 180 s was not enough for it: four 2 m cubes at Epic mean
@@ -299,7 +299,7 @@ jah_pool_arm(gi_movers dirty_mirror ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_dirt
 jah_pool_arm(gi_movers movable_lamp_rest ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_movable_lamp_rest.js 13)
 
 # THE LAMP-MAP CACHE UNDER REFLECTION PROBES, ON A COLD SHADER CACHE
-# (ENGINE_CACHE_POLICY_SPEC P2/P4, ogre-patch 0025). The home is WIPED before
+# (ENGINE_CACHE_POLICY_SPEC P2/P4, fork 6130df9d1 (was 0025)). The home is WIPED before
 # the run — that is the point of the case: the defect it guards only shows while
 # shaders are being generated and compiled for the first time, and it took the
 # process down through the shader-cache save when it did. The script asserts the
@@ -358,7 +358,7 @@ jah_pool_arm(gi_verbs gi_ddgi ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_gi_ddgi.js
 # readings and only the renderer knows the second. The pixel half is the
 # gi.gather engine suite.
 jah_pool_arm(gi_verbs gather_row ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_gather_row.js 1)
-# PHOTON-M3 (ogre-patch 0080): the voxel TOTAL volume is a float that holds the
+# PHOTON-M3 (fork ae2ed529f+155a56bf8 (was 0080)): the voxel TOTAL volume is a float that holds the
 # bounce's fixed point — the direct term bounded by the ceiling, the bounced
 # total above it in a real set of voxels. Read through world.giVoxelStats: a
 # clipped voxel draws a merely dimmer picture, so only the volume can say it.

@@ -87,7 +87,7 @@ assert(world.get().antiAliasing === 2 && fresh.msaa.source === "mode",
 assert(fresh.smaa.valueId === "ultra", "Epic anti-aliases with SMAA Ultra: " + fresh.smaa.valueId);
 // EPIC = the VCT+PCC hybrid since REFLECTIONS_ADOPTION_SPEC P6 (2026-09-07).
 // It was plain "vct" until P1+P2 fixed probe placement, the helper channel and
-// the per-drag-frame re-solve, and ogre-patch 0017 removed the overlapping-
+// the per-drag-frame re-solve, and fork 4d5fbef16 (was 0017) removed the overlapping-
 // probe division that made every probe reflection up to 8x too dark.
 assert(fresh.giMode.valueId === "vct_pcc_hybrid",
        "Epic turns the VCT+PCC hybrid on: " + fresh.giMode.valueId);

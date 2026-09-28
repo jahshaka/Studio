@@ -7,7 +7,7 @@
 //      resulting VkInstance handed to Ogre as a VulkanExternalInstance at
 //      Root::loadPlugin (the RS reads `external_instance` in its CONSTRUCTOR).
 //   3. xrCreateVulkanDeviceKHR wrapping the VkDeviceCreateInfo that
-//      VulkanDevice::buildDeviceCreationRequest() — ogre-patch 0068 — builds:
+//      VulkanDevice::buildDeviceCreationRequest() — fork d014b064f+1bccc3f93 (was 0068) — builds:
 //      the exact extension list and the exact VkPhysicalDeviceFeatures2 chain
 //      createDevice() would have used. The device is handed to Ogre as a
 //      VulkanExternalDevice on the FIRST createRenderWindow, together with the
@@ -22,7 +22,7 @@
 // It also runs in two control modes so the claims are measurable, not asserted:
 //   --plain    boot Ogre the ORDINARY way (Ogre creates instance + device) and
 //              render the fixed parity pose. Compare the PNG's sha256 with the
-//              XR run's: equal = patch 0068 handed Ogre the same device.
+//              XR run's: equal = fork d014b064f+1bccc3f93 (was 0068) handed Ogre the same device.
 //   --probe    the runtime's identity/extensions only; no GPU, no Vulkan.
 //
 // Everything is deliberately linear and free of abstraction: this file is an
@@ -390,7 +390,7 @@ static void renderParityPose(Ogre::Root *root, SpikeScene &sc, const std::string
     writePpm(path, px, rw, rh);
 
     // "Something was drawn" = more than the clear colour is present. On the external
-    // route this is the whole of patch 0068 hunk 1: at the unpatched pin every frame is
+    // route this is the whole of fork d014b064f+1bccc3f93 (was 0068) hunk 1: at the unpatched pin every frame is
     // vetoed and this picture stays the clear colour for ever.
     size_t distinct = 0;
     const unsigned char c0 = px[0], c1 = px[1], c2 = px[2];
@@ -599,7 +599,7 @@ static bool copyEyeToSwapchain(Ogre::VulkanRenderSystem *vkRs, Ogre::TextureGpu 
     }
     dev->mGraphicsQueue.endAllEncoders();
     // getCurrentCmdBuffer NEVER returns null: on a lost device its own checkVkResult
-    // throws (the accessor patch 0040 made linkable). There is nothing to test here.
+    // throws (the accessor fork 1a81f866a (was 0040) made linkable). There is nothing to test here.
     VkCommandBuffer cmd = dev->mGraphicsQueue.getCurrentCmdBuffer();
 
     VkImageMemoryBarrier b{};
@@ -655,7 +655,7 @@ static int runXr(const std::string &outDir, int wantFrames) {
     };
     say("VKREQ  min=%s max=%s", verStr(req.minApiVersionSupported).c_str(),
         verStr(req.maxApiVersionSupported).c_str());
-    const uint32_t wantApi = VK_API_VERSION_1_2;   // patch 0038's ray query needs 1.2
+    const uint32_t wantApi = VK_API_VERSION_1_2;   // fork d014b064f (was 0038)'s ray query needs 1.2
     const bool apiOk = XR_MAKE_VERSION(1, 2, 0) >= req.minApiVersionSupported &&
                        XR_MAKE_VERSION(1, 2, 0) <= req.maxApiVersionSupported;
     check(apiOk, "the runtime's requirements window admits Vulkan 1.2");
@@ -713,7 +713,7 @@ static int runXr(const std::string &outDir, int wantFrames) {
 
     // ---- 4. THE OGRE PLUGIN, on the runtime's instance ---------------------
     // loadPlugin BEFORE the device on purpose: the RS constructor is what runs
-    // VulkanInstance::enumerateExtensionsAndLayers(), and ogre-patch 0068's
+    // VulkanInstance::enumerateExtensionsAndLayers(), and fork d014b064f+1bccc3f93 (was 0068)'s
     // buildDeviceCreationRequest() reads that static list to decide whether
     // VK_KHR_get_physical_device_properties2 is usable.
     VulkanExternalInstance extInstance{};
@@ -739,7 +739,7 @@ static int runXr(const std::string &outDir, int wantFrames) {
     root->setRenderSystem(rsList[0]);
     root->initialise(false);
 
-    // ---- 5. THE DEVICE OGRE WOULD HAVE BUILT (ogre-patch 0068) -------------
+    // ---- 5. THE DEVICE OGRE WOULD HAVE BUILT (fork d014b064f+1bccc3f93 (was 0068)) -------------
     uint32_t numExt = 0;
     vkEnumerateDeviceExtensionProperties(physDev, nullptr, &numExt, nullptr);
     FastArray<VkExtensionProperties> availExt;
@@ -806,7 +806,7 @@ static int runXr(const std::string &outDir, int wantFrames) {
     extDevice.device = vkDevice;
     extDevice.graphicsQueue = gfxQueue;
     extDevice.presentQueue = gfxQueue;
-    extDevice.creationRequest = &request;   // ogre-patch 0068: the ENABLED set
+    extDevice.creationRequest = &request;   // fork d014b064f+1bccc3f93 (was 0068): the ENABLED set
     for (const char *e : request.extensions) {
         VkExtensionProperties p{};
         std::strncpy(p.extensionName, e, VK_MAX_EXTENSION_NAME_SIZE - 1);
@@ -845,7 +845,7 @@ static int runXr(const std::string &outDir, int wantFrames) {
     say("RTT    VkImage 0x%llx",
         (unsigned long long)static_cast<VulkanTextureGpu *>(sc.rtt)->getFinalTextureName());
 
-    // ---- 6b. THE BLACK-FRAME PROOF (patch 0068 hunk 1) ---------------------
+    // ---- 6b. THE BLACK-FRAME PROOF (fork d014b064f+1bccc3f93 (was 0068) hunk 1) ---------------------
     // Before anything XR-shaped: does a frame render at all on an external device?
     // Rendered at the FIXED parity size, never the runtime's eye size, so the picture
     // is comparable with the --plain arm's on any runtime and any compositor.
