@@ -174,7 +174,7 @@ int main(int argc, char **argv)
     GiParams gi;
     gi.mode = GiMode::Off;
     gi.quality = GiQuality::High;
-    gi.cards = GiToggle::On;
+    gi.cards = true;
     gi.cardResidencyRadius = 40.0f;
     s->setGlobalIllumination(gi);
     PostFxDesc fx;
@@ -577,7 +577,7 @@ static int costMain(Engine *e)
     GiParams gi;
     gi.mode = GiMode::Vct;
     gi.quality = GiQuality::High;
-    gi.cards = GiToggle::On;
+    gi.cards = true;
     gi.testBoundsMin = Vec3(-26.0f, -2.0f, -26.0f);
     gi.testBoundsMax = Vec3(26.0f, 14.0f, 26.0f);
     s->setGlobalIllumination(gi);

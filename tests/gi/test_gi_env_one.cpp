@@ -211,7 +211,7 @@ int main()
     base.cascades = false;
     base.ddgi = GiToggle::Off;
     base.gather = GiToggle::Off;
-    base.cards = GiToggle::Off;
+    base.cards = false;
     base.testBoundsMin = Vec3(-4.0f, -2.0f, -4.0f);
     base.testBoundsMax = Vec3(4.0f, 4.0f, 4.0f);
 

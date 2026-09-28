@@ -185,7 +185,7 @@ static int showroomArm(bool lampShadows, bool sunShadow)
     GiParams gi;
     gi.mode = GiMode::Vct;
     gi.quality = GiQuality::High;     // the High tier's own card budget
-    gi.cards = GiToggle::On;
+    gi.cards = true;
     gi.testBoundsMin = Vec3(-26.0f, -2.0f, -26.0f);
     gi.testBoundsMax = Vec3(26.0f, 14.0f, 26.0f);
     s->setGlobalIllumination(gi);
@@ -318,7 +318,7 @@ int main(int argc, char **argv)
     GiParams gi;
     gi.mode = GiMode::Vct;
     gi.quality = GiQuality::High;
-    gi.cards = GiToggle::On;
+    gi.cards = true;
     gi.testBoundsMin = Vec3(-32.0f, -2.0f, -32.0f);
     gi.testBoundsMax = Vec3(32.0f, 16.0f, 32.0f);
     s->setGlobalIllumination(gi);

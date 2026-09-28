@@ -151,7 +151,7 @@ static GiParams baseGi()
     gi.numBounces = 1;
     gi.testBoundsMin = Vec3(-16.0f, -2.0f, -16.0f);
     gi.testBoundsMax = Vec3(16.0f, 12.0f, 16.0f);
-    gi.cards = GiToggle::On;
+    gi.cards = true;
     return gi;
 }
 
@@ -498,7 +498,7 @@ static int caseCapture()
               st.cards.instancesResident);
 
     // ---- THE ROW OFF FREES EVERYTHING ------------------------------------
-    gi.cards = GiToggle::Off;
+    gi.cards = false;
     CHECK(s->setGlobalIllumination(gi), "the card row goes off");
     render(f.e, 4);
     st = s->giStatus();
@@ -2045,7 +2045,7 @@ static int caseReadParity()
     // comes back, and not one GI rebuild is paid for it.
     const unsigned long long rebuildsBefore = s->giStatus().rebuilds;
     GiParams off = gi;
-    off.cards = GiToggle::Off;
+    off.cards = false;
     CHECK(s->setGiTuning(off), "cards off through setGiTuning");
     render(e, 3);
     const bool freed = !s->giStatus().cards.built;

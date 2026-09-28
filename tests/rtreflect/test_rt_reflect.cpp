@@ -1583,7 +1583,7 @@ static int hitresMain(Engine *e)
     gi.numBounces = 1;
     gi.testBoundsMin = Vec3(-8.0f, -3.0f, -8.0f);
     gi.testBoundsMax = Vec3(8.0f, 6.0f, 8.0f);
-    gi.cards = GiToggle::On;
+    gi.cards = true;
     gi.cardResidencyRadius = 40.0f;
     CHECK(s->setGlobalIllumination(gi), "the voxel arm and the surface cache build");
 
@@ -1724,7 +1724,7 @@ static int hitresMain(Engine *e)
     // THE SAME ROW FROM THE VOXELS — the cache off through the tuning door —
     // printed, for the record: this is the banding the card read replaces.
     GiParams off = gi;
-    off.cards = GiToggle::Off;
+    off.cards = false;
     s->setGiTuning(off);
     render(e, 30);
     const Profile voxels = measureRow("hits read the voxels");
@@ -1881,7 +1881,7 @@ static int footprintSweepMain(Engine *e)
     gi.numBounces = 1;
     gi.testBoundsMin = Vec3(-14.0f, -2.0f, -14.0f);
     gi.testBoundsMax = Vec3(14.0f, 10.0f, 7.0f);
-    gi.cards = GiToggle::On;
+    gi.cards = true;
     gi.cardResidencyRadius = 40.0f;
     s->setGlobalIllumination(gi);
     PostFxDesc fx;

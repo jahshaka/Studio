@@ -307,7 +307,7 @@ QVector<VerbInfo> WorldApi::verbs() const
           "(gi.drag_mover renders it under both rules and compares the bytes); what changes is the "
           "picture DURING the drag, which is why this is a choice and not a fix. Cascades only: the "
           "single-volume arm re-voxelises nothing during a drag anyway. What it is DOING is "
-          "THE SURFACE CACHE (SURFACE-CACHE phase 2). 'cards' is off|auto|on and AUTO (the default; the World Mode table's High and Epic columns, Off at Low and Medium) means ON EXACTLY WHERE THE REFLECTION TRACE RUNS (and 'on' too: the cards exist only where rays run, their sun term being traced): a reflection ray's hit reads the hit surface's CARD first — its lit radiance at the card's texel, while the ray's footprint there is at most four card texels — and the voxels where no card answers, so a machine without rays captures nothing. Cards are the axis-aligned orthographic photographs of an object's own surface that the mesh bake authors. With it on, every still, GI-lit object inside 'cardRadius' metres of the camera holds pages in a 2048-square five-layer atlas (albedo, normal, depth, emissive, shadow+roughness — 16 bytes a texel), captured through a prepass in THIS scene, with the sun's visibility TRACED one ray per card texel against the still world's shadow casters, so a card's shadow term is occlusion by OTHER objects and not a constant. 'cardBudget' is how many TEXELS one frame may capture (0 = the quality tier's own): the queue drains oldest-first in Lumen's own priority (last used minus last updated) and a frame never spends more than it was given, so a scene that arrives all at once fills in over frames instead of hitching. An object that MOVES re-allocates its own cards and nobody else's; a material edit re-captures without freeing a page; a light change re-captures nothing (the sun's move re-traces the cards' sun term, any light relights them); a MOVING object holds no cards at all, for the same reason it holds no voxels and no probe capture. world.giStatus().cards reports every one of those as a counter. "
+          "THE SURFACE CACHE (SURFACE-CACHE phase 2). 'cards' is off|auto and AUTO (the default; the World Mode table's High and Epic columns, Off at Low and Medium) means ON EXACTLY WHERE THE RAYS RUN (the cards' sun term is traced; there is no 'on'): a reflection ray's hit reads the hit surface's CARD first — its lit radiance at the card's texel, while the ray's footprint there is at most four card texels — and the voxels where no card answers, so a machine without rays captures nothing. Cards are the axis-aligned orthographic photographs of an object's own surface that the mesh bake authors. With it on, every still, GI-lit object inside 'cardRadius' metres of the camera holds pages in a 2048-square five-layer atlas (albedo, normal, depth, emissive, shadow+roughness — 16 bytes a texel), captured through a prepass in THIS scene, with the sun's visibility TRACED one ray per card texel against the still world's shadow casters, so a card's shadow term is occlusion by OTHER objects and not a constant. 'cardBudget' is how many TEXELS one frame may capture (0 = the quality tier's own): the queue drains oldest-first in Lumen's own priority (last used minus last updated) and a frame never spends more than it was given, so a scene that arrives all at once fills in over frames instead of hitching. An object that MOVES re-allocates its own cards and nobody else's; a material edit re-captures without freeing a page; a light change re-captures nothing (the sun's move re-traces the cards' sun term, any light relights them); a MOVING object holds no cards at all, for the same reason it holds no voxels and no probe capture. world.giStatus().cards reports every one of those as a counter. "
           "world.giStatus()'s 'dragMovers' (how many objects ride the channel right now, normally 1 "
           "during a drag and 0 at rest) and 'dragMoverGestures' (how many such gestures have ended — "
           "one per drag, never one per frame). "
@@ -847,18 +847,18 @@ bool WorldApi::gi(const QVariantMap &params)
                 "world.gi: cascadeInstanceCap must be 0 or more (0 = no budget)"));
         scene->giCascadeInstanceCap = v;
     }
-    // THE SURFACE CACHE's three rows (SURFACE-CACHE phase 2). `cards` takes
-    // the same off|auto|on word the other three-state GI rows take.
+    // THE SURFACE CACHE's three rows (SURFACE-CACHE phase 2). `cards` is 'off' or
+    // 'auto' — there is no 'on' (ATOM-S3-CARDCAP: it could only equal auto).
     if (params.contains(QStringLiteral("cards"))) {
         const QString v = params.value(QStringLiteral("cards")).toString().trimmed().toLower();
         if (v == QStringLiteral("off")) scene->giCards = 0;
         else if (v == QStringLiteral("auto")) scene->giCards = -1;
-        else if (v == QStringLiteral("on")) scene->giCards = 1;
         else
             return fail(QStringLiteral(
-                "world.gi: cards is 'off', 'auto' or 'on' — whether the renderer captures "
-                "SURFACE CARDS for the objects around the camera. Auto is on exactly where the "
-                "reflection trace runs (a ray's hit reads the card first) and off elsewhere."));
+                "world.gi: cards is 'off' or 'auto' — whether the renderer captures SURFACE CARDS "
+                "for the objects around the camera. Auto is on exactly where the rays run (a ray's "
+                "hit reads the card first, and a card's sun term is traced) and off elsewhere; "
+                "there is no 'on'."));
     }
     if (params.contains(QStringLiteral("cardBudget"))) {
         const int v = params.value(QStringLiteral("cardBudget")).toInt();
