@@ -25,17 +25,18 @@
 #include "bridge/previewmesh.h"
 #include <algorithm>
 #include <chrono>
+#include <cstring>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <memory>
 #include <string>
-#include <thread>
 #include <vector>
 
 #include "irisgl/core/color.h"
 #include "irisgl/core/math/quat.h"
 #include "irisgl/core/math/vec.h"
+#include "irisgl/document/assets/texture2d.h"
 #include "irisgl/document/materials/pbrmaterial.h"
 #include "irisgl/document/scenegraph/cameranode.h"
 #include "irisgl/document/scenegraph/lightnode.h"
@@ -576,6 +577,42 @@ int caseShape() {
     std::printf("   S3: the tile %.1f km; two adjacent 16 km windows correlate %.3f\n", tile / 1000.0f, ncc);
     CHECK(tile >= 60000.0f, "S3. the field's period is at least the distance the far sheet fades over (60 km)");
     CHECK(std::fabs(ncc) < 0.5, "S3. two 16 km windows of the field differ");
+
+    // ---- S4: THE WEATHER MAP HOLDS AT EVERY COVERAGE (the fix round's D1) ----
+    // A map black over its left half keeps that half clear even at coverage 1,
+    // where the overcast deck closes everything else: the deck reads the map too.
+    {
+        QImage map(256, 256, QImage::Format_RGBA8888);
+        for (int y = 0; y < 256; ++y)
+            for (int x = 0; x < 256; ++x)
+                map.setPixelColor(x, y, x < 128 ? QColor(0, 0, 0) : QColor(255, 255, 255));
+        const QString path = QStringLiteral("cloud_2d_halfmap.png");
+        CHECK(map.save(path), "S4. the half-black weather map is written");
+        r.clouds(true, 1.0f, 1.0f);
+        r.doc->clouds.weatherMapGuid = QStringLiteral("cloud-2d-halfmap");
+        r.doc->cloudWeatherMap = iris::Texture2D::load(path);
+        r.settle();
+        std::vector<float> t4;
+        unsigned n4 = 0;
+        float tile4 = 0.0f;
+        CHECK(r.escene->cloudField(t4, n4, tile4) && n4 > 0, "S4. the mapped deck's field reads back");
+        // Margins: the footprint's blur (0.6 km sigma, 3 sigma = 0.028 of the tile)
+        // and the map's own bilinear edge — the middle of each half is measured.
+        float blackMax = 0.0f, whiteMin = 1e30f;
+        for (unsigned y = 0; y < n4; ++y)
+            for (unsigned x = 0; x < n4; ++x) {
+                const float u = (float(x) + 0.5f) / float(n4);
+                const float t = t4[size_t(y) * n4 + x];
+                if (u > 0.06f && u < 0.44f) blackMax = std::max(blackMax, t);
+                if (u > 0.56f && u < 0.94f) whiteMin = std::min(whiteMin, t);
+            }
+        std::printf("   S4: coverage 1 under a half-black map: tau over the black half at most %.4f, over the "
+                    "white half at least %.3f\n", blackMax, whiteMin);
+        CHECK(blackMax == 0.0f, "S4. the map's black half is clear sky at coverage 1 (tau 0, the deck included)");
+        CHECK(whiteMin > 1.0f, "S4. ...and its white half is the overcast deck");
+        r.doc->clouds.weatherMapGuid.clear();
+        r.doc->cloudWeatherMap.reset();
+    }
     return 0;
 }
 /// NOT A ROW: `test_cloud_2d look <dir>` writes what the sheet looks like from the
