@@ -879,11 +879,14 @@ QVector<Row> buildRows()
             }
         }
         // -1 (auto) is what a scene no tier has ever been applied to holds, and
-        // the engine resolves it through the tier table (GiQualityFacts
-        // fieldDefault — the same projection as the column), so that is what it
-        // RESOLVES to here too. Any tier application writes a concrete 0/1 through.
+        // the engine resolves it through GiQualityFacts::fieldDefault of the
+        // scene's OWN giQuality — so that is what it resolves to here, through
+        // the same fact (photonFieldAuto; DDGI-AUTO-1: this read the TIER's
+        // column, a second resolution that parted from the engine's the moment a
+        // pinned giQuality met a per-quality default). Any tier application
+        // writes a concrete 0/1 through.
         r.get = [](const iris::ScenePtr &s) {
-            if (s->giDdgi < 0) return photonDdgi(photonTier(s));
+            if (s->giDdgi < 0) return photonFieldAuto(s) ? 1 : 0;
             return s->giDdgi > 0 ? 1 : 0;
         };
         r.set = [](const iris::ScenePtr &s, int v) { s->giDdgi = v ? 1 : 0; };
@@ -1516,6 +1519,12 @@ bool photonEnabled(const iris::ScenePtr &scene)
 int photonTechnique(PhotonTier t) { return kPhotonTable[tierIndex(t)].technique; }
 int photonQuality(PhotonTier t)   { return kPhotonTable[tierIndex(t)].quality; }
 int photonDdgi(PhotonTier t)      { return photonFieldColumn(kPhotonTable[tierIndex(t)]); }
+bool photonFieldAuto(const iris::ScenePtr &scene)
+{
+    if (!scene) return false;
+    return jahshaka::engine::giQualityFacts(
+               jahshaka::engine::GiQuality(qBound(0, int(scene->giQuality), 3))).fieldDefault;
+}
 int photonBounces(PhotonTier t)   { return kPhotonTable[tierIndex(t)].bounces; }
 int photonProbeSize(PhotonTier t) { return kPhotonTable[tierIndex(t)].probeSize; }
 

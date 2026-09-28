@@ -238,6 +238,30 @@ static void testTriState()
               qPrintable(QStringLiteral("applying %1 writes a concrete 0/1 through: the renderer "
                                         "never sees -1 from a tier").arg(worldmodes::photonTierName(t))));
     }
+    // ONE RESOLUTION (DDGI-AUTO-1): the row's Auto is the engine's — the
+    // fieldDefault of the quality the scene RUNS at, its giQuality pinned
+    // against every tier — never the tier column's. The mirror hands the engine
+    // -1 and OgreScene::ddgiWanted resolves it through giQualityFacts(quality);
+    // the row reads the same fact through worldmodes::photonFieldAuto. (Equal
+    // everywhere today — fieldDefault is ON at every quality — so this pins the
+    // PATH: a per-quality default could not part the two.)
+    {
+        const worldmodes::Row *r = worldmodes::row(QStringLiteral("giDdgi"));
+        int checked = 0, agree = 0;
+        for (PhotonTier t : kTiers)
+            for (int q = 0; q < 4; ++q) {
+                auto p = iris::Scene::create();
+                p->giTier = int(t);
+                p->giQuality = iris::GiQuality(q);
+                p->giDdgi = -1;
+                const int engine = giQualityFacts(GiQuality(q)).fieldDefault ? 1 : 0;
+                ++checked;
+                agree += (r && r->get(p) == engine && (worldmodes::photonFieldAuto(p) ? 1 : 0) == engine) ? 1 : 0;
+            }
+        CHECK(r && agree == checked,
+              qPrintable(QStringLiteral("a pinned giQuality against every tier: the field row's Auto IS the "
+                                        "engine's fieldDefault of that quality (%1 of %2)").arg(agree).arg(checked)));
+    }
     // A pre-tier document (the reader's derive path) resolves its -1 the same way.
     auto d = iris::Scene::create();
     d->giMode = iris::GiMode::VCT;
