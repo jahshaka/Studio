@@ -528,7 +528,7 @@ int main()
     }
 
     // =====================================================================
-    // CASE 9 — an alpha-test flip moves the traced set on a STILL scene
+    // CASE 9 — an alpha-test flip on a STILL scene keeps the item traced
     // =====================================================================
     std::printf("\n== case 9: an alpha-test flip ==\n");
     {
@@ -536,9 +536,11 @@ int main()
         const int before = scene->rayQueryStatus().instances;
         // The box's own material turns cut-out. Nothing moves, no render queue
         // changes, no node is touched — only the datablock's alpha test, in
-        // place. An alpha-tested item cannot be in the structure (every BLAS is
-        // opaque and there is no any-hit shader), so the set must shrink on the
-        // very next frame rather than whenever something unrelated moves.
+        // place. SINCE REFLECT-MOVERS-2 A CUT-OUT STAYS IN THE STRUCTURE: its
+        // instance turns FORCE_NO_OPAQUE and every ray query tests its candidates
+        // against its mask (jah_rq_alpha.glsl; gi.rt_alpha_tested holds the holes).
+        // With no albedo map the raster's test reads the background diffuse's
+        // alpha (opaque here): every texel is kept, so the ray still stops.
         PbrParams cut;
         cut.albedo = Colour(0.8f, 0.2f, 0.2f);
         cut.metalness = 0.0f;
@@ -549,20 +551,25 @@ int main()
         render(e, 2);
         const int after = scene->rayQueryStatus().instances;
         std::printf("   instances %d -> %d after the alpha-test flip\n", before, after);
-        CHECK(after == before - 1,
-              "a CUT-OUT item leaves the traced set on the next frame, with nothing moving");
+        CHECK(after == before, "a CUT-OUT item stays in the traced set (its candidates are tested, not dropped)");
+        {
+            std::vector<float> r, h;
+            pushRay(r, Vec3(10.0f, 1.0f, 0.0f), Vec3(-1.0f, 0.0f, 0.0f), 0.001f, 100.0f);
+            CHECK(scene->traceRays(r, h) && h.size() == 4u && hitAt(h, 0).hit &&
+                      std::fabs(hitAt(h, 0).distance - 9.0f) < 0.001f,
+                  "...and a ray at it stops at 9 m (no mask: the constant answer, solid)");
+        }
 
         PbrParams solid = cut;
         solid.alphaMode = PbrAlphaMode::Opaque;
         CHECK(scene->setPbrMaterial(boxMaterial, solid), "...and back to opaque");
         render(e, 2);
-        CHECK(scene->rayQueryStatus().instances == before,
-              "...which puts it back, again with nothing moving");
+        CHECK(scene->rayQueryStatus().instances == before, "...which keeps it, again with nothing moving");
         std::vector<float> r, h;
         pushRay(r, Vec3(10.0f, 1.0f, 0.0f), Vec3(-1.0f, 0.0f, 0.0f), 0.001f, 100.0f);
         CHECK(scene->traceRays(r, h) && h.size() == 4u && hitAt(h, 0).hit &&
                   std::fabs(hitAt(h, 0).distance - 9.0f) < 0.001f,
-              "...and the ray finds it again at 9 m");
+              "...and the ray finds it at 9 m");
     }
 
     // =====================================================================

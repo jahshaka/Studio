@@ -17,16 +17,16 @@
 // per-slot row, the near level (the scene's own ray-level array, not the table's
 // ids.w — the in-place patch's proof) and which slots are active at all. Over:
 //   (a) a mixed set — static casters, movers, non-casters, a hidden item and a
-//       cut-out (out of the traced set) and a blended material (traced: every BLAS
-//       is opaque and only an alpha test leaves the set), LOD chains whose near
+//       cut-out (traced since REFLECT-MOVERS-2, its instance FORCE_NO_OPAQUE) and a
+//       blended material (traced, opaque), LOD chains whose near
 //       level the ray rule moves with the camera and whose far copy is the coarsest,
 //       scaled instances (the far width grows with the scale), two rigged columns
 //       (their own skinned structures, posed);
 //   (b) the same set after removals (the swap-remove renumbers slots), additions,
 //       a mover moved, a cast-shadow and a visibility toggle, a mobility change;
-//   (c) an in-place edit that takes an item OUT of the traced set without anything
-//       moving (a material turned cut-out): the set follows in ONE frame (the old
-//       writer re-read the set only when the movement epoch moved);
+//   (c) an in-place edit that RE-FLAGS an instance without anything moving (a
+//       material turned cut-out: FORCE_NO_OPAQUE): the instances follow in ONE
+//       frame (the old writer re-read the set only when the movement epoch moved);
 //   (d) the lattice: 20 x 20 x 20 cubes, one material each, one of them moved.
 //
 // `--words-still` (atom.words_still): THE WORDS WALK IS CHANGE-DRIVEN. The split's
@@ -254,7 +254,11 @@ static void referenceInstances(OgreScene *os, const TlasReadback &rb, std::vecto
         RefInstance r{};
         std::memcpy(r.transform, world, sizeof(r.transform));
         r.indexMask = (slot & 0xFFFFFFu) | ((mask & 0xFFu) << 24u);
-        r.sbtFlags = 1u << 24u;   // VK_GEOMETRY_INSTANCE_TRIANGLE_FACING_CULL_DISABLE_BIT_KHR
+        // VK_GEOMETRY_INSTANCE_TRIANGLE_FACING_CULL_DISABLE_BIT_KHR, and for a cut-out
+        // VK_GEOMETRY_INSTANCE_FORCE_NO_OPAQUE_BIT_KHR (REFLECT-MOVERS-2)
+        uint32_t fl = 0u;
+        std::memcpy(&fl, &gs.entry(slot).boundsMax[3], sizeof(fl));
+        r.sbtFlags = (1u | ((fl & d::kGpuAlphaTested) ? 8u : 0u)) << 24u;
         r.reference = ref;
         out.push_back(r);
     };
@@ -464,12 +468,13 @@ static int tlasMain()
     render(e, 3);
     verify(s, "(b2) a rigged column removed");
 
-    // (c) AN IN-PLACE EDIT, NOTHING MOVES: the edit target turns cut-out and leaves the
-    // traced set in one frame, then comes back.
+    // (c) AN IN-PLACE EDIT, NOTHING MOVES: the edit target turns cut-out and its
+    // instance turns FORCE_NO_OPAQUE in one frame (the reference writes the flag from
+    // the mirror's word), staying in the traced set; then it comes back.
     const unsigned before = unsigned(s->rayQueryStatus().instances);
     s->setPbrMaterial(editable, cut);
     render(e, 1);
-    verify(s, "(c) an in-place cut-out edit", before - 1u);
+    verify(s, "(c) an in-place cut-out edit", before);
     s->setPbrMaterial(editable, p);
     render(e, 1);
     verify(s, "(c2) the edit back", before);
