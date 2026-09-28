@@ -270,6 +270,7 @@ static void referenceInstances(OgreScene *os, const TlasReadback &rb, std::vecto
         mask |= (flags & d::kGpuCaster) ? kRayMaskCaster : 0u;
         mask |= (flags & d::kGpuMover) ? kRayMaskMover : kRayMaskStill;
         if ((flags & d::kGpuMover) && (flags & d::kGpuCaster)) mask |= kRayMaskMoverCaster;
+        if (!(flags & d::kGpuMover) && (flags & d::kGpuCaster)) mask |= kRayMaskStillCaster;
         if (flags & d::kGpuSkinned) {
             const TlasReadback::Skin *sk = nullptr;
             for (const TlasReadback::Skin &k : rb.skins)

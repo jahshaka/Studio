@@ -448,7 +448,7 @@ static int cardsMain(Engine *e)
                      Vec3(0.0f, 0.5f * (kY0 + kH), 0.0f), Vec3(kHalfW * 2.0f, kH - kY0, 0.2f)),
           "the carded floor and panel exist");
     GiParams gi = chainGi();
-    gi.cards = GiToggle::On;
+    gi.cards = true;
     CHECK(s->setGlobalIllumination(gi), "the chain builds");
     GatherTuning t;
     t.readback = true;
@@ -461,7 +461,7 @@ static int cardsMain(Engine *e)
     std::vector<float> zs;
     for (float d = 0.05f; d <= 1.6f; d += 0.05f) zs.push_back(kFront + d);
     struct ArmResult { std::vector<double> r, g; unsigned cards = 0; bool ran = false; };
-    const auto readArm = [&](const char *what, GiToggle cards, unsigned probeStride, int liveFrames) {
+    const auto readArm = [&](const char *what, bool cards, unsigned probeStride, int liveFrames) {
         ArmResult a;
         GiParams g = gi;
         g.cards = cards;
@@ -521,10 +521,10 @@ static int cardsMain(Engine *e)
         std::printf("   %-44s ran %d, %u cards resident\n", what, int(a.ran), a.cards);
         return a;
     };
-    const ArmResult vox = readArm("the VOXEL arm (cache off)", GiToggle::Off, 0u, 1);
-    const ArmResult card = readArm("the CARD arm (cache on, ungated)", GiToggle::On, 0u, 1);
+    const ArmResult vox = readArm("the VOXEL arm (cache off)", false, 0u, 1);
+    const ArmResult card = readArm("the CARD arm (cache on, ungated)", true, 0u, 1);
     const unsigned kFineStride = 4u;
-    const ArmResult open = readArm("the ESTIMATOR arm (cards, 4 px, 64 live frames)", GiToggle::On,
+    const ArmResult open = readArm("the ESTIMATOR arm (cards, 4 px, 64 live frames)", true,
                                    kFineStride, 64);
     const float fineStride = float(kFineStride) * (2.0f * kOrthoHalf / float(kPlaneSize));
     unsetenv("JAHSHAKA_GATHER_NO_TEMPORAL");

@@ -1097,7 +1097,7 @@ static int shippedCostMain(Engine *e)
             gi.ddgi = GiToggle::Off;
             gi.numBounces = epic ? 3 : 1;
             gi.cascades = true;
-            gi.cards = cards ? GiToggle::On : GiToggle::Off;
+            gi.cards = cards != 0;
             gi.gather = GiToggle::On;
             s->setGlobalIllumination(gi);
             GatherTuning t;

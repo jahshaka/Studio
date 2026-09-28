@@ -229,7 +229,7 @@ static int mirrorArms(Engine *e)
     // THE CARDS ON, the whole suite: the floor is carded, and a hit on it is the
     // cards' to answer (with the movers' traced shadow, PHOTON-CARDS-4) — a hit
     // on a mover never is (movers carry no cards), and that one is the decode's.
-    gi.cards = GiToggle::On;
+    gi.cards = true;
     gi.cardResidencyRadius = 40.0f;
     gi.testBoundsMin = Vec3(-8.0f, -2.0f, -12.0f);
     gi.testBoundsMax = Vec3(8.0f, 8.0f, 6.0f);

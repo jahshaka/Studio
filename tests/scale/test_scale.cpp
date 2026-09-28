@@ -1257,7 +1257,7 @@ static int atlasMain()
     target("W9", double(c.pagesUsed), "pages", ("used of " + std::to_string(c.pages) + " (the fixed 2k atlas)").c_str());
     target("W9", double(c.lightsDropped), "lights", "dropped by the relight's 64-light sum (500 lamps in the world)");
     // ONE LAMP MOVE: the captures and relights it costs until the queues drain.
-    const unsigned long long cap0 = c.captures, inv0 = c.invalidLight, rel0 = c.relights;
+    const unsigned long long cap0 = c.captures, inv0 = c.invalidSun, rel0 = c.relights;
     iris::LightNodePtr lamp = w.lights[w.lights.size() / 2];
     lamp->setLocalPos(lamp->getLocalPos() + iris::Vec3(1.0f, 0, 0));
     int f = 0;
@@ -1267,10 +1267,10 @@ static int atlasMain()
         if (f > 10 && s.queueLength == 0 && s.capturesLastFrame == 0 && s.relitLastFrame == 0) break;
     }
     const CardCacheStatus c1 = env.scene->giStatus().cards;
-    std::printf("W9 one lamp moved 1 m: recaptures %llu, light invalidations %llu, relights %llu over %d frames\n",
-                (unsigned long long)(c1.captures - cap0), (unsigned long long)(c1.invalidLight - inv0),
+    std::printf("W9 one lamp moved 1 m: recaptures %llu, sun invalidations %llu, relights %llu over %d frames\n",
+                (unsigned long long)(c1.captures - cap0), (unsigned long long)(c1.invalidSun - inv0),
                 (unsigned long long)(c1.relights - rel0), f);
-    target("W9", double(c1.captures - cap0), "captures", "recaptures one lamp move costs (global invalidation)");
+    target("W9", double(c1.captures - cap0), "captures", "recaptures one lamp move costs (0: a capture holds no light quantity)");
     target("W9", double(c1.relights - rel0), "relights", "card relights one lamp move costs");
     shutdown(env);
     return failures ? 1 : 0;

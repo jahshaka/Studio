@@ -820,7 +820,9 @@ public:
             double   radius = 0.0;
             int      queue = 0, budgetTexels = 0, capturesLastFrame = 0, texelsLastFrame = 0;
             double   captures = 0.0;
-            double   invalidTransform = 0.0, invalidMaterial = 0.0, invalidLight = 0.0;
+            double   invalidTransform = 0.0, invalidMaterial = 0.0;
+            /// The still world's sun term (traced): sun changes, cards traced.
+            double   invalidSun = 0.0, stillTraces = 0.0;
             double   captureMs = 0.0;
             /// Phase 4's tables, as maintained (nothing binds them yet).
             int      cardRecords = 0, instanceSlots = 0;

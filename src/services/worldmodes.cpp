@@ -409,8 +409,7 @@ QVector<Row> buildRows()
         r.group = QStringLiteral("Reflections");
         r.type = RowType::Enum;
         r.options = { { QStringLiteral("off"),  QStringLiteral("Off"),  0 },
-                      { QStringLiteral("auto"), QStringLiteral("Auto"), -1 },
-                      { QStringLiteral("on"),   QStringLiteral("On"),   1 } };
+                      { QStringLiteral("auto"), QStringLiteral("Auto"), -1 } };
         r.tier[0] = 0; r.tier[1] = 0; r.tier[2] = -1; r.tier[3] = -1;
         r.cost = QStringLiteral("Photographs of the surfaces around the camera, lit, that a "
                                 "traced reflection reads at the point it hits — a mirror shows a "
