@@ -292,12 +292,24 @@ static void testProbeBudget()
     std::printf("\n-- 7. the probe grid's VRAM budget --\n");
     using jahshaka::engine::giProbeGridBytes;
     using jahshaka::engine::giProbeGridBudgetCount;
+    // THE SHADOW TERM IS THE NODE'S REAL TEXTURES (PCC-BUDGET-2), handed in by the
+    // engine (OgreEngine::probeShadowNodeBytes). This headless row cannot ask an
+    // engine, so it carries the node at the shipped High shadow settings — a 2048
+    // atlas: the probe node at 512 with four focused maps (a 512 x 2816 D32 atlas)
+    // plus its 256^2 x 6 R32F scratch cube — and gi_verbs.pcc_budget holds the
+    // engine's own figure to the texture manager's on Showroom 2.
+    const unsigned long long kNode = 512ull * 2816ull * 4ull + 6ull * 256ull * 256ull * 4ull;
+    CHECK(kNode == 7340032ull, "the probe shadow node at a 2048 atlas is 7.0 MiB (was counted as 8 MiB)");
     const unsigned long long measured = 838987760ull;   // PHOTON-F12-PCC, Showroom 2 at Epic
-    CHECK(giProbeGridBytes(512u, true, true, 32u) == measured,
-          "the WHOLE grid's arithmetic (array + shadow targets + cubes) is the F12-PCC measurement");
+    CHECK(giProbeGridBytes(512u, true, kNode, 32u) == measured,
+          "the WHOLE grid from its real terms (array + each capture's depth + the node + cubes) is the "
+          "F12-PCC measurement");
+    CHECK(giProbeGridBytes(512u, true, kNode, 32u) - giProbeGridBytes(512u, true, 0ull, 32u) == 32ull * kNode,
+          "the grid counts each shadowed probe's node once, at its real size");
     for (int q = 0; q < 4; ++q) {
         const auto f = giQualityFacts(GiQuality(q));
-        const bool hdr = f.probeHdrDefault, sh = f.probeShadowsDefault;
+        const bool hdr = f.probeHdrDefault;
+        const unsigned long long sh = f.probeShadowsDefault ? kNode : 0ull;
         const unsigned n = giProbeGridBudgetCount(f.probeGridBudgetBytes, f.probeFaceSize, hdr, sh);
         const unsigned long long at = giProbeGridBytes(f.probeFaceSize, hdr, sh, n);
         const unsigned long long over = giProbeGridBytes(f.probeFaceSize, hdr, sh, n + 1u);
@@ -307,7 +319,7 @@ static void testProbeBudget()
         CHECK(at <= f.probeGridBudgetBytes && over > f.probeGridBudgetBytes,
               qPrintable(QStringLiteral("quality %1: the derived count is the most that fits").arg(q)));
     }
-    CHECK(giProbeGridBudgetCount(giQualityFacts(GiQuality::Epic).probeGridBudgetBytes, 512u, true, true) >= 32u,
+    CHECK(giProbeGridBudgetCount(giQualityFacts(GiQuality::Epic).probeGridBudgetBytes, 512u, true, kNode) >= 32u,
           "Epic's budget holds the measured 32-probe Showroom grid");
 }
 
