@@ -283,6 +283,7 @@ add_executable(test_selection
     ${CMAKE_SOURCE_DIR}/src/modules/materials/nodes/texture.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/materials/widgets/graphicsview.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/materials/widgets/listwidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/tilecache.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/materials/widgets/materialsettingswidget.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/materials/widgets/nodepropertiespanel.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/materials/widgets/treewidget.cpp
@@ -298,7 +299,7 @@ target_include_directories(test_selection PRIVATE
     ${CMAKE_SOURCE_DIR}/src
    ${CMAKE_SOURCE_DIR}/irisgl
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
-target_link_libraries(test_selection PRIVATE IrisGL Qt6::Widgets Qt6::Sql)
+target_link_libraries(test_selection PRIVATE IrisGL Qt6::Widgets Qt6::Sql Qt6::Concurrent)
 add_test(NAME shadergraph.selection COMMAND test_selection WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(shadergraph.selection PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "shadergraph")
 
@@ -358,6 +359,7 @@ add_executable(test_asset_widget_db
     ${CMAKE_SOURCE_DIR}/src/services/projectmembership.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/materials/widgets/shaderlistwidget.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/materials/widgets/listwidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/tilecache.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/materials/models/properties.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/style/stylesheet.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/style/classicsheets.cpp
@@ -379,7 +381,7 @@ target_include_directories(test_asset_widget_db PRIVATE
     ${CMAKE_SOURCE_DIR}/src
     ${CMAKE_SOURCE_DIR}/irisgl
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
-target_link_libraries(test_asset_widget_db PRIVATE IrisGL Qt6::Widgets Qt6::Sql qlementine)
+target_link_libraries(test_asset_widget_db PRIVATE IrisGL Qt6::Widgets Qt6::Sql Qt6::Concurrent qlementine)
 add_test(NAME shadergraph.asset_widget_db COMMAND test_asset_widget_db
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(shadergraph.asset_widget_db PROPERTIES

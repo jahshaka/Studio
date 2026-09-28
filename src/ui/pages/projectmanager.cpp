@@ -148,6 +148,7 @@ ProjectManager::ProjectManager(Database *handle, Project *project, QWidget *pare
     searchTimer->setSingleShot(true);   // timer can only fire once after started
 
     connect(searchTimer, &QTimer::timeout, this, [this]() {
+        finishGridBuild();
         dynamicGrid->searchTiles(searchTerm.toLower());
     });
 
@@ -492,6 +493,7 @@ void ProjectManager::deleteProjectFromWidget(ItemGridWidget *widget)
 
 void ProjectManager::searchProjects()
 {
+    finishGridBuild();
     dynamicGrid->searchTiles(ui->lineEdit->text());
 }
 
@@ -590,6 +592,7 @@ void ProjectManager::applyDesktopLayoutMode(const QString &modeName, bool persis
     if (modeStr == "freeform") gridMode = DynamicGrid::LayoutMode::Freeform;
     else if (modeStr == "sliders") gridMode = DynamicGrid::LayoutMode::Sliders;
 
+    finishGridBuild();   // a layout places every tile
     dynamicGrid->setLayoutMode(gridMode);
 }
 
@@ -604,6 +607,7 @@ bool ProjectManager::setDesktopViewMode(const QString &name)
 bool ProjectManager::moveTileToSliderPos(const QString &guid, int row, int index)
 {
     if (currentLayoutMode != "sliders") return false;
+    finishGridBuild();
 
     foreach (ItemGridWidget *widget, dynamicGrid->originalItems) {
         if (widget->tileData.guid == guid) {
@@ -626,6 +630,8 @@ int ProjectManager::setSliderRows(int rows)
 
 QVariantList ProjectManager::sliderTilesForApi() const
 {
+    // A reader of every tile finishes a build still in slices.
+    const_cast<ProjectManager *>(this)->finishGridBuild();
     QVariantList tiles;
     foreach (ItemGridWidget *widget, dynamicGrid->originalItems) {
         QVariantMap tile;
@@ -694,6 +700,10 @@ void ProjectManager::projectTileSliderChanged(ItemGridWidget *widget)
 void ProjectManager::addTile(const QString &guid)
 {
     if (!gridBuilt || guid.isEmpty() || dynamicGrid->tile(guid)) return;
+    // A row still waiting for its slice is built NOW, at the head (a
+    // touched project goes first, as a rebuild would put it).
+    const int pending = pendingRowOf(guid);
+    if (pending >= 0) pendingRows.removeAt(pending);
     ProjectTileData record;
     if (!db->fetchProjectTile(guid, &record) || record.desktop != currentDesktop) return;
     dynamicGrid->insertTileAtHead(record, isOpenProjectTile(guid));
@@ -704,6 +714,8 @@ void ProjectManager::addTile(const QString &guid)
 
 void ProjectManager::removeTile(const QString &guid)
 {
+    const int pending = pendingRowOf(guid);
+    if (pending >= 0) { pendingRows.removeAt(pending); return; }
     ItemGridWidget *widget = dynamicGrid->tile(guid);
     if (!widget) return;
     dynamicGrid->deleteTile(widget);
@@ -718,7 +730,9 @@ void ProjectManager::moveTile(const QString &guid, int desktop)
 
 void ProjectManager::renameTile(const QString &guid, const QString &name)
 {
-    if (ItemGridWidget *widget = dynamicGrid->tile(guid)) widget->updateLabel(name);
+    const int pending = pendingRowOf(guid);
+    if (pending >= 0) pendingRows[pending].name = name;
+    else if (ItemGridWidget *widget = dynamicGrid->tile(guid)) widget->updateLabel(name);
 }
 
 void ProjectManager::touchTile(const QString &guid)
@@ -742,7 +756,7 @@ void ProjectManager::enterDesktop()
     const QStringList guids = db->fetchProjectGuids(currentDesktop);
     QStringList added, removed;
     for (const QString &guid : guids)
-        if (!dynamicGrid->tile(guid)) added.append(guid);
+        if (!dynamicGrid->tile(guid) && pendingRowOf(guid) < 0) added.append(guid);
     const QSet<QString> onDesktop(guids.cbegin(), guids.cend());
     for (ItemGridWidget *widget : std::as_const(dynamicGrid->originalItems))
         if (!onDesktop.contains(widget->tileData.guid)) removed.append(widget->tileData.guid);
@@ -760,26 +774,61 @@ void ProjectManager::populateDesktop()
 {
     QElapsedTimer timer;
     timer.start();
-    const int decodesBefore = ItemGridWidget::thumbnailDecodeCount();
     dynamicGrid->resetView();
 
-    const QVector<ProjectTileData> rows = db->fetchProjects(currentDesktop);
-    ItemGridWidget::prefetchThumbnails(rows, dynamicGrid->tileSize);
-    for (const ProjectTileData &record : rows)
-        dynamicGrid->addToGridView(record, isOpenProjectTile(record.guid));
+    // A LISTING, NO THUMBNAILS (D11-LIBRARY-SCALE): each tile asks the session's
+    // tile cache for its picture — the placeholder until the bytes, read by guid
+    // a batch per turn, are decoded off this thread.
+    pendingRows = db->fetchProjects(currentDesktop);
+    ++buildGeneration;
     gridBuilt = true;
     ++gridBuildCount;
     lastBuildMs = timer.elapsed();
-    lastBuildTiles = int(rows.size());
-    lastBuildDecodes = ItemGridWidget::thumbnailDecodeCount() - decodesBefore;
-
+    lastBuildTiles = int(pendingRows.size());
+    lastBuildDecodes = 0;   // the UI thread decodes nothing: the cache's pool does
+    lastBuildSlices = 0;
+    // The first slice now (what the desktop shows first), the rest a slice per turn.
+    buildGridSlice(buildGeneration);
     checkForEmptyState();
+}
+
+int ProjectManager::pendingRowOf(const QString &guid) const
+{
+    for (int i = 0; i < pendingRows.size(); ++i)
+        if (pendingRows.at(i).guid == guid) return i;
+    return -1;
+}
+
+void ProjectManager::buildGridSlice(int generation)
+{
+    // A newer build (a desktop switch) owns the grid now.
+    if (generation != buildGeneration || pendingRows.isEmpty()) return;
+    QElapsedTimer timer;
+    timer.start();
+    const int n = qMin(kGridSlice, int(pendingRows.size()));
+    for (int i = 0; i < n; ++i) {
+        const ProjectTileData record = pendingRows.takeFirst();
+        dynamicGrid->addToGridView(record, isOpenProjectTile(record.guid));
+    }
+    lastBuildMs += timer.elapsed();
+    ++lastBuildSlices;
+    if (!pendingRows.isEmpty()) {
+        QMetaObject::invokeMethod(this, [this, generation]() { buildGridSlice(generation); },
+                                  Qt::QueuedConnection);
+        return;
+    }
     // ONE LINE PER BUILD: the count scripting.e2e.desktops reads (log.tail) to
     // prove the grid is built once per DESKTOP CHANGE and never for one
-    // project's, what one build costs, and how many thumbnails it had to
-    // decode (0 for a desktop whose thumbnails the session has seen).
-    irisLog(QStringLiteral("desktop: grid built — %1 tile(s) on desktop %2 in %3 ms, %4 decode(s)")
-                .arg(lastBuildTiles).arg(currentDesktop).arg(lastBuildMs).arg(lastBuildDecodes));
+    // project's, what one build costs on the UI thread (the sum of its slices),
+    // and how many thumbnails it decoded there (none: the tile cache's pool).
+    irisLog(QStringLiteral("desktop: grid built — %1 tile(s) on desktop %2 in %3 ms, %4 decode(s), %5 slice(s)")
+                .arg(lastBuildTiles).arg(currentDesktop).arg(lastBuildMs).arg(lastBuildDecodes)
+                .arg(lastBuildSlices));
+}
+
+void ProjectManager::finishGridBuild()
+{
+    while (!pendingRows.isEmpty()) buildGridSlice(buildGeneration);
 }
 
 QVariantMap ProjectManager::gridStats() const
@@ -789,6 +838,8 @@ QVariantMap ProjectManager::gridStats() const
     stats["lastBuildMs"] = lastBuildMs;
     stats["lastBuildTiles"] = lastBuildTiles;
     stats["lastBuildDecodes"] = lastBuildDecodes;
+    stats["lastBuildSlices"] = lastBuildSlices;
+    stats["pendingTiles"] = int(pendingRows.size());
     stats["decodes"] = ItemGridWidget::thumbnailDecodeCount();
     stats["outOfStep"] = outOfStepEntries;
     stats["tiles"] = dynamicGrid->originalItems.size();
@@ -921,6 +972,7 @@ void ProjectManager::newProject()
 
 void ProjectManager::changePreviewSize(QString scale)
 {
+    finishGridBuild();
     dynamicGrid->scaleTile(scale);
 }
 

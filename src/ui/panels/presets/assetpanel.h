@@ -13,6 +13,8 @@ For more information see the LICENSE file
 #define ASSETPANEL_H
 
 #include <QListWidget>
+
+#include "ui/controls/tilecache.h"
 #include <QWidget>
 
 #include <QLineEdit>
@@ -174,6 +176,14 @@ public:
         favoriteAssets = handle->fetchFavorites();
     }
 
+    /// A favourite's picture by guid from the session's tile cache (the
+    /// favourites listing carries no thumbnail — D11-LIBRARY-SCALE). The item
+    /// must already be in `listView`.
+    void assignTile(QListWidgetItem *item, const QString &guid) {
+        if (!tiles) tiles = new ListTileBinder(listView, { QSize(64, 64), 0 }, listView);
+        tiles->assign(item, guid, QIcon(":/icons/empty_object.png"));
+    }
+
     virtual void setMainWindow(MainWindow *window) = 0;
     virtual void setDatabaseHandle(Database *handle) = 0;
     virtual void addNewItem(QListWidgetItem *item) = 0;
@@ -185,6 +195,7 @@ protected:
     QListWidget *listView;
     MainWindow *mainWindow;
     Database *handle = nullptr;
+    ListTileBinder *tiles = nullptr;
 
     // Drag state for the panels' event filters — MEMBERS, deliberately.
     // Both panels used to declare `QPoint startPos;` as a LOCAL inside

@@ -39,6 +39,7 @@ For more information see the LICENSE file
 #include "bridge/enginehost.h"
 #include "services/materialtile.h"
 #include "services/thumbnailrebuild.h"
+#include "ui/controls/tilecache.h"
 #include <QComboBox>
 
 #include <algorithm>
@@ -627,13 +628,10 @@ void AssetWidget::addItem(const AssetRecord &assetData)
 	item->setData(MODEL_GUID_ROLE, assetData.guid);
 	item->setData(MODEL_PARENT_ROLE, assetData.parent);
 
-    QPixmap thumbnail;
-    if (thumbnail.loadFromData(assetData.thumbnail, "PNG")) {
-        item->setIcon(QIcon(thumbnail));
-    }
-    else {
-        item->setIcon(QIcon(":/icons/empty_object.png"));
-    }
+    // THE PICTURE BY GUID (D11-LIBRARY-SCALE): the listing carries no
+    // thumbnail; the tile cache paints it once the item is in the list, below.
+    // A type with an icon of its own sets it here and keeps it.
+    QIcon typeIcon;
 
 	if (assetData.type == static_cast<int>(ModelTypes::Texture)) {
 
@@ -643,28 +641,26 @@ void AssetWidget::addItem(const AssetRecord &assetData)
 		int skyType = prop.value("sky").toObject().value("type").toInt();
 		item->setData(SKY_TYPE_ROLE, skyType);
 		item->setData(MODEL_TYPE_ROLE, assetData.type);
-		item->setIcon(QIcon(":/icons/icons8-file-sky.png"));
+		typeIcon = QIcon(":/icons/icons8-file-sky.png");
 	}
 
 	if (assetData.type == static_cast<int>(ModelTypes::Music)) {
 		item->setData(MODEL_TYPE_ROLE, assetData.type);
-		item->setIcon(QIcon(":/icons/icons8-file-music.png"));
+		typeIcon = QIcon(":/icons/icons8-file-music.png");
 	}
 
     if (assetData.type == static_cast<int>(ModelTypes::Shader)) {
         item->setData(MODEL_TYPE_ROLE, assetData.type);
-		if(thumbnail.loadFromData(assetData.thumbnail, "PNG"))   item->setIcon(QIcon(thumbnail));
-		else item->setIcon(QIcon(":/icons/icons8-file-72.png"));
     }
 
     if (assetData.type == static_cast<int>(ModelTypes::ParticleSystem)) {
         item->setData(MODEL_TYPE_ROLE, assetData.type);
-        item->setIcon(QIcon(":/icons/icons8-file-72-ps.png"));
+        typeIcon = QIcon(":/icons/icons8-file-72-ps.png");
     }
 
     if (assetData.type == static_cast<int>(ModelTypes::File)) {
         item->setData(MODEL_TYPE_ROLE, assetData.type);
-        item->setIcon(QIcon(":/icons/icons8-file-72-file.png"));
+        typeIcon = QIcon(":/icons/icons8-file-72-file.png");
     }
 	
     if (assetData.type == static_cast<int>(ModelTypes::Material)) {
@@ -683,6 +679,17 @@ void AssetWidget::addItem(const AssetRecord &assetData)
 	item->setFlags(item->flags() | Qt::ItemIsEditable);
 
 	ui->assetView->addItem(item);
+	if (!typeIcon.isNull()) item->setIcon(typeIcon);
+	else tiles()->assign(item, assetData.guid,
+	                     QIcon(assetData.type == static_cast<int>(ModelTypes::Shader)
+	                               ? ":/icons/icons8-file-72.png" : ":/icons/empty_object.png"));
+}
+
+ListTileBinder *AssetWidget::tiles()
+{
+	// The delegate draws the icon at 128 x 128 (ListViewDelegate::paint).
+	if (!tileBinder) tileBinder = new ListTileBinder(ui->assetView, { QSize(128, 128), 0 }, this);
+	return tileBinder;
 }
 
 void AssetWidget::addCrumbs(const QVector<FolderRecord> &folderData)
@@ -2338,14 +2345,13 @@ void AssetWidget::drainThumbnailBacklog()
 	// query, every row's blob, every icon rebuilt) for one changed icon, once
 	// per imported model.
 	if (outcome.ok) {
-		QPixmap thumbnail;
-		if (thumbnail.loadFromData(db->fetchAsset(guid).thumbnail, "PNG")) {
-			for (int i = 0; i < ui->assetView->count(); ++i) {
-				QListWidgetItem *item = ui->assetView->item(i);
-				if (item->data(MODEL_GUID_ROLE).toString() == guid) {
-					item->setIcon(QIcon(thumbnail));
-					break;
-				}
+		// The stored picture changed (the write dropped its cached tile): the
+		// item asks the tile cache again, decoded off this thread.
+		for (int i = 0; i < ui->assetView->count(); ++i) {
+			QListWidgetItem *item = ui->assetView->item(i);
+			if (item->data(MODEL_GUID_ROLE).toString() == guid) {
+				tiles()->refresh(item, guid, QIcon(":/icons/empty_object.png"));
+				break;
 			}
 		}
 	}

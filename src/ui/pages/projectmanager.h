@@ -19,6 +19,9 @@ For more information see the LICENSE file
 #include <QPointer>
 #include <QStringList>
 #include <QWidget>
+#include <QVector>
+
+#include "data/project.h"   // ProjectTileData (the pending rows)
 
 #include <optional>
 
@@ -264,6 +267,22 @@ private:
     qint64 lastBuildMs = 0;
     int lastBuildTiles = 0;
     int lastBuildDecodes = 0;
+    int lastBuildSlices = 0;
+
+    // THE GRID IS BUILT IN SLICES (D11-LIBRARY-SCALE): a desktop of 500
+    // projects cost 600+ ms of tile widgets in ONE event-loop turn — inside a
+    // create's close, the whole of it one frozen window. The first slice is
+    // built at once (what a desktop shows first) and the rest one slice per
+    // turn, in listing order; every tile verb is pending-aware (a pending row
+    // is touched, renamed or removed as a row), and a caller that reads every
+    // tile — a layout change, a search, the slider verbs — finishes the build.
+    static constexpr int kGridSlice = 32;
+    QVector<ProjectTileData> pendingRows;
+    int buildGeneration = 0;
+    void buildGridSlice(int generation);
+    int pendingRowOf(const QString &guid) const;
+    /// Builds every pending tile now (the callers that read the whole grid).
+    void finishGridBuild();
     int outOfStepEntries = 0;
     QString currentLayoutMode = QStringLiteral("rows");
     QMenu *desktopMenu = nullptr;

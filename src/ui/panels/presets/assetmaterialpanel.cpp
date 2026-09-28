@@ -107,15 +107,8 @@ void AssetMaterialPanel::addNewItem(QListWidgetItem *itemInc)
     item->setData(MODEL_TYPE_ROLE, itemInc->data(MODEL_TYPE_ROLE).toInt());
     item->setData(MODEL_GUID_ROLE, itemInc->data(MODEL_GUID_ROLE).toString());
 
-    QPixmap thumbnail;
-    if (thumbnail.loadFromData(asset.thumbnail, "PNG")) {
-        item->setIcon(QIcon(thumbnail));
-    }
-    else {
-        item->setIcon(QIcon(":/icons/empty_object.png"));
-    }
-
     listView->addItem(item);
+    assignTile(item, asset.guid);   // the tile cache, by guid (D11-LIBRARY-SCALE)
     
     // add this asset to the assets table and set the VIEW so we know where it belongs
     handle->addFavorite(itemInc->data(MODEL_GUID_ROLE).toString());
@@ -135,15 +128,8 @@ void AssetMaterialPanel::addFavorites()
             item->setData(MODEL_TYPE_ROLE, asset.type);
             item->setData(MODEL_GUID_ROLE, asset.guid);
 
-            QPixmap thumbnail;
-            if (thumbnail.loadFromData(asset.thumbnail, "PNG")) {
-                item->setIcon(QIcon(thumbnail));
-            }
-            else {
-                item->setIcon(QIcon(":/icons/empty_object.png"));
-            }
-
             listView->addItem(item);
+            assignTile(item, asset.guid);   // the tile cache, by guid (D11-LIBRARY-SCALE)
         }
     }
 }
