@@ -35,8 +35,8 @@
 //      shape — order-independence — expressed the one way a suite in this process
 //      can express it (two allocation orders in two processes cannot be staged
 //      from inside one, so the order that CAN be varied is the one we control).
-//   4. ...AND NOT WHEN IT DECIDES THE DISPATCH PARTITION EITHER (ogre-patch
-//      0065). Case 3's four objects fit one material pool, so the order only
+//   4. ...AND NOT WHEN IT DECIDES THE DISPATCH PARTITION EITHER (fork ad452604a+155a56bf8+0338ca7f2+c4c80b5f7
+//      (was 0065)). Case 3's four objects fit one material pool, so the order only
 //      varies what happens INSIDE one dispatch. Two hundred objects each owning
 //      a material — what the editor actually produces — spread over several
 //      pools, and which pool a material lands in is its creation order, so the

@@ -137,7 +137,7 @@ static float measure(Engine *e, View *v, const char *what, int frames, Image *ou
 /// an env-selected path and not a second source file: the cost of a trace is
 /// the cost of THIS trace over THIS geometry, and a second fixture would be
 /// measuring something else. It reports GPU milliseconds from the pass' own
-/// timestamp pair (`giStatus().rayQuery.reflectMs`, the patch-0027 mechanism),
+/// timestamp pair (`giStatus().rayQuery.reflectMs`, the fork 1a81f866a+1bccc3f93 (was 0027) mechanism),
 /// read back with the availability bit several frames later and never with a
 /// wait — so it renders well past the frames-in-flight depth before reading.
 ///
@@ -508,8 +508,8 @@ int main(int argc, char **argv)
         s->refreshGlobalIllumination();
         // BOTH ARMS ARE READ ONCE THE PICTURE HOLDS STILL, never at a frame
         // count (PHOTON-M3): a chain rebuild re-solves the GI and the settle
-        // runs one injection a frame, and with the float voxel store (patch
-        // 0080) the emitter's un-clipped bounce keeps moving the floor for
+        // runs one injection a frame, and with the float voxel store (fork ae2ed529f+155a56bf8
+        // (was 0080)) the emitter's un-clipped bounce keeps moving the floor for
         // longer than 48 frames — the two arms, 48 frames apart, then differed
         // by the settle (mean 7.09/255 over the march region) with the ray tier
         // blameless. The house lesson: a wall-clock or frame-count settle

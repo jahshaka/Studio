@@ -2058,8 +2058,8 @@ int main()
     // actually reach, at the same 16 bits.
     //
     // THE SAME LINE also decides whether the readback happens at all, and
-    // upstream gates it on the material carrying a roughness MAP. Jahshaka patch
-    // 0022 broke that premise — it folds the screen-space variance of the shading
+    // upstream gates it on the material carrying a roughness MAP. Jahshaka fork 16d8e29d4
+    // (was 0022) broke that premise — it folds the screen-space variance of the shading
     // normal into the GGX alpha, so on any NORMAL-MAPPED surface the roughness is
     // a per-pixel quantity the material constant does not carry, and a
     // normal-mapped material with a constant roughness lost its anti-aliasing for
@@ -2199,7 +2199,7 @@ int main()
     //
     // THE DEFECT THIS SECTION EXISTS FOR (lane SSR-3; found by the PHOTON-R5
     // readers, ledger §432/§440). The march decoded the prepass G-buffer's
-    // roughness channel with the PRE-ogre-patch-0043 range (`.y * 0.98 + 0.02`)
+    // roughness channel with the PRE-fork 16d8e29d4 (was 0043) range (`.y * 0.98 + 0.02`)
     // and then compared the result to its cutoff as though it were a perceptual
     // roughness. Both halves were wrong: fork 16d8e29d4 (was 0043) packs the GGX ALPHA over
     // [0.001, 1], and the alpha is the perceptual roughness SQUARED

@@ -1,6 +1,6 @@
 // gi.probe_gate — REFLECTION PROBES ONLY REACH MATERIALS THAT CAN REFLECT THEM
-// (owner decision 2026-09-13 Q1, SPECS/REFLECTION_PROBE_AUDIT.md; ogre-patch
-// 0028).
+// (owner decision 2026-09-13 Q1, SPECS/REFLECTION_PROBE_AUDIT.md; fork 36162ff37+16d8e29d4
+// (was 0028)).
 //
 // Owner: "[reflection probes] should only affect reflective objects in a
 // scene." Before fork 36162ff37+16d8e29d4 (was 0028) there was NO material-side gate anywhere in the

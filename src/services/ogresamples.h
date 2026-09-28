@@ -34,8 +34,8 @@ For more information see the LICENSE file
 //     is needed anywhere.
 //  2. A seeded ogre.cfg alone CANNOT suppress their config dialog:
 //     GraphicsSystem::mAlwaysAskForConfig is initialised true and
-//     short-circuits restoreConfig() before it is ever consulted. Ogre patch
-//     0020 adds the missing env hook (JAH_OGRE_SAMPLE_NO_CONFIG), which is
+//     short-circuits restoreConfig() before it is ever consulted. fork ef462c42d
+//     (was 0020) adds the missing env hook (JAH_OGRE_SAMPLE_NO_CONFIG), which is
 //     why launch() exports it.
 //  3. Their Vulkan xcb config defaults FULL SCREEN TO "Yes" and Video Mode to
 //     the LARGEST RandR mode. Launching a sample without writing "Full
