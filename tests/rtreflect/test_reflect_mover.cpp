@@ -738,8 +738,9 @@ int main(int argc, char **argv)
                         "moving %.2f px, settled %.2f px\n", arm.name,
                         sumBandMoving / kCheckpoints, sumBandStill / kCheckpoints, bandRatio,
                         nEdge ? sumEdgeMoving / nEdge : -1.0, nEdge ? sumEdgeSettled / nEdge : -1.0);
-            // F2 (REFLECT-MOVERS-2): THE SILHOUETTE BAND'S GRAIN IS A TARGET, NOT A BAR.
-            // Measured 2.14x the still case's on the rays' glossy floor (the whole
+            // F2 (REFLECT-MOVERS-2): THE SILHOUETTE BAND'S GRAIN — THE TRUE BAR IS THE
+            // MEASURED 2.14x (the brief's "state the true bar with the number"); the GOAL
+            // stays 1.5x. Measured 2.14x the still case's on the rays' glossy floor (the whole
             // region's 1.39x hides it); three constructions were measured against it
             // and each lost more than it won (spikes/reflect-movers-2/NOTES.md): a
             // restart band that keeps to taps of the same reflected surface (the band
@@ -750,8 +751,8 @@ int main(int argc, char **argv)
             // measure a filter change here must hold within a pixel. The mirror keeps
             // no history; the march's edge is the lag's.
             if (!arm.march && arm.floorRough >= 0.1f) {
-                std::printf("target: [%s] the reflected silhouette's grain %.2fx the still case's (bar 1.5)\n",
-                            arm.name, bandRatio);
+                std::printf("target: [%s] the reflected silhouette's grain %.2fx the still case's (bar 2.14, the "
+                            "measured; the goal is 1.5)\n", arm.name, bandRatio);
             }
         }
         if (arm.settledBar > 0.0f)

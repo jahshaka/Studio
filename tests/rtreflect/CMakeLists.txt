@@ -183,7 +183,10 @@ target_compile_definitions(test_rt_alpha_tested PRIVATE
     JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
     JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 add_dependencies(test_rt_alpha_tested JahshakaEngineMedia)
-target_link_libraries(test_rt_alpha_tested PRIVATE JahshakaEngine)
+# the engine-private scene: the two-submesh fence (OgreScene::appendSubmesh)
+target_include_directories(test_rt_alpha_tested PRIVATE
+    "${CMAKE_SOURCE_DIR}/irisgl/engine/src" "${JAHSHAKA_ENGINE_BUILD_ID_DIR}")
+target_link_libraries(test_rt_alpha_tested PRIVATE JahshakaEngine OgreNext)
 jah_gpu_row(gi.rt_alpha_tested CLASS engine COMMAND test_rt_alpha_tested
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.rt_alpha_tested PROPERTIES TIMEOUT 240 LABELS "engine")

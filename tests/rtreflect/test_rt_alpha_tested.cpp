@@ -38,6 +38,7 @@
 // construction — the pre-lane flags exactly.
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
+#include "EnginePrivate.h"
 
 #include <algorithm>
 #include <cmath>
@@ -71,6 +72,25 @@ static MeshData fenceMesh()
     d.positions = { -1.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 1.0f, 2.0f, 0.0f, -1.0f, 2.0f, 0.0f };
     d.normals = { 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1 };
     d.uvs = { 0.0f, 1.0f, 1.0f, 1.0f, 1.0f, 0.0f, 0.0f, 0.0f };
+    d.indices = { 0, 1, 2, 0, 2, 3 };
+    return d;
+}
+
+/// A quad in z = 0 over x in [x0, x1], y in [0, 2], UVs over it (the fence's shape).
+static MeshData panelMesh(float x0, float x1)
+{
+    MeshData d = fenceMesh();
+    d.positions = { x0, 0.0f, 0.0f, x1, 0.0f, 0.0f, x1, 2.0f, 0.0f, x0, 2.0f, 0.0f };
+    return d;
+}
+
+/// A HORIZONTAL cut-out layer at height y over [-h, h]^2, the bars tiled `tiles` times.
+static MeshData layerMesh(float y, float h, float tiles)
+{
+    MeshData d;
+    d.positions = { -h, y, h, h, y, h, h, y, -h, -h, y, -h };
+    d.normals = { 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0 };
+    d.uvs = { 0.0f, tiles, tiles, tiles, tiles, 0.0f, 0.0f, 0.0f };
     d.indices = { 0, 1, 2, 0, 2, 3 };
     return d;
 }
@@ -145,6 +165,38 @@ static float rayCoverage(Scene *s, float &analytic, int &agree)
         agree += hit == want ? 1 : 0;
     }
     analytic = float(solid) / float(pts.size());
+    return float(hits) / float(pts.size());
+}
+
+/// The two-submesh arms: the covered fraction of rays whose sun path crosses the
+/// fence plane inside x in [x0, x1] (the bars, or the solid panel beside them).
+static float rayCoverageX(Scene *s, float x0, float x1, int &agree, int &count, bool bars)
+{
+    std::vector<float> in;
+    std::vector<std::pair<float, float>> pts;
+    const float k = 1.0f / std::sqrt(2.0f);
+    const unsigned mask = kRayMaskCaster;
+    float bits;
+    std::memcpy(&bits, &mask, sizeof(bits));
+    for (int iz = 0; iz < 40; ++iz)
+        for (int ix = 0; ix < 40; ++ix) {
+            const float x = x0 + 0.025f * (x1 - x0) + 0.95f * (x1 - x0) * (float(ix) + 0.5f) / 40.0f;
+            const float z = -1.95f + 1.9f * (float(iz) + 0.5f) / 40.0f;
+            pts.push_back({ x, z });
+            in.insert(in.end(), { x, 0.002f, z, 0.0f, 0.0f, k, k, 20.0f, bits, 0, 0, 0 });
+        }
+    std::vector<float> out;
+    count = int(pts.size());
+    agree = 0;
+    if (!s->traceRays(in, out) || out.size() < pts.size() * 4u) return -1.0f;
+    int hits = 0;
+    for (size_t i = 0; i < pts.size(); ++i) {
+        const bool hit = out[i * 4u + 3u] > 0.5f && out[i * 4u] > 0.0f;
+        float yAt;
+        const bool want = bars ? maskSolidAbove(pts[i].first, pts[i].second, yAt) : true;
+        hits += hit ? 1 : 0;
+        agree += hit == want ? 1 : 0;
+    }
     return float(hits) / float(pts.size());
 }
 
@@ -278,7 +330,40 @@ static int costMainImpl(Engine *e, Scene *s, View *view, MaterialId fenceCut, No
             }
         }
     unsetenv("JAH_R6_NO_ALPHA");
+    // THE FOLIAGE STACK (the fable read's H1): eight cut-out layers above the world,
+    // every sun ray and most reflection rays through all of them — the candidate
+    // loop's cliff. Paired the same way; the opaque arm (JAH_R6_NO_ALPHA) stops at
+    // the first layer. Printed, never gated.
+    std::vector<NodeId> stack;
+    for (int l = 0; l < 8; ++l) {
+        const NodeId n = s->createNode();
+        s->attachMesh(n, s->createMesh(layerMesh(2.0f + 0.25f * float(l), 20.0f, 16.0f)), fenceCut);
+        enginetest::setNodePosition(s, n, Vec3(0.0f, 0.0f, -10.0f));
+        stack.push_back(n);
+    }
+    for (int i = 0; i < 240; ++i) e->renderOneFrame();
+    double ssum[2][3] = {}, sn[2][3] = {};
+    for (int round = 0; round < 24; ++round)
+        for (int arm = 0; arm < 2; ++arm) {
+            if (arm) setenv("JAH_R6_NO_ALPHA", "1", 1);
+            else unsetenv("JAH_R6_NO_ALPHA");
+            for (int i = 0; i < 30; ++i) {
+                e->renderOneFrame();
+                if (i < 10) continue;
+                const float v[3] = { s->rayQueryStatus().reflectMs, s->giStatus().gather.traceMs,
+                                     s->sunContactStatus().gpuMs };
+                for (int k = 0; k < 3; ++k)
+                    if (v[k] > 0.0f) { ssum[arm][k] += v[k]; sn[arm][k] += 1.0; }
+            }
+        }
+    unsetenv("JAH_R6_NO_ALPHA");
     const char *what[3] = { "reflection", "gather trace", "sun contact" };
+    for (int k = 0; k < 3; ++k) {
+        const double live = sn[0][k] ? ssum[0][k] / sn[0][k] : -1.0, door = sn[1][k] ? ssum[1][k] / sn[1][k] : -1.0;
+        std::printf("target: 1920x1080, an 8-layer cut-out FOLIAGE STACK over the world: the %s %.4f ms with the "
+                    "candidate loop, %.4f ms opaque (the first layer stops the ray): %+.3f ms (no bar)\n",
+                    what[k], live, door, live - door);
+    }
     for (int k = 0; k < 3; ++k) {
         const double live = n[0][k] ? sum[0][k] / n[0][k] : -1.0, door = n[1][k] ? sum[1][k] / n[1][k] : -1.0;
         std::printf("target: 1920x1080, 10k cubes + one fence: the %s %.4f ms with the alpha loop live, %.4f ms "
@@ -457,6 +542,43 @@ int main(int argc, char **argv)
               analytic, cc[2]);
     CHECK_MSG(px > 500 && contrast > 10.0f && std::fabs(rcov - 0.5f) <= 0.05f,
               "the RAY REFLECTION shows the fence with its holes (%.3f of its footprint, bar 0.5 +- 0.05)", rcov);
+    CHECK_MSG(agree[1] >= 1568, "the cut-out's shadow rays land on the mask ray for ray (%d/1600 agree, bar 0.98)",
+              agree[1]);
+
+    // THE TWO-SUBMESH FENCE (the fable read's D1): one item, the bars (cut-out) and a
+    // solid panel beside them (opaque, the same albedo map — a tree's trunk), in BOTH
+    // submesh orders. Each ray is tested against ITS OWN submesh's datablock and row:
+    // the bars carry the mask's coverage, the panel all of it.
+    s->setNodeMaterial(f.floor, f.floorMatte);
+    s->setNodeVisible(f.fence, false);
+    auto *os = static_cast<jahshaka::engine::detail::OgreScene *>(s);
+    for (int order = 0; order < 2; ++order) {
+        const MeshId bars = s->createMesh(fenceMesh()), panel = s->createMesh(panelMesh(1.2f, 2.2f));
+        const bool trunkFirst = order == 0;
+        const MeshId into = trunkFirst ? panel : bars, from = trunkFirst ? bars : panel;
+        if (!os->appendSubmesh(into, from)) {
+            std::printf("FAIL: appendSubmesh: %s\n", f.e->lastError().c_str());
+            ++failures;
+            break;
+        }
+        const NodeId two = s->createNode();
+        const bool attached = two && s->attachMesh(two, into, f.fenceSolid) &&
+                              os->setSubItemMaterial(two, trunkFirst ? 1u : 0u, f.fenceCut);
+        render(f.e, 60);
+        int ab = 0, nb = 0, ap = 0, np = 0;
+        const float cb = rayCoverageX(s, -1.0f, 1.0f, ab, nb, true);
+        const float cp = rayCoverageX(s, 1.2f, 2.2f, ap, np, false);
+        const char *name = trunkFirst ? "the solid panel first, the bars second" : "the bars first, the solid panel second";
+        std::printf("RESULT two-submesh fence (%s): bars %.3f (%d/%d agree), panel %.3f (%d/%d agree)\n", name, cb, ab,
+                    nb, cp, ap, np);
+        CHECK_MSG(attached && std::fabs(cb - analytic) <= 0.05f && ab >= int(0.98f * float(nb)),
+                  "two submeshes, %s: the cut-out submesh's shadow is its mask's (%.3f vs %.3f +- 0.05; %d/%d rays on "
+                  "the mask)", name, cb, analytic, ab, nb);
+        CHECK_MSG(attached && cp > 0.999f, "two submeshes, %s: the opaque submesh shadows all of its footprint (%.3f)",
+                  name, cp);
+        s->removeNode(two);
+        render(f.e, 2);
+    }
     std::printf("%s\n", failures ? "FAILED" : "PASSED");
     return failures ? 1 : 0;
 }
