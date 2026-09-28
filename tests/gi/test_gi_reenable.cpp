@@ -86,15 +86,14 @@ static GiParams offGi()
 /// the setting the bounce-inject job exists for, and the one no other GI suite
 /// turns on (they all run numBounces = 1, i.e. no bounce job at all, which is
 /// why defect 1 above lived through every gate).
-static GiParams hybridGi(bool cascades)
+static GiParams hybridGi()
 {
     GiParams gi;
     gi.mode = GiMode::VctPccHybrid;
     gi.quality = GiQuality::Medium;
     gi.numBounces = 2;
     gi.ddgi = GiToggle::Off;
-    gi.updateBudget = 0;          // no probe sweeps; this suite is about the arms
-    gi.cascades = cascades;
+    gi.updateBudget = 0;          // no probe sweeps; this suite is about the arm
     return gi;
 }
 
@@ -131,13 +130,20 @@ int main()
     e->takeLastError();                       // the fixture's own build, whatever it said
 
     // =====================================================================
-    // CASE 1 — the single-volume hybrid: on, off, ON AGAIN
+    // CASE 1 — THE CASCADE CHAIN WITH BOUNCES (ogre-patch 0057): on, off, ON AGAIN
     // =====================================================================
-    CHECK(scene->setGlobalIllumination(hybridGi(false)), "case 1: the hybrid is accepted");
-    render(e, 4);
+    // A fresh enable first: before the patch this raised
+    // "'ogre_t6' : unrecognized layout identifier" and left vctBound false,
+    // because the chain was grown after bounces were switched on. (The
+    // single-volume hybrid this case used to run first is deleted with that arm,
+    // D4-PHOTON-TIERS; the chain is the only arm.)
+    CHECK(scene->setGlobalIllumination(hybridGi()), "case 1: the hybrid is accepted");
+    render(e, 6);
     checkNoEngineError(e, "case 1 build");
     GiStatus st = scene->giStatus();
-    CHECK(st.vctBound, "case 1: the voxel arm is bound");
+    CHECK(st.vctBound, "case 1: the cascade chain is bound");
+    CHECK_MSG(st.cascades.size() >= 2u, "case 1: the chain has cascades (%zu)",
+              st.cascades.size());
     Image lit;
     if (!view->readPixels(lit)) { std::printf("FAIL: readPixels (lit)\n"); return 1; }
     const float litLum = bounceLum(lit);
@@ -154,8 +160,8 @@ int main()
               "case 1: the bounce is visible in the first place (%.4f lit vs %.4f off)",
               litLum, offLum);
 
-    CHECK(scene->setGlobalIllumination(hybridGi(false)), "case 1: the hybrid is accepted again");
-    render(e, 4);
+    CHECK(scene->setGlobalIllumination(hybridGi()), "case 1: the hybrid is accepted again");
+    render(e, 6);
     checkNoEngineError(e, "case 1 re-enable");
     st = scene->giStatus();
     CHECK(st.vctBound, "case 1: the voxel arm is bound again");
@@ -163,7 +169,7 @@ int main()
     if (!view->readPixels(relit)) { std::printf("FAIL: readPixels (relit)\n"); return 1; }
     const float relitLum = bounceLum(relit);
     // THE PICTURE COMES BACK, and to the same place: a re-enable rebuilds the
-    // same volume from the same content, so the band's mean must land within a
+    // same chain from the same content, so the band's mean must land within a
     // byte of where it was (the voxelisation is deterministic for a still
     // scene; this tolerance is a quantisation allowance, not a fudge).
     CHECK_MSG(std::fabs(relitLum - litLum) < 0.004f,
@@ -171,51 +177,13 @@ int main()
               relitLum, litLum);
 
     // =====================================================================
-    // CASE 2 — THE CASCADE CHAIN WITH BOUNCES (ogre-patch 0057)
-    // =====================================================================
-    // A fresh enable first: before the patch this raised
-    // "'ogre_t6' : unrecognized layout identifier" and left vctBound false,
-    // because the chain was grown after bounces were switched on.
-    CHECK(scene->setGlobalIllumination(offGi()), "case 2: GI off before the chain");
-    render(e, 2);
-    e->takeLastError();
-    CHECK(scene->setGlobalIllumination(hybridGi(true)), "case 2: the cascade chain is accepted");
-    render(e, 6);
-    checkNoEngineError(e, "case 2 chain build");
-    st = scene->giStatus();
-    CHECK(st.vctBound, "case 2: the cascade chain is bound");
-    CHECK_MSG(st.cascades.size() >= 2u, "case 2: the chain has cascades (%zu)",
-              st.cascades.size());
-    Image chain;
-    if (!view->readPixels(chain)) { std::printf("FAIL: readPixels (chain)\n"); return 1; }
-    const float chainLum = bounceLum(chain);
-    CHECK_MSG(chainLum > offLum + 0.002f,
-              "case 2: the chain lights the floor (%.4f vs %.4f off)", chainLum, offLum);
-
-    // ...and the re-enable of the same chain, which is the flip the ledger's
-    // observation named.
-    CHECK(scene->setGlobalIllumination(offGi()), "case 2: the chain is torn down");
-    render(e, 4);
-    checkNoEngineError(e, "case 2 teardown");
-    CHECK(scene->setGlobalIllumination(hybridGi(true)), "case 2: the chain is re-enabled");
-    render(e, 6);
-    checkNoEngineError(e, "case 2 chain re-enable");
-    st = scene->giStatus();
-    CHECK(st.vctBound, "case 2: the re-enabled chain is bound");
-    Image rechain;
-    if (!view->readPixels(rechain)) { std::printf("FAIL: readPixels (rechain)\n"); return 1; }
-    CHECK_MSG(std::fabs(bounceLum(rechain) - chainLum) < 0.006f,
-              "case 2: the re-enabled chain is the same picture (%.4f vs %.4f)",
-              bounceLum(rechain), chainLum);
-
-    // =====================================================================
     // CASE 3 — the whole sequence the ledger recorded, in one go
     // =====================================================================
-    // off -> hybrid -> off -> cascades, with the error sink drained after each
+    // off -> hybrid -> off -> hybrid, with the error sink drained after each
     // step: the transition itself is what is under test, so no case here may
     // leave a recorded engine error behind.
-    const GiParams seq[4] = { offGi(), hybridGi(false), offGi(), hybridGi(true) };
-    const char *seqName[4] = { "off", "hybrid", "off again", "cascades" };
+    const GiParams seq[4] = { offGi(), hybridGi(), offGi(), hybridGi() };
+    const char *seqName[4] = { "off", "hybrid", "off again", "hybrid again" };
     for (int i = 0; i < 4; ++i) {
         CHECK_MSG(scene->setGlobalIllumination(seq[i]), "case 3: %s accepted", seqName[i]);
         render(e, 5);

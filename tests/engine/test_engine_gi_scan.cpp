@@ -76,7 +76,6 @@ static GiParams cascadeGi()
     gi.numBounces = 1;
     gi.ddgi = GiToggle::Off;
     gi.updateBudget = 0;          // no probe work: the subject is the item scan
-    gi.cascades = true;
     gi.cascadeCount = 1;          // one small volume — this is not a GI suite
     gi.cascadeSet[0] = GiParams::GiCascadeDesc{ 6.0f, 64, 0.0f };
     return gi;

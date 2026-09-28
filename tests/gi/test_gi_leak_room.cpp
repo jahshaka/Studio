@@ -14,10 +14,11 @@
 // measured 0.973 without the field and 0.041 with it at a 0.5 m wall — the
 // field removes 96 % of it. E1 moves the field onto the innermost cascade of a
 // camera-centred chain: a different volume, re-placed as the camera walks. The
-// one thing that must survive that move is exactly this, so the suite runs both
-// arms over the same rooms — the scene-fitted single volume (the shipped
-// reference) and the chain (E1) — with the camera standing close enough to the
-// measured wall for it to be inside cascade 0's box.
+// one thing that must survive that move is exactly this, so the suite runs the
+// chain over the rooms with the camera standing close enough to the measured
+// wall for it to be inside cascade 0's box. (A scene-fitted single-volume arm
+// ran beside it as a reference until D4-PHOTON-TIERS deleted that arm; the
+// absolute bars below are the spike's measured numbers.)
 //
 // Its own binary like every GI suite.
 #include "jahshaka/engine/Engine.h"
@@ -125,8 +126,8 @@ int main()
     // measurement left to make (the spike established this the hard way).
     view->setShadows(true);
 
-    struct Row { float leakSingle = 0.0f, leakChain = 0.0f, greenChain = 0.0f;
-                 bool fieldSingle = false, fieldChain = false;
+    struct Row { float leakChain = 0.0f, greenChain = 0.0f;
+                 bool fieldChain = false;
                  float fieldSpan = 0.0f; };
     Row rows[4];
 
@@ -142,20 +143,13 @@ int main()
         // outside lamp, read; darken it, read again. The difference in the red
         // channel is the leak, and the green channel beside it says the room is
         // lit at all (a black room leaks nothing and proves nothing).
-        const auto leakOf = [&](bool cascades, const char *what) {
+        const auto leakOf = [&](const char *what) {
             GiParams gi;
             gi.mode = GiMode::Vct;
             gi.quality = GiQuality::High;
             gi.ddgi = GiToggle::On;
             gi.updateBudget = 1;
             gi.numBounces = 1;
-            gi.cascades = cascades;
-            if (!cascades) {
-                // The single-volume arm keeps the spike's explicit bounds so the
-                // reference number is the spike's number; the chain fits itself.
-                gi.testBoundsMin = Vec3(-6.5f, -1.0f, -6.5f);
-                gi.testBoundsMax = Vec3( 6.5f,  5.5f,  6.5f);
-            }
             if (!s->setGlobalIllumination(gi))
                 std::printf("   engine error: %s\n", e->lastError().c_str());
             enginetest::leakroom::setOutsideIntensity(s, room, 25.0f);
@@ -177,34 +171,25 @@ int main()
             return std::make_tuple(onR - offR, onG, st.ifdBound);
         };
 
-        const auto single = leakOf(false, "single");
-        const auto chain = leakOf(true, "chain");
+        const auto chain = leakOf("chain");
         const GiStatus stChain = s->giStatus();
-        // BOTH arms must carry a bound field, or the comparative bar below
-        // compares a field against the cone leak (~0.97) and passes trivially.
-        rows[a].fieldSingle = std::get<2>(single);
-        rows[a].leakSingle = std::get<0>(single);
+        // The arm must carry a bound field, or the bar below grades the cone
+        // leak (~0.97) and would fail for the wrong reason.
         rows[a].leakChain = std::get<0>(chain);
         rows[a].greenChain = std::get<1>(chain);
         rows[a].fieldChain = std::get<2>(chain) && stChain.ifdBound;
         rows[a].fieldSpan = stChain.ifdMax.x - stChain.ifdMin.x;
-        CHECK(rows[a].fieldSingle,
-              "leak_room: the scene-fitted REFERENCE arm carries a bound field (or the "
-              "comparative bar would grade a field against the cone leak)");
         CHECK(stChain.ifdBound && !stChain.cascades.empty(),
               "the chain arm really has a chain AND a field bound");
         e->destroyScene(s);
     }
 
-    std::printf("\n wall(m)   leak SINGLE   leak CHAIN   bar      green(chain)\n");
+    std::printf("\n wall(m)   leak CHAIN   bar      green(chain)\n");
     for (int a = 0; a < 4; ++a)
-        std::printf("  %5.2f    %10.4f   %10.4f   %6.4f   %10.4f\n", double(thicknesses[a]),
-                    double(rows[a].leakSingle), double(rows[a].leakChain), double(bars[a]),
-                    double(rows[a].greenChain));
+        std::printf("  %5.2f    %10.4f   %6.4f   %10.4f\n", double(thicknesses[a]),
+                    double(rows[a].leakChain), double(bars[a]), double(rows[a].greenChain));
 
-    // THE BARS. Asserted on the CHAIN arm, because that is E1's new claim; the
-    // single-volume arm is measured beside it so a regression in the reference
-    // cannot hide behind a chain that matches it.
+    // THE BARS, asserted on the chain (E1's claim).
     for (int a = 0; a < 4; ++a) {
         char msg[192];
         std::snprintf(msg, sizeof(msg),
@@ -214,20 +199,6 @@ int main()
     }
     CHECK(rows[0].greenChain > 0.02f,
           "the room is lit by its own lamp (the leak is measured on a lit wall, not a black one)");
-    // AND THE CLAIM ITSELF: the field on a cascade holds the wall at least as
-    // well as the field on the scene's fitted box does. It should do slightly
-    // BETTER, and does — cascade 0 is a 10 m box, so its 8,192 probes sit 0.5 m
-    // apart where the fitted volume's sit 1.6 m apart, and a denser cage is a
-    // sharper visibility test.
-    for (int a = 0; a < 4; ++a) {
-        char msg[192];
-        std::snprintf(msg, sizeof(msg),
-                      "...and it leaks no more than the scene-fitted field at %.2f m "
-                      "(%.4f vs %.4f)", double(thicknesses[a]), double(rows[a].leakChain),
-                      double(rows[a].leakSingle));
-        CHECK(rows[a].leakChain <= rows[a].leakSingle * 1.15f + 0.002f, msg);
-    }
-
     // =====================================================================
     // THE FOLD'S SEAM — a curved SINGLE-SIDED surface is one surface
     // (ogre-patch 0065; the review's F1)

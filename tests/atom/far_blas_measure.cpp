@@ -283,7 +283,6 @@ static int pictureMode(Engine *e, View *view)
     GiParams gi;
     gi.mode = GiMode::VctPccHybrid;
     gi.quality = GiQuality::High;
-    gi.cascades = true;
     gi.ddgi = GiToggle::Off;
     gi.numBounces = 1;
     gi.gather = GiToggle::On;

@@ -903,7 +903,6 @@ int main()
         if (P.gi) {
             gi.mode = P.pcc ? GiMode::VctPccHybrid : GiMode::Vct;
             gi.quality = GiQuality::Medium;
-            gi.cascades = true;
             gi.ddgi = GiToggle::On;
             gi.gather = P.gather ? GiToggle::On : GiToggle::Off;
         } else {

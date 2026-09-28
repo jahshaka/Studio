@@ -259,7 +259,7 @@ int main(int argc, char **argv)
     differential(r, "setShadowCastingEnabled", [&] { r.cube->setShadowCastingEnabled(false); });
     differential(r, "setLightMask", [&] { r.cube->setLightMask(0x3); });
     differential(r, "setPlanarReflector", [&] { r.loner->setPlanarReflector(true); });
-    differential(r, "setGiBoundsExcluded", [&] { r.cube->setGiBoundsExcluded(true); });
+    differential(r, "setProbeGridExcluded", [&] { r.cube->setProbeGridExcluded(true); });
     differential(r, "setCollisionEnabled", [&] { r.cube->setCollisionEnabled(true); });
     differential(r, "setName", [&] { r.cube->setName(QStringLiteral("cube-renamed")); });
 

@@ -113,7 +113,6 @@ int main()
     gi.numBounces = 1;
     gi.ddgi = GiToggle::Off;
     gi.updateBudget = 1;
-    gi.cascades = true;
     CHECK(scene->setGlobalIllumination(gi), "the cascade chain built");
     render(e, 8);
     GiStatus st = scene->giStatus();

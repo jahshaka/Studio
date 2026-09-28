@@ -118,7 +118,6 @@ int main()
     gi.numBounces = 3;                // -> every cascade runs 3 (uniform since PHOTON-M1): odd everywhere
     gi.ddgi = GiToggle::Off;
     gi.updateBudget = 0;
-    gi.cascades = true;
     CHECK(scene->setGlobalIllumination(gi), "the four-cascade chain builds at three bounces");
     render(e, 10);
     const GiStatus st = scene->giStatus();

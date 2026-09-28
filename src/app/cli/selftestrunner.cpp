@@ -194,12 +194,12 @@ if (!material.set(wall, { baseColor: "#f0f0f0", metallic: 0.0, roughness: 1.0 })
 var ph = world.photon({ enabled: true, tier: "high" });
 if (!ph || ph.enabled !== true || ph.tier !== "high")
     throw new Error("world.photon(high) did not take: " + JSON.stringify(ph));
-// SCREEN-SPACE REFLECTIONS ON, EXPLICITLY, AND IT IS LOAD-BEARING: the RAY tier
-// rides the SSR chain's prepass (`gi.rt_reflect` case 6, "with the view's SSR row
-// OFF there is no trace at all, whatever the machine can do"). The `ssr` row's
-// own tier column is the WORLD MODE's, not Photon's, so a Photon tier does not
-// set it and the fixture must — measured: without this line B1 and B2 hashed
-// identically on a machine with ray queries.
+// SCREEN-SPACE REFLECTIONS ON, EXPLICITLY. The row being ON is what B1 needs: an
+// SSR row that is off is honoured at every tier — no trace, no march — and the
+// `ssr` row's tier column is the WORLD MODE's, not Photon's, so a Photon tier
+// does not set it. Its VALUE shapes only B2: at High with rays the trace runs at
+// the tier's own resolution whatever lq/hq says (GiQualityFacts::reflectTrace,
+// D4-PHOTON-TIERS), and with the rays off B2 is the screen march at hq.
 var ssr = world.override({ id: "ssr", value: "hq" });
 if (world.settings().ssr.valueId !== "hq")
     throw new Error("world.override(ssr=hq) did not take: " + JSON.stringify(ssr));

@@ -141,8 +141,8 @@ int main()
         vct.numBounces = 2;
         // EXPLICIT bounds covering floor + wall (also exercises the document's
         // gi.bounds parameter): geometry that leaves them stops voxelizing.
-        vct.testBoundsMin = Vec3(-9.0f, -1.5f, -9.0f);
-        vct.testBoundsMax = Vec3(9.0f, 7.5f, 9.0f);
+        vct.testProbeRegionMin = Vec3(-9.0f, -1.5f, -9.0f);
+        vct.testProbeRegionMax = Vec3(9.0f, 7.5f, 9.0f);
         const bool vctOk = s->setGlobalIllumination(vct);
         if (!vctOk) std::printf("   engine error: %s\n", engine->lastError().c_str());
         CHECK(vctOk, "setGlobalIllumination(Vct) succeeds");
@@ -174,6 +174,9 @@ int main()
         // nature, which makes that signal too weak to assert robustly.
         enginetest::setNodePosition(s, wall, Vec3(0.0f, 3.0f, 40.0f));
         s->refreshGlobalIllumination();
+        // THE CHAIN answers a moved box through its dirty path, one cascade a
+        // frame, then its settle: count frames until GI is at rest (bounded).
+        for (int f = 0; f < 240 && !s->giStatus().giAtRest; ++f) engine->renderOneFrame();
         render(engine.get());
         view->readPixels(img);
         const Colour vctMoved = img.at(floorX, floorY);

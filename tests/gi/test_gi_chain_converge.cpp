@@ -144,7 +144,6 @@ int main(int argc, char **argv)
         bg.numBounces = 4;
         bg.ddgi = GiToggle::Off;
         bg.updateBudget = 0;
-        bg.cascades = true;
         CHECK(bs->setGlobalIllumination(bg), "boot: the arm is armed before the first frame");
         int builtAt = -1;
         for (int f = 0; f < 40; ++f) {
@@ -218,7 +217,6 @@ int main(int argc, char **argv)
     gi.numBounces = 4;
     gi.ddgi = GiToggle::Off;
     gi.updateBudget = 0;
-    gi.cascades = true;
     CHECK(scene->setGlobalIllumination(gi), "the cascade chain builds");
     render(e, 6);
     GiStatus st = scene->giStatus();
@@ -318,24 +316,6 @@ int main(int argc, char **argv)
         CHECK(scene->setGlobalIllumination(gi), "back to the Medium chain");
         render(e, 6);
     }
-
-    // ---- 4. THE SINGLE VOLUME IS NOT AN ITERATION AND STAYS BIT-EXACT ----
-    GiParams single = gi;
-    single.cascades = false;
-    CHECK(scene->setGlobalIllumination(single), "the single-volume arm builds");
-    render(e, 6);
-    st = scene->giStatus();
-    CHECK(st.cascades.empty(), "...with no chain at all");
-    Image s1, s2;
-    scene->refreshGiLighting(false);
-    shot(s1);
-    scene->refreshGiLighting(false);
-    shot(s2);
-    const float singleDelta = worstDiff(s1, s2);
-    std::printf("   single volume: two at-rest re-injections differ by %.2f/255\n", singleDelta);
-    CHECK(singleDelta == 0.0f,
-          "THE SINGLE VOLUME IS BIT-EXACT across re-injections (one injection "
-          "overwrites its light voxels and there is nothing outside it to read)");
 
     // ---- 5. THE FIELD RE-CONVERGES WHEN THE CHAIN'S RADIANCE CHANGED -----
     // The field is an integral of the chain: a light that moved must reach it,

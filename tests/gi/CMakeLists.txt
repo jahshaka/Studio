@@ -307,6 +307,29 @@ set_tests_properties(gi.tiers PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
     LABELS "document" TIMEOUT 120)
 jah_no_display(gi.tiers)
 
+# photon.tiers — THE SETTINGS TRUTH FOR PHOTON (D4-PHOTON-TIERS): every row x tier
+# has a value, the sentences are generated from the one table, the SSR row reads
+# "Traced" at a ray tier, the gather row, the tri-state resolved one way, Epic as a
+# quality row, the probe grid's VRAM budget arithmetic and the declared offscreen
+# picture table. Pure tables: no display.
+add_executable(test_photon_tiers test_photon_tiers.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/worldmodes.cpp)
+set_target_properties(test_photon_tiers PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+target_include_directories(test_photon_tiers PRIVATE
+    ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/irisgl
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src
+    ${CMAKE_SOURCE_DIR}/irisgl/engine/include)
+target_link_libraries(test_photon_tiers PRIVATE IrisGL Qt6::Gui)
+jah_document_graph(test_photon_tiers)
+add_test(NAME photon.tiers COMMAND test_photon_tiers
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(photon.tiers PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+    LABELS "document" TIMEOUT 120)
+jah_no_display(photon.tiers)
+
 # gi.ddgi_ambient — THE PHOTON AMBIENT FIX (GI_UNIFIED_SPEC.md ADDENDUM
 # CORRECTION; the upstream mechanism is in SPECS/OGRE_UPSTREAM_ISSUES.md's
 # "Vct_piece_ps.any: volume-local ambient blend commented out" entry). Its own
@@ -1427,21 +1450,6 @@ set_target_properties(test_gi_voxel_lab PROPERTIES
 add_test(NAME gi.voxel_lab COMMAND test_gi_voxel_lab
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.voxel_lab PROPERTIES TIMEOUT 120 LABELS "engine")
-# VOXEL-DIAL (PHOTON-VOXEL-4) — a TOOL, not a suite: the scene-fitted volume's
-# resolution (GiParams::testVoxelResolution) against its rebuild, injection and
-# frame cost, paired 32 / 64 in one process. Run under scripts/gpu-exclusive.sh.
-add_executable(voxel_dial_measure EXCLUDE_FROM_ALL voxel_dial_measure.cpp)
-set_target_properties(voxel_dial_measure PROPERTIES
-    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
-    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
-    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
-    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
-    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
-target_compile_definitions(voxel_dial_measure PRIVATE
-    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
-    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
-target_link_libraries(voxel_dial_measure PRIVATE JahshakaEngine)
-add_dependencies(voxel_dial_measure JahshakaEngineMedia)
 # gi.voxel_emissive — AN EMITTER AUTHORED AT RADIANCE L IS STORED AS L (PHOTON
 # phase A, SPECS/photon/A2_VOXEL_CLIP_DESIGN.md section 2; lane VOXEL-CLIP-1,
 # ogre-patch 0087). The emissive VOXEL store was RGBA8_UNORM, so every emitter
@@ -1833,3 +1841,22 @@ jah_gpu_row(photon.view CLASS app
 set_tests_properties(photon.view PROPERTIES
     TIMEOUT 400 LABELS "scripting"
     ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}HOME=${_photon_view_home};JAHSHAKA_DATA_ROOT=${_photon_view_home}/.local/share/Jahshaka")
+
+# gi.probe_nan — PROBE-NAN-1 (D4-PHOTON-TIERS): a point light of intensity 20 at 0.3 m over
+# a 100 m ground leaves every irradiance-field texel FINITE (tested on the bits) and never
+# darkens the field against intensity 2 — the defect turned every probe black at once.
+add_executable(test_gi_probe_nan test_gi_probe_nan.cpp)
+set_target_properties(test_gi_probe_nan PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_probe_nan PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_probe_nan PRIVATE JahshakaEngine)
+add_dependencies(test_gi_probe_nan JahshakaEngineMedia)
+jah_gpu_row(gi.probe_nan CLASS engine COMMAND test_gi_probe_nan
+            WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.probe_nan PROPERTIES LABELS "engine" TIMEOUT 120 RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})

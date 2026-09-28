@@ -104,7 +104,6 @@ static GiParams hybridGi()
     GiParams gi;
     gi.mode = GiMode::VctPccHybrid;   // the tier every new project is born at
     gi.quality = GiQuality::Medium;
-    gi.cascades = true;
     gi.ddgi = GiToggle::On;           // the field is the machine's LAST stage
     gi.updateBudget = 1;
     return gi;

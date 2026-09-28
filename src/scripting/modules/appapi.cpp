@@ -269,7 +269,7 @@ QVector<VerbInfo> AppApi::verbs() const
           "driver about its screen (0 = unknown, which falls back to 16 ms). The setting persists "
           "as viewport/pacing and is the same one Preferences > Viewport > Frame Pacing writes.",
           Needs::Window },
-        { "renderStats", "app.renderStats() -> {sceneTriangles, submittedTriangles, gpuCountLagFrames, draws, perPass:[{name, triangles, draws}], perObject:[{id, name, level, levels, triangles}], metricsRecording, fps, frameMs, lastMs, p95Ms, p99Ms, bestMs, worstMs, batches, vertices, instances, incompletePsoRequests, forwardPlusLights, forwardPlusBudget, forwardPlusOverBudget, resourceAdvances}",
+        { "renderStats", "app.renderStats() -> {sceneTriangles, submittedTriangles, gpuCountLagFrames, draws, perPass:[{name, triangles, draws}], perObject:[{id, name, level, levels, triangles, cut}], metricsRecording, fps, frameMs, lastMs, p95Ms, p99Ms, bestMs, worstMs, batches, vertices, instances, incompletePsoRequests, forwardPlusLights, forwardPlusBudget, forwardPlusOverBudget, resourceAdvances}",
           "What the RENDERER measured, straight off the engine boundary — the numbers behind the F3 "
           "stats overlay, and the read-back answer for an agent that wants to know what a frame costs "
           "(a screenshot cannot carry them; the overlay is deliberately absent from offscreen renders). "
@@ -303,7 +303,11 @@ QVector<VerbInfo> AppApi::verbs() const
           "it is real: that byte is one slot per object and every pass which updates LOD lists "
           "writes it (a planar reflector's mirrored camera, a PiP inset, a probe face, a "
           "thumbnail), so in a frame that drew only the main view it is the main view's level, "
-          "and in a frame that also drew a mirror it may be the mirror's. "
+          "and in a frame that also drew a mirror it may be the mirror's (a shadow map's caster "
+          "passes never leave theirs: each computes LOD at its light's camera and the view's levels "
+          "are put back). `cut` is true for an object the view draws through the Atom id pass's "
+          "CLUSTER CUT: no view pass walks its per-object level, so such a row has none — `level` "
+          "reads 0 and `triangles` the authored count; world.setAtomView('levels') shows its cut. "
           "The timings come from Ogre's own FrameStats, which our render loop feeds: `fps`/`frameMs` are "
           "the rolling average, `lastMs` the latest (noisy) sample, `p95Ms`/`p99Ms` the percentiles, "
           "`bestMs`/`worstMs` the extremes. READ THE HONESTY NOTE ON app.frameStats: `fps` here measures "
@@ -1409,6 +1413,7 @@ QVariantMap AppApi::renderStats()
                 row.insert("level", int(d.level));
                 row.insert("levels", int(d.levels));
                 row.insert("triangles", QVariant::fromValue(qulonglong(d.triangles)));
+                row.insert("cut", d.cut);
                 rows.append(row);
             }
         }

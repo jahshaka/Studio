@@ -8,9 +8,10 @@
 //       coarse copies, ATOM-FARBLAS-1) over [maxT, far plane]; a committed
 //       triangle is shaded from the cascades (black where they cannot shade it),
 //       a miss of both reads the SKY.
-//   irisgl/engine/src/OgreScreenProbeGather.cpp (`reach`) — maxT = the outer
-//       cascade's HALF extent (the lit volume's inscribed radius) under the
-//       camera's far plane, unless tuning.rayLength overrides.
+//   irisgl/engine/src/OgreScreenProbeGather.cpp — maxT = THE ONE REACH RULE
+//       (detail::photonRayReach, D4-PHOTON-TIERS): the outer cascade's DIAGONAL
+//       under the camera's far plane, floored at 50 m, unless tuning.rayLength
+//       overrides. (It was the HALF extent after PHOTON-GAFAR-1; below.)
 //
 // THE HISTORY THE NUMBERS SETTLED: maxT used to be the outer box's full
 // DIAGONAL and a missed ray read the outer cascades at its end point (a "far
@@ -288,7 +289,7 @@ static void armChain(View *view, int ssrRow)
 {
     PostFxDesc fx;
     fx.allowOffscreen = true;
-    fx.ssr = ssrRow;       // the tier's own SSR row (the gather's stride is epicTier's)
+    fx.ssr = ssrRow;       // the tier's own SSR row (the gather's stride is the quality row's)
     view->setPostFx(fx);
 }
 
@@ -296,12 +297,12 @@ static void armChain(View *view, int ssrRow)
 /// (src/services/worldmodes.cpp — Epic shares High's resolution dial and
 /// differs in the bounce count, the SSR row and the gather's density). The
 /// gather's stride is the engine's tier table's (`giQualityFacts`, keyed on
-/// GiParams::epicTier: 8 at Epic, 16 below), never the SSR row.
-struct Tier { const char *name; GiQuality quality; GiMode mode; int bounces; int ssrRow; bool epic; };
+/// the quality row: 8 at Epic, 16 below), never the SSR row.
+struct Tier { const char *name; GiQuality quality; GiMode mode; int bounces; int ssrRow; };
 static const Tier kTiers[3] = {
-    { "Medium", GiQuality::Medium, GiMode::Vct,         1, 0, false },
-    { "High",   GiQuality::High,   GiMode::VctPccHybrid, 1, 1, false },
-    { "Epic",   GiQuality::High,   GiMode::VctPccHybrid, 3, 2, true },
+    { "Medium", GiQuality::Medium, GiMode::Vct,         1, 0 },
+    { "High",   GiQuality::High,   GiMode::VctPccHybrid, 1, 1 },
+    { "Epic",   GiQuality::Epic,   GiMode::VctPccHybrid, 3, 2 },
 };
 
 static GiParams giAt(const Tier &t)
@@ -309,10 +310,8 @@ static GiParams giAt(const Tier &t)
     GiParams gi;
     gi.mode = t.mode;
     gi.quality = t.quality;
-    gi.cascades = true;
     gi.ddgi = GiToggle::Off;          // STATED: the field is off; this is the gather's own ray
     gi.numBounces = t.bounces;
-    gi.epicTier = t.epic;
     gi.gather = GiToggle::On;
     return gi;
 }
@@ -500,9 +499,10 @@ static int sweepMain(Engine *e, View *view)
             }
             tune(s, len[2]); render(e, 4); view->readPixels(ref2);
             ref = img[2];
-            const Delta floor = deltaOf(ref, ref2), der = deltaOf(img[0], derived);
+            // The engine's derivation is the diagonal (the one reach rule), arm 2.
+            const Delta floor = deltaOf(ref, ref2), der = deltaOf(img[2], derived);
             std::printf("   instrument floor: the diagonal's arm twice %u/%u px; derived vs forced "
-                        "half extent %u px\n", floor.moved, floor.total, der.moved);
+                        "diagonal %u px\n", floor.moved, floor.total, der.moved);
             if (floor.moved * 100u > floor.total) {
                 std::printf("   !! the frozen instrument moved more than 1 %% on its own — "
                             "this row is VOID\n");
@@ -644,10 +644,9 @@ int main()
                 const float sz = 2.0f * r.outerHalf;
                 r.reach = std::sqrt(3.0f) * sz;             // |voxelSize| of the outer cascade
             }
-            // THE ENGINE'S DERIVATION (OgreScreenProbeGather.cpp `reach`): the
-            // outer half extent under the far plane, 50 m with no cascades.
-            r.maxT = std::min(cam.farClip > 0 ? cam.farClip : 1000.0f,
-                              r.outerHalf > 0.0f ? r.outerHalf : 50.0f);
+            // THE ENGINE'S DERIVATION (detail::photonRayReach, D4-PHOTON-TIERS): the
+            // outer cascade's DIAGONAL under the far plane, floored at 50 m.
+            r.maxT = std::min(cam.farClip > 0 ? cam.farClip : 1000.0f, std::max(r.reach, 50.0f));
             const GatherStatus gst = gs.gather;
             r.stride = gst.stride; r.octRes = gst.octRes; r.gatherProbes = gst.probes;
             // THE RAY START, as the gather now makes it (the fix round): an

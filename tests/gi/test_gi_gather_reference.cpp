@@ -261,7 +261,6 @@ int main()
     gi.ddgi = GiToggle::Off;
     gi.gather = GiToggle::Off;
     gi.numBounces = 1;
-    gi.cascades = true;
     CHECK(s->setGlobalIllumination(gi), "the cascade chain builds over the fixture");
     render(e, 30);
 
@@ -910,7 +909,6 @@ static int traceMain(Engine *e)
     gi.ddgi = GiToggle::Off;
     gi.gather = GiToggle::On;
     gi.numBounces = 1;
-    gi.cascades = true;
     CHECK(s->setGlobalIllumination(gi), "the cascade chain builds over the wall fixture");
     view->setCamera(topDownCamera());
     render(e, 40);

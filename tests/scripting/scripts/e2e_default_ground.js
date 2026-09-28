@@ -229,30 +229,29 @@ assert(scene.nodes().length === 4,
        "nothing new is in the document: the floor, two lights and the root's own row (" +
        scene.nodes().length + ")");
 
-// ---- 3. the lighting is untouched -------------------------------------------
+// ---- 3. the probe placement is untouched ------------------------------------
 // The numbers L3 pinned, read from the renderer: a 100 m ground clamped to the
-// 64 m automatic ceiling, centred on the content.
-// THE SINGLE VOLUME, PINNED, because that is what this section measures: the
-// AUTOMATIC FIT around a 100 m ground plane. Every tier builds the camera-centred
-// CHAIN since PHOTON_SPEC §7 E2 (6), and under a chain `boundsMin/boundsMax` are
-// the OUTERMOST cascade's 120 m box by construction (world.giStatus says so) —
-// a fit test that let the tier decide would be measuring the cascade table.
-world.gi({ mode: "vct", quality: "high", cascades: false });
+// 64 m automatic ceiling, centred on the content. THE FIT IS THE REFLECTION-PROBE
+// GRID'S PLACEMENT REGION (the voxels are the camera's cascade chain and fit
+// nothing — the single fitted volume is deleted, D4-PHOTON-TIERS), and a grid is
+// placed where the reflections are not traced: the ray row goes off for the read.
+var rayRow = world.rayTracing();
+world.rayTracing("off");
 editor.frame(180, 1 / 60);
 var st = world.giStatus();
-console.log("giStatus: " + J({ voxelMetres: st.voxelMetres, min: st.boundsMin, max: st.boundsMax,
+console.log("giStatus: " + J({ min: st.probeRegionMin, max: st.probeRegionMax,
                                probes: st.probeCount }));
 assert(st.live === true, "giStatus is live");
-var extent = Math.max(st.boundsMax.x - st.boundsMin.x, st.boundsMax.y - st.boundsMin.y,
-                      st.boundsMax.z - st.boundsMin.z);
+var extent = Math.max(st.probeRegionMax.x - st.probeRegionMin.x,
+                      st.probeRegionMax.y - st.probeRegionMin.y,
+                      st.probeRegionMax.z - st.probeRegionMin.z);
 assert(extent <= 66.0 && extent >= 60.0,
-       "the automatic volume is still the 64 m ceiling, not a horizon-sized one (" +
+       "the automatic probe region is still the 64 m ceiling, not a horizon-sized one (" +
        extent.toFixed(2) + " m)");
-assert(near(st.voxelMetres, extent / 128.0, 0.01),
-       "...at High's 128^3, i.e. " + st.voxelMetres.toFixed(4) + " m per voxel");
-assert(st.boundsMin.x <= -30 && st.boundsMax.x >= 30,
-       "...and it is the FLOOR's volume: the ground is still in the lit volume (" +
-       st.boundsMin.x.toFixed(1) + " .. " + st.boundsMax.x.toFixed(1) + ")");
+assert(st.probeRegionMin.x <= -30 && st.probeRegionMax.x >= 30,
+       "...and it is the FLOOR's region: the ground is still in it (" +
+       st.probeRegionMin.x.toFixed(1) + " .. " + st.probeRegionMax.x.toFixed(1) + ")");
+world.rayTracing(rayRow);
 
 // ---- 4. a save round trip changes none of it --------------------------------
 assert(project.save() === true, "save");

@@ -56,11 +56,9 @@ assert(gi.ddgiIntensity === undefined,
 // TIER, whose column was off; no tier's column is off any more (E2 (4)), so
 // the pin is the honest way to say it — and a pin against the tier is exactly
 // what world.gi's contract promises, which this line therefore also proves.
-// The cascade chain is pinned off with it: this phase reads `ifdProbes` and the
-// single volume is the arm those numbers were measured on.
-assert(world.gi({ tier: "low", mode: "vct", quality: "low", bounces: 1,
-                  cascades: false, ddgi: false }),
-       "world.gi(vct at the Low tier, the field and the chain pinned off)");
+// (The voxels are the camera's chain, as always: the field rides cascade 0.)
+assert(world.gi({ tier: "low", mode: "vct", quality: "low", bounces: 1, ddgi: false }),
+       "world.gi(vct at the Low tier, the field pinned off)");
 assert(world.get().gi.ddgi === false, "the pin resolves the field OFF");
 editor.frame(4);
 var st = world.giStatus();

@@ -274,7 +274,6 @@ int main() {
     GiParams gi;
     gi.mode = GiMode::Vct;
     gi.quality = GiQuality::High;
-    gi.cascades = true;
     gi.numBounces = 1;
     gi.gather = GiToggle::On;   // forced: the test is the stereo gather, whatever the VR column says
     if (!CHECK_MSG(scene->setGlobalIllumination(gi), "the chain builds")) return 1;

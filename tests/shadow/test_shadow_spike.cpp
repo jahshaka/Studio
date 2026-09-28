@@ -489,8 +489,8 @@ static void r3Case()
     shellRoom(room.scene);   // this case needs probes: see shellRoom
     GiParams gi;
     gi.mode = GiMode::VctPccHybrid;
-    gi.testBoundsMin = Vec3(-6.0f, -0.5f, -6.0f);
-    gi.testBoundsMax = Vec3( 6.0f,  6.0f,  6.0f);
+    gi.testProbeRegionMin = Vec3(-6.0f, -0.5f, -6.0f);
+    gi.testProbeRegionMax = Vec3( 6.0f,  6.0f,  6.0f);
     gi.quality = GiQuality::High;          // probeShadows resolves true at high
     gi.probeShadows = GiToggle::On;
     room.scene->setGlobalIllumination(gi);
@@ -633,8 +633,8 @@ static void cacheKindsCase()
     shellRoom(room.scene);   // this case needs probes: see shellRoom
     GiParams gi;
     gi.mode = GiMode::VctPccHybrid;
-    gi.testBoundsMin = Vec3(-6.0f, -0.5f, -6.0f);
-    gi.testBoundsMax = Vec3( 6.0f,  6.0f,  6.0f);
+    gi.testProbeRegionMin = Vec3(-6.0f, -0.5f, -6.0f);
+    gi.testProbeRegionMax = Vec3( 6.0f,  6.0f,  6.0f);
     gi.quality = GiQuality::Low;
     gi.probeShadows = GiToggle::On;
     gi.pccProbesX = 2; gi.pccProbesY = 1; gi.pccProbesZ = 2;
@@ -752,8 +752,8 @@ static void scanCostCase(int n)
     shellRoom(s);   // this case needs probes: see shellRoom
     GiParams gi;
     gi.mode = GiMode::VctPccHybrid;
-    gi.testBoundsMin = Vec3(-6.0f, -0.5f, -6.0f);
-    gi.testBoundsMax = Vec3( 6.0f,  6.0f,  6.0f);
+    gi.testProbeRegionMin = Vec3(-6.0f, -0.5f, -6.0f);
+    gi.testProbeRegionMax = Vec3( 6.0f,  6.0f,  6.0f);
     gi.quality = GiQuality::Low;
     gi.probeShadows = GiToggle::On;
     gi.pccProbesX = 2; gi.pccProbesY = 1; gi.pccProbesZ = 2;

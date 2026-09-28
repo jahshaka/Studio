@@ -209,6 +209,11 @@ int main()
     Scene *scene = e->createScene("dolly");
     if (!view || !scene) { std::printf("FAIL: view/scene: %s\n", e->lastError().c_str()); return 1; }
     view->setScene(scene);
+    // THE STOCK ROUTE (SHADOW-LOD-1): the per-object chain is what stock-PBR items and
+    // every stock caster draw; an Atom-routed item is drawn by the cluster cut and no
+    // view pass walks its level any more (the fork's LOD walk skips the queue the id
+    // pass draws), so the chain is measured with the split off.
+    scene->setAtomDrawEnabled(false);
     // THE WATCHED VIEW'S BAND (see the header): set once, at creation, because
     // it is a graph-shape property.
     view->setLodHysteresisOffscreen(true);

@@ -261,6 +261,16 @@ if(Vulkan_FOUND AND JAH_ATOM_GLSLANG AND OGRE_NEXT_VULKAN_RS_LIB)
     jah_gpu_row(shadow.caster_first_frame CLASS engine COMMAND test_shadow_atom_cut --first-frame
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
     set_tests_properties(shadow.caster_first_frame PROPERTIES TIMEOUT 120 LABELS "engine")
+    # shadow.stock_lod — A SHADOW MAP DRAWS ITS STOCK CASTERS AT THE LIGHT'S LEVEL (SHADOW-LOD-1, the
+    # fork's caster-pass LOD walk): every caster pass's level for the alpha-tested stock casters is the
+    # rule's at the pass's own camera and the map's texels (PSSM splits, a spot, a point's six faces), the
+    # view's levels survive the shadow node's update (the save/restore), and no view pass walks the Atom
+    # queue. Frames counted: never the GPU lock.
+    add_executable(test_shadow_stock_lod test_shadow_stock_lod.cpp)
+    jah_atom_engine_target(test_shadow_stock_lod)
+    jah_gpu_row(shadow.stock_lod CLASS engine COMMAND test_shadow_stock_lod
+             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+    set_tests_properties(shadow.stock_lod PROPERTIES TIMEOUT 60 LABELS "engine")
     add_executable(test_atom_negative_control test_atom_negative_control.cpp ${_atom_neg_headers})
     jah_atom_engine_target(test_atom_negative_control)
     target_include_directories(test_atom_negative_control PRIVATE "${_atom_neg_gen}"

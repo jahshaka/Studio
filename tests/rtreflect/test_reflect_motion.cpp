@@ -256,8 +256,8 @@ int main()
     gi.mode = GiMode::Vct;
     gi.quality = GiQuality::High;
     gi.numBounces = 1;
-    gi.testBoundsMin = Vec3(-30.0f, -2.0f, -30.0f);
-    gi.testBoundsMax = Vec3(30.0f, 10.0f, 30.0f);
+    gi.testProbeRegionMin = Vec3(-30.0f, -2.0f, -30.0f);
+    gi.testProbeRegionMax = Vec3(30.0f, 10.0f, 30.0f);
     CHECK(s->setGlobalIllumination(gi), "the voxel arm builds over the fixture");
 
     PostFxDesc fx;

@@ -40,18 +40,18 @@ assert(node.setProperty(high, "visible", false), "the user hides the high part i
 var tallTop = node.transform(tall).position.y + node.size(tall).height / 2;
 console.log("    tall part top y = " + tallTop);
 
+// THE AUTOMATIC FIT this suite reads is the REFLECTION-PROBE GRID's placement
+// region (the voxels are the camera's chain and fit nothing — the single fitted
+// volume is deleted, D4-PHOTON-TIERS). A probe grid is placed where the scene's
+// reflections are not traced, so the scene's ray row goes off; the subject is
+// unchanged: "a hidden node takes no part in placing the scene's GI".
+world.rayTracing("off");
 function settle() {
-    // THE SINGLE VOLUME, PINNED, because this suite reads the automatic FIT:
-    // every tier builds the camera-centred chain since PHOTON_SPEC §7 E2 (6),
-    // and under a chain `boundsMin/boundsMax` are the OUTERMOST cascade's box
-    // by construction (world.giStatus says so), which has nothing to do with
-    // what the scene's hidden parts contribute. The subject here is "a hidden
-    // node is out of the lit volume", and the lit volume it means is the fit.
-    world.gi({ cascades: false });
     editor.frame(3);
     world.refreshGi();
     editor.frame(6);
-    return world.giStatus();
+    var st = world.giStatus();
+    return { live: st.live, boundsMin: st.probeRegionMin, boundsMax: st.probeRegionMax };
 }
 function vis(id) {
     return scene.nodes({ subtree: id, depth: 0, include: ["visibility"] })[0];

@@ -79,15 +79,9 @@ int main(int argc, char **argv)
     // graze, so red on the floor is bounced light and nothing else. Low quality
     // 64^3 voxels — the same resolution gi.modes proves a red bounce at.
     auto doc = iris::Scene::create();
-    // THE SINGLE VOLUME, PINNED. Every Photon tier builds the camera-centred
-    // cascade chain since PHOTON_SPEC §7 E2 (6), and a document's `giCascades`
-    // therefore defaults to ON — but what this suite measures is the SINGLE
-    // volume's own behaviour (its automatic fit, its reuse arm, its re-solve
-    // cadence), and the chain's counterpart of each of those is measured by
-    // `gi.cascades` and `gi.cascade_dirty`. Pinning it here keeps each suite
-    // about one arm.
-    doc->giCascades = 0;
     doc->giMode = iris::GiMode::VCT;
+    doc->giDdgi = 0;   // no field: its refinement passes are GI work of their own (the
+                       // document's -1 now resolves to the tier's field, ON)
     // PHOTON-GATHER-1d: the gather pinned off — this suite measures the mirror's
     // GI re-solve coalescing and counts GI work rows; the gather is a per-frame,
     // view-dependent estimate (its rows are filed every frame by design), and it
@@ -208,7 +202,7 @@ int main(int argc, char **argv)
     {
         // THE COUNTER IS WIRED FOR THIS BLOCK ONLY. The rest of the suite runs
         // WITHOUT one on purpose — that is the "no epoch, no skipping" half of
-        // the contract (giEscapeSignature says so by name), and every drag
+        // the contract (giGeometrySignature's own note), and every drag
         // assertion below depends on the walks running unconditionally. Here
         // the epoch IS the subject, so it is armed exactly as the app arms it
         // (EngineHost) and handed back before the drag.
@@ -353,11 +347,18 @@ int main(int argc, char **argv)
                     }
             return n;
         };
-        // (1) STILL: a scene nobody is touching files no GI work at all.
+        // (1) STILL: a scene nobody is touching files no GI work at all — once the
+        // chain has come to rest after the drag above (its dirty path spends a
+        // cascade a frame and then settles: counted, not timed).
+        for (int f = 0; f < 240 && !escene->giStatus().giAtRest; ++f) frame();
+        engine->takeFrameRecords(recs);
         for (int f = 0; f < 20; ++f) frame();
         recs.clear();
         engine->takeFrameRecords(recs);
         const unsigned idleRows = giRows(nullptr);
+        for (const FrameRecord &r : recs)
+            for (const CacheWork &w : r.cacheWork)
+                if (w.cache == CacheKind::Gi) std::printf("   idle GI row: %s\n", w.detail.c_str());
         std::printf("   monitor: %zu still frames, %u GI cache rows\n", recs.size(), idleRows);
         CHECK(!recs.empty(), "the monitor recorded the still frames");
         CHECK(idleRows == 0, "a still scene files NO GI cache work");
@@ -411,9 +412,14 @@ int main(int argc, char **argv)
         for (const FrameRecord &r : recs)
             for (const CacheWork &w : r.cacheWork)
                 if (w.cache == CacheKind::Gi &&
-                    (w.detail == "vct.refresh" || w.detail == "vct.rebuild"))
-                    ++solveRows;
+                    (w.detail.rfind("vct.cascade", 0) == 0 || w.detail == "vct.cascades.build" ||
+                     w.detail == "vct.light.settle" || w.detail == "vct.light"))
+                    ++solveRows;   // the chain's re-solve: a cascade rebuild, or — with nothing
+                                   // geometric moved — its at-rest re-injection
         std::printf("   monitor: the settle filed %u re-solve row(s)\n", solveRows);
+        for (const FrameRecord &r : recs)
+            for (const CacheWork &w : r.cacheWork)
+                if (w.cache == CacheKind::Gi) std::printf("   settle GI row: %s\n", w.detail.c_str());
         CHECK(solveRows >= 1, "the settle's re-solve is FILED as GI cache work");
         engine->setFrameMonitor(MonitorLevel::Off);
     }

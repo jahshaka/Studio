@@ -35,19 +35,19 @@ console.log("new scene: " + J(r));
 assert(r.enabled === true, "a new scene is born with Photon ON");
 assert(r.tier === "epic", "at the Epic tier: " + r.tier);
 assert(r.technique === "vct_pcc_hybrid", "which resolves the hybrid: " + r.technique);
-assert(r.quality === "high", "at high voxel/probe quality: " + r.quality);
+assert(r.quality === "epic", "at the epic engine row: " + r.quality);
 assert(r.ddgi === true, "with the irradiance field on");
 assert(r.bounces === 3, "three light bounces (Epic's column): " + r.bounces);
 assert(r.dynamicProbes === undefined,
        "and NO dynamic-probe column at all (deleted with the feature, REALTIME_REFLECTIONS R2)");
 assert(r.row && r.row.tier === "epic" && r.row.bounces === 3 && r.row.dynamicProbes === undefined &&
-       r.row.technique === "vct_pcc_hybrid" && r.row.quality === "high" && r.row.ddgi === true,
+       r.row.technique === "vct_pcc_hybrid" && r.row.quality === "epic" && r.row.ddgi === true,
        "world.photon().row is the effective table row: " + J(r.row));
 assert(r.ddgiIntensity === undefined, "and no field-intensity dial (deleted, PHOTON-GATHER-1d)");
 assert(r.custom === false, "and nothing pinned: " + J(r.deviations));
 // world.gi is the same model, read through the full surface.
 var gi = world.get().gi;
-assert(gi.tier === "epic" && gi.mode === "vct_pcc_hybrid" && gi.quality === "high" &&
+assert(gi.tier === "epic" && gi.mode === "vct_pcc_hybrid" && gi.quality === "epic" &&
        gi.bounces === 3 && gi.dynamicProbes === undefined,
        "world.get().gi agrees, without the deleted key: " + J([gi.tier, gi.mode, gi.quality, gi.bounces]));
 var gs = world.giStatus();
@@ -64,7 +64,7 @@ var expect = {
     low:    { technique: "vct",            quality: "low",    ddgi: true, bounces: 1 },
     medium: { technique: "vct",            quality: "medium", ddgi: true, bounces: 1 },
     high:   { technique: "vct_pcc_hybrid", quality: "high",   ddgi: true, bounces: 1 },
-    epic:   { technique: "vct_pcc_hybrid", quality: "high",   ddgi: true, bounces: 3 }
+    epic:   { technique: "vct_pcc_hybrid", quality: "epic",   ddgi: true, bounces: 3 }
 };
 for (var t in expect) {
     var got = world.photon({ tier: t });
@@ -76,11 +76,10 @@ for (var t in expect) {
     assert(got.bounces === want.bounces, "  bounces -> " + got.bounces);
     assert(got.row.bounces === want.bounces && got.row.ddgi === want.ddgi,
            "  and the row readback matches the table");
-    // THE CASCADE COLUMN (PHOTON_SPEC §7 E2 (6)): on at EVERY tier, and it is
-    // written through to the document field the mirror reads — a tier that only
-    // said "on" without writing it would leave the renderer on the single box.
-    assert(world.get().gi.cascades === true,
-           "  the camera cascades are ON at the " + t + " tier");
+    // THE CASCADE COLUMN IS GONE (D4-PHOTON-TIERS): the voxels are always the
+    // camera's chain, so no tier and no document field can turn it off.
+    assert(world.get().gi.cascades === undefined,
+           "  no cascade switch is reported at the " + t + " tier");
     // The write-through invariant, seen from the OTHER verb: the backing
     // fields the mirror and the serializer read are the resolved values.
     var w = world.get().gi;
@@ -142,7 +141,7 @@ assert(afterSwitch.custom === true, "so the dial still reads Custom");
 // quality row uses.
 var cleared = world.clearOverride({ id: "giQuality" });
 assert(cleared.source === "mode", "clearOverride drops the pin: " + cleared.source);
-assert(world.photon().quality === "high", "and Epic's quality came back");
+assert(world.photon().quality === "epic", "and Epic's quality came back");
 assert(world.photon().custom === false, "the dial is a clean Epic again");
 
 // The irradiance field pins the same way, INCLUDING against Epic, and "auto"
@@ -214,12 +213,8 @@ assert(!byId["giDynamicProbes"], "the retired dynamic-probe row is not in the re
 assert(byId["giDdgi"].tiers.medium.valueId === "on" && byId["giDdgi"].tiers.high.valueId === "on" &&
        byId["giDdgi"].tiers.low.valueId === "on" && byId["giDdgi"].tiers.epic.valueId === "on",
        "the registry's field column: ON at every tier (Low became a voxel tier, E2 (4))");
-assert(byId["giCascades"] && byId["giCascades"].tierSpace === "photon" &&
-       byId["giCascades"].tiers.low.valueId === "on" &&
-       byId["giCascades"].tiers.medium.valueId === "on" &&
-       byId["giCascades"].tiers.high.valueId === "on" &&
-       byId["giCascades"].tiers.epic.valueId === "on",
-       "and the CASCADE column is a Photon row, on at every tier (E2 (6))");
+assert(!byId["giCascades"],
+       "and there is NO cascade row: the chain always runs (the single volume is deleted)");
 assert(byId["giBounces"].tiers.epic.value === 3 && byId["giBounces"].tiers.high.value === 1,
        "and Epic's column reads 3 bounces against High's 1");
 assert(byId["giMode"].tiers.epic.valueId === "vct_pcc_hybrid",

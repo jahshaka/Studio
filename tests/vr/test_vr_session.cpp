@@ -1892,8 +1892,10 @@ int main() {
             gi.mode = GiMode::Vct;
             gi.quality = GiQuality::Medium;
             gi.numBounces = 1;
-            gi.testBoundsMin = Vec3{ -8.0f, -4.0f, -8.0f };
-            gi.testBoundsMax = Vec3{ 8.0f, 6.0f, 8.0f };
+            // ONE PINNED CAMERA-CENTRED CASCADE where the deleted single volume was
+            // pinned (+-8 m at Medium's 64 cells; D4-PHOTON-TIERS).
+            gi.cascadeCount = 1;
+            gi.cascadeSet[0] = GiParams::GiCascadeDesc{ 8.0f, 64, 0.0f };
             CHECK_MSG(scene->setGlobalIllumination(gi), "the voxel arm builds over the fixture");
         }
 

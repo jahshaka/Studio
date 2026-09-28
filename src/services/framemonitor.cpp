@@ -160,6 +160,7 @@ const char *giQualityName(GiQuality q)
     case GiQuality::Low:    return "low";
     case GiQuality::Medium: return "medium";
     case GiQuality::High:   return "high";
+    case GiQuality::Epic:   return "epic";
     }
     return "?";
 }
@@ -691,6 +692,8 @@ void FrameMonitor::Bundle::writeSnapshot(const EngineSnapshot &s, const QString 
             { "voxelMetres", double(s.gi.voxelMetres) },
             { "probeRegionMin", vec3(s.gi.probeRegionMin) },
             { "probeRegionMax", vec3(s.gi.probeRegionMax) },
+            { "probeFitMin", vec3(s.gi.probeFitMin) },
+            { "probeFitMax", vec3(s.gi.probeFitMax) },
             { "probeHdr", s.gi.probeHdr },
             { "probeShadows", s.gi.probeShadows },
             { "probeUpdatesPerFrame", s.gi.probeUpdatesPerFrame },

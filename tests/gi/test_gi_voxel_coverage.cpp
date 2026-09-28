@@ -69,7 +69,6 @@ static GiParams storeGi()
     gi.numBounces = 1;
     gi.ddgi = GiToggle::Off;
     gi.updateBudget = 0;
-    gi.cascades = true;
     return gi;
 }
 
@@ -209,12 +208,15 @@ static void areaLampShadow(Engine *e, View *view)
 {
     std::printf("\n== an LTC area lamp's voxel shadow through a one-cell wall ==\n");
     Scene *s = e->createScene("area-lamp-shadow");
+    // DETACHED FIRST: a view refuses a second scene while it still shows one (the
+    // single volume this case pinned built without a view, which hid the refusal).
+    view->setScene(nullptr);
     view->setScene(s);
     s->setAmbient(Colour(0, 0, 0), Colour(0, 0, 0));
     const MeshId cube = s->createMesh(enginetest::unitCubeMesh());
     PbrParams mp; mp.albedo = Colour(0.8f, 0.8f, 0.8f); mp.roughness = 1.0f;
     const MaterialId mat = s->createPbrMaterial(mp);
-    const double cell = 8.0 / 64.0;   // the fitted volume below at Medium: 64 cells over 8 m
+    const double cell = 8.0 / 64.0;   // the pinned cascade below: 64 cells over 8 m
     const NodeId floorN = s->createNode(), wallN = s->createNode();
     s->attachMesh(floorN, cube, mat);
     s->attachMesh(wallN, cube, mat);
@@ -235,14 +237,23 @@ static void areaLampShadow(Engine *e, View *view)
     gi.mode = GiMode::Vct;
     gi.quality = GiQuality::Medium;
     gi.numBounces = 0;            // the DIRECT term alone
-    gi.cascades = false;
     gi.ddgi = GiToggle::Off;
-    gi.testBoundsMin = Vec3(-4.0f, -4.0f, -4.0f);
-    gi.testBoundsMax = Vec3(4.0f, 4.0f, 4.0f);
+    // ONE CAMERA-CENTRED CASCADE on the world lattice (its origin is a whole number
+    // of cells, so the wall's faces lie on cell boundaries) at the deleted pinned
+    // volume's cell (8 m at 64), around the camera the fixture keeps.
+    gi.cascadeCount = 1;
+    gi.cascadeSet[0] = GiParams::GiCascadeDesc{ 4.0f, 64, 0.0f };
+    // A CAMERA IN THIS SCENE: a view re-pointed at a new scene has none until one is
+    // set, and the camera-centred cascade is built around it — here at the fixture's
+    // centre, so the one +-4 m cascade holds the floor, the wall and the lamp.
+    view->setCamera(enginetest::testCameraDescLookAt(Vec3(0.0f, 1.5f, 0.0f), Vec3(0.0f, 1.5f, -4.0f)));
     CHECK_MSG(s->setGlobalIllumination(gi), "%s", "the area-lamp fixture's voxel arm builds");
+    // The chain is built around the tracked camera, after the first arm's waits (the
+    // sky's capture, the albedo): counted in frames until its store exists, bounded.
     render(e, 8);
     GiVoxelVolume v;
-    if (!s->giVoxelVolume(0, v) || !v.available) { CHECK_MSG(false, "%s", "the area-lamp store reads back"); e->destroyScene(s); return; }
+    for (int f = 0; f < 60 && !(s->giVoxelVolume(0, v) && v.available); ++f) render(e, 1);
+    if (!s->giVoxelVolume(0, v) || !v.available) { CHECK_MSG(false, "%s", "the area-lamp store reads back"); view->setScene(nullptr); e->destroyScene(s); return; }
     const auto band = [&](double x0, double x1) {
         double sum = 0.0; long n = 0;
         for (int z = 0; z < v.depth; ++z) for (int y = 0; y < v.height; ++y) for (int x = 0; x < v.width; ++x) {
@@ -323,8 +334,8 @@ static void measureLayers(Engine *e, View *view)
     Scene *s = e->createScene("layers");
     view->setScene(s);
     s->setAmbient(Colour(0, 0, 0), Colour(0, 0, 0));
-    const double cell = 8.0 / 64.0;      // the fitted volume below: Medium, 64 cells over 8 m
-    const double z0 = 4.0;               // a cell boundary (the box is anchored at 0)
+    const double cell = 8.0 / 64.0;      // the pinned cascade below: 64 cells over 8 m
+    const double z0 = 4.0;               // a cell boundary (the cascade's origin is on the lattice)
     MeshData md;
     for (double f : { 0.1, 0.5, 0.9 }) {
         const float z = float(z0 + f * cell);
@@ -346,14 +357,18 @@ static void measureLayers(Engine *e, View *view)
     gi.mode = GiMode::Vct;
     gi.quality = GiQuality::Medium;
     gi.numBounces = 0;
-    gi.cascades = false;
     gi.ddgi = GiToggle::Off;
-    gi.testBoundsMin = Vec3(0.0f, 0.0f, 0.0f);
-    gi.testBoundsMax = Vec3(8.0f, 8.0f, 8.0f);
+    gi.cascadeCount = 1;
+    gi.cascadeSet[0] = GiParams::GiCascadeDesc{ 4.0f, 64, 0.0f };
+    // The eye in front of the layers, so the one camera-centred cascade holds them.
+    view->setCamera(enginetest::testCameraDescLookAt(Vec3(2.25f, 2.25f, 1.0f), Vec3(2.25f, 2.25f, 4.0f)));
     CHECK_MSG(s->setGlobalIllumination(gi), "%s", "the layers' volume builds");
+    // The chain is built around the tracked camera, after the first arm's waits (the
+    // sky's capture, the albedo): counted in frames until its store exists, bounded.
     render(e, 8);
     GiVoxelVolume v;
-    if (!s->giVoxelVolume(0, v) || !v.available) { CHECK_MSG(false, "%s", "the layers' store reads back"); e->destroyScene(s); return; }
+    for (int f = 0; f < 60 && !(s->giVoxelVolume(0, v) && v.available); ++f) render(e, 1);
+    if (!s->giVoxelVolume(0, v) || !v.available) { CHECK_MSG(false, "%s", "the layers' store reads back"); view->setScene(nullptr); e->destroyScene(s); return; }
     const int zi = int(std::floor((z0 + 0.5 * cell - v.origin[2]) / v.cell[2]));
     const int xi = int(std::floor((2.25 - v.origin[0]) / v.cell[0])), yi = int(std::floor((2.25 - v.origin[1]) / v.cell[1]));
     const size_t i = ((size_t(zi) * v.height + yi) * v.width + xi) * 4;
