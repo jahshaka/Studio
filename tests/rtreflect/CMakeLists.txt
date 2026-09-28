@@ -168,3 +168,22 @@ if(JAHSHAKA_ASAN)
                          TIMEOUT 180 LABELS "engine"
                          ENVIRONMENT "${JAH_ASAN_ENGINE_OPTIONS}")
 endif()
+
+# A CUT-OUT IS GEOMETRY WITH HOLES FOR THE RAYS TOO (REFLECT-MOVERS-2): a fence
+# with a Cutout mask — its ray shadow, its card sun term and its ray reflection
+# carry the mask's coverage, not the quad's.
+add_executable(test_rt_alpha_tested test_rt_alpha_tested.cpp)
+set_target_properties(test_rt_alpha_tested PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_rt_alpha_tested PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+add_dependencies(test_rt_alpha_tested JahshakaEngineMedia)
+target_link_libraries(test_rt_alpha_tested PRIVATE JahshakaEngine)
+jah_gpu_row(gi.rt_alpha_tested CLASS engine COMMAND test_rt_alpha_tested
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.rt_alpha_tested PROPERTIES TIMEOUT 240 LABELS "engine")

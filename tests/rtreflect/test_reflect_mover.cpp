@@ -59,11 +59,21 @@
 // glossy floor's settled bar of 8.0 was set AFTER the first two measurements
 // failed tighter ones; it guards the trail's return (22.7 codes before the lane).
 //
-// THE KNOWN LIMIT (REFLECT-MOVERS-2): a surface's OWN motion is read from the id
-// image, and the id pass draws only Atom-routed items — anything it does not draw
-// (skinned, alpha-tested, two-sided) takes the camera path: an animated
-// CHARACTER's glossy surface still dithers and its march reflection still lags.
-// (A HIT on any mover is followed — the hit record carries the slot.)
+// REFLECT-MOVERS-2 — A POSED MOVER (the two SKINNED arms): the same sphere,
+// skinned whole to one bone, the NODE STILL and the BONE carrying it round the
+// circle — every metre of its motion is the pose's, which prevWorld never sees.
+// A ray's hit on it reads the hit point's previous position from the skin cache's
+// previous-pose slice (SkinCache.h). Measured (spikes/reflect-movers-2), base ->
+// lane: rays glossy floor settled 24.26 -> ~4.5 codes (the rigid arm's 5.2), the
+// parked pose's ghost 42 -> 38 codes after four frames -> drained by frame 2,
+// grain ~1.1x the still case's. Gated as the rigid rays arm is.
+// THE KNOWN LIMIT: a surface's OWN motion is read from the id image, and the id
+// pass draws only Atom-routed items — anything it does not draw (skinned,
+// alpha-tested, two-sided) takes the camera path: a CHARACTER's own glossy
+// surface still re-converges, and the MARCH's reflection of it still lags a
+// frame (the velocity job reads the id image too: the skinned march arm, 5.6 ->
+// ~4.5 codes against the rigid 1.96 — printed as a target).
+// (A HIT on any mover, rigid or posed, is followed — the hit record carries the slot.)
 //
 //   F3 the GATHER on a moving matte object: 0.33-0.49 codes moving against
 //      0.000 still (the sphere disk line of the reflected arms) — accepted
@@ -169,7 +179,7 @@ static void diskOf(const Vec3 &c, float rad, float &cx, float &cy, float &pr)
     pr = rad / (z * t) * 0.5f * float(kHeight);
 }
 
-enum class Region { Reflected, Sphere };
+enum class Region { Reflected, Sphere, Band };
 
 /// The pixels an arm is measured over: the sphere's MIRROR IMAGE through the floor
 /// plane (y = 0) with the sphere's own disk (dilated) cut out, or the sphere's own
@@ -185,7 +195,10 @@ static std::vector<unsigned> regionAt(const Vec3 &c, Region what, float erode = 
             const float fx = float(x) + 0.5f, fy = float(y) + 0.5f;
             const float ds = std::hypot(fx - sx, fy - sy);
             const float dv = std::hypot(fx - vx, fy - vy);
+            // THE SILHOUETTE BAND (REFLECT-MOVERS-2, §1288 F2): the reflected disk's
+            // edge, 3 px either side, clear of the sphere's own disk.
             const bool in = what == Region::Sphere ? ds < sr - 3.0f - erode
+                            : what == Region::Band ? (std::fabs(dv - vr) <= 3.0f && ds > sr + 3.0f)
                                                    : (dv < vr - 2.0f - erode && ds > sr + 3.0f + erode);
             if (in) px.push_back(y * kWidth + x);
         }
@@ -256,6 +269,53 @@ static float flicker(const Image &prevImg, const Image &cur, const std::vector<u
     return float(s / double(px.size() * 3u));
 }
 
+/// THE REFLECTED SILHOUETTE'S SHARPNESS (REFLECT-MOVERS-2): the 10 %-90 %
+/// transition width, in pixels, of the luminance across the reflected disk's edge,
+/// along 48 radial profiles clear of the sphere's own disk (the median of those
+/// whose inside and outside differ by 10 codes or more); -1 when none does.
+static float edgeWidth(const Image &img, const Vec3 &c)
+{
+    float vx, vy, vr, sx, sy, sr;
+    diskOf(Vec3(c.x, -c.y, c.z), kSphereR, vx, vy, vr);
+    diskOf(c, kSphereR, sx, sy, sr);
+    const int w = int(img.width), h = int(img.height);
+    auto lum = [&](float x, float y) {
+        const int x0 = std::min(std::max(int(std::floor(x)), 0), w - 2);
+        const int y0 = std::min(std::max(int(std::floor(y)), 0), h - 2);
+        const float fx = std::min(std::max(x - float(x0), 0.0f), 1.0f), fy = std::min(std::max(y - float(y0), 0.0f), 1.0f);
+        auto at = [&](int xx, int yy) {
+            const size_t i = (size_t(yy) * size_t(w) + size_t(xx)) * 4u;
+            return (float(img.rgba[i]) + float(img.rgba[i + 1]) + float(img.rgba[i + 2])) / 3.0f;
+        };
+        return (at(x0, y0) * (1 - fx) + at(x0 + 1, y0) * fx) * (1 - fy) +
+               (at(x0, y0 + 1) * (1 - fx) + at(x0 + 1, y0 + 1) * fx) * fy;
+    };
+    std::vector<float> widths;
+    for (int k = 0; k < 48; ++k) {
+        const float a = float(k) / 48.0f * 6.2831853f, dx = std::cos(a), dy = std::sin(a);
+        if (std::hypot(vx + dx * (vr + 10.0f) - sx, vy + dy * (vr + 10.0f) - sy) < sr + 4.0f) continue;
+        float prof[33];
+        for (int i = 0; i <= 32; ++i) {
+            const float r = vr - 8.0f + 0.5f * float(i);
+            prof[i] = lum(vx + dx * r, vy + dy * r);
+        }
+        float in = 0.0f, out = 0.0f;
+        for (int i = 0; i < 6; ++i) { in += prof[i]; out += prof[32 - i]; }
+        in /= 6.0f; out /= 6.0f;
+        if (std::fabs(in - out) < 10.0f) continue;
+        float r10 = -1.0f, r90 = -1.0f;
+        for (int i = 0; i <= 32; ++i) {
+            const float t = (prof[i] - in) / (out - in);
+            if (r10 < 0.0f && t >= 0.1f) r10 = 0.5f * float(i);
+            if (r90 < 0.0f && t >= 0.9f) r90 = 0.5f * float(i);
+        }
+        if (r10 >= 0.0f && r90 >= 0.0f) widths.push_back(r90 - r10);
+    }
+    if (widths.empty()) return -1.0f;
+    std::sort(widths.begin(), widths.end());
+    return widths[widths.size() / 2];
+}
+
 static void writePpm(const Image &img, const std::string &path)
 {
     FILE *f = std::fopen(path.c_str(), "wb");
@@ -275,6 +335,10 @@ struct Arm {
     /// THE BARS (0 = printed, not gated): the moving-vs-settled error in codes, and
     /// the high-frequency part of it against the still case's.
     float settledBar, hfRatioBar;
+    /// REFLECT-MOVERS-2: the mover is a SKINNED sphere whose BONE runs the circle
+    /// (the node stands still, a mover: the pose alone moves it — a walking
+    /// character's limbs), in place of the rigid one.
+    bool skinned = false;
 };
 
 /// THE COST (--cost): the per-pixel motion read at 1080p, PAIRED in one process —
@@ -396,6 +460,36 @@ int main(int argc, char **argv)
     }
     enginetest::setNodeScale(s, sphere, Vec3(2.0f * kSphereR, 2.0f * kSphereR, 2.0f * kSphereR));
     enginetest::setNodePosition(s, sphere, pathAt(0));
+    // THE SKINNED TWIN (REFLECT-MOVERS-2): the same sphere, skinned whole to bone
+    // 1 of a two-bone rig; the BONE carries it round the circle and the node never
+    // moves — every metre of its motion is the pose's. Hidden until its arms.
+    const NodeId skinnedSphere = s->createNode();
+    s->setNodeMovable(skinnedSphere, true);
+    SkeletonDesc skinRig;
+    {
+        skinRig.id = "gi.reflect_mover skinned sphere rig v1";
+        BoneDesc root; root.name = "root";
+        skinRig.bones.push_back(root);
+        BoneDesc body; body.name = "body"; body.parent = 0;
+        skinRig.bones.push_back(body);
+        MeshData sd = sphereMesh();
+        for (float &v : sd.positions) v *= 2.0f * kSphereR;
+        const size_t nv = sd.positions.size() / 3u;
+        for (size_t i = 0; i < nv; ++i) {
+            sd.blendIndices.insert(sd.blendIndices.end(), { 1, 0, 0, 0 });
+            sd.blendWeights.insert(sd.blendWeights.end(), { 1.0f, 0.0f, 0.0f, 0.0f });
+        }
+        if (!(skinnedSphere && s->attachSkinnedMesh(skinnedSphere, s->createMesh(sd), sphereMat0, skinRig))) {
+            std::printf("FAIL: the skinned sphere: %s\n", e->lastError().c_str()); return 1;
+        }
+        s->setNodeVisible(skinnedSphere, false);
+    }
+    const auto poseSkinned = [&](const Vec3 &at) {
+        BonePose p[2];
+        p[1].position = at;
+        return s->setBonePoses(skinnedSphere, p, 2);
+    };
+    poseSkinned(pathAt(0));
     // Two still, bright columns behind, so the glossy sphere has something to reflect.
     for (int i = 0; i < 2; ++i) {
         const NodeId n = s->createNode();
@@ -451,6 +545,12 @@ int main(int argc, char **argv)
           false, 0.0f, 1.5f },
         { "rays: glossy sphere 0.25, its own reflection", 0.0f, 0.9f, 1.0f, 0.25f, Region::Sphere, false,
           3.0f, 1.6f },
+        // REFLECT-MOVERS-2: a SKINNED mover's reflection — the node still, the pose
+        // carrying it (a character's limbs). Measured first, gated after.
+        { "rays: glossy floor 0.2, a SKINNED sphere's reflection", 1.0f, 0.2f, 0.0f, 0.8f, Region::Reflected,
+          false, 8.0f, 1.5f, true },
+        { "march: glossy floor 0.2, a SKINNED sphere's reflection", 1.0f, 0.2f, 0.0f, 0.8f, Region::Reflected,
+          true, 0.0f, 0.0f, true },
     };
     int armIdx = 0;
     for (const Arm &arm : arms) {
@@ -458,24 +558,34 @@ int main(int argc, char **argv)
         PbrParams s2 = sp; s2.metalness = arm.sphereMetal; s2.roughness = arm.sphereRough;
         if (arm.sphereMetal > 0.0f) s2.albedo = Colour(0.95f, 0.8f, 0.6f);
         s->setNodeMaterial(floor, s->createPbrMaterial(f2));
-        s->setNodeMaterial(sphere, s->createPbrMaterial(s2));
+        const NodeId mover = arm.skinned ? skinnedSphere : sphere;
+        s->setNodeMaterial(mover, s->createPbrMaterial(s2));
+        s->setNodeVisible(sphere, !arm.skinned);
+        s->setNodeVisible(skinnedSphere, arm.skinned);
+        const auto place = [&](const Vec3 &at) {
+            if (arm.skinned) poseSkinned(at);
+            else enginetest::setNodePosition(s, sphere, at);
+        };
         {
             PostFxDesc afx = fx;
             if (!arm.march) afx.ssrScreenMarch = false;
             view->setPostFx(afx);
         }
-        enginetest::setNodePosition(s, sphere, pathAt(0));
+        place(pathAt(0));
         render(e, kWarmFrames);
 
         double sumMoving = 0.0, sumStill = 0.0, sumHfMoving = 0.0, sumHfStill = 0.0;
         double sumFlickerMoving = 0.0, sumFlickerStill = 0.0;
+        double sumBandMoving = 0.0, sumBandStill = 0.0;
+        double sumEdgeMoving = 0.0, sumEdgeSettled = 0.0;
+        int nEdge = 0;
         int nFlickerMoving = 0, nFlickerStill = 0;
         int frame = 0;
         for (int c = 1; c <= kCheckpoints; ++c) {
             Image last;
             for (int i = 0; i < kRunIn; ++i) {
                 ++frame;
-                enginetest::setNodePosition(s, sphere, pathAt(frame));
+                place(pathAt(frame));
                 render(e, 1);
                 if (i >= kRunIn - kFlickerFrames - 1) {
                     Image img;
@@ -500,9 +610,9 @@ int main(int argc, char **argv)
             view->readPixels(settled);
             // THE STILL CASE at the same pose: the sphere parked there from a fresh
             // start (away and back, so its history restarts), kRunIn frames.
-            enginetest::setNodePosition(s, sphere, pathAt(frame + 400));
+            place(pathAt(frame + 400));
             render(e, kSettleFrames);
-            enginetest::setNodePosition(s, sphere, pathAt(frame));
+            place(pathAt(frame));
             // THE PARKED POSE'S GHOST (the Fable read's F2): where the sphere's
             // reflection sat for kSettleFrames, the floor must reflect the room
             // again within TWO frames of the sphere leaving (the mover age's
@@ -585,6 +695,18 @@ int main(int argc, char **argv)
             std::printf("    [%s] frame %3d  region %5zu px   moving %.3f (hf %.3f)   still %.3f (hf %.3f) codes\n",
                         arm.name, frame, px.size(), em, hm, es, hs);
             if (arm.region == Region::Reflected) {
+                const std::vector<unsigned> band = regionAt(pathAt(frame), Region::Band);
+                const float ewM = edgeWidth(moving, pathAt(frame)), ewS = edgeWidth(settled, pathAt(frame));
+                if (ewM >= 0.0f && ewS >= 0.0f) {
+                    sumEdgeMoving += ewM;
+                    sumEdgeSettled += ewS;
+                    ++nEdge;
+                }
+                const float bm = hfDiff(moving, settled, band), bs = hfDiff(still, settled, band);
+                sumBandMoving += bm;
+                sumBandStill += bs;
+                std::printf("      silhouette band (%zu px): moving %.3f (hf %.3f)   still %.3f (hf %.3f)\n",
+                            band.size(), meanDiff(moving, settled, band), bm, meanDiff(still, settled, band), bs);
                 // THE SPHERE ITSELF too (its diffuse is the gather's — the brief's §3.5)
                 const std::vector<unsigned> sp = regionAt(pathAt(frame), Region::Sphere);
                 std::printf("      sphere disk: moving %.3f (hf %.3f)   still %.3f (hf %.3f)\n",
@@ -610,6 +732,28 @@ int main(int argc, char **argv)
                     "FLICKER: moving %.3f still %.3f (x%.2f)\n",
                     arm.name, m, st, m / std::max(st, 1e-3f), hm, hs, hm / std::max(hs, 1e-3f), fm, fs,
                     fm / std::max(fs, 1e-3f));
+        if (arm.region == Region::Reflected) {
+            const double bandRatio = sumBandMoving / std::max(sumBandStill, 1e-3);
+            std::printf("RESULT [%s] silhouette band hf: moving %.3f still %.3f (x%.2f); the edge's 10-90 %% width "
+                        "moving %.2f px, settled %.2f px\n", arm.name,
+                        sumBandMoving / kCheckpoints, sumBandStill / kCheckpoints, bandRatio,
+                        nEdge ? sumEdgeMoving / nEdge : -1.0, nEdge ? sumEdgeSettled / nEdge : -1.0);
+            // F2 (REFLECT-MOVERS-2): THE SILHOUETTE BAND'S GRAIN IS A TARGET, NOT A BAR.
+            // Measured 2.14x the still case's on the rays' glossy floor (the whole
+            // region's 1.39x hides it); three constructions were measured against it
+            // and each lost more than it won (spikes/reflect-movers-2/NOTES.md): a
+            // restart band that keeps to taps of the same reflected surface (the band
+            // 14.5x — a restarted texel left unfiltered is one raw ray), an arrival
+            // that waits for a second hit (a 21-code leading-edge trail), an arrival
+            // only onto a mean that held no mover for 16 frames (2.20x, settled 8.2).
+            // The edge's 10-90 % width is printed beside it (moving and settled): the
+            // measure a filter change here must hold within a pixel. The mirror keeps
+            // no history; the march's edge is the lag's.
+            if (!arm.march && arm.floorRough >= 0.1f) {
+                std::printf("target: [%s] the reflected silhouette's grain %.2fx the still case's (bar 1.5)\n",
+                            arm.name, bandRatio);
+            }
+        }
         if (arm.settledBar > 0.0f)
             CHECK_MSG(m < arm.settledBar, "[%s] the moving reflection is within %.1f codes of the settled one (%.3f)",
                       arm.name, arm.settledBar, m);
