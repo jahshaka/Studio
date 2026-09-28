@@ -2264,8 +2264,7 @@ static int coverageTraceMain()
         setCamera(env, iris::Vec3(x, 1.7f, 0.0f), iris::Vec3(x + 10.0f, 1.7f, -2.0f));
         if (f == 300 && !releaseMesh.isNull()) {
             atomBefore = env.scene->atomDrawStatus().atomItems;
-            // THE MESH LEAVES (not just its nodes: a node taken out of the document keeps
-            // its engine Item hidden): every item of it drops the mesh, the last reference
+            // THE MESH LEAVES: every item of it drops the mesh, the last reference
             // releases the GPU scene's entry and its DAG.
             for (auto &it : w.items)
                 if (it->getMesh() == releaseMesh) { released.push_back(it); it->setMesh(iris::MeshPtr()); }
@@ -2318,13 +2317,12 @@ static int coverageTraceMain()
                 atomReleased, atomExtra);
         REQUIRE(maxCoarse > 0u, "the forced small budget overflowed the main region (%u drawn coarse)", maxCoarse);
     }
-    // MEASURED (ATOM-BLACK-FRAMES-1, the Fable read's W3): removeChild takes the items out of
-    // the split and the picture at once (atom 10,001 -> 9,376) but the GPU scene keeps the
-    // mesh's entry and its DAG for the whole window — the mirror keeps the hidden Item —
-    // and releases it only when the mesh itself leaves (setMesh(null), the walk's arm).
-    // Reported as a defect, not asserted here: this suite's subject is the picture.
-    std::printf("coverage_trace: FINDING removeChild %s the GPU scene's mesh entry\n",
-                removeChildReleased ? "releases" : "does NOT release");
+    // REMOVECHILD-LEAK-1 (measured by ATOM-BLACK-FRAMES-1's W3 arm, fixed in
+    // OgreScene::releaseNode): removeChild takes the items out of the split AND
+    // gives back their mesh-table references — the last one releases the GPU
+    // scene's entry and its DAG, as the walk's setMesh(null) arm always did.
+    REQUIRE(removeChildReleased, "removeChild alone releases the GPU scene's mesh entry (\"mesh released\" "
+            "in the trace after every item of the mesh left the document)");
     unsetenv("JAHSHAKA_ATOM_DISCRIMINATE");
     unsetenv("JAHSHAKA_ATOM_TRACE");
     shutdown(env);
