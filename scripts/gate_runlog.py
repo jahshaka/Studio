@@ -38,6 +38,17 @@ import xml.etree.ElementTree as ET
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SCHEMA = 1
+# THE TIER NAMES (TESTING-DEBTS-1 T11) — the only ones a record may carry; testing/runs/README.md
+# documents the same list. gate-scope.sh writes the first four (`scoped`; `scoped-fallback` = a
+# scoped gate that fell back to the whole tier; `scoped-tier` = the tier by rule, a fork pin;
+# `joint` = --joint); rc-gate.sh writes JAH_GATE_TIER (merge by default: stage, nightly, push, fork).
+TIERS = ("scoped", "scoped-fallback", "scoped-tier", "joint", "merge", "stage", "nightly", "push", "fork")
+
+
+def check_tier(tier):
+    if tier not in TIERS:
+        raise ValueError(f"gate_runlog: tier '{tier}' is not one of {', '.join(TIERS)} (testing/runs/README.md)")
+    return tier
 
 # `  12/653 Test  #45: gi.foo ..........   Passed   12.34 sec`
 _RESULT = re.compile(r"^\s*\d+/\d+\s+Test\s+#\d+:\s+(\S+)\s+\.*\s*(.*?)\s+([\d.]+)\s+sec\s*$")
@@ -46,6 +57,7 @@ _RESULT = re.compile(r"^\s*\d+/\d+\s+Test\s+#\d+:\s+(\S+)\s+\.*\s*(.*?)\s+([\d.]
 # and never ended is a CRASH (the runner restarts the app and goes on).
 _ARM = re.compile(r"^\s*ARM\s+(\S+)\s+(PASS|FAIL|CRASH|TIMEOUT|NOADMIT|SKIP)\b(?:\s+(\d+(?:\.\d+)?)\s*(ms|s)?)?")
 _ARM_BEGIN = re.compile(r"^\s*ARM-BEGIN\s+(\S+)\s*$")
+_ARM_DUMP = re.compile(r"^\s*---- (\S+\.\S+): its output \(")
 # A pool's boot footprint (TEST-TIER-1, run_pool.py): `MEM <pool> gpuPoolUsed=<MB> textures=<MB>
 # processMiB=<MiB|?> tier=<t>`, once per process the pool started; the row records the largest.
 _MEM = re.compile(r"^\s*MEM\s+\S+\s+gpuPoolUsed=(\d+)\s+textures=(\d+)\s+processMiB=(\d+|\?)\s+tier=(\S+)")
@@ -54,6 +66,11 @@ _MEM = re.compile(r"^\s*MEM\s+\S+\s+gpuPoolUsed=(\d+)\s+textures=(\d+)\s+process
 # <n> arms` (recorded on the pool's row as `leak`).
 _ARM_MEM = re.compile(r"^\s*MEM\s+(\S+\.\S+)\s+gpuPoolUsed=(\d+)\s+textures=(\d+)\s*$")
 _LEAK = re.compile(r"^\s*LEAK\s+\S+\s+\+(\d+)\s+over\s+(\d+)\s+arms")
+# ...and its two per-arm findings (TESTING-DEBTS-1 T2/T3): `STEP <pool>.<arm> +<MB>` (the one-time
+# step, recorded on the arm as `stepMB`) and `OVER <pool>.<arm> gpuPoolUsed=<MB> tier=<t> boot=<MB>`
+# (an arm past 3x its process's boot, recorded on the arm as `over`).
+_STEP = re.compile(r"^\s*STEP\s+(\S+\.\S+)\s+\+(\d+)")
+_OVER = re.compile(r"^\s*OVER\s+(\S+\.\S+)\s+gpuPoolUsed=(\d+)\s+tier=(\S+)\s+boot=(\d+)")
 _GPU = re.compile(r"^\s*gpu_ms:\s*([0-9.]+)")
 _TARGET = re.compile(r"^\s*target:\s*(.+?)\s*$")
 
@@ -69,6 +86,38 @@ def noadmit_line(text):
         m = _NOADMIT.match(line)
         if m: return m.group(1)[:300]
     return None
+
+
+# THE BUDGET CLASSES (TESTING-DEBTS-1 T1; FORK-OOM-1's two texts, irisgl EnginePrivate.h and
+# src/viewport/devicelossend.h): a red whose output carries the engine's in-frame OOM line is
+# verdict OOM — a VRAM-budget finding (TESTING_GATE §4b: an unadmitted process or a row over its
+# class), never the row's code; a red that carries the device-loss line is LOST (exit 3, the
+# session ended — a loss is NEVER environmental: look for the Xid). LOST wins over OOM: an OOM
+# line says "the device is NOT lost", so a loss after it is the later and graver fact.
+_LOST = re.compile(r"(?i)\b(?:GPU|graphics) device was lost\b")
+_OOM = re.compile(r"GPU out of memory")
+
+
+def budget_verdict(text):
+    """('LOST'|'OOM', the line) for a red's output, or (None, None)."""
+    oom = None
+    for line in (text or "").splitlines():
+        if _LOST.search(line): return "LOST", line.strip()[:300]
+        if oom is None and _OOM.search(line): oom = line.strip()[:300]
+    return ("OOM", oom) if oom else (None, None)
+
+
+def row_verdict(status, text, arms):
+    """(verdict, status, budget line|None) of a row from ctest's status and its output: NOADMIT
+    (never ran), else OOM / LOST for a red that carries the budget texts, else ctest's class."""
+    v, st = verdict_of(status), status.strip("* ")
+    na = noadmit_line(text) if v == "FAIL" else None
+    if na and not arms:
+        return "NOADMIT", na, None
+    if v in ("FAIL", "CRASH", "TIMEOUT"):
+        bv, bline = budget_verdict(text)
+        if bv: return bv, st, bline
+    return v, st, None
 
 
 def verdict_of(status):
@@ -118,6 +167,48 @@ def tree_shas():
                         cwd=os.path.join(ROOT, "irisgl")))
     return {"studio": studio, "irisgl": irisgl, "fork": fork, "studio_dirty": s_dirty or i_dirty,
             "irisgl_dirty": i_dirty}
+
+
+def fork_pin_problem(root=ROOT):
+    """THE BUILT FORK MUST BE THE PIN (TESTING-DEBTS-1 T12). None when the ogre-next checkout AND
+    the install (`<install>/BUILT_FROM`, written by irisgl/scripts/build-ogre.sh; the install is
+    OGRE_PREFIX when set, as build-ogre.sh reads it) are both at the commit irisgl pins; else the
+    refusal text with the exact lines that fix it. A tree with no irisgl submodule (a bare
+    checkout) is not judged. REFLECT-MOVERS-1, 2026-09-28: a worktree whose install was built
+    from an older fork commit than the pin ran a 124-minute gate — its PBS media failed to
+    compile ("atmoNprSkyRadiance: no matching overloaded function"): 76 reds, 3 Xids, void."""
+    ig = os.path.join(root, "irisgl")
+    pin = _git(["rev-parse", "HEAD:thirdparty/ogre-next"], cwd=ig) if os.path.isdir(ig) else ""
+    if not pin:
+        return None
+    src = os.path.join(ig, "thirdparty", "ogre-next")
+    install = os.environ.get("OGRE_PREFIX") or os.path.join(ig, "thirdparty", "ogre-next-install")
+    checkout = _git(["rev-parse", "HEAD"], cwd=src) if os.path.isdir(src) else ""
+    try:
+        rec = open(os.path.join(install, "BUILT_FROM")).read().split()
+    except OSError:
+        rec = []
+    built, dirty = (rec[0] if rec else ""), ("dirty" in rec[1:])
+    why = []
+    if checkout != pin:
+        why.append(f"the ogre-next checkout is at {checkout[:9] or '(none)'}")
+    if not built:
+        why.append(f"the install ({install}) has no BUILT_FROM record (built before build-ogre.sh wrote one)")
+    elif built != pin:
+        why.append(f"the install was built from {built[:9]}")
+    elif dirty:
+        why.append("the install was built from a DIRTY checkout of the pin")
+    if not why:
+        return None
+    have = os.path.isdir(src) and subprocess.run(["git", "cat-file", "-e", pin + "^{commit}"], cwd=src,
+                                                 capture_output=True).returncode == 0
+    fix = [f"cd {root}"]
+    if not have:
+        fix.append("git -C irisgl/thirdparty/ogre-next fetch origin")
+    fix += ["git -C irisgl submodule update --init thirdparty/ogre-next", "./irisgl/scripts/build-ogre.sh"]
+    return ("REFUSING TO RUN: the built fork is not the pin — irisgl pins ogre-next " + pin[:9] + ", but "
+            + "; ".join(why) + ".\nA gate on it tests an engine the tree does not describe (stale media, "
+            "void reds). Fix, then re-run:\n  " + "\n  ".join(fix))
 
 
 def gpu_clocks():
@@ -210,6 +301,19 @@ def _arm_mems(text):
     return out
 
 
+def _arm_findings(text):
+    """arm -> {stepMB?, over?}: the leak probe's per-arm findings (the last of each, per arm)."""
+    out = {}
+    for line in (text or "").splitlines():
+        m = _STEP.match(line)
+        if m: out.setdefault(m.group(1), {})["stepMB"] = int(m.group(2)); continue
+        m = _OVER.match(line)
+        if m:
+            out.setdefault(m.group(1), {})["over"] = {"gpuPoolUsedMB": int(m.group(2)), "tier": m.group(3),
+                                                      "bootMB": int(m.group(4))}
+    return out
+
+
 def _leaks_of(text):
     """A pool row's `leak` field: every LEAK finding line as {riseMB, arms}, or None."""
     found = [{"riseMB": int(m.group(1)), "arms": int(m.group(2))}
@@ -219,9 +323,15 @@ def _leaks_of(text):
 
 def _suite_facts(text):
     gpu, target, arms, begun = None, None, [], []
+    # arm -> its own output lines: from its ARM-BEGIN, and from the runner's dump of a red arm's
+    # output (`---- <pool>.<arm>: its output …`, printed when the process ended), to its ARM line
+    seg, cur = {}, None
     for line in (text or "").splitlines():
         m = _ARM_BEGIN.match(line)
-        if m: begun.append(m.group(1)); continue
+        if m: begun.append(m.group(1)); cur = m.group(1); seg.setdefault(cur, []); continue
+        m = _ARM_DUMP.match(line)
+        if m: cur = m.group(1); seg.setdefault(cur, []); continue
+        if cur is not None: seg[cur].append(line)
         m = _GPU.match(line)
         if m:
             try: gpu = float(m.group(1))
@@ -234,9 +344,17 @@ def _suite_facts(text):
             if m.group(3):
                 secs = float(m.group(3)) if m.group(4) == "s" else float(m.group(3)) / 1000.0
             arms.append((m.group(1), m.group(2), secs))
+            if m.group(1) == cur: cur = None
     ended = {a for a, _, _ in arms}
     arms += [(a, "CRASH", None) for a in dict.fromkeys(begun) if a not in ended]
-    return gpu, target, arms
+    # a red arm whose own lines carry the budget texts takes the budget class (T1)
+    out = []
+    for a, v, secs in arms:
+        if v in ("FAIL", "CRASH", "TIMEOUT"):
+            bv, _ = budget_verdict("\n".join(seg.get(a, [])))
+            v = bv or v
+        out.append((a, v, secs))
+    return gpu, target, out
 
 
 def _file_for(tier, tip, date=None):
@@ -259,7 +377,7 @@ def _prior_counts(path):
 
 
 def append_records(records, tier, tip):
-    path = _file_for(tier, tip)
+    path = _file_for(check_tier(tier), tip)
     os.makedirs(os.path.dirname(path), exist_ok=True)
     prior = _prior_counts(path)
     with open(path, "a") as f:
@@ -275,6 +393,7 @@ def run_ctest(cmd, cwd, tier, lane, jobs, reasons=None, gating=None, rng=None, r
               labels=None, echo=True, env=None):
     """Run a ctest command line (a string, as gate-scope prints it), stream its output, and
     append one record per suite (+ per arm) to the run log. Returns ctest's exit code."""
+    check_tier(tier)       # before the run, never after an hour of it
     reasons = reasons or {}
     junit = tempfile.NamedTemporaryFile(prefix="gate-junit-", suffix=".xml", delete=False).name
     full = (f"{cmd} --output-junit {junit} "
@@ -308,12 +427,11 @@ def run_ctest(cmd, cwd, tier, lane, jobs, reasons=None, gating=None, rng=None, r
                 "box": dict(box0, load=[round(x, 2) for x in load],
                             load_mean=sampler.mean(t_end - secs, t_end)),
                 "source": "run"}
-        v, st = verdict_of(status), status.strip("* ")
-        na = noadmit_line(outputs.get(name, "")) if v == "FAIL" else None
-        if na and not arms:
-            v, st = "NOADMIT", na
+        v, st, bline = row_verdict(status, outputs.get(name, ""), arms)
         row = dict(base, arm=None, verdict=v, status=st,
                    seconds=secs, gpu_ms=gpu, target=target)
+        if bline:
+            row["budget"] = bline
         mem = _mem_of(outputs.get(name, ""))
         if mem is not None:
             row["mem"] = mem
@@ -322,6 +440,7 @@ def run_ctest(cmd, cwd, tier, lane, jobs, reasons=None, gating=None, rng=None, r
             row["leak"] = leak
         recs.append(row)
         arm_mem = _arm_mems(outputs.get(name, ""))
+        arm_find = _arm_findings(outputs.get(name, ""))
         for arm, v, s in arms:
             # an arm's reason: the selector's for that arm (`<row>::<arm>`), else its row's
             ar = reasons.get(f"{name}::{arm.split('.', 1)[-1]}", base["reason"])
@@ -329,6 +448,7 @@ def run_ctest(cmd, cwd, tier, lane, jobs, reasons=None, gating=None, rng=None, r
                        reason=ar)
             if arm in arm_mem:
                 rec["mem"] = arm_mem[arm]
+            rec.update(arm_find.get(arm, {}))
             recs.append(rec)
     if recs:
         path = append_records(recs, tier, shas["studio"])
@@ -371,9 +491,15 @@ def import_log(path, tier, tip, lane, jobs=None, reason=None):
         print("no ctest result lines in", path)
 
 
-def median_times(days=14, verdicts=("PASS",)):
+QUIET_MIN = 3
+
+
+def median_times(days=14, verdicts=("PASS",), sources=None):
     """suite -> median wall seconds over the run log's last `days` days (PASS rows by default:
-    a red's time is its failure's, not the suite's)."""
+    a red's time is its failure's, not the suite's). THE QUIET MEDIAN FIRST (TESTING-DEBTS-1 T8:
+    medians taken under sibling gates ran ~26 % high): a suite with >= QUIET_MIN records whose
+    `box.other_ctests == 0` is costed from those alone, else from every record. `sources`, a
+    dict, receives suite -> "quiet" | "all"."""
     d = log_dir()
     cutoff = (datetime.date.today() - datetime.timedelta(days=days)).isoformat()
     acc = {}
@@ -386,8 +512,15 @@ def median_times(days=14, verdicts=("PASS",)):
             if r.get("verdict") not in verdicts or r.get("seconds") is None: continue
             # an arm is costed as `<row>::<arm>` (gate-scope's key for a partial pool)
             k = r["suite"] if not r.get("arm") else f"{r['suite']}::{r['arm'].split('.', 1)[-1]}"
-            acc.setdefault(k, []).append(r["seconds"])
-    return {k: statistics.median(v) for k, v in acc.items()}
+            quiet = (r.get("box") or {}).get("other_ctests") == 0
+            acc.setdefault(k, []).append((r["seconds"], quiet))
+    out = {}
+    for k, v in acc.items():
+        q = [x for x, quiet in v if quiet]
+        use = q if len(q) >= QUIET_MIN else [x for x, _ in v]
+        out[k] = statistics.median(use)
+        if sources is not None: sources[k] = "quiet" if use is q else "all"
+    return out
 
 
 def _records(days):
@@ -434,13 +567,13 @@ def main():
     ap = argparse.ArgumentParser()
     sub = ap.add_subparsers(dest="cmd", required=True)
     r = sub.add_parser("run", help="run a ctest command and log every suite")
-    r.add_argument("--tier", required=True)
+    r.add_argument("--tier", required=True, choices=TIERS)
     r.add_argument("--lane", default=None)
     r.add_argument("--jobs", type=int, default=None)
     r.add_argument("--build", default="build-linux")
     r.add_argument("ctest", nargs=argparse.REMAINDER)
     i = sub.add_parser("import", help="records from an existing ctest output log")
-    i.add_argument("log"); i.add_argument("--tier", required=True); i.add_argument("--tip", required=True)
+    i.add_argument("log"); i.add_argument("--tier", required=True, choices=TIERS); i.add_argument("--tip", required=True)
     i.add_argument("--lane", default=None); i.add_argument("--jobs", type=int, default=None)
     t = sub.add_parser("times", help="median PASS seconds per suite from the log")
     t.add_argument("--days", type=int, default=14)
@@ -452,6 +585,9 @@ def main():
     if a.cmd == "run":
         cmd = a.ctest[1:] if a.ctest and a.ctest[0] == "--" else a.ctest
         if not cmd: ap.error("give the ctest command after --")
+        bad = fork_pin_problem()
+        if bad:
+            sys.stderr.write(bad + "\n"); sys.exit(4)
         build = a.build if os.path.isabs(a.build) else os.path.join(os.getcwd(), a.build) \
             if os.path.isdir(os.path.join(os.getcwd(), a.build)) else os.path.join(ROOT, a.build)
         lane = a.lane or _git(["rev-parse", "--abbrev-ref", "HEAD"])

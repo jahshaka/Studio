@@ -138,7 +138,7 @@ check(any(l.startswith("MEM selftest gpuPoolUsed=0 textures=0 processMiB=0 tier=
           for l in out1.splitlines()), "a headless pool's MEM line: zero, at the document's tier")
 tierapp = tempfile.NamedTemporaryFile("w", suffix=".py", delete=False)
 tierapp.write(r'''#!/usr/bin/env python3
-import sys
+import os, sys
 a = sys.argv; pool = a[a.index("--pool") + 1]
 tier = a[a.index("--test-tier") + 1] if "--test-tier" in a else "document"
 print("POOL-MEM %s gpuPoolUsed=%d textures=40 tier=%s" % (pool, 300 if tier == "low" else 1445, tier), flush=True)
@@ -146,30 +146,50 @@ for i, e in enumerate(a[a.index("--scripts") + 1].split(",")):
     n = e.split("=", 1)[0]
     print("ARM-BEGIN %s.%s" % (pool, n), flush=True)
     print("ARM %s.%s PASS 1" % (pool, n), flush=True)
-    # the leak probe's point after the arm: a Low process CLIMBS 20 MB an arm, an Epic one is flat
-    print("POOL-MEM %s.%s gpuPoolUsed=%d textures=40" % (pool, n, 300 + 20 * (i + 1) if tier == "low" else 1445), flush=True)
+    # the leak probe's point after the arm: a Low process follows TIER_CURVE (MB per arm), an
+    # Epic one is flat
+    curve = [int(x) for x in os.environ.get("TIER_CURVE", "").split(",") if x]
+    print("POOL-MEM %s.%s gpuPoolUsed=%d textures=40" % (pool, n, curve[i] if tier == "low" else 1445), flush=True)
 ''')
 tierapp.close()
 os.chmod(tierapp.name, 0o755)
+def tiered(t, curve):
+    arms_ = []
+    for i in range(len(curve)): arms_ += ["--arm", "a%d" % (i + 1), "x.js", "30"]
+    return run([sys.executable, driver, "--pool", "tiered", "--app", tierapp.name, "--tier", t] + arms_,
+               {"JAH_POOL_ARMS": "", "TIER_CURVE": ",".join(str(x) for x in curve)})
+def findings(out, word):
+    return [l.split(" (process")[0] for l in out.splitlines() if l.startswith(word + " ")]
 mems, outs = {}, {}
-for t in ("low", "epic"):
-    rc3, out3 = run([sys.executable, driver, "--pool", "tiered", "--app", tierapp.name, "--tier", t,
-                     "--arm", "a1", "x.js", "30", "--arm", "a2", "x.js", "30", "--arm", "a3", "x.js", "30"],
-                    {"JAH_POOL_ARMS": ""})
+# Low: the one-time step at a2 (+160), then a climb of 20 MB an arm over three arms
+for t, curve in (("low", [320, 480, 500, 520, 540]), ("epic", [1445, 1445, 1445])):
+    rc3, out3 = tiered(t, curve)
     show(out3)
     outs[t] = out3
     mems[t] = [l for l in out3.splitlines() if l.startswith("MEM tiered ")]
     check(rc3 == 0, "--tier %s: the pool runs" % t)
 arm_mems = [l for l in outs["low"].splitlines() if l.startswith("MEM tiered.")]
-check(arm_mems == ["MEM tiered.a1 gpuPoolUsed=320 textures=40", "MEM tiered.a2 gpuPoolUsed=340 textures=40",
-                   "MEM tiered.a3 gpuPoolUsed=360 textures=40"],
+check(arm_mems == ["MEM tiered.a%d gpuPoolUsed=%d textures=40" % (i + 1, mb)
+                   for i, mb in enumerate([320, 480, 500, 520, 540])],
       "the leak probe: one `MEM <pool>.<arm>` line after every arm (%s)" % arm_mems)
-check(any(l.startswith("LEAK tiered +40 over 3 arms") for l in outs["low"].splitlines()),
-      "a climb past the largest single step (20 MB) is a LEAK finding line")
-check(not any(l.startswith("LEAK ") for l in outs["epic"].splitlines()),
-      "a flat curve is no LEAK")
-check("LEAK" not in "".join(l for l in outs["low"].splitlines() if l.startswith("POOL tiered:")) and
-      "0 not PASS" in outs["low"], "a LEAK is a finding, never a red")
+check(findings(outs["low"], "STEP") == ["STEP tiered.a2 +160"],
+      "THE ONE-TIME STEP is its own finding, on its arm (%s)" % findings(outs["low"], "STEP"))
+check(findings(outs["low"], "LEAK") == ["LEAK tiered +60 over 3 arms"],
+      "a monotonic climb over 3 arms AFTER the step is a LEAK of the climb alone (%s)" % findings(outs["low"], "LEAK"))
+check(not findings(outs["epic"], "LEAK") and not findings(outs["epic"], "STEP"), "a flat curve is no LEAK and no STEP")
+check("0 not PASS" in outs["low"], "a STEP and a LEAK are findings, never a red")
+# THE OLD FALSE POSITIVE (pool.editor_view's recorded curve, 2026-09-27): drift that goes down once,
+# then a one-time step — the old rule (last - first > the largest step) called it LEAK +168
+rc5, out5 = tiered("low", [338, 339, 344, 342, 350, 353, 491, 505, 506])
+show(out5)
+check(findings(out5, "STEP") == ["STEP tiered.a7 +138"] and not findings(out5, "LEAK"),
+      "a one-time step + drift is a STEP, never a LEAK (%s %s)" % (findings(out5, "STEP"), findings(out5, "LEAK")))
+# THE OVER FINDING (T3): an arm past 3x its process's boot (Low boots at 300: a2 holds 1000)
+rc6, out6 = tiered("low", [320, 1000, 340])
+show(out6)
+check(findings(out6, "OVER") == ["OVER tiered.a2 gpuPoolUsed=1000 tier=low boot=300"] and rc6 == 0,
+      "an arm past 3x its tier's boot is an OVER finding on the arm, not a red (%s)" % findings(out6, "OVER"))
+check(not findings(outs["low"], "OVER"), "a Low arm under 3x its boot is no OVER")
 os.unlink(tierapp.name)
 mems = {t: [l for l in v if not l.startswith("MEM tiered.")] for t, v in mems.items()}
 check(len(mems["low"]) == 1 and mems["low"][0].startswith("MEM tiered gpuPoolUsed=300 textures=40 processMiB=")
@@ -188,8 +208,12 @@ check(m is not None and m["gpuPoolUsedMB"] == 310 and m["tier"] == "low" and m["
       "the run log records a pool row's MEM: the largest over its boots (%s)" % m)
 am = gate_runlog._arm_mems(outs["low"])
 lk = gate_runlog._leaks_of(outs["low"])
-check(am.get("tiered.a3") == {"gpuPoolUsedMB": 360, "texturesMB": 40} and lk == [{"riseMB": 40, "arms": 3}],
+check(am.get("tiered.a3") == {"gpuPoolUsedMB": 500, "texturesMB": 40} and lk == [{"riseMB": 60, "arms": 3}],
       "...each arm's MEM on the arm's record, the LEAK on the row's (%s, %s)" % (am, lk))
+af = gate_runlog._arm_findings(outs["low"] + "\n" + out6)
+check(af.get("tiered.a2", {}).get("stepMB") == 680 and
+      af["tiered.a2"].get("over") == {"gpuPoolUsedMB": 1000, "tier": "low", "bootMB": 300},
+      "...a STEP and an OVER on the arm's record (%s)" % af)
 # ---- part 3: THE VRAM BUDGET and THE KERNEL'S WORD (lane GATE-ADMIT-1) --------------------
 # A private token directory (never the box's /tmp/jah-vram): the stand-in app reports the token
 # files IT holds open (inherited from the driver) and, in arm `xid`, writes a kernel-journal line

@@ -200,6 +200,120 @@ def hunk_cases(gs, graph, build, inv0, cases):
         check(not miss, "%s: selects %s (%d rows; missing %s)" % (c["case"][:60], c["must"], len(S.selected), miss))
 
 
+def runlog_cases(source):
+    """THE RUN LOG'S VERDICT CLASSES (TESTING-DEBTS-1 T1) on fixed texts — FORK-OOM-1's two
+    lines as the engine and the app print them: a red carrying the in-frame OOM line is OOM (the
+    VRAM budget's class), a red carrying the loss line is LOST (a loss after an OOM stays LOST),
+    a PASS keeps PASS whatever it logged, and a pool arm takes the class from its OWN lines."""
+    print("run log (the budget verdicts on fixed texts):")
+    sys.path.insert(0, os.path.join(source, "scripts"))
+    import gate_runlog as rl
+    oom = ("[2026.09.27-19.35.31.710][    9]engine: Warning: GPU out of memory (VK_ERROR_OUT_OF_DEVICE_MEMORY; "
+           "the device is NOT lost): OGRE EXCEPTION(-2:RenderingAPIException): vkAllocateMemory failed for a "
+           "67108864-byte pool (memory type 1, heap 0 of 17171480576 bytes, 1107296256 already held by Ogre)")
+    lost = ("[2026.09.27-19.36.25.295][   18]engine: Error: Jahshaka: THE GPU DEVICE WAS LOST. The session cannot "
+            "continue; the renderer does not recreate a lost device.")
+    fatal = "FATAL: the graphics device was lost; ending the session."
+    check(rl.budget_verdict("x\n" + oom + "\nFAIL: y")[0] == "OOM", "an in-frame OOM line -> OOM")
+    check(rl.budget_verdict(lost)[0] == "LOST", "the engine's loss line -> LOST")
+    check(rl.budget_verdict(fatal)[0] == "LOST", "the app's FATAL loss line -> LOST")
+    check(rl.budget_verdict(oom + "\n" + lost)[0] == "LOST", "an OOM then a loss -> LOST")
+    check(rl.budget_verdict("FAIL: ...and does not claim the device was lost")[0] is None,
+          "an assertion naming 'the device was lost' is no loss")
+    check(rl.budget_verdict("FAIL: 7 < 47")[0] is None, "an ordinary red keeps its class")
+    check(rl.row_verdict("Failed", oom, [])[:2] == ("OOM", "Failed"), "a Failed row carrying it -> OOM (status kept)")
+    check(rl.row_verdict("Exception: SegFault", lost, [])[0] == "LOST", "a crashed row carrying the loss -> LOST")
+    check(rl.row_verdict("Passed", oom, [])[0] == "PASS", "a PASS that logged an OOM stays PASS")
+    pool = "\n".join(["ARM-BEGIN p.a", "ARM-BEGIN p.b", "MEM p.a gpuPoolUsed=300 textures=40",
+                      "---- p.a: its output (2 line(s)) ----", "| ARM-BEGIN p.a", "| " + oom, "ARM p.a FAIL 900",
+                      "---- p.b: its output (1 line(s)) ----", "| FAIL: 3 < 4", "ARM p.b FAIL 800",
+                      "ARM-BEGIN p.c", "| " + lost])
+    arms = {a: v for a, v, _ in rl._suite_facts(pool)[2]}
+    check(arms == {"p.a": "OOM", "p.b": "FAIL", "p.c": "LOST"}, "a pool's arms take the class from their own lines "
+          "(%s)" % arms)
+
+    # T11: THE TIER NAMES — the one list, every literal the gate scripts write is in it, and a
+    # name outside it is refused before a run (never an hour of records under a stray name)
+    print("  the run log's tier names: %s" % ", ".join(rl.TIERS))
+    check(set(rl.TIERS) == {"scoped", "scoped-fallback", "scoped-tier", "joint", "merge", "stage", "nightly",
+                            "push", "fork"}, "the tier names are exactly the documented nine")
+    gsrc = open(os.path.join(source, "scripts", "gate-scope.py")).read()
+    lits = set(re.findall(r'a\.tier or \(?"([a-z-]+)"', gsrc)) | set(re.findall(r'else "(scoped-[a-z]+)"', gsrc))
+    check(lits and lits <= set(rl.TIERS), "every tier gate-scope.py writes is a listed name (%s)" % sorted(lits))
+    try:
+        rl.run_ctest("true", source, "scoped-merge", "x", 1, echo=False)
+        check(False, "an unlisted tier is refused")
+    except ValueError as e:
+        check("not one of" in str(e), "an unlisted tier is refused before the run")
+    try:
+        rl.append_records([], "adhoc", "0")
+        check(False, "an unlisted tier is refused by the writer")
+    except ValueError:
+        check(True, "an unlisted tier is refused by the writer (import too)")
+
+    # T12: THE BUILT FORK MUST BE THE PIN — a fake install (OGRE_PREFIX, as build-ogre.sh reads it)
+    # whose BUILT_FROM names another commit is refused with the fix lines; the pin itself passes
+    import subprocess as sp
+    pin = sp.run(["git", "rev-parse", "HEAD:thirdparty/ogre-next"], cwd=os.path.join(source, "irisgl"),
+                 capture_output=True, text=True).stdout.strip()
+    checkout = sp.run(["git", "rev-parse", "HEAD"], cwd=os.path.join(source, "irisgl", "thirdparty", "ogre-next"),
+                      capture_output=True, text=True).stdout.strip()
+    check(len(pin) == 40, "irisgl pins an ogre-next commit (%s)" % pin[:9])
+    import tempfile as tf
+    with tf.TemporaryDirectory() as inst:
+        old_p = os.environ.get("OGRE_PREFIX")
+        os.environ["OGRE_PREFIX"] = inst
+        try:
+            def rec(text):
+                with open(os.path.join(inst, "BUILT_FROM"), "w") as f: f.write(text)
+            rec("0" * 40 + "\n")
+            bad = rl.fork_pin_problem(source) or ""
+            check("built from 000000000" in bad and "build-ogre.sh" in bad and "submodule update" in bad,
+                  "an install built from another commit is refused with the fix lines")
+            p = sp.run([sys.executable, os.path.join(source, "scripts", "gate_runlog.py"), "run", "--tier", "scoped",
+                        "--", "true"], cwd=source, capture_output=True, text=True, env=dict(os.environ))
+            check(p.returncode == 4 and "REFUSING TO RUN" in p.stderr,
+                  "gate_runlog.py run refuses it before the run (exit %d)" % p.returncode)
+            p = sp.run([sys.executable, os.path.join(source, "scripts", "gate-scope.py"), "--solo", "x", "--build",
+                        source], cwd=source, capture_output=True, text=True, env=dict(os.environ))
+            check(p.returncode == 4 and "REFUSING TO RUN" in p.stderr,
+                  "gate-scope --run/--solo refuses it before the run (exit %d)" % p.returncode)
+            os.unlink(os.path.join(inst, "BUILT_FROM"))
+            check("no BUILT_FROM record" in (rl.fork_pin_problem(source) or ""), "an install with no record is refused")
+            rec(pin + "\ndirty\n")
+            check("DIRTY" in (rl.fork_pin_problem(source) or ""), "an install built from a dirty checkout is refused")
+            rec(pin + "\n")
+            got = rl.fork_pin_problem(source)
+            check(got is None if checkout == pin else "checkout is at" in (got or ""),
+                  "an install built from the pin passes (when the checkout is the pin) (%s)" % (got or "ok")[:80])
+        finally:
+            if old_p is None: os.environ.pop("OGRE_PREFIX", None)
+            else: os.environ["OGRE_PREFIX"] = old_p
+
+    # T8: THE QUIET MEDIAN — a suite with >= 3 PASS records on a box with no sibling ctest is
+    # costed from those alone; with fewer, from every record (a private log directory)
+    import datetime, tempfile
+    with tempfile.TemporaryDirectory() as d:
+        old = os.environ.get("JAH_RUN_LOG_DIR")
+        os.environ["JAH_RUN_LOG_DIR"] = d
+        try:
+            with open(os.path.join(d, datetime.date.today().isoformat() + "-scoped-000000000.jsonl"), "w") as f:
+                for suite, secs, others in ([("x", 10, 0)] * 3 + [("x", 30, 3)] * 3 +
+                                            [("y", 10, 0)] * 2 + [("y", 30, 2)] * 3 + [("z", 20, None)]):
+                    f.write(json.dumps({"suite": suite, "arm": None, "verdict": "PASS", "seconds": secs,
+                                        "box": {"other_ctests": others}}) + "\n")
+            src = {}
+            med = rl.median_times(days=1, sources=src)
+        finally:
+            if old is None: os.environ.pop("JAH_RUN_LOG_DIR", None)
+            else: os.environ["JAH_RUN_LOG_DIR"] = old
+    check(med.get("x") == 10 and src.get("x") == "quiet", "3 quiet records -> the quiet median (%s %s)"
+          % (med.get("x"), src.get("x")))
+    check(med.get("y") == 30 and src.get("y") == "all", "2 quiet records -> every record's median (%s %s)"
+          % (med.get("y"), src.get("y")))
+    check(med.get("z") == 20 and src.get("z") == "all", "no box field -> every record's median")
+
+
 def nm_refusal(source, build):
     """H1: without `nm` the link graph cannot be read — the selector must REFUSE, never answer from
     empty symbol tables (an engine .cpp would select no compiled row, silently and persistently)."""
@@ -239,6 +353,7 @@ def main(source, build):
         return 2
     gs = load_tool(source)
     gg = gs.gate_graph
+    runlog_cases(source)
     identifier_cases(gg)
 
     graph = gg.NinjaGraph.load(build)
