@@ -3028,16 +3028,19 @@ static ProjectTileData readProjectTile(const QSqlRecord &record)
 
 QVector<ProjectTileData> Database::fetchProjects(int desktop)
 {
+    // THE ONE QUERY, NEWEST FIRST, WITH A TIE-BREAK (DESKTOP-ORDER-1). The
+    // stamp is `datetime()`'s whole seconds, so two projects created (or
+    // written) in one second tied and SQLite returned them in whatever order
+    // its plan produced — the Desktop's tiles swapped places between two
+    // fetches. The rowid is the insertion order and never changes on a save,
+    // so within one second the later-CREATED project comes first, every time.
+    // desktop <= 0 = every desktop; COALESCE: a NULL desktop is Desktop 1.
     QSqlQuery query;
-    if (desktop > 0) {
-        // COALESCE: rows from before the desktop migration (NULL) belong to Desktop 1
-        query.prepare(QString::fromLatin1(kProjectTileColumns) +
-                      "WHERE COALESCE(desktop, 1) = ? ORDER BY last_written DESC");
-        query.addBindValue(desktop);
-    }
-    else {
-        query.prepare(QString::fromLatin1(kProjectTileColumns) + "ORDER BY last_written DESC");
-    }
+    query.prepare(QString::fromLatin1(kProjectTileColumns) +
+                  "WHERE (? <= 0 OR COALESCE(desktop, 1) = ?) "
+                  "ORDER BY last_written DESC, rowid DESC");
+    query.addBindValue(desktop);
+    query.addBindValue(desktop);
     executeAndCheckQuery(query, "FetchProjects");
 
     QVector<ProjectTileData> tileData;
