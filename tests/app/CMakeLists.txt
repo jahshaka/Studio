@@ -55,7 +55,7 @@ set_tests_properties(app.engine_selftest_validation PROPERTIES
 #       closeDatabase() read the connection name after invalidating the handle,
 #       so removeDatabase("") no-op'd and Upgrader's schema check leaked the
 #       DEFAULT connection into MainWindow::setupProjectDB.
-#   6c  "invalid parameters in SMAA.material(83)" — ogre-patch 0012.
+#   6c  "invalid parameters in SMAA.material(83)" — fork c290052de (was 0012).
 #   6a  Qt Multimedia on the startup path (iris::Scene and VideoPreviewWidget
 #       both built a QMediaPlayer in their constructors). ui.media_lazy is the
 #       precise guard; this one catches anything ELSE that starts constructing

@@ -50,7 +50,7 @@ assert_absent() {   # $1 = grep -E pattern, $2 = what it means
 assert_absent "duplicate connection name" \
     "no duplicate SQL connection warning (Lane 6b)"
 assert_absent "invalid parameters in SMAA\.material" \
-    "no SMAA.material parse error (Lane 6c / ogre-patch 0012)"
+    "no SMAA.material parse error (Lane 6c / fork c290052de (was 0012))"
 assert_absent "qt\.multimedia\.ffmpeg: Using Qt multimedia" \
     "Qt Multimedia is not constructed at boot (Lane 6a)"
 

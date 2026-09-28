@@ -8,6 +8,16 @@ add_test(NAME source.no_glsl_path
 set_tests_properties(source.no_glsl_path PROPERTIES TIMEOUT 60 LABELS "hygiene")
 jah_no_display(source.no_glsl_path)
 
+# source.fork_stamp — D6-FORK-TOOLING: a configure against an engine install built
+# from another fork commit than the ogre-next checkout is REFUSED (the stale-engine
+# class: the old C++ linked against the new commit's staged media, silently). The
+# script drives cmake/OgreInstallStamp.cmake against scratch fixtures.
+add_test(NAME source.fork_stamp
+         COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/fork_stamp.sh"
+                 "${CMAKE_SOURCE_DIR}")
+set_tests_properties(source.fork_stamp PROPERTIES TIMEOUT 60 LABELS "hygiene")
+jah_no_display(source.fork_stamp)
+
 # source.no_raw_transaction — CLOSE-2 (round 2, H1): the editor's gesture batch
 # can only stand down for an owner that announces itself with a DbTransaction
 # guard; a raw QSqlDatabase::transaction() on the main connection silently gets

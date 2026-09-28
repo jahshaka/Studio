@@ -3,7 +3,7 @@
 // The tier keeps a ray-traceable copy of the scene: one bottom-level
 // acceleration structure per mesh, one top-level structure over the instances,
 // built from the SAME Ogre vertex and index buffers the raster draws
-// (ogre-patches 0038/0039/0040) and recorded into the frame's own command
+// (fork d014b064f+b028638c1+1a81f866a (was 0038/0039/0040)) and recorded into the frame's own command
 // buffer. Nothing in the picture consumes it yet — R2 (probe visibility),
 // R3 (sun contact) and R5 (reflections) are the consumers, and each reads this
 // same structure. So this suite cannot assert a pixel; it asserts GEOMETRY,

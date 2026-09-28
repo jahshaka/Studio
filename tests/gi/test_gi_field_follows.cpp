@@ -534,7 +534,7 @@ int main() {
         // the same reason: with the gate re-opened those pixels trade a FLAT,
         // unoccluded ambient for the chain's occlusion-aware cone answer, which
         // is dimmer — the honest term, and the residual the cascade march still
-        // owes (PHOTON_SPEC E3 / patch 0033's header) is visible in it.
+        // owes (PHOTON_SPEC E3 / fork 8f09c0cd4 (was 0033)'s header) is visible in it.
         const float chainBounce = 0.5f * (chainBands[5] + chainBands[6]);
         const float noGiBounce  = 0.5f * (offBands[5] + offBands[6]);
         std::printf("   red bounce on the grey ground beyond cascade 0: chain+field %.4f | "
@@ -542,7 +542,7 @@ int main() {
         CHECK(noGiBounce < 0.004f, "with no GI that ground carries no red at all (the control)");
         // THE EXISTENCE BAR IS GONE (PHOTON phase A, A1 section 1.2 — lane
         // FENCE-1). It used to read `chainBounce > 0.012f`, and that number was
-        // 0.02 before ogre-patch 0065 changed the answer: a bar re-anchored DOWN
+        // 0.02 before fork ad452604a+155a56bf8+0338ca7f2+c4c80b5f7 (was 0065) changed the answer: a bar re-anchored DOWN
         // to the value it was measuring, with thirty lines explaining why the
         // smaller number was acceptable. It could also never fail for the reason
         // that matters — a transport delivering a tenth of the energy it should

@@ -1,5 +1,5 @@
 // gi.cascade_bounce_bindings — THE CHAIN'S BOUNCE IS A FUNCTION OF THE LIGHT,
-// NOT OF ITS OWN HISTORY (ogre-patch 0060; PHOTON_SPEC §7 E2, the §509 F2
+// NOT OF ITS OWN HISTORY (fork ae2ed529f (was 0060); PHOTON_SPEC §7 E2, the §509 F2
 // follow-up 0057's header named).
 //
 // THE DEFECT THIS EXISTS FOR, in the pin. `VctLighting::runBounce()` ends with

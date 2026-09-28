@@ -137,7 +137,7 @@ static float measure(Engine *e, View *v, const char *what, int frames, Image *ou
 /// an env-selected path and not a second source file: the cost of a trace is
 /// the cost of THIS trace over THIS geometry, and a second fixture would be
 /// measuring something else. It reports GPU milliseconds from the pass' own
-/// timestamp pair (`giStatus().rayQuery.reflectMs`, the patch-0027 mechanism),
+/// timestamp pair (`giStatus().rayQuery.reflectMs`, the fork 1a81f866a+1bccc3f93 (was 0027) mechanism),
 /// read back with the availability bit several frames later and never with a
 /// wait — so it renders well past the frames-in-flight depth before reading.
 ///
@@ -156,7 +156,7 @@ static int costMain(Engine *e, const char *plugin, const char *media);
 /// asserts `red > redPlain + 0.02` — the traced reflection is UNMISTAKABLE
 /// rather than a tint. That is a presence test, and it has been re-anchored
 /// three times (0.05 -> 0.03 by DRAG-1's units fix, 0.03 -> 0.02 by PHOTON-M2's
-/// patch 0077) because both of its terms move whenever the units move. A
+/// fork 8f09c0cd4+155a56bf8 (was 0077)) because both of its terms move whenever the units move. A
 /// presence test cannot see a units error at all: a mirror showing a third of
 /// the radiance it should still shows red.
 ///
@@ -175,7 +175,7 @@ static int costMain(Engine *e, const char *plugin, const char *media);
 ///                             UNORM range.
 ///   gi.rt_reflect_lamp_clip   L = 3.0, which used to be clipped to 1.0 by the
 ///                             EMISSIVE VOXEL STORE (PFG_RGBA8_UNORM) on its way
-///                             into the cache — ogre-patch 0087 made that store
+///                             into the cache — fork ad452604a+155a56bf8 (was 0087) made that store
 ///                             RGBA16F (VOXEL-CLIP-1, 2026-09-22).
 ///
 /// BOTH ROWS ARE THE SAME SENTENCE — a PERFECT mirror reads L — AND READ THE
@@ -288,7 +288,7 @@ int main(int argc, char **argv)
     //
     // ITS RADIANCE IS 0.9 AND THAT IS THE INSTRUMENT'S LIMIT, NOT A TASTE
     // (VOXEL-CLIP-1, 2026-09-22, measured). It used to be 4.0, which the emissive
-    // voxel store clipped to 1.0 (PFG_RGBA8_UNORM) — and ogre-patch 0087 makes
+    // voxel store clipped to 1.0 (PFG_RGBA8_UNORM) — and fork ad452604a+155a56bf8 (was 0087) makes
     // that store a float, so the cube's radiance now reaches the cache whole. An
     // offscreen view's readback is PFG_RGBA8_UNORM (OgreView::createRtt), so the
     // RAYS arm of case 2 below is pinned at its ceiling the moment the reflected
@@ -389,12 +389,12 @@ int main(int argc, char **argv)
     // right only in a scene whose brightest light happens to have radiance pi.
     // This fixture's brightest light is radiance 2.0, so its factor is
     // 2/pi = 0.6366 and the ray used to show it 57 % TOO BRIGHT. Measured on
-    // this suite, both arms in one binary (JAH_RQ_NO_MULT restores the old
-    // reading): red excess 0.0737 without the multiplier, 0.0434 with it — and
+    // this suite, both arms in one binary (DRAG-1; the switch that restored the
+    // old reading is gone): red excess 0.0737 without the multiplier, 0.0434 with it — and
     // 0.0434 against the control's 0.0099 is still 4.4x, which is what
     // "unmistakable rather than a tint" was asking for.
     //
-    // RE-ANCHORED 0.03 -> 0.02 BY PHOTON-M2 (patch 0077), and it is the CONTROL
+    // RE-ANCHORED 0.03 -> 0.02 BY PHOTON-M2 (fork 8f09c0cd4+155a56bf8 (was 0077)), and it is the CONTROL
     // that moved, not the ray. This fixture's no-ray arm reads its reflection of
     // the scene's flat ambient through the specular cone's ESCAPE term, which
     // upstream multiplied by 0.31831 = 1/pi (its eye-tuned cancellation of the
@@ -508,8 +508,8 @@ int main(int argc, char **argv)
         s->refreshGlobalIllumination();
         // BOTH ARMS ARE READ ONCE THE PICTURE HOLDS STILL, never at a frame
         // count (PHOTON-M3): a chain rebuild re-solves the GI and the settle
-        // runs one injection a frame, and with the float voxel store (patch
-        // 0080) the emitter's un-clipped bounce keeps moving the floor for
+        // runs one injection a frame, and with the float voxel store (fork ae2ed529f+155a56bf8
+        // (was 0080)) the emitter's un-clipped bounce keeps moving the floor for
         // longer than 48 frames — the two arms, 48 frames apart, then differed
         // by the settle (mean 7.09/255 over the march region) with the ray tier
         // blameless. The house lesson: a wall-clock or frame-count settle
@@ -594,7 +594,7 @@ int main(int argc, char **argv)
         // completes it to the lamp (1.0/0/0), which is the composite doing its
         // job. The histogram is bimodal: 6,094 of 6,667 px within 2/255, 452 at
         // 32+ on that rim, nothing in between to speak of. With the float voxel
-        // store (patch 0080) the floor's red bounce is brighter, more rim pixels
+        // store (fork ae2ed529f+155a56bf8 (was 0080)) the floor's red bounce is brighter, more rim pixels
         // cross the 0.25 chroma margin, and a MEAN over the region moved from
         // 2.96 to 7.08/255 with the ray tier blameless. So: the share within
         // 2/255 (measured 91.4 %) must stay above 85 %, and the rim is named.
@@ -1283,7 +1283,7 @@ void lampBlockMean(const ImageF &img, int cx, int cy, int half, double out[3])
 static int lampMain(Engine *e, bool target)
 {
     /// L = 0.9 was inside the emissive voxel store's old UNORM range; L = 3.0 was
-    /// not, and that is the clip row's whole content (ogre-patch 0087).
+    /// not, and that is the clip row's whole content (fork ad452604a+155a56bf8 (was 0087)).
     const double kL = target ? 3.0 : 0.9;
     std::printf("== gi.rt_reflect_lamp%s: a perfect mirror reads the emitter's own radiance "
                 "(L = %.2f%s)\n", target ? "_clip" : "", kL,

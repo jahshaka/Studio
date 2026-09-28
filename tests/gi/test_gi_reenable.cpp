@@ -12,7 +12,7 @@
 //      "'ogre_t6' : unrecognized layout identifier" from
 //      NNLightVctBounceInject_cs, which left the whole VCT arm unbound — no GI
 //      in the picture, and one line in the engine log to say so. The cause is
-//      in the pin (ogre-patch 0057): `runBounce` declares one light-voxel
+//      in the pin (fork ae2ed529f (was 0057)): `runBounce` declares one light-voxel
 //      texture per cascade from `hlms_num_vct_cascades`, while the job's
 //      texture UNIT COUNT is only ever derived inside
 //      `setAllowMultipleBounces`/`resetTexturesFromBuildRelative` — so chaining
@@ -130,7 +130,7 @@ int main()
     e->takeLastError();                       // the fixture's own build, whatever it said
 
     // =====================================================================
-    // CASE 1 — THE CASCADE CHAIN WITH BOUNCES (ogre-patch 0057): on, off, ON AGAIN
+    // CASE 1 — THE CASCADE CHAIN WITH BOUNCES (fork ae2ed529f (was 0057)): on, off, ON AGAIN
     // =====================================================================
     // A fresh enable first: before the patch this raised
     // "'ogre_t6' : unrecognized layout identifier" and left vctBound false,

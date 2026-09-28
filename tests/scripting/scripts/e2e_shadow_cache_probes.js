@@ -1,6 +1,6 @@
 // scripting.e2e.shadow_cache_probes — THE LAMP-MAP CACHE UNDER REFLECTION
-// PROBES, WITH A COLD SHADER CACHE (ENGINE_CACHE_POLICY_SPEC P2/P4, ogre-patch
-// 0025). Runs in the real app on a FRESH home (the CMake fixture wipes it), so
+// PROBES, WITH A COLD SHADER CACHE (ENGINE_CACHE_POLICY_SPEC P2/P4, fork 6130df9d1
+// (was 0025)). Runs in the real app on a FRESH home (the CMake fixture wipes it), so
 // every shader this scene needs is GENERATED and COMPILED in this run — which
 // is the only condition under which the defect it guards is visible.
 //

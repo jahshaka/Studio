@@ -31,7 +31,7 @@ set_tests_properties(gi.rt_reflect PROPERTIES TIMEOUT 120 LABELS "engine")
 # radiance is invariant along a ray, so a perfect mirror showing an emitter of
 # radiance L must read exactly L. Two rows, on the two sides of 1.0 — the
 # emissive VOXEL store used to be a UNORM texture, so an emitter authored above
-# 1.0 was clipped on its way into the cache (ogre-patch 0087).
+# 1.0 was clipped on its way into the cache (fork ad452604a+155a56bf8 (was 0087)).
 #
 #   gi.rt_reflect_lamp        L = 0.9, a PERFECT mirror: pixel = L.
 #   gi.rt_reflect_lamp_clip   L = 3.0, the same perfect mirror: pixel = L.

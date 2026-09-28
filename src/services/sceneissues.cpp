@@ -55,7 +55,7 @@ int machineRayTracing()
     // No capabilities object = no device yet (OgreLogBridge.cpp deviceInfo).
     if (engine->deviceInfo().deviceName.empty()) return -1;
     // The process latch (--no-ray-query / JAHSHAKA_NO_RAY_QUERY) is a genuine
-    // "this run has no ray tracing": patch 0038 keeps the extensions off the
+    // "this run has no ray tracing": fork d014b064f (was 0038) keeps the extensions off the
     // device entirely, so this run IS a machine without the hardware, and the
     // row's promise to say so applies to it.
     if (!engine->rayTracing()) return 0;

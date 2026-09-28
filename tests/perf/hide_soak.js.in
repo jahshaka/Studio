@@ -12,8 +12,8 @@
 //     un-hiding the default floor rebuilt its 4 km horizon from nothing (the
 //     owner's "hiding the plane changed its size").
 //   * THE DEVICE LOST — the owner's hide sequence hung the GPU through a large
-//     transient 3D storage image created and destroyed per build (XID-2, patch
-//     0071): 16 cycles of hide/show were what it took to see it.
+//     transient 3D storage image created and destroyed per build (XID-2, fork ad452604a+0338ca7f2+c4c80b5f7
+//     (was 0071)): 16 cycles of hide/show were what it took to see it.
 //
 // Neither was catchable by a suite that hides an object ONCE. What this
 // contributes is the REPEATED gesture, at Epic, on a scene with the caches that

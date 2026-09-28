@@ -27,7 +27,7 @@ endfunction()
 jahshaka_ssr_test(test_ssr)
 target_link_libraries(test_ssr PRIVATE JahshakaEngine)
 # THE SCREEN-ONLY CONTRACT, AND IT STAYS THAT (lead ruling, PHOTON R5 round B).
-# This suite was written to measure the SCREEN-SPACE technique — patch 0036's
+# This suite was written to measure the SCREEN-SPACE technique — fork 16d8e29d4 (was 0036)'s
 # composite, the roughness cutoff, the firefly clamp, the ortho branch — on
 # fixtures whose floors are mirrors. With the ray-query tier live those same
 # fixtures show TRACED reflections as well, and the measurements stop being

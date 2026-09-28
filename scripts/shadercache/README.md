@@ -200,7 +200,7 @@ process has built:
 
 `SceneManager::warmUpShaders` runs no frustum test, so the pass sweeps every
 render queue and every object regardless of where the camera is looking. That
-is the whole prize, and ogre-patch 0016 is what makes the route run at all:
+is the whole prize, and fork 8282f6d70 (was 0016) is what makes the route run at all:
 with the patch reversed and the engine rebuilt, the suite **SEGVs** on its very
 first `warmUpShaders()` in `ForwardPlusBase::getGridBuffer` — the crash the
 audit predicted, reproduced and removed.

@@ -1,5 +1,5 @@
 // scripting.e2e.gi_voxel_store — THE VOXEL STORE HOLDS THE FIXED POINT
-// (PHOTON-M3, ogre-patch 0080; spikes/photon-m3/MEASUREMENTS.md).
+// (PHOTON-M3, fork ae2ed529f+155a56bf8 (was 0080); spikes/photon-m3/MEASUREMENTS.md).
 //
 // The bounce solves L = D + rho * G(L). Its fixed point is D / (1 - rho*f) and
 // has no bound a fixed-range store can hold: in a closed room of albedo 0.79 it

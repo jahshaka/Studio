@@ -3,7 +3,7 @@
 This guide builds **Jahshaka** (the app) and **IrisGL** (the 3D core and engine) with the
 **Ogre-Next engine viewport** on macOS. Rendering runs on Vulkan via **MoltenVK** — the
 Vulkan-over-Metal layer — using the same Vulkan RenderSystem as Linux, with a
-Metal-surface window backend (ours: it was ogre-patch 0007, now part of the fork's
+Metal-surface window backend (ours: it was fork 1a81f866a+d014b064f+1bccc3f93 (was 0007), now part of the fork's
 `M01 SOURCE: build + the Apple Metal window` commit) for the on-screen viewport.
 
 Verified on Apple Silicon (M4 Pro), macOS 26, Xcode 17 / AppleClang 17, Qt 6.11.2,

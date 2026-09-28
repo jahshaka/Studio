@@ -24,12 +24,12 @@
 //                 value, the player in and out, 300 SKY CHANGES, a save after
 //                 each step — the path that crashed three instances on
 //                 2026-09-14. Asserts the process survives it AND that neither
-//                 ogre-patch 0035's guard nor its pass-cache overflow warning
+//                 fork d6348decd (was 0035)'s guard nor its pass-cache overflow warning
 //                 ever had to fire. The sky phase is the one that makes this
 //                 run a REGRESSION test rather than a hope: before the fix
 //                 (lane shadercache-2) those 300 captures minted 300 permanent
 //                 Hlms pass-cache entries and the warning fired at 256.
-//                 (The field is 13 bits since ogre-patch 0046 and run 5 asserts
+//                 (The field is 13 bits since fork d6348decd (was 0046) and run 5 asserts
 //                 the live count instead of the warning — see run 5. And it
 //                 asserts a DELTA across the sky loop, not an absolute after
 //                 it: the absolute is that delta plus a baseline nobody
@@ -201,7 +201,7 @@ int main(int argc, char **argv)
     // launch, the 1-cascade `13LightVctBounceInject_cs` among them) but because
     // those three set `uses_array_bindings`, which made Ogre reflect their own
     // SPIR-V to find their root layout, which upstream's microcode cache refused
-    // to hold on either end. ogre-patch 0063 stores the reflected bindings beside
+    // to hold on either end. fork 5bfe24cd9 (was 0063) stores the reflected bindings beside
     // the SPIR-V and the number is 0 again. If it ever prints 3 once more, that
     // patch is missing from the tree's engine — re-run build-ogre.sh.
     std::printf("   run 3: compiled %d, loaded %d\n", steady.value("compiledThisRun").toInt(),
@@ -227,7 +227,7 @@ int main(int argc, char **argv)
     // The periodic save crashed the owner's editor and two rig instances on
     // 2026-09-14, inside HlmsDiskCache::copyFrom, which subscripts Ogre's
     // renderable and pass caches with indices unpacked from a shader hash and
-    // checks neither (ogre-patch 0035 checks them now). Both indices grow with
+    // checks neither (fork d6348decd (was 0035) checks them now). Both indices grow with
     // CHURN — new material/mesh permutations, new pass property sets, and every
     // World post row is a compositor rebuild that produces some.
     //
@@ -250,7 +250,7 @@ int main(int argc, char **argv)
     //     pass-cache entries (measured, A/B).
     //
     // IT IS A NUMBER NOW, NOT THE ABSENCE OF A WARNING (lane HLMSBITS-1).
-    // ogre-patch 0046 rebalanced the shader hash to [3][16][13], so the pass
+    // fork d6348decd (was 0046) rebalanced the shader hash to [3][16][13], so the pass
     // field holds 8,192 entries and 300 stray ones would no longer trip any
     // log line — the assertion that caught this regression would have gone
     // quiet while still printing "ok". app.shaderCache() reports the live cache
@@ -313,7 +313,7 @@ int main(int argc, char **argv)
     CHECK(passEntries > 0 && passEntries < passCapacity,
           "the whole session's pass cache fits the shader hash's pass field");
     CHECK(passCapacity >= 8192,
-          "the shader hash's pass field addresses at least 8192 entries (ogre-patch 0046)");
+          "the shader hash's pass field addresses at least 8192 entries (fork d6348decd (was 0046))");
     CHECK(!gLastOutput.contains(QStringLiteral("distinct pass property combinations")),
           "no Hlms reported its pass cache filling up");
     CHECK(!gLastOutput.contains(QStringLiteral("save already in progress")),

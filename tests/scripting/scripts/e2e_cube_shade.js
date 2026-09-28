@@ -9,7 +9,7 @@
 // Both were measured, and the measurement named two different causes, so this
 // suite has two halves.
 //
-// HALF 1 — THE CONE BASIS (ogre-patch 0083). The VCT diffuse cones were traced
+// HALF 1 — THE CONE BASIS (fork 8f09c0cd4 (was 0083)). The VCT diffuse cones were traced
 // in the MATERIAL's tangent space: a per-vertex attribute authored for
 // texturing, interpolated from a different vertex triple inside each triangle
 // of a quad. The cone set is not azimuthally symmetric against an anisotropic

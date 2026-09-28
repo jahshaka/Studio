@@ -15,7 +15,7 @@ For more information see the LICENSE file
 // THE END OF A SESSION WHOSE GPU DIED (lane XID-2, 2026-09-17).
 //
 // A lost Vulkan device is not recoverable in this process: the renderer stops
-// recreating it (ogre-patch 0072, because `vkDestroyDevice` on a device whose
+// recreating it (fork d014b064f+1bccc3f93 (was 0072), because `vkDestroyDevice` on a device whose
 // channel the driver has not reclaimed DOES NOT RETURN -- it spins at 100 % of
 // a core for ever, which is the freeze the owner reported), and every later
 // frame throws instead of drawing. Measured on the XID-2 reproducer before this

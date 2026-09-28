@@ -12,9 +12,9 @@
 //                        probe influence produces, and the one that parked this
 //                        work for a day.
 //
-// Shipped by ogre-patch 0029 (the visibility test itself: march from the probe
+// Shipped by fork 4d5fbef16 (was 0029) (the visibility test itself: march from the probe
 // camera towards the shaded point, read the depth the probe recorded that way,
-// and treat "it saw something nearer" as occlusion) standing on ogre-patch 0030
+// and treat "it saw something nearer" as occlusion) standing on fork 508b74369 (was 0030)
 // (the depth it reads is the TRUE depth: the DepthCompressor multiplied its
 // view->probe-local matrix on the wrong side for GLSL/Vulkan, so every
 // off-centre probe's X and Y depths were encoded against the MIRRORED
@@ -172,10 +172,10 @@ int main()
     // photograph does. Red on this metal would be a picture of a place this
     // surface cannot see — the owner's "why would the outside of a building
     // show the room inside?" in its smallest reproducible form. It read
-    // r 1.000 g 0.055 before ogre-patch 0029 and reads r 0.000 after it.
+    // r 1.000 g 0.055 before fork 4d5fbef16 (was 0029) and reads r 0.000 after it.
     CHECK(on.r - on.g < 0.06f,
           "the metal box in the sealed half is NOT painted with the red wall it cannot see "
-          "(the leak ogre-patch 0029 closes — it read r 1.000 g 0.055 before)");
+          "(the leak fork 4d5fbef16 (was 0029) closes — it read r 1.000 g 0.055 before)");
     CHECK(on.r < 0.20f, "...and there is no faint bleed of it either");
 
     engine->destroyScene(s);
@@ -186,7 +186,7 @@ int main()
     //
     // The visibility test is only as good as the distance the probe recorded,
     // and that distance was WRONG on the X and Y axes for every off-centre
-    // probe until ogre-patch 0030: the DepthCompressor multiplied the
+    // probe until fork 508b74369 (was 0030): the DepthCompressor multiplied the
     // view->probe-local matrix on the wrong side for GLSL/Vulkan, so a texel's
     // fApproxDist was computed for the MIRRORED direction. Measured here, in
     // this room, with the probe cube read back texel by texel: probe 0 recorded
@@ -202,8 +202,8 @@ int main()
     // into the only saturated thing in the room -- the red wall. Nothing stands
     // between the probe and the box: the honest answer is "visible", and the
     // pixel says so.
-    //     ogre-patch 0030 applied:      r 1.000, probe 0 reads 2.275 m (101%)
-    //     ogre-patch 0030 reverted:     r 0.000, probe 0 reads 1.058 m (47%)
+    //     fork 508b74369 (was 0030) applied:      r 1.000, probe 0 reads 2.275 m (101%)
+    //     fork 508b74369 (was 0030) reverted:     r 0.000, probe 0 reads 1.058 m (47%)
     Scene *s2 = engine->createScene("vis2");
     view->setScene(s2);
     s2->setAmbient(Colour(0, 0, 0), Colour(0, 0, 0));
@@ -245,7 +245,7 @@ int main()
     CHECK(st2.probeCount == 2 && st2.pccBound, "long room: the 2x1x1 grid built and bound");
     CHECK(lit.r > 0.50f && lit.r - lit.g > 0.40f,
           "long room: the metal box the probe CAN see still reflects the red wall "
-          "(it reads 0.000 on a tree whose probes record the wrong depth -- ogre-patch 0030)");
+          "(it reads 0.000 on a tree whose probes record the wrong depth -- fork 508b74369 (was 0030))");
     engine->destroyScene(s2);
 
     std::printf(failures ? "\nFAILURES: %d\n" : "\nall ok\n", failures);
