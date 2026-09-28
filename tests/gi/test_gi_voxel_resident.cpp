@@ -107,7 +107,6 @@ static GiParams cascadeGi()
     g.numBounces = 1;
     g.ddgi = GiToggle::Off;     // the field would route the diffuse (LATTICE-1)
     g.updateBudget = 0;
-    g.cascades = true;
     g.cascadeVoxelLod = true;
     return g;
 }

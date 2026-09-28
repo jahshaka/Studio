@@ -63,16 +63,13 @@ static void render(Engine *e, int frames = 1)
     for (int i = 0; i < frames; ++i) e->renderOneFrame();
 }
 
-/// THE PROBE CASES RUN ON ONE VOLUME AND THE CHAIN CASE ON A CHAIN, and that is
-/// the fixture's shape rather than a convenience. The probe grid is placed
-/// through the LIT VOLUME, and under a cascade chain that volume is the
-/// OUTERMOST cascade's box — 120 m at this tier — so every probe in a 16 m room
-/// photographs nothing inside its own share of it and the depth rule drops the
-/// whole grid ("all 18 probes photographed nothing", which is the correct
-/// answer for an open world and the wrong fixture for counting captures). The
-/// deferral being measured is in the probe budget and has nothing to do with
-/// the chain; the chain case below turns the cascades on for its own question.
-static GiParams hybridGi(bool chain)
+/// THE PROBE REGION IS PINNED TO THE ROOM: the deferral being measured is in the
+/// probe budget, and a grid spread over empty air photographs nothing inside its
+/// own share and the depth rule drops it (the correct answer for an open world
+/// and the wrong fixture for counting captures). The voxels are the chain, as
+/// they always are (the single volume the probe cases used to run on is deleted,
+/// D4-PHOTON-TIERS).
+static GiParams hybridGi()
 {
     GiParams gi;
     gi.mode = GiMode::VctPccHybrid;      // a PROBE GRID: this suite is about captures
@@ -81,10 +78,9 @@ static GiParams hybridGi(bool chain)
     gi.ddgi = GiToggle::Off;
     gi.updateBudget = 1;                 // the shipped rate: one probe per frame
     gi.probeCaptureSize = 64;            // small captures: the COUNT is the subject
-    gi.cascades = chain;
     // The room, pinned — see the fixture's note.
-    gi.testBoundsMin = Vec3(-4.6f, -0.6f, -4.6f);
-    gi.testBoundsMax = Vec3( 4.6f,  5.6f,  4.6f);
+    gi.testProbeRegionMin = Vec3(-4.6f, -0.6f, -4.6f);
+    gi.testProbeRegionMax = Vec3( 4.6f,  5.6f,  4.6f);
     gi.pccProbesX = 3; gi.pccProbesY = 1; gi.pccProbesZ = 3;   // nine: a real sweep
     return gi;
 }
@@ -168,7 +164,7 @@ int main()
     addPointLamp(scene, Vec3(-2.0f, 4.0f, 1.0f), 6.0f);
     enginetest::testCameraLookAt(view, Vec3(0.0f, 2.5f, 3.5f), Vec3(0.0f, 2.0f, -1.0f));
 
-    CHECK(scene->setGlobalIllumination(hybridGi(false)), "the hybrid arm builds");
+    CHECK(scene->setGlobalIllumination(hybridGi()), "the hybrid arm builds");
     render(e, 16);
     GiStatus st = scene->giStatus();
     std::printf("   %d probes, budget %d, %zu cascades, dropped %d\n",
@@ -266,8 +262,7 @@ int main()
     // monitor files a row for each ("vct.light.moving" against "vct.cascadeN").
     std::printf("\n== case 4: the moving tick does not write over a rebuild ==\n");
     {
-        // THE CHAIN, for this case only — see hybridGi's note.
-        CHECK(scene->setGlobalIllumination(hybridGi(true)), "the cascade chain builds");
+        CHECK(scene->setGlobalIllumination(hybridGi()), "the cascade chain builds");
         render(e, 16);
         CHECK(!scene->giStatus().cascades.empty(), "the chain is up");
         engine->setFrameMonitor(MonitorLevel::Review);
@@ -339,7 +334,7 @@ int main()
     // looked like a still scene and spent a capture on every frame of the drag.
     std::printf("\n== case 6: an unlit mover defers too ==\n");
     {
-        CHECK(scene->setGlobalIllumination(hybridGi(false)), "back to one volume");
+        CHECK(scene->setGlobalIllumination(hybridGi()), "the probe fixture");
         render(e, 16);
         const NodeId card = addUnlitCube(scene, Colour(0.9f, 0.9f, 0.2f));
         CHECK(card != 0, "the unlit card exists");
@@ -402,7 +397,7 @@ int main()
     // =====================================================================
     std::printf("\n== case 5: the picture catches up ==\n");
     {
-        CHECK(scene->setGlobalIllumination(hybridGi(false)), "back to one volume");
+        CHECK(scene->setGlobalIllumination(hybridGi()), "the probe fixture");
         render(e, 16);
         for (int i = 0; i < 600 && scene->giStatus().staleProbes > 0; ++i) render(e, 1);
         const GiStatus fin = scene->giStatus();

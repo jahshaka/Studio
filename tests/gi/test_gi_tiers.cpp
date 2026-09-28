@@ -77,31 +77,29 @@ static void testTierTable()
     // every tier = "follow the engine's quality dial", because the halving that
     // decision asked for is the engine's default now (High 512 -> 256). The
     // column exists so a scene can PIN a size, which case 3 gates.
-    // The SIXTH is PHOTON'S CAMERA CASCADES (PHOTON_SPEC §7 E2 (6)): ON in
-    // every tier, which is what "the boundary is gone for users" means.
+    // (The sixth column, the cascade switch, is deleted with the single
+    // scene-fitted volume it selected — D4-PHOTON-TIERS: the chain always runs.)
     // The TECHNIQUE ordinals moved with Instant Radiosity's deletion (E2 (4)):
     // GiMode is Off 0 / VCT 1 / the hybrid 2, and Low is a voxel tier now.
-    struct Want { PhotonTier tier; int mode, quality, ddgi, bounces, probeSize, cascades; const char *name; };
+    struct Want { PhotonTier tier; int mode, quality, ddgi, bounces, probeSize; const char *name; };
     const Want wants[] = {
-        { PhotonTier::Low,    1, 0, 1, 1, 0, 1, "Low = VCT, two cascades at 64^3, FIELD ON, 1 bounce, no probes" },
-        { PhotonTier::Medium, 1, 1, 1, 1, 0, 1, "Medium = VCT 64^3, FIELD ON (DDGI-fed), 1 bounce" },
-        { PhotonTier::High,   2, 2, 1, 1, 0, 1, "High = VCT + probes 128^3, FIELD ON, 1 bounce" },
-        { PhotonTier::Epic,   2, 3, 1, 3, 0, 1, "Epic = its own engine row (High + 4x the gather probes), FIELD ON, THREE bounces" },
+        { PhotonTier::Low,    1, 0, 1, 1, 0, "Low = VCT, two cascades at 64^3, FIELD ON, 1 bounce, no probes" },
+        { PhotonTier::Medium, 1, 1, 1, 1, 0, "Medium = VCT 64^3, FIELD ON (DDGI-fed), 1 bounce" },
+        { PhotonTier::High,   2, 2, 1, 1, 0, "High = VCT + probes 128^3, FIELD ON, 1 bounce" },
+        { PhotonTier::Epic,   2, 3, 1, 3, 0, "Epic = its own engine row (High + 4x the gather probes), FIELD ON, THREE bounces" },
     };
     for (const Want &w : wants) {
         auto s = freshScene();
         worldmodes::setPhoton(s, true, w.tier);
         CHECK(giMode(s) == w.mode && giQuality(s) == w.quality && giDdgi(s) == w.ddgi &&
-                  giBounces(s) == w.bounces && s->giProbeCaptureSize == w.probeSize &&
-                  s->giCascades == (w.cascades != 0), w.name);
+                  giBounces(s) == w.bounces && s->giProbeCaptureSize == w.probeSize, w.name);
         // The accessors ARE the table (one owner): what they say per column
         // must be what the tier wrote.
         CHECK(worldmodes::photonTechnique(w.tier) == w.mode &&
                   worldmodes::photonQuality(w.tier) == w.quality &&
                   worldmodes::photonDdgi(w.tier) == w.ddgi &&
                   worldmodes::photonBounces(w.tier) == w.bounces &&
-                  worldmodes::photonProbeSize(w.tier) == w.probeSize &&
-                  worldmodes::photonCascades(w.tier) == w.cascades,
+                  worldmodes::photonProbeSize(w.tier) == w.probeSize,
               "the column accessors agree with the write-through");
         CHECK(s->giTier == int(w.tier), "the tier is recorded on the document");
         CHECK(worldmodes::photonEnabled(s), "and Photon reads enabled");
@@ -116,7 +114,7 @@ static void testTierTable()
                   qPrintable(QStringLiteral("write-through holds for %1").arg(id)));
         }
     }
-    CHECK(worldmodes::photonRowIds().size() == 6, "the tier writes exactly six rows through");
+    CHECK(worldmodes::photonRowIds().size() == 5, "the tier writes exactly five rows through");
     // 5 x 4: EVERY cell of every Photon-tiered row is the table's cell. The rows
     // derive their tier[] from kPhotonTable (worldmodes.cpp photonColumns) and
     // the public readers read the same table one column at a time, so a cell
@@ -124,11 +122,11 @@ static void testTierTable()
     // the rayontiers review found (13 of 20 cells untested while hand-copied).
     {
         using Reader = int (*)(PhotonTier);
-        const Reader readers[6] = { worldmodes::photonTechnique, worldmodes::photonQuality,
+        const Reader readers[5] = { worldmodes::photonTechnique, worldmodes::photonQuality,
                                     worldmodes::photonDdgi, worldmodes::photonBounces,
-                                    worldmodes::photonProbeSize, worldmodes::photonCascades };
+                                    worldmodes::photonProbeSize };
         const QStringList ids = worldmodes::photonRowIds();
-        for (int c = 0; c < 6 && c < ids.size(); ++c) {
+        for (int c = 0; c < 5 && c < ids.size(); ++c) {
             const worldmodes::Row *r = worldmodes::row(ids[c]);
             for (int t = 0; t < 4; ++t) {
                 const int want = readers[c](PhotonTier(t));
@@ -167,9 +165,8 @@ static void testTierTable()
                         giCascadeCell(facts.cascades[i]) > giCascadeCell(facts.cascades[i - 1]);
             CHECK(grows, qPrintable(QStringLiteral("quality %1: every cascade is bigger AND "
                                                    "coarser than the one inside it").arg(q)));
-            CHECK(facts.voxelResolution >= 16u && facts.probeFaceSize >= 64u,
-                  qPrintable(QStringLiteral("quality %1: the single volume and the probe face "
-                                            "are sane sizes").arg(q)));
+            CHECK(facts.probeFaceSize >= 64u,
+                  qPrintable(QStringLiteral("quality %1: the probe face is a sane size").arg(q)));
         }
         // (ii) the two expensive probe options resolve ON at High and Epic and
         // nowhere else — the pair GiToggle::Auto reads.
@@ -219,11 +216,9 @@ static void testTierTable()
                                      .arg(worldmodes::photonTierProbeFaceSize(tier))));
         }
         // (iv) Low's chain is 64 (PHOTON_SPEC §7 E2 (4): a 0.31 m cell smears a
-        // room's own walls) and so is its scene-fitted volume since PHOTON-VOXEL-4
-        // (at 32 the field's corner fell outside its derived bracket).
-        CHECK(giQualityFacts(GiQuality::Low).cascades[0].resolution == 64 &&
-                  giQualityFacts(GiQuality::Low).voxelResolution == 64u,
-              "Low: the CHAIN and the single scene-fitted volume are both 64 per axis");
+        // room's own walls).
+        CHECK(giQualityFacts(GiQuality::Low).cascades[0].resolution == 64,
+              "Low: the CHAIN is 64 per axis");
         CHECK(worldmodes::photonTierVoxelPhrase(PhotonTier::Low) == QStringLiteral("64") &&
                   worldmodes::photonTierVoxelPhrase(PhotonTier::Medium) == QStringLiteral("64"),
               "Low and Medium voxelise the chain at the SAME resolution — the "
@@ -308,7 +303,7 @@ static void testPins()
     std::printf("\n-- 3. pins --\n");
     auto s = freshScene();
     worldmodes::setPhoton(s, true, PhotonTier::Epic);
-    CHECK(giQuality(s) == 2 && giDdgi(s) == 1, "Epic to start with");
+    CHECK(giQuality(s) == 3 && giDdgi(s) == 1, "Epic to start with");
 
     // An Advanced edit: quality down to medium, everything else left alone.
     CHECK(worldmodes::setRowValue(s, QStringLiteral("giQuality"), 1), "pin the quality to Medium");
@@ -326,7 +321,7 @@ static void testPins()
 
     // And it can be handed back, one row or all of them.
     worldmodes::clearOverride(s, QStringLiteral("giQuality"));
-    CHECK(giQuality(s) == 2, "clearOverride puts the tier's quality back");
+    CHECK(giQuality(s) == 3, "clearOverride puts the tier's quality back");
     CHECK(!worldmodes::photonCustom(s), "and the tier row stops saying Custom");
 
     // The field is pinnable the same way, including AGAINST Epic.
@@ -387,7 +382,7 @@ static void testWorldModeOwnership()
         { worldmodes::Mode::Low,    0, 0, 0, 1, 0, "World Low leaves GI off, as it always did" },
         { worldmodes::Mode::Medium, 0, 1, 0, 1, 0, "World Medium leaves GI off, as it always did" },
         { worldmodes::Mode::High,   1, 0, 1, 1, 0, "World High is Photon Low: VCT, two cascades at 64^3, the field on" },
-        { worldmodes::Mode::Epic,   2, 2, 1, 3, 0, "World Epic is Photon Epic: the hybrid, high, the field, 3 bounces" },
+        { worldmodes::Mode::Epic,   2, 3, 1, 3, 0, "World Epic is Photon Epic: the hybrid, the epic row, the field, 3 bounces" },
     };
     for (const Want &w : wants) {
         auto s = freshScene();
@@ -425,8 +420,8 @@ static void testNewSceneDefault()
     worldmodes::setMode(s, worldmodes::Mode::Epic);
     CHECK(worldmodes::photonEnabled(s), "a NEW scene is born with Photon ON");
     CHECK(worldmodes::photonTier(s) == PhotonTier::Epic, "at Epic");
-    CHECK(giMode(s) == 2 && giQuality(s) == 2 && giDdgi(s) == 1,
-          "which is the hybrid, high quality, irradiance field on");
+    CHECK(giMode(s) == 2 && giQuality(s) == 3 && giDdgi(s) == 1,
+          "which is the hybrid, the epic quality row, irradiance field on");
     CHECK(giBounces(s) == 3, "with three bounces (Epic's column)");
 }
 

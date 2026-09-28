@@ -1422,21 +1422,6 @@ set_target_properties(test_gi_voxel_lab PROPERTIES
 add_test(NAME gi.voxel_lab COMMAND test_gi_voxel_lab
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.voxel_lab PROPERTIES TIMEOUT 120 LABELS "engine")
-# VOXEL-DIAL (PHOTON-VOXEL-4) — a TOOL, not a suite: the scene-fitted volume's
-# resolution (GiParams::testVoxelResolution) against its rebuild, injection and
-# frame cost, paired 32 / 64 in one process. Run under scripts/gpu-exclusive.sh.
-add_executable(voxel_dial_measure EXCLUDE_FROM_ALL voxel_dial_measure.cpp)
-set_target_properties(voxel_dial_measure PROPERTIES
-    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
-    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
-    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
-    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
-    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
-target_compile_definitions(voxel_dial_measure PRIVATE
-    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
-    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
-target_link_libraries(voxel_dial_measure PRIVATE JahshakaEngine)
-add_dependencies(voxel_dial_measure JahshakaEngineMedia)
 # gi.voxel_emissive — AN EMITTER AUTHORED AT RADIANCE L IS STORED AS L (PHOTON
 # phase A, SPECS/photon/A2_VOXEL_CLIP_DESIGN.md section 2; lane VOXEL-CLIP-1,
 # ogre-patch 0087). The emissive VOXEL store was RGBA8_UNORM, so every emitter

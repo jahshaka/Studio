@@ -718,8 +718,8 @@ int mirrorMain(Engine *e)
     gi.mode = GiMode::Vct;
     gi.quality = GiQuality::High;
     gi.numBounces = 1;
-    gi.testBoundsMin = Vec3(-8.0f, -2.0f, -12.0f);
-    gi.testBoundsMax = Vec3(8.0f, 8.0f, 6.0f);
+    gi.testProbeRegionMin = Vec3(-8.0f, -2.0f, -12.0f);
+    gi.testProbeRegionMax = Vec3(8.0f, 8.0f, 6.0f);
     s->setGlobalIllumination(gi);
     PostFxDesc fx;
     fx.allowOffscreen = true;

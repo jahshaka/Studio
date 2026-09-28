@@ -82,7 +82,6 @@ static GiParams chainGi()
     gi.quality = GiQuality::High;
     gi.ddgi = GiToggle::Off;
     gi.numBounces = 1;
-    gi.cascades = true;
     gi.gather = GiToggle::On;
     return gi;
 }

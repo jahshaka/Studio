@@ -2661,6 +2661,8 @@ IEditorViewport::GiStatusInfo EngineSceneViewport::giStatus() const
     out.voxelMetres = st.voxelMetres;
     out.probeRegionMin = q(st.probeRegionMin);
     out.probeRegionMax = q(st.probeRegionMax);
+    out.probeFitMin    = q(st.probeFitMin);
+    out.probeFitMax    = q(st.probeFitMax);
     out.probeHdr       = st.probeHdr;
     out.probeCaptureSize   = st.probeCaptureSize;
     out.probesDropped      = st.probesDropped;

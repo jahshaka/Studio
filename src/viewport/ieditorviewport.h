@@ -620,6 +620,8 @@ public:
         /// anything (a 1 km volume at 128^3 is 8 m per voxel); 0 with no volume.
         float voxelMetres = 0.0f;
         QVector3D probeRegionMin, probeRegionMax;
+        /// The probe grid's placement fit (engine GiStatus::probeFitMin/Max).
+        QVector3D probeFitMin, probeFitMax;
         /// What the probe captures RESOLVED to (P3a/P3b). Both document fields
         /// are tri-state with an "auto" that consults the quality dial, and the
         /// shadow half falls back when no shadow node exists — so the request

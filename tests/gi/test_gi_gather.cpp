@@ -244,7 +244,6 @@ int main()
             gi.ddgi = ddgi;
             gi.updateBudget = 1;
             gi.numBounces = 1;
-            gi.cascades = true;
             armGather(s, gi, gather);
             enginetest::leakroom::setOutsideIntensity(s, room, 25.0f);
             s->refreshGlobalIllumination();
@@ -400,7 +399,6 @@ int main()
             gi.quality = GiQuality::High;
             gi.ddgi = ddgi;
             gi.numBounces = 1;
-            gi.cascades = true;
             armGather(s, gi, gather);
             s->refreshGlobalIllumination();
             render(e, 40);
@@ -427,7 +425,7 @@ int main()
 
         GiParams gatherGi;
         gatherGi.mode = GiMode::Vct; gatherGi.quality = GiQuality::High;
-        gatherGi.ddgi = GiToggle::Off; gatherGi.numBounces = 1; gatherGi.cascades = true;
+        gatherGi.ddgi = GiToggle::Off; gatherGi.numBounces = 1;
         armGather(s, gatherGi, true);
         render(e, 40);
         const GatherStatus stats = gatherStatus(s);
@@ -618,7 +616,6 @@ int main()
         gi.quality = GiQuality::High;
         gi.ddgi = GiToggle::Off;
         gi.numBounces = 1;
-        gi.cascades = true;
 
         // THE PLANE: the camera low over the floor, nothing else in shot.
         enginetest::testCameraLookAt(view, Vec3(0.0f, 1.2f, 6.0f), Vec3(0.0f, 0.0f, 0.0f));
@@ -768,7 +765,6 @@ static int noRaysMain(Engine *e)
     gi.mode = GiMode::Vct;
     gi.quality = GiQuality::High;
     gi.numBounces = 1;
-    gi.cascades = true;
     s->setGlobalIllumination(gi);
     render(e, 24);
     Image before; view->readPixels(before);
@@ -846,7 +842,6 @@ static int costMain(Engine *e)
     gi.quality = GiQuality::High;
     gi.ddgi = GiToggle::Off;
     gi.numBounces = 1;
-    gi.cascades = true;
     CHECK(s->setGlobalIllumination(gi), "the cascade chain builds over the room");
     // ONE VIEW GATHERS AT A TIME (GATHER-0's D3): `giStatus().gather` answers
     // for the first view of the scene that is running one, in a map keyed by
@@ -1095,7 +1090,6 @@ static int shippedCostMain(Engine *e)
             gi.quality = epic ? GiQuality::Epic : GiQuality::High;
             gi.ddgi = GiToggle::Off;
             gi.numBounces = epic ? 3 : 1;
-            gi.cascades = true;
             gi.cards = cards ? GiToggle::On : GiToggle::Off;
             gi.gather = GiToggle::On;
             s->setGlobalIllumination(gi);

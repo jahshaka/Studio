@@ -76,11 +76,10 @@ for (var t in expect) {
     assert(got.bounces === want.bounces, "  bounces -> " + got.bounces);
     assert(got.row.bounces === want.bounces && got.row.ddgi === want.ddgi,
            "  and the row readback matches the table");
-    // THE CASCADE COLUMN (PHOTON_SPEC §7 E2 (6)): on at EVERY tier, and it is
-    // written through to the document field the mirror reads — a tier that only
-    // said "on" without writing it would leave the renderer on the single box.
-    assert(world.get().gi.cascades === true,
-           "  the camera cascades are ON at the " + t + " tier");
+    // THE CASCADE COLUMN IS GONE (D4-PHOTON-TIERS): the voxels are always the
+    // camera's chain, so no tier and no document field can turn it off.
+    assert(world.get().gi.cascades === undefined,
+           "  no cascade switch is reported at the " + t + " tier");
     // The write-through invariant, seen from the OTHER verb: the backing
     // fields the mirror and the serializer read are the resolved values.
     var w = world.get().gi;
@@ -214,12 +213,8 @@ assert(!byId["giDynamicProbes"], "the retired dynamic-probe row is not in the re
 assert(byId["giDdgi"].tiers.medium.valueId === "on" && byId["giDdgi"].tiers.high.valueId === "on" &&
        byId["giDdgi"].tiers.low.valueId === "on" && byId["giDdgi"].tiers.epic.valueId === "on",
        "the registry's field column: ON at every tier (Low became a voxel tier, E2 (4))");
-assert(byId["giCascades"] && byId["giCascades"].tierSpace === "photon" &&
-       byId["giCascades"].tiers.low.valueId === "on" &&
-       byId["giCascades"].tiers.medium.valueId === "on" &&
-       byId["giCascades"].tiers.high.valueId === "on" &&
-       byId["giCascades"].tiers.epic.valueId === "on",
-       "and the CASCADE column is a Photon row, on at every tier (E2 (6))");
+assert(!byId["giCascades"],
+       "and there is NO cascade row: the chain always runs (the single volume is deleted)");
 assert(byId["giBounces"].tiers.epic.value === 3 && byId["giBounces"].tiers.high.value === 1,
        "and Epic's column reads 3 bounces against High's 1");
 assert(byId["giMode"].tiers.epic.valueId === "vct_pcc_hybrid",

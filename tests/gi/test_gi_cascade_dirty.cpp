@@ -61,7 +61,6 @@ static GiParams chainGi()
     gi.numBounces = 1;
     gi.ddgi = GiToggle::Off;
     gi.updateBudget = 0;          // no probe work: this suite is about the voxels
-    gi.cascades = true;
     return gi;
 }
 

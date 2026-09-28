@@ -1,9 +1,8 @@
 // gi.cascades — PHOTON'S CAMERA-CENTRED VOXEL CASCADES (SPECS/PHOTON_SPEC.md P0).
 //
-// The single-volume voxel arm fits ONE box around the scene's content: stand
-// inside it and the bounce is right, walk out and the world stops bouncing.
-// `GiParams::cascades` builds a chain of camera-centred boxes instead, chained
-// through Ogre's own `VctLighting::addCascade`, scheduled by us.
+// The voxels are a chain of camera-centred boxes, chained through Ogre's own
+// `VctLighting::addCascade` and scheduled by us (the single scene-fitted volume
+// they replaced is deleted, D4-PHOTON-TIERS).
 //
 // What a scheduler has to get right, and what each case here proves:
 //
@@ -104,7 +103,6 @@ static GiParams cascadeGi()
     gi.numBounces = 1;
     gi.ddgi = GiToggle::Off;
     gi.updateBudget = 0;          // no probe work; this suite is about the voxels
-    gi.cascades = true;
     return gi;
 }
 
@@ -216,7 +214,7 @@ int main()
     CHECK(orderOk, "the cascades grow outward: every one is bigger and coarser than the last");
     CHECK(stepsOk, "no outer cascade steps more often than the innermost");
     CHECK(st.cascades[0].cell < 0.2f,
-          "the innermost cascade resolves detail the single fitted volume cannot");
+          "the innermost cascade resolves detail a room-sized volume cannot");
 
     // =====================================================================
     // CASE 2 — at rest it costs exactly nothing
@@ -368,7 +366,6 @@ int main()
             return groundLum(img);
         };
         GiParams off = cascadeGi(); off.mode = GiMode::Off;
-        GiParams single = cascadeGi(); single.cascades = false;
         GiParams one = cascadeGi();
         one.cascadeCount = 1;
         one.cascadeSet[0] = GiParams::GiCascadeDesc{ 5.0f, 128, 0.0f };
@@ -386,37 +383,31 @@ int main()
             const float v = measureArm(p, n == 1 ? "chain length sweep" : "chain length sweep");
             std::printf("   chain of %d: ambient %.4f (%.2fx of GI off)\n", n, v, v / ambientOff);
         }
-        const float ambientSingle = measureArm(single, "the single scene-fitted volume");
         const float ambientOne = measureArm(one, "a chain of ONE camera-centred cascade");
         const float ambientChain = measureArm(cascadeGi(), "the full chain again");
-        std::printf("   ground lit by the ambient alone: GI off %.4f | single volume %.4f (%.2fx) "
+        std::printf("   ground lit by the ambient alone: GI off %.4f "
                     "| 1 cascade %.4f (%.2fx) | %zu cascades %.4f (%.2fx)\n",
-                    ambientOff, ambientSingle, ambientSingle / ambientOff,
-                    ambientOne, ambientOne / ambientOff, scene->giStatus().cascades.size(),
-                    ambientChain, ambientChain / ambientOff);
-        // THE CONTRACT IS AGAINST THE ARM THE CASCADES REPLACE, not against
-        // GI-off: cone-traced diffuse always eats some of the ambient (the
-        // cone's own starting surface occludes it — Jahshaka ogre-patch 0021
-        // measures 65% surviving on an open floor), and that is a property of
-        // VCT, not of cascades. What must not happen is the chain being DARKER
-        // than one volume: that is the 2,2,2 room, and it is what upstream's
-        // cascade manager renders.
+                    ambientOff, ambientOne, ambientOne / ambientOff,
+                    scene->giStatus().cascades.size(), ambientChain, ambientChain / ambientOff);
+        // THE CONTRACT IS AGAINST ONE CAMERA-CENTRED CASCADE, not against GI-off:
+        // cone-traced diffuse always eats some of the ambient (the cone's own
+        // starting surface occludes it — ogre-patch 0021 measures 65% surviving
+        // on an open floor), and that is a property of VCT, not of cascades. What
+        // must not happen is the chain being DARKER than one volume: that is the
+        // 2,2,2 room, and it is what upstream's cascade manager renders.
         // ONE CASCADE IS THE STRUCTURAL TEST: it proves the ambient pair really
-        // is pushed into a camera-centred volume (upstream never pushes it at
-        // all and its room renders 2,2,2), and it must be EXACT.
-        CHECK(ambientOne > 0.95f * ambientSingle,
-              "a camera-centred cascade carries the ambient exactly like the fitted volume");
+        // is pushed into a camera-centred volume (upstream never pushes it at all).
+        CHECK(ambientOne > 0.02f, "a camera-centred cascade carries the ambient");
         // A CHAIN READS THE OPEN GROUND AS ONE VOLUME DOES (PHOTON-VOXEL-4, SUITES-REANCHOR-1).
         // The ground is open: in every cascade the four cones leave the one surface they stand on
         // and see nothing else, so the chain's own quadrature of it - the same cones over the
-        // chain's stores, each march handed to the next cascade - is the single volume's,
-        // exactly. The bar is the pictures' quantum: two block means of 8-bit
-        // pixels, half a code each. (It was >= 0.40x of the single volume: the leaky store's
-        // per-hop re-sampling of the starting surface took a chain to 0.51x; the split store's
-        // origin rule reads the surface once, by where it lies, and the chain reads 1.00x.)
+        // chain's stores, each march handed to the next cascade - is one volume's, exactly. The
+        // bar is the pictures' quantum: two block means of 8-bit pixels, half a code each. (The
+        // reference was the single scene-fitted volume until D4-PHOTON-TIERS deleted it; one
+        // camera-centred cascade is the same physics without the fixed volume.)
         const float kQuantum = 1.0f / 255.0f;
-        CHECK(std::fabs(ambientChain - ambientSingle) <= kQuantum,
-              "a four-cascade chain reads the open ground's ambient as the single volume does (within one code)");
+        CHECK(std::fabs(ambientChain - ambientOne) <= kQuantum,
+              "a four-cascade chain reads the open ground's ambient as one cascade does (within one code)");
         CHECK(ambientChain > 0.02f, "and it is a lit picture, not a black one");
 
         // ---- THE FIELD VARIANT (PHOTON_SPEC §13 G3, audit B1's own test) ----
@@ -431,22 +422,20 @@ int main()
         // PreGenerationStep) and blends the two terms by the field's own
         // confidence in JahIfd: the field inside cascade 0, the cones outside.
         //
-        // So: the same two arms as above, both with the field ON.
-        GiParams singleF = single; singleF.ddgi = GiToggle::On; singleF.updateBudget = 1;
+        // So: the chain with the field ON against the same chain with it off. Out
+        // here the pixel is beyond cascade 0 (the field's box), so the bound field
+        // must change nothing: the outer cascades' cones are the whole answer.
         GiParams chainF  = cascadeGi(); chainF.ddgi = GiToggle::On; chainF.updateBudget = 1;
-        const float fieldSingle = measureArm(singleF, "the single volume with the field on");
-        const bool singleFieldBound = scene->giStatus().ifdBound;
         const float fieldChain = measureArm(chainF, "the chain with the field on");
         const GiStatus fst = scene->giStatus();
-        std::printf("   WITH THE FIELD: single volume %.4f | chain %.4f (%.2fx of the single "
-                    "volume, %.2fx of GI off) | field bound: single %s chain %s, %d probes\n",
-                    fieldSingle, fieldChain,
-                    fieldSingle > 0.0f ? fieldChain / fieldSingle : 0.0f,
+        std::printf("   WITH THE FIELD: chain %.4f (%.2fx of the chain without it, %.2fx of GI "
+                    "off) | field bound %s, %d probes\n",
+                    fieldChain, ambientChain > 0.0f ? fieldChain / ambientChain : 0.0f,
                     ambientOff > 0.0f ? fieldChain / ambientOff : 0.0f,
-                    singleFieldBound ? "y" : "n", fst.ifdBound ? "y" : "n", fst.ifdProbes);
-        CHECK(singleFieldBound && fst.ifdBound, "both arms really have a field bound");
-        CHECK(std::fabs(fieldChain - fieldSingle) <= kQuantum,
-              "A PIXEL BEYOND CASCADE 0 READS THE CHAIN AS THE SINGLE VOLUME WITH THE FIELD BOUND (within one code)");
+                    fst.ifdBound ? "y" : "n", fst.ifdProbes);
+        CHECK(fst.ifdBound, "the chain really has a field bound");
+        CHECK(std::fabs(fieldChain - ambientChain) <= kQuantum,
+              "A PIXEL BEYOND CASCADE 0 READS THE CHAIN'S CONES WITH THE FIELD BOUND (within one code)");
         CHECK(fieldChain > 0.02f, "...and it is a lit picture, not a black one");
     }
 

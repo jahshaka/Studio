@@ -284,8 +284,8 @@ int main(int argc, char **argv)
                     st.giScans - stillFrom, st.giAabbReads - readsFrom, st.giScanMicros);
         CHECK(st.giScans == stillFrom, "still: 20 frames of a still room run ZERO movement scans");
         CHECK(st.giScanMicros == 0.0, "still: ...and a skipped frame reports no scan cost");
-        // THE WHOLE FAMILY, not just the scan: the two signatures the mirror
-        // reads every frame (giEscapeSignature / giGeometrySignature) and the
+        // THE WHOLE FAMILY, not just the scan: the signature the mirror
+        // reads every frame (giGeometrySignature) and the
         // Forward+ slice walk read the same boxes the same expensive way, and a
         // still frame must ask Ogre for NONE of them (clean-2 lane).
         CHECK(st.giAabbReads == readsFrom,
@@ -660,8 +660,8 @@ int main(int argc, char **argv)
         // faces see the sky through the cube and the depth rule drops it (as it
         // should). Four probes stand clear of the cube and see it.
         gi.pccProbesX = gi.pccProbesZ = 2; gi.pccProbesY = 1;
-        gi.testBoundsMin = Vec3(-3.0f, -1.0f, -3.0f);
-        gi.testBoundsMax = Vec3(3.0f, 4.0f, 3.0f);
+        gi.testProbeRegionMin = Vec3(-3.0f, -1.0f, -3.0f);
+        gi.testProbeRegionMax = Vec3(3.0f, 4.0f, 3.0f);
         const unsigned long long rebuilds = escene->giStatus().rebuilds;
         CHECK(other->setGlobalIllumination(gi), "P10: the second scene builds its own hybrid");
         const GiStatus kept = escene->giStatus();

@@ -21,9 +21,9 @@
 // Four ambients: a flat colour (the control that makes the conventions agree),
 // a hemisphere (the 2-band fit exactly — still no bands 2..8), and the analytic
 // sky integrated by the engine itself at NOON and at a 5 degree sun, which is
-// what the shipped Sky Light pushes. Each measured with the chain ON and with
-// the single fitted volume (the arm before E2), and once more with the camera
-// moved, to answer "does the face travel with the camera".
+// what the shipped Sky Light pushes. Each measured with the chain, and once more
+// with the camera moved, to answer "does the face travel with the camera". (The
+// single fitted volume was measured beside it until D4-PHOTON-TIERS deleted it.)
 //
 // ===========================================================================
 // TWO ctest ROWS, ONE BINARY (PHOTON phase A, A1 §0/§1.2 — lane FENCE-1)
@@ -261,9 +261,7 @@ int main(int argc, char **argv)
         return true;
     };
 
-    // What each arm is allowed to do. The SINGLE VOLUME's face is the claim
-    // `gi.volume_edge` makes for a flat ambient, asserted here for a REAL SKY as
-    // well; the CHAIN's faces are E3's measurement, pinned loosely (they are a
+    // What the chain is allowed to do. Its faces are E3's measurement, pinned loosely (they are a
     // known artefact with a number, not a target) so that a regression which
     // doubles them reds and an improvement never does.
     // RE-ANCHORED BY SEAM-1 (2026-09-16, ogre-patch 0066: the cascade march
@@ -295,7 +293,6 @@ int main(int argc, char **argv)
     // difference is the set's own error against the hemisphere - 0.034 of the escape on an open
     // floor (BAR 2, gi.ddgi_ambient). The fence is that envelope widened by that error on both
     // sides: 0.966-1.141. (It was 0.75-1.35, the leaky store's 0.821-1.252 envelope.)
-    const float kSingleFaceMax = 1.08f;      // measured 1.007-1.057 over four ambients
     const float kSetError      = 0.034f;     // the four-cone set's quadrature error, open floor
     const float kChainFaceMax  = 1.107f + kSetError;
     const float kChainFaceMin  = 1.000f - kSetError;
@@ -313,7 +310,7 @@ int main(int argc, char **argv)
                       "world: |ratio - 1| under %.2f  [%s]", cascade, 0.05, what);
         return buf;
     };
-    const auto measure = [&](const char *what, bool chain, const Amb &a, float camX, float orthoHalf) {
+    const auto measure = [&](const char *what, const Amb &a, float camX, float orthoHalf) {
         r.camX = camX; r.orthoHalf = orthoHalf; placeCamera(r);
         GiParams gi;
         gi.gather = GiToggle::Off;   // PHOTON-GATHER-1d (the header)
@@ -321,15 +318,14 @@ int main(int argc, char **argv)
         gi.quality = GiQuality::High;
         gi.numBounces = 1;
         gi.ddgi = (std::getenv("JAH_E3_NO_FIELD") ? GiToggle::Off : GiToggle::On);
-        gi.cascades = chain;
         CHECK(r.scene->setGlobalIllumination(gi), "GI arms");
         render(e, 16);
         Image img;
         r.view->readPixels(img);
         const std::vector<float> p = profile(img);
         const GiStatus st = r.scene->giStatus();
-        std::printf("== %-34s chain=%d cascades=%zu\n", what, chain ? 1 : 0, st.cascades.size());
-        if (chain) {
+        std::printf("== %-34s cascades=%zu\n", what, st.cascades.size());
+        {
             for (size_t i = 0; i < st.cascades.size(); ++i) {
                 const float face = st.cascades[i].centre.x + st.cascades[i].halfSize;
                 const unsigned col = columnForX(r, face);
@@ -359,22 +355,6 @@ int main(int argc, char **argv)
                                "no regression while red: the chain's face steps no more than E3 "
                                "measured it stepping");
             }
-        } else {
-            const float face = st.boundsMax.x;
-            const unsigned col = columnForX(r, face);
-            float in = 0, out = 0;
-            const float ratio = stepAt(p, col, in, out);
-            std::printf("   single volume x %.2f .. %.2f  face col %u  inner %.4f outer %.4f  "
-                        "step %.3fx (%+.1f/255)\n", st.boundsMin.x, st.boundsMax.x, col, in, out,
-                        ratio, (in - out) * 255.0f);
-            // The single fitted volume has the same target — it is the same
-            // claim about the same physics, on the arm that is already closest.
-            TARGET(std::fabs(double(ratio) - 1.0), kFaceTargetBar,
-                   "the SINGLE fitted volume's edge is not a boundary in the world either: "
-                   "|ratio - 1| under 0.05");
-            CHECK_ORDINARY(ratio > 1.0f / kSingleFaceMax && ratio < kSingleFaceMax,
-                           "no regression while red: the SINGLE fitted volume's edge does not "
-                           "step, under a real sky either");
         }
         // The whole profile, thinned, so a face nobody predicted is still visible.
         std::printf("   profile:");
@@ -386,11 +366,10 @@ int main(int argc, char **argv)
     for (const Amb &a : ambients) {
         std::printf("\n===== ambient: %s =====\n", a.name);
         if (!applyAmbient(a)) { ++failures; continue; }
-        measure((std::string(a.name) + ", single volume").c_str(), false, a, 0.0f, 100.0f);
         const std::vector<float> p0 = measure((std::string(a.name) + ", chain, cam x=0").c_str(),
-                                              true, a, 0.0f, 100.0f);
+                                              a, 0.0f, 100.0f);
         const std::vector<float> p1 = measure((std::string(a.name) + ", chain, cam x=8").c_str(),
-                                              true, a, 8.0f, 100.0f);
+                                              a, 8.0f, 100.0f);
         {
             // THE FACES TRAVEL WITH THE CAMERA (audit B8), said as a measurement.
             // Read from the chain itself rather than from the picture, because the
@@ -418,7 +397,7 @@ int main(int argc, char **argv)
                            "travel with the eye rather than staying in the world");
         }
         // ...and the inner faces, at 5x the magnification.
-        measure((std::string(a.name) + ", chain, cam x=0, +-20 m").c_str(), true, a, 0.0f, 20.0f);
+        measure((std::string(a.name) + ", chain, cam x=0, +-20 m").c_str(), a, 0.0f, 20.0f);
     }
 
     std::printf("\n%s: %d failure(s)\n", failures ? "FAILED" : "PASSED", failures);

@@ -172,8 +172,8 @@ static int showroomArm(bool lampShadows, bool sunShadow)
     gi.mode = GiMode::Vct;
     gi.quality = GiQuality::High;     // the High tier's own card budget
     gi.cards = GiToggle::On;
-    gi.testBoundsMin = Vec3(-26.0f, -2.0f, -26.0f);
-    gi.testBoundsMax = Vec3(26.0f, 14.0f, 26.0f);
+    gi.testProbeRegionMin = Vec3(-26.0f, -2.0f, -26.0f);
+    gi.testProbeRegionMax = Vec3(26.0f, 14.0f, 26.0f);
     s->setGlobalIllumination(gi);
     enginetest::testCameraLookAt(view, Vec3(0.0f, 6.0f, -18.0f), Vec3(0.0f, 1.0f, 0.0f));
     render(e, 90);   // warm: the compile storm and the first captures
@@ -303,8 +303,8 @@ int main(int argc, char **argv)
     gi.mode = GiMode::Vct;
     gi.quality = GiQuality::High;
     gi.cards = GiToggle::On;
-    gi.testBoundsMin = Vec3(-32.0f, -2.0f, -32.0f);
-    gi.testBoundsMax = Vec3(32.0f, 16.0f, 32.0f);
+    gi.testProbeRegionMin = Vec3(-32.0f, -2.0f, -32.0f);
+    gi.testProbeRegionMax = Vec3(32.0f, 16.0f, 32.0f);
     s->setGlobalIllumination(gi);
     enginetest::testCameraLookAt(view, Vec3(0.0f, 8.0f, -20.0f), Vec3(0.0f, 1.0f, 0.0f));
 

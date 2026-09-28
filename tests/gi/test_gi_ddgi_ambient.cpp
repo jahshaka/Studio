@@ -144,8 +144,8 @@ static GiParams vctBase()
     gi.mode = GiMode::Vct;
     gi.quality = GiQuality::Medium;      // 64^3 voxels
     gi.numBounces = 2;
-    gi.testBoundsMin = Vec3(-9.0f, -1.5f, -9.0f);
-    gi.testBoundsMax = Vec3(9.0f, 7.5f, 9.0f);
+    gi.testProbeRegionMin = Vec3(-9.0f, -1.5f, -9.0f);
+    gi.testProbeRegionMax = Vec3(9.0f, 7.5f, 9.0f);
     return gi;
 }
 
@@ -524,8 +524,8 @@ int main(int argc, char **argv)
         // bounce (the injection reads the sky, PHOTON-ENV-1) is gi.ddgi's and the cards'
         // subject, and it is not in the analytic below (skyIrradiance).
         ref.numBounces = 0;
-        ref.testBoundsMin = Vec3(-9.0f, -1.5f, -9.0f);
-        ref.testBoundsMax = Vec3(9.0f, 7.5f, 9.0f);
+        ref.testProbeRegionMin = Vec3(-9.0f, -1.5f, -9.0f);
+        ref.testProbeRegionMax = Vec3(9.0f, 7.5f, 9.0f);
         CHECK(s->setGlobalIllumination(ref), "VCT (isotropic) builds over the open scene");
         render(e, 6);
         o.view->readPixels(img);
@@ -808,8 +808,8 @@ int main(int argc, char **argv)
         enginetest::testCameraLookAt(view, Vec3(0.0f, 2.0f, 3.4f), Vec3(0.0f, 1.6f, -1.0f));
 
         GiParams room = vctBase();
-        room.testBoundsMin = Vec3(-5.0f, -1.0f, -5.0f);
-        room.testBoundsMax = Vec3(5.0f, 6.0f, 5.0f);
+        room.testProbeRegionMin = Vec3(-5.0f, -1.0f, -5.0f);
+        room.testProbeRegionMax = Vec3(5.0f, 6.0f, 5.0f);
         room.ddgi = GiToggle::On;
         CHECK(s->setGlobalIllumination(room), "the sealed room binds a field, no sky");
         render(e, 6);

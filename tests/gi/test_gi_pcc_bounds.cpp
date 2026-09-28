@@ -125,8 +125,8 @@ static void roomCase(Engine *engine, View *view, const char *label, float shell,
     gi.pccProbesX = 2; gi.pccProbesY = 1; gi.pccProbesZ = 2;
     if (!autoBounds) {
         const float outer = 4.0f + shell + margin;
-        gi.testBoundsMin = Vec3(-outer, -shell - margin, -outer);
-        gi.testBoundsMax = Vec3( outer, 5.0f + shell + margin, outer);
+        gi.testProbeRegionMin = Vec3(-outer, -shell - margin, -outer);
+        gi.testProbeRegionMax = Vec3( outer, 5.0f + shell + margin, outer);
     }
     std::printf("-- %s (shell %.1f, %s)\n", label, shell,
                 autoBounds ? "auto bounds" : "explicit bounds");
@@ -282,10 +282,10 @@ static void excludeFlagCase(Engine *engine, View *view)
     showBox("lit volume, ground in", st.boundsMin, st.boundsMax);
     CHECK(st.boundsMax.x - st.boundsMin.x > 18.0f,
           "the heuristic keeps this ground (it is not an outlier here)");
-    CHECK(!s->nodeGiBoundsExcluded(ground), "the flag starts off");
+    CHECK(!s->nodeProbeGridExcluded(ground), "the flag starts off");
 
-    s->setNodeGiBoundsExcluded(ground, true);
-    CHECK(s->nodeGiBoundsExcluded(ground), "setNodeGiBoundsExcluded reads back");
+    s->setNodeProbeGridExcluded(ground, true);
+    CHECK(s->nodeProbeGridExcluded(ground), "setNodeProbeGridExcluded reads back");
     // The flag invalidates the GI caches; the flush is at frame time, like every
     // other geometry change.
     render(engine, 2);
@@ -300,7 +300,7 @@ static void excludeFlagCase(Engine *engine, View *view)
     // Proven negatively, which is all this suite can do cheaply: turning the flag
     // back off restores the old volume exactly, i.e. the flag is a pure filter
     // with no side effect on the item set.
-    s->setNodeGiBoundsExcluded(ground, false);
+    s->setNodeProbeGridExcluded(ground, false);
     render(engine, 2);
     st = s->giStatus();
     showBox("lit volume, ground back in", st.boundsMin, st.boundsMax);

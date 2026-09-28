@@ -23,8 +23,9 @@
 // instead, so the ordinary per-frame budget re-photographs them a few at a time
 // rather than the placement capturing the whole grid inline.
 //
-// Section A pins it for the SINGLE-VOLUME arm (the behaviour every shipped
-// scene has today), section B for the cascade chain.
+// Section A pins it for a Shadow Quality change, section B for a lamp count
+// that grows the atlas — both under the cascade chain (the single-volume arm
+// section A used to run is deleted, D4-PHOTON-TIERS).
 //
 // Its own binary like every GI suite.
 #include "jahshaka/engine/Engine.h"
@@ -118,7 +119,7 @@ static NodeId addCastingLamp(Scene *s, const Vec3 &pos)
     return n;
 }
 
-static GiParams hybridGi(bool cascades)
+static GiParams hybridGi()
 {
     GiParams gi;
     gi.mode = GiMode::VctPccHybrid;
@@ -127,9 +128,8 @@ static GiParams hybridGi(bool cascades)
     gi.numBounces = 1;
     gi.ddgi = GiToggle::Off;
     gi.updateBudget = 2;                // a live budget: the stale set is spendable
-    gi.testBoundsMin = Vec3(-5.5f, -0.5f, -5.5f);
-    gi.testBoundsMax = Vec3( 5.5f,  5.5f,  5.5f);
-    gi.cascades = cascades;
+    gi.testProbeRegionMin = Vec3(-5.5f, -0.5f, -5.5f);
+    gi.testProbeRegionMax = Vec3( 5.5f,  5.5f,  5.5f);
     return gi;
 }
 
@@ -160,10 +160,10 @@ int main()
     render(e, 4);
 
     // =====================================================================
-    // SECTION A — the SINGLE-VOLUME arm (what ships today)
+    // SECTION A — a Shadow Quality change under the chain
     // =====================================================================
-    std::printf("\n== A: a shadow-atlas rebuild under the single volume ==\n");
-    CHECK(scene->setGlobalIllumination(hybridGi(false)), "the hybrid arm accepts");
+    std::printf("\n== A: a shadow-atlas rebuild from a Shadow Quality change ==\n");
+    CHECK(scene->setGlobalIllumination(hybridGi()), "the hybrid arm accepts");
     render(e, 12);
     {
         const GiStatus before = scene->giStatus();
@@ -209,7 +209,7 @@ int main()
     // atlas. Under the chain that used to be N voxelisers from scratch in one
     // frame.
     std::printf("\n== B: a lamp added under the cascade chain ==\n");
-    CHECK(scene->setGlobalIllumination(hybridGi(true)), "the cascade arm accepts");
+    CHECK(scene->setGlobalIllumination(hybridGi()), "the cascade arm accepts");
     render(e, 16);
     {
         const GiStatus before = scene->giStatus();

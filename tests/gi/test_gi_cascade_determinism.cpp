@@ -86,7 +86,6 @@ static GiParams chainGi()
     gi.numBounces = 1;
     gi.ddgi = GiToggle::Off;     // the CONE-traced diffuse: the voxels, read directly
     gi.updateBudget = 0;         // no probe work
-    gi.cascades = true;
     return gi;
 }
 

@@ -188,7 +188,7 @@ static GiParams hybridDdgi()
     gi.quality = GiQuality::High;      // Epic in the UI: 128^3 voxels
     gi.numBounces = 1;
     gi.ddgi = GiToggle::On;
-    gi.testAutoBoundsMax = kVolumeMax;      // the boundary this suite is about, fitted not pinned
+    gi.testProbeGridFitMax = kVolumeMax;      // the boundary this suite is about, fitted not pinned
     return gi;
 }
 

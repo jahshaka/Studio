@@ -140,8 +140,8 @@ static GiParams baseGi()
     gi.mode = GiMode::Vct;
     gi.quality = GiQuality::High;
     gi.numBounces = 1;
-    gi.testBoundsMin = Vec3(-16.0f, -2.0f, -16.0f);
-    gi.testBoundsMax = Vec3(16.0f, 12.0f, 16.0f);
+    gi.testProbeRegionMin = Vec3(-16.0f, -2.0f, -16.0f);
+    gi.testProbeRegionMax = Vec3(16.0f, 12.0f, 16.0f);
     gi.cards = GiToggle::On;
     return gi;
 }

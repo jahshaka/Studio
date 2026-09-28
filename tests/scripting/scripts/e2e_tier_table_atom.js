@@ -42,7 +42,7 @@ for (var tn in byTier) {
     var row = byTier[tn];
     assert(row.description.length > 20, tn + " carries a generated description");
     assert(row.ddgi === 1, tn + " turns the irradiance field on (it said \"Low cannot\" for months)");
-    assert(row.cascades === 1 && row.chain.length >= 2,
+    assert(row.cascades === undefined && row.chain.length >= 2,
            tn + " builds a camera-centred chain of at least two cascades");
     // The chain must grow OUTWARD in reach AND in cell or the cone march
     // cannot hand one cascade over to the next.
@@ -58,8 +58,8 @@ for (var tn in byTier) {
 // THE THREE CLAIMS THE OLD TOOLTIPS GOT WRONG, now assertable:
 assert(byTier.low.chain[0].resolution === byTier.medium.chain[0].resolution,
        "Low and Medium voxelise at the SAME resolution — \"Medium is twice Low\" was never true");
-assert(byTier.low.voxelResolution === 64 && byTier.low.chain[0].resolution === 64,
-       "Low's CHAIN and its single scene-fitted volume are both 64 per axis (PHOTON-VOXEL-4)");
+assert(byTier.low.voxelResolution === undefined && byTier.low.chain[0].resolution === 64,
+       "Low's CHAIN is 64 per axis, and no single-volume resolution is reported (it is deleted)");
 assert(byTier.high.chain[0].resolution === 128 &&
        byTier.high.chain[byTier.high.chain.length - 1].resolution === 64,
        "High's chain is 128 near the eye and 64 far away — not \"128^3\"");

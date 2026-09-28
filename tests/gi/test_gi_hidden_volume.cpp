@@ -298,8 +298,8 @@ static void hiddenParentBounce(Engine *engine, View *view)
     gi.quality = GiQuality::High;
     gi.numBounces = 3;
     gi.ddgi = GiToggle::On;
-    gi.testBoundsMin = Vec3(-7.5f, -0.4f, -7.5f);   // PINNED: see the header above
-    gi.testBoundsMax = Vec3( 7.5f,  7.0f,  7.5f);
+    gi.testProbeRegionMin = Vec3(-7.5f, -0.4f, -7.5f);   // PINNED: see the header above
+    gi.testProbeRegionMax = Vec3( 7.5f,  7.0f,  7.5f);
     CHECK(s->setGlobalIllumination(gi), "Epic's GI arms (hybrid, High, 3 bounces, field on)");
     render(engine, 6);
     view->readPixels(img);
@@ -477,7 +477,7 @@ static void volumeCeiling(Engine *engine, View *view)
     const float edge = std::max(std::max(st.boundsMax.x - st.boundsMin.x,
                                          st.boundsMax.y - st.boundsMin.y),
                                 st.boundsMax.z - st.boundsMin.z);
-    // The one-voxel margin computeGiBounds adds rides on top of the ceiling.
+    // The one-voxel margin computeProbeRegion adds rides on top of the ceiling.
     CHECK(edge <= cap * 1.05f, "the automatic volume's largest axis is inside the ceiling");
     CHECK(st.voxelMetres > 0.0f && st.voxelMetres <= 0.55f,
           "the volume resolves to about half a metre per voxel");
@@ -516,7 +516,7 @@ static void volumeCeiling(Engine *engine, View *view)
     // THE KNOB. 0 removes the ceiling, and the volume goes back to the plane —
     // which is also the proof that the assertion above is measuring the ceiling
     // and not some other clamp.
-    gi.testAutoBoundsMax = 0.0f;
+    gi.testProbeGridFitMax = 0.0f;
     CHECK(s->setGlobalIllumination(gi), "autoBoundsMax = 0 re-pushes");
     render(engine, 4);
     st = s->giStatus();
@@ -527,9 +527,9 @@ static void volumeCeiling(Engine *engine, View *view)
 
     // A PINNED VOLUME IGNORES THE CEILING: that is how a scene bigger than the
     // cap asks for more, and it must not be quietly overruled.
-    gi.testAutoBoundsMax = 64.0f;
-    gi.testBoundsMin = Vec3(-150.0f, -10.0f, -150.0f);
-    gi.testBoundsMax = Vec3(150.0f, 10.0f, 150.0f);
+    gi.testProbeGridFitMax = 64.0f;
+    gi.testProbeRegionMin = Vec3(-150.0f, -10.0f, -150.0f);
+    gi.testProbeRegionMax = Vec3(150.0f, 10.0f, 150.0f);
     CHECK(s->setGlobalIllumination(gi), "an explicit volume re-pushes");
     render(engine, 4);
     st = s->giStatus();

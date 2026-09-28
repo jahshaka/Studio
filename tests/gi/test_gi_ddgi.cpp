@@ -164,8 +164,8 @@ static GiParams vctBase()
     gi.mode = GiMode::Vct;
     gi.quality = GiQuality::Medium;      // 64^3 voxels
     gi.numBounces = 2;
-    gi.testBoundsMin = Vec3(-9.0f, -1.5f, -9.0f);
-    gi.testBoundsMax = Vec3(9.0f, 7.5f, 9.0f);
+    gi.testProbeRegionMin = Vec3(-9.0f, -1.5f, -9.0f);
+    gi.testProbeRegionMax = Vec3(9.0f, 7.5f, 9.0f);
     return gi;
 }
 

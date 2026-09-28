@@ -241,7 +241,6 @@ unsigned holdSplashForShaderBuild(QApplication &app, VersionSplashScreen &splash
                           ? GiMode(qBound(0, worldmodes::photonTechnique(tier), 2)) : GiMode::Off;
             gi.quality = GiQuality(qBound(0, worldmodes::photonQuality(tier), 3));
             gi.numBounces = worldmodes::photonBounces(tier);
-            gi.cascades = worldmodes::photonCascades(tier) > 0;
             gi.ddgi = worldmodes::photonDdgi(tier) ? GiToggle::On : GiToggle::Off;
             warmScene->setGlobalIllumination(gi);
             warmGi = gi;

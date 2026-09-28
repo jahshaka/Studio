@@ -208,12 +208,11 @@ int main()
     base.mode = GiMode::Vct;
     base.quality = GiQuality::Medium;
     base.numBounces = 1;
-    base.cascades = false;
     base.ddgi = GiToggle::Off;
     base.gather = GiToggle::Off;
     base.cards = GiToggle::Off;
-    base.testBoundsMin = Vec3(-4.0f, -2.0f, -4.0f);
-    base.testBoundsMax = Vec3(4.0f, 4.0f, 4.0f);
+    // THE TIER'S OWN CHAIN (the single scene-fitted volume this used to pin is
+    // deleted, D4-PHOTON-TIERS): every cascade holds the fixture and nothing else.
 
     const double closedForm = kRho * L * kEnergyFactor1;
     std::printf("\n   THE ONE NUMBER: rho L A(v, 1) = %.3f x %.4f x %.4f = %.4f\n", kRho, L,

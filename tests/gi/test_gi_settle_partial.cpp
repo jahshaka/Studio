@@ -84,7 +84,6 @@ int main()
     gi.quality = GiQuality::High;
     gi.ddgi = GiToggle::Off;
     gi.numBounces = 2;
-    gi.cascades = true;
     CHECK(s->setGlobalIllumination(gi), "the cascade chain builds");
     for (int f = 0; f < 240 && !s->giStatus().giAtRest; ++f) e->renderOneFrame();
     e->renderOneFrame();

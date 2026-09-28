@@ -1,22 +1,19 @@
-// scripting.e2e.gi_bounds — THE LIT VOLUME, WHICH IS THE RENDERER'S AND ONLY
-// THE RENDERER'S (owner decision D8, 2026-09-13, under the CRUD law).
+// scripting.e2e.gi_bounds — THERE IS NO FIXED GI VOLUME (owner decision D8,
+// 2026-09-13; the single scene-fitted voxel volume deleted by D4-PHOTON-TIERS).
 //
-// The user-facing bounds controls are GONE: the World panel's Min/Max rows and
-// its Fit Bounds To Scene button, `world.fitGiBounds`, world.gi's boundsMin /
-// boundsMax / autoBoundsMax keys, and the document's three fields with them. A
-// scene that pinned a volume opens unpinned. What is left is what was always
-// the useful half, and this suite is it:
+// The voxels are always the camera's cascade chain. What is left of "the fit" is
+// the REFLECTION-PROBE GRID's placement region, used where a machine does not
+// trace its reflections — a placement heuristic pending A9, never a lighting
+// volume. This suite is it:
 //
-//   * the AUTOMATIC FIT — a scene with a big ground plane and small objects
-//     must NOT end up with its lit volume spread over the ground;
-//   * world.giStatus()'s resolved volumes — the ONLY way to see where the
-//     lighting is happening, and the separate (tighter) region the reflection
-//     probes are placed in;
-//   * node.setProperty(id, "giBoundsExcluded", true), the per-object escape
-//     hatch, which SURVIVES the deletion because it also feeds the probe
-//     region and the enclosure measurement (OgreGi.cpp giItemBoundsRaw);
+//   * the AUTOMATIC PLACEMENT FIT — a scene with a big ground plane and small
+//     objects must NOT spread its probe grid over the ground;
+//   * world.giStatus()'s probeFitMin/Max (the fit) and probeRegionMin/Max (the
+//     scout's space inside it);
+//   * node.setProperty(id, "probeGridExcluded", true), the per-object escape
+//     hatch (OgreGi.cpp giItemBoundsRaw);
 //   * world.refreshGi(), the on-demand re-solve;
-//   * and the three retired keys, REFUSED BY NAME rather than ignored.
+//   * and the four retired keys, REFUSED BY NAME rather than ignored.
 
 function assert(cond, msg) {
     if (!cond) throw new Error("assert failed: " + msg);
@@ -36,34 +33,30 @@ var c = scene.addPrimitive("cube", { position: { x: 1.5, y: 1, z: 0 } });
 assert(ground.length > 10 && a.length > 10 && c.length > 10, "four objects added");
 editor.frame(2);
 
-// ---- the automatic fit ---------------------------------------------------
-// THE CHAIN IS PINNED OFF HERE, and that is the subject and not a workaround:
-// this suite is about the AUTOMATIC FIT — the one box the renderer puts around
-// the scene's content — and since PHOTON_SPEC §7 E2 (6) every tier builds the
-// camera-centred CHAIN instead, whose `boundsMin/boundsMax` are the OUTERMOST
-// cascade's 120 m box by construction (world.giStatus's own documentation says
-// so). A fit test that let the tier decide would be measuring the cascade table.
-assert(world.gi({ mode: "vct", quality: "low", bounces: 1, cascades: false }),
-       "world.gi(vct, the single volume)");
+// ---- the automatic placement fit ----------------------------------------------
+// The hybrid at LOW, whose reflections are not traced on any machine: a probe
+// grid is placed, so its fit is live.
+assert(world.gi({ mode: "vct_pcc_hybrid", quality: "low", bounces: 1 }),
+       "world.gi(the hybrid at low: a probe grid is placed)");
 editor.frame(4);
 var st = world.giStatus();
 console.log("giStatus = " + JSON.stringify(st));
 assert(st.live === true, "giStatus is LIVE");
-assert(st.mode === "vct", "mode reads vct");
-var autoSize = extent(st.boundsMin, st.boundsMax);
-console.log("automatic lit volume extent = " + autoSize);
+assert(st.mode === "vct_pcc_hybrid", "mode reads vct_pcc_hybrid");
+var autoSize = extent(st.probeFitMin, st.probeFitMax);
+console.log("automatic probe placement fit extent = " + autoSize);
 assert(autoSize < 30, "the automatic fit rejects the 120-unit ground plane as an outlier");
-assert(st.boundsMin.x <= -1.5 && st.boundsMax.x >= 1.5,
+assert(st.probeFitMin.x <= -1.5 && st.probeFitMax.x >= 1.5,
        "...while still containing every small object");
 
-// ---- the three retired keys ----------------------------------------------
+// ---- the four retired keys -----------------------------------------------
 // Refused BY NAME, with the reading that replaced them, rather than swallowed
 // by the unknown-key list: a script that still passes one is asking for a
 // volume of its own and has to find out that there is no longer any such thing.
-["boundsMin", "boundsMax", "autoBoundsMax"].forEach(function (key) {
+["boundsMin", "boundsMax", "autoBoundsMax", "cascades"].forEach(function (key) {
     var threw = "";
     var params = {};
-    params[key] = key === "autoBoundsMax" ? 128 : { x: 0, y: 0, z: 0 };
+    params[key] = key === "autoBoundsMax" ? 128 : (key === "cascades" ? false : { x: 0, y: 0, z: 0 });
     try { world.gi(params); } catch (e) { threw = String(e); }
     assert(threw.indexOf(key) >= 0 && threw.indexOf("giStatus") >= 0,
            "world.gi refuses '" + key + "' by name and says what to read instead");
@@ -71,8 +64,9 @@ assert(st.boundsMin.x <= -1.5 && st.boundsMax.x >= 1.5,
 assert(typeof world.fitGiBounds === "undefined",
        "world.fitGiBounds is gone from the registry altogether");
 var g = world.get().gi;
-assert(g.boundsMin === undefined && g.boundsMax === undefined && g.autoBoundsMax === undefined,
-       "and world.get().gi carries no bounds fields at all");
+assert(g.boundsMin === undefined && g.boundsMax === undefined && g.autoBoundsMax === undefined &&
+       g.cascades === undefined,
+       "and world.get().gi carries no bounds fields and no cascade switch at all");
 
 // ---- the exclude flag ----------------------------------------------------
 // Reachable through the generic property route, and reflected, so
@@ -85,26 +79,29 @@ assert(g.boundsMin === undefined && g.boundsMax === undefined && g.autoBoundsMax
 // subject is genuinely the big one would lose its subject. So a scene like this
 // one, once anything is excluded, falls back to the plain union and the ground
 // comes straight back in — which is exactly why the flag is the ESCAPE HATCH
-// and not an optimisation. It is also read by the PROBE REGION and the
-// ENCLOSURE measurement, which is why D8 deleted the volume pin and kept this.
-assert(node.property(ground, "giBoundsExcluded") === false, "the flag starts off");
-assert(node.setProperty(ground, "giBoundsExcluded", true),
-       "node.setProperty(ground, giBoundsExcluded, true)");
-assert(node.property(ground, "giBoundsExcluded") === true, "...and reads back");
+// and not an optimisation.
+assert(node.property(ground, "probeGridExcluded") === false, "the flag starts off");
+assert(node.setProperty(ground, "probeGridExcluded", true),
+       "node.setProperty(ground, probeGridExcluded, true)");
+assert(node.property(ground, "probeGridExcluded") === true, "...and reads back");
+editor.frame(4);
+world.refreshGi();
 editor.frame(4);
 st = world.giStatus();
-console.log("giStatus, ground excluded = " + JSON.stringify(st.boundsMin) + " .. " +
-            JSON.stringify(st.boundsMax));
-assert(extent(st.boundsMin, st.boundsMax) < 30,
-       "the excluded ground stays out of the lit volume (now by the flag, not the heuristic)");
-assert(st.boundsMin.x <= -1.5 && st.boundsMax.x >= 1.5, "...and the objects are still in it");
-assert(node.setProperty(ground, "giBoundsExcluded", false), "the flag clears again");
+console.log("giStatus, ground excluded = " + JSON.stringify(st.probeFitMin) + " .. " +
+            JSON.stringify(st.probeFitMax));
+assert(extent(st.probeFitMin, st.probeFitMax) < 30,
+       "the excluded ground stays out of the placement fit (now by the flag, not the heuristic)");
+assert(st.probeFitMin.x <= -1.5 && st.probeFitMax.x >= 1.5, "...and the objects are still in it");
+assert(node.setProperty(ground, "probeGridExcluded", false), "the flag clears again");
+editor.frame(4);
+world.refreshGi();
 editor.frame(4);
 st = world.giStatus();
-assert(extent(st.boundsMin, st.boundsMax) < 30,
+assert(extent(st.probeFitMin, st.probeFitMax) < 30,
        "clearing it hands the job back to the heuristic, which reaches the same answer");
 
-// ---- the hybrid's probe region is NOT the lit volume ----------------------
+// ---- the scout's probe region sits inside the fit ---------------------------
 // A ROOM, because a probe grid needs an enclosure and there is no pin to state
 // one with any more: the renderer measures it out of the layout (owner probe
 // rule, 2026-09-13), and this scene of loose cubes on a slab reads as open.
@@ -131,9 +128,9 @@ console.log("hybrid giStatus = " + JSON.stringify(st));
 assert(st.probeCount === 4 && st.pccBound === true, "the probe grid built and bound");
 assert(extent(st.probeRegionMin, st.probeRegionMax) > 0,
        "the hybrid reports a probe region");
-assert(st.probeRegionMin.x >= st.boundsMin.x - 0.001 &&
-       st.probeRegionMax.x <= st.boundsMax.x + 0.001,
-       "the probe region sits INSIDE the lit volume");
+assert(st.probeRegionMin.x >= st.probeFitMin.x - 0.001 &&
+       st.probeRegionMax.x <= st.probeFitMax.x + 0.001,
+       "the probe region sits INSIDE the placement fit");
 
 // ---- the refresh verb ----------------------------------------------------
 // Geometry that moves deliberately does NOT auto-refresh, so this is the only

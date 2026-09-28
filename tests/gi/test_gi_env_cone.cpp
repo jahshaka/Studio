@@ -228,8 +228,8 @@ int main()
             vct.numBounces = 1;
             vct.ddgi = GiToggle::Off;
             vct.gather = GiToggle::Off;
-            vct.testBoundsMin = Vec3(-4.0f, -2.0f, -4.0f);
-            vct.testBoundsMax = Vec3(4.0f, 4.0f, 4.0f);
+            vct.testProbeRegionMin = Vec3(-4.0f, -2.0f, -4.0f);
+            vct.testProbeRegionMax = Vec3(4.0f, 4.0f, 4.0f);
             scene->setGlobalIllumination(vct);
             for (int f = 0; f < 20; ++f) e->renderOneFrame();
             const double inside = centre();
@@ -360,8 +360,8 @@ int main()
         cones.numBounces = 1;
         cones.ddgi = GiToggle::Off;
         cones.gather = GiToggle::Off;
-        cones.testBoundsMin = Vec3(-4.5f, -0.5f, -4.5f);
-        cones.testBoundsMax = Vec3(4.5f, 5.5f, 4.5f);
+        cones.testProbeRegionMin = Vec3(-4.5f, -0.5f, -4.5f);
+        cones.testProbeRegionMax = Vec3(4.5f, 5.5f, 4.5f);
         room->setGlobalIllumination(cones);
         for (int f = 0; f < 4000 && !room->giStatus().giAtRest; ++f) e->renderOneFrame();
         const double viaCones = readHdr(rv);

@@ -69,7 +69,6 @@ static GiParams storeGi()
     gi.numBounces = 1;
     gi.ddgi = GiToggle::Off;
     gi.updateBudget = 0;
-    gi.cascades = true;
     return gi;
 }
 
@@ -214,7 +213,7 @@ static void areaLampShadow(Engine *e, View *view)
     const MeshId cube = s->createMesh(enginetest::unitCubeMesh());
     PbrParams mp; mp.albedo = Colour(0.8f, 0.8f, 0.8f); mp.roughness = 1.0f;
     const MaterialId mat = s->createPbrMaterial(mp);
-    const double cell = 8.0 / 64.0;   // the fitted volume below at Medium: 64 cells over 8 m
+    const double cell = 16.0 / 128.0; // the pinned cascade below: 128 cells over 16 m
     const NodeId floorN = s->createNode(), wallN = s->createNode();
     s->attachMesh(floorN, cube, mat);
     s->attachMesh(wallN, cube, mat);
@@ -235,10 +234,13 @@ static void areaLampShadow(Engine *e, View *view)
     gi.mode = GiMode::Vct;
     gi.quality = GiQuality::Medium;
     gi.numBounces = 0;            // the DIRECT term alone
-    gi.cascades = false;
     gi.ddgi = GiToggle::Off;
-    gi.testBoundsMin = Vec3(-4.0f, -4.0f, -4.0f);
-    gi.testBoundsMax = Vec3(4.0f, 4.0f, 4.0f);
+    // ONE CAMERA-CENTRED CASCADE on the world lattice (its origin is a whole number
+    // of cells, so the wall's faces lie on cell boundaries), wide enough to hold the
+    // fixture wherever the camera's step snaps it. (A pinned scene-fitted volume
+    // until D4-PHOTON-TIERS deleted it.)
+    gi.cascadeCount = 1;
+    gi.cascadeSet[0] = GiParams::GiCascadeDesc{ 8.0f, 128, 0.0f };
     CHECK_MSG(s->setGlobalIllumination(gi), "%s", "the area-lamp fixture's voxel arm builds");
     render(e, 8);
     GiVoxelVolume v;
@@ -323,8 +325,8 @@ static void measureLayers(Engine *e, View *view)
     Scene *s = e->createScene("layers");
     view->setScene(s);
     s->setAmbient(Colour(0, 0, 0), Colour(0, 0, 0));
-    const double cell = 8.0 / 64.0;      // the fitted volume below: Medium, 64 cells over 8 m
-    const double z0 = 4.0;               // a cell boundary (the box is anchored at 0)
+    const double cell = 16.0 / 128.0;    // the pinned cascade below: 128 cells over 16 m
+    const double z0 = 4.0;               // a cell boundary (the cascade's origin is on the lattice)
     MeshData md;
     for (double f : { 0.1, 0.5, 0.9 }) {
         const float z = float(z0 + f * cell);
@@ -346,10 +348,9 @@ static void measureLayers(Engine *e, View *view)
     gi.mode = GiMode::Vct;
     gi.quality = GiQuality::Medium;
     gi.numBounces = 0;
-    gi.cascades = false;
     gi.ddgi = GiToggle::Off;
-    gi.testBoundsMin = Vec3(0.0f, 0.0f, 0.0f);
-    gi.testBoundsMax = Vec3(8.0f, 8.0f, 8.0f);
+    gi.cascadeCount = 1;
+    gi.cascadeSet[0] = GiParams::GiCascadeDesc{ 8.0f, 128, 0.0f };
     CHECK_MSG(s->setGlobalIllumination(gi), "%s", "the layers' volume builds");
     render(e, 8);
     GiVoxelVolume v;

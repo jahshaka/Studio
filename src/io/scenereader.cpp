@@ -511,17 +511,8 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
             0.0, sceneObj.value("giProbeSnapSidesMin").toDouble(scene->giProbeSnapSidesMin)));
         scene->giProbeSnapSidesMax = float(qMax(
             0.0, sceneObj.value("giProbeSnapSidesMax").toDouble(scene->giProbeSnapSidesMax)));
-        // PHOTON cascades (SPECS/PHOTON_SPEC.md P0). Absent in every document
-        // written before the flag existed, and the default is the arm those
-        // documents were authored against — there is nothing to migrate.
-        // The writer always emits 1 or 0. An ABSENT key is left unresolved
-        // (-1) and the block after worldMode is read resolves it through the
-        // tier (scene.h says why the field itself is not a tri-state).
-        {
-            const QJsonValue casc = sceneObj.value("giCascades");
-            scene->giCascades = casc.isUndefined() ? -1
-                              : (casc.toInt(scene->giCascades) != 0 ? 1 : 0);
-        }
+        // PHOTON cascades (SPECS/PHOTON_SPEC.md P0): always the chain; the
+        // `giCascades` switch is deleted and its key is not read (forward-building).
         scene->giCascadeInstanceCap = qBound(
             0, sceneObj.value("giCascadeInstanceCap").toInt(scene->giCascadeInstanceCap), 1 << 20);
         // THE SURFACE CACHE's three rows. Absent in every file written before
@@ -752,18 +743,6 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
             // pin every row of every old document for ever.
             if (!sceneObj.contains("giTier")) worldmodes::derivePhotonFromDocument(scene);
             // A TIER COLUMN THAT DID NOT EXIST WHEN THIS FILE WAS WRITTEN
-            // FOLLOWS THE TIER (PHOTON_SPEC §7 E2 (6), the cascade chain).
-            // Without this every document written before the column — which is
-            // every document that exists, the eight shipped samples included —
-            // would come up with the chain OFF and, worse, would read as
-            // "Custom" for ever, because `photonDeviations` compares the stored
-            // value against the tier's and would find a deviation nobody
-            // authored. It is keyed on the KEY BEING ABSENT and not on its
-            // value, so it can never re-normalise a scene that made a choice
-            // (the re-application trap the deleted comment below records), and
-            // it writes no pin.
-            if (scene->giCascades < 0)
-                scene->giCascades = worldmodes::photonCascades(worldmodes::photonTier(scene));
             // (THE TIER TABLE'S OPTION-(b) BUMP LIVED HERE and is DELETED,
             // 2026-09-12.) It re-applied the tier to any document that carried
             // a `giTier` but no `giDynamicProbes` — the one-day P2 table's
@@ -949,8 +928,8 @@ iris::SceneNodePtr SceneReader::readSceneNode(QJsonObject& nodeObj)
     sceneNode->setPlanarReflector(
         nodeObj["planarReflector"].toBool(sceneNode->getPlanarReflector()));
     // Absent = the ctor's false, same as planarReflector: the writer only emits it when set.
-    sceneNode->setGiBoundsExcluded(
-        nodeObj["giBoundsExcluded"].toBool(sceneNode->getGiBoundsExcluded()));
+    sceneNode->setProbeGridExcluded(
+        nodeObj["probeGridExcluded"].toBool(sceneNode->getProbeGridExcluded()));
     // Shadow Caster: absent = the document default (TRUE) — the writer only
     // emits the key when the user turned casting off, so every scene written
     // before the key existed loads exactly as it did.

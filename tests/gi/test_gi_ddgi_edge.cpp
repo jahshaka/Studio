@@ -274,8 +274,8 @@ static GiParams vctBase()
     // the fixture means to leave outside. 10 m tall (-4.75, empty below the floor)
     // is 64 cells of 0.156 m exactly, the box IS the bounds, and the top still sits
     // inside the ceiling slab.
-    gi.testBoundsMin = Vec3(-5.0f, -4.75f, -5.0f);
-    gi.testBoundsMax = Vec3(5.0f, 5.25f, 5.0f);
+    gi.testProbeRegionMin = Vec3(-5.0f, -4.75f, -5.0f);
+    gi.testProbeRegionMax = Vec3(5.0f, 5.25f, 5.0f);
     return gi;
 }
 
@@ -384,7 +384,7 @@ int main()
     // =====================================================================
     std::printf("\n== case 3: bounds enclosing the shell (the roof is inside the volume) ==\n");
     GiParams enc = vctBase();
-    enc.testBoundsMax = Vec3(5.5f, 6.0f, 5.5f);          // above the roof's outer face (5.5)
+    enc.testProbeRegionMax = Vec3(5.5f, 6.0f, 5.5f);          // above the roof's outer face (5.5)
     CHECK(b.scene->setGlobalIllumination(enc), "VCT without DDGI, enclosing bounds");
     const Reading encOff = measure(e, b);
     showStats("roof, enclosing bounds, field off", encOff.roof);

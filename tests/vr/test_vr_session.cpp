@@ -1892,8 +1892,8 @@ int main() {
             gi.mode = GiMode::Vct;
             gi.quality = GiQuality::Medium;
             gi.numBounces = 1;
-            gi.testBoundsMin = Vec3{ -8.0f, -4.0f, -8.0f };
-            gi.testBoundsMax = Vec3{ 8.0f, 6.0f, 8.0f };
+            gi.testProbeRegionMin = Vec3{ -8.0f, -4.0f, -8.0f };
+            gi.testProbeRegionMax = Vec3{ 8.0f, 6.0f, 8.0f };
             CHECK_MSG(scene->setGlobalIllumination(gi), "the voxel arm builds over the fixture");
         }
 

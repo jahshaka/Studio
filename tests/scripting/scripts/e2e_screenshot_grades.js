@@ -147,19 +147,10 @@ editor.select(null);
 // Four spellings of "give me nothing": the default, the word every suite in the
 // tree was written with, the new name that says what it is, and the boolean the
 // pixel corpus passes. All four must be the SAME picture, pixel for pixel.
-// THE SINGLE VOLUME, PINNED, and it is the subject that asks for it. Every SHOT
-// below renders a frame, and a frame is where the renderer spends queued work:
-// since PHOTON_SPEC §7 E2 (6) every tier builds the camera-centred cascade chain
-// and the pose set above queues a re-centre per cascade, one per frame. Four
-// shots taken back to back would be four moments of the same scroll — a true
-// statement about the renderer and a useless one about the GRADES this file
-// compares, which are a property of the compositor chain and not of GI. So the
-// scene is put on the one volume, which stands still, and every phase below
-// compares grades against grades.
-world.gi({ cascades: false });
-// ...AND SETTLED, which the push itself makes necessary: a GI push is a re-solve
-// and a re-solve stales the whole reflection-probe grid, which then re-captures
-// at the update budget — one probe per frame. Every SHOT renders a frame, so
+// SETTLED FIRST. Every SHOT below renders a frame, and a frame is where the
+// renderer spends queued work: the camera-centred cascade chain re-centres one
+// cascade per frame after the pose set above, and the reflection-probe grid
+// re-captures at the update budget — one probe per frame. Every SHOT renders a frame, so
 // four shots taken mid-catch-up are four different pictures of the same scene
 // and phase A would be comparing the catch-up, not the grades. Render until the
 // renderer says nothing is owed. (The cameras.exposure lesson again: a fixed

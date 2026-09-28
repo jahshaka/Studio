@@ -231,8 +231,8 @@ static int mirrorArms(Engine *e)
     // on a mover never is (movers carry no cards), and that one is the decode's.
     gi.cards = GiToggle::On;
     gi.cardResidencyRadius = 40.0f;
-    gi.testBoundsMin = Vec3(-8.0f, -2.0f, -12.0f);
-    gi.testBoundsMax = Vec3(8.0f, 8.0f, 6.0f);
+    gi.testProbeRegionMin = Vec3(-8.0f, -2.0f, -12.0f);
+    gi.testProbeRegionMax = Vec3(8.0f, 8.0f, 6.0f);
     s->setGlobalIllumination(gi);
     PostFxDesc fx;
     fx.allowOffscreen = true;
@@ -1164,7 +1164,6 @@ static int gatherArm(Engine *e)
     gi.ddgi = GiToggle::Off;
     gi.gather = GiToggle::On;
     gi.numBounces = 1;
-    gi.cascades = true;
     s->setGlobalIllumination(gi);
     GatherTuning t;
     t.restOff = true;   // the estimator's mean over frames, not one held draw

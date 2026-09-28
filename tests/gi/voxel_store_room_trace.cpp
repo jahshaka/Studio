@@ -52,7 +52,6 @@ int main(int argc, char **argv)
     gi.ddgi = GiToggle::Off;
     gi.gather = GiToggle::Off;
     gi.numBounces = 1;
-    gi.cascades = true;
     s->setGlobalIllumination(gi);
     for (int f = 0; f < 16; ++f) e->renderOneFrame();
     for (int f = 0; f < 4000 && !s->giStatus().giAtRest; ++f) e->renderOneFrame();

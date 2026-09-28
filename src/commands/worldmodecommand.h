@@ -54,9 +54,8 @@ public:
         QJsonObject overrides;
         QHash<QString, int> rowValues;   ///< rowId -> backing-field value
         /// PHOTON'S CASCADE FIELDS THAT ARE NOT ROWS (audit D12, PHOTON_SPEC
-        /// §7 E2 (7)). `giCascades` IS a registry row since the tier table
-        /// adopted it, so `rowValues` carries it; the table a scene may pin and
-        /// the per-cascade instance budget are not rows and would otherwise
+        /// §7 E2 (7)). The table a scene may pin and the per-cascade instance
+        /// budget are not rows and would otherwise
         /// survive an undo of the edit that set them — which is the one thing
         /// this command exists to prevent ("going Epic -> High to see what it
         /// looked like was a one-way door").

@@ -149,8 +149,8 @@ static void sectionA(Engine *engine)
     gi.numBounces = 2;
     gi.pccProbesX = 2; gi.pccProbesY = 1; gi.pccProbesZ = 2;     // 4 probes
     gi.updateBudget = 1;
-    gi.testBoundsMin = Vec3(-4.6f, -0.6f, -4.6f);
-    gi.testBoundsMax = Vec3(4.6f, 5.6f, 4.6f);
+    gi.testProbeRegionMin = Vec3(-4.6f, -0.6f, -4.6f);
+    gi.testProbeRegionMax = Vec3(4.6f, 5.6f, 4.6f);
     CHECK(s->setGlobalIllumination(gi), "the hybrid arm builds");
 
     const auto frame = [&]() { engine->renderOneFrame(); };
@@ -547,8 +547,8 @@ static void sectionC(Engine *engine)
     gi.mode = GiMode::Vct;
     gi.quality = GiQuality::Low;          // isotropic: the bounces are readable
     gi.numBounces = 4;          // the engine's ceiling: the widest gap to measure
-    gi.testBoundsMin = Vec3(-6.5f, -0.6f, -6.5f);
-    gi.testBoundsMax = Vec3(6.5f, 6.6f, 6.5f);
+    gi.testProbeRegionMin = Vec3(-6.5f, -0.6f, -6.5f);
+    gi.testProbeRegionMax = Vec3(6.5f, 6.6f, 6.5f);
     CHECK(s->setGlobalIllumination(gi), "VCT at the full bounce count");
     for (int i = 0; i < 6; ++i) engine->renderOneFrame();
     Image img;
@@ -681,7 +681,6 @@ static void sectionD(Engine *engine)
     gi.numBounces = 1;
     gi.ddgi = GiToggle::Off;
     gi.updateBudget = 0;
-    gi.cascades = true;
     // A PINNED TABLE, so the walk below stays well inside the inner cascade and
     // `items` can only move because the SET changed — not because an object
     // left the box.

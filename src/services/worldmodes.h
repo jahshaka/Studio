@@ -228,10 +228,9 @@ QString optionLabel(const Row &r, const EnumOption &o, const iris::ScenePtr &sce
 // High are DDGI-fed — the field is the only diffuse arm that is right in both
 // open and sealed scenes (rayon2 S1-S3) — and Epic has a column of its own so
 // it no longer collapses onto High). ONE table, ONE owner: `kPhotonTable` in
-// worldmodes.cpp; the engine's GiQuality stays three-valued (it is the
-// RESOLUTION dial — voxels, probe faces — and Epic changes no resolution), so
-// Epic's two extra columns are ordinary document fields the engine already
-// reads (numBounces), written through like the other two.
+// worldmodes.cpp; the engine's GiQuality has an Epic row of its own
+// (D4-PHOTON-TIERS: High's resolutions plus four times the gather's probes),
+// and Epic's bounce column is an ordinary document field (numBounces).
 //
 //   tier    technique             voxels             ddgi  DDGI grid  bounces  probe faces/HDR/shadows  budget
 //   Low     VCT, 2 cascades       64^3               ON    8192 fit   1        — (no probes)            (dial)
@@ -244,8 +243,8 @@ QString optionLabel(const Row &r, const EnumOption &o, const iris::ScenePtr &sce
 //   built, PHOTON-F12-PCC) and "VCT + probes" where it does not
 //   (techniqueLabel); the probe columns apply only in the second case.
 //
-// Derived columns (not rows): voxels and probe faces/HDR/shadows follow
-// `giQuality` (OgreGi.cpp giVoxelResolution / buildPcc); the DDGI grid is the
+// Derived columns (not rows): the cascade chain and probe faces/HDR/shadows
+// follow `giQuality` (giQualityFacts / buildPcc); the DDGI grid is the
 // engine's fixed 8192-probe aspect fit (kIfdTotalProbes). Epic's bounce column
 // is measured:
 // bounces 1 -> 3 raises the DDGI-fed floor bounce (gi.ddgi case 7).
@@ -290,10 +289,6 @@ int photonBounces(PhotonTier t);
 /// quality dial). Every tier is 0 today — the column exists so a scene can pin
 /// one, which is the owner's 2026-09-13 Q4 decision.
 int photonProbeSize(PhotonTier t);
-/// The CASCADE CHAIN column (0/1) — Photon's camera-centred voxel cascades.
-/// On in every tier since PHOTON_SPEC §7 E2 (6): the bounce follows the camera
-/// unless a scene pins `giCascades` off.
-int photonCascades(PhotonTier t);
 /// THE GATHER COLUMN (PHOTON-GATHER-1d): the screen-probe gather at this tier —
 /// on/off, the probe stride, the octahedral resolution, the adaptive cap — as a
 /// PROJECTION of the engine's tier table (`giQualityFacts(...).gather`, the
@@ -312,8 +307,8 @@ jahshaka::engine::GiGatherFacts photonVrGather(PhotonTier t);
 /// The numbers come from TWO tables and nowhere else: this file's kPhotonTable
 /// (which technique, which quality, how many bounces, the field, the chain) and
 /// the ENGINE's own `jahshaka::engine::giQualityFacts` (what a quality dial
-/// physically is: the cascade chain and its cells, the single volume's
-/// resolution, the probe face size, the HDR/shadow defaults). Nothing here is
+/// physically is: the cascade chain and its cells, the probe face size, the
+/// HDR/shadow defaults). Nothing here is
 /// prose about the renderer that a human has to keep in step.
 ///
 /// `photonTierSentence` is one tier in one sentence ("Low: two camera cascades,

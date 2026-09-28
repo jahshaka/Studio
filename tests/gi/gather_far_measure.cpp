@@ -309,7 +309,6 @@ static GiParams giAt(const Tier &t)
     GiParams gi;
     gi.mode = t.mode;
     gi.quality = t.quality;
-    gi.cascades = true;
     gi.ddgi = GiToggle::Off;          // STATED: the field is off; this is the gather's own ray
     gi.numBounces = t.bounces;
     gi.gather = GiToggle::On;

@@ -203,7 +203,6 @@ int main()
     GiParams gi;
     gi.mode = GiMode::Vct;
     gi.quality = GiQuality::High;
-    gi.cascades = true;
     gi.ddgi = GiToggle::Off;
     gi.numBounces = 1;
     gi.gather = GiToggle::On;
