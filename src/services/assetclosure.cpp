@@ -40,9 +40,18 @@ QStringList expandThroughCatalog(const QStringList &seeds, Database *db)
         frontier.append(guid);
     };
     for (const QString &seed : seeds) push(seed);
+    // ONE QUERY PER BFS LEVEL (D11-LIBRARY-SCALE §3.6): the whole frontier's
+    // edges at once, then walked in frontier order — the same visit order the
+    // query-per-node walk had, at a statement per level instead of per asset.
     while (!frontier.isEmpty()) {
-        const QString guid = frontier.takeFirst();
-        for (const QString &dep : db->fetchAssetGUIDAndDependencies(guid)) push(dep);
+        const QStringList level = frontier;
+        frontier.clear();
+        const QHash<QString, QStringList> edges = db->fetchDependencyEdges(level);
+        for (const QString &guid : level) {
+            // Self first, as fetchAssetGUIDAndDependencies(guid) answered.
+            push(guid);
+            for (const QString &dep : edges.value(guid)) push(dep);
+        }
     }
     return out;
 }
@@ -78,10 +87,21 @@ QMap<QString, clipboardformat::ClipAsset> describe(const QStringList &guids, Dat
     CasContentSource content(options.storeRoot, options.projectGuid);
     qint64 budget = options.inlineLimitBytes;
 
-    for (const QString &guid : guids) {
-        if (guid.isEmpty() || assetrefs::isReservedGuid(guid)) continue;
-        const AssetRecord record = db->fetchAsset(guid);
-        if (record.guid.isEmpty()) continue;      // a guid this catalog does not know
+    // THE CLOSURE'S ROWS IN TWO STATEMENTS (D11-LIBRARY-SCALE §3.6): every
+    // header without a BLOB, and every asset's direct edges, for the whole guid
+    // set at once. A row's JSON BLOBs are read when that asset is written below
+    // (and only when the item carries them) — never a thumbnail.
+    QStringList wanted;
+    for (const QString &guid : guids)
+        if (!guid.isEmpty() && !assetrefs::isReservedGuid(guid)) wanted.append(guid);
+    QHash<QString, AssetRecord> headers;
+    for (const AssetRecord &row : db->fetchAssetHeaders(wanted)) headers.insert(row.guid, row);
+    const QHash<QString, QStringList> edges = db->fetchDependencyEdges(wanted);
+
+    for (const QString &guid : wanted) {
+        const auto found = headers.constFind(guid);
+        if (found == headers.constEnd()) continue;      // a guid this catalog does not know
+        const AssetRecord &record = *found;
 
         clipboardformat::ClipAsset asset;
         asset.guid = guid;
@@ -90,11 +110,8 @@ QMap<QString, clipboardformat::ClipAsset> describe(const QStringList &guids, Dat
         asset.type = scriptmod::assetTypeName(record.type);
         asset.parent = record.parent;
         asset.viewFilter = record.view_filter;
-        asset.dependencies = db->fetchAssetGUIDAndDependencies(guid, false);
-        if (options.includeRowBlobs) {
-            asset.blob = record.asset;
-            asset.properties = record.properties;
-        }
+        asset.dependencies = edges.value(guid);
+        if (options.includeRowBlobs) db->fetchAssetRowBlobs(guid, &asset.blob, &asset.properties);
 
         bool anyInlined = false, anyReferenced = false;
         for (const auto &entry : content.filesForAsset(guid, record.name)) {
