@@ -1197,8 +1197,8 @@ set_tests_properties(gi.card_blend PROPERTIES TIMEOUT 120 LABELS "engine")
 jah_gpu_row(gi.card_view CLASS engine COMMAND test_gi_cards view
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.card_view PROPERTIES TIMEOUT 120 LABELS "engine")
-# ...and the audit's F3: a capture batch past the relight budget is relit in its
-# own frame (the read never meets the capture's alpha = the world -Z direction).
+# ...and a sun turn re-traces every card's still term (no capture) with every frame's
+# read the card as it was or as it became (ATOM-S3-CARDCAP; it was the audit's F3 capture batch).
 jah_gpu_row(gi.card_view_batch CLASS engine COMMAND test_gi_cards view_batch
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.card_view_batch PROPERTIES TIMEOUT 120 LABELS "engine")
