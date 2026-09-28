@@ -23,7 +23,8 @@ namespace CasSchema
 // 1 = the CAS tables; 2 = project_assets (reference-with-pin, phase 4).
 // Fresh databases bootstrap the FULL final schema directly — there are no
 // user-data migrations (the app ships new; the owner's library is wiped).
-inline constexpr int kUserVersion = 2;
+// 3 = the listing indexes (D11-LIBRARY-SCALE; Database::createIndexes).
+inline constexpr int kUserVersion = 3;
 
 // Reference-with-pin (ASSET_PIPELINE_SPEC §3.1.5, phase 4): a project "use"
 // of an asset is a row here, pinning the source oid AT ADD TIME. Content is

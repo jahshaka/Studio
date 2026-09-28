@@ -31,6 +31,7 @@ For more information see the LICENSE file
 #include <QDateTime>
 #include <QMessageBox>
 #include <QObject>
+#include <QRegularExpression>
 #include <QUuid>
 
 #include <algorithm>
@@ -278,8 +279,87 @@ bool isWriteStatement(const QString &sql)
 }
 }   // namespace
 
+// ---- the query log (D11-LIBRARY-SCALE; the contract is in database.h) ------
+
+namespace {
+struct QueryLogState
+{
+    bool on = false;
+    int statements = 0;
+    QHash<QString, Database::QueryLogEntry> entries;   // by name + sql
+};
+QueryLogState &queryLogState()
+{
+    static QueryLogState state;
+    return state;
+}
+Database::GuidHook &thumbnailWrittenHook()
+{
+    static Database::GuidHook hook;
+    return hook;
+}
+}   // namespace
+
+void Database::setQueryLog(bool on)
+{
+    QueryLogState &log = queryLogState();
+    log.on = on;
+    if (on) { log.statements = 0; log.entries.clear(); }
+}
+
+bool Database::queryLogOn() { return queryLogState().on; }
+
+void Database::classifyQuery(const QString &sql, bool *selectsThumbnail, bool *byGuid)
+{
+    const QString s = sql.simplified();
+    bool thumb = false, keyed = false;
+    static const QRegularExpression select(QStringLiteral("^SELECT (.*?) FROM (.*)$"),
+                                           QRegularExpression::CaseInsensitiveOption);
+    const QRegularExpressionMatch m = select.match(s);
+    if (m.hasMatch()) {
+        static const QRegularExpression column(QStringLiteral("\\bthumbnail\\b"),
+                                               QRegularExpression::CaseInsensitiveOption);
+        thumb = column.match(m.captured(1)).hasMatch();
+        // Keyed: the WHERE names a guid equality or a guid IN list.
+        static const QRegularExpression keyedWhere(
+            QStringLiteral("\\bWHERE\\b.*\\bguid\\s*(=\\s*[?:]|IN\\s*\\()"),
+            QRegularExpression::CaseInsensitiveOption);
+        keyed = keyedWhere.match(m.captured(2)).hasMatch();
+    }
+    if (selectsThumbnail) *selectsThumbnail = thumb;
+    if (byGuid) *byGuid = keyed;
+}
+
+void Database::noteQuery(const QString &name, const QString &sql)
+{
+    QueryLogState &log = queryLogState();
+    if (!log.on) return;
+    ++log.statements;
+    const QString key = name + QLatin1Char('\x1f') + sql;
+    auto it = log.entries.find(key);
+    if (it == log.entries.end()) {
+        QueryLogEntry entry;
+        entry.name = name;
+        entry.sql = sql.simplified();
+        classifyQuery(sql, &entry.selectsThumbnail, &entry.byGuid);
+        it = log.entries.insert(key, entry);
+    }
+    ++it->count;
+}
+
+QVector<Database::QueryLogEntry> Database::queryLogEntries()
+{
+    const auto &entries = queryLogState().entries;
+    return QVector<QueryLogEntry>(entries.cbegin(), entries.cend());
+}
+
+int Database::queryLogStatements() { return queryLogState().statements; }
+
+void Database::setAssetThumbnailWritten(GuidHook hook) { thumbnailWrittenHook() = std::move(hook); }
+
 bool Database::executeAndCheckQuery(QSqlQuery &query, const QString& name)
 {
+    if (queryLogState().on) noteQuery(name, query.lastQuery());
     // THE SYNC ACCOUNTING (editor.undoState().dbCommits). A write with no
     // transaction open is its own transaction: one journal, one fdatasync.
     // Inside a batch or a guard it costs nothing until the commit, which
@@ -879,6 +959,26 @@ void Database::createIndexes()
     QSqlQuery byDependee;
     byDependee.prepare("CREATE INDEX IF NOT EXISTS idx_dependencies_dependee ON dependencies (dependee)");
     executeAndCheckQuery(byDependee, "CreateDependenciesDependeeIndex");
+
+    // THE PREDICATES' INDEXES (D11-LIBRARY-SCALE, audit V2_F F3): every listing
+    // and every project-scoped read filters on one of these columns, and the
+    // catalog had no index on any of them — 29 `project_guid` predicates, the
+    // tray's `parent`, the Library's `view_filter`/`listed`, the drawer's
+    // `collection` and the Desktop's `desktop` each scanned every row. Part of
+    // the schema the bootstrap writes (IF NOT EXISTS: the same statement makes a
+    // fresh file and finishes one that predates it — no migration, nothing read).
+    static const char *const kIndexes[] = {
+        "CREATE INDEX IF NOT EXISTS idx_assets_parent ON assets (parent)",
+        "CREATE INDEX IF NOT EXISTS idx_assets_project_guid ON assets (project_guid)",
+        "CREATE INDEX IF NOT EXISTS idx_assets_view_filter_listed ON assets (view_filter, listed)",
+        "CREATE INDEX IF NOT EXISTS idx_assets_collection ON assets (collection)",
+        "CREATE INDEX IF NOT EXISTS idx_projects_desktop ON projects (desktop)",
+    };
+    for (const char *statement : kIndexes) {
+        QSqlQuery index;
+        index.prepare(QString::fromLatin1(statement));
+        executeAndCheckQuery(index, "CreateIndex");
+    }
 }
 
 // WHERE A PROJECT'S FOLDER LIVES. Empty clears the row back to "the default
@@ -1302,31 +1402,37 @@ FolderRecord Database::fetchFolder(const QString &guid)
     return data;
 }
 
-QVector<AssetRecord> Database::fetchAssetThumbnails(const QStringList &guids)
+// THE TILE CACHE'S READS (D11-LIBRARY-SCALE): the thumbnail BLOB of the guids a
+// view is painting, one bound `IN (...)` per batch (TileCache::kBatch) — never a
+// listing. Absent guids (no row, no thumbnail) are absent from the answer.
+static QHash<QString, QByteArray> fetchThumbnailBytes(Database *db, const char *table,
+                                                      const QStringList &guids, const QString &name)
 {
-	// Construct the guid list to use and chop of the extraneous comma to make it valid
-	QString guidInString;
-	for (const QString &guid : guids) guidInString += "'" + guid + "',";
-	guidInString.chop(1);
+    QHash<QString, QByteArray> out;
+    if (guids.isEmpty()) return out;
+    QStringList marks;
+    marks.reserve(guids.size());
+    for (int i = 0; i < guids.size(); ++i) marks << QStringLiteral("?");
+    QSqlQuery query;
+    query.prepare(QStringLiteral("SELECT guid, thumbnail FROM %1 WHERE guid IN (%2)")
+                      .arg(QString::fromLatin1(table), marks.join(QLatin1Char(','))));
+    for (const QString &guid : guids) query.addBindValue(guid);
+    if (!db->executeAndCheckQuery(query, name)) return out;
+    while (query.next()) {
+        const QByteArray bytes = query.value(1).toByteArray();
+        if (!bytes.isEmpty()) out.insert(query.value(0).toString(), bytes);
+    }
+    return out;
+}
 
-	QSqlQuery query;
-	query.prepare("SELECT guid, thumbnail, name FROM assets WHERE guid IN (" + guidInString + ")");
-	executeAndCheckQuery(query, "fetchAssetThumbnails");
+QHash<QString, QByteArray> Database::fetchAssetThumbnailBytes(const QStringList &guids)
+{
+    return fetchThumbnailBytes(this, "assets", guids, QStringLiteral("fetchAssetThumbnailBytes"));
+}
 
-	QVector<AssetRecord> assetData;
-	while (query.next()) {
-        AssetRecord data;
-		QSqlRecord record = query.record();
-		for (int i = 0; i < record.count(); i++) {
-			data.guid		= record.value(0).toString();
-			data.thumbnail	= record.value(1).toByteArray();
-			data.name		= record.value(2).toString();
-		}
-
-		assetData.push_back(data);
-	}
-
-	return assetData;
+QHash<QString, QByteArray> Database::fetchProjectThumbnailBytes(const QStringList &guids)
+{
+    return fetchThumbnailBytes(this, "projects", guids, QStringLiteral("fetchProjectThumbnailBytes"));
 }
 
 void Database::updateAuthorInfo(const QString &author_name)
@@ -2009,7 +2115,10 @@ bool Database::updateAssetThumbnail(const QString &guid, const QByteArray &thumb
 	query.prepare("UPDATE assets SET thumbnail = ? WHERE guid = ?");
 	query.addBindValue(thumbnail);
 	query.addBindValue(guid);
-	return executeAndCheckQuery(query, "UpdateAssetThumbnail");
+	const bool ok = executeAndCheckQuery(query, "UpdateAssetThumbnail");
+	// Every cached tile of this asset is stale now (D11-LIBRARY-SCALE).
+	if (ok && thumbnailWrittenHook()) thumbnailWrittenHook()(guid);
+	return ok;
 }
 
 bool Database::updateAssetAsset(const QString &guid, const QByteArray &asset)
@@ -2319,8 +2428,11 @@ QVector<AssetRecord> Database::fetchAssetsForAssetView()
     // Phase 0 (ASSET_PIPELINE_SPEC §1.2): the asset JSON BLOB is deliberately
     // NOT selected — no grid consumer reads it, and dragging it in loaded
     // every library row's node JSON into memory on each grid refresh.
+    // NO THUMBNAIL (D11-LIBRARY-SCALE): a listing names rows; the tile cache
+    // reads a row's picture by guid when a view paints it (ui/controls/
+    // tilecache.h). This query fed 10,000 BLOBs into every Library build.
     query.prepare(
-        "SELECT A.name, A.thumbnail, A.guid, C.collection_id, A.type, A.collection, A.properties, "
+        "SELECT A.name, A.guid, C.collection_id, A.type, A.collection, A.properties, "
         "A.author, A.license, A.tags, A.project_guid, A.view_filter "
         "FROM assets A "
         // LEFT JOIN: a row whose collection no longer exists must still show
@@ -2341,22 +2453,17 @@ QVector<AssetRecord> Database::fetchAssetsForAssetView()
     QVector<AssetRecord> tileData;
     while (query.next()) {
         AssetRecord data;
-        QSqlRecord record = query.record();
-        for (int i = 0; i < record.count(); i++) {
-            data.name = record.value(0).toString();
-            data.thumbnail = record.value(1).toByteArray();
-            data.guid = record.value(2).toString();
-            data.collection = record.value(3).toInt();
-            data.type = record.value(4).toInt();
-            data.collection = record.value(5).toInt();
-            data.properties = record.value(6).toByteArray();
-            data.author = record.value(7).toString();
-            data.license = record.value(8).toString();
-            data.tags = record.value(9).toByteArray();
-			data.view_filter = record.value(11).toInt();
-        }
-
-
+        data.name = query.value(0).toString();
+        data.guid = query.value(1).toString();
+        data.type = query.value(3).toInt();
+        data.collection = query.value(4).toInt();
+        data.properties = query.value(5).toByteArray();
+        data.author = query.value(6).toString();
+        data.license = query.value(7).toString();
+        data.tags = query.value(8).toByteArray();
+        data.projectGuid = query.value(9).toString();
+        data.view_filter = query.value(10).toInt();
+        data.listed = true;
         tileData.push_back(data);
     }
 
@@ -2370,7 +2477,9 @@ QVector<AssetRecord> Database::fetchChildAssets(const QString &parent, const QSt
     // the editor's tray the moment it was applied. What is a tray tile is
     // decided in ONE place now — services/assettray.h.
     QString assetsQuery =
-        "SELECT name, thumbnail, guid, parent, type, properties "
+        // A LISTING: no thumbnail column (D11-LIBRARY-SCALE — the tray paints
+        // its pictures from the tile cache by guid).
+        "SELECT name, guid, parent, type, properties "
         "FROM assets A WHERE parent = ? AND project_guid = ? ";
     if (filter > 0) assetsQuery.append("AND type = ? ");
     assetsQuery.append("ORDER BY A.name DESC");
@@ -2386,11 +2495,10 @@ QVector<AssetRecord> Database::fetchChildAssets(const QString &parent, const QSt
     while (query.next()) {
         AssetRecord data;
         data.name = query.value(0).toString();
-        data.thumbnail = query.value(1).toByteArray();
-        data.guid = query.value(2).toString();
-        data.parent = query.value(3).toString();
-        data.type = query.value(4).toInt();
-        data.properties = query.value(5).toByteArray();
+        data.guid = query.value(1).toString();
+        data.parent = query.value(2).toString();
+        data.type = query.value(3).toInt();
+        data.properties = query.value(4).toByteArray();
         data.projectGuid = projectGuid;
         tileData.push_back(data);
     }
@@ -2415,7 +2523,7 @@ QVector<AssetRecord> Database::fetchChildAssetsIn(const QStringList &parents,
     QStringList marks;
     for (int i = 0; i < parents.size(); ++i) marks << QStringLiteral("?");
     QString assetsQuery =
-        QStringLiteral("SELECT name, thumbnail, guid, parent, type, properties "
+        QStringLiteral("SELECT name, guid, parent, type, properties "
                        "FROM assets A WHERE parent IN (%1) AND project_guid = ? ")
             .arg(marks.join(QStringLiteral(", ")));
     if (filter > 0) assetsQuery.append("AND type = ? ");
@@ -2433,11 +2541,10 @@ QVector<AssetRecord> Database::fetchChildAssetsIn(const QStringList &parents,
     while (query.next()) {
         AssetRecord data;
         data.name = query.value(0).toString();
-        data.thumbnail = query.value(1).toByteArray();
-        data.guid = query.value(2).toString();
-        data.parent = query.value(3).toString();
-        data.type = query.value(4).toInt();
-        data.properties = query.value(5).toByteArray();
+        data.guid = query.value(1).toString();
+        data.parent = query.value(2).toString();
+        data.type = query.value(3).toInt();
+        data.properties = query.value(4).toByteArray();
         data.projectGuid = projectGuid;
         tileData.push_back(data);
     }
@@ -2453,7 +2560,8 @@ QVector<AssetRecord> Database::fetchProjectPinnedAssets(const QString &projectGu
     // 30 pins cost 31 queries here, and the editor tray reads this on every
     // edge write and every search keystroke.
     QSqlQuery query;
-    query.prepare("SELECT A.name, A.thumbnail, A.guid, A.parent, A.type, A.properties, "
+    // A LISTING: no thumbnail column (D11-LIBRARY-SCALE).
+    query.prepare("SELECT A.name, A.guid, A.parent, A.type, A.properties, "
                   "A.view_filter, A.date_created, A.collection, A.tags, A.project_guid, A.listed "
                   "FROM project_assets PA JOIN assets A ON A.guid = PA.asset_guid "
                   "WHERE PA.project_guid = ?");
@@ -2463,17 +2571,16 @@ QVector<AssetRecord> Database::fetchProjectPinnedAssets(const QString &projectGu
     while (query.next()) {
         AssetRecord record;
         record.name = query.value(0).toString();
-        record.thumbnail = query.value(1).toByteArray();
-        record.guid = query.value(2).toString();
-        record.parent = query.value(3).toString();
-        record.type = query.value(4).toInt();
-        record.properties = query.value(5).toByteArray();
-        record.view_filter = query.value(6).toInt();
-        record.dateCreated = query.value(7).toDateTime();
-        record.collection = query.value(8).toInt();
-        record.tags = query.value(9).toByteArray();
-        record.projectGuid = query.value(10).toString();
-        record.listed = query.value(11).toInt() != 0;
+        record.guid = query.value(1).toString();
+        record.parent = query.value(2).toString();
+        record.type = query.value(3).toInt();
+        record.properties = query.value(4).toByteArray();
+        record.view_filter = query.value(5).toInt();
+        record.dateCreated = query.value(6).toDateTime();
+        record.collection = query.value(7).toInt();
+        record.tags = query.value(8).toByteArray();
+        record.projectGuid = query.value(9).toString();
+        record.listed = query.value(10).toInt() != 0;
         if (!record.guid.isEmpty()) records.push_back(record);
     }
     return records;
@@ -2563,7 +2670,8 @@ DatabaseMetadataRecord Database::getDbMetadata()
 QVector<AssetRecord> Database::fetchAssetsByType(const int &type, const QString &projectGuid)
 {
     QSqlQuery query;
-    query.prepare("SELECT guid, type, name, thumbnail, asset FROM assets WHERE type = ? AND project_guid = ?");
+    // A LISTING: no thumbnail column (D11-LIBRARY-SCALE).
+    query.prepare("SELECT guid, type, name, asset FROM assets WHERE type = ? AND project_guid = ?");
     query.addBindValue(type);
     query.addBindValue(projectGuid);
     executeAndCheckQuery(query, "fetchAssetsByType");
@@ -2576,8 +2684,7 @@ QVector<AssetRecord> Database::fetchAssetsByType(const int &type, const QString 
             data.guid = record.value(0).toString();
             data.type = record.value(1).toInt();
             data.name = record.value(2).toString();
-			data.thumbnail = query.value(3).toByteArray();
-            data.asset = record.value(4).toByteArray();
+            data.asset = record.value(3).toByteArray();
         }
 
         tileData.push_back(data);
@@ -2586,30 +2693,31 @@ QVector<AssetRecord> Database::fetchAssetsByType(const int &type, const QString 
     return tileData;
 }
 
-QVector<AssetRecord> Database::fetchAssetsByViewFilter(const AssetViewFilter& filter)
+QVector<AssetRecord> Database::fetchAssetsByViewFilter(const AssetViewFilter& filter, int type)
 {
 	QSqlQuery query;
-	// LIBRARY LISTING (the Effects page's shader library): unlisted rows out.
-	query.prepare("SELECT guid, type, name, thumbnail, asset, properties FROM assets "
-	              "WHERE view_filter = ? AND listed = 1");
+	// LIBRARY LISTING (the Materials module's drawers): unlisted rows out. The
+	// TYPE is a predicate (D11-LIBRARY-SCALE): the drawer wants materials, and
+	// reading every library row's definition to drop all but those in C++ cost
+	// the whole library per refresh. NO THUMBNAIL: the tile cache paints it.
+	QString sql = QStringLiteral("SELECT guid, type, name, asset, properties FROM assets "
+	                             "WHERE view_filter = ? AND listed = 1");
+	if (type >= 0) sql += QStringLiteral(" AND type = ?");
+	query.prepare(sql);
 	query.addBindValue(filter);
+	if (type >= 0) query.addBindValue(type);
 	executeAndCheckQuery(query, "fetchAssetsByViewFilter");
 
 	QVector<AssetRecord> tileData;
 	while (query.next()) {
 		AssetRecord data;
-		QSqlRecord record = query.record();
-		for (int i = 0; i < record.count(); i++) {
-			data.guid = record.value(0).toString();
-			data.type = record.value(1).toInt();
-			data.name = record.value(2).toString();
-			data.thumbnail = query.value(3).toByteArray();
-			data.asset = record.value(4).toByteArray();
-			// The row's own facts (a project's copy of a preset is one —
-			// the Custom drawer folds it, PRESET-FOLD-1).
-			data.properties = record.value(5).toByteArray();
-		}
-
+		data.guid = query.value(0).toString();
+		data.type = query.value(1).toInt();
+		data.name = query.value(2).toString();
+		data.asset = query.value(3).toByteArray();
+		// The row's own facts (a project's copy of a preset is one —
+		// the Custom drawer folds it, PRESET-FOLD-1).
+		data.properties = query.value(4).toByteArray();
 		tileData.push_back(data);
 	}
 
@@ -2884,7 +2992,9 @@ QVector<AssetRecord> Database::fetchFavorites()
         // LIBRARY LISTING: an unlisted asset is not a favourite tile either.
         // `A.listed IS NULL` keeps the LEFT JOIN's tolerance of a favourite
         // whose asset row is gone — that row was always shown, broken or not.
-        "SELECT F.asset_guid, F.name, F.date_created, A.type, F.thumbnail FROM favorites F "
+        // A LISTING: no thumbnail column (D11-LIBRARY-SCALE — the preset
+        // panels paint the favourite's asset tile from the tile cache).
+        "SELECT F.asset_guid, F.name, F.date_created, A.type FROM favorites F "
         "LEFT JOIN assets A ON A.guid = F.asset_guid "
         "WHERE A.listed IS NULL OR A.listed = 1"
     );
@@ -2899,7 +3009,6 @@ QVector<AssetRecord> Database::fetchFavorites()
             data.name = record.value(1).toString();
             data.dateCreated = record.value(2).toDateTime();
             data.type = record.value(3).toInt();
-            data.thumbnail = record.value(4).toByteArray();
         }
 
         tileData.push_back(data);
@@ -3002,37 +3111,53 @@ int Database::countAssetsInCollections(const QVector<int> &collectionIds)
 // ONE ROW OF THE DESKTOP'S SHAPE, read the same way by the whole-desktop query
 // and the one-guid query (CREATE-GAP-1): the grid's incremental add must build
 // exactly the tile a rebuild would have built.
+//
+// NO THUMBNAIL (D11-LIBRARY-SCALE, audit V2_F F2): a Desktop tile's picture comes
+// from the tile cache by guid (TileCache::Kind::Project), and every other reader
+// of these rows — the project verbs, the name resolve, the reset — never wanted
+// it: 500 projects carried ~97 MB of PNG through every project.list and every
+// guid resolve. `desktop` is read as stored (the column has DEFAULT 1 in the
+// schema; the NULL fallback was a pre-migration reader, deleted).
 static const char *kProjectTileColumns =
-    "SELECT name, thumbnail, guid, COALESCE(desktop, 1), desktop_x, desktop_y, "
+    "SELECT name, guid, desktop, desktop_x, desktop_y, "
     "slider_row, slider_index FROM projects ";
 
 static ProjectTileData readProjectTile(const QSqlRecord &record)
 {
     ProjectTileData data;
     data.name       = record.value(0).toString();
-    data.thumbnail  = record.value(1).toByteArray();
-    data.guid       = record.value(2).toString();
-    data.desktop    = record.value(3).toInt();
-    data.hasPosition = !record.value(4).isNull() && !record.value(5).isNull();
+    data.guid       = record.value(1).toString();
+    data.desktop    = record.value(2).toInt();
+    data.hasPosition = !record.value(3).isNull() && !record.value(4).isNull();
     if (data.hasPosition) {
-        data.posX = record.value(4).toFloat();
-        data.posY = record.value(5).toFloat();
+        data.posX = record.value(3).toFloat();
+        data.posY = record.value(4).toFloat();
     }
-    data.hasSliderPos = !record.value(6).isNull() && !record.value(7).isNull();
+    data.hasSliderPos = !record.value(5).isNull() && !record.value(6).isNull();
     if (data.hasSliderPos) {
-        data.sliderRow   = record.value(6).toInt();
-        data.sliderIndex = record.value(7).toInt();
+        data.sliderRow   = record.value(5).toInt();
+        data.sliderIndex = record.value(6).toInt();
     }
     return data;
+}
+
+QVector<ProjectTileData> Database::fetchProjectsNamed(const QString &name)
+{
+    QSqlQuery query;
+    query.prepare(QString::fromLatin1(kProjectTileColumns) + "WHERE name = ?");
+    query.addBindValue(name);
+    executeAndCheckQuery(query, "fetchProjectsNamed");
+    QVector<ProjectTileData> rows;
+    while (query.next()) rows.push_back(readProjectTile(query.record()));
+    return rows;
 }
 
 QVector<ProjectTileData> Database::fetchProjects(int desktop)
 {
     QSqlQuery query;
     if (desktop > 0) {
-        // COALESCE: rows from before the desktop migration (NULL) belong to Desktop 1
         query.prepare(QString::fromLatin1(kProjectTileColumns) +
-                      "WHERE COALESCE(desktop, 1) = ? ORDER BY last_written DESC");
+                      "WHERE desktop = ? ORDER BY last_written DESC");
         query.addBindValue(desktop);
     }
     else {
@@ -3059,7 +3184,7 @@ bool Database::fetchProjectTile(const QString &guid, ProjectTileData *out)
 QStringList Database::fetchProjectGuids(int desktop)
 {
     QSqlQuery query;
-    query.prepare("SELECT guid FROM projects WHERE COALESCE(desktop, 1) = ?");
+    query.prepare("SELECT guid FROM projects WHERE desktop = ?");
     query.addBindValue(desktop);
     executeAndCheckQuery(query, "fetchProjectGuids");
     QStringList guids;
@@ -3928,6 +4053,74 @@ QStringList Database::fetchAssetGUIDAndDependencies(const QString &guid, bool ap
 	}
 
 	return dependencies;
+}
+
+// THE CLOSURE'S BATCHED READS (D11-LIBRARY-SCALE §3.6): a walk over N assets used
+// to cost a dependency query and a full row (thumbnail and definition BLOBs
+// included) per asset, and a second dependency query per record. These answer a
+// whole BFS level, and every header of a closure, in ONE statement per chunk of
+// guids (SQLite's bound-variable limit is far above the chunk).
+static const int kInChunk = 500;
+
+static QString inMarks(int n)
+{
+    QStringList marks;
+    marks.reserve(n);
+    for (int i = 0; i < n; ++i) marks << QStringLiteral("?");
+    return marks.join(QLatin1Char(','));
+}
+
+QHash<QString, QStringList> Database::fetchDependencyEdges(const QStringList &dependers)
+{
+    // The same edges fetchAssetGUIDAndDependencies answers one depender at a
+    // time — dependees that are catalog rows — in each depender's own order.
+    QHash<QString, QStringList> out;
+    for (int at = 0; at < dependers.size(); at += kInChunk) {
+        const QStringList chunk = dependers.mid(at, kInChunk);
+        QSqlQuery query;
+        query.prepare(QStringLiteral("SELECT D.depender, assets.guid FROM dependencies D "
+                                     "INNER JOIN assets ON D.dependee = assets.guid "
+                                     "WHERE D.depender IN (%1)").arg(inMarks(int(chunk.size()))));
+        for (const QString &guid : chunk) query.addBindValue(guid);
+        if (!executeAndCheckQuery(query, "fetchDependencyEdges")) continue;
+        while (query.next()) out[query.value(0).toString()].append(query.value(1).toString());
+    }
+    return out;
+}
+
+QVector<AssetRecord> Database::fetchAssetHeaders(const QStringList &guids)
+{
+    QVector<AssetRecord> out;
+    for (int at = 0; at < guids.size(); at += kInChunk) {
+        const QStringList chunk = guids.mid(at, kInChunk);
+        QSqlQuery query;
+        query.prepare(QStringLiteral("SELECT guid, name, type, parent, view_filter, project_guid FROM assets "
+                                     "WHERE guid IN (%1)").arg(inMarks(int(chunk.size()))));
+        for (const QString &guid : chunk) query.addBindValue(guid);
+        if (!executeAndCheckQuery(query, "fetchAssetHeaders")) continue;
+        while (query.next()) {
+            AssetRecord row;
+            row.guid = query.value(0).toString();
+            row.name = query.value(1).toString();
+            row.type = query.value(2).toInt();
+            row.parent = query.value(3).toString();
+            row.view_filter = query.value(4).toInt();
+            row.projectGuid = query.value(5).toString();
+            out.append(row);
+        }
+    }
+    return out;
+}
+
+bool Database::fetchAssetRowBlobs(const QString &guid, QByteArray *asset, QByteArray *properties)
+{
+    QSqlQuery query;
+    query.prepare("SELECT asset, properties FROM assets WHERE guid = ?");
+    query.addBindValue(guid);
+    if (!executeAndCheckQuery(query, "fetchAssetRowBlobs") || !query.next()) return false;
+    if (asset) *asset = query.value(0).toByteArray();
+    if (properties) *properties = query.value(1).toByteArray();
+    return true;
 }
 
 QStringList Database::fetchAssetAndAllDependencies(const QString & guid)

@@ -39,6 +39,7 @@ For more information see the LICENSE file
 #include "services/sceneeditservice.h"
 #include "irisgl/document/scenegraph/scene.h"
 #include "data/settingsmanager.h"
+#include "data/database/database.h"
 #include "scripting/mcp/mcplog.h"
 #include "services/jahlog.h"
 #include "services/apppaths.h"
@@ -132,6 +133,18 @@ QVector<VerbInfo> AppApi::verbs() const
           "drew (a session with no viewport makes the engine's bare resource advance instead). "
           "Both are monotonic over the window's life, never reset by {reset:true} — only "
           "differences mean anything.",
+          Needs::Document },
+        { "queryLog", "app.queryLog({on?}) -> {on, statements, byName:[{name, count}], "
+          "thumbnailSelects:[{name, count, byGuid, sql}]}",
+          "THE LIBRARY DATABASE'S QUERY LOG (D11-LIBRARY-SCALE, data/database/database.h): every "
+          "catalog statement counted by name while the log is on, and every one whose column list "
+          "SELECTS A THUMBNAIL listed with its SQL and whether its WHERE is keyed by guid "
+          "(`guid = ?` or `guid IN (...)`). A LISTING never carries a thumbnail BLOB — a view reads "
+          "the pictures it paints by guid through the tile cache — so over any session every "
+          "thumbnail select must read byGuid true; scale.library asserts it over a boot, the Library "
+          "page, an open and a create at 10,000 assets. {on:true} starts the log EMPTY, {on:false} "
+          "stops it (the read still answers what was logged); no argument only reads. Off by "
+          "default; the cost while on is one hash lookup per statement.",
           Needs::Document },
         { "heartbeat", "app.heartbeat(intervalMs=250) -> bool",
           "Starts (or, with 0, stops) a main-thread heartbeat probe: a timer that ticks on the UI thread and "
@@ -656,6 +669,31 @@ QVector<VerbInfo> AppApi::verbs() const
 QVariantList AppApi::openTimings()
 {
     return LoadTimeline::lastRun();
+}
+
+QVariantMap AppApi::queryLog(const QVariantMap &options)
+{
+    const QString refusal = scriptmod::refuseUnknownKeys(QStringLiteral("app.queryLog"), options,
+                                              { QStringLiteral("on") });
+    if (!refusal.isEmpty()) { fail(refusal); return QVariantMap(); }
+    if (options.contains(QStringLiteral("on")))
+        Database::setQueryLog(options.value(QStringLiteral("on")).toBool());
+    QVariantList byName, thumbs;
+    QHash<QString, int> counts;
+    for (const Database::QueryLogEntry &entry : Database::queryLogEntries()) {
+        counts[entry.name] += entry.count;
+        if (!entry.selectsThumbnail) continue;
+        thumbs.append(QVariantMap{ { QStringLiteral("name"), entry.name },
+                                   { QStringLiteral("count"), entry.count },
+                                   { QStringLiteral("byGuid"), entry.byGuid },
+                                   { QStringLiteral("sql"), entry.sql } });
+    }
+    for (auto it = counts.cbegin(); it != counts.cend(); ++it)
+        byName.append(QVariantMap{ { QStringLiteral("name"), it.key() }, { QStringLiteral("count"), it.value() } });
+    return { { QStringLiteral("on"), Database::queryLogOn() },
+             { QStringLiteral("statements"), Database::queryLogStatements() },
+             { QStringLiteral("byName"), byName },
+             { QStringLiteral("thumbnailSelects"), thumbs } };
 }
 
 QVariantMap AppApi::openStats(const QVariantMap &options)
