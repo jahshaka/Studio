@@ -46,7 +46,7 @@ endif()
 set(OGRE_NEXT_SOURCE "${_ogre_src_default}"
     CACHE PATH "Ogre-Next source tree (for the Hlms shader templates under Samples/Media)")
 # A stale cache from a pre-submodule configure staged UPSTREAM media silently
-# (found 2026-09-03: patch 0009 — now the fork's M26 commit — missing from
+# (found 2026-09-03: fork c290052de (was 0009) — now the fork's M26 commit — missing from
 # bin/media while the build succeeded). When the submodule exists, any cached
 # value pointing elsewhere is force-corrected.
 if(EXISTS "${CMAKE_SOURCE_DIR}/irisgl/thirdparty/ogre-next/CMakeLists.txt"
@@ -69,6 +69,18 @@ if(NOT EXISTS "${OGRE_NEXT_SOURCE}/Samples/Media/Hlms/Pbs")
         "Ogre-Next Hlms templates not found at ${OGRE_NEXT_SOURCE}/Samples/Media/Hlms.\n"
         "Run: git submodule update --init irisgl/thirdparty/ogre-next, or set -DOGRE_NEXT_SOURCE=<source tree>.")
 endif()
+
+# THE INSTALL MUST BE THE CHECKOUT (cmake/OgreInstallStamp.cmake says why): a
+# configure against an engine built from another fork commit FAILS here, with the
+# fix. The stamp and the submodule's HEAD are configure inputs, so `cmake --build`
+# after a pin bump re-runs configure by itself and refuses until build-ogre.sh has.
+include("${CMAKE_CURRENT_LIST_DIR}/OgreInstallStamp.cmake")
+jah_ogre_install_stamp_problem(_ogre_stamp_problem "${OGRE_NEXT_PREFIX}" "${OGRE_NEXT_SOURCE}")
+if(_ogre_stamp_problem)
+    message(FATAL_ERROR "${_ogre_stamp_problem}")
+endif()
+jah_ogre_install_stamp_inputs(_ogre_stamp_inputs "${OGRE_NEXT_PREFIX}" "${OGRE_NEXT_SOURCE}")
+set_property(DIRECTORY "${CMAKE_SOURCE_DIR}" APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${_ogre_stamp_inputs})
 
 add_library(OgreNext INTERFACE)
 # The install ships OgreBuildSettings.h (identical to the build tree's copy), so
