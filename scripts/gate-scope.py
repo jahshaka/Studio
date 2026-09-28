@@ -1122,7 +1122,7 @@ class Selection:
                    "while", "endwhile", "return", "break", "continue"}
 
     # the commands that register or decorate a TEST (their first arguments are row names)
-    _TEST_REGISTRATION = {"add_test", "add_script_e2e", "set_tests_properties", "jah_fresh_home_fixture",
+    _TEST_REGISTRATION = {"add_test", "set_tests_properties", "jah_fresh_home_fixture",
                           "jah_no_display", "jah_tsan_blocked", "jah_lsan_blocked", "jah_tsan_lane",
                           "jah_gpu_exclusive_test"}
     # what a retired suite's check became, printed with its `retired:` reason
@@ -1145,8 +1145,6 @@ class Selection:
             if name in ("add_test", "jah_gpu_exclusive_test"):
                 k = a_.index("NAME") + 1 if "NAME" in a_ else len(a_)
                 named = a_[k:k + 1]
-            elif name == "add_script_e2e":
-                named = [f"scripting.e2e.{a_[0]}"] if a_ else []
             elif name == "set_tests_properties":
                 named = a_[:a_.index("PROPERTIES")] if "PROPERTIES" in a_ else a_[:1]
             else:
@@ -1160,8 +1158,7 @@ class Selection:
             for c in gate_graph.cmake_commands(whole or ""):
                 ca = c[3].split()
                 regs = ([ca[ca.index("NAME") + 1]] if c[0] in ("add_test", "jah_gpu_exclusive_test")
-                        and "NAME" in ca and ca.index("NAME") + 1 < len(ca) else
-                        [f"scripting.e2e.{ca[0]}"] if c[0] == "add_script_e2e" and ca else [])
+                        and "NAME" in ca and ca.index("NAME") + 1 < len(ca) else [])
                 if set(regs) & set(named):
                     cands.append(set(re.findall(r"[A-Za-z0-9_.+\-/${}]+", c[3])))
             for tk in cands:
