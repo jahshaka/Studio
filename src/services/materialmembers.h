@@ -163,8 +163,10 @@ QString duplicate(Database *db, Project *project, const QString &materialGuid,
 /// THE PROJECT'S OWN NAMING (MATERIAL-DROP-1 / TRAY-DUPLICATE-1, the owner
 /// 2026-09-28): the name a new project material born from `sourceName` takes —
 /// `sourceName` itself while the project holds no material of that name, then
-/// `<base> 2`, `<base> 3`, … — a numbered name counts on from its own number
-/// (a copy of "Wood PBR 2" is "Wood PBR 3", not "Wood PBR 2 2"). Judged case-insensitively against the materials THIS
+/// `sourceName 2`, `sourceName 3`, … — the suffix is APPENDED, never parsed out
+/// of the name ("Brick 2024" -> "Brick 2024 2"). `sourceName` is the LIBRARY
+/// ENTRY's name: the preset behind a copy when there is one (so a duplicate of
+/// "Wood PBR 2" is the next free "Wood PBR N"), else the material's own. Judged case-insensitively against the materials THIS
 /// PROJECT holds (its pins — its own rows and the library rows it uses), never
 /// against the whole catalog: another project's "Wood PBR" is not this one's.
 QString projectCopyName(Database *db, const QString &projectGuid, const QString &sourceName);

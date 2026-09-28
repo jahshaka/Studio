@@ -36,7 +36,6 @@ For more information see the LICENSE file
 #include <QJsonObject>
 #include <QPointer>
 #include <QPixmap>
-#include <QTemporaryDir>
 #include <QSqlDatabase>
 #include <QTextStream>
 
@@ -68,6 +67,7 @@ namespace { void regenerateGuids(const iris::SceneNodePtr &root,
 #include "data/constants.h"
 #include "data/primitives.h"
 #include "services/assethelper.h"
+#include "services/assetdelete.h"
 #include "services/meshbakestore.h"
 #include "services/editgate.h"
 #include "data/database/database.h"
@@ -1361,22 +1361,23 @@ ProjectMaterialCopyCommand *SceneEditService::makeMaterialCopy(const QString &so
 
 QString SceneEditService::pushMaterialCopy(ProjectMaterialCopyCommand *command, QString *errorOut)
 {
-    QString copy;
-    QString error;
+    // EVERYTHING READ BEFORE THE PUSH (the Fable read's F3): UndoService::push
+    // DELETES a command the edit gate refuses, so the pointer is never touched
+    // after it — whether the copy landed is the catalog's answer.
+    const QString guid = command->copyGuid();
     if (undo) {
-        undo->push(command);                 // the stack owns it from here
-        copy = command->copyGuid();
-        error = command->error();
+        undo->push(command);                 // the stack owns it (or deleted it) from here
     } else {
         command->redo();
-        copy = command->copyGuid();
-        error = command->error();
         delete command;
     }
-    if (copy.isEmpty() && errorOut)
-        *errorOut = error.isEmpty() ? QStringLiteral("the copy could not be made") : error;
-    if (!copy.isEmpty()) emit assetViewRefreshRequested();
-    return copy;
+    const bool landed = !guid.isEmpty() && !db->fetchAsset(guid).guid.isEmpty();
+    if (!landed) {
+        if (errorOut) *errorOut = QStringLiteral("the copy could not be made");
+        return QString();
+    }
+    emit assetViewRefreshRequested();
+    return guid;
 }
 
 QString SceneEditService::copyMaterialIntoProject(const QString &source, MaterialOrigin origin,
@@ -1429,6 +1430,15 @@ QString SceneEditService::dropMaterial(const QString &presetOrGuid, MaterialOrig
     if (undo) undo->stack()->beginMacro(QObject::tr("Drop Material"));
     const QString copy = pushMaterialCopy(command, &error);
     const bool applied = !copy.isEmpty() && applyMaterialAsset(copy, target);
+    // AN APPLY THAT REFUSED TAKES ITS COPY BACK (the Fable read's F2): the copy
+    // landed (so the stack TOOK the command and the pointer is live — a refused
+    // push never reaches here with a row), and nothing wears it. Retracted, the
+    // macro's step leaves no orphan "X N" in the tray, now or on a redo.
+    if (!copy.isEmpty() && !applied) {
+        if (undo) command->retract();
+        else assetdelete::remove(db, copy, /*keepShared*/ true, /*force*/ true);
+        emit assetViewRefreshRequested();
+    }
     if (undo) undo->stack()->endMacro();
     if (copy.isEmpty()) return fail(error);
     if (!applied) return fail(QStringLiteral("the copy of '%1' could not be applied").arg(presetOrGuid));

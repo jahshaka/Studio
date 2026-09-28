@@ -35,9 +35,9 @@ class Project;
 // (a baked map is born inside exactly one material), and — when the source is a
 // shipped preset or a copy of one — stamped with that preset as its master.
 //
-// THE GUID SURVIVES AN UNDO (PresetCopyCommand's rule): minted on the first
-// redo and kept, so a redo re-makes exactly the row the commands pushed after
-// this one (the apply of a drop) name. Undo takes the pin and the row away.
+// THE GUID SURVIVES AN UNDO (PresetCopyCommand's rule): minted at construction
+// and kept, so a redo re-makes exactly the row the commands pushed after this one
+// (the apply of a drop) name. Undo takes the pin and the row away.
 class ProjectMaterialCopyCommand : public QUndoCommand
 {
 public:
@@ -53,8 +53,16 @@ public:
     /// Asked before the push, so a refusal never becomes an empty undo step.
     bool ready() const { return !mProjectGuid.isEmpty() && !mDefinition.isEmpty() && !mName.isEmpty(); }
 
-    /// Valid after the first redo; empty when the mint failed (`error()`).
+    /// The copy's guid, minted at construction — read it BEFORE the push (a
+    /// refused push deletes the command). Whether the row exists is the
+    /// catalog's answer after the push, never this object's.
     QString copyGuid() const { return mCopyGuid; }
+
+    /// TAKES THE COPY BACK FOR GOOD (MATERIAL-DROP-1's refusal path): a drop
+    /// whose apply refused after the copy was pushed into its macro. Undoes the
+    /// mint now and makes every later undo/redo of the macro a no-op, so the
+    /// step leaves no orphan material. Only for a command the stack TOOK.
+    void retract();
     QString name() const { return mName; }
     QString error() const { return mError; }
 
@@ -67,8 +75,9 @@ private:
     QString     mName;            ///< decided once, at construction
     QJsonObject mDefinition;
     QByteArray  mThumbnail;
-    QString     mCopyGuid;
+    QString     mCopyGuid;        ///< minted at construction, kept for every redo
     QString     mError;
+    bool        mRetracted = false;
 };
 
 #endif // PROJECTMATERIALCOPYCOMMAND_H

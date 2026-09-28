@@ -17,7 +17,6 @@ For more information see the LICENSE file
 #include <QJsonObject>
 #include <QSqlDatabase>
 #include <QSqlQuery>
-#include <QRegularExpression>
 #include <QSet>
 
 #include "data/database/database.h"
@@ -260,14 +259,12 @@ QString projectCopyName(Database *db, const QString &projectGuid, const QString 
             while (query.next()) taken.insert(query.value(0).toString().trimmed().toCaseFolded());
     }
     if (!taken.contains(source.toCaseFolded())) return source;
-    // THE BASE: "Wood PBR 2" is the second "Wood PBR", so its copy counts on
-    // from the same base and number rather than growing a second number.
-    static const QRegularExpression numbered(QStringLiteral("^(.*\\S)\\s+(\\d{1,6})$"));
-    const QRegularExpressionMatch m = numbered.match(source);
-    const QString base = m.hasMatch() ? m.captured(1) : source;
-    const int first = m.hasMatch() ? m.captured(2).toInt() + 1 : 2;
-    for (int n = first;; ++n) {
-        const QString candidate = QStringLiteral("%1 %2").arg(base, QString::number(n));
+    // THE SUFFIX IS APPENDED, NEVER PARSED OUT OF THE NAME: "Brick 2024" is a
+    // name, and its second copy is "Brick 2024 2", not "Brick 2025". The caller
+    // passes the LIBRARY ENTRY's name as the base (the preset a copy was made
+    // from, when there is one), so copies of copies still count on from it.
+    for (int n = 2;; ++n) {
+        const QString candidate = QStringLiteral("%1 %2").arg(source, QString::number(n));
         if (!taken.contains(candidate.toCaseFolded())) return candidate;
     }
 }

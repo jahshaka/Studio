@@ -38,7 +38,19 @@ ProjectMaterialCopyCommand::ProjectMaterialCopyCommand(Database *db, Project *pr
     const QString sourceName = row.name.isEmpty() ? MaterialBundle::shippedPresetName(mSource)
                                                   : row.name;
     mMaster = presetedit::masterOf(mDb, mSource);
-    mName = materialmembers::projectCopyName(mDb, mProjectGuid, sourceName);
+    // THE BASE NAME IS THE LIBRARY ENTRY'S (materialmembers::projectCopyName): the
+    // preset behind the source when there is one, else the source's own name.
+    QString baseName = sourceName;
+    if (!mMaster.isEmpty()) {
+        const AssetRecord master = mDb->fetchAsset(mMaster);
+        baseName = !master.name.isEmpty() ? master.name : MaterialBundle::shippedPresetName(mMaster);
+        if (baseName.isEmpty()) baseName = sourceName;
+    }
+    mName = materialmembers::projectCopyName(mDb, mProjectGuid, baseName);
+    // THE GUID IS MINTED HERE, not on the first redo: the caller reads it BEFORE
+    // the push (a refused push deletes the command — UndoService::push), and every
+    // redo re-makes the row under this same guid.
+    mCopyGuid = GUIDManager::generateGUID();
     mDefinition = materialmembers::copyDefinition(mDb, mProject, mSource, pristine);
     mThumbnail = row.thumbnail;
     if (!mName.isEmpty() && !mDefinition.isEmpty()) {
@@ -66,34 +78,36 @@ void ProjectMaterialCopyCommand::redo()
         return;
     }
 
+    if (mRetracted) return;
     QSqlDatabase conn = QSqlDatabase::database();
     DbTransaction tx(conn);
-    const QString mintedBefore = mCopyGuid;
-    const QString guid = mCopyGuid.isEmpty() ? GUIDManager::generateGUID() : mCopyGuid;
     QString error;
     // The project-owned mint with a caller-supplied guid (the redo contract).
-    const QString made = MaterialBundle::createPresetCopy(mDb, guid, mProjectGuid, mName,
+    const QString made = MaterialBundle::createPresetCopy(mDb, mCopyGuid, mProjectGuid, mName,
                                                           mDefinition, mThumbnail, &error);
     if (made.isEmpty()) {
         mError = error.isEmpty() ? QObject::tr("the catalog refused the copy") : error;
         return;
     }
-    mCopyGuid = made;
     if (!mMaster.isEmpty()) {
         QJsonObject props = QJsonDocument::fromJson(mDb->fetchAsset(mCopyGuid).properties).object();
         props.insert(MaterialBundle::kPresetMasterKey, mMaster);
         mDb->updateAssetProperties(mCopyGuid, QJsonDocument(props).toJson());
     }
     ProjectAssets::addToProject(mCopyGuid, mDb, mProject, ProjectAssets::AddKind::Direct);
-    if (!tx.commit()) {
-        mError = QObject::tr("the catalog refused the copy");
-        mCopyGuid = mintedBefore;
-    }
+    if (!tx.commit()) mError = QObject::tr("the catalog refused the copy");
+}
+
+void ProjectMaterialCopyCommand::retract()
+{
+    if (mRetracted) return;
+    undo();
+    mRetracted = true;
 }
 
 void ProjectMaterialCopyCommand::undo()
 {
-    if (!mDb || mCopyGuid.isEmpty() || mProjectGuid.isEmpty()) return;
+    if (mRetracted || !mDb || mCopyGuid.isEmpty() || mProjectGuid.isEmpty()) return;
     QSqlDatabase conn = QSqlDatabase::database();
     DbTransaction tx(conn);
     assetdelete::removeFromProject(mDb, mCopyGuid, mProjectGuid);
