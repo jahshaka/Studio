@@ -241,11 +241,11 @@ static void testTierTable()
         auto h = freshScene(), e = freshScene();
         worldmodes::setPhoton(h, true, PhotonTier::High);
         worldmodes::setPhoton(e, true, PhotonTier::Epic);
-        CHECK(giMode(h) == giMode(e) && giQuality(h) == giQuality(e) && giDdgi(h) == giDdgi(e),
-              "High and Epic share technique, quality and the field");
-        CHECK(giBounces(e) > giBounces(h),
-              "and Epic alone carries the extra bounces — the ONLY column between "
-              "them since R2 deleted the dynamic-probe reservation");
+        CHECK(giMode(h) == giMode(e) && giDdgi(h) == giDdgi(e),
+              "High and Epic share technique and the field");
+        CHECK(giQuality(e) == 3 && giQuality(h) == 2 && giBounces(e) > giBounces(h),
+              "and Epic carries its own quality row (four times the gather's probes) and the "
+              "extra bounces"); 
         // The engine-side column costs something real and is gated where it
         // renders: gi.ddgi (bounces 1 -> 3 on the DDGI-fed floor).
     }
@@ -345,9 +345,9 @@ static void testPins()
     // nothing re-introduces it quietly.
     CHECK(!worldmodes::setRowValue(s, QStringLiteral("giDynamicProbes"), 4),
           "the retired dynamic-probe row is gone from the registry");
-    CHECK(worldmodes::photonRowIds().size() == 6 &&
+    CHECK(worldmodes::photonRowIds().size() == 5 &&
           !worldmodes::photonRowIds().contains(QStringLiteral("giDynamicProbes")),
-          "Photon is a SIX-column table (the cascade chain joined it, E2 (6))");
+          "Photon is a FIVE-column table (the cascade switch went with the single volume)");
     // THE PROBE CAPTURE SIZE ROW (owner 2026-09-13 Q4) — a tier row with a pin
     // like every other: an explicit size survives a tier switch, is named as a
     // deviation, and Reset hands it back to Automatic.

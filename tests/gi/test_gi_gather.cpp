@@ -486,44 +486,43 @@ int main()
                   "(bar 1 %%) — every A/B below differences two FROZEN arms", floorD.moved,
                   floorD.total);
 
-        // ---- THE RAY'S LENGTH, A/B, BOTH ARMS FROZEN (PHOTON-GAFAR-1) -----
-        // The gather's ray is as long as the lit volume's inscribed radius —
-        // half the outer cascade's extent — and a miss is the sky. The decision
-        // was taken on a sweep (spikes/photon-gafar-1): against rays of the
-        // outer box's full DIAGONAL (the old length) the half extent moved at
-        // most 0.21 % of pixels by 1-2/255 on three fixtures x three tiers,
-        // and cost the same. This is that claim at this suite's pose: the
-        // shipped length against the diagonal, both frozen, inside the
-        // instrument's 1 % bar. If it reds, geometry beyond the lit volume now
-        // matters to the picture and the length has to be re-decided at
-        // OgreScreenProbeGather.cpp's `reach`, with the sweep.
+        // ---- THE RAY'S LENGTH, A/B, BOTH ARMS FROZEN -----------------------
+        // THE ONE REACH RULE (D4-PHOTON-TIERS; detail::photonRayReach): the
+        // gather's ray is as long as the reflections' — the outer cascade's full
+        // DIAGONAL under the far plane (1 km on this suite's camera). The gather
+        // used to stop at the lit volume's inscribed radius, half the outer
+        // extent (PHOTON-GAFAR-1's sweep: the two moved at most 0.21 % of pixels
+        // by 1-2/255 on three fixtures x three tiers, at the same cost). This is
+        // that claim at this suite's pose, the other way round: the shipped
+        // length IS the diagonal, and the inscribed radius draws the same picture
+        // inside the instrument's 1 % bar.
         {
             const GiStatus g = s->giStatus();
             const float outerHalf = g.cascades.empty() ? 0.0f : g.cascades.back().halfSize;
             const float diagonal = std::sqrt(3.0f) * 2.0f * outerHalf;
             CHECK_MSG(outerHalf > 0.0f, "the cascade chain reports its outer box (half %.2f m)",
                       double(outerHalf));
-            armGather(s, gatherGi, true, 16u, 8u, true, diagonal);
-            render(e, 40);
-            Image longRays; view->readPixels(longRays);
             armGather(s, gatherGi, true, 16u, 8u, true, outerHalf);
+            render(e, 40);
+            Image longRays; view->readPixels(longRays);   // the inscribed radius (the old length)
+            armGather(s, gatherGi, true, 16u, 8u, true, std::max(diagonal, 50.0f));
             render(e, 40);
             Image forced; view->readPixels(forced);
             armGather(s, gatherGi, true);
             render(e, 40);
             Image shipped; view->readPixels(shipped);
             const Delta ld = deltaOf(shipped, longRays), fdd = deltaOf(shipped, forced);
-            std::printf("   THE RAY'S LENGTH, frozen: the shipped (half extent %.2f m) against the "
-                        "diagonal (%.2f m) moves %u of %u px (%.2f%%), mean %.2f/255, worst %u\n",
-                        double(outerHalf), double(diagonal), ld.moved, ld.total,
+            std::printf("   THE RAY'S LENGTH, frozen: the shipped (the diagonal, %.2f m) against the "
+                        "inscribed radius (%.2f m) moves %u of %u px (%.2f%%), mean %.2f/255, worst %u\n",
+                        double(diagonal), double(outerHalf), ld.moved, ld.total,
                         100.0 * ld.moved / std::max(1u, ld.total), ld.meanMoved, ld.worst);
             CHECK_MSG(fdd.moved == 0u,
-                      "THE SHIPPED LENGTH IS THE OUTER HALF EXTENT: derived and forced %.2f m "
-                      "draw the same picture (%u px moved)", double(outerHalf), fdd.moved);
+                      "THE SHIPPED LENGTH IS THE ONE REACH RULE, the outer diagonal: derived and "
+                      "forced %.2f m draw the same picture (%u px moved)", double(diagonal),
+                      fdd.moved);
             CHECK_MSG(ld.moved * 100u <= ld.total,
-                      "NOTHING BEYOND THE LIT VOLUME'S INSCRIBED RADIUS REACHES THE PICTURE: "
-                      "rays of the full diagonal move %u of %u px against the shipped length "
-                      "(bar 1 %%)", ld.moved, ld.total);
+                      "THE LENGTH IS NOT A PICTURE DIAL: rays stopped at the lit volume's inscribed "
+                      "radius move %u of %u px against the diagonal (bar 1 %%)", ld.moved, ld.total);
             if (dumpDir) writePpm(longRays, std::string(dumpDir) + "/g1a-bounce-gather-diagonal.ppm");
         }
 

@@ -634,6 +634,9 @@ public:
         /// is the open-scene answer (the sky reflects); with it zero, in the
         /// hybrid, it is a build failure.
         int  probesDropped = 0;
+        /// THE PROBE GRID'S VRAM BUDGET (PCC-BUDGET-1; engine GiStatus).
+        double probeGridBudgetBytes = 0.0, probeGridBytes = 0.0;
+        int  probeGridBudgetProbes = 0, probesOverBudget = 0;
         /// The hybrid at a RAY tier (PHOTON-F12-PCC): no grid by design — the
         /// rays are the reflection (GiStatus::probeGridByRays), and the two
         /// cumulative counters that prove nothing was placed or captured.

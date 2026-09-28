@@ -317,6 +317,21 @@ jahshaka::engine::GiGatherFacts photonVrGather(PhotonTier t);
 /// describes the dial rather than a setting.
 QString photonTierSentence(PhotonTier t);
 QString photonTierSummary();
+
+/// THE OFFSCREEN PICTURE CONTRACT (D4-PHOTON-TIERS §2.2). Every picture the app
+/// renders away from the viewport is one row here, and it either renders THE
+/// TIER'S PICTURE — the viewport's own, Photon's chain-borne terms included (the
+/// screen-probe gather, the traced reflections, the screen march, sun contact) —
+/// or a picture DECLARED LOWER, which says exactly what it renders instead. There
+/// is no third kind: an offscreen view that silently rendered less than the tier
+/// would be a defect, not an optimisation. `kind` is the stable id (world.tierTable's
+/// `offscreen` list carries the same rows); `renders` names the lower picture.
+struct OffscreenPicture {
+    QString kind;
+    bool    tierPicture = false;
+    QString renders;
+};
+const QVector<OffscreenPicture> &offscreenPictures();
 /// The VOXEL RESOLUTIONS a tier actually uses, as a phrase: the chain's
 /// distinct resolutions when the chain is on ("64", "64 and 128"), which is
 /// what the quality dial buys.
@@ -339,6 +354,12 @@ bool probeGridByRays(const iris::ScenePtr &scene, bool sceneTracesRays);
 /// traces rays on this machine. What the rows' tier-describing TEXTS read; a
 /// NAME for the scene in front of the user reads probeGridByRays.
 bool tierRaysResolve(PhotonTier t, bool sceneTracesRays);
+/// THE SSR ROW'S MEANING (D4-PHOTON-TIERS): true where the scene's reflections
+/// are TRACED — Photon on, a quality whose reflections the tier traces
+/// (giQualityFacts rayReflections: High, Epic) and a scene that traces rays on
+/// this machine. There the rays replace the SSR row, which reads "Traced" and
+/// is not read by the renderer (the engine twin: OgreScene::reflectionTraceRow).
+bool reflectionsTraced(const iris::ScenePtr &scene, bool sceneTracesRays);
 /// THE TECHNIQUE'S NAME — one source for the World rows, the GI panel and the
 /// docs: 0 "Off", 1 "VCT", 2 "VCT + rays" where `raysResolve`, else
 /// "VCT + probes".

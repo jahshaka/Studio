@@ -2666,6 +2666,10 @@ IEditorViewport::GiStatusInfo EngineSceneViewport::giStatus() const
     out.probeHdr       = st.probeHdr;
     out.probeCaptureSize   = st.probeCaptureSize;
     out.probesDropped      = st.probesDropped;
+    out.probeGridBudgetBytes  = double(st.probeGridBudgetBytes);
+    out.probeGridBytes        = double(st.probeGridBytes);
+    out.probeGridBudgetProbes = st.probeGridBudgetProbes;
+    out.probesOverBudget      = st.probesOverBudget;
     out.probeGridByRays    = st.probeGridByRays;
     out.probePlacements    = st.probePlacements;
     out.probeCapturesTotal = st.probeCapturesTotal;

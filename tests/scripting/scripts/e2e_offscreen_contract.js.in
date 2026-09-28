@@ -1,0 +1,81 @@
+// gi_verbs.offscreen_contract — THE OFFSCREEN PICTURE CONTRACT (D4-PHOTON-TIERS §2.2), on
+// Grand Showroom 2 at High.
+//
+// The declared table is world.tierTable().offscreen: the viewport and the scene/viewport
+// screenshot grades render THE TIER'S picture; plain, tonemap, the project tile, the probe
+// capture and the card capture are DECLARED lower. This arm holds the declaration against the
+// renderer, as physics rather than as a picture a human approves:
+//
+//   1. A "scene"-grade screenshot — the user's own Screenshot — RUNS THE TIER'S PHOTON TERMS:
+//      switching the screen-probe gather off (world.gi({gather:false})) moves its picture, and
+//      so does switching the scene's rays off (the traced reflections and the gather both go).
+//      A shot that silently rendered the cheap picture would not move.
+//   2. The "plain" grade is DECLARED to render the tier's GI (a still picture gathers, the
+//      engine's StillPicture contract) with no post chain: the gather switch moves it too.
+//
+// On a machine with no ray queries High traces nothing and the gather does not run: then
+// every grade must be unmoved by the switches, which is what the table's rows reduce to.
+function assert(cond, msg) {
+    if (!cond) throw new Error("assert failed: " + msg);
+    console.log("ok: " + msg);
+}
+var SHOWROOM = "@JAH_OFFSCREEN_SHOWROOM@";
+var imported = project.importArchive(SHOWROOM);
+assert(imported && imported.guid, "importArchive(Showroom 2)");
+assert(project.open(imported.guid) === true, "project.open(Showroom 2)");
+
+var table = world.tierTable().offscreen;
+var byKind = {};
+table.forEach(function (k) { byKind[k.kind] = k; });
+["viewport", "screenshot.scene", "screenshot.viewport"].forEach(function (k) {
+    assert(byKind[k] && byKind[k].tierPicture === true, k + " is declared the tier's picture");
+});
+["screenshot.plain", "screenshot.tonemap", "projectTile", "liveOffscreen", "probeCapture", "cardCapture"].forEach(function (k) {
+    assert(byKind[k] && byKind[k].tierPicture === false && byKind[k].renders.length > 20,
+           k + " is DECLARED lower and says what it renders");
+});
+
+world.photon({ enabled: true, tier: "high" });
+editor.setCamera({ position: { x: -6.3, y: 1.7, z: -4.0 }, lookAt: { x: -6.3, y: 1.7, z: 0.0 } });
+editor.frame(240);
+var st = world.giStatus();
+var rays = st.rayQuery && st.rayQuery.available === true && world.rayTracing() !== "off";
+console.log("High: rays " + rays + ", gather on " + (st.gather && st.gather.on));
+
+var probes = [];
+for (var j = 0; j < 9; ++j) for (var i = 0; i < 9; ++i) probes.push({ x: 0.1 + i * 0.1, y: 0.1 + j * 0.1 });
+function shot(grade) { return editor.screenshot("offscreen-" + grade + ".png", 256, 256, probes, grade).probes; }
+function worst(p, q) {
+    var w = 0;
+    for (var k = 0; k < p.length; ++k)
+        w = Math.max(w, Math.abs(p[k].r - q[k].r), Math.abs(p[k].g - q[k].g), Math.abs(p[k].b - q[k].b));
+    return w;
+}
+function settle() { editor.frame(120); var n = 0; while (!world.giStatus().giAtRest && n++ < 600) editor.frame(1); }
+
+settle();
+var sceneA = shot("scene"), plainA = shot("plain");
+world.gi({ gather: false });
+settle();
+var sceneB = shot("scene"), plainB = shot("plain");
+world.gi({ gather: "auto" });
+world.rayTracing("off");
+settle();
+var sceneC = shot("scene"), plainC = shot("plain");
+world.rayTracing("auto");
+console.log("scene grade: gather off moved " + worst(sceneA, sceneB) + "/255, rays off " + worst(sceneA, sceneC));
+console.log("plain grade: gather off moved " + worst(plainA, plainB) + "/255, rays off " + worst(plainA, plainC));
+if (rays) {
+    assert(worst(sceneA, sceneB) > 2,
+           "the SCENE-grade screenshot runs the tier's gather (switching it off moves the picture)");
+    assert(worst(sceneA, sceneC) > 2,
+           "...and the tier's traced reflections (switching the rays off moves it too)");
+} else {
+    assert(worst(sceneA, sceneB) === 0, "no ray queries: the gather cannot run, and the shot does not move");
+}
+if (rays)
+    assert(worst(plainA, plainB) > 2,
+           "the PLAIN grade renders the tier's GI, the gather included, as declared");
+else
+    assert(worst(plainA, plainB) === 0, "no ray queries: the plain shot does not move either");
+console.log("e2e_offscreen_contract: all ok");

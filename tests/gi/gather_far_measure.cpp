@@ -8,9 +8,10 @@
 //       coarse copies, ATOM-FARBLAS-1) over [maxT, far plane]; a committed
 //       triangle is shaded from the cascades (black where they cannot shade it),
 //       a miss of both reads the SKY.
-//   irisgl/engine/src/OgreScreenProbeGather.cpp (`reach`) — maxT = the outer
-//       cascade's HALF extent (the lit volume's inscribed radius) under the
-//       camera's far plane, unless tuning.rayLength overrides.
+//   irisgl/engine/src/OgreScreenProbeGather.cpp — maxT = THE ONE REACH RULE
+//       (detail::photonRayReach, D4-PHOTON-TIERS): the outer cascade's DIAGONAL
+//       under the camera's far plane, floored at 50 m, unless tuning.rayLength
+//       overrides. (It was the HALF extent after PHOTON-GAFAR-1; below.)
 //
 // THE HISTORY THE NUMBERS SETTLED: maxT used to be the outer box's full
 // DIAGONAL and a missed ray read the outer cascades at its end point (a "far
@@ -498,9 +499,10 @@ static int sweepMain(Engine *e, View *view)
             }
             tune(s, len[2]); render(e, 4); view->readPixels(ref2);
             ref = img[2];
-            const Delta floor = deltaOf(ref, ref2), der = deltaOf(img[0], derived);
+            // The engine's derivation is the diagonal (the one reach rule), arm 2.
+            const Delta floor = deltaOf(ref, ref2), der = deltaOf(img[2], derived);
             std::printf("   instrument floor: the diagonal's arm twice %u/%u px; derived vs forced "
-                        "half extent %u px\n", floor.moved, floor.total, der.moved);
+                        "diagonal %u px\n", floor.moved, floor.total, der.moved);
             if (floor.moved * 100u > floor.total) {
                 std::printf("   !! the frozen instrument moved more than 1 %% on its own — "
                             "this row is VOID\n");
@@ -642,10 +644,9 @@ int main()
                 const float sz = 2.0f * r.outerHalf;
                 r.reach = std::sqrt(3.0f) * sz;             // |voxelSize| of the outer cascade
             }
-            // THE ENGINE'S DERIVATION (OgreScreenProbeGather.cpp `reach`): the
-            // outer half extent under the far plane, 50 m with no cascades.
-            r.maxT = std::min(cam.farClip > 0 ? cam.farClip : 1000.0f,
-                              r.outerHalf > 0.0f ? r.outerHalf : 50.0f);
+            // THE ENGINE'S DERIVATION (detail::photonRayReach, D4-PHOTON-TIERS): the
+            // outer cascade's DIAGONAL under the far plane, floored at 50 m.
+            r.maxT = std::min(cam.farClip > 0 ? cam.farClip : 1000.0f, std::max(r.reach, 50.0f));
             const GatherStatus gst = gs.gather;
             r.stride = gst.stride; r.octRes = gst.octRes; r.gatherProbes = gst.probes;
             // THE RAY START, as the gather now makes it (the fix round): an

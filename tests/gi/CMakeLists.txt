@@ -307,6 +307,29 @@ set_tests_properties(gi.tiers PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
     LABELS "document" TIMEOUT 120)
 jah_no_display(gi.tiers)
 
+# photon.tiers — THE SETTINGS TRUTH FOR PHOTON (D4-PHOTON-TIERS): every row x tier
+# has a value, the sentences are generated from the one table, the SSR row reads
+# "Traced" at a ray tier, the gather row, the tri-state resolved one way, Epic as a
+# quality row, the probe grid's VRAM budget arithmetic and the declared offscreen
+# picture table. Pure tables: no display.
+add_executable(test_photon_tiers test_photon_tiers.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/worldmodes.cpp)
+set_target_properties(test_photon_tiers PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+target_include_directories(test_photon_tiers PRIVATE
+    ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/irisgl
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src
+    ${CMAKE_SOURCE_DIR}/irisgl/engine/include)
+target_link_libraries(test_photon_tiers PRIVATE IrisGL Qt6::Gui)
+jah_document_graph(test_photon_tiers)
+add_test(NAME photon.tiers COMMAND test_photon_tiers
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(photon.tiers PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+    LABELS "document" TIMEOUT 120)
+jah_no_display(photon.tiers)
+
 # gi.ddgi_ambient — THE PHOTON AMBIENT FIX (GI_UNIFIED_SPEC.md ADDENDUM
 # CORRECTION; the upstream mechanism is in SPECS/OGRE_UPSTREAM_ISSUES.md's
 # "Vct_piece_ps.any: volume-local ambient blend commented out" entry). Its own
