@@ -359,3 +359,16 @@ set_tests_properties(atom.occlusion_exact_app PROPERTIES
     FIXTURES_REQUIRED atomOcclusionHome
     TIMEOUT 480 LABELS "scripting"
     ENVIRONMENT "HOME=${_occl_home};JAHSHAKA_DATA_ROOT=${_occl_home}/.local/share/Jahshaka")
+
+# atom.dag_chain_validate — DAG-CHAIN-VALIDATE-1 (ATOM-SHADOWS-1's F1): Scene::createMesh
+# REFUSES a card that names a LOD level past the chain (a baked mesh with its chain stripped
+# crashed Ogre's caster queue) and ACCEPTS every mesh the product's bake makes (the 20k
+# sphere, the shipped primitives with a DAG, the dragon, the Physics model — their DAG
+# depth against their chain printed) and a stripped chain with no card DRAWS (30 frames of shadows).
+add_executable(test_atom_dag_chain test_atom_dag_chain.cpp ${_cluster_fixture_sources})
+jah_cluster_target(test_atom_dag_chain)
+add_dependencies(test_atom_dag_chain JahshakaEngineMedia)
+jah_gpu_row(atom.dag_chain_validate CLASS engine COMMAND test_atom_dag_chain
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(atom.dag_chain_validate PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 300 LABELS "engine")
