@@ -36,23 +36,26 @@ using namespace jahshaka::engine;
 
 static void render(Engine *e, int n) { for (int i = 0; i < n; ++i) e->renderOneFrame(); }
 
+/// THE MATERIALS THE SCENE'S CARDED ITEMS WEAR (their edit is what re-queues them).
+static std::vector<std::pair<MaterialId, PbrParams>> gMaterials;
+/// The still trace's GPU milliseconds per card over the last measureCaptures (-1 unread).
+static double gStillGpuPerCard = -1.0;
+
 /// The capture cost of the resident set as it stands, drained three times.
-/// Returns ms per card and writes the card count.
+/// Returns ms per card (CPU: the workspace, the copies and — since ATOM-S3-CARDCAP —
+/// the recording of the still world's sun trace) and writes the card count.
+/// THE TRIGGER IS A MATERIAL EDIT of every material (a capture holds no light
+/// quantity since ATOM-S3-CARDCAP, so a light write re-queues nothing; this tool
+/// used to add a hidden sun a round) — an albedo nudge, no shader change.
 static double measureCaptures(Engine *e, Scene *s, unsigned &cardsOut, double &wsOut)
 {
-    double sum = 0.0, sumWs = 0.0;
-    unsigned captured = 0u;
+    double sum = 0.0, sumWs = 0.0, gpu = 0.0;
+    unsigned captured = 0u, gpuFrames = 0u, gpuCards = 0u;
     for (int round = 0; round < 3; ++round) {
-        // A light write throws every resident card back on the queue.
-        LightDesc l;
-        l.type = LightType::Directional;
-        l.colour = Colour(1.0f, 1.0f, 1.0f);
-        l.intensity = (2.0f + 0.001f * float(round)) / 3.14159265358979323846f;
-        l.castShadows = true;
-        const NodeId sun2 = s->createNode();
-        s->setNodeTransform(sun2, Vec3(0, 0, 0), Quat(0.2f, 0.0f, 0.0f, 0.98f), Vec3(1, 1, 1));
-        s->setLight(sun2, l);
-        s->setNodeVisible(sun2, false);
+        for (auto &m : gMaterials) {
+            m.second.albedo.r += 0.001f;
+            s->setPbrMaterial(m.first, m.second);
+        }
         for (int i = 0; i < 600; ++i) {
             render(e, 1);
             const CardCacheStatus c = s->giStatus().cards;
@@ -60,10 +63,18 @@ static double measureCaptures(Engine *e, Scene *s, unsigned &cardsOut, double &w
                 sum += double(c.captureMs);
                 sumWs += double(c.captureWorkspaceMs);
                 captured += c.capturesLastFrame;
+                // The GPU reading lags a few frames: the mean per traced card of
+                // the readings taken while captures are landing.
+                if (c.stillGpuMs >= 0.0f && c.stillTracedLastFrame) {
+                    gpu += double(c.stillGpuMs);
+                    gpuCards += c.stillTracedLastFrame;
+                    ++gpuFrames;
+                }
             }
             if (c.queueLength == 0u && i > 4) break;
         }
     }
+    gStillGpuPerCard = gpuCards ? gpu / double(gpuCards) : -1.0;
     cardsOut = captured;
     wsOut = captured ? sumWs / double(captured) : 0.0;
     return captured ? sum / double(captured) : 0.0;
@@ -105,6 +116,7 @@ static int showroomArm(bool lampShadows, bool sunShadow)
     fp.albedo = Colour(0.7f, 0.7f, 0.7f);
     fp.roughness = 0.8f;
     const MaterialId floorMat = s->createPbrMaterial(fp);
+    gMaterials.push_back({ floorMat, fp });
     const MeshId mesh = s->createMesh(md);
     {
         const NodeId n = s->createNode();
@@ -118,6 +130,7 @@ static int showroomArm(bool lampShadows, bool sunShadow)
     wp.albedo = Colour(0.6f, 0.58f, 0.55f);
     wp.roughness = 0.7f;
     const MaterialId wallMat = s->createPbrMaterial(wp);
+    gMaterials.push_back({ wallMat, wp });
     const float half = 12.0f;
     for (int w = 0; w < 4; ++w) {
         const NodeId n = s->createNode();
@@ -133,6 +146,7 @@ static int showroomArm(bool lampShadows, bool sunShadow)
     pp.albedo = Colour(0.6f, 0.45f, 0.25f);
     pp.roughness = 0.6f;
     const MaterialId propMat = s->createPbrMaterial(pp);
+    gMaterials.push_back({ propMat, pp });
     for (int i = 0; i < 40; ++i) {
         const NodeId n = s->createNode();
         s->attachMesh(n, mesh, propMat);
@@ -206,8 +220,8 @@ static int showroomArm(bool lampShadows, bool sunShadow)
             unsigned cards = 0u;
             double ws = 0.0;
             const double ms = measureCaptures(e, s, cards, ws);
-            std::printf("   pass %d  %s: %.4f ms/card over %u cards (workspace %.4f)\n", pass,
-                        arm.name, ms, cards, ws);
+            std::printf("   pass %d  %s: %.4f ms/card over %u cards (workspace %.4f; still trace GPU %.4f ms/card)\n",
+                        pass, arm.name, ms, cards, ws, gStillGpuPerCard);
             arm.ms += ms * 0.5;
             arm.ws += ws * 0.5;
             arm.cards += cards;
@@ -268,6 +282,7 @@ int main(int argc, char **argv)
         p.albedo = Colour(0.7f, 0.7f, 0.7f);
         p.roughness = 0.8f;
         const MaterialId mat = s->createPbrMaterial(p);
+        gMaterials.push_back({ mat, p });
         const MeshId mesh = s->createMesh(floorData);
         const NodeId n = s->createNode();
         s->attachMesh(n, mesh, mat);
@@ -278,6 +293,7 @@ int main(int argc, char **argv)
     p.albedo = Colour(0.6f, 0.45f, 0.25f);
     p.roughness = 0.6f;
     const MaterialId mat = s->createPbrMaterial(p);
+    gMaterials.push_back({ mat, p });
     const MeshId mesh = s->createMesh(floorData);
     const int side = int(std::ceil(std::sqrt(double(items))));
     for (int i = 0; i < items; ++i) {

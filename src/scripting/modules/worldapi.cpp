@@ -1247,7 +1247,8 @@ static QVariantMap cardsToJs(const IEditorViewport::GiStatusInfo::CardsInfo &c)
         { QStringLiteral("captures"), c.captures },
         { QStringLiteral("invalidTransform"), c.invalidTransform },
         { QStringLiteral("invalidMaterial"), c.invalidMaterial },
-        { QStringLiteral("invalidLight"), c.invalidLight },
+        { QStringLiteral("invalidSun"), c.invalidSun },
+        { QStringLiteral("stillTraces"), c.stillTraces },
         { QStringLiteral("captureMs"), c.captureMs },
         { QStringLiteral("cardRecords"), c.cardRecords },
         { QStringLiteral("instanceSlots"), c.instanceSlots }
