@@ -356,6 +356,12 @@ set_tests_properties(gi.ddgi_ambient PROPERTIES TIMEOUT 120 LABELS "engine")
 # Reads 12/255 today (the room's far corner lies outside cascade 0's box - the field's volume - and
 # the cone reader alone leaks 4-9/255 there at every cell size); a photon-target row until the
 # reader's residual or a field over the chain closes it. Prints the cones-only table.
+# LOCATED (SEALED-ROOM-CHAIN-1, D8; test_gi_ddgi_ambient --sealed-classes, not a row): the 12/255
+# at the wall pose is ALL SPECULAR — the same room with the walls' F0 = 0 reads 0/255 there (the
+# field carries the diffuse); the diffuse cone reader alone (field off, F0 = 0) keeps 3-4/255
+# (5 with the specular). The residual is the rough lobe's sky share (roughness 0.9: the occlusion
+# march capped at tan 1 along the reflection, Vct_piece_ps.any), not one of the diffuse reader's
+# VOXEL-5 classes; the target stays 12 vs 2 until the specular occlusion lane.
 jah_gpu_row(gi.sealed_room_chain_target CLASS engine COMMAND test_gi_ddgi_ambient --sealed-chain
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.sealed_room_chain_target PROPERTIES TIMEOUT 300 LABELS "engine;photon-target")
