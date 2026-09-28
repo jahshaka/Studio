@@ -135,13 +135,20 @@ struct Rig {
         mirror->applyEnvironment(view, engine.get());
         engine->renderOneFrame();
     }
-    // THE REALISTIC SKY'S BAKE IS DEBOUNCED (applySky, 150 ms of wall time — the
-    // mirror's, not the engine's): let it expire, then frames until the captured
-    // environment has landed.
+    // SETTLED = THE ENVIRONMENT HAS LANDED, counted in FRAMES: the realistic sky
+    // is a const-buffer write and a re-capture (no debounce — scenemirror.h
+    // SkySource), and a capture lands as one set (the SH, the cube, the sheet's
+    // field), so read the SH until it stops moving for three frames running.
     void settle() {
+        float prev[27] = { 0.0f }, cur[27];
+        int still = 0;
+        for (int f = 0; f < 240 && still < 3; ++f) {
+            frame();
+            const bool have = escene->skyAmbientSh(cur);
+            still = (have && std::memcmp(cur, prev, sizeof cur) == 0) ? still + 1 : 0;
+            std::memcpy(prev, cur, sizeof cur);
+        }
         for (int f = 0; f < 4; ++f) frame();
-        std::this_thread::sleep_for(std::chrono::milliseconds(200));
-        for (int f = 0; f < 8; ++f) frame();
     }
     /// The sun at `elevation` degrees above the horizon, `azimuth` about +Y. A
     /// document light travels down its local -Y: pitch 0 is the zenith sun.
@@ -643,6 +650,56 @@ int caseLook(const char *dir) {
         }
     return 0;
 }
+/// NOT A ROW: `test_cloud_2d bake-cost` — what a coverage slider drag costs (CLOUDS-2D-3
+/// fix round, item 4). Paired arms in ONE process, frames COUNTED (N each), each frame's
+/// wall time taken around the product's own frame (the mirror push + renderOneFrame):
+///   still   — nothing changes;
+///   sun     — the sun turns every frame (a sky capture a frame, no bake);
+///   drag    — the coverage moves every frame (a field bake AND a capture a frame).
+/// drag − sun is the bake. Run it under scripts/gpu-exclusive.sh with the clocks locked.
+int caseBakeCost() {
+    Rig r;
+    if (!r.make("test-cloud-2d-cost-ogre.log")) return 1;
+    r.view->resize(1280, 720);
+    r.cam->setLocalPos(iris::Vec3(0.0f, 2.0f, 0.0f));
+    r.cam->lookAt(iris::Vec3(0.0f, 2.3f, -1.0f));
+    r.cam->update(0.0f);
+    r.mirror->applyCamera(r.cam, r.view);
+    r.sunAt(40.0f, 0.0f);
+    r.clouds(true, 0.5f, 1.0f);
+    r.settle();
+    const int N = 90;
+    const auto arm = [&](int kind, double &mean, double &worst, double &median) {
+        std::vector<double> ms;
+        for (int f = 0; f < N; ++f) {
+            if (kind == 1) r.sunAt(40.0f, float(f) * 0.5f);
+            if (kind == 2) r.clouds(true, 0.35f + 0.3f * float(f % 30) / 30.0f, 1.0f);
+            const auto t0 = std::chrono::steady_clock::now();
+            r.frame();
+            ms.push_back(std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count());
+        }
+        mean = 0.0; worst = 0.0;
+        for (double v : ms) { mean += v; worst = std::max(worst, v); }
+        mean /= ms.size();
+        std::sort(ms.begin(), ms.end());
+        median = ms[ms.size() / 2];
+    };
+    const char *names[3] = { "still", "sun turning (a capture a frame)", "coverage drag (a bake + a capture a frame)" };
+    double res[2][3][3] = {};
+    for (int pass = 0; pass < 2; ++pass)
+        for (int k = 0; k < 3; ++k) {
+            r.clouds(true, 0.5f, 1.0f);
+            r.sunAt(40.0f, 0.0f);
+            r.settle();
+            arm(k, res[pass][k][0], res[pass][k][1], res[pass][k][2]);
+            std::printf("   pass %d %-44s mean %7.2f ms  median %7.2f  worst %7.2f (%d frames)\n", pass, names[k],
+                        res[pass][k][0], res[pass][k][2], res[pass][k][1], N);
+        }
+    const CloudStatus cs = r.escene->cloudStatus();
+    std::printf("   the bake (drag - sun, median, two passes): %.2f / %.2f ms; field bakes %u\n",
+                res[0][2][2] - res[0][1][2], res[1][2][2] - res[1][1][2], cs.fieldBakes);
+    return 0;
+}
 }  // namespace
 
 int main(int argc, char **argv) {
@@ -654,6 +711,7 @@ int main(int argc, char **argv) {
     if (which == "energy") rc = caseEnergy();
     else if (which == "shape") rc = caseShape();
     else if (which == "look" && argc > 2) return caseLook(argv[2]);
+    else if (which == "bake-cost") return caseBakeCost();
     else { std::printf("FAIL: unknown case '%s'\n", which.c_str()); return 2; }
     if (rc) return rc;
     std::printf(failures ? "cloud_2d.%s: FAIL (%d)\n" : "cloud_2d.%s: PASS\n", which.c_str(), failures);
