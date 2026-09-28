@@ -230,13 +230,16 @@ static void testTriState()
                              .arg(worldmodes::photonTierName(t))));
     for (PhotonTier t : kTiers) {
         auto s = iris::Scene::create();
+        s->giMode = iris::GiMode::VCT;   // a voxel technique: the field has something to be fed by
         CHECK(s->giDdgi == -1, "a bare document holds -1 (the tier's)");
         const worldmodes::Row *r = worldmodes::row(QStringLiteral("giDdgi"));
         CHECK(r && r->get(s) == 1, "...and the row resolves it to the tier's answer, ON, never OFF");
         worldmodes::setPhoton(s, true, t);
-        CHECK(s->giDdgi == 0 || s->giDdgi == 1,
-              qPrintable(QStringLiteral("applying %1 writes a concrete 0/1 through: the renderer "
-                                        "never sees -1 from a tier").arg(worldmodes::photonTierName(t))));
+        CHECK(s->giDdgi == -1 && r &&
+                  r->get(s) == (giQualityFacts(GiQuality(int(s->giQuality))).fieldDefault ? 1 : 0),
+              qPrintable(QStringLiteral("applying %1 leaves the field AUTO (-1): the engine's fieldDefault "
+                                        "is the one resolution, no concrete copy of the column is written")
+                             .arg(worldmodes::photonTierName(t))));
     }
     // ONE RESOLUTION (DDGI-AUTO-1): the row's Auto is the engine's — the
     // fieldDefault of the quality the scene RUNS at, its giQuality pinned
@@ -251,6 +254,7 @@ static void testTriState()
         for (PhotonTier t : kTiers)
             for (int q = 0; q < 4; ++q) {
                 auto p = iris::Scene::create();
+                p->giMode = iris::GiMode::VCT;
                 p->giTier = int(t);
                 p->giQuality = iris::GiQuality(q);
                 p->giDdgi = -1;
@@ -258,6 +262,9 @@ static void testTriState()
                 ++checked;
                 agree += (r && r->get(p) == engine && (worldmodes::photonFieldAuto(p) ? 1 : 0) == engine) ? 1 : 0;
             }
+        auto off = iris::Scene::create();
+        off->giMode = iris::GiMode::OFF;
+        CHECK(r && r->get(off) == 0, "with Photon OFF the field's Auto reads OFF (the engine builds no field)");
         CHECK(r && agree == checked,
               qPrintable(QStringLiteral("a pinned giQuality against every tier: the field row's Auto IS the "
                                         "engine's fieldDefault of that quality (%1 of %2)").arg(agree).arg(checked)));
@@ -267,7 +274,7 @@ static void testTriState()
     d->giMode = iris::GiMode::VCT;
     d->giQuality = iris::GiQuality::MEDIUM;
     worldmodes::derivePhotonFromDocument(d);
-    CHECK(d->giDdgi == 1, "a derived tier resolves the field's -1 to the table's ON");
+    CHECK(d->giDdgi == -1, "a derived tier leaves the field's -1 AUTO (the engine's fact resolves it)");
 }
 
 static void testEpic()

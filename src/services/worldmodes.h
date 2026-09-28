@@ -322,7 +322,8 @@ int photonDdgi(PhotonTier t);
 /// `GiQualityFacts::fieldDefault` of the quality the scene RUNS at — its
 /// giQuality, pinned or not — never of the tier's column. The mirror hands the
 /// engine -1 and the engine resolves it through exactly this fact
-/// (OgreScene::ddgiWanted), so the row that shows Auto shows what renders. The
+/// (OgreScene::ddgiWanted, which also needs a voxel technique: false with Photon
+/// off), so the row that shows Auto shows what renders. The
 /// desktop column: the VR column's transform (giQualityFacts) leaves
 /// fieldDefault as it is, so the headset resolves the same.
 bool photonFieldAuto(const iris::ScenePtr &scene);

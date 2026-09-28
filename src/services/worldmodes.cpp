@@ -1521,7 +1521,9 @@ int photonQuality(PhotonTier t)   { return kPhotonTable[tierIndex(t)].quality; }
 int photonDdgi(PhotonTier t)      { return photonFieldColumn(kPhotonTable[tierIndex(t)]); }
 bool photonFieldAuto(const iris::ScenePtr &scene)
 {
-    if (!scene) return false;
+    // OgreScene::ddgiWanted's own two terms: a voxel technique to feed it, and the
+    // quality's fieldDefault.
+    if (!scene || scene->giMode == iris::GiMode::OFF) return false;
     return jahshaka::engine::giQualityFacts(
                jahshaka::engine::GiQuality(qBound(0, int(scene->giQuality), 3))).fieldDefault;
 }
@@ -1781,7 +1783,7 @@ void photonHave(const iris::ScenePtr &s, int have[kPhotonRowCount])
 {
     have[0] = int(s->giMode);
     have[1] = int(s->giQuality);
-    have[2] = s->giDdgi > 0 ? 1 : 0;
+    have[2] = s->giDdgi < 0 ? (photonFieldAuto(s) ? 1 : 0) : (s->giDdgi > 0 ? 1 : 0);
     have[3] = qBound(1, s->giNumBounces, 4);
     have[4] = qBound(0, s->giProbeCaptureSize, 1024);
 }
@@ -1808,7 +1810,10 @@ void setPhoton(const iris::ScenePtr &scene, bool enabled, PhotonTier tier)
     }
     // The machinery: written unless the user pinned it.
     if (!pinned(scene, "giQuality")) scene->giQuality = iris::GiQuality(qBound(0, row.quality, 3));
-    if (!pinned(scene, "giDdgi"))    scene->giDdgi = photonFieldColumn(row);
+    // THE FIELD IS AUTO UNDER A TIER (DDGI-AUTO-1): -1, which the engine resolves
+    // through GiQualityFacts::fieldDefault of the quality it runs at — the one
+    // resolution; a tier writes no concrete copy of its column for it to part from.
+    if (!pinned(scene, "giDdgi"))    scene->giDdgi = -1;
     if (!pinned(scene, "giBounces")) scene->giNumBounces = row.bounces;
     if (!pinned(scene, "giProbeSize")) scene->giProbeCaptureSize = qBound(0, row.probeSize, 1024);
     if (!pinned(scene, "giMode")) scene->giMode = iris::GiMode(qBound(1, row.technique, 2));
@@ -1882,13 +1887,10 @@ void derivePhotonFromDocument(const iris::ScenePtr &scene)
     scene->giTier = tierIndex(tier);
     const PhotonRow &want = kPhotonTable[tierIndex(tier)];
 
-    // THE FIELD'S TRI-STATE. -1 in a pre-tier document means the author never
-    // touched it — "the tier decides" — and the tier now decides ON at Medium
-    // and High (owner option (b): the five shipped vct+medium samples, and the
-    // two hybrid ones, come up DDGI-fed; that re-pin is deliberate and is the
-    // ONLY rendered value this derivation may move). An explicit 0/1 is what
-    // the document rendered and is preserved like every other field.
-    if (scene->giDdgi < 0) scene->giDdgi = photonFieldColumn(want);
+    // THE FIELD'S TRI-STATE: -1 stays -1 — Auto, the engine's fieldDefault of the
+    // scene's quality (DDGI-AUTO-1: one resolution; this derivation used to write
+    // the tier column's copy). An explicit 0/1 is what the document rendered and
+    // is preserved like every other field.
 
     // PIN WHAT DEVIATES, DROP WHAT DOES NOT. A pin whose value is the tier's
     // own is noise: it would freeze that field through every future tier switch
