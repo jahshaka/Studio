@@ -124,10 +124,7 @@ void WorldPostFxPropertyWidget::build()
         } else {
             row.combo = this->addComboBox(r->label);
             const QVector<worldmodes::ComboItem> items = worldmodes::comboItems(*r, scene, rays);
-            for (int i = 0; i < items.size(); ++i) {
-                row.combo->addItem(items[i].label, items[i].value);
-                row.combo->setItemEnabled(i, items[i].enabled);
-            }
+            for (const worldmodes::ComboItem &item : items) row.combo->addItem(item.label, item.id);
             row.combo->setToolTip(worldmodes::rowCost(*r, rays));
             identifyRow(row.combo, *r);
             const QString id = r->id;
@@ -136,9 +133,19 @@ void WorldPostFxPropertyWidget::build()
             connect(combo, QOverload<int>::of(&ComboBoxWidget::currentIndexChanged), this,
                     [this, id, label, combo](int index) {
                         if (loading || !scene || index < 0) return;
-                        const int value = combo->getItemData(index).toInt();
+                        // THE ENTRY CHOSEN, by its id, through the one path the
+                        // verbs take (worldmodes::applyComboItem): the SSR row's
+                        // Traced drops its pin rather than writing a value.
+                        const worldmodes::Row *r = worldmodes::row(id);
+                        if (!r) return;
+                        const QString itemId = combo->getItemData(index).toString();
+                        worldmodes::ComboItem chosen;
+                        bool found = false;
+                        for (const worldmodes::ComboItem &item : worldmodes::comboItems(*r, scene, sceneTracesRays()))
+                            if (item.id == itemId) { chosen = item; found = true; break; }
+                        if (!found) return;
                         panelundo::runWorldModeEdit(services, scene, tr("Set %1").arg(label),
-                            [this, id, value]() { worldmodes::setRowValue(scene, id, value); },
+                            [this, r, chosen]() { worldmodes::applyComboItem(scene, *r, chosen); },
                             [this]() { applied(); emit worldSettingsChanged(); });
                     });
         }
@@ -233,10 +240,7 @@ void WorldPostFxPropertyWidget::refreshRows()
             // this machine (worldmodes::comboItems — the SSR row at a ray tier).
             const QVector<worldmodes::ComboItem> items = worldmodes::comboItems(*r, scene, rays);
             row.combo->clear();
-            for (int i = 0; i < items.size(); ++i) {
-                row.combo->addItem(items[i].label, items[i].value);
-                row.combo->setItemEnabled(i, items[i].enabled);
-            }
+            for (const worldmodes::ComboItem &item : items) row.combo->addItem(item.label, item.id);
             const int index = worldmodes::comboIndexOf(items, value);
             row.combo->setCurrentIndex(index >= 0 ? index : 0);
         }

@@ -13,7 +13,6 @@ For more information see the LICENSE file
 #include "ui_comboboxwidget.h"
 
 #include <QListView>
-#include <QStandardItemModel>
 #include <QStyledItemDelegate>
 #include "ui/style/stylesheet.h"
 
@@ -45,12 +44,6 @@ void ComboBoxWidget::setLabel(const QString &label)
 void ComboBoxWidget::addItem(const QString &text, const QVariant &data)
 {
     ui->comboBox->addItem(text, data);
-}
-
-void ComboBoxWidget::setItemEnabled(int index, bool enabled)
-{
-    if (auto *model = qobject_cast<QStandardItemModel *>(ui->comboBox->model()))
-        if (QStandardItem *item = model->item(index)) item->setEnabled(enabled);
 }
 
 int ComboBoxWidget::findData(const QVariant & data)

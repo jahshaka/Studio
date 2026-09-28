@@ -2,12 +2,17 @@
 //
 // The rule: a document's SSR OFF is honoured at every tier — off means off, no trace and no
 // march — and where the scene's reflections are traced the row offers exactly two states,
-// "Off" and one DISABLED "Traced" (the march's lq/hq means nothing there). Held here:
+// "Off" and "Traced" (the march's lq/hq means nothing there); choosing Traced DROPS the SSR pin
+// so the tier decides again — the way back from Off (the Fable read's D1: a disabled Traced left
+// no panel path back). Held here, through the verbs the panels' combos share:
 //   1. at High with rays, the SSR row ON: the reflection trace runs (giStatus().rayQuery.reflect,
 //      rays > 0) — the control that makes 2 mean something;
 //   2. the row OFF at the same tier: the trace does NOT run (reflect false, 0 rays);
 //   3. world.modeTable()'s SSR row — the entries the World panels offer, read from the same
-//      worldmodes::comboItems — lists exactly two: "off" and a disabled "traced".
+//      worldmodes::comboItems — lists exactly two: "off" and "traced" (followsTier);
+//   4. THE ROUND TRIP: world.override({id: "ssr", value: "traced"}) — what the Traced entry
+//      does (worldmodes::applyComboItem) — drops the pin, the row reads its tier's value, and
+//      the trace runs again.
 // On a machine with no ray query nothing is traced and the row keeps its three march entries:
 // then 1 and 3 reduce to that, and 2 still holds.
 function assert(cond, msg) {
@@ -45,10 +50,10 @@ assert(row && row.options, "world.modeTable() lists the SSR row's entries");
 console.log("SSR row entries: " + J(row.options));
 if (traces) {
     assert(row.options.length === 2, "at a ray tier the SSR row offers exactly two entries (" + row.options.length + ")");
-    assert(row.options[0].id === "off" && row.options[0].label === "Off" && row.options[0].enabled !== false,
-           "the first is 'Off', and it can be chosen");
-    assert(row.options[1].id === "traced" && row.options[1].label === "Traced" && row.options[1].enabled === false,
-           "the second is ONE disabled 'Traced' (it names the state, it cannot be chosen)");
+    assert(row.options[0].id === "off" && row.options[0].label === "Off" && row.options[0].followsTier !== true,
+           "the first is 'Off', a plain value");
+    assert(row.options[1].id === "traced" && row.options[1].label === "Traced" && row.options[1].followsTier === true,
+           "the second is 'Traced', and choosing it follows the tier");
 } else {
     assert(row.options.length === 3, "no traced reflections here: the three march entries");
 }
@@ -60,4 +65,16 @@ rq = world.giStatus().rayQuery;
 console.log("rayQuery with the row OFF: " + J(rq));
 assert(rq.reflect === false && rq.reflectRays === 0,
        "OFF IS HONOURED AT A RAY TIER: no reflection trace runs (reflect " + rq.reflect + ", " + rq.reflectRays + " rays)");
+
+if (traces) {
+    var st = world.override({ id: "ssr", value: "traced" });
+    console.log("after 'traced': " + J(st));
+    assert(st.source !== "override" && st.value === st.tierValue && st.value > 0,
+           "choosing Traced DROPS the SSR pin: the row reads its tier's value (" + st.value + ", source " + st.source + ")");
+    editor.frame(60);
+    rq = world.giStatus().rayQuery;
+    assert(rq.reflect === true && rq.reflectRays > 0,
+           "...and the picture traces again (" + rq.reflectRays + " rays)");
+    assert(ssrRow().options.length === 2, "the row still offers its two entries");
+}
 "ok";

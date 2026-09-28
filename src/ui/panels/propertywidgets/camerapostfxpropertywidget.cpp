@@ -376,10 +376,7 @@ void CameraPostFxPropertyWidget::rebuild()
             if (r) {
                 const QVector<worldmodes::ComboItem> items =
                     worldmodes::comboItems(*r, sceneOf(camera), sceneTracesRays());
-                for (int o = 0; o < items.size(); ++o) {
-                    combo->addItem(items[o].label, items[o].value);
-                    combo->setItemEnabled(combo->getWidget()->count() - 1, items[o].enabled);
-                }
+                for (const worldmodes::ComboItem &item : items) combo->addItem(item.label, item.value);
                 if (own.isValid()) {
                     const int i = worldmodes::comboIndexOf(items, own.toInt());
                     if (i >= 0) current = i + 1;

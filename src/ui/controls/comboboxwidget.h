@@ -32,9 +32,6 @@ public:
     int index = 0;
     void setLabel(const QString&);
     void addItem(const QString&, const QVariant &data = QVariant());
-    /// A DISABLED entry names a state the user cannot choose (it is shown, not
-    /// offered): the item stays in the list and in currentIndex, greyed.
-    void setItemEnabled(int index, bool enabled);
     int findData(const QVariant &data);
     QString getCurrentItem();
     QString getCurrentItemData();

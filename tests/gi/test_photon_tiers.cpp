@@ -138,19 +138,46 @@ static void testSsrRow()
         const auto plain  = worldmodes::comboItems(*ssr, s, false);
         if (raysTier) {
             CHECK(traced.size() == 2 && traced[0].value == 0 && traced[0].label == QStringLiteral("Off") &&
-                      traced[0].enabled && traced[1].label == QStringLiteral("Traced") && !traced[1].enabled,
-                  qPrintable(QStringLiteral("%1: where the scene traces the SSR row offers 'Off' and one "
-                                            "disabled 'Traced'").arg(worldmodes::photonTierName(t))));
+                      !traced[0].followsTier && traced[1].label == QStringLiteral("Traced") &&
+                      traced[1].followsTier,
+                  qPrintable(QStringLiteral("%1: where the scene traces the SSR row offers 'Off' and 'Traced' "
+                                            "(Traced follows the tier)").arg(worldmodes::photonTierName(t))));
             CHECK(worldmodes::comboIndexOf(traced, 0) == 0 && worldmodes::comboIndexOf(traced, 1) == 1 &&
                       worldmodes::comboIndexOf(traced, 2) == 1,
                   qPrintable(QStringLiteral("%1: off shows 'Off', either march quality shows 'Traced'")
                                  .arg(worldmodes::photonTierName(t))));
+            // THE ROUND TRIP (the Fable read's D1): Off pinned -> Traced chosen ->
+            // the pin dropped -> the row reads its tier's value again, non-zero.
+            const worldmodes::ComboItem offItem = traced[0], tracedItem = traced[1];
+            CHECK(worldmodes::applyComboItem(s, *ssr, offItem) && s->worldOverrides.contains(QStringLiteral("ssr")) &&
+                      worldmodes::resolved(s, *ssr) == 0,
+                  qPrintable(QStringLiteral("%1: choosing Off pins the SSR row at 0").arg(worldmodes::photonTierName(t))));
+            const int tierCol = worldmodes::tierValue(*ssr, worldmodes::mode(s), s);
+            CHECK(worldmodes::applyComboItem(s, *ssr, tracedItem),
+                  qPrintable(QStringLiteral("%1: Traced can be chosen").arg(worldmodes::photonTierName(t))));
+            const int after = worldmodes::resolved(s, *ssr);
+            CHECK(after > 0 && worldmodes::comboIndexOf(worldmodes::comboItems(*ssr, s, true), after) == 1 &&
+                      (tierCol > 0 ? !s->worldOverrides.contains(QStringLiteral("ssr")) && after == tierCol
+                                   : after == tracedItem.value),
+                  qPrintable(QStringLiteral("%1: choosing Traced drops the pin and the row reads the tier's value "
+                                            "(%2; the World column %3), shown as Traced")
+                                 .arg(worldmodes::photonTierName(t)).arg(after).arg(tierCol)));
+            // ...and where the World mode's own SSR column is OFF, Traced pins its
+            // value, so the entry chosen is the state the scene is in.
+            worldmodes::setMode(s, worldmodes::Mode(0));
+            worldmodes::setPhoton(s, true, t);
+            if (worldmodes::tierValue(*ssr, worldmodes::mode(s), s) == 0) {
+                CHECK(worldmodes::applyComboItem(s, *ssr, tracedItem) && worldmodes::resolved(s, *ssr) == tracedItem.value &&
+                          s->worldOverrides.contains(QStringLiteral("ssr")),
+                      qPrintable(QStringLiteral("%1: under a World mode whose SSR column is off, Traced pins %2")
+                                     .arg(worldmodes::photonTierName(t)).arg(tracedItem.value)));
+            }
         }
         const auto &cannot = raysTier ? plain : traced;
         bool own = cannot.size() == ssr->options.size();
         for (int k = 0; own && k < cannot.size(); ++k)
             own = cannot[k].label == ssr->options[k].label && cannot[k].value == ssr->options[k].value &&
-                  cannot[k].enabled;
+                  !cannot[k].followsTier;
         CHECK(own && (raysTier || plain.size() == ssr->options.size()),
               qPrintable(QStringLiteral("%1: where nothing is traced, the three march entries under their own labels")
                              .arg(worldmodes::photonTierName(t))));

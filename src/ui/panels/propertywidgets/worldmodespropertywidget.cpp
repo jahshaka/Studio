@@ -133,8 +133,7 @@ void WorldModesPropertyWidget::build()
         if (r.type == worldmodes::RowType::Enum) {
             const QVector<worldmodes::ComboItem> items = worldmodes::comboItems(r, scene, rays);
             for (int i = 0; i < items.size(); ++i) {
-                combo->addItem(items[i].label, items[i].value);
-                combo->setItemEnabled(i, items[i].enabled);
+                combo->addItem(items[i].label, items[i].id);
             }
         } else {
             for (int v = r.minValue; v <= r.maxValue; ++v)
@@ -239,8 +238,7 @@ void WorldModesPropertyWidget::refreshRows()
                 const QVector<worldmodes::ComboItem> items = worldmodes::comboItems(r, scene, rays);
                 combo->clear();
                 for (int i = 0; i < items.size(); ++i) {
-                    combo->addItem(items[i].label, items[i].value);
-                    combo->setItemEnabled(i, items[i].enabled);
+                    combo->addItem(items[i].label, items[i].id);
                 }
                 const int index = worldmodes::comboIndexOf(items, value);
                 combo->setCurrentIndex(index >= 0 ? index : 0);
@@ -311,10 +309,24 @@ void WorldModesPropertyWidget::onRowChanged(int)
     if (index >= table.size()) return;
     QComboBox *box = combo->getWidget();
     if (!box) return;
+    const worldmodes::Row &r = table[index];
+    if (r.type == worldmodes::RowType::Enum) {
+        // THE ENTRY CHOSEN, by its id, through the one path the verbs take
+        // (worldmodes::applyComboItem): the SSR row's Traced drops its pin.
+        const QString itemId = box->currentData().toString();
+        for (const worldmodes::ComboItem &item : worldmodes::comboItems(r, scene, sceneTracesRays())) {
+            if (item.id != itemId) continue;
+            const worldmodes::Row *row = &r;
+            runUndoable(tr("Set %1").arg(r.label),
+                        [this, row, item]() { worldmodes::applyComboItem(scene, *row, item); });
+            return;
+        }
+        return;
+    }
     bool ok = false;
     const int value = box->currentData().toInt(&ok);
     if (!ok) return;
-    const QString id = table[index].id;
-    runUndoable(tr("Set %1").arg(table[index].label),
+    const QString id = r.id;
+    runUndoable(tr("Set %1").arg(r.label),
                 [this, id, value]() { worldmodes::setRowValue(scene, id, value); });
 }

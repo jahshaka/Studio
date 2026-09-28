@@ -69,15 +69,17 @@ struct EnumOption {
 };
 
 /// ONE ENTRY OF A ROW'S COMBO as a surface offers it for a scene on this
-/// machine (comboItems). `value` is what choosing it writes; `shows` the other
-/// backing values it stands for (the SSR row's "Traced" stands for every
-/// non-zero march quality at a ray tier); a disabled entry names a state and
-/// cannot be chosen.
+/// machine (comboItems). Every entry can be chosen — through applyComboItem,
+/// the one path the panels and world.override share. `value` is what choosing
+/// it writes; `shows` the other backing values it stands for (the SSR row's
+/// "Traced" stands for every non-zero march quality at a ray tier);
+/// `followsTier` says choosing it DROPS the row's pin so the tier decides again
+/// (the SSR row's "Traced": off -> traced is "let the tier's reflections run").
 struct ComboItem {
     QString    id;
     QString    label;
     int        value = 0;
-    bool       enabled = true;
+    bool       followsTier = false;
     QList<int> shows;
 };
 
@@ -236,6 +238,12 @@ QVector<ComboItem> comboItems(const Row &r, const iris::ScenePtr &scene, bool sc
 /// The index in `items` that shows backing value `value` (its own value or one
 /// it `shows`), -1 when none does.
 int comboIndexOf(const QVector<ComboItem> &items, int value);
+/// CHOOSES an entry (the panels' combos and world.override's option ids): an
+/// ordinary entry pins its value (setRowValue); a `followsTier` entry drops the
+/// row's pin (clearOverride) so the tier's column decides — and where that
+/// column is 0 (a World mode whose SSR column is off) it pins its own value,
+/// so the state the entry names is the state the scene is in. False = refused.
+bool applyComboItem(const iris::ScenePtr &scene, const Row &r, const ComboItem &item);
 
 // ---------------------------------------------------------------------------
 // PHOTON — the unified realtime-GI switch (GI_UNIFIED_SPEC.md §2 / P2).
@@ -384,8 +392,8 @@ bool tierRaysResolve(PhotonTier t, bool sceneTracesRays);
 /// are TRACED — Photon on, a quality whose reflections the tier traces
 /// (giQualityFacts rayReflections: High, Epic) and a scene that traces rays on
 /// this machine. There the rays are the reflection wherever the row is on, and
-/// the row offers only "Off" and a disabled "Traced" (comboItems): OFF IS
-/// HONOURED AT EVERY TIER (no trace, no march — SceneMirror feeds 0), and any
+/// the row offers only "Off" and "Traced" (comboItems; choosing Traced drops the
+/// pin, applyComboItem): OFF IS HONOURED AT EVERY TIER (no trace, no march — SceneMirror feeds 0), and any
 /// other value is fed as the tier's trace resolution (GiQualityFacts::reflectTrace).
 bool reflectionsTraced(const iris::ScenePtr &scene, bool sceneTracesRays);
 /// THE TECHNIQUE'S NAME — one source for the World rows, the GI panel and the
