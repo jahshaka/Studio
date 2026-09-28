@@ -6,8 +6,11 @@
 // the scan's stand-in (a 60 m floor, eight columns, 600 debris islands — written by
 // `test_mesh_bake --write-standin`, the same generator atom.lod_bound_bar bakes)
 // through the owner's import route. Two rules draw it, and each is read:
-//   THE CHAIN'S PER-OBJECT LEVEL (what the shadow casters and every stock-PBR pass
-//   draw, CLUSTER_CUT D6), read per object through app.renderStats().perObject:
+//   THE CHAIN'S PER-OBJECT LEVEL (what every stock-PBR pass draws, CLUSTER_CUT D6),
+//   read per object through app.renderStats().perObject WITH THE SPLIT OFF
+//   (world.setAtomDraw(false)): an Atom-routed item has no view level since
+//   SHADOW-LOD-1 (the view's LOD walk skips the queue the id pass draws; its row
+//   says `cut`), so the stand-in is put on the stock route for (a)-(c):
 //   (a) at 30 / 60 / 120 / 250 / 500 m the level steps DOWN with distance: level 0
 //       close, a coarser level by 250 m, coarser still by 500 m, never finer
 //       further out;
@@ -49,6 +52,11 @@ for (var l = 0; l < lods.length; ++l) {
 }
 assert(levels >= 4, "the stand-in's bake carries a chain (" + levels + " levels)");
 
+// (a)-(c) ON THE STOCK ROUTE: the view walks the stand-in's level only there.
+assert(world.setAtomDraw(false) === false, "world.setAtomDraw(false): the split is off");
+editor.frame(4);
+assert(world.atomStatus().on === false, "the split reports off (" + J(world.atomStatus()) + ")");
+
 function row() {
     var per = app.renderStats().perObject;
     for (var p = 0; p < per.length; ++p)
@@ -61,7 +69,7 @@ function levelAt(d, frames) {
     editor.frameNode(placed.nodeId, { yaw: 30, pitch: -20, distance: d });
     editor.frame(frames || 20);
     var r = row();
-    assert(!!r, "the stand-in has a perObject row at " + d + " m");
+    assert(!!r && r.cut === false, "the stand-in has a stock perObject row at " + d + " m");
     return r.level;
 }
 
@@ -100,7 +108,19 @@ for (var rock = 0; rock < 10; ++rock) {
 console.log("rocking across " + edge + " m: " + J(seen));
 assert(changes <= 1, "rocking +-1 m across the switch changes the level at most once (" + changes + ")");
 
-// (d) the Levels view: the CUT's depth
+// (d) the Levels view: the CUT's depth (the split back on)
+assert(world.setAtomDraw(true) === true, "world.setAtomDraw(true): the split is on again");
+st = world.atomStatus();
+// The route is re-derived by the frame's scan: read until the stand-in's row turns (frames).
+var cutRow = row();
+for (var w = 0; w < 120 && (st.pending > 0 || !cutRow || !cutRow.cut); ++w) {
+    editor.frame(2);
+    st = world.atomStatus();
+    cutRow = row();
+}
+assert(st.live && st.on && st.pending === 0, "the split is live again (" + J(st) + ")");
+assert(!!cutRow && cutRow.cut === true && cutRow.level === 0,
+       "the stand-in's row now says `cut` (no view level: " + J(cutRow) + ")");
 assert(world.setAtomView("levels") === true, "world.setAtomView('levels')");
 // JahAtomView_ps.glsl's ramp, depth 0 warm to 15 dark, as the plain grade stores it.
 var RAMP = [[1.0, 0.15, 0.1], [1.0, 0.55, 0.0], [1.0, 0.95, 0.1], [0.6, 1.0, 0.1],
