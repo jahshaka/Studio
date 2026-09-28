@@ -256,6 +256,11 @@ if(Vulkan_FOUND AND JAH_ATOM_GLSLANG AND OGRE_NEXT_VULKAN_RS_LIB)
     jah_gpu_row(shadow.atom_parity CLASS engine COMMAND test_shadow_atom_cut --parity
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
     set_tests_properties(shadow.atom_parity PROPERTIES TIMEOUT 60 LABELS "engine")   # 7-9 s measured solo x 6, rounded up
+    # shadow.caster_first_frame — CASTER-USES-1: eight views of the world render their first
+    # frame together (> 64 caster maps for the scene's one stats ring): every map recorded.
+    jah_gpu_row(shadow.caster_first_frame CLASS engine COMMAND test_shadow_atom_cut --first-frame
+             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+    set_tests_properties(shadow.caster_first_frame PROPERTIES TIMEOUT 120 LABELS "engine")
     add_executable(test_atom_negative_control test_atom_negative_control.cpp ${_atom_neg_headers})
     jah_atom_engine_target(test_atom_negative_control)
     target_include_directories(test_atom_negative_control PRIVATE "${_atom_neg_gen}"

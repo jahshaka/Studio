@@ -602,6 +602,46 @@ static int parityMain()
     return 0;
 }
 
+// ---------------------------------------------------------------------------
+// shadow.caster_first_frame — CASTER-USES-1: THE FIRST FRAME RECORDS EVERY MAP. The caster
+// pass's stats ring held a fixed 64 maps a frame, and a first frame renders every map at
+// once, so the overflow went unrecorded. EIGHT views of the one scene (each with its own
+// shadow node: the PSSM splits, the spot, the point's six faces) render their first
+// frame together — past 64 caster maps in one frame for the scene's one ring — and the
+// counters must say every one was recorded: the peak above 64, nothing unrecorded.
+static int firstFrameMain()
+{
+    std::printf("== shadow.caster_first_frame: a first frame with more than 64 caster maps records them all\n");
+    World w;
+    if (!makeWorld(w, "uses-0", false)) { std::printf("FAIL: the world\n"); return 1; }
+    const CameraDesc cam = enginetest::testCameraDescLookAt(Vec3(0.0f, 2.2f, 4.0f), Vec3(0.0f, 0.8f, -30.0f));
+    w.view->setCamera(cam);
+    std::vector<View *> more;
+    for (int i = 1; i < 8; ++i) {
+        const std::string name = "uses-" + std::to_string(i);
+        View *v = gE->createOffscreenView(name, kW, kH, Colour(0, 0, 0));
+        if (!v) { std::printf("FAIL: view %d\n", i); return 1; }
+        v->setOffscreenContract(OffscreenContract::StillPicture);
+        v->setScene(w.scene);
+        v->setShadows(true);
+        PostFxDesc fx;
+        fx.allowOffscreen = true;
+        fx.ssr = 0;
+        v->setPostFx(fx);
+        v->setCamera(cam);
+        more.push_back(v);
+    }
+    for (int i = 0; i < 12; ++i) gE->renderOneFrame();   // the first frame, then its read-back
+    const AtomDrawStatus st = w.scene->atomDrawStatus();
+    std::printf("   caster maps: the most in one frame %u, unrecorded %llu (last read: %u maps)\n",
+                st.casterMapsPeak, st.casterUnrecorded, st.casterMaps);
+    CHECK_MSG(st.casterValid && st.casterMapsPeak > 64u,
+              "one frame rendered more than 64 caster maps and recorded them (%u)", st.casterMapsPeak);
+    CHECK_MSG(st.casterUnrecorded == 0ull, "no map went unrecorded (%llu)", st.casterUnrecorded);
+    for (View *v : more) gE->destroyView(v);
+    return 0;
+}
+
 int main(int argc, char **argv)
 {
     QCoreApplication app(argc, argv);
@@ -611,12 +651,14 @@ int main(int argc, char **argv)
     EngineConfig cfg;
     cfg.pluginDir = JAHSHAKA_TEST_PLUGIN_DIR;
     cfg.hlmsMediaDir = JAHSHAKA_TEST_MEDIA_DIR;
-    cfg.logFile = mode == "--parity" ? "test-shadow-atom-parity-ogre.log" : "test-shadow-atom-cut-ogre.log";
+    cfg.logFile = mode == "--parity"        ? "test-shadow-atom-parity-ogre.log"
+                  : mode == "--first-frame" ? "test-shadow-caster-first-frame-ogre.log"
+                                            : "test-shadow-atom-cut-ogre.log";
     auto engine = Engine::create(cfg, err);
     if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }
     engine->setFixedFrameDelta(1.0f / 60.0f);
     gE = engine.get();
-    const int rc = mode == "--parity" ? parityMain() : cutMain();
+    const int rc = mode == "--parity" ? parityMain() : mode == "--first-frame" ? firstFrameMain() : cutMain();
     engine.reset();
     std::printf("%s (%d failure%s)\n", failures || rc ? "FAILED" : "PASSED", failures, failures == 1 ? "" : "s");
     return failures || rc ? 1 : 0;
