@@ -14,11 +14,13 @@
 //            matte ground in the plain grade, the sun dimmed so nothing clips,
 //            GI off (the sheet's shadow on the bounce is gi.card_clouds' claim),
 //            through the document and the mirror — the product's own path.
-//   shape  — see caseShape below (CLOUDS-2D-3 (b)).
+//   shape  — THE FIELD'S CHARACTER: many cloud sizes, an edge that is a ramp in
+//            kilometres, a period the eye cannot find (caseShape says the metrics).
 //
 // NO BRIGHTNESS SLIDER exists or is used: the layer's radiance is the physics of
 // the slab (JahCloudLayer_ps.glsl), and nothing here tunes it to a picture.
 #include <QGuiApplication>
+#include <QImage>
 
 #include "bridge/previewmesh.h"
 #include <algorithm>
@@ -201,6 +203,7 @@ float tauAlongSun(const std::vector<float> &tau, unsigned n, float tile, const f
 /// times mu times the sheet's transmittance at the ground point's sun ray.
 struct Irradiance {
     double ambient = 0.0, direct = 0.0;
+    double beam = 0.0;   // the sun's irradiance on the ground with no sheet in its way
     double total() const { return ambient + direct; }
 };
 Irradiance irradianceAt(Rig &r, const std::vector<float> *tau, unsigned n, float tile) {
@@ -216,8 +219,8 @@ Irradiance irradianceAt(Rig &r, const std::vector<float> *tau, unsigned n, float
     if (tau && !tau->empty())
         t = std::exp(-double(tauAlongSun(*tau, n, tile, sd.clouds.sunDir, sd.clouds.altitude)) /
                      std::max(mu, 0.02));
-    e.direct = double(sd.clouds.sunIrradiance.r + sd.clouds.sunIrradiance.g + sd.clouds.sunIrradiance.b) *
-               mu * t;
+    e.beam = double(sd.clouds.sunIrradiance.r + sd.clouds.sunIrradiance.g + sd.clouds.sunIrradiance.b) * mu;
+    e.direct = e.beam * t;
     return e;
 }
 
@@ -302,28 +305,29 @@ int caseEnergy() {
     r.settle();
     CHECK(r.escene->cloudField(tau, n, tile) && n > 0, "the half deck's field reads back");
     if (tau.empty()) return 1;
-    float bestSun = -1.0f, bestShade = -1.0f, shadeTau = 0.0f;
+    float bestSun = -1.0f, bestShade = -1.0f, shadeTau = 0.0f, sunTau = 1e9f;
     for (int a = 0; a < 360; a += 3) {
         r.sunAt(el, float(a));
         r.frame();
         const SkyDesc sd = r.escene->sky();
         const float t = tauAlongSun(tau, n, tile, sd.clouds.sunDir, sd.clouds.altitude);
-        if (t == 0.0f && bestSun < 0.0f) bestSun = float(a);
+        if (t < sunTau) { sunTau = t; bestSun = float(a); }
         if (t > shadeTau) { shadeTau = t; bestShade = float(a); }
     }
-    CHECK(bestSun >= 0.0f && bestShade >= 0.0f && shadeTau > 4.0f,
+    // A SUN PATCH passes 95 % of the beam at this sun; a SHADOW under 1 %.
+    CHECK(bestSun >= 0.0f && bestShade >= 0.0f && sunTau < 0.03f && shadeTau > 2.7f,
           "a half deck has a sun patch and a deep shadow on the sun's circle");
     const double muS = std::sin(double(el) * M_PI / 180.0);
     double meanT = 0.0, cover = 0.0;
     for (float t : tau) {
         meanT += std::exp(-double(t) / muS);
-        cover += t > 0.0f ? 1.0 : 0.0;
+        cover += t > 0.05f ? 1.0 : 0.0;
     }
     meanT /= double(tau.size());
     cover /= double(tau.size());
     std::printf("   half deck: cloud over %.1f %% of the tile, the beam's mean transmittance %.3f; "
-                "sun patch at azimuth %.0f, shadow (tau %.1f) at %.0f\n",
-                cover * 100.0, meanT, bestSun, shadeTau, bestShade);
+                "sun patch (tau %.3f) at azimuth %.0f, shadow (tau %.1f) at %.0f\n",
+                cover * 100.0, meanT, sunTau, bestSun, shadeTau, bestShade);
 
     r.sunAt(el, bestShade);
     r.settle();
@@ -335,7 +339,7 @@ int caseEnergy() {
     const double sunPx = r.ground();
     // THE TILE'S MEAN: the sky light every point shares plus the sun carried by
     // the field's mean transmittance.
-    const double tileMean = sunPatch.ambient + (sunPatch.direct / 1.0) * meanT;
+    const double tileMean = sunPatch.ambient + sunPatch.beam * meanT;
     r.clouds(true, 0.0f, 1.0f);
     r.settle();
     const Irradiance clear = irradianceAt(r, nullptr, 0, 0.0f);
@@ -364,15 +368,255 @@ int caseEnergy() {
                 sunPatch.total() / clear.total());
     return 0;
 }
+/// A DISTANCE MAP on the wrapped tile: metres from every texel to the nearest
+/// texel of `seed` (a two-pass 8-neighbour chamfer, 1 and sqrt 2 texels — within
+/// 8 % of the Euclidean distance, stated), iterated until it stops moving because
+/// the tile wraps.
+std::vector<float> chamfer(const std::vector<char> &seed, unsigned n, float texel) {
+    const float kInf = 1e30f, d1 = texel, d2 = texel * 1.41421356f;
+    std::vector<float> d(size_t(n) * n);
+    for (size_t i = 0; i < d.size(); ++i) d[i] = seed[i] ? 0.0f : kInf;
+    const auto at = [&](int x, int y) -> float & {
+        x = (x % int(n) + int(n)) % int(n);
+        y = (y % int(n) + int(n)) % int(n);
+        return d[size_t(y) * n + size_t(x)];
+    };
+    for (int pass = 0; pass < 4; ++pass) {
+        bool moved = false;
+        for (int y = 0; y < int(n); ++y)
+            for (int x = 0; x < int(n); ++x) {
+                float &v = at(x, y);
+                const float m = std::min({ v, at(x - 1, y) + d1, at(x, y - 1) + d1,
+                                           at(x - 1, y - 1) + d2, at(x + 1, y - 1) + d2 });
+                if (m < v) { v = m; moved = true; }
+            }
+        for (int y = int(n) - 1; y >= 0; --y)
+            for (int x = int(n) - 1; x >= 0; --x) {
+                float &v = at(x, y);
+                const float m = std::min({ v, at(x + 1, y) + d1, at(x, y + 1) + d1,
+                                           at(x + 1, y + 1) + d2, at(x - 1, y + 1) + d2 });
+                if (m < v) { v = m; moved = true; }
+            }
+        if (!moved) break;
+    }
+    return d;
+}
+
+// shape — THE FIELD'S CHARACTER (CLOUDS-2D-3 (b); the owner: "they look all the
+// same, hard edges"), read off the baked tile itself at the shipped defaults
+// (coverage 0.5, density 1):
+//   S1. NO SINGLE CLOUD: the clouds (connected regions of a visibly opaque
+//       column, tau >= 1, wrapped, at least 250 m across) binned by their
+//       equivalent diameter in octaves — the fullest octave holds at most half
+//       of them, the 90th percentile diameter is at least four times the 10th —
+//       and by their peak depth: a spread (CV >= 0.25), at most half of them at
+//       the thickest one's core;
+//   S2. THE EDGE IS A RAMP IN KILOMETRES: no texel within 1 km of clear sky
+//       (tau <= 0.05) holds half a full column's optical depth (the 1st
+//       percentile of the distance at which a column first reaches half is
+//       >= 1 km; its minimum is printed);
+//   S3. THE PERIOD IS HIDDEN: the tile is at least the distance the far sheet
+//       fades over (60 km), and two 16 km windows of it (the old tile's size)
+//       differ — their normalised correlation below 0.5.
+int caseShape() {
+    Rig r;
+    if (!r.make("test-cloud-2d-shape-ogre.log")) return 1;
+    r.clouds(true, 0.5f, 1.0f);
+    r.sunAt(50.0f, 0.0f);
+    r.settle();
+    std::vector<float> tau;
+    unsigned n = 0;
+    float tile = 0.0f;
+    CHECK(r.escene->cloudField(tau, n, tile) && n > 0, "the field reads back");
+    if (tau.empty()) return 1;
+    const float texel = tile / float(n);
+    float tauMax = 0.0f;
+    double cover = 0.0;
+    for (float t : tau) { tauMax = std::max(tauMax, t); cover += t > 0.05f ? 1.0 : 0.0; }
+    cover /= double(tau.size());
+    // A full column's depth at density 1: OgreSky.cpp kCloudTauFull.
+    const float kFull = 32.0f;
+    std::printf("   field %u^2 over %.1f km (%.1f m a texel); cloud over %.1f %% of it; peak tau %.2f\n",
+                n, tile / 1000.0f, texel, cover * 100.0, tauMax);
+
+    // ---- S0: the coverage dial still means coverage ----
+    {
+        const float dials[] = { 0.1f, 0.25f, 0.5f, 0.75f, 0.9f };
+        std::string line = "   S0: the cloud-covered fraction (tau > 0.05) at coverage";
+        double prev = 0.0;
+        bool rising = true;
+        for (float cv : dials) {
+            double c2 = cover;
+            if (cv != 0.5f) {
+                r.clouds(true, cv, 1.0f);
+                r.settle();
+                std::vector<float> t2;
+                unsigned n2 = 0;
+                float tl2 = 0.0f;
+                r.escene->cloudField(t2, n2, tl2);
+                c2 = 0.0;
+                for (float t : t2) c2 += t > 0.05f ? 1.0 : 0.0;
+                c2 /= double(std::max<size_t>(1, t2.size()));
+            }
+            char buf[48];
+            std::snprintf(buf, sizeof buf, " %.2f -> %.1f %%;", cv, c2 * 100.0);
+            line += buf;
+            rising = rising && c2 >= prev;
+            prev = c2;
+        }
+        std::printf("%s\n", line.c_str());
+        std::fflush(stdout);
+        CHECK(rising, "S0. more coverage covers more of the tile");
+        CHECK(cover >= 0.3 && cover <= 0.65, "S0. coverage 0.5 covers between 30 and 65 % of the tile");
+        r.clouds(true, 0.5f, 1.0f);
+        r.settle();
+    }
+
+    // ---- S1 ----
+    std::vector<int> label(size_t(n) * n, -1);
+    std::vector<double> areas;
+    std::vector<size_t> stack;
+    for (size_t i0 = 0; i0 < tau.size(); ++i0) {
+        if (tau[i0] < 1.0f || label[i0] >= 0) continue;
+        const int id = int(areas.size());
+        size_t area = 0;
+        stack.assign(1, i0);
+        label[i0] = id;
+        while (!stack.empty()) {
+            const size_t i = stack.back();
+            stack.pop_back();
+            ++area;
+            const int x = int(i % n), y = int(i / n);
+            const int nb[4][2] = { { x + 1, y }, { x - 1, y }, { x, y + 1 }, { x, y - 1 } };
+            for (const auto &q : nb) {
+                const size_t j = size_t((q[1] + int(n)) % int(n)) * n + size_t((q[0] + int(n)) % int(n));
+                if (tau[j] >= 1.0f && label[j] < 0) { label[j] = id; stack.push_back(j); }
+            }
+        }
+        areas.push_back(double(area));
+    }
+    // Each cloud's own peak depth, for the thickness half of the claim.
+    std::vector<float> peak(areas.size(), 0.0f);
+    for (size_t i = 0; i < tau.size(); ++i)
+        if (label[i] >= 0) peak[size_t(label[i])] = std::max(peak[size_t(label[i])], tau[i]);
+    std::vector<double> diam;
+    std::vector<double> peaks;
+    for (size_t k = 0; k < areas.size(); ++k) {
+        const double dk = 2.0 * std::sqrt(areas[k] / M_PI) * double(texel) / 1000.0;
+        // A CLOUD is at least 250 m across (7 degrees overhead at the default
+        // 2 km): the eroded margin's specks are not clouds of their own.
+        if (dk < 0.25) continue;
+        diam.push_back(dk);
+        peaks.push_back(double(peak[k]));
+    }
+    std::sort(diam.begin(), diam.end());
+    int bins[16] = { 0 };
+    for (double dk : diam) bins[std::min(15, std::max(0, int(std::floor(std::log2(dk / 0.125)))))]++;
+    int fullest = 0;
+    for (int b : bins) fullest = std::max(fullest, b);
+    const double p10 = diam.empty() ? 0.0 : diam[diam.size() / 10];
+    const double p90 = diam.empty() ? 0.0 : diam[diam.size() * 9 / 10];
+    std::printf("   S1: %zu clouds; diameters p10 %.2f km, median %.2f km, p90 %.2f km; octaves from 0.125 km:",
+                diam.size(), p10, diam.empty() ? 0.0 : diam[diam.size() / 2], p90);
+    for (int b = 0; b < 10; ++b) std::printf(" %d", bins[b]);
+    std::printf("\n");
+    CHECK(diam.size() >= 10, "S1. the tile holds clouds to measure");
+    CHECK(!diam.empty() && double(fullest) <= 0.5 * double(diam.size()),
+          "S1. no single octave of cloud size holds more than half the clouds");
+    CHECK(p10 > 0.0 && p90 >= 4.0 * p10, "S1. the large clouds are at least four times the small ones (p90 / p10)");
+    // ...AND OF THEIR OWN THICKNESS: the clouds' peak depths spread (their
+    // coefficient of variation >= 0.25) and at most half of them sit within 5 %
+    // of the thickest — a field whose every cloud saturates to one core is the
+    // "all the same" the owner saw.
+    double pm = 0.0, pv = 0.0, pmax = 0.0;
+    for (double pk : peaks) { pm += pk; pmax = std::max(pmax, pk); }
+    pm /= std::max<size_t>(1, peaks.size());
+    for (double pk : peaks) pv += (pk - pm) * (pk - pm);
+    const double cv = peaks.size() > 1 ? std::sqrt(pv / double(peaks.size() - 1)) / std::max(pm, 1e-9) : 0.0;
+    size_t atMax = 0;
+    for (double pk : peaks) atMax += pk >= 0.95 * pmax ? 1u : 0u;
+    std::printf("   S1: the clouds' peak depths: mean %.2f, CV %.3f, %zu of %zu within 5 %% of the thickest (%.2f)\n",
+                pm, cv, atMax, peaks.size(), pmax);
+    CHECK(cv >= 0.25, "S1. the clouds differ in thickness (peak-depth CV >= 0.25)");
+    CHECK(2 * atMax <= peaks.size(), "S1. at most half the clouds reach the thickest one's core");
+
+    // ---- S2 ----
+    std::vector<char> clearSeed(tau.size());
+    for (size_t i = 0; i < tau.size(); ++i) clearSeed[i] = tau[i] <= 0.05f;
+    const std::vector<float> dist = chamfer(clearSeed, n, texel);
+    std::vector<float> rise;
+    for (size_t i = 0; i < tau.size(); ++i)
+        if (tau[i] >= 0.5f * kFull) rise.push_back(dist[i]);
+    std::sort(rise.begin(), rise.end());
+    const float riseMin = rise.empty() ? 0.0f : rise.front();
+    const float riseP1 = rise.empty() ? 0.0f : rise[rise.size() / 100];
+    std::printf("   S2: %zu texels hold half a full column; their distance to clear sky: min %.0f m, "
+                "1st percentile %.0f m, median %.0f m\n",
+                rise.size(), riseMin, riseP1, rise.empty() ? 0.0f : rise[rise.size() / 2]);
+    CHECK(!rise.empty(), "S2. some columns reach half a full column");
+    CHECK(riseP1 >= 1000.0f, "S2. a column reaches half a full column no nearer than 1 km to clear sky (1st percentile)");
+
+    // ---- S3 ----
+    const unsigned w = std::max(1u, unsigned(std::lround(16000.0f / texel)));
+    double ncc = 1.0;
+    if (w * 2 <= n) {
+        double ma = 0, mb = 0;
+        for (unsigned y = 0; y < w; ++y)
+            for (unsigned x = 0; x < w; ++x) { ma += tau[size_t(y) * n + x]; mb += tau[size_t(y) * n + x + w]; }
+        ma /= double(w) * w;
+        mb /= double(w) * w;
+        double sab = 0, saa = 0, sbb = 0;
+        for (unsigned y = 0; y < w; ++y)
+            for (unsigned x = 0; x < w; ++x) {
+                const double a = tau[size_t(y) * n + x] - ma, b = tau[size_t(y) * n + x + w] - mb;
+                sab += a * b; saa += a * a; sbb += b * b;
+            }
+        ncc = saa > 0 && sbb > 0 ? sab / std::sqrt(saa * sbb) : 1.0;
+    }
+    std::printf("   S3: the tile %.1f km; two adjacent 16 km windows correlate %.3f\n", tile / 1000.0f, ncc);
+    CHECK(tile >= 60000.0f, "S3. the field's period is at least the distance the far sheet fades over (60 km)");
+    CHECK(std::fabs(ncc) < 0.5, "S3. two 16 km windows of the field differ");
+    return 0;
+}
+/// NOT A ROW: `test_cloud_2d look <dir>` writes what the sheet looks like from the
+/// ground (960x540, the plain grade, the view up at 20 degrees, sun ahead at 25 and
+/// behind at 60 degrees, coverage 0.3 / 0.5 / 0.8) for a human's read.
+int caseLook(const char *dir) {
+    Rig r;
+    if (!r.make("test-cloud-2d-look-ogre.log")) return 1;
+    r.view->resize(960, 540);
+    r.cam->setLocalPos(iris::Vec3(0.0f, 2.0f, 0.0f));
+    r.cam->lookAt(iris::Vec3(0.0f, 2.0f + std::tan(20.0f * float(M_PI) / 180.0f), -1.0f));
+    r.cam->update(0.0f);
+    r.mirror->applyCamera(r.cam, r.view);
+    const float covers[] = { 0.3f, 0.5f, 0.8f };
+    const float suns[2][2] = { { 25.0f, 180.0f }, { 60.0f, 0.0f } };
+    for (const auto &sun : suns)
+        for (float cv : covers) {
+            r.sunAt(sun[0], sun[1]);
+            r.clouds(true, cv, 1.0f);
+            r.settle();
+            Image img;
+            if (!r.view->readPixels(img)) continue;
+            QImage q(img.rgba.data(), int(img.width), int(img.height), QImage::Format_RGBA8888);
+            char name[256];
+            std::snprintf(name, sizeof name, "%s/clouds_sun%02.0f_cov%02.0f.png", dir, sun[0], cv * 100.0f);
+            q.copy().save(QString::fromUtf8(name));
+            std::printf("   wrote %s\n", name);
+        }
+    return 0;
+}
 }  // namespace
 
 int main(int argc, char **argv) {
     qputenv("QT_QPA_PLATFORM", "offscreen");
     QGuiApplication app(argc, argv);
     const std::string which = argc > 1 ? argv[1] : "energy";
-    if (argc > 2) kSunIntensity = float(std::atof(argv[2]));
+    if (argc > 2 && which != "look") kSunIntensity = float(std::atof(argv[2]));
     int rc = 1;
     if (which == "energy") rc = caseEnergy();
+    else if (which == "shape") rc = caseShape();
+    else if (which == "look" && argc > 2) return caseLook(argv[2]);
     else { std::printf("FAIL: unknown case '%s'\n", which.c_str()); return 2; }
     if (rc) return rc;
     std::printf(failures ? "cloud_2d.%s: FAIL (%d)\n" : "cloud_2d.%s: PASS\n", which.c_str(), failures);
