@@ -70,3 +70,13 @@ set_tests_properties(samples.session PROPERTIES
     FIXTURES_REQUIRED samples_home_session
     LABELS "scripting"
     TIMEOUT 1020)  # 6x measured (D6B fix round F1; spikes/d6b-gate-shape/f1-timeouts.txt)
+
+# samples.mirror_room_boots — REFLECT-STATE-1: the Mirror Room sample's picture is ONE picture
+# across boots (ATOM-DECODE-CLASS-1 recorded two). Ten boots, each on a virgin data root, the
+# scene's offscreen picture after 600 fixed-clock frames, byte-identical (the runner:
+# scripts/mirror_room_boots.sh). 251 s measured (25 s a boot): NIGHTLY.
+jah_gpu_row(samples.mirror_room_boots CLASS app
+         COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/scripts/mirror_room_boots.sh $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
+                 ${CMAKE_CURRENT_SOURCE_DIR}/scripts/mirror_room_boot.js.in ${CMAKE_CURRENT_BINARY_DIR}/mirror-room-boots 10
+         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(samples.mirror_room_boots PROPERTIES LABELS "scripting;nightly" TIMEOUT 1800)

@@ -299,6 +299,11 @@ def main(argv):
     # exec in place: the tokens' fds are inherited; the pid that was started IS the command.
     if held:
         os.environ["JAH_VRAM_HELD"] = str(len(held))
+    # THE ROW'S OWN BUDGET, from AFTER both waits (LOCK-WAIT-1): gpu-exclusive.sh hands it over
+    # when a timing row also takes tokens, so neither queue is ever charged to the row.
+    run = os.environ.pop("JAH_GPU_RUN_TIMEOUT", "")
+    if run:
+        rest = ["timeout", "--verbose", "-k", "15", run] + rest
     try:
         os.execvp(rest[0], rest)
     except OSError as e:

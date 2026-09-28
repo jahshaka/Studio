@@ -351,6 +351,14 @@ add_dependencies(test_gi_ddgi_ambient JahshakaEngineMedia)
 jah_gpu_row(gi.ddgi_ambient CLASS engine COMMAND test_gi_ddgi_ambient
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.ddgi_ambient PROPERTIES TIMEOUT 120 LABELS "engine")
+# gi.sealed_room_chain_target — SEALED-ROOM-LEAK-1: case 5's sealed room under the SHIPPED Medium
+# chain with the field on, the eye 0.6 m from a wall: the sky must move no pixel more than 2/255.
+# Reads 12/255 today (the room's far corner lies outside cascade 0's box - the field's volume - and
+# the cone reader alone leaks 4-9/255 there at every cell size); a photon-target row until the
+# reader's residual or a field over the chain closes it. Prints the cones-only table.
+jah_gpu_row(gi.sealed_room_chain_target CLASS engine COMMAND test_gi_ddgi_ambient --sealed-chain
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.sealed_room_chain_target PROPERTIES TIMEOUT 300 LABELS "engine;photon-target")
 # gi.cone_corner_target — THE CONE'S CORNER OVER-READ (PHOTON-FIELD-ROTATE-1, F2):
 # gi.ddgi_ambient's corner used to compare the field with the cone reference; it is
 # anchored on the fixture's ANALYTIC now, and the cone reference - which reads a

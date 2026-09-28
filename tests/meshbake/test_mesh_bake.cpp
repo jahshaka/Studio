@@ -62,6 +62,7 @@
 #include <vector>
 #include <QTemporaryDir>
 #include <cstdio>
+#include <functional>
 #include <string>
 
 #include "assimp/Importer.hpp"
@@ -2279,11 +2280,18 @@ static int dagBar(const QString &name, const iris::MeshPtr &mesh, bool standin, 
     iris::MeshBake::ClusterDagStats st;
     st.wantTerms = true;
     st.denseReference = !target;      // the target row judges (b) and (c) only
+    QElapsedTimer bakeClock;
+    bakeClock.start();
     iris::MeshBake::buildClusterDag(mesh, &st);
+    const qint64 bakeMs = bakeClock.elapsed();
     if (!st.groups) return 0;
     float maxAxis = 0.0f;
     meshExtents(mesh, &maxAxis, nullptr);
     printDagTerms(name, st);
+    // THE DAG'S DISPLACEMENT LOCK (DAG-LOCK-1): its builds, its locks, what it left, its cost.
+    std::printf("   %s: the DAG's lock took %d build(s), %d vertices locked, %d still past the budget; "
+                "%lld ms for the whole DAG\n", qUtf8Printable(name), st.lockPasses, st.lockedVertices,
+                st.lockUnconverged, (long long)bakeMs);
     const float floorBound = maxAxis * 1e-5f;
     int checked = 0, dishonest = 0, loose = 0, drops = 0, oversize = 0;
     double worstRef = 0.0, worstX = 0.0;
@@ -2312,14 +2320,13 @@ static int dagBar(const QString &name, const iris::MeshPtr &mesh, bool standin, 
         CHECK_LOUD(dishonest == 0, qUtf8Printable(QStringLiteral(
         "%1 DAG: (a) every group's error >= its dense reference (%2 of %3 below; worst reference/error %4)")
         .arg(name).arg(dishonest).arg(checked).arg(worstRef, 0, 'f', 4)));
-    // (b) and (c) ARE A TARGET, NOT YET A BAR: the chain holds them with its
-    // DISPLACEMENT LOCK (a level re-simplified with every vertex it would displace
-    // past 2x its own error locked, every island bigger than that keeping a
-    // triangle), and the DAG's build has no per-group lock — clusterlod's
-    // `vertex_lock` is one array for the whole build, so a dropped island costs
-    // its own extent in the group that dropped it (measured: the stand-in's
-    // depth-0 groups 11x median, the temple's 6-10x). PRINTED here; gated only by
-    // `--target` (atom.dag_bound_target, label photon-target).
+    // (b) and (c) ARE A BAR SINCE DAG-LOCK-1: the DAG's build carries the chain's
+    // DISPLACEMENT LOCK (clusterdag::build — a removed vertex or a lost facet past 2x
+    // its group's own error, or an island bigger than the group's error, is locked
+    // and the whole DAG rebuilt; the stand-in converges in 6 builds). Before it the
+    // stand-in's groups read 24 of 30 over. Gated by `--target` (atom.dag_bound_target,
+    // no longer a photon-target: the row gates) — the dense reference (a) is the
+    // other row's, which it keeps for the price.
     std::printf("target: %s DAG (b) %d of %d groups over 2x/2.5x clusterlod's error, worst x %.2f (bar 0)%s\n",
                 qUtf8Printable(name), loose, checked, worstX, qUtf8Printable(why));
     if (standin)
@@ -2556,6 +2563,36 @@ static void dagBoundBar(bool target)
         "the subjects really do carry DAG groups (%1 checked)").arg(groups)));
 }
 
+/// CULL-MODE-1: A TWO-SIDED SOURCE MATERIAL IS BAKED. glTF's `doubleSided` arrives
+/// through assimp as AI_MATKEY_TWOSIDED; the import stores it on the baked material
+/// (MeshMaterialData::twoSided, bake format v16) and it survives the blob.
+static void twoSidedReachesTheNode()
+{
+    const QString rel = QStringLiteral("tests/importer/fixtures/double_sided_quads.gltf");
+    const QString path = fixture(rel);
+    Assimp::Importer importer;
+    const aiScene *scene = importer.ReadFile(path.toStdString().c_str(), iris::ImportFlags::Canonical);
+    CHECK_LOUD(scene != nullptr, "the two-quad glTF parses");
+    if (!scene) return;
+    QTemporaryDir scratch;
+    const QString fingerprint = iris::MeshBake::fingerprintFor(
+        QStringLiteral("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"));
+    iris::MeshBake::Model built = iris::MeshBake::buildFromScene(scene, path, fingerprint, scratch.path());
+    CHECK_LOUD(built.valid, "the two-quad glTF bakes");
+    if (!built.valid) return;
+    int twoSidedMaterials = 0;
+    for (const iris::MeshMaterialData &m : built.materials) twoSidedMaterials += m.twoSided ? 1 : 0;
+    const iris::MeshBake::Model read = iris::MeshBake::deserialize(iris::MeshBake::serialize(built), fingerprint);
+    int readTwoSided = 0;
+    for (const iris::MeshMaterialData &m : read.materials) readTwoSided += m.twoSided ? 1 : 0;
+    CHECK_LOUD(twoSidedMaterials == 1 && readTwoSided == 1,
+               qUtf8Printable(QStringLiteral("one of the two materials is two-sided, through the blob (%1 built, %2 read)")
+                                  .arg(twoSidedMaterials).arg(readTwoSided)));
+    // (The NODE half — the fragment's MeshNode culls nothing — needs an Ogre::Root: a
+    // fragment's children live in the scene graph, which this suite has none of. It is
+    // mirror.document_to_engine's arm, through the same buildFromFile + buildFragment.)
+}
+
 int main(int argc, char **argv)
 {
     QCoreApplication app(argc, argv);
@@ -2646,6 +2683,9 @@ int main(int argc, char **argv)
     roundTrip(QStringLiteral("tests/importer/fixtures/tetra_normals.stl"));
     roundTrip(QStringLiteral("app/models/axis_cube.obj"));
     roundTrip(QStringLiteral("app/models/axis_sphere.obj"));
+
+    std::printf("== 16. a two-sided source material reaches the node ==\n");
+    twoSidedReachesTheNode();
 
     std::printf("== 2-4. determinism, staleness, corruption ==\n");
     determinismAndFailureModes();

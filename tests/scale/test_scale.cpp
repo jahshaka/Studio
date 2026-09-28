@@ -453,12 +453,12 @@ static std::string msText(double ms)
 
 static IdRead readIdPass(Env &env, int frames)
 {
-    // FRAME-COUNTED RE-READS, never a CPU pause: a heavy frame (7 M triangles through
-    // the id pass and the shadow casters) can retire from the monitor's holding window
-    // (kGpuLatencyFrames) before its timestamps come back, so a batch may carry few GPU
-    // samples (measured: 0-4 of 38 inside the 10 M shell's bounds). Batches of `frames`
-    // are read until each pass holds kWant samples or kMaxFrames have been drawn; a
-    // reading that never landed is UNSAMPLED (negative) and printed as such.
+    // FRAME-COUNTED RE-READS, never a CPU pause. A record now waits for its GPU
+    // samples however heavy its frame (MONITOR-RETIRE-1 — before it, 0-4 of 38 records
+    // inside the 10 M shell's bounds carried an id time); the loop stays as the bound on
+    // a reading that never lands (a lost device): batches of `frames` are read until
+    // each pass holds kWant samples or kMaxFrames have been drawn, and a reading that
+    // never landed is UNSAMPLED (negative) and printed as such.
     static const size_t kWant = 8;
     static const int kMaxFrames = 600;
     IdRead out;
@@ -1743,7 +1743,7 @@ static int frameArmsMain(bool lattice)
 //     0.15 ms a map, on both worlds (1.27x the worst was a flake candidate under contention).
 // The caster pass = every pass of the view's shadow node (PassBucket::ShadowView), its scene
 // passes and the caster cut's passes together.
-static int shadowCutMain(bool smallWorld)
+static int shadowCutMain()
 {
     struct Arm { std::vector<double> cpu, gpu; unsigned passes = 0; };
     auto measure = [&](Env &env, Arm &arm) {
@@ -1808,17 +1808,16 @@ static int shadowCutMain(bool smallWorld)
                 gpuBarPerMap, perMap, cg.median, st.casterMaps);
         shutdown(env);
     };
-    // ONE WORLD A PROCESS (the frame monitor does not survive a second engine in one process:
-    // a boot after a shutdown crashed in FrameMonitor::beginFrame, measured) — two rows.
-    if (!smallWorld) {
-        runWorld("world", WorldSpec(), 1.0 / 3.0, kGpuMsPerMapBar);
-    } else {
-        WorldSpec small;
-        small.instances = 200;
-        small.lights = 4;
-        small.spacing = 3.0f;
-        runWorld("small", small, 2.0, kGpuMsPerMapBar);
-    }
+    // BOTH WORLDS IN ONE PROCESS, the big one first: the second boot after a
+    // shutdown is itself the regression test of MONITOR-RETIRE-1 F2 (the frame
+    // monitor used to outlive its engine and crash the next boot's first frame
+    // in FrameMonitor::beginFrame).
+    runWorld("world", WorldSpec(), 1.0 / 3.0, kGpuMsPerMapBar);
+    WorldSpec small;
+    small.instances = 200;
+    small.lights = 4;
+    small.spacing = 3.0f;
+    runWorld("small", small, 2.0, kGpuMsPerMapBar);
     return failures ? 1 : 0;
 }
 
@@ -2265,8 +2264,7 @@ static int coverageTraceMain()
         setCamera(env, iris::Vec3(x, 1.7f, 0.0f), iris::Vec3(x + 10.0f, 1.7f, -2.0f));
         if (f == 300 && !releaseMesh.isNull()) {
             atomBefore = env.scene->atomDrawStatus().atomItems;
-            // THE MESH LEAVES (not just its nodes: a node taken out of the document keeps
-            // its engine Item hidden): every item of it drops the mesh, the last reference
+            // THE MESH LEAVES: every item of it drops the mesh, the last reference
             // releases the GPU scene's entry and its DAG.
             for (auto &it : w.items)
                 if (it->getMesh() == releaseMesh) { released.push_back(it); it->setMesh(iris::MeshPtr()); }
@@ -2283,8 +2281,6 @@ static int coverageTraceMain()
                 auto n = iris::MeshNode::create();
                 n->setName(QStringLiteral("extra%1").arg(k));
                 n->setMesh(extra);
-                // A MESH NODE WITHOUT A MATERIAL CRASHES THE MIRROR (SceneMirror::materialSyncFor
-                // dereferences it — finding, ATOM-BLACK-FRAMES-1): the editor always gives one.
                 n->setMaterial(w.items[size_t(k)]->getMaterial());
                 n->setLocalPos(iris::Vec3(x + 6.0f + float(k % 8) * 1.5f, 1.0f, -3.0f - float(k / 8) * 1.5f));
                 env.doc->getRootNode()->addChild(n);
@@ -2321,13 +2317,12 @@ static int coverageTraceMain()
                 atomReleased, atomExtra);
         REQUIRE(maxCoarse > 0u, "the forced small budget overflowed the main region (%u drawn coarse)", maxCoarse);
     }
-    // MEASURED (ATOM-BLACK-FRAMES-1, the Fable read's W3): removeChild takes the items out of
-    // the split and the picture at once (atom 10,001 -> 9,376) but the GPU scene keeps the
-    // mesh's entry and its DAG for the whole window — the mirror keeps the hidden Item —
-    // and releases it only when the mesh itself leaves (setMesh(null), the walk's arm).
-    // Reported as a defect, not asserted here: this suite's subject is the picture.
-    std::printf("coverage_trace: FINDING removeChild %s the GPU scene's mesh entry\n",
-                removeChildReleased ? "releases" : "does NOT release");
+    // REMOVECHILD-LEAK-1 (measured by ATOM-BLACK-FRAMES-1's W3 arm, fixed in
+    // OgreScene::releaseNode): removeChild takes the items out of the split AND
+    // gives back their mesh-table references — the last one releases the GPU
+    // scene's entry and its DAG, as the walk's setMesh(null) arm always did.
+    REQUIRE(removeChildReleased, "removeChild alone releases the GPU scene's mesh entry (\"mesh released\" "
+            "in the trace after every item of the mesh left the document)");
     unsetenv("JAHSHAKA_ATOM_DISCRIMINATE");
     unsetenv("JAHSHAKA_ATOM_TRACE");
     shutdown(env);
@@ -2357,8 +2352,7 @@ int main(int argc, char **argv)
     if (mode == "--bake") return bakeMain();
     if (mode == "--hit-list") return hitListMain();
     if (mode == "--cpu-walks") return cpuWalksMain();
-    if (mode == "--shadow-cut") return shadowCutMain(false);
-    if (mode == "--shadow-cut-small") return shadowCutMain(true);
+    if (mode == "--shadow-cut") return shadowCutMain();
     if (mode == "--lattice-owed") return latticeOwedMain();
     if (mode == "--frame-arms-world") return frameArmsMain(false);
     if (mode == "--frame-arms-lattice") return frameArmsMain(true);

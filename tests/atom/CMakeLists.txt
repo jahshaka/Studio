@@ -256,6 +256,11 @@ if(Vulkan_FOUND AND JAH_ATOM_GLSLANG AND OGRE_NEXT_VULKAN_RS_LIB)
     jah_gpu_row(shadow.atom_parity CLASS engine COMMAND test_shadow_atom_cut --parity
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
     set_tests_properties(shadow.atom_parity PROPERTIES TIMEOUT 60 LABELS "engine")   # 7-9 s measured solo x 6, rounded up
+    # shadow.caster_first_frame — CASTER-USES-1: eight views of the world render their first
+    # frame together (> 64 caster maps for the scene's one stats ring): every map recorded.
+    jah_gpu_row(shadow.caster_first_frame CLASS engine COMMAND test_shadow_atom_cut --first-frame
+             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+    set_tests_properties(shadow.caster_first_frame PROPERTIES TIMEOUT 120 LABELS "engine")
     # shadow.stock_lod — A SHADOW MAP DRAWS ITS STOCK CASTERS AT THE LIGHT'S LEVEL (SHADOW-LOD-1, the
     # fork's caster-pass LOD walk): every caster pass's level for the alpha-tested stock casters is the
     # rule's at the pass's own camera and the map's texels (PSSM splits, a spot, a point's six faces), the
@@ -369,3 +374,16 @@ set_tests_properties(atom.occlusion_exact_app PROPERTIES
     FIXTURES_REQUIRED atomOcclusionHome
     TIMEOUT 480 LABELS "scripting"
     ENVIRONMENT "HOME=${_occl_home};JAHSHAKA_DATA_ROOT=${_occl_home}/.local/share/Jahshaka")
+
+# atom.dag_chain_validate — DAG-CHAIN-VALIDATE-1 (ATOM-SHADOWS-1's F1): Scene::createMesh
+# REFUSES a card that names a LOD level past the chain (a baked mesh with its chain stripped
+# crashed Ogre's caster queue) and ACCEPTS every mesh the product's bake makes (the 20k
+# sphere, the shipped primitives with a DAG, the dragon, the Physics model — their DAG
+# depth against their chain printed) and a stripped chain with no card DRAWS (30 frames of shadows).
+add_executable(test_atom_dag_chain test_atom_dag_chain.cpp ${_cluster_fixture_sources})
+jah_cluster_target(test_atom_dag_chain)
+add_dependencies(test_atom_dag_chain JahshakaEngineMedia)
+jah_gpu_row(atom.dag_chain_validate CLASS engine COMMAND test_atom_dag_chain
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(atom.dag_chain_validate PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 300 LABELS "engine")
