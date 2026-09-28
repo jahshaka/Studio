@@ -16,6 +16,7 @@
 #include "irisgl/document/assets/texture2d.h"
 #include <algorithm>
 #include <cmath>
+#include <functional>
 #include <cstdio>
 #include <string>
 
@@ -34,6 +35,7 @@
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
 #include "irisgl/mirror/scenemirror.h"
+#include "irisgl/import/meshbake.h"
 #include "irisgl/document/scenegraph/scenepicking.h"
 #include "irisgl/document/scenegraph/skybake.h"
 #include "irisgl/document/scenegraph/nodegraph.h"
@@ -2573,6 +2575,60 @@ int main(int argc, char **argv)
         plane->setFaceCullingMode(iris::FaceCullingMode::Front);
         CHECK(look(below, "cull front, from below"), "cull: 'front' draws the back face from below");
         CHECK(!look(above, "cull front, from above"), "cull: ...and nothing from above");
+
+        // THE IMPORT HALF: a glTF `doubleSided` material (tests/importer/fixtures/
+        // double_sided_quads.gltf — two quads, one of them doubleSided) baked and built
+        // into the document the product's way (MeshBake::buildFromFile -> the blob ->
+        // buildFragment): the two-sided quad's node culls nothing and draws from below,
+        // the one-sided quad's leaves the cull to its material and does not.
+        plane->setVisible(false);
+        const QString gltf = QStringLiteral(JAHSHAKA_SOURCE_DIR "/tests/importer/fixtures/double_sided_quads.gltf");
+        const QString fp = iris::MeshBake::fingerprintFor(QStringLiteral("cull-mode-1-fixture"));
+        const iris::MeshBake::Model baked =
+            iris::MeshBake::deserialize(iris::MeshBake::serialize(iris::MeshBake::buildFromFile(gltf, fp)), fp);
+        CHECK(baked.valid, "cull import: the two-quad glTF bakes and reads back");
+        iris::SceneNodePtr frag = baked.valid ? iris::MeshBake::buildFragment(baked, gltf,
+            [](iris::MeshPtr, iris::MeshMaterialData &) { return iris::MaterialPtr(iris::PbrMaterial::create()); })
+                                              : iris::SceneNodePtr();
+        iris::MeshNodePtr twoSided, oneSided;
+        std::function<void(const iris::SceneNodePtr &)> find = [&](const iris::SceneNodePtr &n) {
+            if (!n) return;
+            if (n->getSceneNodeType() == iris::SceneNodeType::Mesh) {
+                if (n->getName() == QStringLiteral("two_sided_quad")) twoSided = n.staticCast<iris::MeshNode>();
+                if (n->getName() == QStringLiteral("one_sided_quad")) oneSided = n.staticCast<iris::MeshNode>();
+            }
+            for (const iris::SceneNodePtr &c : n->children()) find(c);
+        };
+        if (frag) { sdoc4->getRootNode()->addChild(frag); find(frag); }
+        CHECK(twoSided && twoSided->getFaceCullingMode() == iris::FaceCullingMode::None,
+              "cull import: the doubleSided quad's node culls nothing");
+        CHECK(oneSided && oneSided->getFaceCullingMode() == iris::FaceCullingMode::DefinedInMaterial,
+              "cull import: the one-sided quad's node leaves the cull to its material");
+        if (twoSided && oneSided) {
+            // Each quad alone, from below (its own centre under the camera).
+            auto lookAt = [&](const iris::MeshNodePtr &subject, const iris::MeshNodePtr &other, const char *tag) {
+                other->setVisible(false);
+                const iris::Vec3 c = subject->getGlobalPosition();
+                enginetest::testCameraLookAt(cv4, Vec3(c.x() + 0.2f, c.y() - 2.5f, c.z() + 0.3f), Vec3(c.x(), c.y(), c.z()));
+                for (int i = 0; i < 3; ++i) { cm4.sync(); engine->renderOneFrame(); }
+                Image shown;
+                cv4->readPixels(shown); show(tag, shown);
+                subject->setVisible(false);
+                for (int i = 0; i < 3; ++i) { cm4.sync(); engine->renderOneFrame(); }
+                Image empty;
+                cv4->readPixels(empty);
+                subject->setVisible(true);
+                other->setVisible(true);
+                double sum = 0.0;
+                for (size_t b = 0; b < shown.rgba.size() && b < empty.rgba.size(); ++b)
+                    sum += std::abs(int(shown.rgba[b]) - int(empty.rgba[b]));
+                const double mean = shown.rgba.empty() ? 0.0 : sum / double(shown.rgba.size());
+                std::printf("    %-28s differs from the empty pose by %.2f/255\n", tag, mean);
+                return mean > 2.0;
+            };
+            CHECK(lookAt(twoSided, oneSided, "doubleSided quad, below"), "cull import: the doubleSided quad draws from below");
+            CHECK(!lookAt(oneSided, twoSided, "one-sided quad, below"), "cull import: the one-sided quad does not");
+        }
         cm4.setSource(nullptr);
         engine->destroyView(cv4);
         engine->destroyScene(cs4);
