@@ -55,6 +55,11 @@ _MEM = re.compile(r"^\s*MEM\s+\S+\s+gpuPoolUsed=(\d+)\s+textures=(\d+)\s+process
 # <n> arms` (recorded on the pool's row as `leak`).
 _ARM_MEM = re.compile(r"^\s*MEM\s+(\S+\.\S+)\s+gpuPoolUsed=(\d+)\s+textures=(\d+)\s*$")
 _LEAK = re.compile(r"^\s*LEAK\s+\S+\s+\+(\d+)\s+over\s+(\d+)\s+arms")
+# ...and its two per-arm findings (TESTING-DEBTS-1 T2/T3): `STEP <pool>.<arm> +<MB>` (the one-time
+# step, recorded on the arm as `stepMB`) and `OVER <pool>.<arm> gpuPoolUsed=<MB> tier=<t> boot=<MB>`
+# (an arm past 3x its process's boot, recorded on the arm as `over`).
+_STEP = re.compile(r"^\s*STEP\s+(\S+\.\S+)\s+\+(\d+)")
+_OVER = re.compile(r"^\s*OVER\s+(\S+\.\S+)\s+gpuPoolUsed=(\d+)\s+tier=(\S+)\s+boot=(\d+)")
 _GPU = re.compile(r"^\s*gpu_ms:\s*([0-9.]+)")
 _TARGET = re.compile(r"^\s*target:\s*(.+?)\s*$")
 
@@ -243,6 +248,19 @@ def _arm_mems(text):
     return out
 
 
+def _arm_findings(text):
+    """arm -> {stepMB?, over?}: the leak probe's per-arm findings (the last of each, per arm)."""
+    out = {}
+    for line in (text or "").splitlines():
+        m = _STEP.match(line)
+        if m: out.setdefault(m.group(1), {})["stepMB"] = int(m.group(2)); continue
+        m = _OVER.match(line)
+        if m:
+            out.setdefault(m.group(1), {})["over"] = {"gpuPoolUsedMB": int(m.group(2)), "tier": m.group(3),
+                                                      "bootMB": int(m.group(4))}
+    return out
+
+
 def _leaks_of(text):
     """A pool row's `leak` field: every LEAK finding line as {riseMB, arms}, or None."""
     found = [{"riseMB": int(m.group(1)), "arms": int(m.group(2))}
@@ -368,6 +386,7 @@ def run_ctest(cmd, cwd, tier, lane, jobs, reasons=None, gating=None, rng=None, r
             row["leak"] = leak
         recs.append(row)
         arm_mem = _arm_mems(outputs.get(name, ""))
+        arm_find = _arm_findings(outputs.get(name, ""))
         for arm, v, s in arms:
             # an arm's reason: the selector's for that arm (`<row>::<arm>`), else its row's
             ar = reasons.get(f"{name}::{arm.split('.', 1)[-1]}", base["reason"])
@@ -375,6 +394,7 @@ def run_ctest(cmd, cwd, tier, lane, jobs, reasons=None, gating=None, rng=None, r
                        reason=ar)
             if arm in arm_mem:
                 rec["mem"] = arm_mem[arm]
+            rec.update(arm_find.get(arm, {}))
             recs.append(rec)
     if recs:
         path = append_records(recs, tier, shas["studio"])
