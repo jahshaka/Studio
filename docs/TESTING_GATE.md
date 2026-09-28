@@ -221,7 +221,9 @@ rule …`, `symbols [FogDesc, density] named by 7 file(s)`, `names 2 row(s)`, `t
 (vendored) enters our code through [...]`), then every selected row with its reason
 (`[relinks test_x]`, `symbol FogDesc`, `rule …`, `[module world]`) and the estimate (`N of M tier
 rows, ~S of ~T suite-seconds`, costs from THE RUN LOG's 14-day medians over
-`scripts/gate-times.txt`).
+`scripts/gate-times.txt` — a suite's QUIET median, of its PASS records whose `box.other_ctests == 0`,
+when >= 3 such exist, else every record's (medians under sibling gates ran ~26 % high,
+TESTING-DEBTS-1); the estimate line counts which source each cost came from).
 
 **THE RUN LOG (TESTING_V2 T8).** `--run` (its tier `scoped`, or `scoped-fallback` / `scoped-tier` when a scoped gate ran the whole tier), `--solo` and the rc-gate tiers
 (`scripts/gate_runlog.py run --tier <t> -- <ctest line>`) append one JSON record per row and per

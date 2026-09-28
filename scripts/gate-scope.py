@@ -481,16 +481,29 @@ def record_times():
     print(f"recorded {len(times)} suite times from the run log into {os.path.relpath(TIMES_FILE, ROOT)}")
 
 
+COST_SOURCE = {}   # suite -> "quiet" | "all" (the run log's median, gate_runlog.median_times) | "file"
+
+
 def load_costs():
-    """Per-suite seconds: scripts/gate-times.txt overlaid with the run log's medians (fresher)."""
+    """Per-suite seconds: scripts/gate-times.txt overlaid with the run log's medians (fresher; the
+    quiet-box median where >= 3 records ran with no sibling ctest). COST_SOURCE says which."""
     costs = {}
     if os.path.exists(TIMES_FILE):
         for line in open(TIMES_FILE):
             if line.startswith("#"): continue
             parts = line.split()
-            if len(parts) == 2: costs[parts[0]] = float(parts[1])
-    costs.update(gate_runlog.median_times(days=14))
+            if len(parts) == 2:
+                costs[parts[0]] = float(parts[1]); COST_SOURCE[parts[0]] = "file"
+    costs.update(gate_runlog.median_times(days=14, sources=COST_SOURCE))
     return costs
+
+
+def cost_sources(keys):
+    """'<n> quiet, <n> all, <n> file, <n> assumed' over the keys an estimate summed."""
+    c = {"quiet": 0, "all": 0, "file": 0, "assumed": 0}
+    for k in keys: c[COST_SOURCE.get(k, "assumed")] += 1
+    return (f"costs: {c['quiet']} quiet-box medians (box.other_ctests == 0, >= 3 records), {c['all']} "
+            f"all-record medians, {c['file']} from gate-times.txt, {c['assumed']} assumed 10 s")
 
 
 def api_modules():
@@ -1606,7 +1619,7 @@ def main():
     if names:
         print(f"\nSCOPED tier: {len(names)} of {len(tier_rows)} tier row(s), ~{est:.0f} of ~{tier_est:.0f} "
               f"suite-seconds, ~{wall/60:.1f} min wall at -j{a.jobs} (serial islands {serial:.0f} s); "
-              f"costs from the run log + scripts/gate-times.txt, 10 s assumed otherwise")
+              f"{cost_sources([k for n in names for k in ([f'{n}::{a_}' for a_ in subsets[n]] if n in subsets else [n])])}")
         for n in names:
             print(f"  {cost(n) if n in subsets else costs.get(n, 0):7.1f}  {n}   <- {selected[n]}")
             for arm in subsets.get(n, []):

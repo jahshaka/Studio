@@ -232,6 +232,29 @@ def runlog_cases(source):
     check(arms == {"p.a": "OOM", "p.b": "FAIL", "p.c": "LOST"}, "a pool's arms take the class from their own lines "
           "(%s)" % arms)
 
+    # T8: THE QUIET MEDIAN — a suite with >= 3 PASS records on a box with no sibling ctest is
+    # costed from those alone; with fewer, from every record (a private log directory)
+    import datetime, tempfile
+    with tempfile.TemporaryDirectory() as d:
+        old = os.environ.get("JAH_RUN_LOG_DIR")
+        os.environ["JAH_RUN_LOG_DIR"] = d
+        try:
+            with open(os.path.join(d, datetime.date.today().isoformat() + "-scoped-000000000.jsonl"), "w") as f:
+                for suite, secs, others in ([("x", 10, 0)] * 3 + [("x", 30, 3)] * 3 +
+                                            [("y", 10, 0)] * 2 + [("y", 30, 2)] * 3 + [("z", 20, None)]):
+                    f.write(json.dumps({"suite": suite, "arm": None, "verdict": "PASS", "seconds": secs,
+                                        "box": {"other_ctests": others}}) + "\n")
+            src = {}
+            med = rl.median_times(days=1, sources=src)
+        finally:
+            if old is None: os.environ.pop("JAH_RUN_LOG_DIR", None)
+            else: os.environ["JAH_RUN_LOG_DIR"] = old
+    check(med.get("x") == 10 and src.get("x") == "quiet", "3 quiet records -> the quiet median (%s %s)"
+          % (med.get("x"), src.get("x")))
+    check(med.get("y") == 30 and src.get("y") == "all", "2 quiet records -> every record's median (%s %s)"
+          % (med.get("y"), src.get("y")))
+    check(med.get("z") == 20 and src.get("z") == "all", "no box field -> every record's median")
+
 
 def nm_refusal(source, build):
     """H1: without `nm` the link graph cannot be read — the selector must REFUSE, never answer from

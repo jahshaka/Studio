@@ -437,9 +437,15 @@ def import_log(path, tier, tip, lane, jobs=None, reason=None):
         print("no ctest result lines in", path)
 
 
-def median_times(days=14, verdicts=("PASS",)):
+QUIET_MIN = 3
+
+
+def median_times(days=14, verdicts=("PASS",), sources=None):
     """suite -> median wall seconds over the run log's last `days` days (PASS rows by default:
-    a red's time is its failure's, not the suite's)."""
+    a red's time is its failure's, not the suite's). THE QUIET MEDIAN FIRST (TESTING-DEBTS-1 T8:
+    medians taken under sibling gates ran ~26 % high): a suite with >= QUIET_MIN records whose
+    `box.other_ctests == 0` is costed from those alone, else from every record. `sources`, a
+    dict, receives suite -> "quiet" | "all"."""
     d = log_dir()
     cutoff = (datetime.date.today() - datetime.timedelta(days=days)).isoformat()
     acc = {}
@@ -452,8 +458,15 @@ def median_times(days=14, verdicts=("PASS",)):
             if r.get("verdict") not in verdicts or r.get("seconds") is None: continue
             # an arm is costed as `<row>::<arm>` (gate-scope's key for a partial pool)
             k = r["suite"] if not r.get("arm") else f"{r['suite']}::{r['arm'].split('.', 1)[-1]}"
-            acc.setdefault(k, []).append(r["seconds"])
-    return {k: statistics.median(v) for k, v in acc.items()}
+            quiet = (r.get("box") or {}).get("other_ctests") == 0
+            acc.setdefault(k, []).append((r["seconds"], quiet))
+    out = {}
+    for k, v in acc.items():
+        q = [x for x, quiet in v if quiet]
+        use = q if len(q) >= QUIET_MIN else [x for x, _ in v]
+        out[k] = statistics.median(use)
+        if sources is not None: sources[k] = "quiet" if use is q else "all"
+    return out
 
 
 def _records(days):
