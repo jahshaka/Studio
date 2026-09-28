@@ -55,7 +55,6 @@ std::string gCacheDir;
 
 EngineConfig cacheConfig() {
     EngineConfig cfg;
-    cfg.backend        = Backend::Vulkan;
     cfg.pluginDir      = JAHSHAKA_TEST_PLUGIN_DIR;
     cfg.hlmsMediaDir   = JAHSHAKA_TEST_MEDIA_DIR;
     cfg.logFile        = "test_shader_cache-ogre.log";

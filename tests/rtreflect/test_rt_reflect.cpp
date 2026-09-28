@@ -389,12 +389,12 @@ int main(int argc, char **argv)
     // right only in a scene whose brightest light happens to have radiance pi.
     // This fixture's brightest light is radiance 2.0, so its factor is
     // 2/pi = 0.6366 and the ray used to show it 57 % TOO BRIGHT. Measured on
-    // this suite, both arms in one binary (JAH_RQ_NO_MULT restores the old
-    // reading): red excess 0.0737 without the multiplier, 0.0434 with it — and
+    // this suite, both arms in one binary (DRAG-1; the switch that restored the
+    // old reading is gone): red excess 0.0737 without the multiplier, 0.0434 with it — and
     // 0.0434 against the control's 0.0099 is still 4.4x, which is what
     // "unmistakable rather than a tint" was asking for.
     //
-    // RE-ANCHORED 0.03 -> 0.02 BY PHOTON-M2 (patch 0077), and it is the CONTROL
+    // RE-ANCHORED 0.03 -> 0.02 BY PHOTON-M2 (fork 8f09c0cd4+155a56bf8 (was 0077)), and it is the CONTROL
     // that moved, not the ray. This fixture's no-ray arm reads its reflection of
     // the scene's flat ambient through the specular cone's ESCAPE term, which
     // upstream multiplied by 0.31831 = 1/pi (its eye-tuned cancellation of the

@@ -84,7 +84,6 @@ static void shadowVaoArm(Engine *engine, Scene *s, int iteration) {
 
 static bool runOnce(int iteration) {
     EngineConfig cfg;
-    cfg.backend = Backend::Vulkan;
     cfg.pluginDir = JAHSHAKA_TEST_PLUGIN_DIR;
     cfg.hlmsMediaDir = JAHSHAKA_TEST_MEDIA_DIR;
     cfg.logFile = "test_engine_recreate-ogre.log";
@@ -186,7 +185,7 @@ int main(int argc, char **argv) {
     for (int i = 1; i <= cycles; ++i)
         if (!runOnce(i)) break;
     if (failures) std::printf("RESULT: %d FAILURE(S)\n", failures);
-    else if (gShadowVaoOnly) std::printf("RESULT: PASS (the mixed shadow-VAO list)\n");
+    else if (gShadowVaoOnly) std::printf("RESULT: PASS (the per-level shrunk shadow-VAO list)\n");
     else std::printf("RESULT: PASS (3 create/render/destroy cycles)\n");
     return failures ? 1 : 0;
 }

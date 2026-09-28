@@ -75,7 +75,6 @@ int gFailures = 0, gChecks = 0;
 
 EngineConfig vrConfig() {
     EngineConfig cfg;
-    cfg.backend      = Backend::Vulkan;
     cfg.pluginDir    = JAHSHAKA_TEST_PLUGIN_DIR;
     cfg.hlmsMediaDir = JAHSHAKA_TEST_MEDIA_DIR;
     cfg.logFile      = "test_vr_session-ogre.log";
