@@ -469,6 +469,51 @@ static void fieldRayLedger(Engine *e, Scene *s, const Vec3 &pw, double &leak, do
     leak /= total; stop /= total;
 }
 
+// THE SEALED ROOM UNDER A CASCADE CHAIN (SEALED-ROOM-LEAK-1): case 5's room and light,
+// the sky off then on, and the worst pixel's move. `gi` is the arm; returns the move in
+// 8-bit codes (negative if the frame is vacuous).
+static float sealedRoomMove(Engine *e, const GiParams &gi, const char *label, Vec3 eye = Vec3(0.0f, 2.0f, 0.0f))
+{
+    View *view = e->createOffscreenView("sealed_chain", 128, 128, Colour(0, 0, 0));
+    Scene *s = e->createScene("sealed_chain");
+    view->setScene(s);
+    s->setAmbient(Colour(0, 0, 0), Colour(0, 0, 0));
+    const Colour white(0.45f, 0.45f, 0.45f);
+    const Colour red(0.55f, 0.02f, 0.02f);
+    addSlab(s, white, Vec3(0.0f, -0.2f, 0.0f), Vec3(8.8f, 0.4f, 8.8f));
+    addSlab(s, white, Vec3(0.0f,  5.2f, 0.0f), Vec3(8.8f, 0.4f, 8.8f));
+    addSlab(s, white, Vec3(0.0f,  2.5f, -4.2f), Vec3(8.8f, 5.0f, 0.4f));
+    addSlab(s, white, Vec3(-4.2f, 2.5f, 0.0f), Vec3(0.4f, 5.0f, 8.8f));
+    addSlab(s, white, Vec3( 4.2f, 2.5f, 0.0f), Vec3(0.4f, 5.0f, 8.8f));
+    addSlab(s, red,   Vec3(0.0f,  2.5f, 4.2f), Vec3(8.8f, 5.0f, 0.4f));
+    const NodeId light = s->createNode();
+    s->setNodeTransform(light, Vec3(0.0f, 3.5f, 0.0f), Quat(), Vec3(1, 1, 1));
+    LightDesc l;
+    l.type = LightType::Point;
+    l.colour = Colour(1, 1, 1);
+    l.intensity = 0.25f;
+    l.range = 20.0f;
+    l.castShadows = false;
+    s->setLight(light, l);
+    enginetest::testCameraLookAt(view, eye, Vec3(eye.x, 1.6f, eye.z - 4.4f));
+    s->setGlobalIllumination(gi);
+    render(e, 6);
+    for (int f = 0; f < 600 && !s->giStatus().giAtRest; ++f) e->renderOneFrame();
+    Image off; view->readPixels(off);
+    s->setAmbient(kAmbientUpper, kAmbientLower);
+    render(e, 30);
+    for (int f = 0; f < 600 && !s->giStatus().giAtRest; ++f) e->renderOneFrame();
+    render(e, 30);
+    Image on; view->readPixels(on);
+    unsigned wx = 0, wy = 0;
+    const float d = maxChannelDelta(off, on, &wx, &wy) * 255.0f;
+    std::printf("   %-44s worst pixel moves %6.2f/255 at (%u,%u)\n", label, d, wx, wy);
+    view->setScene(nullptr);
+    e->destroyScene(s);
+    e->destroyView(view);
+    return d;
+}
+
 int main(int argc, char **argv)
 {
     // --cone-target: gi.cone_corner_target, the cone reference's corner against the
@@ -483,6 +528,44 @@ int main(int argc, char **argv)
     if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }
     engine->setFixedFrameDelta(1.0f / 60.0f);
     Engine *e = engine.get();
+    if (argc > 1 && std::string(argv[1]) == "--sealed-chain") {
+        // gi.sealed_room_chain_target — SEALED-ROOM-LEAK-1 (D4-PHOTON-TIERS' finding: the sealed room
+        // under the shipped chain leaks 12/255). Case 5's room, the SHIPPED Medium chain, the field on:
+        // a sealed room is black to the sky, so the sky on must move no pixel more than the reader's
+        // 2/255. MEASURED (D7-ENGINE-FIXES-1, spikes/d7-engine-fixes-1/item9-*.log), and why it is a
+        // target: the eye at the room's centre reads 3/255 (the field covers the room); the eye 0.6 m
+        // from a wall reads 12/255, the worst pixel on the room's FAR corner - outside cascade 0's box,
+        // which is the irradiance field's volume, so those pixels take the CONE diffuse, and the cone
+        // reader alone leaks 4-9/255 in this room at EVERY cell size (0.156 to 1.875 m: not the wall
+        // against the cell) and with 0, 1 or 2 bounces (not the bounce's escaping cones). The hop
+        // between cascades is not it either (one cascade holding the room, cones only: 9/255 at that
+        // pose). The fix is the cone reader's own residual (VOXEL-5's classes, a research item) or a
+        // field over the chain; neither is this lane's. The table prints every arm.
+        const Vec3 wallEye(0.0f, 2.0f, 3.4f), centre(0.0f, 2.0f, 0.0f);
+        for (float half : { 5.0f, 10.0f, 15.0f, 30.0f, 60.0f }) {
+            GiParams gi = vctBase();
+            gi.ddgi = GiToggle::Off;
+            gi.numBounces = 0;
+            gi.cascadeSet[0] = GiParams::GiCascadeDesc{ half, 64, 0.0f };
+            char label[120];
+            std::snprintf(label, sizeof label, "cones only, one cascade, cell %.3f m", 2.0f * half / 64.0f);
+            sealedRoomMove(e, gi, label, centre);
+        }
+        GiParams shipped = vctBase();
+        shipped.ddgi = GiToggle::On;
+        shipped.cascadeCount = 0;                       // the tier's own chain
+        shipped.cascadeSet[0] = GiParams::GiCascadeDesc();
+        const float atCentre = sealedRoomMove(e, shipped, "Medium chain, field on, eye at the centre", centre);
+        const float atWall = sealedRoomMove(e, shipped, "Medium chain, field on, eye 0.6 m from a wall", wallEye);
+        std::printf("target: %.0f/255 (bar 2/255) - the sealed room under the shipped chain, eye 0.6 m from a wall\n",
+                    atWall);
+        CHECK(atCentre <= 3.0f + 1e-3f, "the room inside the field reads the reader's residual (<= 3/255)");
+        CHECK(atWall <= 2.0f + 1e-3f,
+              "SEALED ROOM UNDER THE SHIPPED CHAIN: no pixel moves more than 2/255 with the sky on");
+        engine.reset();
+        std::printf(failures ? "\n%d FAILURES\n" : "\nall ok\n", failures);
+        return failures ? 1 : 0;
+    }
 
     // =====================================================================
     // CASE 1 — OPEN-SCENE RECOVERY, and CASE 4 — CORNER HONESTY, both on
