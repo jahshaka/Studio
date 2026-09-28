@@ -130,19 +130,30 @@ static void testSsrRow()
         auto s = iris::Scene::create();
         worldmodes::setPhoton(s, true, t);
         const bool raysTier = giQualityFacts(GiQuality(worldmodes::photonQuality(t))).rayReflections;
-        for (const worldmodes::EnumOption &o : ssr->options) {
-            const QString traced = worldmodes::optionLabel(*ssr, o, s, true);
-            const QString plain  = worldmodes::optionLabel(*ssr, o, s, false);
-            if (raysTier)
-                CHECK(traced == QStringLiteral("Traced") && plain == o.label,
-                      qPrintable(QStringLiteral("%1, option %2: reads Traced where the scene traces, "
-                                                "its own label where it cannot")
-                                     .arg(worldmodes::photonTierName(t), o.id)));
-            else
-                CHECK(traced == o.label && plain == o.label,
-                      qPrintable(QStringLiteral("%1, option %2: the screen march's own label")
-                                     .arg(worldmodes::photonTierName(t), o.id)));
+        // THE ENTRIES OFFERED (worldmodes::comboItems, what every panel and
+        // world.modeTable list): where the scene traces, exactly "Off" (choosable)
+        // and ONE disabled "Traced" standing for every non-zero value; where it
+        // cannot, the three march entries under their own labels.
+        const auto traced = worldmodes::comboItems(*ssr, s, true);
+        const auto plain  = worldmodes::comboItems(*ssr, s, false);
+        if (raysTier) {
+            CHECK(traced.size() == 2 && traced[0].value == 0 && traced[0].label == QStringLiteral("Off") &&
+                      traced[0].enabled && traced[1].label == QStringLiteral("Traced") && !traced[1].enabled,
+                  qPrintable(QStringLiteral("%1: where the scene traces the SSR row offers 'Off' and one "
+                                            "disabled 'Traced'").arg(worldmodes::photonTierName(t))));
+            CHECK(worldmodes::comboIndexOf(traced, 0) == 0 && worldmodes::comboIndexOf(traced, 1) == 1 &&
+                      worldmodes::comboIndexOf(traced, 2) == 1,
+                  qPrintable(QStringLiteral("%1: off shows 'Off', either march quality shows 'Traced'")
+                                 .arg(worldmodes::photonTierName(t))));
         }
+        const auto &cannot = raysTier ? plain : traced;
+        bool own = cannot.size() == ssr->options.size();
+        for (int k = 0; own && k < cannot.size(); ++k)
+            own = cannot[k].label == ssr->options[k].label && cannot[k].value == ssr->options[k].value &&
+                  cannot[k].enabled;
+        CHECK(own && (raysTier || plain.size() == ssr->options.size()),
+              qPrintable(QStringLiteral("%1: where nothing is traced, the three march entries under their own labels")
+                             .arg(worldmodes::photonTierName(t))));
         CHECK(worldmodes::reflectionsTraced(s, true) == raysTier,
               qPrintable(QStringLiteral("%1: reflectionsTraced agrees with the table")
                              .arg(worldmodes::photonTierName(t))));

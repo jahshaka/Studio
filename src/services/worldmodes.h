@@ -68,6 +68,19 @@ struct EnumOption {
     int     value = 0;   ///< the backing-field value
 };
 
+/// ONE ENTRY OF A ROW'S COMBO as a surface offers it for a scene on this
+/// machine (comboItems). `value` is what choosing it writes; `shows` the other
+/// backing values it stands for (the SSR row's "Traced" stands for every
+/// non-zero march quality at a ray tier); a disabled entry names a state and
+/// cannot be chosen.
+struct ComboItem {
+    QString    id;
+    QString    label;
+    int        value = 0;
+    bool       enabled = true;
+    QList<int> shows;
+};
+
 struct Row {
     QString  id;                       ///< stable, script-facing
     QString  label;
@@ -94,6 +107,12 @@ struct Row {
     /// Read through optionLabel().
     std::function<QString(int value, const iris::ScenePtr &scene, bool sceneTracesRays)>
         optionLabelAt;
+    /// A row whose OFFERED entries depend on the scene on this machine (the SSR
+    /// row at a ray tier offers "Off" and one disabled "Traced"). Null = one
+    /// enabled entry per option, named through optionLabel(). Read through
+    /// comboItems().
+    std::function<QVector<ComboItem>(const iris::ScenePtr &scene, bool sceneTracesRays)>
+        comboItemsAt;
     bool     available = true;         ///< false = declared but not yet implemented
     /// TIER SPACE — WHICH DIAL, IF ANY, RESOLVES THIS ROW.
     ///
@@ -210,6 +229,13 @@ QString rowCost(const Row &r, bool sceneTracesRays);
 /// Row::optionLabelAt). Every surface that names an option reads it here.
 QString optionLabel(const Row &r, const EnumOption &o, const iris::ScenePtr &scene,
                     bool sceneTracesRays);
+/// The entries an Enum row's combo OFFERS for `scene` on this machine (see
+/// Row::comboItemsAt) — the World panels, the camera overrides and
+/// world.modeTable all read it, so no surface offers what another hides.
+QVector<ComboItem> comboItems(const Row &r, const iris::ScenePtr &scene, bool sceneTracesRays);
+/// The index in `items` that shows backing value `value` (its own value or one
+/// it `shows`), -1 when none does.
+int comboIndexOf(const QVector<ComboItem> &items, int value);
 
 // ---------------------------------------------------------------------------
 // PHOTON — the unified realtime-GI switch (GI_UNIFIED_SPEC.md §2 / P2).
@@ -357,8 +383,10 @@ bool tierRaysResolve(PhotonTier t, bool sceneTracesRays);
 /// THE SSR ROW'S MEANING (D4-PHOTON-TIERS): true where the scene's reflections
 /// are TRACED — Photon on, a quality whose reflections the tier traces
 /// (giQualityFacts rayReflections: High, Epic) and a scene that traces rays on
-/// this machine. There the rays replace the SSR row, which reads "Traced" and
-/// is not read by the renderer (the engine twin: OgreScene::reflectionTraceRow).
+/// this machine. There the rays are the reflection wherever the row is on, and
+/// the row offers only "Off" and a disabled "Traced" (comboItems): OFF IS
+/// HONOURED AT EVERY TIER (no trace, no march — SceneMirror feeds 0), and any
+/// other value is fed as the tier's trace resolution (GiQualityFacts::reflectTrace).
 bool reflectionsTraced(const iris::ScenePtr &scene, bool sceneTracesRays);
 /// THE TECHNIQUE'S NAME — one source for the World rows, the GI panel and the
 /// docs: 0 "Off", 1 "VCT", 2 "VCT + rays" where `raysResolve`, else

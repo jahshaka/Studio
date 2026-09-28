@@ -131,8 +131,11 @@ void WorldModesPropertyWidget::build()
         // small budget (0..8 planes), and a combo makes the tier values legible.
         auto *combo = this->addComboBox(r.label);
         if (r.type == worldmodes::RowType::Enum) {
-            for (const worldmodes::EnumOption &o : r.options)
-                combo->addItem(worldmodes::optionLabel(r, o, scene, rays), o.value);
+            const QVector<worldmodes::ComboItem> items = worldmodes::comboItems(r, scene, rays);
+            for (int i = 0; i < items.size(); ++i) {
+                combo->addItem(items[i].label, items[i].value);
+                combo->setItemEnabled(i, items[i].enabled);
+            }
         } else {
             for (int v = r.minValue; v <= r.maxValue; ++v)
                 combo->addItem(QString::number(v), v);
@@ -229,11 +232,22 @@ void WorldModesPropertyWidget::refreshRows()
         } else if (auto *combo = qobject_cast<ComboBoxWidget *>(control)) {
             combo->setLabel(label);
             const QSignalBlocker quiet(combo->getWidget());
-            if (r.type == worldmodes::RowType::Enum)
-                for (int o = 0; o < r.options.size() && o < combo->getWidget()->count(); ++o)
-                    combo->getWidget()->setItemText(o, worldmodes::optionLabel(r, r.options[o], scene, rays));
-            const int index = combo->findData(value);
-            combo->setCurrentIndex(index >= 0 ? index : 0);
+            if (r.type == worldmodes::RowType::Enum) {
+                // The OFFERED entries follow the scene on this machine (the SSR
+                // row at a ray tier: "Off" and a disabled "Traced"), so they are
+                // re-listed, not re-labelled.
+                const QVector<worldmodes::ComboItem> items = worldmodes::comboItems(r, scene, rays);
+                combo->clear();
+                for (int i = 0; i < items.size(); ++i) {
+                    combo->addItem(items[i].label, items[i].value);
+                    combo->setItemEnabled(i, items[i].enabled);
+                }
+                const int index = worldmodes::comboIndexOf(items, value);
+                combo->setCurrentIndex(index >= 0 ? index : 0);
+            } else {
+                const int index = combo->findData(value);
+                combo->setCurrentIndex(index >= 0 ? index : 0);
+            }
         }
         // A row that would be a LIE in this mode is not shown at all
         // (Row::visible; the Metering pattern under Manual exposure, which

@@ -325,6 +325,9 @@ jah_pool_arm(gi_verbs gi_bounds ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_gi_bound
 # intensity 20 at 0.3 m is lit and no darker than at 2 (it drew every probe black; gi.probe_nan
 # holds the field's own half).
 jah_pool_arm(gi_verbs probe_nan_view ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_probe_nan_view.js 20)
+# gi_verbs.ssr_off_ray_tier — D4-PHOTON-TIERS fix round (F2/F3): a document's SSR OFF is honoured
+# at a ray tier (no trace runs), and the row offers exactly "Off" and a disabled "Traced" there.
+jah_pool_arm(gi_verbs ssr_off_ray_tier ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_ssr_off_ray_tier.js 15)
 # gi_verbs.offscreen_contract — D4-PHOTON-TIERS §2.2: the declared offscreen picture table
 # (world.tierTable().offscreen) held against the renderer on Showroom 2 at High — the scene-grade
 # screenshot runs the tier's gather and traced reflections, the plain grade (declared lower)

@@ -123,8 +123,11 @@ void WorldPostFxPropertyWidget::build()
             });
         } else {
             row.combo = this->addComboBox(r->label);
-            for (const worldmodes::EnumOption &o : r->options)
-                row.combo->addItem(worldmodes::optionLabel(*r, o, scene, rays), o.value);
+            const QVector<worldmodes::ComboItem> items = worldmodes::comboItems(*r, scene, rays);
+            for (int i = 0; i < items.size(); ++i) {
+                row.combo->addItem(items[i].label, items[i].value);
+                row.combo->setItemEnabled(i, items[i].enabled);
+            }
             row.combo->setToolTip(worldmodes::rowCost(*r, rays));
             identifyRow(row.combo, *r);
             const QString id = r->id;
@@ -226,7 +229,15 @@ void WorldPostFxPropertyWidget::refreshRows()
         } else if (row.combo) {
             row.combo->setLabel(label);
             const QSignalBlocker quiet(row.combo->getWidget());
-            const int index = row.combo->findData(value);
+            // Re-listed, not re-labelled: the OFFERED entries follow the scene on
+            // this machine (worldmodes::comboItems — the SSR row at a ray tier).
+            const QVector<worldmodes::ComboItem> items = worldmodes::comboItems(*r, scene, rays);
+            row.combo->clear();
+            for (int i = 0; i < items.size(); ++i) {
+                row.combo->addItem(items[i].label, items[i].value);
+                row.combo->setItemEnabled(i, items[i].enabled);
+            }
+            const int index = worldmodes::comboIndexOf(items, value);
             row.combo->setCurrentIndex(index >= 0 ? index : 0);
         }
         // ...AND THE ROW THAT IS HIDDEN RATHER THAN GREYED, same rule as the

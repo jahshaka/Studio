@@ -384,16 +384,23 @@ QVector<Row> buildRows()
                       { QStringLiteral("half"), QStringLiteral("Half-Res Rays"), 1 },
                       { QStringLiteral("hq"),   QStringLiteral("Full-Res Rays"), 2 } };
         r.tier[0] = 0; r.tier[1] = 0; r.tier[2] = 1; r.tier[3] = 2;
-        // AT A RAY TIER THE RAYS ARE THE REFLECTION (D4-PHOTON-TIERS): the row reads
-        // "Traced" and the renderer does not read it — the trace runs at the tier's
-        // own resolution (giQualityFacts reflectTrace, which is this row's own
-        // High/Epic columns). Elsewhere it is the screen march and nothing more.
-        r.optionLabelAt = [labels = r.options](int value, const iris::ScenePtr &scene,
-                                               bool sceneTracesRays) {
-            if (reflectionsTraced(scene, sceneTracesRays)) return QStringLiteral("Traced");
-            for (const EnumOption &o : labels)
-                if (o.value == value) return o.label;
-            return QString();
+        // AT A RAY TIER THE RAYS ARE THE REFLECTION (D4-PHOTON-TIERS): the row
+        // offers exactly two states — "Off", honoured at every tier (no trace, no
+        // march), and one disabled "Traced" standing for every other value: the
+        // march's quality means nothing there, the trace runs at the tier's own
+        // resolution (giQualityFacts reflectTrace, this row's own High/Epic
+        // columns; SceneMirror feeds it). Elsewhere the row is the screen march.
+        r.comboItemsAt = [](const iris::ScenePtr &scene, bool sceneTracesRays) {
+            QVector<ComboItem> items;
+            if (reflectionsTraced(scene, sceneTracesRays)) {
+                items.append({ QStringLiteral("off"), QStringLiteral("Off"), 0, true, {} });
+                items.append({ QStringLiteral("traced"), QStringLiteral("Traced"), 1, false, { 2 } });
+            } else {
+                items.append({ QStringLiteral("off"),  QStringLiteral("Off"),           0, true, {} });
+                items.append({ QStringLiteral("half"), QStringLiteral("Half-Res Rays"), 1, true, {} });
+                items.append({ QStringLiteral("hq"),   QStringLiteral("Full-Res Rays"), 2, true, {} });
+            }
+            return items;
         };
         r.costAt = [](bool sceneTracesRays) {
             const bool rays = tierRaysResolve(PhotonTier::High, sceneTracesRays);
@@ -1083,6 +1090,22 @@ QString optionLabel(const Row &r, const EnumOption &o, const iris::ScenePtr &sce
                     bool sceneTracesRays)
 {
     return r.optionLabelAt ? r.optionLabelAt(o.value, scene, sceneTracesRays) : o.label;
+}
+
+QVector<ComboItem> comboItems(const Row &r, const iris::ScenePtr &scene, bool sceneTracesRays)
+{
+    if (r.comboItemsAt) return r.comboItemsAt(scene, sceneTracesRays);
+    QVector<ComboItem> items;
+    for (const EnumOption &o : r.options)
+        items.append({ o.id, optionLabel(r, o, scene, sceneTracesRays), o.value, true, {} });
+    return items;
+}
+
+int comboIndexOf(const QVector<ComboItem> &items, int value)
+{
+    for (int i = 0; i < items.size(); ++i)
+        if (items[i].value == value || items[i].shows.contains(value)) return i;
+    return -1;
 }
 
 // ---------------------------------------------------------------------------

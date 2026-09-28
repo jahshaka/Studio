@@ -118,6 +118,11 @@ static unsigned long long frameHash(const Image &img)
 // The scene. Built identically in every process, which is what makes the
 // cross-process hash comparison mean something.
 struct Room {
+    /// THE GI DRIVER (D4-PHOTON-TIERS): created FIRST, so it is the scene's
+    /// authoritative view (the first enabled view) and the pinned cascade — and
+    /// the field on it — is centred on ITS camera, at the deleted scene-fitted
+    /// box's centre, whatever the measuring view does. Nothing reads its pixels.
+    View  *driver = nullptr;
     View  *view = nullptr;
     Scene *scene = nullptr;
     NodeId floor = 0, wall = 0, light = 0;
@@ -126,10 +131,13 @@ struct Room {
 static Room buildRoom(Engine *engine)
 {
     Room r;
+    r.driver = engine->createOffscreenView("ddgi-gi", 16, 16, Colour(0, 0, 0));
     r.view = engine->createOffscreenView("ddgi", 128, 128, Colour(0, 0, 0));
     if (r.view) r.view->setOffscreenContract(OffscreenContract::StillPicture);   // a measured picture
     r.scene = engine->createScene("ddgi");
+    r.driver->setScene(r.scene);
     r.view->setScene(r.scene);
+    enginetest::testCameraLookAt(r.driver, Vec3(0.0f, 7.5f, 0.0f), Vec3(0.0f, 7.5f, 1.0f));
     r.scene->setAmbient(Colour(0, 0, 0), Colour(0, 0, 0));
 
     r.floor = enginetest::addTestCube(r.scene, Colour(1.0f, 1.0f, 1.0f), 0.0f, 0.9f);
@@ -164,8 +172,19 @@ static GiParams vctBase()
     gi.mode = GiMode::Vct;
     gi.quality = GiQuality::Medium;      // 64^3 voxels
     gi.numBounces = 2;
-    gi.testProbeRegionMin = Vec3(-9.0f, -1.5f, -9.0f);
-    gi.testProbeRegionMax = Vec3(9.0f, 7.5f, 9.0f);
+    // ONE PINNED CASCADE over the deleted scene-fitted volume's box (D4-PHOTON-
+    // TIERS; a testProbeRegion pin reads nothing outside the hybrid): x,z +-9,
+    // y -1.5 .. 16.5 — EXACTLY the box the deleted arm built from the old
+    // -9 -1.5 -9 .. 9 7.5 9 bounds (it padded the short axis upward to a cube),
+    // centred on the GI driver at (0 7.5 0). The field rides it (8192 probes, the
+    // old fit). AT 128, 0.141 m cells — half the old arm's 0.281 m, and the
+    // measured reason: at 64 the chain's cones read the far floor 4.5 % under the
+    // field (0.4392 / 0.4588, bar 4.3 %) where the deleted arm read 1.000 — the
+    // chain's march is not the single volume's at the coarse cell; at 128 it reads
+    // 1.027. Medium's own chain (cascade 0 +-5 m around the eye) leaves the wall
+    // outside the field altogether, which is what made the dead pin pass.
+    gi.cascadeCount = 1;
+    gi.cascadeSet[0] = GiParams::GiCascadeDesc{ 9.0f, 128, 0.0f };
     return gi;
 }
 

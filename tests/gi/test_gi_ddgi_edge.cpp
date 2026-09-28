@@ -140,8 +140,22 @@ static float meanDelta255(const Stats &a, const Stats &b)
 // and z — which is what makes a leak show up as a PATTERN on the roof rather
 // than as a constant. One wall is red, so the leak is chromatic too.
 static const unsigned kRes = 128;
+/// Where the GI driver stands: the room's centre, low, so the one pinned
+/// cascade (+-5 m at 64, 0.156 m cells — the deleted box's cell) spans the
+/// shell's walls and its TOP lands inside the ceiling slab (5.0 - 5.5): the
+/// centre snaps to the cell lattice: 0.156 m up, top 5.156 (measured, asserted).
+static const Vec3 kDriverCase2(0.0f, 0.25f, 0.0f);
+/// Case 3's: +-5.5 m at 64 (0.172 m), centred 0.172 m up — top 5.672, above the
+/// roof's outer face (5.5), the whole shell inside, cube A (6.75 - 8.25) outside.
+static const Vec3 kDriverCase3(0.0f, 0.5f, 0.0f);
 
 struct Box {
+    /// THE GI DRIVER (D4-PHOTON-TIERS): created FIRST, so it is the scene's
+    /// authoritative view (OgreEngine::renderOneFrame, the first enabled view)
+    /// and the one pinned cascade — and the field on it — is centred on ITS
+    /// camera, which never moves between the shots. It places the volume where
+    /// the deleted scene-fitted box stood; nothing reads its pixels.
+    View  *driver = nullptr;
     View  *view = nullptr;          ///< the exterior camera (orthographic, re-aimed per shot)
     View  *inside = nullptr;        ///< the interior camera
     Scene *scene = nullptr;
@@ -150,11 +164,14 @@ struct Box {
 static Box buildBox(Engine *e)
 {
     Box b;
+    b.driver = e->createOffscreenView("ifdedge_gi", 16, 16, Colour(0, 0, 0));
     b.view = e->createOffscreenView("ifdedge", kRes, kRes, Colour(0, 0, 0));
     b.inside = e->createOffscreenView("ifdedge_in", kRes, kRes, Colour(0, 0, 0));
     b.scene = e->createScene("ifdedge");
+    b.driver->setScene(b.scene);
     b.view->setScene(b.scene);
     b.inside->setScene(b.scene);
+    enginetest::testCameraLookAt(b.driver, kDriverCase2, Vec3(0.0f, 0.25f, 1.0f));
     // A genuine hemisphere pair: the exterior's ONLY light, and the term the
     // field's binding deletes (VctDisableDiffuse) and the fallback restores.
     b.scene->setAmbient(Colour(0.30f, 0.30f, 0.30f), Colour(0.14f, 0.14f, 0.14f));
@@ -246,15 +263,10 @@ static Reading measure(Engine *e, Box &b)
     b.view->readPixels(img);
     r.cubeB = regionStats(img, cubeBTop);
 
-    // THE INTERIOR FROM ITS OWN VIEW, ALONE: the voxels (and the field on cascade 0)
-    // follow the view that DRIVES the scene's GI, and with the roof camera 30 m up
-    // enabled that is not the room (the single fitted volume this suite pinned is
-    // deleted, D4-PHOTON-TIERS). Counted in frames: until GI is at rest, bounded.
-    b.view->setEnabled(false);
+    // THE INTERIOR, settled: counted in frames, until GI is at rest, bounded.
     render(e);
     for (int f = 0; f < 240 && !b.scene->giStatus().giAtRest; ++f) e->renderOneFrame();
     b.inside->readPixels(r.interior);
-    b.view->setEnabled(true);
     // The floor patch nearest the red wall (the camera looks from -Z toward +Z,
     // so the far half of the floor is the red wall's side) and one off to the
     // side, which the bounce reaches far less.
@@ -270,19 +282,13 @@ static GiParams vctBase()
     gi.mode = GiMode::Vct;
     gi.quality = GiQuality::Medium;
     gi.numBounces = 2;
-    // THE WORST CASE, and today's automatic answer: the top of the volume sits
-    // INSIDE the ceiling slab (5.0 - 5.5).
-    // THE BOUNDS ARE A LATTICE'S (PHOTON-VOXEL-4): the fitted box is the bounds
-    // padded on the far side to a power-of-two count of cubic cells (OgreGi.cpp,
-    // buildVoxelArm), so bounds whose height is not the longest side / 2^k grow
-    // UPWARD - the old -1 .. 5.25 (6.25 m of a 10 m side) became -1 .. 9 at Medium
-    // and took in the roof AND the cube 2 m above it, whose cones then saw that
-    // cube: the roof varied by 6/255 with the field off, correct occlusion of a box
-    // the fixture means to leave outside. 10 m tall (-4.75, empty below the floor)
-    // is 64 cells of 0.156 m exactly, the box IS the bounds, and the top still sits
-    // inside the ceiling slab.
-    gi.testProbeRegionMin = Vec3(-5.0f, -4.75f, -5.0f);
-    gi.testProbeRegionMax = Vec3(5.0f, 5.25f, 5.0f);
+    // THE WORST CASE: the top of the field's volume sits INSIDE the ceiling slab
+    // (5.0 - 5.5). ONE PINNED CASCADE on the driver (kDriverCase2): the field
+    // rides cascade 0, so its volume is this box — x,z +-5, y about -4.8 .. 5.2,
+    // cells of 0.156 m, the box the deleted scene-fitted volume pinned here
+    // (-5 -4.75 -5 .. 5 5.25 5 at 64).
+    gi.cascadeCount = 1;
+    gi.cascadeSet[0] = GiParams::GiCascadeDesc{ 5.0f, 64, 0.0f };
     return gi;
 }
 
@@ -330,6 +336,17 @@ int main()
     const GiStatus st = b.scene->giStatus();
     CHECK(st.ifdBound, "the field is bound (the leak has a source)");
     std::printf("   field: %d probes, GI at rest %d\n", st.ifdProbes, int(st.giAtRest));
+    // THE VOLUME IS WHERE THE CASE SAYS (D4-PHOTON-TIERS): the one pinned cascade on
+    // the driver, its top inside the ceiling slab.
+    CHECK(st.cascades.size() == 1u, "one pinned cascade");
+    if (!st.cascades.empty()) {
+        const auto &c0 = st.cascades[0];
+        std::printf("   cascade 0: centre (%.3f %.3f %.3f) half %.3f -> top %.3f\n", c0.centre.x,
+                    c0.centre.y, c0.centre.z, c0.halfSize, c0.centre.y + c0.halfSize);
+        CHECK(c0.centre.y + c0.halfSize > 5.0f && c0.centre.y + c0.halfSize < 5.5f &&
+                  std::fabs(c0.centre.x) - c0.halfSize < -4.5f && std::fabs(c0.centre.z) - c0.halfSize < -4.5f,
+              "the field's volume spans the shell's walls and its TOP sits inside the ceiling slab (5.0 - 5.5)");
+    }
     const Reading ddgiOn = measure(e, b);
     showStats("roof, field ON", ddgiOn.roof);
     showStats("cube 2 m above, field ON", ddgiOn.cubeA);
@@ -391,8 +408,23 @@ int main()
     // =====================================================================
     std::printf("\n== case 3: bounds enclosing the shell (the roof is inside the volume) ==\n");
     GiParams enc = vctBase();
-    enc.testProbeRegionMax = Vec3(5.5f, 6.0f, 5.5f);          // above the roof's outer face (5.5)
+    // One pinned cascade +-5.5 m on the driver moved to kDriverCase3: its top
+    // above the roof's outer face (5.5), the whole shell inside the field.
+    enc.cascadeSet[0] = GiParams::GiCascadeDesc{ 5.5f, 64, 0.0f };
+    enginetest::testCameraLookAt(b.driver, kDriverCase3, Vec3(0.0f, 0.5f, 1.0f));
     CHECK(b.scene->setGlobalIllumination(enc), "VCT without DDGI, enclosing bounds");
+    {
+        const GiStatus es = b.scene->giStatus();
+        if (!es.cascades.empty()) {
+            const auto &c0 = es.cascades[0];
+            std::printf("   cascade 0: centre (%.3f %.3f %.3f) half %.3f -> top %.3f\n", c0.centre.x,
+                        c0.centre.y, c0.centre.z, c0.halfSize, c0.centre.y + c0.halfSize);
+            CHECK(c0.centre.y + c0.halfSize > 5.5f && c0.centre.y - c0.halfSize < 0.0f &&
+                      c0.centre.y + c0.halfSize < 6.75f,
+                  "case 3's volume encloses the shell (its top above the roof's outer face 5.5) and "
+                  "leaves cube A (6.75 - 8.25) outside");
+        }
+    }
     const Reading encOff = measure(e, b);
     showStats("roof, enclosing bounds, field off", encOff.roof);
     enc.ddgi = GiToggle::On;
@@ -422,9 +454,11 @@ int main()
     // PHOTON-GATHER-1d deleted it; "the field still DOES something inside",
     // above, is the field-off-against-on proof it duplicated.)
 
+    b.driver->setScene(nullptr);
     b.view->setScene(nullptr);
     b.inside->setScene(nullptr);
     e->destroyScene(b.scene);
+    e->destroyView(b.driver);
     e->destroyView(b.view);
     e->destroyView(b.inside);
     engine.reset();
