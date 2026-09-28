@@ -2545,6 +2545,124 @@ static int caseViewBatch()
     return failures ? 1 : 0;
 }
 
+// ---------------------------------------------------------------------------
+// gi.card_light_trigger (ATOM-S3-CARDCAP): WHAT A LIGHT WRITE COSTS THE CARDS.
+// A card stores the sun's shadow term and no lamp's, so a POINT LAMP moving must
+// re-queue nothing (0 captures, the stored layers byte-for-byte unchanged — its
+// radiance is the relight's, which it does move), and the SUN turning must stale
+// the sun term of EVERY resident card.
+// ---------------------------------------------------------------------------
+static bool sameLayers(const CardSample &a, const CardSample &b)
+{
+    for (int k = 0; k < 3; ++k)
+        if (a.albedo[k] != b.albedo[k] || a.normal[k] != b.normal[k] || a.emissive[k] != b.emissive[k])
+            return false;
+    return a.depth == b.depth && a.shadow == b.shadow && a.roughness == b.roughness;
+}
+
+static int caseLightTrigger()
+{
+    Fixture f;
+    if (!makeFixture(f, "cardlighttrigger")) return 1;
+    Scene *s = f.s;
+    // Two carded crates on an uncarded floor: twelve cards, one sun, one lamp.
+    const NodeId floorNode = s->createNode();
+    {
+        PbrParams p;
+        p.albedo = Colour(0.6f, 0.6f, 0.6f);
+        const MaterialId mat = s->createPbrMaterial(p);
+        const MeshId mesh = s->createMesh(enginetest::unitCubeMesh());
+        CHECK(floorNode && mat && mesh && s->attachMesh(floorNode, mesh, mat), "the floor exists");
+    }
+    enginetest::setNodeScale(s, floorNode, Vec3(12.0f, 0.2f, 12.0f));
+    enginetest::setNodePosition(s, floorNode, Vec3(0.0f, -0.1f, 0.0f));
+    for (int i = 0; i < 2; ++i) {
+        const NodeId crate = s->createNode();
+        PbrParams p;
+        p.albedo = Colour(0.8f, 0.3f + 0.4f * float(i), 0.2f);
+        const MaterialId mat = s->createPbrMaterial(p);
+        MeshData md = enginetest::unitCubeMesh();
+        md.cards = boxCards(0.5f);
+        const MeshId mesh = s->createMesh(md);
+        CHECK(crate && mat && mesh && s->attachMesh(crate, mesh, mat), "a carded crate exists");
+        enginetest::setNodePosition(s, crate, Vec3(i ? 1.5f : -1.5f, 0.5f, 0.0f));
+    }
+    const NodeId sun = s->createNode();
+    {
+        LightDesc l;
+        l.type = LightType::Directional;
+        l.colour = Colour(1.0f, 1.0f, 1.0f);
+        l.intensity = 2.0f / 3.14159265358979323846f;
+        l.castShadows = true;
+        s->setNodeTransform(sun, Vec3(0, 0, 0), Quat(0.2f, 0.0f, 0.1f, 0.97f), Vec3(1, 1, 1));
+        CHECK(sun && s->setLight(sun, l), "a shadow-casting sun");
+    }
+    const NodeId lamp = s->createNode();
+    {
+        LightDesc l;
+        l.type = LightType::Point;
+        l.colour = Colour(1.0f, 0.9f, 0.8f);
+        l.intensity = 20.0f;
+        l.range = 12.0f;
+        l.castShadows = true;
+        s->setNodeTransform(lamp, Vec3(0.0f, 3.0f, 2.0f), Quat(), Vec3(1, 1, 1));
+        CHECK(lamp && s->setLight(lamp, l), "a shadow-casting point lamp");
+    }
+    f.view->setShadows(true);
+    GiParams gi = baseGi();
+    gi.cardResidencyRadius = 40.0f;
+    CHECK(s->setGlobalIllumination(gi), "GI builds");
+    enginetest::testCameraLookAt(f.view, Vec3(0.0f, 4.0f, -8.0f), Vec3(0.0f, 0.5f, 0.0f));
+    // Settle: every card captured and relit, the queue empty.
+    for (int i = 0; i < 120; ++i) {
+        render(f.e, 1);
+        const CardCacheStatus c = s->giStatus().cards;
+        if (i > 8 && c.built && c.cardsResident && !c.queueLength) break;
+    }
+    render(f.e, 8);
+    const CardCacheStatus c0 = s->giStatus().cards;
+    CHECK_MSG(c0.built && c0.cardsResident == 12u && c0.queueLength == 0u,
+              "twelve cards resident and the queue drained (%u resident, %u queued)", c0.cardsResident,
+              c0.queueLength);
+    // The crates' tops, read as a ray would.
+    const Vec3 up(0.0f, 1.0f, 0.0f);
+    CardSample a0, b0;
+    const bool gotA = s->readCardAt(Vec3(-1.5f, 1.0f, 0.0f), up, a0) && a0.ok;
+    const bool gotB = s->readCardAt(Vec3(1.5f, 1.0f, 0.0f), up, b0) && b0.ok;
+    CHECK(gotA && gotB, "the cache answers on both crates' tops");
+
+    // THE LAMP MOVES: no capture, the stored layers unchanged, the radiance relit.
+    s->setNodeTransform(lamp, Vec3(1.0f, 3.5f, -1.0f), Quat(), Vec3(1, 1, 1));
+    render(f.e, 30);
+    const CardCacheStatus c1 = s->giStatus().cards;
+    std::printf("    lamp move: captures %llu -> %llu, relights %llu -> %llu, queue %u\n",
+                (unsigned long long)c0.captures, (unsigned long long)c1.captures,
+                (unsigned long long)c0.relights, (unsigned long long)c1.relights, c1.queueLength);
+    CHECK_MSG(c1.captures == c0.captures && c1.queueLength == 0u,
+              "a point lamp moving re-queues NO card (%llu captures)",
+              (unsigned long long)(c1.captures - c0.captures));
+    CHECK_MSG(c1.relights > c0.relights, "...and relights the resident set (%llu relights)",
+              (unsigned long long)(c1.relights - c0.relights));
+    CardSample a1, b1;
+    if (gotA && gotB && s->readCardAt(Vec3(-1.5f, 1.0f, 0.0f), up, a1) && a1.ok &&
+        s->readCardAt(Vec3(1.5f, 1.0f, 0.0f), up, b1) && b1.ok)
+        CHECK(sameLayers(a0, a1) && sameLayers(b0, b1),
+              "the stored layers (albedo, normal, depth, emissive, shadow, roughness) are unchanged");
+    else
+        CHECK(false, "the cache answers after the lamp move");
+
+    // THE SUN TURNS: every resident card's sun term is stale.
+    s->setNodeTransform(sun, Vec3(0, 0, 0), Quat(0.35f, 0.0f, -0.2f, 0.91f), Vec3(1, 1, 1));
+    render(f.e, 40);
+    const CardCacheStatus c2 = s->giStatus().cards;
+    std::printf("    sun turn: captures %llu -> %llu\n", (unsigned long long)c1.captures,
+                (unsigned long long)c2.captures);
+    CHECK_MSG(c2.captures - c1.captures >= c1.cardsResident,
+              "the sun turning re-captures every resident card (%llu of %u)",
+              (unsigned long long)(c2.captures - c1.captures), c1.cardsResident);
+    return failures ? 1 : 0;
+}
+
 int main(int argc, char **argv)
 {
     const std::string which = argc > 1 ? argv[1] : "capture";
@@ -2561,6 +2679,7 @@ int main(int argc, char **argv)
     else if (which == "blend") rc = caseBlend();
     else if (which == "view") rc = caseView();
     else if (which == "view_batch") rc = caseViewBatch();
+    else if (which == "light_trigger") rc = caseLightTrigger();
     else { std::printf("FAIL: unknown case '%s'\n", which.c_str()); return 1; }
     std::printf("\n%s: %d failure(s)\n", which.c_str(), failures);
     return rc;

@@ -1168,6 +1168,11 @@ set_tests_properties(gi.card_capture PROPERTIES TIMEOUT 120 LABELS "engine")
 jah_gpu_row(gi.card_shadow CLASS engine COMMAND test_gi_cards shadow
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.card_shadow PROPERTIES TIMEOUT 120 LABELS "engine" RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
+# ATOM-S3-CARDCAP: a point lamp moving re-queues no card (the capture holds the sun's
+# term alone); the sun turning stales every resident card's.
+jah_gpu_row(gi.card_light_trigger CLASS engine COMMAND test_gi_cards light_trigger
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.card_light_trigger PROPERTIES TIMEOUT 120 LABELS "engine")
 jah_gpu_row(gi.card_budget CLASS engine COMMAND test_gi_cards budget
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.card_budget PROPERTIES TIMEOUT 120 LABELS "engine")
