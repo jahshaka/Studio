@@ -321,6 +321,26 @@ set_tests_properties(scripting.e2e.shadow_cache_probes PROPERTIES
 # retired keys refused by name, and world.refreshGi. Engine UP for the same
 # reason as gi_status: the interesting numbers are the renderer's.
 jah_pool_arm(gi_verbs gi_bounds ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_gi_bounds.js 7)
+# gi_verbs.probe_nan_view — PROBE-NAN-1 (D4-PHOTON-TIERS): the Probes view under a lamp of
+# intensity 20 at 0.3 m is lit and no darker than at 2 (it drew every probe black; gi.probe_nan
+# holds the field's own half).
+jah_pool_arm(gi_verbs probe_nan_view ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_probe_nan_view.js 20)
+# gi_verbs.ssr_off_ray_tier — D4-PHOTON-TIERS fix round (F2/F3): a document's SSR OFF is honoured
+# at a ray tier (no trace runs), and the row offers exactly "Off" and a disabled "Traced" there.
+jah_pool_arm(gi_verbs ssr_off_ray_tier ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_ssr_off_ray_tier.js 15)
+# gi_verbs.offscreen_contract — D4-PHOTON-TIERS §2.2: the declared offscreen picture table
+# (world.tierTable().offscreen) held against the renderer on Showroom 2 at High — the scene-grade
+# screenshot runs the tier's gather and traced reflections, the plain grade (declared lower)
+# runs neither. A pixel claim, in the Epic pool.
+set(JAH_OFFSCREEN_SHOWROOM "${CMAKE_SOURCE_DIR}/scenes/Showroom 2.zip")
+configure_file(scripts/e2e_offscreen_contract.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_offscreen_contract.js @ONLY)
+jah_pool_arm(gi_verbs offscreen_contract ${CMAKE_CURRENT_BINARY_DIR}/e2e_offscreen_contract.js 60)
+# gi_verbs.pcc_budget — PCC-BUDGET-1: the probe grid under the tier's WHOLE-grid VRAM budget on
+# Showroom 2 with the rays off (Epic keeps the measured 32, High cuts to its budget's 19), the
+# total asserted by the renderer's arithmetic and by the texture manager.
+set(JAH_PCC_BUDGET_SHOWROOM "${CMAKE_SOURCE_DIR}/scenes/Showroom 2.zip")
+configure_file(scripts/e2e_pcc_budget.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_pcc_budget.js @ONLY)
+jah_pool_arm(gi_verbs pcc_budget ${CMAKE_CURRENT_BINARY_DIR}/e2e_pcc_budget.js 60)
 # ENGINE_CACHE_POLICY_SPEC P10: a page return (editor -> assets -> editor, and
 # editor -> player -> editor) never re-pushes or rebuilds GI — giPushes,
 # giStatus().rebuilds and the whole giStatus reading are unchanged, and the

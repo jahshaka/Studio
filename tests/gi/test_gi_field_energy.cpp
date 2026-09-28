@@ -533,7 +533,6 @@ int main()
     gi.ddgi = GiToggle::On;            // the irradiance field: the term this suite is about
     gi.gather = GiToggle::Off;
     gi.numBounces = 1;
-    gi.cascades = true;
     CHECK(s->setGlobalIllumination(gi), "the cascade chain with the field builds over the fixture");
     // RAYS OFF: `gi.field_follows` is about the field + cone path, and that is
     // the path this bar is stated for. The ray tier's own reflection answer is

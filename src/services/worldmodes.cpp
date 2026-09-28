@@ -70,30 +70,33 @@ int planarBudgetOf(const iris::ScenePtr &s)
 /// 64^3 with the irradiance field on and no probes — which is cheaper on the
 /// frame than the CPU ray trace it replaces, sees every light instead of one,
 /// and is the same arm as the tiers above it.
-/// THE SIXTH COLUMN IS THE CASCADE CHAIN, AND IT IS ON IN EVERY TIER
-/// (PHOTON_SPEC §7 E2 (6), 2026-09-15). Photon's whole point is that the bounce
-/// follows the camera: a single scene-fitted voxel box means a scene bigger than
-/// the renderer's 64 m ceiling is voxelised at metres per cell, and a camera
-/// that walks out of it walks out of the bounce. The chain is the shipped answer
-/// from this tier table on; `world.gi({cascades:false})` is still a per-scene
-/// PIN, like every other row here, for anyone who wants the one box back.
-struct PhotonRow { int technique = 0, quality = 0, ddgi = 0, bounces = 0, probeSize = 0, cascades = 0; };
+/// THE VOXELS ARE ALWAYS THE CAMERA'S CASCADE CHAIN (PHOTON_SPEC §7 E2 (6)); the
+/// column that could turn it off, and the single scene-fitted volume it selected,
+/// are deleted (D4-PHOTON-TIERS — the owner's law: no fixed GI volume, no "room").
+/// THE FIELD COLUMN IS A PROJECTION of the engine's table (D4-PHOTON-TIERS):
+/// giQualityFacts(quality).fieldDefault, the same answer GiParams::ddgi's Auto
+/// resolves to in the renderer — one source, not two copies.
+struct PhotonRow { int technique = 0, quality = 0, bounces = 0, probeSize = 0; };
 const PhotonRow kPhotonTable[4] = {
-    /* Low    */ { 1, 0, 1, 1, 0, 1 },   // VCT, 2 cascades @ 64^3, the field on, no probes
-    /* Medium */ { 1, 1, 1, 1, 0, 1 },   // VCT, the chain at 64^3, DDGI-fed (voxel source)
-    /* High   */ { 2, 2, 1, 1, 0, 1 },   // the hybrid (rays where the scene traces, else probes), the chain's High table
-    /* Epic   */ { 2, 2, 1, 3, 0, 1 },   // ... plus 3 bounces
+    /* Low    */ { 1, 0, 1, 0 },   // VCT, 2 cascades @ 64^3, the field on, no probes
+    /* Medium */ { 1, 1, 1, 0 },   // VCT, the chain at 64^3, DDGI-fed (voxel source)
+    /* High   */ { 2, 2, 1, 0 },   // the hybrid (rays where the scene traces, else probes), the chain's High table
+    /* Epic   */ { 2, 3, 3, 0 },   // the Epic row (4x the gather's probes) plus 3 bounces
 };
+int photonFieldColumn(const PhotonRow &r)
+{
+    return jahshaka::engine::giQualityFacts(jahshaka::engine::GiQuality(qBound(0, r.quality, 3)))
+                   .fieldDefault ? 1 : 0;
+}
 /// The Photon-tiered row ids, in kPhotonTable column order.
-const int kPhotonRowCount = 6;
+const int kPhotonRowCount = 5;
 int photonColumn(const PhotonRow &r, int i) {
     switch (i) {
     case 0: return r.technique;
     case 1: return r.quality;
-    case 2: return r.ddgi;
+    case 2: return photonFieldColumn(r);
     case 3: return r.bounces;
-    case 4: return r.probeSize;
-    default: return r.cascades;
+    default: return r.probeSize;
     }
 }
 /// Fills a Photon-tiered row's four tier cells from the table's column `column`.
@@ -381,15 +384,43 @@ QVector<Row> buildRows()
                       { QStringLiteral("half"), QStringLiteral("Half-Res Rays"), 1 },
                       { QStringLiteral("hq"),   QStringLiteral("Full-Res Rays"), 2 } };
         r.tier[0] = 0; r.tier[1] = 0; r.tier[2] = 1; r.tier[3] = 2;
+        // AT A RAY TIER THE RAYS ARE THE REFLECTION (D4-PHOTON-TIERS): the row
+        // offers exactly two states — "Off", honoured at every tier (no trace, no
+        // march), and "Traced" standing for every other value: the march's
+        // quality means nothing there, the trace runs at the tier's own
+        // resolution (giQualityFacts reflectTrace, this row's own High/Epic
+        // columns; SceneMirror feeds it). Choosing Traced DROPS the pin (the
+        // tier decides again; applyComboItem) — the way back from Off without
+        // resetting every other pin. Elsewhere the row is the screen march.
+        r.comboItemsAt = [](const iris::ScenePtr &scene, bool sceneTracesRays) {
+            QVector<ComboItem> items;
+            if (reflectionsTraced(scene, sceneTracesRays)) {
+                items.append({ QStringLiteral("off"), QStringLiteral("Off"), 0, false, {} });
+                items.append({ QStringLiteral("traced"), QStringLiteral("Traced"), 1, true, { 2 } });
+            } else {
+                items.append({ QStringLiteral("off"),  QStringLiteral("Off"),           0, false, {} });
+                items.append({ QStringLiteral("half"), QStringLiteral("Half-Res Rays"), 1, false, {} });
+                items.append({ QStringLiteral("hq"),   QStringLiteral("Full-Res Rays"), 2, false, {} });
+            }
+            return items;
+        };
         r.costAt = [](bool sceneTracesRays) {
+            const bool rays = tierRaysResolve(PhotonTier::High, sceneTracesRays);
             return QStringLiteral("Reflections of things that MOVE — the one gap a baked capture "
                                   "structurally cannot fill, and the only reflection source that "
                                   "needs no capture at all. Costs a second traversal of the scene "
                                   "(a depth/normal/roughness prepass) on top of the ray march, so "
                                   "it never appears below High. Only reflects what is ON SCREEN: "
                                   "reflections fade out at the frame's edges and on rough "
-                                  "surfaces, and fall back to %1 wherever they do.")
-                .arg(reflectionFallback(tierRaysResolve(PhotonTier::High, sceneTracesRays)));
+                                  "surfaces, and fall back to %1 wherever they do.%2")
+                .arg(reflectionFallback(rays),
+                     rays ? QStringLiteral(" At %1, where this scene traces rays, the RAYS are "
+                                           "the reflection: this row reads Traced and the "
+                                           "renderer traces at the tier's own resolution "
+                                           "(High one ray per 2x2 pixels, Epic every pixel) "
+                                           "whatever it is set to.")
+                                .arg(tiersWithTechnique(2))
+                          : QString());
         };
         r.available = true;
         r.get = [](const iris::ScenePtr &s) { return s->ssrMode; };
@@ -760,33 +791,27 @@ QVector<Row> buildRows()
         r.tierSpace = TierSpace::Photon;
         r.options = { { QStringLiteral("low"),    QStringLiteral("Low"),    0 },
                       { QStringLiteral("medium"), QStringLiteral("Medium"), 1 },
-                      { QStringLiteral("high"),   QStringLiteral("High"),   2 } };
+                      { QStringLiteral("high"),   QStringLiteral("High"),   2 },
+                      { QStringLiteral("epic"),   QStringLiteral("Epic"),   3 } };
         photonColumns(r, 1);
         // GENERATED: the resolutions and probe sizes are the ENGINE's
-        // (giQualityFacts). The hand-written "32/64/128 voxels per axis" was
-        // the single-volume arm's numbers, and the cascade chain — on at every
-        // tier — uses 64/64/128 (render audit A5).
-        r.cost = QStringLiteral("Ray/voxel budget. With Photon's camera cascades on (every tier), "
-                                "this dial picks the chain: ") +
-                 QStringLiteral("Low %1 voxels per axis, Medium %2, High %3")
-                     .arg(photonTierVoxelPhrase(PhotonTier::Low),
-                          photonTierVoxelPhrase(PhotonTier::Medium),
-                          photonTierVoxelPhrase(PhotonTier::High)) +
-                 QStringLiteral("; with the cascades off it sizes the one scene-fitted volume "
-                                "instead (%1 / %2 / %3 per axis). It also sets the reflection "
-                                "probe's cube face: %4 / %5 / %6 pixels")
-                     .arg(jahshaka::engine::giQualityFacts(jahshaka::engine::GiQuality::Low)
-                              .voxelResolution)
-                     .arg(jahshaka::engine::giQualityFacts(jahshaka::engine::GiQuality::Medium)
-                              .voxelResolution)
-                     .arg(jahshaka::engine::giQualityFacts(jahshaka::engine::GiQuality::High)
-                              .voxelResolution)
-                     .arg(jahshaka::engine::giQualityFacts(jahshaka::engine::GiQuality::Low)
-                              .probeFaceSize)
-                     .arg(jahshaka::engine::giQualityFacts(jahshaka::engine::GiQuality::Medium)
-                              .probeFaceSize)
-                     .arg(jahshaka::engine::giQualityFacts(jahshaka::engine::GiQuality::High)
-                              .probeFaceSize);
+        // (giQualityFacts), per quality row (render audit A5).
+        {
+            using jahshaka::engine::GiQuality;
+            using jahshaka::engine::giQualityFacts;
+            r.cost = QStringLiteral("Ray/voxel budget: this dial picks the camera's cascade "
+                                    "chain — Low %1 voxels per axis, Medium %2, High %3, Epic %4 "
+                                    "(Epic adds four times the gather's probes). It also sets the "
+                                    "reflection probe's cube face: %5 / %6 / %7 / %8 pixels")
+                         .arg(photonTierVoxelPhrase(PhotonTier::Low),
+                              photonTierVoxelPhrase(PhotonTier::Medium),
+                              photonTierVoxelPhrase(PhotonTier::High),
+                              photonTierVoxelPhrase(PhotonTier::Epic))
+                         .arg(giQualityFacts(GiQuality::Low).probeFaceSize)
+                         .arg(giQualityFacts(GiQuality::Medium).probeFaceSize)
+                         .arg(giQualityFacts(GiQuality::High).probeFaceSize)
+                         .arg(giQualityFacts(GiQuality::Epic).probeFaceSize);
+        }
         r.costAt = [text = r.cost](bool sceneTracesRays) {
             const bool rays = tierRaysResolve(PhotonTier::High, sceneTracesRays);
             return text +
@@ -854,10 +879,55 @@ QVector<Row> buildRows()
             }
         }
         // -1 (auto) is what a scene no tier has ever been applied to holds, and
-        // the engine renders it as OFF — so that is what it RESOLVES to. Any
-        // tier application writes a concrete 0/1 through.
-        r.get = [](const iris::ScenePtr &s) { return s->giDdgi > 0 ? 1 : 0; };
+        // the engine resolves it through the tier table (GiQualityFacts
+        // fieldDefault — the same projection as the column), so that is what it
+        // RESOLVES to here too. Any tier application writes a concrete 0/1 through.
+        r.get = [](const iris::ScenePtr &s) {
+            if (s->giDdgi < 0) return photonDdgi(photonTier(s));
+            return s->giDdgi > 0 ? 1 : 0;
+        };
         r.set = [](const iris::ScenePtr &s, int v) { s->giDdgi = v ? 1 : 0; };
+        out.append(r);
+    }
+    // THE SCREEN-PROBE GATHER (D4-PHOTON-TIERS; PHOTON-GATHER-1d, PHOTON-GA-VR): a
+    // row of its own at last. Every tier's column is AUTO = THE TIER'S, resolved
+    // by the engine's table (giQualityFacts' gather row, its VR column included
+    // — which only the renderer can resolve, since only it knows a headset is
+    // driving), so the text is generated from that table and never hand-copied.
+    {
+        Row r;
+        r.id = QStringLiteral("giGather");
+        r.label = QStringLiteral("Photon Screen-Probe Gather");
+        r.group = QStringLiteral("Global Illumination");
+        r.type = RowType::Enum;
+        r.options = { { QStringLiteral("off"),  QStringLiteral("Off"),  0 },
+                      { QStringLiteral("auto"), QStringLiteral("Auto"), -1 },
+                      { QStringLiteral("on"),   QStringLiteral("On"),   1 } };
+        r.tier[0] = -1; r.tier[1] = -1; r.tier[2] = -1; r.tier[3] = -1;
+        r.costAt = [](bool sceneTracesRays) {
+            QStringList on, off;
+            for (PhotonTier t : { PhotonTier::Low, PhotonTier::Medium, PhotonTier::High,
+                                  PhotonTier::Epic }) {
+                const jahshaka::engine::GiGatherFacts g = photonGather(t);
+                QString n = photonTierName(t);
+                n[0] = n[0].toUpper();
+                if (!g.on) { off << n; continue; }
+                on << QStringLiteral("%1 %2 rays a probe, a probe per %3x%3 pixels")
+                          .arg(n).arg(g.octRes * g.octRes).arg(g.stride);
+            }
+            return QStringLiteral("The diffuse GI traced by hardware rays, once per probe cell, "
+                                  "instead of once per pixel by six voxel cones: a ray is stopped "
+                                  "by a triangle where a cone is stopped by a voxel. Auto is the "
+                                  "tier's: %1; off at %2. A headset gathers the same row per eye. "
+                                  "Where it runs it IS the diffuse and the irradiance field is its "
+                                  "fallback.%3")
+                .arg(on.join(QStringLiteral("; ")), off.join(QStringLiteral(", ")),
+                     sceneTracesRays ? QString()
+                                     : QStringLiteral(" This machine or scene traces no rays, so "
+                                                      "the row does nothing here."));
+        };
+        r.get = [](const iris::ScenePtr &s) { return s ? qBound(-1, s->giGather, 1) : -1; };
+        r.set = [](const iris::ScenePtr &s, int v) { if (s) s->giGather = qBound(-1, v, 1); };
         out.append(r);
     }
     // EPIC'S TWO COLUMNS (owner option (b), 2026-09-09): what makes the top
@@ -918,35 +988,6 @@ QVector<Row> buildRows()
         };
         r.get = [](const iris::ScenePtr &s) { return qBound(0, s->giProbeCaptureSize, 1024); };
         r.set = [](const iris::ScenePtr &s, int v) { s->giProbeCaptureSize = qBound(0, v, 1024); };
-        out.append(r);
-    }
-    // THE CASCADE CHAIN, as a tier row (PHOTON_SPEC §7 E2 (6)). A Photon-tiered
-    // Enum like the technique above it, so an edit here PINS the chain on or off
-    // against the tier, and every tier's column is 1.
-    {
-        Row r;
-        r.id = QStringLiteral("giCascades");
-        r.label = QStringLiteral("Photon Camera Cascades");
-        r.group = QStringLiteral("Global Illumination");
-        r.type = RowType::Enum;
-        r.tierSpace = TierSpace::Photon;
-        r.options = { { QStringLiteral("off"), QStringLiteral("Off"), 0 },
-                      { QStringLiteral("on"),  QStringLiteral("On"),  1 } };
-        photonColumns(r, 5);
-        r.cost = QStringLiteral("Where the voxels are. On (every tier) the renderer builds a chain "
-                                "of voxel boxes CENTRED ON THE CAMERA — fine cells near the eye, "
-                                "coarse ones far away — and re-centres them as you travel, at most "
-                                "one box per frame, so bounced light follows you through a world of "
-                                "any size and what escapes the outermost box reads the Sky Light "
-                                "rather than going dark. Off fits ONE box around the scene's "
-                                "content instead, under a 64 m ceiling: inside it the bounce is "
-                                "identical and slightly cheaper per pixel (one volume to cone-trace "
-                                "instead of four), outside it there is no bounce at all, and a "
-                                "scene larger than the ceiling is voxelised at metres per cell. "
-                                "Off is the right answer for one room that the camera stays inside; "
-                                "On is the right answer for everything else.");
-        r.get = [](const iris::ScenePtr &s) { return s && s->giCascades > 0 ? 1 : 0; };
-        r.set = [](const iris::ScenePtr &s, int v) { if (s) s->giCascades = v ? 1 : 0; };
         out.append(r);
     }
     {
@@ -1050,6 +1091,31 @@ QString optionLabel(const Row &r, const EnumOption &o, const iris::ScenePtr &sce
                     bool sceneTracesRays)
 {
     return r.optionLabelAt ? r.optionLabelAt(o.value, scene, sceneTracesRays) : o.label;
+}
+
+QVector<ComboItem> comboItems(const Row &r, const iris::ScenePtr &scene, bool sceneTracesRays)
+{
+    if (r.comboItemsAt) return r.comboItemsAt(scene, sceneTracesRays);
+    QVector<ComboItem> items;
+    for (const EnumOption &o : r.options)
+        items.append({ o.id, optionLabel(r, o, scene, sceneTracesRays), o.value, false, {} });
+    return items;
+}
+
+bool applyComboItem(const iris::ScenePtr &scene, const Row &r, const ComboItem &item)
+{
+    if (!scene) return false;
+    if (!item.followsTier) return setRowValue(scene, r.id, item.value);
+    clearOverride(scene, r.id);
+    if (resolved(scene, r) == 0) return setRowValue(scene, r.id, item.value);
+    return true;
+}
+
+int comboIndexOf(const QVector<ComboItem> &items, int value)
+{
+    for (int i = 0; i < items.size(); ++i)
+        if (items[i].value == value || items[i].shows.contains(value)) return i;
+    return -1;
 }
 
 // ---------------------------------------------------------------------------
@@ -1409,7 +1475,7 @@ QStringList photonRowIds()
 {
     return { QStringLiteral("giMode"), QStringLiteral("giQuality"),
              QStringLiteral("giDdgi"), QStringLiteral("giBounces"),
-             QStringLiteral("giProbeSize"), QStringLiteral("giCascades") };
+             QStringLiteral("giProbeSize") };
 }
 
 QString photonTierName(PhotonTier t)
@@ -1449,28 +1515,27 @@ bool photonEnabled(const iris::ScenePtr &scene)
 
 int photonTechnique(PhotonTier t) { return kPhotonTable[tierIndex(t)].technique; }
 int photonQuality(PhotonTier t)   { return kPhotonTable[tierIndex(t)].quality; }
-int photonDdgi(PhotonTier t)      { return kPhotonTable[tierIndex(t)].ddgi; }
+int photonDdgi(PhotonTier t)      { return photonFieldColumn(kPhotonTable[tierIndex(t)]); }
 int photonBounces(PhotonTier t)   { return kPhotonTable[tierIndex(t)].bounces; }
 int photonProbeSize(PhotonTier t) { return kPhotonTable[tierIndex(t)].probeSize; }
-int photonCascades(PhotonTier t)  { return kPhotonTable[tierIndex(t)].cascades; }
 
 // THE GATHER COLUMN IS A PROJECTION, NOT A COPY (PHOTON-GATHER-1d): the engine's
 // tier table holds the gather row (Types.h GiGatherFacts — on/off, stride,
 // octahedral resolution, adaptive cap) and this reads it for the tier's quality
-// and Epic fact, so the column cannot drift from what the renderer does.
+// row, so the column cannot drift from what the renderer does.
 jahshaka::engine::GiGatherFacts photonGather(PhotonTier t)
 {
     return jahshaka::engine::giQualityFacts(
-               jahshaka::engine::GiQuality(qBound(0, photonQuality(t), 2)),
-               jahshaka::engine::GiViewProfile::Desktop, t == PhotonTier::Epic)
+               jahshaka::engine::GiQuality(qBound(0, photonQuality(t), 3)),
+               jahshaka::engine::GiViewProfile::Desktop)
         .gather;
 }
 
 jahshaka::engine::GiGatherFacts photonVrGather(PhotonTier t)
 {
     return jahshaka::engine::giQualityFacts(
-               jahshaka::engine::GiQuality(qBound(0, photonQuality(t), 2)),
-               jahshaka::engine::GiViewProfile::Vr, t == PhotonTier::Epic)
+               jahshaka::engine::GiQuality(qBound(0, photonQuality(t), 3)),
+               jahshaka::engine::GiViewProfile::Vr)
         .gather;
 }
 
@@ -1499,11 +1564,8 @@ QString metres(float v)
 /// The engine's physical facts for a tier's quality column.
 jahshaka::engine::GiQualityFacts factsFor(PhotonTier t)
 {
-    // The tier's Epic fact rides along (the gather's density is the one row the
-    // quality column cannot carry — GiParams::epicTier).
     return jahshaka::engine::giQualityFacts(
-        jahshaka::engine::GiQuality(qBound(0, photonQuality(t), 2)),
-        jahshaka::engine::GiViewProfile::Desktop, t == PhotonTier::Epic);
+        jahshaka::engine::GiQuality(qBound(0, photonQuality(t), 3)));
 }
 
 }   // namespace
@@ -1511,8 +1573,6 @@ jahshaka::engine::GiQualityFacts factsFor(PhotonTier t)
 QString photonTierVoxelPhrase(PhotonTier t)
 {
     const auto facts = factsFor(t);
-    if (!photonCascades(t) || facts.cascadeCount <= 0)
-        return QString::number(facts.voxelResolution);
     QList<int> seen;
     for (int i = 0; i < facts.cascadeCount; ++i)
         if (!seen.contains(facts.cascades[i].resolution)) seen.append(facts.cascades[i].resolution);
@@ -1538,7 +1598,7 @@ bool raysAreTheReflection(int giQuality, bool sceneTracesRays)
 {
     return sceneTracesRays
            && jahshaka::engine::giQualityFacts(
-                  jahshaka::engine::GiQuality(qBound(0, giQuality, 2)))
+                  jahshaka::engine::GiQuality(qBound(0, giQuality, 3)))
                   .rayReflections;
 }
 }   // namespace
@@ -1546,6 +1606,12 @@ bool raysAreTheReflection(int giQuality, bool sceneTracesRays)
 bool probeGridByRays(const iris::ScenePtr &scene, bool sceneTracesRays)
 {
     return scene && raysAreTheReflection(int(scene->giQuality), sceneTracesRays);
+}
+
+bool reflectionsTraced(const iris::ScenePtr &scene, bool sceneTracesRays)
+{
+    return scene && scene->giMode != iris::GiMode::OFF &&
+           raysAreTheReflection(int(scene->giQuality), sceneTracesRays);
 }
 
 bool tierRaysResolve(PhotonTier t, bool sceneTracesRays)
@@ -1579,7 +1645,7 @@ QString photonTierSentence(PhotonTier t)
     out[0] = out[0].toUpper();
     out += QStringLiteral(": ");
 
-    if (photonCascades(t) && facts.cascadeCount > 0) {
+    {
         QStringList rows;
         for (int i = 0; i < facts.cascadeCount; ++i) {
             const auto &c = facts.cascades[i];
@@ -1592,9 +1658,6 @@ QString photonTierSentence(PhotonTier t)
                    .arg(facts.cascadeCount)
                    .arg(facts.cascadeCount == 1 ? QString() : QStringLiteral("s"))
                    .arg(rows.join(QStringLiteral(", ")));
-    } else {
-        out += QStringLiteral("one scene-fitted voxel volume at %1 cubed")
-                   .arg(facts.voxelResolution);
     }
 
     // THE DIFFUSE, from the gather row (PHOTON-GATHER-1d): where rays run, the
@@ -1645,6 +1708,53 @@ QString photonTierSentence(PhotonTier t)
     return out + QStringLiteral(".");
 }
 
+const QVector<OffscreenPicture> &offscreenPictures()
+{
+    // THE ROWS, and where each is carried out (the grade doors are
+    // IEditorViewport::ScreenshotGrade; the view shape is the engine's
+    // PostFxDesc::allowOffscreen — an offscreen view carries no chain unless it
+    // opts in, which is what makes a lower picture a DECLARED one).
+    static const QVector<OffscreenPicture> kinds = {
+        { QStringLiteral("viewport"), true, QString() },
+        // The user's Screenshot, MCP's postFx shot, camera.screenshot({postFx}):
+        // the whole chain, so every chain-borne Photon term runs.
+        { QStringLiteral("screenshot.scene"), true, QString() },
+        { QStringLiteral("screenshot.viewport"), true, QString() },
+        // THE TEST PICTURE: no post chain. Its GI is the tier's — the voxel chain, the
+        // field, and the screen-probe gather (a StillPicture offscreen view gathers,
+        // View::setOffscreenContract) — but none of the chain-borne terms.
+        { QStringLiteral("screenshot.plain"), false,
+          QStringLiteral("the tier's GI (the voxel chain, the irradiance field and, as a still "
+                         "picture, the screen-probe gather) with NO post chain: no screen "
+                         "march, no traced reflections, no sun contact, no SSAO, no grade — the "
+                         "exactly reproducible instrument every pixel suite asserts") },
+        { QStringLiteral("screenshot.tonemap"), false,
+          QStringLiteral("the plain picture plus the deterministic filmic grade at the scene's "
+                         "exposure (the thumbnail grade)") },
+        // Project preview tiles and the asset viewer take the thumbnail grade: cheap
+        // on purpose, and declared so.
+        { QStringLiteral("projectTile"), false,
+          QStringLiteral("the tonemap grade (screenshot.tonemap) at tile size") },
+        // A view drawn every frame for a person (a preview widget, an eye control):
+        // the engine's Live contract pins the gather off.
+        { QStringLiteral("liveOffscreen"), false,
+          QStringLiteral("the field's (or the cones') diffuse instead of the screen-probe gather, "
+                         "the price of a live frame unchanged (View's Live contract)") },
+        // A reflection probe is a photograph for the SPECULAR term; a chain inside it
+        // would count the screen-space and traced terms twice.
+        { QStringLiteral("probeCapture"), false,
+          QStringLiteral("the probe workspace's six faces: the scene lit directly and by the "
+                         "voxel cascades, no post chain, HDR and shadowed per the tier") },
+        // A surface-cache card is the hit's lighting, lit on the GPU from its own
+        // capture (JahCardLight).
+        { QStringLiteral("cardCapture"), false,
+          QStringLiteral("the card's albedo, normal and emissive, lit on the GPU: direct + "
+                         "the environment half + emissive, and an indirect half marched "
+                         "through the voxels on its own budget") },
+    };
+    return kinds;
+}
+
 QString photonTierSummary()
 {
     QStringList lines;
@@ -1665,7 +1775,6 @@ void photonHave(const iris::ScenePtr &s, int have[kPhotonRowCount])
     have[2] = s->giDdgi > 0 ? 1 : 0;
     have[3] = qBound(1, s->giNumBounces, 4);
     have[4] = qBound(0, s->giProbeCaptureSize, 1024);
-    have[5] = s->giCascades > 0 ? 1 : 0;
 }
 }   // namespace
 
@@ -1689,11 +1798,10 @@ void setPhoton(const iris::ScenePtr &scene, bool enabled, PhotonTier tier)
         return;
     }
     // The machinery: written unless the user pinned it.
-    if (!pinned(scene, "giQuality")) scene->giQuality = iris::GiQuality(qBound(0, row.quality, 2));
-    if (!pinned(scene, "giDdgi"))    scene->giDdgi = row.ddgi;
+    if (!pinned(scene, "giQuality")) scene->giQuality = iris::GiQuality(qBound(0, row.quality, 3));
+    if (!pinned(scene, "giDdgi"))    scene->giDdgi = photonFieldColumn(row);
     if (!pinned(scene, "giBounces")) scene->giNumBounces = row.bounces;
     if (!pinned(scene, "giProbeSize")) scene->giProbeCaptureSize = qBound(0, row.probeSize, 1024);
-    if (!pinned(scene, "giCascades")) scene->giCascades = row.cascades;
     if (!pinned(scene, "giMode")) scene->giMode = iris::GiMode(qBound(1, row.technique, 2));
     else if (scene->giMode == iris::GiMode::OFF) {
         // A pin of "off" is what an Advanced technique picker set to Off would
@@ -1738,7 +1846,7 @@ void derivePhotonFromDocument(const iris::ScenePtr &scene)
     if (!scene) return;
     // WHAT THE DOCUMENT RENDERS, read before anything is written.
     const int technique = qBound(0, int(scene->giMode), 2);
-    const int quality   = qBound(0, int(scene->giQuality), 2);
+    const int quality   = qBound(0, int(scene->giQuality), 3);
     const bool enabled  = technique != 0;
 
     // THE TIER (spec §2's migration table, at option (b)'s contents): an
@@ -1753,13 +1861,14 @@ void derivePhotonFromDocument(const iris::ScenePtr &scene)
     // the quality row - its cascade chain, probes and card budgets.)
     PhotonTier tier = PhotonTier::Medium;
     if (enabled) {
-        tier = technique == 2 ? PhotonTier::High
+        tier = technique == 2 ? (quality == 3 ? PhotonTier::Epic : PhotonTier::High)
              : quality == 0   ? PhotonTier::Low
                               : PhotonTier::Medium;
     } else {
         tier = quality == 0 ? PhotonTier::Low
              : quality == 1 ? PhotonTier::Medium
-                            : PhotonTier::High;
+             : quality == 2 ? PhotonTier::High
+                            : PhotonTier::Epic;
     }
     scene->giTier = tierIndex(tier);
     const PhotonRow &want = kPhotonTable[tierIndex(tier)];
@@ -1770,11 +1879,7 @@ void derivePhotonFromDocument(const iris::ScenePtr &scene)
     // two hybrid ones, come up DDGI-fed; that re-pin is deliberate and is the
     // ONLY rendered value this derivation may move). An explicit 0/1 is what
     // the document rendered and is preserved like every other field.
-    if (scene->giDdgi < 0) scene->giDdgi = want.ddgi;
-    // ...and the CASCADE column, the same way and for the same reason: -1 means
-    // the file predates the column (PHOTON_SPEC §7 E2 (6)), so it follows the
-    // tier — which is ON — rather than reading as a deviation nobody authored.
-    if (scene->giCascades < 0) scene->giCascades = want.cascades;
+    if (scene->giDdgi < 0) scene->giDdgi = photonFieldColumn(want);
 
     // PIN WHAT DEVIATES, DROP WHAT DOES NOT. A pin whose value is the tier's
     // own is noise: it would freeze that field through every future tier switch

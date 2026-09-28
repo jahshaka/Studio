@@ -638,7 +638,6 @@ int main()
         if (P.gi) {
             gi.mode = GiMode::Vct;
             gi.quality = GiQuality::Medium;
-            gi.cascades = true;
             gi.ddgi = GiToggle::On;
             gi.gather = P.gather ? GiToggle::On : GiToggle::Off;
         } else {
@@ -794,7 +793,6 @@ int main()
             GiParams gi;
             gi.mode = pcc ? GiMode::VctPccHybrid : GiMode::Vct;
             gi.quality = GiQuality::Medium;
-            gi.cascades = true;
             gi.ddgi = GiToggle::On;
             gi.gather = GiToggle::Off;
             scene->setGlobalIllumination(gi);

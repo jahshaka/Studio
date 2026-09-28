@@ -50,6 +50,7 @@
 #include "../support/enginetesthelpers.h"
 
 #include <cmath>
+#include <algorithm>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -203,7 +204,6 @@ int main()
     GiParams gi;
     gi.mode = GiMode::Vct;
     gi.quality = GiQuality::High;
-    gi.cascades = true;
     gi.ddgi = GiToggle::Off;
     gi.numBounces = 1;
     gi.gather = GiToggle::On;
@@ -216,9 +216,11 @@ int main()
               "the gather runs over a cascade chain (on %d running %d, %zu cascades)",
               int(gs.gather.on), int(gs.gather.running), gs.cascades.size());
     if (gs.cascades.empty()) { std::printf("\nFAILED (%d failures)\n", failures + 1); return 1; }
-    // THE NEAR LENGTH, the engine's own derivation (OgreScreenProbeGather.cpp `reach`).
-    const float reach = gs.cascades.back().halfSize;
-    std::printf("   near length (outer half extent) %.2f m\n", double(reach));
+    // THE NEAR LENGTH, the engine's own derivation (detail::photonRayReach, the one reach
+    // rule since D4-PHOTON-TIERS): the outer cascade's diagonal under the 1 km far plane.
+    const float reach = std::min(1000.0f, std::max(std::sqrt(3.0f) * 2.0f * gs.cascades.back().halfSize,
+                                                   50.0f));
+    std::printf("   near length (the outer cascade's diagonal) %.2f m\n", double(reach));
 
     // ---- 4a. nothing beyond the near length: the far query changes no byte.
     // BOTH ARMS AT THE HOLD (PHOTON-GA-VR): the tuning change restarts the second

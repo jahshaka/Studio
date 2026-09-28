@@ -92,7 +92,6 @@ static GiParams cascadeGi()
     gi.quality = GiQuality::Medium;
     gi.ddgi = GiToggle::Off;      // this suite is about the voxels
     gi.updateBudget = 0;          // and not about probes
-    gi.cascades = true;
     return gi;
 }
 
@@ -193,38 +192,11 @@ int main()
         CHECK(scene->setGlobalIllumination(down), "and the arm comes down again");
     }
 
-    // =====================================================================
-    // CASE 2 — THE SINGLE-VOLUME ARM TAKES THE SAME RULE
-    // =====================================================================
-    // It reads the same two texture slots, so the same "build later, not twice"
-    // applies; here the observable is the arm's own rebuild counter.
-    std::printf("\n== case 2: the single volume ==\n");
+    // (CASE 2 — the single-volume arm taking the same rule — is deleted with
+    // that arm, D4-PHOTON-TIERS. Case 3 starts from GI off, as it always did.)
     {
-        const TextureId tex2 = scene->loadTexture("boottex2.ppm", true);
-        CHECK(tex2 != 0, "a second albedo is scheduled");
-        const MaterialId wall = texturedCube(scene, Vec3(0.0f, 3.0f, -6.0f),
-                                             Vec3(12.0f, 6.0f, 0.2f), tex2);
-        CHECK(wall != 0, "a wall wearing it, bound in the same frame");
-        GiParams single = cascadeGi();
-        single.cascades = false;
-        const unsigned long long before = scene->giStatus().rebuilds;
-        CHECK(scene->setGlobalIllumination(single), "the single-volume arm is pushed");
-        render(e, 8);
-        scene->refreshGlobalIllumination();
-        render(e, 8);
-        const GiStatus o = scene->giStatus();
-        std::printf("   after the open: %llu from-scratch rebuilds (was %llu), "
-                    "reusedLastRefresh %s\n",
-                    o.rebuilds, before, o.reusedLastRefresh ? "true" : "false");
-        CHECK(o.vctBound, "the volume is up and bound");
-        CHECK(o.rebuilds == before + 1u,
-              "THE WHOLE OPEN IS ONE FROM-SCRATCH REBUILD (the texture's arrival did not buy "
-              "a second one)");
-        CHECK(o.reusedLastRefresh,
-              "...and the refresh REUSED the voxel arm — it did not need a fresh voxeliser, "
-              "which is what an albedo that arrived after the build asks for");
         GiParams down; down.mode = GiMode::Off;
-        CHECK(scene->setGlobalIllumination(down), "and it comes down again");
+        CHECK(scene->setGlobalIllumination(down), "GI comes down before case 3");
     }
 
     // =====================================================================
@@ -265,9 +237,10 @@ int main()
         // the cascade was given, which is the honest "nothing was lost" reading
         // — `items` is the subset its own box currently reaches and moves with
         // the camera.
-        CHECK_MSG(!o.cascades.empty() && o.cascades[0].attached >= 4,
-                  "the build HOLDS the object that arrived during the wait (attached %d, "
-                  "and the scene has four boxes and a ground by now)",
+        CHECK_MSG(!o.cascades.empty() && o.cascades[0].attached >= 3,
+                  "the build HOLDS the object that arrived during the wait (attached %d: "
+                  "the ground, the late box and the one that arrived — case 2's wall went "
+                  "with the single volume)",
                   o.cascades.empty() ? -1 : o.cascades[0].attached);
         // AND THE EDIT COSTS AT MOST THE DIRTY PATH'S PRICE: the object arrived
         // after the build was asked for, so the cascades that can see it are

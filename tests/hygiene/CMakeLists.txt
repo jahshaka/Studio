@@ -213,3 +213,12 @@ add_test(NAME source.gpu_rows_closure
                  --app "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" --self-test)
 set_tests_properties(source.gpu_rows_closure PROPERTIES TIMEOUT 120 LABELS "hygiene")
 jah_no_display(source.gpu_rows_closure)
+
+# source.no_fixed_gi_volume — D4-PHOTON-TIERS: the single scene-fitted voxel volume
+# stays deleted end to end, and nothing reads its document keys (giCascades,
+# giBoundsExcluded) any more — the READER half of "the deleted keys are ignored".
+add_test(NAME source.no_fixed_gi_volume
+         COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/no_fixed_gi_volume.sh"
+                 "${CMAKE_SOURCE_DIR}")
+set_tests_properties(source.no_fixed_gi_volume PROPERTIES TIMEOUT 60 LABELS "hygiene")
+jah_no_display(source.no_fixed_gi_volume)

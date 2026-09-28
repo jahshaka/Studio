@@ -50,9 +50,9 @@ static void render(Engine *e, int frames = 3)
 
 static void showBox(const char *what, const GiStatus &st)
 {
-    std::printf("   %-34s %7.2f x %7.2f x %7.2f   (voxel %.3f m)\n", what,
-                st.boundsMax.x - st.boundsMin.x, st.boundsMax.y - st.boundsMin.y,
-                st.boundsMax.z - st.boundsMin.z, st.voxelMetres);
+    std::printf("   %-34s probe fit %7.2f x %7.2f x %7.2f\n", what,
+                st.probeFitMax.x - st.probeFitMin.x, st.probeFitMax.y - st.probeFitMin.y,
+                st.probeFitMax.z - st.probeFitMin.z);
 }
 
 // ---------------------------------------------------------------------------
@@ -145,11 +145,10 @@ static void hiddenGeometry(Engine *engine, View *view)
     const float bounceOff = (hidden.r - hidden.g) - (noPanel.r - noPanel.g);
     CHECK(std::fabs(bounceOff) < 0.01f,
           "hiding the panel returns the floor's red bounce to its no-panel value");
-    // ...and the volume no longer stretches to it. The panel spans y 0..6 and
-    // z -3.45..-2.55; with it hidden the floor alone is 0.1 m thick.
-    CHECK(hiddenSt.boundsMax.y - hiddenSt.boundsMin.y <
-              (visibleSt.boundsMax.y - visibleSt.boundsMin.y) * 0.5f,
-          "the automatic volume no longer contains the hidden panel");
+    // (The "the automatic volume no longer stretches to it" half is the probe
+    // grid's placement fit now — the single scene-fitted voxel volume is deleted,
+    // D4-PHOTON-TIERS — and hiddenParentVolume below reads it.)
+    (void)visibleSt; (void)hiddenSt;
 
     // SHOWING IT AGAIN PUTS IT BACK — the edge is symmetric, and this is what
     // proves the fix is a mask rather than a one-way delete.
@@ -298,8 +297,8 @@ static void hiddenParentBounce(Engine *engine, View *view)
     gi.quality = GiQuality::High;
     gi.numBounces = 3;
     gi.ddgi = GiToggle::On;
-    gi.testBoundsMin = Vec3(-7.5f, -0.4f, -7.5f);   // PINNED: see the header above
-    gi.testBoundsMax = Vec3( 7.5f,  7.0f,  7.5f);
+    gi.testProbeRegionMin = Vec3(-7.5f, -0.4f, -7.5f);   // PINNED: see the header above
+    gi.testProbeRegionMax = Vec3( 7.5f,  7.0f,  7.5f);
     CHECK(s->setGlobalIllumination(gi), "Epic's GI arms (hybrid, High, 3 bounces, field on)");
     render(engine, 6);
     view->readPixels(img);
@@ -380,14 +379,14 @@ static void hiddenParentVolume(Engine *engine, View *view)
     GiParams gi;
     gi.gather = GiToggle::Off;   // PHOTON-GATHER-1d (the header)
     gi.mode = GiMode::VctPccHybrid;
-    gi.quality = GiQuality::High;
+    gi.quality = GiQuality::Medium;   // not a ray tier: the probe grid is PLACED, and its fit is read
     gi.numBounces = 3;
     gi.ddgi = GiToggle::On;
-    CHECK(s->setGlobalIllumination(gi), "Epic's GI arms over an AUTOMATIC volume");
+    CHECK(s->setGlobalIllumination(gi), "the hybrid arms over an AUTOMATIC probe placement fit");
     render(engine, 6);
     const GiStatus shownSt = s->giStatus();
     showBox("volume, root shown", shownSt);
-    CHECK(shownSt.boundsMax.y - shownSt.boundsMin.y < 8.5f,
+    CHECK(shownSt.probeFitMax.y - shownSt.probeFitMin.y < 8.5f,
           "the pillar the user hid is not in the lit volume (y 0..10 would be)");
 
     s->setNodeVisible(h.root, false);
@@ -395,8 +394,8 @@ static void hiddenParentVolume(Engine *engine, View *view)
     render(engine, 6);
     const GiStatus hiddenSt = s->giStatus();
     showBox("volume, root hidden", hiddenSt);
-    CHECK(hiddenSt.boundsMax.y - hiddenSt.boundsMin.y <
-              (shownSt.boundsMax.y - shownSt.boundsMin.y) * 0.5f,
+    CHECK(hiddenSt.probeFitMax.y - hiddenSt.probeFitMin.y <
+              (shownSt.probeFitMax.y - shownSt.probeFitMin.y) * 0.5f,
           "the automatic volume no longer contains the hidden root's parts");
 
     s->setNodeVisible(h.root, true);
@@ -407,7 +406,7 @@ static void hiddenParentVolume(Engine *engine, View *view)
     showBox("volume, root shown again", againSt);
     CHECK(!isGreen(img.at(kPillarX, kPillarY)),
           "showing the root keeps the pillar the user hid out of the picture");
-    CHECK(againSt.boundsMax.y - againSt.boundsMin.y < 8.5f, "...nor back in the lit volume");
+    CHECK(againSt.probeFitMax.y - againSt.probeFitMin.y < 8.5f, "...nor back in the lit volume");
 
     // Showing the pillar itself is the one thing that brings it back.
     s->setNodeVisible(h.pillar, true);
@@ -417,7 +416,7 @@ static void hiddenParentVolume(Engine *engine, View *view)
     const GiStatus pillarSt = s->giStatus();
     showBox("volume, pillar shown", pillarSt);
     CHECK(isGreen(img.at(kPillarX, kPillarY)) &&
-              pillarSt.boundsMax.y - pillarSt.boundsMin.y > 9.5f,
+              pillarSt.probeFitMax.y - pillarSt.probeFitMin.y > 9.5f,
           "showing the pillar itself draws it and puts it in the volume");
 
     GiParams off;
@@ -466,21 +465,19 @@ static void volumeCeiling(Engine *engine, View *view)
 
     GiParams gi;
     gi.gather = GiToggle::Off;   // PHOTON-GATHER-1d (the header)
-    gi.mode = GiMode::Vct;
-    gi.quality = GiQuality::High;      // 128^3, the Epic tier's resolution
+    gi.mode = GiMode::VctPccHybrid;    // the ceiling is the probe grid's PLACEMENT fit's
+    gi.quality = GiQuality::Medium;    // (kProbeGridFitMax; D4-PHOTON-TIERS) — not a ray tier
     gi.numBounces = 3;
     CHECK(s->setGlobalIllumination(gi), "VCT arms at High over a 1024 m plane");
     render(engine, 4);
     GiStatus st = s->giStatus();
     showBox("1024 m plane, ceiling on", st);
     const float cap = 64.0f;           // GiParams::autoBoundsMax's default
-    const float edge = std::max(std::max(st.boundsMax.x - st.boundsMin.x,
-                                         st.boundsMax.y - st.boundsMin.y),
-                                st.boundsMax.z - st.boundsMin.z);
-    // The one-voxel margin computeGiBounds adds rides on top of the ceiling.
+    const float edge = std::max(std::max(st.probeFitMax.x - st.probeFitMin.x,
+                                         st.probeFitMax.y - st.probeFitMin.y),
+                                st.probeFitMax.z - st.probeFitMin.z);
+    // The one-voxel margin computeProbeRegion adds rides on top of the ceiling.
     CHECK(edge <= cap * 1.05f, "the automatic volume's largest axis is inside the ceiling");
-    CHECK(st.voxelMetres > 0.0f && st.voxelMetres <= 0.55f,
-          "the volume resolves to about half a metre per voxel");
 
     // THE GROUND IS SMOOTHLY LIT ACROSS THE VIEW: five probes along the
     // horizontal centre band of the floor, which is where the owner's cell
@@ -516,25 +513,24 @@ static void volumeCeiling(Engine *engine, View *view)
     // THE KNOB. 0 removes the ceiling, and the volume goes back to the plane —
     // which is also the proof that the assertion above is measuring the ceiling
     // and not some other clamp.
-    gi.testAutoBoundsMax = 0.0f;
+    gi.testProbeGridFitMax = 0.0f;
     CHECK(s->setGlobalIllumination(gi), "autoBoundsMax = 0 re-pushes");
     render(engine, 4);
     st = s->giStatus();
     showBox("1024 m plane, ceiling off", st);
-    CHECK(st.boundsMax.x - st.boundsMin.x > 1000.0f,
+    CHECK(st.probeFitMax.x - st.probeFitMin.x > 1000.0f,
           "with the ceiling off the volume is the whole plane again");
-    CHECK(st.voxelMetres > 4.0f, "...at metres per voxel (what the ceiling exists to stop)");
 
     // A PINNED VOLUME IGNORES THE CEILING: that is how a scene bigger than the
     // cap asks for more, and it must not be quietly overruled.
-    gi.testAutoBoundsMax = 64.0f;
-    gi.testBoundsMin = Vec3(-150.0f, -10.0f, -150.0f);
-    gi.testBoundsMax = Vec3(150.0f, 10.0f, 150.0f);
+    gi.testProbeGridFitMax = 64.0f;
+    gi.testProbeRegionMin = Vec3(-150.0f, -10.0f, -150.0f);
+    gi.testProbeRegionMax = Vec3(150.0f, 10.0f, 150.0f);
     CHECK(s->setGlobalIllumination(gi), "an explicit volume re-pushes");
     render(engine, 4);
     st = s->giStatus();
     showBox("explicit 300 m volume", st);
-    CHECK(st.boundsMax.x - st.boundsMin.x > 290.0f,
+    CHECK(st.probeFitMax.x - st.probeFitMin.x > 290.0f,
           "a pinned volume is not clamped by the ceiling");
 
     GiParams off;

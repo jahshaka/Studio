@@ -44,7 +44,6 @@ int main(int argc, char **argv)
     gi.gather = GiToggle::Off;
     gi.updateBudget = 1;
     gi.numBounces = 1;
-    gi.cascades = true;
     s->setGlobalIllumination(gi);
     const double ax[4][3] = { { 0.707107, 0, 0.707107 }, { 0, 0.707107, 0.707107 }, { -0.707107, 0, 0.707107 },
                               { 0, -0.707107, 0.707107 } };

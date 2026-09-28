@@ -1,0 +1,59 @@
+// gi_verbs.pcc_budget — PCC-BUDGET-1: THE REFLECTION-PROBE GRID LIVES UNDER A PER-TIER VRAM
+// BUDGET, and the budget counts THE WHOLE GRID (the probe array, each probe's shadow targets,
+// the grid's capture + IBL cubes), never the array alone. Grand Showroom 2 with the scene's rays
+// OFF (a grid is placed only where reflections are not traced): at Epic the measured 32-probe
+// grid (838,987,760 B, PHOTON-F12-PCC) fits the 1 GiB budget; at High the 512 MiB budget holds
+// 19 probes at the same 512 px HDR shadowed size, so the placement keeps the 19 that saw the
+// most and says how many it cut. THE TOTAL IS ASSERTED TWICE: by the renderer's own arithmetic
+// (giStatus().probeGridBytes) and by the texture manager (app.textureMemory, the grid's
+// textures A/B against the same scene with no grid: the technique pinned to plain VCT, the
+// rays off in BOTH arms — a rays-on arm also holds the ray tier's own targets and the card
+// atlas, which is not the grid's memory).
+function assert(cond, msg) {
+    if (!cond) throw new Error("assert failed: " + msg);
+    console.log("ok: " + msg);
+}
+var SHOWROOM = "@JAH_PCC_BUDGET_SHOWROOM@";
+var imported = project.importArchive(SHOWROOM);
+assert(imported && imported.guid, "importArchive(Showroom 2)");
+assert(project.open(imported.guid) === true, "project.open(Showroom 2)");
+editor.frame(120);
+function total() { return app.textureMemory({ top: 0 }).totalBytes; }
+function arm(tier) {
+    world.photon({ enabled: true, tier: tier });
+    world.rayTracing("off");     // a grid is placed only where the reflections are not traced
+    world.gi({ mode: "vct" });   // ...and none at all with the technique pinned to plain VCT
+    editor.frame(120);
+    var without = total();
+    world.clearOverride({ id: "giMode" });   // the tier's hybrid: the grid is placed
+    editor.frame(240);
+    var st = world.giStatus();
+    var withGrid = total();
+    console.log(tier + ": probes " + st.probeCount + " over budget " + st.probesOverBudget +
+                " budget " + (st.probeGridBudgetBytes / 1048576).toFixed(1) + " MiB (" +
+                st.probeGridBudgetProbes + " probes) grid " + (st.probeGridBytes / 1048576).toFixed(1) +
+                " MiB, textures " + ((withGrid - without) / 1048576).toFixed(1) + " MiB more");
+    world.rayTracing("auto");
+    return { st: st, delta: withGrid - without };
+}
+var epic = arm("epic");
+var high = arm("high");
+[epic, high].forEach(function (a, i) {
+    var name = i ? "high" : "epic";
+    assert(a.st.probeGridBudgetBytes > 0 && a.st.probeGridBudgetProbes > 0,
+           name + ": the grid reports its budget and the count it allows");
+    assert(a.st.probeCount > 0 && a.st.probeCount <= a.st.probeGridBudgetProbes,
+           name + ": the grid keeps no more probes than the budget allows (" + a.st.probeCount + ")");
+    assert(a.st.probeGridBytes <= a.st.probeGridBudgetBytes,
+           name + ": the WHOLE grid, by the renderer's arithmetic, fits the budget");
+    assert(Math.abs(a.delta - a.st.probeGridBytes) <= 0.02 * a.st.probeGridBytes,
+           name + ": ...and the texture manager agrees within 2 % (" + a.delta + " vs " +
+           a.st.probeGridBytes + " B) — the budget counts what is really allocated");
+});
+assert(epic.st.probesOverBudget === 0, "epic: the measured Showroom grid fits its 1 GiB whole");
+assert(high.st.probeGridBudgetProbes < epic.st.probeCount,
+       "high's 512 MiB holds fewer probes than the Showroom keeps at epic ...");
+assert(high.st.probeCount === high.st.probeGridBudgetProbes && high.st.probesOverBudget > 0,
+       "...so high keeps exactly the budget's count and reports the cut (" +
+       high.st.probesOverBudget + ")");
+console.log("e2e_pcc_budget: all ok");

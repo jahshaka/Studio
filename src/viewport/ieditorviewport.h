@@ -620,6 +620,8 @@ public:
         /// anything (a 1 km volume at 128^3 is 8 m per voxel); 0 with no volume.
         float voxelMetres = 0.0f;
         QVector3D probeRegionMin, probeRegionMax;
+        /// The probe grid's placement fit (engine GiStatus::probeFitMin/Max).
+        QVector3D probeFitMin, probeFitMax;
         /// What the probe captures RESOLVED to (P3a/P3b). Both document fields
         /// are tri-state with an "auto" that consults the quality dial, and the
         /// shadow half falls back when no shadow node exists — so the request
@@ -632,6 +634,9 @@ public:
         /// is the open-scene answer (the sky reflects); with it zero, in the
         /// hybrid, it is a build failure.
         int  probesDropped = 0;
+        /// THE PROBE GRID'S VRAM BUDGET (PCC-BUDGET-1; engine GiStatus).
+        double probeGridBudgetBytes = 0.0, probeGridBytes = 0.0;
+        int  probeGridBudgetProbes = 0, probesOverBudget = 0;
         /// The hybrid at a RAY tier (PHOTON-F12-PCC): no grid by design — the
         /// rays are the reflection (GiStatus::probeGridByRays), and the two
         /// cumulative counters that prove nothing was placed or captured.

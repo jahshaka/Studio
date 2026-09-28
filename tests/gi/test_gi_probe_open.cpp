@@ -451,8 +451,8 @@ int main()
         // A budget, not 0: a probe that never captures reflects nothing, and the
         // "inside" half would then read black for the reason case 13 documents.
         gi.updateBudget = 1;
-        gi.testBoundsMin = Vec3(-8.0f, -0.5f, -8.0f);
-        gi.testBoundsMax = Vec3( 8.0f,  7.0f,  8.0f);
+        gi.testProbeRegionMin = Vec3(-8.0f, -0.5f, -8.0f);
+        gi.testProbeRegionMax = Vec3( 8.0f,  7.0f,  8.0f);
         CHECK(s->setGlobalIllumination(gi), "4c: the hybrid builds over the pinned room");
         render(engine.get(), 20);
         const GiStatus st = s->giStatus();
@@ -498,10 +498,17 @@ int main()
               "4c: the mirror inside the grid carries the BLUE sky a probe photographed —\n"
               "          blue no other path holds, over the cone's escape to the environment");
 
-        enginetest::testCameraLookAt(view, Vec3(0.0f, 2.6f, 30.0f), Vec3(0.0f, 1.4f, 25.0f));
+        // FROM ABOVE, like the inside mirror: the pixel reflects the open SKY. (Seen
+        // from the side its centre reflects the horizon, which under the camera's
+        // cascade chain is the voxelised ground — correct, and not this case's
+        // subject; the deleted single volume ended short of it, so it read the sky.)
+        enginetest::testCameraLookAt(view, Vec3(0.0f, 7.0f, 31.0f), Vec3(0.0f, 1.4f, 25.0f));
+        // A 25 m jump re-centres the camera's cascade chain, one cascade a frame,
+        // then its settle: counted until GI is at rest (bounded), not a fixed 6.
         render(engine.get(), 6);
+        for (int f = 0; f < 240 && !s->giStatus().giAtRest; ++f) engine->renderOneFrame();
         view->readPixels(img);
-        const Colour outside = img.at(64, 64);
+        const Colour outside = img.at(56, 54);
         show("mirror OUTSIDE every probe box", outside);
         CHECK(outside.g > outside.b + 0.15f && outside.g > outside.r + 0.15f,
               "4c: the mirror no probe box contains reflects the GREEN sky cubemap —\n"
@@ -789,8 +796,8 @@ int main()
         // pinned bounds for determinism and needs the grid to exist, so it pins
         // the room's own +-8, which is what the automatic fit would give it
         // anyway. Case 1 is where the placement itself is asserted.
-        gi.testBoundsMin = Vec3(-8.0f, -0.5f, -8.0f);
-        gi.testBoundsMax = Vec3( 8.0f,  7.0f,  8.0f);
+        gi.testProbeRegionMin = Vec3(-8.0f, -0.5f, -8.0f);
+        gi.testProbeRegionMax = Vec3( 8.0f,  7.0f,  8.0f);
         CHECK(s->setGlobalIllumination(gi), "13: the hybrid builds over the roofless room");
         render(engine.get(), 20);
         {
@@ -967,8 +974,8 @@ int main()
         gi.numBounces = 1;
         gi.pccProbesX = 2; gi.pccProbesY = 1; gi.pccProbesZ = 2;
         gi.updateBudget = 0;
-        gi.testBoundsMin = Vec3(-6.0f, -0.4f, -6.0f);
-        gi.testBoundsMax = Vec3( 6.0f,  5.0f,  6.0f);
+        gi.testProbeRegionMin = Vec3(-6.0f, -0.4f, -6.0f);
+        gi.testProbeRegionMax = Vec3( 6.0f,  5.0f,  6.0f);
         CHECK(s->setGlobalIllumination(gi), "pinned: the hybrid builds");
         render(engine.get(), 10);
         const GiStatus st = s->giStatus();

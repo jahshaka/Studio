@@ -106,7 +106,7 @@ static float lum(const Colour &c) { return 0.2126f * c.r + 0.7152f * c.g + 0.072
 // x in [-kOrthoHalf, +kOrthoHalf] fills the width.
 static const unsigned kSize = 128;
 static const float    kOrthoHalf = 24.0f;      // half the vertical AND horizontal extent (square)
-static const float    kVolumeMax = 24.0f;      // GiParams::autoBoundsMax -> the box is +-12
+static const float    kVolumeHalf = 12.0f;     // ONE pinned camera-centred cascade -> the box is +-12
 
 static unsigned columnForX(float x)
 {
@@ -171,7 +171,9 @@ static Slab buildSlab(Engine *e, const char *name, const Colour &upper, const Co
     // Straight down: a -90 degree pitch about X, which the lookAt helper cannot
     // express (its up vector is parallel to the forward one there).
     CameraDesc cam;
-    cam.position = Vec3(0.0f, 40.0f, 0.0f);
+    // 10 m up: the ONE camera-centred cascade (+-12 around the eye) reaches the
+    // slab below it, and its X faces cross the picture at +-12.
+    cam.position = Vec3(0.0f, 10.0f, 0.0f);
     cam.orientation = Quat{ -0.70710678f, 0.0f, 0.0f, 0.70710678f };
     cam.orthographic = true;
     cam.orthoSize = kOrthoHalf;
@@ -188,7 +190,11 @@ static GiParams hybridDdgi()
     gi.quality = GiQuality::High;      // Epic in the UI: 128^3 voxels
     gi.numBounces = 1;
     gi.ddgi = GiToggle::On;
-    gi.testAutoBoundsMax = kVolumeMax;      // the boundary this suite is about, fitted not pinned
+    // THE BOUNDARY THIS SUITE IS ABOUT: the lit volume's face. The single scene-fitted
+    // volume it used to be is deleted (D4-PHOTON-TIERS); the same box is ONE pinned
+    // camera-centred cascade, +-12 around the eye, the irradiance field riding it.
+    gi.cascadeCount = 1;
+    gi.cascadeSet[0] = GiParams::GiCascadeDesc{ kVolumeHalf, 128, 0.0f };
     return gi;
 }
 
@@ -248,13 +254,12 @@ int main(int argc, char **argv)
         CHECK(flatGiOff > 0.02f, "the slab really is lit by its ambient (nothing else can be)");
 
         CHECK(o.scene->setGlobalIllumination(hybridDdgi()), "hybrid + DDGI arms");
+        float inside = 0.0f, outside = 0.0f;
+        measure(e, o, "flat ambient, GI on", inside, outside);
         const GiStatus st = o.scene->giStatus();
         CHECK(st.vctBound, "the voxel arm is bound");
         CHECK(st.boundsMax.x - st.boundsMin.x < 48.0f,
-              "the fitted volume really is smaller than the slab (there IS an edge to cross)");
-
-        float inside = 0.0f, outside = 0.0f;
-        measure(e, o, "flat ambient, GI on", inside, outside);
+              "the lit volume really is smaller than the slab (there IS an edge to cross)");
         const float step = outside > 1e-5f ? inside / outside : 0.0f;
 
         // 1. THE STEP. 3.4x before the fix.

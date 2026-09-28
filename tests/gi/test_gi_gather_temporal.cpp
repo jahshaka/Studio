@@ -103,7 +103,6 @@ static GiParams gatherGi()
     gi.quality = GiQuality::High;
     gi.ddgi = GiToggle::Off;    // the gather is the diffuse, alone
     gi.numBounces = 1;
-    gi.cascades = true;
     gi.gather = GiToggle::On;
     return gi;
 }

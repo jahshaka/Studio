@@ -118,6 +118,11 @@ static unsigned long long frameHash(const Image &img)
 // The scene. Built identically in every process, which is what makes the
 // cross-process hash comparison mean something.
 struct Room {
+    /// THE GI DRIVER (D4-PHOTON-TIERS): created FIRST, so it is the scene's
+    /// authoritative view (the first enabled view) and the pinned cascade — and
+    /// the field on it — is centred on ITS camera, at the deleted scene-fitted
+    /// box's centre, whatever the measuring view does. Nothing reads its pixels.
+    View  *driver = nullptr;
     View  *view = nullptr;
     Scene *scene = nullptr;
     NodeId floor = 0, wall = 0, light = 0;
@@ -126,10 +131,13 @@ struct Room {
 static Room buildRoom(Engine *engine)
 {
     Room r;
+    r.driver = engine->createOffscreenView("ddgi-gi", 16, 16, Colour(0, 0, 0));
     r.view = engine->createOffscreenView("ddgi", 128, 128, Colour(0, 0, 0));
     if (r.view) r.view->setOffscreenContract(OffscreenContract::StillPicture);   // a measured picture
     r.scene = engine->createScene("ddgi");
+    r.driver->setScene(r.scene);
     r.view->setScene(r.scene);
+    enginetest::testCameraLookAt(r.driver, Vec3(0.0f, 7.5f, 0.0f), Vec3(0.0f, 7.5f, 1.0f));
     r.scene->setAmbient(Colour(0, 0, 0), Colour(0, 0, 0));
 
     r.floor = enginetest::addTestCube(r.scene, Colour(1.0f, 1.0f, 1.0f), 0.0f, 0.9f);
@@ -164,8 +172,19 @@ static GiParams vctBase()
     gi.mode = GiMode::Vct;
     gi.quality = GiQuality::Medium;      // 64^3 voxels
     gi.numBounces = 2;
-    gi.testBoundsMin = Vec3(-9.0f, -1.5f, -9.0f);
-    gi.testBoundsMax = Vec3(9.0f, 7.5f, 9.0f);
+    // ONE PINNED CASCADE over the deleted scene-fitted volume's box (D4-PHOTON-
+    // TIERS; a testProbeRegion pin reads nothing outside the hybrid): x,z +-9,
+    // y -1.5 .. 16.5 — EXACTLY the box the deleted arm built from the old
+    // -9 -1.5 -9 .. 9 7.5 9 bounds (it padded the short axis upward to a cube),
+    // centred on the GI driver at (0 7.5 0). The field rides it (8192 probes, the
+    // old fit). AT 128, 0.141 m cells — half the old arm's 0.281 m, and the
+    // measured reason: at 64 the chain's cones read the far floor 4.5 % under the
+    // field (0.4392 / 0.4588, bar 4.3 %) where the deleted arm read 1.000 — the
+    // chain's march is not the single volume's at the coarse cell; at 128 it reads
+    // 1.027. Medium's own chain (cascade 0 +-5 m around the eye) leaves the wall
+    // outside the field altogether, which is what made the dead pin pass.
+    gi.cascadeCount = 1;
+    gi.cascadeSet[0] = GiParams::GiCascadeDesc{ 9.0f, 128, 0.0f };
     return gi;
 }
 
@@ -220,6 +239,22 @@ static unsigned long long childHash(const char *self)
     }
     pclose(p);
     return out;
+}
+
+/// A REAL LIGHT WRITE (D4-PHOTON-TIERS): the lamp's intensity nudged by 1 %, so the
+/// renderer's light-write serial moves and the chain's tick lands new radiance — the
+/// deleted single volume counted a bare refreshGiLighting() as a write; the chain
+/// (correctly) does not, since nothing changed.
+static void lightWrite(Scene *s, NodeId light)
+{
+    static bool up = false;
+    up = !up;
+    LightDesc l;
+    l.type = LightType::Directional;
+    l.colour = Colour(1, 1, 1);
+    l.intensity = up ? 2.02f : 2.0f;
+    l.castShadows = false;
+    s->setLight(light, l);
 }
 
 int main(int argc, char **argv)
@@ -461,7 +496,9 @@ int main(int argc, char **argv)
         const int expected = (probes + batch - 1) / batch;
         CHECK(fieldWhole(st), "whole before the light moves");
         CHECK(settleGi(e, r.scene) >= 0, "...and at rest");
+        lightWrite(r.scene, r.light);
         CHECK(r.scene->refreshGiLighting(true), "refreshGiLighting (the light-only cheap path)");
+        e->renderOneFrame();     // the chain's tick lands at the frame's writer point
         st = r.scene->giStatus();
         CHECK(!fieldWhole(st), "the cheap path re-arms the field's pass (reset, not rebuild)");
         CHECK(!st.giAtRest, "A LIGHT WRITE TAKES GI OUT OF REST");
@@ -515,6 +552,7 @@ int main(int argc, char **argv)
         CHECK_MSG(st.gather.running && st.gather.settled && st.gather.settleFrames == 16u,
                   "the gather runs and its history is SETTLED at rest (N = %u frames for a 5-code step)",
                   st.gather.settleFrames);
+        lightWrite(r.scene, r.light);
         CHECK(r.scene->refreshGiLighting(true), "a light write (the cheap path)");
         CHECK(!r.scene->giStatus().giAtRest, "the write takes GI out of rest");
         int frames = 0;
@@ -599,6 +637,7 @@ int main(int argc, char **argv)
                       "(rest frames %u), since its restart %u", restless, st.gather.restFrames,
                       st.gather.sinceRestart);
             // THE RESTART: a light write while the mover moves.
+            lightWrite(r.scene, r.light);
             CHECK(r.scene->refreshGiLighting(true), "a light write with the mover moving");
             CHECK(!r.scene->giStatus().giAtRest, "the write takes GI out of rest");
             unsigned lastSince = 0u;
@@ -686,7 +725,10 @@ int main(int argc, char **argv)
     // ---- 6. lifecycle: the spike's four shapes ---------------------------
     // (a) a full refresh under a live bound field.
     r.scene->refreshGlobalIllumination();
+    // The chain answers a refresh through its dirty path and its tick, a frame
+    // at a time: counted until the field is whole again (bounded), not a fixed 3.
     render(e, 3);
+    for (int f = 0; f < 120 && !fieldWhole(r.scene->giStatus()); ++f) e->renderOneFrame();
     st = r.scene->giStatus();
     CHECK(st.ifdBound && fieldWhole(st),
           "a full refresh under a live field rebuilds it, bound and whole");

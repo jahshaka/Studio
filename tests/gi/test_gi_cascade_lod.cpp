@@ -132,7 +132,6 @@ static GiParams cascadeGi(bool lods)
     gi.numBounces = 1;
     gi.ddgi = GiToggle::Off;
     gi.updateBudget = 0;
-    gi.cascades = true;
     gi.cascadeVoxelLod = lods;
     return gi;
 }

@@ -257,9 +257,9 @@ void SceneWriter::writeScene(QJsonObject& projectObj, iris::ScenePtr scene)
     // Global illumination (world panel). Mode/quality are written as stable
     // strings — the enum ints must stay free to be reordered.
     static const char *giModeNames[] = { "off", "vct", "vct_pcc_hybrid" };
-    static const char *giQualityNames[] = { "low", "medium", "high" };
+    static const char *giQualityNames[] = { "low", "medium", "high", "epic" };
     sceneObj["giMode"] = giModeNames[qBound(0, static_cast<int>(scene->giMode), 2)];
-    sceneObj["giQuality"] = giQualityNames[qBound(0, static_cast<int>(scene->giQuality), 2)];
+    sceneObj["giQuality"] = giQualityNames[qBound(0, static_cast<int>(scene->giQuality), 3)];
     sceneObj["giNumBounces"] = scene->giNumBounces;
     sceneObj["giUpdateBudget"] = scene->giUpdateBudget;   // FIX WAVE B1
     sceneObj["giPccGrid"] = jsonVector3(scene->giPccGrid);
@@ -273,9 +273,8 @@ void SceneWriter::writeScene(QJsonObject& projectObj, iris::ScenePtr scene)
     sceneObj["giProbeSnapDeviation"] = scene->giProbeSnapDeviation;
     sceneObj["giProbeSnapSidesMin"] = scene->giProbeSnapSidesMin;
     sceneObj["giProbeSnapSidesMax"] = scene->giProbeSnapSidesMax;
-    // PHOTON cascades. The flag always; the table only when a scene PINNED one,
-    // so a document that leaves the tier in charge carries no empty array.
-    sceneObj["giCascades"] = scene->giCascades;
+    // PHOTON cascades: the table only when a scene PINNED one, so a document
+    // that leaves the tier in charge carries no empty array.
     sceneObj["giCascadeInstanceCap"] = scene->giCascadeInstanceCap;
     sceneObj["giCards"] = scene->giCards;
     sceneObj["giCardBudgetTexels"] = scene->giCardBudgetTexels;
@@ -427,7 +426,7 @@ void SceneWriter::writeSceneNode(QJsonObject& sceneNodeObj, iris::SceneNodePtr s
     // GI bounds exclusion (REFLECTIONS_ADOPTION_SPEC.md P1a). Written only when
     // TRUE, like planarReflector above: the flag is off on every node of every
     // scene but the handful a user deliberately marks.
-    if (sceneNode->getGiBoundsExcluded()) sceneNodeObj["giBoundsExcluded"] = true;
+    if (sceneNode->getProbeGridExcluded()) sceneNodeObj["probeGridExcluded"] = true;
     // Shadow Caster (the Properties-panel checkbox, nodepropertywidget.cpp).
     // Written only when the user turned it OFF — the document default is on, so
     // an absent key reads as true and every scene written before this line

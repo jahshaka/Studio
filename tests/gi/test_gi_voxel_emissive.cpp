@@ -99,7 +99,6 @@ static GiParams chainGi()
     gi.numBounces = 1;
     gi.ddgi = GiToggle::Off;
     gi.updateBudget = 0;
-    gi.cascades = true;
     return gi;
 }
 

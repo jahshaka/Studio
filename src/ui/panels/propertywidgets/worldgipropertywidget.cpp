@@ -298,14 +298,12 @@ void WorldGiPropertyWidget::rebuild()
         // cone-traced reflections by distance. Live in the engine viewport.
         quality = this->addComboBox(tr("Quality") + pinMark(scene, "giQuality"));
         // (The voxel resolutions per tier are the engine's, not this file's:
-        // world.tierTable() / worldmodes::photonTierVoxelPhrase report them.
-        // The comments that used to sit here said 32/64/128, which is the
-        // single-volume arm — the cascade chain, on at every tier, is
-        // 64/64/128.)
+        // world.tierTable() / worldmodes::photonTierVoxelPhrase report them.)
         quality->addItem(tr("Low"));
         quality->addItem(tr("Medium"));
         quality->addItem(tr("High"));
-        quality->setCurrentIndex(qBound(0, static_cast<int>(scene->giQuality), 2));
+        quality->addItem(tr("Epic"));
+        quality->setCurrentIndex(qBound(0, static_cast<int>(scene->giQuality), 3));
         quality->setToolTip(rowTip("giQuality"));
         connect(quality, QOverload<int>::of(&ComboBoxWidget::currentIndexChanged),
                 this, &WorldGiPropertyWidget::onQualityChanged);
@@ -662,7 +660,7 @@ void WorldGiPropertyWidget::modeChanged(int row)
 void WorldGiPropertyWidget::onQualityChanged(int row)
 {
     if (!scene) return;
-    const int quality = qBound(0, row, 2);
+    const int quality = qBound(0, row, 3);
     editRegistry(tr("Photon Quality Detail"), [this, quality]() {
         scene->giQuality = static_cast<iris::GiQuality>(quality);
         worldmodes::pinRowValue(scene, QStringLiteral("giQuality"), int(scene->giQuality));

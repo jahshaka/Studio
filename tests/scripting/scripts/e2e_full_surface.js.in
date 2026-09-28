@@ -49,7 +49,7 @@ assert(g.mode === "vct_pcc_hybrid" && g.pccGrid.x === 2 && g.pccGrid.y === 1 && 
 // used to pin and cap it are refused BY NAME, not swallowed as unknown keys.
 var boundsThrew = "";
 try { world.gi({ boundsMin: { x: -5, y: 0, z: -5 } }); } catch (e) { boundsThrew = String(e); }
-assert(boundsThrew.indexOf("boundsMin") >= 0 && boundsThrew.indexOf("AUTOMATIC") >= 0,
+assert(boundsThrew.indexOf("boundsMin") >= 0 && boundsThrew.indexOf("NO FIXED GI VOLUME") >= 0,
        "world.gi refuses boundsMin by name: " + boundsThrew);
 boundsThrew = "";
 try { world.gi({ autoBoundsMax: 128 }); } catch (e) { boundsThrew = String(e); }

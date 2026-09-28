@@ -68,6 +68,21 @@ struct EnumOption {
     int     value = 0;   ///< the backing-field value
 };
 
+/// ONE ENTRY OF A ROW'S COMBO as a surface offers it for a scene on this
+/// machine (comboItems). Every entry can be chosen — through applyComboItem,
+/// the one path the panels and world.override share. `value` is what choosing
+/// it writes; `shows` the other backing values it stands for (the SSR row's
+/// "Traced" stands for every non-zero march quality at a ray tier);
+/// `followsTier` says choosing it DROPS the row's pin so the tier decides again
+/// (the SSR row's "Traced": off -> traced is "let the tier's reflections run").
+struct ComboItem {
+    QString    id;
+    QString    label;
+    int        value = 0;
+    bool       followsTier = false;
+    QList<int> shows;
+};
+
 struct Row {
     QString  id;                       ///< stable, script-facing
     QString  label;
@@ -94,6 +109,12 @@ struct Row {
     /// Read through optionLabel().
     std::function<QString(int value, const iris::ScenePtr &scene, bool sceneTracesRays)>
         optionLabelAt;
+    /// A row whose OFFERED entries depend on the scene on this machine (the SSR
+    /// row at a ray tier offers "Off" and one disabled "Traced"). Null = one
+    /// enabled entry per option, named through optionLabel(). Read through
+    /// comboItems().
+    std::function<QVector<ComboItem>(const iris::ScenePtr &scene, bool sceneTracesRays)>
+        comboItemsAt;
     bool     available = true;         ///< false = declared but not yet implemented
     /// TIER SPACE — WHICH DIAL, IF ANY, RESOLVES THIS ROW.
     ///
@@ -210,6 +231,19 @@ QString rowCost(const Row &r, bool sceneTracesRays);
 /// Row::optionLabelAt). Every surface that names an option reads it here.
 QString optionLabel(const Row &r, const EnumOption &o, const iris::ScenePtr &scene,
                     bool sceneTracesRays);
+/// The entries an Enum row's combo OFFERS for `scene` on this machine (see
+/// Row::comboItemsAt) — the World panels, the camera overrides and
+/// world.modeTable all read it, so no surface offers what another hides.
+QVector<ComboItem> comboItems(const Row &r, const iris::ScenePtr &scene, bool sceneTracesRays);
+/// The index in `items` that shows backing value `value` (its own value or one
+/// it `shows`), -1 when none does.
+int comboIndexOf(const QVector<ComboItem> &items, int value);
+/// CHOOSES an entry (the panels' combos and world.override's option ids): an
+/// ordinary entry pins its value (setRowValue); a `followsTier` entry drops the
+/// row's pin (clearOverride) so the tier's column decides — and where that
+/// column is 0 (a World mode whose SSR column is off) it pins its own value,
+/// so the state the entry names is the state the scene is in. False = refused.
+bool applyComboItem(const iris::ScenePtr &scene, const Row &r, const ComboItem &item);
 
 // ---------------------------------------------------------------------------
 // PHOTON — the unified realtime-GI switch (GI_UNIFIED_SPEC.md §2 / P2).
@@ -228,10 +262,9 @@ QString optionLabel(const Row &r, const EnumOption &o, const iris::ScenePtr &sce
 // High are DDGI-fed — the field is the only diffuse arm that is right in both
 // open and sealed scenes (rayon2 S1-S3) — and Epic has a column of its own so
 // it no longer collapses onto High). ONE table, ONE owner: `kPhotonTable` in
-// worldmodes.cpp; the engine's GiQuality stays three-valued (it is the
-// RESOLUTION dial — voxels, probe faces — and Epic changes no resolution), so
-// Epic's two extra columns are ordinary document fields the engine already
-// reads (numBounces), written through like the other two.
+// worldmodes.cpp; the engine's GiQuality has an Epic row of its own
+// (D4-PHOTON-TIERS: High's resolutions plus four times the gather's probes),
+// and Epic's bounce column is an ordinary document field (numBounces).
 //
 //   tier    technique             voxels             ddgi  DDGI grid  bounces  probe faces/HDR/shadows  budget
 //   Low     VCT, 2 cascades       64^3               ON    8192 fit   1        — (no probes)            (dial)
@@ -244,8 +277,8 @@ QString optionLabel(const Row &r, const EnumOption &o, const iris::ScenePtr &sce
 //   built, PHOTON-F12-PCC) and "VCT + probes" where it does not
 //   (techniqueLabel); the probe columns apply only in the second case.
 //
-// Derived columns (not rows): voxels and probe faces/HDR/shadows follow
-// `giQuality` (OgreGi.cpp giVoxelResolution / buildPcc); the DDGI grid is the
+// Derived columns (not rows): the cascade chain and probe faces/HDR/shadows
+// follow `giQuality` (giQualityFacts / buildPcc); the DDGI grid is the
 // engine's fixed 8192-probe aspect fit (kIfdTotalProbes). Epic's bounce column
 // is measured:
 // bounces 1 -> 3 raises the DDGI-fed floor bounce (gi.ddgi case 7).
@@ -290,10 +323,6 @@ int photonBounces(PhotonTier t);
 /// quality dial). Every tier is 0 today — the column exists so a scene can pin
 /// one, which is the owner's 2026-09-13 Q4 decision.
 int photonProbeSize(PhotonTier t);
-/// The CASCADE CHAIN column (0/1) — Photon's camera-centred voxel cascades.
-/// On in every tier since PHOTON_SPEC §7 E2 (6): the bounce follows the camera
-/// unless a scene pins `giCascades` off.
-int photonCascades(PhotonTier t);
 /// THE GATHER COLUMN (PHOTON-GATHER-1d): the screen-probe gather at this tier —
 /// on/off, the probe stride, the octahedral resolution, the adaptive cap — as a
 /// PROJECTION of the engine's tier table (`giQualityFacts(...).gather`, the
@@ -312,8 +341,8 @@ jahshaka::engine::GiGatherFacts photonVrGather(PhotonTier t);
 /// The numbers come from TWO tables and nowhere else: this file's kPhotonTable
 /// (which technique, which quality, how many bounces, the field, the chain) and
 /// the ENGINE's own `jahshaka::engine::giQualityFacts` (what a quality dial
-/// physically is: the cascade chain and its cells, the single volume's
-/// resolution, the probe face size, the HDR/shadow defaults). Nothing here is
+/// physically is: the cascade chain and its cells, the probe face size, the
+/// HDR/shadow defaults). Nothing here is
 /// prose about the renderer that a human has to keep in step.
 ///
 /// `photonTierSentence` is one tier in one sentence ("Low: two camera cascades,
@@ -322,6 +351,21 @@ jahshaka::engine::GiGatherFacts photonVrGather(PhotonTier t);
 /// describes the dial rather than a setting.
 QString photonTierSentence(PhotonTier t);
 QString photonTierSummary();
+
+/// THE OFFSCREEN PICTURE CONTRACT (D4-PHOTON-TIERS §2.2). Every picture the app
+/// renders away from the viewport is one row here, and it either renders THE
+/// TIER'S PICTURE — the viewport's own, Photon's chain-borne terms included (the
+/// screen-probe gather, the traced reflections, the screen march, sun contact) —
+/// or a picture DECLARED LOWER, which says exactly what it renders instead. There
+/// is no third kind: an offscreen view that silently rendered less than the tier
+/// would be a defect, not an optimisation. `kind` is the stable id (world.tierTable's
+/// `offscreen` list carries the same rows); `renders` names the lower picture.
+struct OffscreenPicture {
+    QString kind;
+    bool    tierPicture = false;
+    QString renders;
+};
+const QVector<OffscreenPicture> &offscreenPictures();
 /// The VOXEL RESOLUTIONS a tier actually uses, as a phrase: the chain's
 /// distinct resolutions when the chain is on ("64", "64 and 128"), which is
 /// what the quality dial buys.
@@ -344,6 +388,14 @@ bool probeGridByRays(const iris::ScenePtr &scene, bool sceneTracesRays);
 /// traces rays on this machine. What the rows' tier-describing TEXTS read; a
 /// NAME for the scene in front of the user reads probeGridByRays.
 bool tierRaysResolve(PhotonTier t, bool sceneTracesRays);
+/// THE SSR ROW'S MEANING (D4-PHOTON-TIERS): true where the scene's reflections
+/// are TRACED — Photon on, a quality whose reflections the tier traces
+/// (giQualityFacts rayReflections: High, Epic) and a scene that traces rays on
+/// this machine. There the rays are the reflection wherever the row is on, and
+/// the row offers only "Off" and "Traced" (comboItems; choosing Traced drops the
+/// pin, applyComboItem): OFF IS HONOURED AT EVERY TIER (no trace, no march — SceneMirror feeds 0), and any
+/// other value is fed as the tier's trace resolution (GiQualityFacts::reflectTrace).
+bool reflectionsTraced(const iris::ScenePtr &scene, bool sceneTracesRays);
 /// THE TECHNIQUE'S NAME — one source for the World rows, the GI panel and the
 /// docs: 0 "Off", 1 "VCT", 2 "VCT + rays" where `raysResolve`, else
 /// "VCT + probes".

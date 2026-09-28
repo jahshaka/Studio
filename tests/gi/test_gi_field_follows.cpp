@@ -2,9 +2,7 @@
 //
 // The irradiance field is the leak-free half of Photon's diffuse: probes that
 // carry a depth-variance visibility test, so a wall stops the bounce behind it.
-// It covers ONE box. Under the single-volume arm that box is the scene's fit and
-// it never moves; under a cascade chain the only box worth covering is the
-// innermost cascade's — the near field, where the user is standing — and that
+// It covers ONE box: the only box worth covering is the innermost cascade's — the near field, where the user is standing — and that
 // box WALKS. Until E1 the arm refused to build a field at all under a chain, and
 // said so in a comment: the pin's only placement API re-creates the atlases, so
 // a field on a scrolling cascade was either wrong or black.
@@ -78,10 +76,9 @@ static float groundLum(const Image &img)
 
 /// The NEAREST ground — the bottom eighth of the picture, which at every pose
 /// this suite uses lies a couple of metres in front of the camera and therefore
-/// well inside cascade 0's box. Case 3 compares the two arms' FIELD here and
-/// nowhere else: further up the picture the ground leaves the field's reach and
-/// the two arms are answering different questions (the chain hands those pixels
-/// to its cone bounce, the single volume's field still covers them).
+/// well inside cascade 0's box. Case 3 reads the FIELD here and nowhere else:
+/// further up the picture the ground leaves the field's reach and the chain hands
+/// those pixels to its cone bounce.
 static float nearGroundLum(const Image &img)
 {
     float sum = 0.0f; unsigned n = 0;
@@ -120,7 +117,6 @@ static GiParams fieldGi()
     gi.numBounces = 1;
     gi.ddgi = GiToggle::On;
     gi.updateBudget = 1;
-    gi.cascades = true;
     return gi;
 }
 
@@ -222,7 +218,7 @@ int main() {
     // re-integration is whole, so nothing drifts after it.
     // =====================================================================
     std::printf("\n== case 2: one cascade-0 step, and the follow on the frame after ==\n");
-    float singleVolumeGround = 0.0f, chainGroundAtStart = 0.0f;
+    float nearGroundAtStart = 0.0f, chainGroundAtStart = 0.0f;
     {
         st = scene->giStatus();
         const float step0 = st.cascades[0].step;
@@ -353,32 +349,19 @@ int main() {
     }
 
     // =====================================================================
-    // CASE 3 — it is the same light the single volume gave
+    // CASE 3 — the near ground gets its analytic sky light
     // =====================================================================
-    std::printf("\n== case 3: the picture agrees with the single-volume field ==\n");
+    std::printf("\n== case 3: the near ground against its analytic truth ==\n");
     {
-        // The same pose for both arms. The chain's field covers a 10 m box
-        // around the camera; the single volume's covers the scene's fit. The
-        // ground band this reads is a few metres in front of the camera —
-        // inside cascade 0 either way — so the two fields are integrating the
-        // same geometry and must agree.
+        // The chain's field covers a 10 m box around the camera; the ground band
+        // this reads is a few metres in front of it, inside cascade 0.
         view->setCamera(enginetest::testCameraDescLookAt(Vec3(0.0f, 2.0f, 6.0f),
                                                          Vec3(0.0f, 1.0f, 0.0f)));
         Image img;
         render(e, 8);
         view->readPixels(img);
         const float chain = nearGroundLum(img);
-        const float chainWholeBand = groundLum(img);
-
-        GiParams single = fieldGi(); single.cascades = false;
-        CHECK(scene->setGlobalIllumination(single), "the single-volume arm with the field accepts");
-        render(e, 8);
-        const GiStatus s = scene->giStatus();
-        CHECK(s.ifdBound && s.cascades.empty(), "...and it is one volume with a field on it");
-        CHECK(s.ifdFollows == 0, "a field over a scene-fitted volume follows nothing");
-        view->readPixels(img);
-        singleVolumeGround = nearGroundLum(img);
-        const float singleWholeBand = groundLum(img);
+        nearGroundAtStart = chain;
 
         // THE RAW AMBIENT on the same band (GI off): with no lamp in this scene the
         // near ground's light IS the ambient times what it sees of the sky.
@@ -392,26 +375,13 @@ int main() {
         render(e, 8);
         view->readPixels(img);
         const float chainAgain = nearGroundLum(img);
-        std::printf("   whole ground band (the field's reach and beyond it): chain %.4f | "
-                    "single volume %.4f (%.2fx) — the chain hands the pixels past cascade 0 to "
-                    "its cone bounce, which is G3's subject and gi.cascades' bar\n",
-                    chainWholeBand, singleWholeBand,
-                    singleWholeBand > 0.0f ? chainWholeBand / singleWholeBand : 0.0f);
-        std::printf("   NEAR ground, inside cascade 0: chain %.4f | single volume %.4f (%.2fx) "
-                    "| chain again %.4f\n",
-                    chain, singleVolumeGround, singleVolumeGround > 0.0f ? chain / singleVolumeGround : 0.0f,
-                    chainAgain);
-        CHECK(chain > 0.02f && singleVolumeGround > 0.02f, "both arms render a lit picture");
-        // A TOLERANCE, NOT AN EQUALITY, and the reason is physics: the chain's
-        // field has 8,192 probes over cascade 0's 10 m box where the single
-        // volume's has them over the whole fit, so the two integrate the same
-        // room at very different probe spacings. What must hold is that the
-        // near ground is lit by the SAME light — not that two different
-        // samplings of it agree to the bit.
+        std::printf("   NEAR ground, inside cascade 0: chain %.4f | chain again %.4f\n",
+                    chain, chainAgain);
+        CHECK(chain > 0.02f, "the chain renders a lit picture");
         // AGAINST THE FIXTURE'S OWN TRUTH (PHOTON-READER-1): the band's mean
         // cosine-weighted sky visibility with the walls as the only occluders,
         // computed here exactly, against what the chain's field gives of the raw
-        // ambient. The single volume is PRINTED, not the bar: it was never the truth.
+        // ambient.
         std::vector<enginetest::AnalyticBox> walls;
         for (int i = 0; i < 24; ++i)
             walls.push_back({ Vec3(float(i) * 6.0f - 2.5f, 0.0f, -6.1f),
@@ -426,11 +396,9 @@ int main() {
             }
         truth = samples ? truth / float(samples) : 0.0f;
         const float measured = rawGround > 0.0f ? chain / rawGround : 0.0f;
-        const float singleFrac = rawGround > 0.0f ? singleVolumeGround / rawGround : 0.0f;
         std::printf("   ANALYTIC: the near ground sees %.3f of the sky; of the raw ambient "
-                    "(%.4f) the chain's field gives %.3f (= %.3f of the truth), the single "
-                    "volume's %.3f\n", truth, rawGround, measured,
-                    truth > 0.0f ? measured / truth : 0.0f, singleFrac);
+                    "(%.4f) the chain's field gives %.3f (= %.3f of the truth)\n", truth,
+                    rawGround, measured, truth > 0.0f ? measured / truth : 0.0f);
         // GATED SINCE PHOTON-WRITER-1 (it was the target row
         // gi.field_follows_ground_target: 0.737 at READER-1, 0.662 at ENV-1). The
         // two mechanisms, measured: the field's probe rays marched as CONES,
@@ -488,7 +456,7 @@ int main() {
               "...and still centred on cascade 0, 100 m from where it started");
         CHECK(worstFrame <= 1, "and no frame of the 100 m paid for two cascades");
         CHECK(endGround > 0.02f, "the ground is lit at the far end (nothing went black)");
-        CHECK(std::fabs(endGround - singleVolumeGround) < 0.5f * singleVolumeGround,
+        CHECK(std::fabs(endGround - nearGroundAtStart) < 0.5f * nearGroundAtStart,
               "THE LEAK-FREE DIFFUSE IS WHEREVER THE CAMERA IS (the point of E1)");
     }
 

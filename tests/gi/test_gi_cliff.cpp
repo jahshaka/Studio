@@ -1,5 +1,10 @@
 // THE GI-VOLUME CLIFF (LIGHTING_FIX fix 1) — the owner's regression, gated.
 //
+// THE FIT IT GUARDS IS NOW THE REFLECTION-PROBE GRID'S PLACEMENT FIT (D4-PHOTON-
+// TIERS deleted the single scene-fitted voxel volume; the voxels are the camera's
+// chain). Everything below that says "lit volume" reads that fit; the heuristic
+// and its cliffs are unchanged.
+//
 // WHAT WENT WRONG. `OgreScene::giItemBounds` used to drop every item whose
 // largest world-AABB extent was more than 4x the MEDIAN of those extents, and
 // only from four items upwards. Every part of that is a cliff:
@@ -84,14 +89,24 @@ static NodeId addCube(Scene *s, int i)
 
 struct Box { Vec3 mn, mx; };
 
+static Engine *gEngine = nullptr;
+
+// THE FIT IS THE PROBE GRID'S (D4-PHOTON-TIERS): the voxels are the camera's
+// cascade chain and fit nothing, and the one automatic fit left is where a
+// reflection-probe grid is PLACED — so the hybrid at Low (whose reflections are
+// never traced), and the fit read back as giStatus().probeFitMin/Max. The chain
+// waits for its first tracked camera, and the fit is made by that build, so two
+// frames are rendered after the push. No probe captures: the subject is the fit.
 static Box solve(Scene *s)
 {
     GiParams gi;
-    gi.mode = GiMode::Vct;          // no probes: this suite is about the VOLUME
+    gi.mode = GiMode::VctPccHybrid;
     gi.quality = GiQuality::Low;
+    gi.updateBudget = 0;
     s->setGlobalIllumination(gi);
+    for (int i = 0; i < 2; ++i) gEngine->renderOneFrame();
     const GiStatus st = s->giStatus();
-    return Box{ st.boundsMin, st.boundsMax };
+    return Box{ st.probeFitMin, st.probeFitMax };
 }
 
 static void show(const char *label, int n, const Box &b)
@@ -362,49 +377,6 @@ static void floorSurvivesCase(Engine *engine, View *view)
 }
 
 // ---------------------------------------------------------------------------
-// 4. THE ESCAPE SIGNATURE (fix 2, engine half). `giEscapeSignature()` is what
-//    lets the mirror debounce a re-fit; gi.coalesce drives the mirror half.
-// ---------------------------------------------------------------------------
-static void escapeSignatureCase(Engine *engine, View *view)
-{
-    std::printf("-- giEscapeSignature: 0 inside, changing while outside\n");
-    Scene *s = engine->createScene("cliff_escape");
-    view->setScene(s);
-    for (int i = 0; i < 3; ++i) addCube(s, i);
-    const NodeId flyer = addCube(s, 3);
-    enginetest::addDirectionalLight(s, Vec3(0.2f, -1.0f, 0.3f), 4.0f);
-    const Box b = solve(s);
-    show("escape", 4, b);
-    CHECK(s->giEscapeSignature() == 0ull,
-          "everything is inside the freshly fitted volume: the signature is 0");
-
-    enginetest::setNodePosition(s, flyer, Vec3(1.5f, 40.0f, 0.0f));
-    engine->renderOneFrame();
-    const unsigned long long a1 = s->giEscapeSignature();
-    CHECK(a1 != 0ull, "a cube raised out of the volume makes the signature non-zero");
-
-    enginetest::setNodePosition(s, flyer, Vec3(1.5f, 41.0f, 0.0f));
-    engine->renderOneFrame();
-    const unsigned long long a2 = s->giEscapeSignature();
-    CHECK(a2 != a1, "...and it CHANGES while the cube keeps moving (that is the debounce)");
-
-    engine->renderOneFrame();
-    CHECK(s->giEscapeSignature() == a2, "...and holds still when the cube does");
-
-    s->refreshGlobalIllumination();
-    const Box after = solve(s);
-    show("re-fit", 4, after);
-    CHECK(after.mx.y > 40.0f, "a re-solve fits the volume around the escapee");
-    CHECK(s->giEscapeSignature() == 0ull, "...and the signature is 0 again afterwards");
-
-    GiParams off;
-    s->setGlobalIllumination(off);
-    view->setScene(nullptr);
-    engine->destroyScene(s);
-}
-
-
-// ---------------------------------------------------------------------------
 // 5. THE SUPPORTING SLAB is clipped to the CONTENT, and to nothing about
 //    ITSELF (ENGINE-4 item 5, round-2 review F2). A ground plane is scenery:
 //    the lit volume must cover what stands on it, not the acres it lies on —
@@ -461,13 +433,13 @@ int main()
     if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }
 
     View *view = engine->createOffscreenView("cliff", 128, 128, Colour(0, 0, 0));
+    gEngine = engine.get();
 
     freshTable(engine.get(), view);
     liveTable(engine.get(), view);
     stillTrimsCase(engine.get(), view);
     noRatchetCase(engine.get(), view);
     floorSurvivesCase(engine.get(), view);
-    escapeSignatureCase(engine.get(), view);
     slabPatchCase(engine.get(), view);
 
     engine.reset();

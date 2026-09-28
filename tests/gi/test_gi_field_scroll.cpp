@@ -82,7 +82,6 @@ static GiParams fieldGi(int budget)
     gi.numBounces = 1;
     gi.ddgi = GiToggle::On;
     gi.updateBudget = budget;
-    gi.cascades = true;
     return gi;
 }
 

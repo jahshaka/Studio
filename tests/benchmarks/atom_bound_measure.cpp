@@ -268,10 +268,10 @@ int main()
         s2->setAmbient(Colour(0.2f, 0.2f, 0.22f), Colour(0.1f, 0.1f, 0.12f));
         GiParams gi;
         if (a.shippedDefaults) {
-            gi.mode = GiMode::VctPccHybrid; gi.quality = GiQuality::High; gi.cascades = true;
+            gi.mode = GiMode::VctPccHybrid; gi.quality = GiQuality::High;
             gi.ddgi = GiToggle::On; gi.numBounces = 1;
         } else {
-            gi.mode = GiMode::Off; gi.cascades = false; gi.ddgi = GiToggle::Off;
+            gi.mode = GiMode::Off; gi.ddgi = GiToggle::Off;
         }
         s2->setGlobalIllumination(gi);
         const float dist = (half + 1.0f) / std::tan(22.5f * PI / 180.0f) + half + 2.0f;

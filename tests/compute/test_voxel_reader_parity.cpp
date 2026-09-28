@@ -13,12 +13,12 @@
 // every float compared bit for bit.
 //
 // WHAT IT COVERS. Two chains: the shipped anisotropic four-cascade chain (High)
-// and the isotropic single volume (Low). Every walk variant the consumers use:
+// and an isotropic chain of one cascade (Low). Every walk variant the consumers use:
 // the pixel's diffuse (the six-cone and the four-cone mip step), the specular
 // walk, the field's free-space ray (the hop measured along the ray, no bias).
 // Starts inside cascade 0 and outside it (the hop), directions down the axes,
 // on the diagonals and in between, every cascade and four mips for the point
-// reads; the specular empty-space skip on the single volume. And the RAY HIT's
+// reads; the specular empty-space skip on the one-cascade chain. And the RAY HIT's
 // read of a point against ONE MARCH STEP onto it (the march at zero length).
 //
 // NOT VACUOUS: a harness returning zeros twice would pass a bit comparison. So
@@ -185,24 +185,24 @@ int main()
         gi.quality = GiQuality::High;
         gi.numBounces = 1;
         gi.ddgi = GiToggle::Off;
-        gi.cascades = true;
         CHECK(scene->setGlobalIllumination(gi), "the anisotropic chain builds");
         for (int i = 0; i < 10; ++i) e->renderOneFrame();
         const GiStatus st = scene->giStatus();
         CHECK(st.cascades.size() >= 2u, "...and it is a chain");
         measureChain(e, scene, "anisotropic chain", unsigned(st.cascades.size()), true);
     }
-    // THE ISOTROPIC SINGLE VOLUME (Low): the reader's other half.
+    // THE ISOTROPIC ONE-CASCADE CHAIN (Low, a pinned table of one): the reader's
+    // other half. (It was the single scene-fitted volume until D4-PHOTON-TIERS
+    // deleted it; one camera-centred cascade is the same reader over one volume.)
     {
         GiParams gi;
         gi.mode = GiMode::Vct;
         gi.quality = GiQuality::Low;
         gi.numBounces = 1;
         gi.ddgi = GiToggle::Off;
-        gi.cascades = false;
-        gi.testBoundsMin = Vec3(-6.0f, -1.0f, -6.0f);
-        gi.testBoundsMax = Vec3(6.0f, 8.0f, 6.0f);
-        CHECK(scene->setGlobalIllumination(gi), "the isotropic single volume builds");
+        gi.cascadeCount = 1;
+        gi.cascadeSet[0] = GiParams::GiCascadeDesc{ 8.0f, 64, 0.0f };
+        CHECK(scene->setGlobalIllumination(gi), "the isotropic one-cascade chain builds");
         for (int i = 0; i < 6; ++i) e->renderOneFrame();
         measureChain(e, scene, "isotropic volume", 1u, false);
     }
