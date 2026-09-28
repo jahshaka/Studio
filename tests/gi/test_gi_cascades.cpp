@@ -1520,11 +1520,12 @@ int main()
     std::printf("\n== case 16a: the near-field guarantee, every tier and both columns ==\n");
     {
         bool allOk = true, everyRowOk = true;   // c0's claim, and EVERY row's
-        const GiQuality qualities[3] = { GiQuality::Low, GiQuality::Medium, GiQuality::High };
-        const char *qNames[3] = { "low", "medium", "high" };
+        const GiQuality qualities[4] = { GiQuality::Low, GiQuality::Medium, GiQuality::High,
+                                         GiQuality::Epic };
+        const char *qNames[4] = { "low", "medium", "high", "epic" };
         const GiViewProfile profiles[2] = { GiViewProfile::Desktop, GiViewProfile::Vr };
         const char *pNames[2] = { "desktop", "vr" };
-        for (int q = 0; q < 3; ++q) {
+        for (int q = 0; q < 4; ++q) {
             for (int pr = 0; pr < 2; ++pr) {
                 GiQualityFacts f = giQualityFacts(qualities[q], profiles[pr]);
                 giResolveCascadeSteps(f.cascades, f.cascadeCount);

@@ -257,9 +257,9 @@ void SceneWriter::writeScene(QJsonObject& projectObj, iris::ScenePtr scene)
     // Global illumination (world panel). Mode/quality are written as stable
     // strings — the enum ints must stay free to be reordered.
     static const char *giModeNames[] = { "off", "vct", "vct_pcc_hybrid" };
-    static const char *giQualityNames[] = { "low", "medium", "high" };
+    static const char *giQualityNames[] = { "low", "medium", "high", "epic" };
     sceneObj["giMode"] = giModeNames[qBound(0, static_cast<int>(scene->giMode), 2)];
-    sceneObj["giQuality"] = giQualityNames[qBound(0, static_cast<int>(scene->giQuality), 2)];
+    sceneObj["giQuality"] = giQualityNames[qBound(0, static_cast<int>(scene->giQuality), 3)];
     sceneObj["giNumBounces"] = scene->giNumBounces;
     sceneObj["giUpdateBudget"] = scene->giUpdateBudget;   // FIX WAVE B1
     sceneObj["giPccGrid"] = jsonVector3(scene->giPccGrid);

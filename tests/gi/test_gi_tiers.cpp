@@ -86,7 +86,7 @@ static void testTierTable()
         { PhotonTier::Low,    1, 0, 1, 1, 0, 1, "Low = VCT, two cascades at 64^3, FIELD ON, 1 bounce, no probes" },
         { PhotonTier::Medium, 1, 1, 1, 1, 0, 1, "Medium = VCT 64^3, FIELD ON (DDGI-fed), 1 bounce" },
         { PhotonTier::High,   2, 2, 1, 1, 0, 1, "High = VCT + probes 128^3, FIELD ON, 1 bounce" },
-        { PhotonTier::Epic,   2, 2, 1, 3, 0, 1, "Epic = VCT + probes 128^3, FIELD ON, THREE bounces" },
+        { PhotonTier::Epic,   2, 3, 1, 3, 0, 1, "Epic = its own engine row (High + 4x the gather probes), FIELD ON, THREE bounces" },
     };
     for (const Want &w : wants) {
         auto s = freshScene();
@@ -157,7 +157,7 @@ static void testTierTable()
         // both reach and cell or the cone march cannot hand over (the rule
         // resolveCascadeTable enforces on a PINNED table; the tier's own table
         // has to satisfy it too, and nothing checked that it did).
-        for (int q = 0; q < 3; ++q) {
+        for (int q = 0; q < 4; ++q) {
             const auto facts = giQualityFacts(GiQuality(q));
             CHECK(facts.cascadeCount > 0 && facts.cascadeCount <= 4,
                   qPrintable(QStringLiteral("quality %1: the tier table has 1-4 cascades").arg(q)));
@@ -188,7 +188,7 @@ static void testTierTable()
         // axis"). A sentence that stops naming them has stopped being generated.
         for (int t = 0; t < 4; ++t) {
             const PhotonTier tier = PhotonTier(t);
-            const auto facts = giQualityFacts(GiQuality(qBound(0, worldmodes::photonQuality(tier), 2)));
+            const auto facts = giQualityFacts(GiQuality(qBound(0, worldmodes::photonQuality(tier), 3)));
             const QString text = worldmodes::photonTierSentence(tier);
             CHECK(text.contains(QString::number(facts.cascadeCount)) &&
                       text.contains(QString::number(facts.cascades[0].resolution)),

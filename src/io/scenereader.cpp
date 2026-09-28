@@ -481,6 +481,7 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
             const QString giQuality = sceneObj.value("giQuality").toString();
             if (giQuality == "low") scene->giQuality = iris::GiQuality::LOW;
             else if (giQuality == "high") scene->giQuality = iris::GiQuality::HIGH;
+            else if (giQuality == "epic") scene->giQuality = iris::GiQuality::EPIC;
             else scene->giQuality = iris::GiQuality::MEDIUM;
         }
         // THE LIT VOLUME IS THE RENDERER'S (owner decision D8, 2026-09-13). The

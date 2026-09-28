@@ -82,7 +82,7 @@ const PhotonRow kPhotonTable[4] = {
     /* Low    */ { 1, 0, 1, 1, 0, 1 },   // VCT, 2 cascades @ 64^3, the field on, no probes
     /* Medium */ { 1, 1, 1, 1, 0, 1 },   // VCT, the chain at 64^3, DDGI-fed (voxel source)
     /* High   */ { 2, 2, 1, 1, 0, 1 },   // the hybrid (rays where the scene traces, else probes), the chain's High table
-    /* Epic   */ { 2, 2, 1, 3, 0, 1 },   // ... plus 3 bounces
+    /* Epic   */ { 2, 3, 1, 3, 0, 1 },   // the Epic row (4x the gather's probes) plus 3 bounces
 };
 /// The Photon-tiered row ids, in kPhotonTable column order.
 const int kPhotonRowCount = 6;
@@ -761,7 +761,8 @@ QVector<Row> buildRows()
         r.tierSpace = TierSpace::Photon;
         r.options = { { QStringLiteral("low"),    QStringLiteral("Low"),    0 },
                       { QStringLiteral("medium"), QStringLiteral("Medium"), 1 },
-                      { QStringLiteral("high"),   QStringLiteral("High"),   2 } };
+                      { QStringLiteral("high"),   QStringLiteral("High"),   2 },
+                      { QStringLiteral("epic"),   QStringLiteral("Epic"),   3 } };
         photonColumns(r, 1);
         // GENERATED: the resolutions and probe sizes are the ENGINE's
         // (giQualityFacts). The hand-written "32/64/128 voxels per axis" was
@@ -1458,20 +1459,20 @@ int photonCascades(PhotonTier t)  { return kPhotonTable[tierIndex(t)].cascades; 
 // THE GATHER COLUMN IS A PROJECTION, NOT A COPY (PHOTON-GATHER-1d): the engine's
 // tier table holds the gather row (Types.h GiGatherFacts — on/off, stride,
 // octahedral resolution, adaptive cap) and this reads it for the tier's quality
-// and Epic fact, so the column cannot drift from what the renderer does.
+// row, so the column cannot drift from what the renderer does.
 jahshaka::engine::GiGatherFacts photonGather(PhotonTier t)
 {
     return jahshaka::engine::giQualityFacts(
-               jahshaka::engine::GiQuality(qBound(0, photonQuality(t), 2)),
-               jahshaka::engine::GiViewProfile::Desktop, t == PhotonTier::Epic)
+               jahshaka::engine::GiQuality(qBound(0, photonQuality(t), 3)),
+               jahshaka::engine::GiViewProfile::Desktop)
         .gather;
 }
 
 jahshaka::engine::GiGatherFacts photonVrGather(PhotonTier t)
 {
     return jahshaka::engine::giQualityFacts(
-               jahshaka::engine::GiQuality(qBound(0, photonQuality(t), 2)),
-               jahshaka::engine::GiViewProfile::Vr, t == PhotonTier::Epic)
+               jahshaka::engine::GiQuality(qBound(0, photonQuality(t), 3)),
+               jahshaka::engine::GiViewProfile::Vr)
         .gather;
 }
 
@@ -1500,11 +1501,8 @@ QString metres(float v)
 /// The engine's physical facts for a tier's quality column.
 jahshaka::engine::GiQualityFacts factsFor(PhotonTier t)
 {
-    // The tier's Epic fact rides along (the gather's density is the one row the
-    // quality column cannot carry — GiParams::epicTier).
     return jahshaka::engine::giQualityFacts(
-        jahshaka::engine::GiQuality(qBound(0, photonQuality(t), 2)),
-        jahshaka::engine::GiViewProfile::Desktop, t == PhotonTier::Epic);
+        jahshaka::engine::GiQuality(qBound(0, photonQuality(t), 3)));
 }
 
 }   // namespace
@@ -1539,7 +1537,7 @@ bool raysAreTheReflection(int giQuality, bool sceneTracesRays)
 {
     return sceneTracesRays
            && jahshaka::engine::giQualityFacts(
-                  jahshaka::engine::GiQuality(qBound(0, giQuality, 2)))
+                  jahshaka::engine::GiQuality(qBound(0, giQuality, 3)))
                   .rayReflections;
 }
 }   // namespace
@@ -1690,7 +1688,7 @@ void setPhoton(const iris::ScenePtr &scene, bool enabled, PhotonTier tier)
         return;
     }
     // The machinery: written unless the user pinned it.
-    if (!pinned(scene, "giQuality")) scene->giQuality = iris::GiQuality(qBound(0, row.quality, 2));
+    if (!pinned(scene, "giQuality")) scene->giQuality = iris::GiQuality(qBound(0, row.quality, 3));
     if (!pinned(scene, "giDdgi"))    scene->giDdgi = row.ddgi;
     if (!pinned(scene, "giBounces")) scene->giNumBounces = row.bounces;
     if (!pinned(scene, "giProbeSize")) scene->giProbeCaptureSize = qBound(0, row.probeSize, 1024);
@@ -1739,7 +1737,7 @@ void derivePhotonFromDocument(const iris::ScenePtr &scene)
     if (!scene) return;
     // WHAT THE DOCUMENT RENDERS, read before anything is written.
     const int technique = qBound(0, int(scene->giMode), 2);
-    const int quality   = qBound(0, int(scene->giQuality), 2);
+    const int quality   = qBound(0, int(scene->giQuality), 3);
     const bool enabled  = technique != 0;
 
     // THE TIER (spec §2's migration table, at option (b)'s contents): an
@@ -1754,13 +1752,14 @@ void derivePhotonFromDocument(const iris::ScenePtr &scene)
     // the quality row - its cascade chain, probes and card budgets.)
     PhotonTier tier = PhotonTier::Medium;
     if (enabled) {
-        tier = technique == 2 ? PhotonTier::High
+        tier = technique == 2 ? (quality == 3 ? PhotonTier::Epic : PhotonTier::High)
              : quality == 0   ? PhotonTier::Low
                               : PhotonTier::Medium;
     } else {
         tier = quality == 0 ? PhotonTier::Low
              : quality == 1 ? PhotonTier::Medium
-                            : PhotonTier::High;
+             : quality == 2 ? PhotonTier::High
+                            : PhotonTier::Epic;
     }
     scene->giTier = tierIndex(tier);
     const PhotonRow &want = kPhotonTable[tierIndex(tier)];

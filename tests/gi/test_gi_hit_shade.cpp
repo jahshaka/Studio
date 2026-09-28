@@ -1322,8 +1322,7 @@ static int costMain(Engine *e)
         for (int a = 0; a < kArms; ++a) {
             GiParams gi;
             gi.mode = GiMode::Vct;
-            gi.quality = GiQuality::High;
-            gi.epicTier = arms[a].epic;
+            gi.quality = arms[a].epic ? GiQuality::Epic : GiQuality::High;
             gi.numBounces = 1;
             s->setGlobalIllumination(gi);
             PostFxDesc fx;

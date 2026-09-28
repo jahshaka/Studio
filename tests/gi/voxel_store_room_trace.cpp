@@ -48,12 +48,11 @@ int main(int argc, char **argv)
     s->setLight(lamp, ld);
     GiParams gi;
     gi.mode = GiMode::Vct;
-    gi.quality = GiQuality::High;
+    gi.quality = argc > 1 && std::string(argv[1]) == "epic" ? GiQuality::Epic : GiQuality::High;
     gi.ddgi = GiToggle::Off;
     gi.gather = GiToggle::Off;
     gi.numBounces = 1;
     gi.cascades = true;
-    gi.epicTier = argc > 1 && std::string(argv[1]) == "epic";
     s->setGlobalIllumination(gi);
     for (int f = 0; f < 16; ++f) e->renderOneFrame();
     for (int f = 0; f < 4000 && !s->giStatus().giAtRest; ++f) e->renderOneFrame();
@@ -100,7 +99,7 @@ int main(int argc, char **argv)
     for (size_t i = 0; i < v.light.size(); i += 4)
         allLit += std::max(std::max(v.light[i], v.light[i + 1]), v.light[i + 2]) > 0.0f;
     std::printf("== %s: voxels holding an inward face: lit %ld, DARK (hidden faces) %ld; every lit voxel %ld\n",
-                gi.epicTier ? "Epic" : "High", lit, dark, allLit);
+                gi.quality == GiQuality::Epic ? "Epic" : "High", lit, dark, allLit);
     for (auto &kv : byClass) std::printf("   %-24s %ld\n", kv.first.c_str(), kv.second);
     view->setScene(nullptr);
     e->destroyScene(s);

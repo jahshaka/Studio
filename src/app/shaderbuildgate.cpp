@@ -239,8 +239,7 @@ unsigned holdSplashForShaderBuild(QApplication &app, VersionSplashScreen &splash
             GiParams gi;
             gi.mode = worldmodes::photonEnabled(born)
                           ? GiMode(qBound(0, worldmodes::photonTechnique(tier), 2)) : GiMode::Off;
-            gi.quality = GiQuality(qBound(0, worldmodes::photonQuality(tier), 2));
-            gi.epicTier = tier == worldmodes::PhotonTier::Epic;
+            gi.quality = GiQuality(qBound(0, worldmodes::photonQuality(tier), 3));
             gi.numBounces = worldmodes::photonBounces(tier);
             gi.cascades = worldmodes::photonCascades(tier) > 0;
             gi.ddgi = worldmodes::photonDdgi(tier) ? GiToggle::On : GiToggle::Off;
@@ -382,7 +381,7 @@ unsigned holdSplashForShaderBuild(QApplication &app, VersionSplashScreen &splash
                     GiParams parked;
                     parked.mode = GiMode::Off;
                     parked.gather = GiToggle::On;
-                    parked.epicTier = world->giTier == 3;
+                    parked.quality = GiQuality(qBound(0, int(world->giQuality), 3));
                     warmScene->setGlobalIllumination(parked);
                 }
                 // (1) the viewport: the Epic world's chain (the mirror's applyEnvironment).

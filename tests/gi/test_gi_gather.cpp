@@ -1092,8 +1092,7 @@ static int shippedCostMain(Engine *e)
         for (int cards = 1; cards >= 0; --cards) {
             GiParams gi;
             gi.mode = GiMode::Vct;
-            gi.quality = GiQuality::High;
-            gi.epicTier = epic != 0;
+            gi.quality = epic ? GiQuality::Epic : GiQuality::High;
             gi.ddgi = GiToggle::Off;
             gi.numBounces = epic ? 3 : 1;
             gi.cascades = true;

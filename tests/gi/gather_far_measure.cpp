@@ -288,7 +288,7 @@ static void armChain(View *view, int ssrRow)
 {
     PostFxDesc fx;
     fx.allowOffscreen = true;
-    fx.ssr = ssrRow;       // the tier's own SSR row (the gather's stride is epicTier's)
+    fx.ssr = ssrRow;       // the tier's own SSR row (the gather's stride is the quality row's)
     view->setPostFx(fx);
 }
 
@@ -296,12 +296,12 @@ static void armChain(View *view, int ssrRow)
 /// (src/services/worldmodes.cpp — Epic shares High's resolution dial and
 /// differs in the bounce count, the SSR row and the gather's density). The
 /// gather's stride is the engine's tier table's (`giQualityFacts`, keyed on
-/// GiParams::epicTier: 8 at Epic, 16 below), never the SSR row.
-struct Tier { const char *name; GiQuality quality; GiMode mode; int bounces; int ssrRow; bool epic; };
+/// the quality row: 8 at Epic, 16 below), never the SSR row.
+struct Tier { const char *name; GiQuality quality; GiMode mode; int bounces; int ssrRow; };
 static const Tier kTiers[3] = {
-    { "Medium", GiQuality::Medium, GiMode::Vct,         1, 0, false },
-    { "High",   GiQuality::High,   GiMode::VctPccHybrid, 1, 1, false },
-    { "Epic",   GiQuality::High,   GiMode::VctPccHybrid, 3, 2, true },
+    { "Medium", GiQuality::Medium, GiMode::Vct,         1, 0 },
+    { "High",   GiQuality::High,   GiMode::VctPccHybrid, 1, 1 },
+    { "Epic",   GiQuality::Epic,   GiMode::VctPccHybrid, 3, 2 },
 };
 
 static GiParams giAt(const Tier &t)
@@ -312,7 +312,6 @@ static GiParams giAt(const Tier &t)
     gi.cascades = true;
     gi.ddgi = GiToggle::Off;          // STATED: the field is off; this is the gather's own ray
     gi.numBounces = t.bounces;
-    gi.epicTier = t.epic;
     gi.gather = GiToggle::On;
     return gi;
 }

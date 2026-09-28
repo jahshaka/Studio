@@ -160,6 +160,7 @@ const char *giQualityName(GiQuality q)
     case GiQuality::Low:    return "low";
     case GiQuality::Medium: return "medium";
     case GiQuality::High:   return "high";
+    case GiQuality::Epic:   return "epic";
     }
     return "?";
 }
