@@ -1795,7 +1795,7 @@ set_tests_properties(gi.sun_contact_legs PROPERTIES TIMEOUT 120 LABELS "engine")
 # shaded by HlmsAtom's decode: (a) a MOVER crate's reflection in a perfect
 # mirror covers the static control's fraction of its silhouette in its raster
 # colour; (b) the gather's bounce off a MOVER emitter meets the closed form;
-# (d) a hit outside the frustum takes no clustered light; (e) the sun at a hit is
+# (d) a hit outside the frustum takes its lamp from the world light list; (e) the sun at a hit is
 # the shadow ray. The rigged arm (c) is gi.skin_rays_mirror's.
 # `test_gi_hit_shade --cost` is the paired-arm cost measurement (by hand, under
 # scripts/gpu-exclusive.sh).
@@ -1815,6 +1815,25 @@ add_dependencies(test_gi_hit_shade JahshakaEngineMedia)
 jah_gpu_row(gi.hit_shade CLASS engine TOKENS 2 COMMAND test_gi_hit_shade
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.hit_shade PROPERTIES TIMEOUT 180 LABELS "engine")
+# gi.hit_offscreen_lights (D3-HIT-SHADE-2): THE WORLD LIGHT LIST — a point lamp and
+# a spot whose ranges touch no frustum light a mover's hit seen in a mirror as its
+# raster shows them (2 %), and with the list switched off in the same process the
+# hit falls to the lamps-off raster (the picture before the lane).
+jah_gpu_row(gi.hit_offscreen_lights CLASS engine TOKENS 2 COMMAND test_gi_hit_shade --offscreen-lights
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.hit_offscreen_lights PROPERTIES TIMEOUT 120 LABELS "engine")
+# gi.hit_planar (D3-HIT-SHADE-2): a PLANAR mirror seen in a traced mirror decodes
+# (its own material with the voxel cone's specular) — the error against the true
+# (planar raster) picture printed and bounded; the caches' answer (black) shown.
+jah_gpu_row(gi.hit_planar CLASS engine TOKENS 2 COMMAND test_gi_hit_shade --planar
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.hit_planar PROPERTIES TIMEOUT 120 LABELS "engine")
+# gi.hit_voxel_view (D3-HIT-SHADE-2): the view term on the SAME grazing hits — the
+# card's answer carries it (the true picture), the voxels' is the view mean (no light
+# direction is stored); each held to its own closed form.
+jah_gpu_row(gi.hit_voxel_view CLASS engine TOKENS 2 COMMAND test_gi_hit_shade --voxel-view
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.hit_voxel_view PROPERTIES TIMEOUT 120 LABELS "engine")
 
 # gi.skin_rays — THE GPU SKIN CACHE AND THE SKINNED BLAS (PHOTON P5, RY-R4;
 # PHOTON-SKIN-1)
