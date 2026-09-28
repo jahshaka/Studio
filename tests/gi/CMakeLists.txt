@@ -459,7 +459,7 @@ jah_gpu_row(gi.ddgi_edge CLASS engine COMMAND test_gi_ddgi_edge
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.ddgi_edge PROPERTIES TIMEOUT 120 LABELS "engine")
 
-# THE MATERIAL GATE (owner 2026-09-13 Q1, ogre-patch 0028): a material with
+# THE MATERIAL GATE (owner 2026-09-13 Q1, fork 36162ff37+16d8e29d4 (was 0028)): a material with
 # no specular response samples no reflection probe, and the ones beside it still
 # do. Its own binary.
 add_executable(test_gi_probe_gate test_gi_probe_gate.cpp)
@@ -478,7 +478,7 @@ jah_gpu_row(gi.probe_gate CLASS engine COMMAND test_gi_probe_gate
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.probe_gate PROPERTIES TIMEOUT 120 LABELS "engine")
 
-# VISIBILITY FROM THE PROBE (owner 2026-09-13 Q2, ogre-patch 0029): a surface
+# VISIBILITY FROM THE PROBE (owner 2026-09-13 Q2, fork 4d5fbef16 (was 0029)): a surface
 # occluded from a probe takes nothing from it. Synthetic room, never the
 # Showroom (not open-to-open deterministic).
 add_executable(test_gi_probe_visibility test_gi_probe_visibility.cpp)
@@ -582,7 +582,7 @@ jah_gpu_row(gi.cascades CLASS engine COMMAND test_gi_cascades
 set_tests_properties(gi.cascades PROPERTIES TIMEOUT 120 LABELS "engine" RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
 
 # ATOM STAGE 1'S CONSUMER: WHICH MESH LOD A CASCADE VOXELISES (NANITE_SPEC §7
-# stage 1's hand-off, ogre-patch 0064). A cascade hands the voxeliser the
+# stage 1's hand-off, fork ad452604a+0338ca7f2 (was 0064)). A cascade hands the voxeliser the
 # coarsest baked level whose error is below half its own cell — the authored
 # geometry at the finest cell, a simplified one at the coarse ones — and the LOD
 # BIAS, which is a dial over what is drawn, must not reach it. The A/B is in one
@@ -713,7 +713,7 @@ jah_gpu_row(gi.drag_mover CLASS engine COMMAND test_gi_drag_mover
 set_tests_properties(gi.drag_mover PROPERTIES TIMEOUT 120 LABELS "engine" RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
 
 # THE CHAIN'S BOUNCE IS A FUNCTION OF THE LIGHT, NOT OF ITS OWN HISTORY
-# (ogre-patch 0060). The pin binds the EXTRA CASCADES' light voxels once and
+# (fork ae2ed529f (was 0060)). The pin binds the EXTRA CASCADES' light voxels once and
 # never again, while every cascade swaps its own on every bounce iteration, so
 # at an ODD per-cascade count — which is what Photon's Epic tier produces,
 # 1/3/7 on a four-cascade chain — the cross-cascade term integrates the previous
@@ -759,7 +759,7 @@ jah_gpu_row(gi.chain_converge CLASS engine COMMAND test_gi_chain_converge
 set_tests_properties(gi.chain_converge PROPERTIES
     TIMEOUT 120 LABELS "engine" RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
 
-# THE SAME SCENE VOXELISES TO THE SAME PICTURE (ogre-patches 0061 and 0062): a
+# THE SAME SCENE VOXELISES TO THE SAME PICTURE (fork ad452604a+155a56bf8 (was 0061 and 0062)): a
 # cascade SCROLLED to a place renders what a cascade BUILT at it renders, two
 # builds of one scene agree, and the attach order does not decide the answer.
 # In the gi_chain family like every cascade suite.
@@ -964,6 +964,38 @@ jah_gpu_row(gi.rayquery CLASS engine COMMAND test_gi_rayquery
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.rayquery PROPERTIES TIMEOUT 120 LABELS "engine")
 
+# engine.descriptor_pools — D6-FORK-TOOLING (audit V2-D F8): every raw descriptor
+# pool is planned by the same call that creates its layout and allocates its maximum
+# at birth (irisgl/engine/src/VkDescriptorPools.h); the suite proves the arithmetic,
+# the one-call construction (and prints the driver's answer to a pool one binding
+# short — NVIDIA allocates it) and that every pool a ray-traced scene creates held
+# its maximum. Links the Vulkan
+# render system to reach the device, like tests/atom's negative control. It skips
+# the live case on a device with no ray queries.
+if(OGRE_NEXT_VULKAN_RS_LIB AND Vulkan_FOUND)
+    add_executable(test_descriptor_pools test_descriptor_pools.cpp)
+    set_target_properties(test_descriptor_pools PROPERTIES
+        AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+        CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+        BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+        INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+    target_compile_definitions(test_descriptor_pools PRIVATE
+        JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+        JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+    target_include_directories(test_descriptor_pools PRIVATE
+        "${CMAKE_SOURCE_DIR}/irisgl/engine/src"
+        "${OGRE_NEXT_PREFIX}/include/OGRE-Next/RenderSystems/Vulkan"
+        "${OGRE_NEXT_PREFIX}/include/OGRE-Next/RenderSystems/Vulkan/include"
+        ${Vulkan_INCLUDE_DIRS})
+    target_link_libraries(test_descriptor_pools PRIVATE JahshakaEngine OgreNext
+        "${OGRE_NEXT_VULKAN_RS_LIB}" ${Vulkan_LIBRARIES})
+    add_dependencies(test_descriptor_pools JahshakaEngineMedia)
+    jah_gpu_row(engine.descriptor_pools CLASS engine COMMAND test_descriptor_pools
+             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+    set_tests_properties(engine.descriptor_pools PROPERTIES TIMEOUT 120 LABELS "engine")
+endif()
+
 # THE SAME SUITE WITH THE RAYS OFF (PHOTON_SPEC §7 R1's no-rays switch). It is
 # the whole point of the switch that this GPU can render BOTH pictures, so the
 # fallback is proved on every push rather than assumed. The binary takes its own
@@ -1009,7 +1041,7 @@ endif()
 # is what a user drives (the World panel's dropdown, `world.gi`, a scene
 # open). Two things here that no other suite does: it runs the hybrid with
 # MULTIPLE BOUNCES (numBounces = 2, i.e. the bounce-inject compute job actually
-# exists — ogre-patch 0057's subject), and it drains `takeLastError()` after
+# exists — fork ae2ed529f (was 0057)'s subject), and it drains `takeLastError()` after
 # every push, so an arm that throws its way out of a build fails the suite
 # instead of rendering a dark picture quietly.
 # Its own binary.
@@ -1452,7 +1484,7 @@ add_test(NAME gi.voxel_lab COMMAND test_gi_voxel_lab
 set_tests_properties(gi.voxel_lab PROPERTIES TIMEOUT 120 LABELS "engine")
 # gi.voxel_emissive — AN EMITTER AUTHORED AT RADIANCE L IS STORED AS L (PHOTON
 # phase A, SPECS/photon/A2_VOXEL_CLIP_DESIGN.md section 2; lane VOXEL-CLIP-1,
-# ogre-patch 0087). The emissive VOXEL store was RGBA8_UNORM, so every emitter
+# fork ad452604a+155a56bf8 (was 0087)). The emissive VOXEL store was RGBA8_UNORM, so every emitter
 # above 1.0 entered the injection, the bounces, the field, the cones and the ray
 # hits clipped — read in the bytes (`giVoxelStats().peakEmissive`), because a
 # clipped emitter draws a picture that is merely dimmer.
