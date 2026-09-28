@@ -80,9 +80,20 @@ if (!after.enabled || after.tier !== "epic")
 console.log("newproject_stall: project.create took " + createMs + " ms (budget " +
             kBudgetMs + " ms)");
 
-if (createMs >= kBudgetMs)
-    fail("project.create blocked the UI for " + createMs + " ms (budget " + kBudgetMs +
-         " ms) at the epic tier — the initial thumbnail is building GI again");
+// THE MILLISECOND BAR IS NIGHTLY (TESTING-DEBTS-1 T10, D6B-GATE-SHAPE's pattern): measured on the
+// base 2026-09-28, solo on a box with two sibling lanes, 704 / 686 / 1407 ms — a wall-clock reading
+// of whatever else the box does. threading.newproject_stall.timing runs a copy of this script with
+// JAH_TIMING_BARS defined (jah_timing_script), on the quiet box under the GPU-timing lock; here the
+// reading PRINTS, and the machine-independent halves below (GI armed and restored, no texture-wait
+// timeout) are this row's claims.
+if (typeof JAH_TIMING_BARS !== "undefined" && JAH_TIMING_BARS) {
+    if (createMs >= kBudgetMs)
+        fail("project.create blocked the UI for " + createMs + " ms (budget " + kBudgetMs +
+             " ms) at the epic tier — the initial thumbnail is building GI again");
+} else {
+    console.log("time: " + (createMs < kBudgetMs ? "within" : "OVER") + ": project.create " + createMs +
+                " ms (budget " + kBudgetMs + " ms; a millisecond bar: threading.newproject_stall.timing asserts it)");
+}
 
 // The engine's own view of it: the frame's texture wait must not have been part
 // of the cost either.

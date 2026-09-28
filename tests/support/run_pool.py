@@ -27,11 +27,14 @@ prints one line per arm; this driver owns what the app cannot:
     the process's own nvidia-smi line, and the run log (scripts/gate_runlog.py) records it on
     the pool's row.
   * THE LEAK PROBE. After every arm's baseline the app prints `POOL-MEM <pool>.<arm>
-    gpuPoolUsed=<MB> textures=<MB>`; this driver prints it as `MEM <pool>.<arm> …` (the run log
-    records it on the arm) and, per process, compares the LAST arm's figure with the FIRST's:
-    a rise larger than the largest single arm's own step (the boot -> first arm included) is a
-    monotonic climb, not one arm's working set, and is printed as a FINDING line
-    `LEAK <pool> +<MB> over <n> arms` — never a red (the first runs decide whether it is real).
+    gpuPoolUsed=<MB> textures=<MB>`; this driver prints it as `MEM <pool>.<arm> ...` (the run log
+    records it on the arm) and, per process, reads the arm-to-arm curve (curve_findings,
+    TESTING-DEBTS-1): the ONE-TIME STEP (the largest rise, >= 16 MB and larger than all the
+    others together — a cache or a sample's textures, allocated once) is the FINDING line
+    `STEP <pool>.<arm> +<MB>`; a MONOTONIC CLIMB (>= 3 consecutive rising arms, the step
+    excluded) is `LEAK <pool> +<MB> over <n> arms`. And an arm whose figure passes 3x its
+    process's boot is `OVER <pool>.<arm> gpuPoolUsed=<MB> tier=<t> boot=<MB>` (a pixel claim
+    wrongly in a Low pool). All three are findings, never a red (the first runs decide).
   * THE VRAM BUDGET (lane GATE-ADMIT-1; docs/TESTING_GATE.md §4b). `--vram-tokens <k>`: before
     every app process the driver takes k box-wide VRAM tokens (scripts/vram_tokens.py — the
     same flock files as scripts/gpu-admit.sh), all or nothing, waiting (one `vram: waiting …`
@@ -177,18 +180,40 @@ def process_mib(pid):
     return None
 
 
-def leak_of(boot_mb, curve):
-    """The leak probe over one process: `curve` is [(arm, gpuPoolUsed MB)] in arm order, `boot_mb`
-    the boot's figure (or None). (rise, arms) when the last arm's figure exceeds the first's by
-    more than the largest single step (boot -> first arm, then arm -> arm); else None."""
-    if len(curve) < 2:
-        return None
-    points = ([boot_mb] if boot_mb is not None else []) + [mb for _, mb in curve]
-    steps = [b - a for a, b in zip(points, points[1:])]
-    rise = curve[-1][1] - curve[0][1]
-    if rise > 0 and rise > max(steps):
-        return rise, len(curve)
-    return None
+# THE STEP'S FLOOR: a single arm-to-arm rise below it is drift, never a one-time step.
+STEP_MIN_MB = 16
+# THE OVER FACTOR: an arm whose figure passes its process's boot figure by this factor holds a
+# working set its tier does not explain (a pixel claim in a Low pool: Low boots ~0.3 GB).
+OVER_FACTOR = 3
+
+
+def curve_findings(curve):
+    """The leak probe over one process (TESTING-DEBTS-1 T2): `curve` is [(arm, gpuPoolUsed MB)] in
+    arm order (the boot's figure is NOT a point: boot -> first arm is that arm's working set).
+    Returns (step, leak):
+      step = (arm, MB) — THE ONE-TIME STEP: the largest arm-to-arm rise, when it is at least
+             STEP_MIN_MB and larger than every other rise together (a cache or a sample's
+             textures allocated once); a FINDING, not a leak.
+      leak = (rise MB, n) — a MONOTONIC CLIMB: the longest run of n >= 3 consecutive rising
+             arm-to-arm steps, the step excluded (it breaks a run); rise = the run's sum.
+    Either may be None."""
+    steps = [(curve[i][0], curve[i][1] - curve[i - 1][1]) for i in range(1, len(curve))]
+    step = None
+    rises = [(a, d) for a, d in steps if d > 0]
+    if rises:
+        big = max(rises, key=lambda x: x[1])
+        if big[1] >= STEP_MIN_MB and big[1] > sum(d for _, d in rises) - big[1]:
+            step = big
+    best, run = None, []
+    for a, d in steps + [(None, 0)]:
+        if d > 0 and not (step and a == step[0]):
+            run.append(d)
+            continue
+        if len(run) >= 3 and (best is None or len(run) > best[1] or
+                              (len(run) == best[1] and sum(run) > best[0])):
+            best = (sum(run), len(run))
+        run = []
+    return step, best
 
 
 def kernel_xids(since, pids):
@@ -349,7 +374,7 @@ def main():
         killed_for = None       # "arm:<name>", "baseline:<name>" or "boot"
         began_any = False
         curve = []              # the leak probe: [(arm, gpuPoolUsed MB)] after each arm's baseline
-        boot_mb = None
+        boot_mb, boot_tier = None, None
         fails_here = 0
         lost = None
         while True:
@@ -384,11 +409,17 @@ def main():
             if m and m.group(1) == pool:
                 curve.append((m.group(2), int(m.group(3))))
                 say("MEM %s.%s gpuPoolUsed=%s textures=%s" % (pool, m.group(2), m.group(3), m.group(4)))
+                # T3: an arm past OVER_FACTOR x its process's boot holds what its tier does not
+                # explain — a FINDING on the arm (a pixel claim wrongly in a Low pool), never a red
+                if boot_mb and int(m.group(3)) > OVER_FACTOR * boot_mb:
+                    say("OVER %s.%s gpuPoolUsed=%s tier=%s boot=%d" % (pool, m.group(2), m.group(3),
+                                                                       boot_tier, boot_mb))
                 continue
             m = POOL_MEM.match(line)
             if m and m.group(1) == pool:
                 bm = re.match(r"gpuPoolUsed=(\d+)", m.group(2))
                 boot_mb = int(bm.group(1)) if bm else None
+                boot_tier = m.group(3)
                 mib = process_mib(proc.pid) if not opt["headless"] else 0
                 body = m.group(2)
                 if body == "headless": body = "gpuPoolUsed=0 textures=0"
@@ -414,10 +445,12 @@ def main():
         rc = proc.wait()
         vram_tokens.release(tokens)
         t.join(timeout=5)
-        leak = leak_of(boot_mb, curve)
+        step, leak = curve_findings(curve)
+        pts = " ".join("%s=%d" % (a, mb) for a, mb in curve)
+        if step:
+            say("STEP %s.%s +%d (process %d: %s)" % (pool, step[0], step[1], process, pts))
         if leak:
-            say("LEAK %s +%d over %d arms (process %d: %s)" % (pool, leak[0], leak[1], process,
-                " ".join("%s=%d" % (a, mb) for a, mb in curve)))
+            say("LEAK %s +%d over %d arms (process %d: %s)" % (pool, leak[0], leak[1], process, pts))
         plog.close()
         how = ("signal %d" % -rc) if rc < 0 else ("exit %d" % rc)
 

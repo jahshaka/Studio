@@ -86,8 +86,9 @@ set_tests_properties(app.startup_quiet PROPERTIES
 # (--clear-shader-cache) compiles and runs the GI warm-up; the second boot in the same home compiles
 # ZERO programs and skips it. A ROW of its own: its claim is two boots of one home, the first
 # with its shader cache wiped (a pool process cannot reboot). The home is fresh every run; the
-# row's own first boot is what makes the cache cold. At the document's tier (Epic): the race the
-# gate had is the Epic lighting arm's.
+# row's own first boot is what makes the cache cold. THREE ARMS (TESTING-DEBTS-1 T7): the
+# document's tier (Epic: the race the gate had is the Epic lighting arm's), a Low test process
+# (JAHSHAKA_TEST_TIER=low: the gate warms the born tier) and rays off (JAHSHAKA_NO_RAY_QUERY=1).
 set(_sgw_home ${CMAKE_CURRENT_BINARY_DIR}/shader-gate-warm-home)
 file(MAKE_DIRECTORY ${_sgw_home}/run)
 jah_gpu_row(app.shader_gate_warm CLASS app
@@ -98,7 +99,7 @@ jah_gpu_row(app.shader_gate_warm CLASS app
          WORKING_DIRECTORY ${_sgw_home}/run)
 set_tests_properties(app.shader_gate_warm PROPERTIES
     ENVIRONMENT "HOME=${_sgw_home};JAHSHAKA_DATA_ROOT=${_sgw_home}/.local/share/Jahshaka"
-    TIMEOUT 195   # 6x the measured 32 s (two boots, the first cold; spikes/test-tier-1/shader_gate_warm.log)
+    TIMEOUT 350   # 6x the measured 57.6 s (three arms x two boots; spikes/testing-debts-1/t7-run1.log)
     LABELS "app")
 
 # app.input_keys — EVERY INPUT-SYNTHESIS ASSERTION THE EDITOR HAS, ON ONE BOOT.
