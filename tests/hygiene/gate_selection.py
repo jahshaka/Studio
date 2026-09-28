@@ -200,6 +200,39 @@ def hunk_cases(gs, graph, build, inv0, cases):
         check(not miss, "%s: selects %s (%d rows; missing %s)" % (c["case"][:60], c["must"], len(S.selected), miss))
 
 
+def runlog_cases(source):
+    """THE RUN LOG'S VERDICT CLASSES (TESTING-DEBTS-1 T1) on fixed texts — FORK-OOM-1's two
+    lines as the engine and the app print them: a red carrying the in-frame OOM line is OOM (the
+    VRAM budget's class), a red carrying the loss line is LOST (a loss after an OOM stays LOST),
+    a PASS keeps PASS whatever it logged, and a pool arm takes the class from its OWN lines."""
+    print("run log (the budget verdicts on fixed texts):")
+    sys.path.insert(0, os.path.join(source, "scripts"))
+    import gate_runlog as rl
+    oom = ("[2026.09.27-19.35.31.710][    9]engine: Warning: GPU out of memory (VK_ERROR_OUT_OF_DEVICE_MEMORY; "
+           "the device is NOT lost): OGRE EXCEPTION(-2:RenderingAPIException): vkAllocateMemory failed for a "
+           "67108864-byte pool (memory type 1, heap 0 of 17171480576 bytes, 1107296256 already held by Ogre)")
+    lost = ("[2026.09.27-19.36.25.295][   18]engine: Error: Jahshaka: THE GPU DEVICE WAS LOST. The session cannot "
+            "continue; the renderer does not recreate a lost device.")
+    fatal = "FATAL: the graphics device was lost; ending the session."
+    check(rl.budget_verdict("x\n" + oom + "\nFAIL: y")[0] == "OOM", "an in-frame OOM line -> OOM")
+    check(rl.budget_verdict(lost)[0] == "LOST", "the engine's loss line -> LOST")
+    check(rl.budget_verdict(fatal)[0] == "LOST", "the app's FATAL loss line -> LOST")
+    check(rl.budget_verdict(oom + "\n" + lost)[0] == "LOST", "an OOM then a loss -> LOST")
+    check(rl.budget_verdict("FAIL: ...and does not claim the device was lost")[0] is None,
+          "an assertion naming 'the device was lost' is no loss")
+    check(rl.budget_verdict("FAIL: 7 < 47")[0] is None, "an ordinary red keeps its class")
+    check(rl.row_verdict("Failed", oom, [])[:2] == ("OOM", "Failed"), "a Failed row carrying it -> OOM (status kept)")
+    check(rl.row_verdict("Exception: SegFault", lost, [])[0] == "LOST", "a crashed row carrying the loss -> LOST")
+    check(rl.row_verdict("Passed", oom, [])[0] == "PASS", "a PASS that logged an OOM stays PASS")
+    pool = "\n".join(["ARM-BEGIN p.a", "ARM-BEGIN p.b", "MEM p.a gpuPoolUsed=300 textures=40",
+                      "---- p.a: its output (2 line(s)) ----", "| ARM-BEGIN p.a", "| " + oom, "ARM p.a FAIL 900",
+                      "---- p.b: its output (1 line(s)) ----", "| FAIL: 3 < 4", "ARM p.b FAIL 800",
+                      "ARM-BEGIN p.c", "| " + lost])
+    arms = {a: v for a, v, _ in rl._suite_facts(pool)[2]}
+    check(arms == {"p.a": "OOM", "p.b": "FAIL", "p.c": "LOST"}, "a pool's arms take the class from their own lines "
+          "(%s)" % arms)
+
+
 def nm_refusal(source, build):
     """H1: without `nm` the link graph cannot be read — the selector must REFUSE, never answer from
     empty symbol tables (an engine .cpp would select no compiled row, silently and persistently)."""
@@ -239,6 +272,7 @@ def main(source, build):
         return 2
     gs = load_tool(source)
     gg = gs.gate_graph
+    runlog_cases(source)
     identifier_cases(gg)
 
     graph = gg.NinjaGraph.load(build)

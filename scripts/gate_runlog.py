@@ -46,6 +46,7 @@ _RESULT = re.compile(r"^\s*\d+/\d+\s+Test\s+#\d+:\s+(\S+)\s+\.*\s*(.*?)\s+([\d.]
 # and never ended is a CRASH (the runner restarts the app and goes on).
 _ARM = re.compile(r"^\s*ARM\s+(\S+)\s+(PASS|FAIL|CRASH|TIMEOUT|NOADMIT|SKIP)\b(?:\s+(\d+(?:\.\d+)?)\s*(ms|s)?)?")
 _ARM_BEGIN = re.compile(r"^\s*ARM-BEGIN\s+(\S+)\s*$")
+_ARM_DUMP = re.compile(r"^\s*---- (\S+\.\S+): its output \(")
 # A pool's boot footprint (TEST-TIER-1, run_pool.py): `MEM <pool> gpuPoolUsed=<MB> textures=<MB>
 # processMiB=<MiB|?> tier=<t>`, once per process the pool started; the row records the largest.
 _MEM = re.compile(r"^\s*MEM\s+\S+\s+gpuPoolUsed=(\d+)\s+textures=(\d+)\s+processMiB=(\d+|\?)\s+tier=(\S+)")
@@ -69,6 +70,38 @@ def noadmit_line(text):
         m = _NOADMIT.match(line)
         if m: return m.group(1)[:300]
     return None
+
+
+# THE BUDGET CLASSES (TESTING-DEBTS-1 T1; FORK-OOM-1's two texts, irisgl EnginePrivate.h and
+# src/viewport/devicelossend.h): a red whose output carries the engine's in-frame OOM line is
+# verdict OOM — a VRAM-budget finding (TESTING_GATE §4b: an unadmitted process or a row over its
+# class), never the row's code; a red that carries the device-loss line is LOST (exit 3, the
+# session ended — a loss is NEVER environmental: look for the Xid). LOST wins over OOM: an OOM
+# line says "the device is NOT lost", so a loss after it is the later and graver fact.
+_LOST = re.compile(r"(?i)\b(?:GPU|graphics) device was lost\b")
+_OOM = re.compile(r"GPU out of memory")
+
+
+def budget_verdict(text):
+    """('LOST'|'OOM', the line) for a red's output, or (None, None)."""
+    oom = None
+    for line in (text or "").splitlines():
+        if _LOST.search(line): return "LOST", line.strip()[:300]
+        if oom is None and _OOM.search(line): oom = line.strip()[:300]
+    return ("OOM", oom) if oom else (None, None)
+
+
+def row_verdict(status, text, arms):
+    """(verdict, status, budget line|None) of a row from ctest's status and its output: NOADMIT
+    (never ran), else OOM / LOST for a red that carries the budget texts, else ctest's class."""
+    v, st = verdict_of(status), status.strip("* ")
+    na = noadmit_line(text) if v == "FAIL" else None
+    if na and not arms:
+        return "NOADMIT", na, None
+    if v in ("FAIL", "CRASH", "TIMEOUT"):
+        bv, bline = budget_verdict(text)
+        if bv: return bv, st, bline
+    return v, st, None
 
 
 def verdict_of(status):
@@ -219,9 +252,15 @@ def _leaks_of(text):
 
 def _suite_facts(text):
     gpu, target, arms, begun = None, None, [], []
+    # arm -> its own output lines: from its ARM-BEGIN, and from the runner's dump of a red arm's
+    # output (`---- <pool>.<arm>: its output …`, printed when the process ended), to its ARM line
+    seg, cur = {}, None
     for line in (text or "").splitlines():
         m = _ARM_BEGIN.match(line)
-        if m: begun.append(m.group(1)); continue
+        if m: begun.append(m.group(1)); cur = m.group(1); seg.setdefault(cur, []); continue
+        m = _ARM_DUMP.match(line)
+        if m: cur = m.group(1); seg.setdefault(cur, []); continue
+        if cur is not None: seg[cur].append(line)
         m = _GPU.match(line)
         if m:
             try: gpu = float(m.group(1))
@@ -234,9 +273,17 @@ def _suite_facts(text):
             if m.group(3):
                 secs = float(m.group(3)) if m.group(4) == "s" else float(m.group(3)) / 1000.0
             arms.append((m.group(1), m.group(2), secs))
+            if m.group(1) == cur: cur = None
     ended = {a for a, _, _ in arms}
     arms += [(a, "CRASH", None) for a in dict.fromkeys(begun) if a not in ended]
-    return gpu, target, arms
+    # a red arm whose own lines carry the budget texts takes the budget class (T1)
+    out = []
+    for a, v, secs in arms:
+        if v in ("FAIL", "CRASH", "TIMEOUT"):
+            bv, _ = budget_verdict("\n".join(seg.get(a, [])))
+            v = bv or v
+        out.append((a, v, secs))
+    return gpu, target, out
 
 
 def _file_for(tier, tip, date=None):
@@ -308,12 +355,11 @@ def run_ctest(cmd, cwd, tier, lane, jobs, reasons=None, gating=None, rng=None, r
                 "box": dict(box0, load=[round(x, 2) for x in load],
                             load_mean=sampler.mean(t_end - secs, t_end)),
                 "source": "run"}
-        v, st = verdict_of(status), status.strip("* ")
-        na = noadmit_line(outputs.get(name, "")) if v == "FAIL" else None
-        if na and not arms:
-            v, st = "NOADMIT", na
+        v, st, bline = row_verdict(status, outputs.get(name, ""), arms)
         row = dict(base, arm=None, verdict=v, status=st,
                    seconds=secs, gpu_ms=gpu, target=target)
+        if bline:
+            row["budget"] = bline
         mem = _mem_of(outputs.get(name, ""))
         if mem is not None:
             row["mem"] = mem

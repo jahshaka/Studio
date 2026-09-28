@@ -375,6 +375,12 @@ it is bounded at 900 s (`JAH_VRAM_WAIT`), after which the command never runs (ex
 (`scripts/gate_runlog.py`) records that row — or a pool's never-started arms — as verdict
 `NOADMIT` with the line as its status, never a generic FAIL (the box was over-subscribed; nothing
 about the row's code). A burst of NOADMITs means the lanes asked for more than 900 s of queue.
+A red row (or pool arm) whose OWN output carries the engine's in-frame OOM line (`GPU out of memory
+(VK_ERROR_OUT_OF_DEVICE_MEMORY; the device is NOT lost)`, exit 1) is recorded `OOM`, one carrying the
+loss line (`THE GPU DEVICE WAS LOST` / `the graphics device was lost`, exit 3) `LOST` — the matched
+line rides as `budget` (TESTING-DEBTS-1). `OOM` is the budget class: an unadmitted process or a row
+over its class (read `scripts/gpu-admit.sh status` + nvidia-smi per pid); `LOST` is never
+environmental (look for the Xid). A PASS that logged an OOM warning stays PASS.
 `scripts/gpu-admit.sh status` lists the holders (the file of a held token names its pid and row).
 
 **THE CLASSES** (the audit's A2 table, nvidia-smi per pid, 2026-09-26) — `jah_vram_tokens()` in
