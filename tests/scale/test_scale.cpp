@@ -2282,8 +2282,6 @@ static int coverageTraceMain()
                 auto n = iris::MeshNode::create();
                 n->setName(QStringLiteral("extra%1").arg(k));
                 n->setMesh(extra);
-                // A MESH NODE WITHOUT A MATERIAL CRASHES THE MIRROR (SceneMirror::materialSyncFor
-                // dereferences it — finding, ATOM-BLACK-FRAMES-1): the editor always gives one.
                 n->setMaterial(w.items[size_t(k)]->getMaterial());
                 n->setLocalPos(iris::Vec3(x + 6.0f + float(k % 8) * 1.5f, 1.0f, -3.0f - float(k / 8) * 1.5f));
                 env.doc->getRootNode()->addChild(n);
