@@ -158,7 +158,7 @@ vendored source. The whole law, and what each patch is for:
 
 ```bash
 cd build-linux/bin
-./Jahshaka --viewport=engine
+./Jahshaka            # ./Jahshaka --help lists every option
 ```
 
 Run from `build-linux/bin` — the app writes its logs and settings to the working directory
@@ -196,9 +196,8 @@ Precedence is compiled default → `jahsettings.ini` (`log/global`, `log/<catego
 line → the `log.*` script verbs at runtime. `qDebug()` output maps to `Verbose` and is
 therefore OFF by default even in a Debug build: `--log-level=qt=verbose` turns it on.
 
-`--viewport=engine` selects the Ogre-Next viewport (Vulkan, runs on X11/XWayland). It will be
-the default once the legacy viewport is removed; until then, omitting it launches the
-deprecated GL viewport, which is unsupported.
+`./Jahshaka --help` prints every option and exits before anything starts; an unknown
+`--option` is refused (exit 2) and never launches the editor.
 
 Headless verification without opening a window:
 
