@@ -427,6 +427,11 @@ int main(int argc, char **argv)
     Scene *scene = e->createScene("parity");
     if (!view || !scene) { std::printf("FAIL: view/scene\n"); return 1; }
     view->setScene(scene);
+    // THE STOCK ROUTE (SHADOW-LOD-1): the per-object chain is what stock-PBR items and
+    // every stock caster draw; an Atom-routed item is drawn by the cluster cut and no
+    // view pass walks its level any more (the fork's LOD walk skips the queue the id
+    // pass draws), so the chain is measured with the split off.
+    scene->setAtomDrawEnabled(false);
     scene->setAmbient(Colour(0.4f, 0.4f, 0.4f), Colour(0.2f, 0.2f, 0.2f));
 
     const MeshId mesh = scene->createMesh(chainedMesh());
