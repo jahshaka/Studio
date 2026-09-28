@@ -142,7 +142,7 @@ jah_scale_row(scale.cpu_walks    --cpu-walks     ${SCALE_T_WALKS}        TRUE)  
 # frame <= 0.5 ms still / 1.5 ms on a mover frame): the part that closed the wall
 # removes the label, so the row gates. The dirty scan stays a printed target inside it.
 set_tests_properties(scale.cpu_walks PROPERTIES LABELS "scale")
-# scale.shadow_cut — ATOM-SHADOWS-1's BAR (a ratio of paired arms, not a target): the caster
+# scale.shadow_cut — ATOM-SHADOWS-1's BARS (CPU a ratio of paired arms, GPU absolute per map): the caster
 # pass from the light's cut against the per-instance PBS caster path, on D1's world and a
 # small one. Locked: it times the CPU and the GPU.
 jah_scale_row(scale.shadow_cut   --shadow-cut    ${SCALE_T_SHADOW}       TRUE)

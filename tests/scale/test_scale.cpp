@@ -1729,11 +1729,20 @@ static int frameArmsMain(bool lattice)
 // map) against the per-instance stock PBS caster path (the split's door shut: every item
 // back on PBS, its caster drawn per instance). PAIRED ARMS in one process, alternated
 // (cut, PBS, cut, PBS), each 120 still frames after a 60-frame settle, under the GPU lock.
-// THE BAR (the lead's, 2026-09-27): on D1's world the caster pass's CPU <= 1/3 of the
-// per-instance path's and its GPU not slower (<= 1.10x: two arms' medians of a pass whose
-// own timer bleeds, ENGINE.md); on a SMALL world (200 objects, 4 lamps) neither slower
-// (<= 1.10x both). The caster pass = every pass of the view's shadow node (PassBucket::
-// ShadowView), its scene passes and the caster cut's passes together.
+// THE BARS (the lead's, 2026-09-28):
+//   * CPU, D1's world: <= 1/3 of the per-instance path's — the lane's point (the per-instance
+//     caster draws gone). The small world (200 objects): <= 2x — four dispatches a map beat
+//     200 draws on the GPU's side of the ledger, not the CPU's, so a small scene pays a
+//     little more CPU by construction (measured 1.33x).
+//   * GPU: ABSOLUTE, per map re-rendered — never a ratio against the old route. The old route
+//     drew each caster at the VIEW's level (the pin's shadow passes never compute LOD), i.e.
+//     the wrong geometry for the light, so its GPU time is no reference for a correct map
+//     (shadow.atom_parity is the physics: within a texel of the dense caster, where the old
+//     route was 10.7 texels off). Measured after ATOM-SHADOWS-1's fix round: 0.089 ms a map
+//     on D1's world (0.268 ms / 3 PSSM maps), 0.045 on the small one; the bar is 1.5x the
+//     world's, rounded: 0.13 ms a map, on both worlds.
+// The caster pass = every pass of the view's shadow node (PassBucket::ShadowView), its scene
+// passes and the caster cut's passes together.
 static int shadowCutMain(bool smallWorld)
 {
     struct Arm { std::vector<double> cpu, gpu; unsigned passes = 0; };
@@ -1757,7 +1766,8 @@ static int shadowCutMain(bool smallWorld)
             if (gpuOk) arm.gpu.push_back(gpu);
         }
     };
-    auto runWorld = [&](const char *label, WorldSpec spec, double cpuBar, double gpuBar) {
+    constexpr double kGpuMsPerMapBar = 0.13;
+    auto runWorld = [&](const char *label, WorldSpec spec, double cpuBar, double gpuBarPerMap) {
         Env env;
         World w;
         const std::string log = std::string("test-scale-shadow-cut-") + label + "-ogre.log";
@@ -1782,29 +1792,32 @@ static int shadowCutMain(bool smallWorld)
                     label, st.atomItems, st.casterMaps, st.casterTriangles, st.casterInstances, cut.passes,
                     pbs.passes, cc.median, pc.median, pc.median > 0 ? cc.median / pc.median : -1.0, cg.median,
                     pg.median, pg.median > 0 ? cg.median / pg.median : -1.0, cc.n, pc.n);
-        std::printf("target: scale.shadow_cut %s caster CPU ratio %.3f (bar %.2f), GPU ratio %.3f (bar %.2f)\n", label,
-                    pc.median > 0 ? cc.median / pc.median : -1.0, cpuBar,
-                    pg.median > 0 ? cg.median / pg.median : -1.0, gpuBar);
-        REQUIRE(st.on && st.atomItems > 0 && st.casterValid && st.casterMissing == 0u,
+        const double perMap = st.casterMaps ? cg.median / double(st.casterMaps) : -1.0;
+        std::printf("target: scale.shadow_cut %s caster CPU ratio %.3f (bar %.2f), GPU %.3f ms a map (bar %.2f; the "
+                    "old route's %.3f ms is the view's level, no reference)\n",
+                    label, pc.median > 0 ? cc.median / pc.median : -1.0, cpuBar, perMap, gpuBarPerMap,
+                    pg.median / double(std::max(1u, st.casterMaps)));
+        REQUIRE(st.on && st.atomItems > 0 && st.casterValid && st.casterMissing == 0u && st.casterMaps > 0u,
                 "%s: the caster cut drew (%u maps, %u missing)", label, st.casterMaps, st.casterMissing);
         REQUIRE(cc.n >= 100 && pc.n >= 100, "%s: both arms measured (%zu, %zu frames)", label, cc.n, pc.n);
         REQUIRE(pc.median > 0 && cc.median <= cpuBar * pc.median,
                 "%s: the caster pass's CPU from the cut <= %.2fx the per-instance path's (%.3f vs %.3f ms)", label,
                 cpuBar, cc.median, pc.median);
-        REQUIRE(cg.n > 0 && pg.n > 0 && cg.median <= gpuBar * pg.median,
-                "%s: ...and its GPU not slower (%.3f vs %.3f ms, bar %.2fx)", label, cg.median, pg.median, gpuBar);
+        REQUIRE(cg.n > 0 && perMap >= 0.0 && perMap <= gpuBarPerMap,
+                "%s: the caster pass's GPU <= %.2f ms a map re-rendered (%.3f ms: %.3f over %u maps)", label,
+                gpuBarPerMap, perMap, cg.median, st.casterMaps);
         shutdown(env);
     };
     // ONE WORLD A PROCESS (the frame monitor does not survive a second engine in one process:
     // a boot after a shutdown crashed in FrameMonitor::beginFrame, measured) — two rows.
     if (!smallWorld) {
-        runWorld("world", WorldSpec(), 1.0 / 3.0, 1.10);
+        runWorld("world", WorldSpec(), 1.0 / 3.0, kGpuMsPerMapBar);
     } else {
         WorldSpec small;
         small.instances = 200;
         small.lights = 4;
         small.spacing = 3.0f;
-        runWorld("small", small, 1.10, 1.10);
+        runWorld("small", small, 2.0, kGpuMsPerMapBar);
     }
     return failures ? 1 : 0;
 }
