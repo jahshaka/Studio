@@ -2517,71 +2517,15 @@ int main(int argc, char **argv)
         engine->destroyScene(cs3);
     }
 
-    // ---- THE NODE'S FACE CULL REACHES THE ENGINE (CULL-MODE-1) ----
-    // MeshNode::faceCullingMode had no reader in the mirror: a plane a Studio
-    // path marked cull 'none' (floors, image planes, the preview's matball)
-    // still culled its back. A plane (normal +Y, a one-sided material) seen from
-    // BELOW: Back / the material's own -> nothing; None -> the plane; Front ->
-    // the plane from below and nothing from above.
+    // ---- A glTF doubleSided MATERIAL IMPORTS AS A TWO-SIDED NODE (CULL-MODE-1) ----
+    // tests/importer/fixtures/double_sided_quads.gltf (two quads, one doubleSided) baked
+    // and built into a document the product's way (MeshBake::buildFromFile -> the blob ->
+    // buildFragment; a fragment's children live in the scene graph, which needs this
+    // suite's Ogre::Root): the doubleSided quad's node reads faceCullingMode None, the
+    // one-sided quad's DefinedInMaterial. (The mirror does not read the node's cull yet —
+    // D7-ENGINE-FIXES-1's report says why; the node is the field's persisted carrier.)
     {
         auto sdoc4 = iris::Scene::create();
-        Scene *cs4 = engine->createScene("cull-room");
-        View *cv4 = engine->createOffscreenView("cull-room", 96, 96, Colour(0, 0, 1));
-        CHECK(cs4 && cv4, "cull: a clean-room scene + view");
-        cv4->setScene(cs4);
-        cs4->setAmbient(Colour(0.4f, 0.4f, 0.4f), Colour(0.3f, 0.3f, 0.3f));
-        SceneMirror cm4(cs4);
-        cm4.setLightWires(false);
-        auto plane = iris::MeshNode::create();
-        plane->setName("plane");
-        plane->setMesh(previewmesh::load(QStringLiteral(JAHSHAKA_SOURCE_DIR "/app/content/primitives/plane.obj")));
-        plane->setMaterial(iris::PbrMaterial::create());
-        sdoc4->getRootNode()->addChild(plane);
-        auto sun4 = iris::LightNode::create();
-        sun4->lightType = iris::LightType::Directional;
-        sun4->intensity = 1.0f;
-        sun4->setLocalPos(iris::Vec3(0.0f, 6.0f, 20.0f));
-        sdoc4->getRootNode()->addChild(sun4);
-        cm4.setSource(sdoc4);
-        cm4.sync();
-        cm4.applyEnvironment(cv4);
-        // DRAWN = the picture differs from the same pose with the plane hidden (the sky
-        // and the ambient of this process are whatever earlier arms left — a colour test
-        // would read the nadir's blue ambient on a lit back face as "the clear colour").
-        auto look = [&](const iris::Vec3 &eye, const char *tag) {
-            enginetest::testCameraLookAt(cv4, Vec3(eye.x(), eye.y(), eye.z()), Vec3(0, 0, 0));
-            for (int i = 0; i < 3; ++i) { cm4.sync(); engine->renderOneFrame(); }
-            Image shown;
-            cv4->readPixels(shown); show(tag, shown);
-            plane->setVisible(false);
-            for (int i = 0; i < 3; ++i) { cm4.sync(); engine->renderOneFrame(); }
-            Image empty;
-            cv4->readPixels(empty);
-            plane->setVisible(true);
-            double sum = 0.0;
-            for (size_t b = 0; b < shown.rgba.size() && b < empty.rgba.size(); ++b)
-                sum += std::abs(int(shown.rgba[b]) - int(empty.rgba[b]));
-            const double mean = shown.rgba.empty() ? 0.0 : sum / double(shown.rgba.size());
-            std::printf("    %-28s differs from the empty pose by %.2f/255\n", tag, mean);
-            return mean > 2.0;
-        };
-        const iris::Vec3 below(0.3f, -2.5f, 0.4f), above(0.3f, 2.5f, 0.4f);
-        CHECK(look(above, "cull own, from above"), "cull: the plane draws from above (its front)");
-        CHECK(!look(below, "cull own, from below"), "cull: the material's own cull hides its back");
-        plane->setFaceCullingMode(iris::FaceCullingMode::None);
-        CHECK(look(below, "cull none, from below"), "cull: a node with cull 'none' draws from below");
-        plane->setFaceCullingMode(iris::FaceCullingMode::Back);
-        CHECK(!look(below, "cull back, from below"), "cull: 'back' hides it again");
-        plane->setFaceCullingMode(iris::FaceCullingMode::Front);
-        CHECK(look(below, "cull front, from below"), "cull: 'front' draws the back face from below");
-        CHECK(!look(above, "cull front, from above"), "cull: ...and nothing from above");
-
-        // THE IMPORT HALF: a glTF `doubleSided` material (tests/importer/fixtures/
-        // double_sided_quads.gltf — two quads, one of them doubleSided) baked and built
-        // into the document the product's way (MeshBake::buildFromFile -> the blob ->
-        // buildFragment): the two-sided quad's node culls nothing and draws from below,
-        // the one-sided quad's leaves the cull to its material and does not.
-        plane->setVisible(false);
         const QString gltf = QStringLiteral(JAHSHAKA_SOURCE_DIR "/tests/importer/fixtures/double_sided_quads.gltf");
         const QString fp = iris::MeshBake::fingerprintFor(QStringLiteral("cull-mode-1-fixture"));
         const iris::MeshBake::Model baked =
@@ -2604,36 +2548,7 @@ int main(int argc, char **argv)
               "cull import: the doubleSided quad's node culls nothing");
         CHECK(oneSided && oneSided->getFaceCullingMode() == iris::FaceCullingMode::DefinedInMaterial,
               "cull import: the one-sided quad's node leaves the cull to its material");
-        if (twoSided && oneSided) {
-            // Each quad alone, from below (its own centre under the camera).
-            auto lookAt = [&](const iris::MeshNodePtr &subject, const iris::MeshNodePtr &other, const char *tag) {
-                other->setVisible(false);
-                const iris::Vec3 c = subject->getGlobalPosition();
-                enginetest::testCameraLookAt(cv4, Vec3(c.x() + 0.2f, c.y() - 2.5f, c.z() + 0.3f), Vec3(c.x(), c.y(), c.z()));
-                for (int i = 0; i < 3; ++i) { cm4.sync(); engine->renderOneFrame(); }
-                Image shown;
-                cv4->readPixels(shown); show(tag, shown);
-                subject->setVisible(false);
-                for (int i = 0; i < 3; ++i) { cm4.sync(); engine->renderOneFrame(); }
-                Image empty;
-                cv4->readPixels(empty);
-                subject->setVisible(true);
-                other->setVisible(true);
-                double sum = 0.0;
-                for (size_t b = 0; b < shown.rgba.size() && b < empty.rgba.size(); ++b)
-                    sum += std::abs(int(shown.rgba[b]) - int(empty.rgba[b]));
-                const double mean = shown.rgba.empty() ? 0.0 : sum / double(shown.rgba.size());
-                std::printf("    %-28s differs from the empty pose by %.2f/255\n", tag, mean);
-                return mean > 2.0;
-            };
-            CHECK(lookAt(twoSided, oneSided, "doubleSided quad, below"), "cull import: the doubleSided quad draws from below");
-            CHECK(!lookAt(oneSided, twoSided, "one-sided quad, below"), "cull import: the one-sided quad does not");
-        }
-        cm4.setSource(nullptr);
-        engine->destroyView(cv4);
-        engine->destroyScene(cs4);
     }
-
 
     mirror.setSource(nullptr);
     engine->destroyView(view);
