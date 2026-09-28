@@ -40,6 +40,10 @@ static void render(Engine *e, int n) { for (int i = 0; i < n; ++i) e->renderOneF
 static std::vector<std::pair<MaterialId, PbrParams>> gMaterials;
 /// The still trace's GPU milliseconds per card over the last measureCaptures (-1 unread).
 static double gStillGpuPerCard = -1.0;
+/// ...and the CPU milliseconds per CAPTURING FRAME (CARD-BUDGET-1's paired arm: what a
+/// frame's budget costs, not a card).
+static double gMsPerFrame = 0.0;
+static unsigned gCapturingFrames = 0u;
 
 /// The capture cost of the resident set as it stands, drained three times.
 /// Returns ms per card (CPU: the workspace, the copies and — since ATOM-S3-CARDCAP —
@@ -50,7 +54,7 @@ static double gStillGpuPerCard = -1.0;
 static double measureCaptures(Engine *e, Scene *s, unsigned &cardsOut, double &wsOut)
 {
     double sum = 0.0, sumWs = 0.0, gpu = 0.0;
-    unsigned captured = 0u, gpuFrames = 0u, gpuCards = 0u;
+    unsigned captured = 0u, gpuFrames = 0u, gpuCards = 0u, frames = 0u;
     for (int round = 0; round < 3; ++round) {
         for (auto &m : gMaterials) {
             m.second.albedo.r += 0.001f;
@@ -63,6 +67,7 @@ static double measureCaptures(Engine *e, Scene *s, unsigned &cardsOut, double &w
                 sum += double(c.captureMs);
                 sumWs += double(c.captureWorkspaceMs);
                 captured += c.capturesLastFrame;
+                ++frames;
                 // The GPU reading lags a few frames: the mean per traced card of
                 // the readings taken while captures are landing.
                 if (c.stillGpuMs >= 0.0f && c.stillTracedLastFrame) {
@@ -75,6 +80,8 @@ static double measureCaptures(Engine *e, Scene *s, unsigned &cardsOut, double &w
         }
     }
     gStillGpuPerCard = gpuCards ? gpu / double(gpuCards) : -1.0;
+    gCapturingFrames = frames;
+    gMsPerFrame = frames ? sum / double(frames) : 0.0;
     cardsOut = captured;
     wsOut = captured ? sumWs / double(captured) : 0.0;
     return captured ? sum / double(captured) : 0.0;
@@ -207,10 +214,13 @@ static int showroomArm(bool lampShadows, bool sunShadow)
     // runs inside Ogre's frame, so every card's pass has the frame's light list
     // and re-fits the node; before PHOTON-CARDS-1 it had neither, and the
     // "recalculation costs nothing" reading of this tool was that).
-    struct Arm { const char *name; unsigned budget; double ms = 0.0, ws = 0.0; unsigned cards = 0u; };
+    // CARD-BUDGET-1: the OLD High sizing (5 cards) beside the tier's own budget, per
+    // FRAME as well as per card — the re-sized row may not cost a frame more than
+    // the milliseconds the old one was sized on.
+    struct Arm { const char *name; unsigned budget; double ms = 0.0, ws = 0.0, frameMs = 0.0; unsigned cards = 0u, frames = 0u; };
     Arm arms[] = { { "1 card an update  ", 1u * 16384u },
-                   { "High tier budget  ", 0u },
-                   { "a full batch of 8 ", 8u * 16384u } };
+                   { "old High sizing 5 ", 5u * 16384u },
+                   { "High tier budget  ", 0u } };
     for (int pass = 0; pass < 2; ++pass) {   // twice, interleaved: the spread is stated
         for (Arm &arm : arms) {
             GiParams g = gi;
@@ -220,19 +230,23 @@ static int showroomArm(bool lampShadows, bool sunShadow)
             unsigned cards = 0u;
             double ws = 0.0;
             const double ms = measureCaptures(e, s, cards, ws);
-            std::printf("   pass %d  %s: %.4f ms/card over %u cards (workspace %.4f; still trace GPU %.4f ms/card)\n",
-                        pass, arm.name, ms, cards, ws, gStillGpuPerCard);
+            std::printf("   pass %d  %s: %.4f ms/card over %u cards, %.4f ms per capturing frame over %u "
+                        "(workspace %.4f; still trace GPU %.4f ms/card)\n",
+                        pass, arm.name, ms, cards, gMsPerFrame, gCapturingFrames, ws, gStillGpuPerCard);
             arm.ms += ms * 0.5;
             arm.ws += ws * 0.5;
+            arm.frameMs += gMsPerFrame * 0.5;
             arm.cards += cards;
+            arm.frames += gCapturingFrames;
         }
     }
     std::printf("   == per card, mean of both passes (fit firing):\n");
     for (const Arm &arm : arms)
-        std::printf("   %s (budget %u texels): %.4f ms/card (workspace %.4f)\n", arm.name,
-                    arm.budget ? arm.budget : warm.budgetTexels, arm.ms, arm.ws);
-    std::printf("   the batch of 8 costs %.2fx a single-card update, per card\n",
-                arms[0].ms > 0.0 ? arms[2].ms / arms[0].ms : 0.0);
+        std::printf("   %s (budget %u texels): %.4f ms/card, %.4f ms a capturing frame (workspace %.4f)\n",
+                    arm.name, arm.budget ? arm.budget : warm.budgetTexels, arm.ms, arm.frameMs, arm.ws);
+    std::printf("   the tier's batch costs %.2fx a single-card update, per card; a frame at the tier's budget "
+                "%.4f ms against the old sizing's %.4f ms at its measured cost and 1.0 ms as sized\n",
+                arms[0].ms > 0.0 ? arms[2].ms / arms[0].ms : 0.0, arms[2].frameMs, arms[1].frameMs);
     return 0;
 }
 
