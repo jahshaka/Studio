@@ -160,7 +160,7 @@ EngineRenderDriver::EngineRenderDriver(jahshaka::engine::Engine *engine, QObject
 
         // THE GPU IS GONE: SAY SO AND END, NEVER FREEZE (lane XID-2, 2026-09-17).
         // The one render loop is the one place that can notice. After a device
-        // loss the renderer vetoes every frame (ogre-patch 0072), so without this
+        // loss the renderer vetoes every frame (fork d014b064f+1bccc3f93 (was 0072)), so without this
         // the window simply stops updating, for ever, with the UI still alive —
         // exactly what the owner saw and reported as "the app froze".
         //

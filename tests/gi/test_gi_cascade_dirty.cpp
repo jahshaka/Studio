@@ -19,7 +19,7 @@
 //   2. A MATERIAL edit (the case that needs a NEW voxeliser per cascade, since
 //      VctMaterial caches its conversions by raw datablock pointer): still one
 //      per frame, still no chain build — the replacement is swapped into the
-//      EXISTING lighting, one cascade per frame (ogre-patch 0037).
+//      EXISTING lighting, one cascade per frame (fork ae2ed529f+822d538f5 (was 0037)).
 //   3. A SPAWN: same, through `invalidateGiCaches` and the frame-time flush.
 //   4. A LIGHT edit, which moves no geometry at all: ZERO cascade rebuild rows.
 //      A light change is a re-INJECTION over voxels that are already there, on

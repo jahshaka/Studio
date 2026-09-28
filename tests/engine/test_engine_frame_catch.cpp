@@ -210,7 +210,7 @@ int main()
               "...and the engine says which fact it latched, not the fault's own message");
         // THE FAKE IS ONLY THE ENGINE'S OWN REPORT: nothing about the driver,
         // the render system or the pictures changed, which is why this frame
-        // still draws. (A real loss stops the render system dead — patch 0072
+        // still draws. (A real loss stops the render system dead — fork d014b064f+1bccc3f93 (was 0072)
         // — and that cannot be exercised without taking the box's GPU with it.)
         e->renderOneFrame();
         Image alive;

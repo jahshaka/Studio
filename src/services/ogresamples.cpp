@@ -273,7 +273,7 @@ LaunchResult launch(const QString &name, const LaunchOptions &opts)
     // why no media is ever copied anywhere for this.
     proc.setWorkingDirectory(dir);
     QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
-    // Ogre patch 0020. Without it mAlwaysAskForConfig short-circuits
+    // Ogre fork ef462c42d (was 0020). Without it mAlwaysAskForConfig short-circuits
     // restoreConfig() and the sample opens the raw GLX config dialog instead
     // of honouring the file we just wrote.
     env.insert(QStringLiteral("JAH_OGRE_SAMPLE_NO_CONFIG"), QStringLiteral("1"));

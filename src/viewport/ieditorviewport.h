@@ -644,7 +644,7 @@ public:
         unsigned probePlacements = 0;
         unsigned long long probeCapturesTotal = 0;
         /// Material edits that CROSSED the reflection-probe gate on this scene
-        /// (ogre-patch 0028): the one material edit that rebuilds a shader.
+        /// (fork 36162ff37+16d8e29d4 (was 0028)): the one material edit that rebuilds a shader.
         /// Cumulative, never reset.
         unsigned probeGateCrossings = 0;
         /// How many probes the renderer re-captures per frame — the RESOLVED
@@ -774,7 +774,7 @@ public:
             QVector<int> voxelLevels;
             qint64    voxelTriangles = 0;
             /// How many compute dispatches that rebuild cost — the MATERIAL-COUNT
-            /// half of its bill (ogre-patch 0065; engine GiStatus::CascadeStatus).
+            /// half of its bill (fork ad452604a+155a56bf8+0338ca7f2+c4c80b5f7 (was 0065); engine GiStatus::CascadeStatus).
             qint64    voxelDispatches = 0;
         };
         QVector<CascadeInfo> cascades;

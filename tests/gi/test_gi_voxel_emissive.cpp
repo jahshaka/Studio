@@ -1,6 +1,6 @@
 // gi.voxel_emissive — AN EMITTER AUTHORED AT RADIANCE L IS STORED AS L
 // (PHOTON phase A, SPECS/photon/A2_VOXEL_CLIP_DESIGN.md section 2; lane
-// VOXEL-CLIP-1, ogre-patch 0087).
+// VOXEL-CLIP-1, fork ad452604a+155a56bf8 (was 0087)).
 //
 // THE PHYSICS. Emissive radiance is not a reflectance. An albedo is a ratio and
 // lives in [0, 1] by definition; the radiance a surface EMITS is a physical
@@ -11,7 +11,7 @@
 // THE DEFECT THIS SUITE FENCES. The voxeliser's MATERIAL store carries emissive
 // as four honest floats (OgreVctMaterial.cpp: `shaderMaterial.emissive[i] =
 // emissiveCol[i]`), and our order-independent merge accumulates it on a
-// fixed-point grid whose per-contribution clamp is 16.0 (ogre-patch 0065) — but
+// fixed-point grid whose per-contribution clamp is 16.0 (fork ad452604a+155a56bf8+0338ca7f2+c4c80b5f7 (was 0065)) — but
 // the FINAL STORE, the emissive voxel volume, was `PFG_RGBA8_UNORM`. So an
 // emitter authored at 3.0 was written as exactly 1.0, and the light injection
 // seeds the radiance volume from that texel (`blockColour = emissiveVal.xyz`):
@@ -80,7 +80,7 @@ static const unsigned kSize = 128;
 /// THE BAR: 2 % of the authored radiance. It is the store's own precision and
 /// not a tolerance for a wrong answer — half-float carries 0.5, 1, 3 and 12
 /// exactly, and the merge's fixed-point grid quantises a contribution to
-/// 1/4096 (ogre-patch 0065), which is 0.008 % at L = 3.
+/// 1/4096 (fork ad452604a+155a56bf8+0338ca7f2+c4c80b5f7 (was 0065)), which is 0.008 % at L = 3.
 static const double kBar = 0.02;
 
 static void render(Engine *e, int frames = 1)

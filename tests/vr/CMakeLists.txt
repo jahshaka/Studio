@@ -3,7 +3,7 @@
 # The SUBJECT is the external-device route: an OpenXR runtime creates the
 # VkInstance and the VkDevice, Ogre renders on them, the frame reaches the
 # runtime's swapchain. It is the only test in the tree that would catch a pin
-# bump undoing ogre-patch 0068 (the validateDevice veto, the exported extension
+# bump undoing fork d014b064f+1bccc3f93 (was 0068) (the validateDevice veto, the exported extension
 # list + feature chain).
 #
 # It compiles `xr_spike.cpp` beside this file — ONE source, which `standalone/`

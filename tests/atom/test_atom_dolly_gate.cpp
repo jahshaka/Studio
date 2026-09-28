@@ -49,7 +49,7 @@
 // start pose, then exactly ONE frame per 0.25 m step, 40 m down to 2 m.
 //
 // WHY THE HYSTERESIS BAND IS ON HERE (`setLodHysteresisOffscreen(true)`,
-// Engine.h): the band is a PER-PASS property since ogre-patch 0075's amendment
+// Engine.h): the band is a PER-PASS property since fork 5230c9390+8282f6d70 (was 0075)'s amendment
 // and it is ON for the view a user watches and OFF for every capture, so an
 // offscreen view is the only view whose pixels `readPixels` can return and the
 // only one that has no band by default. A gate on what the USER sees must

@@ -1,5 +1,5 @@
 // gi.cascade_determinism — THE SAME SCENE VOXELISES TO THE SAME PICTURE, whatever
-// the renderer did on the way there (ogre-patches 0061 and 0062; PHOTON_SPEC §7
+// the renderer did on the way there (fork ad452604a+155a56bf8 (was 0061 and 0062); PHOTON_SPEC §7
 // E2 round 2).
 //
 // TWO DEFECTS MADE THIS FALSE, and both are in the pin:
@@ -35,13 +35,13 @@
 //      shape — order-independence — expressed the one way a suite in this process
 //      can express it (two allocation orders in two processes cannot be staged
 //      from inside one, so the order that CAN be varied is the one we control).
-//   4. ...AND NOT WHEN IT DECIDES THE DISPATCH PARTITION EITHER (ogre-patch
-//      0065). Case 3's four objects fit one material pool, so the order only
+//   4. ...AND NOT WHEN IT DECIDES THE DISPATCH PARTITION EITHER (fork ad452604a+155a56bf8+0338ca7f2+c4c80b5f7
+//      (was 0065)). Case 3's four objects fit one material pool, so the order only
 //      varies what happens INSIDE one dispatch. Two hundred objects each owning
 //      a material — what the editor actually produces — spread over several
 //      pools, and which pool a material lands in is its creation order, so the
 //      attach order decides WHICH DISPATCH each object is voxelised by. That is
-//      what patch 0062 bought determinism from by giving every material its own
+//      what fork ad452604a+155a56bf8 (was 0062) bought determinism from by giving every material its own
 //      dispatch (86 -> 321 ms on a dense scene) and what 0065 fixes at the cause
 //      instead: the per-voxel merge accumulates exact integer sums and resolves
 //      them once, so no partition and no order changes a voxel.
@@ -126,7 +126,7 @@ static const float kOneOf255 = 1.0f / 255.0f;
 /// into them (`mixAverage3/4`) — an average of the same numbers in a different
 /// order is the same value only up to that quantisation. So two attach orders can
 /// differ by ONE step of the voxel's own precision and be the same answer; they
-/// cannot differ by more. Measured on this scene: 6/255 before ogre-patch 0062,
+/// cannot differ by more. Measured on this scene: 6/255 before fork ad452604a+155a56bf8 (was 0062),
 /// 1/255 after.
 static const float kOneVoxelStep = 1.6f / 255.0f;
 
@@ -197,7 +197,7 @@ int main()
     // =====================================================================
     // CASE 1 — A CASCADE SCROLLED TO A PLACE IS THE CASCADE BUILT AT IT
     // =====================================================================
-    std::printf("\n== case 1: scrolled to a place == built at it (ogre-patch 0061) ==\n");
+    std::printf("\n== case 1: scrolled to a place == built at it (fork ad452604a (was 0061)) ==\n");
     {
         // WALKED AWAY FROM THE GEOMETRY, AND LOOKING BACK AT IT. Distance alone
         // proves nothing here: this scene is symmetric about the origin, so a
@@ -297,7 +297,7 @@ int main()
     // the outer cascades' cell puts both of its faces in one voxel, which is the
     // case the voxelisation has to decide "these surfaces face opposite ways"
     // about — the decision that used to be made by whichever triangle a thread
-    // reached first (ogre-patch 0065).
+    // reached first (fork ad452604a+155a56bf8+0338ca7f2+c4c80b5f7 (was 0065)).
     std::printf("\n== case 4: 200 objects, 200 materials, two orders (0065) ==\n");
     {
         struct Plate { Vec3 pos; Colour albedo; };

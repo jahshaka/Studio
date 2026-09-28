@@ -266,11 +266,11 @@ int main(int argc, char **argv)
         STEP_CHECK(step, "the ambient does not step across the volume boundary (within 5%)");
         // 2. WHICH CONVENTION SURVIVED: the GI-off one, on both sides.
         //
-        // RE-ANCHORED 5 % -> 10 % BY PHOTON-M2 (patch 0077), measured +7.9 %
+        // RE-ANCHORED 5 % -> 10 % BY PHOTON-M2 (fork 8f09c0cd4+155a56bf8 (was 0077)), measured +7.9 %
         // (0.0941 GI off, 0.1015 GI on, i.e. +2/255 on a 24/255 band), and the
         // 2/255 is ATTRIBUTED: zeroing the specular cone's escape ambient in the
         // staged media brings this band back to 0.0941 EXACTLY, so the whole
-        // difference is that one term. Patch 0077 removed the 0.31831 = 1/pi
+        // difference is that one term. fork 8f09c0cd4+155a56bf8 (was 0077) removed the 0.31831 = 1/pi
         // upstream multiplied it by ("I'm not sure why is it even needed") --
         // an eye-tuned cancellation of the light injection's missing 1/pi, fixed
         // at the cause -- so the scene's one ambient now reaches the specular

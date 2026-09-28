@@ -269,7 +269,7 @@ function resizeViewportTo(w, h) {
 }
 
 // The distance at which the FIRST level change happens, found by DOLLYING
-// OUTWARDS — never by bisection. With ogre-patch 0075's hysteresis band the
+// OUTWARDS — never by bisection. With fork 5230c9390+8282f6d70 (was 0075)'s hysteresis band the
 // level depends on where the camera came from, by design, so a probe sequence
 // that jumps about measures the probe order; a monotone approach measures the
 // switch (and shifts it by the band, identically in every arm, which is why the
@@ -345,7 +345,7 @@ if (resizeViewportTo(1920, 1080)) {
 //    ATOM-3's queued question, ledger §647).
 //
 // THE TWO FACTS THAT MAKE THE QUESTION. The LOD switch carries a 10 % HYSTERESIS
-// BAND (patch 0075, engine.lod_hysteresis): a level held against a small move
+// BAND (fork 5230c9390+8282f6d70 (was 0075), engine.lod_hysteresis): a level held against a small move
 // of the WATCHED view, so an object parked on a threshold does not flicker as
 // the camera breathes. A band is a MEMORY OF THE DIRECTION OF TRAVEL — inside
 // it the level drawn depends on where the value came from. And the band is

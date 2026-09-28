@@ -8,20 +8,15 @@
 
 # PER-TREE ENGINE (owner decree 2026-09-06: no shared install). The engine
 # installs beside its source inside this tree (build-ogre.sh's default), so
-# every checkout and worktree links exactly the engine its own submodule +
-# patches produced — shared-mutable-state hazards (one lane rebuilding the
-# engine under another) are gone by construction. The legacy shared path is a
-# WARNED fallback so not-yet-migrated checkouts keep building; rerun
-# irisgl/scripts/build-ogre.sh once to migrate.
-if(EXISTS "${CMAKE_SOURCE_DIR}/irisgl/thirdparty/ogre-next-install/include/OGRE-Next/Ogre.h")
-    set(_ogre_prefix_default "${CMAKE_SOURCE_DIR}/irisgl/thirdparty/ogre-next-install")
-else()
-    set(_ogre_prefix_default "$ENV{HOME}/Developer/engines/ogre-next-install")
-endif()
-set(OGRE_NEXT_PREFIX "${_ogre_prefix_default}"
+# every checkout and worktree links exactly the engine its own submodule
+# produced. The legacy shared install (~/Developer/engines/ogre-next-install) is
+# gone as a default: it carries no BUILT_FROM stamp, so the stamp check below
+# would refuse it anyway (D6-FORK-TOOLING). A missing install fails configure
+# with the one-time setup line.
+set(OGRE_NEXT_PREFIX "${CMAKE_SOURCE_DIR}/irisgl/thirdparty/ogre-next-install"
     CACHE PATH "Ogre-Next install prefix (written by irisgl/scripts/build-ogre.sh)")
-# A cache from before the per-tree install existed keeps pointing at the shared
-# path; once the per-tree install appears, correct it (same class of trap as
+# A cache that points elsewhere (an old shared-install cache) is corrected once
+# the per-tree install exists (same class of trap as
 # the OGRE_NEXT_SOURCE force below — a stale cache silently links a DIFFERENT
 # engine than the tree's patches describe).
 if(EXISTS "${CMAKE_SOURCE_DIR}/irisgl/thirdparty/ogre-next-install/include/OGRE-Next/Ogre.h"
@@ -30,10 +25,6 @@ if(EXISTS "${CMAKE_SOURCE_DIR}/irisgl/thirdparty/ogre-next-install/include/OGRE-
                     "own engine install — forcing the per-tree install (no shared engine).")
     set(OGRE_NEXT_PREFIX "${CMAKE_SOURCE_DIR}/irisgl/thirdparty/ogre-next-install"
         CACHE PATH "Ogre-Next install prefix (written by irisgl/scripts/build-ogre.sh)" FORCE)
-endif()
-if(OGRE_NEXT_PREFIX STREQUAL "$ENV{HOME}/Developer/engines/ogre-next-install")
-    message(WARNING "Using the LEGACY SHARED engine install. Run irisgl/scripts/build-ogre.sh "
-                    "to give this tree its own engine (per-tree installs are the law since 2026-09-06).")
 endif()
 # The source tree ships as an irisgl submodule — our FORK of ogre-next (branch
 # `jahshaka`), so the media staged from it is already ours. The old
@@ -46,7 +37,7 @@ endif()
 set(OGRE_NEXT_SOURCE "${_ogre_src_default}"
     CACHE PATH "Ogre-Next source tree (for the Hlms shader templates under Samples/Media)")
 # A stale cache from a pre-submodule configure staged UPSTREAM media silently
-# (found 2026-09-03: patch 0009 — now the fork's M26 commit — missing from
+# (found 2026-09-03: fork c290052de (was 0009) — now the fork's M26 commit — missing from
 # bin/media while the build succeeded). When the submodule exists, any cached
 # value pointing elsewhere is force-corrected.
 if(EXISTS "${CMAKE_SOURCE_DIR}/irisgl/thirdparty/ogre-next/CMakeLists.txt"
@@ -69,6 +60,18 @@ if(NOT EXISTS "${OGRE_NEXT_SOURCE}/Samples/Media/Hlms/Pbs")
         "Ogre-Next Hlms templates not found at ${OGRE_NEXT_SOURCE}/Samples/Media/Hlms.\n"
         "Run: git submodule update --init irisgl/thirdparty/ogre-next, or set -DOGRE_NEXT_SOURCE=<source tree>.")
 endif()
+
+# THE INSTALL MUST BE THE CHECKOUT (cmake/OgreInstallStamp.cmake says why): a
+# configure against an engine built from another fork commit FAILS here, with the
+# fix. The stamp and the submodule's HEAD are configure inputs, so `cmake --build`
+# after a pin bump re-runs configure by itself and refuses until build-ogre.sh has.
+include("${CMAKE_CURRENT_LIST_DIR}/OgreInstallStamp.cmake")
+jah_ogre_install_stamp_problem(_ogre_stamp_problem "${OGRE_NEXT_PREFIX}" "${OGRE_NEXT_SOURCE}")
+if(_ogre_stamp_problem)
+    message(FATAL_ERROR "${_ogre_stamp_problem}")
+endif()
+jah_ogre_install_stamp_inputs(_ogre_stamp_inputs "${OGRE_NEXT_PREFIX}" "${OGRE_NEXT_SOURCE}")
+set_property(DIRECTORY "${CMAKE_SOURCE_DIR}" APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${_ogre_stamp_inputs})
 
 add_library(OgreNext INTERFACE)
 # The install ships OgreBuildSettings.h (identical to the build tree's copy), so

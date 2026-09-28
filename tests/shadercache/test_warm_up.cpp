@@ -40,7 +40,7 @@ std::unique_ptr<Engine> gEngine;
 /// Which per-scene warm-up ROUTE this run exercises. The engine reads
 /// JAHSHAKA_WARMUP_PASS once, on the first warm-up; the suite runs BOTH ways
 /// (`shadercache.warmup` = the shipped default, `shadercache.warmup_pass` = the
-/// opt-in CompositorPassWarmUp route that ogre-patch 0016 unblocked), so case 6
+/// opt-in CompositorPassWarmUp route that fork 8282f6d70 (was 0016) unblocked), so case 6
 /// can assert the DELTA between them instead of asserting one of them twice.
 bool gWarmUpPass = false;
 
@@ -77,7 +77,6 @@ int main() {
                                                : "full-frame (shipped default)");
     }
     EngineConfig cfg;
-    cfg.backend      = Backend::Vulkan;
     cfg.pluginDir    = JAHSHAKA_TEST_PLUGIN_DIR;
     cfg.hlmsMediaDir = JAHSHAKA_TEST_MEDIA_DIR;
     cfg.logFile      = "test_warm_up-ogre.log";

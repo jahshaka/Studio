@@ -141,7 +141,7 @@ assert(worst <= BAR,
 //
 // IT WAS NOT. Beyond 32 m the cube's shaded face read 8-9/255 BRIGHTER, flat out
 // to 180 m, with the light volume proven identical at every arm. The mechanism
-// (CLIFF-32-1, patch 0084): the anisotropic escape estimate `min3` read the half
+// (CLIFF-32-1, fork 8f09c0cd4 (was 0084)): the anisotropic escape estimate `min3` read the half
 // of each axis volume chosen by the SIGN of that component of the cone's
 // direction, and on an axis-aligned surface two of those components are zero in
 // exact arithmetic and the last bits of the view matrix in the shader -- so the

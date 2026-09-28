@@ -1,5 +1,5 @@
 // engine.lod_hysteresis — THE LOD SWITCH BAND BELONGS TO THE PASS
-// (ogre-patch 0075 as amended by lane ATOM-3-FIX; the render audit's A7, and
+// (fork 5230c9390+8282f6d70 (was 0075) as amended by lane ATOM-3-FIX; the render audit's A7, and
 // the Fable read of ATOM-3, ledger §664 finding 1).
 //
 // THE CLAIM UNDER TEST, in one sentence: the switch band holds a level against
@@ -9,7 +9,7 @@
 // WHY THAT SECOND HALF NEEDS A SUITE. `LodStrategy::lodSet` writes
 // `MovableObject::mCurrentMeshLod`, and EVERY pass that updates LOD lists
 // writes it: a planar reflector's mirrored camera, a picture-in-picture inset,
-// a reflection-probe cube face, a thumbnail. Patch 0075's first version made
+// a reflection-probe cube face, a thumbnail. fork 5230c9390+8282f6d70 (was 0075)'s first version made
 // the band process-wide and used that one slot as its direction state, so the
 // view's band was measured against another camera's level — it could hold a
 // level the view never chose, and its memory of the direction of travel was

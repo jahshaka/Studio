@@ -1,4 +1,4 @@
-# THE HDR AUTO-EXPOSURE'S STABILITY (lane HDR-1, ogre-patch 0042) — headless,
+# THE HDR AUTO-EXPOSURE'S STABILITY (lane HDR-1, fork feab041c6 (was 0042)) — headless,
 # framework-free, links JahshakaEngine ONLY, same runtime requirements as
 # tests/engine and tests/ssr (a reachable DISPLAY, a Vulkan driver or lavapipe).
 #
@@ -60,7 +60,7 @@ if(JAHSHAKA_ASAN)
                          ENVIRONMENT "${JAH_ASAN_ENGINE_OPTIONS}")
 endif()
 
-# THE GRADE'S 8-BIT WRITE IS DITHERED (lane DITHER-1, ogre-patch 0079). A
+# THE GRADE'S 8-BIT WRITE IS DITHERED (lane DITHER-1, fork feab041c6 (was 0079)). A
 # gradient fixture under one point light, rendered twice in ONE process — with
 # the dither and without it, through PostFxDesc::ditherOff — so every arm is
 # measured against the same binary's undithered picture and the discrimination
@@ -74,7 +74,7 @@ jah_gpu_row(hdr.dither CLASS engine COMMAND test_hdr_dither
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(hdr.dither PROPERTIES TIMEOUT 120 LABELS "engine")
 
-# THE BLOOM COMPOSITE TAKES AN AMOUNT (lane BLOOM-AMOUNT-1, ogre-patch 0082).
+# THE BLOOM COMPOSITE TAKES AN AMOUNT (lane BLOOM-AMOUNT-1, fork feab041c6 (was 0082)).
 # One bright emissive square on black, rendered four ways in ONE process —
 # bloom off, and bloom on at 0, 1 and 2 — so the dial is measured as the halo's
 # summed excess over the bloom-off picture rather than against another run. The

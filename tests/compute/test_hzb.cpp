@@ -54,7 +54,7 @@
 //   5. THE SAME, ON AN ODD-SIZED VIEW (255x135): three of its reductions have an
 //      odd source (255->127, 127->63, 63->31), so the extension path runs, and
 //      the equality above must still hold.
-//   6. THE COST, at 1920x1080, from patch 0027's GPU timestamps through the
+//   6. THE COST, at 1920x1080, from fork 1a81f866a+1bccc3f93 (was 0027)'s GPU timestamps through the
 //      render-loop monitor: the sum of the HZB passes' GPU milliseconds. The
 //      brief's budget is < 0.3 ms on the 4080; the number is printed either
 //      way, because a budget nobody can see is not a measurement.
@@ -300,7 +300,7 @@ int main()
     }
 
     // =====================================================================
-    // 1920x1080: the level count and THE COST, from patch 0027's GPU
+    // 1920x1080: the level count and THE COST, from fork 1a81f866a+1bccc3f93 (was 0027)'s GPU
     // timestamps. Its own view so the assertions above stay on the exact case.
     // =====================================================================
     std::printf("\n== 1920x1080: levels and cost ==\n");

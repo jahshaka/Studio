@@ -237,7 +237,7 @@ int main()
     const float kEmitBottom = 3.0f;
     // Its radiance is 0.9 for continuity with every number this suite has
     // printed since it existed — not for a ceiling any more: the emissive voxel
-    // store is float since ogre-patch 0087 and the picture is read as radiance
+    // store is float since fork ad452604a+155a56bf8 (was 0087) and the picture is read as radiance
     // (HDR-READBACK-1), so nothing between the emitter and the number clips.
     const float kEmitRadiance = 0.9f;
     {
@@ -489,7 +489,7 @@ int main()
     }
 
     // THE THREE ARMS, each ONE estimator: the gather (the cones compiled out by
-    // the listener, the field's cage stood down by ogre-patch 0086), the cones
+    // the listener, the field's cage stood down by fork b6c409c1f (was 0086)), the cones
     // (no field, no gather), the field (no gather).
     std::vector<double> sem;   // the gather arm's standard error per point, relative
     const auto measure = [&](const char *what, GiToggle ddgi, bool gather,
@@ -769,7 +769,7 @@ int main()
         s->setNodeMaterial(floorNode, floorMat);
     }
 
-    // ---- ONE DIFFUSE TERM, WITH THE FIELD BOUND (ogre-patch 0086) ----------
+    // ---- ONE DIFFUSE TERM, WITH THE FIELD BOUND (fork b6c409c1f (was 0086)) ----------
     //
     // THE ACCOUNTING RULE, and the only arm of any gather suite that tests it:
     // every other arm measures with `ddgi` OFF, which is what makes the three
@@ -819,7 +819,7 @@ int main()
         CHECK_MSG(worst > 0.90 && worst < 1.10,
                   "A COVERED PIXEL GETS ONE DIFFUSE TERM: with a field bound the gather's answer "
                   "is %.3f of the field-off answer (bar 0.90 to 1.10) — the cage declines "
-                  "(ogre-patch 0086) and its fallback declines with it", worst);
+                  "(fork b6c409c1f (was 0086)) and its fallback declines with it", worst);
     }
 
     e->destroyScene(s);

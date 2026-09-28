@@ -391,7 +391,7 @@ int main()
                     scene->giStatus().cascades.size(), ambientChain, ambientChain / ambientOff);
         // THE CONTRACT IS AGAINST ONE CAMERA-CENTRED CASCADE, not against GI-off:
         // cone-traced diffuse always eats some of the ambient (the cone's own
-        // starting surface occludes it — ogre-patch 0021 measures 65% surviving
+        // starting surface occludes it — fork 8f09c0cd4 (was 0021) measures 65% surviving
         // on an open floor), and that is a property of VCT, not of cascades. What
         // must not happen is the chain being DARKER than one volume: that is the
         // 2,2,2 room, and it is what upstream's cascade manager renders.
@@ -512,10 +512,10 @@ int main()
     }
 
     // =====================================================================
-    // CASE 7 — THE SPECULAR AMBIENT SURVIVES THE CHAIN (ogre-patch 0033)
+    // CASE 7 — THE SPECULAR AMBIENT SURVIVES THE CHAIN (fork 8f09c0cd4 (was 0033))
     // =====================================================================
     // The chain's cone walk is run TWICE per pixel — once for the diffuse
-    // cones and once for the specular one — and patch 0033 originally fixed
+    // cones and once for the specular one — and fork 8f09c0cd4 (was 0033) originally fixed
     // only the first. The specular continuation kept `irrLight.alpha +=
     // newRes.alpha` (the opacity the call already returns as a running total,
     // so adding it doubles it per hop) and re-applied no self-occlusion bias at
@@ -561,7 +561,7 @@ int main()
             // thousandths either way and a ratio over it is noise. At 0.15 the
             // reflection is of open space, the ambient is the whole reading,
             // and the defect was unmistakable: 1.00 / 0.56 / 0.00 before the
-            // amendment to ogre-patch 0033, 1.00 / 0.85 / 0.85 after. The
+            // amendment to fork 8f09c0cd4 (was 0033), 1.00 / 0.85 / 0.85 after. The
             // residual 0.85 is the same march-distance restart the diffuse half
             // leaves at 0.51 (the patch header; OGRE_UPSTREAM_ISSUES).
             if (r == 0) {
@@ -1255,8 +1255,8 @@ int main()
               "a smaller budget attaches strictly fewer objects (0 = no budget = the most)");
         CHECK(itemsAtCap[0] > itemsAtCap[2],
               "...and voxelises strictly fewer");
-        // THE DISPATCH COUNT IS NOT THE OBJECT COUNT (ogre-patch 0065), and this
-        // is the regression guard for the 3.9x patch 0062 cost on dense content.
+        // THE DISPATCH COUNT IS NOT THE OBJECT COUNT (fork ad452604a+155a56bf8+0338ca7f2+c4c80b5f7 (was 0065)), and this
+        // is the regression guard for the 3.9x fork ad452604a+155a56bf8 (was 0062) cost on dense content.
         // A voxelisation dispatch is sized by the WHOLE VOLUME however few
         // instances it holds, and these 220 objects each own a material — so a
         // bucket key that names the material SLOT gives 220 whole-volume
