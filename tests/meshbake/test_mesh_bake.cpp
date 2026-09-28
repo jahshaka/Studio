@@ -2280,11 +2280,18 @@ static int dagBar(const QString &name, const iris::MeshPtr &mesh, bool standin, 
     iris::MeshBake::ClusterDagStats st;
     st.wantTerms = true;
     st.denseReference = !target;      // the target row judges (b) and (c) only
+    QElapsedTimer bakeClock;
+    bakeClock.start();
     iris::MeshBake::buildClusterDag(mesh, &st);
+    const qint64 bakeMs = bakeClock.elapsed();
     if (!st.groups) return 0;
     float maxAxis = 0.0f;
     meshExtents(mesh, &maxAxis, nullptr);
     printDagTerms(name, st);
+    // THE DAG'S DISPLACEMENT LOCK (DAG-LOCK-1): its builds, its locks, what it left, its cost.
+    std::printf("   %s: the DAG's lock took %d build(s), %d vertices locked, %d still past the budget; "
+                "%lld ms for the whole DAG\n", qUtf8Printable(name), st.lockPasses, st.lockedVertices,
+                st.lockUnconverged, (long long)bakeMs);
     const float floorBound = maxAxis * 1e-5f;
     int checked = 0, dishonest = 0, loose = 0, drops = 0, oversize = 0;
     double worstRef = 0.0, worstX = 0.0;
@@ -2313,14 +2320,13 @@ static int dagBar(const QString &name, const iris::MeshPtr &mesh, bool standin, 
         CHECK_LOUD(dishonest == 0, qUtf8Printable(QStringLiteral(
         "%1 DAG: (a) every group's error >= its dense reference (%2 of %3 below; worst reference/error %4)")
         .arg(name).arg(dishonest).arg(checked).arg(worstRef, 0, 'f', 4)));
-    // (b) and (c) ARE A TARGET, NOT YET A BAR: the chain holds them with its
-    // DISPLACEMENT LOCK (a level re-simplified with every vertex it would displace
-    // past 2x its own error locked, every island bigger than that keeping a
-    // triangle), and the DAG's build has no per-group lock — clusterlod's
-    // `vertex_lock` is one array for the whole build, so a dropped island costs
-    // its own extent in the group that dropped it (measured: the stand-in's
-    // depth-0 groups 11x median, the temple's 6-10x). PRINTED here; gated only by
-    // `--target` (atom.dag_bound_target, label photon-target).
+    // (b) and (c) ARE A BAR SINCE DAG-LOCK-1: the DAG's build carries the chain's
+    // DISPLACEMENT LOCK (clusterdag::build — a removed vertex or a lost facet past 2x
+    // its group's own error, or an island bigger than the group's error, is locked
+    // and the whole DAG rebuilt; the stand-in converges in 6 builds). Before it the
+    // stand-in's groups read 24 of 30 over. Gated by `--target` (atom.dag_bound_target,
+    // no longer a photon-target: the row gates) — the dense reference (a) is the
+    // other row's, which it keeps for the price.
     std::printf("target: %s DAG (b) %d of %d groups over 2x/2.5x clusterlod's error, worst x %.2f (bar 0)%s\n",
                 qUtf8Printable(name), loose, checked, worstX, qUtf8Printable(why));
     if (standin)
@@ -2678,7 +2684,7 @@ int main(int argc, char **argv)
     roundTrip(QStringLiteral("app/models/axis_cube.obj"));
     roundTrip(QStringLiteral("app/models/axis_sphere.obj"));
 
-    std::printf("== 16. a two-sided source material is baked ==\n");
+    std::printf("== 16. a two-sided source material reaches the node ==\n");
     twoSidedReachesTheNode();
 
     std::printf("== 2-4. determinism, staleness, corruption ==\n");

@@ -129,11 +129,10 @@ jah_no_display(atom.lod_bound_bar)
 # every group of every subject's DAG is (a) at least its dense reference (8x the
 # samples against whole grids, the per-facet reference pattern, the island caps, no
 # margin). (b) at most 2x clusterlod's own error (2.5x where an island dropped) and
-# (c) on the stand-in no dropped island bigger than its group's error are PRINTED as
-# `target:` lines — they need a displacement lock the DAG's build does not have yet
-# (clusterlod's lock is one array for the whole build) — and GATED by the
-# `photon-target` row `atom.dag_bound_target`, which the lane that gives the DAG its
-# lock turns green and un-labels.
+# (c) on the stand-in no dropped island bigger than its group's error are GATED by the
+# row `atom.dag_bound_target` — a BAR since DAG-LOCK-1 gave the DAG's build the chain's
+# displacement lock (it was a photon-target row until then; the stand-in read 24 of 30
+# groups over 2.5x without the lock).
 add_test(NAME atom.dag_bound_bar COMMAND test_mesh_bake --dag-bar
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(atom.dag_bound_bar PROPERTIES
@@ -144,7 +143,7 @@ add_test(NAME atom.dag_bound_target COMMAND test_mesh_bake --dag-bar --target
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(atom.dag_bound_target PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen;HOME=${_bake_home};JAHSHAKA_DATA_ROOT=${_bake_home}/.local/share/Jahshaka"
-    TIMEOUT 900 LABELS "meshbake;photon-target")
+    TIMEOUT 900 LABELS "meshbake")
 jah_no_display(atom.dag_bound_target)
 
 # THE SIGNED DISTANCE FIELD (ATOM P2 / SUB-S5-SDF) — `meshbake.sdf`. The zero

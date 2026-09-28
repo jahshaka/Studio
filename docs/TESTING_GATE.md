@@ -47,8 +47,10 @@ disagree. `source.gate_scope_rules` case 6 is the guard.
 A suite that mixes a target claim with correct claims becomes **two ctest rows over one
 binary** (`--target`), never one labelled suite: a ctest label is per SUITE, so labelling the
 whole thing would exclude the correct assertions from pass/fail as well. The rows registered
-today (2026-09-27) are five: `gi.chain_face_target`, `gi.field_follows_energy`,
-`gi.cone_corner_target`, `gi.cone_integrator_parity_offaxis` and `atom.dag_bound_target`.
+today (2026-09-28) are four: `gi.chain_face_target`, `gi.field_follows_energy`,
+`gi.cone_corner_target` and `gi.cone_integrator_parity_offaxis`. DAG-LOCK-1 took the label off
+`atom.dag_bound_target` (the DAG's displacement lock: the stand-in 0 of 22 groups over, worst
+1.39x) — it gates now.
 D6B-GATE-SHAPE took the label off three that had gone green (3/3 on the rig):
 `gi.volume_edge_spec_target` (0.0000 / 0.0011 against 0.05), `gi.gather_reference_target`
 (worst 0.969 against 1.00 +- 0.05) and `gi.gather_plane_target` (1.000) — they gate now.
