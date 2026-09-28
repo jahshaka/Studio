@@ -378,6 +378,7 @@ samples.freshhome.Showroom_2 0.01
 samples.freshhome.Skeletal_Animation 0.01
 samples.freshhome.World_Background 0.45
 samples.freshhome.session 0.01
+samples.mirror_room_boots 251.27
 samples.session 161.00
 scale.occlusion 98.60
 scene.reopen_fidelity 64.71

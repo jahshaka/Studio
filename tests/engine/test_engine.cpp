@@ -5,6 +5,7 @@
 // Framework-free on purpose: nothing to fetch, nothing to install.
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
+#include "../support/proceduralshell.h"
 
 #include <algorithm>
 #include <cmath>
@@ -5705,13 +5706,14 @@ struct MonitorRig {
     }
 };
 
-/// A frame record is NOT published the instant its frame ends: GPU samples come
-/// back two frames late (ogre-patch 0027), so the monitor holds a few records
-/// while it waits for them. Everything here therefore renders a short flush tail
-/// before draining, which is also what a host does.
+/// A frame record is NOT published the instant its frame ends: it waits until the
+/// GPU has answered every sample it asked for (the render system polls its query
+/// pools at the top of each frame), so the monitor holds a few records. Everything
+/// here therefore renders a short flush tail before draining, which is also what a
+/// host does.
 void renderAndFlush(Engine *e, unsigned frames = 1u) {
     render(e, frames);
-    render(e, 4);          // past kGpuLatencyFrames
+    render(e, 4);          // the frames in flight, and the poll that reads them
 }
 
 void monitor_off_is_inert() {
@@ -6279,6 +6281,92 @@ void monitor_is_forward_only_for_compiles() {
     fx.e->setFrameMonitor(MonitorLevel::Off);
 }
 
+/// MONITOR-RETIRE-1: A HEAVY FRAME KEEPS ITS GPU SAMPLE. The monitor used to
+/// publish a record a fixed three frames after it ended and the fork reset its
+/// query pool two frames after it was written, whatever the GPU had finished: a
+/// GPU-bound frame lost every sample (7.1 M id-pass triangles: 1-4 of ~570
+/// records carried an id-pass time). Now a pool is recycled only once its
+/// results are back and a record waits for every sample it asked for. The
+/// fixture is GPU-bound on purpose — the 10 M-triangle procedural shell
+/// (tests/support/proceduralshell.h, unbaked) drawn 64 times through stock
+/// PBS, 640 M triangles a frame, against a CPU frame of a handful of items — and
+/// the bar is the
+/// brief's: at least 95 % of the records carry the heavy pass's GPU time, and no
+/// frame aged out.
+void monitor_heavy_frames_keep_their_samples() {
+    static const int kHeavyInstances = 64;
+    Fixture fx;
+    View *v = fx.view("mon-heavy-view", 1280, 720, kBlue);
+    Scene *s = fx.scene("mon-heavy-scene");
+    REQUIRE(v && s);
+    v->setScene(s);
+    // STOCK PBS, not Atom: the id pass's cluster cut would draw a fraction of
+    // the shell (that is its job) and the frame would not be GPU-bound; the
+    // stock path draws every triangle, which is the heavy frame this case needs.
+    s->setAtomDrawEnabled(false);
+    s->setAmbient(Colour(0.2f, 0.2f, 0.2f), Colour(0.1f, 0.1f, 0.1f));
+    enginetest::addDirectionalLight(s, Vec3(-0.4f, -0.8f, -0.3f), 3.0f);
+    const enginetest::ShellMesh shell = enginetest::proceduralShell(10000000u);
+    MeshData d;
+    d.positions = shell.positions;
+    d.normals = shell.normals;
+    d.uvs = shell.uvs;
+    d.indices.assign(shell.indices.begin(), shell.indices.end());
+    const size_t tris = d.indices.size() / 3u;
+    const MeshId mesh = s->createMesh(d);
+    PbrParams p; p.albedo = Colour(0.7f, 0.6f, 0.5f); p.roughness = 0.6f;
+    const MaterialId mat = s->createPbrMaterial(p);
+    REQUIRE(mesh && mat);
+    for (int i = 0; i < kHeavyInstances; ++i) {
+        const NodeId n = s->createNode();
+        REQUIRE(s->attachMesh(n, mesh, mat));
+        s->setNodeTransform(n, Vec3(float(i % 8) * 1.1f - 3.85f, float(i / 8) * 1.1f - 3.85f, 0), Quat(),
+                            Vec3(0.5f, 0.5f, 0.5f));
+    }
+    CameraDesc c = enginetest::testCameraDescLookAt(Vec3(0, 0, 10.0f), Vec3(0, 0, 0));
+    v->setCamera(c);
+    // The geometry counters are OFF until something reads renderStats (the
+    // pass's triangles are how a record is recognised as a heavy frame).
+    RenderStats armCounters;
+    fx.e->renderStats(armCounters);
+    render(fx.e, 10);                       // uploads and pipelines, before the capture
+
+    fx.e->setFrameMonitor(MonitorLevel::Review);
+    MonitorStatus st = fx.e->monitorStatus();
+    if (!st.gpuActive) {
+        std::printf("    no GPU timestamps in this build (%s): nothing to measure\n", st.gpuReason.c_str());
+        fx.e->setFrameMonitor(MonitorLevel::Off);
+        return;
+    }
+    // Only what the capture PUBLISHED while running is read: stopping it flushes
+    // the frames still in flight unsampled, by design.
+    std::vector<FrameRecord> recs;
+    for (int i = 0; i < 60; ++i) { render(fx.e, 1); fx.e->takeFrameRecords(recs); }
+    st = fx.e->monitorStatus();
+    const unsigned pools = st.gpuQueryPools;
+    fx.e->setFrameMonitor(MonitorLevel::Off);
+    { std::vector<FrameRecord> tail; fx.e->takeFrameRecords(tail); }
+    // THE HEAVY PASS is the one that drew the most triangles in the record.
+    unsigned records = 0, carried = 0;
+    double sumMs = 0;
+    for (const FrameRecord &r : recs) {
+        const FramePass *heavy = nullptr;
+        for (const FramePass &fp : r.passes)
+            if (!heavy || fp.triangles > heavy->triangles) heavy = &fp;
+        if (!heavy || heavy->triangles < tris) continue;   // a record that did not draw the fixture
+        ++records;
+        if (heavy->gpuMs >= 0.0f) { ++carried; sumMs += heavy->gpuMs; }
+    }
+    std::printf("    %zu-triangle shell x %d: %u records drew it, %u carry its GPU time (%.1f %%), "
+                "mean %.2f ms; %llu aged out, %u query pools at the peak\n",
+                tris, kHeavyInstances, records, carried, records ? 100.0 * carried / records : 0.0,
+                carried ? sumMs / carried : -1.0, st.gpuFramesAgedOut, pools);
+    CHECK_MSG(records >= 40u, "the capture recorded the heavy frames (%u)", records);
+    CHECK_MSG(carried * 100u >= records * 95u,
+              "at least 95 %% of the heavy records carry the pass's GPU time (%u of %u)", carried, records);
+    CHECK_MSG(st.gpuFramesAgedOut == 0ull, "no frame aged out (%llu)", st.gpuFramesAgedOut);
+}
+
 void monitor_gpu_timestamps() {
     // P1c (ogre-patch 0027) and BOTH its off-switches (owner decision D3).
     //
@@ -6318,7 +6406,7 @@ void monitor_gpu_timestamps() {
               st.gpuReason.c_str());
     CHECK_MSG(st.gpuQueryPools > 0u, "a capture owns query pools");
 
-    // Render past the two-frame readback latency and drain.
+    // Render past the frames in flight (their samples are answered once the GPU has them) and drain.
     std::vector<FrameRecord> recs;
     for (int i = 0; i < 8; ++i) {
         rig.s->setNodeTransform(rig.cube, Vec3(0.1f * float(i), 0.6f, 0), Quat(),
@@ -6469,6 +6557,7 @@ int main(int argc, char **argv) {
                                                     monitor_detaches_from_a_scene_it_stopped_drawing },
         { "monitor_is_forward_only_for_compiles",   monitor_is_forward_only_for_compiles },
         { "monitor_gpu_timestamps",                 monitor_gpu_timestamps },
+        { "monitor_heavy_frames_keep_their_samples", monitor_heavy_frames_keep_their_samples },
         { "teardown_is_clean",                      teardown_is_clean },
     };
     const std::string filter = argc > 1 ? argv[1] : "";

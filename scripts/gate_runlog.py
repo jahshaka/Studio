@@ -81,6 +81,25 @@ _TARGET = re.compile(r"^\s*target:\s*(.+?)\s*$")
 _NOADMIT = re.compile(r"^\s*(?:\|\s*)*(NOADMIT vram: .*?)\s*$")
 
 
+# THE GPU-TIMING LOCK'S WAIT (LOCK-WAIT-1; scripts/gpu-exclusive.sh): `gpu-lock: waited <s> s` once
+# the lock is held — recorded per row as `lockWaitS` and subtracted from its seconds (a queue is
+# never the row's time); `NOLOCK gpu-lock: …` when the wait passed its bound — verdict NOLOCK (the
+# row never ran; the box's queue, not its code). timeout(1)'s own line — the row's budget, counted
+# from after the lock — makes a red a TIMEOUT.
+_LOCKWAIT = re.compile(r"^\s*(?:\|\s*)*gpu-lock: waited ([0-9.]+) s\s*$")
+_NOLOCK = re.compile(r"^\s*(?:\|\s*)*(NOLOCK gpu-lock: .*?)\s*$")
+_RUNTIMEOUT = re.compile(r"^\s*(?:\|\s*)*timeout: sending signal \S+ to command")
+
+
+def lock_wait(text):
+    for line in (text or "").splitlines():
+        m = _LOCKWAIT.match(line)
+        if m:
+            try: return float(m.group(1))
+            except ValueError: return None
+    return None
+
+
 def noadmit_line(text):
     for line in (text or "").splitlines():
         m = _NOADMIT.match(line)
@@ -114,6 +133,12 @@ def row_verdict(status, text, arms):
     na = noadmit_line(text) if v == "FAIL" else None
     if na and not arms:
         return "NOADMIT", na, None
+    if v == "FAIL":
+        for line in (text or "").splitlines():
+            m = _NOLOCK.match(line)
+            if m: return "NOLOCK", m.group(1)[:300], None
+        if any(_RUNTIMEOUT.match(l) for l in (text or "").splitlines()):
+            v = "TIMEOUT"
     if v in ("FAIL", "CRASH", "TIMEOUT"):
         bv, bline = budget_verdict(text)
         if bv: return bv, st, bline
@@ -428,8 +453,13 @@ def run_ctest(cmd, cwd, tier, lane, jobs, reasons=None, gating=None, rng=None, r
                             load_mean=sampler.mean(t_end - secs, t_end)),
                 "source": "run"}
         v, st, bline = row_verdict(status, outputs.get(name, ""), arms)
+        wait = lock_wait(outputs.get(name, ""))
         row = dict(base, arm=None, verdict=v, status=st,
-                   seconds=secs, gpu_ms=gpu, target=target)
+                   seconds=(round(max(0.0, secs - wait), 2) if wait is not None else secs),
+                   gpu_ms=gpu, target=target)
+        if wait is not None:
+            row["lockWaitS"] = wait
+            row["wallSeconds"] = secs
         if bline:
             row["budget"] = bline
         mem = _mem_of(outputs.get(name, ""))

@@ -79,11 +79,18 @@ function comparePostFx(fx, what) {
 }
 
 // ---------------------------------------------------------------------------
-project.create("vr eye grade " + Date.now());
+// A BLANK WORLD (EYE-GRADE-1's second read, D7-ENGINE-FIXES-1): no ground, no lights.
+// The default template's GROUND put its horizon strip — the brightest line in the eye —
+// through the eye picture's CENTRE: the wearer's head is LEVEL and sways, so the one
+// byte this script reads (`center`) landed on the strip in some shots and on the sky in
+// others (measured: 183 / 228 / 255 on the strip, 7 / 49 / 100 / 138 on the sky; a
+// settle trace showed four distinct, consistent frames per shot, so the picture was
+// never late — the pixel was on a different object). That read as "one change late".
+project.create("vr eye grade " + Date.now(), { empty: true });
 
-// THE FIXTURE IS A FLAT COLOUR SKY, and that is what makes every measurement
-// below pose-independent: a simulated HMD sways and rotates (CLAUDE.md), so the
-// eye and the desktop camera never look in exactly the same direction — but a
+// THE FIXTURE IS A FLAT COLOUR SKY AND NOTHING ELSE, and that is what makes every
+// measurement below pose-independent: a simulated HMD sways and rotates (CLAUDE.md), so
+// the eye and the desktop camera never look in exactly the same direction — but a
 // flat sky is the same radiance in every direction, so a patch of sky is a
 // comparison of the GRADE and of nothing else.
 //

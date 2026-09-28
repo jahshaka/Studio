@@ -16,6 +16,7 @@
 #include "irisgl/document/assets/texture2d.h"
 #include <algorithm>
 #include <cmath>
+#include <functional>
 #include <cstdio>
 #include <string>
 
@@ -34,6 +35,7 @@
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
 #include "irisgl/mirror/scenemirror.h"
+#include "irisgl/import/meshbake.h"
 #include "irisgl/document/scenegraph/scenepicking.h"
 #include "irisgl/document/scenegraph/skybake.h"
 #include "irisgl/document/scenegraph/nodegraph.h"
@@ -2441,6 +2443,111 @@ int main(int argc, char **argv)
               "engine: ...and they are really there, as 16 engine nodes");
 
         smirror2.setSource(nullptr);
+    }
+
+    // ---- A MESH NODE WITH NO MATERIAL (NULL-MATERIAL-SYNC-1) ----
+    // A script or API path can add a MeshNode with a mesh and never give it a
+    // material; the mirror dereferenced the null material in materialSyncFor's
+    // slot loop (SIGSEGV, ATOM-BLACK-FRAMES-1). It must sync and draw the
+    // DEFAULT surface (pbrmaterial.h's defaultmaterial: a neutral grey).
+    {
+        // A CLEAN ROOM (the sun arm's pattern): its own engine scene, view and mirror,
+        // so nothing the blocks above left in `target` lights or exposes it.
+        auto sdoc3 = iris::Scene::create();
+        Scene *cs3 = engine->createScene("nomat-room");
+        View *cv3 = engine->createOffscreenView("nomat-room", 96, 96, Colour(0, 0, 1));
+        CHECK(cs3 && cv3, "no-material: a clean-room scene + view");
+        cv3->setScene(cs3);
+        cs3->setAmbient(Colour(0.4f, 0.4f, 0.4f), Colour(0.3f, 0.3f, 0.3f));
+        SceneMirror cm3(cs3);
+        cm3.setLightWires(false);
+        auto bare = iris::MeshNode::create();
+        bare->setName("bare");
+        bare->setMesh(previewmesh::load(":assets/models/cube.obj"));
+        const float br = bare->getMeshRadius();
+        const float bs = br > 0.0f ? 1.0f / br : 1.0f;
+        bare->setLocalScale(iris::Vec3(bs, bs, bs));
+        CHECK(!bare->material, "no-material: the node carries no material");
+        sdoc3->getRootNode()->addChild(bare);
+        auto sun3 = iris::LightNode::create();
+        sun3->lightType = iris::LightType::Directional;
+        sun3->intensity = 1.0f;
+        sun3->setLocalRot(iris::Quat());   // straight down: the top face the camera sees is lit
+        sun3->setLocalPos(iris::Vec3(0.0f, 6.0f, 0.0f));
+        sdoc3->getRootNode()->addChild(sun3);
+        enginetest::testCameraLookAt(cv3, Vec3(0.4f, 3.0f, 0.6f), Vec3(0, 0, 0));
+        cm3.setSource(sdoc3);
+        cm3.sync();
+        cm3.applyEnvironment(cv3);
+        CHECK(cm3.engineNode(bare.data()) != 0, "no-material: the node has an engine node");
+        for (int i = 0; i < 3; ++i) { cm3.sync(); engine->renderOneFrame(); }
+        cv3->readPixels(img); show("no material", img);
+        const Colour c3 = centre(img);
+        bare->setVisible(false);
+        for (int i = 0; i < 3; ++i) { cm3.sync(); engine->renderOneFrame(); }
+        Image emptyPose;
+        cv3->readPixels(emptyPose); show("no material, hidden", emptyPose);
+        bare->setVisible(true);
+        const Colour ce = centre(emptyPose);
+        CHECK(std::fabs(c3.r - ce.r) + std::fabs(c3.g - ce.g) + std::fabs(c3.b - ce.b) > 0.05f,
+              "no-material: the node DRAWS (its picture differs from the pose without it)");
+        // THE DEFAULT SURFACE, by comparison rather than by a colour: the same node given
+        // the document's own default material (PbrMaterial::create — pbrmaterial.h's one
+        // definition) renders the same picture at the same pose.
+        bare->setMaterial(iris::PbrMaterial::create());
+        for (int i = 0; i < 3; ++i) { cm3.sync(); engine->renderOneFrame(); }
+        Image withDefault;
+        cv3->readPixels(withDefault); show("the default material", withDefault);
+        const Colour c4 = centre(withDefault);
+        CHECK(std::fabs(c3.r - c4.r) < 2.0f / 255.0f && std::fabs(c3.g - c4.g) < 2.0f / 255.0f &&
+                  std::fabs(c3.b - c4.b) < 2.0f / 255.0f,
+              "no-material: it wears the default surface (the same picture as the document's default material)");
+        // ...and the comparison can tell surfaces apart: a red material reads differently.
+        auto red = iris::PbrMaterial::create();
+        red->setBaseColor(QColor(220, 30, 30));
+        bare->setMaterial(red);
+        for (int i = 0; i < 3; ++i) { cm3.sync(); engine->renderOneFrame(); }
+        Image withRed;
+        cv3->readPixels(withRed); show("a red material", withRed);
+        const Colour c5 = centre(withRed);
+        CHECK(std::fabs(c5.r - c4.r) + std::fabs(c5.g - c4.g) + std::fabs(c5.b - c4.b) > 0.05f,
+              "no-material: the comparison is not blind (a red material reads differently)");
+        cm3.setSource(nullptr);
+        engine->destroyView(cv3);
+        engine->destroyScene(cs3);
+    }
+
+    // ---- A glTF doubleSided MATERIAL IMPORTS AS A TWO-SIDED NODE (CULL-MODE-1) ----
+    // tests/importer/fixtures/double_sided_quads.gltf (two quads, one doubleSided) baked
+    // and built into a document the product's way (MeshBake::buildFromFile -> the blob ->
+    // buildFragment; a fragment's children live in the scene graph, which needs this
+    // suite's Ogre::Root): the doubleSided quad's node reads faceCullingMode None, the
+    // one-sided quad's DefinedInMaterial. (The mirror does not read the node's cull yet —
+    // D7-ENGINE-FIXES-1's report says why; the node is the field's persisted carrier.)
+    {
+        auto sdoc4 = iris::Scene::create();
+        const QString gltf = QStringLiteral(JAHSHAKA_SOURCE_DIR "/tests/importer/fixtures/double_sided_quads.gltf");
+        const QString fp = iris::MeshBake::fingerprintFor(QStringLiteral("cull-mode-1-fixture"));
+        const iris::MeshBake::Model baked =
+            iris::MeshBake::deserialize(iris::MeshBake::serialize(iris::MeshBake::buildFromFile(gltf, fp)), fp);
+        CHECK(baked.valid, "cull import: the two-quad glTF bakes and reads back");
+        iris::SceneNodePtr frag = baked.valid ? iris::MeshBake::buildFragment(baked, gltf,
+            [](iris::MeshPtr, iris::MeshMaterialData &) { return iris::MaterialPtr(iris::PbrMaterial::create()); })
+                                              : iris::SceneNodePtr();
+        iris::MeshNodePtr twoSided, oneSided;
+        std::function<void(const iris::SceneNodePtr &)> find = [&](const iris::SceneNodePtr &n) {
+            if (!n) return;
+            if (n->getSceneNodeType() == iris::SceneNodeType::Mesh) {
+                if (n->getName() == QStringLiteral("two_sided_quad")) twoSided = n.staticCast<iris::MeshNode>();
+                if (n->getName() == QStringLiteral("one_sided_quad")) oneSided = n.staticCast<iris::MeshNode>();
+            }
+            for (const iris::SceneNodePtr &c : n->children()) find(c);
+        };
+        if (frag) { sdoc4->getRootNode()->addChild(frag); find(frag); }
+        CHECK(twoSided && twoSided->getFaceCullingMode() == iris::FaceCullingMode::None,
+              "cull import: the doubleSided quad's node culls nothing");
+        CHECK(oneSided && oneSided->getFaceCullingMode() == iris::FaceCullingMode::DefinedInMaterial,
+              "cull import: the one-sided quad's node leaves the cull to its material");
     }
 
     mirror.setSource(nullptr);

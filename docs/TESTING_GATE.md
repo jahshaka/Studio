@@ -47,8 +47,11 @@ disagree. `source.gate_scope_rules` case 6 is the guard.
 A suite that mixes a target claim with correct claims becomes **two ctest rows over one
 binary** (`--target`), never one labelled suite: a ctest label is per SUITE, so labelling the
 whole thing would exclude the correct assertions from pass/fail as well. The rows registered
-today (2026-09-27) are five: `gi.chain_face_target`, `gi.field_follows_energy`,
-`gi.cone_corner_target`, `gi.cone_integrator_parity_offaxis` and `atom.dag_bound_target`.
+today (2026-09-28) are five: `gi.chain_face_target`, `gi.field_follows_energy`,
+`gi.cone_corner_target`, `gi.cone_integrator_parity_offaxis` and `gi.sealed_room_chain_target`
+(SEALED-ROOM-LEAK-1: 12/255 against 2). DAG-LOCK-1 took the label off
+`atom.dag_bound_target` (the DAG's displacement lock: the stand-in 0 of 22 groups over, worst
+1.39x) — it gates now.
 D6B-GATE-SHAPE took the label off three that had gone green (3/3 on the rig):
 `gi.volume_edge_spec_target` (0.0000 / 0.0011 against 0.05), `gi.gather_reference_target`
 (worst 0.969 against 1.00 +- 0.05) and `gi.gather_plane_target` (1.000) — they gate now.
@@ -327,10 +330,20 @@ ratios that sat under RUN_SERIAL only JOINED it (mirror.scale, perf.epic_steady_
 perf.drag_mirror_room, perf.capture_off_is_free; R3), with app.play_select beside app.input_keys
 (key/gesture arrival; R5). Every lock row also takes ctest's `RESOURCE_LOCK gpu_timing`, so two
 of ONE gate never start together and wait in a slot on the flock. `ctest -N -V | grep -c 'Test
-command: .*gpu-exclusive.sh'` = 38 (a bare `grep -c gpu-exclusive` also counts the guard's own
+command: .*gpu-exclusive.sh'` = 37 (a bare `grep -c gpu-exclusive` also counts the guard's own
 command line). Its guard is `devprocess.gpu_lock` (label `tooling`). A contention verdict on a
 lock row needs a sibling that was NOT under the lock (an app on `:0`, a measurement outside the
 wrapper, or — the lock never excludes it — the CPU load of the gate's own other slots) — say which.
+
+**THE LOCK'S WAIT IS NEVER THE ROW'S TIME** (LOCK-WAIT-1, stage close 1: perf.epic_steady_state
+ran ~30 s solo and was killed at its TIMEOUT in the stage tier by queue time). The wrapper prints
+`gpu-lock: waited <s> s` once it holds the lock; the run log records it per row as `lockWaitS`
+and subtracts it from the row's `seconds` (the raw ctest figure stays as `wallSeconds`). A lock
+row's own budget (`RUN_TIMEOUT`) is enforced by the wrapper through timeout(1) FROM AFTER the lock
+(and after the VRAM tokens, when the row takes them — gpu-admit.sh applies it), so ctest's
+TIMEOUT (budget + the lock wait + 30 s) is only the backstop and a queued row never runs short;
+a wait past the bound prints `NOLOCK gpu-lock: …` and the run log's verdict is NOLOCK (never ran —
+the box's queue, not the row's code), and a row stopped by its own budget is a TIMEOUT.
 
 **THE MILLISECOND BARS ARE NIGHTLY: counts at push, milliseconds on a quiet box** (D6B-GATE-SHAPE;
 audit §5). A wall-clock bar reads the box as much as the code, and the GPU lock does not exclude
