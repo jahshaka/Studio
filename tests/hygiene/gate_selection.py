@@ -232,6 +232,25 @@ def runlog_cases(source):
     check(arms == {"p.a": "OOM", "p.b": "FAIL", "p.c": "LOST"}, "a pool's arms take the class from their own lines "
           "(%s)" % arms)
 
+    # T11: THE TIER NAMES — the one list, every literal the gate scripts write is in it, and a
+    # name outside it is refused before a run (never an hour of records under a stray name)
+    print("  the run log's tier names: %s" % ", ".join(rl.TIERS))
+    check(set(rl.TIERS) == {"scoped", "scoped-fallback", "scoped-tier", "joint", "merge", "stage", "nightly",
+                            "push", "fork"}, "the tier names are exactly the documented nine")
+    gsrc = open(os.path.join(source, "scripts", "gate-scope.py")).read()
+    lits = set(re.findall(r'a\.tier or \(?"([a-z-]+)"', gsrc)) | set(re.findall(r'else "(scoped-[a-z]+)"', gsrc))
+    check(lits and lits <= set(rl.TIERS), "every tier gate-scope.py writes is a listed name (%s)" % sorted(lits))
+    try:
+        rl.run_ctest("true", source, "scoped-merge", "x", 1, echo=False)
+        check(False, "an unlisted tier is refused")
+    except ValueError as e:
+        check("not one of" in str(e), "an unlisted tier is refused before the run")
+    try:
+        rl.append_records([], "adhoc", "0")
+        check(False, "an unlisted tier is refused by the writer")
+    except ValueError:
+        check(True, "an unlisted tier is refused by the writer (import too)")
+
     # T8: THE QUIET MEDIAN — a suite with >= 3 PASS records on a box with no sibling ctest is
     # costed from those alone; with fewer, from every record (a private log directory)
     import datetime, tempfile

@@ -38,6 +38,17 @@ import xml.etree.ElementTree as ET
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SCHEMA = 1
+# THE TIER NAMES (TESTING-DEBTS-1 T11) — the only ones a record may carry; testing/runs/README.md
+# documents the same list. gate-scope.sh writes the first four (`scoped`; `scoped-fallback` = a
+# scoped gate that fell back to the whole tier; `scoped-tier` = the tier by rule, a fork pin;
+# `joint` = --joint); rc-gate.sh writes JAH_GATE_TIER (merge by default: stage, nightly, push, fork).
+TIERS = ("scoped", "scoped-fallback", "scoped-tier", "joint", "merge", "stage", "nightly", "push", "fork")
+
+
+def check_tier(tier):
+    if tier not in TIERS:
+        raise ValueError(f"gate_runlog: tier '{tier}' is not one of {', '.join(TIERS)} (testing/runs/README.md)")
+    return tier
 
 # `  12/653 Test  #45: gi.foo ..........   Passed   12.34 sec`
 _RESULT = re.compile(r"^\s*\d+/\d+\s+Test\s+#\d+:\s+(\S+)\s+\.*\s*(.*?)\s+([\d.]+)\s+sec\s*$")
@@ -324,7 +335,7 @@ def _prior_counts(path):
 
 
 def append_records(records, tier, tip):
-    path = _file_for(tier, tip)
+    path = _file_for(check_tier(tier), tip)
     os.makedirs(os.path.dirname(path), exist_ok=True)
     prior = _prior_counts(path)
     with open(path, "a") as f:
@@ -340,6 +351,7 @@ def run_ctest(cmd, cwd, tier, lane, jobs, reasons=None, gating=None, rng=None, r
               labels=None, echo=True, env=None):
     """Run a ctest command line (a string, as gate-scope prints it), stream its output, and
     append one record per suite (+ per arm) to the run log. Returns ctest's exit code."""
+    check_tier(tier)       # before the run, never after an hour of it
     reasons = reasons or {}
     junit = tempfile.NamedTemporaryFile(prefix="gate-junit-", suffix=".xml", delete=False).name
     full = (f"{cmd} --output-junit {junit} "
@@ -513,13 +525,13 @@ def main():
     ap = argparse.ArgumentParser()
     sub = ap.add_subparsers(dest="cmd", required=True)
     r = sub.add_parser("run", help="run a ctest command and log every suite")
-    r.add_argument("--tier", required=True)
+    r.add_argument("--tier", required=True, choices=TIERS)
     r.add_argument("--lane", default=None)
     r.add_argument("--jobs", type=int, default=None)
     r.add_argument("--build", default="build-linux")
     r.add_argument("ctest", nargs=argparse.REMAINDER)
     i = sub.add_parser("import", help="records from an existing ctest output log")
-    i.add_argument("log"); i.add_argument("--tier", required=True); i.add_argument("--tip", required=True)
+    i.add_argument("log"); i.add_argument("--tier", required=True, choices=TIERS); i.add_argument("--tip", required=True)
     i.add_argument("--lane", default=None); i.add_argument("--jobs", type=int, default=None)
     t = sub.add_parser("times", help="median PASS seconds per suite from the log")
     t.add_argument("--days", type=int, default=14)

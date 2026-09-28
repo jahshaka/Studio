@@ -227,8 +227,10 @@ TESTING-DEBTS-1); the estimate line counts which source each cost came from).
 
 **THE RUN LOG (TESTING_V2 T8).** `--run` (its tier `scoped`, or `scoped-fallback` / `scoped-tier` when a scoped gate ran the whole tier), `--solo` and the rc-gate tiers
 (`scripts/gate_runlog.py run --tier <t> -- <ctest line>`) append one JSON record per row and per
-pool arm to `<workspace>/testing/runs/<date>-<tier>-<tip>.jsonl`: verdict (PASS | FAIL | CRASH |
-TIMEOUT | NOTRUN), retries, wall seconds, `gpu_ms` (a suite's `gpu_ms:` line), a target's value,
+pool arm to `<workspace>/testing/runs/<date>-<tier>-<tip>.jsonl` — the tier one of
+`gate_runlog.TIERS` (scoped, scoped-fallback, scoped-tier, joint, merge, stage, nightly, push, fork;
+any other name is refused before the run): verdict (PASS | FAIL | CRASH | TIMEOUT | NOTRUN |
+NOADMIT | OOM | LOST, §4b), retries, wall seconds, `gpu_ms` (a suite's `gpu_ms:` line), a target's value,
 the selection reason, the tree's three shas, the box (load over the suite's own window, the GPU
 clock state, -j, the display, sibling gates). The fields are `testing/runs/README.md`; the two
 standing queries are `scripts/gate_runlog.py longest` and `scripts/gate_runlog.py load-reds`.

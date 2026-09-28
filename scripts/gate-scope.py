@@ -1463,7 +1463,9 @@ def main():
                     help="ctest parallelism (default 4 — the tier's contract; a lane beside other live lanes runs 2)")
     ap.add_argument("--json", action="store_true")
     ap.add_argument("--lane", default=None, help="the lane/stage name the run log records (default: the branch)")
-    ap.add_argument("--tier", default=None, help="the run log's tier name (default: scoped, or merge on a fallback)")
+    ap.add_argument("--tier", default=None, choices=gate_runlog.TIERS,
+                    help="the run log's tier name (default: scoped; scoped-fallback / scoped-tier when a scoped "
+                         "gate runs the whole tier; joint for --joint)")
     ap.add_argument("--record-times", action="store_true",
                     help="refresh scripts/gate-times.txt from the run log (median PASS seconds, 14 days)")
     ap.add_argument("--solo", metavar="SUITE", nargs="+",
