@@ -24,7 +24,7 @@ endif()
 # THE ASan ENGINE SUITES' OPTIONS, in one place (PHOTON_SPEC §7 R1).
 #
 # `protect_shadow_gap=0` is LOAD-BEARING and was MEASURED, not guessed. With the
-# hardware ray-query tier enabled (ogre-patches 0038/0039), `vkCreateDevice`
+# hardware ray-query tier enabled (fork d014b064f+b028638c1 (was 0038/0039)), `vkCreateDevice`
 # returns VK_ERROR_INITIALIZATION_FAILED under AddressSanitizer on NVIDIA
 # 595.84 — on the very GPU where the same call succeeds without ASan, and with
 # no validation error: the driver simply refuses. The cause is not the tier but

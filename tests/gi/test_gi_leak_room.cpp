@@ -201,7 +201,7 @@ int main()
           "the room is lit by its own lamp (the leak is measured on a lit wall, not a black one)");
     // =====================================================================
     // THE FOLD'S SEAM — a curved SINGLE-SIDED surface is one surface
-    // (ogre-patch 0065; the review's F1)
+    // (fork ad452604a+155a56bf8+0338ca7f2+c4c80b5f7 (was 0065); the review's F1)
     // =====================================================================
     //
     // The voxelisation decides "this voxel holds surfaces facing opposite ways"

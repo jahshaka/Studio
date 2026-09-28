@@ -182,7 +182,7 @@ static int worldMain()
     Env env;
     World w;
     if (!bootWorld(env, w, "test-scale-world-ogre.log")) return 1;
-    REQUIRE(gpuTimed(env), "the frame monitor has GPU timing (patch 0027's query pool)");
+    REQUIRE(gpuTimed(env), "the frame monitor has GPU timing (fork 1a81f866a+1bccc3f93 (was 0027)'s query pool)");
     // THE STILL AND THE FLY here; THE WALK AND THE TELEPORT are scale.voxel_scroll's
     // (W1 reads their cascade rows) — the four paths in one process are ~8 minutes
     // of Debug frames, over the five a suite may take.

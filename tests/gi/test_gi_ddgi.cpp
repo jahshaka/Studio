@@ -372,7 +372,7 @@ int main(int argc, char **argv)
     // intensity dial (PHOTON-GATHER-1d deleted it: the field is not the diffuse
     // at a ray tier, and a physical answer needs no trim). (The P0 spike reported ~13x dimmer; that
     // reading came from the pass-buffer misalignment this lane found and fixed
-    // — the pass-buffer under-report, fixed by ogre-patch 0050 — which was collapsing every irradiance
+    // — the pass-buffer under-report, fixed by fork ae2ed529f+822d538f5 (was 0050) — which was collapsing every irradiance
     // lookup onto a single texel. The number does not survive the fix.)
     const Colour calFloor = rawFloor, calFar = rawFar, calWall = rawWall;
     const float calBounce = (calFloor.r - calFloor.g) - (baseFloor.r - baseFloor.g);

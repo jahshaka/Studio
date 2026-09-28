@@ -90,13 +90,13 @@
 //      five assertions red.
 //
 //      SSAO gets the same treatment because it reconstructs a position from
-//      depth the same way and had the same defect (ogre-patch 0019) - PLUS a
+//      depth the same way and had the same defect (fork 3f1ad1110 (was 0019)) - PLUS a
 //      magnitude band, because the pan alone does not catch it. Measured
 //      against the pre-patch code: it translates perfectly well (centroid
 //      8.04 px, mismatch 0.005) while being seven times too strong, so the
 //      only assertion that separates the two is how big the occlusion is.
 //
-//      AND THE HIGHLIGHTS (riders lane, ogre-patch 0024). SSR and SSAO were the
+//      AND THE HIGHLIGHTS (riders lane, fork 36162ff37+16d8e29d4 (was 0024)). SSR and SSAO were the
 //      screen-space half of the owner report; the other half was HlmsPbs
 //      itself, whose viewDir = normalize( -inPs.pos ) assumes a pinhole and so
 //      slides every view-dependent term (NdotV, Fresnel, the half vector, the
@@ -1146,7 +1146,7 @@ int main()
 
         // ---- SSAO ---------------------------------------------------------
         // The same statement for the other effect that reconstructs a position
-        // from depth (ogre-patch 0019). Its buffer is kept at full resolution so
+        // from depth (fork 3f1ad1110 (was 0019)). Its buffer is kept at full resolution so
         // the 8 px pan is 8 px there too.
         {
             PostFxDesc ofx;
@@ -1181,7 +1181,7 @@ int main()
 
                 // AND THE ASSERTION THAT ACTUALLY CATCHES THE SSAO DEFECT,
                 // which the pan does NOT. Measured against the perspective-only
-                // reconstruction (the code before ogre-patch 0019, run on this
+                // reconstruction (the code before fork 3f1ad1110 (was 0019), run on this
                 // exact fixture): it translates correctly - centroid 8.04 px
                 // for an 8 px pan, mismatch 0.005 - because it is wrong by a
                 // factor that is itself a function of the surface, so it MOVES
@@ -1204,7 +1204,7 @@ int main()
             }
         }
 
-        // ---- THE HIGHLIGHTS (ogre-patch 0024) -----------------------------
+        // ---- THE HIGHLIGHTS (fork 36162ff37+16d8e29d4 (was 0024)) -----------------------------
         // The same statement for HlmsPbs' OWN view-dependent shading, measured
         // on plain frames (no post chain at all): a glossy dielectric sphere
         // under the directional light, seen by the ortho camera at the two
@@ -1717,7 +1717,7 @@ int main()
     // add is a second copy of the same lobe. `use_envprobe_map` is raised only
     // by a reflection cubemap or parallax-corrected probes, while the voxel
     // cone's specular, the irradiance field and irradiance volumes all write
-    // envColourS without raising it. ogre-patch 0036 makes the composite the
+    // envColourS without raising it. fork 16d8e29d4 (was 0036) makes the composite the
     // lerp unconditionally.
     //
     // THE FIXTURE is exactly that configuration: VCT global illumination, NO
@@ -1740,7 +1740,7 @@ int main()
     // whatever the confidence was. So the assertion is a ratio, and it needs no
     // knowledge of w, of the tonemap or of the fixture's absolute brightness.
     //
-    // MEASURED on this fixture: 0.314 with patch 0036 against 0.753 without it
+    // MEASURED on this fixture: 0.314 with fork 16d8e29d4 (was 0036) against 0.753 without it
     // — and the budget is halfway between them. The unpatched figure is not the
     // 1.0 the arithmetic of `+=` implies because the numbers are read off the
     // view's 8-BIT sRGB-ENCODED readback (this fixture has HDR off, so there is
@@ -2040,7 +2040,7 @@ int main()
     }
 
     // ---- 13. THE PREPASS MUST HAND BACK THE ROUGHNESS IT WROTE -------------
-    //          (lane HDR-1, ogre-patch 0043)
+    //          (lane HDR-1, fork 16d8e29d4 (was 0043))
     //
     // Assertion 9 above says the prepass RESTRUCTURE is shading-neutral: with the
     // roughness cutoff at zero the reflection is empty everywhere, the whole
@@ -2054,7 +2054,7 @@ int main()
     // range that starts at 0.02 while the shader's own alpha floor
     // (SampleRoughnessMap) is 0.001. A material smoother than perceptual 0.141
     // therefore came back WIDENED, over its whole lit area, purely because SSR
-    // was switched on. ogre-patch 0043 packs over the range the shader can
+    // was switched on. fork 16d8e29d4 (was 0043) packs over the range the shader can
     // actually reach, at the same 16 bits.
     //
     // THE SAME LINE also decides whether the readback happens at all, and
@@ -2068,7 +2068,7 @@ int main()
     // gate to `roughness_map || normal_map_tex`. This fixture carries BOTH maps,
     // so it measures the encoding directly and holds the gate open by
     // construction; the gate's own half is not separable on a synthetic fixture
-    // because patch 0022's kernel is ~0 wherever the normal map is well behaved.
+    // because fork 16d8e29d4 (was 0022)'s kernel is ~0 wherever the normal map is well behaved.
     //
     // THE MEASUREMENT is the one assertion 9 makes — the prepass at zero
     // confidence against no prepass at all, so everything that is not the prepass
@@ -2082,7 +2082,7 @@ int main()
 
             // A tangent-space normal map with detail at the texel rate, unmipped
             // so the normal really does change fast from pixel to pixel - which is
-            // both what patch 0022's anti-aliasing is for and what makes this
+            // both what fork 16d8e29d4 (was 0022)'s anti-aliasing is for and what makes this
             // fixture's shading depend on the roughness the prepass carried.
             const unsigned kN = 256;
             std::vector<unsigned char> nm(kN * kN * 4);
@@ -2104,7 +2104,7 @@ int main()
             pp.albedo = Colour(0.9f, 0.9f, 0.9f);
             pp.metalness = 1.0f;
             // MIRROR-SMOOTH: alpha = 0.12^2 = 0.0144, below the 0.02 the G-buffer
-            // could say before ogre-patch 0043. This is the number the case turns on.
+            // could say before fork 16d8e29d4 (was 0043). This is the number the case turns on.
             pp.roughness = 0.12f;
             pp.uvScale[0] = 40.0f; pp.uvScale[1] = 40.0f;   // texel rate ~ pixel rate mid-frame
             const MaterialId planeMat = rs->createPbrMaterial(pp);
@@ -2112,7 +2112,7 @@ int main()
             // the shader sees (SampleRoughnessMap multiplies material.kS.w by the
             // texture) while the readback happens on UPSTREAM's own gate - i.e.
             // this case fails on an unpatched tree for the encoding alone, with no
-            // argument about patch 0022 needed.
+            // argument about fork 16d8e29d4 (was 0022) needed.
             std::vector<unsigned char> rm(4 * 4 * 4, 255);
             const TextureId roughTex = rs->createTexture(4, 4, rm.data(), false, false);
             CHECK(normalTex && roughTex && planeMat &&
@@ -2124,7 +2124,7 @@ int main()
             enginetest::setNodePosition(rs, plane, Vec3(0.0f, -0.1f, 0.0f));
             // A POINT light over the plane: a metal surface has no diffuse, so the
             // only thing in the frame IS the specular lobe - and the lobe's WIDTH is
-            // the quantity patch 0022 changes, which is what makes this measurable.
+            // the quantity fork 16d8e29d4 (was 0022) changes, which is what makes this measurable.
             {
                 const NodeId lamp = rs->createNode();
                 LightDesc l;
@@ -2179,7 +2179,7 @@ int main()
             // full 255 on the highlight's core). A roughness the prepass could not
             // SAY is a different order of magnitude, and it is flat wrong over the
             // whole lit area. Measured on this fixture: 5424 of 65536 px past 8/255
-            // without ogre-patch 0043, 5 with it.
+            // without fork 16d8e29d4 (was 0043), 5 with it.
             CHECK_MSG(big * 200u <= total,
                       "the prepass hands back the roughness it wrote "
                       "(%u of %u px differ by more than 8/255 = %.2f %%, budget 0.50 %%; "
@@ -2201,7 +2201,7 @@ int main()
     // readers, ledger §432/§440). The march decoded the prepass G-buffer's
     // roughness channel with the PRE-ogre-patch-0043 range (`.y * 0.98 + 0.02`)
     // and then compared the result to its cutoff as though it were a perceptual
-    // roughness. Both halves were wrong: patch 0043 packs the GGX ALPHA over
+    // roughness. Both halves were wrong: fork 16d8e29d4 (was 0043) packs the GGX ALPHA over
     // [0.001, 1], and the alpha is the perceptual roughness SQUARED
     // (`mPerceptualRoughness` is true on this pin). The band the frame actually
     // applied for a cutoff of 0.35 was therefore

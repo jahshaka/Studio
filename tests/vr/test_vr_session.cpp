@@ -2,7 +2,7 @@
 //
 // WHAT IT IS FOR. `vr.spike_1a` beside it proves the FLOOR: that an engine
 // booted on a device an OpenXR runtime created renders the same picture as one
-// on a device Ogre created (ogre-patch 0068). This suite proves the PHASE-2
+// on a device Ogre created (fork d014b064f+1bccc3f93 (was 0068)). This suite proves the PHASE-2
 // engine on top of it:
 //
 //   1. A session begins on the simulated runtime, walks the runtime's own

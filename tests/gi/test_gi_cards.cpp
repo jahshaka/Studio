@@ -1154,7 +1154,7 @@ static int caseLighting()
     // The panel's -Z face is at z = -30.1; the texel read, and the closed form
     // for the lamp: E = intensity * pi (the engine's power scale) times the
     // authored-range curve 1 / (0.5 + (0.5 / R^2) d^2) (OgreScene::setLight:
-    // setAttenuation(R, 0.5, 0, 0.5 / R^2)) times patch 0018's fade (R - d) / R.
+    // setAttenuation(R, 0.5, 0, 0.5 / R^2)) times fork 36162ff37+16d8e29d4 (was 0018)'s fade (R - d) / R.
     const Vec3 pt(0.3f, 1.7f, -30.1f);
     const auto lampDirect = [&](const CardSample &t, double outL[3], double &E) {
         const double dx = lampPos.x - pt.x, dy = lampPos.y - pt.y, dz = lampPos.z - pt.z;

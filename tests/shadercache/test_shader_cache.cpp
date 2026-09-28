@@ -21,7 +21,7 @@
 // container's.)
 //
 // Sequential Engine create/destroy in one process is the whole shape of the
-// test, and it only works because of ogre-patch 0002 — see test_engine_recreate.
+// test, and it only works because of fork d014b064f (was 0002) — see test_engine_recreate.
 //
 // Built TWICE when JAHSHAKA_ASAN=ON: a corrupt-input parser that is merely
 // "did not crash" is not proven. The sanitised twin is what makes case 2-4's

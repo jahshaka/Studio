@@ -17,7 +17,7 @@
 //   (b) walking back in returns to level 0 (nothing sticks);
 //   (c) NO FLICKER AT A BAND EDGE: the camera is walked out in 2 m steps to the
 //       first switch, then rocked +-1 m across that edge ten times — the level may
-//       change at most once (the switch band, ogre-patch 0075's rule).
+//       change at most once (the switch band, fork 5230c9390+8282f6d70 (was 0075)'s rule).
 //   THE CLUSTER CUT (what the id pass draws, per cluster group), read through the
 //   Levels view, which paints each pixel's DAG DEPTH:
 //   (d) at the same five distances the depth at the object's centre is a ramp

@@ -17,7 +17,7 @@
 // viewpoint at the scene's centre photographed (cheaply, 32 px, read
 // symmetrically about itself), and then every probe is kept or dropped by what
 // IT sees. The placement reads one averaged depth value per cube face;
-// ogre-patch 0047 hands those six numbers back, each the distance that face
+// fork 618d95cca (was 0047) hands those six numbers back, each the distance that face
 // could see as a multiple of the distance from that probe's camera to the
 // region's face in the same direction — 1 is "on that face" and 2 is the
 // encoding's saturation, "nothing within twice that distance", which is what a
@@ -375,7 +375,7 @@ int main()
     // This case also covers the default scene's half of the selftest hash: the
     // editor's own new project is a ground, two light icons and a sky, and it
     // gets no probe grid for exactly this reason (and, separately, because its
-    // matte floor cannot reflect one at all — ogre-patch 0028's gate).
+    // matte floor cannot reflect one at all — fork 36162ff37+16d8e29d4 (was 0028)'s gate).
     {
         Scene *s = engine->createScene("bare");
         view->setScene(s);
@@ -412,7 +412,7 @@ int main()
     }
 
     // ---- 4c. THE SKY ANSWERS WHERE NO PROBE BOX DOES -----------------------
-    // Lane SKY-FALLBACK-1 / ogre-patch 0048, and the case the patch exists for.
+    // Lane SKY-FALLBACK-1 / fork 4d5fbef16+8f09c0cd4 (was 0048), and the case the patch exists for.
     //
     // Since the grid became a PER PROBE decision (R5-ROOM) a PARTIAL grid is the
     // normal case — one crate in a new project keeps 2 of 18 candidates — and a
@@ -428,7 +428,7 @@ int main()
     //   * a mirror INSIDE the probe boxes must read BLUE — the probes still own
     //     every pixel their boxes contain, exactly as before this patch;
     //   * a mirror OUTSIDE every probe box must read GREEN — the sky is its
-    //     environment. Before patch 0048 that mirror was BLACK.
+    //     environment. Before fork 4d5fbef16+8f09c0cd4 (was 0048) that mirror was BLACK.
     // The room is case 1's, because a room reliably keeps its grid; the volume
     // is pinned to it so that "outside the grid" is the scene's arithmetic and
     // not a fit's; and the outside mirror stands 25 m away on the same ground.
@@ -461,7 +461,7 @@ int main()
                     st.probeCount, st.probesDropped, st.pccBound ? 1 : 0);
         CHECK(st.probeCount > 0 && st.pccBound,
               "4c: a grid exists — so the sky cubemap is OFF every datablock and the\n"
-              "          only sky left is ogre-patch 0048's pass-level slot");
+              "          only sky left is fork 4d5fbef16+8f09c0cd4 (was 0048)'s pass-level slot");
         // THE SIZE OF THE TEXTURE THE SHADER SAMPLES, and it is asserted here
         // because this is the case where the grid is RE-CREATED after the drop
         // (the placement runs at the scout's 32 px and the grid is rebuilt at
@@ -488,7 +488,7 @@ int main()
         // GREEN by construction (the two-toned sky makes the drawn sky and the
         // environment disagree on purpose). So the tracer no longer isolates one
         // path: the pixel carries the probe's blue AND the cone's escape green
-        // (measured 0.48 / 0.53 / 0.60; patch 0048's flat-ambient escape was the
+        // (measured 0.48 / 0.53 / 0.60; fork 4d5fbef16+8f09c0cd4 (was 0048)'s flat-ambient escape was the
         // sky's own SH, blue, which is why it read saturated blue before). What
         // is asserted is the probe's share: blue that only the probe's
         // photograph holds (the environment alone reads b 0.02 — the outside
@@ -512,12 +512,12 @@ int main()
         show("mirror OUTSIDE every probe box", outside);
         CHECK(outside.g > outside.b + 0.15f && outside.g > outside.r + 0.15f,
               "4c: the mirror no probe box contains reflects the GREEN sky cubemap —\n"
-              "          the sky is the environment wherever no probe is (patch 0048)");
+              "          the sky is the environment wherever no probe is (fork 4d5fbef16+8f09c0cd4 (was 0048))");
         engine->destroyScene(s);
     }
 
     // ---- 4d. WHY THERE IS NO CASE HERE FOR THE ESCAPE SWAP -----------------
-    // ogre-patch 0048's composite is a SWAP — the cone's own answer is kept and
+    // fork 4d5fbef16+8f09c0cd4 (was 0048)'s composite is a SWAP — the cone's own answer is kept and
     // only its flat-ambient escape share becomes the sky — and the natural case
     // for it would be a glossy surface INSIDE the voxel volume that no probe box
     // covers, showing both a neighbour's reflection and the sky.

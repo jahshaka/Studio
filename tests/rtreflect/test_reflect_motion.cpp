@@ -218,7 +218,7 @@ int main()
     // not reflect), spaced so floor shows between them.
     // THE SAME SEVEN HUES AT A PEAK RADIANCE OF 1.0, and the reason is this
     // suite's own units (VOXEL-CLIP-1, 2026-09-22, measured). They were authored
-    // at 3.0, which the emissive voxel store clipped to 1.0 until ogre-patch 0087
+    // at 3.0, which the emissive voxel store clipped to 1.0 until fork ad452604a+155a56bf8 (was 0087)
     // made that store a float — so from 0087 on, a 3.0 pillar really does put
     // three times the radiance into the floor's reflection, and EVERY BAR IN THIS
     // SUITE IS AN ABSOLUTE CODE COUNT. All three moved by the same factor and

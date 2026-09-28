@@ -71,7 +71,7 @@ jah_gpu_row(engine.lod_rule_parity CLASS engine COMMAND test_lod_rule_parity
 set_tests_properties(engine.lod_rule_parity PROPERTIES TIMEOUT 120 LABELS "engine")
 
 # chain.hzb — the closest-depth pyramid: shape, the reduction texel by texel,
-# and its GPU cost at 1920x1080 through patch 0027's timestamps.
+# and its GPU cost at 1920x1080 through fork 1a81f866a+1bccc3f93 (was 0027)'s timestamps.
 add_executable(test_hzb test_hzb.cpp)
 set_target_properties(test_hzb PROPERTIES
     AUTOMOC OFF AUTOUIC OFF AUTORCC OFF

@@ -98,7 +98,7 @@ assert(brighter === matte.length,
 // a PARTIAL grid — and a partial grid used to take the sky cubemap off every
 // datablock (the shader's environment slot has one occupant), leaving the
 // grazing floor pixels no probe box contains with nothing but cone tracing.
-// ogre-patch 0048 gives the sky its own pass-level slot and hands it back to
+// fork 4d5fbef16+8f09c0cd4 (was 0048) gives the sky its own pass-level slot and hands it back to
 // exactly those pixels; the margin measures 5 again, the number this read for
 // the whole life of the case before the regression.
 assert(shiny[3] - matte[3] >= 5,

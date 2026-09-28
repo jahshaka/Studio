@@ -7,7 +7,7 @@
 //   -> IdString::operator<   SIGSEGV at 0x0
 //
 // copyFrom reads a renderable index and a pass index out of a 32-bit shader
-// hash and subscripts two vectors with them, checking neither (ogre-patch 0035
+// hash and subscripts two vectors with them, checking neither (fork d6348decd (was 0035)
 // checks them now and logs instead of dying). Both indices grow with CHURN: the
 // renderable cache with every new material/mesh permutation, the pass cache
 // with every distinct set of pass properties — and a compositor rebuild, which
@@ -63,7 +63,7 @@ step("cleared");
 // every time. The owner's evening session reached 1847 of them, seven times
 // what the EIGHT BITS of the shader hash can address; past 256 the pass index
 // spills into the renderable field beside it and HlmsDiskCache::copyFrom
-// subscripts mRenderableCache out of range — the crash ogre-patch 0035 turned
+// subscripts mRenderableCache out of range — the crash fork d6348decd (was 0035) turned
 // into a skipped entry and a log line.
 //
 // 300 changes therefore crosses 256 on its own. A/B on this exact script:

@@ -7,7 +7,7 @@
 // ===========================================================================
 // `gi.field_follows` case 5 used to assert `chainBounce > 0.012` — "there is
 // SOME red on the ground beyond cascade 0". That number was 0.02 and was
-// re-anchored DOWN to 0.012 when ogre-patch 0065 changed the answer, with
+// re-anchored DOWN to 0.012 when fork ad452604a+155a56bf8+0338ca7f2+c4c80b5f7 (was 0065) changed the answer, with
 // thirty lines explaining why the new, smaller number was acceptable. That is
 // what a fence around today's picture always becomes. An existence bar also
 // cannot fail for the reason that matters: a transport that delivers a tenth of

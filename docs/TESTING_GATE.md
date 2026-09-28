@@ -57,7 +57,7 @@ fixed point - is the ordinary row's byte-equality assertion), `gi.field_follows_
 `gi.chain_face_sky_target` (both gated in their ordinary rows since the field's probe rays cross
 the voxels as rays and a probe behind the shaded point has no say).
 `gi.rt_reflect_lamp_clip` was the fourth and **VOXEL-CLIP-1 took its label off** (2026-09-22,
-ogre-patch 0087) — with a note worth keeping, because it is about the INSTRUMENT: a target test
+fork ad452604a+155a56bf8 (was 0087)) — with a note worth keeping, because it is about the INSTRUMENT: a target test
 has to be answerable through the thing that reads it. That row asked a PERFECT mirror to read
 radiance 3.0 out of an offscreen view whose render target is `PFG_RGBA8_UNORM`
 (`OgreView::createRtt`), so its pixel was pinned at exactly 1.0000 before the patch and after

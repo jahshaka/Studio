@@ -105,7 +105,7 @@ add_dependencies(test_decals JahshakaEngineMedia)
 jah_gpu_row(decals.engine CLASS engine COMMAND test_decals WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(decals.engine PROPERTIES TIMEOUT 120 LABELS "engine")
 
-# THE LOD SWITCH BAND IS THE PASS'S, NOT THE PROCESS'S (ogre-patch 0075 as
+# THE LOD SWITCH BAND IS THE PASS'S, NOT THE PROCESS'S (fork 5230c9390+8282f6d70 (was 0075) as
 # amended by ATOM-3-FIX; the render audit's A7). Its own binary because it needs
 # a second scene pass on one scene — a PiP inset — and because it sets the
 # offscreen-band latch before the engine exists.

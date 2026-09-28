@@ -53,7 +53,7 @@ XDG_RUNTIME_DIR="$XDG_DIR" XR_RUNTIME_JSON="$MANIFEST" \
 
 # The parity arm: the same scene on an OGRE-created device. Equal bytes = the
 # runtime's device and Ogre's own device render the same picture, which is what
-# ogre-patch 0068's exported extension list and feature chain exist to make true.
+# fork d014b064f+1bccc3f93 (was 0068)'s exported extension list and feature chain exist to make true.
 #
 # NO --size HERE ON PURPOSE. Both arms render the parity pose at the binary's own
 # kParityW x kParityH, never at the runtime's recommended eye size — which differs

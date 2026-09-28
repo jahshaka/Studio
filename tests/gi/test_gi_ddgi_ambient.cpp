@@ -647,10 +647,10 @@ int main(int argc, char **argv)
     //
     // The anisotropic tiers (`anisotropic = quality != GiQuality::Low`, OgreGi.cpp) read the
     // directional mips; since PHOTON-VOXEL-3 the escape IS the directional opacity along
-    // the cone's axis (the min-over-axes occupancy estimate and patch 0021's one-mip-finer
+    // the cone's axis (the min-over-axes occupancy estimate and fork 8f09c0cd4 (was 0021)'s one-mip-finer
     // escape are deleted), so the shipped tier's cones answer the same question as the
     // isotropic ones and are held to the same bar. (History: the unpatched march kept 4 % of
-    // an open floor's ambient, patch 0021 ~65-81 %; both were properties of that estimate.)
+    // an open floor's ambient, fork 8f09c0cd4 (was 0021) ~65-81 %; both were properties of that estimate.)
     // =====================================================================
     std::printf("\n== case 2: the shipped tier (anisotropic VCT) ==\n");
     {

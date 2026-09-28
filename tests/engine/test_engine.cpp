@@ -1563,7 +1563,7 @@ void equirect_sky_fills_the_background() {
     const Px k = corner(img);
     std::printf("    equirect sky corner: %d %d %d\n", k.r, k.g, k.b);
     CHECK_MSG(k.r > 150 && k.b > 150 && k.g < 80, "sky texture should fill the background: %d %d %d", k.r, k.g, k.b);
-    // ogre-patch 0009 in one assertion. Ogre's equirect sky needs a texture whose
+    // fork c290052de (was 0009) in one assertion. Ogre's equirect sky needs a texture whose
     // internal type is Type2DArray, which for file-loaded textures means an
     // automatic-batching POOL SLICE, and it tells the shader which slice through
     // the `sliceIdx` uniform. Upstream's Vulkan GLSL declared that uniform and
@@ -1685,7 +1685,7 @@ void cubemap_sky_faces_match_directions() {
 // The pin handles exactly this: `VulkanQueue::notifyTextureDestroyed` finds the
 // texture in `mCopyDownloadTextures` and FLUSHES the encoder (submits, does not
 // wait), and the VkImage itself dies through `delayed_vkDestroyImage` under the
-// frame multiplier (patch 0067's window). Reading the pin is not the same as
+// frame multiplier (fork b028638c1 (was 0067)'s window). Reading the pin is not the same as
 // running it, so:
 //
 //   * two cubemap skies of DIFFERENT uniform brightness on consecutive frames
@@ -4432,7 +4432,7 @@ void hud_overlay_draws_where_it_says_when_allowed() {
               "the cover's STATIC captions must actually render (the one-shot trap): %zu px",
               titlePixels);
 
-    // THAT FOUR-FRAME CHECK IS THE GUARD FOR OGRE-PATCH 0014 (the second read of
+    // THAT FOUR-FRAME CHECK IS THE GUARD FOR OGRE-fork 6130df9d1 (was 0014) (the second read of
     // PATCHES-1, 2026-09-15): the trap was fixed AT THE PIN (0014 loads the font
     // before OverlayElement::_update() builds the geometry), and since PATCHES-1
     // deleted the engine's one-shot re-caption nothing re-flags a caption's
@@ -5485,7 +5485,7 @@ void postfx_epic_shape_with_msaa() {
 ///     Vulkan, so the march read recycled tiles (OgreChain.cpp, our side);
 ///  2. the stock SSAO_HS shader has no far-plane rejection, so sky pixels — no
 ///     geometry, and a normals G-buffer the sky quad never wrote — got ~half
-///     occlusion modulated by the rotation noise (ogre-patch 0011).
+///     occlusion modulated by the rotation noise (fork 3f1ad1110 (was 0011)).
 ///
 /// So this case asserts both halves: the sky stays SMOOTH (neighbouring pixels
 /// differ by a couple of levels, because a sky IS a gradient) and it stays as
@@ -5625,7 +5625,7 @@ void sky_stays_smooth_under_the_post_chain() {
     check("epic (all)", shape(true, true, true, 1), true);
 
     // Nothing occludes the sky: with ambient occlusion ON the sky band must keep
-    // the brightness it has with it OFF. Before ogre-patch 0011 it lost ~45%.
+    // the brightness it has with it OFF. Before fork 3f1ad1110 (was 0011) it lost ~45%.
     std::printf("    sky luma: chain off %d, refraction only %d, + ssao %d\n",
                 lumaPlain, lumaNoSsao, lumaSsao);
     CHECK_MSG(lumaSsao * 100 >= lumaNoSsao * 90,
@@ -5705,7 +5705,7 @@ struct MonitorRig {
 };
 
 /// A frame record is NOT published the instant its frame ends: GPU samples come
-/// back two frames late (ogre-patch 0027), so the monitor holds a few records
+/// back two frames late (fork 1a81f866a+1bccc3f93 (was 0027)), so the monitor holds a few records
 /// while it waits for them. Everything here therefore renders a short flush tail
 /// before draining, which is also what a host does.
 void renderAndFlush(Engine *e, unsigned frames = 1u) {
@@ -6279,7 +6279,7 @@ void monitor_is_forward_only_for_compiles() {
 }
 
 void monitor_gpu_timestamps() {
-    // P1c (ogre-patch 0027) and BOTH its off-switches (owner decision D3).
+    // P1c (fork 1a81f866a+1bccc3f93 (was 0027)) and BOTH its off-switches (owner decision D3).
     //
     // BUILD: without JAH_GPU_TIMESTAMPS the render system answers no such
     //   custom attribute, `gpuCompiled` is false and the reason names the

@@ -37,7 +37,7 @@
 //     hybrid        r=1.000 g=0.059 b=0.059      <- the red wall, via a probe
 //     hybrid, bailed r=0.000 g=0.000 b=0.000     <- indistinguishable from VCT
 //
-// The hybrid reading was r=0.251 until ogre-patch 0017 landed
+// The hybrid reading was r=0.251 until fork 4d5fbef16 (was 0017) landed
 // (2026-09-07): upstream divided probe reflections by the NUMBER of
 // overlapping probes, and this scene runs four of them. Case (e) below is the
 // fence that keeps it fixed.
@@ -456,7 +456,7 @@ int main()
         CHECK(s->removeNode(helper), "helper: witness removed");
     }
 
-    // ---- (e) THE OVERLAPPING-PROBE DIVISION (ogre-patch 0017) --------------
+    // ---- (e) THE OVERLAPPING-PROBE DIVISION (fork 4d5fbef16 (was 0017)) --------------
     // Upstream's hybrid piece divided the finished blend by the NUMBER of
     // probes covering the pixel, after pccEnvS had already been normalised by
     // the sum of their fades — so the same reflection got darker the more
@@ -510,7 +510,7 @@ int main()
         std::printf("   1-probe vs 4-probe: %.3f vs %.3f  (delta %.1f%% of the larger)\n",
                     oneProbe.r, fourProbes.r, 100.0f * delta / larger);
         CHECK(delta < 0.10f * larger,
-              "FOUR probes reflect the wall as brightly as ONE (ogre-patch 0017: the hybrid "
+              "FOUR probes reflect the wall as brightly as ONE (fork 4d5fbef16 (was 0017): the hybrid "
               "no longer divides probe reflections by the probe count)");
 
         // Restore the light for everything after this block.
@@ -520,7 +520,7 @@ int main()
     }
 
     // ---- (e2) THE CLEAR-COAT PERMUTATION COMPILES -------------------------
-    // Patch 0017 rewrites the clear-coat lobe's blend as well as the main one,
+    // fork 4d5fbef16 (was 0017) rewrites the clear-coat lobe's blend as well as the main one,
     // and `clear_coat + vct_num_probes + hlms_enable_cubemaps_auto` is a shader
     // permutation nothing in this program otherwise builds — a permutation that
     // fails to compile is silent until somebody puts a lacquered object in a
@@ -555,7 +555,7 @@ int main()
         CHECK(std::fabs(after.r - before.r) + std::fabs(after.g - before.g) +
                   std::fabs(after.b - before.b) > 0.02f,
               "clear coat: the slab rendered — the clear-coat + VCT + probes shader "
-              "permutation compiles (patch 0017 touches its blend too)");
+              "permutation compiles (fork 4d5fbef16 (was 0017) touches its blend too)");
         CHECK(engine->lastError().empty(),
               "clear coat: ...and the engine reported no error building it");
         CHECK(s->removeNode(coated), "clear coat: slab removed");

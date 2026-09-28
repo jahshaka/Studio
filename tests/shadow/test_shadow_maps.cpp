@@ -165,10 +165,10 @@ static double meanLum(const Image &img)
 }
 
 // ---------------------------------------------------------------------------
-// T0 — THE TWO LIGHT PATHS MUST AGREE (ogre-patch 0018).
+// T0 — THE TWO LIGHT PATHS MUST AGREE (fork 36162ff37+16d8e29d4 (was 0018)).
 //
 // A point light that wins a shadow-map slot is lit by the PASS BUFFER; the same
-// light without a slot is lit by FORWARD+ clustered. Before patch 0018 those
+// light without a slot is lit by FORWARD+ clustered. Before fork 36162ff37+16d8e29d4 (was 0018) those
 // two paths did not agree: Forward+ multiplies by
 // max((range - d) * (1/range), 0) under `hlms_forward_fade_attenuation_range`
 // (default ON) and the pass-buffer path had no such term, so THE SAME LAMP was
@@ -180,7 +180,7 @@ static double meanLum(const Image &img)
 // difference between the two runs is which shader path lit the lamps.
 static void t0_light_path_parity(Engine *e, View *v)
 {
-    std::printf("-- T0: the pass-buffer and Forward+ light paths agree (ogre-patch 0018)\n");
+    std::printf("-- T0: the pass-buffer and Forward+ light paths agree (fork 36162ff37+16d8e29d4 (was 0018))\n");
     Room room = buildRoom(e, v, "t0", 2, /*pillars*/ false);
     if (!room.scene) { std::printf("FAIL: scene\n"); ++failures; return; }
     e->setShadowMapBudget(2u);
@@ -1752,7 +1752,7 @@ static bool logHasCompileFailure(const char *path)
 }
 
 // T3w — A LAMP THAT ARRIVES WHILE THE PROBES ARE ALREADY CAPTURING
-// (ENGINE_CACHE_POLICY_SPEC P4; ogre-patch 0025).
+// (ENGINE_CACHE_POLICY_SPEC P4; fork 6130df9d1 (was 0025)).
 //
 // THE DEFECT IT PINS, measured 2026-09-12: Ogre rebuilds a shadow node's light
 // list at most once per camera per COMPOSITOR FRAME
