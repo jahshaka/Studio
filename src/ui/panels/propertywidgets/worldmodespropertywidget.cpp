@@ -133,7 +133,7 @@ void WorldModesPropertyWidget::build()
         if (r.type == worldmodes::RowType::Enum) {
             const QVector<worldmodes::ComboItem> items = worldmodes::comboItems(r, scene, rays);
             for (int i = 0; i < items.size(); ++i) {
-                combo->addItem(items[i].label, items[i].id);
+                combo->addItem(items[i].label, items[i].value);
             }
         } else {
             for (int v = r.minValue; v <= r.maxValue; ++v)
@@ -238,7 +238,7 @@ void WorldModesPropertyWidget::refreshRows()
                 const QVector<worldmodes::ComboItem> items = worldmodes::comboItems(r, scene, rays);
                 combo->clear();
                 for (int i = 0; i < items.size(); ++i) {
-                    combo->addItem(items[i].label, items[i].id);
+                    combo->addItem(items[i].label, items[i].value);
                 }
                 const int index = worldmodes::comboIndexOf(items, value);
                 combo->setCurrentIndex(index >= 0 ? index : 0);
@@ -311,16 +311,16 @@ void WorldModesPropertyWidget::onRowChanged(int)
     if (!box) return;
     const worldmodes::Row &r = table[index];
     if (r.type == worldmodes::RowType::Enum) {
-        // THE ENTRY CHOSEN, by its id, through the one path the verbs take
+        // THE ENTRY CHOSEN — the combo lists comboItems in order, so its index
+        // is the entry's — through the one path the verbs take
         // (worldmodes::applyComboItem): the SSR row's Traced drops its pin.
-        const QString itemId = box->currentData().toString();
-        for (const worldmodes::ComboItem &item : worldmodes::comboItems(r, scene, sceneTracesRays())) {
-            if (item.id != itemId) continue;
-            const worldmodes::Row *row = &r;
-            runUndoable(tr("Set %1").arg(r.label),
-                        [this, row, item]() { worldmodes::applyComboItem(scene, *row, item); });
-            return;
-        }
+        const QVector<worldmodes::ComboItem> items = worldmodes::comboItems(r, scene, sceneTracesRays());
+        const int at = box->currentIndex();
+        if (at < 0 || at >= items.size() || items[at].value != box->currentData().toInt()) return;
+        const worldmodes::ComboItem item = items[at];
+        const worldmodes::Row *row = &r;
+        runUndoable(tr("Set %1").arg(r.label),
+                    [this, row, item]() { worldmodes::applyComboItem(scene, *row, item); });
         return;
     }
     bool ok = false;
