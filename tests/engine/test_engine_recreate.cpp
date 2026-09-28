@@ -11,6 +11,7 @@
 #include "../support/enginetesthelpers.h"
 #include <cmath>
 #include <cstdio>
+#include <vector>
 #include <cstdlib>
 #include <string>
 using namespace jahshaka::engine;
@@ -166,6 +167,24 @@ static bool runOnce(int iteration) {
         std::printf("    area-lit centre %.0f %.0f %.0f\n", L.r * 255, L.g * 255, L.b * 255);
         std::snprintf(msg, sizeof msg, "iteration %d: the AREA light lights the cube", iteration);
         CHECK(L.r > 0.05f, msg);
+    }
+
+    // ---- THE FRAME MONITOR IS LEFT ON AT DESTRUCTION (MONITOR-RETIRE-1 F2) ----
+    //
+    // The monitor is process-wide (a global pointer into the engine's member)
+    // and used to outlive its engine: the next engine's first frame crashed in
+    // FrameMonitor::beginFrame. Every cycle starts a capture, records, and does
+    // NOT stop it — the destructor must; cycles 2 and 3 are the regression test.
+    {
+        e->setFrameMonitor(MonitorLevel::Review);
+        for (int i = 0; i < 8; ++i) e->renderOneFrame();
+        std::vector<FrameRecord> recs;
+        e->takeFrameRecords(recs);
+        std::snprintf(msg, sizeof msg, "iteration %d: a capture records frames (%zu)", iteration,
+                      recs.size());
+        CHECK(!recs.empty(), msg);
+        std::snprintf(msg, sizeof msg, "iteration %d: the capture is on at destruction", iteration);
+        CHECK(e->frameMonitor() == MonitorLevel::Review, msg);
     }
 
     shadowVaoArm(e.get(), s, iteration);

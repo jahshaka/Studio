@@ -85,6 +85,7 @@ Run: gate_scope_rules.py <source-dir> <build-dir>
 """
 
 import json
+import re
 import os
 import subprocess
 import sys
@@ -137,9 +138,13 @@ def main(source, build):
           "(the SQUARE-1 trap: it used to, with exit 0)")
     # The two runs print the same selection; the cost table can differ by the
     # dir the times were read from, so compare the ctest line.
+    # The SCOPED command, with its pool-arm prefix when arms are selected (`JAH_POOL_ARMS='…' ctest
+    # -j…`). The first cut matched only a bare `ctest -j` line, so it compared the TARGET rows'
+    # command whenever the scoped one carried the prefix — and read "" once the selection had no
+    # target row (DAG-LOCK-1 took atom.dag_bound_target's label off).
     def ctest_line(text):
         for line in text.splitlines():
-            if line.startswith("ctest -j"):
+            if re.match(r"^(JAH_POOL_ARMS='[^']*' )?ctest -j", line):
                 return line
         return ""
     check(ctest_line(out) == ctest_line(absolute_form) and ctest_line(out) != "",

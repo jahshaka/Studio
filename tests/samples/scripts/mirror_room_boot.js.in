@@ -1,0 +1,13 @@
+// samples.mirror_room_boots — ONE boot's half (REFLECT-STATE-1): the Mirror Room sample opened
+// into a virgin data root, settled on the fixed clock, one offscreen shot of the scene's own
+// picture written where the runner put it. The runner boots this ten times and requires ten
+// byte-identical pictures.
+project.openSample("Mirror Room");
+for (var i = 0; i < 4000 && project.archiveState() !== "idle"; ++i) editor.frame(1);
+for (var i = 0; i < 4000 && project.openState() !== "idle"; ++i) editor.frame(1);
+app.waitForTextures();
+editor.frame(600, 1 / 60);
+var s = editor.screenshot("@SHOT@", 960, 540, [], "scene");
+if (!s || !s.width) throw new Error("the screenshot failed: " + app.lastError());
+console.log("mirror_room_boot: shot @SHOT@");
+"ok";

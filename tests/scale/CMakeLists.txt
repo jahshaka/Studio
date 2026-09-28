@@ -102,8 +102,7 @@ set(SCALE_T_FAR 120)          # ~12 s (two pictures)
 set(SCALE_T_BAKE 300)         # 48 s (a 250 k shell baked: W11 itself)
 set(SCALE_T_HIT 430)          # 71 s
 set(SCALE_T_WALKS 340)        # 47-57 s
-set(SCALE_T_SHADOW 300)       # 48 s (the world's boot + four 120-frame arms) x 6
-set(SCALE_T_SHADOW_SMALL 150) # 24.4 s measured (the small world under the gate) x 6
+set(SCALE_T_SHADOW 450)       # both worlds in one process: 48 s + 24.4 s measured, x 6
 # scale.library: 108-110 s over a GENERATED library; a tree without one first generates it
 # (10,000 imports at ~84 ms each = ~14 min, 25 creates, 475 archive imports ~15 s) — the
 # one-time fixture cost, the reason this row's budget is 30 minutes and not 6 x 110 s.
@@ -143,12 +142,11 @@ jah_scale_row(scale.cpu_walks    --cpu-walks     ${SCALE_T_WALKS}        TRUE)  
 # removes the label, so the row gates. The dirty scan stays a printed target inside it.
 set_tests_properties(scale.cpu_walks PROPERTIES LABELS "scale")
 # scale.shadow_cut — ATOM-SHADOWS-1's BARS (CPU a ratio of paired arms, GPU absolute per map): the caster
-# pass from the light's cut against the per-instance PBS caster path, on D1's world and a
-# small one. Locked: it times the CPU and the GPU.
+# pass from the light's cut against the per-instance PBS caster path, on D1's world and then a
+# small one IN THE SAME PROCESS (the second boot is MONITOR-RETIRE-1 F2's regression test).
+# Locked: it times the CPU and the GPU.
 jah_scale_row(scale.shadow_cut   --shadow-cut    ${SCALE_T_SHADOW}       TRUE)
 set_tests_properties(scale.shadow_cut PROPERTIES LABELS "scale")
-jah_scale_row(scale.shadow_cut_small --shadow-cut-small ${SCALE_T_SHADOW_SMALL} TRUE)
-set_tests_properties(scale.shadow_cut_small PROPERTIES LABELS "scale")
 jah_no_display(scale.bake)
 
 # atom.decode_exact — ATOM-DECODE-CLASS-1: the world at ~200 buckets, the classified decode
