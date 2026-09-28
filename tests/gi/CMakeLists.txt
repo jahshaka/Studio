@@ -1250,6 +1250,32 @@ set_tests_properties(gi.card_lighting_indirect PROPERTIES TIMEOUT 120 LABELS "en
 jah_gpu_row(gi.card_clouds CLASS engine COMMAND test_gi_cards clouds
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.card_clouds PROPERTIES TIMEOUT 120 LABELS "engine")
+# CLOUDS-2D-3: THE CLOUD LAYER'S PHYSICS — a sheet never adds light (a full deck at
+# every sun height and density leaves the ground at most as bright as the clear
+# sky; a half deck's tile mean likewise, its shadows brighter than a full deck's)
+# and (shape) the field's blob sizes, edge ramp in km and period. Mirror-linked:
+# the document's clouds block through the mirror is the product's path.
+add_executable(test_cloud_2d test_cloud_2d.cpp
+    ${CMAKE_SOURCE_DIR}/irisgl/mirror/scenemirror.cpp)
+set_target_properties(test_cloud_2d PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_include_directories(test_cloud_2d PRIVATE ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/irisgl
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
+target_compile_definitions(test_cloud_2d PRIVATE
+    JAHSHAKA_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_cloud_2d PRIVATE IrisGL JahshakaEngine Qt6::Gui)
+add_dependencies(test_cloud_2d JahshakaEngineMedia)
+jah_gpu_row(cloud_2d.energy CLASS engine COMMAND test_cloud_2d energy
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(cloud_2d.energy PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+                     TIMEOUT 120 LABELS "engine")
 # gi.card_blend (PHOTON-GATHER-1d fix round): a Blend material on a card subject renders, holds no card.
 jah_gpu_row(gi.card_blend CLASS engine COMMAND test_gi_cards blend
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
