@@ -332,6 +332,16 @@ command line). Its guard is `devprocess.gpu_lock` (label `tooling`). A contentio
 lock row needs a sibling that was NOT under the lock (an app on `:0`, a measurement outside the
 wrapper, or — the lock never excludes it — the CPU load of the gate's own other slots) — say which.
 
+**THE LOCK'S WAIT IS NEVER THE ROW'S TIME** (LOCK-WAIT-1, stage close 1: perf.epic_steady_state
+ran ~30 s solo and was killed at its TIMEOUT in the stage tier by queue time). The wrapper prints
+`gpu-lock: waited <s> s` once it holds the lock; the run log records it per row as `lockWaitS`
+and subtracts it from the row's `seconds` (the raw ctest figure stays as `wallSeconds`). A lock
+row's own budget (`RUN_TIMEOUT`) is enforced by the wrapper through timeout(1) FROM AFTER the lock
+(and after the VRAM tokens, when the row takes them — gpu-admit.sh applies it), so ctest's
+TIMEOUT (budget + the lock wait + 30 s) is only the backstop and a queued row never runs short;
+a wait past the bound prints `NOLOCK gpu-lock: …` and the run log's verdict is NOLOCK (never ran —
+the box's queue, not the row's code), and a row stopped by its own budget is a TIMEOUT.
+
 **THE MILLISECOND BARS ARE NIGHTLY: counts at push, milliseconds on a quiet box** (D6B-GATE-SHAPE;
 audit §5). A wall-clock bar reads the box as much as the code, and the GPU lock does not exclude
 the CPU load of a -j4 gate (open.responsive's 300 ms frame bar read 605 ms cold on a UI thread

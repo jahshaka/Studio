@@ -418,8 +418,10 @@ function(jah_gpu_exclusive_test)
     if(_k GREATER 0)
         set(_admit "${JAH_GPU_ADMIT}" ${_k} --label ${G_NAME}:${G_CLASS} --)
     endif()
-    add_test(NAME ${G_NAME} COMMAND "${JAH_GPU_EXCLUSIVE}" ${_admit} "${_exe}" ${G_COMMAND} ${_wd})
-    math(EXPR _timeout "${G_RUN_TIMEOUT} + ${JAH_GPU_LOCK_WAIT_S}")
+    # --run-timeout: the row's own budget, enforced by the wrapper from AFTER the lock (and the
+    # tokens) — LOCK-WAIT-1; ctest's TIMEOUT below is only the backstop (budget + the waits + 30 s).
+    add_test(NAME ${G_NAME} COMMAND "${JAH_GPU_EXCLUSIVE}" --run-timeout ${G_RUN_TIMEOUT} ${_admit} "${_exe}" ${G_COMMAND} ${_wd})
+    math(EXPR _timeout "${G_RUN_TIMEOUT} + ${JAH_GPU_LOCK_WAIT_S} + 30")
     # ...AND ctest's own `gpu_timing` resource lock (D6B-GATE-SHAPE): two lock holders of ONE
     # gate never start together, so the second does not sit in a slot waiting on the flock
     # (ui.media_lazy waited 88.2 s that way at the audit's gate). The flock still guards the

@@ -15,6 +15,9 @@
 #      started (exec, not a child of flock: a ctest timeout must kill the suite itself).
 #   5. A KILLED HOLDER RELEASES: SIGKILL the holder, the lock is free.
 #   6. The default lock is /tmp/jah-gpu-timing.lock (one box-wide file).
+#   7. THE WAIT IS NOT THE ROW'S TIME (LOCK-WAIT-1): the wait is printed (`gpu-lock: waited <s> s`),
+#      `--run-timeout` counts from AFTER the lock and is enforced, a wait past the bound prints
+#      NOLOCK, and scripts/gate_runlog.py reads both.
 #
 # usage: gpu_lock.sh <scripts/gpu-exclusive.sh> <scratch-dir>
 set -u
@@ -91,6 +94,40 @@ flock -n "$JAH_GPU_LOCK" true && ok "SIGKILL of the holder releases the lock" ||
 # ---- 6. the default path ------------------------------------------------------
 grep -q 'JAH_GPU_LOCK:-/tmp/jah-gpu-timing.lock' "$WRAP" && ok "the default lock is /tmp/jah-gpu-timing.lock" \
                                                      || bad "the wrapper's default lock is not /tmp/jah-gpu-timing.lock"
+
+# ---- 7. THE WAIT IS NOT THE ROW'S TIME (LOCK-WAIT-1) -----------------------------
+# A holder keeps the lock ~2 s; a row whose own budget is 1 s still runs its 0.3 s command:
+# the budget starts AFTER the lock, and the wait is printed as the one line the run log reads.
+"$WRAP" "$D/holder.sh" W "$D" "[ -e '$D/W.release' ]" 2> /dev/null &
+PW=$!
+waitfor "[ -s '$D/W.start' ]" || bad "holder W never started"
+( sleep 2; touch "$D/W.release" ) &
+"$WRAP" --run-timeout 1 bash -c 'sleep 0.3; touch "$0"' "$D/R.ran" 2> "$D/R.err"; rc=$?
+wait $PW
+waited=$(sed -n 's/^gpu-lock: waited \([0-9.]*\) s$/\1/p' "$D/R.err")
+[ $rc = 0 ] && [ -e "$D/R.ran" ] && ok "a row with a 1 s budget ran after a longer wait (the budget starts after the lock)" \
+                                 || bad "the queued row did not run to completion (exit $rc)"
+awk -v w="${waited:-0}" 'BEGIN { exit !(w >= 1.5) }' && ok "the wait is printed: gpu-lock: waited $waited s" \
+                                                     || bad "no or wrong wait line ('$waited'): $(cat "$D/R.err")"
+# ...and the budget IS enforced, from after the lock: a 5 s command in a 1 s budget is stopped.
+"$WRAP" --run-timeout 1 sleep 5 2> "$D/T.err"; rc=$?
+[ $rc = 124 ] && grep -q '^timeout: sending signal' "$D/T.err" && ok "the row's own budget stops it (124, timeout's line)" \
+                                                              || bad "a 5 s command in a 1 s budget exited $rc"
+# ...and a wait past the bound says NOLOCK (the run log's verdict for a row that never ran).
+grep -q '^NOLOCK gpu-lock:' "$D/C.err" && ok "a wait past the bound prints the NOLOCK line" \
+                                       || bad "no NOLOCK line in the bounded wait's stderr: $(cat "$D/C.err")"
+# ...and the run log reads both (scripts/gate_runlog.py): lockWaitS, and NOLOCK as the verdict.
+python3 - "$(dirname "$WRAP")/gate_runlog.py" <<'PY' && ok "the run log parses the wait and the NOLOCK verdict" || bad "the run log does not parse the lock lines"
+import importlib.util, sys
+spec = importlib.util.spec_from_file_location("gate_runlog", sys.argv[1]); m = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(m)
+assert m.lock_wait("x\ngpu-lock: waited 812.4 s\ny") == 812.4
+assert m.lock_wait("nothing") is None
+v, st, _ = m.row_verdict("Failed", "NOLOCK gpu-lock: waited 900 s for /tmp/l and never got it", [])
+assert v == "NOLOCK", v
+v, st, _ = m.row_verdict("Failed", "gpu-lock: waited 3.0 s\ntimeout: sending signal TERM to command 'x'", [])
+assert v == "TIMEOUT", v
+PY
 
 rm -rf "$D"
 if [ $FAILS -ne 0 ]; then echo "devprocess.gpu_lock: FAILED ($FAILS)"; exit 1; fi
