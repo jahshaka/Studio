@@ -62,6 +62,7 @@
 #include <vector>
 #include <QTemporaryDir>
 #include <cstdio>
+#include <functional>
 #include <string>
 
 #include "assimp/Importer.hpp"
@@ -2556,6 +2557,36 @@ static void dagBoundBar(bool target)
         "the subjects really do carry DAG groups (%1 checked)").arg(groups)));
 }
 
+/// CULL-MODE-1: A TWO-SIDED SOURCE MATERIAL IS BAKED. glTF's `doubleSided` arrives
+/// through assimp as AI_MATKEY_TWOSIDED; the import stores it on the baked material
+/// (MeshMaterialData::twoSided, bake format v16) and it survives the blob.
+static void twoSidedReachesTheNode()
+{
+    const QString rel = QStringLiteral("tests/importer/fixtures/double_sided_quads.gltf");
+    const QString path = fixture(rel);
+    Assimp::Importer importer;
+    const aiScene *scene = importer.ReadFile(path.toStdString().c_str(), iris::ImportFlags::Canonical);
+    CHECK_LOUD(scene != nullptr, "the two-quad glTF parses");
+    if (!scene) return;
+    QTemporaryDir scratch;
+    const QString fingerprint = iris::MeshBake::fingerprintFor(
+        QStringLiteral("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"));
+    iris::MeshBake::Model built = iris::MeshBake::buildFromScene(scene, path, fingerprint, scratch.path());
+    CHECK_LOUD(built.valid, "the two-quad glTF bakes");
+    if (!built.valid) return;
+    int twoSidedMaterials = 0;
+    for (const iris::MeshMaterialData &m : built.materials) twoSidedMaterials += m.twoSided ? 1 : 0;
+    const iris::MeshBake::Model read = iris::MeshBake::deserialize(iris::MeshBake::serialize(built), fingerprint);
+    int readTwoSided = 0;
+    for (const iris::MeshMaterialData &m : read.materials) readTwoSided += m.twoSided ? 1 : 0;
+    CHECK_LOUD(twoSidedMaterials == 1 && readTwoSided == 1,
+               qUtf8Printable(QStringLiteral("one of the two materials is two-sided, through the blob (%1 built, %2 read)")
+                                  .arg(twoSidedMaterials).arg(readTwoSided)));
+    // (The NODE half — the fragment's MeshNode culls nothing — needs an Ogre::Root: a
+    // fragment's children live in the scene graph, which this suite has none of. It is
+    // mirror.document_to_engine's arm, through the same buildFromFile + buildFragment.)
+}
+
 int main(int argc, char **argv)
 {
     QCoreApplication app(argc, argv);
@@ -2646,6 +2677,9 @@ int main(int argc, char **argv)
     roundTrip(QStringLiteral("tests/importer/fixtures/tetra_normals.stl"));
     roundTrip(QStringLiteral("app/models/axis_cube.obj"));
     roundTrip(QStringLiteral("app/models/axis_sphere.obj"));
+
+    std::printf("== 16. a two-sided source material is baked ==\n");
+    twoSidedReachesTheNode();
 
     std::printf("== 2-4. determinism, staleness, corruption ==\n");
     determinismAndFailureModes();
