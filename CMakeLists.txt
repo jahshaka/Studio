@@ -450,6 +450,8 @@ set(SRCS
     src/ui/pages/projectmanager.cpp 
     src/ui/controls/dynamicgrid.cpp
     src/ui/controls/itemgridwidget.cpp
+    src/ui/controls/tilecache.cpp
+    src/ui/controls/librarymodel.cpp
     src/ui/controls/sliderlayoutmodel.cpp
     src/ui/dialogs/renameprojectdialog.cpp 
     src/services/thumbnailgenerator.cpp 
@@ -466,9 +468,7 @@ set(SRCS
     src/ui/pages/engineassetviewer.cpp
     src/bridge/enginematerialpreviewscene.cpp
     src/bridge/enginematerialpreview.cpp
-    src/ui/controls/assetviewgrid.cpp
     src/ui/controls/assetdrag.cpp
-    src/ui/controls/assetgriditem.cpp
     src/ui/controls/drawertreewidget.cpp
     src/ui/controls/videopreviewwidget.cpp
     src/ui/controls/waveformwidget.cpp
@@ -737,6 +737,8 @@ set(HEADERS
     src/ui/pages/projectmanager.h 
     src/ui/controls/dynamicgrid.h
     src/ui/controls/itemgridwidget.h
+    src/ui/controls/tilecache.h
+    src/ui/controls/librarymodel.h
     src/ui/controls/sliderlayoutmodel.h
     src/ui/dialogs/renameprojectdialog.h 
     src/services/thumbnailgenerator.h 
@@ -753,8 +755,6 @@ set(HEADERS
     src/ui/pages/engineassetviewer.h
     src/bridge/enginematerialpreviewscene.h
     src/bridge/enginematerialpreview.h
-    src/ui/controls/assetviewgrid.h
-    src/ui/controls/assetgriditem.h
     src/ui/controls/drawertreewidget.h
     src/ui/controls/videopreviewwidget.h
     src/ui/controls/waveformwidget.h

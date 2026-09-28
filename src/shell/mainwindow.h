@@ -344,7 +344,10 @@ public:
     /// The ASSETS PAGE, or null in a session without one (headless, a page-less
     /// host). The `assets.select`/`preview`/`fly` verbs drive it — the shell
     /// owns the widget, the verbs own the capability (SCRIPTING_SPEC §2.3).
-    AssetView *assetsPage() const { return _assetView; }
+    /// The Assets page, built on first use (D11-LIBRARY-SCALE): the verbs that
+    /// drive it and the space switch both come through here.
+    AssetView *assetsPage() { return ensureAssetsPage(); }
+    AssetView *ensureAssetsPage();
     /// The editor's ASSET TRAY panel (the Assets tab of the bottom tray), or
     /// null before the editor is built. editor.trayAssets reads it.
     AssetWidget *assetTray() const { return assetWidget; }
@@ -1146,6 +1149,7 @@ private:
 
     QToolBar *toolBar = nullptr;
     AssetView *_assetView = nullptr;
+    QWidget *assetsPlaceholder = nullptr;   // holds ASSETS = 2 until the page is built
 	QAction *actionSaveScene = nullptr;
 
     /// THE VR TOGGLE (SPECS/VR_SPEC.md §4.5, phase 3) — the editor toolbar's

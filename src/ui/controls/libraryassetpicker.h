@@ -29,8 +29,10 @@ For more information see the LICENSE file
 #include "data/project.h"
 
 class Database;
-class QListWidget;
+class QListView;
 class QLineEdit;
+class LibraryModel;
+class LibraryFilterProxy;
 
 class LibraryAssetPicker : public QDialog
 {
@@ -43,13 +45,18 @@ public:
 
 private:
     LibraryAssetPicker(ModelTypes type, Database *db, const QString &title, QWidget *parent);
-    void populate(const QString &filter);
 
-    ModelTypes   mType;
-    Database    *mDb = nullptr;
-    QListWidget *mList = nullptr;
-    QLineEdit   *mSearch = nullptr;
-    QString      mChosen;
+    // A VIEW OVER THE LIBRARY MODEL (D11-LIBRARY-SCALE): the rows are read once
+    // (no thumbnail column), the type and the search are the proxy's filters —
+    // a keystroke re-filters in memory, it never re-reads or re-decodes — and
+    // each icon comes from the tile cache when the view paints it.
+    ModelTypes          mType;
+    Database           *mDb = nullptr;
+    LibraryModel       *mModel = nullptr;
+    LibraryFilterProxy *mProxy = nullptr;
+    QListView          *mList = nullptr;
+    QLineEdit          *mSearch = nullptr;
+    QString             mChosen;
 };
 
 #endif // LIBRARYASSETPICKER_H

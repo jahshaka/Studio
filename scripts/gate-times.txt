@@ -539,7 +539,6 @@ ui.db_handles 0.15
 ui.dock_state 0.09
 ui.drag_owner 0.02
 ui.engine_view_winid 2.06
-ui.grid_columns 0.02
 ui.hierarchy_root 0.07
 ui.import_dialog 0.08
 ui.light_channels 0.02

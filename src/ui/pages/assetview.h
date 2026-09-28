@@ -67,8 +67,14 @@ enum AssetMetaType
 	Music
 };
 
-class AssetViewGrid;
-class AssetGridItem;
+class LibraryModel;
+class LibraryFilterProxy;
+class LibraryTileDelegate;
+class QListView;
+class QTreeView;
+class QTimer;
+struct LibraryRow;
+struct AssetRecord;
 class DrawerTreeWidget;
 class ImportBatchRunner;
 class ImportTailQueue;
@@ -121,16 +127,18 @@ signals:
 
 
 public slots:
-	void fetchMetadata(AssetGridItem*, bool allowBackfill = true);
+	/// The metadata pane for `guid` (the model's row + its properties, read by
+	/// guid); an unlisted guid clears the pane.
+	void fetchMetadata(const QString &guid, bool allowBackfill = true);
 	/// Lazy metadata backfill for pre-metadata library rows: computes the
 	/// per-type block on a worker thread (assimp/header parse only, no GPU),
 	/// persists it into the row's properties JSON on arrival, refreshes the
-	/// pane if the tile is still selected.
-	void backfillMetadata(AssetGridItem *widget, const QString &guid, int assetType);
+	/// pane if the asset is still selected.
+	void backfillMetadata(const QString &guid, int assetType);
 
-	void addAssetItemToProject(AssetGridItem*);
-	void moveAssetToDrawer(AssetGridItem*, int drawerId);
-	void deleteAssetFromLibrary(AssetGridItem*);
+	void addAssetItemToProject(const QString &guid);
+	void moveAssetToDrawer(const QString &guid, int drawerId);
+	void deleteAssetFromLibrary(const QString &guid);
 
 public:
 	/// `previewViewer` (optional) is the page's preview viewer; null means the
@@ -147,7 +155,6 @@ public:
 	bool eventFilter(QObject *watched, QEvent *event);
     void toggleFilterPane(bool);
 	void addToJahLibrary(const QString fileName, const QString guid, bool jfx = false);
-    void addToLibrary(const QString& main_guid, bool jfx = false);
 	void spaceSplits();
     void closeViewer();
 	void clearViewer();
@@ -170,7 +177,7 @@ public:
 	/// Tile right-click → Rebuild Thumbnail: re-renders and persists the
 	/// tile's thumbnail (3D types through the asset viewer screenshot path,
 	/// images via ThumbnailManager, audio/files back to their type icon).
-	void rebuildTileThumbnail(AssetGridItem *item);
+	void rebuildTileThumbnail(const QString &guid);
 	/// Library ▾ → "Rebuild missing thumbnails": the bulk repair for rows whose
 	/// stored thumbnail is absent or undecodable — the same routine per asset
 	/// as `assets.refreshThumbnail`, run over the library one row at a time
@@ -179,10 +186,10 @@ public:
 	/// Tile context menu → "Create Material from Image" (IMAGE_PLANE_SPEC
 	/// option B1): mints the companion PBR material asset, pins it into the
 	/// open project and adds its library tile.
-	void createMaterialFromImageTile(AssetGridItem *item);
+	void createMaterialFromImageTile(const QString &guid);
 	/// "Create Avatar" on a rigged model tile: mints the avatar asset and opens
 	/// it in the module, one gesture (D8-A).
-	void createAvatarFromModelTile(AssetGridItem *item);
+	void createAvatarFromModelTile(const QString &guid);
 	void showEvent(QShowEvent *event) override;
 
 	/// SELECT AN ASSET BY GUID — the tile gesture, as a call (smoke S4: an
@@ -225,6 +232,17 @@ private:
 	void finishJafImport(const ImportResult &result, const QString &fileName);
 	/// Images/audio/video: build + wire the library tile for a committed row.
 	void addLibraryTileForAsset(const QString &guid);
+	/// The library listing into the model (one query, no thumbnail column,
+	/// nothing decoded — D11-LIBRARY-SCALE).
+	void reloadLibrary();
+	static LibraryRow rowFromRecord(const AssetRecord &record);
+	/// The tile gestures by guid: make current (pane + fields), and open
+	/// (current + preview). showSelection is their shared half.
+	void showSelection(const QString &guid);
+	void lightSelect(const QString &guid);
+	void openTile(const QString &guid);
+	/// The tile's context menu (the entries AssetGridItem carried per widget).
+	void showTileMenu(const QString &guid, const QPoint &globalPos);
 	/// The drawer new imports are filed in: the selected drawer, else
 	/// Uncategorized (§3).
 	int selectedDrawerId() const;
@@ -255,10 +273,9 @@ private:
 	QVector<QPair<int, QString>> drawerMenuEntries() const;
 	/// Refilters the grid to the selected drawer (root -1 = everything).
 	void filterFromSelection();
-	/// The tile signal plumbing every creation path shares.
-	void wireTile(AssetGridItem *gridItem);
-	/// Loading overlay (§1): shown on the double-clicked tile until the
+	/// Loading overlay (§1): pulses on the double-clicked tile until the
 	/// viewer's loadFinished callback (or the selection handler's tail) clears it.
+	void setLoadingTile(const QString &guid);
 	void clearLoadingTile();
     void extractTexturesAndMaterialFromMaterial(
         const QString &filePath,
@@ -312,9 +329,16 @@ private:
     void populateAssetNodeTree(const QString &guid, int assetType);
 	QTreeWidgetItem *rootItem = nullptr;
 	bool drawerTreeUpdating = false;   // guards itemChanged during rebuilds
-	AssetGridItem *loadingTile = nullptr;
+	QString loadingGuid;
+	QTimer *loadingPulse = nullptr;
+	bool loadingPhase = false;
 
-	AssetViewGrid *fastGrid;
+	// THE LIBRARY AS A MODEL (ui/controls/librarymodel.h): the rows, one proxy
+	// (drawer + search) and its two views.
+	LibraryModel *libraryModel = nullptr;
+	LibraryFilterProxy *libraryProxy = nullptr;
+	LibraryTileDelegate *tileDelegate = nullptr;
+	QListView *tileView = nullptr;
 	QWidget *emptyGrid;
 	QWidget *filterPane;
 
@@ -336,7 +360,7 @@ private:
 	QMenu *viewModeMenu = nullptr;
 	QAction *viewTilesAction = nullptr;
 	QAction *viewListAction = nullptr;
-	QTreeWidget *assetListView = nullptr;
+	QTreeView *assetListView = nullptr;
 	void setAssetViewMode(const QString &mode, bool persist = true);
 	void rebuildAssetList();
 	QString assetViewMode = QStringLiteral("tiles");
@@ -366,7 +390,8 @@ private:
 
     SettingsManager* settings;
 	IAssetViewer *viewer;
-    AssetGridItem *selectedGridItem;
+	QString selectedGuid;              // the current asset ('' = none)
+	QJsonObject selectedProperties;    // its row's properties, read on selection
 	QTimer *searchTimer;
 	QString searchTerm;
 	QLineEdit *le;

@@ -1157,6 +1157,7 @@ jah_no_display(ui.db_handles)
 # document, no database, no display.
 add_executable(test_project_tile test_project_tile.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/controls/itemgridwidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/tilecache.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/dialogs/renameprojectdialog.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/style/thememanager.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/style/stylesheet.cpp
@@ -1592,7 +1593,7 @@ jah_no_display(ui.mcp_prefs)   # offscreen widgets only, no X needed
 # emptied both tabs for every user. Link stubs for Database (the tests/ui
 # idiom) — the subject is the call order, so a fake library that counts its
 # reads proves more than a real one.
-find_package(Qt6 REQUIRED COMPONENTS Widgets Sql)
+find_package(Qt6 REQUIRED COMPONENTS Widgets Sql Concurrent)
 add_executable(test_presets_favorites
     test_presets_favorites.cpp
     test_presets_favorites_stubs.cpp
@@ -1602,6 +1603,7 @@ add_executable(test_presets_favorites
     ${CMAKE_SOURCE_DIR}/src/services/materialpresetseeder.h
     ${CMAKE_SOURCE_DIR}/src/ui/panels/presets/assetmodelpanel.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/presets/assetmaterialpanel.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/tilecache.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/style/stylesheet.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/style/classicsheets.cpp
     ${CMAKE_SOURCE_DIR}/src/io/materialpresetreader.cpp
@@ -1622,7 +1624,7 @@ target_include_directories(test_presets_favorites PRIVATE
     ${CMAKE_SOURCE_DIR}/irisgl
     ${CMAKE_SOURCE_DIR}/irisgl/engine/include
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
-target_link_libraries(test_presets_favorites PRIVATE IrisGL Qt6::Widgets Qt6::Sql)
+target_link_libraries(test_presets_favorites PRIVATE IrisGL Qt6::Widgets Qt6::Sql Qt6::Concurrent)
 add_test(NAME ui.presets_favorites COMMAND test_presets_favorites
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(ui.presets_favorites PROPERTIES
@@ -1687,31 +1689,3 @@ set_tests_properties(ui.new_project_dialog PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "ui")
 jah_no_display(ui.new_project_dialog)
 
-# ui.grid_columns — THE ASSET GRID LAYS OUT BEFORE IT HAS EVER BEEN RESIZED
-# (UNINIT-SWEEP-1, hazard A1-4). `AssetViewGrid::lastWidth` is written only by
-# resizeEvent and read by the search, the drawer filter and the tile removal —
-# all three reachable on a tray that is populated before it is shown. It was
-# uninitialised; the honest zero it carries now is the one value the old code
-# could not survive, because two of the three divisions by it lacked the guard
-# the third had. Widgets only, offscreen, no window shown and no resize
-# delivered — that IS the case under test. MALLOC_PERTURB_ makes the failure on
-# a tree without the initialiser deterministic rather than a coin.
-add_executable(test_grid_columns test_grid_columns.cpp
-    ${CMAKE_SOURCE_DIR}/src/ui/controls/assetviewgrid.cpp
-    ${CMAKE_SOURCE_DIR}/src/ui/controls/assetgriditem.cpp
-    ${CMAKE_SOURCE_DIR}/src/ui/controls/assetdrag.cpp
-    ${CMAKE_SOURCE_DIR}/src/ui/style/stylesheet.cpp
-    ${CMAKE_SOURCE_DIR}/src/ui/style/classicsheets.cpp
-    ${CMAKE_SOURCE_DIR}/src/data/settingsmanager.cpp
-    ${CMAKE_SOURCE_DIR}/src/data/constants.cpp)
-set_target_properties(test_grid_columns PROPERTIES
-    AUTOMOC ON AUTORCC ON CXX_STANDARD 17
-    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-target_include_directories(test_grid_columns PRIVATE
-    ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/irisgl)
-target_link_libraries(test_grid_columns PRIVATE Qt6::Widgets Qt6::Sql qlementine)
-add_test(NAME ui.grid_columns COMMAND test_grid_columns
-         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(ui.grid_columns PROPERTIES
-    ENVIRONMENT "QT_QPA_PLATFORM=offscreen;MALLOC_PERTURB_=165" TIMEOUT 120 LABELS "ui")
-jah_no_display(ui.grid_columns)

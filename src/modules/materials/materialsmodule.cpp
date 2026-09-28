@@ -161,7 +161,3 @@ void MaterialsModule::registerApi(ScriptEngine &engine)
     engine.addModule(graphApi);
 }
 
-void MaterialsModule::setAssetView(AssetView *assetView)
-{
-    if (page) page->setAssetView(assetView);
-}

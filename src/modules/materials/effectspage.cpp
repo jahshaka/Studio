@@ -165,7 +165,6 @@ EffectsPage::EffectsPage( QWidget *parent, Database *database) :
 	setMinimumSize(300, 400);
     loadShadersFromDisk();
 
-	assetView = nullptr;
 }
 
 // ---- the open materials (MATERIALS_TABS_SPEC §2) -------------------------
@@ -2038,10 +2037,12 @@ void EffectsPage::updateAssetDock()
 	// THE TWO LIBRARY WORLDS MERGED (spec 2.4): the module lists the same
 	// library MATERIAL bundles the Assets page does — there is no private
 	// "Effects" world any more, and no ModelTypes::Shader tile.
-	auto assets = dataBase->fetchAssetsByViewFilter(AssetViewFilter::AssetsView);
+	// THE TYPE IS A PREDICATE (D11-LIBRARY-SCALE): the library's MATERIAL rows,
+	// no thumbnail column — the tiles come from the tile cache by guid.
+	auto assets = dataBase->fetchAssetsByViewFilter(AssetViewFilter::AssetsView,
+	                                                static_cast<int>(ModelTypes::Material));
 		for (const auto &asset : assets)  //dp something{
 		{
-			if (asset.type != static_cast<int>(ModelTypes::Material)) continue;
 			// THE CUSTOM DRAWER IS THE USER'S OWN MATERIALS, once (the
 			// four-drawer rule, OWNER_REVIEW 9).
 			//
@@ -2086,8 +2087,8 @@ void EffectsPage::updateAssetDock()
 				item->setData(Qt::DisplayRole, asset.name);
 				item->setData(MODEL_GUID_ROLE, asset.guid);
 				item->setData(MODEL_TYPE_ROLE, asset.type);
-				ListWidget::updateThumbnailImage(asset.thumbnail, item);
 				effects->addToListWidget(item);
+				effects->assignTile(item, asset.guid);
 			}
 		}
 	if (!openGuid.isEmpty() && !currentProjectShader)
