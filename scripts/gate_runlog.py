@@ -169,6 +169,48 @@ def tree_shas():
             "irisgl_dirty": i_dirty}
 
 
+def fork_pin_problem(root=ROOT):
+    """THE BUILT FORK MUST BE THE PIN (TESTING-DEBTS-1 T12). None when the ogre-next checkout AND
+    the install (`<install>/BUILT_FROM`, written by irisgl/scripts/build-ogre.sh; the install is
+    OGRE_PREFIX when set, as build-ogre.sh reads it) are both at the commit irisgl pins; else the
+    refusal text with the exact lines that fix it. A tree with no irisgl submodule (a bare
+    checkout) is not judged. REFLECT-MOVERS-1, 2026-09-28: a worktree whose install was built
+    from an older fork commit than the pin ran a 124-minute gate — its PBS media failed to
+    compile ("atmoNprSkyRadiance: no matching overloaded function"): 76 reds, 3 Xids, void."""
+    ig = os.path.join(root, "irisgl")
+    pin = _git(["rev-parse", "HEAD:thirdparty/ogre-next"], cwd=ig) if os.path.isdir(ig) else ""
+    if not pin:
+        return None
+    src = os.path.join(ig, "thirdparty", "ogre-next")
+    install = os.environ.get("OGRE_PREFIX") or os.path.join(ig, "thirdparty", "ogre-next-install")
+    checkout = _git(["rev-parse", "HEAD"], cwd=src) if os.path.isdir(src) else ""
+    try:
+        rec = open(os.path.join(install, "BUILT_FROM")).read().split()
+    except OSError:
+        rec = []
+    built, dirty = (rec[0] if rec else ""), ("dirty" in rec[1:])
+    why = []
+    if checkout != pin:
+        why.append(f"the ogre-next checkout is at {checkout[:9] or '(none)'}")
+    if not built:
+        why.append(f"the install ({install}) has no BUILT_FROM record (built before build-ogre.sh wrote one)")
+    elif built != pin:
+        why.append(f"the install was built from {built[:9]}")
+    elif dirty:
+        why.append("the install was built from a DIRTY checkout of the pin")
+    if not why:
+        return None
+    have = os.path.isdir(src) and subprocess.run(["git", "cat-file", "-e", pin + "^{commit}"], cwd=src,
+                                                 capture_output=True).returncode == 0
+    fix = [f"cd {root}"]
+    if not have:
+        fix.append("git -C irisgl/thirdparty/ogre-next fetch origin")
+    fix += ["git -C irisgl submodule update --init thirdparty/ogre-next", "./irisgl/scripts/build-ogre.sh"]
+    return ("REFUSING TO RUN: the built fork is not the pin — irisgl pins ogre-next " + pin[:9] + ", but "
+            + "; ".join(why) + ".\nA gate on it tests an engine the tree does not describe (stale media, "
+            "void reds). Fix, then re-run:\n  " + "\n  ".join(fix))
+
+
 def gpu_clocks():
     """The GPU's clock state at the run: nvidia-smi exposes no 'locked' flag for
     --lock-gpu-clocks, so it is INFERRED from its signature — an idle GPU that does not clock
@@ -543,6 +585,9 @@ def main():
     if a.cmd == "run":
         cmd = a.ctest[1:] if a.ctest and a.ctest[0] == "--" else a.ctest
         if not cmd: ap.error("give the ctest command after --")
+        bad = fork_pin_problem()
+        if bad:
+            sys.stderr.write(bad + "\n"); sys.exit(4)
         build = a.build if os.path.isabs(a.build) else os.path.join(os.getcwd(), a.build) \
             if os.path.isdir(os.path.join(os.getcwd(), a.build)) else os.path.join(ROOT, a.build)
         lane = a.lane or _git(["rev-parse", "--abbrev-ref", "HEAD"])

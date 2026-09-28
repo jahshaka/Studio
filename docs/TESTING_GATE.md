@@ -235,6 +235,13 @@ the selection reason, the tree's three shas, the box (load over the suite's own 
 clock state, -j, the display, sibling gates). The fields are `testing/runs/README.md`; the two
 standing queries are `scripts/gate_runlog.py longest` and `scripts/gate_runlog.py load-reds`.
 
+**THE BUILT FORK MUST BE THE PIN (TESTING-DEBTS-1 T12).** `irisgl/scripts/build-ogre.sh` writes
+`<install>/BUILT_FROM` (the ogre-next commit it built, `dirty` on a second line for a dirty
+checkout). `gate-scope.sh --run` / `--solo` and `gate_runlog.py run` REFUSE (exit 4, before any
+suite) when the ogre-next checkout or that record is not the commit irisgl pins — or the record is
+missing — and print the fetch / `submodule update` / `build-ogre.sh` lines that fix it. (A gate on
+a stale install tests media the pin no longer matches: REFLECT-MOVERS-1's void 124-minute run.)
+
 **The guard: `gate.selection`** (`tests/hygiene/gate_selection.py`, label `hygiene`) replays
 recorded lane diffs (`tests/hygiene/gate_selection_cases.json`: D's last ten lanes, their reds
 with each verdict's evidence) against the current build's graph: every REAL red must be selected,

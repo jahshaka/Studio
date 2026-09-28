@@ -1487,6 +1487,14 @@ def main():
     if a.nightly_tier:
         print(nightly_tier()); return
     build = resolve_build(a.build)
+    # THE BUILT FORK MUST BE THE PIN (TESTING-DEBTS-1 T12): a run on an install built from another
+    # fork commit is void (stale media) — refused before a suite runs, with the lines that fix it.
+    # (A range that MOVES the pin still selects the MERGE tier by rule, §7b.4; this is the tree.)
+    if a.run or a.solo:
+        bad = gate_runlog.fork_pin_problem()
+        if bad:
+            sys.stderr.write("gate-scope: " + bad + "\n")
+            sys.exit(4)
     if a.joint:
         J = joint(a.joint[0], a.joint[1], build, a.jobs)
         if a.json:

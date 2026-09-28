@@ -251,6 +251,45 @@ def runlog_cases(source):
     except ValueError:
         check(True, "an unlisted tier is refused by the writer (import too)")
 
+    # T12: THE BUILT FORK MUST BE THE PIN — a fake install (OGRE_PREFIX, as build-ogre.sh reads it)
+    # whose BUILT_FROM names another commit is refused with the fix lines; the pin itself passes
+    import subprocess as sp
+    pin = sp.run(["git", "rev-parse", "HEAD:thirdparty/ogre-next"], cwd=os.path.join(source, "irisgl"),
+                 capture_output=True, text=True).stdout.strip()
+    checkout = sp.run(["git", "rev-parse", "HEAD"], cwd=os.path.join(source, "irisgl", "thirdparty", "ogre-next"),
+                      capture_output=True, text=True).stdout.strip()
+    check(len(pin) == 40, "irisgl pins an ogre-next commit (%s)" % pin[:9])
+    import tempfile as tf
+    with tf.TemporaryDirectory() as inst:
+        old_p = os.environ.get("OGRE_PREFIX")
+        os.environ["OGRE_PREFIX"] = inst
+        try:
+            def rec(text):
+                with open(os.path.join(inst, "BUILT_FROM"), "w") as f: f.write(text)
+            rec("0" * 40 + "\n")
+            bad = rl.fork_pin_problem(source) or ""
+            check("built from 000000000" in bad and "build-ogre.sh" in bad and "submodule update" in bad,
+                  "an install built from another commit is refused with the fix lines")
+            p = sp.run([sys.executable, os.path.join(source, "scripts", "gate_runlog.py"), "run", "--tier", "scoped",
+                        "--", "true"], cwd=source, capture_output=True, text=True, env=dict(os.environ))
+            check(p.returncode == 4 and "REFUSING TO RUN" in p.stderr,
+                  "gate_runlog.py run refuses it before the run (exit %d)" % p.returncode)
+            p = sp.run([sys.executable, os.path.join(source, "scripts", "gate-scope.py"), "--solo", "x", "--build",
+                        source], cwd=source, capture_output=True, text=True, env=dict(os.environ))
+            check(p.returncode == 4 and "REFUSING TO RUN" in p.stderr,
+                  "gate-scope --run/--solo refuses it before the run (exit %d)" % p.returncode)
+            os.unlink(os.path.join(inst, "BUILT_FROM"))
+            check("no BUILT_FROM record" in (rl.fork_pin_problem(source) or ""), "an install with no record is refused")
+            rec(pin + "\ndirty\n")
+            check("DIRTY" in (rl.fork_pin_problem(source) or ""), "an install built from a dirty checkout is refused")
+            rec(pin + "\n")
+            got = rl.fork_pin_problem(source)
+            check(got is None if checkout == pin else "checkout is at" in (got or ""),
+                  "an install built from the pin passes (when the checkout is the pin) (%s)" % (got or "ok")[:80])
+        finally:
+            if old_p is None: os.environ.pop("OGRE_PREFIX", None)
+            else: os.environ["OGRE_PREFIX"] = old_p
+
     # T8: THE QUIET MEDIAN — a suite with >= 3 PASS records on a box with no sibling ctest is
     # costed from those alone; with fewer, from every record (a private log directory)
     import datetime, tempfile
