@@ -22,7 +22,8 @@ const char *format()
     return "application/x-qabstractitemmodeldatalist";
 }
 
-QMimeData *mimeFor(int type, const QString &name, const QString &mesh, const QString &guid)
+QMimeData *mimeFor(int type, const QString &name, const QString &mesh, const QString &guid,
+                   Origin origin)
 {
     QByteArray encoded;
     QDataStream stream(&encoded, QIODevice::WriteOnly);
@@ -31,6 +32,7 @@ QMimeData *mimeFor(int type, const QString &name, const QString &mesh, const QSt
     roleDataMap[NameSlot] = QVariant(name);
     roleDataMap[MeshSlot] = QVariant(mesh);
     roleDataMap[GuidSlot] = QVariant(guid);
+    roleDataMap[OriginSlot] = QVariant(static_cast<int>(origin));
     stream << roleDataMap;
 
     auto *mime = new QMimeData;
@@ -39,9 +41,9 @@ QMimeData *mimeFor(int type, const QString &name, const QString &mesh, const QSt
 }
 
 QMimeData *mimeForMany(int type, const QString &name, const QString &mesh,
-                       const QString &guid, const QStringList &guids)
+                       const QString &guid, const QStringList &guids, Origin origin)
 {
-    QMimeData *mime = mimeFor(type, name, mesh, guid);
+    QMimeData *mime = mimeFor(type, name, mesh, guid, origin);
     if (guids.size() <= 1) return mime;   // one tile: the four-slot payload, unchanged
 
     QByteArray encoded;
@@ -52,6 +54,7 @@ QMimeData *mimeForMany(int type, const QString &name, const QString &mesh,
     roleDataMap[MeshSlot] = QVariant(mesh);
     roleDataMap[GuidSlot] = QVariant(guid);
     roleDataMap[GuidsSlot] = QVariant(guids);
+    roleDataMap[OriginSlot] = QVariant(static_cast<int>(origin));
     stream << roleDataMap;
     mime->setData(QString::fromLatin1(format()), encoded);
     return mime;
@@ -93,6 +96,12 @@ QStringList guidsOf(const QMimeData *mime)
     if (!many.isEmpty()) return many;
     const QString one = role.value(GuidSlot).toString();
     return one.isEmpty() ? QStringList() : QStringList{ one };
+}
+
+Origin originOf(const QMimeData *mime)
+{
+    return roles(mime).value(OriginSlot).toInt() == static_cast<int>(Origin::Project)
+               ? Origin::Project : Origin::Library;
 }
 
 } // namespace AssetDrag

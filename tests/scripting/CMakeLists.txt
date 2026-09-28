@@ -1785,6 +1785,13 @@ jah_pool_arm(gi_verbs tier ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_pool_tier.js 
 # directory). The split of a family in two (gi_verbs/gi_movers, editor/editor_view,
 # shading/shading_live, world_sky/world_light, doc/doc_assets) keeps every pool well under the
 # -j4 critical path (~200 s).
+# editor.material_drop — MATERIAL-DROP-1 + TRAY-DUPLICATE-1 (the owner, 2026-09-28): a LIBRARY
+# drop is a fresh, pristine project copy ("Wood PBR", "Wood PBR 2", …), a PROJECT-tray drop
+# assigns, assets.duplicate copies the project's own version by the same naming, and the
+# viewport's real drag does the same. Engine up (the gesture), the Low tier.
+configure_file(scripts/e2e_material_drop.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_material_drop.js @ONLY)
+jah_pool_arm(editor material_drop ${CMAKE_CURRENT_BINARY_DIR}/e2e_material_drop.js 12)
+
 jah_add_pool(doc HEADLESS LABELS scripting)
 jah_add_pool(doc_assets HEADLESS LABELS scripting)
 jah_add_pool(gi_verbs TIER epic LABELS scripting)

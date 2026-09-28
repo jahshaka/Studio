@@ -196,7 +196,10 @@ bool AssetMaterialPanel::eventFilter(QObject *watched, QEvent *event)
                                 item->data(MODEL_TYPE_ROLE).toInt(),
                                 item->data(Qt::UserRole).toString(),
                                 QString(),
-                                item->data(MODEL_GUID_ROLE).toString()));
+                                item->data(MODEL_GUID_ROLE).toString(),
+                                // THE LIBRARY's tray: a drop is a fresh, pristine
+                                // project copy (MATERIAL-DROP-1).
+                                AssetDrag::Origin::Library));
 
                             // only hide for object models
                             drag->setPixmap(item->icon().pixmap(64, 64));

@@ -42,7 +42,14 @@ namespace AssetDrag
 ///                                      one tile was dragged; slot 3 is still
 ///                                      the primary one, so every handler that
 ///                                      takes a single asset is unchanged.
-enum Slot { TypeSlot = 0, NameSlot = 1, MeshSlot = 2, GuidSlot = 3, GuidsSlot = 4 };
+///   5  WHERE THE TILE CAME FROM    (MATERIAL-DROP-1) — the LIBRARY (the
+///                                      materials and models trays, the Assets
+///                                      page) or the open PROJECT (its asset
+///                                      tray). A material dropped from the
+///                                      library is a fresh project copy; one
+///                                      dropped from the project is assigned.
+enum Slot { TypeSlot = 0, NameSlot = 1, MeshSlot = 2, GuidSlot = 3, GuidsSlot = 4, OriginSlot = 5 };
+enum class Origin { Library = 0, Project = 1 };
 
 /// The MIME type every asset drag uses. Qt's own item-view name, kept because
 /// item views already produce and consume it.
@@ -50,14 +57,15 @@ const char *format();
 
 /// A QMimeData carrying those four slots. Caller owns it (hand it straight to
 /// QDrag::setMimeData, which takes ownership).
-QMimeData *mimeFor(int type, const QString &name, const QString &mesh, const QString &guid);
+QMimeData *mimeFor(int type, const QString &name, const QString &mesh, const QString &guid,
+                   Origin origin);
 
 /// THE SAME PAYLOAD FOR A MULTI-SELECTION (DRAWERS-1): the four slots describe
 /// the tile under the cursor, and slot 4 carries every guid the user picked up.
 /// A one-tile gesture produces exactly `mimeFor`'s payload — no handler sees a
 /// new shape unless it asks for one.
 QMimeData *mimeForMany(int type, const QString &name, const QString &mesh,
-                       const QString &guid, const QStringList &guids);
+                       const QString &guid, const QStringList &guids, Origin origin);
 
 /// Is this an asset drag at all?
 bool isAssetDrag(const QMimeData *mime);
@@ -72,6 +80,8 @@ QString guidOf(const QMimeData *mime);
 /// Every guid in the gesture — slot 4 when it is there, otherwise the one guid
 /// of slot 3. Empty only when this is not an asset drag.
 QStringList guidsOf(const QMimeData *mime);
+/// Where the dragged tile came from (slot 5). Every writer states it.
+Origin originOf(const QMimeData *mime);
 
 } // namespace AssetDrag
 

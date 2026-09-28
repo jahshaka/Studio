@@ -843,7 +843,7 @@ QVector<VerbInfo> EditorApi::verbs() const
           "where dragging one there would. Null when this session's viewport has no camera (the "
           "document-only stand-ins).",
           Needs::Engine },
-        { "dragAsset", "editor.dragAsset(guid, x, y, {action, type}) -> bool",
+        { "dragAsset", "editor.dragAsset(guid, x, y, {action, type, from}) -> bool",
           "DRAGS AN ASSET OVER THE VIEWPORT, for real: it posts the same "
           "QDragEnter/QDragMove/QDragLeave/QDrop events a person's drag out of an asset view "
           "posts, carrying the same four-slot payload every asset view builds "
@@ -854,7 +854,11 @@ QVector<VerbInfo> EditorApi::verbs() const
           "gesture sends the enter event for you; 'drop' and 'leave' end it. `type` is the "
           "ModelTypes value, and is worked out from the asset row when omitted — a RESERVED "
           "preset guid names no row and is treated as a material, which is exactly what the "
-          "presets tray drags. This is the only way a script or an MCP client can perform the "
+          "presets tray drags. `from` is where the tile was picked up — 'library' (the materials "
+          "tray, the Assets page) or 'project' (the project's asset tray) — and decides what a "
+          "MATERIAL drop does (material.drop: a fresh project copy, or an assignment); omitted, it "
+          "is 'project' for an asset the open project holds and 'library' otherwise. "
+          "This is the only way a script or an MCP client can perform the "
           "gesture the owner performs with a mouse; everything it reaches is the viewport's own "
           "handler, so it cannot drift from what a person gets.",
           Needs::Engine },
@@ -2631,7 +2635,8 @@ bool EditorApi::dragAssetToTray(const QVariant &guidOrGuids, const QString &fold
     // drag that built its own map would be testing itself.
     const AssetRecord row = host.db ? host.db->fetchAsset(guids.first()) : AssetRecord();
     auto mimeData = [&] {
-        return AssetDrag::mimeForMany(row.type, row.name, QString(), guids.first(), guids);
+        return AssetDrag::mimeForMany(row.type, row.name, QString(), guids.first(), guids,
+                                      AssetDrag::Origin::Project);
     };
 
     {
@@ -2700,6 +2705,18 @@ bool EditorApi::dragAsset(const QString &guid, double x, double y, const QVarian
     int type = options.value(QStringLiteral("type"), -1).toInt();
     if (type < 0)
         type = row.guid.isEmpty() ? static_cast<int>(ModelTypes::Material) : row.type;
+    // WHERE THE TILE CAME FROM (MATERIAL-DROP-1): the tray that holds it.
+    const QString projectGuid = host.project ? host.project->getProjectGuid() : QString();
+    const QString from = options.value(QStringLiteral("from"),
+                                       host.db && !projectGuid.isEmpty()
+                                               && host.db->isAssetPinnedBy(projectGuid, guid)
+                                           ? QStringLiteral("project") : QStringLiteral("library"))
+                             .toString().toLower();
+    if (from != QLatin1String("library") && from != QLatin1String("project"))
+        return fail(QStringLiteral("editor.dragAsset: from must be 'library' or 'project', not '%1'")
+                        .arg(from));
+    const AssetDrag::Origin origin = from == QLatin1String("project") ? AssetDrag::Origin::Project
+                                                                       : AssetDrag::Origin::Library;
 
     const QPointF pos(x, y);
     // ONE payload builder, the one every asset view uses (ui/controls/assetdrag.h):
@@ -2708,7 +2725,7 @@ bool EditorApi::dragAsset(const QString &guid, double x, double y, const QVarian
     // a widget that ignored the enter, and neither may this (code review, F7).
     auto sendEvent = [&](QEvent::Type kind) -> bool {
         std::unique_ptr<QMimeData> mime(
-            AssetDrag::mimeFor(type, row.name, QString(), guid));
+            AssetDrag::mimeFor(type, row.name, QString(), guid, origin));
         if (kind == QEvent::DragEnter) {
             QDragEnterEvent event(pos.toPoint(), Qt::CopyAction, mime.get(),
                                   Qt::LeftButton, Qt::NoModifier);

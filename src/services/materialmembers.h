@@ -67,6 +67,7 @@ For more information see the LICENSE file
 // materials. The origin is what lets "clean this bundle's unused textures"
 // find the rows that came in through it and are now referenced by nothing.
 
+#include <QJsonObject>
 #include <QString>
 #include <QStringList>
 #include <QVector>
@@ -158,6 +159,24 @@ QVector<Unused> cleanUnused(Database *db, Project *project, const QString &mater
 /// answer. Reads the definition pin-first when `project` is given.
 QString duplicate(Database *db, Project *project, const QString &materialGuid,
                   const QString &name = QString(), QString *errorOut = nullptr);
+
+/// THE PROJECT'S OWN NAMING (MATERIAL-DROP-1 / TRAY-DUPLICATE-1, the owner
+/// 2026-09-28): the name a new project material born from `sourceName` takes —
+/// `sourceName` itself while the project holds no material of that name, then
+/// `<base> 2`, `<base> 3`, … — a numbered name counts on from its own number
+/// (a copy of "Wood PBR 2" is "Wood PBR 3", not "Wood PBR 2 2"). Judged case-insensitively against the materials THIS
+/// PROJECT holds (its pins — its own rows and the library rows it uses), never
+/// against the whole catalog: another project's "Wood PBR" is not this one's.
+QString projectCopyName(Database *db, const QString &projectGuid, const QString &sourceName);
+
+/// THE DEFINITION A PROJECT COPY IS MADE FROM: `materialGuid`'s definition —
+/// the LIBRARY's current one when `pristine` (a drop from the library: the
+/// library is the source, whatever this project did to its own copies), the
+/// version `project` renders otherwise (a duplicate of the project's own) —
+/// with the BAKE taken off, as `duplicate` does (a baked map is born inside
+/// exactly one material and never shared). Empty when there is none.
+QJsonObject copyDefinition(Database *db, Project *project, const QString &materialGuid,
+                           bool pristine);
 
 /// WHAT A LIBRARY DELETE OF A BUNDLE TAKES WITH IT (spec §4: "unpinned -> the
 /// row and its EXCLUSIVE born-inside members go; user-imported textures never

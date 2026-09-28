@@ -61,6 +61,7 @@ namespace { void regenerateGuids(const iris::SceneNodePtr &root,
 #include "commands/addscenenodecommand.h"
 #include "commands/changematerialcommand.h"
 #include "commands/pinassetcommand.h"
+#include "commands/projectmaterialcopycommand.h"
 #include "commands/resetmaterialcommand.h"
 #include "commands/deletescenenodecommand.h"
 #include "commands/nodeeditcommand.h"
@@ -1201,17 +1202,20 @@ void collectMeshNodes(const iris::SceneNodePtr &node, QList<iris::MeshNodePtr> &
 
 } // namespace
 
-iris::MaterialPtr SceneEditService::resolveMaterial(const QString &presetOrGuid) const
+iris::MaterialPtr SceneEditService::resolveMaterial(const QString &presetOrGuid,
+                                                   MaterialOrigin origin) const
 {
     if (presetOrGuid.isEmpty()) return iris::MaterialPtr();
+    const bool fromLibrary = origin == MaterialOrigin::Library;
 
     bool isPreset = false;
     const MaterialPreset preset = MaterialPresets::find(presetOrGuid, &isPreset);
     // …UNLESS THIS PROJECT HAS ITS OWN COPY OF THAT PRESET (PRESET-EDIT-1):
-    // the hover preview must show what the drop will apply, and the drop
-    // applies the copy (see applyMaterial). Read through the ordinary bundle
-    // branch below, which is the copy's own definition.
-    const QString mine = isPreset
+    // material.apply by the preset's name means the project's copy. Read
+    // through the ordinary bundle branch below, which is the copy's own
+    // definition. NOT for a drag from the LIBRARY (MATERIAL-DROP-1): that drop
+    // makes a pristine copy, so its preview is the pristine preset.
+    const QString mine = isPreset && !fromLibrary
                              ? presetedit::projectCopyOf(
                                    db, project, MaterialPresetAssets::guidFor(presetOrGuid))
                              : QString();
@@ -1232,7 +1236,8 @@ iris::MaterialPtr SceneEditService::resolveMaterial(const QString &presetOrGuid)
         // a project renders the version it was built with, not whatever the
         // library row holds now. Falls back to the row blob for a material
         // that has no stored definition yet.
-        const QJsonObject matObject = MaterialBundle::read(db, wanted, project);
+        const QJsonObject matObject =
+            MaterialBundle::read(db, wanted, fromLibrary ? nullptr : project);
         if (matObject.isEmpty()) return iris::MaterialPtr();
         return reader.parseMaterialTyped(matObject, db);
     }
@@ -1284,10 +1289,10 @@ bool SceneEditService::applyMaterial(const QString &presetOrGuid, iris::SceneNod
     QString materialGuid = presetOrGuid;
     if (MaterialPresetAssets::isPreset(presetOrGuid)) {
         // THIS PROJECT'S OWN COPY OF IT, IF IT HAS ONE (PRESET-EDIT-1). Once a
-        // project has edited "Wood PBR", that name means the project's copy —
-        // dropping the shipped tile again must not put a SECOND material of
-        // the same name in the tray beside the user's own, and must not paint
-        // the mesh with a picture they have already changed.
+        // project has edited "Wood PBR", that NAME means the project's copy to
+        // `material.apply` and the tray's double-click. A DROP from the library
+        // is not this door (MATERIAL-DROP-1, the owner 2026-09-28): it always
+        // makes a fresh, pristine copy — dropMaterial.
         const QString mine = presetedit::projectCopyOf(
             db, project, MaterialPresetAssets::guidFor(presetOrGuid));
         if (!mine.isEmpty()) return applyMaterialAsset(mine, target);
@@ -1312,6 +1317,122 @@ bool SceneEditService::applyMaterial(const QString &presetOrGuid, iris::SceneNod
     // Deletes: `applyMaterialShader`, the second dispatcher for the module's
     // old graph asset, is gone with the rows it served).
     return applyMaterialAsset(materialGuid, target);
+}
+
+ProjectMaterialCopyCommand *SceneEditService::makeMaterialCopy(const QString &source,
+                                                               MaterialOrigin origin,
+                                                               QString *errorOut)
+{
+    const auto fail = [errorOut](const QString &why) -> ProjectMaterialCopyCommand * {
+        if (errorOut) *errorOut = why;
+        return nullptr;
+    };
+    if (source.isEmpty()) return fail(QStringLiteral("no material"));
+    if (!db || !project || project->getProjectGuid().isEmpty())
+        return fail(QStringLiteral("no project is open"));
+    if (editgate::refuse()) return fail(QStringLiteral("a script run owns the document"));
+
+    QString materialGuid = source;
+    if (MaterialPresetAssets::isPreset(source)) {
+        // A preset is a library bundle, seeded the first time anything uses it
+        // (see applyMaterial) — its copy is made from the seeded row.
+        MaterialPresetSeeder::instance().finishNow();
+        QString error;
+        materialGuid = MaterialPresetAssets::ensureSeeded(source, db, &error);
+        if (materialGuid.isEmpty())
+            return fail(error.isEmpty() ? QStringLiteral("the preset could not be seeded") : error);
+    }
+    const AssetRecord row = db->fetchAsset(materialGuid);
+    if (row.guid.isEmpty() || row.type != static_cast<int>(ModelTypes::Material))
+        return fail(QStringLiteral("'%1' is not a material").arg(source));
+    if (origin == MaterialOrigin::Project
+        && !db->isAssetPinnedBy(project->getProjectGuid(), materialGuid))
+        return fail(QStringLiteral("'%1' is not one of this project's materials").arg(row.name));
+
+    auto *command = new ProjectMaterialCopyCommand(db, project, materialGuid,
+                                                   origin == MaterialOrigin::Library);
+    if (!command->ready()) {
+        const QString why = command->error();
+        delete command;
+        return fail(why);
+    }
+    return command;
+}
+
+QString SceneEditService::pushMaterialCopy(ProjectMaterialCopyCommand *command, QString *errorOut)
+{
+    QString copy;
+    QString error;
+    if (undo) {
+        undo->push(command);                 // the stack owns it from here
+        copy = command->copyGuid();
+        error = command->error();
+    } else {
+        command->redo();
+        copy = command->copyGuid();
+        error = command->error();
+        delete command;
+    }
+    if (copy.isEmpty() && errorOut)
+        *errorOut = error.isEmpty() ? QStringLiteral("the copy could not be made") : error;
+    if (!copy.isEmpty()) emit assetViewRefreshRequested();
+    return copy;
+}
+
+QString SceneEditService::copyMaterialIntoProject(const QString &source, MaterialOrigin origin,
+                                                  QString *errorOut)
+{
+    ProjectMaterialCopyCommand *command = makeMaterialCopy(source, origin, errorOut);
+    return command ? pushMaterialCopy(command, errorOut) : QString();
+}
+
+QString SceneEditService::dropMaterial(const QString &presetOrGuid, MaterialOrigin origin,
+                                       iris::SceneNodePtr target, QString *errorOut)
+{
+    const auto fail = [errorOut](const QString &why) {
+        if (errorOut) *errorOut = why;
+        return QString();
+    };
+    if (presetOrGuid.isEmpty() || !target) return fail(QStringLiteral("no material or no target"));
+    if (preview) preview->end();
+    {
+        QList<iris::MeshNodePtr> meshes;
+        collectMeshNodes(target, meshes);
+        if (meshes.isEmpty()) return fail(QStringLiteral("the target holds no mesh"));
+    }
+    if (editgate::refuse()) return fail(QStringLiteral("a script run owns the document"));
+
+    if (origin == MaterialOrigin::Project) {
+        // AN ASSIGNMENT: the target wears the project's own material itself.
+        if (!db || !project || !db->isAssetPinnedBy(project->getProjectGuid(), presetOrGuid))
+            return fail(QStringLiteral("'%1' is not one of this project's materials").arg(presetOrGuid));
+        if (!applyMaterialAsset(presetOrGuid, target))
+            return fail(QStringLiteral("'%1' could not be applied").arg(presetOrGuid));
+        return presetOrGuid;
+    }
+    // A session with no project (no library to copy into) keeps the old
+    // answer for a shipped preset: painted from the shipped values, nothing
+    // written — there is nowhere to write it.
+    if (!db || !project || project->getProjectGuid().isEmpty()) {
+        if (MaterialPresetAssets::isPreset(presetOrGuid) && applyResolvedMaterial(presetOrGuid, target))
+            return MaterialPresetAssets::guidFor(presetOrGuid);
+        return fail(QStringLiteral("no project is open"));
+    }
+
+    // FROM THE LIBRARY: a fresh, pristine project copy, then the target wears
+    // it — ONE undo step (the copy's command and the apply's macro inside it).
+    // Everything that can refuse is asked BEFORE the macro opens.
+    QString error;
+    ProjectMaterialCopyCommand *command =
+        makeMaterialCopy(presetOrGuid, MaterialOrigin::Library, &error);
+    if (!command) return fail(error);
+    if (undo) undo->stack()->beginMacro(QObject::tr("Drop Material"));
+    const QString copy = pushMaterialCopy(command, &error);
+    const bool applied = !copy.isEmpty() && applyMaterialAsset(copy, target);
+    if (undo) undo->stack()->endMacro();
+    if (copy.isEmpty()) return fail(error);
+    if (!applied) return fail(QStringLiteral("the copy of '%1' could not be applied").arg(presetOrGuid));
+    return copy;
 }
 
 bool SceneEditService::applyResolvedMaterial(const QString &presetOrGuid,
