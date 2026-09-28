@@ -482,11 +482,12 @@ public:
     /// What an export did. `error` empty = the archive was written.
     struct NodeExportResult {
         QString error;
-        int     assets = 0;     ///< asset files packaged beside the scene blob
-        qint64  bytes = 0;      ///< the .jaf's size on disk
+        int     assets = 0;     ///< catalog rows carried (the node's own row included)
+        qint64  bytes = 0;      ///< the share file's size on disk
         bool ok() const { return error.isEmpty(); }
     };
-    /// Packages a node with its dependencies into a .jaf at filePath. The save
+    /// Packages a node with its whole closure into a share file (assetshare::exportNode)
+    /// at filePath. The save
     /// dialog stays in the shell; node.exportArchive (API-first) and the menu
     /// both land here. What a node exports as: services/nodeexport.h.
     NodeExportResult exportNodeTo(const iris::SceneNodePtr &node, ModelTypes modelType,

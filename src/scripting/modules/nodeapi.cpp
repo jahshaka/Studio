@@ -80,13 +80,16 @@ QVector<VerbInfo> NodeApi::verbs() const
           "rather than failing. The result is plain JSON — store it, diff it, edit it.",
           Needs::Document },
         { "exportArchive", "node.exportArchive(id, path, {type}) -> {path, type, assets, bytes}",
-          "EXPORT: packages the node, its subtree and every asset they reference into a "
-          "self-contained .jaf archive at `path` — the scene outliner's Export Object / Export "
+          "EXPORT: packages the node, its subtree and every asset they reference — rows and "
+          "bytes, the whole closure — into a self-contained share file (.jbundle, the format "
+          "assets.exportBundle writes) at `path`, which assets.import lands in any library, an "
+          "empty one included, as ONE new object tile that assets.addToScene places — the "
+          "scene outliner's Export Object / Export "
           "Particle System, which call the same service. What a node exports as is one rule: "
           "\"object\" for a mesh or empty that is not a built-in primitive, \"particleSystem\" "
           "for a particle system; anything else is refused, and so is a `type` that names the "
-          "other kind. `type` is optional (the rule answers it). `assets` is how many asset "
-          "files travelled beside the scene blob and `bytes` the archive's size. Needs an open "
+          "other kind. `type` is optional (the rule answers it). `assets` is how many catalog "
+          "rows travelled (the node's own row included) and `bytes` the archive's size. Needs an open "
           "project. An existing file at `path` is replaced only by a COMPLETE archive: the export "
           "is written beside it and renamed over it on success, so a failed export leaves the "
           "old file untouched. The menu's save dialog asks before replacing; a script is taken "

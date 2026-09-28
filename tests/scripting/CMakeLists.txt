@@ -775,6 +775,12 @@ set_tests_properties(scripting.e2e.perf_capture_frames PROPERTIES
 configure_file(scripts/e2e_import_render.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_import_render.js @ONLY)
 jah_pool_arm(assets_import import_render ${CMAKE_CURRENT_BINARY_DIR}/e2e_import_render.js 9)
 
+# assets_import.node_archive_roundtrip — ARCHIVE-ROUNDTRIP (D7): node.exportArchive's file is
+# self-contained — the source model, its members and its project removed and the store
+# collected, the file re-imports as one object tile that renders its own map. Engine up.
+configure_file(scripts/e2e_node_archive_roundtrip.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_node_archive_roundtrip.js @ONLY)
+jah_pool_arm(assets_import node_archive_roundtrip ${CMAKE_CURRENT_BINARY_DIR}/e2e_node_archive_roundtrip.js 12)
+
 # scripting.e2e.assets_page — the owner's Assets-module smoke round (S4-S7,
 # 2026-09-11): the import selects its tile, the preview is the size the editor
 # places (fit-to-size on both paths), the stored thumbnail is TEXTURED and

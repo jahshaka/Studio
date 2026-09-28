@@ -15,6 +15,7 @@ For more information see the LICENSE file
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QJsonDocument>
 #include <QJsonObject>
 #include <QTemporaryDir>
 
@@ -30,6 +31,8 @@ For more information see the LICENSE file
 #include "scripting/modules/moduleshared.h"
 #include "services/assetcas.h"
 #include "services/assetclosure.h"
+#include "io/assetrefs.h"
+#include "irisgl/core/irisutils.h"
 #include "services/assetstorepaths.h"
 #include "services/clipboardresolver.h"
 
@@ -47,61 +50,25 @@ QString fileFilter()
     return QStringLiteral("Jahshaka asset bundle (*.%1)").arg(QLatin1String(extension()));
 }
 
-ExportResult exportBundle(Database *db, Project *project, const QString &guid,
-                          const QString &destPath)
+namespace {
+
+/// THE ONE WRITER both exports share: the manifest v2 header describing
+/// `envelope.assets`, the envelope as the payload, zipped. WRITTEN BESIDE,
+/// RENAMED OVER (the QSaveFile shape the node export always had): a file
+/// already at `destPath` is replaced only by a complete archive, so a failed
+/// export never leaves the user with less than they had.
+ExportResult writeBundle(const clipboardformat::Envelope &envelope, const QString &kind,
+                         const QString &destPath)
 {
     ExportResult result;
     const auto fail = [&result](const QString &why) { result.error = why; return result; };
-    if (!db) return fail(QStringLiteral("no library is open"));
-    if (guid.isEmpty() || destPath.isEmpty())
-        return fail(QStringLiteral("an asset and a destination are required"));
 
-    const AssetRecord row = db->fetchAsset(guid);
-    if (row.guid.isEmpty()) return fail(QStringLiteral("no asset '%1'").arg(guid));
-
-    // THE WHOLE CLOSURE, WITH ITS BYTES. The budget is unbounded on purpose:
-    // this is the owner's portability rule, not the clipboard's size policy —
-    // a share file that referenced content by oid alone would open to nothing
-    // on a machine that has never seen it (§5, "Import on an EMPTY library").
-    assetclosure::Options options;
-    options.inlineLimitBytes = std::numeric_limits<qint64>::max();
-    options.includeRowBlobs = true;
-    options.storeRoot = AssetStorePaths::root();
-    if (project) options.projectGuid = project->getProjectGuid();
-
-    const QStringList closure = assetclosure::expand({ guid }, db);
-    int inlined = 0, referenced = 0;
-    const QMap<QString, clipboardformat::ClipAsset> assets =
-        assetclosure::describe(closure, db, options, &inlined, &referenced);
-    if (assets.isEmpty()) return fail(QStringLiteral("'%1' has nothing to carry").arg(row.name));
-
-    clipboardformat::Envelope envelope;
-    envelope.version = clipboardformat::kVersion;
-    envelope.app = Constants::CONTENT_VERSION;
-    envelope.created = QDateTime::currentDateTimeUtc().toString(Qt::ISODate);
-    envelope.source.storeRoot = AssetStorePaths::root();
-    AssetCas::readStoreInfo(AssetStorePaths::root(), &envelope.source.storeId, nullptr);
-    if (project) envelope.source.projectGuid = project->getProjectGuid();
-    envelope.assets = assets;
-
-    // ONE item, and it is the asset the file is ABOUT. The rest of the map is
-    // what it is made of; the resolver reads the item to know which guid the
-    // import should answer with.
-    clipboardformat::ClipItem item;
-    item.kind = QLatin1String(clipboardformat::kind::asset());
-    item.data = QJsonObject{ { QStringLiteral("guid"), guid },
-                             { QStringLiteral("name"), row.name },
-                             { QStringLiteral("type"), scriptmod::assetTypeName(row.type) } };
-    envelope.items.append(item);
-
-    // THE MANIFEST — the readable header, v2, in the format every other
-    // export in this app writes.
     exportformat::ExportManifest manifest;
     manifest.version = 2;
-    manifest.kind = scriptmod::assetTypeName(row.type);
+    manifest.kind = kind;
     manifest.generator = QStringLiteral("Jahshaka");
     manifest.created = envelope.created;
-    for (auto it = assets.constBegin(); it != assets.constEnd(); ++it) {
+    for (auto it = envelope.assets.constBegin(); it != envelope.assets.constEnd(); ++it) {
         exportformat::ManifestAsset entry;
         entry.guid = it.key();
         entry.name = it->name;
@@ -134,15 +101,141 @@ ExportResult exportBundle(Database *db, Project *project, const QString &guid,
             return fail(QStringLiteral("a short write"));
     }
 
+    const QString partial = destPath + QStringLiteral(".partial");
+    QFile::remove(partial);
     QString zipError;
-    if (!ZipHelper::zipDirectory(staging.path(), destPath, &zipError))
+    if (!ZipHelper::zipDirectory(staging.path(), partial, &zipError)) {
+        QFile::remove(partial);
         return fail(zipError.isEmpty() ? QStringLiteral("could not write the archive") : zipError);
+    }
+    if (QFile::exists(destPath) && !QFile::remove(destPath)) {
+        QFile::remove(partial);
+        return fail(QStringLiteral("the existing file at %1 could not be replaced").arg(destPath));
+    }
+    if (!QFile::rename(partial, destPath)) {
+        QFile::remove(partial);
+        return fail(QStringLiteral("the archive could not be moved into place at %1").arg(destPath));
+    }
 
     result.path = destPath;
-    result.kind = manifest.kind;
-    result.assets = assets.size();
+    result.kind = kind;
+    result.assets = envelope.assets.size();
     result.bytes = QFileInfo(destPath).size();
     return result;
+}
+
+/// The envelope's header, the same for both exports.
+clipboardformat::Envelope newEnvelope(Project *project)
+{
+    clipboardformat::Envelope envelope;
+    envelope.version = clipboardformat::kVersion;
+    envelope.app = Constants::CONTENT_VERSION;
+    envelope.created = QDateTime::currentDateTimeUtc().toString(Qt::ISODate);
+    envelope.source.storeRoot = AssetStorePaths::root();
+    AssetCas::readStoreInfo(AssetStorePaths::root(), &envelope.source.storeId, nullptr);
+    if (project) envelope.source.projectGuid = project->getProjectGuid();
+    return envelope;
+}
+
+/// THE WHOLE CLOSURE, WITH ITS BYTES. The budget is unbounded on purpose:
+/// this is the owner's portability rule, not the clipboard's size policy — a
+/// share file that referenced content by oid alone would open to nothing on a
+/// machine that has never seen it (§5, "Import on an EMPTY library").
+assetclosure::Options shareOptions(Project *project)
+{
+    assetclosure::Options options;
+    options.inlineLimitBytes = std::numeric_limits<qint64>::max();
+    options.includeRowBlobs = true;
+    options.storeRoot = AssetStorePaths::root();
+    if (project) options.projectGuid = project->getProjectGuid();
+    return options;
+}
+
+}   // namespace
+
+ExportResult exportBundle(Database *db, Project *project, const QString &guid,
+                          const QString &destPath)
+{
+    ExportResult result;
+    const auto fail = [&result](const QString &why) { result.error = why; return result; };
+    if (!db) return fail(QStringLiteral("no library is open"));
+    if (guid.isEmpty() || destPath.isEmpty())
+        return fail(QStringLiteral("an asset and a destination are required"));
+
+    const AssetRecord row = db->fetchAsset(guid);
+    if (row.guid.isEmpty()) return fail(QStringLiteral("no asset '%1'").arg(guid));
+
+    const QStringList closure = assetclosure::expand({ guid }, db);
+    int inlined = 0, referenced = 0;
+    const QMap<QString, clipboardformat::ClipAsset> assets =
+        assetclosure::describe(closure, db, shareOptions(project), &inlined, &referenced);
+    if (assets.isEmpty()) return fail(QStringLiteral("'%1' has nothing to carry").arg(row.name));
+
+    clipboardformat::Envelope envelope = newEnvelope(project);
+    envelope.assets = assets;
+
+    // ONE item, and it is the asset the file is ABOUT. The rest of the map is
+    // what it is made of; the resolver reads the item to know which guid the
+    // import should answer with.
+    clipboardformat::ClipItem item;
+    item.kind = QLatin1String(clipboardformat::kind::asset());
+    item.data = QJsonObject{ { QStringLiteral("guid"), guid },
+                             { QStringLiteral("name"), row.name },
+                             { QStringLiteral("type"), scriptmod::assetTypeName(row.type) } };
+    envelope.items.append(item);
+
+    // THE MANIFEST — the readable header, v2, in the format every other
+    // export in this app writes.
+    return writeBundle(envelope, scriptmod::assetTypeName(row.type), destPath);
+}
+
+ExportResult exportNode(Database *db, Project *project, const QJsonObject &nodeObject,
+                        const QString &name, int typeId, const QString &destPath)
+{
+    ExportResult result;
+    const auto fail = [&result](const QString &why) { result.error = why; return result; };
+    if (!db) return fail(QStringLiteral("no library is open"));
+    if (nodeObject.isEmpty() || destPath.isEmpty())
+        return fail(QStringLiteral("a node and a destination are required"));
+
+    // What the node is made of: the key-aware walk of its references (the
+    // clipboard's own table, io/assetrefs.h) and everything THOSE depend on.
+    const QStringList closure = assetclosure::forNodes({ nodeObject }, db);
+    QMap<QString, clipboardformat::ClipAsset> assets =
+        assetclosure::describe(closure, db, shareOptions(project));
+
+    // THE NODE BECOMES THE ROW THE FILE IS ABOUT: an Object (or ParticleSystem)
+    // row whose `asset` blob is the node — the shape every Object row has and
+    // `assets.addToScene` instantiates — minted here, under a fresh guid, so an
+    // import is one new library tile however many times the file is opened.
+    const QString rowGuid = IrisUtils::generateGUID();
+    clipboardformat::ClipAsset row;
+    row.guid = rowGuid;
+    row.name = name.isEmpty() ? QStringLiteral("Node") : name;
+    row.typeId = typeId;
+    row.type = scriptmod::assetTypeName(typeId);
+    row.viewFilter = static_cast<int>(AssetViewFilter::AssetsView);
+    row.blob = QJsonDocument(nodeObject).toJson(QJsonDocument::Compact);
+    for (const QString &ref : assetrefs::collectAssetGuids(nodeObject))
+        if (assets.contains(ref) && !row.dependencies.contains(ref)) row.dependencies.append(ref);
+    // THE CLOSURE HANGS UNDER THE NEW ROW. A member row's `parent` names the
+    // asset it belongs to — for a placed model, the library Object it was
+    // imported as, which is not in the file. Left as it was, every member
+    // would land under a guid the receiving library does not have; under the
+    // new row it is that row's bundle, which is what it is.
+    for (auto it = assets.begin(); it != assets.end(); ++it)
+        if (!it->parent.isEmpty() && !assets.contains(it->parent)) it->parent = rowGuid;
+    assets.insert(rowGuid, row);
+
+    clipboardformat::Envelope envelope = newEnvelope(project);
+    envelope.assets = assets;
+    clipboardformat::ClipItem item;
+    item.kind = QLatin1String(clipboardformat::kind::asset());
+    item.data = QJsonObject{ { QStringLiteral("guid"), rowGuid },
+                             { QStringLiteral("name"), row.name },
+                             { QStringLiteral("type"), row.type } };
+    envelope.items.append(item);
+    return writeBundle(envelope, row.type, destPath);
 }
 
 bool looksLikeBundle(const QString &path)

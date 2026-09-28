@@ -13,6 +13,7 @@ For more information see the LICENSE file
 #include "irisgl/core/math/quat.h"
 #include "irisgl/core/math/vec.h"
 #include "services/sceneeditservice.h"
+#include "services/assetshare.h"
 
 #include "irisgl/document/assets/mesh.h"
 
@@ -1638,92 +1639,20 @@ SceneEditService::NodeExportResult SceneEditService::exportNodeTo(const iris::Sc
         return result;
     }
 
-    // Construct a temporary dir to place all the files that will be packaged
-    QTemporaryDir temporaryDir;
-    if (!temporaryDir.isValid()) {
-        result.error = QStringLiteral("could not create a temporary directory");
+    // THE SHARE FILE, NOT THE LEGACY .jaf (ARCHIVE-ROUNDTRIP, D7). The node is
+    // captured exactly as the clipboard captures it; its references are read
+    // by the key-aware walk (io/assetrefs.h) — never by treating node guids as
+    // asset guids, which is what left the old archive's catalog empty — and
+    // assetshare writes the closure with every byte (services/assetshare.h).
+    const SceneFragment fragment = captureFragment(node);
+    if (fragment.isNull()) {
+        result.error = QStringLiteral("the node produced no fragment");
         return result;
     }
-
-    const QString writePath = temporaryDir.path();
-
-    // Create a blob containing the necessary tables and rows that are needed to recreate the asset
-    // Assets are exported AS IS with their guids, these are changed when being reimported
-    db->createBlobFromNode(node, QDir(writePath).filePath("asset.db"));
-
-    QDir tempDir(writePath);
-    tempDir.mkpath("assets");
-
-    // The manifest contains a single string telling the asset type
-    // This helps with some preliminary checks to avoid reading the db and encountering blobs etc
-    QFile manifest(QDir(writePath).filePath(".manifest"));
-    if (manifest.open(QIODevice::ReadWrite)) {
-        QTextStream stream(&manifest);
-        const int typeIndex = static_cast<int>(modelType);
-        stream << (typeIndex >= 0 && typeIndex < Project::ModelTypesAsString.size()
-                       ? Project::ModelTypesAsString[typeIndex]
-                       : Project::ModelTypesAsString[0]);
-    }
-    manifest.close();
-
-    // Collect all assets that will be exported and copy these to the temporary directory.
-    //
-    // TWO WALKS, ON PURPOSE (CLIPBOARD_SPEC §6.6). getChildGuids reads the
-    // subtree's NODE guids AS asset guids — an identity that holds for a node
-    // added straight from the library and that a PASTE or a DUPLICATE breaks by
-    // design (regenerateGuids mints fresh node guids). So a pasted model used to
-    // export with NO dependencies at all: a .jaf with a scene blob and an empty
-    // assets/ dir, which imports as an invisible node. The key-aware closure
-    // (io/assetrefs.h — the same table the clipboard uses) reads the REFERENCES
-    // out of the node object instead, which is what a dependency actually is.
-    // The legacy walk stays because it is still right for library-added nodes,
-    // where the row itself is the asset; the union is what has to travel.
-    QStringList assetGuids = AssetHelper::getChildGuids(node);
-    const SceneFragment exportFragment = captureFragment(node);
-    if (!exportFragment.isNull()) {
-        for (const QString &guid : assetclosure::forNodes({ exportFragment.node }, db))
-            if (!assetGuids.contains(guid)) assetGuids.append(guid);
-    }
-
-    for (const auto &guid : assetGuids) {
-        for (const auto &assetGuid : AssetHelper::fetchAssetAndAllDependencies(guid, db)) {
-            // Pin world (phase 4): bytes resolve through the project pin /
-            // library source — the flat project folder holds no assets.
-            QString name;
-            const QString assetPath = AssetCas::resolvePinned(
-                QSqlDatabase::database(), AssetStorePaths::root(),
-                project->getProjectGuid(), assetGuid, &name);
-            if (assetPath.isEmpty()) continue;
-            if (name.isEmpty()) name = db->fetchAsset(assetGuid).name;
-            if (name.isEmpty()) name = QFileInfo(assetPath).fileName();
-            if (QFile::copy(assetPath, IrisUtils::join(writePath, "assets", name)))
-                ++result.assets;
-        }
-    }
-
-    // ONE zip loop (amendment 7): shared helper. WRITTEN BESIDE, RENAMED OVER
-    // (the QSaveFile shape): an archive already at `filePath` is replaced only
-    // by a complete one, so a failed export never leaves the user with less
-    // than they had.
-    const QString partial = filePath + QStringLiteral(".partial");
-    QFile::remove(partial);
-    QString zipError;
-    if (!ZipHelper::zipDirectory(writePath, partial, &zipError)) {
-        QFile::remove(partial);
-        result.error = zipError.isEmpty() ? QStringLiteral("the archive could not be written")
-                                          : zipError;
-        return result;
-    }
-    if (QFile::exists(filePath) && !QFile::remove(filePath)) {
-        QFile::remove(partial);
-        result.error = QStringLiteral("the existing file at %1 could not be replaced").arg(filePath);
-        return result;
-    }
-    if (!QFile::rename(partial, filePath)) {
-        QFile::remove(partial);
-        result.error = QStringLiteral("the archive could not be moved to %1").arg(filePath);
-        return result;
-    }
-    result.bytes = QFileInfo(filePath).size();
+    const auto written = assetshare::exportNode(db, project, fragment.node, node->getName(),
+                                                static_cast<int>(modelType), filePath);
+    if (!written.ok()) { result.error = written.error; return result; }
+    result.assets = written.assets;
+    result.bytes = written.bytes;
     return result;
 }
