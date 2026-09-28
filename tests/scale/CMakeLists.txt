@@ -103,7 +103,7 @@ set(SCALE_T_BAKE 300)         # 48 s (a 250 k shell baked: W11 itself)
 set(SCALE_T_HIT 430)          # 71 s
 set(SCALE_T_WALKS 340)        # 47-57 s
 set(SCALE_T_SHADOW 300)       # 48 s (the world's boot + four 120-frame arms) x 6
-set(SCALE_T_SHADOW_SMALL 120) # the small world: floor
+set(SCALE_T_SHADOW_SMALL 150) # 24.4 s measured (the small world under the gate) x 6
 # scale.library: 108-110 s over a GENERATED library; a tree without one first generates it
 # (10,000 imports at ~84 ms each = ~14 min, 25 creates, 475 archive imports ~15 s) — the
 # one-time fixture cost, the reason this row's budget is 30 minutes and not 6 x 110 s.

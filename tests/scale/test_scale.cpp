@@ -1738,9 +1738,9 @@ static int frameArmsMain(bool lattice)
 //     drew each caster at the VIEW's level (the pin's shadow passes never compute LOD), i.e.
 //     the wrong geometry for the light, so its GPU time is no reference for a correct map
 //     (shadow.atom_parity is the physics: within a texel of the dense caster, where the old
-//     route was 10.7 texels off). Measured after ATOM-SHADOWS-1's fix round: 0.089 ms a map
-//     on D1's world (0.268 ms / 3 PSSM maps), 0.045 on the small one; the bar is 1.5x the
-//     world's, rounded: 0.13 ms a map, on both worlds.
+//     route was 10.7 texels off). Measured over three runs on D1's world: 0.065 / 0.089 / 0.102
+//     ms a map (3 PSSM maps), 0.044 on the small one; the bar is 1.5x the WORST seen, rounded:
+//     0.15 ms a map, on both worlds (1.27x the worst was a flake candidate under contention).
 // The caster pass = every pass of the view's shadow node (PassBucket::ShadowView), its scene
 // passes and the caster cut's passes together.
 static int shadowCutMain(bool smallWorld)
@@ -1766,7 +1766,7 @@ static int shadowCutMain(bool smallWorld)
             if (gpuOk) arm.gpu.push_back(gpu);
         }
     };
-    constexpr double kGpuMsPerMapBar = 0.13;
+    constexpr double kGpuMsPerMapBar = 0.15;
     auto runWorld = [&](const char *label, WorldSpec spec, double cpuBar, double gpuBarPerMap) {
         Env env;
         World w;
