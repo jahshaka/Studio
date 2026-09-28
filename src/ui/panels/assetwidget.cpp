@@ -10,6 +10,7 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "ui/panels/assetwidget.h"
+#include "scripting/modules/assetsapi.h"
 
 #include "ui/dialogs/importsettingsdialog.h"
 #include "ui_assetwidget.h"
@@ -1190,6 +1191,16 @@ void AssetWidget::sceneViewCustomContextMenu(const QPoint& pos)
         }
 
 		if (item->data(MODEL_TYPE_ROLE).toInt() == static_cast<int>(ModelTypes::Material)) {
+			// DUPLICATE (TRAY-DUPLICATE-1, the owner 2026-09-28): a copy of this
+			// material in the project, named by the project's own naming,
+			// selected and ready to edit — the verb `assets.duplicate`, the
+			// same copy a library drop makes. The action is the MENU's (it dies
+			// with it); the slot runs after exec() has returned the choice.
+			const QString materialGuid = item->data(MODEL_GUID_ROLE).toString();
+			QAction *duplicateAction = menu.addAction(tr("Duplicate"));
+			connect(duplicateAction, &QAction::triggered, this,
+			        [this, materialGuid]() { duplicateMaterial(materialGuid); });
+
 			action = new QAction(QIcon(), "Export Material", this);
 			connect(action, SIGNAL(triggered()), this, SLOT(exportMaterial()));
 			menu.addAction(action);
@@ -2130,6 +2141,30 @@ void AssetWidget::createMaterial()
 	for (int i = 0; i < ui->assetView->count(); ++i) {
 		QListWidgetItem *item = ui->assetView->item(i);
 		if (item->data(MODEL_GUID_ROLE).toString() != guid) continue;
+		ui->assetView->setCurrentItem(item);
+		assetItem.wItem = item;
+		emit assetItemSelected(item);
+		break;
+	}
+}
+
+void AssetWidget::duplicateMaterial(const QString &materialGuid)
+{
+	if (!db || !project || project->getProjectGuid().isEmpty()) return;
+	if (!mainWindow || !mainWindow->scripting()) return;
+	AssetsApi api(mainWindow->scripting()->scriptHost());
+	const QString copy = api.quietly([&] { return api.duplicate(materialGuid); });
+	if (copy.isEmpty()) {
+		QMessageBox::warning(this, tr("Duplicate"),
+		                     tr("The material could not be duplicated: %1").arg(api.lastError()));
+		return;
+	}
+	refresh();
+	// SELECTED AND READY TO EDIT: the copy is the project's own row, so the
+	// Materials module opens it editable on the user's double-click.
+	for (int i = 0; i < ui->assetView->count(); ++i) {
+		QListWidgetItem *item = ui->assetView->item(i);
+		if (item->data(MODEL_GUID_ROLE).toString() != copy) continue;
 		ui->assetView->setCurrentItem(item);
 		assetItem.wItem = item;
 		emit assetItemSelected(item);

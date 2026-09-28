@@ -379,6 +379,10 @@ private:
     /// aborts the Debug build (SPECS/IMPORT_DIALOG_SPEC.md §8).
     bool mAsking = false;
 
+    /// The tray's Duplicate (TRAY-DUPLICATE-1): `assets.duplicate`, then the
+    /// copy's tile selected.
+    void duplicateMaterial(const QString &materialGuid);
+
     Ui::AssetWidget *ui;
     QPoint startPos;
 

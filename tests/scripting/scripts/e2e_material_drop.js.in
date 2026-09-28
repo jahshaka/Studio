@@ -1,4 +1,5 @@
-// editor.material_drop — THE LIBRARY IS THE SOURCE (MATERIAL-DROP-1); the owner, 2026-09-28.
+// editor.material_drop — THE LIBRARY IS THE SOURCE (MATERIAL-DROP-1) and the tray's Duplicate
+// is the same copy (TRAY-DUPLICATE-1); the owner, 2026-09-28.
 //
 // What was wrong: dropping a LIBRARY material onto an asset when the project already held a
 // material born from the same library entry REUSED that project material, the owner's edits
@@ -7,7 +8,9 @@
 //   1. a drop FROM THE LIBRARY is a fresh, pristine project copy, named by the project's own
 //      naming — "Wood PBR", then "Wood PBR 2", "3" — whatever was done to an earlier copy;
 //   2. a drop FROM THE PROJECT's tray ASSIGNS that material: no new entry;
-//   3. the viewport's drop (editor.dragAsset, the real drag events) does exactly 1 and 2,
+//   3. assets.duplicate(id) is a copy of the project's own material (its edits included),
+//      named by the same rule, independent of its source, and a tile in the tray;
+//   4. the viewport's drop (editor.dragAsset, the real drag events) does exactly 1 and 2,
 //      and its hover preview of a LIBRARY tile shows the pristine material.
 // Engine up (the gesture needs the viewport); the Low tier (verbs and counts, no picture).
 
@@ -86,7 +89,29 @@ assert(notMine.indexOf("not one of this project's materials") >= 0,
 assert(caught(function () { material.drop(cubeB, WOOD, { from: "tray" }); }).length > 0,
        "an unknown `from` is refused");
 
-// ---- 4. THE GESTURE: the viewport's drop is the verb ------------------------------
+// ---- 4. assets.duplicate: an independent copy, the same naming, a tray tile ---------
+var dup = assets.duplicate(d1.guid);
+var dupName = assets.metadata(dup).name;
+assert(dup && dup !== d1.guid, "assets.duplicate made a copy: " + dup);
+assert(dupName === "Wood PBR 3", "...named by the same rule: 'Wood PBR 3' (got '" + dupName + "')");
+material.drop(cubeC, dup, { from: "project" });
+assert(near(rough(cubeC), 0.13), "...a copy of the PROJECT's version, the edit included");
+var dupOfTwo = assets.duplicate(d2.guid);
+assert(assets.metadata(dupOfTwo).name === "Wood PBR 4",
+       "a duplicate of 'Wood PBR 2' counts on from its own number: '"
+       + assets.metadata(dupOfTwo).name + "'");
+// Independent: an edit of the copy leaves the source alone.
+editRoughness(dup, 0.77);
+assert(near(rough(cubeC), 0.77) && near(rough(cubeA), 0.13),
+       "an edit to the duplicate leaves its source (and the meshes wearing it) untouched");
+assert(projectMaterials().length === before + 4, "...each duplicate is one project material");
+var tray = editor.trayAssets().map(function (t) { return t.guid; });
+assert(tray.indexOf(dup) >= 0, "the duplicate is a tile in the project's asset tray");
+var tileTex = assets.list({ scope: "project", type: "texture", query: "Tile.png" })[0].guid;
+assert(caught(function () { assets.duplicate(tileTex); }).indexOf("only a material duplicates") >= 0,
+       "a non-material is refused by name");
+
+// ---- 5. THE GESTURE: the viewport's drop is the verb ------------------------------
 function pixelOf(id) {
     for (var y = 20; y < 1060; y += 10)
         for (var x = 20; x < 1900; x += 10) {
@@ -112,8 +137,8 @@ editor.frame(2);
 var after = names();
 console.log("project materials after two gesture drops: " + J(after));
 assert(projectMaterials().length === count0 + 2, "two library DRAG-drops = two project materials");
-assert(after.indexOf("Wood PBR 3") >= 0 && after.indexOf("Wood PBR 4") >= 0,
-       "...named 'Wood PBR 3' and 'Wood PBR 4'");
+assert(after.indexOf("Wood PBR 5") >= 0 && after.indexOf("Wood PBR 6") >= 0,
+       "...named 'Wood PBR 5' and 'Wood PBR 6'");
 assert(near(rough(cubeD), pristine), "...and the node wears the pristine copy");
 editor.dragAsset(d1.guid, pd[0], pd[1], { action: "drop", from: "project" });
 editor.frame(2);
