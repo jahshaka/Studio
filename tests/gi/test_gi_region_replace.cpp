@@ -163,9 +163,14 @@ int main()
     const int scratchFrames = toRest(e, s);
     const double scratchMs =
         std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t1).count();
-    // THE SECOND PAIR, the order reversed in effect (the first pair's re-placement paid
-    // whatever the process had not compiled yet): another region growth, re-placed,
-    // then the from-scratch build again.
+    // THE SECOND PAIR: another region growth, re-placed, then the from-scratch build
+    // again. The FIRST re-placement pays ~0.7 s the second does not (970 vs 275 ms):
+    // one HlmsPbs vertex+pixel pair compiled for the probe SCOUT's capture pass
+    // (the log's "100000002"), because the scene's pass state changed after the
+    // initial build — the ray-query tier opened after it — so the re-placement's
+    // scout is the first capture of a new variant. A cold shader cache only: the
+    // product's disk cache holds it from then on (and the from-scratch arm after it,
+    // in this process, reads the compiled variant). Not a defect.
     enginetest::setNodePosition(s, boxes[2], Vec3(-8.0f, 0.25f, 16.0f));
     const auto t2 = std::chrono::steady_clock::now();
     s->refreshGlobalIllumination(GiRefreshReason::Explicit);
