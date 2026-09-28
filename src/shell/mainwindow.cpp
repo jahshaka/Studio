@@ -1593,12 +1593,7 @@ void MainWindow::switchSpace(WindowSpaces space, bool force)
 		playerView->end();
 		break;
 	case WindowSpaces::EDITOR:
-		// THE LAYOUT THE EDITOR HAD, taken before the next space hides its
-		// docks (lane SPACE-1). Everything below this line is a page that
-		// shows no panels, and saving THAT at exit is what left the owner
-		// with an editor that opened empty.
-		captureEditorDockState();
-		sceneView->end();
+		leaveEditorSpace();
 		break;
     default:
         break;
@@ -3396,9 +3391,9 @@ QFont MainWindow::headerGlyphFont() const
 /// widget's sizeHint, and every entry to the editor page shows these docks, so
 /// a resizeDocks from the constructor (queued or not) is simply undone —
 /// measured twice on the rig before this landed. It has to run after the page
-/// is up, which is why it is queued, and it has to run for BOTH ways the editor
-/// page appears: a user switching space, and the scripted/MCP boot, which shows
-/// the page directly (beginEngineSelftest) and never calls switchSpace.
+/// is up, which is why it is queued; enterEditorSpace runs it, which is the one
+/// way the editor page appears (a user's switch, a load's reveal, and the
+/// scripted/MCP boot — enterEditorOnNewScene).
 ///
 /// ONCE per session. After that the user's drag is the answer — these are
 /// starting sizes, not constraints.
@@ -5770,9 +5765,8 @@ void MainWindow::hideEditorPanels()
 //
 // THE PAGE, NOT `currentSpace` (round-2 review). They are the same thing for
 // every path a user takes, and different for the one a SCRIPT takes:
-// beginEngineSelftest shows page 1 directly and calls applyColumnWidthsOnce
-// with currentSpace still DESKTOP (the scripted/MCP boot never calls
-// switchSpace), so keying on the space hid all five docks one loop turn into
+// enterEditorOnNewScene runs enterEditorSpace with currentSpace still DESKTOP
+// (the scripted/MCP boot never calls switchSpace), so keying on the space hid all five docks one loop turn into
 // every scripted session that had a stored layout. `ui->stackedWidget`'s
 // current index is what "the editor is what the user is looking at" actually
 // means — it is the same reading app.docks() reports as `visible`.
@@ -6083,32 +6077,38 @@ void MainWindow::resetOverlaysToDefaults()
     if (physicsCheckAction) physicsCheckAction->setChecked(defaults.showDebugDrawFlags);
 }
 
-bool MainWindow::beginEngineSelftest(QString &why)
+// THE SCRIPTED BOOT TAKES THE PRODUCT ROUTE (VIEWS-XID-1). It used to be a
+// second way onto the editor page — the stacked index set directly, newScene(),
+// sceneView->begin() — and the old pool runner used it to RE-SHOW the page
+// after an arm had a camera PiP up: the Xid 13 "3D WIDTH ZT" device loss of
+// 2026-09-27 (spikes/views-xid-1/). Now it is the scene a File > New makes and
+// the one editor entry a user's switch and a load's reveal both run.
+bool MainWindow::enterEditorOnNewScene(QString &why)
 {
     if (!EngineHost::instance().isRunning()) {
         why = "the engine is not running (engine failed to start?)";
         return false;
     }
-    // The editor page of the stacked widget; showing it gives the viewport its
-    // native window, and with it the engine View and Scene.
-    ui->stackedWidget->setCurrentIndex(1);
-    sceneView->setWindowSpace(WindowSpaces::EDITOR);
-    QCoreApplication::processEvents();
+    newScene();
+    if (!enterEditorSpace()) {
+        why = spaceRefusal.isEmpty() ? QStringLiteral("the editor page refused to start")
+                                     : spaceRefusal;
+        return false;
+    }
     if (!sceneView->isInitialized()) {
         why = "the engine viewport has no view after being shown";
         return false;
     }
-    newScene();
-    sceneView->begin();
-    // The scripted/MCP boot shows this page without switchSpace(), so it needs
-    // its own call — a screenshot taken over MCP must show the layout a user
-    // gets, not a narrower one.
-    applyColumnWidthsOnce();
     return true;
 }
 
-void MainWindow::endEngineSelftest()
+void MainWindow::leaveEditorSpace()
 {
+    // THE LAYOUT THE EDITOR HAD, taken before the next space hides its docks
+    // (lane SPACE-1). Everything after this is a page that shows no panels, and
+    // saving THAT at exit is what left the owner with an editor that opened
+    // empty.
+    captureEditorDockState();
     sceneView->end();
 }
 

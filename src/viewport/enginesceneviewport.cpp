@@ -2344,6 +2344,18 @@ void EngineSceneViewport::setPipSize(double fraction)
         st->setValue("camera/pip_size", f);
 }
 
+bool EngineSceneViewport::pipOnView() const
+{
+    const jahshaka::engine::View *v = view();
+    return v && v->pip().enabled;
+}
+
+unsigned EngineSceneViewport::pipBuilds() const
+{
+    const jahshaka::engine::View *v = view();
+    return v ? v->pipGeneration() : 0u;
+}
+
 // THE SELECTION PREVIEW (D3), pushed once a frame from syncFrame. It exists
 // only while the conditions all hold, and each of them is a decision:
 //   * the preference is on;
@@ -2357,7 +2369,11 @@ void EngineSceneViewport::setPipSize(double fraction)
 // byte-exact — no workspace, no trace.
 void EngineSceneViewport::syncPip()
 {
-    if (!mMirror || !view()) return;
+    if (!view()) return;
+    // NO MIRROR, NO INSET (VIEWS-XID-1): the scene is between a close and the
+    // next bind, so there is no camera to preview — say so to the View rather
+    // than returning with the last scene's request still standing on it.
+    if (!mMirror) { view()->setPip(jahshaka::engine::ViewPipDesc{}); return; }
     iris::CameraNodePtr cam;
     if (mPipEnabled && !mGameView && !mPlaying) {
         cam = mSelectedNode.dynamicCast<iris::CameraNode>();
@@ -4192,6 +4208,13 @@ void EngineSceneViewport::clearScene()
     // nothing in the next process.)
     rememberPassShape();
     if (mOverlay) { mOverlay->clear(); mOverlay.reset(); }
+    // THE INSET IS WITHDRAWN BEFORE THE MIRROR GOES (VIEWS-XID-1). Once the
+    // mirror is reset syncPip has no camera to preview and cannot speak for
+    // this scene; a PiP request left standing on the View was rebuilt on the
+    // NEXT scene by its first attach and drawn by the re-show's cover frames —
+    // the Xid 13 "3D WIDTH ZT" device loss (spikes/views-xid-1/). The engine
+    // also drops the request on detach; the host does not rely on that.
+    if (view()) view()->setPip(jahshaka::engine::ViewPipDesc{});
     if (mMirror) { mMirror->setSource(nullptr); mMirror.reset(); }
     if (view()) {
         view()->setScene(nullptr);

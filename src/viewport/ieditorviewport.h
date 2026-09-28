@@ -271,6 +271,13 @@ public:
     virtual void setPipEnabled(bool) {}
     virtual double pipSize() const { return 0.0; }
     virtual void setPipSize(double) {}
+    /// The ENGINE's reading of the inset, beside the preference above
+    /// (VIEWS-XID-1): whether the View holds an inset request right now, and
+    /// how many times the View has BUILT an inset workspace in its life. A
+    /// scene bind that raises `pipBuilds` without a camera selected is the
+    /// stale-request defect (an inset rebuilt on a scene that never asked).
+    virtual bool pipOnView() const { return false; }
+    virtual unsigned pipBuilds() const { return 0; }
 
     /// The camera speed changed under the viewport's feet — the wheel stepped
     /// it while the camera was flying. The viewport shows the number briefly

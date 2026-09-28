@@ -299,7 +299,7 @@ QVector<VerbInfo> EditorApi::verbs() const
           "a camera id pilots that camera. Exactly editor.pilot with the dropdown's vocabulary — the "
           "two are one mechanism, and this is the name the UI speaks.",
           Needs::Engine },
-        { "pip", "editor.pip() -> {enabled, size, camera}",
+        { "pip", "editor.pip() -> {enabled, size, camera, onView, builds}",
           "The selection preview inset (CAMERAS_SPEC D3): `enabled` the preference (persisted), "
           "`size` its width as a fraction of the viewport (0.08-0.6, persisted), and `camera` the "
           "camera it is showing RIGHT NOW or null. The inset appears bottom-right while a scene "
@@ -307,9 +307,12 @@ QVector<VerbInfo> EditorApi::verbs() const
           "camera — so `camera` can be null while `enabled` is true. The inset is GRADED like the "
           "viewport (CAMERAS_SPEC §7.2 Route C): it renders into its own target and goes through "
           "the same tonemapper, carrying the previewed camera's own exposure and post overrides — "
-          "so what it shows is that camera's shot, not the world's look.",
+          "so what it shows is that camera's shot, not the world's look. `onView` and `builds` are "
+          "the ENGINE's reading: whether the viewport's View holds an inset request right now, and "
+          "how many times it has built an inset in its life — a close or a new scene never raises "
+          "`builds` (a request dies with the scene it was made on).",
           Needs::Engine },
-        { "setPip", "editor.setPip({enabled?, size?}) -> {enabled, size, camera}",
+        { "setPip", "editor.setPip({enabled?, size?}) -> {enabled, size, camera, onView, builds}",
           "Writes the selection-preview preferences and returns the state that resulted (the same "
           "shape editor.pip() reports). Both keys are optional and both persist; an unknown key is "
           "REFUSED. `size` is clamped to 0.08-0.6. This is the Preferences row's own path — the UI "
@@ -1761,6 +1764,11 @@ QVariantMap EditorApi::pip()
         if (cam && cam != host.viewport->pilotedCamera()) showing = cam->getGUID();
     }
     out["camera"] = showing;
+    // THE ENGINE'S OWN READING (VIEWS-XID-1): what the View is holding, not
+    // what the host decided — the two disagreed when a closed scene's inset
+    // request survived onto the next scene.
+    out["onView"] = host.viewport->pipOnView();
+    out["builds"] = host.viewport->pipBuilds();
     return out;
 }
 

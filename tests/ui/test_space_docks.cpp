@@ -382,7 +382,7 @@ int main(int argc, char **argv)
         mcp.initialize();
 
         // THE BOOT STATE, BEFORE ANY SPACE SWITCH (round-2 review). The
-        // scripted/MCP boot shows the editor page directly (beginEngineSelftest)
+        // scripted/MCP boot enters the editor page (enterEditorOnNewScene)
         // and never calls switchSpace, so this reading is the one a script or an
         // MCP client sees — and it is the one a visibility rule keyed on
         // `currentSpace` (still DESKTOP here) got wrong, hiding all five docks
