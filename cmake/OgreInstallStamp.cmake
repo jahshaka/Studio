@@ -36,6 +36,15 @@ function(jah_ogre_install_stamp_problem out prefix src)
         return()
     endif()
     file(STRINGS "${prefix}/BUILT_FROM" _lines)
+    list(LENGTH _lines _n)
+    if(_n EQUAL 0)
+        # A build-ogre.sh that died inside its `{ ... } > BUILT_FROM` group leaves
+        # exactly this: the file, empty.
+        string(CONCAT _msg "The Ogre-Next install at ${prefix} has an EMPTY BUILT_FROM record (the "
+                           "build that wrote it did not finish). ${_remedy}")
+        set(${out} "${_msg}" PARENT_SCOPE)
+        return()
+    endif()
     list(GET _lines 0 _built)
     string(STRIP "${_built}" _built)
     if(NOT _built STREQUAL _head)

@@ -10,7 +10,8 @@
 # cmake/IncludeOgre.cmake is the caller. This drives the SAME function in script
 # mode against scratch fixtures (a one-commit git repo as the checkout, a fake
 # install as the prefix) and asserts every refusal and every acceptance, then that
-# the writer (build-ogre.sh) and the caller (IncludeOgre.cmake) are still wired.
+# the writer (build-ogre.sh) and the caller (IncludeOgre.cmake) are still wired, and
+# that the install prune (prune-ogre-install.sh) survives a trailing-slash prefix.
 #
 # $1 = the repo root
 set -u
@@ -64,6 +65,8 @@ printf '%s\nbuildsettings %s\n' "$OLD_SHA" "$BS" > "$PREFIX/BUILT_FROM"
 run refuse "an install built from ANOTHER fork commit is refused" "STALE ENGINE"
 rm -f "$PREFIX/BUILT_FROM"
 run refuse "an install with no BUILT_FROM record is refused" "no BUILT_FROM"
+: > "$PREFIX/BUILT_FROM"
+run refuse "an EMPTY BUILT_FROM (a build-ogre.sh that died writing it) is refused with the remedy" "EMPTY"
 printf '%s\n' "$NEW_SHA" > "$PREFIX/BUILT_FROM"
 run refuse "a record without the buildsettings hash is refused" "buildsettings"
 printf '%s\nbuildsettings %s\n' "$NEW_SHA" "0000$BS" > "$PREFIX/BUILT_FROM"
@@ -73,6 +76,25 @@ run refuse "an OgreBuildSettings.h the script did not install is refused" "OgreB
 printf '%s\nbuildsettings %s\n' "$NEW_SHA" "$BS" > "$PREFIX/BUILT_FROM"
 git -C "$SRC" -c user.name=t -c user.email=t@t commit -q --allow-empty -m three
 run refuse "the same install after the checkout moved one commit is refused" "STALE ENGINE"
+
+# THE PRUNE (irisgl/scripts/prune-ogre-install.sh): an orphan goes, a listed file
+# stays - and a prefix spelled with a trailing slash (the manifest never has one) prunes
+# exactly the same, never the whole install; a manifest that matches nothing refuses.
+PRUNE="$ROOT/irisgl/scripts/prune-ogre-install.sh"
+P2="$T/prune"; mkdir -p "$P2/include/OGRE-Next" "$P2/lib" "$P2/bin"
+: > "$P2/include/OGRE-Next/Kept.h"; : > "$P2/include/OGRE-Next/Orphan.h"; : > "$P2/lib/libKept.so"
+printf '%s\n' "$P2/include/OGRE-Next/Kept.h" "$P2/lib/libKept.so" > "$T/manifest.txt"
+if bash "$PRUNE" "$P2/" "$T/manifest.txt" > /dev/null && [ -f "$P2/include/OGRE-Next/Kept.h" ] &&
+   [ -f "$P2/lib/libKept.so" ] && [ ! -e "$P2/include/OGRE-Next/Orphan.h" ]; then
+    ok "the prune with a trailing-slash prefix removes the orphan and keeps the listed files"
+else bad "the prune with a trailing-slash prefix did not keep exactly the manifest"; fi
+printf '%s\n' "/elsewhere/include/OGRE-Next/Kept.h" > "$T/manifest-other.txt"
+if ! bash "$PRUNE" "$P2" "$T/manifest-other.txt" > /dev/null 2>&1 && [ -f "$P2/include/OGRE-Next/Kept.h" ]; then
+    ok "a manifest that names none of the install's files is REFUSED and nothing is pruned"
+else bad "a manifest spelled with another prefix pruned the install (or was accepted)"; fi
+grep -q 'prune-ogre-install.sh' "$ROOT/irisgl/scripts/build-ogre.sh" &&
+    ok "build-ogre.sh prunes through prune-ogre-install.sh" ||
+    bad "build-ogre.sh no longer prunes through prune-ogre-install.sh"
 
 # The wiring: the writer writes the format the reader reads, and configure calls it.
 grep -q 'echo "buildsettings ' "$ROOT/irisgl/scripts/build-ogre.sh" &&
