@@ -23,6 +23,7 @@
 #   scripting.e2e.editor_controls.timing 71.87  <- its D6B dev run
 #   shadercache.container_asan 247.95  <- a recorded nightly run (spikes/)
 #   ui.components.timing 2.97  <- its D6B dev run
+#   threading.newproject_stall.timing 14.72  <- its TESTING-DEBTS-1 dev run (the fixture: a wipe)
 #   ui.properties_filter.timing 0.73  <- its D6B dev run
 #   vr.frame_budget 129.68  <- the before-run at 51e9f2c49
 #   vr.warmup.timing 49.73  <- its push row's worst gate run (same binary)
@@ -511,6 +512,7 @@ threading.freshhome.import_soak 0.01
 threading.freshhome.mode 0.43
 threading.freshhome.mode_serial 0.01
 threading.freshhome.newproject_stall 0.01
+threading.freshhome.newproject_stall_timing 0.01
 threading.freshhome.texture_wait_watchdog 0.01
 threading.gi_resolve 30.89
 threading.gi_resolve_pixels 0.01
@@ -522,6 +524,7 @@ threading.mode_pixels 0.01
 threading.mode_serial 58.17
 threading.newproject_stall 24.83
 threading.newproject_stall.no_groupless_texture 0.01
+threading.newproject_stall.timing 14.72
 threading.staging_race 2.35
 threading.texture_wait_watchdog 38.03
 thumbnails.engine 3.44

@@ -298,7 +298,8 @@ evidence string in the report (host-load timing, the texture-worker SEGV class).
 by VRAM, so an OOM means the budget is wrong (a class under-counted, a row outside it) or an
 unadmitted process filled the card — the verdict names which (`scripts/gpu-admit.sh status` and
 `nvidia-smi` beside the red). Known contention-sensitive suites: open.responsive,
-app.engine_selftest_validation, app.input_keys, threading.newproject_stall,
+app.engine_selftest_validation, app.input_keys, threading.newproject_stall.timing (the
+nightly twin of the first create's 1000 ms bar; the push row prints it, TESTING-DEBTS-1),
 scenegraph.benchmark, shadergraph.bake_output, claude.chat, scripting.e2e.space_switch /
 sun_light, ui.media_lazy, gi.budget, scripting.e2e.reflection_map (the GI/VRAM contention
 class; L8's gate, 2026-09-11). Every failure in a gate report carries a verdict
@@ -354,7 +355,7 @@ own XDG_RUNTIME_DIR, so the "one socket" reason was void; vr.eye_grade captures 
 with `xwd -id` and therefore runs on ITS OWN Xvfb, displays 241-299); `gi_chain` — the
 cascade-chain rows (their VRAM reason was measured false). RUN_SERIAL remains only where the
 audit kept it (app.input_keys, app.watchdog_stall, gi.field_scroll, threading.mode /
-mode_serial / gi_resolve / gi_resolve_serial / newproject_stall, and the nightly benches).
+mode_serial / gi_resolve / gi_resolve_serial, newproject_stall.timing, and the nightly benches).
 
 ## 4b. THE VRAM BUDGET — box-wide tokens (lane GATE-ADMIT-1, 2026-09-27)
 
