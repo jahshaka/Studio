@@ -333,8 +333,15 @@ int main(int argc, char **argv)
     gi.mode = GiMode::Vct;
     gi.quality = GiQuality::High;
     gi.numBounces = 1;
-    gi.testProbeRegionMin = Vec3(-14.0f, -2.0f, -14.0f);
-    gi.testProbeRegionMax = Vec3(14.0f, 10.0f, 7.0f);
+    // ONE PINNED CAMERA-CENTRED CASCADE where the deleted single volume was pinned
+    // (D4-PHOTON-TIERS): the subject is the rays against one voxel volume.
+    gi.cascadeCount = 1;
+    gi.cascadeSet[0] = GiParams::GiCascadeDesc{ 14.0f, 128, 0.0f };
+    // THE GATHER OFF (D4-PHOTON-TIERS): this suite's subject is the REFLECTION, and
+    // its rays-on / rays-off A/Bs would otherwise also switch the diffuse between the
+    // screen-probe gather and the cones (the gather needs the rays) — on the matte
+    // emitter of the screen-first fixture that was 2-8/255 over a third of the region.
+    gi.gather = GiToggle::Off;
     CHECK(s->setGlobalIllumination(gi), "the voxel arm builds over the whole fixture");
 
     // The camera stands BETWEEN the cube and the wall and looks at the wall.
@@ -397,9 +404,17 @@ int main(int argc, char **argv)
     // arm reads 0.0533, so the ray's INCREMENT over the fallback is 0.0218 where
     // it was 0.0335. The ray's own answer did not move; the floor it is measured
     // against did, because that floor was pi times too dark.
-    CHECK_MSG(red > redPlain + 0.02f,
-              "THE MIRROR SHOWS WHAT IS BEHIND THE CAMERA: red excess %.4f against the "
-              "control's %.4f",
+    // RE-ANCHORED BY D4-PHOTON-TIERS, and again the FLOOR moved, not the rays: the
+    // ray arm reads 0.0756, exactly the base's. The control is the voxel cone, and
+    // under the camera's cascade chain (the single volume it ran on is deleted) the
+    // cone reaches the cube behind the camera too — 0.0606 where the fitted volume
+    // read 0.0011 — so the ray's increment over it is no longer the measure of "the
+    // rays show it". The claim is held as: the traced answer is unmistakable in its
+    // own right (at least the 0.05 it has read since 0087), never below the cone's,
+    // and case 3 below proves it IS the cube (moved away: 0).
+    CHECK_MSG(red > 0.05f && red >= redPlain,
+              "THE MIRROR SHOWS WHAT IS BEHIND THE CAMERA: red excess %.4f (the cone control "
+              "%.4f)",
               red, redPlain);
 
     // ---- 3: it really is the cube -------------------------------------------
@@ -1068,8 +1083,10 @@ static int costMain(Engine *e, const char *, const char *)
     gi.mode = GiMode::Vct;
     gi.quality = GiQuality::High;
     gi.numBounces = 1;
-    gi.testProbeRegionMin = Vec3(-13.0f, -2.0f, -13.0f);
-    gi.testProbeRegionMax = Vec3(13.0f, 11.0f, 13.0f);
+    // ONE PINNED CAMERA-CENTRED CASCADE where the deleted single volume was pinned
+    // (D4-PHOTON-TIERS): the subject is the rays against one voxel volume.
+    gi.cascadeCount = 1;
+    gi.cascadeSet[0] = GiParams::GiCascadeDesc{ 13.0f, 128, 0.0f };
     CHECK(s->setGlobalIllumination(gi), "the voxel arm builds over the mirror box");
     enginetest::testCameraLookAt(view, Vec3(0.0f, 3.0f, -4.0f), Vec3(2.0f, 3.0f, 6.0f));
 
@@ -1354,8 +1371,10 @@ static int lampMain(Engine *e, bool target)
     gi.mode = GiMode::Vct;
     gi.quality = GiQuality::High;
     gi.numBounces = 1;
-    gi.testProbeRegionMin = Vec3(-14.0f, -6.0f, -16.0f);
-    gi.testProbeRegionMax = Vec3(14.0f, 12.0f, 7.0f);
+    // ONE PINNED CAMERA-CENTRED CASCADE where the deleted single volume was pinned
+    // (D4-PHOTON-TIERS): the subject is the rays against one voxel volume.
+    gi.cascadeCount = 1;
+    gi.cascadeSet[0] = GiParams::GiCascadeDesc{ 16.0f, 128, 0.0f };
     CHECK(s->setGlobalIllumination(gi), "the voxel arm builds over the whole fixture");
 
     PostFxDesc fx;
@@ -1581,8 +1600,10 @@ static int hitresMain(Engine *e)
     gi.mode = GiMode::Vct;
     gi.quality = GiQuality::High;
     gi.numBounces = 1;
-    gi.testProbeRegionMin = Vec3(-8.0f, -3.0f, -8.0f);
-    gi.testProbeRegionMax = Vec3(8.0f, 6.0f, 8.0f);
+    // ONE PINNED CAMERA-CENTRED CASCADE where the deleted single volume was pinned
+    // (D4-PHOTON-TIERS): the subject is the rays against one voxel volume.
+    gi.cascadeCount = 1;
+    gi.cascadeSet[0] = GiParams::GiCascadeDesc{ 8.0f, 128, 0.0f };
     gi.cards = GiToggle::On;
     gi.cardResidencyRadius = 40.0f;
     CHECK(s->setGlobalIllumination(gi), "the voxel arm and the surface cache build");
@@ -1879,8 +1900,10 @@ static int footprintSweepMain(Engine *e)
     gi.mode = GiMode::Vct;
     gi.quality = GiQuality::High;
     gi.numBounces = 1;
-    gi.testProbeRegionMin = Vec3(-14.0f, -2.0f, -14.0f);
-    gi.testProbeRegionMax = Vec3(14.0f, 10.0f, 7.0f);
+    // ONE PINNED CAMERA-CENTRED CASCADE where the deleted single volume was pinned
+    // (D4-PHOTON-TIERS): the subject is the rays against one voxel volume.
+    gi.cascadeCount = 1;
+    gi.cascadeSet[0] = GiParams::GiCascadeDesc{ 14.0f, 128, 0.0f };
     gi.cards = GiToggle::On;
     gi.cardResidencyRadius = 40.0f;
     s->setGlobalIllumination(gi);

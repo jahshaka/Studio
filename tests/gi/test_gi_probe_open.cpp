@@ -498,10 +498,17 @@ int main()
               "4c: the mirror inside the grid carries the BLUE sky a probe photographed —\n"
               "          blue no other path holds, over the cone's escape to the environment");
 
-        enginetest::testCameraLookAt(view, Vec3(0.0f, 2.6f, 30.0f), Vec3(0.0f, 1.4f, 25.0f));
+        // FROM ABOVE, like the inside mirror: the pixel reflects the open SKY. (Seen
+        // from the side its centre reflects the horizon, which under the camera's
+        // cascade chain is the voxelised ground — correct, and not this case's
+        // subject; the deleted single volume ended short of it, so it read the sky.)
+        enginetest::testCameraLookAt(view, Vec3(0.0f, 7.0f, 31.0f), Vec3(0.0f, 1.4f, 25.0f));
+        // A 25 m jump re-centres the camera's cascade chain, one cascade a frame,
+        // then its settle: counted until GI is at rest (bounded), not a fixed 6.
         render(engine.get(), 6);
+        for (int f = 0; f < 240 && !s->giStatus().giAtRest; ++f) engine->renderOneFrame();
         view->readPixels(img);
-        const Colour outside = img.at(64, 64);
+        const Colour outside = img.at(56, 54);
         show("mirror OUTSIDE every probe box", outside);
         CHECK(outside.g > outside.b + 0.15f && outside.g > outside.r + 0.15f,
               "4c: the mirror no probe box contains reflects the GREEN sky cubemap —\n"

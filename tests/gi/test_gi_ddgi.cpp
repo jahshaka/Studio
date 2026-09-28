@@ -222,6 +222,22 @@ static unsigned long long childHash(const char *self)
     return out;
 }
 
+/// A REAL LIGHT WRITE (D4-PHOTON-TIERS): the lamp's intensity nudged by 1 %, so the
+/// renderer's light-write serial moves and the chain's tick lands new radiance — the
+/// deleted single volume counted a bare refreshGiLighting() as a write; the chain
+/// (correctly) does not, since nothing changed.
+static void lightWrite(Scene *s, NodeId light)
+{
+    static bool up = false;
+    up = !up;
+    LightDesc l;
+    l.type = LightType::Directional;
+    l.colour = Colour(1, 1, 1);
+    l.intensity = up ? 2.02f : 2.0f;
+    l.castShadows = false;
+    s->setLight(light, l);
+}
+
 int main(int argc, char **argv)
 {
     if (argc > 1 && std::strcmp(argv[1], "hash") == 0) return runHashChild();
@@ -461,7 +477,9 @@ int main(int argc, char **argv)
         const int expected = (probes + batch - 1) / batch;
         CHECK(fieldWhole(st), "whole before the light moves");
         CHECK(settleGi(e, r.scene) >= 0, "...and at rest");
+        lightWrite(r.scene, r.light);
         CHECK(r.scene->refreshGiLighting(true), "refreshGiLighting (the light-only cheap path)");
+        e->renderOneFrame();     // the chain's tick lands at the frame's writer point
         st = r.scene->giStatus();
         CHECK(!fieldWhole(st), "the cheap path re-arms the field's pass (reset, not rebuild)");
         CHECK(!st.giAtRest, "A LIGHT WRITE TAKES GI OUT OF REST");
@@ -515,6 +533,7 @@ int main(int argc, char **argv)
         CHECK_MSG(st.gather.running && st.gather.settled && st.gather.settleFrames == 16u,
                   "the gather runs and its history is SETTLED at rest (N = %u frames for a 5-code step)",
                   st.gather.settleFrames);
+        lightWrite(r.scene, r.light);
         CHECK(r.scene->refreshGiLighting(true), "a light write (the cheap path)");
         CHECK(!r.scene->giStatus().giAtRest, "the write takes GI out of rest");
         int frames = 0;
@@ -599,6 +618,7 @@ int main(int argc, char **argv)
                       "(rest frames %u), since its restart %u", restless, st.gather.restFrames,
                       st.gather.sinceRestart);
             // THE RESTART: a light write while the mover moves.
+            lightWrite(r.scene, r.light);
             CHECK(r.scene->refreshGiLighting(true), "a light write with the mover moving");
             CHECK(!r.scene->giStatus().giAtRest, "the write takes GI out of rest");
             unsigned lastSince = 0u;
@@ -686,7 +706,10 @@ int main(int argc, char **argv)
     // ---- 6. lifecycle: the spike's four shapes ---------------------------
     // (a) a full refresh under a live bound field.
     r.scene->refreshGlobalIllumination();
+    // The chain answers a refresh through its dirty path and its tick, a frame
+    // at a time: counted until the field is whole again (bounded), not a fixed 3.
     render(e, 3);
+    for (int f = 0; f < 120 && !fieldWhole(r.scene->giStatus()); ++f) e->renderOneFrame();
     st = r.scene->giStatus();
     CHECK(st.ifdBound && fieldWhole(st),
           "a full refresh under a live field rebuilds it, bound and whole");

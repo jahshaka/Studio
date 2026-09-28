@@ -144,8 +144,12 @@ static GiParams vctBase()
     gi.mode = GiMode::Vct;
     gi.quality = GiQuality::Medium;      // 64^3 voxels
     gi.numBounces = 2;
-    gi.testProbeRegionMin = Vec3(-9.0f, -1.5f, -9.0f);
-    gi.testProbeRegionMax = Vec3(9.0f, 7.5f, 9.0f);
+    // ONE PINNED CAMERA-CENTRED CASCADE, +-12 m around the eye at 64 cells (0.375 m):
+    // the lab below reads cascade 0's store and walks it alone, so the engine's march
+    // must have no outer cascade to hop into. (The single scene-fitted volume this
+    // pinned — +-9 m — is deleted, D4-PHOTON-TIERS.)
+    gi.cascadeCount = 1;
+    gi.cascadeSet[0] = GiParams::GiCascadeDesc{ 12.0f, 64, 0.0f };
     return gi;
 }
 
@@ -524,8 +528,8 @@ int main(int argc, char **argv)
         // bounce (the injection reads the sky, PHOTON-ENV-1) is gi.ddgi's and the cards'
         // subject, and it is not in the analytic below (skyIrradiance).
         ref.numBounces = 0;
-        ref.testProbeRegionMin = Vec3(-9.0f, -1.5f, -9.0f);
-        ref.testProbeRegionMax = Vec3(9.0f, 7.5f, 9.0f);
+        ref.cascadeCount = 1;                // see vctBase: one cascade, the lab's store
+        ref.cascadeSet[0] = GiParams::GiCascadeDesc{ 12.0f, 64, 0.0f };
         CHECK(s->setGlobalIllumination(ref), "VCT (isotropic) builds over the open scene");
         render(e, 6);
         o.view->readPixels(img);
@@ -805,11 +809,18 @@ int main(int argc, char **argv)
         l.range = 20.0f;
         l.castShadows = false;
         CHECK(s->setLight(light, l), "the room's point light arms");
-        enginetest::testCameraLookAt(view, Vec3(0.0f, 2.0f, 3.4f), Vec3(0.0f, 1.6f, -1.0f));
+        // The eye at the room's centre, so the one camera-centred cascade below is the
+        // room's own box (+-5, the deleted single volume's) rather than one reaching
+        // metres past its walls.
+        enginetest::testCameraLookAt(view, Vec3(0.0f, 2.0f, 0.0f), Vec3(0.0f, 1.6f, -4.0f));
 
         GiParams room = vctBase();
-        room.testProbeRegionMin = Vec3(-5.0f, -1.0f, -5.0f);
-        room.testProbeRegionMax = Vec3(5.0f, 6.0f, 5.0f);
+        // THE ROOM IN ONE CASCADE (+-5 around the eye at 64 cells, 0.156 m — the
+        // deleted single volume's box and cell): the subject is the READER's
+        // residual. A sealed room under the shipped four-cascade chain leaks the sky
+        // through its 0.4 m walls at the coarse cascades (1.875 m cells at Medium:
+        // 12/255 measured by D4-PHOTON-TIERS) — the cascades' physics, P1's.
+        room.cascadeSet[0] = GiParams::GiCascadeDesc{ 5.0f, 64, 0.0f };
         room.ddgi = GiToggle::On;
         CHECK(s->setGlobalIllumination(room), "the sealed room binds a field, no sky");
         render(e, 6);

@@ -246,8 +246,15 @@ static Reading measure(Engine *e, Box &b)
     b.view->readPixels(img);
     r.cubeB = regionStats(img, cubeBTop);
 
+    // THE INTERIOR FROM ITS OWN VIEW, ALONE: the voxels (and the field on cascade 0)
+    // follow the view that DRIVES the scene's GI, and with the roof camera 30 m up
+    // enabled that is not the room (the single fitted volume this suite pinned is
+    // deleted, D4-PHOTON-TIERS). Counted in frames: until GI is at rest, bounded.
+    b.view->setEnabled(false);
     render(e);
+    for (int f = 0; f < 240 && !b.scene->giStatus().giAtRest; ++f) e->renderOneFrame();
     b.inside->readPixels(r.interior);
+    b.view->setEnabled(true);
     // The floor patch nearest the red wall (the camera looks from -Z toward +Z,
     // so the far half of the floor is the red wall's side) and one off to the
     // side, which the bounce reaches far less.

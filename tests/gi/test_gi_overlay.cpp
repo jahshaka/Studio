@@ -12,7 +12,7 @@
 // world point and reading the middle of the frame answers "is the wire HERE?"
 // exactly.
 //
-// THE VOLUME IS THE RENDERER'S AUTOMATIC FIT (owner decision D8, 2026-09-13:
+// THE VOLUME IS THE RENDERER'S LIT VOLUME — the outer cascade, camera-centred (D8; the scene-fitted
 // the document's bounds pin, its rows, the Fit button and world.fitGiBounds are
 // deleted — the fit is the only behaviour left). So the box is not typed here;
 // it is MEASURED out of `giStatus()` after the first solve, and the scene is
@@ -24,9 +24,10 @@
 //   * aim at the volume's max corner  -> the wire is there;
 //   * aim at the volume's centre      -> nothing (the box is hollow, and its
 //                                        far face's EDGES are not on axis);
-//   * move the geometry and re-solve  -> the box FOLLOWED the scene: the wire
-//                                        is at the new corner and the old one
-//                                        is empty;
+//   * walk the camera                 -> the box FOLLOWED it (the lit volume is
+//                                        the outer cascade, camera-centred): the
+//                                        wire is at the new corner and the old
+//                                        one is empty;
 //   * turn the overlay off            -> the corner is empty again;
 //   * turn GI off with the overlay on -> nothing is drawn at all (it describes
 //                                        GI, it is not decoration).
@@ -203,14 +204,12 @@ int main(int argc, char **argv)
         std::printf("   the AUTOMATIC volume: %.2f %.2f %.2f .. %.2f %.2f %.2f\n",
                     st.boundsMin.x, st.boundsMin.y, st.boundsMin.z,
                     st.boundsMax.x, st.boundsMax.y, st.boundsMax.z);
-        // cube.obj is TWO units across, so the three cubes' union is
-        // x [5.5, 10.5], y [-1.5, 3.5], z [-6.5, -1.5]; one voxel of margin on
-        // a 5 m box at Low (32^3) is 0.156. The fit must land within a fifth of
-        // a metre of that.
-        CHECK(std::fabs(st.boundsMax.x - 10.66f) < 0.2f &&
-              std::fabs(st.boundsMax.y -  3.66f) < 0.2f &&
-              std::fabs(st.boundsMax.z + 1.34f) < 0.2f,
-              "the automatic fit is the three cubes' union plus one voxel");
+        // THE LIT VOLUME IS THE OUTERMOST CASCADE (D4-PHOTON-TIERS deleted the
+        // scene-fitted volume the overlay used to draw): a box centred on the
+        // camera, so it is a non-empty box around the eye.
+        CHECK(st.boundsMax.x > st.boundsMin.x && st.boundsMin.x < farEye.x() &&
+                  st.boundsMax.x > farEye.x(),
+              "the lit volume is the outer cascade's box, around the eye");
     }
     const iris::Vec3 corner = maxCorner();
     const iris::Vec3 centre = midPoint();
@@ -231,36 +230,39 @@ int main(int argc, char **argv)
     CHECK(cornerOn > 0.10f, "the wire box's max CORNER is exactly at giStatus's boundsMax");
     CHECK(centreOn < 0.02f, "...and the box is HOLLOW: nothing through its centre");
 
-    // ---- move the GEOMETRY: the box must follow it ---------------------------
-    // The volume has no dial any more, so the way to move it is to move what it
-    // is fitted to. cubeX owned max X; bring it 2.5 m in and re-solve (the same
-    // re-solve world.refreshGi() asks for — an object moving INWARD escapes
-    // nothing, so nothing would invalidate the volume on its own).
-    cubeX->setLocalPos(iris::Vec3(7.0f, -0.5f, -5.5f));
-    ++doc->giRefreshSerial;
+    // ---- move the CAMERA: the box must follow it -----------------------------
+    // The lit volume is camera-centred, so the way to move it is to walk: 12 m
+    // along +X and +Z re-centres the outer cascade (Low's outer step is a few metres).
+    // Diagonally (X and Z): a walk along one axis leaves the old max corner ON the
+    // new box's edge that runs along that axis.
+    const iris::Vec3 walkedEye = farEye + iris::Vec3(12.0f, 0.0f, 12.0f);
+    cam->setLocalPos(walkedEye);
+    cam->update(0.0f);
     settle(30);
     const iris::Vec3 newCorner = maxCorner();
-    std::printf("   after moving cubeX in: new corner %.2f %.2f %.2f\n",
+    std::printf("   after walking 12 m: new corner %.2f %.2f %.2f\n",
                 newCorner.x(), newCorner.y(), newCorner.z());
-    CHECK(newCorner.x() < corner.x() - 2.0f, "the automatic volume SHRANK with the scene");
-    const float oldCornerAfter = lookAndSample(farEye, corner);
-    const float newCornerAfter = lookAndSample(farEye, newCorner);
-    std::printf("   after moving the geometry:  old corner %.3f   new corner %.3f\n",
+    CHECK(newCorner.x() > corner.x() + 2.0f && newCorner.z() > corner.z() + 2.0f,
+          "the lit volume FOLLOWED the camera");
+    const float oldCornerAfter = lookAndSample(walkedEye, corner);
+    const float newCornerAfter = lookAndSample(walkedEye, newCorner);
+    std::printf("   after the walk:  old corner %.3f   new corner %.3f\n",
                 oldCornerAfter, newCornerAfter);
-    CHECK(newCornerAfter > 0.10f, "the box MOVED with the volume the renderer re-fitted");
+    CHECK(newCornerAfter > 0.10f, "the box MOVED with the volume the renderer reports");
     CHECK(oldCornerAfter < 0.02f, "...and left the old corner empty");
+    (void)cubeX;
 
     // ---- GI off: the overlay describes GI, it is not decoration -------------
     doc->giMode = iris::GiMode::OFF;
-    const float withGiOff = lookAndSample(farEye, newCorner);
+    const float withGiOff = lookAndSample(walkedEye, newCorner);
     std::printf("   GI off, overlay still on: %.3f\n", withGiOff);
     CHECK(withGiOff < 0.02f, "with GI off the overlay draws NOTHING");
 
     // ---- and the toggle really is the switch --------------------------------
     doc->giMode = iris::GiMode::VCT;
-    const float backOn = lookAndSample(farEye, newCorner);
+    const float backOn = lookAndSample(walkedEye, newCorner);
     mirror.setGiVolumeOverlay(false);
-    const float toggledOff = lookAndSample(farEye, newCorner);
+    const float toggledOff = lookAndSample(walkedEye, newCorner);
     std::printf("   GI back on: %.3f   overlay toggled off: %.3f\n", backOn, toggledOff);
     CHECK(backOn > 0.10f, "turning GI back on brings the box back");
     CHECK(toggledOff < 0.02f, "turning the overlay off hides it");

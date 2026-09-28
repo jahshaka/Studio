@@ -140,8 +140,11 @@ static GiParams baseGi()
     gi.mode = GiMode::Vct;
     gi.quality = GiQuality::High;
     gi.numBounces = 1;
-    gi.testProbeRegionMin = Vec3(-16.0f, -2.0f, -16.0f);
-    gi.testProbeRegionMax = Vec3(16.0f, 12.0f, 16.0f);
+    // ONE PINNED CAMERA-CENTRED CASCADE at the cell the deleted single volume had
+    // here (+-16 m at 128: 0.25 m): the subject is the cards against the voxels
+    // they are lit from, not the chain's hand-overs (D4-PHOTON-TIERS).
+    gi.cascadeCount = 1;
+    gi.cascadeSet[0] = GiParams::GiCascadeDesc{ 16.0f, 128, 0.0f };
     gi.cards = GiToggle::On;
     return gi;
 }

@@ -217,6 +217,11 @@ assert(threw, "an unknown grade is refused, catchably, rather than guessed at");
 // pictures can be the tonemap. With the chain empty the `scene` grade must hand
 // back exactly the plain readback — which is what the viewport is showing.
 console.log("---- phase B: HDR off means an ungraded shot ----");
+// THE SCENE'S RAYS OFF FOR PHASES B-D (D4-PHOTON-TIERS): at a ray tier the rays ARE
+// the reflection and the SSR row is not read, so "every chain effect off" and "SSR
+// isolated" below are only statements about the chain with the rays off.
+var rayRowWas = world.rayTracing();
+world.rayTracing("off");
 ["ssao", "ssr", "smaa", "bloom"].forEach(function (id) {
     world.override({ id: id, value: (id === "smaa") ? "off" : ((id === "ssr") ? "off" : false) });
 });
@@ -324,6 +329,7 @@ world.override({ id: "ssr", value: "off" });
 settle();
 var noSsr = shootFloor("ssr-off");
 world.clearOverride({ id: "ssr" });
+world.rayTracing(rayRowWas);
 console.log("   SSR on/off max channel delta on the floor: " + maxDelta(withSsr, noSsr));
 assert(maxDelta(withSsr, noSsr) > 4,
        "screen-space reflections are IN the user's shot — switching them off changes the floor (delta " +

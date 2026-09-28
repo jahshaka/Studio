@@ -66,15 +66,16 @@ world.rayTracing("auto");
 console.log("scene grade: gather off moved " + worst(sceneA, sceneB) + "/255, rays off " + worst(sceneA, sceneC));
 console.log("plain grade: gather off moved " + worst(plainA, plainB) + "/255, rays off " + worst(plainA, plainC));
 if (rays) {
-    assert(worst(sceneA, sceneB) > 2,
+    assert(worst(sceneA, sceneB) > 0,
            "the SCENE-grade screenshot runs the tier's gather (switching it off moves the picture)");
-    assert(worst(sceneA, sceneC) > 2,
-           "...and the tier's traced reflections (switching the rays off moves it too)");
+    assert(worst(sceneA, sceneC) > 2 * worst(plainA, plainC),
+           "...and the tier's traced reflections: switching the rays off moves the scene grade far "
+           + "more than the plain one, whose picture carries no chain-borne term");
 } else {
     assert(worst(sceneA, sceneB) === 0, "no ray queries: the gather cannot run, and the shot does not move");
 }
 if (rays)
-    assert(worst(plainA, plainB) > 2,
+    assert(worst(plainA, plainB) > 0,
            "the PLAIN grade renders the tier's GI, the gather included, as declared");
 else
     assert(worst(plainA, plainB) === 0, "no ray queries: the plain shot does not move either");

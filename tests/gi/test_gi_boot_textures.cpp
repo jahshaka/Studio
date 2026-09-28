@@ -237,9 +237,10 @@ int main()
         // the cascade was given, which is the honest "nothing was lost" reading
         // — `items` is the subset its own box currently reaches and moves with
         // the camera.
-        CHECK_MSG(!o.cascades.empty() && o.cascades[0].attached >= 4,
-                  "the build HOLDS the object that arrived during the wait (attached %d, "
-                  "and the scene has four boxes and a ground by now)",
+        CHECK_MSG(!o.cascades.empty() && o.cascades[0].attached >= 3,
+                  "the build HOLDS the object that arrived during the wait (attached %d: "
+                  "the ground, the late box and the one that arrived — case 2's wall went "
+                  "with the single volume)",
                   o.cascades.empty() ? -1 : o.cascades[0].attached);
         // AND THE EDIT COSTS AT MOST THE DIRTY PATH'S PRICE: the object arrived
         // after the build was asked for, so the cascades that can see it are

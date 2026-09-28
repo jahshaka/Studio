@@ -165,9 +165,9 @@ static void roomCase(Engine *engine, View *view, const char *label, float shell,
     CHECK(st.probeRegionMin.y >= -shell && st.probeRegionMin.y < 0.5f,
           "the probe region's floor sits on the room's floor, not under it");
     // ...and it is INSIDE the lit volume, never the other way round.
-    CHECK(st.probeRegionMin.x >= st.boundsMin.x && st.probeRegionMax.x <= st.boundsMax.x &&
-          st.probeRegionMin.y >= st.boundsMin.y && st.probeRegionMax.y <= st.boundsMax.y &&
-          st.probeRegionMin.z >= st.boundsMin.z && st.probeRegionMax.z <= st.boundsMax.z,
+    CHECK(st.probeRegionMin.x >= st.probeFitMin.x && st.probeRegionMax.x <= st.probeFitMax.x &&
+          st.probeRegionMin.y >= st.probeFitMin.y && st.probeRegionMax.y <= st.probeFitMax.y &&
+          st.probeRegionMin.z >= st.probeFitMin.z && st.probeRegionMax.z <= st.probeFitMax.z,
           "the probe region is contained in the lit volume");
 
     GiParams off;
@@ -204,16 +204,17 @@ static void groundPlaneCase(Engine *engine, View *view)
     enginetest::addDirectionalLight(s, Vec3(0.2f, -1.0f, 0.3f), 4.0f);
 
     GiParams gi;
-    gi.mode = GiMode::Vct;         // no probes: this case is about the VOLUME
+    gi.mode = GiMode::VctPccHybrid;   // the probe grid's PLACEMENT FIT (D4-PHOTON-TIERS)
     gi.quality = GiQuality::Low;
     CHECK(s->setGlobalIllumination(gi), "VCT builds over the default-scene shape");
+    render(engine, 3);   // the chain waits for a tracked camera; the fit is its build\'s
     const GiStatus st = s->giStatus();
-    showBox("lit volume", st.boundsMin, st.boundsMax);
+    showBox("probe fit", st.probeFitMin, st.probeFitMax);
     // The ground is 200 across. Four items, median largest extent = 1, limit 4:
     // the ground is rejected and the primitives (x in [-2,2]) survive.
-    CHECK(st.boundsMax.x - st.boundsMin.x < 10.0f,
+    CHECK(st.probeFitMax.x - st.probeFitMin.x < 10.0f,
           "the lit volume hugs the primitives instead of the 200-unit ground");
-    CHECK(st.boundsMin.x <= -2.0f && st.boundsMax.x >= 2.0f,
+    CHECK(st.probeFitMin.x <= -2.0f && st.probeFitMax.x >= 2.0f,
           "...and still contains every primitive");
     GiParams off;
     s->setGlobalIllumination(off);
@@ -235,12 +236,13 @@ static void singleBigMeshCase(Engine *engine, View *view)
     enginetest::addDirectionalLight(s, Vec3(0.2f, -1.0f, 0.3f), 4.0f);
 
     GiParams gi;
-    gi.mode = GiMode::Vct;
+    gi.mode = GiMode::VctPccHybrid;   // the probe grid's PLACEMENT FIT (D4-PHOTON-TIERS)
     gi.quality = GiQuality::Low;
     CHECK(s->setGlobalIllumination(gi), "VCT builds over a single large mesh");
+    render(engine, 3);   // the chain waits for a tracked camera; the fit is its build\'s
     const GiStatus st = s->giStatus();
-    showBox("lit volume", st.boundsMin, st.boundsMax);
-    CHECK(st.boundsMax.x - st.boundsMin.x >= 60.0f,
+    showBox("probe fit", st.probeFitMin, st.probeFitMax);
+    CHECK(st.probeFitMax.x - st.probeFitMin.x >= 60.0f,
           "a scene that IS one big mesh keeps the whole mesh in the lit volume");
     GiParams off;
     s->setGlobalIllumination(off);
@@ -275,12 +277,13 @@ static void excludeFlagCase(Engine *engine, View *view)
     enginetest::addDirectionalLight(s, Vec3(0.2f, -1.0f, 0.3f), 4.0f);
 
     GiParams gi;
-    gi.mode = GiMode::Vct;
+    gi.mode = GiMode::VctPccHybrid;   // the probe grid's PLACEMENT FIT (D4-PHOTON-TIERS)
     gi.quality = GiQuality::Low;
     CHECK(s->setGlobalIllumination(gi), "VCT builds with the ground included");
+    render(engine, 3);   // the chain waits for a tracked camera; the fit is its build\'s
     GiStatus st = s->giStatus();
-    showBox("lit volume, ground in", st.boundsMin, st.boundsMax);
-    CHECK(st.boundsMax.x - st.boundsMin.x > 18.0f,
+    showBox("probe fit, ground in", st.probeFitMin, st.probeFitMax);
+    CHECK(st.probeFitMax.x - st.probeFitMin.x > 18.0f,
           "the heuristic keeps this ground (it is not an outlier here)");
     CHECK(!s->nodeProbeGridExcluded(ground), "the flag starts off");
 
@@ -290,10 +293,10 @@ static void excludeFlagCase(Engine *engine, View *view)
     // other geometry change.
     render(engine, 2);
     st = s->giStatus();
-    showBox("lit volume, ground out", st.boundsMin, st.boundsMax);
-    CHECK(st.boundsMax.x - st.boundsMin.x < 15.0f,
+    showBox("probe fit, ground out", st.probeFitMin, st.probeFitMax);
+    CHECK(st.probeFitMax.x - st.probeFitMin.x < 15.0f,
           "excluding the ground pulls the lit volume onto the two boxes");
-    CHECK(st.boundsMin.x <= -5.5f && st.boundsMax.x >= 5.5f, "...and still contains them");
+    CHECK(st.probeFitMin.x <= -5.5f && st.probeFitMax.x >= 5.5f, "...and still contains them");
 
     // The ground is EXCLUDED FROM THE BOUNDS, not from GI: it must still be one
     // of the items handed to the voxelizer, so bounced light still comes off it.
@@ -303,8 +306,8 @@ static void excludeFlagCase(Engine *engine, View *view)
     s->setNodeProbeGridExcluded(ground, false);
     render(engine, 2);
     st = s->giStatus();
-    showBox("lit volume, ground back in", st.boundsMin, st.boundsMax);
-    CHECK(st.boundsMax.x - st.boundsMin.x > 18.0f,
+    showBox("probe fit, ground back in", st.probeFitMin, st.probeFitMax);
+    CHECK(st.probeFitMax.x - st.probeFitMin.x > 18.0f,
           "clearing the flag restores the ground to the bounds");
 
     GiParams off;

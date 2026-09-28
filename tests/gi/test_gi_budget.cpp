@@ -38,9 +38,9 @@
 //      re-solves, however much the scene moves — the rollback, kept as one
 //      switch rather than as a mode.
 //
-//   D. THE SETTLE RE-SOLVE RE-USES THE ARM (B4). When nothing was DESTROYED
-//      since the build, the refresh re-runs the existing voxelizer and
-//      re-dirties the probes instead of tearing down and re-placing them, and
+//   D. THE SETTLE RE-SOLVE RE-USES THE ARM: the chain's dirty path (G1) re-runs
+//      the cascades the change reaches and stales the probes instead of tearing
+//      down and re-placing them — a destruction included — and
 //      `giStatus().reusedLastRefresh` says so. Both costs are measured and
 //      printed: the reuse is what makes B's "one re-solve per gesture"
 //      affordable enough to be the default.
@@ -457,10 +457,11 @@ int main(int argc, char **argv)
                 reuse, scratch, scratch / (reuse > 0.001 ? reuse : 0.001));
     CHECK(scratch > reuse, "the reuse arm is cheaper than a from-scratch rebuild");
 
-    // ...and the guarantee that makes it safe: DESTROY something and the arm
-    // must refuse. This is the entire protection for the "always from scratch"
-    // rule (VctVoxelizer's raw Item* cache, VctMaterial's datablock-pointer
-    // cache), so it is asserted rather than assumed.
+    // ...AND A DESTRUCTION TAKES THE SAME PATH under the chain (D4-PHOTON-TIERS
+    // deleted the single-volume reuse arm and the destruction generation that
+    // guarded it): a voxeliser holds no Item* — the gather reads every predicate
+    // off the GPU scene at every build (ATOM P4b) — so a deleted node is answered
+    // by the cascades its box reaches, never by a from-scratch rebuild.
     escene->refreshGlobalIllumination();
     CHECK(escene->giStatus().reusedLastRefresh, "the arm is being re-used again");
     {
@@ -469,15 +470,12 @@ int main(int argc, char **argv)
         frames(30);
         CHECK(escene->giStatus().reusedLastRefresh,
               "adding a node still lets the arm be re-used (growth is safe)");
+        const unsigned long long rebuildsBefore = escene->giStatus().rebuilds;
         doc->getRootNode()->removeChild(doomed);
-        // The mirror destroys the engine node, which bumps the destruction
-        // generation and flags the caches; the frame-time flush then rebuilds
-        // FROM SCRATCH, and that is the whole protection for the "always from
-        // scratch" rule (VctVoxelizer's raw Item* cache, VctMaterial's
-        // datablock-pointer cache). Asserted, not assumed.
         frames(4);
-        CHECK(!escene->giStatus().reusedLastRefresh,
-              "destroying a node forces a from-scratch rebuild (the B4 guarantee)");
+        CHECK(escene->giStatus().reusedLastRefresh &&
+                  escene->giStatus().rebuilds == rebuildsBefore,
+              "destroying a node takes the chain's dirty path too (no from-scratch rebuild)");
     }
     frames(30);
 

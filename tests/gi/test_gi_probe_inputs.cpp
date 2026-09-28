@@ -664,6 +664,14 @@ int main(int argc, char **argv)
         gi.testProbeRegionMax = Vec3(3.0f, 4.0f, 3.0f);
         const unsigned long long rebuilds = escene->giStatus().rebuilds;
         CHECK(other->setGlobalIllumination(gi), "P10: the second scene builds its own hybrid");
+        // THE CHAIN IS BUILT AROUND A TRACKED CAMERA (it waits for one), so the second
+        // scene gets a view of its own; the first scene's view keeps drawing it.
+        View *otherView = engine->createOffscreenView("probe_inputs_other", 64u, 64u,
+                                                      Colour(0, 0, 0));
+        otherView->setScene(other);
+        otherView->setCamera(enginetest::testCameraDescLookAt(Vec3(0.0f, 1.5f, 2.0f),
+                                                              Vec3(0.0f, 1.0f, -2.0f)));
+        frames(4);
         const GiStatus kept = escene->giStatus();
         CHECK(kept.pccBound && kept.vctBound && other->giStatus().pccBound && other->giStatus().vctBound,
               "P10: ...and BOTH scenes' passes bind their own probes and voxels");
@@ -675,6 +683,8 @@ int main(int argc, char **argv)
         CHECK(std::fabs(after.r - ref.r) < 0.05f && std::fabs(after.g - ref.g) < 0.05f &&
               std::fabs(after.b - ref.b) < 0.05f,
               "P10: the reflection is still this scene's own");
+        otherView->setScene(nullptr);
+        engine->destroyView(otherView);
         engine->destroyScene(other);
         frames(2);
         CHECK(escene->giStatus().pccBound && escene->giStatus().vctBound &&

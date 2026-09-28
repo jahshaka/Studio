@@ -6,7 +6,9 @@
 // 19 probes at the same 512 px HDR shadowed size, so the placement keeps the 19 that saw the
 // most and says how many it cut. THE TOTAL IS ASSERTED TWICE: by the renderer's own arithmetic
 // (giStatus().probeGridBytes) and by the texture manager (app.textureMemory, the grid's
-// textures A/B against the same scene with no grid).
+// textures A/B against the same scene with no grid: the technique pinned to plain VCT, the
+// rays off in BOTH arms — a rays-on arm also holds the ray tier's own targets and the card
+// atlas, which is not the grid's memory).
 function assert(cond, msg) {
     if (!cond) throw new Error("assert failed: " + msg);
     console.log("ok: " + msg);
@@ -19,10 +21,11 @@ editor.frame(120);
 function total() { return app.textureMemory({ top: 0 }).totalBytes; }
 function arm(tier) {
     world.photon({ enabled: true, tier: tier });
-    world.rayTracing("on");      // no grid (the rays are the reflection wherever the tier traces)
+    world.rayTracing("off");     // a grid is placed only where the reflections are not traced
+    world.gi({ mode: "vct" });   // ...and none at all with the technique pinned to plain VCT
     editor.frame(120);
     var without = total();
-    world.rayTracing("off");     // the grid is placed
+    world.clearOverride({ id: "giMode" });   // the tier's hybrid: the grid is placed
     editor.frame(240);
     var st = world.giStatus();
     var withGrid = total();

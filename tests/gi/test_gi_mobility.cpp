@@ -32,6 +32,15 @@
 
 using namespace jahshaka::engine;
 
+/// Every cascade's rebuild count, summed: the chain's answer to an edit (G1).
+static unsigned long long cascadeRebuilds(const GiStatus &st)
+{
+    unsigned long long n = 0;
+    for (const auto &c : st.cascades) n += c.rebuilds;
+    return n;
+}
+
+
 static int failures = 0;
 #define CHECK(cond, ...)                                                        \
     do {                                                                        \
@@ -277,16 +286,18 @@ static void sectionA(Engine *engine)
     // a GI edge: exactly one from-scratch rebuild, reported as such. (This is
     // the honest cost the play-time promotion below refuses to pay.)
     {
-        const unsigned long long rebuilds = s->giStatus().rebuilds;
+        const unsigned long long rebuilds = cascadeRebuilds(s->giStatus());
         const unsigned long long mob = s->mobilityStatus().mobilityRebuilds;
         s->setNodeMovable(stayer, true);
         frames(30);
         const GiStatus st = s->giStatus();
-        std::printf("-- authoring flip: rebuilds %llu -> %llu, mobilityRebuilds %llu -> %llu\n",
-                    rebuilds, st.rebuilds, mob, s->mobilityStatus().mobilityRebuilds);
+        std::printf("-- authoring flip: cascade rebuilds %llu -> %llu, mobilityRebuilds %llu -> %llu\n",
+                    rebuilds, cascadeRebuilds(st), mob, s->mobilityStatus().mobilityRebuilds);
         CHECK(s->mobilityStatus().mobilityRebuilds == mob + 1,
               "marking a still object Movable costs EXACTLY ONE mobility rebuild");
-        CHECK(st.rebuilds > rebuilds, "...and the scene really did rebuild its GI");
+        // Under the chain an authoring flip is answered by the cascades its box
+        // reaches (the dirty path, G1), not by a from-scratch rebuild.
+        CHECK(cascadeRebuilds(st) > rebuilds, "...and the chain really did re-voxelise it");
         CHECK(s->mobilityStatus().movableItems == 2,
               "...and both twins now read movable (%zu)", s->mobilityStatus().movableItems);
         // ...and it is now free to move, like its twin.
@@ -372,13 +383,15 @@ static void sectionA(Engine *engine)
         frames(30);
         reb = s->giStatus().rebuilds;
         CHECK(reb > 0, "...a from-scratch rebuild happened while it was promoted");
+        const unsigned long long cascReb = cascadeRebuilds(s->giStatus());
         s->setNodeMovable(prop, false, MobilityChange::Soft);
         frames(30);
         std::printf("-- ghost heal: mobilityRebuilds %llu -> %llu, rebuilds %llu -> %llu\n",
                     mob, s->mobilityStatus().mobilityRebuilds, reb, s->giStatus().rebuilds);
         CHECK(s->mobilityStatus().mobilityRebuilds == mob + 1,
               "clearing a promotion the voxels were rebuilt under costs ONE counted rebuild");
-        CHECK(s->giStatus().rebuilds > reb, "...and the object really is back in the voxels");
+        CHECK(cascadeRebuilds(s->giStatus()) > cascReb,
+              "...and the object really is back in the voxels (the chain re-voxelised its box)");
         s->removeNode(prop);
         frames(20);
     }

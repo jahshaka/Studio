@@ -185,6 +185,13 @@ editor.frame(3);
 // by about a ground when they go off, the scene's own count does not move at
 // all. (This is the measured explanation of the owner's 4,611: 2 x 2,178 plus
 // nine small draws.)
+// THE SCENE'S RAYS GO OFF FIRST (D4-PHOTON-TIERS): at a ray tier the rays ARE the
+// reflection and the SSR row is not read, so only with the rays off is the row the
+// screen march whose pre-pass this measures (the gather, which also carries one,
+// needs the rays too).
+var rayRowWas = world.rayTracing();
+world.rayTracing("off");
+editor.frame(4);
 var ssrOn = app.renderStats();
 world.override({ id: "ssr", value: "off" });
 editor.frame(4);
@@ -195,6 +202,7 @@ assert(ssrOff.submittedTriangles < ssrOn.submittedTriangles,
     "…while the SUBMITTED figure falls with the pre-pass (" + ssrOn.submittedTriangles +
     " -> " + ssrOff.submittedTriangles + ")");
 world.clearOverride({ id: "ssr" });
+world.rayTracing(rayRowWas);
 editor.frame(2);
 
 // AN EMPTY SCENE READS ZERO. Not "about zero", not the helpers' count: the

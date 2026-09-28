@@ -228,8 +228,11 @@ int main()
             vct.numBounces = 1;
             vct.ddgi = GiToggle::Off;
             vct.gather = GiToggle::Off;
-            vct.testProbeRegionMin = Vec3(-4.0f, -2.0f, -4.0f);
-            vct.testProbeRegionMax = Vec3(4.0f, 4.0f, 4.0f);
+            // ONE PINNED CASCADE at the deleted single volume's cell (8 m / 64 =
+            // 0.125 m): +-5 around the eye 3 m up reaches y -2, the old box's floor,
+            // so the plate and the field's probes over it sit where they sat.
+            vct.cascadeCount = 1;
+            vct.cascadeSet[0] = GiParams::GiCascadeDesc{ 5.0f, 80, 0.0f };
             scene->setGlobalIllumination(vct);
             for (int f = 0; f < 20; ++f) e->renderOneFrame();
             const double inside = centre();
@@ -360,8 +363,9 @@ int main()
         cones.numBounces = 1;
         cones.ddgi = GiToggle::Off;
         cones.gather = GiToggle::Off;
-        cones.testProbeRegionMin = Vec3(-4.5f, -0.5f, -4.5f);
-        cones.testProbeRegionMax = Vec3(4.5f, 5.5f, 4.5f);
+        // ONE PINNED CASCADE at the deleted single volume's cell (9 m at 64).
+        cones.cascadeCount = 1;
+        cones.cascadeSet[0] = GiParams::GiCascadeDesc{ 4.5f, 64, 0.0f };
         room->setGlobalIllumination(cones);
         for (int f = 0; f < 4000 && !room->giStatus().giAtRest; ++f) e->renderOneFrame();
         const double viaCones = readHdr(rv);

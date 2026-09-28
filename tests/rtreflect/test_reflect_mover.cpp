@@ -301,7 +301,10 @@ static int costMain(Engine *e)
     enginetest::setNodeScale(s, sphere, Vec3(2.0f * kSphereR, 2.0f * kSphereR, 2.0f * kSphereR));
     enginetest::addDirectionalLight(s, Vec3(-0.3f, -1.0f, 0.4f), 2.0f);
     GiParams gi; gi.mode = GiMode::Vct; gi.quality = GiQuality::High; gi.numBounces = 1;
-    gi.testProbeRegionMin = Vec3(-20.0f, -2.0f, -20.0f); gi.testProbeRegionMax = Vec3(20.0f, 8.0f, 20.0f);
+    // ONE PINNED CAMERA-CENTRED CASCADE where the deleted single volume was pinned
+    // (D4-PHOTON-TIERS): the subject is the rays against one voxel volume.
+    gi.cascadeCount = 1;
+    gi.cascadeSet[0] = GiParams::GiCascadeDesc{ 20.0f, 128, 0.0f };
     s->setGlobalIllumination(gi);
     PostFxDesc fx; fx.allowOffscreen = true; fx.ssr = 2;
     view->setPostFx(fx);
@@ -409,8 +412,10 @@ int main(int argc, char **argv)
     gi.mode = GiMode::Vct;
     gi.quality = GiQuality::High;
     gi.numBounces = 1;
-    gi.testProbeRegionMin = Vec3(-20.0f, -2.0f, -20.0f);
-    gi.testProbeRegionMax = Vec3(20.0f, 8.0f, 20.0f);
+    // ONE PINNED CAMERA-CENTRED CASCADE where the deleted single volume was pinned
+    // (D4-PHOTON-TIERS): the subject is the rays against one voxel volume.
+    gi.cascadeCount = 1;
+    gi.cascadeSet[0] = GiParams::GiCascadeDesc{ 20.0f, 128, 0.0f };
     if (!s->setGlobalIllumination(gi)) { std::printf("FAIL: gi\n"); return 1; }
     PostFxDesc fx;
     fx.allowOffscreen = true;
