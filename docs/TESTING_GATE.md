@@ -327,7 +327,7 @@ ratios that sat under RUN_SERIAL only JOINED it (mirror.scale, perf.epic_steady_
 perf.drag_mirror_room, perf.capture_off_is_free; R3), with app.play_select beside app.input_keys
 (key/gesture arrival; R5). Every lock row also takes ctest's `RESOURCE_LOCK gpu_timing`, so two
 of ONE gate never start together and wait in a slot on the flock. `ctest -N -V | grep -c 'Test
-command: .*gpu-exclusive.sh'` = 38 (a bare `grep -c gpu-exclusive` also counts the guard's own
+command: .*gpu-exclusive.sh'` = 37 (a bare `grep -c gpu-exclusive` also counts the guard's own
 command line). Its guard is `devprocess.gpu_lock` (label `tooling`). A contention verdict on a
 lock row needs a sibling that was NOT under the lock (an app on `:0`, a measurement outside the
 wrapper, or — the lock never excludes it — the CPU load of the gate's own other slots) — say which.
