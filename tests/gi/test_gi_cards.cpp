@@ -2779,6 +2779,9 @@ static int caseLightTrigger()
     CHECK_MSG(c1.captures == c0.captures && c1.queueLength == 0u,
               "a point lamp moving re-queues NO card (%llu captures)",
               (unsigned long long)(c1.captures - c0.captures));
+    CHECK_MSG(c1.stillTraces == c0.stillTraces && c1.stillPending == 0u,
+              "...and re-traces NO card's sun term (%llu still traces)",
+              (unsigned long long)(c1.stillTraces - c0.stillTraces));
     CHECK_MSG(c1.relights > c0.relights, "...and relights the resident set (%llu relights)",
               (unsigned long long)(c1.relights - c0.relights));
     CardSample a1, b1;
