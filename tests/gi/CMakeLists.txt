@@ -1836,3 +1836,22 @@ jah_gpu_row(photon.view CLASS app
 set_tests_properties(photon.view PROPERTIES
     TIMEOUT 400 LABELS "scripting"
     ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}HOME=${_photon_view_home};JAHSHAKA_DATA_ROOT=${_photon_view_home}/.local/share/Jahshaka")
+
+# gi.probe_nan — PROBE-NAN-1 (D4-PHOTON-TIERS): a point light of intensity 20 at 0.3 m over
+# a 100 m ground leaves every irradiance-field texel FINITE (tested on the bits) and never
+# darkens the field against intensity 2 — the defect turned every probe black at once.
+add_executable(test_gi_probe_nan test_gi_probe_nan.cpp)
+set_target_properties(test_gi_probe_nan PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_probe_nan PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_probe_nan PRIVATE JahshakaEngine)
+add_dependencies(test_gi_probe_nan JahshakaEngineMedia)
+jah_gpu_row(gi.probe_nan CLASS engine COMMAND test_gi_probe_nan
+            WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.probe_nan PROPERTIES LABELS "engine" TIMEOUT 120 RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
