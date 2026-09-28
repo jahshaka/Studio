@@ -64,6 +64,7 @@ For more information see the LICENSE file
 #include <QCoreApplication>
 #include <QEventLoop>
 #include "ui/controls/assetdrag.h"
+#include "ui/panels/presets/assetmaterialpanel.h"
 
 using namespace scriptmod;
 
@@ -843,6 +844,12 @@ QVector<VerbInfo> EditorApi::verbs() const
           "where dragging one there would. Null when this session's viewport has no camera (the "
           "document-only stand-ins).",
           Needs::Engine },
+        { "activateMaterialTile", "editor.activateMaterialTile(guid) -> bool",
+          "DOUBLE-CLICKS A TILE OF THE LIBRARY MATERIALS TRAY — the panel's own handler, as a "
+          "person's double-click reaches it: a LIBRARY drop onto the selection (material.drop's "
+          "rule, MATERIAL-DROP-1: a fresh, pristine project copy named by the project's own naming). "
+          "Refuses a guid the tray shows no tile for.",
+          Needs::Window },
         { "dragAsset", "editor.dragAsset(guid, x, y, {action, type, from}) -> bool",
           "DRAGS AN ASSET OVER THE VIEWPORT, for real: it posts the same "
           "QDragEnter/QDragMove/QDragLeave/QDrop events a person's drag out of an asset view "
@@ -2594,6 +2601,17 @@ QVariant EditorApi::dropTargetAt(double x, double y)
     // from "there is nothing here", and only one of them spawns an image plane.
     out.insert("locked", locked);
     return out;
+}
+
+bool EditorApi::activateMaterialTile(const QString &guid)
+{
+    if (!host.mainWindow || !host.mainWindow->materialTray())
+        return fail("editor.activateMaterialTile: this verb needs the editor window (a "
+                    "--headless run has no materials tray)");
+    if (!host.mainWindow->materialTray()->activateTile(guid))
+        return fail(QStringLiteral("editor.activateMaterialTile: the materials tray shows no tile "
+                                   "for '%1'").arg(guid));
+    return true;
 }
 
 bool EditorApi::dragAssetToTray(const QVariant &guidOrGuids, const QString &folderGuid,

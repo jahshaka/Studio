@@ -89,22 +89,46 @@ assert(notMine.indexOf("not one of this project's materials") >= 0,
 assert(caught(function () { material.drop(cubeB, WOOD, { from: "tray" }); }).length > 0,
        "an unknown `from` is refused");
 
+// ---- 3b. THE LIBRARY TRAY'S DOUBLE-CLICK IS A LIBRARY DROP (the lead's rule call) --------
+editor.select(cubeB);
+assert(editor.activateMaterialTile(WOOD) === true, "the materials tray's Wood PBR tile double-clicked");
+var afterClick = names();
+assert(afterClick.indexOf("Wood PBR 3") >= 0 && projectMaterials().length === before + 3,
+       "a double-click makes 'Wood PBR 3' — a fresh copy, like a drag: " + J(afterClick));
+assert(near(rough(cubeB), pristine), "...PRISTINE (roughness " + rough(cubeB) + "), not the edit");
+editor.select(null);
+
+// ---- 3c. A REFUSED DROP LEAVES NO ORPHAN COPY ------------------------------------------
+var lamp = scene.addLight("point");
+var refusedDrop = caught(function () { material.drop(lamp, WOOD); });
+assert(refusedDrop.indexOf("no mesh") >= 0, "a drop on a light is refused: " + refusedDrop);
+assert(projectMaterials().length === before + 3, "...and leaves no 'Wood PBR N' behind");
+
+// ---- 3d. THE SUFFIX IS APPENDED, NEVER PARSED OUT OF THE NAME --------------------------
+var brick = materials.create("Brick 2024");
+material.drop(cubeC, brick);
+material.drop(cubeC, brick);
+var bricks = names().filter(function (n) { return n.indexOf("Brick") === 0; });
+assert(bricks.indexOf("Brick 2024 2") >= 0 && bricks.indexOf("Brick 2025") < 0,
+       "copies of a library 'Brick 2024' count on as 'Brick 2024 2', never 'Brick 2025': " + J(bricks));
+var afterBrick = projectMaterials().length;
+
 // ---- 4. assets.duplicate: an independent copy, the same naming, a tray tile ---------
 var dup = assets.duplicate(d1.guid);
 var dupName = assets.metadata(dup).name;
 assert(dup && dup !== d1.guid, "assets.duplicate made a copy: " + dup);
-assert(dupName === "Wood PBR 3", "...named by the same rule: 'Wood PBR 3' (got '" + dupName + "')");
+assert(dupName === "Wood PBR 4", "...named by the same rule: 'Wood PBR 4' (got '" + dupName + "')");
 material.drop(cubeC, dup, { from: "project" });
 assert(near(rough(cubeC), 0.13), "...a copy of the PROJECT's version, the edit included");
 var dupOfTwo = assets.duplicate(d2.guid);
-assert(assets.metadata(dupOfTwo).name === "Wood PBR 4",
-       "a duplicate of 'Wood PBR 2' counts on from its own number: '"
+assert(assets.metadata(dupOfTwo).name === "Wood PBR 5",
+       "a duplicate of 'Wood PBR 2' counts on from the library entry's name: '"
        + assets.metadata(dupOfTwo).name + "'");
 // Independent: an edit of the copy leaves the source alone.
 editRoughness(dup, 0.77);
 assert(near(rough(cubeC), 0.77) && near(rough(cubeA), 0.13),
        "an edit to the duplicate leaves its source (and the meshes wearing it) untouched");
-assert(projectMaterials().length === before + 4, "...each duplicate is one project material");
+assert(projectMaterials().length === afterBrick + 2, "...each duplicate is one project material");
 var tray = editor.trayAssets().map(function (t) { return t.guid; });
 assert(tray.indexOf(dup) >= 0, "the duplicate is a tile in the project's asset tray");
 var tileTex = assets.list({ scope: "project", type: "texture", query: "Tile.png" })[0].guid;
@@ -137,8 +161,8 @@ editor.frame(2);
 var after = names();
 console.log("project materials after two gesture drops: " + J(after));
 assert(projectMaterials().length === count0 + 2, "two library DRAG-drops = two project materials");
-assert(after.indexOf("Wood PBR 5") >= 0 && after.indexOf("Wood PBR 6") >= 0,
-       "...named 'Wood PBR 5' and 'Wood PBR 6'");
+assert(after.indexOf("Wood PBR 6") >= 0 && after.indexOf("Wood PBR 7") >= 0,
+       "...named 'Wood PBR 6' and 'Wood PBR 7'");
 assert(near(rough(cubeD), pristine), "...and the node wears the pristine copy");
 editor.dragAsset(d1.guid, pd[0], pd[1], { action: "drop", from: "project" });
 editor.frame(2);

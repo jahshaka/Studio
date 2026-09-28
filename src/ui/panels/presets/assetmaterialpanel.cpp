@@ -276,7 +276,26 @@ void AssetMaterialPanel::applyMaterialPreset(QListWidgetItem *item)
     // wrote nothing at all, so `toInt()` returned 0 and double-clicking any
     // favourite applied the first starter preset instead. The guid is on the
     // tile already; it is what the drag carries and what the ONE apply takes.
+    //
+    // THE LIBRARY IS THE SOURCE (MATERIAL-DROP-1, the lead's rule call on the
+    // Fable read's F1): this tray is the LIBRARY's, so a double-click is a drop
+    // onto the selection — a fresh, pristine project copy, exactly like a drag
+    // of the same tile — never the project's edited copy of the entry.
     if (!item || !services || !services->sceneEdit || !services->selection) return;
-    services->sceneEdit->applyMaterial(item->data(MODEL_GUID_ROLE).toString(),
-                                       services->selection->selected());
+    QString error;
+    if (services->sceneEdit->dropMaterial(item->data(MODEL_GUID_ROLE).toString(),
+                                          SceneEditService::MaterialOrigin::Library,
+                                          services->selection->selected(), &error).isEmpty())
+        qWarning("material tray: the double-click applied nothing: %s", qUtf8Printable(error));
+}
+
+bool AssetMaterialPanel::activateTile(const QString &guid)
+{
+    for (int i = 0; i < listView->count(); ++i) {
+        QListWidgetItem *item = listView->item(i);
+        if (item->data(MODEL_GUID_ROLE).toString() != guid) continue;
+        applyMaterialPreset(item);          // the slot the double-click reaches
+        return true;
+    }
+    return false;
 }
