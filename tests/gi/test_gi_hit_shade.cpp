@@ -229,7 +229,7 @@ static int mirrorArms(Engine *e)
     // THE CARDS ON, the whole suite: the floor is carded, and a hit on it is the
     // cards' to answer (with the movers' traced shadow, PHOTON-CARDS-4) — a hit
     // on a mover never is (movers carry no cards), and that one is the decode's.
-    gi.cards = GiToggle::On;
+    gi.cards = true;
     gi.cardResidencyRadius = 40.0f;
     s->setGlobalIllumination(gi);
     PostFxDesc fx;

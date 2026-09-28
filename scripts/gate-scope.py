@@ -481,16 +481,29 @@ def record_times():
     print(f"recorded {len(times)} suite times from the run log into {os.path.relpath(TIMES_FILE, ROOT)}")
 
 
+COST_SOURCE = {}   # suite -> "quiet" | "all" (the run log's median, gate_runlog.median_times) | "file"
+
+
 def load_costs():
-    """Per-suite seconds: scripts/gate-times.txt overlaid with the run log's medians (fresher)."""
+    """Per-suite seconds: scripts/gate-times.txt overlaid with the run log's medians (fresher; the
+    quiet-box median where >= 3 records ran with no sibling ctest). COST_SOURCE says which."""
     costs = {}
     if os.path.exists(TIMES_FILE):
         for line in open(TIMES_FILE):
             if line.startswith("#"): continue
             parts = line.split()
-            if len(parts) == 2: costs[parts[0]] = float(parts[1])
-    costs.update(gate_runlog.median_times(days=14))
+            if len(parts) == 2:
+                costs[parts[0]] = float(parts[1]); COST_SOURCE[parts[0]] = "file"
+    costs.update(gate_runlog.median_times(days=14, sources=COST_SOURCE))
     return costs
+
+
+def cost_sources(keys):
+    """'<n> quiet, <n> all, <n> file, <n> assumed' over the keys an estimate summed."""
+    c = {"quiet": 0, "all": 0, "file": 0, "assumed": 0}
+    for k in keys: c[COST_SOURCE.get(k, "assumed")] += 1
+    return (f"costs: {c['quiet']} quiet-box medians (box.other_ctests == 0, >= 3 records), {c['all']} "
+            f"all-record medians, {c['file']} from gate-times.txt, {c['assumed']} assumed 10 s")
 
 
 def api_modules():
@@ -1122,7 +1135,7 @@ class Selection:
                    "while", "endwhile", "return", "break", "continue"}
 
     # the commands that register or decorate a TEST (their first arguments are row names)
-    _TEST_REGISTRATION = {"add_test", "add_script_e2e", "set_tests_properties", "jah_fresh_home_fixture",
+    _TEST_REGISTRATION = {"add_test", "set_tests_properties", "jah_fresh_home_fixture",
                           "jah_no_display", "jah_tsan_blocked", "jah_lsan_blocked", "jah_tsan_lane",
                           "jah_gpu_exclusive_test"}
     # what a retired suite's check became, printed with its `retired:` reason
@@ -1145,8 +1158,6 @@ class Selection:
             if name in ("add_test", "jah_gpu_exclusive_test"):
                 k = a_.index("NAME") + 1 if "NAME" in a_ else len(a_)
                 named = a_[k:k + 1]
-            elif name == "add_script_e2e":
-                named = [f"scripting.e2e.{a_[0]}"] if a_ else []
             elif name == "set_tests_properties":
                 named = a_[:a_.index("PROPERTIES")] if "PROPERTIES" in a_ else a_[:1]
             else:
@@ -1160,8 +1171,7 @@ class Selection:
             for c in gate_graph.cmake_commands(whole or ""):
                 ca = c[3].split()
                 regs = ([ca[ca.index("NAME") + 1]] if c[0] in ("add_test", "jah_gpu_exclusive_test")
-                        and "NAME" in ca and ca.index("NAME") + 1 < len(ca) else
-                        [f"scripting.e2e.{ca[0]}"] if c[0] == "add_script_e2e" and ca else [])
+                        and "NAME" in ca and ca.index("NAME") + 1 < len(ca) else [])
                 if set(regs) & set(named):
                     cands.append(set(re.findall(r"[A-Za-z0-9_.+\-/${}]+", c[3])))
             for tk in cands:
@@ -1266,15 +1276,16 @@ class Selection:
         for s_ in sorted(set(srcs)):
             self.path(s_, 1, via=f"{os.path.basename(p)} {name}()")
         if srcs: notes.append(f"{len(set(srcs))} source(s) named"); got = True
-        # 4b. a configured script (configure_file(x.js.in x.js)): the rows that run it
-        if name == "configure_file":
+        # 4b. a configured script (configure_file(x.js.in x.js)), or a timing twin's generated copy
+        # (jah_timing_script(<in> <out>.timing.js), D6B-GATE-SHAPE): the rows that run either file
+        if name in ("configure_file", "jah_timing_script"):
             a_ = args.split()
             for x in a_[:2]:
                 bn = os.path.basename(x).replace(".js.in", "").replace(".js", "").replace(".in", "")
                 hit = self.script_base.get(bn, [])
                 if hit:
                     self.add(hit, f"{tag}: configures {os.path.basename(x)}")
-                    notes.append(f"configures the script of {len(hit)} row(s)"); got = True; break
+                    notes.append(f"configures the script of {len(hit)} row(s)"); got = True
         # 5. a sub-directory
         if name.startswith("add_subdirectory"):
             a_ = args.split()
@@ -1453,7 +1464,9 @@ def main():
                     help="ctest parallelism (default 4 — the tier's contract; a lane beside other live lanes runs 2)")
     ap.add_argument("--json", action="store_true")
     ap.add_argument("--lane", default=None, help="the lane/stage name the run log records (default: the branch)")
-    ap.add_argument("--tier", default=None, help="the run log's tier name (default: scoped, or merge on a fallback)")
+    ap.add_argument("--tier", default=None, choices=gate_runlog.TIERS,
+                    help="the run log's tier name (default: scoped; scoped-fallback / scoped-tier when a scoped "
+                         "gate runs the whole tier; joint for --joint)")
     ap.add_argument("--record-times", action="store_true",
                     help="refresh scripts/gate-times.txt from the run log (median PASS seconds, 14 days)")
     ap.add_argument("--solo", metavar="SUITE", nargs="+",
@@ -1475,6 +1488,14 @@ def main():
     if a.nightly_tier:
         print(nightly_tier()); return
     build = resolve_build(a.build)
+    # THE BUILT FORK MUST BE THE PIN (TESTING-DEBTS-1 T12): a run on an install built from another
+    # fork commit is void (stale media) — refused before a suite runs, with the lines that fix it.
+    # (A range that MOVES the pin still selects the MERGE tier by rule, §7b.4; this is the tree.)
+    if a.run or a.solo:
+        bad = gate_runlog.fork_pin_problem()
+        if bad:
+            sys.stderr.write("gate-scope: " + bad + "\n")
+            sys.exit(4)
     if a.joint:
         J = joint(a.joint[0], a.joint[1], build, a.jobs)
         if a.json:
@@ -1609,7 +1630,7 @@ def main():
     if names:
         print(f"\nSCOPED tier: {len(names)} of {len(tier_rows)} tier row(s), ~{est:.0f} of ~{tier_est:.0f} "
               f"suite-seconds, ~{wall/60:.1f} min wall at -j{a.jobs} (serial islands {serial:.0f} s); "
-              f"costs from the run log + scripts/gate-times.txt, 10 s assumed otherwise")
+              f"{cost_sources([k for n in names for k in ([f'{n}::{a_}' for a_ in subsets[n]] if n in subsets else [n])])}")
         for n in names:
             print(f"  {cost(n) if n in subsets else costs.get(n, 0):7.1f}  {n}   <- {selected[n]}")
             for arm in subsets.get(n, []):

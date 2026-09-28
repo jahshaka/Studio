@@ -740,7 +740,7 @@ void FrameMonitor::Bundle::writeSnapshot(const EngineSnapshot &s, const QString 
                 { "captures", double(s.gi.cards.captures) },
                 { "invalidTransform", double(s.gi.cards.invalidTransform) },
                 { "invalidMaterial", double(s.gi.cards.invalidMaterial) },
-                { "invalidLight", double(s.gi.cards.invalidLight) } } },
+                { "invalidSun", double(s.gi.cards.invalidSun) } } },
             { "cardsResident", QJsonObject{
                 { "built", s.gi.cards.built },
                 { "pages", int(s.gi.cards.pages) },
@@ -752,9 +752,19 @@ void FrameMonitor::Bundle::writeSnapshot(const EngineSnapshot &s, const QString 
                 { "bytesPerTexel", int(s.gi.cards.bytesPerTexel) },
                 { "megabytes", double(s.gi.cards.bytes) / (1024.0 * 1024.0) },
                 { "emissiveFormat", qs(s.gi.cards.emissiveFormat) } } },
+            // ...THE STILL WORLD'S SUN TERM (ATOM-S3-CARDCAP): the traced cards,
+            // texels and GPU milliseconds, the stale cards past the budget, and the
+            // still casters' re-traces...
+            { "cardsStill", QJsonObject{
+                { "tracedLastFrame", int(s.gi.cards.stillTracedLastFrame) },
+                { "texelsLastFrame", int(s.gi.cards.stillTexelsLastFrame) },
+                { "pending", int(s.gi.cards.stillPending) },
+                { "traces", double(s.gi.cards.stillTraces) },
+                { "casterRetraces", double(s.gi.cards.casterRetraces) },
+                { "traceGpuMs", double(s.gi.cards.stillGpuMs) } } },
             // ...and THE MOVERS' SHADOW ON THEM (PHOTON-CARDS-4): the traced
-            // term's cards, texels and GPU milliseconds (with the relight's), the
-            // cards past the budget, and the still casters' recaptures.
+            // term's cards, texels and GPU milliseconds (with the relight's) and
+            // the cards past the budget.
             { "cardsMovers", QJsonObject{
                 { "movers", int(s.gi.cards.moverCasters) },
                 { "tracedLastFrame", int(s.gi.cards.moverTracedLastFrame) },
@@ -763,7 +773,6 @@ void FrameMonitor::Bundle::writeSnapshot(const EngineSnapshot &s, const QString 
                 { "pendingAgeFrames", int(s.gi.cards.moverPendingAge) },
                 { "traces", double(s.gi.cards.moverTraces) },
                 { "retired", double(s.gi.cards.moverRetired) },
-                { "casterRecaptures", double(s.gi.cards.casterRecaptures) },
                 { "traceGpuMs", double(s.gi.cards.moverGpuMs) },
                 { "relightGpuMs", double(s.gi.cards.relightGpuMs) } } } } },
         { "shaderCache", QJsonObject{

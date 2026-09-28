@@ -595,6 +595,9 @@ struct KindCounter final : public Ogre::CompositorWorkspaceListener {
     void passPreExecute(Ogre::CompositorPass *pass) override {
         const Ogre::CompositorNode *node = pass->getParentNode();
         if (!node || node->getName() != nodeName) return;
+        // The caster cut's pass (ATOM-SHADOWS-1) is the second half of its map's render, not a
+        // render of its own (the engine's ShadowPassCounter says the same).
+        if (pass->getType() == Ogre::PASS_CUSTOM) return;
         ++total;
         const Ogre::uint32 idx = pass->getDefinition()->mShadowMapIdx;
         if (idx < perMap.size()) ++perMap[idx];

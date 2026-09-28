@@ -2779,7 +2779,8 @@ IEditorViewport::GiStatusInfo EngineSceneViewport::giStatus() const
     out.cards.captures          = double(st.cards.captures);
     out.cards.invalidTransform  = double(st.cards.invalidTransform);
     out.cards.invalidMaterial   = double(st.cards.invalidMaterial);
-    out.cards.invalidLight      = double(st.cards.invalidLight);
+    out.cards.invalidSun        = double(st.cards.invalidSun);
+    out.cards.stillTraces       = double(st.cards.stillTraces);
     out.cards.captureMs         = double(st.cards.captureMs);
     out.cards.cardRecords       = int(st.cards.cardRecords);
     out.cards.instanceSlots     = int(st.cards.instanceSlots);

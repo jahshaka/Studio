@@ -23,9 +23,18 @@ For more information see the LICENSE file
 // world.override survive), AFTER the reader has run, so the reader's absent-key defaults stay
 // the constructor's. A windowed script run also boots at kWindowWidth x kWindowHeight.
 //
-// It is a PROCESS setting, never a document one: nothing here changes the document default
-// (iris::Scene::giTier) or what a scene saves, and a process with no test tier (every pixel
-// pool, the owner's app) honours each opened scene's own tier. `app.testTier()` reads it.
+// It is a PROCESS setting, applied IN MEMORY: nothing here changes the document default
+// (iris::Scene::giTier), and a process with no test tier (every pixel pool, the owner's app)
+// honours each opened scene's own tier. `app.testTier()` reads it.
+//
+// A SAVE FROM A TEST-TIER PROCESS WRITES THE TIER (TESTING-DEBTS-1 T6): setMode writes the
+// scene's worldMode and every unpinned World row in memory (MainWindow::setScene ->
+// worldmodes::setMode), and SceneWriter saves what the scene holds (`worldMode`, `giTier` and
+// the rows) — no guard, and the scene is not marked dirty by it. So a test that asserts a SAVED
+// World row (a tier, a GI / shadow / probe row read back after save -> open) must run at the
+// document's tier (a `TIER epic` pool or a row without JAHSHAKA_TEST_TIER); a Low process can
+// only assert what the test tier itself puts there (<pool>.tier does, on purpose). Measured on
+// 2026-09-28: no Low arm or Low row saves and asserts a World row but <pool>.tier.
 //
 // Header-only on purpose: a process latch, set once in main() before any window exists and
 // read by the shell and the scripting layer — no translation unit of its own to link into the

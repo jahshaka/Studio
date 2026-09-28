@@ -174,7 +174,7 @@ int main(int argc, char **argv)
     GiParams gi;
     gi.mode = GiMode::Off;
     gi.quality = GiQuality::High;
-    gi.cards = GiToggle::On;
+    gi.cards = true;
     gi.cardResidencyRadius = 40.0f;
     s->setGlobalIllumination(gi);
     PostFxDesc fx;
@@ -402,10 +402,10 @@ int main(int argc, char **argv)
                 cardShadow(s, 0.6f, newZ) < 0.1f) { frames = f; break; }
         }
         const GiStatus s1 = s->giStatus();
-        const unsigned long long queued = s1.cards.casterRecaptures - s0.cards.casterRecaptures;
-        const unsigned perFrame = std::max(1u, s1.cards.budgetTexels / (128u * 128u));
+        const unsigned long long queued = s1.cards.casterRetraces - s0.cards.casterRetraces;
+        const unsigned perFrame = std::max(1u, s1.cards.lightBudgetTexels / (128u * 128u));
         const int bar = int((queued + perFrame - 1u) / perFrame) + 2;
-        std::printf("    %llu cards queued for recapture (%u a frame at this budget): old lit / new dark "
+        std::printf("    %llu cards queued for a still re-trace (%u a frame at this budget): old lit / new dark "
                     "after %d frames (bar %d)\n", queued, perFrame, frames, bar);
         CHECK_MSG(queued > 0u, "the move queued its footprints' cards (%llu)", queued);
         CHECK_MSG(frames > 0 && frames <= bar,
@@ -480,7 +480,7 @@ int main(int argc, char **argv)
     // The capture budget's bar for a recapture: the cards queued, at the cards a
     // frame the budget holds, and two frames of slack (arm (f)'s).
     const auto recaptureBar = [&](unsigned long long queued) {
-        const unsigned perFrame = std::max(1u, s->giStatus().cards.budgetTexels / (128u * 128u));
+        const unsigned perFrame = std::max(1u, s->giStatus().cards.lightBudgetTexels / (128u * 128u));
         return int((queued + perFrame - 1u) / perFrame) + 2;
     };
 
@@ -497,7 +497,7 @@ int main(int argc, char **argv)
             render(e, 1);
             if (cardShadow(s, 0.6f, stillZ) > 0.9f) { frames = f; break; }
         }
-        const unsigned long long queued = s->giStatus().cards.casterRecaptures - s0.cards.casterRecaptures;
+        const unsigned long long queued = s->giStatus().cards.casterRetraces - s0.cards.casterRetraces;
         const int bar = recaptureBar(queued);
         std::printf("    %llu cards queued; its footprint lit after %d frames (bar %d)\n", queued, frames, bar);
         CHECK_MSG(queued > 0u, "(h) the deletion queued its footprint's cards (%llu)", queued);
@@ -576,7 +576,7 @@ static int costMain(Engine *e)
     GiParams gi;
     gi.mode = GiMode::Vct;
     gi.quality = GiQuality::High;
-    gi.cards = GiToggle::On;
+    gi.cards = true;
     gi.testProbeRegionMin = Vec3(-26.0f, -2.0f, -26.0f);
     gi.testProbeRegionMax = Vec3(26.0f, 14.0f, 26.0f);
     s->setGlobalIllumination(gi);

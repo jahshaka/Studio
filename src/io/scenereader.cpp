@@ -515,12 +515,10 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
         // `giCascades` switch is deleted and its key is not read (forward-building).
         scene->giCascadeInstanceCap = qBound(
             0, sceneObj.value("giCascadeInstanceCap").toInt(scene->giCascadeInstanceCap), 1 << 20);
-        // THE SURFACE CACHE's three rows. Absent in every file written before
-        // SURFACE-CACHE-1b, and the constructor's value is the answer then —
-        // which is OFF, the shipped arm exactly (READER-DEFAULTS-1's rule: the
-        // absent-key fallback and the constructor default must agree, and here
-        // they are the same expression).
-        scene->giCards = qBound(-1, sceneObj.value("giCards").toInt(scene->giCards), 1);
+        // THE SURFACE CACHE's three rows. `giCards` is 0 OFF or the constructor's
+        // -1 AUTO (READER-DEFAULTS-1: the absent-key fallback is the ctor's); the
+        // deleted 1 "on" reads as the default too.
+        scene->giCards = sceneObj.value("giCards").toInt(scene->giCards) == 0 ? 0 : -1;
         scene->giCardBudgetTexels = qBound(
             0, sceneObj.value("giCardBudgetTexels").toInt(scene->giCardBudgetTexels), 1 << 26);
         scene->giCardRadius = float(qBound(

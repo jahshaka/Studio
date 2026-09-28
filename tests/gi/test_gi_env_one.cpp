@@ -210,7 +210,7 @@ int main()
     base.numBounces = 1;
     base.ddgi = GiToggle::Off;
     base.gather = GiToggle::Off;
-    base.cards = GiToggle::Off;
+    base.cards = false;
     // THE TIER'S OWN CHAIN (the single scene-fitted volume this used to pin is
     // deleted, D4-PHOTON-TIERS): every cascade holds the fixture and nothing else.
 

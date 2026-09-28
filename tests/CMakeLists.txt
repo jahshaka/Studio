@@ -235,7 +235,7 @@ endfunction()
 set(JAH_GPU_EXCLUSIVE "${CMAKE_SOURCE_DIR}/scripts/gpu-exclusive.sh")
 set(JAH_GPU_EXCLUSIVE_SUITES
     # the timing suites of the push tier
-    app.input_keys app.play_select threading.newproject_stall shadergraph.bake_output gi.budget
+    app.input_keys app.play_select shadergraph.bake_output gi.budget
     app.watchdog_stall
     # POST-C-FIXES-1: GPU-budget suites that measured outside the lock (the verdicts:
     # gi.field_scroll flaked 1 of 2 on the base under a sibling's load; gi.rt_reflect_cost
@@ -251,13 +251,17 @@ set(JAH_GPU_EXCLUSIVE_SUITES
     chain.hzb.timing engine.gpu_cull.timing gi.field_follows.timing ui.properties_filter.timing
     ui.components.timing meshbake.cards.timing app.update_check.timing app.shutdown_order.timing
     vr.warmup.timing scripting.e2e.editor_controls.timing
+    # TESTING-DEBTS-1 T10: the first create's 1000 ms bar (the push row keeps the counts).
+    threading.newproject_stall.timing
     # D1-SCALE-FIXTURES: the scale rows that print GPU or frame milliseconds or the UI
     # thread's gaps (tests/scale/CMakeLists.txt) — measurements by design, so a sibling's
     # GPU work inside their window would print someone else's number.
     scale.world scale.voxel_scroll scale.cluster_cut scale.decode scale.tlas scale.cpu_walks
     scale.library
     # ATOM-CLUSTER-CUT: the flat cut's milliseconds at 10k instances (D1's decision number).
-    scale.cut_cost)
+    scale.cut_cost
+    # ATOM-SHADOWS-1: the caster pass's CPU and GPU ms, cut against per-instance (paired arms).
+    scale.shadow_cut scale.shadow_cut_small)
 # The wrapper waits at most this long for the lock (its default, JAH_GPU_LOCK_WAIT), and the wait
 # counts against ctest's TIMEOUT — so a wrapped suite's TIMEOUT is ITS OWN run budget (the value
 # its site measured and documented) PLUS this wait, set here from RUN_TIMEOUT and never again at

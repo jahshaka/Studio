@@ -1604,7 +1604,7 @@ static int hitresMain(Engine *e)
     // (D4-PHOTON-TIERS): the subject is the rays against one voxel volume.
     gi.cascadeCount = 1;
     gi.cascadeSet[0] = GiParams::GiCascadeDesc{ 8.0f, 128, 0.0f };
-    gi.cards = GiToggle::On;
+    gi.cards = true;
     gi.cardResidencyRadius = 40.0f;
     CHECK(s->setGlobalIllumination(gi), "the voxel arm and the surface cache build");
 
@@ -1745,7 +1745,7 @@ static int hitresMain(Engine *e)
     // THE SAME ROW FROM THE VOXELS — the cache off through the tuning door —
     // printed, for the record: this is the banding the card read replaces.
     GiParams off = gi;
-    off.cards = GiToggle::Off;
+    off.cards = false;
     s->setGiTuning(off);
     render(e, 30);
     const Profile voxels = measureRow("hits read the voxels");
@@ -1904,7 +1904,7 @@ static int footprintSweepMain(Engine *e)
     // (D4-PHOTON-TIERS): the subject is the rays against one voxel volume.
     gi.cascadeCount = 1;
     gi.cascadeSet[0] = GiParams::GiCascadeDesc{ 14.0f, 128, 0.0f };
-    gi.cards = GiToggle::On;
+    gi.cards = true;
     gi.cardResidencyRadius = 40.0f;
     s->setGlobalIllumination(gi);
     PostFxDesc fx;

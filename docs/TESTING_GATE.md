@@ -221,15 +221,26 @@ rule …`, `symbols [FogDesc, density] named by 7 file(s)`, `names 2 row(s)`, `t
 (vendored) enters our code through [...]`), then every selected row with its reason
 (`[relinks test_x]`, `symbol FogDesc`, `rule …`, `[module world]`) and the estimate (`N of M tier
 rows, ~S of ~T suite-seconds`, costs from THE RUN LOG's 14-day medians over
-`scripts/gate-times.txt`).
+`scripts/gate-times.txt` — a suite's QUIET median, of its PASS records whose `box.other_ctests == 0`,
+when >= 3 such exist, else every record's (medians under sibling gates ran ~26 % high,
+TESTING-DEBTS-1); the estimate line counts which source each cost came from).
 
 **THE RUN LOG (TESTING_V2 T8).** `--run` (its tier `scoped`, or `scoped-fallback` / `scoped-tier` when a scoped gate ran the whole tier), `--solo` and the rc-gate tiers
 (`scripts/gate_runlog.py run --tier <t> -- <ctest line>`) append one JSON record per row and per
-pool arm to `<workspace>/testing/runs/<date>-<tier>-<tip>.jsonl`: verdict (PASS | FAIL | CRASH |
-TIMEOUT | NOTRUN), retries, wall seconds, `gpu_ms` (a suite's `gpu_ms:` line), a target's value,
+pool arm to `<workspace>/testing/runs/<date>-<tier>-<tip>.jsonl` — the tier one of
+`gate_runlog.TIERS` (scoped, scoped-fallback, scoped-tier, joint, merge, stage, nightly, push, fork;
+any other name is refused before the run): verdict (PASS | FAIL | CRASH | TIMEOUT | NOTRUN |
+NOADMIT | OOM | LOST, §4b), retries, wall seconds, `gpu_ms` (a suite's `gpu_ms:` line), a target's value,
 the selection reason, the tree's three shas, the box (load over the suite's own window, the GPU
 clock state, -j, the display, sibling gates). The fields are `testing/runs/README.md`; the two
 standing queries are `scripts/gate_runlog.py longest` and `scripts/gate_runlog.py load-reds`.
+
+**THE BUILT FORK MUST BE THE PIN (TESTING-DEBTS-1 T12).** `irisgl/scripts/build-ogre.sh` writes
+`<install>/BUILT_FROM` (the ogre-next commit it built, `dirty` on a second line for a dirty
+checkout). `gate-scope.sh --run` / `--solo` and `gate_runlog.py run` REFUSE (exit 4, before any
+suite) when the ogre-next checkout or that record is not the commit irisgl pins — or the record is
+missing — and print the fetch / `submodule update` / `build-ogre.sh` lines that fix it. (A gate on
+a stale install tests media the pin no longer matches: REFLECT-MOVERS-1's void 124-minute run.)
 
 **The guard: `gate.selection`** (`tests/hygiene/gate_selection.py`, label `hygiene`) replays
 recorded lane diffs (`tests/hygiene/gate_selection_cases.json`: D's last ten lanes, their reds
@@ -287,7 +298,8 @@ evidence string in the report (host-load timing, the texture-worker SEGV class).
 by VRAM, so an OOM means the budget is wrong (a class under-counted, a row outside it) or an
 unadmitted process filled the card — the verdict names which (`scripts/gpu-admit.sh status` and
 `nvidia-smi` beside the red). Known contention-sensitive suites: open.responsive,
-app.engine_selftest_validation, app.input_keys, threading.newproject_stall,
+app.engine_selftest_validation, app.input_keys, threading.newproject_stall.timing (the
+nightly twin of the first create's 1000 ms bar; the push row prints it, TESTING-DEBTS-1),
 scenegraph.benchmark, shadergraph.bake_output, claude.chat, scripting.e2e.space_switch /
 sun_light, ui.media_lazy, gi.budget, scripting.e2e.reflection_map (the GI/VRAM contention
 class; L8's gate, 2026-09-11). Every failure in a gate report carries a verdict
@@ -343,7 +355,7 @@ own XDG_RUNTIME_DIR, so the "one socket" reason was void; vr.eye_grade captures 
 with `xwd -id` and therefore runs on ITS OWN Xvfb, displays 241-299); `gi_chain` — the
 cascade-chain rows (their VRAM reason was measured false). RUN_SERIAL remains only where the
 audit kept it (app.input_keys, app.watchdog_stall, gi.field_scroll, threading.mode /
-mode_serial / gi_resolve / gi_resolve_serial / newproject_stall, and the nightly benches).
+mode_serial / gi_resolve / gi_resolve_serial, newproject_stall.timing, and the nightly benches).
 
 ## 4b. THE VRAM BUDGET — box-wide tokens (lane GATE-ADMIT-1, 2026-09-27)
 
@@ -375,6 +387,12 @@ it is bounded at 900 s (`JAH_VRAM_WAIT`), after which the command never runs (ex
 (`scripts/gate_runlog.py`) records that row — or a pool's never-started arms — as verdict
 `NOADMIT` with the line as its status, never a generic FAIL (the box was over-subscribed; nothing
 about the row's code). A burst of NOADMITs means the lanes asked for more than 900 s of queue.
+A red row (or pool arm) whose OWN output carries the engine's in-frame OOM line (`GPU out of memory
+(VK_ERROR_OUT_OF_DEVICE_MEMORY; the device is NOT lost)`, exit 1) is recorded `OOM`, one carrying the
+loss line (`THE GPU DEVICE WAS LOST` / `the graphics device was lost`, exit 3) `LOST` — the matched
+line rides as `budget` (TESTING-DEBTS-1). `OOM` is the budget class: an unadmitted process or a row
+over its class (read `scripts/gpu-admit.sh status` + nvidia-smi per pid); `LOST` is never
+environmental (look for the Xid). A PASS that logged an OOM warning stays PASS.
 `scripts/gpu-admit.sh status` lists the holders (the file of a held token names its pid and row).
 
 **THE CLASSES** (the audit's A2 table, nvidia-smi per pid, 2026-09-26) — `jah_vram_tokens()` in

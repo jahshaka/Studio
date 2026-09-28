@@ -114,6 +114,10 @@ struct Fixture {
     Scene *s = nullptr;
 };
 
+/// Set by makeFixture when the device has no ray tier: THE CARDS EXIST ONLY WHERE
+/// RAYS RUN (ATOM-S3-CARDCAP — their sun term is traced), so a case skips cleanly.
+static bool gNoRays = false;
+
 static bool makeFixture(Fixture &f, const char *name)
 {
     std::string err;
@@ -129,6 +133,11 @@ static bool makeFixture(Fixture &f, const char *name)
     f.s = f.e->createScene(name);
     if (!f.view || !f.s) { std::printf("FAIL: view/scene: %s\n", f.e->lastError().c_str()); return false; }
     f.view->setScene(f.s);
+    if (!f.e->rayQueryAvailable() || !f.e->rayTracing()) {
+        std::printf("ok: no ray-query device here — the cards need the ray tier; the case skips cleanly\n");
+        gNoRays = true;
+        return false;
+    }
     return true;
 }
 
@@ -145,7 +154,7 @@ static GiParams baseGi()
     // they are lit from, not the chain's hand-overs (D4-PHOTON-TIERS).
     gi.cascadeCount = 1;
     gi.cascadeSet[0] = GiParams::GiCascadeDesc{ 16.0f, 128, 0.0f };
-    gi.cards = GiToggle::On;
+    gi.cards = true;
     return gi;
 }
 
@@ -157,7 +166,7 @@ static int caseCapture()
     checkFrames();
 
     Fixture f;
-    if (!makeFixture(f, "cardcapture")) return 1;
+    if (!makeFixture(f, "cardcapture")) return gNoRays ? 0 : 1;
     Scene *s = f.s;
     s->setAmbient(Colour(0.20f, 0.20f, 0.20f), Colour(0.15f, 0.15f, 0.15f));
     enginetest::addDirectionalLight(s, Vec3(-0.3f, -1.0f, 0.4f), 2.0f);
@@ -492,7 +501,7 @@ static int caseCapture()
               st.cards.instancesResident);
 
     // ---- THE ROW OFF FREES EVERYTHING ------------------------------------
-    gi.cards = GiToggle::Off;
+    gi.cards = false;
     CHECK(s->setGlobalIllumination(gi), "the card row goes off");
     render(f.e, 4);
     st = s->giStatus();
@@ -503,10 +512,61 @@ static int caseCapture()
 // ---------------------------------------------------------------------------
 // gi.card_shadow — THE measurement of this phase
 // ---------------------------------------------------------------------------
+/// THE STILL TERM AGAINST THE RAY TRUTH (ATOM-S3-CARDCAP): on a grid of the floor's
+/// top face, every texel the cache answers with is traced again from ITS OWN
+/// surface point (CardSample::position + worldNormal x sunLift — the job's origin)
+/// towards the sun through Scene::traceRays; the stored term must be exactly that
+/// ray's answer (1 lit, 0 occluded; a texel turned away from the sun is 1). The
+/// fixture has no movers, so the casters' channel (kRayMaskCaster) is the still
+/// casters' set. Returns the mismatches; `compared` the texels compared.
+static unsigned stillTermMismatches(Scene *s, const Vec3 &toSun, unsigned &compared, unsigned &dark)
+{
+    compared = 0u;
+    dark = 0u;
+    const Vec3 up(0.0f, 1.0f, 0.0f);
+    std::vector<CardSample> samples;
+    std::vector<float> rays;
+    for (int iz = -9; iz <= 9; ++iz)
+        for (int ix = -9; ix <= 9; ++ix) {
+            CardSample c;
+            if (!s->readCardAt(Vec3(0.4f * float(ix), 0.0f, 0.4f * float(iz)), up, c) || !c.ok) continue;
+            samples.push_back(c);
+            const float o[3] = { c.position[0] + c.worldNormal[0] * c.sunLift,
+                                 c.position[1] + c.worldNormal[1] * c.sunLift,
+                                 c.position[2] + c.worldNormal[2] * c.sunLift };
+            const unsigned mask = kRayMaskCaster;
+            float maskBits;
+            std::memcpy(&maskBits, &mask, sizeof(maskBits));   // the mask is BIT-COPIED (Scene::traceRays)
+            rays.insert(rays.end(), { o[0], o[1], o[2], 0.0f, toSun.x, toSun.y, toSun.z, 10000.0f,
+                                      maskBits, 0.0f, 0.0f, 0.0f });
+        }
+    std::vector<float> hits;
+    if (samples.empty() || !s->traceRays(rays, hits) || hits.size() != samples.size() * 4u) {
+        std::printf("FAIL: the reference trace did not run (%zu samples)\n", samples.size());
+        ++failures;
+        return 1u;
+    }
+    unsigned bad = 0u;
+    for (size_t i = 0; i < samples.size(); ++i) {
+        const CardSample &c = samples[i];
+        const float nl = c.worldNormal[0] * toSun.x + c.worldNormal[1] * toSun.y + c.worldNormal[2] * toSun.z;
+        const float want = (nl > 0.0f && hits[i * 4u] >= 0.0f) ? 0.0f : 1.0f;
+        ++compared;
+        if (c.shadow < 0.5f) ++dark;
+        if (c.shadow != want) {
+            if (bad < 8u)
+                std::printf("    mismatch at (%.3f %.3f %.3f): stored %.3f, the ray says %.0f (hit at %.4f)\n",
+                            c.position[0], c.position[1], c.position[2], c.shadow, want, hits[i * 4u]);
+            ++bad;
+        }
+    }
+    return bad;
+}
+
 static int caseShadow()
 {
     Fixture f;
-    if (!makeFixture(f, "cardshadow")) return 1;
+    if (!makeFixture(f, "cardshadow")) return gNoRays ? 0 : 1;
     Scene *s = f.s;
     // A BLACK AMBIENT, so the shadow term is the only thing that can vary
     // across the card. (The prepass writes the term directly; the ambient never
@@ -618,17 +678,29 @@ static int caseShadow()
         }
     }
     std::printf("\n");
-    // THE PROFILE, AT THE SHIPPED BUDGET: lit / the crate's penumbra / the
-    // footprint / the penumbra / lit at x = 0..+4 — the crate covers x in
-    // [1, 3] and the two edge values are the shadow filter straddling its
-    // faces. Every card of the floor is captured in a different frame at this
-    // budget, so this is the per-card fit, not the first card's.
+    // THE PROFILE, AT THE SHIPPED BUDGET: lit / the crate's edge / the
+    // footprint / the edge / lit at x = 0..+4 — the crate covers x in [1, 3].
+    // The term is TRACED (one ray per texel, no filter): 0 or 1 exactly, and at
+    // the two faces the texel's own centre decides which.
     {
-        const float want[5] = { 1.00f, 0.57f, 0.00f, 0.52f, 1.00f };
-        for (int k = 0; k < 5; ++k)
-            CHECK_MSG(std::fabs(profile[4 + k] - want[k]) <= 0.1f,
-                      "the floor's shadow term at x = +%d is %.2f (want %.2f +- 0.10)", k,
-                      profile[4 + k], want[k]);
+        const float want[5] = { 1.00f, -1.0f, 0.00f, -1.0f, 1.00f };
+        for (int k = 0; k < 5; ++k) {
+            if (want[k] >= 0.0f)
+                CHECK_MSG(profile[4 + k] == want[k], "the floor's sun term at x = +%d is %.2f (want %.2f)", k,
+                          profile[4 + k], want[k]);
+            else
+                CHECK_MSG(profile[4 + k] == 0.0f || profile[4 + k] == 1.0f,
+                          "the floor's sun term at the crate's face x = +%d is %.2f (0 or 1: a hard term)", k,
+                          profile[4 + k]);
+        }
+    }
+    // ...AND EVERY TEXEL IS THE RAY'S OWN ANSWER (the physics bar, exact).
+    {
+        unsigned compared = 0u, dark = 0u;
+        const unsigned bad = stillTermMismatches(s, Vec3(0.0f, 1.0f, 0.0f), compared, dark);
+        CHECK_MSG(bad == 0u && compared > 300u && dark > 10u,
+                  "the stored sun term equals a reference trace from its own texel at %u of %u floor texels"
+                  " (%u in the crate's shadow)", compared - bad, compared, dark);
     }
 
     CardSample inShadow, inLight;
@@ -686,11 +758,22 @@ static int caseShadow()
     CardSample beforeTilt;
     const bool gotBefore = s->readCardAt(pSlide, up, beforeTilt) && beforeTilt.ok;
     s->setNodeTransform(sun, Vec3(0, 0, 0), tilt, Vec3(1, 1, 1));
-    const unsigned long long lightBefore = st.cards.invalidLight;
+    const unsigned long long sunBefore = st.cards.invalidSun, capBefore = st.cards.captures;
     render(f.e, 40);
     st = s->giStatus();
-    CHECK_MSG(st.cards.invalidLight > lightBefore, "the light write reached the cache (%llu)",
-              (unsigned long long)st.cards.invalidLight);
+    CHECK_MSG(st.cards.invalidSun > sunBefore, "the sun's turn reached the cache (%llu)",
+              (unsigned long long)st.cards.invalidSun);
+    CHECK_MSG(st.cards.captures == capBefore && st.cards.stillPending == 0u,
+              "...as a re-TRACE: no card re-captured (%llu), none left waiting (%u)",
+              (unsigned long long)(st.cards.captures - capBefore), st.cards.stillPending);
+    {
+        unsigned compared = 0u, dark = 0u;
+        const Vec3 toSun(-dir.x, -dir.y, -dir.z);
+        const unsigned bad = stillTermMismatches(s, toSun, compared, dark);
+        CHECK_MSG(bad == 0u && compared > 300u && dark > 10u,
+                  "after the turn, the stored sun term equals the reference trace at %u of %u floor texels"
+                  " (%u in the crate's shadow)", compared - bad, compared, dark);
+    }
     CardSample afterTilt;
     if (gotBefore && s->readCardAt(pSlide, up, afterTilt) && afterTilt.ok) {
         std::printf("    at x %+.2f (the shadow slides %.2f m): shadow %.4f before the tilt, %.4f"
@@ -709,6 +792,31 @@ static int caseShadow()
     if (s->readCardAt(pShadow, up, under) && under.ok)
         CHECK_MSG(under.shadow < 0.1f, "the floor UNDER the crate is still shadowed (%.4f)",
                   under.shadow);
+
+    // THE RAYS' ROUND TRIP (ATOM-S3-CARDCAP): the scene's ray row off drops the cache
+    // (the cards exist only where rays run); back on, the cache rebuilds and every
+    // card's still term is traced again — the same term, exactly.
+    {
+        s->setRayTracing(RayTracingMode::Off);
+        render(f.e, 10);
+        CHECK(!s->giStatus().cards.built, "rays off: the cache is gone");
+        s->setRayTracing(RayTracingMode::On);
+        for (int i = 0; i < 300; ++i) {
+            render(f.e, 1);
+            const CardCacheStatus c = s->giStatus().cards;
+            if (i > 8 && c.built && c.cardsResident && !c.queueLength && !c.stillPending) break;
+        }
+        render(f.e, 8);
+        const CardCacheStatus c = s->giStatus().cards;
+        std::printf("    after the round trip: %u resident, %u queued, %u still pending, %llu still traces\n",
+                    c.cardsResident, c.queueLength, c.stillPending, (unsigned long long)c.stillTraces);
+        unsigned compared = 0u, dark = 0u;
+        const Vec3 toSun(-dir.x, -dir.y, -dir.z);
+        const unsigned bad = stillTermMismatches(s, toSun, compared, dark);
+        CHECK_MSG(c.built && c.stillPending == 0u && bad == 0u && compared > 300u && dark > 10u,
+                  "after a rays off/on round trip the stored sun term equals the reference trace at %u of %u"
+                  " floor texels (%u in the crate's shadow)", compared - bad, compared, dark);
+    }
     return failures ? 1 : 0;
 }
 
@@ -718,7 +826,7 @@ static int caseShadow()
 static int caseBudget()
 {
     Fixture f;
-    if (!makeFixture(f, "cardbudget")) return 1;
+    if (!makeFixture(f, "cardbudget")) return gNoRays ? 0 : 1;
     Scene *s = f.s;
     s->setAmbient(Colour(0.15f, 0.15f, 0.15f), Colour(0.10f, 0.10f, 0.10f));
     enginetest::addDirectionalLight(s, Vec3(-0.3f, -1.0f, 0.4f), 2.0f);
@@ -841,7 +949,7 @@ static double pbsDiffuse(double kD, double E, double perceptualRoughness, const 
 static int caseLighting()
 {
     Fixture f;
-    if (!makeFixture(f, "cardlighting")) return 1;
+    if (!makeFixture(f, "cardlighting")) return gNoRays ? 0 : 1;
     Scene *s = f.s;
     // NO AMBIENT and nothing emissive on the subjects: the radiance is the
     // direct term plus the floor's bounce, and the direct half is read as the
@@ -1190,7 +1298,14 @@ static int caseLightingIndirect()
     gi.gather = GiToggle::Off;
     gi.cardResidencyRadius = 40.0f;
     CHECK(s->setGlobalIllumination(gi), "GI builds (the chain, no field, no gather)");
-    s->setRayTracing(RayTracingMode::Off);
+    // THE RAYS STAY ON (ATOM-S3-CARDCAP): the cards exist only where rays run
+    // (their sun term is traced). The wall's pixel is unchanged by them: N.L = 0
+    // under the vertical sun (no sun-contact term), F0 = 0 (no reflection), the
+    // field and the gather off.
+    if (!e->rayQueryAvailable() || !e->rayTracing()) {
+        std::printf("ok: no ray-query device here — the cards need the ray tier; the case skips cleanly\n");
+        return 0;
+    }
     // Straight at the wall's face from the floor's side, orthographic.
     CameraDesc cam;
     cam.position = Vec3(0.0f, 2.0f, -10.0f);
@@ -1539,7 +1654,14 @@ static int caseConeParity(bool offAxisTarget)
     gi.gather = GiToggle::Off;
     gi.cardResidencyRadius = 40.0f;
     CHECK(s->setGlobalIllumination(gi), "GI builds (the chain, no field, no gather)");
-    s->setRayTracing(RayTracingMode::Off);
+    // THE RAYS STAY ON (ATOM-S3-CARDCAP): the cards exist only where rays run
+    // (their sun term is traced). The wall's pixel is unchanged by them: N.L = 0
+    // under the vertical sun (no sun-contact term), F0 = 0 (no reflection), the
+    // field and the gather off.
+    if (!e->rayQueryAvailable() || !e->rayTracing()) {
+        std::printf("ok: no ray-query device here — the cards need the ray tier; the case skips cleanly\n");
+        return 0;
+    }
 
     const double heights[3] = { 0.8, 1.6, 2.8 };
     const double xs[2] = { -1.5, 1.5 };
@@ -1774,7 +1896,7 @@ static int caseConeParity(bool offAxisTarget)
 static int caseReadParity()
 {
     Fixture f;
-    if (!makeFixture(f, "cardreadparity")) return 1;
+    if (!makeFixture(f, "cardreadparity")) return gNoRays ? 0 : 1;
     Engine *e = f.e;
     Scene *s = f.s;
     if (!e->rayQueryAvailable() || !e->rayTracing()) {
@@ -1926,7 +2048,7 @@ static int caseReadParity()
     // comes back, and not one GI rebuild is paid for it.
     const unsigned long long rebuildsBefore = s->giStatus().rebuilds;
     GiParams off = gi;
-    off.cards = GiToggle::Off;
+    off.cards = false;
     CHECK(s->setGiTuning(off), "cards off through setGiTuning");
     render(e, 3);
     const bool freed = !s->giStatus().cards.built;
@@ -1951,7 +2073,7 @@ static int caseReadParity()
 static int caseClouds()
 {
     Fixture f;
-    if (!makeFixture(f, "cardclouds")) return 1;
+    if (!makeFixture(f, "cardclouds")) return gNoRays ? 0 : 1;
     Scene *s = f.s;
     s->setAmbient(Colour(0.0f, 0.0f, 0.0f), Colour(0.0f, 0.0f, 0.0f));
     PbrParams cp;
@@ -2043,7 +2165,7 @@ static int caseClouds()
 static int caseBlend()
 {
     Fixture f;
-    if (!makeFixture(f, "cardblend")) return 1;
+    if (!makeFixture(f, "cardblend")) return gNoRays ? 0 : 1;
     Scene *s = f.s;
     f.view->setOffscreenContract(OffscreenContract::StillPicture);
     s->setAmbient(Colour(0.20f, 0.20f, 0.20f), Colour(0.15f, 0.15f, 0.15f));
@@ -2408,7 +2530,7 @@ static int caseView()
 static int caseViewBatch()
 {
     Fixture f;
-    if (!makeFixture(f, "cardviewbatch")) return 1;
+    if (!makeFixture(f, "cardviewbatch")) return gNoRays ? 0 : 1;
     Engine *e = f.e;
     Scene *s = f.s;
     if (!e->rayQueryAvailable() || !e->rayTracing()) {
@@ -2499,8 +2621,15 @@ static int caseViewBatch()
         CHECK_MSG(settled[i].ok && settled[i].viewed[1] > 0.02f, "face %zu: settled read %.4f (hit %d)", i,
                   settled[i].viewed[1], int(settled[i].hit));
 
-    // THE LIGHT WRITE: the sun turns 0.3 degree about X — every card recaptures.
+    // THE LIGHT WRITE: the sun turns 0.3 degree about X. Since ATOM-S3-CARDCAP it
+    // re-captures NOTHING (a capture holds no light quantity): every card's still
+    // sun term is RE-TRACED, oldest first under the relight budget, and relit in
+    // the frame it is traced. (The F3 scenario this row was written for — a
+    // light-only RECAPTURE past the relight budget, read with the capture's
+    // alpha while the card's lit flag stood — has no trigger left: every capture
+    // now changes the surface, so its read falls back until the card is relit.)
     const unsigned long long capBefore = s->giStatus().cards.captures;
+    const unsigned long long traceBefore = s->giStatus().cards.stillTraces;
     s->setNodeTransform(sun, Vec3(0, 0, 0), sunQuat(0.3 * 3.14159265358979323846 / 180.0), Vec3(1, 1, 1));
     unsigned overBudgetFrames = 0u, frames = 0u;
     std::vector<std::vector<CardReadPick>> perFrame;
@@ -2519,8 +2648,8 @@ static int caseViewBatch()
     // Every frame's read is the card BEFORE the turn or AFTER it (a card not yet
     // recaptured, or recaptured and relit) — within the store's step; a card
     // read with the capture's -Z direction is neither.
-    double worst = 0.0;
-    size_t worstFace = 0;
+    double worst = 0.0, worstValue = 0.0;
+    size_t worstFace = 0, worstFrame = 0;
     for (const auto &now : perFrame)
         for (size_t i = 0; i < nf && i < after.size(); ++i) {
             if (!now[i].ok || !settled[i].ok || !after[i].ok) continue;
@@ -2528,7 +2657,12 @@ static int caseViewBatch()
                 const double v = now[i].viewed[k];
                 const double d = std::min(std::fabs(v / double(settled[i].viewed[k]) - 1.0),
                                           std::fabs(v / double(after[i].viewed[k]) - 1.0));
-                if (d > worst) { worst = d; worstFace = i; }
+                if (d > worst) {
+                    worst = d;
+                    worstFace = i;
+                    worstValue = v;
+                    worstFrame = size_t(&now - &perFrame[0]);
+                }
             }
         }
     const unsigned long long capAfter = s->giStatus().cards.captures;
@@ -2538,13 +2672,220 @@ static int caseViewBatch()
     std::printf("    the turn recaptured %llu cards; %u frames captured more texels than the relight budget;"
                 " the worst frame's read off both the before and the after value: %.2f %% (face %zu)\n",
                 capAfter - capBefore, overBudgetFrames, 100.0 * worst, worstFace);
-    CHECK_MSG(capAfter > capBefore && overBudgetFrames > 0u,
-              "the fixture pushes a capture batch past the relight budget (%u frames; %llu recaptures)",
-              overBudgetFrames, capAfter - capBefore);
+    std::printf("    the worst read: frame %zu, %.4f\n", worstFrame, worstValue);
+    const unsigned long long traced = s->giStatus().cards.stillTraces - traceBefore;
+    const unsigned resident = s->giStatus().cards.cardsResident;
+    CHECK_MSG(capAfter == capBefore && traced >= resident,
+              "the turn re-traced every resident card (%llu of %u) and re-captured none (%llu)", traced,
+              resident, capAfter - capBefore);
     CHECK_MSG(frames == 24u && worst <= 0.01,
-              "on every frame of the recapture every card reads as it was or as it became: worst %.2f %%"
+              "on every frame of the re-trace every card reads as it was or as it became: worst %.2f %%"
               " (bar 1 %%: the store's step; a card read with the capture's -Z direction is 25-40 %% off)",
               100.0 * worst);
+    return failures ? 1 : 0;
+}
+
+// ---------------------------------------------------------------------------
+// gi.card_light_trigger (ATOM-S3-CARDCAP): WHAT A LIGHT WRITE COSTS THE CARDS.
+// A card stores the sun's shadow term and no lamp's, so a POINT LAMP moving must
+// re-queue nothing (0 captures, the stored layers byte-for-byte unchanged — its
+// radiance is the relight's, which it does move), and the SUN turning must stale
+// the sun term of EVERY resident card — a re-TRACE of it, never a recapture (the
+// term is traced, ATOM-S3-CARDCAP).
+// ---------------------------------------------------------------------------
+static bool sameLayers(const CardSample &a, const CardSample &b)
+{
+    for (int k = 0; k < 3; ++k)
+        if (a.albedo[k] != b.albedo[k] || a.normal[k] != b.normal[k] || a.emissive[k] != b.emissive[k])
+            return false;
+    return a.depth == b.depth && a.shadow == b.shadow && a.roughness == b.roughness;
+}
+
+static int caseLightTrigger()
+{
+    Fixture f;
+    if (!makeFixture(f, "cardlighttrigger")) return gNoRays ? 0 : 1;
+    Scene *s = f.s;
+    // Two carded crates on an uncarded floor: twelve cards, one sun, one lamp.
+    const NodeId floorNode = s->createNode();
+    {
+        PbrParams p;
+        p.albedo = Colour(0.6f, 0.6f, 0.6f);
+        const MaterialId mat = s->createPbrMaterial(p);
+        const MeshId mesh = s->createMesh(enginetest::unitCubeMesh());
+        CHECK(floorNode && mat && mesh && s->attachMesh(floorNode, mesh, mat), "the floor exists");
+    }
+    enginetest::setNodeScale(s, floorNode, Vec3(12.0f, 0.2f, 12.0f));
+    enginetest::setNodePosition(s, floorNode, Vec3(0.0f, -0.1f, 0.0f));
+    for (int i = 0; i < 2; ++i) {
+        const NodeId crate = s->createNode();
+        PbrParams p;
+        p.albedo = Colour(0.8f, 0.3f + 0.4f * float(i), 0.2f);
+        const MaterialId mat = s->createPbrMaterial(p);
+        MeshData md = enginetest::unitCubeMesh();
+        md.cards = boxCards(0.5f);
+        const MeshId mesh = s->createMesh(md);
+        CHECK(crate && mat && mesh && s->attachMesh(crate, mesh, mat), "a carded crate exists");
+        enginetest::setNodePosition(s, crate, Vec3(i ? 1.5f : -1.5f, 0.5f, 0.0f));
+    }
+    const NodeId sun = s->createNode();
+    {
+        LightDesc l;
+        l.type = LightType::Directional;
+        l.colour = Colour(1.0f, 1.0f, 1.0f);
+        l.intensity = 2.0f / 3.14159265358979323846f;
+        l.castShadows = true;
+        s->setNodeTransform(sun, Vec3(0, 0, 0), Quat(0.2f, 0.0f, 0.1f, 0.97f), Vec3(1, 1, 1));
+        CHECK(sun && s->setLight(sun, l), "a shadow-casting sun");
+    }
+    const NodeId lamp = s->createNode();
+    {
+        LightDesc l;
+        l.type = LightType::Point;
+        l.colour = Colour(1.0f, 0.9f, 0.8f);
+        l.intensity = 20.0f;
+        l.range = 12.0f;
+        l.castShadows = true;
+        s->setNodeTransform(lamp, Vec3(0.0f, 3.0f, 2.0f), Quat(), Vec3(1, 1, 1));
+        CHECK(lamp && s->setLight(lamp, l), "a shadow-casting point lamp");
+    }
+    f.view->setShadows(true);
+    GiParams gi = baseGi();
+    gi.cardResidencyRadius = 40.0f;
+    CHECK(s->setGlobalIllumination(gi), "GI builds");
+    enginetest::testCameraLookAt(f.view, Vec3(0.0f, 4.0f, -8.0f), Vec3(0.0f, 0.5f, 0.0f));
+    // Settle: every card captured and relit, the queue empty.
+    for (int i = 0; i < 120; ++i) {
+        render(f.e, 1);
+        const CardCacheStatus c = s->giStatus().cards;
+        if (i > 8 && c.built && c.cardsResident && !c.queueLength) break;
+    }
+    render(f.e, 8);
+    const CardCacheStatus c0 = s->giStatus().cards;
+    CHECK_MSG(c0.built && c0.cardsResident == 12u && c0.queueLength == 0u,
+              "twelve cards resident and the queue drained (%u resident, %u queued)", c0.cardsResident,
+              c0.queueLength);
+    // The crates' tops, read as a ray would.
+    const Vec3 up(0.0f, 1.0f, 0.0f);
+    CardSample a0, b0;
+    const bool gotA = s->readCardAt(Vec3(-1.5f, 1.0f, 0.0f), up, a0) && a0.ok;
+    const bool gotB = s->readCardAt(Vec3(1.5f, 1.0f, 0.0f), up, b0) && b0.ok;
+    CHECK(gotA && gotB, "the cache answers on both crates' tops");
+
+    // THE LAMP MOVES: no capture, the stored layers unchanged, the radiance relit.
+    s->setNodeTransform(lamp, Vec3(1.0f, 3.5f, -1.0f), Quat(), Vec3(1, 1, 1));
+    render(f.e, 30);
+    const CardCacheStatus c1 = s->giStatus().cards;
+    std::printf("    lamp move: captures %llu -> %llu, relights %llu -> %llu, queue %u\n",
+                (unsigned long long)c0.captures, (unsigned long long)c1.captures,
+                (unsigned long long)c0.relights, (unsigned long long)c1.relights, c1.queueLength);
+    CHECK_MSG(c1.captures == c0.captures && c1.queueLength == 0u,
+              "a point lamp moving re-queues NO card (%llu captures)",
+              (unsigned long long)(c1.captures - c0.captures));
+    CHECK_MSG(c1.stillTraces == c0.stillTraces && c1.stillPending == 0u,
+              "...and re-traces NO card's sun term (%llu still traces)",
+              (unsigned long long)(c1.stillTraces - c0.stillTraces));
+    CHECK_MSG(c1.relights > c0.relights, "...and relights the resident set (%llu relights)",
+              (unsigned long long)(c1.relights - c0.relights));
+    CardSample a1, b1;
+    if (gotA && gotB && s->readCardAt(Vec3(-1.5f, 1.0f, 0.0f), up, a1) && a1.ok &&
+        s->readCardAt(Vec3(1.5f, 1.0f, 0.0f), up, b1) && b1.ok)
+        CHECK(sameLayers(a0, a1) && sameLayers(b0, b1),
+              "the stored layers (albedo, normal, depth, emissive, shadow, roughness) are unchanged");
+    else
+        CHECK(false, "the cache answers after the lamp move");
+
+    // THE SUN TURNS: every resident card's sun term is stale.
+    s->setNodeTransform(sun, Vec3(0, 0, 0), Quat(0.35f, 0.0f, -0.2f, 0.91f), Vec3(1, 1, 1));
+    render(f.e, 40);
+    const CardCacheStatus c2 = s->giStatus().cards;
+    std::printf("    sun turn: captures %llu -> %llu, still traces %llu -> %llu, pending %u\n",
+                (unsigned long long)c1.captures, (unsigned long long)c2.captures,
+                (unsigned long long)c1.stillTraces, (unsigned long long)c2.stillTraces, c2.stillPending);
+    CHECK_MSG(c2.captures == c1.captures,
+              "the sun turning re-captures NO card (%llu): a capture holds no light quantity",
+              (unsigned long long)(c2.captures - c1.captures));
+    CHECK_MSG(c2.stillTraces - c1.stillTraces >= c1.cardsResident && c2.stillPending == 0u,
+              "...and re-traces every resident card's still sun term (%llu of %u)",
+              (unsigned long long)(c2.stillTraces - c1.stillTraces), c1.cardsResident);
+    return failures ? 1 : 0;
+}
+
+// ---------------------------------------------------------------------------
+// shadow_grid <file> (ATOM-S3-CARDCAP, a TOOL, no row): the floor's sun term on a
+// 0.2 m grid of its top face under a tilted sun beside a 2 m crate, one line a
+// point ("x z shadow card texelX texelY") — the lane's report-only comparison of
+// the traced term against the PSSM term it replaced (the same tool run on both
+// builds, diffed offline).
+// ---------------------------------------------------------------------------
+static int caseShadowGrid(const char *path)
+{
+    Fixture f;
+    if (!makeFixture(f, "cardshadowgrid")) return gNoRays ? 0 : 1;
+    Scene *s = f.s;
+    s->setAmbient(Colour(0.0f, 0.0f, 0.0f), Colour(0.0f, 0.0f, 0.0f));
+    const NodeId floorNode = s->createNode();
+    {
+        PbrParams p;
+        p.albedo = Colour(0.8f, 0.8f, 0.8f);
+        p.roughness = 0.8f;
+        const MaterialId mat = s->createPbrMaterial(p);
+        MeshData md = enginetest::unitCubeMesh();
+        md.cards = boxCards(0.5f);
+        const MeshId mesh = s->createMesh(md);
+        CHECK(floorNode && mat && mesh && s->attachMesh(floorNode, mesh, mat), "the carded floor slab exists");
+    }
+    enginetest::setNodeScale(s, floorNode, Vec3(8.0f, 0.2f, 8.0f));
+    enginetest::setNodePosition(s, floorNode, Vec3(0.0f, -0.1f, 0.0f));
+    const NodeId occluder = s->createNode();
+    {
+        PbrParams p;
+        p.albedo = Colour(0.5f, 0.5f, 0.5f);
+        const MaterialId mat = s->createPbrMaterial(p);
+        const MeshId mesh = s->createMesh(enginetest::unitCubeMesh());
+        CHECK(occluder && mat && mesh && s->attachMesh(occluder, mesh, mat), "the occluder exists");
+    }
+    enginetest::setNodeScale(s, occluder, Vec3(2.0f, 2.0f, 2.0f));
+    enginetest::setNodePosition(s, occluder, Vec3(1.0f, 1.0f, 0.5f));
+    const NodeId sun = s->createNode();
+    {
+        LightDesc l;
+        l.type = LightType::Directional;
+        l.colour = Colour(1.0f, 1.0f, 1.0f);
+        l.intensity = 2.0f / 3.14159265358979323846f;
+        l.castShadows = true;
+        const float ang = 0.5f;
+        s->setNodeTransform(sun, Vec3(0, 0, 0),
+                            Quat(0.15f, 0.0f, std::sin(ang * 0.5f), std::cos(ang * 0.5f)), Vec3(1, 1, 1));
+        CHECK(sun && s->setLight(sun, l), "a tilted shadow-casting sun");
+    }
+    f.view->setShadows(true);
+    GiParams gi = baseGi();
+    gi.cardResidencyRadius = 40.0f;
+    CHECK(s->setGlobalIllumination(gi), "GI builds");
+    enginetest::testCameraLookAt(f.view, Vec3(0.0f, 6.0f, -10.0f), Vec3(0.0f, 0.0f, 0.0f));
+    for (int i = 0; i < 200; ++i) {
+        render(f.e, 1);
+        const CardCacheStatus c = s->giStatus().cards;
+        if (i > 8 && c.built && c.cardsResident && !c.queueLength) break;
+    }
+    render(f.e, 8);
+    FILE *out = std::fopen(path, "w");
+    if (!out) { std::printf("FAIL: cannot write %s\n", path); return 1; }
+    const Vec3 up(0.0f, 1.0f, 0.0f);
+    unsigned answered = 0u;
+    for (int iz = -19; iz <= 19; ++iz)
+        for (int ix = -19; ix <= 19; ++ix) {
+            const float x = 0.2f * float(ix), z = 0.2f * float(iz);
+            CardSample c;
+            if (s->readCardAt(Vec3(x, 0.0f, z), up, c) && c.ok) {
+                std::fprintf(out, "%.2f %.2f %.4f %d %u %u %.5f\n", x, z, c.shadow, c.card, c.texelX, c.texelY,
+                             c.sunLift);
+                ++answered;
+            }
+        }
+    std::fclose(out);
+    CHECK_MSG(answered > 1000u, "the grid answered at %u of 1521 points", answered);
     return failures ? 1 : 0;
 }
 
@@ -2564,6 +2905,8 @@ int main(int argc, char **argv)
     else if (which == "blend") rc = caseBlend();
     else if (which == "view") rc = caseView();
     else if (which == "view_batch") rc = caseViewBatch();
+    else if (which == "light_trigger") rc = caseLightTrigger();
+    else if (which == "shadow_grid") rc = caseShadowGrid(argc > 2 ? argv[2] : "shadow_grid.txt");
     else { std::printf("FAIL: unknown case '%s'\n", which.c_str()); return 1; }
     std::printf("\n%s: %d failure(s)\n", which.c_str(), failures);
     return rc;
