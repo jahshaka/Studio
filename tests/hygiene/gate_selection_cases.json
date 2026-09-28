@@ -359,6 +359,16 @@
    "must": [
     "log.events"
    ]
+  },
+  {
+   "case": "T10 a timing twin's jah_timing_script() line reaches the push row AND the twin (TESTING-DEBTS-1: it fell back to the MERGE tier)",
+   "file": "tests/threading/CMakeLists.txt",
+   "old": "                  ${CMAKE_CURRENT_BINARY_DIR}/newproject_stall.timing.js)\n",
+   "new": "                  ${CMAKE_CURRENT_BINARY_DIR}/newproject_stall.timing.js)   \n",
+   "must": [
+    "threading.newproject_stall",
+    "threading.newproject_stall.timing"
+   ]
   }
  ]
 }

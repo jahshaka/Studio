@@ -1276,15 +1276,16 @@ class Selection:
         for s_ in sorted(set(srcs)):
             self.path(s_, 1, via=f"{os.path.basename(p)} {name}()")
         if srcs: notes.append(f"{len(set(srcs))} source(s) named"); got = True
-        # 4b. a configured script (configure_file(x.js.in x.js)): the rows that run it
-        if name == "configure_file":
+        # 4b. a configured script (configure_file(x.js.in x.js)), or a timing twin's generated copy
+        # (jah_timing_script(<in> <out>.timing.js), D6B-GATE-SHAPE): the rows that run either file
+        if name in ("configure_file", "jah_timing_script"):
             a_ = args.split()
             for x in a_[:2]:
                 bn = os.path.basename(x).replace(".js.in", "").replace(".js", "").replace(".in", "")
                 hit = self.script_base.get(bn, [])
                 if hit:
                     self.add(hit, f"{tag}: configures {os.path.basename(x)}")
-                    notes.append(f"configures the script of {len(hit)} row(s)"); got = True; break
+                    notes.append(f"configures the script of {len(hit)} row(s)"); got = True
         # 5. a sub-directory
         if name.startswith("add_subdirectory"):
             a_ = args.split()
