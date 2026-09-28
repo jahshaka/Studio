@@ -132,7 +132,7 @@ target_compile_definitions(test_reflect_mover PRIVATE
     JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 add_dependencies(test_reflect_mover JahshakaEngineMedia)
 target_link_libraries(test_reflect_mover PRIVATE JahshakaEngine)
-add_test(NAME gi.reflect_mover COMMAND test_reflect_mover
+jah_gpu_row(gi.reflect_mover CLASS engine COMMAND test_reflect_mover
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.reflect_mover PROPERTIES TIMEOUT 300 LABELS "engine")
 
