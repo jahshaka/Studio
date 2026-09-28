@@ -120,6 +120,34 @@ int main(int argc, char **argv)
             else ++refused;
         }
     }
+    // D. THE CHAIN THAT IS BUILT (the Fable read's (d)): a HAND-BUILT MeshData with coarser
+    // levels but NO bounds keeps level 0 alone at upload (buildMeshV2's `accepted`), so a
+    // card at level 1 would walk past the VAO list — refused; the same data WITH bounds
+    // builds both levels and is accepted; and a DYNAMIC one keeps level 0 alone, refused.
+    {
+        MeshData hand;
+        hand.positions = { 0, 0, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0 };
+        hand.normals = { 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1 };
+        hand.indices = { 0, 1, 2, 0, 2, 3 };
+        hand.lodIndices = { { 0, 1, 2 } };
+        MeshCardDesc card;
+        card.axis = 4; card.lodLevel = 1; card.halfU = card.halfV = 0.5f; card.halfDepth = 0.1f;
+        hand.cards = { card };
+        MeshId id = scene->createMesh(hand);
+        std::string why = id ? std::string() : engine->lastError();
+        CHECK(id == 0 && why.find("card") != std::string::npos,
+              "hand-built: coarser levels with no bounds build level 0 alone; a level-1 card is REFUSED (%s)", why.c_str());
+        if (id) scene->destroyMesh(id);
+        hand.lodBounds = { 0.01f };
+        id = scene->createMesh(hand);
+        CHECK(id != 0, "hand-built: the same data WITH its bound builds two levels; the level-1 card is accepted (%s)",
+              id ? "" : engine->lastError().c_str());
+        if (id) scene->destroyMesh(id);
+        hand.dynamic = true;
+        id = scene->createMesh(hand);
+        CHECK(id == 0, "hand-built: a DYNAMIC mesh builds level 0 alone; the level-1 card is refused");
+        if (id) scene->destroyMesh(id);
+    }
     std::printf("    %d meshes with a DAG, %d of them deeper than their chain; %d stripped inputs drawn, %d card refusals\n",
                 withDag, deeperThanChain, drawn, refused);
     CHECK(withDag >= 3 && drawn == withDag, "every stripped DAG drew without a crash (%d of %d)", drawn, withDag);

@@ -5706,13 +5706,14 @@ struct MonitorRig {
     }
 };
 
-/// A frame record is NOT published the instant its frame ends: GPU samples come
-/// back two frames late (ogre-patch 0027), so the monitor holds a few records
-/// while it waits for them. Everything here therefore renders a short flush tail
-/// before draining, which is also what a host does.
+/// A frame record is NOT published the instant its frame ends: it waits until the
+/// GPU has answered every sample it asked for (the render system polls its query
+/// pools at the top of each frame), so the monitor holds a few records. Everything
+/// here therefore renders a short flush tail before draining, which is also what a
+/// host does.
 void renderAndFlush(Engine *e, unsigned frames = 1u) {
     render(e, frames);
-    render(e, 4);          // past kGpuLatencyFrames
+    render(e, 4);          // the frames in flight, and the poll that reads them
 }
 
 void monitor_off_is_inert() {
@@ -6405,7 +6406,7 @@ void monitor_gpu_timestamps() {
               st.gpuReason.c_str());
     CHECK_MSG(st.gpuQueryPools > 0u, "a capture owns query pools");
 
-    // Render past the two-frame readback latency and drain.
+    // Render past the frames in flight (their samples are answered once the GPU has them) and drain.
     std::vector<FrameRecord> recs;
     for (int i = 0; i < 8; ++i) {
         rig.s->setNodeTransform(rig.cube, Vec3(0.1f * float(i), 0.6f, 0), Quat(),
