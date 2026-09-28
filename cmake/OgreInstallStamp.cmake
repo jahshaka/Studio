@@ -27,11 +27,12 @@ function(jah_ogre_install_stamp_problem out prefix src)
         return()
     endif()
     get_filename_component(_irisgl "${src}/../.." ABSOLUTE)
-    set(_remedy "Fix: ${_irisgl}/scripts/build-ogre.sh   (when the checkout is not the pin "
+    string(CONCAT _remedy "Fix: ${_irisgl}/scripts/build-ogre.sh   (when the checkout is not the pin "
                 "irisgl records, first: git -C ${_irisgl} submodule update --init thirdparty/ogre-next)")
     if(NOT EXISTS "${prefix}/BUILT_FROM")
-        set(${out} "The Ogre-Next install at ${prefix} has no BUILT_FROM record, so nothing "
-                   "says which fork commit it is (it predates the record). ${_remedy}" PARENT_SCOPE)
+        string(CONCAT _msg "The Ogre-Next install at ${prefix} has no BUILT_FROM record, so nothing "
+                   "says which fork commit it is (it predates the record). ${_remedy}")
+        set(${out} "${_msg}" PARENT_SCOPE)
         return()
     endif()
     file(STRINGS "${prefix}/BUILT_FROM" _lines)
@@ -40,9 +41,10 @@ function(jah_ogre_install_stamp_problem out prefix src)
     if(NOT _built STREQUAL _head)
         string(SUBSTRING "${_built}" 0 9 _b9)
         string(SUBSTRING "${_head}" 0 9 _h9)
-        set(${out} "STALE ENGINE: the Ogre-Next install at ${prefix} was built from fork commit "
+        string(CONCAT _msg "STALE ENGINE: the Ogre-Next install at ${prefix} was built from fork commit "
                    "${_b9}, but the ogre-next checkout is at ${_h9}. Linking it would run the old "
-                   "engine's C++ against the new commit's staged media. ${_remedy}" PARENT_SCOPE)
+                   "engine's C++ against the new commit's staged media. ${_remedy}")
+        set(${out} "${_msg}" PARENT_SCOPE)
         return()
     endif()
     set(_recorded "")
@@ -52,20 +54,23 @@ function(jah_ogre_install_stamp_problem out prefix src)
         endif()
     endforeach()
     if(NOT _recorded)
-        set(${out} "The Ogre-Next install at ${prefix} records no buildsettings hash (built by an "
-                   "older build-ogre.sh). ${_remedy}" PARENT_SCOPE)
+        string(CONCAT _msg "The Ogre-Next install at ${prefix} records no buildsettings hash (built by an "
+                   "older build-ogre.sh). ${_remedy}")
+        set(${out} "${_msg}" PARENT_SCOPE)
         return()
     endif()
     set(_bs "${prefix}/include/OGRE-Next/OgreBuildSettings.h")
     if(NOT EXISTS "${_bs}")
-        set(${out} "The Ogre-Next install at ${prefix} has no OgreBuildSettings.h. ${_remedy}" PARENT_SCOPE)
+        string(CONCAT _msg "The Ogre-Next install at ${prefix} has no OgreBuildSettings.h. ${_remedy}")
+        set(${out} "${_msg}" PARENT_SCOPE)
         return()
     endif()
     file(SHA256 "${_bs}" _now)
     if(NOT _now STREQUAL _recorded)
-        set(${out} "The Ogre-Next install at ${prefix} has an OgreBuildSettings.h that is not the "
+        string(CONCAT _msg "The Ogre-Next install at ${prefix} has an OgreBuildSettings.h that is not the "
                    "one build-ogre.sh installed (recorded ${_recorded}, found ${_now}): the "
-                   "install was changed by something other than the script. ${_remedy}" PARENT_SCOPE)
+                   "install was changed by something other than the script. ${_remedy}")
+        set(${out} "${_msg}" PARENT_SCOPE)
         return()
     endif()
 endfunction()
