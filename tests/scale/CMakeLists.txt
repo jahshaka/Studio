@@ -22,7 +22,7 @@
 #   the LIBRARY — test_scale_library.cpp generates it through the import door.
 # The bake cache: $JAH_SCALE_ASSET_CACHE, else ${CMAKE_CURRENT_BINARY_DIR}/asset-cache
 # (keyed by the bake's fingerprint: a producer change misses it, never reads stale).
-find_package(Qt6 REQUIRED COMPONENTS Gui OpenGL Core Network)
+find_package(Qt6 REQUIRED COMPONENTS Gui OpenGL Core Network Sql)
 find_package(X11 REQUIRED)
 
 # The two shipped high-poly models, from the tests/atom configure-time extraction
@@ -72,7 +72,7 @@ add_executable(test_scale_library test_scale_library.cpp)
 set_target_properties(test_scale_library PROPERTIES CXX_STANDARD 17
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 target_include_directories(test_scale_library PRIVATE ${CMAKE_SOURCE_DIR}/tests)
-target_link_libraries(test_scale_library PRIVATE Qt6::Core Qt6::Gui Qt6::Network)
+target_link_libraries(test_scale_library PRIVATE Qt6::Core Qt6::Gui Qt6::Network Qt6::Sql)
 target_compile_definitions(test_scale_library PRIVATE
     JAHSHAKA_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
     SCALE_LIBRARY_DIR="${CMAKE_CURRENT_BINARY_DIR}"
@@ -168,4 +168,5 @@ set_tests_properties(atom.coverage_trace PROPERTIES TIMEOUT 1300 LABELS "engine"
 # W14 — the real binary over MCP, the UI thread's gaps: locked (open.responsive's class).
 jah_gpu_exclusive_test(NAME scale.library CLASS app RUN_TIMEOUT ${SCALE_T_LIBRARY} COMMAND test_scale_library
                        WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(scale.library PROPERTIES LABELS "scale-target")
+# W14 IS CLOSED (D11-LIBRARY-SCALE): its row is a BAR, not a target.
+set_tests_properties(scale.library PROPERTIES LABELS "scale")
