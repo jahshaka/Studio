@@ -1197,6 +1197,27 @@ set_tests_properties(gi.stream_edit PROPERTIES TIMEOUT 120 LABELS "engine" RESOU
 # PHOTON-CARDS-4: a mover's shadow on the cached surfaces (the mirror umbra vs the
 # raster, the slide at 0 frames' latency, rest costs nothing, a missed footprint
 # relights nothing, a still crate's move recaptured). `--cost` is not a row.
+# gi.region_replace — REGION-REBUILD-1: a refresh whose content moved the probe grid's
+# region past its tolerance re-places the GRID alone (one placement, the chain's
+# from-scratch count and cascade centres unchanged, each cascade re-voxelised at most
+# once for the edit's own box), on a 400-box scene; prints the re-placement's first
+# frame beside the from-scratch build it replaced.
+add_executable(test_gi_region_replace test_gi_region_replace.cpp)
+set_target_properties(test_gi_region_replace PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_region_replace PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_region_replace PRIVATE JahshakaEngine)
+add_dependencies(test_gi_region_replace JahshakaEngineMedia)
+jah_gpu_row(gi.region_replace CLASS engine COMMAND test_gi_region_replace
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.region_replace PROPERTIES TIMEOUT 120 LABELS "engine")
+
 add_executable(test_gi_cards_mover test_gi_cards_mover.cpp)
 set_target_properties(test_gi_cards_mover PROPERTIES
     AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
