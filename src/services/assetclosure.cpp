@@ -74,7 +74,8 @@ QStringList expand(const QStringList &seeds, Database *db)
 
 QMap<QString, clipboardformat::ClipAsset> describe(const QStringList &guids, Database *db,
                                                     const Options &options,
-                                                    int *inlinedOut, int *referencedOut)
+                                                    int *inlinedOut, int *referencedOut,
+                                                    QVector<DeferredRead> *deferredOut)
 {
     QMap<QString, clipboardformat::ClipAsset> out;
     int inlined = 0, referenced = 0;
@@ -130,15 +131,24 @@ QMap<QString, clipboardformat::ClipAsset> describe(const QStringList &guids, Dat
             // budget is spent, not applied per file. An asset that misses out
             // still travels — by oid, which finds the same content in any
             // store that has it.
+            bool owed = false;
             if (size >= 0 && size <= budget) {
-                QFile source(entry.path);
-                if (source.open(QIODevice::ReadOnly)) {
-                    file.inlineData = source.readAll();
-                    budget -= file.inlineData.size();
-                    anyInlined = true;
+                if (deferredOut) {
+                    // DEFERRED (EXPORT-THREAD-1): the budget is spent now, the
+                    // bytes are read by whoever writes the file — a worker.
+                    deferredOut->append(DeferredRead{ guid, int(asset.files.size()), entry.path });
+                    budget -= size;
+                    anyInlined = owed = true;
+                } else {
+                    QFile source(entry.path);
+                    if (source.open(QIODevice::ReadOnly)) {
+                        file.inlineData = source.readAll();
+                        budget -= file.inlineData.size();
+                        anyInlined = true;
+                    }
                 }
             }
-            if (file.inlineData.isEmpty()) anyReferenced = true;
+            if (file.inlineData.isEmpty() && !owed) anyReferenced = true;
             asset.files.append(file);
         }
 
@@ -150,6 +160,29 @@ QMap<QString, clipboardformat::ClipAsset> describe(const QStringList &guids, Dat
     if (inlinedOut) *inlinedOut = inlined;
     if (referencedOut) *referencedOut = referenced;
     return out;
+}
+
+bool readDeferred(QMap<QString, clipboardformat::ClipAsset> &assets,
+                  const QVector<DeferredRead> &reads, QString *errorOut,
+                  const std::function<bool(int done, int total)> &onRead)
+{
+    const int total = int(reads.size());
+    for (int i = 0; i < total; ++i) {
+        const DeferredRead &read = reads.at(i);
+        auto asset = assets.find(read.guid);
+        if (asset == assets.end() || read.fileIndex < 0 || read.fileIndex >= asset->files.size())
+            continue;
+        // A file that cannot be opened travels by its oid, exactly as the
+        // inline path always treated it (describe's non-deferred branch).
+        QFile source(read.path);
+        if (source.open(QIODevice::ReadOnly))
+            asset->files[read.fileIndex].inlineData = source.readAll();
+        if (onRead && !onRead(i + 1, total)) {
+            if (errorOut) *errorOut = QStringLiteral("cancelled");
+            return false;
+        }
+    }
+    return true;
 }
 
 } // namespace assetclosure

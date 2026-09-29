@@ -308,9 +308,10 @@ protected:
     void dragMoveEvent(QDragMoveEvent*) override;
     void dropEvent(QDropEvent*) override;
 
-    /// The texture/material .jaf exports' payload: each member guid's stored
-    /// bytes copied into `<writePath>/assets/` under its display name.
-    void copyMemberFilesForExport(const QStringList &members, const QString &writePath);
+    /// Every tray export (JAF-EXPORTS-1): a save dialog offering `.jbundle`,
+    /// then `assets.exportBundle` over `guids` (one asset, or a pack).
+    void exportBundleOf(const QStringList &guids, const QString &suggestedName,
+                        const QString &title);
 
     /// The FOLDER tile at a viewport point, or null — the internal drop's
     /// target test (DRAWERS-1).
@@ -348,7 +349,6 @@ protected slots:
     void exportSky();
     void exportMaterial();
 	void exportMaterialPreview();
-	void exportShader();
 	void exportAssetPack();
 
     void searchAssets(QString);

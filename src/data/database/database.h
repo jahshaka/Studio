@@ -747,7 +747,6 @@ public:
     bool createBlobFromAsset(const QString &guid, const QString &writePath);
 
     void createExportScene(const QString& outTempFilePath, const QString &projectGuid);
-    void createExportBundle(const QStringList& objectGuids, const QString& outTempFilePath);
 
     bool checkIfTableExists(const QString &tableName);
     bool checkIfColumnExists(const QString &tableName, const QString &columnName);

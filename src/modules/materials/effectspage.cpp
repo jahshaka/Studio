@@ -1241,7 +1241,7 @@ void EffectsPage::exportEffect(QString guid)
 	if (QFileInfo(path).suffix().isEmpty())
 		path += QStringLiteral(".") + QLatin1String(assetshare::extension());
 
-	const auto written = assetshare::exportBundle(dataBase, mProject, guid, path);
+	const auto written = assetshare::exportBundle(dataBase, mProject, { guid }, path);
 	if (!written.ok())
 		QMessageBox::warning(this, tr("Export material"),
 		                     tr("That material could not be exported: %1").arg(written.error));

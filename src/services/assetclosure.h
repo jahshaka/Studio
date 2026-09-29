@@ -42,6 +42,8 @@ For more information see the LICENSE file
 #include <QStringList>
 #include <QVector>
 
+#include <functional>
+
 #include "io/clipboardformat.h"
 
 class Database;
@@ -74,12 +76,39 @@ QStringList forNodes(const QVector<QJsonObject> &nodeObjects, Database *db);
 /// The catalog closure of `seeds` themselves (an `asset` item's tiles).
 QStringList expand(const QStringList &seeds, Database *db);
 
+/// One file whose bytes are OWED to an entry: `describe` decided it travels
+/// inline (it fits the budget) but, asked to defer, did not read it. The
+/// reader is file I/O only — no catalog, no store lookup — so it is the half
+/// of an export that runs on a worker thread (EXPORT-THREAD-1).
+struct DeferredRead
+{
+    QString guid;       ///< the ClipAsset the bytes belong to
+    int fileIndex = -1; ///< its index in that asset's `files`
+    QString path;       ///< the store object to read
+};
+
 /// Describe `guids` as envelope entries, inlining bytes while the budget
 /// lasts. `inlinedOut`/`referencedOut` (optional) count the two outcomes.
+///
+/// `deferredOut`, when given, turns the inlining into a LIST: every file the
+/// budget admits is appended there instead of being read, and its
+/// `inlineData` stays empty until `readDeferred` fills it. The catalog and
+/// store lookups are the caller's thread's (the UI thread owns the default
+/// connection); the bytes are not.
 QMap<QString, clipboardformat::ClipAsset> describe(const QStringList &guids, Database *db,
                                                    const Options &options,
                                                    int *inlinedOut = nullptr,
-                                                   int *referencedOut = nullptr);
+                                                   int *referencedOut = nullptr,
+                                                   QVector<DeferredRead> *deferredOut = nullptr);
+
+/// Reads what `describe` deferred into `assets`. Pure file I/O, safe on any
+/// thread that owns `assets`. `onRead(done, total)` (optional) runs after each
+/// file on the calling thread; returning false stops the reading (false,
+/// `errorOut` "cancelled"). A file that cannot be opened stays a reference by
+/// oid — the same outcome the non-deferred path gives it.
+bool readDeferred(QMap<QString, clipboardformat::ClipAsset> &assets,
+                  const QVector<DeferredRead> &reads, QString *errorOut = nullptr,
+                  const std::function<bool(int done, int total)> &onRead = {});
 
 } // namespace assetclosure
 

@@ -1,0 +1,110 @@
+// assets_import.bundle_export_@BUNDLE_KIND@ — EVERY TRAY EXPORT RE-IMPORTS INTO AN EMPTY
+// LIBRARY (JAF-EXPORTS-1; the owner's portability rule: every archive is self-contained).
+//
+// What was broken: the Assets tray's Export Texture / Export Sky / Export Material / Export
+// Asset Pack wrote the legacy .jaf — a catalog snapshot plus a hidden `.manifest` that
+// ZipHelper never packed (it lists no dot-files) — so not one of those files ever
+// re-imported. They are deleted; every row calls assets.exportBundle (this verb) with its
+// entry set, and the file is the share format assets.import lands.
+//
+// ONE ARM PER KIND (this file is configured three times): texture, material, pack. THE CLAIM,
+// in one process: export; take EVERYTHING the entries came from out of the library — the
+// rows force-deleted, the source project removed, the store's unreferenced bytes collected —
+// so the library is empty of them; import the file into a new project: every entry comes
+// back with its members, and the pictures are the file's own bytes — a cube wearing the
+// material samples the fixture's TEAL texel (tests/scripting/fixtures/tiny.png is 8x8 of
+// (40,160,160)), not grey, not white, not sky.
+//
+// (No sky arm: nothing in this build mints a ModelTypes::Sky row — the only producer was the
+// legacy .jaf importer — so a sky entry exists only in a library that imported one; the
+// tray's Export Sky calls this same verb with its guid.)
+
+function assert(cond, msg) {
+    if (!cond) throw new Error("assert failed: " + msg);
+    console.log("ok: " + msg);
+}
+function J(x) { return JSON.stringify(x); }
+function gone(guid) { try { assets.metadata(guid); return false; } catch (e) { return true; } }
+
+var KIND = "@BUNDLE_KIND@";
+var TEAL = "@SOURCE_DIR@/tests/scripting/fixtures/tiny.png";
+var MODEL = "@SOURCE_DIR@/tests/importer/fixtures/textured_pbr_quad.glb";
+var file = app.dataRoot().root + "/bundle_export_" + KIND + ".jbundle";
+
+// ---- the source ---------------------------------------------------------------------
+var source = project.create("bundle source " + KIND + " " + Date.now());
+var tex = assets.importFile(TEAL);
+assert(tex && tex.length > 10, "the teal image is a library texture: " + tex);
+
+var entries = [];       // what the file is ABOUT
+var everything = [];    // every row the entries came from (members included)
+if (KIND === "texture") {
+    entries = [tex];
+} else if (KIND === "material") {
+    var mat = materials.createFromImage(tex);
+    assert(mat && mat.length > 10, "a material bundle made from the image: " + mat);
+    assert(assets.dependencies(mat).indexOf(tex) >= 0, "the material's member is the texture");
+    entries = [mat];
+} else if (KIND === "pack") {
+    var packMat = materials.createFromImage(tex);
+    var model = assets.import(MODEL);
+    assert(model && model.length > 10, "a textured model imported: " + model);
+    entries = [tex, packMat, model];
+}
+entries.forEach(function (g) {
+    assets.dependencies(g).forEach(function (d) {
+        if (everything.indexOf(d) < 0) everything.push(d);
+    });
+});
+assert(everything.length >= entries.length, "the entries' closure: " + everything.length + " rows");
+var types = {};
+everything.forEach(function (g) { types[g] = assets.metadata(g).type; });
+
+var r = assets.exportBundle(entries.length === 1 ? entries[0] : entries, file);
+console.log("exportBundle -> " + J(r));
+assert(r.path === file && r.bytes > 0, "the share file was written");
+assert(r.kind === (KIND === "pack" ? "pack" : KIND), "its manifest kind is '" + r.kind + "'");
+assert(r.assets >= everything.length, "it carries every row of the closure (" + r.assets + ")");
+
+// ---- an EMPTY library: everything the entries came from is gone ---------------------
+project.close();
+assert(project.remove(source), "the source project is removed");
+everything.forEach(function (g) {
+    if (!gone(g)) assets.remove(g, { keepShared: false, force: true });
+});
+everything.forEach(function (g) {
+    assert(gone(g), "the library no longer holds " + types[g] + " " + g);
+});
+var gc = assets.gc({ dryRun: false });
+console.log("gc -> " + J(gc).slice(0, 300));
+
+// ---- the import: every entry and its members come back ------------------------------
+project.create("bundle target " + KIND + " " + Date.now());
+var landed = assets.import(file);
+assert(landed === entries[0], "assets.import answers the first entry: " + landed);
+everything.forEach(function (g) {
+    assert(!gone(g), types[g] + " " + g + " is back in the library, from the file");
+    assert(assets.metadata(g).type === types[g], "...as a " + types[g]);
+});
+
+// ---- the pictures are the file's own bytes ------------------------------------------
+var wear = null;
+if (KIND === "texture") wear = materials.createFromImage(tex);
+else if (KIND === "material") wear = entries[0];
+else wear = entries[1];
+var cube = scene.addPrimitive("cube", { position: { x: 0, y: 1, z: 0 } });
+assert(material.apply(cube, wear) === true, "the landed material applies to a cube");
+var m = material.get(cube);
+assert(typeof m.baseColorMap === "string" && m.baseColorMap.indexOf("/") >= 0,
+       "its base-colour map resolves to a stored file: " + m.baseColorMap);
+node.transform(cube, { scale: { x: 4, y: 4, z: 4 } });
+editor.select(null);
+editor.setView("front");
+editor.frame(5);
+var shot = editor.screenshot("bundle_export_" + KIND + ".png", 512, 512);
+console.log("centre pixel " + J(shot.center));
+assert(shot.center.g > 40, "the surface renders (not black/sky): g=" + shot.center.g);
+assert(shot.center.g > shot.center.r + 20 && shot.center.b > shot.center.r + 20,
+       "it samples the TEAL texel — the image came with the file");
+
+console.log("bundle_export_" + KIND + ": ALL OK");
