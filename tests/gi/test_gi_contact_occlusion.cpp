@@ -39,7 +39,15 @@
 //
 // THE MEASUREMENT (the brief's section 4 item 1): JAH_CONTACT_MEASURE=1 prints the
 // PER-TERM table — every shipped tier, and at the ray tiers the gather, the field
-// and the cones one at a time — and gates nothing.
+// and the cones one at a time — and gates nothing (JAH_CONTACT_VOXELS=1 adds the
+// store's own readout at the wall and the floor; JAH_CONTACT_NOCARDS=1 takes the
+// meshes' cards away; JAH_CONTACT_COST=1 is the sky pass's paired GPU cost).
+//
+// THE GATE (gi.contact_occlusion) and the TARGETS (gi.contact_occlusion_target,
+// JAH_CONTACT_TARGET=1) are stated at the gating block in main(). Arm B's reference is
+// solved at the TIER'S bounce count: the engine counts the sky as a light, so one
+// bounce is the wall re-emitting what the sky gives it directly, and the floor-wall
+// inter-reflection is the second and later bounces.
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
 
@@ -157,7 +165,7 @@ struct Radiosity {
     }
 };
 
-Radiosity solveRadiosity(double rhoW, double rhoF)
+Radiosity solveRadiosity(double rhoW, double rhoF, int bounces = 0)
 {
     // Floor elements: fine near the wall, geometric out to 400 m.
     std::vector<double> fe;   // edges
@@ -193,30 +201,44 @@ Radiosity solveRadiosity(double rhoW, double rhoF)
         // A vertical element sees exactly half its hemisphere above the horizon.
         wallSky[j] = 0.5;
     }
-    std::vector<double> Ef(nf, 1.0), Ew(nw, 0.5);
-    for (int it = 0; it < 200; ++it) {
-        std::vector<double> nEf(nf), nEw(nw);
-        for (int i = 0; i < nf; ++i) {
-            double e = floorSky[i];
-            for (int j = 0; j < nw; ++j) e += Ffw[size_t(i) * nw + j] * rhoW * Ew[j];
-            nEf[i] = e;
-        }
+    // THE BOUNCE ORDER (the engine's `numBounces` counts the sky as a light, like a lamp:
+    // one bounce = the light a surface re-emits of what the sky gives it directly).
+    // Radiosities J = rho E, the floor's E read after `bounces` reflections: pass 0 is
+    // the sky's direct term on both surfaces, each further pass adds one reflection
+    // between them. bounces <= 0 = to convergence (the full inter-reflection).
+    std::vector<double> Jw(nw), Jf(nf);
+    for (int j = 0; j < nw; ++j) Jw[j] = rhoW * wallSky[j];
+    for (int i = 0; i < nf; ++i) Jf[i] = rhoF * floorSky[i];
+    const int passes = bounces > 0 ? bounces - 1 : 400;
+    for (int it = 0; it < passes; ++it) {
+        std::vector<double> nJw(nw), nJf(nf);
         for (int j = 0; j < nw; ++j) {
-            double e = wallSky[j];
-            double seen = 0.0;
+            double e = wallSky[j], seen = 0.0;
             for (int i = 0; i < nf; ++i) {
-                e += Fwf[size_t(j) * nf + i] * rhoF * Ef[i];
+                e += Fwf[size_t(j) * nf + i] * Jf[i];
                 seen += Fwf[size_t(j) * nf + i];
             }
-            e += (0.5 - seen) * rhoF * 1.0;   // the floor beyond the solved span: open
-            nEw[j] = e;
+            e += (0.5 - seen) * rhoF;   // the floor beyond the solved span: open
+            nJw[j] = rhoW * e;
+        }
+        for (int i = 0; i < nf; ++i) {
+            double e = floorSky[i];
+            for (int j = 0; j < nw; ++j) e += Ffw[size_t(i) * nw + j] * Jw[j];
+            nJf[i] = rhoF * e;
         }
         double delta = 0.0;
-        for (int i = 0; i < nf; ++i) delta = std::max(delta, std::fabs(nEf[i] - Ef[i]));
-        Ef.swap(nEf);
-        Ew.swap(nEw);
-        if (delta < 1e-9) break;
+        for (int j = 0; j < nw; ++j) delta = std::max(delta, std::fabs(nJw[j] - Jw[j]));
+        Jw.swap(nJw);
+        Jf.swap(nJf);
+        if (bounces <= 0 && delta < 1e-9) break;
     }
+    std::vector<double> Ef(nf), Ew(nw);
+    for (int i = 0; i < nf; ++i) {
+        double e = floorSky[i];
+        for (int j = 0; j < nw; ++j) e += Ffw[size_t(i) * nw + j] * Jw[j];
+        Ef[i] = e;
+    }
+    for (int j = 0; j < nw; ++j) Ew[j] = rhoW > 0.0 ? Jw[j] / rhoW : 0.0;
     Radiosity r;
     for (int i = 0; i < nf; ++i) { r.floorX.push_back(0.5 * (fe[i] + fe[i + 1])); r.floorE.push_back(Ef[i]); }
     double m = 0.0;
@@ -277,7 +299,12 @@ bool build(Fixture &f)
     if (!f.s->setSky(sky)) return false;
     f.s->setEnvironmentLight(Colour(1.0f, 1.0f, 1.0f));
 
-    f.cube = f.s->createMesh(enginetest::unitCubeMesh());
+    // THE MESH CARRIES ITS SIX BOX CARDS, as every baked mesh does (the bake's card
+    // generator, enginetest::boxCards): a ray tier's hit reads the surface cache
+    // first. JAH_CONTACT_NOCARDS=1 measures the voxel path alone.
+    MeshData md = enginetest::unitCubeMesh();
+    if (!std::getenv("JAH_CONTACT_NOCARDS")) md.cards = enginetest::boxCards(0.5f);
+    f.cube = f.s->createMesh(md);
     const NodeId floor = f.s->createNode();
     if (!f.s->attachMesh(floor, f.cube, matte(f.s, kFloorAlbedo))) return false;
     f.s->setNodeTransform(floor, Vec3(0.0f, -0.25f, 0.0f), Quat(), Vec3(80.0f, 0.5f, 80.0f));
@@ -310,7 +337,7 @@ enum class Arm { Open, Black, White, Cube };
 
 /// Settles (giAtRest, frames-counted, then until the strip stops moving) and
 /// returns the strip means at every kDs, averaged over 8 frames.
-struct Profile { double v[kNd]; double far = 0.0; double top = 0.0; bool rest = false; int frames = 0; };
+struct Profile { double v[kNd]; double far = 0.0; double top = 0.0; double across[17] = { 0 }; bool rest = false; int frames = 0; };
 
 Profile measure(Fixture &f, Arm arm)
 {
@@ -359,6 +386,12 @@ Profile measure(Fixture &f, Arm arm)
         }
         p.far += stripMean(img, 3.3f, 3.7f, z0, z1) / 8.0;
         p.top += stripMean(img, kFaceX - 0.15f, kFaceX - 0.05f, z0, z1) / 8.0;   // the wall's top
+        // ACROSS THE VIEW (FIELD-EDGE-1): the floor from x = -3.9 to +3.9 m, the camera
+        // (and cascade 0, and the field) centred on x = 0; read on the open arm.
+        for (int q = 0; q < 17; ++q) {
+            const float x = -3.9f + 0.4875f * float(q);
+            p.across[q] += stripMean(img, x - 0.05f, x + 0.05f, 1.0f, 3.0f) / 8.0;
+        }
     }
     p.frames = frames;
     return p;
@@ -370,6 +403,17 @@ void setTier(Fixture &f, const Tier &t, GiToggle gather, GiToggle ddgi)
     gi.mode = t.mode;
     gi.quality = t.q;
     gi.numBounces = t.bounces;
+    if (const char *b = std::getenv("JAH_CONTACT_BOUNCES")) gi.numBounces = std::atoi(b);   // measurement
+    if (const char *c = std::getenv("JAH_CONTACT_CASCADES")) {   // measurement: "n,half,res"
+        float half = 5.0f; int n = 1, res = 64;
+        std::sscanf(c, "%d,%f,%d", &n, &half, &res);
+        gi.cascadeCount = n;
+        for (int i = 0; i < n; ++i) {
+            gi.cascadeSet[i].halfSize = half * float(1 << i);
+            gi.cascadeSet[i].resolution = res;
+            gi.cascadeSet[i].stepCells = 4.0f;
+        }
+    }
     gi.gather = gather;
     gi.ddgi = ddgi;
     f.s->setGlobalIllumination(gi);
@@ -401,8 +445,55 @@ int main()
     if (failures) return 1;
     const bool rays = f.e->rayQueryAvailable() && f.e->rayTracing();
     const bool measureMode = std::getenv("JAH_CONTACT_MEASURE") != nullptr;
+    const bool targetMode = std::getenv("JAH_CONTACT_TARGET") != nullptr;
 
     // ---- THE REFERENCE ----------------------------------------------------
+    // THE SKY PASS'S COST (JAH_CONTACT_COST=1; run under scripts/gpu-exclusive.sh with
+    // locked clocks): a lamp orbits so the light tick re-injects every few frames, and
+    // the two arms — the sky's light on (the sky pass runs) and at zero gain (it is
+    // skipped: VctLighting::hasEnvironmentLight) — alternate in blocks in ONE process.
+    if (std::getenv("JAH_CONTACT_COST")) {
+        const char *tn = std::getenv("JAH_CONTACT_TIER");
+        const Tier *t = &kTiers[1];
+        for (const Tier &x : kTiers) if (tn && !std::strcmp(tn, x.name)) t = &x;
+        setTier(f, *t, GiToggle::Auto, GiToggle::Auto);
+        f.s->setNodeVisible(f.wall, true);
+        f.s->attachMesh(f.wall, f.cube, f.white);
+        const NodeId lamp = f.s->createNode();
+        LightDesc l; l.type = LightType::Point; l.intensity = 2.0f; l.range = 12.0f; l.castShadows = false;
+        f.s->setLight(lamp, l);
+        render(f.e, 300);
+        f.e->setFrameMonitor(MonitorLevel::Review);
+        render(f.e, 10);
+        std::vector<FrameRecord> sink; f.e->takeFrameRecords(sink);
+        double sum[2] = { 0, 0 }; int n[2] = { 0, 0 };
+        double relight[2] = { 0, 0 }; int nr[2] = { 0, 0 };
+        int frame = 0;
+        for (int block = 0; block < 12; ++block) {
+            const int arm = block & 1;
+            f.s->setEnvironmentLight(arm ? Colour(0, 0, 0) : Colour(1, 1, 1));
+            std::vector<FrameRecord> recs;
+            for (int k = 0; k < 90; ++k, ++frame) {
+                const float a = 0.05f * float(frame);
+                f.s->setNodeTransform(lamp, Vec3(-1.5f + std::cos(a), 1.2f, std::sin(a)), Quat(), Vec3(1, 1, 1));
+                f.e->renderOneFrame();
+                if (k < 30) { std::vector<FrameRecord> d; f.e->takeFrameRecords(d); continue; }
+                f.e->takeFrameRecords(recs);
+                const float rg = f.s->giStatus().cards.relightGpuMs;
+                if (rg > 0.0f) { relight[arm] += rg; ++nr[arm]; }
+            }
+            for (size_t r = 0; r < recs.size(); ++r)
+                for (const CacheWork &w : recs[r].cacheWork) {
+                    if (w.detail.rfind("vct.light", 0) == 0 && w.gpuMs > 0.0f) { sum[arm] += w.gpuMs; ++n[arm]; }
+                }
+        }
+        std::printf("\n== COST at %s: the light tick's GPU ms per injection round: sky pass ON %.3f (n %d), "
+                    "OFF %.3f (n %d); the card relight's GPU ms: ON %.3f (n %d), OFF %.3f (n %d)\n",
+                    t->name, n[0] ? sum[0] / n[0] : -1.0, n[0], n[1] ? sum[1] / n[1] : -1.0, n[1],
+                    nr[0] ? relight[0] / nr[0] : -1.0, nr[0], nr[1] ? relight[1] / nr[1] : -1.0, nr[1]);
+        return 0;
+    }
+
     const Radiosity refB = solveRadiosity(kWhite, kFloorAlbedo);
     double refA[kNd], refBv[kNd];
     std::printf("\n   d (m)                             ");
@@ -444,11 +535,54 @@ int main()
             Profile A, B;
             if (whiteFirst) { B = measure(f, Arm::White); A = measure(f, Arm::Black); }
             else { A = measure(f, Arm::Black); B = measure(f, Arm::White); }
+            if (measureMode && std::getenv("JAH_CONTACT_VOXELS")) {
+                // THE STORE, read where the white wall and the open floor are: radiance
+                // = light / (k c), against the sky radiance L (the 1x1 sky's linear grey).
+                f.s->setNodeVisible(f.wall, true);
+                f.s->attachMesh(f.wall, f.cube, f.white);
+                f.s->refreshGlobalIllumination();
+                render(f.e, 240);
+                GiVoxelVolume vv;
+                if (f.s->giVoxelVolume(0, vv) && vv.available) {
+                    const double L = std::pow((128.0 / 255.0 + 0.055) / 1.055, 2.4);
+                    const auto at = [&](float wx, float wy, float wz, const char *what) {
+                        const int ix = int((wx - vv.origin[0]) / vv.cell[0]);
+                        const int iy = int((wy - vv.origin[1]) / vv.cell[1]);
+                        const int iz = int((wz - vv.origin[2]) / vv.cell[2]);
+                        if (ix < 0 || iy < 0 || iz < 0 || ix >= vv.width || iy >= vv.height || iz >= vv.depth) {
+                            std::printf("   voxel %s: outside\n", what); return; }
+                        const size_t i = (size_t(iz) * vv.height + iy) * vv.width + ix;
+                        const double c = vv.albedo[i * 4 + 3];
+                        const double lr = vv.light[i * 4 + 0];
+                        const double back = vv.lightBack.empty() ? -1.0 : vv.lightBack[i * 4 + 0];
+                        std::printf("   voxel %-22s (%d,%d,%d) albedo %.3f c %.3f  L/(k c)/L_sky: mean %.4f back %.4f "
+                                    "front %.4f\n", what, ix, iy, iz, vv.albedo[i * 4], c,
+                                    c > 0 ? lr / (vv.multiplier * c) / L : 0.0,
+                                    c > 0 && back >= 0 ? back / (vv.multiplier * c) / L : -1.0,
+                                    c > 0 && back >= 0 ? (2 * lr - back) / (vv.multiplier * c) / L : -1.0);
+                    };
+                    std::printf("   THE STORE (cascade 0, cell %.3f m, k %.4f): a Lambertian lit by the sky "
+                                "alone re-emits rho x 0.702 (the lobe) x its sky share\n", vv.cell[0],
+                                vv.multiplier);
+                    for (float y : { 0.3f, 1.0f, 1.7f })
+                        for (float x : { kFaceX - 0.02f, kFaceX - 0.1f, kFaceX - 0.18f }) {
+                            char nm[64]; std::snprintf(nm, sizeof nm, "wall x%.2f y%.1f", x, y);
+                            at(x, y, 0.0f, nm);
+                        }
+                    for (float x : { kFaceX + 0.3f, 1.0f, 3.0f }) {
+                        char nm[64]; std::snprintf(nm, sizeof nm, "floor x%.1f", x);
+                        at(x, -0.06f, 0.0f, nm);
+                        at(x, 0.01f, 0.0f, nm);
+                    }
+                }
+            }
             const Profile C = measure(f, Arm::Cube);
             std::printf("\n== %s — %s (gather %s, field %s; frames open %d A %d B %d C %d; rest %d%d%d%d)\n",
                         t.name, term.name, st.gather.running ? "RUNNING" : "off",
                         st.ifdTargetSamples ? "on" : "off", open.frames, A.frames, B.frames,
                         C.frames, open.rest, A.rest, B.rest, C.rest);
+            std::printf("   cards resident %u (instances %u)\n", st.cards.cardsResident,
+                        st.cards.instancesResident);
             double rA[kNd], rB[kNd], rC[kNd], dBA[kNd], refBA[kNd];
             for (int i = 0; i < kNd; ++i) {
                 rA[i] = A.v[i] / open.v[i];
@@ -457,6 +591,9 @@ int main()
                 dBA[i] = rB[i] - rA[i];
                 refBA[i] = refBv[i] - refA[i];
             }
+            std::printf("   open floor ACROSS the view (x -3.9..3.9 m, / its value at x = 0):");
+            for (int q = 0; q < 17; ++q) std::printf(" %.3f", open.across[q] / open.across[8]);
+            std::printf("\n");
             std::printf("   open floor: %.4f at d=0.05 .. %.4f at d=4 (flat = 1: %.4f); far strip %.4f\n",
                         open.v[0], open.v[kNd - 1], open.v[0] / open.v[kNd - 1], open.far);
             std::printf("   the wall's top face (a material check): open %.4f A %.4f B %.4f\n", open.top,
@@ -469,20 +606,53 @@ int main()
             printRow("  REF", refBA);
             printRow("C 2 m cube    E/E_open", rC);
 
+            // ARM B'S REFERENCE AT THE TIER'S OWN BOUNCE COUNT (the sky counted as a light).
+            const Radiosity refN = solveRadiosity(kWhite, kFloorAlbedo, t.bounces);
+            double refBAn[kNd];
+            for (int i = 0; i < kNd; ++i) refBAn[i] = refN.at(kDs[i]) - refA[i];
+            printRow("  REF at the tier's bounces", refBAn);
             if (measureMode) continue;
-            const bool fine = t.q == GiQuality::Epic || t.q == GiQuality::High;
-            const double tol = fine ? 0.04 : 0.08;
+
+            // THE GATE, and the TARGETS (JAH_CONTACT_TARGET=1, the photon-target twin):
+            //   arm A where the gather runs (Epic, High, Medium on a ray machine): 0.04;
+            //   arm B at the tier's bounce count where ONE bounce is asked (High, Medium):
+            //     0.03 — the sky's direct term re-emitted by the wall, the lane's fix;
+            //   TARGETS: arm A on the field alone (Low; 0.08). Its miss (0.10-0.11 at
+            //     d = 0.5-1 m) is the probe SPACING, not a term: the grid is 32x16x16 over
+            //     cascade 0's 10 m box (0.31 m across the wall, 0.625 m in height), the
+            //     layer under the floor is crushed by its own visibility, so the floor
+            //     reads the cage's upper layer 0.47 m above it — a point that high sees
+            //     less of a 2 m wall (1 - F from 0.47 m: 0.77 at d = 1, the field 0.84).
+            //     Arm B on the field (0.06),
+            //     and Epic's three bounces (0.03 against the three-bounce solve: the voxel
+            //     and card stores' floor-to-wall share is the four-cone set's, a quarter
+            //     of the hemisphere where the floor fills half of it).
+            const bool gathers = rays && (t.mode == GiMode::VctPccHybrid || t.q == GiQuality::Medium);
             double worstA = 0.0, worstB = 0.0;
             for (int i = 1; i < kNd; ++i) {   // d >= 0.1 m
                 worstA = std::max(worstA, std::fabs(rA[i] - refA[i]));
-                worstB = std::max(worstB, std::fabs(dBA[i] - refBA[i]));
+                worstB = std::max(worstB, std::fabs(dBA[i] - refBAn[i]));
             }
-            CHECK_MSG(worstA <= tol,
-                      "%s, arm A: the floor beside a black wall is the sky's 1 - F(d) (worst |off| %.3f, "
-                      "bar %.2f, d >= 0.1 m)", t.name, worstA, tol);
-            CHECK_MSG(worstB <= tol,
-                      "%s, arm B: a white wall adds its bounce (B - A against the radiosity; worst "
-                      "|off| %.3f, bar %.2f)", t.name, worstB, tol);
+            const bool oneBounce = t.bounces == 1;
+            const bool gateA = gathers, gateB = gathers && oneBounce;
+            if (gateA != targetMode) {
+                const double tolA = gateA ? 0.04 : 0.08;
+                CHECK_MSG(worstA <= tolA,
+                          "%s, arm A: the floor beside a black wall is the sky's 1 - F(d) (worst "
+                          "|off| %.3f, bar %.2f, d >= 0.1 m)", t.name, worstA, tolA);
+            }
+            if (gateB != targetMode) {
+                const double tolB = gathers ? 0.03 : 0.06;
+                CHECK_MSG(worstB <= tolB,
+                          "%s, arm B: a white wall under the sky bounces albedo x its sky "
+                          "irradiance onto the floor (B - A against the radiosity at %d bounce(s); "
+                          "worst |off| %.3f, bar %.2f)", t.name, t.bounces, worstB, tolB);
+            }
+            if (!targetMode) {
+                CHECK_MSG(B.top > 1.4 * open.top,
+                          "%s: the white wall's top face is lit (%.4f against the open floor's "
+                          "%.4f)", t.name, B.top, open.top);
+            }
         }
     }
 

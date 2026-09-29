@@ -1514,9 +1514,12 @@ set_tests_properties(gi.gather_trace PROPERTIES
 # 1 - F(d) at d = 0.05..4 m (0.04 at Epic/High, 0.08 at Medium/Low for d >= 0.1 m),
 # a white wall's bounce against a 2-D radiosity solve, the rig check's 2 m cube
 # printed — at every shipped tier. JAH_CONTACT_MEASURE=1 prints the per-term table.
-# A photon-target row: at the base (Studio 1704f7fde) arm A holds at Epic/High/Medium
-# (the gather) and misses at Low (the field, 0.10-0.11 at d = 0.5-1 m), and arm B
-# (the sky-lit white wall's bounce) is ZERO at High/Medium/Low, 0.4 of the solve at Epic.
+# The gate: arm A where the gather runs (0.04) and arm B at the tier's bounce count
+# where one bounce is asked (0.03 at High and Medium) — the sky's direct term in the
+# voxel and card stores (fork sky pass, CONTACT-OCCLUSION-1). The photon-target twin:
+# the field alone (Low: arm A 0.08 — the probe spacing, 0.31 m across and 0.625 m in
+# height: the floor reads its cage's upper layer 0.47 m above it — and arm B 0.06) and
+# Epic's three bounces against the three-bounce solve (0.03).
 add_executable(test_gi_contact_occlusion test_gi_contact_occlusion.cpp)
 set_target_properties(test_gi_contact_occlusion PROPERTIES
     AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
@@ -1531,7 +1534,11 @@ target_link_libraries(test_gi_contact_occlusion PRIVATE JahshakaEngine)
 add_dependencies(test_gi_contact_occlusion JahshakaEngineMedia)
 jah_gpu_row(gi.contact_occlusion CLASS engine TOKENS 2 COMMAND test_gi_contact_occlusion
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(gi.contact_occlusion PROPERTIES TIMEOUT 300 LABELS "engine;photon-target")
+set_tests_properties(gi.contact_occlusion PROPERTIES TIMEOUT 300 LABELS "engine")
+jah_gpu_row(gi.contact_occlusion_target CLASS engine TOKENS 2 COMMAND test_gi_contact_occlusion
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.contact_occlusion_target PROPERTIES TIMEOUT 300 LABELS "engine;photon-target"
+                     ENVIRONMENT "JAH_CONTACT_TARGET=1")
 
 # gi.voxel_coverage — THE STORE HOLDS A SURFACE'S PROJECTED AREA PER AXIS
 # (PHOTON-VOXEL-3): an open emissive quad and a closed box one and four cascade-0
