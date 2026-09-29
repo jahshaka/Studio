@@ -125,10 +125,11 @@ static bool gMatteSlabs = false;
 static NodeId addSlab(Scene *s, const Colour &albedo, const Vec3 &pos, const Vec3 &scale)
 {
     if (gMatteSlabs) {
+        // ITS OWN MESH PER SLAB: a cache keyed on the Scene pointer handed a stale MeshId to the
+        // next arm's scene whenever it came back at the destroyed one's address, and that room
+        // drew EMPTY (PHOTON-PHYSICS-1: the F0 = 0 arms read 0, 4 or 11 run to run).
         const NodeId n = s->createNode();
-        static MeshId cube = 0;
-        static Scene *cubeScene = nullptr;
-        if (cubeScene != s) { cube = s->createMesh(enginetest::unitCubeMesh()); cubeScene = s; }
+        const MeshId cube = s->createMesh(enginetest::unitCubeMesh());
         PbrParams p;
         p.albedo = albedo;
         p.roughness = 0.9f;
@@ -526,7 +527,9 @@ static float sealedRoomMove(Engine *e, const GiParams &gi, const char *label, Ve
     Image on; view->readPixels(on);
     unsigned wx = 0, wy = 0;
     const float d = maxChannelDelta(off, on, &wx, &wy) * 255.0f;
-    std::printf("   %-44s worst pixel moves %6.2f/255 at (%u,%u)\n", label, d, wx, wy);
+    const GiStatus gs = s->giStatus();
+    std::printf("   %-44s worst pixel moves %6.2f/255 at (%u,%u) [probes %d bound %d, field %d]\n", label, d, wx, wy,
+                gs.probeCount, int(gs.pccBound), int(gs.ifdBound));
     view->setScene(nullptr);
     e->destroyScene(s);
     e->destroyView(view);
