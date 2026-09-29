@@ -243,6 +243,50 @@ QVector<Unused> cleanUnused(Database *db, Project *project, const QString &mater
     return removed;
 }
 
+QString projectCopyName(Database *db, const QString &projectGuid, const QString &sourceName)
+{
+    const QString source = sourceName.trimmed();
+    if (!db || projectGuid.isEmpty() || source.isEmpty()) return source;
+    QSet<QString> taken;
+    {
+        QSqlQuery query(QSqlDatabase::database());
+        query.prepare(QStringLiteral(
+            "SELECT a.name FROM assets a JOIN project_assets p ON p.asset_guid = a.guid "
+            "WHERE p.project_guid = ? AND a.type = ?"));
+        query.addBindValue(projectGuid);
+        query.addBindValue(static_cast<int>(ModelTypes::Material));
+        if (query.exec())
+            while (query.next()) taken.insert(query.value(0).toString().trimmed().toCaseFolded());
+    }
+    if (!taken.contains(source.toCaseFolded())) return source;
+    // THE SUFFIX IS APPENDED, NEVER PARSED OUT OF THE NAME: "Brick 2024" is a
+    // name, and its second copy is "Brick 2024 2", not "Brick 2025". The caller
+    // passes the LIBRARY ENTRY's name as the base (the preset a copy was made
+    // from, when there is one), so copies of copies still count on from it.
+    for (int n = 2;; ++n) {
+        const QString candidate = QStringLiteral("%1 %2").arg(source, QString::number(n));
+        if (!taken.contains(candidate.toCaseFolded())) return candidate;
+    }
+}
+
+QJsonObject copyDefinition(Database *db, Project *project, const QString &materialGuid,
+                           bool pristine)
+{
+    if (!db || materialGuid.isEmpty()) return QJsonObject();
+    QJsonObject definition = MaterialBundle::read(db, materialGuid, pristine ? nullptr : project);
+    if (definition.isEmpty()) return definition;
+    const QJsonObject bakedMaps = definition.value(QStringLiteral("bake")).toObject()
+                                            .value(QStringLiteral("maps")).toObject();
+    if (!bakedMaps.isEmpty()) {
+        QJsonObject values = definition.value(QStringLiteral("values")).toObject();
+        for (auto it = bakedMaps.constBegin(); it != bakedMaps.constEnd(); ++it)
+            values.remove(it.key());
+        definition[QStringLiteral("values")] = values;
+    }
+    definition.remove(QStringLiteral("bake"));
+    return definition;
+}
+
 QString duplicate(Database *db, Project *project, const QString &materialGuid,
                   const QString &name, QString *errorOut)
 {
@@ -255,24 +299,14 @@ QString duplicate(Database *db, Project *project, const QString &materialGuid,
     if (row.guid.isEmpty() || row.type != static_cast<int>(ModelTypes::Material))
         return fail(QStringLiteral("'%1' is not a material").arg(materialGuid));
 
-    QJsonObject definition = MaterialBundle::read(db, materialGuid, project);
+    // THE BAKE DOES NOT COME WITH IT (copyDefinition). A baked map's member
+    // row belongs to the ORIGINAL (its `parent`), so a copy naming it would
+    // change appearance when the original is re-baked, and neither material's
+    // Clean unused could reason about it. The slots it filled are cleared with
+    // it; the copy's own save bakes its own maps into its own member rows.
+    QJsonObject definition = copyDefinition(db, project, materialGuid, /*pristine*/ false);
     if (definition.isEmpty())
         return fail(QStringLiteral("'%1' has no definition to copy").arg(row.name));
-
-    // THE BAKE DOES NOT COME WITH IT. A baked map's member row belongs to the
-    // ORIGINAL (its `parent`), so a copy naming it would change appearance
-    // when the original is re-baked, and neither material's Clean unused
-    // could reason about it. The slots it filled are cleared with it; the
-    // copy's own save bakes its own maps into its own member rows.
-    const QJsonObject bakedMaps = definition.value(QStringLiteral("bake")).toObject()
-                                            .value(QStringLiteral("maps")).toObject();
-    if (!bakedMaps.isEmpty()) {
-        QJsonObject values = definition.value(QStringLiteral("values")).toObject();
-        for (auto it = bakedMaps.constBegin(); it != bakedMaps.constEnd(); ++it)
-            values.remove(it.key());
-        definition[QStringLiteral("values")] = values;
-    }
-    definition.remove(QStringLiteral("bake"));
 
     // A NAME NOBODY ELSE HAS, decided against EVERY material row — the
     // library's and every project's own (a drawer is a view of them, and with

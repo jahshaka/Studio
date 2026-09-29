@@ -181,6 +181,52 @@ int main(int argc, char **argv)
               "a bare --test-tier is refused, not ignored");
     }
 
+    // ---- HELP-FLAG-1: --help / --version / an unknown flag -------------------
+    // main() answers --help/--version and exits 0 before QApplication; an
+    // unknown --flag is a refusal (exit 2), never a launch. The process-level
+    // half (exit codes, no window, no file written) is app.help_exits.
+    {
+        const CliOptions o = parsed({ "--help" });
+        CHECK(o.help && o.errors.isEmpty(), "--help parses as help");
+    }
+    {
+        const CliOptions o = parsed({ "-h" });
+        CHECK(o.help && o.errors.isEmpty(), "-h parses as help");
+    }
+    {
+        const CliOptions o = parsed({ "--version" });
+        CHECK(o.version && !o.help && o.errors.isEmpty(), "--version parses as version");
+    }
+    {
+        const CliOptions o = parsed({ "--bogus-flag" });
+        CHECK(o.errors.size() == 1 && o.errors.first().contains(QStringLiteral("--bogus-flag")),
+              "an unknown --flag is refused, naming it (%d error(s))", int(o.errors.size()));
+    }
+    {
+        const CliOptions o = parsed({ "--viewport=engine" });
+        CHECK(o.errors.size() == 1, "the retired --viewport is an unknown flag now");
+    }
+    {
+        const CliOptions o = parsed({ "--engine-selftest" });
+        CHECK(o.errors.size() == 1 && o.selftestPng.isEmpty(),
+              "a trailing --engine-selftest is refused, not dropped into a full boot");
+    }
+    {
+        const CliOptions o = parsed({ "--watchdog=off", "--watchdog-stall=900", "--data-root", "/x" });
+        CHECK(o.errors.isEmpty() && o.dataRoot == QStringLiteral("/x"),
+              "the watchdog's flags (read elsewhere) are accepted by name");
+    }
+    {
+        const CliOptions o = parsed({ "--platform", "offscreen", "-style", "fusion", "somefile.jaf" });
+        CHECK(o.errors.isEmpty(), "Qt's own options and a positional argument pass through (%d error(s))",
+              int(o.errors.size()));
+    }
+    {
+        const QString u = CliOptions::usageText();
+        CHECK(u.contains(QStringLiteral("--data-root")) && u.contains(QStringLiteral("--help")),
+              "the usage text names the options");
+    }
+
     std::printf(failures ? "FAILED: %d check(s)\n" : "ALL CHECKS PASSED\n", failures);
     return failures ? 1 : 0;
 }

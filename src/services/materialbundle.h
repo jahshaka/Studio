@@ -249,8 +249,12 @@ QString create(Database *db, const QString &name, const QJsonObject &definition,
 ///     leave the scene wearing a material that no longer exists
 ///     (commands/presetcopycommand.h). Empty means "mint one".
 ///
-/// Not a door for anything else: `create` is the one every other mint comes
-/// through.
+/// ONE OTHER CALLER, for the same two reasons: ProjectMaterialCopyCommand
+/// (MATERIAL-DROP-1 / TRAY-DUPLICATE-1) — a library drop's pristine project
+/// copy and the tray's Duplicate are the project's own rows too, re-made under
+/// the same guid on a redo, and a library drop of "Wood PBR" into a project
+/// that holds none is called "Wood PBR" (the project's own naming,
+/// `materialmembers::projectCopyName`). Every other mint comes through `create`.
 ///
 /// The copy is `projectGuid`'s OWN row (ASSETS-SCOPE-1) — never a library tile;
 /// an empty `projectGuid` is refused.

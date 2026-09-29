@@ -311,6 +311,66 @@ int main(int argc, char **argv)
     }
 
     // ------------------------------------------------------------------
+    // THE GIZMO'S PARTS DEPTH-TEST AMONG THEMSELVES (GIZMO-DEPTH-1, D7).
+    //
+    // They used to draw depth-less, in an order that was a TIE in the render
+    // queue's sort key broken by VAO ids — so which part covered which was
+    // allocation history, and two B1/B2 selftest pixels moved with it
+    // (ATOM-CPU-WALKS-1). The overlay pass clears its own depth now and the
+    // on-top material tests and writes it, so the NEARER part wins from every
+    // side. The claim, from both ends of the X axis at once: looking DOWN +X
+    // the X handle's arrow head is between the eye and the centre ball, so
+    // the centre pixel is the handle's RED; looking down -X the ball is
+    // between the eye and the X shaft, so it is the ball's WHITE. A fixed
+    // draw order, whichever it is, gets one of the two wrong.
+    {
+        View *depthView = engine->createOffscreenView("gizmo-depth", 256, 256,
+                                                      Colour(0.1f, 0.1f, 0.1f));
+        depthView->setScene(target);
+        const iris::Vec3 savedPos = cam->getLocalPos();
+        GizmoOverlay depthOverlay(target);
+        const auto centreFrom = [&](const iris::Vec3 &eyePos) {
+            cam->setLocalPos(eyePos);
+            cam->lookAt(iris::Vec3(0, 0, 0));
+            cam->update(0.0f);
+            mirror.applyCamera(cam, depthView);
+            gizmo.setSelectedNode(node);
+            gizmo.setPickView(cam, 256.0f, 256.0f);
+            gizmo.updateSize(cam);
+            const iris::Vec3 eye = cam->getGlobalPosition();
+            const iris::Vec3 fwd = (iris::Vec3(0, 0, 0) - eye).normalized();
+            // A ray that misses every handle: nothing drawn highlighted.
+            const iris::Vec3 miss =
+                cam->getGlobalRotation().rotatedVector(iris::Vec3(0, 1, 0)).normalized();
+            depthOverlay.update(&gizmo, eye, miss, fwd);
+            for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+            Image shot;
+            depthView->readPixels(shot);
+            return shot.width ? shot.at(shot.width / 2, shot.height / 2) : Colour(0, 0, 0);
+        };
+        // A hair off the axis, so the view's up vector is defined.
+        const Colour fromPlusX = centreFrom(iris::Vec3(6.0f, 0.01f, 0.01f));
+        const Colour fromMinusX = centreFrom(iris::Vec3(-6.0f, 0.01f, 0.01f));
+        std::printf("    centre pixel looking down +X (%.2f %.2f %.2f), down -X (%.2f %.2f %.2f)\n",
+                    double(fromPlusX.r), double(fromPlusX.g), double(fromPlusX.b),
+                    double(fromMinusX.r), double(fromMinusX.g), double(fromMinusX.b));
+        const auto isRed = [](const Colour &c) { return c.r > 0.6f && c.g < 0.45f && c.b < 0.45f; };
+        const auto isWhite = [](const Colour &c) { return std::min(c.r, std::min(c.g, c.b)) > 0.75f; };
+        CHECK(isRed(fromPlusX),
+              "GIZMO-DEPTH-1: looking down +X the X arrow head, the NEARER part, covers the centre ball");
+        CHECK(isWhite(fromMinusX),
+              "GIZMO-DEPTH-1: looking down -X the centre ball, the NEARER part, covers the X shaft");
+        depthOverlay.clear();
+        cam->setLocalPos(savedPos);
+        cam->lookAt(iris::Vec3(0, 0, 0));
+        cam->update(0.0f);
+        mirror.applyCamera(cam, view);
+        engine->destroyView(depthView);
+        gizmo.setPickView(iris::CameraNodePtr(), 0.0f, 0.0f);
+        gizmo.updateSize(cam);
+    }
+
+    // ------------------------------------------------------------------
     // THE FOV SWEEP (fix wave 2026-09-07). updateSize used to feed DEGREES to
     // qTan and then DIVIDE by the result: at fov 75 that is tan(37.5 rad) =
     // -0.199, so gizmoScale went negative — every handle transform mirrored

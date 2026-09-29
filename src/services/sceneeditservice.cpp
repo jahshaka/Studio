@@ -13,6 +13,7 @@ For more information see the LICENSE file
 #include "irisgl/core/math/quat.h"
 #include "irisgl/core/math/vec.h"
 #include "services/sceneeditservice.h"
+#include "services/assetshare.h"
 
 #include "irisgl/document/assets/mesh.h"
 
@@ -35,7 +36,6 @@ For more information see the LICENSE file
 #include <QJsonObject>
 #include <QPointer>
 #include <QPixmap>
-#include <QTemporaryDir>
 #include <QSqlDatabase>
 #include <QTextStream>
 
@@ -60,12 +60,14 @@ namespace { void regenerateGuids(const iris::SceneNodePtr &root,
 #include "commands/addscenenodecommand.h"
 #include "commands/changematerialcommand.h"
 #include "commands/pinassetcommand.h"
+#include "commands/projectmaterialcopycommand.h"
 #include "commands/resetmaterialcommand.h"
 #include "commands/deletescenenodecommand.h"
 #include "commands/nodeeditcommand.h"
 #include "data/constants.h"
 #include "data/primitives.h"
 #include "services/assethelper.h"
+#include "services/assetdelete.h"
 #include "services/meshbakestore.h"
 #include "services/editgate.h"
 #include "data/database/database.h"
@@ -1200,17 +1202,20 @@ void collectMeshNodes(const iris::SceneNodePtr &node, QList<iris::MeshNodePtr> &
 
 } // namespace
 
-iris::MaterialPtr SceneEditService::resolveMaterial(const QString &presetOrGuid) const
+iris::MaterialPtr SceneEditService::resolveMaterial(const QString &presetOrGuid,
+                                                   MaterialOrigin origin) const
 {
     if (presetOrGuid.isEmpty()) return iris::MaterialPtr();
+    const bool fromLibrary = origin == MaterialOrigin::Library;
 
     bool isPreset = false;
     const MaterialPreset preset = MaterialPresets::find(presetOrGuid, &isPreset);
     // …UNLESS THIS PROJECT HAS ITS OWN COPY OF THAT PRESET (PRESET-EDIT-1):
-    // the hover preview must show what the drop will apply, and the drop
-    // applies the copy (see applyMaterial). Read through the ordinary bundle
-    // branch below, which is the copy's own definition.
-    const QString mine = isPreset
+    // material.apply by the preset's name means the project's copy. Read
+    // through the ordinary bundle branch below, which is the copy's own
+    // definition. NOT for a drag from the LIBRARY (MATERIAL-DROP-1): that drop
+    // makes a pristine copy, so its preview is the pristine preset.
+    const QString mine = isPreset && !fromLibrary
                              ? presetedit::projectCopyOf(
                                    db, project, MaterialPresetAssets::guidFor(presetOrGuid))
                              : QString();
@@ -1231,7 +1236,8 @@ iris::MaterialPtr SceneEditService::resolveMaterial(const QString &presetOrGuid)
         // a project renders the version it was built with, not whatever the
         // library row holds now. Falls back to the row blob for a material
         // that has no stored definition yet.
-        const QJsonObject matObject = MaterialBundle::read(db, wanted, project);
+        const QJsonObject matObject =
+            MaterialBundle::read(db, wanted, fromLibrary ? nullptr : project);
         if (matObject.isEmpty()) return iris::MaterialPtr();
         return reader.parseMaterialTyped(matObject, db);
     }
@@ -1283,10 +1289,10 @@ bool SceneEditService::applyMaterial(const QString &presetOrGuid, iris::SceneNod
     QString materialGuid = presetOrGuid;
     if (MaterialPresetAssets::isPreset(presetOrGuid)) {
         // THIS PROJECT'S OWN COPY OF IT, IF IT HAS ONE (PRESET-EDIT-1). Once a
-        // project has edited "Wood PBR", that name means the project's copy —
-        // dropping the shipped tile again must not put a SECOND material of
-        // the same name in the tray beside the user's own, and must not paint
-        // the mesh with a picture they have already changed.
+        // project has edited "Wood PBR", that NAME means the project's copy to
+        // `material.apply` and the tray's double-click. A DROP from the library
+        // is not this door (MATERIAL-DROP-1, the owner 2026-09-28): it always
+        // makes a fresh, pristine copy — dropMaterial.
         const QString mine = presetedit::projectCopyOf(
             db, project, MaterialPresetAssets::guidFor(presetOrGuid));
         if (!mine.isEmpty()) return applyMaterialAsset(mine, target);
@@ -1311,6 +1317,132 @@ bool SceneEditService::applyMaterial(const QString &presetOrGuid, iris::SceneNod
     // Deletes: `applyMaterialShader`, the second dispatcher for the module's
     // old graph asset, is gone with the rows it served).
     return applyMaterialAsset(materialGuid, target);
+}
+
+ProjectMaterialCopyCommand *SceneEditService::makeMaterialCopy(const QString &source,
+                                                               MaterialOrigin origin,
+                                                               QString *errorOut)
+{
+    const auto fail = [errorOut](const QString &why) -> ProjectMaterialCopyCommand * {
+        if (errorOut) *errorOut = why;
+        return nullptr;
+    };
+    if (source.isEmpty()) return fail(QStringLiteral("no material"));
+    if (!db || !project || project->getProjectGuid().isEmpty())
+        return fail(QStringLiteral("no project is open"));
+    if (editgate::refuse()) return fail(QStringLiteral("a script run owns the document"));
+
+    QString materialGuid = source;
+    if (MaterialPresetAssets::isPreset(source)) {
+        // A preset is a library bundle, seeded the first time anything uses it
+        // (see applyMaterial) — its copy is made from the seeded row.
+        MaterialPresetSeeder::instance().finishNow();
+        QString error;
+        materialGuid = MaterialPresetAssets::ensureSeeded(source, db, &error);
+        if (materialGuid.isEmpty())
+            return fail(error.isEmpty() ? QStringLiteral("the preset could not be seeded") : error);
+    }
+    const AssetRecord row = db->fetchAsset(materialGuid);
+    if (row.guid.isEmpty() || row.type != static_cast<int>(ModelTypes::Material))
+        return fail(QStringLiteral("'%1' is not a material").arg(source));
+    if (origin == MaterialOrigin::Project
+        && !db->isAssetPinnedBy(project->getProjectGuid(), materialGuid))
+        return fail(QStringLiteral("'%1' is not one of this project's materials").arg(row.name));
+
+    auto *command = new ProjectMaterialCopyCommand(db, project, materialGuid,
+                                                   origin == MaterialOrigin::Library);
+    if (!command->ready()) {
+        const QString why = command->error();
+        delete command;
+        return fail(why);
+    }
+    return command;
+}
+
+QString SceneEditService::pushMaterialCopy(ProjectMaterialCopyCommand *command, QString *errorOut)
+{
+    // EVERYTHING READ BEFORE THE PUSH (the Fable read's F3): UndoService::push
+    // DELETES a command the edit gate refuses, so the pointer is never touched
+    // after it — whether the copy landed is the catalog's answer.
+    const QString guid = command->copyGuid();
+    if (undo) {
+        undo->push(command);                 // the stack owns it (or deleted it) from here
+    } else {
+        command->redo();
+        delete command;
+    }
+    const bool landed = !guid.isEmpty() && !db->fetchAsset(guid).guid.isEmpty();
+    if (!landed) {
+        if (errorOut) *errorOut = QStringLiteral("the copy could not be made");
+        return QString();
+    }
+    emit assetViewRefreshRequested();
+    return guid;
+}
+
+QString SceneEditService::copyMaterialIntoProject(const QString &source, MaterialOrigin origin,
+                                                  QString *errorOut)
+{
+    ProjectMaterialCopyCommand *command = makeMaterialCopy(source, origin, errorOut);
+    return command ? pushMaterialCopy(command, errorOut) : QString();
+}
+
+QString SceneEditService::dropMaterial(const QString &presetOrGuid, MaterialOrigin origin,
+                                       iris::SceneNodePtr target, QString *errorOut)
+{
+    const auto fail = [errorOut](const QString &why) {
+        if (errorOut) *errorOut = why;
+        return QString();
+    };
+    if (presetOrGuid.isEmpty() || !target) return fail(QStringLiteral("no material or no target"));
+    if (preview) preview->end();
+    {
+        QList<iris::MeshNodePtr> meshes;
+        collectMeshNodes(target, meshes);
+        if (meshes.isEmpty()) return fail(QStringLiteral("the target holds no mesh"));
+    }
+    if (editgate::refuse()) return fail(QStringLiteral("a script run owns the document"));
+
+    if (origin == MaterialOrigin::Project) {
+        // AN ASSIGNMENT: the target wears the project's own material itself.
+        if (!db || !project || !db->isAssetPinnedBy(project->getProjectGuid(), presetOrGuid))
+            return fail(QStringLiteral("'%1' is not one of this project's materials").arg(presetOrGuid));
+        if (!applyMaterialAsset(presetOrGuid, target))
+            return fail(QStringLiteral("'%1' could not be applied").arg(presetOrGuid));
+        return presetOrGuid;
+    }
+    // A session with no project (no library to copy into) keeps the old
+    // answer for a shipped preset: painted from the shipped values, nothing
+    // written — there is nowhere to write it.
+    if (!db || !project || project->getProjectGuid().isEmpty()) {
+        if (MaterialPresetAssets::isPreset(presetOrGuid) && applyResolvedMaterial(presetOrGuid, target))
+            return MaterialPresetAssets::guidFor(presetOrGuid);
+        return fail(QStringLiteral("no project is open"));
+    }
+
+    // FROM THE LIBRARY: a fresh, pristine project copy, then the target wears
+    // it — ONE undo step (the copy's command and the apply's macro inside it).
+    // Everything that can refuse is asked BEFORE the macro opens.
+    QString error;
+    ProjectMaterialCopyCommand *command =
+        makeMaterialCopy(presetOrGuid, MaterialOrigin::Library, &error);
+    if (!command) return fail(error);
+    if (undo) undo->stack()->beginMacro(QObject::tr("Drop Material"));
+    const QString copy = pushMaterialCopy(command, &error);
+    const bool applied = !copy.isEmpty() && applyMaterialAsset(copy, target);
+    // AN APPLY THAT REFUSED TAKES ITS COPY BACK (the Fable read's F2): the copy
+    // landed (so the stack TOOK the command and the pointer is live — a refused
+    // push never reaches here with a row), and nothing wears it. Retracted, the
+    // macro's step leaves no orphan "X N" in the tray, now or on a redo.
+    if (!copy.isEmpty() && !applied) {
+        if (undo) command->retract();
+        else assetdelete::remove(db, copy, /*keepShared*/ true, /*force*/ true);
+        emit assetViewRefreshRequested();
+    }
+    if (undo) undo->stack()->endMacro();
+    if (copy.isEmpty()) return fail(error);
+    if (!applied) return fail(QStringLiteral("the copy of '%1' could not be applied").arg(presetOrGuid));
+    return copy;
 }
 
 bool SceneEditService::applyResolvedMaterial(const QString &presetOrGuid,
@@ -1638,92 +1770,20 @@ SceneEditService::NodeExportResult SceneEditService::exportNodeTo(const iris::Sc
         return result;
     }
 
-    // Construct a temporary dir to place all the files that will be packaged
-    QTemporaryDir temporaryDir;
-    if (!temporaryDir.isValid()) {
-        result.error = QStringLiteral("could not create a temporary directory");
+    // THE SHARE FILE, NOT THE LEGACY .jaf (ARCHIVE-ROUNDTRIP, D7). The node is
+    // captured exactly as the clipboard captures it; its references are read
+    // by the key-aware walk (io/assetrefs.h) — never by treating node guids as
+    // asset guids, which is what left the old archive's catalog empty — and
+    // assetshare writes the closure with every byte (services/assetshare.h).
+    const SceneFragment fragment = captureFragment(node);
+    if (fragment.isNull()) {
+        result.error = QStringLiteral("the node produced no fragment");
         return result;
     }
-
-    const QString writePath = temporaryDir.path();
-
-    // Create a blob containing the necessary tables and rows that are needed to recreate the asset
-    // Assets are exported AS IS with their guids, these are changed when being reimported
-    db->createBlobFromNode(node, QDir(writePath).filePath("asset.db"));
-
-    QDir tempDir(writePath);
-    tempDir.mkpath("assets");
-
-    // The manifest contains a single string telling the asset type
-    // This helps with some preliminary checks to avoid reading the db and encountering blobs etc
-    QFile manifest(QDir(writePath).filePath(".manifest"));
-    if (manifest.open(QIODevice::ReadWrite)) {
-        QTextStream stream(&manifest);
-        const int typeIndex = static_cast<int>(modelType);
-        stream << (typeIndex >= 0 && typeIndex < Project::ModelTypesAsString.size()
-                       ? Project::ModelTypesAsString[typeIndex]
-                       : Project::ModelTypesAsString[0]);
-    }
-    manifest.close();
-
-    // Collect all assets that will be exported and copy these to the temporary directory.
-    //
-    // TWO WALKS, ON PURPOSE (CLIPBOARD_SPEC §6.6). getChildGuids reads the
-    // subtree's NODE guids AS asset guids — an identity that holds for a node
-    // added straight from the library and that a PASTE or a DUPLICATE breaks by
-    // design (regenerateGuids mints fresh node guids). So a pasted model used to
-    // export with NO dependencies at all: a .jaf with a scene blob and an empty
-    // assets/ dir, which imports as an invisible node. The key-aware closure
-    // (io/assetrefs.h — the same table the clipboard uses) reads the REFERENCES
-    // out of the node object instead, which is what a dependency actually is.
-    // The legacy walk stays because it is still right for library-added nodes,
-    // where the row itself is the asset; the union is what has to travel.
-    QStringList assetGuids = AssetHelper::getChildGuids(node);
-    const SceneFragment exportFragment = captureFragment(node);
-    if (!exportFragment.isNull()) {
-        for (const QString &guid : assetclosure::forNodes({ exportFragment.node }, db))
-            if (!assetGuids.contains(guid)) assetGuids.append(guid);
-    }
-
-    for (const auto &guid : assetGuids) {
-        for (const auto &assetGuid : AssetHelper::fetchAssetAndAllDependencies(guid, db)) {
-            // Pin world (phase 4): bytes resolve through the project pin /
-            // library source — the flat project folder holds no assets.
-            QString name;
-            const QString assetPath = AssetCas::resolvePinned(
-                QSqlDatabase::database(), AssetStorePaths::root(),
-                project->getProjectGuid(), assetGuid, &name);
-            if (assetPath.isEmpty()) continue;
-            if (name.isEmpty()) name = db->fetchAsset(assetGuid).name;
-            if (name.isEmpty()) name = QFileInfo(assetPath).fileName();
-            if (QFile::copy(assetPath, IrisUtils::join(writePath, "assets", name)))
-                ++result.assets;
-        }
-    }
-
-    // ONE zip loop (amendment 7): shared helper. WRITTEN BESIDE, RENAMED OVER
-    // (the QSaveFile shape): an archive already at `filePath` is replaced only
-    // by a complete one, so a failed export never leaves the user with less
-    // than they had.
-    const QString partial = filePath + QStringLiteral(".partial");
-    QFile::remove(partial);
-    QString zipError;
-    if (!ZipHelper::zipDirectory(writePath, partial, &zipError)) {
-        QFile::remove(partial);
-        result.error = zipError.isEmpty() ? QStringLiteral("the archive could not be written")
-                                          : zipError;
-        return result;
-    }
-    if (QFile::exists(filePath) && !QFile::remove(filePath)) {
-        QFile::remove(partial);
-        result.error = QStringLiteral("the existing file at %1 could not be replaced").arg(filePath);
-        return result;
-    }
-    if (!QFile::rename(partial, filePath)) {
-        QFile::remove(partial);
-        result.error = QStringLiteral("the archive could not be moved to %1").arg(filePath);
-        return result;
-    }
-    result.bytes = QFileInfo(filePath).size();
+    const auto written = assetshare::exportNode(db, project, fragment.node, node->getName(),
+                                                static_cast<int>(modelType), filePath);
+    if (!written.ok()) { result.error = written.error; return result; }
+    result.assets = written.assets;
+    result.bytes = written.bytes;
     return result;
 }

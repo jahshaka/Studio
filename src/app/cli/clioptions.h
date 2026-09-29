@@ -135,8 +135,19 @@ struct CliOptions
     /// a runner that cannot pass an argument; the flag wins. main() validates
     /// the name (an unknown one, or "custom", is a CLI error).
     QString testTier;
+    /// `--help` / `-h`: print usageText() and EXIT 0 before anything else —
+    /// before QApplication, a window, the data root, the settings file, the
+    /// log or the database (lane HELP-FLAG-1: two agents once ran `--help`,
+    /// which the binary did not handle, and booted the editor on the owner's
+    /// display with his data root). Wins over every other argument.
+    bool help = false;
+    /// `--version`: print the version line and EXIT 0, exactly like --help.
+    bool version = false;
 
     static CliOptions parse(int argc, char *argv[]);
+
+    /// The usage text `--help` prints (every flag the parser accepts).
+    static QString usageText();
 
     /// Chooses the QPA platform BEFORE QApplication exists: offscreen for
     /// headless runs, else xcb (the engine has no Wayland backend) unless the

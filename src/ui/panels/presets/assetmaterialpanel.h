@@ -36,10 +36,9 @@ public:
         this->mainWindow = mainWindow;
     }
 
-    /// The service layer (§2.3's opportunistic rule). The tray applies a
-    /// material through SceneEditService::applyMaterial — the SAME call the
-    /// viewport's drop and `material.apply` make — instead of through a
-    /// MainWindow overload of its own.
+    /// The service layer (§2.3's opportunistic rule). The tray's double-click
+    /// is a LIBRARY drop onto the selection (SceneEditService::dropMaterial —
+    /// the viewport's drop and `material.drop` make the same call; MATERIAL-DROP-1).
     void setServices(StudioServices *services) { this->services = services; }
 
     /// The favourites are listed HERE, not in the constructor: the panel is
@@ -58,6 +57,10 @@ public:
     void removeFavorite(const QString &guid);
     void addNewItem(QListWidgetItem *item);
     void addFavorites();
+
+    /// THE DOUBLE-CLICK, by guid (editor.activateMaterialTile): what a person's
+    /// double-click on that tile does. False when no tile carries `guid`.
+    bool activateTile(const QString &guid);
 
     bool eventFilter(QObject *watched, QEvent *event);
 public slots:

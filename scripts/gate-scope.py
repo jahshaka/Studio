@@ -202,7 +202,7 @@ AREA_RULES = [
     (r"^src/(ui|shell)/",
      ["ui", "app", "theme", "shortcuts", "desktops", "drawers", "hygiene"],
      ["editor", "app", "desktop"]),
-    (r"^src/app/", ["app", "apppaths", "log", "shutdown", "hygiene", "threading", "api"], ["app"]),
+    (r"^src/app/", ["app", "apppaths", "cli", "log", "shutdown", "hygiene", "threading", "api"], ["app"]),
     # --- data, docs, build ---------------------------------------------------------------
     (r"^docs/SCRIPTING\.md$", ["api"], []),
     # THE TIER DOC'S OWN GUARD (POST-C-FIXES-1): docs/TESTING_GATE.md must quote the

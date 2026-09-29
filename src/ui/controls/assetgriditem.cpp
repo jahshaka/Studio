@@ -240,7 +240,9 @@ void AssetGridItem::startDrag()
 	drag->setMimeData(AssetDrag::mimeFor(metadata["type"].toInt(),
 	                                     metadata["name"].toString(),
 	                                     QString(),
-	                                     metadata["guid"].toString()));
+	                                     metadata["guid"].toString(),
+	                                     // The Assets page is the LIBRARY (MATERIAL-DROP-1).
+	                                     AssetDrag::Origin::Library));
 	if (!pixmap.isNull()) drag->setPixmap(pixmap.scaledToHeight(64, Qt::SmoothTransformation));
 	drag->exec(Qt::MoveAction | Qt::CopyAction);
 }

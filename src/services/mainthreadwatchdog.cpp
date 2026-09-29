@@ -142,8 +142,8 @@ void watchdogLoop()
 ///
 /// Read from the argument list for the same reason `--watchdog=off` is: the
 /// watchdog is started from MainWindow's constructor (the UI thread it watches
-/// is the one that runs it) and MainWindow never sees CliOptions. Unknown flags
-/// are ignored by CliOptions::parse, so this costs nobody anything.
+/// is the one that runs it) and MainWindow never sees CliOptions. CliOptions::parse
+/// accepts the flag by name (it refuses every unknown one, HELP-FLAG-1).
 ///
 /// A malformed or out-of-range value is a WARNING and the default, never a
 /// silent reinterpretation: `--watchdog-stall=50` asking for something the
@@ -179,8 +179,8 @@ bool enabledByConfiguration()
     // `--watchdog=off` / `--watchdog=on`. Read from the argument list rather
     // than CliOptions on purpose: the watchdog is started from MainWindow's
     // constructor (the UI thread it watches is the one that runs it), and
-    // MainWindow never sees CliOptions. Unknown flags are ignored by
-    // CliOptions::parse, so this costs nobody anything.
+    // MainWindow never sees CliOptions. CliOptions::parse accepts the two
+    // spellings by name (it refuses every unknown flag, HELP-FLAG-1).
     const QStringList args = QCoreApplication::arguments();
     if (args.contains(QLatin1String("--watchdog=off"))) return false;
     if (args.contains(QLatin1String("--watchdog=on"))) return true;

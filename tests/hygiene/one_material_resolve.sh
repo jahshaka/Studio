@@ -63,7 +63,11 @@ fi
 
 # THE RESOLVER MUST STILL BE ONE. Routing through it means nothing if it stops
 # being the single entry point.
-if ! grep -q 'iris::MaterialPtr resolveMaterial(const QString &presetOrGuid) const;' \
+# (MATERIAL-DROP-1 gave it an `origin` — library or project — with the project
+# reading as the default: still ONE resolver, asked which reading a drag means.)
+if ! grep -q 'iris::MaterialPtr resolveMaterial(const QString &presetOrGuid,' \
+        src/services/sceneeditservice.h \
+   || ! grep -q 'MaterialOrigin origin = MaterialOrigin::Project) const;' \
         src/services/sceneeditservice.h; then
     echo "source.one_material_resolve: FAIL — SceneEditService::resolveMaterial is gone or has changed shape"
     failures=1

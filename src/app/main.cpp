@@ -86,6 +86,23 @@ int main(int argc, char *argv[])
     GetGitCommitHash();
 
     const CliOptions cli = CliOptions::parse(argc, argv);
+    // --help / --version ANSWER AND EXIT HERE (lane HELP-FLAG-1): before the
+    // refusals below, before QApplication, the data root, the settings file, the
+    // session log, the database or a window — so asking the binary what it
+    // accepts can never boot the editor on whatever display and data root the
+    // shell has (two agents once did exactly that, on the owner's display).
+    if (cli.help || cli.version) {
+        if (cli.help) std::fputs(qPrintable(CliOptions::usageText()), stdout);
+        else {
+#ifdef JAHSHAKA_VERSION
+            std::printf("Jahshaka %s (%s %s)\n", JAHSHAKA_VERSION, GIT_COMMIT_HASH, GIT_COMMIT_DATE);
+#else
+            std::printf("Jahshaka (%s %s)\n", GIT_COMMIT_HASH, GIT_COMMIT_DATE);
+#endif
+        }
+        std::fflush(stdout);
+        return 0;
+    }
     // A COMMAND LINE THE APP CANNOT HONOUR STOPS HERE (ledger 150): before
     // QApplication, before the log, before a window — loudly, on stderr, with a
     // non-zero exit code. The alternative is what `--mcp-port=8716336` used to

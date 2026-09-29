@@ -171,6 +171,8 @@ public:
     QVector<VerbInfo> verbs() const override;
 
     Q_INVOKABLE bool apply(const QString &nodeId, const QString &presetOrGuid);
+    Q_INVOKABLE QVariantMap drop(const QString &nodeId, const QString &presetOrGuid,
+                                 const QVariantMap &options = QVariantMap());
     Q_INVOKABLE bool preview(const QString &nodeId, const QString &presetOrGuid);
     Q_INVOKABLE bool endPreview();
     Q_INVOKABLE bool set(const QString &nodeId, const QVariantMap &values);

@@ -1,0 +1,92 @@
+// assets_import.node_archive_roundtrip — A NODE'S ARCHIVE RE-IMPORTS INTO AN EMPTY LIBRARY
+// AND RENDERS (ARCHIVE-ROUNDTRIP, D7; the owner's portability rule: every archive is
+// self-contained for an empty library).
+//
+// What was broken: node.exportArchive wrote the legacy .jaf — a catalog snapshot built by
+// walking NODE guids as ASSET guids (so a placed model's snapshot held no rows at all) and a
+// `.manifest` the zip writer dropped as a dot-file (so the importer refused the file). It
+// writes the share file now (assetshare::exportNode, the assets.exportBundle format): the
+// node as an Object row plus its whole closure, every byte inline.
+//
+// THE CLAIM, in one process: export a placed textured model; take EVERYTHING it came from
+// out of the library — the model and its members force-deleted, the source project removed,
+// the store's unreferenced bytes collected — so the library is empty of it; import the file
+// into a new project: the rows come back, the node is one tile, it places, and its surface
+// samples the fixture's GREEN texel (the base-colour map bound from the file's own bytes —
+// not grey, not white, not sky). Fixture: tests/importer/fixtures/textured_pbr_quad.glb
+// (+Z quad, top-left texture quadrant RED, the rest GREEN).
+
+function assert(cond, msg) {
+    if (!cond) throw new Error("assert failed: " + msg);
+    console.log("ok: " + msg);
+}
+function J(x) { return JSON.stringify(x); }
+function gone(guid) { try { assets.metadata(guid); return false; } catch (e) { return true; } }
+
+var FIXTURE = "@SOURCE_DIR@/tests/importer/fixtures/textured_pbr_quad.glb";
+var file = app.dataRoot().root + "/node_archive_roundtrip.jbundle";
+
+// ---- the source: a placed textured model --------------------------------------------
+var source = project.create("archive source " + Date.now());
+var placed = assets.importAndPlace(FIXTURE);
+assert(placed.nodeId && placed.assetGuid, "a textured model placed: " + J(placed));
+var sourceRows = assets.list({ scope: "project" }).filter(function (r) {
+    return r.type !== "object" || r.guid === placed.assetGuid;
+}).filter(function (r) { return r.name !== "Tile.png"; });
+var textures = sourceRows.filter(function (r) { return r.type === "texture"; });
+assert(textures.length >= 1, "the model brought its textures: "
+       + J(textures.map(function (r) { return r.name; })));
+
+var r = node.exportArchive(placed.nodeId, file);
+console.log("exportArchive -> " + J(r));
+assert(r.path === file && r.type === "object" && r.bytes > 0, "the archive was written");
+assert(r.assets >= textures.length + 2,
+       "it carries the node's row, its mesh and every texture (" + r.assets + " rows)");
+
+// ---- an EMPTY library: everything the node came from is gone ------------------------
+project.close();
+assert(project.remove(source), "the source project is removed");
+assert(assets.remove(placed.assetGuid, { keepShared: false, force: true }),
+       "the library model is force-deleted with its members");
+sourceRows.forEach(function (row) {
+    if (!gone(row.guid)) assets.remove(row.guid, { keepShared: false, force: true });
+});
+sourceRows.forEach(function (row) {
+    assert(gone(row.guid), "the library no longer holds " + row.type + " '" + row.name + "'");
+});
+var gc = assets.gc({ dryRun: false });
+console.log("gc -> " + J(gc).slice(0, 400));
+
+// ---- the import: the node's assets and the node come back ---------------------------
+project.create("archive target " + Date.now());
+var guid = assets.import(file);
+assert(guid && guid.length > 10, "assets.import(the node's archive) -> " + guid);
+var meta = assets.metadata(guid);
+assert(meta.type === "object", "the file lands as ONE object tile (" + meta.type + ")");
+textures.forEach(function (t) {
+    assert(!gone(t.guid), "texture '" + t.name + "' is back in the library, from the file");
+});
+
+var nodeId = assets.addToScene(guid, { position: { x: -2, y: 3, z: 0 } });
+assert(nodeId && nodeId.length > 10, "assets.addToScene(the imported tile) -> " + nodeId);
+var meshId = null;
+scene.nodes().forEach(function (n) {
+    if (meshId === null && n.type === "mesh" && (n.id === nodeId || n.parent === nodeId)) meshId = n.id;
+});
+assert(meshId !== null, "the imported node carries its mesh");
+var mat = material.get(meshId);
+assert(typeof mat.baseColorMap === "string" && mat.baseColorMap.indexOf("/") >= 0,
+       "its base-colour map resolves to a stored file: " + mat.baseColorMap);
+
+// Same framing as import_render: the centre pixel lands in the GREEN texel region.
+node.transform(nodeId, { scale: { x: 4, y: 4, z: 4 } });
+editor.select(null);
+editor.setView("front");
+editor.frame(5);
+var shot = editor.screenshot("node_archive_roundtrip.png", 512, 512);
+console.log("centre pixel " + J(shot.center));
+assert(shot.center.g > 40, "the re-imported surface renders (not black/sky): g=" + shot.center.g);
+assert(shot.center.g > shot.center.r + 20 && shot.center.g > shot.center.b + 20,
+       "it samples the GREEN texel region — the map came with the file");
+
+console.log("node_archive_roundtrip: ALL OK");

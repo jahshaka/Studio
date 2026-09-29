@@ -3,11 +3,10 @@
 
 // IEditorViewport — what the rest of Studio is allowed to ask of the editor viewport.
 //
-// VIEWPORT_MIGRATION_PLAN.md step 6. Two implementations:
-//   SceneViewWidget       the legacy IrisGL/QOpenGLWidget viewport (wayland only)
-//   EngineSceneViewport   the engine-backed viewport (Ogre-Next via jahshaka::engine)
+// VIEWPORT_MIGRATION_PLAN.md step 6. The implementations: EngineSceneViewport (the
+// engine-backed viewport, Ogre-Next via jahshaka::engine) and the headless stand-in.
 // MainWindow, Globals, UiManager and the camera controllers hold this type, never a
-// concrete widget, so the two can be swapped at runtime (--viewport=engine|legacy).
+// concrete widget.
 //
 // The interface is exactly the surface Studio measured itself using (19 files); it
 // is not a wish list. Legacy-only operations (GL context juggling around resource

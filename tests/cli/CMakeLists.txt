@@ -14,3 +14,13 @@ add_test(NAME app.cli_options COMMAND test_cli_options
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(app.cli_options PROPERTIES LABELS "app" TIMEOUT 60)
 jah_no_display(app.cli_options)
+
+# app.help_exits — HELP-FLAG-1: `--help`/`--version` answer and exit 0, an unknown `--flag`
+# exits 2 with one line, and none of them opens a window or writes a file (the real binary,
+# DISPLAY unset: a process that reached QApplication would abort on the missing display).
+add_test(NAME app.help_exits
+         COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/test_help_exits.py"
+                 "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>"
+         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(app.help_exits PROPERTIES LABELS "app" TIMEOUT 120)
+jah_no_display(app.help_exits)

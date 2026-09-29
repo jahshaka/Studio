@@ -3028,16 +3028,19 @@ static ProjectTileData readProjectTile(const QSqlRecord &record)
 
 QVector<ProjectTileData> Database::fetchProjects(int desktop)
 {
+    // THE ONE QUERY, NEWEST FIRST, WITH A TIE-BREAK (DESKTOP-ORDER-1). The
+    // stamp is `datetime()`'s whole seconds, so two projects created (or
+    // written) in one second tied and SQLite returned them in whatever order
+    // its plan produced — the Desktop's tiles swapped places between two
+    // fetches. The rowid is the insertion order and never changes on a save,
+    // so within one second the later-CREATED project comes first, every time.
+    // desktop <= 0 = every desktop; COALESCE: a NULL desktop is Desktop 1.
     QSqlQuery query;
-    if (desktop > 0) {
-        // COALESCE: rows from before the desktop migration (NULL) belong to Desktop 1
-        query.prepare(QString::fromLatin1(kProjectTileColumns) +
-                      "WHERE COALESCE(desktop, 1) = ? ORDER BY last_written DESC");
-        query.addBindValue(desktop);
-    }
-    else {
-        query.prepare(QString::fromLatin1(kProjectTileColumns) + "ORDER BY last_written DESC");
-    }
+    query.prepare(QString::fromLatin1(kProjectTileColumns) +
+                  "WHERE (? <= 0 OR COALESCE(desktop, 1) = ?) "
+                  "ORDER BY last_written DESC, rowid DESC");
+    query.addBindValue(desktop);
+    query.addBindValue(desktop);
     executeAndCheckQuery(query, "FetchProjects");
 
     QVector<ProjectTileData> tileData;
@@ -3103,185 +3106,10 @@ QByteArray Database::fetchCachedThumbnail(const QString &name) const
     return QByteArray();
 }
 
-bool Database::createBlobFromNode(const iris::SceneNodePtr &node, const QString &writePath)
-{
-    // ScopedConnection: the four early returns below all used to leave the
-    // named connection registered (deep audit 2026-09, area 6).
-    ScopedConnection scoped(Constants::DB_DRIVER, QStringLiteral("NodeExport"), writePath);
-    QSqlDatabase &exportConnection = scoped.db;
-
-    if (!exportConnection.isValid()) {
-        irisLog(QString("The database connection is invalid! %1").arg(exportConnection.lastError().text()));
-        return false;
-    }
-    if (!exportConnection.open()) {
-        irisLog(QString("Couldn't open a database connection! %1").arg(exportConnection.lastError().text()));
-        return false;
-    }
-
-    // Export DB writes in one transaction (phase 0): atomic bundle file,
-    // one fsync instead of one per row.
-    exportConnection.transaction();
-
-    QSqlQuery createAssetsTable(exportConnection);
-    createAssetsTable.prepare(assetsTableSchema);
-    if (!executeAndCheckQuery(createAssetsTable, "CreateAssetsTable")) return false;
-
-    QSqlQuery createDependenciesTable(exportConnection);
-    createDependenciesTable.prepare(dependenciesTableSchema);
-    if (!executeAndCheckQuery(createDependenciesTable, "CreateDependenciesTable")) return false;
-
-    QVector<AssetRecord> assetList;
-    QStringList allAssetsToExport;
-
-    for (const auto &guid : AssetHelper::getChildGuids(node)) {
-        for (const auto &assetGuid : fetchAssetAndAllDependencies(guid)) {
-            allAssetsToExport.append(assetGuid);
-        }
-    }
-
-    for (const auto &asset : allAssetsToExport) {
-        QSqlQuery selectAssetQuery;
-        selectAssetQuery.prepare(
-            "SELECT guid, type, name, collection, times_used, project_guid, date_created, last_updated, "
-            "author, license, hash, version, parent, tags, properties, asset, thumbnail, view_filter, listed "
-            "FROM assets WHERE guid = ?"
-        );
-        selectAssetQuery.addBindValue(asset);
-
-        if (selectAssetQuery.exec()) {
-            if (selectAssetQuery.first()) {
-                AssetRecord data;
-                data.guid           = selectAssetQuery.value(0).toString();
-                data.type           = selectAssetQuery.value(1).toInt();
-                data.name           = selectAssetQuery.value(2).toString();
-                data.collection     = selectAssetQuery.value(3).toInt();
-                data.timesUsed      = selectAssetQuery.value(4).toInt();
-                data.projectGuid    = selectAssetQuery.value(5).toString();
-                data.dateCreated    = selectAssetQuery.value(6).toDateTime();
-                data.lastUpdated    = selectAssetQuery.value(7).toDateTime();
-                data.author         = selectAssetQuery.value(8).toString();
-                data.license        = selectAssetQuery.value(9).toString();
-                data.hash           = selectAssetQuery.value(10).toString();
-                data.version        = selectAssetQuery.value(11).toString();
-                data.parent         = selectAssetQuery.value(12).toString();
-                data.tags           = selectAssetQuery.value(13).toByteArray();
-                data.properties     = selectAssetQuery.value(14).toByteArray();
-                data.asset          = selectAssetQuery.value(15).toByteArray();
-                data.thumbnail      = selectAssetQuery.value(16).toByteArray();
-                data.view_filter	= selectAssetQuery.value(17).toInt();
-                data.listed         = selectAssetQuery.value(18).toBool();
-                assetList.push_back(data);
-            }
-        }
-        else {
-            irisLog("There was an error fetching an asset " + selectAssetQuery.lastError().text());
-        }
-    }
-
-    for (const auto &asset : assetList) {
-        QSqlQuery insertExportAssetQuery(exportConnection);
-        insertExportAssetQuery.prepare(
-            "INSERT INTO assets"
-            " (guid, type, name, collection, times_used, project_guid, date_created, last_updated, author,"
-            " license, hash, version, parent, tags, properties, asset, thumbnail, view_filter, listed)"
-            " VALUES(:guid, :type, :name, :collection, :times_used, :project_guid, :date_created, :last_updated, :author,"
-            " :license, :hash, :version, :parent, :tags, :properties, :asset, :thumbnail, :view_filter, :listed)"
-        );
-
-        insertExportAssetQuery.bindValue(":guid", asset.guid);
-        insertExportAssetQuery.bindValue(":type", asset.type);
-        insertExportAssetQuery.bindValue(":name", asset.name);
-        insertExportAssetQuery.bindValue(":collection", asset.collection);
-        insertExportAssetQuery.bindValue(":times_used", asset.timesUsed);
-        insertExportAssetQuery.bindValue(":project_guid", asset.projectGuid);
-        insertExportAssetQuery.bindValue(":date_created", asset.dateCreated);
-        insertExportAssetQuery.bindValue(":last_updated", asset.lastUpdated);
-        insertExportAssetQuery.bindValue(":author", asset.author);
-        insertExportAssetQuery.bindValue(":license", asset.license);
-        insertExportAssetQuery.bindValue(":hash", asset.hash);
-        insertExportAssetQuery.bindValue(":version", asset.version);
-        insertExportAssetQuery.bindValue(":parent", asset.parent);
-        insertExportAssetQuery.bindValue(":tags", asset.tags);
-        insertExportAssetQuery.bindValue(":properties", asset.properties);
-
-        // Write a copy of objects IN the tree AS IS to preserve hierarchical structure
-        if (asset.type == static_cast<int>(ModelTypes::Object) ||
-            asset.type == static_cast<int>(ModelTypes::ParticleSystem))
-        {
-            QJsonObject assetJson;
-            SceneWriter::writeSceneNode(assetJson, node);
-            insertExportAssetQuery.bindValue(":asset", QJsonDocument(assetJson).toJson());
-        }
-        else {
-            insertExportAssetQuery.bindValue(":asset", asset.asset);
-        }
-
-        insertExportAssetQuery.bindValue(":thumbnail", asset.thumbnail);
-        insertExportAssetQuery.bindValue(":view_filter", asset.view_filter);
-        insertExportAssetQuery.bindValue(":listed", asset.listed ? 1 : 0);
-
-        executeAndCheckQuery(insertExportAssetQuery, "insertExportAssetQuery");
-    }
-
-    QVector<DependencyRecord> dependenciesToExport;
-
-    for (const auto &asset : assetList) {
-        // Dependency-export fix (phase 0): outgoing edges, every row — see
-        // the matching comment in createExportBundle.
-        QSqlQuery selectDep;
-        selectDep.prepare(
-            "SELECT depender_type, dependee_type, project_guid, depender, dependee, id "
-            "FROM dependencies WHERE "
-            "depender = ? AND depender_type = ?"
-        );
-        selectDep.addBindValue(asset.guid);
-        selectDep.addBindValue(asset.type);
-
-        if (selectDep.exec()) {
-            while (selectDep.next()) {
-                DependencyRecord record;
-                record.dependerType = selectDep.value(0).toInt();
-                record.dependeeType = selectDep.value(1).toInt();
-                record.projectGuid  = selectDep.value(2).toString();
-                record.depender     = selectDep.value(3).toString();
-                record.dependee     = selectDep.value(4).toString();
-                record.id           = selectDep.value(5).toString();
-                dependenciesToExport.append(record);
-            }
-        }
-        else {
-            irisLog("There was an error fetching a dependency" + selectDep.lastError().text());
-        }
-    }
-
-    QStringList assetDependencies;
-
-    for (const auto &dep : dependenciesToExport) {
-        QSqlQuery exportDep(exportConnection);
-        exportDep.prepare(
-            "INSERT INTO dependencies (depender_type, dependee_type, project_guid, depender, dependee, id) "
-            "VALUES (:depender_type, :dependee_type, :project_guid, :depender, :dependee, :id)"
-        );
-
-        exportDep.bindValue(":depender_type", dep.dependerType);
-        exportDep.bindValue(":dependee_type", dep.dependeeType);
-        exportDep.bindValue(":project_guid", dep.projectGuid);
-        exportDep.bindValue(":depender", dep.depender);
-        exportDep.bindValue(":dependee", dep.dependee);
-        exportDep.bindValue(":id", dep.id);
-
-        executeAndCheckQuery(exportDep, "exportDep");
-    }
-
-    exportConnection.commit();
-    // close + unregister: ~ScopedConnection
-    return true;
-}
-
 bool Database::createBlobFromAsset(const QString &guid, const QString &writePath)
 {
-    // ScopedConnection — same leak as createBlobFromNode, same fix.
+    // ScopedConnection: an early return used to leave the named connection
+    // registered (deep audit 2026-09, area 6).
     ScopedConnection scoped(Constants::DB_DRIVER, QStringLiteral("NodeExport"), writePath);
     QSqlDatabase &exportConnection = scoped.db;
 
@@ -3521,7 +3349,7 @@ void Database::createExportScene(const QString &outTempFilePath, const QString &
     // the newly created project (project_guid = the new scene guid,
     // view_filter = Editor), so the rows are project members and never
     // library tiles — there is no library visibility for them to carry. The
-    // ASSET archives (createExportBundle / createBlobFromNode /
+    // ASSET archives (createExportBundle /
     // createBlobFromAsset, on assetsTableSchema) do carry it.
     QString createAssetsTableSchema =
         "CREATE TABLE IF NOT EXISTS assets ("
