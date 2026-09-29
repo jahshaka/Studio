@@ -201,15 +201,18 @@ shadowArm("nocast");
 node.setProperty(sunInfo.light, "shadowMapType", sunShadowType);
 // ---- THE BOUNCE SEES THE SAME SHADOW (CLOUDS-2D-2) ----------------------------
 // The voxel light injection darkens a directional light's DIRECT term by the same
-// transmittance the pixel's takes, at the voxel's world centre. ONE bounce and a
-// BLACK sky, so the light volume holds the injection alone (no bounce, and no sky:
-// the store holds the sky's direct term at every bounce count since CONTACT-OCCLUSION-1,
-// and a sky that carries no light skips that pass): its peak (the lit ground under the sun) must drop by the factor the ground pixel's
+// transmittance the pixel's takes, at the voxel's world centre. ONE bounce and the
+// Sky Light at ZERO, so the light volume holds the injection alone (no bounce, and no
+// sky: the store holds the sky's direct term at every bounce count since
+// CONTACT-OCCLUSION-1 — and a sun-lit cloud deck IS sky light, so a lit sky would move
+// the ratio this arm reads; a Sky Light at zero skips that pass): its peak (the lit ground under the sun) must drop by the factor the ground pixel's
 // direct term dropped by above — 0.5 at half strength under an opaque deck
 // (0.5 + 0.5 e^-tau, tau ~ 60: exactly 0.5 to 1e-20) — within the 8-bit direct
 // store's step at that peak (bar 0.02). And coverage 0 must leave the injection
 // byte-identical to no layer (the light volume's digest).
-world.sky("color", { color: "#000000" });
+var armSkyLight = world.skyLight().light;
+var armSkyLightIntensity = node.property(armSkyLight, "intensity");
+node.setProperty(armSkyLight, "intensity", 0.0);
 world.gi({ mode: "vct", bounces: 1 });
 world.clouds({ enabled: false });
 // A lit box — the innermost cascade's surface (the ground is a coarser cascade's).
@@ -239,7 +242,7 @@ assert(vFull.peak <= 0.01 * vClear.peak,
 near(vHalf.meanLit / vClear.meanLit, 0.5, 0.02, "...and so is their mean over the lit voxels");
 node.remove(litBox);
 world.gi({ mode: "off" });
-world.sky("color", { color: "#8090a8" });   // the sky the arms above and below measure
+node.setProperty(armSkyLight, "intensity", armSkyLightIntensity);
 
 world.clouds({ coverage: 0, shadow: 1 });
 var clearShadow = groundShot("clear_shadow1");
