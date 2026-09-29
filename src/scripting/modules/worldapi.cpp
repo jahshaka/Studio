@@ -1048,9 +1048,9 @@ bool WorldApi::gi(const QVariantMap &params)
     }
     // ---- DDGI (GI_UNIFIED_SPEC.md §4 P1) -----------------------------------
     // Same tri-state shape as the probe toggles, and for the same reason: the
-    // value most scenes hold is "let the quality tier decide", which no boolean
-    // can say. Today that resolves to OFF (there is no tier yet) — which is
-    // exactly why every existing scene renders unchanged.
+    // value most scenes hold is "let the quality tier decide" (-1, resolved by the
+    // engine's fieldDefault of the scene's quality — DDGI-AUTO-1), which no
+    // boolean can say.
     // 'ddgi' is a PIN when it is given a value and an UNPIN when it is given
     // "auto": with the Photon tier live, auto means "the tier decides", and the
     // only way to say that is to drop the override and let the tier write.
@@ -1121,7 +1121,8 @@ QVariantMap WorldApi::photonState(const iris::ScenePtr &scene)
           QString::fromLatin1(kGiModeNames[qBound(0, int(scene->giMode), 2)]) },
         { QStringLiteral("quality"),
           QString::fromLatin1(qualityNames[qBound(0, int(scene->giQuality), 3)]) },
-        { QStringLiteral("ddgi"), scene->giDdgi > 0 },
+        // RESOLVED (DDGI-AUTO-1): a tier leaves the field Auto, the engine's fact.
+        { QStringLiteral("ddgi"), scene->giDdgi < 0 ? worldmodes::photonFieldAuto(scene) : scene->giDdgi > 0 },
         // RESOLVED against the tier (the engine's table): a pin wins, auto is
         // the tier's gather row.
         { QStringLiteral("gather"),
@@ -2818,7 +2819,10 @@ QVariantMap WorldApi::get()
                              { "snapDeviation", scene->giProbeSnapDeviation },
                              { "snapSidesMin", scene->giProbeSnapSidesMin },
                              { "snapSidesMax", scene->giProbeSnapSidesMax },
-                             { "ddgi", giToggleToJs(scene->giDdgi) },
+                             // WHAT RENDERS (DDGI-AUTO-1): Auto resolved through
+                             // the engine's fact, the row's own get.
+                             { "ddgi", scene->giDdgi < 0 ? worldmodes::photonFieldAuto(scene)
+                                                         : scene->giDdgi > 0 },
                              { "gather", giToggleToJs(scene->giGather) },
                              { "cascadeInstanceCap", scene->giCascadeInstanceCap },
                              { "dragOnMoverChannel", scene->giDragMoverChannel > 0 },
