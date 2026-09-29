@@ -177,14 +177,16 @@ static GiParams vctBase()
     // y -1.5 .. 16.5 — EXACTLY the box the deleted arm built from the old
     // -9 -1.5 -9 .. 9 7.5 9 bounds (it padded the short axis upward to a cube),
     // centred on the GI driver at (0 7.5 0). The field rides it (8192 probes, the
-    // old fit). AT 128, 0.141 m cells — half the old arm's 0.281 m, and the
-    // measured reason: at 64 the chain's cones read the far floor 4.5 % under the
-    // field (0.4392 / 0.4588, bar 4.3 %) where the deleted arm read 1.000 — the
-    // chain's march is not the single volume's at the coarse cell; at 128 it reads
-    // 1.027. Medium's own chain (cascade 0 +-5 m around the eye) leaves the wall
-    // outside the field altogether, which is what made the dead pin pass.
+    // old fit), at Medium's own 64 (0.281 m cells). UNPINNED from 128 by
+    // GI-DDGI-64-1 (D8): the "4.5 % under the field at 64" was the field read at
+    // BIND — one sample a probe, 1.7 % high — against the cones; at rest the two
+    // read 1.027 at 64 (1.018 at 128, 1.073 at 32: the field's rays out-read the
+    // four-cone set a little more the coarser the cell, inside the set's own
+    // open-floor error), so the AGREE case reads both at rest. Medium's own chain
+    // (cascade 0 +-5 m around the eye) leaves the wall outside the field
+    // altogether, which is why a pinned cascade stays.
     gi.cascadeCount = 1;
-    gi.cascadeSet[0] = GiParams::GiCascadeDesc{ 9.0f, 128, 0.0f };
+    gi.cascadeSet[0] = GiParams::GiCascadeDesc{ 9.0f, 64, 0.0f };
     return gi;
 }
 
@@ -257,9 +259,64 @@ static void lightWrite(Scene *s, NodeId light)
     s->setLight(light, l);
 }
 
+// NOT A ROW: `test_gi_ddgi --cell-sweep` (GI-DDGI-64-1, D8) — the far floor's field /
+// cones ratio (the AGREE reading, both settled) against the pinned cascade's
+// resolution over the same +-9 m box. What the 4.5 % at 64 cells is, as a number per
+// cell size.
+static int runCellSweep()
+{
+    std::string err;
+    EngineConfig cfg;
+    cfg.pluginDir = JAHSHAKA_TEST_PLUGIN_DIR;
+    cfg.hlmsMediaDir = JAHSHAKA_TEST_MEDIA_DIR;
+    cfg.logFile = "test-gi-ddgi-sweep-ogre.log";
+    auto engine = Engine::create(cfg, err);
+    if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }
+    engine->setFixedFrameDelta(1.0f / 60.0f);
+    Engine *e = engine.get();
+    Room r = buildRoom(e);
+    Image img;
+    render(e);
+    r.view->readPixels(img);
+    const Colour base = img.at(kFarX, kFarY);
+    std::printf("   GI off: far floor r %.4f\n", base.r);
+    // Powers of two: 48, 96 and 192 read the cones 0.60-0.62 at this patch (a
+    // non-power-of-two volume is outside what the voxeliser's mips assume).
+    const int resolutions[] = { 32, 64, 128 };
+    for (int res : resolutions) {
+        GiParams gi = vctBase();
+        gi.cascadeSet[0].resolution = res;
+        gi.ddgi = GiToggle::Off;
+        r.scene->setGlobalIllumination(gi);
+        render(e, 4);
+        settleGi(e, r.scene);
+        render(e, 8);
+        r.view->readPixels(img);
+        const Colour cones = img.at(kFarX, kFarY);
+        const Colour conesNear = img.at(kFloorX, kFloorY);
+        gi.ddgi = GiToggle::On;
+        r.scene->setGlobalIllumination(gi);
+        render(e, 4);
+        settleGi(e, r.scene);
+        render(e, 8);
+        r.view->readPixels(img);
+        const Colour field = img.at(kFarX, kFarY);
+        const Colour fieldNear = img.at(kFloorX, kFloorY);
+        const double cell = 18.0 / double(res);
+        std::printf("   res %3d (cell %.3f m): far floor field %.4f cones %.4f -> field / cones %.4f "
+                    "(indirect only: %.4f / %.4f = %.4f); near floor %.4f / %.4f = %.4f\n",
+                    res, cell, field.r, cones.r, cones.r > 0 ? field.r / cones.r : 0.0,
+                    field.r - base.r, cones.r - base.r,
+                    (cones.r - base.r) > 1e-4f ? (field.r - base.r) / (cones.r - base.r) : 0.0,
+                    fieldNear.r, conesNear.r, conesNear.r > 0 ? fieldNear.r / conesNear.r : 0.0);
+    }
+    return 0;
+}
+
 int main(int argc, char **argv)
 {
     if (argc > 1 && std::strcmp(argv[1], "hash") == 0) return runHashChild();
+    if (argc > 1 && std::strcmp(argv[1], "--cell-sweep") == 0) return runCellSweep();
 
     std::string err;
     EngineConfig cfg;
@@ -355,11 +412,31 @@ int main(int argc, char **argv)
     // gi.ddgi_ambient / gi.voxel_lab) plus the two readings' half-codes (0.5/255 each, as a
     // fraction of the value). A collapsed lookup reads far outside it either way.
     {
-        const double ratio = vctFar.r > 0.0f ? double(rawFar.r) / double(vctFar.r) : 0.0;
-        const double tol = 0.034 + 2.0 * (0.5 / 255.0) / std::max(double(vctFar.r), 1e-3);
-        std::printf("   AGREE: far floor, field / cones %.4f / %.4f = %.4f (bar 1 +- %.4f)\n", rawFar.r, vctFar.r,
-                    ratio, tol);
-        CHECK(vctFar.r > 0.05f && std::fabs(ratio - 1.0) <= tol,
+        // BOTH AT REST (GI-DDGI-64-1): the field is WHOLE on the frame it binds (one
+        // sample a probe) and still owes its refinements; read mid-convergence at 64
+        // cells it stood 1.7 % high (0.4588 against 0.4510 at rest), which with the
+        // settled residual below made the "4.5 %" that pinned this suite at 128.
+        settleGi(e, r.scene);
+        render(e, 8);
+        r.view->readPixels(img);
+        const Colour rawFarRest = img.at(kFarX, kFarY);
+        GiParams vctRest = vctBase();
+        r.scene->setGlobalIllumination(vctRest);
+        render(e, 4);
+        settleGi(e, r.scene);
+        render(e, 8);
+        r.view->readPixels(img);
+        const Colour vctFarRest = img.at(kFarX, kFarY);
+        std::printf("   at rest: far floor field %.4f (at bind %.4f), cones %.4f (after 3 frames %.4f)\n",
+                    rawFarRest.r, rawFar.r, vctFarRest.r, vctFar.r);
+        r.scene->setGlobalIllumination(ddgi);
+        render(e, 4);
+        settleGi(e, r.scene);
+        const double ratio = vctFarRest.r > 0.0f ? double(rawFarRest.r) / double(vctFarRest.r) : 0.0;
+        const double tol = 0.034 + 2.0 * (0.5 / 255.0) / std::max(double(vctFarRest.r), 1e-3);
+        std::printf("   AGREE: far floor, field / cones %.4f / %.4f = %.4f (bar 1 +- %.4f)\n", rawFarRest.r,
+                    vctFarRest.r, ratio, tol);
+        CHECK(vctFarRest.r > 0.05f && std::fabs(ratio - 1.0) <= tol,
               "AGREE: far from the wall, the field and the four-cone set read one bounce (the ratio within the "
               "set's open-floor error plus the pixels' half-codes)");
     }

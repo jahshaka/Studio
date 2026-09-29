@@ -1,0 +1,70 @@
+// gi_verbs.planar_records — PLANAR-RECORDS-1 (D8): every ray that hits a PLANAR mirror
+// is a hit-decode RECORD (D3-HIT-SHADE-2: the caches hold only a metal mirror's black
+// diffuse, so its hit is shaded by the decode), and a record the list cannot hold is
+// DROPPED — its ray has no sample that frame, the write-back's "unshaded" case
+// (jah_rq_hit_record.glsl, jahHitAppend). Measured where the brief asked, the Mirror
+// Room at Epic (the owner's photographed room), and on the hazard the D3 read named:
+// a planar mirror floor under 30 MOVERS (every mover hit is a record too), both
+// sampled over 60 frames through world.giStatus().rayQuery's hit counters. THE CLAIM:
+// no record is dropped in either — the list's capacity holds a planar floor's hits
+// and thirty movers' at Epic. The counts are printed (records per frame against the
+// capacity), so a change that eats the headroom is visible before it drops.
+function assert(cond, msg) {
+    if (!cond) throw new Error("assert failed: " + msg);
+    console.log("ok: " + msg);
+}
+var MIRROR = "@JAH_PLANAR_RECORDS_MIRROR@";
+var imported = project.importArchive(MIRROR);
+assert(imported && imported.guid, "importArchive(Mirror Room)");
+assert(project.open(imported.guid) === true, "project.open(Mirror Room)");
+world.photon({ enabled: true, tier: "epic" });
+world.rayTracing("auto");
+editor.frame(180);
+var rq0 = world.giStatus().rayQuery;
+if (!(rq0.available && rq0.enabled)) {
+    console.log("no ray queries on this machine: nothing is traced, nothing recorded");
+    console.log("e2e_planar_records: all ok (skipped)");
+} else {
+    function sample(tag, frames, step) {
+        var maxRec = 0, sumRec = 0, sumDrop = 0, cap = 0;
+        for (var f = 0; f < frames; f++) {
+            if (step) step(f);
+            editor.frame(1);
+            var rq = world.giStatus().rayQuery;
+            maxRec = Math.max(maxRec, rq.hitRecords);
+            sumRec += rq.hitRecords;
+            sumDrop += rq.hitDropped;
+            cap = Math.max(cap, rq.hitCapacity);
+        }
+        console.log(tag + ": records per frame mean " + (sumRec / frames).toFixed(0) + " peak " + maxRec +
+                    " of capacity " + cap + "; dropped " + sumDrop + " over " + frames + " frames (" +
+                    (sumRec > 0 ? (100 * sumDrop / sumRec).toFixed(2) : "0.00") + " %)");
+        return { max: maxRec, mean: sumRec / frames, drop: sumDrop, cap: cap };
+    }
+    var room = sample("the Mirror Room at Epic", 60, null);
+    assert(room.cap > 0, "the hit list exists at Epic (capacity " + room.cap + ")");
+    assert(room.drop === 0, "the Mirror Room at Epic drops no hit record");
+
+    // THE HAZARD: a planar mirror floor under 30 movers, in view.
+    var floor = scene.addPrimitive("plane", { position: { x: 0, y: 0.02, z: 0 }, scale: { x: 8, y: 1, z: 8 } });
+    material.set(floor, { baseColor: "#ffffff", roughness: 0.0, metallic: 1.0 });
+    assert(node.setPlanarReflector(floor, true), "the floor is a planar mirror");
+    var movers = [];
+    for (var i = 0; i < 30; i++) {
+        var m = scene.addPrimitive("sphere", { position: { x: -3 + (i % 6) * 1.2, y: 0.6, z: -3 + Math.floor(i / 6) * 1.2 },
+                                               scale: { x: 0.4, y: 0.4, z: 0.4 } });
+        node.setProperty(m, "mobility", "movable");
+        movers.push(m);
+    }
+    editor.setCamera({ position: { x: 0, y: 3.5, z: 7 }, lookAt: { x: 0, y: 0.5, z: 0 } });
+    editor.frame(60);
+    var busy = sample("a planar floor under 30 movers at Epic", 60, function (f) {
+        for (var k = 0; k < movers.length; k++)
+            node.transform(movers[k], { position: { x: -3 + (k % 6) * 1.2 + 0.3 * Math.sin(0.1 * f + k),
+                                                    y: 0.6 + 0.2 * Math.cos(0.13 * f + k),
+                                                    z: -3 + Math.floor(k / 6) * 1.2 } });
+    });
+    assert(busy.max > room.max, "the floor and the movers add records (" + busy.max + " > " + room.max + ")");
+    assert(busy.drop === 0, "a planar floor under 30 movers drops no hit record at Epic");
+    console.log("e2e_planar_records: all ok");
+}

@@ -17,8 +17,7 @@
 
 #include "bridge/previewmesh.h"
 #include <QImage>
-#include <chrono>
-#include <thread>
+#include <cstring>
 #include <cmath>
 #include <cstdio>
 #include <vector>
@@ -496,12 +495,19 @@ int main(int argc, char **argv)
         // Rotating the light must move the sky's own brightest region.
         doc->skyType = iris::SkyType::REALISTIC;
         doc->sunDiscVisible = false;   // measure the SKY, not the disc on top of it
-        // THE BAKE IS DEBOUNCED at 150 ms (applySky): a suite that only spins
-        // frames re-bakes once and then measures the FIRST sun twice. Settling
-        // means letting the debounce expire, not counting frames.
+        // SETTLED = THE ENVIRONMENT HAS LANDED, counted in FRAMES: the realistic
+        // sky has no debounce (a const-buffer write and a re-capture, scenemirror.h
+        // SkySource), and a capture lands as one set, so read the sky's SH until
+        // it stops moving for three frames running.
         const auto settle = [&]() {
-            for (int f = 0; f < 4; ++f) frame();
-            std::this_thread::sleep_for(std::chrono::milliseconds(200));
+            float prev[27] = { 0.0f }, cur[27];
+            int still = 0;
+            for (int f = 0; f < 240 && still < 3; ++f) {
+                frame();
+                const bool have = escene->skyAmbientSh(cur);
+                still = (have && std::memcmp(cur, prev, sizeof cur) == 0) ? still + 1 : 0;
+                std::memcpy(prev, cur, sizeof cur);
+            }
             for (int f = 0; f < 4; ++f) frame();
         };
         // Sun ahead (at -Z, in frame) vs sun behind: the analytic sky's brightest

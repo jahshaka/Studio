@@ -24,11 +24,14 @@
 //       Before this lane the gather read the panel BLACK.
 //   (c) The RIGGED arm is gi.skin_rays_mirror's (the posed character shaded).
 //   (d) A HIT OUTSIDE THE FRUSTUM has NO Forward+ cell (the fork's
-//       fwdFragCoord hook): a point light beside the crate behind the camera
-//       does not reach its reflection — the reflection equals the crate's raster
-//       with the point light OFF, and the raster with the light ON differs. The
-//       CARDED floor around it is the cards' to answer (no record) and carries
-//       the lamp the card captured.
+//       fwdFragCoord hook) and takes its point and spot lights from the WORLD
+//       light list (D3-HIT-SHADE-2): a point light beside the crate behind the
+//       camera reaches its reflection — the reflection equals the crate's raster
+//       with the point light ON. The CARDED floor around it is the cards' to
+//       answer (no record) and carries the lamp the card captured.
+//       `--offscreen-lights` (gi.hit_offscreen_lights) is the world list's own
+//       row: lamps whose range touches no frustum at all, a spot among them, and
+//       the list switched off in the same process (the picture before the lane).
 //   (e) THE SHADOW RAY: a mover wall under a static overhang in sunlight
 //       reflects DARK where the overhang's shadow falls and LIT beside it, as its
 //       raster does.
@@ -459,7 +462,7 @@ static int mirrorArms(Engine *e)
     }
 
     // ---- (d) a hit outside the frustum has no Forward+ cell -----------------
-    std::printf("\n== (d) a hit OUTSIDE the frustum: no clustered light reaches it ==\n");
+    std::printf("\n== (d) a hit OUTSIDE the frustum: no cell, the world light list lights it ==\n");
     show(false, true);
     // GI OFF for this arm: the lamp's light would otherwise reach the crate a
     // second way — injected into the voxels and bounced off the floor — in the
@@ -556,10 +559,13 @@ static int mirrorArms(Engine *e)
         CHECK_MSG(floorRecords == 0ull,
                   "(d) the floor's hits are the CARDS' (the mirror seeing the floor alone appended %llu records)",
                   floorRecords);
-        CHECK_MSG(dec.n > 50 && relDiff(dm, dOff) < 0.02f,
-                  "(d) the crate's REFLECTION (a decode hit outside the frustum: no cell) is the lamp-OFF raster "
-                  "within %.2f %% (bar 2 %%): the sun, the field, the probes and the sky, no clustered light",
-                  100.0f * relDiff(dm, dOff));
+        // THE WORLD LIGHT LIST (D3-HIT-SHADE-2): a decode hit outside the frustum
+        // has no cell, and its lamp is the world list's — the lamp-ON raster.
+        const Colour dOn = maskMean(rLampOn, dec, true);
+        CHECK_MSG(dec.n > 50 && relDiff(dm, dOn) < 0.02f && relDiff(dOn, dOff) > 0.1f,
+                  "(d) the crate's REFLECTION (a decode hit outside the frustum: no cell) is the lamp-ON raster "
+                  "within %.2f %% (bar 2 %%; the lamp moves the raster %.0f %%): the world light list",
+                  100.0f * relDiff(dm, dOn), 100.0f * relDiff(dOn, dOff));
         const Colour cardLamp(fm.r - fmOff.r, fm.g - fmOff.g, fm.b - fmOff.b),
                      rastLamp(fOn.r - fOff.r, fOn.g - fOff.g, fOn.b - fOff.b);
         std::printf("   the cards' half: mirror lamp OFF (%.4f %.4f %.4f); the lamp's share, mirror (%.4f %.4f %.4f) "
@@ -1296,6 +1302,488 @@ static int gatherArm(Engine *e)
 }
 
 // ---------------------------------------------------------------------------
+// `--offscreen-lights` (gi.hit_offscreen_lights, D3-HIT-SHADE-2): THE WORLD LIGHT
+// LIST. The mirror fixture with no floor, no sun and GI off — the crate's light is
+// its two lamps and the ambient, nothing else. Both lamps sit BEHIND the camera
+// with ranges that touch no part of its frustum (the camera at z = -3 looks +Z;
+// the lamps' spheres end at z <= -3.4), so neither is in Ogre's clustered list
+// nor its camera-culled global list for the mirror shot: a white point lamp and a
+// red SPOT aimed at the crate. The MOVER crate's hits are the decode's (a record
+// each); its reflection must be its RASTER (seen from the reflected camera, where
+// both lamps are on screen and clustered) within arm (a)'s 2 %. The same process
+// then reads the list OFF (JAHSHAKA_HIT_WORLD_LIGHTS=off, the picture before the
+// lane): the reflection falls to the lamp-OFF raster.
+static int offscreenLightsMain(Engine *e)
+{
+    View *view = e->createOffscreenView("hitworld", kSize, kSize, Colour(0, 0, 0));
+    Scene *s = e->createScene("hitworld");
+    view->setScene(s);
+    view->setOffscreenContract(OffscreenContract::StillPicture);
+    view->setShadows(true);
+    s->setAmbient(Colour(0.05f, 0.05f, 0.06f), Colour(0.04f, 0.04f, 0.04f));
+    const MeshId cube = s->createMesh(enginetest::unitCubeMesh());
+    const NodeId wall = s->createNode();
+    {
+        PbrParams wp;
+        wp.albedo = Colour(1, 1, 1);
+        wp.metalness = 1.0f;
+        wp.roughness = 0.0f;
+        s->attachMesh(wall, cube, s->createPbrMaterial(wp));
+    }
+    enginetest::setNodeScale(s, wall, Vec3(14.0f, 9.0f, 0.3f));
+    enginetest::setNodePosition(s, wall, Vec3(0.0f, 1.0f, kMirrorZ + 0.15f));
+    const NodeId mov = s->createNode();
+    s->setNodeMovable(mov, true);
+    s->attachMesh(mov, cube, matte(s, Colour(0.7f, 0.7f, 0.7f)));
+    enginetest::setNodePosition(s, mov, Vec3(0.3f, 0.0f, -8.0f));
+    GiParams gi;
+    gi.mode = GiMode::Off;
+    s->setGlobalIllumination(gi);
+    PostFxDesc fx;
+    fx.allowOffscreen = true;
+    fx.ssr = 2;
+    fx.hdrReadback = true;
+    view->setPostFx(fx);
+    // THE LAMPS. The crate's mirror-facing face is at z = -7.5.
+    const NodeId lamp = s->createNode();
+    enginetest::setNodePosition(s, lamp, Vec3(1.0f, 1.0f, -6.0f));
+    LightDesc point;
+    point.type = LightType::Point;
+    point.colour = Colour(1.0f, 1.0f, 1.0f);
+    point.intensity = 4.0f;
+    point.range = 2.6f;   // the sphere ends at z = -3.4, behind the eye
+    point.castShadows = false;
+    s->setLight(lamp, point);
+    // The spot: aimed from above the crate's mirror side down onto its face centre
+    // (0.3, 0, -7.5), 1.4-2.0 m from the face's points (its range 2.2 reaches all of it).
+    const NodeId spotN = enginetest::addDirectionalLight(s, Vec3(0.7f, -1.6f, -0.9f), 1.0f);
+    enginetest::setNodePosition(s, spotN, Vec3(-0.4f, 1.6f, -6.6f));
+    LightDesc spot;
+    spot.type = LightType::Spot;
+    spot.colour = Colour(1.0f, 0.2f, 0.1f);
+    spot.intensity = 6.0f;
+    spot.range = 2.2f;    // ends at z = -4.4
+    spot.spotAngleDegrees = 35.0f;
+    spot.castShadows = false;
+    s->setLight(spotN, spot);
+    const auto lampsOn = [&](bool on) {
+        LightDesc p = point, q = spot;
+        if (!on) { p.intensity = 0.0f; q.intensity = 0.0f; }
+        s->setLight(lamp, p);
+        s->setLight(spotN, q);
+    };
+    const auto shot = [&](bool mirrorArm) {
+        s->setNodeVisible(wall, mirrorArm);
+        if (mirrorArm) enginetest::testCameraLookAt(view, kCam, Vec3(0.0f, 1.0f, kMirrorZ));
+        else enginetest::testCameraLookAt(view, kCamR, Vec3(0.0f, 1.0f, -20.0f));
+        render(e, 40);
+        ImageF img;
+        view->readPixelsHdr(img);
+        return img;
+    };
+    std::printf("\n== gi.hit_offscreen_lights: lamps no frustum touches light a hit seen in a mirror ==\n");
+    s->setNodeVisible(mov, false);
+    lampsOn(true);
+    const ImageF mNone = shot(true), rNone = shot(false);
+    s->setNodeVisible(mov, true);
+    const ImageF mOn = shot(true);
+    // The counters are read back several frames late: read after a MIRROR shot.
+    const RayQueryStatus st = s->rayQueryStatus();
+    const ImageF rOn = shot(false);
+    setenv("JAHSHAKA_HIT_WORLD_LIGHTS", "off", 1);
+    const ImageF mListOff = shot(true);
+    unsetenv("JAHSHAKA_HIT_WORLD_LIGHTS");
+    lampsOn(false);
+    const ImageF rOff = shot(false);
+    lampsOn(true);
+    const Mask refl = diffMask(mOn, mNone, false, 0.005f);
+    const Mask rast = diffMask(rOn, rNone, true, 0.005f);
+    Mask in;
+    in.m.assign(refl.m.size(), 0u);
+    for (size_t i = 0; i < refl.m.size(); ++i)
+        if (refl.m[i] && rast.m[i]) { in.m[i] = 1u; ++in.n; }
+    const Mask core = erode(in, kSize, kSize, 2);
+    const Colour cm = maskMean(mOn, core, false), cRast = maskMean(rOn, core, true),
+                 cOff = maskMean(rOff, core, true), cListOff = maskMean(mListOff, core, false);
+    std::printf("   crate %u px (eroded): reflection (%.4f %.4f %.4f), raster lamps ON (%.4f %.4f %.4f), raster "
+                "lamps OFF (%.4f %.4f %.4f), reflection with the list OFF (%.4f %.4f %.4f); %llu records, %llu dropped\n",
+                core.n, cm.r, cm.g, cm.b, cRast.r, cRast.g, cRast.b, cOff.r, cOff.g, cOff.b, cListOff.r, cListOff.g,
+                cListOff.b, st.hitRecords, st.hitDropped);
+    CHECK_MSG(st.hitRecords > 0 && st.hitDropped == 0, "the mover's hits are records (%llu, %llu dropped)",
+              st.hitRecords, st.hitDropped);
+    CHECK_MSG(cRast.r > 1.1f * cRast.g,
+              "the red SPOT lights the crate: the lamps-ON raster is red-shifted (r %.4f against g %.4f) — the "
+              "world list's spot branch (the cone, the falloff) is exercised", cRast.r, cRast.g);
+    CHECK_MSG(core.n > 200 && relDiff(cRast, cOff) > 0.5f,
+              "the two lamps light the crate's raster (lamps on vs off: %.0f %% in the worst channel)",
+              100.0f * relDiff(cRast, cOff));
+    // THE REGISTRATION: the traced mirror's picture sits up to a pixel off the
+    // raster's (arm (d) measured half a row on its floor), and this face, lit by two
+    // lamps 1.4-2 m away through their range fade and a spot's cone, changes its
+    // mean by 5-12 % per pixel of shift (measured: the raster's mean over the shared
+    // mask moved one pixel). So the colour compared is each picture's mean over ITS
+    // OWN silhouette (each eroded by one pixel) — a registration moves the content
+    // and the silhouette together — against arm (a)'s 2 %. The shared eroded mask's
+    // number (3.77 % when measured) is PRINTED, not asserted, so the drift stays
+    // visible: the face's mean moves 5-12 % per pixel of sub-pixel shift under two
+    // close lamps, which is why the shared mask cannot carry the 2 % bar.
+    const Mask reflOwn = erode(refl, kSize, kSize, 1), rastOwn = erode(rast, kSize, kSize, 1);
+    const Colour cmOwn = maskMean(mOn, reflOwn, false), crOwn = maskMean(rOn, rastOwn, true);
+    std::printf("   own silhouettes: reflection %u px (%.4f %.4f %.4f), raster %u px (%.4f %.4f %.4f)\n", reflOwn.n,
+                cmOwn.r, cmOwn.g, cmOwn.b, rastOwn.n, crOwn.r, crOwn.g, crOwn.b);
+    CHECK_MSG(core.n > 200 && relDiff(cmOwn, crOwn) < 0.02f,
+              "the off-screen hit's REFLECTION is the lamps-ON raster within %.2f %% over each picture's own "
+              "silhouette (bar 2 %%, arm (a)'s; the shared eroded mask %.2f %%): the world light list lights a hit "
+              "no cell covers", 100.0f * relDiff(cmOwn, crOwn), 100.0f * relDiff(cm, cRast));
+    CHECK_MSG(core.n > 200 && relDiff(cListOff, cOff) < 0.02f,
+              "with the list OFF the reflection is the lamps-OFF raster within %.2f %% — the lamps were missing "
+              "before the lane", 100.0f * relDiff(cListOff, cOff));
+    return 0;
+}
+
+// ---------------------------------------------------------------------------
+// `--planar` (gi.hit_planar, D3-HIT-SHADE-2): A PLANAR MIRROR SEEN IN A RAY-TRACED
+// MIRROR. The mirror fixture's traced wall faces the camera; behind the camera a
+// PLANAR reflector B (a metal mirror slab, turned 30 degrees about Y) reflects an
+// emissive panel P standing off to the side. The raster from the reflected camera
+// is the TRUE picture: B shows P through its planar render (a second scene render
+// from the mirrored camera). A ray that hits B is a second bounce away from P, and
+// one more ray per such hit is not paid: B's hits DECODE (the planar flag,
+// jahHitAlwaysDecodes) — its own material with the specular environment the pass
+// holds (the voxel cone along the hit's reflection vector, the sky as its escape).
+// So B in the traced mirror shows P as the VOXELS hold it: blurred to the voxel
+// lattice, its radiance through the cone's read. The error against the true
+// picture is PRINTED and bounded by the engine's own cone picture of B (the screen
+// with no planar render and no rays — the same term); and the same slab NOT
+// marked a reflector (the
+// caches answer it: a DIFFUSE store, a metal mirror's kD is 0) shows the picture
+// before the lane — black.
+// HIT-PLANAR-GAP-1 (D8): the tier's chain is CAMERA-RELATIVE, so the two "same term"
+// pictures read DIFFERENT voxels — the traced mirror's camera (kCam, 6 m from B)
+// reads B and P out of High's 10 m cascade (0.156 m cells), the reflected camera
+// (kCamR, 21.7 m from B) out of its 60 m cascade (1.875 m cells). `pinnedChain`
+// builds ONE cascade that holds both cameras and B and P and cannot re-centre
+// between the arms (a step of a thousand cells), so both pictures read the SAME
+// voxels through the same cone and the gap left between them is the decode's own.
+// Its own process (`--planar-pinned`, not a row): a second scene in one process
+// measured nothing (B's mask came back empty).
+// THE FINDING (HIT-PLANAR-GAP-1, D8, spikes/d8-photon-debts-1/hit-planar*.log): on the
+// tier's chain the hit reads 50.7 % off the true picture and the screen's cone 61.3 %
+// — the 10.6-point gap. With ONE pinned 24 m cascade (0.375 m cells) both read the
+// same voxels: the hit 70.2 %, the screen 74.8 % — 4.6 points, the other way, both
+// worse (a coarser cell than the traced camera's 0.156 m). So the gap is the
+// camera-relative chain reading B and P from two different cascades (the traced
+// camera 6 m from B, the reflected one 21.7 m), not a defect in either reader; the
+// 4.6 points left are the decode's cone origin (the hit's reconstructed point vs the
+// screen's pixel) at a coarse cell. Neither picture is wrong: the bar stays the
+// engine's own cone (+ 2 %).
+static int planarMain(Engine *e, bool pinnedChain)
+{
+    View *view = e->createOffscreenView(pinnedChain ? "hitplanarpin" : "hitplanar", kSize, kSize,
+                                        Colour(0, 0, 0));
+    Scene *s = e->createScene(pinnedChain ? "hitplanarpin" : "hitplanar");
+    view->setScene(s);
+    view->setOffscreenContract(OffscreenContract::StillPicture);
+    view->setShadows(true);
+    s->setAmbient(Colour(0.05f, 0.05f, 0.06f), Colour(0.04f, 0.04f, 0.04f));
+    const MeshId cube = s->createMesh(enginetest::unitCubeMesh());
+    PbrParams mirrorP;
+    mirrorP.albedo = Colour(1, 1, 1);
+    mirrorP.metalness = 1.0f;
+    mirrorP.roughness = 0.0f;
+    const NodeId wall = s->createNode();
+    s->attachMesh(wall, cube, s->createPbrMaterial(mirrorP));
+    enginetest::setNodeScale(s, wall, Vec3(14.0f, 9.0f, 0.3f));
+    enginetest::setNodePosition(s, wall, Vec3(0.0f, 1.0f, kMirrorZ + 0.15f));
+    // B: the planar mirror, its face normal (0.5, 0, 0.866) — a ray arriving along
+    // -Z leaves it along (0.866, 0, 0.5), towards P.
+    const NodeId b = s->createNode();
+    s->attachMesh(b, cube, s->createPbrMaterial(mirrorP));
+    const float kHalf = 0.5f * 30.0f * 3.14159265f / 180.0f;
+    s->setNodeTransform(b, Vec3(-1.2f, 1.0f, -9.0f), Quat(0.0f, std::sin(kHalf), 0.0f, std::cos(kHalf)),
+                        Vec3(3.0f, 2.4f, 0.1f));
+    // P: an emissive panel facing -X (its light is its own: no lamp, no shadow).
+    const NodeId pn = s->createNode();
+    {
+        MeshData md = enginetest::unitCubeMesh();
+        md.cards = enginetest::boxCards(0.5f);
+        s->attachMesh(pn, s->createMesh(md), matte(s, Colour(0.1f, 0.1f, 0.1f), Colour(2.0f, 0.6f, 0.25f)));
+    }
+    s->setNodeTransform(pn, Vec3(4.1f, 1.0f, -6.5f), Quat(), Vec3(0.2f, 3.0f, 5.0f));
+    GiParams gi;
+    gi.mode = GiMode::Vct;
+    gi.quality = GiQuality::High;
+    gi.numBounces = 1;
+    gi.gather = GiToggle::Off;
+    gi.cards = true;
+    gi.cardResidencyRadius = 40.0f;
+    if (pinnedChain) {
+        gi.cascadeCount = 1;
+        gi.cascadeSet[0] = GiParams::GiCascadeDesc{ 24.0f, 128, 1000.0f };
+    }
+    s->setGlobalIllumination(gi);
+    PlanarReflectionParams pr;
+    pr.budget = 1;
+    pr.resolution = 1024;
+    pr.hdr = true;
+    CHECK(s->setPlanarReflections(pr), "the planar budget applies");
+    CHECK(s->setNodePlanarReflector(b, true), "B is a planar reflector");
+    PostFxDesc fx;
+    fx.allowOffscreen = true;
+    fx.ssr = 2;
+    fx.hdrReadback = true;
+    view->setPostFx(fx);
+    const auto shot = [&](bool mirrorArm) {
+        s->setNodeVisible(wall, mirrorArm);
+        if (mirrorArm) enginetest::testCameraLookAt(view, kCam, Vec3(0.0f, 1.0f, kMirrorZ));
+        else enginetest::testCameraLookAt(view, kCamR, Vec3(0.0f, 1.0f, -20.0f));
+        render(e, 60);
+        ImageF img;
+        view->readPixelsHdr(img);
+        return img;
+    };
+    std::printf("\n== gi.hit_planar: a planar mirror seen in a traced mirror (mirror-in-mirror)%s ==\n",
+                pinnedChain ? ", ONE PINNED CASCADE" : ", the tier's chain");
+    s->setNodeVisible(b, false);
+    const ImageF mNone = shot(true), rNone = shot(false);
+    s->setNodeVisible(b, true);
+    const ImageF mB = shot(true);
+    const RayQueryStatus st = s->rayQueryStatus();
+    const ImageF rB = shot(false);
+    s->setNodePlanarReflector(b, false);
+    const ImageF mBefore = shot(true);
+    // THE ENGINE'S OWN CONE PICTURE OF B: the raster with B NOT a reflector and no
+    // rays — the screen reads B's specular from the same voxel cone the decode does.
+    PostFxDesc noRays = fx;
+    noRays.ssr = 0;
+    view->setPostFx(noRays);
+    const ImageF rCone = shot(false);
+    view->setPostFx(fx);
+    s->setNodePlanarReflector(b, true);
+    // B's silhouette: where B changes the raster AND the traced mirror (the slab is
+    // a mirror of P, so either picture differs wherever B stands).
+    const Mask refl = diffMask(mB, mNone, false, 0.002f);
+    const Mask rast = diffMask(rB, rNone, true, 0.002f);
+    Mask in;
+    in.m.assign(refl.m.size(), 0u);
+    for (size_t i = 0; i < refl.m.size(); ++i)
+        if (refl.m[i] && rast.m[i]) { in.m[i] = 1u; ++in.n; }
+    // THE PINNED ARM'S MASK: with one coarse cascade the traced mirror's B differs from
+    // the no-B picture on a fraction of the silhouette (printed), so its region is the
+    // RASTER's silhouette of B — the same pixels in both pictures by the mirror's
+    // symmetry (the traced camera is the raster camera reflected in the wall).
+    Mask rastOnly;
+    rastOnly.m = rast.m;
+    rastOnly.n = rast.n;
+    const Mask core = erode(pinnedChain ? rastOnly : in, kSize, kSize, 3);
+    const Colour cm = maskMean(mB, core, false), cr = maskMean(rB, core, true), cb = maskMean(mBefore, core, false);
+    const auto lum = [](const Colour &c) { return 0.2126f * c.r + 0.7152f * c.g + 0.0722f * c.b; };
+    const float err = std::fabs(lum(cm) - lum(cr)) / std::max(lum(cr), 1e-6f);
+    const Colour cc = maskMean(rCone, core, true);
+    const float coneErr = std::fabs(lum(cc) - lum(cr)) / std::max(lum(cr), 1e-6f);
+    std::printf("   the SCREEN's cone picture of B (no planar render, no rays): (%.4f %.4f %.4f), %.1f %% off the true "
+                "picture\n", cc.r, cc.g, cc.b, 100.0f * coneErr);
+    std::printf("   B %u px (eroded; refl %u, raster %u): traced mirror (%.4f %.4f %.4f), TRUE (the planar raster) "
+                "(%.4f %.4f %.4f), before (the caches) (%.4f %.4f %.4f); luminance error %.1f %%; %llu records\n",
+                core.n, refl.n, rast.n, cm.r, cm.g, cm.b, cr.r, cr.g, cr.b, cb.r, cb.g, cb.b, 100.0f * err,
+                st.hitRecords);
+    CHECK_MSG(core.n > 300, "B's silhouette is seen in both pictures (%u px)", core.n);
+    CHECK_MSG(st.hitRecords > 0, "B's hits are decode records (%llu)", st.hitRecords);
+    CHECK_MSG(lum(cr) > 0.1f && lum(cb) < 0.1f * lum(cr),
+              "BEFORE (B answered by the caches, a diffuse store): black — %.4f against the true %.4f", lum(cb),
+              lum(cr));
+    // THE BAR IS THE ENGINE'S OWN CONE: B at a hit is shaded by the same specular
+    // environment term the screen reads for B without its planar render — the hit
+    // may not be further from the true picture than that picture is (plus the
+    // mirror composite's 2 %, arm (a)'s). What remains is the CONE's error (the
+    // voxel store's read of an emitter in a mirror lobe), printed above: the physics
+    // of a hit on a mirror is one more bounce, which this lane does not trace.
+    CHECK_MSG(err <= coneErr + 0.02f,
+              "B in the traced mirror is %.1f %% off the true picture — no further than the engine's own cone "
+              "picture of B (%.1f %%, bar + 2 %%)", 100.0f * err, 100.0f * coneErr);
+    CHECK_MSG(lum(cm) > 0.25f * lum(cr) && relDiff(cm, cc) < 1.0f,
+              "B is neither black nor sky-only: %.0f %% of the true luminance, P's colour (worst channel %.0f %% "
+              "from the cone picture's)", 100.0f * lum(cm) / lum(cr), 100.0f * relDiff(cm, cc));
+    e->destroyView(view);
+    e->destroyScene(s);
+    return 0;
+}
+
+// ---------------------------------------------------------------------------
+// `--voxel-view` (gi.hit_voxel_view, D3-HIT-SHADE-2): THE VIEW TERM OF A VOXEL-
+// ANSWERED HIT. HlmsPbs's diffuse is the normalised Disney lobe, VIEW-DEPENDENT: at a
+// grazing eye it is up to 1.6-1.8x its head-on value. A CARD stores the head-on
+// value and its read restores the lobe at the ray's own V from the texel's stored
+// mean light direction (PHOTON-CARDS-5, jah_card_view.glsl). A VOXEL stores the lobe
+// integrated over every view — cos(L) x the directional albedo A(cos L, r) x kD x E
+// (LightInjection, PHOTON-WRITER-1) — and NO light direction: its six anisotropic
+// halves are the light reaching faces looking along each half-axis (the SURFACE's
+// orientation), never the direction the light came from, so no direction can be
+// read back from them, and a sun proxy would be wrong wherever a lamp or the bounce
+// lights the voxel. THE DECISION (the honest note): a voxel hit's diffuse is the
+// view MEAN; its specular is absent (the voxels, like the cards, are a diffuse
+// store — Lumen's rule). This row PINS that physics and measures the gap on the
+// SAME hits: a sun-lit matte floor seen at grazing in the mirror, answered once by
+// its cards and once by the voxels (cards off), each against the TRUE picture (the
+// grazing raster from the reflected camera) and against its closed form: the card's
+// is the lobe at V (exact for one light), the voxel's the view mean cos(L) A(cos L).
+static int voxelViewMain(Engine *e)
+{
+    View *view = e->createOffscreenView("hitvoxview", kSize, kSize, Colour(0, 0, 0));
+    Scene *s = e->createScene("hitvoxview");
+    view->setScene(s);
+    view->setOffscreenContract(OffscreenContract::StillPicture);
+    view->setShadows(true);
+    // NO AMBIENT: the sky's ambient is added per pixel and never injected into the
+    // voxels — the rows compare the SUN's light, which both stores hold.
+    s->setAmbient(Colour(0.0f, 0.0f, 0.0f), Colour(0.0f, 0.0f, 0.0f));
+    const MeshId cube = s->createMesh(enginetest::unitCubeMesh());
+    const NodeId wall = s->createNode();
+    {
+        PbrParams wp;
+        wp.albedo = Colour(1, 1, 1);
+        wp.metalness = 1.0f;
+        wp.roughness = 0.0f;
+        s->attachMesh(wall, cube, s->createPbrMaterial(wp));
+    }
+    enginetest::setNodeScale(s, wall, Vec3(14.0f, 9.0f, 0.3f));
+    enginetest::setNodePosition(s, wall, Vec3(0.0f, 1.0f, kMirrorZ + 0.15f));
+    const NodeId floorN = s->createNode();
+    {
+        MeshData md = enginetest::unitCubeMesh();
+        md.cards = enginetest::boxCards(0.5f);
+        s->attachMesh(floorN, s->createMesh(md), matte(s, Colour(kFloorAlbedo, kFloorAlbedo, kFloorAlbedo)));
+    }
+    s->setNodeTransform(floorN, Vec3(0.0f, -0.55f, -4.0f), Quat(), Vec3(30.0f, 0.1f, 30.0f));
+    // The sun from BEHIND the reflected camera (it travels towards -Z): the grazing
+    // mirror view looks back towards it, where the lobe's retro-reflection is largest.
+    const Vec3 sunDir(-0.25f, -1.0f, -1.05f);
+    enginetest::addDirectionalLight(s, sunDir, 3.0f);
+    GiParams gi;
+    gi.mode = GiMode::Vct;
+    gi.quality = GiQuality::High;
+    gi.numBounces = 1;
+    gi.gather = GiToggle::Off;
+    gi.cards = true;
+    gi.cardResidencyRadius = 40.0f;
+    PostFxDesc fx;
+    fx.allowOffscreen = true;
+    fx.ssr = 2;
+    fx.hdrReadback = true;
+    view->setPostFx(fx);
+    const auto shot = [&](bool mirrorArm) {
+        s->setNodeVisible(wall, mirrorArm);
+        if (mirrorArm) enginetest::testCameraLookAt(view, kCam, Vec3(0.0f, 1.0f, kMirrorZ));
+        else enginetest::testCameraLookAt(view, kCamR, Vec3(0.0f, 1.0f, -20.0f));
+        render(e, 60);
+        ImageF img;
+        view->readPixelsHdr(img);
+        return img;
+    };
+    std::printf("\n== gi.hit_voxel_view: the view term of a card hit and a voxel hit, on the same hits ==\n");
+    s->setGlobalIllumination(gi);
+    s->setNodeVisible(floorN, false);
+    const ImageF mNone = shot(true), rNone = shot(false);
+    s->setNodeVisible(floorN, true);
+    const ImageF mCard = shot(true), rFloor = shot(false);
+    const unsigned long long cardRecords = s->rayQueryStatus().hitRecords;
+    GiParams noCards = gi;
+    noCards.cards = false;
+    s->setGlobalIllumination(noCards);
+    const ImageF mVox = shot(true);
+    const RayQueryStatus stVox = s->rayQueryStatus();
+    // The floor in both pictures, kept to the rows whose REFLECTION is the floor
+    // behind the camera (the mirror's rows; the direct floor below them is the
+    // same picture in both mirror shots and differs from the raster's frame).
+    const Mask refl = diffMask(mCard, mNone, false, 0.002f);
+    const Mask rast = diffMask(rFloor, rNone, true, 0.002f);
+    Mask in;
+    in.m.assign(refl.m.size(), 0u);
+    // THE PREDICTION, per pixel: the raster camera's ray to the floor's top, V back
+    // up it; the lobe (arm (d)'s closed form) at V and the view mean.
+    const double kPiD = 3.14159265358979323846, rough = kMatteRough;
+    double sunL[3] = { 0.25, 1.0, 1.05 };
+    {
+        const double l = std::sqrt(sunL[0] * sunL[0] + sunL[1] * sunL[1] + sunL[2] * sunL[2]);
+        for (double &c : sunL) c /= l;
+    }
+    const auto lobe = [rough](const double L[3], const double V[3]) {
+        double H[3] = { L[0] + V[0], L[1] + V[1], L[2] + V[2] };
+        const double hl = std::sqrt(H[0] * H[0] + H[1] * H[1] + H[2] * H[2]);
+        const double VdotH = (V[0] * H[0] + V[1] * H[1] + V[2] * H[2]) / hl;
+        const double NdotL = std::max(0.0, L[1]), NdotV = std::max(1e-4, V[1]);
+        const double fd90 = 0.5 * rough + 2.0 * rough * VdotH * VdotH;
+        return NdotL * (1.0 + (fd90 - 1.0) * std::pow(1.0 - NdotL, 5.0)) *
+               (1.0 + (fd90 - 1.0) * std::pow(1.0 - NdotV, 5.0)) * (1.0 + (1.0 / 1.51 - 1.0) * rough);
+    };
+    const double viewMean = sunL[1] * enginetest::disneyDiffuseAlbedo(sunL[1], rough);
+    const double eye[3] = { kCamR.x, kCamR.y, kCamR.z };
+    double f[3] = { 0.0 - eye[0], 1.0 - eye[1], -20.0 - eye[2] };
+    {
+        const double l = std::sqrt(f[0] * f[0] + f[1] * f[1] + f[2] * f[2]);
+        for (double &c : f) c /= l;
+    }
+    double r[3] = { -f[2], 0.0, f[0] };
+    {
+        const double l = std::sqrt(r[0] * r[0] + r[2] * r[2]);
+        r[0] /= l; r[2] /= l;
+    }
+    const double u[3] = { r[1] * f[2] - r[2] * f[1], r[2] * f[0] - r[0] * f[2], r[0] * f[1] - r[1] * f[0] };
+    const double th = std::tan(0.5 * 45.0 * kPiD / 180.0);
+    double sumExact = 0.0, sumMean = 0.0, minNdotV = 1.0, maxNdotV = 0.0;
+    for (unsigned y = 0; y < kSize; ++y)
+        for (unsigned x = 0; x < kSize; ++x) {
+            const size_t i = size_t(y) * kSize + x;
+            if (!(refl.m[i] && rast.m[i])) continue;
+            const unsigned rx = kSize - 1u - x;
+            const double ndx = (2.0 * (double(rx) + 0.5) / kSize - 1.0) * th;
+            const double ndy = (1.0 - 2.0 * (double(y) + 0.5) / kSize) * th;
+            double d[3];
+            for (int k = 0; k < 3; ++k) d[k] = f[k] + ndx * r[k] + ndy * u[k];
+            if (!(d[1] < 0.0)) continue;
+            const double t = (-0.5 - eye[1]) / d[1];
+            const double P[3] = { eye[0] + t * d[0], -0.5, eye[2] + t * d[2] };
+            // the floor BEHIND the real camera only: the mirror's reflection of it
+            if (!(P[2] < -3.2) || std::fabs(P[0]) > 14.0) continue;
+            double V[3] = { eye[0] - P[0], eye[1] - P[1], eye[2] - P[2] };
+            const double l = std::sqrt(V[0] * V[0] + V[1] * V[1] + V[2] * V[2]);
+            for (double &c : V) c /= l;
+            in.m[i] = 1u;
+            ++in.n;
+            sumExact += lobe(sunL, V);
+            sumMean += viewMean;
+            minNdotV = std::min(minNdotV, V[1]);
+            maxNdotV = std::max(maxNdotV, V[1]);
+        }
+    const Mask core = erode(in, kSize, kSize, 1);
+    const Colour cCard = maskMean(mCard, core, false), cVox = maskMean(mVox, core, false),
+                 cTrue = maskMean(rFloor, core, true);
+    const double predVox = sumExact > 0.0 ? sumMean / sumExact : 1.0;
+    const auto lum = [](const Colour &c) { return 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b; };
+    const double card = lum(cCard) / lum(cTrue), vox = lum(cVox) / lum(cTrue);
+    std::printf("   %u px of floor seen at N.V %.3f-%.3f in the mirror: TRUE (the grazing raster) %.4f; the CARD's "
+                "answer %.4f (%.3f of true, predicted 1: the view term restored); the VOXELS' %.4f (%.3f of true, "
+                "predicted %.3f: the view mean, no view term); card / voxel %.3f; records %llu / %llu\n",
+                core.n, minNdotV, maxNdotV, lum(cTrue), lum(cCard), card, lum(cVox), vox, predVox,
+                lum(cCard) / std::max(lum(cVox), 1e-9), cardRecords, stVox.hitRecords);
+    CHECK_MSG(core.n > 500, "the floor is seen at grazing in the mirror (%u px)", core.n);
+    CHECK_MSG(stVox.hitRecords == 0ull, "with the cards off the floor's hits are the VOXELS' (%llu records)",
+              stVox.hitRecords);
+    // THE BARS: the card's is arm (d)'s one-light case (the store's step, the
+    // octahedral half-cell, the mirror's half-row registration: 3 %); the voxels'
+    // is gi.hit_voxel's 5 % (the store's tolerance) — each against its OWN closed
+    // form, so a change that adds a view term to the voxel answer, or loses the
+    // card's, reds here and says which.
+    CHECK_MSG(std::fabs(card - 1.0) < 0.03, "the CARD's answer carries the view term: %.3f of the true picture "
+              "(bar 3 %%)", card);
+    CHECK_MSG(std::fabs(vox / predVox - 1.0) < 0.05,
+              "the VOXELS' answer is the view MEAN: %.3f of the true picture against the closed form's %.3f "
+              "(%.1f %% apart, bar 5 %%) — the view term a voxel cannot carry (it stores no light direction)",
+              vox, predVox, 100.0 * std::fabs(vox / predVox - 1.0));
+    return 0;
+}
+
+// ---------------------------------------------------------------------------
 // `--cost`: THE HIT DECODE AT 1920x1080, paired arms in ONE process — High
 // (ssr 1: the half-resolution trace) and Epic (ssr 2 and the Epic gather row),
 // with 0 / 1 / 30 MOVERS in front of a glossy floor (a mover's hits always
@@ -1327,13 +1815,40 @@ static int costMain(Engine *e)
         enginetest::setNodePosition(s, n, Vec3(-7.0f + float(i % 10) * 1.6f, 0.5f, -2.0f - float(i / 10) * 2.5f));
         movers.push_back(n);
     }
+    // SIXTEEN POINT LAMPS (D3-HIT-SHADE-2): eight over the movers (on screen, the
+    // clustered list's) and eight behind the camera (the world list's), so the
+    // light loops the variants below compare have lights to loop.
+    for (int i = 0; i < 16; ++i) {
+        const NodeId l = s->createNode();
+        const bool behind = i >= 8;
+        enginetest::setNodePosition(s, l, Vec3(-7.0f + float(i % 8) * 2.0f, 1.5f, behind ? 12.0f : -4.0f));
+        LightDesc ld;
+        ld.type = LightType::Point;
+        ld.colour = Colour(1.0f, 0.9f, 0.8f);
+        ld.intensity = 1.0f;
+        ld.range = 6.0f;
+        ld.castShadows = false;
+        s->setLight(l, ld);
+    }
     enginetest::testCameraLookAt(view, Vec3(0.0f, 3.0f, 9.0f), Vec3(0.0f, 0.3f, -3.0f));
     e->setFrameMonitor(MonitorLevel::Review);
-    struct Arm { const char *name; bool epic; int movers; };
-    const Arm arms[] = { { "High, 0 movers", false, 0 },  { "High, 1 mover", false, 1 },
-                         { "High, 30 movers", false, 30 }, { "Epic, 0 movers", true, 0 },
-                         { "Epic, 1 mover", true, 1 },    { "Epic, 30 movers", true, 30 } };
-    const int kArms = int(sizeof(arms) / sizeof(arms[0]));
+    // THE VARIANTS (the measurement doors, HlmsAtom::preparePassHash): the product
+    // (the clustered cell on screen, the world list off it); the world list OFF
+    // (the picture before D3-HIT-SHADE-2); the world list for EVERY hit and no cell
+    // (the "one list" arm); the VCT specular cone compiled out of the hit decode.
+    struct Variant { const char *name, *world, *spec; };
+    const Variant variants[] = { { "product", nullptr, nullptr },
+                                 { "world list off", "off", nullptr },
+                                 { "one list (world, no cell)", "all", nullptr },
+                                 { "no VCT specular cone", nullptr, "0" } };
+    struct Arm { std::string name; bool epic; int movers; const Variant *v; };
+    std::vector<Arm> arms;
+    for (const Variant &v : variants)
+        for (int t = 0; t < 2; ++t)
+            for (int m : { 0, 1, 30 })
+                arms.push_back({ std::string(t ? "Epic" : "High") + ", " + std::to_string(m) + " movers, " + v.name,
+                                 t == 1, m, &v });
+    const int kArms = int(arms.size());
     std::vector<double> frameSum(kArms, 0.0), decodeSum(kArms, 0.0), compSum(kArms, 0.0);
     std::vector<int> frameN(kArms, 0), decodeN(kArms, 0), compN(kArms, 0);
     std::vector<unsigned long long> records(kArms, 0ull);
@@ -1349,6 +1864,10 @@ static int costMain(Engine *e)
             fx.ssr = arms[a].epic ? 2 : 1;
             view->setPostFx(fx);
             for (int i = 0; i < 30; ++i) s->setNodeVisible(movers[size_t(i)], i < arms[a].movers);
+            if (arms[a].v->world) setenv("JAHSHAKA_HIT_WORLD_LIGHTS", arms[a].v->world, 1);
+            else unsetenv("JAHSHAKA_HIT_WORLD_LIGHTS");
+            if (arms[a].v->spec) setenv("JAHSHAKA_HIT_VCT_SPECULAR", arms[a].v->spec, 1);
+            else unsetenv("JAHSHAKA_HIT_VCT_SPECULAR");
             render(e, 40);
             std::vector<FrameRecord> drop;
             e->takeFrameRecords(drop);
@@ -1366,11 +1885,105 @@ static int costMain(Engine *e)
         }
     }
     e->setFrameMonitor(MonitorLevel::Off);
-    std::printf("    arm                 frame GPU ms   decode GPU ms   write-back GPU ms   records   (frames)\n");
-    for (int a = 0; a < kArms; ++a)
-        std::printf("    %-18s %12.4f   %13.4f   %17.4f   %7llu   (%d / %d / %d)\n", arms[a].name,
-                    frameN[a] ? frameSum[a] / frameN[a] : -1.0, decodeN[a] ? decodeSum[a] / decodeN[a] : -1.0,
-                    compN[a] ? compSum[a] / compN[a] : -1.0, records[size_t(a)], frameN[a], decodeN[a], compN[a]);
+    unsetenv("JAHSHAKA_HIT_WORLD_LIGHTS");
+    unsetenv("JAHSHAKA_HIT_VCT_SPECULAR");
+    std::printf("    arm                                          frame GPU ms   decode GPU ms   write-back GPU ms   "
+                "records   decode ns/record   (frames)\n");
+    for (int a = 0; a < kArms; ++a) {
+        const double dec = decodeN[a] ? decodeSum[a] / decodeN[a] : -1.0;
+        std::printf("    %-44s %12.4f   %13.4f   %17.4f   %7llu   %16.2f   (%d / %d / %d)\n", arms[a].name.c_str(),
+                    frameN[a] ? frameSum[a] / frameN[a] : -1.0, dec, compN[a] ? compSum[a] / compN[a] : -1.0,
+                    records[size_t(a)], records[size_t(a)] && dec >= 0.0 ? 1e6 * dec / double(records[size_t(a)]) : -1.0,
+                    frameN[a], decodeN[a], compN[a]);
+    }
+    return 0;
+}
+
+// `--cost-lamps` (D3-HIT-SHADE-2, by hand under scripts/gpu-exclusive.sh with locked
+// clocks): THE WORLD LIST'S SCAN. Every hit with no cell walks EVERY world light
+// (the cap counts only the lights that shade), so the decode grows with the scene's
+// lamp count. The --cost fixture (High, 30 movers) with 200 point lamps behind the
+// camera (off screen: the world list's), paired in ONE process by intensity — 16 lit
+// (the rest at 0 leave the list) against 200 — in the product and in the "one list"
+// door (every hit scans, the worst case of hits off screen).
+static int costLampsMain(Engine *e)
+{
+    View *view = e->createOffscreenView("hitcostl", 1920, 1080, Colour(0.45f, 0.55f, 0.70f));
+    view->setOffscreenContract(OffscreenContract::StillPicture);
+    Scene *s = e->createScene("hitcostl");
+    if (!view || !s || !view->setScene(s)) { std::printf("FAIL: view/scene\n"); return 1; }
+    view->setShadows(true);
+    const MeshId cube = s->createMesh(enginetest::unitCubeMesh());
+    const NodeId floorN = s->createNode();
+    {
+        PbrParams p;
+        p.albedo = Colour(0.5f, 0.5f, 0.5f);
+        p.metalness = 1.0f;
+        p.roughness = 0.1f;
+        s->attachMesh(floorN, cube, s->createPbrMaterial(p));
+    }
+    s->setNodeTransform(floorN, Vec3(0.0f, -0.5f, 0.0f), Quat(), Vec3(40.0f, 1.0f, 40.0f));
+    enginetest::addDirectionalLight(s, Vec3(-0.4f, -1.0f, 0.3f), 3.0f);
+    for (int i = 0; i < 30; ++i) {
+        const NodeId n = s->createNode();
+        s->setNodeMovable(n, true);
+        s->attachMesh(n, cube, matte(s, Colour(0.2f + 0.02f * float(i), 0.5f, 0.8f - 0.02f * float(i))));
+        enginetest::setNodePosition(s, n, Vec3(-7.0f + float(i % 10) * 1.6f, 0.5f, -2.0f - float(i / 10) * 2.5f));
+    }
+    std::vector<NodeId> lamps;
+    LightDesc ld;
+    ld.type = LightType::Point;
+    ld.colour = Colour(1.0f, 0.9f, 0.8f);
+    ld.range = 4.0f;
+    ld.castShadows = false;
+    for (int i = 0; i < 200; ++i) {
+        const NodeId l = s->createNode();
+        enginetest::setNodePosition(s, l, Vec3(-10.0f + float(i % 20), 1.5f, 14.0f + float(i / 20)));
+        lamps.push_back(l);
+    }
+    const auto lit = [&](int n) {
+        for (int i = 0; i < 200; ++i) {
+            ld.intensity = i < n ? 1.0f : 0.0f;
+            s->setLight(lamps[size_t(i)], ld);
+        }
+    };
+    enginetest::testCameraLookAt(view, Vec3(0.0f, 3.0f, 9.0f), Vec3(0.0f, 0.3f, -3.0f));
+    GiParams gi;
+    gi.mode = GiMode::Vct;
+    gi.quality = GiQuality::High;
+    gi.numBounces = 1;
+    s->setGlobalIllumination(gi);
+    PostFxDesc fx;
+    fx.allowOffscreen = true;
+    fx.ssr = 1;
+    view->setPostFx(fx);
+    e->setFrameMonitor(MonitorLevel::Review);
+    struct Arm { const char *name; int lamps; const char *world; };
+    const Arm arms[] = { { "High, 30 movers,  16 lamps, product", 16, nullptr },
+                         { "High, 30 movers, 200 lamps, product", 200, nullptr },
+                         { "High, 30 movers,  16 lamps, one list", 16, "all" },
+                         { "High, 30 movers, 200 lamps, one list", 200, "all" } };
+    double sum[4] = {}; int n[4] = {}; unsigned long long rec[4] = {};
+    for (int round = 0; round < 4; ++round)
+        for (int a = 0; a < 4; ++a) {
+            lit(arms[a].lamps);
+            if (arms[a].world) setenv("JAHSHAKA_HIT_WORLD_LIGHTS", arms[a].world, 1);
+            else unsetenv("JAHSHAKA_HIT_WORLD_LIGHTS");
+            render(e, 40);
+            std::vector<FrameRecord> drop;
+            e->takeFrameRecords(drop);
+            std::vector<FrameRecord> recs;
+            for (int k = 0; k < 8; ++k) { render(e, 1); e->takeFrameRecords(recs); }
+            for (const FrameRecord &r : recs)
+                for (const FramePass &p : r.passes)
+                    if (p.pass == "Jahshaka hit decode" && p.gpuMs >= 0.0f) { sum[a] += p.gpuMs; ++n[a]; }
+            rec[a] = s->rayQueryStatus().hitRecords;
+        }
+    unsetenv("JAHSHAKA_HIT_WORLD_LIGHTS");
+    e->setFrameMonitor(MonitorLevel::Off);
+    for (int a = 0; a < 4; ++a)
+        std::printf("    %-40s decode %.4f ms (%d samples), %llu records\n", arms[a].name, n[a] ? sum[a] / n[a] : -1.0,
+                    n[a], rec[a]);
     return 0;
 }
 
@@ -1381,7 +1994,12 @@ int main(int argc, char **argv)
     cfg.pluginDir = JAHSHAKA_TEST_PLUGIN_DIR;
     cfg.hlmsMediaDir = JAHSHAKA_TEST_MEDIA_DIR;
     const bool cost = argc > 1 && std::strcmp(argv[1], "--cost") == 0;
-    cfg.logFile = cost ? "test-gi-hit-shade-cost-ogre.log" : "test-gi-hit-shade-ogre.log";
+    const bool worldLights = argc > 1 && std::strcmp(argv[1], "--offscreen-lights") == 0;
+    const bool planarPinned = argc > 1 && std::strcmp(argv[1], "--planar-pinned") == 0;
+    const bool planar = planarPinned || (argc > 1 && std::strcmp(argv[1], "--planar") == 0);
+    const bool voxelView = argc > 1 && std::strcmp(argv[1], "--voxel-view") == 0;
+    cfg.logFile = cost ? "test-gi-hit-shade-cost-ogre.log"
+                       : (argc > 1 ? "test-gi-hit-shade-mode-ogre.log" : "test-gi-hit-shade-ogre.log");
     auto engine = Engine::create(cfg, err);
     if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }
     engine->setFixedFrameDelta(1.0f / 60.0f);
@@ -1397,6 +2015,14 @@ int main(int argc, char **argv)
         }
     }
     if (cost) return costMain(e);
+    if (argc > 1 && std::strcmp(argv[1], "--cost-lamps") == 0) return costLampsMain(e);
+    if (worldLights || planar || voxelView) {
+        if (worldLights) offscreenLightsMain(e);
+        else if (planar) planarMain(e, planarPinned);
+        else voxelViewMain(e);
+        std::printf("%s: %d failure(s)\n", failures ? "FAIL" : "PASS", failures);
+        return failures ? 1 : 0;
+    }
     mirrorArms(e);
     gatherArm(e);
     std::printf("%s: %d failure(s)\n", failures ? "FAIL" : "PASS", failures);

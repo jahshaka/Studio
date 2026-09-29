@@ -126,11 +126,11 @@ assert(threw.indexOf("DDGI") >= 0,
        "world.gi still REFUSES an unknown key by name after the phase added two: " + threw);
 assert(world.gi({ ddgi: "auto" }), "world.gi({ddgi:\"auto\"}) — back to the tier's answer");
 editor.frame(4);
-// "auto" is an INPUT spelling, not a stored state: it drops the pin and hands
-// the decision back to the Photon tier, which then WRITES ITS ANSWER THROUGH
-// (services/worldmodes.h — a backing field is always the resolved value). The
-// scene is on Low here, and since PHOTON_SPEC §7 E2 (4) Low's answer is ON —
-// which is the point of the line either way: the TIER decided, not the pin.
+// "auto" drops the pin and hands the decision back: the document holds Auto (-1)
+// and world.get() reads what the ENGINE resolves it to (DDGI-AUTO-1: the quality's
+// fieldDefault, the one resolution). The scene is on Low here, and since
+// PHOTON_SPEC §7 E2 (4) Low's answer is ON — the point of the line either way:
+// the tier's fact decided, not the pin.
 assert(world.get().gi.ddgi === true,
        "auto hands the decision to the tier, and the tier's answer is what the document holds");
 assert(world.giStatus().ifdBound === true, "so the field is bound again — the tier said on");

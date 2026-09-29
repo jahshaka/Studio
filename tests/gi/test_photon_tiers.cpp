@@ -230,20 +230,51 @@ static void testTriState()
                              .arg(worldmodes::photonTierName(t))));
     for (PhotonTier t : kTiers) {
         auto s = iris::Scene::create();
+        s->giMode = iris::GiMode::VCT;   // a voxel technique: the field has something to be fed by
         CHECK(s->giDdgi == -1, "a bare document holds -1 (the tier's)");
         const worldmodes::Row *r = worldmodes::row(QStringLiteral("giDdgi"));
         CHECK(r && r->get(s) == 1, "...and the row resolves it to the tier's answer, ON, never OFF");
         worldmodes::setPhoton(s, true, t);
-        CHECK(s->giDdgi == 0 || s->giDdgi == 1,
-              qPrintable(QStringLiteral("applying %1 writes a concrete 0/1 through: the renderer "
-                                        "never sees -1 from a tier").arg(worldmodes::photonTierName(t))));
+        CHECK(s->giDdgi == -1 && r &&
+                  r->get(s) == (giQualityFacts(GiQuality(int(s->giQuality))).fieldDefault ? 1 : 0),
+              qPrintable(QStringLiteral("applying %1 leaves the field AUTO (-1): the engine's fieldDefault "
+                                        "is the one resolution, no concrete copy of the column is written")
+                             .arg(worldmodes::photonTierName(t))));
+    }
+    // ONE RESOLUTION (DDGI-AUTO-1): the row's Auto is the engine's — the
+    // fieldDefault of the quality the scene RUNS at, its giQuality pinned
+    // against every tier — never the tier column's. The mirror hands the engine
+    // -1 and OgreScene::ddgiWanted resolves it through giQualityFacts(quality);
+    // the row reads the same fact through worldmodes::photonFieldAuto. (Equal
+    // everywhere today — fieldDefault is ON at every quality — so this pins the
+    // PATH: a per-quality default could not part the two.)
+    {
+        const worldmodes::Row *r = worldmodes::row(QStringLiteral("giDdgi"));
+        int checked = 0, agree = 0;
+        for (PhotonTier t : kTiers)
+            for (int q = 0; q < 4; ++q) {
+                auto p = iris::Scene::create();
+                p->giMode = iris::GiMode::VCT;
+                p->giTier = int(t);
+                p->giQuality = iris::GiQuality(q);
+                p->giDdgi = -1;
+                const int engine = giQualityFacts(GiQuality(q)).fieldDefault ? 1 : 0;
+                ++checked;
+                agree += (r && r->get(p) == engine && (worldmodes::photonFieldAuto(p) ? 1 : 0) == engine) ? 1 : 0;
+            }
+        auto off = iris::Scene::create();
+        off->giMode = iris::GiMode::OFF;
+        CHECK(r && r->get(off) == 0, "with Photon OFF the field's Auto reads OFF (the engine builds no field)");
+        CHECK(r && agree == checked,
+              qPrintable(QStringLiteral("a pinned giQuality against every tier: the field row's Auto IS the "
+                                        "engine's fieldDefault of that quality (%1 of %2)").arg(agree).arg(checked)));
     }
     // A pre-tier document (the reader's derive path) resolves its -1 the same way.
     auto d = iris::Scene::create();
     d->giMode = iris::GiMode::VCT;
     d->giQuality = iris::GiQuality::MEDIUM;
     worldmodes::derivePhotonFromDocument(d);
-    CHECK(d->giDdgi == 1, "a derived tier resolves the field's -1 to the table's ON");
+    CHECK(d->giDdgi == -1, "a derived tier leaves the field's -1 AUTO (the engine's fact resolves it)");
 }
 
 static void testEpic()
@@ -268,12 +299,24 @@ static void testProbeBudget()
     std::printf("\n-- 7. the probe grid's VRAM budget --\n");
     using jahshaka::engine::giProbeGridBytes;
     using jahshaka::engine::giProbeGridBudgetCount;
+    // THE SHADOW TERM IS THE NODE'S REAL TEXTURES (PCC-BUDGET-2), handed in by the
+    // engine (OgreEngine::probeShadowNodeBytes). This headless row cannot ask an
+    // engine, so it carries the node at the shipped High shadow settings — a 2048
+    // atlas: the probe node at 512 with four focused maps (a 512 x 2816 D32 atlas)
+    // plus its 256^2 x 6 R32F scratch cube — and gi_verbs.pcc_budget holds the
+    // engine's own figure to the texture manager's on Showroom 2.
+    const unsigned long long kNode = 512ull * 2816ull * 4ull + 6ull * 256ull * 256ull * 4ull;
+    CHECK(kNode == 7340032ull, "the probe shadow node at a 2048 atlas is 7.0 MiB (was counted as 8 MiB)");
     const unsigned long long measured = 838987760ull;   // PHOTON-F12-PCC, Showroom 2 at Epic
-    CHECK(giProbeGridBytes(512u, true, true, 32u) == measured,
-          "the WHOLE grid's arithmetic (array + shadow targets + cubes) is the F12-PCC measurement");
+    CHECK(giProbeGridBytes(512u, true, kNode, 32u) == measured,
+          "the WHOLE grid from its real terms (array + each capture's depth + the node + cubes) is the "
+          "F12-PCC measurement");
+    CHECK(giProbeGridBytes(512u, true, kNode, 32u) - giProbeGridBytes(512u, true, 0ull, 32u) == 32ull * kNode,
+          "the grid counts each shadowed probe's node once, at its real size");
     for (int q = 0; q < 4; ++q) {
         const auto f = giQualityFacts(GiQuality(q));
-        const bool hdr = f.probeHdrDefault, sh = f.probeShadowsDefault;
+        const bool hdr = f.probeHdrDefault;
+        const unsigned long long sh = f.probeShadowsDefault ? kNode : 0ull;
         const unsigned n = giProbeGridBudgetCount(f.probeGridBudgetBytes, f.probeFaceSize, hdr, sh);
         const unsigned long long at = giProbeGridBytes(f.probeFaceSize, hdr, sh, n);
         const unsigned long long over = giProbeGridBytes(f.probeFaceSize, hdr, sh, n + 1u);
@@ -283,7 +326,7 @@ static void testProbeBudget()
         CHECK(at <= f.probeGridBudgetBytes && over > f.probeGridBudgetBytes,
               qPrintable(QStringLiteral("quality %1: the derived count is the most that fits").arg(q)));
     }
-    CHECK(giProbeGridBudgetCount(giQualityFacts(GiQuality::Epic).probeGridBudgetBytes, 512u, true, true) >= 32u,
+    CHECK(giProbeGridBudgetCount(giQualityFacts(GiQuality::Epic).probeGridBudgetBytes, 512u, true, kNode) >= 32u,
           "Epic's budget holds the measured 32-probe Showroom grid");
 }
 

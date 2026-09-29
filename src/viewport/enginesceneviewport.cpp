@@ -2824,6 +2824,9 @@ IEditorViewport::GiStatusInfo EngineSceneViewport::giStatus() const
         out.rayQuery.reflect      = rq.reflect;
         out.rayQuery.reflectRays  = rq.reflectRays;
         out.rayQuery.reflectMs    = rq.reflectMs;
+        out.rayQuery.hitRecords   = quint64(rq.hitRecords);
+        out.rayQuery.hitDropped   = quint64(rq.hitDropped);
+        out.rayQuery.hitCapacity  = quint64(rq.hitCapacity);
     }
     // THE SCREEN-PROBE GATHER (SCREEN_PROBE_GATHER_SPEC phase 1) — a member of
     // GiStatus, unlike the tier above it: it IS global illumination.

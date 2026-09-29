@@ -356,6 +356,12 @@ set_tests_properties(gi.ddgi_ambient PROPERTIES TIMEOUT 120 LABELS "engine")
 # Reads 12/255 today (the room's far corner lies outside cascade 0's box - the field's volume - and
 # the cone reader alone leaks 4-9/255 there at every cell size); a photon-target row until the
 # reader's residual or a field over the chain closes it. Prints the cones-only table.
+# LOCATED (SEALED-ROOM-CHAIN-1, D8; test_gi_ddgi_ambient --sealed-classes, not a row): the 12/255
+# at the wall pose is ALL SPECULAR — the same room with the walls' F0 = 0 reads 0/255 there (the
+# field carries the diffuse); the diffuse cone reader alone (field off, F0 = 0) keeps 3-4/255
+# (5 with the specular). The residual is the rough lobe's sky share (roughness 0.9: the occlusion
+# march capped at tan 1 along the reflection, Vct_piece_ps.any), not one of the diffuse reader's
+# VOXEL-5 classes; the target stays 12 vs 2 until the specular occlusion lane.
 jah_gpu_row(gi.sealed_room_chain_target CLASS engine COMMAND test_gi_ddgi_ambient --sealed-chain
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.sealed_room_chain_target PROPERTIES TIMEOUT 300 LABELS "engine;photon-target")
@@ -1197,6 +1203,27 @@ set_tests_properties(gi.stream_edit PROPERTIES TIMEOUT 120 LABELS "engine" RESOU
 # PHOTON-CARDS-4: a mover's shadow on the cached surfaces (the mirror umbra vs the
 # raster, the slide at 0 frames' latency, rest costs nothing, a missed footprint
 # relights nothing, a still crate's move recaptured). `--cost` is not a row.
+# gi.region_replace — REGION-REBUILD-1: a refresh whose content moved the probe grid's
+# region past its tolerance re-places the GRID alone (one placement, the chain's
+# from-scratch count and cascade centres unchanged, each cascade re-voxelised at most
+# once for the edit's own box), on a 400-box scene; prints the re-placement's first
+# frame beside the from-scratch build it replaced.
+add_executable(test_gi_region_replace test_gi_region_replace.cpp)
+set_target_properties(test_gi_region_replace PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_region_replace PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_region_replace PRIVATE JahshakaEngine)
+add_dependencies(test_gi_region_replace JahshakaEngineMedia)
+jah_gpu_row(gi.region_replace CLASS engine COMMAND test_gi_region_replace
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.region_replace PROPERTIES TIMEOUT 120 LABELS "engine")
+
 add_executable(test_gi_cards_mover test_gi_cards_mover.cpp)
 set_target_properties(test_gi_cards_mover PROPERTIES
     AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
@@ -1250,6 +1277,36 @@ set_tests_properties(gi.card_lighting_indirect PROPERTIES TIMEOUT 120 LABELS "en
 jah_gpu_row(gi.card_clouds CLASS engine COMMAND test_gi_cards clouds
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.card_clouds PROPERTIES TIMEOUT 120 LABELS "engine")
+# CLOUDS-2D-3: THE CLOUD LAYER'S PHYSICS — a sheet never adds light (a full deck at
+# every sun height and density leaves the ground at most as bright as the clear
+# sky; a half deck's tile mean likewise, its shadows brighter than a full deck's)
+# and (shape) the field's blob sizes, edge ramp in km and period. Mirror-linked:
+# the document's clouds block through the mirror is the product's path.
+add_executable(test_cloud_2d test_cloud_2d.cpp
+    ${CMAKE_SOURCE_DIR}/irisgl/mirror/scenemirror.cpp)
+set_target_properties(test_cloud_2d PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_include_directories(test_cloud_2d PRIVATE ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/irisgl
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
+target_compile_definitions(test_cloud_2d PRIVATE
+    JAHSHAKA_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_cloud_2d PRIVATE IrisGL JahshakaEngine Qt6::Gui)
+add_dependencies(test_cloud_2d JahshakaEngineMedia)
+jah_gpu_row(cloud_2d.energy CLASS engine COMMAND test_cloud_2d energy
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(cloud_2d.energy PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+                     TIMEOUT 120 LABELS "engine")
+jah_gpu_row(cloud_2d.shape CLASS engine COMMAND test_cloud_2d shape
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(cloud_2d.shape PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+                     TIMEOUT 120 LABELS "engine")
 # gi.card_blend (PHOTON-GATHER-1d fix round): a Blend material on a card subject renders, holds no card.
 jah_gpu_row(gi.card_blend CLASS engine COMMAND test_gi_cards blend
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
@@ -1795,7 +1852,7 @@ set_tests_properties(gi.sun_contact_legs PROPERTIES TIMEOUT 120 LABELS "engine")
 # shaded by HlmsAtom's decode: (a) a MOVER crate's reflection in a perfect
 # mirror covers the static control's fraction of its silhouette in its raster
 # colour; (b) the gather's bounce off a MOVER emitter meets the closed form;
-# (d) a hit outside the frustum takes no clustered light; (e) the sun at a hit is
+# (d) a hit outside the frustum takes its lamp from the world light list; (e) the sun at a hit is
 # the shadow ray. The rigged arm (c) is gi.skin_rays_mirror's.
 # `test_gi_hit_shade --cost` is the paired-arm cost measurement (by hand, under
 # scripts/gpu-exclusive.sh).
@@ -1815,6 +1872,25 @@ add_dependencies(test_gi_hit_shade JahshakaEngineMedia)
 jah_gpu_row(gi.hit_shade CLASS engine TOKENS 2 COMMAND test_gi_hit_shade
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.hit_shade PROPERTIES TIMEOUT 180 LABELS "engine")
+# gi.hit_offscreen_lights (D3-HIT-SHADE-2): THE WORLD LIGHT LIST — a point lamp and
+# a spot whose ranges touch no frustum light a mover's hit seen in a mirror as its
+# raster shows them (2 %), and with the list switched off in the same process the
+# hit falls to the lamps-off raster (the picture before the lane).
+jah_gpu_row(gi.hit_offscreen_lights CLASS engine TOKENS 2 COMMAND test_gi_hit_shade --offscreen-lights
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.hit_offscreen_lights PROPERTIES TIMEOUT 120 LABELS "engine")
+# gi.hit_planar (D3-HIT-SHADE-2): a PLANAR mirror seen in a traced mirror decodes
+# (its own material with the voxel cone's specular) — the error against the true
+# (planar raster) picture printed and bounded; the caches' answer (black) shown.
+jah_gpu_row(gi.hit_planar CLASS engine TOKENS 2 COMMAND test_gi_hit_shade --planar
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.hit_planar PROPERTIES TIMEOUT 120 LABELS "engine")
+# gi.hit_voxel_view (D3-HIT-SHADE-2): the view term on the SAME grazing hits — the
+# card's answer carries it (the true picture), the voxels' is the view mean (no light
+# direction is stored); each held to its own closed form.
+jah_gpu_row(gi.hit_voxel_view CLASS engine TOKENS 2 COMMAND test_gi_hit_shade --voxel-view
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.hit_voxel_view PROPERTIES TIMEOUT 120 LABELS "engine")
 
 # gi.skin_rays — THE GPU SKIN CACHE AND THE SKINNED BLAS (PHOTON P5, RY-R4;
 # PHOTON-SKIN-1)

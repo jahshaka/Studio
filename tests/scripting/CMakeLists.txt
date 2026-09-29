@@ -341,6 +341,11 @@ jah_pool_arm(gi_verbs offscreen_contract ${CMAKE_CURRENT_BINARY_DIR}/e2e_offscre
 set(JAH_PCC_BUDGET_SHOWROOM "${CMAKE_SOURCE_DIR}/scenes/Showroom 2.zip")
 configure_file(scripts/e2e_pcc_budget.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_pcc_budget.js @ONLY)
 jah_pool_arm(gi_verbs pcc_budget ${CMAKE_CURRENT_BINARY_DIR}/e2e_pcc_budget.js 60)
+# gi_verbs.planar_records — PLANAR-RECORDS-1: the hit decode's list on the Mirror Room at Epic
+# and on a planar mirror floor under 30 movers — no record dropped, the counts printed.
+set(JAH_PLANAR_RECORDS_MIRROR "${CMAKE_SOURCE_DIR}/scenes/Mirror Room.zip")
+configure_file(scripts/e2e_planar_records.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_planar_records.js @ONLY)
+jah_pool_arm(gi_verbs planar_records ${CMAKE_CURRENT_BINARY_DIR}/e2e_planar_records.js 40)
 # ENGINE_CACHE_POLICY_SPEC P10: a page return (editor -> assets -> editor, and
 # editor -> player -> editor) never re-pushes or rebuilds GI — giPushes,
 # giStatus().rebuilds and the whole giStatus reading are unchanged, and the

@@ -860,6 +860,12 @@ public:
             bool    reflect = false;  ///< the reflect trace ran this frame (needs an SSR chain)
             int     reflectRays = 0;  ///< rays the last reflect dispatch traced (its own resolution)
             float   reflectMs = -1.0f;///< GPU ms of that dispatch; -1 until measured
+            /// THE HIT DECODE's list (PLANAR-RECORDS-1): records appended in the
+            /// last read-back frame, of those dropped because the list was full,
+            /// and the list's size (RayQueryStatus::hitRecords/hitDropped/hitCapacity).
+            quint64 hitRecords = 0;
+            quint64 hitDropped = 0;
+            quint64 hitCapacity = 0;
         };
         RayQueryInfo rayQuery;
         /// THE SCREEN-PROBE GATHER (SPECS/SCREEN_PROBE_GATHER_SPEC.md phase 1) —
