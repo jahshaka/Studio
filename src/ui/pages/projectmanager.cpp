@@ -787,6 +787,7 @@ void ProjectManager::populateDesktop()
     lastBuildTiles = int(pendingRows.size());
     lastBuildDecodes = 0;   // the UI thread decodes nothing: the cache's pool does
     lastBuildSlices = 0;
+    lastBuildMaxSliceMs = 0;
     // The first slice now (what the desktop shows first), the rest a slice per turn.
     buildGridSlice(buildGeneration);
     checkForEmptyState();
@@ -811,6 +812,7 @@ void ProjectManager::buildGridSlice(int generation)
         dynamicGrid->addToGridView(record, isOpenProjectTile(record.guid));
     }
     lastBuildMs += timer.elapsed();
+    lastBuildMaxSliceMs = qMax(lastBuildMaxSliceMs, timer.elapsed());
     ++lastBuildSlices;
     if (!pendingRows.isEmpty()) {
         QMetaObject::invokeMethod(this, [this, generation]() { buildGridSlice(generation); },
@@ -839,6 +841,7 @@ QVariantMap ProjectManager::gridStats() const
     stats["lastBuildTiles"] = lastBuildTiles;
     stats["lastBuildDecodes"] = lastBuildDecodes;
     stats["lastBuildSlices"] = lastBuildSlices;
+    stats["lastBuildMaxSliceMs"] = lastBuildMaxSliceMs;
     stats["pendingTiles"] = int(pendingRows.size());
     stats["decodes"] = ItemGridWidget::thumbnailDecodeCount();
     stats["outOfStep"] = outOfStepEntries;

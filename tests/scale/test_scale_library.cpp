@@ -35,8 +35,11 @@
 // the same create — the difference between the arms is the library and nothing else.
 //
 // THE BARS (D11-LIBRARY-SCALE §1 — the row stopped being a target when that lane closed
-// W14): at 10,000 assets + 500 projects the boot reaches the MCP in <= 20 s; what the
-// library ADDS to a create's worst UI gap is <= 300 ms and to an open's <= 200 ms; and NO
+// W14): at 10,000 assets + 500 projects the boot reaches the MCP in <= 20 s; the library
+// adds <= 300 ms to the Desktop entry a create's close makes, the Desktop grid of 500
+// projects never blocks the UI thread > 300 ms at a time, the library adds <= 200 ms to
+// an open's worst UI gap (a create's worst gap is its close's thumbnail render in both
+// arms — reported, see runArm; not a library cost); and NO
 // LISTING SELECTS A THUMBNAIL over the whole driven session (app.queryLog: every
 // statement that selects a thumbnail column is keyed by guid). The box's load average is
 // printed beside every arm (a number read on a loaded box says so).
@@ -234,6 +237,7 @@ static bool ensureTemplate()
 
 struct Arm {
     double bootMs = -1, gridMs = -1, gridDecodes = -1, gridTiles = -1;
+    double gridMaxSliceMs = -1, desktopEntryMs = -1;
     double openGap = -1, openMs = -1, createGap = -1, createMs = -1, trayMs = -1, trayCount = -1, listMs = -1,
            listCount = -1, pageGap = -1, pageMs = -1;
     int listingThumbnailSelects = -1;   // statements that selected a thumbnail NOT keyed by guid
@@ -241,7 +245,7 @@ struct Arm {
     QString load;
 };
 
-static double gapAround(App &app, const QString &script, double *ledgerTotal)
+static double gapAround(App &app, const QString &script, double *ledgerTotal, double *desktopEntryMs = nullptr)
 {
     app.mcp.runScript(QStringLiteral("app.heartbeat(0)"));
     app.mcp.runScript(QStringLiteral("app.heartbeat(100)"));
@@ -253,6 +257,12 @@ static double gapAround(App &app, const QString &script, double *ledgerTotal)
     if (ledgerTotal) {
         const QJsonArray t = eval(app, QStringLiteral("app.openTimings()")).toArray();
         *ledgerTotal = t.isEmpty() ? -1 : t.at(0).toObject().value("ms").toDouble();
+        if (desktopEntryMs) {
+            *desktopEntryMs = -1;
+            for (const QJsonValue &v : t)
+                if (v.toObject().value("stage").toString() == QStringLiteral("counter:closePrevious:switch"))
+                    *desktopEntryMs = v.toObject().value("ms").toDouble();
+        }
         // THE WHOLE LEDGER, one line: which stage a gap lives in is read from here.
         std::printf("   ledger %s\n", QJsonDocument(t).toJson(QJsonDocument::Compact).constData());
     }
@@ -292,8 +302,14 @@ static bool runArm(const char *label, const QString &dataRoot, Arm &a)
         if (!page.isEmpty()) a.pageMs = page.at(0).toDouble();
     }
     // THE CREATE (CREATE-GAP-1's measurement): over this library.
+    // THE CREATE. Its worst UI gap is its CLOSE of the open project: that project's
+    // thumbnail render (the ledger's saveOpen:thumbnail, 1.7-3.7 s measured in BOTH
+    // arms, a fresh default scene's close included) — the same work with or without a
+    // library, and the noisiest stage there is. What the library touches is the
+    // Desktop the close enters (the ledger's closePrevious:switch: the grid's first
+    // slice) and the grid's later slices (desktop.gridStats().lastBuildMaxSliceMs).
     a.createGap = gapAround(app, QStringLiteral("project.create('Scale create %1')")
-                                     .arg(QDateTime::currentMSecsSinceEpoch()), &a.createMs);
+                                     .arg(QDateTime::currentMSecsSinceEpoch()), &a.createMs, &a.desktopEntryMs);
     // THE DESKTOP GRID: a driven session boots with the Desktop never SHOWN, so its grid
     // (a tile per project, a thumbnail decode each) is first built when a create's close
     // passes through the Desktop — INSIDE the create above. Its own ledger, read after.
@@ -301,6 +317,7 @@ static bool runArm(const char *label, const QString &dataRoot, Arm &a)
     a.gridMs = g.value("lastBuildMs").toDouble();
     a.gridDecodes = g.value("lastBuildDecodes").toDouble();
     a.gridTiles = g.value("tiles").toDouble();
+    a.gridMaxSliceMs = g.value("lastBuildMaxSliceMs").toDouble(-1);
     std::printf("   [%s] desktop.gridStats() after the create %s\n", label,
                 QJsonDocument(g).toJson(QJsonDocument::Compact).constData());
     // THE LOG: every thumbnail select of the session, and whether it was by guid.
@@ -329,9 +346,11 @@ static bool runArm(const char *label, const QString &dataRoot, Arm &a)
     if (out.open(QIODevice::WriteOnly)) out.write(app.log + app.proc.readAll());
     std::printf("W14 [%-7s] load %s | boot->MCP %8.0f ms | grid build (inside the create) %7.1f ms, %5.0f decodes, %5.0f tiles | open: worst UI gap "
                 "%7.1f ms, ledger %7.1f ms | tray %4.0f ms (%3.0f tiles) | assets.list %6.0f ms (%5.0f rows) | "
-                "Assets page first build %6.0f ms | create: worst UI gap %7.1f ms, ledger %7.1f ms\n",
+                "Assets page first build %6.0f ms | create: worst UI gap %7.1f ms, ledger %7.1f ms, Desktop entry %6.1f ms, "
+                "grid's longest slice %5.1f ms\n",
                 label, qPrintable(a.load), a.bootMs, a.gridMs, a.gridDecodes, a.gridTiles, a.openGap, a.openMs,
-                a.trayMs, a.trayCount, a.listMs, a.listCount, a.pageMs, a.createGap, a.createMs);
+                a.trayMs, a.trayCount, a.listMs, a.listCount, a.pageMs, a.createGap, a.createMs, a.desktopEntryMs,
+                a.gridMaxSliceMs);
     return true;
 }
 
@@ -382,14 +401,20 @@ int main(int argc, char **argv)
     report(f.openGap, "ms", QStringLiteral("the worst UI gap of a project open over the library (control: %1)").arg(e.openGap));
     report(f.openGap - e.openGap, "ms", QStringLiteral("what the library adds to the open's worst UI gap"));
     report(f.createGap, "ms", QStringLiteral("the worst UI gap of a project create over the library (control: %1)").arg(e.createGap));
-    report(f.createGap - e.createGap, "ms", QStringLiteral("what the library adds to the create's worst UI gap"));
+    report(f.createGap - e.createGap, "ms", QStringLiteral("what the library adds to the create's worst UI gap (its close's thumbnail render dominates both arms)"));
+    report(f.desktopEntryMs, "ms", QStringLiteral("the create's Desktop entry, the grid's first slice included (control: %1 ms)").arg(e.desktopEntryMs));
+    report(f.gridMaxSliceMs, "ms", QStringLiteral("the Desktop grid's longest slice (the build's worst UI-thread block)"));
     report(f.listMs, "ms", QStringLiteral("assets.list() over %1 rows (control: %2 ms)").arg(f.listCount).arg(e.listMs));
     report(f.trayMs, "ms", QStringLiteral("a tray populate after the open (control: %1 ms)").arg(e.trayMs));
     // THE BARS (D11-LIBRARY-SCALE §1).
     CHECK(f.bootMs > 0 && f.bootMs <= 20000.0, "BAR: the boot reaches the MCP in <= 20 s at 10k assets + 500 projects (%.0f ms, load %s)",
           f.bootMs, qPrintable(f.load));
-    CHECK(f.createGap >= 0 && e.createGap >= 0 && f.createGap - e.createGap <= 300.0,
-          "BAR: the library adds <= 300 ms to a create's worst UI gap (%.1f vs the control's %.1f ms)", f.createGap, e.createGap);
+    CHECK(f.gridMaxSliceMs >= 0 && f.gridMaxSliceMs <= 300.0,
+          "BAR: the Desktop grid of 500 projects blocks the UI thread <= 300 ms at a time (its longest slice %.1f ms)",
+          f.gridMaxSliceMs);
+    CHECK(f.desktopEntryMs >= 0 && e.desktopEntryMs >= 0 && f.desktopEntryMs - e.desktopEntryMs <= 300.0,
+          "BAR: the library adds <= 300 ms to the Desktop entry a create's close makes (%.1f vs the control's %.1f ms)",
+          f.desktopEntryMs, e.desktopEntryMs);
     CHECK(f.openGap >= 0 && e.openGap >= 0 && f.openGap - e.openGap <= 200.0,
           "BAR: the library adds <= 200 ms to an open's worst UI gap (%.1f vs the control's %.1f ms)", f.openGap, e.openGap);
     CHECK(f.listingThumbnailSelects == 0 && e.listingThumbnailSelects == 0,

@@ -92,6 +92,7 @@ For more information see the LICENSE file
 #include <QHBoxLayout>
 
 #include "ui/controls/tilecache.h"
+#include "ui/pages/iassetviewer.h"
 #include "ui/panels/timeline/nodekeyframeanimation.h"
 #include "ui/panels/timeline/nodekeyframe.h"
 
@@ -4472,6 +4473,11 @@ void MainWindow::setupDesktop()
 	if (EngineHost::instance().isRunning()) {
 		auto &host = EngineHost::instance();
 		assetsPreviewViewer = createEngineAssetViewer(host.engine(), host.driver(), this);
+		// EXPLICITLY HIDDEN until the page mounts it: a child of the window that
+		// no page holds would be shown with the window and draw its View over
+		// the Desktop (app.input_keys: "a View is still enabled on the Desktop
+		// page"). The page's stacked layout shows it when it becomes current.
+		if (assetsPreviewViewer) assetsPreviewViewer->asWidget()->hide();
 	}
 	// The modules (audit §6.2): the shell constructs them against the full
 	// host context and drives pages through the one interface. Stack order is
