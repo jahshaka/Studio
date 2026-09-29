@@ -128,14 +128,6 @@ struct ImportResult
     bool ok() const { return error.isEmpty() && !guid.isEmpty(); }
 };
 
-/// A share file's envelope, read off the disk: the extract and the parse,
-/// FILE I/O ONLY (any thread — importBundle runs it on a worker).
-struct UnpackedBundle
-{
-    clipboardformat::Envelope envelope;
-    QString error;
-};
-UnpackedBundle unpackBundle(const QString &path);
 
 /// Land a share file in this library (and pin it into the open project, if
 /// there is one). A guid this library already holds is NOT overwritten — the

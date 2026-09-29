@@ -28,7 +28,6 @@ For more information see the LICENSE file
 #include "data/constants.h"
 #include "data/database/database.h"
 #include "data/project.h"
-#include "export/exportmanifest.h"
 #include "io/clipboardformat.h"
 #include "zip.h"
 #include "scripting/modules/moduleshared.h"
@@ -254,89 +253,6 @@ bool looksLikeBundle(const QString &path)
     return haveManifest && havePayload;
 }
 
-namespace {
-/// One entry of an open archive, read whole into memory — refused (false,
-/// `why`) when it is absent or its uncompressed size exceeds `cap`.
-bool readEntry(struct zip_t *zip, const QString &name, qint64 cap, QByteArray *out, QString *why)
-{
-    if (zip_entry_open(zip, name.toUtf8().constData()) != 0) {
-        *why = QStringLiteral("this archive carries no %1").arg(name);
-        return false;
-    }
-    const qint64 size = qint64(zip_entry_size(zip));
-    bool ok = size >= 0 && size <= cap;
-    if (!ok) {
-        *why = QStringLiteral("%1 is %2 bytes, more than its manifest accounts for (%3)")
-                   .arg(name).arg(size).arg(cap);
-    } else {
-        out->resize(size);
-        ok = size == 0 || zip_entry_noallocread(zip, out->data(), size_t(size)) == ssize_t(size);
-        if (!ok) *why = QStringLiteral("%1 could not be read").arg(name);
-    }
-    zip_entry_close(zip);
-    return ok;
-}
-}   // namespace
-
-UnpackedBundle unpackBundle(const QString &path)
-{
-    UnpackedBundle out;
-    if (!QFileInfo::exists(path)) {
-        out.error = QStringLiteral("no such file '%1'").arg(path);
-        return out;
-    }
-    // READ FROM THE ARCHIVE, BOUNDED — never extracted (a share file lands in a
-    // QTemporaryDir that is RAM on this box) and never read past what its own
-    // manifest declares. The manifest is small by construction; the payload
-    // is the closure's bytes as base64 plus the rows' JSON, so it may be at
-    // most 4/3 of the manifest's summed file sizes plus a per-row allowance and
-    // a fixed allowance for the row blobs. A payload larger than that is a
-    // file that is not what its header says, and it is refused with the reason
-    // before a byte of it is read.
-    struct zip_t *zip = zip_open(path.toUtf8().constData(), 0, 'r');
-    if (!zip) {
-        out.error = QStringLiteral("this file is not a readable archive");
-        return out;
-    }
-    constexpr qint64 kManifestCap = 16ll * 1024 * 1024;
-    constexpr qint64 kPerRowAllowance = 64ll * 1024;
-    constexpr qint64 kBlobAllowance = 64ll * 1024 * 1024;
-    QByteArray manifestBytes, payload;
-    QString why;
-    if (!readEntry(zip, manifestName(), kManifestCap, &manifestBytes, &why)) {
-        zip_close(zip);
-        out.error = why;
-        return out;
-    }
-    QString manifestError;
-    const exportformat::ExportManifest manifest =
-        exportformat::ExportManifest::fromBytes(manifestBytes, &manifestError);
-    if (!manifestError.isEmpty()) {
-        zip_close(zip);
-        out.error = QStringLiteral("the manifest is unreadable: %1").arg(manifestError);
-        return out;
-    }
-    qint64 declared = 0;
-    for (const auto &asset : manifest.assets)
-        for (const auto &file : asset.files)
-            if (file.size > 0) declared += file.size;
-    const qint64 cap = declared / 3 * 4 + 4 + qint64(manifest.assets.size()) * kPerRowAllowance
-                       + kBlobAllowance;
-    const bool read = readEntry(zip, payloadName(), cap, &payload, &why);
-    zip_close(zip);
-    if (!read) {
-        out.error = why;
-        return out;
-    }
-    QString envelopeError;
-    // NOT THE CLIPBOARD'S 64 MB CAP: a share file carries its whole closure
-    // inline on purpose (the portability rule); its bound is the manifest's.
-    out.envelope = clipboardformat::Envelope::fromText(payload, &envelopeError, cap);
-    if (out.envelope.items.isEmpty())
-        out.error = envelopeError.isEmpty() ? QStringLiteral("the payload names no asset")
-                                            : envelopeError;
-    return out;
-}
 
 ImportResult importBundle(Database *db, Project *project, const QString &path)
 {

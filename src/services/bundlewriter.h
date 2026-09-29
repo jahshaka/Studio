@@ -123,6 +123,18 @@ private:
     bool mStarted = false;
 };
 
+/// A share file's envelope, read off the disk: the extract and the parse,
+/// FILE I/O ONLY (any thread — assetshare::importBundle runs it on a worker).
+/// Read straight from the archive and BOUNDED by the file's own manifest: a
+/// payload larger than 4/3 of the manifest's summed file sizes + 64 KB a row +
+/// 64 MB of row blobs is refused with the reason before it is read.
+struct UnpackedBundle
+{
+    clipboardformat::Envelope envelope;
+    QString error;
+};
+UnpackedBundle unpackBundle(const QString &path);
+
 /// The verbs' export: the stage written on a worker, waited for with the
 /// event loop turning (user input held back). Returns when the file is
 /// complete.

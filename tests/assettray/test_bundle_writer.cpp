@@ -25,7 +25,10 @@ For more information see the LICENSE file
 //      never timed);
 //   3. a cancelled write leaves nothing at the destination — and a file already there
 //      survives it (the write is beside, then renamed over);
-//   4. the owed bytes land inline: the payload carries every file's content.
+//   4. the owed bytes land inline: the payload carries every file's content;
+//   5. THE READER'S BOUND (unpackBundle): the legitimate 200-entry pack unpacks whole, and a
+//      file whose payload is larger than its own manifest accounts for is REFUSED with the
+//      reason before the payload is read.
 
 #include <QCoreApplication>
 #include <QDir>
@@ -39,6 +42,7 @@ For more information see the LICENSE file
 #include <limits>
 
 #include "io/clipboardformat.h"
+#include "export/exportmanifest.h"
 #include "io/ziphelper.h"
 #include "services/bundlewriter.h"
 
@@ -197,6 +201,50 @@ int main(int argc, char **argv)
     const assetshare::ExportResult c = cancelled.wait();
     CHECK(c.canceled && !QFile::exists(fresh) && !QFile::exists(fresh + QStringLiteral(".partial")),
           "a cancelled job writes nothing at a fresh destination");
+
+    // ---- 5: the reader's bound --------------------------------------------------
+    {
+        const assetshare::UnpackedBundle legit = assetshare::unpackBundle(workerPath);
+        std::printf("info: the 200-entry pack unpacks: %s (%lld assets, %lld items)\n",
+                    legit.error.isEmpty() ? "yes" : qPrintable(legit.error),
+                    static_cast<long long>(legit.envelope.assets.size()),
+                    static_cast<long long>(legit.envelope.items.size()));
+        CHECK(legit.error.isEmpty() && legit.envelope.assets.size() == 200
+                  && legit.envelope.items.size() == 200,
+              "a legitimate 200-entry pack is not refused by the bound");
+
+        // THE SAME ~70 MB PAYLOAD under a manifest that declares ONE asset of 0 bytes:
+        // its bound is 64 KB + 64 MB, the payload is larger — a file that is not what
+        // its header says.
+        QTemporaryDir forged;
+        {
+            QTemporaryDir peek;
+            ZipHelper::extract(workerPath, peek.path());
+            QFile::copy(QDir(peek.path()).filePath(QStringLiteral("payload.json")),
+                        QDir(forged.path()).filePath(QStringLiteral("payload.json")));
+        }
+        exportformat::ExportManifest lie;
+        lie.version = 2;
+        lie.kind = QStringLiteral("texture");
+        exportformat::ManifestAsset one;
+        one.guid = QStringLiteral("{00000000-0000-0000-0000-000000000000}");
+        one.name = QStringLiteral("tex0.png");
+        one.type = QStringLiteral("texture");
+        exportformat::ManifestFile none;
+        none.role = QStringLiteral("source");
+        none.name = one.name;
+        none.size = 0;
+        one.files.append(none);
+        lie.assets.append(one);
+        lie.write(QDir(forged.path()).filePath(QStringLiteral("jah.manifest.json")));
+        const QString forgedPath = QDir(work.path()).filePath(QStringLiteral("forged.jbundle"));
+        CHECK(ZipHelper::zipDirectory(forged.path(), forgedPath), "a forged share file is built");
+        const assetshare::UnpackedBundle refused = assetshare::unpackBundle(forgedPath);
+        std::printf("info: the forged file: %s\n", qPrintable(refused.error));
+        CHECK(!refused.error.isEmpty() && refused.envelope.items.isEmpty()
+                  && refused.error.contains(QStringLiteral("more than its manifest accounts for")),
+              "a payload larger than its manifest accounts for is REFUSED, with the reason");
+    }
 
     std::printf("%s: %d failure(s)\n", failures ? "FAIL" : "PASS", failures);
     return failures ? 1 : 0;

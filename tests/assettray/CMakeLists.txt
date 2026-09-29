@@ -146,7 +146,8 @@ jah_d11_suite(test_archive_closure archive.closure test_archive_closure.cpp
 # bundle.writer — EXPORT-THREAD-1: the share file's writer (services/bundlewriter.*) on a worker
 # writes the same manifest + payload bytes as on the calling thread, for a 200-entry pack; the
 # calling thread's event loop turns while it writes (a 1 ms timer ticks — a count); a cancelled
-# write leaves the destination as it was. No database, no engine.
+# write leaves the destination as it was; the READER's bound (unpackBundle) lets the 200-entry
+# pack through and refuses a payload larger than its manifest accounts for. No database, no engine.
 add_executable(test_bundle_writer test_bundle_writer.cpp
     ${CMAKE_SOURCE_DIR}/src/services/bundlewriter.cpp
     ${CMAKE_SOURCE_DIR}/src/export/exportmanifest.cpp
