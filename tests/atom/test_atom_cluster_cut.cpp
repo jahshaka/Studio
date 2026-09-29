@@ -16,7 +16,10 @@
 //      root only" (above every finite error): each level-0 triangle is covered
 //      by exactly one selected cluster's region.
 //      No crack edge in any cut, and the displacement lock locks by POSITION (no
-//      seam twin left free; the 20k sphere is the seam case).
+//      seam twin left free; the 40 m round bar is the seam case). The lock is PER
+//      GROUP (CLUSTER-LOCK-3): the 20k sphere's and the physics model's roots
+//      collapse as far as an unlocked build's (a finer group's lock never reaches
+//      a coarser group).
 //   4. MONOTONE REFINEMENT: raising the threshold never selects a cluster whose
 //      parent (a cluster produced by simplifying its group) was selected at a
 //      lower threshold.
@@ -202,6 +205,16 @@ static void oneMesh(clusterfix::Fixture &f)
         if (groups[size_t(clusters[c].group)].error < FLT_MAX) rootOnly = false;
     CHECK(rootOnly, "%s: above every finite error only terminal groups' clusters are drawn "
           "(%zu clusters, %zu triangles)", f.name.c_str(), cuts.back().size(), tris.back());
+    // THE ROOT COLLAPSES (CLUSTER-LOCK-3): the displacement lock is a group's own, so a
+    // lock a fine group needed never holds a coarse one, and the root lands within 1.5x
+    // of an UNLOCKED build's (78 triangles on the 20k sphere, 76 on the physics model;
+    // one whole-build lock held them at 2916 and 306).
+    const std::map<std::string, size_t> unlockedRoot = { { "uv-sphere-20k", 78u }, { "physics-model", 76u } };
+    const auto unlocked = unlockedRoot.find(f.name);
+    if (unlocked != unlockedRoot.end())
+        CHECK(tris.back() * 2 <= unlocked->second * 3,
+              "%s: THE ROOT COLLAPSES — %zu root triangles against an unlocked build's %zu (bar 1.5x)",
+              f.name.c_str(), tris.back(), unlocked->second);
     bool trianglesFall = true;
     for (size_t i = 1; i < tris.size(); ++i) if (tris[i] > tris[i - 1]) trianglesFall = false;
     CHECK(trianglesFall, "%s: the cut's triangle count never rises with the threshold "
@@ -229,17 +242,27 @@ static void oneMesh(clusterfix::Fixture &f)
               thresholds.size(), cutsWithCracks, worstCut, double(worstAt));
         // THE LOCK IS BY POSITION (CLUSTER-LOCK-1): the displacement lock never locks a
         // position on only some of its indices — a seam twin left free is moved by
-        // clusterlod's sloppy fallback and opens the cut. The 20k sphere's lock reaches
-        // its seam column: the seam case, crack-free above.
+        // clusterlod's sloppy fallback and opens the cut. The 40 m round bar's groups
+        // lock its seam and cap rims: the seam case, crack-free above. (The 20k sphere
+        // was the seam case while one lock bound every level; per group its lock stays
+        // off the seam column.)
+        QString histogram, byDepth;
+        for (int k = 0; k < f.stats.retryHistogram.size(); ++k)
+            histogram += QStringLiteral(" %1:%2").arg(k).arg(f.stats.retryHistogram[k]);
+        for (int d = 0; d < f.stats.retriesByDepth.size(); ++d)
+            byDepth += QStringLiteral(" %1").arg(f.stats.retriesByDepth[d]);
         CHECK(f.stats.lockedSplitPositions == 0,
-              "%s: the displacement lock splits no position (%d builds, %d vertices locked, %d locked "
-              "positions shared by several indices, %d split)", f.name.c_str(), f.stats.lockPasses,
+              "%s: the displacement lock splits no position (%d group retries, groups by retries:%s, retries "
+              "by depth:%s, %d made terminal, %d unconverged, %d vertices locked, %d locked positions shared by several indices, "
+              "%d split)",
+              f.name.c_str(), f.stats.groupRetries, qUtf8Printable(histogram), qUtf8Printable(byDepth),
+              f.stats.groupsMadeTerminal, f.stats.groupsUnconverged,
               f.stats.lockedVertices, f.stats.lockedSharedPositions, f.stats.lockedSplitPositions);
-        if (f.name == "uv-sphere-20k")
+        if (f.name == "round-bar-40m")
             CHECK(f.stats.lockedSharedPositions > 0 && worstCut == 0,
-                  "%s: THE SEAM CASE — the lock reached %d shared (seam / pole) positions over %d builds "
+                  "%s: THE SEAM CASE — the lock reached %d shared (seam / pole) positions over %d group retries "
                   "and the cut kept zero open edges (worst %zu)", f.name.c_str(), f.stats.lockedSharedPositions,
-                  f.stats.lockPasses, worstCut);
+                  f.stats.groupRetries, worstCut);
     }
 
     // MONOTONE REFINEMENT. The parents of cluster c are the clusters its group

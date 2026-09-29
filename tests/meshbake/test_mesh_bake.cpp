@@ -2288,10 +2288,15 @@ static int dagBar(const QString &name, const iris::MeshPtr &mesh, bool standin, 
     float maxAxis = 0.0f;
     meshExtents(mesh, &maxAxis, nullptr);
     printDagTerms(name, st);
-    // THE DAG'S DISPLACEMENT LOCK (DAG-LOCK-1): its builds, its locks, what it left, its cost.
-    std::printf("   %s: the DAG's lock took %d build(s), %d vertices locked, %d still past the budget; "
-                "%lld ms for the whole DAG\n", qUtf8Printable(name), st.lockPasses, st.lockedVertices,
-                st.lockUnconverged, (long long)bakeMs);
+    // THE DAG'S DISPLACEMENT LOCK, PER GROUP (CLUSTER-LOCK-3): its retries, its locks,
+    // what it left, its cost.
+    QString histogram;
+    for (int k = 0; k < st.retryHistogram.size(); ++k)
+        histogram += QStringLiteral(" %1:%2").arg(k).arg(st.retryHistogram[k]);
+    std::printf("   %s: the DAG's lock re-simplified %d time(s) (groups by retries:%s), %d vertices locked, "
+                "%d group(s) made terminal, %d still past the bound; %lld ms for the whole DAG (verify %.0f ms)\n",
+                qUtf8Printable(name), st.groupRetries, qUtf8Printable(histogram), st.lockedVertices,
+                st.groupsMadeTerminal, st.groupsUnconverged, (long long)bakeMs, st.verifyMs);
     const float floorBound = maxAxis * 1e-5f;
     int checked = 0, dishonest = 0, loose = 0, drops = 0, oversize = 0;
     double worstRef = 0.0, worstX = 0.0;
