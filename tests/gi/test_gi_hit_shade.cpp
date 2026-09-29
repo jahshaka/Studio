@@ -1458,10 +1458,30 @@ static int offscreenLightsMain(Engine *e)
 // marked a reflector (the
 // caches answer it: a DIFFUSE store, a metal mirror's kD is 0) shows the picture
 // before the lane — black.
-static int planarMain(Engine *e)
+// HIT-PLANAR-GAP-1 (D8): the tier's chain is CAMERA-RELATIVE, so the two "same term"
+// pictures read DIFFERENT voxels — the traced mirror's camera (kCam, 6 m from B)
+// reads B and P out of High's 10 m cascade (0.156 m cells), the reflected camera
+// (kCamR, 21.7 m from B) out of its 60 m cascade (1.875 m cells). `pinnedChain`
+// builds ONE cascade that holds both cameras and B and P and cannot re-centre
+// between the arms (a step of a thousand cells), so both pictures read the SAME
+// voxels through the same cone and the gap left between them is the decode's own.
+// Its own process (`--planar-pinned`, not a row): a second scene in one process
+// measured nothing (B's mask came back empty).
+// THE FINDING (HIT-PLANAR-GAP-1, D8, spikes/d8-photon-debts-1/hit-planar*.log): on the
+// tier's chain the hit reads 50.7 % off the true picture and the screen's cone 61.3 %
+// — the 10.6-point gap. With ONE pinned 24 m cascade (0.375 m cells) both read the
+// same voxels: the hit 70.2 %, the screen 74.8 % — 4.6 points, the other way, both
+// worse (a coarser cell than the traced camera's 0.156 m). So the gap is the
+// camera-relative chain reading B and P from two different cascades (the traced
+// camera 6 m from B, the reflected one 21.7 m), not a defect in either reader; the
+// 4.6 points left are the decode's cone origin (the hit's reconstructed point vs the
+// screen's pixel) at a coarse cell. Neither picture is wrong: the bar stays the
+// engine's own cone (+ 2 %).
+static int planarMain(Engine *e, bool pinnedChain)
 {
-    View *view = e->createOffscreenView("hitplanar", kSize, kSize, Colour(0, 0, 0));
-    Scene *s = e->createScene("hitplanar");
+    View *view = e->createOffscreenView(pinnedChain ? "hitplanarpin" : "hitplanar", kSize, kSize,
+                                        Colour(0, 0, 0));
+    Scene *s = e->createScene(pinnedChain ? "hitplanarpin" : "hitplanar");
     view->setScene(s);
     view->setOffscreenContract(OffscreenContract::StillPicture);
     view->setShadows(true);
@@ -1497,6 +1517,10 @@ static int planarMain(Engine *e)
     gi.gather = GiToggle::Off;
     gi.cards = true;
     gi.cardResidencyRadius = 40.0f;
+    if (pinnedChain) {
+        gi.cascadeCount = 1;
+        gi.cascadeSet[0] = GiParams::GiCascadeDesc{ 24.0f, 128, 1000.0f };
+    }
     s->setGlobalIllumination(gi);
     PlanarReflectionParams pr;
     pr.budget = 1;
@@ -1518,7 +1542,8 @@ static int planarMain(Engine *e)
         view->readPixelsHdr(img);
         return img;
     };
-    std::printf("\n== gi.hit_planar: a planar mirror seen in a traced mirror (mirror-in-mirror) ==\n");
+    std::printf("\n== gi.hit_planar: a planar mirror seen in a traced mirror (mirror-in-mirror)%s ==\n",
+                pinnedChain ? ", ONE PINNED CASCADE" : ", the tier's chain");
     s->setNodeVisible(b, false);
     const ImageF mNone = shot(true), rNone = shot(false);
     s->setNodeVisible(b, true);
@@ -1543,7 +1568,14 @@ static int planarMain(Engine *e)
     in.m.assign(refl.m.size(), 0u);
     for (size_t i = 0; i < refl.m.size(); ++i)
         if (refl.m[i] && rast.m[i]) { in.m[i] = 1u; ++in.n; }
-    const Mask core = erode(in, kSize, kSize, 3);
+    // THE PINNED ARM'S MASK: with one coarse cascade the traced mirror's B differs from
+    // the no-B picture on a fraction of the silhouette (printed), so its region is the
+    // RASTER's silhouette of B — the same pixels in both pictures by the mirror's
+    // symmetry (the traced camera is the raster camera reflected in the wall).
+    Mask rastOnly;
+    rastOnly.m = rast.m;
+    rastOnly.n = rast.n;
+    const Mask core = erode(pinnedChain ? rastOnly : in, kSize, kSize, 3);
     const Colour cm = maskMean(mB, core, false), cr = maskMean(rB, core, true), cb = maskMean(mBefore, core, false);
     const auto lum = [](const Colour &c) { return 0.2126f * c.r + 0.7152f * c.g + 0.0722f * c.b; };
     const float err = std::fabs(lum(cm) - lum(cr)) / std::max(lum(cr), 1e-6f);
@@ -1572,6 +1604,8 @@ static int planarMain(Engine *e)
     CHECK_MSG(lum(cm) > 0.25f * lum(cr) && relDiff(cm, cc) < 1.0f,
               "B is neither black nor sky-only: %.0f %% of the true luminance, P's colour (worst channel %.0f %% "
               "from the cone picture's)", 100.0f * lum(cm) / lum(cr), 100.0f * relDiff(cm, cc));
+    e->destroyView(view);
+    e->destroyScene(s);
     return 0;
 }
 
@@ -1961,7 +1995,8 @@ int main(int argc, char **argv)
     cfg.hlmsMediaDir = JAHSHAKA_TEST_MEDIA_DIR;
     const bool cost = argc > 1 && std::strcmp(argv[1], "--cost") == 0;
     const bool worldLights = argc > 1 && std::strcmp(argv[1], "--offscreen-lights") == 0;
-    const bool planar = argc > 1 && std::strcmp(argv[1], "--planar") == 0;
+    const bool planarPinned = argc > 1 && std::strcmp(argv[1], "--planar-pinned") == 0;
+    const bool planar = planarPinned || (argc > 1 && std::strcmp(argv[1], "--planar") == 0);
     const bool voxelView = argc > 1 && std::strcmp(argv[1], "--voxel-view") == 0;
     cfg.logFile = cost ? "test-gi-hit-shade-cost-ogre.log"
                        : (argc > 1 ? "test-gi-hit-shade-mode-ogre.log" : "test-gi-hit-shade-ogre.log");
@@ -1983,7 +2018,7 @@ int main(int argc, char **argv)
     if (argc > 1 && std::strcmp(argv[1], "--cost-lamps") == 0) return costLampsMain(e);
     if (worldLights || planar || voxelView) {
         if (worldLights) offscreenLightsMain(e);
-        else if (planar) planarMain(e);
+        else if (planar) planarMain(e, planarPinned);
         else voxelViewMain(e);
         std::printf("%s: %d failure(s)\n", failures ? "FAIL" : "PASS", failures);
         return failures ? 1 : 0;

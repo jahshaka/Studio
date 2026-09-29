@@ -59,7 +59,12 @@ static iris::ScenePtr freshScene()
 
 static int giMode(const iris::ScenePtr &s)    { return int(s->giMode); }
 static int giQuality(const iris::ScenePtr &s) { return int(s->giQuality); }
-static int giDdgi(const iris::ScenePtr &s)    { return s->giDdgi > 0 ? 1 : 0; }
+// What the scene RENDERS for the field: Auto (-1, what a tier leaves since
+// DDGI-AUTO-1) resolved through the engine's fact, the row's own get.
+static int giDdgi(const iris::ScenePtr &s)
+{
+    return s->giDdgi < 0 ? (worldmodes::photonFieldAuto(s) ? 1 : 0) : (s->giDdgi > 0 ? 1 : 0);
+}
 static int giBounces(const iris::ScenePtr &s) { return s->giNumBounces; }
 
 // ---------------------------------------------------------------------------

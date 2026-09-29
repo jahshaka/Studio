@@ -119,8 +119,27 @@ static float maxChannelDelta(const Image &a, const Image &b, unsigned *outX = nu
 }
 
 /// One wall/floor slab, the shape every scene here is built out of.
+/// SEALED-ROOM-CHAIN-1's diagnostic: the room's walls with NO specular (the ground's
+/// matte recipe: the Specular workflow at ior 1, a black specular colour — F0 = 0).
+static bool gMatteSlabs = false;
 static NodeId addSlab(Scene *s, const Colour &albedo, const Vec3 &pos, const Vec3 &scale)
 {
+    if (gMatteSlabs) {
+        const NodeId n = s->createNode();
+        static MeshId cube = 0;
+        static Scene *cubeScene = nullptr;
+        if (cubeScene != s) { cube = s->createMesh(enginetest::unitCubeMesh()); cubeScene = s; }
+        PbrParams p;
+        p.albedo = albedo;
+        p.roughness = 0.9f;
+        p.workflow = PbrParams::Workflow::Specular;
+        p.ior = 1.0f;
+        p.specularColour = Colour(0.0f, 0.0f, 0.0f);
+        s->attachMesh(n, cube, s->createPbrMaterial(p));
+        enginetest::setNodePosition(s, n, pos);
+        enginetest::setNodeScale(s, n, scale);
+        return n;
+    }
     const NodeId n = enginetest::addTestCube(s, albedo, 0.0f, 0.9f);
     enginetest::setNodePosition(s, n, pos);
     enginetest::setNodeScale(s, n, scale);
@@ -528,6 +547,33 @@ int main(int argc, char **argv)
     if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }
     engine->setFixedFrameDelta(1.0f / 60.0f);
     Engine *e = engine.get();
+    // NOT A ROW: `--sealed-classes` (SEALED-ROOM-CHAIN-1, D8) — which class the reader's
+    // residual is: the same cones-only arm with the walls' specular removed (F0 = 0), and
+    // the shipped chain at the wall pose both ways.
+    if (argc > 1 && std::string(argv[1]) == "--sealed-classes") {
+        const Vec3 wallEye(0.0f, 2.0f, 3.4f), centre(0.0f, 2.0f, 0.0f);
+        for (int matte = 0; matte < 2; ++matte) {
+            gMatteSlabs = matte != 0;
+            for (float half : { 5.0f, 30.0f }) {
+                GiParams gi = vctBase();
+                gi.ddgi = GiToggle::Off;
+                gi.numBounces = 0;
+                gi.cascadeSet[0] = GiParams::GiCascadeDesc{ half, 64, 0.0f };
+                char label[120];
+                std::snprintf(label, sizeof label, "%s cones only, cell %.3f m", matte ? "F0=0" : "F0=.04",
+                              2.0f * half / 64.0f);
+                sealedRoomMove(e, gi, label, centre);
+            }
+            GiParams shipped = vctBase();
+            shipped.ddgi = GiToggle::On;
+            shipped.cascadeCount = 0;
+            shipped.cascadeSet[0] = GiParams::GiCascadeDesc();
+            sealedRoomMove(e, shipped, matte ? "F0=0 Medium chain, wall pose" : "F0=.04 Medium chain, wall pose",
+                           wallEye);
+        }
+        engine.reset();
+        return 0;
+    }
     if (argc > 1 && std::string(argv[1]) == "--sealed-chain") {
         // gi.sealed_room_chain_target — SEALED-ROOM-LEAK-1 (D4-PHOTON-TIERS' finding: the sealed room
         // under the shipped chain leaks 12/255). Case 5's room, the SHIPPED Medium chain, the field on:
