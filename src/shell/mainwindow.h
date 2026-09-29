@@ -1150,6 +1150,7 @@ private:
     QToolBar *toolBar = nullptr;
     AssetView *_assetView = nullptr;
     QWidget *assetsPlaceholder = nullptr;   // holds ASSETS = 2 until the page is built
+    class IAssetViewer *assetsPreviewViewer = nullptr;   // made at boot, handed to the page
 	QAction *actionSaveScene = nullptr;
 
     /// THE VR TOGGLE (SPECS/VR_SPEC.md §4.5, phase 3) — the editor toolbar's

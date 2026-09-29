@@ -111,7 +111,7 @@ private:
 
     struct Request
     {
-        Kind kind;
+        Kind kind = Kind::Asset;
         QString guid;
         Spec spec;
         QString key;

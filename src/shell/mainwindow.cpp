@@ -4406,14 +4406,9 @@ AssetView *MainWindow::ensureAssetsPage()
 	// Built once; never in a session without the shell's pages, and never
 	// after teardown (the placeholder is gone with the stack by then).
 	if (_assetView || !assetsPlaceholder || !ui || !ui->stackedWidget) return _assetView;
-	// The Assets page: AssetView gets an EngineAssetViewer (a third engine
-	// Scene with its own preview document), or none in headless runs.
-	IAssetViewer *assetBackend = nullptr;
-	if (EngineHost::instance().isRunning()) {
-		auto &host = EngineHost::instance();
-		assetBackend = createEngineAssetViewer(host.engine(), host.driver(), this);
-	}
-	_assetView = new AssetView(db, this, assetBackend);
+	// The Assets page: AssetView gets the EngineAssetViewer made at boot (a
+	// third engine Scene with its own preview document), or none in headless runs.
+	_assetView = new AssetView(db, this, assetsPreviewViewer);
 	_assetView->installEventFilter(this);
 	_assetView->setServices(services);
 	_assetView->setProject(project);
@@ -4468,6 +4463,16 @@ void MainWindow::setupDesktop()
 	// load-bearing: ASSETS = 2) until ensureAssetsPage() swaps the page in.
 	assetsPlaceholder = new QWidget;
 	ui->stackedWidget->addWidget(assetsPlaceholder);
+	// ITS PREVIEW VIEWER IS STILL MADE HERE, AT BOOT: an EngineAssetViewer is a
+	// third engine Scene, and a Scene created while a project's world is live
+	// (its GI compiling compute pipelines) is an engine path the boot order never
+	// took — ui.window_minimum crashed inside the driver's shader compiler (heap
+	// corruption, 2 of 12 runs, only with the viewer made on the first Assets
+	// visit). The viewer costs the same with any library; the page is what scaled.
+	if (EngineHost::instance().isRunning()) {
+		auto &host = EngineHost::instance();
+		assetsPreviewViewer = createEngineAssetViewer(host.engine(), host.driver(), this);
+	}
 	// The modules (audit §6.2): the shell constructs them against the full
 	// host context and drives pages through the one interface. Stack order is
 	// load-bearing (WindowSpaces indexes): EFFECT = 3, PLAYER = 4, PUBLISH = 5.
