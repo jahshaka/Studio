@@ -127,6 +127,11 @@ var RAMP = [[1.0, 0.15, 0.1], [1.0, 0.55, 0.0], [1.0, 0.95, 0.1], [0.6, 1.0, 0.1
             [0.1, 0.85, 0.2], [0.1, 0.9, 0.95], [0.15, 0.35, 1.0], [0.6, 0.2, 1.0],
             [1.0, 0.4, 0.8], [0.85, 0.85, 0.85], [0.55, 0.35, 0.2], [0.3, 0.6, 0.5],
             [0.9, 0.7, 0.5], [0.4, 0.4, 0.7], [0.7, 0.1, 0.4], [0.2, 0.2, 0.2]];
+// A pixel is a Levels colour when it is a ramp colour — or a blend of two ADJACENT
+// depths' colours: the screenshot's probe is filtered, and where the cut draws a depth-d
+// group beside a depth-(d+1) one (the per-group lock, CLUSTER-LOCK-3: neighbouring groups
+// stop at different depths) a probe on the border reads between the two. A blend counts
+// for the nearer depth.
 function rampDepth(px) {
     var best = -1, bestD = 1e9;
     for (var r = 0; r < RAMP.length; ++r) {
@@ -134,7 +139,17 @@ function rampDepth(px) {
         var dd = dr * dr + dg * dg + db * db;
         if (dd < bestD) { bestD = dd; best = r; }
     }
-    return bestD < 12 * 12 * 3 ? best : -1;
+    if (bestD < 12 * 12 * 3) return best;
+    for (var a = 0; a + 1 < RAMP.length; ++a) {
+        var A = [255 * RAMP[a][0], 255 * RAMP[a][1], 255 * RAMP[a][2]];
+        var B = [255 * RAMP[a + 1][0], 255 * RAMP[a + 1][1], 255 * RAMP[a + 1][2]];
+        var ab = [B[0] - A[0], B[1] - A[1], B[2] - A[2]], ap = [px.r - A[0], px.g - A[1], px.b - A[2]];
+        var t = (ab[0] * ap[0] + ab[1] * ap[1] + ab[2] * ap[2]) / (ab[0] * ab[0] + ab[1] * ab[1] + ab[2] * ab[2]);
+        if (t < 0 || t > 1) continue;
+        var ex = ap[0] - t * ab[0], ey = ap[1] - t * ab[1], ez = ap[2] - t * ab[2];
+        if (ex * ex + ey * ey + ez * ez < 12 * 12 * 3) return t < 0.5 ? a : a + 1;
+    }
+    return -1;
 }
 var probes = [];
 for (var py = -2; py <= 2; ++py)
@@ -150,7 +165,9 @@ function centreDepth(d) {
         votes[lv] = (votes[lv] || 0) + 1;
         if (best < 0 || votes[lv] > votes[best]) best = lv;
     }
-    return { painted: best, votes: best >= 0 ? votes[best] : 0 };
+    var levelsPixels = 0;
+    for (var k = 0; k < votes.length; ++k) levelsPixels += votes[k] || 0;
+    return { painted: best, votes: best >= 0 ? votes[best] : 0, levels: levelsPixels };
 }
 var painted = [];
 for (var c = 0; c < D.length; ++c) {
@@ -158,8 +175,9 @@ for (var c = 0; c < D.length; ++c) {
     painted.push(pc.painted);
     var cs = world.atomStatus();
     console.log("levels view at " + D[c] + " m: the cut paints depth " + pc.painted + " (" + pc.votes +
-                "/25 centre pixels); the view drew " + cs.cutClusters + " clusters, " + cs.cutTriangles + " triangles");
-    assert(pc.painted >= 0 && pc.votes >= 13, "the centre of the shot is a Levels colour at " + D[c] + " m");
+                "/25 centre pixels; " + pc.levels + "/25 a Levels colour); the view drew " + cs.cutClusters +
+                " clusters, " + cs.cutTriangles + " triangles");
+    assert(pc.painted >= 0 && pc.levels >= 13, "the centre of the shot is a Levels colour at " + D[c] + " m");
     if (c > 0) assert(painted[c] >= painted[c - 1], "the painted depth never gets finer further out (" + D[c] +
                       " m: " + painted[c] + " after " + painted[c - 1] + ")");
 }
