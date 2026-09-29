@@ -6496,6 +6496,7 @@ void MainWindow::destroyEngineViews()
     viewPort = nullptr;
     _assetView = nullptr;
     assetsPlaceholder = nullptr;
+    assetsPreviewViewer = nullptr;   // a child of this window: gone with the sweep above
 
     // The Engine must be gone now. It is not an assert because a MainWindow
     // can legitimately be destroyed before finalizeAppExit ran (a CLI path
