@@ -325,6 +325,10 @@ jah_pool_arm(gi_verbs gi_bounds ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_gi_bound
 # intensity 20 at 0.3 m is lit and no darker than at 2 (it drew every probe black; gi.probe_nan
 # holds the field's own half).
 jah_pool_arm(gi_verbs probe_nan_view ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_probe_nan_view.js 20)
+# gi_verbs.contact_band — SSAO-DOUBLE-1: no second occlusion over the GI. A cube on the default and
+# on a white floor at Epic and High: the contact band within 2 codes of the mid-face control (was
+# -11 / -13 under the SSAO multiply); with Photon off the pinned SSAO still darkens it (> 5 codes).
+jah_pool_arm(gi_verbs contact_band ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_contact_band.js 95)
 # gi_verbs.ssr_off_ray_tier — D4-PHOTON-TIERS fix round (F2/F3): a document's SSR OFF is honoured
 # at a ray tier (no trace runs), and the row offers exactly "Off" and a disabled "Traced" there.
 jah_pool_arm(gi_verbs ssr_off_ray_tier ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_ssr_off_ray_tier.js 15)

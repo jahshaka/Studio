@@ -50,7 +50,7 @@ function lum(p) { return 0.2126 * p.r + 0.7152 * p.g + 0.0722 * p.b; }
 
 var proj = project.create("Cube Shade " + Date.now());
 assert(proj.length > 10, "project.create");
-assert(world.mode() === "epic", "a new scene is Epic — the tier that has Photon and SSAO on");
+assert(world.mode() === "epic", "a new scene is Epic");
 
 // ---- 0. the default that half 2 is about -----------------------------------
 var fx = world.postFx();
@@ -227,7 +227,9 @@ world.override({ id: "ssao", value: 0 });
 var noAo = wallRead("sun_only_ao_off");
 assert(Math.min.apply(null, noAo) > 20, "the wall is lit by the sun (" +
        Math.round(Math.min.apply(null, noAo)) + ")");
-world.clearOverride({ id: "ssao" });
+// PINNED ON, not the tier's column: every tier leaves SSAO off since SSAO-DOUBLE-1 (the GI
+// carries the occlusion), and with Photon off — as here — a pin is what runs it.
+world.override({ id: "ssao", value: 1 });
 var withAo = wallRead("sun_only_ao_on");
 var cut = worstMove(noAo, withAo);
 console.log("AO's cut of pure sunlight at 1 m: " + cut.toFixed(2) + "/255");
@@ -246,5 +248,6 @@ assert(wideCut >= 10.0,
        "the AO march is alive and the radius is what confines it (2.0 m cuts " +
        wideCut.toFixed(2) + "/255 of the same sunlight)");
 world.postFx({ ssaoRadius: 0.35 });
+world.clearOverride({ id: "ssao" });
 
 console.log("cube_shade: done");

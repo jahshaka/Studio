@@ -297,7 +297,9 @@ console.log("---- phase D: the chain is in the shot ----");
 assert(world.photon({ tier: "epic" }).tier === "epic", "the world is at the Epic tier");
 var rows = world.settings();
 assert(rows.ssr.valueId !== "off", "Epic has screen-space reflections on: " + rows.ssr.valueId);
-assert(rows.ssao.valueId !== "off", "Epic has ambient occlusion on: " + rows.ssao.valueId);
+// SSAO-DOUBLE-1: off at every GI tier (the GI carries occlusion; gi_verbs.contact_band).
+assert(rows.ssao.valueId === "off", "Epic leaves screen-space AO off (the GI carries occlusion): " +
+       rows.ssao.valueId);
 assert(rows.smaa.valueId !== "off", "Epic has SMAA on: " + rows.smaa.valueId);
 assert(rows.hdr.value !== 0, "Epic has HDR on");
 // A LIT room for the rest of the suite. The differences the chain makes are
