@@ -206,9 +206,10 @@ public:
 
     // ---- THE QUERY LOG (D11-LIBRARY-SCALE) ----------------------------------
     // A diagnostic, OFF by default and statics only (the funnel's rule): every
-    // statement through executeAndCheckQuery — and the raw sites that report
-    // themselves through noteQuery — counted by name, and every one whose column
-    // list SELECTS A THUMBNAIL recorded with whether it is keyed by guid
+    // statement through executeAndCheckQuery — AND ONLY THOSE: the ~30 raw
+    // QSqlQuery::exec() sites in the catalog are invisible to it (none of them is
+    // a listing a panel reads) — counted by name, and every one whose column list
+    // SELECTS A THUMBNAIL recorded with whether it is keyed by guid
     // (`guid = ?` / `guid IN (...)`). `app.queryLog` reads it; the proof that no
     // listing carries a thumbnail BLOB is "every thumbnail select is by guid".
     struct QueryLogEntry
@@ -221,7 +222,6 @@ public:
     };
     static void setQueryLog(bool on);   // turning it on resets it
     static bool queryLogOn();
-    static void noteQuery(const QString &name, const QString &sql);
     static QVector<QueryLogEntry> queryLogEntries();
     static int queryLogStatements();
     /// The classifier, public for the suites: does `sql` select a thumbnail

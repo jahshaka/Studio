@@ -330,7 +330,7 @@ void Database::classifyQuery(const QString &sql, bool *selectsThumbnail, bool *b
     if (byGuid) *byGuid = keyed;
 }
 
-void Database::noteQuery(const QString &name, const QString &sql)
+static void noteQuery(const QString &name, const QString &sql)
 {
     QueryLogState &log = queryLogState();
     if (!log.on) return;
@@ -338,10 +338,10 @@ void Database::noteQuery(const QString &name, const QString &sql)
     const QString key = name + QLatin1Char('\x1f') + sql;
     auto it = log.entries.find(key);
     if (it == log.entries.end()) {
-        QueryLogEntry entry;
+        Database::QueryLogEntry entry;
         entry.name = name;
         entry.sql = sql.simplified();
-        classifyQuery(sql, &entry.selectsThumbnail, &entry.byGuid);
+        Database::classifyQuery(sql, &entry.selectsThumbnail, &entry.byGuid);
         it = log.entries.insert(key, entry);
     }
     ++it->count;
