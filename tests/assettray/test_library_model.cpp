@@ -36,6 +36,7 @@ For more information see the LICENSE file
 #include <QElapsedTimer>
 #include <QFile>
 #include <QImage>
+#include <QListView>
 #include <QPixmap>
 #include <QSqlDatabase>
 #include <QSqlQuery>
@@ -287,6 +288,38 @@ int main(int argc, char **argv)
     for (int r = 0; r < 60; ++r)
         hits += proxy.index(r, 0).data(Qt::DecorationRole).value<QPixmap>().isNull() ? 0 : 1;
     CHECK(hits == 60 && TileCache::instance().decodes() - decodes0 == 60, "a second paint is 60 hits, no decode");
+
+    // ---- THE PICTURE: the page's view over the model, painted offscreen ------
+    // A QListView in icon mode with the tile delegate, as the Assets page builds
+    // it: the first tile's picture centre is its asset's own colour (the fixture's
+    // PNGs are flat colours), painted from the cache — pixel evidence the tiles are
+    // the thumbnails, not placeholders. The grab is kept beside the suite.
+    {
+        QListView view;
+        LibraryTileDelegate delegate;
+        view.setModel(&proxy);
+        view.setItemDelegate(&delegate);
+        view.setViewMode(QListView::IconMode);
+        view.setUniformItemSizes(true);
+        view.setSpacing(5);
+        view.resize(700, 480);
+        view.show();
+        QCoreApplication::processEvents();
+        TileCache::instance().drain(20000);
+        const QImage shot = view.viewport()->grab().toImage();
+        shot.save(QStringLiteral("library_model_tiles.png"));
+        const QModelIndex first = proxy.index(0, 0);
+        const QRect r = view.visualRect(first);
+        const QPoint centre(r.center().x(), r.top() + LibraryTileDelegate::kPictureHeight / 2);
+        const QString name = first.data(LibraryModel::NameRole).toString();
+        const int i = name.mid(6, 4).toInt();   // asset_NNNN.png
+        const QColor want((i * 37) % 256, (i * 91) % 256, (i * 13) % 256);
+        const QColor got = shot.pixelColor(centre * shot.devicePixelRatio());
+        CHECK(qAbs(got.red() - want.red()) <= 3 && qAbs(got.green() - want.green()) <= 3
+                  && qAbs(got.blue() - want.blue()) <= 3,
+              "the first painted tile shows its own thumbnail (%s: got %d,%d,%d want %d,%d,%d)", qPrintable(name),
+              got.red(), got.green(), got.blue(), want.red(), want.green(), want.blue());
+    }
 
     const QString rewritten = proxy.index(0, 0).data(LibraryModel::GuidRole).toString();
     db.updateAssetThumbnail(rewritten, png(4242));
