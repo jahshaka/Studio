@@ -162,27 +162,4 @@ QMap<QString, clipboardformat::ClipAsset> describe(const QStringList &guids, Dat
     return out;
 }
 
-bool readDeferred(QMap<QString, clipboardformat::ClipAsset> &assets,
-                  const QVector<DeferredRead> &reads, QString *errorOut,
-                  const std::function<bool(int done, int total)> &onRead)
-{
-    const int total = int(reads.size());
-    for (int i = 0; i < total; ++i) {
-        const DeferredRead &read = reads.at(i);
-        auto asset = assets.find(read.guid);
-        if (asset == assets.end() || read.fileIndex < 0 || read.fileIndex >= asset->files.size())
-            continue;
-        // A file that cannot be opened travels by its oid, exactly as the
-        // inline path always treated it (describe's non-deferred branch).
-        QFile source(read.path);
-        if (source.open(QIODevice::ReadOnly))
-            asset->files[read.fileIndex].inlineData = source.readAll();
-        if (onRead && !onRead(i + 1, total)) {
-            if (errorOut) *errorOut = QStringLiteral("cancelled");
-            return false;
-        }
-    }
-    return true;
-}
-
 } // namespace assetclosure

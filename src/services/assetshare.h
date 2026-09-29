@@ -54,6 +54,8 @@ For more information see the LICENSE file
 #include <QString>
 #include <QStringList>
 
+#include <functional>
+
 #include "io/clipboardformat.h"
 #include "services/bundlewriter.h"
 
@@ -72,12 +74,17 @@ QString fileFilter();
 
 /// STAGE `guids` and everything they are made of as a share file: the rows,
 /// edges and store paths, read on the calling (UI) thread; the bytes are owed
-/// and read by the writer (services/bundlewriter.h). ONE entry's
+/// and read by the writer (services/bundlewriter.h), on a worker. ONE entry's
 /// manifest kind is its type word ("material", "texture", "sky"); a SET is a
 /// "pack" (the Assets tray's multi-selection). The version that travels is the
 /// one the OPEN PROJECT renders with when it holds an asset (its pin), the
 /// library's otherwise — copy semantics, the same rule the clipboard uses.
-BundleStage stageBundle(Database *db, Project *project, const QStringList &guids);
+///
+/// `yield` (optional) runs between slices of the catalog reads — the caller's
+/// event-loop turn (yieldToEventLoop), so a large set stages without one long
+/// block on the UI thread.
+BundleStage stageBundle(Database *db, Project *project, const QStringList &guids,
+                        const std::function<void()> &yield = {});
 
 /// A SCENE NODE, staged (ARCHIVE-ROUNDTRIP, D7) — the file behind the
 /// outliner's Export Object / Export Particle System and node.exportArchive.
@@ -86,15 +93,20 @@ BundleStage stageBundle(Database *db, Project *project, const QStringList &guids
 /// node's whole closure and every byte beside it; `assets.import` of the file
 /// lands them all and answers that row, which `assets.addToScene` instantiates.
 BundleStage stageNode(Database *db, Project *project, const QJsonObject &nodeObject,
-                      const QString &name, int typeId);
+                      const QString &name, int typeId, const std::function<void()> &yield = {});
 
-/// THE EXPORT every door calls (assets.exportBundle, the Assets tray, the
-/// Materials module): stageBundle, then the writer.
+/// One turn of the calling thread's event loop with user input held back — the
+/// `yield` every export door hands the stage.
+void yieldToEventLoop();
+
+/// THE VERBS' EXPORT (assets.exportBundle): stageBundle, then the writer on a
+/// worker, waited for with the event loop turning (bundlewriter.h,
+/// exportAndWait). The UI doors stage and hand the job to
+/// ui/dialogs/bundleexportdialog.h instead.
 ExportResult exportBundle(Database *db, Project *project, const QStringList &guids,
                           const QString &destPath);
 
-/// node.exportArchive and the outliner's Export Object: stageNode, then the
-/// writer.
+/// node.exportArchive: stageNode, then the writer on a worker (as above).
 ExportResult exportNode(Database *db, Project *project, const QJsonObject &nodeObject,
                         const QString &name, int typeId, const QString &destPath);
 
@@ -117,7 +129,7 @@ struct ImportResult
 };
 
 /// A share file's envelope, read off the disk: the extract and the parse,
-/// FILE I/O ONLY.
+/// FILE I/O ONLY (any thread — importBundle runs it on a worker).
 struct UnpackedBundle
 {
     clipboardformat::Envelope envelope;

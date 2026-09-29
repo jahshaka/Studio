@@ -309,7 +309,8 @@ protected:
     void dropEvent(QDropEvent*) override;
 
     /// Every tray export (JAF-EXPORTS-1): a save dialog offering `.jbundle`,
-    /// then `assets.exportBundle` over `guids` (one asset, or a pack).
+    /// then `guids` (one asset, or a pack) staged and written as
+    /// `assets.exportBundle` does, on a worker behind the progress dialog.
     void exportBundleOf(const QStringList &guids, const QString &suggestedName,
                         const QString &title);
 

@@ -11,6 +11,7 @@ For more information see the LICENSE file
 
 #include "services/assetshare.h"
 
+#include <QCoreApplication>
 #include <QDateTime>
 #include <QDir>
 #include <QFile>
@@ -18,6 +19,10 @@ For more information see the LICENSE file
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QTemporaryDir>
+#include <QEventLoop>
+#include <QFutureWatcher>
+#include <QHash>
+#include <QtConcurrent/QtConcurrentRun>
 
 #include <limits>
 
@@ -78,9 +83,32 @@ assetclosure::Options shareOptions(Project *project)
     return options;
 }
 
+/// THE CATALOG HALF IN SLICES (EXPORT-THREAD-1): describe is a few statements
+/// per asset, and a 200-entry pack is ~50 ms of them in a Debug build — one
+/// block the length of three frames. Sliced, `yield` (the caller's event-loop
+/// turn) runs between every kDescribeSlice assets, so no slice is longer than
+/// a frame. The budget is unbounded here, so slicing changes nothing it spends.
+constexpr int kDescribeSlice = 16;
+QMap<QString, clipboardformat::ClipAsset> describeInSlices(const QStringList &closure, Database *db,
+                                                           Project *project,
+                                                           QVector<assetclosure::DeferredRead> *reads,
+                                                           const std::function<void()> &yield)
+{
+    QMap<QString, clipboardformat::ClipAsset> out;
+    const assetclosure::Options options = shareOptions(project);
+    for (int start = 0; start < closure.size(); start += kDescribeSlice) {
+        if (start > 0 && yield) yield();
+        const auto slice = assetclosure::describe(closure.mid(start, kDescribeSlice), db, options,
+                                                  nullptr, nullptr, reads);
+        for (auto it = slice.constBegin(); it != slice.constEnd(); ++it) out.insert(it.key(), it.value());
+    }
+    return out;
+}
+
 }   // namespace
 
-BundleStage stageBundle(Database *db, Project *project, const QStringList &guids)
+BundleStage stageBundle(Database *db, Project *project, const QStringList &guids,
+                        const std::function<void()> &yield)
 {
     BundleStage stage;
     const auto fail = [&stage](const QString &why) { stage.error = why; return stage; };
@@ -94,8 +122,11 @@ BundleStage stageBundle(Database *db, Project *project, const QStringList &guids
 
     clipboardformat::Envelope envelope = newEnvelope(project);
     QString singleKind;
+    // The entries' own rows in ONE statement (no BLOB), then in the caller's order.
+    QHash<QString, AssetRecord> rows;
+    for (const AssetRecord &row : db->fetchAssetHeaders(entries)) rows.insert(row.guid, row);
     for (const QString &guid : entries) {
-        const AssetRecord row = db->fetchAsset(guid);
+        const AssetRecord row = rows.value(guid);
         if (row.guid.isEmpty()) return fail(QStringLiteral("no asset '%1'").arg(guid));
         // ONE item per entry: the assets the file is ABOUT. The rest of the
         // map is what they are made of; the resolver reads the items to know
@@ -110,10 +141,9 @@ BundleStage stageBundle(Database *db, Project *project, const QStringList &guids
     }
 
     // The rows, the edges and the store paths — queries, on this thread. The
-    // BYTES are owed (`reads`) and read by the writer.
+    // BYTES are owed (`reads`) and read by the writer, on a worker.
     const QStringList closure = assetclosure::expand(entries, db);
-    envelope.assets = assetclosure::describe(closure, db, shareOptions(project), nullptr, nullptr,
-                                             &stage.reads);
+    envelope.assets = describeInSlices(closure, db, project, &stage.reads, yield);
     if (envelope.assets.isEmpty()) return fail(QStringLiteral("nothing to carry"));
 
     stage.envelope = envelope;
@@ -124,7 +154,7 @@ BundleStage stageBundle(Database *db, Project *project, const QStringList &guids
 }
 
 BundleStage stageNode(Database *db, Project *project, const QJsonObject &nodeObject,
-                      const QString &name, int typeId)
+                      const QString &name, int typeId, const std::function<void()> &yield)
 {
     BundleStage stage;
     const auto fail = [&stage](const QString &why) { stage.error = why; return stage; };
@@ -135,7 +165,7 @@ BundleStage stageNode(Database *db, Project *project, const QJsonObject &nodeObj
     // clipboard's own table, io/assetrefs.h) and everything THOSE depend on.
     const QStringList closure = assetclosure::forNodes({ nodeObject }, db);
     QMap<QString, clipboardformat::ClipAsset> assets =
-        assetclosure::describe(closure, db, shareOptions(project), nullptr, nullptr, &stage.reads);
+        describeInSlices(closure, db, project, &stage.reads, yield);
 
     // THE NODE BECOMES THE ROW THE FILE IS ABOUT: an Object (or ParticleSystem)
     // row whose `asset` blob is the node — the shape every Object row has and
@@ -173,16 +203,24 @@ BundleStage stageNode(Database *db, Project *project, const QJsonObject &nodeObj
     return stage;
 }
 
+void yieldToEventLoop()
+{
+    // Frames, repaints, timers; never user input — nothing a click could start
+    // re-enters an export that is staging.
+    QCoreApplication::processEvents(QEventLoop::ExcludeUserInputEvents);
+}
+
 ExportResult exportBundle(Database *db, Project *project, const QStringList &guids,
                           const QString &destPath)
 {
-    return writeBundle(stageBundle(db, project, guids), destPath);
+    return exportAndWait(stageBundle(db, project, guids, yieldToEventLoop), destPath);
 }
 
 ExportResult exportNode(Database *db, Project *project, const QJsonObject &nodeObject,
                         const QString &name, int typeId, const QString &destPath)
 {
-    return writeBundle(stageNode(db, project, nodeObject, name, typeId), destPath);
+    return exportAndWait(stageNode(db, project, nodeObject, name, typeId, yieldToEventLoop),
+                         destPath);
 }
 
 bool looksLikeBundle(const QString &path)
@@ -241,7 +279,11 @@ UnpackedBundle unpackBundle(const QString &path)
         return out;
     }
     QString envelopeError;
-    out.envelope = clipboardformat::Envelope::fromText(payloadFile.readAll(), &envelopeError);
+    // NOT THE CLIPBOARD'S 64 MB CAP: a share file carries its whole closure
+    // inline on purpose (the portability rule), and a pack of pictures passes
+    // 64 MB of base64 easily — it used to write and then refuse to import.
+    out.envelope = clipboardformat::Envelope::fromText(payloadFile.readAll(), &envelopeError,
+                                                       std::numeric_limits<qint64>::max());
     if (out.envelope.items.isEmpty())
         out.error = envelopeError.isEmpty() ? QStringLiteral("the payload names no asset")
                                             : envelopeError;
@@ -255,7 +297,20 @@ ImportResult importBundle(Database *db, Project *project, const QString &path)
     if (!db) return fail(QStringLiteral("no library is open"));
     if (!QFileInfo::exists(path)) return fail(QStringLiteral("no such file '%1'").arg(path));
 
-    const UnpackedBundle unpacked = unpackBundle(path);
+    // THE UNPACK IS A WORKER'S (EXPORT-THREAD-1): the extract and the parse of
+    // an unbounded payload are file I/O, and the calling (UI) thread keeps its
+    // event loop — frames, repaints, timers; user input held back — until the
+    // envelope is in hand. The resolver below is the catalog's, on this thread.
+    QFuture<UnpackedBundle> future = QtConcurrent::run([path]() { return unpackBundle(path); });
+    if (!future.isFinished() && QCoreApplication::instance()) {
+        QEventLoop loop;
+        QFutureWatcher<UnpackedBundle> watcher;
+        QObject::connect(&watcher, &QFutureWatcherBase::finished, &loop, &QEventLoop::quit);
+        watcher.setFuture(future);
+        if (!future.isFinished()) loop.exec(QEventLoop::ExcludeUserInputEvents);
+    }
+    future.waitForFinished();
+    const UnpackedBundle unpacked = future.result();
     if (!unpacked.error.isEmpty()) return fail(unpacked.error);
     const clipboardformat::Envelope &envelope = unpacked.envelope;
 

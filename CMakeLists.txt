@@ -448,6 +448,7 @@ set(SRCS
     src/commands/structuralundo.cpp
     src/commands/staticstate.cpp
     src/ui/dialogs/progressdialog.cpp 
+    src/ui/dialogs/bundleexportdialog.cpp
     src/ui/dialogs/screenshotwidget.cpp 
     src/ui/pages/projectmanager.cpp 
     src/ui/controls/dynamicgrid.cpp

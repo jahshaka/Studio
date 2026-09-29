@@ -32,6 +32,7 @@
 #include <QEventLoop>
 #include <QFile>
 #include <QFileInfo>
+#include <QImage>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -168,10 +169,11 @@ static int shadersCompiled(McpClient &mcp)
 
 /// THE CONTROL (see kControlFactor): the worst heartbeat gap over ~2 s of the
 /// app rendering on its UI thread with no archive in flight.
-static double measureControlGap(McpClient &mcp, const char *label)
+static double measureControlGap(McpClient &mcp, const char *label,
+                                double probeMs = kHeartbeatMs)
 {
     mcp.runScript(QStringLiteral("app.heartbeat(0)"));
-    mcp.runScript(QStringLiteral("app.heartbeat(%1)").arg(int(kHeartbeatMs)));
+    mcp.runScript(QStringLiteral("app.heartbeat(%1)").arg(int(probeMs)));
     QElapsedTimer timer;
     timer.start();
     int frames = 0;
@@ -182,7 +184,7 @@ static double measureControlGap(McpClient &mcp, const char *label)
     const double gapMs = mcp.runScript(QStringLiteral("app.heartbeatStats()"))
                              .value("result").toObject().value("maxGapMs").toDouble();
     std::printf("info: [%s] control: %d rendered frames in 2 s, worst UI gap %.1f ms "
-                "(probe period %.0f ms)\n", label, frames, gapMs, kHeartbeatMs);
+                "(probe period %.0f ms)\n", label, frames, gapMs, probeMs);
     return gapMs;
 }
 
@@ -535,6 +537,92 @@ int main(int argc, char **argv)
           "the round-tripped world opens");
     CHECK(mcp.runScript(QStringLiteral("scene.nodes().length")).value("result").toInt() == nodes,
           "the round-tripped world has the same node count");
+
+    // ---- 3b. THE SHARE FILE IS WRITTEN OFF THE UI THREAD (EXPORT-THREAD-1) ----
+    // assets.exportBundle of a 200-entry pack: the catalog is read on the UI
+    // thread, the bytes / payload / zip are a worker's, and the verb waits with
+    // the event loop turning. A 10 ms probe (the heartbeat's floor) watches it.
+    // PUSH asserts COUNTS — the write ran on a worker, the UI thread ticked
+    // during it; NIGHTLY asserts the gap: the export may add at most ONE FRAME's
+    // budget (16.7 ms at 60 fps) to the worst gap the same app has rendering
+    // with nothing in flight (the control, same probe, same second).
+    {
+        const double kFrameBudgetMs = 1000.0 / 60.0;
+        const double kFineProbeMs = 10.0;
+        const int kPackEntries = 200;
+        QTemporaryDir pics;
+        CHECK(pics.isValid(), "a directory for the pack's 200 pictures");
+        QStringList files;
+        for (int i = 0; i < kPackEntries; ++i) {
+            // 256x256 of per-picture noise: every file different, ~190 KB of PNG
+            // each (~38 MB of owed bytes), so the write is many frames long.
+            QImage img(256, 256, QImage::Format_RGB32);
+            quint32 x = 2463534242u + quint32(i) * 7919u;
+            for (int y = 0; y < img.height(); ++y) {
+                QRgb *row = reinterpret_cast<QRgb *>(img.scanLine(y));
+                for (int c = 0; c < img.width(); ++c) {
+                    x ^= x << 13; x ^= x >> 17; x ^= x << 5;
+                    row[c] = qRgb(x & 0xff, (x >> 8) & 0xff, (x >> 16) & 0xff);
+                }
+            }
+            const QString f = QDir(pics.path()).filePath(QStringLiteral("pack%1.png").arg(i));
+            img.save(f);
+            files << f;
+        }
+        QStringList guids;
+        for (int start = 0; start < files.size(); start += 25) {
+            QStringList batch;
+            for (int i = start; i < qMin(int(files.size()), start + 25); ++i)
+                batch << QStringLiteral("'%1'").arg(files.at(i));
+            const QJsonArray landed = QJsonDocument::fromJson(
+                mcp.runScript(QStringLiteral(
+                    "JSON.stringify([%1].map(function(f){return assets.importFile(f)}))")
+                                  .arg(batch.join(',')))
+                    .value("result").toString().toUtf8()).array();
+            for (const auto &g : landed) guids << QStringLiteral("'%1'").arg(g.toString());
+        }
+        std::printf("info: [pack] %lld pictures imported for the pack\n",
+                    static_cast<long long>(guids.size()));
+        CHECK(guids.size() == kPackEntries, "the 200 pictures are library textures");
+
+        const QString packPath = QDir::current().filePath(QStringLiteral("pack-200.jbundle"));
+        QFile::remove(packPath);
+        const double control = measureControlGap(mcp, "pack", kFineProbeMs);
+        mcp.runScript(QStringLiteral("app.frameStats({reset:true})"));
+        mcp.runScript(QStringLiteral("app.heartbeat(0)"));
+        mcp.runScript(QStringLiteral("app.heartbeat(%1)").arg(int(kFineProbeMs)));
+        QElapsedTimer t;
+        t.start();
+        const QJsonObject written = QJsonDocument::fromJson(
+            mcp.runScript(QStringLiteral("JSON.stringify(assets.exportBundle([%1], '%2'))")
+                              .arg(guids.join(','), packPath))
+                .value("result").toString().toUtf8()).object();
+        const double elapsedMs = double(t.elapsed());
+        const QJsonObject beat = mcp.runScript(QStringLiteral("app.heartbeatStats()"))
+                                     .value("result").toObject();
+        const QJsonObject frames = mcp.runScript(QStringLiteral("app.frameStats()"))
+                                       .value("result").toObject();
+        mcp.runScript(QStringLiteral("app.heartbeat(0)"));
+        const double gap = beat.value("maxGapMs").toDouble();
+        const int ticks = beat.value("ticks").toInt();
+        std::printf("info: [pack] exportBundle of %d entries: %lld bytes in %.0f ms, worker=%d | "
+                    "UI ticks %d (probe %.0f ms) | worst UI gap %.1f ms, control %.1f ms, "
+                    "export adds %.1f ms (bar %.1f) | worst frame %.1f ms\n",
+                    written.value("assets").toInt(),
+                    static_cast<long long>(written.value("bytes").toDouble()), elapsedMs,
+                    int(written.value("worker").toBool()), ticks, kFineProbeMs, gap, control,
+                    gap - control, kFrameBudgetMs, frames.value("worstMs").toDouble());
+        CHECK(written.value("path").toString() == packPath && QFileInfo(packPath).size() > 1024 * 1024,
+              "assets.exportBundle wrote the 200-entry pack");
+        CHECK(written.value("kind").toString() == QLatin1String("pack")
+                  && written.value("assets").toInt() >= kPackEntries,
+              "...as a pack carrying every entry");
+        CHECK(written.value("worker").toBool(), "...and the write ran on a worker, not the UI thread");
+        CHECK(ticks > 0, "the UI thread's event loop turned while the pack was written");
+        TIMING_CHECK(gap > 0.0 && gap - control <= kFrameBudgetMs,
+                     "the export adds at most one frame's budget to the UI thread's worst gap");
+        QFile::remove(packPath);
+    }
 
     // ---- 4. CANCEL leaves no orphan ---------------------------------------
     mcp.runScript(QStringLiteral("project.close()"));

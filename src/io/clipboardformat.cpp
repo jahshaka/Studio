@@ -156,7 +156,7 @@ QByteArray Envelope::toText() const
     return out;
 }
 
-Envelope Envelope::fromText(const QByteArray &text, QString *error)
+Envelope Envelope::fromText(const QByteArray &text, QString *error, qint64 maxBytes)
 {
     Envelope envelope;
     const auto fail = [&](const QString &why) {
@@ -164,7 +164,7 @@ Envelope Envelope::fromText(const QByteArray &text, QString *error)
         return Envelope();
     };
     if (text.trimmed().isEmpty()) return fail(QStringLiteral("the clipboard is empty"));
-    if (qint64(text.size()) > kMaxPayloadBytes)
+    if (qint64(text.size()) > maxBytes)
         return fail(QStringLiteral("payload too large (%1 MB)")
                         .arg(text.size() / (1024.0 * 1024.0), 0, 'f', 1));
 

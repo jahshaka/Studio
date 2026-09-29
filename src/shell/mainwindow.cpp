@@ -13,6 +13,7 @@ For more information see the LICENSE file
 #include "irisgl/core/math/vec.h"
 #include "shell/mainwindow.h"
 #include "services/assetshare.h"
+#include "ui/dialogs/bundleexportdialog.h"
 #include "ui_mainwindow.h"
 
 #include <QWindow>
@@ -2897,8 +2898,11 @@ void MainWindow::exportNode(const iris::SceneNodePtr &node, ModelTypes modelType
 
     if (filePath.isEmpty() || filePath.isNull()) return;
 
-    // THE VERB'S PATH (node.exportArchive calls the same service).
-    const auto result = sceneEditService->exportNodeTo(node, modelType, filePath);
+    // THE VERB'S STAGE (node.exportArchive stages the same way) and the same
+    // worker job, behind the progress dialog (EXPORT-THREAD-1).
+    const auto result = bundleexportdialog::run(
+        this, sceneEditService->stageNodeExport(node, modelType), filePath, tr("Export"));
+    if (result.canceled) return;
     if (!result.ok()) {
         // TOLD, not only logged — this was a silent void (the project export's
         // shape, exportSceneAsZip).

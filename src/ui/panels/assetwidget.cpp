@@ -12,6 +12,7 @@ For more information see the LICENSE file
 #include "ui/panels/assetwidget.h"
 #include "scripting/modules/assetsapi.h"
 #include "services/assetshare.h"
+#include "ui/dialogs/bundleexportdialog.h"
 
 #include "ui/dialogs/importsettingsdialog.h"
 #include "ui_assetwidget.h"
@@ -1398,12 +1399,13 @@ void AssetWidget::exportTexture()
 // `.jaf` writers that lived here (texture, sky, material, asset pack) wrote a
 // database snapshot plus a hidden `.manifest` that ZipHelper never packed
 // (it lists no dot-files), so not one of their files ever re-imported. They
-// are deleted; each row asks `assets.exportBundle` — the verb a script calls —
-// for its entry set, and the file dialogs offer `.jbundle` only.
+// are deleted; each row stages its entry set exactly as `assets.exportBundle`
+// — the verb a script calls — does and writes it through the same worker job,
+// behind the progress dialog; the file dialogs offer `.jbundle` only.
 void AssetWidget::exportBundleOf(const QStringList &guids, const QString &suggestedName,
                                  const QString &title)
 {
-    if (guids.isEmpty() || !mainWindow || !mainWindow->scripting()) return;
+    if (guids.isEmpty() || !db) return;
     QString filePath = QFileDialog::getSaveFileName(
         this, title,
         QStringLiteral("%1.%2").arg(suggestedName, QLatin1String(assetshare::extension())),
@@ -1412,13 +1414,13 @@ void AssetWidget::exportBundleOf(const QStringList &guids, const QString &sugges
     if (QFileInfo(filePath).suffix().isEmpty())
         filePath += QStringLiteral(".") + QLatin1String(assetshare::extension());
 
-    AssetsApi api(mainWindow->scripting()->scriptHost());
-    QVariantList entries;
-    for (const QString &guid : guids) entries << guid;
-    const QVariantMap written =
-        api.quietly([&] { return api.exportBundle(QVariant(entries), filePath); });
-    if (written.value(QStringLiteral("path")).toString().isEmpty())
-        QMessageBox::warning(this, title, tr("That could not be exported: %1").arg(api.lastError()));
+    // THE VERB'S STAGE AND ITS WRITER (EXPORT-THREAD-1): what assets.exportBundle
+    // runs, handed to the progress dialog — the write is a worker's, the window
+    // keeps drawing, and Cancel stops it.
+    const assetshare::ExportResult written = bundleexportdialog::run(
+        this, assetshare::stageBundle(db, project, guids, assetshare::yieldToEventLoop), filePath, title);
+    if (!written.ok() && !written.canceled)
+        QMessageBox::warning(this, title, tr("That could not be exported: %1").arg(written.error));
 }
 
 void AssetWidget::exportMaterial()

@@ -1758,30 +1758,37 @@ void SceneEditService::createMaterialFromNode(iris::SceneNodePtr node, const QSt
     }
 }
 
-SceneEditService::NodeExportResult SceneEditService::exportNodeTo(const iris::SceneNodePtr &node,
-                                                                  ModelTypes modelType,
-                                                                  const QString &filePath)
+assetshare::BundleStage SceneEditService::stageNodeExport(const iris::SceneNodePtr &node,
+                                                          ModelTypes modelType)
 {
-    NodeExportResult result;
-    if (!node) { result.error = QStringLiteral("no node"); return result; }
-    if (filePath.isEmpty()) { result.error = QStringLiteral("no path"); return result; }
+    assetshare::BundleStage stage;
+    if (!node) { stage.error = QStringLiteral("no node"); return stage; }
     if (!db || !project || project->getProjectGuid().isEmpty()) {
-        result.error = QStringLiteral("no project is open");
-        return result;
+        stage.error = QStringLiteral("no project is open");
+        return stage;
     }
 
     // THE SHARE FILE, NOT THE LEGACY .jaf (ARCHIVE-ROUNDTRIP, D7). The node is
     // captured exactly as the clipboard captures it; its references are read
     // by the key-aware walk (io/assetrefs.h) — never by treating node guids as
     // asset guids, which is what left the old archive's catalog empty — and
-    // assetshare writes the closure with every byte (services/assetshare.h).
+    // assetshare stages the closure; the bytes are the writer's, on a worker.
     const SceneFragment fragment = captureFragment(node);
     if (fragment.isNull()) {
-        result.error = QStringLiteral("the node produced no fragment");
-        return result;
+        stage.error = QStringLiteral("the node produced no fragment");
+        return stage;
     }
-    const auto written = assetshare::exportNode(db, project, fragment.node, node->getName(),
-                                                static_cast<int>(modelType), filePath);
+    return assetshare::stageNode(db, project, fragment.node, node->getName(),
+                                 static_cast<int>(modelType), assetshare::yieldToEventLoop);
+}
+
+SceneEditService::NodeExportResult SceneEditService::exportNodeTo(const iris::SceneNodePtr &node,
+                                                                  ModelTypes modelType,
+                                                                  const QString &filePath)
+{
+    NodeExportResult result;
+    if (filePath.isEmpty()) { result.error = QStringLiteral("no path"); return result; }
+    const auto written = assetshare::exportAndWait(stageNodeExport(node, modelType), filePath);
     if (!written.ok()) { result.error = written.error; return result; }
     result.assets = written.assets;
     result.bytes = written.bytes;

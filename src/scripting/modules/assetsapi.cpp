@@ -397,7 +397,7 @@ QVector<VerbInfo> AssetsApi::verbs() const
         // `exportBundle`, beside the `exportRaw` it belongs with, and the
         // alternative (an alias mechanism in the API core, for one name) buys
         // nothing a reader of the docs would notice.
-        { "exportBundle", "assets.exportBundle(guid | [guid], path) -> {path, kind, assets, bytes}",
+        { "exportBundle", "assets.exportBundle(guid | [guid], path) -> {path, kind, assets, bytes, worker}",
           "Writes assets and everything they are made of as ONE self-contained share file (a .jbundle zip: "
           "manifest v2 plus the closure with its bytes inline) — THE export: the Assets tray's Export Texture, "
           "Export Sky, Export Material and Export Asset Pack and the Materials module's Export material all call "
@@ -406,7 +406,11 @@ QVector<VerbInfo> AssetsApi::verbs() const
           "its baked maps, so it opens on a machine that has never seen any of them — the owner's 'material "
           "bundles are great if they are self-contained'. The version that travels is the one the OPEN PROJECT "
           "renders with when it holds an asset, the library's otherwise. Read it back with assets.import(path), "
-          "which answers the first entry's guid and lands them all.",
+          "which answers the first entry's guid and lands them all. THE WRITE IS A WORKER'S: the catalog is read "
+          "on the calling thread, then the bytes are read, the payload serialised and the zip built on a worker "
+          "while the app keeps drawing (user input held back); the verb returns when the file is complete, and "
+          "`worker` is true when the write ran off the UI thread. The UI doors write through the same job "
+          "behind a progress dialog that can cancel it.",
           Needs::Document },
         { "dependencies", "assets.dependencies(guid) -> [guid]",
           "The asset plus all its dependencies, recursively.",
@@ -1785,6 +1789,7 @@ QVariantMap AssetsApi::exportBundle(const QVariant &guids, const QString &path)
     out["kind"] = written.kind;
     out["assets"] = written.assets;
     out["bytes"] = static_cast<qlonglong>(written.bytes);
+    out["worker"] = written.offUiThread;
     return out;
 }
 

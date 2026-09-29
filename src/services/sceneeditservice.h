@@ -39,6 +39,7 @@ For more information see the LICENSE file
 #include "irisgl/irisglfwd.h"
 #include "data/project.h"   // ModelTypes
 #include "io/sceneformat.h"
+#include "services/bundlewriter.h"   // assetshare::BundleStage
 #include "services/surfaceplacement.h"
 
 #include <functional>
@@ -524,6 +525,10 @@ public:
     /// both land here. What a node exports as: services/nodeexport.h.
     NodeExportResult exportNodeTo(const iris::SceneNodePtr &node, ModelTypes modelType,
                                   const QString &filePath);
+    /// The node's share file STAGED (rows, edges, store paths; the bytes owed)
+    /// — what exportNodeTo writes on a worker and waits for, and what the
+    /// outliner's Export Object hands to the progress dialog (EXPORT-THREAD-1).
+    assetshare::BundleStage stageNodeExport(const iris::SceneNodePtr &node, ModelTypes modelType);
 
     // Refresh notifications the undo commands raise (Phase 4: the commands'
     // widget-refresh statics became these signals; the shell connects them to
