@@ -15,6 +15,8 @@
 //   3. EXACTLY ONE CUT at 64 thresholds from "every leaf" (allowed 0) to "the
 //      root only" (above every finite error): each level-0 triangle is covered
 //      by exactly one selected cluster's region.
+//      No crack edge in any cut, and the displacement lock locks by POSITION (no
+//      seam twin left free; the 20k sphere is the seam case).
 //   4. MONOTONE REFINEMENT: raising the threshold never selects a cluster whose
 //      parent (a cluster produced by simplifying its group) was selected at a
 //      lower threshold.
@@ -225,6 +227,19 @@ static void oneMesh(clusterfix::Fixture &f)
         CHECK(worstCut == 0, "%s: NO CRACK EDGE in the cut at any of the %zu thresholds (%zu cuts "
               "with one; worst %zu open edges off level 0's border, at allowed %.4g)", f.name.c_str(),
               thresholds.size(), cutsWithCracks, worstCut, double(worstAt));
+        // THE LOCK IS BY POSITION (CLUSTER-LOCK-1): the displacement lock never locks a
+        // position on only some of its indices — a seam twin left free is moved by
+        // clusterlod's sloppy fallback and opens the cut. The 20k sphere's lock reaches
+        // its seam column: the seam case, crack-free above.
+        CHECK(f.stats.lockedSplitPositions == 0,
+              "%s: the displacement lock splits no position (%d builds, %d vertices locked, %d locked "
+              "positions shared by several indices, %d split)", f.name.c_str(), f.stats.lockPasses,
+              f.stats.lockedVertices, f.stats.lockedSharedPositions, f.stats.lockedSplitPositions);
+        if (f.name == "uv-sphere-20k")
+            CHECK(f.stats.lockedSharedPositions > 0 && worstCut == 0,
+                  "%s: THE SEAM CASE — the lock reached %d shared (seam / pole) positions over %d builds "
+                  "and the cut kept zero open edges (worst %zu)", f.name.c_str(), f.stats.lockedSharedPositions,
+                  f.stats.lockPasses, worstCut);
     }
 
     // MONOTONE REFINEMENT. The parents of cluster c are the clusters its group
