@@ -90,7 +90,6 @@ void EngineAssetScene::buildDocument()
         floor->setName(kFloorName);
         floor->setPickable(false);
         floor->isBuiltIn = true;
-        floor->setFaceCullingMode(iris::FaceCullingMode::None);
         floor->setShadowCastingEnabled(true);
         // The tile texture on the one PBR material, tiled four times.
         auto m = iris::PbrMaterial::create();
@@ -230,7 +229,6 @@ iris::SceneNodePtr EngineAssetScene::setMaterialSubject(iris::MaterialPtr materi
     matball->setLocalPos(iris::Vec3(0, 0, 0));
     matball->setName(name);
     matball->setPickable(false);
-    matball->setFaceCullingMode(iris::FaceCullingMode::None);
     matball->setShadowCastingEnabled(true);
     if (material) matball->setMaterial(material);
     setSubject(matball, false, false);

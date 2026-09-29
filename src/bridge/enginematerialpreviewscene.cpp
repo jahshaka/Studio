@@ -47,6 +47,17 @@ QString meshFile(PreviewMesh mesh)
     return QStringLiteral("app/shadergraph/lowpoly_sphere.obj");
 }
 
+/// THE SUBJECT'S CULL (CULL-MODE-2: a primitive is one-sided). The dock's orbit
+/// has no pitch limit (PreviewOrbit), so its camera reaches the back of whatever
+/// it frames: a closed shape shows none, and stays one-sided — the material
+/// decides, as on any node; the PLANE is the one open surface, and a material
+/// previewed on it reads from both sides.
+iris::FaceCullingMode previewCull(PreviewMesh mesh)
+{
+    return mesh == PreviewMesh::Plane ? iris::FaceCullingMode::None
+                                      : iris::FaceCullingMode::DefinedInMaterial;
+}
+
 } // namespace
 
 EngineMaterialPreviewScene::EngineMaterialPreviewScene(const std::shared_ptr<Engine> &engine)
@@ -183,6 +194,7 @@ void EngineMaterialPreviewScene::rebuildSubject()
     if (mSubject && mSubject->sceneNodeType == iris::SceneNodeType::Mesh) {
         auto node = mSubject.staticCast<iris::MeshNode>();
         node->setMesh(mesh);
+        node->setFaceCullingMode(previewCull(mMesh));
         if (mMaterial) node->setMaterial(mMaterial);
         node->update(0);
         mFramedFor = QSize();     // a new primitive is a new radius
@@ -195,7 +207,7 @@ void EngineMaterialPreviewScene::rebuildSubject()
     node->setLocalPos(iris::Vec3(0, 0, 0));
     node->setPickable(false);
     node->isBuiltIn = true;
-    node->setFaceCullingMode(iris::FaceCullingMode::None);   // Plane reads from both sides
+    node->setFaceCullingMode(previewCull(mMesh));
     if (mMaterial) node->setMaterial(mMaterial);
     mDocument->rootNode->addChild(node);
     node->update(0);

@@ -28,7 +28,6 @@ iris::MeshNodePtr SceneNodeHelper::createBasicMeshNode(
     node->meshIndex = 0;
     node->setName(meshName);
     node->setGUID(meshGuid);
-    node->setFaceCullingMode(iris::FaceCullingMode::None);
     node->isBuiltIn = true;
     return node;
 }

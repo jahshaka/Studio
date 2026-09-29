@@ -133,7 +133,6 @@ iris::MeshNodePtr createNode(Database *db, Project *project)
     node->setLocalPos(iris::Vec3(0, 1e-4, 0));
     node->setName("Ground");
     node->setPickable(false);
-    node->setFaceCullingMode(iris::FaceCullingMode::None);
     node->setShadowCastingEnabled(false);
     node->isBuiltIn = true;
     node->defaultFloor = true;
