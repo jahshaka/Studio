@@ -1528,13 +1528,26 @@ static int caseLightingIndirect()
         CardSample t;
         if (s->readCardAt(Vec3(2.5f, 1.2f, -0.2f), Vec3(0, 0, -1), t) && t.ok) {
             const float want[3] = { 0.60f, 0.45f, 0.30f };
+            // THE BAR IS THE THREE STORES' HALF-STEPS (CONTACT-OCCLUSION-1's verdict): the
+            // authored emissive is itself stored in the R11G11B10F Emissive layer (0.30 on
+            // blue's 5 mantissa bits is 0.2969), the radiance in the R11G11B10F Radiance
+            // layer, the indirect in its own — the flat 2 % held only the radiance's (1.2 %
+            // of 0.3 on blue) and passed while the indirect's value happened to round the
+            // sum to the low side of a tie (0.2969 + 0.0586 = 0.3555, the midpoint of blue's
+            // 0.3516 / 0.3594). Plus 0.5 % for the indirect's own cone quadrature.
+            const auto halfStep = [](double v, int k) {
+                return v > 0.0 ? 0.5 * std::ldexp(1.0, std::ilogb(v) - (k == 2 ? 5 : 6)) : 0.0;
+            };
             for (int k = 0; k < 3; ++k) {
                 const double em = double(t.radiance[k]) - double(t.indirect[k]);
                 const double rel = std::fabs(em - want[k]) / want[k];
-                CHECK_MSG(rel <= 0.02,
+                const double bar = (halfStep(want[k], k) + halfStep(t.radiance[k], k) +
+                                    halfStep(t.indirect[k], k)) / want[k] + 0.005;
+                CHECK_MSG(rel <= bar,
                           "the emissive tile, channel %d: radiance %.4f - indirect %.4f = %.4f,"
-                          " the authored emissive %.3f (%.2f %%, bar 2 %%)",
-                          k, t.radiance[k], t.indirect[k], em, want[k], 100.0 * rel);
+                          " the authored emissive %.3f (%.2f %%, bar %.2f %% = the three stores'"
+                          " half-steps + 0.5)",
+                          k, t.radiance[k], t.indirect[k], em, want[k], 100.0 * rel, 100.0 * bar);
             }
         } else {
             CHECK(false, "the card answers on the emissive tile");
