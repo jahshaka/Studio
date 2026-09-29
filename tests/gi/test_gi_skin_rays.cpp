@@ -514,9 +514,18 @@ int main(int argc, char **argv)
     {
         const unsigned long long p0 = s->rayQueryStatus().skinPasses;
         const unsigned long long d0 = s->rayQueryStatus().skinDispatches;
-        render(e, 5);
-        CHECK_MSG(s->rayQueryStatus().skinPasses == p0 && s->rayQueryStatus().skinDispatches == d0,
-                  "3a. five still frames re-skin nothing (%llu passes)", s->rayQueryStatus().skinPasses - p0);
+        // THE FIRST STILL FRAME OWES ONE SETTLE (REFLECT-MOVERS-2's copy-only record:
+        // the previous-pose slice made level with the pose) — one dispatch, no skinning;
+        // it never ran before REFLECT-EDGE-2 (the still frame returned before the skin
+        // pass), which left a parked character's hits reading as moving for ever.
+        render(e, 1);
+        const unsigned long long d1 = s->rayQueryStatus().skinDispatches;
+        render(e, 4);
+        CHECK_MSG(s->rayQueryStatus().skinPasses == p0 && d1 == d0 + 1 &&
+                      s->rayQueryStatus().skinDispatches == d1,
+                  "3a. five still frames re-skin nothing (%llu passes); the first settles the slice in ONE "
+                  "dispatch (%llu), the next four dispatch nothing (%llu)",
+                  s->rayQueryStatus().skinPasses - p0, d1 - d0, s->rayQueryStatus().skinDispatches - d1);
         enginetest::setNodePosition(s, ch, Vec3(2.0f, 0.0f, 0.0f));
         render(e, 1);
         CHECK_MSG(s->rayQueryStatus().skinPasses == p0,
