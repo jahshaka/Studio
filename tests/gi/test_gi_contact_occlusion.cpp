@@ -494,6 +494,74 @@ int main()
         return 0;
     }
 
+    // THE MOVER AND THE STORE (JAH_CONTACT_MOVER=1; the reflect_mover diagnosis): a
+    // movable sphere circles over the floor under a sun at the High tier; per frame the
+    // cascade-0 light volume's digest says whether the store changed, and the voxel at a
+    // fixed floor point its radiance. Run with and without JAHSHAKA_GI_NO_SKY_PASS=1.
+    if (std::getenv("JAH_CONTACT_MOVER")) {
+        GiParams gi;
+        gi.mode = GiMode::Vct; gi.quality = GiQuality::High; gi.numBounces = 1;
+        gi.cascadeCount = 1;
+        gi.cascadeSet[0] = GiParams::GiCascadeDesc{ 20.0f, 128, 0.0f };
+        f.s->setGlobalIllumination(gi);
+        f.s->setNodeVisible(f.wall, false);
+        f.s->setNodeVisible(f.box, false);
+        if (!std::getenv("JAH_CONTACT_MOVER_NOSUN"))
+            enginetest::addDirectionalLight(f.s, Vec3(-0.3f, -1.0f, 0.4f), 2.0f);
+        if (std::getenv("JAH_CONTACT_MOVER_AMBIENT")) {   // reflect_mover's own sky
+            f.s->setSky(SkyDesc());
+            f.s->setAmbient(Colour(0.45f, 0.55f, 0.70f), Colour(0.30f, 0.30f, 0.32f));
+        }
+        const NodeId ball = f.s->createNode();
+        f.s->setNodeMovable(ball, !std::getenv("JAH_CONTACT_MOVER_STILL"));
+        PbrParams bp; bp.albedo = Colour(1.0f, 0.45f, 0.1f); bp.roughness = 0.8f;
+        f.s->attachMesh(ball, f.cube, f.s->createPbrMaterial(bp));
+        const auto at = [](int k) { const float a = 0.02f * float(k); return Vec3(1.5f * std::cos(a), 0.6f, 1.5f * std::sin(a)); };
+        f.s->setNodeTransform(ball, at(0), Quat(), Vec3(1.2f, 1.2f, 1.2f));
+        render(f.e, 240);
+        std::string prev;
+        int changed = 0;
+        const int N = 60;
+        for (int k = 1; k <= N; ++k) {
+            f.s->setNodeTransform(ball, at(k), Quat(), Vec3(1.2f, 1.2f, 1.2f));
+            f.e->renderOneFrame();
+            const GiVoxelStats vs = f.s->giVoxelStats(0);
+            if (!prev.empty() && vs.lightDigest != prev) ++changed;
+            if (k <= 6 || k == N) std::printf("   mover frame %d: digest %s peak %.4f meanLit %.5f lit %lld\n", k,
+                                               vs.lightDigest.c_str(), double(vs.peak), vs.meanLit, (long long)vs.voxelsLit);
+            prev = vs.lightDigest;
+        }
+        std::printf("\n== MOVER: the store changed on %d of %d moving frames (sky pass %s)\n", changed, N - 1,
+                    std::getenv("JAHSHAKA_GI_NO_SKY_PASS") ? "OFF" : "ON");
+        render(f.e, 120);
+        {
+            // THE THREE READINGS OF ONE FLOOR POINT (1, 0, 1): the pixel (top-down, V = N),
+            // the floor's card, the cascade-0 voxel — all in radiance.
+            ImageF img; f.view->readPixelsHdr(img);
+            const double px = worldToPixel(-2.0f), py = worldToPixel(-2.0f);
+            const Colour c = img.at(unsigned(px), unsigned(py));
+            CardSample cs;
+            const bool cok = f.s->readCardAt(Vec3(-2.0f, 0.0f, -2.0f), Vec3(0, 1, 0), cs) && cs.ok;
+            GiVoxelVolume vv;
+            double vr = -1.0;
+            if (f.s->giVoxelVolume(0, vv) && vv.available) {
+                const int ix = int((-2.0f - vv.origin[0]) / vv.cell[0]);
+                const int iy = int((0.01f - vv.origin[1]) / vv.cell[1]);
+                const int iz = int((-2.0f - vv.origin[2]) / vv.cell[2]);
+                for (int yy = iy - 1; yy <= iy; ++yy) {
+                    const size_t i = (size_t(iz) * vv.height + yy) * vv.width + ix;
+                    const double cc = vv.albedo[i * 4 + 3];
+                    if (cc > 0.5) vr = vv.light[i * 4 + 1] / (vv.multiplier * cc);
+                }
+            }
+            std::printf("   FLOOR (-2,0,-2) green: pixel %.4f  card %s %.4f (indirect %.4f)  voxel %.4f\n", c.g,
+                        cok ? "ok" : "none", cok ? cs.radiance[1] : -1.0f, cok ? cs.indirect[1] : -1.0f, vr);
+        }
+        const std::string settled = f.s->giVoxelStats(0).lightDigest;
+        std::printf("   settled digest %s (the last moving frame's %s)\n", settled.c_str(), prev.c_str());
+        return 0;
+    }
+
     const Radiosity refB = solveRadiosity(kWhite, kFloorAlbedo);
     double refA[kNd], refBv[kNd];
     std::printf("\n   d (m)                             ");
