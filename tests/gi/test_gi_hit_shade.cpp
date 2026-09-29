@@ -1467,16 +1467,12 @@ static int offscreenLightsMain(Engine *e)
 // voxels through the same cone and the gap left between them is the decode's own.
 // Its own process (`--planar-pinned`, not a row): a second scene in one process
 // measured nothing (B's mask came back empty).
-// THE FINDING (HIT-PLANAR-GAP-1, D8, spikes/d8-photon-debts-1/hit-planar*.log): on the
-// tier's chain the hit reads 50.7 % off the true picture and the screen's cone 61.3 %
-// — the 10.6-point gap. With ONE pinned 24 m cascade (0.375 m cells) both read the
-// same voxels: the hit 70.2 %, the screen 74.8 % — 4.6 points, the other way, both
-// worse (a coarser cell than the traced camera's 0.156 m). So the gap is the
-// camera-relative chain reading B and P from two different cascades (the traced
-// camera 6 m from B, the reflected one 21.7 m), not a defect in either reader; the
-// 4.6 points left are the decode's cone origin (the hit's reconstructed point vs the
-// screen's pixel) at a coarse cell. Neither picture is wrong: the bar stays the
-// engine's own cone (+ 2 %).
+// THE GAP (HIT-PLANAR-GAP-1, D8): the two pictures read P from different cascades of the
+// camera-relative chain (the traced camera 6 m from B, the reflected one 21.7 m) — not a
+// defect in either reader. Both used to read about half of P (50.7 % / 61.3 % off): the
+// specular walk's hop ramp and its start slid along the normal (CONE-EMITTER-1,
+// gi.cone_emitter); since, the hit reads 1.5 % off and the screen 21.8 % (P out of the 60 m
+// cascade's 1.875 m cells). The hit's bar is absolute (5 %) beside the relative one.
 static int planarMain(Engine *e, bool pinnedChain)
 {
     View *view = e->createOffscreenView(pinnedChain ? "hitplanarpin" : "hitplanar", kSize, kSize,
@@ -1595,12 +1591,19 @@ static int planarMain(Engine *e, bool pinnedChain)
     // THE BAR IS THE ENGINE'S OWN CONE: B at a hit is shaded by the same specular
     // environment term the screen reads for B without its planar render — the hit
     // may not be further from the true picture than that picture is (plus the
-    // mirror composite's 2 %, arm (a)'s). What remains is the CONE's error (the
-    // voxel store's read of an emitter in a mirror lobe), printed above: the physics
-    // of a hit on a mirror is one more bounce, which this lane does not trace.
+    // mirror composite's 2 %, arm (a)'s).
     CHECK_MSG(err <= coneErr + 0.02f,
               "B in the traced mirror is %.1f %% off the true picture — no further than the engine's own cone "
               "picture of B (%.1f %%, bar + 2 %%)", 100.0f * err, 100.0f * coneErr);
+    // THE EMITTER IN THE HIT'S MIRROR LOBE READS ITS RADIANCE (PHOTON-PHYSICS-1, CONE-EMITTER-1): P
+    // lies past the first cascade from the traced camera, and the specular walk read every cascade
+    // past the first at half its radiance (upstream's hop ramp) from a start slid one cell along
+    // the normal - 50.7 % off (the screen's cone 61.3 %). The unit conversion and the start on the
+    // reflection's own axis: 1.5 % (the screen's 21.8 %: its reflected camera reads P from the
+    // 60 m cascade, 1.875 m cells - the chain, HIT-PLANAR-GAP-1). BAR 5 %: the mirror
+    // composite's 2 % (arm (a)) plus the voxel lattice's blur of P's 0.2 m edge in B's lobe.
+    CHECK_MSG(err <= 0.05f, "B in the traced mirror reads P's radiance: %.1f %% off the true picture (bar 5 %%)",
+              100.0f * err);
     CHECK_MSG(lum(cm) > 0.25f * lum(cr) && relDiff(cm, cc) < 1.0f,
               "B is neither black nor sky-only: %.0f %% of the true luminance, P's colour (worst channel %.0f %% "
               "from the cone picture's)", 100.0f * lum(cm) / lum(cr), 100.0f * relDiff(cm, cc));
