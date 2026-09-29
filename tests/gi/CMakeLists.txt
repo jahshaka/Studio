@@ -1508,6 +1508,31 @@ set_tests_properties(gi.gather_trace PROPERTIES
                      TIMEOUT 120 LABELS "engine"
                      ENVIRONMENT "JAH_GATHER_TRACE=1")
 
+# gi.contact_occlusion — AN OBJECT STANDING ON A FLOOR DARKENS THE FLOOR BESIDE IT
+# (CONTACT-OCCLUSION-1): a 2 m black wall on a matte floor under a constant sky,
+# the floor's E(d)/E_open against the differential-strip configuration factor
+# 1 - F(d) at d = 0.05..4 m (0.04 at Epic/High, 0.08 at Medium/Low for d >= 0.1 m),
+# a white wall's bounce against a 2-D radiosity solve, the rig check's 2 m cube
+# printed — at every shipped tier. JAH_CONTACT_MEASURE=1 prints the per-term table.
+# A photon-target row: at the base (Studio 1704f7fde) arm A holds at Epic/High/Medium
+# (the gather) and misses at Low (the field, 0.10-0.11 at d = 0.5-1 m), and arm B
+# (the sky-lit white wall's bounce) is ZERO at High/Medium/Low, 0.4 of the solve at Epic.
+add_executable(test_gi_contact_occlusion test_gi_contact_occlusion.cpp)
+set_target_properties(test_gi_contact_occlusion PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_contact_occlusion PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_contact_occlusion PRIVATE JahshakaEngine)
+add_dependencies(test_gi_contact_occlusion JahshakaEngineMedia)
+jah_gpu_row(gi.contact_occlusion CLASS engine TOKENS 2 COMMAND test_gi_contact_occlusion
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.contact_occlusion PROPERTIES TIMEOUT 300 LABELS "engine;photon-target")
+
 # gi.voxel_coverage — THE STORE HOLDS A SURFACE'S PROJECTED AREA PER AXIS
 # (PHOTON-VOXEL-3): an open emissive quad and a closed box one and four cascade-0
 # cells thick, turned 0/15/45 degrees against the lattice, and a quad at opacity
