@@ -111,13 +111,18 @@ void LibraryModel::refreshTile(const QString &guid)
 
 void LibraryModel::reassignCollections(const QVector<int> &from, int to)
 {
+    // ONE RANGED dataChanged (the review, D11): one per row made a dynamic proxy
+    // showing that drawer drop its rows one at a time — O(rows^2) for a big one.
+    int first = -1, last = -1;
     for (int i = 0; i < mRows.size(); ++i) {
         if (!from.contains(mRows.at(i).collection)) continue;
         mRows[i].collection = to;
-        // No role list: a proxy re-filters only on the roles it is told about
-        // when told, and the drawer filter reads CollectionRole.
-        emit dataChanged(index(i, 0), index(i, ColumnCount - 1));
+        if (first < 0) first = i;
+        last = i;
     }
+    // No role list: the drawer filter reads CollectionRole, and a proxy
+    // re-filters only on the roles it is told about when told.
+    if (first >= 0) emit dataChanged(index(first, 0), index(last, ColumnCount - 1));
 }
 
 void LibraryModel::setLoading(const QString &guid)
