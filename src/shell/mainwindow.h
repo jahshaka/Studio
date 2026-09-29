@@ -351,6 +351,8 @@ public:
     /// The editor's ASSET TRAY panel (the Assets tab of the bottom tray), or
     /// null before the editor is built. editor.trayAssets reads it.
     AssetWidget *assetTray() const { return assetWidget; }
+    /// The LIBRARY materials tray (editor.activateMaterialTile).
+    AssetMaterialPanel *materialTray() const { return assetMaterialPanel; }
 
     /// One toast, reused, for every transient viewport readout (snap size, fly
     /// speed) — and for a gesture the viewport has to REFUSE: a material or an

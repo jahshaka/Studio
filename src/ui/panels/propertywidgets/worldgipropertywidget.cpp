@@ -389,9 +389,11 @@ void WorldGiPropertyWidget::rebuild()
         // THE IRRADIANCE FIELD (GI_UNIFIED_SPEC P1). On at every voxel tier
         // since option (b); it REPLACES the cone-traced diffuse rather than
         // adding to it.
-        ddgiToggle = this->addCheckBox(tr("Irradiance Field (DDGI)") + pinMark(scene, "giDdgi"),
-                                       scene->giDdgi > 0);
-        ddgiToggle->setValue(scene->giDdgi > 0);
+        // RESOLVED (DDGI-AUTO-1): a tier leaves the field Auto (-1), which the
+        // engine resolves through its quality's fieldDefault — the row's get.
+        const bool ddgiOn = scene->giDdgi < 0 ? worldmodes::photonFieldAuto(scene) : scene->giDdgi > 0;
+        ddgiToggle = this->addCheckBox(tr("Irradiance Field (DDGI)") + pinMark(scene, "giDdgi"), ddgiOn);
+        ddgiToggle->setValue(ddgiOn);
         ddgiToggle->setToolTip(rowTip("giDdgi"));
         connect(ddgiToggle, &CheckBoxWidget::valueChanged,
                 this, &WorldGiPropertyWidget::onDdgiToggled);

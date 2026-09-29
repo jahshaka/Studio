@@ -12,6 +12,7 @@ For more information see the LICENSE file
 #include "irisgl/core/math/quat.h"
 #include "irisgl/core/math/vec.h"
 #include "shell/mainwindow.h"
+#include "services/assetshare.h"
 #include "ui_mainwindow.h"
 
 #include <QWindow>
@@ -2888,8 +2889,10 @@ void MainWindow::exportNode(const iris::SceneNodePtr &node, ModelTypes modelType
     auto filePath = QFileDialog::getSaveFileName(
         this,
         "Choose export path",
-        QString("%1_%2").arg(node->getName(), QString::number(static_cast<time_t>(currentDateTime.toSecsSinceEpoch()))),
-        "Supported Export Formats (*.jaf)"
+        QStringLiteral("%1_%2.%3").arg(node->getName(),
+                                      QString::number(static_cast<time_t>(currentDateTime.toSecsSinceEpoch())),
+                                      QLatin1String(assetshare::extension())),
+        assetshare::fileFilter()
     );
 
     if (filePath.isEmpty() || filePath.isNull()) return;

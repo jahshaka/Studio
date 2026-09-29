@@ -1265,6 +1265,19 @@ QVector<VerbInfo> MaterialApi::verbs() const
           "edges. Ends any live material.preview first, so the undo step captures the node's "
           "true original material.",
           Needs::Document },
+        { "drop", "material.drop(nodeId, presetOrGuid, {from: 'library'|'project'}) -> {guid, name, copied}",
+          "THE DROP OF A MATERIAL ONTO AN ASSET — the viewport's drop calls the same service "
+          "(MATERIAL-DROP-1, the owner 2026-09-28: the LIBRARY is the source). `from: 'library'` "
+          "(the default; the materials tray, the Assets page) ALWAYS makes a fresh, PRISTINE copy of "
+          "the library entry in the open project — the library's current definition, whatever the "
+          "project did to an earlier copy of it — named by the project's own naming (\"Wood PBR\", "
+          "then \"Wood PBR 2\", \"Wood PBR 3\"), sharing its member textures, and dresses the node "
+          "with it: two drops of one library material are two project materials. `from: 'project'` "
+          "(the project's asset tray) ASSIGNS the project's own material itself: nothing is copied. "
+          "A container node dresses every mesh under it. Answers the material the node now wears "
+          "(`guid`, `name`) and whether a copy was made (`copied`). ONE undo step. Needs an open "
+          "project.",
+          Needs::Document },
         { "preview", "material.preview(nodeId, presetOrGuid) -> bool",
           "Shows a material on a node WITHOUT applying it — the editor's live hover preview, which "
           "is what a material dragged over the scene does. It takes the same three payloads "
@@ -1421,6 +1434,39 @@ bool MaterialApi::apply(const QString &nodeId, const QString &presetOrGuid)
     if (host.services->sceneEdit->applyMaterial(presetOrGuid, node)) return true;
 
     return fail(QStringLiteral("material.apply: no preset, material asset or effect graph '%1' (materials.presets() and assets.list list them)").arg(presetOrGuid));
+}
+
+QVariantMap MaterialApi::drop(const QString &nodeId, const QString &presetOrGuid,
+                              const QVariantMap &options)
+{
+    QVariantMap out;
+    if (!host.services || !host.services->sceneEdit) { fail("material: not available in this session"); return out; }
+    if (!requireProject()) return out;
+    static const QStringList known = { QStringLiteral("from") };
+    const QString refusal = refuseUnknownKeys(QStringLiteral("material.drop"), options, known);
+    if (!refusal.isEmpty()) { fail(refusal); return out; }
+    const QString from = options.value(QStringLiteral("from"), QStringLiteral("library")).toString();
+    if (from != QLatin1String("library") && from != QLatin1String("project")) {
+        fail(QStringLiteral("material.drop: from must be 'library' or 'project', not '%1'").arg(from));
+        return out;
+    }
+    auto scene = host.services->sceneEdit->scene();
+    if (!scene) { fail("material.drop: no scene is open"); return out; }
+    auto node = findNodeByGuid(scene->getRootNode(), nodeId);
+    if (!node) { fail(QStringLiteral("material.drop: no node '%1'").arg(nodeId)); return out; }
+
+    using Origin = SceneEditService::MaterialOrigin;
+    const Origin origin = from == QLatin1String("project") ? Origin::Project : Origin::Library;
+    QString error;
+    const QString worn = host.services->sceneEdit->dropMaterial(presetOrGuid, origin, node, &error);
+    if (worn.isEmpty()) {
+        fail(QStringLiteral("material.drop: %1").arg(error));
+        return out;
+    }
+    out.insert(QStringLiteral("guid"), worn);
+    out.insert(QStringLiteral("name"), host.db && !worn.isEmpty() ? host.db->fetchAsset(worn).name : QString());
+    out.insert(QStringLiteral("copied"), origin == Origin::Library);
+    return out;
 }
 
 bool MaterialApi::preview(const QString &nodeId, const QString &presetOrGuid)

@@ -50,6 +50,7 @@ For more information see the LICENSE file
 // bake produced), their bytes and their rows. What does NOT travel is
 // anything reserved — the builtins exist in every install.
 
+#include <QJsonObject>
 #include <QString>
 #include <QStringList>
 
@@ -82,6 +83,19 @@ struct ExportResult
 /// same rule the clipboard uses.
 ExportResult exportBundle(Database *db, Project *project, const QString &guid,
                           const QString &destPath);
+
+/// A SCENE NODE, shared (ARCHIVE-ROUNDTRIP, D7) — the file behind the
+/// outliner's Export Object / Export Particle System and node.exportArchive.
+/// The same format as exportBundle, and for the same reason: the legacy .jaf
+/// carried a catalog snapshot that held NO asset rows (it walked node guids
+/// as asset guids) and a `.manifest` the zip writer dropped as a dot-file, so
+/// it never re-imported at all. Here the node becomes the row the file is
+/// about — an Object (`typeId`) row, fresh guid, its `asset` blob the node —
+/// with the node's whole closure and every byte beside it; `assets.import` of
+/// the file lands them all and answers that row, which `assets.addToScene`
+/// instantiates.
+ExportResult exportNode(Database *db, Project *project, const QJsonObject &nodeObject,
+                        const QString &name, int typeId, const QString &destPath);
 
 struct ImportResult
 {

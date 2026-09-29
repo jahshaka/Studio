@@ -1159,6 +1159,10 @@ void EngineSceneViewport::dragEnterEvent(QDragEnterEvent *event)
     mDragMaterialSource = materialDragSource(event->mimeData());
     if (!mDragMaterialSource.isEmpty()) {
         auto *preview = materialPreview();
+        // A LIBRARY tile previews what its drop makes: the pristine material
+        // (MATERIAL-DROP-1).
+        if (preview)
+            preview->setLibraryOrigin(AssetDrag::originOf(event->mimeData()) == AssetDrag::Origin::Library);
         if (!preview || !preview->canPreview(mDragMaterialSource)) {
             mDragMaterialSource.clear();
             event->ignore();
@@ -1188,7 +1192,10 @@ void EngineSceneViewport::dragMoveEvent(QDragMoveEvent *event)
         bool lockedTarget = false;
         iris::SceneNodePtr node = dropTargetAt(event->position(), &lockedTarget);
         if (lockedTarget) node.reset();
-        if (auto *preview = materialPreview()) preview->begin(node, mDragMaterialSource);
+        if (auto *preview = materialPreview()) {
+            preview->setLibraryOrigin(AssetDrag::originOf(event->mimeData()) == AssetDrag::Origin::Library);
+            preview->begin(node, mDragMaterialSource);
+        }
     } else if (type == static_cast<int>(ModelTypes::Object) || type == static_cast<int>(ModelTypes::ParticleSystem)
                || type == static_cast<int>(ModelTypes::Texture)
                || type == static_cast<int>(ModelTypes::Avatar)
@@ -1292,10 +1299,21 @@ void EngineSceneViewport::dropEvent(QDropEvent *event)
         // The preview ends BEFORE anything reads the node — the selection mounts
         // a Properties panel on it (code review, F10).
         if (preview) preview->end();
+        // THE DROP IS THE VERB'S (material.drop, MATERIAL-DROP-1): a tile from
+        // the LIBRARY becomes a fresh, pristine project copy on the target; one
+        // from the PROJECT's tray is assigned as it is.
         if (target && target->getSceneNodeType() == iris::SceneNodeType::Mesh
             && mServices && mServices->sceneEdit) {
             if (mMainWindow) mMainWindow->sceneNodeSelected(target);
-            mServices->sceneEdit->applyMaterial(source, target);
+            const bool fromProject =
+                AssetDrag::originOf(event->mimeData()) == AssetDrag::Origin::Project;
+            QString error;
+            if (mServices->sceneEdit->dropMaterial(
+                    source,
+                    fromProject ? SceneEditService::MaterialOrigin::Project
+                                : SceneEditService::MaterialOrigin::Library,
+                    target, &error).isEmpty())
+                qWarning("material drop refused: %s", qUtf8Printable(error));
         }
         mDragMaterialSource.clear();
     } else if (type == static_cast<int>(ModelTypes::Texture)) {
@@ -2806,6 +2824,9 @@ IEditorViewport::GiStatusInfo EngineSceneViewport::giStatus() const
         out.rayQuery.reflect      = rq.reflect;
         out.rayQuery.reflectRays  = rq.reflectRays;
         out.rayQuery.reflectMs    = rq.reflectMs;
+        out.rayQuery.hitRecords   = quint64(rq.hitRecords);
+        out.rayQuery.hitDropped   = quint64(rq.hitDropped);
+        out.rayQuery.hitCapacity  = quint64(rq.hitCapacity);
     }
     // THE SCREEN-PROBE GATHER (SCREEN_PROBE_GATHER_SPEC phase 1) — a member of
     // GiStatus, unlike the tier above it: it IS global illumination.

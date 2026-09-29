@@ -744,7 +744,6 @@ public:
 
 
     // EXPORT ===============================================================================
-    bool createBlobFromNode(const iris::SceneNodePtr &node, const QString &writePath);
     bool createBlobFromAsset(const QString &guid, const QString &writePath);
 
     void createExportScene(const QString& outTempFilePath, const QString &projectGuid);

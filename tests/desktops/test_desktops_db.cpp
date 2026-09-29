@@ -316,6 +316,35 @@ int main(int argc, char **argv)
         QFile::remove("own-pic.png");
     }
 
+    // --- DESKTOP-ORDER-1: two projects made in ONE SECOND sort the same way
+    //     every time. The stamp is whole seconds; pinning both to one stamp is
+    //     the same-second create without racing the clock. The tie-break is
+    //     the insertion order: the later-created project first.
+    {
+        CHECK(db.createProject("guid-tie-1", "Tie One"), "the first same-second create");
+        CHECK(db.createProject("guid-tie-2", "Tie Two"), "the second same-second create");
+        QSqlQuery q;
+        CHECK(q.exec("UPDATE projects SET last_written = '2099-01-01 00:00:00', desktop = 4 "
+                     "WHERE guid IN ('guid-tie-1', 'guid-tie-2')"),
+              "both stamped with one second (on a desktop of their own)");
+        bool stable = true;
+        for (int i = 0; i < 20; ++i) {
+            const auto d4 = db.fetchProjects(4);
+            if (d4.size() != 2 || d4[0].guid != "guid-tie-2" || d4[1].guid != "guid-tie-1")
+                stable = false;
+        }
+        CHECK(stable, "same-second tiles: the later create first, in 20 fetches out of 20");
+        const auto all = db.fetchProjects(0);
+        CHECK(all.size() >= 2 && all[0].guid == "guid-tie-2" && all[1].guid == "guid-tie-1",
+              "...and the all-desktops fetch (the same one query) agrees");
+        // A later SAVE of the older one wins its own second outright.
+        CHECK(q.exec("UPDATE projects SET last_written = '2099-01-01 00:00:01' WHERE guid = 'guid-tie-1'"),
+              "the older one written a second later");
+        const auto after = db.fetchProjects(4);
+        CHECK(after.size() == 2 && after[0].guid == "guid-tie-1",
+              "...and it moves to the head (last_written still decides first)");
+    }
+
     db.closeDatabase();
     QFile::remove(dbPath);
 

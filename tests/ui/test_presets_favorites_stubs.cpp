@@ -35,12 +35,13 @@ void SceneEditService::addPrimitive(const QString &, const std::optional<iris::V
 {
 }
 
-// The tray's double-click asks the ONE apply (MATERIAL-PREVIEW-1). The suite
-// never double-clicks — and hands the panels no services — so the call is
-// never made; the symbol still has to resolve.
-bool SceneEditService::applyMaterial(const QString &, iris::SceneNodePtr)
+// The tray's double-click is a LIBRARY drop (MATERIAL-DROP-1). The suite never
+// double-clicks — and hands the panels no services — so the call is never
+// made; the symbol still has to resolve.
+QString SceneEditService::dropMaterial(const QString &, MaterialOrigin, iris::SceneNodePtr,
+                                       QString *)
 {
-    return false;
+    return QString();
 }
 
 // The tray's Customise (R18) mints a material through the ONE preset service.

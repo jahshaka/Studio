@@ -76,7 +76,7 @@ WorldCloudsPropertyWidget::WorldCloudsPropertyWidget()
         "lets through). Surfaces that receive no shadows are not shaded."));
     weather = this->addTexturePicker("Weather Map");
     weather->setToolTip(QStringLiteral(
-        "Optional. An image whose red channel shapes the cloud cover over one 16 km tile of the "
+        "Optional. An image whose red channel shapes the cloud cover over one 64 km tile of the "
         "sheet: white lets clouds form, black keeps the sky clear."));
     note = this->addLabel("Note", QString());
 

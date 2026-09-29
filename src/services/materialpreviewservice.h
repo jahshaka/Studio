@@ -115,6 +115,13 @@ public:
     /// visibly instead of being accepted and doing nothing).
     bool canPreview(const QString &presetOrGuid);
 
+    /// WHERE THE GESTURE'S TILE CAME FROM (MATERIAL-DROP-1): a tile from the
+    /// LIBRARY previews the library's pristine material — what its drop makes
+    /// (SceneEditService::dropMaterial) — never the open project's edited copy
+    /// of the same entry. Set by the viewport as a drag enters; `end` puts it
+    /// back to the project reading (what `material.preview` shows).
+    void setLibraryOrigin(bool fromLibrary);
+
 private:
     /// The restore half of `end`, WITHOUT dropping the resolve cache: what
     /// `begin` does when the hover moves from one object to the next inside one
@@ -134,6 +141,8 @@ private:
     iris::ScenePtr    mScene;        ///< the scene the flag was raised on
     bool mVerbOwned = false;
     QString           mSource;
+
+    bool              mFromLibrary = false;
 
     // The per-gesture resolve cache (keyed on the payload string).
     QString           mResolvedSource;

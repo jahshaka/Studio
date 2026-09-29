@@ -81,6 +81,8 @@ struct DecalOptions
     iris::Vec3 position;
 };
 
+class ProjectMaterialCopyCommand;
+
 class SceneEditService : public QObject
 {
     Q_OBJECT
@@ -379,7 +381,37 @@ public:
     /// QVariant on the AssetManager (which was silently null for two of the
     /// three material sources, the owner's "only some materials preview" bug),
     /// MainWindow::applyMaterialPreset's preset scan, and material.apply's own.
-    iris::MaterialPtr resolveMaterial(const QString &presetOrGuid) const;
+    ///
+    /// `origin` Library (MATERIAL-DROP-1): what a drop FROM THE LIBRARY will
+    /// apply — the library's current definition, never the open project's copy
+    /// of the same entry — so the hover preview of a library drag shows the
+    /// pristine material the drop makes.
+    enum class MaterialOrigin { Project, Library };
+    iris::MaterialPtr resolveMaterial(const QString &presetOrGuid,
+                                      MaterialOrigin origin = MaterialOrigin::Project) const;
+
+    /// A NEW PROJECT MATERIAL MADE FROM `source` (MATERIAL-DROP-1 /
+    /// TRAY-DUPLICATE-1; commands/projectmaterialcopycommand.h), pushed as ONE
+    /// undo step: `origin` Library = a pristine copy of the library entry (a
+    /// shipped preset by name or guid is seeded first); Project = a copy of one
+    /// of the open project's own materials, its edits included (refused for a
+    /// material the project does not hold). Named by the project's own naming
+    /// ("X", "X 2", "X 3" — materialmembers::projectCopyName). Returns the copy's
+    /// guid, or empty with `errorOut` saying why.
+    QString copyMaterialIntoProject(const QString &source, MaterialOrigin origin,
+                                    QString *errorOut = nullptr);
+
+    /// THE DROP OF A MATERIAL ONTO AN ASSET (MATERIAL-DROP-1, the owner
+    /// 2026-09-28) — the viewport's drop and `material.drop` land here. FROM THE
+    /// LIBRARY it always makes a fresh, pristine project copy
+    /// (copyMaterialIntoProject) and dresses the target with it — two drops of
+    /// one library entry are two project materials, however the first was
+    /// edited since. FROM THE PROJECT it ASSIGNS: the target wears that very
+    /// material, nothing is copied. One undo step either way. Answers the guid
+    /// the target now wears (the copy, or the assigned material); empty, with
+    /// `errorOut` saying why, when nothing was dropped.
+    QString dropMaterial(const QString &presetOrGuid, MaterialOrigin origin,
+                         iris::SceneNodePtr target, QString *errorOut = nullptr);
 
     /// THE ONE APPLY, with the target EXPLICIT. `material.apply`, the viewport
     /// drop and the tray's double-click all land here; it dispatches on the
@@ -482,11 +514,12 @@ public:
     /// What an export did. `error` empty = the archive was written.
     struct NodeExportResult {
         QString error;
-        int     assets = 0;     ///< asset files packaged beside the scene blob
-        qint64  bytes = 0;      ///< the .jaf's size on disk
+        int     assets = 0;     ///< catalog rows carried (the node's own row included)
+        qint64  bytes = 0;      ///< the share file's size on disk
         bool ok() const { return error.isEmpty(); }
     };
-    /// Packages a node with its dependencies into a .jaf at filePath. The save
+    /// Packages a node with its whole closure into a share file (assetshare::exportNode)
+    /// at filePath. The save
     /// dialog stays in the shell; node.exportArchive (API-first) and the menu
     /// both land here. What a node exports as: services/nodeexport.h.
     NodeExportResult exportNodeTo(const iris::SceneNodePtr &node, ModelTypes modelType,
@@ -517,6 +550,13 @@ signals:
     void materialApplied(const QString &presetType);
 
 private:
+    /// copyMaterialIntoProject's two halves: every refusal is asked in the
+    /// first (so a drop never opens an undo macro it cannot fill), the push in
+    /// the second.
+    ProjectMaterialCopyCommand *makeMaterialCopy(const QString &source, MaterialOrigin origin,
+                                                 QString *errorOut);
+    QString pushMaterialCopy(ProjectMaterialCopyCommand *command, QString *errorOut);
+
     Database *db = nullptr;
     Project *project;
     UndoService *undo;

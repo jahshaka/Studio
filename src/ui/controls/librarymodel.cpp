@@ -240,7 +240,9 @@ QMimeData *LibraryModel::mimeData(const QModelIndexList &indexes) const
     for (const QModelIndex &index : indexes) {
         if (!index.isValid()) continue;
         const LibraryRow &row = mRows.at(index.row());
-        return AssetDrag::mimeFor(row.type, row.name, QString(), row.guid);
+        return AssetDrag::mimeFor(row.type, row.name, QString(), row.guid,
+                                  // The Assets page and the library picker are the LIBRARY (MATERIAL-DROP-1).
+                                  AssetDrag::Origin::Library);
     }
     return nullptr;
 }

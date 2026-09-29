@@ -1,0 +1,173 @@
+// editor.material_drop — THE LIBRARY IS THE SOURCE (MATERIAL-DROP-1) and the tray's Duplicate
+// is the same copy (TRAY-DUPLICATE-1); the owner, 2026-09-28.
+//
+// What was wrong: dropping a LIBRARY material onto an asset when the project already held a
+// material born from the same library entry REUSED that project material, the owner's edits
+// included (SceneEditService::applyMaterial resolved a preset to presetedit::projectCopyOf).
+// THE RULE, as verbs and as the gesture:
+//   1. a drop FROM THE LIBRARY is a fresh, pristine project copy, named by the project's own
+//      naming — "Wood PBR", then "Wood PBR 2", "3" — whatever was done to an earlier copy;
+//   2. a drop FROM THE PROJECT's tray ASSIGNS that material: no new entry;
+//   3. assets.duplicate(id) is a copy of the project's own material (its edits included),
+//      named by the same rule, independent of its source, and a tile in the tray;
+//   4. the viewport's drop (editor.dragAsset, the real drag events) does exactly 1 and 2,
+//      and its hover preview of a LIBRARY tile shows the pristine material.
+// Engine up (the gesture needs the viewport); the Low tier (verbs and counts, no picture).
+
+function assert(cond, msg) {
+    if (!cond) throw new Error("assert failed: " + msg);
+    console.log("ok: " + msg);
+}
+function J(x) { return JSON.stringify(x); }
+function caught(fn) { try { fn(); } catch (e) { return "" + e; } return ""; }
+function projectMaterials() {
+    return assets.list({ scope: "project", type: "material" });
+}
+function names() { return projectMaterials().map(function (m) { return m.name; }).sort(); }
+function memberGuids(guid) { return materials.members(guid).map(function (m) { return m.guid; }).sort(); }
+function rough(node) { return material.get(node).roughness; }
+function near(a, b) { return Math.abs(a - b) < 1e-3; }
+// AN EDIT OF A PROJECT MATERIAL, the Materials page's way: a float node wired to the
+// master's Roughness in the bundle's graph, saved into the bundle.
+function editRoughness(materialGuid, value) {
+    materials.loadGraph(materialGuid);
+    var master = graph.nodes().filter(function (n) { return n.master; })[0];
+    var f = graph.addNode("float");
+    assert(graph.setValue(f, value) === true && graph.connect(f, 0, master.id, "Roughness") === true
+           && graph.save() === true, "an edit saved into " + assets.metadata(materialGuid).name
+           + " (roughness " + value + ")");
+}
+
+var WOOD = "00000000-0000-0000-0000-000000002022";   // Wood PBR — three maps
+
+project.create("material drop " + Date.now());
+var cubeA = scene.addPrimitive("cube", { position: { x: -2.4, y: 1, z: 0 } });
+var cubeB = scene.addPrimitive("cube", { position: { x: 0, y: 1, z: 0 } });
+var cubeC = scene.addPrimitive("cube", { position: { x: 2.4, y: 1, z: 0 } });
+var cubeD = scene.addPrimitive("cube", { position: { x: 0, y: 2.8, z: 0 } });
+editor.frame(2);
+var before = projectMaterials().length;
+
+// ---- 1. a library drop is a fresh project copy, named by the project ----------------
+var d1 = material.drop(cubeA, WOOD);
+console.log("drop 1 -> " + J(d1));
+assert(d1.copied === true && d1.guid !== WOOD, "a library drop makes a COPY, not the master's pin");
+assert(d1.name === "Wood PBR", "...named 'Wood PBR' — the project held none (got '" + d1.name + "')");
+assert(projectMaterials().length === before + 1, "...one new project material");
+var pristine = rough(cubeA);
+var pristineMembers = memberGuids(d1.guid);
+assert(pristineMembers.length === 3, "...sharing the preset's three member maps");
+
+// The owner edits HIS copy.
+editRoughness(d1.guid, 0.13);
+assert(near(rough(cubeA), 0.13) && !near(pristine, 0.13),
+       "the copy is edited, and the mesh wearing it shows the edit (" + pristine + " -> 0.13)");
+
+// ---- 2. a SECOND library drop is PRISTINE, "Wood PBR 2" -----------------------------
+var d2 = material.drop(cubeB, WOOD);
+console.log("drop 2 -> " + J(d2));
+assert(d2.copied === true && d2.guid !== d1.guid && d2.guid !== WOOD,
+       "the second library drop is ANOTHER copy — not the edited one reused");
+assert(d2.name === "Wood PBR 2", "...named 'Wood PBR 2' (got '" + d2.name + "')");
+assert(near(rough(cubeB), pristine), "...and PRISTINE: the library's roughness " + rough(cubeB)
+       + ", not the edit");
+assert(JSON.stringify(memberGuids(d2.guid)) === JSON.stringify(pristineMembers),
+       "...sharing the same three member maps");
+assert(projectMaterials().length === before + 2, "two library drops = two project materials");
+
+// ---- 3. a PROJECT-tray drop assigns -------------------------------------------------
+var d3 = material.drop(cubeB, d1.guid, { from: "project" });
+console.log("project drop -> " + J(d3));
+assert(d3.copied === false && d3.guid === d1.guid, "a project-tray drop ASSIGNS the project's material");
+assert(projectMaterials().length === before + 2, "...and makes no new entry");
+assert(near(rough(cubeB), 0.13), "...the target wears exactly what A wears (the edit)");
+var notMine = caught(function () {
+    material.drop(cubeB, "00000000-0000-0000-0000-000000002001", { from: "project" });
+});
+assert(notMine.indexOf("not one of this project's materials") >= 0,
+       "a project drop of something the project does not hold is refused: " + notMine);
+assert(caught(function () { material.drop(cubeB, WOOD, { from: "tray" }); }).length > 0,
+       "an unknown `from` is refused");
+
+// ---- 3b. THE LIBRARY TRAY'S DOUBLE-CLICK IS A LIBRARY DROP (the lead's rule call) --------
+editor.select(cubeB);
+assert(editor.activateMaterialTile(WOOD) === true, "the materials tray's Wood PBR tile double-clicked");
+var afterClick = names();
+assert(afterClick.indexOf("Wood PBR 3") >= 0 && projectMaterials().length === before + 3,
+       "a double-click makes 'Wood PBR 3' — a fresh copy, like a drag: " + J(afterClick));
+assert(near(rough(cubeB), pristine), "...PRISTINE (roughness " + rough(cubeB) + "), not the edit");
+editor.select(null);
+
+// ---- 3c. A REFUSED DROP LEAVES NO ORPHAN COPY ------------------------------------------
+var lamp = scene.addLight("point");
+var refusedDrop = caught(function () { material.drop(lamp, WOOD); });
+assert(refusedDrop.indexOf("no mesh") >= 0, "a drop on a light is refused: " + refusedDrop);
+assert(projectMaterials().length === before + 3, "...and leaves no 'Wood PBR N' behind");
+
+// ---- 3d. THE SUFFIX IS APPENDED, NEVER PARSED OUT OF THE NAME --------------------------
+var brick = materials.create("Brick 2024");
+material.drop(cubeC, brick);
+material.drop(cubeC, brick);
+var bricks = names().filter(function (n) { return n.indexOf("Brick") === 0; });
+assert(bricks.indexOf("Brick 2024 2") >= 0 && bricks.indexOf("Brick 2025") < 0,
+       "copies of a library 'Brick 2024' count on as 'Brick 2024 2', never 'Brick 2025': " + J(bricks));
+var afterBrick = projectMaterials().length;
+
+// ---- 4. assets.duplicate: an independent copy, the same naming, a tray tile ---------
+var dup = assets.duplicate(d1.guid);
+var dupName = assets.metadata(dup).name;
+assert(dup && dup !== d1.guid, "assets.duplicate made a copy: " + dup);
+assert(dupName === "Wood PBR 4", "...named by the same rule: 'Wood PBR 4' (got '" + dupName + "')");
+material.drop(cubeC, dup, { from: "project" });
+assert(near(rough(cubeC), 0.13), "...a copy of the PROJECT's version, the edit included");
+var dupOfTwo = assets.duplicate(d2.guid);
+assert(assets.metadata(dupOfTwo).name === "Wood PBR 5",
+       "a duplicate of 'Wood PBR 2' counts on from the library entry's name: '"
+       + assets.metadata(dupOfTwo).name + "'");
+// Independent: an edit of the copy leaves the source alone.
+editRoughness(dup, 0.77);
+assert(near(rough(cubeC), 0.77) && near(rough(cubeA), 0.13),
+       "an edit to the duplicate leaves its source (and the meshes wearing it) untouched");
+assert(projectMaterials().length === afterBrick + 2, "...each duplicate is one project material");
+var tray = editor.trayAssets().map(function (t) { return t.guid; });
+assert(tray.indexOf(dup) >= 0, "the duplicate is a tile in the project's asset tray");
+var tileTex = assets.list({ scope: "project", type: "texture", query: "Tile.png" })[0].guid;
+assert(caught(function () { assets.duplicate(tileTex); }).indexOf("only a material duplicates") >= 0,
+       "a non-material is refused by name");
+
+// ---- 5. THE GESTURE: the viewport's drop is the verb ------------------------------
+function pixelOf(id) {
+    for (var y = 20; y < 1060; y += 10)
+        for (var x = 20; x < 1900; x += 10) {
+            var t = editor.dropTargetAt(x, y);
+            if (t && t.id === id) return [x, y];
+        }
+    return null;
+}
+var pd = pixelOf(cubeD);
+assert(pd !== null, "cube D is under a known pixel: " + J(pd));
+var plainD = rough(cubeD);
+var count0 = projectMaterials().length;
+editor.dragAsset(WOOD, pd[0], pd[1], { from: "library" });
+editor.frame(1);
+assert((material.get(cubeD).baseColorMap || "").length > 0,
+       "hovering shows the dragged material on the cube (its base-colour map)");
+assert(near(rough(cubeD), pristine), "...and a LIBRARY tile previews the PRISTINE material ("
+       + rough(cubeD) + "), not the project's edited copy");
+editor.dragAsset(WOOD, pd[0], pd[1], { action: "drop", from: "library" });
+editor.frame(2);
+editor.dragAsset(WOOD, pd[0], pd[1], { action: "drop", from: "library" });
+editor.frame(2);
+var after = names();
+console.log("project materials after two gesture drops: " + J(after));
+assert(projectMaterials().length === count0 + 2, "two library DRAG-drops = two project materials");
+assert(after.indexOf("Wood PBR 6") >= 0 && after.indexOf("Wood PBR 7") >= 0,
+       "...named 'Wood PBR 6' and 'Wood PBR 7'");
+assert(near(rough(cubeD), pristine), "...and the node wears the pristine copy");
+editor.dragAsset(d1.guid, pd[0], pd[1], { action: "drop", from: "project" });
+editor.frame(2);
+assert(projectMaterials().length === count0 + 2, "a PROJECT-tray drag-drop makes no new entry");
+assert(near(rough(cubeD), 0.13), "...it assigns the project's (edited) material to the node");
+assert(!near(plainD, 0.13), "(the cube did not start at the edited value)");
+
+console.log("material_drop: ALL OK");

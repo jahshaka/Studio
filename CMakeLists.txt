@@ -431,6 +431,7 @@ set(SRCS
     src/commands/changematerialcommand.cpp
     src/commands/pinassetcommand.cpp
     src/commands/presetcopycommand.cpp
+    src/commands/projectmaterialcopycommand.cpp
     src/commands/projectfoldercommand.cpp
     src/commands/resetmaterialcommand.cpp
     src/commands/addscenenodecommand.cpp

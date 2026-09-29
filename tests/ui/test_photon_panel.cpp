@@ -160,9 +160,12 @@ int main(int argc, char **argv)
         CHECK(tier && tier->currentIndex() == 3, "and a new scene shows Epic");
         if (tier) tier->setCurrentIndex(1);   // Medium
         pump();
+        // The field stays AUTO under a tier (DDGI-AUTO-1): the engine's fieldDefault
+        // of the quality resolves it — ON at Medium.
         CHECK(scene->giMode == iris::GiMode::VCT && int(scene->giQuality) == 1 &&
-                  scene->giDdgi == 1 && scene->giNumBounces == 1,
-              "picking Medium wrote the technique, the quality (DDGI-fed) and the bounces through");
+                  scene->giDdgi == -1 && worldmodes::photonFieldAuto(scene) && scene->giNumBounces == 1,
+              "picking Medium wrote the technique, the quality (the field Auto, resolving ON) and the "
+              "bounces through");
         CHECK(scene->giTier == int(worldmodes::PhotonTier::Medium),
               "and recorded the tier on the document");
     }

@@ -38,7 +38,6 @@ public:
     /// resolved through the content-addressed store by guid (by display name
     /// first, then the source role). Empty when the store holds none.
     static QString storedFilePath(const AssetRecord &asset);
-    static QStringList getChildGuids(const iris::SceneNodePtr &node);
     static ModelTypes getAssetTypeFromExtension(const QString &fileSuffix);
     /// modelStats (optional): filled with AssetMetadata::forModelScene counts
     /// from the parse this load already produced — the import-time source

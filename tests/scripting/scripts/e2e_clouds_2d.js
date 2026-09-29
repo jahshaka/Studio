@@ -253,7 +253,7 @@ assert(s0.capturePeriodFrames > 0, "a scrolling layer has a capture period: " + 
 var cap0 = s0.scrollCaptures, scroll0 = s0.scroll[0];
 editor.frame(s0.capturePeriodFrames + 2, 1 / 60);
 var s1 = world.clouds().live;
-var travelled = (scroll0 - s1.scroll[0] + 16000) % 16000;
+var travelled = (scroll0 - s1.scroll[0] + 64000) % 64000;
 near(travelled, 20 * (s0.capturePeriodFrames + 2) / 60, 0.05,
      "the sheet moved by the wind times the scene clock (metres)");
 assert(s1.scrollCaptures === cap0 + 1,
@@ -279,7 +279,7 @@ for (var f = 0; f < 60; f++) {
 var d1 = world.clouds().live;
 assert(d1.clockTicks - d0.clockTicks === 60,
        "60 drawn frames of a sun drag tick the clock 60 times (" + (d1.clockTicks - d0.clockTicks) + ")");
-near((d0.scroll[0] - d1.scroll[0] + 16000) % 16000, 60 * 20 / 60, 0.02,
+near((d0.scroll[0] - d1.scroll[0] + 64000) % 64000, 60 * 20 / 60, 0.02,
      "...and move the sheet 60 frames' worth, not 180 (metres)");
 assert(d1.fieldBakes === d0.fieldBakes, "a sun drag re-bakes no field (" + d0.fieldBakes + " -> " + d1.fieldBakes + ")");
 assert(d1.scrollCaptures === d0.scrollCaptures, "a sun drag adds no scroll capture");

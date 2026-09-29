@@ -26,11 +26,10 @@ For more information see the LICENSE file
 //
 // Three consumers share it: the clipboard's closure walker (what has to travel
 // with a copied selection), the clipboard resolver (rewriting the rare guid a
-// cross-library import had to land under a different id), and the .jaf node
-// export (which computed its dependencies from AssetHelper::getChildGuids —
-// NODE guids read as asset guids, an identity that a paste or a duplicate has
-// broken since regenerateGuids landed, so a pasted node exported with no
-// dependencies at all).
+// cross-library import had to land under a different id), and the node
+// export (assetshare::exportNode — the share file; its legacy .jaf walked NODE
+// guids as asset guids, an identity a paste or a duplicate breaks, so a pasted
+// node exported with no dependencies at all).
 //
 // WHAT IS ASSERTED, AND WHERE — because "there is a table" is worth nothing
 // without a test that the table is the writer's:

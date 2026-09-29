@@ -54,9 +54,20 @@ bool MaterialPreviewService::canPreview(const QString &presetOrGuid)
     if (presetOrGuid == mResolvedSource) return !mResolved.isNull();
     // Resolving to answer the question is the point: the answer IS the
     // material, and the gesture that asked will want it a moment later.
-    mResolved = mSceneEdit->resolveMaterial(presetOrGuid);
+    mResolved = mSceneEdit->resolveMaterial(presetOrGuid,
+                                            mFromLibrary ? SceneEditService::MaterialOrigin::Library
+                                                         : SceneEditService::MaterialOrigin::Project);
     mResolvedSource = presetOrGuid;
     return !mResolved.isNull();
+}
+
+void MaterialPreviewService::setLibraryOrigin(bool fromLibrary)
+{
+    if (fromLibrary == mFromLibrary) return;
+    mFromLibrary = fromLibrary;
+    // The cache answered the OTHER reading of the same payload.
+    mResolvedSource.clear();
+    mResolved.reset();
 }
 
 bool MaterialPreviewService::begin(const QString &nodeGuid, const QString &presetOrGuid)
@@ -119,9 +130,10 @@ bool MaterialPreviewService::end()
     // graph, the panel changes a colour) must be shown as it is now, not as it
     // was when it was last dragged. `end` is what every gesture end calls —
     // drop, drag-leave, cancel, a save, an undo push, a close — so the cache
-    // cannot outlive one.
+    // cannot outlive one. Nor can the gesture's origin (setLibraryOrigin).
     mResolvedSource.clear();
     mResolved.reset();
+    mFromLibrary = false;
     return was;
 }
 

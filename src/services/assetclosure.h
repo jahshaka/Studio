@@ -19,11 +19,10 @@ For more information see the LICENSE file
 //   forNodes()  — the KEY-AWARE walk over node objects (src/io/assetrefs.h)
 //                 that says which asset guids a selection names, then the
 //                 catalog's dependency edges from each of those, transitively.
-//                 This replaces AssetHelper::getChildGuids for anything that
-//                 has been pasted or duplicated: that function reads NODE
-//                 guids as asset guids, an identity the paste path breaks by
-//                 design (regenerateGuids), so a pasted model exported to .jaf
-//                 carried NO dependencies at all (spec §6.6).
+//                 It replaced AssetHelper::getChildGuids (deleted), which
+//                 read NODE guids as asset guids — an identity the paste path
+//                 breaks by design (regenerateGuids) — so a pasted model's
+//                 export carried NO dependencies at all (spec §6.6).
 //
 //   describe()  — turns guids into manifest-v2 asset entries (name, type,
 //                 dependencies, files by oid — CasContentSource, project-pin

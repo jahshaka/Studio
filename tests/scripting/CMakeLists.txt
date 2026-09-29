@@ -341,6 +341,11 @@ jah_pool_arm(gi_verbs offscreen_contract ${CMAKE_CURRENT_BINARY_DIR}/e2e_offscre
 set(JAH_PCC_BUDGET_SHOWROOM "${CMAKE_SOURCE_DIR}/scenes/Showroom 2.zip")
 configure_file(scripts/e2e_pcc_budget.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_pcc_budget.js @ONLY)
 jah_pool_arm(gi_verbs pcc_budget ${CMAKE_CURRENT_BINARY_DIR}/e2e_pcc_budget.js 60)
+# gi_verbs.planar_records — PLANAR-RECORDS-1: the hit decode's list on the Mirror Room at Epic
+# and on a planar mirror floor under 30 movers — no record dropped, the counts printed.
+set(JAH_PLANAR_RECORDS_MIRROR "${CMAKE_SOURCE_DIR}/scenes/Mirror Room.zip")
+configure_file(scripts/e2e_planar_records.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_planar_records.js @ONLY)
+jah_pool_arm(gi_verbs planar_records ${CMAKE_CURRENT_BINARY_DIR}/e2e_planar_records.js 40)
 # ENGINE_CACHE_POLICY_SPEC P10: a page return (editor -> assets -> editor, and
 # editor -> player -> editor) never re-pushes or rebuilds GI — giPushes,
 # giStatus().rebuilds and the whole giStatus reading are unchanged, and the
@@ -774,6 +779,12 @@ set_tests_properties(scripting.e2e.perf_capture_frames PROPERTIES
 # and the preview pixel shows the bound map. Engine up (no --headless).
 configure_file(scripts/e2e_import_render.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_import_render.js @ONLY)
 jah_pool_arm(assets_import import_render ${CMAKE_CURRENT_BINARY_DIR}/e2e_import_render.js 9)
+
+# assets_import.node_archive_roundtrip — ARCHIVE-ROUNDTRIP (D7): node.exportArchive's file is
+# self-contained — the source model, its members and its project removed and the store
+# collected, the file re-imports as one object tile that renders its own map. Engine up.
+configure_file(scripts/e2e_node_archive_roundtrip.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_node_archive_roundtrip.js @ONLY)
+jah_pool_arm(assets_import node_archive_roundtrip ${CMAKE_CURRENT_BINARY_DIR}/e2e_node_archive_roundtrip.js 12)
 
 # scripting.e2e.assets_page — the owner's Assets-module smoke round (S4-S7,
 # 2026-09-11): the import selects its tile, the preview is the size the editor
@@ -1779,6 +1790,13 @@ jah_pool_arm(gi_verbs tier ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_pool_tier.js 
 # directory). The split of a family in two (gi_verbs/gi_movers, editor/editor_view,
 # shading/shading_live, world_sky/world_light, doc/doc_assets) keeps every pool well under the
 # -j4 critical path (~200 s).
+# editor.material_drop — MATERIAL-DROP-1 + TRAY-DUPLICATE-1 (the owner, 2026-09-28): a LIBRARY
+# drop is a fresh, pristine project copy ("Wood PBR", "Wood PBR 2", …), a PROJECT-tray drop
+# assigns, assets.duplicate copies the project's own version by the same naming, and the
+# viewport's real drag does the same. Engine up (the gesture), the Low tier.
+configure_file(scripts/e2e_material_drop.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_material_drop.js @ONLY)
+jah_pool_arm(editor material_drop ${CMAKE_CURRENT_BINARY_DIR}/e2e_material_drop.js 12)
+
 jah_add_pool(doc HEADLESS LABELS scripting)
 jah_add_pool(doc_assets HEADLESS LABELS scripting)
 jah_add_pool(gi_verbs TIER epic LABELS scripting)

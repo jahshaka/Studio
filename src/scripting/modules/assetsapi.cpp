@@ -176,6 +176,16 @@ QVector<VerbInfo> AssetsApi::verbs() const
           "Nothing reads a card yet: the capture is phase 2 and the hit lighting is phase 4. This verb is how the list they will spend is inspected. "
           "An EMPTY list is the honest answer for: a model with no bake yet (assets.bakeAll builds them), a SKINNED mesh (a card baked against a bind pose is a lie — the same limit Epic states), a mesh with no surface area, and an asset imported with `maxCards: 0`. The budget is `maxCards` on the import record (assets.importSettings / assets.import / assets.reimport), 12 by default.",
           Needs::Document },
+        { "duplicate", "assets.duplicate(guid) -> guid",
+          "THE PROJECT TRAY'S Duplicate (TRAY-DUPLICATE-1, the owner 2026-09-28): a copy of one of "
+          "the OPEN PROJECT's materials — the bundle: its definition as this project renders it, "
+          "edits included, sharing its member textures, without its bake — as a NEW material of "
+          "the project's own (never a library tile), named by the project's own naming (\"Wood "
+          "PBR\" -> \"Wood PBR 2\", \"Wood PBR 2\" -> \"Wood PBR 3\"). The copy is "
+          "independent: an edit to one leaves the other. The same copy a library drop makes "
+          "(material.drop), made from the project's version. Refuses a material the project does "
+          "not hold and anything that is not a material. ONE undo step.",
+          Needs::Document },
         { "rename", "assets.rename(guid, name) -> bool",
           "Renames a library asset — the Assets page's name field + Update button, as a verb. "
           "The row's TAGS are carried through untouched (both live in one write). Renaming "
@@ -884,6 +894,30 @@ QVariantList AssetsApi::pins(const QString &guid)
                                 { "name", pin.projectName },
                                 { "live", pin.live } });
     return out;
+}
+
+QString AssetsApi::duplicate(const QString &guid)
+{
+    if (!host.db || !host.services || !host.services->sceneEdit) {
+        fail("assets: not available in this session");
+        return QString();
+    }
+    if (!requireProject()) return QString();
+    const AssetRecord row = host.db->fetchAsset(guid);
+    if (row.guid.isEmpty()) {
+        fail(QStringLiteral("assets.duplicate: no asset with guid '%1'").arg(guid));
+        return QString();
+    }
+    if (row.type != static_cast<int>(ModelTypes::Material)) {
+        fail(QStringLiteral("assets.duplicate: '%1' is a %2 — only a material duplicates")
+                 .arg(row.name, scriptmod::assetTypeName(row.type)));
+        return QString();
+    }
+    QString error;
+    const QString copy = host.services->sceneEdit->copyMaterialIntoProject(
+        guid, SceneEditService::MaterialOrigin::Project, &error);
+    if (copy.isEmpty()) fail(QStringLiteral("assets.duplicate: %1").arg(error));
+    return copy;
 }
 
 bool AssetsApi::rename(const QString &guid, const QString &name)
