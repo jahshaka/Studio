@@ -4464,12 +4464,13 @@ void MainWindow::setupDesktop()
 	// load-bearing: ASSETS = 2) until ensureAssetsPage() swaps the page in.
 	assetsPlaceholder = new QWidget;
 	ui->stackedWidget->addWidget(assetsPlaceholder);
-	// ITS PREVIEW VIEWER IS STILL MADE HERE, AT BOOT: an EngineAssetViewer is a
-	// third engine Scene, and a Scene created while a project's world is live
-	// (its GI compiling compute pipelines) is an engine path the boot order never
-	// took — ui.window_minimum crashed inside the driver's shader compiler (heap
-	// corruption, 2 of 12 runs, only with the viewer made on the first Assets
-	// visit). The viewer costs the same with any library; the page is what scaled.
+	// ITS PREVIEW VIEWER IS STILL MADE HERE, AT BOOT — A WORKAROUND, NOT A FIX
+	// (ASSETS-VISIT-DEATH-1, filed for a debug-runner diagnosis). With the page
+	// AND this viewer (a third engine Scene) both made on the first Assets visit,
+	// ui.window_minimum's app died on `app.space('assets')` once in a gate
+	// (1 of 12 runs; the cause is UNFOUND — no signal text was captured). Making
+	// the viewer here restores the creation order the app always had; only the
+	// page (what scaled with the library) waits for its first use.
 	if (EngineHost::instance().isRunning()) {
 		auto &host = EngineHost::instance();
 		assetsPreviewViewer = createEngineAssetViewer(host.engine(), host.driver(), this);
