@@ -2035,8 +2035,12 @@ void AssetWidget::importAsset(const QStringList &fileNames, bool askImportSettin
 		requests.append(request);
 	}
 	if (sharesLanded) refresh();
-	if (!shareErrors.isEmpty() && askImportSettings)
-		QMessageBox::warning(this, tr("Import failed"), shareErrors.join(QStringLiteral("\n")));
+	if (!shareErrors.isEmpty()) {
+		// A scripted import has nobody to show a box to; it is LOGGED either way.
+		for (const QString &error : shareErrors) qWarning("project panel: share file not imported: %s", qPrintable(error));
+		if (askImportSettings)
+			QMessageBox::warning(this, tr("Import failed"), shareErrors.join(QStringLiteral("\n")));
+	}
 	if (requests.isEmpty()) return;
 
 	// THE IMPORT DECISION (SPECS/IMPORT_DIALOG_SPEC.md §8): one dialog per

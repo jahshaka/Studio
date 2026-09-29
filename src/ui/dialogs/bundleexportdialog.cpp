@@ -69,7 +69,17 @@ assetshare::ExportResult run(QWidget *parent, assetshare::BundleStage stage,
     });
     poll.start(kPollMs);
 
-    if (!job.isFinished()) loop.exec();
+    // BEFORE the modal is up, user input is HELD BACK (a click on the window
+    // behind must not start anything while a write is in flight); once it is
+    // up, the loop takes every event and the modal alone accepts input — so
+    // the one thing a person can do during an export is cancel it.
+    if (!job.isFinished() && show.isActive()) {
+        QEventLoop early;
+        QObject::connect(&watcher, &QFutureWatcherBase::finished, &early, &QEventLoop::quit);
+        QObject::connect(&show, &QTimer::timeout, &early, &QEventLoop::quit);
+        early.exec(QEventLoop::ExcludeUserInputEvents);
+    }
+    if (!job.isFinished() && dialog.isVisible()) loop.exec();
     show.stop();
     poll.stop();
     dialog.hide();

@@ -731,7 +731,7 @@ QVariantMap NodeApi::exportArchive(const QString &id, const QString &path,
     auto node = nodeOrFail(id, QStringLiteral("node.exportArchive"));
     if (!node) return QVariantMap();
     if (path.trimmed().isEmpty()) {
-        fail(QStringLiteral("node.exportArchive: no path — pass where the .jaf goes"));
+        fail(QStringLiteral("node.exportArchive: no path — pass where the .jbundle goes"));
         return QVariantMap();
     }
     const ModelTypes type = nodeexport::typeFor(node);
