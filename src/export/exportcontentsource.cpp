@@ -50,16 +50,6 @@ QVector<ExportContentSource::Entry> CasContentSource::filesForAsset(const QStrin
 
     QSqlDatabase conn = QSqlDatabase::database();
 
-    // The project's pinned source, when exporting in project context.
-    QString pin;
-    if (!project.isEmpty()) {
-        QSqlQuery pinQuery(conn);
-        pinQuery.prepare("SELECT oid_pin FROM project_assets WHERE project_guid = ? AND asset_guid = ?");
-        pinQuery.addBindValue(project);
-        pinQuery.addBindValue(guid);
-        if (pinQuery.exec() && pinQuery.next()) pin = pinQuery.value(0).toString();
-    }
-
     // THE MESH BAKE IS NOT EXPORTED (MESH_BAKE_SPEC phase 1, design call).
     // It is derived data keyed on the BUILD that produced it: an archive
     // carrying one would ship megabytes that the importing installation is
@@ -69,13 +59,24 @@ QVector<ExportContentSource::Entry> CasContentSource::filesForAsset(const QStrin
     // re-bakes lazily on its first open — the same path every pre-bake
     // library takes. (Phase 2's "runtime only, no sources" mode is where a
     // bake becomes archive PAYLOAD, and it will carry its own marker.)
+    //
+    // ONE STATEMENT PER ASSET (D11-LIBRARY-SCALE §3.6): the project's PIN on
+    // the source (copy semantics: what the project renders with is what
+    // travels) and the pinned object's size/extension ride the files query as
+    // LEFT JOINs — they were two more statements per asset. No project, no
+    // pin row: the joins answer NULL.
     QSqlQuery files(conn);
-    files.prepare("SELECT AF.role, AF.name, AF.oid, F.size, F.ext FROM asset_files AF "
-                  "LEFT JOIN files F ON AF.oid = F.oid WHERE AF.asset_guid = ? "
-                  "AND AF.role <> 'bake' "
+    files.prepare("SELECT AF.role, AF.name, AF.oid, F.size, F.ext, PA.oid_pin, PF.oid, PF.size, PF.ext "
+                  "FROM asset_files AF "
+                  "LEFT JOIN files F ON AF.oid = F.oid "
+                  "LEFT JOIN project_assets PA ON PA.asset_guid = AF.asset_guid AND PA.project_guid = ? "
+                  "LEFT JOIN files PF ON PF.oid = PA.oid_pin "
+                  "WHERE AF.asset_guid = ? AND AF.role <> 'bake' "
                   "ORDER BY AF.role, AF.name");
+    files.addBindValue(project);
     files.addBindValue(guid);
     files.exec();
+    ++sStatements;
     while (files.next()) {
         Entry e;
         e.role = files.value(0).toString();
@@ -84,15 +85,12 @@ QVector<ExportContentSource::Entry> CasContentSource::filesForAsset(const QStrin
         e.size = files.value(3).toLongLong();
         QString ext = files.value(4).toString();
 
-        if (e.role == QStringLiteral("source") && !pin.isEmpty() && pin != e.oid) {
-            QSqlQuery pinned(conn);
-            pinned.prepare("SELECT size, ext FROM files WHERE oid = ?");
-            pinned.addBindValue(pin);
-            if (pinned.exec() && pinned.next()) {
-                e.oid = pin;
-                e.size = pinned.value(0).toLongLong();
-                ext = pinned.value(1).toString();
-            }
+        const QString pin = files.value(5).toString();
+        if (e.role == QStringLiteral("source") && !pin.isEmpty() && pin != e.oid
+            && !files.value(6).isNull()) {
+            e.oid = pin;
+            e.size = files.value(7).toLongLong();
+            ext = files.value(8).toString();
         }
 
         e.path = AssetStorePaths::objectPathIn(root, e.oid, ext);
@@ -101,6 +99,8 @@ QVector<ExportContentSource::Entry> CasContentSource::filesForAsset(const QStrin
     }
     return entries;
 }
+
+int CasContentSource::sStatements = 0;
 
 LegacyStoreContentSource::LegacyStoreContentSource(const QString &storeRoot, bool computeHashes)
     : root(storeRoot), hashFiles(computeHashes)

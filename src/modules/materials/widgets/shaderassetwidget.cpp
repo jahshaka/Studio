@@ -189,7 +189,6 @@ void ShaderAssetWidget::addItem(const AssetRecord & assetData)
 	item->setData(MODEL_ITEM_TYPE, MODEL_ASSET);
 	item->setData(MODEL_GUID_ROLE, assetData.guid);
 	item->setData(MODEL_PARENT_ROLE, assetData.parent);
-	ListWidget::updateThumbnailImage(assetData.thumbnail, item);
 
 	item->setSizeHint(currentSize);
 	item->setTextAlignment(Qt::AlignCenter);
@@ -197,6 +196,8 @@ void ShaderAssetWidget::addItem(const AssetRecord & assetData)
 
 	// Hide meshes for now, we work with objects which are parents for meshes, materials etc
 	assetViewWidget->addItem(item);
+	// The picture by guid from the tile cache (the listing carries none).
+	assetViewWidget->assignTile(item, assetData.guid);
 }
 
 void ShaderAssetWidget::setUpDatabase(Database * db)

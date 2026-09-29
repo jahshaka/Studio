@@ -2305,10 +2305,13 @@ QVariantList AvatarApi::library(const QVariantMap &options)
     // rather than filter a library listing that no longer contains them.
     QVector<AssetRecord> rows = host.db->fetchAssetsForAssetView();
     if (hasProject) {
+        // A SET, not a scan per pin (D11-LIBRARY-SCALE: the listing is the whole
+        // library — pins x rows was 10,000 comparisons per pinned asset).
+        QSet<QString> listed;
+        listed.reserve(rows.size());
+        for (const auto &r : std::as_const(rows)) listed.insert(r.guid);
         for (const auto &pinned : host.db->fetchProjectPinnedAssets(host.project->getProjectGuid())) {
-            if (std::any_of(rows.begin(), rows.end(),
-                            [&](const AssetRecord &r) { return r.guid == pinned.guid; }))
-                continue;
+            if (listed.contains(pinned.guid)) continue;
             rows.append(pinned);
         }
     }

@@ -452,11 +452,11 @@ QString MaterialsApi::resolveMaterialGuid(const QString &guidOrName) const
     for (const auto &asset : pinnedMaterials)
         if (asset.name.compare(wanted, Qt::CaseInsensitive) == 0) return asset.guid;
     // ...or a library material's NAME, which is what the user calls it.
-    const auto assets = host.db->fetchAssetsByViewFilter(AssetViewFilter::AssetsView);
-    for (const auto &asset : assets) {
-        if (asset.type != static_cast<int>(ModelTypes::Material)) continue;
+    // (The library's MATERIAL rows only, by predicate — D11-LIBRARY-SCALE.)
+    const auto assets = host.db->fetchAssetsByViewFilter(AssetViewFilter::AssetsView,
+                                                         static_cast<int>(ModelTypes::Material));
+    for (const auto &asset : assets)
         if (asset.name.compare(wanted, Qt::CaseInsensitive) == 0) return asset.guid;
-    }
     return QString();
 }
 

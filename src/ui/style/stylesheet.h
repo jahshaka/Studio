@@ -112,8 +112,6 @@ public:
 	static const QString ItemGridTileLabel(int fontSize);
 
 	// asset grid tile
-	static const QString AssetGridItemLabel(const QString &borderColor);
-	static const QString AssetGridItemThumbnail(const QString &borderColor);
 
 	// project manager
 	static const QString ProjectManagerCanvas();
@@ -217,11 +215,6 @@ public:
 	static const QString AssetViewUpdateButton();
 	static const QString AssetViewNothingSelected();
 	static const QString AssetViewStoreOfflineBanner();
-
-	// asset grid tiles (assetgriditem.cpp)
-	static const QString AssetGridTile();
-	static const QString AssetGridLoadingOverlay();
-	static const QString AssetGridLoadingOverlayAccent();
 
 	// video preview (videopreviewwidget.cpp)
 	static const QString VideoPreviewTitle();

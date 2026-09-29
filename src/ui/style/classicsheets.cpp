@@ -1197,24 +1197,6 @@ const QString StyleSheet::AssetViewStoreOfflineBanner()
 		"#StoreOfflineBanner QLabel { color: #ffe0b3; background: transparent; }");
 }
 
-const QString StyleSheet::AssetGridTile()
-{
-	JAH_CLASSIC_ONLY
-	return QString("background: #272727");
-}
-
-const QString StyleSheet::AssetGridLoadingOverlay()
-{
-	JAH_CLASSIC_ONLY
-	return QString("background: rgba(0, 0, 0, 55%); color: #ffffff; font-size: 12px;");
-}
-
-const QString StyleSheet::AssetGridLoadingOverlayAccent()
-{
-	JAH_CLASSIC_ONLY
-	return QString("background: rgba(0, 0, 0, 55%); color: #3498db; font-size: 12px;");
-}
-
 const QString StyleSheet::VideoPreviewTitle()
 {
 	JAH_CLASSIC_ONLY

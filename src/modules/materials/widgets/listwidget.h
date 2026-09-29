@@ -40,6 +40,10 @@ public:
 	int numberOfItemPerRow;
 	void addToListWidget(QListWidgetItem *item);
 	static void updateThumbnailImage(QByteArray arr, QListWidgetItem *item);
+	/// The item's tile from the session's tile cache, by guid (a listing carries
+	/// no thumbnail — D11-LIBRARY-SCALE): the cached picture, or none until the
+	/// off-thread decode lands. The item must already be in this list.
+	void assignTile(QListWidgetItem *item, const QString &guid);
 	static void highlightNodeForInterval(int seconds, QListWidgetItem* item);
 	/// Clearing a drawer deletes its items, and the highlight above paints
 	/// into one by raw pointer for two seconds — so this stops it first.
@@ -49,6 +53,9 @@ public:
 
 private slots:
     void customContextMenu(QPoint pos);
+
+private:
+    class ListTileBinder *mTiles = nullptr;
 
 protected:
     QMimeData * mimeData(const QList<QListWidgetItem *> &items) const override;

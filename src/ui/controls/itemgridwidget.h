@@ -70,17 +70,15 @@ public:
     int  sliderIndex = 0;           // 0-based order within the row
     int  sliderRowCount = 0;
 
-    /// Shows `png` as this tile's thumbnail (a save's new one). Decoded through
-    /// the session's thumbnail cache: bytes this project has already shown are
-    /// never inflated twice (CREATE-GAP-1).
+    /// Shows `png` as this tile's thumbnail (a save's new one), decoded through
+    /// the session's tile cache: bytes this project has already shown are never
+    /// inflated twice (CREATE-GAP-1). EMPTY bytes (a listing's row — listings
+    /// carry no thumbnail, D11-LIBRARY-SCALE) ask the cache for the project's
+    /// picture by guid: the placeholder shows until the off-thread decode lands.
     void setThumbnail(const QByteArray &png);
-    /// PNG decodes the thumbnail cache has performed this session (the suites
-    /// read it to prove a rebuild decodes nothing it has seen).
+    /// PNG decodes the tile cache has performed this session (the suites read it
+    /// to prove a rebuild decodes nothing it has seen).
     static int thumbnailDecodeCount();
-    /// Decodes (and scales to `tileSize`) every thumbnail of `rows` the cache
-    /// does not hold, in parallel on the thread pool, before a desktop builds
-    /// its tiles; returns how many it decoded.
-    static int prefetchThumbnails(const QVector<ProjectTileData> &rows, const QSize &tileSize);
 
     void setTileSize(QSize size, QSize iSize);
     void updateLabel(QString);
@@ -142,6 +140,8 @@ private:
     QLabel *gridImageLabel;
     QLabel *gridTextLabel;
     void applyCaptionBarStyle();
+    void showTile(const QPixmap &tile);
+    void requestTile();
 
     QPixmap image;
     QWidget *parent;

@@ -23,6 +23,7 @@ For more information see the LICENSE file
 #include <QMenu>
 #include "data/project.h"
 #include "ui/style/stylesheet.h"
+#include "ui/controls/tilecache.h"
 
 QVariantAnimation* ListWidget::anim = Q_NULLPTR;
 
@@ -85,6 +86,13 @@ void ListWidget::updateThumbnailImage(QByteArray arr, QListWidgetItem *item)
 
 	item->setIcon(QIcon(pixmap));
 
+}
+
+void ListWidget::assignTile(QListWidgetItem *item, const QString &guid)
+{
+	// 90 x 90, the size updateThumbnailImage draws a picture it is handed at.
+	if (!mTiles) mTiles = new ListTileBinder(this, { QSize(90, 90), 0 }, this);
+	mTiles->assign(item, guid, QIcon());
 }
 
 void ListWidget::highlightNodeForInterval(int seconds, QListWidgetItem * item)

@@ -401,6 +401,10 @@ private:
 	/// ever. Drained one per event-loop turn, like the page's tail queue, so
 	/// a batch of models never holds the UI thread.
 	QStringList thumbnailBacklog;
+	/// The tray's pictures from the session's tile cache, by guid (the tray
+	/// listing carries no thumbnail — D11-LIBRARY-SCALE).
+	class ListTileBinder *tileBinder = nullptr;
+	ListTileBinder *tiles();
 	/// Renders and stores one backlog entry, then re-arms itself for the next.
 	void drainThumbnailBacklog();
 

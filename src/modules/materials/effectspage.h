@@ -39,7 +39,6 @@ class Database;
 class Project;
 class SettingsManager;
 class UndoRedo;
-class AssetView;
 struct ThumbnailResult;
 
 class QTabBar;
@@ -88,7 +87,6 @@ public:
     void setNodeGraph(NodeGraph* graph);
     void newNodeGraph(QString *shaderName = Q_NULLPTR, int *templateType = Q_NULLPTR, QString *templateName = Q_NULLPTR);
 	
-	void setAssetView(AssetView* assetView) { this->assetView = assetView; }
 	/// Injected by the shell: is a project scene open? Forwarded to the
 	/// module's widgets (Phase 4: was UiManager::isSceneOpen).
 	void setSceneOpenProbe(std::function<bool()> probe);
@@ -507,7 +505,6 @@ private:
 	void requestTabRestore(const QString &key);
 	int indexForRef(const QVariant &tabOrGuid) const;
 	QSplitter *splitView = nullptr;
-	AssetView* assetView;
 
 	QDockWidget* nodeTray = nullptr;
 	QWidget *centralWidget = nullptr;

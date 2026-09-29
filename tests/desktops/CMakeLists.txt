@@ -57,6 +57,7 @@ set_tests_properties(desktops.slider_model PROPERTIES
 add_executable(test_grid_layout test_grid_layout.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/controls/dynamicgrid.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/controls/itemgridwidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/tilecache.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/controls/sliderlayoutmodel.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/dialogs/renameprojectdialog.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/style/thememanager.cpp

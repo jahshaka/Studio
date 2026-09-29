@@ -70,9 +70,14 @@ public:
     QVector<Entry> filesForAsset(const QString &guid,
                                  const QString &nameHint = QString()) override;
 
+    /// Catalog statements filesForAsset has run this process — ONE per asset
+    /// (the archive.closure suite's count).
+    static int statements() { return sStatements; }
+
 private:
     QString root;
     QString project;
+    static int sStatements;
 };
 
 /// The per-guid-folder store layout (now a hardlink VIEW of the CAS —

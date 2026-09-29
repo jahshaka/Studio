@@ -18,7 +18,6 @@ For more information see the LICENSE file
 
 #include "modules/studiomodule.h"
 
-class AssetView;
 namespace materials { class EffectsPage; }
 
 class MaterialsModule : public StudioModule
@@ -36,10 +35,6 @@ public:
     /// The live page, for the shell's direct calls (refresh on page switch,
     /// asset-widget database wiring).
     materials::EffectsPage *effectsPage() const { return page; }
-
-    /// Materials-specific shell wiring: the module's export flows land assets
-    /// in the Assets page's browser.
-    void setAssetView(AssetView *assetView);
 
 private:
     ModuleHost host;

@@ -65,6 +65,9 @@ For more information see the LICENSE file
 #include <functional>
 #include <QTreeWidget>
 #include <QHeaderView>
+#include <QListView>
+#include <QTreeView>
+#include <QGuiApplication>
 #include <QTreeWidgetItem>
 #include <QDragEnterEvent>
 #include <QDropEvent>
@@ -96,8 +99,7 @@ For more information see the LICENSE file
 #include "services/assetstorepaths.h"
 #include <QSqlDatabase>
 #include "services/projectservice.h"
-#include "ui/controls/assetviewgrid.h"
-#include "ui/controls/assetgriditem.h"
+#include "ui/controls/librarymodel.h"
 #include "ui/controls/drawertreewidget.h"
 #include "services/assethelper.h"
 #include "services/assetimporter.h"
@@ -218,7 +220,7 @@ void AssetView::closeViewer()
     split->setStretchFactor(0, 1);
     split->setStretchFactor(1, 1);
 
-    toggleFilterPane(fastGrid->containsTiles());
+    toggleFilterPane(libraryModel->rowCount() > 0);
 }
 
 void AssetView::clearViewer()
@@ -286,9 +288,6 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
 {
 	setParent(parent);
 	this->parent = parent;
-	// Was never initialized: the bottom-right buttons read it before any
-	// selection existed (UB on a garbage pointer once they got enabled).
-	selectedGridItem = nullptr;
 	_assetView = new QListWidget;
 	// The page's preview viewer: engine-backed, or the headless document-only
 	// stand-in when no engine view can exist.
@@ -473,7 +472,19 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
 	headerLayout->addWidget(addDrawerButton);
 	headerRow->setLayout(headerLayout);
 
-	fastGrid = new AssetViewGrid(this);
+	// THE LIBRARY AS A MODEL (D11-LIBRARY-SCALE): one LibraryModel over the
+	// listing (no thumbnail column — the tile cache paints each tile by guid,
+	// off the UI thread), one proxy for the drawer + search, and two views of
+	// it — the tile grid and the list mode's table. No widget per asset: the
+	// page used to build 10,000 of them, three style sheets each, at BOOT.
+	libraryModel = new LibraryModel(this);
+	libraryModel->setTypeNamer([this](int type) { return getAssetType(type); });
+	// Only the tile delegate paints a picture (TileRole): the list mode's rows
+	// must not fetch and decode one each.
+	libraryModel->setDecorated(false);
+	libraryModel->setTileSize(QSize(LibraryTileDelegate::kTileWidth, LibraryTileDelegate::kPictureHeight - 2));
+	libraryProxy = new LibraryFilterProxy(this);
+	libraryProxy->setSourceModel(libraryModel);
 
     // gui
     _splitter = new QSplitter(this);
@@ -516,7 +527,7 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
 
 	connect(treeWidget, &QTreeWidget::itemClicked, [this](QTreeWidgetItem *item, int column) {
 		Q_UNUSED(column);
-		fastGrid->filterAssets(item->data(0, Qt::UserRole).toInt());
+		libraryProxy->setCollection(item->data(0, Qt::UserRole).toInt());
 	});
 
 	// Inline rename commits straight to the database; a refused or empty name
@@ -526,8 +537,9 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
 		const int id = item->data(0, Qt::UserRole).toInt();
 		if (id < 0) return;
 		const QString name = item->text(0).trimmed();
-		if (!name.isEmpty() && db->renameCollection(id, name))
-			fastGrid->reassignCollections({ id }, id, name);   // tiles' collection_name
+		// The pane's Collection row reads the drawer's name live.
+		if (!name.isEmpty() && db->renameCollection(id, name) && !selectedGuid.isEmpty())
+			fetchMetadata(selectedGuid);
 		rebuildDrawerTree();
 	});
 
@@ -570,7 +582,7 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
 	});
 
 	connect(treeWidget, &DrawerTreeWidget::assetMoveRequested, [this](const QString &guid, int drawerId) {
-		if (auto tile = fastGrid->tileByGuid(guid)) moveAssetToDrawer(tile, drawerId);
+		if (libraryModel->contains(guid)) moveAssetToDrawer(guid, drawerId);
 	});
 
 	// The selected asset's own node tree (the model's scene graph, from its
@@ -630,8 +642,8 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
 	searchTimer->setSingleShot(true);   // timer can only fire once after started
 
 	connect(searchTimer, &QTimer::timeout, this, [this]() {
-		fastGrid->searchTiles(searchTerm.toLower());
-		rebuildAssetList();   // the list mirrors the grid's filtered set
+		// Both views read the one proxy: the list mirrors the grid by construction.
+		libraryProxy->setSearch(searchTerm);
 	});
 
 	filterPane = new QWidget;
@@ -743,41 +755,95 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
 	filterPane->setFixedHeight(48);
 	filterPane->setStyleSheet(StyleSheet::AssetViewFilterPane());
 
-	// The list view (owner request 2026-08-31): mirrors the editor panel's
-	// list mode — name/type/size rows from the catalog, driving the very
-	// same tile selection/preview/context plumbing.
-	assetListView = new QTreeWidget;
-	assetListView->setColumnCount(3);
-	assetListView->setHeaderLabels({ tr("Name"), tr("Type"), tr("Size") });
+	// THE TILE GRID: a QListView over the proxy, a delegate painting each tile
+	// from the tile cache (the placeholder until its decode lands). A plain
+	// click makes the tile current (pane, fields, buttons) without loading;
+	// double-click loads the preview; Shift+click adds to the open project;
+	// the drag is the model's (the house asset payload, ui/controls/assetdrag.h).
+	tileDelegate = new LibraryTileDelegate(this);
+	tileView = new QListView;
+	tileView->setObjectName(QStringLiteral("libraryTiles"));
+	tileView->setModel(libraryProxy);
+	tileView->setItemDelegate(tileDelegate);
+	tileView->setViewMode(QListView::IconMode);
+	tileView->setMovement(QListView::Static);
+	tileView->setResizeMode(QListView::Adjust);
+	tileView->setUniformItemSizes(true);
+	tileView->setSpacing(5);
+	tileView->setSelectionMode(QAbstractItemView::SingleSelection);
+	tileView->setDragEnabled(true);
+	tileView->setDragDropMode(QAbstractItemView::DragOnly);
+	tileView->setMouseTracking(true);
+	tileView->setFrameShape(QFrame::NoFrame);
+	tileView->setContextMenuPolicy(Qt::CustomContextMenu);
+	tileView->setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);
+	tileView->setCursor(Qt::PointingHandCursor);
+	{
+		QPixmap placeholder(LibraryTileDelegate::kTileWidth, LibraryTileDelegate::kPictureHeight - 2);
+		placeholder.fill(Qt::transparent);
+		libraryModel->setPlaceholder(placeholder);
+	}
+	connect(tileView, &QListView::clicked, this, [this](const QModelIndex &index) {
+		const QString guid = index.data(LibraryModel::GuidRole).toString();
+		if (QGuiApplication::keyboardModifiers().testFlag(Qt::ShiftModifier)) {
+			// Shift+click: straight into the open project.
+			if (services && services->project && services->project->isSceneOpen())
+				addAssetItemToProject(guid);
+			return;
+		}
+		lightSelect(guid);
+	});
+	connect(tileView, &QListView::doubleClicked, this, [this](const QModelIndex &index) {
+		openTile(index.data(LibraryModel::GuidRole).toString());
+	});
+	connect(tileView, &QListView::customContextMenuRequested, this, [this](const QPoint &pos) {
+		const QModelIndex index = tileView->indexAt(pos);
+		if (!index.isValid()) return;
+		showTileMenu(index.data(LibraryModel::GuidRole).toString(),
+		             tileView->viewport()->mapToGlobal(pos));
+	});
+	// "Loading…" pulses over the tile whose preview loads (ASSET_DRAWERS_SPEC §1).
+	loadingPulse = new QTimer(this);
+	loadingPulse->setInterval(350);
+	connect(loadingPulse, &QTimer::timeout, this, [this]() {
+		loadingPhase = !loadingPhase;
+		tileDelegate->setPulse(loadingPhase);
+		const QModelIndex index = libraryProxy->mapFromSource(libraryModel->indexOfGuid(loadingGuid));
+		if (index.isValid()) tileView->update(index);
+	});
+
+	// The list view (owner request 2026-08-31): name/type/size rows over the
+	// SAME proxy — the drawer and the search reach it by construction — and
+	// the same selection/preview/context plumbing as the tiles.
+	assetListView = new QTreeView;
+	assetListView->setModel(libraryProxy);
 	assetListView->setRootIsDecorated(false);
+	assetListView->setItemsExpandable(false);
 	assetListView->setAlternatingRowColors(false);
 	assetListView->setUniformRowHeights(true);
+	assetListView->setIconSize(QSize(0, 0));
 	assetListView->setFrameShape(QFrame::NoFrame);
+	assetListView->setSelectionMode(QAbstractItemView::SingleSelection);
+	assetListView->setDragEnabled(true);
+	assetListView->setDragDropMode(QAbstractItemView::DragOnly);
 	assetListView->header()->setStretchLastSection(false);
-	assetListView->header()->setSectionResizeMode(0, QHeaderView::Stretch);
-	assetListView->header()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
-	assetListView->header()->setSectionResizeMode(2, QHeaderView::ResizeToContents);
+	assetListView->header()->setSectionResizeMode(LibraryModel::NameColumn, QHeaderView::Stretch);
+	assetListView->header()->setSectionResizeMode(LibraryModel::TypeColumn, QHeaderView::ResizeToContents);
+	assetListView->header()->setSectionResizeMode(LibraryModel::SizeColumn, QHeaderView::ResizeToContents);
 	assetListView->setContextMenuPolicy(Qt::CustomContextMenu);
 	assetListView->setVisible(false);
 	assetListView->setStyleSheet(StyleSheet::AssetViewPaneBorderless());
-	connect(assetListView, &QTreeWidget::itemClicked, this,
-	        [this](QTreeWidgetItem *item, int) {
-		if (auto *tile = fastGrid->tileByGuid(item->data(0, Qt::UserRole).toString()))
-			fastGrid->lightSelectTile(tile);
+	connect(assetListView, &QTreeView::clicked, this, [this](const QModelIndex &index) {
+		lightSelect(index.data(LibraryModel::GuidRole).toString());
 	});
-	connect(assetListView, &QTreeWidget::itemDoubleClicked, this,
-	        [this](QTreeWidgetItem *item, int) {
-		if (auto *tile = fastGrid->tileByGuid(item->data(0, Qt::UserRole).toString()))
-			fastGrid->selectTile(tile);
+	connect(assetListView, &QTreeView::doubleClicked, this, [this](const QModelIndex &index) {
+		openTile(index.data(LibraryModel::GuidRole).toString());
 	});
-	connect(assetListView, &QTreeWidget::customContextMenuRequested, this,
-	        [this](const QPoint &pos) {
-		QTreeWidgetItem *item = assetListView->itemAt(pos);
-		if (!item) return;
-		if (auto *tile = fastGrid->tileByGuid(item->data(0, Qt::UserRole).toString())) {
-			const QPoint global = assetListView->viewport()->mapToGlobal(pos);
-			tile->projectContextMenu(tile->mapFromGlobal(global));
-		}
+	connect(assetListView, &QTreeView::customContextMenuRequested, this, [this](const QPoint &pos) {
+		const QModelIndex index = assetListView->indexAt(pos);
+		if (!index.isValid()) return;
+		showTileMenu(index.data(LibraryModel::GuidRole).toString(),
+		             assetListView->viewport()->mapToGlobal(pos));
 	});
 
 	// The post-dialog tail pump: one viewer preview/thumbnail per event-loop
@@ -796,8 +862,6 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
 	});
 	connect(tailQueue, &ImportTailQueue::finished, this, [this]() {
 		tailStatusLabel->setVisible(false);
-		fastGrid->updateGridColumns(fastGrid->lastWidth);
-		filterFromSelection();
 	});
 
 	auto views = new QWidget;
@@ -807,7 +871,7 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
 	viewsL->setContentsMargins(0, 6, 0, 0);
 	viewsL->setSpacing(0);
 	viewsL->addWidget(emptyGrid);
-	viewsL->addWidget(fastGrid);
+	viewsL->addWidget(tileView);
 	viewsL->addWidget(assetListView);
 	viewsL->addWidget(tailStatusLabel);
 	views->setLayout(viewsL);
@@ -817,66 +881,27 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
 	testL->addWidget(views, 1, 0);
     _viewPane->setLayout(testL);
 
-	// temp this should be checked before by emitting a signal
-	fastGrid->setVisible(false);
+	// THE EMPTY STATE follows the LIBRARY's row count (not the filtered one: a
+	// drawer with nothing in it still shows the filter bar and the grid).
+	tileView->setVisible(false);
 	filterPane->setVisible(false);
+	const auto syncEmptyState = [this]() {
+		const bool any = libraryModel->rowCount() > 0;
+		filterPane->setVisible(any);
+		emptyGrid->setVisible(!any);
+		const bool listMode = assetViewMode == QStringLiteral("list");
+		tileView->setVisible(any && !listMode);
+		assetListView->setVisible(any && listMode);
+	};
+	connect(libraryModel, &QAbstractItemModel::modelReset, this, syncEmptyState);
+	connect(libraryModel, &QAbstractItemModel::rowsInserted, this, syncEmptyState);
+	connect(libraryModel, &QAbstractItemModel::rowsRemoved, this, syncEmptyState);
 
-	connect(fastGrid, &AssetViewGrid::gridCount, [this](int count) {
-		if (count > 0) {
-			filterPane->setVisible(true);
-			emptyGrid->setVisible(false);
-			const bool listMode = assetViewMode == QStringLiteral("list");
-			fastGrid->setVisible(!listMode);
-			assetListView->setVisible(listMode);
-			rebuildAssetList();
-		}
-		else {
-			filterPane->setVisible(false);
-			emptyGrid->setVisible(true);
-			fastGrid->setVisible(false);
-			assetListView->setVisible(false);
-
-		}
-	});
-
-	// show assets
-	int i = 0;
-	// The tile's collection_name used to store the collection's int id — the
-	// metadata pane showed a number. Store the actual name (§2 defect list).
-	QMap<int, QString> drawerNames;
-	for (const auto &coll : db->fetchCollections()) drawerNames.insert(coll.id, coll.name);
-	// THE LIBRARY LISTING (services/assettray.h libraryList): the grid rows
-	// less a legacy Shader row (rule 2b — nothing can open one since
-	// MATERIAL_BUNDLE_SPEC phase 2; the row is untouched and goes with the
-	// next data wipe) and, unless the switch above is on, the pictures that
-	// arrived inside a material bundle (rule 6). The verb's scope 'store'
-	// reads the same function.
-	foreach(const AssetRecord &record, assettray::libraryList(db, showMembers)) {
-		QJsonObject object;
-		object["icon_url"] = "";
-		object["guid"] = record.guid;
-		object["name"] = record.name;
-		object["type"] = record.type;
-		object["collection"] = record.collection;
-		object["collection_name"] = drawerNames.value(record.collection, tr("Uncategorized"));
-		object["author"] = record.author;
-		object["license"] = record.license;
-
-        auto tags = QJsonDocument::fromJson(record.tags);
-
-		QImage image;
-		image.loadFromData(record.thumbnail, "PNG");
-
-        auto sceneProperties = QJsonDocument::fromJson(record.properties);
-
-		auto gridItem = new AssetGridItem(object, image, sceneProperties.object(), tags.object());
-		wireTile(gridItem);
-
-		fastGrid->addTo(gridItem, i);
-		i++;
-	}
-
-	fastGrid->updateGridColumns(fastGrid->lastWidth);
+	// THE ROWS: the library listing, one query without a thumbnail column
+	// (services/assettray.h libraryList — the grid rows less a legacy Shader row
+	// and, unless "Show member textures" is on, the pictures that arrived inside
+	// a material bundle). Nothing is decoded here.
+	reloadLibrary();
 
 	// Restore the persisted Tiles/List choice (owner request 2026-08-31).
 	setAssetViewMode(settings->getValue(QStringLiteral("assetView/viewMode"),
@@ -977,209 +1002,22 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
 	tagWidget->setLayout(tagLayout);
 	tagWidget->setVisible(false);
 
-	connect(fastGrid, &AssetViewGrid::selectedTileToAdd, [=](AssetGridItem *gridItem) {
-		if (!gridItem->metadata.isEmpty()) {
-			if (services && services->project && services->project->isSceneOpen()) {
-				selectedGridItem = gridItem;
-				addAssetItemToProject(gridItem);
-				selectedGridItem = Q_NULLPTR;
-			}
-		}
-	});
-
-	// Plain click (the tile flip keeps preview loading on double-click):
-	// the tile still becomes CURRENT — pane, rename/tags fields and the
-	// bottom-right buttons act on what the user just clicked. This is what
-	// made "Add to Project" look dead: the button read a selection plain
-	// clicks no longer set.
-	connect(fastGrid, &AssetViewGrid::lightSelectedTile, [this](AssetGridItem *gridItem) {
-		if (gridItem->metadata.isEmpty()) return;
-		selectedGridItem = gridItem;
-
-		fetchMetadata(gridItem);
-		populateAssetNodeTree(gridItem->metadata["guid"].toString(),
-		                      gridItem->metadata["type"].toInt());
-
-		renameModelField->setText(QFileInfo(gridItem->metadata["name"].toString()).baseName());
-		QString tags;
-		for (const auto childObj : gridItem->tags["tags"].toArray())
-			tags.append(childObj.toString() + ", ");
-		tags.chop(2);
-		tagModelField->setText(tags);
-
-		renameWidget->setVisible(true);
-		tagWidget->setVisible(true);
-		updateAsset->setVisible(true);
-		deleteFromLibrary->setEnabled(true);
-		updateAddToProjectButton();
-	});
-
-    connect(fastGrid, &AssetViewGrid::selectedTile, [&](AssetGridItem *gridItem) {
-		fastGrid->deselectAll();
-		stopMediaPreviews();   // switching tiles/pages stops playback (§2)
-
-		renameWidget->setVisible(false);
-		tagWidget->setVisible(false);
-		updateAsset->setVisible(false);
-
-		fetchMetadata(gridItem);
-
-		populateAssetNodeTree(gridItem->metadata["guid"].toString(),
-		                      gridItem->metadata["type"].toInt());
-
-		if (!gridItem->metadata.isEmpty()) {
-
-			selectedGridItem = gridItem;
-			updateAddToProjectButton();
-			deleteFromLibrary->setEnabled(true);
-
-			renameWidget->setVisible(true);
-			tagWidget->setVisible(true);
-			updateAsset->setVisible(true);
-
-			renameModelField->setText(QFileInfo(gridItem->metadata["name"].toString()).baseName());
-
-			QString tags;
-			QJsonArray children = gridItem->tags["tags"].toArray();
-			for (auto childObj : children) {
-				auto tag = childObj.toString();
-				tags.append(tag + ", ");
-			}
-
-			tags.chop(2);
-
-			tagModelField->setText(tags);
-
-
-			QVector3D pos;
-			QVector3D rot;
-			int distObj = 5;   // was read uninitialized when no camera props were stored
-
-			bool cached = false;
-
-			if (!gridItem->sceneProperties["camera"].toObject().isEmpty()) {
-				auto props = gridItem->sceneProperties["camera"].toObject();
-				auto posObj = props["pos"].toObject();
-				distObj = props["distFromPivot"].toDouble(5.0);
-				auto rotObj = props["rot"].toObject();
-
-				pos.setX(posObj["x"].toDouble(0));
-				pos.setY(posObj["y"].toDouble(0));
-				pos.setZ(posObj["z"].toDouble(0));
-
-				rot.setX(rotObj["x"].toDouble(0));
-				rot.setY(rotObj["y"].toDouble(0));
-				rot.setZ(rotObj["z"].toDouble(0));
-
-				cached = true;
-			}
-
-			// The loading overlay (§1): visible from the double-click until the
-			// viewer reports the load finished. The synchronous loads below
-			// block the event loop, so paint it before starting.
-			loadingTile = gridItem;
-			gridItem->showLoadingOverlay();
-			QApplication::processEvents();
-
-            // PreviewRouter (ASSET_MEDIA_SPEC §2): ONE type→page map decides
-            // the viewer; the old flat if-chain per type is gone.
-            const QString guid = gridItem->metadata["guid"].toString();
-            const QString name = gridItem->metadata["name"].toString();
-            const auto type = static_cast<ModelTypes>(gridItem->metadata["type"].toInt());
-            const PreviewPage page = PreviewRouter::pageFor(type);
-            // The switch also stops whatever the previous page was playing
-            // (the currentChanged hook), before the new page starts.
-            viewers->setCurrentIndex(static_cast<int>(page));
-
-            // The row's primary file, resolved through the CAS by guid — the
-            // retired <root>/<guid>/ view is gone (deep audit 2026-09, area 6).
-            const QString storeFile = AssetCas::resolveSource(
-                QSqlDatabase::database(), AssetStorePaths::root(), guid);
-
-            switch (page) {
-            case PreviewPage::Viewer3D: {
-                // THE SAVED CAMERA IS RESTORED ONLY IF THERE IS ONE (`cached`).
-                // orientCamera ran unconditionally, so an asset with no stored
-                // camera block — everything imported by a verb, by the avatar
-                // module, by a drop that never reached the page's tail — had
-                // the framing the load had just computed overwritten with the
-                // DEFAULTS: the origin, distance 5, looking down -Z. On any
-                // model bigger than about five metres that is a camera inside
-                // the model, which is what the owner saw (smoke S5).
-                const auto restoreCamera = [&]() {
-                    viewer->orientCamera(iris::fromQt(pos), iris::fromQt(rot), distObj);
-                };
-                if (type == ModelTypes::Object || type == ModelTypes::ParticleSystem) {
-                    // The model file IS the asset's source-role object; the
-                    // old "scan the per-guid folder for a MODEL_EXTS suffix"
-                    // was the retired legacy view's only remaining reader here.
-                    const QString path = storeFile;
-                    if (viewer->cachedAsset(guid))
-                        viewer->addNodeToScene(viewer->cachedAsset(guid), guid, cached, false);
-                    else
-                        viewer->loadJafModel(path, guid, false, true, !cached);
-                    if (cached) restoreCamera();
-                    else        viewer->frameSubject();   // the editor's F, on the new subject
-                }
-                else if (type == ModelTypes::Material) {
-                    viewer->loadJafMaterial(guid);
-                    if (cached) restoreCamera();
-                }
-                else if (type == ModelTypes::Sky) {
-                    viewer->loadJafSky(guid);
-                }
-                break;
-            }
-            case PreviewPage::Image:
-                showImagePreview(storeFile);
-                break;
-            case PreviewPage::Audio:
-                showAudioPreview(guid, storeFile, name);
-                break;
-            case PreviewPage::Video:
-                showVideoPreview(storeFile, name);
-                break;
-            case PreviewPage::Placeholder:
-                showFilePlaceholder(name);
-                break;
-            }
-
-			selectedGridItem = gridItem;
-			selectedGridItem->highlight(true);
-
-			// Types with no viewer load (textures, audio) end up here with the
-			// overlay still up — and the viewer callback already fired for the
-			// rest. Either way the overlay is done.
-			clearLoadingTile();
-		}
-    });
-
 	connect(updateAsset, &QPushButton::pressed, [this]() {
 		// ONE path for name + tags (assettags, 2026-09-06 audit F3): this
 		// button, assets.rename and assets.setTags all write through the same
 		// service, which is also where the "changing one must not wipe the
-		// other" rule lives. The inline JSON-blob builder this replaced was
-		// the only tag writer in the product.
+		// other" rule lives.
+		if (selectedGuid.isEmpty()) return;
 		const QStringList typedTags = tagModelField->text().split(QLatin1Char(','),
 																  Qt::SkipEmptyParts);
 		const QString newName = renameModelField->text();
-		assettags::write(db, selectedGridItem->metadata["guid"].toString(), newName,
-						 typedTags);
-
-		QJsonObject tags;
-		const QStringList stored = assettags::tagsOf(db, selectedGridItem->metadata["guid"].toString());
-		if (!stored.isEmpty()) {
-			QJsonArray actualTags;
-			for (const QString &tag : stored) actualTags.append(tag);
-			tags["tags"] = actualTags;
-		}
-
-		auto metadata = selectedGridItem->metadata;
-		metadata["name"] = newName;
-		metadata["full_filename"] = IrisUtils::buildFileName(newName, QFileInfo(selectedGridItem->metadata["full_filename"].toString()).suffix());
-
-		selectedGridItem->updateMetadata(metadata, tags);
-		fetchMetadata(selectedGridItem);
+		assettags::write(db, selectedGuid, newName, typedTags);
+		const QStringList stored = assettags::tagsOf(db, selectedGuid);
+		libraryModel->update(selectedGuid, [&](LibraryRow &row) {
+			row.name = newName;
+			row.tags = stored;
+		});
+		fetchMetadata(selectedGuid);
 	});
 
 	// THE SIZE ROW's one action (SPECS/IMPORT_DIALOG_SPEC.md §8): reopen the
@@ -1187,17 +1025,15 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
 	// both the widget layer and the ScriptHost, so OK commits through the
 	// assets.reimport verb and the open-scene swap happens with it.
 	connect(importSettingsButton, &QPushButton::clicked, this, [this]() {
-		if (!selectedGridItem || selectedGridItem->metadata.isEmpty()) return;
-		emit reimportAssetRequested(selectedGridItem->metadata["guid"].toString());
+		if (!selectedGuid.isEmpty()) emit reimportAssetRequested(selectedGuid);
 	});
 
 	connect(addToProject, &QPushButton::pressed, [this]() {
-		if (selectedGridItem && !selectedGridItem->metadata.isEmpty())
-			addAssetItemToProject(selectedGridItem);
+		if (!selectedGuid.isEmpty()) addAssetItemToProject(selectedGuid);
 	});
 
 	connect(deleteFromLibrary, &QPushButton::pressed, [this]() {
-		deleteAssetFromLibrary(selectedGridItem);
+		deleteAssetFromLibrary(selectedGuid);
 	});
 
 	connect(browseButton, &QPushButton::pressed, [=]() {
@@ -1372,9 +1208,131 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
 	setStyleSheet(StyleSheet::AssetViewPanel());
 }
 
+// THE TILE GESTURES, by guid (the tile flip, ASSET_DRAWERS_SPEC §1): a plain
+// click makes the asset CURRENT — the pane, the rename/tags fields and the
+// bottom-right buttons act on it — without loading anything; a double click
+// (and assets.select) also loads its preview.
+void AssetView::showSelection(const QString &guid)
+{
+	const LibraryRow *row = libraryModel->rowFor(guid);
+	if (!row) return;
+	selectedGuid = guid;
+	selectedProperties = QJsonObject();
+	// Both views select the same row (they share the proxy).
+	const QModelIndex index = libraryProxy->mapFromSource(libraryModel->indexOfGuid(guid));
+	if (index.isValid()) {
+		tileView->setCurrentIndex(index);
+		assetListView->setCurrentIndex(index);
+	}
+
+	fetchMetadata(guid);
+	populateAssetNodeTree(guid, row->type);
+
+	renameModelField->setText(QFileInfo(row->name).baseName());
+	tagModelField->setText(row->tags.join(QStringLiteral(", ")));
+
+	renameWidget->setVisible(true);
+	tagWidget->setVisible(true);
+	updateAsset->setVisible(true);
+	deleteFromLibrary->setEnabled(true);
+	updateAddToProjectButton();
+}
+
+void AssetView::lightSelect(const QString &guid)
+{
+	showSelection(guid);
+}
+
+void AssetView::openTile(const QString &guid)
+{
+	const LibraryRow *row = libraryModel->rowFor(guid);
+	if (!row) return;
+	stopMediaPreviews();   // switching tiles/pages stops playback (§2)
+	showSelection(guid);   // reads the row's properties into selectedProperties
+
+	QVector3D pos;
+	QVector3D rot;
+	int distObj = 5;   // was read uninitialized when no camera props were stored
+	bool cached = false;
+	const QJsonObject camera = selectedProperties.value(QStringLiteral("camera")).toObject();
+	if (!camera.isEmpty()) {
+		const QJsonObject posObj = camera.value(QStringLiteral("pos")).toObject();
+		const QJsonObject rotObj = camera.value(QStringLiteral("rot")).toObject();
+		distObj = camera.value(QStringLiteral("distFromPivot")).toDouble(5.0);
+		pos = QVector3D(posObj.value(QStringLiteral("x")).toDouble(0), posObj.value(QStringLiteral("y")).toDouble(0),
+		                posObj.value(QStringLiteral("z")).toDouble(0));
+		rot = QVector3D(rotObj.value(QStringLiteral("x")).toDouble(0), rotObj.value(QStringLiteral("y")).toDouble(0),
+		                rotObj.value(QStringLiteral("z")).toDouble(0));
+		cached = true;
+	}
+
+	// The loading overlay (§1): visible from the double-click until the
+	// viewer reports the load finished. The synchronous loads below block the
+	// event loop, so paint it before starting.
+	setLoadingTile(guid);
+	tileView->viewport()->repaint();
+
+	// PreviewRouter (ASSET_MEDIA_SPEC §2): ONE type→page map decides the
+	// viewer; the switch also stops whatever the previous page was playing.
+	const QString name = row->name;
+	const auto type = static_cast<ModelTypes>(row->type);
+	const PreviewPage page = PreviewRouter::pageFor(type);
+	viewers->setCurrentIndex(static_cast<int>(page));
+
+	// The row's primary file, resolved through the CAS by guid.
+	const QString storeFile = AssetCas::resolveSource(
+	    QSqlDatabase::database(), AssetStorePaths::root(), guid);
+
+	switch (page) {
+	case PreviewPage::Viewer3D: {
+		// THE SAVED CAMERA IS RESTORED ONLY IF THERE IS ONE (`cached`): an
+		// asset with no stored camera block keeps the framing its load
+		// computed (smoke S5: the defaults put the camera inside big models).
+		const auto restoreCamera = [&]() {
+			viewer->orientCamera(iris::fromQt(pos), iris::fromQt(rot), distObj);
+		};
+		if (type == ModelTypes::Object || type == ModelTypes::ParticleSystem) {
+			// The model file IS the asset's source-role object.
+			if (viewer->cachedAsset(guid))
+				viewer->addNodeToScene(viewer->cachedAsset(guid), guid, cached, false);
+			else
+				viewer->loadJafModel(storeFile, guid, false, true, !cached);
+			if (cached) restoreCamera();
+			else        viewer->frameSubject();   // the editor's F, on the new subject
+		}
+		else if (type == ModelTypes::Material) {
+			viewer->loadJafMaterial(guid);
+			if (cached) restoreCamera();
+		}
+		else if (type == ModelTypes::Sky) {
+			viewer->loadJafSky(guid);
+		}
+		break;
+	}
+	case PreviewPage::Image:
+		showImagePreview(storeFile);
+		break;
+	case PreviewPage::Audio:
+		showAudioPreview(guid, storeFile, name);
+		break;
+	case PreviewPage::Video:
+		showVideoPreview(storeFile, name);
+		break;
+	case PreviewPage::Placeholder:
+		showFilePlaceholder(name);
+		break;
+	}
+
+	// Types with no viewer load (textures, audio) end up here with the
+	// overlay still up — and the viewer callback already fired for the rest.
+	// Either way the overlay is done.
+	clearLoadingTile();
+}
+
 void AssetView::updateAddToProjectButton()
 {
-	const bool haveTile = selectedGridItem && !selectedGridItem->metadata.isEmpty();
+	const LibraryRow *row = libraryModel->rowFor(selectedGuid);
+	const bool haveTile = row != nullptr;
 	const bool sceneOpen = services && services->project && services->project->isSceneOpen();
 	const bool storeOnline = AssetStoreService::online();
 	addToProject->setEnabled(haveTile && sceneOpen && storeOnline);
@@ -1387,7 +1345,7 @@ void AssetView::updateAddToProjectButton()
 		addToProject->setToolTip(tr("Open a project to add assets to it"));
 	else
 		addToProject->setToolTip(tr("Add \"%1\" to the open project")
-		    .arg(QFileInfo(selectedGridItem->metadata["name"].toString()).baseName()));
+		    .arg(QFileInfo(row->name).baseName()));
 }
 
 void AssetView::refreshStoreBanner()
@@ -1488,15 +1446,10 @@ void AssetView::finishMeshTailItem(const ImportResult &result, const QString &fi
     // import and a scripted import now store the same image.
     assetthumb::storeObject(db, project, result.assetGuid, EngineHost::instance().engine());
 
-    if (auto *tile = fastGrid->tileByGuid(result.assetGuid)) {
-        tile->hideLoadingOverlay();
-        const auto record = db->fetchAsset(result.assetGuid);
-        QImage thumbnail;
-        if (thumbnail.loadFromData(record.thumbnail, "PNG"))
-            tile->setTile(QPixmap::fromImage(thumbnail));
-        // The freshly rendered camera properties feed the pane on selection.
-        tile->sceneProperties = QJsonDocument::fromJson(record.properties).object();
-    }
+    // The tile's picture follows the stored thumbnail by itself (the write drops
+    // the cached tile; the next paint reads the new one). Its loading pulse ends.
+    if (loadingGuid == result.assetGuid) clearLoadingTile();
+    libraryModel->refreshTile(result.assetGuid);
 
     renameWidget->setVisible(true);
     tagWidget->setVisible(true);
@@ -1515,24 +1468,35 @@ void AssetView::finishMeshTailItem(const ImportResult &result, const QString &fi
 bool AssetView::selectAsset(const QString &guid)
 {
     if (guid.isEmpty()) return false;
-    AssetGridItem *tile = fastGrid->tileByGuid(guid);
-    if (!tile && !db->fetchAsset(guid).guid.isEmpty()) {
+    if (!libraryModel->contains(guid) && !db->fetchAsset(guid).guid.isEmpty()) {
         // The page MIRRORS the library: a row that exists but whose tile has
         // not been announced yet (a verb's import, a queued announcement that
-        // has not run) still selects — the tile is built now. The announcement
-        // handler checks for an existing tile, so nothing doubles up.
+        // has not run) still selects — the row is added now. The announcement
+        // handler checks the model first, so nothing doubles up.
         addLibraryTileForAsset(guid);
-        tile = fastGrid->tileByGuid(guid);
     }
-    if (!tile) return false;
-    fastGrid->selectTile(tile);          // the double-click path: preview + pane
-    fastGrid->ensureWidgetVisible(tile, 32, 32);
+    if (!libraryModel->contains(guid)) return false;
+    // A tile the drawer or the search hides is shown: a selection nobody can
+    // see is not a selection.
+    QModelIndex index = libraryProxy->mapFromSource(libraryModel->indexOfGuid(guid));
+    if (!index.isValid()) {
+        treeWidget->setCurrentItem(rootItem);
+        libraryProxy->setCollection(-1);
+        le->clear();
+        libraryProxy->setSearch(QString());
+        index = libraryProxy->mapFromSource(libraryModel->indexOfGuid(guid));
+    }
+    openTile(guid);                       // the double-click path: preview + pane
+    if (index.isValid()) {
+        tileView->scrollTo(index);
+        assetListView->scrollTo(index);
+    }
     return true;
 }
 
 QString AssetView::selectedAssetGuid() const
 {
-    return selectedGridItem ? selectedGridItem->metadata["guid"].toString() : QString();
+    return selectedGuid;
 }
 
 // THE import dispatch (ASSET_DRAWERS_SPEC §3): drop pad and browse dialog both
@@ -1722,9 +1686,6 @@ void AssetView::runImportBatch(const QVector<ImportRequest> &requests)
 		// never freezes; each tile updates live as its render lands.
 		scheduleViewerTails();
 
-		fastGrid->updateGridColumns(fastGrid->lastWidth);
-		filterFromSelection();
-
 		// SELECT WHAT WAS IMPORTED (smoke S4). A mesh selects when its tail
 		// lands (the preview is part of the selection); everything else —
 		// images, audio, video, .jaf archives — has no tail, so the batch
@@ -1755,8 +1716,7 @@ void AssetView::handleImportedFile(const ImportRequest &request, const ImportRes
 		lastImportedGuid = result.assetGuid;
 		if (!isJaf) {
 			addLibraryTileForAsset(result.assetGuid);
-			if (auto *tile = fastGrid->tileByGuid(result.assetGuid))
-				tile->showLoadingOverlay();
+			if (libraryModel->contains(result.assetGuid)) setLoadingTile(result.assetGuid);
 		}
 		return;
 	}
@@ -1790,8 +1750,7 @@ void AssetView::scheduleViewerTails()
 		// committed with the film icon; grab the real first-second frame on
 		// the queue — the same path as tile right-click → Rebuild Thumbnail.
 		tailQueue->enqueue([this, guid]() {
-			if (AssetGridItem *tile = fastGrid->tileByGuid(guid))
-				rebuildTileThumbnail(tile);
+			if (libraryModel->contains(guid)) rebuildTileThumbnail(guid);
 		});
 	}
 
@@ -1820,58 +1779,54 @@ void AssetView::setServices(StudioServices *s)
 	services->assets->onLibraryChanged([self](const QString &guid) {
 		if (!self) return;
 		QMetaObject::invokeMethod(self, [self, guid]() {
-			if (!self || !self->fastGrid) return;
-			if (!self->fastGrid->tileByGuid(guid)) self->addLibraryTileForAsset(guid);
+			if (!self || !self->libraryModel) return;
+			if (!self->libraryModel->contains(guid)) self->addLibraryTileForAsset(guid);
 		}, Qt::QueuedConnection);
 	});
+}
+
+LibraryRow AssetView::rowFromRecord(const AssetRecord &record)
+{
+	LibraryRow row;
+	row.guid = record.guid;
+	row.name = record.name;
+	row.type = record.type;
+	row.collection = record.collection;
+	row.author = record.author;
+	row.license = record.license;
+	for (const QJsonValue &tag : QJsonDocument::fromJson(record.tags).object().value(QStringLiteral("tags")).toArray())
+		row.tags.append(tag.toString());
+	return row;
+}
+
+void AssetView::reloadLibrary()
+{
+	// ONE query, no thumbnail column, nothing decoded: the rows only. The view
+	// asks the tile cache for the ~50 tiles it paints.
+	QVector<LibraryRow> rows;
+	const QVector<AssetRecord> records = assettray::libraryList(db, showMembers);
+	rows.reserve(records.size());
+	for (const AssetRecord &record : records) rows.append(rowFromRecord(record));
+	libraryModel->setRows(rows);
+	if (!libraryModel->contains(selectedGuid)) selectedGuid.clear();
 }
 
 void AssetView::addLibraryTileForAsset(const QString &guid)
 {
 	// The committed row (the same rows the assets.importFile verb writes) —
-	// this is only the tile tail; the pipeline ran on the batch runner.
+	// this is only the tile tail; the pipeline ran on the batch runner. ONE
+	// row in the model, at the front, O(1): nothing is relaid out or rebuilt.
 	const auto record = db->fetchAsset(guid);
 	if (record.guid.isEmpty()) return;
-
-	QJsonObject object;
-	object["icon_url"] = "";
-	object["guid"] = record.guid;
-	object["name"] = record.name;
-	object["type"] = record.type;
-	object["collection"] = record.collection;
-	object["collection_name"] = drawerName(record.collection);
-	object["author"] = record.author;
-	object["license"] = record.license;
-
-	QImage thumbnail;
-	thumbnail.loadFromData(record.thumbnail, "PNG");
-
-	// The row's properties carry the freshly computed "metadata" block —
-	// hand it to the tile so the pane shows it without a backfill round-trip.
-	auto gridItem = new AssetGridItem(object, thumbnail,
-	                                  QJsonDocument::fromJson(record.properties).object(),
-	                                  QJsonObject());
-	wireTile(gridItem);
-	fastGrid->addTo(gridItem, 0);
-	fastGrid->updateGridColumns(fastGrid->lastWidth);
-	filterFromSelection();
+	libraryModel->upsert(rowFromRecord(record));
 }
 
 void AssetView::applyShowMembers(bool on)
 {
-	// THE SWITCH'S OWN SET — the bundle members and nothing else (one pass;
-	// a legacy Shader row and a project's copy of a preset stay out either way).
-	const QStringList folded = assettray::libraryMembers(db, db->fetchAssetsForAssetView());
-	if (on) {
-		for (const QString &guid : folded) {
-			if (fastGrid->tileByGuid(guid)) continue;
-			addLibraryTileForAsset(guid);
-		}
-	} else {
-		for (const QString &guid : folded)
-			if (auto *tile = fastGrid->tileByGuid(guid)) fastGrid->deleteTile(tile);
-		fastGrid->updateGridColumns(fastGrid->lastWidth);
-	}
+	// THE SWITCH'S OWN SET — the bundle members and nothing else; the listing
+	// is re-read (one query, no thumbnails) under the new rule.
+	showMembers = on;
+	reloadLibrary();
 }
 
 // ONE toast for the page, reused. Every message used to `new Toast(this)` and
@@ -2080,91 +2035,20 @@ void AssetView::extractTexturesAndMaterialFromMaterial(const QString &filePath,
 
 void AssetView::addToJahLibrary(const QString fileName, const QString guid, bool jfx)
 {
-    QJsonObject tags;
-    QJsonArray actualTags;
-
-    QFileInfo fInfo(filename);
-    QJsonObject object;
-    object["icon_url"] = "";
-    object["name"] = QFileInfo(fileName).baseName(); // renameModelField->text();
-
-    auto bytes = db->fetchAsset(guid).thumbnail;
-    QImage thumbnail;
-    if (!thumbnail.loadFromData(bytes, "PNG")) {
-    }
-
-
+    Q_UNUSED(fileName);
+    Q_UNUSED(jfx);
 	db->updateAssetViewFilter(guid, 2);
-
-    object["type"] = db->fetchAsset(guid).type;
-
-	if (object["type"].toInt() != static_cast<int>(ModelTypes::Sky)) {
+	const int type = db->fetchAsset(guid).type;
+	if (type != static_cast<int>(ModelTypes::Sky))
         db->updateAssetProperties(guid, QJsonDocument(viewer->getSceneProperties()).toJson());
-	}
-
-	if (object["type"].toInt() == static_cast<int>(ModelTypes::Sky)) {
-		thumbnail = QImage(IrisUtils::getAbsoluteAssetPath("app/icons/icons8-file-sky.png"));
-	}
-
-    if (object["type"].toInt() == static_cast<int>(ModelTypes::ParticleSystem)) {
-        thumbnail = QImage(IrisUtils::getAbsoluteAssetPath("app/icons/icons8-file-ps.png"));
-    }
-
-    object["guid"] = guid;
-
-    auto gridItem = new AssetGridItem(object, thumbnail, viewer->getSceneProperties(), tags);
-    wireTile(gridItem);
 
     viewer->cacheCurrentModel(guid);
-
-    fastGrid->addTo(gridItem, 0, true);
-    QApplication::processEvents();
-    fastGrid->updateGridColumns(fastGrid->lastWidth);
+    addLibraryTileForAsset(guid);
+    openTile(guid);
 
     renameWidget->setVisible(true);
     tagWidget->setVisible(true);
     updateAsset->setVisible(true);
-}
-
-void AssetView::addToLibrary(const QString& main_guid, bool jfx)
-{
-	QJsonObject tags;
-	QJsonArray actualTags;
-
-		QFileInfo fInfo(filename);
-		QJsonObject object;
-		object["icon_url"] = "";
-		object["name"] = QFileInfo(filename).baseName(); // renameModelField->text();
-
-    auto assetSnapshot = viewer->takeScreenshot(512, 512);
-
-    QJsonDocument tagsDoc(tags);
-
-    object["guid"] = main_guid;
-    object["type"] = db->fetchAsset(main_guid).type; // model?
-    object["full_filename"] = IrisUtils::buildFileName(main_guid, fInfo.suffix());
-    if (jfx) {
-        object["author"] = "JahFX";// db->getAuthorName();
-    }
-    else {
-        object["author"] = "";// db->getAuthorName();
-    }
-    object["license"] = "CCBY";
-
-
-
-		auto gridItem = new AssetGridItem(object, assetSnapshot, viewer->getSceneProperties(), tags);
-		wireTile(gridItem);
-
-    viewer->cacheCurrentModel(main_guid);
-
-		fastGrid->addTo(gridItem, 0, true);
-		QApplication::processEvents();
-		fastGrid->updateGridColumns(fastGrid->lastWidth);
-
-		renameWidget->setVisible(true);
-		tagWidget->setVisible(true);
-		updateAsset->setVisible(true);
 }
 
 // ---- rich metadata formatting (ASSET_DRAWERS_SPEC addendum) ----
@@ -2273,32 +2157,31 @@ QString pinnedProjectNames(const QVector<AssetPinRecord> &pins)
 }
 } // namespace
 
-void AssetView::fetchMetadata(AssetGridItem *widget, bool allowBackfill)
+void AssetView::fetchMetadata(const QString &guid, bool allowBackfill)
 {
-	if (!widget->metadata.isEmpty()) {
+	const LibraryRow *row = libraryModel->rowFor(guid);
+	if (row) {
 		metadataMissing->setVisible(false);
 		metadataDetails->setVisible(true);
 
 		MetadataRows rows;
-		rows.append({ tr("Type"), getAssetType(widget->metadata["type"].toInt()) });
+		rows.append({ tr("Type"), getAssetType(row->type) });
 
 		// The rich per-type block: import-time for new assets, lazily
 		// backfilled (worker thread + update-on-arrival) for old libraries.
+		// The row's properties are read HERE, for the one selected asset —
+		// the listing never carries them for a pane.
 		{
-			const QString guid = widget->metadata["guid"].toString();
 			const auto record = db->fetchAsset(guid);
-			QJsonObject meta = widget->sceneProperties["metadata"].toObject();
-			if (meta.isEmpty()) {
-				// another session (or the verb) may have persisted it already
-				meta = QJsonDocument::fromJson(record.properties).object()["metadata"].toObject();
-				if (!meta.isEmpty()) widget->sceneProperties["metadata"] = meta;
-			}
+			const QJsonObject props = QJsonDocument::fromJson(record.properties).object();
+			if (guid == selectedGuid) selectedProperties = props;
+			const QJsonObject meta = props.value(QStringLiteral("metadata")).toObject();
 			if (!meta.isEmpty()) {
 				appendMetadataRows(rows, meta, record.dateCreated);
 			}
 			else if (allowBackfill) {
 				rows.append({ tr("Details"), QStringLiteral("…") });
-				backfillMetadata(widget, guid, record.type);
+				backfillMetadata(guid, record.type);
 			}
 			refreshFitRow(guid, record.type, meta);
 		}
@@ -2310,9 +2193,8 @@ void AssetView::fetchMetadata(AssetGridItem *widget, bool allowBackfill)
 			// the row used to count pins from projects that no longer exist,
 			// and show their raw guids). Dead ones are still worth saying:
 			// they are catalog rows assets.gc can reap.
-			const QString assetGuid = widget->metadata["guid"].toString();
-			const auto all = assetdelete::pins(db, assetGuid);
-			const auto live = assetdelete::livePins(db, assetGuid);
+			const auto all = assetdelete::pins(db, guid);
+			const auto live = assetdelete::livePins(db, guid);
 			const int dead = all.size() - live.size();
 			QString used = live.isEmpty() ? tr("no projects")
 			                              : tr("%n project(s): %1", "", live.size())
@@ -2320,12 +2202,9 @@ void AssetView::fetchMetadata(AssetGridItem *widget, bool allowBackfill)
 			if (dead > 0) used += tr(" (+%n pin(s) from deleted projects)", "", dead);
 			rows.append({ tr("Used by"), used });
 		}
-		rows.append({ tr("Public"), widget->metadata["is_public"].toBool() ? tr("true") : tr("false") });
-		rows.append({ tr("Author"), widget->metadata["author"].toString() });
-		rows.append({ tr("License"), widget->metadata["license"].toString() });
-		
-		const QString collection = widget->metadata["collection_name"].toString();
-		if (!collection.isEmpty()) rows.append({ tr("Collection"), collection });
+		rows.append({ tr("Author"), row->author });
+		rows.append({ tr("License"), row->license });
+		rows.append({ tr("Collection"), drawerName(row->collection) });
 
 		metadataDetails->setText(metadataTableHtml(rows));
 	}
@@ -2372,10 +2251,9 @@ void AssetView::refreshFitRow(const QString &guid, int assetType, const QJsonObj
 	fitRow->setVisible(true);
 }
 
-void AssetView::backfillMetadata(AssetGridItem *widget, const QString &guid, int assetType)
+void AssetView::backfillMetadata(const QString &guid, int assetType)
 {
 	const QString folder = IrisUtils::join(AssetMetadata::storeRootPath(), guid);
-	QPointer<AssetGridItem> tile(widget);
 
 	// Video is the one kind whose rich fields need the GUI thread
 	// (QMediaPlayer probe — ASSET_MEDIA_SPEC §1): compute right here, where
@@ -2383,21 +2261,18 @@ void AssetView::backfillMetadata(AssetGridItem *widget, const QString &guid, int
 	// it would come back degraded.
 	if (assetType == static_cast<int>(ModelTypes::Video)) {
 		const QJsonObject meta = AssetMetadata::ensure(db, guid);
-		if (tile) {
-			if (!meta.isEmpty()) tile->sceneProperties["metadata"] = meta;
-			if (selectedGridItem == tile) fetchMetadata(tile);
-		}
+		if (selectedGuid == guid) fetchMetadata(guid, false);
 		return;
 	}
 
 	auto *watcher = new QFutureWatcher<QJsonObject>(this);
-	connect(watcher, &QFutureWatcher<QJsonObject>::finished, this, [this, watcher, tile, guid]() {
+	connect(watcher, &QFutureWatcher<QJsonObject>::finished, this, [this, watcher, guid]() {
 		watcher->deleteLater();
 		const QJsonObject meta = watcher->result();
 		if (meta.isEmpty()) {
 			// nothing on disk to describe (e.g. a built-in) — re-render the
 			// table with the basic rows only (no backfill retry loop)
-			if (tile && selectedGridItem == tile) fetchMetadata(tile, false);
+			if (selectedGuid == guid) fetchMetadata(guid, false);
 			return;
 		}
 
@@ -2408,26 +2283,23 @@ void AssetView::backfillMetadata(AssetGridItem *widget, const QString &guid, int
 			props["metadata"] = meta;
 			db->updateAssetProperties(guid, QJsonDocument(props).toJson());
 		}
-
-		if (tile) {
-			tile->sceneProperties["metadata"] = props.contains("metadata")
-			                                        ? props["metadata"].toObject() : meta;
-			if (selectedGridItem == tile) fetchMetadata(tile);   // re-renders with data
-		}
+		if (selectedGuid == guid) fetchMetadata(guid, false);   // re-renders with data
 	});
 	// Pure file inspection (assimp / image header / wav header) — thread-safe.
 	watcher->setFuture(QtConcurrent::run(
 	    [assetType, folder]() { return AssetMetadata::computeForStore(assetType, folder); }));
 }
 
-void AssetView::addAssetItemToProject(AssetGridItem *item)
+void AssetView::addAssetItemToProject(const QString &guid)
 {
+	const LibraryRow *row = libraryModel->rowFor(guid);
+	if (!row) return;
+	const QString fullName = row->name;
 	// Are-you-sure first (owner direction): every UI entry point — the
 	// button, Shift+click and the tile context menu — funnels through here,
 	// so one dialog covers all three. The headless verb
 	// (assets.addToProject) never comes this way and stays dialog-free.
-	const QString assetName =
-	    QFileInfo(item->metadata["name"].toString()).baseName();
+	const QString assetName = QFileInfo(fullName).baseName();
 	const QString projectName = project ? project->getProjectName() : QString();
 	{
 		QDialog confirm(this);
@@ -2473,7 +2345,6 @@ void AssetView::addAssetItemToProject(AssetGridItem *item)
 	// Reference-with-pin (phase 4): the twin ~250-line transcription of the
 	// verb body (flat project-folder copies + Database::copyAsset clones)
 	// died here - ProjectAssets is the one implementation.
-	const QString guid = item->metadata["guid"].toString();
 	const auto result = ProjectAssets::addToProject(guid, db, project, ProjectAssets::AddKind::Direct);
 	if (!result.ok()) {
 		QMessageBox::warning(this, tr("Add to project failed"),
@@ -2490,18 +2361,16 @@ void AssetView::addAssetItemToProject(AssetGridItem *item)
 	Toast *t = libraryToast();
 	t->showToast(
 		tr("Asset Added To Project"),
-		tr("%1 has been added successfully to the open project.").arg(item->metadata["name"].toString())
+		tr("%1 has been added successfully to the open project.").arg(fullName)
 	);
 }
 
-void AssetView::moveAssetToDrawer(AssetGridItem *item, int drawerId)
+void AssetView::moveAssetToDrawer(const QString &guid, int drawerId)
 {
-	const auto guid = item->metadata["guid"].toString();
 	if (guid.isEmpty() || !db->switchAssetCollection(drawerId, guid)) return;
 
-	item->metadata["collection"] = drawerId;
-	item->metadata["collection_name"] = drawerName(drawerId);
-	if (selectedGridItem == item) fetchMetadata(item);
+	libraryModel->update(guid, [drawerId](LibraryRow &row) { row.collection = drawerId; });
+	if (selectedGuid == guid) fetchMetadata(guid);
 
 	// The view follows the move (owner smoke-test: a successful move must be
 	// VISIBLE): select the target drawer and filter the grid to it, so the
@@ -2585,7 +2454,7 @@ void AssetView::deleteDrawer(int drawerId)
 	}
 
 	if (!db->deleteCollection(drawerId)) return;
-	fastGrid->reassignCollections(subtree, 0, drawerName(0));
+	libraryModel->reassignCollections(subtree, 0);
 	rebuildDrawerTree();
 	filterFromSelection();
 }
@@ -2628,9 +2497,8 @@ QVector<QPair<int, QString>> AssetView::drawerMenuEntries() const
 
 void AssetView::filterFromSelection()
 {
-	fastGrid->filterAssets(treeWidget->currentItem()
+	libraryProxy->setCollection(treeWidget->currentItem()
 	    ? treeWidget->currentItem()->data(0, Qt::UserRole).toInt() : -1);
-	rebuildAssetList();   // the list mirrors the grid's filtered set
 }
 
 void AssetView::setAssetViewMode(const QString &mode, bool persist)
@@ -2643,7 +2511,7 @@ void AssetView::setAssetViewMode(const QString &mode, bool persist)
 
 	// Only swap the visible pane when the empty-state isn't showing.
 	if (!emptyGrid->isVisible()) {
-		fastGrid->setVisible(!listMode);
+		tileView->setVisible(!listMode);
 		assetListView->setVisible(listMode);
 	}
 	if (listMode) rebuildAssetList();
@@ -2653,79 +2521,66 @@ void AssetView::setAssetViewMode(const QString &mode, bool persist)
 
 void AssetView::rebuildAssetList()
 {
+	// The list's Size column: one query for the whole library, read when the
+	// list is showing (the rows themselves are the shared model's).
 	if (!assetListView || assetViewMode != QStringLiteral("list")) return;
-
-	const QMap<QString, qint64> sizes = db->fetchAssetFileSizes();
-	const QLocale locale;
-
-	assetListView->clear();
-	for (AssetGridItem *tile : fastGrid->tiles()) {
-		// Mirror the grid's search/drawer filtering: a tile hidden by
-		// searchTiles/filterAssets stays out of the list too (isVisibleTo
-		// ignores whether the grid pane itself is currently shown).
-		if (!tile->isVisibleTo(tile->parentWidget())) continue;
-
-		const QString guid = tile->metadata["guid"].toString();
-		auto *row = new QTreeWidgetItem(assetListView);
-		row->setText(0, tile->metadata["name"].toString());
-		row->setText(1, getAssetType(tile->metadata["type"].toInt()));
-		row->setText(2, sizes.contains(guid)
-		                    ? locale.formattedDataSize(sizes.value(guid))
-		                    : QStringLiteral("—"));
-		row->setData(0, Qt::UserRole, guid);
-	}
+	libraryModel->setSizes(db->fetchAssetFileSizes());
 }
 
-void AssetView::wireTile(AssetGridItem *gridItem)
+// THE TILE'S MENU (the one AssetGridItem carried per widget): the same entries,
+// by type, acting on the guid.
+void AssetView::showTileMenu(const QString &guid, const QPoint &globalPos)
 {
-	gridItem->setDrawerProvider([this]() { return drawerMenuEntries(); });
+	const LibraryRow *row = libraryModel->rowFor(guid);
+	if (!row) return;
+	const auto tileType = static_cast<ModelTypes>(row->type);
+	const int currentDrawer = row->collection;
 
-	connect(gridItem, &AssetGridItem::addAssetItemToProject, [this](AssetGridItem *item) {
-		addAssetItemToProject(item);
-	});
+	QMenu menu(this);
+	menu.setStyleSheet(StyleSheet::QMenuDark());
+	connect(menu.addAction(tr("Add to Project")), &QAction::triggered, this,
+	        [this, guid]() { addAssetItemToProject(guid); });
 
-	connect(gridItem, &AssetGridItem::moveAssetToDrawer, [this](AssetGridItem *item, int drawerId) {
-		moveAssetToDrawer(item, drawerId);
-	});
+	QMenu *moveTo = menu.addMenu(tr("Move to"));
+	moveTo->setStyleSheet(StyleSheet::QMenuDark());
+	for (const auto &entry : drawerMenuEntries()) {
+		QAction *action = moveTo->addAction(entry.second);
+		action->setEnabled(entry.first != currentDrawer);
+		const int drawerId = entry.first;
+		connect(action, &QAction::triggered, this,
+		        [this, guid, drawerId]() { moveAssetToDrawer(guid, drawerId); });
+	}
+	moveTo->setEnabled(!moveTo->isEmpty());
 
-	connect(gridItem, &AssetGridItem::deleteAssetFromLibrary, [this](AssetGridItem *item) {
-		deleteAssetFromLibrary(item);
-	});
-
-	connect(gridItem, &AssetGridItem::rebuildThumbnail, [this](AssetGridItem *item) {
-		rebuildTileThumbnail(item);
-	});
-
-	connect(gridItem, &AssetGridItem::createMaterialFromImage, [this](AssetGridItem *item) {
-		createMaterialFromImageTile(item);
-	});
-
-	// AVATARS (§5.5). The rigged test is lazy — one metadata read when a menu
-	// is actually opened, never on the grid build.
-	gridItem->setRiggedProvider([this](const QString &guid) {
-		return AssetMetadata::ensure(db, guid).value(QStringLiteral("hasSkeleton")).toBool();
-	});
-	connect(gridItem, &AssetGridItem::editAvatarAsset, [this](AssetGridItem *item) {
-		if (!item || item->metadata.isEmpty()) return;
+	connect(menu.addAction(tr("Rebuild Thumbnail")), &QAction::triggered, this,
+	        [this, guid]() { rebuildTileThumbnail(guid); });
+	if (tileType == ModelTypes::Texture)
+		connect(menu.addAction(tr("Create Material from Image")), &QAction::triggered, this,
+		        [this, guid]() { createMaterialFromImageTile(guid); });
+	// AVATARS (§5.5). The rigged test is lazy — one metadata read when the menu
+	// is actually opened, never on a listing.
+	if (tileType == ModelTypes::Avatar) {
 		// The Assets page is the LIBRARY's view of the world, so its Edit opens
 		// the library version. The editor drawer's Edit opens the project's.
-		emit editAssetInModule(item->metadata["guid"].toString(), QStringLiteral("avatar"),
-		                       QStringLiteral("library"));
-	});
-	connect(gridItem, &AssetGridItem::createAvatarFromModel, [this](AssetGridItem *item) {
-		createAvatarFromModelTile(item);
-	});
-
-	connect(gridItem, &AssetGridItem::reimportAsset, this, [this](AssetGridItem *item) {
-		if (!item || item->metadata.isEmpty()) return;
-		emit reimportAssetRequested(item->metadata["guid"].toString());
-	});
+		connect(menu.addAction(tr("Edit in Avatar Module")), &QAction::triggered, this, [this, guid]() {
+			emit editAssetInModule(guid, QStringLiteral("avatar"), QStringLiteral("library"));
+		});
+	} else if (tileType == ModelTypes::Object
+	           && AssetMetadata::ensure(db, guid).value(QStringLiteral("hasSkeleton")).toBool()) {
+		connect(menu.addAction(tr("Create Avatar")), &QAction::triggered, this,
+		        [this, guid]() { createAvatarFromModelTile(guid); });
+	}
+	if (tileType == ModelTypes::Object)
+		connect(menu.addAction(tr("Reimport\u2026")), &QAction::triggered, this,
+		        [this, guid]() { emit reimportAssetRequested(guid); });
+	connect(menu.addAction(tr("Delete")), &QAction::triggered, this,
+	        [this, guid]() { deleteAssetFromLibrary(guid); });
+	menu.exec(globalPos);
 }
 
-void AssetView::createAvatarFromModelTile(AssetGridItem *item)
+void AssetView::createAvatarFromModelTile(const QString &objectGuid)
 {
-	if (!item || item->metadata.isEmpty()) return;
-	const QString objectGuid = item->metadata["guid"].toString();
+	if (objectGuid.isEmpty()) return;
 
 	QString error;
 	const QString avatarGuid = AvatarAssets::create(objectGuid, AvatarAssets::Scope::Library, db,
@@ -2741,12 +2596,11 @@ void AssetView::createAvatarFromModelTile(AssetGridItem *item)
 	emit editAssetInModule(avatarGuid, QStringLiteral("avatar"), QStringLiteral("library"));
 }
 
-void AssetView::createMaterialFromImageTile(AssetGridItem *item)
+void AssetView::createMaterialFromImageTile(const QString &textureGuid)
 {
 	// IMAGE_PLANE_SPEC option B1 — the same helper the automatic companion
 	// material and materials.createFromImage use.
-	if (!item || item->metadata.isEmpty()) return;
-	const QString textureGuid = item->metadata["guid"].toString();
+	if (textureGuid.isEmpty()) return;
 
 	QString error;
 	const QString materialGuid =
@@ -2795,13 +2649,9 @@ void AssetView::rebuildMissingThumbnails()
 	// the modal box below — would be the "modal swallowed the quit" zombie.
 	if (result.cancelled) return;
 
-	for (const QString &guid : result.rebuiltGuids) {
-		if (auto *tile = fastGrid->tileByGuid(guid)) {
-			QImage stored;
-			if (stored.loadFromData(db->fetchAsset(guid).thumbnail, "PNG"))
-				tile->setTile(QPixmap::fromImage(stored));
-		}
-	}
+	// Each rebuilt tile repaints from its new stored picture (the write
+	// dropped the cached one; the view reads it again, off this thread).
+	for (const QString &guid : result.rebuiltGuids) libraryModel->refreshTile(guid);
 
 	if (result.rebuilt == 0 && result.failed.isEmpty()) {
 		libraryToast()->showToast(tr("Thumbnails"),
@@ -2830,7 +2680,7 @@ void AssetView::rebuildMissingThumbnails()
 	                     QMessageBox::Ok);
 }
 
-void AssetView::rebuildTileThumbnail(AssetGridItem *item)
+void AssetView::rebuildTileThumbnail(const QString &guid)
 {
 	// ONE ROUTINE, AND THE PREVIEW IS A SIDE EFFECT (THUMBS-1 fix round F7).
 	//
@@ -2846,8 +2696,7 @@ void AssetView::rebuildTileThumbnail(AssetGridItem *item)
 	// it, so nothing is written twice), the page still loads the matching
 	// preview because that is what the user asked to look at, and a failure
 	// shows the reason it already has.
-	if (!item || item->metadata.isEmpty()) return;
-	const QString guid = item->metadata["guid"].toString();
+	if (guid.isEmpty()) return;
 	const auto record = db->fetchAsset(guid);
 	if (record.guid.isEmpty()) return;
 
@@ -2890,15 +2739,9 @@ void AssetView::rebuildTileThumbnail(AssetGridItem *item)
 		const thumbrebuild::Outcome outcome =
 		    thumbrebuild::rebuildOne(db, project, guid, EngineHost::instance().engine());
 		if (!outcome.ok) reason = outcome.reason;
-		else {
-			QImage stored;
-			if (stored.loadFromData(db->fetchAsset(guid).thumbnail, "PNG"))
-				pixmap = QPixmap::fromImage(stored);
-			else reason = tr("the rebuilt thumbnail could not be read back");
-		}
 	}
 
-	if (pixmap.isNull()) {
+	if (!reason.isEmpty()) {
 		// THE REASON IS THE POINT: "could not" with no because is what sent the
 		// owner looking at grey tiles with nothing to go on.
 		QMessageBox::warning(this, tr("Rebuild Thumbnail"),
@@ -2909,25 +2752,35 @@ void AssetView::rebuildTileThumbnail(AssetGridItem *item)
 		return;
 	}
 
-	item->setTile(pixmap);   // the tile updates live; rebuildOne already stored it
+	// The tile updates live: the stored picture changed, the cached tile went
+	// with it, and the view reads the new one.
+	libraryModel->refreshTile(guid);
+}
+
+void AssetView::setLoadingTile(const QString &guid)
+{
+	loadingGuid = guid;
+	libraryModel->setLoading(guid);
+	if (!loadingPulse->isActive()) loadingPulse->start();
 }
 
 void AssetView::clearLoadingTile()
 {
-	if (!loadingTile) return;
-	loadingTile->hideLoadingOverlay();
-	loadingTile = nullptr;
+	if (loadingGuid.isEmpty()) return;
+	loadingGuid.clear();
+	loadingPulse->stop();
+	libraryModel->setLoading(QString());
 }
 
 // LIBRARY DELETE (owner, 2026-09-09): deleting from the library never takes
 // an asset out of a project. The decision and the write both live in
 // services/assetdelete.h — the same code `assets.remove` runs (API-first) —
 // and this function is the two-step confirmation in front of it.
-void AssetView::deleteAssetFromLibrary(AssetGridItem *item)
+void AssetView::deleteAssetFromLibrary(const QString &guid)
 {
-	if (!item || item->metadata.isEmpty()) return;
-	const QString guid = item->metadata["guid"].toString();
-	const QString name = item->metadata["name"].toString();
+	const LibraryRow *row = libraryModel->rowFor(guid);
+	if (!row) return;
+	const QString name = row->name;
 	// LIVE pins only: they are what the delete will actually weigh
 	// (Database::countAssetPins ignores pins from deleted projects).
 	const QVector<AssetPinRecord> pins = assetdelete::livePins(db, guid);
@@ -2987,22 +2840,20 @@ void AssetView::deleteAssetFromLibrary(AssetGridItem *item)
 		return;
 	}
 
-	// The TILE GOES LAST (code review 2026-09-10): everything below still
-	// reads `item` — fetchMetadata dereferences it — and deleteTile hands the
-	// widget to deleteLater. That is safe only because the delete is deferred
-	// to the event loop; ordering it here makes it safe by construction.
-	item->metadata = QJsonObject();
+	// The ROW GOES FIRST now: nothing below reads it (the pane is cleared by
+	// guid, and a guid the model no longer lists renders the empty pane).
+	libraryModel->remove(guid);
 	renameWidget->setVisible(false);
 	tagWidget->setVisible(false);
 	updateAsset->setVisible(false);
 
-	if (selectedGridItem == item) selectedGridItem = nullptr;
+	if (selectedGuid == guid) selectedGuid.clear();
+	if (loadingGuid == guid) clearLoadingTile();
 	updateAddToProjectButton();
 	deleteFromLibrary->setEnabled(false);
 
-	fetchMetadata(item);
+	fetchMetadata(guid);
 	clearViewer();
-	fastGrid->deleteTile(item);
 
 	if (outcome.unlisted) {
 		// The user must know the asset did NOT vanish from their projects.

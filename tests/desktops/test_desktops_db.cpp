@@ -205,15 +205,9 @@ int main(int argc, char **argv)
           "a second startup migration leaves a recorded location alone");
     CHECK(db.fetchProjects().size() == 3, "...and loses no rows");
 
-    // --- A row written with an explicit NULL desktop (e.g. by an older build after a
-    //     downgrade) must still show up on Desktop 1
-    {
-        QSqlQuery q;
-        q.exec("INSERT INTO projects (name, last_written, guid, desktop) "
-               "VALUES ('Downgrade', datetime(), 'guid-d', NULL)");
-        auto d = findTile(db.fetchProjects(1), "guid-d");
-        CHECK(d.guid == "guid-d" && d.desktop == 1, "NULL desktop value reads as Desktop 1");
-    }
+    // (The NULL-desktop reader — "a row an older build wrote with a NULL desktop reads
+    //  as Desktop 1" — is DELETED with the COALESCE it tested: D11-LIBRARY-SCALE, the
+    //  forward-building law; the column is DEFAULT 1 and the index needs `desktop = ?`.)
 
     // --- ONE TIMESTAMP FORMAT (D0): last_written / last_accessed keep SQLite
     //     datetime()'s shape through a project export + import round trip. The

@@ -21,9 +21,28 @@
 // an EMPTY-library control in the same run: the boot to the MCP answering (the window is
 // up and the Desktop built), the Desktop grid's build (desktop.gridStats), a project open
 // and a project create (the UI-thread's worst gap from the heartbeat probe, and the
-// verb's own ledger total), and a tray populate + a library list (the verbs' wall time,
-// measured on the script thread around one hop). No bar: `target:` lines (label
-// scale-target). Engine up on the rig display: the suite spawns the real binary.
+// verb's own ledger total), the Assets page's first build (assets.selected() builds it),
+// and a tray populate + a library list (the verbs' wall time, measured on the script
+// thread around one hop). Engine up on the rig display: the suite spawns the real binary.
+//
+// THE CONTROL IS THE SAME SESSION WITHOUT THE LIBRARY (D11-LIBRARY-SCALE). The first
+// control was an EMPTY root: no project to open and none to close, so its create was
+// 0.2 s where the library arm's create CLOSED an open project — a 1.7-1.9 s thumbnail
+// render of a world compiling its shaders cold, which is not a library cost at all
+// (measured: `closePrevious:save` = `saveOpen:thumbnail`, 1,750-1,900 ms, both before and
+// after this lane). The control is now the template itself with the 10,000 library rows
+// and all but two projects deleted: the same worlds, the same caches, the same open and
+// the same create — the difference between the arms is the library and nothing else.
+//
+// THE BARS (D11-LIBRARY-SCALE §1 — the row stopped being a target when that lane closed
+// W14): at 10,000 assets + 500 projects the boot reaches the MCP in <= 20 s; the library
+// adds <= 300 ms to the Desktop entry a create's close makes, the Desktop grid of 500
+// projects never blocks the UI thread > 300 ms at a time, the library adds <= 200 ms to
+// an open's worst UI gap (a create's worst gap is its close's thumbnail render in both
+// arms — reported, see runArm; not a library cost); and NO
+// LISTING SELECTS A THUMBNAIL over the whole driven session (app.queryLog: every
+// statement that selects a thumbnail column is keyed by guid). The box's load average is
+// printed beside every arm (a number read on a loaded box says so).
 #include "../support/mcpharness.h"
 
 #include <QColor>
@@ -38,7 +57,10 @@
 #include <QProcess>
 #include <QProcessEnvironment>
 #include <QSettings>
+#include <QSqlDatabase>
+#include <QSqlQuery>
 
+#include <cmath>
 #include <cstdio>
 
 using namespace mcpharness;
@@ -55,15 +77,22 @@ static const int kAssets = 10000;
 static const int kProjects = 500;
 static const QString kBase = QStringLiteral(SCALE_LIBRARY_DIR);
 
-static void target(double v, const char *unit, const QString &what)
+static void report(double v, const char *unit, const QString &what)
 {
-    if (v < 0) {   // never measured (no sample, no project to open): never printed as a number
-        std::printf("target: unsampled (bar none yet) W14 %s: %s\n", unit, qPrintable(what));
+    if (std::isnan(v)) {   // never measured (no sample, no project to open): never printed as a number
+        std::printf("W14 unsampled %s: %s\n", unit, qPrintable(what));
         std::fflush(stdout);
         return;
     }
-    std::printf("target: %.4f (bar none yet) W14 %s: %s\n", v, unit, qPrintable(what));
+    std::printf("W14 %.1f %s: %s\n", v, unit, qPrintable(what));
     std::fflush(stdout);
+}
+
+static QString loadAverage()
+{
+    QFile f(QStringLiteral("/proc/loadavg"));
+    if (!f.open(QIODevice::ReadOnly)) return QStringLiteral("n/a");
+    return QString::fromLatin1(f.readAll()).section(QLatin1Char(' '), 0, 2);
 }
 
 struct App {
@@ -208,11 +237,15 @@ static bool ensureTemplate()
 
 struct Arm {
     double bootMs = -1, gridMs = -1, gridDecodes = -1, gridTiles = -1;
+    double gridMaxSliceMs = -1, desktopEntryMs = -1;
     double openGap = -1, openMs = -1, createGap = -1, createMs = -1, trayMs = -1, trayCount = -1, listMs = -1,
-           listCount = -1;
+           listCount = -1, pageGap = -1, pageMs = -1;
+    int listingThumbnailSelects = -1;   // statements that selected a thumbnail NOT keyed by guid
+    int thumbnailSelects = -1;
+    QString load;
 };
 
-static double gapAround(App &app, const QString &script, double *ledgerTotal)
+static double gapAround(App &app, const QString &script, double *ledgerTotal, double *desktopEntryMs = nullptr)
 {
     app.mcp.runScript(QStringLiteral("app.heartbeat(0)"));
     app.mcp.runScript(QStringLiteral("app.heartbeat(100)"));
@@ -224,6 +257,14 @@ static double gapAround(App &app, const QString &script, double *ledgerTotal)
     if (ledgerTotal) {
         const QJsonArray t = eval(app, QStringLiteral("app.openTimings()")).toArray();
         *ledgerTotal = t.isEmpty() ? -1 : t.at(0).toObject().value("ms").toDouble();
+        if (desktopEntryMs) {
+            *desktopEntryMs = -1;
+            for (const QJsonValue &v : t)
+                if (v.toObject().value("stage").toString() == QStringLiteral("counter:closePrevious:switch"))
+                    *desktopEntryMs = v.toObject().value("ms").toDouble();
+        }
+        // THE WHOLE LEDGER, one line: which stage a gap lives in is read from here.
+        std::printf("   ledger %s\n", QJsonDocument(t).toJson(QJsonDocument::Compact).constData());
     }
     app.mcp.runScript(QStringLiteral("app.heartbeat(0)"));
     return gap;
@@ -231,9 +272,13 @@ static double gapAround(App &app, const QString &script, double *ledgerTotal)
 
 static bool runArm(const char *label, const QString &dataRoot, Arm &a)
 {
+    a.load = loadAverage();
     App app;
     if (!launch(app, dataRoot)) { std::printf("FAIL: [%s] boot\n", label); return false; }
     a.bootMs = app.bootMs;
+    // THE QUERY LOG over everything the session does from here (the boot built
+    // nothing of the library since D11 — the Assets page waits for its first use).
+    app.mcp.runScript(QStringLiteral("app.queryLog({on: true})"));
     app.mcp.runScript(QStringLiteral("editor.frame(10)"));
 
     // THE OPEN: the first project the library lists that is not open.
@@ -249,9 +294,22 @@ static bool runArm(const char *label, const QString &dataRoot, Arm &a)
     const QJsonArray list = eval(app, QStringLiteral(
         "(function(){var t=Date.now();var n=assets.list().length;return [Date.now()-t,n]})()")).toArray();
     if (list.size() == 2) { a.listMs = list.at(0).toDouble(); a.listCount = list.at(1).toDouble(); }
+    // THE ASSETS PAGE'S FIRST BUILD (D11: on first use, not at boot) — a verb that
+    // drives the page builds it; its worst UI gap and its wall time.
+    {
+        const QJsonArray page = eval(app, QStringLiteral(
+            "(function(){var t=Date.now();assets.selected();return [Date.now()-t]})()")).toArray();
+        if (!page.isEmpty()) a.pageMs = page.at(0).toDouble();
+    }
     // THE CREATE (CREATE-GAP-1's measurement): over this library.
+    // THE CREATE. Its worst UI gap is its CLOSE of the open project: that project's
+    // thumbnail render (the ledger's saveOpen:thumbnail, 1.7-3.7 s measured in BOTH
+    // arms, a fresh default scene's close included) — the same work with or without a
+    // library, and the noisiest stage there is. What the library touches is the
+    // Desktop the close enters (the ledger's closePrevious:switch: the grid's first
+    // slice) and the grid's later slices (desktop.gridStats().lastBuildMaxSliceMs).
     a.createGap = gapAround(app, QStringLiteral("project.create('Scale create %1')")
-                                     .arg(QDateTime::currentMSecsSinceEpoch()), &a.createMs);
+                                     .arg(QDateTime::currentMSecsSinceEpoch()), &a.createMs, &a.desktopEntryMs);
     // THE DESKTOP GRID: a driven session boots with the Desktop never SHOWN, so its grid
     // (a tile per project, a thumbnail decode each) is first built when a create's close
     // passes through the Desktop — INSIDE the create above. Its own ledger, read after.
@@ -259,17 +317,40 @@ static bool runArm(const char *label, const QString &dataRoot, Arm &a)
     a.gridMs = g.value("lastBuildMs").toDouble();
     a.gridDecodes = g.value("lastBuildDecodes").toDouble();
     a.gridTiles = g.value("tiles").toDouble();
+    a.gridMaxSliceMs = g.value("lastBuildMaxSliceMs").toDouble(-1);
     std::printf("   [%s] desktop.gridStats() after the create %s\n", label,
                 QJsonDocument(g).toJson(QJsonDocument::Compact).constData());
+    // THE LOG: every thumbnail select of the session, and whether it was by guid.
+    {
+        const QJsonObject log = eval(app, QStringLiteral("app.queryLog({on: false})")).toObject();
+        a.thumbnailSelects = 0;
+        // A session whose log recorded NOTHING proves nothing (a binary without
+        // the verb answers an empty object): that is a failure, not a pass.
+        a.listingThumbnailSelects = log.value("statements").toInt() > 0 ? 0 : 1;
+        for (const QJsonValue &v : log.value("thumbnailSelects").toArray()) {
+            const QJsonObject e = v.toObject();
+            a.thumbnailSelects += e.value("count").toInt();
+            if (!e.value("byGuid").toBool()) {
+                a.listingThumbnailSelects += e.value("count").toInt();
+                std::printf("   [%s] A LISTING SELECTED A THUMBNAIL: %s x%d — %s\n", label,
+                            qPrintable(e.value("name").toString()), e.value("count").toInt(),
+                            qPrintable(e.value("sql").toString()));
+            }
+        }
+        std::printf("   [%s] query log: %d statements, %d thumbnail selects (%d not keyed by guid)\n", label,
+                    log.value("statements").toInt(), a.thumbnailSelects, a.listingThumbnailSelects);
+    }
     quit(app);
     // THE APP'S OWN OUTPUT, kept beside the run (an Xid or a crash is triaged from it).
     QFile out(kBase + QStringLiteral("/library-%1-app.log").arg(QString::fromLatin1(label).section('+', 0, 0)));
     if (out.open(QIODevice::WriteOnly)) out.write(app.log + app.proc.readAll());
-    std::printf("W14 [%-7s] boot->MCP %8.0f ms | grid build (inside the create) %7.1f ms, %5.0f decodes, %5.0f tiles | open: worst UI gap "
+    std::printf("W14 [%-7s] load %s | boot->MCP %8.0f ms | grid build (inside the create) %7.1f ms, %5.0f decodes, %5.0f tiles | open: worst UI gap "
                 "%7.1f ms, ledger %7.1f ms | tray %4.0f ms (%3.0f tiles) | assets.list %6.0f ms (%5.0f rows) | "
-                "create: worst UI gap %7.1f ms, ledger %7.1f ms\n",
-                label, a.bootMs, a.gridMs, a.gridDecodes, a.gridTiles, a.openGap, a.openMs, a.trayMs, a.trayCount,
-                a.listMs, a.listCount, a.createGap, a.createMs);
+                "Assets page first build %6.0f ms | create: worst UI gap %7.1f ms, ledger %7.1f ms, Desktop entry %6.1f ms, "
+                "grid's longest slice %5.1f ms\n",
+                label, qPrintable(a.load), a.bootMs, a.gridMs, a.gridDecodes, a.gridTiles, a.openGap, a.openMs,
+                a.trayMs, a.trayCount, a.listMs, a.listCount, a.pageMs, a.createGap, a.createMs, a.desktopEntryMs,
+                a.gridMaxSliceMs);
     return true;
 }
 
@@ -278,7 +359,9 @@ int main(int argc, char **argv)
     QCoreApplication qapp(argc, argv);
     std::setvbuf(stdout, nullptr, _IOLBF, 0);   // a line at a time: the log is read while it runs
     if (!ensureTemplate()) return 1;
-    // THE RUN'S COPY of the template, and an EMPTY control root — both fresh.
+    // THE RUN'S COPY of the template, and the CONTROL — both fresh copies of it (one
+    // cache state, the same worlds: a first-seconds measurement is the shader storm,
+    // DOCS/traps/GATE_AND_RIG.md).
     const QString full = kBase + "/library-run", empty = kBase + "/library-empty";
     QDir(full).removeRecursively();
     QDir(empty).removeRecursively();
@@ -286,25 +369,57 @@ int main(int argc, char **argv)
     t.start();
     const int cp = QProcess::execute(QStringLiteral("cp"), { QStringLiteral("-a"), kBase + "/library-template", full });
     CHECK(cp == 0, "the template copied (%.1f s)", t.elapsed() / 1000.0);
-    // ONE CACHE STATE FOR BOTH ARMS: the template carries the generator run's shader
-    // cache (and the driver's cache under its HOME), so the EMPTY control is given the
-    // same copies — a bare control root pays the PSO compile storm the library arm does
-    // not, and the difference would be the cache, not the library (DOCS/traps/
-    // GATE_AND_RIG.md: a first-seconds measurement is the shader storm).
-    QDir().mkpath(empty);
-    const int cpCache = QProcess::execute(QStringLiteral("cp"),
-        { QStringLiteral("-a"), kBase + "/library-template/shadercache", kBase + "/library-template/home", empty });
-    CHECK(cpCache == 0, "the control root holds the template's shader and driver caches");
+    const int cpControl = QProcess::execute(QStringLiteral("cp"), { QStringLiteral("-a"), kBase + "/library-template", empty });
+    CHECK(cpControl == 0, "the control copied");
+    // THE CONTROL WITHOUT THE LIBRARY: the imported rows and every project but the
+    // first two CREATED ones go (their folders stay on disk, unlisted — nothing reads
+    // them). What remains is the session shape the library arm has: a project to open
+    // and one open to close.
+    {
+        QSqlDatabase conn = QSqlDatabase::addDatabase(QStringLiteral("QSQLITE"), QStringLiteral("scale-control"));
+        conn.setDatabaseName(empty + "/JahLibrary.db");
+        bool ok = conn.open();
+        QSqlQuery q(conn);
+        ok = ok && q.exec(QStringLiteral("DELETE FROM assets WHERE view_filter = 2 AND (project_guid IS NULL OR project_guid = '')"));
+        ok = ok && q.exec(QStringLiteral("DELETE FROM projects WHERE name NOT IN ('Scale project 0', 'Scale project 1')"));
+        int assets = -1, projects = -1;
+        if (q.exec(QStringLiteral("SELECT COUNT(*) FROM assets WHERE view_filter = 2")) && q.next()) assets = q.value(0).toInt();
+        if (q.exec(QStringLiteral("SELECT COUNT(*) FROM projects")) && q.next()) projects = q.value(0).toInt();
+        q.exec(QStringLiteral("VACUUM"));
+        conn.close();
+        conn = QSqlDatabase();
+        QSqlDatabase::removeDatabase(QStringLiteral("scale-control"));
+        CHECK(ok && assets == 0 && projects == 2, "the control holds 0 library assets and 2 projects (%d / %d)", assets, projects);
+    }
     Arm e, f;
-    CHECK(runArm("empty", empty, e), "the EMPTY-library control ran");
+    CHECK(runArm("control", empty, e), "the control (the same session, no library) ran");
     CHECK(runArm("10k+500", full, f), "the 10k-asset / 500-project library ran");
-    target(f.bootMs, "ms", QStringLiteral("boot to the MCP answering with 10k assets + 500 projects (empty: %1 ms)").arg(e.bootMs));
-    target(f.bootMs - e.bootMs, "ms", QStringLiteral("what the library adds to the boot"));
-    target(f.gridMs, "ms", QStringLiteral("the Desktop grid's first build (inside a create's close) over %1 tiles, %2 decodes").arg(f.gridTiles).arg(f.gridDecodes));
-    target(f.openGap, "ms", QStringLiteral("the worst UI gap of a project open over the library (the empty control has no project to open)"));
-    target(f.createGap, "ms", QStringLiteral("the worst UI gap of a project create over the library (empty: %1)").arg(e.createGap));
-    target(f.listMs, "ms", QStringLiteral("assets.list() over %1 rows (empty: %2 ms)").arg(f.listCount).arg(e.listMs));
-    target(f.trayMs, "ms", QStringLiteral("a tray populate after the open (empty: %1 ms)").arg(e.trayMs));
+    report(f.bootMs, "ms", QStringLiteral("boot to the MCP answering with 10k assets + 500 projects (control: %1 ms; load %2)").arg(e.bootMs).arg(f.load));
+    report(f.bootMs - e.bootMs, "ms", QStringLiteral("what the library adds to the boot"));
+    report(f.gridMs, "ms", QStringLiteral("the Desktop grid's first build (inside a create's close) over %1 tiles, %2 decodes on the UI thread").arg(f.gridTiles).arg(f.gridDecodes));
+    report(f.pageMs, "ms", QStringLiteral("the Assets page's first build over the library (control: %1 ms)").arg(e.pageMs));
+    report(f.openGap, "ms", QStringLiteral("the worst UI gap of a project open over the library (control: %1)").arg(e.openGap));
+    report(f.openGap - e.openGap, "ms", QStringLiteral("what the library adds to the open's worst UI gap"));
+    report(f.createGap, "ms", QStringLiteral("the worst UI gap of a project create over the library (control: %1)").arg(e.createGap));
+    report(f.createGap - e.createGap, "ms", QStringLiteral("what the library adds to the create's worst UI gap (its close's thumbnail render dominates both arms)"));
+    report(f.desktopEntryMs, "ms", QStringLiteral("the create's Desktop entry, the grid's first slice included (control: %1 ms)").arg(e.desktopEntryMs));
+    report(f.gridMaxSliceMs, "ms", QStringLiteral("the Desktop grid's longest slice (the build's worst UI-thread block)"));
+    report(f.listMs, "ms", QStringLiteral("assets.list() over %1 rows (control: %2 ms)").arg(f.listCount).arg(e.listMs));
+    report(f.trayMs, "ms", QStringLiteral("a tray populate after the open (control: %1 ms)").arg(e.trayMs));
+    // THE BARS (D11-LIBRARY-SCALE §1).
+    CHECK(f.bootMs > 0 && f.bootMs <= 20000.0, "BAR: the boot reaches the MCP in <= 20 s at 10k assets + 500 projects (%.0f ms, load %s)",
+          f.bootMs, qPrintable(f.load));
+    CHECK(f.gridMaxSliceMs >= 0 && f.gridMaxSliceMs <= 300.0,
+          "BAR: the Desktop grid of 500 projects blocks the UI thread <= 300 ms at a time (its longest slice %.1f ms)",
+          f.gridMaxSliceMs);
+    CHECK(f.desktopEntryMs >= 0 && e.desktopEntryMs >= 0 && f.desktopEntryMs - e.desktopEntryMs <= 300.0,
+          "BAR: the library adds <= 300 ms to the Desktop entry a create's close makes (%.1f vs the control's %.1f ms)",
+          f.desktopEntryMs, e.desktopEntryMs);
+    CHECK(f.openGap >= 0 && e.openGap >= 0 && f.openGap - e.openGap <= 200.0,
+          "BAR: the library adds <= 200 ms to an open's worst UI gap (%.1f vs the control's %.1f ms)", f.openGap, e.openGap);
+    CHECK(f.listingThumbnailSelects == 0 && e.listingThumbnailSelects == 0,
+          "BAR: no listing selected a thumbnail in either session (%d / %d not keyed by guid)",
+          f.listingThumbnailSelects, e.listingThumbnailSelects);
     QDir(full).removeRecursively();
     QDir(empty).removeRecursively();
     return failures ? 1 : 0;

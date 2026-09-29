@@ -204,6 +204,35 @@ public:
 
     bool executeAndCheckQuery(QSqlQuery&, const QString&);
 
+    // ---- THE QUERY LOG (D11-LIBRARY-SCALE) ----------------------------------
+    // A diagnostic, OFF by default and statics only (the funnel's rule): every
+    // statement through executeAndCheckQuery — AND ONLY THOSE: the ~30 raw
+    // QSqlQuery::exec() sites in the catalog are invisible to it (none of them is
+    // a listing a panel reads) — counted by name, and every one whose column list
+    // SELECTS A THUMBNAIL recorded with whether it is keyed by guid
+    // (`guid = ?` / `guid IN (...)`). `app.queryLog` reads it; the proof that no
+    // listing carries a thumbnail BLOB is "every thumbnail select is by guid".
+    struct QueryLogEntry
+    {
+        QString name;
+        QString sql;
+        int count = 0;
+        bool selectsThumbnail = false;
+        bool byGuid = false;
+    };
+    static void setQueryLog(bool on);   // turning it on resets it
+    static bool queryLogOn();
+    static QVector<QueryLogEntry> queryLogEntries();
+    static int queryLogStatements();
+    /// The classifier, public for the suites: does `sql` select a thumbnail
+    /// column, and is its WHERE keyed by guid?
+    static void classifyQuery(const QString &sql, bool *selectsThumbnail, bool *byGuid);
+
+    /// A thumbnail BLOB of an asset was written (updateAssetThumbnail): the shell
+    /// drops that guid's cached tile (ui/controls/tilecache.h). Statics only.
+    using GuidHook = std::function<void(const QString &guid)>;
+    static void setAssetThumbnailWritten(GuidHook hook);
+
     // MANAGE ===============================================================================
     bool initializeDatabase(const QString &pathToBlob);
     void closeDatabase();
@@ -627,7 +656,8 @@ public:
     bool unpinAsset(const QString &projectGuid, const QString &assetGuid);
     QVector<AssetRecord> fetchAssetsFromParent(const QString &guid);
 	QVector<AssetRecord> fetchAssetsByType(const int &type, const QString &projectGuid);
-	QVector<AssetRecord> fetchAssetsByViewFilter(const AssetViewFilter& filter);
+	/// A LISTING (no thumbnail): the listed rows of `filter`, of `type` when >= 0.
+	QVector<AssetRecord> fetchAssetsByViewFilter(const AssetViewFilter& filter, int type = -1);
     QVector<AssetRecord> fetchFilteredAssets(const QString &guid, const int &type);
     QVector<AssetRecord> fetchFavorites();
     QVector<CollectionRecord> fetchCollections();
@@ -636,12 +666,15 @@ public:
     QVector<int> fetchCollectionSubtree(const int collectionId);
     /// How many asset rows live in these drawers (the delete confirm).
     int countAssetsInCollections(const QVector<int> &collectionIds);
-    // desktop <= 0 fetches every project (legacy behaviour); desktop 1..N filters
-    // to that desktop, treating an absent/NULL desktop column value as Desktop 1.
+    /// THE PROJECTS AS A LISTING — no thumbnail, never (D11-LIBRARY-SCALE: the
+    /// tile cache reads a tile's picture by guid). desktop <= 0 lists every
+    /// project; 1..N the projects on that desktop.
     QVector<ProjectTileData> fetchProjects(int desktop = 0);
-    /// ONE project's desktop row (the grid's incremental add, CREATE-GAP-1);
-    /// false when no row has `guid`.
+    /// ONE project's desktop row, no thumbnail (the grid's incremental add and
+    /// the guid resolve — O(1) by the primary key); false when no row has `guid`.
     bool fetchProjectTile(const QString &guid, ProjectTileData *out);
+    /// The projects called exactly `name` (the name half of a guid-or-name resolve).
+    QVector<ProjectTileData> fetchProjectsNamed(const QString &name);
     /// The guids on one desktop, no blobs — what the Desktop entry checks its
     /// tiles against without reading a thumbnail.
     QStringList fetchProjectGuids(int desktop);
@@ -649,7 +682,11 @@ public:
     /// ONE folder row by guid; an empty `guid` field when nothing has it.
     FolderRecord fetchFolder(const QString &guid);
     QVector<FolderRecord> fetchCrumbTrail(const QString &parent, const QString &projectGuid);
-    QVector<AssetRecord> fetchAssetThumbnails(const QStringList &guids);
+    /// THE TILE CACHE'S BY-GUID READS (ui/controls/tilecache.h): the thumbnail
+    /// bytes of at most one batch of guids, one bound IN (...) each. The only
+    /// queries that select a thumbnail for more than one row.
+    QHash<QString, QByteArray> fetchAssetThumbnailBytes(const QStringList &guids);
+    QHash<QString, QByteArray> fetchProjectThumbnailBytes(const QStringList &guids);
     QByteArray fetchAssetData(const QString &guid) const;
 
     QByteArray fetchCachedThumbnail(const QString& name) const;
@@ -659,6 +696,13 @@ public:
     QStringList fetchChildFolderAssets(const QString &guid);
     QStringList fetchAssetGUIDAndDependencies(const QString &guid, bool appendSelf = true);
     QStringList fetchAssetAndAllDependencies(const QString &guid);
+    /// THE CLOSURE'S BATCHED READS (D11-LIBRARY-SCALE): the catalog edges of
+    /// many dependers in one statement per chunk (depender -> its dependees, in
+    /// its own order); the closure's rows WITHOUT a BLOB; and one row's two JSON
+    /// BLOBs, read when that asset is written out.
+    QHash<QString, QStringList> fetchDependencyEdges(const QStringList &dependers);
+    QVector<AssetRecord> fetchAssetHeaders(const QStringList &guids);
+    bool fetchAssetRowBlobs(const QString &guid, QByteArray *asset, QByteArray *properties);
     QVector<DependencyRecord> fetchAssetDependencies(const AssetRecord &record);
     QStringList fetchAssetDependeesByType(const QString &guid, const ModelTypes&);
     QStringList fetchAssetAndDependencies(const QString &guid);

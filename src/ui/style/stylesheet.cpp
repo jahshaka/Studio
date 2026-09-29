@@ -766,23 +766,6 @@ const QString StyleSheet::MainWindowHeaderLogo(const QString &imagePath)
 	return QString("image: url(%1);").arg(imagePath);
 }
 
-const QString StyleSheet::AssetGridItemLabel(const QString &borderColor)
-{
-	JAH_CLASSIC_ONLY
-	return QString("color: #ddd; font-size: 12px; background: #1e1e1e;")
-		+ "border-left: 3px solid " + borderColor
-		+ "; border-bottom: 3px solid " + borderColor
-		+ "; border-right: 3px solid " + borderColor;
-}
-
-const QString StyleSheet::AssetGridItemThumbnail(const QString &borderColor)
-{
-	JAH_CLASSIC_ONLY
-	return QString("border-left: 3px solid ") + borderColor
-		+ "; border-top: 3px solid " + borderColor
-		+ "; border-right: 3px solid " + borderColor;
-}
-
 const QString StyleSheet::ItemGridTileBorder(int width)
 {
 	JAH_CLASSIC_ONLY

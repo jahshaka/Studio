@@ -177,24 +177,21 @@ QString ProjectService::resolveProjectGuid(const QString &guidOrName, QString *n
                                            int *hits) const
 {
     if (hits) *hits = 0;
-    const auto projects = db->fetchProjects(0);
-    // guid match first (guids are unique; names may not be)
-    for (const auto &p : projects) {
-        if (p.guid == guidOrName) {
-            if (nameOut) *nameOut = p.name;
-            if (hits) *hits = 1;
-            return p.guid;
-        }
+    // ONE ROW, BY THE KEY (D11-LIBRARY-SCALE, audit V2_F F2): every project verb
+    // resolves through here, and it used to load EVERY project row — scene and
+    // thumbnail BLOBs included — to find one guid. A guid match first (guids are
+    // unique; names may not be), then the rows with exactly that name.
+    ProjectTileData row;
+    if (db->fetchProjectTile(guidOrName, &row)) {
+        if (nameOut) *nameOut = row.name;
+        if (hits) *hits = 1;
+        return row.guid;
     }
-    QString found, foundName;
-    int matches = 0;
-    for (const auto &p : projects) {
-        if (p.name == guidOrName) { found = p.guid; foundName = p.name; ++matches; }
-    }
-    if (hits) *hits = matches;
-    if (matches > 1) return QString();
-    if (nameOut) *nameOut = foundName;
-    return found;
+    const QVector<ProjectTileData> named = db->fetchProjectsNamed(guidOrName);
+    if (hits) *hits = int(named.size());
+    if (named.size() != 1) return QString();
+    if (nameOut) *nameOut = named.first().name;
+    return named.first().guid;
 }
 
 QString ProjectService::createProjectShell(const QString &name, const QString &location,

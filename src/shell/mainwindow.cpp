@@ -92,6 +92,8 @@ For more information see the LICENSE file
 #include <QWidgetAction>
 #include <QHBoxLayout>
 
+#include "ui/controls/tilecache.h"
+#include "ui/pages/iassetviewer.h"
 #include "ui/panels/timeline/nodekeyframeanimation.h"
 #include "ui/panels/timeline/nodekeyframe.h"
 
@@ -1215,6 +1217,18 @@ void MainWindow::setupProjectDB()
 	if (db->initializeDatabase(path)) {
 		db->createAllTables();
 	}
+	// THE TILE CACHE READS BY GUID (D11-LIBRARY-SCALE): listings carry no
+	// thumbnail, so the cache's batches read the pictures a view paints from
+	// here, on this thread; a thumbnail written anywhere drops the cached tile.
+	TileCache::instance().setSource(TileCache::Kind::Asset, [this](const QStringList &guids) {
+		return db ? db->fetchAssetThumbnailBytes(guids) : QHash<QString, QByteArray>();
+	});
+	TileCache::instance().setSource(TileCache::Kind::Project, [this](const QStringList &guids) {
+		return db ? db->fetchProjectThumbnailBytes(guids) : QHash<QString, QByteArray>();
+	});
+	Database::setAssetThumbnailWritten([](const QString &guid) {
+		TileCache::instance().invalidate(TileCache::Kind::Asset, guid);
+	});
     // THE SEEDS (services/primitiveassets.h). The primitives, the Ground and the
     // samples' Teapot are baked library assets now: one import and one bake each,
     // the first time a library is opened, SYNCHRONOUSLY here — not on a worker,
@@ -1665,9 +1679,10 @@ void MainWindow::switchSpace(WindowSpaces space, bool force)
         }
 
         case WindowSpaces::ASSETS: {
+            ensureAssetsPage();   // built on its first showing (D11-LIBRARY-SCALE)
             ui->stackedWidget->setCurrentIndex(2);
-            ui->stackedWidget->currentWidget()->setFocus();
-			static_cast<AssetView*>(ui->stackedWidget->currentWidget())->spaceSplits();
+            _assetView->setFocus();
+			_assetView->spaceSplits();
     		hideEditorPanels();
     		toolBar->setVisible(false);
 			if (projectService->isSceneOpen()) {
@@ -4383,26 +4398,21 @@ void MainWindow::setupViewPort()
 	widgetStates[static_cast<int>(Widget::CONSOLE)]		= false;
 }
 
-void MainWindow::setupDesktop()
+// THE ASSETS PAGE, BUILT ONCE, WHEN FIRST WANTED (D11-LIBRARY-SCALE §3.3). The
+// page and its engine preview viewer (a third engine Scene) used to be built at
+// BOOT, and the page read and decoded the whole library in its constructor — the
+// +116-162 s a 10,000-asset library added to the boot. Now nothing of it exists
+// until the space is entered (switchSpace) or a verb drives the page
+// (assets.select / selected / preview): both call here BEFORE any show, so no
+// widget is made inside a show walk (the create-crash rule).
+AssetView *MainWindow::ensureAssetsPage()
 {
-	pmContainer = new ProjectManager(db, project, this);
-	pmContainer->mainWindow = this;
-	projectService->setProjectManager(pmContainer);
-	// ...and the other half of that pairing: the desktop's New Scene button
-	// creates through the SERVICE, not through a second copy of it (R1).
-	pmContainer->setProjectService(projectService);
-	// Preferences -> Desktop -> Slider Rows applies LIVE (re-audit F8): the
-	// page's signal reaches the desktop through the same ProjectManager entry
-	// point desktop.setSliderRows uses.
-	if (prefsDialog) prefsDialog->wireDesktop(pmContainer);
-	// The Assets page: AssetView gets an EngineAssetViewer (a third engine
-	// Scene with its own preview document), or none in headless runs.
-	IAssetViewer *assetBackend = nullptr;
-	if (EngineHost::instance().isRunning()) {
-		auto &host = EngineHost::instance();
-		assetBackend = createEngineAssetViewer(host.engine(), host.driver(), this);
-	}
-	_assetView = new AssetView(db, this, assetBackend);
+	// Built once; never in a session without the shell's pages, and never
+	// after teardown (the placeholder is gone with the stack by then).
+	if (_assetView || !assetsPlaceholder || !ui || !ui->stackedWidget) return _assetView;
+	// The Assets page: AssetView gets the EngineAssetViewer made at boot (a
+	// third engine Scene with its own preview document), or none in headless runs.
+	_assetView = new AssetView(db, this, assetsPreviewViewer);
 	_assetView->installEventFilter(this);
 	_assetView->setServices(services);
 	_assetView->setProject(project);
@@ -4418,6 +4428,27 @@ void MainWindow::setupDesktop()
 	// THE IMPORT DECISION (§8) — the same two handlers the project tray gets.
 	connect(_assetView, &AssetView::reimportAssetRequested, this,
 	        [this](const QString &guid) { openImportSettings(guid); });
+	// Into the placeholder's stack slot: the index order is load-bearing.
+	const int at = ui->stackedWidget->indexOf(assetsPlaceholder);
+	ui->stackedWidget->removeWidget(assetsPlaceholder);
+	ui->stackedWidget->insertWidget(at, _assetView);
+	assetsPlaceholder->deleteLater();
+	assetsPlaceholder = nullptr;
+	return _assetView;
+}
+
+void MainWindow::setupDesktop()
+{
+	pmContainer = new ProjectManager(db, project, this);
+	pmContainer->mainWindow = this;
+	projectService->setProjectManager(pmContainer);
+	// ...and the other half of that pairing: the desktop's New Scene button
+	// creates through the SERVICE, not through a second copy of it (R1).
+	pmContainer->setProjectService(projectService);
+	// Preferences -> Desktop -> Slider Rows applies LIVE (re-audit F8): the
+	// page's signal reaches the desktop through the same ProjectManager entry
+	// point desktop.setSliderRows uses.
+	if (prefsDialog) prefsDialog->wireDesktop(pmContainer);
 	// A reimport changed the asset's bake, its size line and its thumbnail:
 	// the library view and the project tray both re-read the row.
 	// QUEUED: the signal is emitted from inside the dialog's accept(), and a
@@ -4431,7 +4462,27 @@ void MainWindow::setupDesktop()
 	ui->stackedWidget->addWidget(pmContainer);
 	
 	ui->stackedWidget->addWidget(viewPort);
-	ui->stackedWidget->addWidget(_assetView);
+	// THE ASSETS PAGE IS BUILT ON ITS FIRST SHOWING, NOT AT BOOT
+	// (D11-LIBRARY-SCALE §3.3): a placeholder holds its stack index (the order is
+	// load-bearing: ASSETS = 2) until ensureAssetsPage() swaps the page in.
+	assetsPlaceholder = new QWidget;
+	ui->stackedWidget->addWidget(assetsPlaceholder);
+	// ITS PREVIEW VIEWER IS STILL MADE HERE, AT BOOT — A WORKAROUND, NOT A FIX
+	// (ASSETS-VISIT-DEATH-1, filed for a debug-runner diagnosis). With the page
+	// AND this viewer (a third engine Scene) both made on the first Assets visit,
+	// ui.window_minimum's app died on `app.space('assets')` once in a gate
+	// (1 of 12 runs; the cause is UNFOUND — no signal text was captured). Making
+	// the viewer here restores the creation order the app always had; only the
+	// page (what scaled with the library) waits for its first use.
+	if (EngineHost::instance().isRunning()) {
+		auto &host = EngineHost::instance();
+		assetsPreviewViewer = createEngineAssetViewer(host.engine(), host.driver(), this);
+		// EXPLICITLY HIDDEN until the page mounts it: a child of the window that
+		// no page holds would be shown with the window and draw its View over
+		// the Desktop (app.input_keys: "a View is still enabled on the Desktop
+		// page"). The page's stacked layout shows it when it becomes current.
+		if (assetsPreviewViewer) assetsPreviewViewer->asWidget()->hide();
+	}
 	// The modules (audit §6.2): the shell constructs them against the full
 	// host context and drives pages through the one interface. Stack order is
 	// load-bearing (WindowSpaces indexes): EFFECT = 3, PLAYER = 4, PUBLISH = 5.
@@ -4457,7 +4508,6 @@ void MainWindow::setupDesktop()
 	playerModule = new PlayerModule;
 	modules = { materialsModule, publishModule, avatarModule, playerModule, vrModule };
 	for (auto *module : modules) module->initialize(moduleHost);
-	materialsModule->setAssetView(_assetView);
 
 	shaderGraph = materialsModule->effectsPage();
 	ui->stackedWidget->addWidget(materialsModule->createPage());
@@ -6448,6 +6498,8 @@ void MainWindow::destroyEngineViews()
     playerView = nullptr;
     viewPort = nullptr;
     _assetView = nullptr;
+    assetsPlaceholder = nullptr;
+    assetsPreviewViewer = nullptr;   // a child of this window: gone with the sweep above
 
     // The Engine must be gone now. It is not an assert because a MainWindow
     // can legitimately be destroyed before finalizeAppExit ran (a CLI path
@@ -6534,6 +6586,11 @@ MainWindow::~MainWindow()
     destroyEngineViews();
 
     JAH_SHUTDOWN_STEP(ShutdownOrder::DatabaseClosed, "database closed");
+    // The tile cache's reads end with the connection (a batch queued behind
+    // the close reads nothing).
+    TileCache::instance().setSource(TileCache::Kind::Asset, nullptr);
+    TileCache::instance().setSource(TileCache::Kind::Project, nullptr);
+    Database::setAssetThumbnailWritten(nullptr);
     this->db->closeDatabase();
 }
 
