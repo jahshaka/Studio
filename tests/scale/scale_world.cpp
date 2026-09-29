@@ -219,8 +219,14 @@ QList<iris::MeshPtr> shellAsset(size_t triangles, BakeInfo *info, bool bakeIfMis
 {
     const QString name = QStringLiteral("shell-%1").arg(qulonglong(triangles));
     const QString oid = shellOid(triangles);
-    if (QFileInfo::exists(shellBlobPath(triangles)))
-        return bakeOrRead(QString(), name, oid, info, false);
+    // A cached blob a newer bake format refuses (its fingerprint names the old
+    // kFormatVersion) is MISSING, not an answer: it is re-baked when the caller
+    // bakes (CLUSTER-LOCK-2 found every format bump turning the cached shell into
+    // "FAIL: the large asset" on a tree that had run the scale rows before).
+    if (QFileInfo::exists(shellBlobPath(triangles))) {
+        QList<iris::MeshPtr> cached = bakeOrRead(QString(), name, oid, info, false);
+        if (!cached.isEmpty()) return cached;
+    }
     if (!bakeIfMissing) {
         if (info) { *info = BakeInfo(); info->name = name; }
         return QList<iris::MeshPtr>();

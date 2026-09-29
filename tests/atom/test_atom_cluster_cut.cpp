@@ -202,6 +202,33 @@ static void oneMesh(clusterfix::Fixture &f)
         if (groups[size_t(clusters[c].group)].error < FLT_MAX) rootOnly = false;
     CHECK(rootOnly, "%s: above every finite error only terminal groups' clusters are drawn "
           "(%zu clusters, %zu triangles)", f.name.c_str(), cuts.back().size(), tris.back());
+    // THE LOCK IS PER LEVEL (CLUSTER-LOCK-2): the displacement lock binds a level only where
+    // the trigger passes that level's error budget, so the ROOT simplifies as it did before any
+    // lock (DAG-LOCK-1's one array held a depth-1 lock to the root: the 20k sphere's root read
+    // 2916 triangles, the physics model's 306). The pre-lock roots, measured on the unlocked
+    // build: uv-sphere-20k 78, physics-model 76; the bar is 1.5x. round-bar-40m (pre-lock 50) is
+    // PRINTED, not held to it: its triggers are the DEEP levels' own (the unlocked DAG's depth-5
+    // and depth-6 groups lock 1415 and 530 positions, fans included, past 2x their error — clusterlod
+    // combines a level's error with its children's by max, while the drift from level 0 adds
+    // up along the 40 m bar), so the bound itself, not the single array, holds its root.
+    {
+        std::string perDepth, triggerDepth;
+        for (int n : f.stats.lockedPerDepth) perDepth += " " + std::to_string(n);
+        for (int n : f.stats.lockTriggerDepths) triggerDepth += " " + std::to_string(n);
+        std::printf("   the lock: %d builds, %d vertices; locked per level:%s; positions by trigger depth:%s\n",
+                    f.stats.lockPasses, f.stats.lockedVertices, perDepth.empty() ? " none" : perDepth.c_str(),
+                    triggerDepth.empty() ? " none" : triggerDepth.c_str());
+        const struct { const char *name; size_t preLock; } roots[] = {
+            { "uv-sphere-20k", 78 }, { "physics-model", 76 } };
+        if (f.name == "round-bar-40m")
+            std::printf("   %s: %zu root triangles (pre-lock 50; the deep levels' own locks, above)\n",
+                        f.name.c_str(), tris.back());
+        for (const auto &r : roots)
+            if (f.name == r.name)
+                CHECK(double(tris.back()) <= 1.5 * double(r.preLock),
+                      "%s: THE ROOT SIMPLIFIES — %zu root triangles, within 1.5x the pre-lock %zu",
+                      f.name.c_str(), tris.back(), r.preLock);
+    }
     bool trianglesFall = true;
     for (size_t i = 1; i < tris.size(); ++i) if (tris[i] > tris[i - 1]) trianglesFall = false;
     CHECK(trianglesFall, "%s: the cut's triangle count never rises with the threshold "
