@@ -180,9 +180,11 @@ static GiParams vctBase()
     // old fit), at Medium's own 64 (0.281 m cells). UNPINNED from 128 by
     // GI-DDGI-64-1 (D8): the "4.5 % under the field at 64" was the field read at
     // BIND — one sample a probe, 1.7 % high — against the cones; at rest the two
-    // read 1.027 at 64 (1.018 at 128, 1.073 at 32: the field's rays out-read the
-    // four-cone set a little more the coarser the cell, inside the set's own
-    // open-floor error), so the AGREE case reads both at rest. Medium's own chain
+    // read 1.027 at 64, so the AGREE case reads both at rest. (At 32 cells - 0.56 m,
+    // a cascade-0 cell no tier ships: every tier's cascade 0 is 0.156 m or finer -
+    // the ratio is 1.076, and BOTH estimators move: the far floor's indirect against
+    // its 128-cell value is +9.0 % in the field and -13.6 % in the cones; `--cell-sweep`,
+    // PHOTON-PHYSICS-1.) Medium's own chain
     // (cascade 0 +-5 m around the eye) leaves the wall outside the field
     // altogether, which is why a pinned cascade stays.
     gi.cascadeCount = 1;
@@ -259,10 +261,13 @@ static void lightWrite(Scene *s, NodeId light)
     s->setLight(light, l);
 }
 
-// NOT A ROW: `test_gi_ddgi --cell-sweep` (GI-DDGI-64-1, D8) — the far floor's field /
-// cones ratio (the AGREE reading, both settled) against the pinned cascade's
-// resolution over the same +-9 m box. What the 4.5 % at 64 cells is, as a number per
-// cell size.
+// NOT A ROW: `test_gi_ddgi --cell-sweep` (GI-DDGI-64-1, D8; PHOTON-PHYSICS-1) — the far
+// floor's field / cones ratio (the AGREE reading, both settled) against the pinned
+// cascade's resolution over the same +-9 m box, in SCENE RADIANCE over a 5 x 5 patch, with
+// the INDIRECT (GI on minus GI off) of each estimator per cell size - which one moves.
+// Measured: indirect field 0.1166 / 0.1099 / 0.1070, cones 0.0841 / 0.0971 / 0.0974 at
+// 32 / 64 / 128; the field's probe count is fixed (8192) and its rays' start bias moves
+// nothing (0 or one cell: the same to five digits).
 static int runCellSweep()
 {
     std::string err;
@@ -275,13 +280,22 @@ static int runCellSweep()
     engine->setFixedFrameDelta(1.0f / 60.0f);
     Engine *e = engine.get();
     Room r = buildRoom(e);
-    Image img;
-    render(e);
-    r.view->readPixels(img);
-    const Colour base = img.at(kFarX, kFarY);
-    std::printf("   GI off: far floor r %.4f\n", base.r);
-    // Powers of two: 48, 96 and 192 read the cones 0.60-0.62 at this patch (a
-    // non-power-of-two volume is outside what the voxeliser's mips assume).
+    // SCENE RADIANCE (the float readback), a 5 x 5 patch: the 8-bit single pixel this sweep
+    // read first moves in display codes, where 2 codes are 3 % of the indirect.
+    PostFxDesc fx;
+    fx.hdrReadback = true;
+    r.view->setPostFx(fx);
+    const auto patch = [&](unsigned cx, unsigned cy) {
+        ImageF img;
+        if (!r.view->readPixelsHdr(img)) return -1.0;
+        double s = 0.0;
+        for (unsigned y = cy - 2; y <= cy + 2; ++y)
+            for (unsigned x = cx - 2; x <= cx + 2; ++x) s += img.at(std::min(x, 127u), std::min(y, 127u)).r;
+        return s / 25.0;
+    };
+    render(e, 8);
+    const double base = patch(kFarX, kFarY), baseNear = patch(kFloorX, kFloorY);
+    std::printf("   GI off: far floor r %.5f, near %.5f (radiance)\n", base, baseNear);
     const int resolutions[] = { 32, 64, 128 };
     for (int res : resolutions) {
         GiParams gi = vctBase();
@@ -291,24 +305,21 @@ static int runCellSweep()
         render(e, 4);
         settleGi(e, r.scene);
         render(e, 8);
-        r.view->readPixels(img);
-        const Colour cones = img.at(kFarX, kFarY);
-        const Colour conesNear = img.at(kFloorX, kFloorY);
+        const double cones = patch(kFarX, kFarY), conesNear = patch(kFloorX, kFloorY);
         gi.ddgi = GiToggle::On;
         r.scene->setGlobalIllumination(gi);
         render(e, 4);
         settleGi(e, r.scene);
         render(e, 8);
-        r.view->readPixels(img);
-        const Colour field = img.at(kFarX, kFarY);
-        const Colour fieldNear = img.at(kFloorX, kFloorY);
+        const double field = patch(kFarX, kFarY), fieldNear = patch(kFloorX, kFloorY);
         const double cell = 18.0 / double(res);
-        std::printf("   res %3d (cell %.3f m): far floor field %.4f cones %.4f -> field / cones %.4f "
-                    "(indirect only: %.4f / %.4f = %.4f); near floor %.4f / %.4f = %.4f\n",
-                    res, cell, field.r, cones.r, cones.r > 0 ? field.r / cones.r : 0.0,
-                    field.r - base.r, cones.r - base.r,
-                    (cones.r - base.r) > 1e-4f ? (field.r - base.r) / (cones.r - base.r) : 0.0,
-                    fieldNear.r, conesNear.r, conesNear.r > 0 ? fieldNear.r / conesNear.r : 0.0);
+        std::printf("   res %3d: the field's probes %d\n", res, r.scene->giStatus().ifdProbes);
+        std::printf("   res %3d (cell %.3f m): far floor field %.5f cones %.5f -> field / cones %.4f (indirect "
+                    "only: %.5f / %.5f = %.4f); near floor indirect %.5f / %.5f = %.4f\n",
+                    res, cell, field, cones, cones > 0 ? field / cones : 0.0, field - base, cones - base,
+                    (cones - base) > 1e-6 ? (field - base) / (cones - base) : 0.0, fieldNear - baseNear,
+                    conesNear - baseNear,
+                    (conesNear - baseNear) > 1e-6 ? (fieldNear - baseNear) / (conesNear - baseNear) : 0.0);
     }
     return 0;
 }
