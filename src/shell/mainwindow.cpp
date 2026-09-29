@@ -4472,11 +4472,15 @@ void MainWindow::setupDesktop()
 	assetsPlaceholder = new QWidget;
 	ui->stackedWidget->addWidget(assetsPlaceholder);
 	// ITS PREVIEW VIEWER IS STILL MADE HERE, AT BOOT — A WORKAROUND, NOT A FIX
-	// (ASSETS-VISIT-DEATH-1, filed for a debug-runner diagnosis). With the page
-	// AND this viewer (a third engine Scene) both made on the first Assets visit,
-	// ui.window_minimum's app died on `app.space('assets')` once in a gate
-	// (1 of 12 runs; the cause is UNFOUND — no signal text was captured). Making
-	// the viewer here restores the creation order the app always had; only the
+	// (ASSETS-VISIT-DEATH-1). With the page AND this viewer both made on the
+	// first Assets visit, ui.window_minimum's app died once on `app.space('assets')`
+	// in a D11 gate; no text was captured (the suite does not print the app's
+	// log). NOT REPRODUCED in 60 loaded runs on 2026-09-29 (the lazy order beside
+	// the lane's own --engine-selftest load: 20 watchdog off, 20 validation layer
+	// on, 20 the gate's configuration under a double load — 0 deaths, 0 cores,
+	// 0 Xid). What this line moves to boot is the viewer WIDGET (its native
+	// window) and its preview document: the engine View and Scene are made on
+	// the first showing in either order (EngineAssetViewer::showEvent). Only the
 	// page (what scaled with the library) waits for its first use.
 	if (EngineHost::instance().isRunning()) {
 		auto &host = EngineHost::instance();
