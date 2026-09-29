@@ -297,6 +297,7 @@ set(SRCS
     src/services/memberstamp.cpp
     src/services/presetrestamp.cpp
     src/services/assetshare.cpp
+    src/services/bundlewriter.cpp
     src/services/projectarchiver.cpp
     src/io/ziphelper.cpp
     src/services/assetmetadata.cpp
@@ -447,6 +448,7 @@ set(SRCS
     src/commands/structuralundo.cpp
     src/commands/staticstate.cpp
     src/ui/dialogs/progressdialog.cpp 
+    src/ui/dialogs/bundleexportdialog.cpp
     src/ui/dialogs/screenshotwidget.cpp 
     src/ui/pages/projectmanager.cpp 
     src/ui/controls/dynamicgrid.cpp
@@ -827,9 +829,6 @@ add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/irisgl/engine ${CMAKE_CURRENT_BINAR
 
 # Headless engine tests (tests/). include(CTest) defines BUILD_TESTING and calls
 # enable_testing() at top level, which add_test in a subdirectory requires.
-# Which editor viewport starts by default. Overridable at runtime with
-# --viewport=engine|legacy or env JAHSHAKA_VIEWPORT (see src/bridge/enginehost.h).
-option(JAHSHAKA_ENGINE_VIEWPORT "Default to the engine viewport" OFF)
 
 # libxcb (Linux only): EmbeddedWebPreview walks the X window tree on Qt's own
 # xcb connection to adopt the Chrome preview window into the Publish page.
@@ -1049,11 +1048,6 @@ endif(USE_BREAKPAD)
 
 target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE ${LIBS})
 target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE JAHSHAKA_VERSION="${JAHSHAKA_VERSION}")
-if(JAHSHAKA_ENGINE_VIEWPORT)
-    target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE JAHSHAKA_ENGINE_VIEWPORT_DEFAULT=1)
-else()
-    target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE JAHSHAKA_ENGINE_VIEWPORT_DEFAULT=0)
-endif()
 
 # A6: these two warning classes are undefined behaviour, not style - keep them fixed.
 if (NOT MSVC)

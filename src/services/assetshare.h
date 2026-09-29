@@ -54,6 +54,11 @@ For more information see the LICENSE file
 #include <QString>
 #include <QStringList>
 
+#include <functional>
+
+#include "io/clipboardformat.h"
+#include "services/bundlewriter.h"
+
 class Database;
 class Project;
 
@@ -67,39 +72,48 @@ inline const char *extension() { return "jbundle"; }
 /// The file-dialog filter both the module and the Assets page use.
 QString fileFilter();
 
-struct ExportResult
-{
-    QString path;      ///< the archive written
-    QString kind;      ///< the manifest's kind ("material", "texture", …)
-    int assets = 0;    ///< rows carried (the asset plus its closure)
-    qint64 bytes = 0;  ///< the archive's size
-    QString error;
-    bool ok() const { return error.isEmpty() && !path.isEmpty(); }
-};
+/// STAGE `guids` and everything they are made of as a share file: the rows,
+/// edges and store paths, read on the calling (UI) thread; the bytes are owed
+/// and read by the writer (services/bundlewriter.h), on a worker. ONE entry's
+/// manifest kind is its type word ("material", "texture", "sky"); a SET is a
+/// "pack" (the Assets tray's multi-selection). The version that travels is the
+/// one the OPEN PROJECT renders with when it holds an asset (its pin), the
+/// library's otherwise — copy semantics, the same rule the clipboard uses.
+///
+/// `yield` (optional) runs between slices of the catalog reads — the caller's
+/// event-loop turn (yieldToEventLoop), so a large set stages without one long
+/// block on the UI thread.
+BundleStage stageBundle(Database *db, Project *project, const QStringList &guids,
+                        const std::function<void()> &yield = {});
 
-/// `guid` and everything it is made of, as a share file at `destPath`. The
-/// version that travels is the one the OPEN PROJECT renders with when it
-/// holds the asset (its pin), the library's otherwise — copy semantics, the
-/// same rule the clipboard uses.
-ExportResult exportBundle(Database *db, Project *project, const QString &guid,
+/// A SCENE NODE, staged (ARCHIVE-ROUNDTRIP, D7) — the file behind the
+/// outliner's Export Object / Export Particle System and node.exportArchive.
+/// The same format as stageBundle: the node becomes the row the file is about
+/// — an Object (`typeId`) row, fresh guid, its `asset` blob the node — with the
+/// node's whole closure and every byte beside it; `assets.import` of the file
+/// lands them all and answers that row, which `assets.addToScene` instantiates.
+BundleStage stageNode(Database *db, Project *project, const QJsonObject &nodeObject,
+                      const QString &name, int typeId, const std::function<void()> &yield = {});
+
+/// One turn of the calling thread's event loop with user input held back — the
+/// `yield` every export door hands the stage.
+void yieldToEventLoop();
+
+/// THE VERBS' EXPORT (assets.exportBundle): stageBundle, then the writer on a
+/// worker, waited for with the event loop turning (bundlewriter.h,
+/// exportAndWait). The UI doors stage and hand the job to
+/// ui/dialogs/bundleexportdialog.h instead.
+ExportResult exportBundle(Database *db, Project *project, const QStringList &guids,
                           const QString &destPath);
 
-/// A SCENE NODE, shared (ARCHIVE-ROUNDTRIP, D7) — the file behind the
-/// outliner's Export Object / Export Particle System and node.exportArchive.
-/// The same format as exportBundle, and for the same reason: the legacy .jaf
-/// carried a catalog snapshot that held NO asset rows (it walked node guids
-/// as asset guids) and a `.manifest` the zip writer dropped as a dot-file, so
-/// it never re-imported at all. Here the node becomes the row the file is
-/// about — an Object (`typeId`) row, fresh guid, its `asset` blob the node —
-/// with the node's whole closure and every byte beside it; `assets.import` of
-/// the file lands them all and answers that row, which `assets.addToScene`
-/// instantiates.
+/// node.exportArchive: stageNode, then the writer on a worker (as above).
 ExportResult exportNode(Database *db, Project *project, const QJsonObject &nodeObject,
                         const QString &name, int typeId, const QString &destPath);
 
 struct ImportResult
 {
-    QString guid;            ///< the asset the file is ABOUT
+    QString guid;            ///< the asset the file is ABOUT (a pack's first entry)
+    QStringList guids;       ///< every entry the file is about, in its order
     QStringList imported;    ///< the rows this import created
     QStringList known;       ///< the rows this library already had
     QString error;
@@ -113,6 +127,7 @@ struct ImportResult
     bool alreadyHad = false;
     bool ok() const { return error.isEmpty() && !guid.isEmpty(); }
 };
+
 
 /// Land a share file in this library (and pin it into the open project, if
 /// there is one). A guid this library already holds is NOT overwritten — the

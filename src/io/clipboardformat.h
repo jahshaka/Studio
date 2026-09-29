@@ -176,8 +176,11 @@ struct Envelope
 
     /// Parses a payload. `error` receives WHY on failure — a caller reports it
     /// (clipboard.setText) rather than throwing, because "this text is not a
-    /// Jahshaka payload" is an ordinary answer, not a fault.
-    static Envelope fromText(const QByteArray &text, QString *error = nullptr);
+    /// Jahshaka payload" is an ordinary answer, not a fault. `maxBytes` is the
+    /// CLIPBOARD's cap by default; a share file (services/assetshare.h) is the
+    /// unbounded closure by design and passes its own.
+    static Envelope fromText(const QByteArray &text, QString *error = nullptr,
+                             qint64 maxBytes = kMaxPayloadBytes);
 
     /// Cheap sniff: does this text START like an envelope? Used before a parse
     /// so a clipboard holding a novel or 30 MB of base64 from another app is

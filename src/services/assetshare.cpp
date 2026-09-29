@@ -11,22 +11,24 @@ For more information see the LICENSE file
 
 #include "services/assetshare.h"
 
+#include <QCoreApplication>
 #include <QDateTime>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
 #include <QJsonDocument>
 #include <QJsonObject>
-#include <QTemporaryDir>
+#include <QEventLoop>
+#include <QFutureWatcher>
+#include <QHash>
+#include <QtConcurrent/QtConcurrentRun>
 
 #include <limits>
 
 #include "data/constants.h"
 #include "data/database/database.h"
 #include "data/project.h"
-#include "export/exportmanifest.h"
 #include "io/clipboardformat.h"
-#include "io/ziphelper.h"
 #include "zip.h"
 #include "scripting/modules/moduleshared.h"
 #include "services/assetcas.h"
@@ -51,78 +53,6 @@ QString fileFilter()
 }
 
 namespace {
-
-/// THE ONE WRITER both exports share: the manifest v2 header describing
-/// `envelope.assets`, the envelope as the payload, zipped. WRITTEN BESIDE,
-/// RENAMED OVER (the QSaveFile shape the node export always had): a file
-/// already at `destPath` is replaced only by a complete archive, so a failed
-/// export never leaves the user with less than they had.
-ExportResult writeBundle(const clipboardformat::Envelope &envelope, const QString &kind,
-                         const QString &destPath)
-{
-    ExportResult result;
-    const auto fail = [&result](const QString &why) { result.error = why; return result; };
-
-    exportformat::ExportManifest manifest;
-    manifest.version = 2;
-    manifest.kind = kind;
-    manifest.generator = QStringLiteral("Jahshaka");
-    manifest.created = envelope.created;
-    for (auto it = envelope.assets.constBegin(); it != envelope.assets.constEnd(); ++it) {
-        exportformat::ManifestAsset entry;
-        entry.guid = it.key();
-        entry.name = it->name;
-        entry.type = it->type;
-        entry.typeId = it->typeId;
-        entry.dependencies = it->dependencies;
-        for (const clipboardformat::ClipFile &file : it->files) {
-            exportformat::ManifestFile mf;
-            mf.role = file.role;
-            mf.name = file.name;
-            mf.size = file.size;
-            mf.oid = file.oid;
-            entry.files.append(mf);
-        }
-        manifest.assets.append(entry);
-    }
-
-    QTemporaryDir staging;
-    if (!staging.isValid()) return fail(QStringLiteral("cannot create a staging directory"));
-    QString manifestError;
-    if (!manifest.write(QDir(staging.path()).filePath(manifestName()), &manifestError))
-        return fail(manifestError.isEmpty() ? QStringLiteral("could not write the manifest")
-                                            : manifestError);
-    {
-        QFile payload(QDir(staging.path()).filePath(payloadName()));
-        if (!payload.open(QIODevice::WriteOnly))
-            return fail(QStringLiteral("could not write the payload"));
-        const QByteArray bytes = envelope.toText();
-        if (payload.write(bytes) != bytes.size())
-            return fail(QStringLiteral("a short write"));
-    }
-
-    const QString partial = destPath + QStringLiteral(".partial");
-    QFile::remove(partial);
-    QString zipError;
-    if (!ZipHelper::zipDirectory(staging.path(), partial, &zipError)) {
-        QFile::remove(partial);
-        return fail(zipError.isEmpty() ? QStringLiteral("could not write the archive") : zipError);
-    }
-    if (QFile::exists(destPath) && !QFile::remove(destPath)) {
-        QFile::remove(partial);
-        return fail(QStringLiteral("the existing file at %1 could not be replaced").arg(destPath));
-    }
-    if (!QFile::rename(partial, destPath)) {
-        QFile::remove(partial);
-        return fail(QStringLiteral("the archive could not be moved into place at %1").arg(destPath));
-    }
-
-    result.path = destPath;
-    result.kind = kind;
-    result.assets = envelope.assets.size();
-    result.bytes = QFileInfo(destPath).size();
-    return result;
-}
 
 /// The envelope's header, the same for both exports.
 clipboardformat::Envelope newEnvelope(Project *project)
@@ -151,58 +81,89 @@ assetclosure::Options shareOptions(Project *project)
     return options;
 }
 
-}   // namespace
-
-ExportResult exportBundle(Database *db, Project *project, const QString &guid,
-                          const QString &destPath)
+/// THE CATALOG HALF IN SLICES (EXPORT-THREAD-1): describe is a few statements
+/// per asset, and a 200-entry pack is ~50 ms of them in a Debug build — one
+/// block the length of three frames. Sliced, `yield` (the caller's event-loop
+/// turn) runs between every kDescribeSlice assets, so no slice is longer than
+/// a frame. The budget is unbounded here, so slicing changes nothing it spends.
+constexpr int kDescribeSlice = 16;
+QMap<QString, clipboardformat::ClipAsset> describeInSlices(const QStringList &closure, Database *db,
+                                                           Project *project,
+                                                           QVector<assetclosure::DeferredRead> *reads,
+                                                           const std::function<void()> &yield)
 {
-    ExportResult result;
-    const auto fail = [&result](const QString &why) { result.error = why; return result; };
-    if (!db) return fail(QStringLiteral("no library is open"));
-    if (guid.isEmpty() || destPath.isEmpty())
-        return fail(QStringLiteral("an asset and a destination are required"));
-
-    const AssetRecord row = db->fetchAsset(guid);
-    if (row.guid.isEmpty()) return fail(QStringLiteral("no asset '%1'").arg(guid));
-
-    const QStringList closure = assetclosure::expand({ guid }, db);
-    int inlined = 0, referenced = 0;
-    const QMap<QString, clipboardformat::ClipAsset> assets =
-        assetclosure::describe(closure, db, shareOptions(project), &inlined, &referenced);
-    if (assets.isEmpty()) return fail(QStringLiteral("'%1' has nothing to carry").arg(row.name));
-
-    clipboardformat::Envelope envelope = newEnvelope(project);
-    envelope.assets = assets;
-
-    // ONE item, and it is the asset the file is ABOUT. The rest of the map is
-    // what it is made of; the resolver reads the item to know which guid the
-    // import should answer with.
-    clipboardformat::ClipItem item;
-    item.kind = QLatin1String(clipboardformat::kind::asset());
-    item.data = QJsonObject{ { QStringLiteral("guid"), guid },
-                             { QStringLiteral("name"), row.name },
-                             { QStringLiteral("type"), scriptmod::assetTypeName(row.type) } };
-    envelope.items.append(item);
-
-    // THE MANIFEST — the readable header, v2, in the format every other
-    // export in this app writes.
-    return writeBundle(envelope, scriptmod::assetTypeName(row.type), destPath);
+    QMap<QString, clipboardformat::ClipAsset> out;
+    const assetclosure::Options options = shareOptions(project);
+    for (int start = 0; start < closure.size(); start += kDescribeSlice) {
+        if (start > 0 && yield) yield();
+        const auto slice = assetclosure::describe(closure.mid(start, kDescribeSlice), db, options,
+                                                  nullptr, nullptr, reads);
+        for (auto it = slice.constBegin(); it != slice.constEnd(); ++it) out.insert(it.key(), it.value());
+    }
+    return out;
 }
 
-ExportResult exportNode(Database *db, Project *project, const QJsonObject &nodeObject,
-                        const QString &name, int typeId, const QString &destPath)
+}   // namespace
+
+BundleStage stageBundle(Database *db, Project *project, const QStringList &guids,
+                        const std::function<void()> &yield)
 {
-    ExportResult result;
-    const auto fail = [&result](const QString &why) { result.error = why; return result; };
+    BundleStage stage;
+    const auto fail = [&stage](const QString &why) { stage.error = why; return stage; };
     if (!db) return fail(QStringLiteral("no library is open"));
-    if (nodeObject.isEmpty() || destPath.isEmpty())
-        return fail(QStringLiteral("a node and a destination are required"));
+
+    // THE ENTRY SET, in the caller's order, each once.
+    QStringList entries;
+    for (const QString &guid : guids)
+        if (!guid.isEmpty() && !entries.contains(guid)) entries.append(guid);
+    if (entries.isEmpty()) return fail(QStringLiteral("an asset is required"));
+
+    clipboardformat::Envelope envelope = newEnvelope(project);
+    QString singleKind;
+    // The entries' own rows in ONE statement (no BLOB), then in the caller's order.
+    QHash<QString, AssetRecord> rows;
+    for (const AssetRecord &row : db->fetchAssetHeaders(entries)) rows.insert(row.guid, row);
+    for (const QString &guid : entries) {
+        const AssetRecord row = rows.value(guid);
+        if (row.guid.isEmpty()) return fail(QStringLiteral("no asset '%1'").arg(guid));
+        // ONE item per entry: the assets the file is ABOUT. The rest of the
+        // map is what they are made of; the resolver reads the items to know
+        // which guids the import answers with.
+        clipboardformat::ClipItem item;
+        item.kind = QLatin1String(clipboardformat::kind::asset());
+        item.data = QJsonObject{ { QStringLiteral("guid"), guid },
+                                 { QStringLiteral("name"), row.name },
+                                 { QStringLiteral("type"), scriptmod::assetTypeName(row.type) } };
+        envelope.items.append(item);
+        if (entries.size() == 1) singleKind = scriptmod::assetTypeName(row.type);
+    }
+
+    // The rows, the edges and the store paths — queries, on this thread. The
+    // BYTES are owed (`reads`) and read by the writer, on a worker.
+    const QStringList closure = assetclosure::expand(entries, db);
+    envelope.assets = describeInSlices(closure, db, project, &stage.reads, yield);
+    if (envelope.assets.isEmpty()) return fail(QStringLiteral("nothing to carry"));
+
+    stage.envelope = envelope;
+    // A single asset's manifest kind is its own type word; a set of them is a
+    // PACK (the Assets tray's multi-selection export).
+    stage.kind = entries.size() == 1 ? singleKind : QStringLiteral("pack");
+    return stage;
+}
+
+BundleStage stageNode(Database *db, Project *project, const QJsonObject &nodeObject,
+                      const QString &name, int typeId, const std::function<void()> &yield)
+{
+    BundleStage stage;
+    const auto fail = [&stage](const QString &why) { stage.error = why; return stage; };
+    if (!db) return fail(QStringLiteral("no library is open"));
+    if (nodeObject.isEmpty()) return fail(QStringLiteral("a node is required"));
 
     // What the node is made of: the key-aware walk of its references (the
     // clipboard's own table, io/assetrefs.h) and everything THOSE depend on.
     const QStringList closure = assetclosure::forNodes({ nodeObject }, db);
     QMap<QString, clipboardformat::ClipAsset> assets =
-        assetclosure::describe(closure, db, shareOptions(project));
+        describeInSlices(closure, db, project, &stage.reads, yield);
 
     // THE NODE BECOMES THE ROW THE FILE IS ABOUT: an Object (or ParticleSystem)
     // row whose `asset` blob is the node — the shape every Object row has and
@@ -235,7 +196,29 @@ ExportResult exportNode(Database *db, Project *project, const QJsonObject &nodeO
                              { QStringLiteral("name"), row.name },
                              { QStringLiteral("type"), row.type } };
     envelope.items.append(item);
-    return writeBundle(envelope, row.type, destPath);
+    stage.envelope = envelope;
+    stage.kind = row.type;
+    return stage;
+}
+
+void yieldToEventLoop()
+{
+    // Frames, repaints, timers; never user input — nothing a click could start
+    // re-enters an export that is staging.
+    QCoreApplication::processEvents(QEventLoop::ExcludeUserInputEvents);
+}
+
+ExportResult exportBundle(Database *db, Project *project, const QStringList &guids,
+                          const QString &destPath)
+{
+    return exportAndWait(stageBundle(db, project, guids, yieldToEventLoop), destPath);
+}
+
+ExportResult exportNode(Database *db, Project *project, const QJsonObject &nodeObject,
+                        const QString &name, int typeId, const QString &destPath)
+{
+    return exportAndWait(stageNode(db, project, nodeObject, name, typeId, yieldToEventLoop),
+                         destPath);
 }
 
 bool looksLikeBundle(const QString &path)
@@ -270,6 +253,7 @@ bool looksLikeBundle(const QString &path)
     return haveManifest && havePayload;
 }
 
+
 ImportResult importBundle(Database *db, Project *project, const QString &path)
 {
     ImportResult result;
@@ -277,22 +261,22 @@ ImportResult importBundle(Database *db, Project *project, const QString &path)
     if (!db) return fail(QStringLiteral("no library is open"));
     if (!QFileInfo::exists(path)) return fail(QStringLiteral("no such file '%1'").arg(path));
 
-    QTemporaryDir staging;
-    if (!staging.isValid()) return fail(QStringLiteral("cannot create a staging directory"));
-    QString zipError;
-    if (!ZipHelper::extract(path, staging.path(), &zipError))
-        return fail(zipError.isEmpty() ? QStringLiteral("this file is not a readable archive")
-                                       : zipError);
-
-    QFile payloadFile(QDir(staging.path()).filePath(payloadName()));
-    if (!payloadFile.exists() || !payloadFile.open(QIODevice::ReadOnly))
-        return fail(QStringLiteral("this archive carries no asset payload"));
-    QString envelopeError;
-    const clipboardformat::Envelope envelope =
-        clipboardformat::Envelope::fromText(payloadFile.readAll(), &envelopeError);
-    if (envelope.items.isEmpty())
-        return fail(envelopeError.isEmpty() ? QStringLiteral("the payload names no asset")
-                                            : envelopeError);
+    // THE UNPACK IS A WORKER'S (EXPORT-THREAD-1): the extract and the parse of
+    // an unbounded payload are file I/O, and the calling (UI) thread keeps its
+    // event loop — frames, repaints, timers; user input held back — until the
+    // envelope is in hand. The resolver below is the catalog's, on this thread.
+    QFuture<UnpackedBundle> future = QtConcurrent::run([path]() { return unpackBundle(path); });
+    if (!future.isFinished() && QCoreApplication::instance()) {
+        QEventLoop loop;
+        QFutureWatcher<UnpackedBundle> watcher;
+        QObject::connect(&watcher, &QFutureWatcherBase::finished, &loop, &QEventLoop::quit);
+        watcher.setFuture(future);
+        if (!future.isFinished()) loop.exec(QEventLoop::ExcludeUserInputEvents);
+    }
+    future.waitForFinished();
+    const UnpackedBundle unpacked = future.result();
+    if (!unpacked.error.isEmpty()) return fail(unpacked.error);
+    const clipboardformat::Envelope &envelope = unpacked.envelope;
 
     // THE EXISTING IMPORT (spec §5): ingest by content, register the rows
     // with their blobs, write the intrinsic edges, pin into the open project.
@@ -300,20 +284,24 @@ ImportResult importBundle(Database *db, Project *project, const QString &path)
     const ClipboardResolveReport report = resolver.apply(envelope);
     if (!report.error.isEmpty()) return fail(report.error);
 
-    const QString wanted = envelope.items.first().data.value(QStringLiteral("guid")).toString();
-    const QString landed = report.guidMap.value(wanted, wanted);
-    if (landed.isEmpty() || db->fetchAsset(landed).guid.isEmpty()) {
-        QString why = QStringLiteral("the asset could not be landed");
-        if (!report.missing.isEmpty())
-            why = QStringLiteral("the archive is missing content: %1")
-                      .arg(report.missing.first().name);
-        return fail(why);
+    // EVERY ENTRY the file is about (a pack names several), in its order.
+    for (const clipboardformat::ClipItem &item : envelope.items) {
+        const QString wanted = item.data.value(QStringLiteral("guid")).toString();
+        const QString landed = report.guidMap.value(wanted, wanted);
+        if (landed.isEmpty() || db->fetchAsset(landed).guid.isEmpty()) {
+            QString why = QStringLiteral("the asset could not be landed");
+            if (!report.missing.isEmpty())
+                why = QStringLiteral("the archive is missing content: %1")
+                          .arg(report.missing.first().name);
+            return fail(why);
+        }
+        result.guids.append(landed);
     }
 
-    result.guid = landed;
+    result.guid = result.guids.first();
     result.imported = report.imported;
     result.known = report.known;
-    result.alreadyHad = report.known.contains(landed) && !report.imported.contains(landed);
+    result.alreadyHad = report.known.contains(result.guid) && !report.imported.contains(result.guid);
     return result;
 }
 

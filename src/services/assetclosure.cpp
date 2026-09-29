@@ -74,7 +74,8 @@ QStringList expand(const QStringList &seeds, Database *db)
 
 QMap<QString, clipboardformat::ClipAsset> describe(const QStringList &guids, Database *db,
                                                     const Options &options,
-                                                    int *inlinedOut, int *referencedOut)
+                                                    int *inlinedOut, int *referencedOut,
+                                                    QVector<DeferredRead> *deferredOut)
 {
     QMap<QString, clipboardformat::ClipAsset> out;
     int inlined = 0, referenced = 0;
@@ -130,15 +131,24 @@ QMap<QString, clipboardformat::ClipAsset> describe(const QStringList &guids, Dat
             // budget is spent, not applied per file. An asset that misses out
             // still travels — by oid, which finds the same content in any
             // store that has it.
+            bool owed = false;
             if (size >= 0 && size <= budget) {
-                QFile source(entry.path);
-                if (source.open(QIODevice::ReadOnly)) {
-                    file.inlineData = source.readAll();
-                    budget -= file.inlineData.size();
-                    anyInlined = true;
+                if (deferredOut) {
+                    // DEFERRED (EXPORT-THREAD-1): the budget is spent now, the
+                    // bytes are read by whoever writes the file — a worker.
+                    deferredOut->append(DeferredRead{ guid, int(asset.files.size()), entry.path });
+                    budget -= size;
+                    anyInlined = owed = true;
+                } else {
+                    QFile source(entry.path);
+                    if (source.open(QIODevice::ReadOnly)) {
+                        file.inlineData = source.readAll();
+                        budget -= file.inlineData.size();
+                        anyInlined = true;
+                    }
                 }
             }
-            if (file.inlineData.isEmpty()) anyReferenced = true;
+            if (file.inlineData.isEmpty() && !owed) anyReferenced = true;
             asset.files.append(file);
         }
 

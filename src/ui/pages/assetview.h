@@ -158,6 +158,10 @@ public:
 	void spaceSplits();
     void closeViewer();
 	void clearViewer();
+	/// Share files (.jbundle) dropped or picked on this page: landed through
+	/// assetshare::importBundle — the import `assets.import` uses — then the
+	/// library listing is re-read and the (first) landed entry selected.
+	void importShareFiles(const QStringList &files);
 	/// Shutdown teardown: close the progress dialog, drop pending viewer
 	/// tails, stop media previews, abort a running import batch and join its
 	/// worker (bounded). Safe to call repeatedly. False when the worker did

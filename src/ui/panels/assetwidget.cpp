@@ -11,6 +11,8 @@ For more information see the LICENSE file
 
 #include "ui/panels/assetwidget.h"
 #include "scripting/modules/assetsapi.h"
+#include "services/assetshare.h"
+#include "ui/dialogs/bundleexportdialog.h"
 
 #include "ui/dialogs/importsettingsdialog.h"
 #include "ui_assetwidget.h"
@@ -34,7 +36,6 @@ For more information see the LICENSE file
 #include <QPointer>
 #include <QProgressDialog>
 #include <QProcess>
-#include <QTemporaryDir>
 #include <QTimer>
 
 #include "bridge/enginehost.h"
@@ -62,7 +63,6 @@ For more information see the LICENSE file
 #include "services/thumbnailmanager.h"
 #include "services/thumbnailgenerator.h"
 #include "services/assethelper.h"
-#include "services/assetstorepaths.h"
 #include "services/import/assetimportservice.h"
 #include "services/import/importbatchrunner.h"
 #include "services/projectassets.h"
@@ -81,9 +81,6 @@ For more information see the LICENSE file
 #include "services/assetservice.h"
 #include "services/services.h"
 #include "services/imagematerial.h"
-#include "services/assetcas.h"
-#include <QSqlDatabase>
-#include "io/ziphelper.h"
 #include "io/assetmanager.h"
 #include "io/builtinmaterials.h"
 #include "irisgl/document/materials/pbrmaterial.h"
@@ -99,43 +96,6 @@ For more information see the LICENSE file
 #include "ui/style/thememanager.h"
 #include <QActionGroup>
 #include "ui/controls/assetdrag.h"
-
-namespace {
-// Pin-world byte resolution for the .jaf exporters (phase 4): an asset's
-// bytes live in the CAS, addressed through the project pin - the flat
-// project folder holds nothing.
-QString resolvePinnedAssetPath(Project *project, const QString &assetGuid, QString *nameOut)
-{
-    return AssetCas::resolvePinned(QSqlDatabase::database(), AssetStorePaths::root(),
-                                   project ? project->getProjectGuid() : QString(),
-                                   assetGuid, nameOut);
-}
-} // namespace
-
-// The texture/material .jaf exporters' payload: every member that HAS stored
-// bytes, copied under its display name. Walks GUIDS (plan item 15c). It used
-// to walk the dependency closure as a list of NAMES and turn each back into a
-// guid with a by-name catalog lookup scoped to the open project — which only
-// ever matched rows stamped with that project (so a pinned library texture,
-// stamped with whichever project imported it, was silently left out of the
-// archive) and matched the wrong row whenever two assets shared a name. A
-// member with no bytes (the material row itself, a DB-only asset) resolves
-// to nothing and is skipped, which is what the old "names without an
-// extension" filter approximated.
-void AssetWidget::copyMemberFilesForExport(const QStringList &members, const QString &writePath)
-{
-    QStringList seen;
-    for (const QString &member : members) {
-        if (member.isEmpty() || seen.contains(member)) continue;
-        seen << member;
-        QString name;
-        const QString assetPath = resolvePinnedAssetPath(project, member, &name);
-        if (assetPath.isEmpty()) continue;
-        if (name.isEmpty()) name = QFileInfo(assetPath).fileName();
-        QFile::copy(assetPath, IrisUtils::join(writePath, "assets", QFileInfo(name).fileName()));
-    }
-}
-
 
 AssetWidget::AssetWidget(Database *handle, QWidget *parent) : QWidget(parent), ui(new Ui::AssetWidget)
 {
@@ -1079,50 +1039,8 @@ void AssetWidget::sceneTreeCustomContextMenu(const QPoint& pos)
 
 void AssetWidget::exportSky()
 {
-    // get the export file path from a save dialog
-    auto filePath = QFileDialog::getSaveFileName(
-        this,
-        "Choose export path",
-        assetItem.wItem->data(Qt::DisplayRole).toString(),
-        "Supported Export Formats (*.jaf)");
-
-    if (filePath.isEmpty() || filePath.isNull())
-        return;
-
-    QTemporaryDir temporaryDir;
-    if (!temporaryDir.isValid())
-        return;
-
-    const QString writePath = temporaryDir.path();
-
-    const QString guid = assetItem.wItem->data(MODEL_GUID_ROLE).toString();
-
-    db->createBlobFromAsset(guid, QDir(writePath).filePath("asset.db"));
-
-    QDir tempDir(writePath);
-    tempDir.mkpath("assets");
-
-    QFile manifest(QDir(writePath).filePath(".manifest"));
-    if (manifest.open(QIODevice::ReadWrite))
-    {
-        QTextStream stream(&manifest);
-        stream << "sky";
-    }
-    manifest.close();
-
-    for (const auto &assetGuid : AssetHelper::fetchAssetAndAllDependencies(guid, db))
-    {
-        QString name;
-        const QString assetPath = resolvePinnedAssetPath(project, assetGuid, &name);
-        if (assetPath.isEmpty()) continue;
-        if (name.isEmpty()) name = db->fetchAsset(assetGuid).name;
-        if (name.isEmpty()) name = QFileInfo(assetPath).fileName();
-        QFile::copy(assetPath, IrisUtils::join(writePath, "assets", name));
-    }
-
-    // ONE zip loop (amendment 7): the shared helper replaces the
-    // hand-rolled zip_entry sweep this site duplicated.
-    ZipHelper::zipDirectory(writePath, filePath);
+    exportBundleOf({ assetItem.wItem->data(MODEL_GUID_ROLE).toString() },
+                   assetItem.wItem->data(Qt::DisplayRole).toString(), tr("Export Sky"));
 }
 
 void AssetWidget::sceneViewCustomContextMenu(const QPoint& pos)
@@ -1226,12 +1144,6 @@ void AssetWidget::sceneViewCustomContextMenu(const QPoint& pos)
             connect(action, SIGNAL(triggered()), this, SLOT(editFileExternally()));
             menu.addAction(action);
         }
-
-		if (item->data(MODEL_TYPE_ROLE).toInt() == static_cast<int>(ModelTypes::Shader)) {
-            action = new QAction(QIcon(), "Export Shader", this);
-            connect(action, SIGNAL(triggered()), this, SLOT(exportShader()));
-            menu.addAction(action);
-		}
 
 		// AVATARS (AVATAR_ASSET_SPEC §5.5). The drawer is the PROJECT's view of
 		// the world, so everything here works on the project's version: Edit
@@ -1478,101 +1390,46 @@ void AssetWidget::saveAvatarToLibrary()
 
 void AssetWidget::exportTexture()
 {
-    // get the export file path from a save dialog
-    auto filePath = QFileDialog::getSaveFileName(
-        this,
-        "Choose export path",
-        assetItem.wItem->data(Qt::DisplayRole).toString() + "_texture",
-        "Supported Export Formats (*.jaf)"
-    );
+    exportBundleOf({ assetItem.wItem->data(MODEL_GUID_ROLE).toString() },
+                   assetItem.wItem->data(Qt::DisplayRole).toString() + "_texture",
+                   tr("Export Texture"));
+}
 
-    if (filePath.isEmpty() || filePath.isNull()) return;
+// EVERY EXPORT IN THE TRAY IS THE SHARE FILE (JAF-EXPORTS-1). The four
+// `.jaf` writers that lived here (texture, sky, material, asset pack) wrote a
+// database snapshot plus a hidden `.manifest` that ZipHelper never packed
+// (it lists no dot-files), so not one of their files ever re-imported. They
+// are deleted; each row stages its entry set exactly as `assets.exportBundle`
+// — the verb a script calls — does and writes it through the same worker job,
+// behind the progress dialog; the file dialogs offer `.jbundle` only.
+void AssetWidget::exportBundleOf(const QStringList &guids, const QString &suggestedName,
+                                 const QString &title)
+{
+    if (guids.isEmpty() || !db) return;
+    QString filePath = QFileDialog::getSaveFileName(
+        this, title,
+        QStringLiteral("%1.%2").arg(suggestedName, QLatin1String(assetshare::extension())),
+        assetshare::fileFilter());
+    if (filePath.isEmpty()) return;
+    if (QFileInfo(filePath).suffix().isEmpty())
+        filePath += QStringLiteral(".") + QLatin1String(assetshare::extension());
 
-    QTemporaryDir temporaryDir;
-    if (!temporaryDir.isValid()) return;
-
-    const QString writePath = temporaryDir.path();
-
-    const QString guid = assetItem.wItem->data(MODEL_GUID_ROLE).toString();
-
-    db->createBlobFromAsset(guid, QDir(writePath).filePath("asset.db"));
-
-    QDir tempDir(writePath);
-    tempDir.mkpath("assets");
-
-    QFile manifest(QDir(writePath).filePath(".manifest"));
-    if (manifest.open(QIODevice::ReadWrite)) {
-        QTextStream stream(&manifest);
-        stream << "texture";
-    }
-    manifest.close();
-
-    QStringList members = db->fetchAssetGUIDAndDependencies(guid);
-    auto shaderGuid = QJsonDocument::fromJson(db->fetchAssetData(guid)).object()["guid"].toString();
-    bool exportCustomShader = false;
-    QMapIterator<QString, QString> it(Constants::Reserved::BuiltinShaders);
-    while (it.hasNext()) {
-        it.next();
-        if (it.key() != shaderGuid) {
-            exportCustomShader = true;
-            break;
-        }
-    }
-    if (exportCustomShader) members.append(db->fetchAssetGUIDAndDependencies(shaderGuid));
-    copyMemberFilesForExport(members, writePath);
-
-    // ONE zip loop (amendment 7): the shared helper replaces the
-    // hand-rolled zip_entry sweep this site duplicated.
-    ZipHelper::zipDirectory(writePath, filePath);
+    // THE VERB'S STAGE AND ITS WRITER (EXPORT-THREAD-1): what assets.exportBundle
+    // runs, handed to the progress dialog — the write is a worker's, the window
+    // keeps drawing, and Cancel stops it.
+    const assetshare::ExportResult written = bundleexportdialog::run(
+        this, assetshare::stageBundle(db, project, guids, assetshare::yieldToEventLoop), filePath, title);
+    if (!written.ok() && !written.canceled)
+        QMessageBox::warning(this, title, tr("That could not be exported: %1").arg(written.error));
 }
 
 void AssetWidget::exportMaterial()
 {
-	// get the export file path from a save dialog
-	auto filePath = QFileDialog::getSaveFileName(
-		this,
-		"Choose export path",
-        assetItem.wItem->data(Qt::DisplayRole).toString() + "_material",
-		"Supported Export Formats (*.jaf)"
-	);
-
-	if (filePath.isEmpty() || filePath.isNull()) return;
-
-	QTemporaryDir temporaryDir;
-	if (!temporaryDir.isValid()) return;
-
-	const QString writePath = temporaryDir.path();
-	const QString guid = assetItem.wItem->data(MODEL_GUID_ROLE).toString();
-
-	db->createBlobFromAsset(guid, QDir(writePath).filePath("asset.db"));
-
-	QDir tempDir(writePath);
-	tempDir.mkpath("assets");
-
-	QFile manifest(QDir(writePath).filePath(".manifest"));
-	if (manifest.open(QIODevice::ReadWrite)) {
-		QTextStream stream(&manifest);
-		stream << "material";
-	}
-	manifest.close();
-
-    QStringList members = db->fetchAssetGUIDAndDependencies(guid);
-    auto shaderGuid = QJsonDocument::fromJson(db->fetchAssetData(guid)).object()["guid"].toString();
-    bool exportCustomShader = false;
-    QMapIterator<QString, QString> it(Constants::Reserved::BuiltinShaders);
-    while (it.hasNext()) {
-        it.next();
-        if (it.key() != shaderGuid) {
-            exportCustomShader = true;
-            break;
-        }
-    }
-    if (exportCustomShader) members.append(db->fetchAssetGUIDAndDependencies(shaderGuid));
-    copyMemberFilesForExport(members, writePath);
-
-    // ONE zip loop (amendment 7): the shared helper replaces the
-    // hand-rolled zip_entry sweep this site duplicated.
-    ZipHelper::zipDirectory(writePath, filePath);
+    // The material bundle with its members — its textures and baked maps
+    // travel as rows and bytes in the one file.
+    exportBundleOf({ assetItem.wItem->data(MODEL_GUID_ROLE).toString() },
+                   assetItem.wItem->data(Qt::DisplayRole).toString() + "_material",
+                   tr("Export Material"));
 }
 
 void AssetWidget::exportMaterialPreview()
@@ -1609,109 +1466,15 @@ void AssetWidget::exportMaterialPreview()
 
 }
 
-void AssetWidget::exportShader()
-{
-    // get the export file path from a save dialog
-    auto filePath = QFileDialog::getSaveFileName(
-        this,
-        "Choose export path",
-        assetItem.wItem->data(Qt::DisplayRole).toString(),
-        "Supported Export Formats (*.jaf)"
-    );
-
-    if (filePath.isEmpty() || filePath.isNull()) return;
-
-    QTemporaryDir temporaryDir;
-    if (!temporaryDir.isValid()) return;
-
-    const QString writePath = temporaryDir.path();
-
-    const QString guid = assetItem.wItem->data(MODEL_GUID_ROLE).toString();
-
-    db->createBlobFromAsset(guid, QDir(writePath).filePath("asset.db"));
-
-    QDir tempDir(writePath);
-    tempDir.mkpath("assets");
-
-    QFile manifest(QDir(writePath).filePath(".manifest"));
-    if (manifest.open(QIODevice::ReadWrite)) {
-        QTextStream stream(&manifest);
-        stream << "shader";
-    }
-    manifest.close();
-
-    for (const auto &assetGuid : AssetHelper::fetchAssetAndAllDependencies(guid, db)) {
-        QString name;
-        const QString assetPath = resolvePinnedAssetPath(project, assetGuid, &name);
-        if (assetPath.isEmpty()) continue;
-        if (name.isEmpty()) name = db->fetchAsset(assetGuid).name;
-        if (name.isEmpty()) name = QFileInfo(assetPath).fileName();
-        QFile::copy(assetPath, IrisUtils::join(writePath, "assets", name));
-    }
-
-    // ONE zip loop (amendment 7): the shared helper replaces the
-    // hand-rolled zip_entry sweep this site duplicated.
-    ZipHelper::zipDirectory(writePath, filePath);
-}
-
 void AssetWidget::exportAssetPack()
 {
-    QDateTime currentDateTime = QDateTime::currentDateTimeUtc();
-     // get the export file path from a save dialog
-    auto filePath = QFileDialog::getSaveFileName(
-        this,
-        "Choose export path",
-        QString("AssetBundle_%1").arg(QString::number(currentDateTime.toSecsSinceEpoch())),
-        "Supported Export Formats (*.jaf)"
-    );
-
-    if (filePath.isEmpty() || filePath.isNull()) return;
-
-    QTemporaryDir temporaryDir;
-    if (!temporaryDir.isValid()) return;
-
-    const QString writePath = temporaryDir.path();
-
     QStringList assetGuids;
-    for (const auto &item : ui->assetView->selectedItems()) {
+    for (const auto &item : ui->assetView->selectedItems())
         assetGuids << item->data(MODEL_GUID_ROLE).toString();
-    }
-
-    db->createExportBundle(assetGuids, QDir(writePath).filePath("asset.db"));
-
-    QDir tempDir(writePath);
-    tempDir.mkpath("assets");
-
-    QFile manifest(QDir(writePath).filePath(".manifest"));
-    if (manifest.open(QIODevice::ReadWrite)) {
-        QTextStream stream(&manifest);
-        stream << "bundle\n";
-        for (const auto &item : assetGuids) stream << item << "\n";
-    }
-    manifest.close();
-
-    for (const auto &guid : assetGuids) {
-        QDir assetDir(QDir(writePath).filePath("assets"));
-        assetDir.mkpath(guid);
-
-        for (const auto &assetGuid : AssetHelper::fetchAssetAndAllDependencies(guid, db)) {
-            QString name;
-            const QString assetPath = resolvePinnedAssetPath(project, assetGuid, &name);
-            if (name.isEmpty()) name = db->fetchAsset(assetGuid).name;
-            if (name.isEmpty()) name = QFileInfo(assetPath).fileName();
-
-            if (!assetPath.isEmpty()) {
-                QFile::copy(
-                    IrisUtils::join(assetPath),
-                    IrisUtils::join(assetDir.absolutePath(), guid, name)
-                );
-            }
-        }
-    }
-
-    // ONE zip loop (amendment 7): the shared helper replaces the
-    // hand-rolled zip_entry sweep this site duplicated.
-    ZipHelper::zipDirectory(writePath, filePath);
+    exportBundleOf(assetGuids,
+                   QStringLiteral("AssetBundle_%1")
+                       .arg(QDateTime::currentDateTimeUtc().toSecsSinceEpoch()),
+                   tr("Export Asset Pack"));
 }
 
 void AssetWidget::searchAssets(QString searchString)
@@ -2255,11 +2018,30 @@ void AssetWidget::importAsset(const QStringList &fileNames, bool askImportSettin
 	if (mAsking || (importRunner && importRunner->isRunning())) return;
 
 	QVector<ImportRequest> requests;
+	QStringList shareErrors;
+	bool sharesLanded = false;
 	for (const QString &fileName : expanded) {
+		// A SHARE FILE (.jbundle, JAF-EXPORTS-1) carries catalog rows: it lands
+		// through the import `assets.import` uses — pinned into this project —
+		// never the model pipeline, which would refuse its extension.
+		if (assetshare::looksLikeBundle(fileName)) {
+			const assetshare::ImportResult landed = assetshare::importBundle(db, project, fileName);
+			if (landed.ok()) sharesLanded = true;
+			else shareErrors << tr("%1: %2").arg(QFileInfo(fileName).fileName(), landed.error);
+			continue;
+		}
 		ImportRequest request;
 		request.sourcePath = fileName;
 		requests.append(request);
 	}
+	if (sharesLanded) refresh();
+	if (!shareErrors.isEmpty()) {
+		// A scripted import has nobody to show a box to; it is LOGGED either way.
+		for (const QString &error : shareErrors) qWarning("project panel: share file not imported: %s", qPrintable(error));
+		if (askImportSettings)
+			QMessageBox::warning(this, tr("Import failed"), shareErrors.join(QStringLiteral("\n")));
+	}
+	if (requests.isEmpty()) return;
 
 	// THE IMPORT DECISION (SPECS/IMPORT_DIALOG_SPEC.md §8): one dialog per
 	// MODEL file BEFORE anything is read and before any progress dialog is up —

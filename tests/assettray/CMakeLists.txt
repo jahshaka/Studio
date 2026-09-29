@@ -142,3 +142,21 @@ jah_d11_suite(test_archive_closure archive.closure test_archive_closure.cpp
     ${CMAKE_SOURCE_DIR}/src/export/exportcontentsource.cpp
     ${CMAKE_SOURCE_DIR}/src/io/assetrefs.cpp
     ${CMAKE_SOURCE_DIR}/src/io/clipboardformat.cpp)
+
+# bundle.writer — EXPORT-THREAD-1: the share file's writer (services/bundlewriter.*) on a worker
+# writes the same manifest + payload bytes as on the calling thread, for a 200-entry pack; the
+# calling thread's event loop turns while it writes (a 1 ms timer ticks — a count); a cancelled
+# write leaves the destination as it was; the READER's bound (unpackBundle) lets the 200-entry
+# pack through and refuses a payload larger than its manifest accounts for. No database, no engine.
+add_executable(test_bundle_writer test_bundle_writer.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/bundlewriter.cpp
+    ${CMAKE_SOURCE_DIR}/src/export/exportmanifest.cpp
+    ${CMAKE_SOURCE_DIR}/src/io/clipboardformat.cpp
+    ${CMAKE_SOURCE_DIR}/src/io/ziphelper.cpp)
+set_target_properties(test_bundle_writer PROPERTIES CXX_STANDARD 17)
+target_include_directories(test_bundle_writer PRIVATE ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/zip/src)
+target_link_libraries(test_bundle_writer PRIVATE Qt6::Core Qt6::Concurrent zip)
+add_test(NAME bundle.writer COMMAND test_bundle_writer WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(bundle.writer PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "assets" TIMEOUT 120)
+jah_no_display(bundle.writer)

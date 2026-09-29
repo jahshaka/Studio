@@ -103,6 +103,7 @@ For more information see the LICENSE file
 #include "core/texturemanager.h"
 #include <QDebug>
 #include "services/assetdelete.h"
+#include "ui/dialogs/bundleexportdialog.h"
 #include "services/assetshare.h"
 #include "services/materialbundle.h"
 #include "services/materialmembers.h"
@@ -1241,8 +1242,11 @@ void EffectsPage::exportEffect(QString guid)
 	if (QFileInfo(path).suffix().isEmpty())
 		path += QStringLiteral(".") + QLatin1String(assetshare::extension());
 
-	const auto written = assetshare::exportBundle(dataBase, mProject, guid, path);
-	if (!written.ok())
+	// On a worker behind the progress dialog (EXPORT-THREAD-1) — the stage and
+	// the writer assets.exportBundle uses.
+	const auto written = bundleexportdialog::run(
+	    this, assetshare::stageBundle(dataBase, mProject, { guid }, assetshare::yieldToEventLoop), path, tr("Export material"));
+	if (!written.ok() && !written.canceled)
 		QMessageBox::warning(this, tr("Export material"),
 		                     tr("That material could not be exported: %1").arg(written.error));
 }

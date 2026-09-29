@@ -5,7 +5,10 @@
 # threading is not allowed to cost — a round trip through the threaded export
 # reproduces the world, and a cancelled import leaves no orphan project — and
 # that quitting mid-archive still terminates cleanly (shutdownArchives).
-find_package(Qt6 REQUIRED COMPONENTS Core Network)
+# AND (EXPORT-THREAD-1) the share file: assets.exportBundle of a 200-entry pack is written on
+# a worker (the verb reports it) while the UI thread keeps ticking; the nightly row holds the
+# gap to the control + one frame (16.7 ms). Qt6::Gui: the suite paints the pack's pictures.
+find_package(Qt6 REQUIRED COMPONENTS Core Gui Network)
 # ZipHelper joins the sources so the suite can READ what the archiver wrote
 # (PUBLISH_AUDIT #2: no mesh bake may travel in a .jaf). It is the app's own
 # zip loop — pure QtCore over thirdparty/zip — so the suite stays free of the
@@ -17,7 +20,7 @@ set_target_properties(test_archive_responsive PROPERTIES CXX_STANDARD 17
 target_include_directories(test_archive_responsive PRIVATE
     ${CMAKE_SOURCE_DIR}/src
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/zip/src)
-target_link_libraries(test_archive_responsive PRIVATE Qt6::Core Qt6::Network zip)
+target_link_libraries(test_archive_responsive PRIVATE Qt6::Core Qt6::Gui Qt6::Network zip)
 target_compile_definitions(test_archive_responsive PRIVATE
     JAHSHAKA_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
     JAHSHAKA_BINARY="$<TARGET_FILE:${CMAKE_PROJECT_NAME}>")

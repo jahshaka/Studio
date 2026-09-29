@@ -94,6 +94,7 @@ For more information see the LICENSE file
 #include "data/project.h"
 #include "services/services.h"
 #include "services/assetservice.h"
+#include "services/assetshare.h"
 #include "services/assetstore.h"
 #include "services/assetcas.h"
 #include "services/assetstorepaths.h"
@@ -1054,6 +1055,7 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
 		for (const auto &ext : Constants::LIGHT_PROFILE_EXTS) patterns << "*." + ext;
 		for (const auto &ext : Constants::WHITELIST) patterns << "*." + ext;
 		patterns << "*." + Constants::ASSET_EXT;
+		patterns << QStringLiteral("*.%1").arg(QLatin1String(assetshare::extension()));
 
 		const auto files = QFileDialog::getOpenFileNames(this,
 		                                                 tr("Import Assets"),
@@ -1507,8 +1509,14 @@ QString AssetView::selectedAssetGuid() const
 void AssetView::importFiles(const QStringList &fileNames)
 {
 	QVector<ImportRequest> requests;
+	QStringList shareFiles;
 	for (const auto &fileName : fileNames) {
 		if (fileName.isEmpty()) continue;
+		// A SHARE FILE (.jbundle — every export this app writes, JAF-EXPORTS-1)
+		// carries catalog ROWS, not a file to convert: it lands through the
+		// import `assets.import` uses (services/assetshare.h), never the
+		// model pipeline, which would refuse its extension.
+		if (assetshare::looksLikeBundle(fileName)) { shareFiles.append(fileName); continue; }
 
 		ImportRequest request;
 		request.sourcePath = fileName;
@@ -1540,6 +1548,7 @@ void AssetView::importFiles(const QStringList &fileNames)
 		}
 		requests.append(request);
 	}
+	if (!shareFiles.isEmpty()) importShareFiles(shareFiles);
 	if (requests.isEmpty()) return;
 
 	// THE IMPORT DECISION (SPECS/IMPORT_DIALOG_SPEC.md §8): one dialog per
@@ -1568,6 +1577,27 @@ void AssetView::importFiles(const QStringList &fileNames)
 		requests = kept;
 	}
 	if (!requests.isEmpty()) runImportBatch(requests);
+}
+
+void AssetView::importShareFiles(const QStringList &files)
+{
+	QStringList errors;
+	QString last;
+	for (const QString &file : files) {
+		const assetshare::ImportResult landed = assetshare::importBundle(db, project, file);
+		if (!landed.ok()) {
+			errors << tr("%1: %2").arg(QFileInfo(file).fileName(), landed.error);
+			continue;
+		}
+		last = landed.guid;
+	}
+	// Every entry a pack carried is a row now; the listing is re-read once
+	// (one query, no thumbnails) rather than tile by tile.
+	reloadLibrary();
+	if (!last.isEmpty()) selectAsset(last);
+	if (!errors.isEmpty())
+		QMessageBox::warning(this, tr("Import failed"), errors.join(QStringLiteral("\n")),
+		                     QMessageBox::Ok);
 }
 
 bool AssetView::shutdownImports(int msTimeout)

@@ -397,12 +397,20 @@ QVector<VerbInfo> AssetsApi::verbs() const
         // `exportBundle`, beside the `exportRaw` it belongs with, and the
         // alternative (an alias mechanism in the API core, for one name) buys
         // nothing a reader of the docs would notice.
-        { "exportBundle", "assets.exportBundle(guid, path) -> {path, kind, assets, bytes}",
-          "Writes ONE asset and everything it is made of as a self-contained share file (a .jbundle zip: "
-          "manifest v2 plus the closure with its bytes inline). A material carries its textures and its baked "
-          "maps, so it opens on a machine that has never seen any of them — the owner's 'material bundles are "
-          "great if they are self-contained'. The version that travels is the one the OPEN PROJECT renders "
-          "with when it holds the asset, the library's otherwise. Read it back with assets.import(path).",
+        { "exportBundle", "assets.exportBundle(guid | [guid], path) -> {path, kind, assets, bytes, worker}",
+          "Writes assets and everything they are made of as ONE self-contained share file (a .jbundle zip: "
+          "manifest v2 plus the closure with its bytes inline) — THE export: the Assets tray's Export Texture, "
+          "Export Sky, Export Material and Export Asset Pack and the Materials module's Export material all call "
+          "it. One guid is that asset (the manifest's kind is its type: \"texture\", \"material\", \"sky\"); an "
+          "array of guids is a PACK (kind \"pack\") that lands every entry. A material carries its textures and "
+          "its baked maps, so it opens on a machine that has never seen any of them — the owner's 'material "
+          "bundles are great if they are self-contained'. The version that travels is the one the OPEN PROJECT "
+          "renders with when it holds an asset, the library's otherwise. Read it back with assets.import(path), "
+          "which answers the first entry's guid and lands them all. THE WRITE IS A WORKER'S: the catalog is read "
+          "on the calling thread, then the bytes are read, the payload serialised and the zip built on a worker "
+          "while the app keeps drawing (user input held back); the verb returns when the file is complete, and "
+          "`worker` is true when the write ran off the UI thread. The UI doors write through the same job "
+          "behind a progress dialog that can cancel it.",
           Needs::Document },
         { "dependencies", "assets.dependencies(guid) -> [guid]",
           "The asset plus all its dependencies, recursively.",
@@ -1759,19 +1767,29 @@ QVariantMap AssetsApi::thumbnail(const QString &guid)
     return out;
 }
 
-QVariantMap AssetsApi::exportBundle(const QString &guid, const QString &path)
+QVariantMap AssetsApi::exportBundle(const QVariant &guids, const QString &path)
 {
     QVariantMap out;
     if (!host.db) { fail("assets: not available in this session"); return out; }
-    const auto written = assetshare::exportBundle(host.db, host.project, guid, path.trimmed());
+    // ONE guid or a SET of them — the tray's single-asset rows and its
+    // multi-selection "Export Asset Pack" are the same verb.
+    QStringList entries;
+    if (guids.typeId() == QMetaType::QVariantList || guids.typeId() == QMetaType::QStringList) {
+        for (const QVariant &v : guids.toList()) entries << v.toString();
+    } else {
+        entries << guids.toString();
+    }
+    if (path.trimmed().isEmpty()) { fail("assets.exportBundle: a destination path is required"); return out; }
+    const auto written = assetshare::exportBundle(host.db, host.project, entries, path.trimmed());
     if (!written.ok()) {
-        fail(QStringLiteral("assets.export: %1").arg(written.error));
+        fail(QStringLiteral("assets.exportBundle: %1").arg(written.error));
         return out;
     }
     out["path"] = written.path;
     out["kind"] = written.kind;
     out["assets"] = written.assets;
     out["bytes"] = static_cast<qlonglong>(written.bytes);
+    out["worker"] = written.offUiThread;
     return out;
 }
 
