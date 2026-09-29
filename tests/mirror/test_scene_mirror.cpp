@@ -2522,10 +2522,23 @@ int main(int argc, char **argv)
     // and built into a document the product's way (MeshBake::buildFromFile -> the blob ->
     // buildFragment; a fragment's children live in the scene graph, which needs this
     // suite's Ogre::Root): the doubleSided quad's node reads faceCullingMode None, the
-    // one-sided quad's DefinedInMaterial. (The mirror does not read the node's cull yet —
-    // D7-ENGINE-FIXES-1's report says why; the node is the field's persisted carrier.)
+    // one-sided quad's DefinedInMaterial — and the mirror honours it (CULL-MODE-2, the
+    // node's cull through its material's cull twin; mirror.cull_twin is the whole
+    // story): from below, the doubleSided quad draws and the one-sided one does not.
     {
         auto sdoc4 = iris::Scene::create();
+        Scene *cs4 = engine->createScene("cull-room");
+        View *cv4 = engine->createOffscreenView("cull-room", 96, 96, Colour(0, 0, 1));
+        CHECK(cs4 && cv4, "cull: a clean-room scene + view");
+        cv4->setScene(cs4);
+        cs4->setAmbient(Colour(0.4f, 0.4f, 0.4f), Colour(0.3f, 0.3f, 0.3f));
+        SceneMirror cm4(cs4);
+        cm4.setLightWires(false);
+        auto sun4 = iris::LightNode::create();
+        sun4->lightType = iris::LightType::Directional;
+        sun4->intensity = 1.0f;
+        sun4->setLocalPos(iris::Vec3(0.0f, 6.0f, 20.0f));
+        sdoc4->getRootNode()->addChild(sun4);
         const QString gltf = QStringLiteral(JAHSHAKA_SOURCE_DIR "/tests/importer/fixtures/double_sided_quads.gltf");
         const QString fp = iris::MeshBake::fingerprintFor(QStringLiteral("cull-mode-1-fixture"));
         const iris::MeshBake::Model baked =
@@ -2548,6 +2561,38 @@ int main(int argc, char **argv)
               "cull import: the doubleSided quad's node culls nothing");
         CHECK(oneSided && oneSided->getFaceCullingMode() == iris::FaceCullingMode::DefinedInMaterial,
               "cull import: the one-sided quad's node leaves the cull to its material");
+        cm4.setSource(sdoc4);
+        cm4.sync();
+        cm4.applyEnvironment(cv4);
+        if (twoSided && oneSided) {
+            // Each quad alone, from below (its own centre under the camera). DRAWN = the
+            // picture differs from the same pose with the quad hidden.
+            auto lookAt = [&](const iris::MeshNodePtr &subject, const iris::MeshNodePtr &other, const char *tag) {
+                other->setVisible(false);
+                const iris::Vec3 c = subject->getGlobalPosition();
+                enginetest::testCameraLookAt(cv4, Vec3(c.x() + 0.2f, c.y() - 2.5f, c.z() + 0.3f), Vec3(c.x(), c.y(), c.z()));
+                for (int i = 0; i < 3; ++i) { cm4.sync(); engine->renderOneFrame(); }
+                Image shown;
+                cv4->readPixels(shown); show(tag, shown);
+                subject->setVisible(false);
+                for (int i = 0; i < 3; ++i) { cm4.sync(); engine->renderOneFrame(); }
+                Image empty;
+                cv4->readPixels(empty);
+                subject->setVisible(true);
+                other->setVisible(true);
+                double sum = 0.0;
+                for (size_t b = 0; b < shown.rgba.size() && b < empty.rgba.size(); ++b)
+                    sum += std::abs(int(shown.rgba[b]) - int(empty.rgba[b]));
+                const double mean = shown.rgba.empty() ? 0.0 : sum / double(shown.rgba.size());
+                std::printf("    %-28s differs from the empty pose by %.2f/255\n", tag, mean);
+                return mean > 2.0;
+            };
+            CHECK(lookAt(twoSided, oneSided, "doubleSided quad, below"), "cull import: the doubleSided quad draws from below");
+            CHECK(!lookAt(oneSided, twoSided, "one-sided quad, below"), "cull import: the one-sided quad does not");
+        }
+        cm4.setSource(nullptr);
+        engine->destroyView(cv4);
+        engine->destroyScene(cs4);
     }
 
     mirror.setSource(nullptr);

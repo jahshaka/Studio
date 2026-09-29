@@ -539,11 +539,11 @@ iris::MeshNodePtr SceneEditService::addImagePlane(const QString &textureGuid,
     }
 
     node->setMaterial(material);
-    if (!opts.doubleSided) {
-        // createBasicMeshNode defaults to cull-none (double-sided) — exactly
-        // the §8.3 default for image planes; single-sided culls back faces.
-        node->setFaceCullingMode(iris::FaceCullingMode::Back);
-    }
+    // THE IMAGE PLANE'S OWN OPTION (IMAGE_PLANE_SPEC §8.3: double-sided by
+    // default, an explicit choice of this verb). A primitive is born one-sided
+    // (CULL-MODE-2), so two-sided is said here, per object — the owner's rule.
+    node->setFaceCullingMode(opts.doubleSided ? iris::FaceCullingMode::None
+                                              : iris::FaceCullingMode::Back);
 
     // A DB object row like the built-in primitives get (the dependency row
     // below and the export walkers hang off it).
