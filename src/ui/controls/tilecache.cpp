@@ -65,7 +65,17 @@ TileCache &TileCache::instance()
     // same hazard in the other direction).
     static TileCache *cache = [] {
         auto *c = new TileCache;
-        qAddPostRoutine([] { instance().mEntries.clear(); });
+        qAddPostRoutine([] {
+            // THE POOL FIRST (the review, D11): a quit with a batch decoding
+            // would leave a worker inside QImage during static destruction —
+            // queued jobs are dropped, a running one finishes (bounded: one
+            // batch of tile decodes), then the pictures go.
+            TileCache &cache = instance();
+            cache.mPool->clear();
+            cache.mPool->waitForDone(5000);
+            cache.mQueue.clear();
+            cache.mEntries.clear();
+        });
         return c;
     }();
     return *cache;
