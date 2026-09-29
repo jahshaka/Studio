@@ -467,7 +467,6 @@ bool buildWorld(Env &env, const WorldSpec &spec, World &world, int settleCap)
         const float k = spec.groundSize / std::max(1e-3f, meshExtent(groundMesh));
         g->setLocalPos(iris::Vec3(0, 1e-4f, 0));
         g->setLocalScale(iris::Vec3(k, 1.0f, k));
-        g->setFaceCullingMode(iris::FaceCullingMode::None);
         g->setShadowCastingEnabled(false);
         auto mat = iris::PbrMaterial::create();
         mat->setValue("baseColor", QColor(255, 255, 255));

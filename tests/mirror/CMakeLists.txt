@@ -46,6 +46,28 @@ jah_gpu_row(mirror.skinned_outline CLASS engine COMMAND test_skinned_outline WOR
 set_tests_properties(mirror.skinned_outline PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "mirror")
 
+# mirror.cull_twin — A NODE'S FACE CULL through its material's CULL TWIN (CULL-MODE-2):
+# one datablock per (material, cull) worn, kept in step with the material, gone
+# with its last wearer; the plane-from-below and closed-box-from-inside pictures;
+# the Atom split sees a shared Back twin as one material.
+add_executable(test_cull_twin test_cull_twin.cpp
+    ${CMAKE_SOURCE_DIR}/irisgl/mirror/scenemirror.cpp)
+set_target_properties(test_cull_twin PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH "${OGRE_NEXT_PREFIX}/lib" INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_include_directories(test_cull_twin PRIVATE ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/irisgl
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
+target_compile_definitions(test_cull_twin PRIVATE
+    JAHSHAKA_SOURCE_DIR="${CMAKE_SOURCE_DIR}" JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_cull_twin PRIVATE IrisGL JahshakaEngine Qt6::Gui Qt6::OpenGL)
+add_dependencies(test_cull_twin JahshakaEngineMedia)
+jah_gpu_row(mirror.cull_twin CLASS engine COMMAND test_cull_twin WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(mirror.cull_twin PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "mirror")
+
 # mirror.scale — the SHAPE of a still frame's mirror cost at scale (MIRROR_SCALE
 # lane, 2026-09-13). The render review measured `host.mirror` at 52 ms per STILL
 # frame on an 8,404-node lattice; this suite is the regression gate, asserting
