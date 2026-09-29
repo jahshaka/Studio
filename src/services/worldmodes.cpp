@@ -105,6 +105,15 @@ void photonColumns(Row &r, int column)
     for (int t = 0; t < 4; ++t) r.tier[t] = photonColumn(kPhotonTable[t], column);
 }
 
+/// THE GI CARRIES OCCLUSION (SSAO-DOUBLE-1): the engine's one rule
+/// (jahshaka::engine::giCarriesOcclusion) on the scene's technique — the
+/// document's iris::GiMode ordinals are the engine's (Off 0, VCT 1, the hybrid 2).
+bool ssaoRefusedByGi(const iris::ScenePtr &scene)
+{
+    return scene && jahshaka::engine::giCarriesOcclusion(
+                        jahshaka::engine::GiMode(qBound(0, int(scene->giMode), 2)));
+}
+
 /// The four tier columns, in order: Low, Medium, High, Epic.
 /// Values and reasons come from POST_CHAIN_SPEC.md §9.3, with two documented
 /// departures: hardware MSAA is 2x in every tier (the scene under the post chain
@@ -118,7 +127,8 @@ void photonColumns(Row &r, int column)
 /// per-frame heavyweights and none of them was carrying its cost in visible
 /// quality — full-res 64-tap SSAO -> half res, a 4096 shadow atlas -> 2048,
 /// PCF 6x6 -> 4x4. HDR, bloom, SMAA Ultra, VCT GI and the planar budget are
-/// UNTOUCHED: Epic is still the tier that turns everything on. Each row carries
+/// UNTOUCHED: Epic is still the tier that turns everything on (SSAO aside: off at
+/// every tier since SSAO-DOUBLE-1 — the GI carries the occlusion). Each row carries
 /// its own note; the before/after screenshots that justified it are in the
 /// wave's report.
 // ---- the machine-dependent reflection phrases (STUDIO-CRUD-1 item 6) -------
@@ -303,21 +313,36 @@ QVector<Row> buildRows()
         r.options = { { QStringLiteral("off"),  QStringLiteral("Off"),        0 },
                       { QStringLiteral("half"), QStringLiteral("Half Res"),   1 },
                       { QStringLiteral("full"), QStringLiteral("Full Res"),   2 } };
-        // EPIC IS HALF-RES, NOT FULL (fps audit F6). The shader takes 64 samples
-        // per pixel and that count is not adjustable, so the buffer resolution
-        // is the only lever there is — and at 3440x1440 full-res that is 64
-        // taps across 4.95 Mpx, the single most expensive per-pixel item in
-        // the tier. Ogre's own SSAO sample runs half-res; the AO signal is
-        // low-frequency by nature (it is upsampled and multiplied into ambient,
-        // not sampled as detail), so the visible difference is small and the
-        // frame-time difference is not.
-        r.tier[0] = 0; r.tier[1] = 0; r.tier[2] = 1; r.tier[3] = 1;
-        r.cost = QStringLiteral("Contact shadowing in creases and corners. 64 samples per pixel, "
-                                "fixed by the shader — the only lever is the buffer resolution. "
-                                "Full Res is four times the samples of Half Res for a "
-                                "low-frequency signal; Half Res is what the tiers use. "
-                                "Also adds a second colour attachment to the MAIN pass, which is "
-                                "why it is off below High.");
+        // OFF AT EVERY TIER, BECAUSE EVERY TIER IS A GI TIER (SSAO-DOUBLE-1). The
+        // GI carries its own visibility, and SSAO multiplies the FINISHED colour:
+        // over a GI it counts occlusion twice and ignores the surface's albedo
+        // (a cube's contact band -11 codes at Epic, -13 on a white floor, where
+        // the GI alone reads -0.4 / +1.3; spikes/reflect-leak-2). The ENGINE
+        // refuses the passes wherever the GI is on (giCarriesOcclusion) whatever
+        // this row says; the row follows it — a pin is kept, and the entries
+        // name the refusal (optionLabelAt), because the settings' truth is what
+        // renders. With Photon off the proxy is honest and a pin runs it.
+        r.tier[0] = 0; r.tier[1] = 0; r.tier[2] = 0; r.tier[3] = 0;
+        r.optionLabelAt = [](int value, const iris::ScenePtr &scene, bool) {
+            const QString plain = value == 0 ? QStringLiteral("Off")
+                                : value == 1 ? QStringLiteral("Half Res")
+                                             : QStringLiteral("Full Res");
+            if (!ssaoRefusedByGi(scene)) return plain;
+            return value == 0
+                ? QStringLiteral("Off (the GI carries occlusion; SSAO applies with GI off)")
+                : plain + QStringLiteral(" (suppressed: the GI carries occlusion; SSAO applies "
+                                         "with GI off)");
+        };
+        r.cost = QStringLiteral("Screen-space contact shadowing in creases and corners — a PROXY "
+                                "for occlusion a renderer did not compute, multiplied into the "
+                                "finished picture. Photon computes it: wherever global "
+                                "illumination is on, its probes, cones and cards carry their own "
+                                "visibility, so the renderer refuses this pass (a second "
+                                "occlusion would darken twice, and without regard to the "
+                                "surface's colour) and every tier leaves it off. With Photon off "
+                                "it applies: 64 samples per pixel, fixed by the shader — the only "
+                                "lever is the buffer resolution (Full Res is four times the "
+                                "samples of Half Res for a low-frequency signal).");
         // One row, two backing fields: the enable flag and the buffer scale.
         r.get = [](const iris::ScenePtr &s) {
             if (!s->ssaoEnabled) return 0;

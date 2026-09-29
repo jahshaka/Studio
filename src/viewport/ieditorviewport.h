@@ -698,6 +698,11 @@ public:
         unsigned ifdTargetSamples = 0;
         unsigned ifdRefinesOwed = 0;
         bool giAtRest = true;
+        /// THE CHAIN REFUSES SSAO HERE (SSAO-DOUBLE-1; engine
+        /// GiStatus::ssaoSuppressed): the GI carries the occlusion, so no view of
+        /// the scene runs the SSAO passes whatever the row says, and why.
+        bool ssaoSuppressed = false;
+        QString ssaoSuppressedReason;
         /// WHERE THE FIELD IS — the corners of the volume its probes span. The
         /// scene's fitted box in the single-volume arm; cascade 0's box, which
         /// follows the camera, under a Photon cascade chain (PHOTON_SPEC E1).

@@ -356,12 +356,13 @@ set_tests_properties(gi.ddgi_ambient PROPERTIES TIMEOUT 120 LABELS "engine")
 # Reads 12/255 today (the room's far corner lies outside cascade 0's box - the field's volume - and
 # the cone reader alone leaks 4-9/255 there at every cell size); a photon-target row until the
 # reader's residual or a field over the chain closes it. Prints the cones-only table.
-# LOCATED (SEALED-ROOM-CHAIN-1, D8; test_gi_ddgi_ambient --sealed-classes, not a row): the 12/255
-# at the wall pose is ALL SPECULAR — the same room with the walls' F0 = 0 reads 0/255 there (the
-# field carries the diffuse); the diffuse cone reader alone (field off, F0 = 0) keeps 3-4/255
-# (5 with the specular). The residual is the rough lobe's sky share (roughness 0.9: the occlusion
-# march capped at tan 1 along the reflection, Vct_piece_ps.any), not one of the diffuse reader's
-# VOXEL-5 classes; the target stays 12 vs 2 until the specular occlusion lane.
+# LOCATED (PHOTON-PHYSICS-1, re-measured; test_gi_ddgi_ambient --sealed-classes, not a row): the
+# 12/255 at the wall pose is NOT specular - the same room with the walls' F0 = 0 reads 11/255 there
+# (D8's "0/255" arm drew an EMPTY room: a mesh cache keyed on a recycled Scene pointer). With the
+# cone diffuse's escape zeroed it reads 7, with the specular escape zeroed too 4 (the field's
+# own); the specular escape alone moves 7 -> 3 in the cones-only room. So the target waits on
+# the diffuse reader's sealed-room residual beyond the field (VOXEL-5's classes) and the field's;
+# spikes/photon-physics-1/ has the arms.
 jah_gpu_row(gi.sealed_room_chain_target CLASS engine COMMAND test_gi_ddgi_ambient --sealed-chain
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.sealed_room_chain_target PROPERTIES TIMEOUT 300 LABELS "engine;photon-target")
@@ -1605,6 +1606,37 @@ jah_gpu_row(gi.voxel_emissive CLASS engine COMMAND test_gi_voxel_emissive
 set_tests_properties(gi.voxel_emissive PROPERTIES
     TIMEOUT 120 LABELS "engine" RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
 
+# gi.cone_emitter — AN EMITTER IN A SPECULAR LOBE READS ITS RADIANCE (PHOTON-PHYSICS-1 item 1,
+# CONE-EMITTER-1): a 1 m panel of radiance 5 over a white metal plate at roughness 0.05 / 0.2 / 0.5,
+# the plate's reflection read as radiance against the same plate under a uniform sky (the split
+# sum's DFG measured, not computed), with the fixture in cascade 0 and in cascade 1; a covered
+# lobe reads >= 0.9 L, the 0.5 lobe the GGX coverage of the panel within 10 %; and (c) the panel's
+# voxels hold L x their opacity. The chain family: it drives a full chain and downloads volumes.
+add_executable(test_gi_cone_emitter test_gi_cone_emitter.cpp)
+set_target_properties(test_gi_cone_emitter PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_cone_emitter PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_cone_emitter PRIVATE JahshakaEngine)
+add_dependencies(test_gi_cone_emitter JahshakaEngineMedia)
+jah_gpu_row(gi.cone_emitter CLASS engine COMMAND test_gi_cone_emitter
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.cone_emitter PROPERTIES
+    TIMEOUT 120 LABELS "engine" RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
+# gi.cone_emitter_lobe_target — the same fixture's roughness-0.5 lobe against the GGX coverage of
+# the panel (bar 10 %): the cone over-reads a partly covered wide lobe (the aperture and the
+# footprint kernel, the test's header). LABEL photon-target: it prints and does not gate; the
+# lane that fits the reader's lobe to GGX deletes the label.
+jah_gpu_row(gi.cone_emitter_lobe_target CLASS engine COMMAND test_gi_cone_emitter --lobe-target
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.cone_emitter_lobe_target PROPERTIES
+    TIMEOUT 120 LABELS "engine;photon-target" RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
+
 # gi.voxel_feed — THE VOXELISER IS FED ON THE DEVICE (ATOM P4b, SPECS/atom/
 # A5b_VOXELISER_FEED_AND_FAR_BLAS_DESIGN.md §2-§3). The gather jobs' own counts
 # (attach set, enclosed set, one record per partition that reaches a cascade's
@@ -1913,7 +1945,8 @@ jah_gpu_row(gi.hit_offscreen_lights CLASS engine TOKENS 2 COMMAND test_gi_hit_sh
 set_tests_properties(gi.hit_offscreen_lights PROPERTIES TIMEOUT 120 LABELS "engine")
 # gi.hit_planar (D3-HIT-SHADE-2): a PLANAR mirror seen in a traced mirror decodes
 # (its own material with the voxel cone's specular) — the error against the true
-# (planar raster) picture printed and bounded; the caches' answer (black) shown.
+# (planar raster) picture bounded (5 %, and no further than the screen's own cone);
+# the caches' answer (black) shown.
 jah_gpu_row(gi.hit_planar CLASS engine TOKENS 2 COMMAND test_gi_hit_shade --planar
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.hit_planar PROPERTIES TIMEOUT 120 LABELS "engine")

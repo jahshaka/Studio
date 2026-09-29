@@ -129,7 +129,8 @@ assert(s.giMode.valueId === "vct_pcc_hybrid",
        "Epic turns the VCT+PCC hybrid on: " + s.giMode.valueId);
 assert(s.shadowFilter.valueId === "soft", "Epic filters shadows with PCF 4x4 (Soft)");
 assert(s.hdr.value === 1 && s.bloom.value === 1, "Epic turns HDR and bloom on");
-assert(s.ssao.valueId === "half", "Epic runs ambient occlusion at half resolution");
+// SSAO-DOUBLE-1: every tier is a GI tier and the GI carries the occlusion — the column is off.
+assert(s.ssao.valueId === "off", "Epic leaves screen-space AO off (the GI carries occlusion)");
 assert(s.smaa.valueId === "ultra", "Epic anti-aliases with SMAA Ultra");
 assert(world.get().antiAliasing === 2, "the backing field followed Epic too (MSAA at the tier's 2x)");
 assert(world.get().shadowResolution === 2048, "and Epic's shadow atlas landed in the field");
