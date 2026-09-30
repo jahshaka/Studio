@@ -136,6 +136,36 @@ jah_gpu_row(gi.reflect_mover CLASS engine COMMAND test_reflect_mover
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.reflect_mover PROPERTIES TIMEOUT 300 LABELS "engine")
 
+# A REFLECTED ASSET'S LEVEL CHANGE (REFLECT-LOD-POP-1): two metal hemispheres
+# reflecting a baked multi-level asset while the camera dollies at them — the
+# frame-to-frame change of the reflection at every ray-level crossing against the
+# still grain of the same region, and a chain-less twin as the paired control. The
+# asset is baked through the import's own door (tests/atom's cluster fixtures).
+find_package(Qt6 REQUIRED COMPONENTS Gui OpenGL)
+add_executable(test_reflect_lod_pop test_reflect_lod_pop.cpp
+    ${CMAKE_SOURCE_DIR}/tests/atom/cluster_fixtures.cpp
+    ${CMAKE_SOURCE_DIR}/irisgl/mirror/scenemirror.cpp)
+set_target_properties(test_reflect_lod_pop PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_include_directories(test_reflect_lod_pop PRIVATE ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/irisgl ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src
+    ${CMAKE_SOURCE_DIR}/tests/atom)
+target_compile_definitions(test_reflect_lod_pop PRIVATE
+    JAHSHAKA_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
+    CLUSTER_FIXTURE_DIR="${CMAKE_BINARY_DIR}/tests/atom/cluster-fixtures"
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+add_dependencies(test_reflect_lod_pop JahshakaEngineMedia)
+target_link_libraries(test_reflect_lod_pop PRIVATE IrisGL JahshakaEngine Qt6::Gui Qt6::OpenGL)
+jah_gpu_row(gi.reflect_lod_pop CLASS engine COMMAND test_reflect_lod_pop
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.reflect_lod_pop PROPERTIES TIMEOUT 300 LABELS "engine"
+                     ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
 # THE COST, at the resolution the bar is stated at. Same binary, same fixture
 # builder, a different question (see costMain).
 #
