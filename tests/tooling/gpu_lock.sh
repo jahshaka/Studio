@@ -11,8 +11,8 @@
 #   2. RELEASE. After all of them, every token is free.
 #   3. THE BOUNDED WAIT. With a holder in place, a timing row with JAH_VRAM_WAIT=1 exits 75, never
 #      runs its command, and prints the NOADMIT line (the run log's verdict for a row that never ran).
-#   4. THE EXIT CODE PASSES THROUGH (`false` -> 1), and the command runs as the pid that was started
-#      (exec in place: a ctest timeout must kill the suite itself).
+#   4. THE EXIT CODE PASSES THROUGH (`false` -> 1), and the command runs as the CHILD of the pid that
+#      was started (the admission stays to read the kernel's word after it, TEST-SELECTOR-1 H4).
 #   5. A KILLED HOLDER RELEASES: SIGKILL the holder, the tokens are free.
 #   6. THE WAIT IS NOT THE ROW'S TIME (LOCK-WAIT-1): the wait is printed (`gpu-lock: waited <s> s`),
 #      `--run-timeout` counts from AFTER the admission and is enforced, and scripts/gate_runlog.py
@@ -92,19 +92,20 @@ touch "$D/C.done"; wait $PH
 [ ! -e "$D/C.ran" ] && ok "...and never ran its command" || bad "the command ran WITHOUT the admission"
 grep -q '^NOADMIT vram:' "$D/C.err" && ok "...and printed the NOADMIT line" || bad "no NOADMIT line: $(cat "$D/C.err")"
 
-# ---- 4. exit code + exec ------------------------------------------------------------------------
+# ---- 4. exit code + the row as the admission's child ------------------------------------------
 "$WRAP" false 2> /dev/null; rc=$?
 [ $rc = 1 ] && ok "the command's exit code passes through (false -> 1)" || bad "false through the wrapper exited $rc"
-"$WRAP" bash -c 'echo $$ > "$0"; exec sleep 30' "$D/E.pid" 2> /dev/null &
+"$WRAP" bash -c 'echo $PPID > "$0"; exec sleep 30' "$D/E.pid" 2> /dev/null &
 PE=$!
-waitfor "[ -s '$D/E.pid' ]" || bad "the exec probe never started"
-[ "$(cat "$D/E.pid")" = "$PE" ] && ok "the command runs AS the started pid (exec in place)" \
-                               || bad "the command is pid $(cat "$D/E.pid"), not the started $PE"
+waitfor "[ -s '$D/E.pid' ]" || bad "the probe never started"
+[ "$(cat "$D/E.pid")" = "$PE" ] && ok "the command runs as the started pid's child (the admission supervises it)" \
+                               || bad "the command's parent is $(cat "$D/E.pid"), not the started $PE"
 
 # ---- 5. a killed holder releases ----------------------------------------------------------------
 [ "$(free_tokens)" = 0 ] && ok "the running command holds every token" || bad "$(free_tokens) tokens free while the probe runs"
 kill -KILL "$PE" 2> /dev/null; wait "$PE" 2> /dev/null
-[ "$(free_tokens)" = 4 ] && ok "SIGKILL of the holder frees every token" || bad "tokens outlived their SIGKILLed holder"
+waitfor '[ "$(free_tokens)" = 4 ]' && ok "SIGKILL of the admission frees every token (its child dies with it)" \
+                                   || bad "tokens outlived their SIGKILLed holder ($(free_tokens) of 4 free)"
 
 # ---- 6. THE WAIT IS NOT THE ROW'S TIME (LOCK-WAIT-1) --------------------------------------------
 # A holder keeps the card ~2 s; a row whose own budget is 1 s still runs its 0.3 s command: the

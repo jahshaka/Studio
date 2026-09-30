@@ -76,8 +76,7 @@ import time
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "scripts"))
 import vram_tokens  # noqa: E402  (scripts/vram_tokens.py — THE box-wide VRAM budget)
-
-XID = re.compile(r"^(\d+(?:\.\d+)?)\s.*NVRM: Xid \([^)]*\): (\d+), pid=(\d+),")
+import kernel_xid   # noqa: E402  (scripts/kernel_xid.py — THE one reader of the kernel's GPU faults)
 
 ARM_BEGIN = re.compile(r"^ARM-BEGIN (\S+)\.(\S+)\s*$")
 ARM_END = re.compile(r"^ARM (\S+)\.(\S+) (PASS|FAIL) (\d+)(?: (.*))?$")
@@ -216,36 +215,6 @@ def curve_findings(curve):
     return step, best
 
 
-def kernel_xids(since, pids):
-    """[(epoch, xid, pid)] for every `NVRM: Xid` line logged since `since` from one of `pids`.
-    None when the journal cannot be read (on Linux that is a red, never a silent pass); [] off
-    Linux (no NVRM log)."""
-    fake = os.environ.get("JAH_KERNEL_JOURNAL")
-    if fake:
-        try:
-            lines = open(fake).read().splitlines()
-        except OSError:
-            return None
-    elif not sys.platform.startswith("linux"):
-        return []
-    else:
-        try:
-            r = subprocess.run(["journalctl", "-k", "--no-pager", "-q", "-o", "short-unix",
-                                "--since", "@%d" % int(since)],
-                               stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, timeout=30)
-        except (OSError, subprocess.TimeoutExpired):
-            return None
-        if r.returncode != 0:
-            return None
-        lines = r.stdout.decode("utf-8", "replace").splitlines()
-    out = []
-    for line in lines:
-        m = XID.match(line)
-        if m and int(m.group(3)) in pids and float(m.group(1)) >= int(since):
-            out.append((float(m.group(1)), int(m.group(2)), int(m.group(3))))
-    return out
-
-
 def say(text):
     sys.stdout.write(text + "\n")
     sys.stdout.flush()
@@ -296,15 +265,13 @@ def main():
                 # journald's ingest of /dev/kmsg, milliseconds on this box. /dev/kmsg itself is not
                 # readable here (dmesg_restrict=1), so the journal is the only reader.
                 time.sleep(1.0)
-            xids = kernel_xids(since, {pid})
+            xids = kernel_xid.kernel_xids(since, {pid})
             if xids is None and not journal_bad:
                 journal_bad.append(pid)
                 # A FINDING, NOT A RED (one hygiene row owns it: devprocess.kernel_journal) — an
                 # unreadable journal is the box's configuration, never the pool's arms.
-                say("pool: %s — FINDING: the kernel journal is unreadable (journalctl -k; the user is not in "
-                    "the adm/systemd-journal group): Xids cannot be read for this pool — "
-                    "devprocess.kernel_journal names the fix" % pool)
-            for t, n, xp in xids or []:
+                say("pool: %s — %s" % (pool, kernel_xid.FINDING))
+            for t, n, xp, _line in xids or []:
                 arm = None
                 for bt, name in begins:
                     if bt <= t: arm = name

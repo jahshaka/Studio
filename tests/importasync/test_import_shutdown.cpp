@@ -97,13 +97,15 @@ int main(int argc, char **argv)
     {
         QProcess jahshaka;
         QString token;
-        CHECK(spawn(jahshaka, freePort(), &token), "app booted and printed the MCP token (during-case)");
+        QByteArray log;
+        CHECK(spawn(jahshaka, freePort(), &token, &log), "app booted and printed the MCP token (during-case)");
         if (token.isEmpty()) return 1;
 
         McpClient mcp;
         mcp.url = QUrl(QStringLiteral("http://127.0.0.1:%1/mcp")
                            .arg(jahshaka.arguments().first().split('=').last()));
         mcp.token = token;
+        mcp.attach(jahshaka, log);   // a transport failure prints the child's state + log tail
         mcp.clientName = QStringLiteral("import-shutdown-test");
         // A 480 s suite whose verbs import a whole directory synchronously: half of
         // its own budget per request, well above the harness default.
@@ -137,13 +139,15 @@ int main(int argc, char **argv)
     {
         QProcess jahshaka;
         QString token;
-        CHECK(spawn(jahshaka, freePort(), &token), "app booted and printed the MCP token (after-case)");
+        QByteArray log;
+        CHECK(spawn(jahshaka, freePort(), &token, &log), "app booted and printed the MCP token (after-case)");
         if (token.isEmpty()) return 1;
 
         McpClient mcp;
         mcp.url = QUrl(QStringLiteral("http://127.0.0.1:%1/mcp")
                            .arg(jahshaka.arguments().first().split('=').last()));
         mcp.token = token;
+        mcp.attach(jahshaka, log);   // a transport failure prints the child's state + log tail
         mcp.clientName = QStringLiteral("import-shutdown-test");
         mcp.transferTimeoutMs = 240000;
         mcp.initialize();

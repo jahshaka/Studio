@@ -2015,11 +2015,11 @@ set(PHOTON_VIEW_SHOWROOM "${CMAKE_SOURCE_DIR}/scenes/Showroom 2.zip")
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/scripts/photon_view.js.in
                ${CMAKE_CURRENT_BINARY_DIR}/photon_view.js @ONLY)
 # ...and arm (f), the COMBINATION with the Atom view (VIEWS-DEPTH-1), whose second
-# half is the kernel's: the run is wrapped in tests/support/no_xid_run.sh, which reds on
-# any NVRM Xid line from the app's pid since the launch (read from the journal, no sudo).
+# half is the kernel's: like every GPU row since TEST-SELECTOR-1 H4, the admission
+# (scripts/vram_tokens.py) reds the row on any NVRM Xid line from its process tree since
+# the launch (scripts/kernel_xid.py reads the journal, no sudo).
 jah_gpu_row(photon.view CLASS app
-         COMMAND sh ${CMAKE_SOURCE_DIR}/tests/support/no_xid_run.sh
-                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
                  --script ${CMAKE_CURRENT_BINARY_DIR}/photon_view.js
          WORKING_DIRECTORY ${_photon_view_home}/run)
 set_tests_properties(photon.view PROPERTIES

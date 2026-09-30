@@ -31,7 +31,7 @@
 
 #include <QThread>
 
-using namespace shutdownharness;
+using namespace mcpharness;
 
 static int failures = 0;
 #define CHECK(cond, msg) do { if (cond) std::printf("ok:   %s\n", msg); else { std::printf("FAIL: %s\n", msg); ++failures; } } while (0)
@@ -58,6 +58,7 @@ int main(int argc, char **argv)
     McpClient mcp;
     mcp.url = QUrl(QStringLiteral("http://127.0.0.1:%1/mcp").arg(port));
     mcp.token = token;
+    mcp.attach(jahshaka, log);   // a transport failure prints the child's state + log tail
     mcp.clientName = QStringLiteral("watchdog-stall-test");
     mcp.initialize();
 
@@ -345,6 +346,7 @@ int main(int argc, char **argv)
             McpClient mcp2;
             mcp2.url = QUrl(QStringLiteral("http://127.0.0.1:%1/mcp").arg(port2));
             mcp2.token = token2;
+            mcp2.attach(second, log2);   // a transport failure prints the child's state + log tail
             mcp2.clientName = QStringLiteral("watchdog-flag-test");
             mcp2.initialize();
             const QJsonObject st = mcp2.runScript(QStringLiteral("app.watchdogStats()"))

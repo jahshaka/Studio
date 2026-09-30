@@ -459,16 +459,22 @@ suite prints the count).
 `--self-test` proves the detector names a synthetic unregistered row. The helper's own guard is
 `devprocess.vram_admit` (tooling): 14 fake rows of the three classes against 12 tokens on the
 kernel's lock table — the bound, all or nothing, lowest first, a killed holder frees,
-`JAH_VRAM_TOKENS=4`, the bounded wait, exec in place, nesting.
+`JAH_VRAM_TOKENS=4`, the bounded wait, the row as the admission's child (exit codes and signals
+through, a SIGTERM forwarded), the Xid read, nesting.
 
-**THE KERNEL'S WORD IN A POOL.** After each app process, `run_pool.py` reads the kernel journal
-since its launch (`journalctl -k`, never sudo): an `NVRM: Xid` line from THAT pid turns the arm
-running at the fault's second into `ARM <pool>.<arm> CRASH <ms> xid <n> …` (a process's verdicts
-are printed once, after that read). An unreadable journal is a printed FINDING in the pool, never a red of every pool: the ONE row that
-reds for it is `devprocess.kernel_journal` (tooling; it names the fix — the user joins `adm`).
-The read waits 1 s after the exit: the Xid is logged at the fault, seconds before the process ends
-(the fence wait until DEVICE_LOST measured 10-11 s), so only journald's millisecond ingest is left. The non-pool
-photon.view rows keep `tests/support/no_xid_run.sh`.
+**THE KERNEL'S WORD ON EVERY GPU ROW** (TEST-SELECTOR-1 H4; ONE reader, `scripts/kernel_xid.py`).
+The admission (`vram_tokens.py admit`, every `jah_gpu_row` and timing row) runs the row as its
+child, tracks the row's process tree (the harness, the app it spawns), and after the row reads the
+kernel journal since the launch (`journalctl -k`, never sudo): an `NVRM: Xid` line from any pid of
+that tree prints `XID <n> from pid <p> of the row …` and turns the row red (never environmental).
+A pool (`run_pool.py`) reads the same way per app process and turns the arm running at the fault's
+second into `ARM <pool>.<arm> CRASH <ms> xid <n> …` (a process's verdicts are printed once, after
+that read). An unreadable journal is a printed FINDING in every user, never a red of every row: the
+ONE row that reds for it is `devprocess.kernel_journal` (tooling; it names the fix — the user joins
+`adm`). After a red exit the read waits 1 s: the Xid is logged at the fault, seconds before the
+process ends (the fence wait until DEVICE_LOST measured 10-11 s), so only journald's millisecond
+ingest is left. (`tests/support/no_xid_run.sh`, photon.view's own wrapper, is deleted: every row
+has it now.)
 
 **THE MEASUREMENT** (`~/Developer/spikes/gate-admit-1/`, 12 tokens then): two MERGE tiers at -j4
 started together on :63/:64, the box otherwise quiet: 0 `OUT_OF_DEVICE_MEMORY`, 0 Xid, peak 13,333

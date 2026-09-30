@@ -43,7 +43,7 @@ For more information see the LICENSE file
 #include <QJsonDocument>
 #include <QThread>
 
-using namespace shutdownharness;
+using namespace mcpharness;
 
 static int failures = 0;
 #define CHECK(cond, msg) do { if (cond) std::printf("ok:   %s\n", msg); \
@@ -166,6 +166,7 @@ int main(int argc, char **argv)
         McpClient mcp;
         mcp.url = QUrl(QStringLiteral("http://127.0.0.1:%1/mcp").arg(port));
         mcp.token = token;
+        mcp.attach(jahshaka, log);   // a transport failure prints the child's state + log tail
         mcp.clientName = QStringLiteral("space-docks-test");
         // app.space() brings up a second View — the request that outlived the old
         // 30 s default under four Vulkan instances (ledger 404). A 600 s suite can
@@ -377,6 +378,7 @@ int main(int argc, char **argv)
         McpClient mcp;
         mcp.url = QUrl(QStringLiteral("http://127.0.0.1:%1/mcp").arg(port));
         mcp.token = token;
+        mcp.attach(jahshaka, log);   // a transport failure prints the child's state + log tail
         mcp.clientName = QStringLiteral("space-docks-test");
         mcp.transferTimeoutMs = 240000;
         mcp.initialize();

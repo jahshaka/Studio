@@ -25,7 +25,7 @@
 #include <QRegularExpression>
 #include <QThread>
 
-using namespace shutdownharness;
+using namespace mcpharness;
 
 static int failures = 0;
 #define CHECK(cond, msg) do { if (cond) std::printf("ok:   %s\n", msg); else { std::printf("FAIL: %s\n", msg); ++failures; } } while (0)
@@ -47,6 +47,7 @@ int main(int argc, char **argv)
     McpClient mcp;
     mcp.url = QUrl(QStringLiteral("http://127.0.0.1:%1/mcp").arg(port));
     mcp.token = token;
+    mcp.attach(jahshaka, log);   // a transport failure prints the child's state + log tail
     mcp.clientName = QStringLiteral("shutdown-order-test");
     mcp.initialize();
 
@@ -81,6 +82,7 @@ int main(int argc, char **argv)
         McpClient slow;
         slow.url = mcp.url;
         slow.token = mcp.token;
+        slow.attach(jahshaka, log);   // a transport failure prints the child's state + log tail
         slow.clientName = QStringLiteral("shutdown-order-transport-test");
         slow.transferTimeoutMs = 400;
         // The APP keeps its ordinary budget on purpose: only the CLIENT gives

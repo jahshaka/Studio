@@ -17,8 +17,9 @@
 # the row's seconds; a wait past the bound (JAH_VRAM_WAIT, 900 s) prints `NOADMIT vram: …`, exits
 # 75 and never runs the command. With `--run-timeout <s>` (what jah_gpu_exclusive_test passes: the
 # row's own budget) THE ROW'S CLOCK STARTS AFTER THE ADMISSION — timeout(1) enforces it from there,
-# and ctest's TIMEOUT is only the backstop (budget + the wait's bound). The command is exec'd in
-# place with the token fds inherited: the tokens die with it, whatever ends it.
+# and ctest's TIMEOUT is only the backstop (budget + the wait's bound). The command runs as the
+# admission's child with the token fds inherited: the tokens die with the pair, whatever ends it,
+# and the kernel's word on the row (an Xid) is read after it (scripts/kernel_xid.py).
 here="$(cd "$(dirname "$0")" && pwd)"
 opts=()
 while [ "$#" -gt 0 ]; do

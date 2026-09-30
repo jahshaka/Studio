@@ -32,7 +32,7 @@
 
 #include "ui/style/stylesheet.h"
 
-using namespace shutdownharness;
+using namespace mcpharness;
 
 static int failures = 0;
 #define CHECK(cond, msg) do { if (cond) std::printf("ok:   %s\n", qUtf8Printable(QString(msg))); \
@@ -116,6 +116,8 @@ bool bootApp(QProcess &jahshaka, McpClient &mcp)
     if (!spawn(jahshaka, port, &token, &log) || token.isEmpty()) return false;
     mcp.url = QUrl(QStringLiteral("http://127.0.0.1:%1/mcp").arg(port));
     mcp.token = token;
+    mcp.ownLog = log;              // bootApp's log dies with it: the client keeps its own copy
+    mcp.attach(jahshaka, mcp.ownLog);   // a transport failure prints the child's state + log tail
     mcp.clientName = QStringLiteral("theme-sheets-test");
     mcp.initialize();
     return true;

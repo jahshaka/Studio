@@ -25,9 +25,11 @@ THE CONTRACT
     it (they wait on the turnstile, holding nothing). A token holder never waits for anything,
     so there is no cycle.
   * THE TOKENS DIE WITH THE PROCESS. The flocks live in the kernel's open-file table: `admit`
-    exec's the command in place with the token fds inherited, so the pid ctest started holds
-    them and every process it spawns does too; a crash, a ctest timeout kill or a SIGKILL
-    frees them. Nothing durable is written (the file bytes are only a label for a reader).
+    holds them and runs the command as its CHILD with the token fds inherited (TEST-SELECTOR-1
+    H4: the admission stays to read the kernel's word on the row — kernel_xid.py — after it), so
+    the pid ctest started holds them and every process it spawns does too; a crash, a ctest
+    timeout kill or a SIGKILL frees them (the child dies with the admission: PR_SET_PDEATHSIG).
+    Nothing durable is written (the file bytes are only a label for a reader).
   * THE WAIT IS BOUNDED (JAH_VRAM_WAIT seconds, default 900, the same bound as the GPU lock) and
     it happens BEFORE the command starts; the CMake helpers add the bound to the row's TIMEOUT
     once, so a wait never eats a row's own budget. An expired wait exits 75 (EX_TEMPFAIL) and
@@ -329,17 +331,80 @@ def main(argv):
         # THE WAIT IS NOT THE ROW'S TIME (LOCK-WAIT-1): one line, read by the run log as lockWaitS
         sys.stderr.write("gpu-lock: waited %.1f s\n" % LAST_WAIT_S)
         sys.stderr.flush()
-    # exec in place: the tokens' fds are inherited; the pid that was started IS the command.
     if held:
         os.environ["JAH_VRAM_HELD"] = str(len(held))
     # THE ROW'S OWN BUDGET, from AFTER the admission (LOCK-WAIT-1): the queue is never charged to it.
     if run:
         rest = ["timeout", "--verbose", "-k", "15", run] + rest
+    return supervise(rest, held, label)
+
+
+def _pdeathsig():
+    """In the child, before exec: die with the admission (a SIGKILL of the pid ctest started must
+    not orphan the row). Linux only; elsewhere nothing."""
     try:
-        os.execvp(rest[0], rest)
+        import ctypes
+        ctypes.CDLL(None, use_errno=True).prctl(1, 9)      # PR_SET_PDEATHSIG, SIGKILL
+    except (OSError, AttributeError):
+        pass
+
+
+def supervise(argv, held, label):
+    """THE ROW RUNS AS THIS ADMISSION'S CHILD (TEST-SELECTOR-1 H4 — it was exec'd in place, and
+    no one was left to read how it ended): the tokens stay held here and are inherited by the row;
+    a SIGTERM/SIGINT/SIGHUP to the pid ctest started is forwarded; the row's process tree is
+    tracked while it lives, and after it the kernel journal is read for an Xid from ANY pid of
+    that tree since the launch (scripts/kernel_xid.py, the one reader): a GPU fault turns the row
+    red, printed with the kernel's own lines — an Xid from a row's pid is never environmental.
+    An unreadable journal is a FINDING line (devprocess.kernel_journal is the row that reds for
+    it). The row's exit code passes through, and a death by signal is re-raised as the same
+    signal, so ctest still names a segfault a segfault."""
+    import signal
+    import subprocess
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import kernel_xid
+    t0 = time.time()
+    try:
+        child = subprocess.Popen(argv, pass_fds=tuple(held), preexec_fn=_pdeathsig if sys.platform.startswith("linux") else None)
     except OSError as e:
-        sys.stderr.write("vram_tokens.py: cannot exec %s: %s\n" % (rest[0], e))
+        sys.stderr.write("vram_tokens.py: cannot run %s: %s\n" % (argv[0], e))
         return 127
+    forward = lambda sig, _frame: child.poll() is None and os.kill(child.pid, sig)
+    for sig in (signal.SIGTERM, signal.SIGINT, signal.SIGHUP, signal.SIGQUIT):
+        signal.signal(sig, forward)
+    tracker = kernel_xid.TreeTracker(child.pid)
+    tracker.start()
+    while True:
+        try:
+            rc = child.wait()
+            break
+        except InterruptedError:
+            continue
+    tracker.stop()
+    if rc != 0 and not os.environ.get("JAH_KERNEL_JOURNAL") and sys.platform.startswith("linux"):
+        time.sleep(1.0)      # journald's ingest of the ring (run_pool.py: why one second is enough)
+    xids = kernel_xid.kernel_xids(t0 - 1, tracker.pids)
+    if xids is None:
+        sys.stderr.write("vram: %s (%s)\n" % (kernel_xid.FINDING, label))
+    elif xids:
+        for t, n, pid, line in xids:
+            sys.stderr.write("XID %d from pid %d of the row %s — THE GPU FAULTED (never environmental): %s\n"
+                             % (n, pid, label, line))
+    sys.stderr.flush()
+    if rc < 0:
+        sys.stderr.write("row-exit: %s died of signal %d\n" % (label, -rc)); sys.stderr.flush()
+        release(held)
+        try:
+            import resource
+            resource.setrlimit(resource.RLIMIT_CORE, (0, 0))    # the row's core is the row's, not ours
+        except (ImportError, ValueError, OSError):
+            pass
+        signal.signal(-rc, signal.SIG_DFL)
+        os.kill(os.getpid(), -rc)
+        return 128 - rc
+    if xids and rc == 0:
+        return 1
+    return rc
 
 
 if __name__ == "__main__":

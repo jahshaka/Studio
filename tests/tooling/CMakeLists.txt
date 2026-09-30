@@ -15,7 +15,8 @@ jah_no_display(devprocess.gpu_lock)
 # tokens); this row proves the bound on the kernel's own lock table: 14 fake rows of the three
 # classes never hold more than 12, no waiter holds part of its request, the lowest free tokens
 # go first, a killed holder frees, JAH_VRAM_TOKENS limits, the wait is bounded (exit 75) and the
-# command is exec'd in place. A PRIVATE token directory: it never waits on — or blocks — a real
+# command runs as the admission's child, whose exit and signal pass through, and a GPU fault
+# (an Xid in the kernel journal from the row's process tree) reds it (TEST-SELECTOR-1 H4). A PRIVATE token directory: it never waits on — or blocks — a real
 # row. No display, no GPU.
 add_test(NAME devprocess.vram_admit
          COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/vram_admit.py"
@@ -28,3 +29,17 @@ jah_no_display(devprocess.vram_admit)
 add_test(NAME devprocess.kernel_journal COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/kernel_journal.sh")
 set_tests_properties(devprocess.kernel_journal PROPERTIES TIMEOUT 60 LABELS "tooling" SKIP_RETURN_CODE 77)
 jah_no_display(devprocess.kernel_journal)
+
+# devprocess.harness_exit — THE HARNESS SAYS HOW ITS CHILD DIED (TEST-SELECTOR-1 H1, plan 9ax
+# HARNESS-EXIT-1): tests/support/mcpharness.h holds the QProcess it talks to, and a transport
+# failure prints the child's state / exit code / exit status and its last 40 log lines. Proved on
+# a stand-in shell child (killed, exiting 5, alive); no app, no display, no GPU.
+add_executable(test_harness_exit test_harness_exit.cpp)
+set_target_properties(test_harness_exit PROPERTIES CXX_STANDARD 17
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+target_link_libraries(test_harness_exit PRIVATE Qt6::Core Qt6::Network)
+# spawn() names the app binary; this suite never calls it (a stand-in child is started by hand)
+target_compile_definitions(test_harness_exit PRIVATE JAHSHAKA_BINARY="/bin/false")
+add_test(NAME devprocess.harness_exit COMMAND test_harness_exit)
+set_tests_properties(devprocess.harness_exit PROPERTIES TIMEOUT 60 LABELS "tooling")
+jah_no_display(devprocess.harness_exit)
