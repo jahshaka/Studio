@@ -17,9 +17,8 @@ For more information see the LICENSE file
 // Add menu, and they had already drifted apart:
 //
 //   * `Constants::Reserved::DefaultPrimitives` — the library guids (the drop
-//     payload and `assets.builtins`), whose guids COLLIDED with
-//     BuiltinShaders' 0002-0006 (harmless only because every lookup happens to
-//     be type-scoped, which is not a property anybody checks when adding a row)
+//     payload and `assets.builtins`), whose guids COLLIDED with the retired
+//     builtin shaders' 0002-0006
 //   * `SceneEditService`'s `kPrimitiveDefs` — name -> mesh -> node name
 //   * `AssetModelPanel`'s `defaultModels` — name -> mesh -> tile icon, in its
 //     own order, missing Pyramid and Ground
@@ -41,12 +40,9 @@ For more information see the LICENSE file
 // sets ("wall, ramp, stairs, arch") are NOT here and never will be: they come
 // later as asset collections the user downloads.
 //
-// THE GUIDS ARE THEIR OWN RANGE NOW (…00000000 4000 and up). They used to sit
-// on top of BuiltinShaders'. Nothing is owed to old data (the crud law), but a
-// library row minted before the renumber can still name an old guid — a
-// FAVOURITE, which is the one place a primitive guid is persisted — so
-// `canonicalGuid` maps old -> new, in ONE place, and every lookup here goes
-// through it.
+// THE GUIDS ARE THEIR OWN RANGE (…00000000 4000 and up). A guid from before
+// the renumber resolves to nothing (FORWARD-ONLY-1: nothing is owed to old
+// data).
 //
 // AND IT IS THE SEED LIST (ATOM P2, 2026-09-22). Every row is a shipped mesh
 // file that becomes a BAKED library asset — a LOD chain, cards, an SDF, one
@@ -167,31 +163,6 @@ inline QString retiredReason(const QString &name)
     return QString();
 }
 
-/// Old primitive guid -> the guid it has now. Everything else comes back
-/// unchanged, so this is safe to put in front of EVERY guid lookup — which is
-/// what makes it the one place the mapping lives.
-inline QString canonicalGuid(const QString &guid)
-{
-    // The pre-2026-09-19 table, in its own order. The three retired rows
-    // (…0007 Gear, …0010 Sponge, …0011 Steps) and the Teapot (…0009) map to
-    // NOTHING: they are not primitives any more, and answering with some other
-    // shape would be worse than answering with nothing.
-    struct Moved { const char *from = nullptr; const char *to = nullptr; };
-    static const Moved moved[] = {
-        { "00000000-0000-0000-0000-000000001000", "00000000-0000-0000-0000-000000004000" },  // Plane
-        { "00000000-0000-0000-0000-000000001001", "00000000-0000-0000-0000-000000004006" },  // Cone
-        { "00000000-0000-0000-0000-000000000002", "00000000-0000-0000-0000-000000004001" },  // Cube
-        { "00000000-0000-0000-0000-000000000003", "00000000-0000-0000-0000-000000004004" },  // Cylinder
-        { "00000000-0000-0000-0000-000000000004", "00000000-0000-0000-0000-000000004002" },  // Sphere
-        { "00000000-0000-0000-0000-000000000005", "00000000-0000-0000-0000-000000004008" },  // Torus
-        { "00000000-0000-0000-0000-000000000006", "00000000-0000-0000-0000-000000004009" },  // Capsule
-        { "00000000-0000-0000-0000-000000000008", "00000000-0000-0000-0000-000000004007" },  // Pyramid
-    };
-    for (const Moved &m : moved)
-        if (guid == QLatin1String(m.from)) return QString::fromLatin1(m.to);
-    return guid;
-}
-
 /// The PRIMITIVE row with this name (case-insensitive), or nullptr. A Platform
 /// seed is deliberately unreachable here: "Teapot" is a seeded, baked asset the
 /// sample scenes still name, and it is NOT a primitive a user may add (owner
@@ -205,14 +176,12 @@ inline const Def *byName(const QString &name)
     return nullptr;
 }
 
-/// The row with this guid — old guids included, through canonicalGuid — or
-/// nullptr.
+/// The row with this guid, or nullptr.
 inline const Def *byGuid(const QString &guid)
 {
     if (guid.isEmpty()) return nullptr;
-    const QString wanted = canonicalGuid(guid);
     for (const Def &def : all())
-        if (def.guid && wanted == QLatin1String(def.guid)) return &def;
+        if (def.guid && guid == QLatin1String(def.guid)) return &def;
     return nullptr;
 }
 

@@ -293,9 +293,6 @@ int main(int argc, char **argv)
     CHECK(!graphyGuid.isEmpty(), "5: a graph material is minted");
     CHECK(countWhere("SELECT COUNT(*) FROM assets") == rowsBefore + 1,
           "5: exactly ONE new row — no Shader row (§2.3)");
-    CHECK(countWhere("SELECT COUNT(*) FROM assets WHERE type = ?",
-                     { static_cast<int>(ModelTypes::Shader) }) == 0,
-          "5: no ModelTypes::Shader row is ever minted again");
 
     const QJsonObject graphReadBack = MaterialBundle::read(&db, graphyGuid);
     CHECK(graphReadBack["shadergraph"].toObject()["nodes"].toArray().size() == 2,

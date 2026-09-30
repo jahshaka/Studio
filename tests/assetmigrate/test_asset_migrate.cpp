@@ -15,8 +15,8 @@
 //   - verify: clean store, then detected bit-rot on a corrupted object;
 //   - sidecars + rebuildCatalog: a fresh DB reconstructed from sidecars
 //     matches (the honest I2 test);
-//   - the RETIRED legacy view: no writer creates <root>/<guid>/ any more,
-//     but the resolver still reads one.
+//   - the RETIRED legacy view: no writer creates <root>/<guid>/ and the
+//     resolver does not read one.
 //
 // Headless (offscreen platform); throwaway files in the test working dir.
 #include <QApplication>
@@ -284,23 +284,18 @@ int main(int argc, char **argv)
     CHECK(QFileInfo::exists(AssetStorePaths::sidecarPathIn(root, "guidC")),
           "file-less row still gets a sidecar");
 
-    // ---- the RETIRED legacy view: still READ, never written ----
-    // materializeLegacyView is gone (deep audit 2026-09, area 6) — nothing
-    // hardlinks <root>/<guid>/ any more. The resolver keeps reading such a
-    // folder so an old store, and the writers that still create one outside
-    // the ONE import pipeline (the materials module's texture import), stay
-    // resolvable until assets.gc reclaims it.
+    // ---- the RETIRED legacy view: never written, never READ (FORWARD-ONLY-1) ----
+    // A pre-CAS <root>/<guid>/ folder is not a place the resolver looks: a row
+    // whose bytes sit only there resolves to nothing.
     {
-        // (i) an asset with NO asset_files row at all, bytes only in the
-        //     legacy folder — the materials-module shape
         insertAsset("guidLegacy", 2, "legacy.png", 3);
         writeFile(root + "/guidLegacy/legacy.png", contentY);
         QString legacyName;
-        const QString legacyPath = AssetCas::resolveSource(conn, root, "guidLegacy", &legacyName);
-        CHECK(readFile(legacyPath) == contentY && legacyName == "legacy.png",
-              "resolveSource reads a legacy folder for a row with no asset_files");
-        CHECK(readFile(AssetCas::resolveFile(conn, root, "guidLegacy", "legacy.png")) == contentY,
-              "resolveFile reads the same legacy folder by name");
+        CHECK(AssetCas::resolveSource(conn, root, "guidLegacy", &legacyName).isEmpty()
+                  && legacyName.isEmpty(),
+              "resolveSource does NOT read a legacy per-guid folder");
+        CHECK(AssetCas::resolveFile(conn, root, "guidLegacy", "legacy.png").isEmpty(),
+              "resolveFile does NOT read it by name either");
         // and nothing materialized a view for the CAS-backed assets
         CHECK(!QFileInfo::exists(root + "/guidB/b.png"),
               "no per-guid view is created for a CAS-backed asset any more");

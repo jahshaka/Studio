@@ -1119,19 +1119,11 @@ static QMap<int, QVariant> dragRoleData(const QMimeData *mime)
 
 /// A material carried by a drag: the payload string the ONE resolver
 /// understands, or empty when this drag is not a material at all.
-///
-/// A SHADER TILE IS A MATERIAL TOO (MATERIAL-PREVIEW-1). The Materials module
-/// files its graphs as Shader rows, and one of those dragged in used to be
-/// accepted by dragEnter, ignored by dragMove and dropped into nothing — a
-/// gesture that looked like it worked and did not. Both types come here and the
-/// resolver decides; a payload it cannot resolve is REFUSED, visibly, by the
-/// cursor.
 QString EngineSceneViewport::materialDragSource(const QMimeData *mime)
 {
     const QMap<int, QVariant> role = dragRoleData(mime);
     const int type = role.value(0).toInt();
-    if (type != static_cast<int>(ModelTypes::Material) &&
-        type != static_cast<int>(ModelTypes::Shader))
+    if (type != static_cast<int>(ModelTypes::Material))
         return QString();
     return role.value(3).toString();
 }
@@ -1240,10 +1232,7 @@ void EngineSceneViewport::dropEvent(QDropEvent *event)
     if (type == static_cast<int>(ModelTypes::ParticleSystem)) {
         emit mEvents.addDroppedParticleSystem(true, mDragScenePos, role.value(3).toString(), role.value(1).toString());
     } else if (type == static_cast<int>(ModelTypes::Object)) {
-        // A PRIMITIVE TILE, by guid — OLD GUIDS INCLUDED. `primitives::byGuid`
-        // maps the pre-2026-09-19 numbering (the range that collided with
-        // BuiltinShaders') onto the current rows, so a favourite a user saved
-        // before the renumber still drops (src/data/primitives.h).
+        // A PRIMITIVE TILE, by guid (src/data/primitives.h).
         if (const primitives::Def *prim = primitives::byGuid(role.value(3).toString())) {
             // WITH THE DROP POINT (smoke S2). This branch was the one dropped
             // asset that carried no position — every primitive dragged into

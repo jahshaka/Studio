@@ -27,7 +27,6 @@ namespace {
 bool isMaterialUse(const DependencyRecord &edge)
 {
     return edge.dependeeType == static_cast<int>(ModelTypes::Material)
-           || edge.dependeeType == static_cast<int>(ModelTypes::Shader)
            || edge.dependeeType == static_cast<int>(ModelTypes::Texture);
 }
 

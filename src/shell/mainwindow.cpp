@@ -197,6 +197,8 @@ For more information see the LICENSE file
 #include "services/outlinesettings.h"
 #include "services/loadtimeline.h"
 #include "services/meshbakestore.h"
+#include "services/assetstorepaths.h"
+#include <QSqlDatabase>
 #include "services/primitiveassets.h"
 #include "services/sceneopenrunner.h"
 #include "services/mainthreadwatchdog.h"
@@ -1176,10 +1178,9 @@ void MainWindow::shutdownBackgroundWork()
         std::_Exit(0);
     }).detach();
 
-    // The lazy mesh-bake queue: nothing left to schedule. A bake already in
-    // flight writes into its own QTemporaryDir and is discarded on arrival
-    // (its completion hop is a no-op once cancelled).
-    MeshBakeStore::cancelPendingBakes();
+    // The library's background bake rebuild (FORWARD-ONLY-1 D1): joined here,
+    // a bake in flight finishes into its own temp and is discarded.
+    MeshBakeStore::stopBackgroundRebuild();
 
     // THE FIRST-RUN PRESET SEED (RESET-LIBRARY-1's fix round). Its own header
     // said "the app's shutdown calls it" and only the --script path
@@ -1326,6 +1327,10 @@ void MainWindow::setupProjectDB()
     const int seeded = PrimitiveAssets::seedAll(db, &seedErrors);
     if (seeded > 0) irisLog(QStringLiteral("primitives: baked %1 shipped meshes").arg(seeded));
     for (const QString &line : seedErrors) irisLog("primitive seed: " + line);
+    // STALE BAKES, IN THE BACKGROUND (FORWARD-ONLY-1 D1): a build that changed
+    // the bake's producer rebuilds every stale bake from its own source, at the
+    // lowest priority; an open rebuilds the ones it needs first, itself.
+    MeshBakeStore::startBackgroundRebuild();
 }
 
 void MainWindow::setupServices()
@@ -2001,6 +2006,10 @@ void MainWindow::openStageBind(bool playMode)
 	projectService->setSceneOpen(true);
 	ui->actionClose->setDisabled(false);
 	setScene(scene);
+	// A MODEL WITH NO CURRENT BAKE IS MISSING, AND SAID SO (FORWARD-ONLY-1):
+	// the reader never parses in its place. setScene cleared the issue store,
+	// so this is raised after it.
+	SceneIssues::instance().raiseMissingModels(projectService->missingModels());
 	refreshClaudeChatContext();   // D1: rebind an open chat to the new project
 	// The Materials page's open tabs are per project (MATERIALS_TABS_SPEC
 	// §2.7): this project's set comes back, and it is the only way the page
@@ -2094,22 +2103,6 @@ void MainWindow::openStageReveal(bool playMode)
 	this->update();
 	MeshBakeStore::endScope();
 	LoadTimeline::end();
-
-	// LAZY RE-BAKE (MESH_BAKE_SPEC phase 1, "existing libraries"). Every world
-	// that arrived as an ARCHIVE — which is all five samples, and every
-	// project imported before this build — has no mesh bake, so this open
-	// parsed. Queue the bake now that the world is on screen: the parse and
-	// the serialize run on a worker, the catalog write is one small step per
-	// model, and the NEXT open of this world is a load. Nothing here can fail
-	// the open; a bake that cannot be built simply never appears.
-	if (projectService && pmContainer) {
-		QStringList models = pmContainer->plannedSessionModelPaths();
-		for (const QString &path : projectService->plannedModelPaths())
-			if (!models.contains(path)) models.append(path);
-		const int queued = MeshBakeStore::scheduleBakes(models);
-		if (queued > 0)
-			irisLog(QString("mesh bake: %1 model(s) queued for a lazy bake").arg(queued));
-	}
 }
 
 QStringList MainWindow::plannedOpenModelPaths()
@@ -2127,8 +2120,10 @@ QStringList MainWindow::plannedOpenModelPaths()
 
 iris::MeshPrewarmPtr MainWindow::prewarmModelsPumped()
 {
-	// THE PARSE, OFF THIS THREAD, WITH THE CALLER STILL BLOCKED
-	// (OPEN-ASSIMP-1). The synchronous open owes its caller a loaded world
+	// THE BAKE READS, OFF THIS THREAD, WITH THE CALLER STILL BLOCKED
+	// (OPEN-ASSIMP-1; since FORWARD-ONLY-1 the worker only ever READS BAKES —
+	// a model with no current bake is shown missing, never parsed). The
+	// synchronous open owes its caller a loaded world
 	// when it returns — that is what `project.open()`, every headless script
 	// and every e2e suite are written against — but it does not owe anyone an
 	// assimp parse on the thread that draws. Measured on the eight shipped
@@ -2168,6 +2163,18 @@ iris::MeshPrewarmPtr MainWindow::prewarmModelsPumped()
 	const QStringList modelPaths = plannedOpenModelPaths();
 	if (modelPaths.isEmpty()) return prewarm;
 
+	// STALE BAKES ARE REBUILT FROM THEIR OWN SOURCES FIRST (FORWARD-ONLY-1
+	// D1): a bake is a cache of the parse, and a build that changed the code
+	// producing it rebuilds it — on a worker, this thread pumping, with the
+	// open's progress up — before anything reads. Never a parse on the open.
+	MeshBakeStore::rebuildPumped(
+	    MeshBakeStore::staleJobsFor(QSqlDatabase::database(), AssetStorePaths::root(), modelPaths),
+	    [this](int i, int n) {
+		    if (pmContainer)
+			    pmContainer->showOpenProgress(5 + (20 * i) / qMax(1, n),
+			                                  tr("Rebuilding models (%1 of %2)…").arg(i + 1).arg(n));
+	    });
+
 	LoadTimeline::mark(QStringLiteral("plan"));
 	QVector<iris::PrewarmItem> plan;
 	plan.reserve(modelPaths.size());
@@ -2181,8 +2188,7 @@ iris::MeshPrewarmPtr MainWindow::prewarmModelsPumped()
 		// before the future rethrew — ninety seconds of "nothing is wrong".
 		struct Finish { std::atomic<bool> &flag; ~Finish() { flag.store(true); } } finish{ done };
 		for (const iris::PrewarmItem &item : plan) {
-			// Named "assimp" for continuity of the ledger, but a bake hit
-			// never reaches assimp — worker:bakeHits is the split.
+			// Named "assimp" for continuity of the ledger; it is a bake read.
 			LoadTimeline::Accumulate parse(QStringLiteral("worker:assimp"));
 			prewarm->parse(item);
 		}
@@ -2882,29 +2888,6 @@ void MainWindow::addCamera()
 void MainWindow::addParticleSystem()
 {
     sceneEditService->addParticleSystem(iris::ParticlePreset::Custom);
-}
-
-void MainWindow::addMesh(const QString &path, bool ignore, iris::Vec3 position)
-{
-    QString filename;
-    if (path.isEmpty()) {
-        // Built from MODEL_EXTS, like every other model dialog. The old literal
-        // was wrong twice over: it listed *.3ds and *.c4d, whose assimp
-        // importers are not compiled in (irisgl/CMakeLists.txt's allowlist) and
-        // never were, while omitting the glb/gltf everything else accepts — and
-        // it was passed in getOpenFileName's DIRECTORY parameter, so the dialog
-        // had no filter at all and opened on a nonexistent path.
-        QStringList patterns;
-        for (const auto &ext : Constants::MODEL_EXTS) patterns << "*." + ext;
-        filename = QFileDialog::getOpenFileName(this, tr("Load Mesh"), QString(),
-                                                tr("Mesh Files (%1)").arg(patterns.join(' ')));
-    } else {
-        filename = path;
-    }
-
-    if (filename.isEmpty()) return;
-
-    sceneEditService->addMesh(filename, ignore, position);
 }
 
 void MainWindow::addMaterialMesh(const QString &path, bool ignore, iris::Vec3 position,

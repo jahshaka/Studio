@@ -51,10 +51,6 @@ static void testPathsAuthority()
     // all derived paths follow.
     AssetStorePaths::setRootOverride("/tmp/jah-store-test/");
     CHECK(AssetStorePaths::root() == "/tmp/jah-store-test", "override root normalized (no trailing slash)");
-    CHECK(AssetStorePaths::legacyFolder("GUID123") == "/tmp/jah-store-test/GUID123",
-          "legacyFolder = <root>/<guid>");
-    CHECK(AssetStorePaths::legacyFilePath("GUID123", "model.glb") == "/tmp/jah-store-test/GUID123/model.glb",
-          "legacyFilePath = <root>/<guid>/<name>");
 
     // CAS layout (phase 2): 2-char fan-out, lowercase oid + ext.
     const QString oid = "ABCDEF0123456789abcdef0123456789abcdef0123456789abcdef0123456789";
@@ -72,8 +68,6 @@ static void testPathsAuthority()
           "storeInfoPath = <root>/store.json");
 
     // Explicit-root variants (migration rehearsal against a copied library).
-    CHECK(AssetStorePaths::legacyFolderIn("/mnt/copy", "G") == "/mnt/copy/G",
-          "legacyFolderIn uses the explicit root");
     CHECK(AssetStorePaths::objectPathIn("/mnt/copy", "aabb", "png") == "/mnt/copy/objects/aa/aabb.png",
           "objectPathIn uses the explicit root");
     CHECK(AssetStorePaths::sidecarPathIn("/mnt/copy", "G") == "/mnt/copy/sidecar/G.json",
@@ -84,80 +78,6 @@ static void testPathsAuthority()
     // Clearing the override restores the default.
     AssetStorePaths::setRootOverride(QString());
     CHECK(AssetStorePaths::root() == AssetStorePaths::defaultRoot(), "override cleared restores default");
-}
-
-static void insertAsset(const QString &guid, int type, const QString &name)
-{
-    QSqlQuery q;
-    q.prepare("INSERT INTO assets (guid, type, name, view_filter) VALUES (?, ?, ?, 2)");
-    q.addBindValue(guid);
-    q.addBindValue(type);
-    q.addBindValue(name);
-    q.exec();
-}
-
-static void insertDep(const QString &depender, int dependerType,
-                      const QString &dependee, int dependeeType, const QString &id)
-{
-    QSqlQuery q;
-    q.prepare("INSERT INTO dependencies (depender_type, dependee_type, project_guid, depender, dependee, id) "
-              "VALUES (?, ?, '', ?, ?, ?)");
-    q.addBindValue(dependerType);
-    q.addBindValue(dependeeType);
-    q.addBindValue(depender);
-    q.addBindValue(dependee);
-    q.addBindValue(id);
-    q.exec();
-}
-
-static void testDependencyExport(Database &db)
-{
-    printf("--- dependency-export regression (selectDep direction + all rows) ---\n");
-
-    // Asset A depends on B and C (outgoing edges). D depends on A (incoming —
-    // must NOT be exported as one of A's dependencies).
-    insertAsset("guidA", 1, "modelA");
-    insertAsset("guidB", 2, "texB");
-    insertAsset("guidC", 2, "texC");
-    insertAsset("guidD", 1, "modelD");
-    insertDep("guidA", 1, "guidB", 2, "dep1");
-    insertDep("guidA", 1, "guidC", 2, "dep2");
-    insertDep("guidD", 1, "guidA", 1, "dep3");
-
-    const QString exportPath = "assetpaths_export_test.db";
-    QFile::remove(exportPath);
-    CHECK(db.createBlobFromAsset("guidA", exportPath), "createBlobFromAsset succeeded");
-
-    {
-        QSqlDatabase check = QSqlDatabase::addDatabase("QSQLITE", "ExportCheckConnection");
-        check.setDatabaseName(exportPath);
-        CHECK(check.open(), "exported blob DB opens");
-
-        QSqlQuery q(check);
-
-        // The bundle carries A + its two dependencies.
-        q.exec("SELECT COUNT(*) FROM assets");
-        q.first();
-        CHECK(q.value(0).toInt() == 3, "exported assets = A + 2 dependencies (3 rows)");
-
-        // BOTH outgoing dependency rows survive (the old `if (first())`
-        // exported at most one; the old WHERE direction exported dep3 instead).
-        q.exec("SELECT COUNT(*) FROM dependencies");
-        q.first();
-        CHECK(q.value(0).toInt() == 2, "exported dependencies = both outgoing rows");
-
-        q.exec("SELECT COUNT(*) FROM dependencies WHERE depender = 'guidA'");
-        q.first();
-        CHECK(q.value(0).toInt() == 2, "both exported rows have depender = A (outgoing direction)");
-
-        q.exec("SELECT COUNT(*) FROM dependencies WHERE dependee = 'guidA'");
-        q.first();
-        CHECK(q.value(0).toInt() == 0, "the incoming edge (D depends on A) was not exported");
-
-        check.close();
-    }
-    QSqlDatabase::removeDatabase("ExportCheckConnection");
-    QFile::remove(exportPath);
 }
 
 // AssetCas::guidForStorePath — the INVERSE resolver, and the regression it
@@ -271,7 +191,6 @@ int main(int argc, char **argv)
 
     testIndices();
     testGuidForStorePath();
-    testDependencyExport(db);
 
     db.closeDatabase();
     QFile::remove(dbPath);

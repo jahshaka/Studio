@@ -201,7 +201,7 @@ int main(int argc, char **argv)
             graphDoc.addNode(tex);
             auto *sampler = lib.createNode("textureSampler");
             graphDoc.addNode(sampler);
-            auto *uv = lib.createNode("texCoords");
+            auto *uv = lib.createNode("uv");
             graphDoc.addNode(uv);
             auto *mul = lib.createNode("multiply");
             graphDoc.addNode(mul);

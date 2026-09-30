@@ -431,71 +431,15 @@ static void testNewSceneDefault()
 }
 
 // ---------------------------------------------------------------------------
-// 6. MIGRATION — the five pre-tier shipped samples, from their real databases
+// 6. RE-APPLYING A TIER HONOURS PINS (the Photon derivation for documents
+//    without `giTier` is DELETED — FORWARD-ONLY-1)
 // ---------------------------------------------------------------------------
-static void testMigration()
+static void testTierReapply()
 {
-    std::printf("\n-- 6. migration --\n");
-    // THE REAL SERIALIZED VALUES, read out of scenes/*.zip's databases on
-    // 2026-09-09. Three (Matcaps, Particles, Physics) carry vct+medium, giDdgi
-    // ABSENT (-1), giNumBounces 1, no GI pins and NO giTier — the
-    // pre-unification shape, so they derive here. Skeletal Animation and World
-    // Background were re-staged under the one-day P2 table and carry
-    // giTier=medium with giDdgi normalised to 0 and no field pin: those take
-    // the reader's option-(b) bump instead (scenereader.cpp: a tier-carrying
-    // document that never carried the retired `giDynamicProbes` key has its
-    // tier re-applied, pins
-    // honoured), which is the tier application section 1 pins — modelled
-    // below as the same setPhoton call. Mirror Room and Showroom carry
-    // giTier=epic and were re-staged by this lane to Epic's columns without
-    // the generator pins. All seven are on worldMode "epic".
-    struct Sample {
-        const char *name;
-        int giMode, giQuality, giDdgi, giBounces;   // as serialized (-1 = the absent tri-state)
-        PhotonTier wantTier;
-        const char *why;
-    };
-    const Sample samples[] = {
-        { "Matcaps",           1, 1, -1, 1, PhotonTier::Medium, "vct + medium -> Medium" },
-        { "Particles",         1, 1, -1, 1, PhotonTier::Medium, "vct + medium -> Medium" },
-        { "Physics",           1, 1, -1, 1, PhotonTier::Medium, "vct + medium -> Medium" },
-    };
-    for (const Sample &sm : samples) {
-        auto s = freshScene();
-        s->giMode = iris::GiMode(sm.giMode);
-        s->giQuality = iris::GiQuality(sm.giQuality);
-        s->giDdgi = sm.giDdgi;
-        s->giNumBounces = sm.giBounces;
-        s->worldMode = int(worldmodes::Mode::Epic);
-        // What the renderer reads, BEFORE.
-        const int mode0 = giMode(s), quality0 = giQuality(s), bounces0 = giBounces(s);
-
-        worldmodes::derivePhotonFromDocument(s);
-
-        // THE ACCEPTANCE CRITERION, option (b): technique, quality and bounces
-        // did not move — and the untouched field FOLLOWED THE
-        // TIER, which for a vct+medium document is ON. That is the owner's
-        // re-pin of these five samples (Photon-2 S1-S3: the DDGI-fed arm is the
-        // one that is right in open AND sealed scenes), taken here on purpose.
-        CHECK(giMode(s) == mode0 && giQuality(s) == quality0 && giBounces(s) == bounces0,
-              qPrintable(QStringLiteral("%1: technique, quality, bounces preserved").arg(sm.name)));
-        CHECK(giDdgi(s) == 1,
-              qPrintable(QStringLiteral("%1: the untouched field follows the tier -> DDGI-fed (the re-pin)").arg(sm.name)));
-        CHECK(worldmodes::photonTier(s) == sm.wantTier, sm.why);
-        CHECK(!worldmodes::photonCustom(s),
-              qPrintable(QStringLiteral("%1: reads as its tier, not as Custom").arg(sm.name)));
-        // The dial itself is pinned, because this scene's World Mode (Epic)
-        // would otherwise resolve it to Epic and change how it renders.
-        CHECK(s->worldOverrides.contains(worldmodes::photonRowId()),
-              qPrintable(QStringLiteral("%1: the Photon dial is pinned against the World Mode").arg(sm.name)));
-        worldmodes::setMode(s, worldmodes::Mode::Epic);
-        CHECK(giMode(s) == mode0 && giQuality(s) == quality0 && giDdgi(s) == 1 && giBounces(s) == bounces0,
-              qPrintable(QStringLiteral("%1: and re-applying its World Mode still changes nothing").arg(sm.name)));
-    }
-
-    // The P2-table shape of Skeletal Animation and World Background (giTier
-    // medium, field normalised to 0, dial pinned against world Epic, nothing
-    // else pinned): the reader re-applies the tier, and the field comes up.
+    std::printf("\n-- 6. tier re-application --\n");
+    // A giTier-medium document with the field at 0, the dial pinned against a
+    // World Epic and nothing else pinned: re-applying the tier turns the field
+    // on; a PINNED field stays as pinned.
     {
         auto s = freshScene();
         s->giMode = iris::GiMode::VCT;
@@ -516,109 +460,6 @@ static void testMigration()
         CHECK(giDdgi(s) == 0 && worldmodes::photonCustom(s), "a pinned field survives the re-application");
     }
 
-    // The pre-re-stage shape of the two hybrid samples (hybrid + high, field
-    // absent, giMode/giQuality pins from their World-Mode-row days): derives
-    // High — DDGI-fed now — with the redundant pins dropped.
-    {
-        auto s = freshScene();
-        s->giMode = iris::GiMode::VCT_PCC_HYBRID;
-        s->giQuality = iris::GiQuality::HIGH;
-        s->giDdgi = -1;
-        s->worldMode = int(worldmodes::Mode::Epic);
-        s->worldOverrides.insert(QStringLiteral("giMode"), 3);
-        s->worldOverrides.insert(QStringLiteral("giQuality"), 2);
-        worldmodes::derivePhotonFromDocument(s);
-        CHECK(worldmodes::photonTier(s) == PhotonTier::High, "hybrid + high, field untouched -> High");
-        CHECK(giDdgi(s) == 1 && giBounces(s) == 1, "DDGI-fed, one bounce");
-        CHECK(!worldmodes::photonCustom(s), "reads as High, not Custom");
-        CHECK(!s->worldOverrides.contains(QStringLiteral("giMode")) &&
-                  !s->worldOverrides.contains(QStringLiteral("giQuality")),
-              "redundant row pins dropped");
-    }
-    // A scene that DEVIATES from every tier keeps its deviation as a pin.
-    {
-        auto s = freshScene();
-        s->giMode = iris::GiMode::VCT;        // vct ...
-        s->giQuality = iris::GiQuality::HIGH; // ... at high quality: Medium + a pin
-        s->worldMode = int(worldmodes::Mode::Epic);
-        worldmodes::derivePhotonFromDocument(s);
-        CHECK(worldmodes::photonTier(s) == PhotonTier::Medium, "vct + high derives Medium");
-        CHECK(giQuality(s) == 2, "and keeps rendering at high quality");
-        CHECK(s->worldOverrides.value(QStringLiteral("giQuality")).toInt() == 2,
-              "because the deviation became a pin");
-        CHECK(worldmodes::photonCustom(s), "which is exactly what 'Custom' means");
-    }
-    // An EXPLICIT field value is preserved, both ways: a document that opted
-    // out renders without the field (pinned, Custom); one that opted in at
-    // Medium IS the Medium row now and needs no pin.
-    {
-        auto s = freshScene();
-        s->giMode = iris::GiMode::VCT;
-        s->giQuality = iris::GiQuality::MEDIUM;
-        s->giDdgi = 0;
-        s->worldMode = int(worldmodes::Mode::Epic);
-        worldmodes::derivePhotonFromDocument(s);
-        CHECK(giDdgi(s) == 0 && s->worldOverrides.value(QStringLiteral("giDdgi")).toInt() == 0,
-              "an explicit field OFF survives as a pin");
-        CHECK(worldmodes::photonCustom(s), "and reads Custom (Medium without its field)");
-    }
-    {
-        auto s = freshScene();
-        s->giMode = iris::GiMode::VCT;
-        s->giQuality = iris::GiQuality::MEDIUM;
-        s->giDdgi = 1;
-        s->worldMode = int(worldmodes::Mode::Epic);
-        worldmodes::derivePhotonFromDocument(s);
-        CHECK(giDdgi(s) == 1 && !s->worldOverrides.contains(QStringLiteral("giDdgi")) &&
-                  !worldmodes::photonCustom(s),
-              "a P1-era explicit field ON at Medium is the Medium row: no pin, not Custom");
-    }
-    // A hand-set bounce count deviates and is kept as a pin (Epic's column is
-    // a row like any other; nothing is owed to old data, but what the document
-    // rendered is preserved where preserving costs nothing).
-    {
-        auto s = freshScene();
-        s->giMode = iris::GiMode::VCT;
-        s->giQuality = iris::GiQuality::MEDIUM;
-        s->giNumBounces = 3;
-        s->worldMode = int(worldmodes::Mode::Epic);
-        worldmodes::derivePhotonFromDocument(s);
-        CHECK(worldmodes::photonTier(s) == PhotonTier::Medium && giBounces(s) == 3 &&
-                  s->worldOverrides.value(QStringLiteral("giBounces")).toInt() == 3,
-              "vct + medium at 3 bounces derives Medium with the bounces pinned");
-    }
-    // A GI-off document stays off, derives a plausible tier from its quality,
-    // and pins nothing about the technique (OFF is the enable, not a deviation).
-    {
-        auto s = freshScene();
-        s->giMode = iris::GiMode::OFF;
-        s->giQuality = iris::GiQuality::MEDIUM;
-        s->worldMode = int(worldmodes::Mode::Epic);
-        worldmodes::derivePhotonFromDocument(s);
-        CHECK(giMode(s) == 0, "an off scene stays off");
-        CHECK(worldmodes::photonTier(s) == PhotonTier::Medium, "its quality picks the tier");
-        CHECK(!s->worldOverrides.contains(QStringLiteral("giMode")),
-              "and OFF is not recorded as a technique pin");
-        CHECK(s->worldOverrides.value(worldmodes::photonRowId()).toInt() == 0,
-              "the dial is pinned OFF against its World Mode");
-        worldmodes::setMode(s, worldmodes::Mode::Epic);
-        CHECK(giMode(s) == 0, "so re-applying Epic does NOT switch GI on behind the user");
-    }
-    // A P1-era scene that opted into the field explicitly on the hybrid is
-    // the new HIGH row, not Epic: no pre-tier document could have rendered
-    // Epic's bounces, so Epic is only ever chosen deliberately.
-    {
-        auto s = freshScene();
-        s->giMode = iris::GiMode::VCT_PCC_HYBRID;
-        s->giQuality = iris::GiQuality::HIGH;
-        s->giDdgi = 1;
-        s->worldMode = int(worldmodes::Mode::Custom);
-        worldmodes::derivePhotonFromDocument(s);
-        CHECK(worldmodes::photonTier(s) == PhotonTier::High, "hybrid + high + field derives High (never Epic)");
-        CHECK(giDdgi(s) == 1 && !worldmodes::photonCustom(s), "with nothing pinned");
-        CHECK(!s->worldOverrides.contains(worldmodes::photonRowId()),
-              "a Custom-mode scene needs no dial pin: no tier can clobber it");
-    }
 }
 
 // ---------------------------------------------------------------------------
@@ -731,7 +572,7 @@ int main(int argc, char **argv)
     testPins();
     testWorldModeOwnership();
     testNewSceneDefault();
-    testMigration();
+    testTierReapply();
     testTierTexts();
 
     std::printf(failures ? "\nFAILED: %d check(s)\n" : "\nALL CHECKS PASSED\n", failures);

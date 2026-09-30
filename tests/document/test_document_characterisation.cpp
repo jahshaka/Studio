@@ -836,37 +836,6 @@ int main(int argc, char **argv)
               "...through MeshNode::setMesh too — the default scene's ground path");
     }
 
-    // --- Retired node types (AVATAR_LOCOMOTION_SPEC Stage 0) ---------------
-    // `viewer` (iris::ViewerNode) was removed with its 2016 character
-    // controller. A file written by an older build can still carry one, and the
-    // reader's contract for such a node is SKIP + log, never "guess a
-    // substitute type" and never a crash — sceneformat::isRetiredNodeType is
-    // the table it keys on, and SceneReader::readSceneNode returns null for a
-    // match (both of its child loops, plus all four external call sites, take
-    // the null).
-    {
-        CHECK(sceneformat::isRetiredNodeType(QStringLiteral("viewer")),
-              "format: 'viewer' is a RETIRED node type -> the reader skips it");
-
-        // Every type string the writer still emits must NOT be retired: a typo
-        // in that table would silently delete every node of a live type from
-        // every file that is opened.
-        const char *live[] = { "empty", "mesh", "light", "camera",
-                               "particle system", "decal" };
-        bool anyLiveRetired = false;
-        for (const char *t : live)
-            if (sceneformat::isRetiredNodeType(QString::fromLatin1(t))) anyLiveRetired = true;
-        CHECK(!anyLiveRetired,
-              "format: no LIVE node type string is in the retired table");
-
-        // An UNRECOGNISED type is not the same thing: it keeps the format's
-        // long-standing tolerance and reads as an Empty placeholder.
-        CHECK(!sceneformat::isRetiredNodeType(QStringLiteral("something-newer")),
-              "format: an unknown type is not 'retired' (it still reads as empty)");
-        CHECK(!sceneformat::isRetiredNodeType(QString()),
-              "format: an absent type string is not 'retired'");
-    }
-
     // --- The reflection roughness cutoff: one key, absent = the ctor's ------
     // The document field, the engine desc, the mirror push, the file key and
     // the World row's id are ONE name — `reflectionRoughnessCutoff`. Asserted

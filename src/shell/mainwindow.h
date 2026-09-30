@@ -659,7 +659,6 @@ public slots:
     void addPrimitiveFromAction();
     void addEmpty();
     void addCamera();
-    void addMesh(const QString &path = "", bool ignore = false, iris::Vec3 position = iris::Vec3());
 	void addMaterialMesh(const QString &path = "", bool ignore = false,
 	                     iris::Vec3 position = iris::Vec3(), const QString &guid = QString(),
 	                     const QString &name = QString(),

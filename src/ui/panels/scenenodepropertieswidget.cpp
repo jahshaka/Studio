@@ -43,7 +43,6 @@ For more information see the LICENSE file
 #include "ui/panels/propertywidgets/meshpropertywidget.h"
 #include "ui/panels/propertywidgets/mobilitypropertywidget.h"
 #include "ui/panels/propertywidgets/componentspropertywidget.h"
-#include "ui/panels/propertywidgets/shaderpropertywidget.h"
 #include "ui/panels/propertywidgets/worldpropertywidget.h"
 #include "ui/panels/propertywidgets/physicspropertywidget.h"
 #include "ui/panels/propertywidgets/skypropertywidget.h"
@@ -274,11 +273,6 @@ SceneNodePropertiesWidget::SceneNodePropertiesWidget(QWidget *parent) : QWidget(
     cameraPostFxPropView->setPanelTitle("Exposure & Post");
     cameraPostFxPropView->expand();
 
-    shaderPropView = new ShaderPropertyWidget();
-    shaderPropView->setPanelTitle("Shader Definitions");
-    shaderPropView->setDatabase(db);
-    shaderPropView->expand();
-
     // SELECTION COST (perf regression, owner session 2026-09-08: 1 fps and
     // 2-7 s UI stalls after an hour). Every blade above is a PERMANENT child of
     // this panel from here on, and selection only ever changes which of them
@@ -334,7 +328,7 @@ QVector<QWidget *> SceneNodePropertiesWidget::bladeWidgets() const
         worldAaPropView, worldShadowPropView, worldVrPropView, transformPropView,
         mobilityPropView, componentsPropView,
         physicsPropView, meshPropView, lightPropView, decalPropView,
-        emitterPropView, cameraPostFxPropView, shaderPropView
+        emitterPropView, cameraPostFxPropView
     };
 }
 
@@ -1002,12 +996,6 @@ void SceneNodePropertiesWidget::mountSelectionBlades()
     // same slot as a scene node, and exclusive with it. Re-mounted from STATE
     // (not just at the moment of the pick) so an undo, a tab toggle or any
     // other re-apply does not replace it with the "nothing selected" line.
-    if (assetBinding == AssetBinding::Shader) {
-        releaseComponents();
-        shaderPropView->setShaderGuid(assetGuid);
-        mount(shaderPropView);
-        return;
-    }
     if (assetBinding == AssetBinding::Sky) {
         releaseComponents();
         skyPropView->setSkyAlongWithProperties(assetGuid,
@@ -1183,11 +1171,7 @@ void SceneNodePropertiesWidget::setAssetItem(QListWidgetItem *item)
 {
     if (!item) return;
     const int type = item->data(MODEL_TYPE_ROLE).toInt();
-    if (type == static_cast<int>(ModelTypes::Shader)) {
-        assetBinding = AssetBinding::Shader;
-        assetGuid = item->data(MODEL_GUID_ROLE).toString();
-    }
-    else if (type == static_cast<int>(ModelTypes::Sky)) {
+    if (type == static_cast<int>(ModelTypes::Sky)) {
         assetBinding = AssetBinding::Sky;
         assetGuid = item->data(MODEL_GUID_ROLE).toString();
         assetSkyType = item->data(SKY_TYPE_ROLE).toInt();
@@ -1314,7 +1298,6 @@ void SceneNodePropertiesWidget::setDatabase(Database *db)
     if (worldPropView) worldPropView->setDatabase(db);
     if (skyPropView) skyPropView->setDatabase(db);
     if (emitterPropView) emitterPropView->setDatabase(db);
-    if (shaderPropView) shaderPropView->setDatabase(db);
     if (decalPropView) decalPropView->setDatabase(db);
     if (materialPropView) materialPropView->setDatabase(db);
 }
@@ -1331,7 +1314,6 @@ void SceneNodePropertiesWidget::setProject(Project *project)
     if (cloudsPropView)   cloudsPropView->setProject(project);
     if (skyPropView)      skyPropView->setProject(project);
     if (emitterPropView)  emitterPropView->setProject(project);
-    if (shaderPropView)   shaderPropView->setProject(project);
     if (lightPropView)    lightPropView->setProject(project);
     // materialPropView is created on demand in setSceneNode() and gets the
     // pointer there (the member is not null-initialised).

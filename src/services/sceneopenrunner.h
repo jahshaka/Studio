@@ -55,6 +55,7 @@ For more information see the LICENSE file
 // a pump re-enters the loop and can destroy the very object mid-call).
 
 #include <QFuture>
+#include "services/meshbakestore.h"
 #include <QObject>
 #include <QStringList>
 #include <QVector>
@@ -167,6 +168,11 @@ private:
     /// filled by setPlan on the UI thread because bake lookup is a database
     /// query and QSqlDatabase connections are per-thread.
     QVector<iris::PrewarmItem> mPlan;
+    /// STALE BAKES of the planned models (FORWARD-ONLY-1 D1): rebuilt from the
+    /// store's own sources on the worker BEFORE the prewarm reads, then
+    /// committed and re-planned on the UI thread. Never a parse on the open.
+    QVector<MeshBakeStore::BakeJob> mRebuild;
+    bool mRebuildDone = false;
     QVector<Slice> mSlices;
     QString mLabel;
     int mNextSlice = 0;

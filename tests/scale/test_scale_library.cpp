@@ -44,6 +44,7 @@
 // statement that selects a thumbnail column is keyed by guid). The box's load average is
 // printed beside every arm (a number read on a loaded box says so).
 #include "../support/mcpharness.h"
+#include "../src/data/database/casschema.h"
 
 #include <QColor>
 #include <QCoreApplication>
@@ -154,7 +155,15 @@ static const int kCreates = 25;
 static bool ensureTemplate()
 {
     const QString tmpl = kBase + "/library-template";
-    if (QFileInfo::exists(tmpl + "/.complete")) return true;
+    // THE TEMPLATE IS A LIBRARY OF ONE GENERATION (FORWARD-ONLY-1,
+    // services/librarygeneration.h): a template an older build generated is
+    // wiped by the app at startup, so it is regenerated here instead of copied.
+    const QString genMark =
+        tmpl + QStringLiteral("/.generation-%1").arg(CasSchema::kUserVersion);
+    if (QFileInfo::exists(tmpl + "/.complete") && QFileInfo::exists(genMark)) return true;
+    if (QDir(tmpl).exists() && !QFileInfo::exists(genMark)) QDir(tmpl).removeRecursively();
+    QDir().mkpath(tmpl);
+    { QFile mark(genMark); mark.open(QIODevice::WriteOnly); }
     const QString src = kBase + "/library-src";
     QDir().mkpath(src);
     QElapsedTimer t;

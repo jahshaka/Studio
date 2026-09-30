@@ -10,6 +10,7 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "services/libraryreset.h"
+#include "services/meshbakestore.h"
 
 #include <QDir>
 #include <QDirIterator>
@@ -146,6 +147,8 @@ Result reset(Database *db, SettingsManager *settings, const QString &projectsRoo
         result.error = why;
         return result;
     }
+    // The background bake rebuild writes into the store this is about to empty.
+    MeshBakeStore::stopBackgroundRebuild();
 
     // ---- 1. COUNT FIRST -------------------------------------------------
     // The numbers describe the library that WAS there. Counted before a byte
@@ -175,8 +178,10 @@ Result reset(Database *db, SettingsManager *settings, const QString &projectsRoo
     // so a user who points it at ~/Documents would otherwise have
     // ~/Documents/Projects emptied of everything they ever put there. Anything
     // not named like a guid is somebody's own folder: left, and not counted.
-    const QString defaultProjects = QDir(projectsRoot).filePath(QStringLiteral("Projects"));
-    if (QDir(defaultProjects).exists()) {
+    // An EMPTY root is "none": QDir("").filePath would be the working directory.
+    const QString defaultProjects =
+        projectsRoot.isEmpty() ? QString() : QDir(projectsRoot).filePath(QStringLiteral("Projects"));
+    if (!defaultProjects.isEmpty() && QDir(defaultProjects).exists()) {
         const QFileInfoList leftovers =
             QDir(defaultProjects).entryInfoList(QDir::AllEntries | QDir::NoDotAndDotDot
                                                 | QDir::Hidden | QDir::System);
@@ -195,9 +200,9 @@ Result reset(Database *db, SettingsManager *settings, const QString &projectsRoo
     // adopts any existing one), so it can be ~/Documents or the top of a USB
     // stick. A reset may therefore remove only what THIS APP puts there —
     // `objects/`, `sidecar/`, `derived/`, `store.json`, the staging temps
-    // beside them and the legacy per-guid folders (AssetStorePaths' layout,
-    // its header's list) — and must leave every other file and folder in that
-    // directory exactly where it is. Never a wildcard.
+    // beside them and the old guid-named per-asset folders (AssetStorePaths'
+    // layout, its header's list) — and must leave every other file and folder
+    // in that directory exactly where it is. Never a wildcard.
     if (!storeRoot.isEmpty() && QDir(storeRoot).exists()) {
         const auto take = [&result](const QString &path) {
             const QFileInfo info(path);
@@ -221,10 +226,16 @@ Result reset(Database *db, SettingsManager *settings, const QString &projectsRoo
                 take(entry.absoluteFilePath());
                 continue;
             }
-            // A legacy per-guid folder: the pre-CAS store's layout, still read
-            // for assets that were never migrated. Its files are stored bytes,
-            // so they count as objects.
-            if (entry.isDir() && isOurGuidName(entry.fileName())) {
+            // The pre-CAS store's per-asset folder, which this app wrote there
+            // and nothing reads any more — ONLY when it provably is one (D5):
+            // directly under the store root, named by the guid of an asset ROW
+            // this catalog holds (the tables are dropped in step 4, after this),
+            // and holding plain files only. A user's own folder that merely
+            // looks like a guid is left exactly where it is.
+            if (entry.isDir() && !entry.isSymLink() && isOurGuidName(entry.fileName())
+                && db->fetchAsset(entry.fileName()).guid == entry.fileName()
+                && QDir(entry.absoluteFilePath())
+                       .entryInfoList(QDir::Dirs | QDir::NoDotAndDotDot).isEmpty()) {
                 countFiles(entry.absoluteFilePath(), &result.removed.objects,
                            &result.removed.staging);
                 take(entry.absoluteFilePath());

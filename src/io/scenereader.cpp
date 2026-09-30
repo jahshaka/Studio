@@ -111,21 +111,15 @@ iris::ScenePtr SceneReader::readScene(const QString &projectPath,
     auto doc = QJsonDocument::fromJson(sceneBlob);
     auto projectObj = doc.object();
 
-    // FORMAT VERSION (src/io/sceneformat.h). v2 is what this build writes; a v1
-    // blob is read as a ONE-WAY CONVERSION — every difference between the two is
-    // an absent key with a documented default, so nothing is lost, and the next
-    // save writes v2. Announced rather than silent: "the file I opened is not
-    // the file I write" is exactly the kind of thing a bug report needs to say.
+    // FORMAT VERSION (src/io/sceneformat.h). v2 is what this build writes and
+    // reads; no conversion from any other exists (FORWARD-ONLY-1). A blob of
+    // another version is said so in the log — a key this build does not know is
+    // ignored and the next save writes v2.
     const int version = sceneformat::versionOf(projectObj);
-    if (version < sceneformat::kVersion) {
-        qInfo("SceneReader: converting a v%d scene to v%d on load (SPECS/SCENEGRAPH_SPEC.md "
-              "§3 step 4 — no migration exists and none is needed; the next save writes v%d).",
-              version, sceneformat::kVersion, sceneformat::kVersion);
-    } else if (version > sceneformat::kVersion) {
-        qWarning("SceneReader: this scene was written by a NEWER build (format v%d, this build "
-                 "reads v%d). Unknown keys are ignored; saving will drop them.",
+    if (version != sceneformat::kVersion)
+        qWarning("SceneReader: this scene is format v%d, this build reads v%d — nothing is "
+                 "converted; keys it does not know are ignored.",
                  version, sceneformat::kVersion);
-    }
 
     auto scene = readScene(projectObj);
 
@@ -173,16 +167,14 @@ EditorData* SceneReader::readEditorData(QJsonObject& projectObj)
     camera->nearClip = (float)camObj.value("nearClip").toDouble(camera->nearClip);
     camera->farClip = (float)camObj.value("farClip").toDouble(camera->farClip);
     camera->setLocalPos(readVector3(camObj.value("pos").toObject()));
-    // rotQuat first (the lossless spelling), euler for anything written before
-    // it existed — see readSceneNodeTransform.
+    // rotQuat — the lossless spelling the writer stores (the euler `rot`
+    // beside it is informational only and never read back).
     const QJsonObject camRotQuat = camObj.value("rotQuat").toObject();
     if (!camRotQuat.isEmpty())
         camera->setLocalRot(iris::Quat(float(camRotQuat.value("scalar").toDouble(1.0)),
                                         float(camRotQuat.value("x").toDouble(0.0)),
                                         float(camRotQuat.value("y").toDouble(0.0)),
                                         float(camRotQuat.value("z").toDouble(0.0))).normalized());
-    else
-        camera->setLocalRot(iris::Quat::fromEulerAngles(readVector3(camObj.value("rot").toObject())));
 	camera->setOrthagonalZoom((float)camObj.value("orthogonalSize").toDouble(camera->orthoSize));
 	iris::CameraProjection val = camObj.value("projectionMode").toString().compare("orthogonal") == 0 ? iris::CameraProjection::Orthogonal : iris::CameraProjection::Perspective;
 	camera->setProjection(val);
@@ -206,37 +198,6 @@ EditorData* SceneReader::readEditorData(QJsonObject& projectObj)
         editorObj.value("showGroundPlane").toBool(editorData->showGroundPlane);
 
     return editorData;
-}
-
-/// THE GLB TEXTURE-LOSS REPAIR (2026-09-09), reader half.
-///
-/// Between 2026-09-03 and this fix, SceneWriter stored the wrong guid in every
-/// texture slot of an imported model: the writer recovered the guid from the
-/// resolved store path, and the tie between the .glb Object's role='texture'
-/// row and the member Texture's role='source' row over the SAME oid was broken
-/// by insertion order, which the Object won (AssetCas::guidForStorePath now
-/// spells the order out). The reader then resolved that guid the other way —
-/// source-role first — and got the .glb itself, so `baseColorMap` pointed at a
-/// model file and every imported model, Mixamo avatars included, reopened
-/// untextured.
-///
-/// Scenes saved in that week are already on disk, and no user-data migration
-/// framework exists (the app ships new). So this is a TOLERANT READER: a
-/// texture slot naming a non-Texture asset is resolved to the object's texture
-/// member that the slot must have meant, one log line each, and the count is
-/// what makes the project dirty so the next save writes it correctly. Nothing
-/// is written to the catalog here.
-QString SceneReader::repairTextureSlot(const QString &stored, const QString &slotName)
-{
-    if (stored.isEmpty()) return stored;
-    const QString repaired = AssetCas::textureGuidForSlot(QSqlDatabase::database(),
-                                                          stored, slotName);
-    if (repaired.isEmpty()) return stored;
-    ++repairedSlots;
-    irisLog(QString("scene reader: %1 named the object '%2' instead of a texture "
-                    "(the 2026-09-03 save defect) - repaired to '%3'")
-                .arg(slotName, stored, repaired));
-    return repaired;
 }
 
 QString SceneReader::resolveAssetPath(const QString &guid)
@@ -519,10 +480,12 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
         // `giCascades` switch is deleted and its key is not read (forward-building).
         scene->giCascadeInstanceCap = qBound(
             0, sceneObj.value("giCascadeInstanceCap").toInt(scene->giCascadeInstanceCap), 1 << 20);
-        // THE SURFACE CACHE's three rows. `giCards` is 0 OFF or the constructor's
-        // -1 AUTO (READER-DEFAULTS-1: the absent-key fallback is the ctor's); the
-        // deleted 1 "on" reads as the default too.
-        scene->giCards = sceneObj.value("giCards").toInt(scene->giCards) == 0 ? 0 : -1;
+        // THE SURFACE CACHE's three rows. `giCards` is 0 OFF or -1 AUTO; any
+        // other value is not this build's and reads as the constructor's.
+        {
+            const int cards = sceneObj.value("giCards").toInt(scene->giCards);
+            if (cards == 0 || cards == -1) scene->giCards = cards;
+        }
         scene->giCardBudgetTexels = qBound(
             0, sceneObj.value("giCardBudgetTexels").toInt(scene->giCardBudgetTexels), 1 << 26);
         scene->giCardRadius = float(qBound(
@@ -626,16 +589,6 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
                                         .toDouble(double(scene->exposureMax)), 16.0));
         if (scene->exposureMax < scene->exposureMin)
             std::swap(scene->exposureMin, scene->exposureMax);
-        // TOLD ONCE, NOT MIGRATED (lead review item 4). A file with the retired
-        // chain-unit keys and none of the new ones opened at the constructor's
-        // grade — which is a decision, not an accident, and the one thing a
-        // user cannot deduce from the picture. The scene carries the fact and
-        // the issue bar says it; nothing converts anything.
-        scene->legacyExposureKeyIgnored =
-            (sceneObj.contains("exposure") || sceneObj.contains("exposureMin") ||
-             sceneObj.contains("exposureMax")) &&
-            !sceneObj.contains("exposureEv") && !sceneObj.contains("exposureMinEv") &&
-            !sceneObj.contains("exposureMaxEv") && !sceneObj.contains("exposureMode");
         // THE METER (EXPOSURE-2). An absent key is the constructor's default
         // (centre-weighted, 10/90) — a file written before the meter existed
         // was metered by a whole-frame mean, and there is no honest conversion
@@ -707,55 +660,18 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
         const int ps = sceneObj.value("planarReflectionShadows").toInt(scene->planarReflectionShadows);
         scene->planarReflectionShadows = (ps == 0 || ps == 1) ? ps : -1;
     }
-    // World Mode (POST_CHAIN_SPEC §9). Absent reads as "custom": the fields
-    // above ARE the truth for a document written before modes existed, and for
-    // one the user never put on a tier. (§12 decision 8 proposed reading absent
-    // as Epic; that would silently switch VCT GI, 4x MSAA and a 4096 shadow
-    // atlas on for every existing scene — left to the owner.)
+    // World Mode (POST_CHAIN_SPEC §9). The fields above were just read from
+    // the document and ARE the resolved values; no tier is re-applied, so a
+    // pinned row and a hand-edited field both survive a round trip untouched.
+    // An absent or unknown mode is the constructor's (Custom). Nothing is
+    // derived or converted (FORWARD-ONLY-1: no absent-means-Epic, no Photon
+    // tier derivation for a document without `giTier`).
     {
-        const QString m = sceneObj.value("worldMode").toString().trimmed().toLower();
         scene->worldOverrides = sceneObj.value("worldOverrides").toObject();
-        if (m.isEmpty()) {
-            // A document written before World Modes existed — the shipped sample
-            // scenes, and nothing else. §12 decision 8: it reads as EPIC, and the
-            // tier is applied so the write-through invariant holds (a backing
-            // field is always the resolved value). Its own settings are NOT
-            // preserved as overrides: that would pin every row of every old
-            // document for ever and make the mode meaningless.
-            worldmodes::setMode(scene, worldmodes::Mode::Epic);
-        } else {
-            bool ok = false;
-            const auto mode = worldmodes::modeFromName(m, &ok);
-            scene->worldMode = ok ? int(mode) : int(worldmodes::Mode::Custom);
-            // The fields above were just read from the document and ARE the
-            // resolved values; no tier is re-applied, so a pinned row and a
-            // hand-edited field both survive a round trip untouched.
-
-            // PHOTON MIGRATION (GI_UNIFIED_SPEC §2 / P2). A document written
-            // before the GI dial existed carries no `giTier`: derive which tier
-            // its settings correspond to and pin whatever deviates, so the
-            // scene renders IDENTICALLY and the panel still has an honest tier
-            // to show. It runs HERE, after worldMode is known, because whether
-            // the tier row needs a pin depends on what the scene's World Mode
-            // would otherwise resolve it to.
-            //
-            // The branch above (a pre-World-Modes document) deliberately does
-            // NOT derive: it applies the Epic tier wholesale, which is what it
-            // has always done, and preserving its old GI settings as pins would
-            // pin every row of every old document for ever.
-            if (!sceneObj.contains("giTier")) worldmodes::derivePhotonFromDocument(scene);
-            // A TIER COLUMN THAT DID NOT EXIST WHEN THIS FILE WAS WRITTEN
-            // (THE TIER TABLE'S OPTION-(b) BUMP LIVED HERE and is DELETED,
-            // 2026-09-12.) It re-applied the tier to any document that carried
-            // a `giTier` but no `giDynamicProbes` — the one-day P2 table's
-            // shape — and it keyed on the PRESENCE of a key that this build no
-            // longer writes, so from the moment R2 deleted the column every
-            // file the app saves would have taken it on every open, silently
-            // re-normalising unpinned deviations for ever (code review
-            // 2026-09-12, item 3). No migrations are owed (CRUD law): a
-            // document's own rows are what it renders, and a sample that comes
-            // up at the wrong tier is re-authored, never patched by the reader.
-        }
+        const QString m = sceneObj.value("worldMode").toString().trimmed().toLower();
+        bool ok = false;
+        const auto mode = worldmodes::modeFromName(m, &ok);
+        if (ok) scene->worldMode = int(mode);
     }
 	scene->setWorldGravity(sceneObj.value("gravity").toDouble(scene->gravity));
 
@@ -878,16 +794,6 @@ iris::SceneNodePtr SceneReader::readSceneNode(QJsonObject& nodeObj)
 
     QString nodeType = nodeObj["type"].toString("empty");
 
-    // A type this build retired (sceneformat::isRetiredNodeType documents the
-    // contract). SKIP it — and its subtree with it — rather than substituting a
-    // type it never was. Both child loops below tolerate the null this returns.
-    if (sceneformat::isRetiredNodeType(nodeType)) {
-        irisLog(QString("scene reader: skipping '%1', a '%2' node — that node type "
-                        "no longer exists in this build")
-                    .arg(nodeObj["name"].toString(QStringLiteral("<unnamed>")), nodeType));
-        return sceneNode;
-    }
-
     if (nodeType == "mesh") {
         sceneNode = createMesh(nodeObj).staticCast<iris::SceneNode>();
     } else if (nodeType == "light") {
@@ -955,11 +861,7 @@ iris::SceneNodePtr SceneReader::readSceneNode(QJsonObject& nodeObj)
     // asking the graph to make it static now would be refused by rule 2 and log
     // a warning per node. Recording the intent here and letting the pass at the
     // end of the load act on it is the same thing, in the right order.
-    //
-    // v2's BOOLEAN "static" key is still READ (true = static, false = movable,
-    // which is exactly what v2's Static/Dynamic override meant) so scenes saved
-    // before mobility open with the same meaning. It is never written again,
-    // and a file carrying both keys is answered by the new one.
+
     iris::Mobility mobility = iris::Mobility::Auto;
     if (nodeObj.contains(QLatin1String("mobility"))) {
         if (!iris::mobilityFromName(nodeObj["mobility"].toString(), mobility)) {
@@ -969,8 +871,6 @@ iris::SceneNodePtr SceneReader::readSceneNode(QJsonObject& nodeObj)
                      qUtf8Printable(nodeObj["mobility"].toString()));
             mobility = iris::Mobility::Auto;
         }
-    } else if (nodeObj.contains(QLatin1String("static"))) {
-        mobility = nodeObj["static"].toBool() ? iris::Mobility::Static : iris::Mobility::Movable;
     }
     if (mobility != iris::Mobility::Auto) sceneNode->_setMobility(mobility);
     // Socket attachment (CAMERAS_SPEC §5). The RAW setter: the owner is very
@@ -1241,32 +1141,14 @@ void SceneReader::readSceneNodeTransform(QJsonObject& nodeObj,iris::SceneNodePtr
     auto pos = nodeObj["pos"].toObject();
     if (!pos.isEmpty()) sceneNode->setLocalPos(readVector3(pos));
 
-    // ROTATION, in either spelling, told apart by the `scalar` key.
-    //
-    // Format v2 writes `rot` as the QUATERNION and writes nothing else (see the
-    // note beside the writer: the euler detour is lossy and moved every rotated
-    // node a little on every single open). `rotQuat` was the transitional key
-    // v1 wrote alongside the euler `rot`, and is still read first because a
-    // project saved by that build is what a developer's library is full of.
-    //
-    // A `rot` with no `scalar` is an EULER TRIPLE, which is what every library
-    // Object asset blob in existence carries (they are node objects too, and
-    // they were written years before this) — those keep loading unchanged.
-    const auto readQuat = [](const QJsonObject &o) {
-        return iris::Quat(float(o["scalar"].toDouble(1.0)),
-                          float(o["x"].toDouble(0.0)),
-                          float(o["y"].toDouble(0.0)),
-                          float(o["z"].toDouble(0.0))).normalized();
-    };
-    const QJsonObject rotQuat = nodeObj["rotQuat"].toObject();
+    // ROTATION: `rot` is the QUATERNION (format v2). An euler triple (no
+    // `scalar`) and the v1 transitional `rotQuat` are not read — FORWARD-ONLY-1.
     const QJsonObject rot = nodeObj["rot"].toObject();
-    if (!rotQuat.isEmpty()) {
-        sceneNode->setLocalRot(readQuat(rotQuat));
-    } else if (rot.contains(QLatin1String("scalar"))) {
-        sceneNode->setLocalRot(readQuat(rot));
-    } else if (!rot.isEmpty()) {
-        sceneNode->setLocalRot(iris::Quat::fromEulerAngles(readVector3(rot)).normalized());
-    }
+    if (rot.contains(QLatin1String("scalar")))
+        sceneNode->setLocalRot(iris::Quat(float(rot["scalar"].toDouble(1.0)),
+                                          float(rot["x"].toDouble(0.0)),
+                                          float(rot["y"].toDouble(0.0)),
+                                          float(rot["z"].toDouble(0.0))).normalized());
 
     auto scale = nodeObj["scale"].toObject();
     if (!scale.isEmpty()) {
@@ -1303,6 +1185,13 @@ iris::MeshNodePtr SceneReader::createMesh(QJsonObject& nodeObj)
         qWarning().noquote() << "scene reader: mesh" << nodeObj["mesh"].toString()
                              << "for node" << nodeObj["name"].toString()
                              << "did not resolve to a file — the node loads with no mesh";
+        // ...AND IT IS A MISSING MODEL (FORWARD-ONLY-1 D1): its SOURCE is not in
+        // the store, so there is nothing to rebuild a bake from. Reported by the
+        // row's own file name (the scene issue names it).
+        const QString rowName =
+            handle ? handle->fetchAsset(nodeObj["mesh"].toString()).name : QString();
+        const QString missing = rowName.isEmpty() ? nodeObj["mesh"].toString() : rowName;
+        if (!missingModelPaths.contains(missing)) missingModelPaths.append(missing);
     }
     if (!source.isEmpty()) {
         // A ":"-prefixed source is a BUILT-IN: a SEED KEY, resolved to the
@@ -1828,7 +1717,7 @@ iris::MaterialPtr SceneReader::readPbrMaterial(const QJsonObject& matObj)
 			// does (asset name joined onto the project folder / asset directory),
 			// and fall back to treating the value as a path relative to the scene
 			// file. An empty result clears the map.
-			const QString stored = repairTextureSlot(val.toString(), prop->name);
+			const QString stored = val.toString();
 			QString path;
 			if (!stored.isEmpty()) {
 				path = resolveAssetPath(stored);
@@ -1911,13 +1800,10 @@ iris::MaterialPtr SceneReader::readMaterial(QJsonObject& nodeObj)
 
 	auto mat = nodeObj["material"].toObject();
 
-	// materialType selects which Material subclass to rebuild. Scenes written
-	// before PBR existed have no such key, so absent means "custom" - but
-	// parseMaterialTyped additionally routes graph-backed materials (their
-	// shaderGuid resolves to a shadergraph definition) to the shader's baked
-	// PbrMaterial (MATERIALS_EVALUATOR phase 5).
-	const auto materialType = mat["materialType"].toString("custom");
-	if (materialType == "pbr") return readPbrMaterial(mat);
+	// materialType "pbr" is the one material there is; anything else is
+	// refused by the reader (logged, the default material) — FORWARD-ONLY-1.
+	if (mat.value(QStringLiteral("materialType")).toString() == QLatin1String("pbr"))
+		return readPbrMaterial(mat);
 
 	return reader.parseMaterialTyped(mat, handle, true);
    
@@ -1969,37 +1855,30 @@ void SceneReader::extractAssetsFromAssimpScene(QString filePath, const QString &
             animations.insert(cacheKey, animationss);
             return;
         }
-        bakeAttempt.stop();   // a miss must not bank the parse below
-
-        // The threaded open parses these on a worker BEFORE the reader runs
-        // (irisgl/import/meshprewarm.h): consume that and this whole stage is
-        // a copy out of a parsed scene instead of a parse.
-        if (prewarm && prewarmUsable) {
-            if (const iris::SceneSource *ready = prewarm->source(filePath)) {
-                LoadTimeline::Accumulate hit(QStringLiteral("prewarm:sceneReaderHit"));
-                iris::GraphicsHelper::loadAllMeshesAndAnimationsFromSource(*ready, filePath,
-                                                                          meshList, animationss);
-                meshes.insert(cacheKey, meshList);
-                assimpScenes.insert(cacheKey);
-                animations.insert(cacheKey, animationss);
-                return;
-            }
+        // AN ANIMATION CLIP FILE IS NOT A MODEL: a ModelTypes::Animation row
+        // carries no mesh bake by design (the clip importer stores the file),
+        // so its clips are READ here — the clip's own path, not a fallback for
+        // a missing model bake.
+        if (!assetGuid.isEmpty() && handle
+            && handle->fetchAsset(assetGuid).type == static_cast<int>(ModelTypes::Animation)) {
+            LoadTimeline::Accumulate clip(QStringLiteral("assimp:clipFile"));
+            iris::GraphicsHelper::loadAllMeshesAndAnimationsFromFile(
+                filePath, meshList, animationss, MeshBakeStore::transformFor(filePath, assetGuid));
+            meshes.insert(cacheKey, meshList);
+            assimpScenes.insert(cacheKey);
+            animations.insert(cacheKey, animationss);
+            return;
         }
 
-        // ONE parse per distinct file per open — and it IS a parse: no bake
-        // and no prewarm served this file, so it is read from the store
-        // (measured by this counter; the ledger key keeps its historical
-        // name). The session store used to be searched for an already
-        // parsed scene first, but nothing has registered one there since the
-        // asset pipeline — every Object entry is a built fragment — so the
-        // search always fell through to this read.
-        LoadTimeline::Accumulate parse(QStringLiteral("assimp:sceneReader"));
-        // THE ASSET'S IMPORT TRANSFORM (IMPORT-1): a fallback parse stands in
-        // for the bake, so it has to produce the same geometry the bake holds —
-        // the asset's baked scale, orientation and origin included.
-        iris::GraphicsHelper::loadAllMeshesAndAnimationsFromFile(
-            filePath, meshList, animationss,
-            MeshBakeStore::transformFor(filePath, assetGuid));
+        // NO CURRENT BAKE: the model is MISSING from this open (FORWARD-ONLY-1).
+        // It is never parsed instead — an archive import bakes what it brings
+        // and an asset import bakes at import, so a miss means the bake is
+        // gone or from another build. The open reports it (a `model.missing`
+        // scene issue, ProjectService::missingModels) and the nodes that use
+        // it load without geometry.
+        if (!missingModelPaths.contains(filePath)) missingModelPaths.append(filePath);
+        irisLog(QStringLiteral("scene reader: '%1' has no current mesh bake — the model is missing "
+                               "from this open (re-import it)").arg(QFileInfo(filePath).fileName()));
 
         meshes.insert(cacheKey, meshList);
         assimpScenes.insert(cacheKey);

@@ -57,8 +57,7 @@ QColor defaultColor();
 QColor lightenForPrimary(const QColor &base);
 QColor defaultPrimaryColor();
 
-/// Stored values (clamped / validated; the legacy width 6 is read as today's
-/// default 3, see width()).
+/// Stored values (clamped / validated).
 int width();
 QColor color();
 QColor primaryColor();

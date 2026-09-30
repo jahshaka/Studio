@@ -114,6 +114,11 @@ public:
     /// Forgets everything — a scene close, or a test between cases.
     void reset();
 
+    /// One `model.missing` issue per model file (FORWARD-ONLY-1): a model with
+    /// no current bake that could not be rebuilt from its source — the open's
+    /// SceneReader::missingModels(), and a library placement's.
+    void raiseMissingModels(const QStringList &paths);
+
     /// Every live issue, in the STABLE order the bar lists them in: by kind,
     /// then by the object each is about, then by id. There is no second,
     /// smaller list — everything live is shown.

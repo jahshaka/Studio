@@ -266,18 +266,6 @@ public:
     void trigger();
     void refresh();
 
-	void extractTexturesAndMaterialFromMaterial(
-		const QString &filePath,
-		QStringList &textureList,
-		QJsonObject &material
-	);
-
-	void extractTexturesAndMaterialFromMaterial(
-		const QByteArray &blob,
-		QStringList &textureList,
-		QJsonObject &material
-	);
-
     void setMainWindow(MainWindow* mainWindow) {
         this->mainWindow = mainWindow;
     }

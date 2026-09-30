@@ -29,7 +29,6 @@
 #include "irisgl/document/scenegraph/shadowmap.h"
 #include "irisgl/document/assets/mesh.h"
 #include "irisgl/document/materials/pbrmaterial.h"
-#include "io/builtinmaterials.h"
 #include "irisgl/core/properties/property.h"
 #include "irisgl/document/scenegraph/cameranode.h"
 #include "jahshaka/engine/Engine.h"
@@ -290,60 +289,14 @@ int main(int argc, char **argv)
         QFile::remove(pngPath);
     }
 
-    // ---- THE RETIRED "Default" BUILTIN, as the PbrMaterial preset it became ----
-    //
-    // This block used to build an iris::CustomMaterial from
-    // app/shader_defs/Default.shader and assert that the mirror could scrape
-    // diffuseColor and diffuseTexture out of its property rows. The class is
-    // gone (HLMS_ADOPTION P4b) and so is the scraping: the conversion happens
-    // ONCE, at load, and what the mirror sees is an ordinary PbrMaterial.
-    //
-    // So the assertion moved with it — this drives the CONVERSION (a legacy
-    // `values{}` block naming the reserved Default guid) and then asserts the
-    // resulting material reaches pixels, which is the property that actually
-    // matters to a user reopening an old scene.
+    // ---- an UNLIT PbrMaterial renders its authored colour, unshaded ----
     {
-        QJsonObject values;
-        values["diffuseColor"] = QStringLiteral("#e62814");
-        values["shininess"] = 0.0;
-        auto converted = BuiltinMaterials::fromBuiltin(
-            QStringLiteral("00000000-0000-0000-0000-000000000001"), values,
-            [](const QString &p, const QString &) { return p; });
-        CHECK(!converted.isNull(), "the reserved Default guid converts to a PbrMaterial");
-        CHECK(converted->getName() == QStringLiteral("Default"),
-              "...and it is still called Default");
-        meshNode2->setMaterial(converted);
-        mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
-        view->readPixels(img); show("converted Default builtin: diffuseColor", img);
-        CHECK(isMaterial(centre(img)), "the converted builtin's colour reaches the engine");
-
-        const QString pngPath = QDir::temp().filePath("jahshaka_mirror_custom_green.png");
-        QImage tex(16, 16, QImage::Format_RGBA8888); tex.fill(QColor(20, 230, 40)); tex.save(pngPath);
-        QJsonObject texValues;
-        texValues["diffuseColor"] = QStringLiteral("#ffffff");
-        texValues["diffuseTexture"] = pngPath;
-        auto texConverted = BuiltinMaterials::fromBuiltin(
-            QStringLiteral("00000000-0000-0000-0000-000000000001"), texValues,
-            [](const QString &p, const QString &) { return p; });
-        meshNode2->setMaterial(texConverted);
-        mirror.sync(); for (int i = 0; i < 3; ++i) engine->renderOneFrame();
-        view->readPixels(img); show("converted Default builtin: diffuseTexture", img);
-        CHECK(centre(img).g > centre(img).r * 1.5f && centre(img).g > centre(img).b * 1.5f,
-              "the legacy diffuseTexture name became a baseColorMap and reaches the engine");
-        QFile::remove(pngPath);
-
-        // The FLAT builtin is the one whose conversion changes shading family
-        // (D-P4b): it becomes an UNLIT PbrMaterial, so its colour arrives
-        // unshaded. That is the whole product answer to "what is Flat?".
-        QJsonObject flatValues;
-        flatValues["color"] = QStringLiteral("#00cc22");
-        auto flat = BuiltinMaterials::fromBuiltin(
-            QStringLiteral("00000000-0000-0000-0000-000000000004"), flatValues,
-            [](const QString &p, const QString &) { return p; });
-        CHECK(flat->shadingModel == 1, "the Flat builtin converts to the UNLIT shading model");
+        auto flat = iris::PbrMaterial::create();
+        flat->setValue(QStringLiteral("shadingModel"), 1);
+        flat->setValue(QStringLiteral("baseColor"), QColor(QStringLiteral("#00cc22")));
         meshNode2->setMaterial(flat);
         mirror.sync(); for (int i = 0; i < 3; ++i) engine->renderOneFrame();
-        view->readPixels(img); show("converted Flat builtin (unlit)", img);
+        view->readPixels(img); show("unlit PbrMaterial", img);
         // Colour components are 0..1 here, and this readback is LINEAR. #00cc22
         // is (0, 204, 34) sRGB, which is (0, 0.604, 0.033) linear — a colour a
         // user PICKED goes through iris::linearOf like every other one

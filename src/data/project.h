@@ -60,19 +60,6 @@ enum AssetViewFilter : int
 	DontShow // Use for dependencies and hidden types later on
 };
 
-struct DatabaseMetadataRecord
-{
-	QDateTime dateCreated;
-	QString hash;
-	QString version;
-	QByteArray data;
-
-	// specific version
-	int major = 0;
-	int minor = 0;
-	int patch = 0;
-};
-
 // The int fields default: not every fetch query selects every column, and an
 // unselected column left the field UNINITIALIZED — assets.list's project
 // scope returned garbage ints in `drawer` (record.collection) for records
@@ -160,8 +147,10 @@ enum class ModelTypes
     Mesh,			// Supported
     SoundEffect,
     Music,			// Supported
-    Shader,			// Supported
-    Variant,
+    // 9 was the retired Shader row (FORWARD-ONLY-1). The value is persisted
+    // in every assets row, so the numbers after it never move and 9 is never
+    // reused.
+    Variant = 10,
     File,			// Supported
     ParticleSystem,	// Supported
     // IES photometric profiles (.ies). A first-class library type rather than a

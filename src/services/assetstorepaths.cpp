@@ -43,21 +43,6 @@ void AssetStorePaths::setRootOverride(const QString &rootPath)
                                    : QDir::cleanPath(QDir::fromNativeSeparators(rootPath));
 }
 
-QString AssetStorePaths::legacyFolder(const QString &assetGuid)
-{
-    return legacyFolderIn(root(), assetGuid);
-}
-
-QString AssetStorePaths::legacyFolderIn(const QString &rootPath, const QString &assetGuid)
-{
-    return join(rootPath, assetGuid);
-}
-
-QString AssetStorePaths::legacyFilePath(const QString &assetGuid, const QString &fileName)
-{
-    return join(legacyFolder(assetGuid), fileName);
-}
-
 QString AssetStorePaths::objectsDir()
 {
     return join(root(), QStringLiteral("objects"));

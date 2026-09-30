@@ -189,9 +189,6 @@ void SceneWriter::writeScene(QJsonObject& projectObj, iris::ScenePtr scene)
     // EXPOSURE (EXPOSURE-1): a mode and three STOPS values. The `*Ev` spelling
     // is what tells an old file's chain-unit `exposure` apart from this one —
     // see the reader.
-    // Writing the new keys ends the "an older key was ignored" statement: the
-    // file carries this grade explicitly from here on (EXPOSURE-1).
-    scene->legacyExposureKeyIgnored = false;
     sceneObj["exposureMode"] = QString::fromLatin1(iris::exposureModeName(scene->exposureMode));
     sceneObj["exposureEv"] = scene->exposure;
     sceneObj["exposureMinEv"] = scene->exposureMin;
@@ -882,14 +879,8 @@ void SceneWriter::writeSceneNodeMaterial(QJsonObject& matObj, iris::MaterialPtr 
 {
 	if (!mat) return;
 
-	// materialType discriminates which Material subclass to rebuild on load.
-	// Absent in scenes written before PBR existed; the reader treats a missing
-	// key as "custom" and converts, so older scenes load unchanged.
-	//
-	// NOTHING WRITES "custom" ANY MORE (HLMS_ADOPTION P4b): the class that tag
-	// named is gone, and a material carrying a reserved BUILTIN guid now saves
-	// as the PbrMaterial preset it became. Readers still accept the tag —
-	// that is the whole point of the retirement.
+	// materialType discriminates which Material subclass to rebuild on load;
+	// the readers read "pbr" and refuse everything else (FORWARD-ONLY-1).
 	if (!!mat.dynamicCast<iris::PbrMaterial>()) {
 		matObj["materialType"] = "pbr";
 		if (!mat->getName().isEmpty()) matObj["name"] = mat->getName();

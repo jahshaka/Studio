@@ -25,33 +25,6 @@ For more information see the LICENSE file
 
 #include <QDebug>
 
-void NodeGraph::addProperty(Property* prop)
-{
-	if(!properties.contains(prop))	this->properties.append(prop);
-}
-
-void NodeGraph::removeProperty(Property * prop)
-{
-	this->properties.removeOne(prop);
-}
-
-
-Property *NodeGraph::getPropertyByName(const QString &name)
-{
-	for (auto prop : properties)
-		if (prop->name == name)
-			return prop;
-	return nullptr;
-}
-
-Property *NodeGraph::getPropertyById(const QString &id)
-{
-	for (auto prop : properties)
-		if (prop->id == id)
-			return prop;
-	return nullptr;
-}
-
 QVector<NodeModel*> NodeGraph::getNodesByTypeName(QString name)
 {
 	QVector<NodeModel *> list;
@@ -206,16 +179,12 @@ QJsonObject NodeGraph::serialize()
 	}
 	graph.insert("connections", consJson);
 	graph.insert("masternode", this->masterNode->id);
-	// The master node's socket layout, so a future renumbering can migrate
-	// instead of silently re-pointing every connection (pbrmasternode.h).
-	// Absent = layout 1, which is what every graph saved before P2 is.
+	// The master node's socket layout: the reader REFUSES any other (a
+	// renumbering bumps it; connections are stored by index).
 	graph.insert("socketLayout", kSocketLayoutVersion);
 
 	graph["settings"] = serializeMaterialSettings();
 
-	// §3b: "properties" is no longer written. Old files carrying it stay
-	// readable forever (deserialize migrates them into real nodes); the
-	// values now live on the nodes themselves.
 	graph["materialGuid"] = materialGuid;
 	return graph;
 }
@@ -284,40 +253,31 @@ NodeGraph* NodeGraph::deserialize(QJsonObject graphObj, NodeLibrary* library,
 		}
 	}
 
+	// THE SOCKET LAYOUT IS THIS BUILD'S, OR THE FILE IS REFUSED (FORWARD-ONLY-1).
+	// Connections are stored BY INDEX, so a graph written against another
+	// master layout would land every connection on the wrong socket. There is
+	// no conversion: every graph this build writes stamps kSocketLayoutVersion.
+	{
+		const int savedLayout = graphObj.value(QStringLiteral("socketLayout")).toInt(0);
+		if (savedLayout != kSocketLayoutVersion) {
+			if (refusalReason)
+				*refusalReason = QStringLiteral(
+				    "This material was saved by an older version of Jahshaka (socket layout "
+				    "%1, this build reads %2) and cannot be opened. Recreate it.")
+				        .arg(savedLayout).arg(kSocketLayoutVersion);
+			qWarning().noquote() << "NodeGraph: refused a graph with socket layout" << savedLayout;
+			return nullptr;
+		}
+	}
+
 	auto graph = new NodeGraph();
 	graph->setNodeLibrary(library);
 
-	// read settings
-
-	// read properties
-	auto propList = graphObj["properties"].toArray();
-	for (auto propObj : propList) {
-		auto prop = Property::parse(propObj.toObject());
-		if (prop != nullptr) // unknown/absent type parses to null
-			graph->addProperty(prop);
-	}
-
 	// read nodes
-	// ids of texture nodes that replaced texture PropertyNodes this load —
-	// their connections need the output-index collapse below
-	QSet<QString> migratedTextureNodes;
 	auto nodeList = graphObj["nodes"].toArray();
 	for (auto nodeVar : nodeList) {
 		auto nodeObj = nodeVar.toObject();
 		auto type = nodeObj["type"].toString();
-
-		// migration: TruncNode wrote "truncate" for years while its library
-		// key was "trunc" — those saves used to crash on load (audit D1)
-		if (type == "truncate")
-			type = "trunc";
-
-		// THE UV MERGE (MATERIAL_UV_NODES_SPEC D-3). "texCoords" (bare UV) and
-		// "uvTransform" (uv*tiling+offset) are one "uv" node now. Both are
-		// registered as hidden library aliases, so this is a RENAME on load,
-		// not a rebuild: the alias node keeps in 0/1/2 and out 0 at the same
-		// indices, and connections are stored BY INDEX, so nothing re-points.
-		// `texCoords` had no inputs at all, so its saves reference out 0 only.
-		const bool wasUvAlias = (type == "texCoords" || type == "uvTransform");
 
 		// The master node is constructed directly, not through the library.
 		// There is exactly ONE master: "PbrMaterial" — a file written on any
@@ -329,86 +289,8 @@ NodeGraph* NodeGraph::deserialize(QJsonObject graphObj, NodeLibrary* library,
 		else {
 			nodeModel = graph->library->createNode(type);
 		}
-		// §3b migration: a PropertyNode instance becomes the real node for
-		// its property's value — Float/Int/Bool -> float, Vec2/3/4 ->
-		// vector2/3/4, Color -> color, Texture -> texture (carrying the
-		// asset guid). Position and id are preserved so connections
-		// re-attach 1:1; multiple instances of one property become
-		// independent copies (owner-locked call, 2026-08-31).
-		bool migratedTexture = false;
-		if (type == "property") {
-			auto propId = nodeObj["value"].toString();
-			auto prop = graph->getPropertyById(propId);
-			nodeModel = nullptr;
-			if (prop != nullptr) {
-				switch (prop->type) {
-				case PropertyType::Float:
-				case PropertyType::Int:
-					nodeModel = graph->library->createNode("float");
-					if (nodeModel) nodeModel->deserializeWidgetValue(QJsonValue(prop->getValue().toDouble()));
-					break;
-				case PropertyType::Bool:
-					nodeModel = graph->library->createNode("float");
-					if (nodeModel) nodeModel->deserializeWidgetValue(QJsonValue(prop->getValue().toBool() ? 1.0 : 0.0));
-					break;
-				case PropertyType::Vec2: {
-					nodeModel = graph->library->createNode("vector2");
-					auto v = iris::fromQt(prop->getValue().value<QVector2D>());
-					QJsonObject o; o["x"] = v.x(); o["y"] = v.y();
-					if (nodeModel) nodeModel->deserializeWidgetValue(o);
-					break;
-				}
-				case PropertyType::Vec3: {
-					nodeModel = graph->library->createNode("vector3");
-					auto v = iris::fromQt(prop->getValue().value<QVector3D>());
-					QJsonObject o; o["x"] = v.x(); o["y"] = v.y(); o["z"] = v.z();
-					if (nodeModel) nodeModel->deserializeWidgetValue(o);
-					break;
-				}
-				case PropertyType::Vec4: {
-					nodeModel = graph->library->createNode("vector4");
-					auto v = iris::fromQt(prop->getValue().value<QVector4D>());
-					QJsonObject o; o["x"] = v.x(); o["y"] = v.y(); o["z"] = v.z(); o["w"] = v.w();
-					if (nodeModel) nodeModel->deserializeWidgetValue(o);
-					break;
-				}
-				case PropertyType::Color: {
-					nodeModel = graph->library->createNode("color");
-					auto c = prop->getValue().value<QColor>();
-					QJsonObject o; o["r"] = c.redF(); o["g"] = c.greenF(); o["b"] = c.blueF(); o["a"] = c.alphaF();
-					if (nodeModel) nodeModel->deserializeWidgetValue(o);
-					break;
-				}
-				case PropertyType::Texture:
-					nodeModel = graph->library->createNode("texture");
-					if (nodeModel) nodeModel->deserializeWidgetValue(QJsonValue(prop->getValue().toString()));
-					migratedTexture = true;
-					break;
-				default:
-					break;
-				}
-			}
-			// a property node whose property is missing or untyped:
-			// skip it (matches the old skip-unknown-node rule)
-			if (nodeModel == nullptr) {
-				qWarning() << "NodeGraph: dropped property node" << nodeObj["id"].toString()
-				           << "- no usable property" << propId;
-				continue;
-			}
-			nodeModel->title = prop->displayName;
-			nodeModel->id = nodeObj["id"].toString();
-			nodeModel->setX(nodeObj["x"].toDouble());
-			nodeModel->setY(nodeObj["y"].toDouble());
-			graph->addNode(nodeModel);
-			graph->migratedPropertyNodes.insert(nodeModel->id, propId);
-			if (migratedTexture)
-				migratedTextureNodes.insert(nodeModel->id);
-			continue;
-		}
-
-		// a type the library doesn't know (e.g. graphs saved while
-		// TruncNode wrote "truncate" instead of its key "trunc") used
-		// to null-deref here; skip the node and keep loading the file
+		// a type the library doesn't know (a newer build's node) is
+		// skipped; the rest of the file keeps loading
 		if (nodeModel == nullptr)
 			continue;
 		nodeModel->id = nodeObj["id"].toString();
@@ -416,14 +298,7 @@ NodeGraph* NodeGraph::deserialize(QJsonObject graphObj, NodeLibrary* library,
   		nodeModel->setY(nodeObj["y"].toDouble());
 
 		nodeModel->deserializeWidgetValue(nodeObj["value"]);
-		auto storedTitle = nodeObj["title"].toString();
-		// A merged alias whose stored title is just the OLD DEFAULT takes the
-		// new node's name — the user never renamed it, and leaving "UV
-		// Transform" on a card that is now the UV node would be the merge
-		// showing through. A title the user actually chose is kept, as always.
-		if (wasUvAlias && (storedTitle == QLatin1String("UV Transform")
-		                   || storedTitle == QLatin1String("Texture Coordinate")))
-			storedTitle.clear();
+		const QString storedTitle = nodeObj["title"].toString();
 		if (!storedTitle.isEmpty())
 			nodeModel->title = storedTitle;
 
@@ -432,20 +307,6 @@ NodeGraph* NodeGraph::deserialize(QJsonObject graphObj, NodeLibrary* library,
 			graph->setMasterNode(nodeModel);
 		}
 	}
-
-	// SOCKET-LAYOUT MIGRATION (HLMS_ADOPTION P2). Layout 1's PBR master had
-	// "Occlusion" at input index 4; layout 2 does not, so every input index
-	// above it moved down one. Connections are stored BY INDEX, so a layout-1
-	// file read as layout 2 would land Emissive on Normal, Alpha on Emissive
-	// and so on — silently. The version key makes that impossible instead of
-	// unlikely. A connection INTO the removed socket is dropped and NAMED: it
-	// fed a bake nothing ever rendered, and the user is owed the sentence.
-	const int savedLayout = graphObj.contains("socketLayout")
-	                            ? graphObj["socketLayout"].toInt(1) : 1;
-	const QString masterId = graphObj["masternode"].toString();
-	const bool pbrMaster = graph->masterNode && graph->masterNode->typeName == "PbrMaterial";
-	const bool migrateSockets = savedLayout < 2 && pbrMaster;
-	constexpr int kRemovedOcclusionSocket = 4;
 
 	// read connections
 	auto conList = graphObj["connections"].toArray();
@@ -460,31 +321,6 @@ NodeGraph* NodeGraph::deserialize(QJsonObject graphObj, NodeLibrary* library,
 		// endpoints may be missing when an unknown node type was skipped
 		if (!graph->nodes.contains(leftNodeId) || !graph->nodes.contains(rightNodeId))
 			continue;
-
-		if (migrateSockets && rightNodeId == masterId) {
-			if (rightSockIndex == kRemovedOcclusionSocket) {
-				// ONCE, however many connections carried it.
-				const QString note =
-				    QStringLiteral("The master node's Occlusion input was removed: the renderer "
-				                   "has no ambient-occlusion input, so the map it baked was never "
-				                   "read by anything. Its connection was dropped on load. Bake AO "
-				                   "into the base colour at import if you need it.");
-				if (!graph->migrationNotes.contains(note)) graph->migrationNotes << note;
-				continue;
-			}
-			if (rightSockIndex > kRemovedOcclusionSocket) --rightSockIndex;
-		}
-
-		// §3b: a texture PropertyNode had outputs texture/rgba/normal — the
-		// replacing texture node has the single texture output, and the
-		// evaluator lands it on the same map slot, so all three collapse to
-		// output 0. Its uv INPUT has no equivalent; connections into it drop.
-		if (migratedTextureNodes.contains(leftNodeId))
-			leftSockIndex = 0;
-		if (migratedTextureNodes.contains(rightNodeId)) {
-			qWarning() << "NodeGraph: dropped uv connection into migrated texture node" << rightNodeId;
-			continue;
-		}
 
 		graph->addConnection(leftNodeId, leftSockIndex, rightNodeId, rightSockIndex);
 	}
@@ -510,11 +346,9 @@ QJsonObject NodeGraph::serializeMaterialSettings()
 		blendType = "Masked";
 		break;
 	case BlendMode::Translucent:
-		// legacy string kept so old builds still read new files as alpha blend
-		blendType = "Blend";
+		blendType = "Translucent";
 		break;
 	case BlendMode::Additive:
-		// was serialized as "Blend" — Additive never survived a save/load
 		blendType = "Additive";
 		break;
 	case BlendMode::Modulate:
@@ -527,10 +361,6 @@ QJsonObject NodeGraph::serializeMaterialSettings()
 		blendType = "Refractive";
 	}
 
-	// The eight inert keys (zWrite/depthTest/fog/castShadow/receiveShadow/
-	// acceptLighting/cullMode/renderLayer) are no longer WRITTEN. Old files
-	// keep carrying them and are still read fine — deserialize just ignores
-	// names it no longer has fields for.
 	obj["name"] = settings.name;
 	obj["blendMode"] = blendType;
 	obj["bakeResolution"] = settings.bakeResolution;
@@ -544,7 +374,7 @@ MaterialSettings NodeGraph::deserializeMaterialSettings(QJsonObject obj)
 		const QString mode = obj["blendMode"].toString().toLower();
 		if (mode == "opaque") return BlendMode::Opaque;
 		if (mode == "masked") return BlendMode::Masked;
-		if (mode == "blend" || mode == "translucent") return BlendMode::Translucent;
+		if (mode == "translucent") return BlendMode::Translucent;
 		if (mode == "additive") return BlendMode::Additive;
 		if (mode == "modulate") return BlendMode::Modulate;
 		if (mode == "glass") return BlendMode::Glass;
@@ -554,7 +384,6 @@ MaterialSettings NodeGraph::deserializeMaterialSettings(QJsonObject obj)
 	MaterialSettings settings;
 	settings.name = obj["name"].toString();
 	settings.blendMode = getBlendmode(obj);
-	// absent in graphs saved before the Materials Evaluator program
 	settings.bakeResolution = qBound(128, obj["bakeResolution"].toInt(1024), 4096);
 
 	return settings;
@@ -567,7 +396,7 @@ void NodeGraph::setMaterialSettings(MaterialSettings setting)
 
 NodeGraph::~NodeGraph()
 {
-	// EVERY NODE, EVERY CONNECTION, EVERY LEGACY PROPERTY (MATERIALS_TABS_SPEC
+	// EVERY NODE AND EVERY CONNECTION (MATERIALS_TABS_SPEC
 	// §2.8). Connections first — they hold a socket on each side — then the
 	// nodes, which own their sockets and (unless a scene's proxy took it) their
 	// widget.
@@ -580,6 +409,4 @@ NodeGraph::~NodeGraph()
 	qDeleteAll(nodes);
 	nodes.clear();
 	masterNode = nullptr;
-	qDeleteAll(properties);
-	properties.clear();
 }

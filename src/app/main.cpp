@@ -18,6 +18,7 @@ For more information see the LICENSE file
 #include <QThread>
 #include <cstdio>
 #include <QApplication>
+#include <QMessageBox>
 #include <QPalette>
 #include <QStyleFactory>
 #include <QSplashScreen>
@@ -48,7 +49,9 @@ For more information see the LICENSE file
 #include "scripting/scriptengine.h"
 #include "data/constants.h"
 #include "app/updatechecker.h"
-#include "app/upgrader.h"
+#include "services/librarygeneration.h"
+#include "irisgl/core/irisutils.h"
+#include "irisgl/core/logger.h"
 #include "ui/dialogs/softwareupdatedialog.h"
 #include "ui/controls/tooltip.h"
 #include "app/versionsplashscreen.h"
@@ -175,14 +178,13 @@ int main(int argc, char *argv[])
     // WHERE THIS RUN KEEPS ITS DATA (services/apppaths.h), resolved BEFORE
     // anything reads a path. Everything downstream — the session log's release
     // directory, SettingsManager (which the very next block constructs), the
-    // Upgrader, the library database, the asset store, the shader cache — asks
+    // library database, the asset store, the shader cache — asks
     // AppPaths, so `--data-root <dir>` / `JAHSHAKA_DATA_ROOT` redirects the
     // whole set together. With neither given, every path is exactly where it
     // has always been.
     //
     // It has to be after QApplication (settingsFilePath reads
-    // applicationDirPath) and before the log, and the ordering below it —
-    // Upgrader before AssetStoreService::bootstrapFromSettings — is unchanged.
+    // applicationDirPath) and before the log.
     AppPaths::initialize(cli.dataRoot);
 
 	installCrashHandler();   // STABILITY_AUDIT.md §5.1 — backtraces for every fatal
@@ -255,12 +257,8 @@ int main(int argc, char *argv[])
         });
 
     // Apply the app theme (Qlementine Dark by default, archived Classic on
-    // request) BEFORE any widget exists — the Upgrader dialog is the first
-    // widget alive. See THEME_AUDIT.md §4.
+    // request) BEFORE any widget exists. See THEME_AUDIT.md §4.
     ThemeManager::applyAtStartup(app);
-
-	Upgrader upgrader;
-	upgrader.checkIfSchemaNeedsUpdating();
 
     app.setWindowIcon(QIcon(":/images/icon.ico"));
 
@@ -287,6 +285,30 @@ int main(int argc, char *argv[])
     if (AssetStorePaths::root() == AssetStorePaths::defaultRoot()) {
         QDir assetDir(AssetStorePaths::defaultRoot());
         if (!assetDir.exists()) assetDir.mkpath(AssetStorePaths::defaultRoot());
+    }
+
+    // THE LIBRARY GENERATION (FORWARD-ONLY-1, services/librarygeneration.h).
+    // There are no migrations: a library that is not this build's (its
+    // generation or its tables) is WIPED through the one reset, after the store
+    // bootstrap above so the reset removes the store this run uses. A data root
+    // another instance holds is REFUSED: this process exits rather than delete
+    // that instance's files.
+    {
+        const librarygeneration::Result gen = librarygeneration::checkAndWipe(
+            IrisUtils::join(AppPaths::dataRoot(), Constants::JAH_DATABASE), AppPaths::dataRoot(),
+            SettingsManager::getDefaultManager());
+        if (gen.outcome == librarygeneration::Outcome::Refused
+            || gen.outcome == librarygeneration::Outcome::Failed) {
+            std::fprintf(stderr, "Jahshaka: the library cannot be opened: %s\n",
+                         qUtf8Printable(gen.reason));
+            irisLog(QStringLiteral("library: REFUSED — %1").arg(gen.reason));
+            // ON SCREEN for a person (D6); never a modal on a driven/rig run.
+            if (!FirstRun::isDrivenSession(cli))
+                QMessageBox::critical(nullptr, QObject::tr("Jahshaka"),
+                                      librarygeneration::refusalText(gen));
+            JahLog::stop(QStringLiteral("library refused, exit code 4"));
+            return 4;
+        }
     }
 
     // ---- The startup header (SESSION_LOG_SPEC §4) --------------------------
@@ -438,6 +460,16 @@ int main(int argc, char *argv[])
         return runMcpServe(window, app, cli.mcpPort, cli.headlessScript);
 
     window.goToDesktop();   // splash.finish above hides the splash here
+
+    // THE WIPE IS SAID ON SCREEN, once (FORWARD-ONLY-1): the projects the user
+    // had are gone from the desktop, and a log line is not where they look.
+    // Only the ordinary windowed launch reaches here (every CLI path returned
+    // above); the scripted surface is app.libraryGeneration().
+    // (Belt and braces with the CLI returns above: the ordinary windowed run a
+    // rig starts with --data-root is DRIVEN too — D7 — and gets no modal.)
+    if (librarygeneration::wipedAtStartup() && !FirstRun::isDrivenSession(cli))
+        QMessageBox::information(&window, QObject::tr("Library reset"),
+                                 librarygeneration::noticeText());
 
     // FIRST LAUNCH, ONCE: the donate greeting (owner decision D3, 2026-09-12).
     // It used to run modally inside MainWindow::closeEvent — the last thing a

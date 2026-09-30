@@ -64,7 +64,6 @@ For more information see the LICENSE file
 #include "ui/controls/comboboxwidget.h"
 #include "ui/controls/rowfit.h"
 #include "ui/panels/propertywidgets/materialpropertywidget.h"
-#include "ui/panels/propertywidgets/shaderpropertywidget.h"
 #include "ui/panels/propertywidgets/worldpropertywidget.h"
 #include "ui/panels/scenenodepropertieswidget.h"
 
@@ -174,61 +173,6 @@ int main(int argc, char **argv)
                   "panel: setDatabase reaches the World blade — the row lists the "
                   "project's music (it listed nothing before this lane)");
         }
-    }
-
-    // ---- 3. THE SHADER BLADE'S COMBO SLOT -----------------------------------
-    //
-    // setShaderGuid fills both combos and then setCurrentIndex()es one, which
-    // emits straight into onShaderFileChanged — the slot that dereferenced the
-    // handle. The panel host hands the library down in its own constructor,
-    // i.e. while its own `db` is still null, so this really can run first.
-    {
-        AssetManager::clearAssetList();
-        auto *shader = new AssetShader;
-        shader->assetGuid = QStringLiteral("shader-under-test");
-        shader->fileName = QStringLiteral("under-test.shader");
-        shader->setValue(QVariant::fromValue(QJsonObject()));
-        AssetManager::addAsset(shader);
-
-        auto *vert = new AssetFile;
-        vert->assetGuid = QStringLiteral("vert-guid");
-        vert->fileName = QStringLiteral("custom.vert");
-        AssetManager::addAsset(vert);
-        auto *frag = new AssetFile;
-        frag->assetGuid = QStringLiteral("frag-guid");
-        frag->fileName = QStringLiteral("custom.frag");
-        AssetManager::addAsset(frag);
-
-        gStubRemoveDependenciesCalls = 0;
-        gStubCreateDependencyCalls = 0;
-
-        ShaderPropertyWidget blade;
-        blade.setProject(&project);
-        blade.setShaderGuid(QStringLiteral("shader-under-test"));   // fills the combos
-        ComboBoxWidget *vertCombo = comboWith(&blade, QStringLiteral("Vertex Shader"));
-        CHECK(vertCombo != nullptr, "shader: the Vertex Shader row is on the blade");
-        const int vertIdx = vertCombo ? vertCombo->findData(QStringLiteral("vert-guid")) : -1;
-        CHECK(vertIdx >= 0, "shader: the project's .vert is in the combo");
-        pick(vertCombo, vertIdx);           // the gesture, with NO library
-        pump();
-        CHECK(gStubRemoveDependenciesCalls == 0 && gStubCreateDependencyCalls == 0,
-              "shader: with no library the slot writes no dependency rows");
-        const QJsonObject afterNoDb = shader->getValue().toJsonObject();
-        CHECK(afterNoDb.contains("vertex_shader") && afterNoDb.contains("fragment_shader"),
-              "shader: ...but the pick still reaches the asset in memory — the "
-              "fallback is truthful, not a skipped feature");
-
-        Database db;
-        blade.setDatabase(&db);
-        // The same gesture again, now that the library is there: back to the
-        // .frag row's sibling index and onto the .vert again.
-        pick(vertCombo, -1);
-        pick(vertCombo, vertIdx);
-        pump();
-        CHECK(gStubRemoveDependenciesCalls > 0,
-              "shader: with the library the same gesture writes the dependency rows");
-
-        AssetManager::clearAssetList();
     }
 
     // ---- 4. THE MATERIAL BLADE'S COMBO SLOT ---------------------------------

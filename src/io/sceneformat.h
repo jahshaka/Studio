@@ -40,18 +40,14 @@ For more information see the LICENSE file
 //     euler triple (lossy — quaternion→euler→quaternion is not a fixed point in
 //     float, so every save/reopen cycle rotated every rotated node a little
 //     further) and `rotQuat` as the real thing, with the reader preferring the
-//     second. v2 writes `rot` as the quaternion and nothing else. The two
-//     spellings are told apart by the `scalar` key, which no euler triple has,
-//     so the LEGACY node objects that still exist outside scene files (library
-//     Object asset blobs — see below) keep reading correctly.
+//     second. v2 writes `rot` as the quaternion and nothing else, and the
+//     reader reads nothing else (an euler triple is not read — FORWARD-ONLY-1).
 //
 //  3. MOBILITY is persisted, as the USER'S SETTING (iris::Mobility: the
 //     "mobility" key, "static" | "movable"). Not the derived answer: the
 //     resolution rule runs on every load, and writing its output would freeze
 //     today's rule into every document. Only the places a human disagreed with
-//     it are written. v2's boolean "static" key (the old StaticOverride) is
-//     still READ with the same meaning — true = static, false = movable — and
-//     is never written again.
+//     it are written. (The old boolean "static" key is not read.)
 //
 //  4. One writer per key. v1's type-specific writers reached back into the node
 //     object and re-wrote keys the common writer had already written — `guid`
@@ -75,12 +71,8 @@ For more information see the LICENSE file
 // sections would have rewritten a database format shipped inside every sample
 // archive for a cosmetic gain. Recorded rather than done.
 //
-// NO BACKWARDS COMPATIBILITY as a product promise (owner decision D4): the app
-// writes v2 and only v2, the six shipped samples are rebuilt in it, and nothing
-// migrates user data. `SceneReader` still READS a v1 blob — that is what made
-// rebuilding the samples possible, and it is what keeps a developer's existing
-// projects openable — but it is a one-way conversion on load, announced in the
-// log, and the next save writes v2.
+// NO BACKWARDS COMPATIBILITY (owner decisions D4 + FORWARD-ONLY-1): the app
+// writes v2 and reads v2; nothing converts an older blob.
 // -----------------------------------------------------------------------------
 namespace sceneformat
 {
@@ -97,27 +89,6 @@ inline int versionOf(const QJsonObject &projectObj)
 {
     const int v = projectObj.value(QStringLiteral("formatVersion")).toInt(0);
     return v > 0 ? v : 1;
-}
-
-/// A node `type` string that older blobs can carry but that this build no
-/// longer has a class for.
-///
-/// READER CONTRACT: skip the node — return null, log the name, and do not
-/// attach it or anything under it. NOT the same as an UNKNOWN type: an
-/// unrecognised string still reads as an Empty (the v1-tolerance the format has
-/// always had), because it may well be a type a newer build writes and this one
-/// should preserve the placeholder for. A RETIRED type is different — we know
-/// exactly what it was and we know the machinery behind it is gone.
-///
-/// The only entry is `viewer` (iris::ViewerNode, the 2016 VR-era first-person
-/// stand-in). It was removed with its btKinematicCharacterController wrapper in
-/// AVATAR_LOCOMOTION_SPEC Stage 0; none of the six shipped samples contains
-/// one, and the app ships as a NEW app with no user-data migration — so an old
-/// developer project carrying one has to open, minus that node, rather than
-/// crash or resurrect a type with no behaviour behind it.
-inline bool isRetiredNodeType(const QString &type)
-{
-    return type == QLatin1String("viewer");
 }
 
 /// The reflection roughness cutoff, in whole per cent, out of a scene object:

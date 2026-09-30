@@ -298,17 +298,14 @@ public:
     bool createDependenciesTable();
     bool createAuthorTable();
     bool createFoldersTable();
-    bool createMetadataTable();
     bool createFavoritesTable();
     void createAllTables();
     void createIndexes();
     void createCasTables();
-    /// THE PIN'S FILING (DRAWERS-1): `project_assets.folder`, added in place on
-    /// an older library. A folder is a PER-PROJECT fact and a pinned row is a
-    /// LIBRARY row shared by every project, so where a project files its pin
-    /// cannot live in `assets.parent` — that column would file the same asset
-    /// into one project's folder for everybody. Empty/NULL = the project root.
-    void migrateProjectAssetsTable();
+    /// True when every table this build creates exists here with exactly the
+    /// same columns. False = a library from an older build (FORWARD-ONLY-1:
+    /// no migrations; main() wipes it through libraryreset).
+    bool schemaMatchesFresh();
 
     // INSERT ===============================================================================
     bool createProject(const QString &guid,
@@ -530,8 +527,6 @@ public:
 	bool updateProjectPosition(const QString &guid, float x, float y);
 	// slider mode (DESKTOP_SLIDER_SPEC.md): filmstrip {row, orderIndex}
 	bool updateProjectSliderPos(const QString &guid, int row, int index);
-	void updateSchema();
-	bool updateMetadataVersion(const QString &version);
 
     // FETCH ================================================================================
     AssetRecord fetchAsset(const QString &guid);
@@ -718,44 +713,20 @@ public:
 
     QStringList hasMultipleDependers(const QString &guid);
     bool hasDependencies(const QString &guid);
-	DatabaseMetadataRecord getDbMetadata();
 
     // IMPORT ===============================================================================
+    /// The PROJECT archive (.jaf) is the last .jaf reader/writer; JAF-READER-1 replaces it with manifest v2 + the envelope.
     /// ARCHIVE-GUIDS-1: `assetGuids` receives ONLY the collision remaps (a
     /// row keeps its guid otherwise; `value(guid, guid)` reads identity), and
     /// `knownGuids` the archive guids this library already held at the same
     /// type — the same asset, whose row the import left alone.
     bool importProject(const QString &inFilePath, const QString &newGuid, QString &worldName, QMap<QString, QString> &assetGuids, QSet<QString> *knownGuids = nullptr);
-    QString importAsset(const ModelTypes &jafType,
-                        const QString &pathToDb,
-                        const QMap<QString, QString> &newNames,
-                        QMap<QString, QString> &outGuids,
-                        QVector<AssetRecord> &assetRecords,
-						AssetViewFilter view_filter_to,
-                        const QString &projectGuid,
-                        const QString &parent = QString());
-
-    QString importAssetBundle(const QString &pathToDb,
-                             const QMap<QString, QString> &newNames,
-                             QMap<QString, QString> &outGuids,
-                             QVector<AssetRecord> &assetRecords,
-                             const QString &projectGuid,
-                             const QString &parent = QString());
-
 
     // EXPORT ===============================================================================
-    bool createBlobFromAsset(const QString &guid, const QString &writePath);
-
     void createExportScene(const QString& outTempFilePath, const QString &projectGuid);
 
     bool checkIfTableExists(const QString &tableName);
     bool checkIfColumnExists(const QString &tableName, const QString &columnName);
-    // Guarded, idempotent schema evolution for the projects table (desktops feature).
-    // Runs on every startup via createAllTables; ALTERs only when a column is missing.
-    void migrateProjectsTable();
-    // Same contract for the collections table (asset drawers: parent column).
-    void migrateCollectionsTable();
-    void migrateAssetsTable();
 
 
     QByteArray getSceneBlobGlobal(const QString &projectGuid) const;
@@ -781,9 +752,8 @@ public:
     bool checkIfDependencyExists(const QString &depender, const ModelTypes &type);
 	bool checkIfDependencyExists(const QString& depender, const QString& dependee);
     bool checkIfProjectVersionSupported(const QString& pathToDb);
-    bool checkIfJafModelVersionSupported(const QString& pathToDb);
 
-    /// Is a `.jaf`/project archive's recorded CONTENT_VERSION string ("0.9.1b",
+    /// Is a project archive's recorded CONTENT_VERSION string ("0.9.1b",
     /// "1.0.0", …) new enough to open? Encodes MIN_JAF_VERSION's historic
     /// major*10 + minor packing as an ordered (major, minor) compare, parsed
     /// with integers — the old code ran the first three characters through
@@ -832,11 +802,8 @@ private:
     QString dependenciesTableSchema;
     QString authorTableSchema;
     QString foldersTableSchema;
-    QString metadataTableSchema;
     QString favoritesTableSchema;
 
-	QString version080SchemaUpdate;
-	QString version080SchemaDowngrade;
 
     QSqlDatabase db;
 

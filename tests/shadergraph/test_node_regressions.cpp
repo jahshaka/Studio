@@ -1,7 +1,7 @@
 // Regressions from the 2026-08-31 node-library audit + the inline-editor work:
-//  - D1: a graph saved while TruncNode wrote typeName "truncate" (registry key
-//        "trunc") segfaulted NodeGraph::deserialize; it must LOAD, and new
-//        saves must write the registry key.
+//  - D1: a graph naming an unknown node type (e.g. the retired "truncate"
+//        spelling) segfaulted NodeGraph::deserialize; it must load WITHOUT that
+//        node (FORWARD-ONLY-1: no rename), and saves write the registry key.
 //  - D2: a bare PropertyNode (no setProperty) had an uninitialized Property*
 //        and crashed on serializeWidgetValue/process.
 //  - D4/D13: Vector2/3/4 constants truncated fractional components to int, and
@@ -54,9 +54,10 @@ int main(int argc, char** argv)
         CHECK(trunc->typeName == "trunc", "D1: TruncNode serializes its registry key");
         graph->addConnection(trunc, 0, master, 1); // wire it so connections load too
 
-        auto json = graph->serialize();
+        const auto original = graph->serialize();
+        auto json = original;
 
-        // the legacy spelling, exactly as broken saves carry it
+        // the retired spelling, exactly as broken saves carried it
         auto nodes = json["nodes"].toArray();
         for (int i = 0; i < nodes.size(); ++i) {
             auto obj = nodes[i].toObject();
@@ -67,16 +68,12 @@ int main(int argc, char** argv)
 
         // used to SIGSEGV (nullptr from createNode, immediate deref)
         auto loaded = NodeGraph::deserialize(json, new LibraryV1());
-        CHECK(loaded != nullptr, "D1: graph with legacy 'truncate' node loads");
-        CHECK(loaded->nodes.size() == 2, "D1: the Truncate node survives the load");
-        bool migrated = false;
-        for (auto node : loaded->nodes.values())
-            if (node->typeName == "trunc") migrated = true;
-        CHECK(migrated, "D1: legacy 'truncate' migrates to 'trunc' on load");
-        CHECK(loaded->connections.size() == 1, "D1: its connection survives too");
+        CHECK(loaded != nullptr, "D1: a graph naming the retired 'truncate' still loads");
+        CHECK(loaded->nodes.size() == 1 && loaded->connections.isEmpty(),
+              "D1: ...WITHOUT it: 'truncate' is not renamed to 'trunc' (FORWARD-ONLY-1)");
 
         // an entirely unknown type must skip cleanly, not crash
-        auto bogus = json;
+        auto bogus = original;
         auto bogusNodes = bogus["nodes"].toArray();
         {
             QJsonObject obj;
@@ -175,51 +172,14 @@ int main(int argc, char** argv)
               "float: inline editor value round-trips through (de)serialize");
     }
 
-    // ------------------------------------------ the UV merge (D-3) load path
+    // ------------------------------------ the retired UV typeNames (D-3)
     {
-        // A graph saved with the two RETIRED typeNames loads as the one `uv`
-        // node with every connection intact. Connections are stored BY INDEX,
-        // so this is the assertion that the alias is index-safe: `uvTransform`
-        // kept 0/1/2 in and 0 out, `texCoords` only ever saved out 0.
-        auto graph = new NodeGraph();
-        graph->setNodeLibrary(new LibraryV1());
-        auto master = new PbrMasterNode();
-        graph->addNode(master);
-        graph->setMasterNode(master);
-        auto uvt = graph->library->createNode("uv");
-        graph->addNode(uvt);
-        auto coords = graph->library->createNode("uv");
-        graph->addNode(coords);
-        graph->addConnection(coords, 0, uvt, 0);  // coords.UV -> uvt.UV
-        graph->addConnection(uvt, 0, master, 0);  // uvt.UV    -> Base Color
-
-        auto json = graph->serialize();
-        auto nodes = json["nodes"].toArray();
-        int renamed = 0;
-        for (int i = 0; i < nodes.size(); ++i) {
-            auto obj = nodes[i].toObject();
-            if (obj["type"].toString() != "uv") continue;
-            // one of each old spelling, with the titles they used to carry
-            obj["type"] = (renamed == 0) ? "uvTransform" : "texCoords";
-            obj["title"] = (renamed == 0) ? "UV Transform" : "Texture Coordinate";
-            nodes[i] = obj;
-            ++renamed;
-        }
-        json["nodes"] = nodes;
-        CHECK(renamed == 2, "uv merge: two nodes rewritten to the legacy typeNames");
-
-        auto loaded = NodeGraph::deserialize(json, new LibraryV1());
-        CHECK(loaded != nullptr, "uv merge: a graph of texCoords + uvTransform loads");
-        int uvNodes = 0;
-        int staleTitles = 0;
-        for (auto node : loaded->nodes.values()) {
-            if (node->typeName == "uv") ++uvNodes;
-            if (node->title == "UV Transform" || node->title == "Texture Coordinate")
-                ++staleTitles;
-        }
-        CHECK(uvNodes == 2, "uv merge: both legacy nodes load as the `uv` node");
-        CHECK(staleTitles == 0, "uv merge: the retired default titles do not survive");
-        CHECK(loaded->connections.size() == 2, "uv merge: both connections re-attach by index");
+        // "texCoords" and "uvTransform" merged into `uv`; their typeNames are
+        // NOT constructible any more (FORWARD-ONLY-1: no load-time alias).
+        LibraryV1 library;
+        CHECK(library.createNode("texCoords") == nullptr && library.createNode("uvTransform") == nullptr,
+              "uv merge: the retired typeNames construct nothing");
+        CHECK(library.createNode("uv") != nullptr, "uv merge: the `uv` node constructs");
     }
 
     // ------------------------------ the shipped presets keep Passthrough

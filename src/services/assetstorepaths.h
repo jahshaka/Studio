@@ -18,12 +18,9 @@ For more information see the LICENSE file
  *
  * Every path under the asset store is derived HERE and nowhere else — the
  * phase-0 sweep replaced the ~27 hand-rolled AppData+"AssetStore" joins with
- * calls into this class.  The only exempt site is src/app/upgrader.cpp, which
- * wipes the PRE-storeRoot install location and must therefore always address
- * the DEFAULT root, never a relocated one.
+ * calls into this class.
  *
  * Layouts served:
- *   - legacy (pre-CAS):  <root>/<assetGuid>/<fileName>       (legacyFolder/legacyFilePath)
  *   - CAS (phase 2):     <root>/objects/ab/<oid>.<ext>        (objectPath)
  *                        <root>/sidecar/<assetGuid>.json      (sidecarPath)
  *                        <root>/derived/<cacheKey>/           (derivedPath)
@@ -52,15 +49,6 @@ public:
 
     // Process-wide root override. Empty string = back to defaultRoot().
     static void setRootOverride(const QString &rootPath);
-
-    // --- Legacy per-guid layout (the pre-CAS store, and the phase-2
-    //     read-fallback for not-yet-migrated assets) -----------------------
-    static QString legacyFolder(const QString &assetGuid);
-    static QString legacyFilePath(const QString &assetGuid, const QString &fileName);
-
-    // Explicit-root variants (migration/verify/rebuild against a copied
-    // library — ASSET_PIPELINE_PREFLIGHT §3.2 rehearsal support).
-    static QString legacyFolderIn(const QString &rootPath, const QString &assetGuid);
 
     // --- Content-addressed layout (phase 2) ------------------------------
     static QString objectsDir();

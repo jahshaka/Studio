@@ -269,12 +269,6 @@ static void testTriState()
               qPrintable(QStringLiteral("a pinned giQuality against every tier: the field row's Auto IS the "
                                         "engine's fieldDefault of that quality (%1 of %2)").arg(agree).arg(checked)));
     }
-    // A pre-tier document (the reader's derive path) resolves its -1 the same way.
-    auto d = iris::Scene::create();
-    d->giMode = iris::GiMode::VCT;
-    d->giQuality = iris::GiQuality::MEDIUM;
-    worldmodes::derivePhotonFromDocument(d);
-    CHECK(d->giDdgi == -1, "a derived tier leaves the field's -1 AUTO (the engine's fact resolves it)");
 }
 
 static void testEpic()

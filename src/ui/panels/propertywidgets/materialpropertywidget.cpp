@@ -34,7 +34,6 @@ For more information see the LICENSE file
 #include "irisgl/document/assets/texture2d.h"
 #include "irisgl/document/scenegraph/meshnode.h"
 #include "irisgl/document/materials/pbrmaterial.h"
-#include "io/builtinmaterials.h"
 #include "irisgl/core/properties/property.h"
 
 #include "services/services.h"
@@ -215,12 +214,6 @@ bool MaterialPropertyWidget::rebindTo(const QSharedPointer<iris::MeshNode> &node
 QString MaterialPropertyWidget::materialItemsKey() const
 {
     QString key;
-    QMapIterator<QString, QString> it(Constants::Reserved::BuiltinShaders);
-    while (it.hasNext()) {
-        it.next();
-        key += it.key() + QLatin1Char('\x1f') + QFileInfo(it.value()).baseName()
-             + QLatin1Char('\x1e');
-    }
     // EXACTLY WHAT setupShaderSelector PUTS IN THE COMBO, or the panel
     // rebuilds for ever or never (fix round F12 changed both together: the
     // session's MATERIAL entries, where it used to be the Shader ones).
@@ -312,10 +305,7 @@ void MaterialPropertyWidget::setWidgetProperties()
     }
 }
 
-// The picker now chooses a MATERIAL, not a shader (HLMS_ADOPTION P4b): a
-// reserved builtin guid resolves to its PbrMaterial preset, a Shader asset to
-// the baked PbrMaterial its graph evaluates to. It used to swap the shader
-// definition inside a CustomMaterial, which is a thing that no longer exists.
+// The picker chooses a MATERIAL asset: its stored definition, as a PbrMaterial.
 void MaterialPropertyWidget::materialChanged(int index)
 {
     Q_UNUSED(index);
@@ -329,16 +319,11 @@ void MaterialPropertyWidget::materialChanged(int index)
 
     MaterialReader reader;
     reader.setProject(project);
-    // THE BUNDLE'S DEFINITION for anything that is not a builtin (phase 2's
-    // Deletes: this read a ModelTypes::Shader row through parseShaderAsPbr —
-    // the module's old separate graph asset, which nothing mints and nothing
-    // else reads). `MaterialBundle::read` is pin-first, so the combo shows the
-    // version this project renders with, and a graph material resolves through
-    // its `values` like every other material.
+    // THE BUNDLE'S DEFINITION. `MaterialBundle::read` is pin-first, so the
+    // combo shows the version this project renders with, and a graph material
+    // resolves through its `values` like every other material.
     iris::MaterialPtr picked =
-        BuiltinMaterials::isBuiltin(guid)
-            ? reader.createMaterialFromShaderGuid(guid, db).staticCast<iris::Material>()
-            : reader.parseMaterialTyped(MaterialBundle::read(db, guid, project), db);
+        reader.parseMaterialTyped(MaterialBundle::read(db, guid, project), db);
     // A guid with no definition at all must not silently blank the mesh: keep
     // what it had.
     if (!picked) { setupShaderSelector(); addResetRow(); setWidgetProperties(); return; }
@@ -368,17 +353,13 @@ void MaterialPropertyWidget::materialChanged(int index)
         SceneWriter::writeSceneNode(node, meshNode, false);
 
         db->updateAssetAsset(meshNode->getGUID(), QJsonDocument(node).toJson());
-        db->removeDependenciesByType(meshNode->getGUID(), ModelTypes::Shader);
-
-        // Don't create dependencies to builtins — they ship with the app.
-        if (!BuiltinMaterials::isBuiltin(guid)) {
-            db->createDependency(
-                static_cast<int>(ModelTypes::Object),
-                static_cast<int>(ModelTypes::Shader),
-                meshNodeGuid, guid,
-                project->getProjectGuid()
-            );
-        }
+        db->removeDependenciesByType(meshNode->getGUID(), ModelTypes::Material);
+        db->createDependency(
+            static_cast<int>(ModelTypes::Object),
+            static_cast<int>(ModelTypes::Material),
+            meshNodeGuid, guid,
+            project->getProjectGuid()
+        );
     }
 
     for (auto prop : material->properties) {
@@ -401,16 +382,8 @@ void MaterialPropertyWidget::materialChanged(int index)
 
 void MaterialPropertyWidget::setupShaderSelector()
 {
-    // "Material", not "Shader": the entries are the reserved builtin PRESETS
-    // and the project's graph-backed material assets. Nothing here selects a
-    // shader any more (HLMS_ADOPTION P4b).
+    // "Material", not "Shader": the entries are the project's material assets.
     materialSelector = this->addComboBox("Material");
-
-    QMapIterator<QString, QString> it(Constants::Reserved::BuiltinShaders);
-    while (it.hasNext()) {
-        it.next();
-        materialSelector->addItem(QFileInfo(it.value()).baseName(), it.key());
-    }
 
     // AND THE PROJECT'S MATERIALS (fix round F12). This listed the session's
     // ModelTypes::SHADER entries — the module's retired separate graph asset

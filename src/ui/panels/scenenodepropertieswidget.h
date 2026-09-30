@@ -51,7 +51,6 @@ class Database;
 class Project;
 
 // These are special and a kind of hack since this widget was never really designed to work with non scenenode types
-class ShaderPropertyWidget;
 class SkyPropertyWidget;
 class WorldCloudsPropertyWidget;
 class WorldGiPropertyWidget;
@@ -358,7 +357,7 @@ private:
     /// nothing to do with the pick — an undo (refreshFromDocument), a tab
     /// toggle and back — and those used to replace the asset's rows with the
     /// "nothing selected" line (F6, second reader 2026-09-15).
-    enum class AssetBinding { None, Shader, Sky };
+    enum class AssetBinding { None, Sky };
     AssetBinding assetBinding = AssetBinding::None;
     QString assetGuid;
     int assetSkyType = 0;
@@ -406,7 +405,6 @@ private:
     QSharedPointer<iris::Scene> scene;
 
     Database *db = nullptr;   // was uninitialized: the ctor forwards it to panels before setDatabase()
-	ShaderPropertyWidget *shaderPropView;
     IEditorViewport *sceneView = nullptr;   // was uninitialized: read before setSceneView() on some paths
 
     QVBoxLayout *widgetPropertyLayout;

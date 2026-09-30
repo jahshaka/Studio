@@ -439,76 +439,6 @@ void AssetWidget::refresh()
 	populateAssetTree(false);
 }
 
-void AssetWidget::extractTexturesAndMaterialFromMaterial(
-	const QString &filePath,
-	QStringList &textureList,
-	QJsonObject &mat)
-{
-	QFile *file = new QFile(filePath);
-	file->open(QIODevice::ReadOnly | QIODevice::Text);
-	QJsonDocument doc = QJsonDocument::fromJson(file->readAll());
-
-	const QJsonObject materialDefinition = doc.object();
-	// Legacy key names renamed to their PBR equivalents, then driven onto a
-	// PbrMaterial's own rows (HLMS_ADOPTION P4b) — no `.shader` file is loaded
-	// to borrow a uniform list from any more.
-	const QJsonObject normalised = BuiltinMaterials::normaliseLegacyDefinition(materialDefinition);
-
-	auto material = iris::PbrMaterial::create();
-	material->setName(materialDefinition["name"].toString());
-
-	for (const auto &prop : material->properties) {
-		if (normalised.contains(prop->name)) {
-			if (prop->type == iris::PropertyType::Texture) {
-				auto textureStr = !normalised[prop->name].toString().isEmpty()
-					? normalised[prop->name].toString()
-					: QString();
-				material->setValue(prop->name, textureStr);
-				if (!textureStr.isEmpty()) {
-					textureList.append(QFileInfo(textureStr).fileName());
-				}
-			}
-			else {
-				material->setValue(prop->name, normalised[prop->name].toVariant());
-			}
-		}
-	}
-
-	SceneWriter::writeSceneNodeMaterial(mat, material, false);
-}
-
-void AssetWidget::extractTexturesAndMaterialFromMaterial(
-	const QByteArray &blob,
-	QStringList &textureList,
-	QJsonObject &mat)
-{
-    QJsonDocument doc = QJsonDocument::fromJson(blob);
-	const QJsonObject materialDefinition = doc.object();
-	// Legacy key names renamed to their PBR equivalents, then driven onto a
-	// PbrMaterial's own rows (HLMS_ADOPTION P4b) — no `.shader` file is loaded
-	// to borrow a uniform list from any more.
-	const QJsonObject normalised = BuiltinMaterials::normaliseLegacyDefinition(materialDefinition);
-
-	auto material = iris::PbrMaterial::create();
-	material->setName(materialDefinition["name"].toString());
-
-	for (const auto &prop : material->properties) {
-		if (normalised.contains(prop->name)) {
-			if (prop->type == iris::PropertyType::Texture) {
-				auto textureStr = !normalised[prop->name].toString().isEmpty()
-					? normalised[prop->name].toString()
-					: QString();
-				material->setValue(prop->name, textureStr);
-			}
-			else {
-				material->setValue(prop->name, normalised[prop->name].toVariant());
-			}
-		}
-	}
-
-	SceneWriter::writeSceneNodeMaterial(mat, material, false);
-}
-
 void AssetWidget::setEventBus(Subscriber *bus)
 {
 	// (Phase 4: was a Globals::eventSubscriber connect in the constructor.)
@@ -610,10 +540,6 @@ void AssetWidget::addItem(const AssetRecord &assetData)
 		typeIcon = QIcon(":/icons/icons8-file-music.png");
 	}
 
-    if (assetData.type == static_cast<int>(ModelTypes::Shader)) {
-        item->setData(MODEL_TYPE_ROLE, assetData.type);
-    }
-
     if (assetData.type == static_cast<int>(ModelTypes::ParticleSystem)) {
         item->setData(MODEL_TYPE_ROLE, assetData.type);
         typeIcon = QIcon(":/icons/icons8-file-72-ps.png");
@@ -642,8 +568,7 @@ void AssetWidget::addItem(const AssetRecord &assetData)
 	ui->assetView->addItem(item);
 	if (!typeIcon.isNull()) item->setIcon(typeIcon);
 	else tiles()->assign(item, assetData.guid,
-	                     QIcon(assetData.type == static_cast<int>(ModelTypes::Shader)
-	                               ? ":/icons/icons8-file-72.png" : ":/icons/empty_object.png"));
+	                     QIcon(":/icons/empty_object.png"));
 }
 
 ListTileBinder *AssetWidget::tiles()
@@ -1137,8 +1062,7 @@ void AssetWidget::sceneViewCustomContextMenu(const QPoint& pos)
             }
 		}
 
-        if (item->data(MODEL_TYPE_ROLE).toInt() == static_cast<int>(ModelTypes::Shader) ||
-            item->data(MODEL_TYPE_ROLE).toInt() == static_cast<int>(ModelTypes::File))
+        if (item->data(MODEL_TYPE_ROLE).toInt() == static_cast<int>(ModelTypes::File))
         {
             action = new QAction(QIcon(), "Edit", this);
             connect(action, SIGNAL(triggered()), this, SLOT(editFileExternally()));

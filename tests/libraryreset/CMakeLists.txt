@@ -20,3 +20,18 @@ set_tests_properties(app.reset_library PROPERTIES
 set_property(TEST app.reset_library APPEND PROPERTY ENVIRONMENT_MODIFICATION
              "JAHSHAKA_DATA_ROOT=unset:")
 jah_no_display(app.reset_library)
+
+# app.library_generation (FORWARD-ONLY-1, services/librarygeneration.h): a fresh
+# data root is not wiped, a library of an OLDER generation (PRAGMA user_version)
+# is wiped at startup, and an older library whose data root another instance
+# holds (<db>.lock) is refused with exit 4 and left untouched. Headless boots.
+set(_gen_home ${CMAKE_CURRENT_BINARY_DIR}/library-generation-home)
+file(MAKE_DIRECTORY ${_gen_home}/run)
+add_test(NAME app.library_generation
+         COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/generation.sh" "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>"
+         WORKING_DIRECTORY ${_gen_home}/run)
+set_tests_properties(app.library_generation PROPERTIES
+    ENVIRONMENT "HOME=${_gen_home}" TIMEOUT 300 LABELS "app")
+set_property(TEST app.library_generation APPEND PROPERTY ENVIRONMENT_MODIFICATION
+             "JAHSHAKA_DATA_ROOT=unset:")
+jah_no_display(app.library_generation)
