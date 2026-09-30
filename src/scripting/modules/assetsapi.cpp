@@ -204,7 +204,7 @@ QVector<VerbInfo> AssetsApi::verbs() const
         { "tags", "assets.tags(guid) -> [tags]",
           "The asset's tags, [] when it has none (also in assets.metadata's read).",
           Needs::Document },
-        { "import", "assets.import(path, {units, scale, axes, rotate, translate, skeleton, clips, materials, maxCards}) -> guid",
+        { "import", "assets.import(path, {units, scale, axes, rotate, translate, skeleton, clips, materials, maxCards, faceCulling}) -> guid",
           "Imports a mesh file (obj, fbx, dae, glb, gltf, ply, stl — Constants::MODEL_EXTS) into the global asset store. NOT undoable. "
           "THE TYPE FOLLOWS THE FILE, not the extension: a model file that carries animation and NO geometry — a Mixamo download 'without skin', a .bvh capture — is stored as an ANIMATION asset (its own library type; every mesh path refuses a zero-mesh file), while a file with meshes stays an object even when it also carries clips. "
           "Read the type back with assets.metadata(guid).kind or assets.list({type: 'animation'}). "
@@ -215,11 +215,12 @@ QVector<VerbInfo> AssetsApi::verbs() const
           "`rotate` [x,y,z]: a free rotation in degrees, applied after the axis fix. `translate` [x,y,z]: an origin shift in METRES, applied last. "
           "`skeleton`, `clips` (true | false | a list of clip names) and `materials` ('import' | 'none') are recorded and are part of the asset's bake key; the pipeline builds all of them today. "
           "`maxCards` (0..64, default 12 — Epic's own 'Max Lumen Mesh Cards') is how many SURFACE CARDS the bake may author per mesh: axis-aligned orthographic captures of the surface, read back with assets.meshCards. 0 authors none. It is part of the bake key too, so changing it re-bakes the asset rather than quietly leaving the old list in place. "
+          "`faceCulling` (\"file\" by default, \"single\", \"double\") decides which faces the model's materials draw: \"file\" keeps the file's own two-sided flag (glTF doubleSided - many exporters, Blender among them, set it on every material), \"single\" imports every material back-culled, \"double\" every material two-sided. It is in the bake key too: changing it re-bakes. "
           "An unknown key or a refused value FAILS the import rather than importing at the wrong size. Read the record back with assets.importSettings(guid) and change it with assets.reimport(guid, {...}). "
           "AN IMPORT YOU ASK FOR IS YOURS (the rule assets.importFile states in full): importing bytes the library already holds as a MATERIAL'S MEMBER texture answers with that row, unstamped, instead of a second copy. Models are never stamped, so for this verb it is the rule of the pipeline rather than a thing that happens here. "
           "AND WHAT IT IS NOT (SEED-SMALL-2, stated so nobody reads it as a bug): the answer-by-content rule covers a MATERIAL'S MEMBER picture only. Importing the same file twice yourself mints a SECOND library row over the one stored object — the bytes are content-addressed and never copied, but two rows means two tiles with two names, two thumbnails and two sets of tags, and nothing merges them afterwards. That is the long-standing behaviour of this pipeline, on purpose for now: whether a user's own second import of their own picture should answer with the first row is an open question for the owner (IMPORT-DEDUP-1), not an oversight here.",
           Needs::Document },
-        { "importFile", "assets.importFile(path, drawerId?, {typeHint, units, scale, axes, rotate, translate, skeleton, clips, materials, maxCards}) -> guid",
+        { "importFile", "assets.importFile(path, drawerId?, {typeHint, units, scale, axes, rotate, translate, skeleton, clips, materials, maxCards, faceCulling}) -> guid",
           "Imports any library-supported file (models, animation clips, images, audio, video) into the asset store, optionally filed in a drawer. Images/audio/video are headless-safe (video decodes through Qt Multimedia's ffmpeg backend, no display needed). NOT undoable. "
           "`typeHint` overrides the pipeline's SNIFF with an asset type name (the assets.list vocabulary: object, animation, texture, music, video, file, ...) — for the file whose extension lies, or the one the sniffer will not claim. It is a HINT to the importer selection, not a relabel of the result: a hint the pipeline cannot honour fails rather than filing bytes under the wrong kind. Unknown names are refused with the list. "
           "RE-IMPORTING A MATERIAL'S MEMBER PICTURE (MATERIAL_BUNDLE_SPEC V-2): a texture that arrived inside a material — picked through its picker, or shipped with a preset — is stamped as that bundle's member and folds into its tile, so the user never sees it on its own. Importing those exact bytes YOURSELF answers with THAT row and clears the stamp: the same guid comes back, it is a tile from then on (assets.list({scope:'store'}) and the editor tray list it), and the material keeps it as a member — membership is the material's definition, never the stamp. One picture stays one row and one stored object; nothing is copied. An import a MATERIAL asks for never clears a stamp, and a deleted-but-pinned row is still re-listed rather than duplicated. "
@@ -437,7 +438,7 @@ QVector<VerbInfo> AssetsApi::verbs() const
           "FBX UnitScaleFactor/100, 1 for the formats that declare none) and `extent` {x,y,z}, the "
           "measured size in metres AS IMPORTED. Absent for a non-model asset.",
           Needs::Document },
-        { "reimport", "assets.reimport(guid, {units, scale, axes, rotate, translate, skeleton, clips, materials, maxCards}) -> {guid, settings, extent, bakeOid}",
+        { "reimport", "assets.reimport(guid, {units, scale, axes, rotate, translate, skeleton, clips, materials, maxCards, faceCulling}) -> {guid, settings, extent, bakeOid}",
           "RE-READS a model asset's stored SOURCE with new import settings and rebuilds everything derived "
           "from it: the mesh bake (the LOD chain and the SURFACE CARDS with it), the measured extent, the "
           "recorded settings and the thumbnail. The options are MERGED over the stored record, so a caller sends only what it is "

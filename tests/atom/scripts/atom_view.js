@@ -9,7 +9,7 @@
 //   (b) 'off' after all four is the 'off' picture, pixel for pixel;
 //   (c) with the split shut (world.setAtomDraw(false)) nothing is painted and the verb
 //       refuses every mode but 'off';
-//   (d) a stock-PBR object (a two-sided cube, atomStatus().twoSided) standing on the
+//   (d) a stock-PBR object (a planar-mirror slab, atomStatus().planar) standing on the
 //       floor keeps its lit picture: the id image still names the floor under it, and
 //       the view paints only where the final depth is the id pass's;
 //   (e) the verb refuses an unknown name, and world.atomStatus() reports the view;

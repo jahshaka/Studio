@@ -239,6 +239,16 @@ if(Vulkan_FOUND AND JAH_ATOM_GLSLANG AND OGRE_NEXT_VULKAN_RS_LIB)
     jah_gpu_row(atom.occlusion_exact CLASS engine COMMAND test_atom_occlusion
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
     set_tests_properties(atom.occlusion_exact PROPERTIES TIMEOUT 120 LABELS "engine")
+    # atom.two_sided — A TWO-SIDED MATERIAL RIDES ATOM (ATOM-TWO-SIDED-1): a closed sphere and
+    # an open plane, both CULL_NONE, routed to Atom (the cut's two-sided range, the no-cull
+    # id and caster pipelines, the decode's facing flip); the picture from the front and
+    # from behind against stock PBS, the closed mesh's ids against its back-culled ones,
+    # the open plane's shadow from both sides.
+    add_executable(test_atom_two_sided test_atom_two_sided.cpp)
+    jah_atom_engine_target(test_atom_two_sided)
+    jah_gpu_row(atom.two_sided CLASS engine COMMAND test_atom_two_sided
+             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+    set_tests_properties(atom.two_sided PROPERTIES TIMEOUT 180 LABELS "engine")
     # shadow.atom_cut / shadow.atom_parity — THE SHADOW MAPS' ATOM CASTERS ARE THE LIGHT'S
     # OWN CLUSTER CUT (ATOM-SHADOWS-1): every map's cut (PSSM, spot, the point's six faces)
     # captured by the engine's test door and checked against the rule at the LIGHT's request
