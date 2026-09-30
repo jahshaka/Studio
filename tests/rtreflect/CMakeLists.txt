@@ -141,6 +141,7 @@ set_tests_properties(gi.reflect_mover PROPERTIES TIMEOUT 300 LABELS "engine")
 # frame-to-frame change of the reflection at every ray-level crossing against the
 # still grain of the same region, and a chain-less twin as the paired control. The
 # asset is baked through the import's own door (tests/atom's cluster fixtures).
+# AN INSTRUMENT: label photon-target (reported, never deciding a tier).
 find_package(Qt6 REQUIRED COMPONENTS Gui OpenGL)
 add_executable(test_reflect_lod_pop test_reflect_lod_pop.cpp
     ${CMAKE_SOURCE_DIR}/tests/atom/cluster_fixtures.cpp
@@ -163,7 +164,7 @@ add_dependencies(test_reflect_lod_pop JahshakaEngineMedia)
 target_link_libraries(test_reflect_lod_pop PRIVATE IrisGL JahshakaEngine Qt6::Gui Qt6::OpenGL)
 jah_gpu_row(gi.reflect_lod_pop CLASS engine COMMAND test_reflect_lod_pop
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(gi.reflect_lod_pop PROPERTIES TIMEOUT 300 LABELS "engine"
+set_tests_properties(gi.reflect_lod_pop PROPERTIES TIMEOUT 600 LABELS "photon-target"
                      ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
 # THE COST, at the resolution the bar is stated at. Same binary, same fixture

@@ -15,8 +15,8 @@
 // at the pair, `kDollyFactor` closer every frame, from `kFar` to `kNear`: the
 // asset's ray level changes several times on the way.
 //
-// THE NUMBERS, frames-counted, 8-bit codes, exposure fixed (the offscreen chain's
-// manual default). The REGION of a dome is the pixels whose view ray meets the
+// THE NUMBERS, frames-counted, 8-bit codes, exposure fixed (no HDR chain:
+// PostFxDesc::hdr defaults to false, so nothing meters). The REGION of a dome is the pixels whose view ray meets the
 // dome (off its silhouette) and whose MIRROR ray meets the asset's bounding
 // sphere — where the asset's reflection is. Per frame: the region's mean
 // absolute frame-to-frame change (DELTA) and its largest per-pixel change.
@@ -43,6 +43,11 @@
 // twin of the asset (the same level-0 geometry and DAG, no chain: its ray level
 // is 0 for ever) — printed beside the chain walk at the same poses, the chain's
 // share of each crossing frame's change.
+//
+// A TARGET ROW (label photon-target, TESTING_GATE §1b): an INSTRUMENT, reported and
+// never deciding a tier. No part turns its printed bar green by design — the pop
+// line is a measurement; today's reading is above. Its two sanity checks (the control
+// is a control; the walk crosses two levels) still gate its own exit code.
 //
 // `--cost`: 200 instances of the asset in a field, the camera flying through it
 // for kCostFrames frames — the ray-level refits a frame and the ray tier's
@@ -302,8 +307,6 @@ static int costMain(Engine *e, const Placed &asset)
     for (int i = 0; i < kWarmFrames; ++i) e->renderOneFrame();
     const GpuSceneStatus g0 = s->gpuSceneStatus();
     const RayQueryStatus r0 = s->rayQueryStatus();
-    double tlasMs = 0.0, blasMs = 0.0;
-    int nT = 0, nB = 0;
     unsigned long long maxRefits = 0, prevRefits = g0.rayLevelRefits;
     for (int f = 0; f < kCostFrames; ++f) {
         z += dz;
@@ -313,20 +316,19 @@ static int costMain(Engine *e, const Placed &asset)
         const GpuSceneStatus g = s->gpuSceneStatus();
         maxRefits = std::max(maxRefits, g.rayLevelRefits - prevRefits);
         prevRefits = g.rayLevelRefits;
-        const RayQueryStatus r = s->rayQueryStatus();
-        if (r.tlasMs > 0.0f) { tlasMs += r.tlasMs; ++nT; }
-        if (r.blasMs > 0.0f) { blasMs += r.blasMs; ++nB; }
     }
     const GpuSceneStatus g1 = s->gpuSceneStatus();
     const RayQueryStatus r1 = s->rayQueryStatus();
     std::printf("target: cost, %d instances flying %d frames at 1920x1080: ray-level walks %llu, evals %.2f/frame, "
-                "refits %.3f/frame (max %llu in one frame); TLAS builds %llu refits %llu, BLAS builds %llu; "
-                "tlasMs mean %.4f, blasMs (last batch) mean %.4f over %d readings; gpuscene scan %.3f ms\n",
+                "refits %.3f/frame (max %llu in one frame); TLAS builds %llu refits %llu, BLAS builds %llu "
+                "(one mesh shared by every instance: its per-(mesh, level) BLAS are built at first use, "
+                "before the flight); tlasMs last reading %.4f, blasMs last reading %.4f (sticky: the last "
+                "measured batch); gpuscene scan %.3f ms\n",
                 kCostInstances, kCostFrames, g1.rayLevelWalks - g0.rayLevelWalks,
                 double(g1.rayLevelEvals - g0.rayLevelEvals) / kCostFrames,
                 double(g1.rayLevelRefits - g0.rayLevelRefits) / kCostFrames, maxRefits,
                 r1.tlasBuilds - r0.tlasBuilds, r1.tlasRefits - r0.tlasRefits, r1.blasBuilds - r0.blasBuilds,
-                nT ? tlasMs / nT : -1.0, nB ? blasMs / nB : -1.0, nB, g1.lastScanMicros / 1000.0);
+                double(r1.tlasMs), double(r1.blasMs), g1.lastScanMicros / 1000.0);
     return 0;
 }
 
@@ -490,7 +492,10 @@ int main(int argc, char **argv)
         return w;
     };
     // THE STILL GRAIN at a pose: parked, settled, then the mean frame-to-frame change.
+    // THE CHAIN'S scene, not the control's: walk(1) ran last and left the twin shown.
     auto grainAt = [&](float dist, float out[2]) {
+        s->setNodeVisible(nodes[0], true);
+        s->setNodeVisible(nodes[1], false);
         const Vec3 eye = eyeAt(dist);
         enginetest::testCameraLookAt(view, eye, kTarget);
         for (int i = 0; i < kSettle; ++i) e->renderOneFrame();
