@@ -154,7 +154,6 @@ int main(int argc, char **argv)
                         double(at(front, 2, H - 3).g), double(at(front, 2, H - 3).b));
             CHECK(shown && std::fabs(gh + 5.0f) < 1e-4f,
                   "the Assets module shows the Ground plane widget, at y = -5 m");
-            CHECK(!isBackground(at(front, 2, H - 3)), "...and it is the ground at the frame's bottom corner");
         }
         const iris::Vec3 camPos = assets.camera()->getLocalPos();
         std::printf("    camera %.2f %.2f %.2f\n", double(camPos.x()), double(camPos.y()), double(camPos.z()));
@@ -246,8 +245,15 @@ int main(int argc, char **argv)
         // because a backdrop switch also moves the fog and shadows the checks above read.
         assets.setBackdrop(1);
         Image dark = render(assets, *engine, view, 3);
-        CHECK(!assets.groundPlaneShown() && isBackground(at(dark, 2, H - 3)),
+        const Colour withPlane = at(huge, 2, H - 3), without = at(dark, 2, H - 3);
+        std::printf("    bottom-left: %.3f %.3f %.3f with the plane, %.3f %.3f %.3f on the dark backdrop\n",
+                    double(withPlane.r), double(withPlane.g), double(withPlane.b),
+                    double(without.r), double(without.g), double(without.b));
+        CHECK(!assets.groundPlaneShown() && isBackground(without),
               "a dark backdrop takes the ground plane away (the bottom corner is background)");
+        CHECK(std::fabs(withPlane.r - without.r) + std::fabs(withPlane.g - without.g) +
+                  std::fabs(withPlane.b - without.b) > 0.02f,
+              "...and that corner WAS the ground plane before (it changed)");
 
         // 5c. the lotus trap: framing a scaled model from its UNSCALED radius
         // put the camera inside/nowhere near it. A cube scaled x3 (world radius
