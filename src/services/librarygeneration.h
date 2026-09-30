@@ -40,8 +40,8 @@ enum class Outcome
     NoLibrary,   ///< no database file: a first launch
     Current,     ///< this build's generation and columns: nothing to do
     Wiped,       ///< an older library, wiped
-    Refused,     ///< an older library another instance holds (or a reset refusal)
-    Failed       ///< the wipe ran and failed
+    Refused,     ///< a NEWER library (never wiped), or an older one another instance holds
+    Failed       ///< the wipe ran and failed (the app refuses to start on it)
 };
 
 struct Result
@@ -65,6 +65,8 @@ bool wipedAtStartup();
 
 /// The notice the GUI shows once after a wipe.
 QString noticeText();
+/// The message the GUI shows before it refuses to start (Refused / Failed).
+QString refusalText(const Result &result);
 }
 
 #endif // LIBRARYGENERATION_H

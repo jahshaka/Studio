@@ -4,6 +4,7 @@
 #   1. a fresh data root is NOT wiped (outcome noLibrary, then current);
 #   2. a library carrying an older generation (PRAGMA user_version) IS wiped at
 #      startup — its projects are gone and the outcome says "wiped";
+#   4. a NEWER library is refused (exit 4), never wiped; and
 #   3. an older library whose data root another instance HOLDS (the
 #      `<db>.lock` QLockFile) is REFUSED: the process exits 4 with the reason,
 #      and nothing is wiped.
@@ -32,13 +33,13 @@ check $? "boot 2: this build's own library is CURRENT and is not wiped"
 
 OLD=$((GEN - 1))
 setgen "$OLD"
-boot boot3.log; check $? "boot 3 (older generation) exits 0"
 # A USER'S folder in the store root that merely LOOKS like a per-asset folder
 # (a guid name, no catalog row behind it): the wipe must leave it (D5).
 USERDIR="$ROOT/AssetStore/0f8fad5b-d9cb-469f-a165-70867728950e"
 mkdir -p "$USERDIR"; echo "mine" > "$USERDIR/notes.txt"
-[ "$(val GEN_OUTCOME boot3.log)" = "wiped" ] && [ "$(val GEN_WIPED boot3.log)" = "true" ] \
+boot boot3.log; check $? "boot 3 (older generation) exits 0"
 [ -f "$USERDIR/notes.txt" ]; check $? "boot 3: a guid-named user folder with no catalog row SURVIVES the wipe"
+[ "$(val GEN_OUTCOME boot3.log)" = "wiped" ] && [ "$(val GEN_WIPED boot3.log)" = "true" ] \
   && [ "$(val GEN_ONDISK boot3.log)" = "$OLD" ]
 check $? "boot 3: generation $OLD is WIPED (outcome $(val GEN_OUTCOME boot3.log), onDisk $(val GEN_ONDISK boot3.log))"
 [ "$(val GEN_PROJECTS boot3.log)" = "0" ]; check $? "boot 3: the old library's projects are gone"
@@ -54,5 +55,13 @@ kill "$HOLDER" 2>/dev/null; rm -f "$DB.lock"
 grep -q "another Jahshaka instance" boot4.log; check $? "boot 4 names the reason"
 [ "$(getgen)" = "$OLD" ]; check $? "boot 4 wiped nothing (the library still carries generation $OLD)"
 
-if [ "$fail" != "0" ]; then tail -20 boot4.log; exit 1; fi
+# A NEWER library is REFUSED, never wiped (D6).
+NEWER=$((GEN + 1))
+setgen "$NEWER"
+boot boot5.log; rc=$?
+[ "$rc" = "4" ]; check $? "boot 5 (a NEWER library, generation $NEWER) is REFUSED with exit 4 (rc $rc)"
+grep -q "newer build" boot5.log; check $? "boot 5 says it was written by a newer build"
+[ "$(getgen)" = "$NEWER" ]; check $? "boot 5 wiped nothing (still generation $NEWER)"
+
+if [ "$fail" != "0" ]; then tail -20 boot4.log; tail -20 boot5.log; exit 1; fi
 echo "app.library_generation: PASS"

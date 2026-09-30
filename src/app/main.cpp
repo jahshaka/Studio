@@ -297,10 +297,15 @@ int main(int argc, char *argv[])
         const librarygeneration::Result gen = librarygeneration::checkAndWipe(
             IrisUtils::join(AppPaths::dataRoot(), Constants::JAH_DATABASE), AppPaths::dataRoot(),
             SettingsManager::getDefaultManager());
-        if (gen.outcome == librarygeneration::Outcome::Refused) {
+        if (gen.outcome == librarygeneration::Outcome::Refused
+            || gen.outcome == librarygeneration::Outcome::Failed) {
             std::fprintf(stderr, "Jahshaka: the library cannot be opened: %s\n",
                          qUtf8Printable(gen.reason));
             irisLog(QStringLiteral("library: REFUSED — %1").arg(gen.reason));
+            // ON SCREEN for a person (D6); never a modal on a driven/rig run.
+            if (!FirstRun::isDrivenSession(cli))
+                QMessageBox::critical(nullptr, QObject::tr("Jahshaka"),
+                                      librarygeneration::refusalText(gen));
             JahLog::stop(QStringLiteral("library refused, exit code 4"));
             return 4;
         }

@@ -64,6 +64,18 @@ Result checkAndWipe(const QString &dbPath, const QString &dataRoot, SettingsMana
         sLast = result;
         return result;
     }
+    // A NEWER library is never wiped (D6): an older build started over a newer
+    // build's data root must not destroy it.
+    if (result.generationOnDisk > generation()) {
+        result.outcome = Outcome::Refused;
+        result.reason = QStringLiteral("This library was written by a newer build of Jahshaka "
+                                       "(library generation %1; this build reads %2). Use the "
+                                       "newer build, or another data folder.")
+                            .arg(result.generationOnDisk).arg(generation());
+        library.closeDatabase();
+        sLast = result;
+        return result;
+    }
     result.reason = columnsMatch
         ? QStringLiteral("library generation %1, this build reads %2")
               .arg(result.generationOnDisk).arg(generation())
@@ -117,6 +129,14 @@ Result checkAndWipe(const QString &dbPath, const QString &dataRoot, SettingsMana
 
 Result lastResult() { return sLast; }
 bool wipedAtStartup() { return sLast.outcome == Outcome::Wiped; }
+
+QString refusalText(const Result &result)
+{
+    if (result.outcome == Outcome::Failed)
+        return QStringLiteral("Your library from the previous build could not be reset, so "
+                              "Jahshaka cannot start on it:\n%1").arg(result.reason);
+    return QStringLiteral("Jahshaka cannot open this library:\n%1").arg(result.reason);
+}
 
 QString noticeText()
 {
