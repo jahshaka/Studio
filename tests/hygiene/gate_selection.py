@@ -12,8 +12,11 @@ WHAT IT REPLAYS (tests/hygiene/gate_selection_cases.json):
     suite the lane's gates found red with a REAL verdict, and every named suite of the lane, must
     be in the selection (or the selection must be the whole tier). The reds judged environmental
     are printed — selected or not — and never required: a contention red is not the change's.
-    A case that says `whole_tier` must select the MERGE tier by rule (a fork pin bump); a case
-    with `max_rows` must stay under it (the precision the lane is there to prove).
+    A case that says `whole_tier` must select the MERGE tier by rule (a fork diff this checkout
+    cannot read); `fork_reach`, a pin bump selected by the FORK DIFF's reach (TEST-SELECTOR-1 T2),
+    never the tier; `own_base`, the lane's OWN range starts at its newest forward merge's d-build
+    parent and `not_paths` (what the merge carried in) are not its paths (T1); a case with
+    `max_rows` must stay under it (the precision the lane is there to prove).
   * FILES: the suites audit's S1/S2 subjects, and the graph's precision (a compiled row whose
     executable does not contain the file is NOT selected).
   * HUNKS: a real file with one edit applied IN MEMORY (the Fable read's negative cases: a
@@ -416,6 +419,20 @@ def main(source, build):
         check(not S.fallback, "%s: no fallback (%s)" % (c["lane"], S.fallback[:2]))
         if c.get("whole_tier"):
             check(bool(S.full_tier), "%s: the MERGE tier by rule (%s)" % (c["lane"], S.full_tier[:1]))
+        if c.get("fork_reach"):
+            # T2: a pin bump selects by the fork diff's reach, never the tier (that runs once, at the merge)
+            check(bool(S.fork_bump) and not S.full_tier and (S.fork_bump or {}).get("files") is not None,
+                  "%s: the fork pin selects by its diff's reach, not the tier (%s)"
+                  % (c["lane"], S.full_tier[:1] or len((S.fork_bump or {}).get("files") or [])))
+        if c.get("own_base"):
+            # T1: the lane is gated on its OWN diff — from its newest forward merge's d-build parent
+            own, incoming, fwd = gs.scope_range(c["range"])
+            check(own.startswith(subprocess.run(["git", "rev-parse", c["own_base"]], cwd=source, capture_output=True,
+                                                text=True).stdout.strip()) and bool(fwd) and bool(incoming),
+                  "%s: its own diff starts at the forward merge's parent %s (%s; %d forward merge(s))"
+                  % (c["lane"], c["own_base"], own[:9], len(fwd)))
+        for np_ in c.get("not_paths", []):
+            check(np_ not in paths, "%s: %s came in through a forward merge — not the lane's path" % (c["lane"], np_))
         for m in c.get("must", []):
             check(whole or chosen(S, m), "%s: selects %s" % (c["lane"], m))
         if "max_rows" in c:
