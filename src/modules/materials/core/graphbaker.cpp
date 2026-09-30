@@ -212,12 +212,6 @@ QJsonObject GraphBaker::classify(NodeGraph* graph, BakeProgram::TextureResolver 
 		out["fold"] = QJsonValue::Null;
 		if (!compiled.uvFold.reason.isEmpty()) out["foldReason"] = compiled.uvFold.reason;
 	}
-	// What LOADING this graph had to change (NodeGraph::migrationNotes). A
-	// migration that drops a connection has to be visible somewhere a caller
-	// actually looks, and bakeInfo is the "what will this graph produce, and
-	// what will it not" report — so it is the honest place for it.
-	if (!graph->migrationNotes.isEmpty())
-		out["migrations"] = QJsonArray::fromStringList(graph->migrationNotes);
 	return out;
 }
 

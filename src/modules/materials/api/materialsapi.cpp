@@ -1901,7 +1901,7 @@ QVector<VerbInfo> GraphApi::verbs() const
           "Folds the current graph to PBR material values (the evaluator is GL-free by design). Pure math chains fold; "
           "approximated lists nodes evaluated against the fake fragment context (worldNormal, fresnel, time at t=0, ...).",
           Needs::Document },
-        { "bakeInfo", "graph.bakeInfo() -> {perSocket: {socketName: class}, fold, foldReason?, migrations?}",
+        { "bakeInfo", "graph.bakeInfo() -> {perSocket: {socketName: class}, fold, foldReason?}",
           "Classifies each master input: 'uniform' | 'passthrough' | 'baked' | 'unsupported' | 'unconnected'. "
           "`fold` is THE UV TRANSFORM ROUTE (MATERIAL_UV_NODES_SPEC): when every texture in the "
           "graph reads the mesh UVs through the same constant tiling/offset/rotation, that "
@@ -1909,7 +1909,7 @@ QVector<VerbInfo> GraphApi::verbs() const
           "samplers}` — the sources bind at full resolution and no map is baked. `fold: null` "
           "with `foldReason` means the textures are RESAMPLED into baked maps instead, which "
           "costs resolution (a 4x tiling into a 1024 bake keeps 256 px per tile), so the reason "
-          "is worth reading. `migrations` lists what loading the graph had to change.",
+          "is worth reading.",
           Needs::Document },
         { "emitInfo", "graph.emitInfo() -> {accepted, animated, emitted: [socket], fallback: {socket: reason}, "
           "ops: [opKey], pixelSource, vertexSource}",
@@ -2420,7 +2420,7 @@ bool GraphApi::deselect()
 
 namespace {
 // One name per BlendMode, matching the settings-view combo labels and the
-// serialized strings (nodegraph.cpp keeps "Blend" on disk for Translucent).
+// serialized strings.
 const char *blendModeName(BlendMode mode)
 {
     switch (mode) {
@@ -2455,7 +2455,7 @@ bool GraphApi::setBlendMode(const QString &mode)
     BlendMode want;
     if      (m == "opaque")                       want = BlendMode::Opaque;
     else if (m == "masked")                       want = BlendMode::Masked;
-    else if (m == "translucent" || m == "blend")  want = BlendMode::Translucent;
+    else if (m == "translucent")                  want = BlendMode::Translucent;
     else if (m == "additive")                     want = BlendMode::Additive;
     else if (m == "modulate")                     want = BlendMode::Modulate;
     else if (m == "glass")                        want = BlendMode::Glass;

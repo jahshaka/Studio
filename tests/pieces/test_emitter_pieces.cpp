@@ -267,7 +267,7 @@ int main(int argc, char **argv)
         // exists to fix; the second block below pins that.)
         Rig r;
         auto sum = r.add("add");
-        r.connect(r.add("texCoords"), 0, sum, 0);
+        r.connect(r.add("uv"), 0, sum, 0);
         r.connect(r.addColor(0.2, 0.4, 0.8), 0, sum, 1);
         r.toMaster(sum, 0, 0);
         const auto compiled = materials::GraphBaker::compile(r.graph);

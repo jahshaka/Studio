@@ -105,9 +105,9 @@ assert(("" + worn.baseColorMap).length > 0, "the mesh wears the bundle's baseCol
 // archive manifest (project rows + pins) did not carry it — the material
 // travelled without the maps it is made of. Every member a write names is
 // pinned now, so this arm bakes BEFORE exporting and the far side checks it.
-var uv = graph.addNode("texCoords");
+var uv = graph.addNode("uv");
 var split = graph.addNode("splitvector");
-assert(graph.connect(uv, 0, split, 0), "texCoords -> splitvector");
+assert(graph.connect(uv, 0, split, 0), "uv -> splitvector");
 assert(graph.connect(split, 0, masterId, "Roughness"), "U -> Roughness (a varying chain: baked)");
 assert(graph.save() === true, "graph.save bakes and writes the definition");
 

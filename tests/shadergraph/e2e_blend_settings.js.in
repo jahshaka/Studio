@@ -23,9 +23,11 @@ for (var i = 0; i < modes.length; i++) {
     assert(graph.settings().blendMode === modes[i], "settings() reads back " + modes[i]);
 }
 
-// legacy alias
-assert(graph.setBlendMode("Blend") === true, "legacy 'Blend' accepted");
-assert(graph.settings().blendMode === "Translucent", "'Blend' lands as Translucent");
+// the retired 'Blend' spelling is REFUSED (FORWARD-ONLY-1), not aliased
+graph.setBlendMode("Translucent");
+var blendThrew = false;
+try { graph.setBlendMode("Blend"); } catch (e) { blendThrew = true; }
+assert(blendThrew, "the retired 'Blend' name is refused");
 
 // unknown mode -> catchable error, setting unchanged
 var threw = false;

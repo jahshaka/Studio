@@ -98,7 +98,7 @@ int main(int argc, char** argv)
     {
         Rig r;
         auto split = r.add("splitvector");
-        r.graph->addConnection(r.add("texCoords"), 0, split, 0);
+        r.graph->addConnection(r.add("uv"), 0, split, 0);
         r.toMaster(split, 0, 2); // X -> Roughness
 
         const QString dir = baseDir + "/gradient";
@@ -125,7 +125,7 @@ int main(int argc, char** argv)
     {
         Rig r;
         auto split = r.add("splitvector");
-        r.graph->addConnection(r.add("texCoords"), 0, split, 0);
+        r.graph->addConnection(r.add("uv"), 0, split, 0);
         auto mul = r.add("multiply");
         r.graph->addConnection(split, 0, mul, 0);
         r.graph->addConnection(r.addFloat(2.0), 0, mul, 1);
@@ -161,7 +161,7 @@ int main(int argc, char** argv)
         static_cast<TextureNode*>(tex)->setTexturePath(texPath);
         auto sampler = r.add("textureSampler");
         r.graph->addConnection(tex, 0, sampler, 0);
-        r.graph->addConnection(r.add("texCoords"), 0, sampler, 1);
+        r.graph->addConnection(r.add("uv"), 0, sampler, 1);
         auto mul = r.add("multiply");
         r.graph->addConnection(sampler, 0, mul, 0);
         r.graph->addConnection(r.addColor(0.5, 0.5, 0.5), 0, mul, 1);
@@ -199,7 +199,7 @@ int main(int argc, char** argv)
         Rig r;
         auto tex = r.add("texture");
         static_cast<TextureNode*>(tex)->setTexturePath(texPath);
-        auto uvt = r.add("uvTransform");
+        auto uvt = r.add("uv");
         QJsonObject widget;
         widget["tileX"] = 2.0; widget["tileY"] = 2.0;
         widget["offsetX"] = 0.0; widget["offsetY"] = 0.0;
@@ -541,7 +541,7 @@ int main(int argc, char** argv)
         Rig r;
         r.toMaster(r.addColor(1.0, 0.0, 0.0), 0, 0); // uniform red base
         auto split = r.add("splitvector");
-        r.graph->addConnection(r.add("texCoords"), 0, split, 0);
+        r.graph->addConnection(r.add("uv"), 0, split, 0);
         r.toMaster(split, 0, 5); // U -> Alpha (varying)
 
         auto res = bake(r, baseDir + "/alpha", 4);
@@ -586,7 +586,7 @@ int main(int argc, char** argv)
     {
         Rig r;
         auto split = r.add("splitvector");
-        r.graph->addConnection(r.add("texCoords"), 0, split, 0);
+        r.graph->addConnection(r.add("uv"), 0, split, 0);
         r.toMaster(split, 0, 2);
 
         const QString dir = baseDir + "/cache";
@@ -620,7 +620,7 @@ int main(int argc, char** argv)
     {
         Rig r;
         auto split = r.add("splitvector");
-        r.graph->addConnection(r.add("texCoords"), 0, split, 0);
+        r.graph->addConnection(r.add("uv"), 0, split, 0);
         r.toMaster(split, 0, 2);
         r.toMaster(r.addFloat(0.3), 0, 1);
         auto info = GraphBaker::classify(r.graph)["perSocket"].toObject();
@@ -633,7 +633,7 @@ int main(int argc, char** argv)
         Rig r;
         // a ~20-node varying graph: texCoords -> split -> 16 alternating ops -> Roughness
         auto split = r.add("splitvector");
-        r.graph->addConnection(r.add("texCoords"), 0, split, 0);
+        r.graph->addConnection(r.add("uv"), 0, split, 0);
         NodeModel* head = split;
         int headOut = 0;
         const char* chain[] = { "add", "multiply", "fraction", "oneminus",
