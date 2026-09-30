@@ -114,7 +114,7 @@ const QStringList &emittableOps()
 		"reflect", "dot", "length", "distance", "normalize",
 		"splitvector", "composevector", "makeColor",
 		// uv + normals
-		"uv", "texCoords", "uvTransform", "panner", "flipbook",
+		"uv", "panner", "flipbook",
 		"normalintensity", "combinenormals",
 		// the clock
 		"time", "pulsate",
@@ -178,8 +178,7 @@ int arityOf(const BakeOp &op)
 	    t == "time" || t == "pulsate")
 		return 1;
 	if (t == "composevector" || t == "makeColor") return 4;
-	if (t == "uv" || t == "texCoords" || t == "uvTransform" || t == "panner" ||
-	    t == "flipbook")
+	if (t == "uv" || t == "panner" || t == "flipbook")
 		return 2;
 	if (t == "normalintensity") return 3;
 	if (t == "smoothstep" || t == "clamp") return in(2);
@@ -321,8 +320,6 @@ private:
 		else if (t == "makeColor")
 			expr = QStringLiteral("float4( %1, %2, %3, 1.0 )")
 			           .arg(scalar(op, 0), scalar(op, 1), scalar(op, 2));
-		else if (t == "texCoords")
-			expr = QStringLiteral("float4( jahUv, 0.0, 0.0 )");
 		// THE UV NODE: R(rot) * ((uv * tiling + offset) - 0.5) + 0.5, rotation
 		// in degrees about the texture centre. The zero-rotation form is the
 		// plain uv*s+o — chosen from BakeOp::uvRotationIsZero, the SAME flag the
@@ -342,10 +339,6 @@ private:
 				           .arg(rad, tiled);
 			}
 		}
-		// uv * tiling + offset (the retired `uvTransform` node's op)
-		else if (t == "uvTransform")
-			expr = QStringLiteral("float4( (%1).xy * (%2).xy + (%3).xy, 0.0, 0.0 )")
-			           .arg(input(op, 0), input(op, 1), input(op, 2));
 		// uv + speed * time; the Time socket is read as a scalar
 		else if (t == "panner")
 			expr = QStringLiteral("float4( (%1).xy + (%2).xy * %3, 0.0, 0.0 )")

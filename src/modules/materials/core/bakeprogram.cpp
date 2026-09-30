@@ -276,10 +276,6 @@ const QHash<QString, EvalFn>& evalRegistry()
 		r["makeColor"] = [](const BakeOp&, const Value* in, const EvalContext&) {
 			return Value(in[0].x, in[1].x, in[2].x, 1.0);
 		};
-		r["texCoords"] = [](const BakeOp&, const Value*, const EvalContext& ctx) {
-			// TexCoord0-3 all evaluate to the bake UV (single-UV bake, spec 1.2)
-			return Value(ctx.u, ctx.v);
-		};
 		r["textureSampler"] = [](const BakeOp& op, const Value* in, const EvalContext&) {
 			if (op.image.isNull()) return Value(0.0, 0.0, 0.0, 0.0); // GLSL-documented: unconnected -> vec4(0)
 			return BakeProgram::sampleImage(op.image, in[0].x, in[0].y);
@@ -332,14 +328,6 @@ const QHash<QString, EvalFn>& evalRegistry()
 			const double c = std::cos(th), sn = std::sin(th);
 			const double tx = x - 0.5, ty = y - 0.5;
 			return Value(c * tx - sn * ty + 0.5, sn * tx + c * ty + 0.5);
-		};
-		// The two typeNames "uv" absorbed. Nothing constructs them any more
-		// (the library aliases them and NodeGraph::deserialize renames on
-		// load); kept so a program compiled from a hand-built node with the
-		// old typeName still evaluates instead of silently reading zero.
-		r["uvTransform"] = [](const BakeOp&, const Value* in, const EvalContext&) {
-			return Value(in[0].x * in[1].x + in[2].x,
-			             in[0].y * in[1].y + in[2].y);
 		};
 		r["panner"] = [](const BakeOp&, const Value* in, const EvalContext&) {
 			// uv + speed * time
@@ -412,7 +400,6 @@ bool nodeIsApproximated(const QString& t)
 	return t == "worldNormal" || t == "localNormal" || t == "fresnel" || t == "depth";
 }
 bool nodeIsAnimated(const QString& t) { return t == "time" || t == "pulsate"; }
-bool nodeIsVarying(const QString& t) { return t == "texCoords"; }
 
 struct Compiler
 {
@@ -669,7 +656,6 @@ struct Compiler
 			markUnsupported(op, type);
 		}
 
-		op.varying |= nodeIsVarying(type);
 		op.animated |= nodeIsAnimated(type);
 		if (nodeIsApproximated(type) || nodeIsAnimated(type)) {
 			op.approximated = true;
@@ -754,8 +740,7 @@ void BakeProgram::reclassify()
 		const auto& uvRef = root.inputs[0];
 		const bool uvIsBakeUv =
 		    (uvRef.op < 0 && uvRef.fallbackKind == BakeInputRef::Uv) ||
-		    (uvRef.op >= 0 && (ops[uvRef.op].typeName == "texCoords"
-		                       || isIdentityUvOp(ops[uvRef.op])));
+		    (uvRef.op >= 0 && isIdentityUvOp(ops[uvRef.op]));
 		if (uvIsBakeUv) {
 			classification = SocketClass::Passthrough;
 			passthroughPath = root.imagePath;
