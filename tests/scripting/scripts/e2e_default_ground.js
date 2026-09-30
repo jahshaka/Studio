@@ -293,6 +293,9 @@ assert(project.close() === true, "close");
 assert(project.open(proj) === true, "reopen");
 assert(editor.overlays().groundPlane === true,
        "the Ground plane setting is PER SCENE and came back with it");
+assert(scene.nodes().length === 4,
+       "...and the SAVED scene holds no node for the plane: the Floor, two lights and the root (" +
+       scene.nodes().length + ")");
 var floor2 = scene.find("Floor");
 var m2 = material.get(floor2);
 assert(m2.workflow === 1 && near(m2.ior, 1.0, 1e-4) &&
@@ -307,6 +310,27 @@ assert(node.setProperty(floor2, "visible", false), "hide the Floor");
 var noFloor = obliqueCorners("no_floor_plane_on");
 assert(skyCount(noFloor) === 0,
        "with the Floor hidden the Ground plane still grounds every corner (" + J(noFloor) + ")");
+
+// ---- 5b. A VISUAL GIZMO, NOT A PROJECT ASSET (owner, 2026-09-30) -------------
+// With the plane ON and nothing else under the cursor (the Floor hidden), the
+// plane is nothing a user can touch: a viewport click there selects NOTHING, a
+// material drop (and the hover preview, which asks the same question) finds NO
+// target, and the plane is in neither the outliner nor the saved scene.
+var vs5 = editor.viewportState();
+var px = vs5.width * 0.5, py = vs5.height * 0.8;
+editor.setCamera({ position: { x: 0, y: 6, z: 8 }, lookAt: { x: 0, y: 0, z: 0 } });
+editor.frame(4, 1 / 60);
+var under5 = editor.screenshot("ground_gizmo_pick.png", 320, 180, [{ x: 0.5, y: 0.8 }], "raw").probes[0];
+assert(!isSky(under5), "the probed pixel IS the Ground plane (" + J(under5) + ")");
+assert(editor.clickTargetAt(px, py) == null, "a viewport click on the Ground plane selects NOTHING");
+assert(editor.dropTargetAt(px, py) == null,
+       "...and a material drop / hover preview there finds NO target — the plane takes no material");
+var rowsOn = editor.outlinerRows().length;
+assert(editor.setOverlays({ groundPlane: false }) === true, "the widget off (for the comparison)");
+assert(editor.outlinerRows().length === rowsOn, "the outliner does not change with the plane (" + rowsOn + " rows)");
+assert(editor.setOverlays({ groundPlane: true }) === true, "the widget on again");
+assert(scene.nodes().filter(function (r) { return /ground ?plane/i.test(r.name); }).length === 0,
+       "...and no node for it exists in the document the save writes");
 assert(editor.setOverlays({ groundPlane: false }) === true, "the widget off too");
 var bare = obliqueCorners("no_floor_plane_off");
 assert(skyCount(bare) === CORNERS.length, "...and with both gone the frame is all sky (" + J(bare) + ")");
