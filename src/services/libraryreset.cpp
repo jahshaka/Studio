@@ -226,10 +226,16 @@ Result reset(Database *db, SettingsManager *settings, const QString &projectsRoo
                 take(entry.absoluteFilePath());
                 continue;
             }
-            // A guid-named folder: the pre-CAS store's per-asset layout, which
-            // this app wrote there and nothing reads any more. It goes with
-            // the store (its files count as objects).
-            if (entry.isDir() && isOurGuidName(entry.fileName())) {
+            // The pre-CAS store's per-asset folder, which this app wrote there
+            // and nothing reads any more — ONLY when it provably is one (D5):
+            // directly under the store root, named by the guid of an asset ROW
+            // this catalog holds (the tables are dropped in step 4, after this),
+            // and holding plain files only. A user's own folder that merely
+            // looks like a guid is left exactly where it is.
+            if (entry.isDir() && !entry.isSymLink() && isOurGuidName(entry.fileName())
+                && db->fetchAsset(entry.fileName()).guid == entry.fileName()
+                && QDir(entry.absoluteFilePath())
+                       .entryInfoList(QDir::Dirs | QDir::NoDotAndDotDot).isEmpty()) {
                 countFiles(entry.absoluteFilePath(), &result.removed.objects,
                            &result.removed.staging);
                 take(entry.absoluteFilePath());

@@ -33,7 +33,12 @@ check $? "boot 2: this build's own library is CURRENT and is not wiped"
 OLD=$((GEN - 1))
 setgen "$OLD"
 boot boot3.log; check $? "boot 3 (older generation) exits 0"
+# A USER'S folder in the store root that merely LOOKS like a per-asset folder
+# (a guid name, no catalog row behind it): the wipe must leave it (D5).
+USERDIR="$ROOT/AssetStore/0f8fad5b-d9cb-469f-a165-70867728950e"
+mkdir -p "$USERDIR"; echo "mine" > "$USERDIR/notes.txt"
 [ "$(val GEN_OUTCOME boot3.log)" = "wiped" ] && [ "$(val GEN_WIPED boot3.log)" = "true" ] \
+[ -f "$USERDIR/notes.txt" ]; check $? "boot 3: a guid-named user folder with no catalog row SURVIVES the wipe"
   && [ "$(val GEN_ONDISK boot3.log)" = "$OLD" ]
 check $? "boot 3: generation $OLD is WIPED (outcome $(val GEN_OUTCOME boot3.log), onDisk $(val GEN_ONDISK boot3.log))"
 [ "$(val GEN_PROJECTS boot3.log)" = "0" ]; check $? "boot 3: the old library's projects are gone"
