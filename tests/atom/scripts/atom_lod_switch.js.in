@@ -165,9 +165,10 @@ function centreDepth(d) {
         votes[lv] = (votes[lv] || 0) + 1;
         if (best < 0 || votes[lv] > votes[best]) best = lv;
     }
-    var levelsPixels = 0;
-    for (var k = 0; k < votes.length; ++k) levelsPixels += votes[k] || 0;
-    return { painted: best, votes: best >= 0 ? votes[best] : 0, levels: levelsPixels };
+    // THE DOMINANT DEPTH: the majority and its two neighbours (the centre shows at most
+    // two adjacent depths around the majority — a border between them).
+    var around = best >= 0 ? (votes[best - 1] || 0) + votes[best] + (votes[best + 1] || 0) : 0;
+    return { painted: best, votes: best >= 0 ? votes[best] : 0, around: around };
 }
 var painted = [];
 for (var c = 0; c < D.length; ++c) {
@@ -175,12 +176,18 @@ for (var c = 0; c < D.length; ++c) {
     painted.push(pc.painted);
     var cs = world.atomStatus();
     console.log("levels view at " + D[c] + " m: the cut paints depth " + pc.painted + " (" + pc.votes +
-                "/25 centre pixels; " + pc.levels + "/25 a Levels colour); the view drew " + cs.cutClusters +
+                "/25 centre pixels; " + pc.around + "/25 at it or an adjacent depth); the view drew " + cs.cutClusters +
                 " clusters, " + cs.cutTriangles + " triangles");
-    assert(pc.painted >= 0 && pc.levels >= 13, "the centre of the shot is a Levels colour at " + D[c] + " m");
+    assert(pc.painted >= 0 && pc.around >= 13, "the centre of the shot is a Levels colour at " + D[c] + " m (" +
+           pc.around + "/25 at depth " + pc.painted + " or an adjacent one)");
     if (c > 0) assert(painted[c] >= painted[c - 1], "the painted depth never gets finer further out (" + D[c] +
                       " m: " + painted[c] + " after " + painted[c - 1] + ")");
 }
+// THE ROOTS COLLAPSE IN THE VIEWPORT (CLUSTER-LOCK-3): with the lock per group the cut
+// keeps coarsening past 60 m (the whole-build lock held the stand-in at depth 2 from
+// 60 m to 250 m).
+assert(painted[3] > painted[1], "the cut coarsens between 60 m and 250 m (depth " + painted[1] + " -> " +
+       painted[3] + ")");
 assert(painted[D.length - 1] > painted[0], "the Levels picture changes: depth " + painted[0] + " at 30 m, " +
        painted[D.length - 1] + " at 500 m");
 
