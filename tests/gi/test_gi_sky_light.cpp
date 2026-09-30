@@ -655,8 +655,17 @@ int main(int argc, char **argv)
             std::printf("   largest single-degree step: the SUN's share %.1f%% (at pitch %.0f), "
                         "the SKY alone %.1f%%\n",
                         worstSun * 100.0f, worstAt, worstSky * 100.0f);
-            CHECK(worstSun < 0.05f,
-                  "7b4. one degree of sun never moves the sun's share of the picture by 5%");
+            // THE VALUE IS RE-BASED FOR THE PHYSICAL SKY (SKY-ATMOSPHERE-1; the
+            // denominator stays the previous frame). The share is the sphere
+            // hiding a sky and the sun's light on it, and with a real twilight
+            // the whole frame falls about twofold per degree at the horizon (the
+            // sky's own step there is 54 %), so the share falls with it and its
+            // smooth step measures 10.3 % of the previous frame at the crossing
+            // at the default haze. 12 %: above that smooth fall, and below the
+            // whole share at the crossing (14.5 % of the frame), so a flip that
+            // took the disc and the sun's light out in one step still reds.
+            CHECK(worstSun < 0.12f,
+                  "7b4. one degree of sun never moves the sun's share of the picture by 12%");
 
             // (d) THE THIN-SKY CASE, which is what the frozen plateau really
             // cost: with the air dialled thin, a sun 30 degrees UNDER the
