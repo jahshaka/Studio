@@ -62,7 +62,41 @@ function snapshot() {
         if (n.type === "mesh") rec.mat = material.get(n.id);
         arr.push(rec);
     }
-    return JSON.stringify({ world: world.get(), root: scene.root(), nodes: arr });
+    return JSON.stringify({ world: documentOnly(world.get()), root: scene.root(), nodes: arr });
+}
+
+// THE GATE IS DOCUMENT FIELDS TO THE BYTE, and a `live` sub-object is not one.
+// world.get() carries runtime READOUTS beside the document (world.clouds.live:
+// the sheet's measured clear-sky mean, its scroll, its capture counters) —
+// numbers the renderer MEASURES from what it drew, which move in the fourth
+// decimal between two opens of the same document (the capture's readback of a
+// sky built again from its tables) without any field having changed. So every
+// `live` object anywhere in the tree is dropped from the compared snapshot, and
+// collected into LIVE_READOUTS so the run prints what it dropped (liveDiff
+// below): a real field that hid in a `live` object would show there.
+var LIVE_READOUTS = [];
+function documentOnly(v, path) {
+    path = path || "world";
+    if (v === null || typeof v !== "object") return v;
+    if (Array.isArray(v)) return v.map(function (x, i) { return documentOnly(x, path + "[" + i + "]"); });
+    var out = {};
+    Object.keys(v).forEach(function (k) {
+        if (k === "live") { LIVE_READOUTS.push({ path: path + ".live", value: v[k] }); return; }
+        out[k] = documentOnly(v[k], path + "." + k);
+    });
+    return out;
+}
+function liveDiff(a, b, path, out) {
+    if (a === b) return out;
+    if (a === null || b === null || typeof a !== "object" || typeof b !== "object") {
+        out.push(path + ": " + JSON.stringify(a) + " -> " + JSON.stringify(b));
+        return out;
+    }
+    var keys = {};
+    Object.keys(a).forEach(function (k) { keys[k] = 1; });
+    Object.keys(b).forEach(function (k) { keys[k] = 1; });
+    Object.keys(keys).forEach(function (k) { liveDiff(a[k], b[k], path + "." + k, out); });
+    return out;
 }
 
 // The ground, dead centre-bottom of the framed view. 0.8 is below the cube and
@@ -165,7 +199,21 @@ for (var cycle = 1; cycle <= 3; cycle++) {
     var p = probe("reopen" + cycle);
     samePixels(p0, p, "cycle " + cycle + ": the ground renders what it rendered before the save");
 
+    var liveFresh = LIVE_READOUTS;
+    LIVE_READOUTS = [];
     var s = snapshot();
+    // THE DROPPED READOUTS, diffed and printed once per cycle: what differs
+    // there is a measurement, and the list says exactly which ones.
+    var ld = [];
+    for (var li = 0; li < liveFresh.length; li++) {
+        var other = null;
+        for (var lj = 0; lj < LIVE_READOUTS.length; lj++)
+            if (LIVE_READOUTS[lj].path === liveFresh[li].path) other = LIVE_READOUTS[lj].value;
+        liveDiff(liveFresh[li].value, other, liveFresh[li].path, ld);
+    }
+    console.log("LIVE DIFF cycle " + cycle + " (" + liveFresh.length + " live object(s), dropped from the gate): " +
+                (ld.length ? ld.join(" | ") : "none"));
+    LIVE_READOUTS = liveFresh;
     var g = groundOf(s);
     assert(g.mat.baseColorMap === g0.mat.baseColorMap,
            "cycle " + cycle + ": Ground's baseColorMap survived the round trip");
