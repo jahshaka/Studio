@@ -31,7 +31,6 @@ class EngineThumbnailRenderer;
 enum class ThumbnailRequestType
 {
     Material,
-    Mesh,
     ImportedMesh, // Stuff that's already in the app to refresh previews
     // A Shader ASSET (a stored graph definition, id = its guid): rendered as
     // the PbrMaterial the evaluator baked into it, on the preview sphere

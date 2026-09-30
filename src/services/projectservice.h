@@ -134,16 +134,15 @@ public:
     /// NOT mutated (SCRIPTING_SPEC §1.6.1). Removes the project's tile.
     bool removeProject(const QString &guid);
 
-    /// The reader half of openProject: reads the scene blob into a document
-    /// scene. editorData is an output parameter exactly as SceneReader hands
-    /// it over.
-    /// `prewarm` (optional) carries the model files a worker thread already
-    /// parsed (irisgl/import/meshprewarm.h) — the reader then builds meshes
-    /// out of ready iris::SceneSource parses instead of running the importer on this thread.
     /// The model files the LAST readProjectScene found with no current bake
     /// (FORWARD-ONLY-1): missing from the open, never parsed. The shell raises
     /// one `model.missing` scene issue per file after it binds the scene.
     QStringList missingModels() const { return mMissingModels; }
+
+    /// The reader half of openProject: reads the scene blob into a document
+    /// scene. editorData is an output parameter exactly as SceneReader hands
+    /// it over. `prewarm` (optional) carries the BAKES a worker thread already
+    /// read (irisgl/import/meshprewarm.h); the reader never parses a model.
     iris::ScenePtr readProjectScene(EditorData **editorData,
                                     const iris::MeshPrewarmPtr &prewarm = iris::MeshPrewarmPtr());
 
