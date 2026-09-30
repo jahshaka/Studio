@@ -3362,7 +3362,7 @@ void unlit_refuses_rigged_meshes() {
               "an unrigged mesh's material switches fine: %s", fx.e->lastError().c_str());
 }
 
-// Fog is EXPONENTIAL (Ogre's AtmosphereNpr math, adopted whole): a surface keeps
+// Fog is EXPONENTIAL (upstream's fog block, fed by our atmosphere component): a surface keeps
 // the fraction 2^(-distance * density) of its own colour, and the rest is fog. It
 // therefore NEVER equals the fog colour at any distance, which is why this suite
 // asserts the law rather than an endpoint.
@@ -3626,32 +3626,12 @@ void atmosphere_sun_tint_reddens_a_low_sun() {
 // ---------------------------------------------------------------------------
 // THE SKY AT A MID-AFTERNOON SUN IS BLUE-WHITE, NOT GOLDEN (lane SKY-TUNE-1)
 // ---------------------------------------------------------------------------
-// AtmosphereNpr's SHIPPED preset (densityCoeff 0.47, densityDiffusion 2.0) is
-// tuned for sunsets: it turned the whole horizon ring golden from a sun 24
-// degrees up and read 107,000 K at the zenith, so a 36-degree sun — mid
-// afternoon — rendered as evening. The defaults were refitted (density 0.25,
-// skyPower 1.5; irisgl/document/scenegraph/scene.cpp carries the derivation and
-// spikes/sky-tune-1/FINDINGS.md the sweep) to PREETHAM'S ANALYTIC DAYLIGHT MODEL
-// (SIGGRAPH 1999) at turbidity 2.5.
-//
-// SINCE SKY-ATMOSPHERE-1 the sky is the planet's atmosphere and the Preetham fit is
-// only printed; the gate is the colour temperature (blue-white, not golden).
-//
-// This case was the gate on that fit, at the three directions that decide what a
-// picture looks like. The reference numbers below are Preetham evaluated at the
-// EXACT directions aimed at here, in CIE u'v' — the chromaticity plane, because
-// the sky's absolute level is a skyPower/exposure question and its HUE is not:
-//
-//   direction (world)                     Preetham u'v'      shipped-preset u'v' error
-//   near zenith  (0, 0.9997, 0.0250)      0.1760, 0.4041     0.0301   <- FAILS
-//   45 deg up, 90 deg from the sun        0.1756, 0.4072     0.0091
-//   10 deg up, 90 deg from the sun        0.1861, 0.4394     0.0285   <- FAILS
-//
-// The tolerance is 0.020: a just-noticeable u'v' shift on a large field is about
-// 0.010, and the MEASURED floor of this three-parameter model at a 36-degree sun
-// — the preset minimising the worst probe over density 0.02..0.80 x diffusion
-// 0.1..4.0 — is 0.0169, so 0.020 is that floor plus a margin and not a number
-// picked to fit. The fitted preset measures 0.0092 / 0.0089 / 0.0146.
+// The realistic sky is the planet's atmosphere (SKY-ATMOSPHERE-1). This case
+// was the gate on the retired non-physical sky's fit to Preetham's analytic
+// daylight model at three directions (CIE u'v', bar 0.020); that fit is gone
+// with the model it tuned, and the Preetham u'v' is only PRINTED below. What
+// this case still gates is the behaviour it was written for: at a 36-degree
+// sun — mid afternoon — the sky reads BLUE-WHITE (CCT >= 8000 K), not golden.
 //
 // Read off a bare scene: the sky quad is unlit, so no light, no cube and no
 // ground can move these pixels. The readback is linear radiance x 255 (the

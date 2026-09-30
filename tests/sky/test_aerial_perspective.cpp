@@ -85,6 +85,10 @@ SkyDesc realisticSky(float elevationDeg, float azimuthDeg, float haze)
     d.atmosphere.sunHaze = haze;
     d.atmosphere.hasSun = true;
     d.atmosphere.sunIlluminance = Colour(kPi, kPi, kPi, 1.0f);   // a white sun, intensity 1
+    // THIS SUITE MEASURES THE AIR ON THE SCENE, so it switches it on: the
+    // default is off since the owner's 2026-09-30 decision (sky.atmosphere (g)
+    // gates the default).
+    d.atmosphere.aerialScale = 1.0f;
     const float e = elevationDeg * kPi / 180.0f, a = azimuthDeg * kPi / 180.0f;
     d.atmosphere.sunDir[0] = std::cos(e) * std::sin(a);
     d.atmosphere.sunDir[1] = std::sin(e);

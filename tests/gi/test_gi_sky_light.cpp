@@ -646,13 +646,8 @@ int main(int argc, char **argv)
             for (size_t i = 1; i < sweep.size(); ++i) {
                 const float shareNow  = sweep[i].mean - bare[i].mean;
                 const float sharePrev = sweep[i - 1].mean - bare[i - 1].mean;
-                // ...OF THE SWEEP'S OWN PICTURE (its first, brightest frame). The
-                // physical sky has a twilight (SKY-ATMOSPHERE-1): the frame mean
-                // falls 15x across these nine degrees, and a step measured
-                // against a frame that dark read 7.1% for a share that moved
-                // 0.0023 — the sphere hiding a darkening sky, not the sun.
                 const float step = std::fabs(shareNow - sharePrev)
-                                   / std::max(1e-4f, sweep[0].mean);
+                                   / std::max(1e-4f, sweep[i - 1].mean);
                 if (step > worstSun) { worstSun = step; worstAt = sweep[i].pitch; }
                 worstSky = std::max(worstSky, std::fabs(bare[i].mean - bare[i - 1].mean)
                                                   / std::max(1e-4f, bare[i - 1].mean));

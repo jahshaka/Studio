@@ -442,17 +442,17 @@ int main(int argc, char **argv)
 
         // THE SUN DIALS ARE GONE (SKY_LIGHT_SPEC.md §3): the realistic sky's
         // sun is the scene's sun LIGHT, so Azimuth and Elevation are not rows
-        // any more. AERIAL SCALE takes the role this case was written for
+        // any more. SCENE AIR (the aerial scale) takes the role this case was written for
         // (the planet's atmosphere's dials since SKY-ATMOSPHERE-1) — it is the
         // same binding through the same `sky` sceneprops row, which is what is
         // actually being gated (one drag, one undo step, the live field AND
         // the serialized blob travelling together).
         CHECK(sliderWith(&panel, QStringLiteral("Sun Azimuth")) == nullptr,
               "sky: the sun dials are gone from the blade (the sky follows the sun light)");
-        HFloatSliderWidget *turb = sliderWith(&panel, QStringLiteral("Aerial Scale"));
+        HFloatSliderWidget *turb = sliderWith(&panel, QStringLiteral("Scene Air"));
         CHECK(turb != nullptr, "sky: the realistic sky's own rows are on the blade");
         const float was = scene->skyRealistic.aerialScale;
-        CHECK(drag(turb, 0.4f, 0.9f), "sky: the Aerial Scale row can be dragged");
+        CHECK(drag(turb, 0.4f, 0.9f), "sky: the Scene Air row can be dragged");
         CHECK(qAbs(scene->skyRealistic.aerialScale - 0.9f) < 0.05f,
               "sky: the drag moved the aerial scale live");
         CHECK(stack.index() == before + 1, "sky: as ONE step");
@@ -469,7 +469,7 @@ int main(int argc, char **argv)
         // The undo above REPAINTED the section (the rows are the sky), so the
         // slider from before it is gone — ask for the row again, which is also
         // the cheapest proof that the repaint happened.
-        HFloatSliderWidget *turb2 = sliderWith(&panel, QStringLiteral("Aerial Scale"));
+        HFloatSliderWidget *turb2 = sliderWith(&panel, QStringLiteral("Scene Air"));
         CHECK(turb2 != nullptr && turb2 != turb, "sky: an undo rebuilt the section's rows");
         if (turb2) {
             const int steps = stack.index();

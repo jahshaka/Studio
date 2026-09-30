@@ -49,14 +49,19 @@ assert(born.r < 60 && born.g < 60 && born.b < 60,
 assert(texture.write(tex, 16, 16, "#ff0000") === true, "write red");
 var red = probe("live_red.png");
 console.log("    " + show("RED", red));
-assert(red.r > red.b + 40 && red.r > red.g + 40,
+// THE SKY IS PHYSICAL (SKY-ATMOSPHERE-1): the faces this camera sees are lit
+// mostly by the Sky Light, whose physical level (and the dark planet ground in
+// its lower half) put a pure-red face at ~45 codes where the retired sky put it
+// at ~90. The claim is the HUE, so the bars are the channel's dominance (3x the
+// others and clearly lit), which holds at any exposure.
+assert(red.r > 20 && red.r > 3 * Math.max(red.g, red.b),
        "the surface is RED after the write " + show("", red));
-assert(red.r > born.r + 40, "and much brighter than the black it replaced");
+assert(red.r > born.r + 20, "and much brighter than the black it replaced");
 
 assert(texture.write(tex, 16, 16, "#0000ff") === true, "write blue");
 var blue = probe("live_blue.png");
 console.log("    " + show("BLUE", blue));
-assert(blue.b > blue.r + 40 && blue.b > blue.g + 40,
+assert(blue.b > 20 && blue.b > 3 * Math.max(blue.r, blue.g),
        "the SAME texture now draws BLUE " + show("", blue));
 
 // ---- 3. a byte array is pixels too, not only a fill --------------------
@@ -65,7 +70,7 @@ for (var p = 0; p < 16 * 16; ++p) bytes.push(20, 220, 20, 255);
 assert(texture.write(tex, 16, 16, bytes) === true, "write a green byte array");
 var green = probe("live_green.png");
 console.log("    " + show("GREEN", green));
-assert(green.g > green.r + 40 && green.g > green.b + 40,
+assert(green.g > 20 && green.g > 3 * Math.max(green.r, green.b),
        "the surface is GREEN " + show("", green));
 
 // ---- 4. writes REUSE the engine texture, they do not recreate it -------

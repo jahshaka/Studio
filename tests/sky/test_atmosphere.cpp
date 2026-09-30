@@ -30,12 +30,22 @@
 //   f. NO SKY IS BLACK and lights nothing: SkyMode::NoSky draws the black
 //      background and a box lit by the Sky Light alone reads black, where the
 //      atmosphere lights it.
+//   g. THE HAZE IS THE SKY'S (owner 2026-09-30): at the defaults (aerialScale 0)
+//      a surface 2 km away reads its own value at haze 10 and 100; the haze
+//      moves the horizon's luminance and whiteness and the sun's tint;
+//   h. THE SKY'S BRIGHTNESS: 2 doubles a sky pixel and the Sky Light's SH, and
+//      leaves the sun's direct term on a floor unchanged;
+//   i. THE OBSERVER IS THE CAMERA: at 500 m and 5 km the horizon dips by the
+//      geometric angle within a pixel and a level surface is seen through the
+//      air at that altitude.
 // And it PRINTS the four tables' cost (Scene::measureAtmosphere; a slope, an
 // upper bound — no bar here, the number is the lane's report).
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
 
 #include <cmath>
+#include <functional>
+#include <vector>
 #include <cstdio>
 #include <cstdlib>
 #include <string>
@@ -352,14 +362,216 @@ int main()
         CHECK_MSG(luma(skyNone) == 0.0 && luma(boxNone) < 1e-5 && (!haveSh || shSum == 0.0),
                   "(f) NO SKY IS BLACK and lights nothing (background %.6f, box %.6f)", luma(skyNone),
                   luma(boxNone));
+        r.s->setNodeVisible(box, false);
+        r.s->setEnvironmentLight(Colour(0.0f, 0.0f, 0.0f));
     }
 
-    // ---- THE SKY PASS'S COST AT 1080p (JAH_ATMO_COST=1; a measurement, never
-    // asserted — run it under scripts/gpu-exclusive.sh) ----------------------
-    // Paired, interleaved arms in ONE process on a 1920x1080 view holding a
-    // floor and a box: the atmosphere against a one-texel image sky (both a
-    // full-screen quad at queue 0). The difference in the frame's GPU time is
-    // the sky pass's table read plus every lit pixel's aerial-perspective read.
+    // ---- g. THE HAZE IS THE SKY'S, NOT THE SCENE'S (owner 2026-09-30) ---------
+    // With the defaults (aerialScale 0) a distant lit surface reads its own
+    // value however hazy the sky; the haze moves the sky's horizon and the sun.
+    {
+        PbrParams p;
+        p.albedo = Colour(0, 0, 0);
+        p.metalness = 1.0f;
+        p.roughness = 1.0f;
+        const MaterialId mat = r.s->createPbrMaterial(p);
+        const NodeId box = r.s->createNode();
+        r.s->attachMesh(box, r.s->createMesh(enginetest::unitCubeMesh()), mat);
+        enginetest::poseRegistry()[r.s][box] = enginetest::NodePose{};
+        const float d = 2000.0f, size = 0.1f * d;
+        enginetest::setNodeScale(r.s, box, Vec3(size, size, size));
+        enginetest::setNodePosition(r.s, box, Vec3(0.0f, 2.0f + 0.5f * size, -(d + 0.5f * size)));
+        CameraDesc c = enginetest::testCameraDescLookAt(Vec3(0.0f, 2.0f, 0.0f),
+                                                        Vec3(0.0f, 2.0f + 0.5f * size, -d));
+        c.fovDegrees = kFovDeg;
+        c.farClip = 40000.0f;
+        r.v->setCamera(c);
+        auto tAt = [&](float haze, Colour &black) {
+            SkyDesc sky = atmosphere(45.0f, 180.0f, 1.0f, haze);
+            sky.atmosphere.aerialScale = AtmosphereSky().aerialScale;   // THE DEFAULT
+            r.s->setSky(sky);
+            ImageF a, b, k;
+            PbrParams q = p;
+            q.emissive = Colour(0.2f, 0.2f, 0.2f); r.s->setPbrMaterial(mat, q); shoot(r, a);
+            q.emissive = Colour(0.8f, 0.8f, 0.8f); r.s->setPbrMaterial(mat, q); shoot(r, b);
+            q.emissive = Colour(0.0f, 0.0f, 0.0f); r.s->setPbrMaterial(mat, q); shoot(r, k);
+            black = centreOf(k);
+            return (double(centreOf(b).g) - double(centreOf(a).g)) / 0.6;
+        };
+        Colour k10, k100;
+        const double t10 = tAt(10.0f, k10), t100 = tAt(100.0f, k100);
+        std::printf("    defaults, 2 km: haze 10 T %.5f black %.6f | haze 100 T %.5f black %.6f\n",
+                    t10, luma(k10), t100, luma(k100));
+        CHECK_MSG(AtmosphereSky().aerialScale == 0.0f && std::fabs(t10 - 1.0) < 2e-3 &&
+                  std::fabs(t100 - 1.0) < 2e-3 && luma(k10) < 1e-4 && luma(k100) < 1e-4,
+                  "(g) THE DEFAULTS PUT NO AIR ON THE SCENE: a surface 2 km away reads its own value at "
+                  "haze 10 and at haze 100 (T %.4f, %.4f)", t10, t100);
+        r.s->setNodeVisible(box, false);
+        r.v->setCamera(level);
+        // ...and the haze moves the SKY: the band just above the horizon whitens.
+        auto horizonBand = [&](float haze) {
+            r.s->setSky(atmosphere(45.0f, 180.0f, 1.0f, haze));
+            ImageF img;
+            shoot(r, img);
+            double rr = 0.0, bb = 0.0, yy = 0.0;
+            int n = 0;
+            for (unsigned y = 0; y < kSize; ++y) {
+                const double e = rowElevation(y);
+                if (e <= 0.0 || e > 2.0) continue;
+                for (unsigned x = 0; x < kSize; ++x) {
+                    const Colour px = img.at(x, y);
+                    rr += px.r; bb += px.b; yy += luma(px); ++n;
+                }
+            }
+            return Colour(float(rr / n), float(yy / n), float(bb / n), 1.0f);
+        };
+        const Colour clean = horizonBand(1.0f), day = horizonBand(10.0f), hazy = horizonBand(50.0f);
+        std::printf("    horizon band (0-2 deg): haze 1 luma %.4f b/r %.3f | haze 10 %.4f %.3f | haze 50 "
+                    "%.4f %.3f\n", clean.g, clean.b / clean.r, day.g, day.b / day.r, hazy.g,
+                    hazy.b / hazy.r);
+        CHECK_MSG(std::fabs(hazy.g / clean.g - 1.0f) > 0.05f &&
+                  hazy.b / hazy.r < clean.b / clean.r * 0.9f,
+                  "(g) the haze moves the sky's horizon: its luminance (%.4f to %.4f) and it WHITENS "
+                  "(b/r %.3f to %.3f)", clean.g, hazy.g, clean.b / clean.r, hazy.b / hazy.r);
+        SkyDesc hz = atmosphere(20.0f, 180.0f, 1.0f, 1.0f);
+        r.s->setSky(hz);
+        const Colour tClean = r.s->atmosphereSunTint(towardsSun(20.0f, 180.0f));
+        hz.atmosphere.sunHaze = 50.0f;
+        r.s->setSky(hz);
+        const Colour tHazy = r.s->atmosphereSunTint(towardsSun(20.0f, 180.0f));
+        CHECK_MSG(tHazy.g < tClean.g * 0.9f,
+                  "(g) ...and the sun's tint: green at a 20-degree sun %.4f at haze 1, %.4f at haze 50",
+                  tClean.g, tHazy.g);
+    }
+
+    // ---- h. THE SKY'S BRIGHTNESS SCALES THE SKY AND ITS LIGHT, NOT THE SUN ---
+    {
+        PbrParams p;
+        p.albedo = Colour(0.5f, 0.5f, 0.5f);
+        p.roughness = 1.0f;
+        const MaterialId mat = r.s->createPbrMaterial(p);
+        const NodeId floor = r.s->createNode();
+        r.s->attachMesh(floor, r.s->createMesh(enginetest::unitCubeMesh()), mat);
+        enginetest::poseRegistry()[r.s][floor] = enginetest::NodePose{};
+        enginetest::setNodeScale(r.s, floor, Vec3(20.0f, 0.1f, 20.0f));
+        enginetest::setNodePosition(r.s, floor, Vec3(0.0f, -0.05f, -6.0f));
+        const NodeId lightNode = r.s->createNode();
+        enginetest::poseRegistry()[r.s][lightNode] = enginetest::NodePose{};   // emits down -Y
+        LightDesc sunL;
+        sunL.type = LightType::Directional;
+        sunL.castShadows = false;
+        r.s->setEnvironmentLight(Colour(1.0f, 1.0f, 1.0f));
+        CameraDesc c = enginetest::testCameraDescLookAt(Vec3(0.0f, 2.0f, 0.0f), Vec3(0.0f, 2.3f, -10.0f));
+        c.fovDegrees = 60.0f;
+        c.farClip = 40000.0f;
+        r.v->setCamera(c);
+        struct Arm { double sky = 0, lit = 0, dark = 0; float sh0 = 0; };
+        auto arm = [&](float brightness) {
+            Arm a;
+            SkyDesc sky = atmosphere(60.0f, 180.0f, 0.0f, 10.0f);
+            sky.atmosphere.skyBrightness = brightness;
+            r.s->setSky(sky);
+            ImageF img;
+            sunL.intensity = 1.0f; r.s->setLight(lightNode, sunL);
+            shoot(r, img, 6);
+            a.sky = luma(img.at(kSize / 2, 8));                 // the sky, 30 degrees up
+            a.lit = luma(img.at(kSize / 2, kSize - 8));         // the floor, sun + sky
+            float sh[27];
+            if (r.s->skyAmbientSh(sh)) a.sh0 = sh[1];           // band 0, green
+            sunL.intensity = 0.0f; r.s->setLight(lightNode, sunL);
+            shoot(r, img, 6);
+            a.dark = luma(img.at(kSize / 2, kSize - 8));        // the floor, sky alone
+            return a;
+        };
+        const Arm one = arm(1.0f), two = arm(2.0f);
+        const double direct1 = one.lit - one.dark, direct2 = two.lit - two.dark;
+        std::printf("    brightness 1 -> 2: sky %.5f -> %.5f (x%.3f), SH band 0 %.5f -> %.5f (x%.3f), the "
+                    "floor's direct term %.5f -> %.5f\n", one.sky, two.sky, two.sky / one.sky, one.sh0,
+                    two.sh0, two.sh0 / one.sh0, direct1, direct2);
+        CHECK_MSG(std::fabs(two.sky / one.sky - 2.0) < 0.02,
+                  "(h) brightness 2 doubles a sky pixel (x%.3f)", two.sky / one.sky);
+        CHECK_MSG(one.sh0 > 0.0f && std::fabs(two.sh0 / one.sh0 - 2.0) < 0.02,
+                  "(h) ...and the Sky Light's ambient (SH band 0 x%.3f)", two.sh0 / one.sh0);
+        CHECK_MSG(direct1 > 0.01 && std::fabs(direct2 / direct1 - 1.0) < 0.01,
+                  "(h) ...and leaves the sun's direct light on the floor unchanged (%.5f against %.5f)",
+                  direct2, direct1);
+        r.s->setNodeVisible(floor, false);
+        sunL.intensity = 0.0f; r.s->setLight(lightNode, sunL);
+        r.s->setEnvironmentLight(Colour(0.0f, 0.0f, 0.0f));
+        r.v->setCamera(level);
+    }
+
+    // ---- i. THE OBSERVER IS THE CAMERA (the merge read's D2) -----------------
+    // At 500 m and 5 km the horizon dips by acos(R / (R + h)) — 0.72 and 2.27
+    // degrees — within a pixel (0.078 degrees here); a level surface 2 km away is
+    // seen through the air AT that altitude (the model's own column, integrated
+    // here), with the scene air on.
+    for (const float h : { 500.0f, 5000.0f }) {
+        CameraDesc c = enginetest::testCameraDescLookAt(Vec3(0.0f, h, 0.0f), Vec3(0.0f, h, -100.0f));
+        c.fovDegrees = kFovDeg;
+        c.farClip = 40000.0f;
+        r.v->setCamera(c);
+        r.s->setSky(atmosphere(45.0f, 180.0f, 1.0f, 10.0f));
+        ImageF img;
+        shoot(r, img, 4);
+        const double dip = std::acos(6360.0 / (6360.0 + h * 0.001)) * 180.0 / kPi;
+        unsigned best = 0;
+        double bestStep = -1.0;
+        for (unsigned y = 100; y + 1 < kSize - 10; ++y) {
+            const double st = std::fabs(rowMean(img, y) - rowMean(img, y + 1));
+            if (st > bestStep) { bestStep = st; best = y; }
+        }
+        const double t = std::tan(0.5 * kFovDeg * kPi / 180.0);
+        const double edge = std::atan((1.0 - 2.0 * (best + 1.0) / kSize) * t) * 180.0 / kPi;
+        const AtmosphereStatus st = r.s->atmosphereStatus();
+        std::printf("    %5.0f m: the horizon between rows %u|%u at %+.3f deg against the dip %.3f deg; "
+                    "observer %.0f m (%u band rebuilds)\n", double(h), best, best + 1, edge, -dip,
+                    double(st.observerAltitudeM), st.observerRebuilds);
+        CHECK_MSG(std::fabs(edge + dip) <= 0.078 + 1e-6,
+                  "(i) at %.0f m the horizon dips %.3f degrees, within a pixel of the geometric %.3f",
+                  double(h), -edge, dip);
+        // the level surface
+        PbrParams p;
+        p.albedo = Colour(0, 0, 0);
+        p.metalness = 1.0f;
+        p.roughness = 1.0f;
+        const MaterialId mat = r.s->createPbrMaterial(p);
+        const NodeId box = r.s->createNode();
+        r.s->attachMesh(box, r.s->createMesh(enginetest::unitCubeMesh()), mat);
+        enginetest::poseRegistry()[r.s][box] = enginetest::NodePose{};
+        const float d = 2000.0f, size = 0.1f * d;
+        enginetest::setNodeScale(r.s, box, Vec3(size, size, size));
+        enginetest::setNodePosition(r.s, box, Vec3(0.0f, h, -(d + 0.5f * size)));
+        ImageF a, b;
+        PbrParams q = p;
+        q.emissive = Colour(0.2f, 0.2f, 0.2f); r.s->setPbrMaterial(mat, q); shoot(r, a);
+        q.emissive = Colour(0.8f, 0.8f, 0.8f); r.s->setPbrMaterial(mat, q); shoot(r, b);
+        const double tGot = (double(centreOf(b).g) - double(centreOf(a).g)) / 0.6;
+        const double hk = h * 0.001, dk = d * 0.001;
+        const double sR[3] = { 5.802e-3, 13.558e-3, 33.1e-3 };
+        const double dO = std::max(0.0, 1.0 - std::fabs(hk - 25.0) / 15.0);
+        const double oz[3] = { 0.650e-3, 1.881e-3, 0.085e-3 };
+        double tRef = 0.0;
+        for (int k = 0; k < 3; ++k)
+            tRef += std::exp(-(sR[k] * std::exp(-hk / 8.0) + 4.44e-3 * 10.0 * std::exp(-hk / 1.2) +
+                               oz[k] * dO) * dk);
+        tRef /= 3.0;
+        CHECK_MSG(std::fabs(tGot - tRef) <= 0.005,
+                  "(i) at %.0f m a level surface 2 km away keeps %.4f of itself — the air at that "
+                  "altitude says %.4f", double(h), tGot, tRef);
+        r.s->setNodeVisible(box, false);
+    }
+    r.v->setCamera(level);
+    r.s->setSky(atmosphere(45.0f, 180.0f));
+
+    // ---- THE COST AT 1080p, ON THE GPU (JAH_ATMO_COST=1; a measurement, never
+    // asserted — run it under scripts/gpu-exclusive.sh with the clocks locked).
+    // The four jobs' own timestamp pairs (the frame monitor's cache rows,
+    // CacheKind::Atmosphere, CacheWork::gpuMs) in three regimes — a still frame,
+    // the sun moving every frame, a dial dragged every frame — and the sky pass
+    // as paired arms in this one process on a 1920x1080 view holding a floor:
+    // the atmosphere against a one-texel image sky (both a full-screen quad at
+    // queue 0), the frame's GPU time differenced.
     if (std::getenv("JAH_ATMO_COST")) {
         View *big = r.e->createOffscreenView("atmo-1080", 1920u, 1080u, Colour(0, 0, 0));
         Scene *cs = r.e->createScene("atmo-cost");
@@ -381,27 +593,59 @@ int main()
         image.mode = SkyMode::Equirectangular;
         image.equirect = cs->createTexture(1, 1, px, true);
         r.v->setEnabled(false);
-        r.e->setFrameMonitor(MonitorLevel::Review);
-        double sum[2] = { 0.0, 0.0 };
-        int n[2] = { 0, 0 };
+        const auto collect = [&](int frames, const std::function<void(int)> &perFrame,
+                                 double &frameMs, int &frameN, double jobMs[4], int jobN[4]) {
+            r.e->setFrameMonitor(MonitorLevel::Review);
+            std::vector<FrameRecord> drop;
+            r.e->takeFrameRecords(drop);
+            for (int i = 0; i < frames; ++i) { perFrame(i); r.e->renderOneFrame(); }
+            r.e->setFrameMonitor(MonitorLevel::Off);
+            std::vector<FrameRecord> recs;
+            r.e->takeFrameRecords(recs);
+            static const char *kJobs[4] = { "Jahshaka/AtmoTransmittance", "Jahshaka/AtmoMultiScatter",
+                                            "Jahshaka/AtmoSkyView", "Jahshaka/AtmoAerial" };
+            for (const FrameRecord &f : recs) {
+                if (f.gpuMs > 0.0f) { frameMs += f.gpuMs; ++frameN; }
+                for (const CacheWork &w : f.cacheWork)
+                    if (w.cache == CacheKind::Atmosphere && w.gpuMs >= 0.0f)
+                        for (int k = 0; k < 4; ++k)
+                            if (w.detail == kJobs[k]) { jobMs[k] += w.gpuMs; ++jobN[k]; }
+            }
+        };
+        const auto report = [](const char *what, double frameMs, int frameN, const double jobMs[4],
+                               const int jobN[4]) {
+            std::printf("    COST %-12s frame GPU %.4f ms (%d frames) | per dispatch: transmittance %.4f (%d) "
+                        "multi-scatter %.4f (%d) sky view %.4f (%d) aerial %.4f (%d) ms\n", what,
+                        frameN ? frameMs / frameN : -1.0, frameN,
+                        jobN[0] ? jobMs[0] / jobN[0] : -1.0, jobN[0], jobN[1] ? jobMs[1] / jobN[1] : -1.0,
+                        jobN[1], jobN[2] ? jobMs[2] / jobN[2] : -1.0, jobN[2],
+                        jobN[3] ? jobMs[3] / jobN[3] : -1.0, jobN[3]);
+        };
+        double sumImg = 0.0, sumAtmo = 0.0;
+        int nImg = 0, nAtmo = 0;
         for (int round = 0; round < 6; ++round)
             for (int arm = 0; arm < 2; ++arm) {
                 cs->setSky(arm ? atmosphere(45.0f, 150.0f) : image);
-                for (int i = 0; i < 20; ++i) r.e->renderOneFrame();   // warm, and the tables built
-                std::vector<FrameRecord> drop;
-                r.e->takeFrameRecords(drop);
-                for (int i = 0; i < 60; ++i) r.e->renderOneFrame();
-                r.e->setFrameMonitor(MonitorLevel::Off);   // flushes what is waiting
-                std::vector<FrameRecord> recs;
-                r.e->takeFrameRecords(recs);
-                r.e->setFrameMonitor(MonitorLevel::Review);
-                for (const FrameRecord &f : recs)
-                    if (f.gpuMs > 0.0f) { sum[arm] += f.gpuMs; ++n[arm]; }
+                for (int i = 0; i < 20; ++i) r.e->renderOneFrame();
+                double jm[4] = { 0, 0, 0, 0 };
+                int jn[4] = { 0, 0, 0, 0 };
+                collect(60, [](int) {}, arm ? sumAtmo : sumImg, arm ? nAtmo : nImg, jm, jn);
             }
-        r.e->setFrameMonitor(MonitorLevel::Off);
-        const double img = n[0] ? sum[0] / n[0] : -1.0, atm = n[1] ? sum[1] / n[1] : -1.0;
-        std::printf("    COST 1080p frame GPU: image sky %.4f ms (%d frames), atmosphere %.4f ms (%d), "
-                    "difference %.4f ms\n", img, n[0], atm, n[1], atm - img);
+        std::printf("    COST 1080p still frame GPU: image sky %.4f ms (%d), atmosphere %.4f ms (%d), the "
+                    "sky pass difference %.4f ms\n", nImg ? sumImg / nImg : -1.0, nImg,
+                    nAtmo ? sumAtmo / nAtmo : -1.0, nAtmo,
+                    (nAtmo && nImg) ? sumAtmo / nAtmo - sumImg / nImg : 0.0);
+        for (int regime = 0; regime < 2; ++regime) {
+            double fm2 = 0.0, jm[4] = { 0, 0, 0, 0 };
+            int fn = 0, jn[4] = { 0, 0, 0, 0 };
+            cs->setSky(atmosphere(45.0f, 150.0f));
+            for (int i = 0; i < 10; ++i) r.e->renderOneFrame();
+            collect(60, [&](int i) {
+                if (regime == 0) cs->setSky(atmosphere(30.0f + 0.25f * float(i), 150.0f));      // the sun
+                else cs->setSky(atmosphere(45.0f, 150.0f, 0.0f, 5.0f + 0.25f * float(i)));     // a dial
+            }, fm2, fn, jm, jn);
+            report(regime == 0 ? "sun move" : "dial drag", fm2, fn, jm, jn);
+        }
         r.v->setEnabled(true);
     }
 

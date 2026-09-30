@@ -131,6 +131,12 @@ var ew = world.get();
 console.log("empty world sky: " + J(ew.sky));
 assert(String(ew.sky.type) === "None",
        "...and NO SKY: SkyType::NONE, a black background that lights nothing (SKY-ATMOSPHERE-1)");
+// ...AND "NO SKY" SURVIVES A SAVE AND A REOPEN (the merge read's W1): the type is
+// written by ordinal and read back as the same value, not as a single colour.
+assert(project.save() === true, "the empty project saves");
+assert(project.close() === true && project.open(empty) === true, "...closes and reopens");
+assert(String(world.get().sky.type) === "None",
+       "...and its sky is still NONE after the reopen (" + J(world.get().sky) + ")");
 
 // ---- 3. World ---------------------------------------------------------------
 var wp = project.create("New Scene World " + Date.now(), { template: "world" });

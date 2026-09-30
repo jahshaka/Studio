@@ -103,8 +103,13 @@ editor.setView("front");
 editor.frame(5);
 var shot = editor.screenshot("bundle_export_" + KIND + ".png", 512, 512);
 console.log("centre pixel " + J(shot.center));
-assert(shot.center.g > 40, "the surface renders (not black/sky): g=" + shot.center.g);
-assert(shot.center.g > shot.center.r + 20 && shot.center.b > shot.center.r + 20,
+// THE SKY IS PHYSICAL (SKY-ATMOSPHERE-1): the front face this view sees is lit
+// by the Sky Light alone, now a physical sky (about a fifth of the retired
+// level over its upper half, the dark planet ground under the horizon), so the
+// teal face reads g ~36 where it read ~70. "Not black" is g > 20; the TEAL test
+// is the hue, a ratio, which no sky level moves.
+assert(shot.center.g > 20, "the surface renders (not black/sky): g=" + shot.center.g);
+assert(shot.center.g > 3 * shot.center.r && shot.center.b > 3 * shot.center.r,
        "it samples the TEAL texel — the image came with the file");
 
 console.log("bundle_export_" + KIND + ": ALL OK");

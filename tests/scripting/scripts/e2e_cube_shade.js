@@ -116,8 +116,16 @@ var at0 = faceRead("rot0");
 // Every probe must be ON the cube: the sky above it is far brighter and the
 // floor behind it far darker, so a probe that fell off the face would make the
 // comparison meaningless.
+// THE SKY IS PHYSICAL (SKY-ATMOSPHERE-1): this face turns away from a low sun
+// and is lit by the Sky Light alone, and the Sky Light is now a physical sky —
+// about a fifth of the retired one's level over its upper half, and the dark,
+// sun-lit PLANET ground over its lower half (the retired model repeated the
+// horizon's colour there) — so the face reads 9..11 codes where it read 25..45.
+// The bar says the probes are ON the face (lit, not black), not how bright the
+// sky makes it; the spread and move bars below are absolute codes and only get
+// stricter at this level.
 var loP = Math.min.apply(null, at0), hiP = Math.max.apply(null, at0);
-assert(loP > 20 && hiP < 110, "every probe is on the cube's face (" + Math.round(loP) + ".." +
+assert(loP > 5 && hiP < 110, "every probe is on the cube's face (" + Math.round(loP) + ".." +
                               Math.round(hiP) + ")");
 
 node.transform(cubes[0], { rotation: { x: 0, y: 0, z: 90 } });
