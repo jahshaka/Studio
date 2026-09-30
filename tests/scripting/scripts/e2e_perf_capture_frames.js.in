@@ -46,7 +46,7 @@ function J(x) { return JSON.stringify(x); }
 var bundle = "@JAH_TEST_BUNDLE@";
 var control = "@JAH_TEST_BUNDLE@-seconds-control";
 
-var guid = project.create("Perf Frames " + Date.now(), { empty: true });
+var guid = project.create("Perf Frames " + Date.now(), { template: "empty" });
 assert(guid.length > 10, "project.create -> " + guid);
 
 // Something to draw. An empty world still renders, but a cube makes the records

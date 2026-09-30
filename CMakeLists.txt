@@ -264,7 +264,7 @@ set(SRCS
     src/services/import/importbatchrunner.cpp
     src/services/projectassets.cpp
     src/services/projectmembership.cpp
-    src/services/defaultfloor.cpp
+    src/services/defaultfloormaterial.cpp
     src/services/materialdefaults.cpp
     src/services/shippedassets.cpp
     src/services/engineerrorpump.cpp

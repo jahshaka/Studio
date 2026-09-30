@@ -458,8 +458,8 @@ bool buildWorld(Env &env, const WorldSpec &spec, World &world, int settleCap)
     worldmodes::setMode(doc, worldmodes::Mode(int(spec.tier)));
     worldmodes::setPhoton(doc, true, spec.tier);
 
-    // THE GROUND: the default floor's mesh and material values, scaled from its
-    // 100 m to the spec's size (defaultfloor.cpp's node, without the project).
+    // THE GROUND: the shipped 100 m ground plane (the samples' platform seed)
+    // with a matte tile, scaled to the spec's size — this fixture's own floor.
     {
         auto g = iris::MeshNode::create();
         g->setName("Ground");

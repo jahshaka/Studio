@@ -129,17 +129,17 @@ var freshName = "Scene Triangles " + Date.now();
 assert(project.create(freshName).length > 10, "a fresh default world: " + freshName);
 editor.frame(4);
 
-// THE DEFAULT GROUND, EXACTLY. It is a 33x33 lattice (it exists so vertex-rate
-// fog and lighting have somewhere to happen) and it is the only mesh in a new
-// world, so the number is the ground's own count and nothing else.
-var GROUND_TRIS = 2178;
+// THE BASIC TEMPLATE'S FLOOR, EXACTLY. It is the cube primitive (WORLD-MODEL-1)
+// and it is the only mesh in a new Basic world, so the number is the floor's
+// own twelve triangles and nothing else.
+var GROUND_TRIS = 12;
 var fresh = app.renderStats();
 assert(fresh.sceneTriangles === GROUND_TRIS,
-    "a new world reads the ground's own triangles exactly (" + fresh.sceneTriangles +
+    "a new world reads the floor's own triangles exactly (" + fresh.sceneTriangles +
     " vs " + GROUND_TRIS + ")");
 assert(fresh.submittedTriangles > fresh.sceneTriangles,
     "…while the renderer submits MORE than that — the SSR depth pre-pass draws the same " +
-    "ground a second time, plus the horizon, the icons, the sky and the post quads (" +
+    "floor a second time, plus the icons, the sky and the post quads (" +
     fresh.submittedTriangles + ")");
 
 // A CUBE ADDS EXACTLY A CUBE.
@@ -183,8 +183,8 @@ editor.frame(3);
 // A RENDER PASS DOES NOT COUNT EITHER. Screen-space reflections add a depth
 // pre-pass that draws the scene's geometry a SECOND time: the GPU figure falls
 // by about a ground when they go off, the scene's own count does not move at
-// all. (This is the measured explanation of the owner's 4,611: 2 x 2,178 plus
-// nine small draws.)
+// all. (This was the measured explanation of the owner's 4,611 — the old
+// ground's 2 x 2,178 plus nine small draws.)
 var ssrOn = app.renderStats();
 world.override({ id: "ssr", value: "off" });
 editor.frame(4);
@@ -199,7 +199,7 @@ editor.frame(2);
 
 // AN EMPTY SCENE READS ZERO. Not "about zero", not the helpers' count: the
 // world has no mesh in it and the readout says so.
-assert(project.create("Empty Triangles " + Date.now(), { empty: true }).length > 10,
+assert(project.create("Empty Triangles " + Date.now(), { template: "empty" }).length > 10,
     "an Empty scene");
 editor.frame(4);
 var empty = app.renderStats();

@@ -100,7 +100,7 @@ inline constexpr float kMenuHoldSeconds = 0.25f;
 /// THE WORLD'S OWN FLOOR, metres — the fallback plane's fallback, used only
 /// when there is no session and therefore no wearer whose floor to continue
 /// (see traceArc's `planeY`). y = 0 is where this editor's grid is drawn, where
-/// the default ground sits and where `scene.addPrimitive` puts a thing with no
+/// the templates' floors have their top face and where `scene.addPrimitive` puts a thing with no
 /// transform, so it is the one plane a document with no rig can mean.
 inline constexpr float kWorldFloorY = 0.0f;
 

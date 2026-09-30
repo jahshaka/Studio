@@ -911,16 +911,15 @@ assert(Math.abs(dp2.x - dp.x) > 1.0,
 
 // ---------------------------------------------------------------------------
 // A DROP APPLIES TO WHAT IS UNDER IT — INCLUDING THE FLOOR (owner report via
-// the rig, 2026-09-14: a MATERIAL dragged onto the default Ground was silently
+// the rig, 2026-09-14: a MATERIAL dragged onto a locked floor was silently
 // discarded, and a TEXTURE spawned a floating image plane instead of
 // retexturing it).
 //
-// The cause was the target resolution, not the apply: the default Ground is
-// setPickable(false) BY DESIGN (clicking the floor selects nothing), and the
-// material/texture drops resolved their target with an ordinary pick, so the
-// floor simply was not there. editor.dropTargetAt is that resolution — the
-// same function the two drop branches call — and it forces pickability the way
-// the object drops always have.
+// The cause was the target resolution, not the apply: a LOCKED node
+// (setPickable(false)) was not there for the material/texture drops' ordinary
+// pick. editor.dropTargetAt is that resolution — the same function the two
+// drop branches call — and it forces pickability the way the object drops
+// always have.
 // The S2 section above left two cubes standing on the ground points this one
 // aims at; they have made their point, and what is under the cursor is this
 // section's whole subject, so they go first.
@@ -931,30 +930,27 @@ editor.frame(2);
 var target = editor.dropTargetAt(vp.width * 0.30, vp.height * 0.70);
 assert(target != null, "editor.dropTargetAt over the ground answers with a node");
 assert(node.property(target.id, "defaultFloor") === true,
-    "...and it is the DEFAULT FLOOR — a locked node is under the cursor like any other ("
+    "...and it is the template's FLOOR ("
     + target.name + ")");
 
-// THE LOCK IS THE ANSWER (owner, 2026-09-15: "we can select the floor like any
-// other asset, it is just LOCKED by default … you can't drop a material on it
+// THE LOCK IS THE ANSWER (owner, 2026-09-15: "you can't drop a material on it
 // while it is locked"). One flag says so — `pickable`, which is exactly what
 // the hierarchy row's lock icon toggles — and the drop REFUSES a locked node
 // by name (a toast) instead of doing nothing, and never turns a refused image
-// into a floating plane.
-assert(target.locked === true,
-    "the default floor is LOCKED, and the verb says so rather than pretending there is no "
-    + "target");
-assert(node.property(target.id, "pickable") === false,
-    "...which is the node's own `pickable` flag — the hierarchy's lock, not a second concept");
-
-node.setProperty(target.id, "pickable", true);          // the lock icon, as a verb
+// into a floating plane. The template's floor ships UNLOCKED (WORLD-MODEL-1: a
+// floor is an ordinary node), so the lock is put on here, as a user would.
+assert(target.locked === false && node.property(target.id, "pickable") === true,
+    "the template's floor ships UNLOCKED — an ordinary node, an ordinary drop target");
+node.setProperty(target.id, "pickable", false);         // the lock icon, as a verb
 editor.frame(2);
-var unlocked = editor.dropTargetAt(vp.width * 0.30, vp.height * 0.70);
-assert(unlocked != null && unlocked.id === target.id && unlocked.locked === false,
-    "unlocked, the same floor is an ordinary drop target (" + JSON.stringify(unlocked) + ")");
-node.setProperty(target.id, "pickable", false);         // put the floor back as it ships
+var lockedTarget = editor.dropTargetAt(vp.width * 0.30, vp.height * 0.70);
+assert(lockedTarget != null && lockedTarget.id === target.id && lockedTarget.locked === true,
+    "locked, the same floor is still under the cursor and the verb SAYS it is locked rather "
+    + "than pretending there is no target (" + JSON.stringify(lockedTarget) + ")");
+node.setProperty(target.id, "pickable", true);          // put the floor back as it ships
 editor.frame(2);
-assert(editor.dropTargetAt(vp.width * 0.30, vp.height * 0.70).locked === true,
-    "re-locked, it refuses again");
+assert(editor.dropTargetAt(vp.width * 0.30, vp.height * 0.70).locked === false,
+    "unlocked again, it is an ordinary drop target again");
 // …and a drop that hits NOTHING still has no target — the case that spawns an
 // image plane for a dropped picture. Aimed deliberately: the camera is put on
 // the horizon and asked about a pixel above it, because "the top of the

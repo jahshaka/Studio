@@ -1353,7 +1353,7 @@ iris::MeshNodePtr SceneReader::createMesh(QJsonObject& nodeObj)
         }
     }
 
-    // THE DEFAULT FLOOR (services/defaultfloor.h): a written flag, never a
+    // THE DEFAULT FLOOR (services/defaultfloormaterial.h): a written flag, never a
     // guess from the name or the mesh path.
     meshNode->defaultFloor = nodeObj["defaultFloor"].toBool(meshNode->defaultFloor);
 

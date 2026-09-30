@@ -104,7 +104,7 @@ function samePixels(a, b, tag) {
 function groundOf(snap) {
     var s = JSON.parse(snap);
     for (var i = 0; i < s.nodes.length; i++)
-        if (s.nodes[i].name === "Ground") return s.nodes[i];
+        if (s.nodes[i].name === "Floor") return s.nodes[i];
     return null;
 }
 
@@ -116,7 +116,7 @@ assert(cube.length > 10, "scene.addPrimitive(cube)");
 
 // A DELIBERATELY NON-UNIFORM tiling on the cube (SMOKE_FIX S11's other half):
 // the fix must not turn "tile 4x across and 1x down" into uniform tiling on the
-// way through the file. The ground's uniform (4, 4) and this (4, 1) are the two
+// way through the file. The floor's uniform (25, 25) and this (4, 1) are the two
 // sides of the same round trip.
 assert(material.set(cube, { textureScale: [4, 1] }) === true,
        "material.set(cube, textureScale [4, 1])");
@@ -132,20 +132,20 @@ var s0 = snapshot();
 // PbrMaterial since HLMS_ADOPTION P4b (it was a Default.shader CustomMaterial,
 // and the builtin shaders were retired). Same file, same defect, same gate.
 var g0 = groundOf(s0);
-assert(g0 !== null, "the default Ground node is in the scene");
+assert(g0 !== null, "the template's Floor node is in the scene");
 assert(g0.mat.baseColorMap && g0.mat.baseColorMap.length > 0,
        "fresh: Ground carries a resolved baseColorMap path");
 assert(g0.castShadow === false, "fresh: Ground has Shadow Caster OFF (createDefaultScene)");
 
 // SMOKE_FIX S11 — THE ROWS ARE WHAT GETS SAVED. createDefaultScene builds the
-// ground with setValue("textureScale", 4), which is UNIFORM tiling: both fields
-// 4, and therefore both rows 4. It used to sync only the row it was named with,
+// floor with setValue("textureScale", 25), which is UNIFORM tiling: both fields
+// 25, and therefore both rows 25. It used to sync only the row it was named with,
 // so the file said textureScale 4, textureScaleV 1 while the live material
 // tiled 4x4 — and the floor's checkers came back squashed along V on reopen.
 // The whole-document diff below could not see it: BOTH sessions reported the
 // same stale rows, and only the pixels disagreed.
-assert(g0.mat.textureScale === 4 && g0.mat.textureScaleV === 4,
-       "fresh: Ground's UV tiling is uniform (4, 4) in the rows that get saved");
+assert(g0.mat.textureScale === 25 && g0.mat.textureScaleV === 25,
+       "fresh: the Floor's UV tiling is uniform (25, 25) in the rows that get saved");
 function cubeUv(snap) {
     var s = JSON.parse(snap);
     for (var i = 0; i < s.nodes.length; i++)
@@ -171,8 +171,8 @@ for (var cycle = 1; cycle <= 3; cycle++) {
            "cycle " + cycle + ": Ground's baseColorMap survived the round trip");
     assert(g.castShadow === false,
            "cycle " + cycle + ": Ground's Shadow Caster flag survived the round trip");
-    assert(g.mat.textureScale === 4 && g.mat.textureScaleV === 4,
-           "cycle " + cycle + ": Ground reopens with uniform (4, 4) tiling, not squashed");
+    assert(g.mat.textureScale === 25 && g.mat.textureScaleV === 25,
+           "cycle " + cycle + ": the Floor reopens with uniform (25, 25) tiling, not squashed");
     var c = cubeUv(s);
     assert(c.textureScale === 4 && c.textureScaleV === 1,
            "cycle " + cycle + ": the cube's explicit (4, 1) tiling survived the round trip");

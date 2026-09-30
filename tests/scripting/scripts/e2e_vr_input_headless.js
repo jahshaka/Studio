@@ -165,10 +165,13 @@ assert(vr.hover() === null, "a ray into the sky hovers nothing");
 
 // ---- 2. THE LOCK IS `pickable`, AND THE VR RAY OBEYS IT -----------------
 //
-// The default scene's Ground ships LOCKED (services/defaultfloor.cpp:
-// setPickable(false)) — the owner's own model, "the floor is just locked by
-// default". Proven here with the document's own raycast so the case cannot
-// silently pass on a scene that has no floor at all.
+// A LOCKED FLOOR: the template's Floor is an ordinary node and ships unlocked
+// (WORLD-MODEL-1), so it is locked here the way a user locks one — the
+// hierarchy's lock icon IS `pickable`. Proven with the document's own raycast
+// so the case cannot silently pass on a scene that has no floor at all.
+var theFloor = scene.find("Floor");
+assert(!!theFloor && node.setProperty(theFloor, "pickable", false) === true,
+       "the template's Floor, locked as a user locks it");
 var floorAny = scene.raycast({ x: 8, y: 3, z: 8 }, { x: 0, y: -1, z: 0 },
                              { includeUnpickable: true });
 var floorPickable = scene.raycast({ x: 8, y: 3, z: 8 }, { x: 0, y: -1, z: 0 });
@@ -176,13 +179,13 @@ console.log("straight down at (8, 8): " + floorAny.length + " node(s), "
             + floorPickable.length + " of them pickable");
 // ASSERTED, NOT SKIPPED (the Fable read of 1S, finding 5): this used to be an
 // `if` with a `note:` in its else, so a project template that stopped shipping
-// a locked floor would have retired the whole case in silence. The floor IS the
-// fixture — every new project has one and it ships locked — so a scene without
-// it is a defect in the template and this line is where it surfaces.
+// a floor would have retired the whole case in silence. The floor IS the
+// fixture — every Basic project has one — so a scene without it is a defect in
+// the template and this line is where it surfaces.
 assert(floorAny.length > 0,
        "a new project's scene has a floor under (8, 8) (" + floorAny.length + " node(s))");
 assert(floorPickable.length === 0,
-       "...and it ships LOCKED, so the document's own raycast refuses it");
+       "...and, LOCKED, the document's own raycast refuses it");
 sendHand({ x: 8, y: 3, z: 8, pitch: -90 });
 assert(vr.hover() === null,
        "a ray on a LOCKED node (" + floorAny[0].name + ") hovers NOTHING — the lock IS "

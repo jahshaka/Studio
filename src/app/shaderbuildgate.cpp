@@ -3,7 +3,7 @@
 
 #include "app/versionsplashscreen.h"
 #include "bridge/enginehost.h"
-#include "services/defaultfloor.h"
+#include "services/defaultfloormaterial.h"
 #include "services/worldmodes.h"
 #include "services/testtier.h"
 #include "bridge/secondarysurfacetonemap.h"
@@ -319,9 +319,9 @@ unsigned holdSplashForShaderBuild(QApplication &app, VersionSplashScreen &splash
     // passes run is `project.create`: the initial thumbnail (the Tonemap grade, GI
     // parked off) and the viewport's first frames (the world's whole chain, GI not yet
     // armed). Left to them, the twins compile inside the create (measured +500 ms,
-    // threading.newproject_stall). So the floor's REAL material (defaultfloor's factory,
+    // threading.newproject_stall). So the floor's REAL material (defaultfloormaterial's factory,
     // through the mirror's own conversion) stands in the warm scene, with its backdrop
-    // twin (the horizon plane: the same datablock through stock PBS), under the Epic
+    // twin (the editor's Ground plane widget: the same material through stock PBS), under the Epic
     // world's chain with GI off, then under the thumbnail's grade. What it cannot reach
     // is anything the document adds later (a user's material, another tier).
     if (coldCache && warmScene && warmView) {
@@ -339,7 +339,7 @@ unsigned holdSplashForShaderBuild(QApplication &app, VersionSplashScreen &splash
         iris::ScenePtr world = iris::Scene::create();
         worldmodes::setMode(world, bornMode());
         PbrParams floorParams;
-        const iris::PbrMaterialPtr floorMat = defaultfloor::createMaterial(nullptr, nullptr);
+        const iris::PbrMaterialPtr floorMat = defaultfloormaterial::create(nullptr, nullptr);
         if (warmScene && warmView->setScene(warmScene) && floorMat &&
             SceneMirror::toPbrParams(floorMat.data(), floorParams)) {
             warmView->setShadows(shape.shadows);
@@ -357,7 +357,7 @@ unsigned holdSplashForShaderBuild(QApplication &app, VersionSplashScreen &splash
             }
             const MaterialId fm = warmScene->createPbrMaterial(floorParams);
             const TextureId tile =
-                fm ? warmScene->loadTexture(defaultfloor::shippedTilePath().toStdString(), true) : TextureId(0);
+                fm ? warmScene->loadTexture(defaultfloormaterial::shippedTilePath().toStdString(), true) : TextureId(0);
             if (tile) warmScene->setPbrTexture(fm, PbrTextureSlot::Albedo, tile);
             const NodeId ground = fm ? warmScene->createNode() : NodeId(0);
             const NodeId horizon = fm ? warmScene->createNode() : NodeId(0);

@@ -968,7 +968,7 @@ void ProjectManager::newProject()
 		return;
 	}
 
-	emit fileToCreate(projectGuid, info.projectName.trimmed(), folder, info.empty);
+	emit fileToCreate(projectGuid, info.projectName.trimmed(), folder, info.sceneTemplate);
 
 	this->hide();
 }

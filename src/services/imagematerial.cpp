@@ -57,7 +57,7 @@ iris::PbrMaterialPtr fromTexture(const QString &textureGuid, Database *db,
     // setValue (not the raw fields) so the editor-facing Property objects
     // stay in step with what the shader reads.
     // UNTINTED, stated (DRAG-1): baseColor multiplies the map, and an image
-    // shown on a plane must be the image. See defaultfloor for the same note.
+    // shown on a plane must be the image. See defaultfloormaterial for the same note.
     material->setValue(QStringLiteral("baseColor"), QColor(255, 255, 255));
     material->setValue(QStringLiteral("baseColorMap"), path);
     material->setValue(QStringLiteral("roughness"), 1.0f);

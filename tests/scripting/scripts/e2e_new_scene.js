@@ -1,23 +1,22 @@
-// scripting.e2e.new_scene — THE NEW-SCENE VERB AND ITS TWO OPTIONS
-// (owner review R1 / R1b, answers Q1 and Q4; lane SMALL-UI-A).
+// scripting.e2e.new_scene — THE NEW-SCENE VERB AND ITS OPTIONS (owner review
+// R1; the TEMPLATES, WORLD-MODEL-1, owner 2026-09-30: "a drop-down of templates
+// like Unreal's").
 //
-// The New Scene dialog has no capability of its own: its Empty scene checkbox
-// and its Browse button are `project.create(name, {empty, location})`, which is
-// what this drives. Four things, in the order a user meets them:
+// The New Scene dialog has no capability of its own: its Template drop-down
+// and its Browse button are `project.create(name, {template, location})`,
+// which is what this drives. In the order a user meets them:
 //
-//   1. THE DEFAULT TEMPLATE — a ground, the sun, a Sky Light, and (the owner's
-//      Q1 answer) the REALISTIC real-time sky with the sun following the
-//      atmosphere. Both --engine-selftest hashes moved for this; here it is as
-//      a document assertion, which is the half that cannot be read off a hash.
-//   2. `{empty: true}` — the blank world, stated exactly: the root node and
-//      NOTHING ELSE. No ground, no lights at all, and the flat default sky.
-//   3. `{location}` — the project folder lands under the folder that was named.
-//   4. A BAD LOCATION IS REFUSED BY NAME, and refused BEFORE anything is
-//      written: no row, no folder, and the project that was open is still open.
-//      (The `||` defect this lane removed lived on the other side of the same
-//      question — `!name.isEmpty() || !name.isNull()` is true for the empty
-//      string, so the desktop page minted NAMELESS projects. An empty name is
-//      refused here too, by the one route both surfaces now take.)
+//   1. BASIC, the default — ONE ordinary floor node "Floor" (the baked cube
+//      primitive, 100 x 1 x 100 m, its top face at y = 0, on Atom), the sun, a
+//      Sky Light and the REALISTIC real-time sky with the sun following the
+//      atmosphere.
+//   2. EMPTY — the root node and NOTHING ELSE: no floor, no lights, no sky.
+//   3. WORLD — Basic's sky and lights on a group "World Floor" of 25 of Basic's
+//      floor cubes, 5 x 5, edge to edge: 500 x 500 m.
+//   4. `{location}` — the project folder lands under the folder that was named.
+//   5. THE REFUSALS, BY NAME and BEFORE anything is written: a bad location, an
+//      empty name, an unknown key — `empty`, the retired option, is one now —
+//      and an unknown template.
 
 function assert(cond, msg) {
     if (!cond) throw new Error("assert failed: " + msg);
@@ -31,7 +30,19 @@ function typesOf(ids) {
     return out;
 }
 
-// ---- 1. the default template ------------------------------------------------
+function near(a, b, tol) { return Math.abs(a - b) <= tol; }
+// The frames it takes a new world's baked meshes and textures to reach the
+// renderer's split: counted, never timed.
+function settleAtom() {
+    var st = world.atomStatus();
+    for (var i = 0; i < 120 && st.live && st.pending > 0; ++i) { editor.frame(1, 1 / 60); st = world.atomStatus(); }
+    return st;
+}
+function lightsIn(rows) {
+    return rows.filter(function (r) { return r.type === "light"; }).length;
+}
+
+// ---- 1. Basic, the default ----------------------------------------------------
 var proj = project.create("New Scene Template " + Date.now());
 assert(proj.length > 10, "project.create with no options");
 
@@ -48,28 +59,83 @@ assert(node.property(sun.light, "followsAtmosphere") === true,
        "...with Sun Follows Atmosphere ON — which is what the realistic sky makes mean something");
 
 var rows = scene.nodes({ depth: 1 });
-console.log("template: " + J(typesOf(rows)));
-assert(!!scene.find("Ground"), "the template stands on the default ground");
+console.log("basic: " + J(typesOf(rows)));
 assert(!!scene.find("Sky Light"), "...and carries the Sky Light");
+assert(lightsIn(scene.nodes()) === 2, "Basic holds exactly TWO lights (the sun and the Sky Light)");
+var floorRows = rows.filter(function (r) { return r.name === "Floor"; });
+assert(floorRows.length === 1 && floorRows[0].type === "mesh",
+       "Basic stands on ONE floor node, a mesh named Floor");
+var floor = floorRows[0].id;
+assert(node.property(floor, "meshPath") === ":/content/primitives/cube.obj",
+       "...and it is the CUBE primitive, the baked library asset (" + node.property(floor, "meshPath") + ")");
+assert(!scene.find("Ground"), "...and there is no hidden 'Ground' any more");
+var fb = scene.bounds({ nodes: [floor] });
+console.log("floor bounds: " + J(fb));
+assert(near(fb.size.x, 100, 0.01) && near(fb.size.y, 1, 0.01) && near(fb.size.z, 100, 0.01),
+       "the floor is 100 x 1 x 100 m");
+assert(near(fb.max.y, 0, 1e-3), "...with its TOP FACE at y = 0 (" + fb.max.y + ")");
+assert(near(fb.center.x, 0, 1e-3) && near(fb.center.z, 0, 1e-3), "...centred on the origin");
+// AN ORDINARY NODE: selectable (pickable), and the scene's size counts it.
+assert(node.property(floor, "pickable") === true, "...and it is an ordinary, pickable node");
+var sb = scene.bounds();
+assert(sb.size.x >= 100 - 0.01, "...which the scene's own bounds count (" + J(sb.size) + ")");
+// ON ATOM: the id pass draws it and the decode shades it.
+editor.frame(10, 1 / 60);
+var atomBasic = settleAtom();
+console.log("basic atom: " + J({ live: atomBasic.live, on: atomBasic.on, atomItems: atomBasic.atomItems,
+                                 pbsItems: atomBasic.pbsItems, notWorld: atomBasic.notWorld,
+                                 pending: atomBasic.pending }));
+if (atomBasic.live && atomBasic.on) {
+    assert(atomBasic.atomItems >= 1, "the floor is ON ATOM (atomItems " + atomBasic.atomItems + ")");
+    assert(node.setProperty(floor, "visible", false), "hide the floor");
+    editor.frame(3, 1 / 60);
+    var atomHidden = world.atomStatus();
+    assert(atomHidden.atomItems === atomBasic.atomItems - 1,
+           "...and it is the floor that atomItems counts (" + atomBasic.atomItems + " -> " +
+           atomHidden.atomItems + " with it hidden)");
+    assert(node.setProperty(floor, "visible", true), "show it again");
+} else {
+    console.log("note: the Atom split is not live on this machine (on=" + atomBasic.on +
+                ") — the floor's route is not asserted here");
+}
 
-// ---- 2. the blank world -----------------------------------------------------
-var empty = project.create("New Scene Empty " + Date.now(), { empty: true });
-assert(empty.length > 10, "project.create({empty: true})");
+// ---- 2. Empty ---------------------------------------------------------------
+var empty = project.create("New Scene Empty " + Date.now(), { template: "empty" });
+assert(empty.length > 10, "project.create({template: \"empty\"})");
 
 var emptyRows = scene.nodes({ depth: 1 });
 console.log("empty: " + J(typesOf(emptyRows)));
 // scene.nodes() starts AT the root, so depth 1 is the root plus its children.
 assert(emptyRows.length === 1,
        "an empty scene is the root node and nothing else (got " + emptyRows.length + " rows)");
-assert(!scene.find("Ground"), "...no ground");
-assert(!scene.find("Sky Light") && !scene.find("Directional Light"),
+assert(!scene.find("Floor"), "...no floor");
+assert(lightsIn(scene.nodes()) === 0,
        "...and no lights at all: an empty world is not lit, which is what 'empty' means");
 var ew = world.get();
 console.log("empty world sky: " + J(ew.sky));
-assert(String(ew.sky.type) === "SingleColor",
-       "...and no sky beyond the document's own default flat colour");
+assert(String(ew.sky.type) === "SingleColor" && String(ew.sky.color).toLowerCase() === "#000000",
+       "...and NO SKY: the document's absence of one, a black single-colour sky that lights nothing");
 
-// ---- 3. a chosen location ---------------------------------------------------
+// ---- 3. World ---------------------------------------------------------------
+var wp = project.create("New Scene World " + Date.now(), { template: "world" });
+assert(wp.length > 10, "project.create({template: \"world\"})");
+var group = scene.find("World Floor");
+assert(!!group, "World holds a group named 'World Floor'");
+var tiles = scene.nodes().filter(function (r) { return r.type === "mesh" && /^Floor \d+$/.test(r.name); });
+console.log("world floors: " + tiles.length);
+assert(tiles.length === 25, "...of 25 floor nodes (Floor 1 .. Floor 25)");
+var under = tiles.filter(function (r) { return node.info(r.id).parent === group; });
+assert(under.length === 25, "...every one of them under World Floor");
+var wb = scene.bounds({ nodes: [group] });
+console.log("world floor bounds: " + J(wb));
+assert(near(wb.size.x, 500, 0.05) && near(wb.size.z, 500, 0.05),
+       "...5 x 5 of the 100 m floors, edge to edge: 500 x 500 m");
+assert(near(wb.max.y, 0, 1e-3) && near(wb.center.x, 0, 0.01) && near(wb.center.z, 0, 0.01),
+       "...top at y = 0, centred on the origin");
+assert(lightsIn(scene.nodes()) === 2 && String(world.get().sky.type) === "Realistic",
+       "...under Basic's sky and its two lights");
+
+// ---- 4. a chosen location ---------------------------------------------------
 // app.dataRoot() names this run's own folders; `assetStore` is a directory the
 // run has certainly created and can certainly write, on every box the gate
 // runs on, and it is NOT the projects root — so "it landed where I said"
@@ -87,7 +153,7 @@ console.log("folder: " + folder);
 assert(folder.indexOf(where) === 0,
        "the project folder is under the location that was named, not under the projects root");
 
-// ---- 3b. AND IT CAN BE FOUND AGAIN (fix round F1) ---------------------------
+// ---- 4b. AND IT CAN BE FOUND AGAIN (fix round F1) ---------------------------
 // WHERE IT LANDS IS NOT THE QUESTION — where it is FOUND is. The location is
 // recorded with the project row and ProjectService::projectFolderFor is the one
 // resolver; before the fix every resolver rebuilt the path from the DEFAULT
@@ -109,7 +175,7 @@ assert(reopened.folder.indexOf(where) === 0,
        reopened.folder + ")");
 assert(reopened.folder === folder, "...at exactly the folder it was created in");
 
-// ---- 3c. a located project DELETES its own folder ---------------------------
+// ---- 4c. a located project DELETES its own folder ---------------------------
 assert(project.close() === true, "close it again");
 assert(project.remove(placed) === true, "project.remove(located)");
 var stillListed = project.list().filter(function (p) { return p.guid === placed; });
@@ -122,7 +188,7 @@ assert(gone !== null,
        "folder of the same guid (nothing) and left this one on disk forever.");
 console.log("   -> " + gone);
 
-// ---- 3d. a recorded location that is not there refuses BY NAME --------------
+// ---- 4d. a recorded location that is not there refuses BY NAME --------------
 // An unplugged drive, expressed with the verbs alone: the inner project's
 // location is the OUTER project's folder, so removing the outer one takes the
 // inner one's recorded root with it. Nothing about that arrangement is special
@@ -145,8 +211,8 @@ assert(orphan.indexOf(outerFolder) >= 0,
 assert(!project.current() || project.current().guid !== inner,
        "...and the refusal did not point the session at it");
 
-// ---- 4. the refusals --------------------------------------------------------
-// A world open again first: §3d's refusal deliberately left the session with
+// ---- 5. the refusals --------------------------------------------------------
+// A world open again first: §4d's refusal deliberately left the session with
 // none, and "a refused create leaves the project that was open exactly where it
 // was" needs one to mean anything.
 assert(project.create("New Scene Refusals " + Date.now()).length > 10,
@@ -167,6 +233,10 @@ refused(function () { project.create("   "); },
         "an empty name", "non-empty name");
 refused(function () { project.create("Typo", { emtpy: true }); },
         "an unknown option key", "unknown option");
+refused(function () { project.create("Retired", { empty: true }); },
+        "the retired `empty` option (it is `template: \"empty\"` now)", "unknown option 'empty'");
+refused(function () { project.create("Nope", { template: "sample" }); },
+        "an unknown template (Sample is not built yet)", "unknown template 'sample'");
 
 assert(project.current().guid === openBefore,
        "a refused create leaves the project that was open exactly where it was");

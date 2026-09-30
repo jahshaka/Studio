@@ -92,7 +92,7 @@ editor.frame(8);
 // is a measurement.
 (function faceIsARamp() {
     var H = 4, FOV = 120, HALF = H * Math.tan(FOV / 2 * Math.PI / 180);
-    var ground = scene.find("Ground");
+    var ground = scene.find("Floor");
     assert(!!ground, "the default floor is there to measure on");
     material.set(ground, { baseColorMap: "" });
     material.set(ground, { baseColor: "#B3B3B3" });

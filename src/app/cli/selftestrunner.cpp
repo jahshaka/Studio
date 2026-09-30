@@ -34,15 +34,15 @@ For more information see the LICENSE file
 
 namespace {
 
-/// The default scene's built-in ground (MainWindow::createDefaultScene), found
-/// the way the viewport and the scene-extents service recognise it.
+/// The Basic template's floor (MainWindow::createDefaultScene): the root's
+/// mesh child that wears the default floor material (`defaultFloor`).
 iris::MeshNodePtr findDefaultGround(const iris::ScenePtr &scene)
 {
     if (!scene || !scene->getRootNode()) return iris::MeshNodePtr();
     for (const auto &child : scene->getRootNode()->children()) {
         if (!child || child->getSceneNodeType() != iris::SceneNodeType::Mesh) continue;
         auto mesh = child.staticCast<iris::MeshNode>();
-        if (mesh->isBuiltIn && mesh->meshPath == QStringLiteral(":/models/ground.obj")) return mesh;
+        if (mesh->defaultFloor) return mesh;
     }
     return iris::MeshNodePtr();
 }
@@ -123,7 +123,7 @@ void settleShotIfGathering(MainWindow &window)
 //   * the realistic sky + ONE directional light, which is the sun role — the
 //     environment term and the direct term;
 //   * a 60 x 60 m GLOSSY floor (metallic 1, roughness 0.2): the reflection
-//     terms. The default Ground cannot take a reflective look, so it is a
+//     terms. The template's floor is matte by design, so it is a
 //     `plane` primitive (DOCS/traps/ENGINE.md, "a moved camera is not a new
 //     view" — the fixture that shows reflection defects is a glossy FLOOR at a
 //     grazing angle with occluders standing on it);
@@ -146,7 +146,7 @@ void settleShotIfGathering(MainWindow &window)
 // a sequence of verbs the editor itself offers, so it cannot drift from what the
 // application can express, and every verb it needs already existed.
 const char *const kFixtureBScript = R"JS(
-var g = project.create("selftest-fixture-B", { empty: true });
+var g = project.create("selftest-fixture-B", { template: "empty" });
 if (!g || g.length < 10) throw new Error("project.create refused");
 
 // The sun FIRST: the realistic sky takes its sun position from the scene's sun
@@ -243,17 +243,16 @@ int runEngineSelftest(MainWindow &window, QApplication &app, const QString &outP
         ~EndSelftest() { window.leaveEditorSpace(); EngineHost::instance().shutdown(); }
     } endSelftest{ window };
 
-    // THE DEFAULT SCENE MUST BE THE DEFAULT SCENE (smoke L10 item 3). On
-    // 2026-09-11 the ground failed to parse (`model :/models/ground.obj: error
-    // parsing file`) and this self-test rendered a groundless scene and exited
-    // 0: the pixel check below only asks that the centre is not the CLEAR
-    // colour, and the sky answers that on its own. So the scene is checked
-    // before a frame is pumped — the ground node exists and carries geometry.
+    // THE DEFAULT SCENE MUST BE THE DEFAULT SCENE (smoke L10 item 3). A floor
+    // whose mesh fails to load leaves a groundless scene, and the pixel check
+    // below only asks that the centre is not the CLEAR colour, which the sky
+    // answers on its own. So the scene is checked before a frame is pumped —
+    // the Basic template's Floor exists and carries geometry.
     //
     // JAHSHAKA_SELFTEST_BREAK_GROUND is the test-only arm that proves this bites
-    // (app.engine_selftest_validation): it re-points the ground at a resource
-    // that does not exist, which leaves the node exactly as a parse failure
-    // does — a mesh path and no mesh. Read here and nowhere else.
+    // (app.engine_selftest_validation): it drops the floor's mesh, which leaves
+    // the node exactly as a failed bake read does — a mesh path and no mesh.
+    // Read here and nowhere else.
     const iris::ScenePtr scene = window.getScene();
     const iris::MeshNodePtr ground = findDefaultGround(scene);
     if (ground && qEnvironmentVariableIsSet("JAHSHAKA_SELFTEST_BREAK_GROUND"))
@@ -263,7 +262,7 @@ int runEngineSelftest(MainWindow &window, QApplication &app, const QString &outP
         std::fprintf(stderr, "engine-selftest: the default scene's ground did not load (%s) — "
                              "a groundless scene is not the default scene; see the model "
                              "error in the log\n",
-                     !ground ? "no Ground node" : qPrintable(QStringLiteral("mesh '%1' has no geometry")
+                     !ground ? "no Floor node" : qPrintable(QStringLiteral("mesh '%1' has no geometry")
                                                                 .arg(ground->meshPath)));
         return 1;
     }

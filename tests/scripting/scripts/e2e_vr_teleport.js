@@ -78,12 +78,15 @@ assert(vr.teleport({ cancel: true }) === false, "so does a cancel");
 // ---- 1. A LEVEL THROW LANDS ON THE LOCKED FLOOR -------------------------
 //
 // THE LOCK IS AN EDIT GUARD, AND A TELEPORT IS NOT AN EDIT (the lead's read of
-// the first round, item 3). A new project's ground ships LOCKED — the owner's
-// own model, and people lock a floor for exactly one reason: so that clicking
-// it does not SELECT it (services/defaultfloor.cpp sets pickable false). A
-// floor you cannot select is still a floor you stand on, so the arc's trace
-// asks the picker with the lock FORCED OFF, and the commonest throw in the
-// editor — at the floor in front of you, in a fresh project — lands on it.
+// the first round, item 3). People lock a floor for exactly one reason: so
+// that clicking it does not SELECT it. The template's Floor ships unlocked (an
+// ordinary node, WORLD-MODEL-1), so it is locked here as a user would. A floor
+// you cannot select is still a floor you stand on, so the arc's trace asks the
+// picker with the lock FORCED OFF, and the commonest throw in the editor — at
+// the floor in front of you — lands on it.
+var lockedFloor = scene.find("Floor");
+assert(!!lockedFloor && node.setProperty(lockedFloor, "pickable", false) === true,
+       "the template's Floor, locked as a user locks it");
 var floorPickable = scene.raycast({ x: 0, y: 3, z: 0 }, { x: 0, y: -1, z: 0 });
 assert(floorPickable.length === 0,
        "the project's floor is LOCKED — the document's own raycast refuses it");
@@ -100,7 +103,7 @@ assert(t1.valid === true, "...and it is somewhere a person may stand");
 assert(t1.reason === "", "so there is no refusal to report");
 show("the landing", t1.landing);
 assert(near(t1.landing.y, 0.0, 5e-3),
-       "it lands ON the locked ground (which sits a hair above y = 0)");
+       "it lands ON the locked floor (its top face is y = 0)");
 // THE HIT IS WHERE THE STRAIGHT PIECE MET THE SURFACE, which is up to a couple
 // of centimetres short of where the CURVE crosses it (the curve is traced as
 // twenty straight pieces): 0.5343 s of flight is 5.343 m along the aim, and
