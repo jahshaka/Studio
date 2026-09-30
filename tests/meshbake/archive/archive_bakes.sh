@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 #
 # meshbake.archive_bakes — FORWARD-ONLY-1 item 1: an archive import BAKES what it
-# brings, a world opens from bakes and never parses, and a model whose bake is
-# gone shows as MISSING with a scene issue — never a parse.
+# brings, a world opens from bakes and never parses, a STALE bake is rebuilt from
+# its own source before the scene shows, and a model whose SOURCE is gone shows
+# as MISSING with a scene issue — never a parse.
 #
 # usage: archive_bakes.sh <jahshaka-binary> <import.js> <open.js>
 # cwd is the scratch run dir; JAHSHAKA_DATA_ROOT is the scratch data root (wiped
@@ -22,20 +23,29 @@ if grep -q "parsing the source" run1.log; then
     echo "archive_bakes: FAIL — a 'parsing the source' line in run 1"; exit 1
 fi
 
-# The bakes go (a stand-in for a bake this build cannot read: the reader's
-# answer to both is the same null).
+# RUN 2 — THE BAKES GO (a stand-in for bakes a changed producer made stale; the
+# reader's answer to both is the same): the open REBUILDS them from the store's
+# own sources on a worker before the scene shows — no parse, the models present.
 n=$(find "$ROOT" -path '*objects*' -name '*.jmb' | wc -l)
 echo "archive_bakes: removing $n bake object(s)"
 [ "$n" -gt 0 ] || { echo "archive_bakes: FAIL — run 1 left no bake objects"; exit 1; }
 find "$ROOT" -path '*objects*' -name '*.jmb' -delete
-
-# Run 2: the same world opens with its models MISSING and a scene issue naming
-# them — and still no parse.
-"$BIN" --data-root "$ROOT" --script "$OPEN_JS" > run2.log 2>&1
+printf 'var REBUILT = true;\n' > run2.js; cat "$OPEN_JS" >> run2.js
+# The library's background sweep is switched OFF here, so it is the OPEN that
+# must rebuild (the sweep is the same rebuild at the lowest priority).
+JAHSHAKA_BAKE_SWEEP=0 "$BIN" --data-root "$ROOT" --script "$PWD/run2.js" > run2.log 2>&1
 rc=$?
 grep -E "^(ok|FAIL)" run2.log
 if [ "$rc" -ne 0 ]; then echo "archive_bakes: run 2 exited $rc"; tail -40 run2.log; exit 1; fi
 if grep -q "parsing the source" run2.log; then
     echo "archive_bakes: FAIL — a 'parsing the source' line in run 2"; exit 1
 fi
+
+# RUN 3 — THE SOURCES GO TOO: nothing to rebuild from, so the model is MISSING
+# with a scene issue naming it, and still nothing is parsed.
+find "$ROOT" -path '*objects*' \( -name '*.jmb' -o -name '*.obj' -o -name '*.dae' -o -name '*.fbx' -o -name '*.glb' -o -name '*.gltf' \) -delete
+"$BIN" --data-root "$ROOT" --script "$OPEN_JS" > run3.log 2>&1
+rc=$?
+grep -E "^(ok|FAIL)" run3.log
+if [ "$rc" -ne 0 ]; then echo "archive_bakes: run 3 exited $rc"; tail -40 run3.log; exit 1; fi
 echo "archive_bakes: PASS"

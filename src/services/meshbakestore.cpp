@@ -23,6 +23,10 @@ For more information see the LICENSE file
 #include <QSqlQuery>
 #include <QTemporaryDir>
 #include <memory>
+#include <atomic>
+#include <QtConcurrent/QtConcurrentRun>
+#include <QThreadPool>
+#include <QThread>
 
 #include "data/database/database.h"
 #include "data/constants.h"
@@ -556,6 +560,7 @@ BakeResult runBake(const BakeJob &job)
     if (job.path.isEmpty()) { out.error = QStringLiteral("not a store object"); return out; }
     auto dir = std::make_shared<QTemporaryDir>();
     if (!dir->isValid()) { out.error = QStringLiteral("cannot create a bake staging directory"); return out; }
+    iris::ParseCensus::BakeBuildScope building;   // the bake's own parse, not an open's
     iris::MeshBake::Model model = iris::MeshBake::buildFromFile(
         job.path, iris::MeshBake::fingerprintFor(job.sourceOid, job.settings), dir->path(),
         job.transform);
@@ -597,6 +602,123 @@ bool commitBake(QSqlDatabase conn, const QString &root, BakeResult &result, QStr
     QVector<AssetCas::Staged> leftover{ result.staged };
     AssetCas::discardStaged(leftover);
     return ok;
+}
+
+QVector<BakeJob> staleJobsFor(QSqlDatabase conn, const QString &root, const QStringList &paths)
+{
+    QVector<BakeJob> jobs;
+    QSet<QString> seen;   // "<oid>|<settingsHash>"
+    for (const QString &path : paths) {
+        const QString oid = oidFromStorePath(root, path);
+        if (oid.isEmpty() || !QFileInfo::exists(path)) continue;   // no source: missing
+        QSqlQuery rows(conn);
+        rows.prepare("SELECT DISTINCT asset_guid FROM asset_files WHERE oid = ? AND role <> ?");
+        rows.addBindValue(oid);
+        rows.addBindValue(iris::MeshBake::casRole());
+        if (!rows.exec()) continue;
+        while (rows.next()) {
+            const QString guid = rows.value(0).toString();
+            const QString key = oid + QLatin1Char('|') + settingsHashFor(conn, root, path, guid);
+            if (seen.contains(key)) continue;
+            seen.insert(key);
+            if (!planFor(conn, root, path, guid).bakePath.isEmpty()) continue;   // fresh
+            BakeJob job = prepareBake(conn, root, { path, guid });
+            if (!job.path.isEmpty()) jobs.append(job);
+        }
+    }
+    return jobs;
+}
+
+int rebuildPumped(const QVector<BakeJob> &jobs, const std::function<void(int, int)> &progress)
+{
+    if (jobs.isEmpty()) return 0;
+    std::atomic<int> at { -1 };
+    std::atomic<bool> done { false };
+    QVector<BakeResult> results(jobs.size());
+    QFuture<void> future = QtConcurrent::run([&]() {
+        struct Finish { std::atomic<bool> &flag; ~Finish() { flag.store(true); } } finish{ done };
+        for (int i = 0; i < jobs.size(); ++i) {
+            at.store(i);
+            results[i] = runBake(jobs[i]);
+        }
+    });
+    int reported = -1;
+    while (!done.load()) {
+        const int now = at.load();
+        if (now != reported && now >= 0) { reported = now; if (progress) progress(now, jobs.size()); }
+        QCoreApplication::processEvents(QEventLoop::ExcludeUserInputEvents, 20);
+        if (!done.load()) QThread::msleep(5);
+    }
+    future.waitForFinished();
+    int failed = 0;
+    QSqlDatabase conn = QSqlDatabase::database();
+    const QString root = AssetStorePaths::root();
+    for (BakeResult &result : results) {
+        QString error;
+        if (!commitBake(conn, root, result, &error)) {
+            ++failed;
+            irisLog(QStringLiteral("mesh bake: a stale bake could not be rebuilt (%1)").arg(error));
+        }
+    }
+    return failed;
+}
+
+namespace {
+QFuture<void> sBackground;
+std::atomic<bool> sBackgroundStop { false };
+QThreadPool *backgroundPool()
+{
+    static QThreadPool *pool = [] {
+        auto *p = new QThreadPool;
+        p->setMaxThreadCount(1);
+        p->setThreadPriority(QThread::LowestPriority);
+        return p;
+    }();
+    return pool;
+}
+}   // namespace
+
+void startBackgroundRebuild()
+{
+    if (backgroundRebuildRunning() || !QCoreApplication::instance()) return;
+    // JAHSHAKA_BAKE_SWEEP=0: no library sweep (a suite that proves the OPEN
+    // rebuilds its own stale bakes needs the sweep out of the race).
+    if (qEnvironmentVariableIsSet("JAHSHAKA_BAKE_SWEEP")
+        && qEnvironmentVariableIntValue("JAHSHAKA_BAKE_SWEEP") == 0)
+        return;
+    QSqlDatabase conn = QSqlDatabase::database();
+    const QString root = AssetStorePaths::root();
+    QVector<BakeJob> jobs;
+    for (const BakeTarget &target : modelBakesNeeded(conn, root)) {
+        if (!QFileInfo::exists(target.path)) continue;
+        BakeJob job = prepareBake(conn, root, target);
+        if (!job.path.isEmpty()) jobs.append(job);
+    }
+    if (jobs.isEmpty()) return;
+    irisLog(QStringLiteral("mesh bake: rebuilding %1 stale bake(s) in the background").arg(jobs.size()));
+    sBackgroundStop.store(false);
+    sBackground = QtConcurrent::run(backgroundPool(), [jobs, root]() {
+        for (const BakeJob &job : jobs) {
+            if (sBackgroundStop.load()) return;
+            auto result = std::make_shared<BakeResult>(runBake(job));
+            QMetaObject::invokeMethod(QCoreApplication::instance(), [result, root]() {
+                QString error;
+                if (!commitBake(QSqlDatabase::database(), root, *result, &error))
+                    irisLog(QStringLiteral("mesh bake: background rebuild failed (%1)").arg(error));
+            }, Qt::QueuedConnection);
+        }
+    });
+}
+
+void stopBackgroundRebuild()
+{
+    sBackgroundStop.store(true);
+    if (sBackground.isValid() && !sBackground.isFinished()) sBackground.waitForFinished();
+}
+
+bool backgroundRebuildRunning()
+{
+    return sBackground.isValid() && !sBackground.isFinished();
 }
 
 QStringList modelSourcesNeedingBake(QSqlDatabase conn, const QString &root)

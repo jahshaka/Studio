@@ -197,6 +197,8 @@ For more information see the LICENSE file
 #include "services/outlinesettings.h"
 #include "services/loadtimeline.h"
 #include "services/meshbakestore.h"
+#include "services/assetstorepaths.h"
+#include <QSqlDatabase>
 #include "services/primitiveassets.h"
 #include "services/sceneopenrunner.h"
 #include "services/mainthreadwatchdog.h"
@@ -1090,6 +1092,10 @@ void MainWindow::shutdownBackgroundWork()
         std::_Exit(0);
     }).detach();
 
+    // The library's background bake rebuild (FORWARD-ONLY-1 D1): joined here,
+    // a bake in flight finishes into its own temp and is discarded.
+    MeshBakeStore::stopBackgroundRebuild();
+
     // THE FIRST-RUN PRESET SEED (RESET-LIBRARY-1's fix round). Its own header
     // said "the app's shutdown calls it" and only the --script path
     // (scriptrunner.cpp) ever did — so a window closed during the first
@@ -1235,6 +1241,10 @@ void MainWindow::setupProjectDB()
     const int seeded = PrimitiveAssets::seedAll(db, &seedErrors);
     if (seeded > 0) irisLog(QStringLiteral("primitives: baked %1 shipped meshes").arg(seeded));
     for (const QString &line : seedErrors) irisLog("primitive seed: " + line);
+    // STALE BAKES, IN THE BACKGROUND (FORWARD-ONLY-1 D1): a build that changed
+    // the bake's producer rebuilds every stale bake from its own source, at the
+    // lowest priority; an open rebuilds the ones it needs first, itself.
+    MeshBakeStore::startBackgroundRebuild();
 }
 
 void MainWindow::setupServices()
@@ -1919,10 +1929,11 @@ void MainWindow::openStageBind(bool playMode)
 		issue.id = QStringLiteral("model.missing:") + path;
 		issue.kind = QStringLiteral("model.missing");
 		issue.nodeName = file;
-		issue.message = tr("The model '%1' has no mesh bake this version of Jahshaka can read, "
-		                   "so it is missing from the scene.").arg(file);
-		issue.action = tr("Re-import the model (or the project archive it came in): an import "
-		                  "bakes it.");
+		issue.message = tr("The model '%1' is missing from the scene: it has no mesh bake, and "
+		                   "none could be rebuilt from its source.").arg(file);
+		issue.action = tr("Its source file is not in the asset store (or its bake could not be "
+		                  "rebuilt from it — the log says why): re-import the model, or the project "
+		                  "archive it came in.");
 		SceneIssues::instance().raise(issue);
 	}
 	refreshClaudeChatContext();   // D1: rebind an open chat to the new project
@@ -2077,6 +2088,18 @@ iris::MeshPrewarmPtr MainWindow::prewarmModelsPumped()
 	auto prewarm = std::make_shared<iris::MeshPrewarm>();
 	const QStringList modelPaths = plannedOpenModelPaths();
 	if (modelPaths.isEmpty()) return prewarm;
+
+	// STALE BAKES ARE REBUILT FROM THEIR OWN SOURCES FIRST (FORWARD-ONLY-1
+	// D1): a bake is a cache of the parse, and a build that changed the code
+	// producing it rebuilds it — on a worker, this thread pumping, with the
+	// open's progress up — before anything reads. Never a parse on the open.
+	MeshBakeStore::rebuildPumped(
+	    MeshBakeStore::staleJobsFor(QSqlDatabase::database(), AssetStorePaths::root(), modelPaths),
+	    [this](int i, int n) {
+		    if (pmContainer)
+			    pmContainer->showOpenProgress(5 + (20 * i) / qMax(1, n),
+			                                  tr("Rebuilding models (%1 of %2)…").arg(i + 1).arg(n));
+	    });
 
 	LoadTimeline::mark(QStringLiteral("plan"));
 	QVector<iris::PrewarmItem> plan;

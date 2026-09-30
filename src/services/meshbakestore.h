@@ -41,6 +41,7 @@ For more information see the LICENSE file
 #include "irisgl/import/meshprewarm.h"
 #include "services/assetcas.h"
 #include <memory>
+#include <functional>
 
 class QTemporaryDir;
 #include "irisgl/import/importsettings.h"
@@ -183,6 +184,31 @@ BakeResult runBake(const BakeJob &job);
 /// Publishes `result` (or discards it on failure). False with `errorOut` set
 /// when the catalog write failed.
 bool commitBake(QSqlDatabase conn, const QString &root, BakeResult &result, QString *errorOut);
+
+// --- A STALE BAKE IS REBUILT FROM ITS OWN SOURCE (FORWARD-ONLY-1 D1) --------
+//
+// A bake is DERIVED DATA: a cache of the parse, keyed on the build that made
+// it (its producer fingerprint). When the code that produces it changes, the
+// cache is rebuilt from the STORE'S OWN SOURCE on a worker — that is not a
+// compatibility reader and it is not a parse on the open path: the scene only
+// ever reads bakes. A model whose SOURCE is gone stays missing.
+
+/// The rebuild jobs for these model files: every (content, settings) variant
+/// named by a library row whose bake is stale or absent and whose source object
+/// is on disk. Database thread.
+QVector<BakeJob> staleJobsFor(QSqlDatabase conn, const QString &root, const QStringList &paths);
+
+/// Runs `jobs` on a worker while THIS (the database) thread pumps — user input
+/// excluded, the open's own prewarm shape — then commits them. `progress(i, n)`
+/// runs on this thread as each job starts. Returns how many failed.
+int rebuildPumped(const QVector<BakeJob> &jobs, const std::function<void(int, int)> &progress);
+
+/// THE LIBRARY'S BACKGROUND SWEEP: every stale bake in the store, one at a
+/// time, on a lowest-priority thread, each committed as it lands. Started
+/// once a library is open; idempotent. stop joins (shutdown, a reset).
+void startBackgroundRebuild();
+void stopBackgroundRebuild();
+bool backgroundRebuildRunning();
 
 /// The paths of the above, for a caller that only wants to know how much work
 /// there is. Kept because the shape reads better at a call site that reports.

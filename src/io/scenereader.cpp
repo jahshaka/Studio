@@ -1181,6 +1181,13 @@ iris::MeshNodePtr SceneReader::createMesh(QJsonObject& nodeObj)
         qWarning().noquote() << "scene reader: mesh" << nodeObj["mesh"].toString()
                              << "for node" << nodeObj["name"].toString()
                              << "did not resolve to a file — the node loads with no mesh";
+        // ...AND IT IS A MISSING MODEL (FORWARD-ONLY-1 D1): its SOURCE is not in
+        // the store, so there is nothing to rebuild a bake from. Reported by the
+        // row's own file name (the scene issue names it).
+        const QString rowName =
+            handle ? handle->fetchAsset(nodeObj["mesh"].toString()).name : QString();
+        const QString missing = rowName.isEmpty() ? nodeObj["mesh"].toString() : rowName;
+        if (!missingModelPaths.contains(missing)) missingModelPaths.append(missing);
     }
     if (!source.isEmpty()) {
         // A ":"-prefixed source is a BUILT-IN: a SEED KEY, resolved to the

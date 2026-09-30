@@ -106,17 +106,19 @@ QVector<VerbInfo> AppApi::verbs() const
           Needs::Document },
         { "openStats", "app.openStats({reset:false}) -> {uiThreadParses, uiThreadParseMs, "
           "uiThreadResourceParses, uiThreadResourceParseMs, workerParses, workerParseMs, "
-          "lastUiThreadParse, bakeHits, bakeMisses, sliceBoundaries, sliceBoundaryFrames}",
+          "lastUiThreadParse, bakeHits, bakeMisses, bakeBuilds, sliceBoundaries, sliceBoundaryFrames}",
           "Model PARSES since the last reset, split by the thread that paid for them "
           "(irisgl/import/parsecensus.h), and the bake reads beside them. A project open must "
           "never parse a model on the UI thread — assimp on a 6 MB mesh is a second of frozen "
           "window — so 'uiThreadParses' is the number open.responsive asserts is ZERO over the "
-          "open of every shipped sample. 'bakeMisses' says why a parse was needed at all (no "
-          "bake for that content yet), and 'lastUiThreadParse' names the file when the count is "
+          "open of every shipped sample. Since FORWARD-ONLY-1 an open never parses a model at all: "
+          "'bakeMisses' counts lookups that found no current bake (the model is then missing, or "
+          "its stale bake was rebuilt first), and 'bakeBuilds' counts the parses that BUILT a bake "
+          "(an import's, a stale bake's rebuild from its source, on a worker); and 'lastUiThreadParse' names the file when the count is "
           "not zero. Pass {reset:true} to zero the counters AFTER reading them, which is how a "
           "caller measures ONE open. 'bakeMisses' counts LOOKUPS, not models — one bake-less "
           "model is asked for twice on a cold open (the prewarm worker's plan item, then the "
-          "reader's own) — so read it as how often the open had to fall back to a parse. "
+          "reader's own) — never a parse. "
           "'uiThreadResourceParses' counts parses of a QT RESOURCE (':/...') separately: a few "
           "kilobytes compiled into the binary, which no worker can hoist because the caller asks "
           "for it by name. An OPEN no longer makes any — the shipped primitives, the Ground and "
@@ -719,6 +721,9 @@ QVariantMap AppApi::openStats(const QVariantMap &options)
     out.insert(QStringLiteral("lastUiThreadParse"), parses.lastMainThreadPath);
     out.insert(QStringLiteral("bakeHits"), parses.bakeHits);
     out.insert(QStringLiteral("bakeMisses"), parses.bakeMisses);
+    // A bake BUILT (an import's, a stale bake's rebuild) — the derived data
+    // being made on a worker, never a model read in place of its bake.
+    out.insert(QStringLiteral("bakeBuilds"), parses.bakeBuilds);
     // THE OPEN'S OWN DRIVE (lane OPEN-FRAMES-1). NOT reset with the parse
     // census: these count the window's life, and a caller measuring one open
     // subtracts. A session with no window reports zeros.

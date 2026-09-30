@@ -10,6 +10,7 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "services/libraryreset.h"
+#include "services/meshbakestore.h"
 
 #include <QDir>
 #include <QDirIterator>
@@ -146,6 +147,8 @@ Result reset(Database *db, SettingsManager *settings, const QString &projectsRoo
         result.error = why;
         return result;
     }
+    // The background bake rebuild writes into the store this is about to empty.
+    MeshBakeStore::stopBackgroundRebuild();
 
     // ---- 1. COUNT FIRST -------------------------------------------------
     // The numbers describe the library that WAS there. Counted before a byte
