@@ -1054,7 +1054,6 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
 		for (const auto &ext : Constants::MATERIAL_EXTS) patterns << "*." + ext;
 		for (const auto &ext : Constants::LIGHT_PROFILE_EXTS) patterns << "*." + ext;
 		for (const auto &ext : Constants::WHITELIST) patterns << "*." + ext;
-		patterns << "*." + Constants::ASSET_EXT;
 		patterns << QStringLiteral("*.%1").arg(QLatin1String(assetshare::extension()));
 
 		const auto files = QFileDialog::getOpenFileNames(this,
@@ -1374,55 +1373,6 @@ void AssetView::showEvent(QShowEvent *event)
 	updateAddToProjectButton();
 }
 
-QString importProjectNameAV;
-int on_extract_entry_av(const char *filename, void *arg) {
-	QFileInfo fInfo(filename);
-	if (fInfo.suffix() == "db") importProjectNameAV = fInfo.baseName();
-	return 0;
-}
-
-// The old importJahModel viewer/tile tail — the archive is already imported
-// (ImportBatchRunner committed it); this runs post-dialog on the UI thread.
-void AssetView::finishJafImport(const ImportResult &result, const QString &fileName)
-{
-    if (result.jafKind == QStringLiteral("bundle")) return;
-
-    const QString guid = result.assetGuid;
-    filename = fileName;
-
-    if (result.jafKind == QStringLiteral("material")) {
-        viewers->setCurrentIndex(0);
-        renameModelField->setText(QFileInfo(filename).baseName());
-        viewer->loadJafMaterial(guid);
-        addToJahLibrary(filename, guid, true);
-    }
-    else if (result.jafKind == QStringLiteral("sky")) {
-        viewers->setCurrentIndex(0);
-        renameModelField->setText(QFileInfo(filename).baseName());
-        viewer->loadJafSky(guid);
-        addToJahLibrary(filename, guid, true);
-    }
-    else if (result.jafKind == QStringLiteral("texture")) {
-        renameModelField->setText(QFileInfo(filename).baseName());
-        viewers->setCurrentIndex(1);
-        const QString imagePath = AssetCas::resolveSource(
-            QSqlDatabase::database(), AssetStorePaths::root(), guid);
-        QPixmap image(imagePath);
-        if (!image.isNull())
-            assetImageCanvas->setPixmap(image.scaledToHeight(480, Qt::SmoothTransformation));
-        addToJahLibrary(filename, guid, true);
-    }
-    else if (result.jafKind == QStringLiteral("object")) {
-        viewers->setCurrentIndex(0);
-        // The archive's model file: the asset's source-role object.
-        const QString path = AssetCas::resolveSource(
-            QSqlDatabase::database(), AssetStorePaths::root(), guid);
-        renameModelField->setText(QFileInfo(filename).baseName());
-        viewer->loadJafModel(path, guid);
-        addToJahLibrary(filename, guid, true);
-    }
-}
-
 // The mesh tail, one item per event-loop turn (see scheduleViewerTails). The
 // pipeline half already ran on the batch runner's worker; ImportMeshTail
 // previews the COMMITTED asset by guid (the library blob — smoke S6; the
@@ -1522,29 +1472,27 @@ void AssetView::importFiles(const QStringList &fileNames)
 		request.sourcePath = fileName;
 
 		const QString suffix = QFileInfo(fileName).suffix().toLower();
-		if (suffix != Constants::ASSET_EXT) {   // .jaf sniffs importer-side
-			const ModelTypes type = AssetHelper::getAssetTypeFromExtension(suffix);
-			switch (type) {
-			case ModelTypes::Texture:
-			case ModelTypes::Music:
-			case ModelTypes::Video:
-				request.typeHint = static_cast<int>(type);
-				request.drawerId = selectedDrawerId();
-				break;
-			case ModelTypes::Mesh:
-				// Meshes and everything they reference: the viewer-driven path
-				// (handleImportedFile keys the mesh tail off this hint).
-				request.typeHint = static_cast<int>(ModelTypes::Mesh);
-				break;
-			default:
-				// NO HINT: the pipeline sniffs. This `default` used to say
-				// "Mesh", which pinned pickImporter to MeshImporter alone and
-				// made FOUR of the nine importers unreachable from this page —
-				// a .shader, .material, .ies or whitelisted text file dropped
-				// on the Assets page could only ever fail as "not a model"
-				// (deep audit 2026-09, area 4).
-				break;
-			}
+		const ModelTypes type = AssetHelper::getAssetTypeFromExtension(suffix);
+		switch (type) {
+		case ModelTypes::Texture:
+		case ModelTypes::Music:
+		case ModelTypes::Video:
+			request.typeHint = static_cast<int>(type);
+			request.drawerId = selectedDrawerId();
+			break;
+		case ModelTypes::Mesh:
+			// Meshes and everything they reference: the viewer-driven path
+			// (handleImportedFile keys the mesh tail off this hint).
+			request.typeHint = static_cast<int>(ModelTypes::Mesh);
+			break;
+		default:
+			// NO HINT: the pipeline sniffs. This `default` used to say
+			// "Mesh", which pinned pickImporter to MeshImporter alone and
+			// made FOUR of the nine importers unreachable from this page —
+			// a .shader, .material, .ies or whitelisted text file dropped
+			// on the Assets page could only ever fail as "not a model"
+			// (deep audit 2026-09, area 4).
+			break;
 		}
 		requests.append(request);
 	}
@@ -1711,14 +1659,14 @@ void AssetView::runImportBatch(const QVector<ImportRequest> &requests)
 		}
 
 		// Engine-dependent tails AFTER the dialog closed (the dialog never
-		// waits on the viewer): mesh/.jaf previews + rendered thumbnails,
+		// waits on the viewer): mesh previews + rendered thumbnails,
 		// video frame grabs — queued ONE PER EVENT-LOOP TURN so the app
 		// never freezes; each tile updates live as its render lands.
 		scheduleViewerTails();
 
 		// SELECT WHAT WAS IMPORTED (smoke S4). A mesh selects when its tail
 		// lands (the preview is part of the selection); everything else —
-		// images, audio, video, .jaf archives — has no tail, so the batch
+		// images, audio, video — has no tail, so the batch
 		// selects its last asset here.
 		if (!tailQueue->isRunning()) selectAsset(lastImportedGuid);
 	});
@@ -1735,19 +1683,15 @@ void AssetView::handleImportedFile(const ImportRequest &request, const ImportRes
 		return;
 	}
 
-	const bool isJaf =
-	    QFileInfo(request.sourcePath).suffix().toLower() == Constants::ASSET_EXT;
-	if (isJaf || request.typeHint == static_cast<int>(ModelTypes::Mesh)) {
+	if (request.typeHint == static_cast<int>(ModelTypes::Mesh)) {
 		// Viewer-driven types: the preview render happens post-dialog, one
 		// item per event-loop turn (scheduleViewerTails). Mesh tiles appear
 		// NOW, mid-batch, with the loading overlay up — the render lands on
 		// the tile when its turn comes.
 		pendingViewerTails.append({ result, request.sourcePath });
 		lastImportedGuid = result.assetGuid;
-		if (!isJaf) {
-			addLibraryTileForAsset(result.assetGuid);
-			if (libraryModel->contains(result.assetGuid)) setLoadingTile(result.assetGuid);
-		}
+		addLibraryTileForAsset(result.assetGuid);
+		if (libraryModel->contains(result.assetGuid)) setLoadingTile(result.assetGuid);
 		return;
 	}
 
@@ -1762,16 +1706,10 @@ void AssetView::scheduleViewerTails()
 {
 	const auto tails = pendingViewerTails;
 	pendingViewerTails.clear();
-	for (const auto &tail : tails) {
-		if (QFileInfo(tail.fileName).suffix().toLower() == Constants::ASSET_EXT)
-			tailQueue->enqueue([this, tail]() {
-				finishJafImport(tail.result, tail.fileName);
-			});
-		else
-			tailQueue->enqueue([this, tail]() {
-				finishMeshTailItem(tail.result, tail.fileName);
-			});
-	}
+	for (const auto &tail : tails)
+		tailQueue->enqueue([this, tail]() {
+			finishMeshTailItem(tail.result, tail.fileName);
+		});
 
 	const auto videoGuids = pendingVideoThumbGuids;
 	pendingVideoThumbGuids.clear();

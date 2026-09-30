@@ -68,7 +68,6 @@ namespace Constants
     extern QList<QString> AVATAR_EXTS;
 	extern QString SHADER_EXT;
     extern QList<QString> MATERIAL_EXTS;
-	extern QString ASSET_EXT;
 
     extern QString UPDATE_CHECK_URL;
 

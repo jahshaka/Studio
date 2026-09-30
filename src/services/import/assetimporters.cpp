@@ -23,7 +23,6 @@ For more information see the LICENSE file
 #include <QTextStream>
 #include <functional>
 
-#include "zip.h"
 
 #include "data/constants.h"
 #include "data/database/database.h"
@@ -807,70 +806,5 @@ bool FileImporter::convert(const ImportRequest &request, const QString &stagingD
         assetFile->path = guid;
         AssetManager::addAsset(assetFile);
     };
-    return true;
-}
-
-// ============================ JafImporter ============================
-
-int JafImporter::modelType() const { return static_cast<int>(ModelTypes::Object); }
-
-bool JafImporter::sniff(const QString &path) const
-{
-    return QFileInfo(path).suffix().toLower() == Constants::ASSET_EXT;
-}
-
-bool JafImporter::validate(const QString &path, QString *errorOut) const
-{
-    if (!QFileInfo::exists(path)) {
-        if (errorOut) *errorOut = QStringLiteral("no such file %1").arg(path);
-        return false;
-    }
-    return true;
-}
-
-bool JafImporter::convert(const ImportRequest &request, const QString &stagingDir,
-                          Database *db, Project *project, StagedAsset &out,
-                          QString *errorOut, const ImportProgressFn &progress)
-{
-    Q_UNUSED(project);
-    if (progress && !progress(QStringLiteral("extract"), 0, 0)) {
-        if (errorOut) *errorOut = QStringLiteral("cancelled");
-        return false;
-    }
-
-    zip_extract(request.sourcePath.toStdString().c_str(),
-                stagingDir.toStdString().c_str(), nullptr, nullptr);
-
-    const QString manifestPath = QDir(stagingDir).filePath(QStringLiteral(".manifest"));
-    const QString dbPath = QDir(stagingDir).filePath(QStringLiteral("asset.db"));
-
-    QFile manifest(manifestPath);
-    if (!manifest.exists() || !db->checkIfJafModelVersionSupported(dbPath)) {
-        if (errorOut)
-            *errorOut = QStringLiteral("This asset was made with a deprecated version of "
-                                       "Jahshaka. You can extract the contents manually and "
-                                       "try importing as regular assets.");
-        return false;
-    }
-    if (!manifest.open(QFile::ReadOnly | QFile::Text)) {
-        if (errorOut) *errorOut = QStringLiteral("unreadable .manifest");
-        return false;
-    }
-    QTextStream in(&manifest);
-    QStringList lines;
-    while (!in.atEnd()) lines << in.readLine();
-    manifest.close();
-    if (lines.isEmpty()) {
-        if (errorOut) *errorOut = QStringLiteral("empty .manifest");
-        return false;
-    }
-
-    out.jaf.kind = lines.first();
-    out.jaf.dbPath = dbPath;
-    out.jaf.assetsDir = QDir(stagingDir).filePath(QStringLiteral("assets"));
-    out.jaf.bundleLines = lines.mid(1);
-    out.jafKind = out.jaf.kind;
-    // Rows/files are produced by the spine's jaf commit path — the archive
-    // carries its own row set (asset.db) and per-guid payload dirs.
     return true;
 }

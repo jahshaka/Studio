@@ -221,7 +221,7 @@ private:
 	/// Start the runner + dialog for a prepared request batch.
 	void runImportBatch(const QVector<ImportRequest> &requests);
 	/// Per-file completion (UI thread, dialog still up): media tiles appear
-	/// live; mesh/.jaf viewer tails queue for after the dialog closes.
+	/// live; mesh viewer tails queue for after the dialog closes.
 	void handleImportedFile(const ImportRequest &request, const ImportResult &result);
 	/// Engine-dependent tails (viewer preview + rendered thumbnail) — run
 	/// AFTER the batch dialog closes, ONE PER EVENT-LOOP TURN through
@@ -232,8 +232,6 @@ private:
 	/// stores its thumbnail through the one thumbnail routine
 	/// (assetthumb::storeObject — what `assets.refreshThumbnail` runs).
 	void finishMeshTailItem(const ImportResult &result, const QString &fileName);
-	/// The old importJahModel tail: per-kind viewer page + library tile.
-	void finishJafImport(const ImportResult &result, const QString &fileName);
 	/// Images/audio/video: build + wire the library tile for a committed row.
 	void addLibraryTileForAsset(const QString &guid);
 	/// The library listing into the model (one query, no thumbnail column,

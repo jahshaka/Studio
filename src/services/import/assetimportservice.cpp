@@ -12,7 +12,6 @@ For more information see the LICENSE file
 #include "services/import/assetimportservice.h"
 
 #include <QDir>
-#include <QDirIterator>
 #include <QElapsedTimer>
 #include <QFileInfo>
 #include <QJsonArray>
@@ -51,7 +50,6 @@ AssetImportService::AssetImportService(Database *db, Project *project)
     mImporters.append(new MediaImporter(static_cast<int>(ModelTypes::Video)));
     mImporters.append(new MaterialImporter());
     mImporters.append(new IesImporter());
-    mImporters.append(new JafImporter());
     mImporters.append(new FileImporter());
 }
 
@@ -79,7 +77,6 @@ qint64 maxSourceBytes(int modelType)
 {
     switch (static_cast<ModelTypes>(modelType)) {
     case ModelTypes::Mesh:
-    case ModelTypes::Object:   // JafImporter — a .jaf archive carries content
     case ModelTypes::Animation:   // a clip file is a model file without the meshes
     case ModelTypes::Texture:
     case ModelTypes::Music:
@@ -117,7 +114,7 @@ QString AssetImportService::relistUnlistedMatch(const StagedAsset &staged)
     // The source oid is ALREADY known: prepare() stamps it into the
     // determinism record for EVERY import — from the importer's own hash when
     // it had one (MeshImporter keys its bake on it), from a read of the source
-    // otherwise — and .jaf plans get one too. Re-hashing here would read the
+    // otherwise. Re-hashing here would read the
     // whole file a second time on the DB/UI thread, a multi-second freeze on a
     // big model for an answer we are holding (code review 2026-09-10). So
     // there is no fallback to write: an empty oid means this plan never went
@@ -165,9 +162,8 @@ QString AssetImportService::claimStampedMemberForUser(const ImportRequest &reque
     // origin.
     if (request.intent != ImportRequest::Intent::User) return QString();
     // A TEXTURE FOR A TEXTURE. The stamp only ever sits on a Texture row, and
-    // a plan that is not making one cannot answer with one — a .jaf, a model
+    // a plan that is not making one cannot answer with one — a model
     // (whose source file is a model, not a picture), a sound.
-    if (!staged.jaf.kind.isEmpty()) return QString();
     int mainType = -1;
     for (const StagedRow &row : staged.rows)
         if (row.guid == staged.mainGuid) { mainType = row.type; break; }
@@ -204,7 +200,7 @@ QString AssetImportService::claimStampedMemberForUser(const ImportRequest &reque
 bool isModelImportPath(const QString &path)
 {
     const QString suffix = QFileInfo(path).suffix().toLower();
-    if (suffix.isEmpty() || suffix == Constants::ASSET_EXT) return false;
+    if (suffix.isEmpty()) return false;
     return Constants::MODEL_EXTS.contains(suffix);
 }
 
@@ -218,7 +214,7 @@ AssetImporterBase *AssetImportService::pickImporter(const ImportRequest &request
     if (error)
         *error = QStringLiteral("'%1' is not an importable library file "
                                 "(models, animation clips, images, audio, video, shaders, "
-                                "materials, .ies light profiles or .jaf)")
+                                "materials or .ies light profiles)")
                      .arg(QFileInfo(request.sourcePath).fileName());
     return nullptr;
 }
@@ -380,25 +376,6 @@ PreparedImport AssetImportService::prepare(const ImportRequest &request,
         stageBytes(file.path, file.role, file.name);
         ++stagedCount;
     }
-    // .jaf archives: the rows come from the archive's own catalog on the DB
-    // thread, but the PAYLOAD is already extracted and its bytes are nobody's
-    // secret — stage them by path here and let the commit match them up once
-    // it knows which guid each one belongs to.
-    if (!staged.jaf.assetsDir.isEmpty()) {
-        QDirIterator payload(staged.jaf.assetsDir,
-                             QDir::NoDotAndDotDot | QDir::Files | QDir::Hidden,
-                             QDirIterator::Subdirectories);
-        while (payload.hasNext()) {
-            const QFileInfo info(payload.next());
-            if (progress && !progress(QStringLiteral("hash"), stagedCount, stagedCount + 1)) {
-                AssetCas::discardStaged(staged.stagedBytes);
-                result.error = QStringLiteral("cancelled");
-                return prepared;
-            }
-            stageBytes(info.absoluteFilePath(), QStringLiteral("file"), info.fileName());
-            ++stagedCount;
-        }
-    }
     AssetCas::flushStaged(staged.stagedBytes);   // the batch's one wait for the device
     return prepared;
 }
@@ -487,7 +464,6 @@ ImportResult AssetImportService::commit(PreparedImport &prepared,
 
     result.assetGuid = staged.mainGuid;
     result.meshGuid = staged.meshGuid;
-    result.jafKind = staged.jafKind;
     result.metadata = staged.metadata;
     result.bakeStages = staged.bakeStages;
 
@@ -530,9 +506,8 @@ bool storeOneFile(QSqlDatabase conn, const QString &root, StagedAsset &staged,
     const QString rootSlash = root.endsWith(QLatin1Char('/')) ? root : root + QLatin1Char('/');
     if (pre && !pre->tmpPath.isEmpty() && !pre->tmpPath.startsWith(rootSlash)) pre = nullptr;
     if (pre) {
-        // The role and name are the COMMIT's to decide (a .jaf payload file is
-        // 'source' or 'file' depending on a catalog name only this thread can
-        // read), so they are set here rather than at staging time.
+        // The role and name are the COMMIT's to decide, so they are set here
+        // rather than at staging time.
         pre->role = role;
         pre->name = name;
         if (!AssetCas::commitStaged(conn, root, guid, *pre, errorOut)) return false;
@@ -602,133 +577,49 @@ bool AssetImportService::commitStagedAsset(const ImportRequest &request, StagedA
         }
     };
 
-    // -------- .jaf archives: rows come from the archive's own asset.db ------
-    if (!staged.jaf.kind.isEmpty()) {
-        QMap<QString, QString> guidCompareMap;
-        QVector<AssetRecord> records;
-
-        if (staged.jaf.kind == QStringLiteral("bundle")) {
-            const QString guid = db->importAssetBundle(staged.jaf.dbPath, QMap<QString, QString>(),
-                                                       guidCompareMap, records, projectGuid);
-            staged.mainGuid = guid;
-            result.guidMap = guidCompareMap;
-            for (auto it = guidCompareMap.constBegin(); it != guidCompareMap.constEnd(); ++it) {
-                if (!staged.jaf.bundleLines.contains(it.key())) continue;
-                const QDir memberDir(QDir(staged.jaf.assetsDir).filePath(it.key()));
-                const QString memberName = db->fetchAsset(it.value()).name;
-                QDirIterator files(memberDir.absolutePath(), QDir::NoDotAndDotDot | QDir::Files | QDir::Hidden);
-                while (files.hasNext()) {
-                    const QFileInfo info(files.next());
-                    const QString role = (info.fileName() == memberName)
-                                             ? QStringLiteral("source") : QStringLiteral("file");
-                    QString oid;
-                    if (!storeOneFile(conn, root, staged, info.absoluteFilePath(), it.value(),
-                                      role, info.fileName(), &oid, &result.error)) {
-                        rollbackAndCleanupObjects();
-                        return false;
-                    }
-                    createdOids.append(oid);
-                    result.objectOids.append(oid);
-                }
-                touchedGuids.append(it.value());
-            }
-        } else {
-            ModelTypes jafType = ModelTypes::Undefined;
-            if (staged.jaf.kind == QStringLiteral("object")) jafType = ModelTypes::Object;
-            else if (staged.jaf.kind == QStringLiteral("texture")) jafType = ModelTypes::Texture;
-            else if (staged.jaf.kind == QStringLiteral("material")) jafType = ModelTypes::Material;
-            // NOT "shader" (fix round F11): a .jaf claiming that kind was the
-            // last door left open onto a ModelTypes::Shader row, and nothing
-            // in this build can read one. Undefined means the import is
-            // refused by name below rather than landing a row that shows a
-            // tile nobody can open.
-            else if (staged.jaf.kind == QStringLiteral("sky")) jafType = ModelTypes::Sky;
-            else if (staged.jaf.kind == QStringLiteral("particle_system")) jafType = ModelTypes::ParticleSystem;
-
-            if (jafType == ModelTypes::Undefined) {
-                result.error = QStringLiteral(
-                                   "this archive carries a '%1', which this version of Jahshaka "
-                                   "does not import")
-                                   .arg(staged.jaf.kind);
-                rollbackAndCleanupObjects();
-                return false;
-            }
-
-            const QString guid = db->importAsset(jafType, staged.jaf.dbPath, QMap<QString, QString>(),
-                                                 guidCompareMap, records,
-                                                 AssetViewFilter::AssetsView, projectGuid);
-            staged.mainGuid = guid;
-            result.guidMap = guidCompareMap;
-            const QString assetName = db->fetchAsset(guid).name;
-
-            QDirIterator files(staged.jaf.assetsDir, QDir::NoDotAndDotDot | QDir::Files | QDir::Hidden);
-            while (files.hasNext()) {
-                const QFileInfo info(files.next());
-                const QString role = (info.fileName() == assetName)
-                                         ? QStringLiteral("source") : QStringLiteral("file");
-                QString oid;
-                if (!storeOneFile(conn, root, staged, info.absoluteFilePath(), guid,
-                                  role, info.fileName(), &oid, &result.error)) {
-                    rollbackAndCleanupObjects();
-                    return false;
-                }
-                createdOids.append(oid);
-                result.objectOids.append(oid);
-            }
-            touchedGuids.append(guid);
+    // -------- the importer's staged plan -------------------
+    for (const StagedRow &row : staged.rows) {
+        // The main row carries the metadata + determinism record.
+        QByteArray properties = row.properties;
+        if (row.guid == staged.mainGuid) {
+            QJsonObject props = QJsonDocument::fromJson(properties).object();
+            if (!staged.metadata.isEmpty()) props["metadata"] = staged.metadata;
+            props["import"] = staged.importRecord;
+            properties = QJsonDocument(props).toJson();
         }
+        // A library row unless the request says the project owns what it
+        // mints (ASSETS-SCOPE-1): then every row is the project's own.
+        const AssetViewFilter viewFilter =
+            request.shipped ? AssetViewFilter::DontShow
+            : (request.ownedByProject && !projectGuid.isEmpty())
+                ? AssetViewFilter::Editor
+                : static_cast<AssetViewFilter>(row.viewFilter);
+        db->createAssetEntry(row.guid, row.name, row.type, row.parent, projectGuid,
+                             QString(), QString(), row.thumbnail, properties,
+                             row.tags, row.asset, viewFilter);
+        touchedGuids.append(row.guid);
+    }
+    for (const StagedDep &dep : staged.deps)
+        db->createDependency(dep.dependerType, dep.dependeeType,
+                             dep.depender, dep.dependee,
+                             dep.projectGuid.isEmpty() ? projectGuid : dep.projectGuid);
 
-        if (staged.mainGuid.isEmpty()) {
-            result.error = QStringLiteral("the archive's catalog could not be imported");
+    int done = 0;
+    for (const StagedFile &file : staged.files) {
+        if (progress && !progress(QStringLiteral("store"), done, staged.files.size())) {
+            result.error = QStringLiteral("cancelled");
             rollbackAndCleanupObjects();
             return false;
         }
-    }
-    // -------- regular imports: the importer's staged plan -------------------
-    else {
-        for (const StagedRow &row : staged.rows) {
-            // The main row carries the metadata + determinism record.
-            QByteArray properties = row.properties;
-            if (row.guid == staged.mainGuid) {
-                QJsonObject props = QJsonDocument::fromJson(properties).object();
-                if (!staged.metadata.isEmpty()) props["metadata"] = staged.metadata;
-                props["import"] = staged.importRecord;
-                properties = QJsonDocument(props).toJson();
-            }
-            // A library row unless the request says the project owns what it
-            // mints (ASSETS-SCOPE-1): then every row is the project's own.
-            const AssetViewFilter viewFilter =
-                request.shipped ? AssetViewFilter::DontShow
-                : (request.ownedByProject && !projectGuid.isEmpty())
-                    ? AssetViewFilter::Editor
-                    : static_cast<AssetViewFilter>(row.viewFilter);
-            db->createAssetEntry(row.guid, row.name, row.type, row.parent, projectGuid,
-                                 QString(), QString(), row.thumbnail, properties,
-                                 row.tags, row.asset, viewFilter);
-            touchedGuids.append(row.guid);
+        QString oid;
+        if (!storeOneFile(conn, root, staged, file.path, file.forGuid,
+                          file.role, file.name, &oid, &result.error)) {
+            rollbackAndCleanupObjects();
+            return false;
         }
-        for (const StagedDep &dep : staged.deps)
-            db->createDependency(dep.dependerType, dep.dependeeType,
-                                 dep.depender, dep.dependee,
-                                 dep.projectGuid.isEmpty() ? projectGuid : dep.projectGuid);
-
-        int done = 0;
-        for (const StagedFile &file : staged.files) {
-            if (progress && !progress(QStringLiteral("store"), done, staged.files.size())) {
-                result.error = QStringLiteral("cancelled");
-                rollbackAndCleanupObjects();
-                return false;
-            }
-            QString oid;
-            if (!storeOneFile(conn, root, staged, file.path, file.forGuid,
-                              file.role, file.name, &oid, &result.error)) {
-                rollbackAndCleanupObjects();
-                return false;
-            }
-            createdOids.append(oid);
-            if (!result.objectOids.contains(oid)) result.objectOids.append(oid);
-            ++done;
-        }
+        createdOids.append(oid);
+        if (!result.objectOids.contains(oid)) result.objectOids.append(oid);
+        ++done;
     }
 
     committed = true;   // commit() rolls back itself on failure; see database.h

@@ -721,31 +721,14 @@ public:
 	DatabaseMetadataRecord getDbMetadata();
 
     // IMPORT ===============================================================================
+    /// The PROJECT archive (.jaf) is the last .jaf reader/writer; JAF-READER-1 replaces it with manifest v2 + the envelope.
     /// ARCHIVE-GUIDS-1: `assetGuids` receives ONLY the collision remaps (a
     /// row keeps its guid otherwise; `value(guid, guid)` reads identity), and
     /// `knownGuids` the archive guids this library already held at the same
     /// type — the same asset, whose row the import left alone.
     bool importProject(const QString &inFilePath, const QString &newGuid, QString &worldName, QMap<QString, QString> &assetGuids, QSet<QString> *knownGuids = nullptr);
-    QString importAsset(const ModelTypes &jafType,
-                        const QString &pathToDb,
-                        const QMap<QString, QString> &newNames,
-                        QMap<QString, QString> &outGuids,
-                        QVector<AssetRecord> &assetRecords,
-						AssetViewFilter view_filter_to,
-                        const QString &projectGuid,
-                        const QString &parent = QString());
-
-    QString importAssetBundle(const QString &pathToDb,
-                             const QMap<QString, QString> &newNames,
-                             QMap<QString, QString> &outGuids,
-                             QVector<AssetRecord> &assetRecords,
-                             const QString &projectGuid,
-                             const QString &parent = QString());
-
 
     // EXPORT ===============================================================================
-    bool createBlobFromAsset(const QString &guid, const QString &writePath);
-
     void createExportScene(const QString& outTempFilePath, const QString &projectGuid);
 
     bool checkIfTableExists(const QString &tableName);
@@ -781,9 +764,8 @@ public:
     bool checkIfDependencyExists(const QString &depender, const ModelTypes &type);
 	bool checkIfDependencyExists(const QString& depender, const QString& dependee);
     bool checkIfProjectVersionSupported(const QString& pathToDb);
-    bool checkIfJafModelVersionSupported(const QString& pathToDb);
 
-    /// Is a `.jaf`/project archive's recorded CONTENT_VERSION string ("0.9.1b",
+    /// Is a project archive's recorded CONTENT_VERSION string ("0.9.1b",
     /// "1.0.0", …) new enough to open? Encodes MIN_JAF_VERSION's historic
     /// major*10 + minor packing as an ordered (major, minor) compare, parsed
     /// with integers — the old code ran the first three characters through
