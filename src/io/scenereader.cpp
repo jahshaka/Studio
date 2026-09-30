@@ -200,6 +200,10 @@ EditorData* SceneReader::readEditorData(QJsonObject& projectObj)
     // EditorData's, which is the one a brand-new scene is born with
     // (ui.grid_default asserts the two agree).
     editorData->showGrid = editorObj.value("showGrid").toBool(editorData->showGrid);
+    // The Ground plane widget, the same way: EditorData's default is the
+    // fallback (off).
+    editorData->showGroundPlane =
+        editorObj.value("showGroundPlane").toBool(editorData->showGroundPlane);
 
     return editorData;
 }

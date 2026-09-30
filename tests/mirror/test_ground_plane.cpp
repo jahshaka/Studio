@@ -1,32 +1,29 @@
-// mirror.ground_horizon — A HIDE IS NOT A DELETE (DRAG-1; render audit IRISGL
-// I-2, and the owner's smoke report "hiding the plane changed its size").
+// mirror.ground_plane — THE GROUND PLANE WIDGET (WORLD-MODEL-1, owner
+// 2026-09-30: the hidden built-in ground and its painted horizon were "a hack";
+// every floor is an ordinary node now, and the infinite ground survives only as
+// an EDITOR WIDGET toggled in View Options).
 //
-// WHAT THE MIRROR DOES. The default floor is a 100 m square, and the ground
-// reads as infinite because SceneMirror owns a 4 km HORIZON plane behind it,
-// built from the floor's own mesh and material and fitted to the floor's UV map
-// (syncGroundHorizon). The horizon follows the floor: no floor, no horizon.
+// WHAT THE MIRROR DOES. SceneMirror::setGroundPlane draws ONE mirror-owned 4 km
+// quad, in a material the host hands it, just under y = 0 — no document node,
+// and a BACKDROP in the engine's sense: every view draws it and no capture sees
+// it (no shadow caster fit, no GI geometry, no probe face, no Atom id pass).
 //
-// THE DEFECT. "No floor" was tested as `!floor->isVisibleInScene()`, and BOTH
-// branches of that — the floor was deleted, and the floor was merely HIDDEN —
-// detached the horizon's mesh and released its material, which the cache sweep
-// then reclaimed. So hiding the ground destroyed the 4 km plane, and SHOWING it
-// again had to rebuild the mesh, re-fit the UV map over the floor's vertices
-// and create a material: the user saw the ground go from infinite to a 100 m
-// square, and come back a frame or more later. Hiding a thing must not destroy
-// it.
-//
-// THE THREE CLAIMS:
-//   A. showing the floor gives an infinite ground: a pixel far past the floor's
-//      own 100 m edge is GROUND, not background;
-//   B. a HIDE keeps the horizon's mesh and material alive — the engine's object
-//      census does not fall — and the horizon is merely invisible;
-//   C. a SHOW is infinite again in the VERY NEXT FRAME, with no rebuild: the
-//      far pixel is ground on the first frame after the show, and the census is
-//      where it was before the hide.
-//
-// The DELETE half of the old behaviour is deliberately left alone and is not
-// asserted here: a deleted floor must still take its horizon's material with
-// it, which is what the branch that survives exists for.
+// THE CLAIMS:
+//   A. OFF BY DEFAULT: a scene with no floor shows sky past the horizon line,
+//      and the mirror owns no plane node;
+//   B. ON: the ground reaches the horizon, and the plane's node is a BACKDROP
+//      (Scene::nodeBackdrop — and so a helper: out of every capture pass) and,
+//      where the renderer's split is live, NOT on Atom (it counts under
+//      AtomDrawStatus::notWorld, and atomItems does not move);
+//   C. A HIDE IS NOT A DELETE (DRAG-1): off keeps the quad and its material —
+//      the engine's object census does not fall — and on again is the ground in
+//      the VERY NEXT FRAME with the census exactly where it was;
+//   D. THE PLAYER'S FLOOR HIDE lands on the next sync in a scene the verifier
+//      cannot cover in one pass (PLAYER-FLOOR-1), on a node carrying
+//      `defaultFloor` — the term the Player's setting is about.
+//   E. MEASURED, NOT ASSERTED: whether the plane darkens under a caster above it
+//      (printed for the record: a backdrop is out of every shadow MAP, and what
+//      the main pass does with the maps is the datablock's).
 #include <QGuiApplication>
 
 #include "bridge/previewmesh.h"
@@ -58,38 +55,31 @@ int main(int argc, char **argv)
     EngineConfig cfg;
     cfg.pluginDir = JAHSHAKA_TEST_PLUGIN_DIR;
     cfg.hlmsMediaDir = JAHSHAKA_TEST_MEDIA_DIR;
-    cfg.logFile = "test_ground_horizon-ogre.log";
+    cfg.logFile = "test_ground_plane-ogre.log";
     std::string err;
     auto engine = Engine::create(cfg, err);
     CHECK(engine != nullptr, "engine created");
     if (!engine) { std::printf("    %s\n", err.c_str()); return 1; }
 
-    // A sky-blue background, so "the ground ended" is unmistakable.
-    View *view = engine->createOffscreenView("horizon", kSize, kSize, Colour(0.0f, 0.2f, 0.8f));
-    Scene *target = engine->createScene("horizon");
+    // A sky-blue background, so "there is no ground there" is unmistakable.
+    View *view = engine->createOffscreenView("groundplane", kSize, kSize, Colour(0.0f, 0.2f, 0.8f));
+    Scene *target = engine->createScene("groundplane");
     if (!view || !target) { std::printf("FAIL: view/scene\n"); return 1; }
     view->setScene(target);
     target->setAmbient(Colour(0.5f, 0.5f, 0.5f), Colour(0.4f, 0.4f, 0.4f));
 
     auto doc = iris::Scene::create();
-    auto floorNode = iris::MeshNode::create();
-    floorNode->setName("Ground");
-    floorNode->setMesh(previewmesh::load(":/models/ground.obj"));
-    floorNode->defaultFloor = true;              // what makes it THE floor
     auto grey = iris::PbrMaterial::create();
     grey->setBaseColor(QColor(200, 200, 200));
-    floorNode->setMaterial(grey);
-    doc->getRootNode()->addChild(floorNode);
 
     auto sun = iris::LightNode::create();
     sun->intensity = 1.2f;
     sun->setLocalRot(iris::Quat::fromEulerAngles(-45.0f, 20.0f, 0.0f));
     doc->getRootNode()->addChild(sun);
 
-    // A camera low and level, looking at the horizon: the ground fills the
-    // bottom half and the sky the top, and the band just below the skyline is
-    // MANY HUNDREDS of metres away — past the floor's own 100 m edge, so only
-    // the horizon plane can fill it.
+    // A camera low and level, looking at the horizon: the band just below the
+    // skyline is MANY HUNDREDS of metres away, so only an infinite ground can
+    // fill it — and a scene with no floor at all has nothing else to.
     auto cam = iris::CameraNode::create();
     cam->angle = 45.0f; cam->nearClip = 0.1f; cam->farClip = 4000.0f;
     cam->setAspectRatio(1.0f);
@@ -99,6 +89,12 @@ int main(int argc, char **argv)
 
     SceneMirror mirror(target);
     mirror.setSource(doc);
+    // The host's material: a plain matte grey here (Studio hands it the
+    // default floor material — the mirror does not care which).
+    auto planeMaterial = iris::PbrMaterial::create();
+    planeMaterial->setBaseColor(QColor(180, 180, 180));
+    planeMaterial->setValue("roughness", 1.0f);
+    mirror.setGroundPlaneMaterial(planeMaterial);
     mirror.sync();
     mirror.applyCamera(cam, view);
 
@@ -108,7 +104,7 @@ int main(int argc, char **argv)
         view->readPixels(img);
     };
     const auto isSky = [](const Colour &c) { return c.b > c.r * 1.8f && c.b > 0.25f; };
-    // The row just below the skyline: the farthest GROUND pixels in the frame.
+    // The rows just below the skyline: the farthest GROUND pixels in the frame.
     const auto groundBandIsGround = [&]() {
         int ground = 0, total = 0;
         for (unsigned y = kSize / 2 + 1; y < kSize / 2 + 9; ++y)
@@ -124,41 +120,98 @@ int main(int argc, char **argv)
         return c;
     };
 
-    // ---- A. the ground is infinite ---------------------------------------
+    // ---- A. off by default -------------------------------------------------
     renderN(6);
-    const double shownFrac = groundBandIsGround();
-    const ObjectCounts before = census();
-    std::printf("   shown: %.1f%% of the far band is ground; census meshes %u materials %u nodes %u\n",
-                100.0 * shownFrac, before.meshes, before.materials, before.nodes);
-    CHECK(shownFrac > 0.95, "A: with the floor shown, the ground reaches the horizon");
+    const double offFrac = groundBandIsGround();
+    std::printf("   off: %.1f%% of the far band is ground\n", 100.0 * offFrac);
+    CHECK(!mirror.groundPlane(), "A: the widget is OFF by default");
+    CHECK(offFrac < 0.05, "A: with no floor and the widget off, the far band is sky");
+    CHECK(mirror.groundPlaneNode() == 0, "A: ...and the mirror has built no plane at all");
+    const AtomDrawStatus atomOff = target->atomDrawStatus();
 
-    // ---- B. a HIDE keeps the horizon alive -------------------------------
-    floorNode->setVisible(false);
+    // ---- B. on: an infinite ground, and a backdrop ---------------------------
+    mirror.setGroundPlane(true);
+    renderN(6);
+    const double onFrac = groundBandIsGround();
+    const ObjectCounts before = census();
+    std::printf("   on: %.1f%% of the far band is ground; census meshes %u materials %u nodes %u\n",
+                100.0 * onFrac, before.meshes, before.materials, before.nodes);
+    CHECK(onFrac > 0.95, "B: with the widget on, the ground reaches the horizon");
+    const NodeId plane = mirror.groundPlaneNode();
+    CHECK(plane != 0, "B: the plane is a mirror-owned engine node");
+    CHECK(plane && target->nodeBackdrop(plane),
+          "B: ...a BACKDROP: drawn by every view, out of every capture — no shadow-map caster, "
+          "no reflection-probe face, no planar mirror, no GI geometry");
+    CHECK(plane && target->nodeHelper(plane),
+          "B: ...which implies the helper exclusion (the capture passes ask for kVisibleBit)");
+    CHECK(doc->getRootNode()->children().size() == 2,
+          "B: and the document never heard of it (the sun and the camera, nothing else)");
+    const AtomDrawStatus atomOn = target->atomDrawStatus();
+    std::printf("   atom: live %d on %d | off: atomItems %u notWorld %u | on: atomItems %u notWorld %u\n",
+                int(atomOn.live), int(atomOn.on), atomOff.atomItems, atomOff.notWorld,
+                atomOn.atomItems, atomOn.notWorld);
+    if (atomOn.live) {
+        CHECK(atomOn.notWorld == atomOff.notWorld + 1u,
+              "B: NOT ON ATOM — the renderer's split counts it under notWorld (a backdrop: the id "
+              "pass draws the world channels only)");
+        CHECK(atomOn.atomItems == atomOff.atomItems, "B: ...and atomItems does not move");
+    } else {
+        std::printf("note: no GPU scene in this engine — the Atom route is read by scripting.e2e."
+                    "default_ground instead\n");
+    }
+
+    // ---- C. a HIDE is not a DELETE -------------------------------------------
+    mirror.setGroundPlane(false);
     renderN(6);
     const ObjectCounts hidden = census();
     const double hiddenFrac = groundBandIsGround();
-    std::printf("   hidden: %.1f%% of the far band is ground; census meshes %u materials %u nodes %u\n",
+    std::printf("   off again: %.1f%% ground; census meshes %u materials %u nodes %u\n",
                 100.0 * hiddenFrac, hidden.meshes, hidden.materials, hidden.nodes);
-    CHECK(hiddenFrac < 0.05, "B: a hidden floor takes its horizon with it (nothing is drawn)");
-    CHECK(hidden.meshes >= before.meshes,
-          "B: A HIDE DESTROYS NO MESH — the horizon's 4 km plane is still there");
-    CHECK(hidden.materials >= before.materials,
-          "B: ...and no material: hiding a thing must not destroy it");
-
-    // ---- C. a SHOW is infinite in the very next frame --------------------
-    floorNode->setVisible(true);
+    CHECK(hiddenFrac < 0.05, "C: off again, nothing is drawn");
+    CHECK(hidden.meshes >= before.meshes && hidden.materials >= before.materials,
+          "C: A HIDE DESTROYS NOTHING — the quad and its material are still there");
+    mirror.setGroundPlane(true);
     mirror.sync();
     engine->renderOneFrame();
     view->readPixels(img);
     const double firstFrameFrac = groundBandIsGround();
     const ObjectCounts shown = census();
-    std::printf("   first frame after the show: %.1f%% of the far band is ground; "
-                "census meshes %u materials %u\n",
-                100.0 * firstFrameFrac, shown.meshes, shown.materials);
-    CHECK(firstFrameFrac > 0.95,
-          "C: THE GROUND IS INFINITE AGAIN IN THE VERY NEXT FRAME (no rebuild, no size change)");
+    CHECK(firstFrameFrac > 0.95, "C: ON AGAIN IN THE VERY NEXT FRAME (no rebuild)");
     CHECK(shown.meshes == before.meshes && shown.materials == before.materials,
-          "C: ...and the census is exactly where it was: nothing was rebuilt");
+          "C: ...and the census is exactly where it was");
+
+    // ---- E. the record: does a caster above it darken it? ---------------------
+    {
+        auto caster = iris::MeshNode::create();
+        caster->setName("Caster");
+        caster->setMesh(previewmesh::load(":/assets/models/cube.obj"));
+        caster->setMaterial(grey);
+        caster->setLocalPos(iris::Vec3(0.0f, 2.0f, -8.0f));
+        doc->getRootNode()->addChild(caster);
+        doc->shadowEnabled = true;
+        view->setShadows(true);
+        cam->setLocalPos(iris::Vec3(0.0f, 14.0f, 4.0f));
+        cam->lookAt(iris::Vec3(0.0f, 0.0f, -8.0f));
+        renderN(8);
+        mirror.applyCamera(cam, view);
+        renderN(4);
+        float lo = 1e9f, hi = -1e9f;
+        for (unsigned y = 16; y < kSize - 16; y += 4)
+            for (unsigned x = 16; x < kSize - 16; x += 4) {
+                const Colour c = img.at(x, y);
+                const float l = (c.r + c.g + c.b) / 3.0f;
+                lo = std::min(lo, l); hi = std::max(hi, l);
+            }
+        std::printf("   E (record): plane luminance over the frame %.3f .. %.3f with a caster above it\n",
+                    lo, hi);
+        caster->removeFromParent();
+        view->setShadows(false);
+        cam->setLocalPos(iris::Vec3(0.0f, 1.6f, 0.0f));
+        cam->lookAt(iris::Vec3(0.0f, 1.55f, -100.0f));
+        renderN(4);
+        mirror.applyCamera(cam, view);
+    }
+    mirror.setGroundPlane(false);
 
     // ---- D. THE PLAYER'S HIDE LANDS ON THE NEXT SYNC, IN A SCENE THE
     //         VERIFIER CANNOT COVER IN ONE PASS (PLAYER-FLOOR-1's fix round,
@@ -185,27 +238,16 @@ int main(int argc, char **argv)
     //   * THE VERIFIER OFF for the flip: whether the rotation reaches the floor
     //     is exactly the accident this case must not depend on. With it off the
     //     only route left is the CHANGE LIST, which is the contract.
-    //   * A SECOND NODE CARRYING `defaultFloor`, and the fixture's original
-    //     floor hidden through the document first. The HORIZON follows the
-    //     first default floor in the same sync (syncGroundHorizon runs every
-    //     sync and reads the switch directly) and it is a 4 km plane 5 mm under
-    //     the floor, so there is NO pixel the floor covers and the horizon does
-    //     not: the first two cuts of this case passed on the defect because the
-    //     horizon alone had carried the whole picture (measured: zero nodes
-    //     visited on the flip sync and the picture still changed), and the draw
-    //     counter could not separate them either. The term is per node
-    //     (`MeshNode::defaultFloor`, never a name), so a second such node is
-    //     the honest way to watch the term itself with no horizon in the frame.
+    //   * A NODE CARRYING `defaultFloor` (the term is per node, never a name),
+    //     and the Ground plane widget OFF so nothing else covers its pixels.
     for (int i = 0; i < 40; ++i) {
         auto prop = iris::MeshNode::create();
         prop->setName(QStringLiteral("Prop%1").arg(i));
-        prop->setMesh(previewmesh::load(":/models/ground.obj"));
+        prop->setMesh(previewmesh::load(":/assets/models/cube.obj"));
         prop->setMaterial(grey);
         prop->setVisible(false);          // in the entry map, out of every frame
         doc->getRootNode()->addChild(prop);
     }
-    floorNode->setVisible(false);         // ...and with it the horizon: an empty sky
-
     auto platform = iris::MeshNode::create();
     platform->setName("Platform");
     platform->setMesh(previewmesh::load(":/assets/models/cube.obj"));

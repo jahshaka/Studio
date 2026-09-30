@@ -182,6 +182,13 @@ public:
         mShowGrid = value;
         emit mEvents.overlaysChanged();
     }
+    bool getShowGroundPlane() const override { return mShowGroundPlane; }
+    void setShowGroundPlane(bool value) override
+    {
+        if (mShowGroundPlane == value) return;
+        mShowGroundPlane = value;
+        emit mEvents.overlaysChanged();
+    }
     bool getShowGiVolume() const override { return mShowGiVolume; }
     void setShowGiVolume(bool value) override { mShowGiVolume = value; }
     /// The shadow-atlas inspector (SHADOW_TOOLING_SPEC.md §4.4). Not persisted,
@@ -751,6 +758,7 @@ private:
     // reflection probes. The canonical orthographic views force it on with a
     // view-facing plane regardless of this flag; see gridStateForView().
     bool mShowGrid = false;
+    bool mShowGroundPlane = false;   ///< EditorData::showGroundPlane's third face
     /// GI volume boxes (fix 9). Diagnostic, default off, not persisted — it is
     /// a thing you turn on while chasing a lighting question.
     bool mShowGiVolume = false;

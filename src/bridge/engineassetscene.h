@@ -113,9 +113,11 @@ private:
 
     iris::ScenePtr      mDocument;
     iris::CameraNodePtr mCamera;
-    iris::SceneNodePtr  mFloor;
     iris::MeshPtr       mSphere;
     bool mShadows = true;
+    /// The Ground plane widget (WORLD-MODEL-1): on for the lit backdrop,
+    /// off for the two dark ones (setBackdrop).
+    bool mGroundPlane = true;
 
     /// The shared arcball (preview mode: left or right drag orbits, rotation
     /// speed .5, the 0.8 lerp in step()).

@@ -1166,6 +1166,7 @@ private:
     QAction *wireCheckAction = nullptr;
     QAction *physicsCheckAction = nullptr;
     QAction *gridCheckAction = nullptr;
+    QAction *groundPlaneCheckAction = nullptr;   ///< View Options "Ground Plane" (WORLD-MODEL-1)
     QAction *statsCheckAction = nullptr;   // F3 frame-stats readout (persisted)
     /// THE ATOM VIEW sub-menu of View Options (D0-ATOM-VIEW): Off, Triangles,
     /// Levels, Buckets, Objects — exclusive, in AtomView's order; F6 cycles it.

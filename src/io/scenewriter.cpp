@@ -325,6 +325,7 @@ void SceneWriter::writeEditorData(QJsonObject& projectObj, EditorData* editorDat
     editorObj["showLightWires"] = editorData->showLightWires;
 	editorObj["showDebugDrawFlags"] = editorData->showDebugDrawFlags;
     editorObj["showGrid"] = editorData->showGrid;
+    editorObj["showGroundPlane"] = editorData->showGroundPlane;
 
     QJsonObject cameraObj;
     auto cam = editorData->editorCamera;

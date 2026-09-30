@@ -3168,6 +3168,8 @@ void MainWindow::setupDockWidgets()
     // World blade's "Show Grid" row is a second face of the View Options
     // Ground Grid action (created in setupViewPort, which runs before this)
     sceneNodePropertiesWidget->getWorldPropertyWidget()->setGridAction(gridCheckAction);
+    // ...and its "Ground Plane" row, of the Ground Plane action beside it.
+    sceneNodePropertiesWidget->getWorldPropertyWidget()->setGroundPlaneAction(groundPlaneCheckAction);
     sceneNodePropertiesWidget->setDatabase(db);
     sceneNodePropertiesWidget->setServices(services);
     sceneNodePropertiesWidget->setProject(project);
@@ -4032,6 +4034,16 @@ void MainWindow::setupViewPort()
     gridCheckAction->setCheckable(true);
     connect(gridCheckAction, SIGNAL(toggled(bool)), this, SLOT(toggleGrid(bool)));
     wireFramesMenu->addAction(gridCheckAction);
+
+    // Ground plane (WORLD-MODEL-1): the editor's infinite matte ground, beside
+    // the grid; per-scene persisted, default OFF (EditorData::showGroundPlane).
+    groundPlaneCheckAction = new QAction(QIcon(), "Ground Plane");
+    groundPlaneCheckAction->setObjectName(QStringLiteral("groundPlaneCheckAction"));
+    groundPlaneCheckAction->setCheckable(true);
+    connect(groundPlaneCheckAction, &QAction::toggled, this, [this](bool on) {
+        if (sceneView) sceneView->setShowGroundPlane(on);
+    });
+    wireFramesMenu->addAction(groundPlaneCheckAction);
 
     physicsCheckAction = new QAction(QIcon(), "Physics Debug Overlay");
     physicsCheckAction->setCheckable(true);
@@ -5741,6 +5753,7 @@ void MainWindow::syncOverlayChecks()
     // action's toggled(), and the round trip ends at the viewport's setter,
     // which ignores a value it already holds.
     if (gridCheckAction) gridCheckAction->setChecked(sceneView->getShowGrid());
+    if (groundPlaneCheckAction) groundPlaneCheckAction->setChecked(sceneView->getShowGroundPlane());
     if (wireCheckAction) wireCheckAction->setChecked(sceneView->getShowLightWires());
     // The stats action's toggled() persists show_fps (setShowFrameStats), so it
     // is blocked: the state it follows was written by whoever moved it.
@@ -5754,6 +5767,8 @@ QVariantMap MainWindow::viewOptionChecks() const
 {
     QVariantMap out;
     if (gridCheckAction) out[QStringLiteral("grid")] = gridCheckAction->isChecked();
+    if (groundPlaneCheckAction)
+        out[QStringLiteral("groundPlane")] = groundPlaneCheckAction->isChecked();
     if (wireCheckAction) out[QStringLiteral("lightWires")] = wireCheckAction->isChecked();
     if (statsCheckAction) out[QStringLiteral("stats")] = statsCheckAction->isChecked();
     if (physicsCheckAction) out[QStringLiteral("physicsDebug")] = physicsCheckAction->isChecked();
@@ -6204,6 +6219,7 @@ void MainWindow::resetOverlaysToDefaults()
 {
     const EditorData defaults;
     sceneView->setShowGrid(defaults.showGrid);
+    sceneView->setShowGroundPlane(defaults.showGroundPlane);
     sceneView->setShowLightWires(defaults.showLightWires);
     sceneView->setShowDebugDrawFlags(defaults.showDebugDrawFlags);
     if (physicsCheckAction) physicsCheckAction->setChecked(defaults.showDebugDrawFlags);

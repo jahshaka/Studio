@@ -168,8 +168,14 @@ QVector<VerbInfo> EditorApi::verbs() const
         { "isGameView", "editor.isGameView() -> bool",
           "Whether Game View is active.",
           Needs::Engine },
-        { "overlays", "editor.overlays() -> {grid, lightWires, selectionWireframe, stats, physicsDebug, gameView, giVolume, gridPlane, shadowAtlas, outlineWidth, outlineColor, outlinePrimaryColor, menu}",
+        { "overlays", "editor.overlays() -> {grid, groundPlane, lightWires, selectionWireframe, stats, physicsDebug, gameView, giVolume, gridPlane, shadowAtlas, outlineWidth, outlineColor, outlinePrimaryColor, menu}",
           "The viewport's editor helpers, as they are right now: `grid` the ground grid, "
+          "`groundPlane` the Ground plane widget — an infinite matte ground (the default floor "
+          "material) the editor draws just under y = 0 so a scene with no floor still stands on "
+          "something; it is not in the document, casts and receives no shadow, is in no GI "
+          "gather, no ray query, no reflection probe and not on Atom (world.atomStatus() counts it "
+          "under `notWorld`); per scene, OFF by default (the scene templates carry real floors), "
+          "and the Player never draws it; "
           "`lightWires` the light icons and their range wires, `selectionWireframe` the selection "
           "highlight style (true = polygon wireframe, false = silhouette outline), `stats` the "
           "engine-drawn frame-stats readout in the viewport's top-left corner (F3), "
@@ -197,7 +203,7 @@ QVector<VerbInfo> EditorApi::verbs() const
           "time in the game view\" is the question people actually ask. Read app.renderStats() for "
           "the numbers themselves — the readout never appears in a screenshot, because screenshots "
           "render through an offscreen view and the overlay is excluded from those by construction. "
-          "`menu` is what the View Options menu's checkmarks SHOW ({grid, lightWires, stats, "
+          "`menu` is what the View Options menu's checkmarks SHOW ({grid, groundPlane, lightWires, stats, "
           "physicsDebug}; empty with no editor window): they follow the viewport's state, so after "
           "any editor.setOverlays they equal the keys above — a difference is a defect. "
           "`outlineWidth`, `outlineColor` and `outlinePrimaryColor` are the selection highlight's "
@@ -205,11 +211,12 @@ QVector<VerbInfo> EditorApi::verbs() const
           "`outlinePrimaryColor` is the brighter colour the PRIMARY member of a multi-selection is "
           "drawn in, and is unused with a single object selected.",
           Needs::Engine },
-        { "setOverlays", "editor.setOverlays({grid, lightWires, selectionWireframe, stats, physicsDebug, gameView, giVolume, shadowAtlas}) -> bool",
+        { "setOverlays", "editor.setOverlays({grid, groundPlane, lightWires, selectionWireframe, stats, physicsDebug, gameView, giVolume, shadowAtlas}) -> bool",
           "Turns the viewport's editor helpers on and off — the View Options rows, the G key and "
           "the F3 stats readout, as one verb. Omitted keys keep their value; an unknown key is "
           "REFUSED (a silently ignored overlay key is indistinguishable from a broken renderer). "
-          "`gameView` hides the helpers all at once and is not persisted; `grid` is per-scene; "
+          "`gameView` hides the helpers all at once and is not persisted; `grid` and `groundPlane` are "
+          "per-scene (the Ground plane is part of the picture, not a helper: gameView leaves it); "
           "`stats` persists as the `show_fps` preference and survives Game View and fullscreen; the "
           "others are viewport state for this session. `physicsDebug` draws the physics world's "
           "collision shapes, and shows nothing at all until a simulation is running "
@@ -1315,6 +1322,7 @@ QVariantMap EditorApi::overlays()
     QVariantMap out;
     if (!requireEngine()) return out;
     out["grid"] = host.viewport->getShowGrid();
+    out["groundPlane"] = host.viewport->getShowGroundPlane();
     out["lightWires"] = host.viewport->getShowLightWires();
     out["selectionWireframe"] = host.viewport->getSelectionWireframe();
     out["stats"] = host.viewport->getShowFps();
@@ -1349,7 +1357,7 @@ bool EditorApi::setOverlays(const QVariantMap &change)
     // The empty-map message used to list FOUR of the keys (F18): a caller who
     // read it and then guessed "fps" got the refusal below, and a caller who
     // trusted it never learned `stats` or `physicsDebug` existed.
-    static const QStringList known = { "grid", "lightWires", "selectionWireframe",
+    static const QStringList known = { "grid", "groundPlane", "lightWires", "selectionWireframe",
                                       "stats", "physicsDebug", "gameView", "giVolume",
                                       "shadowAtlas" };
     if (change.isEmpty())
@@ -1374,6 +1382,8 @@ bool EditorApi::setOverlays(const QVariantMap &change)
     }
 
     if (change.contains("grid")) host.viewport->setShowGrid(change.value("grid").toBool());
+    if (change.contains("groundPlane"))
+        host.viewport->setShowGroundPlane(change.value("groundPlane").toBool());
     if (change.contains("lightWires")) host.viewport->setShowLightWires(change.value("lightWires").toBool());
     if (change.contains("selectionWireframe"))
         host.viewport->setSelectionWireframe(change.value("selectionWireframe").toBool());

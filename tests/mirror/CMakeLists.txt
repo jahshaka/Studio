@@ -143,28 +143,27 @@ jah_gpu_row(mirror.grid_floor CLASS engine COMMAND test_grid_floor WORKING_DIREC
 set_tests_properties(mirror.grid_floor PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
                      TIMEOUT 120 LABELS "mirror")
 
-# mirror.ground_horizon — A HIDE IS NOT A DELETE (DRAG-1; render audit IRISGL
-# I-2). Hiding the default floor used to DETACH the 4 km horizon plane and
-# release its material, so the ground went from infinite to its own 100 m square
-# and showing it again had to rebuild the mesh and re-fit its UV map — the
-# owner's "hiding the plane changed its size". The horizon follows visibility
-# now; the DELETE branch still releases. Pixels plus the engine's object census.
-add_executable(test_ground_horizon test_ground_horizon.cpp
+# mirror.ground_plane — THE GROUND PLANE WIDGET (WORLD-MODEL-1): the editor's
+# infinite matte ground is a mirror-owned backdrop quad, off by default, out of
+# every capture (and off Atom), and a hide is not a delete (DRAG-1). Plus the
+# Player's floor hide landing on the next sync (PLAYER-FLOOR-1). Pixels plus the
+# engine's object census and the plane node's own flags.
+add_executable(test_ground_plane test_ground_plane.cpp
     ${CMAKE_SOURCE_DIR}/irisgl/mirror/scenemirror.cpp)
-set_target_properties(test_ground_horizon PROPERTIES
+set_target_properties(test_ground_plane PROPERTIES
     AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
     BUILD_RPATH "${OGRE_NEXT_PREFIX}/lib" INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
-target_include_directories(test_ground_horizon PRIVATE ${CMAKE_SOURCE_DIR}
+target_include_directories(test_ground_plane PRIVATE ${CMAKE_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/irisgl
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
-target_compile_definitions(test_ground_horizon PRIVATE
+target_compile_definitions(test_ground_plane PRIVATE
     JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}" JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
-target_link_libraries(test_ground_horizon PRIVATE IrisGL JahshakaEngine Qt6::Gui Qt6::OpenGL)
-add_dependencies(test_ground_horizon JahshakaEngineMedia)
-jah_gpu_row(mirror.ground_horizon CLASS engine COMMAND test_ground_horizon
+target_link_libraries(test_ground_plane PRIVATE IrisGL JahshakaEngine Qt6::Gui Qt6::OpenGL)
+add_dependencies(test_ground_plane JahshakaEngineMedia)
+jah_gpu_row(mirror.ground_plane CLASS engine COMMAND test_ground_plane
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(mirror.ground_horizon PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+set_tests_properties(mirror.ground_plane PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
                      TIMEOUT 120 LABELS "mirror")
 
 # mirror.sun_night — WHEN THE SUN GOES OUT (SKY-SMALL / SKY-NIGHT-1). The disc

@@ -7,6 +7,7 @@
 #include <QtMath>
 
 #include "irisgl/mirror/scenemirror.h"
+#include "services/defaultfloormaterial.h"
 #include "viewport/previewframing.h"
 #include "viewport/previeworbit.h"
 #include "irisgl/core/irisutils.h"
@@ -26,7 +27,9 @@ using namespace jahshaka::engine;
 
 namespace {
 
-const char *kFloorName = "ae98cx7u_floor";
+/// Where the preview's ground stands (the Ground plane widget's height): 5 m
+/// under the default plane reset, as the Assets viewer always had it.
+constexpr float kGroundHeight = -5.0f;
 
 // World-space bounds: mesh AABBs through the full global transform (scale and
 // rotation included — ASSETS_AUDIT.md finding 4; the legacy getNodeBoundingBox
@@ -52,7 +55,9 @@ EngineAssetScene::~EngineAssetScene()
 
 void EngineAssetScene::buildDocument()
 {
-    // AssetViewer::initializeGL, minus the GL: the same lights, floor, sky and camera.
+    // AssetViewer::initializeGL, minus the GL: the same lights, sky and camera.
+    // THE GROUND IS THE EDITOR'S GROUND PLANE WIDGET (WORLD-MODEL-1), switched on
+    // in configureMirror — no floor node in the document.
     mDocument = iris::Scene::create();
     mDocument->shadowEnabled = true;
 
@@ -76,31 +81,6 @@ void EngineAssetScene::buildDocument()
     plight->setShadowMapResolution(2048);
     plight->isBuiltIn = true;
     mDocument->rootNode->addChild(plight);
-
-    // The floor is a resource of the app; headless tests have no floor, which is fine.
-    auto floor = iris::MeshNode::create();
-    // The dock's floor: the same shipped ground mesh, parsed here as furniture
-    // (see previewSphere below — no library behind a preview scene).
-    if (iris::MeshPtr ground = previewmesh::load(QStringLiteral(":/models/ground.obj"),
-                                                 QStringLiteral("app/models/ground.obj")))
-        floor->setMesh(ground);
-    floor->meshPath = QStringLiteral(":/models/ground.obj");
-    if (floor->getMesh()) {
-        floor->setLocalPos(iris::Vec3(0, -5, 0));   // legacy: below the default plane reset
-        floor->setName(kFloorName);
-        floor->setPickable(false);
-        floor->isBuiltIn = true;
-        floor->setShadowCastingEnabled(true);
-        // The tile texture on the one PBR material, tiled four times.
-        auto m = iris::PbrMaterial::create();
-        m->setBaseColor(QColor(255, 255, 255));
-        const QString tile = IrisUtils::getAbsoluteAssetPath("app/content/textures/tile.png");
-        if (QFileInfo(tile).isFile()) m->setBaseColorMap(iris::Texture2D::load(tile));
-        m->setTextureScale(4.0f, 4.0f);
-        floor->setMaterial(m);
-        mDocument->rootNode->addChild(floor);
-        mFloor = floor;
-    }
 
     mCamera = iris::CameraNode::create();
     mCamera->setLocalPos(iris::Vec3(5, 6, 12));
@@ -142,6 +122,11 @@ void EngineAssetScene::configureScene(Scene *scene)
 void EngineAssetScene::configureMirror(SceneMirror *mirror)
 {
     mirror->setSource(mDocument);
+    // The Ground plane widget, in the default floor material: an on-ground
+    // subject stands on it (setSubject), and the dark backdrops hide it.
+    mirror->setGroundPlaneMaterial(defaultfloormaterial::createUnpinned());
+    mirror->setGroundPlaneHeight(kGroundHeight);
+    mirror->setGroundPlane(mGroundPlane);
 }
 
 void EngineAssetScene::configureView(View *view)
@@ -187,7 +172,7 @@ void EngineAssetScene::setSubject(iris::SceneNodePtr node, bool viewed, bool isO
         node->setLocalPos(iris::Vec3(0, 0, 0));
         node->update(0);
         auto aabb = nodeBoundingBox(node);
-        node->setLocalPos(iris::Vec3(0, -aabb.getMin().y() - 5, 0));
+        node->setLocalPos(iris::Vec3(0, -aabb.getMin().y() + kGroundHeight, 0));
     }
 
     if (node->sceneNodeType == iris::SceneNodeType::Mesh) {
@@ -247,14 +232,14 @@ void EngineAssetScene::setBackdrop(unsigned int id)
         mDocument->fogEnabled = false;
         mDocument->shadowEnabled = false;
         mDocument->setSkyColor(QColor(25, 25, 25));
-        if (mFloor) mFloor->setVisible(false);
+        mGroundPlane = false;
         mShadows = false;
         break;
     case 2:
         mDocument->fogEnabled = false;
         mDocument->shadowEnabled = false;
         mDocument->setSkyColor(QColor(82, 82, 82));
-        if (mFloor) mFloor->setVisible(false);
+        mGroundPlane = false;
         mShadows = false;
         break;
     case 3:
@@ -262,13 +247,14 @@ void EngineAssetScene::setBackdrop(unsigned int id)
         mDocument->fogEnabled = true;          // exponential, at the document default density
         mDocument->fogColor = QColor(25, 25, 25);
         mDocument->shadowEnabled = true;
-        if (mFloor) mFloor->setVisible(true);
+        mGroundPlane = true;
         mShadows = true;
         break;
     default:
         return;
     }
     if (view()) view()->setShadows(mShadows);
+    if (mirror()) mirror()->setGroundPlane(mGroundPlane);
 }
 
 // ---- orbit camera: the shared PreviewOrbit (viewport/previeworbit.h) ----

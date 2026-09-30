@@ -1,37 +1,27 @@
-// scripting.e2e.default_ground — THE DEFAULT GROUND, IN PIXELS (owner,
-// 2026-09-13, testing push #18: "the ground should not be reflective, it should
-// have 0 specular" and "should the default ground not also be infinite in the
-// Grand Showroom 2? It seems cut off").
+// scripting.e2e.default_ground — THE TEMPLATE'S FLOOR AND THE GROUND PLANE
+// WIDGET, IN PIXELS (owner, 2026-09-13: "the ground should not be reflective, it
+// should have 0 specular"; WORLD-MODEL-1, 2026-09-30: the hidden built-in ground
+// and the painted horizon under it were "a hack" — every floor is an ordinary
+// node, and the infinite ground is an EDITOR WIDGET toggled in View Options).
 //
-// Two owner reports, one object, one engine-up suite — the document half of the
-// floor (its flag, its own material, material.reset) is scripting.e2e.
-// default_floor and stays there; this suite is what a CAMERA sees:
+// The document half of the floor (its flag, its own material, material.reset)
+// is scripting.e2e.default_floor; this suite is what a CAMERA sees:
 //
-//   1. MATTE. At a grazing angle the floor shows no sheen. Fail-before on the
-//      binary this lane started from, same camera, same probes: 66 65 67 81
-//      against 61 59 59 72 here — the 4% dielectric reflection every metallic-
-//      workflow material has (Hlms/Pbs 800.PixelShader_piece_ps.any:330) plus
-//      the direct-light rim. The assertion is the comparison the owner made:
-//      the floor is not brighter than its own diffuse lighting, and raising
-//      Specular Color back to white brings the sheen back — because a mirror
-//      floor has to stay possible.
-//   2. NO EDGE. From a high oblique view the checker reaches every corner of
-//      the frame instead of ending in a square with sky around it (that is
-//      exactly the picture the owner reported). The floor's own mesh is 100 m;
-//      what fills the rest is the mirror's horizon plane (SceneMirror::
-//      syncGroundHorizon). AND IT IS NOT A TEXTURE SEAM EITHER: the checker
-//      crosses all four edges of that square in phase, probed from straight
-//      above (2b) — the trap this feature fell into on its first cut.
-//   3. AND IT CHANGES NO LIGHTING. The horizon is an engine helper, not
-//      geometry: the automatic GI volume, its voxel size and the probe grid are
-//      the same numbers with it as without it — which is the constraint lane L3
-//      left behind (GiParams::autoBoundsMax) and the reason "just make the
-//      ground bigger" was measured and rejected: at 2.4 km the outlier trim
-//      drops the floor out of the lit volume altogether (+-23.1 m -> +-1.8 m,
-//      0.362 -> 0.029 m per voxel).
-//   4. The document never hears about any of it: the scene still has exactly
-//      one floor, scene.bounds still measures the 100 m plane, and nothing new
-//      is selectable.
+//   1. MATTE. At a grazing angle the Basic template's Floor shows no sheen, and
+//      raising Specular Color back to white brings the sheen back — because a
+//      mirror floor has to stay possible.
+//   2. THE FLOOR ENDS; THE WIDGET DOES NOT. From a high oblique view the frame's
+//      corners lie ~176 m out, past the Floor's own 100 m: with the Ground plane
+//      OFF (the default) they are SKY; with it ON (editor.setOverlays) they are
+//      the CHECKER, and it crosses the Floor's edges in phase (2b).
+//   3. AND IT CHANGES NO LIGHTING AND NOTHING ON ATOM: the probe region is the
+//      same numbers with the widget as without it, the renderer's split counts
+//      the plane under notWorld (a backdrop) and atomItems does not move — the
+//      Floor itself IS on Atom.
+//   4. The document never hears about it: nothing new in the scene or its
+//      bounds; the setting is per scene and survives a save and reopen.
+//   5. The widget does not depend on a floor: with the Floor hidden it still
+//      grounds the frame, and with both off the frame is the uniform sky.
 
 function assert(cond, msg) {
     if (!cond) throw new Error("assert failed: " + msg);
@@ -43,8 +33,10 @@ function lum(p) { return (p.r + p.g + p.b) / 3; }
 
 var proj = project.create("Default Ground " + Date.now());
 assert(proj.length > 10, "project.create");
-var ground = scene.find("Ground");
-assert(ground && node.property(ground, "defaultFloor") === true, "a new scene stands on the default floor");
+var ground = scene.find("Floor");
+assert(ground && node.property(ground, "defaultFloor") === true,
+       "a new (Basic) scene stands on its Floor, wearing the default floor material");
+assert(editor.overlays().groundPlane === false, "...and the Ground plane widget is OFF by default");
 
 // THE SUITE STATES ITS OWN SKY (owner answer Q1, 2026-09-18). A new scene's sky
 // is the REALISTIC atmosphere now, and every number below was baselined against
@@ -83,7 +75,7 @@ function grazing(tag) {
 var matte = grazing("matte");
 
 // The way back, and the proof that the probes are looking at a specular signal
-// at all: kS white is the master switch (defaultfloor.h says so), and it has to
+// at all: kS white is the master switch (defaultfloormaterial.h says so), and it has to
 // brighten every one of these probes.
 assert(material.set(ground, { specularColor: "#ffffff", ior: 1.5 }),
        "a user makes the floor reflective again: Specular Color white, IOR 1.5");
@@ -124,42 +116,48 @@ for (var k = 0; k < again.length; k++)
            "the reset floor is the MATTE one, probe " + k + " (" + again[k] + " vs " + shiny2[k] + ")");
 assert(material.reset(ground) === true, "reset it back for the rest of the suite");
 
-// ---- 2. no edge, from the view the owner flew -------------------------------
-// A high oblique over the scene: the floor's own 100 m mesh covers barely the
-// middle of this frame, so every corner probe is the horizon's.
+// ---- 2. the Floor ends; the widget does not ---------------------------------
+// A high oblique over the scene: the Floor's own 100 m covers the middle of this
+// frame and every corner lies ~176 m out.
 var CORNERS = [ { x: 0.06, y: 0.08 }, { x: 0.94, y: 0.08 },
                 { x: 0.06, y: 0.92 }, { x: 0.94, y: 0.92 },
                 { x: 0.5,  y: 0.06 }, { x: 0.5,  y: 0.94 } ];
-// FOG OFF for this measurement, and only for this one: a new scene fogs
-// everything between 100 m and 180 m into the sky's own colour, which is a
-// second (and much older) reason the ground reads as endless — but it also
-// makes "is this pixel ground or sky" unanswerable at the top of the frame.
-// With it off, the sky is a flat 72 and the checker is not.
+// FOG OFF, and the air's haze with it (world.sky's atmosphereHaze is only the
+// realistic sky's; this suite's sky is a flat colour): "is this pixel ground or
+// sky" has to be answerable at the top of the frame.
 assert(world.fog({ enabled: false }), "fog off, so ground and sky can be told apart");
-// The camera pitches down 35 degrees over a 45-degree lens, so the WHOLE frame
-// is below the horizon: every pixel of it is ground or it is a hole. The far
-// corners sit ~176 m out, which the floor's own 100 m mesh cannot reach.
-editor.setCamera({ position: { x: 40, y: 40, z: 40 }, lookAt: { x: 0, y: 0, z: 0 } });
-editor.frame(60, 1 / 60);
-var obl = editor.screenshot("ground_oblique.png", 960, 540, CORNERS, "raw");
-var corners = obl.probes.map(function (p) { return Math.round(lum(p)); });
-console.log("oblique corners: " + J(corners));
-// The sky in a new scene reads ~72 flat; the checker reads ~20-45 and VARIES
-// between its light and dark squares. "Every corner is ground" is therefore two
-// assertions: darker than the sky, and not all the same value.
-var spread = Math.max.apply(null, corners) - Math.min.apply(null, corners);
-for (var c = 0; c < corners.length; c++)
-    assert(corners[c] < 64, "the frame's corner " + c + " is ground, not sky (" + corners[c] + ")");
-assert(spread >= 2, "...and it is the CHECKER, not a flat fill (spread " + spread + ")");
+function obliqueCorners(tag) {
+    editor.setCamera({ position: { x: 40, y: 40, z: 40 }, lookAt: { x: 0, y: 0, z: 0 } });
+    editor.frame(60, 1 / 60);
+    var shot = editor.screenshot("ground_" + tag + ".png", 960, 540, CORNERS, "raw");
+    var v = shot.probes.map(function (p) { return Math.round(lum(p)); });
+    console.log("oblique corners (" + tag + "): " + J(v));
+    return v;
+}
+function spreadOf(v) { return Math.max.apply(null, v) - Math.min.apply(null, v); }
+// A single-colour sky is UNIFORM: every sky corner reads the same value. The
+// checker is not: its light and dark squares differ. That is the discriminator
+// (brightness is not — the matte ground's far corners read within a code of the
+// 0.117-radiance sky that lights them).
+var off = obliqueCorners("plane_off");
+assert(spreadOf(off) <= 1,
+       "with the Ground plane OFF the Floor ENDS: every corner is the uniform sky (" + J(off) + ")");
+assert(editor.setOverlays({ groundPlane: true }) === true, "editor.setOverlays({groundPlane: true})");
+assert(editor.overlays().groundPlane === true && editor.overlays().menu.groundPlane === true,
+       "...the verb and the View Options checkmark both read it");
+var on = obliqueCorners("plane_on");
+assert(spreadOf(on) >= 2,
+       "with it ON the ground reaches every corner — the CHECKER, not a flat fill (spread " +
+       spreadOf(on) + ", " + J(on) + ")");
 
 // ---- 2b. AND THE CHECKER CROSSES THAT EDGE IN PHASE -------------------------
 //
-// The corner probes above only say "not sky", and a horizon with the right
-// checker DENSITY but the wrong PHASE passes them while replacing the geometry
-// edge with a texture seam — which is exactly what the first cut of this
-// feature did (a hand-picked UV constant with no offset: 0.195 of a repeat out,
-// 0.78 m at the default textureScale 4). So: straddle the seam, and compare it
-// against an interior line of the same floor.
+// The corner probes above only say "ground", and a plane with the right checker
+// DENSITY but the wrong PHASE passes them while replacing the Floor's geometry
+// edge with a texture seam. The plane maps 1/100 UV per metre — a template
+// floor's own top-face map — so the default floor material registers across
+// the edge. So: straddle the edge, and compare it against an interior line of
+// the same floor.
 //
 // SELF-CALIBRATING, because the shipped tile is not an axis-aligned checker at
 // all — it is a diamond lattice, so "are these two points the same colour" says
@@ -217,101 +215,98 @@ for (var e = 0; e < EDGES.length; e++) {
            + "the geometry one was (" + m.toFixed(2) + " vs the pattern's own " + interior.toFixed(2) + ")");
 }
 
-// The floor itself is still 100 m: the horizon is not the document growing.
+// The Floor itself is still 100 m: the widget is not the document growing.
 var b = scene.bounds({ nodes: [ground] });
 assert(near(b.size.x, 100, 1) && near(b.size.z, 100, 1),
-       "the default floor is still the 100 m plane lane L3 left (" + J(b.size) + ")");
-var floors = scene.nodes().filter(function (r) {
-    return r.type === "mesh" && node.property(r.id, "defaultFloor") === true;
-});
-assert(floors.length === 1, "and the scene has exactly ONE floor node (" + floors.length + ")");
+       "the Floor is still 100 m (" + J(b.size) + ")");
 assert(scene.nodes().length === 4,
-       "nothing new is in the document: the floor, two lights and the root's own row (" +
+       "nothing new is in the document: the Floor, two lights and the root's own row (" +
        scene.nodes().length + ")");
 
-// ---- 3. the probe placement is untouched ------------------------------------
-// The numbers L3 pinned, read from the renderer: a 100 m ground clamped to the
-// 64 m automatic ceiling, centred on the content. THE FIT IS THE REFLECTION-PROBE
-// GRID'S PLACEMENT REGION (the voxels are the camera's cascade chain and fit
-// nothing — the single fitted volume is deleted, D4-PHOTON-TIERS), and a grid is
-// placed where the reflections are not traced: the ray row goes off for the read.
+// ---- 3. no lighting, nothing on Atom ---------------------------------------
+// The FIT of the reflection-probe grid's placement region, read from the
+// renderer with the widget ON and OFF, paired: a backdrop is in no capture and
+// no GI geometry, so the region is the same numbers. (The ray row goes off for
+// the read — a grid is placed where reflections are not traced.)
 var rayRow = world.rayTracing();
 world.rayTracing("off");
-editor.frame(180, 1 / 60);
-var st = world.giStatus();
-console.log("giStatus: " + J({ min: st.probeRegionMin, max: st.probeRegionMax,
-                               probes: st.probeCount }));
-assert(st.live === true, "giStatus is live");
-var extent = Math.max(st.probeRegionMax.x - st.probeRegionMin.x,
-                      st.probeRegionMax.y - st.probeRegionMin.y,
-                      st.probeRegionMax.z - st.probeRegionMin.z);
-assert(extent <= 66.0 && extent >= 60.0,
-       "the automatic probe region is still the 64 m ceiling, not a horizon-sized one (" +
-       extent.toFixed(2) + " m)");
-assert(st.probeRegionMin.x <= -30 && st.probeRegionMax.x >= 30,
-       "...and it is the FLOOR's region: the ground is still in it (" +
-       st.probeRegionMin.x.toFixed(1) + " .. " + st.probeRegionMax.x.toFixed(1) + ")");
+function region(tag) {
+    editor.frame(180, 1 / 60);
+    var st = world.giStatus();
+    console.log("giStatus (" + tag + "): " + J({ min: st.probeRegionMin, max: st.probeRegionMax,
+                                                 probes: st.probeCount }));
+    assert(st.live === true, "giStatus is live (" + tag + ")");
+    return st;
+}
+var withPlane = region("plane on");
+assert(editor.setOverlays({ groundPlane: false }) === true, "the widget off");
+var without = region("plane off");
+assert(near(withPlane.probeRegionMin.x, without.probeRegionMin.x, 1e-3) &&
+       near(withPlane.probeRegionMax.x, without.probeRegionMax.x, 1e-3) &&
+       near(withPlane.probeRegionMin.y, without.probeRegionMin.y, 1e-3) &&
+       near(withPlane.probeRegionMax.y, without.probeRegionMax.y, 1e-3) &&
+       near(withPlane.probeRegionMin.z, without.probeRegionMin.z, 1e-3) &&
+       near(withPlane.probeRegionMax.z, without.probeRegionMax.z, 1e-3) &&
+       withPlane.probeCount === without.probeCount,
+       "the probe region is the SAME with the Ground plane as without it — it is in no capture");
+assert(without.probeRegionMin.x <= -30 && without.probeRegionMax.x >= 30,
+       "...and it is the FLOOR's region: the Floor is in it (" +
+       without.probeRegionMin.x.toFixed(1) + " .. " + without.probeRegionMax.x.toFixed(1) + ")");
 world.rayTracing(rayRow);
 
-// ---- 4. a save round trip changes none of it --------------------------------
+// ATOM. The Floor is an ordinary baked cube, so the id pass draws it; the plane
+// is a backdrop, so the split counts it as notWorld and draws it through PBS.
+function atomSettled() {
+    var st = world.atomStatus();
+    for (var i = 0; i < 120 && st.live && st.pending > 0; ++i) { editor.frame(1, 1 / 60); st = world.atomStatus(); }
+    return st;
+}
+editor.frame(4, 1 / 60);
+var aOff = atomSettled();
+assert(editor.setOverlays({ groundPlane: true }) === true, "the widget on again");
+editor.frame(4, 1 / 60);
+var aOn = atomSettled();
+console.log("atom: off " + J({ atomItems: aOff.atomItems, notWorld: aOff.notWorld, on: aOff.on }) +
+            " on " + J({ atomItems: aOn.atomItems, notWorld: aOn.notWorld, on: aOn.on }));
+if (aOn.live && aOn.on) {
+    assert(aOn.notWorld === aOff.notWorld + 1,
+           "the Ground plane is NOT on Atom: the split counts it under notWorld (" +
+           aOff.notWorld + " -> " + aOn.notWorld + ")");
+    assert(aOn.atomItems === aOff.atomItems, "...and atomItems does not move (" + aOn.atomItems + ")");
+    assert(node.setProperty(ground, "visible", false), "hide the Floor");
+    editor.frame(3, 1 / 60);
+    var aNoFloor = world.atomStatus();
+    assert(aNoFloor.atomItems === aOn.atomItems - 1,
+           "...while the Floor IS on Atom (atomItems " + aOn.atomItems + " -> " + aNoFloor.atomItems +
+           " with it hidden)");
+    assert(node.setProperty(ground, "visible", true), "show the Floor again");
+} else {
+    console.log("note: the Atom split is not live here (on=" + aOn.on + "); the route is mirror.ground_plane's");
+}
+
+// ---- 4. a save round trip keeps the setting ---------------------------------
 assert(project.save() === true, "save");
 assert(project.close() === true, "close");
 assert(project.open(proj) === true, "reopen");
-var floor2 = scene.find("Ground");
+assert(editor.overlays().groundPlane === true,
+       "the Ground plane setting is PER SCENE and came back with it");
+var floor2 = scene.find("Floor");
 var m2 = material.get(floor2);
 assert(m2.workflow === 1 && near(m2.ior, 1.0, 1e-4) &&
        String(m2.specularColor).toLowerCase() === "#000000",
        "the matte floor survived save/reopen");
 assert(world.fog({ enabled: false }), "fog off again (the reopened scene brought its own back)");
-editor.setCamera({ position: { x: 40, y: 40, z: 40 }, lookAt: { x: 0, y: 0, z: 0 } });
-editor.frame(60, 1 / 60);
-var obl2 = editor.screenshot("ground_oblique_reopen.png", 960, 540, CORNERS, "raw");
-var corners2 = obl2.probes.map(function (p) { return Math.round(lum(p)); });
-console.log("oblique corners after reopen: " + J(corners2));
-for (var d = 0; d < corners2.length; d++)
-    assert(corners2[d] < 64, "...and so did the horizon, corner " + d + " (" + corners2[d] + ")");
+var reopened = obliqueCorners("reopen");
+assert(spreadOf(reopened) >= 2, "...and so did the widget's ground (" + J(reopened) + ")");
 
-// ---- 5. no floor, no horizon ------------------------------------------------
-// Hiding the floor takes its horizon with it: what is left is SKY, and a
-// single-colour sky is UNIFORM — the same value in every corner, which is the
-// discriminator here and not a brightness band.
-//
-// RE-BASELINED (SKY_LIGHT_SPEC.md §2 and §4): the old test asked the bare sky to
-// read BRIGHTER than 64 because the sky colour reached the frame raw. It is
-// decoded now (96 grey is 0.117 of radiance, i.e. 30 in this linear readback),
-// so the sky is DARKER than the lit ground rather than brighter — the horizon is
-// still plainly gone, it just goes the other way.
-assert(node.setProperty(floor2, "visible", false), "hide the floor");
-editor.frame(30, 1 / 60);
-var hidden = editor.screenshot("ground_hidden.png", 960, 540, CORNERS, "raw");
-var hc = hidden.probes.map(function (p) { return Math.round(lum(p)); });
-console.log("oblique corners, floor hidden: " + J(hc));
-var skyLo = Math.min.apply(null, hc), skyHi = Math.max.apply(null, hc);
-assert(skyHi - skyLo <= 1,
-       "a hidden floor leaves nothing but the uniform sky: every corner reads the same (" +
-       J(hc) + ")");
-var withFloor = 0, withoutFloor = 0;
-for (var h = 0; h < hc.length; h++) {
-    withFloor += Math.round(lum(obl2.probes[h]));
-    withoutFloor += hc[h];
-    // ONE CODE OF SLACK, and why (PHOTON-ENV-1): the sky's share of the ground's
-    // light now carries the diffuse lobe's energy factor (1/1.51 at the ground's
-    // roughness 1, the direct lobe's own), so the far corners of the matte
-    // ground read within a code of the 0.117-radiance sky that lights them
-    // (measured 29-30 against 30). Nothing is BRIGHTER without the floor beyond
-    // the readback's quantisation; the frame as a whole losing the lit ground
-    // is asserted below.
-    assert(hc[h] <= Math.round(lum(obl2.probes[h])) + 1,
-           "...no corner got BRIGHTER when the ground went away, corner " + h +
-           " (" + hc[h] + " <= " + Math.round(lum(obl2.probes[h])) + " + 1)");
-}
-assert(withoutFloor < withFloor,
-       "...and the frame as a whole lost the lit ground (" + withoutFloor + " < " +
-       withFloor + " over " + hc.length + " corners)");
-assert(node.setProperty(floor2, "visible", true), "show it again");
-editor.frame(30, 1 / 60);
-var shown = editor.screenshot("ground_shown.png", 960, 540, CORNERS, "raw");
-for (var g = 0; g < CORNERS.length; g++)
-    assert(Math.round(lum(shown.probes[g])) < 64, "...and it comes back, corner " + g);
+// ---- 5. the widget does not need a floor --------------------------------------
+assert(node.setProperty(floor2, "visible", false), "hide the Floor");
+var noFloor = obliqueCorners("no_floor_plane_on");
+assert(spreadOf(noFloor) >= 2,
+       "with the Floor hidden the Ground plane still grounds every corner (" + J(noFloor) + ")");
+assert(editor.setOverlays({ groundPlane: false }) === true, "the widget off too");
+var bare = obliqueCorners("no_floor_plane_off");
+assert(spreadOf(bare) <= 1, "...and with both gone the frame is the uniform sky (" + J(bare) + ")");
+assert(node.setProperty(floor2, "visible", true), "show the Floor again");
 
 console.log("e2e_default_ground: all sections passed");

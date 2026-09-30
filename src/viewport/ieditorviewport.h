@@ -368,6 +368,11 @@ public:
     virtual bool getShowGrid() const { return true; }
     virtual void setShowGrid(bool) {}
 
+    /// The Ground plane widget (WORLD-MODEL-1, EditorData::showGroundPlane):
+    /// per-scene, default OFF. Only the engine viewport draws it.
+    virtual bool getShowGroundPlane() const { return false; }
+    virtual void setShowGroundPlane(bool) {}
+
     /// The GI volume overlay (LIGHTING_FIX fix 9): wireframe boxes around the
     /// lit (voxel) volume and the reflection-probe region `world.giStatus()`
     /// reports. Default OFF — it is a diagnostic, not scenery. Only the engine

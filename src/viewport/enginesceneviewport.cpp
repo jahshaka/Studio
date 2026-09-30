@@ -3,6 +3,7 @@
 #include "irisgl/core/math/vec.h"
 #include "viewport/devicelossend.h"
 #include "viewport/statsrows.h"
+#include "services/defaultfloormaterial.h"
 #include "services/scenestats.h"
 #include "viewport/enginesceneviewport.h"
 
@@ -291,6 +292,10 @@ void EngineSceneViewport::pushEditorHelpers(bool helpers)
     // inherits the other's answer. Game View is still the editor — a scene
     // being looked at without furniture is not the finished thing.
     mMirror->setHideDefaultFloor(false);
+    // The Ground plane widget (WORLD-MODEL-1): the View Options row, and
+    // NOT a helper — it is the picture's ground, so Game View and a screenshot
+    // keep it; only the Player (which states its own) goes without.
+    mMirror->setGroundPlane(mShowGroundPlane);
     mMirror->setLightWires(mShowLightWires && helpers);
     // Camera bodies + frustum wires (CAMERAS_SPEC D2). Same "editor helper"
     // rule as the light wires — G (Game View) and play hide them — but a
@@ -858,6 +863,10 @@ bool EngineSceneViewport::ensureEngineScene()
     // (see there), and on this path there is nothing to drop — but the order has
     // to be the same one on both paths or that line reads a null.
     mMirror.reset(new SceneMirror(mEngineScene));
+    // The Ground plane widget wears the default floor material (the shipped
+    // checker, nothing pinned) — the same values the template floors wear, so
+    // the two read as one ground.
+    mMirror->setGroundPlaneMaterial(defaultfloormaterial::createUnpinned());
     mOverlay.reset(new GizmoOverlay(mEngineScene));
     if (mScene) mMirror->setSource(mScene);
     // A SCENE BORN DURING A LOAD IS BORN LOADING (OPEN_COVER_SPEC §2 A).
@@ -2232,9 +2241,11 @@ void EngineSceneViewport::setEditorData(EditorData *data)
             adoptEditorCamera(data->editorCamera);
         }
         const bool moved = mShowLightWires != data->showLightWires
-                           || mShowGrid != data->showGrid;
+                           || mShowGrid != data->showGrid
+                           || mShowGroundPlane != data->showGroundPlane;
         mShowLightWires = data->showLightWires;
         mShowGrid = data->showGrid;
+        mShowGroundPlane = data->showGroundPlane;
         mShowDebugDraw = data->showDebugDrawFlags;
         if (moved) emit mEvents.overlaysChanged();
     }
@@ -2426,6 +2437,7 @@ EditorData *EngineSceneViewport::getEditorData()
     mEditorData->editorCamera = mEditorCam;
     mEditorData->showLightWires = mShowLightWires;
     mEditorData->showGrid = mShowGrid;
+    mEditorData->showGroundPlane = mShowGroundPlane;
     mEditorData->showDebugDrawFlags = mShowDebugDraw;
     return mEditorData;
 }
@@ -3230,6 +3242,7 @@ QImage EngineSceneViewport::takeScreenshot(int width, int height, ScreenshotGrad
         // would move the whole pixel corpus. The editor's frame loop says the
         // same thing in pushEditorHelpers; a shot does not go through it.
         mMirror->setHideDefaultFloor(false);
+        mMirror->setGroundPlane(mShowGroundPlane);
         mMirror->sync();
         // The shot view starts with a hardcoded background; give it the document
         // sky (flat colour) and world settings (shadows toggle) like the live view.
@@ -4103,6 +4116,7 @@ void EngineSceneViewport::primeSceneGeometry()
     // sync of the editor's own picture, and the Player may have left the hide
     // on behind it.
     mMirror->setHideDefaultFloor(false);
+    mMirror->setGroundPlane(mShowGroundPlane);
     mMirror->setLightWires(mShowLightWires && helpers);
     mMirror->setHighlightWireframe(mSelectionWireframe);
     pushGridForView(helpers);
