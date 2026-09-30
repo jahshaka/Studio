@@ -26,6 +26,8 @@ For more information see the LICENSE file
 #include <QThread>
 #include <QTimer>
 #include <QtConcurrent>
+#include <functional>
+#include <memory>
 
 #include "data/database/database.h"
 #include "data/guidmanager.h"
@@ -545,9 +547,13 @@ void ProjectArchiver::installImportSlice()
         // bytes reuses it); a TEMP is litter in the store's own directory, and
         // this is the one place every import path ends.
         discardStagedImports();
-        if (!mThreaded) return;
-        if (!mCanceled.load() && mResult.error.isEmpty())
-            emitProgress(100, QStringLiteral("Imported."));
+        const bool bake = mResult.error.isEmpty() && !mCanceled.load()
+                          && !mResult.projectGuid.isEmpty();
+        if (!mThreaded) {
+            if (bake) runImportBakesInline();
+            return;
+        }
+        if (bake) { startImportBakes(planImportBakes()); return; }
         finish(mCanceled.load());
         return;
     }
@@ -619,7 +625,7 @@ void ProjectArchiver::installImportSlice()
         db->setProjectAssetFolder(mResult.projectGuid, localGuid, asset.folder);
     ++mResult.assets;
 
-    emitProgress(55 + (40 * mNextIngest) / qMax(1, mIngest.size()),
+    emitProgress(55 + (25 * mNextIngest) / qMax(1, mIngest.size()),
                  QStringLiteral("Storing content (%1 of %2)…")
                      .arg(mNextIngest).arg(mIngest.size()));
 
@@ -687,6 +693,118 @@ void ProjectArchiver::republishImportedBundles()
         }
         AssetCas::writePin(QSqlDatabase::database(), mResult.projectGuid, localGuid, written.oid);
     }
+}
+
+QVector<MeshBakeStore::BakeJob> ProjectArchiver::planImportBakes()
+{
+    QVector<MeshBakeStore::BakeJob> jobs;
+    // THE ROWS THIS IMPORT BROUGHT, by their local guids: a model row this
+    // library already held (ARCHIVE-GUIDS-1) is in the set too, and is simply
+    // skipped when its bake is already fresh.
+    QSet<QString> guids;
+    for (const IngestAsset &asset : mIngest)
+        guids.insert(mGuidMap.value(asset.archiveGuid, asset.archiveGuid));
+    QSqlDatabase conn = QSqlDatabase::database();
+    for (const MeshBakeStore::BakeTarget &target :
+         MeshBakeStore::modelBakesNeeded(conn, mStoreRoot, &guids)) {
+        MeshBakeStore::BakeJob job = MeshBakeStore::prepareBake(conn, mStoreRoot, target);
+        if (!job.path.isEmpty()) jobs.append(job);
+    }
+    return jobs;
+}
+
+int ProjectArchiver::commitImportBakes(QVector<MeshBakeStore::BakeResult> &results)
+{
+    int failed = 0;
+    QSqlDatabase conn = QSqlDatabase::database();
+    for (MeshBakeStore::BakeResult &result : results) {
+        QString error;
+        if (!MeshBakeStore::commitBake(conn, mStoreRoot, result, &error)) {
+            ++failed;
+            qWarning("ProjectArchiver: a model of the archive could not be baked (%s)",
+                     qUtf8Printable(error));
+        }
+    }
+    return failed;
+}
+
+namespace {
+/// The worker: every job in turn (each bake is as wide as the machine on its
+/// own), stopping at a cancel. `report(i, n)` runs on the worker.
+QVector<MeshBakeStore::BakeResult> bakeAll(const QVector<MeshBakeStore::BakeJob> &jobs,
+                                           const std::atomic<bool> *canceled,
+                                           const std::function<void(int, int)> &report)
+{
+    QVector<MeshBakeStore::BakeResult> out;
+    out.reserve(jobs.size());
+    for (int i = 0; i < jobs.size(); ++i) {
+        if (canceled && canceled->load()) break;
+        report(i, jobs.size());
+        out.append(MeshBakeStore::runBake(jobs[i]));
+    }
+    return out;
+}
+}   // namespace
+
+void ProjectArchiver::startImportBakes(QVector<MeshBakeStore::BakeJob> jobs)
+{
+    if (jobs.isEmpty()) {
+        emitProgress(100, QStringLiteral("Imported."));
+        finish(false);
+        return;
+    }
+    // The results travel in a shared holder: the worker never touches a
+    // member but the cancel flag, which the destructor joins on (mFuture).
+    auto results = std::make_shared<QVector<MeshBakeStore::BakeResult>>();
+    mFuture = QtConcurrent::run([this, jobs, results]() {
+        *results = bakeAll(jobs, &mCanceled, [this](int i, int n) {
+            emitProgress(80 + (19 * i) / qMax(1, n),
+                         QStringLiteral("Baking models (%1 of %2)…").arg(i + 1).arg(n));
+        });
+        QMetaObject::invokeMethod(this, [this, results]() {
+            if (mCanceled.load()) {
+                // A cancel during the bake rolls the import back like any other
+                // cancel; the staged bake temps go with the results.
+                for (MeshBakeStore::BakeResult &r : *results) {
+                    QVector<AssetCas::Staged> leftover{ r.staged };
+                    AssetCas::discardStaged(leftover);
+                }
+                if (!mResult.projectGuid.isEmpty()) {
+                    db->deleteProject(mResult.projectGuid);
+                    mResult.projectGuid.clear();
+                }
+                finish(true);
+                return;
+            }
+            commitImportBakes(*results);
+            emitProgress(100, QStringLiteral("Imported."));
+            finish(false);
+        }, Qt::QueuedConnection);
+    });
+}
+
+void ProjectArchiver::runImportBakesInline()
+{
+    const QVector<MeshBakeStore::BakeJob> jobs = planImportBakes();
+    if (jobs.isEmpty()) return;
+    // ON A WORKER, this thread pumping (user input excluded) — the same shape
+    // as the synchronous open's prewarm: a script's importArchive owes its
+    // caller a baked import when it returns, not a frozen window meanwhile.
+    std::atomic<bool> done { false };
+    QVector<MeshBakeStore::BakeResult> results;
+    QFuture<void> future = QtConcurrent::run([&]() {
+        struct Finish { std::atomic<bool> &flag; ~Finish() { flag.store(true); } } finish{ done };
+        results = bakeAll(jobs, &mCanceled, [this](int i, int n) {
+            emitProgress(80 + (19 * i) / qMax(1, n),
+                         QStringLiteral("Baking models (%1 of %2)…").arg(i + 1).arg(n));
+        });
+    });
+    while (!done.load()) {
+        QCoreApplication::processEvents(QEventLoop::ExcludeUserInputEvents, 20);
+        if (!done.load()) QThread::msleep(5);
+    }
+    future.waitForFinished();
+    commitImportBakes(results);
 }
 
 ProjectArchiver::Result ProjectArchiver::importArchive(const QString &zipPath)

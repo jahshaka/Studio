@@ -79,6 +79,7 @@ For more information see the LICENSE file
 
 #include "export/exportmanifest.h"
 #include "services/assetcas.h"
+#include "services/meshbakestore.h"
 
 class Database;
 class Project;
@@ -196,6 +197,19 @@ private:
     /// CAS definition file, and since MATERIAL_BUNDLE_SPEC D-2 that file is
     /// what a material MEANS.
     void republishImportedBundles();
+    /// THE IMPORT BAKES WHAT IT BRINGS (FORWARD-ONLY-1 item 1a). An archive
+    /// carries no bakes (a bake is derived data keyed on the build that made
+    /// it — the export side leaves them out on purpose), so every model the
+    /// archive brought is baked HERE, after its bytes are in the store and
+    /// before the import reports done: a world opens from bakes, never a parse.
+    /// Plans on the UI thread (the catalog), bakes on a worker, commits here.
+    QVector<MeshBakeStore::BakeJob> planImportBakes();
+    /// Threaded: starts the worker; its completion commits, reports and finishes.
+    void startImportBakes(QVector<MeshBakeStore::BakeJob> jobs);
+    /// Commits what the worker produced (UI thread). Returns the failure count.
+    int commitImportBakes(QVector<MeshBakeStore::BakeResult> &results);
+    /// Synchronous: plan, bake (worker, this thread pumping), commit.
+    void runImportBakesInline();
     void beginInstallImport();
 
     void emitProgress(int percent, const QString &text);

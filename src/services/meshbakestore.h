@@ -31,12 +31,17 @@ For more information see the LICENSE file
 // ever receives an already-resolved iris::PrewarmItem (path + bake path +
 // fingerprint) and reads files. The scope cache is mutex-guarded regardless.
 
+#include <QSet>
 #include <QSqlDatabase>
 #include <QString>
 #include <QStringList>
 #include <QVector>
 
 #include "irisgl/import/meshprewarm.h"
+#include "services/assetcas.h"
+#include <memory>
+
+class QTemporaryDir;
 #include "irisgl/import/importsettings.h"
 
 class Database;
@@ -135,8 +140,48 @@ struct BakeTarget
 };
 
 /// Every (model file, owning row) pair in the store with no fresh bake, one
-/// entry per DISTINCT set of import settings over one object.
-QVector<BakeTarget> modelBakesNeeded(QSqlDatabase conn, const QString &root);
+/// entry per DISTINCT set of import settings over one object. `onlyGuids`
+/// non-null restricts the sweep to rows with those guids (an archive import
+/// bakes what IT brought, not the rest of the library).
+QVector<BakeTarget> modelBakesNeeded(QSqlDatabase conn, const QString &root,
+                                     const QSet<QString> *onlyGuids = nullptr);
+
+// --- A bake as three steps, for a caller that owns the threading ------------
+//
+// The catalog is per-thread (QSqlDatabase), the parse is the expensive part and
+// must never run on the UI thread, and the store write is a rename once the
+// bytes are staged. So: PREPARE on the database thread (resolve the settings
+// and the transform), RUN anywhere (parse, serialize, stage + flush into the
+// store — the bake itself is as wide as the machine, MeshBake::setBakeThreads),
+// COMMIT on the database thread (publish the staged object under every row that
+// names the content). ProjectArchiver's import bakes this way.
+
+/// Everything the worker needs, as values. `path` empty = nothing to bake
+/// (not a store object).
+struct BakeJob
+{
+    QString path;
+    QString sourceOid;
+    QString settings;
+    QString storeRoot;
+    iris::ImportTransform transform;
+};
+
+/// What a worker produced. `path` empty = the bake failed (`error` says why).
+struct BakeResult
+{
+    std::shared_ptr<QTemporaryDir> dir;   ///< keeps the written file alive until the commit
+    QString path;
+    QString sourceOid;
+    QString error;
+    AssetCas::Staged staged;              ///< already in the store and flushed, or empty
+};
+
+BakeJob prepareBake(QSqlDatabase conn, const QString &root, const BakeTarget &target);
+BakeResult runBake(const BakeJob &job);
+/// Publishes `result` (or discards it on failure). False with `errorOut` set
+/// when the catalog write failed.
+bool commitBake(QSqlDatabase conn, const QString &root, BakeResult &result, QString *errorOut);
 
 /// The paths of the above, for a caller that only wants to know how much work
 /// there is. Kept because the shape reads better at a call site that reports.

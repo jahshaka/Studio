@@ -668,7 +668,8 @@ void cancelPendingBakes()
     sQueue.clear();
 }
 
-QVector<BakeTarget> modelBakesNeeded(QSqlDatabase conn, const QString &root)
+QVector<BakeTarget> modelBakesNeeded(QSqlDatabase conn, const QString &root,
+                                     const QSet<QString> *onlyGuids)
 {
     QVector<BakeTarget> out;
     // Every recorded file whose DISPLAY NAME is a model, with the ROW that
@@ -697,6 +698,7 @@ QVector<BakeTarget> modelBakesNeeded(QSqlDatabase conn, const QString &root)
         }
         if (path.isEmpty()) continue;   // offline/purged object, already judged
         const QString guid = query.value(3).toString();
+        if (onlyGuids && !onlyGuids->contains(guid)) continue;
         const QString key = oid + QLatin1Char('|') + settingsHashFor(conn, root, path, guid);
         if (seen.contains(key)) continue;
         seen.insert(key);
@@ -704,6 +706,68 @@ QVector<BakeTarget> modelBakesNeeded(QSqlDatabase conn, const QString &root)
         out.append({ path, guid });
     }
     return out;
+}
+
+BakeJob prepareBake(QSqlDatabase conn, const QString &root, const BakeTarget &target)
+{
+    BakeJob job;
+    job.sourceOid = oidFromStorePath(root, target.path);
+    if (job.sourceOid.isEmpty()) return job;
+    job.path = target.path;
+    job.storeRoot = root;
+    job.settings = settingsHashFor(conn, root, target.path, target.assetGuid);
+    job.transform = transformFor(conn, root, target.path, target.assetGuid);
+    return job;
+}
+
+BakeResult runBake(const BakeJob &job)
+{
+    BakeResult out;
+    out.sourceOid = job.sourceOid;
+    if (job.path.isEmpty()) { out.error = QStringLiteral("not a store object"); return out; }
+    auto dir = std::make_shared<QTemporaryDir>();
+    if (!dir->isValid()) { out.error = QStringLiteral("cannot create a bake staging directory"); return out; }
+    iris::MeshBake::Model model = iris::MeshBake::buildFromFile(
+        job.path, iris::MeshBake::fingerprintFor(job.sourceOid, job.settings), dir->path(),
+        job.transform);
+    if (!model.valid) {
+        out.error = QStringLiteral("could not parse '%1' for baking").arg(QFileInfo(job.path).fileName());
+        return out;
+    }
+    const QString path =
+        QDir(dir->path()).filePath(iris::MeshBake::fileNameFor(job.sourceOid, job.settings));
+    if (!iris::MeshBake::write(path, model, &out.error)) return out;
+    out.dir = dir;
+    out.path = path;
+    // The store's half of the write, here and not on the database thread:
+    // hash, copy into objects/ under a temp name, flush (FSYNC-2).
+    out.staged.srcPath = path;
+    out.staged.role = iris::MeshBake::casRole();
+    out.staged.name = QFileInfo(path).fileName();
+    if (AssetCas::stage(job.storeRoot, out.staged)) {
+        QVector<AssetCas::Staged> batch{ out.staged };
+        AssetCas::flushStaged(batch);
+        out.staged = batch.first();
+    } else {
+        out.staged = AssetCas::Staged();   // the commit ingests synchronously
+    }
+    return out;
+}
+
+bool commitBake(QSqlDatabase conn, const QString &root, BakeResult &result, QString *errorOut)
+{
+    bool ok = false;
+    if (!result.path.isEmpty()) {
+        ok = recordBake(conn, root, result.sourceOid, result.path, errorOut, &result.staged);
+        if (ok) clear();
+    } else if (errorOut) {
+        *errorOut = result.error;
+    }
+    // A failed or unrecorded bake leaves the temp the worker staged; it names
+    // no object and no row (discardStaged is a no-op once committed).
+    QVector<AssetCas::Staged> leftover{ result.staged };
+    AssetCas::discardStaged(leftover);
+    return ok;
 }
 
 QStringList modelSourcesNeedingBake(QSqlDatabase conn, const QString &root)
