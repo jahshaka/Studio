@@ -316,7 +316,7 @@ int main(int argc, char **argv)
         // The coverage table is part of the contract: a silently shrinking op
         // list would quietly move graphs back onto the baker.
         const QStringList &ops = PieceEmitter::supportedOps();
-        CHECK(ops.size() >= 45, "the emitter lowers at least 45 op keys");
+        CHECK(ops.size() >= 44, "the emitter lowers at least 44 op keys (the retired texCoords/uvTransform aliases are gone)");
         for (const char *must : { "add", "lerp", "clamp", "pulsate", "time", "flipbook",
                                   "normalize", "smoothstep", "composevector" })
             CHECK(ops.contains(QString::fromLatin1(must)),

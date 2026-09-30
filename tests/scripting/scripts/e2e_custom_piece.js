@@ -50,7 +50,7 @@ assert(emit.pixelSource.indexOf("@piece( custom_ps_preLights )") === 0 ||
        "the emitted source targets custom_ps_preLights");
 assert(emit.pixelSource.indexOf("passBuf.jahClock.x") !== -1,
        "the emitted source reads the pass-buffer clock");
-assert(emit.ops.length >= 45, "the emitter reports its op vocabulary (" + emit.ops.length + " ops)");
+assert(emit.ops.length >= 44, "the emitter reports its op vocabulary (" + emit.ops.length + " ops)");
 assert(emit.vertexSource === "", "no vertex piece for a surface-only graph");
 
 // The baker's own classification is unchanged and still honest: a pulsating
