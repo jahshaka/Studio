@@ -10,12 +10,13 @@ For more information see the LICENSE file
 *************************************************************************/
 
 // ui.new_project_dialog — THE NEW SCENE DIALOG (owner review R1, 2026-09-18:
-// "new scene dialog is not centered… add a check box for empty scene… add a
-// button next to the location so the user can choose the location… make the
-// dialog a little wider to fit the new location button").
+// "new scene dialog is not centered… add a button next to the location so the
+// user can choose the location… make the dialog a little wider to fit the new
+// location button"), and its Template drop-down (WORLD-MODEL-1, owner
+// 2026-09-30: templates like Unreal's).
 //
-// The dialog has no capability of its own — its two new controls are options
-// of `project.create(name, {empty, location})`, which scripting.e2e.new_scene
+// The dialog has no capability of its own — its controls are options of
+// `project.create(name, {template, location})`, which scripting.e2e.new_scene
 // drives. What is asserted HERE is the part a verb cannot see: that the dialog
 // is parented and lands centred on the window it was opened from, that its
 // controls exist and are wired, and that what it ANSWERS carries them.
@@ -23,7 +24,8 @@ For more information see the LICENSE file
 // Widgets only: no engine, no database, no display.
 
 #include <QApplication>
-#include <QCheckBox>
+#include <QComboBox>
+#include <QStandardItemModel>
 #include <QDir>
 #include <QLineEdit>
 #include <QMainWindow>
@@ -72,7 +74,7 @@ int main(int argc, char **argv)
     // ---- the controls exist ------------------------------------------------
     CHECK(dialog.nameEdit() && dialog.locationEdit(), "the dialog has a Name and a Location field");
     CHECK(dialog.browseButton() != nullptr, "…and a Browse button beside the location (R1d)");
-    CHECK(dialog.emptyCheck() != nullptr, "…and an Empty scene checkbox (R1a)");
+    CHECK(dialog.templateCombo() != nullptr, "…and a Template drop-down (WORLD-MODEL-1)");
     CHECK(dialog.createButton() != nullptr, "…and a Create button");
 
     // ---- the default location is the projects root, not an empty box -------
@@ -89,14 +91,29 @@ int main(int argc, char **argv)
           "the location is read-only (chosen with Browse), not disabled — a disabled "
           "QLineEdit cannot be selected or copied");
 
-    // ---- Empty scene is OFF by default and rides the answer ----------------
-    CHECK(!dialog.emptyCheck()->isChecked(),
-          "Empty scene is OFF by default: the template is what New Scene means");
-    CHECK(dialog.getProjectInfo().empty == false, "…and the answer says so");
-    dialog.emptyCheck()->setChecked(true);
-    CHECK(dialog.getProjectInfo().empty == true,
-          "ticking Empty scene passes through to the verb's {empty: true}");
-    dialog.emptyCheck()->setChecked(false);
+    // ---- the Template drop-down: Basic by default, and it rides the answer --
+    QComboBox *combo = dialog.templateCombo();
+    CHECK(combo->count() == 4, "four templates: Basic, Empty, World, Sample");
+    CHECK(combo->itemText(0) == QLatin1String("Basic") && combo->itemText(1) == QLatin1String("Empty")
+              && combo->itemText(2) == QLatin1String("World") && combo->itemText(3) == QLatin1String("Sample"),
+          "…in that order");
+    CHECK(combo->currentIndex() == 0 && combo->currentText() == QLatin1String("Basic"),
+          "the drop-down DEFAULTS TO BASIC");
+    CHECK(dialog.getProjectInfo().sceneTemplate == SceneTemplate::Basic, "…and the answer says so");
+    const auto *model = qobject_cast<QStandardItemModel *>(combo->model());
+    CHECK(model && model->item(3) && !model->item(3)->isEnabled(),
+          "Sample is listed but DISABLED (it does not exist yet)");
+    CHECK(combo->itemData(3, Qt::ToolTipRole).toString() == QLatin1String("Coming"),
+          "…with the tooltip 'Coming'");
+    combo->setCurrentIndex(1);
+    CHECK(dialog.getProjectInfo().sceneTemplate == SceneTemplate::Empty,
+          "picking Empty passes through to the verb's {template: \"empty\"}");
+    combo->setCurrentIndex(2);
+    CHECK(dialog.getProjectInfo().sceneTemplate == SceneTemplate::World,
+          "picking World passes through to {template: \"world\"}");
+    CHECK(scenetemplate::name(dialog.getProjectInfo().sceneTemplate) == QLatin1String("world"),
+          "…whose verb spelling is 'world'");
+    combo->setCurrentIndex(0);
 
     // ---- the default location IS the current projects root (fix round F2) --
     // "default is in the jahshaka documents folder" (owner review R1d). It is

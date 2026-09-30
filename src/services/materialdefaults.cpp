@@ -14,7 +14,7 @@ For more information see the LICENSE file
 #include <QStringList>
 
 #include "irisgl/document/materials/pbrmaterial.h"
-#include "services/defaultfloor.h"
+#include "services/defaultfloormaterial.h"
 
 namespace materialdefaults {
 
@@ -23,10 +23,10 @@ iris::MaterialPtr create(const iris::SceneNodePtr &node, Database *db, Project *
 {
     if (textures) textures->clear();
     if (newlyPinned) newlyPinned->clear();
-    if (!defaultfloor::isDefaultFloor(node)) return iris::MaterialPtr();
+    if (!defaultfloormaterial::isDefaultFloor(node)) return iris::MaterialPtr();
     QString tileGuid;
     bool tileNew = false;
-    auto material = defaultfloor::createMaterial(db, project, &tileGuid, &tileNew);
+    auto material = defaultfloormaterial::create(db, project, &tileGuid, &tileNew);
     if (!tileGuid.isEmpty()) {
         if (textures) textures->append(tileGuid);
         if (newlyPinned && tileNew) newlyPinned->append(tileGuid);

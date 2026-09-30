@@ -87,6 +87,13 @@ WorldPropertyWidget::WorldPropertyWidget()
     // instant before a scene is bound — but a row that starts by disagreeing
     // with the world is exactly how the old default drifted unnoticed.
     showGridToggle = this->addCheckBox("Show Grid", false);
+    // The Ground plane widget beside it (WORLD-MODEL-1), constructed OFF to
+    // agree with EditorData::showGroundPlane; setGroundPlaneAction re-reads.
+    showGroundPlaneToggle = this->addCheckBox("Ground Plane", false);
+    showGroundPlaneToggle->setToolTip(QStringLiteral(
+        "An infinite matte ground the editor draws just under y = 0, so a scene with no floor "
+        "still stands on something. It is not part of the scene: it casts no shadow but receives "
+        "them, adds no bounce light, is in no reflection or ray, and the Player never shows it."));
 
     // WHAT PLAY DOES (AVATAR_LOCOMOTION_SPEC §8.5). It belongs here and not in
     // the World Mode section: world.modeTable is the SCALABILITY registry
@@ -183,6 +190,21 @@ void WorldPropertyWidget::setGridAction(QAction *action)
     });
     connect(showGridToggle, &CheckBoxWidget::valueChanged, this, [this](bool on) {
         if (gridAction) gridAction->setChecked(on);
+    });
+}
+
+void WorldPropertyWidget::setGroundPlaneAction(QAction *action)
+{
+    if (groundPlaneAction == action) return;
+    groundPlaneAction = action;
+    if (!groundPlaneAction || !showGroundPlaneToggle) return;
+    // The same two-way wiring as setGridAction, for the same reasons.
+    showGroundPlaneToggle->setValue(groundPlaneAction->isChecked());
+    connect(groundPlaneAction, &QAction::toggled, this, [this](bool on) {
+        if (showGroundPlaneToggle) showGroundPlaneToggle->setValue(on);
+    });
+    connect(showGroundPlaneToggle, &CheckBoxWidget::valueChanged, this, [this](bool on) {
+        if (groundPlaneAction) groundPlaneAction->setChecked(on);
     });
 }
 

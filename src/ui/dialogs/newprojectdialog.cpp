@@ -9,7 +9,8 @@ and/or modify it under the terms of the MIT License
 For more information see the LICENSE file
 *************************************************************************/
 
-#include <QCheckBox>
+#include <QComboBox>
+#include <QStandardItemModel>
 #include <QFile>
 #include <QFileDialog>
 #include <QFontDatabase>
@@ -44,12 +45,25 @@ NewProjectDialog::NewProjectDialog(QWidget *parent) : QDialog(parent)
 	browse->setObjectName(QStringLiteral("browseLocation"));
 	browse->setAutoDefault(false);
 	browse->setDefault(false);
-	// EMPTY SCENE (owner review R1a / answer Q1): off = the template (ground,
-	// sun, Sky Light, the realistic sky); on = a blank world.
-	emptyScene = new QCheckBox(tr("Empty scene"));
-	emptyScene->setObjectName(QStringLiteral("emptyScene"));
-	emptyScene->setToolTip(tr("Start with a blank world — no ground, no lights, no sky.\n"
-	                          "Off: the default template (ground, sun, sky light, real-time sky)."));
+	// THE TEMPLATE (WORLD-MODEL-1, owner 2026-09-30: a drop-down like
+	// Unreal's). Each entry's data is its SceneTemplate; Sample has none and is
+	// disabled until it exists. Basic is the default.
+	templateLabel = new QLabel(tr("Template"));
+	templateBox = new QComboBox();
+	templateBox->setObjectName(QStringLiteral("sceneTemplate"));
+	templateBox->addItem(tr("Basic"), int(SceneTemplate::Basic));
+	templateBox->setItemData(0, tr("A floor, the sun, a sky light and the real-time sky."),
+	                         Qt::ToolTipRole);
+	templateBox->addItem(tr("Empty"), int(SceneTemplate::Empty));
+	templateBox->setItemData(1, tr("Nothing: no sky, no lights, no floor."), Qt::ToolTipRole);
+	templateBox->addItem(tr("World"), int(SceneTemplate::World));
+	templateBox->setItemData(2, tr("Basic's sky and lights on a 500 m floor of 5 x 5 tiles."),
+	                         Qt::ToolTipRole);
+	templateBox->addItem(tr("Sample"), -1);
+	templateBox->setItemData(3, tr("Coming"), Qt::ToolTipRole);
+	if (auto *model = qobject_cast<QStandardItemModel *>(templateBox->model()))
+		if (QStandardItem *sample = model->item(3)) sample->setEnabled(false);
+	templateBox->setCurrentIndex(0);
 	cancel = new QPushButton("Cancel");
 	create = new QPushButton("Create");
 
@@ -111,7 +125,8 @@ NewProjectDialog::NewProjectDialog(QWidget *parent) : QDialog(parent)
 	grid->addWidget(locationRow);
 
 	grid->addSpacing(6);
-	grid->addWidget(emptyScene);
+	grid->addWidget(templateLabel);
+	grid->addWidget(templateBox);
 
 	auto wid = new QWidget;
 	auto layout = new QHBoxLayout;
@@ -141,7 +156,8 @@ NewProjectDialog::NewProjectDialog(QWidget *parent) : QDialog(parent)
 	projectPathEdit->setStyleSheet(StyleSheet::QLineEdit());
 	scene->setStyleSheet(StyleSheet::QLabelWhite());
 	path->setStyleSheet(StyleSheet::QLabelWhite());
-	if (ThemeManager::classicActive()) emptyScene->setStyleSheet(StyleSheet::QCheckBox());
+	templateLabel->setStyleSheet(StyleSheet::QLabelWhite());
+	if (ThemeManager::classicActive()) templateBox->setStyleSheet(StyleSheet::QComboBox());
 	// THE PRIMARY ACTION IS "CREATE". Classic said so through its own two
 	// sheets; under Qlementine both getters return "" and the theme painted
 	// Cancel as the accented button and Create as the plain one — the owner
@@ -168,7 +184,11 @@ NewProjectDialog::~NewProjectDialog()
 
 ProjectInfo NewProjectDialog::getProjectInfo()
 {
-	ProjectInfo pInfo = { projectName, projectPath, emptyScene->isChecked() };
+	ProjectInfo pInfo;
+	pInfo.projectName = projectName;
+	pInfo.projectPath = projectPath;
+	const int kind = templateBox->currentData().toInt();
+	if (kind >= 0) pInfo.sceneTemplate = static_cast<SceneTemplate>(kind);
 	return pInfo;
 }
 

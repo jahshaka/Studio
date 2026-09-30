@@ -56,17 +56,17 @@ for (var i = 0; i < prims.length; ++i) {
     assert(rows.length === 1 && rows[0].type === "mesh", "...'" + name + "' is a mesh node");
     seen[name] = id;
 }
-// Ground has no tile, so it is not in `prims` — but it IS a name the verb takes,
-// and it was missing from one of the four old lists entirely.
-var ground = scene.addPrimitive("Ground");
-assert(ground && String(ground).length > 0, "scene.addPrimitive('Ground') — the row with no tile");
-seen["Ground"] = ground;
+// The old Ground is a PLATFORM seed now (WORLD-MODEL-1: the samples still stand on
+// it until they are re-authored) — not a name the verb takes.
+var groundRefused = false;
+try { scene.addPrimitive("Ground"); } catch (e) { groundRefused = true; }
+assert(groundRefused, "scene.addPrimitive('Ground') is refused — it is not a primitive any more");
 
 for (var name in seen) {
     var b = scene.bounds({ nodes: [seen[name]] });
     console.log("  " + name + " size " + J([b.size.x.toFixed(3), b.size.y.toFixed(3),
                                             b.size.z.toFixed(3)]));
-    // TWO axes, not three: Plane and Ground are flat on purpose, and a mesh
+    // TWO axes, not three: the Plane is flat on purpose, and a mesh
     // that failed to parse has NO extent at all.
     var axes = [b.size.x, b.size.y, b.size.z].filter(function (v) { return v > 0.01; });
     assert(axes.length >= 2,

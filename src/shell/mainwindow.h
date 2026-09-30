@@ -36,6 +36,7 @@ For more information see the LICENSE file
 #include "thirdparty/qtawesome/QtAwesomeAnim.h"
 #include "ui/controls/fonticons.h"
 #include "data/project.h"
+#include "services/scenetemplate.h"
 
 namespace Ui {
     class MainWindow;
@@ -696,10 +697,10 @@ public slots:
 
 	void toggleDockWidgets();
     void showPreferences();
-    /// `empty` = the blank world (owner review R1b / Q1, 2026-09-18): the
-    /// New Scene dialog's "Empty scene" checkbox and `project.create`'s
-    /// `{empty: true}`. See createDefaultScene for what each of the two holds.
-    void newScene(bool empty = false);
+    /// `kind` = the New Scene dialog's Template drop-down and
+    /// `project.create`'s `{template}` (services/scenetemplate.h says what
+    /// each template holds).
+    void newScene(SceneTemplate kind = SceneTemplate::Basic);
     /// The grid, light-wire and physics-debug overlays back to EditorData's
     /// defaults — newScene and the create run, one body.
     void resetOverlaysToDefaults();
@@ -709,12 +710,12 @@ public slots:
     /// open — its autosave lands in ITS OWN row — then points the current
     /// project at `guid` and runs the create.
     void newProject(const QString &guid, const QString &filename, const QString &projectPath,
-                    bool empty = false);
+                    SceneTemplate kind = SceneTemplate::Basic);
     /// THE SAME CREATE, WITHOUT THE DRAIN (OPEN_COVER_SPEC §2 C/§4,
     /// `project.createAsync`): the slices are queued and this returns at once.
     /// The caller polls `isOpeningProject()` — one runner serves both routes.
     void newProjectAsync(const QString &guid, const QString &filename,
-                         const QString &projectPath, bool empty = false);
+                         const QString &projectPath, SceneTemplate kind = SceneTemplate::Basic);
     /// The BLOCKING open: returns with the world open, which is the contract
     /// `project.open()` and every headless script are written against.
     ///
@@ -762,23 +763,17 @@ public slots:
     /// Takes the editor's panels down for a page that is not the editor.
     void hideEditorPanels();
 
-    /// THE NEW-SCENE TEMPLATE, and its blank twin (owner review R1b / Q1).
+    /// THE NEW-SCENE TEMPLATES (WORLD-MODEL-1; services/scenetemplate.h).
     ///
-    /// `empty == false` is what a new scene has always been, plus the owner's
-    /// Q1 answer: the default ground, the sun (a directional light), the Sky
-    /// Light, shadows on, the Epic world mode — and, since 2026-09-19, the
-    /// REALISTIC real-time sky with the sun following the atmosphere (which is
-    /// LightNode::followsAtmosphere's own default, so nothing is set for it
-    /// here; the template only chooses the sky the flag then means something
-    /// under).
+    /// Basic and World: the sun (a directional light), the Sky Light, shadows
+    /// on, the Epic world mode and the REALISTIC real-time sky with the sun
+    /// following the atmosphere (LightNode::followsAtmosphere's own default),
+    /// standing on ordinary cube floors — one "Floor" for Basic, a 5 x 5
+    /// "World Floor" group for World.
     ///
-    /// `empty == true` is the blank world, and it holds EXACTLY: a root node,
-    /// the Epic world mode, and the document's own constructor defaults. No
-    /// ground, no lights (so nothing lights it — a Sky Light is a light and an
-    /// empty scene has none), and no sky beyond the document's default flat
-    /// 96-grey, which is what iris::Scene's constructor sets and what a scene
-    /// built by a script has always come up with.
-    iris::ScenePtr createDefaultScene(bool empty = false);
+    /// Empty is NOTHING: a root node, the Epic world mode, a black
+    /// single-colour sky (the document's "no sky") and no lights.
+    iris::ScenePtr createDefaultScene(SceneTemplate kind = SceneTemplate::Basic);
 
     void useFreeCamera();
     void useArcballCam();
@@ -909,7 +904,7 @@ private:
     /// The sliced CREATE (OPEN_COVER_SPEC §2 C) — the same runner, the same
     /// stage order. `newProject` is this plus the pumped drain.
     void startCreateRun(const QString &guid, const QString &filename, const QString &projectPath,
-                        bool empty);
+                        SceneTemplate kind);
     /// Builds the open/create runner and its slice boundary, once per window.
     void startOpenRunnerIfNeeded();
     void openStageBegin();
@@ -1171,6 +1166,7 @@ private:
     QAction *wireCheckAction = nullptr;
     QAction *physicsCheckAction = nullptr;
     QAction *gridCheckAction = nullptr;
+    QAction *groundPlaneCheckAction = nullptr;   ///< View Options "Ground Plane" (WORLD-MODEL-1)
     QAction *statsCheckAction = nullptr;   // F3 frame-stats readout (persisted)
     /// THE ATOM VIEW sub-menu of View Options (D0-ATOM-VIEW): Off, Triangles,
     /// Levels, Buckets, Objects — exclusive, in AtomView's order; F6 cycles it.

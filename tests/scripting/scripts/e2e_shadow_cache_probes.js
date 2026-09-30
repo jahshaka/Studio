@@ -33,12 +33,12 @@ assert(guid.length > 10, "project.create -> " + guid);
 // no probes at all in a scene it reads as open. This suite used to say where
 // the space was by PINNING the lit volume, and that pin is gone (owner decision
 // D8: the volume is the renderer's automatic fit and nothing else), so the
-// scene has to be a room for real. The default Ground goes with it: a 100 m
+// scene has to be a room for real. The template's Floor goes with it: a 100 m
 // plane under a 12 m room is the outermost slab on the floor's own axis.
 function buildRoom(half, height) {
     var ids = scene.nodes();
     for (var i = 0; i < ids.length; ++i)
-        if (ids[i].name === "Ground") node.setProperty(ids[i].id, "visible", false);
+        if (ids[i].name === "Floor") node.setProperty(ids[i].id, "visible", false);
     function slab(name, px, py, pz, sx, sy, sz) {
         var id = scene.addPrimitive("cube", { position: { x: px, y: py, z: pz } });
         node.setProperty(id, "name", name);

@@ -215,21 +215,41 @@ assert(st.primaryColor !== st.color,
 assert(editor.overlays().outlinePrimaryColor === st.primaryColor,
        "editor.overlays() reports the same primary colour");
 
-// ---- THE GROUND IS NEVER OUTLINED (the surviving owner ask) ---------------------
-// Folded in from app.selection_outline (lane D6B-GATE-SHAPE; audit verdict MERGE): that
-// suite's other claim — a builtin-flagged Add-menu primitive IS outlined, the isBuiltIn
-// regression of 2026-09-06 — is this suite's "one selected" arm above (both cubes are
-// scene.addPrimitive cubes). With the Ground selected the style toggle must move nothing
-// in either half (its gizmo is in both shots and cancels). GI settles first, because the
-// equality is exact (the reason app.selection_outline waited forty frames).
+// ---- THE FLOOR IS AN ORDINARY NODE, AND IT IS OUTLINED (WORLD-MODEL-1) -----------
+// The template's floor used to be excluded from the outline (a built-in ground with
+// no outline). It is an ordinary cube node now, and a selected Floor is outlined like
+// any mesh. Its outline runs along its 100 m edges, so the camera looks ACROSS one:
+// the z = 50 edge is a horizontal silhouette against the sky, and a dense column of
+// probes crossing it differs between "Floor selected" and "nothing selected" (both in
+// the outline style). The control — nothing selected, twice — differs nowhere.
+var floor = scene.nodes().filter(function (n) { return n.name === "Floor"; })[0];
+assert(floor, "the Basic template has a Floor");
+var cameraWas = editor.camera();
+editor.setCamera({ position: { x: 50, y: 8, z: 70 }, lookAt: { x: 50, y: 0, z: 50 } });
+editor.setOverlays({ selectionWireframe: false });
 editor.frame(40);
-var ground = scene.nodes().filter(function (n) { return n.name === "Ground"; })[0];
-assert(ground, "default scene has a Ground");
-editor.select(ground.id);
-var gd = styleDelta("ground");
-console.log("ground selected -> left " + gd.left + ", right " + gd.right);
-assert(gd.left === 0 && gd.right === 0,
-       "ground selection draws no highlight in either style (" + gd.left + "/" + gd.right + ")");
+var column = [];
+for (var cy = 0.10; cy <= 0.90; cy += 0.002) column.push({ x: 0.30, y: cy });
+function columnShot(tag) {
+    editor.frame(2);
+    var r = editor.screenshot("floor_" + tag + ".png", 640, 480, column);
+    return r.probes.map(function (p) { return p.r + "," + p.g + "," + p.b; });
+}
+function differing(a, b) { var n = 0; for (var i = 0; i < a.length; ++i) if (a[i] !== b[i]) ++n; return n; }
+editor.selectNone();
+var bare1 = columnShot("none1");
+var bare2 = columnShot("none2");
+editor.select(floor.id);
+assert(editor.selection() === floor.id, "the Floor is selectable like any node");
+var outlined = columnShot("selected");
+editor.selectNone();
+var control = differing(bare1, bare2), drawn = differing(bare1, outlined);
+console.log("floor outline: " + drawn + " of " + column.length + " probes differ selected vs not (control " +
+            control + ")");
+assert(control === 0, "the control: two unselected shots agree exactly");
+assert(drawn >= 1, "a selected Floor IS OUTLINED along its edge (" + drawn + " probes)");
+editor.setCamera({ position: cameraWas.position, rotation: cameraWas.rotation });
+editor.frame(2);
 
 // ---- deselect: neither half moves -------------------------------------------
 editor.selectNone();

@@ -74,27 +74,12 @@ exportformat::ManifestScene describe(const iris::ScenePtr &scene,
     exportformat::ManifestScene out;
     if (!scene || !scene->getRootNode()) return out;
 
+    // Every node counts, the templates' floors included (WORLD-MODEL-1: a
+    // floor is an ordinary node, and a world standing on 100 m of floor IS
+    // that big).
     QList<iris::SceneNodePtr> subjects;
-    for (const auto &n : scene->getRootNode()->children()) {
-        if (n && n->getSceneNodeType() == iris::SceneNodeType::Mesh) {
-            const auto mn = n.staticCast<iris::MeshNode>();
-            // The 100 m backdrop, not the scene's size (1024 m before the
-            // SMOKE_FIX S14 re-stage).
-            //
-            // KEYED ON THE MESH PATH ALONE, deliberately: `isBuiltIn` is set by
-            // SceneEditService when the user ADDS a primitive and is never
-            // restored by the reader (SceneNode's ctor leaves it false, and
-            // scenereader.cpp writes meshPath but not the flag), so on a scene
-            // LOADED from a file — which is every sample, and every project a
-            // user reopens — `isBuiltIn` is false for the ground plane too.
-            // Anything testing both, as the viewport's selection-outline filter
-            // does (enginesceneviewport.cpp), silently stops filtering after a
-            // reopen. Reported 2026-09-09.
-            if (mn->meshPath == QStringLiteral(":/models/ground.obj"))
-                continue;
-        }
-        subjects.append(n);
-    }
+    for (const auto &n : scene->getRootNode()->children())
+        if (n) subjects.append(n);
 
     iris::Vec3 mn, mx;
     if (!worldAabb(subjects, false, mn, mx)) return out;

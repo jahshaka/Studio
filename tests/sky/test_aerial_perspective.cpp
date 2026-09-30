@@ -36,6 +36,9 @@
 //      noon;
 //   4. ONE ATMOSPHERE, ONE DENSITY: the turbidity dial moves T(2 km) by the
 //      same law (T 1 -> 97.5 %, T 6 -> 42.3 %) and moves NO sky pixel;
+//  4b. THE HAZE SWITCH (AIR-HAZE-TOGGLE-1): atmosphereHaze off reads T = 1 —
+//      zero air extinction — at 125 m and 2 km, paired against the same sky
+//      with it on, and moves no sky pixel;
 //   5. the World fog ADDS: fog density D on top gives exp(-sigma d) * 2^(-D d);
 //      and its breakthrough never bends the AIR (a bright surface at 2 km);
 //   6. THE HEIGHT LAYER IS SKY-COLOURED under the realistic sky — a magenta
@@ -281,6 +284,48 @@ int main()
         CHECK_MSG(differ == 0, "...and the turbidity moves NO sky pixel (%zu of %zu differ)",
                   differ, total);
         r.s->setSky(realisticSky(45.0f, 180.0f, 2.5f));
+    }
+
+    // ---- 4b. THE HAZE SWITCH (AIR-HAZE-TOGGLE-1) ----------------------------
+    // `AtmosphereSky::atmosphereHaze` false takes the air's extinction off every
+    // surface: the transmittance the instrument reads is exactly the NO-AIR one
+    // (T = 1, the control's unit gain) at every distance, paired in this process
+    // against the same sky with the switch on (exp(-sigma d)); and like the
+    // turbidity it moves NO sky pixel. The sun's tint is untouched by design
+    // (the switch is not an input to atmosphereSunTint).
+    {
+        const double tOn = transmittance(r, 2000.0f);
+        ImageF domeOn, domeOff;
+        shoot(r, domeOn);
+        SkyDesc off = realisticSky(45.0f, 180.0f, 2.5f);
+        off.atmosphere.atmosphereHaze = false;
+        CHECK_MSG(r.s->setSky(off), "the realistic sky with its haze OFF applies: %s",
+                  r.e->lastError().c_str());
+        const double tOffNear = transmittance(r, 125.0f);
+        const double tOffFar = transmittance(r, 2000.0f);
+        shoot(r, domeOff);
+        const double ref = std::exp(-airSigma(2.5) * 2000.0);
+        std::printf("    haze ON: T(2 km) %.5f | haze OFF: T(125 m) %.5f  T(2 km) %.5f\n",
+                    tOn, tOffNear, tOffFar);
+        CHECK_MSG(std::fabs(tOn - ref) <= kTolT,
+                  "with the switch ON the far surface is hazed: T(2 km) %.4f against exp(-sigma d) %.4f",
+                  tOn, ref);
+        CHECK_MSG(std::fabs(tOffNear - 1.0) < 2e-3 && std::fabs(tOffFar - 1.0) < 2e-3,
+                  "with it OFF the air's extinction is ZERO: T = 1 at 125 m and at 2 km (%.5f, %.5f) "
+                  "— the reading the no-air control gives", tOffNear, tOffFar);
+        CHECK_MSG(tOffFar - tOn > 0.2,
+                  "...a measurable difference at 2 km (%.4f against %.4f)", tOffFar, tOn);
+        size_t differ = 0, total = 0;
+        for (unsigned y = 0; y < 30; ++y)
+            for (unsigned x = 0; x < domeOn.width; ++x, ++total) {
+                const Colour a = domeOn.at(x, y), b = domeOff.at(x, y);
+                if (a.r != b.r || a.g != b.g || a.b != b.b) ++differ;
+            }
+        CHECK_MSG(differ == 0, "...and the switch moves NO sky pixel (%zu of %zu differ)", differ, total);
+        r.s->setSky(realisticSky(45.0f, 180.0f, 2.5f));
+        const double tBack = transmittance(r, 2000.0f);
+        CHECK_MSG(std::fabs(tBack - ref) <= kTolT,
+                  "switched back ON, the haze returns: T(2 km) %.4f against %.4f", tBack, ref);
     }
 
     // ---- 5. THE WORLD FOG ADDS ---------------------------------------------

@@ -372,7 +372,7 @@ QVector<VerbInfo> AssetsApi::verbs() const
           "Rebuilds an asset's thumbnail synchronously and writes it to the database. Objects, particle systems, materials, shader graphs and AVATARS render on the engine (engine required; a shader renders the material its graph evaluates to, on the preview sphere; an avatar renders its own character model); images re-thumbnail from the source file, videos re-grab a first-second frame, animation clips redraw their pose strip, and audio/file rows reset to their type icon (document-only). `ok` is false with `reason` naming WHY nothing was stored — a thumbnail that fails is never silent.",
           Needs::Document },
         { "rebuildThumbnails", "assets.rebuildThumbnails({missingOnly, projectOnly, limit}) -> {considered, rebuilt, skipped, cancelled, failed: [{guid, reason}]}",
-          "Rebuilds thumbnails in bulk — the repair pass for rows that are already grey. `missingOnly` (default true) takes only the rows whose stored thumbnail is absent or undecodable; false redraws every asset that has a thumbnail to draw. `projectOnly` (default false) limits it to the open project's pinned assets; `limit` (default 0 = no limit) caps how many are rebuilt. One asset per turn, yielding between them, so the window keeps painting. `skipped` counts the rows with nothing to draw at all (a builtin primitive's row — the default Ground — stores no model definition), which are not failures; a row whose stored bytes are GONE is a failure with its reason. `cancelled` is true when the sweep was stopped before it finished — the app is quitting, or the script was stopped — and whatever it had already rebuilt is stored. Each asset goes through the same routine as assets.refreshThumbnail.",
+          "Rebuilds thumbnails in bulk — the repair pass for rows that are already grey. `missingOnly` (default true) takes only the rows whose stored thumbnail is absent or undecodable; false redraws every asset that has a thumbnail to draw. `projectOnly` (default false) limits it to the open project's pinned assets; `limit` (default 0 = no limit) caps how many are rebuilt. One asset per turn, yielding between them, so the window keeps painting. `skipped` counts the rows with nothing to draw at all (a builtin primitive's row — a template's Floor — stores no model definition), which are not failures; a row whose stored bytes are GONE is a failure with its reason. `cancelled` is true when the sweep was stopped before it finished — the app is quitting, or the script was stopped — and whatever it had already rebuilt is stored. Each asset goes through the same routine as assets.refreshThumbnail.",
           Needs::Document },
         { "thumbnail", "assets.thumbnail(guid) -> {guid, empty, bytes, width, height, centre: {r, g, b}, coverage}",
           "The thumbnail stored for an asset, as facts rather than pixels: byte size of the PNG blob, its decoded dimensions, the colour of its centre pixel (0-255) and `coverage` — the fraction of the image (0..1) that differs from the background the renderer cleared to, i.e. how much of the tile the subject fills. empty is true when the row carries no image. Document-only — it reads the database, it does not render.",
@@ -1479,10 +1479,9 @@ QVariantList AssetsApi::builtins()
     };
     // The primitives come from the ONE table (src/data/primitives.h). What is
     // listed is what a user can DRAG: a row with a TILE. Since ATOM P2 every seed
-    // row has a library guid — the Ground and the Teapot are baked library assets
-    // too — so the tile, not the guid, is the predicate: the Ground is reached by
-    // `scene.addPrimitive("Ground")` and the Teapot is not offered at all (owner
-    // review R6), exactly as before.
+    // row has a library guid — the samples' Ground and Teapot are baked library
+    // assets too — so the tile, not the guid, is the predicate: neither is
+    // offered (owner review R6; WORLD-MODEL-1).
     for (const primitives::Def &def : primitives::all()) {
         if (!def.guid || !def.icon || def.kind != primitives::Kind::Primitive) continue;
         out.append(QVariantMap{ { "guid", QString::fromLatin1(def.guid) },

@@ -17,8 +17,8 @@
 //      (guid, type, has-a-thumbnail) straight from SQL; `missingOnly` is a
 //      WHERE clause, not a decode of every stored PNG.
 //
-//   3. "NOTHING TO DRAW" IS NOT "BROKEN". A builtin primitive's Object row (the
-//      default Ground) stores no definition and is SKIPPED; a row that has a
+//   3. "NOTHING TO DRAW" IS NOT "BROKEN". A builtin primitive's Object row (a
+//      template's Floor) stores no definition and is SKIPPED; a row that has a
 //      definition and cannot be drawn is a FAILURE with a reason.
 //
 // Real Database on a throwaway SQLite file; a null engine, which is exactly

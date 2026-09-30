@@ -51,7 +51,7 @@ inline QSize defaultSize() { return QSize(512, 512); }
 /// returned a null image without a word).
 /// `noModelOut`, when given, is set true for the one case that is not a
 /// failure of the renderer: the row stores no model at all (a builtin
-/// primitive's Object row — the default Ground — is a document thing with no
+/// primitive's Object row — a template's Floor — is a document thing with no
 /// blob to draw). A sweep skips those rather than reporting them broken.
 QImage renderObject(Database *db, Project *project, const QString &guid,
                     const std::shared_ptr<jahshaka::engine::Engine> &engine,

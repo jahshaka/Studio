@@ -3,12 +3,13 @@
 // only it has; since users can add a material to it, it needs a reset that
 // clears the user-added material").
 //
-//   1. a new scene stands on THE default floor — found by its document flag
-//      (node.property(id, "defaultFloor")), never by its name — wearing its
-//      OWN material: the checker (the shipped tile, pinned), textureScale 4,
+//   1. a new (Basic) scene stands on ONE template floor — found by its
+//      document flag (node.property(id, "defaultFloor")), never by its name —
+//      wearing its OWN material: the checker (the shipped tile, pinned),
+//      textureScale 25 (one 4 m checker over the 100 m cube face),
 //      roughness 1, metallic 0, and NO SPECULAR (owner 2026-09-13: "the ground
 //      should not be reflective, it should have 0 specular" — the Specular
-//      workflow at ior 1.0 with a black kS, services/defaultfloor.h); the tile
+//      workflow at ior 1.0 with a black kS, services/defaultfloormaterial.h); the tile
 //      is PINNED into the project (the archive carries it, the reset finds it)
 //      but is NOT a tray tile and neither is the floor — both are the
 //      platform's furniture, not something the user added (owner, 2026-09-13,
@@ -45,9 +46,9 @@ function theFloors() {
 }
 function isFloorDefault(id, tag) {
     var m = material.get(id);
-    assert(("" + m.baseColorMap).length > 0 && near(m.textureScale, 4) && near(m.roughness, 1)
+    assert(("" + m.baseColorMap).length > 0 && near(m.textureScale, 25) && near(m.roughness, 1)
            && near(m.metallic, 0),
-           tag + ": the floor wears its own default — the checker, textureScale 4, roughness 1, "
+           tag + ": the floor wears its own default — the checker, textureScale 25, roughness 1, "
            + "metallic 0 (" + J({ map: ("" + m.baseColorMap).length > 0, textureScale: m.textureScale,
                                    roughness: m.roughness, metallic: m.metallic }) + ")");
     assert(m.workflow === 1 && near(m.ior, 1) && String(m.specularColor).toLowerCase() === "#000000",
@@ -69,7 +70,7 @@ assert(proj.length > 10, "project.create");
 var floors = theFloors();
 assert(floors.length === 1, "a new scene has exactly ONE default floor (" + floors.length + ")");
 var floor = floors[0];
-assert(scene.find("Ground") === floor, "... and it is the Ground the outliner shows");
+assert(scene.find("Floor") === floor, "... and it is the Floor the outliner shows");
 var base = isFloorDefault(floor, "a new scene");
 var tile = assets.list({ scope: "project", type: "texture", query: "Tile.png" });
 assert(tile.length === 1, "the floor's checker is PINNED into the project (one row)");

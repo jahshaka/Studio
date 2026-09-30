@@ -47,7 +47,7 @@ assert(bones.indexOf("jointRoot") >= 0 && bones.indexOf("jointTip") >= 0,
 // Anything unrigged says so.
 var unrigged = null;
 for (var j = 0; j < nodes.length; ++j)
-    if (nodes[j].name === "Ground") { unrigged = nodes[j].id; break; }
+    if (nodes[j].name === "Floor") { unrigged = nodes[j].id; break; }
 assert(unrigged !== null, "the default scene's Ground mesh is there to compare against");
 assert(node.skinningMode(unrigged) === "none", "an unrigged MESH reports 'none'");
 assert(node.boneNames(unrigged).length === 0, "... and has no bones");

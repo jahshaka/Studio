@@ -68,13 +68,14 @@ namespace primitives {
 /// may ask for one by name.
 enum class Kind
 {
-    /// The twelve primitives and the Ground: `scene.addPrimitive("Cube")`, the
+    /// The twelve primitives: `scene.addPrimitive("Cube")`, the
     /// Add menu, the tiles, the drop payload.
     Primitive,
     /// PLATFORM FURNITURE — seeded and baked exactly the same way, but never
     /// offered: the Teapot, which stopped being a primitive (owner review R6)
-    /// while four shipped sample scenes still name its mesh. A user cannot add
-    /// one, and it is not a tile.
+    /// while four shipped sample scenes still name its mesh, and the old Ground
+    /// plane the eight samples stand on. A user cannot add one, and it is not a
+    /// tile.
     ///
     /// (The PREVIEW meshes — the asset dock's high-poly sphere, the material
     /// dock's low-poly ball — are deliberately NOT here. A preview subject is
@@ -117,7 +118,6 @@ inline const QVector<Def> &all()
 {
     static const QVector<Def> defs = {
         // name          guid                                      mesh                                    icon
-        { "Ground",      "00000000-0000-0000-0000-000000004012",   ":/models/ground.obj",                  nullptr },
         { "Plane",       "00000000-0000-0000-0000-000000004000",   ":/content/primitives/plane.obj",       "app/modelpresets/plane.png" },
         { "Cube",        "00000000-0000-0000-0000-000000004001",   ":/content/primitives/cube.obj",        "app/modelpresets/cube.png" },
         { "Sphere",      "00000000-0000-0000-0000-000000004002",   ":/content/primitives/sphere.obj",      "app/modelpresets/sphere.png" },
@@ -134,6 +134,11 @@ inline const QVector<Def> &all()
         // being a primitive (owner review R6) but four shipped sample SCENES
         // name its mesh, so it is baked like every other mesh a scene stands on.
         { "Teapot",      "00000000-0000-0000-0000-000000004013",   ":/content/primitives/teapot.obj",      nullptr, Kind::Platform },
+        // A PLATFORM SEED TOO (WORLD-MODEL-1): the old 100 m ground plane stopped
+        // being a primitive — new scenes stand on ordinary cube floors
+        // (services/scenetemplate.h) — but the eight shipped sample scenes still
+        // name its mesh until they are re-authored on a template.
+        { "Ground",      "00000000-0000-0000-0000-000000004012",   ":/models/ground.obj",                  nullptr, Kind::Platform },
     };
     return defs;
 }
@@ -151,6 +156,10 @@ inline QString retiredReason(const QString &name)
                               "were test models, not primitives, and were removed (owner, "
                               "2026-09-18). Import a model, or build it from primitives.")
             .arg(name.trimmed());
+    if (wanted == QLatin1String("ground"))
+        return QStringLiteral("'Ground' is no longer a built-in primitive — new scenes stand on an "
+                              "ordinary cube floor (the Basic and World templates), and the editor's "
+                              "infinite ground is the View Options' Ground plane (owner, 2026-09-30).");
     if (wanted == QLatin1String("teapot"))
         return QStringLiteral("'Teapot' is no longer a built-in primitive — it belongs to the "
                               "sample scenes that use it (owner, 2026-09-18). The samples still "

@@ -22,6 +22,7 @@ For more information see the LICENSE file
 #include <QVector>
 
 #include "data/project.h"   // ProjectTileData (the pending rows)
+#include "services/scenetemplate.h"
 
 #include <optional>
 
@@ -233,12 +234,13 @@ private:
     friend DynamicGrid;     // is this going to be a problem?
 
 signals:
-    /// `empty` = the dialog's "Empty scene" checkbox (owner review R1a). It
+    /// `kind` = the dialog's Template drop-down (WORLD-MODEL-1). It
     /// rides the signal rather than being read back off the dialog because the
     /// dialog is gone by the time the shell builds the scene.
     /// `guid` is the row createProjectShell just made; the shell points the
     /// current project at it only after closing the world that is open.
-    void fileToCreate(const QString &guid, const QString &name, const QString &path, bool empty);
+    void fileToCreate(const QString &guid, const QString &name, const QString &path,
+                      SceneTemplate kind);
     void importProject();
     /// A tile's Export: the project `guid` (the current project is untouched).
     void exportProject(const QString &guid, const QString &name);

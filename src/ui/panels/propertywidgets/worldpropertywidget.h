@@ -46,6 +46,9 @@ public:
     // (and the per-scene EditorData flag behind it) stays the single source
     // of truth; this row is just another face of it.
     void setGridAction(QAction *action);
+    /// The "Ground Plane" row is the second face of the View Options action,
+    /// exactly as "Show Grid" is of the grid's (WORLD-MODEL-1).
+    void setGroundPlaneAction(QAction *action);
 
 public slots:
     void onBackgroundAmbienceChanged(int index);
@@ -64,7 +67,9 @@ private:
     bool loading = false;
     panelundo::SceneRows rows;
     CheckBoxWidget *showGridToggle = nullptr;
+    CheckBoxWidget *showGroundPlaneToggle = nullptr;
     QAction *gridAction = nullptr;
+    QAction *groundPlaneAction = nullptr;
     CheckBoxWidget *sunDiscVisible = nullptr;    // the sun disc, a world setting (§3)
     CheckBoxWidget *sunDiscInProbes = nullptr;   // ... and whether probes capture it
     DragFloatWidget *sunDiscSize = nullptr;      // ... and how wide it is drawn (degrees)

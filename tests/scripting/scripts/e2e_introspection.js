@@ -21,7 +21,8 @@
 //     #9  material.properties(nodeId), including the undeclared *Map slots that
 //         material.set accepts but createProperties never lists.
 //     #10 the nine world set* aliases moving the same field as their nouns.
-//     #16 "ground" reachable from scene.addPrimitive; {count: N} -> [id].
+//     #16 {count: N} -> [id]; "ground" is RETIRED (WORLD-MODEL-1) and refused
+//         by name, saying where the ground went.
 
 function assert(cond, msg) {
     if (!cond) throw new Error("assert failed: " + msg);
@@ -62,16 +63,15 @@ assert(verbCount >= 190, "…and their verbs: " + verbCount);
 var guid = project.create("Introspection Test " + Date.now());
 assert(guid.length > 10, "project.create -> " + guid);
 
-// ---- #16: "ground" is a primitive verb, and {count} batches -----------------
-var groundId = scene.addPrimitive("ground");
-assert(typeof groundId === "string" && groundId.length > 10,
-       "scene.addPrimitive('ground') -> one id string");
-assert(node.info(groundId).name === "Ground",
-       "…and the node it made is named Ground: " + node.info(groundId).name);
-
-// Case and whitespace are normalised the same way every other primitive is.
-var groundId2 = scene.addPrimitive("  GROUND ");
-assert(node.info(groundId2).name === "Ground", "'  GROUND ' normalises to Ground too");
+// ---- #16: "ground" is RETIRED, and {count} batches ---------------------------
+// The 100 m ground plane stopped being a primitive: new scenes stand on an
+// ordinary cube Floor and the editor's infinite ground is a View Options widget.
+// Asked for — in any case or spacing — it is refused BY NAME with where it went.
+var groundGone = refusal(function () { scene.addPrimitive("  GROUND "); },
+                         "the retired 'ground' primitive");
+assert(groundGone.indexOf("no longer a built-in primitive") >= 0 &&
+       groundGone.indexOf("Ground plane") >= 0,
+       "…by name, saying where the ground went: " + groundGone);
 
 var before = scene.nodes().length;
 editor.beginBatch();
@@ -104,7 +104,7 @@ refusal(function () { scene.addPrimitive("cube", { count: 2.5 }); }, "count: 2.5
 refusal(function () { scene.addPrimitive("cube", { count: 9999 }); }, "count: 9999");
 var unknownPrim = refusal(function () { scene.addPrimitive("dodecahedron"); },
                           "an unknown primitive");
-assert(unknownPrim.indexOf("ground") >= 0, "…and the list it prints now names ground");
+assert(unknownPrim.indexOf("ground") < 0, "…and the list it prints no longer names ground");
 
 // ---- #1: node.properties -----------------------------------------------------
 var cubeId = trio[0];

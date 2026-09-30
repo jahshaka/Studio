@@ -325,6 +325,7 @@ void SceneWriter::writeEditorData(QJsonObject& projectObj, EditorData* editorDat
     editorObj["showLightWires"] = editorData->showLightWires;
 	editorObj["showDebugDrawFlags"] = editorData->showDebugDrawFlags;
     editorObj["showGrid"] = editorData->showGrid;
+    editorObj["showGroundPlane"] = editorData->showGroundPlane;
 
     QJsonObject cameraObj;
     auto cam = editorData->editorCamera;
@@ -740,7 +741,7 @@ void SceneWriter::writeMeshData(QJsonObject& sceneNodeObject, iris::MeshNodePtr 
         default: break;
     }
 
-    // THE DEFAULT FLOOR (services/defaultfloor.h) — written only on the floor,
+    // THE DEFAULT FLOOR (services/defaultfloormaterial.h) — written only on the floor,
     // so an absent key means "an ordinary mesh" for every scene ever written.
     if (meshNode->defaultFloor) sceneNodeObject["defaultFloor"] = true;
 

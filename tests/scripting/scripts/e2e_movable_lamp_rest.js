@@ -35,7 +35,7 @@ function slab(name, px, py, pz, sx, sy, sz) {
 }
 var ids = scene.nodes();
 for (var i = 0; i < ids.length; ++i)
-    if (ids[i].name === "Ground") node.setProperty(ids[i].id, "visible", false);
+    if (ids[i].name === "Floor") node.setProperty(ids[i].id, "visible", false);
 slab("Floor",   0, -0.25, 0, 12, 0.5, 12);
 slab("Roof",    0,  6.25, 0, 12, 0.5, 12);
 slab("WallW",  -6,  3,    0, 0.5, 6,  12);

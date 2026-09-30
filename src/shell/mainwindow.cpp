@@ -218,7 +218,10 @@ static const char *kViewportDockStateKey = "viewportDockState";
 #include "services/clipboardservice.h"
 #include "services/thumbnailservice.h"
 #include "services/assetservice.h"
-#include "services/defaultfloor.h"
+#include "services/defaultfloormaterial.h"
+#include "services/scenetemplate.h"
+#include "irisgl/document/physics/physicsproperties.h"
+#include <QJsonDocument>
 #include "ui/style/stylesheet.h"
 #include "ui/style/thememanager.h"
 #include "ui/style/themeroles.h"
@@ -583,31 +586,114 @@ iris::ScenePtr MainWindow::getScene()
     return scene;
 }
 
-iris::ScenePtr MainWindow::createDefaultScene(bool empty)
+iris::ScenePtr MainWindow::createDefaultScene(SceneTemplate kind)
 {
     auto scene = iris::Scene::create();
     // New scenes start on EPIC (POST_CHAIN_SPEC.md §12 decision 8, owner call).
     // Applied through the registry rather than by hardcoding the values here, so
-    // the tier table stays the single place any of them is written.
+    // the tier table stays the single place any of them is written. Every
+    // template, Empty included.
     worldmodes::setMode(scene, worldmodes::Mode::Epic);
 
-    // THE EMPTY SCENE (owner review R1, "Empty scene"): a blank world, and
-    // nothing else. It stops HERE — before the ground, the two lights and the
-    // sky — so what it holds is exactly the root node, the Epic tier and
-    // iris::Scene's own constructor defaults (including its flat 96-grey sky
-    // and shadows on). It is deliberately not "the template with the ground
-    // hidden": a user who asks for empty gets a document a script would have
-    // built, which is the only definition that cannot drift.
-    if (empty) {
+    // EMPTY IS NOTHING (WORLD-MODEL-1, services/scenetemplate.h): the root, the
+    // tier, no lights, no floor and NO SKY. The document has no "no sky" value
+    // (its sky types are all skies), so the absence of one is a single-colour
+    // sky of BLACK: zero radiance on every path — no light, no reflection, no
+    // ambient — and the black a view with no sky shows. It stops here, before
+    // anything is added: a user who asks for empty gets a document a script
+    // would have built.
+    if (kind == SceneTemplate::Empty) {
+        scene->skyType = iris::SkyType::SINGLE_COLOR;
+        scene->skyColor = QColor(0, 0, 0);
+        // BOTH representations, as world.sky("color") writes them: the stored
+        // block is what the writer saves and the panel binds from.
+        QJsonObject noSky;
+        noSky.insert(QStringLiteral("skyColor"), SceneWriter::jsonColor(scene->skyColor));
+        scene->skyData.insert(QStringLiteral("SingleColor"), noSky);
         sceneNodeSelected(scene->rootNode);
         return scene;
     }
 
-    // THE DEFAULT FLOOR (services/defaultfloor.h): the ONE factory, shared
-    // with material.reset's default provider, so what a new scene stands on
-    // and what a reset restores cannot drift apart.
-    auto node = defaultfloor::createNode(db, project);
-    scene->rootNode->addChild(node);
+    // THE FLOOR (WORLD-MODEL-1): an ORDINARY cube, exactly what the Add menu
+    // makes (the shipped, baked cube primitive — so it has its LOD chain, its
+    // cards and its SDF, and Atom draws it), scaled to 100 x 1 x 100 m with
+    // its TOP face at y = 0, wearing the default floor material. It is
+    // re-materialable, movable and deletable like any node, and it SHIPS LOCKED
+    // (owner, 2026-09-15, restated 2026-09-30: not pickable, so a click on the
+    // empty floor selects nothing and a drop on it is refused by name until the
+    // user unlocks it in the outliner); `defaultFloor`
+    // only says which material `material.reset` brings back and what the
+    // Player's "hide the floor" setting hides. It casts no shadow (nothing is
+    // under it, and a 100 m caster would widen the sun's fit to the whole
+    // floor) and is a static box to physics.
+    // THE TILE IS PINNED ONCE PER TEMPLATE (one import-pipeline visit, not one
+    // per floor: World has 25). Each floor still gets its OWN material instance
+    // — they could share one, but then editing one floor's material would edit
+    // all 25, and a floor is an ordinary node; the decode buckets by shader words
+    // anyway, so sharing would buy no draw.
+    QString tileGuid;
+    const QString tilePath = defaultfloormaterial::pinTile(db, project, &tileGuid);
+    auto makeFloor = [this, &tileGuid, &tilePath](const QString &name, const iris::Vec3 &centre) {
+        const QString guid = GUIDManager::generateGUID();
+        iris::MeshNodePtr node = SceneNodeHelper::createBasicMeshNode(
+            QStringLiteral(":/content/primitives/cube.obj"), name, guid, db);
+        // cube.obj is a 2 m cube about its centre.
+        node->setLocalScale(iris::Vec3(scenetemplate::kFloorSize * 0.5f,
+                                       scenetemplate::kFloorThickness * 0.5f,
+                                       scenetemplate::kFloorSize * 0.5f));
+        node->setLocalPos(centre + iris::Vec3(0, -scenetemplate::kFloorThickness * 0.5f, 0));
+        node->setShadowCastingEnabled(false);
+        node->setPickable(false);          // ships LOCKED (above)
+        node->defaultFloor = true;
+        iris::PhysicsProperty physics;
+        physics.objectMass = 0.0f;
+        physics.isStatic = true;
+        physics.objectCollisionMargin = 0.1f;
+        physics.objectRestitution = 0.01f;
+        physics.type = iris::PhysicsType::Static;
+        physics.shape = iris::PhysicsCollisionShape::Cube;
+        node->isPhysicsBody = true;
+        node->physicsProperty = physics;
+
+        const bool realProject = db && project && !project->getProjectGuid().isEmpty();
+        if (realProject) {
+            // The node's own Object row, as addPrimitive writes for any cube.
+            QJsonObject props;
+            props.insert(QStringLiteral("type"), QStringLiteral("builtin"));
+            db->createAssetEntry(guid, name, static_cast<int>(ModelTypes::Object),
+                                 project->getProjectGuid(), project->getProjectGuid(),
+                                 QString(), QString(), QByteArray(),
+                                 QJsonDocument(props).toJson(), QByteArray(), QByteArray());
+        }
+        node->setMaterial(defaultfloormaterial::createUnpinned(tilePath));
+        if (realProject && !tileGuid.isEmpty())
+            db->createDependency(static_cast<int>(ModelTypes::Object),
+                                 static_cast<int>(ModelTypes::Texture), guid, tileGuid,
+                                 project->getProjectGuid());
+        return node;
+    };
+
+    if (kind == SceneTemplate::World) {
+        // WORLD: twenty-five Basic floors, 5 x 5, edge to edge, centred on the
+        // origin — a 500 m square standing in for terrain (Terra later). 500 m
+        // is exactly the dynamic shadows' reach (OgreEngine's shadow far).
+        auto group = iris::SceneNode::create();
+        group->setName(QStringLiteral("World Floor"));
+        group->setPickable(false);         // locked like the floors it holds
+        scene->rootNode->addChild(group);
+        const int n = scenetemplate::kWorldTilesPerSide;
+        const float s = scenetemplate::kFloorSize;
+        int index = 0;
+        for (int row = 0; row < n; ++row) {
+            for (int col = 0; col < n; ++col) {
+                const iris::Vec3 centre((col - (n - 1) * 0.5f) * s, 0.0f,
+                                        (row - (n - 1) * 0.5f) * s);
+                group->addChild(makeFloor(QStringLiteral("Floor %1").arg(++index), centre));
+            }
+        }
+    } else {
+        scene->rootNode->addChild(makeFloor(QStringLiteral("Floor"), iris::Vec3(0, 0, 0)));
+    }
 
     auto dlight = iris::LightNode::create();
     dlight->setLightType(iris::LightType::Directional);
@@ -3098,6 +3184,8 @@ void MainWindow::setupDockWidgets()
     // World blade's "Show Grid" row is a second face of the View Options
     // Ground Grid action (created in setupViewPort, which runs before this)
     sceneNodePropertiesWidget->getWorldPropertyWidget()->setGridAction(gridCheckAction);
+    // ...and its "Ground Plane" row, of the Ground Plane action beside it.
+    sceneNodePropertiesWidget->getWorldPropertyWidget()->setGroundPlaneAction(groundPlaneCheckAction);
     sceneNodePropertiesWidget->setDatabase(db);
     sceneNodePropertiesWidget->setServices(services);
     sceneNodePropertiesWidget->setProject(project);
@@ -3963,6 +4051,16 @@ void MainWindow::setupViewPort()
     connect(gridCheckAction, SIGNAL(toggled(bool)), this, SLOT(toggleGrid(bool)));
     wireFramesMenu->addAction(gridCheckAction);
 
+    // Ground plane (WORLD-MODEL-1): the editor's infinite matte ground, beside
+    // the grid; per-scene persisted, default OFF (EditorData::showGroundPlane).
+    groundPlaneCheckAction = new QAction(QIcon(), "Ground Plane");
+    groundPlaneCheckAction->setObjectName(QStringLiteral("groundPlaneCheckAction"));
+    groundPlaneCheckAction->setCheckable(true);
+    connect(groundPlaneCheckAction, &QAction::toggled, this, [this](bool on) {
+        if (sceneView) sceneView->setShowGroundPlane(on);
+    });
+    wireFramesMenu->addAction(groundPlaneCheckAction);
+
     physicsCheckAction = new QAction(QIcon(), "Physics Debug Overlay");
     physicsCheckAction->setCheckable(true);
     connect(physicsCheckAction, SIGNAL(toggled(bool)), this, SLOT(toggleDebugDrawer(bool)));
@@ -4528,8 +4626,9 @@ void MainWindow::setupDesktop()
 
 	connect(pmContainer, SIGNAL(closeProject()), SLOT(closeProject()));
 	connect(pmContainer, &ProjectManager::fileToCreate,
-	        this, [this](const QString &guid, const QString &name, const QString &path, bool empty) {
-		newProject(guid, name, path, empty);
+	        this, [this](const QString &guid, const QString &name, const QString &path,
+	                     SceneTemplate kind) {
+		newProject(guid, name, path, kind);
 	});
 	connect(pmContainer, &ProjectManager::exportProject, this, &MainWindow::exportProjectWithDialog);
 }
@@ -5670,6 +5769,7 @@ void MainWindow::syncOverlayChecks()
     // action's toggled(), and the round trip ends at the viewport's setter,
     // which ignores a value it already holds.
     if (gridCheckAction) gridCheckAction->setChecked(sceneView->getShowGrid());
+    if (groundPlaneCheckAction) groundPlaneCheckAction->setChecked(sceneView->getShowGroundPlane());
     if (wireCheckAction) wireCheckAction->setChecked(sceneView->getShowLightWires());
     // The stats action's toggled() persists show_fps (setShowFrameStats), so it
     // is blocked: the state it follows was written by whoever moved it.
@@ -5683,6 +5783,8 @@ QVariantMap MainWindow::viewOptionChecks() const
 {
     QVariantMap out;
     if (gridCheckAction) out[QStringLiteral("grid")] = gridCheckAction->isChecked();
+    if (groundPlaneCheckAction)
+        out[QStringLiteral("groundPlane")] = groundPlaneCheckAction->isChecked();
     if (wireCheckAction) out[QStringLiteral("lightWires")] = wireCheckAction->isChecked();
     if (statsCheckAction) out[QStringLiteral("stats")] = statsCheckAction->isChecked();
     if (physicsCheckAction) out[QStringLiteral("physicsDebug")] = physicsCheckAction->isChecked();
@@ -6117,9 +6219,9 @@ void MainWindow::captureEditorDockState()
 // not" could both be true in one session. A default-constructed EditorData IS
 // the statement of what a new scene looks like; applying it here is the same
 // operation the open path performs, with the same three settings.
-void MainWindow::newScene(bool empty)
+void MainWindow::newScene(SceneTemplate kind)
 {
-    auto scene = this->createDefaultScene(empty);
+    auto scene = this->createDefaultScene(kind);
     this->setScene(scene);
     this->sceneView->resetEditorCam();
     resetOverlaysToDefaults();
@@ -6133,6 +6235,7 @@ void MainWindow::resetOverlaysToDefaults()
 {
     const EditorData defaults;
     sceneView->setShowGrid(defaults.showGrid);
+    sceneView->setShowGroundPlane(defaults.showGroundPlane);
     sceneView->setShowLightWires(defaults.showLightWires);
     sceneView->setShowDebugDrawFlags(defaults.showDebugDrawFlags);
     if (physicsCheckAction) physicsCheckAction->setChecked(defaults.showDebugDrawFlags);
@@ -6284,9 +6387,9 @@ void MainWindow::refreshClaudeChatContext()
 // Create button keeps a window that answers. `project.createAsync` — a create
 // that returns before the world is installed — is phase 2b.
 void MainWindow::newProject(const QString &guid, const QString &filename,
-                            const QString &projectPath, bool empty)
+                            const QString &projectPath, SceneTemplate kind)
 {
-    startCreateRun(guid, filename, projectPath, empty);
+    startCreateRun(guid, filename, projectPath, kind);
     waitForOpen();
 }
 
@@ -6297,13 +6400,13 @@ void MainWindow::newProject(const QString &guid, const QString &filename,
 // caller that wants to WATCH a world arrive has to own the frames between the
 // slices, and `newProject` spends them itself inside `waitForOpen`.
 void MainWindow::newProjectAsync(const QString &guid, const QString &filename,
-                                 const QString &projectPath, bool empty)
+                                 const QString &projectPath, SceneTemplate kind)
 {
-    startCreateRun(guid, filename, projectPath, empty);
+    startCreateRun(guid, filename, projectPath, kind);
 }
 
 void MainWindow::startCreateRun(const QString &guid, const QString &filename,
-                                const QString &projectPath, bool empty)
+                                const QString &projectPath, SceneTemplate kind)
 {
     // AN OPEN IN FLIGHT FINISHES FIRST — before this create's ledger begins:
     // its run is the one LoadTimeline holds until the open ends it, so a begin
@@ -6341,9 +6444,9 @@ void MainWindow::startCreateRun(const QString &guid, const QString &filename,
         // slice, and the call that tells the engine a world is arriving.
         openStageBegin();
     } });
-    slices.append({ QStringLiteral("Creating the scene…"), 45, [this, empty]() {
+    slices.append({ QStringLiteral("Creating the scene…"), 45, [this, kind]() {
         LoadTimeline::mark(QStringLiteral("createDefaultScene"));
-        openPendingScene = createDefaultScene(empty);
+        openPendingScene = createDefaultScene(kind);
     } });
     slices.append({ QStringLiteral("Binding the scene…"), 60, [this]() {
         LoadTimeline::mark(QStringLiteral("setScene"));

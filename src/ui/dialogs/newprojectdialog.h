@@ -18,17 +18,19 @@ For more information see the LICENSE file
 #include <QLayout>
 #include <QLineEdit>
 
-class QCheckBox;
+#include "services/scenetemplate.h"
 
-/// What the New Scene dialog answers with. `empty` and `path` are both
-/// options of the one create verb (`project.create(name, {empty, location})`)
+class QComboBox;
+
+/// What the New Scene dialog answers with. `sceneTemplate` and `path` are both
+/// options of the one create verb (`project.create(name, {template, location})`)
 /// — the dialog fills them in, it does not act on them.
 struct ProjectInfo {
     QString projectName;
     QString projectPath;
-    /// The "Empty scene" checkbox: a blank world instead of the template
-    /// (owner review R1a, 2026-09-18). False is the template.
-    bool    empty = false;
+    /// The Template drop-down (WORLD-MODEL-1): Basic unless the user picked
+    /// another.
+    SceneTemplate sceneTemplate = SceneTemplate::Basic;
 };
 
 class SettingsManager;
@@ -53,7 +55,7 @@ public:
     QLineEdit  *nameEdit()     const { return projectNameEdit; }
     QLineEdit  *locationEdit() const { return projectPathEdit; }
     QPushButton *browseButton() const { return browse; }
-    QCheckBox  *emptyCheck()   const { return emptyScene; }
+    QComboBox  *templateCombo() const { return templateBox; }
     QPushButton *createButton() const { return create; }
     /// Sets the location the way Browse does, without a file dialog: the same
     /// one write, so a test drives the button's effect rather than a copy.
@@ -82,7 +84,8 @@ private:
 	QLineEdit* projectPathEdit;
 	QLineEdit* projectNameEdit;
 	QPushButton* browse;
-	QCheckBox* emptyScene;
+	QLabel* templateLabel;
+	QComboBox* templateBox;
 	QPushButton* cancel;
 	QPushButton* create;
 	bool centred = false;

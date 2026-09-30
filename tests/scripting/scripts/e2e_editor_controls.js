@@ -911,11 +911,11 @@ assert(Math.abs(dp2.x - dp.x) > 1.0,
 
 // ---------------------------------------------------------------------------
 // A DROP APPLIES TO WHAT IS UNDER IT — INCLUDING THE FLOOR (owner report via
-// the rig, 2026-09-14: a MATERIAL dragged onto the default Ground was silently
+// the rig, 2026-09-14: a MATERIAL dragged onto the default floor was silently
 // discarded, and a TEXTURE spawned a floating image plane instead of
 // retexturing it).
 //
-// The cause was the target resolution, not the apply: the default Ground is
+// The cause was the target resolution, not the apply: the template's Floor is
 // setPickable(false) BY DESIGN (clicking the floor selects nothing), and the
 // material/texture drops resolved their target with an ordinary pick, so the
 // floor simply was not there. editor.dropTargetAt is that resolution — the

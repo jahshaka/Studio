@@ -53,7 +53,7 @@ For more information see the LICENSE file
 //      that character's tile (L2);
 //   4. a row the EDITOR minted rather than the user — marked by a `type` in
 //      its properties, and there are two of them. A scene node's OWN row: the
-//      `builtin` marker written for the primitives, the default Ground, image
+//      `builtin` marker written for the primitives (a template's Floor among them), image
 //      planes and decals, plus the row minted per particle EMITTER (a
 //      ParticleSystem row with no stored definition — the emitter's recipe
 //      lives in the scene, not in the catalog); a node is not a library asset,

@@ -182,6 +182,13 @@ public:
         mShowGrid = value;
         emit mEvents.overlaysChanged();
     }
+    bool getShowGroundPlane() const override { return mShowGroundPlane; }
+    void setShowGroundPlane(bool value) override
+    {
+        if (mShowGroundPlane == value) return;
+        mShowGroundPlane = value;
+        emit mEvents.overlaysChanged();
+    }
     bool getShowGiVolume() const override { return mShowGiVolume; }
     void setShowGiVolume(bool value) override { mShowGiVolume = value; }
     /// The shadow-atlas inspector (SHADOW_TOOLING_SPEC.md §4.4). Not persisted,
@@ -383,6 +390,7 @@ public:
     /// node refuses the drop by name rather than swallowing it. Null when the
     /// ray hits nothing.
     iris::SceneNodePtr dropTargetAt(const QPointF &point, bool *locked = nullptr) override;
+    iris::SceneNodePtr clickTargetAt(const QPointF &point) override { return pickAt(point, true); }
     /// Toasts "<node> is locked — unlock it to apply <what>" and answers true
     /// when the drop must stop there.
     bool refuseDropOnLocked(const iris::SceneNodePtr &node, const QString &what);
@@ -751,6 +759,7 @@ private:
     // reflection probes. The canonical orthographic views force it on with a
     // view-facing plane regardless of this flag; see gridStateForView().
     bool mShowGrid = false;
+    bool mShowGroundPlane = false;   ///< EditorData::showGroundPlane's third face
     /// GI volume boxes (fix 9). Diagnostic, default off, not persisted — it is
     /// a thing you turn on while chasing a lighting question.
     bool mShowGiVolume = false;

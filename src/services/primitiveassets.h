@@ -13,8 +13,8 @@ For more information see the LICENSE file
 #define PRIMITIVEASSETS_H
 
 // EVERY ASSET IS AN ATOM ASSET (SPECS/atom/A2_HONEST_GEOMETRY_AND_EVERY_ASSET_
-// DESIGN.md §2.1, ATOM P2). The twelve primitives, the default Ground and the
-// Teapot the samples stand on are BAKED LIBRARY ASSETS, created once per library by the ONE
+// DESIGN.md §2.1, ATOM P2). The twelve primitives, and the old Ground and
+// Teapot the shipped samples still name, are BAKED LIBRARY ASSETS, created once per library by the ONE
 // import pipeline (services/import: sniff -> validate -> convert/bake -> store
 // -> register) from the files the app ships, with the reserved guid they have
 // always had (src/data/primitives.h is the SEED LIST).
@@ -70,7 +70,7 @@ namespace primitives { struct Def; }
 namespace PrimitiveAssets
 {
 
-/// THE BAKED MESH for a seed, by its NAME ("Cube", "Ground") or by its seed
+/// THE BAKED MESH for a seed, by its NAME ("Cube", "Teapot") or by its seed
 /// PATH (":/content/primitives/cube.obj", an absolute app-folder path), held for
 /// the life of the process after the first read. RESOLVE ONLY: null when the
 /// library has not seeded that row or its bake cannot be read by this build — the

@@ -101,8 +101,8 @@ Batch gather(Database *db, const QString &projectGuid, const QVector<AssetRecord
 
 /// Rule 4: a row the EDITOR minted, not the user. Two markers, one test — a
 /// non-empty `type` in the properties:
-///   "builtin"  a scene node's own row: the primitives, the default Ground,
-///              image planes, decals;
+///   "builtin"  a scene node's own row: the primitives (a template's Floor
+///              among them), image planes, decals;
 ///   "platform" a file the app ships that a platform-owned node needs and the
 ///              editor pinned by itself — the default floor's checker
 ///              (services/shippedassets.h Ownership::Platform).

@@ -27,8 +27,8 @@
 // kHelperBit out of every scene pass in that view's workspace — the grid, the
 // light/camera/decal wires and icons, the gizmo, the selection shell and the GI
 // volume boxes are excluded from the Player's picture and from nothing else.
-// The ground's horizon is a BACKDROP (Scene::setNodeBackdrop), not furniture,
-// and stays.
+// (The editor's Ground plane widget is a BACKDROP, not furniture; the Player
+// turns it off itself, EnginePlayerScene's sync.)
 //
 // No GL, no Ogre, no QWidget — so it is testable headless with an offscreen
 // View (tests/player). EnginePlayerView wraps it.

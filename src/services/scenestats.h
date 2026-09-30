@@ -18,7 +18,7 @@ For more information see the LICENSE file
 // they were. The honest answer was that the readout was Ogre's per-frame
 // `mFaceCount` — every triangle the renderer handed the GPU across EVERY pass
 // in that frame: the ground drawn once for the picture and a second time for
-// the SSR depth pre-pass, the horizon plane twice, the light icons, the sky
+// the SSR depth pre-pass, the Ground plane widget twice, the light icons, the sky
 // quad, the sun disc, one full-screen quad per post step and the HUD's own
 // glyphs. A true number, an honest engineering number, and NOT the answer to
 // "what is in my scene".
@@ -43,7 +43,7 @@ For more information see the LICENSE file
 //     with a line primitive (R4a's measurement) — the two numbers agree about
 //     what a triangle is.
 //   * NOTHING THE MIRROR OWNS. The grid, the light icons and their range
-//     wires, the sun disc, the 2 km horizon plane, the gizmos, the selection
+//     wires, the sun disc, the Ground plane widget, the gizmos, the selection
 //     outline and the VR helpers are engine-side objects that exist in no
 //     document, so a document walk excludes them by construction rather than
 //     by a list of names somebody has to maintain.

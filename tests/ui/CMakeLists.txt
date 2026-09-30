@@ -1666,9 +1666,9 @@ set_tests_properties(ui.import_dialog PROPERTIES
 jah_no_display(ui.import_dialog)
 
 # ui.new_project_dialog — THE NEW SCENE DIALOG (owner review R1, lane
-# SMALL-UI-A): parented and centred on its parent window, an Empty scene
-# checkbox and a Browse button that both ride the answer, and wide enough for
-# the button. The verb half — project.create(name, {empty, location}) — is
+# SMALL-UI-A; WORLD-MODEL-1): parented and centred on its parent window, a
+# Template drop-down and a Browse button that both ride the answer, and wide
+# enough for the button. The verb half — project.create(name, {template, location}) — is
 # scripting.e2e.new_scene; this is the part a verb cannot see. Widgets only.
 add_executable(test_new_project_dialog test_new_project_dialog.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/dialogs/newprojectdialog.cpp

@@ -271,8 +271,8 @@ Result reset(Database *db, SettingsManager *settings, const QString &projectsRoo
 
     // THE PRIMITIVES, ALWAYS AND SYNCHRONOUSLY (ATOM P2,
     // services/primitiveassets.h). Unlike the material presets these are not a
-    // warm-up: the twelve primitives, the Ground every new scene stands on and
-    // the Teapot the samples name are BAKED LIBRARY ASSETS, and a catalog that
+    // warm-up: the twelve primitives (the cube every template floor is) and the
+    // Ground and Teapot the samples name are BAKED LIBRARY ASSETS, and a catalog that
     // was just dropped and recreated holds none of them — so a reset left the
     // very next scene with a floor that had no geometry. It is not gated on the
     // driven-session rule for the same reason the launch seed is not: these rows
