@@ -377,33 +377,6 @@ int SceneEditService::refreshAssetMeshes(const QString &meshGuid, const QString 
     return swapped;
 }
 
-void SceneEditService::addMesh(const QString &path, bool ignore, iris::Vec3 position)
-{
-    if (path.isEmpty()) return;
-
-    // No SceneSource: the loader owns a local importer when none is passed
-    // (the old `new` here leaked the whole parsed scene per added mesh).
-    auto node = iris::MeshNode::loadAsSceneFragment(path, [](iris::MeshPtr mesh, iris::MeshMaterialData& data)
-    {
-        return iris::MaterialPtr(BuiltinMaterials::fromMeshData(data));
-    });
-
-    // model file may be invalid so null gets returned
-    if (!node) return;
-
-    // rename animation sources to relative paths
-    auto relPath = QDir(project->folderPath).relativeFilePath(path);
-    for (auto anim : node->getAnimations()) {
-        if (!!anim->skeletalAnimation)
-            anim->skeletalAnimation->source = relPath;
-    }
-
-    node->setLocalPos(position);
-
-    // todo: load material data
-    addNodeToScene(node, ignore);
-}
-
 void SceneEditService::addMaterialMesh(const QString &path, bool ignore, iris::Vec3 position,
                                        const QString &guid, const QString &assetName,
                                        surfaceplacement::Placement placement)

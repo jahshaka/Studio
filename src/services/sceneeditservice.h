@@ -203,10 +203,6 @@ public:
     bool setParticleTexture(const iris::ParticleSystemNodePtr &emitter,
                             const QString &textureGuid);
 
-    /// Imports a mesh file straight into the scene. The path must be a real
-    /// file — the file dialog stays in the shell.
-    void addMesh(const QString &path, bool ignore = false, iris::Vec3 position = iris::Vec3());
-
     /// REIMPORT'S OPEN-SCENE HALF (SPECS/IMPORT_DIALOG_SPEC.md §5): swaps every
     /// MeshNode in the open scene that was built from `meshGuid` to the
     /// geometry that guid's bake now holds, and returns how many moved.

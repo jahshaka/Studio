@@ -140,6 +140,10 @@ public:
     /// `prewarm` (optional) carries the model files a worker thread already
     /// parsed (irisgl/import/meshprewarm.h) — the reader then builds meshes
     /// out of ready iris::SceneSource parses instead of running the importer on this thread.
+    /// The model files the LAST readProjectScene found with no current bake
+    /// (FORWARD-ONLY-1): missing from the open, never parsed. The shell raises
+    /// one `model.missing` scene issue per file after it binds the scene.
+    QStringList missingModels() const { return mMissingModels; }
     iris::ScenePtr readProjectScene(EditorData **editorData,
                                     const iris::MeshPrewarmPtr &prewarm = iris::MeshPrewarmPtr());
 
@@ -215,6 +219,7 @@ private:
     UndoService *undo;
     std::function<iris::ScenePtr()> sceneProvider;
     std::function<void()> mPreWrite;
+    QStringList mMissingModels;
 };
 
 #endif // PROJECTSERVICE_H

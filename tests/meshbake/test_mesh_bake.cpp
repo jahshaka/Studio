@@ -74,6 +74,8 @@
 #include "services/assetstorepaths.h"
 #include "services/import/assetimportservice.h"
 #include "services/meshbakestore.h"
+#include "irisgl/import/meshprewarm.h"
+#include "irisgl/import/parsecensus.h"
 #include "services/primitiveassets.h"
 #include "data/primitives.h"
 #include "bridge/previewmesh.h"
@@ -739,8 +741,8 @@ static void storeIntegration()
     CHECK_LOUD(MeshBakeStore::modelSourcesNeedingBake(conn, storeRoot.path()).isEmpty(),
                "assets.bakeAll's dry run reports nothing left to bake after an import");
 
-    // A CORRUPT bake on disk must make the resolver refuse it, so the open
-    // path parses instead of drawing nothing.
+    // A CORRUPT bake on disk must make the resolver refuse it (FORWARD-ONLY-1:
+    // the open shows the model missing — it never parses in its place).
     {
         QFile file(plan.bakePath);
         CHECK(file.open(QIODevice::ReadWrite), "bake object opened for corruption");
@@ -755,6 +757,21 @@ static void storeIntegration()
                "a truncated bake object reads as a miss, not as geometry");
     CHECK_LOUD(!MeshBakeStore::modelSourcesNeedingBake(conn, storeRoot.path()).isEmpty(),
                "a corrupt bake puts the asset back on bakeAll's list");
+    // THE REFUSAL, through the open's own reader: no model, and no parse.
+    {
+        MeshBakeStore::clear();
+        const int parsesBefore = iris::ParseCensus::snapshot().workerParses
+                                 + iris::ParseCensus::snapshot().mainThreadParses;
+        CHECK_LOUD(MeshBakeStore::load(sourcePath) == nullptr,
+                   "MeshBakeStore::load REFUSES the stale bake (null, no geometry)");
+        CHECK_LOUD(iris::ParseCensus::snapshot().workerParses
+                           + iris::ParseCensus::snapshot().mainThreadParses == parsesBefore,
+                   "...and nothing parsed the source in its place");
+        iris::MeshPrewarm prewarm;
+        prewarm.parse(MeshBakeStore::planFor(conn, storeRoot.path(), sourcePath));
+        CHECK_LOUD(!prewarm.baked(sourcePath) && prewarm.contains(sourcePath),
+                   "the open's prewarm records a MISS for it (bakes only, no parse behind it)");
+    }
 
     // And bakeAll rebuilds it — through the SAME per-asset entry point the
     // single-asset path uses, which must find the model among the asset's

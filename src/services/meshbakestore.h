@@ -17,8 +17,9 @@ For more information see the LICENSE file
 // irisgl/import/meshbake.h knows how to BUILD and READ a bake; it knows
 // nothing about the store. This is the piece that answers "where is the bake
 // for this model file, and what fingerprint must it carry" out of the CAS, and
-// that writes one for an asset that has none (the lazy re-bake of an existing
-// library, and the `assets.bakeAll` verb behind it).
+// that writes one for an asset that has none (an archive import's bake, and the
+// `assets.bakeAll` verb). A model with no current bake is NOT parsed instead:
+// the open shows it missing (FORWARD-ONLY-1).
 //
 // TWO CONSUMERS, ONE RESULT. A world open used to parse every model TWICE —
 // once for the document (SceneReader::getMesh) and once for the library's
@@ -92,7 +93,7 @@ iris::PrewarmItem planFor(const QString &sourcePath, const QString &assetGuid = 
 
 /// Resolve + read. Null when there is no usable bake — every failure mode
 /// (absent, stale fingerprint, wrong version, truncated, corrupt) is a null
-/// return and the caller parses as it always did.
+/// return, and the caller shows the model missing (never a parse).
 ///
 /// Cached while a scope is open, so the scene reader and the session
 /// registration share ONE deserialized model.
@@ -189,37 +190,10 @@ QStringList modelSourcesNeedingBake(QSqlDatabase conn, const QString &root);
 
 /// Bake ONE model FILE (a resolved store object) and record it under every
 /// asset row that names that content. Parses the file — this is the expensive
-/// direction, for the lazy re-bake and `assets.bakeAll`.
+/// direction, for `assets.bakeAll` and Preferences' bake-all.
 bool bakeSource(QSqlDatabase conn, const QString &root, const QString &sourcePath,
                 QString *errorOut, const QString &assetGuid = QString());
 
-// --- Lazy re-bake (MESH_BAKE_SPEC phase 1, "existing libraries") -----------
-//
-// A library that predates the bake — every project imported from an archive,
-// which is how all five sample worlds arrive — has none. Rather than make the
-// user find a button, the first open of such a world queues the bake: the
-// parse and the serialize happen on a worker AFTER the world is on screen,
-// and the catalog write is one small UI-thread step per model. The open that
-// pays for it is the one that was already going to parse; every open after it
-// is a load.
-
-/// Queue the bakes in `targets` that are not fresh. Returns how many were
-/// queued. Safe to call with targets that are already baked or queued.
-int scheduleBakes(const QVector<BakeTarget> &targets);
-
-/// Path-only form, for the OPEN-TIME warm-up: the scene's model paths with no
-/// row attached, so each gets that content's DEFAULT settings variant. That is
-/// the right answer there — an open warms what it just read — and
-/// `assets.bakeAll` is the sweep that covers every row.
-int scheduleBakes(const QStringList &paths);
-
-/// How many bakes are queued or in flight (tests, and the honest answer for a
-/// status line).
-int pendingBakes();
-
-/// Drop the queue and stop scheduling. Called at shutdown; a bake in flight
-/// finishes into its own temp dir and is simply discarded.
-void cancelPendingBakes();
 }   // namespace MeshBakeStore
 
 #endif   // MESHBAKESTORE_H

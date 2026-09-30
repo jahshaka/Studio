@@ -148,18 +148,6 @@ QImage ThumbnailGenerator::renderEngineRequest(EngineThumbnailRenderer &renderer
         return renderer.renderNode(node, size);
     }
 
-    if (request.type == ThumbnailRequestType::Mesh) {
-        iris::SceneSource source;   // owns the assimp importer for the load's duration
-        auto node = iris::MeshNode::loadAsSceneFragment(request.path,
-            [](iris::MeshPtr, iris::MeshMaterialData &data)
-        {
-            // Colours AND texture maps — the asset's real look, not a grey stand-in.
-            return EngineThumbnailRenderer::previewMaterialForMeshData(data);
-        }, &source);
-        if (!node) return QImage();
-        return renderer.renderNode(node, size);
-    }
-
     // (THE SHADER REQUEST TYPE'S BODY IS GONE — phase 2's Deletes. It rendered
     // a ModelTypes::Shader row through parseShaderAsPbr; the module asks for a
     // MATERIAL render of its one row now, and nothing else ever asked for this

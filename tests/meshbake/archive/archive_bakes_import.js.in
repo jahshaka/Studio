@@ -1,0 +1,29 @@
+// meshbake.archive_bakes, run 1 (see archive_bakes.sh).
+function assert(cond, msg) {
+    if (!cond) { console.log("FAIL: " + msg); throw new Error("assert failed: " + msg); }
+    console.log("ok: " + msg);
+}
+var SAMPLES = ["Matcaps", "Skeletal Animation"];
+var guids = [];
+for (var i = 0; i < SAMPLES.length; ++i) {
+    var imported = project.importArchive("@SOURCE_DIR@/scenes/" + SAMPLES[i] + ".zip");
+    assert(imported && imported.guid, "importArchive(" + SAMPLES[i] + ")");
+    guids.push(imported.guid);
+}
+// EVERY MODEL THE ARCHIVES BROUGHT HAS A CURRENT BAKE — the import baked them.
+var need = assets.bakeAll({ dryRun: true });
+assert(need.needed === 0, "after the imports no stored model needs a bake (" + JSON.stringify(need) + ")");
+
+for (var g = 0; g < guids.length; ++g) {
+    app.openStats({ reset: true });
+    assert(project.open(guids[g]) === true, "project.open(" + SAMPLES[g] + ")");
+    var s = app.openStats();
+    assert(s.uiThreadParses === 0 && s.workerParses === 0,
+           SAMPLES[g] + ": the open parsed NOTHING (" + JSON.stringify(s) + ")");
+    assert(s.bakeHits > 0 && s.bakeMisses === 0,
+           SAMPLES[g] + ": every model came from its bake (hits " + s.bakeHits + ", misses " + s.bakeMisses + ")");
+    var issues = editor.checkScene().list || [];
+    var missing = issues.filter(function (x) { return x.kind === "model.missing"; });
+    assert(missing.length === 0, SAMPLES[g] + ": no model is missing");
+    assert(project.close() === true, "project.close");
+}

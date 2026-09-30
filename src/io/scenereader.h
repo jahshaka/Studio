@@ -55,7 +55,14 @@ class SceneReader : public AssetIOBase
 	iris::MeshPrewarmPtr prewarm;
     // We can choose to load assets from a flat file or from those already cached
     // TODO - also cache assets in the viewer
+    QStringList missingModelPaths;
+
 public:
+    /// The model files this reader found with NO current bake (FORWARD-ONLY-1):
+    /// they are missing from the open — never parsed — and the caller reports
+    /// them as scene issues.
+    const QStringList &missingModels() const { return missingModelPaths; }
+
 	void setDatabaseHandle(Database *db) {
 		this->handle = db;
 	}

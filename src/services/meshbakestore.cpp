@@ -17,14 +17,11 @@ For more information see the LICENSE file
 #include <QJsonObject>
 #include <QPair>
 #include <QFileInfo>
-#include <QFutureWatcher>
 #include <QHash>
 #include <QSet>
 #include <QMutex>
 #include <QSqlQuery>
 #include <QTemporaryDir>
-#include <QTimer>
-#include <QtConcurrent/QtConcurrentRun>
 #include <memory>
 
 #include "data/database/database.h"
@@ -297,7 +294,6 @@ iris::PrewarmItem planFor(QSqlDatabase conn, const QString &root, const QString 
     // bumped the producer id. read() validates the fingerprint, so the scan
     // stops at the first row that is actually the current generation.
     const QString settings = settingsHashFor(conn, root, sourcePath, assetGuid);
-    item.transform = transformFor(conn, root, sourcePath, assetGuid);
     QSqlQuery query(conn);
     query.prepare("SELECT AF.oid, F.ext FROM asset_files AF "
                   "LEFT JOIN files F ON AF.oid = F.oid "
@@ -307,40 +303,14 @@ iris::PrewarmItem planFor(QSqlDatabase conn, const QString &root, const QString 
     if (!query.exec()) return item;
 
     const QString fingerprint = iris::MeshBake::fingerprintFor(sourceOid, settings);
-    int stale = 0;
     while (query.next()) {
         const QString path = AssetStorePaths::objectPathIn(root, query.value(0).toString(),
                                                            query.value(1).toString());
         if (!QFileInfo::exists(path)) continue;
-        if (!iris::MeshBake::headerMatches(path, fingerprint)) { ++stale; continue; }
+        if (!iris::MeshBake::headerMatches(path, fingerprint)) continue;
         item.bakePath = path;
         item.bakeFingerprint = fingerprint;
         return item;
-    }
-    // SAY SO. A bake exists for this model but was produced by a different
-    // importer generation, so the open path silently falls back to parsing the
-    // source — and since 2026-09-08 that parse can produce DIFFERENT GEOMETRY
-    // from the bake it replaced: iris::ImportFlags::Canonical gained
-    // aiProcess_GlobalScale, so an FBX that declares centimetres now imports
-    // 100x smaller than the bake in the library holds. Ships-as-new-app: there
-    // is no migration, and the node transforms in an already-saved scene were
-    // authored against the old size, so RE-IMPORT is the honest path. This
-    // line is how the owner finds out, once per model per session, instead of
-    // wondering why an old scene's character shrank.
-    if (stale > 0) {
-        static QSet<QString> told;
-        static QMutex tellLock;
-        QMutexLocker locked(&tellLock);
-        if (!told.contains(sourceOid)) {
-            told.insert(sourceOid);
-            irisLog(QStringLiteral("mesh bake: '%1' has %2 bake(s) from an older importer "
-                                   "generation — parsing the source instead. If this model is an "
-                                   "FBX imported before the unit-scale fix (2026-09-08) it will "
-                                   "come in at its file's declared units, which is NOT the size "
-                                   "the saved scene was built around: re-import it.")
-                        .arg(QFileInfo(sourcePath).fileName())
-                        .arg(stale));
-        }
     }
     return item;
 }
@@ -510,162 +480,6 @@ bool bakeSource(QSqlDatabase conn, const QString &root, const QString &sourcePat
     const QString bakePath = QDir(scratch.path()).filePath(bakeName);
     if (!iris::MeshBake::write(bakePath, model, errorOut)) return false;
     return recordBake(conn, root, sourceOid, bakePath, errorOut);
-}
-
-// --- Lazy re-bake -----------------------------------------------------------
-
-namespace
-{
-
-QVector<BakeTarget> sQueue;         ///< UI thread only; a PAIR, not a path
-bool sBakeInFlight = false;         ///< UI thread only
-bool sCancelled = false;
-
-/// What a worker produced: the temp dir that holds the blob (kept alive with
-/// the result) and the path inside it.
-struct BakeOutput
-{
-    std::shared_ptr<QTemporaryDir> dir;
-    QString path;
-    QString sourceOid;
-    /// The blob, already copied into the store and already flushed, ON THE
-    /// BAKE WORKER (FSYNC-2). The UI-thread tail below used to do both: the
-    /// bake is written into a QTemporaryDir under /tmp, so the store ingest
-    /// was always a cross-device COPY plus an fsync — 351 ms of frozen window
-    /// measured inside an avatar import, for a file the worker had in its
-    /// hands.
-    AssetCas::Staged staged;
-};
-
-void pumpQueue();
-
-void startNext()
-{
-    if (sBakeInFlight || sQueue.isEmpty() || sCancelled) return;
-    if (!QCoreApplication::instance()) { sQueue.clear(); return; }
-
-    const BakeTarget target = sQueue.takeFirst();
-    const QString sourcePath = target.path;
-    const QString root = AssetStorePaths::root();
-    const QString sourceOid = oidFromStorePath(root, sourcePath);
-    if (sourceOid.isEmpty()) { pumpQueue(); return; }
-    if (isFresh(QSqlDatabase::database(), root, sourcePath, target.assetGuid)) {
-        pumpQueue();
-        return;
-    }
-
-    sBakeInFlight = true;
-    auto *watcher = new QFutureWatcher<BakeOutput>();
-    QObject::connect(watcher, &QFutureWatcherBase::finished, QCoreApplication::instance(),
-                     [watcher]() {
-        const BakeOutput out = watcher->result();
-        watcher->deleteLater();
-        sBakeInFlight = false;
-        AssetCas::Staged staged = out.staged;
-        if (!out.path.isEmpty() && !sCancelled) {
-            QString error;
-            if (recordBake(QSqlDatabase::database(), AssetStorePaths::root(),
-                           out.sourceOid, out.path, &error, &staged)) {
-                clear();
-                irisLog("mesh bake: baked " + out.sourceOid.left(12));
-            } else if (!error.isEmpty()) {
-                irisLog("mesh bake: " + error);
-            }
-        }
-        // A bake that was cancelled, failed, or never recorded leaves the temp
-        // the worker staged; it names no object and no row (discardStaged is a
-        // no-op once commitStaged has renamed it).
-        QVector<AssetCas::Staged> leftover{ staged };
-        AssetCas::discardStaged(leftover);
-        pumpQueue();
-    });
-    // The PARSE runs on a worker: it is the cost the bake exists to remove and
-    // it must not be paid on the UI thread just because it is being removed.
-    // The lambda touches nothing but its captured values.
-    // The settings are resolved HERE, on the UI thread, because the lookup is a
-    // catalog read and QSqlDatabase connections are per-thread; the worker gets
-    // plain values (the same split planFor/PrewarmItem already uses).
-    const QString settings =
-        settingsHashFor(QSqlDatabase::database(), root, sourcePath, target.assetGuid);
-    const iris::ImportTransform xf =
-        transformFor(QSqlDatabase::database(), root, sourcePath, target.assetGuid);
-    // The store root is read HERE, on the UI thread, and handed to the worker
-    // as a value — the same split ProjectArchiver's staging uses.
-    const QString storeRoot = root;
-    watcher->setFuture(QtConcurrent::run([sourcePath, sourceOid, settings, xf, storeRoot]() -> BakeOutput {
-        BakeOutput out;
-        out.sourceOid = sourceOid;
-        auto dir = std::make_shared<QTemporaryDir>();
-        if (!dir->isValid()) return out;
-        iris::MeshBake::Model model = iris::MeshBake::buildFromFile(
-            sourcePath, iris::MeshBake::fingerprintFor(sourceOid, settings), dir->path(), xf);
-        if (!model.valid) return out;
-        const QString path =
-            QDir(dir->path()).filePath(iris::MeshBake::fileNameFor(sourceOid, settings));
-        QString error;
-        if (!iris::MeshBake::write(path, model, &error)) return out;
-        out.dir = dir;
-        out.path = path;
-        // The store's half of the write, here and not on the UI thread: hash,
-        // copy into objects/ under a temp name, flush. The tail renames it.
-        out.staged.srcPath = path;
-        out.staged.role = iris::MeshBake::casRole();
-        out.staged.name = QFileInfo(path).fileName();
-        if (AssetCas::stage(storeRoot, out.staged)) {
-            QVector<AssetCas::Staged> batch{ out.staged };
-            AssetCas::flushStaged(batch);
-            out.staged = batch.first();
-        } else {
-            out.staged = AssetCas::Staged();   // the tail ingests synchronously
-        }
-        return out;
-    }));
-}
-
-void pumpQueue()
-{
-    if (sCancelled || sQueue.isEmpty()) return;
-    QTimer::singleShot(0, QCoreApplication::instance(), []() { startNext(); });
-}
-
-}   // namespace
-
-int scheduleBakes(const QVector<BakeTarget> &targets)
-{
-    if (!QCoreApplication::instance()) return 0;
-    sCancelled = false;
-    QSqlDatabase conn = QSqlDatabase::database();
-    const QString root = AssetStorePaths::root();
-    int queued = 0;
-    for (const BakeTarget &target : targets) {
-        if (target.path.isEmpty()) continue;
-        bool already = false;
-        for (const BakeTarget &q : sQueue)
-            if (q.path == target.path && q.assetGuid == target.assetGuid) { already = true; break; }
-        if (already) continue;
-        if (oidFromStorePath(root, target.path).isEmpty()) continue;
-        if (isFresh(conn, root, target.path, target.assetGuid)) continue;
-        sQueue.append(target);
-        ++queued;
-    }
-    if (queued) pumpQueue();
-    return queued;
-}
-
-int scheduleBakes(const QStringList &paths)
-{
-    QVector<BakeTarget> targets;
-    targets.reserve(paths.size());
-    for (const QString &path : paths) targets.append({ path, QString() });
-    return scheduleBakes(targets);
-}
-
-int pendingBakes() { return sQueue.size() + (sBakeInFlight ? 1 : 0); }
-
-void cancelPendingBakes()
-{
-    sCancelled = true;
-    sQueue.clear();
 }
 
 QVector<BakeTarget> modelBakesNeeded(QSqlDatabase conn, const QString &root,

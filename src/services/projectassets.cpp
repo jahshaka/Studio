@@ -155,20 +155,13 @@ bool ProjectAssets::registerSessionAsset(const QString &guid, Database *db,
     switch (static_cast<ModelTypes>(memberRecord.type)) {
         case ModelTypes::Object: {
             if (path.isEmpty()) break;
-            // The SECOND parse of the same model on an open: the session
-            // entry for a pinned Object is a parsed scene fragment. The
-            // threaded open hands us the scene already parsed on a worker
-            // (irisgl/import/meshprewarm.h) — then this is a build, not a
-            // parse.
             const auto makeMaterial = [](iris::MeshPtr, iris::MeshMaterialData &data) {
                 return iris::MaterialPtr(BuiltinMaterials::fromMeshData(data));
             };
             // THE BAKE first (MESH_BAKE_SPEC phase 1): the SAME deserialized
             // model the scene reader used this open — one file read served
             // both consumers, where the old path parsed the file twice.
-            // The counter spans the resolve, the read AND the fragment build —
-            // the whole of what the parse branch below costs, so the two are
-            // directly comparable in the ledger.
+            // The counter spans the resolve, the read AND the fragment build.
             LoadTimeline::Accumulate bakeAttempt(QStringLiteral("bake:sessionAsset"));
             // The prewarm is planned from PATHS, which is this content's
             // DEFAULT settings variant; a member whose row asks for other
@@ -179,7 +172,6 @@ bool ProjectAssets::registerSessionAsset(const QString &guid, Database *db,
             iris::BakedModelPtr baked = (prewarm && prewarmUsable) ? prewarm->baked(path)
                                                                    : iris::BakedModelPtr();
             if (!baked) baked = MeshBakeStore::load(path, member);
-            if (!baked) bakeAttempt.stop();   // a miss must not bank the parse below
             if (baked) {
                 auto node = iris::MeshBake::buildFragment(*baked, path, makeMaterial);
                 if (!node) break;
@@ -194,38 +186,8 @@ bool ProjectAssets::registerSessionAsset(const QString &guid, Database *db,
                 break;
             }
 
-            const iris::SceneSource *ready =
-                (prewarm && prewarmUsable) ? prewarm->source(path) : nullptr;
-            if (ready) {
-                LoadTimeline::Accumulate hit(QStringLiteral("prewarm:sessionAssetHit"));
-                auto node = iris::MeshNode::loadAsSceneFragment(path, *ready, makeMaterial);
-                if (!node) break;
-                const auto definition = QJsonDocument::fromJson(db->fetchAssetData(member)).object();
-                AssetHelper::updateNodeMaterial(node, definition, db);
-                auto *asset = new AssetNodeObject;
-                asset->assetGuid = member;
-                asset->fileName = memberRecord.name;
-                asset->path = path;
-                asset->setValue(QVariant::fromValue(node));
-                AssetManager::addAsset(asset);
-                break;
-            }
-            LoadTimeline::Accumulate parse(QStringLiteral("assimp:sessionAsset"));
-            // The asset's import transform (IMPORT-1): this parse stands in for
-            // the bake and must produce the geometry the bake holds.
-            auto node = iris::MeshNode::loadAsSceneFragment(
-                path, [](iris::MeshPtr, iris::MeshMaterialData &data) {
-                    return iris::MaterialPtr(BuiltinMaterials::fromMeshData(data));
-                }, nullptr, nullptr, QString(), MeshBakeStore::transformFor(path, member));
-            if (!node) break;
-            const auto definition = QJsonDocument::fromJson(db->fetchAssetData(member)).object();
-            AssetHelper::updateNodeMaterial(node, definition, db);
-            auto *asset = new AssetNodeObject;
-            asset->assetGuid = member;
-            asset->fileName = memberRecord.name;
-            asset->path = path;
-            asset->setValue(QVariant::fromValue(node));
-            AssetManager::addAsset(asset);
+            // No current bake: the model is missing from this open, and the
+            // library entry with it (FORWARD-ONLY-1 — never a parse).
             break;
         }
         case ModelTypes::Texture: {

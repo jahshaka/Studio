@@ -1844,37 +1844,15 @@ void SceneReader::extractAssetsFromAssimpScene(QString filePath, const QString &
             animations.insert(cacheKey, animationss);
             return;
         }
-        bakeAttempt.stop();   // a miss must not bank the parse below
-
-        // The threaded open parses these on a worker BEFORE the reader runs
-        // (irisgl/import/meshprewarm.h): consume that and this whole stage is
-        // a copy out of a parsed scene instead of a parse.
-        if (prewarm && prewarmUsable) {
-            if (const iris::SceneSource *ready = prewarm->source(filePath)) {
-                LoadTimeline::Accumulate hit(QStringLiteral("prewarm:sceneReaderHit"));
-                iris::GraphicsHelper::loadAllMeshesAndAnimationsFromSource(*ready, filePath,
-                                                                          meshList, animationss);
-                meshes.insert(cacheKey, meshList);
-                assimpScenes.insert(cacheKey);
-                animations.insert(cacheKey, animationss);
-                return;
-            }
-        }
-
-        // ONE parse per distinct file per open — and it IS a parse: no bake
-        // and no prewarm served this file, so it is read from the store
-        // (measured by this counter; the ledger key keeps its historical
-        // name). The session store used to be searched for an already
-        // parsed scene first, but nothing has registered one there since the
-        // asset pipeline — every Object entry is a built fragment — so the
-        // search always fell through to this read.
-        LoadTimeline::Accumulate parse(QStringLiteral("assimp:sceneReader"));
-        // THE ASSET'S IMPORT TRANSFORM (IMPORT-1): a fallback parse stands in
-        // for the bake, so it has to produce the same geometry the bake holds —
-        // the asset's baked scale, orientation and origin included.
-        iris::GraphicsHelper::loadAllMeshesAndAnimationsFromFile(
-            filePath, meshList, animationss,
-            MeshBakeStore::transformFor(filePath, assetGuid));
+        // NO CURRENT BAKE: the model is MISSING from this open (FORWARD-ONLY-1).
+        // It is never parsed instead — an archive import bakes what it brings
+        // and an asset import bakes at import, so a miss means the bake is
+        // gone or from another build. The open reports it (a `model.missing`
+        // scene issue, ProjectService::missingModels) and the nodes that use
+        // it load without geometry.
+        if (!missingModelPaths.contains(filePath)) missingModelPaths.append(filePath);
+        irisLog(QStringLiteral("scene reader: '%1' has no current mesh bake — the model is missing "
+                               "from this open (re-import it)").arg(QFileInfo(filePath).fileName()));
 
         meshes.insert(cacheKey, meshList);
         assimpScenes.insert(cacheKey);

@@ -294,7 +294,9 @@ iris::ScenePtr ProjectService::readProjectScene(EditorData **editorData,
         LoadTimeline::Accumulate blobRead(QStringLiteral("db:sceneBlob"));
         blob = db->getSceneBlobGlobal(project->getProjectGuid());
     }
-    return reader->readScene(project->getProjectFolder(), blob, editorData);
+    iris::ScenePtr scene = reader->readScene(project->getProjectFolder(), blob, editorData);
+    mMissingModels = reader->missingModels();
+    return scene;
 }
 
 QStringList ProjectService::plannedModelPaths() const
