@@ -1053,11 +1053,10 @@ int main(int argc, char **argv)
         CHECK(centre(img).b > 0.7f && centre(img).g < 0.35f, "gradient sky nadir is the bottom colour");
     }
 
-    // ---- the analytic sky: the ENGINE's, drawn on the GPU (SKY-GPU) --------
-    // There is no CPU bake to call any more: the "realistic" sky is Ogre's
-    // AtmosphereNpr, five numbers and a sun direction pushed into a shader. So
-    // every assertion below is a PIXEL of the rendered sky — which is what the
-    // bake's pixels were a proxy for.
+    // ---- the analytic sky: the ENGINE's, drawn on the GPU --------------------
+    // The "realistic" sky is the planet's atmosphere (SKY-ATMOSPHERE-1): the
+    // dials, the sun's direction and its illuminance pushed into the engine's
+    // tables. So every assertion below is a PIXEL of the rendered sky.
     {
         doc->skyType = iris::SkyType::REALISTIC;
         doc->skyRealistic = iris::SkyRealistic::defaults();
@@ -1091,26 +1090,30 @@ int main(int argc, char **argv)
         std::printf("    moving the sun moved the same pixel by %.3f\n", delta);
         CHECK(delta > 0.05f, "moving the SUN LIGHT moves the analytic sky, in one frame (D15)");
 
-        // THE DIALS ARE REAL DIALS. Density is how much atmosphere the ray
-        // crosses: at the bottom of its range the horizon is pale, at the top
-        // it is deep. One parameter, one visible answer, through the document.
+        // THE DIALS ARE REAL DIALS. The haze is the aerosol in the air (the
+        // planet's atmosphere, SKY-ATMOSPHERE-1): clear air leaves a deep blue
+        // just above the horizon, a hazy day whitens it. One parameter, one
+        // visible answer, through the document's one writer.
         cam->setLocalRot(iris::Quat::fromAxisAndAngle(iris::Vec3(1, 0, 0), 5.0f));
         mirror.applyCamera(cam, view);
         skySun->setLocalRot(iris::Quat::fromEulerAngles(-40.0f, 0.0f, 0.0f));
-        doc->skyRealistic.density = 0.2f;
+        iris::SkyRealistic dial = doc->skyRealistic;
+        dial.sunHaze = 0.0f;
+        doc->setSkyRealistic(dial);
         mirror.sync(); mirror.applySky(view);
         for (int i = 0; i < 3; ++i) engine->renderOneFrame();
         view->readPixels(img);
         const Colour thin = centre(img);
-        doc->skyRealistic.density = 0.8f;
+        dial.sunHaze = 8.0f;
+        doc->setSkyRealistic(dial);
         mirror.sync(); mirror.applySky(view);
         for (int i = 0; i < 3; ++i) engine->renderOneFrame();
-        view->readPixels(img); show("analytic sky, dense", img);
+        view->readPixels(img); show("analytic sky, hazy", img);
         const Colour dense = centre(img);
         const float densityDelta = std::fabs(dense.r - thin.r) + std::fabs(dense.g - thin.g) +
                                    std::fabs(dense.b - thin.b);
-        std::printf("    density 0.2 vs 0.8 moved the horizon by %.3f\n", densityDelta);
-        CHECK(densityDelta > 0.05f, "the Density dial visibly changes the sky");
+        std::printf("    haze 0 vs 8 moved the horizon by %.3f\n", densityDelta);
+        CHECK(densityDelta > 0.05f, "the Sun Haze dial visibly changes the sky");
         doc->skyRealistic = iris::SkyRealistic::defaults();
 
         // A SKY WITH NO SUN is the model's own night, not a crash and not a

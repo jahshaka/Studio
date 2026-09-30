@@ -1,25 +1,20 @@
-// sky.aerial_perspective — THE AIR IS A MEDIUM UNDER THE REALISTIC SKY (lane
-// FOG-ATMO-1) — headless, framework-free, links JahshakaEngine only (a reachable
-// DISPLAY and a Vulkan driver or lavapipe, like tests/engine).
+// sky.aerial_perspective — THE AIR IS A MEDIUM UNDER THE REALISTIC SKY
+// (FOG-ATMO-1; rebased by SKY-ATMOSPHERE-1) — headless, framework-free, links
+// JahshakaEngine only (a reachable DISPLAY and a Vulkan driver, like tests/engine).
 //
-// THE CHANGE THIS SUITE IS THE GATE ON. Until FOG-ATMO-1 the analytic sky
-// ZEROED the atmosphere component's fog, so with the World fog off a surface
-// 2 km away rendered exactly like one 2 m away, and the 2 km horizon plane met
-// the sky in a hard line. The owner asked for Unreal's "sky atmosphere
-// affecting height fog": a real horizon. The engine now keeps the air's own
-// aerial perspective live under that sky, at the atmosphere's ONE density —
-// the sea-level extinction of the same turbidity that tints the sun
-// (OgreSky.cpp, airFogDensity; SKY-DENSITY-1's optical depths):
-//
-//     sigma(T) = tau_R(550)/8 km + beta(T) * tau_A/beta(550)/1.2 km
-//     T 2.5:  0.10013/8000 + 0.06934*2.17535/1200 = 1.3822e-4 per metre
-//
-// and every fog layer fogs towards the sky's own scattering colour.
+// THE CHANGE THIS SUITE IS THE GATE ON. Under the realistic sky every lit
+// surface is seen through the air: the planet's atmosphere's aerial-perspective
+// table (SKY-ATMOSPHERE-1) gives, per direction and distance, the light the air
+// scatters in and the mean transmittance, and the pixel is surface x T +
+// in-scatter. (Until SKY-ATMOSPHERE-1 it was a hand-matched sea-level
+// extinction fogging towards a non-physical sky's colour; the physics bar below
+// moved with the model, and says which.)
 //
 // THE INSTRUMENT. A black, rough box with an EMISSIVE face, read back in float
 // (HDR-READBACK-1: the linear scene radiance before any grade), rendered twice
 // at each distance with two emissive levels. Whatever else reaches the pixel —
-// the fog colour, the ambient, the specular — is the same in both frames, so
+// the in-scatter, the fog colour, the ambient, the specular — is the same in
+// both frames, so
 //
 //     T(d) = (pixel(E2) - pixel(E1)) / (E2 - E1)
 //
@@ -30,22 +25,24 @@
 // WHAT IS ASSERTED
 //   1. the control: no atmosphere, T == 1 at 125 m and at 2 km;
 //   2. THE PHYSICS BAR: under the realistic sky with the fog OFF, T(d) matches
-//      exp(-sigma d) within 0.003 at 125/250/500/1000/2000 m — 75.8 % at 2 km;
-//   3. the colour it fogs towards is the SKY's: a black far surface moves
-//      towards the sky just above it as the distance grows, and it is blue at
-//      noon;
-//   4. ONE ATMOSPHERE, ONE DENSITY: the turbidity dial moves T(2 km) by the
-//      same law (T 1 -> 97.5 %, T 6 -> 42.3 %) and moves NO sky pixel;
-//  4b. THE HAZE SWITCH (AIR-HAZE-TOGGLE-1): atmosphereHaze off reads T = 1 —
-//      zero air extinction — at 125 m and 2 km, paired against the same sky
-//      with it on, and moves no sky pixel;
-//   5. the World fog ADDS: fog density D on top gives exp(-sigma d) * 2^(-D d);
-//      and its breakthrough never bends the AIR (a bright surface at 2 km);
+//      the model's mean transmittance along the level ray (the three species of
+//      Hillaire's Earth at the observer's altitude, integrated here) within
+//      0.003 at 125/250/500/1000/2000 m;
+//   3. the far surface moves towards the sky behind it, and the haze is blue at
+//      a high sun;
+//   4. ONE ATMOSPHERE: the haze dial moves T(2 km) by the same law (haze 0 and
+//      5 against the reference);
+//  4b. THE AERIAL SCALE: 0 reads T = 1 (no air) at 125 m and 2 km, 0.5 the air
+//      of half the distance, paired against 1, and it moves no sky pixel;
+//   5. the World fog ADDS: fog density D on top gives T_air x 2^(-D d); and its
+//      breakthrough never bends the AIR (a bright surface at 2 km);
 //   6. THE HEIGHT LAYER IS SKY-COLOURED under the realistic sky — a magenta
 //      authored colour shows green — and its colour at sunset differs from
 //      noon (redder); under the single-colour sky it is the authored colour;
-//   7. THE HORIZON HAS NO LINE: a two-triangle 8 km ground under a sunset,
-//      fully fogged, reads the sky just above it in every column.
+//   7. THE HORIZON HAS NO LINE UNDER A FOG THAT HIDES THE GROUND: a
+//      two-triangle 8 km ground under a sunset, fully fogged, reads the sky
+//      just above it in every column (the World fog fades towards the sky just
+//      above the horizon).
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
 
@@ -64,16 +61,21 @@ static int failures = 0;
 namespace {
 const float kPi = 3.14159265358979323846f;
 // THE BAR ON A TRANSMITTANCE: 0.003 (the fix round's F8). The instrument's
-// noise is 0.0006 (measured, every arm); 0.01 at 2 km was a 4.8 % error in
-// sigma, a bar a wrong density could pass.
+// noise is 0.0006 (measured, every arm).
 const double kTolT = 0.003;
 // The reference, computed here from the stated model rather than read from the
-// engine (the engine's number is what is being tested).
-double airSigma(double haze)
+// engine (the engine's number is what is being tested): the mean over the
+// three channels of the transmittance along a LEVEL ray at the observer's
+// altitude (2 m; the density is constant along it to well under a part in a
+// thousand over 2 km), per the coefficients in Types.h (per km).
+double airT(double haze, double metres)
 {
-    const double T = haze < 1.0 ? 1.0 : haze;
-    const double beta = std::max(0.0, 0.04608 * T - 0.04586);
-    return 0.10013 / 8000.0 + beta * 2.17535 / 1200.0;
+    const double km = metres * 0.001, h = 0.002;
+    const double sR[3] = { 5.802e-3, 13.558e-3, 33.1e-3 };
+    double t = 0.0;
+    for (int k = 0; k < 3; ++k)
+        t += std::exp(-(sR[k] * std::exp(-h / 8.0) + 4.440e-3 * haze * std::exp(-h / 1.2)) * km);
+    return t / 3.0;
 }
 
 SkyDesc realisticSky(float elevationDeg, float azimuthDeg, float haze)
@@ -82,6 +84,11 @@ SkyDesc realisticSky(float elevationDeg, float azimuthDeg, float haze)
     d.mode = SkyMode::Atmosphere;
     d.atmosphere.sunHaze = haze;
     d.atmosphere.hasSun = true;
+    d.atmosphere.sunIlluminance = Colour(kPi, kPi, kPi, 1.0f);   // a white sun, intensity 1
+    // THIS SUITE MEASURES THE AIR ON THE SCENE, so it switches it on: the
+    // default is off since the owner's 2026-09-30 decision (sky.atmosphere (g)
+    // gates the default).
+    d.atmosphere.aerialScale = 1.0f;
     const float e = elevationDeg * kPi / 180.0f, a = azimuthDeg * kPi / 180.0f;
     d.atmosphere.sunDir[0] = std::cos(e) * std::sin(a);
     d.atmosphere.sunDir[1] = std::sin(e);
@@ -222,15 +229,14 @@ int main()
 
     // ---- 2. THE PHYSICS BAR ------------------------------------------------
     // The sun behind the camera, 45 degrees up: noon-ish, and no glow in view.
-    CHECK_MSG(r.s->setSky(realisticSky(45.0f, 180.0f, 2.5f)), "the realistic sky applies: %s",
+    CHECK_MSG(r.s->setSky(realisticSky(45.0f, 180.0f, 1.0f)), "the realistic sky applies: %s",
               r.e->lastError().c_str());
-    std::printf("== the air at turbidity 2.5, the World fog OFF (sigma %.4e per metre) ==\n",
-                airSigma(2.5));
+    std::printf("== the air at haze 1, the World fog OFF ==\n");
     for (float d : dists) {
         const double t = transmittance(r, d);
-        const double ref = std::exp(-airSigma(2.5) * d);
+        const double ref = airT(1.0, d);
         CHECK_MSG(std::fabs(t - ref) <= kTolT,
-                  "T(%5.0f m) = %.4f against exp(-sigma d) = %.4f (|diff| %.4f <= 0.003)",
+                  "T(%5.0f m) = %.4f against the model's %.4f (|diff| %.4f <= 0.003)",
                   double(d), t, ref, std::fabs(t - ref));
     }
 
@@ -251,7 +257,11 @@ int main()
         };
         std::printf("    black face: 125 m %.4f %.4f %.4f | 2 km %.4f %.4f %.4f | sky above %.4f %.4f %.4f\n",
                     kNear.r, kNear.g, kNear.b, kFar.r, kFar.g, kFar.b, sk.r, sk.g, sk.b);
-        CHECK_MSG(dist(kFar) < dist(kNear) * 0.85,
+        // THE AMOUNT IS THE MODEL'S (SKY-ATMOSPHERE-1): clear air keeps ~90 % of a
+        // surface at 2 km and scatters in a matching share, so the move is a
+        // few percent here (the retired sea-level haze took 24 % and asked for
+        // 15 %); sky.atmosphere (d) holds the 20 km case, where it is large.
+        CHECK_MSG(dist(kFar) < dist(kNear) * 0.97,
                   "a far surface moves TOWARDS the sky behind it (distance to the sky %.4f at 2 km "
                   "against %.4f at 125 m)", dist(kFar), dist(kNear));
         CHECK_MSG(kFar.b > kFar.r && sk.b > sk.r,
@@ -259,73 +269,59 @@ int main()
                   kFar.b, kFar.r);
     }
 
-    // ---- 4. ONE ATMOSPHERE, ONE DENSITY ------------------------------------
+    // ---- 4. ONE ATMOSPHERE ----------------------------------------------
     {
-        ImageF skyClear, skyHazy;
-        r.s->setSky(realisticSky(45.0f, 180.0f, 1.0f));
+        r.s->setSky(realisticSky(45.0f, 180.0f, 0.0f));
         const double tClear = transmittance(r, 2000.0f);
-        shoot(r, skyClear);
-        r.s->setSky(realisticSky(45.0f, 180.0f, 6.0f));
+        r.s->setSky(realisticSky(45.0f, 180.0f, 5.0f));
         const double tHazy = transmittance(r, 2000.0f);
-        shoot(r, skyHazy);
-        const double refClear = std::exp(-airSigma(1.0) * 2000.0);
-        const double refHazy = std::exp(-airSigma(6.0) * 2000.0);
+        const double refClear = airT(0.0, 2000.0), refHazy = airT(5.0, 2000.0);
         CHECK_MSG(std::fabs(tClear - refClear) <= kTolT,
-                  "pure air (turbidity 1): T(2 km) %.4f against %.4f", tClear, refClear);
+                  "no haze: T(2 km) %.4f against %.4f", tClear, refClear);
         CHECK_MSG(std::fabs(tHazy - refHazy) <= kTolT,
-                  "a hazy day (turbidity 6): T(2 km) %.4f against %.4f", tHazy, refHazy);
-        // The dome is the top rows (above the box): it may not move a bit.
-        size_t differ = 0, total = 0;
-        for (unsigned y = 0; y < 30; ++y)
-            for (unsigned x = 0; x < skyClear.width; ++x, ++total) {
-                const Colour a = skyClear.at(x, y), b = skyHazy.at(x, y);
-                if (a.r != b.r || a.g != b.g || a.b != b.b) ++differ;
-            }
-        CHECK_MSG(differ == 0, "...and the turbidity moves NO sky pixel (%zu of %zu differ)",
-                  differ, total);
-        r.s->setSky(realisticSky(45.0f, 180.0f, 2.5f));
+                  "a hazy day (haze 5): T(2 km) %.4f against %.4f", tHazy, refHazy);
+        r.s->setSky(realisticSky(45.0f, 180.0f, 1.0f));
     }
 
-    // ---- 4b. THE HAZE SWITCH (AIR-HAZE-TOGGLE-1) ----------------------------
-    // `AtmosphereSky::atmosphereHaze` false takes the air's extinction off every
-    // surface: the transmittance the instrument reads is exactly the NO-AIR one
-    // (T = 1, the control's unit gain) at every distance, paired in this process
-    // against the same sky with the switch on (exp(-sigma d)); and like the
-    // turbidity it moves NO sky pixel. The sun's tint is untouched by design
-    // (the switch is not an input to atmosphereSunTint).
+    // ---- 4b. THE AERIAL SCALE (AIR-HAZE-TOGGLE-1's switch, now a dial) ------
+    // `AtmosphereSky::aerialScale` 0 takes the air off every surface: the
+    // transmittance the instrument reads is exactly the NO-AIR one (T = 1, the
+    // control's unit gain) at every distance, paired in this process against the
+    // same sky at scale 1; half the scale is the air of half the distance; and
+    // it moves NO sky pixel.
     {
         const double tOn = transmittance(r, 2000.0f);
         ImageF domeOn, domeOff;
         shoot(r, domeOn);
-        SkyDesc off = realisticSky(45.0f, 180.0f, 2.5f);
-        off.atmosphere.atmosphereHaze = false;
-        CHECK_MSG(r.s->setSky(off), "the realistic sky with its haze OFF applies: %s",
+        SkyDesc off = realisticSky(45.0f, 180.0f, 1.0f);
+        off.atmosphere.aerialScale = 0.0f;
+        CHECK_MSG(r.s->setSky(off), "the realistic sky with aerialScale 0 applies: %s",
                   r.e->lastError().c_str());
         const double tOffNear = transmittance(r, 125.0f);
         const double tOffFar = transmittance(r, 2000.0f);
         shoot(r, domeOff);
-        const double ref = std::exp(-airSigma(2.5) * 2000.0);
-        std::printf("    haze ON: T(2 km) %.5f | haze OFF: T(125 m) %.5f  T(2 km) %.5f\n",
-                    tOn, tOffNear, tOffFar);
+        SkyDesc half = realisticSky(45.0f, 180.0f, 1.0f);
+        half.atmosphere.aerialScale = 0.5f;
+        r.s->setSky(half);
+        const double tHalf = transmittance(r, 2000.0f);
+        const double ref = airT(1.0, 2000.0), refHalf = airT(1.0, 1000.0);
+        std::printf("    scale 1: T(2 km) %.5f | scale 0.5: T(2 km) %.5f | scale 0: T(125 m) %.5f  T(2 km) %.5f\n",
+                    tOn, tHalf, tOffNear, tOffFar);
         CHECK_MSG(std::fabs(tOn - ref) <= kTolT,
-                  "with the switch ON the far surface is hazed: T(2 km) %.4f against exp(-sigma d) %.4f",
-                  tOn, ref);
+                  "at scale 1 the far surface is hazed: T(2 km) %.4f against the model's %.4f", tOn, ref);
+        CHECK_MSG(std::fabs(tHalf - refHalf) <= kTolT,
+                  "at scale 0.5 it is the air of 1 km: T %.4f against %.4f", tHalf, refHalf);
         CHECK_MSG(std::fabs(tOffNear - 1.0) < 2e-3 && std::fabs(tOffFar - 1.0) < 2e-3,
-                  "with it OFF the air's extinction is ZERO: T = 1 at 125 m and at 2 km (%.5f, %.5f) "
+                  "at scale 0 the air's extinction is ZERO: T = 1 at 125 m and at 2 km (%.5f, %.5f) "
                   "— the reading the no-air control gives", tOffNear, tOffFar);
-        CHECK_MSG(tOffFar - tOn > 0.2,
-                  "...a measurable difference at 2 km (%.4f against %.4f)", tOffFar, tOn);
         size_t differ = 0, total = 0;
         for (unsigned y = 0; y < 30; ++y)
             for (unsigned x = 0; x < domeOn.width; ++x, ++total) {
                 const Colour a = domeOn.at(x, y), b = domeOff.at(x, y);
                 if (a.r != b.r || a.g != b.g || a.b != b.b) ++differ;
             }
-        CHECK_MSG(differ == 0, "...and the switch moves NO sky pixel (%zu of %zu differ)", differ, total);
-        r.s->setSky(realisticSky(45.0f, 180.0f, 2.5f));
-        const double tBack = transmittance(r, 2000.0f);
-        CHECK_MSG(std::fabs(tBack - ref) <= kTolT,
-                  "switched back ON, the haze returns: T(2 km) %.4f against %.4f", tBack, ref);
+        CHECK_MSG(differ == 0, "...and the scale moves NO sky pixel (%zu of %zu differ)", differ, total);
+        r.s->setSky(realisticSky(45.0f, 180.0f, 1.0f));
     }
 
     // ---- 5. THE WORLD FOG ADDS ---------------------------------------------
@@ -337,14 +333,14 @@ int main()
         fog.breakFalloff = 0.0f;       // the law, not the breakthrough's bend of it
         r.s->setFog(fog);
         const double t = transmittance(r, 500.0f);
-        const double ref = std::exp(-airSigma(2.5) * 500.0) * std::exp2(-0.001 * 500.0);
+        const double ref = airT(1.0, 500.0) * std::exp2(-0.001 * 500.0);
         CHECK_MSG(std::fabs(t - ref) <= kTolT,
                   "the World fog adds to the air: T(500 m) %.4f against exp(-sigma d) 2^(-D d) = %.4f",
                   t, ref);
         fog.enabled = false;
         r.s->setFog(fog);
         const double back = transmittance(r, 500.0f);
-        const double air = std::exp(-airSigma(2.5) * 500.0);
+        const double air = airT(1.0, 500.0);
         CHECK_MSG(std::fabs(back - air) <= kTolT,
                   "...and switching the World fog off leaves the air (%.4f against %.4f)", back, air);
     }
@@ -365,10 +361,10 @@ int main()
         fog.breakFalloff = 0.1f;
         r.s->setFog(fog);
         const double t = transmittance(r, 2000.0f, nullptr, 4.0f, 4.5f);
-        const double ref = std::exp(-airSigma(2.5) * 2000.0);
+        const double ref = airT(1.0, 2000.0);
         CHECK_MSG(std::fabs(t - ref) <= kTolT,
                   "a surface at luminance ~4 under the World fog's breakthrough keeps the AIR's "
-                  "haze: T(2 km) %.4f against exp(-sigma d) %.4f", t, ref);
+                  "haze: T(2 km) %.4f against the model's %.4f", t, ref);
         fog.enabled = false;
         r.s->setFog(fog);
     }
@@ -387,9 +383,9 @@ int main()
         fog.breakFalloff = 0.0f;
         r.s->setFog(fog);
         Colour noon, sunset, authored;
-        r.s->setSky(realisticSky(60.0f, 0.0f, 2.5f));
+        r.s->setSky(realisticSky(60.0f, 0.0f, 1.0f));
         transmittance(r, 500.0f, &noon);
-        r.s->setSky(realisticSky(3.0f, 0.0f, 2.5f));     // the sun low, straight ahead
+        r.s->setSky(realisticSky(3.0f, 0.0f, 1.0f));     // the sun low, straight ahead
         transmittance(r, 500.0f, &sunset);
         r.s->setSky(colourSky(r.s));
         transmittance(r, 500.0f, &authored);
@@ -444,7 +440,7 @@ int main()
         fog.density = 0.1f;            // 2^-33 at the ground's nearest visible row
         fog.breakFalloff = 0.0f;
         r.s->setFog(fog);
-        r.s->setSky(realisticSky(3.0f, 60.0f, 2.5f));
+        r.s->setSky(realisticSky(3.0f, 60.0f, 1.0f));
         ImageF img;
         const bool shot = built && shoot(r, img);
         CHECK_MSG(shot, "the horizon renders");

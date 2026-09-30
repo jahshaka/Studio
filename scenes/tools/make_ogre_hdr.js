@@ -36,7 +36,14 @@ var PREVIEW = TREE + "/scenes/ogre/preview/hdr.png";
 assert(project.create("HDR").length > 0, "created the project");
 
 // THEIR "Bright, sunny day" PRESET, row by row:
-//   sun power        97.0      -> intensity 97/pi (the pi rule, see the harness)
+//   sun power        97.0      -> intensity 1 (power pi): THIS ENGINE'S DAYLIGHT.
+//     Their 97 is ~100,000 lux under their x1024 calibration; ours is the
+//     unit the default grade is derived for (iris::lens::defaultExposureChain:
+//     a sun of intensity 1). The port kept 97/pi = 30.9 until SKY-ATMOSPHERE-1,
+//     when the sky became physical — LIT BY THE SUN — and a 30.9 sun lit a
+//     sky 31x brighter than the exposure window below can bring down (the
+//     frame read 255 everywhere). The window and the exposure are converted
+//     onto our default grade, so the sun that matches them is ours.
 //   spot power       1.5       -> intensity 1.5/pi
 //   exposure         0.0      -> -0.8599 stops of exposure (see below)
 //   min auto expos. -1.0      -> -4.7368 stops of window
@@ -44,7 +51,7 @@ assert(project.create("HDR").length > 0, "created the project");
 //   bloom threshold  5.0
 // The other three presets, for a re-author: hazy day {48, 0, -2, 2.5, 5},
 // overcast {6.0625, 0, -2.5, 1, 5}, moon night {0.0009251, 0.65, -2.5, 3, 5}.
-ogrePbsBase({ sky: "realistic", sunDir: [-1, -1, -1], sunPower: 97.0, skyLight: 1.0,
+ogrePbsBase({ sky: "realistic", sunDir: [-1, -1, -1], sunPower: Math.PI, skyLight: 1.0,
               spots: false });
 
 // Their spots at the preset's 1.5, not the base scene's pi.
@@ -89,12 +96,12 @@ assert(Math.abs(fx.exposureMin - (-4.7368)) < 1e-3 && Math.abs(fx.exposureMax - 
        fx.exposureMax + ")");
 assert(Math.abs(fx.bloomThreshold - 5.0) < 1e-4, "their bloom threshold (5.0)");
 
-// THE SUN IS 97, and that is the whole point: prove it landed rather than
-// being clamped somewhere on the way to the renderer.
+// THE SUN IS THIS ENGINE'S DAYLIGHT (their 97 in our units; see the preset
+// table above): prove it landed.
 var sunId = world.sun().light;
 var sunI = node.property(sunId, "intensity");
-assert(Math.abs(sunI - 97.0 / Math.PI) < 1e-3,
-       "the sun carries their 97.0 power scale (intensity " + sunI.toFixed(3) + ")");
+assert(Math.abs(sunI - 1.0) < 1e-3,
+       "the sun is daylight in this engine's units (intensity " + sunI.toFixed(3) + ")");
 
 ogreCamera();
 editor.frame(30);

@@ -6,7 +6,7 @@
 // convolution was queued for the top of the NEXT frame, so every draw of the
 // change frame sampled a cube nothing had written (recycled VRAM: NaN and 3e4
 // half-floats in mip 0). A ground pixel read 111/28/118 (or 31/255/32 — it is
-// whatever the allocation held) on the first frame after a sky power change and
+// whatever the allocation held) on the first frame after a sky change and
 // 25/29/32 one frame later: a one-frame flash on every sky or sun edit, and a
 // wrong screenshot when one was taken on that frame. The SH also reached the
 // pixel one host push after the cube. The engine now keeps the previous set
@@ -15,7 +15,7 @@
 // landEnvironmentIfComplete); a lone change lands inside its own frame.
 //
 // THE ASSERTION: for each kind of change that re-captures the sky — the sky's
-// power, the sun's direction (the realistic sky follows the sun), the sky type
+// haze, the sun's direction (the realistic sky follows the sun), the sky type
 // both ways (realistic <-> gradient) and the cloud layer on and off — the FIRST
 // picture drawn after the change equals the picture one frame later within
 // 2/255 on every probe and channel. The probes are the repro's ground points and
@@ -47,7 +47,7 @@ var ball = scene.addPrimitive("sphere", { position: { x: 10, y: 3, z: 6 },
                                           scale: { x: 6, y: 6, z: 6 } });
 material.set(ball, { baseColor: "#e0e0e0", metallic: 1.0, roughness: 0.15 });
 editor.selectNone();
-world.sky("realistic", { power: 3.0 });
+world.sky("realistic", { sunHaze: 40.0 });
 editor.frame(4, 1 / 60);
 
 // ground (the repro's two points), then two points on the metal sphere
@@ -91,8 +91,8 @@ function arm(label, change) {
 }
 var failures = [];
 
-var moved = arm("power", function () { world.sky("realistic", { power: 1.5 }); });
-assert(moved >= 3, "the power change moved the picture (" + moved + ")");
+var moved = arm("haze", function () { world.sky("realistic", { sunHaze: 1.0 }); });
+assert(moved >= 3, "the haze change moved the picture (" + moved + ")");
 moved = arm("sun", function () {
     node.transform(sun.light, { rotation: { x: -25, y: 110, z: 0 } });
 });
@@ -101,7 +101,7 @@ moved = arm("to_gradient", function () {
     world.sky("gradient", { top: "#1a3a8a", mid: "#80a0d0", bottom: "#d8c8a0" });
 });
 assert(moved >= 3, "realistic -> gradient moved the picture (" + moved + ")");
-moved = arm("to_realistic", function () { world.sky("realistic", { power: 1.5 }); });
+moved = arm("to_realistic", function () { world.sky("realistic", { sunHaze: 1.0 }); });
 assert(moved >= 3, "gradient -> realistic moved the picture (" + moved + ")");
 // speed 0: no scroll, so the only capture is the change's own. A layer that
 // failed to draw would pass the frame-0 check by measuring nothing: it must move
@@ -149,18 +149,19 @@ function armCam(label, change) {
     return worst(before, f1);
 }
 // THE REPRO ITSELF (CLOUDS-2D-1's ifd_magenta_repro, FIELD-ROTATE-1's frames2):
-// the Photon chain ON with the irradiance field off, the power going 3.0 -> 1.5.
+// the Photon chain ON with the irradiance field off, the sky changing (the
+// retired model's power 3.0 -> 1.5 there; the haze 40 -> 1 here, SKY-ATMOSPHERE-1).
 // Here the chain's own readers (the bounce injection's escape) carried the
 // uncaptured cube into the frames after it — 111/28/118 on the ground at base.
 world.clouds({ enabled: false });
 world.gi({ mode: "vct", ddgi: false });
-world.sky("realistic", { power: 3.0 });
-moved = armCam("repro_power", function () { world.sky("realistic", { power: 1.5 }); });
-assert(moved >= 3, "the repro's power change moved the picture (" + moved + ")");
+world.sky("realistic", { sunHaze: 40.0 });
+moved = armCam("repro_haze", function () { world.sky("realistic", { sunHaze: 1.0 }); });
+assert(moved >= 3, "the repro's haze change moved the picture (" + moved + ")");
 // ...and the SHIPPED configuration: the chain and the irradiance field on.
 world.gi({ mode: "vct", ddgi: true });
-moved = armCam("field_power", function () { world.sky("realistic", { power: 3.0 }); });
-assert(moved >= 3, "the field arm's power change moved the picture (" + moved + ")");
+moved = armCam("field_haze", function () { world.sky("realistic", { sunHaze: 40.0 }); });
+assert(moved >= 3, "the field arm's haze change moved the picture (" + moved + ")");
 
 // ---- A DRAG: the second capture within two frames of the first -------------
 // Its SH read is deferred (integrateSkyShFromCube), so its set lands a frame or
@@ -171,7 +172,7 @@ assert(moved >= 3, "the field arm's power change moved the picture (" + moved + 
 // chain's own settle after a change is not what this arm measures.
 world.gi({ mode: "off" });
 // ...AND THE WORLD FOG OFF (FOG-ATMO-1). Under the realistic sky the fog is the
-// SKY's own radiance for each pixel's ray, read from the sky's constants in the
+// SKY's own radiance for each pixel's ray, read from the sky's tables in the
 // frame they change — it moves with the dome, at once, as it must (a fog held
 // back with the environment set would draw a seam against the dome all through
 // a drag). It is not a member of the set this arm isolates, and the default
@@ -179,9 +180,9 @@ world.gi({ mode: "off" });
 // left is the air's own haze, 0.8 % at this camera's 56 m.
 world.fog({ enabled: false });
 editor.frame(8, 1 / 60);
-world.sky("realistic", { power: 2.2 });
+world.sky("realistic", { sunHaze: 20.0 });
 var dragA = camShot("drag_a");                 // the first change, landed (lone)
-world.sky("realistic", { power: 1.5 });        // within two frames: a drag
+world.sky("realistic", { sunHaze: 1.0 });      // within two frames: a drag
 var dragF0 = camShot("drag_f0");
 editor.frame(4, 1 / 60);
 var dragB = camShot("drag_b");

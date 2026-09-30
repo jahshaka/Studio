@@ -112,7 +112,7 @@ throws(function () { world.sunLight(lamp); }, "sunLight rejects a POINT light (o
 assert(world.sunLight() === sun, "a refused pin changes nothing");
 
 // ---- THE SUN DRIVES THE SKY (D15), and the old dials are REFUSED ----------
-world.sky("realistic", { density: 0.5 });
+world.sky("realistic", { sunHaze: 1.0 });
 throws(function () { world.sky("realistic", { azimuth: 90 }); },
        "world.sky refuses 'azimuth' by name");
 throws(function () { world.sky("realistic", { elevation: 60 }); },
@@ -126,34 +126,31 @@ assert(world.sun().skyDriven === undefined, "...nor does world.sun()");
 
 // ONE WRITER FOR THE REALISTIC SKY (SKY-WRITE-1). The dials exist in the
 // document twice — the typed fields the renderer reads, and the block
-// world.get() reports and the file carries — and four writers used to keep both
-// halves by hand with two different sets of clamps. The verb clamped only
-// sunHaze, so a scripted density of 50 reached the renderer and was silently
-// corrected the next time somebody opened the sky panel. Both halves now go
-// through iris::Scene::setSkyRealistic, which clamps every dial once.
-world.sky("realistic", { density: 50, diffusion: -3, horizon: 9, power: 99, sunHaze: 0.1 });
+// world.get() reports and the file carries. Both halves go through
+// iris::Scene::setSkyRealistic, which clamps every dial once (the planet's
+// atmosphere's dials since SKY-ATMOSPHERE-1).
+world.sky("realistic", { sunHaze: 500, aerialScale: -3, groundAlbedo: 9, rayleighScale: -1 });
 var clamped = world.get().sky.data;
-assert(clamped.density === 1 && clamped.diffusion === 0 && clamped.horizon === 0.5 &&
-       clamped.power === 4 && clamped.sunHaze === 1,
+assert(clamped.sunHaze === 100 && clamped.aerialScale === 0 && clamped.groundAlbedo === 1 &&
+       clamped.rayleighScale === 0,
        "every realistic dial is clamped by the DOCUMENT, and the stored block carries the " +
        "clamped value — not the asked-for one (" + JSON.stringify(clamped) + ")");
-world.sky("realistic", { density: 0.5, diffusion: 2, horizon: 0.025, power: 1.5, sunHaze: 2.5 });
+throws(function () { world.sky("realistic", { density: 0.5 }); },
+       "world.sky refuses the retired model's 'density' by name");
+world.sky("realistic", { sunHaze: 1, aerialScale: 1, groundAlbedo: 0.3, rayleighScale: 1 });
 
-// THE AIR'S HAZE SWITCH (AIR-HAZE-TOGGLE-1): `atmosphereHaze` is on by default,
-// the verb turns it off and on through the same one writer, a non-boolean is
-// refused by name, and leaving it out of a call keeps it where it was. (What it
-// DOES to a surface is sky.aerial_perspective's 4b, at the engine.)
-assert(clamped.atmosphereHaze === true, "the air's haze is ON by default (" + clamped.atmosphereHaze + ")");
-assert(world.sky("realistic", { atmosphereHaze: false }) === true, "world.sky(realistic, {atmosphereHaze: false})");
-assert(world.get().sky.data.atmosphereHaze === false, "...the stored block carries it");
+// THE AIR ON GEOMETRY IS A DIAL (aerialScale; it replaced AIR-HAZE-TOGGLE-1's
+// switch): 1 by default, 0 takes it off, a call that does not name it keeps it,
+// and the retired switch is refused by name. (What it DOES to a surface is
+// sky.aerial_perspective's 4b, at the engine.)
+assert(world.get().sky.data.aerialScale === 1, "the air on geometry is at scale 1 by default");
+assert(world.sky("realistic", { aerialScale: 0 }) === true, "world.sky(realistic, {aerialScale: 0})");
+assert(world.get().sky.data.aerialScale === 0, "...the stored block carries it");
 world.sky("realistic", { sunHaze: 3 });
-assert(world.get().sky.data.atmosphereHaze === false, "...and a call that does not name it keeps it off");
-var hazeRefused = null;
-try { world.sky("realistic", { atmosphereHaze: "no" }); } catch (e) { hazeRefused = String(e); }
-assert(hazeRefused !== null && hazeRefused.indexOf("atmosphereHaze") >= 0,
-       "a non-boolean atmosphereHaze is refused by name: " + hazeRefused);
-assert(world.sky("realistic", { atmosphereHaze: true, sunHaze: 2.5 }) === true &&
-       world.get().sky.data.atmosphereHaze === true, "...and it switches back on");
+assert(world.get().sky.data.aerialScale === 0, "...and a call that does not name it keeps it");
+throws(function () { world.sky("realistic", { atmosphereHaze: false }); },
+       "the retired atmosphereHaze switch is refused by name");
+world.sky("realistic", { aerialScale: 1, sunHaze: 1 });
 
 // ROTATING THE LIGHT MOVES THE SKY. The sky is the engine's analytic model now
 // (SKY-GPU), keyed on the sun direction we push it, so the proof is in pixels:
@@ -185,17 +182,22 @@ function skyBand(tag, rx, ry, rz) {
     console.log("sky band [" + tag + "] " + Math.round(sum));
     return sum;
 }
+// AN ORDINARY DAY'S AIR (haze 10, SKY-ATMOSPHERE-1): the sun side of a sky is
+// brighter through the aerosol's forward scattering; the default haze is very
+// clean air, nearly symmetric fore and aft (gi.sky_light case 7 says the same).
+world.sky("realistic", { sunHaze: 10 });
 var aheadLum = skyBand("ahead", -70, 0, 0);     // the sun low, in front of the camera
 var behindLum = skyBand("behind", -70, 180, 0); // ...and turned right around
 console.log("sky with the sun ahead " + Math.round(aheadLum) +
             " vs behind " + Math.round(behindLum));
 assert(Math.abs(aheadLum - behindLum) > 8,
        "rotating the SUN LIGHT re-bakes the realistic sky (D15)");
+world.sky("realistic", { sunHaze: 1 });
 
 // A HAND-SET ROTATION IS NEVER OVERWRITTEN. The old coupling rewrote it from
 // the sky every frame; nothing does now.
 node.transform(sun, { rotation: { x: -33, y: 12, z: 0 } });
-world.sky("realistic", { density: 0.9 });
+world.sky("realistic", { sunHaze: 3.0 });
 editor.frame(10, 1 / 60);
 near(node.info(sun).rotation.x, -33, 0.01, "a sky edit never moves the sun light");
 world.sunDisc({ visible: true });
@@ -252,9 +254,9 @@ assert(none.secondaries.length === 0, "...and no secondaries");
 assert(none.nextPriority === 0, "...and the next directional would take 0");
 assert(world.sunLight() === "", "world.sunLight() answers empty, not an error");
 assert(world.shadowStatus().sun === "", "world.shadowStatus().sun is empty too");
-// A REALISTIC SKY WITH NO SUN is legal: the model bakes its own night and
-// nothing warns (the analytic sky has no sun-less daylight).
-world.sky("realistic", { density: 0.4 });
+// A REALISTIC SKY WITH NO SUN is legal: nothing lights the air, so it is the
+// night, and nothing warns.
+world.sky("realistic", { sunHaze: 1.0 });
 assert(world.sun().light === "", "a realistic sky in a sunless scene still has no sun");
 // And it is NOT an issue: nothing to fix here.
 var checked = editor.checkScene();
@@ -303,9 +305,9 @@ assert(node.setProperty(sun, "forwardShadingPriority", 0) === true, "back to the
 // about air.
 //
 // MEASURED ON A LIT SURFACE, never on the sky: the sky is drawn by the same
-// model either way, so only a surface can show what reached the ground. The sky
-// is turned right down (power 0.02) so that what the probe reads is the SUN and
-// not the sunset's own glow reflected off the surface.
+// model either way, so only a surface can show what reached the ground. The Sky
+// Light is off, so what the probe reads is the SUN (and the physical sky's own
+// reflection off the surface, a small share next to the beam).
 {
     var atmoGuid = project.create("Sun Atmosphere " + Date.now());
     assert(atmoGuid.length > 10, "a scene for the atmosphere tint");
@@ -314,7 +316,7 @@ assert(node.setProperty(sun, "forwardShadingPriority", 0) === true, "back to the
     assert(node.property(asun, "followsAtmosphere") === true,
            "Follows Atmosphere is ON by default (the owner's decision)");
     world.skyLight({ intensity: 0 });           // the sun alone lights the wall
-    world.sky("realistic", { power: 0.02 });
+    world.sky("realistic", { sunHaze: 1.0 });
     world.sunDisc({ visible: false });
     var wall = scene.addPrimitive("cube", { position: { x: 0, y: 1, z: 0 } });
     editor.select("");                          // no gizmo over the probes
@@ -450,7 +452,7 @@ assert(node.setProperty(sun, "forwardShadingPriority", 0) === true, "back to the
 {
     project.create("Sun At Night " + Date.now());
     var nsun = world.sun().light;
-    world.sky("realistic", { power: 0.02 });
+    world.sky("realistic", { sunHaze: 1.0 });
     scene.addPrimitive("cube", { position: { x: 0, y: 1, z: 0 } });
     editor.select("");
     editor.frame(60, 1 / 60);
@@ -493,22 +495,22 @@ assert(node.setProperty(sun, "forwardShadingPriority", 0) === true, "back to the
            "...and a sun BELOW it does not (" + nightPasses + ")");
     assert(world.sunDisc().visible === true, "the disc is still switched ON in the World panel");
 
-    // THE REGRESSION, at a hazy dial. At Sun Haze 6 and two degrees of
-    // elevation the atmosphere's transmittance is 3.2e-5 — a thirtieth of the
-    // old rule's cut, so the old rule had taken the shadow away — while the
-    // sun's own radiance is still four thousand times the step at which it
-    // stops being able to darken a pixel (4,212x at a gain of one, 7,166x at
-    // the default HDR grade). It casts.
-    world.sky("realistic", { power: 0.02, sunHaze: 6 });
+    // THE REGRESSION, at a hazy dial. At Sun Haze 60 and two degrees of
+    // elevation the atmosphere's transmittance is a few hundredths (the
+    // planet's atmosphere, SKY-ATMOSPHERE-1) — far under the old relative
+    // rule's cut, so the old rule would have taken the shadow away — while the
+    // sun's own radiance is still far above the step at which it stops being
+    // able to darken a pixel. It casts.
+    world.sky("realistic", { sunHaze: 60 });
     var hazyUp = passesAt(-88);                 // +2 degrees
     var hazyDown = passesAt(-92);               // -2 degrees: the Earth is in the way
-    console.log("haze 6 shadow passes: +2 deg " + hazyUp + ", -2 deg " + hazyDown);
+    console.log("haze 60 shadow passes: +2 deg " + hazyUp + ", -2 deg " + hazyDown);
     assert(hazyUp > 0,
-           "at Sun Haze 6 a sun two degrees up still casts (" + hazyUp + " passes) — the old " +
-           "relative rule had switched its shadow off at +3.6 degrees");
+           "at Sun Haze 60 a sun two degrees up still casts (" + hazyUp + " passes) — the old " +
+           "relative rule switched a hazy sun's shadow off degrees above the horizon");
     assert(hazyDown < hazyUp,
            "...and two degrees below the horizon it does not (" + hazyDown + ")");
-    world.sky("realistic", { power: 0.02, sunHaze: 2.5 });
+    world.sky("realistic", { sunHaze: 1 });
 
     // ...and it is not a cheat: the same sun, in the same place, with the row
     // switched off, is back to casting.

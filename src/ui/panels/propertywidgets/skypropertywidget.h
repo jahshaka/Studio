@@ -112,17 +112,14 @@ protected slots:
     void onSingleSkyColorChanged(QColor color);
     void onEquiTextureChanged(QString guid);
 
-    void onSkyDensityChanged(float val);
-    void onSkyDiffusionChanged(float val);
-    void onSkyHorizonChanged(float val);
-    void onSkyPowerChanged(float val);
     void onSunHazeChanged(float val);
-    void onAtmosphereHazeChanged(bool on);
+    void onSkyBrightnessChanged(float val);
+    void onAerialScaleChanged(float val);
+    void onGroundAlbedoChanged(float val);
 
     /// One realistic dial, written through iris::Scene::setSkyRealistic — the
     /// only supported writer of that block (SKY-WRITE-1).
     void writeRealisticDial(const std::function<void(iris::SkyRealistic &)> &edit);
-    void onSkyColourChanged(QColor colour);
 
 	void onGradientTopColorChanged(QColor color);
 	void onGradientMidColorChanged(QColor color);
@@ -180,19 +177,14 @@ private:
     RowPtr<ColorValueWidget> colorBot;
     RowPtr<HFloatSliderWidget> offset;
 
-    // The analytic sky's own dials (SKY-GPU): the ENGINE's parameters, not the
-    // retired CPU bake's. "Sky Detail" went with the bake — there is nothing
-    // to be detailed about a shader.
-    RowPtr<HFloatSliderWidget> skyDensity;
-    RowPtr<HFloatSliderWidget> skyDiffusion;
-    RowPtr<HFloatSliderWidget> skyHorizon;
-    RowPtr<HFloatSliderWidget> skyPower;
-    /// The SUN's transmittance dial (the atmosphere's turbidity) — a sky-block
-    /// row that changes no sky pixel: it colours the direct sunlight.
+    // The planet's atmosphere's dials (SKY-ATMOSPHERE-1), each a physical
+    // quantity: the aerosol haze, the aerial perspective's distance scale and
+    // the planet's albedo under the horizon. (The Rayleigh scale and the ozone
+    // switch are world.sky's.)
     RowPtr<HFloatSliderWidget> sunHaze;
-    /// The air's haze on geometry, on or off (AIR-HAZE-TOGGLE-1).
-    RowPtr<CheckBoxWidget> atmosphereHaze;
-    RowPtr<ColorValueWidget> skyColour;
+    RowPtr<HFloatSliderWidget> skyBrightness;
+    RowPtr<HFloatSliderWidget> aerialScale;
+    RowPtr<HFloatSliderWidget> groundAlbedo;
     RowPtr<LabelWidget> sunReadout;            // which light the sky's sun is (§3)
 
 	QJsonObject singleColorDefinition;

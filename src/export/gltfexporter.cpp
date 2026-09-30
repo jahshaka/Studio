@@ -853,26 +853,22 @@ QJsonObject buildSkyExtras(const iris::ScenePtr &scene, Ctx &c, const GltfExport
         break;
     }
     case iris::SkyType::REALISTIC: {
-        // THE TWO MODELS ARE NOT THE SAME MODEL ANY MORE (SKY-GPU). The editor's
-        // realistic sky is the engine's own analytic atmosphere (Ogre's
-        // AtmosphereNpr, a GPU shader); the viewer has three.js's zz85 Preetham
-        // SkyMesh. The parameters below are exported under their own names so
-        // the archive describes the scene truthfully, but the viewer does NOT
-        // invent a Preetham fit for them — it draws its own sky with the SUN
-        // where this scene's sun is, which is the part a viewer can honour. A
-        // scene whose exact sky matters exports an equirect or cubemap sky.
+        // THE TWO MODELS ARE NOT THE SAME MODEL. The editor's realistic sky is
+        // the planet's atmosphere (SKY-ATMOSPHERE-1, a physical model on the
+        // GPU); the viewer has three.js's zz85 Preetham SkyMesh. The dials are
+        // exported under their own names so the archive describes the scene
+        // truthfully, but the viewer does NOT invent a fit for them — it draws
+        // its own sky with the SUN where this scene's sun is, which is the part
+        // a viewer can honour. A scene whose exact sky matters exports an
+        // equirect or cubemap sky.
         const iris::SkyRealistic &s = scene->skyRealistic;
         sky["type"] = "realistic";
-        sky["density"] = double(s.density);
-        sky["diffusion"] = double(s.diffusion);
-        sky["horizon"] = double(s.horizon);
-        sky["power"] = double(s.power);
-        sky["skyColour"] = s.skyColour.name();
-        // The SUN's air rather than the sky's (lane SKY-DENSITY-1): the
-        // atmosphere's turbidity, which colours the direct sunlight and no sky
-        // pixel. Exported for truthfulness like the four above; the viewer's
-        // own sky model has no counterpart and does not read it.
         sky["sunHaze"] = double(s.sunHaze);
+        sky["aerialScale"] = double(s.aerialScale);
+        sky["skyBrightness"] = double(s.skyBrightness);
+        sky["groundAlbedo"] = double(s.groundAlbedo);
+        sky["rayleighScale"] = double(s.rayleighScale);
+        sky["ozone"] = s.ozone;
         // THE SKY HAS NO SUN OF ITS OWN (SKY_LIGHT_SPEC.md §3): the analytic
         // sky's sun is the scene's SUN LIGHT. Export the DIRECTION the light
         // travels — the viewer places its own sun from it (viewer.js) — rather
@@ -884,6 +880,11 @@ QJsonObject buildSkyExtras(const iris::ScenePtr &scene, Ctx &c, const GltfExport
         }
         break;
     }
+    case iris::SkyType::NONE:
+        // No sky: the editor's background is black, and so is the viewer's.
+        sky["type"] = "color";
+        sky["color"] = QStringLiteral("#000000");
+        break;
     case iris::SkyType::MATERIAL:
     default:
         sky["type"] = "color";
@@ -1502,8 +1503,8 @@ GltfExporter::Result GltfExporter::exportScene(const iris::ScenePtr &scene, cons
             fog["heightLevel"] = double(scene->fogHeightLevel);
         }
         // AERIAL PERSPECTIVE, for information like the two above it: under the
-        // realistic sky the editor fogs towards the sky's own scattering colour
-        // (FOG-ATMO-1 — the sky decides, there is no switch). The viewer has no
+        // realistic sky the editor's air hazes every surface and the fog fades
+        // towards the sky's own radiance (the sky decides, there is no switch). The viewer has no
         // atmosphere to take a fog colour from; saying the scene's fog is the
         // sky's is the honest half of what an archive can do.
         if (scene->skyType == iris::SkyType::REALISTIC) fog["atmosphere"] = true;

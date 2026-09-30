@@ -17,7 +17,7 @@
 //                              with its own diffuse path.
 //   gi.gather_sky    GA-SKY    ONE-ENV's miss, asserted: a zenith sun with its
 //                              disc on, and the open floor's probe irradiance is
-//                              the disc-free sky's SH irradiance within 2 %.
+//                              the disc-free sky's SH irradiance within 3 % (the SH9 bound; SKY-ATMOSPHERE-1).
 //   gi.gather_plane_weight     THE GATHER'S PLANE WEIGHT at a crushed cage: a
 //                              wall pixel beside the edge of a fence 2 cm in
 //                              front of it — where every probe around it passes
@@ -665,9 +665,16 @@ static int skyMain(Engine *e)
         // a sky with a bright zenith glow (the sun's aureole, whiter than the
         // blue sky, so largest in red) a little LOW at the zenith normal; the
         // gather's quadrature integrates the cube itself.
-        CHECK_MSG(std::fabs(ratios[1][c] - 1.0) <= 0.02,
+        // RE-BASED BY SKY-ATMOSPHERE-1 (the physical sky): the residual is now
+        // 0.976 / 0.980 / ~0.99 — the SH9 reference reads HIGH, the other way,
+        // because this sky has a hard horizon over a dark planet band and a
+        // band-limited clamped cosine rings across that step; Ramamoorthi and
+        // Hanrahan's bound on nine-coefficient irradiance is 3 % for ANY
+        // lighting (1 % on average), and that bound is the bar. The disc half
+        // above keeps its 0.002.
+        CHECK_MSG(std::fabs(ratios[1][c] - 1.0) <= 0.03,
                   "GA-SKY: channel %d of the open floor's probe irradiance is the disc-free sky's "
-                  "SH irradiance within 2 %% (ratio %.4f)", c, ratios[1][c]);
+                  "SH irradiance within 3 %% (ratio %.4f)", c, ratios[1][c]);
     }
     CHECK_MSG(m.w > 0.99, "the open floor is covered by probes (%.3f)", m.w);
     std::printf("%s\n", failures ? "FAILED" : "PASSED");

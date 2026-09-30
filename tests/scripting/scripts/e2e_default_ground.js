@@ -122,7 +122,7 @@ assert(material.reset(ground) === true, "reset it back for the rest of the suite
 var CORNERS = [ { x: 0.06, y: 0.08 }, { x: 0.94, y: 0.08 },
                 { x: 0.06, y: 0.92 }, { x: 0.94, y: 0.92 },
                 { x: 0.5,  y: 0.06 }, { x: 0.5,  y: 0.94 } ];
-// FOG OFF, and the air's haze with it (world.sky's atmosphereHaze is only the
+// FOG OFF, and the air's haze with it (world.sky's aerialScale is only the
 // realistic sky's; this suite's sky is a flat colour): "is this pixel ground or
 // sky" has to be answerable at the top of the frame.
 assert(world.fog({ enabled: false }), "fog off, so ground and sky can be told apart");

@@ -54,8 +54,17 @@
 // turns it on (enginesceneviewport.cpp:620) — a suite that forgets
 // `view->setShadows(true)` measures its own setup, not the engine.
 //
+// THE HAZES MOVED WITH THE MODEL (SKY-ATMOSPHERE-1). The tables above are the
+// retired Preetham-turbidity dial's. On the planet's atmosphere the haze is a
+// multiple of the reference's clear-air aerosol, and the tint's 9e-4 crossing
+// sits at +1.67 degrees at haze 40, +2.59 at 60 and +4.23 at 100 (the model's
+// own integral, spikes/sky-atmosphere-1/); at haze 1 it is never reached
+// above the Earth's occlusion band. The three cases below run at 40, 60 and
+// 100 — the same physics (a sun visibly up whose tint is under the old cut),
+// on the new dial.
+//
 // WHAT IS ASSERTED:
-//   A. the sweep from +8 to -2 degrees at haze 2.5, 6 and 10: the disc is
+//   A. the sweep from +8 to -2 degrees at haze 40, 60 and 100: the disc is
 //      drawn above the derived crossing and gone at -2 for every haze;
 //   B. it is MONOTONE — once the disc is gone it never comes back as the sun
 //      goes down (the old rule was monotone too; a threshold on a product is
@@ -63,9 +72,9 @@
 //   C. THE REGRESSION ITSELF, three cases the old rule got wrong and this one
 //      gets right — a bright sun at the elevation where the tint is 9e-4, just
 //      under the old rule's 1e-3 cut, at each of the three hazes;
-//   D. THE SHADOW: cast at +4 degrees at haze 2.5 and 6, gone two degrees below
-//      the horizon at every haze, and — the regression — still cast at haze 6
-//      two degrees up, where the old relative rule had stopped it at +3.6;
+//   D. THE SHADOW: cast at +4 degrees at haze 40 and 60, gone two degrees below
+//      the horizon at every haze, and — the regression — still cast at haze 60
+//      two degrees up, where the old relative rule would have stopped it;
 //   E. the disc's cut is about RADIANCE and not about the air: the same sun,
 //      at an elevation where it draws, stops drawing when its intensity is
 //      turned down far enough — which the old rule could not express at all.
@@ -137,21 +146,15 @@ int main(int argc, char **argv)
     auto doc = iris::Scene::create();
     doc->skyType = iris::SkyType::REALISTIC;
     doc->sunDiscVisible = true;
-    // A DIM SKY, ON PURPOSE. This is an LDR offscreen view (no HDR chain, by
-    // design — pixel suites want exact colours), so a sky at the shipped power
-    // CLIPS to white across the whole upper frame and an ADDITIVE disc over a
-    // clipped sky changes nothing at all: the measurement below would read zero
-    // for a disc that is plainly drawn. `scripting.e2e.sun_light` turns the sky
-    // down for the same reason. It changes no rule: the disc's radiance, which
-    // is what the rule tests, does not depend on the sky's power.
-    {
-        // THROUGH THE ONE WRITER (SKY-WRITE-1), like every other write of these
-        // dials — a suite that bypasses the law it sits beside is the next
-        // reader's counter-example.
-        iris::SkyRealistic r = doc->skyRealistic;
-        r.power = 0.02f;
-        doc->setSkyRealistic(r);
-    }
+    // THE SKY IS THE PLANET'S ATMOSPHERE, AT ITS PHYSICAL LEVEL
+    // (SKY-ATMOSPHERE-1). This is an LDR offscreen view (no HDR chain, by
+    // design — pixel suites want exact colours), and an ADDITIVE disc over a
+    // CLIPPED sky would change nothing. The retired model's sky clipped at its
+    // shipped power and this suite turned it down with a `power` dial; the
+    // physical sky under a sun of intensity 1 reads about a tenth to a third of
+    // full scale and does not clip, so there is no dial to turn (and none
+    // exists). The disc's radiance, which is what the rule tests, never
+    // depended on the sky.
 
     // A floor and a box, so the sun has something to cast a shadow with. (The
     // shadow is read from the renderer's accounting, not from these pixels —
@@ -248,7 +251,7 @@ int main(int argc, char **argv)
     // NOTHING there whatever the sun was worth, while the new one asks what the
     // disc's radiance actually is. The sun is turned up to intensity 20 for
     // that case (see below): the old rule could not see an intensity at all.
-    const Expect expects[] = { { 2.5f, 0.70f }, { 6.0f, 3.54f }, { 10.0f, 6.18f } };
+    const Expect expects[] = { { 40.0f, 1.67f }, { 60.0f, 2.59f }, { 100.0f, 4.23f } };
     const float sweep[] = { 8.0f, 6.0f, 4.0f, 2.0f, 1.0f, 0.0f, -1.0f, -2.0f };
 
     for (const Expect &e : expects) {
@@ -305,41 +308,47 @@ int main(int argc, char **argv)
         return st.shadowPassesLastFrame;
     };
     {
-        { iris::SkyRealistic r = doc->skyRealistic; r.sunHaze = 2.5f; doc->setSkyRealistic(r); }
+        { iris::SkyRealistic r = doc->skyRealistic; r.sunHaze = 40.0f; doc->setSkyRealistic(r); }
         const unsigned up25 = sunCastPasses(4.0f);
         const unsigned down25 = sunCastPasses(-2.0f);
-        CHECK(up25 > 0, "D: haze 2.5 — the sun casts at +4 degrees (%u passes)", up25);
+        CHECK(up25 > 0, "D: haze 40 — the sun casts at +4 degrees (%u passes)", up25);
         CHECK(down25 < up25,
-              "D: haze 2.5 — and casts less two degrees below the horizon (%u)", down25);
+              "D: haze 40 — and casts less two degrees below the horizon (%u)", down25);
 
-        { iris::SkyRealistic r = doc->skyRealistic; r.sunHaze = 6.0f; doc->setSkyRealistic(r); }
+        { iris::SkyRealistic r = doc->skyRealistic; r.sunHaze = 60.0f; doc->setSkyRealistic(r); }
         const unsigned up6 = sunCastPasses(4.0f);
-        // THE REGRESSION. At haze 6 and two degrees up the air has taken the
-        // transmittance to 3.2e-5 — a thirtieth of the old rule's cut, so the
-        // old rule had stopped the shadow — while the sun's radiance is still
-        // four thousand times the step at which it stops being able to darken a
-        // pixel (4,212x at a gain of one, 7,166x at the default HDR grade).
+        // THE REGRESSION. At haze 60 and two degrees up the air has taken the
+        // transmittance under the old rule's 1e-3 cut (it crosses 9e-4 at
+        // +2.59 degrees), so the old rule would have stopped the shadow, while
+        // the sun's radiance is still far above the step at which it stops
+        // being able to darken a pixel.
         const unsigned regression6 = sunCastPasses(2.0f);
         const unsigned down6 = sunCastPasses(-2.0f);
-        CHECK(up6 > 0, "D: haze 6 — the sun casts at +4 degrees (%u passes)", up6);
+        CHECK(up6 > 0, "D: haze 60 — the sun casts at +4 degrees (%u passes)", up6);
         CHECK(regression6 > 0,
-              "D: haze 6 — THE REGRESSION: it still casts two degrees up (%u passes), where "
-              "the old relative rule had stopped its shadow at +3.6 degrees", regression6);
+              "D: haze 60 — THE REGRESSION: it still casts two degrees up (%u passes), where "
+              "the old relative rule would have stopped its shadow above +2.6 degrees", regression6);
         CHECK(down6 < regression6,
-              "D: haze 6 — and casts less two degrees below the horizon (%u)", down6);
+              "D: haze 60 — and casts less two degrees below the horizon (%u)", down6);
 
-        { iris::SkyRealistic r = doc->skyRealistic; r.sunHaze = 10.0f; doc->setSkyRealistic(r); }
+        { iris::SkyRealistic r = doc->skyRealistic; r.sunHaze = 100.0f; doc->setSkyRealistic(r); }
         const unsigned up10 = sunCastPasses(8.0f);
         const unsigned down10 = sunCastPasses(-2.0f);
         CHECK(down10 < up10,
-              "D: haze 10 — nothing is cast two degrees below the horizon (%u against %u up)",
+              "D: haze 100 — nothing is cast two degrees below the horizon (%u against %u up)",
               down10, up10);
-        { iris::SkyRealistic r = doc->skyRealistic; r.sunHaze = 2.5f; doc->setSkyRealistic(r); }
+        { iris::SkyRealistic r = doc->skyRealistic; r.sunHaze = 40.0f; doc->setSkyRealistic(r); }
     }
 
     // ---- E: it is RADIANCE, not the air -----------------------------------
+    // In CLEAR air (haze 1): at haze 40 the aerosol's forward glow round an
+    // 8-degree sun clips this LDR view's sky to white, and an additive disc over
+    // a clipped sky moves no pixel (measured: 0 pixels at haze 40, the same
+    // frame with the disc off identical) — the header's clipping caveat, now
+    // from the physical sky's own forward scattering.
     {
-        { iris::SkyRealistic r = doc->skyRealistic; r.sunHaze = 2.5f; doc->setSkyRealistic(r); }
+        { iris::SkyRealistic r = doc->skyRealistic; r.sunHaze = 1.0f; doc->setSkyRealistic(r); }
+        { Image settle; render(settle); }
         const int bright = discPixels(8.0f);
         CHECK(bright > 0, "a full-intensity sun at +8 degrees draws its disc (%d pixels)", bright);
         sun->intensity = 1e-6f;

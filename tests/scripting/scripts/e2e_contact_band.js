@@ -77,8 +77,15 @@ for (var i = 0; i < 5; ++i) {
     assert(r.atRest, r.tag + ": GI at rest (" + r.frames + " frames)");
     assert(r.mode !== "off" && r.ssaoSuppressed === true,
            r.tag + ": the GI carries the diffuse and the engine says it refuses SSAO");
-    assert(Math.abs(r.d) <= 2.0, r.tag + ": the contact band is within 2 codes of the mid-face control (" +
-           r.band + " vs " + r.ctrl + ", " + r.d + ")");
+    // THE SSAO SIGNATURE IS A DARKER BAND, and that bar stays 2 codes. The band
+    // may read BRIGHTER by up to 4 (SKY-ATMOSPHERE-1): the sky is physical — a
+    // fifth of the retired level over its upper half and the dark planet ground
+    // under the horizon — so on a WHITE floor the floor's sun-lit bounce, which
+    // the band 10-20 cm up sees nearer and less shadowed by the cube than the
+    // mid-face does, is a larger share of the face's light (+2.8 codes at Epic,
+    // measured; the dark floor reads +0.8).
+    assert(r.d >= -2.0 && r.d <= 4.0, r.tag + ": the contact band is not darkened (within -2..+4 codes of " +
+           "the mid-face control: " + r.band + " vs " + r.ctrl + ", " + r.d + ")");
 }
 for (var j = 0; j < 4; ++j)
     assert(rows[j].ssaoRow === "off", rows[j].tag + ": the tier's SSAO column is off (" + rows[j].ssaoRow + ")");

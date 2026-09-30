@@ -598,20 +598,12 @@ iris::ScenePtr MainWindow::createDefaultScene(SceneTemplate kind)
     worldmodes::setMode(scene, worldmodes::Mode::Epic);
 
     // EMPTY IS NOTHING (WORLD-MODEL-1, services/scenetemplate.h): the root, the
-    // tier, no lights, no floor and NO SKY. The document has no "no sky" value
-    // (its sky types are all skies), so the absence of one is a single-colour
-    // sky of BLACK: zero radiance on every path — no light, no reflection, no
-    // ambient — and the black a view with no sky shows. It stops here, before
-    // anything is added: a user who asks for empty gets a document a script
-    // would have built.
+    // tier, no lights, no floor and NO SKY — SkyType::NONE (SKY-ATMOSPHERE-1):
+    // a black background, nothing captured, no light, no reflection, no ambient
+    // from a sky. It stops here, before anything is added: a user who asks for
+    // empty gets a document a script would have built.
     if (kind == SceneTemplate::Empty) {
-        scene->skyType = iris::SkyType::SINGLE_COLOR;
-        scene->skyColor = QColor(0, 0, 0);
-        // BOTH representations, as world.sky("color") writes them: the stored
-        // block is what the writer saves and the panel binds from.
-        QJsonObject noSky;
-        noSky.insert(QStringLiteral("skyColor"), SceneWriter::jsonColor(scene->skyColor));
-        scene->skyData.insert(QStringLiteral("SingleColor"), noSky);
+        scene->skyType = iris::SkyType::NONE;
         sceneNodeSelected(scene->rootNode);
         return scene;
     }
@@ -735,10 +727,10 @@ iris::ScenePtr MainWindow::createDefaultScene(SceneTemplate kind)
 
     // THE DEFAULT SKY IS THE REAL ONE (owner answer Q1, 2026-09-18: "the
     // default new scene = the realistic real-time sky WITH the sun following
-    // it"). The analytic atmosphere is evaluated per pixel on the GPU
-    // (AtmosphereNpr, SKY-GPU), it takes its sun DIRECTION from the scene's
-    // sun — the directional light above, which is why the light is created
-    // first — and the Sky Light integrates it for the scene's ambient. Sun
+    // it"). The planet's atmosphere is drawn on the GPU (SKY-ATMOSPHERE-1),
+    // it takes its sun — direction and light — from the scene's sun, the
+    // directional light above, which is why the light is created first, and
+    // the Sky Light integrates it for the scene's ambient. Sun
     // Follows Atmosphere needs no line here: LightNode::followsAtmosphere is
     // TRUE by default, and this is the sky that makes it mean something (on a
     // picked colour the tint is white and the row says so). Its dials are

@@ -287,27 +287,26 @@ int main(int argc, char **argv)
             assets.setSubject(iris::SceneNodePtr(), false, true);   // sky only
 
             // A sky asset's blob is the same per-type block the scene format
-            // stores. Realistic: the analytic sky's OWN dials (SKY-GPU) — the
-            // five Preetham keys went with the CPU bake, and a preset that
-            // still carries them (or the older sun-position keys) is simply not
-            // read: it opens at the defaults, like any other absent key.
+            // stores. Realistic: the planet's atmosphere's dials
+            // (SKY-ATMOSPHERE-1) — a preset that still carries a retired
+            // model's keys is simply not read: it opens at the defaults, like
+            // any other absent key.
             QJsonObject realistic;
-            realistic["density"] = 0.8;
-            realistic["diffusion"] = 1.5;
-            realistic["horizon"] = 0.05;
-            realistic["power"] = 1.2;
+            realistic["aerialScale"] = 0.8;
+            realistic["groundAlbedo"] = 0.15;
+            realistic["rayleighScale"] = 1.2;
             CHECK(skyassets::applyToScene(doc, iris::SkyType::REALISTIC, realistic,
                                           [](const QString &) { return QString(); }),
                   "sky asset: a REALISTIC definition applies to the preview document");
             CHECK(doc->skyType == iris::SkyType::REALISTIC &&
-                  std::fabs(doc->skyRealistic.density - 0.8f) < 1e-4f &&
-                  std::fabs(doc->skyRealistic.power - 1.2f) < 1e-4f,
+                  std::fabs(doc->skyRealistic.aerialScale - 0.8f) < 1e-4f &&
+                  std::fabs(doc->skyRealistic.rayleighScale - 1.2f) < 1e-4f,
                   "sky asset: the realistic keys land on the document");
             // A key the definition does not carry lands on the model's
             // default, never on an uninitialised float (sunHaze was one).
             CHECK(std::fabs(doc->skyRealistic.sunHaze
                             - iris::SkyRealistic::defaults().sunHaze) < 1e-4f,
-                  "sky asset: an absent sunHaze key is the default (2.5), not garbage");
+                  "sky asset: an absent sunHaze key is the default (1), not garbage");
             // The preview's own sun: the sky takes its direction from the
             // scene's first directional light and from nowhere else.
             {

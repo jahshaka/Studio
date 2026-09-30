@@ -293,9 +293,18 @@ int main(int argc, char **argv)
     // difference is the set's own error against the hemisphere - 0.034 of the escape on an open
     // floor (BAR 2, gi.ddgi_ambient). The fence is that envelope widened by that error on both
     // sides: 0.966-1.141. (It was 0.75-1.35, the leaky store's 0.821-1.252 envelope.)
+    // RE-BASED BY SKY-ATMOSPHERE-1: THE SKY IS PHYSICAL. Its light is the upper
+    // hemisphere's (the lower is the dark planet ground, sun-lit, where the
+    // retired model repeated the horizon's bright colour), and the two
+    // quadratures of it now disagree the OTHER way at cascade 0's face: 0.880x
+    // at the low sun, 0.905-0.910x at noon (the cone set outside reads the
+    // bright horizon band the field's grazing rays see less of). Same rule as
+    // before — the measured envelope, 0.880-1.107x over the four ambients,
+    // widened by the set's own error both sides; the staircase this fences
+    // (1.9x) is as far outside it as ever.
     const float kSetError      = 0.034f;     // the four-cone set's quadrature error, open floor
     const float kChainFaceMax  = 1.107f + kSetError;
-    const float kChainFaceMin  = 1.000f - kSetError;
+    const float kChainFaceMin  = 0.880f - kSetError;
     // THE TARGET. A face is a boundary in a data structure, not in the world:
     // the ambient on a flat slab under an unchanging sky is one number, so every
     // ratio is 1.000 and the bar is the deviation from it. 0.05 is the figure

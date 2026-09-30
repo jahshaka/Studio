@@ -34,7 +34,7 @@ assert(guid.length > 10, "project.create -> " + guid);
 world.mode({ mode: "epic" });
 // The sky has no sun dials (SKY_LIGHT_SPEC.md §3): its sun is the scene's
 // directional light, and ambient is the Sky Light the default scene ships with.
-world.sky("realistic", { density: 0.5 });
+world.sky("realistic", { sunHaze: 1.0 });
 editor.frame(4);
 
 // Two reflectors: a glossy floor and a mirror panel.
@@ -68,12 +68,12 @@ assert(world.planarReflections().activeActors > 0,
        "planar reflections are actually rendering (" +
        world.planarReflections().activeActors + " active)");
 
-// The loop. Each turn: a new sky (a const-buffer write since SKY-GPU) plus a
+// The loop. Each turn: a new sky (a table rebuild since SKY-ATMOSPHERE-1) plus a
 // fresh GPU CAPTURE of it and a new IBL cubemap convolved from that capture,
 // the old one freed — then an offscreen post-fx readback.
 var sizes = [[320, 180], [400, 400], [256, 144]];
 for (var k = 0; k < 6; k++) {
-    world.sky("realistic", { density: 0.30 + k * 0.12 });
+    world.sky("realistic", { sunHaze: 1 + k * 15 });
     editor.frame(6);
     var d = sizes[k % sizes.length];
     var shot = editor.screenshot("sky_ibl_churn_" + k + ".png", d[0], d[1], [], true);
