@@ -131,11 +131,6 @@ ALLOWED_NOARG = [
     ('float(row.at(1).toDouble())', 'the same cascade row'),
     ('float(row.at(2).toDouble())', 'the same cascade row'),
 
-    ('mobility = nodeObj["static"].toBool() ? iris::Mobility::Static',
-     'a RETIRED key read on its way to the bin, inside its own contains() '
-     'guard: `static: true` from before Mobility existed means Static and '
-     'anything else means Movable. Never written again'),
-
     ('auto time = keyObj["time"].toDouble();',
      "a KEYFRAME KEY's own data. The key does not exist until addKey(val, time) "
      "makes it from these two numbers, so there is no object to read a default "

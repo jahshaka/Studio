@@ -189,9 +189,6 @@ void SceneWriter::writeScene(QJsonObject& projectObj, iris::ScenePtr scene)
     // EXPOSURE (EXPOSURE-1): a mode and three STOPS values. The `*Ev` spelling
     // is what tells an old file's chain-unit `exposure` apart from this one —
     // see the reader.
-    // Writing the new keys ends the "an older key was ignored" statement: the
-    // file carries this grade explicitly from here on (EXPOSURE-1).
-    scene->legacyExposureKeyIgnored = false;
     sceneObj["exposureMode"] = QString::fromLatin1(iris::exposureModeName(scene->exposureMode));
     sceneObj["exposureEv"] = scene->exposure;
     sceneObj["exposureMinEv"] = scene->exposureMin;

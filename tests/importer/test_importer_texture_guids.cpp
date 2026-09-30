@@ -21,11 +21,8 @@
 //   3. ROUND TRIP: a PbrMaterial whose maps hold resolved store paths, written
 //      the way a scene save writes it, reopens with every map resolving to a
 //      Texture asset whose bytes are the texture — never the .glb.
-//   4. REPAIR (scenes already saved wrong): the object guid in a texture slot
-//      resolves back to the member texture the slot must have meant, by the
-//      object's stored blob, and never invents one.
-//   5. A repaired load makes the document dirty (UndoService::markContentRepaired)
-//      so the next save writes the corrected scene.
+//   (4./5. — the load-time slot REPAIR and its dirty flag — are deleted with
+//   the repair: FORWARD-ONLY-1.)
 #include <QApplication>
 #include <QDir>
 #include <QFile>
@@ -222,125 +219,6 @@ int main(int argc, char **argv)
         CHECK(everySlotSaved, "the save writes each map's own Texture guid");
         CHECK(noneIsTheModel, "no map is saved as the .glb Object guid (the defect)");
         CHECK(everySlotReopens, "every map reopens as a Texture whose bytes are the texture");
-    }
-
-    // ---- 4. the repair (scenes already saved wrong) -----------------------
-    //
-    // What a scene saved between 2026-09-03 and the fix holds: the OBJECT guid
-    // in every texture slot. The reader heals it per slot.
-    {
-        QJsonObject brokenValues;   // exactly what such a scene file carries
-        brokenValues[QStringLiteral("baseColorMap")] = objectGuid;
-        brokenValues[QStringLiteral("normalMap")] = objectGuid;
-        brokenValues[QStringLiteral("roughnessMap")] = objectGuid;
-
-        // Which texture each slot MUST come back as — the import named the
-        // extracted files after the glTF images, so this is checkable by name
-        // rather than by "some texture or other".
-        const QMap<QString, QString> expected = {
-            { QStringLiteral("baseColorMap"), QStringLiteral("quad_base.png") },
-            { QStringLiteral("normalMap"),    QStringLiteral("quad_normal.png") },
-            { QStringLiteral("roughnessMap"), QStringLiteral("quad_mr_roughness.png") },
-        };
-
-        bool everySlotRepaired = true;
-        QSet<QString> repairedTo;
-        for (auto it = brokenValues.constBegin(); it != brokenValues.constEnd(); ++it) {
-            const QString repaired = AssetCas::textureGuidForSlot(conn, it.value().toString(),
-                                                                  it.key());
-            const bool right = !repaired.isEmpty() && textures.contains(repaired)
-                && assetType(conn, repaired) == static_cast<int>(ModelTypes::Texture)
-                && assetName(conn, repaired) == expected.value(it.key());
-            if (!right)
-                std::printf("info: %s repaired to '%s', expected '%s'\n",
-                            qPrintable(it.key()), qPrintable(assetName(conn, repaired)),
-                            qPrintable(expected.value(it.key())));
-            everySlotRepaired = everySlotRepaired && right;
-            if (!repaired.isEmpty()) repairedTo.insert(repaired);
-        }
-        CHECK(everySlotRepaired,
-              "each broken slot repairs to the very texture it was authored with");
-        CHECK(repairedTo.size() == brokenValues.size(),
-              "the three slots repair to three DIFFERENT textures");
-
-        // Never invents content.
-        CHECK(AssetCas::textureGuidForSlot(conn, baseTex, QStringLiteral("baseColorMap")).isEmpty(),
-              "a slot that already names a Texture is left alone");
-        CHECK(AssetCas::textureGuidForSlot(conn, QStringLiteral("not-in-this-catalog"),
-                                           QStringLiteral("baseColorMap")).isEmpty(),
-              "a guid this catalog never heard of is left alone");
-        CHECK(AssetCas::textureGuidForSlot(conn, objectGuid, QString()).isEmpty()
-                  || true, "an empty slot name never crashes");
-    }
-
-    // ---- 4b. the name route, when there is no blob to read ---------------
-    //
-    // A model imported before the blob carried member guids (or by a path that
-    // never wrote one) still has to be repairable: the member FILE NAMES are
-    // then the only evidence, and one texture on the whole object needs none.
-    {
-        auto row = [&](const QString &guid, ModelTypes type, const QString &name,
-                       const QString &parent) {
-            QSqlQuery q(conn);
-            q.prepare("INSERT INTO assets (guid, type, name, parent) VALUES (?, ?, ?, ?)");
-            q.addBindValue(guid);
-            q.addBindValue(static_cast<int>(type));
-            q.addBindValue(name);
-            q.addBindValue(parent);
-            q.exec();
-        };
-        auto link = [&](const QString &guid, const QString &role, const QString &oid,
-                        const QString &name) {
-            QSqlQuery q(conn);
-            q.prepare("INSERT INTO asset_files (asset_guid, role, oid, name) VALUES (?, ?, ?, ?)");
-            q.addBindValue(guid);
-            q.addBindValue(role);
-            q.addBindValue(oid);
-            q.addBindValue(name);
-            q.exec();
-        };
-
-        // Two maps, no blob.
-        row("obj-noblob", ModelTypes::Object, "wall.fbx", QString());
-        row("tex-diffuse", ModelTypes::Texture, "wall_diffuse.png", "obj-noblob");
-        row("tex-normal", ModelTypes::Texture, "wall_normal.png", "obj-noblob");
-        link("obj-noblob", "texture", "oid-diffuse", "wall_diffuse.png");
-        link("tex-diffuse", "source", "oid-diffuse", "wall_diffuse.png");
-        link("obj-noblob", "texture", "oid-normal", "wall_normal.png");
-        link("tex-normal", "source", "oid-normal", "wall_normal.png");
-
-        CHECK(AssetCas::textureGuidForSlot(conn, "obj-noblob", "baseColorMap")
-                  == QStringLiteral("tex-diffuse"),
-              "no blob: baseColorMap follows the diffuse file name");
-        CHECK(AssetCas::textureGuidForSlot(conn, "obj-noblob", "normalMap")
-                  == QStringLiteral("tex-normal"),
-              "no blob: normalMap follows the normal file name");
-        CHECK(AssetCas::textureGuidForSlot(conn, "obj-noblob", "emissiveMap").isEmpty(),
-              "no blob: a slot no file name claims stays empty (never a guess)");
-
-        // One map, no blob: it can only have been that one.
-        row("obj-single", ModelTypes::Object, "prop.fbx", QString());
-        row("tex-single", ModelTypes::Texture, "prop_atlas.png", "obj-single");
-        link("obj-single", "texture", "oid-single", "prop_atlas.png");
-        link("tex-single", "source", "oid-single", "prop_atlas.png");
-        CHECK(AssetCas::textureGuidForSlot(conn, "obj-single", "baseColorMap")
-                  == QStringLiteral("tex-single"),
-              "one texture on the object answers any slot");
-    }
-
-    // ---- 5. a repaired load is a dirty document ---------------------------
-    {
-        QUndoStack stack;
-        UndoService undo(&stack);
-        undo.markSaved();
-        CHECK(!undo.isDirty() && undo.savedCountMatchesCurrent(),
-              "a freshly loaded, unrepaired scene is clean");
-        undo.markContentRepaired();
-        CHECK(undo.isDirty() && !undo.savedCountMatchesCurrent(),
-              "a repaired load reads dirty (the close prompt offers the corrected save)");
-        undo.markSaved();
-        CHECK(!undo.isDirty() && undo.savedCountMatchesCurrent(),
-              "saving clears the repair flag");
     }
 
     // ---- 6. the material exporter finds an imported texture's bytes -------

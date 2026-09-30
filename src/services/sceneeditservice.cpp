@@ -418,9 +418,6 @@ void SceneEditService::addMaterialMesh(const QString &path, bool ignore, iris::V
     reader->setLibrarySource();
     iris::SceneNodePtr node = reader->readSceneNode(document);
     delete reader;
-    // The reader returns null for a blob whose root is a node type this build
-    // retired (sceneformat::isRetiredNodeType) — the other three readSceneNode
-    // call sites already checked; this one dereferenced it.
     if (!node) return;
 
     // FRESH IDENTITY per instantiation. The blob stores the guids it was

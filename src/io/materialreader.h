@@ -52,12 +52,6 @@ public:
 	/// (plan item 15c: no asset file is ever copied into a folder by name).
 	QString resolveTextureGuid(const QString &guid);
 
-	/// A stored texture reference that names the OBJECT a texture was imported
-	/// inside, repaired to the member texture the SLOT must have meant — the
-	/// reader half of the 2026-09-03 save defect (SceneReader::repairTextureSlot
-	/// documents the whole story; this is the same tolerant read on the material
-	/// reader). Returns `stored` untouched when there is nothing to repair.
-	static QString repairTextureSlot(const QString &stored, const QString &slotName);
 
 	// Dispatches on the "materialType" tag SceneWriter stamps on every saved
 	// material: "pbr" rebuilds a PbrMaterial from its own rows (which is what

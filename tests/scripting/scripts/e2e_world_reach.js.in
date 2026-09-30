@@ -90,46 +90,10 @@ var path = node.property(meshes[0].id, "meshPath");
 assert(path && path.length > 0, "the mesh node carries a meshPath: " + path);
 assert(path !== fixture, "and it is NOT the raw disk path");
 
-// ---- #12: the viewer node is GONE, and an old file carrying one still opens --
+// ---- #12: the viewer node is GONE ------------------------------------------
 // The verb is off the registry entirely (not a verb that fails — absent).
 assert(typeof scene.addViewer === "undefined",
        "scene.addViewer no longer exists on the scene module");
-
-// And the READER's half of the same removal. A blob whose node type is one this
-// build retired must be SKIPPED with a log line, never guessed at and never
-// dereferenced: node.deserialize goes through the very same
-// SceneReader::readSceneNode the scene-file loader uses, so a fragment is the
-// cheapest way to hand the reader an "old file" node.
-var before = scene.nodes().length;
-
-var refusedRoot = caught(function () {
-    node.deserialize({ node: { type: "viewer", name: "Old VR Viewer" } }, "");
-});
-assert(refusedRoot !== null,
-       "a fragment whose ROOT is a retired 'viewer' node is refused: " + refusedRoot);
-assert(scene.nodes().length === before,
-       "and nothing was added to the scene (" + scene.nodes().length + ")");
-
-// The dangerous one: a retired node NESTED under a live parent. Before the
-// tolerant read this was an unguarded addChild of whatever the reader produced.
-var nestedId = node.deserialize({
-    node: {
-        type: "empty", name: "Legacy Group",
-        children: [
-            { type: "viewer", name: "Old VR Viewer 2" },
-            { type: "empty",  name: "Kept Child" }
-        ]
-    }
-}, "");
-assert(nestedId.length > 10, "a fragment with a retired CHILD still rebuilds -> " + nestedId);
-var names = [];
-var afterNodes = scene.nodes();
-for (var ni = 0; ni < afterNodes.length; ++ni) names.push(afterNodes[ni].name);
-assert(names.indexOf("Legacy Group") >= 0, "the live parent came through");
-assert(names.indexOf("Kept Child") >= 0, "and its live sibling came through");
-assert(names.indexOf("Old VR Viewer 2") < 0,
-       "the retired child was SKIPPED, not resurrected as some other type");
-assert(node.remove(nestedId) === true, "and the rebuilt subtree is a normal, removable node");
 
 // ---- the round trip scene.addMesh never had --------------------------------
 assert(project.save() === true, "project.save");

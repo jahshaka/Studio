@@ -233,31 +233,6 @@ QString guidForStorePath(QSqlDatabase conn, const QString &root, const QString &
                          const QString &projectGuid,
                          GuidPreference prefer = GuidPreference::Any);
 
-/// REPAIR for texture slots saved with the broken tie-break above: given the
-/// guid a scene stores in a material's texture slot, the Texture asset it
-/// should have named — or empty when nothing needs repairing (the guid
-/// already names a Texture, or names nothing this catalog knows).
-///
-/// `storedGuid` names an Object (the .glb/.fbx the texture arrived in); the
-/// slot's property name (`baseColorMap`, `normalMap`, …) is what says WHICH of
-/// the object's textures it was, because the guid no longer does — every slot
-/// on the model collapsed onto the one object guid. Two routes, in order:
-/// the object's own serialized blob (the import wrote the correct per-slot
-/// member guids into it), then the member texture whose FILE NAME matches the
-/// slot's role words. A tolerant reader, not a migration: nothing is written
-/// to the catalog and an unrecognisable slot simply stays empty.
-QString textureGuidForSlot(QSqlDatabase conn, const QString &storedGuid,
-                           const QString &slotName);
-
-/// textureGuidForSlot with the tolerant-read POLICY around it: returns
-/// `storedGuid` untouched when there is nothing to repair, and logs one line
-/// when there is. This is the form every reader wants — SceneReader,
-/// MaterialReader and AssetHelper all resolve texture slots and all three had
-/// (or, for AssetHelper, could not have) their own copy of the same five lines.
-/// `who` names the caller in the log ("material reader", "asset helper").
-QString repairTextureSlot(const QString &storedGuid, const QString &slotName,
-                          const char *who);
-
 /// Write <root>/sidecar/<guid>.json — the catalog-rebuild record (invariant
 /// I2): identity, organization, metadata and the file manifest.
 bool writeSidecar(QSqlDatabase conn, const QString &root, const QString &guid,

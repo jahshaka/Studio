@@ -45,16 +45,12 @@ void AssetHelper::updateNodeMaterial(iris::SceneNodePtr &node, QJsonObject defin
     // MaterialReader::resolveTextureGuid). Old blobs that stored plain paths
     // still work: an unresolvable value falls back to itself.
     Q_UNUSED(db);
-    // The SLOT is part of the question (hygiene lane, 2026-09-09): a stored
-    // reference that names the OBJECT a texture was imported inside is repaired
-    // to the member texture the slot's role words name, exactly as the two
-    // readers do (MaterialReader::repairTextureSlot).
     const auto resolveTexture = [&](const QString &stored, const QString &slot) -> QString {
+        Q_UNUSED(slot);
         if (stored.isEmpty()) return stored;
-        const QString ref = AssetCas::repairTextureSlot(stored, slot, "asset helper");
         QSqlDatabase conn = QSqlDatabase::database();
-        const QString path = AssetCas::resolveSource(conn, AssetStorePaths::root(), ref);
-        return path.isEmpty() ? ref : path;
+        const QString path = AssetCas::resolveSource(conn, AssetStorePaths::root(), stored);
+        return path.isEmpty() ? stored : path;
     };
 
     if (node->getSceneNodeType() == iris::SceneNodeType::Mesh) {

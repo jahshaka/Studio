@@ -432,21 +432,6 @@ QStringList photonDeviations(const iris::ScenePtr &scene);
 /// Drops the pins on the Photon-tiered rows and re-applies the tier.
 void clearPhotonOverrides(const iris::ScenePtr &scene);
 
-/// MIGRATION (spec §2's table), for a document written before the tier existed:
-/// derives the tier its serialized GI settings correspond to, PINS every field
-/// that deviates from that tier, and pins the tier row itself when the scene's
-/// World Mode would resolve it to something else. Technique, quality, bounces
-/// and dynamic probes are preserved exactly (a deviation becomes a pin), so
-/// those render IDENTICALLY by construction. The ONE field that may move is
-/// the irradiance field: a document's tri-state -1 ("auto") means "the tier
-/// decides", and since option (b) Medium and High decide ON — that is the
-/// owner's re-pin of the shipped vct+medium samples, taken here and nowhere
-/// else; an explicit 0/1 in the document is preserved (pinned if it deviates).
-/// Redundant pins (a pinned value that IS the derived tier's) are dropped, so a
-/// migrated scene reads as its tier and not as "Custom". Epic is never
-/// derived: no pre-tier document could have rendered its columns.
-void derivePhotonFromDocument(const iris::ScenePtr &scene);
-
 QString    modeName(Mode m);            ///< "custom" | "low" | "medium" | "high" | "epic"
 Mode       modeFromName(const QString &name, bool *ok = nullptr);
 QStringList modeNames();                ///< low, medium, high, epic (Custom is not pickable)

@@ -475,29 +475,6 @@ int SceneIssues::scan(const iris::ScenePtr &scene)
         }
     }
 
-    // ---- exposure.legacy: an older exposure key was ignored ---------------
-    // A file written before EXPOSURE-1 carries the retired chain-unit
-    // `exposure`/`exposureMin`/`exposureMax` and nothing else. The same number
-    // is a different picture in the two units, so the reader ignores them and
-    // the scene opens at the constructor's grade — deliberately, and with no
-    // migration (the CRUD law). This is the one consequence a user cannot see
-    // in the picture, so it is said once, in a sentence, with the action that
-    // ends it. The writer clears the flag: a scene saved from here on carries
-    // its grade explicitly and the line goes with it.
-    if (scene->legacyExposureKeyIgnored) {
-        SceneIssue issue;
-        issue.kind = QStringLiteral("exposure.legacy");
-        issue.message = tr("This scene was saved with an older exposure setting, which is "
-                           "measured differently and has been ignored. It is showing at the "
-                           "default exposure.");
-        issue.action = tr("Set the Exposure you want in World > Post Process and save. The "
-                          "old value could not be converted: the same number means a "
-                          "different picture in the two ways of measuring it.");
-        issue.id = issue.kind;
-        raise(issue);
-        live << issue.id;
-    }
-
     // ---- texture.missing: a material's texture file is gone from disk -----
     // The document KEEPS a material's path when its file disappears (moved,
     // deleted, a project opened on another machine), and the mirror's answer
@@ -560,7 +537,6 @@ int SceneIssues::scan(const iris::ScenePtr &scene)
                                        QStringLiteral("sky.duplicate"),
                                        QStringLiteral("rays.absent"),
                                        QStringLiteral("vr.colour"),
-                                       QStringLiteral("exposure.legacy"),
                                        QStringLiteral("texture.missing") };
     bool removed = false;
     for (int i = mIssues.size() - 1; i >= 0; --i) {
