@@ -1509,6 +1509,41 @@ set_tests_properties(gi.gather_trace PROPERTIES
                      TIMEOUT 120 LABELS "engine"
                      ENVIRONMENT "JAH_GATHER_TRACE=1")
 
+# gi.contact_occlusion — AN OBJECT STANDING ON A FLOOR DARKENS THE FLOOR BESIDE IT
+# (CONTACT-OCCLUSION-1): a 2 m black wall on a matte floor under a constant sky,
+# the floor's E(d)/E_open against the differential-strip configuration factor
+# 1 - F(d) at d = 0.05..4 m (0.04 at Epic/High, 0.08 at Medium/Low for d >= 0.1 m),
+# a white wall's bounce against a 2-D radiosity solve, the rig check's 2 m cube
+# printed — at every shipped tier. JAH_CONTACT_MEASURE=1 prints the per-term table.
+# The gate: arm A where the gather runs (0.04) and arm B at the tier's bounce count
+# where one bounce is asked (0.03 at High and Medium) — the sky's direct term in the
+# voxel and card stores (fork sky pass, CONTACT-OCCLUSION-1). The photon-target twin:
+# the field alone (Low: arm A 0.08 — the probe spacing, 0.31 m across and 0.625 m in
+# height: the floor reads its cage's upper layer 0.47 m above it — and arm B 0.06) and
+# Epic's three bounces against the three-bounce solve (0.03); and case D, the floor under
+# a hovering 2 m MOVER at Epic: 0.380 against the closed form 0.446 (the gather's own answer,
+# too dark by 0.066 — HOVER-GATHER-1). Case D's MIRROR half gates in gi.contact_occlusion:
+# the reflection's hit on the floor under the mover within 0.06 of 0.446 (the mover gate).
+add_executable(test_gi_contact_occlusion test_gi_contact_occlusion.cpp)
+set_target_properties(test_gi_contact_occlusion PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_contact_occlusion PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_contact_occlusion PRIVATE JahshakaEngine)
+add_dependencies(test_gi_contact_occlusion JahshakaEngineMedia)
+jah_gpu_row(gi.contact_occlusion CLASS engine TOKENS 2 COMMAND test_gi_contact_occlusion
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.contact_occlusion PROPERTIES TIMEOUT 300 LABELS "engine")
+jah_gpu_row(gi.contact_occlusion_target CLASS engine TOKENS 2 COMMAND test_gi_contact_occlusion
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.contact_occlusion_target PROPERTIES TIMEOUT 300 LABELS "engine;photon-target"
+                     ENVIRONMENT "JAH_CONTACT_TARGET=1")
+
 # gi.voxel_coverage — THE STORE HOLDS A SURFACE'S PROJECTED AREA PER AXIS
 # (PHOTON-VOXEL-3): an open emissive quad and a closed box one and four cascade-0
 # cells thick, turned 0/15/45 degrees against the lattice, and a quad at opacity

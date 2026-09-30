@@ -295,7 +295,14 @@ static OpenScene buildOpenScene(Engine *e, const char *name)
     o.view->setScene(o.scene);
     o.scene->setAmbient(kAmbientUpper, kAmbientLower);
     addSlab(o.scene, Colour(0.9f, 0.9f, 0.9f), Vec3(0.0f, -0.05f, 0.0f), Vec3(16.0f, 0.1f, 16.0f));
-    addSlab(o.scene, Colour(0.9f, 0.9f, 0.9f), Vec3(0.0f, 2.0f, -2.0f), Vec3(12.0f, 4.0f, 0.4f));
+    // THE WALL IS BLACK (CONTACT-OCCLUSION-1): every reference this fixture is held to is
+    // the floor's SKY VISIBILITY (cosineSkyVisibilityUp, the corner quadratures), which
+    // is the physics of a wall that only blocks. Since the store holds the sky's direct
+    // term at every bounce count, a white wall under this sky bounces albedo x its sky
+    // irradiance onto the floor (gi.contact_occlusion arm B) — measured 95.4 % at the foot
+    // against a sky-visibility bar of 80.3-89.5 % — which is right, and not this
+    // suite's subject (the field's visibility).
+    addSlab(o.scene, Colour(0.0f, 0.0f, 0.0f), Vec3(0.0f, 2.0f, -2.0f), Vec3(12.0f, 4.0f, 0.4f));
     enginetest::testCameraLookAt(o.view, kCamPos, kCamTarget);
     return o;
 }

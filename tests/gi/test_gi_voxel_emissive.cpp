@@ -28,9 +28,9 @@
 // THE FIXTURE is the smallest thing that can answer it: ONE emissive cube in a
 // black box — no sky, no lights, no ambient, albedo zero on the emitter and
 // near-zero on the box, so the only radiance in the volume is the one this
-// suite authored. (DOCS/traps/ENGINE.md: the sky's ambient is never injected
-// into the voxels, so lighting a voxel fixture with a sky measures nothing;
-// here the emitter IS the light.) `ddgi` is OFF — the irradiance field routes
+// suite authored. (No sky: the store holds the sky's direct term — the sky pass,
+// CONTACT-OCCLUSION-1 — and a sky would add its share to every voxel; here the
+// emitter IS the light.) `ddgi` is OFF — the irradiance field routes
 // the diffuse at every shipped tier, and it is not this suite's subject.
 //
 // FOUR ARMS, on the two sides of the old ceiling: L = 0.5 and 1.0 were always
