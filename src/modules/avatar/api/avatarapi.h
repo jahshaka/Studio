@@ -158,6 +158,22 @@ public:
     Q_INVOKABLE QVariantMap importAvatar(const QString &path,
                                          const QVariantMap &options = QVariantMap());
     Q_INVOKABLE QVariantMap open(const QString &guid, const QVariantMap &options = QVariantMap());
+    /// THE ONE MAPPING from an import-settings record (the Import model
+    /// dialog's, `iris::ImportSettings::toJson`) to importAvatar's options —
+    /// what the page's "Import Avatar..." calls, so the button and a script
+    /// cannot disagree about which keys a skinned avatar takes
+    /// (AVATAR-IMPORT-FIX-1). Returns {options, dropped}.
+    Q_INVOKABLE QVariantMap importOptions(const QVariantMap &settings = QVariantMap());
+
+    /// The option keys importAvatar accepts; anything else is refused by name.
+    static const QStringList &importAvatarKeys();
+    /// The import-settings fields that DO NOT APPLY to a skinned avatar, which
+    /// importOptions drops (and importAvatar refuses from a script): `version`
+    /// is the record's format stamp, not an option; `maxCards` is the surface
+    /// card budget and a skinned mesh bakes no cards (SURFACE-CACHE-1a). A NEW
+    /// ImportSettings field lands on neither list and avatar.responsive's page
+    /// arm goes red — which is the point: the test decides, not the owner.
+    static const QStringList &importSettingsNotForAvatars();
 
     // ---- AV1: the module must not freeze the app --------------------------
     //

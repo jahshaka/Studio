@@ -352,7 +352,7 @@ QVector<VerbInfo> AvatarApi::verbs() const
           "avatar is made FROM a model, the model stays a model. NOT undoable — asset "
           "mutations never are (SCRIPTING_SPEC \u00a71.6.5).",
           Needs::Document },
-        { "importAvatar", "avatar.importAvatar(path, {scope, drawer, name, async, units, scale, axes, rotate, translate, skeleton, clips, materials}) -> {asset, avatar, name, open} | {started, async}",
+        { "importAvatar", "avatar.importAvatar(path, {scope, drawer, name, async, units, scale, axes, rotate, translate, skeleton, clips, materials, faceCulling}) -> {asset, avatar, name, open} | {started, async}",
           "THE way a character enters Jahshaka (\u00a74 D7: every load is an import — "
           "avatar.loadPreview is retired). Imports a rigged model file through the ONE import "
           "pipeline, mints an avatar asset from it AND OPENS IT for editing, in one call — the "
@@ -364,11 +364,21 @@ QVector<VerbInfo> AvatarApi::verbs() const
           "refused by name rather than ignored: a skinned mesh carries no cards at all (a card baked "
           "against a bind pose is a lie), so the key could only split one character's bake in two for "
           "nothing. Import the file with assets.importFile if a static model of it needs a card budget. "
+          "`faceCulling` (\"file\" | \"single\" | \"double\") means what it means for assets.import: which faces "
+          "the character's materials draw. avatar.importOptions maps an import-settings record onto these options. "
           "{async: true} runs the whole thing — import, mint, open, preview — OFF the UI thread "
           "through the pipeline's own ImportBatchRunner (the Assets page's threaded import) and "
           "returns {started: true} immediately; watch avatar.progress() and cancel with "
           "avatar.cancelImport(). That is what the module's 'Import Avatar…' uses: a rigged FBX "
           "took 9.3 s of frozen UI synchronously. NOT undoable.",
+          Needs::Document },
+        { "importOptions", "avatar.importOptions(settings?) -> {options, dropped}",
+          "Maps an IMPORT-SETTINGS record (the one assets.import documents and the Import model dialog "
+          "produces) onto avatar.importAvatar's options: the record is parsed and completed with the "
+          "defaults, then the fields that do not apply to a skinned avatar are dropped and named in "
+          "`dropped` (`version`, `maxCards` — a skinned mesh bakes no surface cards). The module's "
+          "'Import Avatar...' calls exactly this, so the button and a script import the same way. "
+          "Refuses a record assets.import would refuse.",
           Needs::Document },
         { "progress", "avatar.progress() -> {running, kind, file, stage, done, total, cancelled, error, result}",
           "What the module's background job is doing — an {async: true} import or open. `kind` "
@@ -2360,6 +2370,51 @@ QString AvatarApi::createAsset(const QString &objectGuid, const QVariantMap &opt
     return guid;
 }
 
+const QStringList &AvatarApi::importAvatarKeys()
+{
+    static const QStringList keys = { "scope", "drawer", "name", "async",
+                                      "units", "scale", "axes", "rotate", "translate",
+                                      "skeleton", "clips", "materials", "faceCulling" };
+    return keys;
+}
+
+const QStringList &AvatarApi::importSettingsNotForAvatars()
+{
+    // NAMED, so the page never forwards a field the verb refuses: the record
+    // is the whole ImportSettings (every key, always — toJson), and a skinned
+    // avatar takes all of it except these.
+    static const QStringList keys = { "version",     // the record's format stamp, not an option
+                                      "maxCards" };  // a skinned mesh bakes no surface cards
+    return keys;
+}
+
+QVariantMap AvatarApi::importOptions(const QVariantMap &settings)
+{
+    // Parse → the COMPLETE record, exactly what the Import model dialog hands
+    // the page (ImportSettings::toJson writes every key), so a partial record
+    // from a script and the dialog's full one go through the same mapping.
+    QJsonObject raw;
+    for (auto it = settings.constBegin(); it != settings.constEnd(); ++it)
+        raw.insert(it.key(), QJsonValue::fromVariant(scriptmod::normalizeJs(it.value())));
+    QString error;
+    const iris::ImportSettings parsed = iris::ImportSettings::fromJson(raw, &error);
+    if (!error.isEmpty()) {
+        record(QStringLiteral("avatar.importOptions: %1").arg(error));
+        return QVariantMap();
+    }
+    const QJsonObject full = parsed.toJson();
+    QVariantMap options;
+    QStringList dropped;
+    for (auto it = full.constBegin(); it != full.constEnd(); ++it) {
+        if (importSettingsNotForAvatars().contains(it.key())) dropped.append(it.key());
+        else options.insert(it.key(), it.value().toVariant());
+    }
+    QVariantMap out;
+    out[QStringLiteral("options")] = options;
+    out[QStringLiteral("dropped")] = dropped;
+    return out;
+}
+
 QVariantMap AvatarApi::importAvatar(const QString &path, const QVariantMap &options)
 {
     QVariantMap out;
@@ -2377,11 +2432,9 @@ QVariantMap AvatarApi::importAvatar(const QString &path, const QVariantMap &opti
     // avatar is a skinned mesh and a skinned mesh carries no surface cards at
     // all — a card baked against a bind pose is a lie — so accepting the key
     // here would only make two avatars key to two different bakes of identical
-    // bytes. It is REFUSED by name like any other unknown option rather than
-    // dropped silently, and the verb's doc says so.
-    static const QStringList known = { "scope", "drawer", "name", "async",
-                                       "units", "scale", "axes", "rotate", "translate",
-                                       "skeleton", "clips", "materials" };
+    // bytes. A SCRIPT that passes it is REFUSED by name like any other unknown
+    // option; the page drops it through importOptions (importSettingsNotForAvatars).
+    const QStringList &known = importAvatarKeys();
     for (auto it = options.constBegin(); it != options.constEnd(); ++it)
         if (!known.contains(it.key())) {
             record(QStringLiteral("avatar.importAvatar: unknown option '%1' (known: %2)")
@@ -2392,7 +2445,7 @@ QVariantMap AvatarApi::importAvatar(const QString &path, const QVariantMap &opti
     {
         QJsonObject raw;
         static const QStringList settingKeys = { "units", "scale", "axes", "rotate", "translate",
-                                                 "skeleton", "clips", "materials" };
+                                                 "skeleton", "clips", "materials", "faceCulling" };
         for (const QString &key : settingKeys)
             if (options.contains(key))
                 raw.insert(key, QJsonValue::fromVariant(

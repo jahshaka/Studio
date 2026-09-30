@@ -645,6 +645,98 @@ int main(int argc, char **argv)
               "the PREVIEW and the DEFINITION are the same character (the stale-apply defect)");
     }
 
+    // ---- 5c. THE PAGE PATH (AVATAR-IMPORT-FIX-1) ---------------------------
+    //
+    // The module's "Import Avatar..." hands the Import model dialog's record —
+    // ImportSettings::toJson, EVERY key — through avatar.importOptions to
+    // avatar.importAvatar. Forwarding the record verbatim made the verb refuse
+    // the dialog's own maxCards (then faceCulling) and the button imported
+    // nothing; no suite drove that path. These arms do, with the dialog's real
+    // record: the defaults, and a non-default faceCulling.
+    {
+        // THE GUARD: every key the record carries is either an importAvatar
+        // option or on the named drop list — a new ImportSettings field that
+        // is neither turns this red instead of the owner's button.
+        const QJsonObject mapped =
+            mcp.runScript(QStringLiteral("avatar.importOptions()")).value("result").toObject();
+        const QJsonObject options = mapped.value("options").toObject();
+        QStringList dropped;
+        for (const QJsonValue &v : mapped.value("dropped").toArray()) dropped.append(v.toString());
+        std::printf("info: importOptions() options=[%s] dropped=[%s]\n",
+                    options.keys().join(QStringLiteral(", ")).toUtf8().constData(),
+                    dropped.join(QStringLiteral(", ")).toUtf8().constData());
+        CHECK(options.contains("faceCulling") && options.contains("units") && options.contains("materials"),
+              "page path: the settings record's avatar fields ride through as options");
+        CHECK(dropped.contains("maxCards") && !options.contains("maxCards") && !options.contains("version"),
+              "page path: maxCards and version are dropped BY NAME");
+        const QString refusedText =
+            mcp.runScript(QStringLiteral("(function(){ try { var r = avatar.importAvatar('%1', {maxCards: 4});"
+                                         " return r && r.avatar ? 'accepted' : 'refused'; }"
+                                         " catch (e) { return 'refused: ' + e; } })()").arg(rig))
+                .value("result").toString();
+        std::printf("info: a script passing maxCards: %s\n", refusedText.toUtf8().constData());
+        CHECK(refusedText.startsWith(QStringLiteral("refused")),
+              "a SCRIPT passing maxCards is still refused by name");
+
+        // The preview only advances while it is ON SCREEN (AvatarPreviewScene's
+        // frame), which is where the page's button lives anyway: go there.
+        const QString spaceBefore = mcp.string(QStringLiteral("app.columns().space"));
+        mcp.runScript(QStringLiteral("app.space('avatar')"));
+        struct Arm { const char *label; const char *settings; const char *culling; };
+        const Arm arms[] = { { "defaults", "{}", "file" },
+                             { "faceCulling double", "{faceCulling: 'double'}", "double" } };
+        for (const Arm &arm : arms) {
+            const QJsonObject imported = mcp.runScript(
+                QStringLiteral("var m = avatar.importOptions(%1);"
+                               " avatar.importAvatar('%2', m.options)").arg(QLatin1String(arm.settings), rig))
+                .value("result").toObject();
+            const QString avatarGuid = imported.value("avatar").toString();
+            const QString modelGuid = imported.value("asset").toString();
+            std::printf("info: page path (%s): %s\n", arm.label,
+                        QJsonDocument(imported).toJson(QJsonDocument::Compact).constData());
+            CHECK(avatarGuid.length() > 10 && modelGuid.length() > 10,
+                  QStringLiteral("page path (%1): the dialog's record IMPORTS an avatar")
+                      .arg(QLatin1String(arm.label)).toUtf8().constData());
+            if (avatarGuid.isEmpty()) continue;
+            CHECK(mcp.string(QStringLiteral("assets.importSettings('%1').settings.faceCulling")
+                                 .arg(modelGuid)) == QLatin1String(arm.culling),
+                  QStringLiteral("page path (%1): faceCulling '%2' reached the import")
+                      .arg(QLatin1String(arm.label), QLatin1String(arm.culling)).toUtf8().constData());
+            CHECK(mcp.integer(QStringLiteral("avatar.preview().bones")) > 10,
+                  QStringLiteral("page path (%1): the character has bones")
+                      .arg(QLatin1String(arm.label)).toUtf8().constData());
+            // A CLIP PLAYS: the file's own, or the walk loaded onto it.
+            QStringList clips = clipNames(
+                mcp, QStringLiteral("avatar.asset().definition.clips.map(function(c){return c.name})"));
+            if (clips.isEmpty()) {
+                mcp.runScript(QStringLiteral("avatar.loadAnimation('%1')").arg(walk));
+                clips = clipNames(
+                    mcp, QStringLiteral("avatar.asset().definition.clips.map(function(c){return c.name})"));
+            }
+            CHECK(!clips.isEmpty(), QStringLiteral("page path (%1): the avatar has a clip")
+                                        .arg(QLatin1String(arm.label)).toUtf8().constData());
+            if (clips.isEmpty()) continue;
+            const bool played = mcp.runScript(QStringLiteral("avatar.playClip('%1')").arg(clips.first()))
+                                    .value("result").toBool();
+            double t = 0.0;
+            QElapsedTimer playTimer;
+            playTimer.start();
+            while (playTimer.elapsed() < 10000) {
+                t = mcp.value(QStringLiteral("avatar.time()")).toDouble();
+                if (t > 0.0) break;
+                QThread::msleep(100);
+            }
+            std::printf("info: page path (%s): playClip('%s') -> %s, time %.3f s\n", arm.label,
+                        clips.first().toUtf8().constData(), played ? "true" : "false", t);
+            CHECK(played && t > 0.0, QStringLiteral("page path (%1): a clip PLAYS (time advances)")
+                                         .arg(QLatin1String(arm.label)).toUtf8().constData());
+            mcp.runScript(QStringLiteral("avatar.stop()"));
+        }
+        std::printf("info: back to the '%s' space\n", spaceBefore.toUtf8().constData());
+        if (!spaceBefore.isEmpty())
+            mcp.runScript(QStringLiteral("app.space('%1')").arg(spaceBefore));
+    }
+
     // ---- 6. quitting with an import IN FLIGHT -----------------------------
     //
     // AND WITH AN UNSAVED DEFINITION EDIT INSIDE ITS COALESCING WINDOW
