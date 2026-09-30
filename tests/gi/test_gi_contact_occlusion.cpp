@@ -724,6 +724,80 @@ int main()
         }
     }
 
+    // ---- CASE D: THE FLOOR UNDER A HOVERING MOVER (MOVER-OCCLUSION-1) ----------------
+    // A BLACK 2 m cube, a MOVER, its bottom face 1 m above the floor, at Epic, under the
+    // same constant sky. The point under its centre sees the bottom face as a parallel
+    // square: the differential element to a parallel rectangle a x b at distance c, the
+    // element under a corner, F = 1/(2 pi) [X/sqrt(1+X^2) atan(Y/sqrt(1+X^2)) + Y/sqrt(1+Y^2)
+    // atan(X/sqrt(1+Y^2))], X = a/c, Y = b/c (Howell's catalogue B-3); centred = four
+    // quadrants of a/2 x a/2: F = 4 F_corner(1, 1) = 0.554, so E/E_open = 0.446. (The
+    // sides cannot be seen from under the bottom face.) Read two ways, each against the
+    // same pixels with the cube hidden: DIRECTLY (a low camera beside it: the floor pixel,
+    // the gather's rays meeting the mover) and IN A MIRROR (a vertical mirror 3 m away:
+    // the reflection ray's HIT on the floor under the mover, whose store radiance the
+    // mover must gate — jahMoverSkyVisibility). Bars: the direct reading within 0.05 of
+    // the closed form, the mirror's within 0.05 of the direct one.
+    // A TARGET (gi.contact_occlusion_target) at delivery: the direct reading measured 0.380
+    // against 0.446, and the mirror arrangement read the same 0.806 with and without the
+    // cube (the camera's centre pixel is not the mirror's image of the point: unverified
+    // geometry, not a verdict on the gate).
+    if (rays && targetMode) {
+        const Tier &epic = kTiers[0];
+        setTier(f, epic, GiToggle::Auto, GiToggle::Auto);
+        f.s->setNodeVisible(f.wall, false);
+        f.s->setNodeVisible(f.box, false);
+        const float x0 = 0.5f;
+        const NodeId hover = f.s->createNode();
+        f.s->setNodeMovable(hover, true);
+        f.s->attachMesh(hover, f.cube, f.black);
+        f.s->setNodeTransform(hover, Vec3(x0, 2.0f, 0.0f), Quat(), Vec3(2.0f, 2.0f, 2.0f));
+        const NodeId mirror = f.s->createNode();
+        PbrParams mp; mp.albedo = Colour(1.0f, 1.0f, 1.0f); mp.metalness = 1.0f; mp.roughness = 0.0f;
+        f.s->attachMesh(mirror, f.cube, f.s->createPbrMaterial(mp));
+        f.s->setNodeTransform(mirror, Vec3(x0 - 3.1f, 1.5f, 0.0f), Quat(), Vec3(0.2f, 3.0f, 8.0f));
+        const double cornerF = [] {
+            const double X = 1.0, Y = 1.0;
+            return 1.0 / (2.0 * kPi) * (X / std::sqrt(1 + X * X) * std::atan(Y / std::sqrt(1 + X * X)) +
+                                        Y / std::sqrt(1 + Y * Y) * std::atan(X / std::sqrt(1 + Y * Y)));
+        }();
+        const double closed = 1.0 - 4.0 * cornerF;
+        const Vec3 eye(x0 + 3.5f, 0.35f, 0.0f);
+        const auto readCentre = [&](const Vec3 &target, bool cube) {
+            f.s->setNodeVisible(hover, cube);
+            f.view->setCamera(enginetest::testCameraDescLookAt(eye, target));
+            f.s->refreshGlobalIllumination();
+            int frames = 0;
+            render(f.e, 120);
+            while (!f.s->giStatus().giAtRest && frames < 900) { render(f.e, 10); frames += 10; }
+            double acc = 0.0;
+            for (int k = 0; k < 8; ++k) {
+                f.e->renderOneFrame();
+                ImageF img; f.view->readPixelsHdr(img);
+                double sum = 0.0; int n = 0;
+                for (int y = int(kSize / 2) - 2; y <= int(kSize / 2) + 2; ++y)
+                    for (int x = int(kSize / 2) - 6; x <= int(kSize / 2) + 6; ++x) {
+                        const Colour c = img.at(unsigned(x), unsigned(y));
+                        sum += double(c.r) + c.g + c.b; ++n;
+                    }
+                acc += sum / n / 8.0;
+            }
+            return acc;
+        };
+        const Vec3 under(x0, 0.0f, 0.0f), inMirror(x0 - 6.2f, 0.0f, 0.0f);
+        const double dOpen = readCentre(under, false), dCube = readCentre(under, true);
+        const double mOpen = readCentre(inMirror, false), mCube = readCentre(inMirror, true);
+        const double direct = dCube / dOpen, mirrored = mCube / mOpen;
+        std::printf("\n== CASE D (Epic): the floor under a hovering 2 m mover, bottom 1 m up: closed form %.3f; "
+                    "direct %.3f (%.4f / %.4f); in the mirror %.3f (%.4f / %.4f)\n", closed, direct, dCube,
+                    dOpen, mirrored, mCube, mOpen);
+        CHECK_MSG(std::fabs(direct - closed) <= 0.05,
+                  "the floor under a hovering mover is darkened by its sky occlusion: %.3f against the "
+                  "closed form %.3f (bar 0.05)", direct, closed);
+        CHECK_MSG(std::fabs(mirrored - direct) <= 0.05,
+                  "...and a mirror's reflection of that point agrees: %.3f against %.3f (bar 0.05)",
+                  mirrored, direct);
+    }
+
     f.view->setScene(nullptr);
     f.e->destroyScene(f.s);
     f.e->destroyView(f.view);
