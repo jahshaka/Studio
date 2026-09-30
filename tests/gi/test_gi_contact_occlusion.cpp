@@ -737,10 +737,11 @@ int main()
     // the reflection ray's HIT on the floor under the mover, whose store radiance the
     // mover must gate — jahMoverSkyVisibility). Bars: the direct reading within 0.05 of
     // the closed form, the mirror's within 0.05 of the direct one.
-    // A TARGET (gi.contact_occlusion_target) at delivery: the direct reading measured 0.380
-    // against 0.446, and the mirror arrangement read the same 0.806 with and without the
-    // cube (the camera's centre pixel is not the mirror's image of the point: unverified
-    // geometry, not a verdict on the gate).
+    // A TARGET (gi.contact_occlusion_target) at delivery. THE DIRECT HALF: the floor under
+    // the hovering cube reads 0.380 against the closed form 0.446 — the gather's own answer,
+    // too dark by 0.066 (HOVER-GATHER-1). THE MIRROR HALF IS UNVERIFIED: it read 0.806 with
+    // and without the cube — the camera's centre pixel missed the mirror's image of the
+    // point, so it says nothing about the hit's mover gate yet.
     if (rays && targetMode) {
         const Tier &epic = kTiers[0];
         setTier(f, epic, GiToggle::Auto, GiToggle::Auto);
