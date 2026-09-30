@@ -485,9 +485,9 @@ int main()
         PbrParams cut;
         cut.alphaMode = PbrAlphaMode::Cutout;
         extra(cut, Vec3(-2.4f, 2.8f, -1.0f), sphere);
-        PbrParams twoSided;
-        twoSided.twoSided = true;
-        extra(twoSided, Vec3(-1.4f, 2.8f, -1.0f), sphere);
+        // FRONT faces culled (an inverted hull): the one cull the id pass does not draw
+        // (a two-sided material rides Atom since ATOM-TWO-SIDED-1 — atom.two_sided).
+        scene->setNodeFaceCull(extra(PbrParams(), Vec3(-1.4f, 2.8f, -1.0f), sphere), FaceCull::Front);
         const MeshId line = scene->createLineMesh({ Vec3(0, 0, 0), Vec3(1, 0, 0), Vec3(1, 1, 0) }, true);
         extra(PbrParams(), Vec3(2.4f, 2.8f, -1.0f), line);
         // A BACKDROP (the default ground's horizon plane is one): drawn by every
@@ -547,17 +547,17 @@ int main()
     // ---- (c) + (d): the split's stat ------------------------------------------
     {
         const AtomDrawStatus st = scene->atomDrawStatus();
-        std::printf("  stat: on %d atom %u pbs %u (notWorld %u notPbs %u customPiece %u blended %u twoSided %u alphaTested %u "
+        std::printf("  stat: on %d atom %u pbs %u (notWorld %u notPbs %u customPiece %u blended %u cullFront %u alphaTested %u "
                     "skinned %u noRow %u) stock %u | materials %u buckets %u twins %u screenDraws %u\n",
-                    int(st.on), st.atomItems, st.pbsItems, st.notWorld, st.notPbs, st.customPiece, st.blended, st.twoSided,
+                    int(st.on), st.atomItems, st.pbsItems, st.notWorld, st.notPbs, st.customPiece, st.blended, st.cullFront,
                     st.alphaTested, st.skinned, st.noRow, st.stockItems, st.materials, st.buckets, st.twins,
                     st.screenDraws);
         CHECK(st.on, "(c) the split is live on this device (the id pass runs)");
         CHECK_MSG(st.atomItems == cells.size() + 1u, "(c) every grid cell and the ground are Atom items (%u of %zu)",
                   st.atomItems, cells.size() + 1u);
-        CHECK_MSG(st.blended == 1 && st.alphaTested == 1 && st.twoSided == 1 && st.noRow == 1 && st.notWorld == 1 &&
+        CHECK_MSG(st.blended == 1 && st.alphaTested == 1 && st.cullFront == 1 && st.noRow == 1 && st.notWorld == 1 &&
                       st.pbsItems == 5,
-                  "(c) the blended, alpha-tested, two-sided, row-less (line) and backdrop items stay on PBS, each "
+                  "(c) the blended, alpha-tested, front-culled, row-less (line) and backdrop items stay on PBS, each "
                   "under its reason (pbs %u)", st.pbsItems);
         CHECK_MSG(st.materials == cells.size() + 1u && st.buckets < st.materials && st.buckets > 0,
                   "(d) the grid's and the ground's %u materials need %u decode draws (buckets)", st.materials,

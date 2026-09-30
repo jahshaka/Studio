@@ -223,12 +223,15 @@ int main(int argc, char **argv)
         enginetest::testCameraLookAt(view, Vec3(0.0f, 3.0f, 10.0f), Vec3(0.0f, 0.5f, 0.0f));
         frames(4);
         const AtomDrawStatus st = scene->atomDrawStatus();
-        std::printf("    atom: on %d atomItems %u twoSided %u pbs %u buckets %u, cull twins %u\n",
-                    int(st.on), st.atomItems, st.twoSided, st.pbsItems, st.buckets, scene->cullTwinCount());
+        std::printf("    atom: on %d atomItems %u (two-sided %u) cullFront %u pbs %u buckets %u, cull twins %u\n",
+                    int(st.on), st.atomItems, st.atomTwoSided, st.cullFront, st.pbsItems, st.buckets,
+                    scene->cullTwinCount());
         CHECK(scene->cullTwinCount() == 1, "two Back nodes on a two-sided material share ONE twin");
-        CHECK(st.twoSided == 1, "the node keeping the material's two-sidedness stays on PBS");
-        CHECK(st.atomItems == 2, "the two Back nodes route to Atom through the twin");
-        CHECK(st.buckets == 1, "...as ONE material: one decode bucket, not one per node");
+        // ATOM-TWO-SIDED-1: the node keeping the material's two-sidedness rides Atom too,
+        // drawn from both sides — in a bucket of its own (the two-sided permutation).
+        CHECK(st.atomItems == 3 && st.atomTwoSided == 1 && st.pbsItems == 0,
+              "the two Back nodes route to Atom through the twin, the two-sided one as itself");
+        CHECK(st.buckets == 2, "...the Back twin ONE bucket, not one per node; the two-sided material its own");
         for (auto &n : nodes) n->removeFromParent();
         frames(3);
         CHECK(scene->cullTwinCount() == 0, "every twin gone with its wearers");
