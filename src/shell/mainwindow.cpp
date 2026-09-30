@@ -756,6 +756,13 @@ iris::ScenePtr MainWindow::createDefaultScene(SceneTemplate kind)
     scene->skyColor = QColor(96, 96, 96);
     scene->fogColor = QColor(96, 96, 96);
     scene->shadowEnabled = true;
+    // THE EXPONENTIAL HEIGHT FOG ON (SKY-DEFAULTS-1; the owner's Unreal Basic
+    // level): the world's medium at iris::HeightFog's dials — Unreal's density
+    // and falloff, from 100 m, so the floor is untouched and the far world, the
+    // horizon and everything under it take the sky's own blue. The World fog
+    // stays off.
+    scene->heightFog = iris::HeightFog();
+    scene->heightFog.enabled = true;
 
     sceneNodeSelected(scene->rootNode);
 

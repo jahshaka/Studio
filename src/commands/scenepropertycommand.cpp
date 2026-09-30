@@ -121,6 +121,12 @@ QVector<sceneprops::Field> buildFields()
             else if (!s->cloudWeatherMap || s->cloudWeatherMap->source != path)
                 s->cloudWeatherMap = iris::Texture2D::load(path, false);
         });
+    // THE HEIGHT FOG (SKY-DEFAULTS-1), whole — one gesture or one
+    // world.heightFog call is one step.
+    add("heightFog", [](const ScenePtr &s) { return QVariant(s->heightFog.toJson().toVariantMap()); },
+        [](const ScenePtr &s, const QVariant &v) {
+            s->heightFog = iris::HeightFog::fromJson(QJsonObject::fromVariantMap(v.toMap()));
+        });
     // HARDWARE RAY TRACING (ledger §425) — the project's own state, as the
     // enum's int. Auto is 0, so a blob that lost the value restores the
     // documented default rather than the most restrictive state; anything

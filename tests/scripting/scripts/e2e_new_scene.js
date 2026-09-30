@@ -14,6 +14,10 @@
 //   3. WORLD — Basic's sky and lights on a group "World Floor" of 25 of Basic's
 //      floor cubes, 5 x 5, edge to edge: 500 x 500 m.
 //   4. `{location}` — the project folder lands under the folder that was named.
+//   1b. THE DEFAULT LOOK (SKY-DEFAULTS-1): the sun 50 degrees up behind the
+//      default camera, an 18 % card at mid-grey, the Height Fog on — near
+//      surfaces untouched, the horizon smooth, the sky under it blue, the
+//      World's far edge fading.
 //   5. THE REFUSALS, BY NAME and BEFORE anything is written: a bad location, an
 //      empty name, an unknown key — `empty`, the retired option, is one now —
 //      and an unknown template.
@@ -115,6 +119,104 @@ if (atomBasic.live && atomBasic.on) {
                 ") — the floor's route is not asserted here");
 }
 
+// ---- 1b. THE DEFAULT LOOK (SKY-DEFAULTS-1) ------------------------------------
+// The owner's Unreal Basic level: the sun high and behind the default camera,
+// an 18 % card on the floor at the film's mid-grey, and the Exponential Height
+// Fog on — the world's medium, beyond 100 m, over the sky under the horizon.
+// Colours are measured in the PLAIN grade's float radiance (linear, no chain);
+// the grey card in the "tonemap" grade (the scene's exposure as a constant).
+function lum(c) { return 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b; }
+function dist(a, b) { return Math.sqrt((a.r - b.r) * (a.r - b.r) + (a.g - b.g) * (a.g - b.g) + (a.b - b.b) * (a.b - b.b)); }
+function tanD(d) { return Math.tan(d * Math.PI / 180); }
+// A probe at `el` degrees of elevation for a LEVEL camera (fov 45, 16:9 shot).
+function rowAt(el) { return 0.5 - 0.5 * tanD(el) / tanD(22.5); }
+function plain(tag, probes) {
+    editor.frame(6, 1 / 60);
+    return editor.screenshot("new_scene_" + tag + ".png", 960, 540, probes, "plain", { radiance: true }).probes;
+}
+editor.setCamera({ position: { x: 0, y: 5, z: 14 }, lookAt: { x: 0, y: 0, z: 0 } });   // the default pose
+var sunDir = world.sun().direction;
+var sunElev = Math.asin(-sunDir.y) * 180 / Math.PI;
+assert(Math.abs(sunElev - 50) <= 1, "the sun stands at 50 degrees of elevation (" + sunElev.toFixed(2) + ")");
+// The default camera looks down -Z; the sun stands where its light comes FROM
+// (-direction): behind the camera is +Z.
+assert(-sunDir.z > 0.5 && Math.abs(sunDir.x) < 1e-3,
+       "...and BEHIND the default camera, on its back azimuth (towards the sun " + J({ x: -sunDir.x, z: -sunDir.z }) + ")");
+var hf = world.heightFog();
+console.log("height fog: " + J(hf));
+assert(hf.enabled === true && near(hf.density, 0.02, 1e-6) && near(hf.heightFalloff, 0.2, 1e-6) &&
+       near(hf.baseHeight, 0, 1e-6) && near(hf.startDistance, 100, 1e-4),
+       "the Height Fog is ON at Unreal's density 0.02 / falloff 0.2, from 100 m");
+assert(world.get().fog.enabled === false, "...and the World (scene) fog stays OFF");
+assert(hf.live && hf.live.on === true && hf.live.colourFromSky === true,
+       "...the renderer draws it, coloured by the sky it captured (" + J(hf.live) + ")");
+var fogC = { r: hf.live.colour[0], g: hf.live.colour[1], b: hf.live.colour[2] };
+assert(fogC.b > fogC.r * 1.5, "...a sky BLUE (" + J(fogC) + ")");
+// THE GREY CARD: an 18 % card on the floor under the default lights develops at
+// the film's mid-grey (display 0.18 = code 46) within 1/3 of a stop (35..59).
+var card = scene.addPrimitive("plane", { position: { x: 0, y: 0.02, z: 0 } });
+material.set(card, { baseColor: "#767676", roughness: 1.0, metallic: 0.0 });
+editor.selectNone();
+editor.frame(10, 1 / 60);
+var cardShot = editor.screenshot("new_scene_card.png", 480, 270, [{ x: 0.5, y: 0.5 }], "tonemap").probes[0];
+var cardCode = 0.2126 * cardShot.r + 0.7152 * cardShot.g + 0.0722 * cardShot.b;
+assert(cardCode >= 35 && cardCode <= 59,
+       "an 18% card on the Basic floor reads the film's mid-grey within 1/3 stop (" + cardCode.toFixed(1) + " of 35..59)");
+// NEARER THAN THE START DISTANCE NOTHING MOVES: the card, fog on and off.
+var nearOn = plain("near_on", [{ x: 0.5, y: 0.5 }])[0].radiance;
+world.heightFog({ enabled: false });
+var nearOff = plain("near_off", [{ x: 0.5, y: 0.5 }])[0].radiance;
+world.heightFog({ enabled: true });
+assert(dist(nearOn, nearOff) === 0, "a surface nearer than the start distance is IDENTICAL with the fog on and off (" +
+       J(nearOn) + " vs " + J(nearOff) + ")");
+node.remove(card);
+// THE HORIZON, level at 2 m with the floor hidden: the sky alone.
+editor.setCamera({ position: { x: 0, y: 2, z: 14 }, lookAt: { x: 0, y: 2, z: -1000 } });
+node.setProperty(floor, "visible", false);
+var els = [1, 1, 0.5, -5];   // [0] unused (30 degrees is read below, pitched)
+var col = [];
+for (var k = 0; k <= 40; ++k) col.push({ x: 0.5, y: 0.40 + k * 0.005 });
+var probes = els.map(function (e) { return { x: 0.5, y: rowAt(e) }; }).concat(col);
+var on = plain("horizon_on", probes);
+world.heightFog({ enabled: false });
+var off = plain("horizon_off", probes);
+world.heightFog({ enabled: true });
+node.setProperty(floor, "visible", true);
+// 30 degrees up is off a level frame (its top edge is 22.5): a camera pitched
+// up 30 degrees reads it at the centre.
+editor.setCamera({ position: { x: 0, y: 2, z: 14 }, lookAt: { x: 0, y: 2 + tanD(30) * 100, z: 14 - 100 } });
+var at30on = plain("up30_on", [{ x: 0.5, y: 0.5 }])[0].radiance;
+world.heightFog({ enabled: false });
+var at30off = plain("up30_off", [{ x: 0.5, y: 0.5 }])[0].radiance;
+world.heightFog({ enabled: true });
+var d30 = Math.abs(lum(at30on) - lum(at30off)) / lum(at30off);
+// UNREAL'S DEFAULTS ARE NOT NOTHING AT 30 DEGREES: density 0.02 / falloff 0.2
+// put an optical depth of D/(k sin 30) = 0.195 on that ray (12.6 % opacity),
+// towards a colour close to the sky's there — measured 3.3 % of luminance. The
+// bound is 5 %: the zenith side of the sky stays the sky.
+assert(d30 < 0.05, "30 degrees above the horizon the sky moves by under 5% (" + (100 * d30).toFixed(2) + "%)");
+var at1on = on[1].radiance, at1off = off[1].radiance;
+assert(dist(at1on, fogC) < 0.25 * dist(at1off, fogC),
+       "1 degree above the horizon the sky is PULLED towards the fog colour (" + dist(at1on, fogC).toFixed(4) +
+       " from it, " + dist(at1off, fogC).toFixed(4) + " with the fog off)");
+var below = on[3].radiance, above = on[2].radiance;
+assert(below.b - below.r > 0.1, "5 degrees BELOW the horizon is BLUE, b - r = " + (below.b - below.r).toFixed(3) +
+       " (> 0.1; the planet's grey band with the fog off: " + (off[3].radiance.b - off[3].radiance.r).toFixed(3) + ")");
+assert(dist(below, above) <= 0.05 * Math.sqrt(above.r * above.r + above.g * above.g + above.b * above.b),
+       "...and within 5% of the sky just above the horizon (0.5 degrees) — one smooth colour across it");
+function maxStep(p) {
+    var worst = 0;
+    for (var i = els.length + 1; i < p.length; ++i)
+        worst = Math.max(worst, dist(p[i].radiance, p[i - 1].radiance));   // colour, not luminance: the
+                                                                          // physical step is a hue step
+    return worst;
+}
+var stepOn = maxStep(on), stepOff = maxStep(off);
+console.log("horizon column: largest row-to-row colour step " + stepOn.toFixed(4) + " fog on, " +
+            stepOff.toFixed(4) + " fog off");
+assert(stepOn < 0.5 * stepOff, "the horizon is SMOOTH with the fog on: its largest step is under half the physical " +
+       "sky's sharp one (" + stepOn.toFixed(4) + " vs " + stepOff.toFixed(4) + ")");
+
 // ---- 2. Empty ---------------------------------------------------------------
 var empty = project.create("New Scene Empty " + Date.now(), { template: "empty" });
 assert(empty.length > 10, "project.create({template: \"empty\"})");
@@ -131,6 +233,7 @@ var ew = world.get();
 console.log("empty world sky: " + J(ew.sky));
 assert(String(ew.sky.type) === "None",
        "...and NO SKY: SkyType::NONE, a black background that lights nothing (SKY-ATMOSPHERE-1)");
+assert(world.heightFog().enabled === false, "...and NO Height Fog: Empty is nothing");
 // ...AND "NO SKY" SURVIVES A SAVE AND A REOPEN (the merge read's W1): the type is
 // written by ordinal and read back as the same value, not as a single colour.
 assert(project.save() === true, "the empty project saves");
@@ -159,6 +262,21 @@ assert(near(wb.max.y, 0, 1e-3) && near(wb.center.x, 0, 0.01) && near(wb.center.z
        "...top at y = 0, centred on the origin");
 assert(lightsIn(scene.nodes()) === 2 && String(world.get().sky.type) === "Realistic",
        "...under Basic's sky and its two lights");
+assert(world.heightFog().enabled === true, "...and Basic's Height Fog");
+// THE FAR EDGE FADES (SKY-DEFAULTS-1): the 250 m edge seen from the default
+// camera, just under the horizon, moves towards the fog colour with it on.
+editor.setCamera({ position: { x: 0, y: 5, z: 14 }, lookAt: { x: 0, y: 0, z: 0 } });
+var pitchW = -Math.atan2(5, 14) * 180 / Math.PI;
+var edgeY = 0.5 - 0.5 * tanD(-1.08 - pitchW) / tanD(22.5) + 0.003;
+var wf = world.heightFog().live;
+var wFog = { r: wf.colour[0], g: wf.colour[1], b: wf.colour[2] };
+var edgeOn = plain("world_edge_on", [{ x: 0.5, y: edgeY }])[0].radiance;
+world.heightFog({ enabled: false });
+var edgeOff = plain("world_edge_off", [{ x: 0.5, y: edgeY }])[0].radiance;
+world.heightFog({ enabled: true });
+assert(dist(edgeOn, wFog) < 0.85 * dist(edgeOff, wFog),
+       "the World's far floor edge FADES into the fog (" + dist(edgeOn, wFog).toFixed(4) + " from its colour, " +
+       dist(edgeOff, wFog).toFixed(4) + " without it)");
 // ONE TILE, PINNED ONCE: every floor wears its OWN material instance, all naming the
 // same pinned checker — one Tile.png row in the project, not twenty-five.
 var maps = {};

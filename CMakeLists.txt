@@ -388,6 +388,7 @@ set(SRCS
     src/services/thumbnailmanager.cpp 
     src/ui/panels/propertywidgets/fogpropertywidget.cpp 
     src/ui/panels/propertywidgets/worldcloudspropertywidget.cpp 
+    src/ui/panels/propertywidgets/worldheightfogpropertywidget.cpp 
     src/io/assetiobase.cpp 
     src/io/materialpresetreader.cpp
     src/io/materialpresets.cpp

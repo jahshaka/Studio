@@ -412,6 +412,11 @@ QVector<VerbInfo> WorldApi::verbs() const
           "`enabled` (default false) switches it. `coverage` 0..1 (default 0.5) is how much of the sky is cloud — 0 clear, 1 an overcast deck. `density` 0..4 (default 1) is how opaque a covered patch is: its underside darkness and its shadow. `speed` 0..100 metres per second of SCENE time (default 10): the renderer's own clock, so a paused scene holds its clouds still and a scripted frame is reproducible. `direction` 0..360 degrees (default 0) is the heading the wind blows TOWARDS, from +X turning towards -Z. `altitude` 500..8000 metres (default 2000) is the ALTITUDE LOOK: the sheet lies over a curved earth, so a low layer fills the sky to the horizon and a high one stays overhead, and a low sun throws the ground shadow sideways by altitude / tan(elevation). `shadow` 0..1 (default 1) scales how much of the sheet's transmittance reaches the sun's light on the ground. `weatherMap` is an image asset guid (assets.list({type:\"texture\"})) whose red channel scales the coverage over one 64 km tile of the sheet — white lets clouds form, black keeps the sky clear — or \"\" to clear it. Values outside a dial's band are clamped, and the answer reports what the scene holds. An unknown key, a value that is not a number, or a weatherMap that is not a stored texture asset is refused and nothing is written. One undo step. "
           "`live` is what the renderer is doing with it (absent without an engine viewport): `drawn`, and `reason` when not (\"off\", \"imageSky\", \"noSky\", \"media\"); `fieldBakes`, how many times the layer's optical-depth field has been rebuilt (a coverage, density or weather-map change rebuilds it; wind and shadow never do); `changeCaptures` and `scrollCaptures`, the environment re-captures it has asked for — at once on a change that moves the sky's picture, and every `capturePeriodFrames` drawn frames while it scrolls (the ambient follows a moving sheet on that cadence, never per frame); `clockTicks`, the drawn frames the sheet's clock has advanced (one per frame, never more); `scroll`, the sheet's current offset in metres; and `skyMean`, the environment capture's mean radiance (its SH band 0, linear, before the Sky Light scales it) — the number that moves when the clouds change the sky's light.",
           Needs::Document },
+        { "heightFog", "world.heightFog({enabled?, density?, heightFalloff?, baseHeight?, startDistance?}) -> {enabled, density, heightFalloff, baseHeight, startDistance, densityPerMetre, heightFalloffPerMetre, live}",
+          "THE EXPONENTIAL HEIGHT FOG — Unreal's Exponential Height Fog (its non-volumetric core) as a medium of the WORLD: nothing nearer than `startDistance` is fogged, so the scene you build stays exactly itself, while the far world, the horizon and the sky under it take the fog. It is SEPARATE from the World fog (world.fog), which it never touches. The medium is density(y) = density x 2^(-heightFalloff x (y - baseHeight)), integrated along every view ray from the start distance to the surface — Unreal's own line integral — and the SKY'S PIXELS ARE FOGGED TOO, at a sky distance of 100 km: a ray that climbs slowly (just above the horizon) crosses a long stretch of the layer and takes the fog's colour, a steep one crosses little and stays the sky, and every ray under the horizon is fogged completely — so the horizon blends smoothly above and below, and what lies under it reads as the fog rather than the planet. THE COLOUR IS THE SKY'S IN-SCATTER, never a pick: the mean radiance the sky delivers to an upward-facing droplet (the environment capture's integral at +Y, the Sky Light's own number, unscaled by it), so it follows the sky, its haze, its brightness and the sun; with no sky it is black. Unreal's Inscattering Color Cubemap has no counterpart on purpose: the sky IS the colour source. Its directional inscattering, second layer, max opacity, cutoff distance and volumetric fog are not here (a later version). "
+          "THE DIALS ARE UNREAL'S NUMBERS: `density` (default 0.02, 0..10) and `heightFalloff` (default 0.2, 0.001..2) are in the units Unreal's panel shows, which it divides by 1000 per centimetre — i.e. by 10 per METRE, the units this renderer works in (`densityPerMetre` and `heightFalloffPerMetre` in the answer are those). `baseHeight` (default 0, metres) is the world height where `density` applies — Unreal's actor height. `startDistance` (default 100, metres, 0..100000) is how far from the eye the fog begins: 100 clears the Basic floor from the default camera (Unreal ships 0, which puts a thin veil on the floor itself). `enabled` switches it; a new scene's OFF, and the Basic and World templates switch it ON at these dials. Values outside a band are clamped and the answer reports what the scene holds. An unknown key or a value that is not a number is refused and nothing is written. One undo step. "
+          "`live` is the renderer's (absent without an engine viewport): `on`, and `colour` — the in-scatter in force, linear [r, g, b] — with `colourFromSky` false while no sky has been captured yet (the colour is then black).",
+          Needs::Document },
         { "sunContact", "world.sunContact({enabled?, range?, resolution?}) -> {enabled, range, resolution, live}",
           "HARD SUN CONTACT SHADOWS — one hardware ray per pixel from the surface the camera sees towards the sun, "
           "folded into the sun's shadow as min(shadow map, ray). A shadow map is rendered with a depth BIAS (or every "
@@ -560,7 +565,7 @@ QVector<VerbInfo> WorldApi::verbs() const
           "not here either: it is a world row, world.sunDisc({size}). On any other sky "
           "it is inert. It is read and written with node.property / node.setProperty.",
           Needs::Document },
-        { "get", "world.get() -> {skyLight, sunDisc, clouds, sunContact, gravity, fog, shadows, gi, sky, mode, settings, postFx, looks}",
+        { "get", "world.get() -> {skyLight, sunDisc, clouds, heightFog, sunContact, gravity, fog, shadows, gi, sky, mode, settings, postFx, looks}",
           "Reads the current world settings.",
           Needs::Document },
         { "mode", "world.mode({mode}) -> string",
@@ -2133,6 +2138,71 @@ QVariantMap WorldApi::clouds(const QVariantMap &params)
 }
 
 // ---------------------------------------------------------------------------
+// THE EXPONENTIAL HEIGHT FOG (SKY-DEFAULTS-1; iris::HeightFog)
+// ---------------------------------------------------------------------------
+// The whole authoring surface: the World panel's Height Fog blade
+// (WorldHeightFogPropertyWidget) writes exactly this document field through the
+// same sceneprops key ("heightFog") with the same clamp.
+QVariantMap WorldApi::heightFog(const QVariantMap &params)
+{
+    QVariantMap out;
+    auto scene = sceneOrFail(QStringLiteral("world.heightFog"));
+    if (!scene) return out;
+    if (!params.isEmpty()) {
+        static const QStringList known = {
+            QStringLiteral("enabled"), QStringLiteral("density"), QStringLiteral("heightFalloff"),
+            QStringLiteral("baseHeight"), QStringLiteral("startDistance")
+        };
+        const QString refusal = refuseUnknownKeys(QStringLiteral("world.heightFog"), params, known);
+        if (!refusal.isEmpty()) { fail(refusal); return out; }
+        // VALIDATED BEFORE ANYTHING IS WRITTEN (world.clouds' rule).
+        iris::HeightFog h = scene->heightFog;
+        if (params.contains(QStringLiteral("enabled")))
+            h.enabled = params.value(QStringLiteral("enabled")).toBool();
+        const struct { const char *key; float *field; } numbers[] = {
+            { "density", &h.density }, { "heightFalloff", &h.heightFalloff },
+            { "baseHeight", &h.baseHeight }, { "startDistance", &h.startDistance },
+        };
+        for (const auto &n : numbers) {
+            const QString key = QString::fromLatin1(n.key);
+            if (!params.contains(key)) continue;
+            bool ok = false;
+            const double v = params.value(key).toDouble(&ok);
+            if (!ok || !std::isfinite(v)) {
+                fail(QStringLiteral("world.heightFog: '%1' must be a number").arg(key));
+                return out;
+            }
+            *n.field = float(v);
+        }
+        h = iris::HeightFog::clamped(h);
+        WorldEdit edit(scene, { QStringLiteral("heightFog") });
+        sceneprops::set(scene, QStringLiteral("heightFog"), h.toJson().toVariantMap());
+        edit.commit(host.services ? host.services->undo : nullptr, QStringLiteral("Height Fog"));
+    }
+    const iris::HeightFog &h = scene->heightFog;
+    out[QStringLiteral("enabled")] = h.enabled;
+    out[QStringLiteral("density")] = double(h.density);
+    out[QStringLiteral("heightFalloff")] = double(h.heightFalloff);
+    out[QStringLiteral("baseHeight")] = double(h.baseHeight);
+    out[QStringLiteral("startDistance")] = double(h.startDistance);
+    out[QStringLiteral("densityPerMetre")] = double(h.density * iris::HeightFog::kUnrealDialToPerMetre);
+    out[QStringLiteral("heightFalloffPerMetre")] =
+        double(h.heightFalloff * iris::HeightFog::kUnrealDialToPerMetre);
+    if (host.isEngineReady() && host.viewport) {
+        if (jahshaka::engine::Scene *es = host.viewport->engineScene()) {
+            const jahshaka::engine::HeightFogStatus st = es->heightFogStatus();
+            QVariantMap live;
+            live[QStringLiteral("on")] = st.on;
+            live[QStringLiteral("colour")] =
+                QVariantList{ double(st.colour[0]), double(st.colour[1]), double(st.colour[2]) };
+            live[QStringLiteral("colourFromSky")] = st.colourFromSky;
+            out[QStringLiteral("live")] = live;
+        }
+    }
+    return out;
+}
+
+// ---------------------------------------------------------------------------
 // HARD SUN CONTACT SHADOWS (PHOTON-RAYS-1; iris::SunContact)
 // ---------------------------------------------------------------------------
 // The whole authoring surface of the row: the World panel's Sun Contact rows
@@ -2781,6 +2851,7 @@ QVariantMap WorldApi::get()
     out["skyLight"] = skyLight();
     out["sunDisc"] = sunDisc(QVariantMap());
     out["clouds"] = clouds(QVariantMap());
+    out["heightFog"] = heightFog(QVariantMap());
     out["sunContact"] = sunContact(QVariantMap());
     out["rayTracing"] = QString::fromLatin1(iris::rayTracingModeName(scene->rayTracing));
     out["gravity"] = scene->gravity;

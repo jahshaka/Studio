@@ -74,6 +74,9 @@ public:
     /// THE 2D CLOUD LAYER (CLOUDS-2D-1; iris::CloudLayer). Reads with no
     /// argument; every key is validated before anything is written.
     Q_INVOKABLE QVariantMap clouds(const QVariantMap &params = QVariantMap());
+    /// THE EXPONENTIAL HEIGHT FOG (SKY-DEFAULTS-1; iris::HeightFog). Reads with
+    /// no argument; every key is validated before anything is written.
+    Q_INVOKABLE QVariantMap heightFog(const QVariantMap &params = QVariantMap());
     /// HARD SUN CONTACT SHADOWS (PHOTON-RAYS-1; iris::SunContact). Reads with no
     /// argument; every key is validated before anything is written.
     Q_INVOKABLE QVariantMap sunContact(const QVariantMap &params = QVariantMap());
