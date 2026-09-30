@@ -139,6 +139,22 @@ assert(clamped.density === 1 && clamped.diffusion === 0 && clamped.horizon === 0
        "clamped value — not the asked-for one (" + JSON.stringify(clamped) + ")");
 world.sky("realistic", { density: 0.5, diffusion: 2, horizon: 0.025, power: 1.5, sunHaze: 2.5 });
 
+// THE AIR'S HAZE SWITCH (AIR-HAZE-TOGGLE-1): `atmosphereHaze` is on by default,
+// the verb turns it off and on through the same one writer, a non-boolean is
+// refused by name, and leaving it out of a call keeps it where it was. (What it
+// DOES to a surface is sky.aerial_perspective's 4b, at the engine.)
+assert(clamped.atmosphereHaze === true, "the air's haze is ON by default (" + clamped.atmosphereHaze + ")");
+assert(world.sky("realistic", { atmosphereHaze: false }) === true, "world.sky(realistic, {atmosphereHaze: false})");
+assert(world.get().sky.data.atmosphereHaze === false, "...the stored block carries it");
+world.sky("realistic", { sunHaze: 3 });
+assert(world.get().sky.data.atmosphereHaze === false, "...and a call that does not name it keeps it off");
+var hazeRefused = null;
+try { world.sky("realistic", { atmosphereHaze: "no" }); } catch (e) { hazeRefused = String(e); }
+assert(hazeRefused !== null && hazeRefused.indexOf("atmosphereHaze") >= 0,
+       "a non-boolean atmosphereHaze is refused by name: " + hazeRefused);
+assert(world.sky("realistic", { atmosphereHaze: true, sunHaze: 2.5 }) === true &&
+       world.get().sky.data.atmosphereHaze === true, "...and it switches back on");
+
 // ROTATING THE LIGHT MOVES THE SKY. The sky is the engine's analytic model now
 // (SKY-GPU), keyed on the sun direction we push it, so the proof is in pixels:
 // with the sun ahead of the camera the picture differs from the same picture

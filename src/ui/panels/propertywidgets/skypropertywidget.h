@@ -117,6 +117,7 @@ protected slots:
     void onSkyHorizonChanged(float val);
     void onSkyPowerChanged(float val);
     void onSunHazeChanged(float val);
+    void onAtmosphereHazeChanged(bool on);
 
     /// One realistic dial, written through iris::Scene::setSkyRealistic — the
     /// only supported writer of that block (SKY-WRITE-1).
@@ -189,6 +190,8 @@ private:
     /// The SUN's transmittance dial (the atmosphere's turbidity) — a sky-block
     /// row that changes no sky pixel: it colours the direct sunlight.
     RowPtr<HFloatSliderWidget> sunHaze;
+    /// The air's haze on geometry, on or off (AIR-HAZE-TOGGLE-1).
+    RowPtr<CheckBoxWidget> atmosphereHaze;
     RowPtr<ColorValueWidget> skyColour;
     RowPtr<LabelWidget> sunReadout;            // which light the sky's sun is (§3)
 

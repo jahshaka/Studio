@@ -264,6 +264,13 @@ void SkyPropertyWidget::skyTypeChanged(int index)
 			// (the row above moves the sky and no sunlight — two quantities,
 			// two dials, since 2026-09-15).
 			sunHaze      = addFloatValueSlider("Sun Haze", 1.f, 10.f, defaults.sunHaze);
+			// THE AIR'S HAZE ON GEOMETRY, switchable (AIR-HAZE-TOGGLE-1), beside
+			// the dial whose aerial perspective it switches.
+			atmosphereHaze = this->addCheckBox("Atmosphere Haze", defaults.atmosphereHaze);
+			atmosphereHaze->setToolTip(tr(
+				"The air's haze on distant surfaces (the aerial perspective Sun Haze "
+				"describes). Off: no air between a surface and the camera. The sun's "
+				"colour and the sky are unchanged; the World fog is its own switch."));
 			skyColour    = this->addColorPicker("Sky Colour");
 			addSunReadoutRow();
 
@@ -272,6 +279,7 @@ void SkyPropertyWidget::skyTypeChanged(int index)
 			skyHorizon->setValue(loaded.horizon);
 			skyPower->setValue(loaded.power);
 			sunHaze->setValue(loaded.sunHaze);
+			atmosphereHaze->setValue(loaded.atmosphereHaze);
 			skyColour->setColorValue(loaded.skyColour);
 
 			// Each dial writes THROUGH its binding (never a second, direct
@@ -286,6 +294,8 @@ void SkyPropertyWidget::skyTypeChanged(int index)
 			           [this](const QVariant &v) { onSkyPowerChanged(v.toFloat()); });
 			wireSkyRow(sunHaze, tr("Sun Haze"),
 			           [this](const QVariant &v) { onSunHazeChanged(v.toFloat()); });
+			wireSkyRow(atmosphereHaze, tr("Atmosphere Haze"),
+			           [this](const QVariant &v) { onAtmosphereHazeChanged(v.toBool()); });
 			wireSkyRow(skyColour->getPicker(), tr("Sky Colour"),
 			           [this](const QVariant &v) { onSkyColourChanged(v.value<QColor>()); });
 
@@ -416,6 +426,7 @@ void SkyPropertyWidget::wireSkyRow(QWidget *row, const QString &text,
         };
     if (auto *slider = qobject_cast<HFloatSliderWidget *>(row))      rowundo::bind(slider, b);
     else if (auto *picker = qobject_cast<ColorPickerWidget *>(row))  rowundo::bind(picker, b);
+    else if (auto *box = qobject_cast<CheckBoxWidget *>(row))        rowundo::bind(box, b);
 }
 
 void SkyPropertyWidget::commitSky(const QVariant &before, const QString &text)
@@ -634,6 +645,11 @@ void SkyPropertyWidget::onSkyPowerChanged(float val)
 void SkyPropertyWidget::onSunHazeChanged(float val)
 {
 	writeRealisticDial([val](iris::SkyRealistic &r) { r.sunHaze = val; });
+}
+
+void SkyPropertyWidget::onAtmosphereHazeChanged(bool on)
+{
+	writeRealisticDial([on](iris::SkyRealistic &r) { r.atmosphereHaze = on; });
 }
 
 void SkyPropertyWidget::onSkyColourChanged(QColor colour)
