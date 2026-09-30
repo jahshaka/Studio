@@ -207,9 +207,8 @@ int main(int argc, char **argv)
 
     // THE SUBJECT: a cube whose light is its own, at 1.4 x WHITE. §14's window
     // is narrow and deliberate — the raw path saturates at 1.0 and the filmic
-    // curve's grade tail saturates at about 1.77 at this exposure (the default
-    // grade of the physical sky, SKY-DEFAULTS-1: chain 0.97882, x 2.0; it was
-    // 2.5 at the retired 96-grey sky's grade), so 1.4 is over-range for raw
+    // curve's grade tail saturates at about 1.77 at this exposure (the pinned
+    // chain 0.97882 below, x 2.0), so 1.4 is over-range for raw
     // and inside the grade (code ~238). That is the whole band this feature
     // recovers, and a value of 8 would clip in both.
     auto cube = iris::MeshNode::create();
@@ -233,12 +232,14 @@ int main(int argc, char **argv)
     // THE WORLD GRADES. hdrEnabled is what makes the main view's chain tonemap,
     // and it is what a host reads into ViewPipDesc::tonemap for the inset.
     doc->hdrEnabled = true;
-    // MANUAL, at the scene default (zero stops = the exposure the default
-    // template's lights derive). Manual is the chain's fixed form, so this
-    // grade is a number from the first frame — EXPOSURE-1 replaced the old
-    // min == max clamp pin with a mode.
+    // MANUAL, at a PINNED grade: chain E = 0.97882 (x 2.0, the film tail
+    // saturating at 1.77 x white), written as the stops it is from whatever the
+    // default anchor is — so the 1.4 x white window below does not ride a
+    // re-derivation of the default exposure (SKY-DEFAULTS-1's merge read). Manual
+    // is the chain's fixed form, so this grade is a number from the first frame.
+    constexpr float kPinnedChain = 0.97882f;
     doc->exposureMode = iris::ExposureMode::Manual;
-    doc->exposure = 0.0f;
+    doc->exposure = iris::lens::exposureChainToStops(kPinnedChain);
 
     // Two cameras at the SAME pose: the explorer that drives the view and the
     // scene camera the inset previews. Identical shots make the grade

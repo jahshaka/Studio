@@ -153,15 +153,16 @@ assert(hf.live && hf.live.on === true && hf.live.colourFromSky === true,
 var fogC = { r: hf.live.colour[0], g: hf.live.colour[1], b: hf.live.colour[2] };
 assert(fogC.b > fogC.r * 1.5, "...a sky BLUE (" + J(fogC) + ")");
 // THE GREY CARD: an 18 % card on the floor under the default lights develops at
-// the film's mid-grey (display 0.18 = code 46) within 1/3 of a stop (35..59).
+// the film's mid-grey (display 0.18 = code 46) within 1/3 of a stop of its
+// input (37..58).
 var card = scene.addPrimitive("plane", { position: { x: 0, y: 0.02, z: 0 } });
 material.set(card, { baseColor: "#767676", roughness: 1.0, metallic: 0.0 });
 editor.selectNone();
 editor.frame(10, 1 / 60);
 var cardShot = editor.screenshot("new_scene_card.png", 480, 270, [{ x: 0.5, y: 0.5 }], "tonemap").probes[0];
 var cardCode = 0.2126 * cardShot.r + 0.7152 * cardShot.g + 0.0722 * cardShot.b;
-assert(cardCode >= 35 && cardCode <= 59,
-       "an 18% card on the Basic floor reads the film's mid-grey within 1/3 stop (" + cardCode.toFixed(1) + " of 35..59)");
+assert(cardCode >= 37 && cardCode <= 58,
+       "an 18% card on the Basic floor reads the film's mid-grey within 1/3 stop (" + cardCode.toFixed(1) + " of 37..58)");
 // NEARER THAN THE START DISTANCE NOTHING MOVES: the card, fog on and off.
 var nearOn = plain("near_on", [{ x: 0.5, y: 0.5 }])[0].radiance;
 world.heightFog({ enabled: false });
@@ -191,9 +192,10 @@ var at30off = plain("up30_off", [{ x: 0.5, y: 0.5 }])[0].radiance;
 world.heightFog({ enabled: true });
 var d30 = Math.abs(lum(at30on) - lum(at30off)) / lum(at30off);
 // UNREAL'S DEFAULTS ARE NOT NOTHING AT 30 DEGREES: density 0.02 / falloff 0.2
-// put an optical depth of D/(k sin 30) = 0.195 on that ray (12.6 % opacity),
-// towards a colour close to the sky's there — measured 3.3 % of luminance. The
-// bound is 5 %: the zenith side of the sky stays the sky.
+// from the 100 m start (the ray starts 52 m up) put an optical depth of 0.097
+// on that ray (6.5 % opacity), towards a colour close to the sky's there —
+// measured 3.3 % of luminance. The bound is 5 %: the zenith side of the sky
+// stays the sky, and the defaults stay Unreal's.
 assert(d30 < 0.05, "30 degrees above the horizon the sky moves by under 5% (" + (100 * d30).toFixed(2) + "%)");
 var at1on = on[1].radiance, at1off = off[1].radiance;
 assert(dist(at1on, fogC) < 0.25 * dist(at1off, fogC),
@@ -274,6 +276,19 @@ var edgeOn = plain("world_edge_on", [{ x: 0.5, y: edgeY }])[0].radiance;
 world.heightFog({ enabled: false });
 var edgeOff = plain("world_edge_off", [{ x: 0.5, y: edgeY }])[0].radiance;
 world.heightFog({ enabled: true });
+// ...AND THE PROBES NEVER SEE IT (the merge read): the height fog is withheld
+// from every cubemap probe face, so a NEAR surface — its direct light and its
+// indirect/probe term together — is identical in World with the fog on and off.
+var wCard = scene.addPrimitive("sphere", { position: { x: 0, y: 1, z: 4 } });
+material.set(wCard, { baseColor: "#767676", roughness: 0.2, metallic: 0.0 });
+editor.selectNone();
+var wNearOn = plain("world_near_on", [{ x: 0.5, y: 0.545 }])[0].radiance;
+world.heightFog({ enabled: false });
+var wNearOff = plain("world_near_off", [{ x: 0.5, y: 0.545 }])[0].radiance;
+world.heightFog({ enabled: true });
+node.remove(wCard);
+assert(dist(wNearOn, wNearOff) === 0, "World: a near glossy surface is IDENTICAL with the height fog on and off, " +
+       "indirect light included (" + J(wNearOn) + " vs " + J(wNearOff) + ")");
 assert(dist(edgeOn, wFog) < 0.85 * dist(edgeOff, wFog),
        "the World's far floor edge FADES into the fog (" + dist(edgeOn, wFog).toFixed(4) + " from its colour, " +
        dist(edgeOff, wFog).toFixed(4) + " without it)");

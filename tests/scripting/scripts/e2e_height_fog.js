@@ -102,8 +102,26 @@ var denser = shot("near_denser", [{ x: 0.5, y: 0.5 }])[0];
 assert(dist(denser, F) < dist(fogged, F), "more density fogs it more");
 node.remove(cube);
 
+// ---- A COLOUR SKY: the height fog ALONE registers the fog component --------
+// No atmosphere, no World fog: the height fog is the component's only customer,
+// so every PBS shader gains the fog block — and a near surface must still be
+// byte-identical with it on and off.
+world.sky("color", { color: "#6080b0" });
+world.heightFog({ enabled: true, density: 0.02, heightFalloff: 0.2, baseHeight: 0, startDistance: 100 });
+var cube2 = scene.addPrimitive("cube", { position: { x: 0, y: 1, z: -40 }, scale: { x: 3, y: 3, z: 3 } });
+editor.selectNone();
+editor.setCamera({ position: { x: 0, y: 2, z: 0 }, lookAt: { x: 0, y: 1, z: -40 } });
+var colOn = shot("colour_near_on", [{ x: 0.5, y: 0.5 }])[0];
+assert(world.heightFog().live.on === true, "under a colour sky the height fog is registered on its own");
+world.heightFog({ enabled: false });
+var colOff = shot("colour_near_off", [{ x: 0.5, y: 0.5 }])[0];
+assert(dist(colOn, colOff) === 0, "...and a surface nearer than the start distance is IDENTICAL on and off (" +
+       J(colOn) + " vs " + J(colOff) + ")");
+node.remove(cube2);
+world.sky("realistic", {});
+
 // ---- THE BASE HEIGHT: a layer lifted over the eye fogs the sky above --------
-world.heightFog({ density: 0.02, startDistance: 100 });
+world.heightFog({ enabled: true, density: 0.02, startDistance: 100 });
 editor.setCamera({ position: { x: 0, y: 2, z: 0 }, lookAt: { x: 0, y: 2 + Math.tan(10 * Math.PI / 180), z: -1 } });
 var low = shot("sky10_base0", [{ x: 0.5, y: 0.5 }])[0];
 world.heightFog({ baseHeight: 300 });
