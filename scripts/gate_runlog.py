@@ -81,13 +81,12 @@ _TARGET = re.compile(r"^\s*target:\s*(.+?)\s*$")
 _NOADMIT = re.compile(r"^\s*(?:\|\s*)*(NOADMIT vram: .*?)\s*$")
 
 
-# THE GPU-TIMING LOCK'S WAIT (LOCK-WAIT-1; scripts/gpu-exclusive.sh): `gpu-lock: waited <s> s` once
-# the lock is held — recorded per row as `lockWaitS` and subtracted from its seconds (a queue is
-# never the row's time); `NOLOCK gpu-lock: …` when the wait passed its bound — verdict NOLOCK (the
-# row never ran; the box's queue, not its code). timeout(1)'s own line — the row's budget, counted
-# from after the lock — makes a red a TIMEOUT.
+# THE TIMING ADMISSION'S WAIT (LOCK-WAIT-1; scripts/gpu-exclusive.sh = every VRAM token, TEST-SELECTOR-1
+# G1+G2): `gpu-lock: waited <s> s` once the card is held — recorded per row as `lockWaitS` and
+# subtracted from its seconds (a queue is never the row's time). A wait past its bound is the
+# admission's NOADMIT (above); timeout(1)'s own line — the row's budget, counted from after the
+# admission — makes a red a TIMEOUT.
 _LOCKWAIT = re.compile(r"^\s*(?:\|\s*)*gpu-lock: waited ([0-9.]+) s\s*$")
-_NOLOCK = re.compile(r"^\s*(?:\|\s*)*(NOLOCK gpu-lock: .*?)\s*$")
 _RUNTIMEOUT = re.compile(r"^\s*(?:\|\s*)*timeout: sending signal \S+ to command")
 
 
@@ -134,9 +133,6 @@ def row_verdict(status, text, arms):
     if na and not arms:
         return "NOADMIT", na, None
     if v == "FAIL":
-        for line in (text or "").splitlines():
-            m = _NOLOCK.match(line)
-            if m: return "NOLOCK", m.group(1)[:300], None
         if any(_RUNTIMEOUT.match(l) for l in (text or "").splitlines()):
             v = "TIMEOUT"
     if v in ("FAIL", "CRASH", "TIMEOUT"):

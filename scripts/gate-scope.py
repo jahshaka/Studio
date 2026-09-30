@@ -518,6 +518,8 @@ def load_inventory(build):
         run = list(cmd)
         if run and os.path.basename(run[0]) == "gpu-exclusive.sh":
             run = run[1:]
+            while run and run[0] in ("--run-timeout", "--label"):
+                run = run[2:]
         if run and os.path.basename(run[0]) == "gpu-admit.sh":
             run = run[run.index("--") + 1:] if "--" in run else run[2:]
         script = None
@@ -1892,9 +1894,11 @@ def main():
         for s in a.solo:
             for _ in range(a.times):
                 rx = "^" + re.escape(s) + "$"
+                # SOLO ON THE CARD TOO (G1+G2): every admission of the retry takes all the VRAM
+                # tokens, so no sibling lane's GPU row runs beside it
                 r = gate_runlog.run_ctest(f"ctest -j1 --timeout 900 --output-on-failure --no-tests=error -R '{rx}'",
                                           build, a.tier or "scoped", lane, 1, reasons={s: "solo retry"},
-                                          rng=log_range, retry=True)
+                                          rng=log_range, retry=True, env=dict(os.environ, JAH_VRAM_ALL="1"))
                 rc = rc or r
         sys.exit(rc)
     if not (a.range or a.files):

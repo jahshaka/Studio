@@ -309,41 +309,45 @@ class; L8's gate, 2026-09-11). Every failure in a gate report carries a verdict
 (environmental + evidence, or real + the failing assertion); a report without verdicts is
 not a gate.
 
-**THE GPU-TIMING LOCK (lane DEVPROCESS-1, 2026-09-23; THE TIMING LIST since D6B-GATE-SHAPE,
-2026-09-27).** Measured: VRAM is not the constraint (2.3 GB of 16 GB with three GPU processes
-live) — GPU TIME is, and `RUN_SERIAL` serialises only inside one ctest process while every lane
-is its own. THE RULE: **a suite that measures time or GPU budget runs under the GPU lock;
-everything else shares the GPU; at most three app-spawning lanes; a measurement lane
-(debug-runner) takes the lock around every `perf.capture` run via the wrapper.** The lock is
-`scripts/gpu-exclusive.sh <command…>` — one box-wide `flock` on `/tmp/jah-gpu-timing.lock` (the
-lock lives in the kernel and dies with its holder), a bounded 900 s wait (exit 75, the command
-never runs), the command exec'd in place so a ctest timeout still kills the suite itself.
+**THE GPU-TIMING ADMISSION (lane DEVPROCESS-1, 2026-09-23; THE TIMING LIST since D6B-GATE-SHAPE,
+2026-09-27; ONE ADMISSION since TEST-SELECTOR-1, 2026-10-01).** `RUN_SERIAL` serialises only
+inside one ctest process while every lane is its own. THE RULE: **a suite that measures time or GPU
+budget takes ALL the VRAM tokens (§4b) — the card drains to it and nothing else, timed or untimed,
+shares the GPU while it measures; everything else shares the GPU within the budget; a measurement
+lane (debug-runner) wraps every `perf.capture` run the same way.** The wrapper is
+`scripts/gpu-exclusive.sh [--run-timeout <s>] [--label <row:class>] <command…>` = `vram_tokens.py
+admit all --timing`: the turnstile keeps the queue behind a waiting timing row (a stream of small
+requests cannot starve it), a bounded 900 s wait (`NOADMIT vram: …`, exit 75, the command never
+runs), the command exec'd in place so a ctest timeout still kills the suite itself and the tokens
+die with it. (Until TEST-SELECTOR-1 it was a separate `flock` that excluded only the OTHER timing
+rows: gi.rt_reflect_cost and gi.field_scroll went red beside sibling GPU rows — plan 9ab.) A
+`gate-scope.sh --solo` retry sets `JAH_VRAM_ALL=1`: every admission of a solo run takes the whole
+card, so a solo retry is solo on the GPU too.
 
 **THE LOCK LIST IS THE TIMING LIST** (`JAH_GPU_EXCLUSIVE_SUITES`, `tests/CMakeLists.txt`,
 registered by `jah_gpu_exclusive_test()`, whose `RUN_TIMEOUT` is the suite's own budget and
-whose TIMEOUT is that plus the 900 s wait; configure fails if a listed suite is registered any
-other way). A suite is on it because it asserts milliseconds, a ratio of milliseconds or a frame
+whose TIMEOUT is that + 30 s + the admission's 900 s bound; configure fails if a listed suite is
+registered any other way). A suite is on it because it asserts milliseconds, a ratio of milliseconds or a frame
 budget — never for a flake history: the six members that measured no time LEFT it
 (app.engine_selftest_validation, claude.chat, ui.media_lazy, scripting.e2e.space_switch /
 sun_light / reflection_map; audit R4 — ui.media_lazy had waited 88 s for it), and the timing
 ratios that sat under RUN_SERIAL only JOINED it (mirror.scale, perf.epic_steady_state,
 perf.drag_mirror_room, perf.capture_off_is_free; R3), with app.play_select beside app.input_keys
-(key/gesture arrival; R5). Every lock row also takes ctest's `RESOURCE_LOCK gpu_timing`, so two
-of ONE gate never start together and wait in a slot on the flock. `ctest -N -V | grep -c 'Test
+(key/gesture arrival; R5). Every timing row also takes ctest's `RESOURCE_LOCK gpu_timing`, so two
+of ONE gate never start together and wait in a slot on the admission. `ctest -N -V | grep -c 'Test
 command: .*gpu-exclusive.sh'` = 37 (a bare `grep -c gpu-exclusive` also counts the guard's own
 command line). Its guard is `devprocess.gpu_lock` (label `tooling`). A contention verdict on a
-lock row needs a sibling that was NOT under the lock (an app on `:0`, a measurement outside the
-wrapper, or — the lock never excludes it — the CPU load of the gate's own other slots) — say which.
+timing row needs a sibling that took no token (an app on `:0`, a measurement outside the wrapper,
+or — the admission never excludes it — the CPU load of the gate's own other slots) — say which.
 
-**THE LOCK'S WAIT IS NEVER THE ROW'S TIME** (LOCK-WAIT-1, stage close 1: perf.epic_steady_state
+**THE ADMISSION'S WAIT IS NEVER THE ROW'S TIME** (LOCK-WAIT-1, stage close 1: perf.epic_steady_state
 ran ~30 s solo and was killed at its TIMEOUT in the stage tier by queue time). The wrapper prints
-`gpu-lock: waited <s> s` once it holds the lock; the run log records it per row as `lockWaitS`
-and subtracts it from the row's `seconds` (the raw ctest figure stays as `wallSeconds`). A lock
-row's own budget (`RUN_TIMEOUT`) is enforced by the wrapper through timeout(1) FROM AFTER the lock
-(and after the VRAM tokens, when the row takes them — gpu-admit.sh applies it), so ctest's
-TIMEOUT (budget + the lock wait + 30 s) is only the backstop and a queued row never runs short;
-a wait past the bound prints `NOLOCK gpu-lock: …` and the run log's verdict is NOLOCK (never ran —
-the box's queue, not the row's code), and a row stopped by its own budget is a TIMEOUT.
+`gpu-lock: waited <s> s` once it holds the card; the run log records it per row as `lockWaitS`
+and subtracts it from the row's `seconds` (the raw ctest figure stays as `wallSeconds`). A timing
+row's own budget (`RUN_TIMEOUT`) is enforced by the wrapper through timeout(1) FROM AFTER the
+admission, so ctest's TIMEOUT (budget + 30 s + the wait's bound) is only the backstop and a queued
+row never runs short; a wait past the bound is the run log's NOADMIT (never ran — the box's queue,
+not the row's code), and a row stopped by its own budget is a TIMEOUT.
 
 **THE MILLISECOND BARS ARE NIGHTLY: counts at push, milliseconds on a quiet box** (D6B-GATE-SHAPE;
 audit §5). A wall-clock bar reads the box as much as the code, and the GPU lock does not exclude

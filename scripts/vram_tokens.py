@@ -36,8 +36,19 @@ THE CONTRACT
   * nvidia-smi is NOT consulted (racy, slow, and blind to what a process will allocate next):
     the token count is the contract, tuned by measurement.
 
+  * ONE ADMISSION FOR TIME TOO (TEST-SELECTOR-1 G1+G2, plan 9ab GPU-RATIO-LOCK-1): a row that
+    measures time or GPU budget asks for ALL the tokens (`admit all`, what scripts/gpu-exclusive.sh
+    runs). The turnstile above already keeps a small-request stream from starving it, so the GPU
+    drains to the timing row and NOTHING untimed shares the card while it measures — the separate
+    flock it used to hold excluded only other flock holders, and the ratio rows went red beside
+    sibling GPU rows (gi.rt_reflect_cost, gi.field_scroll). A solo retry (`gate-scope.sh --solo`)
+    sets JAH_VRAM_ALL=1: every admission of it takes all the tokens, so "solo" is solo on the card.
+
 Usage:
-  vram_tokens.py admit <k> [--label <text>] -- <command> [args...]   (scripts/gpu-admit.sh)
+  vram_tokens.py admit <k>|all [--label <text>] [--timing] [--run-timeout <s>] -- <command> [args...]
+      (scripts/gpu-admit.sh; scripts/gpu-exclusive.sh = `admit all --timing`). --timing prints the
+      wait as `gpu-lock: waited <s> s` (the run log's lockWaitS, never the row's time);
+      --run-timeout starts the row's own budget AFTER the admission (timeout(1)).
   vram_tokens.py status                                              (who holds what, now)
 Python: `acquire(k, label)` -> [fds] (inheritable), `release(fds)`; run_pool.py uses these.
 """
@@ -49,6 +60,7 @@ import time
 
 EX_TEMPFAIL = 75
 POLL_S = 0.1
+LAST_WAIT_S = 0.0        # the last acquire()'s wait, seconds (the --timing line reads it)
 
 
 class AdmitTimeout(Exception):
@@ -140,9 +152,14 @@ def acquire(k, label="", wait=None, log=sys.stderr):
     """Take k tokens (all or nothing, lowest free indices first). Returns the token fds,
     inheritable, which the caller keeps open for exactly the life of the GPU process. Raises
     AdmitTimeout past the wait bound, holding nothing."""
+    global LAST_WAIT_S
+    LAST_WAIT_S = 0.0
     n = token_count()
     if n <= 0 or k <= 0:
         return []
+    if os.environ.get("JAH_VRAM_ALL") and k < n and not os.environ.get("JAH_VRAM_HELD"):
+        _say(log, "vram: a solo run (JAH_VRAM_ALL) — taking all %d tokens, not %d — %s" % (n, k, label))
+        k = n
     if os.environ.get("JAH_VRAM_HELD"):
         # NEVER HOLD-AND-WAIT: a process already admitted (a gpu-admit.sh row whose command
         # starts another admitted command, a pool app) runs on its parent's tokens — a nested
@@ -213,9 +230,10 @@ def acquire(k, label="", wait=None, log=sys.stderr):
             os.pwrite(fd, ("%d %s\n" % (os.getpid(), label)).encode(), 0)
         except OSError:
             pass
+    LAST_WAIT_S = time.monotonic() - t0
     if waited:
         _say(log, "vram: admitted with %d tokens %s after %.1f s%s"
-             % (k, ",".join(str(i) for i in idx), time.monotonic() - t0, (" — " + label) if label else ""))
+             % (k, ",".join(str(i) for i in idx), LAST_WAIT_S, (" — " + label) if label else ""))
     return got
 
 
@@ -272,22 +290,33 @@ def main(argv):
         status()
         return 0
     if argv[0] != "admit" or len(argv) < 2:
-        sys.stderr.write("usage: vram_tokens.py admit <k> [--label <text>] -- <command> [args...]\n")
+        sys.stderr.write("usage: vram_tokens.py admit <k>|all [--label <text>] [--timing] [--run-timeout <s>] "
+                         "-- <command> [args...]\n")
         return 64
-    try:
-        k = int(argv[1])
-    except ValueError:
-        sys.stderr.write("vram_tokens.py: token count '%s' is not a number\n" % argv[1])
-        return 64
+    if argv[1] == "all":
+        k = max(1, token_count())            # admission off (0 tokens) still runs the command at once
+    else:
+        try:
+            k = int(argv[1])
+        except ValueError:
+            sys.stderr.write("vram_tokens.py: token count '%s' is not a number or 'all'\n" % argv[1])
+            return 64
     rest = argv[2:]
-    label = ""
-    if rest[:1] == ["--label"] and len(rest) >= 2:
-        label = rest[1]
-        rest = rest[2:]
+    label, timing, run = "", False, ""
+    while rest and rest[0] in ("--label", "--timing", "--run-timeout"):
+        if rest[0] == "--timing":
+            timing, rest = True, rest[1:]
+        elif len(rest) >= 2:
+            if rest[0] == "--label": label = rest[1]
+            else: run = rest[1]
+            rest = rest[2:]
+        else:
+            break
     if rest[:1] == ["--"]:
         rest = rest[1:]
     if not rest:
-        sys.stderr.write("usage: vram_tokens.py admit <k> [--label <text>] -- <command> [args...]\n")
+        sys.stderr.write("usage: vram_tokens.py admit <k>|all [--label <text>] [--timing] [--run-timeout <s>] "
+                         "-- <command> [args...]\n")
         return 64
     if not label:
         label = os.path.basename(rest[0]) + (" " + " ".join(os.path.basename(a) for a in rest[1:3]) if len(rest) > 1 else "")
@@ -296,12 +325,14 @@ def main(argv):
     except AdmitTimeout as e:
         sys.stderr.write(str(e) + " — the command did not run\n")
         return EX_TEMPFAIL
+    if timing:
+        # THE WAIT IS NOT THE ROW'S TIME (LOCK-WAIT-1): one line, read by the run log as lockWaitS
+        sys.stderr.write("gpu-lock: waited %.1f s\n" % LAST_WAIT_S)
+        sys.stderr.flush()
     # exec in place: the tokens' fds are inherited; the pid that was started IS the command.
     if held:
         os.environ["JAH_VRAM_HELD"] = str(len(held))
-    # THE ROW'S OWN BUDGET, from AFTER both waits (LOCK-WAIT-1): gpu-exclusive.sh hands it over
-    # when a timing row also takes tokens, so neither queue is ever charged to the row.
-    run = os.environ.pop("JAH_GPU_RUN_TIMEOUT", "")
+    # THE ROW'S OWN BUDGET, from AFTER the admission (LOCK-WAIT-1): the queue is never charged to it.
     if run:
         rest = ["timeout", "--verbose", "-k", "15", run] + rest
     try:

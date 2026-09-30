@@ -221,17 +221,18 @@ function(jah_links_assimp _t)
     target_link_libraries(${_t} PRIVATE assimp)
 endfunction()
 
-# THE GPU-TIMING LOCK (lane DEVPROCESS-1, docs/TESTING_GATE.md §4). A suite that measures TIME
-# or GPU BUDGET prints a number that reads as a red when another lane's gate or app shares the
-# GPU with it; RUN_SERIAL serialises only inside ONE ctest process, and every lane is its own
-# ctest process. So these suites — and only these — are REGISTERED THROUGH
-# scripts/gpu-exclusive.sh, one box-wide flock on /tmp/jah-gpu-timing.lock; every other suite
-# shares the GPU freely. THE LOCK LIST IS THE TIMING LIST (lane D6B-GATE-SHAPE; audit
-# SPECS/audits/GATE_SUITES_AUDIT_2026-09-26.md §4 R3/R4/R5, §5): a suite is on it because it
-# asserts a millisecond, a ratio of milliseconds or a frame budget — never for a flake history
-# (the six members that measured no time left it: app.engine_selftest_validation, claude.chat,
-# ui.media_lazy, scripting.e2e.space_switch / sun_light / reflection_map). A suite joins it by a
-# verdict, never by convenience.
+# THE GPU-TIMING ADMISSION (lane DEVPROCESS-1; ONE admission since TEST-SELECTOR-1 G1+G2,
+# docs/TESTING_GATE.md §4). A suite that measures TIME or GPU BUDGET prints a number that reads as
+# a red when anything else shares the GPU with it; RUN_SERIAL serialises only inside ONE ctest
+# process, and every lane is its own ctest process. So these suites — and only these — are
+# REGISTERED THROUGH scripts/gpu-exclusive.sh, which takes EVERY token of the box-wide VRAM budget
+# (below): the card drains to the timing row and nothing untimed shares it. (The separate flock it
+# used to be excluded only the other timing rows.) THE LIST IS THE TIMING LIST (lane
+# D6B-GATE-SHAPE; audit SPECS/audits/GATE_SUITES_AUDIT_2026-09-26.md §4 R3/R4/R5, §5): a suite is
+# on it because it asserts a millisecond, a ratio of milliseconds or a frame budget — never for a
+# flake history (the six members that measured no time left it: app.engine_selftest_validation,
+# claude.chat, ui.media_lazy, scripting.e2e.space_switch / sun_light / reflection_map). A suite
+# joins it by a verdict, never by convenience.
 set(JAH_GPU_EXCLUSIVE "${CMAKE_SOURCE_DIR}/scripts/gpu-exclusive.sh")
 set(JAH_GPU_EXCLUSIVE_SUITES
     # the timing suites of the push tier
@@ -262,12 +263,6 @@ set(JAH_GPU_EXCLUSIVE_SUITES
     scale.cut_cost
     # ATOM-SHADOWS-1: the caster pass's CPU and GPU ms, cut against per-instance (paired arms).
     scale.shadow_cut)
-# The wrapper waits at most this long for the lock (its default, JAH_GPU_LOCK_WAIT), and the wait
-# counts against ctest's TIMEOUT — so a wrapped suite's TIMEOUT is ITS OWN run budget (the value
-# its site measured and documented) PLUS this wait, set here from RUN_TIMEOUT and never again at
-# the site. Widening by exactly the wait keeps every run budget the suite's own verdict.
-set(JAH_GPU_LOCK_WAIT_S 900)
-
 # THE VRAM BUDGET (lane GATE-ADMIT-1; docs/TESTING_GATE.md §4b; SPECS/audits/
 # GPU_LOSS_AUDIT_2026-09-27.md A3/A4). Every lane's gate is its own ctest process, so nothing
 # inside ctest (RESOURCE_GROUPS, RESOURCE_LOCK, RUN_SERIAL) can bound what FOUR gates put on one
@@ -387,12 +382,12 @@ endfunction()
 
 # jah_gpu_exclusive_test(NAME <suite> CLASS <class> [TIER <tier>] RUN_TIMEOUT <s> COMMAND <exe-or-target> [args...]
 #                        [WORKING_DIRECTORY <dir>])
-# add_test() through the lock AND the VRAM budget (the lock for exclusivity, the tokens for
-# memory: the lock is taken FIRST, so a queued timing row holds no tokens while it waits for it).
-# `set_tests_properties` cannot change a registered COMMAND, so the
-# wrapper is applied at registration: a TARGET name as the first COMMAND word becomes
-# $<TARGET_FILE:...> (it is an argument of the wrapper now, and add_test resolves target names
-# only in the command position). A name outside JAH_GPU_EXCLUSIVE_SUITES is a configure error.
+# add_test() through the timing admission: ALL the VRAM tokens (scripts/gpu-exclusive.sh ->
+# vram_tokens.py admit all), whatever the row's class — the class stays in its label for the
+# closure lint. `set_tests_properties` cannot change a registered COMMAND, so the wrapper is
+# applied at registration: a TARGET name as the first COMMAND word becomes $<TARGET_FILE:...> (it
+# is an argument of the wrapper now, and add_test resolves target names only in the command
+# position). A name outside JAH_GPU_EXCLUSIVE_SUITES is a configure error.
 function(jah_gpu_exclusive_test)
     cmake_parse_arguments(G "" "NAME;CLASS;TIER;TOKENS;RUN_TIMEOUT;WORKING_DIRECTORY" "COMMAND" ${ARGN})
     if(NOT G_NAME IN_LIST JAH_GPU_EXCLUSIVE_SUITES)
@@ -402,10 +397,7 @@ function(jah_gpu_exclusive_test)
     if(NOT G_RUN_TIMEOUT OR NOT G_COMMAND OR NOT G_CLASS)
         message(FATAL_ERROR "jah_gpu_exclusive_test(${G_NAME}): CLASS, RUN_TIMEOUT and COMMAND are required")
     endif()
-    jah_vram_tokens(${G_CLASS} _k TIER "${G_TIER}")
-    if(G_TOKENS)
-        set(_k ${G_TOKENS})
-    endif()
+    jah_vram_tokens(${G_CLASS} _k TIER "${G_TIER}")   # validates the class; the row takes ALL tokens
     list(POP_FRONT G_COMMAND _exe)
     if(TARGET ${_exe})
         set(_exe "$<TARGET_FILE:${_exe}>")
@@ -414,25 +406,18 @@ function(jah_gpu_exclusive_test)
     if(G_WORKING_DIRECTORY)
         set(_wd WORKING_DIRECTORY "${G_WORKING_DIRECTORY}")
     endif()
-    set(_admit)
-    if(_k GREATER 0)
-        set(_admit "${JAH_GPU_ADMIT}" ${_k} --label ${G_NAME}:${G_CLASS} --)
-    endif()
-    # --run-timeout: the row's own budget, enforced by the wrapper from AFTER the lock (and the
-    # tokens) — LOCK-WAIT-1; ctest's TIMEOUT below is only the backstop (budget + the waits + 30 s).
-    add_test(NAME ${G_NAME} COMMAND "${JAH_GPU_EXCLUSIVE}" --run-timeout ${G_RUN_TIMEOUT} ${_admit} "${_exe}" ${G_COMMAND} ${_wd})
-    math(EXPR _timeout "${G_RUN_TIMEOUT} + ${JAH_GPU_LOCK_WAIT_S} + 30")
-    # ...AND ctest's own `gpu_timing` resource lock (D6B-GATE-SHAPE): two lock holders of ONE
-    # gate never start together, so the second does not sit in a slot waiting on the flock
-    # (ui.media_lazy waited 88.2 s that way at the audit's gate). The flock still guards the
-    # box against every other lane.
+    # --run-timeout: the row's own budget, enforced by the wrapper from AFTER the admission —
+    # LOCK-WAIT-1; ctest's TIMEOUT is only the backstop (budget + 30 s, + the admission's bound,
+    # added once by _jah_vram_register like every GPU row).
+    add_test(NAME ${G_NAME} COMMAND "${JAH_GPU_EXCLUSIVE}" --run-timeout ${G_RUN_TIMEOUT}
+             --label ${G_NAME}:${G_CLASS} "${_exe}" ${G_COMMAND} ${_wd})
+    math(EXPR _timeout "${G_RUN_TIMEOUT} + 30")
+    # ...AND ctest's own `gpu_timing` resource lock (D6B-GATE-SHAPE): two timing rows of ONE gate
+    # never start together, so the second does not sit in a slot waiting on the admission.
     set_tests_properties(${G_NAME} PROPERTIES TIMEOUT ${_timeout})
     set_property(TEST ${G_NAME} APPEND PROPERTY RESOURCE_LOCK gpu_timing)
     set_property(GLOBAL APPEND PROPERTY JAH_GPU_EXCLUSIVE_REGISTERED ${G_NAME})
-    # the tokens' wait bound on top (deferred, like every jah_gpu_row)
-    if(_k GREATER 0)
-        _jah_vram_register(${G_NAME} ${G_CLASS} ${_k})
-    endif()
+    _jah_vram_register(${G_NAME} ${G_CLASS} all)
 endfunction()
 
 # THE SERIAL FAMILIES (lane D6B-GATE-SHAPE; SPECS/audits/GATE_SUITES_AUDIT_2026-09-26.md §4
@@ -791,8 +776,8 @@ add_subdirectory(update)
 # not installed. Nothing here runs on a box with no VR stack.
 add_subdirectory(vr)
 
-# The lock's tooling suite (devprocess.gpu_lock) and the list's closure: every suite the list
-# names is registered through the lock (app.input_keys and app.play_select need xdotool/curl/
+# The admission's tooling suites (devprocess.gpu_lock, devprocess.vram_admit) and the list's
+# closure: every suite the list names is registered through the timing admission (app.input_keys and app.play_select need xdotool/curl/
 # jq/Xvfb, vr.warmup.timing the VR stack — absent without them).
 add_subdirectory(tooling)
 get_property(_gpu_registered GLOBAL PROPERTY JAH_GPU_EXCLUSIVE_REGISTERED)
@@ -807,6 +792,6 @@ foreach(_t IN LISTS JAH_GPU_EXCLUSIVE_SUITES)
             set(_sev FATAL_ERROR)
         endif()
         message(${_sev} "JAH_GPU_EXCLUSIVE_SUITES names ${_t}, but it was not registered through "
-                            "jah_gpu_exclusive_test() — it would run WITHOUT the GPU-timing lock")
+                            "jah_gpu_exclusive_test() — it would measure beside other GPU rows")
     endif()
 endforeach()

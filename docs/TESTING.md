@@ -173,10 +173,10 @@ the gate on a Vulkan row registered any other way, naming its CMakeLists line.
 - **`--data-root <dir>` / `JAHSHAKA_DATA_ROOT`** moves the settings file, the library, the
   asset store and the shader cache together. Every suite sets its own; set it for any app you
   start by hand, or you write the build tree's shared `jahsettings.ini`.
-- **The GPU lock.** A suite that measures TIME or a GPU BUDGET holds
-  `scripts/gpu-exclusive.sh` (a box-wide `flock`); it is registered with
-  `jah_gpu_exclusive_test()` and nothing else takes it. A measurement you run by hand wraps its
-  app in the same script.
+- **The GPU-timing admission.** A suite that measures TIME or a GPU BUDGET runs through
+  `scripts/gpu-exclusive.sh`, which takes EVERY VRAM token (below): nothing else is on the card
+  while it measures. It is registered with `jah_gpu_exclusive_test()` and nothing else uses it. A
+  measurement you run by hand wraps its app in the same script.
 - **The VRAM budget.** Every Vulkan row takes box-wide tokens before it starts
   (`scripts/gpu-admit.sh`, 11 tokens shared by every lane's gate): a row that does not fit
   WAITS — its output then carries `vram: waiting for <k> tokens, <n> free` — instead of dying of
