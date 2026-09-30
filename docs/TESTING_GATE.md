@@ -295,19 +295,23 @@ the SCOPED selection of the FIX's own diff (`scripts/gate-scope.sh <pre-fix tip>
 The lead's post-merge targeted run stays (owner decision): it catches a merge interaction at
 merge time instead of at the batch gate.
 
-## 4. Flake protocol (unchanged)
+## 4. Flake protocol (the law in the refusal since TEST-SELECTOR-1)
 
-A failure is re-run SOLO on a quiet box up to 3×; 3/3 green = environmental, with the
-evidence string in the report (host-load timing, the texture-worker SEGV class). A
+A red of a CONTENTION-CLASS suite is re-run SOLO 3× (`scripts/gate-scope.sh --solo <suite>`: each
+admission of a solo run takes the whole card, §4b); 3/3 green = environmental, with the evidence
+string in the report (host-load timing, the texture-worker SEGV class). ANY OTHER red needs a
+recorded verdict (real + the failing assertion, or environmental + the evidence):
+`scripts/ci-gate-check.sh <range> --verdict "<text>"` writes it into the run log. THE MERGE REFUSAL
+APPLIES THIS (TEST-SELECTOR-1 L2/L3): `ci-gate-check.sh` refuses a merge while a selected row was
+never run at the tip, a contention-class red lacks 3/3 solo PASS after it (a solo red means it is not
+contention: a verdict), or any other red lacks a verdict — one solo PASS erases nothing — and
+`scripts/lead/merge-dbuild-lane.sh` calls it before it merges. A
 `VK_ERROR_OUT_OF_DEVICE_MEMORY` red is NOT environmental since GATE-ADMIT-1 (§4b): the box admits
 by VRAM, so an OOM means the budget is wrong (a class under-counted, a row outside it) or an
 unadmitted process filled the card — the verdict names which (`scripts/gpu-admit.sh status` and
-`nvidia-smi` beside the red). Known contention-sensitive suites: open.responsive,
-app.engine_selftest_validation, app.input_keys, threading.newproject_stall.timing (the
-nightly twin of the first create's 1000 ms bar; the push row prints it, TESTING-DEBTS-1),
-scenegraph.benchmark, shadergraph.bake_output, claude.chat, scripting.e2e.space_switch /
-sun_light, ui.media_lazy, gi.budget, scripting.e2e.reflection_map (the GI/VRAM contention
-class; L8's gate, 2026-09-11). Every failure in a gate report carries a verdict
+`nvidia-smi` beside the red). THE CONTENTION CLASS IS ONE FILE OF DATA,
+`<workspace>/testing/contention.json` (`{"suites": {<suite or pool.arm>: <its verdict>}}`), read by
+the refusal and by `--solo` — never a prose list; a suite joins it by a recorded verdict. Every failure in a gate report carries a verdict
 (environmental + evidence, or real + the failing assertion); a report without verdicts is
 not a gate.
 

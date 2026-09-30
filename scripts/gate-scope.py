@@ -1891,6 +1891,19 @@ def main():
                                 gate_runlog._git(["rev-parse", "--short=9", t_]) or t_)
     if a.solo:
         rc = 0
+        # THE FLAKE LAW'S LIST (L2): a solo retry clears a red only for a contention-class suite, and
+        # only 3/3; any other red needs a recorded verdict (ci_gate_check --verdict) — said up front
+        cl = gate_runlog.contention_list()
+        for s in a.solo:
+            if cl is None:
+                print(f"gate-scope --solo: the contention list {gate_runlog.contention_file()} is unreadable — "
+                      f"the merge refusal will not accept these retries until it is back")
+            elif s in cl:
+                print(f"gate-scope --solo: {s} is contention-class ({cl[s][:100]}): {a.times}/{a.times} PASS clears its red")
+            else:
+                print(f"gate-scope --solo: {s} is NOT in the contention class ({gate_runlog.contention_file()}): "
+                      f"the retries are logged, and its red still needs a recorded verdict "
+                      f"(scripts/ci-gate-check.sh <range> --verdict \"<text>\")")
         for s in a.solo:
             for _ in range(a.times):
                 rx = "^" + re.escape(s) + "$"

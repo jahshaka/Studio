@@ -169,6 +169,24 @@ def log_dir():
     return os.environ.get("JAH_RUN_LOG_DIR") or os.path.join(workspace_root(), "testing", "runs")
 
 
+# THE CONTENTION CLASS IS DATA (TEST-SELECTOR-1 L2; audit §8: it was prose in three docs the tools
+# could not read): <workspace>/testing/contention.json, {"suites": {<suite or pool.arm>: <verdict>}}.
+# ci_gate_check's flake law (3/3 solo after a red) and `gate-scope.sh --solo` read it; a suite joins
+# it by a recorded verdict, never by convenience.
+def contention_file():
+    return os.environ.get("JAH_CONTENTION_FILE") or os.path.join(workspace_root(), "testing", "contention.json")
+
+
+def contention_list():
+    """{suite or arm: why}, or None when the file cannot be read."""
+    try:
+        d = json.load(open(contention_file()))
+    except (OSError, ValueError):
+        return None
+    s = d.get("suites") if isinstance(d, dict) else None
+    return dict(s) if isinstance(s, dict) else None
+
+
 def _git(args, cwd=ROOT):
     try:
         r = subprocess.run(["git"] + args, cwd=cwd, capture_output=True, text=True)
