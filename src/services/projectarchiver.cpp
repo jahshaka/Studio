@@ -809,18 +809,30 @@ void ProjectArchiver::runImportBakesInline()
         struct Finish { std::atomic<bool> &flag; ~Finish() { flag.store(true); } } finish{ done };
         results = bakeAll(jobs, &mCanceled, [&at](int i, int) { at.store(i); });
     });
+    // The progress is emitted from THIS thread (D10): a synchronous archiver's
+    // emitProgress is a direct emit, and the worker must never be its caller.
+    int reported = -1;
     while (!done.load()) {
-        QCoreApplication::processEvents(QEventLoop::ExcludeUserInputEvents, 20);
-        if (!done.load()) QThread::msleep(5);
-    }
         const int now = at.load();
         if (now != reported && now >= 0) {
             reported = now;
             emitProgress(80 + (19 * now) / qMax(1, int(jobs.size())),
                          QStringLiteral("Baking models (%1 of %2)…").arg(now + 1).arg(jobs.size()));
         }
+        QCoreApplication::processEvents(QEventLoop::ExcludeUserInputEvents, 20);
+        if (!done.load()) QThread::msleep(5);
+    }
     future.waitForFinished();
-    commitImportBakes(results);
+    // A CANCEL COMMITS NOTHING (D10): the staged bake temps go, and the
+    // import's terminal path (importArchive) rolls the project back.
+    if (mCanceled.load()) {
+        for (MeshBakeStore::BakeResult &r : results) {
+            QVector<AssetCas::Staged> leftover{ r.staged };
+            AssetCas::discardStaged(leftover);
+        }
+        return;
+    }
+    commitImportBakes(results, jobs);
 }
 
 ProjectArchiver::Result ProjectArchiver::importArchive(const QString &zipPath)
@@ -834,7 +846,13 @@ ProjectArchiver::Result ProjectArchiver::importArchive(const QString &zipPath)
         while (mResult.error.isEmpty() && !mCanceled.load() && mNextIngest < mIngest.size())
             installImportSlice();
         installImportSlice();   // the terminating call (rollback on cancel)
-        if (mResult.error.isEmpty()) emitProgress(100, QStringLiteral("Imported."));
+        // A cancel during the synchronous bake (D10) rolls the catalog back
+        // exactly as the threaded cancel does.
+        if (mCanceled.load() && !mResult.projectGuid.isEmpty()) {
+            db->deleteProject(mResult.projectGuid);
+            mResult.projectGuid.clear();
+        }
+        if (mResult.error.isEmpty() && !mCanceled.load()) emitProgress(100, importedText());
     }
     const bool canceled = mCanceled.load();
     finish(canceled);
