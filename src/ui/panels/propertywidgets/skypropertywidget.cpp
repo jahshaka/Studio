@@ -77,7 +77,7 @@ QString skyTextureGuid(Project *project, const QString &path, const QString &car
 // table — the enum values are NOT the row indices any more.
 const iris::SkyType kSkyRows[] = {
     iris::SkyType::SINGLE_COLOR, iris::SkyType::CUBEMAP, iris::SkyType::EQUIRECTANGULAR,
-    iris::SkyType::GRADIENT,     iris::SkyType::REALISTIC,
+    iris::SkyType::GRADIENT,     iris::SkyType::REALISTIC, iris::SkyType::NONE,
 };
 const int kSkyRowCount = int(sizeof(kSkyRows) / sizeof(kSkyRows[0]));
 int skyRowFor(iris::SkyType t) {
@@ -95,6 +95,7 @@ QString skyDataKey(iris::SkyType type)
     case iris::SkyType::GRADIENT:        return QStringLiteral("Gradient");
     case iris::SkyType::EQUIRECTANGULAR: return QStringLiteral("Equirectangular");
     case iris::SkyType::CUBEMAP:         return QStringLiteral("Cubemap");
+    case iris::SkyType::NONE:            return QStringLiteral("None");
     case iris::SkyType::MATERIAL:        break;
     }
     return QStringLiteral("SingleColor");
@@ -189,6 +190,7 @@ void SkyPropertyWidget::skyTypeChanged(int index)
 	skySelector->addItem("Equirectangular");
 	skySelector->addItem("Gradient");
 	skySelector->addItem("Realistic");
+	skySelector->addItem("None");
 	skySelector->setCurrentIndex(skyRowFor(type));
 
 	// Combo rows are NOT SkyType values (MATERIAL is gone): translate via the table.
@@ -229,23 +231,13 @@ void SkyPropertyWidget::skyTypeChanged(int index)
 		}
 
 		case iris::SkyType::REALISTIC: {
-			// THE DIALS ARE THE ENGINE'S (SKY-GPU, owner pick 5). The five
-			// Preetham sliders that stood here — Turbidity, Rayleigh, Mie
-			// Coefficient, Mie Directional G, Exposure — described a CPU bake
-			// that no longer exists; the sky is Ogre's own analytic atmosphere,
-			// a fragment shader over the camera ray, and these are ITS
-			// parameters. An old document's Realistic block has none of them
-			// and opens at the defaults (no migrations, ever).
+			// THE PLANET'S ATMOSPHERE (SKY-ATMOSPHERE-1): three physical dials.
+			// An old document's Realistic block has none of them and opens at the
+			// defaults (forward only).
 			const iris::SkyRealistic defaults = iris::SkyRealistic::defaults();
 			// THE BLOCK, THROUGH THE DOCUMENT'S OWN READER AND WRITER
-			// (SKY-WRITE-1). The per-key defaults, the clamps and the colour
-			// fallback were all spelled out again here — a fourth copy, and the
-			// one that decided what a value a VERB wrote was worth: the panel
-			// re-derived the struct from its stored definition on every bind,
-			// so any writer that had kept only one of the two representations
-			// was silently corrected at the next selection. There is one
-			// representation of the pair now and one function that maps
-			// between them; a bind reads and re-writes the SAME fact.
+			// (SKY-WRITE-1): one representation of the pair and one function
+			// that maps between them; a bind reads and re-writes the SAME fact.
 			iris::SkyRealistic loaded = iris::Scene::skyRealisticFromJson(skyDefinition);
 			if (auto live = liveScene()) {
 				live->setSkyRealistic(loaded);
@@ -256,44 +248,43 @@ void SkyPropertyWidget::skyTypeChanged(int index)
 
 			// NO SUN DIALS (SKY_LIGHT_SPEC.md §3, owner decision D15). The sky's
 			// sun IS the scene's sun light: rotate the light and the sky moves.
-			skyDensity   = addFloatValueSlider("Density", 0.01f, 1.f, defaults.density);
-			skyDiffusion = addFloatValueSlider("Diffusion", 0.f, 4.f, defaults.diffusion);
-			skyHorizon   = addFloatValueSlider("Horizon", 0.f, .5f, defaults.horizon);
-			skyPower     = addFloatValueSlider("Sky Power", 0.f, 4.f, defaults.power);
-			// NOT a sky-look row: it colours the SUNLIGHT and moves no sky pixel
-			// (the row above moves the sky and no sunlight — two quantities,
-			// two dials, since 2026-09-15).
-			sunHaze      = addFloatValueSlider("Sun Haze", 1.f, 10.f, defaults.sunHaze);
-			skyColour    = this->addColorPicker("Sky Colour");
+			sunHaze      = addFloatValueSlider("Sun Haze", 0.f, 100.f, defaults.sunHaze);
+			sunHaze->setToolTip(tr("The haze in the air: 1 is very clear air, 0 none at all, "
+			                       "about 10 an ordinary day, 50 hazy. It whitens the horizon, widens the glow round the "
+			                       "sun, reddens a low sun and thickens the air on distant "
+			                       "surfaces — one air."));
+			aerialScale  = addFloatValueSlider("Aerial Scale", 0.f, 1.f, defaults.aerialScale);
+			aerialScale->setToolTip(tr("The aerial perspective — the air between the camera and a surface: 1 is the real "
+			                           "air (distant geometry fades into the sky behind it), 0 is "
+			                           "none. It changes no sky pixel."));
+			groundAlbedo = addFloatValueSlider("Ground Albedo", 0.f, 1.f, defaults.groundAlbedo);
+			groundAlbedo->setToolTip(tr("How bright the planet's surface is — the darker band "
+			                            "under the horizon."));
 			addSunReadoutRow();
 
-			skyDensity->setValue(loaded.density);
-			skyDiffusion->setValue(loaded.diffusion);
-			skyHorizon->setValue(loaded.horizon);
-			skyPower->setValue(loaded.power);
 			sunHaze->setValue(loaded.sunHaze);
-			skyColour->setColorValue(loaded.skyColour);
+			aerialScale->setValue(loaded.aerialScale);
+			groundAlbedo->setValue(loaded.groundAlbedo);
 
 			// Each dial writes THROUGH its binding (never a second, direct
 			// connect) and each drag is ONE undo step in a scene.
-			wireSkyRow(skyDensity, tr("Sky Density"),
-			           [this](const QVariant &v) { onSkyDensityChanged(v.toFloat()); });
-			wireSkyRow(skyDiffusion, tr("Sky Diffusion"),
-			           [this](const QVariant &v) { onSkyDiffusionChanged(v.toFloat()); });
-			wireSkyRow(skyHorizon, tr("Sky Horizon"),
-			           [this](const QVariant &v) { onSkyHorizonChanged(v.toFloat()); });
-			wireSkyRow(skyPower, tr("Sky Power"),
-			           [this](const QVariant &v) { onSkyPowerChanged(v.toFloat()); });
 			wireSkyRow(sunHaze, tr("Sun Haze"),
 			           [this](const QVariant &v) { onSunHazeChanged(v.toFloat()); });
-			wireSkyRow(skyColour->getPicker(), tr("Sky Colour"),
-			           [this](const QVariant &v) { onSkyColourChanged(v.value<QColor>()); });
+			wireSkyRow(aerialScale, tr("Aerial Scale"),
+			           [this](const QVariant &v) { onAerialScaleChanged(v.toFloat()); });
+			wireSkyRow(groundAlbedo, tr("Ground Albedo"),
+			           [this](const QVariant &v) { onGroundAlbedoChanged(v.toFloat()); });
 
 			realisticDefinition = iris::Scene::skyRealisticJson(loaded);
 			updateAssetAndKeys();
 
 			break;
 		}
+
+		case iris::SkyType::NONE:
+			// NO SKY (SKY-ATMOSPHERE-1): nothing to set — a black background,
+			// no environment and no ambient from a sky.
+			break;
 
 		case iris::SkyType::EQUIRECTANGULAR: {
 			equiTexture = this->addTexturePicker("Equi Map");
@@ -509,6 +500,7 @@ void SkyPropertyWidget::updateAssetAndKeys()
 	case iris::SkyType::CUBEMAP:         source = &cubeMapDefinition; break;
 	case iris::SkyType::GRADIENT:        source = &gradientDefinition; break;
 	case iris::SkyType::MATERIAL:        break;
+	case iris::SkyType::NONE:            break;
 	}
 	if (!source) return;
 	for (const QString &key : source->keys()) skyProperties.insert(key, source->value(key));
@@ -611,34 +603,19 @@ void SkyPropertyWidget::onEquiTextureChanged(QString guid)
 	updateAssetAndKeys();
 }
 
-void SkyPropertyWidget::onSkyDensityChanged(float val)
-{
-	writeRealisticDial([val](iris::SkyRealistic &r) { r.density = val; });
-}
-
-void SkyPropertyWidget::onSkyDiffusionChanged(float val)
-{
-	writeRealisticDial([val](iris::SkyRealistic &r) { r.diffusion = val; });
-}
-
-void SkyPropertyWidget::onSkyHorizonChanged(float val)
-{
-	writeRealisticDial([val](iris::SkyRealistic &r) { r.horizon = val; });
-}
-
-void SkyPropertyWidget::onSkyPowerChanged(float val)
-{
-	writeRealisticDial([val](iris::SkyRealistic &r) { r.power = val; });
-}
-
 void SkyPropertyWidget::onSunHazeChanged(float val)
 {
 	writeRealisticDial([val](iris::SkyRealistic &r) { r.sunHaze = val; });
 }
 
-void SkyPropertyWidget::onSkyColourChanged(QColor colour)
+void SkyPropertyWidget::onAerialScaleChanged(float val)
 {
-	writeRealisticDial([colour](iris::SkyRealistic &r) { r.skyColour = colour; });
+	writeRealisticDial([val](iris::SkyRealistic &r) { r.aerialScale = val; });
+}
+
+void SkyPropertyWidget::onGroundAlbedoChanged(float val)
+{
+	writeRealisticDial([val](iris::SkyRealistic &r) { r.groundAlbedo = val; });
 }
 
 /// ONE DIAL, ONE WRITE (SKY-WRITE-1). Every realistic row used to insert its

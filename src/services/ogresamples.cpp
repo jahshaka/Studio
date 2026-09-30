@@ -35,7 +35,8 @@ namespace {
 // The samples this program ports (spec §3, owner decision D2). The first three
 // are the proving slice — one base scene, one room, one cheap rider; the other
 // five ride harnesses those three pay for. Rows the spec ruled out (Atmosphere:
-// their AtmosphereNpr against our Preetham sky is apples to oranges;
+// their non-physical AtmosphereNpr against our planet atmosphere is apples to
+// oranges;
 // MorphAnimations: no blendshapes in the document model yet; the CPU-buffer
 // authoring demos: no document concept) are deliberately absent — a tile that
 // implies parity we cannot reach is worse than no tile.
@@ -45,9 +46,9 @@ const QVector<Entry> &table()
         // The notes are what the PORT CANNOT SHOW, and they are re-checked
         // against the engine each time a port is authored — the sky row here
         // used to say "ours is a Preetham bake", which stopped being true when
-        // the realistic sky moved onto Ogre's own AtmosphereNpr (SKY-GPU,
-        // 2026-09-14): both samples now ask the same sky model, so what is
-        // left to say is about the materials.
+        // the realistic sky moved onto the GPU (SKY-GPU, 2026-09-14; the
+        // planet's atmosphere since SKY-ATMOSPHERE-1), so what is left to say
+        // is about the materials.
         { QStringLiteral("PbsMaterials"), QStringLiteral("PBS Materials"),
           QStringLiteral("3 of their 6 BRDF names exist here. Their palette reflects a "
                          "cubemap from their media; ours reflects the sky. Their grid spins; "

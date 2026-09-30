@@ -243,13 +243,14 @@ QVector<VerbInfo> WorldApi::verbs() const
           "(density(y) = heightDensity * 2^(-(y - heightLevel) * heightFalloff)). breakMinBrightness/"
           "breakFalloff let bright pixels resist the fog (breakFalloff 0 = pure exponential). "
           "THE SKY DECIDES THE COLOUR, AND UNDER THE REALISTIC SKY THE AIR IS ALWAYS THERE: that sky "
-          "is an atmosphere, so its own AERIAL PERSPECTIVE hazes every lit surface with distance "
-          "whether or not this fog is enabled — the air's extinction at sea level, derived from the "
-          "same turbidity that tints the sun (world.sky's sunHaze; 2.5 keeps 87% of a surface at "
-          "1 km, 76% at 2 km) — and density and the height layer add fog on top of it. Every layer "
-          "then fogs towards the sky's own scattering colour for the direction each surface is seen "
-          "from, so the distance and the horizon fade into the sky behind them and follow the sun. "
-          "`color` is the fog colour under the OTHER skies (color, gradient, an image), which have "
+          "is the planet's atmosphere, so its own AERIAL PERSPECTIVE hazes every lit surface with "
+          "distance whether or not this fog is enabled — the light the air scatters in and what of "
+          "the surface survives it, from the same model the sky is drawn with (world.sky's "
+          "aerialScale switches it down to nothing, sunHaze thickens it) — and this fog composes ON "
+          "TOP of it: density and the height layer fog towards the sky's own radiance just above the "
+          "horizon at the direction each surface is seen from, so a fog that hides the ground reads "
+          "as the horizon sky behind it and follows the sun. "
+"`color` is the fog colour under the OTHER skies (color, gradient, an image), which have "
           "no atmosphere to ask; world.get().fog.colorFrom says which is in force. The rows, their "
           "labels and their ranges are ONE table (services/worldmodes.h fogParams) the World > Fog "
           "section is generated from too. "
@@ -513,7 +514,7 @@ QVector<VerbInfo> WorldApi::verbs() const
           "Sets any subset of the planar-reflection settings and returns the new state, as in world.planarReflections(). budget: 0 (off) to 8, or -1 / \"auto\" to follow the World Mode; EACH ACTIVE PLANE IS A WHOLE EXTRA SCENE RENDER EVERY FRAME, and changing the budget recompiles the PBR shaders (expect a pause on the next frame). resolution: 256..2048, or 0 / \"auto\" to follow the budget (1024 from 2 planes up, 512 below). shadows: true/false, or \"auto\" to follow the budget (on from 2 planes up); shadows inside reflections cost a private half-resolution shadow atlas PER PLANE. An explicit value is pinned and survives World Mode switches, exactly like world.override.",
           Needs::Document },
         { "sky", "world.sky(type, {...}) -> bool",
-          "Sets the sky. Types: color {color}; gradient {top, mid, bottom, offset}; realistic {density, diffusion, horizon, skyColour, power, sunHaze}; equirectangular {texture}; cubemap {front, back, left, right, top, bottom} (textures = texture asset guids — assets.list({type:\"texture\"}) lists them; a file name is not an identity and is refused). world.skyPreset applies one of the shipped cube skies. THE SKY HAS NO SUN OF ITS OWN: the realistic sky's sun position, and the warm band that follows it round the horizon, are taken from the scene's SUN — the first directional light — so you place the sun by rotating that light, never with sky dials; the sun DISC is world.sunDisc. The old azimuth/elevation/sunPosX/Y/Z/drivesSun parameters are gone and are refused by name. THE REALISTIC SKY IS THE ENGINE'S OWN ANALYTIC SKY, drawn on the GPU: density is how much atmosphere the ray crosses (the blue's depth), diffusion how fast the colour changes with altitude, horizon the lowest point it is drawn at, skyColour its own colour before absorption, power an HDR multiplier. sunHaze is a SEPARATE dial and not a sky-look one: it is the atmosphere's turbidity — the AIR — and it decides the two things that air does to light: the colour the SUNLIGHT arrives in (the direct beam's transmittance, exp(-tau*airmass), so a low sun turns red and dim) and the AERIAL PERSPECTIVE every lit surface gets under this sky whether or not world.fog is on (the air's sea-level extinction, exp(-sigma*distance), sigma 1.38e-4 per metre at 2.5: 87% of a surface survives 1 km, 76% 2 km, fading towards the sky's own colour) — 1 is a purely molecular atmosphere, 2.5 the clear day the sky's own defaults are fitted to, 4-6 hazy, and under 1 is held at 1. EVERY realistic dial is held inside the band the model can use (density 0.01..1, diffusion 0..4, horizon 0..0.5, power 0..4, sunHaze 1..10) — the document clamps, so a value outside them is corrected on the way in and world.get() reports what the renderer actually has. Moving 'density' changes the sky and leaves the sunlight and the haze alone; moving 'sunHaze' changes the sunlight and the haze and leaves every sky pixel alone. They were one number until 2026-09-15, which is why tuning either used to move the other. There is no CPU bake any more, so the old luminance/reileigh/mieCoefficient/mieDirectionalG/turbidity dials and the 'detail' bake width are gone and refused by name. A sky with no directional light in the scene draws the model's own night. Every sky LIGHTS the scene through the Sky Light (world.skyLight), the single-colour sky included. One call is one undo step (the sky block, the texture it bound); a refused call changes nothing.",
+          "Sets the sky. Types: none {} (no sky at all: a black background, no environment and no ambient from a sky — the Empty template's); color {color}; gradient {top, mid, bottom, offset}; realistic {sunHaze, aerialScale, groundAlbedo, rayleighScale, ozone}; equirectangular {texture}; cubemap {front, back, left, right, top, bottom} (textures = texture asset guids — assets.list({type:\"texture\"}) lists them; a file name is not an identity and is refused). world.skyPreset applies one of the shipped cube skies. THE REALISTIC SKY IS THE PLANET'S ATMOSPHERE, a physical model drawn on the GPU (Hillaire's, what Unreal's Sky Atmosphere is): a planet under a shell of air with Rayleigh and Mie scattering and an ozone layer, and ONE model answers the sky's pixels (a sharp horizon over the darker planet below it), the sun's colour (a low sun turns red and dim), the environment the Sky Light captures, the cloud sheet's air and the AERIAL PERSPECTIVE on every lit surface (distant geometry fades into exactly the sky behind it). THE SKY HAS NO SUN OF ITS OWN: its sun is the scene's SUN — the first directional light — which both places it and LIGHTS it (a brighter sun is a brighter sky, and a scene with no sun light has a night sky); rotate that light to move the sun, and the sun DISC is world.sunDisc. The dials mean physical things and 1 is the clear Earth of the reference for each scale: sunHaze is the aerosol haze as a multiple of the reference's very clear air (0 = none, 1 = default, ~10 an ordinary clear day, ~50 hazy, up to 100; the aerosol is grey — it dims and whitens, the air's molecules redden) and moves the sky, the sunlight and the aerial perspective together, because it is one air; aerialScale (0..1, default 1) is the air on geometry as a distance scale — 1 the real air, 0 none at all (a far lit surface reads as it would with no air before it), and it moves no sky pixel; groundAlbedo (0..1, default 0.3) is the planet's surface under the horizon; rayleighScale (0..10, default 1) is the air's blue; ozone (true/false, default true) is the ozone layer. EVERY dial is held inside its band — the document clamps, so world.get() reports what the renderer actually has. The old density/diffusion/horizon/skyColour/power dials belonged to a non-physical model that is gone and are refused by name. Every sky LIGHTS the scene through the Sky Light (world.skyLight), the single-colour sky included. One call is one undo step (the sky block, the texture it bound); a refused call changes nothing.",
           Needs::Document },
         { "skyPresets", "world.skyPresets() -> [name]",
           "The shipped cube skies — the Presets panel's Skyboxes tab — by name, in the panel's order (Cove, Hamarikyu, Bay, Field, Creek, Space). Needs no project.",
@@ -2594,19 +2595,17 @@ bool WorldApi::sky(const QString &type, const QVariantMap &params)
             "Rotate the sun light instead: node.transform(world.sun().light, {rotation: {...}}).")
                         .arg(QLatin1String(gone)));
     }
-    // ...AND THE PREETHAM DIALS ARE GONE TOO (SKY-GPU). The realistic sky is
-    // the engine's own analytic model, evaluated per pixel on the GPU; the five
-    // parameters that described the CPU bake, and the bake WIDTH that only a
-    // CPU bake could have, have no counterpart in it. Refused by name rather
-    // than silently ignored, for the same reason as above.
-    for (const char *gone : { "luminance", "reileigh", "mieCoefficient",
-                              "mieDirectionalG", "turbidity", "detail" }) {
+    // ...AND THE NON-PHYSICAL SKY'S DIALS ARE GONE (SKY-ATMOSPHERE-1). The
+    // realistic sky is the planet's atmosphere now; the gradient model's
+    // density/diffusion/horizon/skyColour/power have no counterpart in it.
+    // Refused by name rather than silently ignored, for the same reason as above.
+    for (const char *gone : { "density", "diffusion", "horizon", "skyColour", "skyColor", "power" }) {
         if (!params.contains(QLatin1String(gone))) continue;
         return fail(QStringLiteral(
-            "world.sky: '%1' is gone — the realistic sky is the engine's own analytic sky now "
-            "(no CPU bake, no bake width). Its dials are density, diffusion, horizon, skyColour "
-            "and power; the SUN's own air is 'sunHaze' (the atmosphere's turbidity), which "
-            "colours the sunlight and not the sky.").arg(QLatin1String(gone)));
+            "world.sky: '%1' is gone — the realistic sky is the planet's atmosphere now. Its dials "
+            "are sunHaze (the aerosol haze, 0..100, 1 = very clear air), aerialScale (0..1, the air on distant "
+            "surfaces), groundAlbedo (0..1, the planet under the horizon), rayleighScale (the "
+            "air's blue, 1 = Earth) and ozone (true/false).").arg(QLatin1String(gone)));
     }
 
     // Contract per SkyPropertyWidget: set the live fields AND rebuild
@@ -2663,21 +2662,23 @@ bool WorldApi::sky(const QString &type, const QVariantMap &params)
         auto take = [&params](const char *key, float current) {
             return params.contains(key) ? params.value(key).toFloat() : current;
         };
-        r.density   = take("density", r.density);
-        r.diffusion = take("diffusion", r.diffusion);
-        r.horizon   = take("horizon", r.horizon);
-        r.power     = take("power", r.power);
-        r.sunHaze   = take("sunHaze", r.sunHaze);
-        if (params.contains("skyColour") || params.contains("skyColor")) {
-            const QVariant given = params.contains("skyColour") ? params.value("skyColour")
-                                                                : params.value("skyColor");
-            bool ok = false;
-            const QColor c = colorFromJs(given, r.skyColour, &ok);
-            if (!ok) return fail(QStringLiteral("world.sky: %1 (skyColour)").arg(colorHelp(given)));
-            r.skyColour = c;
+        r.sunHaze       = take("sunHaze", r.sunHaze);
+        r.aerialScale   = take("aerialScale", r.aerialScale);
+        r.groundAlbedo  = take("groundAlbedo", r.groundAlbedo);
+        r.rayleighScale = take("rayleighScale", r.rayleighScale);
+        if (params.contains("ozone")) {
+            const QVariant given = scriptmod::normalizeJs(params.value("ozone"));
+            if (given.typeId() != QMetaType::Bool)
+                return fail(QStringLiteral("world.sky: 'ozone' must be true or false, got '%1'")
+                                .arg(given.toString()));
+            r.ozone = given.toBool();
         }
         scene->setSkyRealistic(r);
         scene->skyType = iris::SkyType::REALISTIC;
+    } else if (t == "none") {
+        // NO SKY (SKY-ATMOSPHERE-1): a black background, no environment, no
+        // ambient from a sky. The Empty template's sky.
+        scene->skyType = iris::SkyType::NONE;
     } else if (t == "equirectangular" || t == "equirect") {
         if (!requireProject()) return false;   // texture resolution needs the project's pins
         QString guid, path;
@@ -2732,7 +2733,7 @@ bool WorldApi::sky(const QString &type, const QVariantMap &params)
                                           scene->skyGuid, guids.value(face), host.project->getProjectGuid());
         }
     } else {
-        return fail(QStringLiteral("world.sky: unknown type '%1' (color, gradient, realistic, equirectangular, cubemap)").arg(type));
+        return fail(QStringLiteral("world.sky: unknown type '%1' (none, color, gradient, realistic, equirectangular, cubemap)").arg(type));
     }
 
     edit.commit(host.services ? host.services->undo : nullptr, QStringLiteral("World Sky"));

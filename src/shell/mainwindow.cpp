@@ -647,10 +647,10 @@ iris::ScenePtr MainWindow::createDefaultScene(bool empty)
 
     // THE DEFAULT SKY IS THE REAL ONE (owner answer Q1, 2026-09-18: "the
     // default new scene = the realistic real-time sky WITH the sun following
-    // it"). The analytic atmosphere is evaluated per pixel on the GPU
-    // (AtmosphereNpr, SKY-GPU), it takes its sun DIRECTION from the scene's
-    // sun — the directional light above, which is why the light is created
-    // first — and the Sky Light integrates it for the scene's ambient. Sun
+    // it"). The planet's atmosphere is drawn on the GPU (SKY-ATMOSPHERE-1),
+    // it takes its sun — direction and light — from the scene's sun, the
+    // directional light above, which is why the light is created first, and
+    // the Sky Light integrates it for the scene's ambient. Sun
     // Follows Atmosphere needs no line here: LightNode::followsAtmosphere is
     // TRUE by default, and this is the sky that makes it mean something (on a
     // picked colour the tint is white and the row says so). Its dials are

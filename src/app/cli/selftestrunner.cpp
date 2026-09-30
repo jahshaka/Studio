@@ -156,7 +156,7 @@ var sun = scene.addLight("directional", { position: { x: 0, y: 12, z: 0 },
                                           rotation: { x: -52, y: 28, z: 0 },
                                           intensity: 3.0 });
 if (!sun) throw new Error("scene.addLight(directional) refused");
-if (!world.sky("realistic", { density: 0.35, diffusion: 1.6, power: 1.0, sunHaze: 2.5 }))
+if (!world.sky("realistic", { sunHaze: 1.0 }))
     throw new Error("world.sky(realistic) refused");
 
 // THE GLOSSY FLOOR, 60 x 60 m, lifted 2 cm so it is unambiguously above y = 0.
