@@ -207,9 +207,11 @@ node.setProperty(sunInfo.light, "shadowMapType", sunShadowType);
 // CONTACT-OCCLUSION-1 — and a sun-lit cloud deck IS sky light, so a lit sky would move
 // the ratio this arm reads; a Sky Light at zero skips that pass): its peak (the lit ground under the sun) must drop by the factor the ground pixel's
 // direct term dropped by above — 0.5 at half strength under an opaque deck
-// (0.5 + 0.5 e^-tau, tau ~ 60: exactly 0.5 to 1e-20) — within the 8-bit direct
-// store's step at that peak (bar 0.02). And coverage 0 must leave the injection
-// byte-identical to no layer (the light volume's digest).
+// (0.5 + 0.5 e^-tau, tau ~ 60: exactly 0.5 to 1e-20) — within the float store's
+// rounding: the light volume is RGBA16F, each value within half a step of its own (2^-11
+// relative), so the ratio of two is within 2^-10 of 0.5 = 0.0005; the bar is twice that,
+// 0.001 (measured 0.5000000 on the peak and the mean, CONTACT-OCCLUSION-1). And coverage 0
+// must leave the injection byte-identical to no layer (the light volume's digest).
 var armSkyLight = world.skyLight().light;
 var armSkyLightIntensity = node.property(armSkyLight, "intensity");
 node.setProperty(armSkyLight, "intensity", 0.0);
@@ -233,13 +235,13 @@ assert(vZero.lightDigest === vClear.lightDigest,
        "coverage 0: the injection is byte-identical to no layer (" + vZero.lightDigest + ")");
 world.clouds({ coverage: 1, shadow: 0.5 });
 var vHalf = voxels("deck_shadow05");
-near(vHalf.peak / vClear.peak, 0.5, 0.02,
+near(vHalf.peak / vClear.peak, 0.5, 0.001,
      "an opaque deck at half strength halves the voxels' direct sun, as it halved the ground pixel's");
 world.clouds({ shadow: 1 });
 var vFull = voxels("deck_shadow1");
 assert(vFull.peak <= 0.01 * vClear.peak,
        "an opaque deck at full strength removes the voxels' direct sun (" + vFull.peak + ")");
-near(vHalf.meanLit / vClear.meanLit, 0.5, 0.02, "...and so is their mean over the lit voxels");
+near(vHalf.meanLit / vClear.meanLit, 0.5, 0.001, "...and so is their mean over the lit voxels");
 node.remove(litBox);
 world.gi({ mode: "off" });
 node.setProperty(armSkyLight, "intensity", armSkyLightIntensity);

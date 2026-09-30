@@ -1522,8 +1522,8 @@ set_tests_properties(gi.gather_trace PROPERTIES
 # height: the floor reads its cage's upper layer 0.47 m above it — and arm B 0.06) and
 # Epic's three bounces against the three-bounce solve (0.03); and case D, the floor under
 # a hovering 2 m MOVER at Epic: 0.380 against the closed form 0.446 (the gather's own answer,
-# too dark by 0.066 — HOVER-GATHER-1); its mirror half is UNVERIFIED (the camera missed the
-# mirror's image of the point).
+# too dark by 0.066 — HOVER-GATHER-1). Case D's MIRROR half gates in gi.contact_occlusion:
+# the reflection's hit on the floor under the mover within 0.06 of 0.446 (the mover gate).
 add_executable(test_gi_contact_occlusion test_gi_contact_occlusion.cpp)
 set_target_properties(test_gi_contact_occlusion PROPERTIES
     AUTOMOC OFF AUTOUIC OFF AUTORCC OFF

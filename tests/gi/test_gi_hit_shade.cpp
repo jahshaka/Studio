@@ -1637,8 +1637,9 @@ static int voxelViewMain(Engine *e)
     view->setScene(s);
     view->setOffscreenContract(OffscreenContract::StillPicture);
     view->setShadows(true);
-    // NO AMBIENT: the sky's ambient is added per pixel and never injected into the
-    // voxels — the rows compare the SUN's light, which both stores hold.
+    // NO AMBIENT: the rows compare the SUN's light, which both stores hold; a sky would
+    // add its direct term to the voxels (the sky pass) and to the cards, and the rows
+    // are about the sun.
     s->setAmbient(Colour(0.0f, 0.0f, 0.0f), Colour(0.0f, 0.0f, 0.0f));
     const MeshId cube = s->createMesh(enginetest::unitCubeMesh());
     const NodeId wall = s->createNode();

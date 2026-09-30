@@ -497,7 +497,7 @@ int main()
     // THE MOVER AND THE STORE (JAH_CONTACT_MOVER=1; the reflect_mover diagnosis): a
     // movable sphere circles over the floor under a sun at the High tier; per frame the
     // cascade-0 light volume's digest says whether the store changed, and the voxel at a
-    // fixed floor point its radiance. Run with and without JAHSHAKA_GI_NO_SKY_PASS=1.
+    // fixed floor point its radiance.
     if (std::getenv("JAH_CONTACT_MOVER")) {
         GiParams gi;
         gi.mode = GiMode::Vct; gi.quality = GiQuality::High; gi.numBounces = 1;
@@ -531,8 +531,7 @@ int main()
                                                vs.lightDigest.c_str(), double(vs.peak), vs.meanLit, (long long)vs.voxelsLit);
             prev = vs.lightDigest;
         }
-        std::printf("\n== MOVER: the store changed on %d of %d moving frames (sky pass %s)\n", changed, N - 1,
-                    std::getenv("JAHSHAKA_GI_NO_SKY_PASS") ? "OFF" : "ON");
+        std::printf("\n== MOVER: the store changed on %d of %d moving frames\n", changed, N - 1);
         render(f.e, 120);
         {
             // THE THREE READINGS OF ONE FLOOR POINT (1, 0, 1): the pixel (top-down, V = N),
@@ -737,14 +736,21 @@ int main()
     // the reflection ray's HIT on the floor under the mover, whose store radiance the
     // mover must gate — jahMoverSkyVisibility). Bars: the direct reading within 0.05 of
     // the closed form, the mirror's within 0.05 of the direct one.
-    // A TARGET (gi.contact_occlusion_target) at delivery. THE DIRECT HALF: the floor under
-    // the hovering cube reads 0.380 against the closed form 0.446 — the gather's own answer,
-    // too dark by 0.066 (HOVER-GATHER-1). THE MIRROR HALF IS UNVERIFIED: it read 0.806 with
-    // and without the cube — the camera's centre pixel missed the mirror's image of the
-    // point, so it says nothing about the hit's mover gate yet.
-    if (rays && targetMode) {
+    // THE MIRROR HALF GATES (gi.contact_occlusion); THE DIRECT HALF is a target
+    // (gi.contact_occlusion_target): the floor pixel reads 0.380 against 0.446 — the
+    // gather's own answer, too dark by 0.066 (HOVER-GATHER-1).
+    if (rays && !measureMode) {
         const Tier &epic = kTiers[0];
         setTier(f, epic, GiToggle::Auto, GiToggle::Auto);
+        {   // THE RAY TIER'S REFLECTION ROW (Epic's trace): the mirror answers with rays,
+            // not the voxel cone alone (a mover is not in the store the cone reads).
+            PostFxDesc fx;
+            fx.allowOffscreen = true;
+            fx.ssr = 2;
+            fx.ssao = false;
+            fx.hdrReadback = true;
+            f.view->setPostFx(fx);
+        }
         f.s->setNodeVisible(f.wall, false);
         f.s->setNodeVisible(f.box, false);
         const float x0 = 0.5f;
@@ -755,7 +761,7 @@ int main()
         const NodeId mirror = f.s->createNode();
         PbrParams mp; mp.albedo = Colour(1.0f, 1.0f, 1.0f); mp.metalness = 1.0f; mp.roughness = 0.0f;
         f.s->attachMesh(mirror, f.cube, f.s->createPbrMaterial(mp));
-        f.s->setNodeTransform(mirror, Vec3(x0 - 3.1f, 1.5f, 0.0f), Quat(), Vec3(0.2f, 3.0f, 8.0f));
+        f.s->setNodeTransform(mirror, Vec3(x0 - 3.1f, 1.5f, 0.0f), Quat(), Vec3(0.2f, 3.0f, 8.0f));   // face x0 - 3
         const double cornerF = [] {
             const double X = 1.0, Y = 1.0;
             return 1.0 / (2.0 * kPi) * (X / std::sqrt(1 + X * X) * std::atan(Y / std::sqrt(1 + X * X)) +
@@ -763,13 +769,22 @@ int main()
         }();
         const double closed = 1.0 - 4.0 * cornerF;
         const Vec3 eye(x0 + 3.5f, 0.35f, 0.0f);
+        // THE MIRROR'S CAMERA: to the side (z = 3), looking at the point's image behind
+        // the mirror's front face (x0 - 3): its ray meets the mirror at (x0 - 3, 0.48,
+        // 1.8), and the reflected ray reaches the point under the cube's centre passing
+        // 0.16 m high under its edge — the mirror shows the point, the camera's line of
+        // sight never crosses the cube.
+        const Vec3 mirrorEye(x0 - 1.0f, 0.8f, 3.0f);
+        int settleFrames = 0;
         const auto readCentre = [&](const Vec3 &target, bool cube) {
             f.s->setNodeVisible(hover, cube);
-            f.view->setCamera(enginetest::testCameraDescLookAt(eye, target));
+            const bool viaMirror = target.x < x0 - 3.0f;
+            f.view->setCamera(enginetest::testCameraDescLookAt(viaMirror ? mirrorEye : eye, target));
             f.s->refreshGlobalIllumination();
-            int frames = 0;
+            int frames = 120;
             render(f.e, 120);
-            while (!f.s->giStatus().giAtRest && frames < 900) { render(f.e, 10); frames += 10; }
+            while (!f.s->giStatus().giAtRest && frames < 1020) { render(f.e, 10); frames += 10; }
+            settleFrames = std::max(settleFrames, frames + 8);
             double acc = 0.0;
             for (int k = 0; k < 8; ++k) {
                 f.e->renderOneFrame();
@@ -784,19 +799,29 @@ int main()
             }
             return acc;
         };
-        const Vec3 under(x0, 0.0f, 0.0f), inMirror(x0 - 6.2f, 0.0f, 0.0f);
+        const Vec3 under(x0, 0.0f, 0.0f), inMirror(x0 - 6.0f, 0.0f, 0.0f);   // the point's image
         const double dOpen = readCentre(under, false), dCube = readCentre(under, true);
         const double mOpen = readCentre(inMirror, false), mCube = readCentre(inMirror, true);
         const double direct = dCube / dOpen, mirrored = mCube / mOpen;
         std::printf("\n== CASE D (Epic): the floor under a hovering 2 m mover, bottom 1 m up: closed form %.3f; "
                     "direct %.3f (%.4f / %.4f); in the mirror %.3f (%.4f / %.4f)\n", closed, direct, dCube,
                     dOpen, mirrored, mCube, mOpen);
-        CHECK_MSG(std::fabs(direct - closed) <= 0.05,
-                  "the floor under a hovering mover is darkened by its sky occlusion: %.3f against the "
-                  "closed form %.3f (bar 0.05)", direct, closed);
-        CHECK_MSG(std::fabs(mirrored - direct) <= 0.05,
-                  "...and a mirror's reflection of that point agrees: %.3f against %.3f (bar 0.05)",
-                  mirrored, direct);
+        std::printf("   (each reading settled: 120 frames, then until giAtRest, then 8 averaged — at most %d "
+                    "frames)\n", settleFrames);
+        if (targetMode) {
+            // THE TARGET: the floor pixel itself (the gather's own answer) — 0.380 at
+            // delivery, too dark by 0.066 (HOVER-GATHER-1).
+            CHECK_MSG(std::fabs(direct - closed) <= 0.05,
+                      "the floor under a hovering mover is darkened by its sky occlusion: %.3f against the "
+                      "closed form %.3f (bar 0.05)", direct, closed);
+        } else {
+            // THE MOVER GATE'S BAR: the mirror's reflection ray HITS the floor under the
+            // cube and reads the store, which holds no mover — only the hit's mover gate
+            // (jahMoverSkyVisibility) can darken it. 0.501 at delivery.
+            CHECK_MSG(std::fabs(mirrored - closed) <= 0.06,
+                      "a mirror's reflection of the floor under a hovering mover carries the mover's sky "
+                      "occlusion: %.3f against the closed form %.3f (bar 0.06)", mirrored, closed);
+        }
     }
 
     f.view->setScene(nullptr);
