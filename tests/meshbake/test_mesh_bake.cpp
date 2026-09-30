@@ -56,7 +56,6 @@
 #include <QRegularExpression>
 #include <QElapsedTimer>
 #include <algorithm>
-#include <array>
 #include <cfloat>
 #include <map>
 #include <cmath>
@@ -2157,78 +2156,6 @@ static int boundTerms(const QString &path)
     return 0;
 }
 
-/// `--closure <model>...` (ATOM-TWO-SIDED-1's measurement for the import's face-culling
-/// "Auto"): every mesh's CLOSURE — positions welded, degenerate triangles skipped, every
-/// undirected edge counted by the triangles sharing it. `closure` = edges shared by
-/// exactly two / all edges (a closed 2-manifold reads 1); `Lb/sqrtA` = the boundary's
-/// length over the square root of the area (tessellation-independent: a square plane
-/// reads 4 however finely it is cut). One row a mesh.
-static int closureTool(const QStringList &paths, double eps = 0.0)
-{
-    std::printf("%-44s %8s %9s %8s %8s %8s\n", "mesh", "tris", "closure", "border", "nonman", "Lb/sqrtA");
-    for (const QString &path : paths) {
-        const QList<iris::MeshPtr> meshes = iris::GraphicsHelper::loadAllMeshesFromFile(path);
-        if (meshes.isEmpty()) { std::printf("FAIL: %s parses\n", qUtf8Printable(path)); continue; }
-        for (int i = 0; i < meshes.size(); ++i) {
-            const iris::MeshPtr &mesh = meshes.at(i);
-            const float *pos = nullptr;
-            int comps = 3;
-            size_t nv = 0;
-            for (const iris::VertexBufferPtr &vb : mesh->getVertexBuffers()) {
-                if (!vb || !vb->data || vb->dataSize <= 0) continue;
-                const QList<iris::VertexAttribute> a = vb->vertexLayout.getAttribs();
-                if (a.isEmpty() || a.first().usage != iris::VertexAttribUsage::Position) continue;
-                comps = a.first().count > 0 ? a.first().count : 3;
-                nv = size_t(vb->dataSize) / (sizeof(float) * size_t(comps));
-                pos = reinterpret_cast<const float *>(vb->data);
-            }
-            const iris::IndexBufferPtr ib = mesh->getIndexBuffer();
-            if (!pos || nv < 3 || ib.isNull() || !ib->data) continue;
-            const unsigned *idx = reinterpret_cast<const unsigned *>(ib->data);
-            const size_t ni = size_t(ib->dataSize) / sizeof(unsigned);
-            std::map<std::array<float, 3>, unsigned> weld;
-            std::vector<unsigned> remap(nv);
-            for (size_t v = 0; v < nv; ++v) {
-                // `eps` > 0: WELD WITHIN eps (positions snapped to an eps grid) — the check that a
-                // reading is the surface's and not a near-coincident export split.
-                std::array<float, 3> k = { pos[v * comps], pos[v * comps + 1], pos[v * comps + 2] };
-                if (eps > 0.0)
-                    for (float &c : k) c = float(std::round(double(c) / eps) * eps);
-                remap[v] = weld.emplace(k, unsigned(weld.size())).first->second;
-            }
-            std::vector<iris::Vec3> wp(weld.size());
-            for (const auto &kv : weld) wp[kv.second] = iris::Vec3(kv.first[0], kv.first[1], kv.first[2]);
-            std::map<std::pair<unsigned, unsigned>, int> use;
-            int tris = 0;
-            double area = 0.0;
-            for (size_t t = 0; t + 2 < ni; t += 3) {
-                if (idx[t] >= nv || idx[t + 1] >= nv || idx[t + 2] >= nv) continue;
-                const unsigned w[3] = { remap[idx[t]], remap[idx[t + 1]], remap[idx[t + 2]] };
-                if (w[0] == w[1] || w[1] == w[2] || w[0] == w[2]) continue;
-                ++tris;
-                area += 0.5 * double(iris::Vec3::crossProduct(wp[w[1]] - wp[w[0]], wp[w[2]] - wp[w[0]]).length());
-                for (int e = 0; e < 3; ++e)
-                    ++use[{ std::min(w[e], w[(e + 1) % 3]), std::max(w[e], w[(e + 1) % 3]) }];
-            }
-            int two = 0, border = 0, nonManifold = 0;
-            double borderLength = 0.0;
-            for (const auto &kv : use) {
-                if (kv.second == 2) ++two;
-                else if (kv.second > 2) ++nonManifold;
-                else {
-                    ++border;
-                    borderLength += double((wp[kv.first.first] - wp[kv.first.second]).length());
-                }
-            }
-            std::printf("%-44s %8d %9.6f %8d %8d %8.4f\n",
-                        qUtf8Printable(QStringLiteral("%1#%2").arg(QFileInfo(path).fileName().left(38)).arg(i)), tris,
-                        use.empty() ? 0.0 : double(two) / double(use.size()), border, nonManifold,
-                        area > 0.0 ? borderLength / std::sqrt(area) : 0.0);
-        }
-    }
-    return 0;
-}
-
 /// THE DAG'S GROUPS AS TERMS (ATOM-CLUSTER-CUT: the bound rule applied to every
 /// group). One row per DAG depth — groups, how many dropped an island, the worst
 /// and the median bound/estimate ratio, the largest dropped island — and the ten
@@ -2666,6 +2593,42 @@ static void twoSidedReachesTheNode()
     CHECK_LOUD(twoSidedMaterials == 1 && readTwoSided == 1,
                qUtf8Printable(QStringLiteral("one of the two materials is two-sided, through the blob (%1 built, %2 read)")
                                   .arg(twoSidedMaterials).arg(readTwoSided)));
+    // ATOM-TWO-SIDED-1: THE IMPORT'S FACE CULLING overrides the file's flag where the
+    // importer reads it — the record the verbs and the dialog write (`faceCulling`:
+    // "file" by default, "single", "double"), in the bake key.
+    {
+        const struct { const char *name; iris::FaceCullingImport mode; int twoSided; } arms[] = {
+            { "file", iris::FaceCullingImport::File, 1 },
+            { "single", iris::FaceCullingImport::Single, 0 },
+            { "double", iris::FaceCullingImport::Double, 2 },
+        };
+        QStringList hashes;
+        for (const auto &arm : arms) {
+            QJsonObject record;
+            record[QStringLiteral("faceCulling")] = QString::fromLatin1(arm.name);
+            QString error;
+            const iris::ImportSettings parsed = iris::ImportSettings::fromJson(record, &error);
+            CHECK_LOUD(error.isEmpty() && parsed.faceCulling == arm.mode &&
+                           parsed.toJson().value(QStringLiteral("faceCulling")).toString() == QLatin1String(arm.name),
+                       qUtf8Printable(QStringLiteral("faceCulling '%1' reads, carries and writes back").arg(arm.name)));
+            hashes << parsed.hash();
+            const iris::MeshBake::Model m =
+                iris::MeshBake::buildFromScene(scene, path, fingerprint, scratch.path(), parsed.transform());
+            int n = 0;
+            for (const iris::MeshMaterialData &d : m.materials) n += d.twoSided ? 1 : 0;
+            CHECK_LOUD(m.valid && n == arm.twoSided,
+                       qUtf8Printable(QStringLiteral("faceCulling '%1': %2 of the two materials two-sided (want %3)")
+                                          .arg(arm.name).arg(n).arg(arm.twoSided)));
+        }
+        CHECK_LOUD(hashes[0] == iris::ImportSettings::identityHash() && hashes[1] != hashes[0] &&
+                       hashes[2] != hashes[0] && hashes[2] != hashes[1],
+                   "\"file\" keys as identity; \"single\" and \"double\" each move the settings hash (a re-bake)");
+        QJsonObject wrong;
+        wrong[QStringLiteral("faceCulling")] = QStringLiteral("auto");
+        QString why;
+        iris::ImportSettings::fromJson(wrong, &why);
+        CHECK_LOUD(!why.isEmpty(), "an unknown faceCulling ('auto') is refused");
+    }
     // (The NODE half — the fragment's MeshNode culls nothing — needs an Ogre::Root: a
     // fragment's children live in the scene graph, which this suite has none of. It is
     // mirror.document_to_engine's arm, through the same buildFromFile + buildFragment.)
@@ -2732,16 +2695,6 @@ int main(int argc, char **argv)
         return standin::write(QString::fromLocal8Bit(argv[2])) ? 0 : 1;
     if (argc > 2 && QString::fromLocal8Bit(argv[1]) == QStringLiteral("--bound-terms"))
         return boundTerms(QString::fromLocal8Bit(argv[2]));
-    if (argc > 2 && QString::fromLocal8Bit(argv[1]) == QStringLiteral("--closure")) {
-        QStringList paths;
-        double eps = 0.0;
-        for (int a = 2; a < argc; ++a) {
-            const QString arg = QString::fromLocal8Bit(argv[a]);
-            if (arg.startsWith(QStringLiteral("--eps="))) eps = arg.mid(6).toDouble();
-            else paths << arg;
-        }
-        return closureTool(paths, eps);
-    }
     if (argc > 2 && QString::fromLocal8Bit(argv[1]) == QStringLiteral("--dag-terms"))
         return dagTerms(QString::fromLocal8Bit(argv[2]),
                         argc > 3 && QString::fromLocal8Bit(argv[3]) == QStringLiteral("--dense"));
