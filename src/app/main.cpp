@@ -18,6 +18,7 @@ For more information see the LICENSE file
 #include <QThread>
 #include <cstdio>
 #include <QApplication>
+#include <QMessageBox>
 #include <QPalette>
 #include <QStyleFactory>
 #include <QSplashScreen>
@@ -454,6 +455,14 @@ int main(int argc, char *argv[])
         return runMcpServe(window, app, cli.mcpPort, cli.headlessScript);
 
     window.goToDesktop();   // splash.finish above hides the splash here
+
+    // THE WIPE IS SAID ON SCREEN, once (FORWARD-ONLY-1): the projects the user
+    // had are gone from the desktop, and a log line is not where they look.
+    // Only the ordinary windowed launch reaches here (every CLI path returned
+    // above); the scripted surface is app.libraryGeneration().
+    if (librarygeneration::wipedAtStartup())
+        QMessageBox::information(&window, QObject::tr("Library reset"),
+                                 librarygeneration::noticeText());
 
     // FIRST LAUNCH, ONCE: the donate greeting (owner decision D3, 2026-09-12).
     // It used to run modally inside MainWindow::closeEvent — the last thing a
