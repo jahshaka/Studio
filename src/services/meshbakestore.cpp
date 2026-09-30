@@ -295,7 +295,7 @@ iris::PrewarmItem planFor(QSqlDatabase conn, const QString &root, const QString 
     // stops at the first row that is actually the current generation.
     const QString settings = settingsHashFor(conn, root, sourcePath, assetGuid);
     QSqlQuery query(conn);
-    query.prepare("SELECT AF.oid, F.ext FROM asset_files AF "
+    query.prepare("SELECT AF.oid, F.ext, F.size FROM asset_files AF "
                   "LEFT JOIN files F ON AF.oid = F.oid "
                   "WHERE AF.role = ? AND AF.name = ? ORDER BY AF.rowid DESC");
     query.addBindValue(iris::MeshBake::casRole());
@@ -306,7 +306,12 @@ iris::PrewarmItem planFor(QSqlDatabase conn, const QString &root, const QString 
     while (query.next()) {
         const QString path = AssetStorePaths::objectPathIn(root, query.value(0).toString(),
                                                            query.value(1).toString());
-        if (!QFileInfo::exists(path)) continue;
+        // CHEAP, AND ENOUGH (FORWARD-ONLY-1 D3): the object's size against
+        // the catalog's record of it (a truncated or rewritten object differs)
+        // and the header's producer fingerprint — no payload is read.
+        const QFileInfo info(path);
+        if (!info.exists()) continue;
+        if (!query.value(2).isNull() && info.size() != query.value(2).toLongLong()) continue;
         if (!iris::MeshBake::headerMatches(path, fingerprint)) continue;
         item.bakePath = path;
         item.bakeFingerprint = fingerprint;
@@ -379,9 +384,9 @@ void clear()
 bool isFresh(QSqlDatabase conn, const QString &root, const QString &sourcePath,
              const QString &assetGuid)
 {
-    const iris::PrewarmItem item = planFor(conn, root, sourcePath, assetGuid);
-    if (item.bakePath.isEmpty()) return false;
-    return iris::MeshBake::read(item.bakePath, item.bakeFingerprint).valid;
+    // The plan's own test (size + header fingerprint), never a payload read:
+    // a sweep over a library asks this of every model.
+    return !planFor(conn, root, sourcePath, assetGuid).bakePath.isEmpty();
 }
 
 bool bakeAsset(Database *db, QSqlDatabase conn, const QString &root, const QString &guid,
@@ -492,10 +497,21 @@ QVector<BakeTarget> modelBakesNeeded(QSqlDatabase conn, const QString &root,
     // (what this did until the second read's F3) built one variant and left
     // every other row parsing on every open, forever.
     QSqlQuery query(conn);
-    query.prepare("SELECT AF.oid, AF.name, F.ext, AF.asset_guid FROM asset_files AF "
-                  "LEFT JOIN files F ON AF.oid = F.oid WHERE AF.role <> ? "
-                  "ORDER BY AF.rowid");
+    // THE GUID FILTER IS THE QUERY'S (D3): an archive import asks about the
+    // rows it brought, and must not walk the whole library to find them.
+    QString sql = QStringLiteral("SELECT AF.oid, AF.name, F.ext, AF.asset_guid FROM asset_files AF "
+                                 "LEFT JOIN files F ON AF.oid = F.oid WHERE AF.role <> ?");
+    if (onlyGuids) {
+        if (onlyGuids->isEmpty()) return out;
+        QStringList marks;
+        for (int i = 0; i < onlyGuids->size(); ++i) marks << QStringLiteral("?");
+        sql += QStringLiteral(" AND AF.asset_guid IN (%1)").arg(marks.join(QLatin1Char(',')));
+    }
+    sql += QStringLiteral(" ORDER BY AF.rowid");
+    query.prepare(sql);
     query.addBindValue(iris::MeshBake::casRole());
+    if (onlyGuids)
+        for (const QString &guid : *onlyGuids) query.addBindValue(guid);
     if (!query.exec()) return out;
     QSet<QString> seen;          // "<oid>|<settingsHash>"
     QHash<QString, QString> pathForOid;
@@ -512,7 +528,6 @@ QVector<BakeTarget> modelBakesNeeded(QSqlDatabase conn, const QString &root,
         }
         if (path.isEmpty()) continue;   // offline/purged object, already judged
         const QString guid = query.value(3).toString();
-        if (onlyGuids && !onlyGuids->contains(guid)) continue;
         const QString key = oid + QLatin1Char('|') + settingsHashFor(conn, root, path, guid);
         if (seen.contains(key)) continue;
         seen.insert(key);
