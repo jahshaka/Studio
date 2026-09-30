@@ -231,7 +231,7 @@ def runlog_cases(source):
                       "---- p.a: its output (2 line(s)) ----", "| ARM-BEGIN p.a", "| " + oom, "ARM p.a FAIL 900",
                       "---- p.b: its output (1 line(s)) ----", "| FAIL: 3 < 4", "ARM p.b FAIL 800",
                       "ARM-BEGIN p.c", "| " + lost])
-    arms = {a: v for a, v, _ in rl._suite_facts(pool)[2]}
+    arms = {a: v for a, v, _ in rl._suite_facts(pool)[1]}
     check(arms == {"p.a": "OOM", "p.b": "FAIL", "p.c": "LOST"}, "a pool's arms take the class from their own lines "
           "(%s)" % arms)
 

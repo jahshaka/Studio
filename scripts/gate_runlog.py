@@ -17,9 +17,9 @@ scripts — rc-gate.sh — and anyone running a whole tier):
     scripts/gate_runlog.py load-reds [--days 7]       # red in a gate, green solo at the same tip
 
 `run` streams ctest's output through (the caller still sees and may redirect every line),
-samples the load average every 2 s, adds `--output-junit` to read each suite's own output
-(`gpu_ms:` and `target:` lines, the pools' `ARM <name> PASS|FAIL|CRASH` lines) and exits with
-ctest's exit code. `import` turns an existing ctest output log into records marked
+samples the load average every 2 s and the box (sibling ctests, the GPU's clocks) at EACH SUITE'S
+START (ctest's `Start N: <name>` line), adds `--output-junit` to read each suite's own output
+(`target:` lines, the pools' `ARM <name> PASS|FAIL|CRASH` lines) and exits with ctest's exit code. `import` turns an existing ctest output log into records marked
 `"source": "import"` (the before-run logs of a lane that predates the log).
 """
 import argparse
@@ -50,6 +50,8 @@ def check_tier(tier):
         raise ValueError(f"gate_runlog: tier '{tier}' is not one of {', '.join(TIERS)} (testing/runs/README.md)")
     return tier
 
+# `      Start  45: gi.foo` — ctest prints it as a suite starts (the box is sampled there, L1)
+_START = re.compile(r"^\s*Start\s+\d+:\s+(\S+)\s*$")
 # `  12/653 Test  #45: gi.foo ..........   Passed   12.34 sec`
 _RESULT = re.compile(r"^\s*\d+/\d+\s+Test\s+#\d+:\s+(\S+)\s+\.*\s*(.*?)\s+([\d.]+)\s+sec\s*$")
 # The pools' arm lines (SUITE-POOL-1's runner, tests/support/run_pool.py): `ARM-BEGIN <pool>.<arm>`
@@ -71,7 +73,6 @@ _LEAK = re.compile(r"^\s*LEAK\s+\S+\s+\+(\d+)\s+over\s+(\d+)\s+arms")
 # (an arm past 3x its process's boot, recorded on the arm as `over`).
 _STEP = re.compile(r"^\s*STEP\s+(\S+\.\S+)\s+\+(\d+)")
 _OVER = re.compile(r"^\s*OVER\s+(\S+\.\S+)\s+gpuPoolUsed=(\d+)\s+tier=(\S+)\s+boot=(\d+)")
-_GPU = re.compile(r"^\s*gpu_ms:\s*([0-9.]+)")
 _TARGET = re.compile(r"^\s*target:\s*(.+?)\s*$")
 
 
@@ -343,7 +344,7 @@ def _leaks_of(text):
 
 
 def _suite_facts(text):
-    gpu, target, arms, begun = None, None, [], []
+    target, arms, begun = None, [], []
     # arm -> its own output lines: from its ARM-BEGIN, and from the runner's dump of a red arm's
     # output (`---- <pool>.<arm>: its output …`, printed when the process ended), to its ARM line
     seg, cur = {}, None
@@ -353,10 +354,6 @@ def _suite_facts(text):
         m = _ARM_DUMP.match(line)
         if m: cur = m.group(1); seg.setdefault(cur, []); continue
         if cur is not None: seg[cur].append(line)
-        m = _GPU.match(line)
-        if m:
-            try: gpu = float(m.group(1))
-            except ValueError: pass
         m = _TARGET.match(line)
         if m and target is None: target = m.group(1)[:200]
         m = _ARM.match(line)
@@ -375,7 +372,7 @@ def _suite_facts(text):
             bv, _ = budget_verdict("\n".join(seg.get(a, [])))
             v = bv or v
         out.append((a, v, secs))
-    return gpu, target, out
+    return target, out
 
 
 def _file_for(tier, tip, date=None):
@@ -424,12 +421,16 @@ def run_ctest(cmd, cwd, tier, lane, jobs, reasons=None, gating=None, rng=None, r
             "other_ctests": other_ctests(), "host": os.uname().nodename}
     sampler = LoadSampler(); sampler.start()
     run_id = f"{datetime.datetime.now().strftime('%Y%m%dT%H%M%S')}-{shas['studio'][:9]}"
-    seen = []
+    seen, starts = [], {}
     p = subprocess.Popen(full, cwd=cwd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                          text=True, bufsize=1, errors="replace", env=env)
     for line in p.stdout:
         if echo:
             sys.stdout.write(line); sys.stdout.flush()
+        m = _START.match(line.rstrip("\n"))
+        if m:
+            starts[m.group(1)] = {"other_ctests": other_ctests(), "gpu_clocks": gpu_clocks()}
+            continue
         m = _RESULT.match(line.rstrip("\n"))
         if m:
             seen.append((m.group(1), m.group(2), float(m.group(3)), time.time(), os.getloadavg()))
@@ -440,19 +441,24 @@ def run_ctest(cmd, cwd, tier, lane, jobs, reasons=None, gating=None, rng=None, r
     except OSError: pass
     recs = []
     for name, status, secs, t_end, load in seen:
-        gpu, target, arms = _suite_facts(outputs.get(name, ""))
+        target, arms = _suite_facts(outputs.get(name, ""))
+        # THE BOX AT THIS SUITE'S START (TEST-SELECTOR-1 L1): the gate's first second said nothing
+        # about a suite that started an hour later beside two other gates
+        at = starts.get(name) or {}
         base = {"schema": SCHEMA, "run": run_id, "ts": datetime.datetime.fromtimestamp(t_end).astimezone().isoformat(timespec="seconds"),
                 "suite": name, "tier": tier, "lane": lane, "range": rng, "tip": shas,
                 "reason": reasons.get(name, tier), "gating": (gating(name) if gating else True),
                 "retry": retry, "labels": sorted((labels or {}).get(name, [])),
-                "box": dict(box0, load=[round(x, 2) for x in load],
+                "box": dict(box0, gpu_clocks=at.get("gpu_clocks", box0["gpu_clocks"]),
+                            other_ctests=at.get("other_ctests", box0["other_ctests"]),
+                            load=[round(x, 2) for x in load],
                             load_mean=sampler.mean(t_end - secs, t_end)),
                 "source": "run"}
         v, st, bline = row_verdict(status, outputs.get(name, ""), arms)
         wait = lock_wait(outputs.get(name, ""))
         row = dict(base, arm=None, verdict=v, status=st,
                    seconds=(round(max(0.0, secs - wait), 2) if wait is not None else secs),
-                   gpu_ms=gpu, target=target)
+                   target=target)
         if wait is not None:
             row["lockWaitS"] = wait
             row["wallSeconds"] = secs
@@ -470,7 +476,7 @@ def run_ctest(cmd, cwd, tier, lane, jobs, reasons=None, gating=None, rng=None, r
         for arm, v, s in arms:
             # an arm's reason: the selector's for that arm (`<row>::<arm>`), else its row's
             ar = reasons.get(f"{name}::{arm.split('.', 1)[-1]}", base["reason"])
-            rec = dict(base, arm=arm, verdict=v, status=v, seconds=s, gpu_ms=None, target=None,
+            rec = dict(base, arm=arm, verdict=v, status=v, seconds=s, target=None,
                        reason=ar)
             if arm in arm_mem:
                 rec["mem"] = arm_mem[arm]
@@ -508,7 +514,7 @@ def import_log(path, tier, tip, lane, jobs=None, reason=None):
                      "tip": {"studio": tip}, "reason": reason or f"imported from {path}",
                      "gating": True, "retry": False, "labels": [],
                      "verdict": verdict_of(m.group(2)), "status": m.group(2).strip("* "),
-                     "seconds": float(m.group(3)), "gpu_ms": None, "target": None,
+                     "seconds": float(m.group(3)), "target": None,
                      "box": {"jobs": jobs}, "source": "import"})
     if recs:
         p = append_records(recs, tier, tip)
