@@ -90,9 +90,12 @@ var PORTS = [
                  fx.exposureMin + " .. " + fx.exposureMax + ")");
           assert(world.settings().exposureMode.valueId === "auto",
                  "Hdr: and it is on the AUTOMATIC exposure, which is what the sample IS");
+          // THEIR 97.0 IS OUR DAYLIGHT, intensity 1 (SKY-ATMOSPHERE-1: the sky
+          // is physical and lit by the sun, and a 30.9 sun lit it past the
+          // bright-day window — make_ogre_hdr.js has the re-author).
           var sun = node.property(world.sun().light, "intensity");
-          assert(Math.abs(sun - 97.0 / Math.PI) < 1e-2,
-                 "Hdr: the sun still carries their 97.0 power scale (" + sun.toFixed(3) + ")");
+          assert(Math.abs(sun - 1.0) < 1e-2,
+                 "Hdr: the sun is this engine's daylight, their 97.0 (" + sun.toFixed(3) + ")");
           assert(material.get(scene.find("Palette_r0_f0")).brdf === 3,
                  "Hdr: their DefaultHasDiffuseFresnel BRDF survived");
       } },
