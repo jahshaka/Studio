@@ -215,21 +215,20 @@ assert(st.primaryColor !== st.color,
 assert(editor.overlays().outlinePrimaryColor === st.primaryColor,
        "editor.overlays() reports the same primary colour");
 
-// ---- THE GROUND IS NEVER OUTLINED (the surviving owner ask) ---------------------
-// Folded in from app.selection_outline (lane D6B-GATE-SHAPE; audit verdict MERGE): that
-// suite's other claim — a builtin-flagged Add-menu primitive IS outlined, the isBuiltIn
-// regression of 2026-09-06 — is this suite's "one selected" arm above (both cubes are
-// scene.addPrimitive cubes). With the Ground selected the style toggle must move nothing
-// in either half (its gizmo is in both shots and cancels). GI settles first, because the
-// equality is exact (the reason app.selection_outline waited forty frames).
+// ---- THE FLOOR IS AN ORDINARY NODE (WORLD-MODEL-1) ------------------------------
+// The template's floor used to be excluded from the outline (a built-in ground with
+// no outline). It is an ordinary cube node now: a click selects it and the viewport
+// highlights it like any other mesh — nothing in pushEditorHelpers filters it. (Its
+// outline runs along its 100 m edges, far outside this suite's probes, so the
+// assertion is the selection, not a probe count.)
 editor.frame(40);
-var ground = scene.nodes().filter(function (n) { return n.name === "Ground"; })[0];
-assert(ground, "default scene has a Ground");
-editor.select(ground.id);
-var gd = styleDelta("ground");
-console.log("ground selected -> left " + gd.left + ", right " + gd.right);
-assert(gd.left === 0 && gd.right === 0,
-       "ground selection draws no highlight in either style (" + gd.left + "/" + gd.right + ")");
+var floor = scene.nodes().filter(function (n) { return n.name === "Floor"; })[0];
+assert(floor, "the Basic template has a Floor");
+editor.select(floor.id);
+editor.frame(2);
+assert(editor.selection() === floor.id, "the Floor is selectable like any node");
+var fd = styleDelta("floor");
+console.log("floor selected -> left " + fd.left + ", right " + fd.right);
 
 // ---- deselect: neither half moves -------------------------------------------
 editor.selectNone();

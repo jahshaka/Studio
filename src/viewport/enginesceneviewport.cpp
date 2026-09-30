@@ -303,31 +303,21 @@ void EngineSceneViewport::pushEditorHelpers(bool helpers)
     // Options row for light wires must not silently govern cameras.
     mMirror->setCameraBodies(helpers && !mPlaying);
     mMirror->setHighlightWireframe(mSelectionWireframe);
-    // No selection outline for the World root (the whole scene would glow)
-    // or for the built-in ground PLANE — owner ask 2026-08-31. The first
-    // implementation tested `isBuiltIn`, which every Add-menu primitive
-    // carries (SceneNodeHelper::createBasicMeshNode sets it on cubes, spheres,
-    // capsules — and the sample scenes are assembled from exactly those), so every
-    // primitive silently lost its outline while selection/gizmo/panel kept
-    // working (2026-09-06 sighting; cost a day of misattributed reports).
-    // The exclusion is the GROUND MESH specifically, nothing wider.
-    // The SET, member by member (EDITOR_MULTISELECT_SPEC §2.3) — the two
-    // exclusions above apply per member, not to the selection as a whole.
+    // No selection outline for the World root (the whole scene would glow).
+    // Every other node — the templates' floors included (WORLD-MODEL-1: a
+    // floor is an ordinary node) — is outlined.
+    // The SET, member by member (EDITOR_MULTISELECT_SPEC §2.3) — the exclusion
+    // applies per member, not to the selection as a whole.
     QList<iris::SceneNodePtr> highlight;
     if (helpers) {
         for (const auto &node : mSelectedSet) {
             if (!node) continue;
             if (mScene && node == mScene->getRootNode()) continue;
-            if (node->getSceneNodeType() == iris::SceneNodeType::Mesh) {
-                const auto mn = node.staticCast<iris::MeshNode>();
-                if (mn->isBuiltIn && mn->meshPath == QStringLiteral(":/models/ground.obj"))
-                    continue;
-            }
             highlight.append(node);
         }
     }
     // The PRIMARY goes over EXPLICITLY (EDITOR_MULTISELECT_SPEC D4 b): the
-    // two exclusions above run per member, so the primary can be filtered
+    // exclusion above runs per member, so the primary can be filtered
     // out of `highlight` while secondaries survive — and then "the first
     // entry" would hand the brighter outline to a node that is not the
     // primary. The mirror re-checks membership and drops a primary that is
@@ -987,9 +977,9 @@ iris::SceneNodePtr EngineSceneViewport::pickAt(const QPointF &point, bool select
 // can click to select it; you can't drop a material on it while it is locked."
 // The code already says exactly that with ONE flag — `pickable`. The hierarchy
 // row's lock icon IS setPickable (scenehierarchywidget.cpp lockItemAndChildren
-// / releaseItemAndChildren), and the default floor ships with it off
-// (services/defaultfloor.cpp). So there is no second concept to unify: locked
-// == !isPickable().
+// / releaseItemAndChildren). So there is no second concept to unify: locked
+// == !isPickable(). (The templates' floors are ordinary nodes and start
+// unlocked; a user locks one like any node.)
 //
 // A locked node therefore takes no drop — but the drop must SAY SO rather than
 // vanish, which is what it used to do: the material and texture branches

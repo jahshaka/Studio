@@ -1478,10 +1478,9 @@ QVariantList AssetsApi::builtins()
     };
     // The primitives come from the ONE table (src/data/primitives.h). What is
     // listed is what a user can DRAG: a row with a TILE. Since ATOM P2 every seed
-    // row has a library guid — the Ground and the Teapot are baked library assets
-    // too — so the tile, not the guid, is the predicate: the Ground is reached by
-    // `scene.addPrimitive("Ground")` and the Teapot is not offered at all (owner
-    // review R6), exactly as before.
+    // row has a library guid — the samples' Ground and Teapot are baked library
+    // assets too — so the tile, not the guid, is the predicate: neither is
+    // offered (owner review R6; WORLD-MODEL-1).
     for (const primitives::Def &def : primitives::all()) {
         if (!def.guid || !def.icon || def.kind != primitives::Kind::Primitive) continue;
         out.append(QVariantMap{ { "guid", QString::fromLatin1(def.guid) },
