@@ -390,6 +390,7 @@ public:
     /// node refuses the drop by name rather than swallowing it. Null when the
     /// ray hits nothing.
     iris::SceneNodePtr dropTargetAt(const QPointF &point, bool *locked = nullptr) override;
+    iris::SceneNodePtr clickTargetAt(const QPointF &point) override { return pickAt(point, true); }
     /// Toasts "<node> is locked — unlock it to apply <what>" and answers true
     /// when the drop must stop there.
     bool refuseDropOnLocked(const iris::SceneNodePtr &node, const QString &what);

@@ -1295,7 +1295,7 @@ VrInteraction::Teleport VrInteraction::traceArc(unsigned hand, const VrHandState
             // FORCE-PICKABLE, AND THAT IS THE POINT (the lead's read, item 3).
             // The `pickable` flag is an EDIT guard — it stops a click from
             // SELECTING a thing — and people lock the floor for exactly that
-            // reason (a template's Floor ships unlocked; a user locks it). A teleport is not an
+            // reason (the templates' floors ship locked). A teleport is not an
             // edit: it is locomotion, and a floor you cannot select is still a
             // floor you stand on. Passing the lock through here read the flag
             // on the wrong axis and refused the commonest throw in the editor.

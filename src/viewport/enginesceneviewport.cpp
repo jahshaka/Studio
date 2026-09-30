@@ -978,8 +978,8 @@ iris::SceneNodePtr EngineSceneViewport::pickAt(const QPointF &point, bool select
 // The code already says exactly that with ONE flag — `pickable`. The hierarchy
 // row's lock icon IS setPickable (scenehierarchywidget.cpp lockItemAndChildren
 // / releaseItemAndChildren). So there is no second concept to unify: locked
-// == !isPickable(). (The templates' floors are ordinary nodes and start
-// unlocked; a user locks one like any node.)
+// == !isPickable(). (The templates' floors are ordinary nodes that ship
+// LOCKED — owner, 2026-09-30 — and unlock like any node.)
 //
 // A locked node therefore takes no drop — but the drop must SAY SO rather than
 // vanish, which is what it used to do: the material and texture branches

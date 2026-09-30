@@ -618,7 +618,10 @@ iris::ScenePtr MainWindow::createDefaultScene(SceneTemplate kind)
     // makes (the shipped, baked cube primitive — so it has its LOD chain, its
     // cards and its SDF, and Atom draws it), scaled to 100 x 1 x 100 m with
     // its TOP face at y = 0, wearing the default floor material. It is
-    // selectable, deletable and re-materialable like any node; `defaultFloor`
+    // re-materialable, movable and deletable like any node, and it SHIPS LOCKED
+    // (owner, 2026-09-15, restated 2026-09-30: not pickable, so a click on the
+    // empty floor selects nothing and a drop on it is refused by name until the
+    // user unlocks it in the outliner); `defaultFloor`
     // only says which material `material.reset` brings back and what the
     // Player's "hide the floor" setting hides. It casts no shadow (nothing is
     // under it, and a 100 m caster would widen the sun's fit to the whole
@@ -640,6 +643,7 @@ iris::ScenePtr MainWindow::createDefaultScene(SceneTemplate kind)
                                        scenetemplate::kFloorSize * 0.5f));
         node->setLocalPos(centre + iris::Vec3(0, -scenetemplate::kFloorThickness * 0.5f, 0));
         node->setShadowCastingEnabled(false);
+        node->setPickable(false);          // ships LOCKED (above)
         node->defaultFloor = true;
         iris::PhysicsProperty physics;
         physics.objectMass = 0.0f;
@@ -675,6 +679,7 @@ iris::ScenePtr MainWindow::createDefaultScene(SceneTemplate kind)
         // is exactly the dynamic shadows' reach (OgreEngine's shadow far).
         auto group = iris::SceneNode::create();
         group->setName(QStringLiteral("World Floor"));
+        group->setPickable(false);         // locked like the floors it holds
         scene->rootNode->addChild(group);
         const int n = scenetemplate::kWorldTilesPerSide;
         const float s = scenetemplate::kFloorSize;

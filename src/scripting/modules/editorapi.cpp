@@ -904,13 +904,21 @@ QVector<VerbInfo> EditorApi::verbs() const
           "once it has happened. False when the tray is not showing that folder, when it is not "
           "laid out yet, or when the tile under the cursor is not a folder.",
           Needs::Window },
+        { "clickTargetAt", "editor.clickTargetAt(x, y) -> {id, name} | null",
+          "WHAT A PLAIN LEFT CLICK AT THIS VIEWPORT PIXEL WOULD SELECT — the viewport's own pick, "
+          "the same function a click runs, resolved to the asset root a click selects. LOCKED "
+          "nodes (the node's `pickable` flag off — the templates' floors ship that way) are not "
+          "clickable, so over a locked floor, over empty sky and over the editor's Ground plane "
+          "widget (not a node at all) the answer is null: the click selects nothing. It reads, it "
+          "does not select. Same pixels as editor.dropTargetAt.",
+          Needs::Engine },
         { "dropTargetAt", "editor.dropTargetAt(x, y) -> {id, name, locked} | null",
           "WHAT A DROP AT THIS VIEWPORT PIXEL APPLIES TO — the node a dragged MATERIAL or IMAGE "
           "would land on. `locked` is the hierarchy's lock (the node's `pickable` flag, which is "
           "the same thing): a LOCKED node takes no drop and no click, and the drop says so by "
           "name instead of vanishing — a material dragged onto a locked floor used to do nothing "
           "at all and an image spawned a floating plane instead of retexturing it (owner, "
-          "2026-09-14/15). The templates' floors ship UNLOCKED, as ordinary nodes. Unlock the node "
+          "2026-09-14/15). The templates' floors ship LOCKED (owner, 2026-09-15 and 2026-09-30). Unlock the node "
           "(node.setProperty(id, \"pickable\", true), or the lock icon in the hierarchy) and both "
           "work like any other object's. Null when the ray hits NOTHING, which is the only case "
           "that spawns an image plane for a dropped picture. Same pixels as editor.dropPointAt, "
@@ -2595,6 +2603,15 @@ QVariant EditorApi::dropPointAt(double x, double y)
     out.insert("y", point.y());
     out.insert("z", point.z());
     return out;
+}
+
+QVariant EditorApi::clickTargetAt(double x, double y)
+{
+    if (!requireEngine()) return QVariant();
+    const iris::SceneNodePtr node = host.viewport->clickTargetAt(QPointF(x, y));
+    if (!node) return QVariant();
+    return QVariantMap{ { QStringLiteral("id"), node->getGUID() },
+                        { QStringLiteral("name"), node->getName() } };
 }
 
 QVariant EditorApi::dropTargetAt(double x, double y)

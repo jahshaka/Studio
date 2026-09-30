@@ -75,8 +75,24 @@ assert(near(fb.size.x, 100, 0.01) && near(fb.size.y, 1, 0.01) && near(fb.size.z,
        "the floor is 100 x 1 x 100 m");
 assert(near(fb.max.y, 0, 1e-3), "...with its TOP FACE at y = 0 (" + fb.max.y + ")");
 assert(near(fb.center.x, 0, 1e-3) && near(fb.center.z, 0, 1e-3), "...centred on the origin");
-// AN ORDINARY NODE: selectable (pickable), and the scene's size counts it.
-assert(node.property(floor, "pickable") === true, "...and it is an ordinary, pickable node");
+// AN ORDINARY NODE THAT SHIPS LOCKED (owner, 2026-09-15, restated 2026-09-30):
+// not pickable, so a click on the empty floor selects nothing and a drop on it
+// is refused by name; the verb (the outliner's lock) unlocks it.
+assert(node.property(floor, "pickable") === false, "...and it ships LOCKED (pickable false)");
+editor.setCamera({ position: { x: 0, y: 10, z: 12 }, lookAt: { x: 0, y: 0, z: 0 } });
+editor.frame(4, 1 / 60);
+var vs = editor.viewportState();
+var cx = vs.width * 0.5, cy = vs.height * 0.6;
+assert(editor.clickTargetAt(cx, cy) == null,
+       "a viewport click on the empty (locked) floor selects NOTHING");
+var dropOnFloor = editor.dropTargetAt(cx, cy);
+assert(dropOnFloor != null && dropOnFloor.id === floor && dropOnFloor.locked === true,
+       "...and a drop there names the Floor as LOCKED (" + J(dropOnFloor) + ")");
+assert(node.setProperty(floor, "pickable", true) === true, "unlock it through the verb (the outliner's lock)");
+editor.frame(2, 1 / 60);
+var clicked = editor.clickTargetAt(cx, cy);
+assert(clicked != null && clicked.id === floor, "...unlocked, the same click selects the Floor (" + J(clicked) + ")");
+assert(node.setProperty(floor, "pickable", false) === true, "lock it again, as it ships");
 var sb = scene.bounds();
 assert(sb.size.x >= 100 - 0.01, "...which the scene's own bounds count (" + J(sb.size) + ")");
 // ON ATOM: the id pass draws it and the decode shades it.
@@ -126,6 +142,9 @@ console.log("world floors: " + tiles.length);
 assert(tiles.length === 25, "...of 25 floor nodes (Floor 1 .. Floor 25)");
 var under = tiles.filter(function (r) { return node.info(r.id).parent === group; });
 assert(under.length === 25, "...every one of them under World Floor");
+var unlocked = tiles.filter(function (r) { return node.property(r.id, "pickable") !== false; });
+assert(unlocked.length === 0 && node.property(group, "pickable") === false,
+       "...all 25 floors AND the World Floor group ship LOCKED (" + unlocked.length + " unlocked)");
 var wb = scene.bounds({ nodes: [group] });
 console.log("world floor bounds: " + J(wb));
 assert(near(wb.size.x, 500, 0.05) && near(wb.size.z, 500, 0.05),

@@ -26,7 +26,8 @@ For more information see the LICENSE file
 //     twenty-five of Basic's floor cubes, 5 x 5, edge to edge (500 m square),
 //     standing in for terrain.
 //
-// Every floor is an ordinary node: selectable, deletable, re-materialable. The
+// Every floor is an ordinary node that SHIPS LOCKED (not pickable — owner,
+// 2026-09-30): unlock it, then select, move, delete or re-material it. The
 // dialog's fourth entry, "Sample", is UI only (disabled) until it exists — it
 // has no value here on purpose.
 
