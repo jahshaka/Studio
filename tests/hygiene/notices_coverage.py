@@ -52,6 +52,10 @@ import sys
 NOT_A_COMPONENT = {
     "assimp-patches": "OUR OWN patch stack for assimp (irisgl/cmake/ApplyVendorPatches.cmake "
                       "applies it) — Jahshaka source, not a third party's",
+    "meshoptimizer-clusterlod-patches": "OUR OWN patch stack for the vendored clusterlod.h "
+                                        "(irisgl/CMakeLists.txt applies it at configure, "
+                                        "CLUSTER-LOCK-3) — Jahshaka source, not a third party's; "
+                                        "the header's notice is meshoptimizer-clusterlod's",
     "ogre-next-install": "a BUILD OUTPUT — the engine's install prefix, produced by "
                          "build-ogre.sh from the ogre-next submodule beside it",
 }
