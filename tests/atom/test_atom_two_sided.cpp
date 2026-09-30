@@ -18,7 +18,9 @@
 //   (d) THE SHADOW: the open plane casts from BOTH sides (its shadow on the floor, front
 //       or back toward the sun, the same within 5 %), a back-culled plane with its back
 //       toward the sun casts nothing (the arm's control), and the two-sided plane's lit
-//       front equals the back-culled one's (the caster map is the same map: no new acne).
+//       front equals the back-culled one's (the caster map is the same map: no new acne);
+//   (e) the MASTER material's own two-sided flag toggled at run time moves the route and
+//       the bucket within a bounded number of frames.
 // FRAMES, NEVER TIME: every picture is read until two consecutive reads agree to a code.
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
@@ -311,6 +313,46 @@ int main()
                   fr.atomItems);
         F.scene->setNodeFaceCull(F.sphere, FaceCull::Material);
         for (int i = 0; i < 3; ++i) F.e->renderOneFrame();
+    }
+
+    // ---- (e) THE MASTER MATERIAL'S OWN FLAG, AT RUN TIME --------------------------------
+    // Not a node cull (the twins, (a)): the two materials themselves turn one-sided and back.
+    // The route (kGpuTwoSided on the slot, atomTwoSided) and the bucket (the two-sided
+    // permutation's bucket empties: every item one-sided shares ONE bucket) follow within
+    // a bounded number of frames.
+    {
+        auto flagsOf = [&](NodeId n) {
+            const unsigned s = F.slotOf(n);
+            uint32_t f = 0u;
+            if (s != 0xFFFFFFFFu) std::memcpy(&f, &F.os->gpuScene().entry(s).boundsMax[3], sizeof(f));
+            return f;
+        };
+        auto waitFor = [&](unsigned wantTwo, unsigned wantBuckets, int &frames) {
+            for (frames = 0; frames < 60; ++frames) {
+                F.e->renderOneFrame();
+                const AtomDrawStatus st = F.scene->atomDrawStatus();
+                if (st.atomItems == 3 && st.atomTwoSided == wantTwo && st.buckets == wantBuckets) return true;
+            }
+            return false;
+        };
+        PbrParams sphereOne = twoSided, planeOne = planeP;
+        sphereOne.twoSided = planeOne.twoSided = false;
+        F.scene->setPbrMaterial(twoSidedMat, sphereOne);
+        F.scene->setPbrMaterial(planeMat, planeOne);
+        int f1 = 0, f2 = 0;
+        const bool off = waitFor(0u, 1u, f1);
+        const bool offFlag = !(flagsOf(F.plane) & detail::kGpuTwoSided) && !(flagsOf(F.sphere) & detail::kGpuTwoSided);
+        F.scene->setPbrMaterial(twoSidedMat, twoSided);
+        F.scene->setPbrMaterial(planeMat, planeP);
+        const bool on = waitFor(2u, 2u, f2);
+        const bool onFlag = (flagsOf(F.plane) & detail::kGpuTwoSided) && (flagsOf(F.sphere) & detail::kGpuTwoSided);
+        std::printf("  (e) master flag off: %s in %d frame(s); back on: %s in %d frame(s)\n", off ? "moved" : "STUCK", f1,
+                    on ? "moved" : "STUCK", f2);
+        CHECK_MSG(off && offFlag,
+                  "(e) the masters turned one-sided: the items stay Atom, lose kGpuTwoSided and share ONE bucket "
+                  "within %d frames", f1);
+        CHECK_MSG(on && onFlag,
+                  "(e) turned two-sided again: kGpuTwoSided back and the two-sided bucket back within %d frames", f2);
     }
 
     // ---- (b) + (c): front and back --------------------------------------------------
