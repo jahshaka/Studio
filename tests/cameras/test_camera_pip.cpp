@@ -14,7 +14,7 @@
 // through the HOST ROUTE (SceneMirror::applyPip), because that is the seam the
 // editor uses:
 //
-//   1. THE GRADE. A surface at TWICE WHITE saturates 0% of the inset, exactly
+//   1. THE GRADE. A surface at 1.4 x WHITE saturates 0% of the inset, exactly
 //      as it saturates 0% of the main view — and the inset's centre pixel is
 //      the main view's centre pixel, because both went through the same
 //      HDR/FinalToneMapping quad at the same fixed exposure. The CONTROL that
@@ -205,11 +205,13 @@ int main(int argc, char **argv)
     SceneMirror mirror(target);
     mirror.setSource(doc);
 
-    // THE SUBJECT: a cube whose light is its own, at TWICE WHITE. §14's window
+    // THE SUBJECT: a cube whose light is its own, at 1.4 x WHITE. §14's window
     // is narrow and deliberate — the raw path saturates at 1.0 and the filmic
-    // curve's grade tail saturates at about 2.5 at this exposure, so 2.0 is
-    // over-range for raw and inside the grade. That is the whole band this
-    // feature recovers, and a value of 8 would clip in both.
+    // curve's grade tail saturates at about 1.77 at this exposure (the default
+    // grade of the physical sky, SKY-DEFAULTS-1: chain 0.97882, x 2.0; it was
+    // 2.5 at the retired 96-grey sky's grade), so 1.4 is over-range for raw
+    // and inside the grade (code ~238). That is the whole band this feature
+    // recovers, and a value of 8 would clip in both.
     auto cube = iris::MeshNode::create();
     cube->setName("hot cube");
     cube->setMesh(previewmesh::load(":assets/models/cube.obj"));
@@ -223,7 +225,7 @@ int main(int argc, char **argv)
         auto mat = iris::PbrMaterial::create();
         mat->setBaseColor(QColor(0, 0, 0));
         mat->setEmissiveColor(QColor(255, 255, 255));
-        mat->setEmissiveIntensity(2.0f);        // TWICE WHITE
+        mat->setEmissiveIntensity(1.4f);        // over white, inside the grade
         cube->setMaterial(mat);
     }
     doc->getRootNode()->addChild(cube);
@@ -324,7 +326,7 @@ int main(int argc, char **argv)
                 insetH.lit ? 100.0 * insetH.saturated / insetH.lit : 0.0, insetH.brightest);
     CHECK(insetH.lit > 100, "the inset renders the camera's shot (%d lit px)", insetH.lit);
     CHECK(insetH.saturated == 0,
-          "THE INSET IS GRADED TOO: the twice-white surface saturates 0%% of the inset "
+          "THE INSET IS GRADED TOO: the over-white surface saturates 0%% of the inset "
           "(%d of %d lit px, brightest %d) — the same class as the main view",
           insetH.saturated, insetH.lit, insetH.brightest);
     CHECK(diffInRect(graded, noPip, rect, /*inside*/ false) == 0,
