@@ -182,12 +182,17 @@ function skyBand(tag, rx, ry, rz) {
     console.log("sky band [" + tag + "] " + Math.round(sum));
     return sum;
 }
+// AN ORDINARY DAY'S AIR (haze 10, SKY-ATMOSPHERE-1): the sun side of a sky is
+// brighter through the aerosol's forward scattering; the default haze is very
+// clean air, nearly symmetric fore and aft (gi.sky_light case 7 says the same).
+world.sky("realistic", { sunHaze: 10 });
 var aheadLum = skyBand("ahead", -70, 0, 0);     // the sun low, in front of the camera
 var behindLum = skyBand("behind", -70, 180, 0); // ...and turned right around
 console.log("sky with the sun ahead " + Math.round(aheadLum) +
             " vs behind " + Math.round(behindLum));
 assert(Math.abs(aheadLum - behindLum) > 8,
        "rotating the SUN LIGHT re-bakes the realistic sky (D15)");
+world.sky("realistic", { sunHaze: 1 });
 
 // A HAND-SET ROTATION IS NEVER OVERWRITTEN. The old coupling rewrote it from
 // the sky every frame; nothing does now.

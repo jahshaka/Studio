@@ -3458,10 +3458,9 @@ void fog_transmittance_is_exponential() {
 // ---------------------------------------------------------------------------
 // THE ANALYTIC SKY AND THE AERIAL FOG (SKY-GPU)
 // ---------------------------------------------------------------------------
-// SkyMode::Atmosphere is Ogre's AtmosphereNpr, adopted as the "realistic" sky.
-// What this case gates is the three things the adoption had to REFUSE — the
-// component's light override, its own sun disc and its fog — plus the one thing
-// it had to add: the sky follows the sun WE give it.
+// SkyMode::Atmosphere is the planet's atmosphere (SKY-ATMOSPHERE-1). What this
+// case gates: the sky never takes the scene's LIGHT over, and it follows the
+// sun WE give it.
 void analytic_sky_is_the_engines_and_takes_our_sun() {
     Fixture fx;
     View *v = fx.view("atmo-view", 96, 96, kBlue); REQUIRE(v);
@@ -3482,16 +3481,30 @@ void analytic_sky_is_the_engines_and_takes_our_sun() {
     sky.atmosphere.sunDir[2] = -1.0f;   // towards -Z: ahead of the camera
     CHECK_MSG(s->setSky(sky), "the analytic sky applies: %s", fx.e->lastError().c_str());
     render(fx.e); render(fx.e); REQUIRE(v->readPixels(img));
-    const Px skyAhead = px(img, 4, 4);           // a corner: sky, not the cube
     const Px litAhead = centre(img);
+    // THE SKY IS READ ABOVE THE HORIZON (SKY-ATMOSPHERE-1): this fixture's
+    // camera looks 26 degrees down, so its top corner is the PLANET under the
+    // horizon — lit by the same sun at the same elevation either way, which the
+    // retired model painted with the horizon's azimuth-dependent colour. A
+    // camera looking 15 degrees up along -Z reads the sky itself.
+    auto skyAt = [&]() -> Px {
+        enginetest::testCameraLookAt(v, Vec3(0.0f, 1.0f, 0.0f), Vec3(0.0f, 3.68f, -10.0f));
+        render(fx.e); render(fx.e);
+        const bool read = v->readPixels(img);
+        CHECK_MSG(read, "the sky reads back");
+        const Px p = centre(img);
+        aim(v);
+        return p;
+    };
+    const Px skyAhead = skyAt();
 
     // THE SUN MOVES THE SKY — and nothing else. Same dials, sun turned around:
     // the sky the camera looks at is now the side AWAY from the sun.
     sky.atmosphere.sunDir[2] = 1.0f;
     CHECK_MSG(s->setSky(sky), "the sky takes a new sun direction: %s", fx.e->lastError().c_str());
     render(fx.e); render(fx.e); REQUIRE(v->readPixels(img));
-    const Px skyBehind = px(img, 4, 4);
     const Px litBehind = centre(img);
+    const Px skyBehind = skyAt();
     const int aheadSum = skyAhead.r + skyAhead.g + skyAhead.b;
     const int behindSum = skyBehind.r + skyBehind.g + skyBehind.b;
     std::printf("    sky toward the sun %d %d %d (%d) vs away %d %d %d (%d)\n",
@@ -3621,7 +3634,10 @@ void atmosphere_sun_tint_reddens_a_low_sun() {
 // spikes/sky-tune-1/FINDINGS.md the sweep) to PREETHAM'S ANALYTIC DAYLIGHT MODEL
 // (SIGGRAPH 1999) at turbidity 2.5.
 //
-// This case is the gate on that fit, at the three directions that decide what a
+// SINCE SKY-ATMOSPHERE-1 the sky is the planet's atmosphere and the Preetham fit is
+// only printed; the gate is the colour temperature (blue-white, not golden).
+//
+// This case was the gate on that fit, at the three directions that decide what a
 // picture looks like. The reference numbers below are Preetham evaluated at the
 // EXACT directions aimed at here, in CIE u'v' — the chromaticity plane, because
 // the sky's absolute level is a skyPower/exposure question and its HUE is not:
@@ -3688,9 +3704,14 @@ void analytic_sky_is_blue_white_at_a_mid_afternoon_sun() {
         const double duv = std::sqrt((up - p.refU)*(up - p.refU) + (vp - p.refV)*(vp - p.refV));
         std::printf("    %-24s %3d %3d %3d  u'v' %.4f %.4f (ref %.4f %.4f, du'v' %.4f)  %.0f K\n",
                     p.name, c.r, c.g, c.b, up, vp, double(p.refU), double(p.refV), duv, cct);
-        CHECK_MSG(duv <= kTolUv,
-                  "%s is within %.3f of the Preetham reference in u'v' (%.4f)",
-                  p.name, double(kTolUv), duv);
+        // THE PREETHAM FIT IS RETIRED WITH THE MODEL IT FITTED (SKY-ATMOSPHERE-1).
+        // The u'v' bar gated a non-physical sky's three dials against Preetham's
+        // analytic fit; the sky is now Hillaire's scattering integral, which
+        // reads 0.030-0.037 from Preetham here (printed above) — the known
+        // direction (Preetham's clear sky is too white against measured skies;
+        // Hosek and Wilkie 2012). What this case still gates is the named
+        // behaviour: a mid-afternoon sky is BLUE-WHITE, not golden (below).
+        (void)kTolUv;
         CHECK_MSG(cct >= p.minCct,
                   "%s reads blue-white at a 36-degree sun: %.0f K (>= %.0f)",
                   p.name, cct, double(p.minCct));
@@ -3715,7 +3736,12 @@ void analytic_sky_is_blue_white_at_a_mid_afternoon_sun() {
     // across eight elevations; here it only has to stay DAYLIGHT.
     const Colour tint = s->atmosphereSunTint(Vec3(0.0f, 0.587785f, -0.809017f));
     std::printf("    sun tint at 36 degrees  %.3f %.3f %.3f\n", tint.r, tint.g, tint.b);
-    const float ref36[3] = { 0.8575f, 0.8198f, 0.7322f };   // the spectral reference
+    // THE REFERENCE IS THE PLANET'S ATMOSPHERE'S OWN (SKY-ATMOSPHERE-1): its
+    // transmittance integral at the default haze (the reference's clear air),
+    // 36 degrees over zenith — sky.sun_transmittance holds the same integral to
+    // 2e-3 at eight elevations. The retired Preetham turbidity-2.5 reference
+    // (0.858 / 0.820 / 0.732) described different air.
+    const float ref36[3] = { 0.9585f, 0.9063f, 0.8286f };
     bool near36 = true;
     for (int c = 0; c < 3; ++c) {
         const float got = (c == 0) ? tint.r : (c == 1) ? tint.g : tint.b;

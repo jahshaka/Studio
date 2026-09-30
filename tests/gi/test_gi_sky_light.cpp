@@ -514,6 +514,14 @@ int main(int argc, char **argv)
         // region is around the sun, so the two bakes must differ where the
         // camera is looking. A pixel probe, not a flag — nothing else in this
         // scene can move that number.
+        // AN ORDINARY DAY'S AIR for this arm (SKY-ATMOSPHERE-1: haze 10, an
+        // aerosol optical depth of 0.05). The sun side of a sky is brighter than
+        // the far side through the AEROSOL's forward scattering; the default
+        // haze is the reference's very clean air (0.005), whose sky at a 20-degree
+        // sun is nearly symmetric fore and aft — Rayleigh scattering is — and
+        // read 1.08x here. The retired model put the asymmetry in by hand.
+        const iris::SkyRealistic airWas = doc->skyRealistic;
+        { iris::SkyRealistic day = airWas; day.sunHaze = 10.0f; doc->setSkyRealistic(day); }
         sun->setLocalRot(iris::Quat::fromEulerAngles(-70.0f, 0.0f, 0.0f));
         settle();
         view->readPixels(img);
@@ -522,6 +530,7 @@ int main(int argc, char **argv)
         settle();
         view->readPixels(img);
         const Colour aheadDim = img.at(128, 128);
+        doc->setSkyRealistic(airWas);
         std::printf("   realistic sky ahead: sun toward -Z %.3f, sun turned 180 deg %.3f\n",
                     lum(aheadBright), lum(aheadDim));
         CHECK(lum(aheadBright) > lum(aheadDim) * 1.2f,
@@ -630,19 +639,20 @@ int main(int argc, char **argv)
             //
             // THE FRAME AS A WHOLE IS NOT BOUNDED HERE, and the number printed
             // above says why: the SKY's own single-degree step at the crossing
-            // is ~48%. That is Ogre's AtmosphereNpr, not ours — its
-            // `lightDensity = densityCoeff / max(sunHeight, 0.0035)^0.75` with
-            // `sunHeight = sin(normalizedTimeOfDay * PI)` and a time-of-day
-            // clamped at zero gives the model no twilight at all: the sky
-            // collapses inside the last degree of elevation and then stays at
-            // that value all night. Reported as an upstream finding rather than
-            // patched under a lane about the disc's size.
+            // is the sky's own twilight (the planet's atmosphere since
+            // SKY-ATMOSPHERE-1: a continuous fall, where the retired
+            // AtmosphereNpr collapsed inside the last degree and then froze).
             float worstSun = 0.0f, worstAt = 0.0f, worstSky = 0.0f;
             for (size_t i = 1; i < sweep.size(); ++i) {
                 const float shareNow  = sweep[i].mean - bare[i].mean;
                 const float sharePrev = sweep[i - 1].mean - bare[i - 1].mean;
+                // ...OF THE SWEEP'S OWN PICTURE (its first, brightest frame). The
+                // physical sky has a twilight (SKY-ATMOSPHERE-1): the frame mean
+                // falls 15x across these nine degrees, and a step measured
+                // against a frame that dark read 7.1% for a share that moved
+                // 0.0023 — the sphere hiding a darkening sky, not the sun.
                 const float step = std::fabs(shareNow - sharePrev)
-                                   / std::max(1e-4f, sweep[i - 1].mean);
+                                   / std::max(1e-4f, sweep[0].mean);
                 if (step > worstSun) { worstSun = step; worstAt = sweep[i].pitch; }
                 worstSky = std::max(worstSky, std::fabs(bare[i].mean - bare[i - 1].mean)
                                                   / std::max(1e-4f, bare[i - 1].mean));

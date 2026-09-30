@@ -80,13 +80,14 @@ assert(near(sky.data.sunHaze, 3.0), "sunHaze reaches skyData (save-safe)");
 assert(near(sky.data.groundAlbedo, 0.2), "groundAlbedo reaches skyData (save-safe)");
 assert(sky.azimuth === undefined && sky.elevation === undefined,
        "the sky has no sun dials of its own any more");
-// The CPU bake's dials are GONE (SKY-GPU) and saying so is the verb's job.
+// The retired non-physical sky's dials are GONE (SKY-ATMOSPHERE-1) and saying
+// so is the verb's job.
 var refused = false;
-try { world.sky("realistic", { turbidity: 6 }); } catch (e) { refused = true; }
-assert(refused, "the retired Preetham dials are refused by name");
+try { world.sky("realistic", { density: 0.5 }); } catch (e) { refused = true; }
+assert(refused, "the retired sky model's dials are refused by name");
 refused = false;
-try { world.sky("realistic", { detail: 512 }); } catch (e) { refused = true; }
-assert(refused, "and so is the bake width, which nothing bakes any more");
+try { world.sky("realistic", { atmosphereHaze: false }); } catch (e) { refused = true; }
+assert(refused, "and so is the haze switch the aerial scale replaced");
 
 // ---- the sun disc, a WORLD setting (SKY_LIGHT_SPEC.md §3, owner pick 4) ----
 assert(world.sunDisc().visible === true, "the sun disc is on by default");
@@ -264,7 +265,8 @@ assert(world.antiAliasing() === 4, "reloaded scene achieves 4x again");
 // The VISUAL_PARITY_SPEC lane-A fields ride the same serializer block.
 var reloaded = world.get();
 assert(reloaded.shadowResolution === 2048, "shadowResolution round-trips through save/load");
-assert(reloaded.sky.type === "Realistic" && near(reloaded.sky.data.density, 0.6),
+assert(reloaded.sky.type === "Realistic" && near(reloaded.sky.data.sunHaze, 3.0) &&
+       near(reloaded.sky.data.groundAlbedo, 0.2),
        "the realistic sky and its dials round-trip through save/load");
 assert(reloaded.skyLight.light !== "" && near(reloaded.skyLight.intensity, 1.4, 0.001),
        "the Sky Light and its strength round-trip through save/load");
