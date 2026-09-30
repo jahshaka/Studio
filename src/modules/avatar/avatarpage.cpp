@@ -42,6 +42,7 @@ For more information see the LICENSE file
 #include "modules/avatar/api/avatarapi.h"
 #include "modules/avatar/avatarpreviewmodel.h"
 #include "modules/avatar/avatarpreviewwidget.h"
+#include "services/jahlog.h"
 
 namespace avatar
 {
@@ -495,18 +496,26 @@ void AvatarPage::onImportClicked()
     // used to run on the UI thread — 9.3 s of an app that looks crashed on the
     // owner's Jennifer.fbx. {async: true} is the pipeline's own
     // ImportBatchRunner, the same one the Assets page drives, and the progress
-    // dialog comes up from the API's busyStarted signal. The record's keys ride
-    // through avatar.importAvatar onto the same ImportRequest a verb import
-    // fills, so the two are byte-identical.
-    QVariantMap options{ { "async", true } };
-    const QVariantMap record = records.value(path).toVariantMap();
-    for (auto it = record.constBegin(); it != record.constEnd(); ++it) {
-        if (it.key() == QStringLiteral("version")) continue;   // not an option
-        options.insert(it.key(), it.value());
-    }
-    const QVariantMap started = mApi->quietly([&] { return mApi->importAvatar(path, options); });
-    if (started.isEmpty() && !mApi->lastError().isEmpty())
+    // dialog comes up from the API's busyStarted signal. The record goes
+    // through avatar.importOptions — THE one mapping from import settings to
+    // the verb's options, which drops the fields a skinned avatar does not take
+    // (maxCards) — and on to the same ImportRequest a verb import fills, so the
+    // two are byte-identical (AVATAR-IMPORT-FIX-1: forwarding every key made
+    // the verb refuse the dialog's own record).
+    const QVariantMap started = mApi->quietly([&] {
+        const QVariantMap mapped = mApi->importOptions(records.value(path).toVariantMap());
+        if (mapped.isEmpty()) return QVariantMap();
+        QVariantMap options = mapped.value(QStringLiteral("options")).toMap();
+        options.insert(QStringLiteral("async"), true);
+        return mApi->importAvatar(path, options);
+    });
+    if (started.isEmpty() && !mApi->lastError().isEmpty()) {
+        // Never a silent failure: quietly() keeps the refusal out of the script
+        // console, so the page logs it as well as showing it.
+        JAH_LOG(JahLog::assets, Warning,
+                QStringLiteral("avatar import of '%1' refused: %2").arg(path, mApi->lastError()));
         QMessageBox::warning(this, tr("Import Avatar"), mApi->lastError());
+    }
     refreshFromModel();
 }
 
@@ -569,9 +578,10 @@ void AvatarPage::setApi(AvatarApi *api)
         mProgress->hide();
         refreshFromModel();
         if (cancelled) return;   // nothing was written: the pipeline rolled back
-        if (!error.isEmpty())
+        if (!error.isEmpty()) {
+            JAH_LOG(JahLog::assets, Warning, QStringLiteral("avatar import failed: %1").arg(error));
             QMessageBox::warning(this, tr("Import Avatar"), error);
-        else {
+        } else {
             // The IMPORT's own warnings, surfaced rather than only logged — a
             // Mixamo export's texture paths point outside the file, and the
             // user should be told which maps did not come with it.
