@@ -265,3 +265,20 @@ if(JAHSHAKA_ASAN)
     target_compile_options(test_engine_asan PRIVATE -fsanitize=address -fno-omit-frame-pointer)
     target_link_options(test_engine_asan PRIVATE -fsanitize=address)
 endif()
+
+# engine.media_check (FORWARD-ONLY-1 D2): the staged tonemap media check fires at
+# engine init and is sticky — a copy of the media whose HDR/FinalToneMapping pass
+# has no fragment program refuses every view with the error; the real media works.
+add_executable(test_engine_media_check test_engine_media_check.cpp)
+set_target_properties(test_engine_media_check PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH "${OGRE_NEXT_PREFIX}/lib" INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_engine_media_check PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_engine_media_check PRIVATE JahshakaEngine)
+add_dependencies(test_engine_media_check JahshakaEngineMedia)
+jah_gpu_row(engine.media_check CLASS engine COMMAND test_engine_media_check
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(engine.media_check PROPERTIES TIMEOUT 180 LABELS "engine")
