@@ -465,7 +465,9 @@ int main(int argc, char *argv[])
     // had are gone from the desktop, and a log line is not where they look.
     // Only the ordinary windowed launch reaches here (every CLI path returned
     // above); the scripted surface is app.libraryGeneration().
-    if (librarygeneration::wipedAtStartup())
+    // (Belt and braces with the CLI returns above: the ordinary windowed run a
+    // rig starts with --data-root is DRIVEN too — D7 — and gets no modal.)
+    if (librarygeneration::wipedAtStartup() && !FirstRun::isDrivenSession(cli))
         QMessageBox::information(&window, QObject::tr("Library reset"),
                                  librarygeneration::noticeText());
 
