@@ -347,6 +347,13 @@ void ProjectManager::onArchiveImportFinished(bool canceled)
         progressDialog->setCancelVisible(false);
         progressDialog->setValue(80);
     }
+    // MODELS THE IMPORT COULD NOT BAKE (FORWARD-ONLY-1 D4): the import worked,
+    // and these will show as missing — said now, not only in the log.
+    if (!result.bakeFailures.isEmpty())
+        reportImportProblem(tr("Some models could not be prepared"),
+                            tr("%n model(s) in this project could not be baked and will show as "
+                               "missing:\n%1", nullptr, int(result.bakeFailures.size()))
+                                .arg(result.bakeFailures.join(QLatin1Char('\n'))));
 
     // Imported projects land on the desktop the user is looking at. The
     // project folder is created empty (scenes may write their own files

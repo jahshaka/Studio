@@ -98,6 +98,10 @@ public:
         QString worldName;     // import: the project's display name
         int assets = 0;
         int objects = 0;
+        /// import: the model files the import could NOT bake (FORWARD-ONLY-1
+        /// D4) — they are in the store and will show as missing until
+        /// re-imported. The import itself succeeded.
+        QStringList bakeFailures;
         bool canceled = false;
         bool ok() const { return error.isEmpty(); }
     };
@@ -207,7 +211,10 @@ private:
     /// Threaded: starts the worker; its completion commits, reports and finishes.
     void startImportBakes(QVector<MeshBakeStore::BakeJob> jobs);
     /// Commits what the worker produced (UI thread). Returns the failure count.
-    int commitImportBakes(QVector<MeshBakeStore::BakeResult> &results);
+    int commitImportBakes(QVector<MeshBakeStore::BakeResult> &results,
+                          const QVector<MeshBakeStore::BakeJob> &jobs);
+    /// The final progress line: "Imported." or which models could not be baked.
+    QString importedText() const;
     /// Synchronous: plan, bake (worker, this thread pumping), commit.
     void runImportBakesInline();
     void beginInstallImport();

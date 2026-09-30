@@ -713,19 +713,31 @@ QVector<MeshBakeStore::BakeJob> ProjectArchiver::planImportBakes()
     return jobs;
 }
 
-int ProjectArchiver::commitImportBakes(QVector<MeshBakeStore::BakeResult> &results)
+int ProjectArchiver::commitImportBakes(QVector<MeshBakeStore::BakeResult> &results,
+                                       const QVector<MeshBakeStore::BakeJob> &jobs)
 {
     int failed = 0;
     QSqlDatabase conn = QSqlDatabase::database();
-    for (MeshBakeStore::BakeResult &result : results) {
+    for (int i = 0; i < results.size(); ++i) {
         QString error;
-        if (!MeshBakeStore::commitBake(conn, mStoreRoot, result, &error)) {
+        if (!MeshBakeStore::commitBake(conn, mStoreRoot, results[i], &error)) {
             ++failed;
+            // THE USER IS TOLD (D4): the result carries it and the final
+            // progress line names it — not a qWarning alone.
+            const QString file = i < jobs.size() ? QFileInfo(jobs[i].path).fileName() : QString();
+            mResult.bakeFailures << (file.isEmpty() ? error : file + QStringLiteral(" (") + error + QLatin1Char(')'));
             qWarning("ProjectArchiver: a model of the archive could not be baked (%s)",
                      qUtf8Printable(error));
         }
     }
     return failed;
+}
+
+QString ProjectArchiver::importedText() const
+{
+    if (mResult.bakeFailures.isEmpty()) return QStringLiteral("Imported.");
+    return QStringLiteral("Imported — %1 model(s) could not be baked and will show as missing: %2")
+        .arg(mResult.bakeFailures.size()).arg(mResult.bakeFailures.join(QStringLiteral(", ")));
 }
 
 namespace {
@@ -749,7 +761,7 @@ QVector<MeshBakeStore::BakeResult> bakeAll(const QVector<MeshBakeStore::BakeJob>
 void ProjectArchiver::startImportBakes(QVector<MeshBakeStore::BakeJob> jobs)
 {
     if (jobs.isEmpty()) {
-        emitProgress(100, QStringLiteral("Imported."));
+        emitProgress(100, importedText());
         finish(false);
         return;
     }
@@ -761,7 +773,7 @@ void ProjectArchiver::startImportBakes(QVector<MeshBakeStore::BakeJob> jobs)
             emitProgress(80 + (19 * i) / qMax(1, n),
                          QStringLiteral("Baking models (%1 of %2)…").arg(i + 1).arg(n));
         });
-        QMetaObject::invokeMethod(this, [this, results]() {
+        QMetaObject::invokeMethod(this, [this, results, jobs]() {
             if (mCanceled.load()) {
                 // A cancel during the bake rolls the import back like any other
                 // cancel; the staged bake temps go with the results.
@@ -776,8 +788,8 @@ void ProjectArchiver::startImportBakes(QVector<MeshBakeStore::BakeJob> jobs)
                 finish(true);
                 return;
             }
-            commitImportBakes(*results);
-            emitProgress(100, QStringLiteral("Imported."));
+            commitImportBakes(*results, jobs);
+            emitProgress(100, importedText());
             finish(false);
         }, Qt::QueuedConnection);
     });
@@ -791,18 +803,22 @@ void ProjectArchiver::runImportBakesInline()
     // as the synchronous open's prewarm: a script's importArchive owes its
     // caller a baked import when it returns, not a frozen window meanwhile.
     std::atomic<bool> done { false };
+    std::atomic<int> at { -1 };
     QVector<MeshBakeStore::BakeResult> results;
     QFuture<void> future = QtConcurrent::run([&]() {
         struct Finish { std::atomic<bool> &flag; ~Finish() { flag.store(true); } } finish{ done };
-        results = bakeAll(jobs, &mCanceled, [this](int i, int n) {
-            emitProgress(80 + (19 * i) / qMax(1, n),
-                         QStringLiteral("Baking models (%1 of %2)…").arg(i + 1).arg(n));
-        });
+        results = bakeAll(jobs, &mCanceled, [&at](int i, int) { at.store(i); });
     });
     while (!done.load()) {
         QCoreApplication::processEvents(QEventLoop::ExcludeUserInputEvents, 20);
         if (!done.load()) QThread::msleep(5);
     }
+        const int now = at.load();
+        if (now != reported && now >= 0) {
+            reported = now;
+            emitProgress(80 + (19 * now) / qMax(1, int(jobs.size())),
+                         QStringLiteral("Baking models (%1 of %2)…").arg(now + 1).arg(jobs.size()));
+        }
     future.waitForFinished();
     commitImportBakes(results);
 }

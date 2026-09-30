@@ -13,6 +13,7 @@ For more information see the LICENSE file
 #include "irisgl/core/math/quat.h"
 #include "irisgl/core/math/vec.h"
 #include "services/sceneeditservice.h"
+#include "services/sceneissues.h"
 #include "services/assetshare.h"
 
 #include "irisgl/document/assets/mesh.h"
@@ -390,6 +391,9 @@ void SceneEditService::addMaterialMesh(const QString &path, bool ignore, iris::V
     reader->setProject(project);
     reader->setLibrarySource();
     iris::SceneNodePtr node = reader->readSceneNode(document);
+    // A LIBRARY MODEL WITH NO BAKE IS SAID (FORWARD-ONLY-1 D4): the placed node
+    // arrives without geometry, and the user is told which file — not a log line.
+    SceneIssues::instance().raiseMissingModels(reader->missingModels());
     delete reader;
     if (!node) return;
 

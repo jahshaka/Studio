@@ -249,6 +249,23 @@ int SceneIssues::clearKind(const QString &kind)
     return n;
 }
 
+void SceneIssues::raiseMissingModels(const QStringList &paths)
+{
+    for (const QString &path : paths) {
+        const QString file = QFileInfo(path).fileName().isEmpty() ? path : QFileInfo(path).fileName();
+        SceneIssue issue;
+        issue.id = QStringLiteral("model.missing:") + path;
+        issue.kind = QStringLiteral("model.missing");
+        issue.nodeName = file;
+        issue.message = tr("The model '%1' is missing from the scene: it has no mesh bake, and "
+                           "none could be rebuilt from its source.").arg(file);
+        issue.action = tr("Its source file is not in the asset store (or its bake could not be "
+                          "rebuilt from it — the log says why): re-import the model, or the project "
+                          "archive it came in.");
+        raise(issue);
+    }
+}
+
 void SceneIssues::reset()
 {
     if (mIssues.isEmpty()) return;

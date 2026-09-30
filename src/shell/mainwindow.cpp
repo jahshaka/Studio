@@ -1923,19 +1923,7 @@ void MainWindow::openStageBind(bool playMode)
 	// A MODEL WITH NO CURRENT BAKE IS MISSING, AND SAID SO (FORWARD-ONLY-1):
 	// the reader never parses in its place. setScene cleared the issue store,
 	// so this is raised after it.
-	for (const QString &path : projectService->missingModels()) {
-		const QString file = QFileInfo(path).fileName();
-		SceneIssue issue;
-		issue.id = QStringLiteral("model.missing:") + path;
-		issue.kind = QStringLiteral("model.missing");
-		issue.nodeName = file;
-		issue.message = tr("The model '%1' is missing from the scene: it has no mesh bake, and "
-		                   "none could be rebuilt from its source.").arg(file);
-		issue.action = tr("Its source file is not in the asset store (or its bake could not be "
-		                  "rebuilt from it — the log says why): re-import the model, or the project "
-		                  "archive it came in.");
-		SceneIssues::instance().raise(issue);
-	}
+	SceneIssues::instance().raiseMissingModels(projectService->missingModels());
 	refreshClaudeChatContext();   // D1: rebind an open chat to the new project
 	// The Materials page's open tabs are per project (MATERIALS_TABS_SPEC
 	// §2.7): this project's set comes back, and it is the only way the page
