@@ -28,6 +28,8 @@
 //   E. a clamped write leaves BOTH halves clamped — the stored block cannot
 //      keep a value the renderer refused.
 //
+// (The dials are the planet's atmosphere's since SKY-ATMOSPHERE-1.)
+//
 // Document only: the headless NULL render system, no display, no pixels.
 #include <QGuiApplication>
 #include <QJsonObject>
@@ -62,39 +64,38 @@ int main(int argc, char **argv)
           "A: ...and the block exists (the constructor writes it through the setter)");
 
     // ---- B: the setter writes both halves, and clamps every dial ----------
+    // (the planet's atmosphere's dials, SKY-ATMOSPHERE-1: the haze 0..100, the Rayleigh scale 0..10, the
+    // aerial scale and the albedo 0..1)
     {
         iris::SkyRealistic r = iris::SkyRealistic::defaults();
-        r.density   = 50.0f;     // the panel row's range is 0.01 .. 1
-        r.diffusion = -3.0f;     //                          0 .. 4
-        r.horizon   = 9.0f;      //                          0 .. 0.5
-        r.power     = 99.0f;     //                          0 .. 4
-        r.sunHaze   = 0.1f;      //                          1 .. 10
+        r.sunHaze       = 500.0f;    // 0 .. 100
+        r.aerialScale   = -3.0f;     // 0 .. 1
+        r.groundAlbedo  = 9.0f;      // 0 .. 1
+        r.rayleighScale = -1.0f;     // 0 .. 10
         scene->setSkyRealistic(r);
-        CHECK(near_(scene->skyRealistic.density, 1.0f) &&
-              near_(scene->skyRealistic.diffusion, 0.0f) &&
-              near_(scene->skyRealistic.horizon, 0.5f) &&
-              near_(scene->skyRealistic.power, 4.0f) &&
-              near_(scene->skyRealistic.sunHaze, 1.0f),
+        CHECK(near_(scene->skyRealistic.sunHaze, 100.0f) &&
+              near_(scene->skyRealistic.aerialScale, 0.0f) &&
+              near_(scene->skyRealistic.groundAlbedo, 1.0f) &&
+              near_(scene->skyRealistic.rayleighScale, 0.0f),
               "B: EVERY dial is clamped by the document, not just the one a verb "
-              "remembered (%.3f %.3f %.3f %.3f %.3f)",
-              double(scene->skyRealistic.density), double(scene->skyRealistic.diffusion),
-              double(scene->skyRealistic.horizon), double(scene->skyRealistic.power),
-              double(scene->skyRealistic.sunHaze));
+              "remembered (%.3f %.3f %.3f %.3f)",
+              double(scene->skyRealistic.sunHaze), double(scene->skyRealistic.aerialScale),
+              double(scene->skyRealistic.groundAlbedo), double(scene->skyRealistic.rayleighScale));
         CHECK(scene->skyRealisticInSync(), "B: ...and both halves still agree after the write");
         // E: the STORED block carries the clamped values, not the asked-for ones.
         const QJsonObject block = scene->skyData.value(QStringLiteral("Realistic"));
-        CHECK(std::fabs(block.value("density").toDouble() - 1.0) < 1e-5 &&
-              std::fabs(block.value("sunHaze").toDouble() - 1.0) < 1e-5,
+        CHECK(std::fabs(block.value("sunHaze").toDouble() - 100.0) < 1e-5 &&
+              std::fabs(block.value("groundAlbedo").toDouble() - 1.0) < 1e-5,
               "E: the stored block cannot keep a value the renderer refused "
-              "(density %.3f, sunHaze %.3f)",
-              block.value("density").toDouble(), block.value("sunHaze").toDouble());
+              "(sunHaze %.3f, groundAlbedo %.3f)",
+              block.value("sunHaze").toDouble(), block.value("groundAlbedo").toDouble());
     }
 
     // ---- C: the predicate has teeth --------------------------------------
     {
         scene->setSkyRealistic(iris::SkyRealistic::defaults());
         CHECK(scene->skyRealisticInSync(), "C: in sync before the bypass");
-        scene->skyRealistic.power = 0.02f;     // the bypass this suite exists to catch
+        scene->skyRealistic.groundAlbedo = 0.02f;     // the bypass this suite exists to catch
         CHECK(!scene->skyRealisticInSync(),
               "C: a write straight to the typed field is REPORTED — a future writer that "
               "bypasses setSkyRealistic fails this suite instead of a user's scene");
@@ -105,32 +106,38 @@ int main(int argc, char **argv)
     // ---- D: the round trip, and what an absent key means ------------------
     {
         iris::SkyRealistic r = iris::SkyRealistic::defaults();
-        r.density = 0.31f; r.diffusion = 1.75f; r.horizon = 0.04f;
-        r.power = 2.25f; r.sunHaze = 6.0f; r.skyColour = QColor(17, 34, 51);
+        r.sunHaze = 3.5f; r.aerialScale = 0.25f; r.groundAlbedo = 0.15f;
+        r.rayleighScale = 2.5f; r.ozone = false;
         const iris::SkyRealistic back =
             iris::Scene::skyRealisticFromJson(iris::Scene::skyRealisticJson(r));
-        CHECK(near_(back.density, r.density) && near_(back.diffusion, r.diffusion) &&
-              near_(back.horizon, r.horizon) && near_(back.power, r.power) &&
-              near_(back.sunHaze, r.sunHaze) && back.skyColour == r.skyColour,
-              "D: every dial survives the JSON round trip exactly, the colour included");
+        CHECK(near_(back.sunHaze, r.sunHaze) && near_(back.aerialScale, r.aerialScale) &&
+              near_(back.groundAlbedo, r.groundAlbedo) && near_(back.rayleighScale, r.rayleighScale) &&
+              back.ozone == r.ozone,
+              "D: every dial survives the JSON round trip exactly, the ozone switch included");
 
         const iris::SkyRealistic d = iris::SkyRealistic::defaults();
         const iris::SkyRealistic empty = iris::Scene::skyRealisticFromJson(QJsonObject());
-        CHECK(near_(empty.density, d.density) && near_(empty.sunHaze, d.sunHaze) &&
-              empty.skyColour == d.skyColour,
+        CHECK(near_(empty.sunHaze, d.sunHaze) && near_(empty.aerialScale, d.aerialScale) &&
+              empty.ozone == d.ozone,
               "D: an ABSENT key reads as what a NEW scene means, never as zero — the "
-              "reader-defaults trap (sunHaze %.3f against the default %.3f)",
-              double(empty.sunHaze), double(d.sunHaze));
+              "reader-defaults trap (aerialScale %.3f against the default %.3f)",
+              double(empty.aerialScale), double(d.aerialScale));
 
-        // A block that carries ONE key leaves the others at the new-scene value:
-        // this is exactly the old-document case the four hand-written readers
-        // each had to get right on their own.
+        // A block that carries ONE key leaves the others at the new-scene value.
         QJsonObject partial;
-        partial.insert("density", 0.42);
+        partial.insert("sunHaze", 4.0);
         const iris::SkyRealistic one = iris::Scene::skyRealisticFromJson(partial);
-        CHECK(near_(one.density, 0.42f) && near_(one.power, d.power) &&
-              near_(one.sunHaze, d.sunHaze),
+        CHECK(near_(one.sunHaze, 4.0f) && near_(one.groundAlbedo, d.groundAlbedo) &&
+              near_(one.aerialScale, d.aerialScale),
               "D: a document that knows one dial opens at the defaults for the rest");
+
+        // FORWARD ONLY (SKY-ATMOSPHERE-1): the retired model's keys are not read.
+        QJsonObject old;
+        old.insert("density", 0.9);
+        old.insert("power", 3.0);
+        const iris::SkyRealistic ignored = iris::Scene::skyRealisticFromJson(old);
+        CHECK(iris::Scene::skyRealisticJson(ignored) == iris::Scene::skyRealisticJson(d),
+              "D: an old block's non-physical dials are not read — it opens at the defaults");
     }
 
     std::printf(failures ? "\nFAILURES: %d\n" : "\nall checks passed\n", failures);

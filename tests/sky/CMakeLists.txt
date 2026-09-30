@@ -65,3 +65,10 @@ target_link_libraries(test_aerial_perspective PRIVATE JahshakaEngine)
 jah_gpu_row(sky.aerial_perspective CLASS engine COMMAND test_aerial_perspective
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(sky.aerial_perspective PROPERTIES TIMEOUT 120 LABELS "engine")
+
+# sky.atmosphere — THE PLANET'S ATMOSPHERE (SKY-ATMOSPHERE-1).
+jahshaka_sky_test_src(test_atmosphere test_atmosphere.cpp)
+target_link_libraries(test_atmosphere PRIVATE JahshakaEngine)
+jah_gpu_row(sky.atmosphere CLASS engine COMMAND test_atmosphere
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(sky.atmosphere PROPERTIES TIMEOUT 120 LABELS "engine")

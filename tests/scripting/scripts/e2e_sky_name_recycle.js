@@ -59,7 +59,7 @@ assert(first.names.length === 0, "a host-uploaded equirect sky needs no sky-arra
 for (var k = 0; k < 60; k++) {
     if (k % 3 === 0)      world.sky("color", { color: { r: (k * 4) % 250, g: 40, b: 200 } });
     else if (k % 3 === 1) world.sky("gradient", { top: { r: (k * 7) % 250, g: 10, b: 90 } });
-    else                  world.sky("realistic", { density: 0.2 + (k % 5) * 0.1 });
+    else                  world.sky("realistic", { sunHaze: 1 + (k % 5) * 20 });
     editor.frame(2);
 }
 // Back to a host-uploaded sky, so there is a live array to look at.

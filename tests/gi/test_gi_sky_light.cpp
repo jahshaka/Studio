@@ -654,25 +654,29 @@ int main(int argc, char **argv)
                   "7b4. one degree of sun never moves the sun's share of the picture by 5%");
 
             // (d) THE THIN-SKY CASE, which is what the frozen plateau really
-            // cost: with the density dialled down, a sun 30 degrees UNDER the
-            // ground used to light the scene at a fifth of noon for ever.
+            // cost: with the air dialled thin, a sun 30 degrees UNDER the
+            // ground used to light the scene at a fifth of noon for ever. (The
+            // thin air is the planet's atmosphere's haze at 0 since
+            // SKY-ATMOSPHERE-1; the retired model's density dial stood here.)
             {
-                const float densityWas = doc->skyRealistic.density;
+                iris::SkyRealistic thin = doc->skyRealistic;
+                const iris::SkyRealistic was = thin;
                 doc->sunDiscVisible = true;   // the second sweep left it off
-                doc->skyRealistic.density = 0.1f;
+                thin.sunHaze = 0.0f;
+                doc->setSkyRealistic(thin);
                 sun->setLocalRot(iris::Quat::fromEulerAngles(-120.0f, 0.0f, 0.0f));  // 30 deg under
                 settle();
                 const iris::Vec3 toSun = -sun->getLightDir().normalized();
                 const Colour tint = escene->atmosphereSunTint(
                     Vec3(toSun.x(), toSun.y(), toSun.z()));
-                std::printf("   thin sky (density 0.1), sun 30 deg BELOW: tint %.4f %.4f %.4f, "
+                std::printf("   thin sky (haze 0), sun 30 deg BELOW: tint %.4f %.4f %.4f, "
                             "disc %s\n", tint.r, tint.g, tint.b,
                             escene->sky().sun.enabled ? "on" : "off");
                 CHECK(tint.r == 0.0f && tint.g == 0.0f && tint.b == 0.0f,
                       "7b5. a set sun lights nothing, at any sky density");
                 CHECK(!escene->sky().sun.enabled,
                       "7b6. ...and draws no disc under the ground");
-                doc->skyRealistic.density = densityWas;
+                doc->setSkyRealistic(was);
             }
             sun->setLocalRot(iris::Quat::fromEulerAngles(-70.0f, 0.0f, 0.0f));
             sphere->setLocalPos(iris::Vec3(0.0f, -40.0f, 0.0f));

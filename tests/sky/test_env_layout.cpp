@@ -55,14 +55,18 @@ static int failures = 0;
 
 static const float kPi = 3.14159265358979323846f;
 
-/// The analytic sky, whose capture and convolution are the subject. Its density
-/// is the dial the two cases move: a denser atmosphere is a visibly different
-/// environment, which is what makes case 1's "the reflection followed" real.
-static SkyDesc atmosphereSky(float density, float elevationDeg)
+/// The planet's atmosphere, whose capture and convolution are the subject. Its
+/// haze (SKY-ATMOSPHERE-1: the aerosol density; the retired model's `density`
+/// dial stood here) is the dial the two cases move: a hazier atmosphere is a
+/// visibly different environment, which is what makes case 1's "the
+/// reflection followed" real. Lit by a white sun of intensity 1 (pi in the
+/// renderer's units).
+static SkyDesc atmosphereSky(float haze, float elevationDeg)
 {
     SkyDesc d;
     d.mode = SkyMode::Atmosphere;
-    d.atmosphere.density = density;
+    d.atmosphere.sunHaze = haze;
+    d.atmosphere.sunIlluminance = Colour(kPi, kPi, kPi, 1.0f);
     d.atmosphere.hasSun = true;
     const float e = elevationDeg * kPi / 180.0f;
     d.atmosphere.sunDir[0] = 0.0f;

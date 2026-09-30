@@ -73,11 +73,11 @@ try { world.sky("volumetric"); } catch (e) { thrown = true; }
 assert(thrown, "unknown sky type refused");
 
 // ---- the realistic sky, whose SUN is the scene's directional light (D15) ----
-world.sky("realistic", { density: 0.6, power: 1.2 });
+world.sky("realistic", { sunHaze: 3.0, groundAlbedo: 0.2 });
 sky = world.get().sky;
 assert(sky.type === "Realistic", "realistic sky type set");
-assert(near(sky.data.density, 0.6), "density reaches skyData (save-safe)");
-assert(near(sky.data.power, 1.2), "power reaches skyData (save-safe)");
+assert(near(sky.data.sunHaze, 3.0), "sunHaze reaches skyData (save-safe)");
+assert(near(sky.data.groundAlbedo, 0.2), "groundAlbedo reaches skyData (save-safe)");
 assert(sky.azimuth === undefined && sky.elevation === undefined,
        "the sky has no sun dials of its own any more");
 // The CPU bake's dials are GONE (SKY-GPU) and saying so is the verb's job.
