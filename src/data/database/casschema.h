@@ -24,7 +24,10 @@ namespace CasSchema
 // Fresh databases bootstrap the FULL final schema directly — there are no
 // user-data migrations (the app ships new; the owner's library is wiped).
 // 3 = the listing indexes (D11-LIBRARY-SCALE; Database::createIndexes).
-inline constexpr int kUserVersion = 3;
+// 4 = FORWARD-ONLY-1: the LIBRARY GENERATION (services/librarygeneration.h).
+//     Stored data is read differently with no column moved, so a library of
+//     any other value is wiped at startup. Bump it whenever that is true again.
+inline constexpr int kUserVersion = 4;
 
 // Reference-with-pin (ASSET_PIPELINE_SPEC §3.1.5, phase 4): a project "use"
 // of an asset is a row here, pinning the source oid AT ADD TIME. Content is

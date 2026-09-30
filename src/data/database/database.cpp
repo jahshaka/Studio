@@ -797,7 +797,7 @@ void Database::createCasTables()
     versionQuery.exec("PRAGMA user_version");
     int current = 0;
     if (versionQuery.next()) current = versionQuery.value(0).toInt();
-    if (current < CasSchema::kUserVersion) {
+    if (current != CasSchema::kUserVersion) {
         QSqlQuery setVersion;
         setVersion.exec(QStringLiteral("PRAGMA user_version = %1").arg(CasSchema::kUserVersion));
     }

@@ -303,6 +303,7 @@ set(SRCS
     src/services/assetmetadata.cpp
     src/services/libraryassetnode.cpp
     src/services/libraryreset.cpp
+    src/services/librarygeneration.cpp
     src/bridge/assetthumbnail.cpp
     src/services/rigsignature.cpp
     src/services/animationfile.cpp
@@ -599,6 +600,7 @@ set(HEADERS
     src/services/assetmetadata.h
     src/services/libraryassetnode.h
     src/services/libraryreset.h
+    src/services/librarygeneration.h
     src/bridge/assetthumbnail.h
     src/services/rigsignature.h
     src/services/animationfile.h

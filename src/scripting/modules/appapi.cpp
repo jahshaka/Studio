@@ -46,6 +46,7 @@ For more information see the LICENSE file
 #include "services/assetstorepaths.h"
 #include "app/firstrun.h"
 #include "services/libraryreset.h"
+#include "services/librarygeneration.h"
 #include "data/constants.h"
 #include "services/ogresamples.h"
 #include "services/testtier.h"
@@ -504,6 +505,15 @@ QVector<VerbInfo> AppApi::verbs() const
           "jahsettings.ini in its historical place (applicationDirPath in a Debug build) and its "
           "projects under the `default_directory` preference. READ-ONLY on purpose: a setter "
           "would have to move a live database and a live asset store while they are open.",
+          Needs::Document },
+        { "libraryGeneration", "app.libraryGeneration() -> {generation, onDisk, outcome, wipedAtStartup, reason}",
+          "THE LIBRARY GENERATION (FORWARD-ONLY-1): `generation` is the one this build writes and "
+          "reads (PRAGMA user_version); `onDisk` what the library carried when this process "
+          "started; `outcome` what the startup check did — \"noLibrary\" (a first launch), "
+          "\"current\", \"wiped\" (an older library: there are no migrations, it was reset — "
+          "project folders outside the data root are left on disk, only unlisted — and the GUI "
+          "said so once), \"refused\" (never seen here: that process exits) or \"failed\". "
+          "Read-only.",
           Needs::Document },
         { "resetLibrary", "app.resetLibrary({restart}) -> {ok, removed: {objects, sidecars, projects, thumbnails, staging}, restarted}",
           "RESET THE LIBRARY TO A FIRST LAUNCH (owner review R10.2) — the gesture behind "
@@ -1016,6 +1026,24 @@ QVariantMap AppApi::dataRoot()
 // Everything that touches rows and bytes is services/libraryreset.h, which is
 // what lets the headless suite drive the whole of it and what lets the
 // Preferences button be four lines that call this verb.
+QVariantMap AppApi::libraryGeneration()
+{
+    const librarygeneration::Result r = librarygeneration::lastResult();
+    const char *outcome = "noLibrary";
+    switch (r.outcome) {
+    case librarygeneration::Outcome::NoLibrary: outcome = "noLibrary"; break;
+    case librarygeneration::Outcome::Current:   outcome = "current"; break;
+    case librarygeneration::Outcome::Wiped:     outcome = "wiped"; break;
+    case librarygeneration::Outcome::Refused:   outcome = "refused"; break;
+    case librarygeneration::Outcome::Failed:    outcome = "failed"; break;
+    }
+    return QVariantMap{ { QStringLiteral("generation"), librarygeneration::generation() },
+                        { QStringLiteral("onDisk"), r.generationOnDisk },
+                        { QStringLiteral("outcome"), QString::fromLatin1(outcome) },
+                        { QStringLiteral("wipedAtStartup"), librarygeneration::wipedAtStartup() },
+                        { QStringLiteral("reason"), r.reason } };
+}
+
 QVariantMap AppApi::resetLibrary(const QVariantMap &options)
 {
     QVariantMap out;

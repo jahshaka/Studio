@@ -48,9 +48,7 @@ For more information see the LICENSE file
 #include "scripting/scriptengine.h"
 #include "data/constants.h"
 #include "app/updatechecker.h"
-#include "data/database/database.h"
-#include "data/settingkeys.h"
-#include "services/libraryreset.h"
+#include "services/librarygeneration.h"
 #include "irisgl/core/irisutils.h"
 #include "irisgl/core/logger.h"
 #include "ui/dialogs/softwareupdatedialog.h"
@@ -288,36 +286,22 @@ int main(int argc, char *argv[])
         if (!assetDir.exists()) assetDir.mkpath(AssetStorePaths::defaultRoot());
     }
 
-    // THE SCHEMA CHECK (FORWARD-ONLY-1). There are no migrations: a library
-    // whose tables are not this build's is WIPED — the whole library, through
-    // the one reset (catalog, store layout, project folders), exactly as a
-    // first launch finds it — and the log says so. After the store bootstrap
-    // above, so the reset removes the store this run actually uses.
+    // THE LIBRARY GENERATION (FORWARD-ONLY-1, services/librarygeneration.h).
+    // There are no migrations: a library that is not this build's (its
+    // generation or its tables) is WIPED through the one reset, after the store
+    // bootstrap above so the reset removes the store this run uses. A data root
+    // another instance holds is REFUSED: this process exits rather than delete
+    // that instance's files.
     {
-        const QString libraryPath =
-            IrisUtils::join(AppPaths::dataRoot(), Constants::JAH_DATABASE);
-        if (QFile::exists(libraryPath)) {
-            Database library;
-            if (library.initializeDatabase(libraryPath) && !library.schemaMatchesFresh()) {
-                const QString refusal = libraryreset::refusalReason();
-                if (!refusal.isEmpty()) {
-                    irisLog(QStringLiteral("library: this library was written by an older build "
-                                           "and cannot be wiped now (%1)").arg(refusal));
-                } else {
-                    SettingsManager *settings = SettingsManager::getDefaultManager();
-                    const libraryreset::Result wiped = libraryreset::reset(
-                        &library, settings,
-                        AppPaths::projectsRoot(settings->get(settingkeys::defaultDirectory),
-                                               Constants::PROJECT_FOLDER),
-                        [](const QString &) { return QString(); }, /*seedPresets*/ false);
-                    irisLog(wiped.ok
-                                ? QStringLiteral("library: this library was written by an older "
-                                                 "build and has been WIPED (no migrations exist)")
-                                : QStringLiteral("library: wiping the older build's library "
-                                                 "failed: %1").arg(wiped.error));
-                }
-            }
-            library.closeDatabase();
+        const librarygeneration::Result gen = librarygeneration::checkAndWipe(
+            IrisUtils::join(AppPaths::dataRoot(), Constants::JAH_DATABASE), AppPaths::dataRoot(),
+            SettingsManager::getDefaultManager());
+        if (gen.outcome == librarygeneration::Outcome::Refused) {
+            std::fprintf(stderr, "Jahshaka: the library cannot be opened: %s\n",
+                         qUtf8Printable(gen.reason));
+            irisLog(QStringLiteral("library: REFUSED — %1").arg(gen.reason));
+            JahLog::stop(QStringLiteral("library refused, exit code 4"));
+            return 4;
         }
     }
 

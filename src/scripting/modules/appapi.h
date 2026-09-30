@@ -66,6 +66,7 @@ public:
     /// RESET THE LIBRARY to a first launch (owner review R10.2). The rows,
     /// the store's contents, every project folder — and then the fresh-install
     /// bootstrap. `{restart: true}` brings the app back up.
+    Q_INVOKABLE QVariantMap libraryGeneration();
     Q_INVOKABLE QVariantMap resetLibrary(const QVariantMap &options = QVariantMap());
     Q_INVOKABLE QVariantMap mcpLogging(const QVariantMap &options = QVariantMap());
     /// The process's test tier ("" = none; services/testtier.h).
