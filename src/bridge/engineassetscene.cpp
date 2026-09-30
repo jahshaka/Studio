@@ -225,6 +225,14 @@ void EngineAssetScene::setSkyColor(const QColor &c)
     mDocument->setSkyColor(c);
 }
 
+bool EngineAssetScene::groundPlaneShown(float *height) const
+{
+    const SceneMirror *m = mirror();
+    if (!m) return false;
+    if (height) *height = m->groundPlaneHeight();
+    return m->groundPlane();
+}
+
 void EngineAssetScene::setBackdrop(unsigned int id)
 {
     switch (id) {

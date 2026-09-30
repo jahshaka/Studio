@@ -51,6 +51,9 @@ public:
 
     /// AssetViewer::changeBackdrop: 1 dark, 2 grey (no floor, no shadows), 3 floor + shadows.
     void setBackdrop(unsigned int id);
+    /// The Ground plane widget as the mirror holds it (WORLD-MODEL-1): shown,
+    /// and at what height — for the suite (assets.engine); false before attach.
+    bool groundPlaneShown(float *height = nullptr) const;
     void setSkyColor(const QColor &c);
 
     // ---- the orbit camera (AssetViewer::resetViewerCamera[After] / orientCamera) ----

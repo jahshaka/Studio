@@ -143,6 +143,19 @@ int main(int argc, char **argv)
         show("cube, framing camera", front, W / 2, H / 2);
         CHECK(isRed(at(front, W / 2, H / 2)), "centre pixel is dominated by the material colour");
         CHECK(isBackground(at(front, 2, 2)), "corner is the preview background (25,25,25)");
+        // THE GROUND IS THE EDITOR'S GROUND PLANE WIDGET (WORLD-MODEL-1): on for the
+        // lit backdrop, 5 m down where the subject stands, and it fills the bottom
+        // of the frame; the dark backdrops take it away.
+        {
+            float gh = 0.0f;
+            const bool shown = assets.groundPlaneShown(&gh);
+            std::printf("    ground plane: shown %d at y = %.2f; bottom-left pixel %.3f %.3f %.3f\n",
+                        int(shown), double(gh), double(at(front, 2, H - 3).r),
+                        double(at(front, 2, H - 3).g), double(at(front, 2, H - 3).b));
+            CHECK(shown && std::fabs(gh + 5.0f) < 1e-4f,
+                  "the Assets module shows the Ground plane widget, at y = -5 m");
+            CHECK(!isBackground(at(front, 2, H - 3)), "...and it is the ground at the frame's bottom corner");
+        }
         const iris::Vec3 camPos = assets.camera()->getLocalPos();
         std::printf("    camera %.2f %.2f %.2f\n", double(camPos.x()), double(camPos.y()), double(camPos.z()));
         CHECK(std::fabs(camPos.y() - cube->getLocalPos().y()) < 1.0f, "camera framed at the subject's height");
@@ -229,6 +242,12 @@ int main(int argc, char **argv)
         CHECK(at(huge, W / 2, H / 2).b > 0.12f && at(huge, W / 2, H / 2).b > at(huge, W / 2, H / 2).r * 1.5f,
               "a huge model is visible at the centre (not far-clipped)");
         CHECK(isBackground(at(huge, 2, 2)), "the huge model is framed inside the view");
+        // ...and the dark backdrop takes the Ground plane away (WORLD-MODEL-1). Last,
+        // because a backdrop switch also moves the fog and shadows the checks above read.
+        assets.setBackdrop(1);
+        Image dark = render(assets, *engine, view, 3);
+        CHECK(!assets.groundPlaneShown() && isBackground(at(dark, 2, H - 3)),
+              "a dark backdrop takes the ground plane away (the bottom corner is background)");
 
         // 5c. the lotus trap: framing a scaled model from its UNSCALED radius
         // put the camera inside/nowhere near it. A cube scaled x3 (world radius
