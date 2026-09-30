@@ -47,7 +47,7 @@ public:
     static bool classicActive();
 
     // Reads the persisted choice and applies it. MUST run after the QApplication
-    // is constructed and before ANY widget (the Upgrader dialog is the first).
+    // is constructed and before ANY widget.
     static void applyAtStartup(QApplication &app);
 
     // (clearClassicSheets — a recursive "wipe every sheet under this widget"

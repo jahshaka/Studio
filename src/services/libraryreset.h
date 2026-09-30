@@ -117,10 +117,9 @@ QString refusalReason();
 ///      "Use Existing Store" with force accepts any existing one), so it can
 ///      be ~/Documents or the top of a memory stick, and every other file in
 ///      it belongs to somebody else;
-///   4. drops the tables (`Database::wipeDatabase`) and CREATES THEM AGAIN —
-///      with the metadata version row `createMetadataTable` writes, which is
-///      what the NEXT BOOT's schema check reads and what the old path left it
-///      without;
+///   4. drops the tables (`Database::wipeDatabase`) and CREATES THEM AGAIN,
+///      so the NEXT BOOT's schema check (Database::schemaMatchesFresh) finds
+///      exactly this build's tables;
 ///   5. re-runs the fresh-install bootstrap: the store's identity
 ///      (`AssetStoreService::bootstrapFromSettings`, which writes a new
 ///      store.json) and the first-run preset seed under the same rule a

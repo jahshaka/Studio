@@ -18,9 +18,7 @@ For more information see the LICENSE file
  *
  * Every path under the asset store is derived HERE and nowhere else — the
  * phase-0 sweep replaced the ~27 hand-rolled AppData+"AssetStore" joins with
- * calls into this class.  The only exempt site is src/app/upgrader.cpp, which
- * wipes the PRE-storeRoot install location and must therefore always address
- * the DEFAULT root, never a relocated one.
+ * calls into this class.
  *
  * Layouts served:
  *   - legacy (pre-CAS):  <root>/<assetGuid>/<fileName>       (legacyFolder/legacyFilePath)

@@ -41,12 +41,9 @@ inline constexpr const char *kProjectAssetsTable =
     // WHERE THIS PROJECT FILES THE PIN (DRAWERS-1): a folder guid, NULL/'' for
     // the project root. It is a column on the PIN and not on the asset row
     // because a pinned row is a LIBRARY row every project shares
-    // (services/projectfolders.h). It is HERE as well as in
-    // Database::migrateProjectAssetsTable — the migration is what an older
-    // library gets, and this is what a table created from scratch gets, which
-    // is not only the first launch: AssetCas::ensureCasSchema creates these
-    // tables on its OWN connection (the rebuild/verify paths), and a table
-    // created there without the column made every later filing fail silently.
+    // (services/projectfolders.h). AssetCas::ensureCasSchema also creates
+    // these tables on its OWN connection (the rebuild/verify paths), so the
+    // column lives in this one statement.
     "    folder       TEXT,"
     "    PRIMARY KEY (project_guid, asset_guid)"
     ")";

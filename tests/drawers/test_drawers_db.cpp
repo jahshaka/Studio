@@ -1,5 +1,5 @@
 // Headless characterisation test for the asset-drawers storage layer
-// (ASSET_DRAWERS_SPEC.md §2/§5): the guarded collections-table migration,
+// (ASSET_DRAWERS_SPEC.md §2/§5): the fresh collections schema (an older one is refused),
 // drawer CRUD + nesting, delete-reassigns-to-Uncategorized, and cycle
 // rejection on reparent.
 //
@@ -66,40 +66,34 @@ int main(int argc, char **argv)
         CHECK(level == 1, "... at synchronous = NORMAL");
     }
 
-    // --- Simulate a PRE-DRAWERS library: the collections table as it shipped
-    //     before the parent column existed, with the seeded Uncategorized row
-    //     and one user collection, plus assets living in each.
+    // --- FORWARD-ONLY-1: a PRE-DRAWERS library is REFUSED by the schema
+    //     check, never migrated (main() wipes it).
     {
         QSqlQuery q;
         bool ok = q.exec(
             "CREATE TABLE collections ("
             "    name VARCHAR(128), date_created DATETIME DEFAULT CURRENT_TIMESTAMP,"
             "    collection_id INTEGER PRIMARY KEY)");
-        ok = ok && q.exec("INSERT INTO collections (name, date_created, collection_id) "
-                          "VALUES ('Uncategorized', datetime(), 0)");
-        ok = ok && q.exec("INSERT INTO collections (name, date_created) VALUES ('Legacy Props', datetime())");
-        if (!ok) printf("info: simulation error: %s\n", qPrintable(q.lastError().text()));
-        CHECK(ok, "pre-drawers collections table simulated");
+        CHECK(ok, "a pre-drawers collections table created");
+        CHECK(!db.schemaMatchesFresh(), "the schema check REFUSES a pre-drawers library");
+        CHECK(q.exec("DROP TABLE collections"), "...and it is dropped (the wipe's job)");
     }
-
-    // The startup migration the real app runs.
     db.createAllTables();
-    CHECK(db.checkIfColumnExists("collections", "parent"), "migrated: parent column exists");
-
+    CHECK(db.checkIfColumnExists("collections", "parent"), "the fresh schema has the parent column");
     {
+        QSqlQuery q;
+        bool ok = q.exec("INSERT INTO collections (name, date_created, collection_id) "
+                         "VALUES ('Uncategorized', datetime(), 0)");
+        ok = ok && q.exec("INSERT INTO collections (name, date_created) VALUES ('Legacy Props', datetime())");
+        CHECK(ok, "two collections inserted with no parent given");
         auto colls = db.fetchCollections();
-        CHECK(colls.size() == 2, "no collection lost by the migration");
+        CHECK(colls.size() == 2, "both collections listed");
         CHECK(findCollection(colls, 0).parent == -1, "Uncategorized reads parent -1 (top level)");
-        CHECK(findCollection(colls, 0).name == "Uncategorized", "Uncategorized name intact");
-        bool legacyTopLevel = false;
+        bool topLevel = false;
         for (const auto &c : colls)
-            if (c.name == "Legacy Props" && c.parent == -1) legacyTopLevel = true;
-        CHECK(legacyTopLevel, "existing user collection stays at top level");
+            if (c.name == "Legacy Props" && c.parent == -1) topLevel = true;
+        CHECK(topLevel, "a collection with no parent sits at top level");
     }
-
-    // Idempotent: running the migration again must be a no-op.
-    db.createAllTables();
-    CHECK(db.fetchCollections().size() == 2, "migration is idempotent");
 
     // --- CRUD + nesting -----------------------------------------------------
     const int props = db.createCollection("Props");
@@ -187,31 +181,6 @@ int main(int argc, char **argv)
     }
 
     // --- Material-asset data heal (PBR data-loss audit) ---------------------
-    // Libraries written before the fix carry material rows whose definition
-    // JSON landed in the TAGS column (a shifted createAssetEntry argument)
-    // with the ASSET column empty. The startup migration must move it over,
-    // leave healthy rows alone, and be idempotent.
-    {
-        QSqlQuery q;
-        bool ok = q.exec(
-            "INSERT INTO assets (name, guid, type, project_guid, collection, tags, asset) "
-            "VALUES ('Stranded PBR', 'stranded-mat-guid', 1, 'projX', 0, '{\"materialType\": \"pbr\"}', NULL)");
-        ok = ok && q.exec(
-            "INSERT INTO assets (name, guid, type, project_guid, collection, tags, asset) "
-            "VALUES ('Healthy Mat', 'healthy-mat-guid', 1, 'projX', 0, 'user,tags', '{\"materialType\": \"custom\"}')");
-        CHECK(ok, "pre-fix material rows simulated");
-
-        db.createAllTables();   // runs migrateAssetsTable
-        CHECK(db.fetchAssetData("stranded-mat-guid") == QByteArray("{\"materialType\": \"pbr\"}"),
-              "stranded material JSON moved from tags to asset");
-        CHECK(db.fetchAssetData("healthy-mat-guid") == QByteArray("{\"materialType\": \"custom\"}"),
-              "healthy material row untouched");
-
-        db.createAllTables();   // idempotent
-        CHECK(db.fetchAssetData("stranded-mat-guid") == QByteArray("{\"materialType\": \"pbr\"}"),
-              "material data migration is idempotent");
-    }
-
     db.closeDatabase();
     if (failures) { printf("%d FAILURE(S)\n", failures); return 1; }
     printf("all drawers db checks passed\n");

@@ -298,17 +298,14 @@ public:
     bool createDependenciesTable();
     bool createAuthorTable();
     bool createFoldersTable();
-    bool createMetadataTable();
     bool createFavoritesTable();
     void createAllTables();
     void createIndexes();
     void createCasTables();
-    /// THE PIN'S FILING (DRAWERS-1): `project_assets.folder`, added in place on
-    /// an older library. A folder is a PER-PROJECT fact and a pinned row is a
-    /// LIBRARY row shared by every project, so where a project files its pin
-    /// cannot live in `assets.parent` — that column would file the same asset
-    /// into one project's folder for everybody. Empty/NULL = the project root.
-    void migrateProjectAssetsTable();
+    /// True when every table this build creates exists here with exactly the
+    /// same columns. False = a library from an older build (FORWARD-ONLY-1:
+    /// no migrations; main() wipes it through libraryreset).
+    bool schemaMatchesFresh();
 
     // INSERT ===============================================================================
     bool createProject(const QString &guid,
@@ -530,8 +527,6 @@ public:
 	bool updateProjectPosition(const QString &guid, float x, float y);
 	// slider mode (DESKTOP_SLIDER_SPEC.md): filmstrip {row, orderIndex}
 	bool updateProjectSliderPos(const QString &guid, int row, int index);
-	void updateSchema();
-	bool updateMetadataVersion(const QString &version);
 
     // FETCH ================================================================================
     AssetRecord fetchAsset(const QString &guid);
@@ -718,7 +713,6 @@ public:
 
     QStringList hasMultipleDependers(const QString &guid);
     bool hasDependencies(const QString &guid);
-	DatabaseMetadataRecord getDbMetadata();
 
     // IMPORT ===============================================================================
     /// The PROJECT archive (.jaf) is the last .jaf reader/writer; JAF-READER-1 replaces it with manifest v2 + the envelope.
@@ -733,12 +727,6 @@ public:
 
     bool checkIfTableExists(const QString &tableName);
     bool checkIfColumnExists(const QString &tableName, const QString &columnName);
-    // Guarded, idempotent schema evolution for the projects table (desktops feature).
-    // Runs on every startup via createAllTables; ALTERs only when a column is missing.
-    void migrateProjectsTable();
-    // Same contract for the collections table (asset drawers: parent column).
-    void migrateCollectionsTable();
-    void migrateAssetsTable();
 
 
     QByteArray getSceneBlobGlobal(const QString &projectGuid) const;
@@ -814,11 +802,8 @@ private:
     QString dependenciesTableSchema;
     QString authorTableSchema;
     QString foldersTableSchema;
-    QString metadataTableSchema;
     QString favoritesTableSchema;
 
-	QString version080SchemaUpdate;
-	QString version080SchemaDowngrade;
 
     QSqlDatabase db;
 

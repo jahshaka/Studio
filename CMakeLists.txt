@@ -481,7 +481,6 @@ set(SRCS
     src/services/subscriber.cpp
     src/services/scenenodehelper.cpp
     src/app/notices.cpp
-    src/app/upgrader.cpp
     thirdparty/qtawesome/QtAwesome.cpp
     thirdparty/qtawesome/QtAwesomeAnim.cpp
     src/ui/style/stylesheet.cpp
@@ -766,7 +765,6 @@ set(HEADERS
     src/services/assethelper.h
     src/services/subscriber.h
     src/services/scenenodehelper.h
-    src/app/upgrader.h
     thirdparty/qtawesome/QtAwesome.h
     thirdparty/qtawesome/QtAwesomeAnim.h 
     src/ui/style/stylesheet.h

@@ -53,7 +53,7 @@ set_tests_properties(app.engine_selftest_validation PROPERTIES
 #
 #   6b  "duplicate connection name 'qt_sql_default_connection'" — Database::
 #       closeDatabase() read the connection name after invalidating the handle,
-#       so removeDatabase("") no-op'd and Upgrader's schema check leaked the
+#       so removeDatabase("") no-op'd and the boot's schema check leaked the
 #       DEFAULT connection into MainWindow::setupProjectDB.
 #   6c  "invalid parameters in SMAA.material(83)" — fork c290052de (was 0012).
 #   6a  Qt Multimedia on the startup path (iris::Scene and VideoPreviewWidget
@@ -65,8 +65,8 @@ set_tests_properties(app.engine_selftest_validation PROPERTIES
 #       banner this assertion weakens, ui.media_lazy does not).
 #
 # TWO runs under ONE scratch HOME on purpose: the 6b warning needs a database
-# to already exist, because Upgrader::checkIfSchemaNeedsUpdating() returns
-# early when there is none — a single fresh-HOME boot could never see it.
+# to already exist, because main()'s schema check (FORWARD-ONLY-1) opens one
+# only when there is one — a single fresh-HOME boot could never see it.
 # Deliberately NOT pinned to DISPLAY=:0 (unlike the selftests above): it
 # inherits the session display exactly like the scripting e2e suites, so it
 # runs on whatever Xvfb the gate uses.

@@ -48,7 +48,11 @@ For more information see the LICENSE file
 #include "scripting/scriptengine.h"
 #include "data/constants.h"
 #include "app/updatechecker.h"
-#include "app/upgrader.h"
+#include "data/database/database.h"
+#include "data/settingkeys.h"
+#include "services/libraryreset.h"
+#include "irisgl/core/irisutils.h"
+#include "irisgl/core/logger.h"
 #include "ui/dialogs/softwareupdatedialog.h"
 #include "ui/controls/tooltip.h"
 #include "app/versionsplashscreen.h"
@@ -175,14 +179,13 @@ int main(int argc, char *argv[])
     // WHERE THIS RUN KEEPS ITS DATA (services/apppaths.h), resolved BEFORE
     // anything reads a path. Everything downstream — the session log's release
     // directory, SettingsManager (which the very next block constructs), the
-    // Upgrader, the library database, the asset store, the shader cache — asks
+    // library database, the asset store, the shader cache — asks
     // AppPaths, so `--data-root <dir>` / `JAHSHAKA_DATA_ROOT` redirects the
     // whole set together. With neither given, every path is exactly where it
     // has always been.
     //
     // It has to be after QApplication (settingsFilePath reads
-    // applicationDirPath) and before the log, and the ordering below it —
-    // Upgrader before AssetStoreService::bootstrapFromSettings — is unchanged.
+    // applicationDirPath) and before the log.
     AppPaths::initialize(cli.dataRoot);
 
 	installCrashHandler();   // STABILITY_AUDIT.md §5.1 — backtraces for every fatal
@@ -255,12 +258,8 @@ int main(int argc, char *argv[])
         });
 
     // Apply the app theme (Qlementine Dark by default, archived Classic on
-    // request) BEFORE any widget exists — the Upgrader dialog is the first
-    // widget alive. See THEME_AUDIT.md §4.
+    // request) BEFORE any widget exists. See THEME_AUDIT.md §4.
     ThemeManager::applyAtStartup(app);
-
-	Upgrader upgrader;
-	upgrader.checkIfSchemaNeedsUpdating();
 
     app.setWindowIcon(QIcon(":/images/icon.ico"));
 
@@ -287,6 +286,39 @@ int main(int argc, char *argv[])
     if (AssetStorePaths::root() == AssetStorePaths::defaultRoot()) {
         QDir assetDir(AssetStorePaths::defaultRoot());
         if (!assetDir.exists()) assetDir.mkpath(AssetStorePaths::defaultRoot());
+    }
+
+    // THE SCHEMA CHECK (FORWARD-ONLY-1). There are no migrations: a library
+    // whose tables are not this build's is WIPED — the whole library, through
+    // the one reset (catalog, store layout, project folders), exactly as a
+    // first launch finds it — and the log says so. After the store bootstrap
+    // above, so the reset removes the store this run actually uses.
+    {
+        const QString libraryPath =
+            IrisUtils::join(AppPaths::dataRoot(), Constants::JAH_DATABASE);
+        if (QFile::exists(libraryPath)) {
+            Database library;
+            if (library.initializeDatabase(libraryPath) && !library.schemaMatchesFresh()) {
+                const QString refusal = libraryreset::refusalReason();
+                if (!refusal.isEmpty()) {
+                    irisLog(QStringLiteral("library: this library was written by an older build "
+                                           "and cannot be wiped now (%1)").arg(refusal));
+                } else {
+                    SettingsManager *settings = SettingsManager::getDefaultManager();
+                    const libraryreset::Result wiped = libraryreset::reset(
+                        &library, settings,
+                        AppPaths::projectsRoot(settings->get(settingkeys::defaultDirectory),
+                                               Constants::PROJECT_FOLDER),
+                        [](const QString &) { return QString(); }, /*seedPresets*/ false);
+                    irisLog(wiped.ok
+                                ? QStringLiteral("library: this library was written by an older "
+                                                 "build and has been WIPED (no migrations exist)")
+                                : QStringLiteral("library: wiping the older build's library "
+                                                 "failed: %1").arg(wiped.error));
+                }
+            }
+            library.closeDatabase();
+        }
     }
 
     // ---- The startup header (SESSION_LOG_SPEC §4) --------------------------

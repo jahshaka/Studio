@@ -1,5 +1,5 @@
 // Headless characterisation test for the multiple-desktops storage layer
-// (DESKTOPS_SPEC.md): the guarded projects-table migration, the desktop filter
+// (DESKTOPS_SPEC.md): the fresh projects schema (an older one is refused), the desktop filter
 // on fetchProjects, the move round-trip, and the freeform position round-trip.
 //
 // Builds the REAL Database class (src/core/database/database.cpp) against a
@@ -30,52 +30,10 @@ static ProjectTileData findTile(const QVector<ProjectTileData> &tiles, const QSt
     return ProjectTileData();
 }
 
-// Optional second mode: test_desktops_db <path-to-library-copy>
-// Runs the startup migration against a COPY of a real JahLibrary.db and verifies
-// nothing is lost: all projects present, every one on Desktop 1, positions NULL.
-static int migrateLibraryCopy(const QString &path)
-{
-    Database db;
-    CHECK(db.initializeDatabase(path), "library copy opened");
-
-    const int before = [] {
-        QSqlQuery q;
-        q.exec("SELECT COUNT(*) FROM projects");
-        return q.next() ? q.value(0).toInt() : -1;
-    }();
-    printf("info: library copy has %d project(s)\n", before);
-
-    db.createAllTables();   // the migration the real app runs at startup
-
-    CHECK(db.checkIfColumnExists("projects", "desktop"),   "copy migrated: desktop column");
-    CHECK(db.checkIfColumnExists("projects", "desktop_x"), "copy migrated: desktop_x column");
-    CHECK(db.checkIfColumnExists("projects", "desktop_y"), "copy migrated: desktop_y column");
-
-    auto all = db.fetchProjects();
-    auto d1  = db.fetchProjects(1);
-    CHECK(all.size() == before, "no project lost by the migration");
-    CHECK(d1.size() == before, "every existing project lands on Desktop 1");
-    for (const auto &t : d1) {
-        if (t.desktop != 1 || t.hasPosition) {
-            printf("FAIL: project %s desktop=%d hasPosition=%d\n",
-                   qPrintable(t.guid), t.desktop, int(t.hasPosition));
-            ++failures;
-        }
-    }
-    CHECK(true, "migrated projects default to desktop 1, unplaced");
-
-    db.closeDatabase();
-    if (failures) { printf("%d FAILURE(S)\n", failures); return 1; }
-    printf("library copy migrated cleanly\n");
-    return 0;
-}
-
 int main(int argc, char **argv)
 {
     qputenv("QT_QPA_PLATFORM", "offscreen");
     QApplication app(argc, argv);   // database.cpp links QtWidgets (QMessageBox)
-
-    if (argc > 1) return migrateLibraryCopy(QString::fromLocal8Bit(argv[1]));
 
     const QString dbPath = "desktops_test.db";
     QFile::remove(dbPath);
@@ -83,8 +41,9 @@ int main(int argc, char **argv)
     Database db;
     CHECK(db.initializeDatabase(dbPath), "throwaway database opened");
 
-    // --- Simulate a PRE-DESKTOPS library: the projects table as it shipped before
-    //     the desktop columns existed, with two legacy projects on it.
+    // --- FORWARD-ONLY-1: a PRE-DESKTOPS library is REFUSED, never migrated.
+    //     The schema check (Database::schemaMatchesFresh, run by main() before
+    //     anything opens the library) names it; main() then wipes it.
     {
         QSqlQuery q;
         bool ok = q.exec(
@@ -93,20 +52,25 @@ int main(int argc, char **argv)
             "    date_created DATETIME DEFAULT CURRENT_TIMESTAMP, version VARCHAR(8),"
             "    description TEXT, url TEXT, guid VARCHAR(32) PRIMARY KEY,"
             "    thumbnail BLOB, scene BLOB)");
-        CHECK(ok, "legacy (pre-desktops) projects table created");
-
-        ok = q.exec("INSERT INTO projects (name, last_written, guid) VALUES "
-                    "('Legacy A', datetime('now', '-1 hour'), 'guid-a'),"
-                    "('Legacy B', datetime('now', '-2 hour'), 'guid-b')");
-        CHECK(ok, "two legacy projects inserted");
+        CHECK(ok, "a pre-desktops projects table created");
+        CHECK(!db.schemaMatchesFresh(), "the schema check REFUSES a pre-desktops library");
+        CHECK(q.exec("DROP TABLE projects"), "...and it is dropped (the wipe's job)");
     }
-    CHECK(!db.checkIfColumnExists("projects", "desktop"), "precondition: no desktop column yet");
-
-    // --- The startup migration (createAllTables runs migrateProjectsTable)
     db.createAllTables();
-    CHECK(db.checkIfColumnExists("projects", "desktop"),   "migration added the desktop column");
-    CHECK(db.checkIfColumnExists("projects", "desktop_x"), "migration added the desktop_x column");
-    CHECK(db.checkIfColumnExists("projects", "desktop_y"), "migration added the desktop_y column");
+    CHECK(db.schemaMatchesFresh(), "a fresh library matches this build's schema");
+    CHECK(db.checkIfColumnExists("projects", "desktop"),   "the fresh schema has the desktop column");
+    CHECK(db.checkIfColumnExists("projects", "desktop_x"), "the fresh schema has the desktop_x column");
+    CHECK(db.checkIfColumnExists("projects", "desktop_y"), "the fresh schema has the desktop_y column");
+    CHECK(db.checkIfColumnExists("projects", "slider_row") &&
+              db.checkIfColumnExists("projects", "slider_index"),
+          "the fresh schema has the slider columns (they were ALTER-only before)");
+    {
+        QSqlQuery q;
+        CHECK(q.exec("INSERT INTO projects (name, last_written, guid) VALUES "
+                     "('Legacy A', datetime('now', '-1 hour'), 'guid-a'),"
+                     "('Legacy B', datetime('now', '-2 hour'), 'guid-b')"),
+              "two projects inserted with no desktop given");
+    }
 
     // --- Legacy rows belong to Desktop 1 and are unplaced
     {
@@ -120,9 +84,9 @@ int main(int argc, char **argv)
         CHECK(db.fetchProjects().size() == 2, "unfiltered fetch (legacy call) still returns everything");
     }
 
-    // --- Idempotence: a second startup must not duplicate columns or lose rows
+    // --- Idempotence: a second startup must not duplicate tables or lose rows
     db.createAllTables();
-    CHECK(db.fetchProjects().size() == 2, "running the migration twice is harmless");
+    CHECK(db.fetchProjects().size() == 2, "running the create twice is harmless");
 
     // --- Move round-trip: right-click -> Move to Desktop 3
     CHECK(db.updateProjectDesktop("guid-a", 3), "updateProjectDesktop succeeds");
@@ -135,7 +99,7 @@ int main(int argc, char **argv)
     }
 
     // --- New projects default to Desktop 1 via the schema DEFAULT
-    CHECK(db.createProject("guid-c", "Fresh"), "createProject on the migrated table");
+    CHECK(db.createProject("guid-c", "Fresh"), "createProject on the fresh table");
     {
         auto c = findTile(db.fetchProjects(1), "guid-c");
         CHECK(c.guid == "guid-c" && c.desktop == 1, "new project lands on Desktop 1 by default");
@@ -152,11 +116,8 @@ int main(int argc, char **argv)
         CHECK(!b.hasPosition, "unplaced project still reports no position");
     }
 
-    // --- Slider mode (DESKTOP_SLIDER_SPEC.md): migration adds the filmstrip
-    //     columns, unassigned rows read back hasSliderPos == false, and the
-    //     {row, orderIndex} assignment round-trips.
-    CHECK(db.checkIfColumnExists("projects", "slider_row"),   "migration added the slider_row column");
-    CHECK(db.checkIfColumnExists("projects", "slider_index"), "migration added the slider_index column");
+    // --- Slider mode (DESKTOP_SLIDER_SPEC.md): unassigned rows read back
+    //     hasSliderPos == false, and the {row, orderIndex} assignment round-trips.
     {
         auto a = findTile(db.fetchProjects(3), "guid-a");
         CHECK(!a.hasSliderPos, "legacy project has no slider assignment (NULL)");
@@ -175,14 +136,12 @@ int main(int argc, char **argv)
     //     and a location that is not RECORDED cannot be found again: every
     //     resolver rebuilt the path from the default root, so a restart opened a
     //     located project pointing at a folder that does not exist and a delete
-    //     left the real folder behind. Additive and guarded like the four
-    //     columns above — the property that matters for the owner's live
-    //     library is that every existing row reads back EMPTY, which means "the
-    //     default root", which is where every one of them is.
-    CHECK(db.checkIfColumnExists("projects", "location"), "migration added the location column");
+    //     left the real folder behind. A row nobody gave a location reads back
+    //     EMPTY, which means "the default root".
+    CHECK(db.checkIfColumnExists("projects", "location"), "the fresh schema has the location column");
     {
         CHECK(db.projectLocation("guid-a").isEmpty(),
-              "a project written before the column reads back NO location (= the default root)");
+              "a project inserted with no location reads back NONE (= the default root)");
         CHECK(db.projectLocation("guid-c").isEmpty(),
               "...and so does a project created after it, when nobody chose one");
 
@@ -198,11 +157,11 @@ int main(int argc, char **argv)
         CHECK(db.setProjectLocation("guid-a", chosen), "re-record it for the idempotence check");
     }
 
-    // --- Idempotence AGAIN, with a value in the new column: a second startup
-    //     must not re-add it or wipe what is in it.
+    // --- Idempotence AGAIN, with a value in the column: a second startup must
+    //     not wipe what is in it.
     db.createAllTables();
     CHECK(db.projectLocation("guid-a") == QStringLiteral("/media/an-external-drive/Worlds"),
-          "a second startup migration leaves a recorded location alone");
+          "a second startup leaves a recorded location alone");
     CHECK(db.fetchProjects().size() == 3, "...and loses no rows");
 
     // (The NULL-desktop reader — "a row an older build wrote with a NULL desktop reads
