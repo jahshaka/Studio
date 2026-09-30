@@ -36,8 +36,6 @@ assert(landed && landed.length > 10, "assets.import took the share file -> " + l
 var types = {};
 assets.list({ scope: "store" }).forEach(function (a) { types[a.guid] = a.type; });
 assert(types[landed] === "material", "what landed is a MATERIAL (" + types[landed] + ")");
-assert(assets.list({ scope: "store", type: "shader" }).length === 0,
-       "no ModelTypes::Shader row exists on this side either");
 
 // THE MEMBER TRAVELLED, bytes and all.
 var members = materials.members(landed);

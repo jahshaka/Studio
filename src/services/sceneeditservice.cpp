@@ -1719,14 +1719,7 @@ void SceneEditService::createMaterialFromNode(iris::SceneNodePtr node, const QSt
 
         MaterialReader reader;
         reader.setProject(project);
-        auto material = reader.parseMaterial(materialDefOriginal, db);
-
-        // Actually create the material and add shader as it's dependency
-        db->createDependency(
-            static_cast<int>(ModelTypes::Material),
-            static_cast<int>(ModelTypes::Shader),
-            assetGuid, material->getGuid(),
-            project->getProjectGuid());
+        auto material = reader.parseMaterialTyped(materialDefOriginal, db);
 
         // Add all its textures as dependencies too
         auto values = materialDefOriginal["values"].toObject();

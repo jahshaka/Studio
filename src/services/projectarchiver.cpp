@@ -64,7 +64,6 @@ namespace {
 QString typeNameOf(int type)
 {
     switch (static_cast<ModelTypes>(type)) {
-    case ModelTypes::Shader: return "shader";
     case ModelTypes::Material: return "material";
     case ModelTypes::Texture: return "texture";
     case ModelTypes::Video: return "video";

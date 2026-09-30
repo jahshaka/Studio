@@ -881,14 +881,8 @@ void SceneWriter::writeSceneNodeMaterial(QJsonObject& matObj, iris::MaterialPtr 
 {
 	if (!mat) return;
 
-	// materialType discriminates which Material subclass to rebuild on load.
-	// Absent in scenes written before PBR existed; the reader treats a missing
-	// key as "custom" and converts, so older scenes load unchanged.
-	//
-	// NOTHING WRITES "custom" ANY MORE (HLMS_ADOPTION P4b): the class that tag
-	// named is gone, and a material carrying a reserved BUILTIN guid now saves
-	// as the PbrMaterial preset it became. Readers still accept the tag —
-	// that is the whole point of the retirement.
+	// materialType discriminates which Material subclass to rebuild on load;
+	// the readers read "pbr" and refuse everything else (FORWARD-ONLY-1).
 	if (!!mat.dynamicCast<iris::PbrMaterial>()) {
 		matObj["materialType"] = "pbr";
 		if (!mat->getName().isEmpty()) matObj["name"] = mat->getName();

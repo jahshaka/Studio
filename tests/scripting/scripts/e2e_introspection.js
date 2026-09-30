@@ -245,20 +245,13 @@ assert(matMsg.indexOf("metallic") >= 0 && matMsg.indexOf("baseColorMap") >= 0,
        "…and lists the writable keys, texture slots included");
 assert(matMsg.indexOf("diffuseTexture") < 0,
        "…and does NOT offer a key the F7 fix makes fail");
-// A legacy key still gets its own, more specific message — INCLUDING when its
-// value is not a real file, which is the case that used to be swallowed. The
-// key was checked after the value, so `{diffuseTexture: "x.png"}` was refused
-// with "no texture file or asset 'x.png'" and sent the reader hunting for a
-// missing file instead of telling them the slot does not exist. The fix-wave
-// suite only ever passed an existing fixture path, so it never saw this.
+// A retired pre-PBR key is refused as an UNKNOWN property (FORWARD-ONLY-1) —
+// including when its value is not a real file, never a missing-file message.
 var legacyMsg = refusal(function () { material.set(cubeId, { diffuseTexture: "x.png" }); },
-                        "material.set with a legacy texture name and a bogus path");
-assert(legacyMsg.indexOf("legacy shader texture name") >= 0,
-       "…and it is the LEGACY-KEY message, not a missing-file message");
-assert(legacyMsg.indexOf("baseColorMap") >= 0, "…which points at the PBR slot instead");
-var specularMsg = refusal(function () { material.set(cubeId, { specularTexture: "nope" }); },
-                          "a legacy key with no PBR equivalent");
-assert(specularMsg.indexOf("no PBR equivalent") >= 0, "…and says so plainly");
+                        "material.set with a retired texture name and a bogus path");
+assert(legacyMsg.indexOf("unknown property") >= 0,
+       "…and it is the unknown-property message, not a missing-file message");
+assert(legacyMsg.indexOf("baseColorMap") >= 0, "…which lists the PBR slots instead");
 
 // The verb refuses a non-mesh rather than answering with an empty object.
 refusal(function () { material.properties(lightId); }, "material.properties on a light");

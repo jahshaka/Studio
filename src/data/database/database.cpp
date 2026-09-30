@@ -4060,7 +4060,6 @@ bool Database::importProject(const QString &inFilePath, const QString &newSceneG
         insertImportAssetQuery.bindValue(":properties", asset.properties);
 
         if (asset.type == static_cast<int>(ModelTypes::Object) ||
-            asset.type == static_cast<int>(ModelTypes::Shader) ||
             asset.type == static_cast<int>(ModelTypes::Material))
         {
             auto doc = QJsonDocument::fromJson(asset.asset);

@@ -264,11 +264,11 @@ int main(int argc, char **argv)
     // DEPENDER_TYPE (see getDependencyByType's WHERE clause), so the test keeps
     // it consistent with the row it creates.
     {
-        const int dependerType = static_cast<int>(ModelTypes::Shader);
+        const int dependerType = static_cast<int>(ModelTypes::Material);
         const QString depender = "dep-er", oldDependee = "dep-ee-old", newDependee = "dep-ee-new";
         CHECK(db.createDependency(dependerType, static_cast<int>(ModelTypes::File),
                                   depender, oldDependee, projectGuid),
-              "shader dependency row created");
+              "material dependency row created");
         CHECK(db.getDependencyByType(dependerType, depender) == oldDependee,
               "dependency row reads back before the update");
 

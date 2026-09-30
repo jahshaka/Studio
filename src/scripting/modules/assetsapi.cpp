@@ -104,7 +104,6 @@ int typeFromName(const QString &name)
     if (n == "object" || n == "model") return static_cast<int>(ModelTypes::Object);
     if (n == "mesh") return static_cast<int>(ModelTypes::Mesh);
     if (n == "music") return static_cast<int>(ModelTypes::Music);
-    if (n == "shader") return static_cast<int>(ModelTypes::Shader);
     if (n == "file") return static_cast<int>(ModelTypes::File);
     if (n == "particles") return static_cast<int>(ModelTypes::ParticleSystem);
     if (n == "lightprofile" || n == "ies") return static_cast<int>(ModelTypes::LightProfile);
@@ -328,13 +327,7 @@ QVector<VerbInfo> AssetsApi::verbs() const
           "other option key is refused rather than ignored.",
           Needs::Document },
         { "builtins", "assets.builtins() -> [{guid, name, kind}]",
-          "The reserved built-ins: primitives and materials with their reserved guids. Guids collide "
-          "across kinds — always pair guid with kind. The Default/Flat/Glass family reports kind "
-          "'material' since HLMS adoption retired CustomMaterial: those rows ARE material presets, "
-          "and reported 'shader' only because the map they live in is still called BuiltinShaders. "
-          "Nothing resolves BY kind — a scene, a script or a saved document referencing one of these "
-          "guids works exactly as before, and assets.list still accepts type 'shader' for the "
-          "graph-backed material assets that really are ModelTypes::Shader rows.",
+          "The reserved built-ins: the draggable primitives and the shipped material presets, with their reserved guids. Guids collide across kinds — always pair guid with kind.",
           Needs::Document },
         { "remove", "assets.remove(guid, {keepShared: true, force: false}) -> bool",
           "Removes a store asset from the LIBRARY. A LIBRARY DELETE NEVER TAKES AN ASSET OUT OF A PROJECT (owner law, 2026-09-09): "
@@ -368,7 +361,7 @@ QVector<VerbInfo> AssetsApi::verbs() const
           "Reads the catalog only — the project does not have to be open, and the asset does not have to be listed.",
           Needs::Document },
         { "refreshThumbnail", "assets.refreshThumbnail(guid) -> {ok, reason}",
-          "Rebuilds an asset's thumbnail synchronously and writes it to the database. Objects, particle systems, materials, shader graphs and AVATARS render on the engine (engine required; a shader renders the material its graph evaluates to, on the preview sphere; an avatar renders its own character model); images re-thumbnail from the source file, videos re-grab a first-second frame, animation clips redraw their pose strip, and audio/file rows reset to their type icon (document-only). `ok` is false with `reason` naming WHY nothing was stored — a thumbnail that fails is never silent.",
+          "Rebuilds an asset's thumbnail synchronously and writes it to the database. Objects, particle systems, materials and AVATARS render on the engine (engine required; an avatar renders its own character model); images re-thumbnail from the source file, videos re-grab a first-second frame, animation clips redraw their pose strip, and audio/file rows reset to their type icon (document-only). `ok` is false with `reason` naming WHY nothing was stored — a thumbnail that fails is never silent.",
           Needs::Document },
         { "rebuildThumbnails", "assets.rebuildThumbnails({missingOnly, projectOnly, limit}) -> {considered, rebuilt, skipped, cancelled, failed: [{guid, reason}]}",
           "Rebuilds thumbnails in bulk — the repair pass for rows that are already grey. `missingOnly` (default true) takes only the rows whose stored thumbnail is absent or undecodable; false redraws every asset that has a thumbnail to draw. `projectOnly` (default false) limits it to the open project's pinned assets; `limit` (default 0 = no limit) caps how many are rebuilt. One asset per turn, yielding between them, so the window keeps painting. `skipped` counts the rows with nothing to draw at all (a builtin primitive's row — the default Ground — stores no model definition), which are not failures; a row whose stored bytes are GONE is a failure with its reason. `cancelled` is true when the sweep was stopped before it finished — the app is quitting, or the script was stopped — and whatever it had already rebuilt is stored. Each asset goes through the same routine as assets.refreshThumbnail.",
@@ -1075,7 +1068,7 @@ QString AssetsApi::importFile(const QString &path, int drawerId, const QVariantM
         typeHint = typeFromName(hint);
         if (typeHint < 0) {
             fail(QStringLiteral("assets.importFile: unknown typeHint '%1' (object, mesh, texture, "
-                                "material, sky, music, video, shader, particles, lightprofile, file)")
+                                "material, sky, music, video, particles, lightprofile, file)")
                      .arg(hint));
             return QString();
         }
@@ -1489,14 +1482,6 @@ QVariantList AssetsApi::builtins()
                                 { "kind", QStringLiteral("primitive") } });
     }
     append(Constants::Reserved::DefaultMaterials, "material");
-    // "material", not "shader" (owner decision, 2026-09-07). The reserved
-    // Default/Flat/Glass/Matcap family stopped being shaders when
-    // CustomMaterial was retired (HLMS_ADOPTION P4b): every one of them
-    // hydrates as a PbrMaterial preset (io/builtinmaterials.cpp) and the
-    // "Material" picker lists them beside the graph-backed materials. The map
-    // keeps its historical name; the REPORTED kind now tells the truth.
-    // Purely a label: nothing looks these guids up by kind.
-    append(Constants::Reserved::BuiltinShaders, "material");
     return out;
 }
 

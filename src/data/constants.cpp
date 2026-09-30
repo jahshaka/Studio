@@ -20,8 +20,6 @@ namespace Contants
     QString PROJ_EXT          = ".jah";
 	QString META_EXT		  = "meta";
     QStringList PROJECT_DIRS  = { "Textures", "Shaders", "Materials", "Models", "Files" };
-    QString SHADER_DEFS       = "/app/shader_defs/";
-    QString DEFAULT_SHADER    = "/app/shader_defs/Default.shader";
     QString SAMPLES_FOLDER    = "/scenes";
     QString PROJECT_FOLDER    = "/Jahshaka";
     QString JAH_FOLDER        = "/Jahshaka";
@@ -81,13 +79,6 @@ namespace Contants
     // ModelTypes::Avatar row. One extension, its own list, so the store
     // dispatch can find it exactly like every other typed row finds its file.
     QList<QString> AVATAR_EXTS = { "avatar" };
-	// SHADER_EXT survives as a STRING WITH NO READER (fix round F13): the
-	// `.shader` importer, the type mapping and the file-dialog pattern are
-	// all deleted with the ModelTypes::Shader row, and nothing else names the
-	// extension. It is kept only because the constant is public API-ish and
-	// its removal touches a header every TU includes; the next sweep can take
-	// it with the enumerator.
-	QString SHADER_EXT		    = "shader";
     QList<QString> MATERIAL_EXTS= { "material"};
     
 
@@ -102,22 +93,6 @@ namespace Contants
 
     namespace Reserved
     {
-        // TODO - maybe move this to an external resources json file
-        QMap<QString, QString> BuiltinShaders = {
-            { "00000000-0000-0000-0000-000000000001", QDir(Constants::SHADER_DEFS).filePath("Default.shader") },
-            { "00000000-0000-0000-0000-000000000002", QDir(Constants::SHADER_DEFS).filePath("DefaultAnimated.shader") },
-            { "00000000-0000-0000-0000-000000000003", QDir(Constants::SHADER_DEFS).filePath("EdgeMaterial.shader") },
-            { "00000000-0000-0000-0000-000000000004", QDir(Constants::SHADER_DEFS).filePath("Flat.shader") },
-            { "00000000-0000-0000-0000-000000000005", QDir(Constants::SHADER_DEFS).filePath("Glass.shader") },
-            { "00000000-0000-0000-0000-000000000006", QDir(Constants::SHADER_DEFS).filePath("Matcap.shader") },
-        };
-
-        // (DefaultPrimitives LIVED HERE. It is now one row per primitive in
-        // src/data/primitives.h, with the guid, the mesh and the tile icon
-        // together — owner review R6, 2026-09-18. Its guids also COLLIDED with
-        // BuiltinShaders' 0002-0006 above; the table's are their own 4000
-        // range, and primitives::canonicalGuid maps the old ones.)
-
         // THE SHIPPED MATERIAL PRESETS, by the guid each has always had.
         // These are LIBRARY BUNDLES now (MATERIAL_BUNDLE_SPEC phase 3,
         // services/materialpresetassets.h): the guid is the row's, seeded
@@ -161,13 +136,6 @@ namespace Contants
 			{ "00000000-0000-0000-0000-000000002032", "Painted Metal PBR" },
 			{ "00000000-0000-0000-0000-000000002033", "Grass 2 PBR" },
          };
-
-        QString SHADER_DEFAULT = "00000000-0000-0000-0000-000000000001";
-        QString SHADER_DEFAULT_ANIMATED = "00000000-0000-0000-0000-000000000002";
-        QString SHADER_EDGE_MATERIAL = "00000000-0000-0000-0000-000000000003";
-        QString SHADER_FLAT = "00000000-0000-0000-0000-000000000004";
-        QString SHADER_GLASS = "00000000-0000-0000-0000-000000000005";
-        QString SHADER_MATCAP = "00000000-0000-0000-0000-000000000006";
     }
 }
 

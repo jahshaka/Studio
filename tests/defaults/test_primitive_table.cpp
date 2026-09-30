@@ -128,11 +128,7 @@ int main(int argc, char **argv)
     }
     check(tiles >= 12, QStringLiteral("at least twelve tiles (got %1)").arg(tiles));
 
-    // ---- 3: no collision with the reserved shader/material guids ------------
-    for (auto it = Constants::Reserved::BuiltinShaders.constBegin();
-         it != Constants::Reserved::BuiltinShaders.constEnd(); ++it)
-        check(!guids.contains(it.key()),
-              QStringLiteral("no primitive guid collides with the builtin shader %1").arg(it.key()));
+    // ---- 3: no collision with the reserved material guids -------------------
     for (auto it = Constants::Reserved::DefaultMaterials.constBegin();
          it != Constants::Reserved::DefaultMaterials.constEnd(); ++it)
         check(!guids.contains(it.key()),

@@ -279,10 +279,6 @@ private:
 	/// viewer's loadFinished callback (or the selection handler's tail) clears it.
 	void setLoadingTile(const QString &guid);
 	void clearLoadingTile();
-    void extractTexturesAndMaterialFromMaterial(
-        const QString &filePath,
-        QStringList &textureList,
-        QJsonObject &mat);
 
 	Database *db = nullptr;
 	Project *project = nullptr;   // the live Project (Phase 4: was Globals::project)

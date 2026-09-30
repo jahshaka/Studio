@@ -1343,7 +1343,6 @@ QStringList ProjectManager::sessionAssetGuids()
 	LoadTimeline::Accumulate membershipQueries(QStringLiteral("db:membership"));
 	for (const int type : { static_cast<int>(ModelTypes::File),
 	                        static_cast<int>(ModelTypes::Texture),
-	                        static_cast<int>(ModelTypes::Shader),
 	                        static_cast<int>(ModelTypes::ParticleSystem),
 	                        static_cast<int>(ModelTypes::Material) }) {
 		for (const auto &asset : db->fetchAssetsByType(type, projectGuid))

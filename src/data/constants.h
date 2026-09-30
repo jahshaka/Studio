@@ -32,8 +32,6 @@ namespace Constants
     extern QString PROJ_EXT;
 	extern QString META_EXT;
     extern QStringList PROJECT_DIRS;
-    extern QString SHADER_DEFS;
-    extern QString DEFAULT_SHADER;
     extern QString SAMPLES_FOLDER;
     extern QString PROJECT_FOLDER;
     extern QString JAH_FOLDER;
@@ -66,7 +64,6 @@ namespace Constants
     extern QList<QString> LIGHT_PROFILE_EXTS;
     /// The avatar definition (AVATAR_ASSET_SPEC §3.1): `.avatar` JSON.
     extern QList<QString> AVATAR_EXTS;
-	extern QString SHADER_EXT;
     extern QList<QString> MATERIAL_EXTS;
 
     extern QString UPDATE_CHECK_URL;
@@ -86,17 +83,8 @@ namespace Constants
 
     namespace Reserved
     {
-        // TODO - maybe move this to an external resources json file
-        extern QMap<QString, QString> BuiltinShaders;
         // (DefaultPrimitives is gone — src/data/primitives.h, R6.)
         extern QMap<QString, QString> DefaultMaterials;
-
-        extern QString SHADER_DEFAULT;
-        extern QString SHADER_DEFAULT_ANIMATED;
-        extern QString SHADER_EDGE_MATERIAL;
-        extern QString SHADER_FLAT;
-        extern QString SHADER_GLASS;
-        extern QString SHADER_MATCAP;
     }
 }
 

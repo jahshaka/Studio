@@ -1907,13 +1907,10 @@ iris::MaterialPtr SceneReader::readMaterial(QJsonObject& nodeObj)
 
 	auto mat = nodeObj["material"].toObject();
 
-	// materialType selects which Material subclass to rebuild. Scenes written
-	// before PBR existed have no such key, so absent means "custom" - but
-	// parseMaterialTyped additionally routes graph-backed materials (their
-	// shaderGuid resolves to a shadergraph definition) to the shader's baked
-	// PbrMaterial (MATERIALS_EVALUATOR phase 5).
-	const auto materialType = mat["materialType"].toString("custom");
-	if (materialType == "pbr") return readPbrMaterial(mat);
+	// materialType "pbr" is the one material there is; anything else is
+	// refused by the reader (logged, the default material) — FORWARD-ONLY-1.
+	if (mat.value(QStringLiteral("materialType")).toString() == QLatin1String("pbr"))
+		return readPbrMaterial(mat);
 
 	return reader.parseMaterialTyped(mat, handle, true);
    

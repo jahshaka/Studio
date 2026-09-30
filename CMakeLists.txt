@@ -411,7 +411,6 @@ set(SRCS
     src/ui/panels/propertywidgets/meshpropertywidget.cpp
     src/ui/panels/propertywidgets/mobilitypropertywidget.cpp
     src/ui/panels/propertywidgets/componentspropertywidget.cpp
-    src/ui/panels/propertywidgets/shaderpropertywidget.cpp 
     src/ui/panels/propertywidget.cpp
     src/ui/panels/propertyrows.cpp 
     src/ui/dialogs/newprojectdialog.cpp 
@@ -702,7 +701,6 @@ set(HEADERS
     src/io/materialreader.h 
     src/ui/controls/filepickerwidget.h 
     src/ui/panels/propertywidgets/meshpropertywidget.h 
-    src/ui/panels/propertywidgets/shaderpropertywidget.h 
     src/ui/panels/propertywidget.h 
     src/ui/controls/basewidget.h 
     src/ui/dialogs/newprojectdialog.h 

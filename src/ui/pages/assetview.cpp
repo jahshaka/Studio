@@ -30,11 +30,6 @@ For more information see the LICENSE file
 
 #include "irisgl/core/irisutils.h"
 #include "irisgl/document/assets/mesh.h"
-// extractTexturesAndMaterialFromMaterial still builds a legacy CustomMaterial
-// from app/shader_defs/*.shader (the builtin Default/Flat/Glass set, the last
-// CustomMaterial users). It used to reach the type through thumbnailgenerator.h;
-// the dependency is spelled out here so the scheduled iris::CustomMaterial
-// deletion can grep its real call sites.
 #include "irisgl/core/properties/property.h"
 #include "zip.h"
 
@@ -262,7 +257,6 @@ void AssetView::populateAssetNodeTree(const QString &guid, int assetType)
 QString AssetView::getAssetType(int id)
 {
 	switch (id) {
-		case static_cast<int>(ModelTypes::Shader):			return "Shader";			break;
 		case static_cast<int>(ModelTypes::Material):		return "Material";			break;
 		case static_cast<int>(ModelTypes::Texture):			return "Texture";			break;
 		case static_cast<int>(ModelTypes::Object):			return "Object";			break;
@@ -1957,48 +1951,6 @@ void AssetView::applyImageZoom()
 	assetImageCanvas->adjustSize();
 	if (imageZoomLabel)
 		imageZoomLabel->setText(QStringLiteral("%1%").arg(qRound(imageZoom * 100)));
-}
-
-void AssetView::extractTexturesAndMaterialFromMaterial(const QString &filePath,
-                                                       QStringList &textureList,
-                                                       QJsonObject &mat)
-{
-    QFile *file = new QFile(filePath);
-    file->open(QIODevice::ReadOnly | QIODevice::Text);
-    QJsonDocument doc = QJsonDocument::fromJson(file->readAll());
-
-    const QJsonObject materialDefinition = doc.object();
-
-    auto material_name = materialDefinition["name"].toString();
-    if (material_name.isEmpty()) material_name = "Default";
-
-    // The definition's legacy Default-shader key names are renamed to their PBR
-    // equivalents and then drive a PbrMaterial's own rows (HLMS_ADOPTION P4b).
-    // This used to load the matching `.shader` file just to borrow its uniform
-    // list, which meant a definition naming a shader that no longer existed
-    // silently produced a material with no properties and no values.
-    const QJsonObject normalised = BuiltinMaterials::normaliseLegacyDefinition(materialDefinition);
-    auto material = iris::PbrMaterial::create();
-    material->setName(material_name);
-
-    for (const auto &prop : material->properties) {
-        if (normalised.contains(prop->name)) {
-            if (prop->type == iris::PropertyType::Texture) {
-                auto textureStr = !normalised[prop->name].toString().isEmpty()
-                ? normalised[prop->name].toString()
-                : QString();
-                material->setValue(prop->name, textureStr);
-                if (!textureStr.isEmpty()) {
-                    textureList.append(QFileInfo(textureStr).fileName());
-                }
-            }
-            else {
-                material->setValue(prop->name, normalised[prop->name].toVariant());
-            }
-        }
-    }
-
-    SceneWriter::writeSceneNodeMaterial(mat, material, false);
 }
 
 void AssetView::addToJahLibrary(const QString fileName, const QString guid, bool jfx)

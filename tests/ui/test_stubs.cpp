@@ -65,12 +65,6 @@ MaterialReader::MaterialReader(TextureSource texSrc)
 {
 }
 
-iris::PbrMaterialPtr MaterialReader::createMaterialFromShaderGuid(QString, Database *,
-                                                                  const QJsonObject &)
-{
-    return iris::PbrMaterialPtr();
-}
-
 /// The one guid this stub answers for (ui.db_handles): the material blade's
 /// combo slot only reaches its library bookkeeping when the pick RESOLVES, so
 /// a suite about that slot needs one material that does.

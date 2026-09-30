@@ -42,8 +42,6 @@ assert(matGuid.length > 10, "materials.create({graph:true}) -> ONE guid");
 var libraryTypes = {};
 assets.list({ scope: "store" }).forEach(function (a) { libraryTypes[a.guid] = a.type; });
 assert(libraryTypes[matGuid] === "material", "the bundle is a Material row (" + libraryTypes[matGuid] + ")");
-assert(assets.list({ scope: "store", type: "shader" }).length === 0,
-       "no ModelTypes::Shader row exists anywhere");
 
 // A GRAPH MATERIAL'S PICTURE GOES ON A TEXTURE NODE. The image is imported
 // by CONTENT the moment it is named — that is the owner's "adding a texture

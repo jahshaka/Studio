@@ -110,13 +110,6 @@ QStringList makePbrMapKeys()
     return keys;
 }
 const QStringList kPbrMapKeys = makePbrMapKeys();
-/// The RETIRED builtin shaders' texture spellings (Default.shader declared them
-/// as uniforms). They name nothing on a PbrMaterial — which is now the only
-/// material class there is — and are REFUSED by name (F7) rather than falling
-/// into the texture branch and complaining about a missing file.
-const QStringList kLegacyMapKeys = { "diffuseTexture", "specularTexture",
-                                     "normalTexture", "reflectionTexture" };
-const QStringList kMapKeys = kPbrMapKeys + kLegacyMapKeys;
 
 /// The material's declared Property rows. `properties` lives on the base class,
 /// so this no longer has to guess which subclass it is holding (it used to try
@@ -1517,8 +1510,7 @@ bool MaterialApi::set(const QString &nodeId, const QVariantMap &values)
     // The vocabularies live at file scope (top of this file) so this function,
     // its refusal message and material.properties can never disagree.
     const QStringList &colorKeys = kColorKeys;
-    const QStringList &legacyMapKeys = kLegacyMapKeys;
-    const QStringList &mapKeys = kMapKeys;
+    const QStringList &mapKeys = kPbrMapKeys;
 
     // `textureScale: [u, v]` / `textureOffset: [u, v]` become the scalar rows
     // the document actually stores; a bare number still means uniform.
@@ -1533,34 +1525,6 @@ bool MaterialApi::set(const QString &nodeId, const QVariantMap &values)
     for (auto it = expanded.constBegin(); it != expanded.constEnd(); ++it) {
         const QString &key = it.key();
         QVariant newValue = normalizeJs(it.value());
-
-        // THE KEY IS CHECKED BEFORE ITS VALUE. Found building lane A: F7's
-        // "that is a legacy shader texture name" message was UNREACHABLE for
-        // the values people actually pass. A legacy key fell into the texture
-        // branch below first, and any path that is not an existing file and not
-        // an asset guid — i.e. every plausible typo — was refused with "no
-        // texture file or asset 'x.png'", which sends the reader off hunting for
-        // a missing file when the real problem is that this material has no such
-        // slot at all. Only a legacy key whose value happened to resolve ever
-        // reached the message written for it.
-        if (legacyMapKeys.contains(key)) {
-            static const QMap<QString, QString> replacement{
-                { QStringLiteral("diffuseTexture"),    QStringLiteral("baseColorMap") },
-                { QStringLiteral("normalTexture"),     QStringLiteral("normalMap") },
-                { QStringLiteral("specularTexture"),   QString() },
-                { QStringLiteral("reflectionTexture"), QString() },
-            };
-            const QString instead = replacement.value(key);
-            return fail(QStringLiteral(
-                            "material.set: '%1' is a legacy shader texture name and this "
-                            "node's PBR material has no such slot — %2 (the PBR maps are "
-                            "baseColorMap, metallicMap, roughnessMap, normalMap, "
-                            "emissiveMap)")
-                            .arg(key,
-                                 instead.isEmpty()
-                                     ? QStringLiteral("there is no PBR equivalent")
-                                     : QStringLiteral("use '%1'").arg(instead)));
-        }
 
         if (colorKeys.contains(key)) {
             // F8: a colour string the parser cannot read used to keep the old
@@ -1654,13 +1618,11 @@ bool MaterialApi::set(const QString &nodeId, const QVariantMap &values)
         }
         if (!known) {
             // A PbrMaterial map key is legal even if its Property row were
-            // ever dropped. The legacy *Texture spellings never reach here —
-            // they are refused by name at the top of the loop (F7).
+            // ever dropped.
             if (!mapKeys.contains(key))
                 // The key list is the ONE thing that turns this from a bare
                 // rejection into a usable answer (AI_SURFACE_PROGRAM_SPEC §3.A
-                // item #1): exactly the keys that survive the F7 fix. The legacy
-                // spellings are deliberately NOT in it.
+                // item #1).
                 return fail(QStringLiteral("material.set: unknown property '%1' — this "
                                            "material accepts: %2 (material.properties('%3') "
                                            "gives their types, values and ranges)")

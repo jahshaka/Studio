@@ -25,6 +25,7 @@ For more information see the LICENSE file
 #include "io/scenewriter.h"
 #include "io/assetmanager.h"
 #include "io/builtinmaterials.h"
+#include "irisgl/core/logger.h"
 #include "services/assetcas.h"
 #include "services/assetstorepaths.h"
 #include "services/assetmetadata.h"
@@ -47,9 +48,7 @@ void AssetHelper::updateNodeMaterial(iris::SceneNodePtr &node, QJsonObject defin
     // The SLOT is part of the question (hygiene lane, 2026-09-09): a stored
     // reference that names the OBJECT a texture was imported inside is repaired
     // to the member texture the slot's role words name, exactly as the two
-    // readers do (MaterialReader::repairTextureSlot). Before this, the legacy
-    // branch below could not be given the repair at all — the resolver it hands
-    // to BuiltinMaterials had no idea which row it was resolving for.
+    // readers do (MaterialReader::repairTextureSlot).
     const auto resolveTexture = [&](const QString &stored, const QString &slot) -> QString {
         if (stored.isEmpty()) return stored;
         const QString ref = AssetCas::repairTextureSlot(stored, slot, "asset helper");
@@ -61,25 +60,17 @@ void AssetHelper::updateNodeMaterial(iris::SceneNodePtr &node, QJsonObject defin
     if (node->getSceneNodeType() == iris::SceneNodeType::Mesh) {
         auto materialDefinition = definition.value("material").toObject();
 
-        // ONE PATH SINCE HLMS_ADOPTION P4b, because there is one material class.
-        //
-        // A "pbr"-tagged blob rebuilds a PbrMaterial from its own rows; a
-        // LEGACY blob (a builtin shader guid plus Default-shader uniform names)
-        // has those names renamed to their PBR equivalents first, and then
-        // drives the same rows. What used to sit here was a second copy of the
-        // reader: it looked the builtin `.shader` file up, ran generate() to
-        // get a property list, and walked THAT — so a blob the shader lookup
-        // missed produced a material with no properties at all and every value
-        // was silently dropped.
+        // ONE PATH: a "pbr"-tagged definition rebuilds a PbrMaterial from its
+        // own `values` rows. Anything else is from before the one material
+        // class and is REFUSED (FORWARD-ONLY-1): the node gets the default
+        // material, never a conversion.
         const bool isPbrBlob =
             materialDefinition.value("materialType").toString() == QStringLiteral("pbr");
-
-        // V1 definitions carry values at the top level; V2 (everything the
-        // one-pipeline importer writes) nests them under "values". Read both.
-        QJsonObject values = materialDefinition.value("values").toObject();
-        for (auto it = materialDefinition.constBegin(); it != materialDefinition.constEnd(); ++it)
-            if (!values.contains(it.key())) values.insert(it.key(), it.value());
-        if (!isPbrBlob) values = BuiltinMaterials::normaliseLegacyDefinition(values);
+        const QJsonObject values =
+            isPbrBlob ? materialDefinition.value("values").toObject() : QJsonObject();
+        if (!isPbrBlob && !materialDefinition.isEmpty())
+            irisLog(QStringLiteral("asset helper: refused a non-pbr material definition on '%1'")
+                        .arg(node->getName()));
 
         auto pbr = iris::PbrMaterial::create();
         for (const iris::Property* property : pbr->properties) {
@@ -93,17 +84,6 @@ void AssetHelper::updateNodeMaterial(iris::SceneNodePtr &node, QJsonObject defin
                                              property->name));
             else
                 pbr->setValue(property->name, values.value(property->name).toVariant());
-        }
-        // The Flat builtin is the one legacy guid whose SHADING MODEL differs
-        // (HLMS_ADOPTION P4a/D-P4b), and a values-only walk cannot know that.
-        if (!isPbrBlob) {
-            const QString guid = materialDefinition.value("guid").toString().isEmpty()
-                                     ? materialDefinition.value("shaderGuid").toString()
-                                     : materialDefinition.value("guid").toString();
-            if (BuiltinMaterials::isBuiltin(guid)) {
-                auto builtin = BuiltinMaterials::fromBuiltin(guid, values, resolveTexture);
-                pbr->setValue(QStringLiteral("shadingModel"), builtin->shadingModel);
-            }
         }
         node.staticCast<iris::MeshNode>()->setMaterial(pbr);
     }

@@ -160,8 +160,10 @@ enum class ModelTypes
     Mesh,			// Supported
     SoundEffect,
     Music,			// Supported
-    Shader,			// Supported
-    Variant,
+    // 9 was the retired Shader row (FORWARD-ONLY-1). The value is persisted
+    // in every assets row, so the numbers after it never move and 9 is never
+    // reused.
+    Variant = 10,
     File,			// Supported
     ParticleSystem,	// Supported
     // IES photometric profiles (.ies). A first-class library type rather than a

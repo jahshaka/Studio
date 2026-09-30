@@ -671,15 +671,12 @@ bool MaterialImporter::convert(const ImportRequest &request, const QString &stag
 
     out.mainGuid = GUIDManager::generateGUID();
 
-    // Normalize through a PbrMaterial's property set, collecting texture
-    // references. The legacy Default-shader key names are renamed first
-    // (HLMS_ADOPTION P4b); before that this loaded the `.shader` file whose
-    // NAME matched the material's just to borrow a uniform list, so importing
-    // a `.material` whose name matched no shader normalised against Default's
-    // uniforms by accident.
+    // Drive a PbrMaterial's own property rows off the definition's keys,
+    // collecting texture references. Only the PBR spellings are read
+    // (FORWARD-ONLY-1: the pre-PBR key renames are gone).
     auto materialName = materialDefinition["name"].toString();
     if (materialName.isEmpty()) materialName = QStringLiteral("Default");
-    const QJsonObject normalised = BuiltinMaterials::normaliseLegacyDefinition(materialDefinition);
+    const QJsonObject &normalised = materialDefinition;
     auto material = iris::PbrMaterial::create();
     material->setName(materialName);
 

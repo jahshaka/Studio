@@ -462,7 +462,6 @@ set(JAH_PROPERTIES_COLUMN_SOURCES
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/meshpropertywidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/physicspropertywidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/skypropertywidget.cpp
-    ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/shaderpropertywidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/cubemapwidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/controls/assetdrag.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/controls/accordionbladewidget.cpp
@@ -682,7 +681,6 @@ add_executable(test_panel_undo
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/meshpropertywidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/physicspropertywidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/skypropertywidget.cpp
-    ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/shaderpropertywidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/cubemapwidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/controls/assetdrag.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/controls/accordionbladewidget.cpp
@@ -814,7 +812,6 @@ add_executable(test_panel_lifetime
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/meshpropertywidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/physicspropertywidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/skypropertywidget.cpp
-    ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/shaderpropertywidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/cubemapwidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/controls/assetdrag.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/controls/accordionbladewidget.cpp
@@ -956,7 +953,6 @@ set(JAH_PROPERTIES_PANEL_SOURCES
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/meshpropertywidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/physicspropertywidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/skypropertywidget.cpp
-    ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/shaderpropertywidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/cubemapwidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/controls/accordionbladewidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/controls/rowfit.cpp

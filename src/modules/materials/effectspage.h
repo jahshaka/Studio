@@ -339,7 +339,6 @@ private:
 	/// The guids WE asked the shared thumbnail queue about (a material render
 	/// is not ours by type alone any more — see requestShaderThumbnail).
 	QSet<QString> mPendingThumbnails;
-    void loadShadersFromDisk();
 
 
 	/// Import a material share file (services/assetshare.h) into the library

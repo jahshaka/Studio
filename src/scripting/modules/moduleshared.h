@@ -53,7 +53,6 @@ inline QString assetTypeName(int type)
     case ModelTypes::Mesh: return QStringLiteral("mesh");
     case ModelTypes::SoundEffect: return QStringLiteral("soundeffect");
     case ModelTypes::Music: return QStringLiteral("music");
-    case ModelTypes::Shader: return QStringLiteral("shader");
     case ModelTypes::Variant: return QStringLiteral("variant");
     case ModelTypes::File: return QStringLiteral("file");
     case ModelTypes::ParticleSystem: return QStringLiteral("particles");
