@@ -61,7 +61,7 @@ assert(isGuid(projA), "project.create A");
 var folderA = project.current().folder;
 assert(folderA && folderA.length > 0, "project A has a folder: " + folderA);
 
-var groundA = scene.find("Ground");
+var groundA = scene.find("Floor");
 assert(groundA && groundA.length > 10, "the default scene has its Ground");
 var tile = savedSlot(groundA, "baseColorMap");
 assert(isGuid(tile), "the ground's saved baseColorMap is an asset GUID (" + tile + ")");
@@ -80,14 +80,14 @@ assert(raw.files && raw.files.length === 1,
 assert(project.save() === true, "project.save");
 assert(project.close() === true, "project.close");
 assert(project.open(projA) === true, "project.open (REOPEN)");
-groundA = scene.find("Ground");
+groundA = scene.find("Floor");
 assert(savedSlot(groundA, "baseColorMap") === tile, "the reopened ground still names the tile's guid");
 assert(material.get(groundA).baseColorMap === tilePath,
        "and still renders the same pinned object after the round trip");
 
 // ------------------------------- 3. ONE row per library, identified by content
 var projB = project.create("Shipped B " + Date.now());
-var groundB = scene.find("Ground");
+var groundB = scene.find("Floor");
 assert(savedSlot(groundB, "baseColorMap") === tile,
        "a SECOND project's ground names the SAME library row (one row per content, not per project)");
 assert(pinnedBy(tile, projA) && pinnedBy(tile, projB), "and both projects pin it");
@@ -150,6 +150,6 @@ var projC = project.create("Shipped C " + Date.now());
 var facesC = world.skyPreset("Cove");
 assert(facesC.front === faces.front && facesC.top === faces.top,
        "a third project's sky preset names the same library rows");
-assert(savedSlot(scene.find("Ground"), "baseColorMap") === tile, "and its ground the same tile");
+assert(savedSlot(scene.find("Floor"), "baseColorMap") === tile, "and its ground the same tile");
 
 console.log("shipped_assets: ALL OK");

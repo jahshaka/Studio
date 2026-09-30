@@ -191,7 +191,7 @@ function companionOf(textureGuid) {
 // shipped file the editor pins by itself — a full library texture (the project
 // archive carries it, `material.reset` finds it) marked PLATFORM-owned, which
 // the tray drops by the same rule that drops the Ground (assettray.h rule 4).
-var groundId = scene.find("Ground");
+var groundId = scene.find("Floor");
 var tileRows = assets.list({ scope: "project", type: "texture", query: "Tile.png" });
 assert(groundId && tileRows.length === 1, "the default scene's Ground and its Tile.png row");
 assert(currentTray().indexOf(tileRows[0].guid) < 0,

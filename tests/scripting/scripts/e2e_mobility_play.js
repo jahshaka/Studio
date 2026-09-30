@@ -29,7 +29,7 @@ function assert(cond, msg) {
 project.create("Mobility Play " + Date.now());
 
 // Something for the renderer to actually light.
-var ground = scene.addPrimitive("ground");
+var ground = scene.addPrimitive("plane", { scale: { x: 50, y: 1, z: 50 } });
 var prop = scene.addPrimitive("cube", { position: { x: 0, y: 1, z: 0 } });
 node.setProperty(prop, "name", "Crate");
 var marked = scene.addPrimitive("cube", { position: { x: 3, y: 1, z: 0 } });

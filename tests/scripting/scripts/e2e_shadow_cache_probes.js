@@ -38,7 +38,7 @@ assert(guid.length > 10, "project.create -> " + guid);
 function buildRoom(half, height) {
     var ids = scene.nodes();
     for (var i = 0; i < ids.length; ++i)
-        if (ids[i].name === "Ground") node.setProperty(ids[i].id, "visible", false);
+        if (ids[i].name === "Floor") node.setProperty(ids[i].id, "visible", false);
     function slab(name, px, py, pz, sx, sy, sz) {
         var id = scene.addPrimitive("cube", { position: { x: px, y: py, z: pz } });
         node.setProperty(id, "name", name);

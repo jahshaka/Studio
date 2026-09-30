@@ -29,7 +29,7 @@ function assert(cond, msg) {
 
 project.create("Dirty Mirror " + Date.now());
 
-var ground = scene.addPrimitive("ground");
+var ground = scene.addPrimitive("plane", { scale: { x: 50, y: 1, z: 50 } });
 var group = scene.addEmpty({ position: { x: 0, y: 0, z: 0 } });
 node.setProperty(group, "name", "Props");
 var kids = [];

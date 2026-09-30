@@ -53,7 +53,7 @@ var proj = project.create("Fixed Clock " + Date.now());
 assert(proj.length > 10, "project.create -> " + proj);
 
 // ---- the scene --------------------------------------------------------------
-var ground = scene.addPrimitive("ground", { position: { x: 0, y: 0, z: 0 } });
+var ground = scene.addPrimitive("plane", { position: { x: 0, y: 0, z: 0 }, scale: { x: 50, y: 1, z: 50 } });
 assert(node.physics(ground, { type: "static", shape: "plane" }) === true ||
        node.physics(ground, { type: "static", shape: "trianglemesh" }) === true,
        "the ground is a static collider");

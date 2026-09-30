@@ -605,6 +605,11 @@ iris::ScenePtr MainWindow::createDefaultScene(SceneTemplate kind)
     if (kind == SceneTemplate::Empty) {
         scene->skyType = iris::SkyType::SINGLE_COLOR;
         scene->skyColor = QColor(0, 0, 0);
+        // BOTH representations, as world.sky("color") writes them: the stored
+        // block is what the writer saves and the panel binds from.
+        QJsonObject noSky;
+        noSky.insert(QStringLiteral("skyColor"), SceneWriter::jsonColor(scene->skyColor));
+        scene->skyData.insert(QStringLiteral("SingleColor"), noSky);
         sceneNodeSelected(scene->rootNode);
         return scene;
     }

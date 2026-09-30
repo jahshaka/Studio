@@ -213,7 +213,7 @@ var reproGuid = project.create(reproName);
 // addPrimitive would otherwise leave three nodes called "Cube".
 function named(id, n) { assert(node.setProperty(id, "name", n) === true, "named " + n); return id; }
 
-var rGround = named(scene.addPrimitive("ground"), "R_ground");
+var rGround = named(scene.addPrimitive("plane", { scale: { x: 50, y: 1, z: 50 } }), "R_ground");
 var rProp   = named(scene.addPrimitive("cube", { position: { x: 2, y: 0, z: 0 } }), "R_prop");
 named(scene.addPrimitive("sphere", { parent: rProp }), "R_propChild");
 // SHIPPED-CONTENT SHAPE: the animation panel leaves a channel-less "Animation"

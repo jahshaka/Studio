@@ -186,7 +186,7 @@ function shadowArm(tag) {
     }
 }
 shadowArm("ground");
-var groundNode = scene.find("Ground");
+var groundNode = scene.find("Floor");
 assert(material.set(groundNode, { receiveShadows: false }) === true,
        "the ground stops receiving shadow maps");
 assert(material.get(groundNode).receiveShadows === false, "...and reads back so");

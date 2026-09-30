@@ -188,7 +188,7 @@ assert(comboDefault >= 5, "the default scene ran at least five combinations (" +
 // THE GROUND'S SIZE, once, for the record (PHOTON-VIEW-2: the Cards quad's lift grows with it).
 var nodes0 = scene.nodes();
 for (var gi0 = 0; gi0 < nodes0.length; ++gi0)
-    if (nodes0[gi0].name === "Ground") console.log("default Ground size " + J(node.size(nodes0[gi0].id)));
+    if (nodes0[gi0].name === "Floor") console.log("default Ground size " + J(node.size(nodes0[gi0].id)));
 
 // ---- (c) the refusals ---------------------------------------------------------------
 var unknown = false;

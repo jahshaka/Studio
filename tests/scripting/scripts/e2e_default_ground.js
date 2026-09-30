@@ -126,29 +126,32 @@ var CORNERS = [ { x: 0.06, y: 0.08 }, { x: 0.94, y: 0.08 },
 // realistic sky's; this suite's sky is a flat colour): "is this pixel ground or
 // sky" has to be answerable at the top of the frame.
 assert(world.fog({ enabled: false }), "fog off, so ground and sky can be told apart");
+// THE SKY IS MADE UNMISTAKABLE for these reads: BLACK, so it reads zero and lights
+// nothing, while every ground pixel carries the sun (the matte ground's far corners
+// read within a code of a GREY sky's radiance, which is no discriminator at all).
+assert(world.sky("color", { color: "#000000" }) === true, "a black sky for the ground/sky reads");
+function isSky(p) { return p.r + p.g + p.b <= 3; }
 function obliqueCorners(tag) {
     editor.setCamera({ position: { x: 40, y: 40, z: 40 }, lookAt: { x: 0, y: 0, z: 0 } });
     editor.frame(60, 1 / 60);
     var shot = editor.screenshot("ground_" + tag + ".png", 960, 540, CORNERS, "raw");
-    var v = shot.probes.map(function (p) { return Math.round(lum(p)); });
+    var v = shot.probes.map(function (p) { return { r: p.r, g: p.g, b: p.b, sky: isSky(p) }; });
     console.log("oblique corners (" + tag + "): " + J(v));
     return v;
 }
-function spreadOf(v) { return Math.max.apply(null, v) - Math.min.apply(null, v); }
-// A single-colour sky is UNIFORM: every sky corner reads the same value. The
-// checker is not: its light and dark squares differ. That is the discriminator
-// (brightness is not — the matte ground's far corners read within a code of the
-// 0.117-radiance sky that lights them).
+function skyCount(v) { return v.filter(function (p) { return p.sky; }).length; }
+// The top three probes (0, 1, 4) lie ~176 m out, past the Floor's 50 m half-width;
+// the bottom three are the Floor's own near field.
+var FAR = [0, 1, 4];
 var off = obliqueCorners("plane_off");
-assert(spreadOf(off) <= 1,
-       "with the Ground plane OFF the Floor ENDS: every corner is the uniform sky (" + J(off) + ")");
+for (var f = 0; f < FAR.length; f++)
+    assert(off[FAR[f]].sky, "with the Ground plane OFF the Floor ENDS: far probe " + FAR[f] + " is sky");
+assert(!off[5].sky, "...while the near probe is the Floor");
 assert(editor.setOverlays({ groundPlane: true }) === true, "editor.setOverlays({groundPlane: true})");
 assert(editor.overlays().groundPlane === true && editor.overlays().menu.groundPlane === true,
        "...the verb and the View Options checkmark both read it");
 var on = obliqueCorners("plane_on");
-assert(spreadOf(on) >= 2,
-       "with it ON the ground reaches every corner — the CHECKER, not a flat fill (spread " +
-       spreadOf(on) + ", " + J(on) + ")");
+assert(skyCount(on) === 0, "with it ON the ground reaches every corner of the frame (" + J(on) + ")");
 
 // ---- 2b. AND THE CHECKER CROSSES THAT EDGE IN PHASE -------------------------
 //
@@ -297,16 +300,16 @@ assert(m2.workflow === 1 && near(m2.ior, 1.0, 1e-4) &&
        "the matte floor survived save/reopen");
 assert(world.fog({ enabled: false }), "fog off again (the reopened scene brought its own back)");
 var reopened = obliqueCorners("reopen");
-assert(spreadOf(reopened) >= 2, "...and so did the widget's ground (" + J(reopened) + ")");
+assert(skyCount(reopened) === 0, "...and so did the widget's ground (" + J(reopened) + ")");
 
 // ---- 5. the widget does not need a floor --------------------------------------
 assert(node.setProperty(floor2, "visible", false), "hide the Floor");
 var noFloor = obliqueCorners("no_floor_plane_on");
-assert(spreadOf(noFloor) >= 2,
+assert(skyCount(noFloor) === 0,
        "with the Floor hidden the Ground plane still grounds every corner (" + J(noFloor) + ")");
 assert(editor.setOverlays({ groundPlane: false }) === true, "the widget off too");
 var bare = obliqueCorners("no_floor_plane_off");
-assert(spreadOf(bare) <= 1, "...and with both gone the frame is the uniform sky (" + J(bare) + ")");
+assert(skyCount(bare) === CORNERS.length, "...and with both gone the frame is all sky (" + J(bare) + ")");
 assert(node.setProperty(floor2, "visible", true), "show the Floor again");
 
 console.log("e2e_default_ground: all sections passed");

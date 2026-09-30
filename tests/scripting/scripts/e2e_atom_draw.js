@@ -2,12 +2,12 @@
 // S3-DRAW): world.atomStatus() reads the split the renderer decided for the open
 // scene, and world.setAtomDraw() is the measuring door that shuts it.
 //
-// The DEFAULT SCENE is the subject, because it carries both halves of the split:
-// the floor is an Atom item (the id pass draws it, the decode shades it) and the
-// floor's 4 km horizon plane is a BACKDROP — drawn by every view, in no world
-// channel — which the id pass must leave to PBS (the reason `notWorld`). A split
-// that routed the horizon to the Atom queue drew it nowhere: the default scene's
-// far ground turned to sky (engine selftest pose 1, found while building the lane).
+// The DEFAULT SCENE with the editor's Ground plane widget on is the subject,
+// because it carries both halves of the split: the Floor is an Atom item (the id
+// pass draws it, the decode shades it) and the 4 km Ground plane is a BACKDROP —
+// drawn by every view, in no world channel — which the id pass must leave to PBS
+// (the reason `notWorld`). A split that routed a backdrop to the Atom queue drew
+// it nowhere (found while building the lane, on the old horizon plane).
 // The picture must not care which path drew it: the editor's own shot ("scene"
 // grade) with the split on and off agrees to a code at every probe.
 
@@ -19,6 +19,7 @@ function J(x) { return JSON.stringify(x); }
 
 var proj = project.create("Atom Draw " + Date.now());
 assert(proj.length > 10, "project.create");
+assert(editor.setOverlays({ groundPlane: true }) === true, "the Ground plane widget on");
 // Frames until the floor's textures have landed: a material whose textures are
 // still baking is `pending` (PBS draws it for those frames).
 var st = world.atomStatus();
@@ -30,7 +31,7 @@ console.log("atomStatus: " + J(st));
 assert(st.live && st.on, "the split is live on this machine (live " + st.live + ", on " + st.on + ")");
 assert(st.atomItems >= 1 && st.materials >= 1 && st.buckets >= 1 && st.screenDraws === st.buckets,
        "the floor is drawn by the id pass and shaded by one decode draw per bucket");
-assert(st.notWorld === 1, "the floor's horizon plane stays on PBS as a backdrop (notWorld " + st.notWorld + ")");
+assert(st.notWorld === 1, "the Ground plane stays on PBS as a backdrop (notWorld " + st.notWorld + ")");
 assert(st.stereoViews === 0 && st.passthroughViews === 0,
        "no view of the default scene (Epic: the post chain) draws without the id pass");
 

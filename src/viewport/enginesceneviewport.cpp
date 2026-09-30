@@ -4341,9 +4341,12 @@ bool EngineSceneViewport::snapNodeToFloor(const iris::SceneNodePtr &node)
     const float bottom = hasBounds ? bounds.getMin().y() : pos.y();
     const iris::Vec3 centre = hasBounds ? bounds.getCenter() : pos;
 
-    // Straight down from just under the selection's own bounds, so its own
-    // meshes can never be the hit.
-    const iris::Vec3 start(centre.x(), bottom - 0.001f, centre.z());
+    // Straight down from just ABOVE the selection's own bottom (its own meshes
+    // are skipped by the subtree test below). Starting just UNDER it put the
+    // ray inside a solid floor the selection already rests on — a template's
+    // cube Floor (WORLD-MODEL-1) — so a second snap found the floor's BOTTOM
+    // face and sank the selection by the floor's thickness.
+    const iris::Vec3 start(centre.x(), bottom + 0.001f, centre.z());
     const iris::Vec3 end = start + iris::Vec3(0.0f, -10000.0f, 0.0f);
     // Meshes only: this looks for the SURFACE under the selection (End = drop to
     // floor), and a light or camera origin sphere is not a floor.

@@ -1156,7 +1156,7 @@ int main(int argc, char **argv)
         // What a read reports: the floor's material, whether the floor's row
         // names the applied material (its use edge), the tray.
         const QString readFloor = QStringLiteral(
-            "var g = scene.find('Ground'); var m = material.get(g);"
+            "var g = scene.find('Floor'); var m = material.get(g);"
             "JSON.stringify({ map: '' + m.baseColorMap, textureScale: m.textureScale,"
             " roughness: m.roughness, baseColor: m.baseColor,"
             " uses: assets.dependencies(g),"
@@ -1166,7 +1166,7 @@ int main(int argc, char **argv)
             "project.create('Reset Undo ' + Date.now());"
             "var tex = assets.importFile('%1/tiny.png');"
             "var mat = materials.createFromImage(tex);"
-            "var g = scene.find('Ground');"
+            "var g = scene.find('Floor');"
             "material.apply(g, mat);"
             "var tile = assets.list({scope:'project', type:'texture', query:'Tile.png'})[0].guid;"
             "JSON.stringify({ g: g, mat: mat, tex: tex, tile: tile })")
@@ -1186,10 +1186,10 @@ int main(int argc, char **argv)
               "reset/undo: the texture is deleted from the library — pinned, so UNLISTED");
 
         const QJsonObject reset = run(QStringLiteral(
-            "material.reset(scene.find('Ground'))"), "reset the floor");
+            "material.reset(scene.find('Floor'))"), "reset the floor");
         CHECK(reset.value("ok").toBool() && reset.value("result").toBool(), "reset/undo: material.reset");
         const QJsonObject afterReset = parse(run(readFloor, "read"));
-        CHECK(qAbs(afterReset.value("textureScale").toDouble() - 4) < 1e-4
+        CHECK(qAbs(afterReset.value("textureScale").toDouble() - 25) < 1e-4
                   && !afterReset.value("uses").toArray().contains(mat),
               "reset/undo: the floor wears its default and no longer uses the material");
         CHECK(afterReset.value("tray").toArray().contains(mat),
@@ -1215,7 +1215,7 @@ int main(int argc, char **argv)
 
         CHECK(undoRedo("redo"), "reset/undo: undo_redo applies the redo");
         const QJsonObject redone = parse(run(readFloor, "read"));
-        CHECK(qAbs(redone.value("textureScale").toDouble() - 4) < 1e-4
+        CHECK(qAbs(redone.value("textureScale").toDouble() - 25) < 1e-4
                   && !redone.value("uses").toArray().contains(mat),
               "reset/undo: REDO restores the default again");
 
@@ -1225,7 +1225,7 @@ int main(int argc, char **argv)
             "JSON.stringify({ pinned: assets.list({scope:'project'}).some(function(r){return r.guid==='%1';}) })")
             .arg(tile), "take the checker out of the project"));
         CHECK(!unpinned.value("pinned").toBool(), "reset/undo: the checker is not in the project");
-        run(QStringLiteral("material.reset(scene.find('Ground'))"), "reset again");
+        run(QStringLiteral("material.reset(scene.find('Floor'))"), "reset again");
         auto tilePinned = [&]() {
             return parse(run(QStringLiteral(
                 "JSON.stringify({ pinned: assets.list({scope:'project'}).some(function(r){return r.guid==='%1';}) })")
