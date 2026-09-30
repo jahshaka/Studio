@@ -269,6 +269,11 @@ var lights = scene.nodes();
 for (var li = 0; li < lights.length; ++li)
     if (/light/i.test(lights[li].type)) node.setProperty(lights[li].id, "visible", false);
 world.sky("color", { color: "#000000" });
+// THE GRADE THIS ARM'S THRESHOLDS WERE SET AT (SKY-DEFAULTS-1): zero stops moved
+// +0.552 when the default exposure was re-derived from the physical sky, and a
+// brighter grade lifts the cube's DIRECT red on the spheres over the "off"
+// picture's 40 cut. The arm measures the field's follow, not the grade: pinned.
+world.postFx({ exposureEv: -0.552 });
 var cube = scene.addPrimitive("cube", { position: { x: 4.5, y: 0.3, z: 6.5 }, scale: { x: 0.6, y: 0.6, z: 0.6 } });
 material.set(cube, { baseColor: "#000000", emissiveColor: "#ff0000", emissiveIntensity: 3 });
 function walkTo(x, z) {

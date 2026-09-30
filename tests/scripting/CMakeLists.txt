@@ -424,6 +424,12 @@ jah_pool_arm(world_light sun_light ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_sun_l
 # measured direct term, the scroll and its capture cadence, an image sky
 # ignoring the block, and the export bake.
 jah_pool_arm(world_sky clouds_2d ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_clouds_2d.js 42)
+# THE EXPONENTIAL HEIGHT FOG (SKY-DEFAULTS-1): the world.heightFog block
+# (the Basic template's defaults in Unreal's units, clamps, refusals, one undo
+# step, save/reopen), the start distance leaving a near surface byte-identical,
+# density and base height moving the far surface and the sky. The default look
+# it gives a new scene is scripting.e2e.new_scene's.
+jah_pool_arm(world_sky height_fog ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_height_fog.js 16)
 # HARD SUN CONTACT SHADOWS (PHOTON-RAYS-1): world.sunContact's contract — off by
 # default, validation, one undo step, the file round trip, and what the renderer
 # did (gi.sun_contact is the picture).
@@ -1560,7 +1566,7 @@ set_tests_properties(scripting.e2e.player_bounce PROPERTIES
 # the New Scene dialog's two controls (WORLD-MODEL-1: Basic / Empty / World) (owner review R1 / R1b, lane
 # SMALL-UI-A). Engine up: the default template's sky is a RENDERER fact as much
 # as a document one, and the empty world has to be built by the same route.
-jah_pool_arm(editor new_scene ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_new_scene.js 10)
+jah_pool_arm(editor new_scene ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_new_scene.js 16)
 
 # scripting.e2e.primitives — the ONE primitive table through the VERB (owner
 # review R6 / answer Q4). The table's own contract — the meshes, the tangents,

@@ -694,7 +694,13 @@ iris::ScenePtr MainWindow::createDefaultScene(SceneTemplate kind)
     scene->rootNode->addChild(dlight);
     dlight->setName("Directional Light");
     dlight->setLocalPos(iris::Vec3(4, 4, 0));
-    dlight->setLocalRot(iris::Quat::fromEulerAngles(15, 0, 0));
+    // THE SUN HIGH AND BEHIND THE DEFAULT CAMERA (SKY-DEFAULTS-1; Unreal's default
+    // class): 50 degrees of elevation, and its azimuth the camera's back — the
+    // editor camera stands at (0, 5, 14) looking at the origin, down -Z, so the
+    // sun stands towards +Z and its light travels (0, -sin 50, -cos 50). The
+    // floor in view is fully lit and the sky ahead is the deep-blue side, away
+    // from the sun. A pitch of 40 degrees about X turns the light's -Y to that.
+    dlight->setLocalRot(iris::Quat::fromEulerAngles(scenetemplate::kSunPitchDegrees, 0, 0));
     // Through the funnel: these run AFTER addChild, so the node is already in
     // the scene and a raw field write is a change nothing reports
     // (SPECS/DIRTY_SET_MIRROR_SPEC.md; lead review R2 #10). The first sync of a
@@ -750,6 +756,13 @@ iris::ScenePtr MainWindow::createDefaultScene(SceneTemplate kind)
     scene->skyColor = QColor(96, 96, 96);
     scene->fogColor = QColor(96, 96, 96);
     scene->shadowEnabled = true;
+    // THE EXPONENTIAL HEIGHT FOG ON (SKY-DEFAULTS-1; the owner's Unreal Basic
+    // level): the world's medium at iris::HeightFog's dials — Unreal's density
+    // and falloff, from 100 m, so the floor is untouched and the far world, the
+    // horizon and everything under it take the sky's own blue. The World fog
+    // stays off.
+    scene->heightFog = iris::HeightFog();
+    scene->heightFog.enabled = true;
 
     sceneNodeSelected(scene->rootNode);
 

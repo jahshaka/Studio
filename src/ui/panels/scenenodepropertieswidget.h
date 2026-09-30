@@ -53,6 +53,7 @@ class Project;
 // These are special and a kind of hack since this widget was never really designed to work with non scenenode types
 class SkyPropertyWidget;
 class WorldCloudsPropertyWidget;
+class WorldHeightFogPropertyWidget;
 class WorldGiPropertyWidget;
 class WorldAaPropertyWidget;
 class WorldModesPropertyWidget;
@@ -392,6 +393,7 @@ private:
 	SkyPropertyWidget *skyPropView;
 	/// The Clouds blade, under the Sky blade (CLOUDS-2D-1).
 	WorldCloudsPropertyWidget *cloudsPropView = nullptr;
+	WorldHeightFogPropertyWidget *heightFogPropView = nullptr;
 	MeshPropertyWidget* meshPropView;
     /// MOVEMENT (REALTIME_REFLECTIONS_SPEC §3.3): the per-object mobility row,
     /// mounted for EVERY node kind — a lamp on a swinging arm needs it as much

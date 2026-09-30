@@ -572,14 +572,18 @@ void partB()
             const double back = (hable(xStar) / hw - 0.5) * 1.25 + 0.61;
             CHECK(std::fabs(back - 0.18) < 1e-6, "...and x* develops to 0.18 (%.6f)", back);
 
-            // (2) the default template's lights: a sun and a Sky Light at
-            // intensity 1 over a 96-grey sky.
-            const double skySrgb = 96.0 / 255.0;
-            const double skyLin = std::pow((skySrgb + 0.055) / 1.055, 2.4);
-            const double eKey = pi * (1.0 + skyLin);
-            CHECK(std::fabs(double(iris::lens::keyIrradiance(1.0f, 1.0f, float(skyLin))) - eKey)
+            // (2) the default template's lights on its floor (SKY-DEFAULTS-1):
+            // the sun at 50 degrees and the Sky Light over the realistic sky,
+            // MEASURED through the renderer on an 18 % card — 1.987 + 0.406.
+            const double sunAtFloor = 1.987, skyAtFloor = 0.406;
+            const double eKey = sunAtFloor + skyAtFloor;
+            CHECK(std::fabs(double(iris::lens::keyIrradiance(float(sunAtFloor / pi), 1.0f,
+                                                             float(skyAtFloor / pi))) - eKey)
                       < 1e-4,
-                  "keyIrradiance(sun 1, sky light 1, sky %.5f) = %.5f", skyLin, eKey);
+                  "keyIrradiance(sun %.4f, sky light 1, sky %.4f) = %.5f", sunAtFloor / pi,
+                  skyAtFloor / pi, eKey);
+            CHECK(std::fabs(double(zero) - 0.97882) < 1e-4,
+                  "zero stops is chain E 0.97882 (the physical sky's grade, %.5f)", double(zero));
 
             // (3) the exposure that develops an 18 % grey card under it at x*.
             const double byHand = 2.0 + std::log(xStar * pi / eKey);

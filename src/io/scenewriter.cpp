@@ -151,6 +151,10 @@ void SceneWriter::writeScene(QJsonObject& projectObj, iris::ScenePtr scene)
     // layer existed (the reader reads an absent block as the default).
     if (scene->clouds != iris::CloudLayer())
         sceneObj["clouds"] = scene->clouds.toJson();
+    // THE HEIGHT FOG (SKY-DEFAULTS-1), the same rule: only when not the
+    // constructor's (off), so a scene nobody gave it is the file it was.
+    if (scene->heightFog != iris::HeightFog())
+        sceneObj["heightFog"] = scene->heightFog.toJson();
     // HARD SUN CONTACT SHADOWS (PHOTON-RAYS-1) — the same rule: only when it is
     // not the default, so every scene that never turned it on is unchanged.
     if (scene->sunContact != iris::SunContact())

@@ -37,6 +37,7 @@ For more information see the LICENSE file
 #include "ui/panels/propertywidgets/emitterpropertywidget.h"
 #include "ui/panels/propertywidgets/fogpropertywidget.h"
 #include "ui/panels/propertywidgets/worldcloudspropertywidget.h"
+#include "ui/panels/propertywidgets/worldheightfogpropertywidget.h"
 #include "ui/panels/propertywidgets/lightpropertywidget.h"
 #include "ui/panels/propertywidgets/decalpropertywidget.h"
 #include "ui/panels/propertywidgets/materialpropertywidget.h"
@@ -88,6 +89,9 @@ SceneNodePropertiesWidget::SceneNodePropertiesWidget(QWidget *parent) : QWidget(
 	cloudsPropView->setPanelTitle("Clouds");
 	connect(skyPropView, &SkyPropertyWidget::skyTypeApplied,
 	        cloudsPropView, &WorldCloudsPropertyWidget::refreshRows);
+	// THE HEIGHT FOG (SKY-DEFAULTS-1), under the sky and the clouds it fogs.
+	heightFogPropView = new WorldHeightFogPropertyWidget();
+	heightFogPropView->setPanelTitle("Height Fog");
 	// ...and the Fog blade: its colour row is greyed under the realistic sky,
 	// whose own scattering colours the fog (FOG-ATMO-1).
 	connect(skyPropView, &SkyPropertyWidget::skyTypeApplied,
@@ -323,7 +327,7 @@ SceneNodePropertiesWidget::SceneNodePropertiesWidget(QWidget *parent) : QWidget(
 QVector<QWidget *> SceneNodePropertiesWidget::bladeWidgets() const
 {
     return {
-        fogPropView, worldPropView, skyPropView, cloudsPropView,
+        fogPropView, worldPropView, skyPropView, cloudsPropView, heightFogPropView,
         worldModesPropView, worldGiPropView, worldPostFxPropView,
         worldAaPropView, worldShadowPropView, worldVrPropView, transformPropView,
         mobilityPropView, componentsPropView,
@@ -609,7 +613,7 @@ bool SceneNodePropertiesWidget::eventFilter(QObject *watched, QEvent *event)
 // THE SECTION THAT SHOWS A sceneprops KEY. Enumerated from the rows each
 // section binds: World (ambience volume, gravity, play mode, ray tracing, the
 // three sun-disc rows), Fog (the fog* rows and Receive Shadows' shadowEnabled),
-// Clouds (clouds), Sky (sky — only while the section shows the SCENE's sky, not
+// Clouds (clouds), Height Fog (heightFog), Sky (sky — only while the section shows the SCENE's sky, not
 // a library asset), Photon (the gi* rows), Post Process (postFx.* and looks),
 // Shadows (sunContact), VR (vr.*). The keys no section shows (sunLight,
 // ssrMarch) map to none.
@@ -624,6 +628,7 @@ QWidget *SceneNodePropertiesWidget::worldSectionForKey(const QString &key) const
     if (key.startsWith(QLatin1String("fog")) || key == QLatin1String("shadowEnabled"))
         return fogPropView;
     if (key == QLatin1String("clouds")) return cloudsPropView;
+    if (key == QLatin1String("heightFog")) return heightFogPropView;
     if (key == QLatin1String("sky"))
         return (skyPropView && skyPropView->showsSceneSky()) ? skyPropView : nullptr;
     if (key.startsWith(QLatin1String("gi"))) return worldGiPropView;
@@ -647,6 +652,7 @@ void SceneNodePropertiesWidget::refreshStaleWorldSections()
         if (section == worldPropView)             worldPropView->setScene(sc);
         else if (section == fogPropView)          fogPropView->setScene(sc);
         else if (section == cloudsPropView)       cloudsPropView->setScene(sc);
+        else if (section == heightFogPropView)    heightFogPropView->setScene(sc);
         else if (section == skyPropView)          skyPropView->setScene(sc);
         else if (section == worldGiPropView)      worldGiPropView->setScene(sc);
         else if (section == worldPostFxPropView)  worldPostFxPropView->setScene(sc);
@@ -960,6 +966,7 @@ void SceneNodePropertiesWidget::bindScene(const QSharedPointer<iris::Scene> &sce
     // implementation, two bindings).
     skyPropView->setScene(scene);
     cloudsPropView->setScene(scene);
+    heightFogPropView->setScene(scene);
 }
 
 // THE CHEAP HALF: the blades are permanent children and already bound, so a
@@ -970,6 +977,7 @@ void SceneNodePropertiesWidget::mountWorldBlades()
     mount(worldPropView);
     mount(skyPropView);
     mount(cloudsPropView);
+    mount(heightFogPropView);
     mount(worldModesPropView);
     mount(worldGiPropView);
     mount(worldPostFxPropView);
@@ -1254,6 +1262,7 @@ void SceneNodePropertiesWidget::setServices(StudioServices *services)
     if (worldGiPropView) worldGiPropView->setServices(services);
     if (worldPropView) worldPropView->setServices(services);
     if (cloudsPropView) cloudsPropView->setServices(services);
+    if (heightFogPropView) heightFogPropView->setServices(services);
     if (fogPropView) fogPropView->setServices(services);
     if (worldAaPropView) worldAaPropView->setServices(services);
     if (worldShadowPropView) worldShadowPropView->setServices(services);

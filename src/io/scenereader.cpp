@@ -303,6 +303,10 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
 	// inside a present block the constructor's value too (the reader-defaults
 	// law). The weather map is resolved here, like the sky's own image.
 	scene->clouds = iris::CloudLayer::fromJson(sceneObj.value("clouds").toObject());
+	// THE HEIGHT FOG (SKY-DEFAULTS-1): an absent block is the constructor's, OFF
+	// (forward only: a scene written before it has none, and there is no reader
+	// for anything older).
+	scene->heightFog = iris::HeightFog::fromJson(sceneObj.value("heightFog").toObject());
 	// HARD SUN CONTACT SHADOWS (PHOTON-RAYS-1): an absent block is the
 	// constructor's row, OFF (the reader-defaults law, fromJson's own).
 	scene->sunContact = iris::SunContact::fromJson(sceneObj.value("sunContact").toObject());

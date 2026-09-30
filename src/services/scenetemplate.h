@@ -76,6 +76,12 @@ inline bool fromName(const QString &text, SceneTemplate *out)
 constexpr float kFloorSize = 100.0f;
 constexpr float kFloorThickness = 1.0f;
 constexpr int   kWorldTilesPerSide = 5;
+/// THE SUN'S PLACE (SKY-DEFAULTS-1): the Basic/World sun is pitched this far
+/// about X from straight down, i.e. it stands at 90 - 40 = 50 degrees of
+/// elevation (Unreal's default class) towards +Z — the default editor camera's
+/// back (EngineSceneViewport::resetEditorCam: (0, 5, 14) looking at the origin).
+constexpr float kSunPitchDegrees = 40.0f;
+constexpr float kSunElevationDegrees = 90.0f - kSunPitchDegrees;
 
 }   // namespace scenetemplate
 
