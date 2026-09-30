@@ -15,21 +15,12 @@ For more information see the LICENSE file
 // ExportContentSource — the seam between exporters and asset storage
 // (ASSET_PIPELINE_SPEC §3.3 "files are gathered by oid through the resolver").
 //
-// Front half (this file): LegacyStoreContentSource walks the per-guid
-// AssetStore folder — <storeRoot>/<guid>/* — which is today's layout. A
-// missing folder yields ZERO files, not an error (preflight §3.1: most Editor
-// rows have no store folder; identity survives absence).
-//
-// Final half (after Lane A's phase 2 CAS lands): a resolver-backed source
-// implements the same interface over the `asset_files`/`files` tables and
-// objects/ paths. `oid` here is sha256 hex of the bytes — the CAS object id —
-// so entries produced by either source are identical; exporters and manifests
-// never notice the swap.
+// The one production source is CasContentSource: entries come from the
+// `asset_files`/`files` tables and the store's objects/. `oid` is sha256 hex of
+// the bytes — the CAS object id. A DB-only row yields ZERO files, not an error.
 //
 // The store root is always passed in EXPLICITLY: exporters must not derive
-// storage paths (that authority is Lane A's AssetStorePaths). Verb-level
-// callers pass AssetMetadata::storeRootPath() — the one canonical helper —
-// which the lead reroutes through AssetStorePaths at merge.
+// storage paths (that authority is AssetStorePaths).
 
 #include <QString>
 #include <QVector>
@@ -41,7 +32,7 @@ public:
 
     struct Entry
     {
-        QString role;   // "source" for legacy store files (roles refine under CAS)
+        QString role;   // the asset_files role ("source", "texture", …)
         QString name;   // file name (display + export naming)
         QString path;   // absolute path to readable bytes
         qint64 size = -1;
@@ -50,9 +41,8 @@ public:
 
     /// Every stored file belonging to `guid`. Empty = the asset has no stored
     /// bytes (a DB-only row) — callers treat that as a valid, file-less asset.
-    /// `nameHint` is the catalog's file name for the asset — legacy resolution
-    /// is name-keyed (spec §1.2), so sources that fall back to a flat folder
-    /// need it; the CAS source will ignore it.
+    /// `nameHint` is the catalog's file name for the asset (the CAS source
+    /// ignores it).
     virtual QVector<Entry> filesForAsset(const QString &guid,
                                          const QString &nameHint = QString()) = 0;
 };
@@ -78,27 +68,6 @@ private:
     QString root;
     QString project;
     static int sStatements;
-};
-
-/// The per-guid-folder store layout (now a hardlink VIEW of the CAS —
-/// kept for sources outside the catalog).
-class LegacyStoreContentSource : public ExportContentSource
-{
-public:
-    /// `storeRoot` = the AssetStore root directory (explicit, see header).
-    /// `computeHashes` fills Entry::oid with sha256 hex. Production exports
-    /// use CasContentSource; this survives as the filesystem-only source the
-    /// export unit suite drives (no DB required). The flat project-folder
-    /// fallback died with the pin world.
-    explicit LegacyStoreContentSource(const QString &storeRoot,
-                                      bool computeHashes = true);
-
-    QVector<Entry> filesForAsset(const QString &guid,
-                                 const QString &nameHint = QString()) override;
-
-private:
-    QString root;
-    bool hashFiles;
 };
 
 #endif // EXPORTCONTENTSOURCE_H

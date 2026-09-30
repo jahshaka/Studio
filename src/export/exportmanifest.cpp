@@ -21,14 +21,6 @@ namespace {
 
 const QString kFormatTag = QStringLiteral("jah-export-manifest");
 
-// The v1 vocabulary (assetview.cpp importJahModel) — anything else on a
-// one-line manifest is rejected rather than guessed at.
-const QStringList kV1Kinds = {
-    QStringLiteral("object"), QStringLiteral("texture"), QStringLiteral("material"),
-    QStringLiteral("shader"), QStringLiteral("sky"), QStringLiteral("particle_system"),
-    QStringLiteral("bundle")
-};
-
 } // namespace
 
 QJsonObject ExportManifest::toJson() const
@@ -121,18 +113,6 @@ ExportManifest ExportManifest::fromBytes(const QByteArray &bytes, QString *error
     const QByteArray trimmed = bytes.trimmed();
     if (trimmed.isEmpty()) {
         if (error) *error = QStringLiteral("empty manifest");
-        return m;
-    }
-
-    // v1: a single word on the first line, from the historical vocabulary.
-    if (!trimmed.startsWith('{')) {
-        const QString word = QString::fromUtf8(trimmed.split('\n').first()).trimmed();
-        if (!kV1Kinds.contains(word)) {
-            if (error) *error = QStringLiteral("unknown v1 manifest kind: %1").arg(word);
-            return m;
-        }
-        m.version = 1;
-        m.kind = word;
         return m;
     }
 

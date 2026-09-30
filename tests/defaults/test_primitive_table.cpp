@@ -134,25 +134,19 @@ int main(int argc, char **argv)
         check(!guids.contains(it.key()),
               QStringLiteral("no primitive guid collides with the material preset %1").arg(it.value()));
 
-    // ---- 4: the old numbering still resolves --------------------------------
-    // The eight rows that survived the renumber, by their PRE-2026-09-19 guids:
-    // the drop path asks primitives::byGuid, which canonicalises first.
-    struct Legacy { const char *guid; const char *name; };
-    const Legacy legacy[] = {
-        { "00000000-0000-0000-0000-000000001000", "Plane" },
-        { "00000000-0000-0000-0000-000000001001", "Cone" },
-        { "00000000-0000-0000-0000-000000000002", "Cube" },
-        { "00000000-0000-0000-0000-000000000003", "Cylinder" },
-        { "00000000-0000-0000-0000-000000000004", "Sphere" },
-        { "00000000-0000-0000-0000-000000000005", "Torus" },
-        { "00000000-0000-0000-0000-000000000006", "Capsule" },
-        { "00000000-0000-0000-0000-000000000008", "Pyramid" },
-    };
-    for (const Legacy &row : legacy) {
-        const primitives::Def *def = primitives::byGuid(QString::fromLatin1(row.guid));
-        check(def && QString::fromLatin1(def->name) == QLatin1String(row.name),
-              QStringLiteral("the old guid %1 still resolves to %2").arg(row.guid, row.name));
-    }
+    // ---- 4: the pre-2026-09-19 numbering is REFUSED (FORWARD-ONLY-1) --------
+    // A guid from before the renumber resolves to nothing: no canonicalising
+    // map, nothing owed to old data.
+    for (const char *old : { "00000000-0000-0000-0000-000000001000",     // Plane
+                             "00000000-0000-0000-0000-000000001001",     // Cone
+                             "00000000-0000-0000-0000-000000000002",     // Cube
+                             "00000000-0000-0000-0000-000000000003",     // Cylinder
+                             "00000000-0000-0000-0000-000000000004",     // Sphere
+                             "00000000-0000-0000-0000-000000000005",     // Torus
+                             "00000000-0000-0000-0000-000000000006",     // Capsule
+                             "00000000-0000-0000-0000-000000000008" })   // Pyramid
+        check(primitives::byGuid(QString::fromLatin1(old)) == nullptr,
+              QStringLiteral("the pre-renumber guid %1 resolves to nothing").arg(old));
     // ...and the four retired rows resolve to NOTHING rather than to some other
     // shape: answering with the wrong primitive is worse than answering none.
     for (const char *gone : { "00000000-0000-0000-0000-000000000007",     // Gear

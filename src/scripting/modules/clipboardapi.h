@@ -17,10 +17,7 @@ For more information see the LICENSE file
 // viewport are all callers of the same component and none of them is "editor").
 //
 // Every surface in the app goes through these verbs: the Ctrl+C/Ctrl+X/Ctrl+V
-// chords, the tree's context menu, and anything Claude drives over MCP. The
-// older `editor.copy/paste/clipboard` verbs survive as thin aliases (marked
-// deprecated in their doc strings) so scripts written against them keep
-// working; they now share this one clipboard.
+// chords, the tree's context menu, and anything Claude drives over MCP.
 
 #include <QList>
 #include <QVariantList>

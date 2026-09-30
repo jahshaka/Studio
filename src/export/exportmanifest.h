@@ -14,10 +14,8 @@ For more information see the LICENSE file
 
 // Export manifest v2 (ASSET_PIPELINE_SPEC §3.3, phase-5 front half).
 //
-// One manifest format for every unified export (.jaf, raw file exports,
-// project archives). v1 is the legacy .jaf `.manifest`: a single-word text
-// line naming the payload type ("object", "texture", "material", "shader",
-// "sky", "particle_system", "bundle"). v2 is real JSON:
+// One manifest format for every unified export (raw file exports, share
+// files, project archives). It is JSON, version 2 (anything else is refused):
 //
 //   {
 //     "format": "jah-export-manifest",
@@ -117,8 +115,8 @@ struct ManifestScene
 
 struct ExportManifest
 {
-    int version = 2;         // 1 = legacy single-word manifest
-    QString kind;            // payload type; v1 words pass through unchanged
+    int version = 2;
+    QString kind;            // payload type
     QString generator;       // informational
     QString created;         // ISO 8601 UTC, informational
     QVector<ManifestAsset> assets;

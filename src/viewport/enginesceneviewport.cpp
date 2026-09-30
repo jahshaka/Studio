@@ -1233,10 +1233,7 @@ void EngineSceneViewport::dropEvent(QDropEvent *event)
     if (type == static_cast<int>(ModelTypes::ParticleSystem)) {
         emit mEvents.addDroppedParticleSystem(true, mDragScenePos, role.value(3).toString(), role.value(1).toString());
     } else if (type == static_cast<int>(ModelTypes::Object)) {
-        // A PRIMITIVE TILE, by guid — OLD GUIDS INCLUDED. `primitives::byGuid`
-        // maps the pre-2026-09-19 numbering (the range that collided with
-        // BuiltinShaders') onto the current rows, so a favourite a user saved
-        // before the renumber still drops (src/data/primitives.h).
+        // A PRIMITIVE TILE, by guid (src/data/primitives.h).
         if (const primitives::Def *prim = primitives::byGuid(role.value(3).toString())) {
             // WITH THE DROP POINT (smoke S2). This branch was the one dropped
             // asset that carried no position — every primitive dragged into

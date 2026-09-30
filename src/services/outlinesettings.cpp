@@ -44,12 +44,7 @@ int width()
 {
     auto *settings = SettingsManager::getDefaultManager();
     if (!settings) return defaultWidth();
-    // Default halved 6 -> 3 (2026-08-30). A stored 6 is indistinguishable from
-    // the old default, so treat it AS the new default; any other stored value
-    // is a deliberate user choice and is kept. (Was inline in the Preferences
-    // page, where the verbs could not see it.)
-    int stored = settings->getValue(widthKey(), defaultWidth()).toInt();
-    if (stored == 6) stored = defaultWidth();
+    const int stored = settings->getValue(widthKey(), defaultWidth()).toInt();
     return qBound(minWidth(), stored, maxWidth());
 }
 
