@@ -18,7 +18,8 @@
 //   4. A ONE-SIDED CLOSED BOX SEEN FROM INSIDE SHOWS THE VOID; two-sided, its walls.
 //   5. THE ATOM SPLIT: a two-sided MATERIAL worn by Back nodes -> their shared Back
 //      twin routes to Atom as ONE material (one twin, one bucket); the node that
-//      keeps the material's own two-sidedness stays on PBS.
+//      keeps the material's own two-sidedness rides Atom too, drawn from both sides in
+//      a bucket of its own (ATOM-TWO-SIDED-1).
 #include <QGuiApplication>
 #include <cmath>
 #include <cstdio>
