@@ -20,6 +20,7 @@ function J(x) { return JSON.stringify(x); }
 var proj = project.create("Atom Draw " + Date.now());
 assert(proj.length > 10, "project.create");
 assert(editor.setOverlays({ groundPlane: true }) === true, "the Ground plane widget on");
+editor.frame(2);   // the viewport pushes the widget to the mirror on its own sync
 // Frames until the floor's textures have landed: a material whose textures are
 // still baking is `pending` (PBS draws it for those frames).
 var st = world.atomStatus();
