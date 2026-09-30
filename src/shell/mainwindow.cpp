@@ -623,7 +623,14 @@ iris::ScenePtr MainWindow::createDefaultScene(SceneTemplate kind)
     // Player's "hide the floor" setting hides. It casts no shadow (nothing is
     // under it, and a 100 m caster would widen the sun's fit to the whole
     // floor) and is a static box to physics.
-    auto makeFloor = [this](const QString &name, const iris::Vec3 &centre) {
+    // THE TILE IS PINNED ONCE PER TEMPLATE (one import-pipeline visit, not one
+    // per floor: World has 25). Each floor still gets its OWN material instance
+    // — they could share one, but then editing one floor's material would edit
+    // all 25, and a floor is an ordinary node; the decode buckets by shader words
+    // anyway, so sharing would buy no draw.
+    QString tileGuid;
+    const QString tilePath = defaultfloormaterial::pinTile(db, project, &tileGuid);
+    auto makeFloor = [this, &tileGuid, &tilePath](const QString &name, const iris::Vec3 &centre) {
         const QString guid = GUIDManager::generateGUID();
         iris::MeshNodePtr node = SceneNodeHelper::createBasicMeshNode(
             QStringLiteral(":/content/primitives/cube.obj"), name, guid, db);
@@ -654,8 +661,7 @@ iris::ScenePtr MainWindow::createDefaultScene(SceneTemplate kind)
                                  QString(), QString(), QByteArray(),
                                  QJsonDocument(props).toJson(), QByteArray(), QByteArray());
         }
-        QString tileGuid;
-        node->setMaterial(defaultfloormaterial::create(db, project, &tileGuid));
+        node->setMaterial(defaultfloormaterial::createUnpinned(tilePath));
         if (realProject && !tileGuid.isEmpty())
             db->createDependency(static_cast<int>(ModelTypes::Object),
                                  static_cast<int>(ModelTypes::Texture), guid, tileGuid,

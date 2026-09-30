@@ -134,6 +134,17 @@ assert(near(wb.max.y, 0, 1e-3) && near(wb.center.x, 0, 0.01) && near(wb.center.z
        "...top at y = 0, centred on the origin");
 assert(lightsIn(scene.nodes()) === 2 && String(world.get().sky.type) === "Realistic",
        "...under Basic's sky and its two lights");
+// ONE TILE, PINNED ONCE: every floor wears its OWN material instance, all naming the
+// same pinned checker — one Tile.png row in the project, not twenty-five.
+var maps = {};
+for (var t = 0; t < tiles.length; ++t) maps[material.get(tiles[t].id).baseColorMap] = true;
+assert(Object.keys(maps).length === 1 && String(Object.keys(maps)[0]).length > 0,
+       "the 25 floors all wear the one pinned checker (" + J(Object.keys(maps)) + ")");
+assert(assets.list({ scope: "project", type: "texture", query: "Tile.png" }).length === 1,
+       "...one Tile.png row in the project");
+assert(material.set(tiles[0].id, { roughness: 0.3 }) === true &&
+       material.get(tiles[1].id).roughness === 1,
+       "...and editing one floor's material leaves its neighbour's alone (own instances)");
 
 // ---- 4. a chosen location ---------------------------------------------------
 // app.dataRoot() names this run's own folders; `assetStore` is a directory the

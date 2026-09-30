@@ -18,8 +18,7 @@ For more information see the LICENSE file
 
 namespace defaultfloormaterial {
 
-iris::PbrMaterialPtr create(Database *db, Project *project, QString *tileGuid,
-                            bool *tileNewlyPinned)
+QString pinTile(Database *db, Project *project, QString *tileGuid, bool *tileNewlyPinned)
 {
     // THE GROUND'S TILE IS A LIBRARY TEXTURE (plan item 15c, audit D35). In a
     // real project it goes through the one import pipeline the first time any
@@ -65,7 +64,13 @@ iris::PbrMaterialPtr create(Database *db, Project *project, QString *tileGuid,
         }
     }
 
-    return createUnpinned(tilePath);
+    return tilePath;
+}
+
+iris::PbrMaterialPtr create(Database *db, Project *project, QString *tileGuid,
+                            bool *tileNewlyPinned)
+{
+    return createUnpinned(pinTile(db, project, tileGuid, tileNewlyPinned));
 }
 
 }   // namespace defaultfloormaterial

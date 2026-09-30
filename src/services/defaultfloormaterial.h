@@ -129,6 +129,14 @@ inline iris::PbrMaterialPtr createUnpinned(const QString &tilePath = shippedTile
     return material;
 }
 
+/// THE TILE, PINNED ONCE: the path the material's base-colour map should
+/// name — the pinned store object in a real project (`tileGuid` names its
+/// row, `tileNewlyPinned` whether THIS call pinned it), the shipped file
+/// otherwise. A caller building several floors pins once and hands the path to
+/// createUnpinned for each (the World template's 25).
+QString pinTile(Database *db, Project *project, QString *tileGuid = nullptr,
+                bool *tileNewlyPinned = nullptr);
+
 /// A FRESH instance of the floor's own default material. In a real project
 /// (`project` with a guid) the checker is pinned into it and `tileGuid`, when
 /// given, names the pinned row, and `tileNewlyPinned` says whether THIS call
