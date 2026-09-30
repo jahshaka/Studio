@@ -213,3 +213,22 @@ jah_no_display(meshbake.hemisphere_winding)
 jah_no_display(meshbake.roundtrip)
 jah_no_display(meshbake.cards meshbake.cards.timing)
 jah_no_display(meshbake.sdf)
+
+# meshbake.archive_bakes (FORWARD-ONLY-1 item 1): an ARCHIVE IMPORT bakes every
+# model it brings (archives carry no bakes), so a fresh library that imports the
+# shipped samples opens them from bakes with ZERO parses; and with the bakes gone
+# the world opens with its models MISSING and a `model.missing` scene issue —
+# never a parse. Two app runs over one scratch data root (archive/archive_bakes.sh).
+set(_archive_home ${CMAKE_CURRENT_BINARY_DIR}/archive-bakes-home)
+file(MAKE_DIRECTORY ${_archive_home}/run)
+set(SOURCE_DIR ${CMAKE_SOURCE_DIR})
+configure_file(archive/archive_bakes_import.js.in ${CMAKE_CURRENT_BINARY_DIR}/archive_bakes_import.js @ONLY)
+jah_gpu_row(meshbake.archive_bakes CLASS app
+         COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/archive/archive_bakes.sh"
+                 "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>"
+                 "${CMAKE_CURRENT_BINARY_DIR}/archive_bakes_import.js"
+                 "${CMAKE_CURRENT_SOURCE_DIR}/archive/archive_bakes_open.js"
+         WORKING_DIRECTORY ${_archive_home}/run)
+set_tests_properties(meshbake.archive_bakes PROPERTIES
+    ENVIRONMENT "HOME=${_archive_home};JAHSHAKA_DATA_ROOT=${_archive_home}/data"
+    TIMEOUT 400 LABELS "meshbake")

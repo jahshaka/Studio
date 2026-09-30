@@ -13,6 +13,7 @@ For more information see the LICENSE file
 #include "irisgl/core/math/quat.h"
 #include "irisgl/core/math/vec.h"
 #include "services/sceneeditservice.h"
+#include "services/sceneissues.h"
 #include "services/assetshare.h"
 
 #include "irisgl/document/assets/mesh.h"
@@ -376,33 +377,6 @@ int SceneEditService::refreshAssetMeshes(const QString &meshGuid, const QString 
     return swapped;
 }
 
-void SceneEditService::addMesh(const QString &path, bool ignore, iris::Vec3 position)
-{
-    if (path.isEmpty()) return;
-
-    // No SceneSource: the loader owns a local importer when none is passed
-    // (the old `new` here leaked the whole parsed scene per added mesh).
-    auto node = iris::MeshNode::loadAsSceneFragment(path, [](iris::MeshPtr mesh, iris::MeshMaterialData& data)
-    {
-        return iris::MaterialPtr(BuiltinMaterials::fromMeshData(data));
-    });
-
-    // model file may be invalid so null gets returned
-    if (!node) return;
-
-    // rename animation sources to relative paths
-    auto relPath = QDir(project->folderPath).relativeFilePath(path);
-    for (auto anim : node->getAnimations()) {
-        if (!!anim->skeletalAnimation)
-            anim->skeletalAnimation->source = relPath;
-    }
-
-    node->setLocalPos(position);
-
-    // todo: load material data
-    addNodeToScene(node, ignore);
-}
-
 void SceneEditService::addMaterialMesh(const QString &path, bool ignore, iris::Vec3 position,
                                        const QString &guid, const QString &assetName,
                                        surfaceplacement::Placement placement)
@@ -416,10 +390,10 @@ void SceneEditService::addMaterialMesh(const QString &path, bool ignore, iris::V
     reader->setProject(project);
     reader->setLibrarySource();
     iris::SceneNodePtr node = reader->readSceneNode(document);
+    // A LIBRARY MODEL WITH NO BAKE IS SAID (FORWARD-ONLY-1 D4): the placed node
+    // arrives without geometry, and the user is told which file — not a log line.
+    SceneIssues::instance().raiseMissingModels(reader->missingModels());
     delete reader;
-    // The reader returns null for a blob whose root is a node type this build
-    // retired (sceneformat::isRetiredNodeType) — the other three readSceneNode
-    // call sites already checked; this one dereferenced it.
     if (!node) return;
 
     // FRESH IDENTITY per instantiation. The blob stores the guids it was
@@ -1718,14 +1692,7 @@ void SceneEditService::createMaterialFromNode(iris::SceneNodePtr node, const QSt
 
         MaterialReader reader;
         reader.setProject(project);
-        auto material = reader.parseMaterial(materialDefOriginal, db);
-
-        // Actually create the material and add shader as it's dependency
-        db->createDependency(
-            static_cast<int>(ModelTypes::Material),
-            static_cast<int>(ModelTypes::Shader),
-            assetGuid, material->getGuid(),
-            project->getProjectGuid());
+        auto material = reader.parseMaterialTyped(materialDefOriginal, db);
 
         // Add all its textures as dependencies too
         auto values = materialDefOriginal["values"].toObject();

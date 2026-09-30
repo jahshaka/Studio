@@ -427,7 +427,7 @@ int main(int argc, char** argv)
     // ============ IMAGE_PLANE_SPEC option C: uvTransform + texelsize aspect ============
     {
         Rig r; // defaults: uv * (1,1) + (0,0) == uv
-        auto op = r.add("uvTransform");
+        auto op = r.add("uv");
         r.graph->addConnection(r.addVec(2, 0.25, 0.5), 0, op, 0);
         r.toMaster(op, 0, 0);
         auto c = baseColorOf(r);
@@ -436,7 +436,7 @@ int main(int argc, char** argv)
     }
     {
         Rig r; // the inline editors are the socket defaults: uv*(2,2)+(.1,.3)
-        auto op = r.add("uvTransform");
+        auto op = r.add("uv");
         QJsonObject widget;
         widget["tileX"] = 2.0; widget["tileY"] = 2.0;
         widget["offsetX"] = 0.1; widget["offsetY"] = 0.3;
@@ -449,7 +449,7 @@ int main(int argc, char** argv)
     }
     {
         Rig r; // a CONNECTED Tiling socket overrides the inline editor
-        auto op = r.add("uvTransform");
+        auto op = r.add("uv");
         QJsonObject widget;
         widget["tileX"] = 5.0; widget["tileY"] = 5.0;
         widget["offsetX"] = 0.0; widget["offsetY"] = 0.0;
@@ -465,7 +465,7 @@ int main(int argc, char** argv)
         // widget values survive a serialize/deserialize round-trip (the same
         // path a saved .effect takes)
         Rig r;
-        auto op = r.add("uvTransform");
+        auto op = r.add("uv");
         QJsonObject widget;
         widget["tileX"] = 2.0; widget["tileY"] = 2.0;
         widget["offsetX"] = 0.1; widget["offsetY"] = 0.3;
@@ -482,19 +482,19 @@ int main(int argc, char** argv)
 
     // ============ THE UV NODE (MATERIAL_UV_NODES_SPEC D-3/D-5) ============
     {
-        Rig r; // the merge: "uvTransform" and "texCoords" both construct a `uv`
-        auto a = r.graph->library->createNode("uvTransform");
-        auto b = r.graph->library->createNode("texCoords");
+        // the merge: "uvTransform" and "texCoords" are GONE (FORWARD-ONLY-1) —
+        // neither constructs, neither is a palette entry; `uv` is the one node.
+        Rig r;
+        CHECK(r.graph->library->createNode("uvTransform") == nullptr
+                  && r.graph->library->createNode("texCoords") == nullptr,
+              "uv: the retired typeNames construct nothing");
         auto c = r.graph->library->createNode("uv");
-        CHECK(a && b && c, "uv: all three typeNames construct");
-        CHECK(a->typeName == "uv" && b->typeName == "uv" && c->typeName == "uv",
-              "uv: the old typeNames are aliases of the one node");
-        CHECK(a->title == "UV" && b->title == "UV", "uv: aliases carry the new title");
+        CHECK(c && c->typeName == "uv" && c->title == "UV", "uv: the one node constructs");
         LibraryV1 lib;
         bool listed = false;
         for (auto item : lib.getItems())
             if (item->name == "texCoords" || item->name == "uvTransform") listed = true;
-        CHECK(!listed, "uv: the aliases are NOT palette entries");
+        CHECK(!listed, "uv: the retired names are not palette entries");
     }
     {
         Rig r; // rotation about the texture centre, 90 degrees
@@ -555,25 +555,25 @@ int main(int argc, char** argv)
         }
     }
     {
-        // TOLERANT-ABSENT: a `uvTransform` saved before rotation existed, and a
-        // `texCoords` whose widget value was never an object at all.
+        // ABSENT KEYS READ AS THE DEFAULTS: a `uv` value with no rotation/UV
+        // set, and a value that is not an object at all.
         LibraryV1 lib;
-        auto old = lib.createNode("uvTransform");
+        auto old = lib.createNode("uv");
         QJsonObject legacy;
         legacy["tileX"] = 2.0; legacy["tileY"] = 2.0;
         legacy["offsetX"] = 0.0; legacy["offsetY"] = 0.0;
         old->deserializeWidgetValue(legacy);
         const QJsonObject back = old->serializeWidgetValue().toObject();
         CHECK(near(back["rotation"].toDouble(), 0.0) && back["uvSet"].toInt() == 0,
-              "op: a pre-rotation uvTransform loads as rotation 0 / UV set 0");
-        auto bare = lib.createNode("texCoords");
-        bare->deserializeWidgetValue(QJsonValue());   // texCoords serialized nothing
+              "op: a uv value without rotation reads rotation 0 / UV set 0");
+        auto bare = lib.createNode("uv");
+        bare->deserializeWidgetValue(QJsonValue());
         const QJsonObject bareBack = bare->serializeWidgetValue().toObject();
         CHECK(near(bareBack["tileX"].toDouble(), 1.0)
               && near(bareBack["tileY"].toDouble(), 1.0)
               && near(bareBack["offsetX"].toDouble(), 0.0)
               && near(bareBack["rotation"].toDouble(), 0.0),
-              "op: a bare texCoords loads as the identity transform");
+              "op: a non-object uv value reads as the identity transform");
     }
     {
         Rig r; // texelsize Aspect (out 5): 32x64 -> W/H == 0.5
@@ -733,9 +733,9 @@ int main(int argc, char** argv)
         static_cast<TextureNode*>(tex)->setTexturePath(texPath);
         r.toMaster(tex, 0, 0);             // passthrough Base Color
         auto split = r.add("splitvector");
-        r.graph->addConnection(r.add("texCoords"), 0, split, 0);
+        r.graph->addConnection(r.add("uv"), 0, split, 0);
         r.toMaster(split, 0, 1);           // varying U -> Metallic
-        r.toMaster(r.add("texCoords"), 0, 6); // varying Alpha Cutoff
+        r.toMaster(r.add("uv"), 0, 6); // varying Alpha Cutoff
         r.toMaster(r.addVec(3, 1, 1, 1), 0, 7); // Vertex Offset fed
 
         auto info = r.info();

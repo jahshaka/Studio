@@ -15,9 +15,8 @@
 //      MATERIAL guids any more — the old primitive numbers sat on top of
 //      BuiltinShaders' 0002-0006 and were safe only because every lookup
 //      happened to be type-scoped.
-//   3. AN OLD GUID STILL RESOLVES. A favourite saved before the renumber names
-//      a guid that is no longer in the table; primitives::canonicalGuid maps it
-//      in one place, which is what the drop path asks.
+//   3. A PRE-RENUMBER GUID RESOLVES TO NOTHING (FORWARD-ONLY-1; asserted in
+//      defaults.primitive_table).
 //   4. GEAR, SPONGE, STEPS AND THE TEAPOT ARE GONE, and asking for one says so
 //      by name instead of doing nothing (which is what the old fall-through
 //      loop did for any name it did not recognise).
@@ -43,7 +42,7 @@ assert(prims.length >= 12, "the table has at least the twelve tiles (got " + pri
 
 // ---- 1. every row adds, with real geometry ---------------------------------
 // (The vertex layout itself — normals, UVs and TANGENTS on every row, plus the
-// tile icon files and the old-guid mapping — is defaults.primitive_table, which
+// tile icon files and the old-guid refusal — is defaults.primitive_table, which
 // reads the table and the resources directly. This half is the VERB: that every
 // name the drawer offers is a name the verb accepts, and that what comes back
 // is a mesh node with a box.)

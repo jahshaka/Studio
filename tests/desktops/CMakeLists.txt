@@ -1,5 +1,5 @@
 # Multiple-desktops storage tests (DESKTOPS_SPEC.md): builds the REAL
-# src/data/database/database.cpp against a throwaway SQLite file — migration,
+# src/data/database/database.cpp against a throwaway SQLite file — the fresh schema,
 # desktop filter, move round-trip, freeform position round-trip. Headless
 # (offscreen platform); never touches the user's live JahLibrary.db.
 find_package(Qt6 REQUIRED COMPONENTS Widgets Sql Multimedia Concurrent)

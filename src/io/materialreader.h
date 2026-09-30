@@ -52,28 +52,11 @@ public:
 	/// (plan item 15c: no asset file is ever copied into a folder by name).
 	QString resolveTextureGuid(const QString &guid);
 
-	/// A stored texture reference that names the OBJECT a texture was imported
-	/// inside, repaired to the member texture the SLOT must have meant — the
-	/// reader half of the 2026-09-03 save defect (SceneReader::repairTextureSlot
-	/// documents the whole story; this is the same tolerant read on the material
-	/// reader). Returns `stored` untouched when there is nothing to repair.
-	static QString repairTextureSlot(const QString &stored, const QString &slotName);
-
-	/// A saved material definition (shaderGuid + values) as a PbrMaterial.
-	///
-	/// It returns a PbrMaterial because since HLMS_ADOPTION P4b there IS no
-	/// other material class: the six reserved builtins are PbrMaterial PRESETS
-	/// (io/builtinmaterials.h), and anything else legacy has its recognisable
-	/// uniform names mapped across. A definition this cannot understand yields
-	/// a DEFAULT PbrMaterial, never null and never a load failure — the reserved
-	/// guids are permanent, and a scene naming one must open.
-	iris::PbrMaterialPtr parseMaterial(QJsonObject matObject, Database* handle, bool loadTextures = true);
 
 	// Dispatches on the "materialType" tag SceneWriter stamps on every saved
 	// material: "pbr" rebuilds a PbrMaterial from its own rows (which is what
-	// a bundle definition, graph payload and all, carries); anything else — a
-	// reserved builtin guid, a legacy material — goes through parseMaterial's
-	// conversion. EVERY branch yields a PbrMaterial.
+	// a bundle definition, graph payload and all, carries); anything else is
+	// REFUSED (logged) and yields the default PbrMaterial. Never null.
 	iris::MaterialPtr parseMaterialTyped(QJsonObject matObject, Database* handle, bool loadTextures = true);
 
 	// (parseShaderAsPbr and shaderDefinitionAsPbr are DELETED —
@@ -87,14 +70,9 @@ public:
 	// so these had no content left to read.)
 
 	iris::PbrMaterialPtr parsePbrMaterial(QJsonObject matObject, Database* handle, bool loadTextures = true);
-	/// The PbrMaterial a reserved BUILTIN guid now stands for, with the saved
-	/// values applied — the reader half of the builtin retirement.
-	iris::PbrMaterialPtr createMaterialFromShaderGuid(QString shaderGuid, Database* db,
-	                                                  const QJsonObject &values = QJsonObject());
+	/// The row's stored definition blob (the shader-piece regeneration).
 	QJsonObject getShaderObjectFromId(QString shaderGuid, Database* db);
-	QJsonObject convertV1MaterialToV2(QJsonObject mat);
 
-	int getMaterialVersion(QJsonObject oldMatObj);
 
 // (readJahShader/getParsedShader and the `parsedShader` member they filled
 // were removed with the deep-audit 2026-09 pass: zero callers, and

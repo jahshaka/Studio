@@ -34,7 +34,7 @@ For more information see the LICENSE file
 // folder for everybody, and the row would then vanish from every listing
 // (`fetchChildAssets` matches on project_guid, which a library row does not
 // have). A pin's filing is therefore a column on the PIN: `project_assets.
-// folder` (Database::migrateProjectAssetsTable adds it in place). This service
+// folder`. This service
 // is the only place that has to know which of the two a guid takes — `file`
 // decides, `folderOf` answers, and everything above them speaks in guids.
 //

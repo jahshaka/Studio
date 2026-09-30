@@ -186,16 +186,6 @@ QStringList hidden(Database *db, const QString &projectGuid, const QVector<Asset
         }
         // 2. a mesh is the inside of a model.
         if (isType(record, ModelTypes::Mesh)) { out.append(record.guid); continue; }
-        // 2b. a ModelTypes::SHADER row: the Materials module's old separate
-        //     graph asset (MATERIAL_BUNDLE_SPEC phase 2, owner Q3 "only
-        //     materials"). Nothing in the app can mint one any more and
-        //     nothing can read one — the readers went with the two minting
-        //     sites — so a library that predates the bundle model may still
-        //     hold such a row, and a tile for it would be a tile that cannot
-        //     be opened, applied or previewed. Not a data change: the row is
-        //     untouched and goes with the next data wipe (spec 7, no
-        //     migration is owed).
-        if (isType(record, ModelTypes::Shader)) { out.append(record.guid); continue; }
         // 3. the model and the clips an avatar in this project owns.
         if (claimed.contains(record.guid)
             && (isType(record, ModelTypes::Object) || isType(record, ModelTypes::Animation))) {
@@ -360,12 +350,10 @@ namespace {
 
 /// WHICH LIBRARY RULE DROPS A ROW, if any — the one classification behind
 /// libraryHidden and libraryMembers, so the two can never disagree.
-enum class LibraryFold { Shown, Shader, Member };
+enum class LibraryFold { Shown, Member };
 
 LibraryFold libraryFoldOf(Database *db, const AssetRecord &record, bool askMembers)
 {
-    // 2b. a legacy Shader row (the Assets page used to skip it inline).
-    if (isType(record, ModelTypes::Shader)) return LibraryFold::Shader;
     // 6. a picture that arrived inside a material bundle (V-2). The cheap half
     //    of the test reads the record's own properties; only a stamped row costs
     //    a query, and a library holds few of those (the preset seed's maps, a
@@ -382,7 +370,6 @@ QStringList libraryHidden(Database *db, const QVector<AssetRecord> &records, boo
     if (!db) return out;
     for (const AssetRecord &record : records) {
         switch (libraryFoldOf(db, record, /*askMembers=*/!showMembers)) {
-        case LibraryFold::Shader:      out.append(record.guid); break;
         case LibraryFold::Member:      if (!showMembers) out.append(record.guid); break;
         case LibraryFold::Shown:       break;
         }

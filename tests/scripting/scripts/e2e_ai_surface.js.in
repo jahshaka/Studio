@@ -89,17 +89,10 @@ for (var i = 0; i < legacy.length; ++i) {
             edit[key] = fixtures + "/tiny.png";
             material.set(cube, edit);
         };
-    })(legacy[i]), "F7: material.set refuses the legacy key '" + legacy[i] + "'");
-    assert(msg.indexOf("baseColorMap") >= 0,
-           "and the error names the real PBR slots: " + msg);
+    })(legacy[i]), "F7: material.set refuses the retired key '" + legacy[i] + "'");
+    assert(msg.indexOf("unknown property") >= 0 && msg.indexOf("baseColorMap") >= 0,
+           "as an UNKNOWN property, and the error names the real PBR slots: " + msg);
 }
-// The named replacements are spelled out for the two that have one.
-assert(refuses(function () { material.set(cube, { diffuseTexture: fixtures + "/tiny.png" }); })
-           .indexOf("use 'baseColorMap'") >= 0,
-       "diffuseTexture is redirected to baseColorMap by name");
-assert(refuses(function () { material.set(cube, { normalTexture: fixtures + "/tiny.png" }); })
-           .indexOf("use 'normalMap'") >= 0,
-       "normalTexture is redirected to normalMap by name");
 
 // The real key still works — the refusal is about the SPELLING, not the slot.
 assert(material.set(cube, { baseColorMap: fixtures + "/tiny.png" }) === true,

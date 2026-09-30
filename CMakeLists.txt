@@ -303,6 +303,7 @@ set(SRCS
     src/services/assetmetadata.cpp
     src/services/libraryassetnode.cpp
     src/services/libraryreset.cpp
+    src/services/librarygeneration.cpp
     src/bridge/assetthumbnail.cpp
     src/services/rigsignature.cpp
     src/services/animationfile.cpp
@@ -411,7 +412,6 @@ set(SRCS
     src/ui/panels/propertywidgets/meshpropertywidget.cpp
     src/ui/panels/propertywidgets/mobilitypropertywidget.cpp
     src/ui/panels/propertywidgets/componentspropertywidget.cpp
-    src/ui/panels/propertywidgets/shaderpropertywidget.cpp 
     src/ui/panels/propertywidget.cpp
     src/ui/panels/propertyrows.cpp 
     src/ui/dialogs/newprojectdialog.cpp 
@@ -482,7 +482,6 @@ set(SRCS
     src/services/subscriber.cpp
     src/services/scenenodehelper.cpp
     src/app/notices.cpp
-    src/app/upgrader.cpp
     thirdparty/qtawesome/QtAwesome.cpp
     thirdparty/qtawesome/QtAwesomeAnim.cpp
     src/ui/style/stylesheet.cpp
@@ -601,6 +600,7 @@ set(HEADERS
     src/services/assetmetadata.h
     src/services/libraryassetnode.h
     src/services/libraryreset.h
+    src/services/librarygeneration.h
     src/bridge/assetthumbnail.h
     src/services/rigsignature.h
     src/services/animationfile.h
@@ -702,7 +702,6 @@ set(HEADERS
     src/io/materialreader.h 
     src/ui/controls/filepickerwidget.h 
     src/ui/panels/propertywidgets/meshpropertywidget.h 
-    src/ui/panels/propertywidgets/shaderpropertywidget.h 
     src/ui/panels/propertywidget.h 
     src/ui/controls/basewidget.h 
     src/ui/dialogs/newprojectdialog.h 
@@ -768,7 +767,6 @@ set(HEADERS
     src/services/assethelper.h
     src/services/subscriber.h
     src/services/scenenodehelper.h
-    src/app/upgrader.h
     thirdparty/qtawesome/QtAwesome.h
     thirdparty/qtawesome/QtAwesomeAnim.h 
     src/ui/style/stylesheet.h

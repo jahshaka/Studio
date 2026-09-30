@@ -1,8 +1,8 @@
 // Raw export + manifest v2 (ASSET_PIPELINE_SPEC §3.3 phase-5 front half):
-// LegacyStoreContentSource over a fixture store, RawExporter round-trip
+// a folder-per-guid fixture content source (test-local), RawExporter round-trip
 // (export -> files on disk -> manifest parses back), content dedup by oid,
 // name-collision dedup, DB-only rows, the flat-folder fallback, manifest-only
-// mode, and v1/v2 manifest reader acceptance. Pure QtCore, no scene.
+// mode, and the manifest reader (v2 read, v1 refused). Pure QtCore, no scene.
 
 #include <QCoreApplication>
 #include <QCryptographicHash>
@@ -44,6 +44,33 @@ static QByteArray readFile(const QString &path)
     return f.open(QIODevice::ReadOnly) ? f.readAll() : QByteArray();
 }
 
+/// The FIXTURE content source: <root>/<guid>/<files>, name-sorted, hashed. A
+/// test double for RawExporter (production exports read the CAS through
+/// CasContentSource); the per-guid store layout it mimics is gone from the app.
+class FixtureContentSource : public ExportContentSource
+{
+public:
+    explicit FixtureContentSource(const QString &root) : mRoot(root) {}
+    QVector<Entry> filesForAsset(const QString &guid, const QString & = QString()) override
+    {
+        QVector<Entry> entries;
+        const QDir folder(QDir(mRoot).filePath(guid));
+        if (!folder.exists()) return entries;
+        for (const QFileInfo &fi : folder.entryInfoList(QDir::Files | QDir::Readable, QDir::Name)) {
+            Entry e;
+            e.role = QStringLiteral("source");
+            e.name = fi.fileName();
+            e.path = fi.absoluteFilePath();
+            e.size = fi.size();
+            e.oid = sha256(readFile(e.path));
+            entries.append(e);
+        }
+        return entries;
+    }
+private:
+    QString mRoot;
+};
+
 int main(int argc, char **argv)
 {
     QCoreApplication app(argc, argv);
@@ -62,25 +89,10 @@ int main(int argc, char **argv)
     CHECK(writeFile(store + "/guidC/skin.png", otherBytes), "fixture guidC/skin.png (different bytes)");
     // guidD has no folder at all (a DB-only row)
 
-    // ---- content source ----
-    {
-        LegacyStoreContentSource src(store);
-        const auto a = src.filesForAsset("guidA");
-        CHECK(a.size() == 2, "guidA lists 2 files");
-        CHECK(!a.isEmpty() && a.first().name == "model.glb", "name-sorted listing");
-        CHECK(!a.isEmpty() && a.first().size == modelBytes.size(), "size recorded");
-        CHECK(!a.isEmpty() && a.first().oid == sha256(modelBytes), "oid = sha256 of bytes");
-        CHECK(src.filesForAsset("guidD").isEmpty(), "missing folder = zero files, not an error");
-
-        LegacyStoreContentSource noHash(store, false);
-        const auto nh = noHash.filesForAsset("guidA");
-        CHECK(!nh.isEmpty() && nh.first().oid.isEmpty(), "hashing can be skipped (oid empty)");
-    }
-
     // ---- raw export round-trip ----
     const QString outDir = tmp.filePath("out");
     {
-        LegacyStoreContentSource src(store);
+        FixtureContentSource src(store);
         QVector<RawExporter::AssetInfo> assets;
         assets.append({ "guidA", "model.glb", "object", 5, { "guidB", "guidC" } });
         assets.append({ "guidB", "skin.png", "texture", 2, {} });
@@ -120,7 +132,7 @@ int main(int argc, char **argv)
 
     // ---- manifest-only mode (project.exportManifest's path) ----
     {
-        LegacyStoreContentSource src(store);
+        FixtureContentSource src(store);
         QVector<RawExporter::AssetInfo> assets;
         assets.append({ "guidA", "model.glb", "object", 5, {} });
         const QString mdir = tmp.filePath("manifest-only");
@@ -136,22 +148,20 @@ int main(int argc, char **argv)
 
     // ---- error paths ----
     {
-        LegacyStoreContentSource src(store);
+        FixtureContentSource src(store);
         const auto r = RawExporter::exportAssets({}, src, tmp.filePath("x"));
         CHECK(!r.ok, "empty asset list refused");
         const auto r2 = RawExporter::exportAssets({ { "g", "n", "object", 5, {} } }, src, "");
         CHECK(!r2.ok, "empty destination refused");
     }
 
-    // ---- manifest reader: v1 acceptance + rejects ----
+    // ---- manifest reader: the retired v1 one-word manifest is refused ----
     {
         QString err;
-        auto v1 = exportformat::ExportManifest::fromBytes("object\n", &err);
-        CHECK(v1.isValid() && v1.version == 1 && v1.kind == "object", "v1 'object' accepted");
-        v1 = exportformat::ExportManifest::fromBytes("bundle", &err);
-        CHECK(v1.isValid() && v1.version == 1 && v1.kind == "bundle", "v1 'bundle' accepted");
-        auto bad = exportformat::ExportManifest::fromBytes("garbage-word", &err);
-        CHECK(!bad.isValid(), "unknown v1 word rejected");
+        auto bad = exportformat::ExportManifest::fromBytes("object\n", &err);
+        CHECK(!bad.isValid(), "a v1 one-word manifest ('object') is refused");
+        bad = exportformat::ExportManifest::fromBytes("garbage-word", &err);
+        CHECK(!bad.isValid(), "a non-JSON word is refused");
         bad = exportformat::ExportManifest::fromBytes("{\"format\":\"other\"}", &err);
         CHECK(!bad.isValid(), "foreign JSON rejected");
         bad = exportformat::ExportManifest::fromBytes("", &err);

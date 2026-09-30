@@ -23,52 +23,6 @@ For more information see the LICENSE file
 
 namespace {
 
-// THE RESERVED GUIDS, spelled out here rather than read from
-// Constants::Reserved::BuiltinShaders. That map still exists and still points
-// each guid at a `.shader` FILE — those files stay on disk as the record of
-// what the uniforms were, and of what a legacy `values{}` block's key names
-// mean — but nothing loads one as a shader any more, and this translation must
-// not need the app's constants table to run. (It is what lets the mirror suite,
-// which links no Studio code, drive the conversion directly.)
-const char *kDefault         = "00000000-0000-0000-0000-000000000001";
-const char *kDefaultAnimated = "00000000-0000-0000-0000-000000000002";
-const char *kEdgeMaterial    = "00000000-0000-0000-0000-000000000003";
-const char *kFlat            = "00000000-0000-0000-0000-000000000004";
-const char *kGlass           = "00000000-0000-0000-0000-000000000005";
-const char *kMatcap          = "00000000-0000-0000-0000-000000000006";
-
-QColor colourOf(const QJsonObject &values, const char *key, bool *found = nullptr)
-{
-    const QJsonValue v = values.value(QLatin1String(key));
-    if (found) *found = false;
-    if (!v.isString()) return QColor();
-    QColor c;
-    c.setNamedColor(v.toString());
-    if (!c.isValid()) return QColor();
-    if (found) *found = true;
-    return c;
-}
-
-bool floatOf(const QJsonObject &values, const char *key, float &out)
-{
-    const QJsonValue v = values.value(QLatin1String(key));
-    if (!v.isDouble()) return false;
-    out = float(v.toDouble());
-    return true;
-}
-
-/// `key` is the LEGACY name the value was stored under; `slot` is the PBR row
-/// it lands in. The resolver is given the SLOT, because that is what says which
-/// of an imported model's textures a bare object guid meant
-/// (BuiltinMaterials::TextureResolver).
-QString textureOf(const QJsonObject &values, const char *key, const char *slot,
-                  const BuiltinMaterials::TextureResolver &resolve)
-{
-    const QString stored = values.value(QLatin1String(key)).toString();
-    if (stored.isEmpty() || !resolve) return QString();
-    return resolve(stored, QLatin1String(slot));
-}
-
 /// THE SHININESS REMAP, and it is the mirror's, not a new one
 /// (SceneMirror::toPbrParams). Legacy Blinn shininess is inverse-sense and
 /// assimp encodes glTF roughness into it as (1-r)^2 * 1000, so the 128 clamp
@@ -81,155 +35,7 @@ float roughnessFromShininess(float shininess)
     return 1.0f - std::sqrt(s / 128.0f) * 0.9f;
 }
 
-/// The values every legacy Default-family material carries, applied onto `mat`.
-/// Shared by the Default/DefaultAnimated builtins and by the unknown-shader
-/// fallback, because a stranger's `.shader` uniforms were almost always copies
-/// of Default's.
-void applyDefaultFamily(const iris::PbrMaterialPtr &mat, const QJsonObject &values,
-                        const BuiltinMaterials::TextureResolver &resolve)
-{
-    bool found = false;
-    // The colour, under any of the four spellings the tree has used.
-    for (const char *key : { "diffuseColor", "color", "albedo", "baseColor" }) {
-        const QColor c = colourOf(values, key, &found);
-        if (found) { mat->setValue(QStringLiteral("baseColor"), c); break; }
-    }
-
-    // Roughness: a real roughness wins; shininess is only CONSULTED when there
-    // is none. (This ordering is the mirror's, and it exists because running
-    // the shininess remap unconditionally stamped over every imported glTF
-    // roughness.)
-    float f = 0.0f;
-    if (floatOf(values, "roughness", f) || floatOf(values, "roughnessFactor", f))
-        mat->setValue(QStringLiteral("roughness"), f);
-    else if (floatOf(values, "shininess", f))
-        mat->setValue(QStringLiteral("roughness"), roughnessFromShininess(f));
-
-    if (floatOf(values, "metallic", f) || floatOf(values, "metalness", f))
-        mat->setValue(QStringLiteral("metallic"), f);
-    if (floatOf(values, "textureScale", f))
-        mat->setValue(QStringLiteral("textureScale"), f);
-    if (floatOf(values, "normalIntensity", f) || floatOf(values, "normalFactor", f))
-        mat->setValue(QStringLiteral("normalFactor"), f);
-
-    // `useAlpha` meant "respect the diffuse texture's alpha channel", which is
-    // glTF BLEND. It reached nothing in the engine before this (the mirror
-    // never read it), so honouring it is a small restoration, not a change.
-    if (values.value(QLatin1String("useAlpha")).toBool(false))
-        mat->setValue(QStringLiteral("alphaMode"), 2);
-
-    for (const char *key : { "diffuseTexture", "baseColorMap", "albedoMap" }) {
-        const QString p = textureOf(values, key, "baseColorMap", resolve);
-        if (!p.isEmpty()) { mat->setValue(QStringLiteral("baseColorMap"), p); break; }
-    }
-    for (const char *key : { "normalTexture", "normalMap" }) {
-        const QString p = textureOf(values, key, "normalMap", resolve);
-        if (!p.isEmpty()) { mat->setValue(QStringLiteral("normalMap"), p); break; }
-    }
-    const QString em = textureOf(values, "emissiveMap", "emissiveMap", resolve);
-    if (!em.isEmpty()) mat->setValue(QStringLiteral("emissiveMap"), em);
-
-    // NOT CARRIED, and deliberately: ambientColor, specularColor,
-    // specularTexture, reflectionTexture, reflectionInfluence. There is no
-    // metallic-roughness parameter for any of them, and the renderer has not
-    // read one of them for as long as the engine viewport has existed — the
-    // loss is being made explicit here, not created here.
-}
-
 } // namespace
-
-namespace BuiltinMaterials {
-
-QString builtinName(const QString &shaderGuid)
-{
-    if (shaderGuid == QLatin1String(kDefault))         return QStringLiteral("Default");
-    if (shaderGuid == QLatin1String(kDefaultAnimated)) return QStringLiteral("DefaultAnimated");
-    if (shaderGuid == QLatin1String(kEdgeMaterial))    return QStringLiteral("EdgeMaterial");
-    if (shaderGuid == QLatin1String(kFlat))            return QStringLiteral("Flat");
-    if (shaderGuid == QLatin1String(kGlass))           return QStringLiteral("Glass");
-    if (shaderGuid == QLatin1String(kMatcap))          return QStringLiteral("Matcap");
-    return QString();
-}
-
-bool isBuiltin(const QString &shaderGuid)
-{
-    return !builtinName(shaderGuid).isEmpty();
-}
-
-iris::PbrMaterialPtr fromBuiltin(const QString &shaderGuid, const QJsonObject &values,
-                                 const TextureResolver &resolveTexture)
-{
-    auto mat = iris::PbrMaterial::create();
-    mat->setName(builtinName(shaderGuid));
-    mat->setGuid(shaderGuid);
-
-    if (shaderGuid == QLatin1String(kFlat)) {
-        // D-P4b, and the reason P4a came first: `Flat` was the one builtin with
-        // NO metallic-roughness equivalent — a flat unlit colour is not a PBR
-        // surface with the lighting turned down, it is the other shading model.
-        // Now that the renderer has one, Flat is simply an Unlit preset and the
-        // conversion is exact rather than approximate.
-        mat->setValue(QStringLiteral("shadingModel"), 1);
-        bool found = false;
-        const QColor c = colourOf(values, "color", &found);
-        mat->setValue(QStringLiteral("baseColor"), found ? c : QColor(255, 255, 255));
-        return mat;
-    }
-
-    if (shaderGuid == QLatin1String(kGlass)) {
-        // The three legacy uniforms (refractivity / Influence / Transparency)
-        // parameterise a hand-written refraction shader that no longer exists,
-        // and none of them is a metallic-roughness quantity. The preset is the
-        // drawer's Glass PBR (app/content/materials/Glass-pbr.material) — the
-        // same values the 2026-08-31 sample conversion already applied to every
-        // shipped Glass material, so shipped content does not move.
-        mat->setValue(QStringLiteral("baseColor"), QColor(QStringLiteral("#EEF4F8")));
-        mat->setValue(QStringLiteral("metallic"), 0.0f);
-        mat->setValue(QStringLiteral("roughness"), 0.05f);
-        mat->setValue(QStringLiteral("alphaMode"), 3);   // Glass
-        mat->setValue(QStringLiteral("alpha"), 0.3f);
-        return mat;
-    }
-
-    if (shaderGuid == QLatin1String(kMatcap)) {
-        // A matcap is a pre-lit sphere image: a SHADING MODEL, not a texture
-        // slot, so there is no honest slot to bind matTexture into. The drawer's
-        // Silver PBR is what the sample conversion chose for exactly this case
-        // and it is what a matcap most often stood in for.
-        mat->setValue(QStringLiteral("baseColor"), QColor(QStringLiteral("#F5F5F7")));
-        mat->setValue(QStringLiteral("metallic"), 1.0f);
-        mat->setValue(QStringLiteral("roughness"), 0.22f);
-        return mat;
-    }
-
-    if (shaderGuid == QLatin1String(kEdgeMaterial)) {
-        // The base colour carries; the fresnel rim (edge_color, fresnelPow)
-        // does not, because a rim term is shading and not a material parameter.
-        // Anything wanting it back builds it in the graph.
-        bool found = false;
-        const QColor c = colourOf(values, "color", &found);
-        mat->setValue(QStringLiteral("baseColor"), found ? c : QColor(255, 255, 255));
-        mat->setValue(QStringLiteral("metallic"), 0.0f);
-        mat->setValue(QStringLiteral("roughness"), 0.5f);
-        return mat;
-    }
-
-    // Default and DefaultAnimated. They differ only in that the animated one
-    // was compiled with skinning — which is geometry, not material — so ONE
-    // conversion serves both.
-    applyDefaultFamily(mat, values, resolveTexture);
-    return mat;
-}
-
-iris::PbrMaterialPtr fromLegacyValues(const QJsonObject &values,
-                                      const TextureResolver &resolveTexture)
-{
-    auto mat = iris::PbrMaterial::create();
-    applyDefaultFamily(mat, values, resolveTexture);
-    return mat;
-}
-
-} // namespace BuiltinMaterials
 
 namespace BuiltinMaterials {
 
@@ -259,12 +65,6 @@ iris::PbrMaterialPtr fromPreset(const MaterialPreset &preset)
         return mat;
     }
 
-    // (THE LEGACY FLAVOUR IS GONE — MATERIAL_BUNDLE_SPEC phase 3's Deletes.
-    // The fourteen pre-PBR `.material` files it converted are deleted, and
-    // the preset list has skipped every non-PBR file since the HLMS adoption,
-    // so no preset of that shape can reach this function any more. A
-    // Blinn-era material inside a SCENE still converts — that is
-    // `fromLegacyValues`, which is a different door and stays.)
     return mat;
 }
 
@@ -371,33 +171,6 @@ iris::PbrMaterialPtr fromMeshData(const iris::MeshMaterialData &data)
     // specularTexture / hightTexture have no metallic-roughness home, and never
     // reached the renderer through the old path either.
     return mat;
-}
-
-QJsonObject normaliseLegacyDefinition(const QJsonObject &definition)
-{
-    QJsonObject out;
-    for (auto it = definition.constBegin(); it != definition.constEnd(); ++it) {
-        const QString &key = it.key();
-        if (key == QLatin1String("diffuseColor"))        out[QStringLiteral("baseColor")] = it.value();
-        else if (key == QLatin1String("color"))          out[QStringLiteral("baseColor")] = it.value();
-        else if (key == QLatin1String("diffuseTexture")) out[QStringLiteral("baseColorMap")] = it.value();
-        else if (key == QLatin1String("normalTexture"))  out[QStringLiteral("normalMap")] = it.value();
-        else if (key == QLatin1String("normalIntensity"))out[QStringLiteral("normalFactor")] = it.value();
-        else if (key == QLatin1String("shininess"))
-            out[QStringLiteral("roughness")] = double(roughnessFromShininess(float(it.value().toDouble())));
-        // Dropped, with no equivalent: ambientColor, specularColor,
-        // specularTexture, reflectionTexture, reflectionInfluence, useAlpha's
-        // shader-side meaning. See applyDefaultFamily for why.
-        else if (key == QLatin1String("ambientColor") || key == QLatin1String("specularColor") ||
-                 key == QLatin1String("specularTexture") || key == QLatin1String("reflectionTexture") ||
-                 key == QLatin1String("reflectionInfluence"))
-            continue;
-        else out[key] = it.value();
-    }
-    // An explicit PBR spelling always wins over one derived from a legacy key.
-    for (const char *pbrKey : { "baseColor", "baseColorMap", "normalMap", "normalFactor", "roughness" })
-        if (definition.contains(QLatin1String(pbrKey))) out[QLatin1String(pbrKey)] = definition.value(QLatin1String(pbrKey));
-    return out;
 }
 
 }

@@ -240,6 +240,7 @@ int main(int argc, char** argv)
             g["nodes"] = nodes;
             g["connections"] = cons;
             g["masternode"] = QString::fromLatin1(masterId);
+            g["socketLayout"] = NodeGraph::kSocketLayoutVersion;
             g["materialGuid"] = QString();
             return g;
         };
@@ -303,8 +304,6 @@ int main(int argc, char** argv)
             const auto result = PbrGraphEvaluator::evaluate(graph);
             CHECK(near(float(result.values["roughness"].toDouble(-1)), 0.35f),
                   "refuse: ... and its values are untouched by the guard");
-            CHECK(graph && graph->migrationNotes.isEmpty(),
-                  "refuse: a PBR graph carries no migration note");
         }
 
         // (c2) NO MASTER AT ALL, three ways (fix round). A file with no
@@ -389,7 +388,7 @@ int main(int argc, char** argv)
         CHECK(presetFiles.size() == 20,
               "shipped: twenty presets, and they are the WHOLE shipped set");
 
-        int noGraph = 0, notPbr = 0, migrated = 0, unsupported = 0, disagreed = 0;
+        int noGraph = 0, notPbr = 0, unsupported = 0, disagreed = 0;
         int texturedSockets = 0, bakedSockets = 0;
         for (const QString &file : presetFiles) {
             QFile mf(file);
@@ -415,10 +414,6 @@ int main(int argc, char** argv)
                 std::printf("      NOT a PBR graph: %s\n", qPrintable(name));
                 ++notPbr;
                 continue;
-            }
-            if (!graph->migrationNotes.isEmpty()) {
-                std::printf("      still migrates on load: %s\n", qPrintable(name));
-                ++migrated;
             }
             const auto result = PbrGraphEvaluator::evaluate(graph);
             if (!result.unsupportedNodes.isEmpty()) {
@@ -514,7 +509,6 @@ int main(int argc, char** argv)
         }
         CHECK(noGraph == 0, "shipped: EVERY preset names a graph, and it is there");
         CHECK(notPbr == 0, "shipped: ... every one of them has a PbrMaterial master");
-        CHECK(migrated == 0, "shipped: ... and not one still needs migrating on load");
         CHECK(unsupported == 0, "shipped: ... nothing in them evaluates unsupported");
         CHECK(disagreed == 0,
               "shipped: a preset's GRAPH and its authored VALUES describe the same material");
@@ -527,8 +521,7 @@ int main(int argc, char** argv)
     // ---- blend modes (IMAGE_PLANE_SPEC §9): MaterialSettings passes through --
     // The master's Blend Mode is material state: the evaluator lands it on
     // alphaMode (Additive=4, Modulate=5 — 3 is Glass), Opaque keeps the auto
-    // rules, and the setting round-trips serialization under the new names
-    // (legacy "Blend" still reads as Translucent).
+    // rules, and the setting round-trips serialization under the new names.
     {
         auto makeGraph = []() {
             auto graph = new NodeGraph();
@@ -585,12 +578,17 @@ int main(int argc, char** argv)
             const MaterialSettings back = NodeGraph::deserializeMaterialSettings(obj);
             CHECK(back.blendMode == mode, "blend: mode survives settings serialize round-trip");
         }
-        // legacy files: "Blend" (also what Additive wrongly serialized as
-        // before this feature) reads as Translucent
-        QJsonObject legacy = graph->serializeMaterialSettings();
-        legacy["blendMode"] = "Blend";
-        CHECK(NodeGraph::deserializeMaterialSettings(legacy).blendMode == BlendMode::Translucent,
-              "blend: legacy 'Blend' string reads as Translucent");
+        // Translucent is WRITTEN as "Translucent"; the retired "Blend" string
+        // is not an alias any more (FORWARD-ONLY-1) — it reads as the default.
+        MaterialSettings translucent = graph->settings;
+        translucent.blendMode = BlendMode::Translucent;
+        graph->setMaterialSettings(translucent);
+        CHECK(graph->serializeMaterialSettings()["blendMode"].toString() == "Translucent",
+              "blend: Translucent is written as 'Translucent'");
+        QJsonObject retired = graph->serializeMaterialSettings();
+        retired["blendMode"] = "Blend";
+        CHECK(NodeGraph::deserializeMaterialSettings(retired).blendMode == BlendMode::Opaque,
+              "blend: the retired 'Blend' string is not read as Translucent");
     }
 
     QFile::remove(texPath);

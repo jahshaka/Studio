@@ -528,11 +528,9 @@ void GraphNodeScene::dropEvent(QGraphicsSceneDragDropEvent * event)
 	// A MATERIAL BUNDLE opens in the graph editor (MATERIAL_BUNDLE_SPEC 2.3):
 	// the tiles carry ModelTypes::Material now, and this gate named only
 	// Shader — so dragging a material onto the canvas did nothing at all.
-	// Shader is kept beside it for rows that still arrive from disk.
 	{
 		const int droppedType = QVariant(event->mimeData()->data("MODEL_TYPE_ROLE")).toInt();
-		if (droppedType == static_cast<int>(ModelTypes::Material)
-		    || droppedType == static_cast<int>(ModelTypes::Shader)) {
+		if (droppedType == static_cast<int>(ModelTypes::Material)) {
 		event->accept();
 
 		emit loadGraph(QString::fromUtf8(event->mimeData()->data("MODEL_GUID_ROLE")));

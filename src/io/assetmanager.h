@@ -120,21 +120,6 @@ struct AssetTexture : public Asset
     }
 };
 
-struct AssetShader : public Asset
-{
-	AssetShader() {
-		type = ModelTypes::Shader;
-	}
-
-	virtual QVariant getValue() {
-		return value;
-	}
-
-	virtual void setValue(QVariant val) {
-		value = val;
-	}
-};
-
 struct AssetParticleSystem : public Asset
 {
     AssetParticleSystem() {

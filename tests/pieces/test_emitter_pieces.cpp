@@ -267,7 +267,7 @@ int main(int argc, char **argv)
         // exists to fix; the second block below pins that.)
         Rig r;
         auto sum = r.add("add");
-        r.connect(r.add("texCoords"), 0, sum, 0);
+        r.connect(r.add("uv"), 0, sum, 0);
         r.connect(r.addColor(0.2, 0.4, 0.8), 0, sum, 1);
         r.toMaster(sum, 0, 0);
         const auto compiled = materials::GraphBaker::compile(r.graph);
@@ -316,7 +316,7 @@ int main(int argc, char **argv)
         // The coverage table is part of the contract: a silently shrinking op
         // list would quietly move graphs back onto the baker.
         const QStringList &ops = PieceEmitter::supportedOps();
-        CHECK(ops.size() >= 45, "the emitter lowers at least 45 op keys");
+        CHECK(ops.size() >= 44, "the emitter lowers at least 44 op keys (the retired texCoords/uvTransform aliases are gone)");
         for (const char *must : { "add", "lerp", "clamp", "pulsate", "time", "flipbook",
                                   "normalize", "smoothstep", "composevector" })
             CHECK(ops.contains(QString::fromLatin1(must)),

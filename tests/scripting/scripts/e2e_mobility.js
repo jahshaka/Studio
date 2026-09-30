@@ -164,27 +164,18 @@ reads(byName("M_movable"), "movable", "user", "REOPENED: ...and resolves from th
 assert(node.mobility(byName("M_movable")).graphStatic === false,
        "REOPENED: ...and the load-time pass kept it out of the static graph half");
 
-// ---- A SCENE WRITTEN BEFORE MOBILITY STILL OPENS THE SAME WAY ------------
-// v2 wrote a boolean "static" key (true = the user pinned it static, false =
-// the user pinned it dynamic). The reader still understands it; the writer
-// never produces it again. node.serialize/deserialize is the same
-// writer/reader pair the scene file uses, so editing a fragment by hand is the
-// honest way to build "a file from before the change" inside a script.
+// ---- THE RETIRED BOOLEAN "static" KEY IS NOT READ (FORWARD-ONLY-1) ---------
+// v2 wrote a boolean "static" key; this build writes and reads only
+// "mobility". node.serialize/deserialize is the scene file's writer/reader
+// pair, so editing a fragment by hand is the honest way to hand it one.
 var fragment = node.serialize(byName("M_static"));
 assert(fragment.node.mobility === "static",
        "the writer emits the NEW key (and only when a human set it)");
 delete fragment.node.mobility;
-fragment.node["static"] = true;                    // the v2 spelling
+fragment.node["static"] = true;                    // the retired spelling
 var legacyStatic = node.deserialize(fragment, "", -1);
-assert(node.mobility(legacyStatic).setting === "static",
-       "LEGACY: the old `static: true` still reads as Static");
-
-var fragment2 = node.serialize(byName("M_movable"));
-delete fragment2.node.mobility;
-fragment2.node["static"] = false;                  // v2's "Dynamic"
-var legacyDynamic = node.deserialize(fragment2, "", -1);
-assert(node.mobility(legacyDynamic).setting === "movable",
-       "LEGACY: the old `static: false` (Dynamic) reads as Movable — same meaning");
+assert(node.mobility(legacyStatic).setting === "auto",
+       "RETIRED: `static: true` is ignored — the node resolves automatically");
 
 // A SCENE SAVED BEFORE THE PHYSICS BLOCK CARRIED A TYPE reads back as type
 // "none" (a missing key is 0), so it must classify like the shape-only body

@@ -22,6 +22,9 @@ For more information see the LICENSE file
 
 #include "services/loadtimeline.h"
 #include "services/meshbakestore.h"
+#include "irisgl/core/logger.h"
+#include "services/assetstorepaths.h"
+#include <QSqlDatabase>
 
 SceneOpenRunner::SceneOpenRunner(Database *db, Project *project, QObject *parent)
     : QObject(parent), db(db), project(project),
@@ -44,6 +47,9 @@ void SceneOpenRunner::setPlan(const QStringList &modelPaths, const QVector<Slice
     // The bake PLAN is resolved HERE, on the UI thread that owns the database
     // connection (MESH_BAKE_SPEC phase 1): the worker only ever reads files.
     mModelPaths = modelPaths;
+    mRebuild = MeshBakeStore::staleJobsFor(QSqlDatabase::database(), AssetStorePaths::root(),
+                                           modelPaths);
+    mRebuildDone = mRebuild.isEmpty();
     mPlan.clear();
     mPlan.reserve(modelPaths.size());
     for (const QString &path : modelPaths) mPlan.append(MeshBakeStore::planFor(path));
@@ -70,6 +76,37 @@ void SceneOpenRunner::start()
 
 void SceneOpenRunner::runWorker()
 {
+    // THE STALE BAKES FIRST (D1): rebuilt here, committed and re-planned on
+    // the UI thread (the catalog), then this worker is started again for the
+    // prewarm proper.
+    if (!mRebuildDone) {
+        auto results = std::make_shared<QVector<MeshBakeStore::BakeResult>>();
+        const int n = mRebuild.size();
+        for (int i = 0; i < n; ++i) {
+            if (mAborted.load()) break;
+            QMetaObject::invokeMethod(this, [this, i, n]() {
+                emit progress(5 + (20 * i) / qMax(1, n),
+                              QStringLiteral("Rebuilding models (%1 of %2)…").arg(i + 1).arg(n));
+            }, Qt::QueuedConnection);
+            results->append(MeshBakeStore::runBake(mRebuild.at(i)));
+        }
+        QMetaObject::invokeMethod(this, [this, results]() {
+            QSqlDatabase conn = QSqlDatabase::database();
+            const QString root = AssetStorePaths::root();
+            for (MeshBakeStore::BakeResult &result : *results) {
+                QString error;
+                if (!MeshBakeStore::commitBake(conn, root, result, &error))
+                    irisLog(QStringLiteral("open: a stale bake could not be rebuilt (%1)").arg(error));
+            }
+            mRebuildDone = true;
+            mRebuild.clear();
+            mPlan.clear();
+            for (const QString &path : mModelPaths) mPlan.append(MeshBakeStore::planFor(path));
+            if (mAborted.load()) { runNextSlice(); return; }
+            mFuture = QtConcurrent::run([this]() { runWorker(); });
+        }, Qt::QueuedConnection);
+        return;
+    }
     const int total = mPlan.size();   // the array indexed below, not its source
     for (int i = 0; i < total; ++i) {
         if (mAborted.load()) break;

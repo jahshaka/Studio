@@ -54,27 +54,25 @@ QVariantMap ClassReport::toMap() const
 int Report::totalCount() const
 {
     return unreferencedObjects.items.size() + strayObjects.items.size()
-         + straySidecars.items.size() + legacyFolders.items.size()
-         + redundantLegacyFiles.items.size() + deadPins.items.size();
+         + straySidecars.items.size() + deadPins.items.size();
 }
 
 qint64 Report::totalBytes() const
 {
     return unreferencedObjects.bytes + strayObjects.bytes + straySidecars.bytes
-         + legacyFolders.bytes + redundantLegacyFiles.bytes + deadPins.bytes;
+         + deadPins.bytes;
 }
 
 int Report::removedCount() const
 {
     return unreferencedObjects.removed + strayObjects.removed + straySidecars.removed
-         + legacyFolders.removed + redundantLegacyFiles.removed + deadPins.removed;
+         + deadPins.removed;
 }
 
 qint64 Report::removedBytes() const
 {
     return unreferencedObjects.removedBytes + strayObjects.removedBytes
-         + straySidecars.removedBytes + legacyFolders.removedBytes
-         + redundantLegacyFiles.removedBytes + deadPins.removedBytes;
+         + straySidecars.removedBytes + deadPins.removedBytes;
 }
 
 QVariantMap Report::toMap() const
@@ -83,8 +81,6 @@ QVariantMap Report::toMap() const
     classes["unreferencedObjects"] = unreferencedObjects.toMap();
     classes["strayObjects"] = strayObjects.toMap();
     classes["straySidecars"] = straySidecars.toMap();
-    classes["legacyFolders"] = legacyFolders.toMap();
-    classes["redundantLegacyFiles"] = redundantLegacyFiles.toMap();
     classes["deadPins"] = deadPins.toMap();
 
     QVariantMap map;
@@ -105,16 +101,6 @@ QVariantMap Report::toMap() const
 
 namespace
 {
-// Directory names the store owns itself: never candidates for the legacy
-// per-guid sweep, whatever the catalog says.
-bool isReservedStoreDir(const QString &name)
-{
-    return name == QLatin1String("objects")
-        || name == QLatin1String("sidecar")
-        || name == QLatin1String("derived")
-        || name.startsWith(QLatin1Char('.'));
-}
-
 // FileWrite::stagingTempPath's shape: "<final>.tmp-<pid>-<serial>".
 bool isStagingTemp(const QString &fileName)
 {
@@ -155,13 +141,6 @@ void add(ClassReport &report, const QString &id, const QString &path,
     report.bytes += bytes;
 }
 
-qint64 directoryBytes(const QString &path)
-{
-    qint64 total = 0;
-    QDirIterator it(path, QDir::Files | QDir::Hidden, QDirIterator::Subdirectories);
-    while (it.hasNext()) { it.next(); total += it.fileInfo().size(); }
-    return total;
-}
 } // namespace
 
 Report collect(QSqlDatabase conn, const QString &root, bool force)
@@ -291,55 +270,6 @@ Report collect(QSqlDatabase conn, const QString &root, bool force)
         }
     }
 
-    // --- (d)/(e) the legacy per-guid view ----------------------------------
-    //
-    // (d) a folder naming no asset row is garbage outright; (e) a folder that
-    // DOES name a live asset keeps only the entries the CAS cannot serve —
-    // an entry whose bytes are proven present as an object (same size, object
-    // on disk) is the second copy Windows pays full price for.
-    {
-        QDirIterator dirs(root, QDir::Dirs | QDir::NoDotAndDotDot);
-        while (dirs.hasNext()) {
-            dirs.next();
-            const QFileInfo dirInfo = dirs.fileInfo();
-            const QString name = dirInfo.fileName();
-            if (isReservedStoreDir(name)) continue;
-
-            if (!assetGuids.contains(name)) {
-                add(report.legacyFolders, name, dirInfo.absoluteFilePath(),
-                    directoryBytes(dirInfo.absoluteFilePath()),
-                    QStringLiteral("no assets row carries this guid"));
-                continue;
-            }
-
-            // Live asset: reclaim only entries the CAS demonstrably holds.
-            QSqlQuery q(conn);
-            q.prepare("SELECT AF.name, AF.oid, F.ext FROM asset_files AF "
-                      "LEFT JOIN files F ON AF.oid = F.oid WHERE AF.asset_guid = ?");
-            q.addBindValue(name);
-            if (!q.exec()) continue;
-            QHash<QString, QString> objectForName;   // display name -> object path
-            while (q.next()) {
-                objectForName.insert(q.value(0).toString(),
-                                     AssetStorePaths::objectPathIn(root, q.value(1).toString(),
-                                                                   q.value(2).toString()));
-            }
-
-            QDirIterator files(dirInfo.absoluteFilePath(), QDir::Files | QDir::Hidden);
-            while (files.hasNext()) {
-                files.next();
-                const QFileInfo info = files.fileInfo();
-                const QString objectPath = objectForName.value(info.fileName());
-                if (objectPath.isEmpty()) continue;              // not in the CAS — keep
-                const QFileInfo object(objectPath);
-                if (!object.exists() || object.size() != info.size()) continue;   // unproven — keep
-                add(report.redundantLegacyFiles, name + QLatin1Char('/') + info.fileName(),
-                    info.absoluteFilePath(), info.size(),
-                    QStringLiteral("byte-for-byte present in objects/ (retired legacy view)"));
-            }
-        }
-    }
-
     // --- (f) pins naming a project that no longer exists -------------------
     //
     // Rows, not files. A dead pin is a reference the catalog still honours:
@@ -453,24 +383,6 @@ Report sweep(QSqlDatabase conn, const QString &root, bool dryRun, bool force)
 
     unlinkFiles(report.strayObjects);
     unlinkFiles(report.straySidecars);
-    unlinkFiles(report.redundantLegacyFiles);
-
-    for (const Item &item : report.legacyFolders.items) {
-        QDir folder(item.path);
-        if (folder.removeRecursively()) {
-            ++report.legacyFolders.removed;
-            report.legacyFolders.removedBytes += item.bytes;
-        } else {
-            report.failures << QStringLiteral("could not remove %1").arg(item.path);
-        }
-    }
-    // A per-guid folder emptied by the redundant-file sweep is the retired
-    // view finishing its own retirement.
-    for (const Item &item : report.redundantLegacyFiles.items) {
-        const QString folder = QFileInfo(item.path).absolutePath();
-        QDir dir(folder);
-        if (dir.exists() && dir.isEmpty()) dir.removeRecursively();
-    }
 
     report.ok = report.failures.isEmpty();
     report.elapsedMs += timer.elapsed();

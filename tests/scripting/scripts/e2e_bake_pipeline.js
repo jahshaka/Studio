@@ -34,9 +34,9 @@ var masterId = null;
 graph.nodes().forEach(function (n) { if (n.master) masterId = n.id; });
 assert(masterId !== null, "the new graph has a master node");
 
-var uv = graph.addNode("texCoords");
+var uv = graph.addNode("uv");
 var split = graph.addNode("splitvector");
-assert(graph.connect(uv, 0, split, 0), "texCoords -> splitvector");
+assert(graph.connect(uv, 0, split, 0), "uv -> splitvector");
 assert(graph.connect(split, 0, masterId, "Roughness"), "U -> Roughness (varying)");
 
 var col = graph.addNode("color");

@@ -164,7 +164,6 @@ EffectsPage::EffectsPage( QWidget *parent, Database *database) :
 	configureAssetsDock();
     configureConnections();
 	setMinimumSize(300, 400);
-    loadShadersFromDisk();
 
 }
 
@@ -856,37 +855,6 @@ void EffectsPage::onShaderThumbnail(const ThumbnailResult &result)
 void EffectsPage::saveDefaultShader()
 {
 	bool shouldSaveGraph = createNewGraph(false);
-}
-
-void EffectsPage::loadShadersFromDisk()
-{
-	// create constants for this
-    auto filePath = QDir().filePath(AppPaths::dataRoot() + "/Materials/MyFx/");
-	QDirIterator it(filePath);
-
-	while (it.hasNext()) {
-
-		QFile file(it.next());
-		file.open(QIODevice::ReadOnly);
-		auto doc = QJsonDocument::fromJson(file.readAll());
-		file.close();
-
-		auto obj = doc.object();
-        if (obj["guid"].toString() == "") continue;
-
-		QListWidgetItem *item = new QListWidgetItem;
-		item->setFlags(item->flags() | Qt::ItemIsEditable);
-		item->setSizeHint(defaultItemSize);
-		item->setTextAlignment(Qt::AlignCenter);
-		item->setIcon(QIcon(":/icons/icons8-file-72.png"));
-
-		item->setData(Qt::DisplayRole, obj["name"].toString());
-		item->setData(MODEL_GUID_ROLE, obj["guid"].toString());
-		item->setData(MODEL_TYPE_ROLE, static_cast<int>(ModelTypes::Shader));
-		item->icon().addPixmap(QPixmap(":/icons.shader_overlay.png"));
-		effects->addItem(item);
-    }
-	
 }
 
 // (`deleteMaterialFile` is DELETED — MATERIALS_TABS_SPEC §7. It had no

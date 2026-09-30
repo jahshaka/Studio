@@ -1,10 +1,6 @@
-// §3b migration suite (MATERIALS_EVALUATOR_SPEC §6, shadergraph.panel_migration):
-// old-format graph JSON — graph["properties"] + PropertyNode instances — loads
-// into real constant/texture nodes with positions preserved, outputs
-// reconnected 1:1, multi-reference properties becoming independent copies
-// (owner-locked call), evaluation matching the folded property values, and
-// re-saves that never write "properties" again. The shipped presets (re-saved
-// through this very migration) round-trip as the acceptance test.
+// shadergraph.panel_migration: old-format graph JSON (graph["properties"] +
+// PropertyNode instances, the deleted master) is REFUSED — there is no
+// migration (FORWARD-ONLY-1) — and the shipped presets load clean.
 //
 // No GL, no engine. QT_QPA_PLATFORM=offscreen.
 #include <QApplication>
@@ -59,13 +55,6 @@ static QJsonObject connectionJson(const QString& left, int leftIdx,
     return obj;
 }
 
-static NodeModel* nodeOfType(NodeGraph* graph, const QString& type)
-{
-    for (auto node : graph->nodes.values())
-        if (node->typeName == type) return node;
-    return nullptr;
-}
-
 int main(int argc, char** argv)
 {
     qputenv("QT_QPA_PLATFORM", "offscreen");
@@ -80,9 +69,8 @@ int main(int argc, char** argv)
     }
 
     // ------------------------------------------------------------------
-    // 1. synthetic old-format graph: every property type, one property
-    //    referenced TWICE (multi-reference), a texture property with the
-    //    rgba/normal output shape and a uv input feed.
+    // 1. a synthetic pre-§3b graph (graph-global properties, PropertyNode
+    //    instances, a texCoords feed) is REFUSED (FORWARD-ONLY-1).
     // ------------------------------------------------------------------
     {
         QJsonObject graphObj;
@@ -148,95 +136,22 @@ int main(int argc, char** argv)
         graphObj["connections"] = cons;
         graphObj["masternode"] = "master-id";
 
-        auto graph = NodeGraph::deserialize(graphObj, new LibraryV1());
-        CHECK(graph != nullptr && graph->getMasterNode() != nullptr,
-              "synthetic: old-format graph loads with a master");
-        CHECK(graph->getNodesByTypeName("property").isEmpty(),
-              "synthetic: no 'property' nodes survive the load");
-        CHECK(graph->nodes.size() == 8, "synthetic: every instance became a real node");
-        CHECK(graph->migratedPropertyNodes.size() == 6, "synthetic: six migrations recorded");
+        // FORWARD-ONLY-1: the §3b migration is DELETED. A pre-§3b file carries
+        // no socket layout, so it is refused whole, with a reason.
+        QString reason;
+        auto graph = NodeGraph::deserialize(graphObj, new LibraryV1(), &reason);
+        CHECK(graph == nullptr, "old format: a pre-§3b graph is REFUSED, not migrated");
+        CHECK(reason.contains(QStringLiteral("older version")), "old format: the refusal says why");
 
-        // types
-        auto floatA = graph->getNode("float-a");
-        auto floatB = graph->getNode("float-b");
-        auto vec3A = graph->getNode("vec3-a");
-        auto colA = graph->getNode("col-a");
-        auto texA = graph->getNode("tex-a");
-        auto boolA = graph->getNode("bool-a");
-        CHECK(floatA && floatA->typeName == "float" && floatB && floatB->typeName == "float",
-              "synthetic: Float property instances -> float nodes (ids preserved)");
-        CHECK(vec3A && vec3A->typeName == "vector3", "synthetic: Vec3 property -> vector3 node");
-        CHECK(colA && colA->typeName == "color", "synthetic: Color property -> color node");
-        CHECK(texA && texA->typeName == "texture", "synthetic: Texture property -> texture node");
-        CHECK(boolA && boolA->typeName == "float", "synthetic: Bool property -> float node");
-
-        // positions + titles
-        CHECK(floatA && near(floatA->getX(), 10) && near(floatA->getY(), 20)
-              && floatB && near(floatB->getX(), 30) && near(floatB->getY(), 40),
-              "synthetic: node positions preserved");
-        CHECK(floatA && floatA->title == "Shine" && texA && texA->title == "Bumps",
-              "synthetic: property display names carry onto the nodes");
-
-        // values
-        CHECK(floatA && near(floatA->serializeWidgetValue().toDouble(), 0.7),
-              "synthetic: float value folded into the node");
-        auto v3val = vec3A ? vec3A->serializeWidgetValue().toObject() : QJsonObject();
-        CHECK(near(v3val["x"].toDouble(), 0.0) && near(v3val["y"].toDouble(), 1.0)
-              && near(v3val["z"].toDouble(), 0.0),
-              "synthetic: vec3 value folded into the node");
-        auto colVal = colA ? colA->serializeWidgetValue().toObject() : QJsonObject();
-        CHECK(near(colVal["r"].toDouble(), 1.0, 1e-2) && near(colVal["g"].toDouble(), 0.0, 1e-2),
-              "synthetic: color value folded into the node");
-        CHECK(boolA && near(boolA->serializeWidgetValue().toDouble(), 1.0),
-              "synthetic: bool true folds to 1.0");
-        CHECK(texA && static_cast<TextureNode*>(texA)->getTexturePath() == texPath,
-              "synthetic: texture property's path lands on the texture node");
-
-        // connections: 5 survive (the uv feed drops), the normal output
-        // collapses onto the texture node's single output
-        CHECK(graph->connections.size() == 5,
-              "synthetic: 5 of 6 connections survive (uv feed dropped)");
-        bool texConnRemapped = false;
-        for (auto con : graph->connections.values()) {
-            if (con->leftSocket->node->id == "tex-a")
-                texConnRemapped = (con->leftSocket->node->outSockets.indexOf(con->leftSocket) == 0);
-        }
-        CHECK(texConnRemapped, "synthetic: texture rgba/normal output remapped to output 0");
-
-        // multi-reference = independent copies (owner-locked)
-        if (floatA && floatB) {
-            floatA->deserializeWidgetValue(QJsonValue(0.2));
-            CHECK(near(floatB->serializeWidgetValue().toDouble(), 0.7),
-                  "synthetic: editing one copy leaves the other at 0.7 (independent copies)");
-            floatA->deserializeWidgetValue(QJsonValue(0.7)); // restore for evaluation
-        }
-
-        // evaluation matches the folded property values
-        auto result = PbrGraphEvaluator::evaluate(graph, nullptr);
-        CHECK(near(result.values["roughness"].toDouble(), 0.7, 1e-4), "synthetic: roughness folds to 0.7");
-        CHECK(near(result.values["metallic"].toDouble(), 0.7, 1e-4), "synthetic: metallic folds to 0.7");
-        auto base = result.values["baseColor"].toObject();
-        CHECK(near(base["g"].toDouble(), 1.0, 1e-4) && near(base["r"].toDouble(), 0.0, 1e-4),
-              "synthetic: baseColor folds from the migrated vector3");
-        auto emissive = result.values["emissiveColor"].toObject();
-        CHECK(near(emissive["r"].toDouble(), 1.0, 1e-2), "synthetic: emissive folds from the migrated color");
-        CHECK(result.values["normalMap"].toString() == texPath,
-              "synthetic: normalMap path flows from the migrated texture node");
-
-        // re-save: no "properties", nodes keep types/values; round-trips
-        auto saved = graph->serialize();
-        CHECK(!saved.contains("properties"), "synthetic: re-save writes no 'properties'");
-        auto reloaded = NodeGraph::deserialize(saved, new LibraryV1());
-        CHECK(reloaded->nodes.size() == graph->nodes.size()
-              && reloaded->connections.size() == graph->connections.size(),
-              "synthetic: re-saved graph round-trips node/connection counts");
-        auto reFloat = reloaded->getNode("float-a");
-        CHECK(reFloat && reFloat->typeName == "float"
-              && near(reFloat->serializeWidgetValue().toDouble(), 0.7)
-              && reFloat->title == "Shine",
-              "synthetic: round-trip keeps values and migrated titles");
-        auto result2 = PbrGraphEvaluator::evaluate(reloaded, nullptr);
-        CHECK(result2.values == result.values, "synthetic: evaluation identical after round-trip");
+        // Even stamped with today's layout, the retired shapes are not nodes:
+        // 'property' and 'texCoords' are unknown types and are skipped, and the
+        // graph-global 'properties' array is neither read nor written.
+        graphObj["socketLayout"] = NodeGraph::kSocketLayoutVersion;
+        graph = NodeGraph::deserialize(graphObj, new LibraryV1(), &reason);
+        CHECK(graph && graph->getMasterNode() && graph->nodes.size() == 1,
+              "retired shapes: only the master loads (no PropertyNode / texCoords conversion)");
+        CHECK(graph && !graph->serialize().contains("properties"),
+              "retired shapes: a save writes no 'properties'");
     }
 
     // ------------------------------------------------------------------
@@ -259,13 +174,7 @@ int main(int argc, char** argv)
         // "Surface Material" master, so they are now exactly the evidence that
         // a legacy file cannot be opened: null, with a sentence naming the
         // node and what to do instead.
-        //
-        // They used to prove the §3b PropertyNode migration on real files as
-        // well. That migration is UNCHANGED and is proved in full by the
-        // synthetic section above — every property type, positions, titles,
-        // values, the texture-output collapse, the uv-feed drop, the
-        // independent copies and the round-trip — on the PBR master, which is
-        // the only master a graph can have.
+
         const char* kFixtures[] = { "checker_oldformat.effect",
                                     "brick_oldformat.effect",
                                     "basic_oldformat.effect" };
@@ -283,7 +192,7 @@ int main(int argc, char** argv)
     }
 
     // ------------------------------------------------------------------
-    // 3. every shipped preset (re-saved through the migration) loads clean:
+    // 3. every shipped preset loads clean:
     //    a master, zero property nodes, and no 'properties' on re-save
     // ------------------------------------------------------------------
     {

@@ -50,9 +50,6 @@ enum class BlendMode {
 /// row (P1) that reaches the renderer, and per-material fog is a candidate for
 /// the custom-piece phase. The rest describe render state the engine derives
 /// from the blend mode and the alpha mode.
-///
-/// Old graphs still carry the eight keys; deserialize simply does not read
-/// them, which is what tolerance looks like — no migration, no load failure.
 struct MaterialSettings {
 	QString name = "";
 	BlendMode blendMode = BlendMode::Opaque;
@@ -72,36 +69,14 @@ public:
 	QMap<QString, NodeModel*> nodes;
 	QMap<QString, ConnectionModel*> connections;
 	NodeModel* masterNode = nullptr;
-	// Legacy graph-global uniform parameters. Since the §3b migration these
-	// are READ (old files stay loadable forever; the values fold into real
-	// nodes at load time) but never written back — serialize() stops
-	// emitting "properties".
-	QVector<Property*> properties;
-	// §3b migration record: id of every node that replaced a PropertyNode
-	// instance at load time -> the property id it carried. Lets the preset
-	// loader (and tools) re-target texture assignments that used to key off
-	// the property list.
-	QMap<QString, QString> migratedPropertyNodes;
-	/// What LOADING this graph had to change, in words, for the user. Written
-	/// by deserialize() and reported by graph.bakeInfo() so a silent migration
-	/// cannot happen: the PBR master's socket layout is versioned
-	/// (kSocketLayoutVersion) and a layout-1 file has its indices shifted, with
-	/// any connection into the removed Occlusion socket DROPPED. Dropping a
-	/// connection without saying so is the failure this list exists to prevent.
-	QStringList migrationNotes;
 	MaterialSettings settings;
 	QString materialGuid = "";
 
-	/// PbrMasterNode's socket layout (see pbrmasternode.h).
-	///   1 — ten sockets, "Occlusion" at index 4 (before HLMS_ADOPTION P2)
-	///   2 — nine sockets, no Occlusion
-	/// Absent from a saved graph means 1: the key did not exist then.
+	/// PbrMasterNode's socket layout (see pbrmasternode.h): nine sockets, no
+	/// Occlusion. deserialize REFUSES a graph stamped with any other value (or
+	/// none) — connections are stored by index (FORWARD-ONLY-1).
 	static constexpr int kSocketLayoutVersion = 2;
 
-	void addProperty(Property* prop);
-	void removeProperty(Property* prop);
-	Property* getPropertyByName(const QString& name);
-	Property* getPropertyById(const QString& id);
 	QVector<NodeModel *> getNodesByTypeName(QString name);
 
 	/// THE NODE LIBRARY IS NOT OWNED. It is a stateless factory registry
@@ -141,9 +116,10 @@ public:
 	/// half-loaded, because a silently master-less graph bakes nothing and looks
 	/// like an empty canvas the user then saves over.
 	///
-	/// Every caller must handle null. Nothing else in here refuses: an unknown
-	/// NODE type is still skipped, the load-time renames (trunc, the UV merge,
-	/// the PropertyNode migration) still run.
+	/// A graph stamped with another socket layout (kSocketLayoutVersion) is
+	/// refused the same way (FORWARD-ONLY-1: no load-time renames or index
+	/// shifts exist). Every caller must handle null. An unknown NODE type is
+	/// skipped.
 	static NodeGraph* deserialize(QJsonObject obj, NodeLibrary* lib,
 	                              QString* refusalReason = nullptr);
 	QJsonObject serializeMaterialSettings();

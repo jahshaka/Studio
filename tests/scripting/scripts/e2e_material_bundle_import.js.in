@@ -43,9 +43,6 @@ assets.list({ scope: "project" }).forEach(function (a) { types[a.guid] = a.type;
 var mats = Object.keys(types).filter(function (g) { return types[g] === "material"; });
 assert(mats.length >= 1, "the material came back");
 
-// ONE TILE, still: no Shader row travelled and none was minted on the way in.
-assert(assets.list({ scope: "store", type: "shader" }).length === 0,
-       "no ModelTypes::Shader row exists on the far side either");
 
 // THE PIN'S FOLDER CAME WITH IT (ARCHIVE-FOLDER-1), on a machine that has
 // never seen the project. A pinned library row's filing lives on the PIN, not

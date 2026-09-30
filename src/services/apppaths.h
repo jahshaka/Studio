@@ -43,7 +43,7 @@ For more information see the LICENSE file
  * a second developer profile hermetic — SETTINGS INCLUDED, which is the part
  * `HOME=` could never buy.
  *
- * Resolved ONCE, in main(), before the Upgrader, before SettingsManager and
+ * Resolved ONCE, in main(), before SettingsManager and
  * before AssetStoreService::bootstrapFromSettings — that ordering is already
  * load-bearing for the store root (src/app/main.cpp) and this must not
  * disturb it. `initialize()` is idempotent and cheap; anything that reads a

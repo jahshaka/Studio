@@ -44,17 +44,11 @@ For more information see the LICENSE file
 //     the Preferences button shows the dry run first and asks, and `sweep()`
 //     takes the flag explicitly.
 //
-// The five classes (the audit's four, plus the legacy-view reclaim that makes
-// retiring the view worth the trouble — Windows sees the view as a SECOND full
-// copy of every file, 152MB → 438MB):
+// The four classes:
 //
 //   unreferencedObjects  files row + object with no asset_files row and no pin
 //   strayObjects         objects/** with no files row; stale *.tmp-* stagings
 //   straySidecars        sidecar/<guid>.json naming no assets row
-//   legacyFolders        <root>/<guid>/ naming no assets row
-//   redundantLegacyFiles <root>/<guid>/<name> whose bytes are proven present
-//                        in the CAS (same size, object exists) — the view
-//                        materializeLegacyView used to build
 //   deadPins             project_assets rows naming a project that no longer
 //                        exists (code review 2026-09-10; 32 of 129 on the
 //                        owner's store). ROWS, not files: they free no bytes
@@ -108,8 +102,6 @@ struct Report
     ClassReport unreferencedObjects;
     ClassReport strayObjects;
     ClassReport straySidecars;
-    ClassReport legacyFolders;
-    ClassReport redundantLegacyFiles;
     ClassReport deadPins;
 
     /// Informational only, never acted on: files rows whose refcount does not

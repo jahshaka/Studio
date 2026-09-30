@@ -64,9 +64,7 @@ class Project;
 
 namespace assetshare {
 
-/// The share file's extension, without the dot. A format of its own, not
-/// `.jaf`: the legacy importer sniffs that one and would take this file to
-/// pieces looking for an `asset.db` that is not there.
+/// The share file's extension, without the dot.
 inline const char *extension() { return "jbundle"; }
 
 /// The file-dialog filter both the module and the Assets page use.

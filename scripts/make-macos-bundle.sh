@@ -112,7 +112,7 @@ ditto "$REPO_ROOT/app"          "$CONTENTS/Resources/app"
 ditto "$REPO_ROOT/scenes"       "$CONTENTS/Resources/scenes"
 ditto "$BUILD_DIR/bin/media"    "$CONTENTS/Resources/media"
 [ -d "$CONTENTS/Resources/media/Hlms/Pbs" ] || die "step 2: media/Hlms/Pbs missing"
-[ -d "$CONTENTS/Resources/app/shader_defs" ] || die "step 2: app/shader_defs missing"
+[ -d "$CONTENTS/Resources/app/content" ] || die "step 2: app/content missing"
 check "Resources/{app,scenes,media} present"
 
 # --- 3. Symlinks back into MacOS/ -------------------------------------------

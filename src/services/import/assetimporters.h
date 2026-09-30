@@ -141,20 +141,4 @@ public:
                  QString *errorOut, const ImportProgressFn &progress) override;
 };
 
-/// .jaf archives (single assets and bundles). convert() extracts and
-/// validates; the spine commits through Database::importAsset /
-/// importAssetBundle and ingests the payload files CAS-first.
-class JafImporter : public AssetImporterBase
-{
-public:
-    QString name() const override { return QStringLiteral("jaf"); }
-    int version() const override { return 1; }
-    int modelType() const override;
-    bool sniff(const QString &path) const override;
-    bool validate(const QString &path, QString *errorOut) const override;
-    bool convert(const ImportRequest &request, const QString &stagingDir,
-                 Database *db, Project *project, StagedAsset &out,
-                 QString *errorOut, const ImportProgressFn &progress) override;
-};
-
 #endif // ASSETIMPORTERS_H

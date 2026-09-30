@@ -188,8 +188,10 @@ QVector<VerbInfo> ProjectApi::verbs() const
           "Exports the open project as a self-contained archive: catalog snapshot + manifest v2 + the "
           "pinned CAS objects. A reference-based project leaves the machine whole.",
           Needs::Document },
-        { "importArchive", "project.importArchive(path) -> {guid, name, assets, objects}",
-          "Imports a project archive as a NEW project: rows, objects ingested CAS-first, fresh pins. "
+        { "importArchive", "project.importArchive(path) -> {guid, name, assets, objects, bakeFailures}",
+          "Imports a project archive as a NEW project: rows, objects ingested CAS-first, fresh pins, and "
+          "EVERY MODEL IT BRINGS BAKED before this returns (an archive carries no bakes); `bakeFailures` "
+          "names the model files that could not be baked (they show as missing). "
           "Does not open it; its tile is on the Desktop when this returns (the grid is rebuilt).",
           Needs::Document },
         { "exportArchiveAsync", "project.exportArchiveAsync(path) -> bool",
@@ -758,6 +760,7 @@ QVariantMap ProjectApi::exportArchive(const QString &path)
     out["path"] = r.path;
     out["assets"] = r.assets;
     out["objects"] = r.objects;
+    out["bakeFailures"] = r.bakeFailures;
     return out;
 }
 

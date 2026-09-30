@@ -106,6 +106,8 @@ Database::Database()
         "    desktop           INTEGER DEFAULT 1,"   // which desktop the tile lives on (1..4)
         "    desktop_x         REAL,"                // freeform position, normalized 0..1
         "    desktop_y         REAL,"                // NULL = never placed (cascade assigns)
+        "    slider_row        INTEGER,"             // slider mode filmstrip row (DESKTOP_SLIDER_SPEC.md)
+        "    slider_index      INTEGER,"             // ... and order index; NULL = never assigned
         // WHERE THIS PROJECT'S FOLDER LIVES — the root it was created under,
         // NOT the folder itself (the folder is always <location>/Projects/<guid>,
         // so the guid is never stored twice). NULL or empty means the user's
@@ -193,14 +195,6 @@ Database::Database()
         "    visible           INTEGER"
         ")";
 
-	metadataTableSchema =
-		"CREATE TABLE IF NOT EXISTS metadata ("
-		"    date_created      DATETIME DEFAULT CURRENT_TIMESTAMP,"
-		"    hash              VARCHAR(16),"
-		"    version           VARCHAR(8),"
-		"    data			   BLOB"
-		")";
-
     favoritesTableSchema =
         "CREATE TABLE IF NOT EXISTS favorites ("
         "    asset_guid        VARCHAR(32) PRIMARY KEY,"
@@ -211,13 +205,9 @@ Database::Database()
         "    thumbnail		   BLOB"
         ")";
 
-	// Schema updates
-	version080SchemaUpdate = "ALTER TABLE assets ADD COLUMN view_filter INTEGER;";
-	version080SchemaDowngrade = "ALTER TABLE assets DROP COLUMN view_filter;";
-
     // THE BATCH STANDS DOWN FOR A REAL OWNER (CLOSE-2 — see beginBatch and
     // DbTransaction's constructor). The registry, not a captured `this`: a
-    // process can hold several Database instances at once (the upgrader's
+    // process can hold several Database instances at once (main()'s
     // schema check, a suite's), the hook is ONE static slot, and a captured
     // `this` would mean the last instance constructed speaks for every batch
     // — including, after that instance died, for a dangling pointer. The
@@ -248,7 +238,7 @@ void Database::resumeBatchFor(const QSqlDatabase &connection)
 Database::~Database()
 {
     // Release whatever registration this instance still holds. The dtor used to
-    // be empty, so a stack Database (Upgrader's schema check, every DB suite)
+    // be empty, so a stack Database (main()'s schema check, every DB suite)
     // left `qt_sql_default_connection` registered on an early return or an
     // exception path, and the next initializeDatabase() printed Qt's
     // "duplicate connection name" warning (STABILITY_PROGRAM_SPEC §1.7a).
@@ -582,7 +572,7 @@ void Database::closeDatabase()
     // actually unregistered and the next addDatabase() printed
     //     qt.sql.qsqldatabase: QSqlDatabasePrivate::addDatabase: duplicate
     //     connection name 'qt_sql_default_connection', old connection removed
-    // on every boot (STABILITY_PROGRAM_SPEC §1.7a: Upgrader opens the default
+    // on every boot (STABILITY_PROGRAM_SPEC §1.7a: main()'s schema check opens the default
     // connection at main.cpp:139, MainWindow::setupProjectDB opens it again).
     // Capture the name first; every QSqlDatabase copy must be gone before
     // removeDatabase or Qt warns that the connection is still in use, which is
@@ -631,99 +621,6 @@ bool Database::checkIfColumnExists(const QString &tableName, const QString &colu
     }
 
     return false;
-}
-
-void Database::migrateProjectsTable()
-{
-    // Desktops feature (DESKTOPS_SPEC.md): existing libraries gain the columns in place.
-    // Guarded by a column-existence check so this is idempotent and downgrade-safe —
-    // ALTER TABLE ADD COLUMN with a DEFAULT means pre-existing rows read back as 1.
-    if (!checkIfColumnExists("projects", "desktop")) {
-        QSqlQuery query;
-        query.prepare("ALTER TABLE projects ADD COLUMN desktop INTEGER DEFAULT 1");
-        executeAndCheckQuery(query, "MigrateProjectsAddDesktop");
-    }
-
-    if (!checkIfColumnExists("projects", "desktop_x")) {
-        QSqlQuery query;
-        query.prepare("ALTER TABLE projects ADD COLUMN desktop_x REAL");
-        executeAndCheckQuery(query, "MigrateProjectsAddDesktopX");
-    }
-
-    if (!checkIfColumnExists("projects", "desktop_y")) {
-        QSqlQuery query;
-        query.prepare("ALTER TABLE projects ADD COLUMN desktop_y REAL");
-        executeAndCheckQuery(query, "MigrateProjectsAddDesktopY");
-    }
-
-    // Slider mode (DESKTOP_SLIDER_SPEC.md): filmstrip {row, orderIndex} per
-    // tile. NULL = never assigned; the layout model seeds those on first show.
-    if (!checkIfColumnExists("projects", "slider_row")) {
-        QSqlQuery query;
-        query.prepare("ALTER TABLE projects ADD COLUMN slider_row INTEGER");
-        executeAndCheckQuery(query, "MigrateProjectsAddSliderRow");
-    }
-
-    if (!checkIfColumnExists("projects", "slider_index")) {
-        QSqlQuery query;
-        query.prepare("ALTER TABLE projects ADD COLUMN slider_index INTEGER");
-        executeAndCheckQuery(query, "MigrateProjectsAddSliderIndex");
-    }
-
-    // WHERE THE PROJECT'S FOLDER LIVES (owner review R1d, SMALL-UI-A): the
-    // dialog's Browse button can put a new project anywhere, and a location
-    // that is not recorded cannot be found again — every resolver rebuilt the
-    // path from the DEFAULT root, so a restart opened a located project
-    // pointing at a folder that does not exist. Additive and guarded like the
-    // four above: an existing library gains the column in place and every row
-    // in it reads back NULL, which means "the default root" — which is where
-    // every one of them is.
-    if (!checkIfColumnExists("projects", "location")) {
-        QSqlQuery query;
-        query.prepare("ALTER TABLE projects ADD COLUMN location TEXT");
-        executeAndCheckQuery(query, "MigrateProjectsAddLocation");
-    }
-}
-
-void Database::migrateCollectionsTable()
-{
-    // Asset drawers (ASSET_DRAWERS_SPEC.md §2): collections gain nesting in
-    // place. Additive and guarded like the desktops migration above — existing
-    // user collections read back parent -1 and keep working at top level.
-    if (!checkIfColumnExists("collections", "parent")) {
-        QSqlQuery query;
-        query.prepare("ALTER TABLE collections ADD COLUMN parent INTEGER DEFAULT -1");
-        executeAndCheckQuery(query, "MigrateCollectionsAddParent");
-    }
-}
-
-void Database::migrateAssetsTable()
-{
-    // Material-asset data heal: a shifted argument in the preset-apply
-    // registration (fixed alongside the PBR-materials data-loss audit) wrote
-    // every material definition into the TAGS column, leaving the ASSET
-    // column empty — so saved materials hydrated broken and could never be
-    // re-applied. Move the stranded JSON where it belongs. Idempotent: after
-    // the move the WHERE clause matches nothing, and rows written correctly
-    // (asset populated) are untouched.
-    QSqlQuery query;
-    query.prepare(
-        "UPDATE assets SET asset = tags, tags = NULL "
-        "WHERE type = ? AND (asset IS NULL OR length(asset) = 0) "
-        "AND tags LIKE '{%'"
-    );
-    query.addBindValue(static_cast<int>(ModelTypes::Material));
-    executeAndCheckQuery(query, "MigrateAssetsMaterialData");
-
-    // LIBRARY VISIBILITY: additive and guarded, exactly like the collections
-    // `parent` column. Not a data migration — every existing row reads back
-    // listed = 1, which is what every existing row IS; the column only has to
-    // exist before the listing queries name it.
-    if (!checkIfColumnExists("assets", "listed")) {
-        QSqlQuery addListed;
-        addListed.prepare("ALTER TABLE assets ADD COLUMN listed INTEGER NOT NULL DEFAULT 1");
-        executeAndCheckQuery(addListed, "MigrateAssetsAddListed");
-    }
 }
 
 // Both of these bound by NAME (":depender", ...) against POSITIONAL '?'
@@ -841,25 +738,6 @@ bool Database::createFoldersTable()
     return executeAndCheckQuery(query, "CreateFoldersTable");
 }
 
-bool Database::createMetadataTable()
-{
-	if (!checkIfTableExists("metadata")) {
-		QSqlQuery query;
-		query.prepare(metadataTableSchema);
-		if (executeAndCheckQuery(query, "CreateMetadataTable")) {
-			QSqlQuery defaultCollQuery;
-			defaultCollQuery.prepare("INSERT INTO metadata (version) VALUES (?)");
-			defaultCollQuery.addBindValue(Constants::CONTENT_VERSION);
-			return executeAndCheckQuery(defaultCollQuery, "InsertDefaultMetadata");
-		}
-
-		return false;
-	}
-
-	// table already exists - nothing to do
-	return true;
-}
-
 bool Database::createFavoritesTable()
 {
     QSqlQuery query;
@@ -871,16 +749,12 @@ void Database::createAllTables()
 {
     DbTransaction tx(db);
     if (!checkIfTableExists("projects"))        createProjectsTable();
-    migrateProjectsTable();
     if (!checkIfTableExists("thumbnails"))      createThumbnailsTable();
     if (!checkIfTableExists("collections"))     createCollectionsTable();
-    migrateCollectionsTable();
     if (!checkIfTableExists("assets"))          createAssetsTable();
-    migrateAssetsTable();
     if (!checkIfTableExists("dependencies"))    createDependenciesTable();
     if (!checkIfTableExists("author"))          createAuthorTable();
     if (!checkIfTableExists("folders"))         createFoldersTable();
-    if (!checkIfTableExists("metadata"))        createMetadataTable();
     if (!checkIfTableExists("favorites"))       createFavoritesTable();
     createIndexes();
     createCasTables();
@@ -918,33 +792,69 @@ void Database::createCasTables()
     QSqlQuery projectAssetsTable;
     projectAssetsTable.prepare(CasSchema::kProjectAssetsTable);
     executeAndCheckQuery(projectAssetsTable, "CreateProjectAssetsTable");
-    migrateProjectAssetsTable();
 
     QSqlQuery versionQuery;
     versionQuery.exec("PRAGMA user_version");
     int current = 0;
     if (versionQuery.next()) current = versionQuery.value(0).toInt();
-    if (current < CasSchema::kUserVersion) {
+    if (current != CasSchema::kUserVersion) {
         QSqlQuery setVersion;
         setVersion.exec(QStringLiteral("PRAGMA user_version = %1").arg(CasSchema::kUserVersion));
     }
 }
 
-// WHERE A PROJECT FILES ITS PIN (DRAWERS-1). A folder is a fact about ONE
-// project and a pinned row is a LIBRARY row every project shares, so the
-// filing cannot ride `assets.parent`: that column would put the same asset in
-// one project's folder for everybody. It rides the pin. NULL/empty = the
-// project root, which is what every row written before this column says.
-//
-// A table created TODAY has the column from the schema constant
-// (data/database/casschema.h) and this does nothing; this is for the libraries
-// that predate it.
-void Database::migrateProjectAssetsTable()
+// THE SCHEMA CHECK (FORWARD-ONLY-1). A library whose tables are not exactly
+// the ones this build creates is from an older build: there are no migrations,
+// so the caller wipes it (main.cpp, libraryreset::reset). The fresh schema is
+// built in a private in-memory database from the SAME statements
+// createAllTables/createCasTables run, and every one of its tables must exist
+// here with exactly the same column names — so the check can never disagree
+// with what a fresh library actually is.
+bool Database::schemaMatchesFresh()
 {
-    if (checkIfColumnExists("project_assets", "folder")) return;
-    QSqlQuery query;
-    query.prepare("ALTER TABLE project_assets ADD COLUMN folder TEXT");
-    executeAndCheckQuery(query, "MigrateProjectAssetsAddFolder");
+    const QString probeName = QStringLiteral("SchemaProbe-%1").arg(quintptr(this));
+    bool matches = true;
+    {
+        QSqlDatabase fresh = QSqlDatabase::addDatabase(Constants::DB_DRIVER, probeName);
+        fresh.setDatabaseName(QStringLiteral(":memory:"));
+        if (!fresh.open()) {
+            fresh = QSqlDatabase();
+            QSqlDatabase::removeDatabase(probeName);
+            return true;   // cannot build the reference: never wipe on a guess
+        }
+        const QStringList statements = {
+            projectsTableSchema, thumbnailsTableSchema, collectionsTableSchema,
+            assetsTableSchema, dependenciesTableSchema, authorTableSchema,
+            foldersTableSchema, favoritesTableSchema,
+            QString::fromLatin1(CasSchema::kFilesTable),
+            QString::fromLatin1(CasSchema::kAssetFilesTable),
+            QString::fromLatin1(CasSchema::kProjectAssetsTable),
+        };
+        for (const QString &sql : statements) QSqlQuery(fresh).exec(sql);
+
+        const auto columnsOf = [](const QSqlDatabase &conn, const QString &table) {
+            QStringList out;
+            QSqlQuery q(conn);
+            // PRAGMA takes no bound parameters; the names come from sqlite_master.
+            if (q.exec(QStringLiteral("PRAGMA table_info(%1)").arg(table)))
+                while (q.next()) out << q.value(1).toString().toLower();
+            out.sort();
+            return out;
+        };
+        QSqlQuery tables(fresh);
+        tables.exec(QStringLiteral("SELECT name FROM sqlite_master WHERE type = 'table'"));
+        while (matches && tables.next()) {
+            const QString table = tables.value(0).toString();
+            if (columnsOf(db, table) != columnsOf(fresh, table)) {
+                irisLog(QStringLiteral("library schema: table '%1' differs from this build's")
+                            .arg(table));
+                matches = false;
+            }
+        }
+        fresh.close();
+    }
+    QSqlDatabase::removeDatabase(probeName);
+    return matches;
 }
 
 void Database::createIndexes()
@@ -1223,25 +1133,6 @@ bool Database::updateProjectSliderPos(const QString &guid, int row, int index)
 	query.addBindValue(index);
 	query.addBindValue(guid);
 	return executeAndCheckQuery(query, "UpdateProjectSliderPos");
-}
-
-void Database::updateSchema()
-{
-	// apply schema updates in order, those already applied will do nothing
-	QSqlQuery query;
-	query.prepare(version080SchemaUpdate);
-	executeAndCheckQuery(query, "080SchemaUpdate");
-}
-
-bool Database::updateMetadataVersion(const QString& version)
-{
-	QSqlQuery query;
-	query.prepare(
-		"UPDATE metadata SET version = ?"
-	);
-	query.addBindValue(version);
-
-	return executeAndCheckQuery(query, "updateMetadataVersion");
 }
 
 namespace {
@@ -1603,7 +1494,6 @@ void Database::wipeDatabase()
 	destroyTable("dependencies");
 	destroyTable("author");
 	destroyTable("folders");
-	destroyTable("metadata");
 	// The tables the CAS and the favourites view added (deep audit 2026-09,
 	// area 6: "wipe" left the entire content catalog behind, so the rebuilt
 	// database opened onto files/asset_files/project_assets rows naming assets
@@ -2633,40 +2523,6 @@ QVector<AssetRecord> Database::fetchAssetsFromParent(const QString & guid)
     return assets;
 }
 
-DatabaseMetadataRecord Database::getDbMetadata()
-{
-	QSqlQuery query;
-	query.prepare("SELECT date_created, hash, version, data FROM metadata");
-
-	if (query.exec()) {
-		query.next();
-	}
-	else {
-		irisLog(
-			"There was an error fetching db metadata " + query.lastError().text()
-		);
-
-		return DatabaseMetadataRecord();
-	}
-
-	DatabaseMetadataRecord record;
-	record.dateCreated = query.value(0).toDateTime();
-	record.hash = query.value(1).toString();
-	record.version = query.value(2).toString();
-	record.data = query.value(3).toByteArray();
-
-	auto numbers = record.version.split(".");
-	record.major = numbers[0].toInt();
-	record.minor = numbers[1].toInt();
-
-	if (numbers[2].length() > 1) numbers[2].chop(1);
-	int dbPatch = numbers[2].toInt();
-
-	record.patch = dbPatch;
-
-	return record;
-}
-
 QVector<AssetRecord> Database::fetchAssetsByType(const int &type, const QString &projectGuid)
 {
     QSqlQuery query;
@@ -3073,170 +2929,6 @@ QByteArray Database::fetchCachedThumbnail(const QString &name) const
     return QByteArray();
 }
 
-bool Database::createBlobFromAsset(const QString &guid, const QString &writePath)
-{
-    // ScopedConnection: an early return used to leave the named connection
-    // registered (deep audit 2026-09, area 6).
-    ScopedConnection scoped(Constants::DB_DRIVER, QStringLiteral("NodeExport"), writePath);
-    QSqlDatabase &exportConnection = scoped.db;
-
-    if (!exportConnection.isValid()) {
-        irisLog(QString("The database connection is invalid! %1").arg(exportConnection.lastError().text()));
-        return false;
-    }
-    if (!exportConnection.open()) {
-        irisLog(QString("Couldn't open a database connection! %1").arg(exportConnection.lastError().text()));
-        return false;
-    }
-
-    // Export DB writes in one transaction (phase 0): atomic bundle file,
-    // one fsync instead of one per row.
-    exportConnection.transaction();
-
-    QSqlQuery createAssetsTable(exportConnection);
-    createAssetsTable.prepare(assetsTableSchema);
-    if (!executeAndCheckQuery(createAssetsTable, "CreateAssetsTable")) return false;
-
-    QSqlQuery createDependenciesTable(exportConnection);
-    createDependenciesTable.prepare(dependenciesTableSchema);
-    if (!executeAndCheckQuery(createDependenciesTable, "CreateDependenciesTable")) return false;
-
-    QVector<AssetRecord> assetList;
-    QStringList allAssetsToExport;
-
-    for (const auto &assetGuid : fetchAssetAndAllDependencies(guid)) {
-        allAssetsToExport.append(assetGuid);
-    }
-
-    for (const auto &asset : allAssetsToExport) {
-        QSqlQuery selectAssetQuery;
-        selectAssetQuery.prepare(
-            "SELECT guid, type, name, collection, times_used, project_guid, date_created, last_updated, "
-            "author, license, hash, version, parent, tags, properties, asset, thumbnail, view_filter, listed "
-            "FROM assets WHERE guid = ?"
-        );
-        selectAssetQuery.addBindValue(asset);
-
-        if (selectAssetQuery.exec()) {
-            if (selectAssetQuery.first()) {
-                AssetRecord data;
-                data.guid = selectAssetQuery.value(0).toString();
-                data.type = selectAssetQuery.value(1).toInt();
-                data.name = selectAssetQuery.value(2).toString();
-                data.collection = selectAssetQuery.value(3).toInt();
-                data.timesUsed = selectAssetQuery.value(4).toInt();
-                data.projectGuid = selectAssetQuery.value(5).toString();
-                data.dateCreated = selectAssetQuery.value(6).toDateTime();
-                data.lastUpdated = selectAssetQuery.value(7).toDateTime();
-                data.author = selectAssetQuery.value(8).toString();
-                data.license = selectAssetQuery.value(9).toString();
-                data.hash = selectAssetQuery.value(10).toString();
-                data.version = selectAssetQuery.value(11).toString();
-                data.parent = selectAssetQuery.value(12).toString();
-                data.tags = selectAssetQuery.value(13).toByteArray();
-                data.properties = selectAssetQuery.value(14).toByteArray();
-                data.asset = selectAssetQuery.value(15).toByteArray();
-                data.thumbnail = selectAssetQuery.value(16).toByteArray();
-                data.view_filter = selectAssetQuery.value(17).toInt();
-                data.listed = selectAssetQuery.value(18).toBool();
-                assetList.push_back(data);
-            }
-        }
-        else {
-            irisLog("There was an error fetching an asset " + selectAssetQuery.lastError().text());
-        }
-    }
-
-    for (const auto &asset : assetList) {
-        QSqlQuery insertExportAssetQuery(exportConnection);
-        insertExportAssetQuery.prepare(
-            "INSERT INTO assets"
-            " (guid, type, name, collection, times_used, project_guid, date_created, last_updated, author,"
-            " license, hash, version, parent, tags, properties, asset, thumbnail, view_filter, listed)"
-            " VALUES(:guid, :type, :name, :collection, :times_used, :project_guid, :date_created, :last_updated, :author,"
-            " :license, :hash, :version, :parent, :tags, :properties, :asset, :thumbnail, :view_filter, :listed)"
-        );
-
-        insertExportAssetQuery.bindValue(":guid", asset.guid);
-        insertExportAssetQuery.bindValue(":type", asset.type);
-        insertExportAssetQuery.bindValue(":name", asset.name);
-        insertExportAssetQuery.bindValue(":collection", asset.collection);
-        insertExportAssetQuery.bindValue(":times_used", asset.timesUsed);
-        insertExportAssetQuery.bindValue(":project_guid", asset.projectGuid);
-        insertExportAssetQuery.bindValue(":date_created", asset.dateCreated);
-        insertExportAssetQuery.bindValue(":last_updated", asset.lastUpdated);
-        insertExportAssetQuery.bindValue(":author", asset.author);
-        insertExportAssetQuery.bindValue(":license", asset.license);
-        insertExportAssetQuery.bindValue(":hash", asset.hash);
-        insertExportAssetQuery.bindValue(":version", asset.version);
-        insertExportAssetQuery.bindValue(":parent", asset.parent);
-        insertExportAssetQuery.bindValue(":tags", asset.tags);
-        insertExportAssetQuery.bindValue(":properties", asset.properties);
-        insertExportAssetQuery.bindValue(":asset", asset.asset);
-
-        insertExportAssetQuery.bindValue(":thumbnail", asset.thumbnail);
-        insertExportAssetQuery.bindValue(":view_filter", asset.view_filter);
-        insertExportAssetQuery.bindValue(":listed", asset.listed ? 1 : 0);
-
-        executeAndCheckQuery(insertExportAssetQuery, "insertExportAssetQuery");
-    }
-
-    QVector<DependencyRecord> dependenciesToExport;
-
-    for (const auto &asset : assetList) {
-        // Dependency-export fix (ASSET_PIPELINE_SPEC §1.7 / phase 0): follow
-        // the asset's OUTGOING edges (depender = asset) and iterate EVERY row
-        // (the old query walked dependee = asset and kept at most one).
-        QSqlQuery selectDep;
-        selectDep.prepare(
-            "SELECT depender_type, dependee_type, project_guid, depender, dependee, id "
-            "FROM dependencies WHERE "
-            "depender = ? AND depender_type = ?"
-        );
-        selectDep.addBindValue(asset.guid);
-        selectDep.addBindValue(asset.type);
-
-        if (selectDep.exec()) {
-            while (selectDep.next()) {
-                DependencyRecord record;
-                record.dependerType = selectDep.value(0).toInt();
-                record.dependeeType = selectDep.value(1).toInt();
-                record.projectGuid = selectDep.value(2).toString();
-                record.depender = selectDep.value(3).toString();
-                record.dependee = selectDep.value(4).toString();
-                record.id = selectDep.value(5).toString();
-                dependenciesToExport.append(record);
-            }
-        }
-        else {
-            irisLog("There was an error fetching a dependency" + selectDep.lastError().text());
-        }
-    }
-
-    QStringList assetDependencies;
-
-    for (const auto &dep : dependenciesToExport) {
-        QSqlQuery exportDep(exportConnection);
-        exportDep.prepare(
-            "INSERT INTO dependencies (depender_type, dependee_type, project_guid, depender, dependee, id) "
-            "VALUES (:depender_type, :dependee_type, :project_guid, :depender, :dependee, :id)"
-        );
-
-        exportDep.bindValue(":depender_type", dep.dependerType);
-        exportDep.bindValue(":dependee_type", dep.dependeeType);
-        exportDep.bindValue(":project_guid", dep.projectGuid);
-        exportDep.bindValue(":depender", dep.depender);
-        exportDep.bindValue(":dependee", dep.dependee);
-        exportDep.bindValue(":id", dep.id);
-
-        executeAndCheckQuery(exportDep, "exportDep");
-    }
-
-    exportConnection.commit();
-    // close + unregister: ~ScopedConnection
-    return true;
-}
-
 void Database::createExportScene(const QString &outTempFilePath, const QString &projectGuid)
 {
     QSqlQuery query;
@@ -3571,11 +3263,6 @@ bool Database::checkIfDependencyExists(const QString& depender, const QString& d
 bool Database::checkIfProjectVersionSupported(const QString &pathToDb)
 {
     return checkIfVersionSupported(pathToDb, "projects");
-}
-
-bool Database::checkIfJafModelVersionSupported(const QString &pathToDb)
-{
-    return checkIfVersionSupported(pathToDb, "assets");
 }
 
 QStringList Database::fetchFolderNameByParent(const QString &guid)
@@ -4031,6 +3718,7 @@ bool Database::hasDependencies(const QString &guid)
     return query.value(0).toBool();
 }
 
+// The PROJECT archive half of .jaf — replaced by the envelope format in lane JAF-READER-1.
 bool Database::importProject(const QString &inFilePath, const QString &newSceneGuid, QString &worldName, QMap<QString, QString> &outGuids, QSet<QString> *knownGuids)
 {
     // ScopedConnection: the connection name was already unique per call (a
@@ -4228,7 +3916,6 @@ bool Database::importProject(const QString &inFilePath, const QString &newSceneG
         insertImportAssetQuery.bindValue(":properties", asset.properties);
 
         if (asset.type == static_cast<int>(ModelTypes::Object) ||
-            asset.type == static_cast<int>(ModelTypes::Shader) ||
             asset.type == static_cast<int>(ModelTypes::Material))
         {
             auto doc = QJsonDocument::fromJson(asset.asset);
@@ -4358,427 +4045,6 @@ bool Database::importProject(const QString &inFilePath, const QString &newSceneG
 
     // close + unregister: ~ScopedConnection
     return tx.commit();
-}
-
-// Does a table in THIS connection carry the column? (Database::
-// checkIfColumnExists asks the main library; a .jaf archive is a different
-// connection.) An archive written before a column existed must still import.
-static bool connectionHasColumn(const QSqlDatabase &conn, const QString &table,
-                                const QString &column)
-{
-    QSqlQuery query(conn);
-    // PRAGMA takes no bound parameters; the table names here are literals.
-    if (!query.exec(QStringLiteral("PRAGMA table_info(%1)").arg(table))) return false;
-    while (query.next())
-        if (query.value(1).toString().compare(column, Qt::CaseInsensitive) == 0) return true;
-    return false;
-}
-
-QString Database::importAsset(
-	const ModelTypes &jafType,
-	const QString & pathToDb,
-	const QMap<QString, QString>& newNames,
-    QMap<QString, QString> &outGuids,
-    QVector<AssetRecord> &assetRecords,
-	AssetViewFilter view_filter_to,
-	const QString &projectGuid,
-	const QString &parent)
-{
-    QSqlDatabase importConnection = QSqlDatabase();
-    importConnection = QSqlDatabase::addDatabase(Constants::DB_DRIVER, "NodeImportConnection");
-    importConnection.setDatabaseName(pathToDb);
-
-    if (importConnection.isValid()) {
-        if (!importConnection.open()) {
-            irisLog(QString("Couldn't open a database connection! %1").arg(importConnection.lastError().text()));
-        }
-    }
-    else {
-        irisLog(QString("The database connection is invalid! %1").arg(importConnection.lastError().text()));
-    }
-
-	// Whole .jaf import lands in one transaction on the main library (phase 0).
-	DbTransaction tx(db);
-
-	// LIBRARY VISIBILITY TRAVELS WITH THE ARCHIVE (lead call 2026-09-10): an
-	// export of an UNLISTED asset lands unlisted where it arrives — the row a
-	// user deleted from their library does not come back as a library tile on
-	// someone else's box just because it rode along in a .jaf. Archives
-	// written before the column existed have no opinion and import listed.
-	const bool archiveHasListed = connectionHasColumn(importConnection, "assets", "listed");
-
-	QSqlQuery selectAssetQuery(importConnection);
-	selectAssetQuery.prepare(
-		QStringLiteral("SELECT guid, type, name, collection, times_used, project_guid, date_created, "
-		               "last_updated, author, license, hash, version, parent, tags, properties, asset, "
-		               "thumbnail%1 FROM assets").arg(archiveHasListed ? ", listed" : ""));
-	executeAndCheckQuery(selectAssetQuery, "fetchImportAssets");
-
-	QMap<QString, QString> assetGuids; /* old x new guid */
-	QMap<QString, QString> archiveParents; /* new guid x the archive's parent */
-
-	QString guidToReturn = GUIDManager::generateGUID();
-
-	QVector<AssetRecord> assetsToImport;
-
-	while (selectAssetQuery.next()) {
-        AssetRecord data;
-		QSqlRecord record = selectAssetQuery.record();
-
-		for (int i = 0; i < record.count(); i++) {
-			if (selectAssetQuery.value(1).toInt() == static_cast<int>(jafType)) {
-				data.guid = guidToReturn;
-				assetGuids.insert(record.value(0).toString(), guidToReturn);
-			}
-			else {
-				QString guid = GUIDManager::generateGUID();
-				assetGuids.insert(record.value(0).toString(), guid);
-				data.guid = guid;
-			}
-
-            outGuids.insert(record.value(0).toString(), data.guid);
-
-			data.type = record.value(1).toInt();
-
-			// If we find a file with the same name, rename it (may or may not change)
-            if (!newNames.isEmpty()) {
-                for (const auto &name : newNames) {
-                    if (!newNames.value(record.value(2).toString()).isEmpty()) {
-                        data.name = newNames.value(record.value(2).toString());
-                    }
-                    else data.name = record.value(2).toString();
-                }
-            }
-            else {
-                data.name = record.value(2).toString();
-            }
-
-			data.collection = record.value(3).toInt();
-			data.timesUsed = record.value(4).toInt();
-            // Store assets don't have parents so keep this field NULL
-			if (!parent.isEmpty()) data.projectGuid = projectGuid;
-			data.dateCreated = record.value(6).toDateTime();
-			data.lastUpdated = record.value(7).toDateTime();
-			data.author = record.value(8).toString();
-			data.license = record.value(9).toString();
-			data.hash = record.value(10).toString();
-			data.version = record.value(11).toString();
-            // The ARCHIVE's parent, remapped below once every new guid exists.
-            archiveParents.insert(data.guid, record.value(12).toString());
-			data.tags = record.value(13).toByteArray();
-			data.properties = record.value(14).toByteArray();
-			data.asset = record.value(15).toByteArray();
-			data.thumbnail = record.value(16).toByteArray();
-			data.view_filter = view_filter_to;
-			data.listed = archiveHasListed ? record.value(17).toBool() : true;
-		}
-
-		assetsToImport.push_back(data);
-	}
-
-    // MEMBERSHIP SURVIVES THE ARCHIVE (small-items round B). A row's `parent`
-    // is its owning ASSET for an import member (the Mesh row, the member
-    // textures), and that guid is re-minted here — so it has to be remapped,
-    // exactly as importProject remaps its own. Before this, every .jaf import
-    // dropped the parent entirely and a model's members arrived as rows of
-    // their own: tiles in the editor tray and, now that membership is what the
-    // library grid hides by (memberSubquery), tiles in the Assets grid too.
-    // A parent that is not one of the archive's assets is the caller's folder
-    // (the `parent` argument) or nothing.
-    for (auto &asset : assetsToImport) {
-        const QString mapped = assetGuids.value(archiveParents.value(asset.guid));
-        asset.parent = !mapped.isEmpty() ? mapped : parent;
-    }
-
-    for (auto &asset : assetsToImport) {
-        if (asset.type == static_cast<int>(ModelTypes::Shader)   ||
-            asset.type == static_cast<int>(ModelTypes::Material) ||
-            asset.type == static_cast<int>(ModelTypes::Sky) ||
-            asset.type == static_cast<int>(ModelTypes::Object))
-        {
-            auto doc = QJsonDocument::fromJson(asset.asset);
-            QString docToString = doc.toJson(QJsonDocument::Compact);
-
-            QMapIterator<QString, QString> i(assetGuids);
-            while (i.hasNext()) {
-                i.next();
-                docToString.replace(i.key(), i.value());
-            }
-
-            QJsonDocument updatedDoc = QJsonDocument::fromJson(docToString.toUtf8());
-            asset.asset = updatedDoc.toJson();
-        }
-    }
-
-    assetRecords = assetsToImport;
-
-	QSqlQuery selectDepQuery(importConnection);
-	selectDepQuery.prepare("SELECT depender_type, dependee_type, depender, dependee FROM dependencies");
-	executeAndCheckQuery(selectDepQuery, "fetchImportDeps");
-
-	QVector<DependencyRecord> depsToImport;
-	while (selectDepQuery.next()) {
-        DependencyRecord data;
-		QSqlRecord record = selectDepQuery.record();
-		for (int i = 0; i < record.count(); i++) {
-			data.dependerType = record.value(0).toInt();
-			data.dependeeType = record.value(1).toInt();
-			if (!parent.isEmpty()) data.projectGuid = parent;
-			data.depender = assetGuids.value(record.value(2).toString());
-			data.dependee = assetGuids.value(record.value(3).toString());
-
-			data.id = GUIDManager::generateGUID();
-		}
-
-		if (!data.depender.isEmpty()) depsToImport.push_back(data);
-	}
-
-	for (const auto &asset : assetsToImport) {
-		QSqlQuery insertAssetQuery;
-		insertAssetQuery.prepare(
-			"INSERT INTO assets"
-			" (guid, type, name, collection, times_used, project_guid, date_created, last_updated, author,"
-			" license, hash, version, parent, tags, properties, asset, thumbnail, view_filter, listed)"
-			" VALUES(:guid, :type, :name, :collection, :times_used, :project_guid, :date_created, :last_updated, :author,"
-			" :license, :hash, :version, :parent, :tags, :properties, :asset, :thumbnail, :view_filter, :listed)"
-		);
-
-        if (jafType == ModelTypes::Texture) {
-            guidToReturn = asset.guid;
-        }
-
-		insertAssetQuery.bindValue(":guid", asset.guid);
-		insertAssetQuery.bindValue(":type", asset.type);
-		insertAssetQuery.bindValue(":name", asset.name);
-		insertAssetQuery.bindValue(":collection", asset.collection);
-		insertAssetQuery.bindValue(":times_used", asset.timesUsed);
-		insertAssetQuery.bindValue(":project_guid", asset.projectGuid);
-		insertAssetQuery.bindValue(":date_created", asset.dateCreated);
-		insertAssetQuery.bindValue(":last_updated", asset.lastUpdated);
-		insertAssetQuery.bindValue(":author", asset.author);
-		insertAssetQuery.bindValue(":license", asset.license);
-		insertAssetQuery.bindValue(":hash", asset.hash);
-		insertAssetQuery.bindValue(":version", asset.version);
-		insertAssetQuery.bindValue(":parent", asset.parent);
-		insertAssetQuery.bindValue(":tags", asset.tags);
-		insertAssetQuery.bindValue(":properties", asset.properties);
-		insertAssetQuery.bindValue(":asset", asset.asset);
-		insertAssetQuery.bindValue(":thumbnail", asset.thumbnail);
-		insertAssetQuery.bindValue(":view_filter", asset.view_filter);
-		insertAssetQuery.bindValue(":listed", asset.listed ? 1 : 0);
-
-		executeAndCheckQuery(insertAssetQuery, "insertAssetQuery");
-	}
-
-	for (const auto &dep : depsToImport) {
-        QSqlQuery importDep;
-        importDep.prepare(
-            "INSERT INTO dependencies (depender_type, dependee_type, project_guid, depender, dependee, id) "
-            "VALUES (:depender_type, :dependee_type, :project_guid, :depender, :dependee, :id)"
-        );
-        importDep.bindValue(":depender_type",   dep.dependerType);
-        importDep.bindValue(":dependee_type",   dep.dependeeType);
-        importDep.bindValue(":project_guid",    dep.projectGuid);
-        importDep.bindValue(":depender",        dep.depender);
-        importDep.bindValue(":dependee",        dep.dependee);
-        importDep.bindValue(":id",              dep.id);
-		executeAndCheckQuery(importDep, "ImportDep");
-	}
-
-    importConnection.close();
-    importConnection = QSqlDatabase();
-    QSqlDatabase::removeDatabase("NodeImportConnection");
-
-	tx.commit();
-	return guidToReturn;
-}
-
-QString Database::importAssetBundle(const QString & pathToDb, const QMap<QString, QString>& newNames, QMap<QString, QString>& outGuids, QVector<AssetRecord>& assetRecords, const QString &projectGuid, const QString & parent)
-{
-    QSqlDatabase importConnection = QSqlDatabase();
-    importConnection = QSqlDatabase::addDatabase(Constants::DB_DRIVER, "NodeImportConnection");
-    importConnection.setDatabaseName(pathToDb);
-
-    if (importConnection.isValid()) {
-        if (!importConnection.open()) {
-            irisLog(QString("Couldn't open a database connection! %1").arg(importConnection.lastError().text()));
-        }
-    }
-    else {
-        irisLog(QString("The database connection is invalid! %1").arg(importConnection.lastError().text()));
-    }
-
-    // Whole bundle import lands in one transaction on the main library (phase 0).
-    DbTransaction tx(db);
-
-    // See importAsset: library visibility travels with the archive, and an
-    // archive that predates the column imports listed.
-    const bool archiveHasListed = connectionHasColumn(importConnection, "assets", "listed");
-
-    QSqlQuery selectAssetQuery(importConnection);
-    selectAssetQuery.prepare(
-        QStringLiteral("SELECT guid, type, name, collection, times_used, project_guid, date_created, "
-                       "last_updated, author, license, hash, version, parent, tags, properties, asset, "
-                       "thumbnail, view_filter%1 FROM assets").arg(archiveHasListed ? ", listed" : ""));
-    executeAndCheckQuery(selectAssetQuery, "fetchImportAssets");
-
-    QMap<QString, QString> assetGuids; /* old x new guid */
-    QMap<QString, QString> archiveParents; /* new guid x the archive's parent */
-
-    QString guidToReturn = GUIDManager::generateGUID();
-
-    QVector<AssetRecord> assetsToImport;
-
-    while (selectAssetQuery.next()) {
-        AssetRecord data;
-        QSqlRecord record = selectAssetQuery.record();
-
-        for (int i = 0; i < record.count(); i++) {
-            QString guid = GUIDManager::generateGUID();
-            assetGuids.insert(record.value(0).toString(), guid);
-            data.guid = guid;
-
-            outGuids.insert(record.value(0).toString(), data.guid);
-
-            data.type = record.value(1).toInt();
-
-            // If we find a file with the same name, rename it (may or may not change)
-            if (!newNames.isEmpty()) {
-                for (const auto &name : newNames) {
-                    if (!newNames.value(record.value(2).toString()).isEmpty()) {
-                        data.name = newNames.value(record.value(2).toString());
-                    }
-                    else data.name = record.value(2).toString();
-                }
-            }
-            else {
-                data.name = record.value(2).toString();
-            }
-
-            data.collection = record.value(3).toInt();
-            data.timesUsed = record.value(4).toInt();
-            // Store assets don't have parents so keep this field NULL
-            if (!parent.isEmpty()) data.projectGuid = projectGuid;
-            data.dateCreated = record.value(6).toDateTime();
-            data.lastUpdated = record.value(7).toDateTime();
-            data.author = record.value(8).toString();
-            data.license = record.value(9).toString();
-            data.hash = record.value(10).toString();
-            data.version = record.value(11).toString();
-            // The ARCHIVE's parent, remapped below once every new guid exists.
-            archiveParents.insert(data.guid, record.value(12).toString());
-            data.tags = record.value(13).toByteArray();
-            data.properties = record.value(14).toByteArray();
-            data.asset = record.value(15).toByteArray();
-            data.thumbnail = record.value(16).toByteArray();
-            data.view_filter = record.value(17).toInt();
-            data.listed = archiveHasListed ? record.value(18).toBool() : true;
-        }
-
-        assetsToImport.push_back(data);
-    }
-
-    // Membership survives the archive — see importAsset above.
-    for (auto &asset : assetsToImport) {
-        const QString mapped = assetGuids.value(archiveParents.value(asset.guid));
-        asset.parent = !mapped.isEmpty() ? mapped : parent;
-    }
-
-    for (auto &asset : assetsToImport) {
-        if (asset.type == static_cast<int>(ModelTypes::Shader) ||
-            asset.type == static_cast<int>(ModelTypes::Material) ||
-            asset.type == static_cast<int>(ModelTypes::Object))
-        {
-            auto doc = QJsonDocument::fromJson(asset.asset);
-            QString docToString = doc.toJson(QJsonDocument::Compact);
-
-            QMapIterator<QString, QString> i(assetGuids);
-            while (i.hasNext()) {
-                i.next();
-                docToString.replace(i.key(), i.value());
-            }
-
-            QJsonDocument updatedDoc = QJsonDocument::fromJson(docToString.toUtf8());
-            asset.asset = updatedDoc.toJson();
-        }
-    }
-
-    assetRecords = assetsToImport;
-
-    QSqlQuery selectDepQuery(importConnection);
-    selectDepQuery.prepare("SELECT depender_type, dependee_type, depender, dependee FROM dependencies");
-    executeAndCheckQuery(selectDepQuery, "fetchImportDeps");
-
-    QVector<DependencyRecord> depsToImport;
-    while (selectDepQuery.next()) {
-        DependencyRecord data;
-        QSqlRecord record = selectDepQuery.record();
-        for (int i = 0; i < record.count(); i++) {
-            data.dependerType = record.value(0).toInt();
-            data.dependeeType = record.value(1).toInt();
-            if (!parent.isEmpty()) data.projectGuid = parent;
-            data.depender = assetGuids.value(record.value(2).toString());
-            data.dependee = assetGuids.value(record.value(3).toString());
-            data.id = GUIDManager::generateGUID();
-        }
-
-        depsToImport.push_back(data);
-    }
-
-    for (const auto &asset : assetsToImport) {
-        QSqlQuery insertAssetQuery;
-        insertAssetQuery.prepare(
-            "INSERT INTO assets"
-            " (guid, type, name, collection, times_used, project_guid, date_created, last_updated, author,"
-            " license, hash, version, parent, tags, properties, asset, thumbnail, view_filter, listed)"
-            " VALUES(:guid, :type, :name, :collection, :times_used, :project_guid, :date_created, :last_updated, :author,"
-            " :license, :hash, :version, :parent, :tags, :properties, :asset, :thumbnail, :view_filter, :listed)"
-        );
-
-        insertAssetQuery.bindValue(":guid", asset.guid);
-        insertAssetQuery.bindValue(":type", asset.type);
-        insertAssetQuery.bindValue(":name", asset.name);
-        insertAssetQuery.bindValue(":collection", asset.collection);
-        insertAssetQuery.bindValue(":times_used", asset.timesUsed);
-        insertAssetQuery.bindValue(":project_guid", asset.projectGuid);
-        insertAssetQuery.bindValue(":date_created", asset.dateCreated);
-        insertAssetQuery.bindValue(":last_updated", asset.lastUpdated);
-        insertAssetQuery.bindValue(":author", asset.author);
-        insertAssetQuery.bindValue(":license", asset.license);
-        insertAssetQuery.bindValue(":hash", asset.hash);
-        insertAssetQuery.bindValue(":version", asset.version);
-        insertAssetQuery.bindValue(":parent", asset.parent);
-        insertAssetQuery.bindValue(":tags", asset.tags);
-        insertAssetQuery.bindValue(":properties", asset.properties);
-        insertAssetQuery.bindValue(":asset", asset.asset);
-        insertAssetQuery.bindValue(":thumbnail", asset.thumbnail);
-        insertAssetQuery.bindValue(":view_filter", asset.view_filter);
-        insertAssetQuery.bindValue(":listed", asset.listed ? 1 : 0);
-
-        executeAndCheckQuery(insertAssetQuery, "insertAssetQuery");
-    }
-
-    for (const auto &dep : depsToImport) {
-        QSqlQuery importDep;
-        importDep.prepare(
-            "INSERT INTO dependencies (depender_type, dependee_type, project_guid, depender, dependee, id) "
-            "VALUES (:depender_type, :dependee_type, :project_guid, :depender, :dependee, :id)"
-        );
-        importDep.bindValue(":depender_type", dep.dependerType);
-        importDep.bindValue(":dependee_type", dep.dependeeType);
-        importDep.bindValue(":project_guid", dep.projectGuid);
-        importDep.bindValue(":depender", dep.depender);
-        importDep.bindValue(":dependee", dep.dependee);
-        importDep.bindValue(":id", dep.id);
-        executeAndCheckQuery(importDep, "ImportDep");
-    }
-
-    importConnection.close();
-    importConnection = QSqlDatabase();
-    QSqlDatabase::removeDatabase("NodeImportConnection");
-
-    tx.commit();
-    return guidToReturn;
 }
 
 bool Database::jafVersionAccepted(const QString &version)

@@ -1,5 +1,5 @@
 // shadergraph.ao_removed — HLMS_ADOPTION P2: the ambient-occlusion ghost is
-// gone, and a graph that was authored WITH it still loads correctly.
+// gone, and a graph authored WITH it is refused.
 //
 // The ghost: the renderer has no ambient-occlusion input at all, yet the
 // master node carried an "Occlusion" socket at index 4, GraphBaker baked it to
@@ -7,23 +7,16 @@
 // dropped it on the floor. The socket is deleted.
 //
 // Deleting a socket from a node whose CONNECTIONS ARE STORED BY INDEX is the
-// dangerous half, and it is what this suite is really about. Reading a
-// layout-1 graph as if it were layout 2 would land the old Emissive connection
-// on Normal, Alpha on Emissive, Alpha Cutoff on Alpha — silently, with no
-// error anywhere and no way for a user to know their material changed. So the
-// layout is VERSIONED and deserialize migrates. This asserts:
+// dangerous half. Reading a layout-1 graph as if it were layout 2 would land
+// the old Emissive connection on Normal, Alpha on Emissive, Alpha Cutoff on
+// Alpha — silently. So the layout is VERSIONED and deserialize REFUSES any
+// other (FORWARD-ONLY-1: the index-shift migration is deleted). This asserts:
 //
 //   1. new graphs stamp socketLayout 2 and the master has nine sockets, none
 //      of them Occlusion;
-//   2. a layout-1 graph (ten sockets, Occlusion at 4) loads with every
-//      connection ABOVE the removed socket shifted down one — Emissive is
-//      still Emissive;
-//   3. the connection INTO Occlusion is dropped and REPORTED, exactly once,
-//      through graph.bakeInfo()'s "migrations" — a dropped connection the user
-//      is not told about is the thing being avoided;
-//   4. no occlusionMap comes out of a bake, and no occlusion* value survives
-//      into the evaluated material;
-//   5. an already-migrated (layout 2) graph is NOT shifted a second time.
+//   2. a layout-1 graph (ten sockets, Occlusion at 4) is refused whole;
+//   3. a layout-2 graph loads as written, and no occlusion* value or socket
+//      survives into bakeInfo or the evaluated material.
 //
 // No GL, no engine. QT_QPA_PLATFORM=offscreen.
 #include <QApplication>
@@ -122,11 +115,8 @@ int main(int argc, char** argv)
     CHECK(saved["socketLayout"].toInt() == NodeGraph::kSocketLayoutVersion,
           "a saved graph stamps its socket layout");
 
-    // ---- 2 + 3. a layout-1 file migrates, and says what it dropped ----
+    // ---- 2. a layout-1 file is REFUSED (FORWARD-ONLY-1: no index shift) ----
     {
-        // an extra node to hang the legacy Occlusion connection off
-        NodeGraph seed;
-        seed.setNodeLibrary(&lib);
         QJsonObject l1 = saved;
         QJsonArray nodes = l1["nodes"].toArray();
         QJsonObject occNode;
@@ -140,40 +130,27 @@ int main(int argc, char** argv)
         l1["nodes"] = nodes;
         l1 = toLayout1(l1, emissiveId, alphaId, QStringLiteral("legacy-occlusion-source"));
 
-        NodeGraph* loaded = NodeGraph::deserialize(l1, &lib);
-        CHECK(loaded != nullptr, "the layout-1 graph loads at all");
+        QString reason;
+        NodeGraph* loaded = NodeGraph::deserialize(l1, &lib, &reason);
+        CHECK(loaded == nullptr, "a layout-1 graph is REFUSED, not shifted");
+        CHECK(!reason.isEmpty(), "...with a reason the caller can show");
+        delete loaded;
+    }
+
+    // ---- 3. a layout-2 file loads as written, with nothing occlusion-shaped ----
+    {
+        NodeGraph* loaded = NodeGraph::deserialize(saved, &lib);
+        CHECK(loaded != nullptr, "the layout-2 graph loads");
         if (!loaded) { std::printf("FAILED (%d)\n", failures); return 1; }
-
         auto* master = loaded->getMasterNode();
-        CHECK(master && master->inSockets.size() == 9, "loaded master has the new layout");
+        CHECK(master->inSockets[4]->hasConnection() &&
+                  master->inSockets[4]->getConnection()->leftSocket->node->id == emissiveId,
+              "Emissive stays on index 4");
 
-        // The migration's whole job: Emissive is still Emissive.
-        auto socketSource = [&](int index) -> QString {
-            auto* sock = master->inSockets[index];
-            if (!sock->hasConnection()) return QString();
-            return sock->getConnection()->leftSocket->node->id;
-        };
-        CHECK(socketSource(4) == emissiveId,
-              "the old Emissive connection (index 5) landed on Emissive (index 4)");
-        CHECK(socketSource(5) == alphaId,
-              "the old Alpha connection (index 6) landed on Alpha (index 5)");
-        CHECK(socketSource(3).isEmpty(),
-              "Normal did NOT collect the shifted Emissive connection");
-
-        // The dropped Occlusion chain is REPORTED — once.
-        CHECK(loaded->migrationNotes.size() == 1,
-              "loading reported exactly one migration note");
-        CHECK(loaded->migrationNotes.value(0).contains(QStringLiteral("Occlusion")),
-              "the note names the Occlusion input");
         const QJsonObject info = materials::GraphBaker::classify(loaded, nullptr);
-        CHECK(info.contains(QStringLiteral("migrations")),
-              "graph.bakeInfo() carries the migration note (where a caller looks)");
-        CHECK(info["migrations"].toArray().size() == 1,
-              "bakeInfo reports it exactly once");
         CHECK(!info["perSocket"].toObject().contains(QStringLiteral("Occlusion")),
-              "bakeInfo has no Occlusion socket to classify any more");
+              "bakeInfo has no Occlusion socket to classify");
 
-        // ---- 4. nothing occlusion-shaped survives into the material ----
         const auto result = PbrGraphEvaluator::evaluate(loaded);
         bool sawOcclusionValue = false;
         for (auto it = result.values.begin(); it != result.values.end(); ++it)
@@ -185,24 +162,6 @@ int main(int argc, char** argv)
         for (auto* prop : material->properties)
             if (prop->name.startsWith(QStringLiteral("occlusion"))) declaresOcclusion = true;
         CHECK(!declaresOcclusion, "PbrMaterial declares no occlusion row");
-
-        // Re-saving must stamp the new layout, so the file migrates ONCE ever.
-        CHECK(loaded->serialize()["socketLayout"].toInt() == NodeGraph::kSocketLayoutVersion,
-              "re-saving the migrated graph stamps layout 2");
-        delete loaded;
-    }
-
-    // ---- 5. a layout-2 file is NOT shifted again ----
-    {
-        NodeGraph* loaded = NodeGraph::deserialize(saved, &lib);
-        CHECK(loaded != nullptr, "the layout-2 graph loads");
-        if (!loaded) { std::printf("FAILED (%d)\n", failures); return 1; }
-        auto* master = loaded->getMasterNode();
-        CHECK(master->inSockets[4]->hasConnection() &&
-                  master->inSockets[4]->getConnection()->leftSocket->node->id == emissiveId,
-              "an already-migrated graph keeps Emissive on index 4 (no double shift)");
-        CHECK(loaded->migrationNotes.isEmpty(),
-              "a layout-2 graph reports no migration");
         delete loaded;
     }
 

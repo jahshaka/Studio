@@ -100,8 +100,7 @@ struct ImportRequest
 };
 
 /// Is this path a MODEL file — the one kind the import dialog asks about?
-/// Media never prompts, and a .jaf archive carries assets that were already
-/// imported with their own settings.
+/// Media never prompts.
 bool isModelImportPath(const QString &path);
 
 struct ImportResult
@@ -111,8 +110,6 @@ struct ImportResult
     QString error;              // non-empty = failed
     QStringList warnings;
     QStringList objectOids;     // every CAS object this import wrote or reused
-    QString jafKind;            // .jaf imports: the manifest kind ("object", …)
-    QMap<QString, QString> guidMap;   // .jaf imports: archive guid → new guid
     QJsonObject metadata;       // the describe-stage block recorded on the row
     QString bakeStages;         // the mesh bake's per-mesh, per-stage ms (MeshBake::Model::stageSummary) — the log line's, never recorded
     bool ok() const { return error.isEmpty() && !assetGuid.isEmpty(); }
@@ -151,17 +148,6 @@ struct StagedDep
     QString projectGuid;
 };
 
-/// .jaf archives carry their own row set (asset.db) and payload dirs; the
-/// spine commits them through Database::importAsset/importAssetBundle and
-/// ingests the payload CAS-first. kind empty = not a .jaf import.
-struct StagedJaf
-{
-    QString kind;               // "object" | "texture" | … | "bundle"
-    QString dbPath;             // extracted asset.db
-    QString assetsDir;          // extracted assets/ payload
-    QStringList bundleLines;    // bundle manifests: the member guid list
-};
-
 /// The importer's complete plan; the spine commits it atomically.
 struct StagedAsset
 {
@@ -173,14 +159,12 @@ struct StagedAsset
     QJsonObject metadata;                // describe-stage block ("metadata" property)
     QJsonObject importRecord;            // determinism record ("import" property)
     QString bakeStages;                  // the bake's per-stage ms, for the import's log line only (never on the row: it is the run, not the content)
-    QString jafKind;
-    StagedJaf jaf;
     QStringList warnings;
     std::function<void()> registerSession;   // AssetManager adds; runs after commit
 
     /// The COMPLETE import-settings record this import actually applied
     /// (irisgl/import/importsettings.h), when the importer has one. Empty for
-    /// every importer that takes no settings (media, .jaf). The spine records
+    /// every importer that takes no settings (media). The spine records
     /// it in the determinism record instead of the caller's partial request,
     /// so `assets.importSettings` and the re-bake lookup read one shape.
     QJsonObject appliedSettings;

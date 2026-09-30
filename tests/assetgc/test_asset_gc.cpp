@@ -124,7 +124,6 @@ int main(int argc, char **argv)
     const QByteArray bytesDrift   = QByteArray("DRIFT---").repeated(90);
     const QByteArray bytesDead    = QByteArray("DEADOBJ-").repeated(70);
     const QByteArray bytesStray   = QByteArray("STRAY---").repeated(60);
-    const QByteArray bytesLegacy  = QByteArray("LEGACY--").repeated(50);
 
     writeFile(srcDir + "/shared.bin",   bytesShared);
     writeFile(srcDir + "/solo.bin",     bytesSolo);
@@ -202,15 +201,8 @@ int main(int argc, char **argv)
     CHECK(scalar(conn, "SELECT COUNT(*) FROM asset_files WHERE oid = '" + oidBake + "' AND role = 'bake'") == 1,
           "the bake has exactly one asset_files row, under its asset");
 
-    // A live sidecar, and a live per-guid folder holding bytes the CAS does
-    // NOT have (the materials-module texture shape).
+    // A live sidecar.
     CHECK(AssetCas::writeSidecar(conn, root, "guidSolo", &error), "sidecar for a live asset");
-    writeFile(root + "/guidLegacyLive/keepme.bin", bytesLegacy);
-
-    // A redundant legacy-view entry for a LIVE asset: byte-for-byte the CAS
-    // object. This one IS reclaimable — it is the second copy the retired
-    // view used to cost.
-    writeFile(root + "/guidShared/shared.bin", bytesShared);
 
     // A staging temp written just now: it may belong to an import in flight.
     const QString freshTemp = AssetStorePaths::objectPathIn(root, oidSolo, "bin") + ".tmp-4242-0";
@@ -262,10 +254,6 @@ int main(int argc, char **argv)
         "{\"formatVersion\":1,\"guid\":\"guidGhostAsset\",\"name\":\"ghost.bin\",\"type\":1,"
         "\"files\":[{\"role\":\"source\",\"oid\":\"" + ghostOid.toUtf8() + "\",\"name\":\"ghost.bin\",\"size\":4096,\"ext\":\"bin\"}]}"));
 
-    // (d) a per-guid folder naming no asset row
-    const QString deadFolder = root + "/guidGhostFolder";
-    writeFile(deadFolder + "/leftover.bin", bytesStray);
-
     // ---- verify() is green BEFORE the sweep (bar the ghost row we planted) ----
     {
         conn = QSqlDatabase();
@@ -310,25 +298,12 @@ int main(int argc, char **argv)
     CHECK(!reports(dry.straySidecars, AssetStorePaths::sidecarPathIn(root, "guidSolo")),
           "THE LAW: the live asset's sidecar is not collected");
 
-    CHECK(dry.legacyFolders.items.size() == 1, "dry run: exactly 1 dead per-guid folder");
-    CHECK(reports(dry.legacyFolders, deadFolder), "dry run names the dead folder");
-    CHECK(!reports(dry.legacyFolders, root + "/guidLegacyLive"),
-          "THE LAW: a live asset's folder is not collected");
-    CHECK(!reports(dry.legacyFolders, root + "/guidShared"),
-          "THE LAW: a live asset's folder is not collected even when its content IS in the CAS");
-
     CHECK(dry.deadPins.items.isEmpty(),
           "THE LAW: a pin of a LIVING project is never a dead pin");
 
-    CHECK(dry.redundantLegacyFiles.items.size() == 1, "dry run: exactly 1 redundant legacy copy");
-    CHECK(reports(dry.redundantLegacyFiles, root + "/guidShared/shared.bin"),
-          "dry run names the duplicated view entry");
-    CHECK(!reports(dry.redundantLegacyFiles, root + "/guidLegacyLive/keepme.bin"),
-          "THE LAW: a legacy file the CAS does NOT hold is not collected");
-
     // And nothing moved.
     CHECK(QFileInfo::exists(deadObject) && QFileInfo::exists(strayObject)
-              && QFileInfo::exists(deadSidecar) && QDir(deadFolder).exists(),
+              && QFileInfo::exists(deadSidecar),
           "the dry run left every reported artifact in place");
 
     // ================= THE REFUSAL =================
@@ -371,9 +346,6 @@ int main(int argc, char **argv)
     CHECK(!QFileInfo::exists(strayObject), "the uncatalogued object is gone");
     CHECK(!QFileInfo::exists(staleTemp), "the abandoned staging temp is gone");
     CHECK(!QFileInfo::exists(deadSidecar), "the tombstone sidecar is gone");
-    CHECK(!QDir(deadFolder).exists(), "the dead per-guid folder is gone");
-    CHECK(!QFileInfo::exists(root + "/guidShared/shared.bin"), "the duplicated view entry is gone");
-    CHECK(!QDir(root + "/guidShared").exists(), "…and the folder it emptied went with it");
     CHECK(scalar(conn, "SELECT COUNT(*) FROM files") == filesBefore - 2,
           "exactly the two unreferenced files rows were dropped");
 
@@ -392,8 +364,6 @@ int main(int argc, char **argv)
           "LIVE: the refcount-drift object is byte-for-byte intact");
     CHECK(readFile(AssetStorePaths::objectPathIn(root, oidBake, "jmb")) == bytesBake,
           "LIVE: the mesh bake survived the sweep byte-for-byte");
-    CHECK(readFile(root + "/guidLegacyLive/keepme.bin") == bytesLegacy,
-          "LIVE: the legacy-only file is byte-for-byte intact");
     CHECK(readFile(freshTemp) == bytesSolo, "LIVE: the in-flight staging temp is untouched");
     CHECK(QFileInfo::exists(AssetStorePaths::sidecarPathIn(root, "guidSolo")),
           "LIVE: the live asset's sidecar survived");

@@ -34,10 +34,8 @@ PATTERNS=(
     'document/assets/shader\.h'
 )
 
-# app/shaders/ is a PATH, not a symbol: the six app/shader_defs/*.shader files
-# still name files under it in their (deliberately unread) vertex_shader /
-# fragment_shader keys, so the path check is that the DIRECTORY is gone and no
-# build file references the qrc.
+# app/shaders/ is a PATH, not a symbol: the path check is that the DIRECTORY is
+# gone and no build file references the qrc.
 SEARCH_DIRS=(src irisgl/core irisgl/document irisgl/engine irisgl/import
              irisgl/mirror tests app/themes cmake)
 
