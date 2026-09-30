@@ -21,15 +21,18 @@
 //   D. THE PLAYER'S FLOOR HIDE lands on the next sync in a scene the verifier
 //      cannot cover in one pass (PLAYER-FLOOR-1), on a node carrying
 //      `defaultFloor` — the term the Player's setting is about.
-//   E. MEASURED, NOT ASSERTED: whether the plane darkens under a caster above it
-//      (printed for the record: a backdrop is out of every shadow MAP, and what
-//      the main pass does with the maps is the datablock's).
+//   E. IT RECEIVES SHADOWS AND CASTS NONE: a caster above darkens it (paired
+//      against the same caster with casting off), and a box under it reads the
+//      same with the plane on as off.
 #include <QGuiApplication>
 
 #include "bridge/previewmesh.h"
 #include <QColor>
 #include <cstdio>
 #include <cmath>
+#include <algorithm>
+#include <utility>
+#include <vector>
 
 #include "irisgl/irisglfwd.h"
 #include "irisgl/document/materials/pbrmaterial.h"
@@ -180,31 +183,102 @@ int main(int argc, char **argv)
     CHECK(shown.meshes == before.meshes && shown.materials == before.materials,
           "C: ...and the census is exactly where it was");
 
-    // ---- E. the record: does a caster above it darken it? ---------------------
+    // ---- E. IT RECEIVES SHADOWS AND CASTS NONE ---------------------------------
+    // The backdrop bit takes the plane out of every CASTER and capture pass; its
+    // material (the default floor material in Studio) still samples the shadow
+    // map in the main pass — which is what gives the Assets preview its contact
+    // shadow. Both halves, paired in this process:
+    //   E1 a RED cube above the plane darkens grey plane pixels, and the SAME
+    //      scene with the cube's casting switched off darkens none (the cube's own
+    //      red pixels are excluded by colour, so only the shadow is counted);
+    //   E2 a grey box UNDER the plane, seen from below it (the plane faces up
+    //      and is culled from beneath), reads the same with the plane on as off:
+    //      the plane throws no shadow on it.
     {
+        doc->shadowEnabled = true;
+        view->setShadows(true);
+        // A sun from ABOVE for this case (a light emits down its local -Y,
+        // tipped 25 degrees): the fixture's own sun lights the far band and
+        // barely reaches a floor seen from above, so a shadow would have nothing
+        // to take away. Not so bright that the box under the plane (E2) clips.
+        sun->setVisible(false);
+        auto topSun = iris::LightNode::create();
+        topSun->setLightType(iris::LightType::Directional);
+        topSun->intensity = 0.8f;
+        topSun->setLocalRot(iris::Quat::fromEulerAngles(-25.0f, 0.0f, 0.0f));
+        doc->getRootNode()->addChild(topSun);
+        auto red = iris::PbrMaterial::create();
+        red->setBaseColor(QColor(220, 10, 10));
         auto caster = iris::MeshNode::create();
         caster->setName("Caster");
         caster->setMesh(previewmesh::load(":/assets/models/cube.obj"));
-        caster->setMaterial(grey);
-        caster->setLocalPos(iris::Vec3(0.0f, 2.0f, -8.0f));
+        caster->setMaterial(red);
+        caster->setLocalPos(iris::Vec3(0.0f, 1.5f, -8.0f));
         doc->getRootNode()->addChild(caster);
-        doc->shadowEnabled = true;
-        view->setShadows(true);
         cam->setLocalPos(iris::Vec3(0.0f, 14.0f, 4.0f));
         cam->lookAt(iris::Vec3(0.0f, 0.0f, -8.0f));
-        renderN(8);
-        mirror.applyCamera(cam, view);
-        renderN(4);
-        float lo = 1e9f, hi = -1e9f;
-        for (unsigned y = 16; y < kSize - 16; y += 4)
-            for (unsigned x = 16; x < kSize - 16; x += 4) {
-                const Colour c = img.at(x, y);
-                const float l = (c.r + c.g + c.b) / 3.0f;
-                lo = std::min(lo, l); hi = std::max(hi, l);
-            }
-        std::printf("   E (record): plane luminance over the frame %.3f .. %.3f with a caster above it\n",
-                    lo, hi);
+        const auto shadowedPlanePixels = [&](int frames) {
+            renderN(frames);
+            mirror.applyCamera(cam, view);
+            renderN(frames);
+            std::vector<float> lum;
+            for (unsigned y = 0; y < kSize; ++y)
+                for (unsigned x = 0; x < kSize; ++x) {
+                    const Colour c = img.at(x, y);
+                    if (c.r > 1.6f * c.g + 0.02f) continue;          // the red caster itself
+                    lum.push_back((c.r + c.g + c.b) / 3.0f);
+                }
+            if (lum.empty()) return std::pair<int, float>(0, 0.0f);
+            std::vector<float> sorted = lum;
+            std::nth_element(sorted.begin(), sorted.begin() + sorted.size() * 9 / 10, sorted.end());
+            const float lit = sorted[sorted.size() * 9 / 10];
+            int dark = 0;
+            for (float l : lum) if (l < 0.7f * lit) ++dark;
+            return std::pair<int, float>(dark, lit);
+        };
+        const auto withShadow = shadowedPlanePixels(8);
+        caster->setShadowCastingEnabled(false);
+        const auto without = shadowedPlanePixels(8);
+        std::printf("   E1: shadowed plane pixels %d (lit %.3f) with the caster casting, %d (lit %.3f) "
+                    "with its casting off\n", withShadow.first, withShadow.second, without.first,
+                    without.second);
+        CHECK(withShadow.first > 200 && without.first < withShadow.first / 10,
+              "E1: THE PLANE RECEIVES SHADOWS — a caster above it darkens it, and the same caster "
+              "with casting off does not");
         caster->removeFromParent();
+
+        // E2: under the plane.
+        auto under = iris::MeshNode::create();
+        under->setName("Under");
+        under->setMesh(previewmesh::load(":/assets/models/cube.obj"));
+        under->setMaterial(grey);
+        under->setLocalPos(iris::Vec3(0.0f, -4.0f, -6.0f));
+        doc->getRootNode()->addChild(under);
+        cam->setLocalPos(iris::Vec3(0.0f, -0.5f, 0.0f));
+        cam->lookAt(iris::Vec3(0.0f, -3.0f, -6.0f));
+        const auto boxTop = [&]() {
+            renderN(8);
+            mirror.applyCamera(cam, view);
+            renderN(8);
+            double sum = 0; int n = 0;
+            for (unsigned y = kSize / 2 - 6; y < kSize / 2 + 6; ++y)
+                for (unsigned x = kSize / 2 - 6; x < kSize / 2 + 6; ++x) {
+                    const Colour c = img.at(x, y);
+                    sum += (c.r + c.g + c.b) / 3.0; ++n;
+                }
+            return n ? sum / n : 0.0;
+        };
+        const double underOn = boxTop();
+        mirror.setGroundPlane(false);
+        const double underOff = boxTop();
+        std::printf("   E2: the box under the plane reads %.4f with the plane on, %.4f with it off\n",
+                    underOn, underOff);
+        CHECK(!isSky(img.at(kSize / 2, kSize / 2)) && underOn < 0.98 && std::fabs(underOn - underOff) < 0.01,
+              "E2: THE PLANE CASTS NOTHING — a lit box under it reads the same with the plane as without");
+        under->removeFromParent();
+        topSun->removeFromParent();
+        sun->setVisible(true);
+        doc->shadowEnabled = false;
         view->setShadows(false);
         cam->setLocalPos(iris::Vec3(0.0f, 1.6f, 0.0f));
         cam->lookAt(iris::Vec3(0.0f, 1.55f, -100.0f));

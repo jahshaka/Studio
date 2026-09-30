@@ -92,8 +92,8 @@ WorldPropertyWidget::WorldPropertyWidget()
     showGroundPlaneToggle = this->addCheckBox("Ground Plane", false);
     showGroundPlaneToggle->setToolTip(QStringLiteral(
         "An infinite matte ground the editor draws just under y = 0, so a scene with no floor "
-        "still stands on something. It is not part of the scene: no shadows, no bounce light, "
-        "no reflections, and the Player never shows it."));
+        "still stands on something. It is not part of the scene: it casts no shadow but receives "
+        "them, adds no bounce light, is in no reflection or ray, and the Player never shows it."));
 
     // WHAT PLAY DOES (AVATAR_LOCOMOTION_SPEC §8.5). It belongs here and not in
     // the World Mode section: world.modeTable is the SCALABILITY registry

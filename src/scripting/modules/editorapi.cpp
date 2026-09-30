@@ -172,7 +172,7 @@ QVector<VerbInfo> EditorApi::verbs() const
           "The viewport's editor helpers, as they are right now: `grid` the ground grid, "
           "`groundPlane` the Ground plane widget — an infinite matte ground (the default floor "
           "material) the editor draws just under y = 0 so a scene with no floor still stands on "
-          "something; it is not in the document, casts and receives no shadow, is in no GI "
+          "something; it is not in the document, casts no shadow (it receives them), is in no GI "
           "gather, no ray query, no reflection probe and not on Atom (world.atomStatus() counts it "
           "under `notWorld`); per scene, OFF by default (the scene templates carry real floors), "
           "and the Player never draws it; "
