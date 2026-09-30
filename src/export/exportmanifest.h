@@ -99,9 +99,10 @@ struct ManifestAsset
 ///     "camera": { "fov": 45.0, "height": 2.5 }  // the SAVED editor camera
 ///   }
 ///
-/// `extent` is the world AABB of the scene's GEOMETRY excluding the ground
-/// plane (sceneextents::worldAabb over the mesh nodes, minus any node the
-/// caller drops) — the number a human means by "how big is this room". Readers
+/// `extent` is the world AABB of the scene's GEOMETRY (sceneextents::describe:
+/// worldAabb over every root child, the scene's floors included — a floor is
+/// an ordinary node, WORLD-MODEL-1), so a Basic world reads at least its
+/// 100 m Floor. Readers
 /// that do not know the key ignore it; `present` false means the archive
 /// predates the block, never that the scene has no size.
 struct ManifestScene

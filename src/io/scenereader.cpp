@@ -249,8 +249,8 @@ QString SceneReader::resolveAssetPath(const QString &guid)
     //
     // Two by-NAME fallbacks followed until then: `assetDirectory + row name`
     // for a library-source read and `projectFolder + row name` for a project
-    // load. The second existed for exactly one asset — the default ground's
-    // Tile.png, which MainWindow::createDefaultScene copied into the project
+    // load. The second existed for exactly one asset — the then-default ground's
+    // Tile.png, which the new-scene template once copied into the project
     // folder under a bare catalog row, and which the writer re-found by name
     // on save: the two had to agree or the floor reopened bare white (the
     // "reopen lighting blowout"). The first had lost its last real directory

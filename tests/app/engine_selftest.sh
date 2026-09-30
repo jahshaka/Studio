@@ -22,16 +22,14 @@
 #      B1 == B2 is LEGAL on a machine with no ray query — the runner says so and
 #      exits 0 — so this arm asserts the inequality only when the runner did not
 #      print that sentence.
-#   2. THE BROKEN-GROUND ARM (smoke L10 item 3). On 2026-09-11 the default
-#      scene's ground failed to load (`model :/models/ground.obj: error parsing
-#      file` in the log) and the self-test rendered a groundless scene and
-#      exited 0: its only pixel assertion was "the centre is not the clear
-#      colour", which the SKY satisfies on its own. The self-test now asserts
-#      the default scene's ground node carries real geometry before it renders,
-#      and this arm proves the assertion bites: JAHSHAKA_SELFTEST_BREAK_GROUND=1
-#      (read ONLY by the self-test runner) re-points the ground at a resource
-#      that does not exist — the state a parse failure leaves — and the run
-#      must exit 1 naming the ground. It fails before the frame pump, so the
+#   2. THE BROKEN-GROUND ARM (smoke L10 item 3). A default scene whose floor
+#      fails to load renders a groundless scene that still exits 0 on a pixel
+#      check alone ("the centre is not the clear colour" — the SKY satisfies it).
+#      The self-test asserts the Basic template's Floor (found by its
+#      defaultFloor flag) carries real geometry before it renders, and this arm
+#      proves the assertion bites: JAHSHAKA_SELFTEST_BREAK_GROUND=1 (read ONLY
+#      by the self-test runner) drops the floor's mesh — the state a failed
+#      bake read leaves — and the run must exit 1 naming the ground. It fails before the frame pump, so the
 #      arm costs one boot.
 #
 # usage: engine_selftest.sh <jahshaka-binary> <out-dir>

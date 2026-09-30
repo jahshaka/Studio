@@ -120,7 +120,7 @@ QString MaterialReader::resolveTextureGuid(const QString &guid)
 	// 15c). Two by-NAME fallbacks followed until then — `projectFolder +
 	// row name` for a Project read and `globalSourceFolder + row name` for a
 	// GlobalAssets one — and the project half existed for exactly one asset:
-	// the default ground's Tile.png, which MainWindow::createDefaultScene
+	// the then-default ground's Tile.png, which the new-scene template once
 	// copied into the project folder under a bare catalog row the store knew
 	// nothing about (the "reopen lighting blowout", 65,65,65 -> 255,255,255,
 	// was that asymmetry between this reader and the writer). The tile is a

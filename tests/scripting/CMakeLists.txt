@@ -1556,8 +1556,8 @@ set_tests_properties(scripting.e2e.player_bounce PROPERTIES
     LABELS "scripting"
     TIMEOUT 300)
 
-# scripting.e2e.new_scene — project.create(name, {empty, location}), which IS
-# the New Scene dialog's two new controls (owner review R1 / R1b, lane
+# scripting.e2e.new_scene — project.create(name, {template, location}), which IS
+# the New Scene dialog's two controls (WORLD-MODEL-1: Basic / Empty / World) (owner review R1 / R1b, lane
 # SMALL-UI-A). Engine up: the default template's sky is a RENDERER fact as much
 # as a document one, and the empty world has to be built by the same route.
 jah_pool_arm(editor new_scene ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_new_scene.js 10)

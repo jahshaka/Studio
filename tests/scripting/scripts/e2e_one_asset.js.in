@@ -45,7 +45,7 @@ project.create("one asset");
 
 // A NEW PROJECT'S TRAY IS EMPTY (owner, 2026-09-13, lane BAR-1: "the project
 // asset tray should only show assets and items added to the project"). A fresh
-// project has rows of its own — the default Ground and the shipped checker it
+// project has rows of its own — the template's Floor and the shipped checker it
 // stands on — but neither is anything the user added: the Ground is a node's
 // own row and the checker is PLATFORM-owned (services/shippedassets.h), both
 // dropped by the tray's rule 4. Every count below is relative to this.

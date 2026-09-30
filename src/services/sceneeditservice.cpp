@@ -294,7 +294,7 @@ iris::ParticleSystemNodePtr SceneEditService::addParticleSystem(iris::ParticlePr
     // PROJECT: with none open (a headless script, the startup placeholder)
     // they used to land in the library stamped with an empty project guid, one
     // row per emitter nobody could see (15c review #1 — the same guard the
-    // material presets and the default Ground row got in 15c).
+    // material presets and the default floor's row got in 15c).
     const bool haveProject = project && !project->getProjectGuid().isEmpty();
     if (haveProject) {
         // THE EXISTING FOLDER'S GUID (small-items round B). This minted a fresh
