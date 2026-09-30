@@ -82,12 +82,10 @@ int main(int argc, char **argv)
     CHECK(db.checkIfColumnExists("collections", "parent"), "the fresh schema has the parent column");
     {
         QSqlQuery q;
-        bool ok = q.exec("INSERT INTO collections (name, date_created, collection_id) "
-                         "VALUES ('Uncategorized', datetime(), 0)");
-        ok = ok && q.exec("INSERT INTO collections (name, date_created) VALUES ('Legacy Props', datetime())");
-        CHECK(ok, "two collections inserted with no parent given");
+        const bool ok = q.exec("INSERT INTO collections (name, date_created) VALUES ('Legacy Props', datetime())");
+        CHECK(ok, "a collection inserted with no parent given");
         auto colls = db.fetchCollections();
-        CHECK(colls.size() == 2, "both collections listed");
+        CHECK(colls.size() == 2, "the seeded Uncategorized and the new one are listed");
         CHECK(findCollection(colls, 0).parent == -1, "Uncategorized reads parent -1 (top level)");
         bool topLevel = false;
         for (const auto &c : colls)

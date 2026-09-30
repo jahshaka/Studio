@@ -90,10 +90,8 @@ ALLOWED = [
     ('float(camRotQuat.value("x").toDouble(0.0))', 'the identity quaternion'),
     ('float(camRotQuat.value("y").toDouble(0.0))', 'the identity quaternion'),
     ('float(camRotQuat.value("z").toDouble(0.0))', 'the identity quaternion'),
-    ('return iris::Quat(float(o["scalar"].toDouble(1.0))', 'the identity quaternion'),
-    ('float(o["x"].toDouble(0.0))', 'the identity quaternion'),
-    ('float(o["y"].toDouble(0.0))', 'the identity quaternion'),
-    ('float(o["z"].toDouble(0.0))', 'the identity quaternion'),
+    ('sceneNode->setLocalRot(iris::Quat(float(rot["scalar"].toDouble(1.0))',
+     'the identity quaternion'),
     ('socket.rotation = iris::Quat(float(rot["scalar"].toDouble(1.0))',
      'the identity quaternion'),
     ('float(rot["x"].toDouble(0.0))', 'the identity quaternion'),
@@ -103,9 +101,6 @@ ALLOWED = [
     # --- sentinels and enum parsing, not values ------------------------------
     ('nodeObj["type"].toString("empty")',
      'a node TYPE, which selects a class — not a default value of a field'),
-    ('mat["materialType"].toString("custom")',
-     "the material FORMAT's own legacy spelling: a block with no type is the "
-     'old custom-shader material, which is a format fact'),
     ('nodeObj["activeAnimation"].toInt(-1)',
      '-1 is "no active animation", a sentinel outside the index range'),
     ('l["default"].toBool(true)',
