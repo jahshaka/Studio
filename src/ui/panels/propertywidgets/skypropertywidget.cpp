@@ -249,20 +249,26 @@ void SkyPropertyWidget::skyTypeChanged(int index)
 			// NO SUN DIALS (SKY_LIGHT_SPEC.md §3, owner decision D15). The sky's
 			// sun IS the scene's sun light: rotate the light and the sky moves.
 			sunHaze      = addFloatValueSlider("Sun Haze", 0.f, 100.f, defaults.sunHaze);
-			sunHaze->setToolTip(tr("The haze in the air: 1 is very clear air, 0 none at all, "
-			                       "about 10 an ordinary day, 50 hazy. It whitens the horizon, widens the glow round the "
-			                       "sun, reddens a low sun and thickens the air on distant "
-			                       "surfaces — one air."));
-			aerialScale  = addFloatValueSlider("Aerial Scale", 0.f, 1.f, defaults.aerialScale);
-			aerialScale->setToolTip(tr("The aerial perspective — the air between the camera and a surface: 1 is the real "
-			                           "air (distant geometry fades into the sky behind it), 0 is "
-			                           "none. It changes no sky pixel."));
+			sunHaze->setToolTip(tr("The sky's haze: 10 is an ordinary clear day, 1 very clean "
+			                       "air, 0 none at all, 50 hazy. It whitens the horizon, widens "
+			                       "the glow round the sun and dims and reddens a low sun. It "
+			                       "does not haze the scene — that is the World fog."));
+			skyBrightness = addFloatValueSlider("Brightness", 0.f, 10.f, defaults.skyBrightness);
+			skyBrightness->setToolTip(tr("The sky's brightness: 1 is the physical sky. It scales "
+			                             "the sky, its light on the scene (the Sky Light) and its "
+			                             "reflections — never the sun's own light."));
+			aerialScale  = addFloatValueSlider("Scene Air", 0.f, 1.f, defaults.aerialScale);
+			aerialScale->setToolTip(tr("Aerial perspective on the scene: the atmosphere's own air "
+			                           "between the camera and a surface (1 = the real air, 0 = "
+			                           "none, the default — the World fog hazes the scene). It "
+			                           "changes no sky pixel."));
 			groundAlbedo = addFloatValueSlider("Ground Albedo", 0.f, 1.f, defaults.groundAlbedo);
 			groundAlbedo->setToolTip(tr("How bright the planet's surface is — the darker band "
 			                            "under the horizon."));
 			addSunReadoutRow();
 
 			sunHaze->setValue(loaded.sunHaze);
+			skyBrightness->setValue(loaded.skyBrightness);
 			aerialScale->setValue(loaded.aerialScale);
 			groundAlbedo->setValue(loaded.groundAlbedo);
 
@@ -270,7 +276,9 @@ void SkyPropertyWidget::skyTypeChanged(int index)
 			// connect) and each drag is ONE undo step in a scene.
 			wireSkyRow(sunHaze, tr("Sun Haze"),
 			           [this](const QVariant &v) { onSunHazeChanged(v.toFloat()); });
-			wireSkyRow(aerialScale, tr("Aerial Scale"),
+			wireSkyRow(skyBrightness, tr("Sky Brightness"),
+			           [this](const QVariant &v) { onSkyBrightnessChanged(v.toFloat()); });
+			wireSkyRow(aerialScale, tr("Scene Air"),
 			           [this](const QVariant &v) { onAerialScaleChanged(v.toFloat()); });
 			wireSkyRow(groundAlbedo, tr("Ground Albedo"),
 			           [this](const QVariant &v) { onGroundAlbedoChanged(v.toFloat()); });
@@ -607,6 +615,11 @@ void SkyPropertyWidget::onEquiTextureChanged(QString guid)
 void SkyPropertyWidget::onSunHazeChanged(float val)
 {
 	writeRealisticDial([val](iris::SkyRealistic &r) { r.sunHaze = val; });
+}
+
+void SkyPropertyWidget::onSkyBrightnessChanged(float val)
+{
+	writeRealisticDial([val](iris::SkyRealistic &r) { r.skyBrightness = val; });
 }
 
 void SkyPropertyWidget::onAerialScaleChanged(float val)

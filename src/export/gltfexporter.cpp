@@ -865,6 +865,7 @@ QJsonObject buildSkyExtras(const iris::ScenePtr &scene, Ctx &c, const GltfExport
         sky["type"] = "realistic";
         sky["sunHaze"] = double(s.sunHaze);
         sky["aerialScale"] = double(s.aerialScale);
+        sky["skyBrightness"] = double(s.skyBrightness);
         sky["groundAlbedo"] = double(s.groundAlbedo);
         sky["rayleighScale"] = double(s.rayleighScale);
         sky["ozone"] = s.ozone;

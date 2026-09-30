@@ -113,6 +113,7 @@ protected slots:
     void onEquiTextureChanged(QString guid);
 
     void onSunHazeChanged(float val);
+    void onSkyBrightnessChanged(float val);
     void onAerialScaleChanged(float val);
     void onGroundAlbedoChanged(float val);
 
@@ -181,6 +182,7 @@ private:
     // the planet's albedo under the horizon. (The Rayleigh scale and the ozone
     // switch are world.sky's.)
     RowPtr<HFloatSliderWidget> sunHaze;
+    RowPtr<HFloatSliderWidget> skyBrightness;
     RowPtr<HFloatSliderWidget> aerialScale;
     RowPtr<HFloatSliderWidget> groundAlbedo;
     RowPtr<LabelWidget> sunReadout;            // which light the sky's sun is (§3)
