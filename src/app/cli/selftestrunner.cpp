@@ -540,15 +540,16 @@ int runEngineSelftest(MainWindow &window, QApplication &app, const QString &outP
     // THE GRADE IS PART OF THE FENCE, and this is the one thing about fixture B
     // that had to be discovered rather than designed.
     //
-    // `takeScreenshot(w, h)` is the PLAIN grade — "NO POST-PROCESSING AT ALL:
-    // 1x MSAA, linear radiance clipped to 8 bits" (ieditorviewport.h). Poses 1
-    // and 2 are Plain shots, and that is right for them: they are an exactly
-    // reproducible measuring instrument. But Plain has no post chain, so it has
-    // no SSR prepass, and the RAY tier rides that prepass — measured on this
-    // tree: a Plain-grade fixture B with a glossy floor, a mirror pillar and the
-    // ray tier on hashed IDENTICALLY with rays on and off, 0 of 65,536 pixels
-    // different. A Plain hash structurally cannot see the half of this renderer
-    // PHOTON's P3 and P5 exist to change.
+    // `takeScreenshot(w, h)` is the TONEMAP grade (EngineSceneViewport's
+    // two-argument door: the deterministic filmic grade at the scene's exposure,
+    // display-encoded since SRGB-ENCODE-1, and nothing else). Poses 1 and 2 are
+    // such shots, and that is right for them: they are exactly reproducible.
+    // But that minimal chain has no SSR prepass, and the RAY tier rides that
+    // prepass — measured on this tree: a fixture B with a glossy floor, a
+    // mirror pillar and the ray tier on hashed IDENTICALLY with rays on and off
+    // in the minimal grade, 0 of 65,536 pixels different. Such a hash
+    // structurally cannot see the half of this renderer PHOTON's P3 and P5
+    // exist to change.
     //
     // So B1/B2 are the VIEWPORT grade: the scene's whole chain — SSAO, SSR, the
     // ray tier, bloom, SMAA, the looks stack, HDR and the tonemap — with the
