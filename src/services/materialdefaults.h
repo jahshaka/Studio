@@ -19,14 +19,14 @@ For more information see the LICENSE file
 // document and this adds none).
 //
 // A node HAS a default only when something provides one. The default floor
-// (services/defaultfloor.h) is the first and, today, only provider; every
+// (services/defaultfloormaterial.h) is the first and, today, only provider; every
 // other node has none, and a reset of it changes nothing and says so.
 
 #include <QString>
 #include <QStringList>
 
 #include "irisgl/irisglfwd.h"
-#include "services/defaultfloor.h"
+#include "services/defaultfloormaterial.h"
 
 class Database;
 class Project;
@@ -37,13 +37,13 @@ namespace materialdefaults {
 /// below: the material panel asks without linking the factories.)
 inline bool hasDefault(const iris::SceneNodePtr &node)
 {
-    return defaultfloor::isDefaultFloor(node);
+    return defaultfloormaterial::isDefaultFloor(node);
 }
 
 /// The provider's name for the UI ("Default Floor"); empty when there is none.
 inline QString providerName(const iris::SceneNodePtr &node)
 {
-    return defaultfloor::isDefaultFloor(node) ? QStringLiteral("Default Floor") : QString();
+    return defaultfloormaterial::isDefaultFloor(node) ? QStringLiteral("Default Floor") : QString();
 }
 
 /// A FRESH instance of `node`'s own default material, or null when it has

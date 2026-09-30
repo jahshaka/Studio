@@ -139,6 +139,19 @@ throws(function () { world.sky("realistic", { density: 0.5 }); },
        "world.sky refuses the retired model's 'density' by name");
 world.sky("realistic", { sunHaze: 1, aerialScale: 1, groundAlbedo: 0.3, rayleighScale: 1 });
 
+// THE AIR ON GEOMETRY IS A DIAL (aerialScale; it replaced AIR-HAZE-TOGGLE-1's
+// switch): 1 by default, 0 takes it off, a call that does not name it keeps it,
+// and the retired switch is refused by name. (What it DOES to a surface is
+// sky.aerial_perspective's 4b, at the engine.)
+assert(world.get().sky.data.aerialScale === 1, "the air on geometry is at scale 1 by default");
+assert(world.sky("realistic", { aerialScale: 0 }) === true, "world.sky(realistic, {aerialScale: 0})");
+assert(world.get().sky.data.aerialScale === 0, "...the stored block carries it");
+world.sky("realistic", { sunHaze: 3 });
+assert(world.get().sky.data.aerialScale === 0, "...and a call that does not name it keeps it");
+throws(function () { world.sky("realistic", { atmosphereHaze: false }); },
+       "the retired atmosphereHaze switch is refused by name");
+world.sky("realistic", { aerialScale: 1, sunHaze: 1 });
+
 // ROTATING THE LIGHT MOVES THE SKY. The sky is the engine's analytic model now
 // (SKY-GPU), keyed on the sun direction we push it, so the proof is in pixels:
 // with the sun ahead of the camera the picture differs from the same picture

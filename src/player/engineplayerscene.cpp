@@ -282,6 +282,9 @@ void EnginePlayerScene::step(float dt, int width, int height)
         // in its own syncFrame, so a page switch either way is exact and no
         // host inherits the other's answer.
         mMirror->setHideDefaultFloor(mDocument->playerHidesFloor);
+        // The Ground plane is an EDITOR widget (WORLD-MODEL-1): the finished
+        // thing stands on what the scene holds.
+        mMirror->setGroundPlane(false);
         mMirror->sync();
         // THE SAME THREE CALLS THE EDITOR VIEWPORT MAKES, IN THE SAME ORDER
         // (EngineSceneViewport::syncFrame). applyEnvironment is what pushes the
@@ -385,6 +388,7 @@ QImage EnginePlayerScene::takeScreenshot(int width, int height, int grade)
         // A PLAYER SHOT IS THE PLAYER'S PICTURE (PLAYER-FLOOR-1): the floor the
         // project asked to hide is out of it too, at every grade.
         mMirror->setHideDefaultFloor(mDocument && mDocument->playerHidesFloor);
+        mMirror->setGroundPlane(false);
         mMirror->sync();
         mMirror->applySky(shot);
         mMirror->applyEnvironment(shot);

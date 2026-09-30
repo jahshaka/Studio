@@ -171,7 +171,6 @@ void SceneEditService::addPrimitive(const QString &text,
 
 // The menu slots, over the ONE table below (they used to carry a second copy
 // of every resource path — thirteen strings maintained in two places).
-void SceneEditService::addGround()   { addPrimitive(QStringLiteral("Ground")); }
 void SceneEditService::addCone()     { addPrimitive(QStringLiteral("Cone")); }
 void SceneEditService::addCube()     { addPrimitive(QStringLiteral("Cube")); }
 void SceneEditService::addTorus()    { addPrimitive(QStringLiteral("Torus")); }
@@ -295,7 +294,7 @@ iris::ParticleSystemNodePtr SceneEditService::addParticleSystem(iris::ParticlePr
     // PROJECT: with none open (a headless script, the startup placeholder)
     // they used to land in the library stamped with an empty project guid, one
     // row per emitter nobody could see (15c review #1 — the same guard the
-    // material presets and the default Ground row got in 15c).
+    // material presets and the default floor's row got in 15c).
     const bool haveProject = project && !project->getProjectGuid().isEmpty();
     if (haveProject) {
         // THE EXISTING FOLDER'S GUID (small-items round B). This minted a fresh
@@ -995,18 +994,18 @@ iris::SceneNodePtr SceneEditService::insertFragment(const SceneFragment &fragmen
     // — it calls rebuildFragment directly, because restoring a deleted node
     // must give back the guid the rest of the document still refers to.)
     regenerateGuids(node, guidMapOut);
-    // A pasted floor is a copy, and a scene has ONE default floor
-    // (services/defaultfloor.h): the copy — and anything under it — is an
-    // ordinary mesh, as Duplicate makes it. (Here and not in rebuildFragment:
-    // an undo of a delete must give the floor back AS the floor.)
+    // A pasted floor is a copy (services/defaultfloormaterial.h): the copy —
+    // and anything under it — is an ordinary mesh, as Duplicate makes it.
+    // (Here and not in rebuildFragment: an undo of a delete must give the
+    // floor back AS the floor.)
     std::function<void(const iris::SceneNodePtr &)> clearFloor =
         [&clearFloor](const iris::SceneNodePtr &n) {
             if (n->getSceneNodeType() == iris::SceneNodeType::Mesh)
             {
                 const iris::MeshNodePtr floor = n.staticCast<iris::MeshNode>();
                 floor->defaultFloor = false;
-                // The mirror reads `defaultFloor` to find the horizon plate's
-                // subject; a hand-written reflected field has to say so.
+                // The mirror reads `defaultFloor` for the Player's floor
+                // switch; a hand-written reflected field has to say so.
                 floor->markChanged(iris::NodeChange::Params);
             }
             for (const auto &child : n->children()) clearFloor(child);

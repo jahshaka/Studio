@@ -187,6 +187,10 @@ public:
     /// (the hierarchy's lock icon, i.e. `pickable` false — the default floor
     /// ships that way): a locked node is under the cursor like any other and
     /// refuses the drop by name. Null in the document-only stand-ins.
+    /// The node a plain LEFT CLICK at that pixel would select (the viewport's
+    /// own pick, root-resolved): LOCKED nodes are skipped, so it is null over a
+    /// locked floor or empty sky. Null in the document-only stand-ins.
+    virtual iris::SceneNodePtr clickTargetAt(const QPointF &) { return iris::SceneNodePtr(); }
     virtual iris::SceneNodePtr dropTargetAt(const QPointF &, bool * = nullptr)
     {
         return iris::SceneNodePtr();
@@ -367,6 +371,11 @@ public:
     /// engine viewport draws it.
     virtual bool getShowGrid() const { return true; }
     virtual void setShowGrid(bool) {}
+
+    /// The Ground plane widget (WORLD-MODEL-1, EditorData::showGroundPlane):
+    /// per-scene, default OFF. Only the engine viewport draws it.
+    virtual bool getShowGroundPlane() const { return false; }
+    virtual void setShowGroundPlane(bool) {}
 
     /// The GI volume overlay (LIGHTING_FIX fix 9): wireframe boxes around the
     /// lit (voxel) volume and the reflection-probe region `world.giStatus()`

@@ -42,6 +42,13 @@ public:
     /// perspective grid is opt-in) everywhere EXCEPT here, and this member is
     /// the one a new scene reads.
     bool showGrid = false;
+    /// THE GROUND PLANE WIDGET (WORLD-MODEL-1): an infinite matte ground drawn
+    /// by the editor under the scene — no geometry in the document; it casts no
+    /// shadow but receives them; not in GI, rays or Atom (SceneMirror::setGroundPlane). Per scene like the
+    /// grid, and DEFAULT OFF: the templates carry real floors. The same three
+    /// places as the grid say so — here, SceneReader::readEditorData's
+    /// fallback, and EngineSceneViewport::mShowGroundPlane.
+    bool showGroundPlane = false;
 };
 
 #endif // EDITORDATA_H

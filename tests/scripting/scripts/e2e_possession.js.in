@@ -98,7 +98,7 @@ assert(avatarA !== avatarB, "the two avatars are two nodes");
 // quad the capsule starts inside). Turning the avatar's own mesh collider off
 // restores the full 1.9167 u. Stage 2's fix, not this lane's.
 scene.nodes().forEach(function (n) {
-    if (n.type === "mesh" && n.name !== "Ground") node.setCollision(n.id, false);
+    if (n.type === "mesh" && n.name !== "Floor") node.setCollision(n.id, false);
 });
 
 var listed = avatar.list();

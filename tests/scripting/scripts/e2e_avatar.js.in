@@ -368,7 +368,7 @@ var pinned = avatar.setMovement(avatarId, {
 assert(pinned.jumpCount === 2, "the round-trip values are in place");
 
 // ---- node.setCollision (§6.3 option C) ----
-var groundId = scene.find("Ground");
+var groundId = scene.find("Floor");
 assert(groundId, "the default scene's Ground is there");
 assert(node.collision(groundId) === true, "node.collision: a MESH defaults to collidable");
 assert(node.collision(rootId) === false, "... and a non-mesh node does not");
@@ -398,7 +398,7 @@ assert(after.capsuleAuto === false &&
        Math.abs(after.capsuleHeight - 1.95) < 1e-5,
        "... and the capsule, including capsuleAuto being OFF");
 
-var groundAfter = scene.find("Ground");
+var groundAfter = scene.find("Floor");
 assert(node.collision(groundAfter) === false,
        "the COLLISION flag round-tripped too (written only when the user overrode the default)");
 

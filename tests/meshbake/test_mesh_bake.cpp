@@ -2593,6 +2593,42 @@ static void twoSidedReachesTheNode()
     CHECK_LOUD(twoSidedMaterials == 1 && readTwoSided == 1,
                qUtf8Printable(QStringLiteral("one of the two materials is two-sided, through the blob (%1 built, %2 read)")
                                   .arg(twoSidedMaterials).arg(readTwoSided)));
+    // ATOM-TWO-SIDED-1: THE IMPORT'S FACE CULLING overrides the file's flag where the
+    // importer reads it — the record the verbs and the dialog write (`faceCulling`:
+    // "file" by default, "single", "double"), in the bake key.
+    {
+        const struct { const char *name; iris::FaceCullingImport mode; int twoSided; } arms[] = {
+            { "file", iris::FaceCullingImport::File, 1 },
+            { "single", iris::FaceCullingImport::Single, 0 },
+            { "double", iris::FaceCullingImport::Double, 2 },
+        };
+        QStringList hashes;
+        for (const auto &arm : arms) {
+            QJsonObject record;
+            record[QStringLiteral("faceCulling")] = QString::fromLatin1(arm.name);
+            QString error;
+            const iris::ImportSettings parsed = iris::ImportSettings::fromJson(record, &error);
+            CHECK_LOUD(error.isEmpty() && parsed.faceCulling == arm.mode &&
+                           parsed.toJson().value(QStringLiteral("faceCulling")).toString() == QLatin1String(arm.name),
+                       qUtf8Printable(QStringLiteral("faceCulling '%1' reads, carries and writes back").arg(arm.name)));
+            hashes << parsed.hash();
+            const iris::MeshBake::Model m =
+                iris::MeshBake::buildFromScene(scene, path, fingerprint, scratch.path(), parsed.transform());
+            int n = 0;
+            for (const iris::MeshMaterialData &d : m.materials) n += d.twoSided ? 1 : 0;
+            CHECK_LOUD(m.valid && n == arm.twoSided,
+                       qUtf8Printable(QStringLiteral("faceCulling '%1': %2 of the two materials two-sided (want %3)")
+                                          .arg(arm.name).arg(n).arg(arm.twoSided)));
+        }
+        CHECK_LOUD(hashes[0] == iris::ImportSettings::identityHash() && hashes[1] != hashes[0] &&
+                       hashes[2] != hashes[0] && hashes[2] != hashes[1],
+                   "\"file\" keys as identity; \"single\" and \"double\" each move the settings hash (a re-bake)");
+        QJsonObject wrong;
+        wrong[QStringLiteral("faceCulling")] = QStringLiteral("auto");
+        QString why;
+        iris::ImportSettings::fromJson(wrong, &why);
+        CHECK_LOUD(!why.isEmpty(), "an unknown faceCulling ('auto') is refused");
+    }
     // (The NODE half — the fragment's MeshNode culls nothing — needs an Ogre::Root: a
     // fragment's children live in the scene graph, which this suite has none of. It is
     // mirror.document_to_engine's arm, through the same buildFromFile + buildFragment.)

@@ -261,6 +261,7 @@ private:
     QLabel *mHeader = nullptr;
     QLabel *mFileFacts = nullptr;
     QComboBox *mUnits = nullptr;
+    QComboBox *mFaceCulling = nullptr;   ///< ATOM-TWO-SIDED-1: file | single | double
     QDoubleSpinBox *mScale = nullptr;
     QComboBox *mUp = nullptr;
     QComboBox *mForward = nullptr;

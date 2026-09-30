@@ -346,6 +346,22 @@ void ImportSettingsDialog::buildUi()
     originForm->addRow(tr("Offset"), transRow);
     outer->addWidget(originBox);
 
+    // ---- FACES (ATOM-TWO-SIDED-1) ---------------------------------------
+    auto *facesBox = new QGroupBox(tr("Faces"), this);
+    auto *facesForm = new QFormLayout(facesBox);
+    mFaceCulling = new QComboBox(facesBox);
+    mFaceCulling->addItem(tr("From file"), QLatin1String(iris::ImportSettings::faceCullingName(
+                                               iris::FaceCullingImport::File)));
+    mFaceCulling->addItem(tr("Single-sided"), QLatin1String(iris::ImportSettings::faceCullingName(
+                                                  iris::FaceCullingImport::Single)));
+    mFaceCulling->addItem(tr("Double-sided"), QLatin1String(iris::ImportSettings::faceCullingName(
+                                                  iris::FaceCullingImport::Double)));
+    mFaceCulling->setToolTip(tr("Which faces the model's materials draw. \"From file\" keeps what "
+                                "the file says (many exporters mark every material double-sided); "
+                                "single-sided hides back faces, double-sided draws both."));
+    facesForm->addRow(tr("Face culling"), mFaceCulling);
+    outer->addWidget(facesBox);
+
     // ---- WHAT TO IMPORT --------------------------------------------------
     auto *tuneBox = new QGroupBox(tr("What to import"), this);
     auto *tuneLayout = new QVBoxLayout(tuneBox);
@@ -424,6 +440,10 @@ void ImportSettingsDialog::buildUi()
         changed();
         applyOriginHelper();
     };
+    connect(mFaceCulling, &QComboBox::currentIndexChanged, this, [this, changed]() {
+        if (mUpdating) return;
+        changed();
+    });
     connect(mUnits, &QComboBox::currentIndexChanged, this, [this, geometryChanged]() {
         if (mUpdating) return;
         geometryChanged();
@@ -614,6 +634,7 @@ void ImportSettingsDialog::readFieldsIntoSettings()
 {
     mSettings.scale = mScale->value();
     iris::ImportSettings::unitFromName(mUnits->currentData().toString(), &mSettings.units);
+    iris::ImportSettings::faceCullingFromName(mFaceCulling->currentData().toString(), &mSettings.faceCulling);
     mSettings.up = mUp->currentData().toString();
     mSettings.forward = mForward->currentData().toString();
     for (int i = 0; i < 3; ++i) {
@@ -681,6 +702,8 @@ void ImportSettingsDialog::writeSettingsIntoFields()
     mScale->setValue(mSettings.scale);
     mUnits->setCurrentIndex(
         std::max(0, mUnits->findData(QLatin1String(iris::ImportSettings::unitName(mSettings.units)))));
+    mFaceCulling->setCurrentIndex(std::max(
+        0, mFaceCulling->findData(QLatin1String(iris::ImportSettings::faceCullingName(mSettings.faceCulling)))));
     mUp->setCurrentIndex(std::max(0, mUp->findData(mSettings.up)));
     mForward->setCurrentIndex(std::max(0, mForward->findData(mSettings.forward)));
     for (int i = 0; i < 3; ++i) {

@@ -24,7 +24,7 @@ function assert(cond, msg) {
 }
 var guid = project.create("Contact Band " + Date.now());
 assert(guid.length > 10, "project.create");
-var G = scene.find("Ground");
+var G = scene.find("Floor");
 assert(!!G, "the default scene has its ground");
 var C = scene.addPrimitive("cube", { position: { x: 0, y: 1, z: 0 } });
 assert(C.length > 10, "a 2 m cube resting on the ground");

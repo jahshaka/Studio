@@ -33,27 +33,36 @@ For more information see the LICENSE file
 #include <QPointer>
 #include "services/projectarchiver.h"
 #include "services/sceneextents.h"
+#include "services/scenetemplate.h"
 #include "viewport/ieditorviewport.h"
 
 QVector<VerbInfo> ProjectApi::verbs() const
 {
     return {
-        { "create", "project.create(name, {empty, location}) -> guid",
+        { "create", "project.create(name, {template, location}) -> guid",
           "Creates a project (folder, DB row, default scene saved into the blob) on the current desktop and "
           "opens it in the editor. The scene is in the row when this returns; the row's THUMBNAIL is encoded "
           "on a worker and lands ~100 ms later (the same holds for the world a create closes; project.save "
           "writes its thumbnail synchronously). INSIDE A SCRIPT this ends the run's undo entry first: everything the run "
           "did up to here becomes one undo step of the project being left, whose stack is then cleared with "
           "it, and the rest of the run records into a fresh entry in the new project.\n\n"
-          "`empty: true` gives a BLANK WORLD instead of the default template. The template is a ground, the "
-          "sun (a directional light), a Sky Light and the realistic real-time sky with the sun following the "
-          "atmosphere; the blank world is the root node, the Epic world mode and the document's own defaults "
-          "— no ground, no lights at all (so nothing lights it) and no sky beyond the flat default colour. "
+          "`template` picks what the new world holds (default \"basic\"): \"basic\" is ONE FLOOR — an "
+          "ordinary cube node named Floor, 100 x 1 x 100 m with its top face at y = 0, wearing the default "
+          "floor material — the sun (a directional light), a Sky Light and the realistic real-time sky with "
+          "the sun following the atmosphere; \"world\" is Basic's sky and lights on a group \"World Floor\" "
+          "of 25 of Basic's floor cubes (\"Floor 1\"..\"Floor 25\"), 5 x 5, edge to edge, centred on the "
+          "origin (500 m square); \"empty\" is NOTHING — the root node and the Epic world mode, no floor, "
+          "no lights and no sky (a black single-colour sky, which lights nothing). Any other value is refused "
+          "by name. Every floor (and World's group) is an ordinary node that SHIPS LOCKED — not "
+          "pickable, so a click on the empty floor selects nothing and a material drop on it is "
+          "refused by name (editor.clickTargetAt / editor.dropTargetAt); unlock it with "
+          "node.setProperty(id, \"pickable\", true) or the outliner's lock, then select, move, "
+          "delete or re-material it like any node. "
           "`location` is the folder the project's own directory is created under; omitted, it is the user's "
           "projects root (the Jahshaka documents folder, or the run's --data-root). A location that does not "
           "exist, is not a folder or is not writable is REFUSED BY NAME — no project row is written and "
           "nothing is left pointing at a folder that was never made. These are the New Scene dialog's two "
-          "controls: its Empty scene checkbox and its Browse button call this verb."
+          "controls: its Template drop-down and its Browse button call this verb."
           "\n\nTHE WORLD'S LIGHTING ARRIVES ON THE FRAMES AFTER THIS RETURNS "
           "(SPECS/OPEN_COVER_SPEC.md §2 A). A world's FIRST global-illumination arm — the voxel "
           "cascades, the reflection-probe grid, the irradiance field — is the longest thing the "
@@ -63,7 +72,7 @@ QVector<VerbInfo> ProjectApi::verbs() const
           "reports an arm that is not there yet. A script that asserts on it renders its own frames "
           "first (`editor.frame(n)`); a person never notices, because the frames are the app's own.",
           Needs::Document },
-        { "createAsync", "project.createAsync(name, {empty, location}) -> guid",
+        { "createAsync", "project.createAsync(name, {template, location}) -> guid",
           "THE CREATE, WITHOUT THE WAIT (SPECS/OPEN_COVER_SPEC.md §2 C/§4). Exactly what "
           "project.create does — the same folder, the same DB row, the same default world, the "
           "same slices in the same order — except that it returns as soon as the create is "
@@ -77,7 +86,7 @@ QVector<VerbInfo> ProjectApi::verbs() const
           "project.create keeps its synchronous contract for the scripts and suites written "
           "against it, and the New Scene dialog keeps using it; this exists for a caller that "
           "wants to drive the frames of a create itself — which is the only way to watch a "
-          "world stream in (editor.viewportState().pending). `empty` and `location` mean exactly "
+          "world stream in (editor.viewportState().pending). `template` and `location` mean exactly "
           "what they mean on project.create, and an open or create already in flight is REFUSED "
           "by name rather than queued.",
           Needs::Window },
@@ -235,17 +244,25 @@ QString ProjectApi::createInto(const QString &name, const QVariantMap &options,
     if (!host.mainWindow || !host.services || !host.services->project) { fail("project: not available in this session"); return QString(); }
     if (name.trimmed().isEmpty()) { fail(QStringLiteral("%1: a non-empty name is required").arg(verb)); return QString(); }
 
-    // UNKNOWN KEYS ARE REFUSED, not ignored (the house rule): `{emtpy: true}`
+    // UNKNOWN KEYS ARE REFUSED, not ignored (the house rule): `{tempalte: "empty"}`
     // silently making the template is exactly the class of bug the option maps
     // exist to prevent.
-    static const QStringList known = { QStringLiteral("empty"), QStringLiteral("location") };
+    static const QStringList known = { QStringLiteral("template"), QStringLiteral("location") };
     for (auto it = options.constBegin(); it != options.constEnd(); ++it) {
         if (known.contains(it.key())) continue;
         fail(QStringLiteral("%1: unknown option '%2' (known: %3)")
                  .arg(verb, it.key(), known.join(QStringLiteral(", "))));
         return QString();
     }
-    const bool empty = options.value(QStringLiteral("empty"), false).toBool();
+    SceneTemplate kind = SceneTemplate::Basic;
+    if (options.contains(QStringLiteral("template"))) {
+        const QString wanted = options.value(QStringLiteral("template")).toString();
+        if (!scenetemplate::fromName(wanted, &kind)) {
+            fail(QStringLiteral("%1: unknown template '%2' (known: %3)")
+                     .arg(verb, wanted, scenetemplate::names().join(QStringLiteral(", "))));
+            return QString();
+        }
+    }
     const QString location = options.value(QStringLiteral("location")).toString();
 
     // The data half (guid, current project, folder, DB row, desktop) is
@@ -268,8 +285,8 @@ QString ProjectApi::createInto(const QString &name, const QVariantMap &options,
     // reasoning is on ScriptHost::endRunUndoMacro). newProject() clears the
     // stack, and that clear is a no-op while the run's macro is open.
     host.endRunUndoMacro();
-    if (async) host.mainWindow->newProjectAsync(guid, name.trimmed(), folder, empty);
-    else       host.mainWindow->newProject(guid, name.trimmed(), folder, empty);
+    if (async) host.mainWindow->newProjectAsync(guid, name.trimmed(), folder, kind);
+    else       host.mainWindow->newProject(guid, name.trimmed(), folder, kind);
     host.beginRunUndoMacro();
     return guid;
 }

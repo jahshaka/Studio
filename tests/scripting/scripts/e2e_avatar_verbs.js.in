@@ -151,7 +151,7 @@ assert(typeof st.state === "string" && typeof st.transitioning === "boolean"
 
 var badTarget = false;
 try {
-    var ground = scene.nodes().filter(function (n) { return n.name === "Ground"; })[0];
+    var ground = scene.nodes().filter(function (n) { return n.name === "Floor"; })[0];
     if (ground) avatar.loadClip(ground.id, WALK); else badTarget = true;
 } catch (e) { badTarget = true; }
 assert(badTarget, "loading a clip onto a node that is not an avatar is refused");

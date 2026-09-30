@@ -32,6 +32,8 @@
 //      a high sun;
 //   4. ONE ATMOSPHERE: the haze dial moves T(2 km) by the same law (haze 0 and
 //      5 against the reference);
+//  4b. THE AERIAL SCALE: 0 reads T = 1 (no air) at 125 m and 2 km, 0.5 the air
+//      of half the distance, paired against 1, and it moves no sky pixel;
 //   5. the World fog ADDS: fog density D on top gives T_air x 2^(-D d); and its
 //      breakthrough never bends the AIR (a bright surface at 2 km);
 //   6. THE HEIGHT LAYER IS SKY-COLOURED under the realistic sky — a magenta
@@ -274,6 +276,47 @@ int main()
                   "no haze: T(2 km) %.4f against %.4f", tClear, refClear);
         CHECK_MSG(std::fabs(tHazy - refHazy) <= kTolT,
                   "a hazy day (haze 5): T(2 km) %.4f against %.4f", tHazy, refHazy);
+        r.s->setSky(realisticSky(45.0f, 180.0f, 1.0f));
+    }
+
+    // ---- 4b. THE AERIAL SCALE (AIR-HAZE-TOGGLE-1's switch, now a dial) ------
+    // `AtmosphereSky::aerialScale` 0 takes the air off every surface: the
+    // transmittance the instrument reads is exactly the NO-AIR one (T = 1, the
+    // control's unit gain) at every distance, paired in this process against the
+    // same sky at scale 1; half the scale is the air of half the distance; and
+    // it moves NO sky pixel.
+    {
+        const double tOn = transmittance(r, 2000.0f);
+        ImageF domeOn, domeOff;
+        shoot(r, domeOn);
+        SkyDesc off = realisticSky(45.0f, 180.0f, 1.0f);
+        off.atmosphere.aerialScale = 0.0f;
+        CHECK_MSG(r.s->setSky(off), "the realistic sky with aerialScale 0 applies: %s",
+                  r.e->lastError().c_str());
+        const double tOffNear = transmittance(r, 125.0f);
+        const double tOffFar = transmittance(r, 2000.0f);
+        shoot(r, domeOff);
+        SkyDesc half = realisticSky(45.0f, 180.0f, 1.0f);
+        half.atmosphere.aerialScale = 0.5f;
+        r.s->setSky(half);
+        const double tHalf = transmittance(r, 2000.0f);
+        const double ref = airT(1.0, 2000.0), refHalf = airT(1.0, 1000.0);
+        std::printf("    scale 1: T(2 km) %.5f | scale 0.5: T(2 km) %.5f | scale 0: T(125 m) %.5f  T(2 km) %.5f\n",
+                    tOn, tHalf, tOffNear, tOffFar);
+        CHECK_MSG(std::fabs(tOn - ref) <= kTolT,
+                  "at scale 1 the far surface is hazed: T(2 km) %.4f against the model's %.4f", tOn, ref);
+        CHECK_MSG(std::fabs(tHalf - refHalf) <= kTolT,
+                  "at scale 0.5 it is the air of 1 km: T %.4f against %.4f", tHalf, refHalf);
+        CHECK_MSG(std::fabs(tOffNear - 1.0) < 2e-3 && std::fabs(tOffFar - 1.0) < 2e-3,
+                  "at scale 0 the air's extinction is ZERO: T = 1 at 125 m and at 2 km (%.5f, %.5f) "
+                  "— the reading the no-air control gives", tOffNear, tOffFar);
+        size_t differ = 0, total = 0;
+        for (unsigned y = 0; y < 30; ++y)
+            for (unsigned x = 0; x < domeOn.width; ++x, ++total) {
+                const Colour a = domeOn.at(x, y), b = domeOff.at(x, y);
+                if (a.r != b.r || a.g != b.g || a.b != b.b) ++differ;
+            }
+        CHECK_MSG(differ == 0, "...and the scale moves NO sky pixel (%zu of %zu differ)", differ, total);
         r.s->setSky(realisticSky(45.0f, 180.0f, 1.0f));
     }
 

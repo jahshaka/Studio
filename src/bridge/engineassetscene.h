@@ -51,6 +51,9 @@ public:
 
     /// AssetViewer::changeBackdrop: 1 dark, 2 grey (no floor, no shadows), 3 floor + shadows.
     void setBackdrop(unsigned int id);
+    /// The Ground plane widget as the mirror holds it (WORLD-MODEL-1): shown,
+    /// and at what height — for the suite (assets.engine); false before attach.
+    bool groundPlaneShown(float *height = nullptr) const;
     void setSkyColor(const QColor &c);
 
     // ---- the orbit camera (AssetViewer::resetViewerCamera[After] / orientCamera) ----
@@ -113,9 +116,11 @@ private:
 
     iris::ScenePtr      mDocument;
     iris::CameraNodePtr mCamera;
-    iris::SceneNodePtr  mFloor;
     iris::MeshPtr       mSphere;
     bool mShadows = true;
+    /// The Ground plane widget (WORLD-MODEL-1): on for the lit backdrop,
+    /// off for the two dark ones (setBackdrop).
+    bool mGroundPlane = true;
 
     /// The shared arcball (preview mode: left or right drag orbits, rotation
     /// speed .5, the 0.8 lerp in step()).

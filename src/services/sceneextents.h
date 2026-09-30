@@ -34,10 +34,8 @@ bool worldAabb(const QList<iris::SceneNodePtr> &nodes, bool includePoints,
                iris::Vec3 &outMin, iris::Vec3 &outMax, int *outNodes = nullptr);
 
 /// The archive manifest's scene-scale block for `scene`, measured with
-/// worldAabb over everything EXCEPT the built-in ground plane — a 100 m
-/// backdrop that is present in every scene and would drown every measurement
-/// (the viewport's selection code identifies it the same way: isBuiltIn plus
-/// the ":/models/ground.obj" mesh path). `camera` is the saved editor camera,
+/// worldAabb over every node of the scene (its floors included — a floor is an
+/// ordinary node). `camera` is the saved editor camera,
 /// or null when the caller has none; its vertical fov and eye height are what a
 /// consumer needs to say "this scene is authored to the convention".
 /// `present` comes back false when the scene has no geometry at all.

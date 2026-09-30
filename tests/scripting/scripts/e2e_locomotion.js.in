@@ -136,7 +136,7 @@ assert(avatar.list()[0].state === st.state,
        "avatar.list's `state` column and locomotionState agree");
 
 // A node with no avatar component reports nothing rather than throwing.
-var plain = scene.nodes().filter(function (n) { return n.name === "Ground"; })[0];
+var plain = scene.nodes().filter(function (n) { return n.name === "Floor"; })[0];
 if (plain) {
     var empty = avatar.locomotionState(plain.id);
     assert(!empty || Object.keys(empty).length === 0,

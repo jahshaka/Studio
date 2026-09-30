@@ -63,25 +63,14 @@ int machineRayTracing()
 }
 
 /// Every mesh node under `root` that actually blocks light: visible, and a
-/// shadow caster. The built-in GROUND is the one exclusion — it is in every
-/// scene, it is under everything, and "your lamp shines through the Ground" is
-/// never the sentence a user needs.
-///
-/// Identified by its flag AND its mesh path, the same belt-and-braces
-/// sceneextents::describe uses and for the same reason: `isBuiltIn` is set on
-/// any primitive the user ADDS and is not restored by the reader, so it is
-/// useless as "this is the editor's own prop" (filtering on it made this
-/// scanner blind to every cube and plane in the scene).
+/// shadow caster. (The templates' floors cast no shadow, so they are not
+/// blockers by the same rule as any node with its caster row off.)
 void collectBlockers(const iris::SceneNodePtr &node, QList<iris::SceneNodePtr> &out)
 {
     if (!node) return;
     if (node->getSceneNodeType() == iris::SceneNodeType::Mesh && node->isVisible() &&
-        node->getShadowCastingEnabled()) {
-        const auto mesh = node.staticCast<iris::MeshNode>();
-        const bool isGround = mesh->defaultFloor ||
-                              mesh->meshPath == QStringLiteral(":/models/ground.obj");
-        if (!isGround) out.append(node);
-    }
+        node->getShadowCastingEnabled())
+        out.append(node);
     for (const auto &child : node->children()) collectBlockers(child, out);
 }
 

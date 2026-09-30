@@ -118,11 +118,10 @@ int main(int argc, char **argv)
                   QStringLiteral("%1: ...and decodes (%2x%3)")
                       .arg(name).arg(thumb.width()).arg(thumb.height()));
         } else {
-            // The rows with no TILE are the Ground (100 m of floor: an Add-menu
-            // entry and a verb name, never something to drag out of a drawer)
-            // and the Platform seeds. Everything a user can drag has an icon.
-            check(name == QLatin1String("Ground") || def.kind == primitives::Kind::Platform,
-                  QStringLiteral("%1: only the Ground and a Platform seed may have no tile")
+            // The rows with no TILE are the Platform seeds (the samples' Teapot
+            // and old Ground). Everything a user can add has an icon.
+            check(def.kind == primitives::Kind::Platform,
+                  QStringLiteral("%1: only a Platform seed may have no tile")
                       .arg(name));
         }
     }

@@ -86,7 +86,7 @@ function comparePostFx(fx, what) {
 // others (measured: 183 / 228 / 255 on the strip, 7 / 49 / 100 / 138 on the sky; a
 // settle trace showed four distinct, consistent frames per shot, so the picture was
 // never late — the pixel was on a different object). That read as "one change late".
-project.create("vr eye grade " + Date.now(), { empty: true });
+project.create("vr eye grade " + Date.now(), { template: "empty" });
 
 // THE FIXTURE IS A FLAT COLOUR SKY AND NOTHING ELSE, and that is what makes every
 // measurement below pose-independent: a simulated HMD sways and rotates (CLAUDE.md), so

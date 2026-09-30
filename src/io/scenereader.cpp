@@ -200,6 +200,10 @@ EditorData* SceneReader::readEditorData(QJsonObject& projectObj)
     // EditorData's, which is the one a brand-new scene is born with
     // (ui.grid_default asserts the two agree).
     editorData->showGrid = editorObj.value("showGrid").toBool(editorData->showGrid);
+    // The Ground plane widget, the same way: EditorData's default is the
+    // fallback (off).
+    editorData->showGroundPlane =
+        editorObj.value("showGroundPlane").toBool(editorData->showGroundPlane);
 
     return editorData;
 }
@@ -245,8 +249,8 @@ QString SceneReader::resolveAssetPath(const QString &guid)
     //
     // Two by-NAME fallbacks followed until then: `assetDirectory + row name`
     // for a library-source read and `projectFolder + row name` for a project
-    // load. The second existed for exactly one asset — the default ground's
-    // Tile.png, which MainWindow::createDefaultScene copied into the project
+    // load. The second existed for exactly one asset — the then-default ground's
+    // Tile.png, which the new-scene template once copied into the project
     // folder under a bare catalog row, and which the writer re-found by name
     // on save: the two had to agree or the floor reopened bare white (the
     // "reopen lighting blowout"). The first had lost its last real directory
@@ -1353,7 +1357,7 @@ iris::MeshNodePtr SceneReader::createMesh(QJsonObject& nodeObj)
         }
     }
 
-    // THE DEFAULT FLOOR (services/defaultfloor.h): a written flag, never a
+    // THE DEFAULT FLOOR (services/defaultfloormaterial.h): a written flag, never a
     // guess from the name or the mesh path.
     meshNode->defaultFloor = nodeObj["defaultFloor"].toBool(meshNode->defaultFloor);
 

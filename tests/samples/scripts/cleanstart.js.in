@@ -1002,7 +1002,7 @@ errorsClean("after baked reopen");
 // 7. THE DEFAULT FLOOR (owner, 2026-09-12: "the demo scenes don't have the
 //    checker default floor, just a grey nothing — ALL the demo scenes should
 //    have that default floor"). Every demo stands on ONE default floor — the
-//    document flag, not the name (services/defaultfloor.h) — which wears the
+//    document flag, not the name (services/defaultfloormaterial.h) — which wears the
 //    checker (World Background's floor is its own metal deck, by design) and
 //    RENDERS a texture: a top-down look at the floor, with everything but the
 //    floor and the lights hidden (so no object or shadow is in the shot), must

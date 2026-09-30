@@ -165,7 +165,7 @@ assert(vr.hover() === null, "a ray into the sky hovers nothing");
 
 // ---- 2. THE LOCK IS `pickable`, AND THE VR RAY OBEYS IT -----------------
 //
-// The default scene's Ground ships LOCKED (services/defaultfloor.cpp:
+// The Basic template's Floor ships LOCKED (MainWindow::createDefaultScene:
 // setPickable(false)) — the owner's own model, "the floor is just locked by
 // default". Proven here with the document's own raycast so the case cannot
 // silently pass on a scene that has no floor at all.

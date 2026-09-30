@@ -102,7 +102,6 @@ public:
     iris::ScenePtr scene() const { return sceneProvider ? sceneProvider() : iris::ScenePtr(); }
 
     // Built-in primitives (each pairs a bundled mesh with a DB object row).
-    void addGround();
     void addCone();
     void addCube();
     void addTorus();

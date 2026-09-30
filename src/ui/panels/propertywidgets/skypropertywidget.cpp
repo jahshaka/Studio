@@ -407,6 +407,7 @@ void SkyPropertyWidget::wireSkyRow(QWidget *row, const QString &text,
         };
     if (auto *slider = qobject_cast<HFloatSliderWidget *>(row))      rowundo::bind(slider, b);
     else if (auto *picker = qobject_cast<ColorPickerWidget *>(row))  rowundo::bind(picker, b);
+    else if (auto *box = qobject_cast<CheckBoxWidget *>(row))        rowundo::bind(box, b);
 }
 
 void SkyPropertyWidget::commitSky(const QVariant &before, const QString &text)
