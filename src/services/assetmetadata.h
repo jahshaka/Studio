@@ -114,10 +114,12 @@ public:
     /// the version this row's `source` points at.
     static QJsonObject forAvatarFile(const QString &filePath);
 
-    // Dispatches on the asset row's ModelTypes over its store folder
-    // (AssetStore/<guid>/). Returns an empty object when the folder holds
-    // nothing to describe (e.g. reserved built-ins with no files).
-    static QJsonObject computeForStore(int assetType, const QString &storeFolder);
+    // Dispatches on the asset row's ModelTypes over its RESOLVED source file
+    // (AssetCas::resolveSource). Empty when there is no file to describe (a
+    // row with no stored bytes). Pure file inspection: safe on a worker, bar
+    // Video (QMediaPlayer — GUI thread).
+    static QJsonObject computeForSource(int assetType, const QString &sourcePath,
+                                        const QString &assetGuid = QString());
 
     // The lazy backfill: returns properties["metadata"], computing and
     // persisting it when absent. storeRoot is overridable for tests;

@@ -195,9 +195,9 @@ Result reset(Database *db, SettingsManager *settings, const QString &projectsRoo
     // adopts any existing one), so it can be ~/Documents or the top of a USB
     // stick. A reset may therefore remove only what THIS APP puts there —
     // `objects/`, `sidecar/`, `derived/`, `store.json`, the staging temps
-    // beside them and the legacy per-guid folders (AssetStorePaths' layout,
-    // its header's list) — and must leave every other file and folder in that
-    // directory exactly where it is. Never a wildcard.
+    // beside them (AssetStorePaths' layout, its header's list) — and must
+    // leave every other file and folder in that directory exactly where it is.
+    // Never a wildcard.
     if (!storeRoot.isEmpty() && QDir(storeRoot).exists()) {
         const auto take = [&result](const QString &path) {
             const QFileInfo info(path);
@@ -218,15 +218,6 @@ Result reset(Database *db, SettingsManager *settings, const QString &projectsRoo
             // — store.json's is written right here in the root).
             if (!entry.isDir() && isStagingTemp(entry.fileName())) {
                 ++result.removed.staging;
-                take(entry.absoluteFilePath());
-                continue;
-            }
-            // A legacy per-guid folder: the pre-CAS store's layout, still read
-            // for assets that were never migrated. Its files are stored bytes,
-            // so they count as objects.
-            if (entry.isDir() && isOurGuidName(entry.fileName())) {
-                countFiles(entry.absoluteFilePath(), &result.removed.objects,
-                           &result.removed.staging);
                 take(entry.absoluteFilePath());
             }
         }

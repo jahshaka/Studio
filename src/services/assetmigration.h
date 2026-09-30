@@ -16,8 +16,6 @@ For more information see the LICENSE file
 //   - every tool takes an EXPLICIT db path + store root, opening its own
 //     named connection, so a rehearsal against a copied library never goes
 //     near the live one (preflight §3.2);
-//   - migration is hardlink/copy and RETAINS the legacy per-guid tree until
-//     an explicit owner-gated purge; a missing legacy folder is zero files;
 //   - migration REFUSES while another process holds the library lock
 //     ("close Jahshaka first", preflight §6.2);
 //   - migration scans LIBRARY rows: view_filter IN (2,3) — Effects rows ARE

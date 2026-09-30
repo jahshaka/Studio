@@ -94,15 +94,6 @@ QJsonObject parseWavHeader(const QString &filePath, QJsonObject meta)
     return meta;
 }
 
-// The primary file of a store folder for a given extension list, or empty.
-QString findByExtension(const QString &folder, const QStringList &exts)
-{
-    for (const QFileInfo &file : QDir(folder).entryInfoList(QDir::Files, QDir::Name))
-        if (exts.contains(file.suffix().toLower()))
-            return file.absoluteFilePath();
-    return QString();
-}
-
 } // namespace
 
 QJsonObject AssetMetadata::forModelScene(const iris::ModelSceneInfo &scene, const QString &sourceFile)
@@ -345,70 +336,21 @@ QJsonObject AssetMetadata::forAvatarFile(const QString &filePath)
     return meta;
 }
 
-QJsonObject AssetMetadata::computeForStore(int assetType, const QString &storeFolder)
+QJsonObject AssetMetadata::computeForSource(int assetType, const QString &sourcePath,
+                                            const QString &assetGuid)
 {
-    const QDir dir(storeFolder);
-    if (!dir.exists()) return QJsonObject();
-
-    // The legacy per-guid view names its folder after the asset, which is how
-    // a model described from it still gets its own import recipe (F7).
-    const QString guid = QFileInfo(storeFolder).fileName();
-
+    if (sourcePath.isEmpty() || !QFileInfo::exists(sourcePath)) return QJsonObject();
     switch (static_cast<ModelTypes>(assetType)) {
     case ModelTypes::Object:
-    case ModelTypes::Mesh: {
-        const QString model = findByExtension(storeFolder, Constants::MODEL_EXTS);
-        if (!model.isEmpty()) return forModelFile(model, guid);
-        break;
+    case ModelTypes::Mesh: return forModelFile(sourcePath, assetGuid);
+    case ModelTypes::Texture: return forImageFile(sourcePath);
+    case ModelTypes::Music: return forAudioFile(sourcePath);
+    case ModelTypes::Video: return forVideoFile(sourcePath);
+    case ModelTypes::LightProfile: return forLightProfileFile(sourcePath);
+    case ModelTypes::Avatar: return forAvatarFile(sourcePath);
+    case ModelTypes::Animation: return forAnimationFile(sourcePath);
+    default: return forGenericFile(sourcePath);
     }
-    case ModelTypes::Texture: {
-        const QString image = findByExtension(storeFolder, Constants::IMAGE_EXTS);
-        if (!image.isEmpty()) return forImageFile(image);
-        break;
-    }
-    case ModelTypes::Music: {
-        const QString audio = findByExtension(storeFolder, Constants::AUDIO_EXTS);
-        if (!audio.isEmpty()) return forAudioFile(audio);
-        break;
-    }
-    case ModelTypes::Video: {
-        const QString video = findByExtension(storeFolder, Constants::VIDEO_EXTS);
-        if (!video.isEmpty()) return forVideoFile(video);
-        break;
-    }
-    case ModelTypes::LightProfile: {
-        const QString ies = findByExtension(storeFolder, Constants::LIGHT_PROFILE_EXTS);
-        if (!ies.isEmpty()) return forLightProfileFile(ies);
-        break;
-    }
-    case ModelTypes::Avatar: {
-        const QString definition = findByExtension(storeFolder, Constants::AVATAR_EXTS);
-        if (!definition.isEmpty()) return forAvatarFile(definition);
-        break;
-    }
-    case ModelTypes::Animation: {
-        const QString clip = findByExtension(storeFolder, Constants::ANIMATION_EXTS);
-        if (!clip.isEmpty()) return forAnimationFile(clip);
-        break;
-    }
-    default:
-        break;
-    }
-
-    // Everything else — shaders, materials, particle systems, skies, files,
-    // and typed rows whose expected file is missing: describe the folder.
-    const auto files = dir.entryInfoList(QDir::Files, QDir::Size);
-    if (files.isEmpty()) return QJsonObject();
-
-    qint64 total = 0;
-    for (const QFileInfo &file : files) total += file.size();
-
-    QJsonObject meta;
-    meta["kind"] = "file";
-    meta["format"] = files.first().suffix().toLower();   // the largest file
-    meta["fileSize"] = total;
-    if (files.size() > 1) meta["files"] = files.size();
-    return meta;
 }
 
 QJsonObject AssetMetadata::ensure(Database *db, const QString &guid, const QString &storeRoot)
@@ -438,25 +380,9 @@ QJsonObject AssetMetadata::ensure(Database *db, const QString &guid, const QStri
     }
 
     const QString root = storeRoot.isEmpty() ? storeRootPath() : storeRoot;
-    QJsonObject meta = computeForStore(record.type, QDir(root).filePath(guid));
-    if (meta.isEmpty()) {
-        // CAS-only rows (no per-guid view on disk): describe the resolved
-        // source object directly (phase 4 — guid-first resolution).
-        const QString source = AssetCas::resolveSource(QSqlDatabase::database(), root, guid);
-        if (!source.isEmpty()) {
-            switch (static_cast<ModelTypes>(record.type)) {
-            case ModelTypes::Object:
-            case ModelTypes::Mesh: meta = forModelFile(source, guid); break;
-            case ModelTypes::Texture: meta = forImageFile(source); break;
-            case ModelTypes::Music: meta = forAudioFile(source); break;
-            case ModelTypes::Video: meta = forVideoFile(source); break;
-            case ModelTypes::LightProfile: meta = forLightProfileFile(source); break;
-            case ModelTypes::Avatar: meta = forAvatarFile(source); break;
-            case ModelTypes::Animation: meta = forAnimationFile(source); break;
-            default: meta = forGenericFile(source); break;
-            }
-        }
-    }
+    // The resolved source object (guid-first — the store is content-addressed).
+    const QString source = AssetCas::resolveSource(QSqlDatabase::database(), root, guid);
+    QJsonObject meta = computeForSource(record.type, source, guid);
     if (meta.isEmpty()) return meta;   // nothing to describe — don't persist a stub
     // A video block computed off the GUI thread is degraded (no QMediaPlayer
     // there) — hand it back for display but let a GUI-thread call enrich later.

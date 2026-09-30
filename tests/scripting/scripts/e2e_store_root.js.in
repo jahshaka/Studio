@@ -94,19 +94,14 @@ try {
     assert(gc.ok === true, "assets.gc() reports ok on the live store");
     assert(gc.removed === 0, "a dry run removes nothing");
     assert(typeof gc.classes === "object", "the report carries the per-class map");
-    var classNames = ["unreferencedObjects", "strayObjects", "straySidecars",
-                      "legacyFolders", "redundantLegacyFiles"];
+    var classNames = ["unreferencedObjects", "strayObjects", "straySidecars", "deadPins"];
     for (var c = 0; c < classNames.length; c++) {
         var cls = gc.classes[classNames[c]];
         assert(cls && typeof cls.count === "number" && typeof cls.bytes === "number"
                && cls.items instanceof Array,
                "class " + classNames[c] + " reports {count, bytes, items}");
     }
-    // A freshly imported library asset leaves NO content garbage. (The two
-    // legacy-view classes are deliberately not asserted at zero: this scratch
-    // HOME survives across runs, so a store written by an older build still
-    // carries per-guid folders here — which is exactly what those classes
-    // exist to reclaim.)
+    // A freshly imported library asset leaves NO content garbage.
     assert(gc.classes.unreferencedObjects.count === 0, "no unreferenced objects in a fresh store");
     assert(gc.classes.strayObjects.count === 0, "no stray objects in a fresh store");
     assert(gc.classes.straySidecars.count === 0, "no stray sidecars in a fresh store");

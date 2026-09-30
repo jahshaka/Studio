@@ -151,17 +151,6 @@ bool ingestFile(QSqlDatabase conn, const QString &root, const QString &srcPath,
                 QString *oidOut, QString *errorOut,
                 const QString &knownOid = QString());
 
-// THE LEGACY VIEW IS RETIRED (deep audit 2026-09, area 6).
-//
-// materializeLegacyView used to hardlink every asset's objects into
-// <root>/<guid>/ so the readers that had not moved to the resolver kept
-// working. All of them have moved (resolveFile / resolveSource /
-// resolvePinned), so the view is gone: it was a SECOND full copy of the store
-// on any filesystem without hardlinks — Windows, where 152MB became 438MB and
-// every import paid a second full write. Existing stores keep their folders
-// until `assets.gc` reclaims them, and resolveFile still READS them (below),
-// so nothing breaks on the way through.
-
 /// Move an asset's LIBRARY 'source' pointer to `oid` (the bytes must already
 /// be in the store — ingestFile first). This is the write a LIBRARY save
 /// needs and `copyOnWrite` deliberately does not do: the asset_files PK is
@@ -275,8 +264,7 @@ bool writeSidecar(QSqlDatabase conn, const QString &root, const QString &guid,
                   QString *errorOut);
 
 /// Resolve an asset's file to an absolute path: asset_files → objects/ when
-/// the object exists, else the legacy folder+name fallback (one release,
-/// spec §3.1.3). Empty when neither exists.
+/// the object exists. Empty otherwise.
 QString resolveFile(QSqlDatabase conn, const QString &root,
                     const QString &guid, const QString &name);
 

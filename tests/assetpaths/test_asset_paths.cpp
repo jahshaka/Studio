@@ -51,10 +51,6 @@ static void testPathsAuthority()
     // all derived paths follow.
     AssetStorePaths::setRootOverride("/tmp/jah-store-test/");
     CHECK(AssetStorePaths::root() == "/tmp/jah-store-test", "override root normalized (no trailing slash)");
-    CHECK(AssetStorePaths::legacyFolder("GUID123") == "/tmp/jah-store-test/GUID123",
-          "legacyFolder = <root>/<guid>");
-    CHECK(AssetStorePaths::legacyFilePath("GUID123", "model.glb") == "/tmp/jah-store-test/GUID123/model.glb",
-          "legacyFilePath = <root>/<guid>/<name>");
 
     // CAS layout (phase 2): 2-char fan-out, lowercase oid + ext.
     const QString oid = "ABCDEF0123456789abcdef0123456789abcdef0123456789abcdef0123456789";
@@ -72,8 +68,6 @@ static void testPathsAuthority()
           "storeInfoPath = <root>/store.json");
 
     // Explicit-root variants (migration rehearsal against a copied library).
-    CHECK(AssetStorePaths::legacyFolderIn("/mnt/copy", "G") == "/mnt/copy/G",
-          "legacyFolderIn uses the explicit root");
     CHECK(AssetStorePaths::objectPathIn("/mnt/copy", "aabb", "png") == "/mnt/copy/objects/aa/aabb.png",
           "objectPathIn uses the explicit root");
     CHECK(AssetStorePaths::sidecarPathIn("/mnt/copy", "G") == "/mnt/copy/sidecar/G.json",

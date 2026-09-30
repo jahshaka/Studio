@@ -2173,7 +2173,12 @@ void AssetView::refreshFitRow(const QString &guid, int assetType, const QJsonObj
 
 void AssetView::backfillMetadata(const QString &guid, int assetType)
 {
-	const QString folder = IrisUtils::join(AssetMetadata::storeRootPath(), guid);
+	// The RESOLVED source object, on this thread (the catalog connection is
+	// per-thread); the worker only reads the file. This used to hand the worker
+	// the retired per-guid folder <root>/<guid>/, which no CAS asset has — so
+	// the async half described nothing (FORWARD-ONLY-1).
+	const QString source = AssetCas::resolveSource(QSqlDatabase::database(),
+	                                               AssetStorePaths::root(), guid);
 
 	// Video is the one kind whose rich fields need the GUI thread
 	// (QMediaPlayer probe — ASSET_MEDIA_SPEC §1): compute right here, where
@@ -2207,7 +2212,7 @@ void AssetView::backfillMetadata(const QString &guid, int assetType)
 	});
 	// Pure file inspection (assimp / image header / wav header) — thread-safe.
 	watcher->setFuture(QtConcurrent::run(
-	    [assetType, folder]() { return AssetMetadata::computeForStore(assetType, folder); }));
+	    [assetType, source, guid]() { return AssetMetadata::computeForSource(assetType, source, guid); }));
 }
 
 void AssetView::addAssetItemToProject(const QString &guid)

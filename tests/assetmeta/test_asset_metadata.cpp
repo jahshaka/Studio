@@ -16,7 +16,10 @@
 
 #include "data/database/database.h"
 #include "data/project.h"
+#include "services/assetcas.h"
 #include "services/assetmetadata.h"
+#include "services/assetstorepaths.h"
+#include <QSqlDatabase>
 #include "services/rigsignature.h"
 
 static int failures = 0;
@@ -124,31 +127,34 @@ int main(int argc, char **argv)
               "rig: bone channels counted (no assimp pivots in a glTF)");
     }
 
-    // ---- store-folder dispatch ----
+    // ---- source dispatch (the resolved store object) ----
     const QString storeRoot = QDir::currentPath() + "/assetmeta_store";
     QDir(storeRoot).removeRecursively();
     {
-        QDir().mkpath(storeRoot + "/modelguid");
-        QFile::copy(CUBE_OBJ, storeRoot + "/modelguid/cube.obj");
-        const QJsonObject meta = AssetMetadata::computeForStore(
-            static_cast<int>(ModelTypes::Object), storeRoot + "/modelguid");
+        const QJsonObject meta = AssetMetadata::computeForSource(
+            static_cast<int>(ModelTypes::Object), CUBE_OBJ);
         CHECK(meta["kind"].toString() == "model" && meta["triangles"].toInteger() == 12,
-              "store dispatch: Object folder -> model stats");
+              "source dispatch: Object -> model stats");
     }
     {
-        QDir().mkpath(storeRoot + "/fileguid");
-        QFile::copy(QString(FIXTURES) + "/tiny.png", storeRoot + "/fileguid/a.dat");
-        QFile::copy(QString(FIXTURES) + "/tiny.wav", storeRoot + "/fileguid/b.bin");
-        const QJsonObject meta = AssetMetadata::computeForStore(
-            static_cast<int>(ModelTypes::File), storeRoot + "/fileguid");
-        CHECK(meta["kind"].toString() == "file", "store dispatch: generic folder -> file");
-        CHECK(meta["files"].toInt() == 2, "store dispatch: file count 2");
-        CHECK(meta["fileSize"].toInteger() == 76 + 844, "store dispatch: total bytes summed");
+        const QJsonObject meta = AssetMetadata::computeForSource(
+            static_cast<int>(ModelTypes::File), QString(FIXTURES) + "/tiny.wav");
+        CHECK(meta["kind"].toString() == "file", "source dispatch: File -> generic file block");
+        CHECK(meta["fileSize"].toInteger() == 844, "source dispatch: the file's bytes");
     }
     {
-        const QJsonObject meta = AssetMetadata::computeForStore(
-            static_cast<int>(ModelTypes::Object), storeRoot + "/no_such_folder");
-        CHECK(meta.isEmpty(), "store dispatch: missing folder -> empty (no stub persisted)");
+        const QJsonObject meta = AssetMetadata::computeForSource(
+            static_cast<int>(ModelTypes::Object), storeRoot + "/no_such_file.obj");
+        CHECK(meta.isEmpty(), "source dispatch: missing file -> empty (no stub persisted)");
+    }
+    {
+        // FORWARD-ONLY-1: a pre-CAS <root>/<guid>/ folder is not a source.
+        QDir().mkpath(storeRoot + "/legacyguid");
+        QFile::copy(CUBE_OBJ, storeRoot + "/legacyguid/cube.obj");
+        const QJsonObject meta = AssetMetadata::computeForSource(
+            static_cast<int>(ModelTypes::Object), storeRoot + "/legacyguid");
+        CHECK(meta["kind"].toString() != "model",
+              "source dispatch: a legacy per-guid FOLDER is not described as a model");
     }
 
     // ---- ensure(): the lazy backfill against the real Database ----
@@ -158,15 +164,18 @@ int main(int argc, char **argv)
     CHECK(db.initializeDatabase(dbPath), "throwaway database opened");
     db.createAllTables();
 
-    // A legacy Object row: properties hold ONLY the viewer's camera block.
+    // An Object row whose properties hold ONLY the viewer's camera block, its
+    // model stored in the CAS like every import.
     const QString guid = "aaaaaaaa-1111-2222-3333-444444444444";
-    QDir().mkpath(storeRoot + "/" + guid);
-    QFile::copy(CUBE_OBJ, storeRoot + "/" + guid + "/cube.obj");
+    QString cubeOid, ingestError;
     QJsonObject camProps{ { "camera", QJsonObject{ { "distFromPivot", 5.0 } } } };
     db.createAssetEntry(guid, "cube", static_cast<int>(ModelTypes::Object), QString(),
                         QString(), QString(), QString(), QByteArray(),
                         QJsonDocument(camProps).toJson(), QByteArray(), QByteArray(),
                         AssetViewFilter::AssetsView);
+    CHECK(AssetCas::ingestFile(QSqlDatabase::database(), storeRoot, CUBE_OBJ, guid, "source",
+                               "cube.obj", &cubeOid, &ingestError),
+          "the model is ingested into the store");
 
     {
         const QJsonObject meta = AssetMetadata::ensure(&db, guid, storeRoot);
@@ -182,7 +191,7 @@ int main(int argc, char **argv)
     {
         // Second call must serve the persisted block, not recompute:
         // remove the file — the answer must still be there.
-        QFile::remove(storeRoot + "/" + guid + "/cube.obj");
+        QFile::remove(AssetStorePaths::objectPathIn(storeRoot, cubeOid, "obj"));
         const QJsonObject meta = AssetMetadata::ensure(&db, guid, storeRoot);
         CHECK(meta["triangles"].toInteger() == 12, "ensure: second call reads the stored block");
     }

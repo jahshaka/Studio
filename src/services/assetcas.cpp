@@ -448,35 +448,10 @@ QString resolveSource(QSqlDatabase conn, const QString &root,
             if (nameOut) *nameOut = query.value(0).toString();
             return path;
         }
-        // Object missing (offline root, purged store): legacy fallback below.
-        const QString legacy = QDir(AssetStorePaths::legacyFolderIn(root, guid))
-                                   .filePath(query.value(0).toString());
-        if (QFileInfo::exists(legacy)) {
-            if (nameOut) *nameOut = query.value(0).toString();
-            return legacy;
-        }
-        return QString();
     }
-
-    // NO asset_files row at all. That is not only "a DB-only asset": writers
-    // outside the ONE import pipeline still drop a file straight into
-    // <root>/<guid>/ and create the row (the materials module's texture
-    // import does exactly this), and until the retired legacy view is swept
-    // those bytes are the asset's only copy. The resolver is now the single
-    // place that knows about them — which is what let every call site stop
-    // building <root>/<guid>/<name> for itself.
-    QSqlQuery byName(conn);
-    byName.prepare("SELECT name FROM assets WHERE guid = ?");
-    byName.addBindValue(guid);
-    if (byName.exec() && byName.next()) {
-        const QString name = byName.value(0).toString();
-        if (name.isEmpty()) return QString();
-        const QString legacy = QDir(AssetStorePaths::legacyFolderIn(root, guid)).filePath(name);
-        if (QFileInfo::exists(legacy)) {
-            if (nameOut) *nameOut = name;
-            return legacy;
-        }
-    }
+    // No asset_files row (a DB-only asset) or an object that is not on disk
+    // (offline root, purged store): nothing to resolve. The pre-CAS per-guid
+    // folders are not read (FORWARD-ONLY-1).
     return QString();
 }
 
@@ -645,9 +620,6 @@ QString resolveFile(QSqlDatabase conn, const QString &root,
             root, query.value(0).toString(), query.value(1).toString());
         if (QFileInfo::exists(path)) return path;
     }
-    // …legacy per-guid folder as the one-release read fallback.
-    const QString legacy = QDir(AssetStorePaths::legacyFolderIn(root, guid)).filePath(name);
-    if (QFileInfo::exists(legacy)) return legacy;
     return QString();
 }
 

@@ -134,11 +134,8 @@ Outcome remove(Database *db, const QString &guid, bool keepShared, bool force)
         return out;
     }
 
-    // Whatever the retired legacy per-guid view left behind goes with the row;
-    // the CONTENT under objects/ is assets.gc's to reclaim — only it can tell a
-    // shared object from an exclusive one.
-    QDir legacy(AssetStorePaths::legacyFolder(guid));
-    if (legacy.exists()) legacy.removeRecursively();
+    // The CONTENT under objects/ is assets.gc's to reclaim — only it can tell
+    // a shared object from an exclusive one.
     return out;
 }
 
