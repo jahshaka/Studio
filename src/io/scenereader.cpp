@@ -1844,6 +1844,21 @@ void SceneReader::extractAssetsFromAssimpScene(QString filePath, const QString &
             animations.insert(cacheKey, animationss);
             return;
         }
+        // AN ANIMATION CLIP FILE IS NOT A MODEL: a ModelTypes::Animation row
+        // carries no mesh bake by design (the clip importer stores the file),
+        // so its clips are READ here — the clip's own path, not a fallback for
+        // a missing model bake.
+        if (!assetGuid.isEmpty() && handle
+            && handle->fetchAsset(assetGuid).type == static_cast<int>(ModelTypes::Animation)) {
+            LoadTimeline::Accumulate clip(QStringLiteral("assimp:clipFile"));
+            iris::GraphicsHelper::loadAllMeshesAndAnimationsFromFile(
+                filePath, meshList, animationss, MeshBakeStore::transformFor(filePath, assetGuid));
+            meshes.insert(cacheKey, meshList);
+            assimpScenes.insert(cacheKey);
+            animations.insert(cacheKey, animationss);
+            return;
+        }
+
         // NO CURRENT BAKE: the model is MISSING from this open (FORWARD-ONLY-1).
         // It is never parsed instead — an archive import bakes what it brings
         // and an asset import bakes at import, so a miss means the bake is
