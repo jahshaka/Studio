@@ -15,8 +15,8 @@ For more information see the LICENSE file
 // StudioModule v2 — the module contract (D10-SHELL-MODULES; the 2026-09-30
 // architecture audit, area 5 "Next version").
 //
-// A module is a feature domain: it owns a page and/or docks, contributes its
-// actions, menu rows, shortcuts and toolbar slots, opens the asset kinds it
+// A module is a feature domain: it owns a page, contributes its shortcuts and
+// toolbar actions, opens the asset kinds it
 // owns, routes the edit chords of its own space, and registers API verbs. The
 // shell holds a list of StudioModule* and drives every one through this one
 // interface — it never names a module's class and never calls into a module's
@@ -79,7 +79,7 @@ struct StudioContext
 
 /// What a module adds to the shell. Collected from contribute() and applied by
 /// the shell: the page goes into the PageHost under the module's id, the rows
-/// into the ActionHost (ShortcutRegistry + toolbar slots + named menus).
+/// into the ActionHost (ShortcutRegistry + toolbar slots).
 class Contributions
 {
 public:
@@ -111,25 +111,11 @@ public:
         QString slot;
         QAction *action = nullptr;
     };
-    /// An action appended to a named menu ("view.options").
-    struct MenuRow {
-        QString menu;
-        QAction *action = nullptr;
-    };
-    /// A dock shown only while the module's space is on screen.
-    struct Dock {
-        QString id;
-        QString title;
-        QWidget *widget = nullptr;
-        Qt::DockWidgetArea area = Qt::RightDockWidgetArea;
-    };
 
     void setPage(QWidget *page) { mPage = page; }
     void addShortcut(const Shortcut &s) { mShortcuts.append(s); }
     void addFixedRow(const FixedRow &r) { mFixedRows.append(r); }
     void addToolbarAction(const QString &slot, QAction *action) { mToolbar.append({ slot, action }); }
-    void addMenuRow(const QString &menu, QAction *action) { mMenuRows.append({ menu, action }); }
-    void addDock(const Dock &dock) { mDocks.append(dock); }
     /// An asset KIND this module opens (AssetView / the tray ask by kind).
     void opensAssetKind(const QString &kind) { mAssetKinds.append(kind); }
 
@@ -137,8 +123,6 @@ public:
     const QVector<Shortcut> &shortcuts() const { return mShortcuts; }
     const QVector<FixedRow> &fixedRows() const { return mFixedRows; }
     const QVector<ToolbarAction> &toolbarActions() const { return mToolbar; }
-    const QVector<MenuRow> &menuRows() const { return mMenuRows; }
-    const QVector<Dock> &docks() const { return mDocks; }
     const QStringList &assetKinds() const { return mAssetKinds; }
 
 private:
@@ -146,8 +130,6 @@ private:
     QVector<Shortcut> mShortcuts;
     QVector<FixedRow> mFixedRows;
     QVector<ToolbarAction> mToolbar;
-    QVector<MenuRow> mMenuRows;
-    QVector<Dock> mDocks;
     QStringList mAssetKinds;
 };
 
@@ -201,9 +183,13 @@ public:
     /// services exist and before contribute().
     virtual void initialize(StudioContext &ctx) = 0;
 
-    /// Everything the module adds to the shell: its page, docks, actions, menu
-    /// rows, shortcuts, toolbar slots and asset kinds. Called once, after
-    /// initialize(). The shell owns what it places (pages, docks, actions).
+    /// Everything the module adds to the shell: its page, shortcuts, toolbar
+    /// actions and asset kinds. Called once, after initialize().
+    /// OWNERSHIP: the PAGE becomes the shell's (reparented into the PageHost's
+    /// stack). A toolbar ACTION stays the module's — the shell only places it
+    /// (QWidget::insertAction takes no ownership), so the module keeps it
+    /// alive while placed and deletes it in its own teardown (VrModule holds
+    /// its action in a unique_ptr; a QAction removes itself from the bar).
     virtual void contribute(Contributions &) {}
 
     /// The verbs — the module's real interface. Called once, after contribute().

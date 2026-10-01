@@ -21,9 +21,6 @@ For more information see the LICENSE file
 // said so in a comment, because nothing else could). Here a page is named by
 // its space / module id ("desktop", "editor", "assets", "materials", "player",
 // "publish", "avatar"), and the order pages were added in means nothing.
-//
-// A page may also own DOCKS (a module's Contributions::Dock): they live on the
-// outer window and are shown exactly while their page is the page on screen.
 
 #include <QHash>
 #include <QObject>
@@ -31,8 +28,6 @@ For more information see the LICENSE file
 #include <QString>
 #include <QVector>
 
-class QDockWidget;
-class QMainWindow;
 class QStackedWidget;
 class QWidget;
 
@@ -40,8 +35,8 @@ class PageHost : public QObject
 {
     Q_OBJECT
 public:
-    /// `stack` holds the pages; `window` (nullable) holds the pages' docks.
-    PageHost(QStackedWidget *stack, QMainWindow *window, QObject *parent = nullptr);
+    /// `stack` holds the pages.
+    explicit PageHost(QStackedWidget *stack, QObject *parent = nullptr);
 
     /// Adds `page` under `id`. A second page under the same id is refused.
     bool addPage(const QString &id, QWidget *page);
@@ -53,7 +48,7 @@ public:
     QWidget *page(const QString &id) const;
     bool hasPage(const QString &id) const { return mPages.contains(id); }
 
-    /// Makes `id` the page on screen (and shows/hides the pages' docks).
+    /// Makes `id` the page on screen.
     /// `focus` gives the page the keyboard, as the Materials and Avatar spaces
     /// always did. False for an unknown id.
     bool show(const QString &id, bool focus = false);
@@ -62,20 +57,11 @@ public:
     bool isCurrent(const QString &id) const { return currentId() == id; }
     QWidget *currentPage() const;
 
-    /// A dock that belongs to page `pageId`: placed on the window, visible only
-    /// while that page is current.
-    void addDock(const QString &pageId, QDockWidget *dock, int area);
-
     QStackedWidget *stack() const { return mStack; }
 
 private:
-    void syncDocks();
-
     QStackedWidget *mStack = nullptr;
-    QMainWindow *mWindow = nullptr;
     QHash<QString, QPointer<QWidget>> mPages;
-    struct PageDock { QString page; QPointer<QDockWidget> dock; };
-    QVector<PageDock> mDocks;
 };
 
 #endif // PAGEHOST_H

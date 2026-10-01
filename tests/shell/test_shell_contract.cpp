@@ -3,15 +3,15 @@
 //
 // A fake module is driven through the shell's own parts — the ModuleHub (the
 // one loop over the modules), the PageHost (pages by id) and the ActionHost
-// (the ShortcutRegistry extended to actions, menus and toolbar slots) — and
+// (the ShortcutRegistry extended to actions and toolbar slots) — and
 // every hook it receives is logged. The suite asserts:
 //
 //   * the ORDER of the hooks on boot / open / create / close / a space switch /
 //     an edit command / an asset request / quit, against studiomodule.h;
-//   * that what the module CONTRIBUTES lands: its page under its id, its dock
-//     visible only on its page, a registry row placed after its anchor, a
-//     handler on a row the shell owns that runs only on the module's space, a
-//     toolbar action in a named slot and a row in a named menu;
+//   * that what the module CONTRIBUTES lands: its page under its id, a
+//     registry row placed after its anchor, a handler on a row the shell owns
+//     that runs only on the module's space, and a toolbar action in a named
+//     slot;
 //   * that the edit chords follow the ACTIVE space — never a fallback to
 //     another space's target — and Ctrl+Z moves the QUndoGroup's active stack,
 //     which a page with no document does not have (audit S4a);
@@ -22,10 +22,8 @@
 
 #include <QAction>
 #include <QApplication>
-#include <QDockWidget>
 #include <QLabel>
 #include <QMainWindow>
-#include <QMenu>
 #include <QSettings>
 #include <QStackedWidget>
 #include <QTemporaryDir>
@@ -64,11 +62,6 @@ public:
         gLog << QStringLiteral("contribute");
         page = new QLabel(QStringLiteral("fake page"));
         c.setPage(page);
-        Contributions::Dock dock;
-        dock.id = QStringLiteral("fakeDock");
-        dock.title = QStringLiteral("Fake");
-        dock.widget = new QLabel(QStringLiteral("fake dock"));
-        c.addDock(dock);
         // A row of its own, placed after the shell's tool.cycle.
         Contributions::Shortcut own;
         own.id = QStringLiteral("fake.do");
@@ -87,8 +80,6 @@ public:
         toolbarAction = new QAction(QStringLiteral("Fake Tool"));
         toolbarAction->setObjectName(QStringLiteral("actionFake"));
         c.addToolbarAction(QStringLiteral("editor.end"), toolbarAction);
-        menuAction = new QAction(QStringLiteral("Fake Row"));
-        c.addMenuRow(QStringLiteral("view.options"), menuAction);
         c.opensAssetKind(QStringLiteral("fakeasset"));
     }
     void registerApi(ScriptEngine &) override { gLog << QStringLiteral("registerApi"); }
@@ -116,11 +107,12 @@ public:
     }
     void abortBackgroundWork() override { gLog << QStringLiteral("abort"); }
     void shutdown() override { gLog << QStringLiteral("shutdown"); }
+    // The module owns what it contributes to a toolbar (studiomodule.h).
+    ~FakeModule() override { delete toolbarAction; }
 
     QWidget *initializedWith = nullptr;
     QWidget *page = nullptr;
     QAction *toolbarAction = nullptr;
-    QAction *menuAction = nullptr;
     QUndoStack stack;
 };
 
@@ -146,17 +138,15 @@ int main(int argc, char **argv)
     QString currentSpace = QStringLiteral("desktop");
 
     ShortcutRegistry registry(&settings);
-    PageHost pages(stack, &window);
+    PageHost pages(stack);
     ActionHost actions(&registry, &window, [&currentSpace]() { return currentSpace; });
     ModuleHub hub;
 
-    // The shell's own pages, toolbar slot and menu, as the window builds them.
+    // The shell's own pages and toolbar slot, as the window builds them.
     pages.addPage(QStringLiteral("desktop"), new QLabel(QStringLiteral("desktop")));
     pages.addPage(QStringLiteral("editor"), new QLabel(QStringLiteral("editor")));
     QToolBar toolbar;
     toolbar.addAction(QStringLiteral("Undo"));
-    QMenu viewOptions;
-    viewOptions.addAction(QStringLiteral("Light Bounds"));
 
     // ---- boot -------------------------------------------------------------
     auto *fake = new FakeModule;
@@ -165,10 +155,9 @@ int main(int argc, char **argv)
     ctx.shellWidget = &window;
     hub.initialize(ctx);
     hub.contribute(&pages, &actions);
-    // The window builds its toolbar and menus AFTER the modules contributed
+    // The window builds its toolbar AFTER the modules contributed
     // (the order it really runs in): the contributions wait for their slot.
     actions.addToolbarSlot(&toolbar, QStringLiteral("editor.end"));
-    actions.registerMenu(QStringLiteral("view.options"), &viewOptions);
     // The fake never touches the engine it is handed: the reference only
     // proves the hub forwards it, in order.
     hub.registerApi(*reinterpret_cast<ScriptEngine *>(&window));
@@ -205,9 +194,6 @@ int main(int argc, char **argv)
     CHECK(toolbar.actions().contains(fake->toolbarAction)
               && toolbar.actions().indexOf(fake->toolbarAction) == 1,
           "contribute: the toolbar action lands in its slot, even one built after the contribution");
-    CHECK(viewOptions.actions().contains(fake->menuAction), "contribute: the menu row lands in its menu");
-    auto *fakeDock = window.findChild<QDockWidget *>(QStringLiteral("fakeDock"));
-    CHECK(fakeDock && fakeDock->isHidden(), "contribute: the module's dock is hidden off its page");
 
     // ---- open / create / close ---------------------------------------------
     gLog.clear();
@@ -225,7 +211,6 @@ int main(int argc, char **argv)
     currentSpace = QStringLiteral("fake");
     CHECK(gLog == QStringList({ "space:desktop>fake" }), "switch: onSpaceChanged(from, to)");
     CHECK(pages.isCurrent(QStringLiteral("fake")), "switch: the page is shown by id");
-    CHECK(fakeDock && !fakeDock->isHidden(), "switch: the module's dock comes up with its page");
 
     // ---- an edit command and the module's chords ---------------------------
     gLog.clear();
@@ -245,7 +230,6 @@ int main(int argc, char **argv)
     actions.trigger(QStringLiteral("edit.delete"));
     CHECK(gLog == QStringList({ "space:fake>editor", "action:tool.cycle@editor" }),
           "edit: off the module's space its handler and its target are never asked");
-    CHECK(fakeDock && fakeDock->isHidden(), "switch: the dock goes with its page");
 
     // ---- undo follows the space (the QUndoGroup; audit S4a) ------------------
     // The owner's report: Ctrl+Z on a page that is not the editor undid the

@@ -12,7 +12,7 @@ For more information see the LICENSE file
 #ifndef ACTIONHOST_H
 #define ACTIONHOST_H
 
-// ActionHost — the ShortcutRegistry EXTENDED TO ACTIONS, MENUS AND TOOLBAR SLOTS
+// ActionHost — the ShortcutRegistry EXTENDED TO ACTIONS AND TOOLBAR SLOTS
 // (D10-SHELL-MODULES; audit S1 "module chords are registered by the shell").
 //
 // Three things live here:
@@ -32,8 +32,8 @@ For more information see the LICENSE file
 //    pass at commit(), when every anchor exists.
 //
 //  * THE SLOTS. A toolbar slot is a named insertion point (an invisible marker
-//    action); a menu is registered by name. A contribution lands in either
-//    without the shell knowing what it is.
+//    action). A contribution lands in one without the shell knowing what it
+//    is.
 
 #include <QHash>
 #include <QObject>
@@ -46,7 +46,6 @@ For more information see the LICENSE file
 #include "modules/studiomodule.h"
 
 class QAction;
-class QMenu;
 class QToolBar;
 class QWidget;
 class ShortcutRegistry;
@@ -69,7 +68,7 @@ public:
     void addFixedRow(const Contributions::FixedRow &row);
     /// A handler for an existing row on `space` ("" = every space).
     void handle(const QString &id, const QString &space, const std::function<void()> &run);
-    /// Applies a module's contributed rows, toolbar actions and menu rows.
+    /// Applies a module's contributed rows and toolbar actions.
     void apply(const Contributions &contributions);
 
     /// Registers every row collected so far, in order, anchors resolved. Rows
@@ -88,11 +87,6 @@ public:
     /// does not exist YET (the modules contribute before the toolbar is
     /// built) keeps the action until it does.
     void addToolbarAction(const QString &slot, QAction *action);
-
-    /// A named menu; rows contributed before it existed land in it now.
-    void registerMenu(const QString &id, QMenu *menu);
-    void addMenuRow(const QString &menu, QAction *action);
-    QMenu *menu(const QString &id) const;
 
 private:
     struct Row {
@@ -117,9 +111,7 @@ private:
     bool mCommitted = false;
     struct Slot { QPointer<QToolBar> bar; QPointer<QAction> marker; };
     QHash<QString, Slot> mSlots;
-    QHash<QString, QPointer<QMenu>> mMenus;
     QHash<QString, QVector<QPointer<QAction>>> mPendingToolbar;
-    QHash<QString, QVector<QPointer<QAction>>> mPendingMenu;
 };
 
 #endif // ACTIONHOST_H

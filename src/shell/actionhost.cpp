@@ -12,7 +12,6 @@ For more information see the LICENSE file
 #include "shell/actionhost.h"
 
 #include <QAction>
-#include <QMenu>
 #include <QToolBar>
 #include <QWidget>
 
@@ -67,7 +66,6 @@ void ActionHost::apply(const Contributions &contributions)
     for (const auto &row : contributions.fixedRows()) addFixedRow(row);
     for (const auto &row : contributions.shortcuts()) addRow(row);
     for (const auto &entry : contributions.toolbarActions()) addToolbarAction(entry.slot, entry.action);
-    for (const auto &entry : contributions.menuRows()) addMenuRow(entry.menu, entry.action);
 }
 
 void ActionHost::commit()
@@ -149,22 +147,4 @@ void ActionHost::addToolbarAction(const QString &slot, QAction *action)
     it->bar->insertAction(it->marker, action);
 }
 
-void ActionHost::registerMenu(const QString &id, QMenu *menu)
-{
-    if (!menu) return;
-    mMenus.insert(id, menu);
-    for (const QPointer<QAction> &action : mPendingMenu.take(id))
-        if (action) menu->addAction(action);
-}
 
-void ActionHost::addMenuRow(const QString &menuId, QAction *action)
-{
-    if (!action) return;
-    if (QMenu *target = menu(menuId)) target->addAction(action);
-    else mPendingMenu[menuId].append(action);
-}
-
-QMenu *ActionHost::menu(const QString &id) const
-{
-    return mMenus.value(id).data();
-}

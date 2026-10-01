@@ -11,7 +11,6 @@ For more information see the LICENSE file
 
 #include "shell/modulehub.h"
 
-#include <QDockWidget>
 #include <QUndoGroup>
 #include <QUndoStack>
 
@@ -54,13 +53,6 @@ void ModuleHub::contribute(PageHost *pages, ActionHost *actions)
         Contributions c;
         m->contribute(c);
         if (pages && c.page()) pages->addPage(m->id(), c.page());
-        for (const auto &dock : c.docks()) {
-            if (!pages || !dock.widget) continue;
-            auto *d = new QDockWidget(dock.title);
-            d->setObjectName(dock.id);
-            d->setWidget(dock.widget);
-            pages->addDock(m->id(), d, int(dock.area));
-        }
         if (actions) actions->apply(c);
         for (const QString &kind : c.assetKinds()) mAssetKinds.insert(kind, m);
     }

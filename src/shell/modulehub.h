@@ -54,9 +54,9 @@ public:
 
     // ---- boot: initialize -> contribute -> registerApi ------------------
     void initialize(StudioContext &ctx);
-    /// Each module's Contributions: its page into `pages` under its id (and
-    /// its docks with it), its rows / toolbar actions / menu rows into
-    /// `actions`, its asset kinds into the hub's routing table.
+    /// Each module's Contributions: its page into `pages` under its id, its
+    /// rows and toolbar actions into `actions`, its asset kinds into the hub's
+    /// routing table.
     void contribute(PageHost *pages, ActionHost *actions);
     void registerApi(ScriptEngine &engine);
 

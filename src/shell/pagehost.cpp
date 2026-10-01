@@ -11,12 +11,10 @@ For more information see the LICENSE file
 
 #include "shell/pagehost.h"
 
-#include <QDockWidget>
-#include <QMainWindow>
 #include <QStackedWidget>
 
-PageHost::PageHost(QStackedWidget *stack, QMainWindow *window, QObject *parent)
-    : QObject(parent), mStack(stack), mWindow(window)
+PageHost::PageHost(QStackedWidget *stack, QObject *parent)
+    : QObject(parent), mStack(stack)
 {
 }
 
@@ -53,7 +51,6 @@ bool PageHost::show(const QString &id, bool focus)
     if (!mStack || !target) return false;
     mStack->setCurrentWidget(target);
     if (focus) target->setFocus();
-    syncDocks();
     return true;
 }
 
@@ -71,17 +68,4 @@ QWidget *PageHost::currentPage() const
     return mStack ? mStack->currentWidget() : nullptr;
 }
 
-void PageHost::addDock(const QString &pageId, QDockWidget *dock, int area)
-{
-    if (!dock) return;
-    if (mWindow) mWindow->addDockWidget(static_cast<Qt::DockWidgetArea>(area), dock);
-    mDocks.append({ pageId, dock });
-    syncDocks();
-}
 
-void PageHost::syncDocks()
-{
-    const QString current = currentId();
-    for (const PageDock &d : mDocks)
-        if (d.dock) d.dock->setVisible(d.page == current);
-}

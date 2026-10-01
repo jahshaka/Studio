@@ -220,11 +220,11 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
 
 	// THE SHELL'S PARTS (D10-SHELL-MODULES). The lifecycle opens the library
 	// now and owns the whole shutdown order; the pages are keyed by id; every
-	// keyboard action, menu row and toolbar slot goes through the action host;
+	// keyboard action and toolbar slot goes through the action host;
 	// the modules are driven through their hooks by the hub.
 	lifecycle = new ShellLifecycle(this);
 	db = lifecycle->openLibrary();
-	pageHost = new PageHost(ui->stackedWidget, this, this);
+	pageHost = new PageHost(ui->stackedWidget, this);
 	shortcutRegistry = new ShortcutRegistry(settings->settings, this);
 	actionHost = new ActionHost(shortcutRegistry, this, [this]() { return currentSpaceId(); }, this);
 	viewController = new ViewController(this);
