@@ -12,7 +12,15 @@ For more information see the LICENSE file
 #include "scripting/modules/desktopapi.h"
 
 #include "ui/pages/projectmanager.h"
-#include "shell/mainwindow.h"
+#include "ui/ishellview.h"
+
+namespace {
+/// The Desktop page, through the shell (null in a session with no window).
+ProjectManager *desktopPage(const ScriptHost &host)
+{
+    return host.shell ? host.shell->projectPage() : nullptr;
+}
+}   // namespace
 
 QVector<VerbInfo> DesktopApi::verbs() const
 {
@@ -46,61 +54,61 @@ QVector<VerbInfo> DesktopApi::verbs() const
 
 QString DesktopApi::viewMode()
 {
-    if (!host.projectManager) { fail("desktop: not available in this session"); return QString(); }
-    return host.projectManager->desktopViewMode();
+    if (!desktopPage(host)) { fail("desktop: not available in this session"); return QString(); }
+    return desktopPage(host)->desktopViewMode();
 }
 
 bool DesktopApi::setViewMode(const QString &mode)
 {
-    if (!host.projectManager) return fail("desktop: not available in this session");
-    if (!host.projectManager->setDesktopViewMode(mode))
+    if (!desktopPage(host)) return fail("desktop: not available in this session");
+    if (!desktopPage(host)->setDesktopViewMode(mode))
         return fail(QStringLiteral("desktop.setViewMode: unknown mode '%1' (rows, freeform, sliders)").arg(mode));
     return true;
 }
 
 bool DesktopApi::moveTile(const QString &guid, int row, int index)
 {
-    if (!host.projectManager) return fail("desktop: not available in this session");
+    if (!desktopPage(host)) return fail("desktop: not available in this session");
     if (guid.isEmpty()) return fail("desktop.moveTile: guid is required");
-    if (host.projectManager->desktopViewMode() != QLatin1String("sliders"))
+    if (desktopPage(host)->desktopViewMode() != QLatin1String("sliders"))
         return fail("desktop.moveTile: the current desktop is not in 'sliders' view mode");
-    if (!host.projectManager->moveTileToSliderPos(guid, row - 1, index))
+    if (!desktopPage(host)->moveTileToSliderPos(guid, row - 1, index))
         return fail(QStringLiteral("desktop.moveTile: no tile '%1' on the current desktop").arg(guid));
     return true;
 }
 
 bool DesktopApi::exportTile(const QString &guid, const QString &zipPath)
 {
-    if (!host.mainWindow) return fail("desktop.exportTile: this verb needs the editor window");
+    if (!host.shell) return fail("desktop.exportTile: this verb needs the editor window");
     if (zipPath.trimmed().isEmpty()) return fail("desktop.exportTile: a destination path is required");
     QString why;
-    if (!host.mainWindow->startProjectExport(guid, zipPath, &why))
+    if (!host.shell->startProjectExport(guid, zipPath, &why))
         return fail(QStringLiteral("desktop.exportTile: %1").arg(why));
     return true;
 }
 
 QVariantMap DesktopApi::gridStats()
 {
-    if (!host.projectManager) { fail("desktop: not available in this session"); return {}; }
-    return host.projectManager->gridStats();
+    if (!desktopPage(host)) { fail("desktop: not available in this session"); return {}; }
+    return desktopPage(host)->gridStats();
 }
 
 int DesktopApi::sliderRows()
 {
-    if (!host.projectManager) { fail("desktop: not available in this session"); return 0; }
-    return host.projectManager->sliderRows();
+    if (!desktopPage(host)) { fail("desktop: not available in this session"); return 0; }
+    return desktopPage(host)->sliderRows();
 }
 
 int DesktopApi::setSliderRows(int rows)
 {
-    if (!host.projectManager) { fail("desktop: not available in this session"); return 0; }
+    if (!desktopPage(host)) { fail("desktop: not available in this session"); return 0; }
     if (rows < 2 || rows > 10)
         { fail(QStringLiteral("desktop.setSliderRows: rows must be 2..10 (got %1)").arg(rows)); return 0; }
-    return host.projectManager->setSliderRows(rows);
+    return desktopPage(host)->setSliderRows(rows);
 }
 
 QVariantList DesktopApi::tiles()
 {
-    if (!host.projectManager) { fail("desktop: not available in this session"); return {}; }
-    return host.projectManager->sliderTilesForApi();
+    if (!desktopPage(host)) { fail("desktop: not available in this session"); return {}; }
+    return desktopPage(host)->sliderTilesForApi();
 }

@@ -18,7 +18,7 @@ For more information see the LICENSE file
 //
 // WHY A SWEEP MUST BE STOPPABLE AT ALL. `thumbrebuild::rebuildMissing` yields
 // to the event loop between assets, and a yield delivers a WINDOW CLOSE:
-// MainWindow::closeEvent runs with the sweep on the stack, shutdownBackgroundWork
+// MainWindow::closeEvent runs with the sweep on the stack, ShellLifecycle::stopBackgroundWork
 // destroys the thumbnail renderer, and the loop would otherwise carry on — re-
 // creating the renderer, rendering the rest of the library with the window
 // gone, and finally opening a modal box on a dead window (the "modal swallowed

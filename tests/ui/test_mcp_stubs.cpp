@@ -1,16 +1,15 @@
-// Link stubs for ui.mcp_prefs: the page under test talks to a server, a main
-// window and the theme, and none of the three is what is being tested.
+// Link stubs for ui.mcp_prefs: the page under test talks to a server and the
+// theme, and neither is what is being tested. (The window's start is a
+// std::function the test leaves empty: the page falls back to the server's own.)
 // (tests/ui house pattern — see test_stubs.cpp for the material panel's.)
 
 #include <QString>
 
 #include "scripting/mcp/mcpserver.h"
 #include "scripting/mcp/mcptools.h"
-#include "shell/mainwindow.h"
 #include "ui/style/thememanager.h"
 
 int gStubServerStops = 0;
-bool McpServerStubStart(quint16 port, QString *errorOut);
 
 McpTools::McpTools(ScriptEngine *engine) : mEngine(engine) {}
 
@@ -42,15 +41,7 @@ void McpServer::regenerateToken() { mToken = QStringLiteral("stub-token"); }
 
 QString McpServer::connectCommand() const { return QStringLiteral("claude mcp add … stub"); }
 
-// The window: the page asks it to (re)start the server so the console dock
-// gets the fresh connect line. Nothing here needs either.
-bool MainWindow::startMcpServer(quint16 port, QString *errorOut)
-{
-    return McpServerStubStart(port, errorOut);
-}
-
 // The theme: Classic, so the page builds plain QCheckBoxes and the test needs
 // no qlementine.
 bool ThemeManager::classicActive() { return true; }
 
-bool McpServerStubStart(quint16, QString *) { return true; }

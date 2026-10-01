@@ -15,14 +15,16 @@ For more information see the LICENSE file
 #include "bridge/enginematerialpreview.h"
 #include "modules/materials/api/materialsapi.h"
 #include "modules/materials/effectspage.h"
+#include "modules/materials/widgets/listwidget.h"
 #include "scripting/scriptengine.h"
+#include "services/playbackservice.h"
 #include "services/projectservice.h"
 #include "services/presetedit.h"
 #include "services/undoservice.h"
 #include "services/sceneeditservice.h"
 #include "services/services.h"
 
-void MaterialsModule::initialize(ModuleHost &host)
+void MaterialsModule::initialize(StudioContext &host)
 {
     this->host = host;
 
@@ -39,6 +41,19 @@ void MaterialsModule::initialize(ModuleHost &host)
         page->setSceneOpenProbe([projectService]() { return projectService->isSceneOpen(); });
     }
     page->setProject(host.project);
+    // EVERY RETURN TO EDIT MODE re-hands the page's asset drawer the library,
+    // which (with a scene open) re-reads it — what the shell's edit-mode
+    // chrome did for this page by hand before the module owned it.
+    if (host.services && host.services->playback) {
+        auto *effectsPage = page;
+        Database *db = host.db;
+        QObject::connect(host.services->playback, &PlaybackService::editModeEntered, page,
+                         [effectsPage, db]() { effectsPage->setAssetWidgetDatabase(db); });
+    }
+    // THE UNDO GROUP FOLLOWS THE OPEN TAB: each tab has its own stack, and the
+    // shell's QUndoGroup must name the one on screen.
+    if (host.editTargetChanged)
+        QObject::connect(page, &materials::EffectsPage::activeDocumentShown, page, host.editTargetChanged);
     // The open TAB SET lives in the app's settings, per project (§2.7).
     page->setSettings(host.settings);
 
@@ -74,9 +89,72 @@ void MaterialsModule::initialize(ModuleHost &host)
     }
 }
 
-QWidget *MaterialsModule::createPage()
+void MaterialsModule::contribute(Contributions &c)
 {
-    return page;
+    c.setPage(page);
+    if (!page) return;
+    auto *effectsPage = page;
+    // THE SPACE-ROUTED CHORDS (one registry claimant each; the editor answers
+    // the same chords on its own space). Space opens the node SEARCH palette —
+    // the graph is the thing being edited here and there is no gizmo to cycle
+    // (owner decision 2026-09-05) — and F frames the graph selection
+    // (STUDIO-CRUD-1 item 7: the graph view's own QShortcut made F ambiguous).
+    Contributions::Shortcut space;
+    space.id = QStringLiteral("tool.cycle");
+    space.space = id();
+    space.run = [effectsPage]() { effectsPage->openNodeSearch(); };
+    c.addShortcut(space);
+    Contributions::Shortcut focus;
+    focus.id = QStringLiteral("camera.focus");
+    focus.space = id();
+    focus.run = [effectsPage]() { effectsPage->graphFitSelection(); };
+    c.addShortcut(focus);
+    // H — the graph's own row, listed where it always was: after Focus.
+    Contributions::Shortcut resetZoom;
+    resetZoom.id = QStringLiteral("graph.resetZoom");
+    resetZoom.label = QStringLiteral("Reset Graph Zoom");
+    resetZoom.category = QStringLiteral("Materials");
+    resetZoom.keys = QKeySequence(Qt::Key_H);
+    resetZoom.space = id();
+    resetZoom.after = QStringLiteral("camera.focus");
+    resetZoom.run = [effectsPage]() { effectsPage->graphResetZoom(); };
+    c.addShortcut(resetZoom);
+}
+
+void MaterialsModule::onProjectChanged(Project *)
+{
+    // The page reads the project's state itself (its open-tab set is keyed by
+    // the project's guid, and a close saves the set and closes the tabs that
+    // were the PROJECT's copies); the hook is only WHEN.
+    if (page) page->onProjectChanged();
+}
+
+void MaterialsModule::onSpaceChanged(const QString &, const QString &to)
+{
+    // A drawer tile's two-second highlight paints into its item by raw
+    // pointer; a space switch ends it (the shell did this by hand on every
+    // switch before the module heard the switch itself).
+    ListWidget::stopHighlightedNode();
+    if (!page || to != id()) return;
+    page->refreshShaderGraph();
+    qDebug() << "Materials space: shaderGraph visible" << page->isVisible() << "size" << page->size();
+}
+
+EditTarget MaterialsModule::editTarget()
+{
+    EditTarget t;
+    if (!page) return t;
+    auto *effectsPage = page;
+    // The repaint is part of the move: the graph's commands mutate node and
+    // connection state directly and QGraphicsScene has no way to know.
+    t.undoStack = page->graphUndoStack();
+    t.undo = [effectsPage]() { effectsPage->graphUndo(); };
+    t.redo = [effectsPage]() { effectsPage->graphRedo(); };
+    t.deleteSelection = [effectsPage]() { effectsPage->graphDeleteSelected(); };
+    t.duplicateSelection = [effectsPage]() { effectsPage->graphDuplicateSelected(); };
+    t.copySelection = [effectsPage]() { effectsPage->graphCopySelected(); };
+    t.paste = [effectsPage]() { effectsPage->graphPaste(); };
+    return t;
 }
 
 void MaterialsModule::registerApi(ScriptEngine &engine)

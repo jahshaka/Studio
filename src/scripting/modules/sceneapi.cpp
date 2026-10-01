@@ -27,7 +27,7 @@ For more information see the LICENSE file
 #include "commands/reparentscenenodecommand.h"
 #include "commands/scenefoldercommand.h"
 #include "commands/transformscenenodecommand.h"
-#include "shell/mainwindow.h"
+#include "ui/ishellview.h"
 #include "viewport/ieditorviewport.h"
 #include "services/sceneeditservice.h"
 #include "services/sceneextents.h"

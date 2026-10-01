@@ -252,6 +252,7 @@ set(SRCS
     src/scripting/claude/claudelaunchconfig.cpp
     src/scripting/claude/claudestreamparser.cpp
     src/scripting/claude/claudechathost.cpp
+    src/scripting/claude/claudeassistant.cpp
     src/ui/windows/claudechatwindow.cpp
     src/ui/dialogs/preferences/mcpsettingswidget.cpp
     src/ui/dialogs/preferences/scriptingsettingswidget.cpp
@@ -287,6 +288,23 @@ set(SRCS
     src/services/mainthreadheartbeat.cpp
     src/services/mainthreadwatchdog.cpp
     src/shell/shutdownorder.cpp
+    src/shell/pagehost.cpp
+    src/shell/actionhost.cpp
+    src/shell/modulehub.cpp
+    src/shell/shelllifecycle.cpp
+    src/shell/shellview.cpp
+    src/shell/viewcontroller.cpp
+    src/shell/sceneissuewatch.cpp
+    src/shell/editordocks.cpp
+    src/shell/shellscripting.cpp
+    src/shell/shellheader.cpp
+    src/shell/editorpage.cpp
+    src/shell/editortoolbar.cpp
+    src/shell/shellactions.cpp
+    src/shell/shellservices.cpp
+    src/services/projectrunner.cpp
+    src/services/scenetemplatebuilder.cpp
+    src/modules/moduleregistry.cpp
     src/services/sceneopenrunner.cpp
     src/services/imagematerial.cpp
     src/services/materialbundle.cpp
@@ -583,6 +601,26 @@ set(HEADERS
     src/export/exportcontentsource.h
     src/export/rawexporter.h
     src/modules/studiomodule.h
+    src/modules/moduleregistry.h
+    src/shell/pagehost.h
+    src/shell/actionhost.h
+    src/shell/modulehub.h
+    src/shell/shelllifecycle.h
+    src/shell/shellview.h
+    src/shell/viewcontroller.h
+    src/shell/sceneissuewatch.h
+    src/shell/editordocks.h
+    src/shell/shellscripting.h
+    src/shell/shellheader.h
+    src/shell/editorpage.h
+    src/shell/editortoolbar.h
+    src/shell/shellactions.h
+    src/shell/shellservices.h
+    src/services/projectrunner.h
+    src/services/scenetemplatebuilder.h
+    src/shell/spaces.h
+    src/ui/ishellview.h
+    src/scripting/claude/claudeassistant.h
     src/scripting/modules/studiomodules.h
     src/scripting/mcp/mcpserver.h
     src/scripting/mcp/mcptools.h

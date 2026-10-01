@@ -29,7 +29,7 @@ For more information see the LICENSE file
 #include "bridge/enginehost.h"
 #include "io/assetmanager.h"
 #include "io/materialpresetreader.h"
-#include "shell/mainwindow.h"
+#include "ui/ishellview.h"
 #include "services/assetcas.h"
 #include "services/assetstorepaths.h"
 #include "services/imagematerial.h"
@@ -1396,7 +1396,7 @@ iris::MeshNodePtr MaterialApi::meshNodeOrFail(const QString &nodeId, const QStri
 
 bool MaterialApi::apply(const QString &nodeId, const QString &presetOrGuid)
 {
-    if (!host.mainWindow) return fail("material: not available in this session");
+    if (!host.shell) return fail("material: not available in this session");
     if (!requireProject()) return false;   // the delegate registers DB rows
 
     auto scene = (host.services && host.services->sceneEdit) ? host.services->sceneEdit->scene() : iris::ScenePtr();

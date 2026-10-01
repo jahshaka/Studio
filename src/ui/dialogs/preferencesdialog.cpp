@@ -86,9 +86,9 @@ void PreferencesDialog::wireEditor(IEditorViewport *viewport, MainWindow *mainWi
     if (worldSettings) worldSettings->wireEditor(viewport, mainWindow);
 }
 
-void PreferencesDialog::wireMcp(McpServer *server, MainWindow *mainWindow)
+void PreferencesDialog::wireMcp(McpServer *server, std::function<bool(quint16, QString *)> start)
 {
-    if (mcpSettings) mcpSettings->wireMcp(server, mainWindow);
+    if (mcpSettings) mcpSettings->wireMcp(server, std::move(start));
 }
 
 void PreferencesDialog::wireScripting(ScriptEngine *engine)

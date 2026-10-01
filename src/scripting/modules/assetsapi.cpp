@@ -75,7 +75,7 @@ For more information see the LICENSE file
 #include "io/assetmanager.h"
 #include "io/materialreader.h"
 #include "io/scenereader.h"
-#include "shell/mainwindow.h"
+#include "ui/ishellview.h"
 #include "services/sceneeditservice.h"
 #include "services/surfaceplacement.h"
 #include "services/selectionservice.h"
@@ -1353,7 +1353,7 @@ QVariantMap AssetsApi::updateFromLibrary(const QString &guid)
 
 QString AssetsApi::addToScene(const QString &guid, const QVariantMap &options)
 {
-    if (!host.db || !host.mainWindow) { fail("assets: not available in this session"); return QString(); }
+    if (!host.db || !host.shell) { fail("assets: not available in this session"); return QString(); }
     if (!requireProject()) return QString();
 
     // Type-qualified lookup (§1.6.4: reserved guids collide across kinds).
@@ -1611,7 +1611,7 @@ QVariantMap AssetsApi::rebuildThumbnails(const QVariantMap &options)
 
 AssetView *AssetsApi::assetsPage(const QString &verb)
 {
-    AssetView *page = host.mainWindow ? host.mainWindow->assetsPage() : nullptr;
+    AssetView *page = host.shell ? host.shell->assetsPage() : nullptr;
     if (!page) { fail(QStringLiteral("%1: there is no Assets page in this session").arg(verb)); return nullptr; }
     return page;
 }

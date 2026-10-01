@@ -13,6 +13,8 @@ For more information see the LICENSE file
 #define PREFERENCESDIALOG_H
 
 #include <QDialog>
+
+#include <functional>
 #include <QCloseEvent>
 #include <QDebug>
 
@@ -53,8 +55,9 @@ public:
     explicit PreferencesDialog(QWidget* parent, Database *db, SettingsManager* settings);
     /// Forwards the editor wiring to the world-settings page (Phase 4).
     void wireEditor(IEditorViewport *viewport, MainWindow *mainWindow);
-    /// Forwards the MCP server to its settings page (created after the dialog).
-    void wireMcp(McpServer *server, MainWindow *mainWindow);
+    /// Forwards the MCP server and its start to the settings page (created
+    /// after the dialog).
+    void wireMcp(McpServer *server, std::function<bool(quint16, QString *)> start);
     /// The Scripting page over the live engine (Live script feedback).
     void wireScripting(ScriptEngine *engine);
     /// Forwards the shortcut registry to the Shortcuts page (created after the dialog).

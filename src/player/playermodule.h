@@ -34,12 +34,12 @@ class PlayerModule : public StudioModule
 public:
     QString id() const override { return QStringLiteral("player"); }
 
-    void initialize(ModuleHost &host) override { this->host = host; }
+    void initialize(StudioContext &host) override { this->host = host; }
     void registerApi(ScriptEngine &engine) override;
     void shutdown() override {}
 
 private:
-    ModuleHost host;
+    StudioContext host;
     PlayerApi *mApi = nullptr;   // owned by the ScriptEngine
 };
 

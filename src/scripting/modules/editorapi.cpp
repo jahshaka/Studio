@@ -38,7 +38,7 @@ For more information see the LICENSE file
 #include "viewport/previewframing.h"
 #include "viewport/snapsettings.h"
 #include "viewport/cameraspeed.h"
-#include "shell/mainwindow.h"
+#include "ui/ishellview.h"
 #include "ui/panels/assetwidget.h"
 #include "ui/panels/scenehierarchywidget.h"
 #include "services/editgate.h"
@@ -1012,8 +1012,8 @@ QList<iris::SceneNodePtr> EditorApi::rangeInVisibleOrder(const iris::SceneNodePt
     // folders reorder the root level and a collapsed subtree is not on screen,
     // so "everything between these two rows" is a widget fact, not a document
     // one (EDITOR_MULTISELECT_SPEC §2.2).
-    if (host.mainWindow) {
-        if (auto *panel = host.mainWindow->hierarchyPanel()) {
+    if (host.shell) {
+        if (auto *panel = host.shell->hierarchyPanel()) {
             out = panel->nodesInVisibleRange(a, b);
             if (!out.isEmpty()) return out;
         }
@@ -1107,8 +1107,8 @@ QVariantList EditorApi::outlinerRows()
     // THE WIDGET IS THE AUTHORITY when there is one (folders reorder the root
     // level, a collapsed subtree is not on screen) — the same precedence
     // rangeInVisibleOrder uses.
-    if (host.mainWindow)
-        if (auto *panel = host.mainWindow->hierarchyPanel())
+    if (host.shell)
+        if (auto *panel = host.shell->hierarchyPanel())
             rows = panel->visibleNodeRows();
     if (rows.isEmpty()) outlinerRowsOf(scene->getRootNode(), scene->getRootNode(), rows);
 
@@ -1282,7 +1282,7 @@ bool EditorApi::setGizmoMode(const QString &mode)
     // slot when the shell exists, so the toolbar's checked state follows
     // exactly as it does for the W/E/R keys, and straight to the viewport
     // otherwise. The wearer's `menu` press takes the same call.
-    if (!gizmomode::apply(host.mainWindow, host.viewport, mode))
+    if (!gizmomode::apply(host.shell, host.viewport, mode))
         return fail(QStringLiteral("editor.setGizmoMode: unknown mode '%1' (translate|rotate|scale)").arg(mode));
     return true;
 }
@@ -1354,7 +1354,7 @@ QVariantMap EditorApi::overlays()
     out["outlinePrimaryColor"] = outlinesettings::primaryColor().name();
     // The View Options menu's checkmarks, read back (STUDIO-CRUD-1 item 8):
     // one owner (the viewport), and the menu follows it.
-    out["menu"] = host.mainWindow ? host.mainWindow->viewOptionChecks() : QVariantMap();
+    out["menu"] = host.shell ? host.shell->viewOptionChecks() : QVariantMap();
     return out;
 }
 
@@ -1407,7 +1407,7 @@ bool EditorApi::setOverlays(const QVariantMap &change)
         // Through MainWindow when the shell exists so the menu's checkmark
         // follows a scripted change (the same path the menu item takes);
         // straight to the viewport otherwise.
-        if (host.mainWindow) host.mainWindow->setPhysicsDebugOverlay(on);
+        if (host.shell) host.shell->setPhysicsDebugOverlay(on);
         else host.viewport->setShowDebugDrawFlags(on);
     }
     if (change.contains("gameView")) host.viewport->setGameView(change.value("gameView").toBool());
@@ -1520,7 +1520,7 @@ bool EditorApi::setView(const QString &view)
     // Go through MainWindow when one exists so the projection icon and the
     // Views dropdown checks stay in sync; the viewport alone otherwise
     // (headless --script runs).
-    const bool ok = host.mainWindow ? host.mainWindow->applyCameraView(view)
+    const bool ok = host.shell ? host.shell->applyCameraView(view)
                                     : host.viewport->setCameraView(view);
     if (!ok) {
         // Two ways to fail, and telling them apart is the whole difference
@@ -1913,10 +1913,10 @@ bool EditorApi::setCameraMode(const QString &mode)
     // Through MainWindow's slots when the shell exists (the toolbar buttons'
     // path); straight to the viewport otherwise.
     if (mode == QLatin1String("free")) {
-        if (host.mainWindow) QMetaObject::invokeMethod(host.mainWindow, "useFreeCamera");
+        if (host.shell) host.shell->useFreeCamera();
         else host.viewport->setFreeCameraMode();
     } else if (mode == QLatin1String("orbit")) {
-        if (host.mainWindow) QMetaObject::invokeMethod(host.mainWindow, "useArcballCam");
+        if (host.shell) host.shell->useArcballCamera();
         else host.viewport->setArcBallCameraMode();
     } else {
         return fail(QStringLiteral("editor.setCameraMode: unknown mode '%1' (free|orbit)").arg(mode));
@@ -1940,7 +1940,7 @@ bool EditorApi::setGizmoSpace(const QString &space)
     // Through MainWindow when the shell exists so the toolbar's Global/Local
     // buttons follow the switch (the same path the buttons themselves take);
     // straight to the viewport otherwise.
-    if (host.mainWindow) host.mainWindow->applyGizmoTransformSpace(wanted);
+    if (host.shell) host.shell->applyGizmoTransformSpace(wanted);
     else if (wanted == QLatin1String("local")) host.viewport->setGizmoTransformToLocal();
     else host.viewport->setGizmoTransformToGlobal();
     return true;
@@ -1980,7 +1980,7 @@ double EditorApi::setLodBias(double bias)
 
 bool EditorApi::fullscreen(const QVariant &on)
 {
-    if (!host.mainWindow)
+    if (!host.shell)
         return fail("editor.fullscreen: this verb needs the editor window (a --script/--headless "
                     "run has no window to make fullscreen)");
     const QVariant value = scriptmod::normalizeJs(on);
@@ -1989,9 +1989,9 @@ bool EditorApi::fullscreen(const QVariant &on)
             return fail(QStringLiteral("editor.fullscreen: '%1' is not true or false — call it "
                                        "with no argument to READ the state")
                             .arg(value.toString()));
-        host.mainWindow->setImmersiveFullscreen(value.toBool());
+        host.shell->setImmersiveFullscreen(value.toBool());
     }
-    return host.mainWindow->isImmersiveFullscreen();
+    return host.shell->isImmersiveFullscreen();
 }
 
 // THE BOTTOM TRAY (smoke S1). The verb and the Ctrl+` chord call the SAME
@@ -2001,39 +2001,39 @@ bool EditorApi::fullscreen(const QVariant &on)
 QVariantMap EditorApi::trayState()
 {
     QVariantMap out;
-    if (!host.mainWindow) {
+    if (!host.shell) {
         fail("editor.trayState: this verb needs the editor window (a --script/--headless run "
              "has no tray)");
         return out;
     }
-    const QString tab = host.mainWindow->trayTab();
+    const QString tab = host.shell->trayTab();
     if (tab.isEmpty()) {
         fail("editor.trayState: this window has no bottom tray");
         return out;
     }
     QVariantList tabs;
-    for (const QString &name : host.mainWindow->trayTabs()) tabs << name;
+    for (const QString &name : host.shell->trayTabs()) tabs << name;
     out["tab"] = tab;
     out["tabs"] = tabs;
-    out["consoleVisible"] = host.mainWindow->isConsoleTabVisible();
-    out["consoleFocused"] = host.mainWindow->isConsoleInputFocused();
-    out["visible"] = host.mainWindow->isTrayVisible();
+    out["consoleVisible"] = host.shell->isConsoleTabVisible();
+    out["consoleFocused"] = host.shell->isConsoleInputFocused();
+    out["visible"] = host.shell->isTrayVisible();
     // The asset browser dock's title, read off the dock itself (objectName
     // "assetDock", the DockState key): the string its tab is drawn from.
-    const auto *assets = host.mainWindow->findChild<QDockWidget *>(QStringLiteral("assetDock"));
+    const auto *assets = host.shell->window()->findChild<QDockWidget *>(QStringLiteral("assetDock"));
     out["title"] = assets ? assets->windowTitle() : QString();
     // …and the GEOMETRY belongs to whichever tab is in front: the three docks
     // down there share one rectangle and Qt parks the ones behind off-screen
     // (lane SPACE-2), so measuring the asset browser while the Timeline is up
     // answers with the parking spot.
-    const auto *dock = host.mainWindow->bottomFrontDock();
+    const auto *dock = host.shell->bottomFrontDock();
     // THE CORNER (owner, 2026-09-12): the right column owns the bottom-right
     // corner, so it runs to the bottom of the editor and the tray stops at its
     // edge. Reported in the docks' shared parent (the editor's nested window)
     // so a test can assert it: trayRight <= rightColumnLeft and
     // rightColumnBottom == areaBottom.
-    const auto *props = host.mainWindow->findChild<QDockWidget *>(QStringLiteral("sceneNodePropertiesDock"));
-    const auto *presets = host.mainWindow->findChild<QDockWidget *>(QStringLiteral("presetsDock"));
+    const auto *props = host.shell->window()->findChild<QDockWidget *>(QStringLiteral("sceneNodePropertiesDock"));
+    const auto *presets = host.shell->window()->findChild<QDockWidget *>(QStringLiteral("presetsDock"));
     if (dock && props && dock->parentWidget() && dock->isVisible() && props->isVisible()) {
         const QWidget *area = dock->parentWidget();
         out["trayRight"] = dock->geometry().right();
@@ -2044,7 +2044,7 @@ QVariantMap EditorApi::trayState()
         out["rightColumnBottom"] = bottom;
         out["areaBottom"] = area->height() - 1;
         // THE PRESETS LINE (owner 2026-09-12): Presets starts where the Tray does.
-        out["trayTop"] = host.mainWindow->bottomAreaTop();
+        out["trayTop"] = host.shell->bottomAreaTop();
         if (presets && presets->isVisible() && presets->parentWidget() == area)
             out["presetsTop"] = presets->geometry().top();
     }
@@ -2053,23 +2053,23 @@ QVariantMap EditorApi::trayState()
 
 QVariantList EditorApi::trayAssets()
 {
-    if (!host.mainWindow || !host.mainWindow->assetTray()) {
+    if (!host.shell || !host.shell->assetTray()) {
         fail("editor.trayAssets: this verb needs the editor window (a --script/--headless run "
              "has no tray) — assets.list({scope: 'project', tray: true}) is the same listing "
              "as data");
         return QVariantList();
     }
-    return host.mainWindow->assetTray()->shownTiles();
+    return host.shell->assetTray()->shownTiles();
 }
 
 QVariantMap EditorApi::tray(const QVariantMap &change)
 {
-    if (!host.mainWindow) {
+    if (!host.shell) {
         fail("editor.tray: this verb needs the editor window (a --script/--headless run has no "
              "tray)");
         return QVariantMap();
     }
-    if (host.mainWindow->trayTab().isEmpty()) {
+    if (host.shell->trayTab().isEmpty()) {
         fail("editor.tray: this window has no bottom tray");
         return QVariantMap();
     }
@@ -2084,17 +2084,17 @@ QVariantMap EditorApi::tray(const QVariantMap &change)
     // contradiction the caller should see resolved in the order they wrote it,
     // and `tab` is the more specific request.
     if (change.contains("console"))
-        host.mainWindow->setConsoleTabVisible(change.value("console").toBool());
+        host.shell->setConsoleTabVisible(change.value("console").toBool());
     if (change.contains("height")) {
         const int h = change.value("height").toInt();
-        if (!host.mainWindow->setTrayHeight(h)) {
+        if (!host.shell->setTrayHeight(h)) {
             fail(QStringLiteral("editor.tray: height %1 refused (at least 40 px, and the editor tray must exist)").arg(h));
             return QVariantMap();
         }
     }
     if (change.contains("tab")) {
         const QString tab = change.value("tab").toString();
-        if (!host.mainWindow->setTrayTab(tab)) {
+        if (!host.shell->setTrayTab(tab)) {
             fail(QStringLiteral("editor.tray: unknown tab '%1' (assets|timeline|console)").arg(tab));
             return QVariantMap();
         }
@@ -2104,7 +2104,7 @@ QVariantMap EditorApi::tray(const QVariantMap &change)
 
 QVariantMap EditorApi::panel(const QVariantMap &change)
 {
-    if (!host.mainWindow) {
+    if (!host.shell) {
         fail("editor.panel: this verb needs the editor window (a --script/--headless run has "
              "no panels)");
         return QVariantMap();
@@ -2117,23 +2117,23 @@ QVariantMap EditorApi::panel(const QVariantMap &change)
         return QVariantMap();
     }
     const QString name = change.value("name").toString().trimmed().toLower();
-    if (!host.mainWindow->panelDock(name)) {
+    if (!host.shell->panelDock(name)) {
         fail(QStringLiteral("editor.panel: unknown panel '%1' (hierarchy|properties|presets|"
                             "assets|timeline|console)").arg(change.value("name").toString()));
         return QVariantMap();
     }
     if (change.contains("open"))
-        host.mainWindow->setPanelOpen(name, change.value("open").toBool());
+        host.shell->setPanelOpen(name, change.value("open").toBool());
     // ...then the raise, so `{open: true, raise: true}` in one call means what
     // it reads like. `open: true` raises by itself; this is for the panel that
     // is already open behind another tab.
     if (change.value("raise").toBool())
-        host.mainWindow->raisePanel(name);
+        host.shell->raisePanel(name);
     QVariantMap out;
     out["name"] = name;
-    out["open"] = host.mainWindow->isPanelOpen(name);
-    out["current"] = MainWindow::isFrontTab(host.mainWindow->panelDock(name));
-    out["tabbed"] = host.mainWindow->trayTabs().contains(name);
+    out["open"] = host.shell->isPanelOpen(name);
+    out["current"] = host.shell->isPanelInFront(name);
+    out["tabbed"] = host.shell->trayTabs().contains(name);
     return out;
 }
 
@@ -2189,17 +2189,17 @@ QVariantMap EditorApi::selectionCost(const QVariantMap &options)
 
 QVariantMap EditorApi::propertiesStats()
 {
-    if (!host.mainWindow) {
+    if (!host.shell) {
         fail("editor.propertiesStats: this verb needs the editor window (a --script/--headless "
              "run has no panels)");
         return QVariantMap();
     }
-    return host.mainWindow->propertiesStats();
+    return host.shell->propertiesStats();
 }
 
 QVariantMap EditorApi::propertiesTab(const QVariantMap &change)
 {
-    if (!host.mainWindow) {
+    if (!host.shell) {
         fail("editor.propertiesTab: this verb needs the editor window (a --script/--headless "
              "run has no panels)");
         return QVariantMap();
@@ -2211,20 +2211,20 @@ QVariantMap EditorApi::propertiesTab(const QVariantMap &change)
 
     if (change.contains(QStringLiteral("tab"))) {
         const QString wanted = change.value(QStringLiteral("tab")).toString();
-        if (!host.mainWindow->setPropertiesTab(wanted)) {
+        if (!host.shell->setPropertiesTab(wanted)) {
             fail(QStringLiteral("editor.propertiesTab: unknown tab '%1' (world|selection)")
                      .arg(wanted));
             return QVariantMap();
         }
     }
     QVariantMap out;
-    out[QStringLiteral("tab")] = host.mainWindow->propertiesTab();
+    out[QStringLiteral("tab")] = host.shell->propertiesTab();
     return out;
 }
 
 QVariantMap EditorApi::propertiesFilter(const QVariantMap &change)
 {
-    if (!host.mainWindow) {
+    if (!host.shell) {
         fail("editor.propertiesFilter: this verb needs the editor window (a --script/--headless "
              "run has no panels)");
         return QVariantMap();
@@ -2235,16 +2235,16 @@ QVariantMap EditorApi::propertiesFilter(const QVariantMap &change)
     if (!refusal.isEmpty()) { fail(refusal); return QVariantMap(); }
 
     const QString tab = change.value(QStringLiteral("tab")).toString();
-    if (!host.mainWindow->isPropertiesTab(tab)) {
+    if (!host.shell->isPropertiesTab(tab)) {
         fail(QStringLiteral("editor.propertiesFilter: unknown tab '%1' (world|selection)").arg(tab));
         return QVariantMap();
     }
     if (change.contains(QStringLiteral("text")))
-        host.mainWindow->setPropertiesFilter(tab, change.value(QStringLiteral("text")).toString());
-    const QPair<int, int> counts = host.mainWindow->propertiesFilterCounts(tab);
+        host.shell->setPropertiesFilter(tab, change.value(QStringLiteral("text")).toString());
+    const QPair<int, int> counts = host.shell->propertiesFilterCounts(tab);
     QVariantMap out;
-    out[QStringLiteral("tab")] = tab.isEmpty() ? host.mainWindow->propertiesTab() : tab.trimmed().toLower();
-    out[QStringLiteral("text")] = host.mainWindow->propertiesFilter(tab);
+    out[QStringLiteral("tab")] = tab.isEmpty() ? host.shell->propertiesTab() : tab.trimmed().toLower();
+    out[QStringLiteral("text")] = host.shell->propertiesFilter(tab);
     out[QStringLiteral("visible")] = counts.first;
     out[QStringLiteral("hidden")] = counts.second;
     return out;
@@ -2252,7 +2252,7 @@ QVariantMap EditorApi::propertiesFilter(const QVariantMap &change)
 
 QVariantList EditorApi::properties(const QVariantMap &args)
 {
-    if (!host.mainWindow) {
+    if (!host.shell) {
         fail("editor.properties: this verb needs the editor window (a --script/--headless "
              "run has no panels)");
         return QVariantList();
@@ -2263,16 +2263,16 @@ QVariantList EditorApi::properties(const QVariantMap &args)
     if (!refusal.isEmpty()) { fail(refusal); return QVariantList(); }
 
     const QString tab = args.value(QStringLiteral("tab")).toString();
-    if (!host.mainWindow->isPropertiesTab(tab)) {
+    if (!host.shell->isPropertiesTab(tab)) {
         fail(QStringLiteral("editor.properties: unknown tab '%1' (world|selection)").arg(tab));
         return QVariantList();
     }
-    return host.mainWindow->propertyRows(tab);
+    return host.shell->propertyRows(tab);
 }
 
 QVariantMap EditorApi::propertyRow(const QVariantMap &args)
 {
-    if (!host.mainWindow) {
+    if (!host.shell) {
         fail("editor.propertyRow: this verb needs the editor window (a --script/--headless "
              "run has no panels)");
         return QVariantMap();
@@ -2286,7 +2286,7 @@ QVariantMap EditorApi::propertyRow(const QVariantMap &args)
     if (key.isEmpty()) { fail("editor.propertyRow: a 'key' is required"); return QVariantMap(); }
     const bool drive = args.contains(QStringLiteral("value"));
     QString error;
-    const QVariantMap out = host.mainWindow->propertyRow(
+    const QVariantMap out = host.shell->propertyRow(
         args.value(QStringLiteral("tab")).toString(), key, drive,
         scriptmod::normalizeJs(args.value(QStringLiteral("value"))), &error);
     if (out.isEmpty()) {
@@ -2572,9 +2572,9 @@ bool EditorApi::key(const QString &name, const QString &action)
         // REACHES IT: Qt's shortcut map fires the shortcut instead (W is
         // tool.translate while editing). Sending the KeyPress anyway would
         // drive a path no user can take — refuse, and name the shortcut.
-        if (!over.isAccepted() && host.mainWindow) {
+        if (!over.isAccepted() && host.shell) {
             const QKeySequence chord(seq[0]);
-            if (const auto *reg = host.mainWindow->findChild<ShortcutRegistry *>()) {
+            if (const auto *reg = host.shell->window()->findChild<ShortcutRegistry *>()) {
                 for (const ShortcutRegistry::Entry &e : reg->entries()) {
                     if (!e.shortcut || e.sequence.isEmpty() || e.sequence != chord) continue;
                     return fail(QStringLiteral("editor.key: '%1' is the shortcut %2 here, not a "
@@ -2631,10 +2631,10 @@ QVariant EditorApi::dropTargetAt(double x, double y)
 
 bool EditorApi::activateMaterialTile(const QString &guid)
 {
-    if (!host.mainWindow || !host.mainWindow->materialTray())
+    if (!host.shell || !host.shell->materialTray())
         return fail("editor.activateMaterialTile: this verb needs the editor window (a "
                     "--headless run has no materials tray)");
-    if (!host.mainWindow->materialTray()->activateTile(guid))
+    if (!host.shell->materialTray()->activateTile(guid))
         return fail(QStringLiteral("editor.activateMaterialTile: the materials tray shows no tile "
                                    "for '%1'").arg(guid));
     return true;
@@ -2643,10 +2643,10 @@ bool EditorApi::activateMaterialTile(const QString &guid)
 bool EditorApi::dragAssetToTray(const QVariant &guidOrGuids, const QString &folderGuid,
                                 const QVariantMap &options)
 {
-    if (!host.mainWindow || !host.mainWindow->assetTray())
+    if (!host.shell || !host.shell->assetTray())
         return fail("editor.dragAssetToTray: this verb needs the editor window (a "
                     "--script/--headless run has no tray)");
-    AssetWidget *tray = host.mainWindow->assetTray();
+    AssetWidget *tray = host.shell->assetTray();
 
     static const QStringList kActions{ QStringLiteral("move"), QStringLiteral("drop") };
     const QString action = options.value(QStringLiteral("action"),
@@ -2827,11 +2827,11 @@ bool EditorApi::dragAsset(const QString &guid, double x, double y, const QVarian
 
 QVariantList EditorApi::toolbar()
 {
-    if (!host.mainWindow) {
+    if (!host.shell) {
         fail("editor.toolbar: this verb needs the editor window");
         return QVariantList();
     }
-    return host.mainWindow->toolbarActions();
+    return host.shell->toolbarActions();
 }
 
 QVariantMap EditorApi::viewportState()
@@ -2944,7 +2944,7 @@ QVariantMap EditorApi::viewportState()
 
 bool EditorApi::loadingCover(const QVariant &on)
 {
-    if (!host.mainWindow) {
+    if (!host.shell) {
         fail("editor.loadingCover: this verb needs the editor window");
         return false;
     }
@@ -3056,7 +3056,7 @@ QVariantMap EditorApi::checkScene()
 
 QVariantMap EditorApi::issueBar()
 {
-    if (!host.mainWindow) {
+    if (!host.shell) {
         // Not a failure: a headless session simply has no bar, and the store
         // verbs are the half that works everywhere.
         return QVariantMap{ { QStringLiteral("editorActive"), false },
@@ -3069,8 +3069,8 @@ QVariantMap EditorApi::issueBar()
     // SETTLED, NOT RACED: the shell decides this on a 1 Hz timer, and a script
     // that asked a moment after switching pages would otherwise read the old
     // answer. One pass, then report.
-    host.mainWindow->updateSceneIssues();
-    return host.mainWindow->sceneIssueBarState();
+    host.shell->updateSceneIssues();
+    return host.shell->sceneIssueBarState();
 }
 
 QVariantMap EditorApi::screenshot(const QString &path, int width, int height,
@@ -3267,7 +3267,7 @@ bool EditorApi::endBatch()
 bool EditorApi::importAssets(const QVariant &paths)
 {
     if (!requireProject()) return false;
-    if (!host.mainWindow) return fail("editor.importAssets: no window in this session");
+    if (!host.shell) return fail("editor.importAssets: no window in this session");
 
     QStringList files;
     const QVariant normalized = scriptmod::normalizeJs(paths);
@@ -3281,7 +3281,7 @@ bool EditorApi::importAssets(const QVariant &paths)
         if (!QFileInfo::exists(file))
             return fail(QStringLiteral("editor.importAssets: no such file: %1").arg(file));
     }
-    if (!host.mainWindow->startInteractiveImport(files))
+    if (!host.shell->startInteractiveImport(files))
         return fail("editor.importAssets: an interactive import is already running");
     return true;
 }

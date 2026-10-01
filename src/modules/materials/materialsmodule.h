@@ -27,17 +27,23 @@ public:
 
     /// Builds the Effects page from the host context: db, engine-rendered
     /// Display preview (when the engine runs), scene-open probe and project.
-    void initialize(ModuleHost &host) override;
-    QWidget *createPage() override;
+    void initialize(StudioContext &ctx) override;
+    /// The page, and the chords the graph answers on this space: Space opens
+    /// the node search, F frames the selection, H resets the zoom.
+    void contribute(Contributions &c) override;
     void registerApi(ScriptEngine &engine) override;
+    /// The page's open tabs are per project (MATERIALS_TABS_SPEC §2.7).
+    void onProjectChanged(Project *project) override;
+    /// Entering the space re-reads the graph.
+    void onSpaceChanged(const QString &from, const QString &to) override;
+    /// The OPEN TAB's stack and the graph's own edit chords. Cut and select-all
+    /// are deliberately unanswered: the graph has neither, and a chord must
+    /// never act on a selection the user cannot see.
+    EditTarget editTarget() override;
     void shutdown() override {}
 
-    /// The live page, for the shell's direct calls (refresh on page switch,
-    /// asset-widget database wiring).
-    materials::EffectsPage *effectsPage() const { return page; }
-
 private:
-    ModuleHost host;
+    StudioContext host;
     materials::EffectsPage *page = nullptr;
 };
 

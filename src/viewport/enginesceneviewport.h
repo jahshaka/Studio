@@ -131,7 +131,6 @@ private:
     void adoptEditorCamera(iris::CameraNodePtr camera);
 public:
 
-    void setWindowSpace(WindowSpaces) override {}
     void setSceneMode(SceneMode) override {}
     void enterEditorMode() override {}
     void enterPlayerMode() override {}

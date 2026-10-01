@@ -34,7 +34,7 @@ class PublishApi : public ApiModule
 {
     Q_OBJECT
 public:
-    PublishApi(ScriptHost &host, const ModuleHost &moduleHost)
+    PublishApi(ScriptHost &host, const StudioContext &moduleHost)
         : ApiModule(host), moduleHost(moduleHost) {}
 
     QString jsName() const override { return QStringLiteral("publish"); }
@@ -49,7 +49,7 @@ private:
     QString projectFolder() const;
     QString exportDir() const;
 
-    ModuleHost moduleHost;
+    StudioContext moduleHost;
 };
 
 #endif // PUBLISHAPI_H

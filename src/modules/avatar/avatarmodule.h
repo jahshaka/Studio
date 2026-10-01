@@ -39,24 +39,24 @@ public:
 
     QString id() const override { return QStringLiteral("avatar"); }
 
-    void initialize(ModuleHost &host) override;
-    QWidget *createPage() override;
+    void initialize(StudioContext &host) override;
+    /// The page, and the asset kind this module owns ("avatar").
+    void contribute(Contributions &c) override;
     void registerApi(ScriptEngine &engine) override;
+    /// "Edit in Avatar Module" (Open), the drawer's "Add to Scene" and the
+    /// viewport's avatar drop (Spawn), and a clip dropped on a body (Assign) —
+    /// every one through the module's VERB (avatar.open / avatar.spawn /
+    /// avatar.loadClip), so the gesture and a script take the same path
+    /// (SCRIPTING_SPEC §2.3). A refusal is the verb's own message, shown here
+    /// because a menu click has no JS engine to throw into.
+    bool openAsset(const AssetRef &ref) override;
     /// StudioModule's quit hook: flush the pending definition write and tell
     /// the import runner to stop, without joining (CLEANUP-1 item 2).
     void abortBackgroundWork() override;
     void shutdown() override;
 
-    /// The live page, for the shell's direct calls (page-switch refresh).
-    avatar::AvatarPage *page() const { return mPage; }
-    /// The module's VERB surface. The shell's "Edit in Avatar Module" route
-    /// calls `avatar.open` through this rather than reaching into the page:
-    /// the verb is the capability and the page is a view over it, so the shell
-    /// seam and a script take exactly the same path (SCRIPTING_SPEC §2.3).
-    AvatarApi *api() const { return mApi; }
-
 private:
-    ModuleHost host;
+    StudioContext host;
     std::unique_ptr<avatar::AvatarPreviewModel> mModel;
     avatar::AvatarPage *mPage = nullptr;
     AvatarPreview      *mPreview = nullptr;   // owned by the page once injected

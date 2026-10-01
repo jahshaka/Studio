@@ -42,7 +42,7 @@ class VrApi : public ApiModule
 {
     Q_OBJECT
 public:
-    VrApi(ScriptHost &host, const ModuleHost &moduleHost);
+    VrApi(ScriptHost &host, const StudioContext &moduleHost);
 
     QString jsName() const override { return QStringLiteral("vr"); }
     QVector<VerbInfo> verbs() const override;
@@ -125,7 +125,7 @@ private:
     /// syncs, the two being two views on one scene.
     void pushProxies();
 
-    ModuleHost moduleHost;
+    StudioContext moduleHost;
     /// THE EDITOR'S VR PREVIEW (phase 4). Owned here because the verbs are the
     /// only way in and out of it; stepped from the render driver's beforeFrame,
     /// which this object connects to once.

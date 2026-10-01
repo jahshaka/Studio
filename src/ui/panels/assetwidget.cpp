@@ -1885,7 +1885,7 @@ bool AssetWidget::shutdownImports(int msTimeout)
 {
 	if (progressDialog) progressDialog->close();
 	// THE THUMBNAIL BACKLOG GOES WITH THEM (fix round F9). A pending
-	// single-shot would run after MainWindow::shutdownBackgroundWork has
+	// single-shot would run after ShellLifecycle::stopBackgroundWork has
 	// destroyed the thumbnail renderer and RE-CREATE it, on a window that is
 	// already leaving — the drain re-arms itself, so one survivor is all of
 	// them. Nothing is lost: a model with no thumbnail is what "Rebuild

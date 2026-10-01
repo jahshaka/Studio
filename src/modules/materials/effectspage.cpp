@@ -254,6 +254,7 @@ void EffectsPage::showDocument(MaterialDocument *doc)
 	refreshCurrentTile();
 	schedulePreviewUpdate();
 	mShowingDocument = false;
+	emit activeDocumentShown();
 }
 
 bool EffectsPage::activateTab(int index)

@@ -27,11 +27,10 @@ For more information see the LICENSE file
 #include <QString>
 
 class ApiRegistry;
-class MainWindow;
 class Database;
+class IShellView;
 class Project;
 class IEditorViewport;
-class ProjectManager;
 class QUndoStack;
 struct StudioServices;
 
@@ -47,14 +46,16 @@ enum class ScriptRunState {
 
 struct ScriptHost
 {
-    MainWindow      *mainWindow = nullptr;
+    /// What the shell shows (ui/ishellview.h) — the window's spaces, panels,
+    /// dialogs, the open and the create — or null in a host with no window.
+    /// The scripting layer never names the shell's class (D10; audit S3).
+    IShellView      *shell = nullptr;
     Database        *db = nullptr;
     /// The one live Project instance (Phase 4: was the Globals::project
     /// static). NULLABLE: hosts that drive only the scripting core leave it
     /// unset, so verbs that touch it must null-check (the modules do).
     Project         *project = nullptr;
     IEditorViewport *viewport = nullptr;        // editor viewport, if one exists
-    ProjectManager  *projectManager = nullptr;
     QUndoStack      *undoStack = nullptr;       // for one-undo-step-per-script macros
 
     /// The service layer (src/services/services.h) — the ApiModules' verbs
@@ -72,6 +73,11 @@ struct ScriptHost
     /// (AI_SURFACE_PROGRAM_SPEC §2.0). Nothing else should reach for it — a
     /// verb that needs another verb should call the module, not the registry.
     ApiRegistry     *registry = nullptr;
+
+    /// The engine this host is installed into — set beside `registry` by
+    /// ScriptEngine's constructor. For the one verb that tunes the engine that
+    /// runs it (app.scriptPolicy); verbs never run other verbs through it.
+    class ScriptEngine *engine = nullptr;
 
     /// True when a project is open (a scene is loaded and `project` has a
     /// guid). Unset = false: verbs that requireProject() fail cleanly.

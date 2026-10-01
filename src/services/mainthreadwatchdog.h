@@ -57,7 +57,7 @@ For more information see the LICENSE file
 //   * `app.watchdog(stallMs)` at runtime, so a script can tighten the fence
 //     around the step it is about to take and put it back afterwards.
 //
-// It is also stopped in MainWindow::shutdownBackgroundWork — a teardown that
+// It is also stopped in ShellLifecycle::stopBackgroundWork — a teardown that
 // takes two seconds is normal, and photographing it would be noise (the
 // separate 20 s force-exit thread there is the shutdown watchdog; this is not
 // it).

@@ -49,16 +49,16 @@ namespace ShutdownOrder {
 /// The participants, in the order they must run. Numbered because the gate
 /// asserts the numbers.
 enum Step {
-    CloseEvent        = 1,  ///< MainWindow::closeEvent — settle an in-flight open,
+    CloseEvent        = 1,  ///< ShellLifecycle::closeRequested — settle an in-flight open,
                             ///  autosave / unsaved-changes prompt, donate dialog,
                             ///  geometry+state to settings
-    BackgroundWork    = 2,  ///< MainWindow::shutdownBackgroundWork — the bounded
+    BackgroundWork    = 2,  ///< ShellLifecycle::stopBackgroundWork — the bounded
                             ///  teardown of every worker: 20 s force-exit thread,
                             ///  open runner, import batches, ARCHIVE runners, MCP,
                             ///  Claude chat, thumbnails, the global pool, the
                             ///  main-thread watchdog. Idempotent (closeEvent AND
                             ///  aboutToQuit both land here)
-    Modules           = 3,  ///< MainWindow::shutdownModules — StudioModule::
+    Modules           = 3,  ///< ShellLifecycle -> ModuleHub::shutdownModules — StudioModule::
                             ///  shutdown() on every registered module, while the
                             ///  Engine is still alive. `shutdown()` is part of the
                             ///  module contract (src/modules/studiomodule.h) and
@@ -71,13 +71,13 @@ enum Step {
                             ///  driver stopped and deleted, shader cache + warm-up
                             ///  set written, the HOST's shared_ptr dropped. Does
                             ///  NOT destroy the Engine — the viewports still hold it
-    WindowBody        = 5,  ///< ~MainWindow body: undoStack->clear() (incident 1),
+    WindowBody        = 5,  ///< ShellLifecycle::teardownWindow (~MainWindow): undoStack->clear() (incident 1),
                             ///  then the modules, the services and the Ui:: struct
-    EngineViews       = 6,  ///< ~MainWindow body: the engine-holding widgets are
+    EngineViews       = 6,  ///< ShellLifecycle::teardownWindow: the engine-holding widgets are
                             ///  destroyed HERE, so the last shared_ptr<Engine> drops
                             ///  and ~OgreEngine runs (incident 2) while the database
                             ///  is still open
-    DatabaseClosed    = 7,  ///< ~MainWindow body: db->closeDatabase(), last
+    DatabaseClosed    = 7,  ///< ShellLifecycle::teardownWindow: db->closeDatabase(), last
     WidgetTree        = 8,  ///< ~QWidget(MainWindow): whatever step 6 did not reach.
                             ///  Nothing here may touch the database or the engine
 };

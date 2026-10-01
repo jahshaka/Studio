@@ -338,7 +338,8 @@ fi
 
 # ============================================================ PART 2 ==========
 # Ctrl+Z routing. Owner decision: the Materials space owns the chord and drives
-# the GRAPH stack there; every other space keeps the editor undo.
+# the GRAPH stack there, the editor its scene stack, and a page with no
+# document nothing at all (the shell's QUndoGroup, D10).
 
 activate
 
@@ -357,6 +358,37 @@ note "editor page: scene nodes $before -> $mid -> $after after Ctrl+Z"
 [ "$after" -eq "$before" ] \
     && ok "Ctrl+Z on the editor page undid the scene edit" \
     || bad "Ctrl+Z on the editor page did not undo (nodes $mid -> $after)"
+
+# --- a page with NO document undoes nothing (D10; audit S4a) --------------
+# The owner-visible defect: Ctrl+Z on the Desktop, Assets, Avatar, Publish or
+# Player page used to fall through to the editor's stack and undo the scene
+# invisibly. The shell's undo group has no active stack on such a page, so the
+# chord is a no-op there.
+guard0=$(js 'scene.addPrimitive("cube", {name:"pacing_cube_assets"}); scene.nodes().length')
+js 'app.space("assets")' > /dev/null || bad "the Assets space could be shown"
+activate
+key ctrl+z
+kept0=$(js 'scene.nodes().length')
+note "assets page: scene nodes $guard0 -> $kept0 after Ctrl+Z"
+[ "$kept0" -eq "$guard0" ] \
+    && ok "Ctrl+Z on the Assets page (no document) left the SCENE alone" \
+    || bad "Ctrl+Z on the Assets page undid a scene edit ($guard0 -> $kept0)"
+# The same no-op on two more pages with no document — the Publish page and
+# the Player (a running scene, still not a document the chord may move). Each
+# edit is made on the editor first, so the scene's stack has a step to lose.
+for sp in publish player; do
+    js 'app.space("editor")' > /dev/null || bad "the Editor space could be shown"
+    guardN=$(js "scene.addPrimitive(\"cube\", {name:\"pacing_cube_$sp\"}); scene.nodes().length")
+    js "app.space(\"$sp\")" > /dev/null || bad "the $sp space could be shown"
+    activate
+    key ctrl+z
+    keptN=$(js 'scene.nodes().length')
+    note "$sp page: scene nodes $guardN -> $keptN after Ctrl+Z"
+    [ "$keptN" -eq "$guardN" ] \
+        && ok "Ctrl+Z on the $sp page (no document) left the SCENE alone" \
+        || bad "Ctrl+Z on the $sp page undid a scene edit ($guardN -> $keptN)"
+done
+js 'app.space("editor")' > /dev/null || bad "the Editor space could be shown"
 
 # --- the Materials page does NOT reach the editor's stack ----------------
 guard=$(js 'scene.addPrimitive("cube", {name:"pacing_cube2"}); scene.nodes().length')

@@ -234,3 +234,14 @@ add_test(NAME source.no_fixed_gi_volume
                  "${CMAKE_SOURCE_DIR}")
 set_tests_properties(source.no_fixed_gi_volume PROPERTIES TIMEOUT 60 LABELS "hygiene")
 jah_no_display(source.no_fixed_gi_volume)
+
+# source.shell_boundaries — D10-SHELL-MODULES (the 2026-09-30 audit, area 5: S3,
+# S11, S14): no shell/ include under src/modules or src/scripting (the window is
+# reached through ui/ishellview.h), no setCurrentIndex(<digit>) in src/shell (the
+# pages are keyed by name), and src/shell/mainwindow.cpp includes no module
+# header by name (the shell drives modules through StudioModule's hooks).
+add_test(NAME source.shell_boundaries
+         COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/shell_boundaries.sh"
+                 "${CMAKE_SOURCE_DIR}")
+set_tests_properties(source.shell_boundaries PROPERTIES TIMEOUT 60 LABELS "hygiene")
+jah_no_display(source.shell_boundaries)

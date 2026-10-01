@@ -50,7 +50,7 @@ ProjectService::ProjectService(Database *db,
 
 ProjectService::~ProjectService()
 {
-    // The shell drains at shutdown (shutdownBackgroundWork), while the
+    // The shell drains at shutdown (ShellLifecycle::stopBackgroundWork), while the
     // database is still open; anything still here is only waited for, never
     // written — the rows it would write may already be gone.
     for (auto it = mThumbEncodes.begin(); it != mThumbEncodes.end(); ++it) {

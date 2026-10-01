@@ -73,7 +73,7 @@ void ThumbnailGenerator::shutdown()
     if (tick) tick->stop();
     pending.clear();
     // A SWEEP MAY BE ON THE STACK ABOVE US (fix round F1). This runs from
-    // MainWindow::shutdownBackgroundWork, which is also what a window close
+    // ShellLifecycle::stopBackgroundWork, which is also what a window close
     // delivered INSIDE a sweep's yield reaches — so ask the sweep to stop
     // before destroying the renderer it is about to borrow again.
     thumbrebuild::requestStop();

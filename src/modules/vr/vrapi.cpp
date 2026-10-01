@@ -224,7 +224,7 @@ View *desktopViewOf(Engine *e, View *eyes)
 
 }   // namespace
 
-VrApi::VrApi(ScriptHost &host, const ModuleHost &moduleHost)
+VrApi::VrApi(ScriptHost &host, const StudioContext &moduleHost)
     : ApiModule(host), moduleHost(moduleHost)
 {
     // THE PROXIES FOLLOW THE DRIVER'S OWN TICK, because they belong to ANY
@@ -1552,7 +1552,7 @@ void VrApi::installInteraction()
     // W/E/R keys, and straight to the viewport when there is none. This used to
     // re-spell the three slot names here, which is two copies of one route.
     deps.setGizmoMode = [this](const QString &mode) {
-        gizmomode::apply(moduleHost.shellWidget, moduleHost.viewport, mode);
+        gizmomode::apply(moduleHost.shell, moduleHost.viewport, mode);
     };
     interaction.setDeps(deps);
     engineInput.setEngine(engine());

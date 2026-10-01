@@ -55,7 +55,7 @@ class PublishPage : public QWidget
 {
     Q_OBJECT
 public:
-    explicit PublishPage(ModuleHost host, QWidget *parent = nullptr);
+    explicit PublishPage(StudioContext host, QWidget *parent = nullptr);
 
 protected:
     void showEvent(QShowEvent *event) override;
@@ -77,7 +77,7 @@ private:
     void launchCompanion(const QString &indexHtml, const QString &summary);
     void onPopOut();
 
-    ModuleHost host;
+    StudioContext host;
     QLabel *statusLabel = nullptr;
     QLabel *detailLabel = nullptr;
     QLabel *dirLabel = nullptr;
@@ -99,14 +99,15 @@ class PublishModule : public StudioModule
 {
 public:
     QString id() const override { return QStringLiteral("publish"); }
-    void initialize(ModuleHost &host) override { this->host = host; }
-    QWidget *createPage() override;
+    void initialize(StudioContext &host) override { this->host = host; }
+    /// The publish page (a view over the publish.* verbs).
+    void contribute(Contributions &c) override;
     /// publish.state() — the module's (read-only) verb surface, F14.
     void registerApi(ScriptEngine &engine) override;
     void shutdown() override {}
 
 private:
-    ModuleHost host;
+    StudioContext host;
 };
 
 #endif // PUBLISHMODULE_H

@@ -573,7 +573,7 @@ void Database::closeDatabase()
     //     qt.sql.qsqldatabase: QSqlDatabasePrivate::addDatabase: duplicate
     //     connection name 'qt_sql_default_connection', old connection removed
     // on every boot (STABILITY_PROGRAM_SPEC §1.7a: main()'s schema check opens the default
-    // connection at main.cpp:139, MainWindow::setupProjectDB opens it again).
+    // connection at main.cpp:139, ShellLifecycle::openLibrary opens it again).
     // Capture the name first; every QSqlDatabase copy must be gone before
     // removeDatabase or Qt warns that the connection is still in use, which is
     // why `db` is invalidated in between.

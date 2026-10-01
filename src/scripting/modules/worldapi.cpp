@@ -31,7 +31,7 @@ For more information see the LICENSE file
 #include <QSqlDatabase>
 #include "data/project.h"
 #include "io/scenewriter.h"
-#include "shell/mainwindow.h"
+#include "ui/ishellview.h"
 #include "services/sceneeditservice.h"
 #include "services/services.h"
 #include "viewport/ieditorviewport.h"
