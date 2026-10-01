@@ -134,27 +134,34 @@ void ActionHost::addToolbarSlot(QToolBar *bar, const QString &slot)
     marker->setVisible(false);
     bar->addAction(marker);
     mSlots.insert(slot, { bar, marker });
+    for (const QPointer<QAction> &action : mPendingToolbar.take(slot))
+        if (action) bar->insertAction(marker, action);
 }
 
-bool ActionHost::addToolbarAction(const QString &slot, QAction *action)
+void ActionHost::addToolbarAction(const QString &slot, QAction *action)
 {
+    if (!action) return;
     const auto it = mSlots.constFind(slot);
-    if (it == mSlots.cend() || !it->bar || !it->marker || !action) return false;
+    if (it == mSlots.cend() || !it->bar || !it->marker) {
+        mPendingToolbar[slot].append(action);
+        return;
+    }
     it->bar->insertAction(it->marker, action);
-    return true;
 }
 
 void ActionHost::registerMenu(const QString &id, QMenu *menu)
 {
-    if (menu) mMenus.insert(id, menu);
+    if (!menu) return;
+    mMenus.insert(id, menu);
+    for (const QPointer<QAction> &action : mPendingMenu.take(id))
+        if (action) menu->addAction(action);
 }
 
-bool ActionHost::addMenuRow(const QString &menuId, QAction *action)
+void ActionHost::addMenuRow(const QString &menuId, QAction *action)
 {
-    QMenu *target = menu(menuId);
-    if (!target || !action) return false;
-    target->addAction(action);
-    return true;
+    if (!action) return;
+    if (QMenu *target = menu(menuId)) target->addAction(action);
+    else mPendingMenu[menuId].append(action);
 }
 
 QMenu *ActionHost::menu(const QString &id) const

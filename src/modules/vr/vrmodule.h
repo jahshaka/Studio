@@ -27,27 +27,54 @@ For more information see the LICENSE file
 
 #include <QPointer>
 
+#include <memory>
+
 #include "modules/studiomodule.h"
 
+class QAction;
+struct ScriptHost;
 class VrApi;
 
 class VrModule : public StudioModule
 {
 public:
     QString id() const override { return QStringLiteral("vr"); }
+    VrModule();
+    ~VrModule() override;
     void initialize(StudioContext &host) override { this->host = host; }
+    /// THE VR TOGGLE (SPECS/VR_SPEC.md §4.5): the editor toolbar's action (its
+    /// `editor.vr` slot) and the vr.toggle chord. The Player page's own button
+    /// fires the same row, so every surface ends in toggle().
+    void contribute(Contributions &c) override;
     void registerApi(ScriptEngine &engine) override;
     void shutdown() override;
-    /// THE VR BUTTON ON THE EDITOR PAGE (the owner, 2026-09-17, at the first
-    /// controller smoke: "the VR button takes me to the Player"): from the
-    /// editor page the button is the EDITOR PREVIEW (vr.begin / vr.end), from
-    /// the Player page it is the Player's run. Both call the same verbs the
-    /// console calls. Returns the preview's state after the toggle.
-    bool toggleEditorPreview();
-    bool isEditorPreviewActive() const;
+
+    /// THE BUTTON MEANS "VR, HERE" (the owner, 2026-09-17, at the first
+    /// controller smoke: "the VR button takes me to the Player"): on the editor
+    /// page it starts (or ends) the EDITOR PREVIEW — vr.begin / vr.end, the
+    /// headset as a live window on the editor; on any other page it is the
+    /// Player's run in the headset — PlayerService::toggleVr, what `vr.toggle()`
+    /// calls. Both are the verbs' own paths, never a second one.
+    void toggle();
 
 private:
+    bool toggleEditorPreview();
+    bool isEditorPreviewActive() const;
+    /// Says on screen why a VR toggle did not start (the reason is the verb's own).
+    void showRefusal(const QString &reason);
+    /// Icon + tooltip + enabled state of the VR action, from the live session.
+    void refreshUi();
+
     StudioContext host;
+    ScriptHost *scriptHost = nullptr;
+    std::unique_ptr<QAction> mAction;
+    /// What the icon is currently showing, so the per-frame refresh only
+    /// rebuilds when the answer moves.
+    bool mIconActive = false;
+    /// Can this PROCESS do VR at all? Fixed at boot (the engine asks the
+    /// runtime once, and only under `--vr`), so the per-frame follower reads
+    /// this cached bool first and an ordinary launch pays nothing.
+    bool mCapable = false;
     /// The module's ApiModule, owned by the ScriptEngine — held weakly so
     /// shutdown() can end a session through the object that owns it.
     QPointer<VrApi> api;

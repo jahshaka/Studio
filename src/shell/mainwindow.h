@@ -48,7 +48,6 @@ class AssetView;
 /// Only ever held as a weak_ptr here (mEngineWatch) — the shell includes the
 /// engine header in the .cpp, never in this one.
 namespace jahshaka { namespace engine { class Engine; } }
-class VrModule;
 class PageHost;
 class ActionHost;
 class ModuleHub;
@@ -234,14 +233,10 @@ public:
 	void assignAnimationAsset(const QString &guid, const iris::SceneNodePtr &node);
 	void deselectViewports();
 
-    /// Enters or leaves the Player's VR mode — the toolbar icon, the Player
-    /// page's button and the `vr.toggle()` verb all end up here, and all of
-    /// them go through PlayerService so there is one implementation.
-    void toggleVrMode();
-    /// Icon + tooltip + enabled state of the VR actions, from the live session.
-    void refreshVrUi();
-    /// Says on screen why a VR toggle did not start (the reason is the verb's own).
-    void showVrRefusal(const QString &reason);
+    /// The window-centre notice (a page that cannot start, VR that did not).
+    void showNotice(const QString &title, const QString &text);
+    /// The Player page's VR button follows the session (the VR module's).
+    void showPlayerVrState(bool available, bool active);
 
 	/// The editor camera's controls: the canonical views, the projection
 	/// toggle and the camera switcher (shell/viewcontroller.h).
@@ -289,9 +284,6 @@ public:
     void setSettingsManager(SettingsManager* settings);
     SettingsManager* getSettingsManager();
 
-    /// The VR icon follows the session (per frame, a cached bool unless the
-    /// process can do VR at all).
-    void followVrSession();
 
     iris::ScenePtr getScene();
 
@@ -1025,18 +1017,6 @@ private:
     class IAssetViewer *assetsPreviewViewer = nullptr;   // made at boot, handed to the page
 	QAction *actionSaveScene = nullptr;
 
-    /// THE VR TOGGLE (SPECS/VR_SPEC.md §4.5, phase 3) — the editor toolbar's
-    /// half. The Player page has its own button and both make the same call
-    /// (PlayerService::toggleVr, which is what `vr.toggle()` calls); this is
-    /// held so its icon and its tooltip can follow the session.
-    QAction *actionVr = nullptr;
-    /// What the icon is currently showing, so the per-frame refresh only
-    /// rebuilds a QIcon when the answer moves.
-    bool mVrIconActive = false;
-    /// Can this PROCESS do VR at all? Fixed at boot (the engine asks the
-    /// runtime once, and only under `--vr`), so the per-frame follower reads
-    /// this cached bool first and an ordinary launch pays nothing.
-    bool mVrCapable = false;
 
     QAction *wireCheckAction = nullptr;
     QAction *physicsCheckAction = nullptr;
@@ -1109,7 +1089,6 @@ private:
 
 	QtAwesome *fontIcons;
 
-	VrModule *vrModule = nullptr;
 
 	/// THE SHELL'S PARTS (D10-SHELL-MODULES): the pages by id, the actions /
 	/// menus / toolbar slots, the module loop, and the one teardown path.

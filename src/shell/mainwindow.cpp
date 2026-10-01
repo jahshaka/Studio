@@ -158,7 +158,6 @@ For more information see the LICENSE file
 #include "irisgl/document/physics/environment.h"
 #include "irisgl/document/input/inputmap.h"
 
-#include "modules/vr/vrmodule.h"
 #include "modules/moduleregistry.h"
 #include "services/playerservice.h"
 #include "modules/studiomodule.h"
@@ -872,134 +871,17 @@ void MainWindow::setSettingsManager(SettingsManager* settings)
     this->settings = settings;
 }
 
-void MainWindow::followVrSession()
+// THE WINDOW-CENTRE NOTICE — a page that cannot start, VR that did not. One
+// toast, reused; its anchor is the Toast's own (audit F-D4).
+void MainWindow::showNotice(const QString &title, const QString &text)
 {
-    EngineRenderDriver *driver = EngineHost::instance().driver();
-    if (!driver) return;
-    // THE VR ICON FOLLOWS THE SESSION, not just the button that started it: a
-    // session can end from a script (`vr.end()`), from a lost device or from
-    // the runtime itself, and a toolbar showing "in VR" over an editor that is
-    // not would be a lie.
-    //
-    // WHAT IT COSTS, stated honestly (lead review F8): in a process that CANNOT
-    // do VR — every ordinary launch, since capability is fixed at boot and only
-    // `--vr` asks for it — this is one cached bool and nothing else, which is
-    // the case that must not pay. In a VR-capable process it is a `VrStatus`
-    // read per frame on the UI thread (a ~20-word struct built from the
-    // session's own counters, no lock and no runtime call), and a QIcon is
-    // rebuilt only when the answer moves.
-    connect(driver, &EngineRenderDriver::beforeFrame, this, [this]() {
-        if (!mVrCapable) return;
-        if ((playerService && playerService->isVrActive()) != mVrIconActive || (vrModule && vrModule->isEditorPreviewActive() && !mVrIconActive)) refreshVrUi();
-    });
-}
-
-// ---------------------------------------------------------------------------
-// THE VR TOGGLE (SPECS/VR_SPEC.md §4.5, phase 3).
-//
-// Both surfaces — the editor toolbar's icon (and its Ctrl+Shift+V row) and the
-// Player page's own button — end up in these two functions, and the functions
-// do nothing but call PlayerService. That is the API-first rule as wiring: the
-// capability is `player.play({vr:true})` / `player.stop()`, the verb `vr.toggle()`
-// calls the service, and so does every button.
-
-void MainWindow::toggleVrMode()
-{
-    // THE BUTTON MEANS "VR, HERE": on the editor page it starts (or ends) the
-    // EDITOR PREVIEW — the headset as a live window on the editor, the
-    // controllers pointing and grabbing (VR phase 4); on the Player page it is
-    // the Player's run in the headset (phase 3). Before this the button always
-    // took the user to the Player, and the preview existed only as a verb (the
-    // owner, at the first controller smoke).
-    if (currentSpace == WindowSpaces::EDITOR && vrModule) {
-        const bool was = vrModule->isEditorPreviewActive();
-        const bool on = vrModule->toggleEditorPreview();
-        // A REFUSED BEGIN IS SAID ON SCREEN (the owner's #51 smoke: "nothing
-        // happens when I click it" — the runtime had refused the session six
-        // times and the only witness was the log). The verb's own reason is in
-        // the host's error slot, where `app.lastError()` reads it.
-        if (!was && !on) showVrRefusal(scriptHost ? scriptHost->lastError : QString());
-        refreshVrUi();
-        return;
-    }
-    if (!playerService) return;
-    // OFF THE EDITOR PAGE THE BUTTON MEANS THE PLAYER, AND THE PLAYER NEEDS A
-    // WORLD (SMOKE-FIX-1's fix round, F7). On a `--vr` boot this icon is live
-    // on the DESKTOP page, where there is nothing to play: the toggle used to
-    // open the Player page over no project at all and start it. Say so and stop
-    // — the service's own refusal is the same predicate, this is the sentence.
-    if (!projectService || !projectService->isSceneOpen()) {
-        if (!viewErrorToast) viewErrorToast = new Toast(this);
-        viewErrorToast->setAnchor(Toast::Anchor::WindowCentre);
-        viewErrorToast->showToast(tr("Nothing to play"),
-                                  tr("Open a world first — VR plays the world you have open."));
-        refreshVrUi();
-        return;
-    }
-    const bool wasVr = playerService->isVrActive();
-    if (!playerService->toggleVr() && !wasVr) {
-        qWarning("Jahshaka VR: the toggle did not start - %s",
-                 qPrintable(playerService->lastError()));
-        showVrRefusal(playerService->lastError());
-    }
-    refreshVrUi();
-}
-
-void MainWindow::showVrRefusal(const QString &reason)
-{
-    // THE SENTENCE A PERSON CAN ACT ON FIRST, the runtime's own words second.
-    // One case deserves its own sentence because nothing in the reason says
-    // what to DO: the OpenXR runtime created this process's Vulkan device at
-    // boot, so a runtime connection that died afterwards — WiVRn starts a fresh
-    // streaming process every time the headset reconnects, and the one this
-    // app connected to is gone — cannot be re-made in place. Every
-    // xrCreateSession then fails XR_ERROR_RUNTIME_FAILURE for the life of the
-    // process (measured, the owner's #51 smoke).
-    const bool connectionDied = reason.contains(QLatin1String("XR_ERROR_RUNTIME_FAILURE"))
-                             || reason.contains(QLatin1String("XR_ERROR_INSTANCE_LOST"))
-                             || reason.contains(QLatin1String("XR_ERROR_RUNTIME_UNAVAILABLE"));
-    QString text = connectionDied
-        ? tr("The headset's connection changed after Jahshaka started. Put the headset on, "
-             "check it is connected, then restart Jahshaka.")
-        : tr("The headset did not start.");
-    if (!reason.isEmpty()) text += QStringLiteral("\n") + reason;
     if (!viewErrorToast) viewErrorToast = new Toast(this);
     viewErrorToast->setAnchor(Toast::Anchor::WindowCentre);
-    viewErrorToast->showToast(tr("VR did not start"), text);
+    viewErrorToast->showToast(title, text);
 }
 
-void MainWindow::refreshVrUi()
+void MainWindow::showPlayerVrState(bool available, bool active)
 {
-    if (!actionVr) return;
-    const bool available = playerService && playerService->vrAvailable();
-    const bool previewActive = vrModule && vrModule->isEditorPreviewActive();
-    const bool active = available && (playerService->isVrActive() || previewActive);
-    // FIXED AT BOOT, so it is asked once and cached: the per-frame follower
-    // above tests this before it asks anything else.
-    mVrCapable = available;
-    actionVr->setEnabled(available);
-    actionVr->setChecked(active);
-    mVrIconActive = active;
-    // THE TOOLTIP CARRIES THE RUNTIME'S OWN REASON when the icon is dead, plus
-    // the sentence a user can act on: VR capability is decided once, at boot,
-    // because the OpenXR route has the RUNTIME create the Vulkan device the
-    // whole engine runs on (VR_SPEC §7 risk 11). Plugging a headset in later
-    // needs a restart, and nothing in the editor can change that at runtime.
-    if (available) {
-        const bool onEditor = currentSpace == WindowSpaces::EDITOR;
-        actionVr->setToolTip(active
-            ? (previewActive ? QStringLiteral("Leave VR | End the editor preview")
-                             : QStringLiteral("Leave VR | Stop the run and take the headset off"))
-            : (onEditor ? QStringLiteral("Enter VR | The editor in the headset: point, select and "
-                                         "grab with the controllers; the desktop stays the editor")
-                        : QStringLiteral("Enter VR | Run the scene in the headset (the Player page, "
-                                         "mirrored here)")));
-    } else {
-        QString why = playerService ? playerService->vrUnavailableReason() : QString();
-        if (!cliVr())
-            why = QStringLiteral("VR capability is fixed at boot — restart with --vr");
-        actionVr->setToolTip(QStringLiteral("Enter VR | Unavailable: %1").arg(why));
-    }
     if (playerView) playerView->showVr(available, active);
 }
 
@@ -1141,7 +1023,9 @@ void MainWindow::setupServices()
         QVariantMap vrIconOptions;
         vrIconOptions.insert("color", QColor(255, 255, 255));
         vrIconOptions.insert("color-active", QColor(255, 255, 255));
-        widget->setVrToggle([this]() { this->toggleVrMode(); },
+        // The Player page's own VR button fires the vr.toggle row — the VR
+        // module's — exactly as the chord and the toolbar action do.
+        widget->setVrToggle([this]() { actionHost->trigger(QStringLiteral("vr.toggle")); },
                             fontIcons->icon(fa::binoculars, vrIconOptions));
     }
 
@@ -4030,7 +3914,6 @@ void MainWindow::setupViewPort()
             // the persisted pacing mode; the ViewController feeds it both and
             // keeps feeding it across screen and refresh-rate changes.
             viewController->startFramePacing(this, settings);
-            followVrSession();
             host.driver()->start();
         } else if (!error.isEmpty()) {
             qCritical("Engine unavailable (%s): using the headless document-only viewport.",
@@ -4236,7 +4119,6 @@ void MainWindow::setupDesktop()
 	moduleHub->setModules(moduleregistry::createAll());
 	moduleHub->initialize(context);
 	moduleHub->contribute(pageHost, actionHost);
-	vrModule = static_cast<VrModule *>(moduleHub->module(QStringLiteral("vr")));
 
 	connect(pmContainer, SIGNAL(closeProject()), SLOT(closeProject()));
 	connect(pmContainer, &ProjectManager::fileToCreate,
@@ -4440,22 +4322,9 @@ void MainWindow::setupToolBar()
     cameraGroup->addAction(actionArcballCam);
     actionFreeCamera->setChecked(true);
 
-    // THE VR TOGGLE (SPECS/VR_SPEC.md §4.5, phase 3). One action, beside the
-    // camera controls it belongs with: press it and the Player page comes up
-    // with the scene running in the headset; press it again and the run stops.
-    // It calls PlayerService, which is what the `vr.toggle()` verb calls — the
-    // button is a caller of the capability, never a second path into it.
-    //
-    // fa::binoculars is the closest thing the shipped icon font (Font Awesome
-    // 4) has to a headset: a two-lens device held to the eyes. Stated because
-    // it is a choice, not an obvious match.
-    actionVr = new QAction;
-    actionVr->setObjectName(QStringLiteral("actionVr"));
-    actionVr->setCheckable(true);
-    actionVr->setIcon(fontIcons->icon(fa::binoculars, options));
-    toolBar->addAction(actionVr);
-    connect(actionVr, &QAction::triggered, this, [this]() { toggleVrMode(); });
-    refreshVrUi();
+    // THE VR SLOT: the VR module's toggle lands here, beside the camera
+    // controls it belongs with (its contribution).
+    actionHost->addToolbarSlot(toolBar, QStringLiteral("editor.vr"));
 
     // this acts as a spacer
     QWidget* empty = new QWidget();
@@ -4812,11 +4681,8 @@ void MainWindow::setupShortcuts()
     // row exists so the Preferences table says so.
     fixed("properties.filter.clear", "Properties: Clear the Filter", "Windows",
                  "Esc (while the filter box has focus)");
-    // VR (SPECS/VR_SPEC.md §4.5). Its own row rather than a "Windows" one: it
-    // is not a space switch, it is a MODE — the Player page comes up and the
-    // run happens in the headset.
-    row("vr.toggle", "Enter / leave VR", "VR", QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_V),
-        any, [this]() { toggleVrMode(); });
+    // (vr.toggle, Ctrl+Shift+V, is the VR module's own row, listed after this
+    // one — its contribution.)
     row("space.desktop", "Desktop Space", "Windows", QKeySequence(Qt::CTRL | Qt::Key_1), any,
             [this]() { this->switchSpace(WindowSpaces::DESKTOP); });
     row("space.player", "Player Space", "Windows", QKeySequence(Qt::CTRL | Qt::Key_2), any,

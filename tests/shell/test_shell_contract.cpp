@@ -155,10 +155,8 @@ int main(int argc, char **argv)
     pages.addPage(QStringLiteral("editor"), new QLabel(QStringLiteral("editor")));
     QToolBar toolbar;
     toolbar.addAction(QStringLiteral("Undo"));
-    actions.addToolbarSlot(&toolbar, QStringLiteral("editor.end"));
     QMenu viewOptions;
     viewOptions.addAction(QStringLiteral("Light Bounds"));
-    actions.registerMenu(QStringLiteral("view.options"), &viewOptions);
 
     // ---- boot -------------------------------------------------------------
     auto *fake = new FakeModule;
@@ -167,6 +165,10 @@ int main(int argc, char **argv)
     ctx.shellWidget = &window;
     hub.initialize(ctx);
     hub.contribute(&pages, &actions);
+    // The window builds its toolbar and menus AFTER the modules contributed
+    // (the order it really runs in): the contributions wait for their slot.
+    actions.addToolbarSlot(&toolbar, QStringLiteral("editor.end"));
+    actions.registerMenu(QStringLiteral("view.options"), &viewOptions);
     // The fake never touches the engine it is handed: the reference only
     // proves the hub forwards it, in order.
     hub.registerApi(*reinterpret_cast<ScriptEngine *>(&window));
@@ -202,7 +204,7 @@ int main(int argc, char **argv)
           "contribute: a handler-only contribution never defines the shell's row");
     CHECK(toolbar.actions().contains(fake->toolbarAction)
               && toolbar.actions().indexOf(fake->toolbarAction) == 1,
-          "contribute: the toolbar action lands in its slot");
+          "contribute: the toolbar action lands in its slot, even one built after the contribution");
     CHECK(viewOptions.actions().contains(fake->menuAction), "contribute: the menu row lands in its menu");
     auto *fakeDock = window.findChild<QDockWidget *>(QStringLiteral("fakeDock"));
     CHECK(fakeDock && fakeDock->isHidden(), "contribute: the module's dock is hidden off its page");

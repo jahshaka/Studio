@@ -90,6 +90,8 @@ public:
     bool closeDialog(const QString &name) override;
     bool isDialogOpen(const QString &name) const override;
     void showViewportToast(const QString &title, const QString &text) override;
+    void showNotice(const QString &title, const QString &text) override;
+    void showPlayerVrState(bool available, bool active) override;
 
 private:
     MainWindow *mWindow = nullptr;

@@ -84,12 +84,14 @@ public:
 
     /// A named insertion point at the CURRENT end of `bar`.
     void addToolbarSlot(QToolBar *bar, const QString &slot);
-    /// Inserts `action` at the end of `slot` (before its marker). False for an
-    /// unknown slot.
-    bool addToolbarAction(const QString &slot, QAction *action);
+    /// Inserts `action` at the end of `slot` (before its marker). A slot that
+    /// does not exist YET (the modules contribute before the toolbar is
+    /// built) keeps the action until it does.
+    void addToolbarAction(const QString &slot, QAction *action);
 
+    /// A named menu; rows contributed before it existed land in it now.
     void registerMenu(const QString &id, QMenu *menu);
-    bool addMenuRow(const QString &menu, QAction *action);
+    void addMenuRow(const QString &menu, QAction *action);
     QMenu *menu(const QString &id) const;
 
 private:
@@ -116,6 +118,8 @@ private:
     struct Slot { QPointer<QToolBar> bar; QPointer<QAction> marker; };
     QHash<QString, Slot> mSlots;
     QHash<QString, QPointer<QMenu>> mMenus;
+    QHash<QString, QVector<QPointer<QAction>>> mPendingToolbar;
+    QHash<QString, QVector<QPointer<QAction>>> mPendingMenu;
 };
 
 #endif // ACTIONHOST_H

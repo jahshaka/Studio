@@ -342,3 +342,13 @@ void ShellView::showViewportToast(const QString &title, const QString &text)
 {
     mWindow->showViewportToast(title, text);
 }
+
+void ShellView::showNotice(const QString &title, const QString &text)
+{
+    mWindow->showNotice(title, text);
+}
+
+void ShellView::showPlayerVrState(bool available, bool active)
+{
+    mWindow->showPlayerVrState(available, active);
+}

@@ -167,6 +167,10 @@ public:
     // ---- feedback ------------------------------------------------------
     /// The one transient toast over the editor viewport.
     virtual void showViewportToast(const QString &title, const QString &text) = 0;
+    /// The window-centre notice (a page that cannot start, VR that did not).
+    virtual void showNotice(const QString &title, const QString &text) = 0;
+    /// The Player page's VR button follows the session (VrModule owns it).
+    virtual void showPlayerVrState(bool available, bool active) = 0;
 };
 
 #endif // ISHELLVIEW_H
