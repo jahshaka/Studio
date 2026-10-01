@@ -128,7 +128,7 @@ def fail_line(text):
     script = None
     for line in (text or "").splitlines():
         m = _FAILLINE.match(line)
-        if m and not m.group(1).startswith("FAILED"):
+        if m:
             return m.group(1).strip()[:300]
         if script is None:
             m = _SCRIPTFAIL.search(line)

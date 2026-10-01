@@ -176,10 +176,17 @@ def lane_commits(gs, base, tip_sha):
     return [c for c in revs if c != tip_sha and c not in line]
 
 
+_FORK_PINS = {}
+
+
 def fork_pin(gs, irisgl_sha):
-    """The ogre-next commit an irisgl commit pins ('' when it cannot be read: no re-use across it)."""
+    """The ogre-next commit an irisgl commit pins ('' when it cannot be read: no re-use across it).
+    Cached: the refusal asks it once per row per earlier commit."""
     if not irisgl_sha: return ""
-    return _git(["rev-parse", f"{irisgl_sha}:thirdparty/ogre-next"], os.path.join(gs.ROOT, "irisgl"))
+    if irisgl_sha not in _FORK_PINS:
+        _FORK_PINS[irisgl_sha] = _git(["rev-parse", f"{irisgl_sha}:thirdparty/ogre-next"],
+                                      os.path.join(gs.ROOT, "irisgl"))
+    return _FORK_PINS[irisgl_sha]
 
 
 class Reach:
@@ -266,7 +273,11 @@ def check(rng, build, gs=None, verdicts=None):
 
     def judge_all():
         """{key: (state, why, source sha)} — the tip's records first, then (for a row the tip has no
-        run of) the newest earlier commit's, under the rule in this file's header."""
+        run of) the newest earlier commit's, under the rule in this file's header. AND THE FLAKE LAW
+        ACROSS COMMITS (the lead's merge read, F1): a row green at the tip is still refused while an
+        earlier commit that the fix does NOT reach holds an open red of it (no verdict; a contention
+        red without its 3/3) — a green re-run at a later commit does not answer a red the fix never
+        touched; a verdict does, or --solo 3/3 for the contention class."""
         nonlocal reach
         got = records_by_tip(pins)
         out = {}
@@ -275,6 +286,20 @@ def check(rng, build, gs=None, verdicts=None):
         for k in need:
             st, why = judge(k, got[tip_sha].get(k, []), contention)
             src = tip_sha
+            if st == "green" and have_earlier:
+                if reach is None:
+                    reach = Reach(gs, build, tip_sha, tip_fork)
+                for c in have_earlier:
+                    if Reach.reaches(reach.of(c, fork_pin(gs, pins[c])), k):
+                        break                   # the fix reached it: the tip's run answers what came before
+                    recs = got[c].get(k, [])
+                    if not recs: continue
+                    cst, cwhy = judge(k, recs, contention)
+                    if cst == "red":
+                        st, src = "red", c
+                        why = (f"an OPEN red at {c[:9]} that {c[:9]}..{tip_sha[:9]} does not reach — the green at the "
+                               f"tip does not answer it (a verdict does; --solo 3/3 for the contention class): {cwhy}")
+                        break
             if st == "missing" and have_earlier:
                 if reach is None:
                     reach = Reach(gs, build, tip_sha, tip_fork)

@@ -37,8 +37,11 @@ pass until its part lands is a **target test**:
   gate and no merge waits for it — the inline target run held every engine lane's gate 7-13 min
   at `-j1` (the gate-speed audit's S1). `--no-targets` skips the step; `--targets-only` runs it in
   the foreground. Still `-j1` (it is a measurement; a measurement sharing the GPU with three
-  siblings prints a number nobody can use), and its exit code is reported and discarded. The tree
-  does not rebuild under a running target step: kill that pid first — the targets are a report. The MERGE and PUSH tiers drop it
+  siblings prints a number nobody can use), and its exit code is reported and discarded. The step
+  runs in its own session, so its pid IS its process group: stop it with `kill -- -<pid>` (the
+  ctest and every suite under it). Every `--run` and `--solo` on that build dir stops a live step's
+  group by itself before it starts, and says so — the targets are a report and can be re-run. A
+  rebuild does not run under a live step: stop the group first. The MERGE and PUSH tiers drop it
   with `-LE`, which is the only shape ctest offers for "these do not decide the tier";
 - every run prints `target: <value> (bar <bar>) <what>`, so the distance to the bar is visible
   from any lane's scoped gate and a target that goes green EARLY is noticed rather than
@@ -315,8 +318,10 @@ lane's time rests on.
 
 A lane that gets a red FIXES, then runs THE FIX ROUND: `scripts/gate-scope.sh <pre-fix
 tip>..<post-fix tip> --run` — the scoped selection of the FIX's own diff, never the lane's whole
-selection again. A red the fix does not reach is answered where it happened (re-run it at the new
-tip, or a verdict). The batch gate before the push is the full safety net. The lead's post-merge
+selection again. After a forward merge of d-build into the lane, the fix round is `<merge
+commit>..<tip>` (the merge commit is the lane's own; a range across it scopes the whole lane again).
+A red the fix does not reach is answered where it happened: a recorded verdict, or `--solo` 3/3 for
+the contention class — a green re-run at a later commit does NOT answer it. The batch gate before the push is the full safety net. The lead's post-merge
 targeted run stays (owner decision): it catches a merge interaction at merge time instead of at
 the batch gate.
 
@@ -332,7 +337,10 @@ commit a forward merge carried in is not one), provided:
   tier by rule — A FORK PIN CHANGE INVALIDATES EVERY EARLIER RECORD (§7b rule 4 stays);
 - that newest record decides: green is re-used; a red without its verdict (or a contention red
   without its 3/3) REFUSES — a later red blocks an older green. `--verdict "<row>=<text>"`
-  records the answer at the commit where that red happened.
+  records the answer at the commit where that red happened (repeatable: every `--verdict` counts).
+THE FLAKE LAW ACROSS COMMITS: a row green at the tip is STILL refused while an earlier commit that
+the fix does not reach holds an open red of it — a verdict-less red, or a contention red without its
+3/3. A red at a commit the fix DOES reach is answered by the tip's run.
 A row the fix reaches needs its record at the tip. Every row prints its source
 (`row <name> <- <sha> (the tip)` or `... re-used from <sha>`); the summary counts both. Measured
 on this lane's own two rounds: `spikes/gate-speed-1/`.

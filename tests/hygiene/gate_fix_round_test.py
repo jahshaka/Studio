@@ -159,6 +159,22 @@ def main(source, build):
               "...a verdict is recorded AT %s (where the red happened) and the lane is accepted (%d, %s)"
               % (A, rc, vfiles))
 
+    # ---- 4b. THE FLAKE LAW ACROSS COMMITS (the lead's read, F1): a green at the tip does not answer an
+    # earlier red the fix does not reach; it does answer one the fix reaches ------------------------
+    if cand:
+        k = cand[0]
+        fresh()
+        put([x for x in lane_need if x not in (k, some_fix)], "PASS", "2026-01-01T10:00:00", A)
+        put([k, some_fix], "FAIL", "2026-01-01T10:00:01", A)
+        put(lane_need, "PASS", "2026-01-01T11:00:00", B)                 # everything re-run green at the tip
+        rc, out = run(lane)
+        check(rc == 1 and f"OPEN red at {revs[A][:9]}" in out and k[0] in out
+              and not any(l.startswith(f"ci-gate-check: RED {some_fix[0]}:") for l in out.splitlines()),
+              "%s red at %s (the fix does not reach it), green at the tip -> REFUSED; %s, which the fix reaches, "
+              "is answered by the tip (%d)" % (k[0], A, some_fix[0], rc))
+        rc, out = run(lane, "--verdict", f"{k[0]}=read: the fixture's red")
+        check(rc == 0, "...its verdict (recorded at %s) answers it (%d)" % (A, rc))
+
     # ---- 5. the targets never set the exit code ------------------------------------------------------
     spec = importlib.util.spec_from_file_location("gate_scope_t", os.path.join(scripts, "gate-scope.py"))
     g = importlib.util.module_from_spec(spec)
@@ -199,6 +215,20 @@ def main(source, build):
     check(code in (0, None) and calls == [("target", True)] and "exited 8" in out,
           "--targets-only: the targets run alone under the run log's `target` tier, read 8, and exit 0 (%r, %r)"
           % (code, calls))
+    # F2: the detached step writes its pid file, and the next --run stops its GROUP before it starts
+    fake_step = ["sh", "-c", "sleep 120 & sleep 120; :", "gate-scope.py", "--targets-only"]
+    pid = g._launch_target_step(fake_step, build)
+    import time
+    time.sleep(0.5)
+    pidfile = os.path.join(build, g.TARGET_PIDFILE)
+    check(os.path.isfile(pidfile) and open(pidfile).read().split()[0] == str(pid),
+          "the target step's launch writes <build>/%s with its pid (%d)" % (g.TARGET_PIDFILE, pid))
+    members = subprocess.run(["pgrep", "-g", str(pid)], capture_output=True, text=True).stdout.split()
+    code, out = gs_main(files + ["--run", "--no-targets"])
+    time.sleep(0.5)
+    left = subprocess.run(["pgrep", "-g", str(pid)], capture_output=True, text=True).stdout.split()
+    check(len(members) >= 2 and not left and f"process group {pid}" in out and not os.path.exists(pidfile),
+          "...and the next --run stops the WHOLE group (%d members before, %d after) and says so" % (len(members), len(left)))
     g.gate_runlog.run_ctest, g.gate_runlog.fork_pin_problem = real_rc, real_fpp
 
     # ---- L1 / L2 / L3: the run log -------------------------------------------------------------------

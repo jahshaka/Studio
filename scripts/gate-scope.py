@@ -1888,23 +1888,64 @@ def joint(range_a, range_b, build, jobs):
     return out
 
 
-def start_target_step(a, build):
-    """THE TARGET STEP, DETACHED (GATE-SPEED-1 item 2): the same range with `--targets-only`, in its
-    own session, its output in <build>/gate-targets.log and its pid in <build>/gate-targets.pid. The
-    gate's exit does not wait for it, and nothing that judges a gate reads it (ci_gate_check needs
-    no target record). The tree must not rebuild under it: a rebuild that cannot wait kills THAT
-    pid first — the targets are a report."""
-    args = [sys.executable, os.path.abspath(__file__)] + (["--files"] + list(a.files) if a.files else [a.range]) \
-        + ["--build", build, "--run", "--targets-only"]
-    if a.lane: args += ["--lane", a.lane]
+TARGET_PIDFILE = "gate-targets.pid"
+
+
+def _launch_target_step(args, build):
+    """Start `args` in its OWN SESSION (so its pid is its process group), output in
+    <build>/gate-targets.log, the pid in <build>/gate-targets.pid. Returns the pid."""
     log = os.path.join(build, "gate-targets.log")
     with open(log, "w") as out:
         p = subprocess.Popen(args, cwd=ROOT, stdout=out, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL,
                              start_new_session=True)
-    with open(os.path.join(build, "gate-targets.pid"), "w") as f:
+    with open(os.path.join(build, TARGET_PIDFILE), "w") as f:
         f.write(f"{p.pid}\n")
-    print(f"=== target tests: started as their own step (pid {p.pid}, run-log tier `target`), NOT waited for;\n"
-          f"    log {log} — the tree must not rebuild until that pid exits (or kill it: they are a report)")
+    return p.pid
+
+
+def start_target_step(a, build):
+    """THE TARGET STEP, DETACHED (GATE-SPEED-1 item 2): the same range with `--targets-only`, in its
+    own session, its output in <build>/gate-targets.log and its pid (= its process group) in
+    <build>/gate-targets.pid. The gate's exit does not wait for it, and nothing that judges a gate
+    reads it (ci_gate_check needs no target record). It is stopped by GROUP — `kill -- -<pid>` takes
+    the ctest and every suite under it — and the next `--run` / `--solo` on this build dir stops it by
+    itself before it starts (stop_target_step): the targets are a report and can be re-run."""
+    args = [sys.executable, os.path.abspath(__file__)] + (["--files"] + list(a.files) if a.files else [a.range]) \
+        + ["--build", build, "--run", "--targets-only"]
+    if a.lane: args += ["--lane", a.lane]
+    pid = _launch_target_step(args, build)
+    print(f"=== target tests: started as their own step (process group {pid}, run-log tier `target`), NOT waited for;\n"
+          f"    log {os.path.join(build, 'gate-targets.log')} — stop it with `kill -- -{pid}`; the next --run or "
+          f"--solo here stops it first")
+
+
+def stop_target_step(build):
+    """Stop a LIVE target step of this build dir by its process group, before a gate or a retry runs
+    on the tree (the lead's merge read, F2). Only a group whose leader is a target step (`gate-scope`
+    and `--targets-only` in its argv) is touched — a pid the system reused is left alone. Returns the
+    pid it stopped, or None."""
+    path = os.path.join(build, TARGET_PIDFILE)
+    try:
+        pid = int(open(path).read().split()[0])
+    except (OSError, ValueError, IndexError):
+        return None
+    try:
+        argv = open(f"/proc/{pid}/cmdline", "rb").read().split(b"\0")
+    except OSError:
+        argv = []
+    stopped = None
+    if any(b"gate-scope" in x for x in argv) and b"--targets-only" in argv:
+        import signal
+        try:
+            os.killpg(pid, signal.SIGTERM)
+            stopped = pid
+            print(f"gate-scope: stopped the live target step of {build} (process group {pid}) before this run — "
+                  f"the targets are a report; re-run them with --targets-only")
+        except OSError:
+            pass
+    try: os.unlink(path)
+    except OSError: pass
+    return stopped
 
 
 def main():
@@ -1969,6 +2010,8 @@ def main():
         if bad:
             sys.stderr.write("gate-scope: " + bad + "\n")
             sys.exit(4)
+        if not a.targets_only:
+            stop_target_step(build)
     if a.joint:
         J = joint(a.joint[0], a.joint[1], build, a.jobs)
         if a.json:
