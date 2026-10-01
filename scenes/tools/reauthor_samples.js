@@ -80,7 +80,9 @@
 //     previews are shot at. Logged per sample.
 //
 // IDEMPOTENT: on an archive already re-authored there is no ground to replace
-// (the run says so and stops before writing) and step 2 converts nothing.
+// (the run says so and writes nothing but a dropped stale checker row, below)
+// and step 2 converts nothing. Step 1 and 3 on an ORIGINAL archive need a
+// build that still seeds ground.obj (Studio before SAMPLES-1's CRUD commit).
 
 var TREE    = "@TREE@";
 var SAMPLE  = "@SAMPLE@";
@@ -161,6 +163,24 @@ function openArchive(path) {
     return imported;
 }
 
+// THE OLD GROUND'S CHECKER ROW. The Basic floor pins its own Tile.png row, so
+// the old ground's (and, on World Background, whose floor wears its deck
+// plate, the new floor's own) is a catalog row nothing uses — and an archive
+// carries every row of its project (measured on the first run: two Tile.png
+// rows in six of the eight archives, which e2e_tray_panel's closure check
+// caught). It leaves the project; the library row is not touched.
+function dropStaleCheckers(floor) {
+    var worn = "" + ((node.serialize(floor).node.material || {}).values || {}).baseColorMap;
+    var stale = assets.list({ scope: "project", type: "texture", query: "Tile.png" })
+        .filter(function (r) { return r.name === "Tile.png" && r.guid !== worn; });
+    stale.forEach(function (r) {
+        if (assets.removeFromProject(r.guid) !== true) fail("could not drop the stale Tile.png row " + r.guid);
+    });
+    log("CHECKER ROWS: " + stale.length + " unused Tile.png row(s) dropped; the floor wears " +
+        (worn ? worn : "(none)"));
+    return stale.length;
+}
+
 // ===========================================================================
 // 1. MEASURE
 // ===========================================================================
@@ -219,7 +239,23 @@ if (MODE === "measure") {
 if (MODE === "apply") {
     var imported = openArchive(ARCHIVE);
     var grounds = groundsOf();
-    if (grounds.length === 0) { log("no ground.obj floor — already re-authored, nothing written"); }
+    if (grounds.length === 0) {
+        // Already re-authored: only a stale checker row can be left to drop.
+        var floors = scene.nodes().filter(function (r) {
+            return r.type === "mesh" && node.property(r.id, "defaultFloor") === true;
+        });
+        if (floors.length !== 1) fail(floors.length + " default floors on a re-authored sample");
+        if (dropStaleCheckers(floors[0].id) > 0) {
+            if (project.save() !== true) fail("save failed");
+            var re = project.exportArchive(ZIP);
+            if (!re || !re.path) fail("exportArchive failed");
+            log("no ground.obj floor — already re-authored; re-exported " + re.path +
+                " without the stale row(s) (" + re.assets + " assets)");
+        } else {
+            log("no ground.obj floor — already re-authored, nothing written");
+        }
+        if (project.close() !== true) fail("close failed");
+    }
     else {
         if (grounds.length !== 1) fail(grounds.length + " ground.obj nodes — one floor per sample");
         var ground = grounds[0].id;
@@ -280,6 +316,8 @@ if (MODE === "apply") {
             (parent ? node.info(parent).name : "the root") + "; carried: " +
             (carried.length ? carried.join("; ") : "nothing (the sample's ground was the default)"));
 
+        dropStaleCheckers(floor);
+
         if (OPEN_SCENES[SAMPLE]) {
             var hf = world.heightFog({ enabled: true });
             log("HEIGHT FOG on (an open scene): " + J(hf));
@@ -317,6 +355,9 @@ if (MODE === "apply") {
         ", bakeBuilds " + stats.bakeBuilds + ", model.missing " + missing.length + ", issues " + issues.length + " " +
         J(issues.map(function (i) { return i.kind + ":" + i.nodeName; })));
     if (groundsOf().length) fail("the reopened archive still stands on ground.obj");
+    var tiles = assets.list({ scope: "project", type: "texture", query: "Tile.png" })
+        .filter(function (r) { return r.name === "Tile.png"; });
+    if (tiles.length > 1) fail("the reopened archive carries " + tiles.length + " Tile.png rows");
     if (stats.uiThreadParses !== 0) fail("the open parsed " + stats.uiThreadParses + " model(s)");
     if (issues.length) fail("the reopened sample has scene issues");
     if (world.heightFog().enabled !== !!OPEN_SCENES[SAMPLE])
