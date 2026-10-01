@@ -193,7 +193,7 @@ void ProjectManager::openProjectFromWidget(ItemGridWidget *widget, bool playMode
     // user is on stays, because this close is the first half of an open
     // (MainWindow::CloseIntent, VIEW-REBUILD-1).
     if (mainWindow->studioServices()->project->isSceneOpen())
-        mainWindow->closeProject(MainWindow::CloseIntent::ReopenInPlace);
+        mainWindow->projectRunner()->close(true);   // the first half of an open: the page stays
 
 	// WHERE THIS PROJECT ACTUALLY IS (SMALL-UI-A fix round F1). This rebuilt
 	// the path from the DEFAULT projects root, so a project created at a chosen
@@ -393,7 +393,7 @@ void ProjectManager::onArchiveImportFinished(bool canceled)
         // reset, the user's unsaved edits gone. It has to happen BEFORE the
         // re-point, because closeProject saves the project the pointer names.
         if (mainWindow->studioServices()->project->isSceneOpen())
-            mainWindow->closeProject(MainWindow::CloseIntent::ReopenInPlace);
+            mainWindow->projectRunner()->close(true);   // the first half of an open: the page stays
         project->setProjectPath(pDir, result.worldName);
         project->setProjectGuid(result.projectGuid);
         LoadTimeline::begin(QStringLiteral("open(import) %1").arg(result.worldName));

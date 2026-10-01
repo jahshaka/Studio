@@ -38,6 +38,7 @@ For more information see the LICENSE file
 #include "data/project.h"
 #include "services/scenetemplate.h"
 #include "modules/studiomodule.h"
+#include "services/projectrunner.h"
 #include "ui/ishellview.h"
 
 namespace Ui {
@@ -140,7 +141,7 @@ enum class SceneNodeType;
 
 class Database;
 class Project;
-class MainWindow : public QMainWindow
+class MainWindow : public QMainWindow, private ProjectRunner::Host
 {
 
     Q_OBJECT
@@ -225,26 +226,8 @@ public:
 	/// The editor camera's controls: the canonical views, the projection
 	/// toggle and the camera switcher (shell/viewcontroller.h).
 	ViewController *views() const { return viewController; }
-    /// WHAT A CLOSE IS FOR (VIEW-REBUILD-1, 2026-09-21).
-    ///
-    /// `ToDesktop` is a close the user asked for: the world goes and the window
-    /// lands on the Desktop, which is the only page left that means anything.
-    ///
-    /// `ReopenInPlace` is the FIRST HALF OF AN OPEN — every close-then-open
-    /// caller (project.open, project.openAsync, a desktop tile, the
-    /// import-and-open) tears the current world down through this same function
-    /// before pointing the project at the next one. Measured on the rig
-    /// (spikes/view-rebuild-1/): the space switch that ends a ToDesktop close
-    /// hid the editor PAGE — a native X ancestor of the viewport's own window,
-    /// because Qt gives every ancestor of a WA_NativeWindow widget a window of
-    /// its own — so the viewport was UNVIEWABLE for 499-2,973 ms of an open in
-    /// place, its rect walked five times as the docks came back, and nothing
-    /// the engine drew (a cover, STALE-VIEW-1's background, the first frame of
-    /// the new world) could reach a window that is not on screen. The user saw
-    /// the app's watermark. The teardown is identical either way; only the page
-    /// stays.
-    enum class CloseIntent { ToDesktop, ReopenInPlace };
-    void closeProject(CloseIntent intent);
+    /// THE OPEN, THE CREATE AND THE CLOSE (services/projectrunner.h).
+    ProjectRunner *projectRunner() const { return projects; }
     void switchSpace(WindowSpaces space, bool force = false);
     /// ENTERING THE EDITOR PAGE, the whole of it, in one place (VIEW-REBUILD-1).
     ///
@@ -485,59 +468,13 @@ public slots:
     /// defaults — newScene and the create run, one body.
     void resetOverlaysToDefaults();
 
-    /// Creates the world of the project `guid` (a row createProjectShell has
-    /// just made) named `filename` in `projectPath`: closes the world that is
-    /// open — its autosave lands in ITS OWN row — then points the current
-    /// project at `guid` and runs the create.
-    void newProject(const QString &guid, const QString &filename, const QString &projectPath,
-                    SceneTemplate kind = SceneTemplate::Basic);
-    /// THE SAME CREATE, WITHOUT THE DRAIN (OPEN_COVER_SPEC §2 C/§4,
-    /// `project.createAsync`): the slices are queued and this returns at once.
-    /// The caller polls `isOpeningProject()` — one runner serves both routes.
-    void newProjectAsync(const QString &guid, const QString &filename,
-                         const QString &projectPath, SceneTemplate kind = SceneTemplate::Basic);
-    /// The BLOCKING open: returns with the world open, which is the contract
-    /// `project.open()` and every headless script are written against.
-    ///
-    /// Its MODEL PARSES run on a worker while this thread pumps
-    /// (prewarmModelsPumped; OPEN-ASSIMP-1) — measured 1 086 ms of assimp for
-    /// the Matcaps sample, 986 ms for World Background, all of it on the UI
-    /// thread before this — and the install stages then run back to back as
-    /// they always have.
-    void openProject(bool playMode = false);
-    /// The RESPONSIVE open (services/sceneopenrunner.h): the same worker parse,
-    /// and the install run one slice per event-loop turn so the window keeps
-    /// pumping. Returns immediately; the open completes through the event loop.
-    /// What a tile click uses.
+    /// The threaded open (a desktop tile's), through the runner.
     void openProjectAsync(bool playMode = false);
     /// THE DESKTOP PAGE, for the verbs that drive what it owns — today the
     /// sample browser's open (project.openSample). Borrowed, never null in a
     /// windowed session, and owned by this window.
     ProjectManager *projectPage() const { return pmContainer; }
-    /// True while an asynchronous open is in flight.
-    bool isOpeningProject() const;
-    /// THE OPEN'S SLICE-BOUNDARY COUNTERS (lane OPEN-FRAMES-1), reported by
-    /// app.openStats(). `openSliceBoundaries()` is how many times the install
-    /// crossed a slice boundary in this window's life — where the renderer is
-    /// driven so that the open never depends on the app's render tick — and
-    /// `openSliceBoundaryFrames()` how many of those crossings really rendered
-    /// a frame (the rest made the engine's bare resource advance, which is what
-    /// a session with no viewport can do). Monotonic: only differences mean
-    /// anything.
-    unsigned openSliceBoundaries() const;
-    unsigned openSliceBoundaryFrames() const { return openSliceBoundaryFrameCount; }
-    /// Runs an in-flight threaded open TO COMPLETION before the caller does
-    /// anything else, with the event loop pumped (user input excluded).
-    ///
-    /// A verb that is about to close the project and point it at another world
-    /// MUST call this FIRST: the runner's remaining slices read the project at
-    /// SLICE time (readProjectScene asks the Database for
-    /// project->getProjectGuid()'s blob), so an open finished after the
-    /// pointers moved would install a hybrid — the old session's assets, the
-    /// new world's blob, and a prewarm for neither, every mesh of it parsed on
-    /// this thread. Returns true when nothing is (or is still) in flight.
-    bool waitForOpen();
-
+    /// The close a user asked for (the runner drains an open in flight first).
     void closeProject();
 
     /// Takes the editor's panels down for a page that is not the editor.
@@ -650,47 +587,24 @@ private:
     /// The active space's name, as the hub and the action host key it.
     QString currentSpaceId() const { return spaces::id(currentSpace); }
 
-    // ---- the open, in stages (shared by the synchronous and threaded paths) --
-    /// Cover up + tear the previous world down. Always first.
-    /// The sliced CREATE (OPEN_COVER_SPEC §2 C) — the same runner, the same
-    /// stage order. `newProject` is this plus the pumped drain.
-    void startCreateRun(const QString &guid, const QString &filename, const QString &projectPath,
-                        SceneTemplate kind);
-    /// Builds the open/create runner and its slice boundary, once per window.
-    void startOpenRunnerIfNeeded();
-    void openStageBegin();
-    /// Read the document (optionally out of a worker's prewarm), bind it to
-    /// the viewports and the panels that follow the scene. The threaded open
-    /// runs the two halves on separate turns — reading is the biggest slice
-    /// left once the model parses are on the worker.
-    void openStageReadDocument(bool playMode, const iris::MeshPrewarmPtr &prewarm);
-    void openStageRead(const iris::MeshPrewarmPtr &prewarm);
-    void openStageBind(bool playMode);
-
-    iris::ScenePtr openPendingScene;
-    class EditorData *openPendingEditorData = nullptr;
-    /// The asset panel rebuild + undo bookkeeping.
-    void openStagePanels();
-    /// The page switch, the root selection and autoplay. Always last.
-    void openStageReveal(bool playMode);
-
-    /// Plans and STARTS the THREADED open (the worker parse + the install
-    /// slices, one per event-loop turn). openProjectAsync's whole body.
-    void startOpenRun(bool playMode);
-
-    /// Every model file the opening project needs, resolved on the thread that
-    /// owns the database connection. Shared by both open paths.
-    QStringList plannedOpenModelPaths();
-
-    /// The synchronous open's parse: the plan resolved here, the FILES read on
-    /// a worker, this thread pumping (user input excluded) until it is done.
-    /// Never returns null; an empty prewarm simply means nothing to parse.
-    iris::MeshPrewarmPtr prewarmModelsPumped();
-
-    class SceneOpenRunner *openRunner = nullptr;
-    /// See openSliceBoundaryFrames(). Counted here rather than in the runner
-    /// because only the shell knows whether its viewport drew.
-    unsigned openSliceBoundaryFrameCount = 0;
+    // ---- ProjectRunner::Host: the stage bodies only the window can run ----
+    void teardownWorld() override;
+    void bindWorld(const iris::ScenePtr &scene, EditorData *editorData, bool playMode) override;
+    void bindNewWorld(const iris::ScenePtr &scene) override;
+    iris::ScenePtr createWorld(SceneTemplate kind) override;
+    void buildPanels(bool fresh) override;
+    bool revealWorld(bool playMode) override;
+    void prepareClose() override;
+    void closeWorld(bool reopenInPlace) override;
+    QStringList plannedSessionModelPaths() override;
+    QStringList sessionAssetGuids() override;
+    void registerSessionAssets(const iris::MeshPrewarmPtr &prewarm) override;
+    void registerSessionAssetGuids(const QStringList &guids,
+                                   const iris::MeshPrewarmPtr &prewarm) override;
+    void showOpenProgress(int percent, const QString &text) override;
+    void hideOpenProgress() override;
+    void saveOpenWorld() override;
+    ProjectRunner *projects = nullptr;
 
     void applySelectionToUi(iris::SceneNodePtr sceneNode);
     /// The primary this fan-out last applied — for the honest "did the

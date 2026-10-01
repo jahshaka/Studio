@@ -42,48 +42,47 @@ QString ShellView::spaceRefusal() const
 
 void ShellView::openProject(bool playMode)
 {
-    mWindow->openProject(playMode);
+    mWindow->projectRunner()->open(playMode);
 }
 
 void ShellView::openProjectAsync(bool playMode)
 {
-    mWindow->openProjectAsync(playMode);
+    mWindow->projectRunner()->openAsync(playMode);
 }
 
 void ShellView::newProject(const QString &guid, const QString &name, const QString &folder, SceneTemplate kind)
 {
-    mWindow->newProject(guid, name, folder, kind);
+    mWindow->projectRunner()->create(guid, name, folder, kind);
 }
 
 void ShellView::newProjectAsync(const QString &guid, const QString &name, const QString &folder, SceneTemplate kind)
 {
-    mWindow->newProjectAsync(guid, name, folder, kind);
+    mWindow->projectRunner()->createAsync(guid, name, folder, kind);
 }
 
 void ShellView::closeProject(bool reopenInPlace)
 {
-    mWindow->closeProject(reopenInPlace ? MainWindow::CloseIntent::ReopenInPlace
-                                         : MainWindow::CloseIntent::ToDesktop);
+    mWindow->projectRunner()->close(reopenInPlace);
 }
 
 bool ShellView::waitForOpen()
 {
-    return mWindow->waitForOpen();
+    return mWindow->projectRunner()->waitForOpen();
 }
 
 bool ShellView::isOpeningProject() const
 {
-    return mWindow->isOpeningProject();
+    return mWindow->projectRunner()->isOpening();
 }
 
 unsigned ShellView::openSliceBoundaries() const
 {
-    return mWindow->openSliceBoundaries();
+    return mWindow->projectRunner()->sliceBoundaries();
 }
 
 unsigned ShellView::openSliceBoundaryFrames() const
 {
-    return mWindow->openSliceBoundaryFrames();
+    return mWindow->projectRunner()->sliceBoundaryFrames();
 }
 
 bool ShellView::startProjectExport(const QString &guid, const QString &zipPath, QString *why)
