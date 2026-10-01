@@ -88,8 +88,8 @@ function slab(name, pos, scale, color, rough, metal) {
 }
 
 // ONE FLOOR (owner, 2026-09-12): the room stands on the scene's DEFAULT FLOOR
-// — the Ground every new scene is born with (its checker,
-// services/defaultfloor.h) — not on a slab laid over it. Everything that stood
+// — the Floor every new scene is born with (its checker,
+// services/scenetemplatebuilder.h) — not on a slab laid over it. Everything that stood
 // on the slab's top now stands on y = 0.
 var FLOOR_TOP = 0.0;
 var CEIL_BOTTOM = 3.75;    // ceiling slab: centre 4.25, half-height 0.5
@@ -101,8 +101,8 @@ var WALL_HALF = CEIL_BOTTOM / 2;
 // slab's satin finish (roughness 0.55 on the checker); the reflections this
 // sample exists to show belong to the mirror panel, the sphere and the torus,
 // not to the floor. The floor is left as a new scene is born with it
-// (services/defaultfloor.h).
-var ground = scene.find("Ground");
+// (services/scenetemplatebuilder.h).
+var ground = scene.find("Floor");
 assert(ground && node.property(ground, "defaultFloor") === true, "the room stands on the default floor");
 slab("Ceiling",  { x: 0, y: 4.25, z: 0 },           { x: 9, y: 0.5, z: 9 },          "#cccccc");
 slab("RedWall",  { x: 0, y: WALL_HALF, z: 4.75 },   { x: 9, y: WALL_HALF, z: 0.5 },  "#e01010", 0.8);  // THE wall

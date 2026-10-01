@@ -31,6 +31,7 @@ For more information see the LICENSE file
 #include "viewport/ieditorviewport.h"
 #include "services/sceneeditservice.h"
 #include "services/sceneextents.h"
+#include "services/scenetemplate.h"
 #include "services/selectionservice.h"
 #include "services/services.h"
 #include "services/undoservice.h"
@@ -81,10 +82,10 @@ QVector<VerbInfo> SceneApi::verbs() const
           "drills into the part under the cursor.",
           Needs::Document },
         { "addPrimitive", "scene.addPrimitive(name, {position, rotation, scale, parent, count, onSurface}) -> id | [id]",
-          "Adds a built-in primitive: ground, plane, cube, sphere, hemisphere, cylinder, tube, cone, "
-          "pyramid, torus, capsule, wedge, star ('ground' is the large floor plane the Add menu "
-          "offers, and is the one row with no library tile). Gear, Sponge, Steps and the Teapot were "
-          "REMOVED on 2026-09-18 — primitives only — and asking for one of them says so by name. {count: N} adds N of them and returns an ARRAY of ids instead of one id; "
+          "Adds a built-in primitive: plane, cube, sphere, hemisphere, cylinder, tube, cone, "
+          "pyramid, torus, capsule, wedge, star. Gear, Sponge, Steps and the Teapot were "
+          "REMOVED on 2026-09-18 and the Ground on 2026-09-30 (a floor is scene.addFloor) — "
+          "primitives only — and asking for one of them says so by name. {count: N} adds N of them and returns an ARRAY of ids instead of one id; "
           "every copy gets the same position/rotation/scale/parent options, so move them "
           "afterwards with node.transform. `onSurface: true` reads `position` as a SURFACE rather "
           "than a pivot: the primitive is lifted so the bottom of its bounding box rests on that "
@@ -92,6 +93,18 @@ QVector<VerbInfo> SceneApi::verbs() const
           "modelled around its own centre, so a drop that put the pivot on the floor buried half "
           "of it — owner, 2026-09-14); it needs a `position`, and is refused without one, because it says what that position MEANS. Undoable — the whole batch is one step of the run's "
           "undo macro.",
+          Needs::Document },
+        { "addFloor", "scene.addFloor({template, parent, position}) -> id",
+          "Adds a NEW-SCENE TEMPLATE'S FLOOR to the open scene — the very nodes project.create "
+          "stands a new world on (services/scenetemplatebuilder.h): `template` \"basic\" (the "
+          "default) is ONE ordinary cube node named Floor, 100 x 1 x 100 m with its top face at "
+          "y = 0, wearing the default floor material (material.reset brings it back), casting no "
+          "shadow, a static box to physics and LOCKED (not pickable — unlock it in the outliner); \"world\" is the group World Floor holding "
+          "twenty-five of them, 5 x 5 edge to edge (500 m square). The id is the Floor's, or the "
+          "group's. \"empty\" has no floor and is refused. `parent` files it under a node "
+          "(keeping its world pose) and `position` moves it, as every add verb's options do. "
+          "This is how a scene built before the templates — a re-authored sample "
+          "(scenes/tools/reauthor_samples.js) — stands on today's floor. Undoable.",
           Needs::Document },
         { "addLight", "scene.addLight(type, {position, ...}) -> id",
           "Adds a light: point, spot, directional, area or SKY. "
@@ -567,6 +580,39 @@ QVariant SceneApi::addPrimitive(const QString &name, const QVariantMap &options)
         ids.append(id);
     }
     return count > 1 ? QVariant(ids) : QVariant(ids.first().toString());
+}
+
+QString SceneApi::addFloor(const QVariantMap &options)
+{
+    const QString verb = QStringLiteral("scene.addFloor");
+    if (!requireProject()) return QString();   // the floors get DB asset rows
+    if (!sceneOrFail()) return QString();
+
+    QVariantMap rest = options;
+    const QVariant asked = normalizeJs(rest.take(QStringLiteral("template")));
+    SceneTemplate kind = SceneTemplate::Basic;
+    if (asked.isValid() && !asked.isNull()
+        && !scenetemplate::fromName(asked.toString(), &kind)) {
+        fail(QStringLiteral("%1: unknown template '%2' (try: %3)")
+                 .arg(verb, asked.toString(), scenetemplate::names().join(QStringLiteral(", "))));
+        return QString();
+    }
+    if (kind == SceneTemplate::Empty) {
+        fail(QStringLiteral("%1: the Empty template has no floor — ask for \"basic\" or \"world\"")
+                 .arg(verb));
+        return QString();
+    }
+
+    // Not through finishAdd: the floor ships LOCKED, and the selection the
+    // add-funnel reads its result from never holds a locked node.
+    iris::SceneNodePtr floor = host.services->sceneEdit->addFloor(kind);
+    if (!floor) {
+        fail(QStringLiteral("%1: the floor was not created").arg(verb));
+        return QString();
+    }
+    if (!applyOptions(floor, rest, verb)) return QString();
+    if (!rest.isEmpty()) floor->applyStaticDefaults();
+    return floor->getGUID();
 }
 
 QString SceneApi::addLight(const QString &type, const QVariantMap &options)
