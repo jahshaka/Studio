@@ -307,8 +307,24 @@ NIGHTLY_LABEL_RE = "|".join(sorted(re.escape(l) for l in NIGHTLY_LABELS | TARGET
 # (docs/TESTING_GATE.md §1); a lane beside other live lanes asks for -j2 with `-j 2`, and
 # the fallback must honour that as the scoped command does (DEVPROCESS-1 item 2: the
 # fallback used to print and RUN a hardcoded -j4 whatever the caller asked).
+# THE TIMING ROWS ARE THEIR OWN SERIAL PHASE (TEST-SELECTOR-1, the merge read's W1 — the lead's
+# decision): a row that measures takes EVERY VRAM token, and inside a -j4 phase it waited holding
+# the admission's turnstile while its siblings drained (20 timing rows waited 1,104 s in one 69-min
+# gate), stalling every admission on the box. So every tier and every scoped gate runs in two
+# phases: the parallel phase WITHOUT the `timing` rows (label `timing`, appended to every
+# jah_gpu_exclusive_test row), then the timing rows at -j1, the whole GPU theirs.
+TIMING_LABEL = "timing"
+
+
 def merge_tier(jobs=4):
+    """The MERGE tier's PARALLEL phase (its second phase is merge_tier_serial())."""
     return (f'ctest -j{jobs} --timeout 120 --output-on-failure '
+            f'-LE "^({NIGHTLY_LABEL_RE}|{TIMING_LABEL})$"')
+
+
+def merge_tier_serial():
+    """The MERGE tier's SERIAL phase: its timing rows, one at a time, after the parallel phase."""
+    return (f'ctest -j1 --timeout 120 --output-on-failure -L "^{TIMING_LABEL}$" '
             f'-LE "^({NIGHTLY_LABEL_RE})$"')
 
 
@@ -1827,11 +1843,17 @@ def joint(range_a, range_b, build, jobs):
     own = lambda S: {n for n in S.owned if n in S.selected}
     both = sorted((own(A) & sb) | (own(B) & sa))
     union = sorted(sa | sb)
+    ser = [n for n in union if TIMING_LABEL in inv0[n]["labels"]]
+    par = [n for n in union if n not in ser]
     out = {"ranges": [range_a, range_b], "shared_paths": shared_paths, "joint": both,
            "union": union, "whole_tier": whole,
            "command": merge_tier(jobs) if whole else
            ("ctest -j%d --timeout 120 --output-on-failure --no-tests=error -R '^(%s)$'"
-            % (jobs, "|".join(re.escape(n) for n in union)) if union else "")}
+            % (jobs, "|".join(re.escape(n) for n in par)) if par else ""),
+           # the timing rows of the union: their own serial phase after it (W1)
+           "serial_command": merge_tier_serial() if whole else
+           ("ctest -j1 --timeout 120 --output-on-failure --no-tests=error -R '^(%s)$'"
+            % "|".join(re.escape(n) for n in ser) if ser else "")}
     return out
 
 
@@ -1863,6 +1885,9 @@ def main():
     ap.add_argument("--fork-tier", action="store_true",
                     help="a range that moves the fork pin: run the MERGE tier (logged as tier `fork`) — §7b rule 4's "
                          "one full tier per bump, at the merge into d-build; ci_gate_check requires it")
+    ap.add_argument("--merge-tier-serial", action="store_true",
+                    help="print the MERGE tier's SERIAL phase (its timing rows at -j1, run after --merge-tier's "
+                         "parallel phase) and exit")
     ap.add_argument("--nightly-tier", action="store_true",
                     help="print the NIGHTLY tier's ctest command (every `nightly` row, -j1) and exit")
     a = ap.parse_args()
@@ -1870,6 +1895,8 @@ def main():
         record_times(); return
     if a.merge_tier:
         print(merge_tier(a.jobs)); return
+    if a.merge_tier_serial:
+        print(merge_tier_serial()); return
     if a.nightly_tier:
         print(nightly_tier()); return
     build = resolve_build(a.build)
@@ -1894,12 +1921,15 @@ def main():
         for n in J["joint"]: print(f"  {n}")
         print(f"\nthe merge gate = the UNION of both selections: "
               + ("the MERGE tier (one side selects it)" if J["whole_tier"] else f"{len(J['union'])} row(s)"))
-        print(f"\n{J['command']}")
-        if a.run and J["command"]:
+        print(f"\n{J['command']}\n{J['serial_command']}")
+        if a.run and (J["command"] or J["serial_command"]):
             lane = a.lane or "joint"
-            sys.exit(gate_runlog.run_ctest(J["command"], build, a.tier or "joint", lane, a.jobs,
-                                           reasons={n: ("joint: both" if n in J["joint"] else "joint: union")
-                                                    for n in J["union"]}))
+            why = {n: ("joint: both" if n in J["joint"] else "joint: union") for n in J["union"]}
+            rc = gate_runlog.run_ctest(J["command"], build, a.tier or "joint", lane, a.jobs,
+                                       reasons=why) if J["command"] else 0
+            if J["serial_command"]:
+                rc = gate_runlog.run_ctest(J["serial_command"], build, a.tier or "joint", lane, 1, reasons=why) or rc
+            sys.exit(rc)
         return
     lane = a.lane or gate_runlog._git(["rev-parse", "--abbrev-ref", "HEAD"])
     # the run log records the range by sha (HEAD moves; the record must not)
@@ -1972,8 +2002,11 @@ def main():
             return 10.0 + sum(costs.get(f"{n}::{arm}", 10.0) for arm in subsets[n])
         return costs.get(n, 10.0)
     est = sum(cost(n) for n in names)
-    serial = sum(cost(n) for n in names if inv[n]["serial"])
-    wall = max(est / float(a.jobs), serial) + 5
+    timing = [n for n in names if TIMING_LABEL in inv[n]["labels"]]
+    par_names = [n for n in names if n not in timing]
+    serial = sum(cost(n) for n in par_names if inv[n]["serial"])
+    timing_s = sum(cost(n) for n in timing)
+    wall = max((est - timing_s) / float(a.jobs), serial) + timing_s + 5
     tier_rows = [n for n, t in inv.items() if not (t["labels"] & (NIGHTLY_LABELS | TARGET_LABELS))]
     tier_est = sum(costs.get(n, 10.0) for n in tier_rows)
 
@@ -1982,9 +2015,10 @@ def main():
         return f"ctest -j{jobs} --timeout 120 --output-on-failure --no-tests=error -R '{rx}'"
 
     whole_tier = bool(S.fallback or S.full_tier)
-    cmd = ctest_for(names, a.jobs) if names else ""
+    cmd = ctest_for(par_names, a.jobs) if par_names else ""
     if cmd and pool_env:
         cmd = f"JAH_POOL_ARMS='{pool_env}' {cmd}"
+    timing_cmd = ctest_for(timing, 1) if timing else ""      # the serial phase (W1)
     target_cmd = ctest_for(targets, 1) if targets else ""
 
     if a.json:
@@ -1998,34 +2032,40 @@ def main():
                           "estimated_seconds": est, "estimated_wall": wall,
                           "tier_rows": len(tier_rows), "tier_estimated_seconds": tier_est,
                           "command": merge_tier(a.jobs) if whole_tier else cmd,
+                          "serial_command": merge_tier_serial() if whole_tier else timing_cmd,
                           "target_command": target_cmd}, indent=1))
         return
     print(f"gate-scope: {len(paths)} touched path(s)"
           + ("" if S.graph else "   [NO BUILD GRAPH: compiled rows by directory rules]"))
     for p, why in S.rationale: print(f"  {p}\n      -> {why}")
 
+    def run_both(tier_name):
+        """The MERGE tier, both phases (parallel, then the timing rows serial); the worse exit code."""
+        labels = {n: t["labels"] for n, t in inv.items()}
+        r1 = gate_runlog.run_ctest(merge_tier(a.jobs), build, tier_name, lane, a.jobs, reasons={}, rng=log_range,
+                                   labels=labels)
+        print("\n=== the timing phase (serial, after the parallel phase) ===")
+        r2 = gate_runlog.run_ctest(merge_tier_serial(), build, tier_name, lane, 1, reasons={}, rng=log_range,
+                                   labels=labels)
+        return r1 or r2
+
     def run_tier(reason):
-        tier = merge_tier(a.jobs)
-        print(f"\n{tier}")
+        print(f"\n{merge_tier(a.jobs)}\n{merge_tier_serial()}")
         if a.run:
             # a SCOPED gate that ran the whole tier is logged as such — "scoped-fallback" (no rule,
             # no symbol, no graph owner) or "scoped-tier" (the tier by rule: a root setting, an unreadable
             # fork diff) — so the
             # run log tells it from the lead's MERGE tier runs
-            sys.exit(gate_runlog.run_ctest(tier, build, a.tier or ("scoped-fallback" if reason == "fallback"
-                                                                   else "scoped-tier"), lane, a.jobs,
-                                           reasons={}, rng=log_range, labels={n: t["labels"] for n, t in inv.items()}))
+            sys.exit(run_both(a.tier or ("scoped-fallback" if reason == "fallback" else "scoped-tier")))
     if S.fork_bump:
         fb = S.fork_bump
         print(f"\nTHE FORK PIN MOVED ({(fb['old'] or '?')[:9]} -> {(fb['new'] or '?')[:9]}): this gate selects by the "
               f"fork diff's reach;\n  §7b rule 4's full tier runs ONCE per bump, at the merge into d-build:\n"
               f"  scripts/gate-scope.sh {a.range} --run --fork-tier   (ci_gate_check refuses the merge without it)")
         if a.fork_tier:
-            tier = merge_tier(a.jobs)
-            print(f"\n{tier}")
+            print(f"\n{merge_tier(a.jobs)}\n{merge_tier_serial()}")
             if a.run:
-                sys.exit(gate_runlog.run_ctest(tier, build, a.tier or "fork", lane, a.jobs, reasons={}, rng=log_range,
-                                               labels={n: t["labels"] for n, t in inv.items()}))
+                sys.exit(run_both(a.tier or "fork"))
             return
     elif a.fork_tier:
         sys.stderr.write("gate-scope: --fork-tier on a range that does not move the fork pin — nothing to do\n")
@@ -2066,6 +2106,7 @@ def main():
             for arm in subsets.get(n, []):
                 print(f"           arm {inv[n]['pool']}.{arm}   <- {S.arms[n][arm]}")
         print(f"\n{cmd}")
+        if timing_cmd: print(f"{timing_cmd}    # the timing rows, serial, after it ({len(timing)}, ~{timing_s:.0f} s)")
     else:
         print("\nSCOPED tier: every selected suite is a TARGET test — this change gates on nothing "
               "of its own, and the targets below still run and report.")
@@ -2078,6 +2119,10 @@ def main():
         env = dict(os.environ, JAH_POOL_ARMS=pool_env) if pool_env else None
         rc = gate_runlog.run_ctest(cmd.split(" ", 1)[1] if pool_env else cmd, build, a.tier or "scoped", lane,
                                    a.jobs, reasons=reasons, rng=log_range, labels=labels, env=env) if cmd else 0
+        if timing_cmd:
+            print("\n=== the timing phase: %d row(s), serial, the GPU theirs ===" % len(timing))
+            rc = gate_runlog.run_ctest(timing_cmd, build, a.tier or "scoped", lane, 1, reasons=reasons,
+                                       rng=log_range, labels=labels) or rc
         if target_cmd:
             # THE TARGETS' RUN IS A REPORT. Its exit code is printed and thrown away.
             print("\n=== target tests (label %s): reported, not gating ==="

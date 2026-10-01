@@ -338,6 +338,19 @@ function(_jah_vram_widen_timeout _row)
     math(EXPR _t "${_t} + ${JAH_VRAM_WAIT_S}")
     set_tests_properties(${_row} PROPERTIES TIMEOUT ${_t})
 endfunction()
+# THE TIMING PHASE (TEST-SELECTOR-1, W1): every timing row carries the label `timing`, appended at
+# the end of its directory (after the site's own set_tests_properties(... LABELS ...), which
+# replaces the list) — the gates run these rows as their own serial phase after the parallel one
+# (scripts/gate-scope.py merge_tier_serial / the scoped gate's second phase).
+function(_jah_timing_label _row)
+    get_test_property(${_row} LABELS _l)
+    if(NOT _l)
+        set(_l "")
+    endif()
+    list(APPEND _l timing)
+    list(REMOVE_DUPLICATES _l)
+    set_tests_properties(${_row} PROPERTIES LABELS "${_l}")
+endfunction()
 function(_jah_vram_register _row _class _k)
     set_property(GLOBAL APPEND PROPERTY JAH_GPU_ROWS "${_row}|${_class}|${_k}")
     cmake_language(EVAL CODE "cmake_language(DEFER CALL _jah_vram_widen_timeout [[${_row}]])")
@@ -422,6 +435,7 @@ function(jah_gpu_exclusive_test)
     set_property(TEST ${G_NAME} APPEND PROPERTY RESOURCE_LOCK gpu_timing)
     set_property(GLOBAL APPEND PROPERTY JAH_GPU_EXCLUSIVE_REGISTERED ${G_NAME})
     _jah_vram_register(${G_NAME} ${G_CLASS} all)
+    cmake_language(EVAL CODE "cmake_language(DEFER CALL _jah_timing_label [[${G_NAME}]])")
 endfunction()
 
 # THE SERIAL FAMILIES (lane D6B-GATE-SHAPE; SPECS/audits/GATE_SUITES_AUDIT_2026-09-26.md §4

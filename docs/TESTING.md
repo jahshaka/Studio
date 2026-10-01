@@ -23,8 +23,10 @@ DISPLAY=:NN ctest -R '^scripting\.e2e\.mobility$' --output-on-failure
 DISPLAY=:NN ctest -R '^pool\.gi_verbs$' --output-on-failure
 JAH_POOL_ARMS=gi_verbs.gi_status DISPLAY=:NN ctest -R '^pool\.gi_verbs$' --output-on-failure
 
-# the MERGE tier (the full run) — the command is printed by the script, never typed by hand
+# the MERGE tier (the full run) — the commands are printed by the script, never typed by hand:
+# the parallel phase, then the timing rows serially
 python3 scripts/gate-scope.py --merge-tier
+python3 scripts/gate-scope.py --merge-tier-serial
 ```
 
 **The tiers and when each runs** (the contract is `TESTING_GATE.md` §1):
