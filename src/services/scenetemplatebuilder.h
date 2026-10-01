@@ -27,6 +27,13 @@ class Project;
 
 namespace scenetemplate {
 
+/// The template's FLOOR alone: Basic's one "Floor" cube, or World's "World
+/// Floor" group of 25; null for Empty. The same nodes `build` stands a new
+/// scene on — and what scene.addFloor adds to an open one (the shipped samples
+/// are re-authored onto it, SAMPLES-1). With a real project the tile is pinned
+/// and each floor's Object row + tile dependency is written, as `build` does.
+iris::SceneNodePtr buildFloor(SceneTemplate kind, Database *db, Project *project);
+
 /// The template's document. With a real project (a guid), the floors' Object
 /// rows and their tile dependency are written to `db` as addPrimitive writes
 /// them for any cube.

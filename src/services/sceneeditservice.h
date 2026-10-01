@@ -40,6 +40,7 @@ For more information see the LICENSE file
 #include "data/project.h"   // ModelTypes
 #include "io/sceneformat.h"
 #include "services/bundlewriter.h"   // assetshare::BundleStage
+#include "services/scenetemplate.h"
 #include "services/surfaceplacement.h"
 
 #include <functional>
@@ -125,6 +126,14 @@ public:
     void addPrimitive(const QString &name,
                       const std::optional<iris::Vec3> &position = std::nullopt,
                       surfaceplacement::Placement placement = surfaceplacement::Placement::Pivot);
+
+    /// THE TEMPLATE FLOOR, added to the open scene (SAMPLES-1): exactly the
+    /// floor a new scene of `kind` stands on (scenetemplate::buildFloor —
+    /// Basic's locked 100 x 1 x 100 m "Floor" cube, or World's 5 x 5 "World
+    /// Floor" group), its tile pinned and its Object rows written. Added at
+    /// the root, where the template puts it, and undoable through
+    /// addNodeToScene. Null for Empty or with no scene/project.
+    iris::SceneNodePtr addFloor(SceneTemplate kind);
 
     void addPointLight();
     void addSpotLight();

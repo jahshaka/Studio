@@ -382,6 +382,100 @@ assert(orphan.indexOf(outerFolder) >= 0,
 assert(!project.current() || project.current().guid !== inner,
        "...and the refusal did not point the session at it");
 
+// ---- 4e. scene.addFloor: THE TEMPLATE'S FLOOR, IN A SCENE THAT HAS NONE --------
+// (SAMPLES-1) The very nodes the templates stand on, added to an open scene by
+// one verb — how the shipped samples, built before the templates, are
+// re-authored onto today's floor (scenes/tools/reauthor_samples.js). ONE
+// builder (scenetemplate::buildFloor), so the two can never drift: the Floor
+// added here must be the Basic template's Floor in every property.
+var ap = project.create("New Scene AddFloor " + Date.now(), { template: "empty" });
+assert(ap.length > 10 && scene.nodes().length === 1, "an Empty project to add a floor to");
+var holder = scene.addEmpty({ position: { x: 0, y: 0, z: 0 } });
+node.rename(holder, "World");
+var af = scene.addFloor({ parent: holder });
+assert(typeof af === "string" && af.length > 10, "scene.addFloor() -> an id (" + af + ")");
+var afInfo = node.info(af);
+assert(afInfo.name === "Floor" && afInfo.type === "mesh" && afInfo.parent === holder,
+       "...the node is 'Floor', a mesh, filed under the parent it was given (" + J(afInfo) + ")");
+assert(node.property(af, "meshPath") === ":/content/primitives/cube.obj" &&
+       node.property(af, "defaultFloor") === true && node.property(af, "pickable") === false,
+       "...the baked cube primitive, the DEFAULT FLOOR, shipped LOCKED");
+var afb = scene.bounds({ nodes: [af] });
+assert(near(afb.size.x, 100, 0.01) && near(afb.size.y, 1, 0.01) && near(afb.size.z, 100, 0.01) &&
+       near(afb.max.y, 0, 1e-3) && near(afb.center.x, 0, 1e-3) && near(afb.center.z, 0, 1e-3),
+       "...100 x 1 x 100 m, top face at y = 0, centred on the origin (" + J(afb) + ")");
+var afm = material.get(af);
+assert(afm.textureScale === 25 && afm.roughness === 1 && afm.metallic === 0 &&
+       String(afm.baseColorMap).length > 0,
+       "...wearing the default floor material: the pinned checker at 25, roughness 1, metallic 0");
+assert(node.castShadow(af) === false, "...casting no shadow");
+var afp = node.physicsInfo(af);
+assert(afp.enabled === true && afp.type === "static" && afp.shape === "cube",
+       "...a static box to physics (" + J(afp) + ")");
+assert(assets.list({ scope: "project", type: "texture", query: "Tile.png" }).length === 1,
+       "...its checker pinned into the project (one Tile.png row)");
+assert(material.set(af, { roughness: 0.4 }) === true && material.reset(af) === true &&
+       material.get(af).roughness === 1,
+       "material.reset brings the floor's own default back (it is THE default floor)");
+assert(node.remove(af) === true && !node.info(af), "the floor deletes like any node");
+var aw = scene.addFloor({ template: "world" });
+var awTiles = scene.nodes().filter(function (r) { return r.type === "mesh" && /^Floor \d+$/.test(r.name); });
+assert(node.info(aw).name === "World Floor" && awTiles.length === 25 &&
+       awTiles.every(function (r) { return node.info(r.id).parent === aw; }),
+       "scene.addFloor({template: \"world\"}) -> the 'World Floor' group of 25 floors");
+var awb = scene.bounds({ nodes: [aw] });
+assert(near(awb.size.x, 500, 0.05) && near(awb.size.z, 500, 0.05) && near(awb.max.y, 0, 1e-3),
+       "...500 x 500 m, top at y = 0 (" + J(awb.size) + ")");
+function addFloorRefused(opts, expect, what) {
+    var threw = null;
+    try { scene.addFloor(opts); } catch (e) { threw = String(e); }
+    assert(threw !== null && threw.indexOf(expect) >= 0, what + " is refused by name (" + threw + ")");
+}
+addFloorRefused({ template: "empty" }, "has no floor", "scene.addFloor({template: \"empty\"})");
+addFloorRefused({ template: "terrain" }, "unknown template 'terrain'", "an unknown template");
+// A REFUSED CALL LEAVES THE SCENE UNTOUCHED: the options are judged before the
+// floor exists (it used to be added and THEN refused for its parent).
+var countBefore = scene.nodes().length;
+addFloorRefused({ parent: "no-such-node" }, "no node with id 'no-such-node'", "a parent that does not exist");
+addFloorRefused({ onSurface: true }, "onSurface needs a position", "onSurface without a position");
+assert(scene.nodes().length === countBefore,
+       "...and neither refusal left a floor behind (" + countBefore + " -> " + scene.nodes().length + " nodes)");
+
+// A SECOND BASIC FLOOR IN A SCENE THAT HAS ONE IS ADDED, not refused: it is an
+// ordinary cube node like any other add, which is how a floor is EXTENDED (a
+// position puts it edge to edge — the World template is 25 of them). Each is a
+// default floor of its own (material.reset gives it the floor material), and
+// it is named "Floor" like the first — an add names a node by what it is and
+// does not de-duplicate (scene.addPrimitive("cube") twice is two "Cube"s); ids
+// are the identity, and node.rename is where the sibling-unique rule lives.
+var bp = project.create("New Scene AddFloor Twice " + Date.now(), { template: "basic" });
+assert(bp.length > 10, "a Basic project, which already stands on its Floor");
+function floorsNow() {
+    return scene.nodes().filter(function (r) {
+        return r.type === "mesh" && node.property(r.id, "defaultFloor") === true;
+    });
+}
+assert(floorsNow().length === 1, "...one default floor to begin with");
+// `position` is the node's PIVOT, as for every add verb, and the floor's pivot
+// is the cube's centre half a metre below the top: an axis left out keeps the
+// template's value, so {x: 100} slides it along and its top stays at y = 0.
+var second = scene.addFloor({ position: { x: 100 } });
+var both = floorsNow();
+assert(both.length === 2 && both.some(function (r) { return r.id === second; }),
+       "a second scene.addFloor() adds a SECOND default floor (" + J(both.map(function (r) { return r.name; })) + ")");
+assert(both[0].id !== both[1].id && both[0].name === "Floor" && both[1].name === "Floor",
+       "...a node of its own, named 'Floor' like the first (" + both[0].name + ", " + both[1].name + ")");
+var sb = scene.bounds({ nodes: [second] });
+assert(near(sb.min.x, 50, 0.01) && near(sb.max.x, 150, 0.01) && near(sb.max.y, 0, 1e-3),
+       "...placed by its position: edge to edge with the first, top at y = 0 (" + J(sb) + ")");
+// UNDO of scene.addFloor (one step that removes the floor) is proved across two
+// closed run_script macros in mcp.e2e: a --script run is ONE open macro, so
+// editor.undo() cannot reach it from here. What this run can see is the step.
+var pushesBefore = editor.undoState().pushes;
+var third = scene.addFloor();
+assert(editor.undoState().pushes > pushesBefore, "scene.addFloor RECORDS an undo step");
+assert(node.remove(third) === true, "(the third floor removed again)");
+
 // ---- 5. the refusals --------------------------------------------------------
 // A world open again first: §4d's refusal deliberately left the session with
 // none, and "a refused create leaves the project that was open exactly where it

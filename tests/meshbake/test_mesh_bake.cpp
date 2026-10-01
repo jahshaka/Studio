@@ -1110,7 +1110,7 @@ const CardSubject kCardSubjects[] = {
     // REGRESSION guard on that number, not an endorsement of it.
     { "app/content/primitives/star.obj",         0.80f,
       "self-occluding: axis-aligned cards cannot see inside its own arms" },
-    { "app/models/ground.obj",                   0.90f, nullptr },
+    { "tests/meshbake/fixtures/flat_grid_100m.obj",                   0.90f, nullptr },
     { "app/content/primitives/endlessplane.obj", 0.90f, nullptr },
     { "app/content/primitives/hp_sphere.obj",    0.90f, nullptr },
     { "app/content/primitives/teapot.obj",       0.90f, nullptr },
@@ -1453,7 +1453,7 @@ static void surfaceCards()
 // exact term by the sampling margin) the check reproduces the stored number and reads
 // 1.0000; where the sampled term carries it, the ratio is the dense samples against
 // 1.25x the bake's (0.80-0.90 on the shipped meshes), which is the margin being judged.
-// `ground.obj` reads ~0.20 because its bound is the precision floor. The physics bar —
+// `flat_grid_100m.obj` (the old 100 m ground plane, kept here as a test subject) reads ~0.20 because its bound is the precision floor. The physics bar —
 // bound >= the dense reference AND <= 2x the simplifier's error — is
 // atom.lod_bound_bar; `test_mesh_bake --bound-terms <file>` prints a chain's terms.
 //
@@ -1477,7 +1477,7 @@ static void errorBound()
         { QStringLiteral("app/content/primitives/teapot.obj") },
         { QStringLiteral("app/content/primitives/tube.obj") },
         { QStringLiteral("app/content/primitives/endlessplane.obj") },
-        { QStringLiteral("app/models/ground.obj") },
+        { QStringLiteral("tests/meshbake/fixtures/flat_grid_100m.obj") },
         { QStringLiteral("app/models/axis_sphere.obj") },
         { QStringLiteral("tests/importer/fixtures/scaled_two_meshes.glb") },
     };
@@ -1946,8 +1946,8 @@ static void windingAgreesWithNormals()
         const QString name = QString::fromLatin1(def.name);
         // The seed key is a Qt RESOURCE and this binary links no .qrc, so the
         // same file is read from the source tree: ":/content/primitives/x.obj"
-        // ships as "app/content/primitives/x.obj" and ":/models/ground.obj" as
-        // "app/models/ground.obj" — one mapping, the one the app folder IS.
+        // ships as "app/content/primitives/x.obj" — one mapping, the one the
+        // app folder IS.
         const QString seed = QString::fromLatin1(def.mesh);
         const QString path = seed.startsWith(QLatin1Char(':'))
                                  ? fixture(QStringLiteral("app") + seed.mid(1))
@@ -2485,7 +2485,7 @@ static void boundBar()
         { fixture(QStringLiteral("app/content/primitives/teapot.obj")), false },
         { fixture(QStringLiteral("app/content/primitives/tube.obj")), false },
         { fixture(QStringLiteral("app/content/primitives/endlessplane.obj")), false },
-        { fixture(QStringLiteral("app/models/ground.obj")), false },
+        { fixture(QStringLiteral("tests/meshbake/fixtures/flat_grid_100m.obj")), false },
         { fixture(QStringLiteral("app/models/axis_sphere.obj")), false },
         { QStringLiteral(JAH_CLUSTER_FIXTURE_DIR "/matcaps_dragon.obj"), false },
         { standinPath, true },
@@ -2568,7 +2568,7 @@ static void dagBoundBar(bool target)
         fixture(QStringLiteral("app/content/primitives/teapot.obj")),
         fixture(QStringLiteral("app/content/primitives/tube.obj")),
         fixture(QStringLiteral("app/content/primitives/endlessplane.obj")),
-        fixture(QStringLiteral("app/models/ground.obj")),
+        fixture(QStringLiteral("tests/meshbake/fixtures/flat_grid_100m.obj")),
         fixture(QStringLiteral("app/models/axis_sphere.obj")),
         QStringLiteral(JAH_CLUSTER_FIXTURE_DIR "/matcaps_dragon.obj"),
         standinPath,

@@ -31,24 +31,9 @@ For more information see the LICENSE file
 
 namespace scenetemplate {
 
-iris::ScenePtr build(SceneTemplate kind, Database *db, Project *project)
+iris::SceneNodePtr buildFloor(SceneTemplate kind, Database *db, Project *project)
 {
-    auto scene = iris::Scene::create();
-    // New scenes start on EPIC (POST_CHAIN_SPEC.md §12 decision 8, owner call).
-    // Applied through the registry rather than by hardcoding the values here, so
-    // the tier table stays the single place any of them is written. Every
-    // template, Empty included.
-    worldmodes::setMode(scene, worldmodes::Mode::Epic);
-
-    // EMPTY IS NOTHING (WORLD-MODEL-1, services/scenetemplate.h): the root, the
-    // tier, no lights, no floor and NO SKY — SkyType::NONE (SKY-ATMOSPHERE-1):
-    // a black background, nothing captured, no light, no reflection, no ambient
-    // from a sky. It stops here, before anything is added: a user who asks for
-    // empty gets a document a script would have built.
-    if (kind == SceneTemplate::Empty) {
-        scene->skyType = iris::SkyType::NONE;
-        return scene;
-    }
+    if (kind == SceneTemplate::Empty) return iris::SceneNodePtr();
 
     // THE FLOOR (WORLD-MODEL-1): an ORDINARY cube, exactly what the Add menu
     // makes (the shipped, baked cube primitive — so it has its LOD chain, its
@@ -116,7 +101,6 @@ iris::ScenePtr build(SceneTemplate kind, Database *db, Project *project)
         auto group = iris::SceneNode::create();
         group->setName(QStringLiteral("World Floor"));
         group->setPickable(false);         // locked like the floors it holds
-        scene->rootNode->addChild(group);
         const int n = scenetemplate::kWorldTilesPerSide;
         const float s = scenetemplate::kFloorSize;
         int index = 0;
@@ -127,9 +111,32 @@ iris::ScenePtr build(SceneTemplate kind, Database *db, Project *project)
                 group->addChild(makeFloor(QStringLiteral("Floor %1").arg(++index), centre));
             }
         }
-    } else {
-        scene->rootNode->addChild(makeFloor(QStringLiteral("Floor"), iris::Vec3(0, 0, 0)));
+        return group;
     }
+    return makeFloor(QStringLiteral("Floor"), iris::Vec3(0, 0, 0));
+}
+
+iris::ScenePtr build(SceneTemplate kind, Database *db, Project *project)
+{
+    auto scene = iris::Scene::create();
+    // New scenes start on EPIC (POST_CHAIN_SPEC.md §12 decision 8, owner call).
+    // Applied through the registry rather than by hardcoding the values here, so
+    // the tier table stays the single place any of them is written. Every
+    // template, Empty included.
+    worldmodes::setMode(scene, worldmodes::Mode::Epic);
+
+    // EMPTY IS NOTHING (WORLD-MODEL-1, services/scenetemplate.h): the root, the
+    // tier, no lights, no floor and NO SKY — SkyType::NONE (SKY-ATMOSPHERE-1):
+    // a black background, nothing captured, no light, no reflection, no ambient
+    // from a sky. It stops here, before anything is added: a user who asks for
+    // empty gets a document a script would have built.
+    if (kind == SceneTemplate::Empty) {
+        scene->skyType = iris::SkyType::NONE;
+        return scene;
+    }
+
+    // THE FLOOR (buildFloor above) — one "Floor", or World's 5 x 5 group.
+    scene->rootNode->addChild(buildFloor(kind, db, project));
 
     auto dlight = iris::LightNode::create();
     dlight->setLightType(iris::LightType::Directional);

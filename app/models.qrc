@@ -26,7 +26,6 @@
         <file>content/primitives/tube.obj</file>
         <file>content/primitives/wedge.obj</file>
         <file>content/primitives/star.obj</file>
-        <file>models/ground.obj</file>
         <file>content/vr/meta-quest-touch-pro/left.obj</file>
         <file>content/vr/meta-quest-touch-pro/right.obj</file>
     </qresource>
