@@ -1377,6 +1377,13 @@ class Selection:
                     notes.append(f"{name}() at line {first} registers {len(bt)} row(s) (ctest backtrace)")
                     resolved_new.add(key)
                     continue
+            if name in ("endfunction", "endmacro"):
+                # a function's closing line is the function: the nearest function/macro header above it
+                hdr = [c for c in parsed if c[0] in ("function", "macro") and c[1] < first]
+                if hdr and hdr[-1][3].split():
+                    fname = hdr[-1][3].split()[0].lower()
+                    if self.cmake_command(p, d, name, args, fname, changed_text, whole, tag, notes):
+                        continue
             if blk is not None and name in _BLOCK_LINES:
                 # THE BLOCK'S BODY (T3): an if() whose condition changed, or an endif() a deletion
                 # took with it, reaches what the commands inside it reach — resolved one by one
@@ -1591,6 +1598,11 @@ class Selection:
         helper = fn if fn else (args.split()[0].lower() if name in ("function", "macro") and args.split() else None)
         if helper:
             via = [n for n, t in self.inv.items() if helper in t["via"]]
+            if not via:
+                # A HELPER RUN THROUGH `cmake_language(DEFER CALL <helper> …)` (a deferred label or
+                # timeout on a row): its rows are those of the function that defers it
+                for outer in self.deferring_functions(helper):
+                    via += [n for n, t in self.inv.items() if outer in t["via"]]
             if via:
                 self.add(via, f"{tag}: inside {helper}()"); notes.append(f"{helper}(): {len(via)} row(s)")
             calls = self.cmake_calls(helper)
@@ -1702,6 +1714,17 @@ class Selection:
                 self.exes_under(under, tag)
             notes.append(f"{name}() at directory scope of {under}"); got = True
         return got
+
+    def deferring_functions(self, helper):
+        """The functions whose bodies run `DEFER CALL <helper>` (in any build file of the tree)."""
+        self.cmake_calls(helper)            # fills _cmake_texts
+        out = set()
+        for t in self._cmake_texts:
+            if "CALL " + helper not in t and "CALL\t" + helper not in t: continue
+            for c in gate_graph.cmake_commands(t):
+                if c[4] and re.search(r"DEFER\s+CALL\s+" + re.escape(helper) + r"\b", c[3], re.I):
+                    out.add(c[4])
+        return out
 
     def cmake_calls(self, fn):
         """The first arguments of every call of a CMake helper across the tree's build files."""
