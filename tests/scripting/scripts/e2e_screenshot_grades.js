@@ -69,6 +69,27 @@ function maxDelta(a, b) {
     return m;
 }
 function J(v) { return JSON.stringify(v); }
+// THE SAME PICTURE IN TWO SPACES (SRGB-ENCODE-1): the plain grade is linear
+// radiance, every other grade is display-encoded. `scene` of a world with HDR off
+// is the plain picture THROUGH THE ENCODE, so its probes are read back as LIGHT
+// (`light`, the block decoded pixel by pixel before the mean — a mean of encoded
+// bytes across an edge is not the encode of the mean light) and compared with the
+// old one-code bar plus half of one display code's width in linear light at that
+// level (the encode's own quantum) — the bar mapped, not widened.
+function srgbDecode(c) {
+    var v = Math.max(0, Math.min(255, c)) / 255;
+    return 255 * (v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4));
+}
+function decodedExcess(linear, display) {
+    var worst = -1e9;
+    for (var i = 0; i < linear.probes.length; ++i)
+        ["r", "g", "b"].forEach(function (k) {
+            var d = display.probes[i][k];
+            var quantum = 0.5 * (srgbDecode(d + 0.5) - srgbDecode(d - 0.5));
+            worst = Math.max(worst, Math.abs(linear.probes[i][k] - display.probes[i].light[k]) - (1 + quantum));
+        });
+    return worst;
+}
 
 // The viewport's automatic exposure is a temporal filter that converges at 75%
 // per second; the frames are the document's own 1/60 s grid, so this is a
@@ -231,9 +252,9 @@ var plainNoHdr = shoot("plain");
 var sceneNoHdr = shoot("scene");
 console.log("   HDR off: plain mean " + mean(plainNoHdr).toFixed(1) +
             ", scene mean " + mean(sceneNoHdr).toFixed(1));
-assert(maxDelta(plainNoHdr, sceneNoHdr) <= 1,
-       "HDR off: the shot is UNGRADED, like the viewport (max channel delta " +
-       maxDelta(plainNoHdr, sceneNoHdr) + ")");
+assert(decodedExcess(plainNoHdr, sceneNoHdr) <= 0,
+       "HDR off: the shot is UNGRADED, like the viewport — the plain picture through the display " +
+       "encode (worst excess over the mapped one-code bar " + decodedExcess(plainNoHdr, sceneNoHdr).toFixed(2) + ")");
 
 // ...and with HDR back on the same two pictures must SEPARATE, or the
 // assertion above would be passing for the wrong reason. At the world's own

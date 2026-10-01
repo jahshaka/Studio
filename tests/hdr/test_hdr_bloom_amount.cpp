@@ -159,9 +159,9 @@ double haloExcess(const std::vector<int> &frame, const std::vector<int> &off)
 ///
 /// The shader (Samples/Media/.../FinalToneMapping_ps.glsl) computes
 ///
-///     out = ( Filmic(x) / Filmic(W) - 0.5 ) * 1.25 + 0.5 + 0.11
+///     out = sRGB_OETF( ( Filmic(x) / Filmic(W) - 0.5 ) * 1.25 + 0.5 + 0.11 )
 ///
-/// and writes it as an 8-bit code. In the HALO of this fixture the scene's own
+/// (the encode since SRGB-ENCODE-1) and writes it as an 8-bit code. In the HALO of this fixture the scene's own
 /// contribution is exactly zero — black clear, black albedo, no ambient, no
 /// light — so `x` IS the bloom term, `16 * fromSRGB(ladder) * amount`, and
 /// nothing else. Inverting the curve therefore recovers the light the bloom put
@@ -187,7 +187,10 @@ double filmic(double x)
 }
 double toneCurve(double x)          // the shader's output value, before the 8-bit write
 {
-    return (filmic(x) / filmic(kW) - 0.5) * 1.25 + 0.5 + 0.11;
+    double v = (filmic(x) / filmic(kW) - 0.5) * 1.25 + 0.5 + 0.11;
+    // ...through the display encode (SRGB-ENCODE-1), after the grade tail.
+    v = std::min(std::max(v, 0.0), 1.0);
+    return v <= 0.0031308 ? v * 12.92 : 1.055 * std::pow(v, 1.0 / 2.4) - 0.055;
 }
 /// The light behind a display value, by bisection on a monotone curve. 1e-7 of
 /// a unit is far finer than one code is worth and costs ~24 iterations.

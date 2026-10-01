@@ -66,7 +66,15 @@ constexpr int kW = 256, kH = 160;
 
 void frames(int n) { for (int i = 0; i < n; ++i) gEngine->renderOneFrame(); }
 
-/// Mean luminance of a rectangle of the frame, 0..255. The objects are measured
+/// The picture is sRGB-ENCODED (SRGB-ENCODE-1) and a stop is a ratio of LIGHT, so
+/// every byte is decoded back to the light the display emits for it, 0..255.
+double lin(unsigned char v)
+{
+    const double c = v / 255.0;
+    return 255.0 * (c <= 0.04045 ? c / 12.92 : std::pow((c + 0.055) / 1.055, 2.4));
+}
+
+/// Mean (decoded) luminance of a rectangle of the frame, 0..255. The objects are measured
 /// through BOXES rather than over the whole picture, because the whole picture
 /// is exactly what the plane changes — a frame mean would measure the plane.
 double boxLuma(const Image &img, int x0, int y0, int x1, int y1)
@@ -77,7 +85,7 @@ double boxLuma(const Image &img, int x0, int y0, int x1, int y1)
         for (int x = x0; x < x1; ++x) {
             const size_t i = (size_t(y) * size_t(kW) + size_t(x)) * 4;
             if (i + 3 >= img.rgba.size()) continue;
-            sum += 0.2126 * img.rgba[i] + 0.7152 * img.rgba[i + 1] + 0.0722 * img.rgba[i + 2];
+            sum += 0.2126 * lin(img.rgba[i]) + 0.7152 * lin(img.rgba[i + 1]) + 0.0722 * lin(img.rgba[i + 2]);
             ++n;
         }
     }

@@ -259,7 +259,8 @@ static float measure(Engine *e, View *v, const char *what, int frames = 3, Image
 {
     render(e, frames);
     Image img;
-    if (!v->readPixels(img)) { std::printf("FAIL: readPixels (%s)\n", what); ++failures; return 0.0f; }
+    // LINEAR whatever the view's space: the red excess is light (SRGB-ENCODE-1).
+    if (!enginetest::readLinear(v, img)) { std::printf("FAIL: readPixels (%s)\n", what); ++failures; return 0.0f; }
     int x = -1, y = -1;
     const float r = maxRedExcessLowerHalf(img, &x, &y);
     std::printf("   %s: max red excess (lower half) = %.3f at (%d,%d)\n", what, r, x, y);
@@ -553,6 +554,14 @@ int main()
     // produces, something about `use_prepass` moved the picture: normals,
     // shadows, roughness or depth. It is not; the pixels match exactly.
     {
+        // THE REFERENCE IS THE SAME DISPLAY PICTURE WITHOUT SSR (SRGB-ENCODE-1):
+        // `plain` above is the linear Plain instrument, another colour space.
+        PostFxDesc bare;
+        bare.allowOffscreen = true;
+        view->setPostFx(bare);
+        render(engine.get(), 4);
+        Image plain;
+        CHECK(view->readPixels(plain), "readPixels, the display picture with no SSR");
         PostFxDesc neutral;
         neutral.allowOffscreen = true;
         neutral.ssr = 1;
@@ -561,6 +570,11 @@ int main()
         render(engine.get(), 4);
         Image flat;
         CHECK(view->readPixels(flat), "readPixels with SSR structurally on and zero confidence");
+        // IN LINEAR LIGHT (SRGB-ENCODE-1): the G-buffer's precision bar was measured
+        // on linear 8-bit pictures; the encode's finer dark steps would otherwise
+        // count sub-code float noise the old target rounded away.
+        enginetest::linearise(plain);
+        enginetest::linearise(flat);
         unsigned diff = 0, big = 0;
         float worst = 0.0f;
         identical(plain, flat, &diff);
@@ -625,7 +639,7 @@ int main()
             auto contrast = [&](const char *what) {
                 render(engine.get(), 4);
                 Image img;
-                if (!shv->readPixels(img)) { CHECK_MSG(false, "readPixels (%s)", what); return 1.0f; }
+                if (!enginetest::readLinear(shv, img)) { CHECK_MSG(false, "readPixels (%s)", what); return 1.0f; }
                 if (envOn("JAH_SSR_DUMP")) {
                     std::string p = std::string("ssr-shadow-") + what + ".ppm";
                     for (char &c : p) if (c == ' ' || c == ',') c = '_';
@@ -1019,11 +1033,11 @@ int main()
             ov->setPostFx(PostFxDesc());
             render(engine.get(), 4);
             Image off;
-            if (!ov->readPixels(off)) return false;
+            if (!enginetest::readLinear(ov, off)) return false;   // light, both spaces (SRGB-ENCODE-1)
             ov->setPostFx(fxOn);
             render(engine.get(), 4);
             Image on;
-            if (!ov->readPixels(on)) return false;
+            if (!enginetest::readLinear(ov, on)) return false;
             if (on.width != kW || on.height != kH) return false;
             out.assign(size_t(kW) * kH, 0.0f);
             for (unsigned y = 0; y < kH; ++y)
@@ -1242,7 +1256,7 @@ int main()
                 ov->setCamera(c);
                 ov->setPostFx(PostFxDesc());
                 render(engine.get(), 4);
-                if (!ov->readPixels(img) || img.width != kW || img.height != kH) return false;
+                if (!enginetest::readLinear(ov, img) || img.width != kW || img.height != kH) return false;
                 lum.assign(size_t(kW) * kH, 0.0f);
                 for (unsigned y = 0; y < kH; ++y)
                     for (unsigned x = 0; x < kW; ++x) {
@@ -2143,14 +2157,14 @@ int main()
             Image noPrepass, withPrepass;
             rv->setPostFx(PostFxDesc());
             render(engine.get(), 4);
-            CHECK(rv->readPixels(noPrepass), "readPixels (no prepass)");
+            CHECK(enginetest::readLinear(rv, noPrepass), "readPixels (no prepass)");   // light (SRGB-ENCODE-1)
             PostFxDesc pfx;
             pfx.allowOffscreen = true;
             pfx.ssr = 2;                     // full-res rays, so nothing is half-res
             pfx.reflectionRoughnessCutoff = 0.0f;  // ...and the reflection is empty everywhere
             rv->setPostFx(pfx);
             render(engine.get(), 5);
-            CHECK(rv->readPixels(withPrepass), "readPixels (prepass, zero confidence)");
+            CHECK(enginetest::readLinear(rv, withPrepass), "readPixels (prepass, zero confidence)");
 
             if (envOn("JAH_SSR_DUMP")) {
                 writePpm(noPrepass, "ssr-roughgate-off.ppm");
@@ -2271,7 +2285,12 @@ int main()
             {
                 PbrParams p;
                 p.albedo = Colour(0.05f, 0.05f, 0.05f);
-                p.emissive = Colour(3.0f, 0.0f, 0.0f);
+                // 1.0, not the 3.0 it was (SRGB-ENCODE-1): an HDR-off chain's scene
+                // target is FLOAT now, so the reflection carries the emitter's
+                // radiance above 1 instead of the 8-bit target's clip at 1, and at
+                // 3.0 the reflection's peak saturated at every cutoff. 1.0 is the
+                // light the old clipped target actually reflected.
+                p.emissive = Colour(1.0f, 0.0f, 0.0f);
                 p.roughness = 0.5f;
                 const NodeId n = cs->createNode();
                 CHECK(n && cs->attachMesh(n, cs->createMesh(enginetest::unitCubeMesh()),

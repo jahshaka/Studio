@@ -105,23 +105,10 @@ static QImage previewShot(EngineMaterialPreviewScene &preview, Engine &engine,
 
 static int luma(QRgb p) { return qRound(0.2126 * qRed(p) + 0.7152 * qGreen(p) + 0.0722 * qBlue(p)); }
 
-/// The linear readback as a display would show it (sRGB encode, per channel).
-static QImage toDisplay(const QImage &img)
-{
-    QImage out = img;
-    for (int y = 0; y < out.height(); ++y)
-        for (int x = 0; x < out.width(); ++x) {
-            const QRgb p = img.pixel(x, y);
-            int c[3] = { qRed(p), qGreen(p), qBlue(p) };
-            for (int &v : c) {
-                const double l = double(v) / 255.0;
-                const double e = l <= 0.0031308 ? l * 12.92 : 1.055 * std::pow(l, 1.0 / 2.4) - 0.055;
-                v = int(std::lround(e * 255.0));
-            }
-            out.setPixel(x, y, qRgb(c[0], c[1], c[2]));
-        }
-    return out;
-}
+/// THE READBACK IS THE DISPLAY PICTURE (SRGB-ENCODE-1): the preview and the
+/// thumbnail are display views, so the renderer applies the sRGB encode itself
+/// and every measurement below reads display codes directly. (This file used
+/// to encode a linear readback here; that encode is now the renderer's.)
 
 /// The subject's silhouette: an emissive-green material against a neutral
 /// studio, so "is this the subject" needs no model of where a sphere is.
@@ -215,7 +202,7 @@ int main(int argc, char **argv)
 
         // ---- 1. the backdrop the dock shows ----
         preview.setMaterial(pbr(QColor(118, 118, 118), 0.0f, 1.0f));
-        const QImage plate = toDisplay(previewShot(preview, *engine, view, "backdrop-and-grey"));
+        const QImage plate = previewShot(preview, *engine, view, "backdrop-and-grey");
         std::printf("    backdrop: corner %d, top-centre %d (display codes)\n",
                     luma(plate.pixel(2, 2)), luma(plate.pixel(W / 2, 2)));
         CHECK(luma(plate.pixel(2, 2)) > 60 && luma(plate.pixel(2, 2)) < 250,
@@ -223,12 +210,12 @@ int main(int argc, char **argv)
 
         // ---- 2. a chrome sphere: the softboxes read, and nothing burns out ----
         preview.setMaterial(pbr(QColor(255, 255, 255), 1.0f, 0.05f));
-        const QImage chrome = toDisplay(previewShot(preview, *engine, view, "chrome"));
+        const QImage chrome = previewShot(preview, *engine, view, "chrome");
         CHECK(!chrome.isNull(), "the chrome sphere rendered");
 
         // ---- 3. the silhouette, and the sphere is whole at every dock shape ----
         preview.setMaterial(marker());
-        const QImage green = toDisplay(previewShot(preview, *engine, view, "silhouette"));
+        const QImage green = previewShot(preview, *engine, view, "silhouette");
         const std::vector<bool> mask = silhouette(green);
         const long area = countMask(mask);
         std::printf("    silhouette: %ld px of %d (%.1f%% of the frame); framed at %.3f\n",
@@ -266,7 +253,7 @@ int main(int argc, char **argv)
 
         // ---- 4. an ORDINARY material does not burn out anywhere ----
         preview.setMaterial(pbr(QColor(200, 200, 200), 0.0f, 0.35f));
-        const QImage glossy = toDisplay(previewShot(preview, *engine, view, "glossy"));
+        const QImage glossy = previewShot(preview, *engine, view, "glossy");
         long glossyClipped = 0;
         int glossyMax = 0;
         for (int y = 0; y < glossy.height(); ++y)
@@ -283,7 +270,7 @@ int main(int argc, char **argv)
 
         // ---- 5. an 18% grey diffuse sphere reads as the grey card ----
         preview.setMaterial(pbr(QColor(118, 118, 118), 0.0f, 1.0f));
-        const QImage grey = toDisplay(previewShot(preview, *engine, view, "grey-card"));
+        const QImage grey = previewShot(preview, *engine, view, "grey-card");
         previewGreyMean = meanOver(grey, mask);
         std::printf("    18%% grey diffuse sphere: mean %.1f/255 over the silhouette (display)\n",
                     previewGreyMean);
@@ -299,7 +286,7 @@ int main(int argc, char **argv)
         for (const Shape &sh : shapes) {
             view->resize(unsigned(sh.w), unsigned(sh.h));
             preview.setMaterial(marker());
-            const QImage shot = toDisplay(previewShot(preview, *engine, view, sh.name));
+            const QImage shot = previewShot(preview, *engine, view, sh.name);
             const std::vector<bool> m = silhouette(shot);
             const long a = countMask(m);
             const bool edge = touchesEdge(shot, m, 1);
@@ -324,7 +311,7 @@ int main(int argc, char **argv)
             const QImage raw2 = loan->renderMaterial(marker(), QSize(128, 128));
             CHECK(!raw1.isNull() && raw1 == raw2,
                   "two renders of the same material are byte-identical");
-            const std::vector<bool> mask = silhouette(toDisplay(raw1));
+            const std::vector<bool> mask = silhouette(raw1);
             std::printf("    thumbnail silhouette: %ld px of %d (%.1f%%)\n", countMask(mask),
                         128 * 128, 100.0 * double(countMask(mask)) / double(128 * 128));
             CHECK(countMask(mask) > 128 * 128 / 12, "the thumbnail's sphere fills the tile");
@@ -333,7 +320,7 @@ int main(int argc, char **argv)
             const QImage greyRaw = loan->renderMaterial(pbr(QColor(118, 118, 118), 0.0f, 1.0f),
                                                         QSize(128, 128));
             previewdump::save("thumb-grey-card", greyRaw);
-            const QImage grey = toDisplay(greyRaw);
+            const QImage grey = greyRaw;
             const double thumbMean = meanOver(grey, mask);
             std::printf("    thumbnail 18%% grey: mean %.1f/255 (preview %.1f) — difference %.1f\n",
                         thumbMean, previewGreyMean, std::fabs(thumbMean - previewGreyMean));
@@ -345,7 +332,7 @@ int main(int argc, char **argv)
             const QImage chromeRaw = loan->renderMaterial(pbr(QColor(255, 255, 255), 1.0f, 0.05f),
                                                           QSize(128, 128));
             previewdump::save("thumb-chrome", chromeRaw);
-            const QImage chrome = toDisplay(chromeRaw);
+            const QImage chrome = chromeRaw;
             int maxChannel = 0;
             for (int y = 0; y < chrome.height(); ++y)
                 for (int x = 0; x < chrome.width(); ++x) {

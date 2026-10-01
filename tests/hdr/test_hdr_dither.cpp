@@ -212,7 +212,7 @@ int main()
         LightDesc l;
         l.type = LightType::Point;
         l.colour = Colour(1.0f, 1.0f, 1.0f);
-        l.intensity = 2.0f;        // measured: the frame lands on codes 134..144
+        l.intensity = 2.0f;        // measured: the frame lands on display codes 192..198 (SRGB-ENCODE-1; 134..144 before the encode)
         l.range = 2000.0f;         // no range cut-off inside the fixture
         l.castShadows = false;
         if (!s->setLight(n, l)) { std::printf("FAIL: fixture light\n"); return 1; }
@@ -248,7 +248,10 @@ int main()
     // below could pass on a flat picture.
     int lo = 255, hi = 0;
     for (int v : gp) { lo = std::min(lo, v); hi = std::max(hi, v); }
-    CHECK(hi - lo >= 8, "the fixture renders a gradient of %d codes (%d..%d)", hi - lo, lo, hi);
+    // sRGB display encode (SRGB-ENCODE-1): the same light that spanned linear codes
+    // 134..144 lands on display codes 192..198 — the OETF's slope there is 0.67, so
+    // the old bar of 8 codes is 5 in the encoded picture.
+    CHECK(hi - lo >= 5, "the fixture renders a gradient of %d codes (%d..%d)", hi - lo, lo, hi);
 
     // ---- A  THE BANDING SIGNATURE ----------------------------------------
     {

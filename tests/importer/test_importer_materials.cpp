@@ -502,9 +502,13 @@ int main(int argc, char **argv)
                     // 45.6 before and after) does not, so the relative bar is
                     // re-derived from the same two readings: 1.36x, fenced at
                     // 1.25x ("clearly brighter", not "tuned to it").
-                    CHECK(fixedLuma > 56.0 && fixedLuma < 68.0,
+                    // sRGB display encode (SRGB-ENCODE-1): the thumbnail is display-encoded
+                    // now, so the pin and its band are the OETF image of the linear ones:
+                    // 62.1 (56..68) -> 135 (128..141).
+                    CHECK(fixedLuma > 128.0 && fixedLuma < 141.0,
                           "5: the imported spec-gloss material is LIT, at the re-pinned value "
-                          "(62.1 +/- 6 in the studio environment with the diffuse energy factor)");
+                          "(135, the encode of 62.1 +/- 6, in the studio environment with the "
+                          "diffuse energy factor)");
                     CHECK(fixedLuma > brokenLuma * 1.25,
                           "5: ... and is clearly brighter than the full-metal reading it used to get");
                 }

@@ -923,7 +923,7 @@ QVector<VerbInfo> EditorApi::verbs() const
           "that spawns an image plane for a dropped picture. Same pixels as editor.dropPointAt, "
           "which answers WHERE the same drop would place a new object.",
           Needs::Engine },
-        { "screenshot", "editor.screenshot(path, w=256, h=256, probes=[], grade=\"plain\", {radiance}) -> {path, width, height, grade, encoding, center:{r,g,b}, probes:[{x,y,r,g,b,radiance?}]}",
+        { "screenshot", "editor.screenshot(path, w=256, h=256, probes=[], grade=\"plain\", {radiance}) -> {path, width, height, grade, encoding, center:{r,g,b}, probes:[{x,y,r,g,b,radiance?,light?}]}",
           "Offscreen render of the editor scene to a PNG; returns the centre pixel, plus the pixel at each probe point ({x,y} in normalized 0..1 image coordinates), so scripts can assert on colours. Headless-safe. "
           "A SCREENSHOT IS THE PICTURE AT REST: before the editor camera's shot the verb renders frames OFFSCREEN - nothing is presented, the document's clock does not move - until world.giStatus().giAtRest is true - no GI rebuild, settle or irradiance-field refinement still owed - at most 2000 frames, so two shots of a still scene are the same picture. A scene with something moving every frame (an animation, a socket rider, a physics body) never comes to rest: where the screen-probe gather runs, its shot is taken once the gather's history has settled (16 frames after its last restart) and shows that settled history, which is NOT byte-stable from one shot to the next by nature. "
           "`grade` says HOW THE SHOT IS DEVELOPED, and the default is deliberately the dullest answer, because this verb is a measuring instrument: "
@@ -933,7 +933,7 @@ QVector<VerbInfo> EditorApi::verbs() const
           "\"viewport\" (or true) is the same whole chain but with the chain's OWN adaptive exposure re-seeded from the scene's (or the driving camera's) exposure value; an offscreen view lives about two frames and cannot converge, so it grades at that seed. It exists for camera.screenshot, where there is no on-screen view measuring the camera in question — for the editor camera prefer \"scene\". "
           "The editor's own Screenshot action uses \"scene\"; project preview tiles and asset thumbnails use \"tonemap\". "
           "{radiance: true} (the plain grade only, the editor's own picture only) ALSO READS THE SCENE RADIANCE IN FLOAT — the linear value the plain bytes are an 8-bit store of, unclipped — and every probe gains `radiance:{r,g,b}`, the float mean of the same 5x5 block. It is for a measurement that lives inside one code of the bytes (an A/B whose whole effect is a fraction of a code, a transmittance); the bytes and the PNG are unchanged. "
-          "THE TWO COLOUR SPACES, MEASURED (PLAIN-GRADE-1, 2026-09-18): the graded answers (\"tonemap\", \"scene\", \"viewport\") are THE WINDOW'S OWN BYTES — a flat sky picked as #8000C0 reads (50, 0, 114) in a \"scene\" shot and (50, 0, 114) in an xwd grab of the live window, the same bytes — while \"plain\" is LINEAR RADIANCE: the same sky reads (55, 0, 134), which is the sRGB decode of the colour the user picked. So a plain shot is not a dark picture of the scene, it is a MEASUREMENT in a different space, and that — not a missing sRGB encode — is why every offscreen diagnosis in this tree has read \"too dark\" (this engine's window swapchain is not sRGB either; the tonemapper's output IS the display code). The answer reports `grade` and `encoding` (\"linear\" or \"display\") so a reader is told which space it is holding. "
+          "THE TWO COLOUR SPACES (PLAIN-GRADE-1 measured them; SRGB-ENCODE-1 put the encode in): the graded answers (\"tonemap\", \"scene\", \"viewport\") are THE WINDOW'S OWN BYTES — the film curve's output through the exact sRGB encode, so an 18 % card at the default exposure reads 118 — while \"plain\" is LINEAR RADIANCE, the instrument every pixel suite asserts (a sky picked as #808080 reads 55, the sRGB decode of the colour the user picked). The answer reports `grade` and `encoding` (\"linear\" or \"display\") so a reader is told which space it is holding, and a DISPLAY grade's probes also carry `light:{r,g,b}` — the same 5x5 block decoded to linear light pixel by pixel BEFORE the mean (0..255 floats), because the mean of encoded bytes is not the encode of the mean light across an edge. "
           ,
           Needs::Engine },
         { "beginBatch", "editor.beginBatch() -> bool",
@@ -3204,6 +3204,25 @@ QVariantMap EditorApi::screenshot(const QString &path, int width, int height,
         }
         if (n > 0) { r /= n; g /= n; b /= n; }
         QVariantMap probe{ { "x", px }, { "y", py }, { "r", r }, { "g", g }, { "b", b } };
+        if (IEditorViewport::gradeEncoding(mode) == QLatin1String("display")) {
+            // THE BLOCK AS LIGHT (SRGB-ENCODE-1): each byte decoded through the
+            // sRGB EOTF, then the mean — see the verb's doc for why not the reverse.
+            const auto lin = [](int v) {
+                const double c = v / 255.0;
+                return 255.0 * (c <= 0.04045 ? c / 12.92 : std::pow((c + 0.055) / 1.055, 2.4));
+            };
+            double lr = 0.0, lg = 0.0, lb = 0.0;
+            int ln = 0;
+            for (int dy = -2; dy <= 2; ++dy)
+                for (int dx = -2; dx <= 2; ++dx) {
+                    const int x = ix + dx, y = iy + dy;
+                    if (x < 0 || y < 0 || x >= img.width() || y >= img.height()) continue;
+                    const QColor c = img.pixelColor(x, y);
+                    lr += lin(c.red()); lg += lin(c.green()); lb += lin(c.blue()); ++ln;
+                }
+            if (ln > 0) { lr /= ln; lg /= ln; lb /= ln; }
+            probe["light"] = QVariantMap{ { "r", lr }, { "g", lg }, { "b", lb } };
+        }
         if (radiance) {
             // The same 5x5 block, in float and without the integer mean.
             double fr = 0.0, fg = 0.0, fb = 0.0;

@@ -153,16 +153,18 @@ assert(hf.live && hf.live.on === true && hf.live.colourFromSky === true,
 var fogC = { r: hf.live.colour[0], g: hf.live.colour[1], b: hf.live.colour[2] };
 assert(fogC.b > fogC.r * 1.5, "...a sky BLUE (" + J(fogC) + ")");
 // THE GREY CARD: an 18 % card on the floor under the default lights develops at
-// the film's mid-grey (display 0.18 = code 46) within 1/3 of a stop of its
-// input (37..58).
+// the film's mid-grey (film output 0.18 = display code 118 through the sRGB
+// encode) within 1/3 of a stop of its input. The band is the OETF image of the
+// linear one (0.18 x 2^-1/3 .. 2^+1/3 = 37..58 linear codes = 107..131 display:
+// sRGB display encode (SRGB-ENCODE-1)).
 var card = scene.addPrimitive("plane", { position: { x: 0, y: 0.02, z: 0 } });
 material.set(card, { baseColor: "#767676", roughness: 1.0, metallic: 0.0 });
 editor.selectNone();
 editor.frame(10, 1 / 60);
 var cardShot = editor.screenshot("new_scene_card.png", 480, 270, [{ x: 0.5, y: 0.5 }], "tonemap").probes[0];
 var cardCode = 0.2126 * cardShot.r + 0.7152 * cardShot.g + 0.0722 * cardShot.b;
-assert(cardCode >= 37 && cardCode <= 58,
-       "an 18% card on the Basic floor reads the film's mid-grey within 1/3 stop (" + cardCode.toFixed(1) + " of 37..58)");
+assert(cardCode >= 107 && cardCode <= 131,
+       "an 18% card on the Basic floor reads the film's mid-grey within 1/3 stop (" + cardCode.toFixed(1) + " of 107..131)");
 // NEARER THAN THE START DISTANCE NOTHING MOVES: the card, fog on and off.
 var nearOn = plain("near_on", [{ x: 0.5, y: 0.5 }])[0].radiance;
 world.heightFog({ enabled: false });

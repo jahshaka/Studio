@@ -142,7 +142,7 @@ static bool identical(const Image &a, const Image &b)
 // suite's `field` arm is compared against gi.leak_room's asserted numbers, and
 // that comparison is only worth anything while the rooms are the same room.
 using enginetest::leakroom::addSlab;
-using enginetest::leakroom::meanRG;
+using enginetest::leakroom::meanRGDecoded;
 
 // ---------------------------------------------------------------------------
 static int costMain(Engine *e);
@@ -249,14 +249,14 @@ int main()
             s->refreshGlobalIllumination();
             render(e, 16);
             Image img; view->readPixels(img);
-            float onR = 0, onG = 0; meanRG(img, onR, onG);
+            float onR = 0, onG = 0; meanRGDecoded(img, onR, onG);   // display-encoded (SRGB-ENCODE-1)
             if (dumpDir && a == 0)
                 writePpm(img, std::string(dumpDir) + "/g0-leakroom-" + what + ".ppm");
             enginetest::leakroom::setOutsideIntensity(s, room, 0.0f);
             s->refreshGlobalIllumination();
             render(e, 16);
             view->readPixels(img);
-            float offR = 0, offG = 0; meanRG(img, offR, offG);
+            float offR = 0, offG = 0; meanRGDecoded(img, offR, offG);
             armGather(s, gi, false);
             std::printf("   %-7s wall %.2f m: LEAK %.4f (lamp on r %.4f, off r %.4f), green %.4f\n",
                         what, double(T), double(onR - offR), double(onR), double(offR),

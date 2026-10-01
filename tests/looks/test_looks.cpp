@@ -278,6 +278,15 @@ int main()
     enginetest::testCameraLookAt(fx.v, Vec3(0.0f, 0.5f, 5.0f), Vec3(0, 0, 0));
 
     // ---- 1. the baseline, and the byte-identical law ----------------------
+    // TWO BASELINES SINCE SRGB-ENCODE-1. `instrument` is the offscreen view with
+    // no door (the linear Plain instrument) — what section 2 must still get when
+    // a stack is pushed without the door; `plain` is the DISPLAY picture through
+    // the door with nothing in it, which every look is compared against.
+    render(fx.e, 4);
+    Image instrument;
+    REQUIRE(fx.v->readPixels(instrument));
+    const unsigned genInstrument = fx.v->workspaceGeneration();
+    fx.v->setPostFx(baseFx());
     render(fx.e, 4);
     Image plain;
     REQUIRE(fx.v->readPixels(plain));
@@ -303,18 +312,23 @@ int main()
 
     // ---- 2. the offscreen guarantee ---------------------------------------
     {
+        // Back to the instrument (no door), then a stack WITHOUT the door: it
+        // must change nothing, not even the workspace.
+        fx.v->setPostFx(PostFxDesc());
+        const unsigned genBack = fx.v->workspaceGeneration();
         PostFxDesc fxDesc;                       // NO allowOffscreen
         fxDesc.looks.push_back(look(LookKind::Desaturate, 1.0f));
         fx.v->setPostFx(fxDesc);
-        CHECK_MSG(fx.v->workspaceGeneration() == genPlain,
+        CHECK_MSG(fx.v->workspaceGeneration() == genBack,
                   "looks_are_ignored_offscreen_unless_asked: no rebuild (%u -> %u)",
-                  genPlain, fx.v->workspaceGeneration());
+                  genBack, fx.v->workspaceGeneration());
         render(fx.e, 3);
         Image ignored;
         REQUIRE(fx.v->readPixels(ignored));
-        CHECK_MSG(pixelDiff(plain, ignored) == 0,
+        CHECK_MSG(pixelDiff(instrument, ignored) == 0,
                   "looks_are_ignored_offscreen_unless_asked: %u pixels differ",
-                  pixelDiff(plain, ignored));
+                  pixelDiff(instrument, ignored));
+        (void)genInstrument;
     }
 
     // ---- 3. desaturate ------------------------------------------------------
@@ -571,9 +585,24 @@ int main()
             // Two independent witnesses: saturation 0.2 drops the chroma, and
             // vignette 0.9 makes the corner far darker than the centre while
             // the centre keeps its brightness.
-            CHECK_MSG(meanChroma(img) < meanChroma(plain) * 0.6f,
-                      "filmGrade desaturates at saturation 0.2: chroma %.4f -> %.4f",
-                      meanChroma(plain), meanChroma(img));
+            //
+            // THE SATURATION WITNESS IS THE SAME GRADE AT SATURATION 1 (SRGB-ENCODE-1).
+            // It used to be the ungraded frame; the look now receives DISPLAY values
+            // (about twice the old linear ones at this fixture's mid tones), so the
+            // warm tint's own chroma — tint x value — outweighs a bar measured
+            // against a frame that has no tint. Holding every other knob fixed and
+            // moving only the saturation is the witness of the saturation alone.
+            Image fullSat;
+            {
+                PostFxDesc ds = baseFx();
+                ds.looks.push_back(look(LookKind::FilmGrade, 1.0f, 1.0f, 1.4f, 0.9f, 1.2f, 0.9f, 0.6f));
+                fx.v->setPostFx(ds);
+                render(fx.e, 3);
+                REQUIRE(fx.v->readPixels(fullSat));
+            }
+            CHECK_MSG(meanChroma(img) < meanChroma(fullSat) * 0.6f,
+                      "filmGrade desaturates at saturation 0.2: chroma %.4f (saturation 1) -> %.4f",
+                      meanChroma(fullSat), meanChroma(img));
             const auto lum = [](const Colour &p) { return 0.3f * p.r + 0.59f * p.g + 0.11f * p.b; };
             const float cornerBefore = lum(plain.at(2, 2));
             const float cornerAfter  = lum(img.at(2, 2));

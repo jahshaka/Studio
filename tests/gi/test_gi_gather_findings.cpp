@@ -135,6 +135,17 @@ static PbrParams matte(const Colour &albedo)
 }
 
 /// How two pictures differ INSIDE a rectangle (fractions of the image).
+/// THE PICTURES ARE DISPLAY-ENCODED AND THE BARS ARE LIGHT (SRGB-ENCODE-1): every
+/// view in this file opts into the chain, so its bytes carry the sRGB encode,
+/// while every bar below is derived in linear light (a reader's quantum, a
+/// specular albedo times an irradiance change). So a byte is DECODED before it
+/// is compared, and a "code" in this file is 1/255 of LINEAR light — the unit
+/// the bars were written in.
+static double linCode(unsigned char v)
+{
+    const double c = v / 255.0;
+    return 255.0 * (c <= 0.04045 ? c / 12.92 : std::pow((c + 0.055) / 1.055, 2.4));
+}
 struct Delta { unsigned moved = 0u, total = 0u; double mean = 0.0; unsigned worst = 0u; };
 static Delta deltaIn(const Image &a, const Image &b, float x0, float y0, float x1, float y1)
 {
@@ -144,12 +155,12 @@ static Delta deltaIn(const Image &a, const Image &b, float x0, float y0, float x
     for (unsigned y = unsigned(y0 * a.height); y < unsigned(y1 * a.height); ++y)
         for (unsigned x = unsigned(x0 * a.width); x < unsigned(x1 * a.width); ++x) {
             const size_t i = (size_t(y) * a.width + x) * 4u;
-            unsigned w = 0u;
+            double w = 0.0;
             for (int c = 0; c < 3; ++c)
-                w = std::max(w, unsigned(std::abs(int(a.rgba[i + c]) - int(b.rgba[i + c]))));
+                w = std::max(w, std::fabs(linCode(a.rgba[i + c]) - linCode(b.rgba[i + c])));
             ++d.total;
             sum += w;
-            if (w) { ++d.moved; d.worst = std::max(d.worst, w); }
+            if (w > 0.0) { ++d.moved; d.worst = std::max(d.worst, unsigned(std::lround(w))); }
         }
     d.mean = d.total ? sum / d.total : 0.0;
     return d;
@@ -167,7 +178,9 @@ static Colour meanIn(const Image &img, float x0, float y0, float x1, float y1)
     double r = 0, g = 0, b = 0; unsigned n = 0;
     for (unsigned y = unsigned(y0 * img.height); y < unsigned(y1 * img.height); ++y)
         for (unsigned x = unsigned(x0 * img.width); x < unsigned(x1 * img.width); ++x) {
-            const Colour c = img.at(x, y); r += c.r; g += c.g; b += c.b; ++n;
+            const size_t i = (size_t(y) * img.width + x) * 4u;   // decoded: linCode's note
+            r += linCode(img.rgba[i]) / 255.0; g += linCode(img.rgba[i + 1]) / 255.0;
+            b += linCode(img.rgba[i + 2]) / 255.0; ++n;
         }
     return n ? Colour(float(r / n), float(g / n), float(b / n)) : Colour(0, 0, 0);
 }
@@ -344,7 +357,12 @@ static int glassMain(Engine *e)
         GiParams gi;
         gi.mode = GiMode::Off;
         CHECK(s->setGlobalIllumination(gi), "F2: GI off (only the direct term)");
-        view->setPostFx(PostFxDesc());     // no chain: no prepass
+        {   // no prepass - but the same DISPLAY picture as the arm below (SRGB-ENCODE-1:
+            // a view with no chain at all is the linear Plain instrument, another space)
+            PostFxDesc bare;
+            bare.allowOffscreen = true;
+            view->setPostFx(bare);
+        }
         render(e, 12);
         Image plain; view->readPixels(plain);
         armChain(view);                      // the SSR row: the prepass
