@@ -96,6 +96,22 @@ def main(source, build):
     check(rc == 1 and "no verdict recorded for api.contract" in out,
           "a verdict for a row that is not red is refused, said out loud (%d)" % rc)
 
+    # ---- a REPEATED --verdict records every verdict (the form merge-dbuild-lane.sh builds) -------
+    fresh(unlisted)
+    put(rows[:1], "PASS", "2026-01-01T10:00:00")
+    put(rows[1:], "FAIL", "2026-01-01T10:00:01")
+    rc, out = run(RANGE, "--verdict", "app.startup_quiet=first verdict", "--verdict", "photon.view=second verdict")
+    vrec = [json.loads(l) for f in os.listdir(os.environ["JAH_RUN_LOG_DIR"]) if "-verdict-" in f
+            for l in open(os.path.join(os.environ["JAH_RUN_LOG_DIR"], f))]
+    check(rc == 0 and sorted(r["suite"] for r in vrec) == ["app.startup_quiet", "photon.view"],
+          "two repeated --verdict flags record BOTH verdicts and the lane is accepted (%d, %s)"
+          % (rc, sorted(r["suite"] for r in vrec)))
+    fresh(unlisted)
+    put(rows[:1], "PASS", "2026-01-01T10:00:00")
+    put(rows[1:], "FAIL", "2026-01-01T10:00:01")
+    rc, out = run(RANGE, "--verdict", "app.startup_quiet=first verdict", "photon.view=second verdict")
+    check(rc == 0, "...and so does one --verdict with two pairs (%d)" % rc)
+
     # ---- a row that never ran (NOADMIT) is MISSING, which no verdict clears ------------------------
     fresh(unlisted)
     put(rows[:2], "PASS", "2026-01-01T10:00:00")
@@ -166,7 +182,7 @@ def main(source, build):
     os.chmod(fake, 0o755)
     calls = []
     real_oc, real_gc = gate_runlog.other_ctests, gate_runlog.gpu_clocks
-    gate_runlog.other_ctests = lambda: calls.append(1) or len(calls)
+    gate_runlog.other_ctests = lambda *own: calls.append(1) or len(calls)
     gate_runlog.gpu_clocks = lambda: {"state": "sampled-%d" % len(calls)}
     try:
         gate_runlog.run_ctest(fake, scratch, "scoped", "ci-check-test", 1, echo=False)

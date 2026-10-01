@@ -238,10 +238,12 @@ def runlog_cases(source):
     # T11: THE TIER NAMES — the one list, every literal the gate scripts write is in it, and a
     # name outside it is refused before a run (never an hour of records under a stray name)
     print("  the run log's tier names: %s" % ", ".join(rl.TIERS))
-    check(set(rl.TIERS) == {"scoped", "scoped-fallback", "scoped-tier", "joint", "merge", "stage", "nightly",
-                            "push", "fork"}, "the tier names are exactly the documented nine")
+    check(set(rl.TIERS) == {"scoped", "scoped-fallback", "scoped-tier", "joint", "target", "merge", "stage",
+                            "nightly", "push", "smoke", "fork"},
+          "the tier names are exactly the documented eleven (GATE-SPEED-1 added target and smoke)")
     gsrc = open(os.path.join(source, "scripts", "gate-scope.py")).read()
-    lits = set(re.findall(r'a\.tier or \(?"([a-z-]+)"', gsrc)) | set(re.findall(r'else "(scoped-[a-z]+)"', gsrc))
+    lits = set(re.findall(r'a\.tier or \(?"([a-z-]+)"', gsrc)) | set(re.findall(r'else "(scoped-[a-z]+)"', gsrc)) \
+        | set(re.findall(r'run_ctest\(target_cmd, build, "([a-z-]+)"', gsrc))
     check(lits and lits <= set(rl.TIERS), "every tier gate-scope.py writes is a listed name (%s)" % sorted(lits))
     try:
         rl.run_ctest("true", source, "scoped-merge", "x", 1, echo=False)

@@ -1,7 +1,8 @@
 # The test gate — how it works (2026-09-09; reshaped by D6B-GATE-SHAPE 2026-09-27)
 
-Jahshaka's ctest suite is ~700 registered rows; the MERGE/PUSH tier runs 653 of them (§5 has
-the measured walls). Since 2026-09-09 the gate is TIERED: a change is gated on what it can
+Jahshaka's ctest suite is ~700 registered rows; the MERGE/PUSH tier runs ~575 of them — 559 in
+its parallel phase and 16 timing rows serially (rc-smoke15a, 2026-10-01: 31.4 + 8.3 min after a
+13.6 min build; §5 has the history). Since 2026-09-09 the gate is TIERED: a change is gated on what it can
 break, and the full run is a per-batch event. This file is the reference; `scripts/gate-scope.py`
 carries the rules, and SPECS/audits/GATE_SUITES_AUDIT_2026-09-26.md is the audit the 2026-09-27
 reshape followed.
@@ -29,9 +30,18 @@ pass until its part lands is a **target test**:
 - it carries the ctest label **`photon-target`**, and its header states the PART that turns it
   green and today's measured value;
 - it is EXCLUDED FROM PASS/FAIL, never from the run. `scripts/gate-scope.sh` selects it,
-  prints it in a `TARGET TESTS` section, and runs it in a SECOND ctest invocation at `-j1`
-  (it is a measurement; a measurement sharing the GPU with three siblings prints a number
-  nobody can use) whose exit code is reported and discarded. The MERGE and PUSH tiers drop it
+  prints it in a `TARGET TESTS` section, and runs it as ITS OWN STEP after the gate's verdict
+  (GATE-SPEED-1): `--run` prints the gating phases' verdict, exits with their code, and starts
+  `gate-scope.sh <range> --run --targets-only` DETACHED (its pid in `<build>/gate-targets.pid`,
+  its output in `<build>/gate-targets.log`, its records under the run log's tier `target`), so no
+  gate and no merge waits for it — the inline target run held every engine lane's gate 7-13 min
+  at `-j1` (the gate-speed audit's S1). `--no-targets` skips the step; `--targets-only` runs it in
+  the foreground. Still `-j1` (it is a measurement; a measurement sharing the GPU with three
+  siblings prints a number nobody can use), and its exit code is reported and discarded. The step
+  runs in its own session, so its pid IS its process group: stop it with `kill -- -<pid>` (the
+  ctest and every suite under it). Every `--run` and `--solo` on that build dir stops a live step's
+  group by itself before it starts, and says so — the targets are a report and can be re-run. A
+  rebuild does not run under a live step: stop the group first. The MERGE and PUSH tiers drop it
   with `-LE`, which is the only shape ctest offers for "these do not decide the tier";
 - every run prints `target: <value> (bar <bar>) <what>`, so the distance to the bar is visible
   from any lane's scoped gate and a target that goes green EARLY is noticed rather than
@@ -69,9 +79,13 @@ same pixel through a GREY mirror at L = 3.0 and at L = 0.8 and asserts the RATIO
 1.25 under a clip): the mirror's reflectance and the whole grade cancel, and the claim is about
 the store alone. Measured 1.255x unpatched / 3.745x patched.
 
-`-j4` is the ceiling on this box (RTX 4080 16 GB: ~1.6 GB of VRAM per Vulkan boot since the
-probe-shadow merge of 2026-09-10, ~3 GB before; boots are CPU-bound too — expect ~1.6× over
--j2, not 2×). Every gate runs at `-j4`, however many other lanes gate beside it: the box admits
+THE WIDTH IS ONE CONSTANT: `GATE_JOBS` in `scripts/gate-scope.py` (today **4**;
+`gate-scope.py --gate-jobs` prints it). The scoped gate, the MERGE tier, a fallback, the joint
+union, the merge refusal's re-selection and `rc-gate.sh`'s ctest all read it; changing the box's
+width is that one line and an owner decision (§7b rule 3). The gate-speed audit's scheduler replay
+(rc-smoke15a's durations, the registered locks and tokens) puts -j6 at 21.7 min against 31.0 at
+-j4, CPU contention unmeasured (`~/Developer/spikes/gate-speed-1/`). Every gate runs at
+`GATE_JOBS`, however many other lanes gate beside it: the box admits
 Vulkan processes by VRAM itself (§4b, GATE-ADMIT-1) — a row that does not fit waits for tokens
 instead of failing an allocation, so the old "-j2 while two or more other Vulkan gates are live"
 rule is retired.
@@ -154,12 +168,15 @@ zero and stays there.
 THE PRINCIPLE (TESTING_V2 T3; PHOTON_ATOM_CONTRACT §7b rule 1): a lane runs everything its
 change CAN REACH and nothing it cannot — read from the build and the diff, never guessed — and
 the full tiers stay where the process needs them (a stage close, a fork pin bump, nightly, the
-phase's push). `-j N` / `--jobs N` sets the ctest parallelism (default 4); the printed command,
+phase's push). `-j N` / `--jobs N` sets the ctest parallelism (default `GATE_JOBS`); the printed command,
 the wall estimate and a fallback's MERGE tier all follow it.
 
 ```
 scripts/gate-scope.sh <base>..<tip>            # a lane: its base commit .. its tip — prints the selection and why
-scripts/gate-scope.sh <range> --run            # run it (DISPLAY, data root set); every row's verdict -> the run log
+scripts/gate-scope.sh <range> --run            # run it (DISPLAY, data root set); every row's verdict -> the run log;
+                                               #   exits with the GATING phases' code, then starts the target step
+scripts/gate-scope.sh <range> --run --no-targets    # ...without the target step
+scripts/gate-scope.sh <range> --run --targets-only  # the target step alone, in the foreground (reported, exit 0)
 scripts/gate-scope.sh <range> --json           # machine-readable: suites, reasons, rationale, command
 scripts/gate-scope.sh --files src/x.cpp ...    # a file list instead of a range (no diff: no symbols, no CMake reading)
 scripts/gate-scope.sh --solo <suite> [--times 3]   # the flake protocol (§4), each run logged as a retry
@@ -269,15 +286,16 @@ tool's own traps (the empty inventory, `--build .`, the targets' split, the fall
 **ENFORCEMENT (T6; §7b "the rules are tooling, not text").** (1) THE ONE COMMAND a developer runs
 before a merge is `scripts/gate-scope.sh <base>..HEAD --run`: it prints the selection and every
 reason, runs it, writes the run log, and exits non-zero on any gating red (target tests report,
-never gate). (2) `source.testing_rules` (label `hygiene`) lints the rules the tree can show: R1
+never gate, and run after the verdict as their own step). (2) `source.testing_rules` (label `hygiene`) lints the rules the tree can show: R1
 every measuring row (`.timing`, `.benchmark`, `JAHSHAKA_TIMING_BARS=1`) inside the GPU lock; R2
 every `nightly` row priced in `scripts/gate-times.txt`; R3 no copied `ctest -LE` tier outside
 `gate-scope.py`; R4 no `RUN_SERIAL` without a comment naming its reason (or the GPU lock); R5 every
 app/lint row reachable from a subject (an API module its script or harness calls, a rule's
 directory, a tree file it runs). (3) THE MERGE REFUSAL: `scripts/ci-gate-check.sh <range>` exits 1
-with the reason unless the run log holds, at the range's tip on a clean tree, a latest-PASS record
-for every row and arm the range selects (a solo retry's green after a red counts; both stay in the
-log). A hook or a CI job calls it; `gate.ci_check` proves it.
+with the reason unless the run log answers every row and arm the range selects, on a clean tree,
+under the flake law (§4) — at the range's tip, or, for a row the last fix round did not reach, at
+an earlier commit of the lane (§3b). It prints, per row, the commit its record came from. A hook
+or a CI job calls it; `gate.ci_check` and `gate.fix_round` prove it.
 
 **THE JOINT SUITES (T4).** At a merge where two lanes touched one file family, the lead runs
 `scripts/gate-scope.sh --joint <rangeA> <rangeB> [--run]`: the gate is the UNION of both
@@ -296,13 +314,36 @@ missed the app-spawning harnesses); a fork pin bump is the tier by rule. Summed:
 The selector does not make an engine lane short; the pools (fewer app boots) are what an engine
 lane's time rests on.
 
-## 3b. Re-gating after a fix (2026-09-11, owner: "no double checking")
+## 3b. Re-gating after a fix (2026-09-11, owner: "no double checking"; MECHANICAL since GATE-SPEED-1)
 
-A lane that gets a red on its tier FIXES, then re-runs ONLY (a) the suites that failed and (b)
-the SCOPED selection of the FIX's own diff (`scripts/gate-scope.sh <pre-fix tip>..<post-fix tip>
---run`) — never the whole tier again. The batch gate before the push is the full safety net.
-The lead's post-merge targeted run stays (owner decision): it catches a merge interaction at
-merge time instead of at the batch gate.
+A lane that gets a red FIXES, then runs THE FIX ROUND: `scripts/gate-scope.sh <pre-fix
+tip>..<post-fix tip> --run` — the scoped selection of the FIX's own diff, never the lane's whole
+selection again. After a forward merge of d-build into the lane, the fix round is `<merge
+commit>..<tip>` (the merge commit is the lane's own; a range across it scopes the whole lane again).
+A red the fix does not reach is answered where it happened: a recorded verdict, or `--solo` 3/3 for
+the contention class — a green re-run at a later commit does NOT answer it. The batch gate before the push is the full safety net. The lead's post-merge
+targeted run stays (owner decision): it catches a merge interaction at merge time instead of at
+the batch gate.
+
+THE MERGE REFUSAL ACCEPTS IT (`scripts/ci_gate_check.py`; until GATE-SPEED-1 it keyed every record
+on the EXACT tip, so every fix round re-ran the whole selection — 45.9 % of all suite-time
+09-28..10-01, the gate-speed audit's R1). For a row with no record at the tip it takes the NEWEST
+record of that row at an earlier commit A of the lane (its own commits in base..tip; a d-build
+commit a forward merge carried in is not one), provided:
+- the scoped selection of `A..tip` does NOT include the row (a pool arm: does not include that arm)
+  — the same selector and the same reach, so a miss is a selector defect (§3), never a reason to
+  re-run "to be safe";
+- the fork pin is the same at A and at the tip, and `A..tip` neither falls back nor selects the
+  tier by rule — A FORK PIN CHANGE INVALIDATES EVERY EARLIER RECORD (§7b rule 4 stays);
+- that newest record decides: green is re-used; a red without its verdict (or a contention red
+  without its 3/3) REFUSES — a later red blocks an older green. `--verdict "<row>=<text>"`
+  records the answer at the commit where that red happened (repeatable: every `--verdict` counts).
+THE FLAKE LAW ACROSS COMMITS: a row green at the tip is STILL refused while an earlier commit that
+the fix does not reach holds an open red of it — a verdict-less red, or a contention red without its
+3/3. A red at a commit the fix DOES reach is answered by the tip's run.
+A row the fix reaches needs its record at the tip. Every row prints its source
+(`row <name> <- <sha> (the tip)` or `... re-used from <sha>`); the summary counts both. Measured
+on this lane's own two rounds: `spikes/gate-speed-1/`.
 
 ## 4. Flake protocol (the law in the refusal since TEST-SELECTOR-1)
 
@@ -385,9 +426,10 @@ above every measured row so its chain starts first and overlaps the gate:
 the nightly vr.frame_budget and vr.warmup.timing) (each runner's IPC socket lives in its
 own XDG_RUNTIME_DIR, so the "one socket" reason was void; vr.eye_grade captures the compositor
 with `xwd -id` and therefore runs on ITS OWN Xvfb, displays 241-299); `gi_chain` — the
-cascade-chain rows (their VRAM reason was measured false). RUN_SERIAL remains only where the
-audit kept it (app.input_keys, app.watchdog_stall, gi.field_scroll, threading.mode /
-mode_serial / gi_resolve / gi_resolve_serial, newproject_stall.timing, and the nightly benches).
+cascade-chain rows (their VRAM reason was measured false). `threading` — the four compile halves of tests/threading (mode / mode_serial / gi_resolve /
+gi_resolve_serial; GATE-SPEED-1: they were RUN_SERIAL; their claim is a byte compare, the verdict
+is in their CMake). RUN_SERIAL remains only where the audit kept it (app.input_keys,
+app.watchdog_stall, gi.field_scroll, newproject_stall.timing, and the nightly benches).
 
 ## 4b. THE VRAM BUDGET — box-wide tokens (lane GATE-ADMIT-1, 2026-09-27)
 
@@ -525,8 +567,9 @@ WHAT THE SHAPE CAN STILL WIN is the gap to busy/4 — about 8 % after D6B. The r
 suite-seconds: the tier grew ~20 rows between the audit and D6B (atom.lod_switch alone is
 250 s), and three other lanes' gates doubled every row's seconds on the day of the
 measurement. The residual one-running tail is the RUN_SERIAL rows the audit KEPT (§4, the
-serial families paragraph); a `threading` RESOURCE_LOCK for the four compile halves would
-keep their stated reason ("four Epic opens compiling at once") without stopping the gate.
+serial families paragraph); the four threading compile halves left it for the `threading`
+RESOURCE_LOCK (GATE-SPEED-1), which keeps their stated reason ("four Epic opens compiling at
+once") without stopping the gate.
 
 HISTORY, kept because the counts move most weeks: 455 registered / 451 run in 930-1,028 s at
 -j4 on pushes #44-#46 (2026-09-18, ledger §680/§689/§707; the spread was load: one build, two

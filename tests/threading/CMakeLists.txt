@@ -53,11 +53,20 @@ jah_tsan_lane(threading.staging_race)
 #     serial half not serial-compile at all.
 #   * ENGINE UP (no --headless): the whole subject is shader compilation during
 #     a rendered frame.
-#   * RUN_SERIAL on both halves. They are not timing gates, but they both open a
-#     project at Epic and compile a few dozen shaders; letting four of those run
-#     at once is how the contention-sensitive suites got their reputation.
+#   * RESOURCE_LOCK threading on both halves (GATE-SPEED-1; RUN_SERIAL until then).
+#     They are not timing gates: their claim is a BYTE compare of two pictures, which
+#     a loaded box cannot move. What must not happen is the four compile halves of
+#     this file (these two and the gi_resolve pair) opening a project at Epic all at
+#     once — the lock keeps them single-file among themselves, while RUN_SERIAL
+#     stopped the WHOLE gate for each of them (1.2 min per tier in the gate-speed
+#     audit's replay). VERDICT (the law for dropping RUN_SERIAL): the family ran 3x
+#     solo and 3x under a -j4 load, green, Xid 0 — spikes/gate-speed-1/.
+#     The COST starts the chain early so it overlaps the gate instead of ending it.
 #   * The pixel compare is `cmake -E compare_files` on the two PNGs — byte for
 #     byte, no tolerance. Anything else would be a different claim.
+# THE threading FAMILY'S COST (GATE-SPEED-1; the serial families, tests/CMakeLists.txt): above
+# every measured row and below the monado / gi_chain chains, so the four-row chain starts early.
+set(JAH_COST_THREADING 80000)
 set(SOURCE_DIR ${CMAKE_SOURCE_DIR})
 configure_file(mode.js.in ${CMAKE_CURRENT_BINARY_DIR}/mode.js @ONLY)
 
@@ -77,7 +86,7 @@ set_tests_properties(threading.mode PROPERTIES
     ENVIRONMENT "HOME=${_thr_home_par};JAHSHAKA_DATA_ROOT=${_thr_home_par}/.local/share/Jahshaka"
     FIXTURES_REQUIRED threading_home_mode
     FIXTURES_SETUP threading_shot_parallel
-    LABELS "threading" RUN_SERIAL TRUE TIMEOUT 300)
+    LABELS "threading" RESOURCE_LOCK threading COST ${JAH_COST_THREADING} TIMEOUT 300)
 
 # JAHSHAKA_SCENE_THREADS is the PRIMARY tier's measurement escape hatch
 # (src/bridge/sceneworkerthreads.h:52-56) — pinning it to 1 gives the editor
@@ -91,7 +100,7 @@ set_tests_properties(threading.mode_serial PROPERTIES
     ENVIRONMENT "HOME=${_thr_home_ser};JAHSHAKA_DATA_ROOT=${_thr_home_ser}/.local/share/Jahshaka;JAHSHAKA_SCENE_THREADS=1"
     FIXTURES_REQUIRED threading_home_mode_serial
     FIXTURES_SETUP threading_shot_serial
-    LABELS "threading" RUN_SERIAL TRUE TIMEOUT 300)
+    LABELS "threading" RESOURCE_LOCK threading COST ${JAH_COST_THREADING} TIMEOUT 300)
 
 add_test(NAME threading.mode_pixels
          COMMAND ${CMAKE_COMMAND} -E compare_files
@@ -105,7 +114,7 @@ set_tests_properties(threading.mode_pixels PROPERTIES
 # GUARD FOR THE GI RE-SOLVE (PHOTON_SPEC.md §7 E1 "ITEM 0"; ledger §373).
 #
 # Same three-entry shape and the same reasons as the trio above (two virgin HOMEs
-# so both halves really compile; engine up; RUN_SERIAL; a byte compare with no
+# so both halves really compile; engine up; the threading lock; a byte compare with no
 # tolerance). What it adds is the one frame threading.mode does not exercise: a
 # `world.refreshGi()` issued EXACTLY ONE rendered frame after the compile burst.
 # The script's header explains the defect and what "wrong" looks like.
@@ -131,9 +140,9 @@ jah_fresh_home_fixture(threading.freshhome.gi_resolve threading_home_gi_resolve 
 
 jah_fresh_home_fixture(threading.freshhome.gi_resolve_serial threading_home_gi_resolve_serial "${_gir_home_ser}" LABELS "threading")
 
-# RUN_SERIAL on both halves (threading.gi_resolve and threading.gi_resolve_serial), for the
-# mode pair's reason above: each opens a project at Epic and compiles a few dozen shaders (not a
-# timing gate).
+# RESOURCE_LOCK threading on both halves (threading.gi_resolve and threading.gi_resolve_serial),
+# for the mode pair's reason and verdict above: each opens a project at Epic and compiles a few
+# dozen shaders (not a timing gate) — never beside another compile half of this file.
 jah_gpu_row(threading.gi_resolve CLASS app
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
                  --script ${CMAKE_CURRENT_BINARY_DIR}/gi_resolve.js
@@ -142,7 +151,7 @@ set_tests_properties(threading.gi_resolve PROPERTIES
     ENVIRONMENT "HOME=${_gir_home_par};JAHSHAKA_DATA_ROOT=${_gir_home_par}/.local/share/Jahshaka"
     FIXTURES_REQUIRED threading_home_gi_resolve
     FIXTURES_SETUP threading_shot_gi_parallel
-    LABELS "threading" RUN_SERIAL TRUE TIMEOUT 240)
+    LABELS "threading" RESOURCE_LOCK threading COST ${JAH_COST_THREADING} TIMEOUT 240)
 
 jah_gpu_row(threading.gi_resolve_serial CLASS app
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
@@ -152,7 +161,7 @@ set_tests_properties(threading.gi_resolve_serial PROPERTIES
     ENVIRONMENT "HOME=${_gir_home_ser};JAHSHAKA_DATA_ROOT=${_gir_home_ser}/.local/share/Jahshaka;JAHSHAKA_SCENE_THREADS=1"
     FIXTURES_REQUIRED threading_home_gi_resolve_serial
     FIXTURES_SETUP threading_shot_gi_serial
-    LABELS "threading" RUN_SERIAL TRUE TIMEOUT 240)
+    LABELS "threading" RESOURCE_LOCK threading COST ${JAH_COST_THREADING} TIMEOUT 240)
 
 add_test(NAME threading.gi_resolve_pixels
          COMMAND ${CMAKE_COMMAND} -E compare_files
@@ -194,10 +203,9 @@ set(_thr_home_stall ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-threading_newproject_st
 
 jah_fresh_home_fixture(threading.freshhome.import_soak threading_home_import_soak "${_thr_home_soak}" LABELS "threading")
 
-# NOT RUN_SERIAL (TEST_GATE_AUDIT.md §2, 2026-09-09). threading.mode and
-# threading.mode_serial keep theirs and the reason is written above them — four
-# Epic opens compiling shaders at once is the measured origin of the whole
-# contention class. This suite is different in kind: its assertions are
+# NOT RUN_SERIAL (TEST_GATE_AUDIT.md §2, 2026-09-09) and not in the threading lock either.
+# The four compile halves above hold `RESOURCE_LOCK threading` (four Epic opens compiling
+# shaders at once is the measured origin of the contention class). This suite is different in kind: its assertions are
 # PER-ITERATION BUDGETS with 30 s of headroom each, and a soak that a parallel
 # schedule can starve inside a 30 s budget would be reporting a real defect.
 # What it cost was a serial island of 12 s per gate.
