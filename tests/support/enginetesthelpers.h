@@ -145,6 +145,37 @@ inline void setNodeScale(Scene *s, NodeId n, const Vec3 &scale)
     s->setNodeTransform(n, p.pos, p.rot, p.scale);
 }
 
+// ---------------------------------------------------------------------------
+// THE DISPLAY ENCODE AND THE SUITES THAT MEASURE LIGHT (SRGB-ENCODE-1). A view
+// that presents, or an offscreen view that opted into the chain
+// (PostFxDesc::allowOffscreen), writes sRGB-ENCODED bytes; an offscreen view
+// that did not is the Plain instrument and writes linear radiance. A suite whose
+// bars are LIGHT (a red excess, an occlusion mass, a shadow ratio) reads the
+// former through `linearise`, which turns the bytes back into 8-bit linear
+// radiance — the space every such bar in this tree was derived in.
+inline bool displayEncoded(View *v)
+{
+    return v && (!v->isOffscreen() || v->postFx().allowOffscreen);
+}
+inline void linearise(Image &img)
+{
+    unsigned char lut[256];
+    for (int i = 0; i < 256; ++i) {
+        const double c = i / 255.0;
+        const double l = c <= 0.04045 ? c / 12.92 : std::pow((c + 0.055) / 1.055, 2.4);
+        lut[i] = static_cast<unsigned char>(std::lround(l * 255.0));
+    }
+    for (size_t i = 0; i < img.rgba.size(); ++i)
+        if ((i & 3u) != 3u) img.rgba[i] = lut[img.rgba[i]];
+}
+/// readPixels in LINEAR radiance whatever the view's space (see above).
+inline bool readLinear(View *v, Image &img)
+{
+    if (!v || !v->readPixels(img)) return false;
+    if (displayEncoded(v)) linearise(img);
+    return true;
+}
+
 /// setCameraPosition without lookAt: identity orientation (looking down -Z),
 /// engine-default projection — exactly what the deleted View verb left behind.
 inline void testCameraAt(View *v, const Vec3 &pos)
@@ -305,6 +336,25 @@ inline void meanRG(const Image &img, float &r, float &g)
     const unsigned y0 = img.height * 5u / 16u, y1 = img.height * 11u / 16u;
     for (unsigned y = y0; y < y1; ++y)
         for (unsigned x = x0; x < x1; ++x) { const Colour c = img.at(x, y); sr += c.r; sg += c.g; ++n; }
+    r = float(n ? sr / n : 0.0); g = float(n ? sg / n : 0.0);
+}
+/// The same mean over a DISPLAY-ENCODED readback (a view that opted into the
+/// chain: SRGB-ENCODE-1), decoded to linear light first, so the leak is read in
+/// the unit its bars were derived in.
+inline void meanRGDecoded(const Image &img, float &r, float &g)
+{
+    const auto lin = [](unsigned char v) {
+        const double c = v / 255.0;
+        return c <= 0.04045 ? c / 12.92 : std::pow((c + 0.055) / 1.055, 2.4);
+    };
+    double sr = 0.0, sg = 0.0; int n = 0;
+    const unsigned x0 = img.width * 5u / 16u, x1 = img.width * 11u / 16u;
+    const unsigned y0 = img.height * 5u / 16u, y1 = img.height * 11u / 16u;
+    for (unsigned y = y0; y < y1; ++y)
+        for (unsigned x = x0; x < x1; ++x) {
+            const size_t i = (size_t(y) * img.width + x) * 4u;
+            sr += lin(img.rgba[i]); sg += lin(img.rgba[i + 1]); ++n;
+        }
     r = float(n ? sr / n : 0.0); g = float(n ? sg / n : 0.0);
 }
 

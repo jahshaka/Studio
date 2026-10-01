@@ -6,6 +6,7 @@
 // at the centre; a second material colour must show; the RTT preview must
 // match the view; release() must detach cleanly.
 #include "../support/previewdump.h"
+#include "../support/thumbnailgrade.h"
 
 #include "bridge/previewmesh.h"
 #include "irisgl/core/math/vec.h"
@@ -143,6 +144,23 @@ int main(int argc, char **argv)
         show("cube, framing camera", front, W / 2, H / 2);
         CHECK(isRed(at(front, W / 2, H / 2)), "centre pixel is dominated by the material colour");
         CHECK(isBackground(at(front, 2, 2)), "corner is the preview background (25,25,25)");
+        // THE SHOT IS A TILE, NOT THE INSTRUMENT (SRGB-ENCODE-1): renderImage is
+        // the sky asset's thumbnail path (assetview -> engineassetviewer ->
+        // EngineAssetScene::renderImage), and it takes the thumbnail grade,
+        // display-encoded — the subject's centre reads the grade's code for the
+        // light the instrument view above reads there (the same pose and scene).
+        {
+            const QImage shot = assets.renderImage(W, H);
+            const int instrument = int(at(front, W / 2, H / 2).r * 255.0f + 0.5f);
+            const int got = shot.isNull() ? -1 : shot.pixelColor(W / 2, H / 2).red();
+            double lo = 0.0, hi = 0.0;
+            const bool ok = thumbgrade::matches(got, instrument, assets.document()->exposure, &lo, &hi);
+            std::printf("    asset shot centre red: %d (the thumbnail grade of the instrument's %d: "
+                        "%.1f..%.1f)\n", got, instrument, lo, hi);
+            CHECK(!shot.isNull() && ok,
+                  "SRGB-ENCODE-1: the asset shot (the sky tile's path) is the thumbnail grade, "
+                  "display-encoded, like every other tile");
+        }
         // THE GROUND IS THE EDITOR'S GROUND PLANE WIDGET (WORLD-MODEL-1): on for the
         // lit backdrop, 5 m down where the subject stands, and it fills the bottom
         // of the frame; the dark backdrops take it away.

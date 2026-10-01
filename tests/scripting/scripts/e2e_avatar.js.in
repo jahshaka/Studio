@@ -94,6 +94,8 @@ avatar.setTime(0);
 assert(avatar.setMeshVisible(true) && avatar.setSkeletonVisible(false), "mesh only");
 var meshShot = avatar.snapshot("avatar_mesh.png", 160, 160, [{ x: 0.5, y: 0.5 }]);
 console.log("mesh-only centre: " + JSON.stringify(meshShot.center));
+assert(meshShot.encoding === "display",
+       "avatar.snapshot reports its bytes' space: display-encoded, the thumbnail grade (SRGB-ENCODE-1)");
 assert(isRed(meshShot.center), "mesh on / skeleton off -> the mesh at the centre");
 
 assert(avatar.setMeshVisible(false) && avatar.setSkeletonVisible(true), "skeleton only");

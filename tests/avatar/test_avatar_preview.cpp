@@ -31,6 +31,7 @@
 // with the mesh on — on a real character the skeleton is inside the mesh and
 // is hidden, which is the accepted behaviour until an X-ray mode exists.
 #include "../support/previewdump.h"
+#include "../support/thumbnailgrade.h"
 #include "irisgl/core/math/vec.h"
 #include "irisgl/document/scenegraph/scene.h"
 #include <QApplication>
@@ -175,6 +176,22 @@ int main(int argc, char **argv)
     Image img = render(scene, *engine, view);
     show("S4 mesh on / skeleton off", img);
     CHECK(isMesh(img.at(unsigned(W / 2), unsigned(H / 2))), "S4: the mesh covers the subject centre");
+    // ---- SRGB-ENCODE-1: avatar.snapshot is a tile, not the instrument --------
+    // renderImage is avatar.snapshot's path: the thumbnail grade, display-encoded
+    // — the mesh at the centre reads the grade's code for the light the instrument
+    // view reads there (mesh on, skeleton off: no overlay colour in the way).
+    {
+        const QImage shot = scene.renderImage(W, H);
+        const Colour ci = img.at(unsigned(W / 2), unsigned(H / 2));
+        const int instrument = int(std::max({ ci.r, ci.g, ci.b }) * 255.0f + 0.5f);
+        const QColor cs = shot.isNull() ? QColor(0, 0, 0) : shot.pixelColor(W / 2, H / 2);
+        const int got = shot.isNull() ? -1 : std::max({ cs.red(), cs.green(), cs.blue() });
+        double lo = 0.0, hi = 0.0;
+        const bool ok = thumbgrade::matches(got, instrument, model.document()->exposure, &lo, &hi);
+        std::printf("    avatar snapshot centre: %d (the thumbnail grade of the instrument's %d: %.1f..%.1f)\n",
+                    got, instrument, lo, hi);
+        CHECK(!shot.isNull() && ok, "SRGB-ENCODE-1: avatar.snapshot is the thumbnail grade, display-encoded");
+    }
     CHECK(count(img, isOverlay) == 0, "S4: NO overlay pixels while the skeleton is off");
     CHECK(scene.overlaySegments() == 0, "S4: the overlay draws no segments");
 

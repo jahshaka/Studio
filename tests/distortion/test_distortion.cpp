@@ -221,6 +221,13 @@ int main()
     enginetest::testCameraLookAt(view, Vec3(0.0f, 0.0f, 2.0f), Vec3(0.0f, 0.0f, -4.0f));
 
     // ---- the baseline: the wall alone, no emitter, no chain ----------------
+    // THE DISPLAY PICTURE (SRGB-ENCODE-1): every frame compared below comes
+    // through the chain's door and is display-encoded, so the baseline is the
+    // same door with nothing in it (the passthrough shape plus the encode), not
+    // the linear Plain instrument an offscreen view without the door is.
+    PostFxDesc base;
+    base.allowOffscreen = true;   // the deliberate door; see tests/looks' header
+    view->setPostFx(base);
     render(engine.get(), 4);
     Image wallOnly;
     REQUIRE(view->readPixels(wallOnly));
@@ -267,8 +274,6 @@ int main()
               pixelDiff(wallOnly, passthrough));
 
     // ---- 1. STRENGTH 0 IS BYTE-IDENTICAL -----------------------------------
-    PostFxDesc base;
-    base.allowOffscreen = true;   // the deliberate door; see tests/looks' header
     {
         PostFxDesc d = base;
         d.distortion = true;

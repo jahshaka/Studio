@@ -109,3 +109,14 @@ if(JAHSHAKA_ASAN)
     set_tests_properties(hdr.dither_asan PROPERTIES TIMEOUT 120 LABELS "engine"
                          ENVIRONMENT "${JAH_ASAN_ENGINE_OPTIONS}")
 endif()
+
+# EXACTLY ONE sRGB ENCODE ON EVERY DISPLAY PATH (SRGB-ENCODE-1). A flat emissive
+# plane at a ramp of known radiances, read back four ways in ONE process: the
+# Plain instrument (linear, unchanged), the ungraded display picture in the
+# passthrough and the post shape (the exact sRGB OETF), and the graded picture
+# (the OETF of the film curve; the grey card at 118). See the file header.
+jahshaka_hdr_test(test_hdr_display_encode test_hdr_display_encode.cpp)
+target_link_libraries(test_hdr_display_encode PRIVATE JahshakaEngine)
+jah_gpu_row(hdr.display_encode CLASS engine COMMAND test_hdr_display_encode
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(hdr.display_encode PROPERTIES TIMEOUT 120 LABELS "engine")

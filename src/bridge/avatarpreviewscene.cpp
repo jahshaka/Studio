@@ -8,6 +8,8 @@
 #include "irisgl/document/scenegraph/scene.h"
 #include "irisgl/document/scenegraph/scenenode.h"
 #include "irisgl/mirror/scenemirror.h"
+#include "irisgl/document/scenegraph/cameralens.h"
+#include "bridge/secondarysurfacetonemap.h"
 #include "modules/avatar/avatarpreviewmodel.h"
 #include "viewport/boneoverlay.h"
 #include "viewport/previewframing.h"
@@ -278,6 +280,11 @@ void AvatarPreviewScene::prepareOffscreen(View *shot, int width, int height)
         mModel->camera()->update(0);
         mirror()->applyCamera(mModel->camera(), shot);
     }
+    // A PICTURE, NOT THE INSTRUMENT (SRGB-ENCODE-1): the thumbnail grade at the
+    // avatar document's exposure, display-encoded like every other tile
+    // (avatar.snapshot reports `encoding: "display"`).
+    if (mModel && mModel->document())
+        secondaryfx::apply(shot, true, iris::lens::exposureStopsToChain(mModel->document()->exposure));
 }
 
 QImage AvatarPreviewScene::renderImage(int width, int height)

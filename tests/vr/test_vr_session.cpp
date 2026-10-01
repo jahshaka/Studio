@@ -1647,7 +1647,10 @@ int main() {
                 const auto cyanPixels = [&]() {
                     View *v = engine->vrView();
                     Image eye;
-                    if (!v || !v->readPixels(eye)) return size_t(0);
+                    // LINEAR (SRGB-ENCODE-1): the eye is display-encoded now, and the
+                    // classifier's 25-code margins were set on the linear picture -
+                    // the encode lifts the fixture's blue-grey backdrop past them.
+                    if (!enginetest::readLinear(v, eye)) return size_t(0);
                     size_t cyan = 0;
                     for (size_t i = 0; i + 3 < eye.rgba.size(); i += 4) {
                         const int r = eye.rgba[i], g = eye.rgba[i + 1], b = eye.rgba[i + 2];

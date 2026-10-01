@@ -135,7 +135,9 @@ Histogram histogram(const Image &img, const Rect &r)
             const int rr = img.rgba[i], gg = img.rgba[i + 1], bb = img.rgba[i + 2];
             sum += 0.2126 * rr + 0.7152 * gg + 0.0722 * bb;
             ++n;
-            if (rr < 40 && gg < 40 && bb < 40) continue;     // the inset's background
+            // the inset's background. sRGB display encode (SRGB-ENCODE-1): the
+            // linear bar 40 is display 110 (the 0.02/0.03 backdrop now reads ~39/48).
+            if (rr < 110 && gg < 110 && bb < 110) continue;
             ++h.lit;
             h.brightest = std::max(h.brightest, std::max({ rr, gg, bb }));
             if (rr >= 254 && gg >= 254 && bb >= 254) ++h.saturated;
@@ -163,7 +165,7 @@ Box brightBox(const Image &img, const Rect &r)
         for (int x = std::max(0, x0); x < std::min(int(img.width), x1); ++x) {
             const size_t i = (size_t(y) * img.width + x) * 4u;
             const int lum = (img.rgba[i] + img.rgba[i + 1] + img.rgba[i + 2]) / 3;
-            if (lum < 96) continue;
+            if (lum < 165) continue;   // 96 linear = 165 display: OETF(96) = 165.04 (SRGB-ENCODE-1)
             b.x0 = std::min(b.x0, x); b.x1 = std::max(b.x1, x);
             b.y0 = std::min(b.y0, y); b.y1 = std::max(b.y1, y);
         }

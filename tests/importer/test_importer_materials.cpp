@@ -56,6 +56,7 @@
 #include <QImage>
 #include <QJsonObject>
 #include <QTemporaryDir>
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 
@@ -111,21 +112,39 @@ static iris::MeshNodePtr meshNodeNamed(const iris::SceneNodePtr &root, const QSt
 }
 
 /// Mean luminance of a rendered tile, counting only what is not the background.
-static double meanSubjectLuma(const QImage &img)
+/// THE THUMBNAIL IS DISPLAY-ENCODED (SRGB-ENCODE-1): the background colour is a
+/// LINEAR radiance, so the mask compares against its encode; `light`, if asked,
+/// is the same mean with every byte decoded first (a ratio of brightness is a
+/// ratio of light, not of display codes).
+static double srgbEnc(double v)
 {
-    const Colour bg = EngineThumbnailRenderer::backgroundColour();
-    double sum = 0.0;
+    v = std::min(std::max(v, 0.0), 1.0);
+    return v <= 0.0031308 ? v * 12.92 : 1.055 * std::pow(v, 1.0 / 2.4) - 0.055;
+}
+static double srgbDec(int code)
+{
+    const double c = code / 255.0;
+    return 255.0 * (c <= 0.04045 ? c / 12.92 : std::pow((c + 0.055) / 1.055, 2.4));
+}
+static double meanSubjectLuma(const QImage &img, double *light = nullptr)
+{
+    const Colour bgLin = EngineThumbnailRenderer::backgroundColour();
+    const double bg[3] = { srgbEnc(bgLin.r), srgbEnc(bgLin.g), srgbEnc(bgLin.b) };
+    double sum = 0.0, sumLight = 0.0;
     int n = 0;
     for (int y = 0; y < img.height(); ++y)
         for (int x = 0; x < img.width(); ++x) {
             const QColor c = img.pixelColor(x, y);
-            if (std::fabs(float(c.redF()) - bg.r) < 0.04f &&
-                std::fabs(float(c.greenF()) - bg.g) < 0.04f &&
-                std::fabs(float(c.blueF()) - bg.b) < 0.04f)
+            if (std::fabs(c.redF() - bg[0]) < 0.04 &&
+                std::fabs(c.greenF() - bg[1]) < 0.04 &&
+                std::fabs(c.blueF() - bg[2]) < 0.04)
                 continue;
             sum += 0.2126 * c.red() + 0.7152 * c.green() + 0.0722 * c.blue();
+            sumLight += 0.2126 * srgbDec(c.red()) + 0.7152 * srgbDec(c.green()) +
+                        0.0722 * srgbDec(c.blue());
             ++n;
         }
+    if (light) *light = n ? sumLight / n : 0.0;
     return n ? sum / n : 0.0;
 }
 
@@ -454,7 +473,8 @@ int main(int argc, char **argv)
                 if (node) {
                     auto mat = node->getMaterial().dynamicCast<iris::PbrMaterial>();
                     const QImage fixedShot = renderer.renderNode(node, QSize(96, 96));
-                    const double fixedLuma = meanSubjectLuma(fixedShot);
+                    double fixedLight = 0.0;
+                    const double fixedLuma = meanSubjectLuma(fixedShot, &fixedLight);
 
                     // The pre-fix reading, on the same mesh and the same maps:
                     // the metallic workflow at full metal / full rough, which
@@ -463,7 +483,8 @@ int main(int argc, char **argv)
                     mat->setValue(QStringLiteral("metallic"), 1.0f);
                     mat->setValue(QStringLiteral("roughness"), 1.0f);
                     const QImage brokenShot = renderer.renderNode(node, QSize(96, 96));
-                    const double brokenLuma = meanSubjectLuma(brokenShot);
+                    double brokenLight = 0.0;
+                    const double brokenLuma = meanSubjectLuma(brokenShot, &brokenLight);
                     // Leave the document as it was imported.
                     mat->setValue(QStringLiteral("workflow"), 1);
                     mat->setValue(QStringLiteral("metallic"), 0.0f);
@@ -502,10 +523,21 @@ int main(int argc, char **argv)
                     // 45.6 before and after) does not, so the relative bar is
                     // re-derived from the same two readings: 1.36x, fenced at
                     // 1.25x ("clearly brighter", not "tuned to it").
-                    CHECK(fixedLuma > 56.0 && fixedLuma < 68.0,
+                    // sRGB display encode (SRGB-ENCODE-1): the thumbnail is display-encoded
+                    // now, so the pin and its band are the OETF image of the linear ones:
+                    // The pin was MEASURED on the linear picture, so it is held IN LIGHT
+                    // (the decoded mean): 62.1 +/- 6, exactly the old bar. (Its OETF image
+                    // in display codes is not the display mean — the mean of encoded bytes
+                    // is not the encode of the mean light.)
+                    CHECK(fixedLight > 56.0 && fixedLight < 68.0,
                           "5: the imported spec-gloss material is LIT, at the re-pinned value "
-                          "(62.1 +/- 6 in the studio environment with the diffuse energy factor)");
-                    CHECK(fixedLuma > brokenLuma * 1.25,
+                          "(62.1 +/- 6 in light, in the studio environment with the diffuse "
+                          "energy factor)");
+                    // ...IN LIGHT (SRGB-ENCODE-1): the 1.25x fence was set on the linear
+                    // picture, so it is evaluated on the decoded means.
+                    std::printf("    in light: imported %.1f, pre-fix %.1f (ratio %.2f)\n",
+                                fixedLight, brokenLight, brokenLight > 0.0 ? fixedLight / brokenLight : 0.0);
+                    CHECK(fixedLight > brokenLight * 1.25,
                           "5: ... and is clearly brighter than the full-metal reading it used to get");
                 }
 

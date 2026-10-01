@@ -5305,7 +5305,11 @@ void ssao_darkens_creases() {
     CHECK_MSG(bestDrop > (flatPlain - flatAo),
               "the crease darkens MORE than open floor: %d vs %d", bestDrop, flatPlain - flatAo);
 
-    v->setPostFx(PostFxDesc());
+    // SSAO off on the SAME display picture (SRGB-ENCODE-1: a bare PostFxDesc is the
+    // linear Plain instrument, another colour space than `plain` above).
+    PostFxDesc offDesc;
+    offDesc.allowOffscreen = true;
+    v->setPostFx(offDesc);
     render(fx.e, 2); Image off; REQUIRE(v->readPixels(off));
     CHECK_MSG(px(off, 64, unsigned(creaseY)).r == px(plain, 64, unsigned(creaseY)).r,
               "turning SSAO off restores the exact original");

@@ -425,34 +425,23 @@ public:
     /// USER pressing Screenshot wants the picture they are looking at. So the
     /// plain picture is an EXPLICIT opt-in whose name says what it is, and the
     /// user's door asks for `Scene`.
-    /// WHAT COLOUR SPACE EACH GRADE'S BYTES ARE IN — MEASURED, not assumed
-    /// (PLAIN-GRADE-1, 2026-09-18; the render audit's ON-20 asked the question
-    /// and left it open). The measurement, on the rig at 1920x1080 with a flat
-    /// sky the user picked as #808080 (the document decodes a picked colour
-    /// sRGB->linear, so the sky's radiance is 0.2159):
+    /// WHAT COLOUR SPACE EACH GRADE'S BYTES ARE IN (PLAIN-GRADE-1 measured the
+    /// question, SRGB-ENCODE-1 fixed the display half of the answer):
     ///
-    ///   plain    55/255 = 0.2157 — THE LINEAR RADIANCE, un-encoded.
-    ///   tonemap  50/255, scene 50/255, viewport 50/255 — the film curve's
-    ///            output (Hable at the shipped constants, /f(11.2), then the
-    ///            (x-0.5)*1.25+0.61 grade tail: 0.2159 x 1.3646 exposure
-    ///            -> 0.1946 -> 50, to the byte).
-    ///   THE WINDOW  (0x200011 grabbed with xwd while the same scene was on
-    ///            screen) 50/255 — and with the sky at #8000C0 the window read
-    ///            (50, 0, 114) against the scene grade's (50, 0, 114), THE SAME
-    ///            BYTES.
+    ///   plain    THE LINEAR RADIANCE, un-encoded: a flat #808080 sky
+    ///            (radiance 0.2159 — the document decodes a picked colour)
+    ///            reads 55/255. The measuring instrument, by contract.
+    ///   tonemap, scene, viewport — and THE WINDOW, and the VR eye image:
+    ///            the film curve's output THROUGH THE sRGB ENCODE (the end of
+    ///            HDR/FinalToneMapping; Jahshaka/DisplayEncode for a world with
+    ///            HDR off). The graded answers are the window's bytes exactly.
     ///
-    /// So: THE THREE GRADED ANSWERS ARE WHAT THE WINDOW SHOWS, bit for bit, and
-    /// PLAIN IS NOT — Plain is one colour space away from the picture, by its
-    /// own contract ("no post-processing at all"), and that difference is the
-    /// whole reason every offscreen diagnosis in this tree has read "too dark".
-    /// It is NOT a missing sRGB encode on the offscreen target: this engine's
-    /// window swapchain is not sRGB either (the `gamma` parameter is passed on
-    /// the non-Vulkan branch only, OgreEngine.cpp), HlmsPbs in this pin sets
-    /// `hw_gamma_write` unconditionally so the shader never encodes, and the
-    /// tonemapper's output IS the display code (which is why EXPOSURE-1's
-    /// anchor solves to an output of exactly 0.18 for an 18 % card). Encoding
-    /// the plain readback would therefore make it disagree with the window and
-    /// with every engine-side offscreen suite at once.
+    /// So Plain is one colour space away from the picture, deliberately: every
+    /// pixel suite asserts its exact linear values, and the engine keeps it
+    /// linear by construction (an offscreen view that has not opted into the
+    /// post chain is never display-encoded — ChainDesc::displayEncode). An 18 %
+    /// card at the default exposure reads 118 in the graded answers and on
+    /// screen.
     ///
     /// READ A PLAIN VALUE AS RADIANCE, then. `gradeEncoding()` below reports
     /// this per grade and every screenshot verb returns it beside the pixels,
