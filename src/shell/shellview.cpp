@@ -295,12 +295,12 @@ void ShellView::useArcballCamera()
 
 bool ShellView::isImmersiveFullscreen() const
 {
-    return mWindow->isImmersiveFullscreen();
+    return mWindow->views()->isImmersiveFullscreen();
 }
 
 void ShellView::setImmersiveFullscreen(bool on)
 {
-    mWindow->setImmersiveFullscreen(on);
+    mWindow->views()->setImmersiveFullscreen(on);
 }
 
 void ShellView::refreshGameplayShortcutRows()

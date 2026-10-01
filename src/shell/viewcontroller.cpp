@@ -14,6 +14,7 @@ For more information see the LICENSE file
 #include <QAction>
 #include <QActionGroup>
 #include <QIcon>
+#include <QMainWindow>
 #include <QMenu>
 #include <QPushButton>
 #include <QToolButton>
@@ -246,4 +247,69 @@ void ViewController::syncProjectionButton(bool perspective)
 		mProjection->setIcon(QIcon(":/icons/orthogonal-view-80.png"));
 		mProjection->setToolTip(tr("Orthogonal view | Toggle to switch to perspective view"));
 	}
+}
+
+// ---- immersive fullscreen ----------------------------------------------------
+
+void ViewController::setWindow(QMainWindow *window, const FullscreenChrome &chrome)
+{
+    mWindow = window;
+    mChrome = chrome;
+}
+
+void ViewController::setImmersiveFullscreen(bool on)
+{
+    if (mImmersive == on) return;
+    toggleImmersiveFullscreen();
+}
+
+// F11: immersive fullscreen — the window goes fullscreen and (in the editor
+// space) the docks and toolbar hide; a second F11 restores exactly what was
+// visible before (EDITOR_SHORTCUTS_SPEC §3).
+void ViewController::toggleImmersiveFullscreen()
+{
+    if (!mWindow) return;
+    if (mImmersive) { leaveImmersiveFullscreen(true); return; }
+    mImmersive = true;
+    mEntering = true;      // until the window manager says we are there
+    if (mChrome.captureLayout) mChrome.captureLayout();
+    mPreFullscreenMaximized = mWindow->isMaximized();
+    if (mChrome.hide) mChrome.hide();
+    mWindow->showFullScreen();
+}
+
+void ViewController::leaveImmersiveFullscreen(bool restoreWindow)
+{
+    // FIRST, so that the showNormal()/showMaximized() below — and any state
+    // change somebody else made — cannot re-enter through windowStateChanged.
+    mImmersive = false;
+    mEntering = false;
+    if (mChrome.restore) mChrome.restore();
+    if (restoreWindow && mWindow)
+        mPreFullscreenMaximized ? mWindow->showMaximized() : mWindow->showNormal();
+}
+
+// THE WINDOW STATE THIS CLASS DOES NOT OWN (RR2's finding, lane ENGINE-7 item
+// 5). Immersive fullscreen is a window state PLUS a set of hidden docks, and
+// anything can take the window out of that state without telling us:
+// `app.resizeWindow()` calls showNormal() before resizing, a window manager
+// offers its own control, and a desktop environment may un-fullscreen a window
+// on a workspace change. The flag then claimed fullscreen while the window was
+// windowed with its docks still hidden — and `setImmersiveFullscreen(true)`,
+// which is idempotent against the flag, did NOTHING, so F11 was dead until it
+// was pressed twice.
+void ViewController::windowStateChanged()
+{
+    if (!mImmersive || !mWindow) return;
+    // ARRIVED: from here a state change that is not fullscreen is a departure.
+    if (mWindow->isFullScreen()) { mEntering = false; return; }
+    // STILL ON THE WAY IN (round-2 review, item 5). showFullScreen() is a
+    // request, and a window manager may answer a maximized window with an
+    // intermediate state that carries neither flag; restoring the docks there
+    // would put the whole editor chrome back INSIDE a window that is about to
+    // go fullscreen.
+    if (mEntering) return;
+    // A MINIMISED fullscreen window is still fullscreen (Qt ORs the minimise
+    // bit in), so isFullScreen() stays true and this does not fire for it.
+    leaveImmersiveFullscreen(false);
 }
