@@ -603,6 +603,23 @@ QString SceneApi::addFloor(const QVariantMap &options)
         return QString();
     }
 
+    // THE OPTIONS ARE JUDGED BEFORE THE FLOOR EXISTS: a refused call leaves the
+    // scene untouched (applyOptions below would otherwise throw with the floor
+    // already added). A new node cannot close a cycle, so the parent's
+    // existence and onSurface's position are the whole of what can refuse.
+    if (rest.contains(QStringLiteral("parent"))) {
+        const QString parentId = rest.value(QStringLiteral("parent")).toString();
+        if (!findNodeByGuid(host.services->sceneEdit->scene()->getRootNode(), parentId)) {
+            fail(QStringLiteral("%1: no node with id '%2' for parent").arg(verb, parentId));
+            return QString();
+        }
+    }
+    if (rest.value(QStringLiteral("onSurface")).toBool()
+        && !rest.contains(QStringLiteral("position"))) {
+        fail(QStringLiteral("%1: onSurface needs a position").arg(verb));
+        return QString();
+    }
+
     // Not through finishAdd: the floor ships LOCKED, and the selection the
     // add-funnel reads its result from never holds a locked node.
     iris::SceneNodePtr floor = host.services->sceneEdit->addFloor(kind);

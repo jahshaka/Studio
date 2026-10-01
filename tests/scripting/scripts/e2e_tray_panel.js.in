@@ -298,12 +298,15 @@ for (var i = 0; i < SAMPLES.length; ++i) {
                return ("" + r.name).toLowerCase() === "tile.png";
            }).length === 0,
            name + ": the shipped checker is not a tray tile");
-    var floor = scene.find("Ground");
-    if (floor) {
-        var floorMap = "" + material.get(floor).baseColorMap;
-        assert(floorMap.length > 0 && floorMap.indexOf("objects/") >= 0,
-               name + ": ... and the ground still wears it from the store (" + floorMap + ")");
-    }
+    // The floor by its DOCUMENT FLAG, never by a name (it was "Ground" until
+    // SAMPLES-1, and a by-name lookup silently skipped this check on all eight).
+    var floors = scene.nodes().filter(function (r) {
+        return r.type === "mesh" && node.property(r.id, "defaultFloor") === true;
+    });
+    assert(floors.length === 1, name + ": the sample stands on ONE default floor (" + floors.length + ")");
+    var floorMap = "" + material.get(floors[0].id).baseColorMap;
+    assert(floorMap.length > 0 && floorMap.indexOf("objects/") >= 0,
+           name + ": ... and the floor still wears its map from the store (" + floorMap + ")");
     agree(name);
     var folders = editor.trayAssets().filter(function (t) { return t.folder; });
     assert(folders.length === 0,

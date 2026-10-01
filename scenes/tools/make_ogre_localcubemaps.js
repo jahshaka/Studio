@@ -54,7 +54,7 @@ ogreSky({ sky: "#303030", sunDir: [-1, -1, -1], sunPower: 1.0, skyLight: 1.0 });
 
 // Their floor is part of the room (the 23 boxes), so the port has no separate
 // ground — the template's Floor would be a second floor under a sealed interior.
-removeNode("Floor");
+removeTemplateFloor();
 
 // ---- the room -------------------------------------------------------------
 ogreRoom();

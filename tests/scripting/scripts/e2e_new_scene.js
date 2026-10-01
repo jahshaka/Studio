@@ -433,6 +433,42 @@ function addFloorRefused(opts, expect, what) {
 }
 addFloorRefused({ template: "empty" }, "has no floor", "scene.addFloor({template: \"empty\"})");
 addFloorRefused({ template: "terrain" }, "unknown template 'terrain'", "an unknown template");
+// A REFUSED CALL LEAVES THE SCENE UNTOUCHED: the options are judged before the
+// floor exists (it used to be added and THEN refused for its parent).
+var countBefore = scene.nodes().length;
+addFloorRefused({ parent: "no-such-node" }, "no node with id 'no-such-node'", "a parent that does not exist");
+addFloorRefused({ onSurface: true }, "onSurface needs a position", "onSurface without a position");
+assert(scene.nodes().length === countBefore,
+       "...and neither refusal left a floor behind (" + countBefore + " -> " + scene.nodes().length + " nodes)");
+
+// A SECOND BASIC FLOOR IN A SCENE THAT HAS ONE IS ADDED, not refused: it is an
+// ordinary cube node like any other add, which is how a floor is EXTENDED (a
+// position puts it edge to edge — the World template is 25 of them). Each is a
+// default floor of its own (material.reset gives it the floor material), under
+// a sibling-unique name.
+var bp = project.create("New Scene AddFloor Twice " + Date.now(), { template: "basic" });
+assert(bp.length > 10, "a Basic project, which already stands on its Floor");
+function floorsNow() {
+    return scene.nodes().filter(function (r) {
+        return r.type === "mesh" && node.property(r.id, "defaultFloor") === true;
+    });
+}
+assert(floorsNow().length === 1, "...one default floor to begin with");
+var second = scene.addFloor({ position: { x: 100, y: 0, z: 0 } });
+var both = floorsNow();
+assert(both.length === 2 && both.some(function (r) { return r.id === second; }),
+       "a second scene.addFloor() adds a SECOND default floor (" + J(both.map(function (r) { return r.name; })) + ")");
+assert(both[0].name !== both[1].name, "...under its own name (" + both[0].name + ", " + both[1].name + ")");
+var sb = scene.bounds({ nodes: [second] });
+assert(near(sb.min.x, 50, 0.01) && near(sb.max.x, 150, 0.01) && near(sb.max.y, 0, 1e-3),
+       "...placed by its position: edge to edge with the first, top at y = 0 (" + J(sb) + ")");
+// UNDO of scene.addFloor (one step that removes the floor) is proved across two
+// closed run_script macros in mcp.e2e: a --script run is ONE open macro, so
+// editor.undo() cannot reach it from here. What this run can see is the step.
+var pushesBefore = editor.undoState().pushes;
+var third = scene.addFloor();
+assert(editor.undoState().pushes > pushesBefore, "scene.addFloor RECORDS an undo step");
+assert(node.remove(third) === true, "(the third floor removed again)");
 
 // ---- 5. the refusals --------------------------------------------------------
 // A world open again first: §4d's refusal deliberately left the session with
