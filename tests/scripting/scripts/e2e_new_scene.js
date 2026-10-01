@@ -444,8 +444,10 @@ assert(scene.nodes().length === countBefore,
 // A SECOND BASIC FLOOR IN A SCENE THAT HAS ONE IS ADDED, not refused: it is an
 // ordinary cube node like any other add, which is how a floor is EXTENDED (a
 // position puts it edge to edge — the World template is 25 of them). Each is a
-// default floor of its own (material.reset gives it the floor material), under
-// a sibling-unique name.
+// default floor of its own (material.reset gives it the floor material), and
+// it is named "Floor" like the first — an add names a node by what it is and
+// does not de-duplicate (scene.addPrimitive("cube") twice is two "Cube"s); ids
+// are the identity, and node.rename is where the sibling-unique rule lives.
 var bp = project.create("New Scene AddFloor Twice " + Date.now(), { template: "basic" });
 assert(bp.length > 10, "a Basic project, which already stands on its Floor");
 function floorsNow() {
@@ -458,7 +460,8 @@ var second = scene.addFloor({ position: { x: 100, y: 0, z: 0 } });
 var both = floorsNow();
 assert(both.length === 2 && both.some(function (r) { return r.id === second; }),
        "a second scene.addFloor() adds a SECOND default floor (" + J(both.map(function (r) { return r.name; })) + ")");
-assert(both[0].name !== both[1].name, "...under its own name (" + both[0].name + ", " + both[1].name + ")");
+assert(both[0].id !== both[1].id && both[0].name === "Floor" && both[1].name === "Floor",
+       "...a node of its own, named 'Floor' like the first (" + both[0].name + ", " + both[1].name + ")");
 var sb = scene.bounds({ nodes: [second] });
 assert(near(sb.min.x, 50, 0.01) && near(sb.max.x, 150, 0.01) && near(sb.max.y, 0, 1e-3),
        "...placed by its position: edge to edge with the first, top at y = 0 (" + J(sb) + ")");
