@@ -1447,7 +1447,7 @@ set_tests_properties(gi.gather PROPERTIES TIMEOUT 180 LABELS "engine")
 # not a measurement. The suite PRINTS its milliseconds and asserts only a
 # catastrophe ceiling; the numbers of record are taken by hand with the clocks
 # locked (spikes/gather-1a/FINDINGS.md).
-jah_gpu_exclusive_test(NAME gi.gather_cost CLASS engine TOKENS 4 RUN_TIMEOUT 900 COMMAND test_gi_gather
+jah_gpu_exclusive_test(NAME gi.gather_cost CLASS engine RUN_TIMEOUT 900 COMMAND test_gi_gather
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.gather_cost PROPERTIES
                      LABELS "nightly;quiet-box" RUN_SERIAL TRUE
@@ -2015,11 +2015,11 @@ set(PHOTON_VIEW_SHOWROOM "${CMAKE_SOURCE_DIR}/scenes/Showroom 2.zip")
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/scripts/photon_view.js.in
                ${CMAKE_CURRENT_BINARY_DIR}/photon_view.js @ONLY)
 # ...and arm (f), the COMBINATION with the Atom view (VIEWS-DEPTH-1), whose second
-# half is the kernel's: the run is wrapped in tests/support/no_xid_run.sh, which reds on
-# any NVRM Xid line from the app's pid since the launch (read from the journal, no sudo).
+# half is the kernel's: like every GPU row since TEST-SELECTOR-1 H4, the admission
+# (scripts/vram_tokens.py) reds the row on any NVRM Xid line from its process tree since
+# the launch (scripts/kernel_xid.py reads the journal, no sudo).
 jah_gpu_row(photon.view CLASS app
-         COMMAND sh ${CMAKE_SOURCE_DIR}/tests/support/no_xid_run.sh
-                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
                  --script ${CMAKE_CURRENT_BINARY_DIR}/photon_view.js
          WORKING_DIRECTORY ${_photon_view_home}/run)
 set_tests_properties(photon.view PROPERTIES

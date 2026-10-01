@@ -109,7 +109,8 @@ def classify(test, app):
     envmod = as_list(props.get("ENVIRONMENT_MODIFICATION"))
     env = as_list(props.get("ENVIRONMENT"))
     words = [str(w) for w in cmd]
-    registered = any(os.path.basename(w) == "gpu-admit.sh" for w in words) or (
+    # gpu-exclusive.sh IS the admission too (TEST-SELECTOR-1 G1+G2): a timing row takes ALL tokens
+    registered = any(os.path.basename(w) in ("gpu-admit.sh", "gpu-exclusive.sh") for w in words) or (
         any(os.path.basename(w) == "run_pool.py" for w in words) and "--vram-tokens" in words)
     nodisplay = any(re.match(r"^DISPLAY=unset:", e) for e in envmod)
     if nodisplay:
@@ -175,6 +176,8 @@ def check(listing, app, out):
                 k = words[words.index("--vram-tokens") + 1]
             else:
                 for i, w in enumerate(words):
+                    if os.path.basename(w) == "gpu-exclusive.sh":
+                        k = "all"; break
                     if os.path.basename(w) == "gpu-admit.sh" and i + 1 < len(words):
                         k = words[i + 1]; break
             by_class[k] = by_class.get(k, 0) + 1

@@ -213,12 +213,14 @@ int main(int argc, char **argv)
     QProcess jahshaka;
     QString token;
     const quint16 port = freePort();
-    CHECK(spawn(jahshaka, port, &token), "app booted and printed the MCP token");
+    QByteArray log;
+    CHECK(spawn(jahshaka, port, &token, &log), "app booted and printed the MCP token");
     if (token.isEmpty()) return 1;
 
     McpClient mcp;
     mcp.url = QUrl(QStringLiteral("http://127.0.0.1:%1/mcp").arg(port));
     mcp.token = token;
+    mcp.attach(jahshaka, log);   // a transport failure prints the child's state + log tail
     mcp.clientName = QStringLiteral("openasync-test");
     mcp.initialize();
 

@@ -11,7 +11,7 @@ reshape followed.
 | Tier | What runs | When | Who runs it |
 |---|---|---|---|
 | **SCOPED** | the suites `scripts/gate-scope.sh <base>..<tip>` selects from the touched paths | a lane's own gate; a merge of that lane | the lane (feature-/engine-builder), or gate-runner with the selection |
-| **MERGE** | the command `python3 scripts/gate-scope.py --merge-tier [-j N]` prints — `ctest -j4 --timeout 120 --output-on-failure -LE` over `gate-scope.py`'s `NIGHTLY_LABELS` ∪ `TARGET_LABELS` (today: every `nightly` row — §1d —, the ASan shader-cache attack `shadercache-attack`, and the target tests `photon-target` and `scale-target`, §1b/§1c; the benches' `--smoke` rows, label `benchmark-smoke`, DO run). The set lives in the script ONLY; this doc never copies it (`source.gate_scope_rules` case 9 fails on a literal `-LE` list here), and neither may a script — `scripts/lead/rc-gate.sh` must run what `--merge-tier` prints. `--timeout 120` is the default for rows that set none; `-j 2` while another lane's gate is live. **Measured (D6B-GATE-SHAPE, 2026-09-27): 56.7 min at -j4 beside other lanes' gates, 36.6 min simulated on the audit's quieter durations — the reshape's ~30 min goal (and its lane's ≤ 35 min bar) was NOT reached; §5 has the before/after pair and why** | a lane whose scope falls back (see §3), any merge the lead wants covered wider, and — while the full gate is under moratorium — the gate before a push | gate-runner |
+| **MERGE** | TWO PHASES (TEST-SELECTOR-1): the parallel phase `python3 scripts/gate-scope.py --merge-tier [-j N]` prints (every row but the `timing` ones), then the serial phase `--merge-tier-serial` prints (the `timing` rows at -j1, each taking the whole GPU — inside the parallel phase they waited holding the admission's turnstile and stalled every admission on the box). The parallel phase is `ctest -j4 --timeout 120 --output-on-failure -LE` over `gate-scope.py`'s `NIGHTLY_LABELS` ∪ `TARGET_LABELS` ∪ {`timing`} (today: every `nightly` row — §1d —, the ASan shader-cache attack `shadercache-attack`, and the target tests `photon-target` and `scale-target`, §1b/§1c; the benches' `--smoke` rows, label `benchmark-smoke`, DO run). The set lives in the script ONLY; this doc never copies it (`source.gate_scope_rules` case 9 fails on a literal `-LE` list here), and neither may a script — `scripts/lead/rc-gate.sh` must run what `--merge-tier` prints. `--timeout 120` is the default for rows that set none; `-j 2` while another lane's gate is live. **Measured (D6B-GATE-SHAPE, 2026-09-27): 56.7 min at -j4 beside other lanes' gates, 36.6 min simulated on the audit's quieter durations — the reshape's ~30 min goal (and its lane's ≤ 35 min bar) was NOT reached; §5 has the before/after pair and why** | a lane whose scope falls back (see §3), any merge the lead wants covered wider, and — while the full gate is under moratorium — the gate before a push | gate-runner |
 | **PUSH** | the MERGE tier + the `--engine-selftest` sha256 lines — **FOUR of them since lane FENCE-1**: `pose 1`, `pose 2`, `pose B1 (rays)`, `pose B2 (no rays)`. Poses 1-2 are the default scene at the PLAIN grade; pose pair B is a purpose-built fixture (glossy floor, cascade crossing, emissive 3.0, mirror pillar) at the VIEWPORT grade, which is the only grade that carries the SSR prepass and therefore the ray tier. Quote all four. (The moratorium of 2026-09-09 lifted 2026-09-10 with the cleanup: the four nightly suites are NIGHTLY, not push, unless the batch touched their subject) | once per BATCH of merged lanes, before a push | gate-runner |
 | **NIGHTLY** | `python3 scripts/gate-scope.py --nightly-tier` — every `nightly` row, `-j1` (§1d): the benches' `--assert` rows, shadercache.container_asan, **open.crash_soak** (OPEN-FRAMES-1: the async-open teardown repro twelve times under glibc's malloc checks; read one failure as "run it again", three as a regression of the open's slice-boundary drive), the minutes-of-one-process sweeps (atom.cluster_cut, atom.cluster_crack, gi.chain_converge_scenes), vr.frame_budget, and the `<suite>.timing` millisecond rows (§4) | once a day / before a tag, on a quiet box, and whenever a batch touched a nightly row's subject | the lead |
 
@@ -211,8 +211,17 @@ selects its rows and the executables built under it. A directory-scope setting
 directory — at the root, in `tests/` or in `irisgl/` that is the MERGE tier BY RULE. A vendored
 archive's flag change (`meshoptimizer`) enters through its first-party callers (the bake's rows).
 
-**The full tier by rule, and the fallback.** A fork pin bump (`irisgl/thirdparty/ogre-next`)
-selects the MERGE tier BY RULE (§7b rule 4: an Ogre change reaches everything). The FALLBACK to
+**The lane's own range, the fork, and the fallback** (TEST-SELECTOR-1). The range is the LANE'S
+OWN diff: across a forward merge (a merge whose second parent is on d-build's first-parent line) it
+starts at that merge's d-build parent, and what came in is printed as the `--joint` command; an
+internal branch merged into the lane is the lane's own change. A fork pin bump
+(`irisgl/thirdparty/ogre-next`) selects by the FORK DIFF'S reach: every built or staged fork file
+selects the engine's pixel family and every executable that extracts the engine; only what the
+engine never stages (other render systems, unstaged samples media, docs, HLSL/Metal twins) selects
+nothing; an unreadable fork diff is the tier. §7b rule 4's one full tier per bump runs at the merge:
+`gate-scope.sh <range> --run --fork-tier` (ci_gate_check requires it). Build files resolve
+through ctest's own backtraces (the rows registered from inside a changed command's span) when the
+tip's file is the working tree's text. The FALLBACK to
 the MERGE tier is left for a path with no rule, no symbol and no graph owner — printed loudly with
 the path and the reason; a build dir with no ninja deps log (not built yet) turns the graph off
 and says so (compiled rows then go by the rules' dirs, the old behaviour). `app.startup_quiet` +
@@ -233,9 +242,11 @@ TESTING-DEBTS-1); the estimate line counts which source each cost came from).
 pool arm to `<workspace>/testing/runs/<date>-<tier>-<tip>.jsonl` — the tier one of
 `gate_runlog.TIERS` (scoped, scoped-fallback, scoped-tier, joint, merge, stage, nightly, push, fork;
 any other name is refused before the run): verdict (PASS | FAIL | CRASH | TIMEOUT | NOTRUN |
-NOADMIT | OOM | LOST, §4b), retries, wall seconds, `gpu_ms` (a suite's `gpu_ms:` line), a target's value,
-the selection reason, the tree's three shas, the box (load over the suite's own window, the GPU
-clock state, -j, the display, sibling gates). The fields are `testing/runs/README.md`; the two
+NOADMIT | OOM | LOST, §4b), retries, wall seconds, a target's value, the selection reason, the
+tree's three shas, the box (load over the suite's own window; the GPU clock state and the sibling
+gates sampled AT THE SUITE'S START — ctest's `Start N:` line, TEST-SELECTOR-1 L1; -j, the display).
+`gpu_ms` is gone (TEST-SELECTOR-1 L4: no suite ever printed one — 0 of 38,269 records; a GPU time
+reaches the log as a target line, `target: <value> (bar <bar>) <what>`). The fields are `testing/runs/README.md`; the two
 standing queries are `scripts/gate_runlog.py longest` and `scripts/gate_runlog.py load-reds`.
 
 **THE BUILT FORK MUST BE THE PIN (TESTING-DEBTS-1 T12).** `irisgl/scripts/build-ogre.sh` writes
@@ -293,57 +304,65 @@ the SCOPED selection of the FIX's own diff (`scripts/gate-scope.sh <pre-fix tip>
 The lead's post-merge targeted run stays (owner decision): it catches a merge interaction at
 merge time instead of at the batch gate.
 
-## 4. Flake protocol (unchanged)
+## 4. Flake protocol (the law in the refusal since TEST-SELECTOR-1)
 
-A failure is re-run SOLO on a quiet box up to 3×; 3/3 green = environmental, with the
-evidence string in the report (host-load timing, the texture-worker SEGV class). A
+A red of a CONTENTION-CLASS suite is re-run SOLO 3× (`scripts/gate-scope.sh --solo <suite>`: each
+admission of a solo run takes the whole card, §4b); 3/3 green = environmental, with the evidence
+string in the report (host-load timing, the texture-worker SEGV class). ANY OTHER red needs a
+recorded verdict (real + the failing assertion, or environmental + the evidence):
+`scripts/ci-gate-check.sh <range> --verdict "<row>=<text>" ...` writes it into the run log, per row and timestamped (it clears only the reds logged before it; a row that never ran — NOADMIT — is missing, which no verdict clears). THE MERGE REFUSAL
+APPLIES THIS (TEST-SELECTOR-1 L2/L3): `ci-gate-check.sh` refuses a merge while a selected row was
+never run at the tip, a contention-class red lacks 3/3 solo PASS after it (a solo red means it is not
+contention: a verdict), or any other red lacks a verdict — one solo PASS erases nothing — and
+`scripts/lead/merge-dbuild-lane.sh` calls it before it merges. A
 `VK_ERROR_OUT_OF_DEVICE_MEMORY` red is NOT environmental since GATE-ADMIT-1 (§4b): the box admits
 by VRAM, so an OOM means the budget is wrong (a class under-counted, a row outside it) or an
 unadmitted process filled the card — the verdict names which (`scripts/gpu-admit.sh status` and
-`nvidia-smi` beside the red). Known contention-sensitive suites: open.responsive,
-app.engine_selftest_validation, app.input_keys, threading.newproject_stall.timing (the
-nightly twin of the first create's 1000 ms bar; the push row prints it, TESTING-DEBTS-1),
-scenegraph.benchmark, shadergraph.bake_output, claude.chat, scripting.e2e.space_switch /
-sun_light, ui.media_lazy, gi.budget, scripting.e2e.reflection_map (the GI/VRAM contention
-class; L8's gate, 2026-09-11). Every failure in a gate report carries a verdict
+`nvidia-smi` beside the red). THE CONTENTION CLASS IS ONE FILE OF DATA,
+`<workspace>/testing/contention.json` (`{"suites": {<suite or pool.arm>: <its verdict>}}`), read by
+the refusal and by `--solo` — never a prose list; a suite joins it by a recorded verdict. Every failure in a gate report carries a verdict
 (environmental + evidence, or real + the failing assertion); a report without verdicts is
 not a gate.
 
-**THE GPU-TIMING LOCK (lane DEVPROCESS-1, 2026-09-23; THE TIMING LIST since D6B-GATE-SHAPE,
-2026-09-27).** Measured: VRAM is not the constraint (2.3 GB of 16 GB with three GPU processes
-live) — GPU TIME is, and `RUN_SERIAL` serialises only inside one ctest process while every lane
-is its own. THE RULE: **a suite that measures time or GPU budget runs under the GPU lock;
-everything else shares the GPU; at most three app-spawning lanes; a measurement lane
-(debug-runner) takes the lock around every `perf.capture` run via the wrapper.** The lock is
-`scripts/gpu-exclusive.sh <command…>` — one box-wide `flock` on `/tmp/jah-gpu-timing.lock` (the
-lock lives in the kernel and dies with its holder), a bounded 900 s wait (exit 75, the command
-never runs), the command exec'd in place so a ctest timeout still kills the suite itself.
+**THE GPU-TIMING ADMISSION (lane DEVPROCESS-1, 2026-09-23; THE TIMING LIST since D6B-GATE-SHAPE,
+2026-09-27; ONE ADMISSION since TEST-SELECTOR-1, 2026-10-01).** `RUN_SERIAL` serialises only
+inside one ctest process while every lane is its own. THE RULE: **a suite that measures time or GPU
+budget takes ALL the VRAM tokens (§4b) — the card drains to it and nothing else, timed or untimed,
+shares the GPU while it measures; everything else shares the GPU within the budget; a measurement
+lane (debug-runner) wraps every `perf.capture` run the same way.** The wrapper is
+`scripts/gpu-exclusive.sh [--run-timeout <s>] [--label <row:class>] <command…>` = `vram_tokens.py
+admit all --timing`: the turnstile keeps the queue behind a waiting timing row (a stream of small
+requests cannot starve it), a bounded 900 s wait (`NOADMIT vram: …`, exit 75, the command never
+runs), the command exec'd in place so a ctest timeout still kills the suite itself and the tokens
+die with it. (Until TEST-SELECTOR-1 it was a separate `flock` that excluded only the OTHER timing
+rows: gi.rt_reflect_cost and gi.field_scroll went red beside sibling GPU rows — plan 9ab.) A
+`gate-scope.sh --solo` retry sets `JAH_VRAM_ALL=1`: every admission of a solo run takes the whole
+card, so a solo retry is solo on the GPU too.
 
 **THE LOCK LIST IS THE TIMING LIST** (`JAH_GPU_EXCLUSIVE_SUITES`, `tests/CMakeLists.txt`,
 registered by `jah_gpu_exclusive_test()`, whose `RUN_TIMEOUT` is the suite's own budget and
-whose TIMEOUT is that plus the 900 s wait; configure fails if a listed suite is registered any
-other way). A suite is on it because it asserts milliseconds, a ratio of milliseconds or a frame
+whose TIMEOUT is that + 30 s + the admission's 900 s bound; configure fails if a listed suite is
+registered any other way). A suite is on it because it asserts milliseconds, a ratio of milliseconds or a frame
 budget — never for a flake history: the six members that measured no time LEFT it
 (app.engine_selftest_validation, claude.chat, ui.media_lazy, scripting.e2e.space_switch /
 sun_light / reflection_map; audit R4 — ui.media_lazy had waited 88 s for it), and the timing
 ratios that sat under RUN_SERIAL only JOINED it (mirror.scale, perf.epic_steady_state,
 perf.drag_mirror_room, perf.capture_off_is_free; R3), with app.play_select beside app.input_keys
-(key/gesture arrival; R5). Every lock row also takes ctest's `RESOURCE_LOCK gpu_timing`, so two
-of ONE gate never start together and wait in a slot on the flock. `ctest -N -V | grep -c 'Test
+(key/gesture arrival; R5). Every timing row also takes ctest's `RESOURCE_LOCK gpu_timing`, so two
+of ONE gate never start together and wait in a slot on the admission. `ctest -N -V | grep -c 'Test
 command: .*gpu-exclusive.sh'` = 37 (a bare `grep -c gpu-exclusive` also counts the guard's own
 command line). Its guard is `devprocess.gpu_lock` (label `tooling`). A contention verdict on a
-lock row needs a sibling that was NOT under the lock (an app on `:0`, a measurement outside the
-wrapper, or — the lock never excludes it — the CPU load of the gate's own other slots) — say which.
+timing row needs a sibling that took no token (an app on `:0`, a measurement outside the wrapper,
+or — the admission never excludes it — the CPU load of the gate's own other slots) — say which.
 
-**THE LOCK'S WAIT IS NEVER THE ROW'S TIME** (LOCK-WAIT-1, stage close 1: perf.epic_steady_state
+**THE ADMISSION'S WAIT IS NEVER THE ROW'S TIME** (LOCK-WAIT-1, stage close 1: perf.epic_steady_state
 ran ~30 s solo and was killed at its TIMEOUT in the stage tier by queue time). The wrapper prints
-`gpu-lock: waited <s> s` once it holds the lock; the run log records it per row as `lockWaitS`
-and subtracts it from the row's `seconds` (the raw ctest figure stays as `wallSeconds`). A lock
-row's own budget (`RUN_TIMEOUT`) is enforced by the wrapper through timeout(1) FROM AFTER the lock
-(and after the VRAM tokens, when the row takes them — gpu-admit.sh applies it), so ctest's
-TIMEOUT (budget + the lock wait + 30 s) is only the backstop and a queued row never runs short;
-a wait past the bound prints `NOLOCK gpu-lock: …` and the run log's verdict is NOLOCK (never ran —
-the box's queue, not the row's code), and a row stopped by its own budget is a TIMEOUT.
+`gpu-lock: waited <s> s` once it holds the card; the run log records it per row as `lockWaitS`
+and subtracts it from the row's `seconds` (the raw ctest figure stays as `wallSeconds`). A timing
+row's own budget (`RUN_TIMEOUT`) is enforced by the wrapper through timeout(1) FROM AFTER the
+admission, so ctest's TIMEOUT (budget + 30 s + the wait's bound) is only the backstop and a queued
+row never runs short; a wait past the bound is the run log's NOADMIT (never ran — the box's queue,
+not the row's code), and a row stopped by its own budget is a TIMEOUT.
 
 **THE MILLISECOND BARS ARE NIGHTLY: counts at push, milliseconds on a quiet box** (D6B-GATE-SHAPE;
 audit §5). A wall-clock bar reads the box as much as the code, and the GPU lock does not exclude
@@ -449,16 +468,22 @@ suite prints the count).
 `--self-test` proves the detector names a synthetic unregistered row. The helper's own guard is
 `devprocess.vram_admit` (tooling): 14 fake rows of the three classes against 12 tokens on the
 kernel's lock table — the bound, all or nothing, lowest first, a killed holder frees,
-`JAH_VRAM_TOKENS=4`, the bounded wait, exec in place, nesting.
+`JAH_VRAM_TOKENS=4`, the bounded wait, the row as the admission's child (exit codes and signals
+through, a SIGTERM forwarded), the Xid read, nesting.
 
-**THE KERNEL'S WORD IN A POOL.** After each app process, `run_pool.py` reads the kernel journal
-since its launch (`journalctl -k`, never sudo): an `NVRM: Xid` line from THAT pid turns the arm
-running at the fault's second into `ARM <pool>.<arm> CRASH <ms> xid <n> …` (a process's verdicts
-are printed once, after that read). An unreadable journal is a printed FINDING in the pool, never a red of every pool: the ONE row that
-reds for it is `devprocess.kernel_journal` (tooling; it names the fix — the user joins `adm`).
-The read waits 1 s after the exit: the Xid is logged at the fault, seconds before the process ends
-(the fence wait until DEVICE_LOST measured 10-11 s), so only journald's millisecond ingest is left. The non-pool
-photon.view rows keep `tests/support/no_xid_run.sh`.
+**THE KERNEL'S WORD ON EVERY GPU ROW** (TEST-SELECTOR-1 H4; ONE reader, `scripts/kernel_xid.py`).
+The admission (`vram_tokens.py admit`, every `jah_gpu_row` and timing row) runs the row as its
+child, tracks the row's process tree (the harness, the app it spawns), and after the row reads the
+kernel journal since the launch (`journalctl -k`, never sudo): an `NVRM: Xid` line from any pid of
+that tree prints `XID <n> from pid <p> of the row …` and turns the row red (never environmental).
+A pool (`run_pool.py`) reads the same way per app process and turns the arm running at the fault's
+second into `ARM <pool>.<arm> CRASH <ms> xid <n> …` (a process's verdicts are printed once, after
+that read). An unreadable journal is a printed FINDING in every user, never a red of every row: the
+ONE row that reds for it is `devprocess.kernel_journal` (tooling; it names the fix — the user joins
+`adm`). After a red exit the read waits 1 s: the Xid is logged at the fault, seconds before the
+process ends (the fence wait until DEVICE_LOST measured 10-11 s), so only journald's millisecond
+ingest is left. (`tests/support/no_xid_run.sh`, photon.view's own wrapper, is deleted: every row
+has it now.)
 
 **THE MEASUREMENT** (`~/Developer/spikes/gate-admit-1/`, 12 tokens then): two MERGE tiers at -j4
 started together on :63/:64, the box otherwise quiet: 0 `OUT_OF_DEVICE_MEMORY`, 0 Xid, peak 13,333

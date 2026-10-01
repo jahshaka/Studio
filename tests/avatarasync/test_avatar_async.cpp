@@ -342,7 +342,7 @@ int main(int argc, char **argv)
     QProcess jahshaka;
     QString token;
     const quint16 port = freePort();
-    CHECK(spawn(jahshaka, port, &token, QStringList(), 180000), "app booted and printed the MCP token");
+    CHECK(spawn(jahshaka, port, &token, &gAppLog, QStringList(), 180000), "app booted and printed the MCP token");
     if (token.isEmpty()) return 1;
     // From here the app's own output is KEPT (see drainApp): a red prints the
     // app's account of its UI thread instead of discarding it with the pipe.
@@ -351,6 +351,7 @@ int main(int argc, char **argv)
     McpClient mcp;
     mcp.url = QUrl(QStringLiteral("http://127.0.0.1:%1/mcp").arg(port));
     mcp.token = token;
+    mcp.attach(jahshaka, gAppLog);   // a transport failure prints the child's state + log tail
     mcp.clientName = QStringLiteral("avatar-test");
     // The avatar suite's own budget is 900 s and its verbs are the slowest in the
     // tree (a synchronous import of the owner's rig), so it raises the harness's
@@ -803,11 +804,14 @@ int main(int argc, char **argv)
     QProcess second;
     QString secondToken;
     const quint16 secondPort = freePort();
-    CHECK(spawn(second, secondPort, &secondToken, QStringList(), 180000), "the app booted a second time on the same library");
+    QByteArray secondLog;
+    CHECK(spawn(second, secondPort, &secondToken, &secondLog, QStringList(), 180000),
+          "the app booted a second time on the same library");
     if (!secondToken.isEmpty()) {
         McpClient restarted;
         restarted.url = QUrl(QStringLiteral("http://127.0.0.1:%1/mcp").arg(secondPort));
         restarted.token = secondToken;
+        restarted.attach(second, secondLog);   // a transport failure prints the child's state + log tail
         restarted.clientName = QStringLiteral("avatar-test");
         restarted.transferTimeoutMs = 300000;
         restarted.initialize();

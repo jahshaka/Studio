@@ -31,7 +31,7 @@
 //       restores the off picture exactly. The live viewport renders every combination too
 //       (editor.frame), and — when the rig's screen is tall enough — again in the owner's
 //       window, 1867 x 1339. ZERO Xid from this run's pid is asserted OUTSIDE the script,
-//       by the suite's wrapper (tests/support/no_xid_run.sh) reading the kernel journal.
+//       by the GPU row's admission (scripts/vram_tokens.py) reading the kernel journal.
 // Frames, never time: every shot renders until the scene is at rest.
 
 function assert(cond, msg) {

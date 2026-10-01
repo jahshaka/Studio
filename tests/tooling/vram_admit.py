@@ -246,14 +246,50 @@ check(r.returncode == 75 and "never" not in open(ev).read(),
       "a wait past JAH_VRAM_WAIT exits 75 and never runs the command (rc %d)" % r.returncode)
 os.killpg(full.pid, signal.SIGKILL); full.wait()
 
-# ---- 6: exec in place, exit codes, nesting ---------------------------------------------------
-print("6. exec in place")
+# ---- 6: the row is the admission's CHILD (TEST-SELECTOR-1 H4), exit codes, signals, nesting ---
+print("6. the row runs as the admission's child")
 tok = os.path.join(D, "tok6")
-p = subprocess.Popen([ADMIT, "2", "--", "sh", "-c", 'echo $$; exit 7'], env=env_for(tok, 12),
+p = subprocess.Popen([ADMIT, "2", "--", "sh", "-c", 'echo $PPID; exit 7'], env=env_for(tok, 12),
                      stdout=subprocess.PIPE, text=True)
 out, _ = p.communicate()
 check(out.strip() == str(p.pid) and p.returncode == 7,
-      "the command runs AS the started pid (%s == %d) and its exit code passes through (%d)" % (out.strip(), p.pid, p.returncode))
+      "the command is the started pid's child (%s == %d) and its exit code passes through (%d)"
+      % (out.strip(), p.pid, p.returncode))
+p = subprocess.run([ADMIT, "1", "--", "sh", "-c", "kill -SEGV $$"], env=env_for(tok, 12),
+                   stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+check(p.returncode == -signal.SIGSEGV, "a row killed by SIGSEGV reads to ctest as SIGSEGV (%d)" % p.returncode)
+p = subprocess.run([ADMIT, "1", "--", "sh", "-c", "kill -KILL $$"], env=env_for(tok, 12),
+                   stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+check(p.returncode == -signal.SIGKILL and "Traceback" not in p.stderr,
+      "a row killed by SIGKILL reads to ctest as SIGKILL, no traceback (%d)" % p.returncode)
+mark = os.path.join(D, "term6")
+p = subprocess.Popen([ADMIT, "1", "--", "sh", "-c", "trap 'echo got > %s; exit 3' TERM; while :; do sleep 0.05; done" % mark],
+                     env=env_for(tok, 12), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+for _ in range(400):
+    if len(held_by_pid(tok).get(p.pid, ())) == 1: break
+    time.sleep(0.01)
+time.sleep(0.3)
+p.send_signal(signal.SIGTERM); p.wait()
+check(os.path.exists(mark) and p.returncode == 3, "a SIGTERM to the admission reaches the row (rc %d)" % p.returncode)
+# THE KERNEL'S WORD (H4): an Xid line from the row's pid — or a GRANDCHILD's, as an app spawned by a
+# harness — since the launch turns a passing row red, printed; an unreadable journal is a FINDING.
+journal = os.path.join(D, "journal6")
+open(journal, "w").close()
+fault = os.path.join(D, "fault6.sh")
+with open(fault, "w") as f:
+    f.write("#!/bin/sh\n# a grandchild that logs an Xid for its own pid after 1.5 s, then the row passes\n"
+            "sh -c 'sleep 1.5; echo \"$(date +%s).5 box kernel: NVRM: Xid (PCI:0000:01:00): 109, pid=$$, "
+            "name=sh, Ch 0000\" >> \"$0\"' \"$1\"\nexit 0\n")
+p = subprocess.run([ADMIT, "1", "--", "sh", fault, journal],
+                   env=env_for(tok, 12, JAH_KERNEL_JOURNAL=journal), stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                   text=True)
+check(p.returncode != 0 and "XID 109 from pid" in p.stderr and "THE GPU FAULTED" in p.stderr,
+      "an Xid from the row's grandchild turns a passing row red, with the kernel's line (rc %d: %s)"
+      % (p.returncode, p.stderr.strip()[-160:]))
+p = subprocess.run([ADMIT, "1", "--", "true"], env=env_for(tok, 12, JAH_KERNEL_JOURNAL=os.path.join(D, "absent")),
+                   stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+check(p.returncode == 0 and "FINDING: the kernel journal is unreadable" in p.stderr,
+      "an unreadable journal is a FINDING line, never a red (rc %d)" % p.returncode)
 r = subprocess.run([ADMIT, "1", "--", ADMIT, "1", "--", "sh", "-c", "echo nested-ran"],
                    env=env_for(tok, 1, JAH_VRAM_WAIT=2), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
 check(r.returncode == 0 and "nested-ran" in r.stdout and "already admitted by the parent" in r.stderr,

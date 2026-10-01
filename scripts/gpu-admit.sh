@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# gpu-admit.sh <tokens> [--label <text>] -- <command> [args...] — run <command> holding <tokens> of
-# THE BOX-WIDE VRAM BUDGET (lane GATE-ADMIT-1, docs/TESTING_GATE.md §4b; the model is
-# scripts/gpu-exclusive.sh). 11 flock tokens under /tmp/jah-vram/ (JAH_VRAM_TOKENS overrides,
+# gpu-admit.sh <tokens>|all [--label <text>] -- <command> [args...] — run <command> holding <tokens> of
+# THE BOX-WIDE VRAM BUDGET (lane GATE-ADMIT-1, docs/TESTING_GATE.md §4b; `all` = every token, what
+# scripts/gpu-exclusive.sh asks for a timing row). 11 flock tokens under /tmp/jah-vram/ (JAH_VRAM_TOKENS overrides,
 # 0 = admission off), 1 token = 1,090 MiB at the measured peak; every Vulkan test row takes its class's
 # tokens (app/pool process 2, engine suite 1, VR 3, the selftest 2 — tests/CMakeLists.txt,
 # jah_gpu_row), all or nothing, lowest free first, waiting (one `vram: waiting …` line) instead of

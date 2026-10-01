@@ -107,11 +107,11 @@ set(SCALE_T_SHADOW 450)       # both worlds in one process: 48 s + 24.4 s measur
 # (10,000 imports at ~84 ms each = ~14 min, 25 creates, 475 archive imports ~15 s) — the
 # one-time fixture cost, the reason this row's budget is 30 minutes and not 6 x 110 s.
 set(SCALE_T_LIBRARY 1800)
-# VRAM (GATE-ADMIT-1, nvidia-smi per pid in the two-tier run): test_scale peaked 1.9 GB -> every
-# test_scale row takes 2 tokens.
+# VRAM (GATE-ADMIT-1, nvidia-smi per pid in the two-tier run): test_scale peaked 1.9 GB -> an
+# untimed test_scale row takes 2 tokens; a locked (timing) row takes all of them.
 function(jah_scale_row _name _mode _timeout _locked)
     if(_locked)
-        jah_gpu_exclusive_test(NAME ${_name} CLASS engine TOKENS 2 RUN_TIMEOUT ${_timeout} COMMAND test_scale ${_mode}
+        jah_gpu_exclusive_test(NAME ${_name} CLASS engine RUN_TIMEOUT ${_timeout} COMMAND test_scale ${_mode}
                                WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
     else()
         jah_gpu_row(${_name} CLASS engine TOKENS 2 COMMAND test_scale ${_mode} WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")

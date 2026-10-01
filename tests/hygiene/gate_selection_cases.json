@@ -81,8 +81,8 @@
    "env": [
     "open.responsive"
    ],
-   "whole_tier": true,
-   "note": "the fork pin moved: the MERGE tier by rule (contract §7b.4)"
+   "note": "the fork pin moved: the MERGE tier by rule (contract §7b.4) — since TEST-SELECTOR-1 T2 the pin bump selects by the fork diff's reach (the full tier runs once, at the merge: --fork-tier)",
+   "fork_reach": true
   },
   {
    "lane": "ATOM-DECODE-CLASS-1",
@@ -149,8 +149,8 @@
     "gi.field_follows",
     "gi.rt_reflect_cost"
    ],
-   "whole_tier": true,
-   "note": "api.contract red at the merge (SCRIPTING.md kept from the wrong side); the fork pin moved: the MERGE tier by rule"
+   "note": "api.contract red at the merge (SCRIPTING.md kept from the wrong side); the fork pin moved: the MERGE tier by rule — since TEST-SELECTOR-1 T2 the pin bump selects by the fork diff's reach (the full tier runs once, at the merge: --fork-tier)",
+   "fork_reach": true
   },
   {
    "lane": "VIEWS-DEPTH-1",
@@ -162,7 +162,7 @@
    ],
    "env": [],
    "max_rows": 10,
-   "note": "the old selector fell back on tests/support/no_xid_run.sh; the change is one suite's registration, its script and its wrapper"
+   "note": "the old selector fell back on the suite's Xid wrapper (deleted since TEST-SELECTOR-1 H4); the change is one suite's registration, its script and its wrapper"
   },
   {
    "lane": "ATOM-CPU-WALKS-1",
@@ -213,6 +213,470 @@
     "scripting.e2e.texture_missing"
    ],
    "note": "fell back on irisgl/irisglfwd.h (-1,188 lines, eleven files deleted); 14 reds all green solo (VRAM 14.2/16.4 GB with three gates live: device lost, no Xid); a deleted C/C++ file reaches nothing of its own (its users are in the diff)"
+  },
+  {
+   "lane": "TEST-TIER-1 (scoped-fallback gate at 462a89522)",
+   "range": "61ea6a106..462a89522",
+   "evidence": "testing/runs/2026-09-28-scoped-fallback-462a89522.jsonl",
+   "must": [
+    "source.gpu_rows_closure"
+   ],
+   "env": [
+    "gi.field_scroll",
+    "open.responsive",
+    "vr.eye_grade"
+   ],
+   "note": "TEST-SELECTOR-1 T4: one of the 29 tier-sized lane gates since 09-28 (old selector: scoped-fallback); must = its reds with no solo PASS outside the contention class (unverified per suite: the class the audit counted), env = solo-passed or contention-class reds",
+   "max_rows": 260
+  },
+  {
+   "lane": "D3-HIT-SHADE-2 (scoped-fallback gate at 5c3ce8b4d)",
+   "range": "ebbea3b02..5c3ce8b4d",
+   "evidence": "testing/runs/2026-09-28-scoped-fallback-5c3ce8b4d.jsonl",
+   "must": [],
+   "env": [
+    "gi.field_scroll",
+    "gi.rt_reflect_cost",
+    "open.responsive"
+   ],
+   "note": "TEST-SELECTOR-1 T4: one of the 29 tier-sized lane gates since 09-28 (old selector: scoped-fallback); must = its reds with no solo PASS outside the contention class (unverified per suite: the class the audit counted), env = solo-passed or contention-class reds",
+   "own_base": "dc3fed56a",
+   "not_paths": [
+    "irisgl/thirdparty/ogre-next"
+   ]
+  },
+  {
+   "lane": "D7-STUDIO-FIXES-1 (scoped-fallback gate at 693beed9d)",
+   "range": "f5b653471..693beed9d",
+   "evidence": "testing/runs/2026-09-28-scoped-fallback-693beed9d.jsonl",
+   "must": [],
+   "env": [
+    "app.watchdog_stall"
+   ],
+   "note": "TEST-SELECTOR-1 T4: one of the 29 tier-sized lane gates since 09-28 (old selector: scoped-fallback); must = its reds with no solo PASS outside the contention class (unverified per suite: the class the audit counted), env = solo-passed or contention-class reds; T1: a Studio-only lane whose forward merge carried fork e78e26e49 in — gated on its own diff from the merge's d-build parent",
+   "own_base": "dc3fed56a",
+   "not_paths": [
+    "irisgl/thirdparty/ogre-next",
+    "cmake/IncludeOgre.cmake"
+   ]
+  },
+  {
+   "lane": "D6-FORK-TOOLING (scoped-fallback gate at 69e1f3f1c)",
+   "range": "ebbea3b02..69e1f3f1c",
+   "evidence": "testing/runs/2026-09-28-scoped-fallback-69e1f3f1c.jsonl",
+   "must": [
+    "vr.session"
+   ],
+   "env": [],
+   "note": "TEST-SELECTOR-1 T4: one of the 29 tier-sized lane gates since 09-28 (old selector: scoped-fallback); must = its reds with no solo PASS outside the contention class (unverified per suite: the class the audit counted), env = solo-passed or contention-class reds",
+   "fork_reach": true
+  },
+  {
+   "lane": "D4-PHOTON-TIERS (scoped-fallback gate at 78cd55d26)",
+   "range": "bd5d5a8df..78cd55d26",
+   "evidence": "testing/runs/2026-09-28-scoped-fallback-78cd55d26.jsonl",
+   "must": [
+    "editor_view.render_stats",
+    "pool.editor_view"
+   ],
+   "env": [
+    "devprocess.vram_admit",
+    "open.responsive"
+   ],
+   "note": "TEST-SELECTOR-1 T4: one of the 29 tier-sized lane gates since 09-28 (old selector: scoped-fallback); must = its reds with no solo PASS outside the contention class (unverified per suite: the class the audit counted), env = solo-passed or contention-class reds",
+   "fork_reach": true
+  },
+  {
+   "lane": "ATOM-SHADOWS-1 (scoped-fallback gate at 8969d1c49)",
+   "range": "61ea6a106..8969d1c49",
+   "evidence": "testing/runs/2026-09-28-scoped-fallback-8969d1c49.jsonl",
+   "must": [
+    "lights.shadows",
+    "scale.shadow_cut",
+    "shadow.cache_kinds",
+    "source.member_init"
+   ],
+   "env": [
+    "devprocess.vram_admit",
+    "open.responsive",
+    "shadergraph.bake_output"
+   ],
+   "note": "TEST-SELECTOR-1 T4: one of the 29 tier-sized lane gates since 09-28 (old selector: scoped-fallback); must = its reds with no solo PASS outside the contention class (unverified per suite: the class the audit counted), env = solo-passed or contention-class reds; reds of rows gone from this tree: ['scale.shadow_cut_small']"
+  },
+  {
+   "lane": "D6-FORK-TOOLING (scoped-fallback gate at 9c3811b1e)",
+   "range": "ebbea3b02..9c3811b1e",
+   "evidence": "testing/runs/2026-09-28-scoped-fallback-9c3811b1e.jsonl",
+   "must": [],
+   "env": [
+    "gi.rt_reflect_cost",
+    "open.responsive",
+    "perf.capture_off_is_free"
+   ],
+   "note": "TEST-SELECTOR-1 T4: one of the 29 tier-sized lane gates since 09-28 (old selector: scoped-fallback); must = its reds with no solo PASS outside the contention class (unverified per suite: the class the audit counted), env = solo-passed or contention-class reds",
+   "fork_reach": true
+  },
+  {
+   "lane": "D6-FORK-TOOLING (scoped-fallback gate at c2758618a)",
+   "range": "ebbea3b02..c2758618a",
+   "evidence": "testing/runs/2026-09-28-scoped-fallback-c2758618a.jsonl",
+   "must": [
+    "vr.session_undithered"
+   ],
+   "env": [
+    "open.responsive"
+   ],
+   "note": "TEST-SELECTOR-1 T4: one of the 29 tier-sized lane gates since 09-28 (old selector: scoped-fallback); must = its reds with no solo PASS outside the contention class (unverified per suite: the class the audit counted), env = solo-passed or contention-class reds",
+   "fork_reach": true
+  },
+  {
+   "lane": "D3-HIT-SHADE-2 (scoped-fallback gate at db6d1c2a5)",
+   "range": "ebbea3b02..db6d1c2a5",
+   "evidence": "testing/runs/2026-09-28-scoped-fallback-db6d1c2a5.jsonl",
+   "must": [],
+   "env": [
+    "app.watchdog_stall",
+    "open.responsive"
+   ],
+   "note": "TEST-SELECTOR-1 T4: one of the 29 tier-sized lane gates since 09-28 (old selector: scoped-fallback); must = its reds with no solo PASS outside the contention class (unverified per suite: the class the audit counted), env = solo-passed or contention-class reds"
+  },
+  {
+   "lane": "D7-ENGINE-FIXES-1 (scoped-fallback gate at dc770c5b8)",
+   "range": "6cf5ee49b..dc770c5b8",
+   "evidence": "testing/runs/2026-09-28-scoped-fallback-dc770c5b8.jsonl",
+   "must": [],
+   "env": [
+    "open.responsive"
+   ],
+   "note": "TEST-SELECTOR-1 T4: one of the 29 tier-sized lane gates since 09-28 (old selector: scoped-fallback); must = its reds with no solo PASS outside the contention class (unverified per suite: the class the audit counted), env = solo-passed or contention-class reds; since the merge read's D1 the own range starts at the forward merge's d-build parent, whose pin is readable: the fork bump selects by reach",
+   "fork_reach": true
+  },
+  {
+   "lane": "D4-PHOTON-TIERS (scoped-fallback gate at e6a71d0df)",
+   "range": "bd5d5a8df..e6a71d0df",
+   "evidence": "testing/runs/2026-09-28-scoped-fallback-e6a71d0df.jsonl",
+   "must": [
+    "atom.occlusion_exact_app",
+    "editor_view.full_surface",
+    "editor_view.render_stats",
+    "gi.boot_textures",
+    "gi.card_lighting_indirect",
+    "gi.cards_mover_shadow",
+    "gi.coalesce",
+    "gi.cone_integrator_parity",
+    "gi.ddgi",
+    "gi.ddgi_ambient",
+    "gi.ddgi_edge",
+    "gi.env_cone",
+    "gi.env_ray_match",
+    "gi.hidden_volume",
+    "gi.hit_shade",
+    "gi.mobility",
+    "gi.modes",
+    "gi.overlay",
+    "gi.pcc_bounds",
+    "gi.probe_inputs",
+    "gi.probe_open",
+    "gi.reflect_mover",
+    "gi.rt_reflect",
+    "gi.rt_reflect_asan",
+    "gi.skin_rays_mirror",
+    "gi.volume_edge",
+    "gi.volume_edge_spec_target",
+    "gi.voxel_coverage",
+    "gi_verbs.offscreen_contract",
+    "gi_verbs.pcc_budget",
+    "photon.view",
+    "pool.editor_view",
+    "pool.gi_verbs",
+    "pool.world_light",
+    "samples.cleanstart.Mirror_Room",
+    "samples.cleanstart.Showroom",
+    "samples.cleanstart.Showroom_2",
+    "threading.newproject_stall",
+    "vr.eye_grade",
+    "vr.session",
+    "world_light.screenshot_grades"
+   ],
+   "env": [
+    "gi.budget",
+    "gi.rt_reflect_cost",
+    "open.responsive"
+   ],
+   "note": "TEST-SELECTOR-1 T4: one of the 29 tier-sized lane gates since 09-28 (old selector: scoped-fallback); must = its reds with no solo PASS outside the contention class (unverified per suite: the class the audit counted), env = solo-passed or contention-class reds",
+   "fork_reach": true
+  },
+  {
+   "lane": "D7-ENGINE-FIXES-1 (scoped-fallback gate at f811f0989)",
+   "range": "321983ce2..f811f0989",
+   "evidence": "testing/runs/2026-09-28-scoped-fallback-f811f0989.jsonl",
+   "must": [
+    "source.gate_scope_rules",
+    "source.testing_rules"
+   ],
+   "env": [
+    "gi.field_scroll",
+    "gi.rt_reflect_cost"
+   ],
+   "note": "TEST-SELECTOR-1 T4: one of the 29 tier-sized lane gates since 09-28 (old selector: scoped-fallback); must = its reds with no solo PASS outside the contention class (unverified per suite: the class the audit counted), env = solo-passed or contention-class reds; the fork pin moved through 45caa1569, a commit the fork's rebase removed: the diff is unreadable, so the MERGE tier by rule",
+   "whole_tier": true
+  },
+  {
+   "lane": "D7-STUDIO-FIXES-2 (scoped-fallback gate at 1cb65cd25)",
+   "range": "09d898714..1cb65cd25",
+   "evidence": "testing/runs/2026-09-29-scoped-fallback-1cb65cd25.jsonl",
+   "must": [
+    "source.testing_rules"
+   ],
+   "env": [
+    "mirror.scale",
+    "open.responsive",
+    "perf.epic_steady_state"
+   ],
+   "note": "TEST-SELECTOR-1 T4: one of the 29 tier-sized lane gates since 09-28 (old selector: scoped-fallback); must = its reds with no solo PASS outside the contention class (unverified per suite: the class the audit counted), env = solo-passed or contention-class reds"
+  },
+  {
+   "lane": "D7-STUDIO-FIXES-1 (scoped-fallback gate at 78dfa54e5)",
+   "range": "f5b653471..78dfa54e5",
+   "evidence": "testing/runs/2026-09-29-scoped-fallback-78dfa54e5.jsonl",
+   "must": [],
+   "env": [
+    "perf.drag_mirror_room"
+   ],
+   "note": "TEST-SELECTOR-1 T4: one of the 29 tier-sized lane gates since 09-28 (old selector: scoped-fallback); must = its reds with no solo PASS outside the contention class (unverified per suite: the class the audit counted), env = solo-passed or contention-class reds"
+  },
+  {
+   "lane": "CONTACT-OCCLUSION-1 (scoped-tier gate at 1775e79f0)",
+   "range": "1704f7fde..1775e79f0",
+   "evidence": "testing/runs/2026-09-29-scoped-tier-1775e79f0.jsonl",
+   "must": [
+    "gi.hit_planar",
+    "gi.reflect_mover",
+    "pool.world_sky",
+    "world_sky.clouds_2d"
+   ],
+   "env": [
+    "app.watchdog_stall"
+   ],
+   "note": "TEST-SELECTOR-1 T4: one of the 29 tier-sized lane gates since 09-28 (old selector: scoped-tier); must = its reds with no solo PASS outside the contention class (unverified per suite: the class the audit counted), env = solo-passed or contention-class reds",
+   "fork_reach": true
+  },
+  {
+   "lane": "D8-PHOTON-DEBTS-1 (scoped-tier gate at 383b6f47a)",
+   "range": "aabbb60c3..383b6f47a",
+   "evidence": "testing/runs/2026-09-29-scoped-tier-383b6f47a.jsonl",
+   "must": [],
+   "env": [
+    "open.responsive",
+    "ui.selection_cost"
+   ],
+   "note": "TEST-SELECTOR-1 T4: one of the 29 tier-sized lane gates since 09-28 (old selector: scoped-tier); must = its reds with no solo PASS outside the contention class (unverified per suite: the class the audit counted), env = solo-passed or contention-class reds",
+   "fork_reach": true
+  },
+  {
+   "lane": "CONTACT-OCCLUSION-1 (scoped-tier gate at 445d1bdb6)",
+   "range": "1704f7fde..445d1bdb6",
+   "evidence": "testing/runs/2026-09-29-scoped-tier-445d1bdb6.jsonl",
+   "must": [
+    "atom.occlusion_exact_app",
+    "gi.card_view",
+    "gi.ddgi_ambient",
+    "gi.reflect_mover",
+    "pool.world_sky",
+    "world_sky.clouds_2d"
+   ],
+   "env": [
+    "commands.undo_clear_cost",
+    "gi.budget",
+    "gi.rt_reflect_cost",
+    "open.responsive",
+    "vr.input_session"
+   ],
+   "note": "TEST-SELECTOR-1 T4: one of the 29 tier-sized lane gates since 09-28 (old selector: scoped-tier); must = its reds with no solo PASS outside the contention class (unverified per suite: the class the audit counted), env = solo-passed or contention-class reds",
+   "fork_reach": true
+  },
+  {
+   "lane": "D11-LIBRARY-SCALE (scoped-tier gate at 53b9044f0)",
+   "range": "a859f31ed..53b9044f0",
+   "evidence": "testing/runs/2026-09-29-scoped-tier-53b9044f0.jsonl",
+   "must": [],
+   "env": [
+    "open.responsive"
+   ],
+   "note": "TEST-SELECTOR-1 T4: one of the 29 tier-sized lane gates since 09-28 (old selector: scoped-tier); must = its reds with no solo PASS outside the contention class (unverified per suite: the class the audit counted), env = solo-passed or contention-class reds; T1: the pin came in through its forward merge — its own diff is ~284 rows",
+   "own_base": "3e632812e",
+   "not_paths": [
+    "irisgl/thirdparty/ogre-next"
+   ],
+   "max_rows": 320
+  },
+  {
+   "lane": "PHOTON-PHYSICS-1 (scoped-tier gate at c97e0c9e5)",
+   "range": "1704f7fde..c97e0c9e5",
+   "evidence": "testing/runs/2026-09-29-scoped-tier-c97e0c9e5.jsonl",
+   "must": [],
+   "env": [
+    "doc_assets.video_texture",
+    "open.responsive",
+    "pool.doc_assets"
+   ],
+   "note": "TEST-SELECTOR-1 T4: one of the 29 tier-sized lane gates since 09-28 (old selector: scoped-tier); must = its reds with no solo PASS outside the contention class (unverified per suite: the class the audit counted), env = solo-passed or contention-class reds",
+   "fork_reach": true
+  },
+  {
+   "lane": "CONTACT-OCCLUSION-1 (scoped-fallback gate at 091bca76c)",
+   "range": "1704f7fde..091bca76c",
+   "evidence": "testing/runs/2026-09-30-scoped-fallback-091bca76c.jsonl",
+   "must": [],
+   "env": [
+    "commands.undo_clear_cost"
+   ],
+   "note": "TEST-SELECTOR-1 T4: one of the 29 tier-sized lane gates since 09-28 (old selector: scoped-fallback); must = its reds with no solo PASS outside the contention class (unverified per suite: the class the audit counted), env = solo-passed or contention-class reds",
+   "fork_reach": true
+  },
+  {
+   "lane": "CLUSTER-LOCK-3 (scoped-fallback gate at 0ed8780b9)",
+   "range": "1fd103263..0ed8780b9",
+   "evidence": "testing/runs/2026-09-30-scoped-fallback-0ed8780b9.jsonl",
+   "must": [
+    "atom.lod_switch",
+    "source.member_init",
+    "source.notices_coverage"
+   ],
+   "env": [
+    "open.responsive"
+   ],
+   "note": "TEST-SELECTOR-1 T4: one of the 29 tier-sized lane gates since 09-28 (old selector: scoped-fallback); must = its reds with no solo PASS outside the contention class (unverified per suite: the class the audit counted), env = solo-passed or contention-class reds"
+  },
+  {
+   "lane": "CLUSTER-LOCK-3 (scoped-fallback gate at 79935a0ce)",
+   "range": "e5c1a5e7b..79935a0ce",
+   "evidence": "testing/runs/2026-09-30-scoped-fallback-79935a0ce.jsonl",
+   "must": [],
+   "env": [
+    "open.responsive"
+   ],
+   "note": "TEST-SELECTOR-1 T4: one of the 29 tier-sized lane gates since 09-28 (old selector: scoped-fallback); must = its reds with no solo PASS outside the contention class (unverified per suite: the class the audit counted), env = solo-passed or contention-class reds"
+  },
+  {
+   "lane": "CONTACT-OCCLUSION-1 (scoped-fallback gate at 81d06b385)",
+   "range": "1704f7fde..81d06b385",
+   "evidence": "testing/runs/2026-09-30-scoped-fallback-81d06b385.jsonl",
+   "must": [],
+   "env": [
+    "vr.session"
+   ],
+   "note": "TEST-SELECTOR-1 T4: one of the 29 tier-sized lane gates since 09-28 (old selector: scoped-fallback); must = its reds with no solo PASS outside the contention class (unverified per suite: the class the audit counted), env = solo-passed or contention-class reds",
+   "fork_reach": true
+  },
+  {
+   "lane": "WORLD-MODEL-1 (scoped-fallback gate at d3c9656d9)",
+   "range": "0b15bc188..d3c9656d9",
+   "evidence": "testing/runs/2026-09-30-scoped-fallback-d3c9656d9.jsonl",
+   "must": [
+    "atom.atom_draw",
+    "avatar_anim.avatar",
+    "avatar_anim.skinning",
+    "doc.static_semantics",
+    "editor.new_scene",
+    "editor_view.editor_controls",
+    "gi_movers.dirty_mirror",
+    "gi_movers.mobility_play",
+    "gi_verbs.contact_band",
+    "mcp.e2e",
+    "player.fixed_clock",
+    "pool.atom",
+    "pool.avatar_anim",
+    "pool.doc",
+    "pool.editor",
+    "pool.editor_view",
+    "pool.gi_movers",
+    "pool.gi_verbs",
+    "pool.player",
+    "pool.world_sky",
+    "scripting.e2e.one_asset",
+    "scripting.e2e.shipped_assets",
+    "world_sky.clouds_2d",
+    "world_sky.default_ground"
+   ],
+   "env": [
+    "commands.undo_clear_cost",
+    "open.responsive"
+   ],
+   "note": "TEST-SELECTOR-1 T4: one of the 29 tier-sized lane gates since 09-28 (old selector: scoped-fallback); must = its reds with no solo PASS outside the contention class (unverified per suite: the class the audit counted), env = solo-passed or contention-class reds"
+  },
+  {
+   "lane": "CONTACT-OCCLUSION-1 (scoped-fallback gate at d8e3f7b89)",
+   "range": "1704f7fde..d8e3f7b89",
+   "evidence": "testing/runs/2026-09-30-scoped-fallback-d8e3f7b89.jsonl",
+   "must": [
+    "gi.reflect_mover"
+   ],
+   "env": [],
+   "note": "TEST-SELECTOR-1 T4: one of the 29 tier-sized lane gates since 09-28 (old selector: scoped-fallback); must = its reds with no solo PASS outside the contention class (unverified per suite: the class the audit counted), env = solo-passed or contention-class reds",
+   "fork_reach": true
+  },
+  {
+   "lane": "WORLD-MODEL-1 (scoped-fallback gate at ed4c38086)",
+   "range": "0b15bc188..ed4c38086",
+   "evidence": "testing/runs/2026-09-30-scoped-fallback-ed4c38086.jsonl",
+   "must": [
+    "assets.engine",
+    "source.one_material_resolve",
+    "vr.input_session"
+   ],
+   "env": [
+    "gi.field_scroll",
+    "perf.drag_mirror_room"
+   ],
+   "note": "TEST-SELECTOR-1 T4: one of the 29 tier-sized lane gates since 09-28 (old selector: scoped-fallback); must = its reds with no solo PASS outside the contention class (unverified per suite: the class the audit counted), env = solo-passed or contention-class reds"
+  },
+  {
+   "lane": "CONTACT-OCCLUSION-1 (scoped-tier gate at 2fb9f128f)",
+   "range": "1704f7fde..2fb9f128f",
+   "evidence": "testing/runs/2026-09-30-scoped-tier-2fb9f128f.jsonl",
+   "must": [
+    "gi.reflect_mover",
+    "shadow.cache_kinds"
+   ],
+   "env": [
+    "app.engine_selftest_validation",
+    "commands.undo_clear_cost",
+    "gi.field_scroll",
+    "open.responsive",
+    "perf.drag_mirror_room"
+   ],
+   "note": "TEST-SELECTOR-1 T4: one of the 29 tier-sized lane gates since 09-28 (old selector: scoped-tier); must = its reds with no solo PASS outside the contention class (unverified per suite: the class the audit counted), env = solo-passed or contention-class reds",
+   "fork_reach": true
+  },
+  {
+   "lane": "CONTACT-OCCLUSION-1 (scoped-tier gate at 684e0f7aa)",
+   "range": "1775e79f0..684e0f7aa",
+   "evidence": "testing/runs/2026-09-30-scoped-tier-684e0f7aa.jsonl",
+   "must": [
+    "gi.card_lighting_indirect",
+    "gi.reflect_mover"
+   ],
+   "env": [
+    "gi.field_scroll",
+    "open.responsive"
+   ],
+   "note": "TEST-SELECTOR-1 T4: one of the 29 tier-sized lane gates since 09-28 (old selector: scoped-tier); must = its reds with no solo PASS outside the contention class (unverified per suite: the class the audit counted), env = solo-passed or contention-class reds",
+   "fork_reach": true
+  },
+  {
+   "lane": "CONTACT-OCCLUSION-1 (scoped-tier gate at 921930e50)",
+   "range": "1704f7fde..921930e50",
+   "evidence": "testing/runs/2026-09-30-scoped-tier-921930e50.jsonl",
+   "must": [
+    "gi.reflect_mover"
+   ],
+   "env": [
+    "commands.undo_clear_cost",
+    "open.responsive"
+   ],
+   "note": "TEST-SELECTOR-1 T4: one of the 29 tier-sized lane gates since 09-28 (old selector: scoped-tier); must = its reds with no solo PASS outside the contention class (unverified per suite: the class the audit counted), env = solo-passed or contention-class reds",
+   "fork_reach": true
   }
  ],
  "files": [
@@ -368,6 +832,26 @@
    "must": [
     "threading.newproject_stall",
     "threading.newproject_stall.timing"
+   ]
+  },
+  {
+   "case": "T3 a changed jah_gpu_row whose row name is a loop variable (vr.${_arm}) resolves through ctest's backtrace (4 fallbacks before)",
+   "file": "tests/vr/CMakeLists.txt",
+   "old": "                     \"${_vr_warm_script}\"\n",
+   "new": "                     \"${_vr_warm_script}\" --frames 2\n",
+   "must": [
+    "vr.warmup",
+    "vr.warmup_control"
+   ]
+  },
+  {
+   "case": "T3 a changed line inside jah_scale_row's body reaches every row registered through it (6 fallbacks before)",
+   "file": "tests/scale/CMakeLists.txt",
+   "old": "        jah_gpu_row(${_name} CLASS engine TOKENS 2 COMMAND test_scale ${_mode} WORKING_DIRECTORY \"${CMAKE_CURRENT_BINARY_DIR}\")\n",
+   "new": "        jah_gpu_row(${_name} CLASS engine TOKENS 3 COMMAND test_scale ${_mode} WORKING_DIRECTORY \"${CMAKE_CURRENT_BINARY_DIR}\")\n",
+   "must": [
+    "scale.lights",
+    "scale.levels"
    ]
   }
  ]

@@ -12,8 +12,11 @@ WHAT IT REPLAYS (tests/hygiene/gate_selection_cases.json):
     suite the lane's gates found red with a REAL verdict, and every named suite of the lane, must
     be in the selection (or the selection must be the whole tier). The reds judged environmental
     are printed — selected or not — and never required: a contention red is not the change's.
-    A case that says `whole_tier` must select the MERGE tier by rule (a fork pin bump); a case
-    with `max_rows` must stay under it (the precision the lane is there to prove).
+    A case that says `whole_tier` must select the MERGE tier by rule (a fork diff this checkout
+    cannot read); `fork_reach`, a pin bump selected by the FORK DIFF's reach (TEST-SELECTOR-1 T2),
+    never the tier; `own_base`, the lane's OWN range starts at its newest forward merge's d-build
+    parent and `not_paths` (what the merge carried in) are not its paths (T1); a case with
+    `max_rows` must stay under it (the precision the lane is there to prove).
   * FILES: the suites audit's S1/S2 subjects, and the graph's precision (a compiled row whose
     executable does not contain the file is NOT selected).
   * HUNKS: a real file with one edit applied IN MEMORY (the Fable read's negative cases: a
@@ -228,7 +231,7 @@ def runlog_cases(source):
                       "---- p.a: its output (2 line(s)) ----", "| ARM-BEGIN p.a", "| " + oom, "ARM p.a FAIL 900",
                       "---- p.b: its output (1 line(s)) ----", "| FAIL: 3 < 4", "ARM p.b FAIL 800",
                       "ARM-BEGIN p.c", "| " + lost])
-    arms = {a: v for a, v, _ in rl._suite_facts(pool)[2]}
+    arms = {a: v for a, v, _ in rl._suite_facts(pool)[1]}
     check(arms == {"p.a": "OOM", "p.b": "FAIL", "p.c": "LOST"}, "a pool's arms take the class from their own lines "
           "(%s)" % arms)
 
@@ -347,6 +350,42 @@ def joint_case(gs, build, cases):
         check(m in J["joint"], "the joint rows carry %s (%d joint of %d)" % (m, len(J["joint"]), len(J["union"])))
 
 
+def own_range_case(gs):
+    """T1 IN A SCRATCH REPO (the merge read's replay): the lane's own diff across forward merges of
+    d-build AND an internal fix branch merged into the lane. d-build: base0 -> dA -> dB -> dC; the
+    lane: laneA, merge(dA), laneB, merge(dB), laneC, laneD, merge of `fix` (fix1, forked at laneC).
+    The own range must hold every lane file and fix1 and none of dA/dB — an internal merge is the
+    lane's own change (the first version of own_base counted it forward and dropped laneA..laneC)."""
+    import tempfile
+    print("\nown range (a scratch repo: forward merges + an internal fix branch):")
+    with tempfile.TemporaryDirectory() as d:
+        g = lambda *a: subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@t", *a], cwd=d,
+                                      capture_output=True, text=True, check=True).stdout.strip()
+        def commit(name):
+            open(os.path.join(d, name), "w").write(name + "\n"); g("add", name); g("commit", "-q", "-m", name)
+        g("init", "-q", "-b", "d-build"); commit("base0")
+        g("checkout", "-q", "-b", "lane")
+        g("checkout", "-q", "d-build"); commit("dA"); commit("dB"); commit("dC")
+        dA, dB = g("rev-parse", "HEAD~2"), g("rev-parse", "HEAD~1")
+        g("checkout", "-q", "lane"); commit("laneA")
+        g("merge", "-q", "--no-ff", "-m", "fwd dA", dA); commit("laneB")
+        g("merge", "-q", "--no-ff", "-m", "fwd dB", dB); commit("laneC")
+        g("checkout", "-q", "-b", "fix"); commit("fix1")
+        g("checkout", "-q", "lane"); commit("laneD")
+        g("merge", "-q", "--no-ff", "-m", "the internal fix", "fix")
+        old = os.environ.get("JAH_INTEGRATION_REFS")
+        os.environ["JAH_INTEGRATION_REFS"] = "d-build"
+        try:
+            own, fwd = gs.own_base("d-build", "lane", cwd=d)
+        finally:
+            if old is None: os.environ.pop("JAH_INTEGRATION_REFS", None)
+            else: os.environ["JAH_INTEGRATION_REFS"] = old
+        files = set(g("diff", "--name-only", own, "lane").split())
+        check(files == {"laneA", "laneB", "laneC", "laneD", "fix1"},
+              "the own diff is every lane file + the fix branch, no d-build file (%s)" % sorted(files))
+        check(len(fwd) == 2 and own == dB, "two forward merges, the own base is the newest one's d-build parent")
+
+
 def main(source, build):
     if not os.path.isfile(os.path.join(build, "CTestTestfile.cmake")):
         print("gate_selection: %s is not a configured build dir" % build)
@@ -416,6 +455,20 @@ def main(source, build):
         check(not S.fallback, "%s: no fallback (%s)" % (c["lane"], S.fallback[:2]))
         if c.get("whole_tier"):
             check(bool(S.full_tier), "%s: the MERGE tier by rule (%s)" % (c["lane"], S.full_tier[:1]))
+        if c.get("fork_reach"):
+            # T2: a pin bump selects by the fork diff's reach, never the tier (that runs once, at the merge)
+            check(bool(S.fork_bump) and not S.full_tier and (S.fork_bump or {}).get("files") is not None,
+                  "%s: the fork pin selects by its diff's reach, not the tier (%s)"
+                  % (c["lane"], S.full_tier[:1] or len((S.fork_bump or {}).get("files") or [])))
+        if c.get("own_base"):
+            # T1: the lane is gated on its OWN diff — from its newest forward merge's d-build parent
+            own, incoming, fwd = gs.scope_range(c["range"])
+            check(own.startswith(subprocess.run(["git", "rev-parse", c["own_base"]], cwd=source, capture_output=True,
+                                                text=True).stdout.strip()) and bool(fwd) and bool(incoming),
+                  "%s: its own diff starts at the forward merge's parent %s (%s; %d forward merge(s))"
+                  % (c["lane"], c["own_base"], own[:9], len(fwd)))
+        for np_ in c.get("not_paths", []):
+            check(np_ not in paths, "%s: %s came in through a forward merge — not the lane's path" % (c["lane"], np_))
         for m in c.get("must", []):
             check(whole or chosen(S, m), "%s: selects %s" % (c["lane"], m))
         if "max_rows" in c:
@@ -437,6 +490,7 @@ def main(source, build):
     hunk_cases(gs, graph, build, inv0, cases)
     nm_refusal(source, build)
     joint_case(gs, build, cases)
+    own_range_case(gs)
     print("\n  the MERGE tier: %d rows, ~%.0f suite-seconds" % (len(tier_rows), tier_s))
     if FAILURES:
         print("gate.selection: FAILED (%d)" % len(FAILURES))

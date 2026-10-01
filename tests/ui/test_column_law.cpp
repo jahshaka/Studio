@@ -31,7 +31,7 @@
 #include <QJsonDocument>
 #include <QThread>
 
-using namespace shutdownharness;
+using namespace mcpharness;
 
 static int failures = 0;
 #define CHECK(cond, msg) do { if (cond) std::printf("ok:   %s\n", msg); \
@@ -76,6 +76,7 @@ int main(int argc, char **argv)
     McpClient mcp;
     mcp.url = QUrl(QStringLiteral("http://127.0.0.1:%1/mcp").arg(port));
     mcp.token = token;
+    mcp.attach(jahshaka, log);   // a transport failure prints the child's state + log tail
     mcp.clientName = QStringLiteral("column-law-test");
     mcp.initialize();
 

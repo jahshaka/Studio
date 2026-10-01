@@ -24,8 +24,10 @@ THE THREE SELECTORS (the Selection class below has the detail):
      AREA RULES' families and the scripts' API modules; when the app relinked and no rule
      narrows a path, every app row.
 Build files are read by what their changed commands name. The FALLBACK to the MERGE tier is
-only for a path with no rule, no symbol and no graph owner; a fork pin bump selects the MERGE
-tier BY RULE. Tiers are contracts: the selection printed here is what runs, nothing
+only for a path with no rule, no symbol and no graph owner. A fork pin bump selects by the FORK
+DIFF'S reach (FORK_FAMILIES); its one full tier runs at the merge into d-build (`--fork-tier`,
+which ci_gate_check requires). THE RANGE IS THE LANE'S OWN: across a forward merge the scope
+starts at the merge's d-build parent (own_base), and what came in is the joint suites'. Tiers are contracts: the selection printed here is what runs, nothing
 hand-picked out of it; a red a later tier finds that this selection missed is a defect of
 this tool, fixed here and added to tests/hygiene/gate_selection_cases.json.
 """
@@ -64,6 +66,31 @@ ENGINE_FAMILY = ["engine", "gi", "rtreflect", "lights", "looks", "distortion", "
                  "materialpreview", "player", "sockets", "threading", "perf", "gizmo", "assets", "log",
                  "shutdown", "openasync", "*vulkan-scripts"]
 
+# THE FORK'S FAMILIES (TEST-SELECTOR-1 T2; the merge read's D2): a fork pin bump inside a lane
+# selects by what the fork's own diff reaches — each changed fork file, first match:
+#   none    — what the engine never builds or stages: the other render systems, the upstream
+#             samples and their media, the docs (irisgl/engine/CMakeLists.txt stages exactly
+#             Hlms/{Common,Pbs,Unlit}, 2.0/scripts/materials/{Common,HDR,Tutorial_SSAO,
+#             Tutorial_SMAA}, VCT, Compute/Tools, Compute/Algorithms/{IBL,IrradianceFields} and
+#             packs/DebugPack.zip; nothing else of Samples/ reaches a process of ours), and the
+#             HLSL/Metal twins of a shader (Vulkan reads the .glsl / .any);
+#   engine  — EVERYTHING ELSE the engine builds or stages: the pixel family (ENGINE_FAMILY + atom)
+#             and every executable that extracts the engine — the pin's selection before this lane.
+#             The narrower arms the first version had are gone (the read's D2, the brief's error):
+#             the Vulkan render system runs every rendering executable; the irradiance field (and
+#             the VCT feeding it) shades every lit pixel at every tier (Types.h fieldDefault);
+#             Compute/Tools is the voxelizer's clear.
+# The only narrowing left is `none`. A fork file no family names is the MERGE tier.
+FORK_FAMILIES = [
+    (r"^(Docs/|Scripts/|\.github/|\.circleci/|.*\.md$|LICENSE|README|Other/|Samples/2\.0/|"
+     r"RenderSystems/(Direct3D11|GL3Plus|GLES2|Metal)/|.*\.(hlsl|metal)$)", "none"),
+    (r"^Samples/Media/(VCT/|Compute/Tools/|Compute/Algorithms/(IBL|IrradianceFields)/|Hlms/(Common|Pbs|Unlit)/|"
+     r"packs/DebugPack\.zip$|2\.0/scripts/materials/(Common|HDR|Tutorial_SSAO|Tutorial_SMAA)/)", "engine"),
+    (r"^Samples/Media/", "none"),
+    (r"^(OgreMain|Components|PlugIns|RenderSystems/(Vulkan|NULL)|CMake|CMakeLists\.txt|Dependencies|DependenciesD)",
+     "engine"),
+]
+
 AREA_RULES = [
     # --- engine: anything that changes pixels or the boundary ---------------------------
     # THE VISIBILITY-BUFFER DECODE (tests/atom: engine.atom_parity and its twins, the
@@ -76,7 +103,11 @@ AREA_RULES = [
     (r"^irisgl/(engine/media/Hlms/|engine/src/(HlmsAtom|OgreAtomPass|AtomPass|OgreGpuScene|GpuScene)\.|"
      r"thirdparty/ogre-next)",
      ENGINE_FAMILY + ["atom"], []),
-    (r"^irisgl/(engine/|thirdparty/ogre-next|scripts/build-ogre)", ENGINE_FAMILY, []),
+    (r"^irisgl/(engine/|thirdparty/ogre-next|scripts/(build|prune)-ogre)", ENGINE_FAMILY, []),
+    # HOW OGRE IS FOUND AND LINKED (TEST-SELECTOR-1; the audit's T3 list: 14 lane gates fell back
+    # on this one file): every executable that links the engine, and the pixel family — the
+    # fork family `ogre`, never the whole tier.
+    (r"^cmake/IncludeOgre\.cmake$", ENGINE_FAMILY + ["atom"], []),
     (r"^irisgl/mirror/",
      ["mirror", "skeletal", "sockets", "cameras", "gizmo", "player", "thumbnails",
       "materialpreview", "samples", "picking", "particles",
@@ -276,8 +307,24 @@ NIGHTLY_LABEL_RE = "|".join(sorted(re.escape(l) for l in NIGHTLY_LABELS | TARGET
 # (docs/TESTING_GATE.md §1); a lane beside other live lanes asks for -j2 with `-j 2`, and
 # the fallback must honour that as the scoped command does (DEVPROCESS-1 item 2: the
 # fallback used to print and RUN a hardcoded -j4 whatever the caller asked).
+# THE TIMING ROWS ARE THEIR OWN SERIAL PHASE (TEST-SELECTOR-1, the merge read's W1 — the lead's
+# decision): a row that measures takes EVERY VRAM token, and inside a -j4 phase it waited holding
+# the admission's turnstile while its siblings drained (20 timing rows waited 1,104 s in one 69-min
+# gate), stalling every admission on the box. So every tier and every scoped gate runs in two
+# phases: the parallel phase WITHOUT the `timing` rows (label `timing`, appended to every
+# jah_gpu_exclusive_test row), then the timing rows at -j1, the whole GPU theirs.
+TIMING_LABEL = "timing"
+
+
 def merge_tier(jobs=4):
+    """The MERGE tier's PARALLEL phase (its second phase is merge_tier_serial())."""
     return (f'ctest -j{jobs} --timeout 120 --output-on-failure '
+            f'-LE "^({NIGHTLY_LABEL_RE}|{TIMING_LABEL})$"')
+
+
+def merge_tier_serial():
+    """The MERGE tier's SERIAL phase: its timing rows, one at a time, after the parallel phase."""
+    return (f'ctest -j1 --timeout 120 --output-on-failure -L "^{TIMING_LABEL}$" '
             f'-LE "^({NIGHTLY_LABEL_RE})$"')
 
 
@@ -298,8 +345,103 @@ def sh(cmd, cwd=ROOT):
     return r.stdout
 
 
+def _git_try(args, cwd=ROOT):
+    """git's stdout (stripped), or None when the command fails (an unknown sha is an answer here)."""
+    try:
+        r = subprocess.run(["git"] + args, cwd=cwd, capture_output=True, text=True)
+    except OSError:
+        return None
+    return r.stdout.strip() if r.returncode == 0 else None
+
+
+_OWN_BASE_CACHE = {}
+_LINE_CACHE = {}
+INTEGRATION_REFS = ("d-build", "origin/d-build", "main/d-build", "o3de", "origin/o3de", "main/o3de", "ogre",
+                    "origin/ogre", "main/ogre")
+
+
+def integration_line(cwd=ROOT):
+    """Every commit on the first-parent line of the repo's integration branches (JAH_INTEGRATION_REFS,
+    space-separated, overrides INTEGRATION_REFS): the commits a forward merge can bring in."""
+    if cwd in _LINE_CACHE: return _LINE_CACHE[cwd]
+    refs = os.environ.get("JAH_INTEGRATION_REFS", "").split() or INTEGRATION_REFS
+    line = set()
+    for r in refs:
+        if _git_try(["rev-parse", "--verify", "-q", r + "^{commit}"], cwd):
+            line |= set((_git_try(["rev-list", "--first-parent", r], cwd) or "").split())
+    _LINE_CACHE[cwd] = line
+    return line
+
+
+def own_base(base, tip, cwd=ROOT):
+    """THE LANE'S OWN DIFF (TEST-SELECTOR-1 T1; audit ARCH_AUDIT_2026-09-30 testing-tooling T1).
+
+    A two-dot `base..tip` across a FORWARD MERGE (d-build merged into the lane) is the lane's
+    change PLUS every sibling change the merge carried in: d7-studio-fixes-1, a Studio-only lane,
+    ran three full tiers on a fork pin its own ten commits never touched. The lane's own change is
+    the diff from the d-build commit it last merged to its tip, so:
+      * a one-commit range (`merge^1..merge`, a lane's merge INTO d-build) is itself;
+      * else the base is the merge-base of base and tip (a base AHEAD of the lane — d-build moved
+        on — is not the lane's change either), moved up to the second parent of the NEWEST FORWARD
+        merge on the tip's first-parent line.
+    A merge is FORWARD only when its second parent lies ON THE INTEGRATION LINE — the first-parent
+    history of d-build (or o3de / ogre, local or remote: integration_line()). Any other merge — an
+    internal fix branch merged into the lane — is the lane's own change (the merge read's
+    scratch-repo replay: counting it as forward dropped laneA..laneC from the diff; over-selection
+    is the safe side). Returns (own base sha, [(merge sha, its second parent)] of the forward merges
+    seen, newest first) — or (base, []) when git cannot resolve the range (a replay's fake revisions)."""
+    key = (base, tip, cwd)
+    if key in _OWN_BASE_CACHE: return _OWN_BASE_CACHE[key]
+    b, t = _git_try(["rev-parse", "--verify", "-q", base + "^{commit}"], cwd), \
+        _git_try(["rev-parse", "--verify", "-q", tip + "^{commit}"], cwd)
+    if not b or not t:
+        _OWN_BASE_CACHE[key] = (base, []); return _OWN_BASE_CACHE[key]
+    if _git_try(["rev-parse", "--verify", "-q", t + "^1"], cwd) == b:
+        _OWN_BASE_CACHE[key] = (b, []); return _OWN_BASE_CACHE[key]
+    mb = _git_try(["merge-base", b, t], cwd) or b
+    own, fwd = mb, []
+    for line in (_git_try(["rev-list", "--first-parent", "--merges", "--parents", f"{mb}..{t}"], cwd) or "").splitlines():
+        shas = line.split()
+        if len(shas) < 3: continue
+        m, p2 = shas[0], shas[2]
+        if p2 in integration_line(cwd):
+            fwd.append((m, p2))
+    if fwd:
+        own = fwd[0][1]
+    _OWN_BASE_CACHE[key] = (own, fwd)
+    return own, fwd
+
+
+def scope_range(rng):
+    """(own range `<own base>..<tip>`, the range that came in through forward merges or None,
+    the forward merges) — see own_base. A range git cannot resolve is returned unchanged."""
+    if not rng or ".." not in rng:
+        return rng, None, []
+    base, tip = rng.split("..", 1)
+    own, fwd = own_base(base, tip)
+    b = _git_try(["rev-parse", "--verify", "-q", base + "^{commit}"])
+    mb = (_git_try(["merge-base", b, tip]) if b else None) or b
+    incoming = f"{mb}..{own}" if fwd and mb and own != mb else None
+    return f"{own}..{tip}", incoming, fwd
+
+
+def irisgl_pair(base, tip):
+    """The irisgl revisions a Studio range compares: the pins at both ends, the old end moved to
+    the lane's OWN base inside irisgl (a forward merge of d-build's irisgl is not the lane's
+    change, and a base pin AHEAD of the lane's is not either — own_base, run in the submodule)."""
+    old = sh(f"git rev-parse {base}:irisgl").strip()
+    new = sh(f"git rev-parse {tip}:irisgl").strip()
+    ig = os.path.join(ROOT, "irisgl")
+    if old != new:
+        o, _ = own_base(old, new, cwd=ig)
+        if _git_try(["rev-parse", "--verify", "-q", o + "^{commit}"], ig): old = o
+    return old, new
+
+
 def touched_paths(rng):
-    """Files changed in the Studio range, plus the irisgl submodule's own diff (prefixed)."""
+    """Files changed in the Studio range, plus the irisgl submodule's own diff (prefixed) — the
+    LANE'S OWN change (scope_range: what forward merges carried in is the joint suites' business)."""
+    rng = scope_range(rng)[0]
     files = [l for l in sh(f"git diff --name-only {rng}").splitlines() if l]
     if not files:
         sys.stderr.write(f"gate-scope: range {rng} touches no file — refusing to scope an empty change\n")
@@ -307,9 +449,8 @@ def touched_paths(rng):
     out = [f for f in files if f != "irisgl"]
     if "irisgl" in files:
         base, tip = rng.split("..", 1)
-        old = sh(f"git rev-parse {base}:irisgl").strip()
-        new = sh(f"git rev-parse {tip}:irisgl").strip()
-        sub = sh(f"git diff --name-only {old} {new}", cwd=os.path.join(ROOT, "irisgl")).splitlines()
+        old, new = irisgl_pair(base, tip)
+        sub = sh(f"git diff --name-only {old} {new}", cwd=os.path.join(ROOT, "irisgl")).splitlines() if old != new else []
         out += ["irisgl/" + s for s in sub if s]
     return sorted(set(out))
 
@@ -372,10 +513,16 @@ def load_inventory(build):
         # take the first frame that lies in a tests/<dir>/ (the call site); the
         # add_test frame is kept only when no such frame exists.
         n = nodes[t["backtrace"]]
-        frames, via = [], set()
+        frames, via, sites = [], set(), set()
         while True:
             if n.get("file") is not None:
                 frames.append(files[n["file"]])
+                # THE REGISTRATION SITES (T3): every file:line of the backtrace — the add_test, the
+                # helper call that ran it (jah_gpu_row, jah_scale_row, a foreach's body line) —
+                # so a changed CMake command resolves to the rows registered FROM INSIDE ITS SPAN,
+                # whatever variables and helpers name them
+                if n.get("line") is not None:
+                    sites.add((os.path.normpath(files[n["file"]]), int(n["line"])))
             if n.get("command") is not None and n["command"] < len(commands):
                 via.add(commands[n["command"]].lower())     # the helper functions it came through
             if "parent" not in n:
@@ -399,6 +546,8 @@ def load_inventory(build):
         run = list(cmd)
         if run and os.path.basename(run[0]) == "gpu-exclusive.sh":
             run = run[1:]
+            while run and run[0] in ("--run-timeout", "--label"):
+                run = run[2:]
         if run and os.path.basename(run[0]) == "gpu-admit.sh":
             run = run[run.index("--") + 1:] if "--" in run else run[2:]
         script = None
@@ -431,6 +580,7 @@ def load_inventory(build):
             "argv_files": set(files_in_argv),
             "via": via,
             "frames": set(os.path.normpath(f) for f in frames),
+            "sites": sites,
             "serial": bool(props.get("RUN_SERIAL")),
             "env": list(props.get("ENVIRONMENT", []) or []),
             "fixture_setup": bool(props.get("FIXTURES_SETUP")),
@@ -552,6 +702,7 @@ def _git_show(rev, path):
 class Revs:
     """The two sides of the range, in each repo (Studio; irisgl at the pins the range names)."""
     def __init__(self, rng):
+        rng = scope_range(rng)[0]            # the lane's OWN change (T1), as touched_paths reads it
         self.rng = rng
         self.base, self.tip = rng.split("..", 1) if rng and ".." in rng else (None, None)
         self._ig = None
@@ -560,7 +711,7 @@ class Revs:
         if not self.base: return None, None
         if path.startswith("irisgl/"):
             if self._ig is None:
-                self._ig = (sh(f"git rev-parse {self.base}:irisgl").strip(), sh(f"git rev-parse {self.tip}:irisgl").strip())
+                self._ig = irisgl_pair(self.base, self.tip)
             return self._ig
         return self.base, self.tip
 
@@ -619,7 +770,8 @@ class Selection:
         self.inv, self.graph, self.app_exe, self.revs, self.jobs = inv, graph, app_exe, revs, jobs
         self.selected = {}
         self.fallback = []
-        self.full_tier = []          # rules that select the whole tier (a fork bump, a root setting)
+        self.full_tier = []          # rules that select the whole tier (an unreadable fork diff, a root setting)
+        self.fork_bump = None        # {old, new, files} when the range moves the fork pin (T2)
         self.rationale = []
         self.code_moved = False
         self.skipped_ubiquitous = set()
@@ -771,11 +923,56 @@ class Selection:
         notes = []
         if p.startswith(("src/", "irisgl/", "tests/")): self.code_moved = True
 
-        # THE FORK PIN: an Ogre change reaches everything (PHOTON_ATOM_CONTRACT §7b rule 4).
+        # THE FORK PIN (TEST-SELECTOR-1 T2): inside a lane a pin bump selects by what the FORK'S
+        # DIFF reaches (FORK_FAMILIES); §7b rule 4's full tier runs ONCE per bump, at the merge
+        # into d-build (`--fork-tier`, which ci_gate_check requires of a range that moves the pin),
+        # not on every fix round (contact-occlusion-1: eight full tiers in 8.6 h, one per round).
         if p == "irisgl/thirdparty/ogre-next" or p.startswith("irisgl/thirdparty/ogre-next/"):
-            self.full_tier.append(f"{p}: the fork pin moved — an Ogre change reaches every suite (§7b rule 4)")
-            self.expand(ENGINE_FAMILY + ["atom"], [], f"{p}: fork pin")
-            if depth == 0: self.rationale.append((p, "fork pin bump → the MERGE tier by rule (§7b.4)"))
+            self.fork(p, tag, depth)
+            return
+        m_patch = re.match(r"^(irisgl/thirdparty/([^/]+)-patches)/.+\.patch$", p)
+        if m_patch:
+            # A VENDORED COMPONENT'S PATCH STACK (assimp-patches/, meshoptimizer-clusterlod-patches/),
+            # applied at configure: it reaches what the files it patches reach — the vendored file
+            # itself, or its staged copy (<build>/…/vendor-patched/<component>/…), whichever the
+            # build graph compiles
+            a, b = self.revs.texts(p) if self.revs.base else (None, None)
+            text = b or a or ""
+            if not text:
+                try: text = open(os.path.join(ROOT, p), errors="replace").read()
+                except OSError: text = ""
+            names = sorted({os.path.basename(x) for x in re.findall(r"^\+\+\+ b/(\S+)", text, re.M)})
+            comp = m_patch.group(2)
+            roots = [os.path.join(ROOT, "irisgl", "thirdparty", comp)]
+            if self.graph is not None:
+                roots += [os.path.join(dp, comp) for dp, dns, _ in os.walk(self.graph.build)
+                          if os.path.basename(dp) == "vendor-patched"]
+            hit = 0
+            for r_ in roots:
+                for dp, _, fs in os.walk(r_):
+                    for f in fs:
+                        if f in names:
+                            rel = os.path.relpath(os.path.join(dp, f), ROOT)
+                            g = self.graph_rows(rel, f"{tag} (patches {rel})")
+                            if g is not None:
+                                hit += 1
+                                if g[1]: self.expand(["*app-rows"], [], f"{tag}: patches {f}, compiled into the app")
+                                for inc in sorted({os.path.relpath(self.graph.obj_src[o], ROOT)
+                                                   for o in self.graph.includers(os.path.join(ROOT, rel))
+                                                   if o in self.graph.obj_src}):
+                                    if inc.startswith(("src/", "irisgl/")) and not inc.startswith("irisgl/thirdparty/"):
+                                        self.rules_for(inc, f"{tag} (read by {inc})", kinds={"app", "other"})
+            self.expand(["hygiene"], [], f"{tag}: a vendored patch")
+            if not hit:
+                self.full_tier.append(f"{p}: a patch whose patched file ({names}) no build graph node owns")
+            if depth == 0: self.rationale.append((p, f"a vendored patch of {names}: {hit} compiled copy(ies)"))
+            return
+        if re.match(r"^(irisgl/)?thirdparty/[^/]+/(PROVENANCE|README|LICENSE|NOTICE|COPYING)[^/]*$", p) or (
+                (p.startswith(("irisgl/thirdparty/", "thirdparty/"))) and p.endswith(".md") and
+                p.count("/") == (3 if p.startswith("irisgl/") else 2)):
+            # a vendored component's own notice/provenance text: compiled into nothing; the notices lint reads it
+            self.expand(["hygiene"], [], f"{tag}: a vendored notice")
+            if depth == 0: self.rationale.append((p, "a vendored component's notice/provenance → the source lints"))
             return
         if p.startswith("irisgl/thirdparty/") or p.startswith("thirdparty/"):
             # vendored code: compiled into the tree (graph) or a submodule gitlink (no graph node)
@@ -794,7 +991,7 @@ class Selection:
             # its rule; every other build file is read by what its changed commands name
             if any(re.match(pat, p) for pat, _, _ in AREA_RULES):
                 r = self.rules_for(p, tag)
-                if p.startswith("irisgl/cmake/WrapHlmsPiece"):
+                if p.startswith("irisgl/cmake/WrapHlmsPiece") or p == "cmake/IncludeOgre.cmake":
                     n = self.engine_rows(tag)
                     if n is not None: r += f"; every executable that extracts the engine ({n})"
                 if depth == 0: self.rationale.append((p, r))
@@ -889,6 +1086,46 @@ class Selection:
                 notes.append("NO RULE, no symbol, no graph owner → merge tier")
         if depth == 0: self.rationale.append((p, "; ".join(notes)))
 
+    def fork_pins(self):
+        """(old, new) ogre-next commits the range's irisgl ends pin, or (None, None)."""
+        a, b = self.revs.pair("irisgl/x")
+        if not a: return None, None
+        ig = os.path.join(ROOT, "irisgl")
+        return (_git_try(["rev-parse", f"{a}:thirdparty/ogre-next"], ig),
+                _git_try(["rev-parse", f"{b}:thirdparty/ogre-next"], ig))
+
+    def fork(self, p, tag, depth):
+        """A fork pin bump, selected by the fork diff's reach (FORK_FAMILIES, first match per
+        file). A fork file no family owns, or a diff this checkout cannot read, is the tier."""
+        old, new = self.fork_pins()
+        src = os.path.join(ROOT, "irisgl", "thirdparty", "ogre-next")
+        files = None
+        if old and new and old != new:
+            out = _git_try(["diff", "--name-only", old, new], src)
+            files = out.splitlines() if out is not None else None
+        self.fork_bump = {"old": old, "new": new, "files": files}
+        if files is None:
+            self.full_tier.append(f"{p}: the fork pin moved ({(old or '?')[:9]} -> {(new or '?')[:9]}) and this "
+                                  f"checkout cannot read the fork diff — fetch the fork, or the tier")
+            if depth == 0: self.rationale.append((p, "fork pin bump, diff unreadable → the MERGE tier"))
+            return
+        hits = collections.Counter()
+        for f in files:
+            fam = next((fam for pat, fam in FORK_FAMILIES if re.match(pat, f)), None)
+            if fam is None:
+                self.full_tier.append(f"{p}: fork file {f} — no fork family owns it")
+                hits["TIER"] += 1; continue
+            hits[fam] += 1
+            why = f"{tag}: fork {fam} ({f})"
+            if fam == "none":
+                continue
+            # "engine": the pixel family + every executable that extracts the engine
+            self.expand(ENGINE_FAMILY + ["atom"], [], why)
+            self.engine_rows(why)
+        if depth == 0:
+            self.rationale.append((p, f"fork pin {(old or '?')[:9]} -> {(new or '?')[:9]}: {len(files)} fork file(s) "
+                                      f"by family {dict(hits)} (the full tier runs once, at the merge: --fork-tier)"))
+
     def _deleted(self, p):
         """True when the range deletes the file (it is at the base and not at the tip)."""
         a, b = self.revs.texts(p)
@@ -917,6 +1154,11 @@ class Selection:
         if users:
             for u in users: self.path(u, 1, via=f"names {os.path.basename(p)}")
             notes.append(f"named by {len(users)} test file(s)"); return
+        if not os.path.exists(os.path.join(ROOT, p)) and not self.names_anywhere(os.path.basename(p)):
+            # A tests/ FILE GONE FROM THIS TREE that nothing here runs or names (a replayed range
+            # meets a file a later lane deleted — tests/support/no_xid_run.sh after TEST-SELECTOR-1
+            # H4): retired, said out loud, like a gone row; never a fallback
+            notes.append(f"retired: {os.path.basename(p)} exists nowhere in this tree"); return
         self.fallback.append(f"{tag}: no suite owns this tests/ path")
         notes.append("no suite owns it → fallback")
 
@@ -1045,6 +1287,19 @@ class Selection:
             if depth == 0: self.rationale.append((p, "a build file without a range → merge tier"))
             return
         a, b = self.revs.texts(p)
+        # A CMAKE SCRIPT RUN WITH -P (irisgl/cmake/ApplyVendorPatches.cmake, run by an
+        # execute_process at configure): its reach is the reach of the commands that run it
+        invokers = self.p_script_invokers(p)
+        if invokers:
+            hit = 0
+            self._var_seen = set()
+            for f, text, c in invokers:
+                if self.cmake_command(f, os.path.dirname(f), c[0], c[3], c[4], c[3], text, tag, notes, depth=1):
+                    hit += 1
+            if hit:
+                if depth == 0: self.rationale.append((p, f"a -P script: the {hit} command(s) that run it; "
+                                                         + "; ".join(dict.fromkeys(notes))))
+                return
         if not a and b:
             # A NEW build file: everything it registers and builds is new — its rows and the
             # executables built under its directory
@@ -1053,6 +1308,7 @@ class Selection:
             n_exe = self.exes_under(d, tag)
             if depth == 0: self.rationale.append((p, f"a new build file → its {len(rows)} row(s), {n_exe} executable(s) built under {d}"))
             return
+        self._cmake_tip_text = b or ""
         old_l, new_l = _changed_line_numbers(self.revs.diff_u0(p))
         a_lines, b_lines = (a or "").split("\n"), (b or "").split("\n")
         # list-only lines (a source added/removed) say nothing: the files are in the diff — but
@@ -1074,22 +1330,103 @@ class Selection:
             if depth == 0: self.rationale.append((p, "source-list / comment edit only → scoped by the files it names"))
             return
         cmds = []
-        for text, nums in ((a or "", old_i), (b or "", new_i)):
+        for side, text, nums in (("old", a or "", old_i), ("new", b or "", new_i)):
             if not nums: continue
-            for c in gate_graph.cmake_commands(text):
+            parsed = gate_graph.cmake_commands(text)
+            blocks = _block_spans(parsed)
+            for k, c in enumerate(parsed):
                 if any(c[1] <= n <= c[2] for n in nums):
                     # the changed lines' text, a trailing comment cut (a token in a comment names nothing)
                     changed_text = "\n".join(re.sub(r'\s#[^"]*$', "", text.split("\n")[n - 1])
                                              for n in sorted(nums) if c[1] <= n <= c[2])
-                    cmds.append((c, changed_text, text))
+                    # a block's own line (if/else/endif, foreach/endforeach): the block it opens or
+                    # closes — its body is what the condition or the loop reaches
+                    blk = blocks.get(k)
+                    if blk is None and c[0] in _BLOCK_LINES:
+                        inside = [sp for sp in blocks.values() if sp[0] <= c[1] <= sp[1]]
+                        blk = min(inside, key=lambda sp: sp[1] - sp[0]) if inside else None
+                    cmds.append((c, changed_text, text, side, blk or (c[1], c[2]), parsed, blk))
         unresolved = []
-        for (name, first, last, args, fn), changed_text, whole in cmds:
+        # a MODIFIED command is on both sides: the new side (read through ctest's backtraces) first,
+        # and its old self is then the same command, not a second one to resolve
+        cmds.sort(key=lambda x: 0 if x[3] == "new" else 1)
+        # THE BACKTRACES ARE THIS BUILD'S (the merge read's W2): their file:line sites describe the
+        # working tree's text, so they resolve the tip's lines only when the tip's file IS that text,
+        # line for line — the changed lines themselves aside (the build registered them as built) —
+        # and a replayed range, or a tree that moved on, takes the name-based reading below
+        try:
+            wt = open(os.path.join(ROOT, p), errors="replace").read().split("\n")
+            bt_ok = len(wt) == len(b_lines) and all(x == y for i, (x, y) in enumerate(zip(wt, b_lines), 1)
+                                                    if i not in new_l)
+        except OSError:
+            bt_ok = False
+        resolved_new = set()
+        for (name, first, last, args, fn), changed_text, whole, side, span, parsed, blk in cmds:
+            key = (name, tuple(args.split()[:1]))
+            if side == "old" and key in resolved_new:
+                continue
+            # THE REGISTRATION READER (T3): the rows ctest itself says were registered from inside
+            # this command's span (a foreach/while/if: its whole block) — jah_gpu_row(vr.${_arm}),
+            # jah_scale_row, an add_test in a loop — read from the json-v1 backtraces, so no row
+            # name has to be spelled in the command. The new side only (an old line's rows are
+            # gone from this inventory; gone_row resolves those).
+            if side == "new" and bt_ok:
+                bt = self.rows_registered_at(p, span[0], span[1])
+                if bt:
+                    self.add(bt, f"{tag}: registered at {os.path.basename(p)}:{span[0]}-{span[1]}")
+                    notes.append(f"{name}() at line {first} registers {len(bt)} row(s) (ctest backtrace)")
+                    resolved_new.add(key)
+                    continue
+            if name in ("endfunction", "endmacro"):
+                # a function's closing line is the function: the nearest function/macro header above it
+                hdr = [c for c in parsed if c[0] in ("function", "macro") and c[1] < first]
+                if hdr and hdr[-1][3].split():
+                    fname = hdr[-1][3].split()[0].lower()
+                    if self.cmake_command(p, d, name, args, fname, changed_text, whole, tag, notes):
+                        continue
+            if blk is not None and name in _BLOCK_LINES:
+                # THE BLOCK'S BODY (T3): an if() whose condition changed, or an endif() a deletion
+                # took with it, reaches what the commands inside it reach — resolved one by one
+                self._var_seen = set()
+                inner = [c for c in parsed if blk[0] < c[1] and c[2] < blk[1] and c[0] not in _BLOCK_LINES]
+                hit = [c[0] for c in inner
+                       if self.cmake_command(p, d, c[0], c[3], c[4], c[3], whole, tag, notes, depth=1)]
+                if hit:
+                    notes.append(f"{name}() at line {first}: its block's {len(hit)} command(s)")
+                    continue
             got = self.cmake_command(p, d, name, args, fn, changed_text, whole, tag, notes)
             if not got: unresolved.append(f"{name}() at line {first}")
         if unresolved:
             self.fallback.append(f"{tag}: CMake command(s) that name nothing a suite owns: {', '.join(unresolved)}")
             notes.append("unresolved: " + ", ".join(unresolved))
         if depth == 0: self.rationale.append((p, "; ".join(dict.fromkeys(notes)) or "CMake"))
+
+    def p_script_invokers(self, p):
+        """[(build file, its text, command)] of every command that runs <p> with `-P`."""
+        base = os.path.basename(p)
+        if not base.endswith(".cmake"): return []
+        if not hasattr(self, "_cmake_files"):
+            self._cmake_files = []
+            for dp, dns, fs in os.walk(ROOT):
+                dns[:] = [x for x in dns if not x.startswith(("build", ".")) and x != "thirdparty"]
+                for f in fs:
+                    if f == "CMakeLists.txt" or f.endswith(".cmake"):
+                        try: self._cmake_files.append((os.path.relpath(os.path.join(dp, f), ROOT),
+                                                       open(os.path.join(dp, f), errors="replace").read()))
+                        except OSError: pass
+        out = []
+        pat = re.compile(r"-P\s+\S*" + re.escape(base) + r"\b")
+        for f, text in self._cmake_files:
+            if base not in text: continue
+            for c in gate_graph.cmake_commands(text):
+                if pat.search(c[3]): out.append((f, text, c))
+        return out
+
+    def rows_registered_at(self, p, first, last):
+        """The rows whose ctest backtrace passes through <p> at a line in [first, last]."""
+        ap = os.path.normpath(os.path.join(ROOT, p))
+        return sorted(n for n, t in self.inv.items()
+                      if any(f == ap and first <= ln <= last for f, ln in t.get("sites", ())))
 
     def exes_under(self, d, tag):
         """Every executable built under a source directory (its build dir), and its rows."""
@@ -1137,7 +1474,7 @@ class Selection:
     # the commands that register or decorate a TEST (their first arguments are row names)
     _TEST_REGISTRATION = {"add_test", "set_tests_properties", "jah_fresh_home_fixture",
                           "jah_no_display", "jah_tsan_blocked", "jah_lsan_blocked", "jah_tsan_lane",
-                          "jah_gpu_exclusive_test"}
+                          "jah_gpu_exclusive_test", "jah_gpu_row", "jah_scale_row"}
     # what a retired suite's check became, printed with its `retired:` reason
     RETIRED = {
         "app.create_loop": "SUITE-POOL-1; its one unique check (the Properties column after 40 "
@@ -1160,6 +1497,8 @@ class Selection:
                 named = a_[k:k + 1]
             elif name == "set_tests_properties":
                 named = a_[:a_.index("PROPERTIES")] if "PROPERTIES" in a_ else a_[:1]
+            elif name in ("jah_gpu_row", "jah_scale_row"):
+                named = a_[:1]                      # the row is the first argument
             else:
                 named = [x for x in a_ if "." in x and not x.startswith(("$", '"'))][:4]
             named = [n for n in named if n and "$" not in n]
@@ -1171,7 +1510,8 @@ class Selection:
             for c in gate_graph.cmake_commands(whole or ""):
                 ca = c[3].split()
                 regs = ([ca[ca.index("NAME") + 1]] if c[0] in ("add_test", "jah_gpu_exclusive_test")
-                        and "NAME" in ca and ca.index("NAME") + 1 < len(ca) else [])
+                        and "NAME" in ca and ca.index("NAME") + 1 < len(ca) else
+                        ca[:1] if c[0] in ("jah_gpu_row", "jah_scale_row") else [])
                 if set(regs) & set(named):
                     cands.append(set(re.findall(r"[A-Za-z0-9_.+\-/${}]+", c[3])))
             for tk in cands:
@@ -1222,6 +1562,13 @@ class Selection:
         # 0. a pool's arm or row (SUITE-POOL-1's helpers): the arm alone, or the pool whole
         a_ = args.split()
         if name == "jah_pool_arm" and len(a_) >= 2 and f"pool.{a_[0]}" in self.inv:
+            if "${" in a_[1]:
+                # an arm named through a loop variable (foreach(KIND a b c) jah_pool_arm(p x_${KIND})):
+                # the pool's arms the pattern matches
+                rx = re.compile("^" + re.sub(r"\\\$\\\{\w+\\\}", ".+", re.escape(a_[1])) + "$")
+                arms = [f"pool.{a_[0]}::{x}" for x in self.inv[f"pool.{a_[0]}"]["arms"] if rx.match(x)]
+                self.add(arms or [f"pool.{a_[0]}"], f"{tag}: its arm(s)")
+                notes.append(f"arms {a_[0]}.{a_[1]}: {len(arms) or 'the pool whole'}"); return True
             self.add([f"pool.{a_[0]}::{a_[1]}"], f"{tag}: its arm")
             notes.append(f"arm {a_[0]}.{a_[1]}"); return True
         if name == "jah_add_pool" and a_ and f"pool.{a_[0]}" in self.inv:
@@ -1236,7 +1583,7 @@ class Selection:
         # that ARM ("the row became an arm"); one naming a suite or a test target that exists
         # nowhere any more — no row, no arm, no fixture, no target — resolves to NOTHING, said
         # out loud (`retired: <name>`), never a fallback and never silent.
-        if not rows and name in self._TEST_REGISTRATION | {"add_executable", "set_target_properties"} \
+        if not rows and name in self._TEST_REGISTRATION | {"add_executable", "set_target_properties", "add_dependencies"} \
                 or (not rows and name.startswith("target_")):
             gone = self.gone_row(name, args, toks, whole)
             if gone is not None:
@@ -1251,6 +1598,11 @@ class Selection:
         helper = fn if fn else (args.split()[0].lower() if name in ("function", "macro") and args.split() else None)
         if helper:
             via = [n for n, t in self.inv.items() if helper in t["via"]]
+            if not via:
+                # A HELPER RUN THROUGH `cmake_language(DEFER CALL <helper> …)` (a deferred label or
+                # timeout on a row): its rows are those of the function that defers it
+                for outer in self.deferring_functions(helper):
+                    via += [n for n, t in self.inv.items() if outer in t["via"]]
             if via:
                 self.add(via, f"{tag}: inside {helper}()"); notes.append(f"{helper}(): {len(via)} row(s)")
             calls = self.cmake_calls(helper)
@@ -1283,6 +1635,10 @@ class Selection:
             for x in a_[:2]:
                 bn = os.path.basename(x).replace(".js.in", "").replace(".js", "").replace(".in", "")
                 hit = self.script_base.get(bn, [])
+                if not hit and "${" in bn:
+                    # a script configured per loop value (e2e_bundle_export_${KIND}.js): every match
+                    rx = re.compile("^" + re.sub(r"\\\$\\\{\w+\\\}", ".+", re.escape(bn)) + "$")
+                    hit = sorted({r for b_, rs in self.script_base.items() if rx.match(b_) for r in rs})
                 if hit:
                     self.add(hit, f"{tag}: configures {os.path.basename(x)}")
                     notes.append(f"configures the script of {len(hit)} row(s)"); got = True
@@ -1295,16 +1651,30 @@ class Selection:
             self.add(reg, f"{tag}: add_subdirectory({sd})")
             n_exe = self.exes_under(sub, f"{tag}: add_subdirectory({sd})")
             notes.append(f"add_subdirectory({sd}): {len(reg)} row(s), {n_exe} executable(s)"); got = True
-        # 6. a variable: follow its users in the same file, once (not when the change only
-        # listed rows: a suite list's change is the rows it adds or drops)
-        if name in ("set", "list", "option", "string") and depth == 0 and not rows:
-            a_ = args.split()
-            var = a_[1] if name in ("list", "string") and len(a_) > 1 else (a_[0] if a_ else "")
+        # 6. a variable: follow its users in the same file (not when the change only listed rows: a
+        # suite list's change is the rows it adds or drops) — THROUGH CHAINS, three hops deep
+        # (TEST-SELECTOR-1: a staged header's path set -> file(COPY_FILE) -> the include directory
+        # of the target that compiles it), each variable once. file(GLOB|READ|STRINGS <var>) sets
+        # one too.
+        if depth == 0:
+            self._var_seen = set()
+        a_ = args.split()
+        setter = name in ("set", "list", "option", "string") or (
+            name == "file" and a_[:1] and a_[0] in ("GLOB", "GLOB_RECURSE", "READ", "STRINGS"))
+        if setter and depth < 3 and not rows:
+            var = _set_var(name, a_)
+            tip_text = getattr(self, "_cmake_tip_text", None)
+            if (var and tip_text is not None and whole is not tip_text
+                    and not re.search(r"\b" + re.escape(var) + r"\b", tip_text) and not self.names_anywhere(var)):
+                # A VARIABLE DELETED WITH ITS USERS (an option() and the if() that read it): whatever
+                # it reached is in this diff as its users' own deleted lines
+                notes.append(f"variable {var} deleted with its users"); return True
             users = [c for c in gate_graph.cmake_commands(whole)
                      if re.search(r"\$\{" + re.escape(var) + r"\}|\b" + re.escape(var) + r"\b", c[3])
-                     and not (c[0] == name and c[3].split()[:1] == a_[:1])]
+                     and not (c[0] == name and c[3].split()[:1] == a_[:1])] if var not in self._var_seen else []
+            self._var_seen.add(var)
             for (un, uf, ul, ua, ufn) in users:
-                if self.cmake_command(p, d, un, ua, ufn, ua, whole, tag, notes, depth=1): got = True
+                if self.cmake_command(p, d, un, ua, ufn, ua, whole, tag, notes, depth=depth + 1): got = True
             if users: notes.append(f"variable {var}: {len(users)} user command(s)")
             # ...and the configured scripts that substitute it (@VAR@ in a .in beside this file)
             if var and not got:
@@ -1322,12 +1692,13 @@ class Selection:
                     if d in ("", "."): break
         # 6b. a local variable the command reads (${_home} in a file(MAKE_DIRECTORY)): the
         # commands that read it too — the row whose ENVIRONMENT names that home
-        if not got and depth == 0:
-            for var in sorted(set(re.findall(r"\$\{(_\w+)\}", args))):
+        if not got and depth < 3:
+            for var in sorted(set(re.findall(r"\$\{(_\w+)\}", args)) - self._var_seen):
+                self._var_seen.add(var)
                 users = [c for c in gate_graph.cmake_commands(whole)
                          if "${" + var + "}" in c[3] and c[3] != args and c[0] != "set"]
                 for (un, uf, ul, ua, ufn) in users:
-                    if self.cmake_command(p, d, un, ua, ufn, ua, whole, tag, notes, depth=1): got = True
+                    if self.cmake_command(p, d, un, ua, ufn, ua, whole, tag, notes, depth=depth + 1): got = True
                 if users and got: notes.append(f"{name}() reads {var}, which {len(users)} command(s) use")
         # 7. a directory-scope setting: every target under this directory
         if not got and depth == 0 and (name in gate_graph.DIRECTORY_SCOPE or name in self._STRUCTURAL
@@ -1343,6 +1714,17 @@ class Selection:
                 self.exes_under(under, tag)
             notes.append(f"{name}() at directory scope of {under}"); got = True
         return got
+
+    def deferring_functions(self, helper):
+        """The functions whose bodies run `DEFER CALL <helper>` (in any build file of the tree)."""
+        self.cmake_calls(helper)            # fills _cmake_texts
+        out = set()
+        for t in self._cmake_texts:
+            if "CALL " + helper not in t and "CALL\t" + helper not in t: continue
+            for c in gate_graph.cmake_commands(t):
+                if c[4] and re.search(r"DEFER\s+CALL\s+" + re.escape(helper) + r"\b", c[3], re.I):
+                    out.add(c[4])
+        return out
 
     def cmake_calls(self, fn):
         """The first arguments of every call of a CMake helper across the tree's build files."""
@@ -1363,6 +1745,45 @@ class Selection:
         for t in self._cmake_texts:
             out += [m.group(1).replace("${CMAKE_PROJECT_NAME}", "Jahshaka") for m in pat.finditer(t)]
         return sorted(set(o for o in out if not o.startswith(("_", "${"))))
+
+
+# string(<SUB> ...)'s OUTPUT variable, by argument index (the sub-command is index 0)
+_STRING_OUT = {"APPEND": 1, "PREPEND": 1, "CONCAT": 1, "JOIN": 2, "SHA256": 1, "SHA1": 1, "MD5": 1,
+               "SHA512": 1, "SHA224": 1, "SHA384": 1, "REPLACE": 3, "STRIP": 2, "TOLOWER": 2, "TOUPPER": 2,
+               "LENGTH": 2, "SUBSTRING": 4, "FIND": 3, "TIMESTAMP": 1, "CONFIGURE": 2, "GENEX_STRIP": 2,
+               "MAKE_C_IDENTIFIER": 2, "REPEAT": 3, "HEX": 2, "ASCII": -1}
+_STRING_REGEX_OUT = {"REPLACE": 4, "MATCH": 3, "MATCHALL": 3}
+
+
+def _set_var(name, a_):
+    """The variable a set/list/option/string/file(GLOB|READ|STRINGS) command WRITES."""
+    if not a_: return ""
+    if name == "string":
+        if a_[0] == "REGEX" and len(a_) > 1:
+            k = _STRING_REGEX_OUT.get(a_[1], 3)
+        else:
+            k = _STRING_OUT.get(a_[0], 1)
+        return a_[k] if -len(a_) <= k < len(a_) else ""
+    if name in ("list", "file"):
+        return a_[1] if len(a_) > 1 else ""
+    return a_[0]
+
+
+_BLOCK_OPEN = {"foreach": "endforeach", "while": "endwhile", "if": "endif"}
+_BLOCK_LINES = {"if", "elseif", "else", "endif", "foreach", "endforeach", "while", "endwhile"}
+
+
+def _block_spans(parsed):
+    """command index -> (first line, last line) of the BLOCK a foreach/while/if opens (to its
+    matching end command): the rows its body registers are that command's rows."""
+    out, stack = {}, []
+    for k, c in enumerate(parsed):
+        if c[0] in _BLOCK_OPEN:
+            stack.append((k, _BLOCK_OPEN[c[0]]))
+        elif stack and c[0] == stack[-1][1]:
+            k0, _ = stack.pop()
+            out[k0] = (parsed[k0][1], c[2])
+    return out
 
 
 def cmake_src_refs():
@@ -1445,11 +1866,17 @@ def joint(range_a, range_b, build, jobs):
     own = lambda S: {n for n in S.owned if n in S.selected}
     both = sorted((own(A) & sb) | (own(B) & sa))
     union = sorted(sa | sb)
+    ser = [n for n in union if TIMING_LABEL in inv0[n]["labels"]]
+    par = [n for n in union if n not in ser]
     out = {"ranges": [range_a, range_b], "shared_paths": shared_paths, "joint": both,
            "union": union, "whole_tier": whole,
            "command": merge_tier(jobs) if whole else
            ("ctest -j%d --timeout 120 --output-on-failure --no-tests=error -R '^(%s)$'"
-            % (jobs, "|".join(re.escape(n) for n in union)) if union else "")}
+            % (jobs, "|".join(re.escape(n) for n in par)) if par else ""),
+           # the timing rows of the union: their own serial phase after it (W1)
+           "serial_command": merge_tier_serial() if whole else
+           ("ctest -j1 --timeout 120 --output-on-failure --no-tests=error -R '^(%s)$'"
+            % "|".join(re.escape(n) for n in ser) if ser else "")}
     return out
 
 
@@ -1478,6 +1905,12 @@ def main():
     ap.add_argument("--joint", nargs=2, metavar=("RANGE_A", "RANGE_B"),
                     help="the joint suites of two lanes merged together: the union of both selections, "
                          "naming the rows BOTH select (the shared map) and the paths both touched")
+    ap.add_argument("--fork-tier", action="store_true",
+                    help="a range that moves the fork pin: run the MERGE tier (logged as tier `fork`) — §7b rule 4's "
+                         "one full tier per bump, at the merge into d-build; ci_gate_check requires it")
+    ap.add_argument("--merge-tier-serial", action="store_true",
+                    help="print the MERGE tier's SERIAL phase (its timing rows at -j1, run after --merge-tier's "
+                         "parallel phase) and exit")
     ap.add_argument("--nightly-tier", action="store_true",
                     help="print the NIGHTLY tier's ctest command (every `nightly` row, -j1) and exit")
     a = ap.parse_args()
@@ -1485,12 +1918,15 @@ def main():
         record_times(); return
     if a.merge_tier:
         print(merge_tier(a.jobs)); return
+    if a.merge_tier_serial:
+        print(merge_tier_serial()); return
     if a.nightly_tier:
         print(nightly_tier()); return
     build = resolve_build(a.build)
     # THE BUILT FORK MUST BE THE PIN (TESTING-DEBTS-1 T12): a run on an install built from another
     # fork commit is void (stale media) — refused before a suite runs, with the lines that fix it.
-    # (A range that MOVES the pin still selects the MERGE tier by rule, §7b.4; this is the tree.)
+    # (A range that MOVES the pin selects by the fork diff's reach, and --fork-tier runs its one full
+    # tier, §7b.4; this check is about the tree.)
     if a.run or a.solo:
         bad = gate_runlog.fork_pin_problem()
         if bad:
@@ -1508,12 +1944,15 @@ def main():
         for n in J["joint"]: print(f"  {n}")
         print(f"\nthe merge gate = the UNION of both selections: "
               + ("the MERGE tier (one side selects it)" if J["whole_tier"] else f"{len(J['union'])} row(s)"))
-        print(f"\n{J['command']}")
-        if a.run and J["command"]:
+        print(f"\n{J['command']}\n{J['serial_command']}")
+        if a.run and (J["command"] or J["serial_command"]):
             lane = a.lane or "joint"
-            sys.exit(gate_runlog.run_ctest(J["command"], build, a.tier or "joint", lane, a.jobs,
-                                           reasons={n: ("joint: both" if n in J["joint"] else "joint: union")
-                                                    for n in J["union"]}))
+            why = {n: ("joint: both" if n in J["joint"] else "joint: union") for n in J["union"]}
+            rc = gate_runlog.run_ctest(J["command"], build, a.tier or "joint", lane, a.jobs,
+                                       reasons=why) if J["command"] else 0
+            if J["serial_command"]:
+                rc = gate_runlog.run_ctest(J["serial_command"], build, a.tier or "joint", lane, 1, reasons=why) or rc
+            sys.exit(rc)
         return
     lane = a.lane or gate_runlog._git(["rev-parse", "--abbrev-ref", "HEAD"])
     # the run log records the range by sha (HEAD moves; the record must not)
@@ -1524,17 +1963,44 @@ def main():
                                 gate_runlog._git(["rev-parse", "--short=9", t_]) or t_)
     if a.solo:
         rc = 0
+        # THE FLAKE LAW'S LIST (L2): a solo retry clears a red only for a contention-class suite, and
+        # only 3/3; any other red needs a recorded verdict (ci_gate_check --verdict) — said up front
+        cl = gate_runlog.contention_list()
+        for s in a.solo:
+            if cl is None:
+                print(f"gate-scope --solo: the contention list {gate_runlog.contention_file()} is unreadable — "
+                      f"the merge refusal will not accept these retries until it is back")
+            elif s in cl:
+                print(f"gate-scope --solo: {s} is contention-class ({cl[s][:100]}): {a.times}/{a.times} PASS clears its red")
+            else:
+                print(f"gate-scope --solo: {s} is NOT in the contention class ({gate_runlog.contention_file()}): "
+                      f"the retries are logged, and its red still needs a recorded verdict "
+                      f"(scripts/ci-gate-check.sh <range> --verdict \"{s}=<text>\")")
         for s in a.solo:
             for _ in range(a.times):
                 rx = "^" + re.escape(s) + "$"
+                # SOLO ON THE CARD TOO (G1+G2): every admission of the retry takes all the VRAM
+                # tokens, so no sibling lane's GPU row runs beside it
                 r = gate_runlog.run_ctest(f"ctest -j1 --timeout 900 --output-on-failure --no-tests=error -R '{rx}'",
                                           build, a.tier or "scoped", lane, 1, reasons={s: "solo retry"},
-                                          rng=log_range, retry=True)
+                                          rng=log_range, retry=True, env=dict(os.environ, JAH_VRAM_ALL="1"))
                 rc = rc or r
         sys.exit(rc)
     if not (a.range or a.files):
         ap.error("give a range (base..tip) or --files")
     paths = a.files if a.files else touched_paths(a.range)
+    own_rng, incoming, fwd = scope_range(a.range) if a.range and not a.files else (a.range, None, [])
+    if fwd and not a.json:
+        # THE LANE IS GATED ON ITS OWN DIFF (T1): what the forward merges carried in is the
+        # siblings' change, gated on their own lanes — the combination is the joint suites'.
+        short = lambda r: "..".join(x[:9] for x in r.split(".."))
+        print(f"gate-scope: {len(fwd)} forward merge(s) in {a.range} — the lane's OWN change is "
+              f"{short(own_rng)} (from the newest one's second parent {fwd[0][1][:9]})")
+        if incoming:
+            print(f"  what came in through them ({short(incoming)}) is NOT this gate's: the joint suites are\n"
+                  f"  scripts/gate-scope.sh --joint {short(own_rng)} {short(incoming)}")
+    if fwd:
+        log_range = "..".join(x[:9] for x in own_rng.split(".."))
 
     costs = load_costs()
     S = select(paths, a.range if not a.files else None, build, a.jobs)
@@ -1559,8 +2025,11 @@ def main():
             return 10.0 + sum(costs.get(f"{n}::{arm}", 10.0) for arm in subsets[n])
         return costs.get(n, 10.0)
     est = sum(cost(n) for n in names)
-    serial = sum(cost(n) for n in names if inv[n]["serial"])
-    wall = max(est / float(a.jobs), serial) + 5
+    timing = [n for n in names if TIMING_LABEL in inv[n]["labels"]]
+    par_names = [n for n in names if n not in timing]
+    serial = sum(cost(n) for n in par_names if inv[n]["serial"])
+    timing_s = sum(cost(n) for n in timing)
+    wall = max((est - timing_s) / float(a.jobs), serial) + timing_s + 5
     tier_rows = [n for n, t in inv.items() if not (t["labels"] & (NIGHTLY_LABELS | TARGET_LABELS))]
     tier_est = sum(costs.get(n, 10.0) for n in tier_rows)
 
@@ -1569,14 +2038,16 @@ def main():
         return f"ctest -j{jobs} --timeout 120 --output-on-failure --no-tests=error -R '{rx}'"
 
     whole_tier = bool(S.fallback or S.full_tier)
-    cmd = ctest_for(names, a.jobs) if names else ""
+    cmd = ctest_for(par_names, a.jobs) if par_names else ""
     if cmd and pool_env:
         cmd = f"JAH_POOL_ARMS='{pool_env}' {cmd}"
+    timing_cmd = ctest_for(timing, 1) if timing else ""      # the serial phase (W1)
     target_cmd = ctest_for(targets, 1) if targets else ""
 
     if a.json:
         print(json.dumps({"paths": paths, "suites": names, "targets": targets, "fallback": S.fallback,
-                          "full_tier": S.full_tier, "reasons": {n: selected[n] for n in names},
+                          "full_tier": S.full_tier, "fork_bump": S.fork_bump, "reasons": {n: selected[n] for n in names},
+                          "own_range": own_rng, "incoming": incoming, "forward_merges": [m for m, _ in fwd],
                           "arms": {r: {arm: S.arms[r][arm] for arm in subsets[r]} for r in subsets},
                           "pool_arms_env": pool_env,
                           "rationale": [{"path": p, "why": w} for p, w in S.rationale],
@@ -1584,22 +2055,44 @@ def main():
                           "estimated_seconds": est, "estimated_wall": wall,
                           "tier_rows": len(tier_rows), "tier_estimated_seconds": tier_est,
                           "command": merge_tier(a.jobs) if whole_tier else cmd,
+                          "serial_command": merge_tier_serial() if whole_tier else timing_cmd,
                           "target_command": target_cmd}, indent=1))
         return
     print(f"gate-scope: {len(paths)} touched path(s)"
           + ("" if S.graph else "   [NO BUILD GRAPH: compiled rows by directory rules]"))
     for p, why in S.rationale: print(f"  {p}\n      -> {why}")
 
+    def run_both(tier_name):
+        """The MERGE tier, both phases (parallel, then the timing rows serial); the worse exit code."""
+        labels = {n: t["labels"] for n, t in inv.items()}
+        r1 = gate_runlog.run_ctest(merge_tier(a.jobs), build, tier_name, lane, a.jobs, reasons={}, rng=log_range,
+                                   labels=labels)
+        print("\n=== the timing phase (serial, after the parallel phase) ===")
+        r2 = gate_runlog.run_ctest(merge_tier_serial(), build, tier_name, lane, 1, reasons={}, rng=log_range,
+                                   labels=labels)
+        return r1 or r2
+
     def run_tier(reason):
-        tier = merge_tier(a.jobs)
-        print(f"\n{tier}")
+        print(f"\n{merge_tier(a.jobs)}\n{merge_tier_serial()}")
         if a.run:
             # a SCOPED gate that ran the whole tier is logged as such — "scoped-fallback" (no rule,
-            # no symbol, no graph owner) or "scoped-tier" (the tier by rule: a fork pin) — so the
+            # no symbol, no graph owner) or "scoped-tier" (the tier by rule: a root setting, an unreadable
+            # fork diff) — so the
             # run log tells it from the lead's MERGE tier runs
-            sys.exit(gate_runlog.run_ctest(tier, build, a.tier or ("scoped-fallback" if reason == "fallback"
-                                                                   else "scoped-tier"), lane, a.jobs,
-                                           reasons={}, rng=log_range, labels={n: t["labels"] for n, t in inv.items()}))
+            sys.exit(run_both(a.tier or ("scoped-fallback" if reason == "fallback" else "scoped-tier")))
+    if S.fork_bump:
+        fb = S.fork_bump
+        print(f"\nTHE FORK PIN MOVED ({(fb['old'] or '?')[:9]} -> {(fb['new'] or '?')[:9]}): this gate selects by the "
+              f"fork diff's reach;\n  §7b rule 4's full tier runs ONCE per bump, at the merge into d-build:\n"
+              f"  scripts/gate-scope.sh {a.range} --run --fork-tier   (ci_gate_check refuses the merge without it)")
+        if a.fork_tier:
+            print(f"\n{merge_tier(a.jobs)}\n{merge_tier_serial()}")
+            if a.run:
+                sys.exit(run_both(a.tier or "fork"))
+            return
+    elif a.fork_tier:
+        sys.stderr.write("gate-scope: --fork-tier on a range that does not move the fork pin — nothing to do\n")
+        sys.exit(2)
     if S.full_tier and not S.fallback:
         print("\nTHE MERGE TIER BY RULE (the change reaches every suite):")
         for f in S.full_tier: print(f"  {f}")
@@ -1636,6 +2129,7 @@ def main():
             for arm in subsets.get(n, []):
                 print(f"           arm {inv[n]['pool']}.{arm}   <- {S.arms[n][arm]}")
         print(f"\n{cmd}")
+        if timing_cmd: print(f"{timing_cmd}    # the timing rows, serial, after it ({len(timing)}, ~{timing_s:.0f} s)")
     else:
         print("\nSCOPED tier: every selected suite is a TARGET test — this change gates on nothing "
               "of its own, and the targets below still run and report.")
@@ -1648,6 +2142,10 @@ def main():
         env = dict(os.environ, JAH_POOL_ARMS=pool_env) if pool_env else None
         rc = gate_runlog.run_ctest(cmd.split(" ", 1)[1] if pool_env else cmd, build, a.tier or "scoped", lane,
                                    a.jobs, reasons=reasons, rng=log_range, labels=labels, env=env) if cmd else 0
+        if timing_cmd:
+            print("\n=== the timing phase: %d row(s), serial, the GPU theirs ===" % len(timing))
+            rc = gate_runlog.run_ctest(timing_cmd, build, a.tier or "scoped", lane, 1, reasons=reasons,
+                                       rng=log_range, labels=labels) or rc
         if target_cmd:
             # THE TARGETS' RUN IS A REPORT. Its exit code is printed and thrown away.
             print("\n=== target tests (label %s): reported, not gating ==="

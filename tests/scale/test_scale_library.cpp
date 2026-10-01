@@ -124,6 +124,7 @@ static bool launch(App &app, const QString &dataRoot)
     app.bootMs = double(t.elapsed());
     app.mcp.url = QUrl(QStringLiteral("http://127.0.0.1:%1/mcp").arg(port));
     app.mcp.token = token;
+    app.mcp.attach(app.proc, app.log);   // a transport failure prints the child's state + log tail
     app.mcp.clientName = QStringLiteral("scale-library");
     app.mcp.transferTimeoutMs = 600000;
     app.mcp.initialize();

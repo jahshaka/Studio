@@ -106,6 +106,58 @@ struct McpClient
     QString lastTransportError;
     int transportFailures = 0;
 
+    /// THE APP THIS CLIENT TALKS TO (TEST-SELECTOR-1 H1, plan 9ax HARNESS-EXIT-1): the harness
+    /// holds the QProcess and the log the suite keeps of it, so a transport failure says HOW the
+    /// child is — running, or gone with which exit code / status / error — and prints the last
+    /// lines it wrote. Before this a FAIL(transport) printed the request and nothing of the
+    /// process: a crash, a watchdog abort and a slow verb read the same. attach() once after
+    /// spawn(); a suite that drains the process itself passes the same log it drains into.
+    QProcess *app = nullptr;
+    QByteArray *appLog = nullptr;
+    /// A log the client keeps itself, for a suite whose boot log is a local of a helper that
+    /// returns before the client is done: `mcp.ownLog = log; mcp.attach(process, mcp.ownLog);`.
+    QByteArray ownLog;
+
+    void attach(QProcess &process, QByteArray &log)
+    {
+        app = &process;
+        appLog = &log;
+    }
+
+    /// The child's state, exit code, exit status and error, and the last `tailLines` lines of
+    /// its log (drained first), as one block; printed as `info:` lines and returned. Empty when
+    /// no process is attached.
+    QString childReport(int tailLines = 40)
+    {
+        if (!app) return QString();
+        if (appLog) *appLog += app->readAll();
+        static const char *states[] = { "NotRunning", "Starting", "Running" };
+        QString out = QStringLiteral("child: state=%1 pid=%2")
+                          .arg(QString::fromLatin1(states[qBound(0, int(app->state()), 2)]))
+                          .arg(app->processId());
+        if (app->state() == QProcess::NotRunning)
+            out += QStringLiteral(" exitCode=%1 exitStatus=%2")
+                       .arg(app->exitCode())
+                       .arg(app->exitStatus() == QProcess::CrashExit ? QStringLiteral("CrashExit")
+                                                                     : QStringLiteral("NormalExit"));
+        if (app->error() != QProcess::UnknownError)
+            out += QStringLiteral(" error=%1 (%2)").arg(int(app->error())).arg(app->errorString());
+        QStringList lines;
+        if (appLog) {
+            const QList<QByteArray> all = appLog->split('\n');
+            int end = all.size();
+            while (end > 0 && all[end - 1].trimmed().isEmpty()) --end;
+            for (int i = qMax(0, end - tailLines); i < end; ++i)
+                lines << QString::fromUtf8(all[i]);
+        }
+        std::printf("info: ---- %s ----\n", qUtf8Printable(out));
+        std::printf("info: ---- the child's last %lld log line(s) ----\n", static_cast<long long>(lines.size()));
+        for (const QString &l : lines) std::printf("info: | %s\n", qUtf8Printable(l));
+        std::printf("info: ---- end of the child's log ----\n");
+        std::fflush(stdout);
+        return out + QLatin1Char('\n') + lines.join(QLatin1Char('\n'));
+    }
+
     /// ReplyOptional is for the ONE request whose answer may legitimately
     /// never arrive: `app.quit()` races the queued window close, so the app is
     /// allowed to go away mid-response. Everything else is ReplyRequired.
@@ -168,6 +220,7 @@ struct McpClient
         ++transportFailures;
         std::printf("FAIL(transport): %s\n", qUtf8Printable(lastTransportError));
         std::fflush(stdout);
+        childReport();
         // NOT an empty object: a caller reading .value("ok") still fails, and
         // now the object it read says why.
         return QJsonObject{ { "ok", false },
@@ -211,6 +264,7 @@ struct McpClient
             ++transportFailures;
             std::printf("FAIL(transport): %s\n", qUtf8Printable(lastTransportError));
             std::fflush(stdout);
+            childReport();
             return QJsonObject{ { "ok", false },
                                 { "error", lastTransportError },
                                 { "transport", problem } };
@@ -303,7 +357,8 @@ inline quint16 freePort()
 
 /// Spawns the app on `port` and returns once it printed its session token.
 /// Everything read on the way is appended to `log` — these suites assert on
-/// the process's own output, so nothing may be thrown away.
+/// the process's own output, so nothing may be thrown away (the overload that
+/// kept no boot log is deleted, TEST-SELECTOR-1 H2). Then McpClient::attach().
 inline bool spawn(QProcess &jahshaka, quint16 port, QString *tokenOut, QByteArray *log,
                   const QStringList &extraArgs = QStringList(), int bootBudgetMs = 120000)
 {
@@ -325,24 +380,15 @@ inline bool spawn(QProcess &jahshaka, quint16 port, QString *tokenOut, QByteArra
             }
         }
     }
+    // the boot failed: HOW the child is, not only what it said (H1)
+    std::printf("---- boot failed: state=%d exitCode=%d exitStatus=%s error=%s ----\n",
+                int(jahshaka.state()), jahshaka.exitCode(),
+                jahshaka.exitStatus() == QProcess::CrashExit ? "CrashExit" : "NormalExit",
+                qUtf8Printable(jahshaka.errorString()));
     std::printf("---- boot log ----\n%s\n", log->constData());
     return false;
 }
 
-/// The four suites that grew their own copy spawned without keeping the boot
-/// log; this overload is that call, unchanged.
-inline bool spawn(QProcess &jahshaka, quint16 port, QString *tokenOut,
-                  const QStringList &extraArgs = QStringList(), int bootBudgetMs = 120000)
-{
-    QByteArray log;
-    return spawn(jahshaka, port, tokenOut, &log, extraArgs, bootBudgetMs);
-}
-
 }   // namespace mcpharness
-
-/// The name the suites in tests/shutdown/ have used since the harness was
-/// theirs. Kept as an alias so the twelve users do not all have to change the
-/// word in the same commit that changes the transport.
-namespace shutdownharness = mcpharness;
 
 #endif   // TESTS_SUPPORT_MCPHARNESS_H

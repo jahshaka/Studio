@@ -459,7 +459,7 @@ int main(int argc, char **argv)
 
     // ---- PHASE 2: THE WINDOW CLOSES WHILE A CAPTURE IS RUNNING -------------
     {
-        using namespace shutdownharness;
+        using namespace mcpharness;
         const QString quitHome =
             QDir::current().absoluteFilePath(QStringLiteral("e2e-home-capture_quit"));
         const QString quitRoot = quitHome + QStringLiteral("/perf");
@@ -495,6 +495,7 @@ int main(int argc, char **argv)
             McpClient mcp;
             mcp.url = QUrl(QStringLiteral("http://127.0.0.1:%1/mcp").arg(port));
             mcp.token = token;
+            mcp.attach(app2, log);   // a transport failure prints the child's state + log tail
             mcp.clientName = QStringLiteral("capture-bundle-test");
             // A 900 s suite that boots the binary three times: a request may wait on a
             // cold-cache engine start, so the per-request budget is raised.
@@ -623,6 +624,7 @@ int main(int argc, char **argv)
             McpClient mcp3;
             mcp3.url = QUrl(QStringLiteral("http://127.0.0.1:%1/mcp").arg(port3));
             mcp3.token = token3;
+            mcp3.attach(app3, log3);   // a transport failure prints the child's state + log tail
             mcp3.clientName = QStringLiteral("capture-bundle-test");
             mcp3.transferTimeoutMs = 240000;
             mcp3.initialize();

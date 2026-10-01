@@ -36,15 +36,13 @@
 // load: the same binary cleared 300 commands in 21 ms, 29 ms, 64 ms and 90 ms
 // on four runs of one afternoon, so it redded under a -j4 gate and once even
 // solo, with the commit count — the actual contract — reading 1 every time.
-// Both shapes are measured in the SAME run on the SAME disk and the clear must
-// be at least 1.5x cheaper than the one it replaced (it measures 1.9x-2.0x since
-// the library went to WAL, and a regression to per-destructor commits measures
-// 1x — see the factor's note). That
-// catches a regression to per-destructor commits, which is what the bound was
-// for, and cannot be made to fail by a busy machine. On a build dir that lives
-// on tmpfs, where a sync costs nothing, the old shape falls below a 5 ms floor
-// and the ratio is printed instead of asserted — a ratio between two numbers
-// that are both noise proves nothing either way.
+// Both shapes are measured in the SAME run on the SAME disk; the clear measures
+// 1.9x-2.0x cheaper than the one it replaced since the library went to WAL, and a
+// regression to per-destructor commits measures 1x. That ratio is a PRINTED
+// TARGET (`target:` in the run log, TEST-SELECTOR-1 X5): the gate is the commit
+// COUNT (1 against 300, from sqlite3_commit_hook), which no busy machine moves.
+// Only a build without the commit hook asserts the ratio (its one evidence left),
+// and not under a 5 ms floor (a tmpfs build dir, where a sync costs nothing).
 //
 // Framework-free (printf + a failure counter), offscreen, DISPLAY-FREE.
 #include <QApplication>
@@ -263,38 +261,31 @@ int main(int argc, char **argv)
         // The wall clock, as a RATIO against the shape it replaced — same disk,
         // same run, same load (see the header). The owner's freeze was 33,156 ms
         // of exactly this.
-        printf("info: the clear is %.1fx cheaper than the old shape\n",
-               clearMicros > 0 ? double(direct.micros) / double(clearMicros) : 0.0);
-        // A FLOOR UNDER THE COMPARISON. On a build directory that lives on
-        // tmpfs an fdatasync costs nothing at all, so 300 of them can come in
-        // under 5 ms and the ratio stops being a measurement of anything — it
-        // would red with the commit counts, which ARE the contract, reading 1
-        // and 300. Say so and move on; the commit assertions above still hold.
-        if (direct.micros < 5000) {
-            printf("info: the old shape took %lld us — under the 5 ms floor "
-                   "(a tmpfs build dir?), the ratio is NOT asserted\n",
-                   static_cast<long long>(direct.micros));
-        } else {
-            // THE FACTOR IS 1.5, AND THE REASON IS WHAT THE TEST HAS TO
-            // DISTINGUISH. A regression to one commit per destructor makes the
-            // two shapes the SAME shape — a ratio of about 1.
-            //
-            // IT USED TO BE 3, when it measured 32x-52x solo, and FSYNC-2 moved
-            // it: the library now opens in WAL at synchronous=NORMAL
-            // (database.cpp), so a commit no longer waits for the device and
-            // the 300 extra transactions the old shape pays are 300 lots of
-            // TRANSACTION OVERHEAD instead of 300 fdatasyncs. That is the same
-            // collapse the tmpfs floor above describes, arriving by a different
-            // route, and it is not a regression in the thing this suite guards:
-            // the CONTRACT is the commit COUNT, asserted exactly above (1
-            // against 300, from sqlite3_commit_hook), and it still reads 1.
-            // Measured after the move, five solo runs: 18.3-19.2 ms against
-            // 35.5-37.7 ms, i.e. 1.9x-2.0x every time — stable, because both
-            // halves are now CPU in one process rather than one half being the
-            // disk. 1.5 sits comfortably between that and the 1.0 a regression
-            // would read.
-            CHECK(clearMicros > 0 && double(direct.micros) > double(clearMicros) * 1.5,
-                  "clearing the stack is at least 1.5x cheaper than one delete per command");
+        //
+        // THE RATIO IS A PRINTED TARGET, THE COMMIT COUNT IS THE GATE
+        // (TEST-SELECTOR-1 X5, audit 9bi). The bar read 9 first-run reds in the
+        // run log, every one beside sibling gates, while the commit counts above
+        // read 1 against 300 each time — and the counts ARE the contract: a
+        // regression to one commit per destructor reads 300, exactly, on any
+        // box. Since FSYNC-2 (WAL at synchronous=NORMAL) both shapes are CPU in
+        // one process (1.9x-2.0x solo, 1.0x for the regression), a margin a
+        // loaded box eats. So the ratio is printed as the run log's `target:`
+        // line against its old bar of 1.5, and asserted only where the counts
+        // cannot be (no sqlite3 commit hook in this build): there it is the only
+        // evidence left. Under the 5 ms floor (a tmpfs build dir, where a sync
+        // costs nothing) the ratio measures nothing and is not asserted either.
+        const double ratio = clearMicros > 0 ? double(direct.micros) / double(clearMicros) : 0.0;
+        printf("target: %.2fx (bar 1.5) the clear against one delete per command, wall clock in one run "
+               "(the commit counts gate)\n", ratio);
+        if (!counting) {
+            if (direct.micros < 5000) {
+                printf("info: the old shape took %lld us — under the 5 ms floor "
+                       "(a tmpfs build dir?), the ratio is NOT asserted\n",
+                       static_cast<long long>(direct.micros));
+            } else {
+                CHECK(clearMicros > 0 && ratio > 1.5,
+                      "no commit hook: clearing the stack is at least 1.5x cheaper than one delete per command");
+            }
         }
     }
 

@@ -145,9 +145,11 @@ if(Python3_Interpreter_FOUND)
                      "${CMAKE_SOURCE_DIR}" "${CMAKE_BINARY_DIR}")
     set_tests_properties(source.testing_rules PROPERTIES TIMEOUT 120 LABELS "hygiene")
     jah_no_display(source.testing_rules)
-    # gate.ci_check — THE MERGE REFUSAL (MODULAR-GATE-1, T6): scripts/ci-gate-check.sh <range>
-    # refuses unless the run log holds a green record at the tip for every row the range selects
-    # (a recorded range against a private run log: six cases, ~30 s).
+    # gate.ci_check — THE MERGE REFUSAL (MODULAR-GATE-1 T6; the flake law since TEST-SELECTOR-1):
+    # scripts/ci-gate-check.sh <range> refuses unless every row the range selects was run at the tip
+    # and its reds are answered — 3/3 solo for a contention-class suite, a recorded verdict for any
+    # other; a fork pin bump needs the whole tier (a recorded range against a private run log and a
+    # private contention list; ~15 s).
     add_test(NAME gate.ci_check
              COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/ci_gate_check_test.py"
                      "${CMAKE_SOURCE_DIR}" "${CMAKE_BINARY_DIR}")
