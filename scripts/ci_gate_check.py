@@ -343,9 +343,11 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("range")
     ap.add_argument("--build", default="build-linux")
-    ap.add_argument("--verdict", nargs="+", default=None, metavar="ROW=TEXT",
+    # action="extend": `--verdict a=x b=y` and `--verdict a=x --verdict b=y` (the form merge-dbuild-lane.sh
+    # builds) both record EVERY verdict — with nargs="+" alone a repeated flag kept only the last one
+    ap.add_argument("--verdict", nargs="+", action="extend", default=None, metavar="ROW=TEXT",
                     help="record a verdict per red row (`<row or pool.arm>=<the reader's text>`) in the run log, "
-                         "then re-check; it clears only the reds logged before it")
+                         "then re-check; it clears only the reds logged before it (repeatable)")
     a = ap.parse_args()
     verdicts = None
     if a.verdict:

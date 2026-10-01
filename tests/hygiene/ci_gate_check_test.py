@@ -96,6 +96,22 @@ def main(source, build):
     check(rc == 1 and "no verdict recorded for api.contract" in out,
           "a verdict for a row that is not red is refused, said out loud (%d)" % rc)
 
+    # ---- a REPEATED --verdict records every verdict (the form merge-dbuild-lane.sh builds) -------
+    fresh(unlisted)
+    put(rows[:1], "PASS", "2026-01-01T10:00:00")
+    put(rows[1:], "FAIL", "2026-01-01T10:00:01")
+    rc, out = run(RANGE, "--verdict", "app.startup_quiet=first verdict", "--verdict", "photon.view=second verdict")
+    vrec = [json.loads(l) for f in os.listdir(os.environ["JAH_RUN_LOG_DIR"]) if "-verdict-" in f
+            for l in open(os.path.join(os.environ["JAH_RUN_LOG_DIR"], f))]
+    check(rc == 0 and sorted(r["suite"] for r in vrec) == ["app.startup_quiet", "photon.view"],
+          "two repeated --verdict flags record BOTH verdicts and the lane is accepted (%d, %s)"
+          % (rc, sorted(r["suite"] for r in vrec)))
+    fresh(unlisted)
+    put(rows[:1], "PASS", "2026-01-01T10:00:00")
+    put(rows[1:], "FAIL", "2026-01-01T10:00:01")
+    rc, out = run(RANGE, "--verdict", "app.startup_quiet=first verdict", "photon.view=second verdict")
+    check(rc == 0, "...and so does one --verdict with two pairs (%d)" % rc)
+
     # ---- a row that never ran (NOADMIT) is MISSING, which no verdict clears ------------------------
     fresh(unlisted)
     put(rows[:2], "PASS", "2026-01-01T10:00:00")
