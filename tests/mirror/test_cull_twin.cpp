@@ -24,7 +24,7 @@
 #include <cmath>
 #include <cstdio>
 
-#include "bridge/previewmesh.h"
+#include "../support/testmesh.h"
 #include "irisgl/document/materials/pbrmaterial.h"
 #include "irisgl/document/scenegraph/lightnode.h"
 #include "irisgl/document/scenegraph/meshnode.h"
@@ -39,7 +39,7 @@ static int failures = 0;
 
 static iris::MeshPtr primitive(const char *file)
 {
-    return previewmesh::load(QStringLiteral(JAHSHAKA_SOURCE_DIR "/app/content/primitives/") +
+    return testmesh::load(QStringLiteral(JAHSHAKA_SOURCE_DIR "/app/content/primitives/") +
                              QString::fromLatin1(file));
 }
 

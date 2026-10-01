@@ -215,7 +215,7 @@ def main(source, build):
     # with no rule is what prints the tier command.
     code2, out2, err2 = run([tool, "--files", "CMakeLists.txt", "--build", build], source)
     for line in out2.splitlines():
-        if line.startswith("ctest -j4 ") and "-LE" in line:
+        if line.startswith("ctest -j") and "-LE" in line:
             merge = line
     check("photon-target" in plain(merge) and "nightly" in plain(merge),
           "the MERGE tier's -LE carries photon-target beside the nightly labels")

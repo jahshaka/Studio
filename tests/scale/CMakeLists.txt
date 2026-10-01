@@ -103,10 +103,12 @@ set(SCALE_T_BAKE 300)         # 48 s (a 250 k shell baked: W11 itself)
 set(SCALE_T_HIT 430)          # 71 s
 set(SCALE_T_WALKS 340)        # 47-57 s
 set(SCALE_T_SHADOW 450)       # both worlds in one process: 48 s + 24.4 s measured, x 6
-# scale.library: 108-110 s over a GENERATED library; a tree without one first generates it
-# (10,000 imports at ~84 ms each = ~14 min, 25 creates, 475 archive imports ~15 s) — the
-# one-time fixture cost, the reason this row's budget is 30 minutes and not 6 x 110 s.
-set(SCALE_T_LIBRARY 1800)
+# scale.library: 48-110 s over a GENERATED library (6 x 110 s). The generation is its own row
+# since GATE-SPEED-1 (scale.library.fixture below): 10,000 imports + 25 creates + 475 archive
+# imports, 184-200 s measured in a fresh rc tree and up to ~14 min on a loaded box — the
+# one-time fixture cost, whose budget (30 min) is the fixture row's, never the lock's.
+set(SCALE_T_LIBRARY 660)
+set(SCALE_T_LIBRARY_FIXTURE 1800)
 # VRAM (GATE-ADMIT-1, nvidia-smi per pid in the two-tier run): test_scale peaked 1.9 GB -> an
 # untimed test_scale row takes 2 tokens; a locked (timing) row takes all of them.
 function(jah_scale_row _name _mode _timeout _locked)
@@ -166,7 +168,16 @@ set_tests_properties(atom.coverage_trace PROPERTIES TIMEOUT 1300 LABELS "engine"
                      ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
 # W14 — the real binary over MCP, the UI thread's gaps: locked (open.responsive's class).
+# THE FIXTURE IS ITS OWN ROW, OUTSIDE THE LOCK (GATE-SPEED-1 item 4; the gate-speed audit's T1):
+# `scale.library.fixture` generates the 10k-asset / 500-project template through the app's own
+# doors as an ordinary app row (2 tokens) in the parallel phase, and is a no-op once the template
+# exists; the locked measurement requires it and never generates (a missing template is its FAIL).
+# ctest adds a required setup row to any selection that names the measurement (`-L timing`, `-R`).
+jah_gpu_row(scale.library.fixture CLASS app COMMAND test_scale_library --generate
+            WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(scale.library.fixture PROPERTIES TIMEOUT ${SCALE_T_LIBRARY_FIXTURE} LABELS "scale"
+                     FIXTURES_SETUP scale_library_template)
 jah_gpu_exclusive_test(NAME scale.library CLASS app RUN_TIMEOUT ${SCALE_T_LIBRARY} COMMAND test_scale_library
                        WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 # W14 IS CLOSED (D11-LIBRARY-SCALE): its row is a BAR, not a target.
-set_tests_properties(scale.library PROPERTIES LABELS "scale")
+set_tests_properties(scale.library PROPERTIES LABELS "scale" FIXTURES_REQUIRED scale_library_template)

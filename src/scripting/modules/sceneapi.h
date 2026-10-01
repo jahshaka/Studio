@@ -41,6 +41,7 @@ public:
     Q_INVOKABLE QVariantList raycast(const QVariant &origin, const QVariant &direction,
                                      const QVariantMap &options = QVariantMap());
     Q_INVOKABLE QVariant addPrimitive(const QString &name, const QVariantMap &options = QVariantMap());
+    Q_INVOKABLE QString addFloor(const QVariantMap &options = QVariantMap());
     Q_INVOKABLE QString addLight(const QString &type, const QVariantMap &options = QVariantMap());
     Q_INVOKABLE QString addEmpty(const QVariantMap &options = QVariantMap());
     Q_INVOKABLE QString addMesh(const QString &path, const QVariantMap &options = QVariantMap());

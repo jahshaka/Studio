@@ -114,7 +114,8 @@ QVector<VerbInfo> AppApi::verbs() const
           Needs::Document },
         { "openStats", "app.openStats({reset:false}) -> {uiThreadParses, uiThreadParseMs, "
           "uiThreadResourceParses, uiThreadResourceParseMs, workerParses, workerParseMs, "
-          "lastUiThreadParse, bakeHits, bakeMisses, bakeBuilds, sliceBoundaries, sliceBoundaryFrames}",
+          "lastUiThreadParse, bakeHits, bakeMisses, bakeBuilds, uiThreadBakeBuilds, uiThreadBakeBuildMs, "
+          "lastUiThreadBakeBuild, sliceBoundaries, sliceBoundaryFrames}",
           "Model PARSES since the last reset, split by the thread that paid for them "
           "(irisgl/import/parsecensus.h), and the bake reads beside them. A project open must "
           "never parse a model on the UI thread — assimp on a 6 MB mesh is a second of frozen "
@@ -122,18 +123,20 @@ QVector<VerbInfo> AppApi::verbs() const
           "open of every shipped sample. Since FORWARD-ONLY-1 an open never parses a model at all: "
           "'bakeMisses' counts lookups that found no current bake (the model is then missing, or "
           "its stale bake was rebuilt first), and 'bakeBuilds' counts the parses that BUILT a bake "
-          "(an import's, a stale bake's rebuild from its source, on a worker); and 'lastUiThreadParse' names the file when the count is "
+          "(an import's, a stale bake's rebuild from its source), of which 'uiThreadBakeBuilds' ran ON "
+          "THE UI THREAD (the boot's library seed; a verb's synchronous import), with their "
+          "'uiThreadBakeBuildMs' and 'lastUiThreadBakeBuild'; and 'lastUiThreadParse' names the file when the count is "
           "not zero. Pass {reset:true} to zero the counters AFTER reading them, which is how a "
           "caller measures ONE open. 'bakeMisses' counts LOOKUPS, not models — one bake-less "
           "model is asked for twice on a cold open (the prewarm worker's plan item, then the "
           "reader's own) — never a parse. "
           "'uiThreadResourceParses' counts parses of a QT RESOURCE (':/...') separately: a few "
           "kilobytes compiled into the binary, which no worker can hoist because the caller asks "
-          "for it by name. An OPEN no longer makes any — the shipped primitives, the Ground and "
-          "the Teapot are baked library assets read from the store like every imported model "
-          "(ATOM P2), so what is left on this counter is the preview docks' own furniture, parsed "
-          "once per process when a dock first renders. Process-wide and always on: the cost is "
-          "one clock read per parse. "
+          "for it by name. The app makes NONE: every mesh it ships — the primitives, the "
+          "Teapot, the preview docks' subjects, the VR controllers — is a "
+          "baked seed row read from the store, and an import's own parse (a library seed's "
+          "included) counts as a bake build (SHIPPED-BAKES-1). Process-wide and always on: the "
+          "cost is one clock read per parse. "
           "'sliceBoundaries' and 'sliceBoundaryFrames' are the THREADED open's own drive "
           "(services/sceneopenrunner.h): the install runs one slice per event-loop turn and "
           "renders a frame at every boundary between two of them, because the app's 16 ms render "
@@ -730,8 +733,13 @@ QVariantMap AppApi::openStats(const QVariantMap &options)
     out.insert(QStringLiteral("bakeHits"), parses.bakeHits);
     out.insert(QStringLiteral("bakeMisses"), parses.bakeMisses);
     // A bake BUILT (an import's, a stale bake's rebuild) — the derived data
-    // being made on a worker, never a model read in place of its bake.
+    // being made, never a model read in place of its bake — and how many of
+    // those ran on the UI THREAD (the boot's library seed, a verb's synchronous
+    // import), with their milliseconds and the last file.
     out.insert(QStringLiteral("bakeBuilds"), parses.bakeBuilds);
+    out.insert(QStringLiteral("uiThreadBakeBuilds"), parses.mainThreadBakeBuilds);
+    out.insert(QStringLiteral("uiThreadBakeBuildMs"), parses.mainThreadBakeBuildMs);
+    out.insert(QStringLiteral("lastUiThreadBakeBuild"), parses.lastMainThreadBakePath);
     // THE OPEN'S OWN DRIVE (lane OPEN-FRAMES-1). NOT reset with the parse
     // census: these count the window's life, and a caller measuring one open
     // subtracts. A session with no window reports zeros.

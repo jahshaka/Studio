@@ -574,7 +574,7 @@ bool AnimationImporter::convert(const ImportRequest &request, const QString &sta
                                 Database *db, Project *project, StagedAsset &out,
                                 QString *errorOut, const ImportProgressFn &progress)
 {
-    Q_UNUSED(stagingDir); Q_UNUSED(db); Q_UNUSED(project);
+    Q_UNUSED(db); Q_UNUSED(project);
     const QFileInfo sourceInfo(request.sourcePath);
 
     if (progress && !progress(QStringLiteral("convert"), 0, 0)) {
@@ -582,10 +582,17 @@ bool AnimationImporter::convert(const ImportRequest &request, const QString &sta
         return false;
     }
 
-    // ONE parse for both the metadata block and the thumbnail — the pose strip
-    // is drawn from the same parse the clip table is read from.
+    // ONE parse, and it BUILDS THE CLIP BAKE (SHIPPED-BAKES-1): the clip
+    // table, the metadata block and the pose strip are all read off the bake's
+    // own facts, and every reader after this import reads the bake — the
+    // avatar module, the scene reader, the thumbnail rebuild, the backfill.
+    out.sourceOid = AssetCas::hashFile(request.sourcePath);
+    const iris::MeshBake::Clip clip = iris::MeshBake::buildClipFromFile(
+        request.sourcePath, iris::MeshBake::clipFingerprintFor(out.sourceOid));
     QImage poseStrip;
-    const animfile::Contents contents = animfile::read(request.sourcePath, &poseStrip);
+    const animfile::Contents contents =
+        clip.valid ? animfile::describe(clip.info, sourceInfo.completeBaseName(), &poseStrip)
+                   : animfile::read(request.sourcePath);   // the failure's own words
     if (!contents.parsed) {
         if (errorOut)
             *errorOut = QStringLiteral("\"%1\" could not be read (%2)")
@@ -620,7 +627,19 @@ bool AnimationImporter::convert(const ImportRequest &request, const QString &sta
     // path.
     out.files.append({ sourceInfo.absoluteFilePath(), out.mainGuid,
                        QStringLiteral("source"), sourceInfo.fileName() });
-    out.metadata = AssetMetadata::forAnimationFile(request.sourcePath);
+    out.metadata = AssetMetadata::forAnimationContents(contents, request.sourcePath);
+
+    // THE CLIP BAKE, recorded under the row like a model's bake (role `bake`),
+    // so `assets.gc` reaps it with the asset and the archive carries it.
+    if (!out.sourceOid.isEmpty()) {
+        const QString bakeName = iris::MeshBake::clipFileNameFor(out.sourceOid);
+        const QString bakePath = QDir(stagingDir).filePath(bakeName);
+        QString bakeError;
+        if (iris::MeshBake::writeClip(bakePath, clip, &bakeError))
+            out.files.append({ bakePath, out.mainGuid, iris::MeshBake::casRole(), bakeName });
+        else
+            irisLog("import: " + bakeError + " (the clip's readers rebuild it from the source)");
+    }
 
     StagedRow row;
     row.guid = out.mainGuid;

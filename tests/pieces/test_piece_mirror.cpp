@@ -32,6 +32,7 @@
 #include "modules/materials/models/libraryv1.h"
 #include "modules/materials/models/nodemodel.h"
 #include "modules/materials/nodes/pbrmasternode.h"
+#include "../support/testmesh.h"
 
 using namespace jahshaka::engine;
 
@@ -113,6 +114,9 @@ int main(int argc, char **argv)
 {
     qputenv("QT_QPA_PLATFORM", "offscreen");
     QApplication app(argc, argv);   // widget-backed graph nodes need one
+    // The preview docks' and the VR slot's seed keys, from the fixture files
+    // (the app reads them from its seeded library; tests/support/testmesh.h).
+    testmesh::installShippedResolver();
     QTemporaryDir tmp;
 
     EngineConfig cfg;

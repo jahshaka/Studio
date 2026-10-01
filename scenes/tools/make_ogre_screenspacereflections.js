@@ -31,7 +31,7 @@ assert(project.create("Screen Space Reflections").length > 0, "created the proje
 // — a mean of about 0.09 of radiance, three times the LocalCubemaps room's. The
 // grey whose hemispherical integral is 0.09 is sRGB 82, #525252.
 ogreSky({ sky: "#525252", sunDir: [-1, -1, -1], sunPower: 1.0, skyLight: 1.0 });
-removeNode("Ground");
+removeTemplateFloor();
 
 // THE SAME ROOM, POLISHED: roughness 0.02, which is the one material
 // difference between this sample and LocalCubemaps.

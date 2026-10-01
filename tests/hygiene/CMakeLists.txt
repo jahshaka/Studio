@@ -74,6 +74,16 @@ add_test(NAME source.one_readfile
 set_tests_properties(source.one_readfile PROPERTIES TIMEOUT 60 LABELS "hygiene")
 jah_no_display(source.one_readfile)
 
+# source.assimp_import_only — SHIPPED-BAKES-1: assimp is reached ONLY from the
+# import pipeline. Every reader after an import reads a BAKE (a model's mesh
+# bake, a clip's clip bake, a shipped mesh's seed row); a parse anywhere else is
+# a second geometry path beside the bake. See the script's header for the list.
+add_test(NAME source.assimp_import_only
+         COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/assimp_import_only.sh"
+                 "${CMAKE_SOURCE_DIR}")
+set_tests_properties(source.assimp_import_only PROPERTIES TIMEOUT 60 LABELS "hygiene")
+jah_no_display(source.assimp_import_only)
+
 # source.one_material_resolve — MATERIAL-PREVIEW-1: there is ONE way to resolve
 # a material (SceneEditService::resolveMaterial) and a hydrated material never
 # goes into an Asset's QVariant. The live hover preview was dead for two of its
@@ -155,6 +165,17 @@ if(Python3_Interpreter_FOUND)
                      "${CMAKE_SOURCE_DIR}" "${CMAKE_BINARY_DIR}")
     set_tests_properties(gate.ci_check PROPERTIES TIMEOUT 180 LABELS "hygiene")
     jah_no_display(gate.ci_check)
+    # gate.fix_round — THE FIX ROUND RE-USES WHAT IT CANNOT REACH (GATE-SPEED-1; TESTING_GATE §3b made
+    # mechanical): the refusal takes a row's newest record at an earlier commit of the lane when the
+    # fix's own selection does not reach it and the fork pin did not move; a reached row is demanded
+    # at the tip; a later red blocks the older green. And the targets never set a gate's exit code,
+    # and the run log's own-tree / token-wait / FAIL-line fields. Recorded lanes (D11-LIBRARY-SCALE,
+    # CONTACT-OCCLUSION-1) against a private run log; one selection per range (~1-2 min warm).
+    add_test(NAME gate.fix_round
+             COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/gate_fix_round_test.py"
+                     "${CMAKE_SOURCE_DIR}" "${CMAKE_BINARY_DIR}")
+    set_tests_properties(gate.fix_round PROPERTIES TIMEOUT 600 LABELS "hygiene")
+    jah_no_display(gate.fix_round)
 endif()
 
 # source.member_init — UNINIT-SWEEP-1: every scalar, pointer and enum member of ours

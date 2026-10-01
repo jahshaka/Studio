@@ -37,6 +37,8 @@
 #include "services/rigsignature.h"
 
 #include "../support/documentgraph.h"
+#include "../support/testmesh.h"
+#include "avatarfixtures.h"
 static int failures = 0;
 #define CHECK(cond, msg) do { if (cond) std::printf("ok:   %s\n", msg); \
     else { std::printf("FAIL: %s\n", msg); ++failures; } } while (0)
@@ -87,6 +89,9 @@ int main(int argc, char **argv)
 {
     qputenv("QT_QPA_PLATFORM", "offscreen");
     QGuiApplication app(argc, argv);
+    // The preview docks' and the VR slot's seed keys, from the fixture files
+    // (the app reads them from its seeded library; tests/support/testmesh.h).
+    testmesh::installShippedResolver();
 
     // v1 INTERIM (SPECS/SCENEGRAPH_SPEC.md §3): a document node IS an engine
     // node now, so even a document-only suite needs an engine. Declared here,
@@ -99,7 +104,7 @@ int main(int argc, char **argv)
     {
         avatar::AvatarPreviewModel model;
         QString error;
-        CHECK(model.load(kRig, &error), "Z1: the skinned single-mesh rig loads");
+        CHECK(model.load(avatarfixture::subject(kRig), &error), "Z1: the skinned single-mesh rig loads");
         if (!model.isLoaded()) { std::printf("    %s\n", qUtf8Printable(error)); return 1; }
 
         auto fragment = model.fragment();
@@ -165,7 +170,7 @@ int main(int argc, char **argv)
 
     // ================= S1/S2/S3/S3b — the preview model =================
     avatar::AvatarPreviewModel model;
-    CHECK(model.load(kRig), "S1: preview load");
+    CHECK(model.load(avatarfixture::subject(kRig)), "S1: preview load");
     if (!model.isLoaded()) return 1;
 
     // --- S1: clips and the bone tree ---
@@ -276,7 +281,7 @@ int main(int argc, char **argv)
     // glTF documents whose node names either do or do not match rig2.glb's.
     {
         avatar::AvatarPreviewModel cross;
-        CHECK(cross.load(kRig), "X: the character loads");
+        CHECK(cross.load(avatarfixture::subject(kRig)), "X: the character loads");
         const int ownClips = cross.clips().size();
 
         // --- X1: an ANIMATION-ONLY file (zero meshes) loads at all ---
@@ -285,7 +290,7 @@ int main(int argc, char **argv)
         // path parses the aiScene itself and reads clips only.
         QString error;
         avatar::ClipLoadReport report;
-        const bool added = cross.loadAnimation(kWalkAnim, &error, &report);
+        const bool added = cross.loadAnimation(avatarfixture::clip(kWalkAnim), kWalkAnim, &error, &report);
         if (!added) std::printf("    %s\n", qUtf8Printable(error));
         CHECK(added, "X1: an animation-only file (0 meshes) loads onto the character");
         CHECK(report.added == 1 && report.matched == 1 && report.boneChannels == 1,
@@ -374,7 +379,7 @@ int main(int argc, char **argv)
         QString mismatchError;
         avatar::ClipLoadReport mismatch;
         const int before = cross.clips().size();
-        CHECK(!cross.loadAnimation(kMismatchAnim, &mismatchError, &mismatch),
+        CHECK(!cross.loadAnimation(avatarfixture::clip(kMismatchAnim), kMismatchAnim, &mismatchError, &mismatch),
               "X5: a clip animating a different rig is refused, not silently loaded");
         std::printf("    refusal: %s\n", qUtf8Printable(mismatchError));
         CHECK(mismatchError.contains("hips"), "X5: ... and the message names the unmatched bone");
@@ -437,13 +442,13 @@ int main(int argc, char **argv)
         // --- X6: the error cases a script can hit ---
         avatar::AvatarPreviewModel empty;
         QString emptyError;
-        CHECK(!empty.loadAnimation(kWalkAnim, &emptyError) && !emptyError.isEmpty(),
+        CHECK(!empty.loadAnimation(avatarfixture::clip(kWalkAnim), kWalkAnim, &emptyError) && !emptyError.isEmpty(),
               "X6: loading an animation with no character loaded fails with a message");
         QString missingError;
-        CHECK(!cross.loadAnimation(kRig + ".nope", &missingError) && missingError.contains("no such file"),
+        CHECK(!cross.loadAnimation(avatarfixture::clip(kRig + ".nope"), kRig + ".nope", &missingError) && missingError.contains("no such file"),
               "X6: a missing file fails with a message");
         QString noAnimError;
-        CHECK(!cross.loadAnimation(kProp, &noAnimError) && noAnimError.contains("no animation"),
+        CHECK(!cross.loadAnimation(avatarfixture::clip(kProp), kProp, &noAnimError) && noAnimError.contains("no animation"),
               "X6: a file with no clips at all fails with a message");
     }
 
@@ -460,7 +465,7 @@ int main(int argc, char **argv)
     // deaf to .bvh.
     {
         avatar::AvatarPreviewModel mocap;
-        CHECK(mocap.load(kRig), "B: the character loads");
+        CHECK(mocap.load(avatarfixture::subject(kRig)), "B: the character loads");
         const int ownClips = mocap.clips().size();
 
         // --- B0: what assimp actually hands over for a .bvh ---------------
@@ -502,7 +507,7 @@ int main(int argc, char **argv)
         // --- B1: the .bvh loads onto the character ------------------------
         QString error;
         avatar::ClipLoadReport report;
-        const bool added = mocap.loadAnimation(kBvhWalk, &error, &report);
+        const bool added = mocap.loadAnimation(avatarfixture::clip(kBvhWalk), kBvhWalk, &error, &report);
         if (!added) std::printf("    %s\n", qUtf8Printable(error));
         CHECK(added, "B1: a mocap .bvh loads onto the character through avatar.loadAnimation");
         CHECK(report.added == 1 && report.matched == 2 && report.boneChannels == 2,
@@ -560,7 +565,7 @@ int main(int argc, char **argv)
         QString mismatchError;
         avatar::ClipLoadReport mismatch;
         const int before = mocap.clips().size();
-        CHECK(!mocap.loadAnimation(kBvhMismatch, &mismatchError, &mismatch),
+        CHECK(!mocap.loadAnimation(avatarfixture::clip(kBvhMismatch), kBvhMismatch, &mismatchError, &mismatch),
               "B4: a .bvh animating a different rig is refused, not silently loaded");
         std::printf("    refusal: %s\n", qUtf8Printable(mismatchError));
         CHECK(mismatchError.contains("hips"), "B4: ... and the message names the unmatched joint");
@@ -571,7 +576,7 @@ int main(int argc, char **argv)
     // ================= X7 — root motion (walk in place vs as authored) ====
     {
         avatar::AvatarPreviewModel rm;
-        CHECK(rm.load(kRig), "X7: character loaded");
+        CHECK(rm.load(avatarfixture::subject(kRig)), "X7: character loaded");
         CHECK(!rm.rootMotion(), "X7: root motion is OFF by default (locomotion plays in place)");
         // rig2.glb's clips are rotation-only, so the stripping must be a no-op
         // on them: the pose at t=0.5 has to be identical either way.
@@ -612,7 +617,7 @@ int main(int argc, char **argv)
         // and the readback says so.
         {
             avatar::AvatarPreviewModel m;
-            CHECK(m.load(kRig), "H1: the 2 m rig loads");
+            CHECK(m.load(avatarfixture::subject(kRig)), "H1: the 2 m rig loads");
             CHECK(close(m.characterHeight(), 2.0f, 1e-3f),
                   "H1: a 2 m character measures 2 m");
             const iris::Vec3 scale = m.fragment()->getLocalScale();
@@ -628,7 +633,7 @@ int main(int argc, char **argv)
         // whole of the change.
         {
             avatar::AvatarPreviewModel m;
-            CHECK(m.load(kGiant), "H2: the 17.25 m rig loads");
+            CHECK(m.load(avatarfixture::subject(kGiant)), "H2: the 17.25 m rig loads");
             CHECK(close(m.characterHeight(), 17.25f, 0.01f),
                   qUtf8Printable(QStringLiteral("H2: it measures %1 m (expected 17.25) — nothing "
                                                 "scaled it").arg(double(m.characterHeight()))));
@@ -651,7 +656,7 @@ int main(int argc, char **argv)
         // H3 — the other end, same answer: a 10 cm rig loads as a 10 cm rig.
         {
             avatar::AvatarPreviewModel m;
-            CHECK(m.load(kTiny), "H3: the 0.10 m rig loads");
+            CHECK(m.load(avatarfixture::subject(kTiny)), "H3: the 0.10 m rig loads");
             CHECK(close(m.characterHeight(), 0.10f, 0.01f),
                   qUtf8Printable(QStringLiteral("H3: 0.10 m stays 0.10 m (%1 m)")
                                      .arg(double(m.characterHeight()))));
@@ -673,7 +678,7 @@ int main(int argc, char **argv)
         // be arithmetic instead of a screenshot.
         for (const QString &path : { kRig, kGiant, kTiny }) {
             avatar::AvatarPreviewModel m;
-            m.load(path);
+            m.load(avatarfixture::subject(path));
             const float head = avatar::measureCharacterHeight(m.fragment());
             const float ceiling = m.ceilingHeight();
             CHECK(head < ceiling,
@@ -690,21 +695,18 @@ int main(int argc, char **argv)
         // normalizable and must be left alone rather than guessed at.
         {
             avatar::AvatarPreviewModel m;
-            m.load(kRig);
+            m.load(avatarfixture::subject(kRig));
             const float before = avatar::measureCharacterHeight(m.fragment());
-            CHECK(m.loadAnimation(kBvhWalk), "H7: a mocap clip loads onto the character");
+            CHECK(m.loadAnimation(avatarfixture::clip(kBvhWalk), kBvhWalk), "H7: a mocap clip loads onto the character");
             CHECK(close(avatar::measureCharacterHeight(m.fragment()), before, 1e-4f),
                   "H7: ... and loading a clip never rescales the subject");
         }
     }
 
     // --- clear ---
-    const QString scratch = model.extractDir();
     model.clear();
     CHECK(!model.isLoaded() && model.bones().isEmpty() && model.clips().isEmpty(),
           "clear: the subject and its rig are gone");
-    CHECK(scratch.isEmpty() || !QFileInfo::exists(scratch),
-          "clear: the scratch extract dir is removed (never beside the source file)");
 
     std::printf(failures ? "\n%d FAILURES\n" : "\nall document checks passed\n", failures);
     return failures ? 1 : 0;

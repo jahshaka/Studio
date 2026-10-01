@@ -117,6 +117,11 @@ QStringList ProjectRunner::plannedOpenModelPaths()
 	return paths;
 }
 
+QStringList ProjectRunner::plannedOpenClipPaths()
+{
+	return mProjectService ? mProjectService->plannedClipPaths() : QStringList();
+}
+
 iris::MeshPrewarmPtr ProjectRunner::prewarmModelsPumped()
 {
 	// THE BAKE READS, OFF THIS THREAD, WITH THE CALLER STILL BLOCKED
@@ -160,14 +165,17 @@ iris::MeshPrewarmPtr ProjectRunner::prewarmModelsPumped()
 	// real and is reported; it is not this lane's to fix under it.
 	auto prewarm = std::make_shared<iris::MeshPrewarm>();
 	const QStringList modelPaths = plannedOpenModelPaths();
-	if (modelPaths.isEmpty()) return prewarm;
+	const QStringList clipPaths = plannedOpenClipPaths();
+	if (modelPaths.isEmpty() && clipPaths.isEmpty()) return prewarm;
 
 	// STALE BAKES ARE REBUILT FROM THEIR OWN SOURCES FIRST (FORWARD-ONLY-1
 	// D1): a bake is a cache of the parse, and a build that changed the code
 	// producing it rebuilds it — on a worker, this thread pumping, with the
 	// open's progress up — before anything reads. Never a parse on the open.
+	// ...the clip files' CLIP bakes with them (SHIPPED-BAKES-1).
 	MeshBakeStore::rebuildPumped(
-	    MeshBakeStore::staleJobsFor(QSqlDatabase::database(), AssetStorePaths::root(), modelPaths),
+	    MeshBakeStore::staleJobsFor(QSqlDatabase::database(), AssetStorePaths::root(),
+	                                modelPaths + clipPaths),
 	    [this](int i, int n) {
 		    mHost->showOpenProgress(5 + (20 * i) / qMax(1, n),
 		                            tr("Rebuilding models (%1 of %2)…").arg(i + 1).arg(n));
@@ -488,7 +496,7 @@ void ProjectRunner::startOpenRun(bool playMode)
 	slices.append({ QStringLiteral("Opening…"), 100,
 	                [this, playMode]() { stageReveal(playMode); } });
 
-	mRunner->setPlan(modelPaths, slices,
+	mRunner->setPlan(modelPaths, plannedOpenClipPaths(), slices,
 	                 mProject ? mProject->getProjectName() : QStringLiteral("scene"));
 	mRunner->start();
 }
@@ -662,7 +670,7 @@ void ProjectRunner::startCreateRun(const QString &guid, const QString &filename,
         }
     } });
 
-    mRunner->setPlan(QStringList(), slices,
+    mRunner->setPlan(QStringList(), QStringList(), slices,
                      filename.isEmpty() ? QStringLiteral("scene") : filename);
     mRunner->start();
 }

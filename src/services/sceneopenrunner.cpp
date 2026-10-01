@@ -41,14 +41,14 @@ SceneOpenRunner::~SceneOpenRunner()
     if (mFuture.isValid() && !mFuture.isFinished()) mFuture.waitForFinished();
 }
 
-void SceneOpenRunner::setPlan(const QStringList &modelPaths, const QVector<Slice> &slices,
-                              const QString &label)
+void SceneOpenRunner::setPlan(const QStringList &modelPaths, const QStringList &clipPaths,
+                              const QVector<Slice> &slices, const QString &label)
 {
     // The bake PLAN is resolved HERE, on the UI thread that owns the database
     // connection (MESH_BAKE_SPEC phase 1): the worker only ever reads files.
     mModelPaths = modelPaths;
     mRebuild = MeshBakeStore::staleJobsFor(QSqlDatabase::database(), AssetStorePaths::root(),
-                                           modelPaths);
+                                           modelPaths + clipPaths);
     mRebuildDone = mRebuild.isEmpty();
     mPlan.clear();
     mPlan.reserve(modelPaths.size());
@@ -65,7 +65,7 @@ void SceneOpenRunner::start()
 {
     mRunning.store(true);
     emit progress(5, QStringLiteral("Reading %1…").arg(mLabel));
-    if (mModelPaths.isEmpty()) {
+    if (mModelPaths.isEmpty() && mRebuildDone) {
         // Nothing to parse: go straight to the slices, still one per turn.
         mParsed.store(true);
         QTimer::singleShot(0, this, [this]() { runNextSlice(); });

@@ -17,6 +17,14 @@
 // each run, because making it is minutes of the app's own work; the generation time is
 // printed when it happens.
 //
+// THE GENERATION IS ITS OWN ROW (GATE-SPEED-1 item 4, the gate-speed audit's T1):
+// `test_scale_library --generate` is `scale.library.fixture`, a FIXTURES_SETUP row admitted
+// like any app row (2 VRAM tokens) in the gate's parallel phase. The MEASUREMENT (this
+// binary with no argument, `scale.library`) stays inside the whole-card lock and never
+// generates: a missing template is a FAIL naming the fixture row. Generating inside the
+// lock held every token on the box for 232-248 s of a fresh tree's serial phase against
+// 48 s for the measurement itself.
+//
 // THE MEASUREMENTS (the numbers CREATE-GAP-1's suite takes, at this size), each against
 // an EMPTY-library control in the same run: the boot to the MCP answering (the window is
 // up and the Desktop built), the Desktop grid's build (desktop.gridStats), a project open
@@ -153,15 +161,25 @@ static QJsonValue eval(App &app, const QString &script)
 /// spikes/d1-scale-fixtures/library-crash/), and 500 creates are ~8 minutes of the app.
 static const int kCreates = 25;
 
+/// THE TEMPLATE IS A LIBRARY OF ONE GENERATION (FORWARD-ONLY-1,
+/// services/librarygeneration.h): a template an older build generated is wiped by
+/// the app at startup, so it is regenerated instead of copied.
+static bool templateReady()
+{
+    const QString tmpl = kBase + "/library-template";
+    return QFileInfo::exists(tmpl + "/.complete")
+        && QFileInfo::exists(tmpl + QStringLiteral("/.generation-%1").arg(CasSchema::kUserVersion));
+}
+
 static bool ensureTemplate()
 {
     const QString tmpl = kBase + "/library-template";
-    // THE TEMPLATE IS A LIBRARY OF ONE GENERATION (FORWARD-ONLY-1,
-    // services/librarygeneration.h): a template an older build generated is
-    // wiped by the app at startup, so it is regenerated here instead of copied.
     const QString genMark =
         tmpl + QStringLiteral("/.generation-%1").arg(CasSchema::kUserVersion);
-    if (QFileInfo::exists(tmpl + "/.complete") && QFileInfo::exists(genMark)) return true;
+    if (templateReady()) {
+        std::printf("library: the template is ready (%s) — nothing to generate\n", qPrintable(tmpl));
+        return true;
+    }
     if (QDir(tmpl).exists() && !QFileInfo::exists(genMark)) QDir(tmpl).removeRecursively();
     QDir().mkpath(tmpl);
     { QFile mark(genMark); mark.open(QIODevice::WriteOnly); }
@@ -368,7 +386,15 @@ int main(int argc, char **argv)
 {
     QCoreApplication qapp(argc, argv);
     std::setvbuf(stdout, nullptr, _IOLBF, 0);   // a line at a time: the log is read while it runs
-    if (!ensureTemplate()) return 1;
+    // scale.library.fixture: generate (or resume) the template and stop — outside the lock.
+    if (qapp.arguments().contains(QStringLiteral("--generate"))) return ensureTemplate() ? 0 : 1;
+    // scale.library: measure only. The fixture row ran first (FIXTURES_REQUIRED); a missing
+    // template here means it failed or was skipped, never a reason to generate in the lock.
+    if (!templateReady()) {
+        std::printf("FAIL: the library template is missing or of another generation (%s/library-template) — "
+                    "scale.library.fixture (test_scale_library --generate) makes it\n", qPrintable(kBase));
+        return 1;
+    }
     // THE RUN'S COPY of the template, and the CONTROL — both fresh copies of it (one
     // cache state, the same worlds: a first-seconds measurement is the shader storm,
     // DOCS/traps/GATE_AND_RIG.md).

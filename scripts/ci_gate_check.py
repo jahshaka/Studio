@@ -16,6 +16,21 @@ in part, every selected arm — must have been run there, and THE FLAKE LAW deci
   a run). One solo PASS no longer erases a red (the audit's L2: gi.field_scroll PASS/FAIL/PASS
   beside a sibling was accepted).
 
+THE FIX ROUND RE-USES WHAT IT CANNOT REACH (GATE-SPEED-1 item 1; TESTING_GATE §3b made mechanical —
+the owner, 2026-09-11: "no double checking"). A row with no record at the tip takes the NEWEST record
+of that row at an earlier commit A OF THE LANE (its own commits in base..tip: not the integration
+line a forward merge carried in), provided
+  (a) the scoped selection of A..tip — the same selector, the same reach — does NOT include the row
+      (a pool's arm: does not include that arm), and
+  (b) the fork pin is the same at A and at the tip, and A..tip neither falls back nor is the tier by
+      rule (a pin change invalidates every earlier record: §7b rule 4 stays);
+and that newest record decides: green re-uses it; red (with no verdict, or a contention red without
+its 3/3) refuses — a later red blocks the older green, and is answered where it happened
+(`--verdict` records it at that commit). A row the fix reaches needs its record at the tip, as before.
+Every row prints the commit its record came from. Before this lane the key was the EXACT tip, so
+every fix round re-ran the lane's whole selection: 45.9 % of all suite-time since 09-28 (the
+gate-speed audit's R1). A miss is a selector defect, which is already the law's answer.
+
 A range that MOVES THE FORK PIN needs the whole MERGE tier at the tip (§7b rule 4: the one full
 tier per bump, `gate-scope.sh <range> --run --fork-tier`; the lane's own gates select by the fork
 diff's reach). So does a selection that fell back or is the tier by rule.
@@ -50,10 +65,11 @@ def load_gs():
     return gs
 
 
-def records_at(tip, irisgl=None):
-    """(suite, arm) -> [records at this tip, oldest first] (clean tree, irisgl at the tip's pin),
-    across every file of the log — the verdict records included (kind == "verdict")."""
-    out = {}
+def records_by_tip(pins):
+    """{tip: {(suite, arm): [records, oldest first]}} for every tip in `pins` ({studio sha: the irisgl
+    sha it pins}) — clean tree, irisgl at THAT tip's pin — read in ONE pass over the log, the verdict
+    records included (kind == "verdict")."""
+    out = {t: {} for t in pins}
     d = gate_runlog.log_dir()
     if not os.path.isdir(d): return out
     for f in sorted(os.listdir(d)):
@@ -62,14 +78,17 @@ def records_at(tip, irisgl=None):
             try: r = json.loads(line)
             except ValueError: continue
             t = r.get("tip") or {}
-            if t.get("studio") != tip or t.get("studio_dirty") or t.get("irisgl_dirty"): continue
+            sha = t.get("studio")
+            if sha not in out or t.get("studio_dirty") or t.get("irisgl_dirty"): continue
             # the engine that ran must be the one the tip PINS (F1): a record from a tree whose
             # irisgl was checked out elsewhere tested other code
-            if irisgl and t.get("irisgl") != irisgl: continue
-            out.setdefault((r.get("suite"), r.get("arm")), []).append(r)
-    for v in out.values():
-        v.sort(key=lambda r: r.get("ts") or "")
+            if pins[sha] and t.get("irisgl") != pins[sha]: continue
+            out[sha].setdefault((r.get("suite"), r.get("arm")), []).append(r)
+    for recs in out.values():
+        for v in recs.values():
+            v.sort(key=lambda r: r.get("ts") or "")
     return out
+
 
 
 def _when(r):
@@ -144,6 +163,75 @@ def needed_rows(gs, S):
     return need, "the scoped selection"
 
 
+def _git(args, cwd):
+    r = subprocess.run(["git"] + args, cwd=cwd, capture_output=True, text=True)
+    return r.stdout.strip() if r.returncode == 0 else ""
+
+
+def lane_commits(gs, base, tip_sha):
+    """The lane's OWN earlier commits, newest first: base..tip without the tip, minus the integration
+    line (a d-build commit a forward merge carried in is not a commit of this lane)."""
+    line = gs.integration_line()
+    revs = _git(["rev-list", "--topo-order", f"{base}..{tip_sha}"], gs.ROOT).split()
+    return [c for c in revs if c != tip_sha and c not in line]
+
+
+_FORK_PINS = {}
+
+
+def fork_pin(gs, irisgl_sha):
+    """The ogre-next commit an irisgl commit pins ('' when it cannot be read: no re-use across it).
+    Cached: the refusal asks it once per row per earlier commit."""
+    if not irisgl_sha: return ""
+    if irisgl_sha not in _FORK_PINS:
+        _FORK_PINS[irisgl_sha] = _git(["rev-parse", f"{irisgl_sha}:thirdparty/ogre-next"],
+                                      os.path.join(gs.ROOT, "irisgl"))
+    return _FORK_PINS[irisgl_sha]
+
+
+class Reach:
+    """What the scoped selection of <A>..<tip> reaches, per earlier commit A (computed once each, on
+    one build graph and one inventory). ALL = every row: a fork pin change, a fallback, the tier by
+    rule, or a range the selector cannot read (no re-use across it — the safe side)."""
+    ALL = None
+
+    def __init__(self, gs, build, tip_sha, tip_fork):
+        import copy
+        import gate_graph
+        self.gs, self.build, self.tip, self.tip_fork, self.copy = gs, build, tip_sha, tip_fork, copy
+        self.graph = gate_graph.NinjaGraph.load(build)
+        self.inv0 = gs.load_inventory(build)
+        self.cache = {}
+
+    def of(self, a, a_fork):
+        if a in self.cache: return self.cache[a]
+        reach = Reach.ALL
+        if a_fork and a_fork == self.tip_fork:
+            rng = f"{a}..{self.tip}"
+            try:
+                S = self.gs.select(self.gs.touched_paths(rng), rng, self.build, self.gs.GATE_JOBS, graph=self.graph,
+                                   inv=self.copy.deepcopy(self.inv0), quiet_graph=True)
+                if not (S.fallback or S.full_tier or S.fork_bump):
+                    subsets = S.arm_subsets()
+                    reach = set()
+                    for n in S.selected:
+                        reach.add((n, None))
+                        pool = S.inv[n].get("pool")
+                        if n in subsets:
+                            reach |= {(n, f"{pool}.{arm}") for arm in subsets[n]}
+                        elif pool:
+                            reach.add((n, "*"))      # the whole pool: every arm
+            except SystemExit:
+                reach = Reach.ALL                    # an unreadable or empty range: nothing is re-used
+        self.cache[a] = reach
+        return reach
+
+    @staticmethod
+    def reaches(reach, key):
+        if reach is Reach.ALL: return True
+        return key in reach or (key[1] is not None and (key[0], "*") in reach)
+
+
 def record_verdicts(pairs, tip_sha, pin):
     """[(key, text)] -> one VERDICT record per row, stamped now."""
     now = datetime.datetime.now().astimezone()
@@ -171,35 +259,107 @@ def check(rng, build, gs=None, verdicts=None):
     tip_sha = subprocess.run(["git", "rev-parse", tip], cwd=gs.ROOT, capture_output=True, text=True).stdout.strip()
     if not tip_sha:
         return None, [f"cannot resolve {tip}"]
-    S = gs.select(gs.touched_paths(rng), rng, build, 4, quiet_graph=True)
+    base_sha = _git(["rev-parse", base], gs.ROOT) or base
+    S = gs.select(gs.touched_paths(rng), rng, build, gs.GATE_JOBS, quiet_graph=True)
     need, what = needed_rows(gs, S)
-    pin = subprocess.run(["git", "rev-parse", f"{tip_sha}:irisgl"], cwd=gs.ROOT, capture_output=True, text=True).stdout.strip()
-    got = records_at(tip_sha, pin or None)
+    pin = _git(["rev-parse", f"{tip_sha}:irisgl"], gs.ROOT)
     label = lambda k: f"{k[0]}{' :: ' + k[1] if k[1] else ''}"
-    judged = {k: judge(k, got.get(k, []), contention) for k in need}
+    # THE LANE'S EARLIER COMMITS and the pins they ran on (records at each are read in one pass)
+    earlier = lane_commits(gs, base_sha, tip_sha)
+    pins = {tip_sha: pin or None}
+    for c in earlier:
+        pins[c] = _git(["rev-parse", f"{c}:irisgl"], gs.ROOT) or None
+    reach = None
+
+    def judge_all():
+        """{key: (state, why, source sha)} — the tip's records first, then (for a row the tip has no
+        run of) the newest earlier commit's, under the rule in this file's header. AND THE FLAKE LAW
+        ACROSS COMMITS (the lead's merge read, F1): a row green at the tip is still refused while an
+        earlier commit that the fix does NOT reach holds an open red of it (no verdict; a contention
+        red without its 3/3) — a green re-run at a later commit does not answer a red the fix never
+        touched; a verdict does, or --solo 3/3 for the contention class."""
+        nonlocal reach
+        got = records_by_tip(pins)
+        out = {}
+        tip_fork = fork_pin(gs, pin)
+        have_earlier = [c for c in earlier if got[c]]
+        for k in need:
+            st, why = judge(k, got[tip_sha].get(k, []), contention)
+            src = tip_sha
+            if st == "green" and have_earlier:
+                if reach is None:
+                    reach = Reach(gs, build, tip_sha, tip_fork)
+                for c in have_earlier:
+                    if Reach.reaches(reach.of(c, fork_pin(gs, pins[c])), k):
+                        break                   # the fix reached it: the tip's run answers what came before
+                    recs = got[c].get(k, [])
+                    if not recs: continue
+                    cst, cwhy = judge(k, recs, contention)
+                    if cst == "red":
+                        st, src = "red", c
+                        why = (f"an OPEN red at {c[:9]} that {c[:9]}..{tip_sha[:9]} does not reach — the green at the "
+                               f"tip does not answer it (a verdict does; --solo 3/3 for the contention class): {cwhy}")
+                        break
+            if st == "missing" and have_earlier:
+                if reach is None:
+                    reach = Reach(gs, build, tip_sha, tip_fork)
+                for c in have_earlier:
+                    r = reach.of(c, fork_pin(gs, pins[c]))
+                    if Reach.reaches(r, k):
+                        why += (f"; {c[:9]}..{tip_sha[:9]} reaches it" if r is not Reach.ALL else
+                                f"; no re-use across {c[:9]} (a fork pin change, a fallback or the tier by rule "
+                                f"in {c[:9]}..{tip_sha[:9]})")
+                        break
+                    recs = got[c].get(k, [])
+                    if not recs: continue
+                    cst, cwhy = judge(k, recs, contention)
+                    if cst == "missing": continue
+                    st, src = cst, c
+                    why = (f"re-used from {c[:9]} ({c[:9]}..{tip_sha[:9]} does not reach it)"
+                           + (f"; {cwhy}" if cwhy else "")) if cst == "green" else \
+                          (f"red at {c[:9]}, the newest run of it on the lane ({c[:9]}..{tip_sha[:9]} does not reach "
+                           f"it; answer it there): {cwhy}")
+                    break
+            out[k] = (st, why, src)
+        return out
+
+    judged = judge_all()
     if verdicts:
-        pairs, unknown = [], []
+        pairs, unknown = {}, []
         for name, text in verdicts.items():
             keys = [k for k in need if k[0] == name or (k[1] and k[1] == name)]
             red_keys = [k for k in keys if judged[k][0] == "red"]
-            if red_keys: pairs += [(k, text) for k in red_keys]
-            else: unknown.append(f"{name} ({'not selected' if not keys else judged[keys[0]][0]})")
+            for k in red_keys:
+                pairs.setdefault(judged[k][2], []).append((k, text))     # recorded where the red happened
+            if not red_keys:
+                unknown.append(f"{name} ({'not selected' if not keys else judged[keys[0]][0]})")
         for u in unknown:
             print(f"ci-gate-check: no verdict recorded for {u} — a verdict answers a red row only")
+        for at, ps in pairs.items():
+            path = record_verdicts(ps, at, pins.get(at) or "")
+            print(f"ci-gate-check: recorded {len(ps)} verdict(s) at {at[:9]} -> {path}")
         if pairs:
-            path = record_verdicts(pairs, tip_sha, pin)
-            print(f"ci-gate-check: recorded {len(pairs)} verdict(s) -> {path}")
-            got = records_at(tip_sha, pin or None)
-            judged = {k: judge(k, got.get(k, []), contention) for k in need}
-    missing = [label(k) for k, (st, _) in judged.items() if st == "missing"]
-    red = [f"{label(k)}: {why}" for k, (st, why) in judged.items() if st == "red"]
-    cleared = [f"{label(k)}: {why}" for k, (st, why) in judged.items() if st == "green" and why]
+            judged = judge_all()
+    # THE PROVENANCE, per row (GATE-SPEED-1): which commit's record answered it
+    for k in need:
+        st, why, src = judged[k]
+        print(f"ci-gate-check: row {label(k)} <- {src[:9]}{' (the tip)' if src == tip_sha else ''}: {st}"
+              + (f" — {why}" if why else ""))
+    missing = [label(k) for k, (st, _, _) in judged.items() if st == "missing"]
+    red = [f"{label(k)}: {why}" for k, (st, why, _) in judged.items() if st == "red"]
+    cleared = [f"{label(k)}: {why}" for k, (st, why, src) in judged.items()
+               if st == "green" and why and src == tip_sha]
+    reused = {}
+    for k, (st, _, src) in judged.items():
+        if st == "green" and src != tip_sha: reused[src] = reused.get(src, 0) + 1
     reasons = []
-    if missing: reasons.append(f"{len(missing)} of {len(need)} row(s) of {what} have no record at {tip_sha[:9]}: "
-                               f"{missing[:8]}")
+    if missing: reasons.append(f"{len(missing)} of {len(need)} row(s) of {what} have no record at {tip_sha[:9]} "
+                               f"(nor a re-usable one earlier on the lane): {missing[:8]}")
     for r in red[:20]: reasons.append("RED " + r)
     if not (missing or red):
-        reasons.append(f"{what}: {len(need)} row(s) green at {tip_sha[:9]}"
+        at_tip = len(need) - sum(reused.values())
+        reasons.append(f"{what}: {len(need)} row(s) green — {at_tip} at {tip_sha[:9]}"
+                       + "".join(f", {n} re-used from {c[:9]}" for c, n in reused.items())
                        + (f"; cleared by the law: {cleared[:6]}" if cleared else ""))
     return not (missing or red), reasons
 
@@ -208,9 +368,11 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("range")
     ap.add_argument("--build", default="build-linux")
-    ap.add_argument("--verdict", nargs="+", default=None, metavar="ROW=TEXT",
+    # action="extend": `--verdict a=x b=y` and `--verdict a=x --verdict b=y` (the form merge-dbuild-lane.sh
+    # builds) both record EVERY verdict — with nargs="+" alone a repeated flag kept only the last one
+    ap.add_argument("--verdict", nargs="+", action="extend", default=None, metavar="ROW=TEXT",
                     help="record a verdict per red row (`<row or pool.arm>=<the reader's text>`) in the run log, "
-                         "then re-check; it clears only the reds logged before it")
+                         "then re-check; it clears only the reds logged before it (repeatable)")
     a = ap.parse_args()
     verdicts = None
     if a.verdict:
@@ -227,8 +389,9 @@ def main():
         sys.exit(2)
     for r in reasons: print(("ci-gate-check: " if ok else "ci-gate-check: REFUSED — ") + r)
     if not ok:
-        print(f"ci-gate-check: run `scripts/gate-scope.sh {a.range} --run` at the tip; a contention-class red "
-              f"takes `--solo <suite>` (3/3); any other red a verdict: `--verdict \"<row>=<text>\" ...`")
+        print(f"ci-gate-check: run the FIX ROUND `scripts/gate-scope.sh <pre-fix tip>..{a.range.split('..', 1)[1]} --run` "
+              f"(§3b; or `{a.range} --run` for a lane never gated); a contention-class red takes `--solo <suite>` "
+              f"(3/3); any other red a verdict: `--verdict \"<row>=<text>\" ...`")
     sys.exit(0 if ok else 1)
 
 

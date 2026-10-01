@@ -27,6 +27,7 @@
 #include <QJsonObject>
 #include <QSqlDatabase>
 #include <QSqlQuery>
+#include <QTemporaryDir>
 #include <cstdio>
 
 #include "data/database/database.h"
@@ -41,6 +42,8 @@
 #include "io/scenewriter.h"
 #include "irisgl/document/physics/avatarmovement.h"
 #include "irisgl/document/scenegraph/scenenode.h"
+#include "../support/testmesh.h"
+#include "irisgl/import/meshbake.h"
 
 static int failures = 0;
 #define CHECK(cond, msg) do { if (cond) std::printf("ok:   %s\n", msg); \
@@ -92,6 +95,19 @@ int main(int argc, char **argv)
 {
     qputenv("QT_QPA_PLATFORM", "offscreen");
     QApplication app(argc, argv);   // database.cpp links QtWidgets
+    // The preview docks' and the VR slot's seed keys, from the fixture files
+    // (the app reads them from its seeded library; tests/support/testmesh.h).
+    testmesh::installShippedResolver();
+    // THE METADATA BACKFILL READS A ROW'S BAKE (SHIPPED-BAKES-1) and these rows
+    // are hand-made, never imported: the suite bakes each source on first ask,
+    // with the import's own builder, where the app's resolver finds the store's.
+    static QTemporaryDir bakes;
+    AssetMetadata::setBakePathResolver([](int, const QString &source, const QString &) {
+        const QString out = QDir(bakes.path()).filePath(QFileInfo(source).fileName() + ".jmb");
+        if (!QFileInfo::exists(out))
+            iris::MeshBake::write(out, iris::MeshBake::buildFromFile(source, QStringLiteral("t")), nullptr);
+        return out;
+    });
 
     const QString cwd = QDir::currentPath();
     const QString dbPath = cwd + "/avatar_assets_test.db";

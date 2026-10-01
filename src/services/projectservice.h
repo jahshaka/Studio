@@ -150,6 +150,10 @@ public:
     /// scene blob references, CAS-resolved. DB work, so it runs on the thread
     /// that owns the default connection — the caller's.
     QStringList plannedModelPaths() const;
+    /// The animation CLIP FILES the blob's skeletal clips name (SceneReader::
+    /// collectClipSources) — the open rebuilds their stale clip bakes with the
+    /// models' (SHIPPED-BAKES-1).
+    QStringList plannedClipPaths() const;
 
     /// Blob-only save (SCRIPTING_SPEC §1.6.2): never silently no-ops; the
     /// thumbnail refreshes only when a viewport can render one.

@@ -38,6 +38,7 @@ For more information see the LICENSE file
 #include <QStringList>
 #include <QVector>
 
+#include "irisgl/import/meshbake.h"
 #include "irisgl/import/meshprewarm.h"
 #include "services/assetcas.h"
 #include <memory>
@@ -139,6 +140,9 @@ struct BakeTarget
 {
     QString path;
     QString assetGuid;
+    /// A CLIP bake (iris::MeshBake::Clip), not a model bake: the content is an
+    /// animation clip file (a ModelTypes::Animation row names it).
+    bool clip = false;
 };
 
 /// Every (model file, owning row) pair in the store with no fresh bake, one
@@ -167,6 +171,7 @@ struct BakeJob
     QString settings;
     QString storeRoot;
     iris::ImportTransform transform;
+    bool clip = false;   ///< build the CLIP bake of this content (no settings: it is built at identity)
 };
 
 /// What a worker produced. `path` empty = the bake failed (`error` says why).
@@ -216,9 +221,52 @@ QStringList modelSourcesNeedingBake(QSqlDatabase conn, const QString &root);
 
 /// Bake ONE model FILE (a resolved store object) and record it under every
 /// asset row that names that content. Parses the file — this is the expensive
-/// direction, for `assets.bakeAll` and Preferences' bake-all.
+/// direction, for `assets.bakeAll` and Preferences' bake-all. A CLIP file (the
+/// content of a ModelTypes::Animation row) gets its clip bake.
 bool bakeSource(QSqlDatabase conn, const QString &root, const QString &sourcePath,
                 QString *errorOut, const QString &assetGuid = QString());
+
+// --- THE CLIP BAKE (SHIPPED-BAKES-1) -----------------------------------------
+//
+// An animation clip file is read through its CLIP bake (irisgl/import/
+// meshbake.h, MeshBake::Clip) by every door: the scene reader's clip branch,
+// the avatar module's Load Animation and avatar.loadClip, the thumbnail's pose
+// strip and the metadata backfill. It is built at IMPORT (AnimationImporter)
+// and at ARCHIVE import, keyed on the content and the producer like a model
+// bake, recorded under role `bake` as `<oid16>-clip.jcb`; a stale or deleted
+// one is REBUILT FROM ITS SOURCE on a worker (the background sweep, the open's
+// own rebuild, `ensureClip`) — never parsed in place of the read.
+
+/// True when any library row naming this content is an animation clip
+/// (ModelTypes::Animation). Database thread.
+bool isClipContent(QSqlDatabase conn, const QString &root, const QString &sourcePath);
+
+/// Where the CURRENT clip bake of `sourcePath` is (the plan's cheap test: the
+/// object's size and the header's fingerprint), or empty.
+QString clipBakePath(QSqlDatabase conn, const QString &root, const QString &sourcePath);
+
+/// Read the current clip bake. Null when there is none — never a parse. UI /
+/// database thread (the lookup reads the catalog).
+iris::BakedClipPtr loadClip(const QString &sourcePath);
+
+/// `loadClip`, and when there is no current bake, BUILD it from the store's own
+/// source on a worker while this thread pumps (user input excluded — the open's
+/// rebuild shape), commit it, and read it. For the verbs that read a clip a
+/// person just asked for (avatar.loadAnimation, avatar.loadClip, a thumbnail
+/// rebuild). Null when the source is gone or unreadable.
+iris::BakedClipPtr ensureClip(const QString &sourcePath);
+
+/// The MODEL counterpart of `ensureClip`'s rebuild, for a verb that reads one
+/// model a person just asked for (the avatar module's subject): when its bake
+/// is stale or absent, rebuild it from the store's source on a worker while
+/// this thread pumps. True when a current bake exists afterwards.
+bool ensureFresh(const QString &sourcePath, const QString &assetGuid = QString());
+
+/// THE CURRENT BAKE of a library row's source, by the row's type: a clip row's
+/// clip bake, any other model row's model bake. Empty when there is none.
+/// Database thread. The shape AssetMetadata::setBakePathResolver takes — the app
+/// installs exactly this (src/app/main.cpp), and so does a suite with a library.
+QString currentBakePath(int assetType, const QString &sourcePath, const QString &assetGuid);
 
 }   // namespace MeshBakeStore
 

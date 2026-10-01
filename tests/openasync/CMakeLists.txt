@@ -38,7 +38,9 @@ set(_open_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-open)
 file(MAKE_DIRECTORY ${_open_home}/run)
 # THE PUSH ROW ASSERTS THE COUNTS, THE NIGHTLY ROW THE MILLISECONDS (lane D6B-GATE-SHAPE;
 # audit §5, verdict FIX-TIME): open.responsive runs every count, structure and ledger
-# assertion and prints each UI-gap / frame / watchdog reading; open.responsive.timing
+# assertion and prints each UI-gap / frame / watchdog reading — the cold and per-sample ceilings
+# and the exit budget too, since GATE-SPEED-1 (39 of its 41 reds on disk were the cold
+# ceiling read on a loaded box); open.responsive.timing
 # (below) is the same binary with JAHSHAKA_TIMING_BARS=1 — the bars armed, on a quiet box,
 # under the GPU-timing lock. The push row measures no time, so it left the lock.
 jah_gpu_row(open.responsive CLASS app COMMAND test_open_responsive

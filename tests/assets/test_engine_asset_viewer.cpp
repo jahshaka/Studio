@@ -8,7 +8,7 @@
 #include "../support/previewdump.h"
 #include "../support/thumbnailgrade.h"
 
-#include "bridge/previewmesh.h"
+#include "../support/testmesh.h"
 #include "irisgl/core/math/vec.h"
 #include <QGuiApplication>
 #include <QColor>
@@ -86,6 +86,9 @@ int main(int argc, char **argv)
 {
     qputenv("QT_QPA_PLATFORM", "offscreen");
     QGuiApplication app(argc, argv);
+    // The preview docks' and the VR slot's seed keys, from the fixture files
+    // (the app reads them from its seeded library; tests/support/testmesh.h).
+    testmesh::installShippedResolver();
 
     EngineConfig cfg;
     cfg.pluginDir = JAHSHAKA_TEST_PLUGIN_DIR;
@@ -123,13 +126,13 @@ int main(int argc, char **argv)
         red->setBaseColor(QColor(204, 40, 30));
         auto body = iris::MeshNode::create();
         body->setName("cube");
-        body->setMesh(previewmesh::load(":assets/models/cube.obj"));
+        body->setMesh(testmesh::load(":assets/models/cube.obj"));
         CHECK(!!body->getMesh(), "cube.obj loaded into the document (no GL)");
         body->setMaterial(red);
         cube->addChild(body);
         auto marker = iris::MeshNode::create();
         marker->setName("marker");
-        marker->setMesh(previewmesh::load(":assets/models/cube.obj"));
+        marker->setMesh(testmesh::load(":assets/models/cube.obj"));
         marker->setMaterial(red);
         marker->setLocalScale(iris::Vec3(0.3f, 0.3f, 0.3f));
         marker->setLocalPos(iris::Vec3(1.6f, -0.7f, 1.6f));
@@ -232,7 +235,7 @@ int main(int argc, char **argv)
         // 5a. the framing math itself: world bounds include node scale.
         auto giant = iris::MeshNode::create();
         giant->setName("giant");
-        giant->setMesh(previewmesh::load(":assets/models/cube.obj"));
+        giant->setMesh(testmesh::load(":assets/models/cube.obj"));
         auto blue = iris::PbrMaterial::create();
         blue->setBaseColor(QColor(30, 60, 220));
         giant->setMaterial(blue);
@@ -279,7 +282,7 @@ int main(int argc, char **argv)
         // inside the model; the world-space framing backs off ~15 units.
         auto scaled = iris::MeshNode::create();
         scaled->setName("scaled");
-        scaled->setMesh(previewmesh::load(":assets/models/cube.obj"));
+        scaled->setMesh(testmesh::load(":assets/models/cube.obj"));
         scaled->setMaterial(red);
         scaled->setLocalScale(iris::Vec3(3.0f, 3.0f, 3.0f));
         assets.setSubject(scaled, false, true);

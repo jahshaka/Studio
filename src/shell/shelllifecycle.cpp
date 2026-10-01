@@ -28,6 +28,7 @@ For more information see the LICENSE file
 #include "data/database/database.h"
 #include "data/settingsmanager.h"
 #include "irisgl/core/irisutils.h"
+#include "irisgl/document/assets/shippedmeshes.h"
 #include "scripting/scriptengine.h"
 #include "scripting/claude/claudeassistant.h"
 #include "scripting/scripthost.h"
@@ -92,8 +93,8 @@ Database *ShellLifecycle::openLibrary()
 	Database::setAssetThumbnailWritten([](const QString &guid) {
 		TileCache::instance().invalidate(TileCache::Kind::Asset, guid);
 	});
-    // THE SEEDS (services/primitiveassets.h). The primitives, the Ground and the
-    // samples' Teapot are baked library assets now: one import and one bake each,
+    // THE SEEDS (services/primitiveassets.h). The primitives and the samples'
+    // Teapot are baked library assets now: one import and one bake each,
     // the first time a library is opened, SYNCHRONOUSLY here — not on a worker,
     // because a library whose row count moves while a script runs is the defect
     // MaterialPresetSeeder's header describes. A library that already holds them
@@ -102,6 +103,12 @@ Database *ShellLifecycle::openLibrary()
     const int seeded = PrimitiveAssets::seedAll(mDb, &seedErrors);
     if (seeded > 0) irisLog(QStringLiteral("primitives: baked %1 shipped meshes").arg(seeded));
     for (const QString &line : seedErrors) irisLog("primitive seed: " + line);
+    // EVERY SHIPPED MESH THE APP DRAWS IS ONE OF THOSE ROWS (SHIPPED-BAKES-1):
+    // the preview docks' subjects, the avatar room's cube and the VR controller
+    // models ask for theirs by seed key through IrisGL's seam, and get the bake.
+    iris::ShippedMeshes::setResolver([db](const QString &seedKey) {
+        return PrimitiveAssets::mesh(seedKey, db);
+    });
     // STALE BAKES, IN THE BACKGROUND (FORWARD-ONLY-1 D1): a build that changed
     // the bake's producer rebuilds every stale bake from its own source, at the
     // lowest priority; an open rebuilds the ones it needs first, itself.
@@ -405,6 +412,7 @@ void ShellLifecycle::teardownWindow()
     TileCache::instance().setSource(TileCache::Kind::Asset, nullptr);
     TileCache::instance().setSource(TileCache::Kind::Project, nullptr);
     Database::setAssetThumbnailWritten(nullptr);
+    iris::ShippedMeshes::setResolver(nullptr);
     if (mDb) mDb->closeDatabase();
 }
 

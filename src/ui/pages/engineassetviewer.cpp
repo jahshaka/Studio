@@ -46,7 +46,6 @@ EngineAssetViewer::EngineAssetViewer(const std::shared_ptr<Engine> &engine,
     : EngineViewWidget(parent), mEngine(engine), mDriver(driver)
 {
     mScene.reset(new EngineAssetScene(engine));
-    mSource = new iris::SceneSource();
     // Parented to the viewer widget: app teardown closes/destroys it. No
     // modality — the old unparented WindowModal was inert, keep it inert.
     mProgress = new ProgressDialog(this);
@@ -64,7 +63,6 @@ EngineAssetViewer::~EngineAssetViewer()
     mScene->release();      // the Scene goes before the View (Engine.h ordering)
     mScene.reset();
     destroyView();
-    delete mSource;
     delete mProgress;
 }
 

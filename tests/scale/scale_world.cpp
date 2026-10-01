@@ -442,7 +442,7 @@ bool buildWorld(Env &env, const WorldSpec &spec, World &world, int settleCap)
     }
     BakeInfo groundInfo;
     iris::MeshPtr groundMesh =
-        bakedMesh(QStringLiteral(JAHSHAKA_SOURCE_DIR "/app/models/ground.obj"), "ground", &groundInfo);
+        bakedMesh(QStringLiteral(JAHSHAKA_SOURCE_DIR "/tests/meshbake/fixtures/flat_grid_100m.obj"), "ground", &groundInfo);
     if (groundMesh.isNull()) { std::printf("FAIL: the ground mesh\n"); return false; }
     world.bakeOrReadMs = msSince(t0);
 
@@ -458,7 +458,8 @@ bool buildWorld(Env &env, const WorldSpec &spec, World &world, int settleCap)
     worldmodes::setMode(doc, worldmodes::Mode(int(spec.tier)));
     worldmodes::setPhoton(doc, true, spec.tier);
 
-    // THE GROUND: the shipped 100 m ground plane (the samples' platform seed)
+    // THE GROUND: the old 100 m ground plane (a meshbake test fixture since
+    // SAMPLES-1 retired it from the app)
     // with a matte tile, scaled to the spec's size — this fixture's own floor.
     {
         auto g = iris::MeshNode::create();

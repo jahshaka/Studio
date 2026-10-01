@@ -93,7 +93,8 @@ for (var i = 0; i < SAMPLES.length; i++) {
     var ids = [];
     var rows = scene.nodes({ depth: 1 });
     for (var r = 0; r < rows.length; r++) {
-        if (rows[r].id === rootId || rows[r].name === "Ground") continue;
+        if (rows[r].id === rootId) continue;
+        if (rows[r].type === "mesh" && node.property(rows[r].id, "defaultFloor") === true) continue;
         ids.push(rows[r].id);
     }
     log(name + ": " + nodes + " nodes, extent " + JSON.stringify(scene.bounds({ nodes: ids }).size) +

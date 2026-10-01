@@ -87,8 +87,10 @@ public:
 
     /// Queue an open. `meshGuidPaths` is the prewarm plan (already
     /// CAS-resolved on the UI thread); `slices` is the install.
-    void setPlan(const QStringList &modelPaths, const QVector<Slice> &slices,
-                 const QString &label);
+    /// `clipPaths` are the clip files the scene names: their stale CLIP bakes
+    /// are rebuilt with the models' (SHIPPED-BAKES-1); they are not prewarmed.
+    void setPlan(const QStringList &modelPaths, const QStringList &clipPaths,
+                 const QVector<Slice> &slices, const QString &label);
 
     /// WHAT RUNS BETWEEN TWO SLICES, AND WHY THIS EXISTS (lane OPEN-FRAMES-1,
     /// 2026-09-15).

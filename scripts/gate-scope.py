@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """gate-scope — the SCOPED tier: what a change CAN REACH, and why (MODULAR-GATE-1).
 
-    scripts/gate-scope.sh <base>..<tip> [--build build-linux] [--run] [--json] [-j N]
+    scripts/gate-scope.sh <base>..<tip> [--build build-linux] [--run [--no-targets | --targets-only]] [--json] [-j N]
     scripts/gate-scope.sh --files path [path ...]
     scripts/gate-scope.sh --solo <suite> [...] [--times 3]     # the flake protocol, logged
     scripts/gate-scope.sh --record-times                       # gate-times.txt from the run log
-    scripts/gate-scope.sh --merge-tier [-j N] | --nightly-tier
+    scripts/gate-scope.sh --merge-tier [-j N] | --merge-tier-serial | --nightly-tier | --gate-jobs
 
 A lane runs everything its change can reach and nothing it cannot — read from the build and
 the diff, never guessed — and the full tiers stay where the process needs them (a stage
@@ -291,8 +291,9 @@ SCOPE_EXCLUDED_LABELS = {"quiet-box", "shadercache-attack"}
 # suite's CMake, and that deletion IS the part's acceptance.
 #
 # So the exclusion is from PASS/FAIL, never from the run. gate-scope runs the
-# gating suites first (their exit code is the gate's), then the target suites in
-# a second ctest invocation whose result is reported and discarded. The MERGE
+# gating suites (their exit code is the gate's) and prints the verdict; the target
+# suites are THEIR OWN STEP after it (GATE-SPEED-1: `--run` starts `--targets-only`
+# detached, run-log tier `target`), whose result is reported and discarded. The MERGE
 # and PUSH tiers drop them with -LE, which is the only shape ctest offers for
 # "do not let these decide the tier"; their values are read from a lane's scoped
 # run, where they are printed.
@@ -303,9 +304,16 @@ SCOPE_EXCLUDED_LABELS = {"quiet-box", "shadercache-attack"}
 TARGET_LABELS = {"photon-target", "scale-target"}
 
 NIGHTLY_LABEL_RE = "|".join(sorted(re.escape(l) for l in NIGHTLY_LABELS | TARGET_LABELS))
-# The MERGE tier at a given ctest parallelism. -j4 is the tier's contract on a quiet box
-# (docs/TESTING_GATE.md §1); a lane beside other live lanes asks for -j2 with `-j 2`, and
-# the fallback must honour that as the scoped command does (DEVPROCESS-1 item 2: the
+# THE GATE'S PARALLEL WIDTH — THE ONE CONSTANT (GATE-SPEED-1 item 9). Every gate's parallel phase
+# (the scoped selection, the MERGE tier, a fallback, the joint union), rc-gate.sh's ctest width
+# (`gate-scope.py --gate-jobs`) and the merge refusal's re-selection read THIS; the docs name it
+# instead of quoting a number. Changing the box's width is this one line — and an owner decision
+# (PHOTON_ATOM_CONTRACT §7b rule 3; the gate-speed audit's replay: -j6 21.7 min against -j4's 31.0
+# on rc-smoke15a's durations, CPU contention unmeasured). `-j N` still overrides it per run.
+GATE_JOBS = 4
+
+# The MERGE tier at a given ctest parallelism (GATE_JOBS by default, docs/TESTING_GATE.md §1); the
+# fallback must honour a caller's `-j` as the scoped command does (DEVPROCESS-1 item 2: the
 # fallback used to print and RUN a hardcoded -j4 whatever the caller asked).
 # THE TIMING ROWS ARE THEIR OWN SERIAL PHASE (TEST-SELECTOR-1, the merge read's W1 — the lead's
 # decision): a row that measures takes EVERY VRAM token, and inside a -j4 phase it waited holding
@@ -316,7 +324,7 @@ NIGHTLY_LABEL_RE = "|".join(sorted(re.escape(l) for l in NIGHTLY_LABELS | TARGET
 TIMING_LABEL = "timing"
 
 
-def merge_tier(jobs=4):
+def merge_tier(jobs=GATE_JOBS):
     """The MERGE tier's PARALLEL phase (its second phase is merge_tier_serial())."""
     return (f'ctest -j{jobs} --timeout 120 --output-on-failure '
             f'-LE "^({NIGHTLY_LABEL_RE}|{TIMING_LABEL})$"')
@@ -1880,6 +1888,66 @@ def joint(range_a, range_b, build, jobs):
     return out
 
 
+TARGET_PIDFILE = "gate-targets.pid"
+
+
+def _launch_target_step(args, build):
+    """Start `args` in its OWN SESSION (so its pid is its process group), output in
+    <build>/gate-targets.log, the pid in <build>/gate-targets.pid. Returns the pid."""
+    log = os.path.join(build, "gate-targets.log")
+    with open(log, "w") as out:
+        p = subprocess.Popen(args, cwd=ROOT, stdout=out, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL,
+                             start_new_session=True)
+    with open(os.path.join(build, TARGET_PIDFILE), "w") as f:
+        f.write(f"{p.pid}\n")
+    return p.pid
+
+
+def start_target_step(a, build):
+    """THE TARGET STEP, DETACHED (GATE-SPEED-1 item 2): the same range with `--targets-only`, in its
+    own session, its output in <build>/gate-targets.log and its pid (= its process group) in
+    <build>/gate-targets.pid. The gate's exit does not wait for it, and nothing that judges a gate
+    reads it (ci_gate_check needs no target record). It is stopped by GROUP — `kill -- -<pid>` takes
+    the ctest and every suite under it — and the next `--run` / `--solo` on this build dir stops it by
+    itself before it starts (stop_target_step): the targets are a report and can be re-run."""
+    args = [sys.executable, os.path.abspath(__file__)] + (["--files"] + list(a.files) if a.files else [a.range]) \
+        + ["--build", build, "--run", "--targets-only"]
+    if a.lane: args += ["--lane", a.lane]
+    pid = _launch_target_step(args, build)
+    print(f"=== target tests: started as their own step (process group {pid}, run-log tier `target`), NOT waited for;\n"
+          f"    log {os.path.join(build, 'gate-targets.log')} — stop it with `kill -- -{pid}`; the next --run or "
+          f"--solo here stops it first")
+
+
+def stop_target_step(build):
+    """Stop a LIVE target step of this build dir by its process group, before a gate or a retry runs
+    on the tree (the lead's merge read, F2). Only a group whose leader is a target step (`gate-scope`
+    and `--targets-only` in its argv) is touched — a pid the system reused is left alone. Returns the
+    pid it stopped, or None."""
+    path = os.path.join(build, TARGET_PIDFILE)
+    try:
+        pid = int(open(path).read().split()[0])
+    except (OSError, ValueError, IndexError):
+        return None
+    try:
+        argv = open(f"/proc/{pid}/cmdline", "rb").read().split(b"\0")
+    except OSError:
+        argv = []
+    stopped = None
+    if any(b"gate-scope" in x for x in argv) and b"--targets-only" in argv:
+        import signal
+        try:
+            os.killpg(pid, signal.SIGTERM)
+            stopped = pid
+            print(f"gate-scope: stopped the live target step of {build} (process group {pid}) before this run — "
+                  f"the targets are a report; re-run them with --targets-only")
+        except OSError:
+            pass
+    try: os.unlink(path)
+    except OSError: pass
+    return stopped
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("range", nargs="?", help="git range base..tip (Studio repo)")
@@ -1887,8 +1955,8 @@ def main():
     ap.add_argument("--build", default="build-linux")
     ap.add_argument("--run", action="store_true", help="run the selection now (DISPLAY must be set); "
                     "every suite's verdict goes to the run log")
-    ap.add_argument("-j", "--jobs", type=int, default=4,
-                    help="ctest parallelism (default 4 — the tier's contract; a lane beside other live lanes runs 2)")
+    ap.add_argument("-j", "--jobs", type=int, default=GATE_JOBS,
+                    help=f"ctest parallelism of the parallel phase (default GATE_JOBS = {GATE_JOBS}, the one constant)")
     ap.add_argument("--json", action="store_true")
     ap.add_argument("--lane", default=None, help="the lane/stage name the run log records (default: the branch)")
     ap.add_argument("--tier", default=None, choices=gate_runlog.TIERS,
@@ -1913,7 +1981,17 @@ def main():
                          "parallel phase) and exit")
     ap.add_argument("--nightly-tier", action="store_true",
                     help="print the NIGHTLY tier's ctest command (every `nightly` row, -j1) and exit")
+    ap.add_argument("--gate-jobs", action="store_true",
+                    help="print GATE_JOBS, the gate's parallel width (rc-gate.sh reads it), and exit")
+    tg = ap.add_mutually_exclusive_group()
+    tg.add_argument("--no-targets", action="store_true",
+                    help="with --run: do not start the target tests' step after the gating verdict")
+    tg.add_argument("--targets-only", action="store_true",
+                    help="with --run: run ONLY the selection's target tests (-j1, run-log tier `target`), in the "
+                         "foreground; reported, exit 0 whatever they read — the step --run starts by itself")
     a = ap.parse_args()
+    if a.gate_jobs:
+        print(GATE_JOBS); return
     if a.record_times:
         record_times(); return
     if a.merge_tier:
@@ -1932,6 +2010,8 @@ def main():
         if bad:
             sys.stderr.write("gate-scope: " + bad + "\n")
             sys.exit(4)
+        if not a.targets_only:
+            stop_target_step(build)
     if a.joint:
         J = joint(a.joint[0], a.joint[1], build, a.jobs)
         if a.json:
@@ -2134,6 +2214,17 @@ def main():
         print("\nSCOPED tier: every selected suite is a TARGET test — this change gates on nothing "
               "of its own, and the targets below still run and report.")
     if target_cmd: print(f"\n{target_cmd}    # target tests: reported, NOT gating")
+    if a.run and a.targets_only:
+        # THE TARGET STEP (GATE-SPEED-1 item 2): the targets' own ctest, -j1, its own run-log tier. A
+        # report: its exit code is printed and the step exits 0.
+        if not target_cmd:
+            print("\n=== target tests: none selected ==="); return
+        labels = {n: t["labels"] for n, t in inv.items()}
+        print("\n=== target tests (label %s): reported, not gating ===" % "/".join(sorted(TARGET_LABELS)))
+        trc = gate_runlog.run_ctest(target_cmd, build, "target", lane, 1, reasons=selected_targets,
+                                    rng=log_range, labels=labels, gating=lambda n: False)
+        print("=== target tests exited %d — NOT part of any gate's verdict ===" % trc)
+        return
     if a.run:
         labels = {n: t["labels"] for n, t in inv.items()}
         reasons = dict(selected)
@@ -2146,14 +2237,12 @@ def main():
             print("\n=== the timing phase: %d row(s), serial, the GPU theirs ===" % len(timing))
             rc = gate_runlog.run_ctest(timing_cmd, build, a.tier or "scoped", lane, 1, reasons=reasons,
                                        rng=log_range, labels=labels) or rc
-        if target_cmd:
-            # THE TARGETS' RUN IS A REPORT. Its exit code is printed and thrown away.
-            print("\n=== target tests (label %s): reported, not gating ==="
-                  % "/".join(sorted(TARGET_LABELS)))
-            trc = gate_runlog.run_ctest(target_cmd, build, a.tier or "scoped", lane, 1,
-                                        reasons=selected_targets, rng=log_range, labels=labels,
-                                        gating=lambda n: False)
-            print("=== target tests exited %d — NOT part of this gate's verdict ===" % trc)
+        # THE VERDICT IS THE GATING PHASES' (GATE-SPEED-1 item 2): printed and returned here, before
+        # any target runs. The targets used to run inline after this point, at -j1, and the gate's
+        # exit waited for them (7-13 min of every engine lane's gate, the gate-speed audit's S1).
+        print("\n=== GATE VERDICT: %s (exit %d) — the gating phases only ===" % ("GREEN" if rc == 0 else "RED", rc))
+        if target_cmd and not a.no_targets:
+            start_target_step(a, build)
         sys.exit(rc)
 
 

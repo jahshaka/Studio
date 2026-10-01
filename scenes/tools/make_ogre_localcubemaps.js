@@ -53,8 +53,8 @@ assert(project.create("Local Cubemaps").length > 0, "created the project");
 ogreSky({ sky: "#303030", sunDir: [-1, -1, -1], sunPower: 1.0, skyLight: 1.0 });
 
 // Their floor is part of the room (the 23 boxes), so the port has no separate
-// ground — the default Ground would be a second floor under a sealed interior.
-removeNode("Ground");
+// ground — the template's Floor would be a second floor under a sealed interior.
+removeTemplateFloor();
 
 // ---- the room -------------------------------------------------------------
 ogreRoom();
