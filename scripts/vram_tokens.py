@@ -399,9 +399,15 @@ def supervise(argv, held, label):
             resource.setrlimit(resource.RLIMIT_CORE, (0, 0))    # the row's core is the row's, not ours
         except (ImportError, ValueError, OSError):
             pass
-        signal.signal(-rc, signal.SIG_DFL)
+        # the same signal, re-raised: SIGKILL/SIGSTOP cannot (and need not) be reset — signal.signal on
+        # them raises (the merge read's D5: a traceback and exit 1 read as FAIL, not CRASH)
+        if -rc not in (signal.SIGKILL, signal.SIGSTOP):
+            try:
+                signal.signal(-rc, signal.SIG_DFL)
+            except (OSError, ValueError):
+                return 128 - rc
         os.kill(os.getpid(), -rc)
-        return 128 - rc
+        return 128 - rc         # a signal that did not end us (an ignored one): the shell's convention
     if xids and rc == 0:
         return 1
     return rc

@@ -258,6 +258,10 @@ check(out.strip() == str(p.pid) and p.returncode == 7,
 p = subprocess.run([ADMIT, "1", "--", "sh", "-c", "kill -SEGV $$"], env=env_for(tok, 12),
                    stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
 check(p.returncode == -signal.SIGSEGV, "a row killed by SIGSEGV reads to ctest as SIGSEGV (%d)" % p.returncode)
+p = subprocess.run([ADMIT, "1", "--", "sh", "-c", "kill -KILL $$"], env=env_for(tok, 12),
+                   stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+check(p.returncode == -signal.SIGKILL and "Traceback" not in p.stderr,
+      "a row killed by SIGKILL reads to ctest as SIGKILL, no traceback (%d)" % p.returncode)
 mark = os.path.join(D, "term6")
 p = subprocess.Popen([ADMIT, "1", "--", "sh", "-c", "trap 'echo got > %s; exit 3' TERM; while :; do sleep 0.05; done" % mark],
                      env=env_for(tok, 12), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
