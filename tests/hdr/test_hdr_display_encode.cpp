@@ -24,6 +24,10 @@
 //      255 OETF(film(E)) within one code, dither on; and the grey card — the
 //      tonemapper input that develops to 0.18 — reads 118 (the brief: +-3; this
 //      holds it to +-1). A second encode would put it at ~181; none puts it at 46.
+//   E  THE FILM CURVE (IMAGE-1, Unreal's filmic): nine exposures -4..+4 stops
+//      of the card against the reference; +4 stops below 250, -4 above 0.
+//   F  THE IMAGE BLOCK: neutral at its defaults; contrast, shadows,
+//      highlights and the film slope all leave the grey card where it is.
 //
 // Every arm reports its worst error, so a failure says which curve the bytes
 // are really on.
@@ -82,24 +86,38 @@ double oetf(double v)                  // the exact piecewise sRGB encode
     return v <= 0.0031308 ? v * 12.92 : 1.055 * std::pow(v, 1.0 / 2.4) - 0.055;
 }
 
-constexpr double kW = 11.2;
-double filmic(double x)
-{
-    const double A = 0.22, B = 0.3, C = 0.10, D = 0.20, E = 0.01, F = 0.30;
-    return ((x * (A * x + C * B) + D * E) / (x * (A * x + B) + D * F)) - E / F;
-}
+// THE FILM CURVE (IMAGE-1): Unreal Engine's filmic tonemapper (4.15+,
+// TonemapCommon.ush FilmToneMap) on a grey at its five defaults, spelled out
+// here again rather than shared, so a curve edit in either place fails here.
+// iris::lens::filmCurve (irisgl cameralens.cpp) is the third copy and
+// tests/cameras holds it to this one.
 double toneCurve(double x)             // FinalToneMapping's LINEAR output, before the encode
 {
-    return (filmic(x) / filmic(kW) - 0.5) * 1.25 + 0.5 + 0.11;
+    const double slope = 0.88, toe = 0.55, shoulder = 0.26, black = 0.0, white = 0.04;
+    const double toeScale = 1.0 + black - toe, shoulderScale = 1.0 + white - shoulder;
+    const double bt = (0.18 + black) / toeScale - 1.0;
+    const double toeMatch = std::log10(0.18) - 0.5 * std::log((1.0 + bt) / (1.0 - bt)) * (toeScale / slope);
+    const double straightMatch = (1.0 - toe) / slope - toeMatch;
+    const double shoulderMatch = shoulder / slope - straightMatch;
+    const double lc = std::log10(std::max(x, 1e-10));
+    const double straight = slope * (lc + straightMatch);
+    double toeC = -black + 2.0 * toeScale / (1.0 + std::exp((-2.0 * slope / toeScale) * (lc - toeMatch)));
+    double shC = (1.0 + white) - 2.0 * shoulderScale / (1.0 + std::exp((2.0 * slope / shoulderScale) * (lc - shoulderMatch)));
+    toeC = lc < toeMatch ? toeC : straight;
+    shC = lc > shoulderMatch ? shC : straight;
+    double t = std::min(std::max((lc - toeMatch) / (shoulderMatch - toeMatch), 0.0), 1.0);
+    if (shoulderMatch < toeMatch) t = 1.0 - t;
+    t = (3.0 - 2.0 * t) * t * t;
+    return std::max(0.0, toeC + (shC - toeC) * t);
 }
 double inputFor(double value)          // the tonemapper input that develops to `value`
 {
-    double lo = 0.0, hi = kW;
+    double lo = -6.0, hi = 3.0;        // log10 of the input
     for (int i = 0; i < 80; ++i) {
         const double mid = 0.5 * (lo + hi);
-        if (toneCurve(mid) < value) lo = mid; else hi = mid;
+        if (toneCurve(std::pow(10.0, mid)) < value) lo = mid; else hi = mid;
     }
-    return 0.5 * (lo + hi);
+    return std::pow(10.0, 0.5 * (lo + hi));
 }
 
 /// Mean green code over the central quarter of the frame (the fixture is flat).
@@ -216,6 +234,65 @@ int main()
               "D: the GREY CARD (film input %.5f, developing to 0.18) reads 118 (%.2f; "
               "unencoded would be 46, twice encoded ~%.0f)", xStar, code,
               255.0 * oetf(oetf(0.18)));
+        CHECK(std::fabs(xStar - 0.18) < 1e-4,
+              "D: the curve maps the grey card to itself (input %.6f displays as 0.18)", xStar);
+    }
+
+    // ---- E: THE TONEMAP ARM (IMAGE-1) --------------------------------------
+    // Nine exposures of the grey card, -4 to +4 stops, against the reference;
+    // the highlight four stops over the card is NOT clipped and the shadow four
+    // stops under it is not crushed (the curve this replaced clipped to white
+    // 3.68 stops over the card).
+    {
+        double worst = 0.0, over4 = -1.0, under4 = -1.0;
+        for (int st = -4; st <= 4; ++st) {
+            const double e = 0.18 * std::pow(2.0, st);
+            double code = -1.0;
+            if (!shoot(float(e), code)) { CHECK(false, "E: render at %+d stops", st); break; }
+            const double want = 255.0 * oetf(toneCurve(e));
+            std::printf("   [E film] %+d stops (E %.5f) -> code %.2f (reference %.2f)\n", st, e,
+                        code, want);
+            worst = std::max(worst, std::fabs(code - want));
+            if (st == 4) over4 = code;
+            if (st == -4) under4 = code;
+        }
+        CHECK(worst <= 1.0, "E: the curve matches the reference at nine exposures (worst %.2f codes)",
+              worst);
+        CHECK(over4 >= 0.0 && over4 < 250.0, "E: +4 stops over the card is not clipped (%.2f < 250)",
+              over4);
+        CHECK(under4 > 0.5, "E: -4 stops under the card is not crushed to black (%.2f)", under4);
+    }
+
+    // ---- F: THE IMAGE BLOCK at its defaults is the curve above, and each of
+    // its fields reaches the picture in the direction it names (IMAGE-1). A grey
+    // emitter at the card, so the curve's input is known.
+    {
+        PostFxDesc fx;
+        fx.allowOffscreen = true; fx.hdr = true; fx.tonemapFixed = true;
+        fx.exposureScale = 1.0f; fx.bloom = false;
+        const auto shootWith = [&](const ImageGrade &g, double &code) {
+            fx.image = g;
+            gView->setPostFx(fx);
+            return shoot(0.18f, code);
+        };
+        double base = 0.0, c = 0.0;
+        CHECK(shootWith(ImageGrade(), base) && std::fabs(base - 118.0) <= 1.0,
+              "F: the default image block is the neutral curve (card %.2f)", base);
+        ImageGrade g;
+        g.highlights = 2.0f;           // the card sits below the highlight mask
+        CHECK(shootWith(g, c) && std::fabs(c - base) <= 1.0,
+              "F: highlights leave the grey card alone (%.2f vs %.2f)", c, base);
+        g = ImageGrade(); g.shadows = 2.0f;   // ...and the shadow mask
+        CHECK(shootWith(g, c) && std::fabs(c - base) <= 1.0,
+              "F: shadows leave the grey card alone (%.2f vs %.2f)", c, base);
+        g = ImageGrade(); g.contrast = 1.5f;  // contrast pivots ON the card
+        CHECK(shootWith(g, c) && std::fabs(c - base) <= 1.0,
+              "F: contrast pivots on the grey card (%.2f vs %.2f)", c, base);
+        g = ImageGrade(); g.filmSlope = 1.2f; // 0.18 stays 0.18 for any film
+        CHECK(shootWith(g, c) && std::fabs(c - base) <= 1.0,
+              "F: a steeper film still develops the card to 0.18 (%.2f vs %.2f)", c, base);
+        fx.image = ImageGrade();
+        gView->setPostFx(fx);
     }
 
     std::printf("%s (%d failure%s)\n", failures ? "FAILED" : "PASSED", failures,

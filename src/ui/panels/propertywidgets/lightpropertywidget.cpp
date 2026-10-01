@@ -113,7 +113,7 @@ void setBindingLabel(QLabel *label, const QString &guid, const QString &path, Da
 // EVERY ROW HERE IS ONE REFLECTED LIGHT PROPERTY (debt L6 / N5): the rows write
 // through LightNode::setPropertyValue — the exact call node.setProperty makes —
 // and each gesture becomes one SetNodePropertyCommand. No new verb was needed:
-// intensity, colour, distance, the spot cone, the area rectangle, the shadow
+// intensity, colour, range (`distance`), source radius, the spot cone, the area rectangle, the shadow
 // type/size/static flag and the shadow tint are all reflected keys already, and
 // the two asset-binding rows go through LightBindings, which is what
 // node.setLightProfile / node.setLightTexture call.
@@ -124,7 +124,12 @@ LightPropertyWidget::LightPropertyWidget(QWidget* parent):
 {
     lightColor = this->addColorPicker("Color");
     intensity = this->addFloatValueSlider("Intensity", 0, 10.f);
-    distance = this->addFloatValueSlider("Distance", 0, 100.f);
+    // THE RANGE: where the light's inverse-square falloff is windowed to zero
+    // (IMAGE-1; the key is still `distance`).
+    distance = this->addFloatValueSlider("Range", 0, 100.f);
+    // THE SOURCE RADIUS (IMAGE-1): the emitter's size — inside it the light
+    // stops getting brighter. Points and spots only.
+    sourceRadius = this->addFloatValueSlider("Source Radius", 0.001f, 2.f);
     // The cutoff is a HALF angle; 1..85 is what the renderer clamps to, so the
     // slider offers exactly that rather than a 0..90 range whose ends do
     // nothing. Softness is a 0..1 FRACTION and was on a 0.1..90 slider —
@@ -248,6 +253,7 @@ void LightPropertyWidget::wireRows()
     rowundo::bind(lightColor->getPicker(), rows(QStringLiteral("lightColor")));
     rowundo::bind(intensity, rows(QStringLiteral("intensity")));
     rowundo::bind(distance, rows(QStringLiteral("distance")));
+    rowundo::bind(sourceRadius, rows(QStringLiteral("sourceRadius")));
     rowundo::bind(spotCutOff, rows(QStringLiteral("spotCutOff")));
     rowundo::bind(spotCutOffSoftness, rows(QStringLiteral("spotCutOffSoftness")));
     rowundo::bind(spotFalloff, rows(QStringLiteral("spotFalloff")));
@@ -288,6 +294,7 @@ void LightPropertyWidget::setSceneNode(QSharedPointer<iris::SceneNode> sceneNode
         lightColor->setColorValue(lightNode->color);
         intensity->setValue(lightNode->intensity);
         distance->setValue(lightNode->distance);
+        sourceRadius->setValue(lightNode->sourceRadius);
         spotCutOff->setValue(lightNode->spotCutOff);
         spotCutOffSoftness->setValue(lightNode->spotCutOffSoftness);
         spotFalloff->setValue(lightNode->spotFalloff);
@@ -303,6 +310,9 @@ void LightPropertyWidget::setSceneNode(QSharedPointer<iris::SceneNode> sceneNode
         const bool isSky = lightNode->getLightType() == iris::LightType::Sky;
         lightColor->setLabel(isSky ? tr("Tint") : tr("Color"));
         PropertyRows::setPanelVisible(distance, !isSky);
+        PropertyRows::setPanelVisible(sourceRadius,
+                                      lightNode->getLightType() == iris::LightType::Point ||
+                                          lightNode->getLightType() == iris::LightType::Spot);
         PropertyRows::setPanelVisible(lightChannels, !isSky);
         if (lightNode->getLightType()==iris::LightType::Spot) {
             PropertyRows::setPanelVisible(spotCutOff, true);

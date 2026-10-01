@@ -153,7 +153,7 @@ SceneNodePropertiesWidget::SceneNodePropertiesWidget(QWidget *parent) : QWidget(
 	// Mode section is. It sits between GI and Anti-Aliasing because that is
 	// where it sits in the frame — after the lighting solve, before the AA.
 	worldPostFxPropView = new WorldPostFxPropertyWidget();
-	worldPostFxPropView->setPanelTitle("Post Process");
+	worldPostFxPropView->setPanelTitle("World Camera");   // IMAGE-1: the editor view's camera: exposure, the image block, the post chain
 	worldPostFxPropView->expand();
 	// The two sections show the SAME on/off rows (this one groups the chain,
 	// the World Mode one lists the whole tier), so each has to re-read after

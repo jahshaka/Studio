@@ -32,8 +32,44 @@
 // Animation's body-less floor, World Background's deck plate). HEIGHT FOG is on
 // in the four open scenes under a procedural sky (Matcaps, Particles, Physics,
 // Skeletal Animation); the three walled rooms have none, and neither does
-// World Background, whose sky is a photograph the fog would paint over. All
-// eight are MANUAL at 0 stops, the re-derived default exposure chain.
+// World Background, whose sky is a photograph the fog would paint over.
+//
+// THE LIGHTS AND THE EXPOSURE (IMAGE-1, 2026-10-01). A point or spot light falls
+// off as the inverse square law, windowed to its range (it used to be about
+// twice its intensity, flat, across its whole range). Each sample's lamps are
+// RE-LIT to physical intensities by the table below: every lamp keeps the
+// light it gave the floor straight beneath it under the retired curve
+//     I = I_old * ((1 - h/R) / (0.5 + 0.5 h^2 / R^2)) / (window(h/R) / h^2)
+// (h its height over the floor, R its range), so the key on the floor is the
+// authored one and everything farther from the lamp falls off physically. The
+// table is ABSOLUTE (the authored values are in the comment), so a re-run sets
+// the same numbers rather than scaling them again. Then each sample's
+// EXPOSURE IS KEYED, manually, on its own floor card: an 18 % card on the floor
+// where the sample camera's ray through KEY_UV lands (lit floor in front of the
+// subject, picked on the frame), its radiance read, and the exposure in stops
+// that develops it to the film's grey (code 118) written to world.postFx. MANUAL
+// AND KEYED, NOT AUTO: a sample is a photograph and must open the same every
+// time (auto exposure answers the frame's content — a particle plume pumps it —
+// and the meter disagreed with the card by up to 1.6 stops across the
+// samples, spikes/bright-1), and a keyed card is how a photographer meters.
+var RELIGHT = {                       // name -> { light: intensity }  (authored: I R h)
+    "Matcaps":            { "Point Light": 17.43 },                 // 1    10   4
+    "Mirror Room":        { "KeyLight": 24.2, "FillLight": 14.92 },  // 1.4/1.1 22.9 3.2/2.8
+    "Particles":          { "Spot Light": 220.82 },                 // 4.63 16.7 6.58
+    "Physics":            { "Point Light": 17.43 },                 // 1    10   4
+    "Showroom":           { "Point Light": 17.43, "Light0": 10.32, "Light1": 5.39, "Light2": 5.39 },
+    "Showroom 2":         { "Light0": 41.28, "Light1": 21.55, "Light2": 21.55 },
+    "Skeletal Animation": { "Point Light": 1.09 },                  // 1    2.5  1
+    "World Background":   { "Point Light": 17.43 }                  // 1    10   4
+};
+// Where each sample's floor card goes: the screen point (u, v) the sample
+// camera's ray goes through to the floor.
+var KEY_UV = {
+    "Matcaps": [0.5, 0.85], "Mirror Room": [0.6, 0.65], "Particles": [0.75, 0.8],
+    "Physics": [0.65, 0.8], "Showroom": [0.5, 0.88], "Showroom 2": [0.5, 0.95],
+    "Skeletal Animation": [0.3, 0.85], "World Background": [0.35, 0.85]
+};
+var CARD_REFLECTANCE = 0.18116;       // #767676, decoded
 
 var TREE    = "@TREE@";
 var SAMPLE  = "@SAMPLE@";
@@ -117,6 +153,55 @@ stale.forEach(function (r) {
     if (assets.removeFromProject(r.guid) !== true) fail("could not drop the stale Tile.png row " + r.guid);
 });
 log("CHECKER ROWS: " + stale.length + " unused Tile.png row(s) dropped; the floor wears " + (worn || "(none)"));
+
+// ---- the lights, re-lit to the inverse square law (IMAGE-1) --------------
+var plan = RELIGHT[SAMPLE] || {};
+scene.nodes().filter(function (r) { return r.type === "light"; }).forEach(function (r) {
+    var nm = node.info(r.id).name;
+    if (!(nm in plan)) return;
+    var was = node.property(r.id, "intensity");
+    node.setProperty(r.id, "intensity", plan[nm]);
+    node.setProperty(r.id, "sourceRadius", 0.1);
+    log("RELIGHT " + nm + ": intensity " + r3(was) + " -> " + plan[nm]);
+});
+
+// ---- the exposure, keyed on the sample's own floor card (IMAGE-1) --------
+function keyExposure() {
+    world.override({ id: "exposureMode", value: "manual" });
+    world.postFx({ exposureEv: 0 });
+    compose(P.warm);
+    var c = editor.camera(), q = c.rotation, p = c.position, uv = KEY_UV[SAMPLE];
+    var th = Math.tan(c.fov * Math.PI / 360.0);
+    var v = [(2 * uv[0] - 1) * th * (16 / 9), (1 - 2 * uv[1]) * th, -1];
+    var x = q.x, y = q.y, z = q.z, w = q.scalar;
+    var tx = 2 * (y * v[2] - z * v[1]), ty = 2 * (z * v[0] - x * v[2]), tz = 2 * (x * v[1] - y * v[0]);
+    var d = [v[0] + w * tx + (y * tz - z * ty), v[1] + w * ty + (z * tx - x * tz), v[2] + w * tz + (x * ty - y * tx)];
+    var dl = Math.sqrt(d[0] * d[0] + d[1] * d[1] + d[2] * d[2]);
+    var hits = scene.raycast(p, { x: d[0] / dl, y: d[1] / dl, z: d[2] / dl }, { includeUnpickable: true });
+    if (!hits.length) fail("the key card's ray hit nothing");
+    var hp = hits[0].point;
+    var card = scene.addPrimitive("cube", { position: { x: hp.x, y: hp.y + 0.011, z: hp.z },
+                                            scale: { x: 0.6, y: 0.02, z: 0.6 } });
+    material.set(card, { baseColor: "#767676", roughness: 1, metallic: 0 });
+    editor.gameView(false);
+    editor.select(""); editor.frameNode(card, { pitch: -70, distance: 1.5 });
+    editor.frame(90, 1.0 / 60.0);
+    var r = editor.screenshot(OUT + "/" + SLUG + "-keycard.png", 640, 360, [{ x: 0.5, y: 0.5 }], "plain",
+                              { radiance: true }).probes[0].radiance;
+    var L = 0.2126 * r.r + 0.7152 * r.g + 0.0722 * r.b;
+    node.remove(card);
+    // ...and the sample's own camera back (frameNode moved it).
+    editor.setCamera({ position: c.position, rotation: c.rotation, fov: c.fov });
+    // The card's film input at 0 stops is L x the manual multiplier; the stops
+    // that put it on 0.18 (the film's grey, which the curve maps to itself).
+    var m0 = world.postFx({}).exposureMultiplier;
+    var stops = Math.log(0.18 / (L * m0)) / Math.LN2;
+    stops = Math.round(stops * 100) / 100;
+    world.postFx({ exposureEv: stops });
+    log("KEY CARD on '" + hits[0].name + "' at " + J({ x: r3(hp.x), y: r3(hp.y), z: r3(hp.z) }) +
+        ": radiance " + r3(L) + " -> exposure " + stops + " stops");
+}
+keyExposure();
 if (project.save() !== true) fail("save failed");
 
 compose(P.warm);

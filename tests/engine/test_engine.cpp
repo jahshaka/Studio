@@ -906,12 +906,12 @@ void pip_survives_a_main_workspace_rebuild() {
 /// only. Before this, every full-frame quad — tonemap with its bloom
 /// composite, SMAA, every look — processed the bars along with the shot, so a
 /// bright shot bloomed INTO the bars and the looks stage graded them (Old
-/// Movie's vignette rings and scratches over black, Film Grade's tint lifting
+/// Movie's vignette rings and scratches over black, a second look stage lifting
 /// them off black). Now every such quad is scissored to the shot and clears
 /// its target black first (ChainHandles::scissorPasses).
 ///
 /// Asserted with the worst case the owner reported: HDR + bloom + Old Movie
-/// + Film Grade over a bright emissive scene. Every bar pixel is EXACTLY
+/// + Posterize over a bright emissive scene. Every bar pixel is EXACTLY
 /// (0,0,0); the shot itself is still graded (it differs from the plain
 /// render); and removing the letterbox returns the byte-identical frame it
 /// had before it (with time-independent looks: Old Movie is animated).
@@ -953,12 +953,12 @@ void letterbox_post_chain_runs_on_the_shot_only() {
     fx.bloom = true;
     fx.bloomThreshold = 1.0f;    // low, so the emitter blooms hard
     fx.smaaPreset = 2;
-    // Old Movie (vignette, scratches, grain) + Film Grade (a warm tint with
-    // its own vignette): the two looks that visibly graded the bars.
-    // (Film Grade's p[4..6] is the TINT — a zero tint multiplies the frame to
-    // black, which is the one way to get this case's bars 'right' for free.)
+    // Old Movie (vignette, scratches, grain) + Posterize: the old movie is the
+    // look that visibly graded the bars; the posterize is a second stage after
+    // it. (The film grade that stood here was folded into the image block,
+    // IMAGE-1.)
     fx.looks = { look(LookKind::OldMovie, 1.0f, 1.0f, 1.0f, 1.0f),
-                 look(LookKind::FilmGrade, 1.0f, 1.2f, 1.1f, 0.8f, 1.1f, 1.0f, 0.9f) };
+                 look(LookKind::Posterize, 1.0f, 6.0f, 1.0f) };
     v->setPostFx(fx);
 
     CameraDesc cam;
@@ -1001,7 +1001,7 @@ void letterbox_post_chain_runs_on_the_shot_only() {
     CHECK_MSG(litShot > 60u * boxed.width / 4u,
               "the 2:1 shot is drawn inside the letterbox (%u lit px)", litShot);
     CHECK_MSG(barRows == 64u,
-              "THE BARS ARE PURE BLACK through bloom + Old Movie + Film Grade: %u of 64 bar rows "
+              "THE BARS ARE PURE BLACK through bloom + Old Movie + Posterize: %u of 64 bar rows "
               "exactly black, worst bar channel %u/255 (unrestricted chain: 80)", barRows, worst);
 
     // ...and the shot is still graded: the same frame with no looks and no
@@ -1025,7 +1025,7 @@ void letterbox_post_chain_runs_on_the_shot_only() {
     // No letterbox = the frame it always was. Time-independent looks for the
     // round trip (Old Movie animates on Ogre's time_0_x).
     PostFxDesc stillFx = fx;
-    stillFx.looks = { look(LookKind::FilmGrade, 1.0f, 1.2f, 1.1f, 0.8f, 1.1f, 1.0f, 0.9f),
+    stillFx.looks = { look(LookKind::Desaturate, 0.7f),
                       look(LookKind::Posterize, 0.6f, 6.0f, 1.0f) };
     // (The A/B evidence frame first: the letterboxed STILL grade, dumped for
     // the inner-rect comparison against the pre-change build — Old Movie
@@ -4786,16 +4786,15 @@ void vr_view_policy_keeps_the_project_and_drops_what_a_seam_breaks() {
     world.distortionStrength = 0.75f;
     world.hzb = true;
     world.reflectionRoughnessCutoff = 0.55f;
-    LookDesc grade;  grade.kind = LookKind::FilmGrade;
-    grade.p[0] = 0.8f; grade.p[1] = 1.3f; grade.p[2] = 1.1f; grade.p[3] = 0.6f;
-    grade.p[4] = 0.9f; grade.p[5] = 1.0f; grade.p[6] = 1.05f;
+    world.image.contrast = 1.1f; world.image.saturation = 1.3f; world.image.vignette = 0.6f;
+    world.image.whiteTemperature = 5600.0f;
     LookDesc blur;   blur.kind = LookKind::RadialBlur;   blur.p[0] = 0.5f;
     LookDesc warp;   warp.kind = LookKind::GlassWarp;    warp.p[0] = 0.4f;
     LookDesc movie;  movie.kind = LookKind::OldMovie;    movie.p[0] = 0.3f;
     LookDesc grey;   grey.kind = LookKind::Desaturate;   grey.p[0] = 0.7f;
     LookDesc post;   post.kind = LookKind::Posterize;    post.p[0] = 0.6f; post.p[1] = 8.0f;
     LookDesc sharp;  sharp.kind = LookKind::Sharpen;     sharp.p[0] = 0.5f;
-    world.looks = { grade, blur, warp, movie, grey, post, sharp };
+    world.looks = { blur, warp, movie, grey, post, sharp };
 
     PostFxDesc eye = world;
     applyVrViewPolicy(eye);
@@ -4827,24 +4826,25 @@ void vr_view_policy_keeps_the_project_and_drops_what_a_seam_breaks() {
               "so is the reflection row and every tuning value");
 
     // ---- the looks: kept, dropped, and the one that is edited -------------
-    CHECK_MSG(eye.looks.size() == 4u, "three of seven looks are dropped (%zu kept)",
+    CHECK_MSG(eye.looks.size() == 3u, "three of six looks are dropped (%zu kept)",
               eye.looks.size());
-    CHECK_MSG(eye.looks[0].kind == LookKind::FilmGrade &&
-                  eye.looks[1].kind == LookKind::Desaturate &&
-                  eye.looks[2].kind == LookKind::Posterize &&
-                  eye.looks[3].kind == LookKind::Sharpen,
+    CHECK_MSG(eye.looks[0].kind == LookKind::Desaturate &&
+                  eye.looks[1].kind == LookKind::Posterize &&
+                  eye.looks[2].kind == LookKind::Sharpen,
               "the pointwise looks ride, IN THE PROJECT'S ORDER; the centre-relative ones "
               "(radial blur, glass warp, old movie) do not");
-    CHECK_MSG(eye.looks[0].p[3] == 0.0f,
-              "the film grade's VIGNETTE is zeroed — it is the one term measured from the "
+    CHECK_MSG(eye.image.vignette == 0.0f,
+              "the image block's VIGNETTE is zeroed — it is the one term measured from the "
               "frame's centre, which in a two-eye target is the inner edge of both");
-    CHECK_MSG(eye.looks[0].p[0] == grade.p[0] && eye.looks[0].p[1] == grade.p[1] &&
-                  eye.looks[0].p[2] == grade.p[2] && eye.looks[0].p[4] == grade.p[4] &&
-                  eye.looks[0].p[5] == grade.p[5] && eye.looks[0].p[6] == grade.p[6],
-              "...and NOTHING else of it moves: amount, saturation, contrast and tint are "
-              "the author's");
+    {
+        ImageGrade rest = world.image;
+        rest.vignette = 0.0f;
+        CHECK_MSG(eye.image == rest,
+                  "...and NOTHING else of the image block moves: contrast, saturation, the "
+                  "white balance and the film are the author's");
+    }
     CHECK_MSG(stereoSafeLook(LookKind::Desaturate) && stereoSafeLook(LookKind::Posterize) &&
-                  stereoSafeLook(LookKind::Sharpen) && stereoSafeLook(LookKind::FilmGrade) &&
+                  stereoSafeLook(LookKind::Sharpen) &&
                   !stereoSafeLook(LookKind::RadialBlur) &&
                   !stereoSafeLook(LookKind::GlassWarp) && !stereoSafeLook(LookKind::OldMovie),
               "stereoSafeLook answers the same by kind");

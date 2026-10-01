@@ -532,6 +532,21 @@ int main(int argc, char **argv)
         stack.undo();
         CHECK(qFuzzyCompare(light->intensity, 1.0f), "light: undo restored the intensity");
 
+        // THE SOURCE RADIUS ROW (IMAGE-1): the reflected key `sourceRadius`, the
+        // one node.setProperty / node.getProperty read and write — the row is
+        // the verb's, so what the drag wrote is what the verb reads back.
+        HFloatSliderWidget *srcRow = sliderWith(&panel, QStringLiteral("Source Radius"));
+        CHECK(srcRow != nullptr, "light: the source-radius row is on a point light's blade");
+        const int srcBefore = stack.index();
+        CHECK(drag(srcRow, 0.1f, 0.5f), "light: the source-radius row can be dragged");
+        CHECK(qAbs(light->getPropertyValue(QStringLiteral("sourceRadius")).toFloat() - 0.5f) < 1e-2f,
+              "light: the row wrote the key node.getProperty reads");
+        CHECK(stack.index() == srcBefore + 1, "light: ONE step for the source-radius drag");
+        stack.undo();
+        CHECK(qAbs(light->sourceRadius - 0.1f) < 1e-6f, "light: undo restored the source radius");
+        CHECK(sliderWith(&panel, QStringLiteral("Range")) != nullptr,
+              "light: the falloff's range is on the blade as Range");
+
         ComboBoxWidget *shadow = comboWith(&panel, QStringLiteral("Shadow Type"));
         CHECK(shadow != nullptr, "light: the shadow-type row is on the blade");
         const int steps = stack.index();

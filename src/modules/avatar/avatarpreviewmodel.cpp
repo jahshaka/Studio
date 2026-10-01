@@ -135,7 +135,10 @@ void AvatarPreviewModel::buildDocument()
     // with nothing clipped (tests/avatar S12); the room's white is now its seam
     // lights, which is the design. The character is lit by the same panel and
     // reads correspondingly softer.
-    mPanelLight->intensity = 0.75f;
+    // 1.5 since IMAGE-1: an approximate area light now falls off from a disc of
+    // its own area and keeps its contact brightness (the retired curve doubled
+    // every point inside its range), so the panel reads as 0.75 always did.
+    mPanelLight->intensity = 1.5f;
     mPanelLight->rectWidth = 7.5f;
     mPanelLight->rectHeight = 7.5f;
     mPanelLight->distance = 30.0f;             // falloff range: generous for a 4m room

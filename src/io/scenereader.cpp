@@ -646,6 +646,14 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
     // otherwise be 5 in the document, 2.00 in the panel and 2x in the picture
     // (the engine and the shader clamp) — one number, three answers.
     scene->bloomAmount = float(qBound(0.0, sceneObj.value("bloomAmount").toDouble(scene->bloomAmount), 2.0));
+    // THE IMAGE BLOCK (IMAGE-1): one key per table entry, the constructor's
+    // value when absent, clamped to the table's range on the way in.
+    for (int i = 0; i < iris::lens::ImageParamCount; ++i) {
+        const iris::lens::ImageParamDef &d = iris::lens::imageParams()[i];
+        scene->image[i] = float(qBound(double(d.minValue),
+                                       sceneObj.value(QLatin1String(d.id)).toDouble(scene->image[i]),
+                                       double(d.maxValue)));
+    }
     scene->ssaoEnabled = sceneObj.value("ssaoEnabled").toBool(scene->ssaoEnabled);
     scene->ssaoScale = float(qBound(0.25, sceneObj.value("ssaoScale").toDouble(scene->ssaoScale), 1.0));
     scene->ssaoPower = float(qBound(0.1, sceneObj.value("ssaoPower").toDouble(scene->ssaoPower), 8.0));
@@ -1347,6 +1355,8 @@ iris::LightNodePtr SceneReader::createLight(QJsonObject& nodeObj)
     // came back reaching a tenth as far as a light made in the editor.
     lightNode->intensity = (float)nodeObj["intensity"].toDouble(lightNode->intensity);
     lightNode->distance = (float)nodeObj["distance"].toDouble(lightNode->distance);
+    lightNode->sourceRadius =
+        std::max(0.001f, float(nodeObj.value("sourceRadius").toDouble(lightNode->sourceRadius)));
     lightNode->spotCutOff = (float)nodeObj["spotCutOff"].toDouble(lightNode->spotCutOff);
     // Serializer gap fixed (WEB_EXPORT_AUDIT §1): the mirror consumes softness
     // but it was never persisted. A document written before softness was

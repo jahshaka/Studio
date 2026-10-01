@@ -772,7 +772,7 @@ int main(int argc, char **argv)
           "properties_filter: a text nothing matches leaves no ROW on screen (and says so "
           "in the counts), rather than showing everything");
     // ELEVEN since the World panel grew its Height Fog section (SKY-DEFAULTS-1):
-    // World, Sky, Clouds, Height Fog, World Mode, Photon, Post Process,
+    // World, Sky, Clouds, Height Fog, World Mode, Photon, World Camera,
     // Anti-Aliasing, Shadows, VR, Fog.
     CHECK(visibleSections(panel).size() == 11,
           QStringLiteral("properties_filter: ...while every section header stays, greyed "

@@ -207,6 +207,8 @@ void SceneWriter::writeScene(QJsonObject& projectObj, iris::ScenePtr scene)
     sceneObj["bloomThreshold"] = scene->bloomThreshold;
     sceneObj["bloomKnee"] = scene->bloomKnee;
     sceneObj["bloomAmount"] = scene->bloomAmount;
+    for (int i = 0; i < iris::lens::ImageParamCount; ++i)
+        sceneObj[QLatin1String(iris::lens::imageParams()[i].id)] = scene->image[i];
     sceneObj["ssaoEnabled"] = scene->ssaoEnabled;
     sceneObj["ssaoScale"] = scene->ssaoScale;
     sceneObj["ssaoPower"] = scene->ssaoPower;
@@ -1058,6 +1060,7 @@ void SceneWriter::writeLightData(QJsonObject& sceneNodeObject,iris::LightNodePtr
     sceneNodeObject["lightType"] = getLightNodeTypeName(lightNode->lightType);
     sceneNodeObject["intensity"] = lightNode->intensity;
     sceneNodeObject["distance"] = lightNode->distance;
+    sceneNodeObject["sourceRadius"] = lightNode->sourceRadius;
     sceneNodeObject["spotCutOff"] = lightNode->spotCutOff;
     sceneNodeObject["spotCutOffSoftness"] = lightNode->spotCutOffSoftness;
     sceneNodeObject["spotFalloff"] = lightNode->spotFalloff;

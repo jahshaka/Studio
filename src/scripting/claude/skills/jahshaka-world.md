@@ -100,8 +100,21 @@ number. Always confirm with the returned row state rather than assuming.
 The post chain's on/off switches are World Mode rows; its dials are not:
 
 ```js
-world.postFx({ exposure: 0.4, bloomThreshold: 1.2,
+world.postFx({ exposureEv: 0.4, bloomThreshold: 1.2,
                ssaoPower: 1.5, ssaoRadius: 0.8 });   // returns the new state
+```
+
+The same verb carries the WORLD CAMERA's image block — the editor view's
+development, and the default every camera inherits (a camera overrides a field
+with `camera.postFx(id, {contrast: 1.2})`, and `null` goes back to inheriting):
+
+```js
+world.postFx({ contrast: 1.1, saturation: 0.9,        // 1 = neutral
+               shadows: 0.5, highlights: -0.5,        // gains in stops on the darks / brights
+               whiteTemperature: 5600, whiteTint: 0,  // kelvin; 6500 = neutral
+               vignette: 0.3,
+               filmSlope: 0.88, filmToe: 0.55, filmShoulder: 0.26,
+               filmBlackClip: 0, filmWhiteClip: 0.04 });   // Unreal's filmic defaults
 ```
 
 Planar reflections have their own read/write pair, where a budget of `-1` (or

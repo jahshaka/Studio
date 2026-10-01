@@ -58,10 +58,11 @@ constexpr int GLTF_FLOAT = 5126;
 constexpr int GLTF_UNSIGNED_INT = 5125;
 constexpr int GLTF_UNSIGNED_SHORT = 5123;
 
-// Light intensity calibration (audit §1 "Lights" row): the document's intensity
-// is a raw legacy uniform; the engine renders intensity*pi because HlmsPbs
-// divides by pi. The viewer's three.js lights are fed the same product, so the
-// one constant keeps engine viewport and web viewer in the same brightness family.
+// Light intensity calibration (audit §1 "Lights" row): the engine renders
+// intensity*pi because HlmsPbs divides by pi, and a point or spot light falls
+// off as the inverse square law (IMAGE-1) — KHR_lights_punctual's own model, so
+// the viewer's physically-correct three.js lights fed the same product draw the
+// same brightness at every distance.
 constexpr float kLightIntensityScale = 3.14159265358979f;
 
 // Textures above this edge are downscaled at export (audit §3 size ceiling).

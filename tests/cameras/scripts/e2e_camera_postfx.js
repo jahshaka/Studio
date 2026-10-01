@@ -18,6 +18,10 @@
 // Phase J: the LOOKS stack — the one WHOLE-STACK override, its three states
 //          (inherit / none / its own), the shared validator, the reflected
 //          half, and the save/open round trip.
+// Phase K: THE IMAGE BLOCK (IMAGE-1) — the world camera's defaults through
+//          world.postFx, a camera's override of one field, inherit after a
+//          clear, one undo step per world.postFx call, and the save/open
+//          round trip of both halves.
 
 function assert(cond, msg) {
     if (!cond) throw new Error("assert failed: " + msg);
@@ -358,5 +362,60 @@ camera.postFx(fresh, { looks: null });
 assert(editor.select(fresh), "…and back on inherit");
 editor.select(null);
 world.removeLook(lookA);
+
+// ---- phase K: the image block (IMAGE-1) -------------------------------------
+var IMAGE = { contrast: 1, saturation: 1, shadows: 0, highlights: 0, whiteTemperature: 6500,
+              whiteTint: 0, vignette: 0, filmSlope: 0.88, filmToe: 0.55, filmShoulder: 0.26,
+              filmBlackClip: 0, filmWhiteClip: 0.04 };
+var wfx = world.postFx({});
+Object.keys(IMAGE).forEach(function (k) {
+    near(wfx[k], IMAGE[k], 1e-5, "THE WORLD CAMERA's default " + k + " is " + IMAGE[k]);
+});
+// One call, one undo step, whatever it touches.
+var pushes = editor.undoState().pushes;
+wfx = world.postFx({ contrast: 1.3, whiteTemperature: 5000, filmToe: 0.6 });
+near(wfx.contrast, 1.3, 1e-5, "world.postFx writes the world's contrast");
+near(wfx.whiteTemperature, 5000, 1e-3, "...its white balance");
+near(wfx.filmToe, 0.6, 1e-5, "...and its film toe");
+assert(editor.undoState().pushes - pushes === 1, "one world.postFx call is ONE undo step");
+assert(editor.undo(), "editor.undo takes it back");
+wfx = world.postFx({});
+near(wfx.contrast, 1, 1e-5, "...the contrast is back to the default");
+near(wfx.whiteTemperature, 6500, 1e-3, "...and so are the white balance");
+near(wfx.filmToe, 0.55, 1e-5, "...and the film toe");
+assert(editor.undoState().canRedo, "and the step can be redone");
+world.postFx({ contrast: 1.3, whiteTemperature: 5000 });
+// A camera inherits every field, and overrides one.
+var kcam = scene.addCamera({ position: { x: 1, y: 1, z: 6 }, name: "Image Shot" });
+var kp = camera.postFx(kcam);
+near(kp.resolved.contrast, 1.3, 1e-5, "a new camera RESOLVES the world's contrast");
+near(kp.resolved.whiteTemperature, 5000, 1e-3, "...and its white balance");
+assert(kp.overrides.contrast === undefined, "...and overrides nothing");
+kp = camera.postFx(kcam, { contrast: 0.8, vignette: 0.4 });
+near(kp.overrides.contrast, 0.8, 1e-5, "camera.postFx overrides ONE field of the image block");
+near(kp.resolved.contrast, 0.8, 1e-5, "...which is what the camera resolves");
+near(kp.resolved.whiteTemperature, 5000, 1e-3, "...while the rest is still the world's");
+near(kp.resolved.vignette, 0.4, 1e-5, "...and a second override sits beside it");
+kp = camera.postFx(kcam, { contrast: null });
+assert(kp.overrides.contrast === undefined, "null clears the contrast override");
+near(kp.resolved.contrast, 1.3, 1e-5, "...and the camera inherits the world's contrast again");
+world.postFx({ contrast: 1.1 });
+near(camera.postFx(kcam).resolved.contrast, 1.1, 1e-5, "...and FOLLOWS it when the world moves");
+// Both halves survive the real writer and reader.
+assert(project.save(), "save with an image block on the world and on a camera");
+var kguid = guid;
+var kname = node.info(kcam).name;
+assert(project.close(), "close");
+assert(project.open(kguid), "re-open — the real reader");
+wfx = world.postFx({});
+near(wfx.contrast, 1.1, 1e-5, "the world's contrast survives save/open");
+near(wfx.whiteTemperature, 5000, 1e-3, "...and its white balance");
+var kcam2 = scene.nodes().filter(function (r) { return node.info(r.id).name === kname; })[0].id;
+kp = camera.postFx(kcam2);
+near(kp.overrides.vignette, 0.4, 1e-5, "the camera's vignette override survives save/open");
+assert(kp.overrides.contrast === undefined, "...and its cleared contrast stays cleared");
+assert(editor.select(kcam2), "the camera panel builds with image-block overrides");
+editor.select(null);
+world.postFx({ contrast: 1, whiteTemperature: 6500 });
 
 console.log("\nALL CAMERA POST-FX E2E CHECKS PASSED");

@@ -488,11 +488,6 @@ int main()
         { "sharpen",
           look(LookKind::Sharpen, 1.0f),
           look(LookKind::Sharpen, 0.0f) },
-        { "filmGrade",
-          // Saturation 0.2, contrast 1.4, vignette 0.9, a warm tint: every knob
-          // off neutral, so "did the grade run" has more than one witness.
-          look(LookKind::FilmGrade, 1.0f, 0.2f, 1.4f, 0.9f, 1.2f, 0.9f, 0.6f),
-          look(LookKind::FilmGrade, 0.0f, 0.2f, 1.4f, 0.9f, 1.2f, 0.9f, 0.6f) },
     };
 
     const float plainGradient = meanGradient(plain);
@@ -579,42 +574,13 @@ int main()
                       plainGradient, after);
             break;
         }
-        case LookKind::FilmGrade: {
-            // Two independent witnesses: saturation 0.2 drops the chroma, and
-            // vignette 0.9 makes the corner far darker than the centre while
-            // the centre keeps its brightness.
-            //
-            // THE SATURATION WITNESS IS THE SAME GRADE AT SATURATION 1 (SRGB-ENCODE-1).
-            // It used to be the ungraded frame; the look now receives DISPLAY values
-            // (about twice the old linear ones at this fixture's mid tones), so the
-            // warm tint's own chroma — tint x value — outweighs a bar measured
-            // against a frame that has no tint. Holding every other knob fixed and
-            // moving only the saturation is the witness of the saturation alone.
-            Image fullSat;
-            {
-                PostFxDesc ds = baseFx();
-                ds.looks.push_back(look(LookKind::FilmGrade, 1.0f, 1.0f, 1.4f, 0.9f, 1.2f, 0.9f, 0.6f));
-                fx.v->setPostFx(ds);
-                render(fx.e, 3);
-                REQUIRE(fx.v->readPixels(fullSat));
-            }
-            CHECK_MSG(meanChroma(img) < meanChroma(fullSat) * 0.6f,
-                      "filmGrade desaturates at saturation 0.2: chroma %.4f (saturation 1) -> %.4f",
-                      meanChroma(fullSat), meanChroma(img));
-            const auto lum = [](const Colour &p) { return 0.3f * p.r + 0.59f * p.g + 0.11f * p.b; };
-            const float cornerBefore = lum(plain.at(2, 2));
-            const float cornerAfter  = lum(img.at(2, 2));
-            CHECK_MSG(cornerAfter <= cornerBefore + 1.0f / 255.0f,
-                      "filmGrade vignettes the corner: %.4f -> %.4f", cornerBefore, cornerAfter);
-            break;
-        }
         default: break;
         }
     }
 
-    // ---- 8. a full seven-look stack builds and draws ------------------------
+    // ---- 8. a full six-look stack builds and draws ------------------------
     //
-    // The catalogue's worst case: every look at once, seven quads and the
+    // The catalogue's worst case: every look at once, six quads and the
     // ping-pong between them. It is here because "the stage supports N" is a
     // claim about the graph and the only honest proof is a frame.
     {
@@ -625,20 +591,19 @@ int main()
         d.looks.push_back(look(LookKind::Posterize, 0.6f, 8.0f, 0.6f));
         d.looks.push_back(look(LookKind::Desaturate, 0.3f));
         d.looks.push_back(look(LookKind::OldMovie, 0.4f, 0.5f, 0.5f, 0.5f));
-        d.looks.push_back(look(LookKind::FilmGrade, 0.8f, 0.8f, 1.2f, 0.5f, 1.1f, 1.0f, 0.9f));
         fx.v->setPostFx(d);
         render(fx.e, 4);
         Image all;
         REQUIRE(fx.v->readPixels(all));
-        writePpm(all, "looks-all-seven.ppm");
-        CHECK_MSG(pixelDiff(plain, all) > 0, "a seven-look stack renders a frame");
+        writePpm(all, "looks-all-six.ppm");
+        CHECK_MSG(pixelDiff(plain, all) > 0, "a six-look stack renders a frame");
         // And it comes back: the graph returns to the passthrough shape.
         fx.v->setPostFx(baseFx());
         render(fx.e, 3);
         Image back;
         REQUIRE(fx.v->readPixels(back));
         CHECK_MSG(pixelDiff(plain, back) == 0,
-                  "tearing down a seven-look stack returns the original frame (%u differ)",
+                  "tearing down a six-look stack returns the original frame (%u differ)",
                   pixelDiff(plain, back));
     }
 

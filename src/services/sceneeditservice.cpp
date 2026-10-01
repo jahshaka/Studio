@@ -18,6 +18,7 @@ For more information see the LICENSE file
 #include "services/assetshare.h"
 
 #include "irisgl/document/assets/mesh.h"
+#include "irisgl/document/scenegraph/cameralens.h"
 
 #include <functional>
 
@@ -202,7 +203,9 @@ void SceneEditService::addPointLight()
     node->setLightType(iris::LightType::Point);
     node->icon = iris::Texture2D::load(":/icons/bulb.png");
     node->setName("Point Light");
-    node->intensity = 1.0f;
+    // An 18 % card 3 m away reads the film's grey at the default exposure
+    // (IMAGE-1; iris::lens::kDefaultLampIntensity says how it was measured).
+    node->intensity = iris::lens::kDefaultLampIntensity;
     node->distance = 40.0f;
     addNodeToScene(node);
 }
@@ -213,6 +216,7 @@ void SceneEditService::addSpotLight()
     node->setLightType(iris::LightType::Spot);
     node->icon = iris::Texture2D::load(":/icons/spotlight.png");
     node->setName("Spot Light");
+    node->intensity = iris::lens::kDefaultLampIntensity;   // as the point light (IMAGE-1)
     addNodeToScene(node);
 }
 

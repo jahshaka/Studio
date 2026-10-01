@@ -402,7 +402,9 @@ QVector<VerbInfo> CameraApi::verbs() const
           "editor.frame(1) after moving the rig before reading it.",
           Needs::Document },
         { "postFx", "camera.postFx(id, {hdr?, bloom?, bloomAmount?, bloomThreshold?, bloomKnee?, ssao?, ssaoPower?, "
-                    "ssaoRadius?, smaa?, ssr?, refractions?, looks?}?) -> "
+                    "ssaoRadius?, smaa?, ssr?, refractions?, looks?, contrast?, saturation?, shadows?, "
+                    "highlights?, whiteTemperature?, whiteTint?, vignette?, filmSlope?, filmToe?, "
+                    "filmShoulder?, filmBlackClip?, filmWhiteClip?}?) -> "
                     "{id, overrides, resolved, available}",
           "The camera's PER-CAMERA POST OVERRIDES over the world's post chain "
           "(CAMERA_LENS_SPEC §5), read or written. Each row is TRI-STATE: a key present "

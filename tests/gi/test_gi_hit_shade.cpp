@@ -577,7 +577,7 @@ static int mirrorArms(Engine *e)
         // mirror image) to the floor's top, the view V back up it, and the two
         // lights' closed forms — the sun (power 3: albedo x 3 / pi x N.L x the
         // lobe, 0 where the crate shadows it) and the lamp (albedo x colour x 6 x
-        // 1 / (0.5 + (0.5 / R^2) d^2) x (R - d) / R x N.L x the lobe) — plus the
+        // the one falloff (Types.h lightFalloff) x N.L x the lobe) — plus the
         // ambient pair's upper colour x albedo x A(N.V, r) (the read restores it
         // exactly). EXACT = each light's lobe at V, at the pixel's point; READ =
         // each light's lobe at V = N summed AT THE CARD TEXEL'S CENTRE (what the
@@ -681,9 +681,7 @@ static int mirrorArms(Engine *e)
                         double lampL[3] = { lampPos[0] - Q[0], lampPos[1] - Q[1], lampPos[2] - Q[2] };
                         const double dist = std::sqrt(lampL[0] * lampL[0] + lampL[1] * lampL[1] + lampL[2] * lampL[2]);
                         for (int k = 0; k < 3; ++k) o.lampL[k] = lampL[k] / dist;
-                        const double att = dist < kLampR ? 1.0 / (0.5 + (0.5 / (kLampR * kLampR)) * dist * dist) *
-                                                               (kLampR - dist) / kLampR
-                                                         : 0.0;
+                        const double att = lightFalloff(dist, kLampR, double(LightDesc().sourceRadius));
                         const double sunE = sunVisible(Q) ? albedo * 3.0 / kPiD : 0.0;
                         for (int k = 0; k < 3; ++k) {
                             o.s[k] = sunE * lobe(sunL, N);

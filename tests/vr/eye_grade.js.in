@@ -42,7 +42,7 @@ var OUT = "@JAH_EYE_GRADE_DIR@";
 // `vr_view_policy_keeps_the_project_and_drops_what_a_seam_breaks`, which needs
 // no runtime; here it is the EXEMPTION list for the comparison below.)
 var POLICY = ["bloom", "ssao", "smaaPreset", "ssrScreenMarch", "refractions", "distortion",
-              "allowOffscreen", "looks"];
+              "allowOffscreen", "looks", "image"];
 
 // ...AND THE TWO FIELDS THAT ARE NOT DESCRIPTION AT ALL: `exposureMeasured` is
 // what a view's automatic exposure SETTLED on and `globalsPushes` how many
@@ -76,6 +76,13 @@ function comparePostFx(fx, what) {
            "an offset coordinate and fall back only at the frame's edges — at the seam there " +
            "is no fallback and the other eye is what they read)");
     assert(fx.eye.allowOffscreen === true, what + ": the eye pair keeps the post chain");
+    // THE IMAGE BLOCK (IMAGE-1): every field rides but the vignette, which is 0.
+    var ik = Object.keys(fx.desktop.image);
+    for (var j = 0; j < ik.length; ++j) {
+        var want = ik[j] === "vignette" ? 0 : fx.desktop.image[ik[j]];
+        assert(fx.eye.image[ik[j]] === want,
+               what + ": the eye's image." + ik[j] + " is " + want + " (got " + fx.eye.image[ik[j]] + ")");
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -308,24 +315,30 @@ editor.frame(60);
 //
 // The stereo chain builds its looks stage here for the first time: the arm is
 // as much "does the session survive it" as "is the right subset kept".
-world.addLook("filmGrade", { amount: 0.8, saturation: 1.2, contrast: 1.1, vignette: 0.6 });
+world.addLook("sharpen", { amount: 0.5 });
 world.addLook("radialBlur", { amount: 0.5 });
 world.addLook("desaturate", { amount: 0.4 });
+// THE IMAGE BLOCK's vignette (IMAGE-1) is measured from the frame's centre too.
+world.postFx({ vignette: 0.6, contrast: 1.1 });
 editor.frame(60);
 var looked = vr.state().postFx;
 comparePostFx(looked, "with a looks stack");
 var kept = looked.eye.looks.map(function (l) { return l.id; });
-assert(kept.length === 2 && kept[0] === "filmGrade" && kept[1] === "desaturate",
+assert(kept.length === 2 && kept[0] === "sharpen" && kept[1] === "desaturate",
        "the eye keeps the pointwise looks in the project's order and drops the radial blur " +
        "(kept: " + kept.join(", ") + ")");
-assert(looked.eye.looks[0].p[3] === 0,
-       "...with the film grade's vignette zeroed (it is measured from the frame's centre)");
+assert(looked.eye.image.vignette === 0 && looked.desktop.image.vignette > 0.59,
+       "...with the image block's vignette zeroed in the eyes (it is measured from the frame's " +
+       "centre) and kept on the desktop");
+assert(Math.abs(looked.eye.image.contrast - 1.1) < 1e-6,
+       "...and the rest of the image block rides (eye contrast " + looked.eye.image.contrast + ")");
 assert(looked.desktop.looks.length === 3, "while the desktop keeps all three");
 var lookShot = vr.eyeScreenshot(0, OUT + "/eye-looks.png");
 assert(lookShot.center.r > 0 || lookShot.center.g > 0 || lookShot.center.b > 0,
        "and the session still renders a picture through the looks stage (centre " +
        lookShot.center.r + "," + lookShot.center.g + "," + lookShot.center.b + ")");
-world.removeLook("filmGrade");
+world.postFx({ vignette: 0, contrast: 1 });
+world.removeLook("sharpen");
 world.removeLook("radialBlur");
 world.removeLook("desaturate");
 editor.frame(30);
