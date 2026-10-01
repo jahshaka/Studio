@@ -1334,6 +1334,16 @@ class Selection:
         # a MODIFIED command is on both sides: the new side (read through ctest's backtraces) first,
         # and its old self is then the same command, not a second one to resolve
         cmds.sort(key=lambda x: 0 if x[3] == "new" else 1)
+        # THE BACKTRACES ARE THIS BUILD'S (the merge read's W2): their file:line sites describe the
+        # working tree's text, so they resolve the tip's lines only when the tip's file IS that text,
+        # line for line — the changed lines themselves aside (the build registered them as built) —
+        # and a replayed range, or a tree that moved on, takes the name-based reading below
+        try:
+            wt = open(os.path.join(ROOT, p), errors="replace").read().split("\n")
+            bt_ok = len(wt) == len(b_lines) and all(x == y for i, (x, y) in enumerate(zip(wt, b_lines), 1)
+                                                    if i not in new_l)
+        except OSError:
+            bt_ok = False
         resolved_new = set()
         for (name, first, last, args, fn), changed_text, whole, side, span, parsed, blk in cmds:
             key = (name, tuple(args.split()[:1]))
@@ -1344,7 +1354,7 @@ class Selection:
             # jah_scale_row, an add_test in a loop — read from the json-v1 backtraces, so no row
             # name has to be spelled in the command. The new side only (an old line's rows are
             # gone from this inventory; gone_row resolves those).
-            if side == "new":
+            if side == "new" and bt_ok:
                 bt = self.rows_registered_at(p, span[0], span[1])
                 if bt:
                     self.add(bt, f"{tag}: registered at {os.path.basename(p)}:{span[0]}-{span[1]}")
