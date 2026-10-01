@@ -7,6 +7,8 @@
 #include <QtMath>
 
 #include "irisgl/mirror/scenemirror.h"
+#include "irisgl/document/scenegraph/cameralens.h"
+#include "bridge/secondarysurfacetonemap.h"
 #include "services/defaultfloormaterial.h"
 #include "viewport/previewframing.h"
 #include "viewport/previeworbit.h"
@@ -422,9 +424,15 @@ void EngineAssetScene::step(float dt, int width, int height)
 
 void EngineAssetScene::prepareOffscreen(View *shot, int width, int height)
 {
-    (void)shot;   // the base has already made it the current view
+    // The base has already made `shot` the current view.
     mDocument->refresh();
     pushFrame(mCamera, width, height);
+    // A PICTURE, NOT THE INSTRUMENT (SRGB-ENCODE-1): an offscreen view that does
+    // not opt in is the linear Plain instrument, ~2.7 stops darker at mid grey than
+    // every other tile. This shot is a tile, so it takes the THUMBNAIL grade — the
+    // grade every asset tile has, at the document's exposure, display-encoded.
+    // After pushFrame: the mirror's push rewrites the view's description.
+    secondaryfx::apply(shot, true, iris::lens::exposureStopsToChain(mDocument->exposure));
 }
 
 QImage EngineAssetScene::renderImage(int width, int height)

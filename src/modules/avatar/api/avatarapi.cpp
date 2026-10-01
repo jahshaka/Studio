@@ -138,7 +138,7 @@ QVector<VerbInfo> AvatarApi::verbs() const
         { "bones", "avatar.bones() -> [{name, parent, position:{x,y,z}}]",
           "The rig as the preview resolves it: one entry per bone that has a scene node, `parent` being the NEAREST ancestor that is also a bone (assimp pivot nodes sit between real bones, and Bone::parentBone is empty for such rigs). World-space positions AT THE CURRENT TIME, read back from the engine's evaluated skeleton — clip evaluation is the engine's, so a pose only exists where an engine does. Under --headless the rig's shape (names, parents, hierarchy) is still reported but the positions are the REST pose.",
           Needs::Engine },
-        { "snapshot", "avatar.snapshot(path, w=256, h=256, probes=[]) -> {path, width, height, center:{r,g,b}, probes:[{x,y,r,g,b}]}",
+        { "snapshot", "avatar.snapshot(path, w=256, h=256, probes=[]) -> {path, width, height, encoding, center:{r,g,b}, probes:[{x,y,r,g,b}]}",
           "Offscreen render of the Avatar page's preview scene to a PNG, with the centre pixel and each probe point ({x,y} normalized 0..1) returned so scripts can assert on colours — the way a script (or an MCP session) proves the skeleton-only view from outside the app.",
           Needs::Engine },
         { "addSockets", "avatar.addSockets(nodeId) -> [{socket, bone, mapped, existed, node}]",
@@ -880,6 +880,9 @@ QVariantMap AvatarApi::snapshot(const QString &path, int width, int height,
     out["path"] = info.absoluteFilePath();
     out["width"] = img.width();
     out["height"] = img.height();
+    // THE SPACE OF THE BYTES (SRGB-ENCODE-1): the snapshot is the thumbnail grade,
+    // display-encoded — the same answer editor.screenshot gives for its graded shots.
+    out["encoding"] = QStringLiteral("display");
     out["center"] = QVariantMap{ { "r", center.red() }, { "g", center.green() }, { "b", center.blue() } };
 
     // Same probe convention as editor.screenshot: normalized 0..1 coordinates,

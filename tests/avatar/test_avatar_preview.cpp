@@ -31,6 +31,7 @@
 // with the mesh on — on a real character the skeleton is inside the mesh and
 // is hidden, which is the accepted behaviour until an X-ray mode exists.
 #include "../support/previewdump.h"
+#include "../support/thumbnailgrade.h"
 #include "irisgl/core/math/vec.h"
 #include "irisgl/document/scenegraph/scene.h"
 #include <QApplication>
@@ -230,6 +231,20 @@ int main(int argc, char **argv)
     CHECK(std::fabs(centroidHalf - centroid0) > 1.5f,
           "S7: the bone lines MOVED with the clip (the pose reaches pixels)");
     model.setTime(0.0f);
+
+    // ---- SRGB-ENCODE-1: avatar.snapshot is a tile, not the instrument --------
+    // renderImage is avatar.snapshot's path: the thumbnail grade, display-encoded
+    // — the flat backdrop reads the grade's code for its radiance.
+    {
+        const QImage shot = scene.renderImage(W, H);
+        const QColor c = model.document()->skyColor;
+        const double want = thumbgrade::code(c.redF(), model.document()->exposure);
+        const int got = shot.isNull() ? -1 : shot.pixelColor(2, 2).red();
+        std::printf("    avatar snapshot backdrop: %d (the thumbnail grade of %.4f: %.1f)\n",
+                    got, c.redF(), want);
+        CHECK(!shot.isNull() && std::fabs(got - want) <= 1.5,
+              "SRGB-ENCODE-1: avatar.snapshot is the thumbnail grade, display-encoded");
+    }
 
     // ---- S6b: neither ----
     model.setSkeletonVisible(false);
