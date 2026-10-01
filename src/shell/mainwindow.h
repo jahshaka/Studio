@@ -54,6 +54,7 @@ class ModuleHub;
 class ShellLifecycle;
 class ShellView;
 class ViewController;
+class SceneIssueWatch;
 
 class QPushButton;
 class QStandardItem;
@@ -527,15 +528,8 @@ public:
     /// caller; everything else goes through the registry's own API.
     void refreshGameplayShortcutRows();
 
-    /// One pass of the scene-issue scanner plus the show/hide decision for the
-    /// viewport's error bar. Driven by the 1 Hz timer and by every space switch;
-    /// PUBLIC because `editor.issueBar()` runs it before reporting, so a script
-    /// reads a settled answer instead of racing the timer.
-    void updateSceneIssues();
-    /// What the error bar is currently showing, for that verb: whether it
-    /// exists, whether the editor is the active space, whether it is on screen
-    /// and how many rows it has.
-    QVariantMap sceneIssueBarState() const;
+    /// The scene-error area (shell/sceneissuewatch.h).
+    SceneIssueWatch *sceneIssues() const { return issueWatch; }
 
 private:
 
@@ -1051,12 +1045,6 @@ private:
     QString spaceRefusal;
     /// The Player page could not start: say why and go back (SMOKE-FIX-1).
     void bounceFromPlayer(const QString &why);
-    /// THE SCENE-ERROR AREA (services/sceneissues.h): a dismissible list of the
-    /// scene problems the user can fix, over the viewport beside the frame-rate
-    /// readout. Built on the first issue and kept; the timer runs the scanner.
-    class SceneIssueBar *sceneIssueBar = nullptr;
-    class QTimer *sceneIssueTimer = nullptr;
-    void wireSceneIssues();
     void stepSnapSize(int direction);
     /// What the editor's chrome looked like before immersive fullscreen hid it.
     QVector<bool> preFullscreenWidgets;
@@ -1098,6 +1086,7 @@ private:
 	ShellLifecycle *lifecycle = nullptr;
 	ShellView *shellView = nullptr;
 	ViewController *viewController = nullptr;
+	SceneIssueWatch *issueWatch = nullptr;
 
     // services (APP_ARCHITECTURE_AUDIT §3.3): constructed in setupServices(),
     // deleted in the dtor. The QObject services are parented to the window.

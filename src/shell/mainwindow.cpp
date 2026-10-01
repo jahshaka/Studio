@@ -167,6 +167,7 @@ For more information see the LICENSE file
 #include "shell/shelllifecycle.h"
 #include "shell/shellview.h"
 #include "shell/viewcontroller.h"
+#include "shell/sceneissuewatch.h"
 #include "player/playerwidget.h"
 #include "player/engineplayerview.h"
 #include "viewport/headlesseditorviewport.h"
@@ -285,6 +286,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
 	shortcutRegistry = new ShortcutRegistry(settings->settings, this);
 	actionHost = new ActionHost(shortcutRegistry, this, [this]() { return currentSpaceId(); }, this);
 	viewController = new ViewController(this);
+	issueWatch = new SceneIssueWatch(this, [this]() { return currentSpace == WindowSpaces::EDITOR; }, this);
 	moduleHub = new ModuleHub(this);
 	moduleHub->setSpaceEditTarget(spaces::id(WindowSpaces::EDITOR), [this]() { return editorEditTarget(); });
 	shellView = new ShellView(this);
@@ -1128,38 +1130,11 @@ void MainWindow::setupServices()
                                                         holdMs > 0 ? holdMs : 1650);
             });
 
-    // THE SCENE-ERROR AREA (services/sceneissues.h, owner Q1b/Q1c). A visible,
-    // dismissible list of the things wrong with the OPEN SCENE that the person
-    // using the editor can fix — beside the frame-rate readout, because that is
-    // where the owner asked for it. Engine diagnostics never come here: they go
-    // to the log and to the monitor's capture bundle.
-    //
-    // The scanner runs on a slow timer rather than per frame: the conditions it
-    // looks for are authoring state, not frame state, and raising an issue that
-    // is already live is a no-op by construction, so a second of latency costs
-    // nothing and a per-frame walk of every light against every mesh would.
-    wireSceneIssues();
-
-    // THE LIBRARY ITSELF CAN FAIL, AND THE USER HAS TO BE TOLD (CLOSE-2 round
-    // 2, H7). A gesture's database writes ride one transaction now, so a
-    // commit that fails rolls back EVERYTHING that gesture wrote — a whole
-    // script run's asset rows — and until this line existed the only trace was
-    // a warn in the log, which has an audience of one. It is a scene-issue and
-    // not a toast for the reason the bar exists: it stays up until the
-    // condition is gone, and the condition going away is the very next gesture
-    // committing. No node to select; the action is the only thing to say.
-    Database::setBatchCommitListener([](bool ok) {
-        const QString id = QStringLiteral("library.write");
-        if (ok) { SceneIssues::instance().clear(id); return; }
-        SceneIssue issue;
-        issue.id = id;
-        issue.kind = QStringLiteral("library.write");
-        issue.message = tr("The library could not be saved, so the changes from the last "
-                           "action were not kept.");
-        issue.action = tr("Check that the disk is not full and that the library file is not "
-                          "read-only, then try the action again.");
-        SceneIssues::instance().raise(issue);
-    });
+    // THE SCENE-ERROR AREA (services/sceneissues.h, owner Q1b/Q1c): the bar
+    // over the viewport and its 1 Hz scanner, and the library's own write
+    // failure raised into it (shell/sceneissuewatch.h).
+    issueWatch->setScene(sceneEditService, sceneView);
+    issueWatch->start();
 
     // Commands raise their refreshes through the aggregate (stamped at push);
     // the viewport's gizmos push through the same aggregate.
@@ -1410,7 +1385,7 @@ void MainWindow::switchSpace(WindowSpaces space, bool force)
 	updateTopMenuStates(space);
 	// The scene-issue bar belongs to the EDITOR and is a top-level window that
 	// stays on top: it has to go NOW, not on the scanner's next tick (item 3).
-	updateSceneIssues();
+	issueWatch->update();
 }
 
 // ENTERING THE EDITOR PAGE — switchSpace's EDITOR case, and the reveal's
@@ -4749,69 +4724,6 @@ void MainWindow::stepSnapSize(int direction)
     showViewportToast("Snap Size", text);
 }
 
-// The transient readout over the viewport — one toast, reused, for every
-// "you just changed this with a gesture" message (snap size, fly speed). It was
-// stepSnapSize's tail; the fly-speed wheel needed the identical five lines.
-// THE SCENE-ERROR AREA. The bar is a view of SceneIssues and owns no state;
-// this is the whole of the shell's involvement — build it lazily over the
-// viewport and tick the scanner. Nothing is wired INTO the bar: it has no
-// buttons and emits nothing (owner, 2026-09-13 — it shows the errors and the
-// user fixes them in the scene).
-void MainWindow::wireSceneIssues()
-{
-    if (sceneIssueTimer) return;
-    sceneIssueTimer = new QTimer(this);
-    sceneIssueTimer->setInterval(1000);
-    connect(sceneIssueTimer, &QTimer::timeout, this, [this]() { updateSceneIssues(); });
-    sceneIssueTimer->start();
-}
-
-// ONE PASS: scan the open scene, and decide whether the bar may be on screen.
-// Driven by the 1 Hz timer and by every space switch.
-void MainWindow::updateSceneIssues()
-{
-    // THE BAR IS AN EDITOR SURFACE, and it is a FRAMELESS TOP-LEVEL WITH
-    // WindowStaysOnTopHint (sceneissuebar.cpp) — so without this check it
-    // floated over the Desktop, Assets, Player and Materials pages, describing
-    // a scene nobody is looking at (item 3). The comment below promised this
-    // check for a week; here it is.
-    if (currentSpace != WindowSpaces::EDITOR) {
-        if (sceneIssueBar) sceneIssueBar->setEditorActive(false);
-        return;
-    }
-    if (sceneIssueBar) sceneIssueBar->setEditorActive(true);
-    if (!sceneEditService) return;
-    auto scene = sceneEditService->scene();
-    if (!scene) { SceneIssues::instance().reset(); return; }
-    SceneIssues::instance().scan(scene);
-    if (!sceneIssueBar && SceneIssues::instance().count() > 0) {
-        sceneIssueBar = new SceneIssueBar(this);
-        // Under the engine-drawn frame-stats rows (three lines plus their
-        // inset) so the two never overlap when F3 is on.
-        sceneIssueBar->setAnchor(sceneView ? sceneView->asWidget() : nullptr, 96);
-        sceneIssueBar->refresh();
-    }
-}
-
-// What the bar is showing, for `editor.issueBar()` — the seam the shell's half
-// of the error area is tested through (item 3's case in
-// scripting.e2e.scene_issues).
-QVariantMap MainWindow::sceneIssueBarState() const
-{
-    QVariantMap out;
-    out[QStringLiteral("editorActive")] = (currentSpace == WindowSpaces::EDITOR);
-    out[QStringLiteral("exists")] = sceneIssueBar != nullptr;
-    out[QStringLiteral("visible")] = sceneIssueBar && sceneIssueBar->isVisible();
-    out[QStringLiteral("rows")] = SceneIssues::instance().count();
-    // What is actually BUILT: one line per issue (plus the "+N more" line), and
-    // no clickable control anywhere in it. `buttons` is asserted to be zero by
-    // scripting.e2e.scene_issues — the owner's "just show the error" rule, in a
-    // form that cannot rot.
-    out[QStringLiteral("lines")] = sceneIssueBar ? sceneIssueBar->lineCount() : 0;
-    out[QStringLiteral("buttons")] = sceneIssueBar ? sceneIssueBar->buttonCount() : 0;
-    return out;
-}
-
 // THE PANEL RE-READS THE DOCUMENT (round 2, item 3). Used by the edit gate:
 // a row whose write was refused is still showing the refused value, and the
 // document is the only thing that knows better. Both halves are deferred —
@@ -4828,6 +4740,8 @@ void MainWindow::refreshPropertiesFromDocument()
     });
 }
 
+// The transient readout over the viewport — one toast, reused, for every
+// "you just changed this with a gesture" message (snap size, fly speed).
 void MainWindow::showViewportToast(const QString &title, const QString &text)
 {
     if (!sceneView) return;

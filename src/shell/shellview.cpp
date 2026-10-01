@@ -14,6 +14,7 @@ For more information see the LICENSE file
 #include "shell/mainwindow.h"
 #include "shell/spaces.h"
 #include "shell/viewcontroller.h"
+#include "shell/sceneissuewatch.h"
 
 QWidget *ShellView::window() const
 {
@@ -310,12 +311,12 @@ void ShellView::refreshGameplayShortcutRows()
 
 void ShellView::updateSceneIssues()
 {
-    mWindow->updateSceneIssues();
+    mWindow->sceneIssues()->update();
 }
 
 QVariantMap ShellView::sceneIssueBarState() const
 {
-    return mWindow->sceneIssueBarState();
+    return mWindow->sceneIssues()->state();
 }
 
 QStringList ShellView::dialogNames() const
