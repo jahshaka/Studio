@@ -285,7 +285,6 @@ int main()
     render(fx.e, 4);
     Image instrument;
     REQUIRE(fx.v->readPixels(instrument));
-    const unsigned genInstrument = fx.v->workspaceGeneration();
     fx.v->setPostFx(baseFx());
     render(fx.e, 4);
     Image plain;
@@ -328,7 +327,6 @@ int main()
         CHECK_MSG(pixelDiff(instrument, ignored) == 0,
                   "looks_are_ignored_offscreen_unless_asked: %u pixels differ",
                   pixelDiff(instrument, ignored));
-        (void)genInstrument;
     }
 
     // ---- 3. desaturate ------------------------------------------------------

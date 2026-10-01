@@ -145,8 +145,6 @@ inline void setNodeScale(Scene *s, NodeId n, const Vec3 &scale)
     s->setNodeTransform(n, p.pos, p.rot, p.scale);
 }
 
-/// setCameraPosition without lookAt: identity orientation (looking down -Z),
-/// engine-default projection — exactly what the deleted View verb left behind.
 // ---------------------------------------------------------------------------
 // THE DISPLAY ENCODE AND THE SUITES THAT MEASURE LIGHT (SRGB-ENCODE-1). A view
 // that presents, or an offscreen view that opted into the chain
@@ -178,6 +176,8 @@ inline bool readLinear(View *v, Image &img)
     return true;
 }
 
+/// setCameraPosition without lookAt: identity orientation (looking down -Z),
+/// engine-default projection — exactly what the deleted View verb left behind.
 inline void testCameraAt(View *v, const Vec3 &pos)
 {
     CameraDesc c;

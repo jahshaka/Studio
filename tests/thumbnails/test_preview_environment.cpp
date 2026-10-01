@@ -317,10 +317,9 @@ int main(int argc, char **argv)
             CHECK(countMask(mask) > 128 * 128 / 12, "the thumbnail's sphere fills the tile");
             CHECK(!touchesEdge(raw1, mask, 1), "the thumbnail's sphere is whole in its tile");
 
-            const QImage greyRaw = loan->renderMaterial(pbr(QColor(118, 118, 118), 0.0f, 1.0f),
+            const QImage grey = loan->renderMaterial(pbr(QColor(118, 118, 118), 0.0f, 1.0f),
                                                         QSize(128, 128));
-            previewdump::save("thumb-grey-card", greyRaw);
-            const QImage grey = greyRaw;
+            previewdump::save("thumb-grey-card", grey);
             const double thumbMean = meanOver(grey, mask);
             std::printf("    thumbnail 18%% grey: mean %.1f/255 (preview %.1f) — difference %.1f\n",
                         thumbMean, previewGreyMean, std::fabs(thumbMean - previewGreyMean));
@@ -329,10 +328,9 @@ int main(int argc, char **argv)
             CHECK(std::fabs(thumbMean - previewGreyMean) <= 5.0,
                   "the thumbnail and the preview of one material agree within 5/255");
 
-            const QImage chromeRaw = loan->renderMaterial(pbr(QColor(255, 255, 255), 1.0f, 0.05f),
-                                                          QSize(128, 128));
-            previewdump::save("thumb-chrome", chromeRaw);
-            const QImage chrome = chromeRaw;
+            const QImage chrome = loan->renderMaterial(pbr(QColor(255, 255, 255), 1.0f, 0.05f),
+                                                       QSize(128, 128));
+            previewdump::save("thumb-chrome", chrome);
             int maxChannel = 0;
             for (int y = 0; y < chrome.height(); ++y)
                 for (int x = 0; x < chrome.width(); ++x) {
