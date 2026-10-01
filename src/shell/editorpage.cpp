@@ -30,6 +30,7 @@ For more information see the LICENSE file
 #include "data/settingsmanager.h"
 #include "player/engineplayerview.h"
 #include "player/playerwidget.h"
+#include "services/clipboardservice.h"
 #include "services/playbackservice.h"
 #include "services/sceneeditservice.h"
 #include "services/selectionservice.h"
@@ -54,6 +55,7 @@ EditorPage::EditorPage(QObject *parent) : QObject(parent)
 void EditorPage::build(const Deps &deps)
 {
     fontIcons = deps.icons;
+    mShell = deps.shell;
     sceneContainer = new QWidget;
     QSizePolicy sceneContainerPolicy;
     sceneContainerPolicy.setHorizontalPolicy(QSizePolicy::Preferred);
@@ -669,4 +671,93 @@ bool EditorPage::eventFilter(QObject *obj, QEvent *event)
     }
 
     return false;
+}
+
+// THE EDITOR'S EDIT TARGET (EDITOR_MULTISELECT_SPEC §2.6): the four chords act
+// on the selection SET, the clipboard is the one system clipboard. The hub asks
+// for it each time a chord fires on the editor space; on any other space the
+// space's own target (or none) answers instead — never this one.
+EditTarget EditorPage::editTarget()
+{
+    EditTarget t;
+    t.deleteSelection = [this]() { deleteSelection(); };
+    t.duplicateSelection = [this]() { duplicateSelection(); };
+    t.copySelection = [this]() { copySelection(); };
+    t.cutSelection = [this]() { cutSelection(); };
+    t.paste = [this]() { paste(); };
+    t.selectAll = [this]() {
+        if (mServices && mServices->sceneEdit) mServices->sceneEdit->selectAll();
+    };
+    return t;
+}
+
+void EditorPage::deleteSelection()
+{
+    if (!mServices || !mServices->selection) return;
+    const auto set = mServices->selection->selectedSet();
+    if (set.size() > 1) { mServices->sceneEdit->deleteNodes(set); return; }
+    mServices->sceneEdit->deleteNode(mServices->selection->selected());
+}
+
+// THE SELECTION, not the primary (EDITOR_MULTISELECT_SPEC §2.5). Both of these
+// are what the toolbar buttons, the outliner's context menu and the Del/Ctrl+D
+// shortcuts call, so all three act on the whole set and land as one undo step.
+void EditorPage::duplicateSelection()
+{
+    if (!mServices || !mServices->selection) return;
+    const auto set = mServices->selection->selectedSet();
+    if (set.size() > 1) { mServices->sceneEdit->duplicateNodes(set); return; }
+    mServices->sceneEdit->duplicateNode(mServices->selection->selected());
+}
+
+void EditorPage::copySelection()
+{
+    // ONE clipboard now (CLIPBOARD_SPEC D3 b): the editor writes the same
+    // system clipboard the Materials graph does, as a self-identifying text
+    // payload, so a copy crosses to a second instance and back. The Materials
+    // space keeps its own payload shape for one release (§2.2 `graph` items are
+    // P2) — its own edit target, not a second clipboard.
+    if (!mServices || !mServices->clipboard || !mServices->selection) return;
+    const auto result = mServices->clipboard->copyNodes(mServices->selection->selectedSet());
+    if (result.ok())
+        mShell->showViewportToast(tr("Copy"), tr("%1 object(s) copied").arg(result.items));
+}
+
+void EditorPage::cutSelection()
+{
+    if (!mServices || !mServices->clipboard || !mServices->selection) return;
+    const auto result = mServices->clipboard->cutNodes(mServices->selection->selectedSet());
+    if (result.ok())
+        mShell->showViewportToast(tr("Cut"), tr("%1 object(s) cut").arg(result.copy.items));
+}
+
+void EditorPage::paste()
+{
+    if (!mServices || !mServices->clipboard) return;
+
+    const auto result = mServices->clipboard->paste();
+    // WHAT THE PASTE COULD NOT DO IS SAID OUT LOUD. A clipboard that holds
+    // nothing of ours, or objects whose textures this library has never seen,
+    // used to be a silent no-op — the worst possible answer for a chord.
+    if (!result.error.isEmpty()) {
+        mShell->showViewportToast(tr("Paste"), result.error);
+        return;
+    }
+    if (!result.missing.isEmpty()) {
+        mShell->showViewportToast(tr("Paste"),
+                          tr("%1 object(s) pasted — %2 asset(s) missing from this library")
+                              .arg(result.pasted.size()).arg(result.missing.size()));
+        return;
+    }
+    if (result.pasted.isEmpty()) {
+        const QString reason = result.skipped.isEmpty()
+                                   ? tr("the clipboard holds nothing to paste here")
+                                   : result.skipped.first().reason;
+        mShell->showViewportToast(tr("Paste"), reason);
+        return;
+    }
+    QString message = tr("%1 object(s) pasted").arg(result.pasted.size());
+    if (!result.imported.isEmpty())
+        message += tr(", %1 asset(s) imported").arg(result.imported.size());
+    mShell->showViewportToast(tr("Paste"), message);
 }

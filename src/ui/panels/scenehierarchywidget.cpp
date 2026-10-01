@@ -30,6 +30,7 @@ For more information see the LICENSE file
 #include "data/primitives.h"
 
 #include "irisgl/document/scenegraph/scene.h"
+#include "irisgl/document/scenegraph/particlesystemnode.h"
 #include "irisgl/document/scenegraph/scenenode.h"
 #include "irisgl/document/scenegraph/decalnode.h"
 #include "irisgl/core/irisutils.h"
@@ -130,63 +131,70 @@ void SceneHierarchyWidget::setMainWindow(MainWindow *mainWin)
     // six hand-written entries out of thirteen primitives — Cone, Capsule and
     // Pyramid existed as verbs, as tiles and as MainWindow slots but could not
     // be reached from the Add menu at all, and a new primitive needed a fourth
-    // hand edit to appear here. Each action carries its row's NAME, which
-    // MainWindow::addPrimitiveFromAction reads back.
+    // hand edit to appear here. Each action carries its row's NAME, which the
+    // scene-edit service's addPrimitive is handed.
+    //
+    // THE ROWS CALL THE SERVICE, not the window (D10): the window's eleven
+    // one-line forwarding slots are gone; the service is the capability the
+    // verbs call too.
+    auto edit = [this]() { return mainWindow->studioServices()->sceneEdit; };
     QAction *action = nullptr;
     for (const primitives::Def &def : primitives::all()) {
         action = new QAction(QString::fromLatin1(def.name), this);
         action->setData(QString::fromLatin1(def.name));
         primtiveMenu->addAction(action);
-        connect(action, SIGNAL(triggered()), mainWindow, SLOT(addPrimitiveFromAction()));
+        connect(action, &QAction::triggered, this,
+                [edit, action]() { edit()->addPrimitive(action->data().toString()); });
     }
 
     // Lamps
     auto lightMenu = addMenu->addMenu("Light");
     action = new QAction("Point", this);
     lightMenu->addAction(action);
-    connect(action, SIGNAL(triggered()), mainWindow, SLOT(addPointLight()));
+    connect(action, &QAction::triggered, this, [edit]() { edit()->addPointLight(); });
 
     action = new QAction("Spot", this);
     lightMenu->addAction(action);
-    connect(action, SIGNAL(triggered()), mainWindow, SLOT(addSpotLight()));
+    connect(action, &QAction::triggered, this, [edit]() { edit()->addSpotLight(); });
 
     action = new QAction("Directional", this);
     lightMenu->addAction(action);
-    connect(action, SIGNAL(triggered()), mainWindow, SLOT(addDirectionalLight()));
+    connect(action, &QAction::triggered, this, [edit]() { edit()->addDirectionalLight(); });
 
     action = new QAction("Area", this);
     lightMenu->addAction(action);
-    connect(action, SIGNAL(triggered()), mainWindow, SLOT(addAreaLight()));
+    connect(action, &QAction::triggered, this, [edit]() { edit()->addAreaLight(); });
 
     // THE SKY LIGHT (SKY_LIGHT_SPEC.md §2): the light that reads the World sky
     // and fills the scene with its ambient. A scene has one; a second raises a
     // scene issue rather than being refused here (the user may be replacing it).
     action = new QAction("Sky Light", this);
     lightMenu->addAction(action);
-    connect(action, SIGNAL(triggered()), mainWindow, SLOT(addSkyLight()));
+    connect(action, &QAction::triggered, this, [edit]() { edit()->addSkyLight(); });
 
     // Decal (DECALS_SPEC): a top-level entry, not under Light — it is its own
     // object kind. It spawns without an image; the Decal panel's picker (or a
     // drop from the asset bin) binds one.
     action = new QAction("Decal", this);
     addMenu->addAction(action);
-    connect(action, SIGNAL(triggered()), mainWindow, SLOT(addDecal()));
+    connect(action, &QAction::triggered, this, [edit]() { edit()->addDecal(QString()); });
 
     action = new QAction("Empty", this);
     addMenu->addAction(action);
-    connect(action, SIGNAL(triggered()), mainWindow, SLOT(addEmpty()));
+    connect(action, &QAction::triggered, this, [edit]() { edit()->addEmpty(); });
 
     // Scene cameras (CAMERAS_SPEC phase 1) — the verb existed before this row
     // did; a capability with no UI entry point is invisible to most users
     // (owner sighting 2026-09-06).
     action = new QAction("Camera", this);
     addMenu->addAction(action);
-    connect(action, SIGNAL(triggered()), mainWindow, SLOT(addCamera()));
+    connect(action, &QAction::triggered, this, [edit]() { edit()->addCamera(); });
 
     // Systems
     action = new QAction("Particle System", this);
     addMenu->addAction(action);
-    connect(action, SIGNAL(triggered()), mainWindow, SLOT(addParticleSystem()));
+    connect(action, &QAction::triggered, this,
+            [edit]() { edit()->addParticleSystem(iris::ParticlePreset::Custom); });
 
     ui->addBtn->setMenu(addMenu);
     ui->addBtn->setPopupMode(QToolButton::InstantPopup);

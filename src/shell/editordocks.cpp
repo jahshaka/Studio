@@ -14,7 +14,10 @@ For more information see the LICENSE file
 #include <QAction>
 #include <QApplication>
 #include <QCoreApplication>
+#include <QDateTime>
 #include <QDialog>
+#include <QFileDialog>
+#include <QMessageBox>
 #include <QDockWidget>
 #include <QGridLayout>
 #include <QLabel>
@@ -28,9 +31,18 @@ For more information see the LICENSE file
 #include <QVBoxLayout>
 
 #include "app/firstrun.h"
+#include "irisgl/core/logger.h"
+#include "irisgl/document/scenegraph/scenenode.h"
+#include "services/assetshare.h"
+#include "services/sceneeditservice.h"
+#include "services/thumbnailservice.h"
+#include "ui/dialogs/bundleexportdialog.h"
 #include "data/constants.h"
 #include "data/settingsmanager.h"
 #include "services/materialpresetseeder.h"
+#include "services/clipboardservice.h"
+#include "services/selectioncost.h"
+#include "services/undoservice.h"
 #include "services/selectionservice.h"
 #include "services/services.h"
 #include "shell/dockstate.h"
@@ -1377,4 +1389,145 @@ void EditorDocks::restoreAfterFullscreen()
         raiseBottomFrontTab();
     }
     preFullscreenWidgets.clear();
+}
+
+// WHAT A SELECTION COSTS (ADD-1, 2026-09-15). Three of these four are cheap and
+// IMMEDIATE — the outline and gizmo in the viewport, the highlighted row in the
+// Hierarchy, the timeline's subject. The fourth, the Properties column, is the
+// expensive one (44 ms of a scripted add's 50 before this lane), and it is the
+// only one nobody can see until the frame paints: it settles its rebuild at the
+// end of the event-loop turn instead, coalescing repeated selections into one
+// mount (SceneNodePropertiesWidget::applyTab). A click is one turn, so the pick
+// is unchanged in feel; an undo of a 64-object macro selects 64 times and mounts
+// once. A scripted add is a turn of its own (every verb hops to this thread), so
+// a script still mounts per add — the win there is the material blade's REFILL
+// and the mesh cache (~3 ms per add, not 44).
+void EditorDocks::showSelection(iris::SceneNodePtr sceneNode)
+{
+    // WHAT THIS COSTS, PER CONSUMER (SELECT-COST-1, 2026-09-18): `vr.select()`
+    // measured 16-17 ms per call and a desktop click paid the same, which at
+    // 90 Hz is more than a frame for a trigger press. The four calls below are
+    // charged separately — plus the Properties column's DEFERRED mount, which
+    // lands in a later turn and no timer around this function can see — and
+    // `editor.selectionCost()` reads them back.
+    //
+    // A RE-SELECTION IS NOT A NO-OP HERE, deliberately: three callers
+    // re-select the node they already have precisely to REFRESH the panels
+    // after changing the document under them (ReparentSceneNodeCommand's
+    // undo and redo, material.apply), and the service's own contract says a
+    // replace always re-emits. What makes it cheap is that the consumers
+    // themselves build nothing when nothing changed — the column re-points
+    // its blades (0.26 ms) instead of re-showing them — so the counter below
+    // records honestly how many of these fan-outs really moved the primary.
+    const bool primaryChanged = lastAppliedSelection.toStrongRef() != sceneNode;
+    lastAppliedSelection = sceneNode.toWeakRef();
+    selcost::noteSelection(primaryChanged);
+    { selcost::Scope s(selcost::Viewport);   sceneView->setSelectedNode(sceneNode); }
+    { selcost::Scope s(selcost::Properties); sceneNodePropertiesWidget->setSceneNode(sceneNode); }
+    { selcost::Scope s(selcost::Hierarchy);  sceneHierarchyWidget->setSelectedNode(sceneNode); }
+    { selcost::Scope s(selcost::Timeline);   animationWidget->setSceneNode(sceneNode); }
+}
+
+// The consumers that understand a SET: the outliner's selected rows and the
+// viewport (outline, gizmo group, focus/orbit/floor). The properties panel and
+// the timeline stay on the primary — multi-edit is out of scope for v1
+// (EDITOR_MULTISELECT_SPEC §4).
+//
+// THIS RUNS ON EVERY SINGLE PICK TOO, which is why its two calls are charged
+// like the four above (SELECT-COST-1's second read): `SelectionService::select`
+// emits selectionChanged AND selectionSetChanged, so a plain click, a verb and
+// a `vr.select` all write the viewport and the outliner twice — once with the
+// primary, once with the set of one. `editor.selectionCost()` would otherwise
+// call four consumers "the whole cost as the user pays it".
+void EditorDocks::showSelectionSet(const QList<iris::SceneNodePtr> &nodes)
+{
+    { selcost::Scope s(selcost::SetViewport);
+      if (sceneView) sceneView->setSelectedSet(nodes); }
+    { selcost::Scope s(selcost::SetHierarchy);
+      if (sceneHierarchyWidget) sceneHierarchyWidget->setSelectedSet(nodes); }
+}
+
+void EditorDocks::exportNode(const iris::SceneNodePtr &node, ModelTypes modelType)
+{
+    if (!node) return;
+
+    // Dispatch a thumbnail request regardless of what happens,
+    // This should finish in the time it takes to spawn a dialog and save
+    // Since the object is already loaded in memory
+    if (services && services->thumbnails) services->thumbnails->refreshObjectThumbnail(node->getGUID());
+
+    QDateTime currentDateTime = QDateTime::currentDateTimeUtc();
+
+    // The export is titled the name of the node + the current date time in UTC
+    auto filePath = QFileDialog::getSaveFileName(
+        mWindow,
+        "Choose export path",
+        QStringLiteral("%1_%2.%3").arg(node->getName(),
+                                      QString::number(static_cast<time_t>(currentDateTime.toSecsSinceEpoch())),
+                                      QLatin1String(assetshare::extension())),
+        assetshare::fileFilter()
+    );
+
+    if (filePath.isEmpty() || filePath.isNull()) return;
+
+    // THE VERB'S STAGE (node.exportArchive stages the same way) and the same
+    // worker job, behind the progress dialog (EXPORT-THREAD-1).
+    const auto result = bundleexportdialog::run(
+        mWindow, services->sceneEdit->stageNodeExport(node, modelType), filePath, tr("Export"));
+    if (result.canceled) return;
+    if (!result.ok()) {
+        // TOLD, not only logged — this was a silent void (the project export's
+        // shape, exportSceneAsZip).
+        irisLog(QStringLiteral("Export failed: %1").arg(result.error));
+        if (!FirstRun::isDrivenSession())
+            QMessageBox::warning(mWindow, tr("Export failed"),
+                                 tr("%1 could not be exported: %2").arg(node->getName(), result.error));
+    }
+}
+
+// THE PANELS FOLLOW THE SERVICES: the undo commands' refresh notifications, a
+// paste's library import, an undo's repaint of the properties column.
+void EditorDocks::followServices(StudioServices *svc)
+{
+    // The undo commands' refresh notifications (Phase 4: was
+    // UiManager::sceneHierarchyWidget / ::propertyWidget reach-ins).
+    connect(svc->sceneEdit, &SceneEditService::hierarchyChanged, this, [this]() {
+        sceneHierarchyWidget->repopulateTree();
+    });
+    connect(svc->sceneEdit, &SceneEditService::nodeInserted, this,
+            [this](const iris::SceneNodePtr &node) {
+        if (sceneHierarchyWidget) sceneHierarchyWidget->insertChild(node);
+    });
+    connect(svc->sceneEdit, &SceneEditService::nodeRemoved, this,
+            [this, svc](const iris::SceneNodePtr &node) {
+        if (sceneHierarchyWidget) sceneHierarchyWidget->removeChild(node);
+        // A node that has left the document cannot stay in the selection SET
+        // (EDITOR_MULTISELECT_SPEC §2.1). The single selection was pruned by
+        // the delete command's select(null); a set member three rows down was
+        // not, and a stale member would keep an outline shell alive and feed a
+        // dead node to the next group transform.
+        if (svc->selection) svc->selection->remove(node);
+    });
+    connect(svc->sceneEdit, &SceneEditService::transformRefreshRequested, this, [this]() {
+        if (sceneNodePropertiesWidget) sceneNodePropertiesWidget->refreshTransform();
+    });
+    connect(svc->sceneEdit, &SceneEditService::assetViewRefreshRequested, this, [this]() {
+        assetWidget->updateAssetView(assetWidget->assetItem.selectedGuid);
+    });
+    connect(svc->sceneEdit, &SceneEditService::materialApplied, this, [this](const QString &) {
+        sceneNodePropertiesWidget->refreshMaterial();
+    });
+    connect(svc->clipboard, &ClipboardService::assetsImported, this,
+            [this](const QStringList &) {
+        // A paste that imported library assets has changed the library.
+        if (assetWidget)
+            assetWidget->updateAssetView(assetWidget->assetItem.selectedGuid);
+    });
+
+    // AN UNDO REPAINTS THE PANEL (debt L6): every properties row is undoable
+    // now, and the rows are the document's state on screen. One hook, deferred
+    // by the panel itself, rather than a refresh callback on every command.
+    svc->undo->setStackMovedHook([this]() {
+        if (sceneNodePropertiesWidget) sceneNodePropertiesWidget->refreshFromDocument();
+    });
 }

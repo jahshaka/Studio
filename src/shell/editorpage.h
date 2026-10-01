@@ -30,6 +30,7 @@ For more information see the LICENSE file
 #include <functional>
 #include <memory>
 
+#include "modules/studiomodule.h"
 #include "shell/viewcontroller.h"
 
 class Database;
@@ -110,13 +111,27 @@ public:
     /// The Simulate Physics button back to its idle face (a close).
     void resetSimulationButton();
 
+    // ---- the edit chords on the editor's space -----------------------------
+    /// What the edit chords mean on the EDITOR (the ModuleHub asks for it each
+    /// time one fires): the selection SET, the clipboard (EDITOR_MULTISELECT_SPEC
+    /// §2.6). The scene's undo is the window's to add (its stack and title).
+    EditTarget editTarget();
+    /// Delete / duplicate the selection SET — one undo step for the whole set
+    /// (the toolbar, the outliner's menu, Del and Ctrl+D all land here).
+    void deleteSelection();
+    void duplicateSelection();
+
     /// The viewport container forwards a press to the view (the mouse grab).
     bool eventFilter(QObject *obj, QEvent *event) override;
 
 private:
+    void copySelection();
+    void cutSelection();
+    void paste();
     void syncOverlayChecks();
     void takeScreenshot();
 
+    MainWindow *mShell = nullptr;
     StudioServices *mServices = nullptr;
     QtAwesome *fontIcons = nullptr;
     QMainWindow *mViewPort = nullptr;

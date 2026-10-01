@@ -61,51 +61,18 @@ class EditorToolbar;
 class SceneIssueWatch;
 class EditorDocks;
 
-class QPushButton;
-class QStandardItem;
-class QStandardItemModel;
-class QTreeWidgetItem;
-class QTreeWidget;
-class QIcon;
 class QUndoStack;
-class QToolButton;
-class QOffscreenSurface;
-
-class TransformSlidersUi;
-class LightLayerWidget;
-class ModelLayerWidget;
-class TorusLayerWidget;
-class SphereLayerWidget;
-class TimelineWidget;
-class KeyFrameWidget;
-class AnimationWidget;
-class TexturedPlaneLayerWidget;
-class WorldLayerWidget;
-class EndlessPlaneLayerWidget;
-
-class MaterialWidget;
-class TransformGizmo;
-class AdvancedTransformGizmo;
-class TransformWidget;
 
 class IEditorViewport;
 class SceneHierarchyWidget;
 class PlayerWidget;
 
-class EditorCameraController;
 class SettingsManager;
 class ShortcutRegistry;
 class PreferencesDialog;
 class AboutDialog;
 
-class JahRenderer;
-
 class ProjectManager;
-
-class GizmoHitData;
-class AdvancedGizmoHandle;
-class MaterialPreset;
-class AssetWidget;
 
 // services (src/services/) — the shell constructs these and delegates to them
 class MaterialPreviewService;
@@ -113,27 +80,18 @@ struct StudioServices;
 class UndoService;
 class SelectionService;
 class PlaybackService;
-class SessionMarkers;
-class PerfSampler;
 class PlayerService;
 class ProjectService;
 class SceneEditService;
 class ClipboardService;
 class ThumbnailService;
 class AssetService;
-// class SceneNodePropertiesWidget;
-
-class AssetModelPanel;
-class AssetMaterialPanel;
-
 
 #include "ui/panels/scenenodepropertieswidget.h"
-
 
 enum class SceneNodeType;
 
 #include "shell/spaces.h"
-
 
 #include <QJsonObject>
 #include "irisgl/document/scenegraph/lightnode.h"
@@ -152,8 +110,6 @@ class MainWindow : public QMainWindow, private ProjectRunner::Host
 public:
     explicit MainWindow(QWidget *parent = 0);
     ~MainWindow();
-
-    void stopAnimWidget();
 
     /// The editor viewport (engine-backed, or the headless stand-in).
     IEditorViewport *viewport() { return sceneView; }
@@ -183,7 +139,6 @@ public:
     /// toast the user saw.
     QString lastSpaceRefusal() const { return spaceRefusal; }
     void setupUndoRedo();
-
 
 	WindowSpaces getWindowSpace();
 	/// Opens a library asset in the module that owns its kind, switching to
@@ -228,12 +183,9 @@ public:
     bool enterEditorSpace();
 	void updateTopMenuStates(WindowSpaces activeSpace);
 
-
     virtual void closeEvent(QCloseEvent *event);
 
-    void setSettingsManager(SettingsManager* settings);
     SettingsManager* getSettingsManager();
-
 
     iris::ScenePtr getScene();
 
@@ -332,12 +284,6 @@ public:
     class ImportSettingsDialog *openImportSettings(const QString &guid,
                                                    QString *errorOut = nullptr);
 
-    /// Parameterised node verbs for the scripting API: same behaviour as the
-    /// deleteNode()/duplicateNode() context-menu slots but on an explicit node
-    /// (and duplication is undoable via AddSceneNodeCommand).
-    bool deleteSceneNode(iris::SceneNodePtr node);
-    iris::SceneNodePtr duplicateSceneNode(iris::SceneNodePtr node);
-
     /// The scripting engine (created in the ctor; modules see the world through
     /// ScriptHost). Null only before the ctor finishes.
     class ScriptEngine *scripting() { return scriptEngine; }
@@ -356,9 +302,6 @@ public:
     void refreshThumbnail(QListWidgetItem *item);
 
     QString originalTitle;
-
-    void addNodeToActiveNode(QSharedPointer<iris::SceneNode> sceneNode);
-    void addNodeToScene(QSharedPointer<iris::SceneNode> sceneNode, bool ignore = false);
 
     // (evalShadowMapType / getLightTypeFromName / createLight — a SECOND scene
     // reader that lived here, knew neither Area nor Sky nor the sun rows, and
@@ -386,7 +329,6 @@ private:
     /// the state it does not own and puts the chrome back.
     void changeEvent(QEvent *event) override;
 
-
     void updateCurrentSceneThumbnail();
 
 public slots:
@@ -396,25 +338,11 @@ public slots:
     /// current project is never re-pointed (CREATE-GAP-1's fix round).
     void exportProjectWithDialog(const QString &guid, const QString &name);
 
-
 public slots:
 
     void setupViewPort();
     void setupDesktop();
     void setupShortcuts();
-
-    //scenegraph
-    /// Adds the primitive the sender QAction names (its `data()` is the row's name
-    /// in src/data/primitives.h). It replaced thirteen one-line slots — owner
-    /// review R6; the Add > Primitive menu is built from the table.
-    void addPrimitiveFromAction();
-    void addEmpty();
-    void addCamera();
-	void addMaterialMesh(const QString &path = "", bool ignore = false,
-	                     iris::Vec3 position = iris::Vec3(), const QString &guid = QString(),
-	                     const QString &name = QString(),
-	                     surfaceplacement::Placement placement = surfaceplacement::Placement::Pivot);
-    void addAssetParticleSystem(bool ignore, iris::Vec3 position, QString guid, QString assetName);
 
     //context menu functions
     void duplicateNode();
@@ -422,23 +350,6 @@ public slots:
 	void exportNode(const iris::SceneNodePtr &node, ModelTypes modelType);
     void deleteNode();
 
-    void addPointLight();
-    void addSpotLight();
-    void addDirectionalLight();
-    void addAreaLight();
-    void addSkyLight();
-
-    /// Adds an image-less decal (DECALS_SPEC): the node draws its wire box until
-    /// an image is picked in the Decal panel or dropped on it from the bin.
-    void addDecal();
-
-    void addParticleSystem();
-
-
-    void sceneTreeCustomContextMenu(const QPoint&);
-    void sceneTreeItemChanged(QTreeWidgetItem* item,int column);
-
-    void sceneNodeSelected(QTreeWidgetItem *item);
     void assetItemSelected(QListWidgetItem *item);
     void sceneNodeSelected(iris::SceneNodePtr sceneNode);
 
@@ -475,11 +386,6 @@ public slots:
     /// single-colour sky (the document's "no sky") and no lights.
     iris::ScenePtr createDefaultScene(SceneTemplate kind = SceneTemplate::Basic);
 
-
-
-
-
-
     void updateSceneSettings();
 
     void undo();
@@ -499,7 +405,6 @@ public slots:
     /// space's edit target (EDITOR_MULTISELECT_SPEC §8.7).
     void selectAllActiveSpace();
 
-
 signals:
 	/// An asset was REIMPORTED through the import-settings dialog: its bake,
 	/// its metadata block and every placed instance of it have changed
@@ -509,9 +414,7 @@ signals:
 
 public slots:
 
-
 private slots:
-
 
 	/// Shrinks the window to the screen it is about to appear on, keeping the
 	/// authored .ui size as the preferred one. Called ONLY when there is no
@@ -521,13 +424,6 @@ private slots:
 
 private:
     void setupServices();
-    /// What the edit chords mean on the EDITOR space (the ModuleHub asks for
-    /// it each time one fires): the selection SET, the clipboard, the scene's
-    /// undo (EDITOR_MULTISELECT_SPEC §2.6).
-    EditTarget editorEditTarget();
-    void copyEditorSelection();
-    void cutEditorSelection();
-    void pasteIntoEditor();
     /// The active space's name, as the hub and the action host key it.
     QString currentSpaceId() const { return spaces::id(currentSpace); }
 
@@ -551,15 +447,6 @@ private:
     iris::ScenePtr openWorld() const override;
     ProjectRunner *projects = nullptr;
 
-    void applySelectionToUi(iris::SceneNodePtr sceneNode);
-    /// The primary this fan-out last applied — for the honest "did the
-    /// selection really change" count behind `editor.selectionCost()`. Weak:
-    /// it is an identity, never dereferenced, and a deleted node must not be
-    /// kept alive (or confused with a new one at the same address).
-    QWeakPointer<iris::SceneNode> lastAppliedSelection;
-    void applySelectionSetToUi(const QList<iris::SceneNodePtr> &nodes);
-
-
     Ui::MainWindow *ui;
     IEditorViewport* sceneView = nullptr;
 	PlayerWidget* playerView = nullptr;
@@ -567,26 +454,17 @@ private:
 	/// setupServices can hand it to PlayerService (verb-coverage audit F1).
 	class EnginePlayerView* playerBackend = nullptr;
 
-    QWidget *container = nullptr;
-
     QSharedPointer<iris::Scene> scene;
-
-
-
-    AnimationWidget* animWidget = nullptr;
-
 
     SettingsManager* settings;
     PreferencesDialog* prefsDialog;
     ShortcutRegistry* shortcutRegistry = nullptr;
     AboutDialog* aboutDialog;
 
-
     Database *db = nullptr;
 
     /// The export's progress dialog (the archive is the ProjectRunner's).
     QPointer<class ProgressDialog> archiveProgress;
-
 
     /// The one live Project instance, owned by the shell and injected into
     /// everything that needs it (Phase 4: was the Globals::project static).
@@ -598,18 +476,13 @@ private:
 
     QUndoStack* undoStack = nullptr;
 
-
-    QMainWindow *dialog = nullptr;
-
     QMainWindow *viewPort = nullptr;
-
 
     QToolBar *toolBar = nullptr;
     AssetView *_assetView = nullptr;
     QWidget *assetsPlaceholder = nullptr;   // the "assets" page until the real one is built
     class IAssetViewer *assetsPreviewViewer = nullptr;   // made at boot, handed to the page
 	QAction *actionSaveScene = nullptr;
-
 
     class Toast *snapToast = nullptr;   // [ / ] snap-size feedback
     /// "The 3D view could not be created" — the respecced Failed state
@@ -620,7 +493,6 @@ private:
     /// The Player page could not start: say why and go back (SMOKE-FIX-1).
     void bounceFromPlayer(const QString &why);
 
-
     /// The space this window came FROM and the one it is on. BOTH initialised:
     /// `previousSpace` is read by the Ctrl+Tab "Previous Space" shortcut (its
     /// ONLY reader) and was uninitialised until the first switch wrote it, so
@@ -630,10 +502,7 @@ private:
     WindowSpaces previousSpace = WindowSpaces::DESKTOP;
     WindowSpaces currentSpace = WindowSpaces::DESKTOP;
 
-
-
 	QtAwesome *fontIcons;
-
 
 	/// THE SHELL'S PARTS (D10-SHELL-MODULES): the pages by id, the actions /
 	/// menus / toolbar slots, the module loop, and the one teardown path.

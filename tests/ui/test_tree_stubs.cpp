@@ -58,5 +58,17 @@ ClipboardPasteResult ClipboardService::paste(const ClipboardPasteOptions &) { re
 // before scenenode.h's explicit one).
 #include "services/selectionservice.h"
 void SceneEditService::notifyHierarchyChanged() {}
+// The Add menu's rows call the service directly (D10); the suites never press one.
+void SceneEditService::addPrimitive(const QString &, const std::optional<iris::Vec3> &,
+                                    surfaceplacement::Placement) {}
+void SceneEditService::addPointLight() {}
+void SceneEditService::addSpotLight() {}
+void SceneEditService::addDirectionalLight() {}
+void SceneEditService::addAreaLight() {}
+void SceneEditService::addSkyLight() {}
+void SceneEditService::addEmpty() {}
+iris::CameraNodePtr SceneEditService::addCamera(bool) { return {}; }
+iris::ParticleSystemNodePtr SceneEditService::addParticleSystem(iris::ParticlePreset) { return {}; }
+iris::DecalNodePtr SceneEditService::addDecal(const QString &, const DecalOptions &) { return {}; }
 void SceneEditService::notifyTransformChanged() {}   // SetNodePropertyCommand (the outliner eye, 2026-09-12)
 void SelectionService::select(iris::SceneNodePtr) {}

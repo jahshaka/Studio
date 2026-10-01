@@ -45,6 +45,10 @@ For more information see the LICENSE file
 #include <QVariantList>
 #include <QVariantMap>
 #include <QVector>
+#include <QWeakPointer>
+
+#include "irisgl/irisglfwd.h"
+#include "data/project.h"
 
 #include <functional>
 
@@ -115,6 +119,10 @@ public:
     };
     /// Builds the six docks, the default layout and the USER's restored one.
     void build(const Deps &deps);
+    /// The panels follow the services: the edits' refresh notifications (the
+    /// outliner's rows, the transform rows, the tray, the material blade), a
+    /// paste's library import, and an undo's repaint of the properties column.
+    void followServices(StudioServices *svc);
     /// The console widget (it needs the script engine, made after the docks).
     void setConsole(ScriptConsole *console);
     /// The editor toolbar, which immersive fullscreen hides with the docks.
@@ -188,6 +196,17 @@ public:
     void focusPropertiesFilter();
     /// Re-reads the column from the document (the edit gate's repaint).
     void refreshPropertiesFromDocument();
+
+    /// THE PANELS FOLLOW THE SELECTION: the primary into the viewport, the
+    /// properties column, the outliner and the timeline (SelectionService::
+    /// selectionChanged), the SET into the viewport and the outliner
+    /// (selectionSetChanged). Each consumer is charged to editor.selectionCost.
+    void showSelection(iris::SceneNodePtr sceneNode);
+    void showSelectionSet(const QList<iris::SceneNodePtr> &nodes);
+
+    /// The outliner's Export: the node through the save dialog and the bundle
+    /// writer, behind its progress dialog (node.exportArchive's own stage).
+    void exportNode(const iris::SceneNodePtr &node, ModelTypes modelType);
 
     /// A favourited tray item goes to the Presets panel of its kind.
     void favoriteItem(QListWidgetItem *item);
@@ -272,6 +291,11 @@ private:
     /// on the way out of that space (and before immersive fullscreen hides the
     /// chrome), and it is what the window close writes.
     QByteArray editorDockState;
+    /// The primary the selection fan-out last applied — for the honest "did
+    /// the selection really change" count behind `editor.selectionCost()`.
+    /// Weak: it is an identity, never dereferenced, and a deleted node must not
+    /// be kept alive (or confused with a new one at the same address).
+    QWeakPointer<iris::SceneNode> lastAppliedSelection;
     /// What the editor's chrome looked like before immersive fullscreen hid it.
     QVector<bool> preFullscreenWidgets;
 };

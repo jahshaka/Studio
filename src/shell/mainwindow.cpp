@@ -13,14 +13,8 @@ For more information see the LICENSE file
 #include "irisgl/core/math/vec.h"
 #include "shell/mainwindow.h"
 #include "services/assetshare.h"
-#include "ui/dialogs/bundleexportdialog.h"
 #include "ui_mainwindow.h"
 
-#include <QWindow>
-#include <QSurface>
-#include <QScrollArea>
-#include <QTextDocument>
-#include <QTemporaryFile>
 
 #include <memory>
 
@@ -41,111 +35,66 @@ For more information see the LICENSE file
 #include "irisgl/core/logger.h"
 #include "services/jahlog.h"
 #include "services/sessionmarkers.h"
-#include "services/editgate.h"
+#include "services/services.h"
 #include "services/framemonitor.h"
 #include "services/perfsampler.h"
 
-#include "data/guidmanager.h"
-#include "services/thumbnailmanager.h"
 #include "bridge/enginehost.h"
 #include "viewport/enginerenderdriver.h"
-#include "bridge/enginematerialpreview.h"
 #include "services/assethelper.h"
-#include "services/assetstore.h"
-#include "services/scenenodehelper.h"
 
-#include <QFontDatabase>
 #include <qstandarditemmodel.h>
-#include <QKeyEvent>
+#include <QDockWidget>
 #include <QMessageBox>
 #include <QUndoStack>
 
 #include <QApplication>
-#include <QGuiApplication>
 #include <QScreen>
-#include <QHash>
-#include <QHashIterator>
-#include <QDirIterator>
-#include <QDockWidget>
-#include <QTabBar>
 #include <QFileDialog>
-#include <QTemporaryDir>
 
-#include <QTreeWidgetItem>
 
-#include <QPushButton>
-#include <QTimer>
 #include <QtConcurrent>
-#include <QFuture>
-#include <QThread>
 #include <atomic>
 #include <math.h>
-#include <QDesktopServices>
-#include <QShortcut>
-#include <QToolButton>
 #include <QLineEdit>
 #include <QTextEdit>
 #include <QPlainTextEdit>
 #include <QAbstractSpinBox>
-#include <QSpinBox>
-#include <QSlider>
-#include <QMenu>
-#include <QWidgetAction>
-#include <QHBoxLayout>
 
 #include "ui/controls/tilecache.h"
 #include "ui/pages/iassetviewer.h"
-#include "ui/panels/timeline/nodekeyframeanimation.h"
-#include "ui/panels/timeline/nodekeyframe.h"
 
 #include "ui/panels/timeline/animationwidget.h"
 
 #include "data/project.h"
-#include "ui/controls/accordionbladewidget.h"
 
 #include "viewport/editorcameracontroller.h"
 #include "data/settingsmanager.h"
 #include "ui/dialogs/preferencesdialog.h"
-#include "ui/dialogs/preferences/worldsettingswidget.h"
 #include "ui/dialogs/aboutdialog.h"
 
-#include "services/collisionhelper.h"
 
-#include "data/materialpreset.h"
 
 #include "ui/pages/projectmanager.h"
 
-#include "io/scenewriter.h"
-#include "io/scenereader.h"
 
 #include "data/constants.h"
-#include "io/materialreader.h"
-#include "data/database/database.h"
 
-#include "commands/addscenenodecommand.h"
-#include "commands/deletescenenodecommand.h"
 
-#include "ui/dialogs/screenshotwidget.h"
 #include "viewport/editordata.h"
 #include "ui/panels/assetwidget.h"
 
-#include <QThreadPool>
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
 #include <thread>
 
-#include "ui/dialogs/newprojectdialog.h"
 
 #include "ui/panels/scenehierarchywidget.h"
 #include "ui/panels/scenenodepropertieswidget.h"
-#include "ui/controls/propertiestabstrip.h"
 #include "ui/panels/propertywidgets/worldpropertywidget.h"
 
-#include "ui/panels/presets/skypresets.h"
 
-#include "ui/panels/presets/assetmodelpanel.h"
-#include "ui/panels/presets/assetmaterialpanel.h"
 
 #include "ui/pages/assetview.h"
 #include "ui/dialogs/toast.h"
@@ -180,21 +129,15 @@ For more information see the LICENSE file
 #include "player/engineplayerview.h"
 #include "viewport/headlesseditorviewport.h"
 
-#include "scripting/scripthost.h"
 #include "scripting/scriptengine.h"
 #include "scripting/claude/claudeassistant.h"
-#include "ui/panels/scriptconsole.h"
-#include "scripting/modules/studiomodules.h"
 
-#include "services/services.h"
 #include "services/shortcutregistry.h"
 #include "services/worldmodes.h"
 #include "services/testtier.h"
 #include "viewport/snapsettings.h"
 #include "viewport/cameraspeed.h"
-#include "services/subscriber.h"
 #include "services/undoservice.h"
-#include "services/selectioncost.h"
 #include "services/selectionservice.h"
 #include "services/playbackservice.h"
 #include "services/projectservice.h"
@@ -203,16 +146,13 @@ For more information see the LICENSE file
 #include "services/loadtimeline.h"
 #include "services/meshbakestore.h"
 #include "services/assetstorepaths.h"
-#include <QSqlDatabase>
 #include "services/primitiveassets.h"
 #include "services/sceneopenrunner.h"
 #include "services/mainthreadwatchdog.h"
 #include "services/apppaths.h"
-#include "shell/dockstate.h"
 #include "shell/shutdownorder.h"
 
 #include "services/projectarchiver.h"
-#include "services/sceneextents.h"
 #include "ui/dialogs/progressdialog.h"
 #include "app/firstrun.h"
 #include "services/materialpresetseeder.h"
@@ -220,17 +160,14 @@ For more information see the LICENSE file
 #include "services/sceneeditservice.h"
 #include "services/clipboardservice.h"
 #include "services/thumbnailservice.h"
-#include "services/assetservice.h"
 #include "services/defaultfloormaterial.h"
 #include "services/scenetemplate.h"
 #include "services/scenetemplatebuilder.h"
 #include "irisgl/document/physics/physicsproperties.h"
-#include <QJsonDocument>
 #include "ui/style/stylesheet.h"
 #include "ui/style/thememanager.h"
 #include "ui/style/themeroles.h"
 #include "ui/style/columnedpage.h"
-#include "ui/style/panelmetrics.h"
 
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWindow)
 {
@@ -297,7 +234,17 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
 	toolbar = new EditorToolbar(this);
 	issueWatch = new SceneIssueWatch(this, [this]() { return currentSpace == WindowSpaces::EDITOR; }, this);
 	moduleHub = new ModuleHub(this);
-	moduleHub->setSpaceEditTarget(spaces::id(WindowSpaces::EDITOR), [this]() { return editorEditTarget(); });
+	// THE EDITOR'S EDIT TARGET: the editor page's chords on the selection SET
+	// and the clipboard, and the scene's stack — moved through UndoService (the
+	// edit gate, the end of a live material preview and the panel's repaint ride
+	// every undo), the title following.
+	moduleHub->setSpaceEditTarget(spaces::id(WindowSpaces::EDITOR), [this]() {
+		EditTarget t = page->editTarget();
+		t.undoStack = undoStack;
+		t.undo = [this]() { undo(); updateWindowTitle(); };
+		t.redo = [this]() { redo(); updateWindowTitle(); };
+		return t;
+	});
 	shellView = new ShellView(this);
 
     prefsDialog = new PreferencesDialog(nullptr, db, settings);
@@ -591,10 +538,6 @@ iris::ScenePtr MainWindow::createDefaultScene(SceneTemplate kind)
     return scene;
 }
 
-void MainWindow::setSettingsManager(SettingsManager* settings)
-{
-    this->settings = settings;
-}
 
 // THE WINDOW-CENTRE NOTICE — a page that cannot start, VR that did not. One
 // toast, reused; its anchor is the Toast's own (audit F-D4).
@@ -627,14 +570,7 @@ void MainWindow::setupFileMenu()
     connect(prefsDialog,            SIGNAL(PreferencesDialogClosed()), SLOT(updateSceneSettings()));
 }
 
-void MainWindow::sceneTreeCustomContextMenu(const QPoint& pos)
-{
-}
 
-void MainWindow::stopAnimWidget()
-{
-    animWidget->stopAnimation();
-}
 
 void MainWindow::setupServices()
 {
@@ -663,7 +599,7 @@ void MainWindow::setupServices()
     assetService = serviceLayer->assets();
 
     connect(selectionService, &SelectionService::selectionChanged,
-            this, &MainWindow::applySelectionToUi);
+            docks, &EditorDocks::showSelection);
     // The SET fan-out (EDITOR_MULTISELECT_SPEC §2.1). Deliberately a second
     // connection and not a widened applySelectionToUi: the primary signal
     // drives the single-node panels (properties, timeline) and fires only when
@@ -672,7 +608,7 @@ void MainWindow::setupServices()
     // the properties panel N times (§3.3). Emitted AFTER selectionChanged, so
     // the set is what the tree ends up showing.
     connect(selectionService, &SelectionService::selectionSetChanged,
-            this, &MainWindow::applySelectionSetToUi);
+            docks, &EditorDocks::showSelectionSet);
     // The play-button chrome follows the play-in-place mode.
     connect(playbackService, &PlaybackService::editModeEntered,
             page, &EditorPage::applyEditModeUi);
@@ -705,40 +641,9 @@ void MainWindow::setupServices()
                             fontIcons->icon(fa::binoculars, vrIconOptions));
     }
 
-    // The undo commands' refresh notifications (Phase 4: was
-    // UiManager::sceneHierarchyWidget / ::propertyWidget reach-ins).
-    connect(sceneEditService, &SceneEditService::hierarchyChanged, this, [this]() {
-        docks->hierarchy()->repopulateTree();
-    });
-    connect(sceneEditService, &SceneEditService::nodeInserted, this,
-            [this](const iris::SceneNodePtr &node) {
-        if (docks->hierarchy()) docks->hierarchy()->insertChild(node);
-    });
-    connect(sceneEditService, &SceneEditService::nodeRemoved, this,
-            [this](const iris::SceneNodePtr &node) {
-        if (docks->hierarchy()) docks->hierarchy()->removeChild(node);
-        // A node that has left the document cannot stay in the selection SET
-        // (EDITOR_MULTISELECT_SPEC §2.1). The single selection was pruned by
-        // the delete command's select(null); a set member three rows down was
-        // not, and a stale member would keep an outline shell alive and feed a
-        // dead node to the next group transform.
-        if (selectionService) selectionService->remove(node);
-    });
-    connect(sceneEditService, &SceneEditService::transformRefreshRequested, this, [this]() {
-        if (docks->properties()) docks->properties()->refreshTransform();
-    });
-    connect(sceneEditService, &SceneEditService::assetViewRefreshRequested, this, [this]() {
-        docks->assetTray()->updateAssetView(docks->assetTray()->assetItem.selectedGuid);
-    });
-    connect(sceneEditService, &SceneEditService::materialApplied, this, [this](const QString &) {
-        docks->properties()->refreshMaterial();
-    });
-    connect(clipboardService, &ClipboardService::assetsImported, this,
-            [this](const QStringList &) {
-        // A paste that imported library assets has changed the library.
-        if (docks->assetTray())
-            docks->assetTray()->updateAssetView(docks->assetTray()->assetItem.selectedGuid);
-    });
+    // THE PANELS FOLLOW THE SERVICES (the edits' refreshes, the paste's import,
+    // an undo's repaint) — the editor's docks' own wiring.
+    docks->followServices(services);
 
     // THE MONITOR'S ONLY VISIBLE OUTPUT (owner, 2026-09-12): a toast when a
     // capture starts and a toast naming the bundle when it stops. The monitor
@@ -766,12 +671,6 @@ void MainWindow::setupServices()
     issueWatch->setScene(sceneEditService, sceneView);
     issueWatch->start();
 
-    // AN UNDO REPAINTS THE PANEL (debt L6): every properties row is undoable
-    // now, and the rows are the document's state on screen. One hook, deferred
-    // by the panel itself, rather than a refresh callback on every command.
-    undoService->setStackMovedHook([this]() {
-        if (docks->properties()) docks->properties()->refreshFromDocument();
-    });
     if (sceneView) { sceneView->setServices(services); sceneView->setProject(project); }
     page->setServices(services);
     if (prefsDialog) prefsDialog->wireEditor(sceneView, this);
@@ -1409,8 +1308,14 @@ void MainWindow::closeWorld(bool reopenInPlace)
 		sceneView->end();
 }
 
-// THE PANELS' TWO CALLS INTO THE WINDOW, answered by the editor's docks: the
-// tray's favourite (the Presets panel of its kind) and the edit gate's repaint.
+// THE PANELS' CALLS INTO THE WINDOW, answered by the editor's docks: the
+// tray's favourite (the Presets panel of its kind), the edit gate's repaint and
+// the outliner's Export.
+void MainWindow::exportNode(const iris::SceneNodePtr &node, ModelTypes modelType)
+{
+    docks->exportNode(node, modelType);
+}
+
 void MainWindow::favoriteItem(QListWidgetItem *item)
 {
     docks->favoriteItem(item);
@@ -1482,15 +1387,7 @@ void MainWindow::assetItemSelected(QListWidgetItem *item)
 	docks->properties()->setAssetItem(item);
 }
 
-void MainWindow::sceneNodeSelected(QTreeWidgetItem* item)
-{
 
-}
-
-void MainWindow::sceneTreeItemChanged(QTreeWidgetItem* item,int column)
-{
-
-}
 
 void MainWindow::sceneNodeSelected(iris::SceneNodePtr sceneNode)
 {
@@ -1502,166 +1399,44 @@ iris::SceneNodePtr MainWindow::selectedSceneNode() const
     return selectionService->selected();
 }
 
-// WHAT A SELECTION COSTS (ADD-1, 2026-09-15). Three of these four are cheap and
-// IMMEDIATE — the outline and gizmo in the viewport, the highlighted row in the
-// Hierarchy, the timeline's subject. The fourth, the Properties column, is the
-// expensive one (44 ms of a scripted add's 50 before this lane), and it is the
-// only one nobody can see until the frame paints: it settles its rebuild at the
-// end of the event-loop turn instead, coalescing repeated selections into one
-// mount (SceneNodePropertiesWidget::applyTab). A click is one turn, so the pick
-// is unchanged in feel; an undo of a 64-object macro selects 64 times and mounts
-// once. A scripted add is a turn of its own (every verb hops to this thread), so
-// a script still mounts per add — the win there is the material blade's REFILL
-// and the mesh cache (~3 ms per add, not 44).
-void MainWindow::applySelectionToUi(iris::SceneNodePtr sceneNode)
-{
-    // WHAT THIS COSTS, PER CONSUMER (SELECT-COST-1, 2026-09-18): `vr.select()`
-    // measured 16-17 ms per call and a desktop click paid the same, which at
-    // 90 Hz is more than a frame for a trigger press. The four calls below are
-    // charged separately — plus the Properties column's DEFERRED mount, which
-    // lands in a later turn and no timer around this function can see — and
-    // `editor.selectionCost()` reads them back.
-    //
-    // A RE-SELECTION IS NOT A NO-OP HERE, deliberately: three callers
-    // re-select the node they already have precisely to REFRESH the panels
-    // after changing the document under them (ReparentSceneNodeCommand's
-    // undo and redo, material.apply), and the service's own contract says a
-    // replace always re-emits. What makes it cheap is that the consumers
-    // themselves build nothing when nothing changed — the column re-points
-    // its blades (0.26 ms) instead of re-showing them — so the counter below
-    // records honestly how many of these fan-outs really moved the primary.
-    const bool primaryChanged = lastAppliedSelection.toStrongRef() != sceneNode;
-    lastAppliedSelection = sceneNode.toWeakRef();
-    selcost::noteSelection(primaryChanged);
-    { selcost::Scope s(selcost::Viewport);   sceneView->setSelectedNode(sceneNode); }
-    { selcost::Scope s(selcost::Properties); docks->properties()->setSceneNode(sceneNode); }
-    { selcost::Scope s(selcost::Hierarchy);  docks->hierarchy()->setSelectedNode(sceneNode); }
-    { selcost::Scope s(selcost::Timeline);   docks->timeline()->setSceneNode(sceneNode); }
-}
-
-// The consumers that understand a SET: the outliner's selected rows and the
-// viewport (outline, gizmo group, focus/orbit/floor). The properties panel and
-// the timeline stay on the primary — multi-edit is out of scope for v1
-// (EDITOR_MULTISELECT_SPEC §4).
-//
-// THIS RUNS ON EVERY SINGLE PICK TOO, which is why its two calls are charged
-// like the four above (SELECT-COST-1's second read): `SelectionService::select`
-// emits selectionChanged AND selectionSetChanged, so a plain click, a verb and
-// a `vr.select` all write the viewport and the outliner twice — once with the
-// primary, once with the set of one. `editor.selectionCost()` would otherwise
-// call four consumers "the whole cost as the user pays it".
-void MainWindow::applySelectionSetToUi(const QList<iris::SceneNodePtr> &nodes)
-{
-    { selcost::Scope s(selcost::SetViewport);
-      if (sceneView) sceneView->setSelectedSet(nodes); }
-    { selcost::Scope s(selcost::SetHierarchy);
-      if (docks->hierarchy()) docks->hierarchy()->setSelectedSet(nodes); }
-}
-
-// ONE SLOT FOR EVERY PRIMITIVE (owner review R6). Thirteen identical
-// forwarding slots stood here — one per shape, four of them (Teapot, Sponge,
-// Steps, Gear) connected to nothing at all — and every new primitive needed a
-// slot, a declaration and a hand-written menu entry. The Add menu builds itself
-// from src/data/primitives.h now and carries the row's NAME on the action.
-void MainWindow::addPrimitiveFromAction()
-{
-    const QAction *action = qobject_cast<QAction *>(sender());
-    if (!action || !sceneEditService) return;
-    sceneEditService->addPrimitive(action->data().toString());
-}
-
-void MainWindow::addPointLight()
-{
-    sceneEditService->addPointLight();
-}
-
-void MainWindow::addSpotLight()
-{
-    sceneEditService->addSpotLight();
-}
 
 
-void MainWindow::addDirectionalLight()
-{
-    sceneEditService->addDirectionalLight();
-}
 
-void MainWindow::addAreaLight()
-{
-    sceneEditService->addAreaLight();
-}
 
-void MainWindow::addSkyLight()
-{
-    sceneEditService->addSkyLight();
-}
 
-void MainWindow::addDecal()
-{
-    sceneEditService->addDecal(QString());
-}
 
-void MainWindow::addEmpty()
-{
-    sceneEditService->addEmpty();
-}
 
-void MainWindow::addCamera()
-{
-    sceneEditService->addCamera();
-}
 
-void MainWindow::addParticleSystem()
-{
-    sceneEditService->addParticleSystem(iris::ParticlePreset::Custom);
-}
 
-void MainWindow::addMaterialMesh(const QString &path, bool ignore, iris::Vec3 position,
-                                 const QString &guid, const QString &assetName,
-                                 surfaceplacement::Placement placement)
-{
-    sceneEditService->addMaterialMesh(path, ignore, position, guid, assetName, placement);
-}
 
-void MainWindow::addAssetParticleSystem(bool ignore, iris::Vec3 position, QString guid, QString assetName)
-{
-    sceneEditService->addAssetParticleSystem(ignore, position, guid, assetName);
-}
+
+
+
+
 
 /**
  * Adds sceneNode to selected scene node. If there is no selected scene node,
  * sceneNode is added to the root node
  * @param sceneNode
  */
-void MainWindow::addNodeToActiveNode(QSharedPointer<iris::SceneNode> sceneNode)
-{
-    sceneEditService->addNodeToActiveNode(sceneNode);
-}
 
 /**
  * adds sceneNode directly to the scene's rootNode
  * applied default material to mesh if one isnt present
  * ignore set to false means we only add it visually, usually to discard it afterw
  */
-void MainWindow::addNodeToScene(QSharedPointer<iris::SceneNode> sceneNode, bool ignore)
+
+
+
+// THE OUTLINER'S DELETE AND DUPLICATE, through the editor page's edit target.
+void MainWindow::deleteNode()
 {
-    sceneEditService->addNodeToScene(sceneNode, ignore);
+    page->deleteSelection();
 }
 
-// THE SELECTION, not the primary (EDITOR_MULTISELECT_SPEC §2.5). Both of these
-// are what the toolbar buttons, the outliner's context menu and the Del/Ctrl+D
-// shortcuts call, so all three act on the whole set and land as one undo step.
 void MainWindow::duplicateNode()
 {
-    if (!selectionService) return;
-    const auto set = selectionService->selectedSet();
-    if (set.size() > 1) { sceneEditService->duplicateNodes(set); return; }
-    duplicateSceneNode(selectionService->selected());
-}
-
-iris::SceneNodePtr MainWindow::duplicateSceneNode(iris::SceneNodePtr source)
-{
-    return sceneEditService->duplicateNode(source);
+    page->duplicateSelection();
 }
 
 void MainWindow::createMaterial()
@@ -1670,56 +1445,8 @@ void MainWindow::createMaterial()
                                              docks->assetTray()->assetItem.selectedGuid);
 }
 
-void MainWindow::exportNode(const iris::SceneNodePtr &node, ModelTypes modelType)
-{
-    if (!node) return;
 
-    // Dispatch a thumbnail request regardless of what happens,
-    // This should finish in the time it takes to spawn a dialog and save
-    // Since the object is already loaded in memory
-    refreshThumbnail(node->getGUID());
 
-    QDateTime currentDateTime = QDateTime::currentDateTimeUtc();
-
-    // The export is titled the name of the node + the current date time in UTC
-    auto filePath = QFileDialog::getSaveFileName(
-        this,
-        "Choose export path",
-        QStringLiteral("%1_%2.%3").arg(node->getName(),
-                                      QString::number(static_cast<time_t>(currentDateTime.toSecsSinceEpoch())),
-                                      QLatin1String(assetshare::extension())),
-        assetshare::fileFilter()
-    );
-
-    if (filePath.isEmpty() || filePath.isNull()) return;
-
-    // THE VERB'S STAGE (node.exportArchive stages the same way) and the same
-    // worker job, behind the progress dialog (EXPORT-THREAD-1).
-    const auto result = bundleexportdialog::run(
-        this, sceneEditService->stageNodeExport(node, modelType), filePath, tr("Export"));
-    if (result.canceled) return;
-    if (!result.ok()) {
-        // TOLD, not only logged — this was a silent void (the project export's
-        // shape, exportSceneAsZip).
-        irisLog(QStringLiteral("Export failed: %1").arg(result.error));
-        if (!FirstRun::isDrivenSession())
-            QMessageBox::warning(this, tr("Export failed"),
-                                 tr("%1 could not be exported: %2").arg(node->getName(), result.error));
-    }
-}
-
-void MainWindow::deleteNode()
-{
-    if (!selectionService) return;
-    const auto set = selectionService->selectedSet();
-    if (set.size() > 1) { sceneEditService->deleteNodes(set); return; }
-    deleteSceneNode(selectionService->selected());
-}
-
-bool MainWindow::deleteSceneNode(iris::SceneNodePtr node)
-{
-    return sceneEditService->deleteNode(node);
-}
 
 void MainWindow::updateCurrentSceneThumbnail()
 {
@@ -2064,50 +1791,8 @@ void MainWindow::redoActiveSpace()
     moduleHub->redo(currentSpaceId());
 }
 
-// THE EDITOR'S EDIT TARGET (EDITOR_MULTISELECT_SPEC §2.6): the four chords act
-// on the selection SET, the clipboard is the one system clipboard. The hub asks
-// for it each time a chord fires on the editor space; on any other space the
-// space's own target (or none) answers instead — never this one.
-EditTarget MainWindow::editorEditTarget()
-{
-    EditTarget t;
-    // The scene's stack, moved through UndoService — the edit gate, the end of
-    // a live material preview and the panel's repaint ride every undo — and the
-    // title follows.
-    t.undoStack = undoStack;
-    t.undo = [this]() { undo(); updateWindowTitle(); };
-    t.redo = [this]() { redo(); updateWindowTitle(); };
-    t.deleteSelection = [this]() { deleteNode(); };
-    t.duplicateSelection = [this]() { duplicateNode(); };
-    t.copySelection = [this]() { copyEditorSelection(); };
-    t.cutSelection = [this]() { cutEditorSelection(); };
-    t.paste = [this]() { pasteIntoEditor(); };
-    t.selectAll = [this]() {
-        if (services && services->sceneEdit) services->sceneEdit->selectAll();
-    };
-    return t;
-}
 
-void MainWindow::copyEditorSelection()
-{
-    // ONE clipboard now (CLIPBOARD_SPEC D3 b): the editor writes the same
-    // system clipboard the Materials graph does, as a self-identifying text
-    // payload, so a copy crosses to a second instance and back. The Materials
-    // space keeps its own payload shape for one release (§2.2 `graph` items are
-    // P2) — its own edit target, not a second clipboard.
-    if (!services || !services->clipboard || !services->selection) return;
-    const auto result = services->clipboard->copyNodes(services->selection->selectedSet());
-    if (result.ok())
-        showViewportToast(tr("Copy"), tr("%1 object(s) copied").arg(result.items));
-}
 
-void MainWindow::cutEditorSelection()
-{
-    if (!services || !services->clipboard || !services->selection) return;
-    const auto result = services->clipboard->cutNodes(services->selection->selectedSet());
-    if (result.ok())
-        showViewportToast(tr("Cut"), tr("%1 object(s) cut").arg(result.copy.items));
-}
 
 // Ctrl+A. Two rules in one place: a focused TEXT ENTRY owns the chord, and
 // otherwise the active space decides (EDITOR_MULTISELECT_SPEC §8.7).
@@ -2132,36 +1817,6 @@ void MainWindow::selectAllActiveSpace()
     moduleHub->runEdit(currentSpaceId(), ModuleHub::Edit::SelectAll);
 }
 
-void MainWindow::pasteIntoEditor()
-{
-    if (!services || !services->clipboard) return;
-
-    const auto result = services->clipboard->paste();
-    // WHAT THE PASTE COULD NOT DO IS SAID OUT LOUD. A clipboard that holds
-    // nothing of ours, or objects whose textures this library has never seen,
-    // used to be a silent no-op — the worst possible answer for a chord.
-    if (!result.error.isEmpty()) {
-        showViewportToast(tr("Paste"), result.error);
-        return;
-    }
-    if (!result.missing.isEmpty()) {
-        showViewportToast(tr("Paste"),
-                          tr("%1 object(s) pasted — %2 asset(s) missing from this library")
-                              .arg(result.pasted.size()).arg(result.missing.size()));
-        return;
-    }
-    if (result.pasted.isEmpty()) {
-        const QString reason = result.skipped.isEmpty()
-                                   ? tr("the clipboard holds nothing to paste here")
-                                   : result.skipped.first().reason;
-        showViewportToast(tr("Paste"), reason);
-        return;
-    }
-    QString message = tr("%1 object(s) pasted").arg(result.pasted.size());
-    if (!result.imported.isEmpty())
-        message += tr(", %1 asset(s) imported").arg(result.imported.size());
-    showViewportToast(tr("Paste"), message);
-}
 
 
 
