@@ -66,35 +66,29 @@ ENGINE_FAMILY = ["engine", "gi", "rtreflect", "lights", "looks", "distortion", "
                  "materialpreview", "player", "sockets", "threading", "perf", "gizmo", "assets", "log",
                  "shutdown", "openasync", "*vulkan-scripts"]
 
-# THE FORK'S FAMILIES (TEST-SELECTOR-1 T2): a fork pin bump inside a lane selects by what the
-# fork's own diff reaches — each changed fork file, first match:
+# THE FORK'S FAMILIES (TEST-SELECTOR-1 T2; the merge read's D2): a fork pin bump inside a lane
+# selects by what the fork's own diff reaches — each changed fork file, first match:
 #   none    — what the engine never builds or stages: the other render systems, the upstream
 #             samples and their media, the docs (irisgl/engine/CMakeLists.txt stages exactly
 #             Hlms/{Common,Pbs,Unlit}, 2.0/scripts/materials/{Common,HDR,Tutorial_SSAO,
 #             Tutorial_SMAA}, VCT, Compute/Tools, Compute/Algorithms/{IBL,IrradianceFields} and
 #             packs/DebugPack.zip; nothing else of Samples/ reaches a process of ours), and the
 #             HLSL/Metal twins of a shader (Vulkan reads the .glsl / .any);
-#   gi      — the voxel cone tracer and the irradiance field (C++ and media): the gi and rtreflect
-#             dirs and every gi.* / photon.* row;
-#   vulkan  — the Vulkan render system: the engine.* rows (tests/engine and the selftests);
-#   compute — the compute tools: compute, engine, atom;
-#   pbs     — the PBS / Unlit Hlms (C++ and pieces), the staged material scripts, the debug pack:
-#             the pixel family (ENGINE_FAMILY + atom) and every executable that extracts the engine;
-#   ogre    — OgreMain, the other components and plug-ins, the fork's build files: the same
-#             (every executable linking OgreMain is every one that extracts the engine).
-# A fork file no family names is the MERGE tier, printed with its path.
+#   engine  — EVERYTHING ELSE the engine builds or stages: the pixel family (ENGINE_FAMILY + atom)
+#             and every executable that extracts the engine — the pin's selection before this lane.
+#             The narrower arms the first version had are gone (the read's D2, the brief's error):
+#             the Vulkan render system runs every rendering executable; the irradiance field (and
+#             the VCT feeding it) shades every lit pixel at every tier (Types.h fieldDefault);
+#             Compute/Tools is the voxelizer's clear.
+# The only narrowing left is `none`. A fork file no family names is the MERGE tier.
 FORK_FAMILIES = [
     (r"^(Docs/|Scripts/|\.github/|\.circleci/|.*\.md$|LICENSE|README|Other/|Samples/2\.0/|"
      r"RenderSystems/(Direct3D11|GL3Plus|GLES2|Metal)/|.*\.(hlsl|metal)$)", "none"),
-    (r"^Samples/Media/(VCT/|Compute/Algorithms/IrradianceFields/)", "gi"),
-    (r"^Components/Hlms/Pbs/(src|include)/(Vct|IrradianceField|InstantRadiosity)", "gi"),
-    (r"^RenderSystems/Vulkan/", "vulkan"),
-    (r"^Samples/Media/Compute/Tools/", "compute"),
-    (r"^Samples/Media/(Hlms/(Common|Pbs|Unlit)/|Compute/Algorithms/IBL/|packs/DebugPack\.zip$|"
-     r"2\.0/scripts/materials/(Common|HDR|Tutorial_SSAO|Tutorial_SMAA)/)", "pbs"),
-    (r"^Components/Hlms/(Pbs|Common|Unlit)/", "pbs"),
+    (r"^Samples/Media/(VCT/|Compute/Tools/|Compute/Algorithms/(IBL|IrradianceFields)/|Hlms/(Common|Pbs|Unlit)/|"
+     r"packs/DebugPack\.zip$|2\.0/scripts/materials/(Common|HDR|Tutorial_SSAO|Tutorial_SMAA)/)", "engine"),
     (r"^Samples/Media/", "none"),
-    (r"^(OgreMain|Components|PlugIns|RenderSystems/NULL|CMake|CMakeLists\.txt|Dependencies|DependenciesD)", "ogre"),
+    (r"^(OgreMain|Components|PlugIns|RenderSystems/(Vulkan|NULL)|CMake|CMakeLists\.txt|Dependencies|DependenciesD)",
+     "engine"),
 ]
 
 AREA_RULES = [
@@ -1109,17 +1103,9 @@ class Selection:
             why = f"{tag}: fork {fam} ({f})"
             if fam == "none":
                 continue
-            if fam == "gi":
-                self.expand(["gi", "rtreflect"], [], why)
-                self.add([n for n in self.inv if n.startswith(("gi.", "photon."))], why)
-            elif fam == "vulkan":
-                self.expand(["engine"], [], why)
-                self.add([n for n in self.inv if n.startswith("engine.") or "engine_selftest" in n], why)
-            elif fam == "compute":
-                self.expand(["compute", "engine", "atom"], [], why)
-            else:   # "pbs" / "ogre": the pixel family + every executable that extracts the engine
-                self.expand(ENGINE_FAMILY + ["atom"], [], why)
-                self.engine_rows(why)
+            # "engine": the pixel family + every executable that extracts the engine
+            self.expand(ENGINE_FAMILY + ["atom"], [], why)
+            self.engine_rows(why)
         if depth == 0:
             self.rationale.append((p, f"fork pin {(old or '?')[:9]} -> {(new or '?')[:9]}: {len(files)} fork file(s) "
                                       f"by family {dict(hits)} (the full tier runs once, at the merge: --fork-tier)"))
