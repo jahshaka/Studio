@@ -1134,6 +1134,11 @@ class Selection:
         if users:
             for u in users: self.path(u, 1, via=f"names {os.path.basename(p)}")
             notes.append(f"named by {len(users)} test file(s)"); return
+        if not os.path.exists(os.path.join(ROOT, p)) and not self.names_anywhere(os.path.basename(p)):
+            # A tests/ FILE GONE FROM THIS TREE that nothing here runs or names (a replayed range
+            # meets a file a later lane deleted — tests/support/no_xid_run.sh after TEST-SELECTOR-1
+            # H4): retired, said out loud, like a gone row; never a fallback
+            notes.append(f"retired: {os.path.basename(p)} exists nowhere in this tree"); return
         self.fallback.append(f"{tag}: no suite owns this tests/ path")
         notes.append("no suite owns it → fallback")
 

@@ -162,7 +162,7 @@
    ],
    "env": [],
    "max_rows": 10,
-   "note": "the old selector fell back on tests/support/no_xid_run.sh; the change is one suite's registration, its script and its wrapper"
+   "note": "the old selector fell back on the suite's Xid wrapper (deleted since TEST-SELECTOR-1 H4); the change is one suite's registration, its script and its wrapper"
   },
   {
    "lane": "ATOM-CPU-WALKS-1",
