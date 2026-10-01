@@ -34,7 +34,6 @@ class Database;
 class Project;
 class EditorData;
 class Gizmo;
-enum WindowSpaces : int;      // mainwindow.h
 class SceneMirror;
 namespace jahshaka { namespace engine { class Scene; } }
 enum class SceneMode;         // playbackservice.h
@@ -291,7 +290,6 @@ public:
     virtual EditorData *getEditorData() = 0;
 
     // ---- modes ----
-    virtual void setWindowSpace(WindowSpaces windowSpace) = 0;
     virtual void setSceneMode(SceneMode sceneMode) = 0;
     virtual void enterEditorMode() = 0;
     virtual void enterPlayerMode() = 0;

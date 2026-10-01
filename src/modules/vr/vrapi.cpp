@@ -224,7 +224,7 @@ View *desktopViewOf(Engine *e, View *eyes)
 
 }   // namespace
 
-VrApi::VrApi(ScriptHost &host, const ModuleHost &moduleHost)
+VrApi::VrApi(ScriptHost &host, const StudioContext &moduleHost)
     : ApiModule(host), moduleHost(moduleHost)
 {
     // THE PROXIES FOLLOW THE DRIVER'S OWN TICK, because they belong to ANY

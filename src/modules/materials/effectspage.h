@@ -186,6 +186,9 @@ public:
 	// a caller can tell "did nothing" from "not available".
 	bool graphUndo();
 	bool graphRedo();
+	/// The OPEN TAB's edit stack, or null with no material open — what the
+	/// shell's undo group makes active while the Materials space is up.
+	QUndoStack *graphUndoStack() const { return activeStack(); }
 
 	/// Opens the graph's node-SEARCH palette. The page-scoped entry point for
 	/// the shell's Space key (owner decision 2026-09-05: on the Materials space

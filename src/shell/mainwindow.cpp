@@ -158,15 +158,15 @@ For more information see the LICENSE file
 #include "irisgl/document/physics/environment.h"
 #include "irisgl/document/input/inputmap.h"
 
-#include "modules/materials/effectspage.h"
-#include "modules/materials/materialsmodule.h"
-#include "modules/publish/publishmodule.h"
-#include "modules/avatar/avatarmodule.h"
 #include "modules/vr/vrmodule.h"
-#include "modules/avatar/api/avatarapi.h"
-#include "player/playermodule.h"
+#include "modules/moduleregistry.h"
 #include "services/playerservice.h"
 #include "modules/studiomodule.h"
+#include "shell/actionhost.h"
+#include "shell/modulehub.h"
+#include "shell/pagehost.h"
+#include "shell/shelllifecycle.h"
+#include "shell/shellview.h"
 #include "player/playerwidget.h"
 #include "player/engineplayerview.h"
 #include "viewport/headlesseditorviewport.h"
@@ -279,7 +279,18 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
 	currentSpace = WindowSpaces::DESKTOP;
 	originalTitle = windowTitle();
 
-	setupProjectDB();
+	// THE SHELL'S PARTS (D10-SHELL-MODULES). The lifecycle opens the library
+	// now and owns the whole shutdown order; the pages are keyed by id; every
+	// keyboard action, menu row and toolbar slot goes through the action host;
+	// the modules are driven through their hooks by the hub.
+	lifecycle = new ShellLifecycle(this);
+	db = lifecycle->openLibrary();
+	pageHost = new PageHost(ui->stackedWidget, this, this);
+	shortcutRegistry = new ShortcutRegistry(settings->settings, this);
+	actionHost = new ActionHost(shortcutRegistry, this, [this]() { return currentSpaceId(); }, this);
+	moduleHub = new ModuleHub(this);
+	moduleHub->setSpaceEditTarget(spaces::id(WindowSpaces::EDITOR), [this]() { return editorEditTarget(); });
+	shellView = new ShellView(this);
 
     prefsDialog = new PreferencesDialog(nullptr, db, settings);
     aboutDialog = new AboutDialog();
@@ -418,7 +429,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
 			? ScriptRunPolicy::Live : ScriptRunPolicy::Off);
 	if (prefsDialog) prefsDialog->wireScripting(scriptEngine);
 	registerStudioModules(*scriptEngine);
-	for (auto *module : modules) module->registerApi(*scriptEngine);
+	moduleHub->registerApi(*scriptEngine);
 
 	// THE CONSOLE IS THE BOTTOM AREA'S THIRD TAB (owner, 2026-09-14, lane
 	// SPACE-2). Its DOCK is built in setupDockWidgets — it has to exist before
@@ -463,7 +474,83 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
 	// Every exit path funnels through aboutToQuit (a window close,
 	// QApplication::exit/quit from the CLI runners, quitOnLastWindowClosed) —
 	// teardown of background workers must not depend on closeEvent alone.
-	connect(qApp, &QCoreApplication::aboutToQuit, this, &MainWindow::shutdownBackgroundWork);
+	connect(qApp, &QCoreApplication::aboutToQuit, lifecycle, &ShellLifecycle::stopBackgroundWork);
+
+	// WHAT THE SHUTDOWN ORDER NEEDS FROM THIS WINDOW (shell/shelllifecycle.h).
+	ShellLifecycle::Parts parts;
+	parts.window = this;
+	parts.settings = settings;
+	parts.modules = moduleHub;
+	parts.scriptEngine = scriptEngine;
+	parts.scriptHost = scriptHost;
+	parts.projectService = projectService;
+	parts.undoService = undoService;
+	parts.undoStack = undoStack;
+	parts.openInFlight = [this]() { return isOpeningProject(); };
+	parts.settleOpen = [this](int budgetMs) {
+		openRunner->waitForDone(budgetMs);
+		if (openRunner->isRunning()) openRunner->requestAbort();
+	};
+	parts.stopOpen = [this](int budgetMs) {
+		if (!openRunner) return true;
+		openRunner->requestAbort();
+		return openRunner->waitForDone(budgetMs);
+	};
+	parts.saveScene = [this]() { saveScene(); };
+	parts.storeEditorLayout = [this]() {
+		// THE EDITOR'S LAYOUT, NOT THIS PAGE'S (lane SPACE-1, 2026-09-14). Every
+		// space but the editor hides the editor's docks, and immersive
+		// fullscreen hides them inside it — so saving the live state was saving
+		// "no panels" for anyone who quit from the Player, from the Materials
+		// page or from F11, and that is what the next launch restored.
+		// captureEditorDockState() takes the live layout when the editor is the
+		// page on screen and does nothing when it is not; the snapshot taken on
+		// the way out of the editor then stands. With neither — a session that
+		// never opened a scene — the stored layout is left exactly as it was,
+		// because this session has nothing better to say about it.
+		captureEditorDockState();
+		DockState::store(settings->settings, QString::fromLatin1(kViewportDockStateKey),
+		                 editorDockState);
+	};
+	parts.stopImports = [this](int budgetMs) {
+		bool stopped = true;
+		if (assetWidget) stopped &= assetWidget->shutdownImports(budgetMs);
+		if (_assetView) stopped &= _assetView->shutdownImports(budgetMs);
+		return stopped;
+	};
+	parts.stopAssistant = [this]() {
+		if (mcpServer) mcpServer->stop();
+		if (claudeChatHost) claudeChatHost->shutdown();
+	};
+	parts.deleteServices = [this]() {
+		// The QObject services (selection/playback/sceneEdit) are parented to
+		// the window; the plain ones are deleted here.
+		delete services;
+		services = nullptr;
+		// Before sceneEditService (which it points at) and before the scene
+		// dies: its destructor puts any borrowed material back.
+		delete materialPreviewService;
+		materialPreviewService = nullptr;
+		delete projectService;
+		projectService = nullptr;
+		delete thumbnailService;
+		thumbnailService = nullptr;
+		delete assetService;
+		assetService = nullptr;
+		delete undoService;
+		undoService = nullptr;
+		delete ui;
+		ui = nullptr;
+	};
+	parts.forgetViews = [this]() {
+		sceneView = nullptr;
+		playerView = nullptr;
+		viewPort = nullptr;
+		_assetView = nullptr;
+		assetsPlaceholder = nullptr;
+		assetsPreviewViewer = nullptr;   // a child of this window: gone with the sweep
+	};
+	lifecycle->setParts(parts);
 
 	// Step 7 of the shutdown order has no code of its own: it IS ~QWidget
 	// destroying this window's children. A plain QObject child records it on
@@ -1018,267 +1105,8 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event)
 
 void MainWindow::closeEvent(QCloseEvent *event)
 {
-	// A SCRIPT IN FLIGHT IS STOPPED FIRST, and the close waits for it
-	// (SCRIPTING_LIVE_SPEC). A run holds the UI thread only between hops now,
-	// so this window CAN be closed while a script is working — and closing it
-	// destroys the script engine, the host and the modules under a worker
-	// thread that is about to hop into them. Stop the run (it ends at its next
-	// JavaScript boundary; a run parked inside a long verb ends when that verb
-	// returns) and re-post the close for when it has, which is the same
-	// promise app.quit() makes.
-	if (scriptEngine && scriptEngine->isRunning()) {
-		scriptEngine->stop();
-		if (scriptHost && scriptHost->afterRun)
-			scriptHost->afterRun([this]() { close(); });
-		event->ignore();
-		return;
-	}
-
-	// An open IN FLIGHT is finished first (services/sceneopenrunner.h). Its
-	// slices are short and waitForDone pumps the loop that runs them, so this
-	// costs at most the rest of one open — and it is what makes the decision
-	// below coherent: closing halfway through an install found sceneOpen still
-	// false and a dirty undo stack, and asked the user to save a document that
-	// was not built yet (a modal QMessageBox that then swallowed the quit and
-	// left the process alive — the import.shutdown zombie, wearing a different
-	// hat). Re-entrancy is guarded: the pump can deliver another close.
-	static bool sSettlingOpen = false;
-	if (sSettlingOpen) return;   // a nested close under the settle: the outer one finishes
-	if (isOpeningProject()) {
-		sSettlingOpen = true;
-		openRunner->waitForDone(5000);
-		if (openRunner->isRunning()) openRunner->requestAbort();
-		sSettlingOpen = false;
-	}
-
-    bool closing = false;
-	bool autoSave = settings->get(settingkeys::autoSave);
-
-	if (autoSave && projectService->isSceneOpen()) {
-		saveScene();
-		closing = true;
-		event->accept();
-	}
-	else {
-		// `isSceneOpen()` is part of the CONDITION, not just the branch above
-		// it (2026-09-04, found by app.watchdog_stall): with no project open
-		// the undo stack is still dirty — the editor's default scene put
-		// entries there — so this asked the user to save a document that does
-		// not exist, with a modal QMessageBox that swallowed the quit and left
-		// the process alive — the same zombie the in-flight-open settle at the
-		// top of this function was written for, in a second guise. Nothing to
-		// save means nothing to ask.
-		if (undoService->isDirty() && !undoService->savedCountMatchesCurrent()
-		    && projectService->isSceneOpen()) {
-			QMessageBox::StandardButton reply;
-			reply = QMessageBox::question(this,
-				"Unsaved Changes",
-				"There are unsaved changes, save before closing?",
-				QMessageBox::Yes | QMessageBox::No | QMessageBox::Cancel);
-			if (reply == QMessageBox::Yes) {
-				saveScene();
-				event->accept();
-				closing = true;
-			}
-			else if (reply == QMessageBox::No) {
-				event->accept();
-				closing = true;
-			}
-			else {
-				event->ignore();
-				return;
-			}
-		}
-		else {
-			event->accept();
-			closing = true;
-		}
-	}
-
-	// (THE DONATE DIALOG USED TO RUN HERE, modally, as the last thing a user
-	// saw on the way out. It moved to FIRST LAUNCH — app/firstrun.h, called
-	// from main() — for two reasons: asking on the way out is the worst moment
-	// to ask, and a nested modal event loop inside closeEvent meant app.quit()
-	// could not complete until somebody clicked it. Owner decision D3,
-	// 2026-09-12. Nothing may be added here that runs its own event loop.)
-
-	// STEP 1 of the shutdown order (the whole sequence is documented in one
-	// place, at ~MainWindow, and enumerated in shell/shutdownorder.h). Recorded
-	// HERE, past the Cancel branch above: a close the user backed out of is not
-	// a shutdown.
-	JAH_SHUTDOWN_STEP(ShutdownOrder::CloseEvent, "closeEvent: autosave + settings");
-
-	// The session's own totals (SESSION_LOG_SPEC §5, "clean quit"). Written
-	// HERE, past the Cancel branch, for the same reason the step above is: a
-	// close the user backed out of is not the end of the session. JahLog's
-	// close bracket and by-level roll-up follow later, in finalizeAppExit.
-	SessionMarkers::logQuitSummary();
-
-	settings->setValue("geometry", saveGeometry());
-	settings->setValue("windowState", saveState());
-	// ...and the EDITOR DOCKS, which live in the nested `viewPort` QMainWindow
-	// and are therefore not in the line above (shell/dockstate.h).
-	//
-	// THE EDITOR'S LAYOUT, NOT THIS PAGE'S (lane SPACE-1, 2026-09-14). Every
-	// space but the editor hides the editor's docks, and immersive fullscreen
-	// hides them inside it — so saving the live state was saving "no panels"
-	// for anyone who quit from the Player, from the Materials page or from
-	// F11, and that is what the next launch restored. captureEditorDockState()
-	// takes the live layout when the editor is the page on screen and does
-	// nothing when it is not; the snapshot taken on the way out of the editor
-	// then stands. With neither — a session that never opened a scene — the
-	// stored layout is left exactly as it was, because this session has
-	// nothing better to say about it.
-	captureEditorDockState();
-	DockState::store(settings->settings, QString::fromLatin1(kViewportDockStateKey),
-	                 editorDockState);
-
-    // Orderly teardown BEFORE the window disappears: dialogs close with a
-    // window still on screen, and a mid-flight import batch is aborted and
-    // joined while the event loop can still service its commit hop. (Also
-    // wired to aboutToQuit for the QApplication::exit/quit paths.)
-    shutdownBackgroundWork();
-}
-
-void MainWindow::shutdownBackgroundWork()
-{
-    // Idempotent: closeEvent AND aboutToQuit both land here.
-    static bool sDone = false;
-    if (sDone) return;
-    sDone = true;
-
-    // STEP 2 of the shutdown order (see ~MainWindow / shell/shutdownorder.h).
-    JAH_SHUTDOWN_STEP(ShutdownOrder::BackgroundWork, "shutdownBackgroundWork: workers joined");
-
-    // A RUNNING CAPTURE IS FINISHED AND WRITTEN FIRST, before anything below
-    // touches the engine (CLEANUP-1 item 1). The owner presses Ctrl+F4, sees
-    // the problem, and closes the window — and until this line the bundle was
-    // simply thrown away: finish() never ran, so there was no machine.json, the
-    // trace kept its open bracket, and the engine's ring (which holds the last
-    // frames of every capture) was never drained. finalizeAppExit stops the
-    // monitor too, but it runs after this function, after the modules are down
-    // and after a forced exit can already have taken the process — which is
-    // precisely the quit the owner is recording when something is wrong.
-    //
-    // Idempotent and free when idle: stop() returns false with no capture
-    // running and the second call at finalizeAppExit then does nothing.
-    FrameMonitor::instance().stop();
-
-    // The main-thread watchdog goes FIRST. A teardown that takes two seconds
-    // is normal — the joins below are bounded at 3 s each on purpose — and a
-    // watchdog left running would photograph a perfectly healthy shutdown and
-    // deliver a signal into the middle of it. (Not to be confused with the 20 s
-    // force-exit thread started a few lines down: that one IS the shutdown
-    // watchdog. STABILITY_PROGRAM_SPEC §3 item 10.)
-    MainThreadWatchdog::stop();
-
-    // A worker that will not die must never zombify the process: from here
-    // the whole teardown is bounded. If anything below (or Qt's/Ogre's own
-    // destruction) wedges, log and force the exit — better a logged forced
-    // exit than a headless process orphaning a "loading" dialog.
-    std::thread([]() {
-        std::this_thread::sleep_for(std::chrono::seconds(20));
-        qWarning("shutdown watchdog: teardown exceeded 20s — forcing process exit");
-        std::fflush(nullptr);
-        std::_Exit(0);
-    }).detach();
-
-    // The library's background bake rebuild (FORWARD-ONLY-1 D1): joined here,
-    // a bake in flight finishes into its own temp and is discarded.
-    MeshBakeStore::stopBackgroundRebuild();
-
-    // THE FIRST-RUN PRESET SEED (RESET-LIBRARY-1's fix round). Its own header
-    // said "the app's shutdown calls it" and only the --script path
-    // (scriptrunner.cpp) ever did — so a window closed during the first
-    // launch's seed left a worker copying and fsyncing map files into the
-    // store while the rest of this function tore the app down around it, to be
-    // reaped by the pool wait below only if it happened to finish, and by the
-    // forced exit if it did not. It is a WARM-UP: aborting costs at most the
-    // file in flight, the next launch finishes what was skipped, and the abort
-    // reaches the runner underneath it too, which is what lets the pool wait
-    // further down do the joining.
-    MaterialPresetSeeder::instance().requestAbort();
-
-    // EVERY MODULE IS TOLD TO STOP FIRST (item 2). Module workers ride the same
-    // global pool the wait below joins, and shutdownModules() — where a
-    // module's own abort used to live — runs AFTER that wait and after the
-    // forced exit behind it. Nothing here joins: abort, flush, return, and let
-    // the one pool wait below do the joining for all of them.
-    for (auto *module : modules)
-        if (module) module->abortBackgroundWork();
-
-    // Import pipeline: abort batches, join workers (bounded), close the
-    // progress dialogs, drop viewer-tail queues.
-    bool workersStopped = true;
-    // The open runner: abandon whatever is left and join its parse worker.
-    if (openRunner) {
-        openRunner->requestAbort();
-        workersStopped &= openRunner->waitForDone(3000);
-    }
-    if (assetWidget) workersStopped &= assetWidget->shutdownImports(3000);
-    if (_assetView) workersStopped &= _assetView->shutdownImports(3000);
-
-    // Archive export/import (STABILITY_PROGRAM_SPEC Lane 4): cancelled and
-    // joined, bounded, exactly like the import batches. Every live archiver —
-    // this window's exporter and the project page's importer — is covered by
-    // the one static call.
-    workersStopped &= ProjectArchiver::shutdownArchives(3000);
-
-    // The MCP endpoint must not accept requests into a half-torn-down app.
-    if (mcpServer) mcpServer->stop();
-
-    // The Claude chat subprocess: closes stdin, waits briefly, kills.
-    if (claudeChatHost) claudeChatHost->shutdown();
-
-    ThumbnailGenerator::getSingleton()->shutdown();
-
-    // THE LAST SAVE'S THUMBNAIL (CREATE-GAP-1): a save encodes its PNG on a
-    // worker and writes it when the worker is done — closeEvent's autosave
-    // above is exactly such a save. Waited for and WRITTEN here, while the
-    // database is still open, so a quit never drops the picture of the world
-    // it just saved. Bounded by one PNG encode (~100 ms).
-    if (projectService) {
-        const int drained = projectService->drainThumbnailEncodes();
-        if (drained) qInfo("shutdown: wrote %d pending project thumbnail(s)", drained);
-    }
-
-    // Reap the remaining pool workers (metadata/peaks/bake futures) so
-    // QThreadPool's exit-time wait finds an empty pool.
-    workersStopped &= QThreadPool::globalInstance()->waitForDone(3000);
-
-    if (!workersStopped) {
-        // A worker outlived its abort window. Continuing would run the rest
-        // of Qt teardown (window + services destroyed, DB closed, engine
-        // released) UNDER a thread still using those objects — an exit-time
-        // crash, and the settings are already saved by now. Stop here, on
-        // purpose and on the record: a logged forced exit beats both a
-        // zombie and a crash.
-        qWarning("shutdown: background workers did not stop in time — forcing a clean "
-                 "process exit now (settings are saved; no teardown race)");
-        std::fflush(nullptr);
-        std::_Exit(0);
-    }
-
-    shutdownModules();
-}
-
-void MainWindow::shutdownModules()
-{
-    // STEP 3 of the shutdown order (see ~MainWindow / shell/shutdownorder.h).
-    //
-    // StudioModule::shutdown() is part of the module contract and had ZERO
-    // call sites (deep audit 2026-09, area 1): the avatar module's documented
-    // guarantee — "only the document model is ours, and it must go before the
-    // engine does" — simply did not hold. Here is the place where it does:
-    // after the workers are joined and BEFORE EngineHost::shutdown() (step 4),
-    // so a module still sees a live engine while it lets go of it.
-    //
-    // The module OBJECTS are deleted in ~MainWindow, not here: a module's page
-    // is still in the stacked widget at this point and the destructor order of
-    // the two must stay the Qt one.
-    JAH_SHUTDOWN_STEP(ShutdownOrder::Modules, "modules shut down");
-    for (auto *module : modules)
-        if (module) module->shutdown();
+    // STEP 1 of the shutdown order — the whole sequence is ShellLifecycle's.
+    lifecycle->closeRequested(event);
 }
 
 void MainWindow::setupFileMenu()
@@ -1293,49 +1121,6 @@ void MainWindow::sceneTreeCustomContextMenu(const QPoint& pos)
 void MainWindow::stopAnimWidget()
 {
     animWidget->stopAnimation();
-}
-
-void MainWindow::setupProjectDB()
-{
-    const QString path = IrisUtils::join(
-        AppPaths::dataRoot(), Constants::JAH_DATABASE
-    );
-
-    // Library lock (ASSET_PIPELINE preflight §6.2): held for the app's
-    // lifetime so store migration tools can refuse while any instance runs.
-    // Non-fatal — a second instance simply runs without the lock, as before.
-    LibraryLock::acquire(path);
-
-    db = new Database();
-	if (db->initializeDatabase(path)) {
-		db->createAllTables();
-	}
-	// THE TILE CACHE READS BY GUID (D11-LIBRARY-SCALE): listings carry no
-	// thumbnail, so the cache's batches read the pictures a view paints from
-	// here, on this thread; a thumbnail written anywhere drops the cached tile.
-	TileCache::instance().setSource(TileCache::Kind::Asset, [this](const QStringList &guids) {
-		return db ? db->fetchAssetThumbnailBytes(guids) : QHash<QString, QByteArray>();
-	});
-	TileCache::instance().setSource(TileCache::Kind::Project, [this](const QStringList &guids) {
-		return db ? db->fetchProjectThumbnailBytes(guids) : QHash<QString, QByteArray>();
-	});
-	Database::setAssetThumbnailWritten([](const QString &guid) {
-		TileCache::instance().invalidate(TileCache::Kind::Asset, guid);
-	});
-    // THE SEEDS (services/primitiveassets.h). The primitives, the Ground and the
-    // samples' Teapot are baked library assets now: one import and one bake each,
-    // the first time a library is opened, SYNCHRONOUSLY here — not on a worker,
-    // because a library whose row count moves while a script runs is the defect
-    // MaterialPresetSeeder's header describes. A library that already holds them
-    // pays one catalog query per row.
-    QStringList seedErrors;
-    const int seeded = PrimitiveAssets::seedAll(db, &seedErrors);
-    if (seeded > 0) irisLog(QStringLiteral("primitives: baked %1 shipped meshes").arg(seeded));
-    for (const QString &line : seedErrors) irisLog("primitive seed: " + line);
-    // STALE BAKES, IN THE BACKGROUND (FORWARD-ONLY-1 D1): a build that changed
-    // the bake's producer rebuilds every stale bake from its own source, at the
-    // lowest priority; an open rebuilds the ones it needs first, itself.
-    MeshBakeStore::startBackgroundRebuild();
 }
 
 void MainWindow::setupServices()
@@ -1609,80 +1394,46 @@ void MainWindow::deselectViewports()
 	player_menu->setCursor(Qt::ArrowCursor);
 }
 
-/// Space names for the log — the same words app.space() accepts, so a record
-/// and a script read the same way.
-static const char *spaceName(WindowSpaces s)
-{
-	switch (s) {
-	case WindowSpaces::DESKTOP: return "desktop";
-	case WindowSpaces::PLAYER:  return "player";
-	case WindowSpaces::EDITOR:  return "editor";
-	case WindowSpaces::EFFECT:  return "materials";
-	case WindowSpaces::ASSETS:  return "assets";
-	case WindowSpaces::PUBLISH: return "publish";
-	case WindowSpaces::AVATAR:  return "avatar";
-	}
-	return "?";
-}
-
+// THE ASSET SEAMS (AVATAR_ASSET_SPEC §5.5): a page or the viewport asks for an
+// asset to be opened / spawned / assigned; the hub hands it to the module that
+// contributed its KIND, and the module calls its own verb. Neither side learns
+// about the other.
 void MainWindow::spawnAvatarAsset(const QString &guid, const iris::Vec3 &position,
                                   bool hasPosition)
 {
-    if (!avatarModule) return;
-    auto *api = avatarModule->api();
-    if (!api) return;
-    QVariantMap options;
-    if (hasPosition)
-        options.insert(QStringLiteral("position"),
-                       QVariantMap{ { "x", position.x() }, { "y", position.y() },
-                                    { "z", position.z() } });
-    if (api->quietly([&] { return api->spawn(guid, options); }).isEmpty()
-        && !api->lastError().isEmpty())
-        QMessageBox::warning(this, tr("Add Avatar to Scene"), api->lastError());
+    AssetRef ref;
+    ref.guid = guid;
+    ref.kind = QStringLiteral("avatar");
+    ref.intent = AssetRef::Intent::Spawn;
+    ref.hasPosition = hasPosition;
+    ref.position[0] = position.x();
+    ref.position[1] = position.y();
+    ref.position[2] = position.z();
+    moduleHub->openAsset(ref);
 }
 
 void MainWindow::assignAnimationAsset(const QString &guid, const iris::SceneNodePtr &node)
 {
-    // NOTHING UNDER THE CURSOR (R2, 2026-09-11: an Animation tile dropped in
-    // the viewport did nothing at all, with no message). A clip is not a scene
-    // object — it is something a character wears — so the drop says that.
-    if (!node) {
-        showViewportToast(tr("Animation"),
-                          tr("Drop an animation onto a character to assign the clip"));
-        return;
+    AssetRef ref;
+    ref.guid = guid;
+    ref.kind = QStringLiteral("avatar");
+    ref.intent = AssetRef::Intent::Assign;
+    if (node) {
+        ref.targetGuid = node->getGUID();
+        ref.targetName = node->getName();
     }
-    if (!avatarModule) return;
-    auto *api = avatarModule->api();
-    if (!api) return;
-    const QVariantMap result =
-        api->quietly([&] { return api->loadClip(node->getGUID(), guid, QVariantMap()); });
-    if (result.isEmpty()) {
-        showViewportToast(tr("Animation"),
-                          api->lastError().isEmpty()
-                              ? tr("'%1' cannot take this clip").arg(node->getName())
-                              : api->lastError());
-        return;
-    }
-    const QVariantList added = result.value(QStringLiteral("clips")).toList();
-    showViewportToast(tr("Animation"),
-                      tr("%1 clip(s) added to %2").arg(added.size()).arg(node->getName()));
+    moduleHub->openAsset(ref);
 }
 
-void MainWindow::openAssetInModule(const QString &guid, const QString &moduleId,
+void MainWindow::openAssetInModule(const QString &guid, const QString &kind,
                                    const QString &scope)
 {
-    if (moduleId != QLatin1String("avatar") || !avatarModule) return;
-    switchSpace(WindowSpaces::AVATAR);
-    if (auto *api = avatarModule->api()) {
-        QVariantMap options;
-        if (!scope.isEmpty()) options.insert(QStringLiteral("scope"), scope);
-        const QVariantMap opened = api->quietly([&] { return api->open(guid, options); });
-        // A refusal is the module's own message (a definition that will not
-        // parse, a project scope with nothing pinned) — shown here because a
-        // menu click has no JS engine to throw into.
-        if (opened.isEmpty() && !api->lastError().isEmpty())
-            QMessageBox::warning(this, tr("Edit in Avatar Module"), api->lastError());
-    }
+    AssetRef ref;
+    ref.guid = guid;
+    ref.kind = kind;
+    ref.scope = scope;
+    ref.intent = AssetRef::Intent::Open;
+    moduleHub->openAsset(ref);
 }
 
 void MainWindow::switchSpace(WindowSpaces space, bool force)
@@ -1695,9 +1446,7 @@ void MainWindow::switchSpace(WindowSpaces space, bool force)
 	// Every attempt starts with a clean slate: whatever refused last time is
 	// not the reason this one might (SMOKE-FIX-1).
 	spaceRefusal.clear();
-	SessionMarkers::logSpaceSwitch(QString::fromLatin1(spaceName(currentSpace)),
-	                               QString::fromLatin1(spaceName(space)));
-	ListWidget::stopHighlightedNode();
+	SessionMarkers::logSpaceSwitch(spaces::id(currentSpace), spaces::id(space));
 
 	// properly shutdown previous space
 	switch (currentSpace) {
@@ -1728,7 +1477,7 @@ void MainWindow::switchSpace(WindowSpaces space, bool force)
 			// enterDesktop).
 			pmContainer->enterDesktop();
 
-			ui->stackedWidget->setCurrentIndex(0);
+			pageHost->show(spaces::id(WindowSpaces::DESKTOP));
 
             hideEditorPanels();
             ui->actionClose->setDisabled(true);
@@ -1747,11 +1496,10 @@ void MainWindow::switchSpace(WindowSpaces space, bool force)
         }
 
         case WindowSpaces::PLAYER: {
-            ui->stackedWidget->setCurrentIndex(4);
+            pageHost->show(spaces::id(WindowSpaces::PLAYER));
             hideEditorPanels();
             toolBar->setVisible(false);
 
-			this->sceneView->setWindowSpace(space);
             playbackService->setSceneMode(SceneMode::PlayMode);
             playSceneBtn->hide();
             this->enterPlayMode();
@@ -1777,7 +1525,7 @@ void MainWindow::switchSpace(WindowSpaces space, bool force)
 
         case WindowSpaces::ASSETS: {
             ensureAssetsPage();   // built on its first showing (D11-LIBRARY-SCALE)
-            ui->stackedWidget->setCurrentIndex(2);
+            pageHost->show(spaces::id(WindowSpaces::ASSETS));
             _assetView->setFocus();
 			_assetView->spaceSplits();
     		hideEditorPanels();
@@ -1790,24 +1538,13 @@ void MainWindow::switchSpace(WindowSpaces space, bool force)
     	}
 
 		case WindowSpaces::EFFECT: {
-			qDebug() << "switchSpace(EFFECT): count" << ui->stackedWidget->count()
-			         << "index before" << ui->stackedWidget->currentIndex();
-			ui->stackedWidget->setCurrentIndex(3);
-			ui->stackedWidget->currentWidget()->setFocus();
-
+			pageHost->show(spaces::id(WindowSpaces::EFFECT), true);
 			toolBar->setVisible(false);
-
-			shaderGraph->refreshShaderGraph();
-			qDebug() << "switchSpace(EFFECT): index now" << ui->stackedWidget->currentIndex()
-			         << "current" << ui->stackedWidget->currentWidget()
-			         << "shaderGraph visible" << shaderGraph->isVisible()
-			         << "size" << shaderGraph->size();
-
 			break;
 		}
 
 		case WindowSpaces::PUBLISH: {
-			ui->stackedWidget->setCurrentIndex(5);
+			pageHost->show(spaces::id(WindowSpaces::PUBLISH));
 			hideEditorPanels();
 			toolBar->setVisible(false);
 			if (projectService->isSceneOpen()) playSceneBtn->hide();
@@ -1815,8 +1552,7 @@ void MainWindow::switchSpace(WindowSpaces space, bool force)
 		}
 
 		case WindowSpaces::AVATAR: {
-			ui->stackedWidget->setCurrentIndex(6);
-			ui->stackedWidget->currentWidget()->setFocus();
+			pageHost->show(spaces::id(WindowSpaces::AVATAR), true);
 			hideEditorPanels();
 			toolBar->setVisible(false);
 			if (projectService->isSceneOpen()) playSceneBtn->hide();
@@ -1825,6 +1561,11 @@ void MainWindow::switchSpace(WindowSpaces space, bool force)
 
         default: break;
     }
+
+	// EVERY MODULE HEARS THE SWITCH (StudioModule::onSpaceChanged) — the
+	// Materials page re-reads its graph on the way in. A refused switch never
+	// gets here: its bounce made a switch of its own.
+	moduleHub->spaceChanged(spaces::id(previousSpace), spaces::id(space));
 
 	updateTopMenuStates(space);
 	// The scene-issue bar belongs to the EDITOR and is a top-level window that
@@ -1844,14 +1585,13 @@ void MainWindow::switchSpace(WindowSpaces space, bool force)
 // which a scene open resets to perspective, and the cover/bounce check.
 bool MainWindow::enterEditorSpace()
 {
-    ui->stackedWidget->setCurrentIndex(1);
+    pageHost->show(spaces::id(WindowSpaces::EDITOR));
 
 	applyDockVisibilityForSpace();
 	playerControls->setVisible(false);
 
 	applyColumnWidthsOnce();
 
-	this->sceneView->setWindowSpace(WindowSpaces::EDITOR);
     playSceneBtn->show();
     this->enterEditMode();
     playbackService->setSceneMode(SceneMode::EditMode);
@@ -2016,10 +1756,9 @@ void MainWindow::openStageBind(bool playMode)
 	// so this is raised after it.
 	SceneIssues::instance().raiseMissingModels(projectService->missingModels());
 	refreshClaudeChatContext();   // D1: rebind an open chat to the new project
-	// The Materials page's open tabs are per project (MATERIALS_TABS_SPEC
-	// §2.7): this project's set comes back, and it is the only way the page
-	// can be told at all — `setProject` is called once, at module init.
-	if (shaderGraph) shaderGraph->onProjectChanged();
+	// THE MODULES HEAR THE PROJECT (StudioModule::onProjectChanged): the
+	// Materials page's open tabs are per project (MATERIALS_TABS_SPEC §2.7).
+	moduleHub->projectChanged(project);
 
 	if (editorData != Q_NULLPTR) {
 		sceneView->setEditorData(editorData);
@@ -2598,9 +2337,9 @@ void MainWindow::closeProject(CloseIntent intent)
     playbackService->setPlaying(false);
     ui->actionClose->setDisabled(false);
     refreshClaudeChatContext();   // D1: an open chat loses its project
-    // The Materials page saves this project's open tabs and closes the ones
-    // that were the PROJECT's copies — their scope is going with it.
-    if (shaderGraph) shaderGraph->onProjectChanged();
+    // The modules hear the close: the Materials page saves this project's open
+    // tabs and closes the ones that were the PROJECT's copies.
+    moduleHub->projectChanged(nullptr);
 
     undoService->clear();
     AssetManager::clearAssetList();
@@ -3621,8 +3360,8 @@ MainWindow::ColumnMetrics MainWindow::activeColumns() const
     if (currentSpace == WindowSpaces::EDITOR) {
         left = sceneHierarchyDock;
         right = sceneNodePropertiesDock;
-    } else if (ui && ui->stackedWidget) {
-        if (auto *page = dynamic_cast<ColumnedPage *>(ui->stackedWidget->currentWidget())) {
+    } else if (pageHost) {
+        if (auto *page = dynamic_cast<ColumnedPage *>(pageHost->currentPage())) {
             left = page->leftColumn();
             right = page->rightColumn();
         }
@@ -4389,7 +4128,7 @@ void MainWindow::setupViewPort()
             sceneView = createEngineSceneViewport(host.engine(), host.driver(), viewPort);
             // Non-owning: step 5 of the shutdown order checks it (see
             // destroyEngineViews / shell/shutdownorder.h).
-            mEngineWatch = host.engine();
+            lifecycle->watchEngine(host.engine());
             // PANEL-AWARE PACING (fps audit F1): no more literal 16. The driver
             // derives its interval from the screen the window is on and from
             // the persisted pacing mode; wireFramePacing() below feeds it both
@@ -4499,7 +4238,7 @@ AssetView *MainWindow::ensureAssetsPage()
 {
 	// Built once; never in a session without the shell's pages, and never
 	// after teardown (the placeholder is gone with the stack by then).
-	if (_assetView || !assetsPlaceholder || !ui || !ui->stackedWidget) return _assetView;
+	if (_assetView || !assetsPlaceholder || !pageHost) return _assetView;
 	// The Assets page: AssetView gets the EngineAssetViewer made at boot (a
 	// third engine Scene with its own preview document), or none in headless runs.
 	_assetView = new AssetView(db, this, assetsPreviewViewer);
@@ -4518,11 +4257,8 @@ AssetView *MainWindow::ensureAssetsPage()
 	// THE IMPORT DECISION (§8) — the same two handlers the project tray gets.
 	connect(_assetView, &AssetView::reimportAssetRequested, this,
 	        [this](const QString &guid) { openImportSettings(guid); });
-	// Into the placeholder's stack slot: the index order is load-bearing.
-	const int at = ui->stackedWidget->indexOf(assetsPlaceholder);
-	ui->stackedWidget->removeWidget(assetsPlaceholder);
-	ui->stackedWidget->insertWidget(at, _assetView);
-	assetsPlaceholder->deleteLater();
+	// The page takes the placeholder's place under the same id.
+	pageHost->replacePage(spaces::id(WindowSpaces::ASSETS), _assetView);
 	assetsPlaceholder = nullptr;
 	return _assetView;
 }
@@ -4549,14 +4285,14 @@ void MainWindow::setupDesktop()
 		if (assetWidget) assetWidget->refresh();
 	}, Qt::QueuedConnection);
 
-	ui->stackedWidget->addWidget(pmContainer);
-	
-	ui->stackedWidget->addWidget(viewPort);
+	// THE PAGES, BY ID (PageHost). The order they are added in means nothing.
+	pageHost->addPage(spaces::id(WindowSpaces::DESKTOP), pmContainer);
+	pageHost->addPage(spaces::id(WindowSpaces::EDITOR), viewPort);
 	// THE ASSETS PAGE IS BUILT ON ITS FIRST SHOWING, NOT AT BOOT
-	// (D11-LIBRARY-SCALE §3.3): a placeholder holds its stack index (the order is
-	// load-bearing: ASSETS = 2) until ensureAssetsPage() swaps the page in.
+	// (D11-LIBRARY-SCALE §3.3): a placeholder holds its id until
+	// ensureAssetsPage() swaps the page in.
 	assetsPlaceholder = new QWidget;
-	ui->stackedWidget->addWidget(assetsPlaceholder);
+	pageHost->addPage(spaces::id(WindowSpaces::ASSETS), assetsPlaceholder);
 	// ITS PREVIEW VIEWER IS STILL MADE HERE, AT BOOT — A WORKAROUND, NOT A FIX
 	// (ASSETS-VISIT-DEATH-1). With the page AND this viewer both made on the
 	// first Assets visit, ui.window_minimum's app died once on `app.space('assets')`
@@ -4577,40 +4313,27 @@ void MainWindow::setupDesktop()
 		// page"). The page's stacked layout shows it when it becomes current.
 		if (assetsPreviewViewer) assetsPreviewViewer->asWidget()->hide();
 	}
-	// The modules (audit §6.2): the shell constructs them against the full
-	// host context and drives pages through the one interface. Stack order is
-	// load-bearing (WindowSpaces indexes): EFFECT = 3, PLAYER = 4, PUBLISH = 5.
-	ModuleHost moduleHost;
-	moduleHost.db = db;
-	moduleHost.settings = settings;
-	moduleHost.viewport = sceneView;
-	moduleHost.engine = &EngineHost::instance();
-	moduleHost.services = services;
-	moduleHost.project = project;
-	moduleHost.shellWidget = this;
-	materialsModule = new MaterialsModule;
-	publishModule = new PublishModule;
-	avatarModule = new AvatarModule;
-	// VR (SPECS/VR_SPEC.md §4.6, phase 2): verbs only, NO page — the session's
-	// UI is phase 3's (the Player's VR mode) and phase 4's (the editor
-	// preview), and both will call the same `vr.*` verbs this module
-	// registers. A module with no page still gets a place in the loop.
-	vrModule = new VrModule;
-	// The Player space contributes VERBS only (verb-coverage audit F1): its
-	// page is PlayerWidget, built in setupViewPort, because the stacked-widget
-	// index order is load-bearing (PLAYER = 4).
-	playerModule = new PlayerModule;
-	modules = { materialsModule, publishModule, avatarModule, playerModule, vrModule };
-	for (auto *module : modules) module->initialize(moduleHost);
+	// The Player's page is PlayerWidget, built in setupViewPort with its engine
+	// backend.
+	pageHost->addPage(spaces::id(WindowSpaces::PLAYER), playerView);
 
-	shaderGraph = materialsModule->effectsPage();
-	ui->stackedWidget->addWidget(materialsModule->createPage());
-	ui->stackedWidget->addWidget(playerView);
-	publishView = publishModule->createPage();
-	ui->stackedWidget->addWidget(publishView);
-	// AVATAR = stack index 6, APPENDED (R0.14: switchSpace's indices are hard-coded).
-	avatarView = avatarModule->createPage();
-	ui->stackedWidget->addWidget(avatarView);
+	// THE MODULES (StudioModule v2): built from the compiled-in list, given the
+	// one context, and asked what they contribute — their pages land in the
+	// PageHost under their ids, their rows and toolbar actions in the
+	// ActionHost. The shell never names a module's class.
+	StudioContext context;
+	context.db = db;
+	context.settings = settings;
+	context.viewport = sceneView;
+	context.engine = &EngineHost::instance();
+	context.services = services;
+	context.project = project;
+	context.shellWidget = this;
+	context.shell = shellView;
+	moduleHub->setModules(moduleregistry::createAll());
+	moduleHub->initialize(context);
+	moduleHub->contribute(pageHost, actionHost);
+	vrModule = static_cast<VrModule *>(moduleHub->module(QStringLiteral("vr")));
 
 	connect(pmContainer, SIGNAL(closeProject()), SLOT(closeProject()));
 	connect(pmContainer, &ProjectManager::fileToCreate,
@@ -4915,75 +4638,100 @@ void MainWindow::setupShortcuts()
     // shortcut system cannot express (RMB-held fly keys, held modifiers,
     // Alt+drag) are registered as fixed rows for discoverability; their
     // handling lives in the viewport's event code.
-    shortcutRegistry = new ShortcutRegistry(settings->settings, this);
-    ShortcutRegistry &reg = *shortcutRegistry;
+    //
+    // Every row goes through the ActionHost (shell/actionhost.h): it is defined
+    // once, and its handler is SPACE-SCOPED — `editor` rows run only while the
+    // editor is the space, and a module adds the handler for its own space to
+    // the same row (the Materials page's Space and F). The registry itself was
+    // made in the constructor, where the modules' rows could join it.
+    ActionHost &actions = *actionHost;
+    const QString editor = spaces::id(WindowSpaces::EDITOR);
+    const QString player = spaces::id(WindowSpaces::PLAYER);
+    const QString any;
+    auto row = [&actions](const char *id, const char *label, const char *category,
+                          const QKeySequence &keys, const QString &space,
+                          const std::function<void()> &run) {
+        Contributions::Shortcut r;
+        r.id = QString::fromLatin1(id);
+        r.label = QString::fromUtf8(label);
+        r.category = QString::fromLatin1(category);
+        r.keys = keys;
+        r.space = space;
+        r.run = run;
+        actions.addRow(r);
+    };
+    auto fixed = [&actions](const char *id, const char *label, const char *category,
+                            const char *text) {
+        Contributions::FixedRow r;
+        r.id = QString::fromLatin1(id);
+        r.label = QString::fromUtf8(label);
+        r.category = QString::fromLatin1(category);
+        r.text = QString::fromUtf8(text);
+        actions.addFixedRow(r);
+    };
 
     // ---- tools (Unreal keys: W/E/R; T kept as the historical translate key.
     // While RMB is held these keys fly the camera — the viewport withholds
     // them from the shortcut system, see EngineSceneViewport::event) ----
-    reg.add("tool.translate", "Translate Tool", "Tools", QKeySequence(Qt::Key_W), this,
-            [this]() { if (currentSpace == WindowSpaces::EDITOR) translateGizmo(); });
-    reg.add("tool.translate.alt", "Translate Tool (alias)", "Tools", QKeySequence(Qt::Key_T), this,
-            [this]() { if (currentSpace == WindowSpaces::EDITOR) translateGizmo(); });
-    reg.add("tool.rotate", "Rotate Tool", "Tools", QKeySequence(Qt::Key_E), this,
-            [this]() { if (currentSpace == WindowSpaces::EDITOR) rotateGizmo(); });
-    reg.add("tool.scale", "Scale Tool", "Tools", QKeySequence(Qt::Key_R), this,
-            [this]() { if (currentSpace == WindowSpaces::EDITOR) scaleGizmo(); });
+    row("tool.translate", "Translate Tool", "Tools", QKeySequence(Qt::Key_W), editor,
+            [this]() { translateGizmo(); });
+    row("tool.translate.alt", "Translate Tool (alias)", "Tools", QKeySequence(Qt::Key_T), editor,
+            [this]() { translateGizmo(); });
+    row("tool.rotate", "Rotate Tool", "Tools", QKeySequence(Qt::Key_E), editor,
+            [this]() { rotateGizmo(); });
+    row("tool.scale", "Scale Tool", "Tools", QKeySequence(Qt::Key_R), editor,
+            [this]() { scaleGizmo(); });
     // Space is page-scoped, exactly like Ctrl+Z: ONE registry claimant, routed
-    // by the active space (see spaceKeyActiveSpace).
-    reg.add("tool.cycle", "Cycle Gizmo Mode / Node Search", "Tools", QKeySequence(Qt::Key_Space), this,
-            [this]() { spaceKeyActiveSpace(); });
+    // by the active space — the gizmo cycle here, the Materials module's node
+    // search on its own space (its contribution to this row).
+    row("tool.cycle", "Cycle Gizmo Mode / Node Search", "Tools", QKeySequence(Qt::Key_Space), editor,
+        [this]() { cycleGizmoMode(); });
 
     // ---- camera ----
     // F is page-scoped like Space: ONE registry claimant (the graph view's own
     // QShortcut made it ambiguous on the Materials page — STUDIO-CRUD-1 item 7),
-    // routed by the active space (see focusActiveSpace).
-    reg.add("camera.focus", "Focus Selection / Frame Graph Nodes", "Camera",
-            QKeySequence(Qt::Key_F), this, [this]() { focusActiveSpace(); });
-    reg.add("graph.resetZoom", "Reset Graph Zoom", "Materials", QKeySequence(Qt::Key_H), this,
-            [this]() {
-                if (currentSpace == WindowSpaces::EFFECT && shaderGraph) shaderGraph->graphResetZoom();
-            });
-    reg.add("view.orthographic", "Orthographic Projection", "Camera", QKeySequence(Qt::Key_O), this,
+    // routed by the active space: the Materials module frames its graph.
+    // (graph.resetZoom, H, is the Materials module's own row, listed after this
+    // one — its contribution.)
+    row("camera.focus", "Focus Selection / Frame Graph Nodes", "Camera",
+        QKeySequence(Qt::Key_F), editor, [this]() { sceneView->focusOnSelection(); });
+    row("view.orthographic", "Orthographic Projection", "Camera", QKeySequence(Qt::Key_O), any,
             [this]() { emit projectionChangeRequested(false); });
-    reg.add("view.perspective", "Perspective Projection", "Camera", QKeySequence(Qt::Key_P), this,
+    row("view.perspective", "Perspective Projection", "Camera", QKeySequence(Qt::Key_P), any,
             [this]() { emit projectionChangeRequested(true); });
     // Canonical axis views (historical X/Y/Z keys, moved out of the arcball
     // controller's raw key handling so they are remappable, listed in
     // Preferences -> Shortcuts, and work in the free camera too). Ctrl+Z
     // stays undo — "back" gets Shift+Z instead.
-    reg.add("view.top", "Top View", "Camera", QKeySequence(Qt::Key_Y), this,
-            [this]() { if (currentSpace == WindowSpaces::EDITOR) applyCameraView("top"); });
-    reg.add("view.bottom", "Bottom View", "Camera", QKeySequence(Qt::CTRL | Qt::Key_Y), this,
-            [this]() { if (currentSpace == WindowSpaces::EDITOR) applyCameraView("bottom"); });
-    reg.add("view.left", "Left View", "Camera", QKeySequence(Qt::Key_X), this,
-            [this]() { if (currentSpace == WindowSpaces::EDITOR) applyCameraView("left"); });
-    reg.add("view.right", "Right View", "Camera", QKeySequence(Qt::CTRL | Qt::Key_X), this,
-            [this]() { if (currentSpace == WindowSpaces::EDITOR) applyCameraView("right"); });
-    reg.add("view.front", "Front View", "Camera", QKeySequence(Qt::Key_Z), this,
-            [this]() { if (currentSpace == WindowSpaces::EDITOR) applyCameraView("front"); });
-    reg.add("view.back", "Back View", "Camera", QKeySequence(Qt::SHIFT | Qt::Key_Z), this,
-            [this]() { if (currentSpace == WindowSpaces::EDITOR) applyCameraView("back"); });
+    row("view.top", "Top View", "Camera", QKeySequence(Qt::Key_Y), editor,
+            [this]() { applyCameraView("top"); });
+    row("view.bottom", "Bottom View", "Camera", QKeySequence(Qt::CTRL | Qt::Key_Y), editor,
+            [this]() { applyCameraView("bottom"); });
+    row("view.left", "Left View", "Camera", QKeySequence(Qt::Key_X), editor,
+            [this]() { applyCameraView("left"); });
+    row("view.right", "Right View", "Camera", QKeySequence(Qt::CTRL | Qt::Key_X), editor,
+            [this]() { applyCameraView("right"); });
+    row("view.front", "Front View", "Camera", QKeySequence(Qt::Key_Z), editor,
+            [this]() { applyCameraView("front"); });
+    row("view.back", "Back View", "Camera", QKeySequence(Qt::SHIFT | Qt::Key_Z), editor,
+            [this]() { applyCameraView("back"); });
     // The ARROW CLUSTER, not W/A/S/D (owner decision 2026-09-09): the editor's
     // fly moved off the letters so tool shortcuts can have them back. The
     // PLAYER still answers to both spellings — its rows are the Gameplay
     // section below, driven by the InputMap.
-    reg.addFixed("camera.fly", "Fly Camera (free camera)", "Camera",
+    fixed("camera.fly", "Fly Camera (free camera)", "Camera",
                  "RMB (hold) + Arrow keys + PageUp/PageDown \xc2\xb7 Shift: 3x");
-    reg.addFixed("camera.wheel", "Zoom / Dolly", "Camera", "Mouse Wheel");
+    fixed("camera.wheel", "Zoom / Dolly", "Camera", "Mouse Wheel");
     // Held-modifier input, like the fly keys: listed read-only, never a
     // QShortcut. Alt ON the gizmo keeps its duplicate-while-dragging meaning
     // (snap.altdrag below) — the gizmo hit-test runs first.
-    reg.addFixed("camera.orbit", "Orbit Around Selection", "Camera",
+    fixed("camera.orbit", "Orbit Around Selection", "Camera",
                  "Alt + LMB drag (off the gizmo)");
 
     // ---- view ----
-    reg.add("view.gameView", "Game View (hide editor helpers)", "View", QKeySequence(Qt::Key_G), this,
-            [this]() {
-                if (currentSpace == WindowSpaces::EDITOR)
-                    sceneView->setGameView(!sceneView->isGameView());
-            });
-    reg.add("view.grid", "Toggle Ground Grid", "View", QKeySequence(), this,
+    row("view.gameView", "Game View (hide editor helpers)", "View", QKeySequence(Qt::Key_G), editor,
+            [this]() { sceneView->setGameView(!sceneView->isGameView()); });
+    row("view.grid", "Toggle Ground Grid", "View", QKeySequence(), any,
             [this]() { if (sceneView) sceneView->setShowGrid(!sceneView->getShowGrid()); });
     // F3 — the games convention (Minecraft, idTech-adjacent), and the only free
     // F-key in this registry besides F11 (STATS_OVERLAY_SPEC D3). Category
@@ -4991,15 +4739,15 @@ void MainWindow::setupShortcuts()
     // Preferences page. Goes through the same verb path as the checkbox and
     // never a separate one — and persists, because a diagnostic you have to
     // switch on again after every restart is a diagnostic nobody uses.
-    reg.add("view.stats", "Show Frame Stats", "View", QKeySequence(Qt::Key_F3), this,
+    row("view.stats", "Show Frame Stats", "View", QKeySequence(Qt::Key_F3), any,
             [this]() { setShowFrameStats(!sceneView->getShowFps()); });
     // F6 — THE ATOM VIEW, cycled Off -> Triangles -> Levels -> Buckets -> Objects
     // -> Off (the View Options sub-menu picks one directly).
-    reg.add("view.atomView", "Cycle Atom View", "View", QKeySequence(Qt::Key_F6), this,
+    row("view.atomView", "Cycle Atom View", "View", QKeySequence(Qt::Key_F6), any,
             [this]() { setAtomViewMode((atomViewMode() + 1) % 5); });
     // F7 — THE PHOTON VIEW, cycled Off -> Voxels -> ... -> Ray Hits -> Off through
     // the modes that can paint here (the View Options sub-menu picks one directly).
-    reg.add("view.photonView", "Cycle Photon View", "View", QKeySequence(Qt::Key_F7), this,
+    row("view.photonView", "Cycle Photon View", "View", QKeySequence(Qt::Key_F7), any,
             [this]() {
                 jahshaka::engine::Scene *es = sceneView ? sceneView->engineScene() : nullptr;
                 if (!es) return;
@@ -5013,7 +4761,7 @@ void MainWindow::setupShortcuts()
                 }
                 setPhotonViewMode(next);
             });
-    reg.add("window.fullscreen", "Immersive Fullscreen", "View", QKeySequence(Qt::Key_F11), this,
+    row("window.fullscreen", "Immersive Fullscreen", "View", QKeySequence(Qt::Key_F11), any,
             [this]() { toggleImmersiveFullscreen(); });
     // Ctrl+F4 — THE CAPTURE KEY (owner, 2026-09-12: "I would prefer to activate
     // the monitor Ctrl+F4 and then it captures the next 20 seconds of data for
@@ -5026,9 +4774,8 @@ void MainWindow::setupShortcuts()
     // NOTHING IS DRAWN by this beyond the two toasts wired in
     // connectFrameMonitorToasts(): an on-screen display would itself cost frame
     // time and passes and contaminate what the capture measures.
-    reg.add("perf.capture", "Capture Render Monitor Data (20 s)", "View",
-            QKeySequence(Qt::CTRL | Qt::Key_F4), this, [this]() {
-                if (currentSpace != WindowSpaces::EDITOR) return;
+    row("perf.capture", "Capture Render Monitor Data (20 s)", "View",
+        QKeySequence(Qt::CTRL | Qt::Key_F4), editor, [this]() {
                 if (FrameMonitor::instance().isRecording()) { FrameMonitor::instance().stop(); return; }
                 FrameMonitor::Request request;
                 if (project) request.label = project->getProjectName();
@@ -5039,13 +4786,9 @@ void MainWindow::setupShortcuts()
 
     // ---- playback (Space is the gizmo cycle now — Unreal PIE puts play on
     // Alt+P; the toolbar Play button is unchanged) ----
-    reg.add("play.toggle", "Play / Stop Scene", "Playback",
-            QKeySequence(Qt::ALT | Qt::Key_P), this, [this]() {
-                if (currentSpace == WindowSpaces::EDITOR)
-                    onPlaySceneButton();
-                else if (currentSpace == WindowSpaces::PLAYER)
-                    playerView->onPlayScene();
-            });
+    row("play.toggle", "Play / Stop Scene", "Playback",
+        QKeySequence(Qt::ALT | Qt::Key_P), editor, [this]() { onPlaySceneButton(); });
+    actions.handle(QStringLiteral("play.toggle"), player, [this]() { playerView->onPlayScene(); });
 
     // F8 — EJECT (PLAY-SELECT-1, owner R13). Unreal's key, and free in this
     // registry (the only other F-keys here are F3 and F11). It hands the mouse
@@ -5057,9 +4800,9 @@ void MainWindow::setupShortcuts()
     // ONE PATH with `editor.playEject` (SCRIPTING_SPEC §2.3): both this lambda
     // and the verb set the VIEWPORT's latch, which is the flag its event
     // handlers branch on.
-    reg.add("play.eject", "Eject (editor input during play)", "Playback",
-            QKeySequence(Qt::Key_F8), this, [this]() {
-                if (currentSpace != WindowSpaces::EDITOR || !sceneView) return;
+    row("play.eject", "Eject (editor input during play)", "Playback",
+        QKeySequence(Qt::Key_F8), editor, [this]() {
+                if (!sceneView) return;
                 if (!sceneView->isPlaying()) return;
                 const bool ejected = !sceneView->playEjected();
                 sceneView->setPlayEjected(ejected);
@@ -5069,15 +4812,15 @@ void MainWindow::setupShortcuts()
             });
 
     // ---- snapping (SnapSettings, EDITOR_SHORTCUTS_SPEC §4) ----
-    reg.add("snap.decrease", "Decrease Snap / Grid Size", "Snapping", QKeySequence(Qt::Key_BracketLeft),
-            this, [this]() { stepSnapSize(-1); });
-    reg.add("snap.increase", "Increase Snap / Grid Size", "Snapping", QKeySequence(Qt::Key_BracketRight),
-            this, [this]() { stepSnapSize(+1); });
-    reg.add("snap.floor", "Snap Selection To Floor", "Snapping", QKeySequence(Qt::Key_End), this,
-            [this]() { if (currentSpace == WindowSpaces::EDITOR) sceneView->snapSelectionToFloor(); });
-    reg.addFixed("snap.relative", "Snap While Dragging", "Snapping", "Ctrl (hold)");
-    reg.addFixed("snap.altdrag", "Duplicate While Dragging", "Snapping", "Alt + drag gizmo");
-    reg.addFixed("snap.vertex", "Snap To Vertex", "Snapping", "V (hold) while moving");
+    row("snap.decrease", "Decrease Snap / Grid Size", "Snapping", QKeySequence(Qt::Key_BracketLeft),
+        any, [this]() { stepSnapSize(-1); });
+    row("snap.increase", "Increase Snap / Grid Size", "Snapping", QKeySequence(Qt::Key_BracketRight),
+        any, [this]() { stepSnapSize(+1); });
+    row("snap.floor", "Snap Selection To Floor", "Snapping", QKeySequence(Qt::Key_End), editor,
+            [this]() { sceneView->snapSelectionToFloor(); });
+    fixed("snap.relative", "Snap While Dragging", "Snapping", "Ctrl (hold)");
+    fixed("snap.altdrag", "Duplicate While Dragging", "Snapping", "Alt + drag gizmo");
+    fixed("snap.vertex", "Snap To Vertex", "Snapping", "V (hold) while moving");
 
     // ---- editing ----
     // Ctrl+Z/Ctrl+Shift+Z had been DEAD since the menubar went away: the .ui's
@@ -5088,9 +4831,9 @@ void MainWindow::setupShortcuts()
     // would collide with view.bottom.
     // The ONE claimant for each chord — see undoActiveSpace() for why that
     // matters and which stack each space owns.
-    reg.add("edit.undo", "Undo", "Editing", QKeySequence(Qt::CTRL | Qt::Key_Z), this,
+    row("edit.undo", "Undo", "Editing", QKeySequence(Qt::CTRL | Qt::Key_Z), any,
             [this]() { undoActiveSpace(); });
-    reg.add("edit.redo", "Redo", "Editing", QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_Z), this,
+    row("edit.redo", "Redo", "Editing", QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_Z), any,
             [this]() { redoActiveSpace(); });
 
     // Delete / Ctrl+D / Ctrl+C / Ctrl+V (EDITOR_MULTISELECT_SPEC §2.6). Same
@@ -5104,21 +4847,26 @@ void MainWindow::setupShortcuts()
     // their standard editing keys, so a WindowShortcut never fires while one
     // has focus (the tree's inline rename editor is the case that matters, and
     // app.input_keys probes it on the rig).
-    reg.add("edit.delete", "Delete Selection", "Editing", QKeySequence(Qt::Key_Delete), this,
-            [this]() { deleteActiveSpace(); });
-    reg.add("edit.duplicate", "Duplicate Selection", "Editing", QKeySequence(Qt::CTRL | Qt::Key_D), this,
-            [this]() { duplicateActiveSpace(); });
-    reg.add("edit.copy", "Copy Selection", "Editing", QKeySequence(Qt::CTRL | Qt::Key_C), this,
-            [this]() { copyActiveSpace(); });
+    //
+    // The ACTIVE SPACE's edit target answers (ModuleHub::runEdit): the editor's
+    // selection SET, the Materials graph, or nothing — deliberately NOT a
+    // fallback, so a chord never acts on a selection the user cannot see.
+    using Edit = ModuleHub::Edit;
+    row("edit.delete", "Delete Selection", "Editing", QKeySequence(Qt::Key_Delete), any,
+        [this]() { moduleHub->runEdit(currentSpaceId(), Edit::Delete); });
+    row("edit.duplicate", "Duplicate Selection", "Editing", QKeySequence(Qt::CTRL | Qt::Key_D), any,
+        [this]() { moduleHub->runEdit(currentSpaceId(), Edit::Duplicate); });
+    row("edit.copy", "Copy Selection", "Editing", QKeySequence(Qt::CTRL | Qt::Key_C), any,
+        [this]() { moduleHub->runEdit(currentSpaceId(), Edit::Copy); });
     // Ctrl+X. The third chord of the set, and the one that was missing: a
     // clipboard whose copy travels to another instance but whose CUT does not
     // exist is half a clipboard. Same single-claimant routing, same text-field
     // rule as the two above (a focused QLineEdit accepts the ShortcutOverride
     // for Cut before a WindowShortcut can fire).
-    reg.add("edit.cut", "Cut Selection", "Editing", QKeySequence(Qt::CTRL | Qt::Key_X), this,
-            [this]() { cutActiveSpace(); });
-    reg.add("edit.paste", "Paste", "Editing", QKeySequence(Qt::CTRL | Qt::Key_V), this,
-            [this]() { pasteActiveSpace(); });
+    row("edit.cut", "Cut Selection", "Editing", QKeySequence(Qt::CTRL | Qt::Key_X), any,
+        [this]() { moduleHub->runEdit(currentSpaceId(), Edit::Cut); });
+    row("edit.paste", "Paste", "Editing", QKeySequence(Qt::CTRL | Qt::Key_V), any,
+        [this]() { moduleHub->runEdit(currentSpaceId(), Edit::Paste); });
     // Ctrl+A (EDITOR_MULTISELECT_SPEC §8.7, decided 2026-09-09). Same
     // single-claimant routing as the four chords above — and the same TEXT
     // FIELD rule, made explicit rather than left to Qt: selectAllActiveSpace
@@ -5127,11 +4875,11 @@ void MainWindow::setupShortcuts()
     // a transform field selects THAT text. Qt's own ShortcutOverride usually
     // gets there first (QWidgetLineControl accepts QKeySequence::SelectAll),
     // but "usually" is not a contract to hang the scene selection on.
-    reg.add("edit.selectAll", "Select All", "Editing", QKeySequence(Qt::CTRL | Qt::Key_A), this,
+    row("edit.selectAll", "Select All", "Editing", QKeySequence(Qt::CTRL | Qt::Key_A), any,
             [this]() { selectAllActiveSpace(); });
 
     // ---- file / windows ----
-    reg.add("file.save", "Save Scene", "File", QKeySequence(Qt::CTRL | Qt::Key_S), this,
+    row("file.save", "Save Scene", "File", QKeySequence(Qt::CTRL | Qt::Key_S), any,
             [this]() { saveScene(); });
     // Ctrl+` = the Console TAB of the bottom tray (smoke S1). One function for
     // the chord and for `editor.tray`, so the verb the suites drive is the code
@@ -5140,11 +4888,11 @@ void MainWindow::setupShortcuts()
     // click before it would take a character, which also meant the chord rules
     // the console is the natural place to exercise — Ctrl+A belongs to a
     // focused text field — could not be reached from the keyboard at all).
-    reg.add("console.toggle", "Script Console", "Windows",
-            QKeySequence(Qt::CTRL | Qt::Key_QuoteLeft), this,
+    row("console.toggle", "Script Console", "Windows",
+            QKeySequence(Qt::CTRL | Qt::Key_QuoteLeft), any,
             [this]() { toggleScriptConsole(); });
-    reg.add("claude.toggle", "Claude Assistant", "Windows",
-            QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_C), this,
+    row("claude.toggle", "Claude Assistant", "Windows",
+            QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_C), any,
             [this]() { toggleClaudeChat(); });
     // THE RIGHT COLUMN'S TWO TABS (PROPERTY_FILTER_SPEC D2): one toggle, not two
     // keys. Ctrl+Tab is taken by space.previous, so Ctrl+Shift+P — verified
@@ -5153,8 +4901,8 @@ void MainWindow::setupShortcuts()
     // conflict check runs on a USER rebinding, not on these defaults: two
     // defaults claiming one chord would simply both be registered, so the
     // default above was checked by hand.)
-    reg.add("properties.tab", "Properties: World / Selection Tab", "Windows",
-            QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_P), this, [this]() {
+    row("properties.tab", "Properties: World / Selection Tab", "Windows",
+            QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_P), any, [this]() {
         if (!sceneNodePropertiesWidget) return;
         sceneNodePropertiesWidget->setPropertiesTab(
             sceneNodePropertiesWidget->propertiesTab() == SceneNodePropertiesWidget::Tab::World
@@ -5168,8 +4916,8 @@ void MainWindow::setupShortcuts()
     // tab has its own filter. (A QLineEdit accepts the ShortcutOverride for
     // unmodified printable keys, so typing "f" into the box does not fire
     // camera.focus.)
-    reg.add("properties.filter", "Properties: Filter Rows", "Windows",
-            QKeySequence(Qt::CTRL | Qt::Key_F), this, [this]() {
+    row("properties.filter", "Properties: Filter Rows", "Windows",
+            QKeySequence(Qt::CTRL | Qt::Key_F), any, [this]() {
         if (!propertiesTabStrip) return;
         // A dock tabbed BEHIND another is visible (shown, parked off-screen — the
         // SPACE-2 fact), so the test is "in front", not "visible": otherwise the
@@ -5180,24 +4928,24 @@ void MainWindow::setupShortcuts()
     });
     // Esc is a widget-level key inside the box, not a registry binding — the
     // row exists so the Preferences table says so.
-    reg.addFixed("properties.filter.clear", "Properties: Clear the Filter", "Windows",
+    fixed("properties.filter.clear", "Properties: Clear the Filter", "Windows",
                  "Esc (while the filter box has focus)");
     // VR (SPECS/VR_SPEC.md §4.5). Its own row rather than a "Windows" one: it
     // is not a space switch, it is a MODE — the Player page comes up and the
     // run happens in the headset.
-    reg.add("vr.toggle", "Enter / leave VR", "VR", QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_V),
-            this, [this]() { toggleVrMode(); });
-    reg.add("space.desktop", "Desktop Space", "Windows", QKeySequence(Qt::CTRL | Qt::Key_1), this,
+    row("vr.toggle", "Enter / leave VR", "VR", QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_V),
+        any, [this]() { toggleVrMode(); });
+    row("space.desktop", "Desktop Space", "Windows", QKeySequence(Qt::CTRL | Qt::Key_1), any,
             [this]() { this->switchSpace(WindowSpaces::DESKTOP); });
-    reg.add("space.player", "Player Space", "Windows", QKeySequence(Qt::CTRL | Qt::Key_2), this,
+    row("space.player", "Player Space", "Windows", QKeySequence(Qt::CTRL | Qt::Key_2), any,
             [this]() { if (projectService->isSceneOpen()) this->switchSpace(WindowSpaces::PLAYER); });
-    reg.add("space.editor", "Editor Space", "Windows", QKeySequence(Qt::CTRL | Qt::Key_3), this,
+    row("space.editor", "Editor Space", "Windows", QKeySequence(Qt::CTRL | Qt::Key_3), any,
             [this]() { if (projectService->isSceneOpen()) this->switchSpace(WindowSpaces::EDITOR); });
-    reg.add("space.effects", "Effects Space", "Windows", QKeySequence(Qt::CTRL | Qt::Key_4), this,
+    row("space.effects", "Effects Space", "Windows", QKeySequence(Qt::CTRL | Qt::Key_4), any,
             [this]() { this->switchSpace(WindowSpaces::EFFECT); });
-    reg.add("space.assets", "Assets Space", "Windows", QKeySequence(Qt::CTRL | Qt::Key_5), this,
+    row("space.assets", "Assets Space", "Windows", QKeySequence(Qt::CTRL | Qt::Key_5), any,
             [this]() { this->switchSpace(WindowSpaces::ASSETS); });
-    reg.add("space.previous", "Previous Space", "Windows", QKeySequence(Qt::CTRL | Qt::Key_Tab), this,
+    row("space.previous", "Previous Space", "Windows", QKeySequence(Qt::CTRL | Qt::Key_Tab), any,
             [this]() {
                 if ((previousSpace == WindowSpaces::PLAYER || previousSpace == WindowSpaces::EDITOR) &&
                     !projectService->isSceneOpen())
@@ -5213,10 +4961,13 @@ void MainWindow::setupShortcuts()
     // mode today. The rebindable half lives in the InputMap — `input.bind`
     // writes it and refreshGameplayShortcutRows() re-labels these rows.
     iris::InputSystem::instance().setSettings(settings->settings);
-    reg.addFixed("gameplay.move",   "Move (play mode)",   "Gameplay", "W / S / A / D");
-    reg.addFixed("gameplay.look",   "Look (play mode)",   "Gameplay", "Mouse");
-    reg.addFixed("gameplay.jump",   "Jump (play mode)",   "Gameplay", "Space");
-    reg.addFixed("gameplay.sprint", "Sprint (play mode)", "Gameplay", "Shift");
+    fixed("gameplay.move",   "Move (play mode)",   "Gameplay", "W / S / A / D");
+    fixed("gameplay.look",   "Look (play mode)",   "Gameplay", "Mouse");
+    fixed("gameplay.jump",   "Jump (play mode)",   "Gameplay", "Space");
+    fixed("gameplay.sprint", "Sprint (play mode)", "Gameplay", "Shift");
+    // EVERY ROW IS IN: the shell's and the modules' (contributed at boot, with
+    // their `after` anchors), registered in one pass in the Preferences order.
+    actions.commit();
     refreshGameplayShortcutRows();
 }
 
@@ -5526,7 +5277,8 @@ void MainWindow::redo()
 // so Qt dispatched the chord ambiguously and NEITHER ran: on that page undo did
 // nothing at all. The graph view's pair is deleted (materials/widgets/
 // graphicsview.cpp says why), leaving this the single claimant, and the owner's
-// decision is that on the Materials page the GRAPH stack is the one it drives.
+// decision is that on the Materials page the GRAPH stack is the one it drives —
+// the Materials module's edit target.
 //
 // Deliberately not a fallback: with the Materials space active, Ctrl+Z with an
 // empty graph stack does NOTHING rather than quietly undoing a scene edit the
@@ -5534,72 +5286,63 @@ void MainWindow::redo()
 
 void MainWindow::undoActiveSpace()
 {
-    if (currentSpace == WindowSpaces::EFFECT && shaderGraph) { shaderGraph->graphUndo(); return; }
+    if (currentSpace == WindowSpaces::EFFECT) {
+        const EditTarget target = moduleHub->editTarget(currentSpaceId());
+        if (target.undo) target.undo();
+        return;
+    }
     undo();
     updateWindowTitle();
 }
 
 void MainWindow::redoActiveSpace()
 {
-    if (currentSpace == WindowSpaces::EFFECT && shaderGraph) { shaderGraph->graphRedo(); return; }
+    if (currentSpace == WindowSpaces::EFFECT) {
+        const EditTarget target = moduleHub->editTarget(currentSpaceId());
+        if (target.redo) target.redo();
+        return;
+    }
     redo();
     updateWindowTitle();
 }
 
-// The four edit chords, routed the same way and for the same reason
-// (EDITOR_MULTISELECT_SPEC §2.6). Deliberately NOT fallbacks: with the
-// Materials space active they act on the GRAPH and never quietly on a scene
-// selection the user cannot see, exactly as undoActiveSpace decided.
-void MainWindow::deleteActiveSpace()
+// THE EDITOR'S EDIT TARGET (EDITOR_MULTISELECT_SPEC §2.6): the four chords act
+// on the selection SET, the clipboard is the one system clipboard. The hub asks
+// for it each time a chord fires on the editor space; on any other space the
+// space's own target (or none) answers instead — never this one.
+EditTarget MainWindow::editorEditTarget()
 {
-    if (currentSpace == WindowSpaces::EFFECT) {
-        if (shaderGraph) shaderGraph->graphDeleteSelected();
-        return;
-    }
-    if (currentSpace == WindowSpaces::EDITOR) deleteNode();
+    EditTarget t;
+    t.deleteSelection = [this]() { deleteNode(); };
+    t.duplicateSelection = [this]() { duplicateNode(); };
+    t.copySelection = [this]() { copyEditorSelection(); };
+    t.cutSelection = [this]() { cutEditorSelection(); };
+    t.paste = [this]() { pasteIntoEditor(); };
+    t.selectAll = [this]() {
+        if (services && services->sceneEdit) services->sceneEdit->selectAll();
+    };
+    return t;
 }
 
-void MainWindow::duplicateActiveSpace()
+void MainWindow::copyEditorSelection()
 {
-    if (currentSpace == WindowSpaces::EFFECT) {
-        if (shaderGraph) shaderGraph->graphDuplicateSelected();
-        return;
-    }
-    if (currentSpace == WindowSpaces::EDITOR) duplicateNode();
-}
-
-void MainWindow::copyActiveSpace()
-{
-    if (currentSpace == WindowSpaces::EFFECT) {
-        if (shaderGraph) shaderGraph->graphCopySelected();
-        return;
-    }
     // ONE clipboard now (CLIPBOARD_SPEC D3 b): the editor writes the same
     // system clipboard the Materials graph does, as a self-identifying text
     // payload, so a copy crosses to a second instance and back. The Materials
     // space keeps its own payload shape for one release (§2.2 `graph` items are
-    // P2) — hence the branch above, not a second clipboard.
-    if (currentSpace == WindowSpaces::EDITOR && services && services->clipboard &&
-        services->selection) {
-        const auto result = services->clipboard->copyNodes(services->selection->selectedSet());
-        if (result.ok())
-            showViewportToast(tr("Copy"), tr("%1 object(s) copied").arg(result.items));
-    }
+    // P2) — its own edit target, not a second clipboard.
+    if (!services || !services->clipboard || !services->selection) return;
+    const auto result = services->clipboard->copyNodes(services->selection->selectedSet());
+    if (result.ok())
+        showViewportToast(tr("Copy"), tr("%1 object(s) copied").arg(result.items));
 }
 
-void MainWindow::cutActiveSpace()
+void MainWindow::cutEditorSelection()
 {
-    if (currentSpace == WindowSpaces::EFFECT) {
-        // The graph has no cut of its own; deliberately NOT a fallback to the
-        // scene, for the reason undoActiveSpace records.
-        return;
-    }
-    if (currentSpace == WindowSpaces::EDITOR && services && services->clipboard &&
-        services->selection) {
-        const auto result = services->clipboard->cutNodes(services->selection->selectedSet());
-        if (result.ok())
-            showViewportToast(tr("Cut"), tr("%1 object(s) cut").arg(result.copy.items));
-    }
+    if (!services || !services->clipboard || !services->selection) return;
+    const auto result = services->clipboard->cutNodes(services->selection->selectedSet());
+    if (result.ok())
+        showViewportToast(tr("Cut"), tr("%1 object(s) cut").arg(result.copy.items));
 }
 
 // Ctrl+A. Two rules in one place: a focused TEXT ENTRY owns the chord, and
@@ -5620,23 +5363,14 @@ void MainWindow::selectAllActiveSpace()
             return;
         }
     }
-    if (currentSpace == WindowSpaces::EFFECT) {
-        // The node graph has no select-all of its own yet; deliberately NOT a
-        // fallback to the scene, for the reason undoActiveSpace records — a
-        // chord must never quietly act on a selection the user cannot see.
-        return;
-    }
-    if (currentSpace == WindowSpaces::EDITOR && services && services->sceneEdit)
-        services->sceneEdit->selectAll();
+    // The node graph has no select-all of its own yet; its target leaves the
+    // chord unanswered rather than falling back to the scene.
+    moduleHub->runEdit(currentSpaceId(), ModuleHub::Edit::SelectAll);
 }
 
-void MainWindow::pasteActiveSpace()
+void MainWindow::pasteIntoEditor()
 {
-    if (currentSpace == WindowSpaces::EFFECT) {
-        if (shaderGraph) shaderGraph->graphPaste();
-        return;
-    }
-    if (currentSpace != WindowSpaces::EDITOR || !services || !services->clipboard) return;
+    if (!services || !services->clipboard) return;
 
     const auto result = services->clipboard->paste();
     // WHAT THE PASTE COULD NOT DO IS SAID OUT LOUD. A clipboard that holds
@@ -5663,32 +5397,6 @@ void MainWindow::pasteActiveSpace()
     if (!result.imported.isEmpty())
         message += tr(", %1 asset(s) imported").arg(result.imported.size());
     showViewportToast(tr("Paste"), message);
-}
-
-// ---- Space routing (owner decision 2026-09-05) -----------------------------
-//
-// Same shape as undoActiveSpace, and for the same reason: the chord keeps ONE
-// registry claimant (so it stays listed and remappable in Preferences, and Qt
-// never sees an ambiguous WindowShortcut), and the active space decides what it
-// means. On the Materials space Space opens the node-SEARCH palette — the graph
-// is the thing being edited there and there is no gizmo to cycle; everywhere
-// else it is the tool cycle it has always been.
-void MainWindow::focusActiveSpace()
-{
-    if (currentSpace == WindowSpaces::EFFECT) {
-        if (shaderGraph) shaderGraph->graphFitSelection();
-        return;
-    }
-    if (currentSpace == WindowSpaces::EDITOR) sceneView->focusOnSelection();
-}
-
-void MainWindow::spaceKeyActiveSpace()
-{
-    if (currentSpace == WindowSpaces::EFFECT) {
-        if (shaderGraph) shaderGraph->openNodeSearch();
-        return;
-    }
-    if (currentSpace == WindowSpaces::EDITOR) cycleGizmoMode();
 }
 
 int MainWindow::atomViewMode()
@@ -5928,8 +5636,8 @@ void MainWindow::hideEditorPanels()
 // leaveImmersiveFullscreen would then restore a state nobody was in.
 void MainWindow::applyDockVisibilityForSpace()
 {
-    if (!sceneHierarchyDock || !ui || !ui->stackedWidget) return;
-    const bool editor = ui->stackedWidget->currentIndex() == 1 && !immersiveFullscreen;
+    if (!sceneHierarchyDock || !pageHost) return;
+    const bool editor = pageHost->isCurrent(spaces::id(WindowSpaces::EDITOR)) && !immersiveFullscreen;
     // WHICH TAB IS IN FRONT SURVIVES THE ROUND TRIP (lane SPACE-2). Showing a
     // tabified dock RAISES it, so the loop below would hand the front tab to
     // whichever dock it shows last — a trip to the Player and back came home on
@@ -6446,7 +6154,7 @@ void MainWindow::startCreateRun(const QString &guid, const QString &filename,
         sceneView->resetEditorCam();
         resetOverlaysToDefaults();   // a brand-new scene starts at the defaults
         refreshClaudeChatContext();   // D1: rebind an open chat to the new project
-        if (shaderGraph) shaderGraph->onProjectChanged();   // its tabs are per project
+        moduleHub->projectChanged(project);   // the modules hear the new project
         if (services) services->announceSceneOpened();
     } });
     slices.append({ QStringLiteral("Building the asset panel…"), 75, [this]() {
@@ -6525,172 +6233,12 @@ void MainWindow::startCreateRun(const QString &guid, const QString &filename,
     openRunner->start();
 }
 
-// ===========================================================================
-//  THE SHUTDOWN ORDER  (STABILITY_PROGRAM_SPEC.md §1.5 / Lane 3)
-//  Written down ONCE, here. shell/shutdownorder.h carries the enumeration and
-//  the two incidents that paid for it; this is the code half.
-//
-//   1 CloseEvent        MainWindow::closeEvent — settle an in-flight open,
-//                       autosave / unsaved-changes prompt, donate dialog,
-//                       geometry + state to settings
-//   2 BackgroundWork    MainWindow::shutdownBackgroundWork — the
-//                       bounded teardown of every worker this window owns.
-//                       Idempotent: closeEvent AND aboutToQuit land here
-//   3 Modules           MainWindow::shutdownModules — StudioModule::shutdown()
-//                       on every module, while the engine is still alive
-//   4 EngineHostRelease finalizeAppExit (app/cli/scriptrunner.cpp) ->
-//                       EngineHost::shutdown(): the render driver stops, the
-//                       shader cache and warm-up set are written, the HOST's
-//                       shared_ptr is dropped. It does NOT destroy the Engine
-//   5 WindowBody        this destructor's body: undoStack->clear() first
-//                       (incident 1), then the module objects, the services
-//                       and the Ui:: struct
-//   6 EngineViews       destroyEngineViews() — the widgets holding the last
-//                       shared_ptr<Engine> are deleted HERE (incident 2), so
-//                       ~OgreEngine runs with the database still open
-//   7 DatabaseClosed    db->closeDatabase(), last
-//   8 WidgetTree        ~QWidget(MainWindow): whatever step 6 did not reach.
-//                       Nothing here may touch the database or the engine
-//
-//  If you add a participant, add it to shutdownorder.h's enum and to this
-//  block. The app.shutdown_order gate reads the steps out of the process's
-//  own output and fails when they fire twice or out of order.
-// ===========================================================================
-
-void MainWindow::destroyEngineViews()
-{
-    // STEP 6, and the reason it exists.
-    //
-    // EngineHost::shutdown() (step 4) drops the HOST's reference and stops the
-    // render loop — but the Engine is a shared_ptr and four widgets hold their
-    // own copies: the editor viewport (viewport/enginesceneviewport.h), the
-    // player view, the Assets page's viewer, and the module previews (materials
-    // Display, avatar). Every one of them lives in this window's child widget
-    // tree, which Qt destroys in ~QWidget — AFTER this destructor's body, i.e.
-    // after closeDatabase().
-    //
-    // So before this lane the Engine died at a point with no name, after the
-    // database was gone, and the ENGINE TEARDOWN LAW (workspaces -> scenes ->
-    // drop every MeshPtr -> delete Root) ran there. Nothing in engine teardown
-    // writes to the database today, which made it latent rather than live —
-    // and exactly the shape of the bug `740e0155` fixed for the undo stack one
-    // level up.
-    //
-    // Deleting the direct child widgets here is precisely what ~QWidget would
-    // do a moment later; doing it in the body just moves it in FRONT of
-    // closeDatabase() and gives it a name. It is strictly safer than the old
-    // order too: widgets are now destroyed while the database connection is
-    // still open, not after it closed.
-    //
-    // QPointer, because deleting one child can delete another (a dock's
-    // titlebar widget, a page's children).
-    QList<QPointer<QWidget>> kids;
-    for (QObject *child : children())
-        if (QWidget *w = qobject_cast<QWidget *>(child)) kids.append(w);
-    for (QPointer<QWidget> &w : kids)
-        if (!w.isNull()) delete w.data();
-
-    // Everything below points into that tree. Nothing runs after this except
-    // closeDatabase(), but a stale `sceneView` is the kind of thing a later
-    // edit trips over.
-    sceneView = nullptr;
-    playerView = nullptr;
-    viewPort = nullptr;
-    _assetView = nullptr;
-    assetsPlaceholder = nullptr;
-    assetsPreviewViewer = nullptr;   // a child of this window: gone with the sweep above
-
-    // The Engine must be gone now. It is not an assert because a MainWindow
-    // can legitimately be destroyed before finalizeAppExit ran (a CLI path
-    // that returns early), in which case EngineHost still holds its reference
-    // — that case is excluded, and what is left is the real finding: somebody
-    // added a shared_ptr<Engine> holder that is not in this window's widget
-    // tree, and the Engine is once again dying after the database closes.
-    if (!EngineHost::instance().isRunning() && !mEngineWatch.expired())
-        qWarning("[shutdown] step 6: the Engine is STILL referenced after the "
-                 "viewports were destroyed — a holder outside MainWindow's "
-                 "widget tree exists, and the engine will now be torn down "
-                 "after closeDatabase(). See shell/shutdownorder.h.");
-}
-
 MainWindow::~MainWindow()
 {
-    JAH_SHUTDOWN_STEP(ShutdownOrder::WindowBody, "~MainWindow body");
-
-    // The edit gate's notice captured this window (ledger §423). The gate
-    // outlives every window — it is process-wide — so the hook goes first,
-    // before anything here can raise it.
-    editgate::setNoticeHook({});
-
-    // ...and so did the camera-speed dial (fix round item 1). CameraSpeed is
-    // process-wide too, so a handler capturing this window must not outlive
-    // it. Its pending value goes to the store here, on the way out: a deferred
-    // write that a quit could swallow would be a preference that did not stick.
-    CameraSpeed::setOnChanged({});
-    CameraSpeed::flush();
-
-    // ORDER IS LOAD-BEARING. Undo commands owe the database work when they die
-    // (DeleteSceneNodeCommand finalises the asset row once no undo can reach
-    // the delete any more), and undoStack is parented to this window — so it
-    // used to be destroyed AFTER this body, i.e. after closeDatabase(), and
-    // every pending asset delete failed against a closed connection. Silently:
-    // the SQLite driver's only complaint was "Parameter count mismatch" at
-    // [info] level. Drain the stack here, while the connection is still open.
-    //
-    // Since CLOSE-1 the destructors only QUEUE that work (the quit path is the
-    // same freeze as the project close: hundreds of commands, hundreds of
-    // syncs), so the drain is followed by the one flush that applies it.
-    // closeDatabase() flushes too — this call is what makes the order above
-    // say what it means.
-    if (undoStack) undoStack->clear();
-    if (db) db->flushPendingAssetDeletes();
-    // ...and the last save's thumbnail, for the same reason and the same exits:
-    // the --script / --dump-api-docs paths never reach shutdownBackgroundWork,
-    // where a window close drains it (CREATE-GAP-1). Idempotent; nothing left
-    // is nothing done.
-    if (projectService) projectService->drainThumbnailEncodes();
-
-    // The modules. They are plain heap objects the shell news up in
-    // setupViewPort() and nothing ever deleted them (deep audit 2026-09,
-    // area 1). shutdown() runs at step 3 on the closeEvent path — but the
-    // --script / --dump-api-docs exits NEVER run steps 1-3 (no closeEvent,
-    // no aboutToQuit), so it must run here too or deleting the avatar module
-    // frees AvatarPreviewModel while AvatarPreviewScene still holds a raw
-    // back-pointer to it: the widget tree's release() then jumps through a
-    // freed std::function (the fix-wave gate's e2e.avatar SEGV, 2026-09-05).
-    // shutdown() is idempotent, so the double call on the closeEvent path is
-    // free. Their PAGES belong to the stacked widget and die with the tree.
-    for (auto *m : modules)
-        if (m) m->shutdown();
-    qDeleteAll(modules);
-    modules.clear();
-    materialsModule = nullptr;
-    publishModule = nullptr;
-    avatarModule = nullptr;
-    shaderGraph = nullptr;
-
-    // The QObject services (selection/playback/sceneEdit) are parented to the
-    // window; the plain ones are deleted here.
-    delete services;
-    // Before sceneEditService (which it points at) and before the scene dies:
-    // its destructor puts any borrowed material back.
-    delete materialPreviewService;
-    delete projectService;
-    delete thumbnailService;
-    delete assetService;
-    delete undoService;
-    delete ui;
-
-    JAH_SHUTDOWN_STEP(ShutdownOrder::EngineViews, "engine-holding widgets destroyed");
-    destroyEngineViews();
-
-    JAH_SHUTDOWN_STEP(ShutdownOrder::DatabaseClosed, "database closed");
-    // The tile cache's reads end with the connection (a batch queued behind
-    // the close reads nothing).
-    TileCache::instance().setSource(TileCache::Kind::Asset, nullptr);
-    TileCache::instance().setSource(TileCache::Kind::Project, nullptr);
-    Database::setAssetThumbnailWritten(nullptr);
-    this->db->closeDatabase();
+    // STEPS 5-7 of the shutdown order (shell/shelllifecycle.h): the undo
+    // drain, the modules, the services, the engine-holding widgets, and the
+    // database last.
+    lifecycle->teardownWindow();
 }
 
 void MainWindow::useFreeCamera()
@@ -6793,7 +6341,6 @@ void MainWindow::applyEditModeUi()
 {
     playSceneBtn->setText("Play Scene");
     playSceneBtn->setToolTip("Play scene");
-	shaderGraph->setAssetWidgetDatabase(db);
     QVariantMap options;
     options.insert("color", QColor(46, 204, 113));
     options.insert("color-active", QColor(46, 204, 113));

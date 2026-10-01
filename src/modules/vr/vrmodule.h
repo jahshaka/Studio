@@ -35,7 +35,7 @@ class VrModule : public StudioModule
 {
 public:
     QString id() const override { return QStringLiteral("vr"); }
-    void initialize(ModuleHost &host) override { this->host = host; }
+    void initialize(StudioContext &host) override { this->host = host; }
     void registerApi(ScriptEngine &engine) override;
     void shutdown() override;
     /// THE VR BUTTON ON THE EDITOR PAGE (the owner, 2026-09-17, at the first
@@ -47,7 +47,7 @@ public:
     bool isEditorPreviewActive() const;
 
 private:
-    ModuleHost host;
+    StudioContext host;
     /// The module's ApiModule, owned by the ScriptEngine — held weakly so
     /// shutdown() can end a session through the object that owns it.
     QPointer<VrApi> api;

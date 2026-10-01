@@ -287,6 +287,12 @@ set(SRCS
     src/services/mainthreadheartbeat.cpp
     src/services/mainthreadwatchdog.cpp
     src/shell/shutdownorder.cpp
+    src/shell/pagehost.cpp
+    src/shell/actionhost.cpp
+    src/shell/modulehub.cpp
+    src/shell/shelllifecycle.cpp
+    src/shell/shellview.cpp
+    src/modules/moduleregistry.cpp
     src/services/sceneopenrunner.cpp
     src/services/imagematerial.cpp
     src/services/materialbundle.cpp
@@ -583,6 +589,14 @@ set(HEADERS
     src/export/exportcontentsource.h
     src/export/rawexporter.h
     src/modules/studiomodule.h
+    src/modules/moduleregistry.h
+    src/shell/pagehost.h
+    src/shell/actionhost.h
+    src/shell/modulehub.h
+    src/shell/shelllifecycle.h
+    src/shell/shellview.h
+    src/shell/spaces.h
+    src/ui/ishellview.h
     src/scripting/modules/studiomodules.h
     src/scripting/mcp/mcpserver.h
     src/scripting/mcp/mcptools.h

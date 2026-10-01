@@ -35,7 +35,7 @@ For more information see the LICENSE file
 #include "ui/style/stylesheet.h"
 #include "ui/style/themeroles.h"
 
-PublishPage::PublishPage(ModuleHost host_, QWidget *parent)
+PublishPage::PublishPage(StudioContext host_, QWidget *parent)
     : QWidget(parent), host(host_)
 {
     setObjectName("publishView");
@@ -495,9 +495,9 @@ void PublishPage::onOpenFolder()
     QDesktopServices::openUrl(QUrl::fromLocalFile(dir));
 }
 
-QWidget *PublishModule::createPage()
+void PublishModule::contribute(Contributions &c)
 {
-    return new PublishPage(host, host.shellWidget);
+    c.setPage(new PublishPage(host, host.shellWidget));
 }
 
 void PublishModule::registerApi(ScriptEngine &engine)

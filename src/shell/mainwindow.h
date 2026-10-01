@@ -37,6 +37,7 @@ For more information see the LICENSE file
 #include "ui/controls/fonticons.h"
 #include "data/project.h"
 #include "services/scenetemplate.h"
+#include "modules/studiomodule.h"
 
 namespace Ui {
     class MainWindow;
@@ -46,13 +47,12 @@ class AssetView;
 /// Only ever held as a weak_ptr here (mEngineWatch) — the shell includes the
 /// engine header in the .cpp, never in this one.
 namespace jahshaka { namespace engine { class Engine; } }
-namespace materials { class EffectsPage; }
-class StudioModule;
-class MaterialsModule;
-class PublishModule;
-class AvatarModule;
 class VrModule;
-class PlayerModule;
+class PageHost;
+class ActionHost;
+class ModuleHub;
+class ShellLifecycle;
+class ShellView;
 
 class QPushButton;
 class QStandardItem;
@@ -125,18 +125,8 @@ class AssetMaterialPanel;
 
 enum class SceneNodeType;
 
-enum WindowSpaces : int {
-    DESKTOP,
-    PLAYER,
-    EDITOR,
-	EFFECT,
-    ASSETS,
-    PUBLISH,
-    // AVATAR is APPENDED, and its page is appended AFTER publishView: switchSpace
-    // uses hard-coded stack indices, so inserting anywhere else switches every
-    // space above it to the wrong widget (AVATAR_MODULE_SPEC R0.14).
-    AVATAR
-};
+#include "shell/spaces.h"
+
 
 // The editor's panels, in `widgetStates` order. CONSOLE is APPENDED (lane
 // SPACE-2, 2026-09-14): the script console is a dock of the bottom area again —
@@ -218,7 +208,6 @@ public:
     /// row, the Preferences checkbox and editor.setOverlays({stats}) all land
     /// here, and it persists `show_fps` (STATS_OVERLAY_SPEC.md §5.3).
     void setShowFrameStats(bool on);
-    void setupProjectDB();
     void setupUndoRedo();
 
     /// THE size of the header's glyph icons (Publish / Help / Preferences) —
@@ -530,25 +519,6 @@ public:
     class ImportSettingsDialog *openImportSettings(const QString &guid,
                                                    QString *errorOut = nullptr);
 
-    /// Orderly teardown of every background worker the window owns (import
-    /// batch + tails, MCP server, Claude chat subprocess, thumbnails). Runs
-    /// at most once; called from closeEvent and wired to aboutToQuit so the
-    /// QApplication::exit/quit path is covered too. Bounded: a worker
-    /// that will not die is abandoned (the process-level force-exit guard in
-    /// main() has the final word).
-    void shutdownBackgroundWork();
-
-    /// Step 3 of the shutdown order (shell/shutdownorder.h): StudioModule::
-    /// shutdown() on every registered module, while the Engine is still up.
-    /// Tail of shutdownBackgroundWork(), which is itself run-once.
-    void shutdownModules();
-
-    /// Step 6 of the shutdown order (shell/shutdownorder.h): destroys the
-    /// child widgets that hold the last shared_ptr<Engine>, so the engine dies
-    /// with a name on it and BEFORE closeDatabase(). Called only from
-    /// ~MainWindow.
-    void destroyEngineViews();
-
     /// Parameterised node verbs for the scripting API: same behaviour as the
     /// deleteNode()/duplicateNode() context-menu slots but on an explicit node
     /// (and duplication is undoable via AddSceneNodeCommand).
@@ -807,27 +777,17 @@ public slots:
     void redo();
 
     /// Ctrl+Z / Ctrl+Shift+Z, routed to whichever edit stack the ACTIVE SPACE
-    /// owns: the Materials space owns the graph's (owner decision, deep audit
-    /// 2026-09 area 1), every other space the editor's. The registry entries
-    /// "edit.undo"/"edit.redo" and the Edit menu/toolbar actions all call these
-    /// — never undo()/redo() directly — so there is exactly one claimant for
-    /// the chord and one place the routing rule lives.
+    /// owns (the ModuleHub's edit targets): the Materials space owns the
+    /// graph's (owner decision, deep audit 2026-09 area 1), every other space
+    /// the editor's. The registry entries "edit.undo"/"edit.redo" and the Edit
+    /// menu/toolbar actions all call these — never undo()/redo() directly — so
+    /// there is exactly one claimant for the chord and one place the routing
+    /// rule lives.
     void undoActiveSpace();
-    /// The four edit chords, routed by the active space like undo/redo
-    /// (EDITOR_MULTISELECT_SPEC §2.6): the editor's selection SET, or the
-    /// Materials graph when that page is up.
-    void deleteActiveSpace();
-    void duplicateActiveSpace();
-    void copyActiveSpace();
-    void cutActiveSpace();
-    void pasteActiveSpace();
-    void selectAllActiveSpace();
-    /// Space: node search on the Materials space, gizmo cycle elsewhere.
-    void spaceKeyActiveSpace();
-    /// F: frame the graph selection on the Materials page, focus the scene
-    /// selection in the editor (one claimant, routed like Space).
-    void focusActiveSpace();
     void redoActiveSpace();
+    /// Ctrl+A: a focused text entry owns the chord; otherwise the active
+    /// space's edit target (EDITOR_MULTISELECT_SPEC §8.7).
+    void selectAllActiveSpace();
 
     void takeScreenshot();
     void toggleLightWires(bool state);
@@ -897,6 +857,15 @@ private slots:
 
 private:
     void setupServices();
+    /// What the edit chords mean on the EDITOR space (the ModuleHub asks for
+    /// it each time one fires): the selection SET, the clipboard, the scene's
+    /// undo (EDITOR_MULTISELECT_SPEC §2.6).
+    EditTarget editorEditTarget();
+    void copyEditorSelection();
+    void cutEditorSelection();
+    void pasteIntoEditor();
+    /// The active space's name, as the hub and the action host key it.
+    QString currentSpaceId() const { return spaces::id(currentSpace); }
 
     // ---- the open, in stages (shared by the synchronous and threaded paths) --
     /// Cover up + tear the previous world down. Always first.
@@ -992,13 +961,6 @@ private:
     std::unique_ptr<Project> exportTarget;
     QPointer<class ProgressDialog> archiveProgress;
 
-    /// A NON-owning watch on the process's Engine, taken when the viewport is
-    /// created. Step 5 of the shutdown order (shell/shutdownorder.h) uses it to
-    /// prove the engine really died with the viewports — if a new
-    /// shared_ptr<Engine> holder ever appears outside this window's widget
-    /// tree, this is what notices.
-    std::weak_ptr<jahshaka::engine::Engine> mEngineWatch;
-
     /// The screen the render loop is currently paced against (fps audit F1),
     /// and the connection to its refresh-rate signal. Non-owning; both are
     /// remade whenever the window changes screen.
@@ -1022,8 +984,6 @@ private:
 	QPushButton *assets_menu = nullptr;
 	QPushButton *publish_menu = nullptr;
 	QPushButton *avatar_menu = nullptr;
-	QWidget *publishView = nullptr;   // stacked page 5: publishing stub
-	QWidget *avatarView = nullptr;    // stacked page 6: the avatar module
 	QWidget *assets_panel = nullptr;
 	QLabel *jlogo = nullptr;
 	QPushButton *help = nullptr;
@@ -1145,7 +1105,7 @@ private:
 
     QToolBar *toolBar = nullptr;
     AssetView *_assetView = nullptr;
-    QWidget *assetsPlaceholder = nullptr;   // holds ASSETS = 2 until the page is built
+    QWidget *assetsPlaceholder = nullptr;   // the "assets" page until the real one is built
     class IAssetViewer *assetsPreviewViewer = nullptr;   // made at boot, handed to the page
 	QAction *actionSaveScene = nullptr;
 
@@ -1244,13 +1204,15 @@ private:
 	QPushButton *cameraView = nullptr;
 	QtAwesome *fontIcons;
 
-	materials::EffectsPage *shaderGraph = nullptr;   // the materials module's page
-	QVector<StudioModule*> modules;                  // audit §6.2: the shell's module list
-	MaterialsModule *materialsModule = nullptr;
-	PublishModule *publishModule = nullptr;
-	AvatarModule *avatarModule = nullptr;
 	VrModule *vrModule = nullptr;
-	PlayerModule *playerModule = nullptr;
+
+	/// THE SHELL'S PARTS (D10-SHELL-MODULES): the pages by id, the actions /
+	/// menus / toolbar slots, the module loop, and the one teardown path.
+	PageHost *pageHost = nullptr;
+	ActionHost *actionHost = nullptr;
+	ModuleHub *moduleHub = nullptr;
+	ShellLifecycle *lifecycle = nullptr;
+	ShellView *shellView = nullptr;
 
     // services (APP_ARCHITECTURE_AUDIT §3.3): constructed in setupServices(),
     // deleted in the dtor. The QObject services are parented to the window.

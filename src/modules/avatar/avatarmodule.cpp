@@ -24,11 +24,14 @@ For more information see the LICENSE file
 #include <QSet>
 #include "services/services.h"
 #include "scripting/scriptengine.h"
+#include "ui/ishellview.h"
+
+#include <QMessageBox>
 
 AvatarModule::AvatarModule() = default;
 AvatarModule::~AvatarModule() = default;
 
-void AvatarModule::initialize(ModuleHost &host)
+void AvatarModule::initialize(StudioContext &host)
 {
     this->host = host;
     mModel.reset(new avatar::AvatarPreviewModel());
@@ -51,9 +54,75 @@ void AvatarModule::initialize(ModuleHost &host)
     }
 }
 
-QWidget *AvatarModule::createPage()
+void AvatarModule::contribute(Contributions &c)
 {
-    return mPage;
+    c.setPage(mPage);
+    c.opensAssetKind(QStringLiteral("avatar"));
+}
+
+bool AvatarModule::openAsset(const AssetRef &ref)
+{
+    if (ref.kind != QLatin1String("avatar")) return false;
+    QWidget *parent = host.shellWidget;
+    switch (ref.intent) {
+    case AssetRef::Intent::Open: {
+        // THE PAGE -> MODULE SEAM (AVATAR_ASSET_SPEC §5.5): the space first,
+        // then the verb.
+        if (host.shell) host.shell->setSpace(id());
+        if (!mApi) return true;
+        QVariantMap options;
+        if (!ref.scope.isEmpty()) options.insert(QStringLiteral("scope"), ref.scope);
+        auto *api = mApi;
+        const QVariantMap opened = api->quietly([&] { return api->open(ref.guid, options); });
+        // A refusal is the module's own message (a definition that will not
+        // parse, a project scope with nothing pinned).
+        if (opened.isEmpty() && !api->lastError().isEmpty())
+            QMessageBox::warning(parent, QObject::tr("Edit in Avatar Module"), api->lastError());
+        return true;
+    }
+    case AssetRef::Intent::Spawn: {
+        if (!mApi) return true;
+        auto *api = mApi;
+        QVariantMap options;
+        if (ref.hasPosition)
+            options.insert(QStringLiteral("position"),
+                           QVariantMap{ { "x", ref.position[0] }, { "y", ref.position[1] },
+                                        { "z", ref.position[2] } });
+        if (api->quietly([&] { return api->spawn(ref.guid, options); }).isEmpty()
+            && !api->lastError().isEmpty())
+            QMessageBox::warning(parent, QObject::tr("Add Avatar to Scene"), api->lastError());
+        return true;
+    }
+    case AssetRef::Intent::Assign: {
+        // NOTHING UNDER THE CURSOR (R2, 2026-09-11: an Animation tile dropped in
+        // the viewport did nothing at all, with no message). A clip is not a
+        // scene object — it is something a character wears — so the drop says
+        // that.
+        if (ref.targetGuid.isEmpty()) {
+            if (host.shell)
+                host.shell->showViewportToast(QObject::tr("Animation"),
+                    QObject::tr("Drop an animation onto a character to assign the clip"));
+            return true;
+        }
+        if (!mApi) return true;
+        auto *api = mApi;
+        const QVariantMap result = api->quietly(
+            [&] { return api->loadClip(ref.targetGuid, ref.guid, QVariantMap()); });
+        if (!host.shell) return true;
+        if (result.isEmpty()) {
+            host.shell->showViewportToast(QObject::tr("Animation"),
+                api->lastError().isEmpty()
+                    ? QObject::tr("'%1' cannot take this clip").arg(ref.targetName)
+                    : api->lastError());
+            return true;
+        }
+        const QVariantList added = result.value(QStringLiteral("clips")).toList();
+        host.shell->showViewportToast(QObject::tr("Animation"),
+            QObject::tr("%1 clip(s) added to %2").arg(added.size()).arg(ref.targetName));
+        return true;
+    }
+    }
+    return false;
 }
 
 void AvatarModule::registerApi(ScriptEngine &engine)
@@ -67,7 +136,7 @@ void AvatarModule::registerApi(ScriptEngine &engine)
     if (mPage) {
         auto *page = mPage;
         // The page's project actions, routed through the services the module
-        // WAS given (ModuleHost) — the page never reaches for them itself.
+        // WAS given (StudioContext) — the page never reaches for them itself.
         auto host_ = host;
         auto *api = mApi;
         QObject::connect(page, &avatar::AvatarPage::addAvatarToProject, page,
