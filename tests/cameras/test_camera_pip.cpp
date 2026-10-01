@@ -165,7 +165,7 @@ Box brightBox(const Image &img, const Rect &r)
         for (int x = std::max(0, x0); x < std::min(int(img.width), x1); ++x) {
             const size_t i = (size_t(y) * img.width + x) * 4u;
             const int lum = (img.rgba[i] + img.rgba[i + 1] + img.rgba[i + 2]) / 3;
-            if (lum < 164) continue;   // 96 linear = 164 display (SRGB-ENCODE-1)
+            if (lum < 165) continue;   // 96 linear = 165 display: OETF(96) = 165.04 (SRGB-ENCODE-1)
             b.x0 = std::min(b.x0, x); b.x1 = std::max(b.x1, x);
             b.y0 = std::min(b.y0, y); b.y1 = std::max(b.y1, y);
         }
