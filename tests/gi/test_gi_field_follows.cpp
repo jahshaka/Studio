@@ -487,7 +487,9 @@ int main() {
         LightDesc ld;
         ld.type = LightType::Point;
         ld.colour = Colour(1.0f, 1.0f, 1.0f);
-        ld.intensity = 2.0f;
+        // IMAGE-1: 2.0 under the retired near-flat curve, re-keyed at 12 m — the
+        // ground beyond cascade 0 this case reads — for the inverse square law.
+        ld.intensity = 314.0f;
         ld.range = 30.0f;
         ld.castShadows = false;
         scene->setLight(lamp, ld);

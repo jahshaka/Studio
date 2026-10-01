@@ -533,15 +533,19 @@ int main(int argc, char **argv)
                     // (the decoded mean): 62.1 +/- 6, exactly the old bar. (Its OETF image
                     // in display codes is not the display mean — the mean of encoded bytes
                     // is not the encode of the mean light.)
-                    CHECK(fixedLight > 56.0 && fixedLight < 68.0,
+                    // RE-PINNED (IMAGE-1: physical falloff + filmic curve): 62.1 -> 75.1 in
+                    // decoded light — Unreal's film develops this quad's tones brighter than
+                    // Hable's tail did; and the full-metal reading moved with it (60.6),
+                    // so the relative fence below is re-derived from the two readings:
+                    // 1.24x, fenced at 1.15x ("clearly brighter", not "tuned to it").
+                    CHECK(fixedLight > 69.0 && fixedLight < 81.0,
                           "5: the imported spec-gloss material is LIT, at the re-pinned value "
-                          "(62.1 +/- 6 in light, in the studio environment with the diffuse "
-                          "energy factor)");
+                          "(75.1 +/- 6 in light, in the studio environment, Unreal's film)");
                     // ...IN LIGHT (SRGB-ENCODE-1): the 1.25x fence was set on the linear
                     // picture, so it is evaluated on the decoded means.
                     std::printf("    in light: imported %.1f, pre-fix %.1f (ratio %.2f)\n",
                                 fixedLight, brokenLight, brokenLight > 0.0 ? fixedLight / brokenLight : 0.0);
-                    CHECK(fixedLight > brokenLight * 1.25,
+                    CHECK(fixedLight > brokenLight * 1.15,
                           "5: ... and is clearly brighter than the full-metal reading it used to get");
                 }
 

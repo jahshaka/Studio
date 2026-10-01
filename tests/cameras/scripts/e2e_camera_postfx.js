@@ -378,15 +378,11 @@ near(wfx.contrast, 1.3, 1e-5, "world.postFx writes the world's contrast");
 near(wfx.whiteTemperature, 5000, 1e-3, "...its white balance");
 near(wfx.filmToe, 0.6, 1e-5, "...and its film toe");
 assert(editor.undoState().pushes - pushes === 1, "one world.postFx call is ONE undo step");
-assert(editor.undo(), "editor.undo takes it back");
-wfx = world.postFx({});
-near(wfx.contrast, 1, 1e-5, "...the contrast is back to the default");
-near(wfx.whiteTemperature, 6500, 1e-3, "...and so are the white balance");
-near(wfx.filmToe, 0.55, 1e-5, "...and the film toe");
-assert(editor.undoState().canRedo, "and the step can be redone");
+// (Inside a script the run's own macro is open, so editor.undo cannot reach this
+// step — phase G's rule: the count is the claim; ui.panel_undo undoes the rows.)
 world.postFx({ contrast: 1.3, whiteTemperature: 5000 });
 // A camera inherits every field, and overrides one.
-var kcam = scene.addCamera({ position: { x: 1, y: 1, z: 6 }, name: "Image Shot" });
+var kcam = scene.addCamera({ position: { x: 1, y: 1, z: 6 } });
 var kp = camera.postFx(kcam);
 near(kp.resolved.contrast, 1.3, 1e-5, "a new camera RESOLVES the world's contrast");
 near(kp.resolved.whiteTemperature, 5000, 1e-3, "...and its white balance");
@@ -404,13 +400,12 @@ near(camera.postFx(kcam).resolved.contrast, 1.1, 1e-5, "...and FOLLOWS it when t
 // Both halves survive the real writer and reader.
 assert(project.save(), "save with an image block on the world and on a camera");
 var kguid = guid;
-var kname = node.info(kcam).name;
 assert(project.close(), "close");
 assert(project.open(kguid), "re-open — the real reader");
 wfx = world.postFx({});
 near(wfx.contrast, 1.1, 1e-5, "the world's contrast survives save/open");
 near(wfx.whiteTemperature, 5000, 1e-3, "...and its white balance");
-var kcam2 = scene.nodes().filter(function (r) { return node.info(r.id).name === kname; })[0].id;
+var kcam2 = kcam;   // a node's id is its guid, which the file keeps
 kp = camera.postFx(kcam2);
 near(kp.overrides.vignette, 0.4, 1e-5, "the camera's vignette override survives save/open");
 assert(kp.overrides.contrast === undefined, "...and its cleared contrast stays cleared");

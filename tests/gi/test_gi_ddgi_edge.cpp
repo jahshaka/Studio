@@ -197,7 +197,7 @@ static Box buildBox(Engine *e)
     LightDesc l;
     l.type = LightType::Point;
     l.colour = Colour(1, 1, 1);
-    l.intensity = 1.2f;
+    l.intensity = 12.9f;   // IMAGE-1: 1.2 re-keyed at 2.5 m, the room's reach (inverse square)
     l.range = 20.0f;
     l.castShadows = false;
     b.scene->setLight(light, l);

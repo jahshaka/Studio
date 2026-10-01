@@ -154,10 +154,15 @@ int main(int argc, char **argv)
         // light the instrument view above reads there (the same pose and scene).
         {
             const QImage shot = assets.renderImage(W, H);
-            const int instrument = int(at(front, W / 2, H / 2).r * 255.0f + 0.5f);
+            // The film runs on the COLOUR (IMAGE-1: Unreal's, in ACEScg): the whole
+            // instrument colour goes in, its red channel is compared.
+            const Colour ci = at(front, W / 2, H / 2);
+            const int inst[3] = { int(ci.r * 255.0f + 0.5f), int(ci.g * 255.0f + 0.5f),
+                                  int(ci.b * 255.0f + 0.5f) };
+            const int instrument = inst[0];
             const int got = shot.isNull() ? -1 : shot.pixelColor(W / 2, H / 2).red();
             double lo = 0.0, hi = 0.0;
-            const bool ok = thumbgrade::matches(got, instrument, assets.document()->exposure, &lo, &hi);
+            const bool ok = thumbgrade::matchesRGB(got, inst, 0, assets.document()->exposure, &lo, &hi);
             std::printf("    asset shot centre red: %d (the thumbnail grade of the instrument's %d: "
                         "%.1f..%.1f)\n", got, instrument, lo, hi);
             CHECK(!shot.isNull() && ok,

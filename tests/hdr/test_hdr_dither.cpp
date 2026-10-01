@@ -212,7 +212,9 @@ int main()
         LightDesc l;
         l.type = LightType::Point;
         l.colour = Colour(1.0f, 1.0f, 1.0f);
-        l.intensity = 2.0f;        // measured: the frame lands on display codes 192..198 (SRGB-ENCODE-1; 134..144 before the encode)
+        // 4096 since IMAGE-1: the inverse square law at 32 m gives the plane the light
+        // 2.0 gave it under the retired near-flat curve (2 x 2 = 4 = 4096 / 32^2).
+        l.intensity = 4096.0f;
         l.range = 2000.0f;         // no range cut-off inside the fixture
         l.castShadows = false;
         if (!s->setLight(n, l)) { std::printf("FAIL: fixture light\n"); return 1; }

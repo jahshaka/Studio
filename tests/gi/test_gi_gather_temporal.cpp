@@ -112,8 +112,10 @@ static GiParams gatherGi()
 /// high in the middle, two in opposite corners — and a few objects on the
 /// floor). Matte everywhere, one warm wall and one cool block so the bounce has
 /// a colour; the ambient is black, so every indirect photon is the gather's.
-/// The sample's own lamp intensities (0.65 in the middle, 0.5 in the corners).
-static const float kLampScale = 1.0f;
+/// The sample's own lamp intensities, re-keyed for the inverse square law the way
+/// the sample was (IMAGE-1: the light each gave the floor beneath it, kept):
+/// 0.65 -> 38.2 in the middle (6.2 m up), 0.5 -> 20.3 in the corners (5 m up).
+static const float kCentreLamp = 38.2f, kCornerLamp = 20.3f;
 static void buildShowroom(Scene *s)
 {
     const MeshId cube = s->createMesh(enginetest::unitCubeMesh());
@@ -130,9 +132,9 @@ static void buildShowroom(Scene *s)
     addBox(s, cube, matte(Colour(0.25f, 0.45f, 0.80f)), Vec3(-4.0f, 1.0f, 0.0f), Vec3(2.0f, 2.0f, 2.0f));
     addBox(s, cube, matte(Colour(0.85f, 0.85f, 0.80f)), Vec3(3.5f, 0.75f, -2.0f), Vec3(1.5f, 1.5f, 3.0f));
     addBox(s, cube, matte(Colour(0.30f, 0.65f, 0.30f)), Vec3(1.0f, 0.5f, 7.0f), Vec3(1.0f, 1.0f, 1.0f));
-    gCentreLamp = addPointLamp(s, Vec3(0.0f, 6.2f, 0.0f), kLampScale * 0.65f, 30.0f);
-    addPointLamp(s, Vec3(-8.0f, 5.0f, -5.0f), kLampScale * 0.5f, 30.0f);
-    addPointLamp(s, Vec3(8.0f, 5.0f, 5.0f), kLampScale * 0.5f, 30.0f);
+    gCentreLamp = addPointLamp(s, Vec3(0.0f, 6.2f, 0.0f), kCentreLamp, 30.0f);
+    addPointLamp(s, Vec3(-8.0f, 5.0f, -5.0f), kCornerLamp, 30.0f);
+    addPointLamp(s, Vec3(8.0f, 5.0f, 5.0f), kCornerLamp, 30.0f);
 }
 
 static const unsigned kW = 768u, kH = 432u;
@@ -312,7 +314,7 @@ static int stableMain(Engine *e)
         LightDesc on;
         on.type = LightType::Point;
         on.colour = Colour(1.0f, 0.97f, 0.92f);
-        on.intensity = kLampScale * 0.65f;
+        on.intensity = kCentreLamp;
         on.range = 30.0f;
         s->setLight(gCentreLamp, on);
         s->refreshGlobalIllumination();   // the mirror's job in the app: a light edit re-injects

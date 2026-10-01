@@ -59,11 +59,11 @@ function J(x) { return JSON.stringify(x); }
 // World Background, whose cubemap environment rides at 0.53 (the old 0.376 x
 // 1.4 gain, preserved).
 var EXPECTED = {
-    "Matcaps": { tier: "medium", nodes: 6, names: ["StanfordDragon", "Floor", "Directional Light", "Sky Light"],
+    "Matcaps": { exposureEv: -0.69, tier: "medium", nodes: 6, names: ["StanfordDragon", "Floor", "Directional Light", "Sky Light"],
                  types: { mesh: 2, light: 3 } },
-    "Particles": { tier: "medium", nodes: 11, names: ["Fire Pit", "Floor", "Sphere", "Sky Light"],
+    "Particles": { exposureEv: -0.31, tier: "medium", nodes: 11, names: ["Fire Pit", "Floor", "Sphere", "Sky Light"],
                    types: { mesh: 3, particles: 4 } },
-    "Physics": { tier: "medium", nodes: 17, names: ["Teapot", "ball", "pipe", "Floor", "Sky Light"],
+    "Physics": { exposureEv: -0.3, tier: "medium", nodes: 17, names: ["Teapot", "ball", "pipe", "Floor", "Sky Light"],
                  types: { mesh: 13, light: 3 } },
     // The GRAND SHOWROOM (2026-09-07) replaced the old 241-node import: a
     // sealed hall of primitives — 6 room slabs, 4 columns, a 4-sphere metal
@@ -73,13 +73,13 @@ var EXPECTED = {
     // ONE FLOOR since lane L13 (owner, 2026-09-12): the gallery stands on the
     // default floor, and the slab it used to lay over it is gone. That floor
     // is the Basic template's "Floor" cube since SAMPLES-1 (every sample).
-    "Showroom": { tier: "epic", nodes: 23, names: ["Floor", "Sphere_r0", "GoldTorus", "GreenTeapot", "Sky Light"],
+    "Showroom": { exposureEv: -0.88, tier: "epic", nodes: 23, names: ["Floor", "Sphere_r0", "GoldTorus", "GreenTeapot", "Sky Light"],
                   types: { mesh: 16, light: 6 } },
     // SHOWROOM 2 (lane L14, owner 2026-09-12): the same generator at twice the
     // size. 20 nodes — the Showroom's 22 without the new-scene template's
     // Directional Light and Point Light, which a sealed room cannot use (the
     // generator removes them). Its three lights are ALL the room has.
-    "Showroom 2": { tier: "epic", nodes: 21, names: ["Floor", "Sphere_r0", "GoldTorus", "GreenTeapot", "Light0", "Sky Light"],
+    "Showroom 2": { exposureEv: -0.39, tier: "epic", nodes: 21, names: ["Floor", "Sphere_r0", "GoldTorus", "GreenTeapot", "Light0", "Sky Light"],
                     types: { mesh: 16, light: 4 }, lightsExactly: 4,
                     absent: ["Directional Light", "Point Light"] },
     // The Mirror Room: the reflections sample (scenes/tools/make_mirror_room.js).
@@ -87,14 +87,14 @@ var EXPECTED = {
     // pass had left behind (the expectation lagged the re-stage — three lanes
     // independently flagged it).
     // 13 since lane L13: one floor, the default one (the Floor slab is gone).
-    "Mirror Room": { tier: "epic", nodes: 14, names: ["Floor", "RedWall", "MirrorPanel", "MirrorSphere", "GoldTorus", "Sky Light"],
+    "Mirror Room": { exposureEv: -1.88, tier: "epic", nodes: 14, names: ["Floor", "RedWall", "MirrorPanel", "MirrorSphere", "GoldTorus", "Sky Light"],
                      types: { mesh: 10, light: 3 } },
-    "Skeletal Animation": { tier: "medium", nodes: 71, names: ["Beta_HighLimbsGeoMesh", "Hips", "Floor", "Sky Light"],
+    "Skeletal Animation": { exposureEv: -1.06, tier: "medium", nodes: 71, names: ["Beta_HighLimbsGeoMesh", "Hips", "Floor", "Sky Light"],
                             types: { mesh: 4, light: 3 } },
     // The three dragons became Dragon / Dragon2 / Dragon3 on 2026-09-09: they
     // were all "SceneNode24" (an importer leftover) and the first had no guid
     // at all, so no by-name or by-id verb could tell them apart.
-    "World Background": { tier: "medium", nodes: 8, names: ["Dragon", "Dragon3", "Floor", "Sky Light"],
+    "World Background": { exposureEv: -0.9, tier: "medium", nodes: 8, names: ["Dragon", "Dragon3", "Floor", "Sky Light"],
                           types: { mesh: 4, light: 3 } }
 };
 
@@ -914,7 +914,9 @@ assert(ray.custom === false && (!ray.deviations || ray.deviations.length === 0),
 // (nothing links SceneReader; tests/mirror records why). The constructor is
 // MANUAL at zero stops — zero being the grade the scene's own lights derive —
 // and a sample with nothing to say about exposure must come back as exactly
-// that.
+// that. SINCE IMAGE-1 every sample carries its own exposure, KEYED on its floor
+// card (scenes/tools/reauthor_samples.js; the table's exposureEv), so the
+// absent-key half of this claim is the template's, not these archives'.
 var DOC_EXPOSURE_EV = 0.0;    // iris::Scene's constructor, in STOPS
 var wantExposure = want.exposureEv === undefined ? DOC_EXPOSURE_EV : want.exposureEv;
 var shipFx = world.postFx();

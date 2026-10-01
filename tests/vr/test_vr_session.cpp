@@ -1654,7 +1654,11 @@ int main() {
                     size_t cyan = 0;
                     for (size_t i = 0; i + 3 < eye.rgba.size(); i += 4) {
                         const int r = eye.rgba[i], g = eye.rgba[i + 1], b = eye.rgba[i + 2];
-                        if (g - r > 25 && b - r > 25) ++cyan;
+                        // CYAN, NOT BLUE (IMAGE-1): the proxy's green and blue are equal;
+                        // the fixture's sunlit blue wall (0.20 0.55 0.85) used to clip near
+                        // white under Hable's tail and now keeps its hue through Unreal's
+                        // film, so the hue's own test - g within 15 % of b - separates them.
+                        if (g - r > 25 && b - r > 25 && std::abs(g - b) * 100 < 15 * std::max(g, b)) ++cyan;
                     }
                     return cyan;
                 };

@@ -25,7 +25,11 @@ function assert(cond, msg) {
     console.log("ok: " + msg);
 }
 function isGreen(c) { return c.g > 110 && c.g > c.r * 1.8 && c.g > c.b * 1.8; }
-function isRed(c) { return c.r > 40 && c.r > c.g * 1.8 && c.r > c.b * 1.8; }
+// RED, AS THE FILM DEVELOPS IT (IMAGE-1): Unreal's filmic curve desaturates a
+// bright red toward white the way film does (the rig's red reads (233,140,130),
+// r/g 1.66, where Hable's tail kept it at 1.8+); a grey backdrop or the skeleton's
+// overlay is nowhere near 1.5.
+function isRed(c) { return c.r > 40 && c.r > c.g * 1.5 && c.r > c.b * 1.5; }
 
 var RIG = "@SOURCE_DIR@/tests/avatar/fixtures/rig2.glb";
 var WALK = "@SOURCE_DIR@/tests/avatar/fixtures/rig2_walk_anim.glb";

@@ -79,7 +79,7 @@ void setLamp(Room &r, bool castShadows)
 {
     LightDesc d;
     d.type = LightType::Point;
-    d.intensity = 12.0f;
+    d.intensity = 427.0f;   // IMAGE-1: 12 under the retired curve, re-keyed at the lamp's 5 m above the floor
     d.range = 20.0f;
     d.castShadows = castShadows;
     r.scene->setLight(r.lamp, d);

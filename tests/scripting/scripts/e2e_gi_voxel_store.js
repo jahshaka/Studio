@@ -79,9 +79,15 @@ assert(d.format === "PFG_RGBA16_FLOAT", "the total volume is RGBA16F (got " + d.
 // store read 22,476: 2,292 voxels holding only faces hidden inside the slabs, lit through them.
 assert(d.voxelsLit === 20184,
        "the direct pass lit exactly the voxels the lit geometry predicts: " + d.voxelsLit + " (20184)");
-assert(d.peak > 0.5 && d.peak <= 1.0 + 1e-3,
-       "the direct term is normalised to at most the ceiling: peak " + d.peak);
-assert(d.voxelsAboveOne === 0, "nothing of the direct term is above 1 (" + d.voxelsAboveOne + ")");
+// THE STORE IS NORMALISED TO THE LAMP'S LIGHT AT 1 m (IMAGE-1): a lamp follows the inverse
+// square law now, so a face NEARER than 1 m stands above 1 — the ceiling's inner face is 0.8 m
+// above it, and a voxel's centre (where the injection evaluates the law) up to half a cell nearer.
+// The bound is the law at that nearest centre times the albedo (the lobe is at most 1).
+var NEAREST = 0.8 - 0.5 * (10.0 / 128.0);
+var DIRECT_MAX = 0.791 / (NEAREST * NEAREST);
+assert(d.peak > 0.5 && d.peak <= DIRECT_MAX * (1 + 1e-3),
+       "the direct term is at most the falloff allows at the nearest face: peak " + d.peak +
+       " (bound " + DIRECT_MAX.toFixed(3) + ")");
 assert(d.voxelsAtMax === 0, "a float store has no top bin: voxelsAtMax " + d.voxelsAtMax);
 
 // (c) three bounces: the fixed point stands above the ceiling and is HELD.
@@ -90,11 +96,15 @@ world.refreshGi();
 settle();
 var b = world.giVoxelStats({ cascade: 0 });
 assert(b.available === true && b.format === "PFG_RGBA16_FLOAT", "the bounced volume is the same float store");
-assert(b.peakDirect > 0.5 && b.peakDirect <= 1.0 + 1e-3,
-       "the DIRECT volume beside it holds D at most 1: peakDirect " + b.peakDirect);
-assert(b.peak > 1.2 * b.peakDirect,
-       "the fixed point stands above the ceiling: peak " + b.peak + " vs direct " + b.peakDirect +
-       " (measured 2.05x; an 8-bit store reads 1.0 here)");
+assert(b.peakDirect > 0.5 && b.peakDirect <= DIRECT_MAX * (1 + 1e-3),
+       "the DIRECT volume beside it holds D within the falloff's bound: peakDirect " + b.peakDirect);
+// (IMAGE-1: the direct PEAK is now the inverse square law's hot spot on the ceiling 0.8 m over
+// the lamp, which the bounce barely adds to — the fixed point's excess is where the room fills,
+// so it is counted there: more voxels above 1 with the bounce than with the direct term alone.)
+assert(b.voxelsAboveOne > d.voxelsAboveOne && b.peak >= b.peakDirect,
+       "the fixed point stands above the ceiling: " + b.voxelsAboveOne + " voxels above 1 against " +
+       d.voxelsAboveOne + " direct; peak " + b.peak + " vs direct " + b.peakDirect +
+       " (an 8-bit store reads 1.0 here)");
 // ...and HELD: voxels stand above the ceiling (an 8-bit store has none). The count itself is no
 // geometric prediction - it is the tail of the fixed point over the ceiling (781 here, 5,115 on
 // the leaky store whose hidden faces glowed) - so the claim is that the tail exists.

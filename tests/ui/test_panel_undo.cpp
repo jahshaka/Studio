@@ -415,6 +415,25 @@ int main(int argc, char **argv)
             pump();
             CHECK(qFuzzyCompare(scene->exposure, was), "postfx: undone");
         }
+
+        // THE IMAGE BLOCK (IMAGE-1): the World Camera's Contrast row, the key
+        // world.postFx writes (postFx.contrast), one step per scrub, undone.
+        DragFloatWidget *contrast = dragWith(&panel, QStringLiteral("Contrast"));
+        CHECK(contrast != nullptr, "postfx: the image block's contrast is on the blade");
+        if (contrast) {
+            const float was = scene->image[iris::lens::ImageContrast];
+            const int steps = stack.index();
+            emit contrast->valueChanged(1.2);
+            emit contrast->valueChanged(1.4);
+            CHECK(qAbs(scene->image[iris::lens::ImageContrast] - 1.4f) < 1e-4f,
+                  "postfx: the contrast scrub wrote the world camera live");
+            emit contrast->editingDone();
+            CHECK(stack.index() == steps + 1, "postfx: the contrast scrub is ONE step");
+            stack.undo();
+            pump();
+            CHECK(qFuzzyCompare(scene->image[iris::lens::ImageContrast], was),
+                  "postfx: the contrast is undone");
+        }
     }
 
     // ---- 5. THE SKY SECTION: ONE STEP OVER THE WHOLE SKY BLOCK -------------

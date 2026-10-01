@@ -2015,7 +2015,9 @@ void light_on_node_and_camera_desc() {
     CHECK(s->attachMesh(cube, mesh, mat));
     s->setNodeTransform(cube, Vec3(0,0,0), Quat(), Vec3(1.2f,1.2f,1.2f));
     NodeId lightNode = s->createNode();
-    LightDesc d; d.type = LightType::Point; d.intensity = 0.8f; d.range = 20.0f;   // low enough not to saturate
+    // 27 since IMAGE-1: the inverse square law at the cube, ~4.8 m away, gives it the light 0.8
+    // gave it under the retired near-flat curve — still low enough not to saturate.
+    LightDesc d; d.type = LightType::Point; d.intensity = 27.0f; d.range = 20.0f;
     CHECK(s->setLight(lightNode, d));
     s->setNodeTransform(lightNode, Vec3(4, 1, 2.5f), Quat(), Vec3(1,1,1));
     render(fx.e);
@@ -4996,9 +4998,9 @@ void fixed_exposure_tonemap() {
     PbrParams hot;
     hot.albedo = Colour(0, 0, 0);
     // TWICE WHITE. The window this demonstration lives in is narrow and worth
-    // recording: raw saturates at 1.0, and the filmic curve's grade tail
-    // ((x-0.5)*1.25 + 0.5 + 0.11, HDR/FinalToneMapping_ps.glsl) saturates at a
-    // scene value of about 2.5 at this exposure. So 2.0 is over-range for the
+    // recording: raw saturates at 1.0, and the film curve (Unreal's filmic,
+    // HDR/FinalToneMapping_ps.glsl, IMAGE-1) reaches white only around a
+    // scene value of 11 at this exposure. So 2.0 is over-range for the
     // raw path and inside the graded one — which is precisely the band the
     // whole feature exists to recover. (A value of 8 clips in BOTH: no
     // tonemapper has infinite range, and claiming otherwise would be the kind

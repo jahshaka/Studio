@@ -199,7 +199,7 @@ int main(int argc, char **argv)
         LightDesc l;
         l.type = LightType::Point;
         l.colour = Colour(1.0f, 1.0f, 1.0f);
-        l.intensity = 0.5f;
+        l.intensity = 15.9f;   // IMAGE-1: 0.5 re-keyed at the lamp's 4.5 m (inverse square)
         l.range = 24.0f;
         l.castShadows = true;
         scene->setLight(lamp, l);

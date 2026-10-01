@@ -1517,11 +1517,23 @@ GltfExporter::Result GltfExporter::exportScene(const iris::ScenePtr &scene, cons
     // Post chain (POST_CHAIN_SPEC.md §10). The web viewer cannot reproduce the
     // engine's SSAO/SMAA/refraction, but it CAN match the grade — which is the
     // part a viewer notices — so the tonemapper and its exposure travel.
-    // "hable" is Uncharted2 with the sample's own constants plus its grade tail;
-    // the viewer ports that curve rather than approximating it with a stock one.
+    // "filmic" is Unreal's filmic tonemapper (IMAGE-1; the engine's
+    // FinalToneMapping): the viewer ports that curve rather than approximating it
+    // with a stock one, and its five parameters travel. (The rest of the image
+    // block — contrast, saturation, white balance, vignette — does not: the web
+    // viewer is a preview of the content, the World Camera's grade is the editor's.)
     {
         QJsonObject post;
-        post["tonemap"] = scene->hdrEnabled ? QStringLiteral("hable") : QStringLiteral("neutral");
+        post["tonemap"] = scene->hdrEnabled ? QStringLiteral("filmic") : QStringLiteral("neutral");
+        {
+            QJsonObject film;
+            film["slope"] = double(scene->image[iris::lens::ImageFilmSlope]);
+            film["toe"] = double(scene->image[iris::lens::ImageFilmToe]);
+            film["shoulder"] = double(scene->image[iris::lens::ImageFilmShoulder]);
+            film["blackClip"] = double(scene->image[iris::lens::ImageFilmBlackClip]);
+            film["whiteClip"] = double(scene->image[iris::lens::ImageFilmWhiteClip]);
+            post["film"] = film;
+        }
         // THE MULTIPLIER, NOT THE DIAL (EXPOSURE-1, lead review item 2). The
         // viewer's tonemapper takes a linear multiplier, and the number that
         // produces the editor's picture is `e^(E-2)/0.18` — the constant the

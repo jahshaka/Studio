@@ -518,7 +518,7 @@ static float sealedRoomMove(Engine *e, const GiParams &gi, const char *label, Ve
     LightDesc l;
     l.type = LightType::Point;
     l.colour = Colour(1, 1, 1);
-    l.intensity = 0.25f;
+    l.intensity = 4.9f;    // IMAGE-1: 0.25 re-keyed at the lamp's 3.5 m (inverse square)
     l.range = 20.0f;
     l.castShadows = false;
     s->setLight(light, l);
@@ -944,7 +944,7 @@ int main(int argc, char **argv)
         LightDesc l;
         l.type = LightType::Point;
         l.colour = Colour(1, 1, 1);
-        l.intensity = 0.25f;
+        l.intensity = 4.9f;    // IMAGE-1: 0.25 re-keyed at the lamp's 3.5 m (inverse square)
         l.range = 20.0f;
         l.castShadows = false;
         CHECK(s->setLight(light, l), "the room's point light arms");

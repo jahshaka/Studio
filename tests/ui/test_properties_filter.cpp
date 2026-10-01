@@ -332,7 +332,7 @@ int main(int argc, char **argv)
     {
         bool postOpen = false;
         for (AccordianBladeWidget *b : panel->findChildren<AccordianBladeWidget *>())
-            if (b->panelTitle().startsWith(QStringLiteral("Post")) && b->isVisibleTo(panel))
+            if (b->panelTitle().startsWith(QStringLiteral("World Camera")) && b->isVisibleTo(panel))
                 postOpen = b->isExpanded();
         CHECK(postOpen, "properties_filter: the section holding the match is expanded");
     }

@@ -2469,7 +2469,9 @@ static int caseView()
         LightDesc ld;
         ld.type = LightType::Point;
         ld.colour = Colour(0.2f, 0.4f, 1.0f);
-        ld.intensity = 6.0f;
+        // IMAGE-1: 6 under the retired curve, re-keyed at its 1.8 m for the
+        // inverse square law (the closed form above is the new law).
+        ld.intensity = 25.4f;
         ld.range = float(lampR);
         ld.castShadows = false;
         s->setLight(lamp, ld);
@@ -2486,7 +2488,7 @@ static int caseView()
         LightDesc sd;
         sd.type = LightType::Spot;
         sd.colour = Colour(1.0f, 0.8f, 0.6f);
-        sd.intensity = 8.0f;
+        sd.intensity = 82.1f;   // IMAGE-1: 8 re-keyed at its 3 m (inverse square)
         sd.range = 8.0f;
         sd.spotAngleDegrees = 30.0f;
         sd.spotSoftness = 0.5f;
