@@ -176,6 +176,22 @@ int main(int argc, char **argv)
     Image img = render(scene, *engine, view);
     show("S4 mesh on / skeleton off", img);
     CHECK(isMesh(img.at(unsigned(W / 2), unsigned(H / 2))), "S4: the mesh covers the subject centre");
+    // ---- SRGB-ENCODE-1: avatar.snapshot is a tile, not the instrument --------
+    // renderImage is avatar.snapshot's path: the thumbnail grade, display-encoded
+    // — the mesh at the centre reads the grade's code for the light the instrument
+    // view reads there (mesh on, skeleton off: no overlay colour in the way).
+    {
+        const QImage shot = scene.renderImage(W, H);
+        const Colour ci = img.at(unsigned(W / 2), unsigned(H / 2));
+        const int instrument = int(std::max({ ci.r, ci.g, ci.b }) * 255.0f + 0.5f);
+        const QColor cs = shot.isNull() ? QColor(0, 0, 0) : shot.pixelColor(W / 2, H / 2);
+        const int got = shot.isNull() ? -1 : std::max({ cs.red(), cs.green(), cs.blue() });
+        double lo = 0.0, hi = 0.0;
+        const bool ok = thumbgrade::matches(got, instrument, model.document()->exposure, &lo, &hi);
+        std::printf("    avatar snapshot centre: %d (the thumbnail grade of the instrument's %d: %.1f..%.1f)\n",
+                    got, instrument, lo, hi);
+        CHECK(!shot.isNull() && ok, "SRGB-ENCODE-1: avatar.snapshot is the thumbnail grade, display-encoded");
+    }
     CHECK(count(img, isOverlay) == 0, "S4: NO overlay pixels while the skeleton is off");
     CHECK(scene.overlaySegments() == 0, "S4: the overlay draws no segments");
 
@@ -231,20 +247,6 @@ int main(int argc, char **argv)
     CHECK(std::fabs(centroidHalf - centroid0) > 1.5f,
           "S7: the bone lines MOVED with the clip (the pose reaches pixels)");
     model.setTime(0.0f);
-
-    // ---- SRGB-ENCODE-1: avatar.snapshot is a tile, not the instrument --------
-    // renderImage is avatar.snapshot's path: the thumbnail grade, display-encoded
-    // — the flat backdrop reads the grade's code for its radiance.
-    {
-        const QImage shot = scene.renderImage(W, H);
-        const QColor c = model.document()->skyColor;
-        const double want = thumbgrade::code(c.redF(), model.document()->exposure);
-        const int got = shot.isNull() ? -1 : shot.pixelColor(2, 2).red();
-        std::printf("    avatar snapshot backdrop: %d (the thumbnail grade of %.4f: %.1f)\n",
-                    got, c.redF(), want);
-        CHECK(!shot.isNull() && std::fabs(got - want) <= 1.5,
-              "SRGB-ENCODE-1: avatar.snapshot is the thumbnail grade, display-encoded");
-    }
 
     // ---- S6b: neither ----
     model.setSkeletonVisible(false);

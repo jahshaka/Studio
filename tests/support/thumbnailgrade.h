@@ -32,4 +32,17 @@ inline double code(double linear, float stops)
     return 255.0 * oetf(film(linear * std::exp(e - 2.0) / 0.18));
 }
 
+/// Does a display byte `got` match the grade of an INSTRUMENT byte `instrument`
+/// (the linear Plain readback of the same pixel)? The instrument is quantised to
+/// 1/255 of light, so the expected code is a RANGE — the grade of instrument +-0.5 —
+/// widened by one code for the dither and the float path.
+inline bool matches(int got, int instrument, float stops, double *lo = nullptr, double *hi = nullptr)
+{
+    const double a = code(std::max(0.0, instrument - 0.5) / 255.0, stops);
+    const double b = code((instrument + 0.5) / 255.0, stops);
+    if (lo) *lo = a;
+    if (hi) *hi = b;
+    return got >= a - 1.0 && got <= b + 1.0;
+}
+
 }   // namespace thumbgrade

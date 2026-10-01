@@ -147,16 +147,17 @@ int main(int argc, char **argv)
         // THE SHOT IS A TILE, NOT THE INSTRUMENT (SRGB-ENCODE-1): renderImage is
         // the sky asset's thumbnail path (assetview -> engineassetviewer ->
         // EngineAssetScene::renderImage), and it takes the thumbnail grade,
-        // display-encoded — its flat backdrop reads the grade's code for the
-        // backdrop's radiance, not the linear 25 the instrument view above reads.
+        // display-encoded — the subject's centre reads the grade's code for the
+        // light the instrument view above reads there (the same pose and scene).
         {
             const QImage shot = assets.renderImage(W, H);
-            const QColor c = assets.document()->skyColor;
-            const double want = thumbgrade::code(c.redF(), assets.document()->exposure);
-            const int got = shot.isNull() ? -1 : shot.pixelColor(2, 2).red();
-            std::printf("    asset shot backdrop: %d (the thumbnail grade of %.4f: %.1f; the instrument "
-                        "reads %d)\n", got, c.redF(), want, int(at(front, 2, 2).r * 255.0f + 0.5f));
-            CHECK(!shot.isNull() && std::fabs(got - want) <= 1.5,
+            const int instrument = int(at(front, W / 2, H / 2).r * 255.0f + 0.5f);
+            const int got = shot.isNull() ? -1 : shot.pixelColor(W / 2, H / 2).red();
+            double lo = 0.0, hi = 0.0;
+            const bool ok = thumbgrade::matches(got, instrument, assets.document()->exposure, &lo, &hi);
+            std::printf("    asset shot centre red: %d (the thumbnail grade of the instrument's %d: "
+                        "%.1f..%.1f)\n", got, instrument, lo, hi);
+            CHECK(!shot.isNull() && ok,
                   "SRGB-ENCODE-1: the asset shot (the sky tile's path) is the thumbnail grade, "
                   "display-encoded, like every other tile");
         }
