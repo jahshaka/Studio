@@ -401,14 +401,6 @@ public slots:
     /// current project is never re-pointed (CREATE-GAP-1's fix round).
     void exportProjectWithDialog(const QString &guid, const QString &name);
 
-public:
-    /// THE ONE EXPORT OF A PROJECT BY GUID (threaded, the window's archiver):
-    /// what the tile's Export and `desktop.exportTile` both run. Reads the
-    /// project's ROW; the current project, the open world and its autosave are
-    /// untouched — except that exporting the project that IS open first saves
-    /// it, so the archive carries what is on screen. False (and `why`) when an
-    /// archive operation is already running or the project is unknown.
-    bool startProjectExport(const QString &guid, const QString &zipPath, QString *why = nullptr);
 
 public slots:
 
@@ -604,6 +596,7 @@ private:
     void showOpenProgress(int percent, const QString &text) override;
     void hideOpenProgress() override;
     void saveOpenWorld() override;
+    iris::ScenePtr openWorld() const override;
     ProjectRunner *projects = nullptr;
 
     void applySelectionToUi(iris::SceneNodePtr sceneNode);
@@ -649,13 +642,7 @@ private:
 
     Database *db = nullptr;
 
-    /// The THREADED project-archive export (STABILITY_PROGRAM_SPEC Lane 4).
-    /// Created on first use, parented here; shutdownBackgroundWork cancels and
-    /// joins it (ProjectArchiver::shutdownArchives).
-    class ProjectArchiver *archiver = nullptr;
-    /// The archiver's export target: a Project naming the row being exported,
-    /// never the live one (an export used to re-point the live project).
-    std::unique_ptr<Project> exportTarget;
+    /// The export's progress dialog (the archive is the ProjectRunner's).
     QPointer<class ProgressDialog> archiveProgress;
 
 

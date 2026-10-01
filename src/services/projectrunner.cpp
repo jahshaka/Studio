@@ -28,7 +28,10 @@ For more information see the LICENSE file
 #include "services/assetstorepaths.h"
 #include "services/loadtimeline.h"
 #include "services/meshbakestore.h"
+#include "services/projectarchiver.h"
 #include "services/projectservice.h"
+#include "services/sceneextents.h"
+#include "data/database/database.h"
 #include "services/sceneopenrunner.h"
 #include "viewport/ieditorviewport.h"
 
@@ -705,6 +708,66 @@ void ProjectRunner::close(bool reopenInPlace)
         sDrainingOpen = false;
     }
     mHost->closeWorld(reopenInPlace);
+}
+
+// ---- the export --------------------------------------------------------------
+
+bool ProjectRunner::startExport(const QString &guid, const QString &zipPath, QString *why)
+{
+    const auto refuse = [why](const QString &reason) {
+        if (why) *why = reason;
+        return false;
+    };
+    if (mArchiver && mArchiver->isRunning())
+        return refuse(tr("An archive operation is already running."));
+    if (guid.isEmpty() || !mDb->fetchProjectTile(guid, nullptr))
+        return refuse(tr("No project with guid '%1'.").arg(guid));
+
+    // THE OPEN WORLD IS SAVED ONLY WHEN IT IS THE ONE BEING EXPORTED (CREATE-
+    // GAP-1's fix round). The tile's Export used to re-point the LIVE project
+    // at the exported tile and then save "the scene" — the open world, written
+    // into the exported project's row and folder — and the pointer stayed
+    // there, so every later autosave of the open world landed in that row too.
+    const bool exportingOpenWorld = mHost->openWorld() && mProjectService->isSceneOpen()
+                                    && guid == mProject->getProjectGuid();
+    if (exportingOpenWorld) mHost->saveOpenWorld();
+
+    if (!mArchiver) {
+        // It exports `mExportTarget` — a Project naming the row — never the
+        // live project. SIGNAL-driven, never pumping: a pump from inside a
+        // slice re-enters the loop and can destroy objects the slice is still
+        // using (ProgressDialog::setPumpsEventLoop documents the scar).
+        mExportTarget = std::make_unique<Project>();
+        mArchiver = new ProjectArchiver(mDb, mExportTarget.get(), this);
+        connect(mArchiver, &ProjectArchiver::progress, this, &ProjectRunner::exportProgress);
+        connect(mArchiver, &ProjectArchiver::finished, this, [this](bool canceled) {
+            emit exportFinished(canceled, mArchiver->result().ok(), mArchiver->result().error);
+        });
+    }
+    mExportTarget->setProjectPath(mProjectService->projectFolderFor(guid), QString());
+    mExportTarget->setProjectGuid(guid);
+
+    // Pin-world archives (phase 4): catalog snapshot + manifest v2 + the
+    // pinned CAS objects, through the one archive implementation the
+    // project.exportArchive verb also calls — THREADED here (Lane 4), so the
+    // window keeps painting while a multi-hundred-megabyte world compresses.
+    emit exportStarted();
+    // The manifest's scene-scale block, measured from the live document — the
+    // archiver only ever sees the database (services/sceneextents.h). Only
+    // the OPEN world has a live document; another project's archive carries
+    // no scale block rather than the open world's.
+    mArchiver->setSceneMetadata(exportingOpenWorld && mViewport
+                                    ? sceneextents::describe(mViewport->getScene(),
+                                                             mViewport->editorCamera())
+                                    : exportformat::ManifestScene());
+    if (!mArchiver->startExport(zipPath))
+        return refuse(mArchiver->result().error);
+    return true;
+}
+
+void ProjectRunner::cancelExport()
+{
+    if (mArchiver) mArchiver->requestCancel();
 }
 
 // ---- teardown ----------------------------------------------------------------

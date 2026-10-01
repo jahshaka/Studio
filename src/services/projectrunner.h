@@ -103,6 +103,8 @@ public:
         virtual void hideOpenProgress() = 0;
         /// The open world's force save (autosave), for an export of it.
         virtual void saveOpenWorld() = 0;
+        /// The world that is bound to the window, or null.
+        virtual iris::ScenePtr openWorld() const = 0;
     };
 
     ProjectRunner(Database *db, Project *project, ProjectService *projectService,
@@ -163,11 +165,29 @@ public:
     /// An open in flight is drained first, then the host's teardown runs.
     void close(bool reopenInPlace);
 
+    // ---- the export ----------------------------------------------------------
+    /// THE ONE EXPORT OF A PROJECT BY GUID (threaded, the window's archiver):
+    /// what the tile's Export and `desktop.exportTile` both run. Reads the
+    /// project's ROW; the current project, the open world and its autosave are
+    /// untouched — except that exporting the project that IS open first saves
+    /// it, so the archive carries what is on screen. False (and `why`) when an
+    /// archive operation is already running or the project is unknown.
+    bool startExport(const QString &guid, const QString &zipPath, QString *why = nullptr);
+    /// The progress dialog's Cancel.
+    void cancelExport();
+
     // ---- teardown ------------------------------------------------------------
     /// The window close's settle: finish within the budget, then abandon.
     void settle(int budgetMs);
     /// Step 2 of the shutdown order: abort, then join. False = did not stop.
     bool stop(int budgetMs);
+
+signals:
+    /// An export is under way (the shell puts its progress up).
+    void exportStarted();
+    void exportProgress(int percent, const QString &text);
+    /// `ok` false with `error` when it failed; `canceled` when the user stopped it.
+    void exportFinished(bool canceled, bool ok, const QString &error);
 
 private:
     void startRunnerIfNeeded();
@@ -193,6 +213,13 @@ private:
     unsigned mSliceBoundaryFrames = 0;
     iris::ScenePtr mPendingScene;
     EditorData *mPendingEditorData = nullptr;
+    /// The THREADED project-archive export (STABILITY_PROGRAM_SPEC Lane 4).
+    /// Created on first use; the shutdown order's step 2 cancels and joins it
+    /// (ProjectArchiver::shutdownArchives).
+    ProjectArchiver *mArchiver = nullptr;
+    /// The archiver's export target: a Project naming the row being exported,
+    /// never the live one (an export used to re-point the live project).
+    std::unique_ptr<Project> mExportTarget;
 };
 
 #endif // PROJECTRUNNER_H

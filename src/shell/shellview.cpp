@@ -87,7 +87,7 @@ unsigned ShellView::openSliceBoundaryFrames() const
 
 bool ShellView::startProjectExport(const QString &guid, const QString &zipPath, QString *why)
 {
-    return mWindow->startProjectExport(guid, zipPath, why);
+    return mWindow->projectRunner()->startExport(guid, zipPath, why);
 }
 
 bool ShellView::startInteractiveImport(const QStringList &files)

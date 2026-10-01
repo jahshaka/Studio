@@ -311,6 +311,32 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
 	// THE OPEN, THE CREATE AND THE CLOSE (services/projectrunner.h): the order,
 	// the slices and the drains; this window is its Host — the stage bodies.
 	projects = new ProjectRunner(db, project, projectService, settings, sceneView, this, this);
+	// THE EXPORT'S PROGRESS, AND ITS FAILURE SAID OUT LOUD — the dialog is the
+	// window's; the archive is the runner's.
+	connect(projects, &ProjectRunner::exportStarted, this, [this]() {
+		if (!archiveProgress) {
+			archiveProgress = new ProgressDialog(this);
+			// SIGNAL-driven, never pumping: a pump from inside a slice re-enters
+			// the loop and can destroy objects the slice is still using
+			// (ProgressDialog::setPumpsEventLoop documents the scar).
+			archiveProgress->setPumpsEventLoop(false);
+			connect(archiveProgress, &ProgressDialog::canceled, projects, &ProjectRunner::cancelExport);
+		}
+		archiveProgress->setLabelText(tr("Exporting scene…"));
+		archiveProgress->resetCancel();
+		archiveProgress->setCancelVisible(true);
+		archiveProgress->setValue(0);
+		archiveProgress->show();
+	});
+	connect(projects, &ProjectRunner::exportProgress, this, [this](int percent, const QString &text) {
+		if (archiveProgress) archiveProgress->setValueAndText(percent, text);
+	});
+	connect(projects, &ProjectRunner::exportFinished, this,
+	        [this](bool canceled, bool ok, const QString &error) {
+		if (archiveProgress) archiveProgress->close();
+		if (!canceled && !ok && !FirstRun::isDrivenSession())
+			QMessageBox::warning(this, tr("Export failed"), error, QMessageBox::Ok);
+	});
     setupToolBar();
     // THE EDITOR'S PANELS (shell/editordocks.h): the six docks, the default
     // layout and the user's restored one.
@@ -1602,6 +1628,11 @@ void MainWindow::saveOpenWorld()
     saveScene();
 }
 
+iris::ScenePtr MainWindow::openWorld() const
+{
+    return scene;
+}
+
 // The close a user asked for: the world goes and the window lands on the
 // Desktop (VIEW-REBUILD-1 gave the other half of this function a name).
 void MainWindow::closeProject()
@@ -2157,80 +2188,10 @@ void MainWindow::exportProjectWithDialog(const QString &guid, const QString &nam
     if (filePath.isEmpty() || filePath.isNull()) return;
     if (!filePath.endsWith(".zip")) filePath += ".zip";
     QString why;
-    if (!startProjectExport(guid, filePath, &why))
+    if (!projects->startExport(guid, filePath, &why))
         QMessageBox::information(this, tr("Export"), why, QMessageBox::Ok);
 }
 
-bool MainWindow::startProjectExport(const QString &guid, const QString &zipPath, QString *why)
-{
-    const auto refuse = [why](const QString &reason) {
-        if (why) *why = reason;
-        return false;
-    };
-    if (archiver && archiver->isRunning())
-        return refuse(tr("An archive operation is already running."));
-    if (guid.isEmpty() || !db->fetchProjectTile(guid, nullptr))
-        return refuse(tr("No project with guid '%1'.").arg(guid));
-
-    // THE OPEN WORLD IS SAVED ONLY WHEN IT IS THE ONE BEING EXPORTED (CREATE-
-    // GAP-1's fix round). The tile's Export used to re-point the LIVE project
-    // at the exported tile and then save "the scene" — the open world, written
-    // into the exported project's row and folder — and the pointer stayed
-    // there, so every later autosave of the open world landed in that row too.
-    const bool exportingOpenWorld = scene && projectService->isSceneOpen()
-                                    && guid == project->getProjectGuid();
-    if (exportingOpenWorld) saveScene();
-
-    if (!archiver) {
-        // Parented: it dies with this window (step 5 of the shutdown order),
-        // and shutdownBackgroundWork cancels + joins it before that. It exports
-        // `exportTarget` — a Project naming the row — never the live project.
-        exportTarget = std::make_unique<Project>();
-        archiver = new ProjectArchiver(db, exportTarget.get(), this);
-        archiveProgress = new ProgressDialog(this);
-        // SIGNAL-driven, never pumping: a pump from inside a slice re-enters
-        // the loop and can destroy objects the slice is still using
-        // (ProgressDialog::setPumpsEventLoop documents the scar).
-        archiveProgress->setPumpsEventLoop(false);
-        connect(archiveProgress, &ProgressDialog::canceled, this,
-                [this]() { if (archiver) archiver->requestCancel(); });
-        connect(archiver, &ProjectArchiver::progress, this,
-                [this](int percent, const QString &text) {
-                    if (archiveProgress) archiveProgress->setValueAndText(percent, text);
-                });
-        connect(archiver, &ProjectArchiver::finished, this, [this](bool canceled) {
-            if (archiveProgress) archiveProgress->close();
-            if (!canceled && !archiver->result().ok() && !FirstRun::isDrivenSession())
-                QMessageBox::warning(this, tr("Export failed"),
-                                     archiver->result().error, QMessageBox::Ok);
-        });
-    }
-    exportTarget->setProjectPath(projectService->projectFolderFor(guid), QString());
-    exportTarget->setProjectGuid(guid);
-
-    // Pin-world archives (phase 4): catalog snapshot + manifest v2 + the
-    // pinned CAS objects, through the one archive implementation the
-    // project.exportArchive verb also calls — THREADED here (Lane 4), so the
-    // window keeps painting while a multi-hundred-megabyte world compresses.
-    if (archiveProgress) {
-        archiveProgress->setLabelText(tr("Exporting scene…"));
-        archiveProgress->resetCancel();
-        archiveProgress->setCancelVisible(true);
-        archiveProgress->setValue(0);
-        archiveProgress->show();
-    }
-    // The manifest's scene-scale block, measured from the live document — the
-    // archiver only ever sees the database (services/sceneextents.h). Only
-    // the OPEN world has a live document; another project's archive carries
-    // no scale block rather than the open world's.
-    archiver->setSceneMetadata(exportingOpenWorld && sceneView
-                                   ? sceneextents::describe(sceneView->getScene(),
-                                                            sceneView->editorCamera())
-                                   : exportformat::ManifestScene());
-    if (!archiver->startExport(zipPath))
-        return refuse(archiver->result().error);
-    return true;
-}
 
 
 
