@@ -557,7 +557,13 @@ int main(int argc, char **argv)
         const QJsonObject duringSwitch = mcp.runScript(
             QStringLiteral("var opened = avatar.open('%1', {async: true});"
                            "var refusals = [];"
-                           "function refused(f) { try { f(); return false; } catch (e) { return true; } }"
+                           // ONLY INSIDE THE WINDOW: the switch reads a BAKE now
+                           // (SHIPPED-BAKES-1, ~80 ms, not a 1.5 s parse), and the
+                           // script's verb hops pump the UI loop, so the window
+                           // can close mid-list — an edit after it is legal and
+                           // is not attempted (null).
+                           "function refused(f) { if (!avatar.progress().running) return null;"
+                           "  try { f(); return false; } catch (e) { return true; } }"
                            "refusals.push(refused(function(){ avatar.loadAnimation('%2'); }));"
                            "refusals.push(refused(function(){ avatar.setDefaultClip(''); }));"
                            "refusals.push(refused(function(){ avatar.removeClip('%3'); }));"
@@ -573,10 +579,16 @@ int main(int argc, char **argv)
         // (SPECS/IMPORT_DIALOG_SPEC.md §12.3) — a character's size is an import
         // setting, so there is no per-subject height edit left to refuse.
         bool allRefused = refusals.size() == 5;
-        for (const QJsonValue &v : refusals) allRefused = allRefused && v.toBool();
-        CHECK(duringSwitch.value("running").toBool(),
-              "the switch was still in flight while the edits were attempted");
-        CHECK(allRefused, "every definition edit REFUSED inside the switch window");
+        int attempted = 0;
+        for (const QJsonValue &v : refusals) {
+            if (v.isNull()) continue;   // the window had closed: not attempted
+            ++attempted;
+            allRefused = allRefused && v.toBool();
+        }
+        CHECK(refusals.size() == 5 && !refusals.at(0).isNull(),
+              "the switch was still in flight when the first edit was attempted");
+        std::printf("info: %d of 5 edits attempted inside the switch window\n", attempted);
+        CHECK(allRefused, "every definition edit attempted inside the switch window was REFUSED");
         CHECK(duringSwitch.value("clips").toInt() == 0,
               "... and the incoming avatar's clip list did not grow in memory");
 
