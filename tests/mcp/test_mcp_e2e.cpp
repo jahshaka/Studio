@@ -19,6 +19,7 @@
 //     escapable via depth/subtree, and enriched via include[]
 //   - undo_redo reverts the last run_script call (describe_scene confirms)
 //   - api_docs returns the registry reference (whole and per-module)
+//   - scene.addFloor is UNDOABLE through undo_redo (SAMPLES-1)
 //   - F5: a scripted node.setProperty is UNDOABLE through undo_redo
 //   - plan item 15: node.rename is UNDOABLE through undo_redo (the colliding
 //     rename answers the sibling-unique name; undo restores the old one)
@@ -724,6 +725,26 @@ int main(int argc, char **argv)
                                                      QJsonObject{ { "action", "redo" } }));
         CHECK(redone.value("applied").toBool(), "undo_redo applies the redo");
         CHECK(countNodes() == before + 1, "redo restores the primitive");
+    }
+
+    // ---- scene.addFloor is UNDOABLE (SAMPLES-1) ---------------------------
+    // One closed run_script macro adds a floor; one undo removes it. A
+    // --script run cannot show this (its own macro never closes), so the
+    // verb's suite (scripting.e2e.new_scene) proves the step is RECORDED and
+    // this proves undoing it takes the floor away.
+    {
+        const QJsonObject added = toolJson(callTool(net, url, token, ++id, "run_script",
+            QJsonObject{ { "script", "scene.addFloor({position: {x: 0, y: 0, z: 300}})" },
+                         { "label", "add a floor" } }));
+        const QString floorId = added.value("result").toString();
+        CHECK(added.value("ok").toBool() && !floorId.isEmpty(), "run_script adds a floor");
+        const QJsonObject undone = toolJson(callTool(net, url, token, ++id, "undo_redo",
+                                                     QJsonObject{ { "action", "undo" } }));
+        CHECK(undone.value("applied").toBool(), "undo_redo applies the undo");
+        const QJsonObject gone = toolJson(callTool(net, url, token, ++id, "run_script",
+            QJsonObject{ { "script", QStringLiteral("node.info('%1') ? 'present' : 'gone'").arg(floorId) } }));
+        CHECK(gone.value("result").toString() == QStringLiteral("gone"),
+              "one undo removes the floor scene.addFloor added");
     }
 
     // ---- F5: node.setProperty is UNDOABLE --------------------------------

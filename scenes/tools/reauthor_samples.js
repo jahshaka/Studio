@@ -1,169 +1,72 @@
-// BRINGS ONE SHIPPED SAMPLE UP TO DATE with the three changes that landed
-// after its archive was last written, and re-shoots its preview — one
-// re-authoring pass, so the eight archives are regenerated once.
+// RE-SHOOTS AND RE-EXPORTS ONE SHIPPED SAMPLE ON TODAY'S BUILD (the owner's
+// forward-only rule: "samples are re-authored when a build finishes"). Run it,
+// never hand-edit the archives. ONE SAMPLE PER RUN, ON A VIRGIN HOME (a library
+// holding a second copy of an archive's bytes would answer content lookups for
+// both):
 //
-// Run it, do not hand-edit the archives. ONE SAMPLE PER RUN, ON A VIRGIN HOME
-// (the reason is under "the checker" below):
-//
-//   TREE=<absolute path to the source tree>
+//   TREE=<absolute path to the source tree>   OUT=<a scratch dir>
 //   for S in Matcaps "Mirror Room" Particles Physics Showroom "Showroom 2" \
 //            "Skeletal Animation" "World Background"; do
-//       sed -e "s|@TREE@|$TREE|" -e "s|@SAMPLE@|$S|" -e "s|@MODE@|apply|" \
-//           -e "s|@OUT@|<a scratch dir>|" $TREE/scenes/tools/reauthor_samples.js > /tmp/re.js
-//       rm -rf <a virgin home>; mkdir -p <a virgin home>/run
-//       ( cd <a virgin home>/run && HOME=<a virgin home> DISPLAY=<your Xvfb, 1920x1080> \
-//             <build>/bin/Jahshaka --script /tmp/re.js --data-root <a virgin home>/data )
+//       sed -e "s|@TREE@|$TREE|" -e "s|@SAMPLE@|$S|" -e "s|@OUT@|$OUT|" \
+//           $TREE/scenes/tools/reauthor_samples.js > $OUT/re.js
+//       rm -rf $OUT/home; mkdir -p $OUT/home/run
+//       ( cd $OUT/home/run && HOME=$OUT/home DISPLAY=<your Xvfb, 1920x1080> \
+//             <build>/bin/Jahshaka --script $OUT/re.js --data-root $OUT/home/data ) \
+//           | tee "$OUT/$S.log"
 //   done
 //
-// @MODE@ = "measure" reads and photographs everything and writes NOTHING — no
-// material edit, no save, no preview, no archive. It is how the before/after
-// tables in spikes/content-1/INDEX.md were taken.
+// NOT --headless: the previews are real frames, and the drag-in check renders.
 //
-// NOT --headless: the GI fit is a RENDERER measurement and the previews are
-// real frames.
+// What a run does, on the archive as it ships: drops any project Tile.png row
+// the default floor does not wear (an archive carries every row of its
+// project, so a stray checker row is shipped dead weight — and a tray tile
+// e2e_tray_panel's closure check names), re-shoots the preview at the
+// encoded display, re-exports the archive, and proves the round trip: the
+// reopened sample has 0 UI-thread parses, 0 scene issues, ONE checker row, and
+// every library object drags in.
 //
-// ===========================================================================
-// 1. THE LIT VOLUME — re-measured, not re-authored
-// ===========================================================================
-// Nothing in the document says how big a room is any more (BOUNDS-CRUD): the
-// renderer measures the lit volume from the content the ground supports, and
-// ENGINE-4 item 5 changed that measurement after the UNPIN-1 previews and
-// giStatus tables were taken. So every sample's preview is re-shot on today's
-// fit and its volume recorded. scenes/tools/unpin_sample_gi.js's measure mode
-// reads the same numbers for the three rooms; this tool reads them for all
-// eight.
-//
-// ===========================================================================
-// 2. IMPORTED COLOURS — re-encoded, and ONLY the imported ones
-// ===========================================================================
-// Since LIGHTS-2 a QColor in the document is sRGB and is DECODED on its way to
-// the renderer, and the importer ENCODES the linear factors glTF and assimp
-// hand it (iris::srgbOf). The samples' materials, however, live in their scene
-// JSON and are not re-derived on load: a colour the OLD importer wrote — a raw
-// linear factor pushed straight into a QColor — now decodes a second time and
-// renders a gamma too dark. Skeletal Animation's character is the visible one.
-//
-// WHICH COLOURS THOSE ARE IS MEASURED, NEVER GUESSED. For every mesh node whose
-// mesh is a library MODEL ASSET (a built-in primitive's `:/models/...` mesh can
-// never have come from an importer), this tool exports that asset's own source
-// file and RE-IMPORTS IT with today's importer in a scratch project. That gives
-// the colour today's pipeline produces for that exact file and mesh index; the
-// value the OLD pipeline would have produced for the same file is its linear
-// decode. A stored colour that equals that old value (within 2/255 of the
-// re-quantisation) IS what the importer put there and is replaced by today's;
-// anything else is the author's and is left alone.
-//
-// Measured on the eight, 2026-09-13: it matches Skeletal Animation's three
-// character materials (#5ebfe7 -> #a4e1f5 twice, #0b0b0b -> #3d3d3d) and
-// NOTHING else — the Matcaps dragon's #ffd700, the World Background dragons'
-// #f5f5f7 / #ffd700 / #eef4f8, the Physics pipes and ball, the Particles fire
-// pit's #cccccc are all values a person chose (their files import as #cbcbcb,
-// assimp's default grey, whose old spelling is #989898). The fire pit is the
-// one that shows why the rule has to be the provenance and not a resemblance:
-// #cccccc sits ONE step from srgbOf's answer for that file and is still not it.
-//
-// ===========================================================================
-// 3. THE CHECKER IS THE PLATFORM'S, NOT THE USER'S
-// ===========================================================================
-// BAR-1 marked the shipped checker's library row `{"type": "platform"}` so the
-// editor's asset tray drops it (services/assettray.h rule 4): it is furniture
-// the app pins behind the user's back, not something they added. It stamped the
-// rows a FLOOR RESOLVES TO at creation, so the sample archives — written before
-// it — still carry an unstamped Tile.png row and an opened sample showed the
-// checker in its tray.
-//
-// The stamp is not applied by hand here. Creating a project runs the default
-// floor, which pins the shipped tile through
-// ShippedAssets::pinTexture(Ownership::Platform), and that call resolves the
-// row BY CONTENT — so on a library whose only copy of those bytes is the one
-// this sample's archive just brought in, it stamps the sample's own row, which
-// the export then carries. THAT is why this tool runs one sample per virgin
-// HOME: with two samples in one library the content lookup answers one row for
-// both and only one archive would be stamped.
-//
-// ===========================================================================
-// WHAT IS NOT TOUCHED: the camera, the lights, the sky, the exposure, the probe
-// grid, the tier, the geometry, the hand-authored colours, and each sample's
-// own preview SIZE and GRADE (the five that ship a "scene"-graded preview keep
-// it; the three rooms keep the viewport grade they were photographed with —
-// re-developing a picture is not this pass's business).
-//
-// IDEMPOTENT: a second run finds the colours already encoded, the row already
-// stamped, measures the same fit and re-exports the same archive.
+// THE SHIPPED SAMPLES' WORLD (SAMPLES-1, 2026-10-01 — what a new edit should
+// keep): every sample stands on the Basic template's floor (scene.addFloor),
+// filed under its "World" group, carrying what it authored on its ground
+// (Showroom's glossy lobe, Showroom 2's 8 m checker, Physics' bounce, Skeletal
+// Animation's body-less floor, World Background's deck plate). HEIGHT FOG is on
+// in the four open scenes under a procedural sky (Matcaps, Particles, Physics,
+// Skeletal Animation); the three walled rooms have none, and neither does
+// World Background, whose sky is a photograph the fog would paint over. All
+// eight are MANUAL at 0 stops, the re-derived default exposure chain.
 
-var TREE   = "@TREE@";
-var SAMPLE = "@SAMPLE@";
-var MODE   = "@MODE@";
-var OUT    = "@OUT@";
+var TREE    = "@TREE@";
+var SAMPLE  = "@SAMPLE@";
+var OUT     = "@OUT@";
 
 // name -> the preview it ships, at the size and grade it ships at, and the
 // warm-up its content needs before the shutter (a particle sample photographs
 // as an empty scene until the plumes have filled).
 var PREVIEWS = {
-    "Matcaps":            { file: "matcaps.png",   w: 460,  h: 215,  warm: 120, grade: "scene" },
-    "Particles":          { file: "particles.png", w: 480,  h: 270,  warm: 240, grade: "scene" },
-    "Physics":            { file: "physics.png",   w: 1920, h: 1080, warm: 120, grade: "scene" },
-    "Skeletal Animation": { file: "skeletal.png",  w: 1280, h: 720,  warm: 120, grade: "scene" },
-    "World Background":   { file: "world.png",     w: 1920, h: 1080, warm: 120, grade: "scene" },
-    "Mirror Room":        { file: "mirrorroom.png", w: 1280, h: 720, warm: 120, grade: true },
-    "Showroom":           { file: "showroom.png",  w: 1280, h: 720,  warm: 120, grade: true },
-    "Showroom 2":         { file: "showroom2.png", w: 1280, h: 720,  warm: 120, grade: true }
+    "Matcaps":            { file: "matcaps.png",    w: 460,  h: 215,  warm: 120, grade: "scene" },
+    "Particles":          { file: "particles.png",  w: 480,  h: 270,  warm: 240, grade: "scene" },
+    "Physics":            { file: "physics.png",    w: 1920, h: 1080, warm: 120, grade: "scene" },
+    "Skeletal Animation": { file: "skeletal.png",   w: 1280, h: 720,  warm: 120, grade: "scene" },
+    "World Background":   { file: "world.png",      w: 1920, h: 1080, warm: 120, grade: "scene" },
+    "Mirror Room":        { file: "mirrorroom.png", w: 1280, h: 720,  warm: 120, grade: true },
+    "Showroom":           { file: "showroom.png",   w: 1280, h: 720,  warm: 120, grade: true },
+    "Showroom 2":         { file: "showroom2.png",  w: 1280, h: 720,  warm: 120, grade: true }
 };
 
-// Centre plus the four quarters, at the sample's own saved camera.
 var PROBES = [{ x: 0.5, y: 0.5 }, { x: 0.25, y: 0.25 }, { x: 0.75, y: 0.25 },
               { x: 0.25, y: 0.75 }, { x: 0.75, y: 0.75 }];
 
-// The material colour slots a file format can carry (assimp's COLOR_*, glTF's
-// factors). Roughness and metallic are scalars and were never colour-decoded.
-var SLOTS = ["baseColor", "specularColor", "fresnelColor", "emissiveColor"];
-
-var ZIP = TREE + "/scenes/" + SAMPLE + ".zip";
-var P   = PREVIEWS[SAMPLE];
+var P = PREVIEWS[SAMPLE];
 var SLUG = SAMPLE.replace(/ /g, "_");
+var ZIP = TREE + "/scenes/" + SAMPLE + ".zip";
 
 function log(m) { console.log("[reauthor] " + SAMPLE + ": " + m); }
 function fail(m) { throw new Error("reauthor: " + SAMPLE + ": " + m); }
 function J(x) { return JSON.stringify(x); }
-function r2(v) { return Math.round(v * 100) / 100; }
-function vec(v) { return "(" + r2(v.x) + ", " + r2(v.y) + ", " + r2(v.z) + ")"; }
-function size(a, b) { return "(" + r2(b.x - a.x) + " x " + r2(b.y - a.y) + " x " + r2(b.z - a.z) + ")"; }
+function r3(v) { return Math.round(v * 1000) / 1000; }
 
-// ---- colour arithmetic, mirroring irisgl/core/color.h ----------------------
-function linearOfChannel(c) {                    // sRGB 0..1 -> linear 0..1
-    if (c <= 0) return 0;
-    if (c >= 1) return 1;
-    return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
-}
-function hexToRgb(hex) {
-    var h = ("" + hex).replace("#", "");
-    return [parseInt(h.substr(0, 2), 16), parseInt(h.substr(2, 2), 16), parseInt(h.substr(4, 2), 16)];
-}
-// The 8-bit colour the PRE-srgbOf importer would have written for the file that
-// today imports as `hex`: today's value is the sRGB encoding of the file's
-// linear factor, so the old one is its decode.
-function oldSpellingOf(hex) {
-    var c = hexToRgb(hex), out = [];
-    for (var i = 0; i < 3; i++) out.push(Math.round(linearOfChannel(c[i] / 255) * 255));
-    return out;
-}
-function within(a, b, tol) {
-    for (var i = 0; i < 3; i++) if (Math.abs(a[i] - b[i]) > tol) return false;
-    return true;
-}
+if (!P) fail("not a shipped sample");
 
-function giLine(tag) {
-    var st = world.giStatus();
-    log(tag + " GI: bounds " + vec(st.boundsMin) + " .. " + vec(st.boundsMax) +
-        " size " + size(st.boundsMin, st.boundsMax) + " voxelMetres " + r2(st.voxelMetres) +
-        " | probes " + st.probeCount + " region " + vec(st.probeRegionMin) + " .. " +
-        vec(st.probeRegionMax) + " dropped " + st.probesDropped +
-        " clamped " + st.probesClampedToRegion + " mode " + st.mode);
-    return st;
-}
-
-// The sample's own picture: no selection, no light wires, Game View — the frame
-// its preview ships, which is also where the pixels are read.
 function compose(warm) {
     editor.select(null);
     editor.setOverlays({ lightWires: false });
@@ -173,200 +76,105 @@ function compose(warm) {
 
 function shoot(tag) {
     var shot = editor.screenshot(OUT + "/" + SLUG + "-" + tag + ".png", 1280, 720, PROBES, "scene");
-    var line = "", sum = 0;
+    var line = [];
     for (var i = 0; i < shot.probes.length; i++) {
         var p = shot.probes[i];
-        line += (i ? "  " : "") + Math.round(p.r) + "," + Math.round(p.g) + "," + Math.round(p.b);
-        sum += p.r + p.g + p.b;
+        line.push(Math.round(p.r) + "," + Math.round(p.g) + "," + Math.round(p.b));
     }
-    log("probes [" + tag + "] scene grade: " + line + "   mean " + r2(sum / 15));
-    return shot.probes;
+    log("probes [" + tag + "] " + line.join("  "));
 }
 
-// Every mesh node's material, with the library model asset it came from (empty
-// for a built-in primitive).
-function inventory() {
-    var out = [], nodes = scene.nodes();
-    for (var i = 0; i < nodes.length; i++) {
-        if (nodes[i].type !== "mesh") continue;
-        var id = nodes[i].id;
-        var mesh = "" + node.property(id, "meshPath");
-        var rec = { id: id, name: nodes[i].name, mesh: mesh,
-                    index: node.property(id, "meshIndex"), colours: {} };
-        var m = material.get(id);
-        for (var s = 0; s < SLOTS.length; s++) rec.colours[SLOTS[s]] = m[SLOTS[s]];
-        out.push(rec);
-    }
-    return out;
+function defaultFloor() {
+    var floors = scene.nodes().filter(function (r) {
+        return r.type === "mesh" && node.property(r.id, "defaultFloor") === true;
+    });
+    if (floors.length !== 1) fail(floors.length + " default floors — one floor per sample");
+    return floors[0].id;
 }
 
-// ---------------------------------------------------------------------------
-// 1. the sample as it ships
-// ---------------------------------------------------------------------------
-var imported = project.importArchive(ZIP);
-if (!imported || !imported.guid) fail("importArchive failed");
-if (project.open(imported.guid) !== true) fail("open failed");
-var nodeCount = scene.nodes().length;
-if (nodeCount < 2) fail("opened with " + nodeCount + " nodes — that is not the sample");
-log(nodeCount + " nodes, camera " + J(editor.camera().position) + " fov " + editor.camera().fov);
+function checkerRows() {
+    return assets.list({ scope: "project", type: "texture", query: "Tile.png" })
+        .filter(function (r) { return r.name === "Tile.png"; });
+}
+
+function openArchive(path) {
+    var imported = project.importArchive(path);
+    if (!imported || !imported.guid) fail("importArchive failed: " + path);
+    if (imported.bakeFailures && imported.bakeFailures.length)
+        fail("the archive import could not bake " + J(imported.bakeFailures));
+    app.openStats({ reset: true });
+    if (project.open(imported.guid) !== true) fail("open failed");
+    if (scene.nodes().length < 2) fail("opened with " + scene.nodes().length + " nodes");
+    return imported;
+}
+
+// ---- the archive as it ships: tidy, re-shoot, re-export ----------------------
+openArchive(ZIP);
+var floor = defaultFloor();
+var worn = "" + ((node.serialize(floor).node.material || {}).values || {}).baseColorMap;
+var stale = checkerRows().filter(function (r) { return r.guid !== worn; });
+stale.forEach(function (r) {
+    if (assets.removeFromProject(r.guid) !== true) fail("could not drop the stale Tile.png row " + r.guid);
+});
+log("CHECKER ROWS: " + stale.length + " unused Tile.png row(s) dropped; the floor wears " + (worn || "(none)"));
+if (project.save() !== true) fail("save failed");
 
 compose(P.warm);
-giLine("AS SHIPPED");
-shoot("before");
-
-var stored = inventory();
-// One export per model asset the scene actually uses.
-var sources = {}, order = [];
-for (var i = 0; i < stored.length; i++) {
-    var mesh = stored[i].mesh;
-    if (!mesh || mesh.indexOf(":/") === 0) continue;   // a built-in primitive
-    if (sources[mesh]) continue;
-    var dir = OUT + "/raw/" + SLUG + "/" + order.length;
-    var raw = assets.exportRaw(mesh, dir, { dependencies: false, hash: false });
-    var file = "";
-    for (var f = 0; f < raw.files.length; f++)
-        if (!/\.(png|jpg|jpeg|tga|bmp|dds)$/i.test("" + raw.files[f])) file = dir + "/" + raw.files[f];
-    sources[mesh] = file;
-    order.push(mesh);
-    log("model asset " + mesh + " -> " + J(raw.files));
-}
+shoot("after");
+editor.frame(60, 1.0 / 60.0);
+var shot = editor.screenshot(TREE + "/scenes/preview/" + P.file, P.w, P.h, [{ x: 0.5, y: 0.5 }], P.grade);
+log("preview " + P.file + " " + P.w + "x" + P.h + " centre " + J(shot.center));
 editor.gameView(false);
+
+var out = project.exportArchive(ZIP);
+if (!out || !out.path) fail("exportArchive failed");
+log("wrote " + out.path + " (" + out.assets + " assets, " + out.objects + " objects)");
 if (project.close() !== true) fail("close failed");
 
-// ---------------------------------------------------------------------------
-// 2. the scratch project: the platform stamp, and today's importer
-// ---------------------------------------------------------------------------
-// Creating it builds a default floor, and THAT is what stamps the sample's
-// checker row `{"type": "platform"}` — see the header, section 3.
-project.create("reauthor scratch");
-var freshOf = {};                                   // mesh asset -> index -> colours
-for (var k = 0; k < order.length; k++) {
-    var file = sources[order[k]];
-    if (!file) { log("no model file for " + order[k] + " — left alone"); continue; }
-    assets.importAndPlace(file, { position: { x: 0, y: 0, z: 0 } });
-    var table = {};
-    var ns = scene.nodes();
-    for (var q = 0; q < ns.length; q++) {
-        if (ns[q].type !== "mesh") continue;
-        var qmesh = "" + node.property(ns[q].id, "meshPath");
-        if (!qmesh || qmesh.indexOf(":/") === 0) continue;
-        var qm = material.get(ns[q].id), rec = {};
-        for (var s2 = 0; s2 < SLOTS.length; s2++) rec[SLOTS[s2]] = qm[SLOTS[s2]];
-        table[node.property(ns[q].id, "meshIndex")] = rec;
-    }
-    freshOf[order[k]] = table;
-    // clear the scratch scene before the next file
-    var all = scene.nodes();
-    for (var d = 0; d < all.length; d++)
-        if (!all[d].parent) { try { node.remove(all[d].id); } catch (e) {} }
-}
-if (project.close() !== true) fail("scratch close failed");
+// ---- the round trip: what the shipped archive opens as -------------------
+openArchive(ZIP);
+editor.frame(120, 1.0 / 60.0);
+var stats = app.openStats();
+var issues = editor.issues();
+var missing = issues.filter(function (i) { return i.kind === "model.missing"; });
+log("REOPENED: " + scene.nodes().length + " nodes, uiThreadParses " + stats.uiThreadParses +
+    ", bakeBuilds " + stats.bakeBuilds + ", model.missing " + missing.length + ", issues " +
+    issues.length + " " + J(issues.map(function (i) { return i.kind + ":" + i.nodeName; })));
+defaultFloor();
+if (checkerRows().length > 1) fail("the reopened archive carries " + checkerRows().length + " Tile.png rows");
+if (stats.uiThreadParses !== 0) fail("the open parsed " + stats.uiThreadParses + " model(s)");
+if (issues.length) fail("the reopened sample has scene issues");
 
-// ---------------------------------------------------------------------------
-// 3. the re-authoring
-// ---------------------------------------------------------------------------
-if (project.open(imported.guid) !== true) fail("re-open failed");
-var live = inventory(), edits = 0, kept = 0;
-for (var i2 = 0; i2 < live.length; i2++) {
-    var rec = live[i2];
-    var table = freshOf[rec.mesh];
-    if (!table) continue;                            // built-in primitive, or no source file
-    var fresh = table[rec.index];
-    if (!fresh) { log(rec.name + ": today's import has no mesh " + rec.index + " — left alone"); continue; }
-    var write = {};
-    for (var s3 = 0; s3 < SLOTS.length; s3++) {
-        var key = SLOTS[s3];
-        var have = rec.colours[key], now = fresh[key];
-        if (have === now) continue;                  // already today's spelling
-        var old = oldSpellingOf(now);
-        if (within(hexToRgb(have), old, 2)) {
-            write[key] = now;
-            log(rec.name + " [mesh " + rec.index + "] " + key + " " + have + " -> " + now +
-                " (the importer's, whose old spelling is #" +
-                old.map(function (v) { return ("0" + v.toString(16)).slice(-2); }).join("") + ")");
-        } else {
-            ++kept;
-            log(rec.name + " [mesh " + rec.index + "] " + key + " " + have +
-                " KEPT — authored (today's import of this file says " + now +
-                ", whose old spelling is #" +
-                old.map(function (v) { return ("0" + v.toString(16)).slice(-2); }).join("") + ")");
+// ---- the drag-in: every library object arrives rotated and dressed ------
+var objects = assets.list({ scope: "project", type: "object" }).filter(function (a) {
+    return a.type === "object" || a.type === "Object";
+});
+var dragged = 0;
+objects.forEach(function (a) {
+    var id;
+    try { id = assets.addToScene(a.guid, { position: { x: 0, y: 0, z: 30 } }); }
+    catch (e) { return; }                     // a built-in row has no blob to place
+    if (!id) return;
+    var parts = [{ id: id, name: node.info(id).name, depth: 0 }].concat(node.components(id));
+    var imported = parts.some(function (p) {
+        return node.info(p.id).type === "mesh"
+            && ("" + node.property(p.id, "meshPath")).indexOf(":/") !== 0;
+    });
+    if (!imported) { node.remove(id); return; }   // a built-in's row: no blob of its own
+    ++dragged;
+    var rotated = 0, meshes = [];
+    parts.forEach(function (p) {
+        var r = node.info(p.id).rotation;
+        if (Math.abs(r.x) + Math.abs(r.y) + Math.abs(r.z) > 1e-3) ++rotated;
+        if (node.info(p.id).type === "mesh") {
+            var m = material.get(p.id);
+            meshes.push(p.name + " " + m.baseColor + " r" + r3(m.roughness) + " m" + r3(m.metallic));
         }
-    }
-    var keys = Object.keys(write);
-    if (keys.length) {
-        // Written in BOTH modes: measure mode never saves, exports or re-shoots
-        // a preview, but the "after" pixels it reports have to be the pixels
-        // the edit produces.
-        if (material.set(rec.id, write) !== true) fail(rec.name + ": material.set refused " + J(write));
-        edits += keys.length;
-    }
-}
-log(edits + " importer-sourced colour(s) re-encoded, " + kept + " authored colour(s) left alone");
-
-compose(P.warm);
-giLine("RE-AUTHORED");
-shoot("after");
-
-if (MODE !== "apply") {
-    log("MEASURE ONLY — nothing written");
-    editor.gameView(false);
-    if (project.close() !== true) fail("close failed");
-} else {
-    if (project.save() !== true) fail("save failed");
-
-    // ---- the shipped preview ----------------------------------------------
-    // Game View (already on), the SAVED camera, the size and the grade this
-    // sample's preview ships at.
-    editor.frame(60, 1.0 / 60.0);
-    var shot = editor.screenshot(TREE + "/scenes/preview/" + P.file, P.w, P.h,
-                                 [{ x: 0.5, y: 0.5 }], P.grade);
-    log("preview " + P.w + "x" + P.h + " centre " + J(shot.center));
-    editor.gameView(false);
-
-    // ---- the archive -------------------------------------------------------
-    var out = project.exportArchive(ZIP);
-    if (!out || !out.path) fail("exportArchive failed");
-    log("wrote " + out.path + " (" + out.assets + " assets, " + out.objects + " objects)");
-    if (project.close() !== true) fail("close failed");
-
-    // ---- and it survived the round trip ------------------------------------
-    var back = project.importArchive(ZIP);
-    if (!back || !back.guid) fail("re-import failed");
-    if (project.open(back.guid) !== true) fail("re-open (after export) failed");
-    compose(P.warm);
-    giLine("REOPENED");
-    var again = inventory();
-    for (var i3 = 0; i3 < again.length; i3++) {
-        var was = null;
-        for (var j = 0; j < live.length; j++) if (live[j].name === again[i3].name) was = live[j];
-        if (!was) continue;
-        var table2 = freshOf[again[i3].mesh];
-        if (!table2 || !table2[again[i3].index]) continue;
-        for (var s4 = 0; s4 < SLOTS.length; s4++) {
-            var key2 = SLOTS[s4], want = table2[again[i3].index][key2];
-            var had = was.colours[key2];
-            var expect = within(hexToRgb(had), oldSpellingOf(want), 2) ? want : had;
-            if (again[i3].colours[key2] !== expect)
-                fail(again[i3].name + ": " + key2 + " reopened as " + again[i3].colours[key2] +
-                     ", expected " + expect);
-        }
-    }
-    log("colours survived the round trip");
-
-    // THE TRAY: the checker is the platform's furniture, so an opened sample
-    // shows every asset it uses EXCEPT that row — while the floor still wears
-    // it (the pin and the bytes are untouched; only the row is marked).
-    var tray = assets.list({ scope: "project", tray: true });
-    for (var t = 0; t < tray.length; t++)
-        if (("" + tray[t].name).toLowerCase() === "tile.png")
-            fail("the shipped checker is still a tray tile after the re-export");
-    var ground = scene.find("Ground");
-    if (ground) {
-        var map = "" + material.get(ground).baseColorMap;
-        if (!map.length) fail("the ground lost its checker");
-        log("tray " + tray.length + " tile(s), no checker; the ground still wears " + map);
-    }
-    if (project.close() !== true) fail("close (after re-import) failed");
-}
-
-log("done (" + MODE + ")");
+    });
+    log("DRAG-IN " + a.name + ": " + parts.length + " node(s), " + rotated + " rotated; " +
+        meshes.join(" | "));
+    node.remove(id);
+});
+log(dragged + " library object(s) dragged in");
+if (project.close() !== true) fail("close (round trip) failed");
+log("done");

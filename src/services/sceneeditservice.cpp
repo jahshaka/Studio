@@ -14,6 +14,7 @@ For more information see the LICENSE file
 #include "irisgl/core/math/vec.h"
 #include "services/sceneeditservice.h"
 #include "services/sceneissues.h"
+#include "services/scenetemplatebuilder.h"
 #include "services/assetshare.h"
 
 #include "irisgl/document/assets/mesh.h"
@@ -168,6 +169,19 @@ void SceneEditService::addPrimitive(const QString &text,
     // gets its pivot exactly there (services/surfaceplacement.h).
     if (position) surfaceplacement::place(node, *position, placement);
     addNodeToScene(node, position.has_value());
+}
+
+iris::SceneNodePtr SceneEditService::addFloor(SceneTemplate kind)
+{
+    // ONE FLOOR BUILDER (services/scenetemplatebuilder.h): what a new scene of
+    // this template stands on, so a scene given a floor later — a re-authored
+    // sample — wears the very same nodes, rows and material.
+    if (!scene() || !db || !project || project->getProjectGuid().isEmpty())
+        return iris::SceneNodePtr();
+    iris::SceneNodePtr floor = scenetemplate::buildFloor(kind, db, project);
+    if (!floor) return floor;
+    addNodeToScene(floor, true);   // where the template puts it: the origin
+    return floor;
 }
 
 // The menu slots, over the ONE table below (they used to carry a second copy

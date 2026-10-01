@@ -30,8 +30,8 @@ For more information see the LICENSE file
 // THE DOCUMENT DID NOT CHANGE, on purpose. A mesh node for a built-in still
 // stores `":/content/primitives/cube.obj"` in its `mesh` field — that string is
 // a SEED KEY now, resolved here to the baked asset, never a file to parse. So
-// every scene ever saved (the eight shipped samples name five primitives, the
-// Ground and the Teapot between them) opens unchanged and gains the chain, the
+// every scene ever saved (the eight shipped samples name primitives and the
+// Teapot) opens unchanged and gains the chain, the
 // writer is untouched, and the places that recognise the floor by its mesh path
 // keep working. The reserved GUID is the LIBRARY row's identity (a favourite,
 // the tiles' drop payload, `assets.builtins`); the seed PATH is the document's.

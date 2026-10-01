@@ -145,8 +145,8 @@ static void testLaunchConfig()
           "skills: scene teaches physics and the overlay switches");
     CHECK(sceneMd.contains("api.help") && sceneMd.contains("api_docs({search"),
           "skills: scene teaches the cold-start lookups");
-    CHECK(sceneMd.contains("ground") && sceneMd.contains("count:"),
-          "skills: scene knows the ground primitive and the count option");
+    CHECK(sceneMd.contains("scene.addFloor") && sceneMd.contains("count:"),
+          "skills: scene knows the floor verb (the Ground primitive is retired) and the count option");
     const QString particlesMd = QString::fromUtf8(
         readFile(project + "/.claude/skills/jahshaka-particles/SKILL.md"));
     CHECK(particlesMd.contains("particles.setColourKeys")

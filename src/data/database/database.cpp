@@ -2140,9 +2140,9 @@ QVector<Database::AssetThumbnailState> Database::fetchAssetThumbnailStates(bool 
     // `{"type": "platform"}` is the APP's own content, pinned or seeded behind
     // the user's back and shown in no tile grid: the default floor's checker
     // (services/shippedassets.h, Ownership::Platform) and, since the primitives
-    // became baked library assets, the fourteen shipped meshes — whose tiles are
-    // the PNG icons in `src/data/primitives.h`, and two of which (the Ground, the
-    // Teapot) have no tile at all. A sweep that considers them renders fourteen
+    // became baked library assets, the thirteen shipped meshes — whose tiles are
+    // the PNG icons in `src/data/primitives.h`, and one of which (the Teapot)
+    // has no tile at all. A sweep that considers them renders thirteen
     // thumbnails nobody displays and then reports a library full of "missing"
     // rows, which is what `scripting.e2e.thumbnails_order` caught. A thumbnail is
     // for a row a user can SEE, and that is exactly what the stamp says.
