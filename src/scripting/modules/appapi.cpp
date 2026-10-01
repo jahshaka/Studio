@@ -133,7 +133,7 @@ QVector<VerbInfo> AppApi::verbs() const
           "'uiThreadResourceParses' counts parses of a QT RESOURCE (':/...') separately: a few "
           "kilobytes compiled into the binary, which no worker can hoist because the caller asks "
           "for it by name. The app makes NONE: every mesh it ships — the primitives, the "
-          "samples' Ground and Teapot, the preview docks' subjects, the VR controllers — is a "
+          "Teapot, the preview docks' subjects, the VR controllers — is a "
           "baked seed row read from the store, and an import's own parse (a library seed's "
           "included) counts as a bake build (SHIPPED-BAKES-1). Process-wide and always on: the "
           "cost is one clock read per parse. "

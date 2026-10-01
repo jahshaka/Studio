@@ -147,10 +147,25 @@ function eulerForDirection(dir) {
 /// Their `powerScale` as our `intensity` (see the header: they differ by pi).
 function powerScale(ps) { return ps / PI; }
 
+/// Removes the node named `name` — and FAILS when there is none: a rename
+/// once let these ports go on removing nothing (the template's floor stopped
+/// being called "Ground" and three ports kept a second floor, unnoticed).
 function removeNode(name) {
     var id = scene.find(name);
-    if (id) assert(node.remove(id), "removed '" + name + "'");
-    return !!id;
+    assert(id, "removeNode: no node named '" + name + "' to remove");
+    assert(node.remove(id), "removed '" + name + "'");
+    return true;
+}
+
+/// Removes the NEW-SCENE TEMPLATE'S FLOOR — found by its `defaultFloor` flag,
+/// never by a name — and fails when the scene has none.
+function removeTemplateFloor() {
+    var floors = scene.nodes().filter(function (r) {
+        return r.type === "mesh" && node.property(r.id, "defaultFloor") === true;
+    });
+    assert(floors.length > 0, "removeTemplateFloor: the scene has no template floor to remove");
+    floors.forEach(function (r) { assert(node.remove(r.id), "removed the template floor '" + r.name + "'"); });
+    return floors.length;
 }
 
 /// A port never pins a GI volume: the lit volume is automatic and a scene that
@@ -275,7 +290,7 @@ function ogreRocks(id, tile) {
 /// IesProfiles is a plain polished surface with no maps at all, and a textured
 /// floor hides exactly what that sample is about (the shape each light throws).
 function ogreFloor(plain) {
-    removeNode("Ground");
+    removeTemplateFloor();
     var id = scene.addPrimitive("plane", { position: { x: 0, y: -1, z: 0 },
                                            scale: { x: 25, y: 1, z: 25 } });
     node.rename(id, "Floor");

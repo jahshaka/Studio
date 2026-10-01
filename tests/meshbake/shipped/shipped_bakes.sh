@@ -4,8 +4,8 @@
 # dependency, and the app makes NO runtime parse.
 #
 # RUN 1 — a FRESH data root boots (the seed bakes every shipped mesh: the
-#   primitives, the samples' Ground and Teapot, the preview docks' subjects, the
-#   VR controllers), opens the Avatar space and its room, imports and opens a
+#   primitives, the Teapot, the preview docks' subjects, the VR controllers —
+#   one bake build per row of the seed table, src/data/primitives.h), opens the Avatar space and its room, imports and opens a
 #   character and its walk clip (each read from its bake), plays the clip,
 #   opens the Materials page's preview, renders a material thumbnail and — when
 #   the box has Monado — runs a VR session; `app.openStats` reads ZERO runtime
@@ -15,10 +15,15 @@
 #   the scene shows — a bake build, never a parse — and the character's clip is
 #   back.
 #
-# usage: shipped_bakes.sh <jahshaka-binary> <run1.js> <run2.js> <vr-runner> <monado-manifest>
+# usage: shipped_bakes.sh <jahshaka-binary> <run1.js> <run2.js> <vr-runner> <monado-manifest> <primitives.h>
 # cwd = the scratch run dir; JAHSHAKA_DATA_ROOT = the scratch data root (wiped here).
 set -u
-BIN="$1"; RUN1="$2"; RUN2="$3"; VR_RUNNER="$4"; MANIFEST="$5"
+BIN="$1"; RUN1="$2"; RUN2="$3"; VR_RUNNER="$4"; MANIFEST="$5"; SEED_TABLE="$6"
+# THE BOOT'S EXPECTED BAKE BUILDS, DERIVED FROM THE SEED TABLE (every row with a
+# reserved guid is one seed import), never a hard-coded number.
+SEED_ROWS=$(grep -cE '^\s*\{ "[A-Za-z]+",\s*"00000000-0000-0000-0000-[0-9]{12}"' "$SEED_TABLE")
+[ "$SEED_ROWS" -gt 0 ] || { echo "shipped_bakes: FAIL — no seed rows read from $SEED_TABLE"; exit 1; }
+echo "shipped_bakes: the seed table has $SEED_ROWS row(s)"
 ROOT="${JAHSHAKA_DATA_ROOT:?the row sets JAHSHAKA_DATA_ROOT}"
 rm -rf "$ROOT"; mkdir -p "$ROOT"
 
@@ -31,6 +36,7 @@ if command -v monado-service >/dev/null 2>&1 && [ -r "$MANIFEST" ]; then
 else
     printf 'var VR_RUNTIME = false;\n' > run1.js
 fi
+printf 'var SEED_ROWS = %d;\n' "$SEED_ROWS" >> run1.js
 cat "$RUN1" >> run1.js
 if grep -q 'VR_RUNTIME = true' run1.js; then
     JAH_MONADO_CONTROLLERS=none bash "$VR_RUNNER" --launch "$MANIFEST" -- "$BIN" --vr --data-root "$ROOT" --script "$PWD/run1.js" \

@@ -1,6 +1,7 @@
 // meshbake.shipped_bakes, RUN 1 (see shipped_bakes.sh): a fresh data root, the
 // app's own furniture and a character + clip — every one READ FROM A BAKE, and
-// zero runtime parses over the whole run. VR_RUNTIME is prepended by the driver.
+// zero runtime parses over the whole run. VR_RUNTIME and SEED_ROWS (counted
+// from src/data/primitives.h) are prepended by the driver.
 function assert(cond, msg) {
     if (!cond) { console.log("FAIL: " + msg); throw new Error("assert failed: " + msg); }
     console.log("ok: " + msg);
@@ -26,9 +27,10 @@ assert(parses(boot) === 0, "the fresh library's boot made NO runtime parse");
 // a first boot's cost, reported, not a run-time read.
 console.log("census boot: " + boot.uiThreadBakeBuilds + " of " + boot.bakeBuilds +
             " seed bake builds ran on the UI thread, " + boot.uiThreadBakeBuildMs.toFixed(1) + " ms");
-assert(boot.bakeBuilds >= 18,
-       "the seed BAKED every shipped mesh — the primitives, Ground, Teapot, the preview " +
-       "subjects and the VR controllers (" + boot.bakeBuilds + " bake builds)");
+assert(boot.bakeBuilds === SEED_ROWS,
+       "the seed BAKED every shipped mesh — the primitives, the Teapot, the preview subjects " +
+       "and the VR controllers: " + boot.bakeBuilds + " bake builds, one per seed row (" +
+       SEED_ROWS + ")");
 
 var proj = project.create("Shipped Bakes");
 assert(proj && proj.length > 10, "project.create");

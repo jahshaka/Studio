@@ -93,8 +93,8 @@ Database *ShellLifecycle::openLibrary()
 	Database::setAssetThumbnailWritten([](const QString &guid) {
 		TileCache::instance().invalidate(TileCache::Kind::Asset, guid);
 	});
-    // THE SEEDS (services/primitiveassets.h). The primitives, the Ground and the
-    // samples' Teapot are baked library assets now: one import and one bake each,
+    // THE SEEDS (services/primitiveassets.h). The primitives and the samples'
+    // Teapot are baked library assets now: one import and one bake each,
     // the first time a library is opened, SYNCHRONOUSLY here — not on a worker,
     // because a library whose row count moves while a script runs is the defect
     // MaterialPresetSeeder's header describes. A library that already holds them

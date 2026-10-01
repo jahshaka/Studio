@@ -1227,8 +1227,8 @@ iris::MeshNodePtr SceneReader::createMesh(QJsonObject& nodeObj)
         // getMesh ran on it too, so every primitive in every scene also cost a
         // failed catalog lookup whose result was thrown away (measured
         // 2026-09-15: 5 per open of the Mirror Room sample, 6 per Showroom).
-        // The eight shipped samples name five primitives, the Ground and the
-        // Teapot between them; each of them arrives with its LOD chain now.
+        // The eight shipped samples name the cube floor, a handful of other
+        // primitives and the Teapot; each of them arrives with its LOD chain.
         auto mesh = source.startsWith(":")
                         ? PrimitiveAssets::mesh(source, handle)
                         : getMesh(source, meshIndex, nodeObj["mesh"].toString());

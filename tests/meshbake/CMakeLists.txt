@@ -234,8 +234,8 @@ set_tests_properties(meshbake.archive_bakes PROPERTIES
     TIMEOUT 400 LABELS "meshbake")
 
 # meshbake.shipped_bakes (SHIPPED-BAKES-1's app arm): a FRESH data root boots —
-# its seed BAKES every shipped mesh (the primitives, the samples' Ground and
-# Teapot, the preview docks' subjects, the VR controllers) — opens the Avatar
+# its seed BAKES every shipped mesh (the primitives, the Teapot, the preview
+# docks' subjects, the VR controllers — one per row of src/data/primitives.h) — opens the Avatar
 # space, imports a character and its walk clip and PLAYS the clip from its clip
 # bake, opens the Materials preview, renders a thumbnail and (with Monado on the
 # box) runs a VR session: `app.openStats` reads ZERO runtime parses. Then the
@@ -252,6 +252,7 @@ jah_gpu_row(meshbake.shipped_bakes CLASS vr
                  "${CMAKE_CURRENT_SOURCE_DIR}/shipped/shipped_bakes_run2.js"
                  "${CMAKE_SOURCE_DIR}/tests/vr/run_vr_app.sh"
                  "/usr/share/openxr/1/openxr_monado.json"
+                 "${CMAKE_SOURCE_DIR}/src/data/primitives.h"
          WORKING_DIRECTORY ${_shipped_home}/run)
 set_tests_properties(meshbake.shipped_bakes PROPERTIES
     ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}HOME=${_shipped_home};JAHSHAKA_DATA_ROOT=${_shipped_home}/data"

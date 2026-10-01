@@ -69,8 +69,8 @@ inventing key spellings.
 ## Core verbs
 
 ```js
-// Primitives: plane, ground, cone, cube, cylinder, sphere, torus, capsule,
-// gear, pyramid, teapot, sponge, steps  ("ground" is the big floor plane)
+// Primitives: plane, cube, sphere, hemisphere, cylinder, tube, cone, pyramid,
+// torus, capsule, wedge, star  (a floor is scene.addFloor({template: "basic"}))
 var id = scene.addPrimitive("cube", { position: {x: 0, y: 0.5, z: 0} });
 var row = scene.addPrimitive("cube", { count: 5 });   // -> ARRAY of 5 ids
 row.forEach(function (n, i) { node.transform(n, { position: {x: i*2, y: 0.5, z: 0} }); });

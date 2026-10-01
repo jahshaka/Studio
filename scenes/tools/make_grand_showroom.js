@@ -41,7 +41,7 @@
 // units tall), and the review build placed the spheres, the torus and the
 // columns by eye — half of each one was under the floor slab, which shows as
 // hemispheres and as a sunken arch. Since lane L13 the floor is the scene's
-// default Ground at y = 0, so a scaled sphere of radius r rests at y = r.
+// default Floor (top face y = 0), so a scaled sphere of radius r rests at y = r.
 //
 // SCENE-SCALE CONVENTION (owner 2026-09-08, applied by lane-samplescale
 // 2026-09-09). 1 unit = 1 METRE, and every shipped sample is authored to it:
@@ -154,8 +154,8 @@ function slab(name, pos, scale, color, rough, metal) {
 
 // ONE FLOOR (owner, 2026-09-12: "we have two floors in the Showroom — a floor
 // under the items and a large floor under everything"). The gallery stands on
-// the scene's DEFAULT FLOOR — the Ground every new scene is born with (its
-// checker, services/defaultfloor.h) — so the floor slab this room used to lay
+// the scene's DEFAULT FLOOR — the Floor every new scene is born with (its
+// checker, services/scenetemplatebuilder.h) — so the floor slab this room used to lay
 // on top of it is gone, and everything that stood on the slab's top now
 // stands on y = 0.
 var FLOOR_TOP = 0.0;
@@ -166,14 +166,14 @@ var WALL_HALF = (CEIL_BOTTOM - 0.0) / 2;   // walls span the floor line to the c
 // should have 0 specular"). This room used to put the deleted gallery slab's
 // polish on the default floor — roughness 0.32, metallic 0.05 — and the owner
 // reversed that while testing push #18. The default floor is left exactly as a
-// new scene is born with it (services/defaultfloor.h: roughness 1, no
+// new scene is born with it (services/scenetemplatebuilder.h: roughness 1, no
 // specular); the room keeps its polished look in the SLABS, the columns and
 // the metal ladder, which is where it belongs.
 // The one thing still authored here is the CHECKER's size: textureScale is a
-// repeat count over the fixed 100 m ground, so a checker cell twice as big is
-// half the repeats (the default 4 = 2 m cells in the S = 0.5 room, 2 = 4 m
-// cells at S = 1).
-var ground = scene.find("Ground");
+// repeat count over the Basic floor's 100 m face, so a checker cell twice as
+// big is half the repeats (the template's 25 = 2 m cells in the S = 0.5 room,
+// 12.5 = 4 m cells at S = 1).
+var ground = scene.find("Floor");
 assert(ground && node.property(ground, "defaultFloor") === true, "the room stands on the default floor");
 var CHECKER = material.get(ground).textureScale / GROW;
 assert(material.set(ground, { textureScale: CHECKER }),
