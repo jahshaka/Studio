@@ -1447,7 +1447,7 @@ set_tests_properties(gi.gather PROPERTIES TIMEOUT 180 LABELS "engine")
 # not a measurement. The suite PRINTS its milliseconds and asserts only a
 # catastrophe ceiling; the numbers of record are taken by hand with the clocks
 # locked (spikes/gather-1a/FINDINGS.md).
-jah_gpu_exclusive_test(NAME gi.gather_cost CLASS engine TOKENS 4 RUN_TIMEOUT 900 COMMAND test_gi_gather
+jah_gpu_exclusive_test(NAME gi.gather_cost CLASS engine RUN_TIMEOUT 900 COMMAND test_gi_gather
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.gather_cost PROPERTIES
                      LABELS "nightly;quiet-box" RUN_SERIAL TRUE

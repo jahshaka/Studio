@@ -389,13 +389,17 @@ endfunction()
 # is an argument of the wrapper now, and add_test resolves target names only in the command
 # position). A name outside JAH_GPU_EXCLUSIVE_SUITES is a configure error.
 function(jah_gpu_exclusive_test)
-    cmake_parse_arguments(G "" "NAME;CLASS;TIER;TOKENS;RUN_TIMEOUT;WORKING_DIRECTORY" "COMMAND" ${ARGN})
+    cmake_parse_arguments(G "" "NAME;CLASS;TIER;RUN_TIMEOUT;WORKING_DIRECTORY" "COMMAND" ${ARGN})
     if(NOT G_NAME IN_LIST JAH_GPU_EXCLUSIVE_SUITES)
         message(FATAL_ERROR "jah_gpu_exclusive_test(${G_NAME}): not in JAH_GPU_EXCLUSIVE_SUITES "
                             "(tests/CMakeLists.txt) — the GPU-timing list changes by a verdict only")
     endif()
     if(NOT G_RUN_TIMEOUT OR NOT G_COMMAND OR NOT G_CLASS)
         message(FATAL_ERROR "jah_gpu_exclusive_test(${G_NAME}): CLASS, RUN_TIMEOUT and COMMAND are required")
+    endif()
+    if(G_UNPARSED_ARGUMENTS)
+        message(FATAL_ERROR "jah_gpu_exclusive_test(${G_NAME}): unexpected arguments '${G_UNPARSED_ARGUMENTS}' "
+                            "(a timing row takes ALL the tokens: there is no TOKENS)")
     endif()
     jah_vram_tokens(${G_CLASS} _k TIER "${G_TIER}")   # validates the class; the row takes ALL tokens
     list(POP_FRONT G_COMMAND _exe)
