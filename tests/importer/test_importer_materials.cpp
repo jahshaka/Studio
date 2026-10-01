@@ -525,11 +525,14 @@ int main(int argc, char **argv)
                     // 1.25x ("clearly brighter", not "tuned to it").
                     // sRGB display encode (SRGB-ENCODE-1): the thumbnail is display-encoded
                     // now, so the pin and its band are the OETF image of the linear ones:
-                    // 62.1 (56..68) -> 135 (129..141: OETF(56) = 129.02, OETF(68) = 141.08).
-                    CHECK(fixedLuma > 129.0 && fixedLuma < 141.0,
+                    // The pin was MEASURED on the linear picture, so it is held IN LIGHT
+                    // (the decoded mean): 62.1 +/- 6, exactly the old bar. (Its OETF image
+                    // in display codes is not the display mean — the mean of encoded bytes
+                    // is not the encode of the mean light.)
+                    CHECK(fixedLight > 56.0 && fixedLight < 68.0,
                           "5: the imported spec-gloss material is LIT, at the re-pinned value "
-                          "(135, the encode of 62.1 +/- 6, in the studio environment with the "
-                          "diffuse energy factor)");
+                          "(62.1 +/- 6 in light, in the studio environment with the diffuse "
+                          "energy factor)");
                     // ...IN LIGHT (SRGB-ENCODE-1): the 1.25x fence was set on the linear
                     // picture, so it is evaluated on the decoded means.
                     std::printf("    in light: imported %.1f, pre-fix %.1f (ratio %.2f)\n",
