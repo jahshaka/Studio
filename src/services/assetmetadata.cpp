@@ -195,10 +195,11 @@ QJsonObject AssetMetadata::forModelBake(const QString &bakePath, const QString &
     // THE FACTS OF THE IMPORT'S OWN PARSE, kept in the bake (MeshBake::Model::
     // describe) — counted under the asset's import recipe, so the `extent` is
     // the size the asset MEASURES, exactly as the import's own block. No parse.
-    if (bakePath.isEmpty()) return QJsonObject();
-    const iris::MeshBake::Model model = iris::MeshBake::read(bakePath);
-    if (!model.valid || !model.describe.parsed) return QJsonObject();
-    return forModelScene(model.describe, sourceFile);
+    // The bake's HEADER only (MeshBake::readDescribe): the geometry behind it
+    // is never deserialized to describe a model.
+    iris::ModelSceneInfo facts;
+    if (bakePath.isEmpty() || !iris::MeshBake::readDescribe(bakePath, &facts)) return QJsonObject();
+    return forModelScene(facts, sourceFile);
 }
 
 QJsonObject AssetMetadata::forClipBake(const QString &bakePath, const QString &sourceFile,

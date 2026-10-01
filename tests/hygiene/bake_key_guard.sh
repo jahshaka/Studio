@@ -52,7 +52,8 @@ CMAKE_FILE="CMakeLists.txt"
 ACK_RE='^bake-output: unchanged[[:space:]]*$'
 
 # The files that LEFT the producer hash and are covered by the version instead,
-# plus the parse twin the bake has to agree with (import/graphicshelper.cpp).
+# (The parse twin the bake is compared with left IrisGL in SHIPPED-BAKES-1:
+# it is tests/support/testmesh.cpp now, a suite's fixture parse.)
 # This is the original twelve minus what irisgl/CMakeLists.txt still hashes and
 # minus import/importflags.{h,cpp} — whose only contribution to a bake is the
 # VALUE of ImportFlags::Canonical, which the key already carries as an exact
@@ -63,7 +64,6 @@ WATCHED=(document/assets/mesh.cpp
          document/assets/skeleton.h
          document/scenegraph/meshnode.cpp
          core/geometry/trimesh.cpp
-         import/graphicshelper.cpp
          # Three more layout PRODUCERS the second read found (2026-09-15): the
          # vertex-attribute enum VALUES are the baked integers, the bounding
          # sphere is AABB's, and key ORDER is KeyFrame::addKey's sort.

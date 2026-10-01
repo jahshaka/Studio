@@ -25,6 +25,7 @@ For more information see the LICENSE file
 
 #include "services/primitiveassets.h"
 
+#include <QElapsedTimer>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
@@ -220,12 +221,22 @@ int seedAll(Database *db, QStringList *errors)
         const bool had = !storedSource(conn, AssetStorePaths::root(), db,
                                       QString::fromLatin1(def.guid)).isEmpty();
         QString error;
+        QElapsedTimer took;
+        took.start();
         if (ensureSeeded(def, db, &error).isEmpty()) {
             if (errors)
                 *errors << QStringLiteral("%1: %2").arg(QString::fromLatin1(def.name), error);
             continue;
         }
-        if (!had) ++created;
+        if (!had) {
+            ++created;
+            // THE FIRST BOOT'S COST, per seed and on the calling (UI) thread:
+            // the import that BAKES the shipped mesh. Logged so the cost is a
+            // reading, not a guess (SHIPPED-BAKES-1).
+            irisLog(QStringLiteral("seed: %1 imported and baked in %2 ms")
+                        .arg(QString::fromLatin1(def.name))
+                        .arg(double(took.nsecsElapsed()) / 1.0e6, 0, 'f', 1));
+        }
     }
     return created;
 }

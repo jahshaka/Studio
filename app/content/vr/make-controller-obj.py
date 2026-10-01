@@ -74,6 +74,7 @@ def main():
     js, bins = read_glb(src)
     scene = js['scenes'][js.get('scene', 0)]
     verts, norms, faces = [], [], []
+    rewound = [0]
 
     def walk(idx, parent):
         node = js['nodes'][idx]
@@ -92,7 +93,24 @@ def main():
                     L = math.sqrt(sum(c * c for c in v)) or 1.0
                     norms.append(tuple(c / L for c in v))
                 for i in range(0, len(idxs), 3):
-                    faces.append((base + idxs[i] + 1, base + idxs[i + 1] + 1, base + idxs[i + 2] + 1))
+                    a, b, c = base + idxs[i], base + idxs[i + 1], base + idxs[i + 2]
+                    # THE WINDING AGREES WITH THE FACE'S OWN NORMALS (SHIPPED-BAKES-1):
+                    # upstream right.glb carries one sliver wound against its
+                    # declared normals, and a mirrored node transform would flip
+                    # every face of its part. The bake, the back-face cull and
+                    # meshbake.hemisphere_winding all read the winding, so a
+                    # face whose geometric normal opposes the sum of its three
+                    # vertex normals is re-wound here, at the one place the file
+                    # is made.
+                    e1 = [verts[b][k] - verts[a][k] for k in range(3)]
+                    e2 = [verts[c][k] - verts[a][k] for k in range(3)]
+                    g = (e1[1] * e2[2] - e1[2] * e2[1], e1[2] * e2[0] - e1[0] * e2[2],
+                         e1[0] * e2[1] - e1[1] * e2[0])
+                    d = [norms[a][k] + norms[b][k] + norms[c][k] for k in range(3)]
+                    if sum(g[k] * d[k] for k in range(3)) < 0.0:
+                        b, c = c, b
+                        rewound[0] += 1
+                    faces.append((a + 1, b + 1, c + 1))
         for c in node.get('children', []): walk(c, world)
 
     ident = [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]]
@@ -109,7 +127,7 @@ def main():
         for a, b, c in faces: f.write('f %d//%d %d//%d %d//%d\n' % (a, a, b, b, c, c))
     lo = [min(v[i] for v in verts) for i in range(3)]
     hi = [max(v[i] for v in verts) for i in range(3)]
-    print('%s: %d verts, %d tris, aabb min (%.4f %.4f %.4f) max (%.4f %.4f %.4f)'
-          % (dst, len(verts), len(faces), lo[0], lo[1], lo[2], hi[0], hi[1], hi[2]))
+    print('%s: %d verts, %d tris (%d re-wound to their normals), aabb min (%.4f %.4f %.4f) max (%.4f %.4f %.4f)'
+          % (dst, len(verts), len(faces), rewound[0], lo[0], lo[1], lo[2], hi[0], hi[1], hi[2]))
 
 main()

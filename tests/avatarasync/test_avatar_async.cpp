@@ -134,6 +134,7 @@ static const int kExitBudgetMs = 30000;
 /// away on every red this suite ever had. Drained on every poll below,
 /// printed by printUiThreadEvidence when a gap misses its budget.
 static QProcess *gApp = nullptr;
+static QString gHoldFile;
 static QByteArray gAppLog;
 static void drainApp() { if (gApp) gAppLog += gApp->readAll(); }
 
@@ -339,6 +340,11 @@ int main(int argc, char **argv)
     CHECK(QFileInfo::exists(walk), "the animation-only fixture is present");
     if (!QFileInfo::exists(rig)) return 1;
 
+    // The switch-window hold (case 7): the app inherits this, and holds an
+    // async switch's worker only while the file exists.
+    gHoldFile = QDir::current().absoluteFilePath(QStringLiteral("avatar_switch.hold"));
+    QFile::remove(gHoldFile);
+    qputenv("JAHSHAKA_TEST_AVATAR_HOLD_FILE", gHoldFile.toUtf8());
     QProcess jahshaka;
     QString token;
     const quint16 port = freePort();
@@ -554,16 +560,18 @@ int main(int argc, char **argv)
         // back to the other one, then switch to the victim ASYNCHRONOUSLY and
         // edit inside the window.
         mcp.runScript(QStringLiteral("avatar.open('%1')").arg(asyncAvatar));
+        // THE HOLD (the app's JAHSHAKA_TEST_AVATAR_HOLD_FILE seam): the switch's
+        // worker cannot finish while this file exists, so every edit below is
+        // made inside the window — deterministic, not a race against a bake
+        // read that takes ~80 ms.
+        {
+            QFile holdFile(gHoldFile);
+            CHECK(holdFile.open(QIODevice::WriteOnly), "the switch hold is armed");
+        }
         const QJsonObject duringSwitch = mcp.runScript(
             QStringLiteral("var opened = avatar.open('%1', {async: true});"
                            "var refusals = [];"
-                           // ONLY INSIDE THE WINDOW: the switch reads a BAKE now
-                           // (SHIPPED-BAKES-1, ~80 ms, not a 1.5 s parse), and the
-                           // script's verb hops pump the UI loop, so the window
-                           // can close mid-list — an edit after it is legal and
-                           // is not attempted (null).
-                           "function refused(f) { if (!avatar.progress().running) return null;"
-                           "  try { f(); return false; } catch (e) { return true; } }"
+                           "function refused(f) { try { f(); return false; } catch (e) { return true; } }"
                            "refusals.push(refused(function(){ avatar.loadAnimation('%2'); }));"
                            "refusals.push(refused(function(){ avatar.setDefaultClip(''); }));"
                            "refusals.push(refused(function(){ avatar.removeClip('%3'); }));"
@@ -579,19 +587,14 @@ int main(int argc, char **argv)
         // (SPECS/IMPORT_DIALOG_SPEC.md §12.3) — a character's size is an import
         // setting, so there is no per-subject height edit left to refuse.
         bool allRefused = refusals.size() == 5;
-        int attempted = 0;
-        for (const QJsonValue &v : refusals) {
-            if (v.isNull()) continue;   // the window had closed: not attempted
-            ++attempted;
-            allRefused = allRefused && v.toBool();
-        }
-        CHECK(refusals.size() == 5 && !refusals.at(0).isNull(),
-              "the switch was still in flight when the first edit was attempted");
-        std::printf("info: %d of 5 edits attempted inside the switch window\n", attempted);
-        CHECK(allRefused, "every definition edit attempted inside the switch window was REFUSED");
+        for (const QJsonValue &v : refusals) allRefused = allRefused && v.toBool();
+        CHECK(duringSwitch.value("running").toBool(),
+              "the switch was still in flight while the edits were attempted");
+        CHECK(allRefused, "every definition edit REFUSED inside the switch window");
         CHECK(duringSwitch.value("clips").toInt() == 0,
               "... and the incoming avatar's clip list did not grow in memory");
 
+        QFile::remove(gHoldFile);   // released: the switch may finish now
         const JobStats afterWindow = waitForJob(mcp, "switch-window");
         CHECK(afterWindow.done, "the switch finished normally afterwards");
         const QString afterVersion =

@@ -33,7 +33,7 @@ else
 fi
 cat "$RUN1" >> run1.js
 if grep -q 'VR_RUNTIME = true' run1.js; then
-    bash "$VR_RUNNER" --launch "$MANIFEST" -- "$BIN" --vr --data-root "$ROOT" --script "$PWD/run1.js" \
+    JAH_MONADO_CONTROLLERS=none bash "$VR_RUNNER" --launch "$MANIFEST" -- "$BIN" --vr --data-root "$ROOT" --script "$PWD/run1.js" \
         > run1.log 2>&1
 else
     "$BIN" --data-root "$ROOT" --script "$PWD/run1.js" > run1.log 2>&1

@@ -6,8 +6,12 @@ function assert(cond, msg) {
     console.log("ok: " + msg);
 }
 function parses(s) { return s.uiThreadParses + s.uiThreadResourceParses + s.workerParses; }
+// THE CENSUS IN SEGMENTS: each reading zeroes the counters behind it, so a
+// segment's numbers are its own; `total` keeps the whole run's parses.
+var total = 0;
 function census(label) {
-    var s = app.openStats();
+    var s = app.openStats({ reset: true });
+    total += parses(s);
     console.log("census " + label + ": " + JSON.stringify(s));
     return s;
 }
@@ -18,6 +22,10 @@ var WALK = "@SOURCE_DIR@/tests/avatar/fixtures/rig2_walk_anim.glb";
 // ---- 1. THE BOOT: the fresh library seeded (BAKED) every shipped mesh ------
 var boot = census("boot");
 assert(parses(boot) === 0, "the fresh library's boot made NO runtime parse");
+// THE SEED BAKES ON THE UI THREAD (shelllifecycle -> PrimitiveAssets::seedAll):
+// a first boot's cost, reported, not a run-time read.
+console.log("census boot: " + boot.uiThreadBakeBuilds + " of " + boot.bakeBuilds +
+            " seed bake builds ran on the UI thread, " + boot.uiThreadBakeBuildMs.toFixed(1) + " ms");
 assert(boot.bakeBuilds >= 18,
        "the seed BAKED every shipped mesh — the primitives, Ground, Teapot, the preview " +
        "subjects and the VR controllers (" + boot.bakeBuilds + " bake builds)");
@@ -28,6 +36,10 @@ assert(proj && proj.length > 10, "project.create");
 // ---- 2. THE AVATAR SPACE: its room is the baked cube -----------------------
 assert(app.space("avatar") === true, "the Avatar space opens");
 assert(avatar.spaceMode("modern") === "modern", "...in the modern room (built from the cube's bake)");
+var space = census("avatar space");
+assert(parses(space) === 0 && space.uiThreadBakeBuilds === 0 && space.bakeBuilds === 0,
+       "the Avatar space and its room built NOTHING and parsed nothing (" +
+       space.uiThreadBakeBuilds + " UI-thread bake builds)");
 
 // The character: imported (its parse BUILDS the bake) and opened FROM the bake.
 var imported = avatar.importAvatar(RIG);
@@ -41,6 +53,14 @@ var added = avatar.loadAnimation(WALK);
 assert(!!added && added.added === 1 && added.asset,
        "the walk clip landed on the character from its CLIP bake");
 assert(assets.metadata(added.asset).kind === "animation", "...an Animation asset");
+// THE VERB-DRIVEN IMPORTS: avatar.importAvatar and avatar.loadAnimation(path)
+// import SYNCHRONOUSLY on the UI thread (resolveClipAsset -> importFile) — a
+// known cost, reported here, and the lead's own row (not this lane's).
+var imports = census("verb imports");
+assert(parses(imports) === 0, "the verb imports made no runtime parse (their parses BUILT bakes)");
+console.log("census verb imports: " + imports.uiThreadBakeBuilds + " UI-thread bake build(s), " +
+            imports.uiThreadBakeBuildMs.toFixed(1) + " ms (last " + imports.lastUiThreadBakeBuild + ")");
+
 var clips = avatar.clips();
 var walk = clips[clips.length - 1];
 assert(avatar.setClip(walk.name), "avatar.setClip(" + walk.name + ")");
@@ -77,18 +97,50 @@ assert(assets.thumbnail(tab.guid).coverage > 0.05,
 // ---- 4. A VR SESSION (Monado's simulated headset), when the box has one -----
 if (VR_RUNTIME) {
     assert(app.space("editor") === true, "back to the editor");
+    // The headset ALONE (the driver starts Monado with no controllers), so the
+    // injection is accepted: a TOUCH profile in each hand is what makes the
+    // mirror draw the shipped controller MODEL instead of the wand.
     assert(vr.begin() === true, "vr.begin()");
-    vr.step({ frames: 60 });
-    var st = vr.state();
-    assert(st.active === true && st.proxies === true, "the session runs with the controllers drawn");
+    var TOUCH = "/interaction_profiles/oculus/touch_controller";
+    var seedGuid = { left: "00000000-0000-0000-0000-000000004016",
+                     right: "00000000-0000-0000-0000-000000004017" };
+    ["left", "right"].forEach(function (hand) {
+        assert(vr.inject(hand, { valid: true, aim: { x: hand === "left" ? -0.2 : 0.2, y: 1, z: -0.4 },
+                                 profile: TOUCH }) === true,
+               "vr.inject(" + hand + ", Touch) is accepted (no runtime controller bound)");
+    });
+    vr.step({ frames: 30 });
+    // The status reaches the mirror on the driver's frame or on this verb (a
+    // script's editor.frame does not tick the driver); the mirror's own sync
+    // then builds the proxies and picks each one's mesh by its hand's profile.
+    assert(vr.proxies(true) === true, "vr.proxies(true) — the status pushed to the mirror now");
+    editor.frame(4);
+    ["left", "right"].forEach(function (hand) {
+        var p = vr.proxyPose(hand);
+        var baked = assets.metadata(seedGuid[hand]);
+        console.log(hand + " proxy: " + JSON.stringify(p) + " bake triangles " + baked.triangles);
+        // The PROFILE picks the mesh; whether this headset-only rig LOCATES
+        // the hand (it has no controllers) only decides if it is shown.
+        assert(p.model === "controller",
+               "the " + hand + " hand WEARS the controller model, not the wand");
+        assert(p.modelKey.indexOf("meta-quest-touch-pro/" + hand + ".obj") >= 0,
+               "...the " + hand + " seed row's model (" + p.modelKey + ")");
+        assert(p.modelTriangles > 1000 && p.modelTriangles === baked.triangles,
+               "...uploaded from its BAKE: " + p.modelTriangles + " triangles, the bake's " +
+               baked.triangles);
+    });
     assert(vr.end() === true, "vr.end()");
 } else {
     console.log("ok: (no Monado on this box — the VR case is not run)");
 }
 
 // ---- 5. THE WHOLE RUN ------------------------------------------------------
-var end = census("end");
-assert(parses(end) === 0,
+var end = census("preview + thumbnail + VR");
+assert(end.uiThreadBakeBuilds === 0,
+       "the clip playing, the spawn, the material preview, the thumbnail" +
+       (VR_RUNTIME ? " and the VR session" : "") + " built NO bake on the UI thread (" +
+       end.uiThreadBakeBuilds + ")");
+assert(total === 0,
        "the whole run made NO runtime parse — the Avatar space, the character, its clip, the " +
        "material preview, the thumbnail" + (VR_RUNTIME ? ", the VR session" : ""));
 assert(project.save() === true, "project.save");

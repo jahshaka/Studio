@@ -24,7 +24,7 @@ cd "$ROOT" || { echo "source.no_glsl_path: no such root $ROOT"; exit 1; }
 failures=0
 
 # The names that must not come back, and where they were.
-#   loadAndProcessShader            irisgl/import/graphicshelper.cpp
+#   loadAndProcessShader            irisgl/import/graphicshelper.cpp (deleted)
 #   createProgramFromShaderSource   irisgl/document/materials/material.cpp
 #   iris::Shader / ShaderPtr        irisgl/document/assets/shader.{h,cpp}
 PATTERNS=(

@@ -55,7 +55,13 @@ trap cleanup EXIT
 # there is nothing for the grip-pose actions to bind to and the hand half of
 # the suite has no subject. `simple` is the profile our action set suggests
 # bindings for, which is the point.
-XDG_RUNTIME_DIR="$XDG_DIR" SIMULATED_ENABLE=1 SIMULATED_LEFT=simple SIMULATED_RIGHT=simple \
+#
+# JAH_MONADO_CONTROLLERS=none starts the headset ALONE (meshbake.shipped_bakes):
+# with no controller bound to either hand, `vr.inject` is accepted — the one way
+# to put a Touch profile in a hand on a box whose runtime has no Touch model.
+CONTROLLERS=(SIMULATED_LEFT=simple SIMULATED_RIGHT=simple)
+[ "${JAH_MONADO_CONTROLLERS:-simple}" = none ] && CONTROLLERS=()
+env XDG_RUNTIME_DIR="$XDG_DIR" SIMULATED_ENABLE=1 "${CONTROLLERS[@]}" \
     XRT_COMPOSITOR_NULL=1 XRT_NO_STDIN=1 \
     monado-service > "$XDG_DIR/monado.log" 2>&1 &
 MON_PID=$!

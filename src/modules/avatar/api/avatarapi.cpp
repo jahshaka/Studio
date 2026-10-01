@@ -22,6 +22,8 @@ For more information see the LICENSE file
 #include <QSqlQuery>
 #include <QSqlError>
 #include <QFutureWatcher>
+#include <QThread>
+#include <QElapsedTimer>
 #include <QTimer>
 #include <QtConcurrent>
 #include <algorithm>
@@ -408,8 +410,8 @@ QVector<VerbInfo> AvatarApi::verbs() const
           "the user's own) and otherwise the library's. Replaces the retired "
           "`avatar.loadPreview`: every load is an import now (\u00a74 D7). {async: true} returns as "
           "soon as the DEFINITION is open (the clip list and the scope banner are already right) "
-          "and parses the character for the preview on a worker — the owner-measured 1.5 s "
-          "avatar switch, off the UI thread; watch avatar.progress().",
+          "and builds the character for the preview from its BAKE on a worker (never a parse), "
+          "off the UI thread; watch avatar.progress().",
           Needs::Document },
         { "asset", "avatar.asset() -> {guid, scope, version, name, dirty, pending, definition} | undefined",
           "What the module currently has open, and whether it has unsaved edits. `pending` is "
@@ -2692,17 +2694,19 @@ void AvatarApi::startPreviewLoad(const QString &modelPath, const QString &rowNam
     mJob.running = true;
     mJob.stage = QStringLiteral("preview");
     mJob.kind = QStringLiteral("open");
-    // THE PREVIEW PARSE CANNOT BE CANCELLED (assimp), so the dialog must stop
-    // offering it: a live Cancel button that latches "Cancelling…" and then
-    // does nothing is worse than no button (lead review). Re-announcing the
-    // phase is also what tells the user the import part is over.
+    // THE PREVIEW BUILD IS NOT CANCELLABLE (a bake read and a fragment build
+    // on a worker, ~80 ms), so the dialog does not offer it: a live Cancel
+    // button that latches "Cancelling…" and then does nothing is worse than no
+    // button (lead review). Re-announcing the phase is also what tells the user
+    // the import part is over.
     emit busyStarted(QStringLiteral("Loading %1").arg(rowName), false);
     emit busyStage(QStringLiteral("preview"), 0, 0);
 
-    // THE 1.5 s SWITCH (owner-measured): an assimp parse of the stored model
-    // plus its embedded-texture extraction, on the UI thread. It reads nothing
-    // of this object, so it runs on a pool thread while the module keeps
-    // drawing the character already loaded; only the graft comes back here.
+    // THE SWITCH OFF THE UI THREAD (AV1: it was an owner-measured 1.5 s parse;
+    // since SHIPPED-BAKES-1 it is the character's BAKE read and its fragment
+    // build). It reads nothing of this object, so it runs on a pool thread
+    // while the module keeps drawing the character already loaded; only the
+    // graft (and the material re-point, catalog work) comes back here.
     auto *watcher =
         new QFutureWatcher<std::shared_ptr<avatar::AvatarPreviewModel::PreparedSubject>>(this);
     mOpenWatcher = watcher;
@@ -2740,7 +2744,18 @@ void AvatarApi::startPreviewLoad(const QString &modelPath, const QString &rowNam
     // fragment (the same split the mesh prewarm uses). Never a parse.
     const avatar::AvatarPreviewModel::SubjectSource source =
         subjectSourceFor(modelPath, rowName, modelGuid);
-    watcher->setFuture(QtConcurrent::run([source]() {
+    // THE TEST HOLD (avatar.responsive case 7): with
+    // JAHSHAKA_TEST_AVATAR_HOLD_FILE naming a file, the worker does not finish
+    // while that file exists (capped at 60 s), so a suite can make edits INSIDE
+    // the switch window deterministically — a bake read is ~80 ms. Unset in
+    // every real run; read here, on the UI thread, and handed over by value.
+    const QString hold = qEnvironmentVariable("JAHSHAKA_TEST_AVATAR_HOLD_FILE");
+    watcher->setFuture(QtConcurrent::run([source, hold]() {
+        if (!hold.isEmpty()) {
+            QElapsedTimer held;
+            held.start();
+            while (QFileInfo::exists(hold) && held.elapsed() < 60000) QThread::msleep(5);
+        }
         return avatar::AvatarPreviewModel::prepareSubject(source);
     }));
 }
@@ -2815,9 +2830,9 @@ void AvatarApi::abortBackgroundWork()
     // (c) ASK the import worker to stop — and do NOT wait for it. The runner
     // lives on the global pool, which is exactly what the shell joins a few
     // lines later; blocking here would only move the same 3 s wait earlier.
-    // (The preview parse is assimp and cannot be interrupted at all — that is
-    // stated at startPreviewLoad — so the shell may still spend its budget on
-    // one. The point of this hook is that the flush and the abort now happen
+    // (The preview build — a bake read — is not interruptible — that is
+    // stated at startPreviewLoad — so the shell may still spend a little of its
+    // budget on one. The point of this hook is that the flush and the abort now happen
     // BEFORE that budget is spent, not after it has already been lost.)
     if (mImportRunner) mImportRunner->requestAbort();
 }
@@ -2842,10 +2857,10 @@ void AvatarApi::detachModel()
     if (auto *watcher = mOpenWatcher) {
         mOpenWatcher = nullptr;
         watcher->disconnect(this);
-        // The parse cannot be interrupted (assimp) and it touches nothing of
-        // ours, so the join is bounded by the parse itself — measured at 0.4-1.5 s
-        // on the owner's file. Quitting DURING a preview parse therefore waits
-        // that long; quitting during the import phase does not (the runner
+        // The preview build (a bake read and a fragment build) is not
+        // interruptible and touches nothing of ours, so the join is bounded by
+        // it — tens of milliseconds since SHIPPED-BAKES-1 (it was a 0.4-1.5 s
+        // parse). Quitting during the import phase does not wait (the runner
         // abandons). Joining is the safe half of the trade: the pool must not
         // be torn down under a running task.
         watcher->waitForFinished();

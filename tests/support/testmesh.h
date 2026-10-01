@@ -38,15 +38,24 @@ For more information see the LICENSE file
 #include "irisgl/core/irisutils.h"
 #include "irisgl/document/assets/mesh.h"
 #include "irisgl/document/assets/shippedmeshes.h"
-#include "irisgl/import/graphicshelper.h"
+#include "irisgl/import/importsettings.h"
+
+struct aiScene;
 
 namespace testmesh
 {
 
+/// Every mesh of `path` (a file or a ":/" resource), parsed with the canonical
+/// preset under `xf` — the fixture parse (testmesh.cpp, the jah_testmesh lib).
+QList<iris::MeshPtr> parseFile(const QString &path,
+                               const iris::ImportTransform &xf = iris::ImportTransform());
+/// The same conversion off a scene the suite already parsed.
+QList<iris::MeshPtr> fromScene(const aiScene *scene);
+
 /// The first mesh of `path` — a file or a ":/" resource. Null when it is not there.
 inline iris::MeshPtr load(const QString &path)
 {
-    const QList<iris::MeshPtr> meshes = iris::GraphicsHelper::loadAllMeshesFromFile(path);
+    const QList<iris::MeshPtr> meshes = parseFile(path);
     return meshes.isEmpty() ? iris::MeshPtr() : meshes.first();
 }
 
@@ -56,11 +65,11 @@ inline iris::MeshPtr load(const QString &resourcePath, const QString &appRelativ
 {
     QList<iris::MeshPtr> meshes;
     if (QFileInfo::exists(resourcePath))
-        meshes = iris::GraphicsHelper::loadAllMeshesFromFile(resourcePath);
+        meshes = parseFile(resourcePath);
     if (meshes.isEmpty() && !appRelativePath.isEmpty()) {
         const QString onDisk = IrisUtils::getAbsoluteAssetPath(appRelativePath);
         if (QFileInfo(onDisk).isFile())
-            meshes = iris::GraphicsHelper::loadAllMeshesFromFile(onDisk);
+            meshes = parseFile(onDisk);
     }
     return meshes.isEmpty() ? iris::MeshPtr() : meshes.first();
 }
