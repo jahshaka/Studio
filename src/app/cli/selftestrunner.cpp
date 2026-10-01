@@ -11,6 +11,7 @@ For more information see the LICENSE file
 
 #include "app/cli/selftestrunner.h"
 
+#include <cmath>
 #include <cstdio>
 
 #include <QApplication>
@@ -388,7 +389,13 @@ int runEngineSelftest(MainWindow &window, QApplication &app, const QString &outP
         std::fprintf(stderr, "engine-selftest: could not save %s\n", qPrintable(outPng));
         return 1;
     }
-    const QColor clear = QColor::fromRgbF(0.10f, 0.11f, 0.14f);
+    // THE CLEAR AS THE SHOT SHOWS IT (SRGB-ENCODE-1): the view clears to the LINEAR
+    // (0.10, 0.11, 0.14) and the shot is a display picture, so the guard compares
+    // against the sRGB encode of that clear — (89, 93, 105) — not the linear bytes.
+    const auto encode = [](double v) {
+        return v <= 0.0031308 ? v * 12.92 : 1.055 * std::pow(v, 1.0 / 2.4) - 0.055;
+    };
+    const QColor clear = QColor::fromRgbF(float(encode(0.10)), float(encode(0.11)), float(encode(0.14)));
     const int tolerance = 2;
     const auto isPicture = [&](const QImage &im) {
         const QColor c = im.pixelColor(im.width() / 2, im.height() / 2);
