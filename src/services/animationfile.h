@@ -17,6 +17,8 @@ For more information see the LICENSE file
 #include <QStringList>
 #include <QVector>
 
+namespace iris { struct ClipFileInfo; }
+
 /// ANIMATION FILES — the reader behind `ModelTypes::Animation`
 /// (the library type for a clip file: what Mixamo calls a download
 /// "without skin").
@@ -97,9 +99,17 @@ bool isAnimationFile(const QString &path);
 
 /// ONE parse. `poseStripOut`, when given, receives the thumbnail: three
 /// projected skeleton poses sampled across the first clip — the only way to
-/// tell two clip files apart at tile size.
+/// tell two clip files apart at tile size. AN IMPORT-TIME CALL
+/// (source.assimp_import_only): after the import every reader describes the
+/// CLIP BAKE instead (`describe` over MeshBake::Clip::info).
 Contents read(const QString &path, QImage *poseStripOut = nullptr,
               int stripWidth = 256, int stripHeight = 256);
+
+/// The same contents (and strip) from facts already read — the clip bake's
+/// (SHIPPED-BAKES-1). `baseName` names a clip whose own name is junk
+/// (rig::displayNameFor), so it is the FILE's base name, never a store hash.
+Contents describe(const iris::ClipFileInfo &info, const QString &baseName,
+                  QImage *poseStripOut = nullptr, int stripWidth = 256, int stripHeight = 256);
 
 }   // namespace animfile
 

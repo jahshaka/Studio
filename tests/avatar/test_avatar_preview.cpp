@@ -45,6 +45,8 @@
 #include "irisgl/irisglfwd.h"
 #include "jahshaka/engine/Engine.h"
 #include "modules/avatar/avatarpreviewmodel.h"
+#include "../support/testmesh.h"
+#include "avatarfixtures.h"
 
 using namespace jahshaka::engine;
 static int failures = 0;
@@ -145,6 +147,9 @@ int main(int argc, char **argv)
 {
     qputenv("QT_QPA_PLATFORM", "offscreen");
     QApplication app(argc, argv);
+    // The preview docks' and the VR slot's seed keys, from the fixture files
+    // (the app reads them from its seeded library; tests/support/testmesh.h).
+    testmesh::installShippedResolver();
 
     EngineConfig cfg;
     cfg.pluginDir = JAHSHAKA_TEST_PLUGIN_DIR;
@@ -161,7 +166,7 @@ int main(int argc, char **argv)
     if (!view) return 1;
 
     avatar::AvatarPreviewModel model;
-    CHECK(model.load(QString::fromUtf8(kRig)), "the rigged fixture loads into the preview model");
+    CHECK(model.load(avatarfixture::subject(QString::fromUtf8(kRig))), "the rigged fixture loads into the preview model");
     if (!model.isLoaded()) return 1;
     model.setClip("Idle");
     model.setTime(0.0f);
@@ -325,7 +330,7 @@ int main(int argc, char **argv)
     {
         QString error;
         const int before = model.clips().size();
-        const bool added = model.loadAnimation(QString::fromUtf8(kBvh), &error);
+        const bool added = model.loadAnimation(avatarfixture::clip(QString::fromUtf8(kBvh)), QString::fromUtf8(kBvh), &error);
         if (!added) std::printf("    %s\n", qUtf8Printable(error));
         CHECK(added, "S10: the mocap .bvh loads onto the loaded character");
         CHECK(model.clips().size() == before + 1, "S10: its clip joins the list");
@@ -368,7 +373,7 @@ int main(int argc, char **argv)
     // both halves of that rule are worth pinning.
     {
         avatar::AvatarPreviewModel rigged;
-        const bool loaded = rigged.load(QString::fromUtf8(kMannequin));
+        const bool loaded = rigged.load(avatarfixture::subject(QString::fromUtf8(kMannequin)));
         CHECK(loaded, "S11: the Mixamo mannequin loads into the preview model");
         if (loaded) {
             scene.setModel(&rigged);
@@ -444,7 +449,7 @@ int main(int argc, char **argv)
             // The MANNEQUIN stands in it, because that is the picture the page
             // shows and the framing it uses: a 1.75 m subject, the room at its
             // authored 1 u = 1 m, the camera where AvatarPreviewScene puts it.
-            CHECK(room.load(QString::fromUtf8(kMannequin)), "S12: the mannequin loads into the room");
+            CHECK(room.load(avatarfixture::subject(QString::fromUtf8(kMannequin))), "S12: the mannequin loads into the room");
             AvatarPreviewScene arena(engine);
             CHECK(arena.attach(arenaView), "S12: the arena scene attaches");
             arena.setModel(&room);

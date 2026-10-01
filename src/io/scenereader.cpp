@@ -53,7 +53,6 @@ For more information see the LICENSE file
 #include "irisgl/document/assets/texture2d.h"
 #include "irisgl/document/materials/renderstates.h"
 #include "irisgl/document/materials/rasterizerstate.h"
-#include "irisgl/import/graphicshelper.h"
 #include "irisgl/core/viewport.h"
 #include "irisgl/document/animation/animableproperty.h"
 #include "irisgl/document/animation/animation.h"
@@ -247,6 +246,30 @@ QStringList SceneReader::collectMeshSources(const QJsonObject &projectObj)
     };
     const QJsonObject sceneObj = projectObj["scene"].toObject();
     const QJsonArray roots = sceneObj.value("rootNode").toObject()["children"].toArray();
+    for (const auto &child : roots) walk(child.toObject());
+    return out;
+}
+
+QStringList SceneReader::collectClipSources(const QJsonObject &projectObj)
+{
+    QStringList out;
+    if (!handle) return out;
+    std::function<void(const QJsonObject &)> walk = [&](const QJsonObject &nodeObj) {
+        for (const auto &anim : nodeObj.value(QLatin1String("animations")).toArray()) {
+            const QJsonObject skel =
+                anim.toObject().value(QLatin1String("skeletalAnimation")).toObject();
+            const QString guid = skel.value(QLatin1String("guid")).toString();
+            if (guid.isEmpty()) continue;
+            if (handle->fetchAsset(guid).type != static_cast<int>(ModelTypes::Animation)) continue;
+            const QString path = resolveAssetPath(guid);
+            if (!path.isEmpty() && !out.contains(path)) out.append(path);
+        }
+        for (const auto &child : nodeObj.value(QLatin1String("children")).toArray())
+            walk(child.toObject());
+    };
+    const QJsonObject sceneObj = projectObj.value(QLatin1String("scene")).toObject();
+    const QJsonArray roots =
+        sceneObj.value(QLatin1String("rootNode")).toObject().value(QLatin1String("children")).toArray();
     for (const auto &child : roots) walk(child.toObject());
     return out;
 }
@@ -1860,14 +1883,23 @@ void SceneReader::extractAssetsFromAssimpScene(QString filePath, const QString &
             return;
         }
         // AN ANIMATION CLIP FILE IS NOT A MODEL: a ModelTypes::Animation row
-        // carries no mesh bake by design (the clip importer stores the file),
-        // so its clips are READ here — the clip's own path, not a fallback for
-        // a missing model bake.
+        // carries no mesh bake — it carries a CLIP bake (SHIPPED-BAKES-1,
+        // MeshBake::Clip), built at import and rebuilt by the open's own stale
+        // pass (collectClipSources), and its clips are READ from it. Never a
+        // parse: a clip with no current bake leaves its character at bind pose
+        // and says so.
         if (!assetGuid.isEmpty() && handle
             && handle->fetchAsset(assetGuid).type == static_cast<int>(ModelTypes::Animation)) {
-            LoadTimeline::Accumulate clip(QStringLiteral("assimp:clipFile"));
-            iris::GraphicsHelper::loadAllMeshesAndAnimationsFromFile(
-                filePath, meshList, animationss, MeshBakeStore::transformFor(filePath, assetGuid));
+            LoadTimeline::Accumulate clip(QStringLiteral("bake:clipFile"));
+            if (const iris::BakedClipPtr baked = MeshBakeStore::loadClip(filePath)) {
+                // The clip ROW's own uniform factor — what its parse was handed.
+                animationss = iris::MeshBake::clipAnimations(
+                    *baked, MeshBakeStore::transformFor(filePath, assetGuid).keysOnly(), filePath);
+            } else {
+                irisLog(QStringLiteral("scene reader: the clip '%1' has no current clip bake — its "
+                                       "animation is missing from this open")
+                            .arg(handle->fetchAsset(assetGuid).name));
+            }
             meshes.insert(cacheKey, meshList);
             assimpScenes.insert(cacheKey);
             animations.insert(cacheKey, animationss);

@@ -33,7 +33,7 @@ namespace {
 
 /// The held meshes — what `Mesh::pinLoadPaths` used to hold parses in. Keyed by
 /// the seed's reserved guid, so the name form and the path form of one ask share
-/// one entry. STRONG references, deliberately: this is a fixed, small set (16
+/// one entry. STRONG references, deliberately: this is a fixed, small set (18
 /// meshes, a few hundred kilobytes of index and vertex data) that every world
 /// stands on, and the weak cache it replaces is exactly what made closing a
 /// world cost the next open a re-read.

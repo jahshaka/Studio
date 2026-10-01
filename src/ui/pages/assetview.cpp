@@ -2210,9 +2210,14 @@ void AssetView::backfillMetadata(const QString &guid, int assetType)
 		}
 		if (selectedGuid == guid) fetchMetadata(guid, false);   // re-renders with data
 	});
-	// Pure file inspection (assimp / image header / wav header) — thread-safe.
-	watcher->setFuture(QtConcurrent::run(
-	    [assetType, source, guid]() { return AssetMetadata::computeForSource(assetType, source, guid); }));
+	// The row's BAKE and name are resolved HERE (catalog, this thread); the
+	// worker only reads files — a bake, an image header, a wav header. No
+	// model or clip is ever parsed for its description (SHIPPED-BAKES-1).
+	const QString bakePath = AssetMetadata::bakePathFor(assetType, source, guid);
+	const QString rowName = db->fetchAsset(guid).name;
+	watcher->setFuture(QtConcurrent::run([assetType, source, bakePath, rowName]() {
+		return AssetMetadata::computeForSource(assetType, source, bakePath, rowName);
+	}));
 }
 
 void AssetView::addAssetItemToProject(const QString &guid)

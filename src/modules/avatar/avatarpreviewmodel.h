@@ -16,17 +16,18 @@ For more information see the LICENSE file
 // (AVATAR_MODULE_SPEC §0.9).
 //
 // It owns a small iris document (key light, fill light, camera, and the rigged
-// fragment loaded straight off disk), the clip list and its display names, the
+// fragment built from the character's bake), the clip list and its display names, the
 // transport state, the two visibility toggles, and the bone segments the
 // overlay draws. This is what the `avatar` verbs call and what the headless
 // suite drives — every verb except `avatar.snapshot` is Needs::Document
 // because everything interesting lives here.
 //
-// Load route (§0.6 D0.1 A): AssetHelper::extractTexturesAndMaterialFromMesh
-// with a per-session scratch extract dir. Nothing is written to the library,
-// the database or the project — this is a viewer, not an importer. An empty
-// extract dir would write embedded textures BESIDE the source file (into the
-// owner's Downloads folder); the scratch dir is not optional.
+// Load route (SHIPPED-BAKES-1): the character model's BAKE and its clips'
+// CLIP bakes — never a parse (assimp is an import-time dependency,
+// `source.assimp_import_only`). The fragment is MeshBake::buildFragment's, its
+// materials re-pointed at the row's stored definition exactly as every baked
+// fragment is. Nothing is written to the library, the database or the project
+// — this is a viewer, not an importer.
 //
 // The rig's SHAPE comes from the SCENE-NODE hierarchy, never from
 // Bone::parentBone (§0.1: empty for pivot-preserving FBX rigs) — a bone's
@@ -44,13 +45,15 @@ For more information see the LICENSE file
 #include <QSet>
 #include <QString>
 #include <QStringList>
-#include <QTemporaryDir>
 #include <QVector>
 #include <functional>
 #include <memory>
 
 #include "irisgl/irisglfwd.h"
 #include "irisgl/import/importsettings.h"
+#include "irisgl/import/meshbake.h"
+#include "irisgl/import/meshprewarm.h"   // iris::BakedModelPtr
+#include <QJsonObject>
 #include "services/extentmeasure.h"
 
 namespace avatar
@@ -149,73 +152,83 @@ public:
     ~AvatarPreviewModel();
 
     // ---- load / clear -----------------------------------------------------
-    /// Loads `path` (any model extension assimp reads) as the one preview
-    /// subject, replacing whatever was loaded. False + `error` on failure.
-    /// `displayName` names the SUBJECT and every junk-named clip in it. It is
-    /// not cosmetic: since the CAS, a stored object's file NAME IS ITS SHA256,
-    /// so a subject loaded from the store and named after its file is called
-    /// "c826b4bf…" and so is every Mixamo clip inside it (they are all
-    /// literally named "mixamo.com", and the display rule falls back to the
-    /// file's base name). Callers that load from the store pass the CATALOG
-    /// ROW's name — the same rule `attachClipsFromFile` follows for its
-    /// refusals. Empty = use the file's base name, which is right for a load
-    /// straight off disk.
-    /// `assetGuid` (IMPORT-1) is the MODEL ROW this path belongs to: the parse
-    /// is given that row's import recipe, so the page shows the size the scene
-    /// places. Empty = whatever that content's default variant is.
-    bool load(const QString &path, QString *error = nullptr,
-              const QString &displayName = QString(),
-              const QString &assetGuid = QString());
+    /// WHAT A SUBJECT IS LOADED FROM (SHIPPED-BAKES-1): the character model's
+    /// BAKE — never a parse; the caller resolves all of it on the thread that
+    /// owns the catalog (MeshBakeStore::load, the row's material definition,
+    /// its import recipe).
+    struct SubjectSource
+    {
+        iris::BakedModelPtr baked;   ///< the model's current bake, already read — or null, and
+        iris::PrewarmItem plan;      ///< where it is, read by `prepareSubject` (a worker may)
+        QString path;                ///< the model file the bake was built from
+        /// Names the SUBJECT and every junk-named clip in it. Not cosmetic:
+        /// since the CAS, a stored object's file NAME IS ITS SHA256, so a
+        /// subject named after its file is called "c826b4bf…" and so is every
+        /// Mixamo clip inside it (all literally "mixamo.com"). Callers that
+        /// load from the store pass the CATALOG ROW's name. Empty = the file's
+        /// base name.
+        QString displayName;
+        /// The model row's stored definition (`assets.data`): its materials,
+        /// with their textures as member asset guids — what re-points the
+        /// bake's bare texture names at the store (AssetHelper::
+        /// updateNodeMaterial, the same step every baked fragment takes).
+        QJsonObject definition;
+        /// The CHARACTER ASSET's import recipe (IMPORT-1): what the bake was
+        /// built under, and what a later clip has to be scaled by.
+        iris::ImportTransform xf;
+    };
+
+    /// Loads `source` as the one preview subject, replacing whatever was
+    /// loaded. False + `error` on failure. UI thread.
+    bool load(const SubjectSource &source, QString *error = nullptr);
 
     // ---- the SPLIT load (AV1: the frozen app) -----------------------------
     //
-    // The expensive half of `load` is the assimp parse + embedded-texture
-    // extraction, and it touches NO model state — the same shape
-    // AssetImportService::prepare has, for the same reason: on the owner's
-    // Jennifer.fbx it cost 1.5 s of frozen UI on every avatar switch. It is a
-    // STATIC function taking nothing but a path, so a caller may run it on a
-    // worker thread while the model keeps serving the frames the UI draws, and
-    // then hand the result back here.
+    // The expensive half of `load` is building the fragment out of the bake,
+    // and it touches NO model state — the same shape AssetImportService::
+    // prepare has, for the same reason (the parse it replaced cost 1.5 s of
+    // frozen UI on the owner's Jennifer.fbx on every avatar switch). It is a
+    // STATIC function, so a caller may run it on a worker thread while the
+    // model keeps serving the frames the UI draws, and then hand the result
+    // back here.
     //
-    // `apply` is UI-THREAD ONLY (it grafts the parsed fragment into the live
-    // document the mirror walks) and consumes the prepared subject.
+    // `apply` is UI-THREAD ONLY (it grafts the fragment into the live document
+    // the mirror walks, and re-points its materials through the catalog) and
+    // consumes the prepared subject.
     struct PreparedSubject
     {
-        QString path;            ///< absolute path the parse read
+        QString path;            ///< the model file the bake was built from
         QString displayName;     ///< the catalog row's name, or empty
-        iris::SceneNodePtr node; ///< the parsed fragment, not yet in a document
-        std::shared_ptr<QTemporaryDir> scratch;   ///< where embedded textures went
-        /// The CHARACTER ASSET's import recipe, resolved by the caller on the
-        /// thread that may touch the catalog (the same split the mesh prewarm
-        /// uses). It is what the parse below applied, and it is also what a
-        /// later clip file has to be read with — see loadAnimation.
+        iris::SceneNodePtr node; ///< the built fragment, not yet in a document
+        QJsonObject definition;  ///< applied by `applySubject` (catalog work)
+        /// The CHARACTER ASSET's import recipe — also what a later clip file
+        /// has to be scaled by (see loadAnimation).
         iris::ImportTransform xf;
         QString error;
         bool ok() const { return error.isEmpty() && !node.isNull(); }
     };
-    /// THREAD-SAFE: parses `path` and extracts its embedded textures into a
-    /// fresh scratch dir. Never touches this object (it is static); the result
-    /// is inert until `applySubject` takes it.
-    static std::shared_ptr<PreparedSubject> prepareSubject(
-        const QString &path, const QString &displayName = QString(),
-        const iris::ImportTransform &xf = iris::ImportTransform());
+    /// THREAD-SAFE: builds the fragment out of `source.baked`. Never touches
+    /// this object (it is static); the result is inert until `applySubject`.
+    static std::shared_ptr<PreparedSubject> prepareSubject(const SubjectSource &source);
     /// UI thread: replaces the loaded subject with `prepared`. False + `error`
     /// when the prepare failed (the loaded subject is then left alone).
     bool applySubject(const std::shared_ptr<PreparedSubject> &prepared, QString *error = nullptr);
-    /// Reads `path` for CLIPS ONLY and appends them to the clip list of the
-    /// already-loaded character (the Mixamo workflow: one character file, then
-    /// one file per animation). Accepts both shapes an exporter produces — a
-    /// with-skin animation file (its mesh is ignored) and an animation-only
-    /// file (zero meshes, which every mesh loader in the tree rejects). The
-    /// join is by SCENE-NODE NAME, so a clip from a different rig is REFUSED
-    /// (false + `error` naming the first unmatched bones) instead of silently
-    /// loading a clip that moves nothing.
+    /// Appends the CLIPS of `clip` — the clip bake of the file at `path`
+    /// (SHIPPED-BAKES-1, MeshBake::Clip: the caller reads it, through
+    /// MeshBakeStore::ensureClip; nothing here parses) — to the clip list of
+    /// the already-loaded character (the Mixamo workflow: one character file,
+    /// then one file per animation). Both shapes an exporter produces bake to
+    /// one: a with-skin animation file (its mesh is ignored) and an
+    /// animation-only file. The keys are scaled by THIS rig's uniform import
+    /// factor (MeshBake::clipAnimations). The join is by SCENE-NODE NAME, so a
+    /// clip from a different rig is REFUSED (false + `error` naming the first
+    /// unmatched bones) instead of silently loading a clip that moves nothing.
     /// `displayName` names the clips this file contributes, for exactly the
     /// reason `load`'s does: a clip file resolved through the CAS is named
     /// after its sha256, and every Mixamo animation download is called
     /// "mixamo.com", so the fallback would name them all after the hash.
-    bool loadAnimation(const QString &path, QString *error = nullptr,
-                       ClipLoadReport *report = nullptr,
+    bool loadAnimation(const iris::MeshBake::Clip &clip, const QString &path,
+                       QString *error = nullptr, ClipLoadReport *report = nullptr,
                        const QString &displayName = QString());
     void clear();
     bool isLoaded() const { return !mFragment.isNull(); }
@@ -233,8 +246,6 @@ public:
     QString filePath() const { return mFilePath; }
     /// The file's base name — also the fallback display name for junk clips.
     QString name() const { return mName; }
-    /// Where embedded textures were extracted (per-session scratch).
-    QString extractDir() const;
 
     // ---- the document -----------------------------------------------------
     iris::ScenePtr      document() const { return mDocument; }
@@ -376,7 +387,6 @@ private:
     /// The loaded character's import recipe — what its geometry was built with,
     /// and what a clip file loaded against it must be read with.
     iris::ImportTransform mImportTransform;
-    std::shared_ptr<QTemporaryDir> mScratch;
 
     // Clip display names, in the order they were added: the character file's
     // own first, then each loadAnimation's. `skel` is the clip AS AUTHORED —

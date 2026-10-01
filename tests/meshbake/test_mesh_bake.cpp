@@ -6,7 +6,7 @@
 // sides and compares them field by field.
 //
 //   1. Round trip. For every fixture: parse with assimp, build the document
-//      the old way (GraphicsHelper::loadAllMeshesFromAssimpScene +
+//      the old way (testmesh::fromScene +
 //      Mesh::extractAnimations + MeshNode::loadAsSceneFragment), then bake,
 //      serialize, deserialize, and compare — vertex buffers byte for byte,
 //      index buffers byte for byte, bounds, the picking TriMesh, the skeleton
@@ -44,7 +44,7 @@
 #include <QCoreApplication>
 #include <QCryptographicHash>
 
-#include "bridge/previewmesh.h"
+#include "../support/testmesh.h"
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
@@ -61,6 +61,7 @@
 #include <cmath>
 #include <vector>
 #include <QTemporaryDir>
+#include <QBuffer>
 #include <cstdio>
 #include <functional>
 #include <string>
@@ -78,7 +79,7 @@
 #include "irisgl/import/parsecensus.h"
 #include "services/primitiveassets.h"
 #include "data/primitives.h"
-#include "bridge/previewmesh.h"
+#include "../support/testmesh.h"
 #include "export/exportcontentsource.h"
 
 #include "irisgl/core/geometry/trimesh.h"
@@ -91,11 +92,12 @@
 #include "irisgl/document/assets/vertexbuffer.h"
 #include "irisgl/document/assets/vertexlayout.h"
 #include "irisgl/document/scenegraph/meshnode.h"
-#include "irisgl/import/graphicshelper.h"
 #include "irisgl/import/importflags.h"
 #include "irisgl/import/importsettings.h"
 #include "irisgl/import/meshbake.h"
 #include "irisgl/import/modelsceneinfo.h"
+#include "irisgl/import/scenesource.h"
+#include "irisgl/import/clipfileinfo.h"
 #include "../support/timingbars.h"
 
 static int failures = 0;
@@ -309,7 +311,7 @@ static void roundTrip(const QString &relPath)
         return;
     }
     const QList<iris::MeshPtr> parsedMeshes =
-        iris::GraphicsHelper::loadAllMeshesFromAssimpScene(scene);
+        testmesh::fromScene(scene);
     const QMap<QString, iris::SkeletalAnimationPtr> parsedAnims =
         iris::Mesh::extractAnimations(scene, path);
     // The scratch dir is passed to BOTH sides: extractMaterialData WRITES
@@ -555,7 +557,6 @@ static void theKey()
         QStringLiteral("document/assets/skeleton.cpp"), QStringLiteral("document/assets/skeleton.h"),
         QStringLiteral("document/scenegraph/meshnode.cpp"),
         QStringLiteral("core/geometry/trimesh.cpp"),
-        QStringLiteral("import/graphicshelper.cpp"),
         QStringLiteral("import/importflags.h"),       QStringLiteral("import/importflags.cpp")};
     QStringList leaked;
     for (const QString &rel : versionCovered)
@@ -729,7 +730,7 @@ static void storeIntegration()
                                              iris::ImportFlags::Canonical);
     if (scene) {
         const QList<iris::MeshPtr> parsedMeshes =
-            iris::GraphicsHelper::loadAllMeshesFromAssimpScene(scene);
+            testmesh::fromScene(scene);
         CHECK_LOUD(parsedMeshes.size() == loaded.meshes.size(),
                    "the stored bake has the same mesh count as a parse of the stored source");
         for (int i = 0; i < qMin(parsedMeshes.size(), loaded.meshes.size()); ++i)
@@ -1178,7 +1179,7 @@ static void surfaceCards()
         // inside Mesh::loadMesh; the cards a primitive carries are its bake's).
         QElapsedTimer timer;
         timer.start();
-        const iris::MeshPtr mesh = previewmesh::load(path);
+        const iris::MeshPtr mesh = testmesh::load(path);
         const double loadMs = double(timer.nsecsElapsed()) / 1e6;
         if (mesh.isNull()) {
             std::printf("FAIL: could not load %s\n", subject.path);
@@ -1223,7 +1224,7 @@ static void surfaceCards()
     // exact rather than "the box plus a margin".
     {
         const iris::MeshPtr cube =
-            previewmesh::load(fixture(QStringLiteral("app/content/primitives/cube.obj")));
+            testmesh::load(fixture(QStringLiteral("app/content/primitives/cube.obj")));
         // The cards are built HERE now: nothing builds them at creation since
         // ATOM P2 deleted Mesh::loadMesh, and a primitive's real cards are its
         // BAKE's (meshbake.primitives_baked).
@@ -1262,8 +1263,8 @@ static void surfaceCards()
     // model's bake a different object on every import.
     {
         const QString path = fixture(QStringLiteral("app/content/primitives/torus.obj"));
-        const iris::MeshPtr first = previewmesh::load(path);
-        const iris::MeshPtr second = previewmesh::load(path);
+        const iris::MeshPtr first = testmesh::load(path);
+        const iris::MeshPtr second = testmesh::load(path);
         bool same = !first.isNull() && !second.isNull()
                     && first->cards.size() == second->cards.size()
                     && first->cardCoverage == second->cardCoverage;
@@ -1291,7 +1292,7 @@ static void surfaceCards()
     // (d) THE BUDGET, and monotonicity in it.
     {
         const QString path = fixture(QStringLiteral("app/content/primitives/star.obj"));
-        const iris::MeshPtr mesh = previewmesh::load(path);
+        const iris::MeshPtr mesh = testmesh::load(path);
         if (!mesh.isNull()) {
             iris::MeshBake::buildCards(mesh, 0);
             CHECK_LOUD(mesh->cards.isEmpty() && mesh->cardCoverage == 0.0f,
@@ -1458,7 +1459,7 @@ static void surfaceCards()
 // atom.lod_bound_bar; `test_mesh_bake --bound-terms <file>` prints a chain's terms.
 //
 // WHAT IT ADDS TO THE BAR: the same dense re-measure through the BAKE's own route
-// (`MeshBake::buildFromFile`, where the bar loads through GraphicsHelper), one bound and
+// (`MeshBake::buildFromFile`, where the bar loads through testmesh::parseFile), one bound and
 // one quadric per level, the bounds non-decreasing, and the ratio table.
 //
 // AND `lodBounds[k] >= lodErrors[k]` IS DELIBERATELY NOT ASSERTED. The quadric can
@@ -1952,7 +1953,7 @@ static void windingAgreesWithNormals()
         const QString path = seed.startsWith(QLatin1Char(':'))
                                  ? fixture(QStringLiteral("app") + seed.mid(1))
                                  : fixture(seed);
-        const iris::MeshPtr mesh = previewmesh::load(path, QString());
+        const iris::MeshPtr mesh = testmesh::load(path, QString());
         CHECK_LOUD(!mesh.isNull(), qUtf8Printable(name + ": the shipped mesh parses"));
         if (!mesh) continue;
 
@@ -2159,7 +2160,7 @@ static void printTerms(const QString &label, const QVector<iris::MeshBake::LodLe
 /// The tool the lead re-runs on a file nobody can ship (the owner's scan).
 static int boundTerms(const QString &path)
 {
-    const QList<iris::MeshPtr> meshes = iris::GraphicsHelper::loadAllMeshesFromFile(path);
+    const QList<iris::MeshPtr> meshes = testmesh::parseFile(path);
     if (meshes.isEmpty()) { std::printf("FAIL: %s parses\n", qUtf8Printable(path)); return 1; }
     for (int i = 0; i < meshes.size(); ++i) {
         QVector<iris::MeshBake::LodLevelTerms> terms;
@@ -2228,7 +2229,7 @@ static void printDagTerms(const QString &label, const iris::MeshBake::ClusterDag
 /// tool on a file nobody can ship — the owner's scan). Times the DAG build.
 static int dagTerms(const QString &path, bool dense)
 {
-    const QList<iris::MeshPtr> meshes = iris::GraphicsHelper::loadAllMeshesFromFile(path);
+    const QList<iris::MeshPtr> meshes = testmesh::parseFile(path);
     if (meshes.isEmpty()) { std::printf("FAIL: %s parses\n", qUtf8Printable(path)); return 1; }
     for (int i = 0; i < meshes.size(); ++i) {
         iris::MeshBake::ClusterDagStats st;
@@ -2493,7 +2494,7 @@ static void boundBar()
     int chained = 0;
     for (const Subject &s : subjects) {
         const QString name = s.standin ? QStringLiteral("scan stand-in") : QFileInfo(s.path).fileName();
-        const QList<iris::MeshPtr> meshes = iris::GraphicsHelper::loadAllMeshesFromFile(s.path);
+        const QList<iris::MeshPtr> meshes = testmesh::parseFile(s.path);
         CHECK_LOUD(!meshes.isEmpty(), qUtf8Printable(name + ": parses"));
         for (const iris::MeshPtr &mesh : meshes) {
             QVector<iris::MeshBake::LodLevelTerms> terms;
@@ -2577,7 +2578,7 @@ static void dagBoundBar(bool target)
     for (const QString &path : subjects) {
         const bool standin = path == standinPath;
         const QString name = standin ? QStringLiteral("scan stand-in") : QFileInfo(path).fileName();
-        const QList<iris::MeshPtr> meshes = iris::GraphicsHelper::loadAllMeshesFromFile(path);
+        const QList<iris::MeshPtr> meshes = testmesh::parseFile(path);
         CHECK_LOUD(!meshes.isEmpty(), qUtf8Printable(name + ": parses"));
         for (const iris::MeshPtr &mesh : meshes) groups += dagBar(name, mesh, standin, target);
     }
@@ -2649,6 +2650,242 @@ static void twoSidedReachesTheNode()
     // (The NODE half — the fragment's MeshNode culls nothing — needs an Ogre::Root: a
     // fragment's children live in the scene graph, which this suite has none of. It is
     // mirror.document_to_engine's arm, through the same buildFromFile + buildFragment.)
+}
+
+// ---------------------------------------------------------------------------
+// 17. THE CLIP BAKE and the DESCRIBE block (SHIPPED-BAKES-1)
+// ---------------------------------------------------------------------------
+//
+// A clip file's readers read its CLIP bake, never a parse: its facts (the
+// ClipFileInfo the strip and the metadata come from) and its keys must survive
+// the round trip exactly, its bytes must be deterministic, a wrong key or a
+// truncated blob must be refused, and the rig's uniform factor must reach the
+// POSITION keys and nothing else. A model bake carries the facts of its parse
+// (the metadata backfill reads them).
+static void clipBake()
+{
+    const QString walk = fixture(QStringLiteral("tests/avatar/fixtures/rig2_walk_anim.glb"));
+    const QVector<double> strip = iris::ClipFileInfo::stripFractions();
+    const iris::MeshBake::Clip clip = iris::MeshBake::buildClipFromFile(walk, QStringLiteral("fp"));
+    CHECK_LOUD(clip.valid && clip.info.parsed, "the clip bakes");
+    CHECK_LOUD(!clip.animations.isEmpty(), "...with its animation");
+    CHECK_LOUD(clip.info.poses.size() == strip.size(),
+               "...and the pose strip's poses (one per ClipFileInfo::stripFractions)");
+
+    const QByteArray a = iris::MeshBake::serializeClip(clip);
+    const QByteArray b = iris::MeshBake::serializeClip(
+        iris::MeshBake::buildClipFromFile(walk, QStringLiteral("fp")));
+    CHECK_LOUD(!a.isEmpty() && a == b, "the clip bake is deterministic (two builds, same bytes)");
+
+    const iris::MeshBake::Clip back = iris::MeshBake::deserializeClip(a, QStringLiteral("fp"));
+    CHECK_LOUD(back.valid, "it reads back");
+    CHECK_LOUD(iris::MeshBake::serializeClip(back) == a, "...to the same bytes (a lossless round trip)");
+    CHECK(back.info.clips.size() == clip.info.clips.size()
+              && back.info.nodeNames == clip.info.nodeNames
+              && back.info.nodeParents == clip.info.nodeParents,
+          "the clip table and the hierarchy survive");
+    CHECK(back.declaredUnitScale == clip.declaredUnitScale, "the file's declared unit survives");
+    CHECK_LOUD(!iris::MeshBake::deserializeClip(a, QStringLiteral("other")).valid,
+               "a clip bake under another key is REFUSED (a stale producer rebuilds)");
+    CHECK_LOUD(!iris::MeshBake::deserializeClip(a.left(a.size() / 2)).valid,
+               "a truncated clip bake is refused");
+    CHECK_LOUD(!iris::MeshBake::deserialize(a).valid && !iris::MeshBake::deserializeClip(
+                   iris::MeshBake::serialize(iris::MeshBake::buildFromFile(
+                       fixture(QStringLiteral("tests/importer/fixtures/ticks_anim.glb")),
+                       QStringLiteral("fp")))).valid,
+               "the two KINDS never read as each other");
+
+    // THE PARSE IT REPLACES, compared: the facts of the identity ClipNamesOnly
+    // read are the bake's facts.
+    const iris::ClipFileInfo parsed = iris::ClipFileInfo::read(walk, strip);
+    bool sameFacts = parsed.parsed && parsed.clips.size() == back.info.clips.size()
+                     && parsed.nodeNames == back.info.nodeNames
+                     && parsed.poses.size() == back.info.poses.size();
+    for (int i = 0; sameFacts && i < parsed.clips.size(); ++i)
+        sameFacts = parsed.clips[i].name == back.info.clips[i].name
+                    && parsed.clips[i].channelNames == back.info.clips[i].channelNames
+                    && parsed.clips[i].lengthSeconds == back.info.clips[i].lengthSeconds;
+    for (int i = 0; sameFacts && i < parsed.poses.size(); ++i)
+        sameFacts = parsed.poses[i].positions == back.info.poses[i].positions;
+    CHECK_LOUD(sameFacts, "the bake's facts ARE the parse's (names, channels, lengths, poses)");
+
+    // THE RIG'S FACTOR: identity hands the keys over untouched; a rig imported
+    // at 2x gets every POSITION key doubled and its rotations and scales as
+    // authored (what assimp's ScaleProcess did to a key read under that rig).
+    const auto same = iris::MeshBake::clipAnimations(back, iris::ImportTransform(), walk);
+    iris::ImportTransform twice;
+    twice.scale = 2.0;
+    const auto doubled = iris::MeshBake::clipAnimations(back, twice, walk);
+    bool identityExact = same.size() == back.animations.size();
+    bool scaledExact = doubled.size() == back.animations.size();
+    int posKeys = 0;
+    for (auto it = back.animations.constBegin(); it != back.animations.constEnd(); ++it) {
+        const auto &from = it.value();
+        const auto &id = same.value(it.key());
+        const auto &x2 = doubled.value(it.key());
+        if (!id || !x2) { identityExact = scaledExact = false; break; }
+        identityExact = identityExact && id->source == walk && x2->source == walk;
+        for (auto b = from->boneAnimations.constBegin(); b != from->boneAnimations.constEnd(); ++b) {
+            const auto f = b.value();
+            const auto i1 = id->boneAnimations.value(b.key());
+            const auto i2 = x2->boneAnimations.value(b.key());
+            if (!i1 || !i2) { identityExact = scaledExact = false; continue; }
+            for (int k = 0; k < f->posKeys->keys.size(); ++k, ++posKeys) {
+                const iris::Vec3 v = f->posKeys->keys[k]->value;
+                identityExact = identityExact && i1->posKeys->keys[k]->value == v
+                                && i1->posKeys->keys[k]->time == f->posKeys->keys[k]->time;
+                scaledExact = scaledExact && i2->posKeys->keys[k]->value == v * 2.0f;
+            }
+            for (int k = 0; k < f->rotKeys->keys.size(); ++k)
+                scaledExact = scaledExact
+                              && i2->rotKeys->keys[k]->value == f->rotKeys->keys[k]->value;
+        }
+    }
+    CHECK_LOUD(posKeys > 0, qUtf8Printable(QStringLiteral("the clip has position keys (%1)").arg(posKeys)));
+    CHECK_LOUD(identityExact, "an identity rig gets the clip's keys exactly, on fresh objects");
+    CHECK_LOUD(scaledExact, "a 2x rig gets every position key doubled, rotations as authored");
+    CHECK_LOUD(same.constBegin().value() != back.animations.constBegin().value(),
+               "...and every caller is handed its OWN objects");
+
+    // THE FACTOR AGAINST THE PARSE IT REPLACES, under a UNIT OVERRIDE, on an
+    // FBX that declares its own unit: the bake read with a rig's recipe must
+    // hand over the keys the old parse under that recipe produced — not a
+    // multiply compared with the same multiply.
+    {
+        // pivot_rig.fbx is authored in METRES (UnitScaleFactor 100); its
+        // CENTIMETRE twin — the Mixamo unit — is the same ASCII with the one
+        // declaration changed, written here rather than committed.
+        QTemporaryDir unitDir;
+        const QString cmRig = QDir(unitDir.path()).filePath(QStringLiteral("pivot_rig_cm.fbx"));
+        {
+            QFile in(fixture(QStringLiteral("tests/skeletal/fixtures/pivot_rig.fbx")));
+            QFile out(cmRig);
+            if (in.open(QIODevice::ReadOnly) && out.open(QIODevice::WriteOnly)) {
+                QByteArray text = in.readAll();
+                text.replace("\"UnitScaleFactor\", \"double\", \"Number\", \"\",100",
+                             "\"UnitScaleFactor\", \"double\", \"Number\", \"\",1");
+                out.write(text);
+            }
+        }
+        QString chosen;
+        iris::MeshBake::Clip fbx;
+        for (const QString &path : { cmRig }) {
+            const QString rel = QFileInfo(path).fileName();
+            iris::MeshBake::Clip c = iris::MeshBake::buildClipFromFile(path, QStringLiteral("fp"));
+            bool hasPos = false;
+            for (const auto &a : c.animations)
+                for (const auto &bone : a->boneAnimations)
+                    hasPos = hasPos || !bone->posKeys->keys.isEmpty();
+            std::printf("info: %s: declared unit %.4f m, %d clip(s), position keys %s\n",
+                        qUtf8Printable(rel), c.declaredUnitScale, int(c.animations.size()),
+                        hasPos ? "yes" : "no");
+            if (c.valid && hasPos && c.declaredUnitScale != 1.0 && chosen.isEmpty()) {
+                chosen = path;
+                fbx = c;
+            }
+        }
+        CHECK_LOUD(!chosen.isEmpty(), "an FBX clip fixture that DECLARES a non-metre unit");
+        if (!chosen.isEmpty()) {
+            iris::ImportTransform rig;
+            rig.scale = 1.3;
+            rig.unitOverride = 0.5;   // the user says: half a metre per unit
+            const auto baked = iris::MeshBake::clipAnimations(fbx, rig.keysOnly(), chosen);
+            Assimp::Importer importer;
+            const aiScene *scene =
+                iris::readSceneFile(importer, chosen, iris::ImportFlags::ClipNamesOnly, rig.keysOnly());
+            const auto parsed = scene ? iris::Mesh::extractAnimations(scene, chosen)
+                                      : QMap<QString, iris::SkeletalAnimationPtr>();
+            bool same = !parsed.isEmpty() && parsed.size() == baked.size();
+            int compared = 0;
+            float worst = 0.0f;
+            for (auto it = parsed.constBegin(); same && it != parsed.constEnd(); ++it) {
+                const auto b = baked.value(it.key());
+                if (!b) { same = false; break; }
+                for (auto bone = it.value()->boneAnimations.constBegin();
+                     same && bone != it.value()->boneAnimations.constEnd(); ++bone) {
+                    const auto mine = b->boneAnimations.value(bone.key());
+                    if (!mine || mine->posKeys->keys.size() != bone.value()->posKeys->keys.size()) {
+                        same = false;
+                        break;
+                    }
+                    for (int k = 0; k < bone.value()->posKeys->keys.size(); ++k, ++compared) {
+                        const iris::Vec3 p = bone.value()->posKeys->keys[k]->value;
+                        const iris::Vec3 q = mine->posKeys->keys[k]->value;
+                        const float tol = 1e-4f * std::max(1.0f, p.length());
+                        worst = std::max(worst, (p - q).length());
+                        same = same && (p - q).length() <= tol;
+                    }
+                    for (int k = 0; same && k < bone.value()->rotKeys->keys.size(); ++k)
+                        same = same && mine->rotKeys->keys.size() == bone.value()->rotKeys->keys.size();
+                }
+            }
+            CHECK_LOUD(same && compared > 0,
+                       qUtf8Printable(QStringLiteral("under a unit override (0.5 m/unit, scale 1.3) the "
+                                                     "clip bake's keys ARE the parse's: %1 position keys, "
+                                                     "worst %2").arg(compared).arg(double(worst))));
+        }
+    }
+
+    // THE DESCRIBE BLOCK: a model bake carries the facts of its parse.
+    const QString ticks = fixture(QStringLiteral("tests/importer/fixtures/ticks_anim.glb"));
+    const iris::MeshBake::Model model = iris::MeshBake::buildFromFile(ticks, QStringLiteral("fp"));
+    iris::SceneSource source;
+    CHECK_LOUD(source.read(ticks), "the fixture parses (the comparison's own read)");
+    const iris::ModelSceneInfo facts = iris::ModelSceneInfo::fromSource(source);
+    const iris::MeshBake::Model read = iris::MeshBake::deserialize(iris::MeshBake::serialize(model));
+    const iris::ModelSceneInfo &d = read.describe;
+    CHECK_LOUD(read.valid && d.parsed, "a model bake reads back WITH its describe block");
+    CHECK_LOUD(d.vertices == facts.vertices && d.triangles == facts.triangles
+                   && d.meshes == facts.meshes && d.materials == facts.materials
+                   && d.boneNames == facts.boneNames && d.nodeNames == facts.nodeNames
+                   && d.textureReferences == facts.textureReferences
+                   && d.animations.size() == facts.animations.size()
+                   && d.extentX == facts.extentX && d.extentY == facts.extentY
+                   && d.extentZ == facts.extentZ && d.extentValid == facts.extentValid
+                   && d.declaredUnitScale == facts.declaredUnitScale,
+               "...and its facts ARE the parse's (counts, names, clips, extent, unit)");
+
+    // THE HEADER READ: the describe block alone, off the file, no geometry.
+    QTemporaryDir dir;
+    const QString bakePath = QDir(dir.path()).filePath(QStringLiteral("ticks.jmb"));
+    CHECK_LOUD(iris::MeshBake::write(bakePath, model, nullptr), "the model bake is written");
+    iris::ModelSceneInfo header;
+    CHECK_LOUD(iris::MeshBake::readDescribe(bakePath, &header)
+                   && header.vertices == facts.vertices && header.triangles == facts.triangles
+                   && header.nodeNames == facts.nodeNames && header.extentX == facts.extentX,
+               "readDescribe answers the same facts from the HEADER alone");
+    CHECK_LOUD(!iris::MeshBake::readDescribe(bakePath, &header, QStringLiteral("other")),
+               "...and refuses a bake under another key");
+    {
+        // Cut the file right after the header: the geometry is GONE and the
+        // header read still answers — it never reached for it.
+        QFile f(bakePath);
+        QByteArray all;
+        if (f.open(QIODevice::ReadOnly)) { all = f.readAll(); f.close(); }
+        // Where the header ends: stream magic, version, key and facts the way
+        // the container lays them, and take the stream's position.
+        QBuffer buffer(&all);
+        buffer.open(QIODevice::ReadOnly);
+        QDataStream h(&buffer);
+        h.setVersion(QDataStream::Qt_6_0);
+        h.setByteOrder(QDataStream::LittleEndian);
+        quint32 magic = 0;
+        qint32 version = 0;
+        QString key;
+        QByteArray factsBlob;
+        h >> magic >> version >> key >> factsBlob;
+        const qint64 headerBytes = buffer.pos();
+        CHECK_LOUD(h.status() == QDataStream::Ok && headerBytes < all.size() / 2,
+                   qUtf8Printable(QStringLiteral("the header is %1 of the bake's %2 bytes")
+                                      .arg(headerBytes).arg(all.size())));
+        const QString cut = QDir(dir.path()).filePath(QStringLiteral("cut.jmb"));
+        QFile out(cut);
+        if (out.open(QIODevice::WriteOnly)) { out.write(all.left(int(headerBytes))); out.close(); }
+        iris::ModelSceneInfo cutInfo;
+        CHECK_LOUD(iris::MeshBake::readDescribe(cut, &cutInfo) && cutInfo.triangles == header.triangles,
+                   "a bake cut right after its header still describes (the geometry is never read)");
+        CHECK_LOUD(!iris::MeshBake::read(cut).valid, "...while the full read of it is refused");
+    }
 }
 
 int main(int argc, char **argv)
@@ -2756,6 +2993,9 @@ int main(int argc, char **argv)
 
     std::printf("== 7. the ATOM LOD chain ==\n");
     lodChain();
+
+    std::printf("== 17. the clip bake and the describe block ==\n");
+    clipBake();
 
     if (failures) std::printf("FAILED: %d of %d check(s)\n", failures, checks);
     else          std::printf("ALL %d CHECKS PASSED\n", checks);

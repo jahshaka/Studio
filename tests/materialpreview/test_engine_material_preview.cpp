@@ -34,6 +34,7 @@
 #include "modules/materials/nodes/test.h"
 #include "modules/materials/core/graphbaker.h"
 #include "modules/materials/core/pbrgraphevaluator.h"
+#include "../support/testmesh.h"
 
 using namespace jahshaka::engine;
 static int failures = 0;
@@ -74,6 +75,9 @@ int main(int argc, char **argv)
 {
     qputenv("QT_QPA_PLATFORM", "offscreen");
     QApplication app(argc, argv); // widget-backed graph nodes need QApplication
+    // The preview docks' and the VR slot's seed keys, from the fixture files
+    // (the app reads them from its seeded library; tests/support/testmesh.h).
+    testmesh::installShippedResolver();
 
     EngineConfig cfg;
     cfg.pluginDir = JAHSHAKA_TEST_PLUGIN_DIR;

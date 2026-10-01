@@ -72,16 +72,18 @@ enum class Kind
     /// while four shipped sample scenes still name its mesh. A user cannot add
     /// one, and it is not a tile. (The old 100 m Ground plane was one too, until
     /// SAMPLES-1 re-authored the eight samples onto the Basic floor.)
-    ///
-    /// (The PREVIEW meshes — the asset dock's high-poly sphere, the material
-    /// dock's low-poly ball — are deliberately NOT here. A preview subject is
-    /// drawn at one distance in a 256-pixel tile: it has no use for a LOD chain,
-    /// cards or an SDF, and making it a library asset would make four
-    /// preview-only binaries depend on the whole catalog and import pipeline for
-    /// geometry that is a dock's own furniture. They are parsed once per process
-    /// through the importer's parse entry point, in bridge/, beside the docks
-    /// that own them.)
     Platform,
+    /// THE APP'S OWN FURNITURE (SHIPPED-BAKES-1) — meshes the APP draws and no
+    /// document ever names: the asset dock's high-poly sphere, the material
+    /// dock's low-poly ball and the VR controller models. Seeded and baked like
+    /// every other row (so nothing parses them at run time — assimp is an
+    /// import-time dependency), resolved by seed key through IrisGL's seam
+    /// (irisgl/document/assets/shippedmeshes.h). The preview docks' other
+    /// subjects — the thumbnail's sphere, the avatar room's cube, the material
+    /// dock's cube/plane/cylinder/capsule/torus — ARE primitives and resolve to
+    /// those rows. Never a tile, never a verb name; the controllers carry no UVs
+    /// (an unlit helper).
+    Furniture,
 };
 
 struct Def
@@ -130,6 +132,12 @@ inline const QVector<Def> &all()
         // being a primitive (owner review R6) but four shipped sample SCENES
         // name its mesh, so it is baked like every other mesh a scene stands on.
         { "Teapot",      "00000000-0000-0000-0000-000000004013",   ":/content/primitives/teapot.obj",      nullptr, Kind::Platform },
+        // THE APP'S FURNITURE (SHIPPED-BAKES-1): what a preview dock and the VR
+        // session draw, baked like the rest so nothing parses them at run time.
+        { "PreviewSphere",   "00000000-0000-0000-0000-000000004014", ":/content/primitives/hp_sphere.obj",          nullptr, Kind::Furniture },
+        { "PreviewBall",     "00000000-0000-0000-0000-000000004015", "app/shadergraph/lowpoly_sphere.obj",          nullptr, Kind::Furniture },
+        { "ControllerLeft",  "00000000-0000-0000-0000-000000004016", ":/content/vr/meta-quest-touch-pro/left.obj",  nullptr, Kind::Furniture },
+        { "ControllerRight", "00000000-0000-0000-0000-000000004017", ":/content/vr/meta-quest-touch-pro/right.obj", nullptr, Kind::Furniture },
     };
     return defs;
 }
@@ -195,11 +203,10 @@ inline const Def *bySeedName(const QString &name)
 
 /// THE SEED KEY LOOKUP: the row whose shipped mesh file is `meshKey`, or
 /// nullptr. This is how a document's mesh reference — the ":/..." string a scene
-/// has always stored for a built-in — reaches its baked asset
-/// (services/primitiveassets.h). An EXACT match: the key is a string the writer
-/// wrote from this table, and a by-file-name fallback would make two tables of
-/// one (it was written for the preview docks, which turned out to own their own
-/// furniture instead — bridge/previewmesh.h).
+/// has always stored for a built-in — and an app consumer's ask (a preview dock,
+/// the VR controller slot) reach the baked asset (services/primitiveassets.h).
+/// An EXACT match: the key is a string written from this table, and a
+/// by-file-name fallback would make two tables of one.
 inline const Def *bySeedMesh(const QString &meshKey)
 {
     if (meshKey.isEmpty()) return nullptr;

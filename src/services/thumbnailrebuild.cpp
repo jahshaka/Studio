@@ -11,6 +11,7 @@ For more information see the LICENSE file
 
 #include "services/thumbnailrebuild.h"
 
+#include <QFileInfo>
 #include <QImage>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -31,6 +32,7 @@ For more information see the LICENSE file
 #include "services/assethelper.h"
 #include "services/assetstorepaths.h"
 #include "services/iesprofile.h"
+#include "services/meshbakestore.h"
 #include "services/avatarassets.h"
 #include "services/thumbnailmanager.h"
 #include "services/videoutils.h"
@@ -138,10 +140,15 @@ Outcome rebuildOne(Database *db, Project *project, const QString &guid,
     case ModelTypes::Animation: {
         // The POSE STRIP the import drew, redrawn — a clip file has no engine
         // render to make (there is nothing to put the clip ON), so this is the
-        // same three projected poses, from the stored bytes.
+        // same three projected poses, from the CLIP BAKE's own (SHIPPED-BAKES-1):
+        // never a parse. A stale or missing bake is rebuilt from the source on a
+        // worker first (MeshBakeStore::ensureClip).
         QImage strip;
-        animfile::read(storeFileFor(guid), &strip, 256, 256);
-        if (strip.isNull()) return Outcome::bad(QStringLiteral("the animation could not be read"));
+        if (const iris::BakedClipPtr clip = MeshBakeStore::ensureClip(storeFileFor(guid)))
+            animfile::describe(clip->info, QFileInfo(record.name).completeBaseName(), &strip,
+                               256, 256);
+        if (strip.isNull())
+            return Outcome::bad(QStringLiteral("the animation's clip bake could not be read"));
         return store(db, guid, QPixmap::fromImage(strip));
     }
     case ModelTypes::File:

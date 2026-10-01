@@ -36,6 +36,7 @@ For more information see the LICENSE file
 #include "services/import/assetimporters.h"
 #include "services/jahlog.h"
 #include "irisgl/core/logger.h"
+#include "irisgl/import/parsecensus.h"
 
 AssetImportService::AssetImportService(Database *db, Project *project)
     : db(db), project(project)
@@ -268,6 +269,11 @@ PreparedImport AssetImportService::prepare(const ImportRequest &request,
     PreparedImport prepared;
     prepared.request = request;
     ImportResult &result = prepared.result;
+    // AN IMPORT'S PARSE BUILDS THE BAKE (irisgl/import/parsecensus.h): the
+    // census counts it as a bake build, never as a read standing in for one —
+    // so the seeds a fresh library bakes at its first open, on the UI thread,
+    // leave app.openStats' parse counts at zero (SHIPPED-BAKES-1).
+    iris::ParseCensus::BakeBuildScope building;
 
     if (!db) { result.error = QStringLiteral("no database"); return prepared; }
 

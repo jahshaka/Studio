@@ -15,11 +15,11 @@ For more information see the LICENSE file
 #include <QJsonObject>
 #include <functional>
 
-#include "irisgl/import/importsettings.h"
 #include <QString>
 
 class Database;
 namespace iris { struct ModelSceneInfo; }
+namespace animfile { struct Contents; }
 
 // Rich per-type asset metadata (ASSET_DRAWERS_SPEC.md addendum).
 //
@@ -66,29 +66,33 @@ public:
     // so its face count is the triangle count).
     static QJsonObject forModelScene(const iris::ModelSceneInfo &scene, const QString &sourceFile);
 
-    // Backfill path: one canonical parse of the file (iris::ModelSceneInfo::read
-    // — no GPU, no iris document).
-    /// `assetGuid` names the ROW, so the describe parses with that asset's own
-    /// import recipe — the recorded `extent` is the size the asset MEASURES,
-    /// not the size its file was authored at (IMPORT-1).
-    static QJsonObject forModelFile(const QString &filePath,
-                                    const QString &assetGuid = QString());
-
-    // ---- THE IMPORT RECIPE, as a seam (IMPORT-1) --------------------------
+    // ---- THE BACKFILL READS BAKES (SHIPPED-BAKES-1) ------------------------
     //
-    // A model's describe has to parse the file the way the ASSET was imported,
-    // or the `extent` it records is the file's authored size and not the size
-    // every placement has. The lookup lives in MeshBakeStore (it is a catalog
-    // query), and this service is linked on its own into a dozen small suites
-    // that have no catalog at all — so it is a HOOK rather than a call, set
-    // once by the app and left at identity everywhere else. Identity is exactly
-    // what those suites had before, and what a library with no import settings
-    // resolves to anyway.
-    using ImportTransformResolver =
-        std::function<iris::ImportTransform(const QString &sourcePath, const QString &assetGuid)>;
-    static void setImportTransformResolver(ImportTransformResolver resolver);
-    static iris::ImportTransform importTransformFor(const QString &sourcePath,
-                                                    const QString &assetGuid);
+    // A library row whose block is absent is described from its BAKE — the
+    // model bake carries the facts of the parse it was built from
+    // (MeshBake::Model::describe), the clip bake its clip table and poses — and
+    // never from a parse: assimp is an import-time dependency
+    // (`source.assimp_import_only`). A row with no current bake describes as
+    // nothing (not persisted); the library's background rebuild makes the bake
+    // and the next inspection describes it.
+
+    /// A model row's block from its current bake at `bakePath`.
+    static QJsonObject forModelBake(const QString &bakePath, const QString &sourceFile);
+
+    /// A clip row's block from its current clip bake at `bakePath`. `baseName`
+    /// names a clip whose own name is junk (the ROW's base name, never a hash).
+    static QJsonObject forClipBake(const QString &bakePath, const QString &sourceFile,
+                                   const QString &baseName);
+
+    /// WHERE A ROW'S CURRENT BAKE IS, as a seam: the lookup is a catalog query
+    /// that lives in MeshBakeStore, and this service is linked on its own into
+    /// a dozen small suites with no catalog — so the app sets it once
+    /// (src/app/main.cpp) and everywhere else there is simply no bake.
+    /// Database thread.
+    using BakePathResolver = std::function<QString(int assetType, const QString &sourcePath,
+                                                   const QString &assetGuid)>;
+    static void setBakePathResolver(BakePathResolver resolver);
+    static QString bakePathFor(int assetType, const QString &sourcePath, const QString &assetGuid);
 
     static QJsonObject forImageFile(const QString &filePath);   // header-only decode
     static QJsonObject forAudioFile(const QString &filePath);   // RIFF parse for wav
@@ -103,9 +107,10 @@ public:
     /// [{name, rawName, length (seconds), channels, boneChannels}], the bone
     /// names the channels DRIVE and the `rigId` hashed over them — the same
     /// hash the model side computes over its bone names, so "does this clip
-    /// fit that rig" is a string compare between two rows. Read by
-    /// animfile::read (one parse, names and numbers only).
-    static QJsonObject forAnimationFile(const QString &filePath);
+    /// fit that rig" is a string compare between two rows. Built from contents
+    /// already read (the import's clip bake, or forClipBake's).
+    static QJsonObject forAnimationContents(const animfile::Contents &contents,
+                                            const QString &filePath);
 
     /// The avatar DEFINITION block (AVATAR_ASSET_SPEC §3.1): what the tile and
     /// the module's library list show without opening the avatar — its name,
@@ -115,11 +120,14 @@ public:
     static QJsonObject forAvatarFile(const QString &filePath);
 
     // Dispatches on the asset row's ModelTypes over its RESOLVED source file
-    // (AssetCas::resolveSource). Empty when there is no file to describe (a
-    // row with no stored bytes). Pure file inspection: safe on a worker, bar
-    // Video (QMediaPlayer — GUI thread).
+    // (AssetCas::resolveSource) and, for a model or a clip, its resolved BAKE
+    // (`bakePath`, bakePathFor — resolve it on the database thread). Empty when
+    // there is nothing to describe (no stored bytes, or a model/clip with no
+    // current bake). Pure file inspection: safe on a worker, bar Video
+    // (QMediaPlayer — GUI thread). `displayName` is the row's name.
     static QJsonObject computeForSource(int assetType, const QString &sourcePath,
-                                        const QString &assetGuid = QString());
+                                        const QString &bakePath = QString(),
+                                        const QString &displayName = QString());
 
     // The lazy backfill: returns properties["metadata"], computing and
     // persisting it when absent. storeRoot is overridable for tests;

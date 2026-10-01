@@ -221,6 +221,19 @@ function(jah_links_assimp _t)
     target_link_libraries(${_t} PRIVATE assimp)
 endfunction()
 
+# THE FIXTURE PARSE (SHIPPED-BAKES-1): assimp is import-time only, so the
+# "parse a file into iris::Meshes" helper is test support, not IrisGL —
+# tests/support/testmesh.cpp, in this static library. Every suite whose sources
+# include support/testmesh.h is linked to it automatically at the end of this
+# file (jah_link_testmesh_users), so a new suite needs no line of its own.
+add_library(jah_testmesh STATIC ${CMAKE_CURRENT_SOURCE_DIR}/support/testmesh.cpp)
+set_target_properties(jah_testmesh PROPERTIES AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 POSITION_INDEPENDENT_CODE ON)
+target_include_directories(jah_testmesh PRIVATE
+    ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/irisgl)
+jah_links_assimp(jah_testmesh)
+target_link_libraries(jah_testmesh PUBLIC IrisGL Qt6::Core)
+
 # THE GPU-TIMING ADMISSION (lane DEVPROCESS-1; ONE admission since TEST-SELECTOR-1 G1+G2,
 # docs/TESTING_GATE.md §4). A suite that measures TIME or GPU BUDGET prints a number that reads as
 # a red when anything else shares the GPU with it; RUN_SERIAL serialises only inside ONE ctest
@@ -814,3 +827,42 @@ foreach(_t IN LISTS JAH_GPU_EXCLUSIVE_SUITES)
                             "jah_gpu_exclusive_test() — it would measure beside other GPU rows")
     endif()
 endforeach()
+
+# ---------------------------------------------------------------------------
+# jah_link_testmesh_users — every target under tests/ whose own sources include
+# support/testmesh.h links jah_testmesh (the fixture parse, SHIPPED-BAKES-1).
+function(jah_link_testmesh_users _dir)
+    get_property(_targets DIRECTORY "${_dir}" PROPERTY BUILDSYSTEM_TARGETS)
+    foreach(_t IN LISTS _targets)
+        if(_t STREQUAL "jah_testmesh")
+            continue()
+        endif()
+        get_target_property(_type ${_t} TYPE)
+        if(NOT _type STREQUAL "EXECUTABLE")
+            continue()
+        endif()
+        get_target_property(_srcs ${_t} SOURCES)
+        get_target_property(_sdir ${_t} SOURCE_DIR)
+        foreach(_src IN LISTS _srcs)
+            if(NOT _src MATCHES "\\.cpp$")
+                continue()
+            endif()
+            if(NOT IS_ABSOLUTE "${_src}")
+                set(_src "${_sdir}/${_src}")
+            endif()
+            if(NOT EXISTS "${_src}" OR NOT _src MATCHES "/tests/")
+                continue()
+            endif()
+            file(STRINGS "${_src}" _hit REGEX "support/testmesh\\.h")
+            if(_hit)
+                target_link_libraries(${_t} PRIVATE jah_testmesh)
+                break()
+            endif()
+        endforeach()
+    endforeach()
+    get_property(_subs DIRECTORY "${_dir}" PROPERTY SUBDIRECTORIES)
+    foreach(_sub IN LISTS _subs)
+        jah_link_testmesh_users("${_sub}")
+    endforeach()
+endfunction()
+jah_link_testmesh_users("${CMAKE_CURRENT_SOURCE_DIR}")

@@ -355,7 +355,8 @@ QVector<VerbInfo> VrApi::verbs() const
           "it. False when nobody is in VR. (`player.vrRecenter` stays its own verb: \"put me "
           "back where the run began\" is a different product gesture from walking.)",
           Needs::Engine },
-        { "proxyPose", "vr.proxyPose(\"left\"|\"right\") -> {drawn, x, y, z, rotation, yaw}",
+        { "proxyPose", "vr.proxyPose(\"left\"|\"right\") -> {drawn, x, y, z, rotation, yaw, model, "
+                       "modelKey, modelTriangles}",
           "WHERE THE WEARER'S CONTROLLER IS ACTUALLY DRAWN — the world pose of the proxy node "
           "itself, read back out of the scene graph, as against `vr.state().hands` which is "
           "what the runtime REPORTED.\n\n"
@@ -366,7 +367,12 @@ QVector<VerbInfo> VrApi::verbs() const
           "measured rather than assumed — `scripting.e2e`/`vr.verbs_session` asserts the two "
           "agree to a millimetre on the frame a move happens.\n\n"
           "`drawn` is false when there is no proxy node at all (no session has asked for one, "
-          "or `vr.proxies(false)`), and the pose is then all zeros.",
+          "or `vr.proxies(false)`), and the pose is then all zeros.\n\n"
+          "`model` is what the proxy is WEARING: \"controller\" when it is the controller model "
+          "built from the shipped mesh's BAKED seed row (a Touch profile bound to that hand), "
+          "\"wand\" otherwise, empty with no proxy node — read whether or not this frame located the "
+          "hand (the profile picks the mesh, the pose only shows it); `modelKey` is that model's seed key and "
+          "`modelTriangles` the triangles uploaded from its bake.",
           Needs::Engine },
         { "end", "vr.end() -> bool",
           "Ends the session and puts everything back — the mirror, the stereo view, the "
@@ -1035,8 +1041,11 @@ QVariantMap VrApi::proxyPose(const QString &hand)
     const QString h = hand.trimmed().toLower();
     const int index = h == QLatin1String("right") ? 1 : 0;
     NodeId nodes[2] = { 0, 0 };
-    if (SceneMirror *mirror = moduleHost.viewport ? moduleHost.viewport->sceneMirror() : nullptr)
+    SceneMirror::VrProxyDrawn wearing;
+    if (SceneMirror *mirror = moduleHost.viewport ? moduleHost.viewport->sceneMirror() : nullptr) {
         mirror->vrProxyNodes(nodes);
+        wearing = mirror->vrProxyDrawn(index);
+    }
     Scene *scene = moduleHost.viewport ? moduleHost.viewport->engineScene() : nullptr;
     Vec3 position;
     Quat rotation;
@@ -1047,6 +1056,13 @@ QVariantMap VrApi::proxyPose(const QString &hand)
     // "is there a marker in the scene at all", so it is named for what it is.
     out.remove(QStringLiteral("valid"));
     out[QStringLiteral("drawn")] = drawn;
+    // WHAT THE NODE WEARS, whether or not this frame located the hand: the
+    // mesh is chosen by the hand's PROFILE, the visibility by its pose.
+    out[QStringLiteral("model")] = nodes[index] ? (wearing.model ? QStringLiteral("controller")
+                                                                 : QStringLiteral("wand"))
+                                                : QString();
+    out[QStringLiteral("modelKey")] = wearing.key;
+    out[QStringLiteral("modelTriangles")] = wearing.triangles;
     return out;
 }
 

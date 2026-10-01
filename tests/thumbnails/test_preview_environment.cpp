@@ -58,6 +58,7 @@ static const double kGreyHi = greyCardDisplay(130.0, kRoughEnergyFactor);
 #include "bridge/enginematerialpreviewscene.h"
 #include "bridge/enginethumbnailrenderer.h"
 #include "bridge/previewenvironment.h"
+#include "../support/testmesh.h"
 
 using namespace jahshaka::engine;
 
@@ -155,6 +156,9 @@ int main(int argc, char **argv)
 {
     qputenv("QT_QPA_PLATFORM", "offscreen");
     QGuiApplication app(argc, argv);
+    // The preview docks' and the VR slot's seed keys, from the fixture files
+    // (the app reads them from its seeded library; tests/support/testmesh.h).
+    testmesh::installShippedResolver();
 
     EngineConfig cfg;
     cfg.pluginDir = JAHSHAKA_TEST_PLUGIN_DIR;

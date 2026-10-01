@@ -36,6 +36,7 @@
 #include "bridge/enginethumbnailrenderer.h"
 #include "services/thumbnailrebuild.h"
 #include "services/thumbnailstop.h"
+#include "../support/testmesh.h"
 
 static int failures = 0;
 #define CHECK(cond, msg) do { if (cond) std::printf("ok:   %s\n", msg); else { std::printf("FAIL: %s\n", msg); ++failures; } } while (0)
@@ -52,6 +53,9 @@ int main(int argc, char *argv[])
 {
     qputenv("QT_QPA_PLATFORM", "offscreen");
     QCoreApplication app(argc, argv);
+    // The preview docks' and the VR slot's seed keys, from the fixture files
+    // (the app reads them from its seeded library; tests/support/testmesh.h).
+    testmesh::installShippedResolver();
 
     const QString dbPath = QDir::current().filePath("test_thumbnail_sweep.db");
     QFile::remove(dbPath);

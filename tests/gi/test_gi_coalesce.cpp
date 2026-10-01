@@ -27,7 +27,7 @@
 // engine, and the contract is the pair.
 #include <QGuiApplication>
 
-#include "bridge/previewmesh.h"
+#include "../support/testmesh.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
@@ -114,7 +114,7 @@ int main(int argc, char **argv)
     // lights do, so the same +80 reads the same way here.
     auto floor = iris::MeshNode::create();
     floor->setName("floor");
-    floor->setMesh(previewmesh::load(QStringLiteral(JAHSHAKA_SOURCE_DIR "/app/content/primitives/cube.obj")));
+    floor->setMesh(testmesh::load(QStringLiteral(JAHSHAKA_SOURCE_DIR "/app/content/primitives/cube.obj")));
     floor->setLocalPos(iris::Vec3(0.0f, -0.05f, 0.0f));
     // THE SCENE IS THE SIZE OF THE VOLUME IT USED TO PIN (owner decision D8,
     // 2026-09-13). The lit volume is the renderer's fit to the geometry now, so
@@ -138,7 +138,7 @@ int main(int argc, char **argv)
 
     auto wall = iris::MeshNode::create();
     wall->setName("red wall");
-    wall->setMesh(previewmesh::load(QStringLiteral(JAHSHAKA_SOURCE_DIR "/app/content/primitives/cube.obj")));
+    wall->setMesh(testmesh::load(QStringLiteral(JAHSHAKA_SOURCE_DIR "/app/content/primitives/cube.obj")));
     wall->setLocalPos(iris::Vec3(0.0f, 3.08f, -3.0f));
     wall->setLocalScale(iris::Vec3(7.0f, 3.18f, 0.9f));
     auto wallMat = iris::PbrMaterial::create();
@@ -492,7 +492,7 @@ int main(int argc, char **argv)
 
     auto flyer = iris::MeshNode::create();
     flyer->setName("flyer");
-    flyer->setMesh(previewmesh::load(QStringLiteral(JAHSHAKA_SOURCE_DIR "/app/content/primitives/cube.obj")));
+    flyer->setMesh(testmesh::load(QStringLiteral(JAHSHAKA_SOURCE_DIR "/app/content/primitives/cube.obj")));
     flyer->setLocalPos(iris::Vec3(0.0f, 0.6f, 1.0f));
     flyer->setLocalScale(iris::Vec3(1.0f, 1.0f, 1.0f));
     auto flyerMat = iris::PbrMaterial::create();
@@ -557,7 +557,7 @@ int main(int argc, char **argv)
         const auto box = [&](const char *name, const iris::Vec3 &pos, const iris::Vec3 &scale) {
             auto n = iris::MeshNode::create();
             n->setName(QString::fromLatin1(name));
-            n->setMesh(previewmesh::load(QStringLiteral(JAHSHAKA_SOURCE_DIR "/app/content/primitives/cube.obj")));
+            n->setMesh(testmesh::load(QStringLiteral(JAHSHAKA_SOURCE_DIR "/app/content/primitives/cube.obj")));
             n->setLocalPos(pos);
             n->setLocalScale(scale);
             n->setMaterial(floorMat);

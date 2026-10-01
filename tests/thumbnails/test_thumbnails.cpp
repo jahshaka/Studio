@@ -4,7 +4,7 @@
 // identical to the first reproduces it (nothing leaks between requests).
 #include "../support/previewdump.h"
 
-#include "bridge/previewmesh.h"
+#include "../support/testmesh.h"
 #include "irisgl/core/math/vec.h"
 #include <QGuiApplication>
 #include <QColor>
@@ -61,7 +61,7 @@ static QImage thumbnail(EngineThumbnailRenderer &r, QColor diffuse, QSize size)
 {
     // Exactly what ThumbnailGenerator's Mesh path builds: a MeshNode with a PbrMaterial.
     auto node = iris::MeshNode::create();
-    node->setMesh(previewmesh::load(":assets/models/cube.obj"));
+    node->setMesh(testmesh::load(":assets/models/cube.obj"));
     auto mat = iris::PbrMaterial::create();
     mat->setBaseColor(diffuse);
     node->setMaterial(mat);
@@ -81,6 +81,9 @@ int main(int argc, char **argv)
 {
     qputenv("QT_QPA_PLATFORM", "offscreen");
     QGuiApplication app(argc, argv);
+    // The preview docks' and the VR slot's seed keys, from the fixture files
+    // (the app reads them from its seeded library; tests/support/testmesh.h).
+    testmesh::installShippedResolver();
     EngineConfig cfg; cfg.pluginDir = JAHSHAKA_TEST_PLUGIN_DIR; cfg.hlmsMediaDir = JAHSHAKA_TEST_MEDIA_DIR; cfg.logFile = "test_thumbnails-ogre.log";
     std::string err;
     std::shared_ptr<Engine> engine = Engine::create(cfg, err);
@@ -154,7 +157,7 @@ int main(int argc, char **argv)
         // uniform-background thumbnail. The clip planes must follow the framing.
         {
             auto giant = iris::MeshNode::create();
-            giant->setMesh(previewmesh::load(":assets/models/cube.obj"));
+            giant->setMesh(testmesh::load(":assets/models/cube.obj"));
             auto gm = iris::PbrMaterial::create();
             gm->setBaseColor(QColor(220, 30, 30));
             giant->setMaterial(gm);
@@ -182,7 +185,7 @@ int main(int argc, char **argv)
             CHECK(!mat.isNull(), "mesh-data factory returns a material");
 
             auto node = iris::MeshNode::create();
-            node->setMesh(previewmesh::load(":assets/models/cube.obj"));
+            node->setMesh(testmesh::load(":assets/models/cube.obj"));
             node->setMaterial(mat);
             QImage t = renderer.renderNode(node, size); show("textured cube", t);
             const QColor ct = centre(t);
@@ -212,7 +215,7 @@ int main(int argc, char **argv)
         // clipping of its own.
         {
             auto hot = iris::MeshNode::create();
-            hot->setMesh(previewmesh::load(":assets/models/cube.obj"));
+            hot->setMesh(testmesh::load(":assets/models/cube.obj"));
             auto hm = iris::PbrMaterial::create();
             hm->setBaseColor(QColor(255, 255, 255));
             hot->setMaterial(hm);

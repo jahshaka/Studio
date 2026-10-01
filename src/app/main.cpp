@@ -247,14 +247,12 @@ int main(int argc, char *argv[])
     // category and rotation without one of them being edited.
     JahLog::absorbIrisLogger();
 
-    // THE IMPORT RECIPE SEAM (IMPORT-1, services/assetmetadata.h): a model's
-    // metadata describe has to parse the file the way the ASSET was imported,
-    // and the lookup is a catalog query that lives in MeshBakeStore. Wired here
-    // so the describe service stays linkable on its own.
-    AssetMetadata::setImportTransformResolver(
-        [](const QString &sourcePath, const QString &assetGuid) {
-            return MeshBakeStore::transformFor(sourcePath, assetGuid);
-        });
+    // THE BAKE SEAM (SHIPPED-BAKES-1, services/assetmetadata.h): a library
+    // row's metadata backfill describes its current BAKE — a model's carries
+    // the facts of the import's parse, a clip's its clip table — and never
+    // parses. The lookup is a catalog query that lives in MeshBakeStore; wired
+    // here so the describe service stays linkable on its own.
+    AssetMetadata::setBakePathResolver(&MeshBakeStore::currentBakePath);
 
     // Apply the app theme (Qlementine Dark by default, archived Classic on
     // request) BEFORE any widget exists. See THEME_AUDIT.md §4.
