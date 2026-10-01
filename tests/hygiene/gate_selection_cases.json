@@ -348,8 +348,8 @@
    "env": [
     "open.responsive"
    ],
-   "note": "TEST-SELECTOR-1 T4: one of the 29 tier-sized lane gates since 09-28 (old selector: scoped-fallback); must = its reds with no solo PASS outside the contention class (unverified per suite: the class the audit counted), env = solo-passed or contention-class reds; the fork pin moved through 45caa1569, a commit the fork's rebase removed: the diff is unreadable, so the MERGE tier by rule",
-   "whole_tier": true
+   "note": "TEST-SELECTOR-1 T4: one of the 29 tier-sized lane gates since 09-28 (old selector: scoped-fallback); must = its reds with no solo PASS outside the contention class (unverified per suite: the class the audit counted), env = solo-passed or contention-class reds; since the merge read's D1 the own range starts at the forward merge's d-build parent, whose pin is readable: the fork bump selects by reach",
+   "fork_reach": true
   },
   {
    "lane": "D4-PHOTON-TIERS (scoped-fallback gate at e6a71d0df)",

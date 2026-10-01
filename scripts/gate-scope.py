@@ -345,6 +345,22 @@ def _git_try(args, cwd=ROOT):
 
 
 _OWN_BASE_CACHE = {}
+_LINE_CACHE = {}
+INTEGRATION_REFS = ("d-build", "origin/d-build", "main/d-build", "o3de", "origin/o3de", "main/o3de", "ogre",
+                    "origin/ogre", "main/ogre")
+
+
+def integration_line(cwd=ROOT):
+    """Every commit on the first-parent line of the repo's integration branches (JAH_INTEGRATION_REFS,
+    space-separated, overrides INTEGRATION_REFS): the commits a forward merge can bring in."""
+    if cwd in _LINE_CACHE: return _LINE_CACHE[cwd]
+    refs = os.environ.get("JAH_INTEGRATION_REFS", "").split() or INTEGRATION_REFS
+    line = set()
+    for r in refs:
+        if _git_try(["rev-parse", "--verify", "-q", r + "^{commit}"], cwd):
+            line |= set((_git_try(["rev-list", "--first-parent", r], cwd) or "").split())
+    _LINE_CACHE[cwd] = line
+    return line
 
 
 def own_base(base, tip, cwd=ROOT):
@@ -356,11 +372,14 @@ def own_base(base, tip, cwd=ROOT):
     the diff from the d-build commit it last merged to its tip, so:
       * a one-commit range (`merge^1..merge`, a lane's merge INTO d-build) is itself;
       * else the base is the merge-base of base and tip (a base AHEAD of the lane — d-build moved
-        on — is not the lane's change either), moved up to the second parent of the NEWEST merge
-        on the tip's first-parent line whose second parent descends from that merge-base (a
-        forward merge of the base line, or of a sibling lane).
-    Returns (own base sha, [(merge sha, its second parent)] of the forward merges seen, newest
-    first) — or (base, []) when git cannot resolve the range (a replay's fake revisions)."""
+        on — is not the lane's change either), moved up to the second parent of the NEWEST FORWARD
+        merge on the tip's first-parent line.
+    A merge is FORWARD only when its second parent lies ON THE INTEGRATION LINE — the first-parent
+    history of d-build (or o3de / ogre, local or remote: integration_line()). Any other merge — an
+    internal fix branch merged into the lane — is the lane's own change (the merge read's
+    scratch-repo replay: counting it as forward dropped laneA..laneC from the diff; over-selection
+    is the safe side). Returns (own base sha, [(merge sha, its second parent)] of the forward merges
+    seen, newest first) — or (base, []) when git cannot resolve the range (a replay's fake revisions)."""
     key = (base, tip, cwd)
     if key in _OWN_BASE_CACHE: return _OWN_BASE_CACHE[key]
     b, t = _git_try(["rev-parse", "--verify", "-q", base + "^{commit}"], cwd), \
@@ -375,8 +394,7 @@ def own_base(base, tip, cwd=ROOT):
         shas = line.split()
         if len(shas) < 3: continue
         m, p2 = shas[0], shas[2]
-        if subprocess.run(["git", "merge-base", "--is-ancestor", mb, p2], cwd=cwd,
-                          capture_output=True).returncode == 0:
+        if p2 in integration_line(cwd):
             fwd.append((m, p2))
     if fwd:
         own = fwd[0][1]
