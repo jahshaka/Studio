@@ -456,7 +456,10 @@ function floorsNow() {
     });
 }
 assert(floorsNow().length === 1, "...one default floor to begin with");
-var second = scene.addFloor({ position: { x: 100, y: 0, z: 0 } });
+// `position` is the node's PIVOT, as for every add verb, and the floor's pivot
+// is the cube's centre half a metre below the top: an axis left out keeps the
+// template's value, so {x: 100} slides it along and its top stays at y = 0.
+var second = scene.addFloor({ position: { x: 100 } });
 var both = floorsNow();
 assert(both.length === 2 && both.some(function (r) { return r.id === second; }),
        "a second scene.addFloor() adds a SECOND default floor (" + J(both.map(function (r) { return r.name; })) + ")");
