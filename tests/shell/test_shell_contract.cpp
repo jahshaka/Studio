@@ -13,7 +13,8 @@
 //     handler on a row the shell owns that runs only on the module's space, a
 //     toolbar action in a named slot and a row in a named menu;
 //   * that the edit chords follow the ACTIVE space — never a fallback to
-//     another space's target;
+//     another space's target — and Ctrl+Z moves the QUndoGroup's active stack,
+//     which a page with no document does not have (audit S4a);
 //   * that shutdown() runs exactly once however many exit paths ask.
 //
 // No window, no engine, no database: the hub, the hosts and the registry are
@@ -244,6 +245,34 @@ int main(int argc, char **argv)
           "edit: off the module's space its handler and its target are never asked");
     CHECK(fakeDock && fakeDock->isHidden(), "switch: the dock goes with its page");
 
+    // ---- undo follows the space (the QUndoGroup; audit S4a) ------------------
+    // The owner's report: Ctrl+Z on a page that is not the editor undid the
+    // scene, invisibly. The shell's own space ("editor") registers its target
+    // the way the window does; the fake's stack is the module's.
+    gLog.clear();
+    QUndoStack editorStack;
+    int sceneEdits = 0;
+    int graphEdits = 0;
+    editorStack.push(new CountingCommand(&sceneEdits));
+    fake->stack.push(new CountingCommand(&graphEdits));
+    hub.setSpaceEditTarget(QStringLiteral("editor"), [&editorStack]() {
+        EditTarget t;
+        t.undoStack = &editorStack;
+        return t;
+    });
+    CHECK(!hub.undo(QStringLiteral("desktop")) && sceneEdits == 1 && graphEdits == 1,
+          "undo: on a page with no document Ctrl+Z is a no-op (the scene is not touched)");
+    CHECK(hub.undoGroup()->activeStack() == nullptr, "undo: a page with no document has NO active stack");
+    CHECK(hub.undo(QStringLiteral("editor")) && sceneEdits == 0 && graphEdits == 1,
+          "undo: on the editor the scene's stack moves");
+    CHECK(hub.undoGroup()->activeStack() == &editorStack, "undo: the editor's stack is the active one there");
+    CHECK(hub.redo(QStringLiteral("editor")) && sceneEdits == 1, "redo: on the editor the scene's stack moves back");
+    CHECK(hub.undo(QStringLiteral("fake")) && graphEdits == 0 && sceneEdits == 1,
+          "undo: on a module's space its OWN stack moves, never the scene's");
+    CHECK(hub.undoGroup()->activeStack() == &fake->stack, "undo: the module's stack is active on its space");
+    CHECK(!hub.redo(QStringLiteral("assets")) && graphEdits == 0 && sceneEdits == 1,
+          "redo: on another page with no document nothing moves");
+
     // ---- an asset of the module's kind --------------------------------------
     gLog.clear();
     AssetRef ref;
@@ -261,6 +290,7 @@ int main(int argc, char **argv)
     hub.shutdownModules();     // ...and a second exit path asking again
     CHECK(gLog == QStringList({ "abort", "shutdown" }), "quit: abort, then shutdown EXACTLY once");
     gLog.clear();
+    hub.setSpaceEditTarget(QStringLiteral("editor"), nullptr);
     hub.releaseModules();      // the window body (step 5): no second shutdown
     CHECK(gLog.isEmpty() && hub.modules().isEmpty(), "quit: release deletes without a second shutdown");
 

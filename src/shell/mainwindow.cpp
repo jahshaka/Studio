@@ -5282,28 +5282,24 @@ void MainWindow::redo()
 //
 // Deliberately not a fallback: with the Materials space active, Ctrl+Z with an
 // empty graph stack does NOTHING rather than quietly undoing a scene edit the
-// user cannot see. Everywhere else it is exactly the editor undo it always was.
+// user cannot see.
+//
+// AND A PAGE WITH NO DOCUMENT UNDOES NOTHING (D10; audit S4a). The rule above
+// was the Materials page's only: on the Desktop, Assets, Avatar, Publish and
+// Player pages Ctrl+Z fell through to the editor's stack and undid the scene
+// invisibly. The stacks are a QUndoGroup now (ModuleHub): the ACTIVE stack is
+// the one the active space's edit target names — the editor's scene stack, the
+// Materials page's open tab — and a space with none has no active stack, so the
+// chord moves nothing.
 
 void MainWindow::undoActiveSpace()
 {
-    if (currentSpace == WindowSpaces::EFFECT) {
-        const EditTarget target = moduleHub->editTarget(currentSpaceId());
-        if (target.undo) target.undo();
-        return;
-    }
-    undo();
-    updateWindowTitle();
+    moduleHub->undo(currentSpaceId());
 }
 
 void MainWindow::redoActiveSpace()
 {
-    if (currentSpace == WindowSpaces::EFFECT) {
-        const EditTarget target = moduleHub->editTarget(currentSpaceId());
-        if (target.redo) target.redo();
-        return;
-    }
-    redo();
-    updateWindowTitle();
+    moduleHub->redo(currentSpaceId());
 }
 
 // THE EDITOR'S EDIT TARGET (EDITOR_MULTISELECT_SPEC §2.6): the four chords act
@@ -5313,6 +5309,12 @@ void MainWindow::redoActiveSpace()
 EditTarget MainWindow::editorEditTarget()
 {
     EditTarget t;
+    // The scene's stack, moved through UndoService — the edit gate, the end of
+    // a live material preview and the panel's repaint ride every undo — and the
+    // title follows.
+    t.undoStack = undoStack;
+    t.undo = [this]() { undo(); updateWindowTitle(); };
+    t.redo = [this]() { redo(); updateWindowTitle(); };
     t.deleteSelection = [this]() { deleteNode(); };
     t.duplicateSelection = [this]() { duplicateNode(); };
     t.copySelection = [this]() { copyEditorSelection(); };
