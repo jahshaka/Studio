@@ -22,6 +22,7 @@ For more information see the LICENSE file
 #include <QtEndian>
 #include <algorithm>
 
+#include "irisgl/import/meshbake.h"
 #include "irisgl/import/modelsceneinfo.h"
 
 #include "data/constants.h"
@@ -158,7 +159,7 @@ QJsonObject AssetMetadata::forModelScene(const iris::ModelSceneInfo &scene, cons
     //
     // The model's measured size in metres and what the FILE declared its unit
     // to be. Computed HERE — the one import-time model-description site — so it
-    // also comes for free on the lazy backfill (forModelFile). The extent is
+    // also comes for free on the lazy backfill (forModelBake, from the bake's describe). The extent is
     // IrisGL's measurement of the parse this import actually made, i.e. AFTER
     // the asset's import transform (SPECS/IMPORT_DIALOG_SPEC.md §6): it is the
     // size the user will see placed, because every instance is placed at
@@ -174,35 +175,39 @@ QJsonObject AssetMetadata::forModelScene(const iris::ModelSceneInfo &scene, cons
 
 namespace
 {
-AssetMetadata::ImportTransformResolver sImportTransformResolver;
+AssetMetadata::BakePathResolver sBakePathResolver;
 }   // namespace
 
-void AssetMetadata::setImportTransformResolver(ImportTransformResolver resolver)
+void AssetMetadata::setBakePathResolver(BakePathResolver resolver)
 {
-    sImportTransformResolver = std::move(resolver);
+    sBakePathResolver = std::move(resolver);
 }
 
-iris::ImportTransform AssetMetadata::importTransformFor(const QString &sourcePath,
-                                                        const QString &assetGuid)
+QString AssetMetadata::bakePathFor(int assetType, const QString &sourcePath,
+                                   const QString &assetGuid)
 {
-    if (!sImportTransformResolver) return iris::ImportTransform();
-    return sImportTransformResolver(sourcePath, assetGuid);
+    if (!sBakePathResolver || sourcePath.isEmpty()) return QString();
+    return sBakePathResolver(assetType, sourcePath, assetGuid);
 }
 
-QJsonObject AssetMetadata::forModelFile(const QString &filePath, const QString &assetGuid)
+QJsonObject AssetMetadata::forModelBake(const QString &bakePath, const QString &sourceFile)
 {
-    // THE canonical preset (ASSET_PIPELINE_SPEC §3.2.2), inside IrisGL:
-    // metadata counts must match the geometry import and every load produce —
-    // a third flag set here used to yield vertex/index counts matching neither.
-    //
-    // …AND THE ASSET'S OWN IMPORT RECIPE (IMPORT-1, the second read's F7): the
-    // `extent` this records is what the asset MEASURES, so a backfill that
-    // parsed with identity would report the file's authored size for an asset
-    // the import scaled — and that number is what the Assets page shows.
-    const iris::ModelSceneInfo scene =
-        iris::ModelSceneInfo::read(filePath, importTransformFor(filePath, assetGuid));
-    if (!scene.parsed) return forGenericFile(filePath);   // still format/size, never nothing
-    return forModelScene(scene, filePath);
+    // THE FACTS OF THE IMPORT'S OWN PARSE, kept in the bake (MeshBake::Model::
+    // describe) — counted under the asset's import recipe, so the `extent` is
+    // the size the asset MEASURES, exactly as the import's own block. No parse.
+    if (bakePath.isEmpty()) return QJsonObject();
+    const iris::MeshBake::Model model = iris::MeshBake::read(bakePath);
+    if (!model.valid || !model.describe.parsed) return QJsonObject();
+    return forModelScene(model.describe, sourceFile);
+}
+
+QJsonObject AssetMetadata::forClipBake(const QString &bakePath, const QString &sourceFile,
+                                       const QString &baseName)
+{
+    if (bakePath.isEmpty()) return QJsonObject();
+    const iris::MeshBake::Clip clip = iris::MeshBake::readClip(bakePath);
+    if (!clip.valid) return QJsonObject();
+    return forAnimationContents(animfile::describe(clip.info, baseName), sourceFile);
 }
 
 QJsonObject AssetMetadata::forImageFile(const QString &filePath)
@@ -268,18 +273,18 @@ QJsonObject AssetMetadata::forLightProfileFile(const QString &filePath)
     return meta;
 }
 
-QJsonObject AssetMetadata::forAnimationFile(const QString &filePath)
+QJsonObject AssetMetadata::forAnimationContents(const animfile::Contents &contents,
+                                                const QString &filePath)
 {
     QJsonObject meta;
     meta["kind"] = "animation";
     meta["format"] = formatOf(filePath);
     meta["fileSize"] = sizeOf(filePath);
 
-    const animfile::Contents contents = animfile::read(filePath);
     if (!contents.parsed) {
         // A block is still written (format/fileSize) so the lazy backfill does
-        // not re-parse an unreadable file on every inspection; the absent clip
-        // table is the tell.
+        // not re-describe an unreadable file on every inspection; the absent
+        // clip table is the tell.
         meta["error"] = contents.error;
         return meta;
     }
@@ -337,18 +342,19 @@ QJsonObject AssetMetadata::forAvatarFile(const QString &filePath)
 }
 
 QJsonObject AssetMetadata::computeForSource(int assetType, const QString &sourcePath,
-                                            const QString &assetGuid)
+                                            const QString &bakePath, const QString &displayName)
 {
     if (sourcePath.isEmpty() || !QFileInfo::exists(sourcePath)) return QJsonObject();
     switch (static_cast<ModelTypes>(assetType)) {
     case ModelTypes::Object:
-    case ModelTypes::Mesh: return forModelFile(sourcePath, assetGuid);
+    case ModelTypes::Mesh: return forModelBake(bakePath, sourcePath);
     case ModelTypes::Texture: return forImageFile(sourcePath);
     case ModelTypes::Music: return forAudioFile(sourcePath);
     case ModelTypes::Video: return forVideoFile(sourcePath);
     case ModelTypes::LightProfile: return forLightProfileFile(sourcePath);
     case ModelTypes::Avatar: return forAvatarFile(sourcePath);
-    case ModelTypes::Animation: return forAnimationFile(sourcePath);
+    case ModelTypes::Animation:
+        return forClipBake(bakePath, sourcePath, QFileInfo(displayName).completeBaseName());
     default: return forGenericFile(sourcePath);
     }
 }
@@ -360,29 +366,13 @@ QJsonObject AssetMetadata::ensure(Database *db, const QString &guid, const QStri
     if (record.guid.isEmpty()) return QJsonObject();
 
     QJsonObject props = QJsonDocument::fromJson(record.properties).object();
-    if (props.contains("metadata")) {
-        const QJsonObject stored = props["metadata"].toObject();
-        // A MODEL block written before the rig fields existed (AVATAR_ASSET
-        // §5.1) is incomplete, not absent — and the "metadata exists, stop"
-        // short-circuit below would keep it incomplete forever, so
-        // `assets.list({rigged:true})` would never see a single library row
-        // imported before this build. One extra key is the version marker:
-        // recompute once, persist, and every later call is the fast path
-        // again. (Ships-as-new-app means no MIGRATIONS; a lazy backfill that
-        // already exists for exactly this is not one.)
-        // Same story a second time (the import dialog, 2026-09-16): a model
-        // block written before it carries the retired fit keys and may carry no
-        // `extent` at all. `extent` joins `hasSkeleton` as the version marker —
-        // one recompute, persisted, and the fast path is back.
-        if (stored.value("kind").toString() != QLatin1String("model")
-            || (stored.contains("hasSkeleton") && stored.contains("extent")))
-            return stored;
-    }
+    if (props.contains("metadata")) return props["metadata"].toObject();
 
     const QString root = storeRoot.isEmpty() ? storeRootPath() : storeRoot;
     // The resolved source object (guid-first — the store is content-addressed).
     const QString source = AssetCas::resolveSource(QSqlDatabase::database(), root, guid);
-    QJsonObject meta = computeForSource(record.type, source, guid);
+    QJsonObject meta = computeForSource(record.type, source,
+                                        bakePathFor(record.type, source, guid), record.name);
     if (meta.isEmpty()) return meta;   // nothing to describe — don't persist a stub
     // A video block computed off the GUI thread is degraded (no QMediaPlayer
     // there) — hand it back for display but let a GUI-thread call enrich later.

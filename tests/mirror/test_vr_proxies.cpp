@@ -47,7 +47,7 @@
 //      for a controller whose shape we do not know.
 #include <QGuiApplication>
 
-#include "bridge/previewmesh.h"
+#include "../support/testmesh.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
@@ -73,6 +73,9 @@ int main(int argc, char **argv)
 {
     qputenv("QT_QPA_PLATFORM", "offscreen");
     QGuiApplication app(argc, argv);
+    // The preview docks' and the VR slot's seed keys, from the fixture files
+    // (the app reads them from its seeded library; tests/support/testmesh.h).
+    testmesh::installShippedResolver();
 
     EngineConfig cfg;
     cfg.pluginDir = JAHSHAKA_TEST_PLUGIN_DIR;
@@ -92,7 +95,7 @@ int main(int argc, char **argv)
     auto doc = iris::Scene::create();
     auto cube = iris::MeshNode::create();
     cube->setName("Cube");
-    cube->setMesh(previewmesh::load(":/assets/models/cube.obj"));
+    cube->setMesh(testmesh::load(":/assets/models/cube.obj"));
     auto grey = iris::PbrMaterial::create();
     grey->setBaseColor(QColor(160, 160, 160));
     cube->setMaterial(grey);

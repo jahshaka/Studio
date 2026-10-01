@@ -25,7 +25,7 @@
 #include "irisgl/core/properties/property.h"
 #include <QFileInfo>
 #include "io/builtinmaterials.h"
-#include "bridge/previewmesh.h"
+#include "irisgl/document/assets/shippedmeshes.h"
 #include "irisgl/mirror/scenemirror.h"
 #include "bridge/offscreenrenderscope.h"
 #include "bridge/previewenvironment.h"
@@ -380,15 +380,13 @@ QImage EngineThumbnailRenderer::renderNode(iris::SceneNodePtr subject, QSize siz
 QImage EngineThumbnailRenderer::renderMaterial(iris::MaterialPtr material, QSize size)
 {
     if (!mSphere) {
-        // The tile's own subject, parsed once per process through the importer's
-        // parse entry point (ATOM P2 deleted `Mesh::loadMesh`; a thumbnail sphere
-        // is furniture, not library content, and needs no chain for a 256-pixel
-        // tile).
-        mSphere = previewmesh::load(QStringLiteral(":/content/primitives/sphere.obj"),
-                                    QStringLiteral("app/content/primitives/sphere.obj"));
+        // The tile's own subject: the BAKED Sphere primitive, by its seed key
+        // (SHIPPED-BAKES-1, irisgl/document/assets/shippedmeshes.h) — never a
+        // parse.
+        mSphere = iris::ShippedMeshes::mesh(QStringLiteral(":/content/primitives/sphere.obj"));
         if (!mSphere)
-            return failed(QStringLiteral("the preview sphere (app/content/primitives/sphere.obj) "
-                                         "could not be loaded"));
+            return failed(QStringLiteral("the preview sphere (the Sphere primitive's bake) is not "
+                                         "available — the library has not seeded it"));
     }
     auto node = iris::MeshNode::create();
     node->setMesh(mSphere);

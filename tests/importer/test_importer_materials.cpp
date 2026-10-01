@@ -73,6 +73,7 @@
 #include "bridge/enginethumbnailrenderer.h"
 #include "io/scenewriter.h"
 #include "services/assethelper.h"
+#include "../support/testmesh.h"
 
 using namespace jahshaka::engine;
 
@@ -152,6 +153,9 @@ int main(int argc, char **argv)
 {
     qputenv("QT_QPA_PLATFORM", "offscreen");
     QApplication app(argc, argv);
+    // The preview docks' and the VR slot's seed keys, from the fixture files
+    // (the app reads them from its seeded library; tests/support/testmesh.h).
+    testmesh::installShippedResolver();
 
     // A document node IS an engine node (SCENEGRAPH_SPEC D2) and this suite
     // needs BOTH halves — imported documents AND pixels — so the document graph

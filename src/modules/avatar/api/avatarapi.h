@@ -306,6 +306,11 @@ private:
     /// page shows a different size from the scene (IMPORT-1).
     QString openDefinition(const QString &guid, AvatarAssets::Scope scope, QString *rowNameOut,
                            QString *modelGuidOut = nullptr);
+    /// The character's bake, definition and recipe, resolved on this (the
+    /// catalog's) thread — what both the sync and the async load are given.
+    avatar::AvatarPreviewModel::SubjectSource subjectSourceFor(const QString &modelPath,
+                                                               const QString &rowName,
+                                                               const QString &modelGuid);
     void startPreviewLoad(const QString &modelPath, const QString &rowName,
                           const QString &modelGuid = QString());
     void endJob(bool cancelled, const QString &error, const QVariantMap &result = QVariantMap());

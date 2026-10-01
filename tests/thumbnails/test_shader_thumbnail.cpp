@@ -41,6 +41,7 @@
 #include <QJsonArray>
 #include "bridge/enginethumbnailrenderer.h"
 #include "jahshaka/engine/Engine.h"
+#include "../support/testmesh.h"
 
 using namespace jahshaka::engine;
 static int failures = 0;
@@ -105,6 +106,9 @@ int main(int argc, char **argv)
 {
     qputenv("QT_QPA_PLATFORM", "offscreen");
     QGuiApplication app(argc, argv);
+    // The preview docks' and the VR slot's seed keys, from the fixture files
+    // (the app reads them from its seeded library; tests/support/testmesh.h).
+    testmesh::installShippedResolver();
 
     // ---- database: a throwaway file, never the user's library ----
     const QString dbPath = QDir::current().filePath("test_shader_thumbnail.db");

@@ -6,7 +6,7 @@
 // No window; runs with DISPLAY reachable (Vulkan). QT_QPA_PLATFORM=offscreen.
 #include "irisgl/core/math/quat.h"
 
-#include "bridge/previewmesh.h"
+#include "../support/testmesh.h"
 #include "irisgl/core/math/vec.h"
 #include <QGuiApplication>
 #include <QImage>
@@ -89,7 +89,7 @@ int main(int argc, char **argv)
     doc->getRootNode()->addChild(parent);
     auto meshNode = iris::MeshNode::create();
     meshNode->setName("cube");
-    meshNode->setMesh(previewmesh::load(":assets/models/cube.obj"));
+    meshNode->setMesh(testmesh::load(":assets/models/cube.obj"));
     auto orange = iris::PbrMaterial::create();
     orange->setBaseColor(QColor(204, 76, 51));   // the document decides the colour
     meshNode->setMaterial(orange);
@@ -246,7 +246,7 @@ int main(int argc, char **argv)
 
     // ---- step 4: material colour comes from the DOCUMENT ----
     auto meshNode2 = iris::MeshNode::create();
-    meshNode2->setMesh(previewmesh::load(":assets/models/cube.obj"));
+    meshNode2->setMesh(testmesh::load(":assets/models/cube.obj"));
     meshNode2->setLocalScale(iris::Vec3(s, s, s));
     auto pbr = iris::PbrMaterial::create();
     pbr->setBaseColor(QColor(30, 80, 230));      // blue-ish
@@ -612,7 +612,7 @@ int main(int argc, char **argv)
         auto group = iris::SceneNode::create();
         auto makePart = [&](float x) {
             auto part = iris::MeshNode::create();
-            part->setMesh(previewmesh::load(":assets/models/cube.obj"));
+            part->setMesh(testmesh::load(":assets/models/cube.obj"));
             part->setLocalScale(iris::Vec3(s, s, s));
             part->setLocalPos(iris::Vec3(x, 0, 0));
             part->setMaterial(resting);
@@ -879,7 +879,7 @@ int main(int argc, char **argv)
         floorMat->setValue("metallic", 0.0f);
         auto floorNode = iris::MeshNode::create();
         floorNode->setName("decal floor");
-        floorNode->setMesh(previewmesh::load(":assets/models/cube.obj"));
+        floorNode->setMesh(testmesh::load(":assets/models/cube.obj"));
         floorNode->setMaterial(floorMat);
         CHECK(!!floorNode->getMesh(), "decal: floor mesh loaded");
         floorNode->setLocalScale(iris::Vec3(8.0f, 0.2f, 8.0f));
@@ -1492,7 +1492,7 @@ int main(int argc, char **argv)
         // spare — the whole assertion is a silhouette-area comparison.
         enginetest::testCameraLookAt(view, Vec3(0.0f, 0.0f, 5.5f), Vec3(0, 0, 0));
 
-        subject->setMesh(previewmesh::load(kCube));
+        subject->setMesh(testmesh::load(kCube));
         CHECK(!!subject->getMesh(), "mesh swap: cube loaded");
         mirror.sync(); for (int i = 0; i < 3; ++i) engine->renderOneFrame();
         view->readPixels(img); show("subject = cube", img);
@@ -1504,7 +1504,7 @@ int main(int argc, char **argv)
         // Entry::meshPtr was written and never read, so this changed nothing in
         // the engine — which is why the mesh picker is commented out in the
         // properties panel and the material preview replaced whole nodes.
-        subject->setMesh(previewmesh::load(kPlane));
+        subject->setMesh(testmesh::load(kPlane));
         mirror.sync(); for (int i = 0; i < 3; ++i) engine->renderOneFrame();
         view->readPixels(img); show("subject = plane", img);
         const int planePx = litPixels(img);
@@ -1513,7 +1513,7 @@ int main(int argc, char **argv)
               "mesh swap reaches the engine (the edge-on plane covers far less than the cube)");
 
         // ...and back, so the swap is not a one-way accident.
-        subject->setMesh(previewmesh::load(kCube));
+        subject->setMesh(testmesh::load(kCube));
         mirror.sync(); for (int i = 0; i < 3; ++i) engine->renderOneFrame();
         view->readPixels(img);
         CHECK(std::abs(litPixels(img) - cubePx) < cubePx / 40,
@@ -1531,7 +1531,7 @@ int main(int argc, char **argv)
         CHECK(litPixels(img) == 0, "mesh detach: nothing renders once the mesh is cleared");
 
         // Re-attaching after a detach must work (the entry is reused).
-        subject->setMesh(previewmesh::load(kCube));
+        subject->setMesh(testmesh::load(kCube));
         mirror.sync(); for (int i = 0; i < 3; ++i) engine->renderOneFrame();
         view->readPixels(img);
         CHECK(litPixels(img) > 1000, "mesh detach: giving the node a mesh again re-attaches it");
@@ -1560,7 +1560,7 @@ int main(int argc, char **argv)
             wlight->setLocalPos(iris::Vec3(0.0f, 8.0f, 0.0f));
             wdoc->getRootNode()->addChild(wlight);
             auto floor2 = iris::MeshNode::create();
-            floor2->setMesh(previewmesh::load(QStringLiteral(JAHSHAKA_SOURCE_DIR "/app/content/primitives/plane.obj")));
+            floor2->setMesh(testmesh::load(QStringLiteral(JAHSHAKA_SOURCE_DIR "/app/content/primitives/plane.obj")));
             floor2->setLocalScale(iris::Vec3(4, 4, 4));
             auto white = iris::PbrMaterial::create();
             white->setBaseColor(QColor(240, 240, 240));
@@ -1631,7 +1631,7 @@ int main(int argc, char **argv)
         gdoc->giUpdateBudget = 1;
         auto gfloor = iris::MeshNode::create();
         gfloor->setName("floor");
-        gfloor->setMesh(previewmesh::load(QStringLiteral(JAHSHAKA_SOURCE_DIR "/app/content/primitives/plane.obj")));
+        gfloor->setMesh(testmesh::load(QStringLiteral(JAHSHAKA_SOURCE_DIR "/app/content/primitives/plane.obj")));
         gfloor->setLocalScale(iris::Vec3(4, 4, 4));
         auto gmat = iris::PbrMaterial::create();
         gmat->setBaseColor(QColor(220, 220, 220));
@@ -1853,7 +1853,7 @@ int main(int argc, char **argv)
     {
         auto pdoc = iris::Scene::create();
         auto cube = iris::MeshNode::create();
-        cube->setMesh(previewmesh::load(":assets/models/cube.obj"));
+        cube->setMesh(testmesh::load(":assets/models/cube.obj"));
         cube->setMaterial(iris::PbrMaterial::create());
         cube->setName("pick-cube");
         cube->setLocalPos(iris::Vec3(0, 0, 0));
@@ -1922,7 +1922,7 @@ int main(int argc, char **argv)
     {
         auto ldoc = iris::Scene::create();
         auto cube = iris::MeshNode::create();
-        cube->setMesh(previewmesh::load(":assets/models/cube.obj"));
+        cube->setMesh(testmesh::load(":assets/models/cube.obj"));
         cube->setMaterial(iris::PbrMaterial::create());
         cube->setName("channels-cube");
         ldoc->getRootNode()->addChild(cube, false);
@@ -2003,7 +2003,7 @@ int main(int argc, char **argv)
         ldoc->giUpdateBudget = 1;
         auto lfloor = iris::MeshNode::create();
         lfloor->setName("lamp-floor");
-        lfloor->setMesh(previewmesh::load(QStringLiteral(JAHSHAKA_SOURCE_DIR "/app/content/primitives/plane.obj")));
+        lfloor->setMesh(testmesh::load(QStringLiteral(JAHSHAKA_SOURCE_DIR "/app/content/primitives/plane.obj")));
         lfloor->setLocalScale(iris::Vec3(4, 4, 4));
         lfloor->setMaterial(iris::PbrMaterial::create());
         ldoc->getRootNode()->addChild(lfloor, false);
@@ -2070,7 +2070,7 @@ int main(int argc, char **argv)
     {
         auto sdoc = iris::Scene::create();
         auto pre = iris::MeshNode::create();
-        pre->setMesh(previewmesh::load(":assets/models/cube.obj"));
+        pre->setMesh(testmesh::load(":assets/models/cube.obj"));
         pre->setMaterial(iris::PbrMaterial::create());
         pre->setName("static-before-attach");
         sdoc->getRootNode()->addChild(pre, false);
@@ -2078,7 +2078,7 @@ int main(int argc, char **argv)
         CHECK(pre->isStaticInGraph(), "static: marked before the mirror ever saw it");
 
         auto post = iris::MeshNode::create();
-        post->setMesh(previewmesh::load(":assets/models/cube.obj"));
+        post->setMesh(testmesh::load(":assets/models/cube.obj"));
         post->setMaterial(iris::PbrMaterial::create());
         post->setName("static-after-attach");
         post->setLocalPos(iris::Vec3(3, 0, 0));
@@ -2121,7 +2121,7 @@ int main(int argc, char **argv)
     {
         auto mdoc = iris::Scene::create();
         auto still = iris::MeshNode::create();
-        still->setMesh(previewmesh::load(":assets/models/cube.obj"));
+        still->setMesh(testmesh::load(":assets/models/cube.obj"));
         still->setMaterial(iris::PbrMaterial::create());
         still->setName("mobility-still");
         mdoc->getRootNode()->addChild(still, false);
@@ -2129,7 +2129,7 @@ int main(int argc, char **argv)
         auto carrier = iris::SceneNode::create();
         carrier->setName("mobility-carrier");
         auto rider = iris::MeshNode::create();
-        rider->setMesh(previewmesh::load(":assets/models/cube.obj"));
+        rider->setMesh(testmesh::load(":assets/models/cube.obj"));
         rider->setMaterial(iris::PbrMaterial::create());
         rider->setName("mobility-rider");
         rider->setLocalPos(iris::Vec3(3, 0, 0));
@@ -2230,7 +2230,7 @@ int main(int argc, char **argv)
         floorMat->setValue("metallic", 0.0f);
         auto floor = iris::MeshNode::create();
         floor->setName("sun floor");
-        floor->setMesh(previewmesh::load(":assets/models/cube.obj"));
+        floor->setMesh(testmesh::load(":assets/models/cube.obj"));
         floor->setMaterial(floorMat);
         floor->setLocalScale(iris::Vec3(8.0f, 0.2f, 8.0f));
         floor->setLocalPos(iris::Vec3(0, -1.1f, 0));
@@ -2372,7 +2372,7 @@ int main(int argc, char **argv)
         CHECK(engine->objectCounts(before), "census: the engine reports its object counts");
 
         // ONE mesh asset, read once — what the seed cache hands out.
-        iris::MeshPtr shared = previewmesh::load(":assets/models/cube.obj");
+        iris::MeshPtr shared = testmesh::load(":assets/models/cube.obj");
         QVector<iris::MeshNodePtr> copies;
         for (int i = 0; i < 16; ++i) {
             auto n2 = iris::MeshNode::create();
@@ -2419,7 +2419,7 @@ int main(int argc, char **argv)
         cm3.setLightWires(false);
         auto bare = iris::MeshNode::create();
         bare->setName("bare");
-        bare->setMesh(previewmesh::load(":assets/models/cube.obj"));
+        bare->setMesh(testmesh::load(":assets/models/cube.obj"));
         const float br = bare->getMeshRadius();
         const float bs = br > 0.0f ? 1.0f / br : 1.0f;
         bare->setLocalScale(iris::Vec3(bs, bs, bs));

@@ -68,8 +68,7 @@ QString shippedFile(const primitives::Def &def, QTemporaryDir &holder, QString *
     // TWO PLACES, ONE FILE. A shipped mesh is compiled into the app's resources
     // AND copied beside the binary (the app folder IS the resource tree: ":/x/y"
     // ships as "app/x/y"), and which of them a given binary has depends on the
-    // .qrc files its target lists — the same fact bridge/previewmesh.h states for
-    // the preview docks. The product always has the resource; a suite that links
+    // .qrc files its target lists. The product always has the resource; a suite that links
     // no .qrc reads the same bytes from the app folder, and the bytes are what the
     // object id is made of, so the two routes cannot produce different content.
     const QString onDisk = IrisUtils::getAbsoluteAssetPath(

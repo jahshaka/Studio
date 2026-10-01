@@ -199,6 +199,8 @@ private:
     void stageBind(bool playMode);
     void stageReveal(bool playMode);
     QStringList plannedOpenModelPaths();
+    /// The clip files the open's scene names (ProjectService::plannedClipPaths).
+    QStringList plannedOpenClipPaths();
     iris::MeshPrewarmPtr prewarmModelsPumped();
 
     Database *mDb = nullptr;

@@ -216,16 +216,13 @@ QVector<Segment> posePlanar(const iris::ClipFileInfo &info, const iris::ClipFile
     return segments;
 }
 
-/// The fractions of the first clip the strip samples: three poses — enough
-/// to read a walk from a stride, and enough to tell two clip files apart at
-/// tile size.
-const QVector<double> kStripFractions = { 0.1, 0.5, 0.9 };
-
 QImage drawPoseStrip(const iris::ClipFileInfo &info, int width, int height)
 {
     QImage image(width, height, QImage::Format_ARGB32_Premultiplied);
     image.fill(QColor(24, 24, 28));
-    if (info.poses.size() != kStripFractions.size()) return image;   // nothing to sample
+    // The strip's three moments (iris::ClipFileInfo::stripFractions — the clip
+    // bake samples exactly these, so a strip redrawn from it is the import's).
+    if (info.poses.size() != iris::ClipFileInfo::stripFractions().size()) return image;
 
     Bounds bounds;
     QVector<Segment> poses[3];
@@ -300,15 +297,21 @@ bool isAnimationFile(const QString &path)
 
 Contents read(const QString &path, QImage *poseStripOut, int stripWidth, int stripHeight)
 {
-    Contents out;
     // ClipNamesOnly, not the canonical preset: every step of that preset is
     // geometry work this file has no geometry for, while the file's UNIT
     // factor still has to apply — a clip's translation keys are in the file's
-    // units (the FBX unit-scale fix, avatarpreviewmodel.cpp). The parse is
-    // IrisGL's (assimp is its private dependency); the poses for the strip
-    // come out of the same parse.
-    const iris::ClipFileInfo info =
-        iris::ClipFileInfo::read(path, poseStripOut ? kStripFractions : QVector<double>());
+    // units (the FBX unit-scale fix). The parse is IrisGL's (assimp is its
+    // private dependency); the poses for the strip come out of the same parse.
+    const iris::ClipFileInfo info = iris::ClipFileInfo::read(
+        path, poseStripOut ? iris::ClipFileInfo::stripFractions() : QVector<double>());
+    return describe(info, QFileInfo(path).completeBaseName(), poseStripOut, stripWidth,
+                    stripHeight);
+}
+
+Contents describe(const iris::ClipFileInfo &info, const QString &baseName, QImage *poseStripOut,
+                  int stripWidth, int stripHeight)
+{
+    Contents out;
     if (!info.parsed) {
         out.error = info.error;
         return out;
@@ -317,7 +320,6 @@ Contents read(const QString &path, QImage *poseStripOut, int stripWidth, int str
     out.meshes = info.meshes;
     out.animations = info.animations;
 
-    const QString baseName = QFileInfo(path).completeBaseName();
     QSet<QString> boneSeen;
     for (const auto &source : info.clips) {
         ClipInfo clip;

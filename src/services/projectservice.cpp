@@ -314,6 +314,17 @@ QStringList ProjectService::plannedModelPaths() const
     return reader.collectMeshSources(projectObj);
 }
 
+QStringList ProjectService::plannedClipPaths() const
+{
+    if (!db || !project || project->getProjectGuid().isEmpty()) return QStringList();
+    SceneReader reader;
+    reader.setDatabaseHandle(db);
+    reader.setProject(project);
+    const QJsonObject projectObj =
+        QJsonDocument::fromJson(db->getSceneBlobGlobal(project->getProjectGuid())).object();
+    return reader.collectClipSources(projectObj);
+}
+
 // THE SCENE SAVE IS ALREADY CRASH-ATOMIC — DO NOT "FIX" IT INTO SOMETHING THAT
 // IS NOT. (STABILITY_PROGRAM_SPEC.md §1.4, Lane 2.)
 //

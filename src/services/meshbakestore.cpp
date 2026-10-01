@@ -405,8 +405,8 @@ bool bakeAsset(Database *db, QSqlDatabase conn, const QString &root, const QStri
         return false;
     }
     const ModelTypes type = static_cast<ModelTypes>(record.type);
-    if (type != ModelTypes::Object && type != ModelTypes::Mesh) {
-        // Not a model: nothing to bake, and not an error.
+    if (type != ModelTypes::Object && type != ModelTypes::Mesh && type != ModelTypes::Animation) {
+        // Not a model or a clip: nothing to bake, and not an error.
         return true;
     }
 
@@ -443,6 +443,16 @@ bool bakeAsset(Database *db, QSqlDatabase conn, const QString &root, const QStri
     const QString sourceOid = oidFromStorePath(root, sourcePath);
     if (sourceOid.isEmpty()) return true;   // legacy-folder bytes: no content id to key on
 
+    // A CLIP ROW'S BAKE is its clip bake (SHIPPED-BAKES-1).
+    if (type == ModelTypes::Animation) {
+        if (!clipBakePath(conn, root, sourcePath).isEmpty()) return true;
+        if (neededOut) *neededOut = true;
+        if (dryRun) return true;
+        if (!bakeSource(conn, root, sourcePath, errorOut, guid)) return false;
+        clear();
+        return true;
+    }
+
     // BY THE ROW, not by the path (IMPORT-1): this asset's import settings are
     // half the bake key, and a sibling row over the same bytes may want other
     // settings. bakeAsset knows which row it is baking for; the content-first
@@ -470,9 +480,25 @@ bool bakeSource(QSqlDatabase conn, const QString &root, const QString &sourcePat
     // while it reads a material), and it must not be next to the CAS objects:
     // a re-bake is not an import and may not add bytes to the store.
     QTemporaryDir scratch;
+    iris::ParseCensus::BakeBuildScope building;   // the bake's own parse, not a read's
     if (!scratch.isValid()) {
         if (errorOut) *errorOut = QStringLiteral("cannot create a bake staging directory");
         return false;
+    }
+
+    if (isClipContent(conn, root, sourcePath)) {
+        // THE CLIP BAKE (SHIPPED-BAKES-1): content only, built at identity.
+        const iris::MeshBake::Clip clip = iris::MeshBake::buildClipFromFile(
+            sourcePath, iris::MeshBake::clipFingerprintFor(sourceOid));
+        if (!clip.valid) {
+            if (errorOut)
+                *errorOut = QStringLiteral("could not read '%1' for its clip bake").arg(sourcePath);
+            return false;
+        }
+        const QString clipPath =
+            QDir(scratch.path()).filePath(iris::MeshBake::clipFileNameFor(sourceOid));
+        if (!iris::MeshBake::writeClip(clipPath, clip, errorOut)) return false;
+        return recordBake(conn, root, sourceOid, clipPath, errorOut);
     }
 
     const QString settings = settingsHashFor(conn, root, sourcePath, assetGuid);
@@ -503,8 +529,11 @@ QVector<BakeTarget> modelBakesNeeded(QSqlDatabase conn, const QString &root,
     QSqlQuery query(conn);
     // THE GUID FILTER IS THE QUERY'S (D3): an archive import asks about the
     // rows it brought, and must not walk the whole library to find them.
-    QString sql = QStringLiteral("SELECT AF.oid, AF.name, F.ext, AF.asset_guid FROM asset_files AF "
-                                 "LEFT JOIN files F ON AF.oid = F.oid WHERE AF.role <> ?");
+    // The ROW'S TYPE rides along: a clip row's content gets a CLIP bake
+    // (SHIPPED-BAKES-1), every other model file a model bake.
+    QString sql = QStringLiteral("SELECT AF.oid, AF.name, F.ext, AF.asset_guid, A.type FROM asset_files AF "
+                                 "LEFT JOIN files F ON AF.oid = F.oid "
+                                 "LEFT JOIN assets A ON A.guid = AF.asset_guid WHERE AF.role <> ?");
     if (onlyGuids) {
         if (onlyGuids->isEmpty()) return out;
         QStringList marks;
@@ -532,11 +561,19 @@ QVector<BakeTarget> modelBakesNeeded(QSqlDatabase conn, const QString &root,
         }
         if (path.isEmpty()) continue;   // offline/purged object, already judged
         const QString guid = query.value(3).toString();
+        if (query.value(4).toInt() == static_cast<int>(ModelTypes::Animation)) {
+            const QString key = oid + QStringLiteral("|clip");
+            if (seen.contains(key)) continue;
+            seen.insert(key);
+            if (!clipBakePath(conn, root, path).isEmpty()) continue;
+            out.append({ path, guid, true });
+            continue;
+        }
         const QString key = oid + QLatin1Char('|') + settingsHashFor(conn, root, path, guid);
         if (seen.contains(key)) continue;
         seen.insert(key);
         if (isFresh(conn, root, path, guid)) continue;
-        out.append({ path, guid });
+        out.append({ path, guid, false });
     }
     return out;
 }
@@ -548,6 +585,8 @@ BakeJob prepareBake(QSqlDatabase conn, const QString &root, const BakeTarget &ta
     if (job.sourceOid.isEmpty()) return job;
     job.path = target.path;
     job.storeRoot = root;
+    job.clip = target.clip;
+    if (job.clip) return job;   // a clip bake is built at identity: no settings, no transform
     job.settings = settingsHashFor(conn, root, target.path, target.assetGuid);
     job.transform = transformFor(conn, root, target.path, target.assetGuid);
     return job;
@@ -561,16 +600,28 @@ BakeResult runBake(const BakeJob &job)
     auto dir = std::make_shared<QTemporaryDir>();
     if (!dir->isValid()) { out.error = QStringLiteral("cannot create a bake staging directory"); return out; }
     iris::ParseCensus::BakeBuildScope building;   // the bake's own parse, not an open's
-    iris::MeshBake::Model model = iris::MeshBake::buildFromFile(
-        job.path, iris::MeshBake::fingerprintFor(job.sourceOid, job.settings), dir->path(),
-        job.transform);
-    if (!model.valid) {
-        out.error = QStringLiteral("could not parse '%1' for baking").arg(QFileInfo(job.path).fileName());
-        return out;
+    QString path;
+    if (job.clip) {
+        const iris::MeshBake::Clip clip = iris::MeshBake::buildClipFromFile(
+            job.path, iris::MeshBake::clipFingerprintFor(job.sourceOid));
+        if (!clip.valid) {
+            out.error = QStringLiteral("could not read '%1' for its clip bake")
+                            .arg(QFileInfo(job.path).fileName());
+            return out;
+        }
+        path = QDir(dir->path()).filePath(iris::MeshBake::clipFileNameFor(job.sourceOid));
+        if (!iris::MeshBake::writeClip(path, clip, &out.error)) return out;
+    } else {
+        iris::MeshBake::Model model = iris::MeshBake::buildFromFile(
+            job.path, iris::MeshBake::fingerprintFor(job.sourceOid, job.settings), dir->path(),
+            job.transform);
+        if (!model.valid) {
+            out.error = QStringLiteral("could not parse '%1' for baking").arg(QFileInfo(job.path).fileName());
+            return out;
+        }
+        path = QDir(dir->path()).filePath(iris::MeshBake::fileNameFor(job.sourceOid, job.settings));
+        if (!iris::MeshBake::write(path, model, &out.error)) return out;
     }
-    const QString path =
-        QDir(dir->path()).filePath(iris::MeshBake::fileNameFor(job.sourceOid, job.settings));
-    if (!iris::MeshBake::write(path, model, &out.error)) return out;
     out.dir = dir;
     out.path = path;
     // The store's half of the write, here and not on the database thread:
@@ -612,12 +663,23 @@ QVector<BakeJob> staleJobsFor(QSqlDatabase conn, const QString &root, const QStr
         const QString oid = oidFromStorePath(root, path);
         if (oid.isEmpty() || !QFileInfo::exists(path)) continue;   // no source: missing
         QSqlQuery rows(conn);
-        rows.prepare("SELECT DISTINCT asset_guid FROM asset_files WHERE oid = ? AND role <> ?");
+        rows.prepare("SELECT DISTINCT AF.asset_guid, A.type FROM asset_files AF "
+                     "LEFT JOIN assets A ON A.guid = AF.asset_guid WHERE AF.oid = ? AND AF.role <> ?");
         rows.addBindValue(oid);
         rows.addBindValue(iris::MeshBake::casRole());
         if (!rows.exec()) continue;
         while (rows.next()) {
             const QString guid = rows.value(0).toString();
+            if (rows.value(1).toInt() == static_cast<int>(ModelTypes::Animation)) {
+                // A CLIP's content: its clip bake (SHIPPED-BAKES-1).
+                const QString key = oid + QStringLiteral("|clip");
+                if (seen.contains(key)) continue;
+                seen.insert(key);
+                if (!clipBakePath(conn, root, path).isEmpty()) continue;   // fresh
+                BakeJob job = prepareBake(conn, root, { path, guid, true });
+                if (!job.path.isEmpty()) jobs.append(job);
+                continue;
+            }
             const QString key = oid + QLatin1Char('|') + settingsHashFor(conn, root, path, guid);
             if (seen.contains(key)) continue;
             seen.insert(key);
@@ -719,6 +781,100 @@ void stopBackgroundRebuild()
 bool backgroundRebuildRunning()
 {
     return sBackground.isValid() && !sBackground.isFinished();
+}
+
+// ---- the clip bake (SHIPPED-BAKES-1) ----------------------------------------
+
+bool isClipContent(QSqlDatabase conn, const QString &root, const QString &sourcePath)
+{
+    const QString oid = oidFromStorePath(root, sourcePath);
+    if (oid.isEmpty()) return false;
+    QSqlQuery query(conn);
+    query.prepare("SELECT 1 FROM asset_files AF JOIN assets A ON A.guid = AF.asset_guid "
+                  "WHERE AF.oid = ? AND A.type = ? LIMIT 1");
+    query.addBindValue(oid);
+    query.addBindValue(static_cast<int>(ModelTypes::Animation));
+    return query.exec() && query.next();
+}
+
+QString clipBakePath(QSqlDatabase conn, const QString &root, const QString &sourcePath)
+{
+    const QString sourceOid = oidFromStorePath(root, sourcePath);
+    if (sourceOid.isEmpty()) return QString();
+    // NEWEST FIRST, every candidate — planFor's rule, for planFor's reason: a
+    // producer bump leaves the stale generation under the same name until the
+    // rebuild retires it.
+    QSqlQuery query(conn);
+    query.prepare("SELECT AF.oid, F.ext, F.size FROM asset_files AF "
+                  "LEFT JOIN files F ON AF.oid = F.oid "
+                  "WHERE AF.role = ? AND AF.name = ? ORDER BY AF.rowid DESC");
+    query.addBindValue(iris::MeshBake::casRole());
+    query.addBindValue(iris::MeshBake::clipFileNameFor(sourceOid));
+    if (!query.exec()) return QString();
+    const QString fingerprint = iris::MeshBake::clipFingerprintFor(sourceOid);
+    while (query.next()) {
+        const QString path = AssetStorePaths::objectPathIn(root, query.value(0).toString(),
+                                                           query.value(1).toString());
+        const QFileInfo info(path);
+        if (!info.exists()) continue;
+        if (!query.value(2).isNull() && info.size() != query.value(2).toLongLong()) continue;
+        if (!iris::MeshBake::clipHeaderMatches(path, fingerprint)) continue;
+        return path;
+    }
+    return QString();
+}
+
+iris::BakedClipPtr loadClip(const QString &sourcePath)
+{
+    if (sourcePath.isEmpty()) return iris::BakedClipPtr();
+    QSqlDatabase conn = QSqlDatabase::database();
+    const QString root = AssetStorePaths::root();
+    const QString bake = clipBakePath(conn, root, sourcePath);
+    iris::BakedClipPtr result;
+    if (!bake.isEmpty()) {
+        const QString oid = oidFromStorePath(root, sourcePath);
+        iris::MeshBake::Clip clip =
+            iris::MeshBake::readClip(bake, iris::MeshBake::clipFingerprintFor(oid));
+        if (clip.valid) result = std::make_shared<const iris::MeshBake::Clip>(std::move(clip));
+    }
+    // The same census every bake read reports to (app.openStats()).
+    iris::ParseCensus::recordBake(result != nullptr);
+    return result;
+}
+
+iris::BakedClipPtr ensureClip(const QString &sourcePath)
+{
+    if (iris::BakedClipPtr have = loadClip(sourcePath)) return have;
+    QSqlDatabase conn = QSqlDatabase::database();
+    const QString root = AssetStorePaths::root();
+    // THE SAME REBUILD THE OPEN RUNS: the store's own source, on a worker, this
+    // thread pumping, committed under every row that names the content. Any
+    // model content may carry clips, so the job is built for the path asked
+    // about, whatever row type names it.
+    BakeJob job = prepareBake(conn, root, { sourcePath, QString(), true });
+    if (job.path.isEmpty() || !QFileInfo::exists(job.path)) return iris::BakedClipPtr();
+    rebuildPumped({ job }, std::function<void(int, int)>());
+    return loadClip(sourcePath);
+}
+
+QString currentBakePath(int assetType, const QString &sourcePath, const QString &assetGuid)
+{
+    QSqlDatabase conn = QSqlDatabase::database();
+    const QString root = AssetStorePaths::root();
+    if (assetType == static_cast<int>(ModelTypes::Animation))
+        return clipBakePath(conn, root, sourcePath);
+    return planFor(conn, root, sourcePath, assetGuid).bakePath;
+}
+
+bool ensureFresh(const QString &sourcePath, const QString &assetGuid)
+{
+    QSqlDatabase conn = QSqlDatabase::database();
+    const QString root = AssetStorePaths::root();
+    if (isFresh(conn, root, sourcePath, assetGuid)) return true;
+    const QVector<BakeJob> jobs = staleJobsFor(conn, root, { sourcePath });
+    if (jobs.isEmpty()) return false;   // no source on disk: the model stays missing
+    rebuildPumped(jobs, std::function<void(int, int)>());
+    return isFresh(conn, root, sourcePath, assetGuid);
 }
 
 QStringList modelSourcesNeedingBake(QSqlDatabase conn, const QString &root)

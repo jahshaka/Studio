@@ -30,7 +30,6 @@ For more information see the LICENSE file
 #include "irisgl/document/animation/keyframeanimation.h"
 #include "irisgl/document/animation/skeletalanimation.h"
 #include "irisgl/document/assets/mesh.h"
-#include "irisgl/import/graphicshelper.h"
 #include "irisgl/document/assets/skeleton.h"
 #include "modules/avatar/avatarsockets.h"
 #include "irisgl/document/scenegraph/cameranode.h"
@@ -38,6 +37,8 @@ For more information see the LICENSE file
 #include "irisgl/document/scenegraph/meshnode.h"
 #include "irisgl/document/scenegraph/scene.h"
 #include "irisgl/document/scenegraph/scenenode.h"
+#include "io/builtinmaterials.h"
+#include "irisgl/document/materials/pbrmaterial.h"
 #include "services/assethelper.h"
 #include "services/meshbakestore.h"
 #include "services/rigsignature.h"
@@ -264,61 +265,48 @@ void AvatarPreviewModel::rescaleSpace()
     }
 }
 
-QString AvatarPreviewModel::extractDir() const
-{
-    return mScratch ? mScratch->path() : QString();
-}
-
 // THE EXPENSIVE HALF, on whatever thread the caller runs it (AV1). Nothing
-// here reads or writes a member: the parse produces a detached fragment and a
-// scratch dir, and `applySubject` is what makes them this model's subject.
+// here reads or writes a member: the fragment is built out of the BAKE the
+// caller resolved (SHIPPED-BAKES-1 — the parse that used to run here, with its
+// embedded-texture extraction into a scratch dir, is gone), and `applySubject`
+// is what makes it this model's subject.
 std::shared_ptr<AvatarPreviewModel::PreparedSubject>
-AvatarPreviewModel::prepareSubject(const QString &path, const QString &displayName,
-                                   const iris::ImportTransform &xf)
+AvatarPreviewModel::prepareSubject(const SubjectSource &source)
 {
     auto prepared = std::make_shared<PreparedSubject>();
-    prepared->displayName = displayName;
-    prepared->xf = xf;
-
-    const QFileInfo info(path);
-    if (!info.exists() || !info.isFile()) {
-        prepared->error = QStringLiteral("no such file: %1").arg(path);
-        return prepared;
+    prepared->displayName = source.displayName;
+    prepared->xf = source.xf;
+    prepared->definition = source.definition;
+    prepared->path = QFileInfo(source.path).absoluteFilePath();
+    const QString shown = source.displayName.isEmpty() ? QFileInfo(source.path).fileName()
+                                                       : source.displayName;
+    iris::BakedModelPtr baked = source.baked;
+    if (!baked && !source.plan.bakePath.isEmpty()) {
+        iris::MeshBake::Model model =
+            iris::MeshBake::read(source.plan.bakePath, source.plan.bakeFingerprint);
+        if (model.valid) baked = std::make_shared<const iris::MeshBake::Model>(std::move(model));
     }
-    prepared->path = info.absoluteFilePath();
-
-    // R0.12: an empty extract dir writes embedded textures BESIDE the source —
-    // into the owner's Downloads folder. Per-session scratch, cleaned on clear().
-    prepared->scratch =
-        std::make_shared<QTemporaryDir>(QDir::tempPath() + "/jahshaka-avatar-XXXXXX");
-    if (!prepared->scratch->isValid()) {
+    if (!baked || !baked->valid) {
         prepared->error =
-            QStringLiteral("could not create a scratch directory for embedded textures");
+            QStringLiteral("%1 has no current bake (the library rebuilds it; try again once it "
+                           "has)").arg(shown);
         return prepared;
     }
-
-    QStringList textureList, texturesFullPath;
-    bool hasEmbedded = false;
-    // THE CHARACTER ASSET'S IMPORT RECIPE (IMPORT-1): without it the Avatar
-    // page shows a different size from the scene, which is the defect class the
-    // choke point exists to close.
-    prepared->node = AssetHelper::extractTexturesAndMaterialFromMesh(
-        prepared->path, textureList, texturesFullPath, hasEmbedded, nullptr,
-        prepared->scratch->path(), nullptr, xf);
+    // The ONE material conversion every baked fragment takes
+    // (io/builtinmaterials.h); the stored definition re-points the textures
+    // at apply time.
+    const auto makeMaterial = [](iris::MeshPtr, iris::MeshMaterialData &data) {
+        return iris::MaterialPtr(BuiltinMaterials::fromMeshData(data));
+    };
+    prepared->node = iris::MeshBake::buildFragment(*baked, prepared->path, makeMaterial);
     if (!prepared->node)
-        prepared->error =
-            QStringLiteral("could not read %1 (unsupported or corrupt model)").arg(info.fileName());
+        prepared->error = QStringLiteral("%1's bake holds no character").arg(shown);
     return prepared;
 }
 
-bool AvatarPreviewModel::load(const QString &path, QString *error,
-                              const QString &displayName, const QString &assetGuid)
+bool AvatarPreviewModel::load(const SubjectSource &source, QString *error)
 {
-    // The recipe is resolved HERE, on the caller's thread, because it reads the
-    // catalog (MeshBakeStore's connection is per-thread) — the same split the
-    // async open uses.
-    return applySubject(
-        prepareSubject(path, displayName, MeshBakeStore::transformFor(path, assetGuid)), error);
+    return applySubject(prepareSubject(source), error);
 }
 
 bool AvatarPreviewModel::applySubject(const std::shared_ptr<PreparedSubject> &prepared,
@@ -339,10 +327,14 @@ bool AvatarPreviewModel::applySubject(const std::shared_ptr<PreparedSubject> &pr
     // LAST, not first: the old subject stays on screen for the whole parse, so
     // an avatar switch never shows an empty room while it loads.
     clear();
-    mScratch = prepared->scratch;
 
     const QFileInfo info(prepared->path);
     auto node = prepared->node;
+    // THE STORED MATERIALS (UI thread: it resolves texture guids through the
+    // catalog) — the bake records bare texture names, the definition the
+    // member texture assets they became at import.
+    if (!prepared->definition.isEmpty())
+        AssetHelper::updateNodeMaterial(node, prepared->definition, nullptr);
 
     mFilePath = info.absoluteFilePath();
     mName = prepared->displayName.isEmpty() ? info.completeBaseName() : prepared->displayName;
@@ -419,7 +411,6 @@ void AvatarPreviewModel::clear()
     mTime = 0.0f;
     mPlaying = false;
     mDirty = true;
-    mScratch.reset();       // QTemporaryDir removes the extracted textures
     rescaleSpace();
 }
 
@@ -576,7 +567,8 @@ void AvatarPreviewModel::setRootMotion(bool on)
     rebuildClipAnimations();
 }
 
-bool AvatarPreviewModel::loadAnimation(const QString &path, QString *error, ClipLoadReport *report,
+bool AvatarPreviewModel::loadAnimation(const iris::MeshBake::Clip &clipBake, const QString &path,
+                                       QString *error, ClipLoadReport *report,
                                        const QString &displayName)
 {
     const auto fail = [error](const QString &why) {
@@ -591,33 +583,19 @@ bool AvatarPreviewModel::loadAnimation(const QString &path, QString *error, Clip
     if (!info.exists() || !info.isFile())
         return fail(QStringLiteral("no such file: %1").arg(path));
 
-    // NOT AssetHelper/loadAsSceneFragment: those need a mesh and would build a
-    // second character. An animation file is parsed (iris::ClipFileInfo) and read
-    // for clips only — which is also the only way an ANIMATION-ONLY export
-    // (zero meshes) can be read at all, since every mesh loader rejects those.
-    //
-    // No GEOMETRY post-processing: every step in the canonical preset is
-    // geometry work, and node and channel NAMES — most of what this path
-    // cares about — come out identical either way (measured on Ely +
-    // Walking(1).fbx: same 207 node names, same 52 channel names, 3x faster).
-    //
-    // ClipNamesOnly, not 0: a clip's translation keys are in the FILE's units,
-    // and the CHARACTER was parsed with the canonical preset, which honours
-    // them. Reading the clip without the unit factor would drive a metre-scale
-    // rig with centimetre-scale offsets — a rig that flies apart on the first
-    // frame (the FBX unit-scale fix, importflags.h).
-    //
-    // …AND WITH THE RIG'S OWN UNIFORM FACTOR (IMPORT-1, IMPORT_DIALOG_SPEC §10):
-    // the character's import settings are baked into its geometry, so a clip
-    // read at the file's own scale would drive a rescaled rig with the wrong
-    // offsets — the same defect one size further out. `keysOnly` carries the
-    // factor and deliberately NOT the rotation or the origin: those transform
-    // the character's root node, and a clip has no geometry for them to move.
-    QString readError;
-    const auto anims = iris::GraphicsHelper::loadAnimationsFromClipFile(
-        info.absoluteFilePath(), &readError, mImportTransform.keysOnly());
-    if (!readError.isEmpty())
-        return fail(QStringLiteral("could not read %1 (%2)").arg(info.fileName(), readError));
+    // THE CLIP BAKE, never a parse (SHIPPED-BAKES-1): the caller read it
+    // (MeshBakeStore::ensureClip), built at the clip's import from ONE
+    // ClipNamesOnly read — the file's own unit applied, no geometry
+    // post-processing (node and channel NAMES, most of what this path cares
+    // about, come out identical either way). The keys are handed over in THIS
+    // RIG's units: the character's import settings are baked into its geometry,
+    // so its uniform factor (`keysOnly` — not its rotation or origin, which move
+    // the character's root node and a clip has no geometry for) scales the
+    // position keys exactly as the parse it replaces did (IMPORT-1, §10).
+    if (!clipBake.valid)
+        return fail(QStringLiteral("could not read %1 (it has no clip bake)").arg(info.fileName()));
+    const auto anims = iris::MeshBake::clipAnimations(clipBake, mImportTransform.keysOnly(),
+                                                      info.absoluteFilePath());
     if (anims.isEmpty())
         return fail(QStringLiteral("%1 contains no animation").arg(info.fileName()));
 

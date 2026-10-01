@@ -13,7 +13,7 @@
 #include "viewport/previewframing.h"
 #include "viewport/previeworbit.h"
 #include "irisgl/core/irisutils.h"
-#include "bridge/previewmesh.h"
+#include "irisgl/document/assets/shippedmeshes.h"
 #include "irisgl/core/geometry/aabb.h"
 #include "irisgl/core/geometry/boundingsphere.h"
 #include "irisgl/document/assets/mesh.h"
@@ -139,14 +139,10 @@ void EngineAssetScene::configureView(View *view)
 iris::MeshPtr EngineAssetScene::previewSphere()
 {
     if (mSphere) return mSphere;
-    // THE DOCK'S OWN FURNITURE, parsed once per process (ATOM P2). `Mesh::loadMesh`
-    // is deleted; this is the importer's own parse entry point, called directly,
-    // with no card generation behind it and no library involved. A preview subject
-    // is drawn at ONE distance in a small tile: it has no use for a LOD chain, and
-    // making it a library asset would put the catalog and the import pipeline
-    // behind a dock's sphere.
-    mSphere = previewmesh::load(QStringLiteral(":/content/primitives/hp_sphere.obj"),
-                                QStringLiteral("app/content/primitives/hp_sphere.obj"));
+    // THE DOCK'S OWN FURNITURE, BAKED (SHIPPED-BAKES-1): a Furniture seed row
+    // (src/data/primitives.h), read by its seed key through IrisGL's seam —
+    // never parsed. Null until a library is seeded; asked again next time.
+    mSphere = iris::ShippedMeshes::mesh(QStringLiteral(":/content/primitives/hp_sphere.obj"));
     return mSphere;
 }
 

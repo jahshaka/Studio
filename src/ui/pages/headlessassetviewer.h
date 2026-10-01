@@ -5,11 +5,12 @@
 // runs where no engine view can exist (--headless scripts, --dump-api-docs).
 // Before step 14 this role was played by an unrealized legacy AssetViewer;
 // this class keeps only the document surface AssetView exercises headless:
-// the assimp SceneSource and the node cache. Nothing renders.
+// the node cache. Nothing renders.
 #include "irisgl/core/math/vec.h"
 #include <QWidget>
 #include "ui/pages/iassetviewer.h"
-#include "irisgl/document/scenegraph/meshnode.h"   // iris::SceneSource
+#include <QMap>
+#include "irisgl/document/scenegraph/scenenode.h"
 
 class HeadlessAssetViewer : public IAssetViewer
 {
@@ -17,15 +18,10 @@ public:
     HeadlessAssetViewer(QWidget *parent = nullptr)
     {
         mWidget = new QWidget(parent);
-        mSource = new iris::SceneSource();
     }
-
-    ~HeadlessAssetViewer() override { delete mSource; }
 
     QWidget *asWidget() override { return mWidget; }
     void setDatabase(Database *db) override { Q_UNUSED(db); }
-
-    iris::SceneSource *sceneSource() override { return mSource; }
 
     void clearScene() override {}
     void changeBackdrop(unsigned int) override {}
@@ -53,7 +49,6 @@ public:
 
 private:
     QWidget *mWidget = nullptr;
-    iris::SceneSource *mSource = nullptr;
     iris::SceneNodePtr mLastNode;
     QMap<QString, iris::SceneNodePtr> mCache;
 };

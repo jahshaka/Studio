@@ -6,6 +6,7 @@
 // Framework-free; non-zero exit on failure.
 #include <QApplication>
 #include <QDir>
+#include <QFileInfo>
 #include <QFile>
 #include <QJsonDocument>
 #include <QJsonArray>
@@ -21,6 +22,8 @@
 #include "services/assetstorepaths.h"
 #include <QSqlDatabase>
 #include "services/rigsignature.h"
+#include "irisgl/import/meshbake.h"
+#include <QTemporaryDir>
 
 static int failures = 0;
 #define CHECK(cond, msg) do { if (cond) printf("ok:   %s\n", msg); else { printf("FAIL: %s\n", msg); ++failures; } } while (0)
@@ -31,10 +34,38 @@ static const char *CUBE_OBJ = JAHSHAKA_TEST_SOURCE_DIR "/app/content/primitives/
 // joints jointRoot/jointTip, clips "Idle" and the junk name "mixamo.com".
 static const char *RIG_GLB = JAHSHAKA_TEST_SOURCE_DIR "/tests/avatar/fixtures/rig2.glb";
 
+// THE BACKFILL READS BAKES (SHIPPED-BAKES-1): a model is described from its
+// bake's own facts and a clip from its clip bake, never by a parse. The suite
+// has no library, so it bakes its fixtures here with the import's own builders.
+static QTemporaryDir &bakeDir()
+{
+    static QTemporaryDir dir;
+    return dir;
+}
+
+static QString modelBakeOf(const QString &path)
+{
+    const iris::MeshBake::Model model = iris::MeshBake::buildFromFile(path, QStringLiteral("t"));
+    const QString out = QDir(bakeDir().path()).filePath(QFileInfo(path).fileName() + ".jmb");
+    QString error;
+    return iris::MeshBake::write(out, model, &error) ? out : QString();
+}
+
+static QString clipBakeOf(const QString &path)
+{
+    const iris::MeshBake::Clip clip = iris::MeshBake::buildClipFromFile(path, QStringLiteral("t"));
+    const QString out = QDir(bakeDir().path()).filePath(QFileInfo(path).fileName() + ".jcb");
+    QString error;
+    return iris::MeshBake::writeClip(out, clip, &error) ? out : QString();
+}
+
 int main(int argc, char **argv)
 {
     qputenv("QT_QPA_PLATFORM", "offscreen");
     QApplication app(argc, argv);   // database.cpp links QtWidgets
+    const QString cubeBake = modelBakeOf(CUBE_OBJ);
+    const QString rigBake = modelBakeOf(RIG_GLB);
+    CHECK(!cubeBake.isEmpty() && !rigBake.isEmpty(), "the fixtures bake");
 
     // ---- images: header-only decode ----
     {
@@ -57,9 +88,9 @@ int main(int argc, char **argv)
         CHECK(meta["fileSize"].toInteger() == 844, "audio: file size 844");
     }
 
-    // ---- models: assimp-light load (triangulate only, no GPU) ----
+    // ---- models: the BAKE's own facts (no parse, no GPU) ----
     {
-        const QJsonObject meta = AssetMetadata::forModelFile(CUBE_OBJ);
+        const QJsonObject meta = AssetMetadata::forModelBake(cubeBake, CUBE_OBJ);
         CHECK(meta["kind"].toString() == "model", "model: kind");
         CHECK(meta["format"].toString() == "obj", "model: format obj");
         CHECK(meta["triangles"].toInteger() == 12, "model: cube = 12 triangles");
@@ -86,7 +117,7 @@ int main(int argc, char **argv)
     // `assets.list({rigged:true})` filters on and what the avatar definition's
     // `rig` block is copied from, so it is asserted on a REAL rigged file.
     {
-        const QJsonObject meta = AssetMetadata::forModelFile(RIG_GLB);
+        const QJsonObject meta = AssetMetadata::forModelBake(rigBake, RIG_GLB);
         CHECK(meta["kind"].toString() == "model", "rig: kind model");
         CHECK(meta["hasSkeleton"].toBool(), "rig: rig2.glb hasSkeleton");
         CHECK(meta["bones"].toInt() == 2, "rig: rig2.glb has 2 bones");
@@ -127,14 +158,30 @@ int main(int argc, char **argv)
               "rig: bone channels counted (no assimp pivots in a glTF)");
     }
 
+    // ---- a CLIP is described from its clip bake ----
+    {
+        const QString clipBake = clipBakeOf(RIG_GLB);
+        const QJsonObject meta = AssetMetadata::forClipBake(clipBake, RIG_GLB, QStringLiteral("rig2"));
+        CHECK(meta["kind"].toString() == "animation", "clip bake: kind animation");
+        CHECK(meta["clips"].toArray().size() == 2, "clip bake: both clips in the table");
+        CHECK(meta["duration"].toDouble() > 0.0, "clip bake: a duration in seconds");
+        CHECK(!meta["rigId"].toString().isEmpty(), "clip bake: the clip's rig id");
+    }
+
     // ---- source dispatch (the resolved store object) ----
     const QString storeRoot = QDir::currentPath() + "/assetmeta_store";
     QDir(storeRoot).removeRecursively();
     {
         const QJsonObject meta = AssetMetadata::computeForSource(
-            static_cast<int>(ModelTypes::Object), CUBE_OBJ);
+            static_cast<int>(ModelTypes::Object), CUBE_OBJ, cubeBake);
         CHECK(meta["kind"].toString() == "model" && meta["triangles"].toInteger() == 12,
-              "source dispatch: Object -> model stats");
+              "source dispatch: Object -> model stats (from its bake)");
+    }
+    {
+        const QJsonObject meta = AssetMetadata::computeForSource(
+            static_cast<int>(ModelTypes::Object), CUBE_OBJ);
+        CHECK(meta.isEmpty(),
+              "source dispatch: a model with NO BAKE describes as nothing — never a parse");
     }
     {
         const QJsonObject meta = AssetMetadata::computeForSource(
@@ -178,8 +225,15 @@ int main(int argc, char **argv)
           "the model is ingested into the store");
 
     {
+        // No bake resolver (no current bake): nothing described, nothing persisted.
+        const QJsonObject none = AssetMetadata::ensure(&db, guid, storeRoot);
+        CHECK(none.isEmpty() && !QJsonDocument::fromJson(db.fetchAsset(guid).properties)
+                                     .object().contains("metadata"),
+              "ensure: a row with no current bake persists no block");
+        AssetMetadata::setBakePathResolver(
+            [cubeBake](int, const QString &, const QString &) { return cubeBake; });
         const QJsonObject meta = AssetMetadata::ensure(&db, guid, storeRoot);
-        CHECK(meta["triangles"].toInteger() == 12, "ensure: backfill computed model stats");
+        CHECK(meta["triangles"].toInteger() == 12, "ensure: backfill computed model stats from the bake");
 
         const QJsonObject props =
             QJsonDocument::fromJson(db.fetchAsset(guid).properties).object();

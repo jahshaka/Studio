@@ -77,6 +77,12 @@ public:
 	/// createMesh() will resolve them. The plan the prewarm worker is given.
 	QStringList collectMeshSources(const QJsonObject &projectObj);
 
+	/// Every animation CLIP FILE (a ModelTypes::Animation row) this blob's
+	/// skeletal clips reference, resolved the way getSkeletalAnimation will —
+	/// so the open's stale-bake pass rebuilds their clip bakes before anything
+	/// reads (SHIPPED-BAKES-1). DB work: the caller's thread.
+	QStringList collectClipSources(const QJsonObject &projectObj);
+
 	void setProject(Project *p) { project = p; }
 
     /// FALSE MEANS "resolve by the open project's PIN", which is what a project

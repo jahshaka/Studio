@@ -25,7 +25,6 @@ class EngineRenderDriver;
 class EngineAssetScene;
 class Project;
 class ProgressDialog;
-namespace iris { class SceneSource; }
 
 class EngineAssetViewer : public EngineViewWidget, public IAssetViewer
 {
@@ -38,7 +37,6 @@ public:
     QWidget *asWidget() override { return this; }
     void setDatabase(Database *db) override { mDb = db; }
     void setProject(Project *project) override { mProject = project; }
-    iris::SceneSource *sceneSource() override { return mSource; }
     void clearScene() override;
     void changeBackdrop(unsigned int id) override;
     iris::SceneNodePtr cachedAsset(const QString &guid) override { return mCachedAssets.value(guid); }
@@ -100,7 +98,6 @@ private:
     std::unique_ptr<EngineAssetScene> mScene;
     Database *mDb = nullptr;
     Project *mProject = nullptr;   // the live Project (Phase 4: was Globals::project)
-    iris::SceneSource *mSource = nullptr;
     ProgressDialog *mProgress = nullptr;
     std::function<void()> mLoadFinished;   // fires in hideProgress (end of every load*)
     QMap<QString, iris::SceneNodePtr> mCachedAssets;

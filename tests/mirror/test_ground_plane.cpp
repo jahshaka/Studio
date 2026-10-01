@@ -26,7 +26,7 @@
 //      same with the plane on as off.
 #include <QGuiApplication>
 
-#include "bridge/previewmesh.h"
+#include "../support/testmesh.h"
 #include <QColor>
 #include <cstdio>
 #include <cmath>
@@ -211,7 +211,7 @@ int main(int argc, char **argv)
         red->setBaseColor(QColor(220, 10, 10));
         auto caster = iris::MeshNode::create();
         caster->setName("Caster");
-        caster->setMesh(previewmesh::load(":/assets/models/cube.obj"));
+        caster->setMesh(testmesh::load(":/assets/models/cube.obj"));
         caster->setMaterial(red);
         caster->setLocalPos(iris::Vec3(0.0f, 1.5f, -8.0f));
         doc->getRootNode()->addChild(caster);
@@ -250,7 +250,7 @@ int main(int argc, char **argv)
         // E2: under the plane.
         auto under = iris::MeshNode::create();
         under->setName("Under");
-        under->setMesh(previewmesh::load(":/assets/models/cube.obj"));
+        under->setMesh(testmesh::load(":/assets/models/cube.obj"));
         under->setMaterial(grey);
         under->setLocalPos(iris::Vec3(0.0f, -4.0f, -6.0f));
         doc->getRootNode()->addChild(under);
@@ -317,14 +317,14 @@ int main(int argc, char **argv)
     for (int i = 0; i < 40; ++i) {
         auto prop = iris::MeshNode::create();
         prop->setName(QStringLiteral("Prop%1").arg(i));
-        prop->setMesh(previewmesh::load(":/assets/models/cube.obj"));
+        prop->setMesh(testmesh::load(":/assets/models/cube.obj"));
         prop->setMaterial(grey);
         prop->setVisible(false);          // in the entry map, out of every frame
         doc->getRootNode()->addChild(prop);
     }
     auto platform = iris::MeshNode::create();
     platform->setName("Platform");
-    platform->setMesh(previewmesh::load(":/assets/models/cube.obj"));
+    platform->setMesh(testmesh::load(":/assets/models/cube.obj"));
     platform->setMaterial(grey);
     platform->defaultFloor = true;        // the flag the setting is about
     platform->setLocalPos(iris::Vec3(0.0f, 0.0f, -6.0f));

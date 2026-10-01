@@ -232,3 +232,28 @@ jah_gpu_row(meshbake.archive_bakes CLASS app
 set_tests_properties(meshbake.archive_bakes PROPERTIES
     ENVIRONMENT "HOME=${_archive_home};JAHSHAKA_DATA_ROOT=${_archive_home}/data"
     TIMEOUT 400 LABELS "meshbake")
+
+# meshbake.shipped_bakes (SHIPPED-BAKES-1's app arm): a FRESH data root boots —
+# its seed BAKES every shipped mesh (the primitives, the samples' Ground and
+# Teapot, the preview docks' subjects, the VR controllers) — opens the Avatar
+# space, imports a character and its walk clip and PLAYS the clip from its clip
+# bake, opens the Materials preview, renders a thumbnail and (with Monado on the
+# box) runs a VR session: `app.openStats` reads ZERO runtime parses. Then the
+# CLIP BAKES ARE DELETED and the project's open rebuilds them from the clip's
+# source — a bake build, still zero parses — with the character's clip back.
+# Two app runs over one scratch data root (shipped/shipped_bakes.sh).
+set(_shipped_home ${CMAKE_CURRENT_BINARY_DIR}/shipped-bakes-home)
+file(MAKE_DIRECTORY ${_shipped_home}/run)
+configure_file(shipped/shipped_bakes_run1.js.in ${CMAKE_CURRENT_BINARY_DIR}/shipped_bakes_run1.js @ONLY)
+jah_gpu_row(meshbake.shipped_bakes CLASS vr
+         COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/shipped/shipped_bakes.sh"
+                 "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>"
+                 "${CMAKE_CURRENT_BINARY_DIR}/shipped_bakes_run1.js"
+                 "${CMAKE_CURRENT_SOURCE_DIR}/shipped/shipped_bakes_run2.js"
+                 "${CMAKE_SOURCE_DIR}/tests/vr/run_vr_app.sh"
+                 "/usr/share/openxr/1/openxr_monado.json"
+         WORKING_DIRECTORY ${_shipped_home}/run)
+set_tests_properties(meshbake.shipped_bakes PROPERTIES
+    ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}HOME=${_shipped_home};JAHSHAKA_DATA_ROOT=${_shipped_home}/data"
+    RESOURCE_LOCK monado
+    TIMEOUT 400 LABELS "meshbake")

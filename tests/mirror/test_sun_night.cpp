@@ -83,7 +83,7 @@
 
 #include <QGuiApplication>
 
-#include "bridge/previewmesh.h"
+#include "../support/testmesh.h"
 #include <QColor>
 #include <cmath>
 #include <cstdio>
@@ -161,7 +161,7 @@ int main(int argc, char **argv)
     // they are here so the caster walk has a caster.)
     auto floorNode = iris::MeshNode::create();
     floorNode->setName("floor");
-    floorNode->setMesh(previewmesh::load(":assets/models/cube.obj"));
+    floorNode->setMesh(testmesh::load(":assets/models/cube.obj"));
     auto grey = iris::PbrMaterial::create();
     grey->setBaseColor(QColor(120, 120, 120));
     floorNode->setMaterial(grey);
@@ -174,7 +174,7 @@ int main(int argc, char **argv)
 
     auto box = iris::MeshNode::create();
     box->setName("box");
-    box->setMesh(previewmesh::load(":assets/models/cube.obj"));
+    box->setMesh(testmesh::load(":assets/models/cube.obj"));
     auto white = iris::PbrMaterial::create();
     white->setBaseColor(QColor(210, 210, 210));
     box->setMaterial(white);

@@ -69,7 +69,13 @@ WATCHED=(document/assets/mesh.cpp
          # sphere is AABB's, and key ORDER is KeyFrame::addKey's sort.
          document/assets/vertexlayout.h
          core/geometry/aabb.cpp
-         document/animation/keyframeanimation.h)
+         document/animation/keyframeanimation.h
+         # SHIPPED-BAKES-1 (2026-10-01): the bake now CARRIES the facts of its
+         # parse (ModelSceneInfo, the model bake's describe block) and the clip
+         # bake carries ClipFileInfo (names, numbers, the pose-strip poses) —
+         # what these two files compute is serialized.
+         import/modelsceneinfo.cpp
+         import/clipfileinfo.cpp)
 
 failures=0
 

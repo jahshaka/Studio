@@ -2,7 +2,7 @@
 #include "irisgl/core/math/vec.h"
 #include "bridge/enginematerialpreviewscene.h"
 
-#include "bridge/previewmesh.h"
+#include "irisgl/document/assets/shippedmeshes.h"
 
 #include <QFileInfo>
 #include <algorithm>
@@ -28,21 +28,19 @@ namespace {
 
 const char *kSubjectName = "matpreview-primitive";
 
-/// THE DOCK'S SUBJECT MESHES. Five of the six used to be loaded from
-/// `app/shadergraph/`, where they sat as BYTE-IDENTICAL copies of the shipped
-/// primitives (measured: cube, cone, plane, cylinder, capsule and torus matched
-/// their `app/content/primitives/` twins exactly) — those six duplicate files are
-/// DELETED and the dock reads the shipped ones, which is the same geometry it
-/// always drew. The low-poly ball is its own mesh and stays where it is.
-QString meshFile(PreviewMesh mesh)
+/// THE DOCK'S SUBJECT MESHES, BY SEED KEY (SHIPPED-BAKES-1). Five of the six
+/// are the shipped PRIMITIVES' baked rows; the low-poly ball is its own mesh, a
+/// Furniture seed row (src/data/primitives.h). All six are read from their
+/// bakes through IrisGL's seam — never parsed.
+QString meshSeed(PreviewMesh mesh)
 {
     switch (mesh) {
     case PreviewMesh::Sphere:   return QStringLiteral("app/shadergraph/lowpoly_sphere.obj");
-    case PreviewMesh::Cube:     return QStringLiteral("app/content/primitives/cube.obj");
-    case PreviewMesh::Plane:    return QStringLiteral("app/content/primitives/plane.obj");
-    case PreviewMesh::Cylinder: return QStringLiteral("app/content/primitives/cylinder.obj");
-    case PreviewMesh::Capsule:  return QStringLiteral("app/content/primitives/capsule.obj");
-    case PreviewMesh::Torus:    return QStringLiteral("app/content/primitives/torus.obj");
+    case PreviewMesh::Cube:     return QStringLiteral(":/content/primitives/cube.obj");
+    case PreviewMesh::Plane:    return QStringLiteral(":/content/primitives/plane.obj");
+    case PreviewMesh::Cylinder: return QStringLiteral(":/content/primitives/cylinder.obj");
+    case PreviewMesh::Capsule:  return QStringLiteral(":/content/primitives/capsule.obj");
+    case PreviewMesh::Torus:    return QStringLiteral(":/content/primitives/torus.obj");
     }
     return QStringLiteral("app/shadergraph/lowpoly_sphere.obj");
 }
@@ -173,11 +171,10 @@ iris::MeshPtr EngineMaterialPreviewScene::meshFor(PreviewMesh mesh)
 {
     auto &slot = mMeshes[int(mesh)];
     if (slot) return slot;
-    // Parsed once per process (bridge/previewmesh.h): dock furniture, no cards,
-    // no library. `mMeshes` is the cache — one parse per shape per session.
-    const QString file = meshFile(mesh);
-    slot = previewmesh::load(QStringLiteral(":/") + file.mid(file.indexOf(QLatin1Char('/')) + 1),
-                             file);
+    // The BAKED mesh, by seed key (irisgl/document/assets/shippedmeshes.h);
+    // `mMeshes` holds it for the dock's life. Null (no library seeded yet) is
+    // asked again next time.
+    slot = iris::ShippedMeshes::mesh(meshSeed(mesh));
     return slot;
 }
 

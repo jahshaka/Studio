@@ -13,6 +13,7 @@ For more information see the LICENSE file
 
 #include <QColor>
 #include <QJsonArray>
+#include <QJsonDocument>
 #include <QJsonObject>
 #include <QDir>
 #include <QFileInfo>
@@ -33,7 +34,6 @@ For more information see the LICENSE file
 #include "irisgl/document/animation/animation.h"
 #include "irisgl/document/animation/skeletalanimation.h"
 #include "irisgl/document/assets/mesh.h"
-#include "irisgl/import/graphicshelper.h"
 #include "irisgl/document/animation/locomotion.h"
 #include "irisgl/document/physics/avatarmovement.h"
 #include "irisgl/document/physics/environment.h"
@@ -606,9 +606,17 @@ QVariant AvatarApi::loadAnimation(const QString &pathOrAssetGuid, const QVariant
         if (!rowName.isEmpty()) clipDisplayName = QFileInfo(rowName).completeBaseName();
     }
 
+    // The clip's BAKE (SHIPPED-BAKES-1) — built at its import, rebuilt from the
+    // stored bytes on a worker when stale; the preview never parses.
+    const iris::BakedClipPtr clipBake = MeshBakeStore::ensureClip(path);
+    if (!clipBake) {
+        record(QStringLiteral("avatar.loadAnimation: could not read '%1' (no clip bake could be "
+                              "built from its stored bytes)").arg(QFileInfo(path).fileName()));
+        return QVariant();
+    }
     QString error;
     avatar::ClipLoadReport report;
-    if (!mModel->loadAnimation(path, &error, &report, clipDisplayName)) {
+    if (!mModel->loadAnimation(*clipBake, path, &error, &report, clipDisplayName)) {
         record(QStringLiteral("avatar.loadAnimation: %1").arg(error));
         return QVariant();
     }
@@ -1449,26 +1457,22 @@ bool AvatarApi::attachClipsFromFile(const char *verb, const iris::SceneNodePtr &
     const QString rowName = host.db ? host.db->fetchAsset(assetGuid).name : QString();
     const QString shown = rowName.isEmpty() ? info.fileName() : rowName;
 
-    // NOT the mesh loader: an animation-only export (zero meshes — what Mixamo
-    // hands you for "without skin") is rejected by every mesh path, and this
-    // route wants nothing but the channels anyway. No GEOMETRY post-processing:
-    // every step of the canonical preset is geometry work, and channel NAMES
-    // come out identical either way (measured, avatarpreviewmodel.cpp) — but
-    // the file's UNIT FACTOR still applies, because a clip's translation keys
-    // are in the file's units and the character was parsed with it
-    // (ImportFlags::ClipNamesOnly via GraphicsHelper::loadAnimationsFromClipFile, the FBX unit-scale fix).
-    // …AND WITH THE RIG'S OWN UNIFORM FACTOR (IMPORT-1, IMPORT_DIALOG_SPEC §10):
-    // the character's import settings are baked into its geometry, so a clip
-    // read at its own file's scale would drive a rescaled rig with the wrong
-    // offsets. keysOnly() carries the factor and not the rotation or origin —
-    // those transform the character's ROOT NODE and a clip has no geometry.
-    QString readError;
-    const auto anims = iris::GraphicsHelper::loadAnimationsFromClipFile(
-        absolutePath, &readError, rigImportTransform(character).keysOnly());
-    if (!readError.isEmpty()) {
-        record(QStringLiteral("%1: could not read the clip file (%2)").arg(v, readError));
+    // THE CLIP BAKE, never a parse (SHIPPED-BAKES-1): every clip file this verb
+    // reaches is a library row's stored bytes, and its clip bake (built at the
+    // clip's import, rebuilt from the source on a worker when stale) carries
+    // the channels. The keys come out in THIS RIG's units: the character's
+    // import settings are baked into its geometry, so its uniform factor —
+    // keysOnly(), not the rotation or origin, which transform the character's
+    // ROOT NODE — scales the position keys exactly as the parse it replaces
+    // did (IMPORT-1, IMPORT_DIALOG_SPEC §10).
+    const iris::BakedClipPtr clipBake = MeshBakeStore::ensureClip(absolutePath);
+    if (!clipBake) {
+        record(QStringLiteral("%1: could not read the clip file '%2' (no clip bake could be built "
+                              "from its stored bytes)").arg(v, shown));
         return false;
     }
+    const auto anims = iris::MeshBake::clipAnimations(
+        *clipBake, rigImportTransform(character).keysOnly(), absolutePath);
     if (anims.isEmpty()) {
         record(QStringLiteral("%1: '%2' contains no animation").arg(v, shown));
         return false;
@@ -2730,14 +2734,34 @@ void AvatarApi::startPreviewLoad(const QString &modelPath, const QString &rowNam
         }
         endJob(false, error);
     });
-    // The character asset's import recipe, resolved HERE on the UI thread: the
-    // lookup reads the catalog and QSqlDatabase connections are per-thread, so
-    // the worker gets a plain value (the same split the mesh prewarm uses).
-    // Without it the page would preview a different size from the scene.
-    const iris::ImportTransform xf = MeshBakeStore::transformFor(modelPath, modelGuid);
-    watcher->setFuture(QtConcurrent::run([modelPath, rowName, xf]() {
-        return avatar::AvatarPreviewModel::prepareSubject(modelPath, rowName, xf);
+    // Everything catalog-shaped resolved HERE on the UI thread (the bake's
+    // plan, the row's material definition, its import recipe — QSqlDatabase
+    // connections are per-thread); the worker reads the bake and builds the
+    // fragment (the same split the mesh prewarm uses). Never a parse.
+    const avatar::AvatarPreviewModel::SubjectSource source =
+        subjectSourceFor(modelPath, rowName, modelGuid);
+    watcher->setFuture(QtConcurrent::run([source]() {
+        return avatar::AvatarPreviewModel::prepareSubject(source);
     }));
+}
+
+avatar::AvatarPreviewModel::SubjectSource AvatarApi::subjectSourceFor(const QString &modelPath,
+                                                                      const QString &rowName,
+                                                                      const QString &modelGuid)
+{
+    avatar::AvatarPreviewModel::SubjectSource source;
+    source.path = modelPath;
+    source.displayName = rowName;
+    // THE CHARACTER ASSET'S IMPORT RECIPE (IMPORT-1): what its bake was built
+    // under, and what a clip loaded onto it is scaled by.
+    source.xf = MeshBakeStore::transformFor(modelPath, modelGuid);
+    if (host.db)
+        source.definition = QJsonDocument::fromJson(host.db->fetchAssetData(modelGuid)).object();
+    // A STALE BAKE IS REBUILT FROM ITS SOURCE first (on a worker, this thread
+    // pumping) — the model is never parsed in its place (SHIPPED-BAKES-1).
+    MeshBakeStore::ensureFresh(modelPath, modelGuid);
+    source.plan = MeshBakeStore::planFor(modelPath, modelGuid);
+    return source;
 }
 
 void AvatarApi::endJob(bool cancelled, const QString &error, const QVariantMap &result)
@@ -2953,7 +2977,7 @@ QVariantMap AvatarApi::open(const QString &guid, const QVariantMap &options)
     // THE ROW'S NAME, not the file's: a store object is named after its
     // sha256, so the subject (and every junk-named clip in it) would otherwise
     // be called "c826b4bf…".
-    if (!mModel->load(modelPath, &loadError, rowName, modelGuid))
+    if (!mModel->load(subjectSourceFor(modelPath, rowName, modelGuid), &loadError))
         record(QStringLiteral("avatar.open: '%1' opened, but its model could not be "
                               "previewed: %2").arg(rowName, loadError));
     notifySubjectChanged();

@@ -140,6 +140,10 @@ void SceneHierarchyWidget::setMainWindow(MainWindow *mainWin)
     auto edit = [this]() { return mainWindow->studioServices()->sceneEdit; };
     QAction *action = nullptr;
     for (const primitives::Def &def : primitives::all()) {
+        // A PRIMITIVE only: the Platform and Furniture seed rows (the samples'
+        // Teapot and Ground, the preview docks' subjects, the VR controllers)
+        // are baked meshes nobody adds by name — addPrimitive refuses them.
+        if (def.kind != primitives::Kind::Primitive) continue;
         action = new QAction(QString::fromLatin1(def.name), this);
         action->setData(QString::fromLatin1(def.name));
         primtiveMenu->addAction(action);
