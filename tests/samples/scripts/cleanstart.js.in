@@ -59,11 +59,11 @@ function J(x) { return JSON.stringify(x); }
 // World Background, whose cubemap environment rides at 0.53 (the old 0.376 x
 // 1.4 gain, preserved).
 var EXPECTED = {
-    "Matcaps": { tier: "medium", nodes: 6, names: ["StanfordDragon", "Ground", "Directional Light", "Sky Light"],
+    "Matcaps": { tier: "medium", nodes: 6, names: ["StanfordDragon", "Floor", "Directional Light", "Sky Light"],
                  types: { mesh: 2, light: 3 } },
-    "Particles": { tier: "medium", nodes: 11, names: ["Fire Pit", "Ground", "Sphere", "Sky Light"],
+    "Particles": { tier: "medium", nodes: 11, names: ["Fire Pit", "Floor", "Sphere", "Sky Light"],
                    types: { mesh: 3, particles: 4 } },
-    "Physics": { tier: "medium", nodes: 17, names: ["Teapot", "ball", "pipe", "Ground", "Sky Light"],
+    "Physics": { tier: "medium", nodes: 17, names: ["Teapot", "ball", "pipe", "Floor", "Sky Light"],
                  types: { mesh: 13, light: 3 } },
     // The GRAND SHOWROOM (2026-09-07) replaced the old 241-node import: a
     // sealed hall of primitives — 6 room slabs, 4 columns, a 4-sphere metal
@@ -71,14 +71,15 @@ var EXPECTED = {
     // and it is REGENERABLE (scenes/tools/make_grand_showroom.js), which the
     // world it replaced was not.
     // ONE FLOOR since lane L13 (owner, 2026-09-12): the gallery stands on the
-    // default floor (the Ground), and the slab it used to lay over it is gone.
-    "Showroom": { tier: "epic", nodes: 23, names: ["Ground", "Sphere_r0", "GoldTorus", "GreenTeapot", "Sky Light"],
+    // default floor, and the slab it used to lay over it is gone. That floor
+    // is the Basic template's "Floor" cube since SAMPLES-1 (every sample).
+    "Showroom": { tier: "epic", nodes: 23, names: ["Floor", "Sphere_r0", "GoldTorus", "GreenTeapot", "Sky Light"],
                   types: { mesh: 16, light: 6 } },
     // SHOWROOM 2 (lane L14, owner 2026-09-12): the same generator at twice the
     // size. 20 nodes — the Showroom's 22 without the new-scene template's
     // Directional Light and Point Light, which a sealed room cannot use (the
     // generator removes them). Its three lights are ALL the room has.
-    "Showroom 2": { tier: "epic", nodes: 21, names: ["Ground", "Sphere_r0", "GoldTorus", "GreenTeapot", "Light0", "Sky Light"],
+    "Showroom 2": { tier: "epic", nodes: 21, names: ["Floor", "Sphere_r0", "GoldTorus", "GreenTeapot", "Light0", "Sky Light"],
                     types: { mesh: 16, light: 4 }, lightsExactly: 4,
                     absent: ["Directional Light", "Point Light"] },
     // The Mirror Room: the reflections sample (scenes/tools/make_mirror_room.js).
@@ -86,14 +87,14 @@ var EXPECTED = {
     // pass had left behind (the expectation lagged the re-stage — three lanes
     // independently flagged it).
     // 13 since lane L13: one floor, the default one (the Floor slab is gone).
-    "Mirror Room": { tier: "epic", nodes: 14, names: ["Ground", "RedWall", "MirrorPanel", "MirrorSphere", "GoldTorus", "Sky Light"],
+    "Mirror Room": { tier: "epic", nodes: 14, names: ["Floor", "RedWall", "MirrorPanel", "MirrorSphere", "GoldTorus", "Sky Light"],
                      types: { mesh: 10, light: 3 } },
-    "Skeletal Animation": { tier: "medium", nodes: 71, names: ["Beta_HighLimbsGeoMesh", "Hips", "Ground", "Sky Light"],
+    "Skeletal Animation": { tier: "medium", nodes: 71, names: ["Beta_HighLimbsGeoMesh", "Hips", "Floor", "Sky Light"],
                             types: { mesh: 4, light: 3 } },
     // The three dragons became Dragon / Dragon2 / Dragon3 on 2026-09-09: they
     // were all "SceneNode24" (an importer leftover) and the first had no guid
     // at all, so no by-name or by-id verb could tell them apart.
-    "World Background": { tier: "medium", nodes: 8, names: ["Dragon", "Dragon3", "Ground", "Sky Light"],
+    "World Background": { tier: "medium", nodes: 8, names: ["Dragon", "Dragon3", "Floor", "Sky Light"],
                           types: { mesh: 4, light: 3 } }
 };
 
@@ -399,13 +400,15 @@ var SCALE = {
         // below is the Showroom's times two, and `envelope` widens exactly the
         // two limits a fly-around hall breaks: the 48 m ceiling slab overhangs
         // the 40 m sample extent, and the 6.75 m interior is above the 4.5 m
-        // human-height ceiling. The checker grows with the room (textureScale
-        // 2 = 4 m cells), so the floor reads as the Showroom's does.
+        // human-height ceiling. The checker grows with the room: an 8 m repeat
+        // where every other sample has the template's 4 m (textureScale 12.5
+        // on the Basic floor's 100 m face; it was 2 on the old 16 m-per-UV
+        // ground — reauthor_samples.js carries the SIZE, SAMPLES-1).
         extent: { x: 48.0, y: 7.75, z: 48.0 }, cameraHeight: 4.9, fov: 45,
         room: { width: 23.5, depth: 23.5, height: 6.75 },
         objects: { "Sphere_r0": { y: 3.4 }, "GreenTeapot": { x: 3.86 } },
         envelope: { extentMax: 50.0, roomHeightMax: 7.0 },
-        floorTextureScale: 2
+        floorTextureScale: 12.5
     },
     "Showroom": {
         // Re-staged 2026-09-09: 2x -> 1x (an 11.75 m gallery under a 3.25 m
@@ -592,7 +595,8 @@ function checkScale() {
 // projects:
 //
 //   * the materials the conversion owns (the dragons are the drawer's
-//     Gold/Silver/Glass PBR presets — scenes/tools/convert_legacy_materials.py),
+//     Gold/Silver/Glass PBR presets — the HLMS_ADOPTION P4b table, whose only
+//     copy is scenes/tools/samples_library_objects.py now),
 //   * texture properties resolve to store paths, never raw guids,
 //   * PIXELS: an engine screenshot with colour probes (editor.screenshot's
 //     5x5-averaged probe points) — the gold dragon must BE gold, the blue
@@ -709,7 +713,7 @@ var FIDELITY = {
                "Matcaps: dragon is the Gold PBR preset (metallic=" + m.metallic +
                " baseColor=" + m.baseColor + ")");
         assertTexturePath("Matcaps ground", "baseColorMap",
-                          material.get(meshesByName("Ground")[0].id).baseColorMap);
+                          material.get(meshesByName("Floor")[0].id).baseColorMap);
         // THE BODY, NOT THE HIGHLIGHT (2026-09-19). These two probes used to sit
         // at 0.49,0.49 and 0.50,0.40 — both on the gold's SPECULAR HOTSPOT,
         // where the picture reads 255,255,1. A hotspot is the least stable
@@ -736,7 +740,7 @@ var FIDELITY = {
         assert(sphereMat.baseColor === "#ffcd37",
                "Particles: sphere keeps its edge-material colour (" + sphereMat.baseColor + ")");
         assertTexturePath("Particles ground", "baseColorMap",
-                          material.get(meshesByName("Ground")[0].id).baseColorMap);
+                          material.get(meshesByName("Floor")[0].id).baseColorMap);
         assertTexturePath("Particles fire pit", "baseColorMap",
                           material.get(meshesByName("Fire Pit")[0].id).baseColorMap);
         var particleCount = 0;
@@ -785,7 +789,7 @@ var FIDELITY = {
                "World: Glass PBR dragon present (alphaMode 3, alpha " +
                (byColor["#eef4f8"] ? byColor["#eef4f8"].alpha : "?") + ")");
         assertTexturePath("World ground", "baseColorMap",
-                          material.get(meshesByName("Ground")[0].id).baseColorMap);
+                          material.get(meshesByName("Floor")[0].id).baseColorMap);
         // The gold probe moved off the HIGHLIGHT and onto the body for the
         // reason written out in the Matcaps case above: a hotspot swings from
         // 255 to 28 when a light's shadow moves it two pixels. 0.56,0.46 is
@@ -851,7 +855,7 @@ var REOPEN_FIDELITY = {
         assertFireIsFire(shoot("particles_plume_resaved", firePlumeProbePoints()),
                          " after save+reopen");
         assertTexturePath("Particles ground (reopened)", "baseColorMap",
-                          material.get(meshesByName("Ground")[0].id).baseColorMap);
+                          material.get(meshesByName("Floor")[0].id).baseColorMap);
         assertTexturePath("Particles fire pit (reopened)", "baseColorMap",
                           material.get(meshesByName("Fire Pit")[0].id).baseColorMap);
         assertTexturePath("Particles fire pit (reopened)", "normalMap",
@@ -868,8 +872,8 @@ app.engineErrors(true);
 var imported = project.importArchive(ZIP);
 assert(imported && imported.guid && imported.guid.length > 10, "importArchive -> " + (imported ? imported.guid : "null"));
 assert(imported.assets > 0, "catalog rows imported (" + imported.assets + ")");
-// OBJECTS: stored files in the archive's CAS — at the least the ground's
-// Tile.png, which every sample's default Ground uses. The two script-built
+// OBJECTS: stored files in the archive's CAS — at the least the floor's
+// Tile.png, which every sample's default floor uses. The two script-built
 // samples (Showroom, Mirror Room) are made of PRIMITIVES, whose meshes are app
 // resources rather than library assets, and until lane L13 they shipped NO
 // objects at all: their Tile.png row had no stored bytes, so the ground came
@@ -1008,7 +1012,8 @@ errorsClean("after baked reopen");
 //    floor and the lights hidden (so no object or shadow is in the shot), must
 //    show the two tones' edges across a probe grid. A flat untextured floor
 //    under the same lights changes by a level or two between neighbouring
-//    probes; the checker's cells (2 m at textureScale 4) change by a step.
+//    probes; the checker's cells (2 m checks: the template's textureScale 25
+//    on the floor's 100 m face) change by a step.
 //    Last on purpose: it hides nodes, and nothing after it looks.
 function checkDefaultFloor() {
     var floors = scene.nodes().filter(function (r) {
@@ -1019,7 +1024,7 @@ function checkDefaultFloor() {
     var fm = material.get(floor);
     assert(("" + fm.baseColorMap).length > 0, "the default floor wears a texture");
     // Showroom 2's checker grows with its room (its SCALE block says why).
-    var checker = (SCALE[SAMPLE] && SCALE[SAMPLE].floorTextureScale) || 4;
+    var checker = (SCALE[SAMPLE] && SCALE[SAMPLE].floorTextureScale) || 25;
     if (SAMPLE !== "World Background")
         assert(Math.abs(fm.textureScale - checker) < 1e-4,
                "... the checker at textureScale " + checker + " (" + fm.textureScale + ")");
