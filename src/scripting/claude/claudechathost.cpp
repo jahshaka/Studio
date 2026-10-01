@@ -117,7 +117,7 @@ bool ClaudeChatHost::configure(const QString &projectFolder, bool mcpEnabled,
                          ? QString()
                          : ClaudeLaunchConfig::readSessionId(projectFolder);
         // D2: a child this project recorded and nobody reaped (the app died
-        // before shutdownBackgroundWork ran) dies here, before we spawn ours.
+        // before ShellLifecycle::stopBackgroundWork ran) dies here, before we spawn ours.
         if (!mProjectFolder.isEmpty()) reapStaleChild(mProjectFolder);
         if (hadConversation) emit projectChanged(projectFolder);
     } else if (mcpEnabled != mMcpEnabled || mcpPort != mMcpPort || mcpToken != mMcpToken) {

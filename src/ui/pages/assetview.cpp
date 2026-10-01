@@ -2569,7 +2569,7 @@ void AssetView::rebuildMissingThumbnails()
 	    [] { QCoreApplication::processEvents(QEventLoop::ExcludeUserInputEvents); });
 
 	// STOPPED MEANS SILENT (fix round F1). A yield delivers the window's close:
-	// shutdownBackgroundWork has already destroyed the thumbnail renderer by the
+	// ShellLifecycle::stopBackgroundWork has already destroyed the thumbnail renderer by the
 	// time we are back here, the page is on its way out, and a toast — let alone
 	// the modal box below — would be the "modal swallowed the quit" zombie.
 	if (result.cancelled) return;

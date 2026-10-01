@@ -7,8 +7,8 @@ Every verb is callable from the script console (Editor, bottom dock), from
 headless matrix: *document* verbs need no VIEWPORT (`--headless`), *engine*
 verbs need the engine viewport up, *window* verbs are only meaningful with
 the editor UI. A `--headless` run boots the engine on the NULL render
-system and needs NO DISPLAY AT ALL (eb4320b4; 35 suites run displayless
-on this rig). A run WITH a viewport — `--script` without `--headless`, and
+system and needs NO DISPLAY AT ALL (eb4320b4; every `jah_no_display` row of
+the gate runs that way). A run WITH a viewport — `--script` without `--headless`, and
 therefore every *engine* verb — does need a reachable DISPLAY, because Ogre
 has no Wayland backend and its XCB support object connects at plugin load.
 

@@ -105,7 +105,7 @@ public:
     /// Stop as soon as the current file finishes. The worker checks this
     /// between files, so an abort costs at most one copy. Safe from any
     /// thread, and BOTH shutdown paths call it: the window's
-    /// (MainWindow::shutdownBackgroundWork, whose pool wait then joins the
+    /// (ShellLifecycle::stopBackgroundWork, whose pool wait then joins the
     /// aborted worker) and the CLI's (finalizeAppExit). Until RESET-LIBRARY-1's
     /// fix round only the CLI one did, so a window closed during the first
     /// launch's seed tore the app down around a live importer.

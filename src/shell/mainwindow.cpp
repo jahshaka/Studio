@@ -441,7 +441,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
 	// The main-thread watchdog (STABILITY_PROGRAM_SPEC Lane 5). Started HERE,
 	// from the UI thread, because the thread that starts it is the thread its
 	// backtraces will be of. Dev builds only, and it stops itself in
-	// shutdownBackgroundWork so a normal teardown is never photographed.
+	// ShellLifecycle::stopBackgroundWork so a normal teardown is never photographed.
 	MainThreadWatchdog::start();
 }
 

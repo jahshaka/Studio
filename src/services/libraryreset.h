@@ -35,7 +35,7 @@ For more information see the LICENSE file
 //     "There was an error fetching db metadata No query", "080SchemaUpdate
 //     query failed to execute!", "updateMetadataVersion query failed to
 //     execute! Parameter count mismatch". (The tables did come back later —
-//     `MainWindow::setupProjectDB` creates them — but only after the upgrader
+//     `ShellLifecycle::openLibrary` creates them — but only after the upgrader
 //     had already failed against the empty file.)
 //   * AND A SESSION THAT DID NOT RESTART carried on with no tables at all.
 //

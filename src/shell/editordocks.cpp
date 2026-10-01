@@ -1277,11 +1277,11 @@ void EditorDocks::favoriteItem(QListWidgetItem *item)
 {
     if (item->data(MODEL_TYPE_ROLE).toInt() == static_cast<int>(ModelTypes::Material)) {
         assetMaterialPanel->addNewItem(item);
-        presetsTabWidget->setCurrentIndex(1);
+        presetsTabWidget->setCurrentWidget(assetMaterialPanel);
     }
     else if (item->data(MODEL_TYPE_ROLE).toInt() == static_cast<int>(ModelTypes::Object)) {
         assetModelPanel->addNewItem(item);
-        presetsTabWidget->setCurrentIndex(0);
+        presetsTabWidget->setCurrentWidget(assetModelPanel);
     }
 }
 
