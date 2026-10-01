@@ -293,6 +293,7 @@ set(SRCS
     src/shell/modulehub.cpp
     src/shell/shelllifecycle.cpp
     src/shell/shellview.cpp
+    src/shell/viewcontroller.cpp
     src/modules/moduleregistry.cpp
     src/services/sceneopenrunner.cpp
     src/services/imagematerial.cpp
@@ -596,6 +597,7 @@ set(HEADERS
     src/shell/modulehub.h
     src/shell/shelllifecycle.h
     src/shell/shellview.h
+    src/shell/viewcontroller.h
     src/shell/spaces.h
     src/ui/ishellview.h
     src/scripting/claude/claudeassistant.h

@@ -167,6 +167,7 @@ For more information see the LICENSE file
 #include "shell/pagehost.h"
 #include "shell/shelllifecycle.h"
 #include "shell/shellview.h"
+#include "shell/viewcontroller.h"
 #include "player/playerwidget.h"
 #include "player/engineplayerview.h"
 #include "viewport/headlesseditorviewport.h"
@@ -284,6 +285,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
 	pageHost = new PageHost(ui->stackedWidget, this, this);
 	shortcutRegistry = new ShortcutRegistry(settings->settings, this);
 	actionHost = new ActionHost(shortcutRegistry, this, [this]() { return currentSpaceId(); }, this);
+	viewController = new ViewController(this);
 	moduleHub = new ModuleHub(this);
 	moduleHub->setSpaceEditTarget(spaces::id(WindowSpaces::EDITOR), [this]() { return editorEditTarget(); });
 	shellView = new ShellView(this);
@@ -1609,7 +1611,7 @@ bool MainWindow::enterEditorSpace()
 	// The dropdown follows the VIEWPORT, and a scene open resets it to
 	// perspective (per-view camera memory is per scene session) — so
 	// re-read it here rather than leaving "Top" over a fresh scene.
-	setViewsButtonLabel(sceneView->cameraView());
+	viewController->followViewport();
 
 	sceneView->begin();
 	// The on-screen View could not be created at all: nothing will ever present
@@ -3894,61 +3896,9 @@ void MainWindow::setupViewPort()
     wireFramesButton->setText("View Options ");
     wireFramesButton->setPopupMode(QToolButton::InstantPopup);
 
-    // Views ▾ — canonical camera views (owner request): Perspective plus the
-    // six orthographic axis views. Same path as the view.* shortcuts and the
-    // editor.setView verb (applyCameraView).
-    viewsButton = new QToolButton;
-    viewsButton->setStyleSheet(StyleSheet::ViewportMenuButton());
-    viewsMenu = new QMenu;
-    viewsMenu->setStyleSheet(StyleSheet::QMenuFlat());
-    auto viewsGroup = new QActionGroup(viewsMenu);
-    viewsGroup->setExclusive(true);
-    const QVector<QPair<QString, QString>> canonicalViews = {
-        { QStringLiteral("perspective"), QStringLiteral("Perspective") },
-        { QStringLiteral("top"), QStringLiteral("Top") },
-        { QStringLiteral("bottom"), QStringLiteral("Bottom") },
-        { QStringLiteral("left"), QStringLiteral("Left") },
-        { QStringLiteral("right"), QStringLiteral("Right") },
-        { QStringLiteral("front"), QStringLiteral("Front") },
-        { QStringLiteral("back"), QStringLiteral("Back") },
-    };
-    for (const auto &entry : canonicalViews) {
-        QAction *action = viewsMenu->addAction(entry.second);
-        action->setCheckable(true);
-        action->setChecked(entry.first == QLatin1String("perspective"));
-        action->setData(entry.first);
-        viewsGroup->addAction(action);
-        connect(action, &QAction::triggered, this,
-                [this, entry]() { applyCameraView(entry.first); });
-        viewsActions.push_back(action);
-    }
-    viewsButton->setMenu(viewsMenu);
-    // The button SHOWS the current view, it does not advertise the menu: a
-    // static "Views" label told the user nothing about which view they were
-    // in (owner report 2026-09-07). It starts on Perspective — the viewport's
-    // own starting view — and follows every path that changes it, the
-    // dropdown, the view.* shortcuts and editor.setView alike, because they
-    // all land in applyCameraView.
-    viewsButton->setToolTip(tr("Canonical camera views"));
-    setViewsButtonLabel(QStringLiteral("perspective"));
-    viewsButton->setPopupMode(QToolButton::InstantPopup);
-
-    // Camera ▾ — the switcher (CAMERAS_SPEC D4): the Viewport (explorer) plus
-    // every scene camera by name. Choosing a camera PILOTS it; choosing
-    // Viewport ejects. It is rebuilt on every open rather than kept in sync,
-    // because the list is the document's and the document changes underneath it
-    // (a camera added, renamed, deleted, a whole world closed) — and a stale
-    // entry would hand the viewport a stale node.
-    camerasButton = new QToolButton;
-    camerasButton->setStyleSheet(StyleSheet::ViewportMenuButton());
-    camerasMenu = new QMenu;
-    camerasMenu->setStyleSheet(StyleSheet::QMenuFlat());
-    connect(camerasMenu, &QMenu::aboutToShow, this, &MainWindow::rebuildCamerasMenu);
-    camerasButton->setMenu(camerasMenu);
-    camerasButton->setText("Camera ");
-    camerasButton->setPopupMode(QToolButton::InstantPopup);
-    camerasButton->setToolTip(tr("Render the viewport through the free explorer or a scene camera "
-                                 "(choosing a camera pilots it)"));
+    // The projection toggle, Views ▾ and Camera ▾ — the editor camera's
+    // controls, owned by the ViewController.
+    const ViewController::CameraControls cameraControls = viewController->createCameraControls();
 
     connect(screenShotBtn, SIGNAL(pressed()), this, SLOT(takeScreenshot()));
 
@@ -3965,20 +3915,12 @@ void MainWindow::setupViewPort()
 	playSimBtn->setToolTip("Simulate physics only");
 	playSimBtn->setStyleSheet(StyleSheet::BackgroundTransparent());
 
-	cameraView = new QPushButton;
-	cameraView->setStyleSheet(StyleSheet::ViewportCameraToggle());
-	// The icon used to appear only after the first changeProjection() call —
-	// invisible on a transparent background, but an empty grey pill under the
-	// chrome button spec. The editor camera starts perspective; say so.
-	cameraView->setIcon(QIcon(":/icons/perspective-view-80.png"));
-	cameraView->setToolTip(tr("Perspective view | Toggle to switch to orthogonal view"));
-
     controlBarLayout->setSpacing(8);
     controlBarLayout->addWidget(screenShotBtn);
-	controlBarLayout->addWidget(cameraView);
+	controlBarLayout->addWidget(cameraControls.projection);
     controlBarLayout->addWidget(wireFramesButton);
-    controlBarLayout->addWidget(viewsButton);
-    controlBarLayout->addWidget(camerasButton);
+    controlBarLayout->addWidget(cameraControls.views);
+    controlBarLayout->addWidget(cameraControls.cameras);
     controlBarLayout->addStretch();
     controlBarLayout->addWidget(playSceneBtn);
     controlBarLayout->addSpacing(2);
@@ -3994,9 +3936,9 @@ void MainWindow::setupViewPort()
         // footer, owner direction): rounded grey, consistent height,
         // horizontal text gutters — replaces the square edge-tight look.
         for (QWidget *chromeBtn :
-             std::initializer_list<QWidget *>{ screenShotBtn, cameraView,
-                                               wireFramesButton, viewsButton,
-                                               camerasButton,
+             std::initializer_list<QWidget *>{ screenShotBtn, cameraControls.projection,
+                                               wireFramesButton, cameraControls.views,
+                                               cameraControls.cameras,
                                                playSceneBtn, playSimBtn })
             chromeBtn->setStyleSheet(ThemeManager::chromeButtonSheet());
     }
@@ -4155,6 +4097,7 @@ void MainWindow::setupViewPort()
     sceneView->asWidget()->setFocus();
     sceneView->setMainWindow(this);
     sceneView->setDatabase(db);
+    viewController->setViewport(sceneView);
 
 	// The player page: PlayerWidget gets an EnginePlayerView (a second engine
 	// Scene mirroring the same document), or none in headless runs.
@@ -4600,22 +4543,6 @@ void MainWindow::setupToolBar()
 	// actions (the Claude assistant's chat button).
 	actionHost->addToolbarSlot(toolBar, QStringLiteral("editor.end"));
 
-	cameraView->setIconSize(QSize(17, 17));
-
-	connect(cameraView, &QPushButton::clicked, [=](){ emit projectionChangeRequested(!sceneView->editorCamera()->isPerspective); });
-
-	connect(this, SIGNAL(projectionChangeRequested(bool)), this, SLOT(changeProjection(bool)));	
-
-	// A REPORT, NOT A COMMAND. The viewport telling the toolbar what its camera
-	// now is must only repaint the button — routing it through
-	// projectionChangeRequested would make every such report re-issue a view
-	// change (and, since the change is a canonical view now, snap the camera).
-	connect(sceneView->events(), &EditorViewportEvents::updateToolbarButton, this, [this]() {
-		if (!sceneView || !sceneView->editorCamera()) return;
-		syncProjectionButton(sceneView->editorCamera()->isPerspective);
-		setViewsButtonLabel(sceneView->cameraView());
-	});
-
 	// The scroll wheel stepped the camera speed while the EDITOR's camera was
 	// flying: show the new number over the viewport. The toolbar button needs
 	// no telling — it follows the dial itself (CameraSpeed::setOnChanged,
@@ -4701,25 +4628,25 @@ void MainWindow::setupShortcuts()
     row("camera.focus", "Focus Selection / Frame Graph Nodes", "Camera",
         QKeySequence(Qt::Key_F), editor, [this]() { sceneView->focusOnSelection(); });
     row("view.orthographic", "Orthographic Projection", "Camera", QKeySequence(Qt::Key_O), any,
-            [this]() { emit projectionChangeRequested(false); });
+            [this]() { viewController->changeProjection(false); });
     row("view.perspective", "Perspective Projection", "Camera", QKeySequence(Qt::Key_P), any,
-            [this]() { emit projectionChangeRequested(true); });
+            [this]() { viewController->changeProjection(true); });
     // Canonical axis views (historical X/Y/Z keys, moved out of the arcball
     // controller's raw key handling so they are remappable, listed in
     // Preferences -> Shortcuts, and work in the free camera too). Ctrl+Z
     // stays undo — "back" gets Shift+Z instead.
     row("view.top", "Top View", "Camera", QKeySequence(Qt::Key_Y), editor,
-            [this]() { applyCameraView("top"); });
+            [this]() { viewController->applyCameraView("top"); });
     row("view.bottom", "Bottom View", "Camera", QKeySequence(Qt::CTRL | Qt::Key_Y), editor,
-            [this]() { applyCameraView("bottom"); });
+            [this]() { viewController->applyCameraView("bottom"); });
     row("view.left", "Left View", "Camera", QKeySequence(Qt::Key_X), editor,
-            [this]() { applyCameraView("left"); });
+            [this]() { viewController->applyCameraView("left"); });
     row("view.right", "Right View", "Camera", QKeySequence(Qt::CTRL | Qt::Key_X), editor,
-            [this]() { applyCameraView("right"); });
+            [this]() { viewController->applyCameraView("right"); });
     row("view.front", "Front View", "Camera", QKeySequence(Qt::Key_Z), editor,
-            [this]() { applyCameraView("front"); });
+            [this]() { viewController->applyCameraView("front"); });
     row("view.back", "Back View", "Camera", QKeySequence(Qt::SHIFT | Qt::Key_Z), editor,
-            [this]() { applyCameraView("back"); });
+            [this]() { viewController->applyCameraView("back"); });
     // The ARROW CLUSTER, not W/A/S/D (owner decision 2026-09-09): the editor's
     // fly moved off the letters so tool shortcuts can have them back. The
     // PLAYER still answers to both spellings — its rows are the Gameplay
@@ -6282,115 +6209,6 @@ void MainWindow::applyPlayModeUi()
     playSceneBtn->setIcon(fontIcons->icon(fa::stop, options));
 }
 
-// The camera switcher's list (CAMERAS_SPEC D4). Built on every open from the
-// live document; the checkmark shows what the viewport is actually rendering
-// through, which is the piloted camera or the explorer.
-void MainWindow::rebuildCamerasMenu()
-{
-    if (!camerasMenu) return;
-    camerasMenu->clear();
-    auto group = new QActionGroup(camerasMenu);
-    group->setExclusive(true);
-
-    const iris::CameraNodePtr piloted = sceneView ? sceneView->pilotedCamera()
-                                                  : iris::CameraNodePtr();
-    QAction *explorer = camerasMenu->addAction(tr("Viewport"));
-    explorer->setCheckable(true);
-    explorer->setChecked(piloted.isNull());
-    group->addAction(explorer);
-    connect(explorer, &QAction::triggered, this,
-            [this]() { if (sceneView) sceneView->pilotCamera(iris::CameraNodePtr()); });
-
-    auto scene = sceneView ? sceneView->getScene() : iris::ScenePtr();
-    if (!scene || scene->cameras.isEmpty()) {
-        QAction *none = camerasMenu->addAction(tr("No scene cameras"));
-        none->setEnabled(false);
-        return;
-    }
-    camerasMenu->addSeparator();
-    // By NAME, and stable: a QHash's order is not, and a menu that reshuffles
-    // between opens is unusable.
-    QVector<iris::CameraNodePtr> cameras;
-    for (const auto &cam : scene->cameras) if (cam) cameras.push_back(cam);
-    std::sort(cameras.begin(), cameras.end(),
-              [](const iris::CameraNodePtr &a, const iris::CameraNodePtr &b) {
-                  if (a->getName() != b->getName()) return a->getName() < b->getName();
-                  return a->getGUID() < b->getGUID();
-              });
-    for (const iris::CameraNodePtr &cam : cameras) {
-        QAction *action = camerasMenu->addAction(
-            cam->getName().isEmpty() ? tr("Camera") : cam->getName());
-        action->setCheckable(true);
-        action->setChecked(piloted == cam);
-        group->addAction(action);
-        const QString guid = cam->getGUID();
-        connect(action, &QAction::triggered, this, [this, guid]() {
-            if (!sceneView) return;
-            auto sc = sceneView->getScene();
-            if (!sc) return;
-            if (auto target = sc->cameras.value(guid)) sceneView->pilotCamera(target);
-        });
-    }
-}
-
-bool MainWindow::applyCameraView(const QString &name)
-{
-    if (!sceneView || !sceneView->setCameraView(name)) return false;
-
-    // The projection button is a VIEW of the state, so it is updated and never
-    // asked to re-apply anything (it used to call changeProjection, which is
-    // now the command and would recurse).
-    const bool perspective = (name == QLatin1String("perspective"));
-    syncProjectionButton(perspective);
-    // ...and an axis view is remembered, so the toggle's "orthographic" means
-    // "back to the one I was in".
-    if (!perspective) lastOrthographicView = name;
-
-    for (QAction *action : viewsActions)
-        action->setChecked(action->data().toString() == name);
-    setViewsButtonLabel(name);
-    return true;
-}
-
-void MainWindow::setViewsButtonLabel(const QString &view)
-{
-    if (!viewsButton) return;
-    // The label is the checked action's own text, so the button and the menu
-    // can never spell the same view differently.
-    for (QAction *action : viewsActions) {
-        if (action->data().toString() != view) continue;
-        viewsButton->setText(action->text() + QStringLiteral(" "));
-        return;
-    }
-    viewsButton->setText(QStringLiteral("Perspective "));
-}
-
-// THE PROJECTION TOGGLE IS A VIEW CHANGE (hygiene lane, 2026-09-09).
-//
-// Three defects in one small function, all of them the same mistake — it did
-// the work itself instead of asking the viewport:
-//
-//  1. It wrote `sceneView->getScene()->camera`, the SCENE's camera node. The
-//     explorer this viewport flies is a different node (EngineSceneViewport::
-//     editorCamera), so the button changed a camera nothing was looking
-//     through and the picture did not change at all until something else
-//     happened to re-push.
-//  2. It never went through setCameraView, so the AXIS-VIEW ROTATION LOCK was
-//     never armed or disarmed (the lock reads the projection precisely because
-//     this button used to bypass it — enginesceneviewport.cpp says so at
-//     cameraRotationLocked) and the per-view camera memory was not consulted.
-//  3. It left the Views label reading "Perspective" over an orthographic
-//     picture, because only applyCameraView relabels it.
-//
-// So it now asks for a canonical view, and "orthographic" means the last AXIS
-// view this window was in (Top on a fresh window). That is the same state the
-// Views menu produces, which is the point: two controls that mean the same
-// thing must not be able to leave the editor in two different states.
-void MainWindow::changeProjection(bool val)
-{
-	applyCameraView(val ? QStringLiteral("perspective") : lastOrthographicView);
-}
-
 // The first-run size clamp (see the restoreGeometry call site). Before the
 // first show() there is no QWindow yet, so screen() answers with the primary
 // screen — which is the one a first window lands on anyway. availableGeometry()
@@ -6412,14 +6230,3 @@ void MainWindow::fitToScreen()
     if (!avail.contains(QRect(pos(), fit))) move(avail.topLeft());
 }
 
-void MainWindow::syncProjectionButton(bool perspective)
-{
-	if (!cameraView) return;
-	if (perspective) {
-		cameraView->setIcon(QIcon(":/icons/perspective-view-80.png"));
-		cameraView->setToolTip(tr("Perspective view | Toggle to switch to orthogonal view"));
-	} else {
-		cameraView->setIcon(QIcon(":/icons/orthogonal-view-80.png"));
-		cameraView->setToolTip(tr("Orthogonal view | Toggle to switch to perspective view"));
-	}
-}

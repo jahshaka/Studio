@@ -13,6 +13,7 @@ For more information see the LICENSE file
 
 #include "shell/mainwindow.h"
 #include "shell/spaces.h"
+#include "shell/viewcontroller.h"
 
 QWidget *ShellView::window() const
 {
@@ -265,7 +266,7 @@ void ShellView::setPhysicsDebugOverlay(bool on)
 
 bool ShellView::applyCameraView(const QString &name)
 {
-    return mWindow->applyCameraView(name);
+    return mWindow->views()->applyCameraView(name);
 }
 
 bool ShellView::applyGizmoTransformSpace(const QString &space)

@@ -54,6 +54,7 @@ class ActionHost;
 class ModuleHub;
 class ShellLifecycle;
 class ShellView;
+class ViewController;
 
 class QPushButton;
 class QStandardItem;
@@ -242,19 +243,9 @@ public:
     /// Says on screen why a VR toggle did not start (the reason is the verb's own).
     void showVrRefusal(const QString &reason);
 
-	/// Views dropdown / view.* shortcuts / editor.setView verb — ONE path:
-	/// snaps the editor camera to a canonical view ("top", "bottom", "left",
-	/// "right", "front", "back", "perspective"), switches projection (axis
-	/// views are orthographic) and keeps the toolbar + dropdown checks in
-	/// sync. Returns false for an unknown name.
-	bool applyCameraView(const QString &name);
-	/// The Views dropdown's label = the view it is currently in ("Perspective"
-	/// until one is picked). Driven from applyCameraView, so a scripted
-	/// editor.setView moves it exactly like a click does.
-	void setViewsButtonLabel(const QString &view);
-	/// Rebuilds the camera switcher's list from the live document
-	/// (CAMERAS_SPEC D4). Connected to the menu's aboutToShow.
-	void rebuildCamerasMenu();
+	/// The editor camera's controls: the canonical views, the projection
+	/// toggle and the camera switcher (shell/viewcontroller.h).
+	ViewController *views() const { return viewController; }
     /// WHAT A CLOSE IS FOR (VIEW-REBUILD-1, 2026-09-21).
     ///
     /// `ToDesktop` is a close the user asked for: the world goes and the window
@@ -790,8 +781,6 @@ public slots:
     void toggleDebugDrawer(bool state);
 
 signals:
-	void projectionChangeRequested(bool val);
-
 	/// An asset was REIMPORTED through the import-settings dialog: its bake,
 	/// its metadata block and every placed instance of it have changed
 	/// (SPECS/IMPORT_DIALOG_SPEC.md §5). The Assets page and the project tray
@@ -820,23 +809,6 @@ private slots:
     void cycleGizmoMode();
 
     void onPlaySceneButton();
-
-	/// The PROJECTION TOGGLE, and it is a CANONICAL VIEW change (hygiene lane,
-	/// 2026-09-09). `true` = perspective; `false` = the last orthographic axis
-	/// view this window was in, "top" until there has been one. It routes
-	/// through applyCameraView, which is the only path that also arms the
-	/// axis-view rotation lock, updates the Views menu and relabels the button.
-	///
-	/// It used to flip `sceneView->getScene()->camera` — the SCENE's camera
-	/// node, which is not the editor camera this viewport flies — leaving the
-	/// explorer's projection untouched, the lock unarmed and the Views label
-	/// reading "Perspective" over an orthographic picture.
-	void changeProjection(bool val);
-
-	/// Icon + tooltip only: what the projection button LOOKS like. Split out of
-	/// changeProjection so the viewport can report a projection it changed
-	/// itself without that report turning into a command.
-	void syncProjectionButton(bool perspective);
 
 	/// Shrinks the window to the screen it is about to appear on, keeping the
 	/// authored .ui size as the preferred one. Called ONLY when there is no
@@ -1075,19 +1047,6 @@ private:
     QPushButton *playSceneBtn = nullptr;
     QMenu *wireFramesMenu = nullptr;
     QToolButton *wireFramesButton = nullptr;
-    QToolButton *viewsButton = nullptr;
-    QMenu *viewsMenu = nullptr;
-    QVector<QAction *> viewsActions;   // checkable, ordered as built
-    /// Where the projection toggle goes when it is asked for "orthographic":
-    /// the last axis view this window was in, so Perspective -> Front ->
-    /// Perspective -> (toggle) returns to Front rather than jumping to Top.
-    QString lastOrthographicView = QStringLiteral("top");
-    /// The CAMERA SWITCHER (CAMERAS_SPEC D4), beside Views: "Viewport" (the
-    /// free explorer) plus every scene camera by name. Rebuilt from the
-    /// document each time it opens — cameras are added, renamed and deleted
-    /// while the menu exists, and a stale list would pilot a dead node.
-    QToolButton *camerasButton = nullptr;
-    QMenu *camerasMenu = nullptr;
     QPushButton *restartBtn = nullptr;
     QPushButton *playBtn = nullptr;
     QPushButton *stopBtn = nullptr;
@@ -1190,7 +1149,6 @@ private:
     AssetModelPanel *assetModelPanel = nullptr;
     AssetMaterialPanel *assetMaterialPanel = nullptr;
 
-	QPushButton *cameraView = nullptr;
 	QtAwesome *fontIcons;
 
 	VrModule *vrModule = nullptr;
@@ -1202,6 +1160,7 @@ private:
 	ModuleHub *moduleHub = nullptr;
 	ShellLifecycle *lifecycle = nullptr;
 	ShellView *shellView = nullptr;
+	ViewController *viewController = nullptr;
 
     // services (APP_ARCHITECTURE_AUDIT §3.3): constructed in setupServices(),
     // deleted in the dtor. The QObject services are parented to the window.
