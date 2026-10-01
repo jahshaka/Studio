@@ -25,7 +25,7 @@ For more information see the LICENSE file
 
 #include "data/database/database.h"
 #include "data/project.h"
-#include "shell/mainwindow.h"
+#include "ui/ishellview.h"
 #include "services/projectservice.h"
 #include "services/loadtimeline.h"
 #include "services/services.h"
@@ -35,6 +35,14 @@ For more information see the LICENSE file
 #include "services/sceneextents.h"
 #include "services/scenetemplate.h"
 #include "viewport/ieditorviewport.h"
+
+namespace {
+/// The Desktop page, through the shell (null in a session with no window).
+ProjectManager *desktopPage(const ScriptHost &host)
+{
+    return host.shell ? host.shell->projectPage() : nullptr;
+}
+}   // namespace
 
 QVector<VerbInfo> ProjectApi::verbs() const
 {
@@ -243,7 +251,7 @@ QString ProjectApi::resolveGuid(const QString &guidOrName, QString *nameOut)
 QString ProjectApi::createInto(const QString &name, const QVariantMap &options,
                                bool async, const QString &verb)
 {
-    if (!host.mainWindow || !host.services || !host.services->project) { fail("project: not available in this session"); return QString(); }
+    if (!host.shell || !host.services || !host.services->project) { fail("project: not available in this session"); return QString(); }
     if (name.trimmed().isEmpty()) { fail(QStringLiteral("%1: a non-empty name is required").arg(verb)); return QString(); }
 
     // UNKNOWN KEYS ARE REFUSED, not ignored (the house rule): `{tempalte: "empty"}`
@@ -287,8 +295,8 @@ QString ProjectApi::createInto(const QString &name, const QVariantMap &options,
     // reasoning is on ScriptHost::endRunUndoMacro). newProject() clears the
     // stack, and that clear is a no-op while the run's macro is open.
     host.endRunUndoMacro();
-    if (async) host.mainWindow->newProjectAsync(guid, name.trimmed(), folder, kind);
-    else       host.mainWindow->newProject(guid, name.trimmed(), folder, kind);
+    if (async) host.shell->newProjectAsync(guid, name.trimmed(), folder, kind);
+    else       host.shell->newProject(guid, name.trimmed(), folder, kind);
     host.beginRunUndoMacro();
     return guid;
 }
@@ -304,7 +312,7 @@ QString ProjectApi::create(const QString &name, const QVariantMap &options)
 // drift the option map and the shell's stage list exist to prevent.
 QString ProjectApi::createAsync(const QString &name, const QVariantMap &options)
 {
-    if (!host.mainWindow) { fail("project.createAsync: this verb needs the editor window"); return QString(); }
+    if (!host.shell) { fail("project.createAsync: this verb needs the editor window"); return QString(); }
     // THE SAME RULE project.openAsync follows, and the same predicate: while
     // project.openState() reads 'opening' a second one is refused, never
     // queued. (project.create cannot refuse — its contract is a loaded world —
@@ -317,7 +325,7 @@ QString ProjectApi::createAsync(const QString &name, const QVariantMap &options)
 
 bool ProjectApi::open(const QString &guidOrName)
 {
-    if (!host.mainWindow || !host.services || !host.services->project)
+    if (!host.shell || !host.services || !host.services->project)
         return fail("project: not available in this session");
 
     QString name;
@@ -339,11 +347,11 @@ bool ProjectApi::open(const QString &guidOrName)
     // closing and re-pointing first and draining afterwards would install a
     // hybrid world: the old session's assets, the new blob, and a prewarm for
     // neither, every mesh of it parsed on the UI thread.
-    if (!host.mainWindow->waitForOpen())
+    if (!host.shell->waitForOpen())
         return fail("project.open: an open already in flight did not finish");
 
     if (host.project->getProjectGuid() == guid && host.services->project->isSceneOpen()) {
-        host.mainWindow->switchSpace(WindowSpaces::EDITOR);
+        host.shell->setSpace(QStringLiteral("editor"));
         return true;
     }
     // A RECORDED LOCATION THAT IS NOT THERE IS A REFUSAL BY NAME (SMALL-UI-A
@@ -365,7 +373,7 @@ bool ProjectApi::open(const QString &guidOrName)
     // The close is the first half of this open: the page the user is on stays
     // (MainWindow::CloseIntent, VIEW-REBUILD-1).
     if (host.services->project->isSceneOpen())
-        host.mainWindow->closeProject(MainWindow::CloseIntent::ReopenInPlace);
+        host.shell->closeProject(true);
 
     // The ledger starts HERE, not in MainWindow::openProject: the session
     // registrations are part of what an open costs and they happen inside it.
@@ -376,14 +384,14 @@ bool ProjectApi::open(const QString &guidOrName)
     // now, so the preload that used to run here — and parse on this thread —
     // is gone).
     host.services->project->pointAtProject(guid, name);
-    host.mainWindow->openProject(false);
+    host.shell->openProject(false);
     host.beginRunUndoMacro();
     return true;
 }
 
 bool ProjectApi::openAsync(const QString &guidOrName, const QVariantMap &options)
 {
-    if (!host.mainWindow || !host.services || !host.services->project)
+    if (!host.shell || !host.services || !host.services->project)
         return fail("project: not available in this session");
 
     // WHICH SPACE THIS OPEN LANDS IN, said by the caller (SMOKE-FIX-1). The
@@ -408,7 +416,7 @@ bool ProjectApi::openAsync(const QString &guidOrName, const QVariantMap &options
                     "(project.openState() reads 'opening' until it finishes)");
 
     if (host.project->getProjectGuid() == guid && host.services->project->isSceneOpen()) {
-        host.mainWindow->switchSpace(play ? WindowSpaces::PLAYER : WindowSpaces::EDITOR);
+        host.shell->setSpace(play ? QStringLiteral("player") : QStringLiteral("editor"));
         return true;
     }
     // A RECORDED LOCATION THAT IS NOT THERE IS A REFUSAL BY NAME (SMALL-UI-A
@@ -427,13 +435,13 @@ bool ProjectApi::openAsync(const QString &guidOrName, const QVariantMap &options
     // The close is the first half of this open: the page the user is on stays
     // (MainWindow::CloseIntent, VIEW-REBUILD-1).
     if (host.services->project->isSceneOpen())
-        host.mainWindow->closeProject(MainWindow::CloseIntent::ReopenInPlace);
+        host.shell->closeProject(true);
 
     LoadTimeline::begin(QStringLiteral("open(script-async) %1").arg(name.isEmpty() ? guid : name));
     // The open's first slices do the session registrations themselves, with
     // the worker's parsed models in hand.
     host.services->project->pointAtProject(guid, name);
-    host.mainWindow->openProjectAsync(play);
+    host.shell->openProjectAsync(play);
     host.beginRunUndoMacro();
     return true;
 }
@@ -445,8 +453,8 @@ QStringList ProjectApi::samples()
 
 bool ProjectApi::openSample(const QString &name)
 {
-    if (!host.mainWindow) return fail("project.openSample: this verb needs the editor window");
-    ProjectManager *page = host.mainWindow->projectPage();
+    if (!host.shell) return fail("project.openSample: this verb needs the editor window");
+    ProjectManager *page = host.shell->projectPage();
     if (!page) return fail("project.openSample: this session has no project page");
     if (openInFlight())
         return fail("project.openSample: an open is already in flight "
@@ -473,12 +481,12 @@ bool ProjectApi::openSample(const QString &name)
 
 bool ProjectApi::openInFlight() const
 {
-    return host.mainWindow && host.mainWindow->isOpeningProject();
+    return host.shell && host.shell->isOpeningProject();
 }
 
 QString ProjectApi::openState()
 {
-    if (!host.mainWindow) { fail("project: not available in this session"); return QStringLiteral("idle"); }
+    if (!host.shell) { fail("project: not available in this session"); return QStringLiteral("idle"); }
     return openInFlight() ? QStringLiteral("opening") : QStringLiteral("idle");
 }
 
@@ -505,7 +513,7 @@ bool ProjectApi::close()
     // in-flight project's history dies with it.
     if (openInFlight()) {
         host.endRunUndoMacro();
-        host.mainWindow->closeProject();
+        host.shell->closeProject();
         host.beginRunUndoMacro();
         return true;
     }
@@ -515,7 +523,7 @@ bool ProjectApi::close()
     // (CLOSE-2 item 2). Without this the whole stack survived the close,
     // holding commands that name a document that no longer exists.
     host.endRunUndoMacro();
-    host.mainWindow->closeProject();
+    host.shell->closeProject();
     host.beginRunUndoMacro();
     return true;
 }
@@ -529,7 +537,7 @@ bool ProjectApi::rename(const QString &guid, const QString &newName)
     if (host.project->getProjectGuid() == guid)
         host.project->setProjectPath(host.project->getProjectFolder(), newName.trimmed());
     // The caption follows (the Desktop used to learn it at its next rebuild).
-    if (host.projectManager) host.projectManager->renameTile(guid, newName.trimmed());
+    if (desktopPage(host)) desktopPage(host)->renameTile(guid, newName.trimmed());
     return true;
 }
 
@@ -583,7 +591,7 @@ bool ProjectApi::moveToDesktop(const QString &guid, int desktop)
     if (!host.db->updateProjectDesktop(guid, desktop))
         return fail(QStringLiteral("project.moveToDesktop: no project with guid '%1'").arg(guid));
     // ONE TILE MOVES (CREATE-GAP-1): off this desktop's grid, or onto it.
-    if (host.projectManager) host.projectManager->moveTile(guid, desktop);
+    if (desktopPage(host)) desktopPage(host)->moveTile(guid, desktop);
     return true;
 }
 
@@ -801,9 +809,9 @@ bool ProjectApi::importArchiveAsync(const QString &path)
     // THE IMPORTED PROJECT IS A TILE when it lands (CREATE-GAP-1) — the
     // Desktop no longer rebuilds on entry to find it. One connection per
     // session archiver, made with the import that needs it.
-    if (host.projectManager && !a->property("jahTileHook").toBool()) {
+    if (desktopPage(host) && !a->property("jahTileHook").toBool()) {
         a->setProperty("jahTileHook", true);
-        QPointer<ProjectManager> page = host.projectManager;
+        QPointer<ProjectManager> page = desktopPage(host);
         QObject::connect(a, &ProjectArchiver::finished, a, [a, page](bool canceled) {
             if (canceled || !page) return;
             const ProjectArchiver::Result &r = a->result();
@@ -867,7 +875,7 @@ QVariantMap ProjectApi::importArchive(const QString &path)
     if (!r.ok()) { fail(QStringLiteral("project.importArchive: %1").arg(r.error)); return out; }
     // THE NEW PROJECT IS A TILE NOW — its one tile, as the Desktop page's own
     // import adds it (CREATE-GAP-1: this rebuilt the whole grid for it).
-    if (host.projectManager) host.projectManager->addTile(r.projectGuid);
+    if (desktopPage(host)) desktopPage(host)->addTile(r.projectGuid);
     out["guid"] = r.projectGuid;
     out["name"] = r.worldName;
     out["assets"] = r.assets;

@@ -27,10 +27,9 @@ For more information see the LICENSE file
 // three slot names, which is exactly how a mode set from the headset would have
 // stopped moving the toolbar the day somebody renamed one of them.
 
-#include <QMetaObject>
-#include <QObject>
 #include <QString>
 
+#include "ui/ishellview.h"
 #include "viewport/ieditorviewport.h"
 
 namespace gizmomode {
@@ -49,20 +48,17 @@ inline QString next(const QString &mode)
     return QStringLiteral("translate");
 }
 
-/// Applies a mode. `shell` is the main window (nullable — a headless host has
+/// Applies a mode. `shell` is the shell's view (nullable — a headless host has
 /// none); `viewport` the editor viewport (nullable for the same reason). False
 /// for an unknown mode, or when there is nothing at all to apply it to; the
 /// CALLER owns the error message, because the two callers word it differently
 /// (a verb names what was passed, a button press has nobody to tell).
-inline bool apply(QObject *shell, IEditorViewport *viewport, const QString &mode)
+inline bool apply(IShellView *shell, IEditorViewport *viewport, const QString &mode)
 {
     if (!isKnown(mode)) return false;
-    // THROUGH THE SHELL'S OWN SLOT when there is a shell, so the toolbar's
-    // checked state follows exactly as it does for the keys.
-    const char *slot = mode == QLatin1String("rotate")  ? "rotateGizmo"
-                     : mode == QLatin1String("scale")   ? "scaleGizmo"
-                                                        : "translateGizmo";
-    if (shell && QMetaObject::invokeMethod(shell, slot)) return true;
+    // THROUGH THE SHELL when there is a shell, so the toolbar's checked state
+    // follows exactly as it does for the keys.
+    if (shell && shell->applyGizmoMode(mode)) return true;
     if (!viewport) return false;
     if (mode == QLatin1String("rotate")) viewport->setGizmoRot();
     else if (mode == QLatin1String("scale")) viewport->setGizmoScale();

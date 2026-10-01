@@ -38,6 +38,7 @@ For more information see the LICENSE file
 #include "data/project.h"
 #include "services/scenetemplate.h"
 #include "modules/studiomodule.h"
+#include "ui/ishellview.h"
 
 namespace Ui {
     class MainWindow;
@@ -466,13 +467,7 @@ public:
     /// actually came out as, per page, so `app.columns` can gate the law
     /// instead of trusting each page to have used the constant. `valid` is
     /// false for a space that has no columns (Desktop, Player).
-    struct ColumnMetrics {
-        bool valid = false;
-        int leftWidth = 0;      ///< 0 when the page has no left column
-        int leftMin = 0;
-        int rightWidth = 0;     ///< 0 when the page has no right column
-        int rightMin = 0;
-    };
+    using ColumnMetrics = IShellView::ColumnMetrics;
     ColumnMetrics activeColumns() const;
 
     /// THE EDITOR'S DOCKS, MEASURED (lane SPACE-1, 2026-09-14). One entry per
@@ -824,10 +819,13 @@ public slots:
     /// EditorViewportEvents::cameraSpeedChanged.
     void syncCameraSpeedUi();
 
-private slots:
+    /// The three gizmo modes with the toolbar following (the keys, the buttons
+    /// and IShellView::applyGizmoMode — editor.setGizmoMode and the headset).
     void translateGizmo();
     void rotateGizmo();
     void scaleGizmo();
+
+private slots:
     void cycleGizmoMode();
 
     void onPlaySceneButton();

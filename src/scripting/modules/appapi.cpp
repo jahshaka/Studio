@@ -17,7 +17,7 @@ For more information see the LICENSE file
 #include "scripting/modules/appapi.h"
 #include "scripting/modules/moduleshared.h"
 
-#include "shell/mainwindow.h"
+#include "ui/ishellview.h"
 #include "ui/style/panelmetrics.h"
 #include "ui/style/thememanager.h"
 #include "ui/pages/projectmanager.h"
@@ -59,6 +59,14 @@ For more information see the LICENSE file
 #include <QWidget>
 #include <QScreen>
 #include <QRect>
+
+namespace {
+/// The Desktop page, through the shell (null in a session with no window).
+ProjectManager *desktopPage(const ScriptHost &host)
+{
+    return host.shell ? host.shell->projectPage() : nullptr;
+}
+}   // namespace
 
 QVector<VerbInfo> AppApi::verbs() const
 {
@@ -728,9 +736,9 @@ QVariantMap AppApi::openStats(const QVariantMap &options)
     // census: these count the window's life, and a caller measuring one open
     // subtracts. A session with no window reports zeros.
     out.insert(QStringLiteral("sliceBoundaries"),
-               host.mainWindow ? host.mainWindow->openSliceBoundaries() : 0u);
+               host.shell ? host.shell->openSliceBoundaries() : 0u);
     out.insert(QStringLiteral("sliceBoundaryFrames"),
-               host.mainWindow ? host.mainWindow->openSliceBoundaryFrames() : 0u);
+               host.shell ? host.shell->openSliceBoundaryFrames() : 0u);
     // Read FIRST, then zero: a caller measuring one open wants the numbers of
     // the window it just closed, not an empty map.
     if (options.value(QStringLiteral("reset")).toBool()) iris::ParseCensus::reset();
@@ -830,51 +838,48 @@ bool AppApi::flushShaderCache(int budgetMs)
 
 bool AppApi::quit()
 {
-    if (!host.mainWindow) return fail("app: not available in this session");
+    if (!host.shell) return fail("app: not available in this session");
     // Deferred: let the calling script (and its undo macro) finish first. It
     // has to go through the host's afterRun hook — a plain queued call is
     // delivered BETWEEN TWO VERBS now that the script runs off the UI thread,
     // which would close the window (and the engine, and this module) underneath
     // the run that asked for it.
-    auto close = [w = host.mainWindow]() { w->close(); };
+    auto close = [w = host.shell->window()]() { w->close(); };
     if (host.afterRun) host.afterRun(close);
-    else QMetaObject::invokeMethod(host.mainWindow, close, Qt::QueuedConnection);
+    else QMetaObject::invokeMethod(host.shell->window(), close, Qt::QueuedConnection);
     return true;
 }
 
 int AppApi::desktop(int n)
 {
-    if (!host.projectManager) { fail("app: not available in this session"); return 0; }
-    if (n >= 1) host.projectManager->switchDesktop(n);
-    return host.projectManager->getCurrentDesktop();
+    if (!desktopPage(host)) { fail("app: not available in this session"); return 0; }
+    if (n >= 1) desktopPage(host)->switchDesktop(n);
+    return desktopPage(host)->getCurrentDesktop();
 }
 
 bool AppApi::space(const QString &name)
 {
-    if (!host.mainWindow) return fail("app: not available in this session");
+    if (!host.shell) return fail("app: not available in this session");
     const QString s = name.trimmed().toLower();
-    WindowSpaces space;
-    if (s == "desktop")                          space = WindowSpaces::DESKTOP;
-    else if (s == "player")                      space = WindowSpaces::PLAYER;
-    else if (s == "editor")                      space = WindowSpaces::EDITOR;
-    else if (s == "materials" || s == "effects") space = WindowSpaces::EFFECT;
-    else if (s == "assets")                      space = WindowSpaces::ASSETS;
-    else if (s == "publish")                     space = WindowSpaces::PUBLISH;
-    else if (s == "avatar")                      space = WindowSpaces::AVATAR;
-    else return fail(QStringLiteral("app.space: unknown space '%1' (desktop, player, editor, materials, assets, publish, avatar)").arg(name));
+    static const QStringList kSpaces = { "desktop", "player", "editor", "materials", "effects",
+                                         "assets", "publish", "avatar" };
+    if (!kSpaces.contains(s))
+        return fail(QStringLiteral("app.space: unknown space '%1' (desktop, player, editor, materials, assets, publish, avatar)").arg(name));
+    // "effects" is the Materials space's old name, still accepted.
+    const QString space = s == QLatin1String("effects") ? QStringLiteral("materials") : s;
 
     const bool sceneOpen = host.services && host.services->project && host.services->project->isSceneOpen();
-    if ((space == WindowSpaces::PLAYER || space == WindowSpaces::EDITOR) && !sceneOpen)
+    if ((space == QLatin1String("player") || space == QLatin1String("editor")) && !sceneOpen)
         return fail(QStringLiteral("app.space: '%1' needs an open project").arg(s));
 
-    host.mainWindow->switchSpace(space);
+    host.shell->setSpace(space);
 
     // audit D15: the verb once reported success while the page stayed put —
     // never claim a switch the window didn't make. AND SAY WHY (SMOKE-FIX-1):
     // the window records the reason it bounced, so a script's refusal carries
     // the same sentence the user's toast does instead of a bare "refused".
-    if (host.mainWindow->getWindowSpace() != space) {
-        const QString why = host.mainWindow->lastSpaceRefusal();
+    if (host.shell->space() != space) {
+        const QString why = host.shell->spaceRefusal();
         return fail(why.isEmpty()
                         ? QStringLiteral("app.space: the window refused to switch to '%1'").arg(s)
                         : QStringLiteral("app.space: the window refused to switch to '%1' — %2")
@@ -1055,7 +1060,7 @@ QVariantMap AppApi::resetLibrary(const QVariantMap &options)
     if (!host.db) { fail("app.resetLibrary: there is no library in this session"); return out; }
 
     const bool restart = options.value(QStringLiteral("restart"), false).toBool();
-    if (restart && !host.mainWindow) {
+    if (restart && !host.shell) {
         fail("app.resetLibrary: {restart: true} needs the application (this session has no window "
              "to bring back)");
         return out;
@@ -1065,7 +1070,7 @@ QVariantMap AppApi::resetLibrary(const QVariantMap &options)
     // — `--script x.js` and `--headless` included — so a script that asks for
     // it spawns a child running the same script, which resets the library and
     // spawns another: an unbounded chain of processes, each one wiping what
-    // the last one made. (The earlier guard for this was `!host.mainWindow`,
+    // the last one made. (The earlier guard for this was `!host.shell`,
     // and its premise was simply false: a --headless run builds a MainWindow
     // too — main.cpp does, it merely never shows it.) Stripping the one-shot
     // flags would be a second answer to "what is this process for"; the
@@ -1094,9 +1099,9 @@ QVariantMap AppApi::resetLibrary(const QVariantMap &options)
     // exactly as project.close does it — the history names a document that
     // will not exist.
     ProjectService *projects = host.services ? host.services->project : nullptr;
-    if (projects && projects->isSceneOpen() && host.mainWindow) {
+    if (projects && projects->isSceneOpen() && host.shell) {
         host.endRunUndoMacro();
-        host.mainWindow->closeProject();
+        host.shell->closeProject();
         host.beginRunUndoMacro();
     }
 
@@ -1152,9 +1157,9 @@ QVariantMap AppApi::resetLibrary(const QVariantMap &options)
     // is: a plain queued close is delivered BETWEEN TWO VERBS now that a script
     // runs off the UI thread, which would close the window underneath the run
     // that asked for it.
-    auto close = [w = host.mainWindow]() { w->close(); };
+    auto close = [w = host.shell->window()]() { w->close(); };
     if (host.afterRun) host.afterRun(close);
-    else QMetaObject::invokeMethod(host.mainWindow, close, Qt::QueuedConnection);
+    else QMetaObject::invokeMethod(host.shell->window(), close, Qt::QueuedConnection);
     return out;
 }
 
@@ -1180,22 +1185,12 @@ QVariant AppApi::lastError()
 QVariantMap AppApi::columns()
 {
     QVariantMap out;
-    if (!host.mainWindow) {
+    if (!host.shell) {
         fail("app.columns: this verb needs the editor window (a --script/--headless run has no "
              "pages)");
         return out;
     }
-    QString space;
-    switch (host.mainWindow->getWindowSpace()) {
-    case WindowSpaces::DESKTOP: space = QStringLiteral("desktop"); break;
-    case WindowSpaces::EDITOR:  space = QStringLiteral("editor"); break;
-    case WindowSpaces::PLAYER:  space = QStringLiteral("player"); break;
-    case WindowSpaces::EFFECT:  space = QStringLiteral("materials"); break;
-    case WindowSpaces::ASSETS:  space = QStringLiteral("assets"); break;
-    case WindowSpaces::PUBLISH: space = QStringLiteral("publish"); break;
-    case WindowSpaces::AVATAR:  space = QStringLiteral("avatar"); break;
-    default:                    space = QStringLiteral("unknown"); break;
-    }
+    const QString space = host.shell->space();
     out.insert("space", space);
     // What the law SAYS, beside what the page DID — a caller comparing the two
     // does not have to carry a copy of the constants.
@@ -1205,7 +1200,7 @@ QVariantMap AppApi::columns()
     metrics.insert("rightWidth", PanelMetrics::rightColumnWidth);
     metrics.insert("rightMin", PanelMetrics::rightColumnMinWidth);
     out.insert("metrics", metrics);
-    const MainWindow::ColumnMetrics m = host.mainWindow->activeColumns();
+    const IShellView::ColumnMetrics m = host.shell->activeColumns();
     if (!m.valid) return out;
     if (m.leftWidth > 0 || m.leftMin > 0) {
         QVariantMap left;
@@ -1224,12 +1219,12 @@ QVariantMap AppApi::columns()
 
 QVariantList AppApi::docks()
 {
-    if (!host.mainWindow) {
+    if (!host.shell) {
         fail("app.docks: this verb needs the editor window (a --script/--headless run has no "
              "pages)");
         return {};
     }
-    return host.mainWindow->dockReport();
+    return host.shell->dockReport();
 }
 
 QVariantMap AppApi::mcpLogging(const QVariantMap &options)
@@ -1260,7 +1255,7 @@ QString AppApi::testTier()
 QVariantMap AppApi::window()
 {
     QVariantMap out;
-    QWidget *w = host.mainWindow;
+    QWidget *w = host.shell ? host.shell->window() : nullptr;
     if (!w) return out;                 // no window in this session: an empty map, not a throw
     const QRect g = w->frameGeometry().isValid() ? w->frameGeometry() : w->geometry();
     out.insert("x", g.x());
@@ -1296,7 +1291,7 @@ QVariantMap AppApi::window()
 
 QVariantMap AppApi::resizeWindow(int width, int height)
 {
-    QWidget *w = host.mainWindow;
+    QWidget *w = host.shell ? host.shell->window() : nullptr;
     if (!w) {
         fail("app.resizeWindow: this session has no main window");
         return {};
@@ -1312,7 +1307,7 @@ QVariantMap AppApi::resizeWindow(int width, int height)
 
 QVariantMap AppApi::scriptPolicy(const QString &mode)
 {
-    ScriptEngine *engine = host.mainWindow ? host.mainWindow->scripting() : nullptr;
+    ScriptEngine *engine = host.engine;
     if (!engine) {
         refuse(QStringLiteral("app.scriptPolicy: this session has no script engine"));
         return {};
@@ -1785,15 +1780,15 @@ QVariantMap AppApi::styleSheets(const QVariantMap &options)
 QVariantList AppApi::dialogs()
 {
     QVariantList out;
-    if (!host.mainWindow) {
+    if (!host.shell) {
         fail("app.dialogs: this verb needs the editor window");
         return out;
     }
-    for (const QString &name : host.mainWindow->dialogNames()) {
+    for (const QString &name : host.shell->dialogNames()) {
         // closeDialog/openDialog own the bookkeeping; "open" is simply whether
         // the name's widget is on screen now.
         out.append(QVariantMap{ { "name", name },
-                                { "open", host.mainWindow->isDialogOpen(name) } });
+                                { "open", host.shell->isDialogOpen(name) } });
     }
     return out;
 }
@@ -1801,11 +1796,11 @@ QVariantList AppApi::dialogs()
 QVariantMap AppApi::dialog(const QString &name, const QVariant &openOrOptions)
 {
     QVariantMap out;
-    if (!host.mainWindow) {
+    if (!host.shell) {
         fail("app.dialog: this verb needs the editor window");
         return out;
     }
-    if (!host.mainWindow->dialogNames().contains(name)) {
+    if (!host.shell->dialogNames().contains(name)) {
         fail(QStringLiteral("app.dialog: no dialog named '%1' (app.dialogs() lists them)").arg(name));
         return out;
     }
@@ -1830,12 +1825,12 @@ QVariantMap AppApi::dialog(const QString &name, const QVariant &openOrOptions)
 
     out["name"] = name;
     if (!open) {
-        host.mainWindow->closeDialog(name);
+        host.shell->closeDialog(name);
         out["open"] = false;
         return out;
     }
     QVariantMap extra;
-    QWidget *w = host.mainWindow->openDialog(name, options, &extra);
+    QWidget *w = host.shell->openDialog(name, options, &extra);
     // THE DIALOG'S OWN MESSAGE FIRST, whether or not it opened: a refusal with
     // a reason ("this asset has no import record") is worth more than "could
     // not be opened in this session".

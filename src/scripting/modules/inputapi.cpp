@@ -12,7 +12,7 @@ For more information see the LICENSE file
 #include "scripting/modules/inputapi.h"
 
 #include "irisgl/document/input/inputmap.h"
-#include "shell/mainwindow.h"
+#include "ui/ishellview.h"
 
 using iris::InputAction;
 using iris::InputActionType;
@@ -173,5 +173,5 @@ QVariantMap InputApi::state()
 
 void InputApi::refreshShortcutRows()
 {
-    if (host.mainWindow) host.mainWindow->refreshGameplayShortcutRows();
+    if (host.shell) host.shell->refreshGameplayShortcutRows();
 }

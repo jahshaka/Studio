@@ -45,6 +45,7 @@ ScriptEngine::ScriptEngine(ScriptHost &host, QObject *parent)
     // can validate the live surface (AI_SURFACE_PROGRAM_SPEC §2.0). One
     // ScriptEngine per host, so this is never contested.
     mHost.registry = &mRegistry;
+    mHost.engine = this;
     // "AFTER THE SCRIPT", which used to be what a queued call meant and is not
     // any more (ScriptHost::afterRun). Banked here and drained once the run's
     // macro is closed and the engine is idle.

@@ -28,7 +28,7 @@ For more information see the LICENSE file
 #include "commands/scenefoldercommand.h"
 #include "commands/setnodepropertycommand.h"
 #include "commands/transformscenenodecommand.h"
-#include "shell/mainwindow.h"
+#include "ui/ishellview.h"
 #include "services/nodeexport.h"
 #include "services/sceneeditservice.h"
 #include "data/database/database.h"

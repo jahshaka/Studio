@@ -318,11 +318,10 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
 	// scripting (SCRIPTING_SPEC §2): the host sees the live app; the console
 	// dock starts hidden — Ctrl+` toggles it in the editor space.
 	scriptHost = new ScriptHost;
-	scriptHost->mainWindow = this;
+	scriptHost->shell = shellView;
 	scriptHost->db = db;
 	scriptHost->project = project;
 	scriptHost->viewport = sceneView;
-	scriptHost->projectManager = pmContainer;
 	scriptHost->undoStack = undoStack;
 	scriptHost->services = services;
 	scriptHost->projectOpen = [this]() {
