@@ -166,7 +166,7 @@ def main(source, build):
     os.chmod(fake, 0o755)
     calls = []
     real_oc, real_gc = gate_runlog.other_ctests, gate_runlog.gpu_clocks
-    gate_runlog.other_ctests = lambda: calls.append(1) or len(calls)
+    gate_runlog.other_ctests = lambda *own: calls.append(1) or len(calls)
     gate_runlog.gpu_clocks = lambda: {"state": "sampled-%d" % len(calls)}
     try:
         gate_runlog.run_ctest(fake, scratch, "scoped", "ci-check-test", 1, echo=False)

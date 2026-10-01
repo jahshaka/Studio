@@ -41,8 +41,11 @@ SCHEMA = 1
 # THE TIER NAMES (TESTING-DEBTS-1 T11) — the only ones a record may carry; testing/runs/README.md
 # documents the same list. gate-scope.sh writes the first four (`scoped`; `scoped-fallback` = a
 # scoped gate that fell back to the whole tier; `scoped-tier` = the tier by rule, a fork pin;
-# `joint` = --joint); rc-gate.sh writes JAH_GATE_TIER (merge by default: stage, nightly, push, fork).
-TIERS = ("scoped", "scoped-fallback", "scoped-tier", "joint", "merge", "stage", "nightly", "push", "fork")
+# `joint` = --joint) and `target` (GATE-SPEED-1: the target tests' own step, after the gating
+# verdict — reported, never gating); rc-gate.sh writes JAH_GATE_TIER (merge by default: stage,
+# nightly, push, smoke — the owner's smoke rc —, fork).
+TIERS = ("scoped", "scoped-fallback", "scoped-tier", "joint", "target", "merge", "stage", "nightly", "push",
+         "smoke", "fork")
 
 
 def check_tier(tier):
@@ -89,6 +92,41 @@ _NOADMIT = re.compile(r"^\s*(?:\|\s*)*(NOADMIT vram: .*?)\s*$")
 # admission — makes a red a TIMEOUT.
 _LOCKWAIT = re.compile(r"^\s*(?:\|\s*)*gpu-lock: waited ([0-9.]+) s\s*$")
 _RUNTIMEOUT = re.compile(r"^\s*(?:\|\s*)*timeout: sending signal \S+ to command")
+
+
+# THE ADMISSION'S TOKEN WAIT (GATE-SPEED-1, the gate-speed audit's L2): every GPU row's admission
+# (scripts/vram_tokens.py) prints `vram: admitted with <k> tokens <idx> after <s> s` when it had to
+# wait — a pool prints one per app process it starts. Recorded per row as `tokenWaitS` (their sum)
+# and, for a row that is not a timing row (whose `gpu-lock: waited` line already carries the same
+# wait), subtracted from its seconds: a queue is never the row's time, and without it nobody can
+# tell a token-bound gate from a CPU-bound one when the width is raised.
+_TOKENWAIT = re.compile(r"^\s*(?:\|\s*)*vram: admitted with \d+ tokens? \S* ?after ([0-9.]+) s")
+
+
+def token_wait(text):
+    """The summed admission waits of a row's output (seconds), or None when it never waited."""
+    total, seen = 0.0, False
+    for line in (text or "").splitlines():
+        m = _TOKENWAIT.match(line)
+        if m:
+            try: total += float(m.group(1)); seen = True
+            except ValueError: pass
+    return round(total, 2) if seen else None
+
+
+# THE FIRST FAILING ASSERTION OF A RED (GATE-SPEED-1, the audit's L3): open.responsive went red in
+# 38 of 85 gates and the log could not say why. Our suites print `FAIL: <what>` (and
+# `FAIL(transport): …`), gtest `[  FAILED  ] …`, QTest `FAIL!  : …`; the first such line of a red
+# row's output is recorded as `failLine`.
+_FAILLINE = re.compile(r"^\s*(?:\|\s*)*(FAIL(?:[:(!]).*|\[\s+FAILED\s+\].*)$")
+
+
+def fail_line(text):
+    for line in (text or "").splitlines():
+        m = _FAILLINE.match(line)
+        if m and not m.group(1).startswith("FAILED"):
+            return m.group(1).strip()[:300]
+    return None
 
 
 def lock_wait(text):
@@ -270,12 +308,36 @@ def gpu_clocks():
         return {"state": "unknown"}
 
 
-def other_ctests():
-    """ctest processes on the box that are not ours (the contention context of a run)."""
+def _ppid(pid):
+    """The parent pid from /proc/<pid>/stat (the field after the parenthesised name), or None."""
+    try:
+        with open(f"/proc/{pid}/stat") as f:
+            st = f.read()
+        return int(st[st.rindex(")") + 2:].split()[1])
+    except (OSError, ValueError, IndexError):
+        return None
+
+
+def _descends_from(pid, roots):
+    seen = 0
+    while pid and pid > 1 and seen < 64:
+        if pid in roots: return True
+        pid, seen = _ppid(pid), seen + 1
+    return False
+
+
+def other_ctests(own_root=None):
+    """ctest processes on the box that are not ours (the contention context of a run).
+
+    OURS = this process and EVERY DESCENDANT of it, plus `own_root`'s tree (the shell run_ctest
+    spawned, and the ctest under it). Until GATE-SPEED-1 only os.getpid() — the python runner —
+    was excluded, so the gate's own ctest was counted: every row of rc-smoke15a read 1 with no
+    sibling gate live, the quiet medians (`other_ctests == 0`) stopped receiving records, and the
+    §7b sibling counts were inflated (the gate-speed audit's L1)."""
     try:
         r = subprocess.run(["pgrep", "-x", "ctest"], capture_output=True, text=True)
-        me = os.getpid()
-        return len([p for p in r.stdout.split() if int(p) != me])
+        roots = {os.getpid()} | ({own_root} if own_root else set())
+        return len([p for p in r.stdout.split() if not _descends_from(int(p), roots)])
     except OSError:
         return None
 
@@ -447,7 +509,7 @@ def run_ctest(cmd, cwd, tier, lane, jobs, reasons=None, gating=None, rng=None, r
             sys.stdout.write(line); sys.stdout.flush()
         m = _START.match(line.rstrip("\n"))
         if m:
-            starts[m.group(1)] = {"other_ctests": other_ctests(), "gpu_clocks": gpu_clocks()}
+            starts[m.group(1)] = {"other_ctests": other_ctests(p.pid), "gpu_clocks": gpu_clocks()}
             continue
         m = _RESULT.match(line.rstrip("\n"))
         if m:
@@ -474,12 +536,22 @@ def run_ctest(cmd, cwd, tier, lane, jobs, reasons=None, gating=None, rng=None, r
                 "source": "run"}
         v, st, bline = row_verdict(status, outputs.get(name, ""), arms)
         wait = lock_wait(outputs.get(name, ""))
+        twait = token_wait(outputs.get(name, ""))
+        # a timing row's lock line and its admission line are the SAME wait: subtract it once
+        queued = wait if wait is not None else twait
         row = dict(base, arm=None, verdict=v, status=st,
-                   seconds=(round(max(0.0, secs - wait), 2) if wait is not None else secs),
+                   seconds=(round(max(0.0, secs - queued), 2) if queued is not None else secs),
                    target=target)
         if wait is not None:
             row["lockWaitS"] = wait
+        if twait is not None:
+            row["tokenWaitS"] = twait
+        if queued is not None:
             row["wallSeconds"] = secs
+        if v != "PASS":
+            fl = fail_line(outputs.get(name, ""))
+            if fl:
+                row["failLine"] = fl
         if bline:
             row["budget"] = bline
         mem = _mem_of(outputs.get(name, ""))
