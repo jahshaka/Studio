@@ -28,7 +28,11 @@ hits=$(grep -rn -E "$PATTERN" \
          --include='*.glsl' --include='*.any' 2>/dev/null |
        grep -v -E '^tests/hygiene/' |
        grep -v -E ':\s*(//|///|\*)' |
-       grep -v -E '=== undefined|!byId\[|== nullptr' )   # a suite asserting the ABSENCE is the point
+       grep -v -E '=== undefined|!byId\[|== nullptr' |   # a suite asserting the ABSENCE is the point
+       # The debug voxel visualiser's own shader uniform, by name (OWN-GI-1: Ogre's
+       # VoxelVisualizer moved into irisgl as photon/voxel/PhotonVoxelVisualizer.cpp) —
+       # the size of the cascade it draws, not the deleted single volume's lever.
+       grep -v -E 'setNamedConstant\( "voxelResolution"' )
 if [ -n "$hits" ]; then
     echo "source.no_fixed_gi_volume: the deleted single-volume arm (or a reader of its keys) is back:"
     echo "$hits" | head -40
