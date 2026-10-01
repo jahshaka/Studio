@@ -71,7 +71,7 @@
 #include <Vao/OgreVertexArrayObject.h>
 #include <Vao/OgreUavBufferPacked.h>
 #include <Vao/OgreVaoManager.h>
-#include <Vct/OgreVctVoxelizer.h>
+#include "photon/voxel/PhotonVoxelizer.h"
 
 #include <algorithm>
 #include <cmath>
@@ -643,8 +643,8 @@ int main()
             const uint32_t *lv = &lev[(size_t(mesh) * detail::GpuScene::kLevelsPerMesh) * 8u];
             const uint32_t geomRow = lv[3];
             const Ogre::MeshPtr &m = gs.meshAt(mesh);
-            Ogre::VctVoxelizer::GeometryRow want;
-            const bool described = m && Ogre::VctVoxelizer::describeGeometryRow(m, 0u, 0u, vaoMgr, want);
+            Ogre::PhotonVoxelizer::GeometryRow want;
+            const bool described = m && Ogre::PhotonVoxelizer::describeGeometryRow(m, 0u, 0u, vaoMgr, want);
             const uint32_t *row = geomRow != detail::GpuScene::kNoGeomRow && size_t(geomRow) * 12u + 12u <= rows.size()
                                       ? &rows[size_t(geomRow) * 12u] : nullptr;
             const bool same = described && row && std::memcmp(row, &want, 48) == 0;
@@ -657,7 +657,7 @@ int main()
                        lv[1] == uint32_t(c.geom->idx.size()) && row[6] != 0xFFFFFFFFu;
         }
         CHECK(tablesOk, "the device tables the decode reads name the raster's own geometry (instance -> "
-                        "level -> geometry row, read back and compared with VctVoxelizer::describeGeometryRow)");
+                        "level -> geometry row, read back and compared with PhotonVoxelizer::describeGeometryRow)");
         if (!tablesOk) return 1;
     }
 
@@ -1016,11 +1016,18 @@ int main()
         }
         if (P.gi) {
             const GiStatus st = scene->giStatus();
-            CHECK_MSG(st.vctBound, "[%s] the VCT chain is bound to HlmsPbs", P.name);
+            CHECK_MSG(st.vctBound && st.ifdBound,
+                      "[%s] the scene's voxel chain and irradiance field are bound (vct %d, field %d)",
+                      P.name, int(st.vctBound), int(st.ifdBound));
+            // OWN-GI-1: the Photon volumes are OURS and no PBS-family host holds them —
+            // the listener binds them per pass — so upstream's two pointers stay null
+            // on both hosts while the scene's volumes are live and the pixels above
+            // (decode == raster) read them.
             auto *pbs = static_cast<Ogre::HlmsPbs *>(hm->getHlms(Ogre::HLMS_PBS));
-            CHECK_MSG(atom->getVctLighting() == pbs->getVctLighting() &&
-                          atom->getIrradianceField() == pbs->getIrradianceField() && pbs->getIrradianceField(),
-                      "[%s] tellEveryHlms: HlmsAtom holds PBS's VctLighting and IrradianceField", P.name);
+            CHECK_MSG(!pbs->getVctLighting() && !pbs->getIrradianceField() && !atom->getVctLighting() &&
+                          !atom->getIrradianceField(),
+                      "[%s] HlmsPbs and HlmsAtom hold no VctLighting/IrradianceField (the listener binds "
+                      "Photon's volumes)", P.name);
             if (P.gather)
                 CHECK_MSG(st.gather.on && st.gather.running,
                           "[%s] the gather ran on the view's frame (on %d, running %d, probes %u, %ux%u, error '%s')",
