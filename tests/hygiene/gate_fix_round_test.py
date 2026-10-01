@@ -225,6 +225,9 @@ def main(source, build):
           % {k: one.get(k) for k in ("tokenWaitS", "seconds", "wallSeconds")})
     check(two.get("failLine") == "FAIL: the first assertion" and "failLine" not in one,
           "L3: a red row records its FIRST FAIL line, a green one none (%r)" % two.get("failLine"))
+    check(gate_runlog.fail_line("[log] script: Error: x.js:73 FAILED after 9 ms\nfile:///a/b/x.js:73: Error: assert failed: "
+                                "idle: budget") == "x.js:73: Error: assert failed: idle: budget",
+          "L3: a --script suite's red records its runner's assertion line")
     # L1: a ctest under this process (or under the given root) is ours; an orphan in another tree is not
     child = subprocess.Popen(["sleep", "30"])
     orphan = subprocess.run(["sh", "-c", "setsid sleep 30 > /dev/null 2>&1 & echo $!"], capture_output=True,

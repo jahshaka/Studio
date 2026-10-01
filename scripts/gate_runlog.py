@@ -119,14 +119,22 @@ def token_wait(text):
 # `FAIL(transport): …`), gtest `[  FAILED  ] …`, QTest `FAIL!  : …`; the first such line of a red
 # row's output is recorded as `failLine`.
 _FAILLINE = re.compile(r"^\s*(?:\|\s*)*(FAIL(?:[:(!]).*|\[\s+FAILED\s+\].*)$")
+# ...and a --script suite's: the runner's `<script>.js:<line>: Error: assert failed: <what>` (found on
+# the first rc after the field landed: perf.epic_steady_state's red carried no FAIL line at all)
+_SCRIPTFAIL = re.compile(r"([^/\s]+\.js:\d+: Error: .*)$")
 
 
 def fail_line(text):
+    script = None
     for line in (text or "").splitlines():
         m = _FAILLINE.match(line)
         if m and not m.group(1).startswith("FAILED"):
             return m.group(1).strip()[:300]
-    return None
+        if script is None:
+            m = _SCRIPTFAIL.search(line)
+            if m and "[" not in line[:2]:
+                script = m.group(1).strip()[:300]
+    return script
 
 
 def lock_wait(text):
