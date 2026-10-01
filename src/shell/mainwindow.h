@@ -55,6 +55,9 @@ class ModuleHub;
 class ShellLifecycle;
 class ShellView;
 class ViewController;
+class ShellHeader;
+class EditorPage;
+class EditorToolbar;
 class SceneIssueWatch;
 class EditorDocks;
 
@@ -179,26 +182,8 @@ public:
     /// by app.space() so a verb's refusal carries the same sentence as the
     /// toast the user saw.
     QString lastSpaceRefusal() const { return spaceRefusal; }
-    /// THE EDITOR TOOLBAR'S CONTROLS, as state: one entry per action with its
-    /// objectName (minus the `action` prefix, lower-cased), whether it is on
-    /// screen and whether it can be used. Read by `editor.toolbar()`.
-    ///
-    /// The toolbar is a UI surface with no reading at all until now, which is
-    /// why "the Save button is hidden on every default install" (owner,
-    /// 2026-09-18) could be true for as long as it was: nothing could ask.
-    QVariantList toolbarActions() const;
-    /// What the View Options menu's checkmarks show ({grid, lightWires, stats,
-    /// physicsDebug}) — editor.overlays().menu, the proof they follow the state.
-    QVariantMap viewOptionChecks() const;
-    /// The ONE place the frame-stats readout is switched: F3, the View Options
-    /// row, the Preferences checkbox and editor.setOverlays({stats}) all land
-    /// here, and it persists `show_fps` (STATS_OVERLAY_SPEC.md §5.3).
-    void setShowFrameStats(bool on);
     void setupUndoRedo();
 
-    /// THE size of the header's glyph icons (Publish / Help / Preferences) —
-    /// one font for all three, so they cannot drift apart again.
-    QFont headerGlyphFont() const;
 
 	WindowSpaces getWindowSpace();
 	/// Opens a library asset in the module that owns its kind, switching to
@@ -216,7 +201,6 @@ public:
 	/// `avatar.loadClip` verb (S9). A null node, or a node the verb refuses,
 	/// says so in a viewport toast instead of doing nothing silently.
 	void assignAnimationAsset(const QString &guid, const iris::SceneNodePtr &node);
-	void deselectViewports();
 
     /// The window-centre notice (a page that cannot start, VR that did not).
     void showNotice(const QString &title, const QString &text);
@@ -244,7 +228,6 @@ public:
     bool enterEditorSpace();
 	void updateTopMenuStates(WindowSpaces activeSpace);
 
-    bool eventFilter(QObject *obj, QEvent *event);
 
     virtual void closeEvent(QCloseEvent *event);
 
@@ -283,6 +266,18 @@ public:
     /// THE EDITOR'S PANELS (shell/editordocks.h): the docks, the bottom area,
     /// the properties column and the readings the verbs report.
     EditorDocks *editorDocks() const { return docks; }
+    /// THE EDITOR PAGE and its toolbar (shell/editorpage.h, shell/editortoolbar.h).
+    EditorPage *editorPage() const { return page; }
+    EditorToolbar *editorToolbar() const { return toolbar; }
+    /// The module loop (the edit chords' targets live there).
+    ModuleHub *hub() const { return moduleHub; }
+    /// The active space's name, as the hub and the action host key it.
+    QString currentSpaceName() const { return spaces::id(currentSpace); }
+    /// The space this window came FROM (Ctrl+Tab's "Previous Space").
+    WindowSpaces previousWindowSpace() const { return previousSpace; }
+    /// The Player page's widget, and the one live Project.
+    PlayerWidget *playerPage() const { return playerView; }
+    Project *currentProject() const { return project; }
 
     /// One toast, reused, for every transient viewport readout (snap size, fly
     /// speed) — and for a gesture the viewport has to REFUSE: a material or an
@@ -406,7 +401,6 @@ public slots:
 
     void setupViewPort();
     void setupDesktop();
-    void setupToolBar();
     void setupShortcuts();
 
     //scenegraph
@@ -456,9 +450,6 @@ public slots:
     /// `project.create`'s `{template}` (services/scenetemplate.h says what
     /// each template holds).
     void newScene(SceneTemplate kind = SceneTemplate::Basic);
-    /// The grid, light-wire and physics-debug overlays back to EditorData's
-    /// defaults — newScene and the create run, one body.
-    void resetOverlaysToDefaults();
 
     /// The threaded open (a desktop tile's), through the runner.
     void openProjectAsync(bool playMode = false);
@@ -484,24 +475,9 @@ public slots:
     /// single-colour sky (the document's "no sky") and no lights.
     iris::ScenePtr createDefaultScene(SceneTemplate kind = SceneTemplate::Basic);
 
-    void useFreeCamera();
-    void useArcballCam();
 
-    void useLocalTransform();
-    void useGlobalTransform();
 
-    /// The gizmo transform space as the verb surface spells it: "local" |
-    /// "global" (editor.gizmoSpace / editor.setGizmoSpace, 2026-09-06
-    /// verb-coverage audit F12). Reading goes to the viewport — the gizmos own
-    /// the state — and writing goes through the two slots above so the
-    /// toolbar's Global/Local buttons follow a scripted switch.
-    QString gizmoTransformSpace() const;
-    bool applyGizmoTransformSpace(const QString &space);
 
-    /// The physics debug drawer with the menu's checkmark kept in sync
-    /// (editor.setOverlays({physicsDebug}) — F11). The action's toggled()
-    /// signal drives toggleDebugDrawer, so this is one path, not two.
-    void setPhysicsDebugOverlay(bool on);
 
 
     void updateSceneSettings();
@@ -523,13 +499,6 @@ public slots:
     /// space's edit target (EDITOR_MULTISELECT_SPEC §8.7).
     void selectAllActiveSpace();
 
-    void takeScreenshot();
-    void toggleLightWires(bool state);
-    void toggleGrid(bool state);
-    /// The View Options checkmarks := the viewport's overlay state (the one
-    /// owner; driven by EditorViewportEvents::overlaysChanged).
-    void syncOverlayChecks();
-    void toggleDebugDrawer(bool state);
 
 signals:
 	/// An asset was REIMPORTED through the import-settings dialog: its bake,
@@ -539,27 +508,10 @@ signals:
 	void assetReimported(const QString &guid);
 
 public slots:
-    // public for the scripting API (editor.play()/stop() set the mode
-    // explicitly instead of toggling the play button)
-    void enterEditMode();
-    void enterPlayMode();
-    /// Re-reads CameraSpeed into the toolbar's speed button and its popover.
-    /// Public and a SLOT because editor.cameraSpeed invokes it by name (the
-    /// verb owns the value, the toolbar is only a view of it) and because the
-    /// viewport's wheel gesture routes here through
-    /// EditorViewportEvents::cameraSpeedChanged.
-    void syncCameraSpeedUi();
 
-    /// The three gizmo modes with the toolbar following (the keys, the buttons
-    /// and IShellView::applyGizmoMode — editor.setGizmoMode and the headset).
-    void translateGizmo();
-    void rotateGizmo();
-    void scaleGizmo();
 
 private slots:
-    void cycleGizmoMode();
 
-    void onPlaySceneButton();
 
 	/// Shrinks the window to the screen it is about to appear on, keeping the
 	/// authored .ui size as the preferred one. Called ONLY when there is no
@@ -606,12 +558,6 @@ private:
     /// kept alive (or confused with a new one at the same address).
     QWeakPointer<iris::SceneNode> lastAppliedSelection;
     void applySelectionSetToUi(const QList<iris::SceneNodePtr> &nodes);
-    /// The widget fan-out for a selection change (viewport, properties,
-    /// hierarchy, timeline) — driven by SelectionService::selectionChanged.
-    /// The play-button chrome halves of the old enterEditMode/enterPlayMode —
-    /// driven by PlaybackService's mode signals.
-    void applyEditModeUi();
-    void applyPlayModeUi();
 
 
     Ui::MainWindow *ui;
@@ -622,7 +568,6 @@ private:
 	class EnginePlayerView* playerBackend = nullptr;
 
     QWidget *container = nullptr;
-    EditorCameraController* camControl;
 
     QSharedPointer<iris::Scene> scene;
 
@@ -636,9 +581,6 @@ private:
     ShortcutRegistry* shortcutRegistry = nullptr;
     AboutDialog* aboutDialog;
 
-    QActionGroup* transformGroup = nullptr;
-    QActionGroup* transformSpaceGroup = nullptr;
-    QActionGroup* cameraGroup = nullptr;
 
     Database *db = nullptr;
 
@@ -656,31 +598,11 @@ private:
 
     QUndoStack* undoStack = nullptr;
 
-	QPushButton *worlds_menu = nullptr;
-	QPushButton *player_menu = nullptr;
-	QPushButton *editor_menu = nullptr;
-	QPushButton *effect_menu = nullptr;
-	QPushButton *assets_menu = nullptr;
-	QPushButton *publish_menu = nullptr;
-	QPushButton *avatar_menu = nullptr;
-	QWidget *assets_panel = nullptr;
-	QLabel *jlogo = nullptr;
-	QPushButton *help = nullptr;
-	QPushButton *prefs = nullptr;
 
     QMainWindow *dialog = nullptr;
 
     QMainWindow *viewPort = nullptr;
-    QWidget *sceneContainer = nullptr;
 
-    QWidget *controlBar = nullptr;
-    QWidget *playerControls = nullptr;
-    QPushButton *playSceneBtn = nullptr;
-    QMenu *wireFramesMenu = nullptr;
-    QToolButton *wireFramesButton = nullptr;
-    QPushButton *restartBtn = nullptr;
-    QPushButton *playBtn = nullptr;
-    QPushButton *stopBtn = nullptr;
 
     QToolBar *toolBar = nullptr;
     AssetView *_assetView = nullptr;
@@ -689,32 +611,7 @@ private:
 	QAction *actionSaveScene = nullptr;
 
 
-    QAction *wireCheckAction = nullptr;
-    QAction *physicsCheckAction = nullptr;
-    QAction *gridCheckAction = nullptr;
-    QAction *groundPlaneCheckAction = nullptr;   ///< View Options "Ground Plane" (WORLD-MODEL-1)
-    QAction *statsCheckAction = nullptr;   // F3 frame-stats readout (persisted)
-    /// THE ATOM VIEW sub-menu of View Options (D0-ATOM-VIEW): Off, Triangles,
-    /// Levels, Buckets, Objects — exclusive, in AtomView's order; F6 cycles it.
-    /// Both call the scene's setAtomView, the one path world.setAtomView takes.
-    QVector<QAction *> atomViewActions;
-    void setAtomViewMode(int mode);
-    int atomViewMode();
-    /// View Options -> Photon View (PHOTON-VIEW-1): Off, Voxels, Probes, Cards,
-    /// Screen Probes, Diffuse GI Only, Reflections Only, Ray Hits — exclusive, in
-    /// PhotonView's order; F7 cycles through the ones that can paint. Both call the
-    /// scene's setPhotonView behind its photonViewRefusal, world.setPhotonView's path.
-    QVector<QAction *> photonViewActions;
-    void setPhotonViewMode(int mode);
-    int photonViewMode();
     class Toast *snapToast = nullptr;   // [ / ] snap-size feedback
-    /// THE CAMERA-SPEED BUTTON and the two controls in its popover (owner
-    /// R15). Owned by the toolbar and the popover menu; held to keep all three
-    /// in sync with CameraSpeed, which the verb and the scroll wheel can both
-    /// change behind their backs.
-    class QToolButton *cameraSpeedButton = nullptr;
-    class QSlider *cameraSpeedSlider = nullptr;
-    class QSpinBox *cameraSpeedSpin = nullptr;
     /// "The 3D view could not be created" — the respecced Failed state
     /// (STATS_OVERLAY_SPEC.md §6.4), which used to be a ViewportCover state.
     class Toast *viewErrorToast = nullptr;
@@ -722,7 +619,6 @@ private:
     QString spaceRefusal;
     /// The Player page could not start: say why and go back (SMOKE-FIX-1).
     void bounceFromPlayer(const QString &why);
-    void stepSnapSize(int direction);
 
 
     /// The space this window came FROM and the one it is on. BOTH initialised:
@@ -733,16 +629,7 @@ private:
     /// two members down from it).
     WindowSpaces previousSpace = WindowSpaces::DESKTOP;
     WindowSpaces currentSpace = WindowSpaces::DESKTOP;
-	QPushButton *playSimBtn = nullptr;
 
-    QAction *actionTranslate = nullptr;
-    QAction *actionRotate = nullptr;
-    QAction *actionScale = nullptr;
-    /// The toolbar's transform-space pair. Members (they were locals) so a
-    /// scripted editor.setGizmoSpace can leave the buttons telling the truth,
-    /// exactly as actionTranslate/Rotate/Scale do for the gizmo mode.
-    QAction *actionGlobalSpace = nullptr;
-    QAction *actionLocalSpace = nullptr;
 
 
 	QtAwesome *fontIcons;
@@ -756,22 +643,19 @@ private:
 	ShellLifecycle *lifecycle = nullptr;
 	ShellView *shellView = nullptr;
 	ViewController *viewController = nullptr;
+	ShellHeader *header = nullptr;
+	EditorPage *page = nullptr;
+	EditorToolbar *toolbar = nullptr;
 	SceneIssueWatch *issueWatch = nullptr;
 	EditorDocks *docks = nullptr;
 
     // services (APP_ARCHITECTURE_AUDIT §3.3): constructed in setupServices(),
     // deleted in the dtor. The QObject services are parented to the window.
     StudioServices *services = nullptr;
+    class ShellServices *serviceLayer = nullptr;
     UndoService *undoService = nullptr;
     SelectionService *selectionService = nullptr;
     PlaybackService *playbackService = nullptr;
-    /// The session log's shell-side event markers (SESSION_LOG_SPEC §5):
-    /// play/stop brackets, space switches, the quit summary and the scene
-    /// stats appended to the open block. Parented, so it dies with the window.
-    SessionMarkers *sessionMarkers = nullptr;
-    /// The session log's periodic perf sampler (SESSION_LOG_SPEC §8-R3).
-    /// Parented; also published through StudioServices for log.perf/log.sample.
-    PerfSampler *perfSampler = nullptr;
     PlayerService *playerService = nullptr;
     ProjectService *projectService = nullptr;
     SceneEditService *sceneEditService = nullptr;
@@ -786,6 +670,7 @@ private:
     struct ScriptHost *scriptHost = nullptr;
     class ScriptEngine *scriptEngine = nullptr;
     class ScriptConsole *scriptConsole = nullptr;
+    class ShellScripting *scripting_ = nullptr;
     class ClaudeAssistant *assistant = nullptr;
 
     /// Per-dialog options and answers for openDialog (only importSettings has

@@ -16,6 +16,8 @@ For more information see the LICENSE file
 #include "shell/viewcontroller.h"
 #include "shell/sceneissuewatch.h"
 #include "shell/editordocks.h"
+#include "shell/editorpage.h"
+#include "shell/editortoolbar.h"
 
 QWidget *ShellView::window() const
 {
@@ -252,17 +254,17 @@ QVariantMap ShellView::propertiesStats() const
 
 QVariantList ShellView::toolbarActions() const
 {
-    return mWindow->toolbarActions();
+    return mWindow->editorToolbar()->toolbarActions();
 }
 
 QVariantMap ShellView::viewOptionChecks() const
 {
-    return mWindow->viewOptionChecks();
+    return mWindow->editorPage()->viewOptionChecks();
 }
 
 void ShellView::setPhysicsDebugOverlay(bool on)
 {
-    mWindow->setPhysicsDebugOverlay(on);
+    mWindow->editorPage()->setPhysicsDebugOverlay(on);
 }
 
 bool ShellView::applyCameraView(const QString &name)
@@ -272,26 +274,26 @@ bool ShellView::applyCameraView(const QString &name)
 
 bool ShellView::applyGizmoTransformSpace(const QString &space)
 {
-    return mWindow->applyGizmoTransformSpace(space);
+    return mWindow->editorToolbar()->applyGizmoTransformSpace(space);
 }
 
 bool ShellView::applyGizmoMode(const QString &mode)
 {
-    if (mode == QLatin1String("rotate"))         mWindow->rotateGizmo();
-    else if (mode == QLatin1String("scale"))     mWindow->scaleGizmo();
-    else if (mode == QLatin1String("translate")) mWindow->translateGizmo();
+    if (mode == QLatin1String("rotate"))         mWindow->editorToolbar()->rotateGizmo();
+    else if (mode == QLatin1String("scale"))     mWindow->editorToolbar()->scaleGizmo();
+    else if (mode == QLatin1String("translate")) mWindow->editorToolbar()->translateGizmo();
     else return false;
     return true;
 }
 
 void ShellView::useFreeCamera()
 {
-    mWindow->useFreeCamera();
+    mWindow->editorToolbar()->useFreeCamera();
 }
 
 void ShellView::useArcballCamera()
 {
-    mWindow->useArcballCam();
+    mWindow->editorToolbar()->useArcballCam();
 }
 
 bool ShellView::isImmersiveFullscreen() const

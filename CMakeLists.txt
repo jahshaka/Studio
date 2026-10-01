@@ -296,7 +296,14 @@ set(SRCS
     src/shell/viewcontroller.cpp
     src/shell/sceneissuewatch.cpp
     src/shell/editordocks.cpp
+    src/shell/shellscripting.cpp
+    src/shell/shellheader.cpp
+    src/shell/editorpage.cpp
+    src/shell/editortoolbar.cpp
+    src/shell/shellactions.cpp
+    src/shell/shellservices.cpp
     src/services/projectrunner.cpp
+    src/services/scenetemplatebuilder.cpp
     src/modules/moduleregistry.cpp
     src/services/sceneopenrunner.cpp
     src/services/imagematerial.cpp
@@ -603,7 +610,14 @@ set(HEADERS
     src/shell/viewcontroller.h
     src/shell/sceneissuewatch.h
     src/shell/editordocks.h
+    src/shell/shellscripting.h
+    src/shell/shellheader.h
+    src/shell/editorpage.h
+    src/shell/editortoolbar.h
+    src/shell/shellactions.h
+    src/shell/shellservices.h
     src/services/projectrunner.h
+    src/services/scenetemplatebuilder.h
     src/shell/spaces.h
     src/ui/ishellview.h
     src/scripting/claude/claudeassistant.h

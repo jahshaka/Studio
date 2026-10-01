@@ -205,7 +205,7 @@ void EditorDocks::build(const Deps &deps)
     sceneNodePropertiesWidget = new SceneNodePropertiesWidget;
     sceneNodePropertiesWidget->setSceneView(sceneView);
     // World blade's "Show Grid" row is a second face of the View Options
-    // Ground Grid action (created in setupViewPort, which runs before this)
+    // Ground Grid action (the editor page's, built before the docks)
     sceneNodePropertiesWidget->getWorldPropertyWidget()->setGridAction(gridCheckAction);
     // ...and its "Ground Plane" row, of the Ground Plane action beside it.
     sceneNodePropertiesWidget->getWorldPropertyWidget()->setGroundPlaneAction(groundPlaneCheckAction);
@@ -334,7 +334,6 @@ void EditorDocks::build(const Deps &deps)
     assetWidget->setEventBus(services->eventBus);
     assetWidget->setProject(project);
     assetWidget->setAcceptDrops(true);
-    assetWidget->installEventFilter(mShell);
 
 	connect(assetWidget, SIGNAL(assetItemSelected(QListWidgetItem*)), mShell, SLOT(assetItemSelected(QListWidgetItem*)));
     assetWidget->setServices(services);

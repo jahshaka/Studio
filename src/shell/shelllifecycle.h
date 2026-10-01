@@ -54,15 +54,18 @@ For more information see the LICENSE file
 #include <functional>
 #include <memory>
 
+class AssetView;
+class ClaudeAssistant;
 class Database;
+class EditorDocks;
 class ModuleHub;
-class ProjectService;
+class ProjectRunner;
 class QCloseEvent;
 class QMainWindow;
 class QUndoStack;
 class ScriptEngine;
 class SettingsManager;
-class UndoService;
+class ShellServices;
 struct ScriptHost;
 namespace jahshaka { namespace engine { class Engine; } }
 
@@ -70,35 +73,33 @@ class ShellLifecycle : public QObject
 {
     Q_OBJECT
 public:
-    /// What the order needs from the window. Pointers are borrowed; a hook
-    /// left unset is a participant this session does not have.
+    /// The shell's parts the order drives. Pointers are borrowed; a null one
+    /// is a participant this session does not have.
     struct Parts {
         QMainWindow *window = nullptr;
         SettingsManager *settings = nullptr;
         ModuleHub *modules = nullptr;
         ScriptEngine *scriptEngine = nullptr;
         ScriptHost *scriptHost = nullptr;
-        ProjectService *projectService = nullptr;
-        UndoService *undoService = nullptr;
+        /// The service layer: the project and undo services, and step 5's
+        /// teardown of the plain ones.
+        ShellServices *services = nullptr;
         QUndoStack *undoStack = nullptr;
-        /// An open (or create) in flight, and its settle: finish within the
-        /// budget, then abandon whatever is left.
-        std::function<bool()> openInFlight;
-        std::function<void(int budgetMs)> settleOpen;
-        /// Step 2's join of the open runner: abort, then wait. False = did not stop.
-        std::function<bool(int budgetMs)> stopOpen;
+        /// The open (or create) runner: its settle and its join.
+        ProjectRunner *projects = nullptr;
+        /// The editor's layout (written at close) and the tray's import batches.
+        EditorDocks *docks = nullptr;
+        /// The MCP endpoint and the Claude chat subprocess.
+        ClaudeAssistant *assistant = nullptr;
+        /// The Assets page, or null while it has never been built.
+        std::function<AssetView *()> assetsPage;
         /// The force save (autosave / "save before closing?").
         std::function<void()> saveScene;
-        /// Writes the EDITOR's dock layout (not the page's) to settings.
-        std::function<void()> storeEditorLayout;
-        /// The import batches (the tray's and the Assets page's). False = did not stop.
-        std::function<bool(int budgetMs)> stopImports;
-        /// The MCP endpoint and the Claude chat subprocess.
-        std::function<void()> stopAssistant;
-        /// Step 5: the services and the Ui:: struct, in that order.
-        std::function<void()> deleteServices;
-        /// Step 6's epilogue: every pointer into the destroyed widget tree nulled.
-        std::function<void()> forgetViews;
+        /// Step 5's last act: the window forgets the plain services and
+        /// deletes its Ui:: struct.
+        std::function<void()> deleteUi;
+        /// Every pointer the window kept into what steps 5-6 destroyed, nulled.
+        std::function<void()> forget;
     };
 
     explicit ShellLifecycle(QObject *parent = nullptr);

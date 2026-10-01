@@ -29,6 +29,7 @@ For more information see the LICENSE file
 #include "data/settingsmanager.h"
 #include "irisgl/core/irisutils.h"
 #include "scripting/scriptengine.h"
+#include "scripting/claude/claudeassistant.h"
 #include "scripting/scripthost.h"
 #include "services/apppaths.h"
 #include "services/assetstore.h"
@@ -44,7 +45,12 @@ For more information see the LICENSE file
 #include "services/sessionmarkers.h"
 #include "services/thumbnailgenerator.h"
 #include "services/undoservice.h"
+#include "shell/editordocks.h"
 #include "shell/modulehub.h"
+#include "shell/shellservices.h"
+#include "services/projectrunner.h"
+#include "ui/pages/assetview.h"
+#include "ui/panels/assetwidget.h"
 #include "shell/shutdownorder.h"
 #include "ui/controls/tilecache.h"
 #include "viewport/cameraspeed.h"
@@ -132,14 +138,16 @@ void ShellLifecycle::closeRequested(QCloseEvent *event)
 	// hat). Re-entrancy is guarded: the pump can deliver another close.
 	static bool sSettlingOpen = false;
 	if (sSettlingOpen) return;   // a nested close under the settle: the outer one finishes
-	if (mParts.openInFlight && mParts.openInFlight()) {
+	if (mParts.projects && mParts.projects->isOpening()) {
 		sSettlingOpen = true;
-		if (mParts.settleOpen) mParts.settleOpen(5000);
+		mParts.projects->settle(5000);
 		sSettlingOpen = false;
 	}
 
+	ProjectService *projectService = mParts.services ? mParts.services->project() : nullptr;
+	UndoService *undoService = mParts.services ? mParts.services->undo() : nullptr;
 	const bool autoSave = mParts.settings->get(settingkeys::autoSave);
-	const bool sceneOpen = mParts.projectService && mParts.projectService->isSceneOpen();
+	const bool sceneOpen = projectService && projectService->isSceneOpen();
 
 	if (autoSave && sceneOpen) {
 		if (mParts.saveScene) mParts.saveScene();
@@ -154,8 +162,8 @@ void ShellLifecycle::closeRequested(QCloseEvent *event)
 		// the process alive — the same zombie the in-flight-open settle at the
 		// top of this function was written for, in a second guise. Nothing to
 		// save means nothing to ask.
-		if (mParts.undoService && mParts.undoService->isDirty()
-		    && !mParts.undoService->savedCountMatchesCurrent() && sceneOpen) {
+		if (undoService && undoService->isDirty()
+		    && !undoService->savedCountMatchesCurrent() && sceneOpen) {
 			QMessageBox::StandardButton reply;
 			reply = QMessageBox::question(mParts.window,
 				"Unsaved Changes",
@@ -202,7 +210,7 @@ void ShellLifecycle::closeRequested(QCloseEvent *event)
 	// ...and the EDITOR DOCKS, which live in the nested `viewPort` QMainWindow
 	// and are therefore not in the line above (shell/dockstate.h) — the
 	// editor's layout, not this page's (lane SPACE-1; EditorDocks says why).
-	if (mParts.storeEditorLayout) mParts.storeEditorLayout();
+	if (mParts.docks) mParts.docks->storeLayout();
 
     // Orderly teardown BEFORE the window disappears: dialogs close with a
     // window still on screen, and a mid-flight import batch is aborted and
@@ -280,8 +288,11 @@ void ShellLifecycle::stopBackgroundWork()
     // progress dialogs, drop viewer-tail queues.
     bool workersStopped = true;
     // The open runner: abandon whatever is left and join its parse worker.
-    if (mParts.stopOpen) workersStopped &= mParts.stopOpen(3000);
-    if (mParts.stopImports) workersStopped &= mParts.stopImports(3000);
+    if (mParts.projects) workersStopped &= mParts.projects->stop(3000);
+    if (mParts.docks && mParts.docks->assetTray())
+        workersStopped &= mParts.docks->assetTray()->shutdownImports(3000);
+    if (AssetView *page = mParts.assetsPage ? mParts.assetsPage() : nullptr)
+        workersStopped &= page->shutdownImports(3000);
 
     // Archive export/import (STABILITY_PROGRAM_SPEC Lane 4): cancelled and
     // joined, bounded, exactly like the import batches. Every live archiver —
@@ -291,7 +302,7 @@ void ShellLifecycle::stopBackgroundWork()
 
     // The MCP endpoint must not accept requests into a half-torn-down app, and
     // the Claude chat subprocess closes stdin, waits briefly, and is killed.
-    if (mParts.stopAssistant) mParts.stopAssistant();
+    if (mParts.assistant) mParts.assistant->shutdown();
 
     ThumbnailGenerator::getSingleton()->shutdown();
 
@@ -300,8 +311,8 @@ void ShellLifecycle::stopBackgroundWork()
     // above is exactly such a save. Waited for and WRITTEN here, while the
     // database is still open, so a quit never drops the picture of the world
     // it just saved. Bounded by one PNG encode (~100 ms).
-    if (mParts.projectService) {
-        const int drained = mParts.projectService->drainThumbnailEncodes();
+    if (ProjectService *projectService = mParts.services ? mParts.services->project() : nullptr) {
+        const int drained = projectService->drainThumbnailEncodes();
         if (drained) qInfo("shutdown: wrote %d pending project thumbnail(s)", drained);
     }
 
@@ -367,7 +378,8 @@ void ShellLifecycle::teardownWindow()
     // the --script / --dump-api-docs paths never reach stopBackgroundWork,
     // where a window close drains it (CREATE-GAP-1). Idempotent; nothing left
     // is nothing done.
-    if (mParts.projectService) mParts.projectService->drainThumbnailEncodes();
+    if (ProjectService *projectService = mParts.services ? mParts.services->project() : nullptr)
+        projectService->drainThumbnailEncodes();
 
     // The modules. ONE TEARDOWN PATH: on the window-close path step 3 has
     // already shut them down and this only deletes them; the --script /
@@ -379,9 +391,10 @@ void ShellLifecycle::teardownWindow()
     // Their PAGES belong to the stacked widget and die with the tree.
     if (mParts.modules) mParts.modules->releaseModules();
 
-    // The services and the Ui:: struct (the QObject services are parented to
-    // the window and die with it).
-    if (mParts.deleteServices) mParts.deleteServices();
+    // The services that are not QObjects of the window, then the Ui:: struct
+    // (the QObject services are the service layer's children and die with it).
+    if (mParts.services) mParts.services->destroyPlain();
+    if (mParts.deleteUi) mParts.deleteUi();
 
     JAH_SHUTDOWN_STEP(ShutdownOrder::EngineViews, "engine-holding widgets destroyed");
     destroyEngineViews();
@@ -432,7 +445,7 @@ void ShellLifecycle::destroyEngineViews()
     // Everything the window kept points into that tree. Nothing runs after
     // this except closeDatabase(), but a stale viewport pointer is the kind of
     // thing a later edit trips over.
-    if (mParts.forgetViews) mParts.forgetViews();
+    if (mParts.forget) mParts.forget();
 
     // The Engine must be gone now. It is not an assert because a MainWindow
     // can legitimately be destroyed before finalizeAppExit ran (a CLI path
