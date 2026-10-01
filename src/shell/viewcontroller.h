@@ -16,6 +16,10 @@ For more information see the LICENSE file
 //
 // Two things a person does to the view, owned in one place:
 //
+// THE FRAME PACING (fps audit F1, services/framepacing.h): the render loop is
+// paced against the persisted pacing mode and the refresh rate of the screen
+// the window is on, kept current across screen and refresh-rate changes.
+//
 // IMMERSIVE FULLSCREEN (F11 the key, editor.fullscreen the verb): the window
 // goes fullscreen and, in the editor space, the editor's chrome — its docks
 // and toolbar — hides; a second F11 restores exactly what was visible before
@@ -40,6 +44,9 @@ For more information see the LICENSE file
 class IEditorViewport;
 class QAction;
 class QMainWindow;
+class QScreen;
+class QWidget;
+class SettingsManager;
 class QMenu;
 class QPushButton;
 class QToolButton;
@@ -78,6 +85,13 @@ public:
     /// Rebuilds the camera switcher's list from the live document
     /// (CAMERAS_SPEC D4). Connected to the menu's aboutToShow.
     void rebuildCamerasMenu();
+
+    // ---- frame pacing -----------------------------------------------------
+    /// Panel-aware frame pacing: pushes the persisted pacing mode and
+    /// `window`'s screen refresh rate into the render driver, and keeps the
+    /// rate current across screen/mode changes. Called once, where the driver
+    /// is started.
+    void startFramePacing(QWidget *window, SettingsManager *settings);
 
     // ---- immersive fullscreen -------------------------------------------
     /// What fullscreen asks of the editor's chrome.
@@ -134,6 +148,20 @@ private:
     /// while the menu exists, and a stale list would pilot a dead node.
     QPointer<QToolButton> mCamerasButton;
     QMenu *mCamerasMenu = nullptr;
+
+    /// Re-resolves the screen and pushes its refresh rate. Also re-points the
+    /// refresh-rate connection when the window has moved to another screen.
+    void updatePacingScreen();
+    /// Connects QWindow::screenChanged once the native window exists — it does
+    /// not yet when startFramePacing() runs (constructor work). Retries on the
+    /// event loop and gives up silently in a session that shows no window.
+    void hookPacingScreenSignal(int retriesLeft);
+    QPointer<QWidget> mPacingWindow;
+    /// The screen the render loop is currently paced against, and the
+    /// connection to its refresh-rate signal. Non-owning; both are remade
+    /// whenever the window changes screen.
+    QScreen *mPacingScreen = nullptr;
+    QMetaObject::Connection mPacingRefreshConnection;
 
     QMainWindow *mWindow = nullptr;
     FullscreenChrome mChrome;

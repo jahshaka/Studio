@@ -15,6 +15,9 @@ For more information see the LICENSE file
 #include <QActionGroup>
 #include <QIcon>
 #include <QMainWindow>
+#include <QScreen>
+#include <QTimer>
+#include <QWindow>
 #include <QMenu>
 #include <QPushButton>
 #include <QToolButton>
@@ -23,7 +26,11 @@ For more information see the LICENSE file
 
 #include "irisgl/document/scenegraph/cameranode.h"
 #include "irisgl/document/scenegraph/scene.h"
+#include "bridge/enginehost.h"
+#include "data/settingsmanager.h"
+#include "services/framepacing.h"
 #include "ui/style/stylesheet.h"
+#include "viewport/enginerenderdriver.h"
 #include "viewport/ieditorviewport.h"
 
 ViewController::ViewController(QObject *parent) : QObject(parent)
@@ -312,4 +319,69 @@ void ViewController::windowStateChanged()
     // A MINIMISED fullscreen window is still fullscreen (Qt ORs the minimise
     // bit in), so isFullScreen() stays true and this does not fire for it.
     leaveImmersiveFullscreen(false);
+}
+
+// ---- frame pacing ------------------------------------------------------------
+
+void ViewController::startFramePacing(QWidget *window, SettingsManager *settings)
+{
+    // PANEL-AWARE PACING (fps audit F1, services/framepacing.h). Two inputs:
+    // the persisted mode and the refresh rate of the screen this window is on.
+    EngineRenderDriver *driver = EngineHost::instance().driver();
+    if (!driver) return;
+    mPacingWindow = window;
+
+    if (settings) {
+        bool ok = false;
+        const framepacing::Mode m = framepacing::modeFromName(
+            settings->getValue(framepacing::settingsKey(), QString()).toString(), &ok);
+        // An absent or unreadable value is not an error: Display is the default
+        // and writing one back would invent a preference the user never made.
+        if (ok) driver->setPacingMode(m);
+    }
+
+    // "Which screen is this window on" is a QWindow question, and the QWindow
+    // does not exist until the widget is shown — which is AFTER this runs
+    // (the viewport is constructor work). So take what is available now
+    // (QWidget::screen(), the primary screen before a show) and hook the
+    // screenChanged signal on the next event-loop turns, once the handle is
+    // there. NOT createWinId(): forcing a native window early in engine mode is
+    // exactly the class of thing AA_DontCreateNativeWidgetSiblings exists to
+    // avoid, and this needs no help from it.
+    hookPacingScreenSignal(8);
+    updatePacingScreen();
+}
+
+void ViewController::hookPacingScreenSignal(int retriesLeft)
+{
+    if (!mPacingWindow) return;
+    if (QWindow *handle = mPacingWindow->windowHandle()) {
+        connect(handle, &QWindow::screenChanged, this, [this](QScreen *) { updatePacingScreen(); });
+        updatePacingScreen();   // the real window may sit on another screen
+        return;
+    }
+    if (retriesLeft <= 0) return;   // a session that never shows a window (scripted, headless)
+    QTimer::singleShot(0, this, [this, retriesLeft] { hookPacingScreenSignal(retriesLeft - 1); });
+}
+
+void ViewController::updatePacingScreen()
+{
+    EngineRenderDriver *driver = EngineHost::instance().driver();
+    if (!driver || !mPacingWindow) return;
+    QWindow *handle = mPacingWindow->windowHandle();
+    QScreen *s = handle && handle->screen() ? handle->screen() : mPacingWindow->screen();
+    // The rate can change WITHOUT the screen changing (a mode switch, a
+    // variable-refresh panel renegotiating), so the connection follows the
+    // screen and is remade when the window moves.
+    if (s != mPacingScreen) {
+        if (mPacingRefreshConnection) disconnect(mPacingRefreshConnection);
+        mPacingScreen = s;
+        if (s) mPacingRefreshConnection =
+            connect(s, &QScreen::refreshRateChanged, this,
+                    [](qreal hz) {
+                        if (EngineRenderDriver *d = EngineHost::instance().driver())
+                            d->setRefreshHz(double(hz));
+                    });
+    }
+    driver->setRefreshHz(s ? double(s->refreshRate()) : 0.0);
 }

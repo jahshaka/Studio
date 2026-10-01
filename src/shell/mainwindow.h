@@ -289,18 +289,9 @@ public:
     void setSettingsManager(SettingsManager* settings);
     SettingsManager* getSettingsManager();
 
-    /// Panel-aware frame pacing (fps audit F1, services/framepacing.h): pushes
-    /// the persisted pacing mode and this window's screen refresh rate into the
-    /// render driver, and keeps the rate current across screen/mode changes.
-    /// Called once, where the driver is started.
-    void wireFramePacing();
-    /// Re-resolves the screen and pushes its refresh rate. Also re-points the
-    /// refresh-rate connection when the window has moved to another screen.
-    void updateFramePacingScreen();
-    /// Connects QWindow::screenChanged once the native window exists — it does
-    /// not yet when wireFramePacing() runs (constructor work). Retries on the
-    /// event loop and gives up silently in a session that shows no window.
-    void hookFramePacingScreenSignal(int retriesLeft);
+    /// The VR icon follows the session (per frame, a cached bool unless the
+    /// process can do VR at all).
+    void followVrSession();
 
     iris::ScenePtr getScene();
 
@@ -904,11 +895,6 @@ private:
     std::unique_ptr<Project> exportTarget;
     QPointer<class ProgressDialog> archiveProgress;
 
-    /// The screen the render loop is currently paced against (fps audit F1),
-    /// and the connection to its refresh-rate signal. Non-owning; both are
-    /// remade whenever the window changes screen.
-    class QScreen *mPacingScreen = nullptr;
-    QMetaObject::Connection mPacingRefreshConnection;
 
     /// The one live Project instance, owned by the shell and injected into
     /// everything that needs it (Phase 4: was the Globals::project static).
