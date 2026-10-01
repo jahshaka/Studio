@@ -48,8 +48,10 @@ public:
         IEditorViewport *viewport = nullptr;
         QtAwesome *icons = nullptr;
         ActionHost *actions = nullptr;     ///< the toolbar's slots are registered here
-        std::function<void()> undo;        ///< the scene's undo (the buttons; the chord routes by space)
-        std::function<void()> redo;
+        /// The undo/redo buttons, made by the shell's QUndoGroup (ModuleHub::
+        /// createUndoAction): enabled and titled by the active stack.
+        std::function<QAction *(QObject *)> undoAction;
+        std::function<QAction *(QObject *)> redoAction;
         std::function<void()> exportScene;
         std::function<void()> saveScene;
         std::function<void()> toggleDocks;

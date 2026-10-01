@@ -24,7 +24,11 @@ For more information see the LICENSE file
 // It also routes the EDIT CHORDS by the active space (EditTarget): the
 // space's own target, a module's or one the shell registers for a space it
 // owns itself (the editor), or nothing — a page with no document answers no
-// chord.
+// chord. UNDO IS A QUndoGroup: every switch (and a module's editTargetChanged)
+// makes the space's stack the group's ACTIVE one — null on a page with no
+// document — and Ctrl+Z, Ctrl+Shift+Z and the undo/redo buttons (made by
+// createUndoAction/createRedoAction, so their enabled state is the group's)
+// all act on that active stack.
 
 #include <QHash>
 #include <QObject>
@@ -37,6 +41,7 @@ For more information see the LICENSE file
 
 class ActionHost;
 class PageHost;
+class QAction;
 class QUndoGroup;
 
 class ModuleHub : public QObject
@@ -62,6 +67,8 @@ public:
 
     // ---- the session ----------------------------------------------------
     void projectChanged(Project *project);
+    /// Every module hears the switch; then the group's active stack becomes
+    /// `to`'s (syncActiveStack).
     void spaceChanged(const QString &from, const QString &to);
     /// Routes `ref` to the module that contributed `ref.kind`. False when no
     /// module owns the kind or the module declined.
@@ -78,14 +85,23 @@ public:
     /// Runs `edit` on the space's target. False when the space does not
     /// answer it (nothing happens — never a fallback to another space).
     bool runEdit(const QString &space, Edit edit);
-    /// Ctrl+Z / Ctrl+Shift+Z: the space's stack becomes the group's ACTIVE
-    /// stack, then it moves. A space with no stack has no active stack and the
-    /// chord does nothing (audit S4a). False when nothing moved.
-    bool undo(const QString &space);
-    bool redo(const QString &space);
+    /// Re-reads the current space's EditTarget::undoStack into the group as
+    /// its ACTIVE stack (null = none). Run at every switch and by
+    /// StudioContext::editTargetChanged.
+    void syncActiveStack();
+    /// Ctrl+Z / Ctrl+Shift+Z / the buttons: the group's ACTIVE stack moves —
+    /// through the space target's own undo/redo when it names that stack (the
+    /// edit gate, a repaint), else QUndoGroup::undo/redo. No active stack =
+    /// nothing moves (audit S4a). False when there was no active stack.
+    bool undo();
+    bool redo();
+    /// An undo/redo action bound to the group (QUndoGroup::createUndoAction /
+    /// createRedoAction: enabled and titled by the active stack) whose
+    /// trigger is undo()/redo() above, so the edit gate is never skipped.
+    QAction *createUndoAction(QObject *parent);
+    QAction *createRedoAction(QObject *parent);
     QUndoGroup *undoGroup() const { return mUndoGroup; }
-    /// The group's active stack for `space`, resolved now (null = none).
-    QUndoStack *activateStackFor(const QString &space);
+    QString currentSpace() const { return mSpace; }
 
     // ---- teardown -------------------------------------------------------
     /// abortBackgroundWork() on every module (stop, do not join).
@@ -101,6 +117,7 @@ private:
     QHash<QString, StudioModule *> mAssetKinds;
     QHash<QString, std::function<EditTarget()>> mShellTargets;
     QUndoGroup *mUndoGroup = nullptr;
+    QString mSpace;
     bool mShutDown = false;
 };
 

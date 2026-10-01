@@ -137,24 +137,6 @@
     <string>Website</string>
    </property>
   </action>
-  <action name="actionUndo">
-   <property name="icon">
-    <iconset resource="../app/icons.qrc">
-     <normaloff>:/icons/undo.png</normaloff>:/icons/undo.png</iconset>
-   </property>
-   <property name="text">
-    <string>Undo</string>
-   </property>
-  </action>
-  <action name="actionRedo">
-   <property name="icon">
-    <iconset resource="../app/icons.qrc">
-     <normaloff>:/icons/redo.svg</normaloff>:/icons/redo.svg</iconset>
-   </property>
-   <property name="text">
-    <string>Redo</string>
-   </property>
-  </action>
   <action name="actionTranslate">
    <property name="checkable">
     <bool>true</bool>
@@ -243,16 +225,6 @@
    </property>
    <property name="toolTip">
     <string>Arcball Camera</string>
-   </property>
-  </action>
-  <action name="actionEditUndo">
-   <property name="text">
-    <string>Undo</string>
-   </property>
-  </action>
-  <action name="actionEditRedo">
-   <property name="text">
-    <string>Redo</string>
    </property>
   </action>
   <action name="actionClose">

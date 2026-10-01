@@ -29,7 +29,7 @@ For more information see the LICENSE file
 //   create   onProjectChanged(project)        (the new scene is bound)
 //   close    onProjectChanged(nullptr)        (the scene is torn down)
 //   switch   onSpaceChanged(from, to)          (every module, every switch)
-//   edit     editTarget()                     (resolved when a chord fires)
+//   edit     editTarget()                     (the undo stack at each switch; a chord when it fires)
 //   asset    openAsset(ref)                   (a page asks for a kind it owns)
 //   quit     abortBackgroundWork() -> shutdown()   (each exactly once)
 //
@@ -75,6 +75,10 @@ struct StudioContext
     Project         *project   = nullptr;   ///< the one live Project instance
     QWidget         *shellWidget = nullptr; ///< parent for pages/dialogs (the shell window as a QWidget)
     IShellView      *shell     = nullptr;   ///< the shell's view surface (spaces, toasts, panels), or null
+    /// Call when editTarget() would now name a different undo stack (the
+    /// Materials page's active tab changed): the shell re-reads the active
+    /// space's target into its QUndoGroup. Set by the shell; may be empty.
+    std::function<void()> editTargetChanged;
 };
 
 /// What a module adds to the shell. Collected from contribute() and applied by
@@ -134,11 +138,14 @@ private:
 };
 
 /// WHAT THE EDIT CHORDS MEAN ON A MODULE'S SPACE. `undoStack` joins the shell's
-/// QUndoGroup and is the ACTIVE stack while the space is up; null = the space
-/// has no document, and Ctrl+Z there is a no-op (audit S4a: it used to undo
-/// the scene, invisibly). `undo`/`redo` replace the plain stack call when the
-/// module must do more than move the stack (a repaint, an edit gate). A null
-/// handler is a chord this space does not answer.
+/// QUndoGroup and is its ACTIVE stack while the space is up — the group is the
+/// routing: Ctrl+Z, Ctrl+Shift+Z and the undo/redo buttons all act on the
+/// group's active stack, and their enabled state is the group's. Null = the
+/// space has no document: no active stack, Ctrl+Z is a no-op (audit S4a: it
+/// used to undo the scene, invisibly). `undo`/`redo` replace the plain
+/// QUndoGroup::undo when the module must do more than move the stack (a
+/// repaint, the edit gate) — they run only while their stack IS the active
+/// one. A null handler is a chord this space does not answer.
 struct EditTarget
 {
     QUndoStack *undoStack = nullptr;
@@ -203,9 +210,11 @@ public:
     /// "editor", "materials", ...). Every module hears every switch.
     virtual void onSpaceChanged(const QString &from, const QString &to) { Q_UNUSED(from); Q_UNUSED(to); }
 
-    /// What the edit chords do while this module's space is active. Resolved
-    /// each time a chord fires, so a stack that changes with the module's own
-    /// state (a material tab) is always the live one. Default: no document.
+    /// What the edit chords do while this module's space is active. Its
+    /// `undoStack` is made the shell's QUndoGroup's ACTIVE stack on every switch
+    /// to the space and whenever the module calls ctx.editTargetChanged() (a
+    /// material tab). The other chords are resolved when they fire. Default:
+    /// no document.
     virtual EditTarget editTarget() { return EditTarget(); }
 
     /// Open/spawn/assign an asset of a kind this module contributed. Returns

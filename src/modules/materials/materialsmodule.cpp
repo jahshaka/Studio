@@ -50,6 +50,10 @@ void MaterialsModule::initialize(StudioContext &host)
         QObject::connect(host.services->playback, &PlaybackService::editModeEntered, page,
                          [effectsPage, db]() { effectsPage->setAssetWidgetDatabase(db); });
     }
+    // THE UNDO GROUP FOLLOWS THE OPEN TAB: each tab has its own stack, and the
+    // shell's QUndoGroup must name the one on screen.
+    if (host.editTargetChanged)
+        QObject::connect(page, &materials::EffectsPage::activeDocumentShown, page, host.editTargetChanged);
     // The open TAB SET lives in the app's settings, per project (§2.7).
     page->setSettings(host.settings);
 

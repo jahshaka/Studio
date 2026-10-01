@@ -11,6 +11,7 @@ For more information see the LICENSE file
 
 #include "shell/modulehub.h"
 
+#include <QAction>
 #include <QUndoGroup>
 #include <QUndoStack>
 
@@ -44,6 +45,7 @@ StudioModule *ModuleHub::module(const QString &id) const
 
 void ModuleHub::initialize(StudioContext &ctx)
 {
+    ctx.editTargetChanged = [this]() { syncActiveStack(); };
     for (StudioModule *m : mModules) m->initialize(ctx);
 }
 
@@ -71,6 +73,8 @@ void ModuleHub::projectChanged(Project *project)
 void ModuleHub::spaceChanged(const QString &from, const QString &to)
 {
     for (StudioModule *m : mModules) m->onSpaceChanged(from, to);
+    mSpace = to;
+    syncActiveStack();
 }
 
 bool ModuleHub::openAsset(const AssetRef &ref)
@@ -109,33 +113,55 @@ bool ModuleHub::runEdit(const QString &space, Edit edit)
     return true;
 }
 
-QUndoStack *ModuleHub::activateStackFor(const QString &space)
+void ModuleHub::syncActiveStack()
 {
-    // RESOLVED AT THE CHORD, not at the space switch: a module's stack can
-    // change while its space is up (the Materials page's stack is the open
-    // TAB's), and the group must name the one the user is looking at.
-    QUndoStack *stack = editTarget(space).undoStack;
-    if (stack) mUndoGroup->addStack(stack);   // a no-op for a stack already in the group
+    // AT THE SWITCH, AND WHEN THE MODULE SAYS SO: a module's stack can change
+    // while its space is up (the Materials page's stack is the open TAB's),
+    // so the module calls StudioContext::editTargetChanged and the group
+    // follows. A stack deleted while in the group leaves it by itself
+    // (~QUndoStack), so the group never points at freed memory.
+    QUndoStack *stack = editTarget(mSpace).undoStack;
+    if (stack && !mUndoGroup->stacks().contains(stack)) mUndoGroup->addStack(stack);
     mUndoGroup->setActiveStack(stack);
-    return stack;
 }
 
-bool ModuleHub::undo(const QString &space)
+bool ModuleHub::undo()
 {
-    const EditTarget target = editTarget(space);
-    if (!activateStackFor(space)) return false;   // no document here: Ctrl+Z is a no-op
-    if (target.undo) target.undo();
+    QUndoStack *active = mUndoGroup->activeStack();
+    if (!active) return false;   // no document here: Ctrl+Z is a no-op
+    const EditTarget target = editTarget(mSpace);
+    if (target.undoStack == active && target.undo) target.undo();
     else mUndoGroup->undo();
     return true;
 }
 
-bool ModuleHub::redo(const QString &space)
+bool ModuleHub::redo()
 {
-    const EditTarget target = editTarget(space);
-    if (!activateStackFor(space)) return false;
-    if (target.redo) target.redo();
+    QUndoStack *active = mUndoGroup->activeStack();
+    if (!active) return false;
+    const EditTarget target = editTarget(mSpace);
+    if (target.undoStack == active && target.redo) target.redo();
     else mUndoGroup->redo();
     return true;
+}
+
+QAction *ModuleHub::createUndoAction(QObject *parent)
+{
+    // Qt's action follows the group (enabled = canUndo, text = the command);
+    // its trigger is re-pointed from QUndoGroup::undo to undo() so the space
+    // target's own path (the edit gate, a repaint) is the one that runs.
+    QAction *action = mUndoGroup->createUndoAction(parent);
+    QObject::disconnect(action, &QAction::triggered, mUndoGroup, &QUndoGroup::undo);
+    connect(action, &QAction::triggered, this, [this]() { undo(); });
+    return action;
+}
+
+QAction *ModuleHub::createRedoAction(QObject *parent)
+{
+    QAction *action = mUndoGroup->createRedoAction(parent);
+    QObject::disconnect(action, &QAction::triggered, mUndoGroup, &QUndoGroup::redo);
+    connect(action, &QAction::triggered, this, [this]() { redo(); });
+    return action;
 }
 
 void ModuleHub::abortBackgroundWork()

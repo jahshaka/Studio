@@ -190,6 +190,13 @@ public:
 	/// shell's undo group makes active while the Materials space is up.
 	QUndoStack *graphUndoStack() const { return activeStack(); }
 
+signals:
+	/// A document was put on screen as the ACTIVE tab: graphUndoStack() may
+	/// now name another stack (the shell's undo group follows it).
+	void activeDocumentShown();
+
+public:
+
 	/// Opens the graph's node-SEARCH palette. The page-scoped entry point for
 	/// the shell's Space key (owner decision 2026-09-05: on the Materials space
 	/// Space searches nodes, everywhere else it cycles the gizmo) — the same

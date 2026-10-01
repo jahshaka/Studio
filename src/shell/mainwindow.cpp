@@ -300,8 +300,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     toolbarDeps.viewport = sceneView;
     toolbarDeps.icons = fontIcons;
     toolbarDeps.actions = actionHost;
-    toolbarDeps.undo = [this]() { undo(); };
-    toolbarDeps.redo = [this]() { redo(); };
+    toolbarDeps.undoAction = [this](QObject *parent) { return moduleHub->createUndoAction(parent); };
+    toolbarDeps.redoAction = [this](QObject *parent) { return moduleHub->createRedoAction(parent); };
     toolbarDeps.exportScene = [this]() { exportSceneAsZip(); };
     toolbarDeps.saveScene = [this]() { saveScene(); };
     toolbarDeps.toggleDocks = [this]() { docks->openToggleDialog(); };
@@ -678,21 +678,12 @@ void MainWindow::setupServices()
 
 void MainWindow::setupUndoRedo()
 {
+    // The scene's stack. It joins the hub's QUndoGroup as the editor space's
+    // edit target (the ctor's setSpaceEditTarget); the chords are the
+    // registry's edit.undo / edit.redo rows and the buttons the editor
+    // toolbar's group-made actions — the .ui's four undo/redo actions, on no
+    // widget since the menubar went, are deleted.
     undoStack = new QUndoStack(this);
-
-
-    // All four go through the space-routing entry points, like the registry
-    // shortcut — one rule, one place (undoActiveSpace).
-    connect(ui->actionUndo, &QAction::triggered, [this]() { undoActiveSpace(); });
-    connect(ui->actionEditUndo, &QAction::triggered, [this]() { undoActiveSpace(); });
-
-    // (shortcut moved to ShortcutRegistry "edit.undo" — this action is not
-    // attached to any widget, so a QKeySequence here never fired anyway)
-
-    connect(ui->actionRedo, &QAction::triggered, [this]() { redoActiveSpace(); });
-    connect(ui->actionEditRedo, &QAction::triggered, [this]() { redoActiveSpace(); });
-
-    // (shortcut moved to ShortcutRegistry "edit.redo")
 }
 
 WindowSpaces MainWindow::getWindowSpace()
@@ -1783,12 +1774,12 @@ void MainWindow::redo()
 
 void MainWindow::undoActiveSpace()
 {
-    moduleHub->undo(currentSpaceId());
+    moduleHub->undo();
 }
 
 void MainWindow::redoActiveSpace()
 {
-    moduleHub->redo(currentSpaceId());
+    moduleHub->redo();
 }
 
 

@@ -49,13 +49,13 @@ void EditorToolbar::build(const Deps &deps)
 	toolBar->setObjectName(QString::fromLatin1(DockState::kEditorToolBarName));
 	toolBar->setIconSize(QSize(16, 16));
 
-	QAction *actionUndo = new QAction;
+	QAction *actionUndo = mDeps.undoAction(toolBar);
 	actionUndo->setToolTip("Undo | Undo last action");
 	actionUndo->setObjectName(QStringLiteral("actionUndo"));
 	actionUndo->setIcon(fontIcons->icon(fa::reply, options));
 	toolBar->addAction(actionUndo);
 
-	QAction *actionRedo = new QAction;
+	QAction *actionRedo = mDeps.redoAction(toolBar);
 	actionRedo->setToolTip("Redo | Redo last action");
 	actionRedo->setObjectName(QStringLiteral("actionRedo"));
 	actionRedo->setIcon(fontIcons->icon(fa::share, options));
@@ -63,8 +63,6 @@ void EditorToolbar::build(const Deps &deps)
 
 	toolBar->addSeparator();
 
-	connect(actionUndo, &QAction::triggered, this, [this]() { if (mDeps.undo) mDeps.undo(); });
-	connect(actionRedo, &QAction::triggered, this, [this]() { if (mDeps.redo) mDeps.redo(); });
 
     actionTranslate = new QAction;
     actionTranslate->setObjectName(QStringLiteral("actionTranslate"));

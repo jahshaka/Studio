@@ -13,8 +13,10 @@
 //     that runs only on the module's space, and a toolbar action in a named
 //     slot;
 //   * that the edit chords follow the ACTIVE space — never a fallback to
-//     another space's target — and Ctrl+Z moves the QUndoGroup's active stack,
-//     which a page with no document does not have (audit S4a);
+//     another space's target — and that undo IS the QUndoGroup: the switch
+//     (and a module's editTargetChanged) sets the active stack, which a page
+//     with no document does not have (audit S4a); the group's own actions are
+//     enabled by it and trigger through the target's undo (the edit gate);
 //   * that shutdown() runs exactly once however many exit paths ask.
 //
 // No window, no engine, no database: the hub, the hosts and the registry are
@@ -95,7 +97,7 @@ public:
     {
         gLog << QStringLiteral("editTarget");
         EditTarget t;
-        t.undoStack = &stack;
+        t.undoStack = current;
         t.deleteSelection = []() { gLog << QStringLiteral("edit:delete"); };
         t.paste = []() { gLog << QStringLiteral("edit:paste"); };
         return t;
@@ -114,6 +116,7 @@ public:
     QWidget *page = nullptr;
     QAction *toolbarAction = nullptr;
     QUndoStack stack;
+    QUndoStack *current = &stack;   ///< the open "tab"'s stack
 };
 
 class CountingCommand : public QUndoCommand
@@ -209,7 +212,8 @@ int main(int argc, char **argv)
     pages.show(QStringLiteral("fake"));
     hub.spaceChanged(currentSpace, QStringLiteral("fake"));
     currentSpace = QStringLiteral("fake");
-    CHECK(gLog == QStringList({ "space:desktop>fake" }), "switch: onSpaceChanged(from, to)");
+    CHECK(gLog == QStringList({ "space:desktop>fake", "editTarget" }),
+          "switch: onSpaceChanged(from, to), then the target's stack is read into the undo group");
     CHECK(pages.isCurrent(QStringLiteral("fake")), "switch: the page is shown by id");
 
     // ---- an edit command and the module's chords ---------------------------
@@ -241,23 +245,58 @@ int main(int argc, char **argv)
     int graphEdits = 0;
     editorStack.push(new CountingCommand(&sceneEdits));
     fake->stack.push(new CountingCommand(&graphEdits));
-    hub.setSpaceEditTarget(QStringLiteral("editor"), [&editorStack]() {
+    // The editor's target routes its undo through its own path (the window's
+    // is UndoService: the edit gate) — the group must call it, not bypass it.
+    int gatedUndos = 0;
+    hub.setSpaceEditTarget(QStringLiteral("editor"), [&editorStack, &gatedUndos]() {
         EditTarget t;
         t.undoStack = &editorStack;
+        t.undo = [&editorStack, &gatedUndos]() { ++gatedUndos; editorStack.undo(); };
         return t;
     });
-    CHECK(!hub.undo(QStringLiteral("desktop")) && sceneEdits == 1 && graphEdits == 1,
-          "undo: on a page with no document Ctrl+Z is a no-op (the scene is not touched)");
+    // The buttons are the GROUP's actions (createUndoAction): enabled by the
+    // active stack, triggered through the hub.
+    QAction *undoButton = hub.createUndoAction(&window);
+    QAction *redoButton = hub.createRedoAction(&window);
+    auto go = [&](const QString &to) {
+        pages.show(to);
+        hub.spaceChanged(currentSpace, to);
+        currentSpace = to;
+    };
+    go(QStringLiteral("desktop"));
     CHECK(hub.undoGroup()->activeStack() == nullptr, "undo: a page with no document has NO active stack");
-    CHECK(hub.undo(QStringLiteral("editor")) && sceneEdits == 0 && graphEdits == 1,
-          "undo: on the editor the scene's stack moves");
-    CHECK(hub.undoGroup()->activeStack() == &editorStack, "undo: the editor's stack is the active one there");
-    CHECK(hub.redo(QStringLiteral("editor")) && sceneEdits == 1, "redo: on the editor the scene's stack moves back");
-    CHECK(hub.undo(QStringLiteral("fake")) && graphEdits == 0 && sceneEdits == 1,
-          "undo: on a module's space its OWN stack moves, never the scene's");
+    CHECK(!undoButton->isEnabled() && !redoButton->isEnabled(), "undo: the group's buttons are off with no active stack");
+    CHECK(!hub.undo() && sceneEdits == 1 && graphEdits == 1,
+          "undo: on a page with no document Ctrl+Z is a no-op (the scene is not touched)");
+    editorStack.push(new CountingCommand(&sceneEdits));   // two steps: a double undo would show
+    go(QStringLiteral("editor"));
+    CHECK(hub.undoGroup()->activeStack() == &editorStack, "undo: the switch makes the editor's stack the active one");
+    CHECK(undoButton->isEnabled() && !redoButton->isEnabled(), "undo: the buttons follow the active stack");
+    undoButton->trigger();
+    CHECK(sceneEdits == 1 && graphEdits == 1 && gatedUndos == 1,
+          "undo: the group's button moves the scene's stack ONE step, THROUGH the target's own undo (the gate)");
+    CHECK(redoButton->isEnabled(), "redo: the redo button comes on after an undo");
+    CHECK(hub.redo() && sceneEdits == 2, "redo: on the editor the scene's stack moves back");
+    go(QStringLiteral("fake"));
     CHECK(hub.undoGroup()->activeStack() == &fake->stack, "undo: the module's stack is active on its space");
-    CHECK(!hub.redo(QStringLiteral("assets")) && graphEdits == 0 && sceneEdits == 1,
+    CHECK(hub.undo() && graphEdits == 0 && sceneEdits == 2 && gatedUndos == 1,
+          "undo: on a module's space its OWN stack moves, never the scene's");
+    // The module's stack changes under it (a material tab): it says so and
+    // the group follows.
+    QUndoStack secondTab;
+    secondTab.push(new CountingCommand(&graphEdits));
+    fake->current = &secondTab;
+    CHECK(hub.undoGroup()->activeStack() == &fake->stack, "undo: the group holds until the module says its target moved");
+    ctx.editTargetChanged();
+    CHECK(hub.undoGroup()->activeStack() == &secondTab, "undo: editTargetChanged re-reads the module's stack");
+    CHECK(hub.undo() && graphEdits == 0, "undo: the new tab's stack moves");
+    fake->current = &fake->stack;
+    ctx.editTargetChanged();
+    go(QStringLiteral("assets"));
+    CHECK(!hub.redo() && graphEdits == 0 && sceneEdits == 2,
           "redo: on another page with no document nothing moves");
+    CHECK(!undoButton->isEnabled(), "undo: the buttons go off again");
+    go(QStringLiteral("editor"));
 
     // ---- an asset of the module's kind --------------------------------------
     gLog.clear();
