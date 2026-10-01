@@ -29,6 +29,7 @@ For more information see the LICENSE file
 #include "scripting/scriptengine.h"
 #include "scripting/mcp/mcpserver.h"
 #include "shell/mainwindow.h"
+#include "scripting/claude/claudeassistant.h"
 #include "services/mainthreadwatchdog.h"
 #include "services/jahlog.h"
 #include "shell/shutdownorder.h"
@@ -466,12 +467,12 @@ int runMcpServe(MainWindow &window, QApplication &app, unsigned short port, bool
     }
 
     QString error;
-    if (!window.startMcpServer(port, &error)) {
+    if (!window.claudeAssistant()->startMcpServer(port, &error)) {
         std::fprintf(stderr, "mcp: %s\n", qPrintable(error));
         return finalizeAppExit(1);       // ordered teardown, see above
     }
 
-    McpServer *mcp = window.mcp();
+    McpServer *mcp = window.claudeAssistant()->mcp();
     // THE PORT, ON ITS OWN LINE AND MACHINE-READABLE (TEST_GATE_AUDIT.md §4.1).
     // `--mcp-port=0` binds an EPHEMERAL port, which is the only way several
     // driver suites can boot the app at once — two of them hard-coded 8751 and

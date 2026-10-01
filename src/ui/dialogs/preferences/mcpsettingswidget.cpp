@@ -29,7 +29,6 @@ For more information see the LICENSE file
 #include "data/settingsmanager.h"
 #include "scripting/mcp/mcplog.h"
 #include "scripting/mcp/mcpserver.h"
-#include "shell/mainwindow.h"
 #include "ui/style/stylesheet.h"
 
 McpSettingsWidget::McpSettingsWidget(SettingsManager *settings, QWidget *parent)
@@ -148,10 +147,10 @@ McpSettingsWidget::McpSettingsWidget(SettingsManager *settings, QWidget *parent)
     refresh();
 }
 
-void McpSettingsWidget::wireMcp(McpServer *server, MainWindow *mainWindow)
+void McpSettingsWidget::wireMcp(McpServer *server, Starter start)
 {
     mServer = server;
-    mMainWindow = mainWindow;
+    mStart = std::move(start);
     if (mServer) connect(mServer, &McpServer::stateChanged, this, &McpSettingsWidget::refresh);
     reloadFromLiveState();
     refresh();
@@ -216,9 +215,9 @@ void McpSettingsWidget::saveSettings()
     if (!mServer) return;
     if (enabled && (!mServer->isRunning() || mServer->port() != port)) {
         // Restart on the (possibly new) port; the console dock gets the
-        // fresh connect line via MainWindow.
+        // fresh connect line through the assistant's start.
         QString error;
-        if (mMainWindow) mMainWindow->startMcpServer(port, &error);
+        if (mStart) mStart(port, &error);
         else mServer->start(port, &error);
         if (!error.isEmpty()) mStatus->setText(error);
     } else if (!enabled && mServer->isRunning() && mEnabledTouched) {

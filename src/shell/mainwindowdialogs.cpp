@@ -45,7 +45,7 @@ For more information see the LICENSE file
 #include "services/assetstorepaths.h"
 #include "scripting/scriptengine.h"
 #include "ui/pages/projectmanager.h"
-#include "ui/windows/claudechatwindow.h"
+#include "scripting/claude/claudeassistant.h"
 
 #include <QFileInfo>
 #include <QImage>
@@ -90,8 +90,9 @@ QWidget *MainWindow::openDialog(const QString &name, const QVariantMap &options,
         dialog = aboutDialog;
         owned = false;
     } else if (name == QLatin1String("claudeChat")) {
-        if (!claudeChatWindow || !claudeChatWindow->isVisible()) toggleClaudeChat();
-        dialog = claudeChatWindow;
+        if (!assistant->chatWindow() || !assistant->chatWindow()->isVisible())
+            assistant->toggleChat();
+        dialog = assistant->chatWindow();
         owned = false;
     } else if (name == QLatin1String("sampleBrowser")) {
         dialog = pmContainer ? pmContainer->prepareSampleBrowser() : nullptr;
@@ -286,7 +287,7 @@ bool MainWindow::closeDialog(const QString &name)
     QWidget *dialog = scriptDialogs.take(name);
     if (!dialog || !dialog->isVisible()) return false;
     if (name == QLatin1String("claudeChat")) {
-        toggleClaudeChat();   // the window's own close path (it keeps state)
+        assistant->toggleChat();   // the window's own close path (it keeps state)
         return true;
     }
     dialog->close();          // owned entries delete themselves (WA_DeleteOnClose)

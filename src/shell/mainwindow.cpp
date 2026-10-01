@@ -173,11 +173,7 @@ For more information see the LICENSE file
 
 #include "scripting/scripthost.h"
 #include "scripting/scriptengine.h"
-#include "scripting/mcp/mcpserver.h"
-#include "scripting/claude/claudechathost.h"
-#include "scripting/claude/claudecliprobe.h"
-#include "scripting/claude/claudelaunchconfig.h"
-#include "ui/windows/claudechatwindow.h"
+#include "scripting/claude/claudeassistant.h"
 #include "ui/panels/scriptconsole.h"
 #include "scripting/modules/studiomodules.h"
 
@@ -313,7 +309,6 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     setupToolBar();
     setupDockWidgets();
     setupShortcuts();
-    prefsDialog->wireShortcuts(shortcutRegistry);
 
 	// scripting (SCRIPTING_SPEC §2): the host sees the live app; the console
 	// dock starts hidden — Ctrl+` toggles it in the editor space.
@@ -441,17 +436,35 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
 	scriptConsole = new ScriptConsole(scriptEngine);
 	if (scriptConsoleDock) scriptConsoleDock->setWidget(scriptConsole);
 
-	// MCP endpoint (CLAUDE_EDITOR_SPEC.md phase 1): OFF by default — total
-	// lockdown, the scripting engine is the only capability surface. Started
-	// here only when the Preferences toggle was saved on; --mcp-port=N starts
-	// it from the CLI path instead.
-	mcpServer = new McpServer(scriptEngine, this);
-	prefsDialog->wireMcp(mcpServer, this);
-	if (settings->get(settingkeys::mcpEnabled)) {
-		QString mcpError;
-		if (!startMcpServer(quint16(settings->get(settingkeys::mcpPort)), &mcpError))
-			qWarning("MCP: %s", qPrintable(mcpError));
+	// THE MCP ENDPOINT AND THE CLAUDE CHAT (scripting/claude/claudeassistant.h):
+	// one owner, OFF by default; the Preferences page starts it through the
+	// assistant so the console gets the connect line. Its toolbar action and
+	// chord are its contribution.
+	ClaudeAssistant::Deps assistantDeps;
+	assistantDeps.engine = scriptEngine;
+	assistantDeps.settings = settings;
+	assistantDeps.projectService = projectService;
+	assistantDeps.project = project;
+	assistantDeps.console = scriptConsole;
+	assistantDeps.window = this;
+	assistant = new ClaudeAssistant(assistantDeps, this);
+	prefsDialog->wireMcp(assistant->mcp(), [this](quint16 port, QString *error) {
+		return assistant->startMcpServer(port, error);
+	});
+	assistant->startFromSettings();
+	{
+		Contributions c;
+		assistant->contribute(c, fontIcons);
+		actionHost->apply(c);
 	}
+
+	// EVERY ROW IS IN: the shell's, the modules' (contributed at boot) and the
+	// assistant's, each with its `after` anchor — registered in one pass in the
+	// Preferences order, and only then handed to the Preferences page, which
+	// builds its table from the registry.
+	actionHost->commit();
+	refreshGameplayShortcutRows();
+	prefsDialog->wireShortcuts(shortcutRegistry);
 
 	updateTopMenuStates(currentSpace);
 
@@ -517,10 +530,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
 		if (_assetView) stopped &= _assetView->shutdownImports(budgetMs);
 		return stopped;
 	};
-	parts.stopAssistant = [this]() {
-		if (mcpServer) mcpServer->stop();
-		if (claudeChatHost) claudeChatHost->shutdown();
-	};
+	parts.stopAssistant = [this]() { if (assistant) assistant->shutdown(); };
 	parts.deleteServices = [this]() {
 		// The QObject services (selection/playback/sceneEdit) are parented to
 		// the window; the plain ones are deleted here.
@@ -1754,7 +1764,7 @@ void MainWindow::openStageBind(bool playMode)
 	// the reader never parses in its place. setScene cleared the issue store,
 	// so this is raised after it.
 	SceneIssues::instance().raiseMissingModels(projectService->missingModels());
-	refreshClaudeChatContext();   // D1: rebind an open chat to the new project
+	assistant->refreshChatContext();   // D1: rebind an open chat to the new project
 	// THE MODULES HEAR THE PROJECT (StudioModule::onProjectChanged): the
 	// Materials page's open tabs are per project (MATERIALS_TABS_SPEC §2.7).
 	moduleHub->projectChanged(project);
@@ -2335,7 +2345,7 @@ void MainWindow::closeProject(CloseIntent intent)
 
     playbackService->setPlaying(false);
     ui->actionClose->setDisabled(false);
-    refreshClaudeChatContext();   // D1: an open chat loses its project
+    assistant->refreshChatContext();   // D1: an open chat loses its project
     // The modules hear the close: the Materials page saves this project's open
     // tabs and closes the ones that were the PROJECT's copies.
     moduleHub->projectChanged(nullptr);
@@ -4586,13 +4596,9 @@ void MainWindow::setupToolBar()
 	viewDocks->setIcon(fontIcons->icon(fa::listalt, options));
 	toolBar->addAction(viewDocks);
 
-	QAction *actionClaude = new QAction;
-	actionClaude->setObjectName(QStringLiteral("actionClaudeChat"));
-	actionClaude->setCheckable(false);
-	actionClaude->setToolTip("Claude | Chat with Claude inside the editor (Ctrl+Shift+C)");
-	actionClaude->setIcon(fontIcons->icon(fa::magic, options));
-	toolBar->addAction(actionClaude);
-	connect(actionClaude, &QAction::triggered, this, &MainWindow::toggleClaudeChat);
+	// THE TOOLBAR'S END SLOT: contributions land here, after the shell's own
+	// actions (the Claude assistant's chat button).
+	actionHost->addToolbarSlot(toolBar, QStringLiteral("editor.end"));
 
 	cameraView->setIconSize(QSize(17, 17));
 
@@ -4890,9 +4896,8 @@ void MainWindow::setupShortcuts()
     row("console.toggle", "Script Console", "Windows",
             QKeySequence(Qt::CTRL | Qt::Key_QuoteLeft), any,
             [this]() { toggleScriptConsole(); });
-    row("claude.toggle", "Claude Assistant", "Windows",
-            QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_C), any,
-            [this]() { toggleClaudeChat(); });
+    // (claude.toggle, Ctrl+Shift+C, is the Claude assistant's own row, listed
+    // after this one — its contribution.)
     // THE RIGHT COLUMN'S TWO TABS (PROPERTY_FILTER_SPEC D2): one toggle, not two
     // keys. Ctrl+Tab is taken by space.previous, so Ctrl+Shift+P — verified
     // free against the 50 rows already registered here, and remappable in
@@ -4964,10 +4969,6 @@ void MainWindow::setupShortcuts()
     fixed("gameplay.look",   "Look (play mode)",   "Gameplay", "Mouse");
     fixed("gameplay.jump",   "Jump (play mode)",   "Gameplay", "Space");
     fixed("gameplay.sprint", "Sprint (play mode)", "Gameplay", "Shift");
-    // EVERY ROW IS IN: the shell's and the modules' (contributed at boot, with
-    // their `after` anchors), registered in one pass in the Preferences order.
-    actions.commit();
-    refreshGameplayShortcutRows();
 }
 
 void MainWindow::refreshGameplayShortcutRows()
@@ -5973,85 +5974,6 @@ void MainWindow::leaveEditorSpace()
     sceneView->end();
 }
 
-bool MainWindow::startMcpServer(quint16 port, QString *errorOut)
-{
-    if (!mcpServer) {
-        if (errorOut) *errorOut = QStringLiteral("the MCP server was not created");
-        return false;
-    }
-    QString error;
-    if (!mcpServer->start(port, &error)) {
-        if (errorOut) *errorOut = error;
-        return false;
-    }
-    // The console dock shows the copyable connect line (the token lives only
-    // in this session — it is never persisted).
-    if (scriptConsole) {
-        scriptConsole->announce(QStringLiteral("MCP server listening on http://127.0.0.1:%1/mcp")
-                                    .arg(mcpServer->port()));
-        scriptConsole->announce(mcpServer->connectCommand());
-    }
-    return true;
-}
-
-void MainWindow::toggleClaudeChat()
-{
-    if (claudeChatWindow && claudeChatWindow->isVisible()) {
-        claudeChatWindow->close();
-        return;
-    }
-    if (!claudeChatHost) claudeChatHost = new ClaudeChatHost(this);
-    // The model seam (AI_SURFACE_PROGRAM_SPEC owner decision): the dock pins a
-    // model instead of silently inheriting the user's terminal default. The
-    // setting is what a header picker will write; absent, the shipped default
-    // applies, and an explicit empty string restores "inherit".
-    claudeChatHost->setModel(settings->get(settingkeys::claudeModel));
-    if (!claudeChatWindow) {
-        claudeChatWindow = new ClaudeChatWindow(settings->settings, claudeChatHost, this);
-        connect(claudeChatWindow, &ClaudeChatWindow::enableMcpRequested, this, [this]() {
-            const quint16 port =
-                quint16(settings->get(settingkeys::mcpPort));
-            QString error;
-            if (startMcpServer(port, &error)) {
-                settings->set(settingkeys::mcpEnabled, true);
-            } else if (scriptConsole) {
-                scriptConsole->announce(QStringLiteral("MCP enable failed: %1").arg(error));
-            }
-            refreshClaudeChatContext();
-        });
-        // The one-time CLI probe (~ms when installed; renders the friendly
-        // install state when not).
-        claudeChatWindow->setCliState(ClaudeCliProbe::probe());
-    }
-    refreshClaudeChatContext();
-    claudeChatWindow->show();
-    claudeChatWindow->raise();
-    claudeChatWindow->activateWindow();
-}
-
-// Called on every project OPEN and CLOSE as well as on toggle/enable-MCP
-// (CLAUDE_EDITOR_SPEC D1): ClaudeChatHost::configure is written to rebind on a
-// folder change, but nothing used to call it when the project changed, so a
-// chat left open across a switch kept the previous project's cwd, MCP config
-// file and session. Cheap when the chat was never opened — it returns at the
-// first line.
-void MainWindow::refreshClaudeChatContext()
-{
-    if (!claudeChatWindow || !claudeChatHost) return;
-    const bool sceneOpen = projectService->isSceneOpen();
-    const bool mcpRunning = mcpServer && mcpServer->isRunning();
-    claudeChatWindow->setProjectOpen(sceneOpen);
-    claudeChatWindow->setMcpRunning(mcpRunning);
-    const QString folder = (sceneOpen && project) ? project->getProjectFolder() : QString();
-    QString error;
-    if (!claudeChatHost->configure(folder, mcpRunning,
-                                   mcpRunning ? mcpServer->port() : 0,
-                                   mcpRunning ? mcpServer->token() : QString(), &error)
-        && scriptConsole && !error.isEmpty()) {
-        scriptConsole->announce(QStringLiteral("Claude chat config: %1").arg(error));
-    }
-}
-
 // A CREATE IS AN OPEN OF A WORLD NOBODY WROTE DOWN YET (SPECS/OPEN_COVER_SPEC.md
 // §2 C, lane OPEN-COVER-2a).
 //
@@ -6154,7 +6076,7 @@ void MainWindow::startCreateRun(const QString &guid, const QString &filename,
         setScene(created);
         sceneView->resetEditorCam();
         resetOverlaysToDefaults();   // a brand-new scene starts at the defaults
-        refreshClaudeChatContext();   // D1: rebind an open chat to the new project
+        assistant->refreshChatContext();   // D1: rebind an open chat to the new project
         moduleHub->projectChanged(project);   // the modules hear the new project
         if (services) services->announceSceneOpened();
     } });

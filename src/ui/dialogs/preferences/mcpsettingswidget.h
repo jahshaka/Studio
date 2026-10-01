@@ -25,6 +25,8 @@ For more information see the LICENSE file
 
 #include <QWidget>
 
+#include <functional>
+
 class QAbstractButton;
 class QShowEvent;
 class QLabel;
@@ -32,7 +34,6 @@ class QLineEdit;
 class QSpinBox;
 class SettingsManager;
 class McpServer;
-class MainWindow;
 
 class McpSettingsWidget : public QWidget
 {
@@ -40,8 +41,11 @@ class McpSettingsWidget : public QWidget
 public:
     explicit McpSettingsWidget(SettingsManager *settings, QWidget *parent = nullptr);
 
+    /// How the page starts the server: the assistant's start, which also
+    /// announces the connect line in the console. Null = the server's own.
+    using Starter = std::function<bool(quint16 port, QString *error)>;
     /// Late wiring (the dialog exists before the scripting stack does).
-    void wireMcp(McpServer *server, MainWindow *mainWindow);
+    void wireMcp(McpServer *server, Starter start);
 
     /// Persists mcp_enabled/mcp_port and starts/stops/restarts the server to
     /// match. Called from the dialog's Apply.
@@ -62,7 +66,7 @@ private slots:
 private:
     SettingsManager *mSettings;
     McpServer *mServer = nullptr;
-    MainWindow *mMainWindow = nullptr;
+    Starter mStart;
 
     QAbstractButton *mEnabled;   // QCheckBox (Classic) or qlementine Switch (Qlementine)
     QAbstractButton *mLogSessions;   // the opt-in tool-research record (default OFF)

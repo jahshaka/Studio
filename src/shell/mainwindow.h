@@ -524,18 +524,9 @@ public:
     /// ScriptHost). Null only before the ctor finishes.
     class ScriptEngine *scripting() { return scriptEngine; }
 
-    /// The MCP endpoint (CLAUDE_EDITOR_SPEC.md phase 1). Created in the ctor,
-    /// OFF by default; started by the Preferences toggle or --mcp-port=N.
-    class McpServer *mcp() { return mcpServer; }
-    /// Starts the MCP server on 127.0.0.1:port and announces the connect line
-    /// in the script console dock. False (with errorOut) when the bind fails.
-    bool startMcpServer(quint16 port, QString *errorOut = nullptr);
-
-    /// The floating Claude chat popup (CLAUDE_EDITOR_SPEC phase 2) — created
-    /// lazily; toggled by the toolbar button and the claude.toggle shortcut.
-    void toggleClaudeChat();
-    /// Pushes the current project / MCP state into the chat window + host.
-    void refreshClaudeChatContext();
+    /// The MCP endpoint and the Claude chat (scripting/claude/claudeassistant.h):
+    /// created in the ctor, the endpoint OFF by default; --mcp-port=N starts it.
+    class ClaudeAssistant *claudeAssistant() const { return assistant; }
 
     /**
      * Applies material preset to active scene node and refreshes material property widget
@@ -1239,9 +1230,7 @@ private:
     struct ScriptHost *scriptHost = nullptr;
     class ScriptEngine *scriptEngine = nullptr;
     class ScriptConsole *scriptConsole = nullptr;
-    class McpServer *mcpServer = nullptr;
-    class ClaudeChatHost *claudeChatHost = nullptr;
-    class ClaudeChatWindow *claudeChatWindow = nullptr;
+    class ClaudeAssistant *assistant = nullptr;
 
     /// Per-dialog options and answers for openDialog (only importSettings has
     /// any — see mainwindowdialogs.cpp).

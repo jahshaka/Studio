@@ -252,6 +252,7 @@ set(SRCS
     src/scripting/claude/claudelaunchconfig.cpp
     src/scripting/claude/claudestreamparser.cpp
     src/scripting/claude/claudechathost.cpp
+    src/scripting/claude/claudeassistant.cpp
     src/ui/windows/claudechatwindow.cpp
     src/ui/dialogs/preferences/mcpsettingswidget.cpp
     src/ui/dialogs/preferences/scriptingsettingswidget.cpp
@@ -597,6 +598,7 @@ set(HEADERS
     src/shell/shellview.h
     src/shell/spaces.h
     src/ui/ishellview.h
+    src/scripting/claude/claudeassistant.h
     src/scripting/modules/studiomodules.h
     src/scripting/mcp/mcpserver.h
     src/scripting/mcp/mcptools.h
