@@ -295,6 +295,7 @@ set(SRCS
     src/shell/shellview.cpp
     src/shell/viewcontroller.cpp
     src/shell/sceneissuewatch.cpp
+    src/shell/editordocks.cpp
     src/modules/moduleregistry.cpp
     src/services/sceneopenrunner.cpp
     src/services/imagematerial.cpp
@@ -600,6 +601,7 @@ set(HEADERS
     src/shell/shellview.h
     src/shell/viewcontroller.h
     src/shell/sceneissuewatch.h
+    src/shell/editordocks.h
     src/shell/spaces.h
     src/ui/ishellview.h
     src/scripting/claude/claudeassistant.h

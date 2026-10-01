@@ -55,6 +55,7 @@ class ShellLifecycle;
 class ShellView;
 class ViewController;
 class SceneIssueWatch;
+class EditorDocks;
 
 class QPushButton;
 class QStandardItem;
@@ -130,24 +131,6 @@ enum class SceneNodeType;
 #include "shell/spaces.h"
 
 
-// The editor's panels, in `widgetStates` order. CONSOLE is APPENDED (lane
-// SPACE-2, 2026-09-14): the script console is a dock of the bottom area again —
-// the third tab beside Assets and the Timeline — so it needs the same record
-// every other panel has (the space switch hides it with the rest, its title-bar
-// X closes it for good, a restart brings back the tab the user left open). It
-// is deliberately NOT one of the Toggle Widgets dialog's buttons: Ctrl+` is the
-// console's switch, and "Restore All" restoring a console nobody asked for is
-// not what that button means.
-enum class Widget
-{
-	HIERARCHY,
-	PROPERTIES,
-	ASSETS,
-	TIMELINE,
-	PRESETS,
-	CONSOLE
-};
-
 #include <QJsonObject>
 #include "irisgl/document/scenegraph/lightnode.h"
 #include "irisgl/document/scenegraph/shadowmap.h"
@@ -173,7 +156,7 @@ public:
     /// The outliner panel. Public because the OUTLINER is the authority on
     /// visible row order — editor.selectRange has to ask it what lies between
     /// two rows (EDITOR_MULTISELECT_SPEC §2.7); null in headless sessions.
-    SceneHierarchyWidget *hierarchyPanel() const { return sceneHierarchyWidget; }
+    SceneHierarchyWidget *hierarchyPanel() const;
     /// The engine-up boot of --engine-selftest, --script, --scripts and
     /// --mcp-port: a new default scene (newScene) shown through the PRODUCT's
     /// editor entry (enterEditorSpace) — there is no second way onto the page.
@@ -314,11 +297,9 @@ public:
     /// drive it and the space switch both come through here.
     AssetView *assetsPage() { return ensureAssetsPage(); }
     AssetView *ensureAssetsPage();
-    /// The editor's ASSET TRAY panel (the Assets tab of the bottom tray), or
-    /// null before the editor is built. editor.trayAssets reads it.
-    AssetWidget *assetTray() const { return assetWidget; }
-    /// The LIBRARY materials tray (editor.activateMaterialTile).
-    AssetMaterialPanel *materialTray() const { return assetMaterialPanel; }
+    /// THE EDITOR'S PANELS (shell/editordocks.h): the docks, the bottom area,
+    /// the properties column and the readings the verbs report.
+    EditorDocks *editorDocks() const { return docks; }
 
     /// One toast, reused, for every transient viewport readout (snap size, fly
     /// speed) — and for a gesture the viewport has to REFUSE: a material or an
@@ -330,113 +311,6 @@ public:
     /// a refused row is showing a value the document does not hold).
     void refreshPropertiesFromDocument();
 
-    // ---- the editor's BOTTOM AREA (owner, 2026-09-14, lane SPACE-2) --------
-    // ONE tab bar along the bottom of the editor: "Assets" (the asset browser),
-    // "Timeline" (the keyframe panel) and "Console" (the script console) when
-    // it is turned on. All three are DOCKS of the editor's nested window,
-    // tabified into one group whose tab bar sits at the TOP of the area
-    // (setTabPosition(North) in setupDockWidgets) — the bar used to be Qt's
-    // default SOUTH one, a 20 px strip along the very bottom edge of the
-    // window under a tray that carried its own tab bar at the top, which is how
-    // the Timeline came to read as "gone" (owner report, 2026-09-14).
-    //
-    // Ctrl+` and the `editor.tray` / `editor.trayState` verbs go through these
-    // — the key and the verb are the same code path, which is what lets a
-    // suite assert what the key did.
-
-    /// Which tab of the bottom area is in front: "assets", "timeline" or
-    /// "console". Empty with no bottom area (a --headless run has no window).
-    QString trayTab() const;
-    /// The bottom area's tabs, in tab-bar order — the names trayTab() can
-    /// return, for the panels that are open right now.
-    QStringList trayTabs() const;
-    /// Shows a tab by name ("assets" | "timeline" | "console"). Naming the
-    /// console shows the dock if it was closed, raises it and
-    /// (focusConsoleInput) puts the keyboard in the console's input line.
-    /// False for an unknown name.
-    bool setTrayTab(const QString &tab, bool focusConsoleInput = true);
-    /// Whether the Console tab is in the tab bar at all.
-    bool isConsoleTabVisible() const;
-    /// Adds/removes the Console tab (shows/closes its dock). Showing it selects
-    /// it; hiding it leaves the Assets and Timeline tabs as they were.
-    void setConsoleTabVisible(bool visible, bool focusInput = true);
-    /// Whether the console's INPUT line has the keyboard right now — the half
-    /// of Ctrl+` that a console you still have to click does not deliver.
-    bool isConsoleInputFocused() const;
-    /// Whether the tray widget itself is on screen (the View menu can hide it).
-    bool isTrayVisible() const;
-    /// OPENS OR CLOSES AN EDITOR PANEL by its script name ("hierarchy",
-    /// "properties", "presets", "assets", "timeline", "console"). The ONE
-    /// implementation: the Toggle Widgets dialog's buttons, the `editor.panel`
-    /// verb and the tests all call it, and closing goes through the dock's own
-    /// close() — the title-bar X's gesture — so every route leaves the same
-    /// state behind. False for a name that is not a panel.
-    bool setPanelOpen(const QString &name, bool open);
-    /// Whether that panel is open (it may still be behind another tab).
-    bool isPanelOpen(const QString &name) const;
-    /// BRINGS AN OPEN PANEL TO THE FRONT OF ITS TAB GROUP (`editor.panel`'s
-    /// `raise`, lane STUDIO-SMALL-A; the gap SELECT-COST-1 found). Opening a
-    /// panel already raises it, so this is the gesture for a panel that is
-    /// OPEN but tabbed BEHIND another — the one thing a script could not do.
-    /// A closed panel cannot be in front: raising one is a no-op (false), and
-    /// `{open: true, raise: true}` is how a caller says "open it and show it".
-    /// Also records the bottom group's front tab, so the next page switch
-    /// brings back what the caller asked for rather than what it interrupted.
-    bool raisePanel(const QString &name);
-    /// That panel's dock, or null.
-    QDockWidget *panelDock(const QString &name) const;
-    /// THE RIGHT COLUMN'S TAB ("world" | "selection", PROPERTY_FILTER_SPEC §2).
-    /// The one implementation behind the tab bar, the Ctrl+Shift+P toggle and
-    /// the `editor.propertiesTab` verb.
-    QString propertiesTab() const;
-    /// The right column's per-tab FILTER (`editor.propertiesFilter`). An empty
-    /// `tabName` means the tab on screen; an unknown one is refused (false /
-    /// an empty string).
-    QString propertiesFilter(const QString &tabName = QString()) const;
-    /// Whether `tabName` names a tab ("world" / "selection"); an empty name is
-    /// "the tab on screen" and is always valid.
-    bool isPropertiesTab(const QString &tabName) const;
-    bool setPropertiesFilter(const QString &tabName, const QString &text);
-    /// {rows the filter kept, rows it removed} for that tab's last apply.
-    QPair<int, int> propertiesFilterCounts(const QString &tabName = QString()) const;
-    /// THE COLUMN'S OWN ACCOUNT OF ITSELF (`editor.properties`): one entry per
-    /// row that tab has mounted, in column order.
-    QVariantList propertyRows(const QString &tabName = QString()) const;
-    /// ONE ROW BY ITS STABLE KEY (`editor.propertyRow`): its listing plus its
-    /// control's reading (PropertyRows::readRow), after — when `drive` — the
-    /// gesture a user makes on it (PropertyRows::driveRow). An empty map with
-    /// `error` set when the tab, the key or the gesture is refused.
-    QVariantMap propertyRow(const QString &tabName, const QString &key, bool drive,
-                            const QVariant &value, QString *error);
-    /// WHAT THE COLUMN HAS COST (`editor.propertiesStats`): mounts, material
-    /// refills vs rebuilds, the mounted row count, and whether a mount is owed.
-    /// Reads nothing into existence — it never settles a pending mount.
-    QVariantMap propertiesStats() const;
-    /// Raises a tab by name; false for a name that is not one.
-    bool setPropertiesTab(const QString &name);
-    /// Whether `dock` is the tab in FRONT of its group (and not closed). Qt
-    /// offers no such accessor: a tabified dock that is not current is shown
-    /// and parked off-screen, which is the reading this uses — the same one
-    /// QDockWidget itself uses to emit visibilityChanged. A dock that shares a
-    /// bar with nothing is trivially in front of its own group.
-    static bool isFrontTab(const QDockWidget *dock);
-    /// The bottom area's dock whose geometry IS the area: the tab in FRONT.
-    /// The other tabs are parked off-screen by Qt, so this is the only honest
-    /// answer to "where is the bottom area and how tall is it".
-    QDockWidget *bottomFrontDock() const;
-    /// The y of the bottom area's TOP EDGE as the user sees it — the group's
-    /// tab bar, which sits above the dock, when there is one.
-    int bottomAreaTop() const;
-    /// The editor's bottom Tray height (owner 2026-09-12, editor.tray({height})).
-    bool setTrayHeight(int height);
-    /// THE PRESETS LINE: the right column's Presets panel starts on the SAME
-    /// horizontal line as the bottom Tray (owner 2026-09-12). Re-run whenever the
-    /// Tray is resized, so the two panels move together.
-    void alignPresetsWithTray(int retries = 3);
-    /// Ctrl+` : show + focus the Console tab, or hide it when it is already the
-    /// tab in front. The ShortcutRegistry entry calls exactly this.
-    void toggleScriptConsole();
-
     /// THE ACTIVE PAGE'S COLUMNS (smoke S1). Every page's left and right
     /// columns are sized from ui/style/panelmetrics.h; this reports what they
     /// actually came out as, per page, so `app.columns` can gate the law
@@ -444,15 +318,6 @@ public:
     /// false for a space that has no columns (Desktop, Player).
     using ColumnMetrics = IShellView::ColumnMetrics;
     ColumnMetrics activeColumns() const;
-
-    /// THE EDITOR'S DOCKS, MEASURED (lane SPACE-1, 2026-09-14). One entry per
-    /// dock of the nested `viewPort` QMainWindow — the name restoreState
-    /// matches on, whether it is on screen, and the rectangle it occupies —
-    /// so `app.docks` can assert "the editor came back with its panels"
-    /// instead of a human looking at the window. A dock reports visible only
-    /// while the editor page is the page on screen, which is the honest
-    /// reading: a dock on a hidden page is not on screen.
-    QVariantList dockReport() const;
 
     /// THE APP'S DIALOGS, BY NAME (theme sweep, lane 16 — shell/mainwindowdialogs.cpp):
     /// what app.dialogs / app.dialog open for a script. The theme walk
@@ -564,7 +429,6 @@ public:
 
 public slots:
 
-    void setupDockWidgets();
     void setupViewPort();
     void setupDesktop();
     void setupToolBar();
@@ -612,7 +476,6 @@ public slots:
 	void saveScene(const QString &filename, const QString &projectPath);
     void saveScene();
 
-	void toggleDockWidgets();
     void showPreferences();
     /// `kind` = the New Scene dialog's Template drop-down and
     /// `project.create`'s `{template}` (services/scenetemplate.h says what
@@ -906,93 +769,6 @@ private:
 
     QMainWindow *dialog = nullptr;
 
-    QDockWidget *sceneHierarchyDock = nullptr;
-    SceneHierarchyWidget *sceneHierarchyWidget = nullptr;
-
-    QDockWidget *sceneNodePropertiesDock = nullptr;
-    SceneNodePropertiesWidget *sceneNodePropertiesWidget = nullptr;
-    /// The right column's World | Selection tab bar (above the scroll area).
-    class PropertiesTabStrip *propertiesTabStrip = nullptr;
-
-    QDockWidget *presetsDock = nullptr;
-    /// Gives the editor's two COLUMNS their default widths, once per session
-    /// (ui/style/panelmetrics.h): the Properties/Presets column on the right
-    /// and the Hierarchy column on the left, which every other page copies.
-    /// Called from both ways the editor page opens.
-    void applyColumnWidthsOnce();
-    bool presetsAlignQueued = false;
-    /// Whether that has happened — after it has, a user's drag wins.
-    bool columnsSized = false;
-    /// True when the nested `viewPort` QMainWindow's dock layout came back from
-    /// settings — the once-per-session default column width then stands down
-    /// (shell/dockstate.h).
-    bool restoredViewportDocks = false;
-    /// THE EDITOR'S DOCKS, AS THE EDITOR LAST HAD THEM (lane SPACE-1). Every
-    /// space but the editor hides them, so the layout live at exit is the
-    /// layout of whatever page the user quit from — an editor with no panels,
-    /// stored as the editor's own. This is the last one the EDITOR had, taken
-    /// on the way out of that space (and before immersive fullscreen hides the
-    /// chrome), and it is what closeEvent writes.
-    QByteArray editorDockState;
-    /// Takes that snapshot. A no-op while the docks are hidden, which is what
-    /// makes it safe to call from anywhere on the way out.
-    void captureEditorDockState();
-    /// Shows or hides the editor's five docks for the space that is on screen:
-    /// the editor shows the ones `widgetStates` says are open, every other
-    /// space shows none. The ONE place dock visibility follows a space, so the
-    /// space switch and the queued layout pass cannot disagree about it.
-    void applyDockVisibilityForSpace();
-
-    /// The bottom area's docks in tab-bar order, each with the name the
-    /// `editor.tray` verbs call it by ("assets" | "timeline" | "console").
-    QVector<QPair<QString, QDockWidget *>> bottomAreaTabs() const;
-    /// The tab that was in front the last time the bottom area was on screen —
-    /// what a space round trip puts back (lane SPACE-2).
-    QString bottomFrontTab = QStringLiteral("assets");
-    /// The tab Ctrl+` interrupted — where the bottom area goes when the
-    /// console tab is taken away again.
-    QString bottomReturnTab = QStringLiteral("assets");
-    /// Brings `bottomFrontTab` back to the front of the bottom area.
-    void raiseBottomFrontTab();
-
-    /// THE LAUNCH TAB (owner review R7, 2026-09-18; the rule of 2026-09-15).
-    ///
-    /// EVERY SESSION OPENS ON ASSETS. Which bottom tab is in front is SESSION
-    /// state, not a preference: inside a session it follows the user and
-    /// survives space switches, fullscreen and the console's visit — but a
-    /// LAUNCH always starts on the asset browser, whatever the saved DockState
-    /// blob remembers, because that blob records where the last session HAPPENED
-    /// to stop (often the Timeline, or the Console after a Ctrl+`).
-    ///
-    /// It is a function because the blob is restored TWICE — once in the
-    /// constructor, and again from applyColumnWidthsOnce at the window's real
-    /// size (the columns come back too narrow otherwise, smoke S1) — and the
-    /// second restore silently re-applied the blob's front tab: the raise in
-    /// the constructor was undone one event-loop turn after the editor opened,
-    /// which is how the rule regressed without anybody touching it. Both
-    /// restores are followed by this call.
-    ///
-    /// It sets `bottomFrontTab` as well as raising the dock: the very next
-    /// thing applyDockVisibilityForSpace does is READ the current front tab
-    /// into that field, so a raise alone would be read straight back out again.
-    void raiseLaunchBottomTab();
-
-    QTabWidget *presetsTabWidget = nullptr;
-
-    /// The bottom area's three docks — ONE tab group, one tab bar (lane
-    /// SPACE-2). `assetDock` holds the asset browser directly (the QTabWidget
-    /// that used to nest a second tab bar inside it is gone), `animationDock`
-    /// the Timeline, `scriptConsoleDock` the script console, which is hidden
-    /// until Ctrl+` (or editor.tray) asks for it — a hidden dock has no tab, so
-    /// "the Console tab is in the bar" and "the console dock is open" are the
-    /// same statement.
-    QDockWidget *assetDock = nullptr;
-    AssetWidget *assetWidget = nullptr;
-
-    QDockWidget *animationDock = nullptr;
-    AnimationWidget *animationWidget = nullptr;
-    QDockWidget *scriptConsoleDock = nullptr;
-
     QMainWindow *viewPort = nullptr;
     QWidget *sceneContainer = nullptr;
 
@@ -1046,12 +822,7 @@ private:
     /// The Player page could not start: say why and go back (SMOKE-FIX-1).
     void bounceFromPlayer(const QString &why);
     void stepSnapSize(int direction);
-    /// What the editor's chrome looked like before immersive fullscreen hid it.
-    QVector<bool> preFullscreenWidgets;
-    void hideChromeForFullscreen();
-    void restoreChromeAfterFullscreen();
 
-	QVector<bool> widgetStates;	// use the order in the enum
 
     /// The space this window came FROM and the one it is on. BOTH initialised:
     /// `previousSpace` is read by the Ctrl+Tab "Previous Space" shortcut (its
@@ -1072,8 +843,6 @@ private:
     QAction *actionGlobalSpace = nullptr;
     QAction *actionLocalSpace = nullptr;
 
-    AssetModelPanel *assetModelPanel = nullptr;
-    AssetMaterialPanel *assetMaterialPanel = nullptr;
 
 	QtAwesome *fontIcons;
 
@@ -1087,6 +856,7 @@ private:
 	ShellView *shellView = nullptr;
 	ViewController *viewController = nullptr;
 	SceneIssueWatch *issueWatch = nullptr;
+	EditorDocks *docks = nullptr;
 
     // services (APP_ARCHITECTURE_AUDIT §3.3): constructed in setupServices(),
     // deleted in the dtor. The QObject services are parented to the window.

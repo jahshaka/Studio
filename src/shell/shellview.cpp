@@ -15,6 +15,7 @@ For more information see the LICENSE file
 #include "shell/spaces.h"
 #include "shell/viewcontroller.h"
 #include "shell/sceneissuewatch.h"
+#include "shell/editordocks.h"
 
 QWidget *ShellView::window() const
 {
@@ -107,12 +108,12 @@ AssetView *ShellView::assetsPage()
 
 AssetWidget *ShellView::assetTray() const
 {
-    return mWindow->assetTray();
+    return mWindow->editorDocks()->assetTray();
 }
 
 AssetMaterialPanel *ShellView::materialTray() const
 {
-    return mWindow->materialTray();
+    return mWindow->editorDocks()->materialTray();
 }
 
 SceneHierarchyWidget *ShellView::hierarchyPanel() const
@@ -122,82 +123,82 @@ SceneHierarchyWidget *ShellView::hierarchyPanel() const
 
 QString ShellView::trayTab() const
 {
-    return mWindow->trayTab();
+    return mWindow->editorDocks()->trayTab();
 }
 
 QStringList ShellView::trayTabs() const
 {
-    return mWindow->trayTabs();
+    return mWindow->editorDocks()->trayTabs();
 }
 
 bool ShellView::setTrayTab(const QString &tab, bool focusConsoleInput)
 {
-    return mWindow->setTrayTab(tab, focusConsoleInput);
+    return mWindow->editorDocks()->setTrayTab(tab, focusConsoleInput);
 }
 
 bool ShellView::setTrayHeight(int height)
 {
-    return mWindow->setTrayHeight(height);
+    return mWindow->editorDocks()->setTrayHeight(height);
 }
 
 bool ShellView::isTrayVisible() const
 {
-    return mWindow->isTrayVisible();
+    return mWindow->editorDocks()->isTrayVisible();
 }
 
 bool ShellView::isConsoleTabVisible() const
 {
-    return mWindow->isConsoleTabVisible();
+    return mWindow->editorDocks()->isConsoleTabVisible();
 }
 
 void ShellView::setConsoleTabVisible(bool visible, bool focusInput)
 {
-    mWindow->setConsoleTabVisible(visible, focusInput);
+    mWindow->editorDocks()->setConsoleTabVisible(visible, focusInput);
 }
 
 bool ShellView::isConsoleInputFocused() const
 {
-    return mWindow->isConsoleInputFocused();
+    return mWindow->editorDocks()->isConsoleInputFocused();
 }
 
 QDockWidget *ShellView::bottomFrontDock() const
 {
-    return mWindow->bottomFrontDock();
+    return mWindow->editorDocks()->bottomFrontDock();
 }
 
 int ShellView::bottomAreaTop() const
 {
-    return mWindow->bottomAreaTop();
+    return mWindow->editorDocks()->bottomAreaTop();
 }
 
 QDockWidget *ShellView::panelDock(const QString &name) const
 {
-    return mWindow->panelDock(name);
+    return mWindow->editorDocks()->panelDock(name);
 }
 
 bool ShellView::setPanelOpen(const QString &name, bool open)
 {
-    return mWindow->setPanelOpen(name, open);
+    return mWindow->editorDocks()->setPanelOpen(name, open);
 }
 
 bool ShellView::isPanelOpen(const QString &name) const
 {
-    return mWindow->isPanelOpen(name);
+    return mWindow->editorDocks()->isPanelOpen(name);
 }
 
 bool ShellView::raisePanel(const QString &name)
 {
-    return mWindow->raisePanel(name);
+    return mWindow->editorDocks()->raisePanel(name);
 }
 
 bool ShellView::isPanelInFront(const QString &name) const
 {
-    return MainWindow::isFrontTab(mWindow->panelDock(name));
+    return EditorDocks::isFrontTab(mWindow->editorDocks()->panelDock(name));
 }
 
 QVariantList ShellView::dockReport() const
 {
-    return mWindow->dockReport();
+    return mWindow->editorDocks()->dockReport();
 }
 
 IShellView::ColumnMetrics ShellView::activeColumns() const
@@ -207,47 +208,47 @@ IShellView::ColumnMetrics ShellView::activeColumns() const
 
 QString ShellView::propertiesTab() const
 {
-    return mWindow->propertiesTab();
+    return mWindow->editorDocks()->propertiesTab();
 }
 
 bool ShellView::setPropertiesTab(const QString &name)
 {
-    return mWindow->setPropertiesTab(name);
+    return mWindow->editorDocks()->setPropertiesTab(name);
 }
 
 bool ShellView::isPropertiesTab(const QString &tabName) const
 {
-    return mWindow->isPropertiesTab(tabName);
+    return mWindow->editorDocks()->isPropertiesTab(tabName);
 }
 
 QString ShellView::propertiesFilter(const QString &tabName) const
 {
-    return mWindow->propertiesFilter(tabName);
+    return mWindow->editorDocks()->propertiesFilter(tabName);
 }
 
 bool ShellView::setPropertiesFilter(const QString &tabName, const QString &text)
 {
-    return mWindow->setPropertiesFilter(tabName, text);
+    return mWindow->editorDocks()->setPropertiesFilter(tabName, text);
 }
 
 QPair<int, int> ShellView::propertiesFilterCounts(const QString &tabName) const
 {
-    return mWindow->propertiesFilterCounts(tabName);
+    return mWindow->editorDocks()->propertiesFilterCounts(tabName);
 }
 
 QVariantList ShellView::propertyRows(const QString &tabName) const
 {
-    return mWindow->propertyRows(tabName);
+    return mWindow->editorDocks()->propertyRows(tabName);
 }
 
 QVariantMap ShellView::propertyRow(const QString &tabName, const QString &key, bool drive, const QVariant &value, QString *error)
 {
-    return mWindow->propertyRow(tabName, key, drive, value, error);
+    return mWindow->editorDocks()->propertyRow(tabName, key, drive, value, error);
 }
 
 QVariantMap ShellView::propertiesStats() const
 {
-    return mWindow->propertiesStats();
+    return mWindow->editorDocks()->propertiesStats();
 }
 
 QVariantList ShellView::toolbarActions() const
