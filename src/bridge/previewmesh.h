@@ -14,7 +14,7 @@ For more information see the LICENSE file
 
 // A PREVIEW DOCK'S OWN FURNITURE (ATOM P2).
 //
-// The SCENE's meshes are baked library assets — the primitives, the Ground, the
+// The SCENE's meshes are baked library assets — the primitives and the
 // Teapot (services/primitiveassets.h) — and `iris::Mesh::loadMesh` is deleted
 // with its cache, its pin and the surface-card generation it ran at creation.
 // What is left of "parse a model file" is this: two docks' subjects, a thumbnail

@@ -34,11 +34,9 @@ function refused(fn, what) {
 
 assert(project.create("bounds").length > 0, "created the project");
 
-// The default scene ships a 100 m ground plane and two lights; measuring the
-// whole scene therefore measures the GROUND, which is the first thing this verb
-// has to be honest about. (RE-PINNED from 1024 m by SMOKE_FIX S14: app/models/
-// ground.obj was re-staged to 100 m — the old number predates 1 u = 1 m and was
-// why a new project fitted its GI over a square kilometre.)
+// The default scene ships a 100 m floor (the Basic template's cube) and two
+// lights; measuring the whole scene therefore measures the FLOOR, which is the
+// first thing this verb has to be honest about.
 var all = scene.bounds();
 console.log("default scene bounds: " + J(all));
 assert(near(all.size.x, 100, 1), "the default scene measures its 100 m ground plane (" +

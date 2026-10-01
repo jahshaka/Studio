@@ -129,7 +129,7 @@ QVector<VerbInfo> AppApi::verbs() const
           "reader's own) — never a parse. "
           "'uiThreadResourceParses' counts parses of a QT RESOURCE (':/...') separately: a few "
           "kilobytes compiled into the binary, which no worker can hoist because the caller asks "
-          "for it by name. An OPEN no longer makes any — the shipped primitives, the Ground and "
+          "for it by name. An OPEN no longer makes any — the shipped primitives and "
           "the Teapot are baked library assets read from the store like every imported model "
           "(ATOM P2), so what is left on this counter is the preview docks' own furniture, parsed "
           "once per process when a dock first renders. Process-wide and always on: the cost is "
