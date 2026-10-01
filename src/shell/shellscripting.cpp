@@ -31,12 +31,19 @@ For more information see the LICENSE file
 #include "viewport/enginerenderdriver.h"
 #include "viewport/ieditorviewport.h"
 
+ShellScripting::~ShellScripting()
+{
+	// The script engine, its ApiModules and the assistant hold the ScriptHost
+	// by reference: they go first, then mHost (a member) after this body.
+	qDeleteAll(findChildren<QObject *>(Qt::FindDirectChildrenOnly));
+}
+
 ShellScripting::ShellScripting(const Deps &deps, QObject *parent) : QObject(parent)
 {
 	// scripting (SCRIPTING_SPEC §2): the host sees the live app; the console
 	// dock starts hidden — Ctrl+` toggles it in the editor space.
-	ScriptHost *scriptHost = new ScriptHost;
-	mHost = scriptHost;
+	mHost = std::make_unique<ScriptHost>();
+	ScriptHost *scriptHost = mHost.get();
 	scriptHost->shell = deps.shell;
 	scriptHost->db = deps.db;
 	scriptHost->project = deps.project;

@@ -510,7 +510,8 @@ private:
 	ActionHost *actionHost = nullptr;
 	ModuleHub *moduleHub = nullptr;
 	ShellLifecycle *lifecycle = nullptr;
-	ShellView *shellView = nullptr;
+	/// The window as the layers below see it (ui/ishellview.h); owned here.
+	std::unique_ptr<ShellView> shellView;
 	ViewController *viewController = nullptr;
 	ShellHeader *header = nullptr;
 	EditorPage *page = nullptr;

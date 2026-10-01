@@ -245,7 +245,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
 		t.redo = [this]() { redo(); updateWindowTitle(); };
 		return t;
 	});
-	shellView = new ShellView(this);
+	shellView = std::make_unique<ShellView>(this);
 
     prefsDialog = new PreferencesDialog(nullptr, db, settings);
     aboutDialog = new AboutDialog();
@@ -336,7 +336,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
 	// the app through, the engine with every domain's and module's verbs, the
 	// console (the bottom area's third tab) and the Claude assistant.
 	ShellScripting::Deps scriptingDeps;
-	scriptingDeps.shell = shellView;
+	scriptingDeps.shell = shellView.get();
 	scriptingDeps.db = db;
 	scriptingDeps.project = project;
 	scriptingDeps.viewport = sceneView;
@@ -1671,7 +1671,7 @@ void MainWindow::setupDesktop()
 	context.services = services;
 	context.project = project;
 	context.shellWidget = this;
-	context.shell = shellView;
+	context.shell = shellView.get();
 	moduleHub->setModules(moduleregistry::createAll());
 	moduleHub->initialize(context);
 	moduleHub->contribute(pageHost, actionHost);

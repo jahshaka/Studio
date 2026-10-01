@@ -24,6 +24,7 @@ For more information see the LICENSE file
 #include <QString>
 
 #include <functional>
+#include <memory>
 
 class ClaudeAssistant;
 class Database;
@@ -64,13 +65,17 @@ public:
     };
     ShellScripting(const Deps &deps, QObject *parent = nullptr);
 
-    ScriptHost *host() const { return mHost; }
+    ~ShellScripting() override;
+
+    ScriptHost *host() const { return mHost.get(); }
     ScriptEngine *engine() const { return mEngine; }
     ScriptConsole *console() const { return mConsole; }
     ClaudeAssistant *assistant() const { return mAssistant; }
 
 private:
-    ScriptHost *mHost = nullptr;
+    /// Owned: every ApiModule and the engine hold a ScriptHost&, so the
+    /// destructor deletes this object's children before the host goes.
+    std::unique_ptr<ScriptHost> mHost;
     ScriptEngine *mEngine = nullptr;
     ScriptConsole *mConsole = nullptr;
     ClaudeAssistant *mAssistant = nullptr;
