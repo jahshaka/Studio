@@ -20,9 +20,10 @@ A range that MOVES THE FORK PIN needs the whole MERGE tier at the tip (§7b rule
 tier per bump, `gate-scope.sh <range> --run --fork-tier`; the lane's own gates select by the fork
 diff's reach). So does a selection that fell back or is the tier by rule.
 
-THE VERDICT: `--verdict "<text>"` records one `VERDICT` record per currently red row (or only the
-`--verdict-suite` ones) into the run log (`<date>-verdict-<tip>.jsonl`, the same directory; the
-reader's text and the reds it answered) and re-checks. scripts/lead/merge-dbuild-lane.sh calls this
+THE VERDICT IS PER ROW AND TIMESTAMPED: `--verdict "<row>=<text>" ...` records one `VERDICT` record
+per named red row into the run log (`<date>-verdict-<tip>.jsonl`, the same directory) and
+re-checks; it clears only the reds logged before it. A row that never ran (NOADMIT, NOTRUN) is
+MISSING, which no verdict clears. scripts/lead/merge-dbuild-lane.sh calls this
 and refuses the merge on a failure; its own `--verdict` passes through here.
 
 Exit 0 accepted, 1 refused, 2 unusable (no contention list, an unresolvable range).
@@ -71,22 +72,44 @@ def records_at(tip, irisgl=None):
     return out
 
 
+def _when(r):
+    """A record's time, comparable across the log's two spellings (with and without an offset)."""
+    ts = r.get("ts") or ""
+    try:
+        t = datetime.datetime.fromisoformat(ts)
+    except ValueError:
+        return datetime.datetime.min.replace(tzinfo=datetime.timezone.utc)
+    return t if t.tzinfo else t.astimezone()
+
+
+NEVER_RAN = ("NOADMIT", "NOTRUN")
+
+
 def judge(key, recs, contention):
-    """(state, why) for one row/arm: state 'green' | 'missing' | 'red'."""
-    runs = [r for r in recs if r.get("kind") != "verdict"]
-    verdicts = [r for r in recs if r.get("kind") == "verdict"]
+    """(state, why) for one row/arm: state 'green' | 'missing' | 'red'.
+
+    A run that never happened (NOADMIT: the admission's bound; NOTRUN) is no run: a row with only
+    those is MISSING, which no verdict clears. A VERDICT is per row and timestamped: it clears
+    only the reds logged BEFORE it — a red after it needs its own answer (the merge read's D4)."""
+    runs = sorted((r for r in recs if r.get("kind") != "verdict" and r.get("verdict") not in NEVER_RAN), key=_when)
+    verdicts = sorted((r for r in recs if r.get("kind") == "verdict"), key=_when)
     if not runs:
-        return "missing", "never run at the tip"
+        never = [r.get("verdict") for r in recs if r.get("verdict") in NEVER_RAN]
+        return "missing", "never run at the tip" + (f" ({never[-1]}: it never ran)" if never else "")
     reds = [r for r in runs if r.get("verdict") != "PASS"]
     if not reds:
         return "green", ""
-    if verdicts:
+    last_verdict = _when(verdicts[-1]) if verdicts else None
+    open_reds = [r for r in reds if last_verdict is None or _when(r) > last_verdict]
+    if not open_reds:
         return "green", "recorded verdict: " + (verdicts[-1].get("text") or "")[:120]
+    reds = open_reds
     name, arm = key
     listed = name in contention or (arm and arm in contention)
     gate_reds = [r for r in reds if not r.get("retry")]
-    last_gate_red = max((r.get("ts") or "" for r in gate_reds), default="")
-    solos = [r for r in runs if r.get("retry") and (r.get("ts") or "") > last_gate_red]
+    last_gate_red = max((_when(r) for r in gate_reds), default=None)
+    solos = [r for r in runs if r.get("retry") and (last_gate_red is None or _when(r) > last_gate_red)
+             and (last_verdict is None or _when(r) > last_verdict)]
     solo_reds = [r for r in solos if r.get("verdict") != "PASS"]
     if not listed:
         return "red", (f"{reds[-1].get('verdict')} and not in the contention class — needs a recorded verdict"
@@ -121,12 +144,13 @@ def needed_rows(gs, S):
     return need, "the scoped selection"
 
 
-def record_verdicts(keys, text, tip_sha, pin):
+def record_verdicts(pairs, tip_sha, pin):
+    """[(key, text)] -> one VERDICT record per row, stamped now."""
     now = datetime.datetime.now().astimezone()
     path = os.path.join(gate_runlog.log_dir(), f"{now.date().isoformat()}-verdict-{tip_sha[:9]}.jsonl")
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "a") as f:
-        for n, a in keys:
+        for (n, a), text in pairs:
             f.write(json.dumps({"schema": gate_runlog.SCHEMA, "kind": "verdict", "suite": n, "arm": a,
                                 "verdict": "VERDICT", "text": text, "ts": now.isoformat(timespec="seconds"),
                                 "tip": {"studio": tip_sha, "irisgl": pin, "studio_dirty": False,
@@ -135,8 +159,9 @@ def record_verdicts(keys, text, tip_sha, pin):
     return path
 
 
-def check(rng, build, gs=None, verdict=None, verdict_suites=None):
-    """(ok, reasons) for a range. `verdict`: record it for the red rows first."""
+def check(rng, build, gs=None, verdicts=None):
+    """(ok, reasons) for a range. `verdicts`: {row or pool.arm: text} recorded for those rows first
+    (per row, timestamped; a row that is not red now is refused as a verdict, said out loud)."""
     gs = gs or load_gs()
     contention = gate_runlog.contention_list()
     if contention is None:
@@ -152,12 +177,18 @@ def check(rng, build, gs=None, verdict=None, verdict_suites=None):
     got = records_at(tip_sha, pin or None)
     label = lambda k: f"{k[0]}{' :: ' + k[1] if k[1] else ''}"
     judged = {k: judge(k, got.get(k, []), contention) for k in need}
-    if verdict:
-        reds = [k for k, (st, _) in judged.items() if st == "red"
-                and (not verdict_suites or k[0] in verdict_suites or (k[1] and k[1] in verdict_suites))]
-        if reds:
-            path = record_verdicts(reds, verdict, tip_sha, pin)
-            print(f"ci-gate-check: recorded the verdict for {len(reds)} red row(s) -> {path}")
+    if verdicts:
+        pairs, unknown = [], []
+        for name, text in verdicts.items():
+            keys = [k for k in need if k[0] == name or (k[1] and k[1] == name)]
+            red_keys = [k for k in keys if judged[k][0] == "red"]
+            if red_keys: pairs += [(k, text) for k in red_keys]
+            else: unknown.append(f"{name} ({'not selected' if not keys else judged[keys[0]][0]})")
+        for u in unknown:
+            print(f"ci-gate-check: no verdict recorded for {u} — a verdict answers a red row only")
+        if pairs:
+            path = record_verdicts(pairs, tip_sha, pin)
+            print(f"ci-gate-check: recorded {len(pairs)} verdict(s) -> {path}")
             got = records_at(tip_sha, pin or None)
             judged = {k: judge(k, got.get(k, []), contention) for k in need}
     missing = [label(k) for k, (st, _) in judged.items() if st == "missing"]
@@ -177,19 +208,27 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("range")
     ap.add_argument("--build", default="build-linux")
-    ap.add_argument("--verdict", default=None,
-                    help="record this verdict for every red row (the reader's text) in the run log, then re-check")
-    ap.add_argument("--verdict-suite", nargs="*", default=None, help="record the verdict for these rows/arms only")
+    ap.add_argument("--verdict", nargs="+", default=None, metavar="ROW=TEXT",
+                    help="record a verdict per red row (`<row or pool.arm>=<the reader's text>`) in the run log, "
+                         "then re-check; it clears only the reds logged before it")
     a = ap.parse_args()
+    verdicts = None
+    if a.verdict:
+        verdicts = {}
+        for pair in a.verdict:
+            if "=" not in pair or not pair.split("=", 1)[1].strip():
+                ap.error(f"--verdict takes <row>=<text> pairs, got '{pair}'")
+            k, v = pair.split("=", 1)
+            verdicts[k.strip()] = v.strip()
     gs = load_gs()
-    ok, reasons = check(a.range, gs.resolve_build(a.build), gs, verdict=a.verdict, verdict_suites=a.verdict_suite)
+    ok, reasons = check(a.range, gs.resolve_build(a.build), gs, verdicts=verdicts)
     if ok is None:
         for r in reasons: print("ci-gate-check: UNUSABLE — " + r)
         sys.exit(2)
     for r in reasons: print(("ci-gate-check: " if ok else "ci-gate-check: REFUSED — ") + r)
     if not ok:
         print(f"ci-gate-check: run `scripts/gate-scope.sh {a.range} --run` at the tip; a contention-class red "
-              f"takes `--solo <suite>` (3/3); any other red a verdict: `--verdict \"<text>\"`")
+              f"takes `--solo <suite>` (3/3); any other red a verdict: `--verdict \"<row>=<text>\" ...`")
     sys.exit(0 if ok else 1)
 
 

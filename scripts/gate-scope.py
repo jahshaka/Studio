@@ -1912,7 +1912,7 @@ def main():
             else:
                 print(f"gate-scope --solo: {s} is NOT in the contention class ({gate_runlog.contention_file()}): "
                       f"the retries are logged, and its red still needs a recorded verdict "
-                      f"(scripts/ci-gate-check.sh <range> --verdict \"<text>\")")
+                      f"(scripts/ci-gate-check.sh <range> --verdict \"{s}=<text>\")")
         for s in a.solo:
             for _ in range(a.times):
                 rx = "^" + re.escape(s) + "$"

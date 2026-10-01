@@ -3,7 +3,8 @@
 
 scripts/ci-gate-check.sh <range> refuses a merge unless the run log at the range's tip answers every
 row the range selects under THE FLAKE LAW (scripts/ci_gate_check.py): a contention-class red needs
-3/3 solo PASS after it, any other red a recorded verdict (`--verdict "<text>"`, written into the log),
+3/3 solo PASS after it, any other red a recorded verdict (`--verdict "<row>=<text>"`, per row and
+timestamped in the log, clearing only the reds before it),
 and a row never run is refused. Proved on a recorded range (VIEWS-DEPTH-1, 51e9f2c49..3756b2f18:
 photon.view + the smoke pair) against a PRIVATE run log (JAH_RUN_LOG_DIR) and a PRIVATE contention
 list (JAH_CONTENTION_FILE):
@@ -79,7 +80,7 @@ def main(source, build):
     rc, out = run()
     check(rc == 1 and "needs a recorded verdict" in out,
           "...and ONE solo PASS does not erase it (the audit's L2: latest-wins is gone) (%d)" % rc)
-    rc, out = run(RANGE, "--verdict", "photon.view: the fixture's red, read by the test")
+    rc, out = run(RANGE, "--verdict", "photon.view=the fixture's red, read by the test")
     check(rc == 0 and "recorded verdict" in out, "the same red with a recorded verdict -> accepted (%d)" % rc)
     vfiles = [f for f in os.listdir(os.environ["JAH_RUN_LOG_DIR"]) if "-verdict-" in f]
     vrec = [json.loads(l) for f in vfiles for l in open(os.path.join(os.environ["JAH_RUN_LOG_DIR"], f))]
@@ -87,6 +88,21 @@ def main(source, build):
           and "read by the test" in vrec[0]["text"], "...and the verdict is a record in the run log (%s)" % vfiles)
     rc, out = run()
     check(rc == 0, "...which a later check reads without the flag (%d)" % rc)
+    put(rows[2:], "FAIL", "2099-01-01T10:00:00")
+    rc, out = run()
+    check(rc == 1 and "needs a recorded verdict" in out,
+          "a red logged AFTER the verdict is not cleared by it (D4: per row, timestamped) (%d)" % rc)
+    rc, out = run(RANGE, "--verdict", "api.contract=not red, so nothing to answer")
+    check(rc == 1 and "no verdict recorded for api.contract" in out,
+          "a verdict for a row that is not red is refused, said out loud (%d)" % rc)
+
+    # ---- a row that never ran (NOADMIT) is MISSING, which no verdict clears ------------------------
+    fresh(unlisted)
+    put(rows[:2], "PASS", "2026-01-01T10:00:00")
+    put(rows[2:], "NOADMIT", "2026-01-01T10:00:01")
+    rc, out = run(RANGE, "--verdict", "photon.view=it waited too long")
+    check(rc == 1 and "no record" in out and "no verdict recorded for photon.view" in out,
+          "a NOADMIT row is missing and a verdict cannot clear it (%d)" % rc)
 
     # ---- the law, a CONTENTION-CLASS row ----------------------------------------------------------
     fresh(listed)

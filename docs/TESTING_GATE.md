@@ -301,7 +301,7 @@ A red of a CONTENTION-CLASS suite is re-run SOLO 3× (`scripts/gate-scope.sh --s
 admission of a solo run takes the whole card, §4b); 3/3 green = environmental, with the evidence
 string in the report (host-load timing, the texture-worker SEGV class). ANY OTHER red needs a
 recorded verdict (real + the failing assertion, or environmental + the evidence):
-`scripts/ci-gate-check.sh <range> --verdict "<text>"` writes it into the run log. THE MERGE REFUSAL
+`scripts/ci-gate-check.sh <range> --verdict "<row>=<text>" ...` writes it into the run log, per row and timestamped (it clears only the reds logged before it; a row that never ran — NOADMIT — is missing, which no verdict clears). THE MERGE REFUSAL
 APPLIES THIS (TEST-SELECTOR-1 L2/L3): `ci-gate-check.sh` refuses a merge while a selected row was
 never run at the tip, a contention-class red lacks 3/3 solo PASS after it (a solo red means it is not
 contention: a verdict), or any other red lacks a verdict — one solo PASS erases nothing — and
