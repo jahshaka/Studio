@@ -213,6 +213,21 @@ for (var cycle = 1; cycle <= 3; cycle++) {
     }
     console.log("LIVE DIFF cycle " + cycle + " (" + liveFresh.length + " live object(s), dropped from the gate): " +
                 (ld.length ? ld.join(" | ") : "none"));
+    // THE REOPENED SKY IS THE FRESH ONE (REOPEN-SKY-1): the environment capture's mean
+    // is a function of the document, not of the camera's history — the capture sees
+    // the sky from its own observer. Float tolerance (the capture's half-float SH).
+    var skyFresh = null, skyNow = null;
+    for (var si = 0; si < liveFresh.length; si++)
+        if (liveFresh[si].path === "world.clouds.live") skyFresh = liveFresh[si].value.skyMean;
+    for (var sj = 0; sj < LIVE_READOUTS.length; sj++)
+        if (LIVE_READOUTS[sj].path === "world.clouds.live") skyNow = LIVE_READOUTS[sj].value.skyMean;
+    assert(skyFresh && skyNow && skyFresh.length === 3 && skyNow.length === 3,
+           "cycle " + cycle + ": the sky's mean is read fresh and reopened");
+    var skyWorst = 0;
+    for (var sc = 0; sc < 3; sc++)
+        skyWorst = Math.max(skyWorst, Math.abs(skyNow[sc] - skyFresh[sc]) / Math.max(Math.abs(skyFresh[sc]), 1e-6));
+    assert(skyWorst <= 1e-5, "cycle " + cycle + ": the reopened sky's mean equals the fresh one (worst relative " +
+           skyWorst.toExponential(2) + ", bar 1e-5)");
     LIVE_READOUTS = liveFresh;
     var g = groundOf(s);
     assert(g.mat.baseColorMap === g0.mat.baseColorMap,
