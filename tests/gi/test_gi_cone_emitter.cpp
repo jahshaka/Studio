@@ -43,6 +43,19 @@
 // wider than the GGX lobe) and the footprint kernel (a bilinear read of a texel K weighs a
 // small central object as A / K^2, a uniform disc of radius K as A / (pi K^2)). A covered lobe
 // is exact either way; the partial one is the reader's own lane.
+// CONE-LOBE-1 (PHOTON-II-1, d-build c5fbe870c, STOPPED with the numbers; spikes/photon-ii-1/):
+// the 0.5 lobe in cascade 0 / cascade 1 against the GGX coverage 0.396 -
+//   shipped (tan(r pi/2 0.99), the floored kernel)                1.48 / 1.58
+//   A  the GGX lobe's half-energy cone, tan = 2a / (1 - a^2)      2.18 / 1.32
+//   B  A + the kernel's AREA normalised (footprint x sqrt(pi))    1.53 / 1.60 (r 0.05 c1: 0.65)
+//   C  A + the lateral kernel only                                1.62 / 1.38
+//   D  A + the plane's own level only                             1.78 / 1.66
+//   F  the shipped aperture + the area-normalised kernel          1.40 / 1.23 (r 0.2 c1: 0.55)
+// and on the CPU lab (march / the uniform-disc reference, nine start points) no single level
+// offset normalises the kernel across apertures (0.95-2.8 at tan 0.98, 1.0 at tan 0.3-0.4): the
+// lateral read is a box x tent at an integer-or-fractional level whose central weight depends on
+// the object's size against the texel, not a disc. A normalised kernel is a re-designed lateral
+// read (a quadrature of the disc), not a constant.
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
 
