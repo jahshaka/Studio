@@ -60,6 +60,11 @@ public:
     float getValue();
     void setValue(float);
     void setRange(float min, float max);
+    /// A TYPED CEILING above the slider's own range (IMAGE-1): the slider spans
+    /// [min, max] for a scrub, the spinbox accepts up to `typedMax` — a value past
+    /// the slider's end is kept as typed and shows the slider at its end. Call
+    /// after setRange.
+    void setTypedMaximum(float typedMax);
     /// Digits after the decimal point in the spinbox (Qt's default is 2, which
     /// rounds small-magnitude rows -- fog density lives around 0.024 -- to
     /// uselessness). Also scales the keyboard/wheel step to match.

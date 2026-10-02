@@ -39,7 +39,7 @@ function changed(a, b) {
         if (a[i].r !== b[i].r || a[i].g !== b[i].g || a[i].b !== b[i].b) ++n;
     return n;
 }
-// SHOWROOM 2'S PICTURE BAR: at most 12 pixels (2 before IMAGE-1), each at most 1 code in any channel (SSAO-DOUBLE-1,
+// SHOWROOM 2'S PICTURE BAR: at most the in-run control's count + 2 pixels (2 absolute before IMAGE-1), each at most 1 code in any channel (SSAO-DOUBLE-1,
 // 2026-09-29). The id pass and the raster route shade a surface a half-texel rounding apart
 // on Showroom 2 pose 1 — one or two pixels, one code (e.g. (40,40,43) against (40,40,44)).
 // Until 2026-09-29 the SSAO multiply's blur hid it and "pixel for pixel" held; with SSAO
@@ -54,9 +54,11 @@ function worstCode(a, b) {
 }
 // IMAGE-1 (physical falloff + filmic curve): the same one-code rounding (ATOM-OCC-1CODE-1), on more
 // pixels: the re-lit Showroom 2 under Unreal's film puts more surfaces on a code boundary - 9
-// pixels at pose 1, each 1 code, measured 3/3 solo; the id image stays pixel for pixel. The count
-// bar is 12; the 1-code bar is unchanged.
-function sameBar(a, b) { return changed(a, b) <= 12 && worstCode(a, b) <= 1; }
+// pixels at pose 1 against a CONTROL (two arms that differ in nothing the occlusion does) of 7,
+// each 1 code, measured 3/3 solo. So the bar is RELATIVE to the run's own control: the picture
+// differs from frustum-only by at most the control's count + 2 pixels, each at most 1 code; the id
+// image stays pixel for pixel.
+function sameBar(a, b, control) { return changed(a, b) <= control + 2 && worstCode(a, b) <= 1; }
 
 function waitSplit() {
     var st = world.atomStatus();
@@ -138,9 +140,9 @@ function exactOn(sceneName, strictPicture) {
         // first arm still settles: measured, its control differs from the others exactly
         // where the first arm does).
         // The default scene stays pixel for pixel (it shows no rounding); Showroom 2 takes the bar above.
-        assert(strictPicture ? dLit2 === 0 : sameBar(again[i].lit, without[i].lit),
+        assert(strictPicture ? dLit2 === 0 : sameBar(again[i].lit, without[i].lit, dCtl),
                sceneName + " pose " + i + ": the picture with the occlusion is the frustum-only one, " +
-               (strictPicture ? "pixel for pixel" : "at most 12 pixels by at most 1 code") + " (" + dLit2 +
+               (strictPicture ? "pixel for pixel" : "at most the control's " + dCtl + " + 2 pixels by at most 1 code") + " (" + dLit2 +
                " differ, worst " + worstCode(again[i].lit, without[i].lit) + ")");
         if (strictPicture)
             assert(dLit === 0 && dCtl === 0, sceneName + " pose " + i + ": ...and so is the first arm's (" + dLit +

@@ -168,12 +168,11 @@ static double meanLum(const Image &img)
 // T0 — THE TWO LIGHT PATHS MUST AGREE (fork 36162ff37+16d8e29d4 (was 0018)).
 //
 // A point light that wins a shadow-map slot is lit by the PASS BUFFER; the same
-// light without a slot is lit by FORWARD+ clustered. Before fork 36162ff37+16d8e29d4 (was 0018) those
-// two paths did not agree: Forward+ multiplies by
-// max((range - d) * (1/range), 0) under `hlms_forward_fade_attenuation_range`
-// (default ON) and the pass-buffer path had no such term, so THE SAME LAMP was
-// about twice as bright once it got a shadow map — measured here at 141 vs 63
-// mean luminance before the patch. That made the whole shadow-map budget
+// light without a slot is lit by FORWARD+ clustered. The two paths once
+// carried different falloffs (Forward+ had a range fade the pass buffer lacked,
+// 141 vs 63 mean luminance); since IMAGE-1 both call the ONE falloff,
+// JahBrdf's jahLightAttenuation, so THE SAME LAMP must read the same whether or
+// not it holds a shadow map. Anything else would make the whole shadow-map budget
 // feature change scene BRIGHTNESS, which is not what a shadow setting may do.
 //
 // No pillars: with nothing to cast, a shadow map changes no pixel, so the only

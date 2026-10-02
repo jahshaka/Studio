@@ -357,6 +357,28 @@ static int stableMain(Engine *e)
     // rest, shows every frame. (Measured on the rgba16f + r32ui pair it
     // replaced, the same arm: spikes/photon-ga-vr/EVIDENCE.md.)
     {
+        // THE STORAGE ITSELF, AT THE ABSOLUTE BAR (IMAGE-1 fix round): with the probes at
+        // their cells' centres and every ray at its texel's centre (jitterOff +
+        // rayJitterOff) a still view's estimate is the SAME every frame, so whatever the
+        // EMA's picture still steps by is the packed 8-byte texel's own rounding — the
+        // flicker this arm exists for. Held to the bar the packing was accepted on
+        // (photon-ga-vr: no sampled pixel steps by 2 codes, under 1 % of the region does).
+        GatherTuning tq;
+        tq.restOff = true;
+        tq.jitterOff = true;
+        tq.rayJitterOff = true;
+        s->setGatherTuning(tq);
+        render(e, 120);
+        const StableReading store = stableReading(e, view, 60, "packed-store");
+        std::printf("     the packed history with a fixed estimate (restOff, no jitter): worst step "
+                    "%u, mean |step| %.3f, pixels whose worst step reached 2: %.2f %%\n",
+                    store.worstStep, store.meanStep, 100.0 * store.overTwo);
+        CHECK_MSG(store.worstStep < 2u && store.overTwo < 0.01,
+                  "THE PACKED TEXEL DOES NOT FLICKER: with a fixed estimate the EMA steps no "
+                  "sampled pixel by 2/255 (worst %u) and %.2f %% of the region (bar < 1 %%)",
+                  store.worstStep, 100.0 * store.overTwo);
+    }
+    {
         GatherTuning tr;
         tr.restOff = true;
         s->setGatherTuning(tr);

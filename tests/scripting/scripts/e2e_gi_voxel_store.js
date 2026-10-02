@@ -59,7 +59,10 @@ box(-S / 2, S / 2, 0, T, S, S); box(S / 2, S / 2, 0, T, S, S);
 box(0, S / 2, -S / 2, S, S, T); box(0, S / 2, S / 2, S, S, T);
 var lamp = scene.addLight("point", { position: { x: 0, y: S - 1.0, z: 0 } });
 node.setProperty(lamp, "distance", 30.0);
-node.setProperty(lamp, "intensity", 0.12);
+// 2.98 since IMAGE-1: 0.12 under the retired near-flat curve, re-keyed by the fixtures' rule (its
+// light on the floor 3.8 m below kept) for the inverse square law. (The store is normalised by the
+// lamp's own power, so the claims below do not move with it.)
+node.setProperty(lamp, "intensity", 2.98);
 editor.setCamera({ position: { x: 0, y: S / 2, z: 1.8 }, lookAt: { x: 0, y: S / 2, z: -3.0 } });
 world.photon({ enabled: true, tier: "epic" });
 world.gi({ ddgi: false });
@@ -101,10 +104,24 @@ assert(b.peakDirect > 0.5 && b.peakDirect <= DIRECT_MAX * (1 + 1e-3),
 // (IMAGE-1: the direct PEAK is now the inverse square law's hot spot on the ceiling 0.8 m over
 // the lamp, which the bounce barely adds to — the fixed point's excess is where the room fills,
 // so it is counted there: more voxels above 1 with the bounce than with the direct term alone.)
-assert(b.voxelsAboveOne > d.voxelsAboveOne && b.peak >= b.peakDirect,
+assert(b.voxelsAboveOne > d.voxelsAboveOne,
        "the fixed point stands above the ceiling: " + b.voxelsAboveOne + " voxels above 1 against " +
-       d.voxelsAboveOne + " direct; peak " + b.peak + " vs direct " + b.peakDirect +
-       " (an 8-bit store reads 1.0 here)");
+       d.voxelsAboveOne + " direct (an 8-bit store reads 1.0 here)");
+// THE BOUNCE'S MAGNITUDE (IMAGE-1 fix round): the room's light summed over the store (mean x count),
+// the bounced total over the direct alone. A closed room of albedo rho returns rho + rho^2 + rho^3
+// of its direct light in three bounces; the voxels hold the surface's lobe-weighted radiance, so
+// rho is the walls' 0.791 times the diffuse lobe's 0.905 (the header: roughness 0) = 0.716, and
+// the three-bounce share 0.716 + 0.513 + 0.367 = 1.596. MEASURED 0.870 (IMAGE-1 fix round, this
+// rig at Epic): above one bounce's 0.716 and under the closed room's three, as a voxel store with
+// coverage-weighted cells and an open seam should be. THE TOLERANCE: at least 80 % of ONE bounce
+// (0.573: a bounce that lost a fifth of the walls' albedo reds) and at most the three-bounce
+// bound + 5 % (1.676: energy gain reds).
+var fluxD = d.meanLit * d.voxelsLit, fluxB = b.meanLit * b.voxelsLit;
+var share = fluxD > 0 ? (fluxB - fluxD) / fluxD : -1;
+console.log("BOUNCE SHARE " + share.toFixed(4) + " (closed-room 3-bounce bound 1.596; flux direct " + fluxD.toFixed(1) + ", total " + fluxB.toFixed(1) + ")");
+assert(share >= 0.716 * 0.8 && share <= 1.596 * 1.05,
+       "the bounce returns between 80 % of one bounce and the closed room's three-bounce share of the " +
+       "direct light: " + share.toFixed(3) + " (0.573 .. 1.676; rho 0.791 x lobe 0.905 = 0.716)");
 // ...and HELD: voxels stand above the ceiling (an 8-bit store has none). The count itself is no
 // geometric prediction - it is the tail of the fixed point over the ceiling (781 here, 5,115 on
 // the leaky store whose hidden faces glowed) - so the claim is that the tail exists.

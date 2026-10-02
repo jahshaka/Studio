@@ -87,7 +87,7 @@ var EXPECTED = {
     // pass had left behind (the expectation lagged the re-stage — three lanes
     // independently flagged it).
     // 13 since lane L13: one floor, the default one (the Floor slab is gone).
-    "Mirror Room": { exposureEv: -1.88, tier: "epic", nodes: 14, names: ["Floor", "RedWall", "MirrorPanel", "MirrorSphere", "GoldTorus", "Sky Light"],
+    "Mirror Room": { exposureEv: -2.19, tier: "epic", nodes: 14, names: ["Floor", "RedWall", "MirrorPanel", "MirrorSphere", "GoldTorus", "Sky Light"],
                      types: { mesh: 10, light: 3 } },
     "Skeletal Animation": { exposureEv: -1.06, tier: "medium", nodes: 71, names: ["Beta_HighLimbsGeoMesh", "Hips", "Floor", "Sky Light"],
                             types: { mesh: 4, light: 3 } },

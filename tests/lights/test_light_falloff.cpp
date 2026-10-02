@@ -23,6 +23,7 @@
 // down at it: the centre pixel is then that patch and nothing else.
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
+#include "../support/lightfalloff.h"
 
 #include <algorithm>
 #include <cmath>

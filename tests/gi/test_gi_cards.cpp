@@ -32,6 +32,7 @@
 // is asserted by their own suites, not by this one.
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
+#include "../support/lightfalloff.h"
 
 #include <algorithm>
 #include <cmath>

@@ -51,6 +51,7 @@
 // SKIPPED, NOT FAILED, without ray-query hardware.
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
+#include "../support/lightfalloff.h"
 
 #include <algorithm>
 #include <array>

@@ -21,6 +21,7 @@
 // it holds exactly nothing, and the nearer ones hold light.
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
+#include "../support/lightfalloff.h"
 
 #include <algorithm>
 #include <cmath>
@@ -173,6 +174,64 @@ int main()
               "NO VOXEL PAST THE LAMP'S RANGE HOLDS ITS LIGHT (%ld of %ld)", beyondLit, beyondN);
     CHECK_MSG(insideN > 100 && insideLit == insideN,
               "...and every voxel well inside it does (%ld of %ld)", insideLit, insideN);
+
+    // ---- 3. AN AREA LIGHT: the injection against the pixel ---------------------
+    // The pixel lights the floor from an approximate area light with the one falloff from a
+    // disc of the rectangle's area (AreaLights_piece_ps.any); the injection uses the LTC form
+    // factor, windowed to the same range. The voxel's stored radiance over the pixel's
+    // (linear, readPixelsHdr straight down at the voxel), divided by the same ratio for a
+    // point lamp at the same place (the store's normalisation and the voxel's lobe cancel),
+    // is how far the two area models disagree at that distance. THE SCALE IS RECORDED, NOT
+    // BARRED: the approximate area light's pixel and the injection's LTC form factor are two
+    // different models of the emitter (measured 0.231 at 1.5 m and 0.252 at 2.5 m: the voxels
+    // hold about a quarter of what the approximation draws — the approximation's roughness
+    // booster and the form factor's normalisation, a pre-existing gap filed with IMAGE-1's
+    // report). THE LAW IS BARRED: the ratio holds across distance within 15 %, i.e. the
+    // injection falls off and is windowed as the pixel is.
+    {
+        PostFxDesc fx;
+        fx.hdrReadback = true;
+        view->setPostFx(fx);
+        const auto pixelAt = [&]() {
+            view->setCamera(enginetest::testCameraDescLookAt(Vec3(float(cx), 0.6f, float(cz) + 0.001f),
+                                                             Vec3(float(cx), 0.0f, float(cz))));
+            render(e, 4);
+            ImageF img;
+            if (!view->readPixelsHdr(img)) return -1.0;
+            const Colour c = img.at(64, 64);
+            return double(c.r + c.g + c.b) / 3.0;
+        };
+        double areaRatio[2] = { 0.0, 0.0 };
+        int areaArm = 0;
+        for (double d : { 1.5, 2.5 }) {
+            double ratio[2] = { 0.0, 0.0 };
+            for (int k = 0; k < 2; ++k) {
+                LightDesc l;
+                l.castShadows = false;
+                l.range = 6.0f;
+                if (k == 0) { l.type = LightType::Point; l.intensity = 4.0f; }
+                else { l.type = LightType::Area; l.accurate = false; l.rectWidth = 1.0f; l.rectHeight = 1.0f;
+                       l.intensity = 4.0f; }
+                s->setLight(lamp, l);
+                s->setNodeTransform(lamp, Vec3(float(cx), float(cy + d), float(cz)), Quat(), Vec3(1, 1, 1));
+                const double px = pixelAt();
+                view->setCamera(enginetest::testCameraDescLookAt(Vec3(0.0f, 1.5f, 0.0f), Vec3(0.0f, 0.0f, -4.0f)));
+                const double vx_ = settledVoxel(e, s, vx, vy, vz, v);
+                ratio[k] = px > 0.0 ? vx_ / px : -1.0;
+                std::printf("   %s lamp %.1f m above: pixel %.6f, voxel %.6f, voxel/pixel %.4f\n",
+                            k == 0 ? "point" : "area ", d, px, vx_, ratio[k]);
+            }
+            const double areaToPoint = ratio[0] > 0.0 ? ratio[1] / ratio[0] : -1.0;
+            std::printf("   AREA vs POINT at %.1f m: (voxel/pixel)_area / (voxel/pixel)_point = %.3f\n", d,
+                        areaToPoint);
+            areaRatio[areaArm++] = areaToPoint;
+        }
+        CHECK_MSG(areaRatio[0] > 0.0 && areaRatio[1] > 0.0 &&
+                      std::fabs(areaRatio[1] / areaRatio[0] - 1.0) < 0.15,
+                  "AN AREA LAMP'S BOUNCE FALLS OFF AS ITS DIRECT LIGHT: the injection-to-pixel ratio "
+                  "holds from 1.5 m to 2.5 m (%.3f -> %.3f, within 15 %%)", areaRatio[0], areaRatio[1]);
+        view->setPostFx(PostFxDesc());
+    }
 
     GiParams off; off.mode = GiMode::Off;
     s->setGlobalIllumination(off);

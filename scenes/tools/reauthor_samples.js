@@ -65,7 +65,7 @@ var RELIGHT = {                       // name -> { light: intensity }  (authored
 // Where each sample's floor card goes: the screen point (u, v) the sample
 // camera's ray goes through to the floor.
 var KEY_UV = {
-    "Matcaps": [0.5, 0.85], "Mirror Room": [0.6, 0.65], "Particles": [0.75, 0.8],
+    "Matcaps": [0.5, 0.85], "Mirror Room": [0.55, 0.72], "Particles": [0.75, 0.8],
     "Physics": [0.65, 0.8], "Showroom": [0.5, 0.88], "Showroom 2": [0.5, 0.95],
     "Skeletal Animation": [0.3, 0.85], "World Background": [0.35, 0.85]
 };
@@ -179,7 +179,15 @@ function keyExposure() {
     var dl = Math.sqrt(d[0] * d[0] + d[1] * d[1] + d[2] * d[2]);
     var hits = scene.raycast(p, { x: d[0] / dl, y: d[1] / dl, z: d[2] / dl }, { includeUnpickable: true });
     if (!hits.length) fail("the key card's ray hit nothing");
+    // THE FLOOR, NOT WHATEVER IS IN THE WAY: a card keyed on a mirror's base or a prop's
+    // top is not the sample's floor card (the Mirror Room's first cut landed on its
+    // MirrorPanel).
+    if (hits[0].name !== "Floor") fail("the key card's ray hit '" + hits[0].name + "', not the Floor");
     var hp = hits[0].point;
+    // The card leaves NOTHING behind: its node is removed below, and every asset row it
+    // brought (its primitive's material) is dropped from the project with it.
+    var rowsBefore = {};
+    assets.list({ scope: "project" }).forEach(function (r) { rowsBefore[r.guid] = true; });
     var card = scene.addPrimitive("cube", { position: { x: hp.x, y: hp.y + 0.011, z: hp.z },
                                             scale: { x: 0.6, y: 0.02, z: 0.6 } });
     material.set(card, { baseColor: "#767676", roughness: 1, metallic: 0 });
@@ -190,6 +198,10 @@ function keyExposure() {
                               { radiance: true }).probes[0].radiance;
     var L = 0.2126 * r.r + 0.7152 * r.g + 0.0722 * r.b;
     node.remove(card);
+    assets.list({ scope: "project" }).forEach(function (r) {
+        if (!rowsBefore[r.guid] && assets.removeFromProject(r.guid) !== true)
+            fail("could not drop the key card's row " + r.name + " " + r.guid);
+    });
     // ...and the sample's own camera back (frameNode moved it).
     editor.setCamera({ position: c.position, rotation: c.rotation, fov: c.fov });
     // The card's film input at 0 stops is L x the manual multiplier; the stops

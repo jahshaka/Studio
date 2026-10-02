@@ -551,6 +551,19 @@ int main(int argc, char **argv)
         stack.undo();
         CHECK(qFuzzyCompare(light->intensity, 1.0f), "light: undo restored the intensity");
 
+        // A TYPED INTENSITY PAST THE SLIDER (IMAGE-1): the re-lit lamps run to tens and
+        // hundreds; typing 24.2 into the field must reach the light as 24.2 (the key the
+        // verb node.getProperty reads), not the slider's end.
+        if (intensity) {
+            intensity->ui->spinbox->setValue(24.2);
+            CHECK(qAbs(light->getPropertyValue(QStringLiteral("intensity")).toFloat() - 24.2f) < 1e-4f,
+                  "light: a typed intensity of 24.2 reads back as 24.2 through the verb's key");
+            intensity->ui->spinbox->setValue(221.0);
+            CHECK(qAbs(light->intensity - 221.0f) < 1e-3f,
+                  "light: ...and 221 (the re-lit Particles spot) is kept, not clamped");
+            light->intensity = 1.0f;
+        }
+
         // THE SOURCE RADIUS ROW (IMAGE-1): the reflected key `sourceRadius`, the
         // one node.setProperty / node.getProperty read and write — the row is
         // the verb's, so what the drag wrote is what the verb reads back.

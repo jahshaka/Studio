@@ -410,6 +410,19 @@ kp = camera.postFx(kcam2);
 near(kp.overrides.vignette, 0.4, 1e-5, "the camera's vignette override survives save/open");
 assert(kp.overrides.contrast === undefined, "...and its cleared contrast stays cleared");
 assert(editor.select(kcam2), "the camera panel builds with image-block overrides");
+// A WILD OVERRIDE IS CLAMPED TO THE TABLE (IMAGE-1 fix round): contrast 1000 would be a power of
+// 1000 on the grey-card ratio — Inf/NaN in the film. It lands at the row's maximum, and the
+// camera's graded picture is finite and lit (NaN-safe: the probe values must be finite numbers).
+kp = camera.postFx(kcam2, { contrast: 1000 });
+near(kp.overrides.contrast, 2.0, 1e-6, "camera.postFx clamps an image-block override to the table (contrast 1000 -> 2)");
+var wild = camera.screenshot(kcam2, "camlens-contrast-wild.png", { width: 160, height: 90, postFx: true,
+                             probes: [{ x: 0.5, y: 0.5 }, { x: 0.25, y: 0.75 }] });
+var allFinite = [wild.center.r, wild.center.g, wild.center.b].concat(wild.probes.map(function (q) {
+    return q.r + q.g + q.b; })).every(function (v) { return typeof v === "number" && isFinite(v) && v === v; });
+assert(allFinite && wild.center.r + wild.center.g + wild.center.b > 0,
+       "...and the picture it grades is finite and lit (a NaN in the film reaches the 8-bit picture as black: " +
+       JSON.stringify(wild.center) + ")");
+camera.postFx(kcam2, { contrast: null });
 editor.select(null);
 world.postFx({ contrast: 1, whiteTemperature: 6500 });
 

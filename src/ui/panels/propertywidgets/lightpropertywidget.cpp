@@ -123,7 +123,13 @@ LightPropertyWidget::LightPropertyWidget(QWidget* parent):
          [this]() { return !loading; })
 {
     lightColor = this->addColorPicker("Color");
-    intensity = this->addFloatValueSlider("Intensity", 0, 10.f);
+    // A SOFT SLIDER, AN UNCAPPED FIELD (IMAGE-1): under the inverse square law a
+    // lamp's intensity is its light at 1 m, so a room's lamps run to tens and a
+    // high spot to hundreds (the re-lit samples: 1.1 to 221; a new lamp is 8).
+    // The slider scrubs 0..100; the typed field takes up to 100000 and keeps
+    // what was typed (the row never clamps a value it did not choose).
+    intensity = this->addFloatValueSlider("Intensity", 0, 100.f);
+    intensity->setTypedMaximum(100000.f);
     // THE RANGE: where the light's inverse-square falloff is windowed to zero
     // (IMAGE-1; the key is still `distance`).
     distance = this->addFloatValueSlider("Range", 0, 100.f);
