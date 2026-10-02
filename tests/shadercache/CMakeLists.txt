@@ -23,6 +23,13 @@ add_dependencies(test_shader_cache JahshakaEngineMedia)
 jah_gpu_row(shadercache.container CLASS engine COMMAND test_shader_cache
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(shadercache.container PROPERTIES TIMEOUT 720 LABELS "shadercache")
+# A pipeline the engine builds lazily reaches the disk (PIPELINE-CACHE-1 fix round):
+# three engine processes against one directory, the driver's own disk cache off so
+# the pipeline layer is the only thing that can make the third one warm.
+jah_gpu_row(shadercache.engine_pipelines CLASS engine COMMAND test_shader_cache --engine-pipelines
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(shadercache.engine_pipelines PROPERTIES TIMEOUT 300 LABELS "shadercache"
+    ENVIRONMENT "__GL_SHADER_DISK_CACHE=0")
 
 if(JAHSHAKA_ASAN)
     # The sanitised twin. "A corrupt file did not crash us" is not a claim you
