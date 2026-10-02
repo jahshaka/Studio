@@ -706,7 +706,7 @@ int main(int argc, char **argv)
             render(e, 60);
             for (int i = 0; i < 240; ++i) {
                 const int mode = 1 + (i & 1);
-                setenv("JAH_R7_EDGE_CLASSES", getenv("JAH_EDGE_MODE3") ? "3" : mode == 1 ? "1" : "2", 1);
+                setenv("JAH_R7_EDGE_CLASSES", mode == 1 ? "1" : "2", 1);
                 if (phase == 0) ++frame;
                 if (phase == 0) edgePlace(pathAt(frame));
                 render(e, 1);
