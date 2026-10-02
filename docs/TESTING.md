@@ -403,7 +403,9 @@ lanes. Deleted by the sweep (no reader): `JAHSHAKA_GI_DEBUG` (17 diagnostic log 
 | `JAH_GI_CASCADE_FAULT`, `JAH_GI_CASCADE_FAULT_POST` | OgreGi.cpp | gi.cascades | a cascade build throws before / after the placement moves |
 | `JAH_VCT_REFUSE_GEOMETRY` | OgreGi.cpp | gi.voxel_resident | the voxeliser reads no geometry (an empty volume must build) |
 | `JAHSHAKA_GI_FIELD_NO_SCROLL` | OgreGi.cpp | gi.field_scroll | the field re-placed whole instead of scrolled |
-| `JAHSHAKA_GI_FIELD_RAYS`, `_SAMPLES`, `_STATIC` | OgreGi.cpp | gi.field_thin_wall, gi.field_scroll | the field's rays per texel, sample target, rotation |
+| `JAHSHAKA_GI_FIELD_RAYS` | OgreGi.cpp | gi.field_thin_wall | the field's rays per depth texel |
+| `JAHSHAKA_GI_FIELD_SAMPLES` | OgreGi.cpp | gi.field_thin_wall | the field's sample target per texel |
+| `JAHSHAKA_GI_FIELD_STATIC` | OgreGi.cpp | gi.field_thin_wall | the field's rays NOT rotated per frame (the fixed-set arm) |
 | `JAHSHAKA_GI_NO_REBUILD_SETTLE` | OgreGi.cpp | gi.chain_converge | the rebuild settle off (paired arm) |
 | `JAH_TEXTURE_CACHE`, `JAH_TEXTURE_MULTILOAD`, `JAH_TEXTURE_SYNC_LOAD` | OgreEngine.cpp, OgreMaterials.cpp | scripts/threading/texture-ab.sh | the texture-load A/B arms |
 | `JAH_TEXTURE_WAIT_MS`, `JAH_TEXTURE_WAIT_FAULT`, `JAH_TEXTURE_DRAIN_ADVANCE_MS` | OgreEngine.cpp | threading.texture_wait_watchdog, app.* verbs (docs/SCRIPTING.md) | the texture wait budget and its fault hook |
