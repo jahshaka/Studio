@@ -246,6 +246,27 @@ var good = world.gi({ cascadeSet: [ { halfSize: 5, resolution: 128 },
 assert(!!good, "a table that grows outward is accepted");
 world.gi({ cascadeSet: [] });
 
+// CASCADE-CAP-1: the verb refuses a chain longer than the engine's one constant
+// (kGiTierMaxCascades = 4, the longest a tier builds — the pass-texture table is
+// sized on it), and accepts one of exactly that length.
+threwTable = false;
+var capMsg = "";
+try {
+    world.gi({ cascadeSet: [ { halfSize: 5,  resolution: 128 },
+                             { halfSize: 10, resolution: 128 },
+                             { halfSize: 15, resolution: 64 },
+                             { halfSize: 60, resolution: 64 },
+                             { halfSize: 240, resolution: 64 } ] });
+} catch (e) { threwTable = true; capMsg = String(e); }
+assert(threwTable, "world.gi refuses a cascadeSet of 5 rows (above kGiTierMaxCascades)");
+assert(capMsg.indexOf("at most 4") >= 0, "...and names the cap: " + capMsg);
+var four = world.gi({ cascadeSet: [ { halfSize: 5,  resolution: 128 },
+                                    { halfSize: 10, resolution: 128 },
+                                    { halfSize: 15, resolution: 64 },
+                                    { halfSize: 60, resolution: 64 } ] });
+assert(!!four, "a chain of exactly kGiTierMaxCascades rows is accepted");
+world.gi({ cascadeSet: [] });
+
 // ---------------------------------------------------------------------------
 // THE REFLECTION ROUGHNESS CUTOFF (PHOTON_SPEC §7 R5; owner, ledger §426).
 //
