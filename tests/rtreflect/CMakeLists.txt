@@ -71,7 +71,7 @@ if(EXISTS "${_rt_lvp_icd}")
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
     set_tests_properties(gi.rt_reflect_format_refused_lavapipe PROPERTIES TIMEOUT 120
                          LABELS "engine"
-                         ENVIRONMENT "VK_ICD_FILENAMES=${_rt_lvp_icd};JAHSHAKA_RAY_DENY_STORAGE_FORMAT=R32G32B32A32_SFLOAT")
+                         ENVIRONMENT "VK_ICD_FILENAMES=${_rt_lvp_icd};JAHSHAKA_RAY_DENY_STORAGE_FORMAT=R32G32_SFLOAT")
 endif()
 
 # ENV-RAY-MATCH (PHOTON P3): a silver floor under the realistic sky, the
