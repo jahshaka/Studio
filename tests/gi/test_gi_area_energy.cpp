@@ -21,19 +21,16 @@
 // injection evaluates the light). Three heights; the range is far (40 m) so the window
 // is 1 to five decimals.
 //
-// THE BARS. gi.area_energy: the VOXEL store and the accurate (LTC) pixel within 5 % of the
-// closed form at every height. gi.area_energy_target (--pixel): the pixel's approximate area
-// light within 5 % — a photon-target row: the approximation is the fork's media.
+// THE BARS. gi.area_energy: the VOXEL store, the accurate (LTC) pixel and the APPROXIMATE area
+// light's pixel, each within 5 % of the closed form at every height.
 //
-// WHAT IT FOUND (AREA-SCALE-1, measured on d-build c5fbe870c, a matte floor at roughness 1):
-// the voxel store is the closed form (0.9996 / 0.9999 / 1.0004 at 1 / 1.5 / 2.5 m: the LTC
-// form factor the injection evaluates is exact) and so is the LTC pixel (0.9998 / 1.0003 /
-// 1.0001). The APPROXIMATE area light's pixel draws 5.32 / 4.59 / 4.21 x it: its roughness
-// booster lerp(1, 4, roughness) (x4 at roughness 1) times its far-field law
-// r^2 / max(d^2, r^2) (r = sqrt(w l / pi)) against the form factor (1.33 / 1.15 / 1.05 x; the
-// disc's own on-axis law r^2 / (r^2 + d^2) is within 1 % of the rectangle's). IMAGE-1's
-// "voxel at 1/4 of the pixel" was the pixel over-drawing, not the voxel under-holding. Both
-// terms are AreaLights_piece_ps.any in the fork: the fix is a fork commit.
+// WHAT IT FOUND (AREA-SCALE-1, d-build c5fbe870c, a matte floor at roughness 1): the voxel store
+// and the LTC pixel were the closed form to 0.04 %; the approximate area light drew 5.32 / 4.59 /
+// 4.21 x it at 1 / 1.5 / 2.5 m - upstream's roughness booster lerp(1, 4, roughness) times
+// IMAGE-1's far-field law r^2 / max(d^2, r^2). The fork's AreaLights now takes JahBrdf's
+// jahAreaLightAttenuation (the disc's on-axis law r^2 / (r^2 + d^2), the window shared) and no
+// booster: 1.0075 / 1.0048 / 1.0024. JAH_AREA_PICTURE=<file.ppm> renders a before/after view.
+
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
 #include "../support/lightfalloff.h"
@@ -95,9 +92,8 @@ double settledVoxel(Engine *e, Scene *s, int x, int y, int z, GiVoxelVolume &v)
 
 }   // namespace
 
-int main(int argc, char **argv)
+int main()
 {
-    const bool pixelTarget = argc > 1 && std::strcmp(argv[1], "--pixel") == 0;
     std::string err;
     EngineConfig cfg;
     cfg.pluginDir = JAHSHAKA_TEST_PLUGIN_DIR;
@@ -215,19 +211,45 @@ int main(int argc, char **argv)
         worstLtc = std::max(worstLtc, std::fabs(ltcRatio - 1.0));
     }
     view->setPostFx(PostFxDesc());
-    if (!pixelTarget) {
-        CHECK_MSG(worstVoxel <= 0.05,
-                  "THE VOXEL STORE HOLDS THE DEFINED AREA-LIGHT ENERGY: a I F(h) within 5 %% at 1, 1.5 and "
-                  "2.5 m (worst %.2f %%)", 100.0 * worstVoxel);
-        CHECK_MSG(worstLtc <= 0.05,
-                  "...and so does the accurate (LTC) pixel (worst %.2f %%)", 100.0 * worstLtc);
-    } else {
-        std::printf("target: the approximate area light's pixel against the closed form, worst %.2f %% (bar 5 %%)\n",
-                    100.0 * worstPixel);
-        CHECK_MSG(worstPixel <= 0.05,
-                  "THE APPROXIMATE AREA LIGHT'S PIXEL DRAWS THE DEFINED ENERGY within 5 %% (worst %.2f %%)",
-                  100.0 * worstPixel);
+    if (const char *pic = std::getenv("JAH_AREA_PICTURE")) {   // measurement: a before/after picture
+        // a 1 x 1 m approximate area light 1.5 m over the floor, a grey cube beside it, from the side
+        LightDesc l;
+        l.castShadows = false;
+        l.range = float(kRange);
+        l.intensity = 4.0f;
+        l.type = LightType::Area;
+        l.accurate = false;
+        l.rectWidth = 1.0f;
+        l.rectHeight = 1.0f;
+        s->setLight(lamp, l);
+        s->setNodeTransform(lamp, Vec3(0.0f, 1.5f, 0.0f), Quat(), Vec3(1, 1, 1));
+        const NodeId box = s->createNode();
+        PbrParams bp;
+        bp.albedo = Colour(0.6f, 0.6f, 0.6f);
+        bp.roughness = 0.5f;
+        s->attachMesh(box, cube, s->createPbrMaterial(bp));
+        s->setNodeTransform(box, Vec3(1.0f, 0.4f, 0.0f), Quat(), Vec3(0.8f, 0.8f, 0.8f));
+        View *pv = e->createOffscreenView("area-picture", 640, 360, Colour(0, 0, 0));
+        pv->setScene(s);
+        pv->setCamera(enginetest::testCameraDescLookAt(Vec3(0.0f, 1.8f, 4.5f), Vec3(0.3f, 0.4f, 0.0f)));
+        render(e, 60);
+        Image im;
+        pv->readPixels(im);
+        if (FILE *f = std::fopen(pic, "wb")) {
+            std::fprintf(f, "P6\n%u %u\n255\n", im.width, im.height);
+            for (size_t i = 0; i < size_t(im.width) * im.height; ++i) std::fwrite(&im.rgba[i * 4], 1, 3, f);
+            std::fclose(f);
+        }
+        pv->setScene(nullptr);
+        e->destroyView(pv);
+        s->removeNode(box);
     }
+    CHECK_MSG(worstVoxel <= 0.05,
+              "THE VOXEL STORE HOLDS THE DEFINED AREA-LIGHT ENERGY: a I F(h) within 5 %% at 1, 1.5 and "
+              "2.5 m (worst %.2f %%)", 100.0 * worstVoxel);
+    CHECK_MSG(worstLtc <= 0.05, "...and so does the accurate (LTC) pixel (worst %.2f %%)", 100.0 * worstLtc);
+    CHECK_MSG(worstPixel <= 0.05,
+              "...and so does the APPROXIMATE area light's pixel (worst %.2f %%)", 100.0 * worstPixel);
 
     GiParams off; off.mode = GiMode::Off;
     s->setGlobalIllumination(off);

@@ -56,6 +56,14 @@
 // lateral read is a box x tent at an integer-or-fractional level whose central weight depends on
 // the object's size against the texel, not a disc. A normalised kernel is a re-designed lateral
 // read (a quadrature of the disc), not a constant.
+// THE QUADRATURE (part 1b, DECLINED ON COST by the lead): the plane read as the disc's degree-3
+// rule (the centre at 1/4, six taps at sqrt(2/3) R at 1/8) with the aperture holding 55 % of the
+// GGX lobe's energy (tan th = alpha sqrt(0.55/0.45), the reflection 2 th) reached the bar -
+// covered 1.000 / 0.981, roughness 0.2 1.049 / 1.035 x, roughness 0.5 0.950 / 1.023 x the GGX
+// coverage (cascade 0 / 1) - at 16.5 ms against 5.8 ms of frame GPU time on a full-screen 1080p
+// roughness-0.5 plate (locked 2100 MHz, ABBA). The patches: spikes/photon-ii-1/cone-lobe-quadrature.*.
+// The cheap path (a pre-integrated lobe table, or the scheduler's budget) is filed for V2; this
+// row stays a target.
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
 
