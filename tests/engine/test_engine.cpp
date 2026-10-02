@@ -2606,15 +2606,13 @@ void pbr_two_sided_shows_inside_faces() {
     render(fx.e); Image img; REQUIRE(v->readPixels(img));
     const Px culled = centre(img);
     CHECK_MSG(near(culled, kBlue, 20), "inside a one-sided cube only the background is visible: %d %d %d", culled.r, culled.g, culled.b);
-    p.twoSided = true;
-    CHECK(s->setPbrMaterial(mat, p));
+    s->setNodeFaceCull(n, FaceCull::TwoSided);   // the node is the authority on its cull
     render(fx.e); REQUIRE(v->readPixels(img));
     const Px inside = centre(img);
     std::printf("    inside the cube: one-sided %d %d %d | two-sided %d %d %d\n",
                 culled.r, culled.g, culled.b, inside.r, inside.g, inside.b);
     CHECK_MSG(!near(inside, kBlue, 20) && inside.r > 50, "two-sided lighting shows the inner faces: %d %d %d", inside.r, inside.g, inside.b);
-    p.twoSided = false;
-    CHECK(s->setPbrMaterial(mat, p));
+    s->setNodeFaceCull(n, FaceCull::Material);
     render(fx.e); REQUIRE(v->readPixels(img));
     CHECK(near(centre(img), kBlue, 20));
 }

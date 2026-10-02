@@ -421,7 +421,7 @@ int main(int argc, char **argv)
     f.fence = s->createNode();
     TextureId bars = 0;
     {
-        PbrParams p; p.albedo = Colour(1.0f, 1.0f, 1.0f); p.roughness = 0.7f; p.twoSided = true;
+        PbrParams p; p.albedo = Colour(1.0f, 1.0f, 1.0f); p.roughness = 0.7f;
         p.alphaMode = PbrAlphaMode::Cutout; p.alphaCutoff = 0.5f;
         f.fenceCut = s->createPbrMaterial(p);
         PbrParams o = p; o.alphaMode = PbrAlphaMode::Opaque;
@@ -434,6 +434,7 @@ int main(int argc, char **argv)
         if (!(f.fence && s->attachMesh(f.fence, s->createMesh(fenceMesh()), f.fenceCut))) {
             std::printf("FAIL: the fence\n"); return 1;
         }
+        s->setNodeFaceCull(f.fence, FaceCull::TwoSided);   // a fence is seen from both sides
     }
     // THE SUN behind the fence at 45 degrees, casting.
     {

@@ -22,10 +22,9 @@
 //   6. A CULL TOGGLED EVERY FRAME re-wears ONE twin (CULL-TWIN-DEBTS-1): the twin
 //      outlives its last wearer by kCullTwinGraceFrames (60) of the scene's frames,
 //      so the toggle never builds and destroys a datablock per frame.
-//   7. THE THREE READ PATHS (CULL-TWIN-DEBTS-1): a material SWAPPED under a node
-//      that keeps its cull; the material's OWN two-sidedness flipping under a Back
-//      node (an engine-level material: the document has no material cull); twins
-//      across a SHADING-MODEL switch (Lit -> Unlit -> Lit).
+//   7. THE READ PATHS (CULL-TWIN-DEBTS-1): a material SWAPPED under a node that
+//      keeps its cull; twins across a SHADING-MODEL switch (Lit -> Unlit -> Lit). (A
+//      material has no cull of its own: the node is the authority.)
 //   8. A CULL EDIT RE-VOXELISES NOTHING (CULL-TWIN-DEBTS-1): the voxelisers read no
 //      cull, so no cascade rebuilds for one.
 #include <QGuiApplication>
@@ -305,32 +304,6 @@ int main(int argc, char **argv)
         swapped->removeFromParent();
         frames(kGrace);
         CHECK(scene->cullTwinCount() == 0, "(a)/(c) every twin gone");
-
-        // (b) THE MATERIAL'S OWN TWO-SIDEDNESS FLIPPING UNDER A BACK NODE. The document
-        // has no material cull (the node is the authority), so this is an engine-level
-        // material: a node that names Back wears the master while the material is
-        // one-sided, a Back twin while it is two-sided, and the master again after.
-        PbrParams p;
-        p.albedo = Colour(0.8f, 0.2f, 0.2f);
-        const MaterialId em = scene->createPbrMaterial(p);
-        const MeshId mesh = scene->createMesh(enginetest::unitCubeMesh());
-        const NodeId en = scene->createNode();
-        CHECK(em && mesh && en && scene->attachMesh(en, mesh, em), "(b) an engine-level cube");
-        enginetest::setNodePosition(scene, en, Vec3(0.0f, -40.0f, 0.0f));
-        scene->setNodeFaceCull(en, FaceCull::Back);
-        engine->renderOneFrame();
-        CHECK(scene->cullTwinCount() == 0, "(b) Back on a one-sided material wears the master");
-        p.twoSided = true;
-        CHECK(scene->setPbrMaterial(em, p), "(b) the material turns two-sided");
-        engine->renderOneFrame();
-        CHECK(scene->cullTwinCount() == 1, "(b) ...and the Back node now wears a Back twin");
-        p.twoSided = false;
-        CHECK(scene->setPbrMaterial(em, p), "(b) the material turns one-sided again");
-        for (int i = 0; i < kGrace; ++i) engine->renderOneFrame();
-        CHECK(scene->cullTwinCount() == 0, "(b) ...the node wears the master again and the twin has gone");
-        scene->removeNode(en);
-        scene->destroyMaterial(em);
-        engine->renderOneFrame();
     }
 
     // ---- 8. A CULL EDIT RE-VOXELISES NOTHING ---------------------------------
