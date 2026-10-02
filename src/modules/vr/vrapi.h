@@ -116,7 +116,10 @@ public:
     /// viewport while it still exists. This object is owned by the ScriptEngine
     /// and outlives the viewport (~MainWindow -> ~ShellScripting ->
     /// ~ScriptEngine), so nothing it owns may hold a live route to the host after
-    /// this. Returns whether a session ended.
+    /// this — the context copy included: it is CLEARED here, so a verb called
+    /// after (a script still running in the ScriptEngine) finds no engine, no
+    /// viewport and no services, and refuses through the null paths every host
+    /// read already has. Returns whether a session ended.
     bool shutdown();
     /// The editor preview's state, for the shell's VR button (VrModule).
     bool editorPreviewActive() const { return editor.isActive(); }
@@ -132,7 +135,9 @@ private:
     /// syncs, the two being two views on one scene.
     void pushProxies();
 
+    /// The shell's context bag, COPIED at construction — and cleared by shutdown().
     StudioContext moduleHost;
+    bool shutDown = false;   ///< shutdown() ran: begin() refuses by name
     /// THE EDITOR'S VR PREVIEW (phase 4). Owned here because the verbs are the
     /// only way in and out of it; stepped from the render driver's beforeFrame,
     /// which this object connects to once.
