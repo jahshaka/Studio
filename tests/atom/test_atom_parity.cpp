@@ -594,8 +594,10 @@ int main()
         // Lit to sit INSIDE the 8-bit range (dolly_gate's rule: a saturated cell hides
         // a difference by clamping it — the grid asserts it below).
         sunL.intensity = sun ? 0.24f / 3.14159265f : 0.0f;
-        pointL.intensity = point ? 0.42f : 0.0f;
-        spotL.intensity = spot ? 0.75f : 0.0f;
+        // IMAGE-1: 0.42 and 0.75 under the retired curve, re-keyed at each lamp's
+        // height (1.9 m, 3.2 m) for the inverse square law.
+        pointL.intensity = point ? 2.2f : 0.0f;
+        spotL.intensity = spot ? 9.68f : 0.0f;
         scene->setLight(sunNode, sunL);
         scene->setLight(pointNode, pointL);
         scene->setLight(spotNode, spotL);

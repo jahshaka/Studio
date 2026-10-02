@@ -1,17 +1,17 @@
-// POINT/SPOT ATTENUATION AND THE SPOT CONE (LIGHTING_FIX fixes 4 and 5).
+// POINT/SPOT FALLOFF AND THE SPOT CONE.
 //
-// Both fixes are about the same thing: the numbers a user types were not the
-// numbers the renderer used, and the editor's own wireframes drew the numbers
-// rather than the renderer.
-//
-// FIX 4 — THE RANGE (F-A1..A4). `setLight` called
-// `setAttenuationBasedOnRadius(range, 0.01f)`, which reads the range as the
-// radius of the falloff CURVE and then solves for the distance at which the
-// light dims to 1% of its peak. That distance is sqrt(199) = 14.1 times the
-// number typed (OgreLight.cpp:194-217). So a light authored at range 5 lit out
-// to 70 units, the Forward+ cut-off sat 14x too far out, and the range circle
-// the editor draws at 5 was decoration. `setAttenuation(r, 0.5, 0, 0.5/r^2)`
-// keeps Ogre's own curve and puts the cut-off where the user put it.
+// THE FALLOFF (IMAGE-1). A point or spot light follows the inverse square law
+// from its source radius, windowed to zero at its authored range (Karis 2013):
+//     E = I / max(d^2, rSrc^2) * saturate(1 - (d/R)^4)^2
+// — `lightFalloff` in Types.h, the fork's JahBrdf `jahLightAttenuation` in the
+// shaders. MEASURED IN FLOAT (readPixelsHdr, the scene's linear radiance): a
+// small patch faces the light at a known distance — the light straight above
+// it, the camera straight above both — so the only variable is d. The law is
+// checked within 2 % between 1 m and R/2 (the window itself is 0.879 at R/2,
+// so a bare 1/d^2 is NOT what is asserted there: the stated law is), and the
+// light reaches zero smoothly at R and stays there past it. The editor's
+// range circle is drawn at R (scenemirror scales the ring by `distance`), so
+// "the wire is where the light ends" is the same assertion.
 //
 // FIX 5 — THE CONE (F-S1). `spotCutOff` is a HALF angle everywhere in the
 // document — the editor's cone wire is `radius = range * tan(spotCutOff)` —
@@ -19,14 +19,13 @@
 // went straight through, so every spot rendered a cone half as wide as the wire
 // drawn around it.
 //
-// HOW IT IS MEASURED. A single small probe patch on the floor, moved to a known
-// radius from the light, with the camera moved with it and looking straight
-// down at it: the centre pixel is then that patch and nothing else. No
-// world-to-pixel arithmetic, no reliance on a projection — just "is the floor
-// lit HERE?". The light's own geometry is the only variable.
+// HOW IT IS MEASURED. A single small probe patch, the camera looking straight
+// down at it: the centre pixel is then that patch and nothing else.
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
+#include "../support/lightfalloff.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 
@@ -51,21 +50,31 @@ static float probeAt(Engine *engine, View *view, Scene *s, NodeId probe, float x
 }
 
 // ---------------------------------------------------------------------------
-// Fix 4: a POINT light's illumination must end at the authored range — which is
-// exactly the radius the editor's range circle is drawn at (scenemirror.cpp
-// scales the ring mesh by `light->distance`), so this is the "wire radius ==
-// cut-off" assertion, measured in pixels rather than asserted in code.
+// THE FALLOFF: the light straight above a patch that faces it, at distance d.
 // ---------------------------------------------------------------------------
+static float radianceAt(Engine *engine, View *view, Scene *s, NodeId lightNode, float d)
+{
+    // The patch's top face is at y = 0.025 (a 0.05-high box at the origin).
+    s->setNodeTransform(lightNode, Vec3(0.0f, 0.025f + d, 0.0f), Quat(), Vec3(1, 1, 1));
+    enginetest::testCameraLookAt(view, Vec3(0.0f, 0.6f, 0.001f), Vec3(0.0f, 0.0f, 0.0f));
+    for (int i = 0; i < 3; ++i) engine->renderOneFrame();
+    ImageF img;
+    if (!view->readPixelsHdr(img)) return -1.0f;
+    const Colour c = img.at(64, 64);
+    return (c.r + c.g + c.b) / 3.0f;
+}
+
 static void pointRangeCase(Engine *engine, View *view)
 {
     const float R = 6.0f;
-    std::printf("-- point light, authored range %.1f (the editor's range circle)\n", R);
+    std::printf("-- point light, range %.1f: the inverse square law, windowed to the range\n", R);
     Scene *s = engine->createScene("falloff_point");
     view->setScene(s);
     s->setAmbient(Colour(0, 0, 0), Colour(0, 0, 0));
+    PostFxDesc fx;
+    fx.hdrReadback = true;          // the scene's linear radiance, before any grade
+    view->setPostFx(fx);
 
-    // A small white patch, moved around; nothing else is in the scene, so the
-    // only thing that can light it is the point light.
     const NodeId probe = enginetest::addTestCube(s, Colour(0.9f, 0.9f, 0.9f), 0.0f, 0.9f);
     enginetest::setNodeScale(s, probe, Vec3(1.2f, 0.05f, 1.2f));
 
@@ -73,29 +82,48 @@ static void pointRangeCase(Engine *engine, View *view)
     LightDesc l;
     l.type = LightType::Point;
     l.colour = Colour(1, 1, 1);
-    // Low enough that nothing saturates: every probe below is a measurement,
-    // and a clipped 1.000 would hide the very falloff being measured.
-    l.intensity = 1.2f;
+    l.intensity = 4.0f;
     l.range = R;
     l.castShadows = false;
-    s->setNodeTransform(lightNode, Vec3(0.0f, 0.4f, 0.0f), Quat(), Vec3(1, 1, 1));
     s->setLight(lightNode, l);
 
-    const float at0    = probeAt(engine, view, s, probe, 0.0f, 0.0f);
-    const float atHalf = probeAt(engine, view, s, probe, R * 0.5f, 0.0f);
-    const float atEdge = probeAt(engine, view, s, probe, R * 0.98f, 0.0f);
-    const float beyond = probeAt(engine, view, s, probe, R * 1.6f, 0.0f);
-    std::printf("   luminance:  d=0 %.3f   d=R/2 %.3f   d=0.98R %.3f   d=1.6R %.3f\n",
-                at0, atHalf, atEdge, beyond);
+    // THE LAW: radiance / lightFalloff(d) is one constant (the patch's albedo,
+    // pi and the BRDF at normal incidence), so normalise by d = 1 m.
+    const double ref = double(radianceAt(engine, view, s, lightNode, 1.0f)) /
+                       lightFalloff(1.0, R, l.sourceRadius);
+    double worst = 0.0, worstBare = 0.0;
+    for (float d : { 1.0f, 1.5f, 2.0f, 2.5f, 3.0f }) {
+        const float e = radianceAt(engine, view, s, lightNode, d);
+        const double law = ref * lightFalloff(d, R, l.sourceRadius);
+        const double bare = ref / (double(d) * d);
+        std::printf("   d %.1f m: radiance %.5f  law %.5f (%+.2f %%)  1/d^2 %.5f (%+.2f %%)\n", d, e,
+                    law, 100.0 * (e / law - 1.0), bare, 100.0 * (e / bare - 1.0));
+        worst = std::max(worst, std::fabs(e / law - 1.0));
+        worstBare = std::max(worstBare, std::fabs(e / bare - 1.0));
+    }
+    CHECK(ref > 0.0, "the light lights the patch at all (the test is not vacuous)");
+    CHECK(worst < 0.02, "between 1 m and R/2 the light follows I / d^2 x the window within 2 %");
+    std::printf("   (a bare 1/d^2 is off by up to %.1f %% at R/2: the window's own 0.879)\n",
+                100.0 * worstBare);
 
-    CHECK(at0 > 0.05f, "the light lights anything at all (the test is not vacuous)");
-    CHECK(beyond < 0.005f,
-          "NOTHING is lit past the authored range (it used to reach 14.1x further)");
-    CHECK(atEdge < at0 * 0.25f,
-          "the light has genuinely faded out by the range circle, not stopped abruptly");
-    CHECK(atHalf > 0.0f && atHalf < at0,
-          "...and falls off smoothly on the way there");
+    // INSIDE THE SOURCE: no brighter than at the source radius.
+    const float atSrc = radianceAt(engine, view, s, lightNode, l.sourceRadius);
+    const float inside = radianceAt(engine, view, s, lightNode, l.sourceRadius * 0.5f);
+    std::printf("   d = rSrc %.5f, d = rSrc/2 %.5f\n", atSrc, inside);
+    CHECK(std::fabs(inside / atSrc - 1.0f) < 0.02f,
+          "inside the source radius the light stops getting brighter (1 / max(d^2, rSrc^2))");
 
+    // THE WINDOW: smooth to zero at R, nothing past it.
+    const float at90 = radianceAt(engine, view, s, lightNode, R * 0.9f);
+    const float at98 = radianceAt(engine, view, s, lightNode, R * 0.98f);
+    const float beyond = radianceAt(engine, view, s, lightNode, R * 1.1f);
+    const double law90 = ref * lightFalloff(R * 0.9, R, l.sourceRadius);
+    std::printf("   d 0.9R %.6f (law %.6f)  0.98R %.6f  1.1R %.6f\n", at90, law90, at98, beyond);
+    CHECK(std::fabs(at90 / law90 - 1.0) < 0.05, "the window is the stated one near the range (0.9 R)");
+    CHECK(at98 < at90 * 0.2f && at98 >= 0.0f, "the light fades smoothly into the range circle");
+    CHECK(beyond == 0.0f, "NOTHING is lit past the authored range");
+
+    view->setPostFx(PostFxDesc());   // the spot case reads the plain 8-bit instrument
     view->setScene(nullptr);
     engine->destroyScene(s);
 }
@@ -124,7 +152,7 @@ static void spotConeCase(Engine *engine, View *view)
     LightDesc l;
     l.type = LightType::Spot;
     l.colour = Colour(1, 1, 1);
-    l.intensity = 1.6f;            // see the note in the point case: no saturation
+    l.intensity = 20.0f;           // 5 m away: 20 / 25 = 0.8 at the centre, no saturation
     l.range = height * 3.0f;        // the cone must not be cut short by the range
     l.spotAngleDegrees = halfDeg;   // HALF angle, the document's convention
     l.spotSoftness = 0.15f;         // the new default: a narrow soft edge

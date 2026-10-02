@@ -552,38 +552,36 @@ void partB()
         {
             const double pi = 3.14159265358979323846;
             // (1) the film curve, inverted: the tonemapper input that makes the
-            // display emit 18 %. FinalToneMapping_ps.glsl's second constant set
-            // plus its hand grade tail, spelled out again rather than shared.
-            const double A = 0.22, B = 0.30, C = 0.10, D = 0.20, Ee = 0.01, Ff = 0.30, W = 11.2;
-            auto hable = [&](double x) {
-                return ((x * (A * x + C * B) + D * Ee) / (x * (A * x + B) + D * Ff)) - Ee / Ff;
-            };
-            const double hw = hable(W);
-            const double h = ((0.18 - 0.61) / 1.25 + 0.5) * hw;
-            const double k = h + Ee / Ff;
-            const double qa = A * (1.0 - k), qb = B * (C - k), qc = D * (Ee - k * Ff);
-            const double xStar = (-qb + std::sqrt(qb * qb - 4.0 * qa * qc)) / (2.0 * qa);
-            CHECK(std::fabs(double(iris::lens::greyCardFilmInput()) - xStar) < 1e-6,
+            // display emit 18 %. Unreal's filmic tonemapper (IMAGE-1) is BUILT
+            // through (0.18, 0.18), so the inversion is 0.18 — and the curve
+            // itself is held at nine exposures to the shader's reference
+            // (hdr.display_encode). Here: the inversion is an inversion.
+            const double xStar = 0.18;
+            CHECK(std::fabs(double(iris::lens::greyCardFilmInput()) - xStar) < 1e-5,
                   "the film curve inverts to x* = %.6f (the tonemapper input that displays as "
                   "18%% grey); the shipped constant is %.6f", xStar,
                   double(iris::lens::greyCardFilmInput()));
-            // ...and the inversion is really an inversion: put x* through the
-            // curve and the display gets 0.18.
-            const double back = (hable(xStar) / hw - 0.5) * 1.25 + 0.61;
-            CHECK(std::fabs(back - 0.18) < 1e-6, "...and x* develops to 0.18 (%.6f)", back);
+            const double back = double(iris::lens::filmCurve(float(xStar)));
+            CHECK(std::fabs(back - 0.18) < 1e-5, "...and x* develops to 0.18 (%.6f)", back);
+            // A STEEPER FILM KEEPS THE CARD: 0.18 leaves any parameter set at 0.18.
+            iris::lens::FilmParams steep; steep.slope = 1.2f; steep.toe = 0.3f; steep.shoulder = 0.5f;
+            CHECK(std::fabs(double(iris::lens::filmCurve(0.18f, steep)) - 0.18) < 1e-4,
+                  "...whatever the film (slope 1.2, toe 0.3, shoulder 0.5: %.6f)",
+                  double(iris::lens::filmCurve(0.18f, steep)));
 
             // (2) the default template's lights on its floor (SKY-DEFAULTS-1):
             // the sun at 50 degrees and the Sky Light over the realistic sky,
-            // MEASURED through the renderer on an 18 % card — 1.987 + 0.406.
-            const double sunAtFloor = 1.987, skyAtFloor = 0.406;
+            // MEASURED through the renderer on an 18 % card — 1.653 + 0.383
+            // (IMAGE-1's re-measure, spikes/image-1/scripts/anchor.js).
+            const double sunAtFloor = 1.653, skyAtFloor = 0.383;
             const double eKey = sunAtFloor + skyAtFloor;
             CHECK(std::fabs(double(iris::lens::keyIrradiance(float(sunAtFloor / pi), 1.0f,
                                                              float(skyAtFloor / pi))) - eKey)
                       < 1e-4,
                   "keyIrradiance(sun %.4f, sky light 1, sky %.4f) = %.5f", sunAtFloor / pi,
                   skyAtFloor / pi, eKey);
-            CHECK(std::fabs(double(zero) - 0.97882) < 1e-4,
-                  "zero stops is chain E 0.97882 (the physical sky's grade, %.5f)", double(zero));
+            CHECK(std::fabs(double(zero) - 0.71894) < 1e-4,
+                  "zero stops is chain E 0.71894 (the physical sky's grade, %.5f)", double(zero));
 
             // (3) the exposure that develops an 18 % grey card under it at x*.
             const double byHand = 2.0 + std::log(xStar * pi / eKey);
@@ -600,9 +598,8 @@ void partB()
             // THE END-TO-END CLAIM, in one line: a grey card under the default
             // scene's own lights displays at 18 %.
             const double greyRadiance = 0.18 * eKey / pi;
-            const double displayed =
-                (hable(greyRadiance * double(iris::lens::exposureMultiplier(zero))) / hw - 0.5) *
-                    1.25 + 0.61;
+            const double displayed = double(iris::lens::filmCurve(
+                float(greyRadiance * double(iris::lens::exposureMultiplier(zero)))));
             CHECK(std::fabs(displayed - 0.18) < 1e-4,
                   "an 18%% grey card under the default lights displays at 18%% (%.5f)", displayed);
         }

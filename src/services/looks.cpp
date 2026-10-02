@@ -133,37 +133,6 @@ QVector<LookUi> buildTable()
                                          "identity.") });
         out.append(l);
     }
-    {
-        LookUi l;
-        l.id = QStringLiteral("filmGrade");
-        l.label = QStringLiteral("Film Grade");
-        l.doc = QStringLiteral(
-            "The four controls a colourist reaches for first — saturation, "
-            "contrast, tint and vignette — applied in that order to the finished "
-            "frame. Every parameter is neutral at its default, so a fresh Film "
-            "Grade changes nothing until you move something.");
-        l.params.append({ QStringLiteral("amount"), QStringLiteral("Amount"), 0.01, 2,
-                          QStringLiteral("How much of the graded picture replaces the "
-                                         "original, 0..1. At 0 the look is an exact "
-                                         "identity.") });
-        l.params.append({ QStringLiteral("saturation"), QStringLiteral("Saturation"), 0.01, 2,
-                          QStringLiteral("1 is untouched, 0 is black and white, above 1 pushes "
-                                         "colour.") });
-        l.params.append({ QStringLiteral("contrast"), QStringLiteral("Contrast"), 0.01, 2,
-                          QStringLiteral("1 is untouched. Pivots about mid grey, so raising it "
-                                         "does not change the overall brightness.") });
-        l.params.append({ QStringLiteral("vignette"), QStringLiteral("Vignette"), 0.01, 2,
-                          QStringLiteral("Darkens the corners. 0 is off; 1 takes the corners "
-                                         "to black and leaves the centre untouched.") });
-        l.params.append({ QStringLiteral("tintR"), QStringLiteral("Tint R"), 0.01, 2,
-                          QStringLiteral("Red multiplier; 1 is neutral.") });
-        l.params.append({ QStringLiteral("tintG"), QStringLiteral("Tint G"), 0.01, 2,
-                          QStringLiteral("Green multiplier; 1 is neutral.") });
-        l.params.append({ QStringLiteral("tintB"), QStringLiteral("Tint B"), 0.01, 2,
-                          QStringLiteral("Blue multiplier; 1 is neutral. Below 1 on blue and "
-                                         "green is the warm print look.") });
-        out.append(l);
-    }
     return out;
 }
 

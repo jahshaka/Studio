@@ -32,6 +32,7 @@
 // is asserted by their own suites, not by this one.
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
+#include "../support/lightfalloff.h"
 
 #include <algorithm>
 #include <cmath>
@@ -1153,15 +1154,14 @@ static int caseLighting()
     render(f.e, 30);
     // The panel's -Z face is at z = -30.1; the texel read, and the closed form
     // for the lamp: E = intensity * pi (the engine's power scale) times the
-    // authored-range curve 1 / (0.5 + (0.5 / R^2) d^2) (OgreScene::setLight:
-    // setAttenuation(R, 0.5, 0, 0.5 / R^2)) times fork 36162ff37+16d8e29d4 (was 0018)'s fade (R - d) / R.
+    // one falloff (Types.h lightFalloff: inverse square from the default
+    // source radius, windowed to the range).
     const Vec3 pt(0.3f, 1.7f, -30.1f);
     const auto lampDirect = [&](const CardSample &t, double outL[3], double &E) {
         const double dx = lampPos.x - pt.x, dy = lampPos.y - pt.y, dz = lampPos.z - pt.z;
         const double d = std::sqrt(dx * dx + dy * dy + dz * dz);
         outL[0] = dx / d; outL[1] = dy / d; outL[2] = dz / d;
-        const double atten = 1.0 / (0.5 + (0.5 / (kLampRange * kLampRange)) * d * d) *
-                             std::max((kLampRange - d) / kLampRange, 0.0);
+        const double atten = lightFalloff(d, kLampRange, double(pl.sourceRadius));
         E = double(pl.intensity) * 3.14159265358979323846 * atten;
         (void)t;
     };
@@ -2463,14 +2463,16 @@ static int caseView()
             const double dx = 0.3 - x, dz = 0.0 - z;
             const double d = std::sqrt(dx * dx + lampH * lampH + dz * dz);
             if (d >= lampR) return 0.0;
-            return (lampH / d) / (0.5 + (0.5 / (lampR * lampR)) * d * d) * (lampR - d) / lampR;
+            return (lampH / d) * lightFalloff(d, lampR, double(LightDesc().sourceRadius));
         };
         const NodeId lamp = s->createNode();
         s->setNodeTransform(lamp, Vec3(0.3f, float(lampH), 0.0f), Quat(), Vec3(1, 1, 1));
         LightDesc ld;
         ld.type = LightType::Point;
         ld.colour = Colour(0.2f, 0.4f, 1.0f);
-        ld.intensity = 6.0f;
+        // IMAGE-1: 6 under the retired curve, re-keyed at its 1.8 m for the
+        // inverse square law (the closed form above is the new law).
+        ld.intensity = 25.4f;
         ld.range = float(lampR);
         ld.castShadows = false;
         s->setLight(lamp, ld);
@@ -2487,7 +2489,7 @@ static int caseView()
         LightDesc sd;
         sd.type = LightType::Spot;
         sd.colour = Colour(1.0f, 0.8f, 0.6f);
-        sd.intensity = 8.0f;
+        sd.intensity = 82.1f;   // IMAGE-1: 8 re-keyed at its 3 m (inverse square)
         sd.range = 8.0f;
         sd.spotAngleDegrees = 30.0f;
         sd.spotSoftness = 0.5f;
@@ -2501,7 +2503,7 @@ static int caseView()
             const double cosA = h / d;
             const double outer = std::cos(30.0 * kPi / 180.0), inner = std::cos(30.0 * 0.5 * kPi / 180.0);
             const double cone = std::min(1.0, std::max(0.0, (cosA - outer) / (inner - outer)));
-            return cosA / (0.5 + (0.5 / (R * R)) * d * d) * (R - d) / R * cone;
+            return cosA * lightFalloff(d, R, double(LightDesc().sourceRadius)) * cone;
         };
         row(arm.name, "spot, centre", 0.3, -2.0, spotShape);
         row(arm.name, "spot, penumbra", 0.3, -2.0 - 3.0 * std::tan(22.5 * kPi / 180.0), spotShape);

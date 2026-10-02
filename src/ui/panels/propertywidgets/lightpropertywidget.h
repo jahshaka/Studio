@@ -103,6 +103,7 @@ private:
 
 	ColorValueWidget* lightColor;
 	HFloatSliderWidget* distance;
+	HFloatSliderWidget* sourceRadius;
     HFloatSliderWidget* spotCutOff;
     HFloatSliderWidget* spotCutOffSoftness;
     HFloatSliderWidget* spotFalloff;

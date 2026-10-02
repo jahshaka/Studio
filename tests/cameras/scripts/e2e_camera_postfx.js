@@ -18,6 +18,10 @@
 // Phase J: the LOOKS stack — the one WHOLE-STACK override, its three states
 //          (inherit / none / its own), the shared validator, the reflected
 //          half, and the save/open round trip.
+// Phase K: THE IMAGE BLOCK (IMAGE-1) — the world camera's defaults through
+//          world.postFx, a camera's override of one field, inherit after a
+//          clear, one undo step per world.postFx call, and the save/open
+//          round trip of both halves.
 
 function assert(cond, msg) {
     if (!cond) throw new Error("assert failed: " + msg);
@@ -358,5 +362,68 @@ camera.postFx(fresh, { looks: null });
 assert(editor.select(fresh), "…and back on inherit");
 editor.select(null);
 world.removeLook(lookA);
+
+// ---- phase K: the image block (IMAGE-1) -------------------------------------
+var IMAGE = { contrast: 1, saturation: 1, shadows: 0, highlights: 0, whiteTemperature: 6500,
+              whiteTint: 0, vignette: 0, filmSlope: 0.88, filmToe: 0.55, filmShoulder: 0.26,
+              filmBlackClip: 0, filmWhiteClip: 0.04 };
+var wfx = world.postFx({});
+Object.keys(IMAGE).forEach(function (k) {
+    near(wfx[k], IMAGE[k], 1e-5, "THE WORLD CAMERA's default " + k + " is " + IMAGE[k]);
+});
+// One call, one undo step, whatever it touches.
+var pushes = editor.undoState().pushes;
+wfx = world.postFx({ contrast: 1.3, whiteTemperature: 5000, filmToe: 0.6 });
+near(wfx.contrast, 1.3, 1e-5, "world.postFx writes the world's contrast");
+near(wfx.whiteTemperature, 5000, 1e-3, "...its white balance");
+near(wfx.filmToe, 0.6, 1e-5, "...and its film toe");
+assert(editor.undoState().pushes - pushes === 1, "one world.postFx call is ONE undo step");
+// (Inside a script the run's own macro is open, so editor.undo cannot reach this
+// step — phase G's rule: the count is the claim; ui.panel_undo undoes the rows.)
+world.postFx({ contrast: 1.3, whiteTemperature: 5000 });
+// A camera inherits every field, and overrides one.
+var kcam = scene.addCamera({ position: { x: 1, y: 1, z: 6 } });
+var kp = camera.postFx(kcam);
+near(kp.resolved.contrast, 1.3, 1e-5, "a new camera RESOLVES the world's contrast");
+near(kp.resolved.whiteTemperature, 5000, 1e-3, "...and its white balance");
+assert(kp.overrides.contrast === undefined, "...and overrides nothing");
+kp = camera.postFx(kcam, { contrast: 0.8, vignette: 0.4 });
+near(kp.overrides.contrast, 0.8, 1e-5, "camera.postFx overrides ONE field of the image block");
+near(kp.resolved.contrast, 0.8, 1e-5, "...which is what the camera resolves");
+near(kp.resolved.whiteTemperature, 5000, 1e-3, "...while the rest is still the world's");
+near(kp.resolved.vignette, 0.4, 1e-5, "...and a second override sits beside it");
+kp = camera.postFx(kcam, { contrast: null });
+assert(kp.overrides.contrast === undefined, "null clears the contrast override");
+near(kp.resolved.contrast, 1.3, 1e-5, "...and the camera inherits the world's contrast again");
+world.postFx({ contrast: 1.1 });
+near(camera.postFx(kcam).resolved.contrast, 1.1, 1e-5, "...and FOLLOWS it when the world moves");
+// Both halves survive the real writer and reader.
+assert(project.save(), "save with an image block on the world and on a camera");
+var kguid = guid;
+assert(project.close(), "close");
+assert(project.open(kguid), "re-open — the real reader");
+wfx = world.postFx({});
+near(wfx.contrast, 1.1, 1e-5, "the world's contrast survives save/open");
+near(wfx.whiteTemperature, 5000, 1e-3, "...and its white balance");
+var kcam2 = kcam;   // a node's id is its guid, which the file keeps
+kp = camera.postFx(kcam2);
+near(kp.overrides.vignette, 0.4, 1e-5, "the camera's vignette override survives save/open");
+assert(kp.overrides.contrast === undefined, "...and its cleared contrast stays cleared");
+assert(editor.select(kcam2), "the camera panel builds with image-block overrides");
+// A WILD OVERRIDE IS CLAMPED TO THE TABLE (IMAGE-1 fix round): contrast 1000 would be a power of
+// 1000 on the grey-card ratio — Inf/NaN in the film. It lands at the row's maximum, and the
+// camera's graded picture is finite and lit (NaN-safe: the probe values must be finite numbers).
+kp = camera.postFx(kcam2, { contrast: 1000 });
+near(kp.overrides.contrast, 2.0, 1e-6, "camera.postFx clamps an image-block override to the table (contrast 1000 -> 2)");
+var wild = camera.screenshot(kcam2, "camlens-contrast-wild.png", { width: 160, height: 90, postFx: true,
+                             probes: [{ x: 0.5, y: 0.5 }, { x: 0.25, y: 0.75 }] });
+var allFinite = [wild.center.r, wild.center.g, wild.center.b].concat(wild.probes.map(function (q) {
+    return q.r + q.g + q.b; })).every(function (v) { return typeof v === "number" && isFinite(v) && v === v; });
+assert(allFinite && wild.center.r + wild.center.g + wild.center.b > 0,
+       "...and the picture it grades is finite and lit (a NaN in the film reaches the 8-bit picture as black: " +
+       JSON.stringify(wild.center) + ")");
+camera.postFx(kcam2, { contrast: null });
+editor.select(null);
+world.postFx({ contrast: 1, whiteTemperature: 6500 });
 
 console.log("\nALL CAMERA POST-FX E2E CHECKS PASSED");

@@ -225,42 +225,63 @@
             }
         });
         // Tone mapping (POST_CHAIN_SPEC.md §10). three.js ships Linear,
-        // Reinhard, Cineon, ACESFilmic, AgX and Neutral — none of them is Hable,
-        // which is what the engine's HDR chain uses. Rather than pick the
-        // nearest stock curve and quietly look different, the exact curve is
-        // ported below (it is twenty lines of arithmetic, and it is OUR shader
-        // in OUR viewer, not a fork of anything).
+        // Reinhard, Cineon, ACESFilmic, AgX and Neutral; the engine runs
+        // UNREAL'S FILMIC tonemapper (IMAGE-1: UE 4.15's FilmToneMap, ACES-based,
+        // five parameters) and three.js's ACESFilmic is a different fit, so the
+        // exact curve is ported below — the engine's FinalToneMapping_ps.glsl
+        // jahFilmToneMap, in ACEScg, with the exporter's five parameters.
         var post = jah.post || {};
-        if (post.tonemap === "hable") {
+        if (post.tonemap === "filmic") {
             renderer.toneMapping = THREE.CustomToneMapping;
-            // THE MULTIPLIER, AS THE EXPORTER COMPUTED IT (EXPOSURE-1). This
-            // used to be `Math.pow(2, post.exposure)` over a value the exporter
-            // wrote on the post chain's natural-log axis — right arithmetic,
-            // wrong unit, and every published picture a fraction of a stop off.
-            // The viewer derives nothing now: the editor and the web read one
-            // number, and the fallback is the multiplier a default scene has.
-            renderer.toneMappingExposure = post.exposureMultiplier || 1.364563;
+            // THE MULTIPLIER, AS THE EXPORTER COMPUTED IT (EXPOSURE-1): the editor
+            // and the web read one number; the fallback is a default scene's.
+            renderer.toneMappingExposure = post.exposureMultiplier || 1.543064;
+            var film = post.film || {};
+            var f = function (v, d) { return (typeof v === "number" ? v : d).toFixed(6); };
             if (THREE.ShaderChunk) {
-                // FinalToneMapping_ps.glsl, verbatim: Uncharted2 with the
-                // sample's constants, then its hand grade tail. Both halves or
-                // neither — half of the grade is worse than none of it.
                 THREE.ShaderChunk.tonemapping_pars_fragment =
                     THREE.ShaderChunk.tonemapping_pars_fragment.replace(
                         "vec3 CustomToneMapping( vec3 color ) { return color; }",
-                        [ "const float JAH_A = 0.22, JAH_B = 0.30, JAH_C = 0.10;",
-                          "const float JAH_D = 0.20, JAH_E = 0.01, JAH_F = 0.30, JAH_W = 11.2;",
-                          "vec3 JahFilmic( vec3 x ) {",
-                          "  return ((x*(JAH_A*x+JAH_C*JAH_B)+JAH_D*JAH_E) /",
-                          "          (x*(JAH_A*x+JAH_B)+JAH_D*JAH_F)) - JAH_E/JAH_F;",
-                          "}",
-                          "float JahFilmic( float x ) {",
-                          "  return ((x*(JAH_A*x+JAH_C*JAH_B)+JAH_D*JAH_E) /",
-                          "          (x*(JAH_A*x+JAH_B)+JAH_D*JAH_F)) - JAH_E/JAH_F;",
-                          "}",
+                        [ "const mat3 JAH_S2A = mat3( 0.6131486203, 0.3394883591, 0.0473630206, 0.0702074147, 0.9163424763, 0.0134501090, 0.0206231422, 0.1095899890, 0.8697868689 );",
+                          "const mat3 JAH_A2S = mat3( 1.7050473375, -0.6217891459, -0.0832581917, -0.1302575067, 1.1408060644, -0.0105485577, -0.0240032831, -0.1289688126, 1.1529720957 );",
+                          "const mat3 JAH_1T0 = mat3( 0.6954522414, 0.1406786965, 0.1638690622, 0.0447945634, 0.8596711185, 0.0955343182, -0.0055258826, 0.0040252103, 1.0015006723 );",
+                          "const mat3 JAH_0T1 = mat3( 1.4514393161, -0.2365107469, -0.2149285693, -0.0765537734, 1.1762296998, -0.0996759264, 0.0083161484, -0.0060324498, 0.9977163014 );",
+                          "const vec3 JAH_Y = vec3( 0.2722287168, 0.6740817658, 0.0536895174 );",
+                          "const float JAH_SLOPE = " + f(film.slope, 0.88) + ", JAH_TOE = " + f(film.toe, 0.55) + ";",
+                          "const float JAH_SHOULDER = " + f(film.shoulder, 0.26) + ", JAH_BLACK = " + f(film.blackClip, 0.0) + ", JAH_WHITE = " + f(film.whiteClip, 0.04) + ";",
+                          "float jahSat( vec3 c ) { float mi = min( min( c.r, c.g ), c.b ); float ma = max( max( c.r, c.g ), c.b ); return ( max( ma, 1e-10 ) - max( mi, 1e-10 ) ) / max( ma, 1e-2 ); }",
+                          "float jahYc( vec3 c ) { float ch = sqrt( c.b * ( c.b - c.g ) + c.g * ( c.g - c.r ) + c.r * ( c.r - c.b ) ); return ( c.b + c.g + c.r + 1.75 * ch ) / 3.0; }",
+                          "float jahSig( float x ) { float t = max( 1.0 - abs( 0.5 * x ), 0.0 ); return 0.5 * ( 1.0 + sign( x ) * ( 1.0 - t * t ) ); }",
+                          "float jahGlow( float y, float g, float m ) { if( y <= 2.0 / 3.0 * m ) return g; if( y >= 2.0 * m ) return 0.0; return g * ( m / y - 0.5 ); }",
+                          "float jahHue( vec3 c ) { if( c.r == c.g && c.g == c.b ) return 0.0; float h = 57.2957795131 * atan( 1.7320508076 * ( c.g - c.b ), 2.0 * c.r - c.g - c.b ); return h < 0.0 ? h + 360.0 : h; }",
                           "vec3 CustomToneMapping( vec3 color ) {",
                           "  color *= toneMappingExposure;",
-                          "  color = JahFilmic( color ) / JahFilmic( JAH_W );",
-                          "  return ( color - 0.5 ) * 1.25 + 0.5 + 0.11;",
+                          "  vec3 c0 = ( color * JAH_S2A ) * JAH_1T0;",
+                          "  float sat = jahSat( c0 );",
+                          "  c0 *= 1.0 + jahGlow( jahYc( c0 ), 0.05 * jahSig( ( sat - 0.4 ) / 0.2 ), 0.08 );",
+                          "  float hue = jahHue( c0 ); float ch = hue > 180.0 ? hue - 360.0 : hue;",
+                          "  float hw = smoothstep( 0.0, 1.0, 1.0 - abs( 2.0 * ch / 135.0 ) ); hw *= hw;",
+                          "  c0.r += hw * sat * ( 0.03 - c0.r ) * ( 1.0 - 0.82 );",
+                          "  vec3 w = max( c0 * JAH_0T1, vec3( 0.0 ) );",
+                          "  w = mix( vec3( dot( w, JAH_Y ) ), w, 0.96 );",
+                          "  float ts = 1.0 + JAH_BLACK - JAH_TOE, ss = 1.0 + JAH_WHITE - JAH_SHOULDER;",
+                          "  float tm;",
+                          "  if( JAH_TOE > 0.8 ) tm = ( 1.0 - JAH_TOE - 0.18 ) / JAH_SLOPE + log( 0.18 ) * 0.4342944819;",
+                          "  else { float bt = ( 0.18 + JAH_BLACK ) / ts - 1.0; tm = log( 0.18 ) * 0.4342944819 - 0.5 * log( ( 1.0 + bt ) / ( 1.0 - bt ) ) * ( ts / JAH_SLOPE ); }",
+                          "  float sm = ( 1.0 - JAH_TOE ) / JAH_SLOPE - tm;",
+                          "  float shm = JAH_SHOULDER / JAH_SLOPE - sm;",
+                          "  vec3 lc = log( max( w, vec3( 1e-10 ) ) ) * 0.4342944819;",
+                          "  vec3 st = JAH_SLOPE * ( lc + sm );",
+                          "  vec3 tc = -JAH_BLACK + ( 2.0 * ts ) / ( 1.0 + exp( ( -2.0 * JAH_SLOPE / ts ) * ( lc - tm ) ) );",
+                          "  vec3 sc = ( 1.0 + JAH_WHITE ) - ( 2.0 * ss ) / ( 1.0 + exp( ( 2.0 * JAH_SLOPE / ss ) * ( lc - shm ) ) );",
+                          "  tc = mix( st, tc, lessThan( lc, vec3( tm ) ) );",
+                          "  sc = mix( st, sc, greaterThan( lc, vec3( shm ) ) );",
+                          "  vec3 t = clamp( ( lc - tm ) / ( shm - tm ), 0.0, 1.0 );",
+                          "  t = shm < tm ? 1.0 - t : t;",
+                          "  t = ( 3.0 - 2.0 * t ) * t * t;",
+                          "  vec3 tone = mix( tc, sc, t );",
+                          "  tone = mix( vec3( dot( tone, JAH_Y ) ), tone, 0.93 );",
+                          "  return max( max( tone, vec3( 0.0 ) ) * JAH_A2S, vec3( 0.0 ) );",
                           "}" ].join("\n"));
             }
         }

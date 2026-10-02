@@ -11,13 +11,6 @@
 
 namespace thumbgrade {
 
-inline double film(double x)
-{
-    const double A = 0.22, B = 0.3, C = 0.10, D = 0.20, E = 0.01, F = 0.30, W = 11.2;
-    const auto h = [&](double v) { return ((v * (A * v + C * B) + D * E) / (v * (A * v + B) + D * F)) - E / F; };
-    return (h(x) / h(W) - 0.5) * 1.25 + 0.5 + 0.11;
-}
-
 inline double oetf(double v)
 {
     v = std::min(std::max(v, 0.0), 1.0);
@@ -26,23 +19,35 @@ inline double oetf(double v)
 
 /// The display code a flat radiance `linear` develops to at `stops` of
 /// document exposure (the chain's fixed form: exp(E - 2) / 0.18, the grey card).
-inline double code(double linear, float stops)
+/// The display code of channel `ch` for a LINEAR colour at `stops` (the shader's
+/// whole chain: the fixed exposure, the film on the colour, the encode).
+inline double codeRGB(const double linear[3], int ch, float stops)
 {
     const double e = double(iris::lens::exposureStopsToChain(stops));
-    return 255.0 * oetf(film(linear * std::exp(e - 2.0) / 0.18));
+    const double m = std::exp(e - 2.0) / 0.18;
+    const double x[3] = { linear[0] * m, linear[1] * m, linear[2] * m };
+    double o[3];
+    iris::lens::filmRGB(x, o);   // the one C++ transcription of the shader's film
+    return 255.0 * oetf(o[ch]);
 }
 
-/// Does a display byte `got` match the grade of an INSTRUMENT byte `instrument`
-/// (the linear Plain readback of the same pixel)? The instrument is quantised to
-/// 1/255 of light, so the expected code is a RANGE — the grade of instrument +-0.5 —
-/// widened by one code for the dither and the float path.
-inline bool matches(int got, int instrument, float stops, double *lo = nullptr, double *hi = nullptr)
+/// THE TILE'S CHANNEL `ch` against the instrument's colour (8-bit linear codes),
+/// a half code either way of each instrument channel.
+inline bool matchesRGB(int got, const int instrument[3], int ch, float stops, double *lo = nullptr,
+                       double *hi = nullptr)
 {
-    const double a = code(std::max(0.0, instrument - 0.5) / 255.0, stops);
-    const double b = code((instrument + 0.5) / 255.0, stops);
+    double a = 1e9, b = -1e9;
+    for (int k = 0; k < 8; ++k) {
+        double lin[3];
+        for (int c = 0; c < 3; ++c)
+            lin[c] = std::max(0.0, instrument[c] + ((k >> c) & 1 ? 0.5 : -0.5)) / 255.0;
+        const double v = codeRGB(lin, ch, stops);
+        a = std::min(a, v); b = std::max(b, v);
+    }
     if (lo) *lo = a;
     if (hi) *hi = b;
     return got >= a - 1.0 && got <= b + 1.0;
 }
+
 
 }   // namespace thumbgrade

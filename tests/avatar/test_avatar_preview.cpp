@@ -188,11 +188,16 @@ int main(int argc, char **argv)
     {
         const QImage shot = scene.renderImage(W, H);
         const Colour ci = img.at(unsigned(W / 2), unsigned(H / 2));
-        const int instrument = int(std::max({ ci.r, ci.g, ci.b }) * 255.0f + 0.5f);
+        // The film runs on the COLOUR (IMAGE-1: Unreal's, in ACEScg), so the whole
+        // instrument colour goes in and its strongest channel is compared.
+        const int inst[3] = { int(ci.r * 255.0f + 0.5f), int(ci.g * 255.0f + 0.5f),
+                              int(ci.b * 255.0f + 0.5f) };
+        const int ch = inst[0] >= inst[1] && inst[0] >= inst[2] ? 0 : (inst[1] >= inst[2] ? 1 : 2);
+        const int instrument = inst[ch];
         const QColor cs = shot.isNull() ? QColor(0, 0, 0) : shot.pixelColor(W / 2, H / 2);
-        const int got = shot.isNull() ? -1 : std::max({ cs.red(), cs.green(), cs.blue() });
+        const int got = shot.isNull() ? -1 : (ch == 0 ? cs.red() : ch == 1 ? cs.green() : cs.blue());
         double lo = 0.0, hi = 0.0;
-        const bool ok = thumbgrade::matches(got, instrument, model.document()->exposure, &lo, &hi);
+        const bool ok = thumbgrade::matchesRGB(got, inst, ch, model.document()->exposure, &lo, &hi);
         std::printf("    avatar snapshot centre: %d (the thumbnail grade of the instrument's %d: %.1f..%.1f)\n",
                     got, instrument, lo, hi);
         CHECK(!shot.isNull() && ok, "SRGB-ENCODE-1: avatar.snapshot is the thumbnail grade, display-encoded");

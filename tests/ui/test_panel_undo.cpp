@@ -415,6 +415,25 @@ int main(int argc, char **argv)
             pump();
             CHECK(qFuzzyCompare(scene->exposure, was), "postfx: undone");
         }
+
+        // THE IMAGE BLOCK (IMAGE-1): the World Camera's Contrast row, the key
+        // world.postFx writes (postFx.contrast), one step per scrub, undone.
+        DragFloatWidget *contrast = dragWith(&panel, QStringLiteral("Contrast"));
+        CHECK(contrast != nullptr, "postfx: the image block's contrast is on the blade");
+        if (contrast) {
+            const float was = scene->image[iris::lens::ImageContrast];
+            const int steps = stack.index();
+            emit contrast->valueChanged(1.2);
+            emit contrast->valueChanged(1.4);
+            CHECK(qAbs(scene->image[iris::lens::ImageContrast] - 1.4f) < 1e-4f,
+                  "postfx: the contrast scrub wrote the world camera live");
+            emit contrast->editingDone();
+            CHECK(stack.index() == steps + 1, "postfx: the contrast scrub is ONE step");
+            stack.undo();
+            pump();
+            CHECK(qFuzzyCompare(scene->image[iris::lens::ImageContrast], was),
+                  "postfx: the contrast is undone");
+        }
     }
 
     // ---- 5. THE SKY SECTION: ONE STEP OVER THE WHOLE SKY BLOCK -------------
@@ -531,6 +550,34 @@ int main(int argc, char **argv)
         CHECK(stack.index() == before + 1, "light: ONE step for the drag");
         stack.undo();
         CHECK(qFuzzyCompare(light->intensity, 1.0f), "light: undo restored the intensity");
+
+        // A TYPED INTENSITY PAST THE SLIDER (IMAGE-1): the re-lit lamps run to tens and
+        // hundreds; typing 24.2 into the field must reach the light as 24.2 (the key the
+        // verb node.getProperty reads), not the slider's end.
+        if (intensity) {
+            intensity->ui->spinbox->setValue(24.2);
+            CHECK(qAbs(light->getPropertyValue(QStringLiteral("intensity")).toFloat() - 24.2f) < 1e-4f,
+                  "light: a typed intensity of 24.2 reads back as 24.2 through the verb's key");
+            intensity->ui->spinbox->setValue(221.0);
+            CHECK(qAbs(light->intensity - 221.0f) < 1e-3f,
+                  "light: ...and 221 (the re-lit Particles spot) is kept, not clamped");
+            light->intensity = 1.0f;
+        }
+
+        // THE SOURCE RADIUS ROW (IMAGE-1): the reflected key `sourceRadius`, the
+        // one node.setProperty / node.getProperty read and write — the row is
+        // the verb's, so what the drag wrote is what the verb reads back.
+        HFloatSliderWidget *srcRow = sliderWith(&panel, QStringLiteral("Source Radius"));
+        CHECK(srcRow != nullptr, "light: the source-radius row is on a point light's blade");
+        const int srcBefore = stack.index();
+        CHECK(drag(srcRow, 0.1f, 0.5f), "light: the source-radius row can be dragged");
+        CHECK(qAbs(light->getPropertyValue(QStringLiteral("sourceRadius")).toFloat() - 0.5f) < 1e-2f,
+              "light: the row wrote the key node.getProperty reads");
+        CHECK(stack.index() == srcBefore + 1, "light: ONE step for the source-radius drag");
+        stack.undo();
+        CHECK(qAbs(light->sourceRadius - 0.1f) < 1e-6f, "light: undo restored the source radius");
+        CHECK(sliderWith(&panel, QStringLiteral("Range")) != nullptr,
+              "light: the falloff's range is on the blade as Range");
 
         ComboBoxWidget *shadow = comboWith(&panel, QStringLiteral("Shadow Type"));
         CHECK(shadow != nullptr, "light: the shadow-type row is on the blade");

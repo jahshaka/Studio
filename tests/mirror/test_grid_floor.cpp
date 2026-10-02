@@ -139,6 +139,10 @@ int main(int argc, char **argv)
     doc->getRootNode()->addChild(box);
 
     auto sun = iris::LightNode::create();
+    // A SUN, said so (IMAGE-1): a LightNode is born a POINT light, and this one
+    // sat 9 m up — under the inverse square law that is 1/81 of its intensity
+    // at the box, which then failed its own colour test. The case means a sun.
+    sun->setLightType(iris::LightType::Directional);
     sun->intensity = 1.2f;
     sun->setLocalRot(iris::Quat::fromEulerAngles(-55.0f, 25.0f, 0.0f));
     sun->setLocalPos(iris::Vec3(0.0f, 9.0f, 0.0f));

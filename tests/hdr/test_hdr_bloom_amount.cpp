@@ -159,49 +159,55 @@ double haloExcess(const std::vector<int> &frame, const std::vector<int> &off)
 ///
 /// The shader (Samples/Media/.../FinalToneMapping_ps.glsl) computes
 ///
-///     out = sRGB_OETF( ( Filmic(x) / Filmic(W) - 0.5 ) * 1.25 + 0.5 + 0.11 )
+///     out = sRGB_OETF( film(x) )
 ///
-/// (the encode since SRGB-ENCODE-1) and writes it as an 8-bit code. In the HALO of this fixture the scene's own
-/// contribution is exactly zero — black clear, black albedo, no ambient, no
-/// light — so `x` IS the bloom term, `16 * fromSRGB(ladder) * amount`, and
-/// nothing else. Inverting the curve therefore recovers the light the bloom put
-/// there, and twice the amount must recover twice the light, per pixel.
+/// with film = Unreal's filmic tonemapper (IMAGE-1; on a grey its colour terms are
+/// the identity), and writes it as an 8-bit code. In the HALO of this fixture the
+/// scene's own contribution is exactly zero — black clear, black albedo, no
+/// ambient, no light — so `x` IS the bloom term, `16 * fromSRGB(ladder) * amount`,
+/// and nothing else. Inverting the curve therefore recovers the light the bloom
+/// put there, and twice the amount must recover twice the light, per pixel.
 ///
-/// WHY THE CODES THEMSELVES CANNOT CARRY THE CLAIM, in both directions:
-///   * the curve COMPRESSES at the top (that is what a tonemapper is), so a
-///     bright halo pixel cannot be twice as bright in codes however linear the
-///     term is;
-///   * and it has a DEAD ZONE at the bottom, which is the surprise and is worth
-///     recording: `out` for x == 0 is -0.015, i.e. the affine tail this pin
-///     applies after the curve puts black BELOW zero, so the first ~4 codes of
-///     bloom are clamped away entirely. Measured on this fixture: summing the
-///     dim tail of the halo in codes reads a ratio of 3.3 rather than 2, and
-///     every code of that error is the clamp, not the dial.
-/// A suite that asserted on code sums would therefore have to pick a band by
-/// eye and would pin the CURVE, not the amount. This pins the amount.
-constexpr double kW = 11.2;
-double filmic(double x)
+/// WHY THE CODES THEMSELVES CANNOT CARRY THE CLAIM: the curve COMPRESSES at the
+/// top (that is what a tonemapper is) and its toe compresses at the bottom, so a
+/// halo pixel cannot be twice as bright in codes however linear the term is. A
+/// suite that asserted on code sums would pin the CURVE, not the amount. This
+/// pins the amount.
+double film(double x)               // UE 4.15 FilmToneMap on a grey, Unreal's defaults
 {
-    const double A = 0.22, B = 0.3, C = 0.10, D = 0.20, E = 0.01, F = 0.30;
-    return ((x * (A * x + C * B) + D * E) / (x * (A * x + B) + D * F)) - E / F;
+    const double slope = 0.88, toe = 0.55, shoulder = 0.26, black = 0.0, white = 0.04;
+    const double toeScale = 1.0 + black - toe, shoulderScale = 1.0 + white - shoulder;
+    const double bt = (0.18 + black) / toeScale - 1.0;
+    const double toeMatch = std::log10(0.18) - 0.5 * std::log((1.0 + bt) / (1.0 - bt)) * (toeScale / slope);
+    const double straightMatch = (1.0 - toe) / slope - toeMatch;
+    const double shoulderMatch = shoulder / slope - straightMatch;
+    const double lc = std::log10(std::max(x, 1e-10));
+    const double straight = slope * (lc + straightMatch);
+    double toeC = -black + 2.0 * toeScale / (1.0 + std::exp((-2.0 * slope / toeScale) * (lc - toeMatch)));
+    double shC = (1.0 + white) - 2.0 * shoulderScale / (1.0 + std::exp((2.0 * slope / shoulderScale) * (lc - shoulderMatch)));
+    toeC = lc < toeMatch ? toeC : straight;
+    shC = lc > shoulderMatch ? shC : straight;
+    double t = std::min(std::max((lc - toeMatch) / (shoulderMatch - toeMatch), 0.0), 1.0);
+    if (shoulderMatch < toeMatch) t = 1.0 - t;
+    t = (3.0 - 2.0 * t) * t * t;
+    return std::max(0.0, toeC + (shC - toeC) * t);
 }
 double toneCurve(double x)          // the shader's output value, before the 8-bit write
 {
-    double v = (filmic(x) / filmic(kW) - 0.5) * 1.25 + 0.5 + 0.11;
-    // ...through the display encode (SRGB-ENCODE-1), after the grade tail.
+    double v = film(x);
     v = std::min(std::max(v, 0.0), 1.0);
     return v <= 0.0031308 ? v * 12.92 : 1.055 * std::pow(v, 1.0 / 2.4) - 0.055;
 }
-/// The light behind a display value, by bisection on a monotone curve. 1e-7 of
-/// a unit is far finer than one code is worth and costs ~24 iterations.
+/// The light behind a display value, by bisection on the log axis of a monotone
+/// curve (finer than one code is worth).
 double lightBehind(double value)
 {
-    double lo = 0.0, hi = kW;
-    for (int i = 0; i < 60; ++i) {
+    double lo = -8.0, hi = 3.0;
+    for (int i = 0; i < 80; ++i) {
         const double mid = 0.5 * (lo + hi);
-        if (toneCurve(mid) < value) lo = mid; else hi = mid;
+        if (toneCurve(std::pow(10.0, mid)) < value) lo = mid; else hi = mid;
     }
-    return 0.5 * (lo + hi);
+    return std::pow(10.0, 0.5 * (lo + hi));
 }
 
 double median(std::vector<double> v)

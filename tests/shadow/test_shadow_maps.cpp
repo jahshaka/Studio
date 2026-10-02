@@ -77,7 +77,7 @@ static Room buildRoom(Engine *e, View *v, const char *name, int lamps, bool pill
         const NodeId lamp = s->createNode();
         LightDesc d;
         d.type = LightType::Point;
-        d.intensity = 0.25f;
+        d.intensity = 5.8f;   // IMAGE-1: 0.25 under the retired curve, re-keyed at the lamps' 4.5 m (inverse square)
         d.range = 12.0f;
         d.castShadows = true;
         s->setLight(lamp, d);
@@ -168,12 +168,11 @@ static double meanLum(const Image &img)
 // T0 — THE TWO LIGHT PATHS MUST AGREE (fork 36162ff37+16d8e29d4 (was 0018)).
 //
 // A point light that wins a shadow-map slot is lit by the PASS BUFFER; the same
-// light without a slot is lit by FORWARD+ clustered. Before fork 36162ff37+16d8e29d4 (was 0018) those
-// two paths did not agree: Forward+ multiplies by
-// max((range - d) * (1/range), 0) under `hlms_forward_fade_attenuation_range`
-// (default ON) and the pass-buffer path had no such term, so THE SAME LAMP was
-// about twice as bright once it got a shadow map — measured here at 141 vs 63
-// mean luminance before the patch. That made the whole shadow-map budget
+// light without a slot is lit by FORWARD+ clustered. The two paths once
+// carried different falloffs (Forward+ had a range fade the pass buffer lacked,
+// 141 vs 63 mean luminance); since IMAGE-1 both call the ONE falloff,
+// JahBrdf's jahLightAttenuation, so THE SAME LAMP must read the same whether or
+// not it holds a shadow map. Anything else would make the whole shadow-map budget
 // feature change scene BRIGHTNESS, which is not what a shadow setting may do.
 //
 // No pillars: with nothing to cast, a shadow map changes no pixel, so the only
@@ -198,7 +197,7 @@ static void t0_light_path_parity(Engine *e, View *v)
     for (int i = 0; i < 2; ++i) {
         LightDesc d;
         d.type = LightType::Point;
-        d.intensity = 0.25f;
+        d.intensity = 5.8f;   // IMAGE-1: as above
         d.range = 12.0f;
         d.castShadows = false;
         room.scene->setLight(room.lamps[i], d);
@@ -331,7 +330,7 @@ static void t5_rebuild_churn(Engine *e, View *v)
         const NodeId lamp = s->createNode();
         LightDesc d;
         d.type = (i % 2) ? LightType::Spot : LightType::Point;
-        d.intensity = 0.2f;
+        d.intensity = 5.3f;    // IMAGE-1: 0.2 re-keyed at the lamps' 5 m
         d.range = 12.0f;
         d.spotAngleDegrees = 50.0f;
         d.castShadows = true;
@@ -409,7 +408,7 @@ static void t5b_rebuild_under_hybrid_gi(Engine *e, View *v)
         const NodeId lamp = s->createNode();
         LightDesc d;
         d.type = LightType::Point;
-        d.intensity = 0.3f;
+        d.intensity = 5.2f;    // IMAGE-1: 0.3 re-keyed at the lamps' 4 m
         d.range = 10.0f;
         d.castShadows = true;
         s->setLight(lamp, d);
@@ -547,7 +546,9 @@ struct CacheRoom {
     MaterialId mat = 0;
 };
 
-static LightDesc cacheLamp(float range = 9.0f, Colour c = Colour(1, 1, 1), float intensity = 1.5f)
+// 16.6 since IMAGE-1: 1.5 under the retired near-flat curve, re-keyed so a lamp 3 m above
+// the floor (kCacheLamp) gives it the same light under the inverse square law.
+static LightDesc cacheLamp(float range = 9.0f, Colour c = Colour(1, 1, 1), float intensity = 16.6f)
 {
     LightDesc d;
     d.type = LightType::Point;
@@ -700,7 +701,7 @@ static void t3_cache_view(Engine *e, View *v)
           "a caster moving outside every lamp's reach re-renders nothing (%d/%d/%d)", p[0], p[1], p[2]);
 
     // (e) COLOUR AND INTENSITY ARE NOT SHADOW INPUTS.
-    r.scene->setLight(r.lamps[0], cacheLamp(9.0f, Colour(1.0f, 0.4f, 0.2f), 3.0f));
+    r.scene->setLight(r.lamps[0], cacheLamp(9.0f, Colour(1.0f, 0.4f, 0.2f), 166.0f));   // ten times the default (IMAGE-1: the final probe sits at 0.92 of its range, where the window leaves 8 %)
     st = frame(e, p, r);
     CHECK(p[0] == 0 && p[1] == 0 && p[2] == 0,
           "a colour + intensity edit re-renders nothing (%d/%d/%d)", p[0], p[1], p[2]);
@@ -1144,7 +1145,8 @@ static SpotRoom buildSpotRoom(Engine *e, View *v, const char *name)
         LightDesc d;
         d.type = i < 2 ? LightType::Point : LightType::Spot;
         d.colour = Colour(1, 1, 1);
-        d.intensity = 1.5f;
+        // IMAGE-1: 1.5 re-keyed at each lamp's height (3 m points, 5 m spots).
+        d.intensity = i < 2 ? 16.6f : 31.1f;
         d.range = 9.0f;
         d.spotAngleDegrees = 60.0f;
         d.castShadows = true;
@@ -1218,7 +1220,7 @@ static void t3t_cache_spots_and_slots(Engine *e, View *v)
     const NodeId added = r.scene->createNode();
     LightDesc d;
     d.type = LightType::Spot;
-    d.intensity = 1.5f;
+    d.intensity = 31.1f;   // IMAGE-1: 1.5 re-keyed at its 5 m
     d.range = 9.0f;
     d.spotAngleDegrees = 60.0f;
     d.castShadows = true;

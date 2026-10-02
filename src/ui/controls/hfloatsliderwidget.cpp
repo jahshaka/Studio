@@ -9,6 +9,7 @@ and/or modify it under the terms of the MIT License
 For more information see the LICENSE file
 *************************************************************************/
 
+#include <algorithm>
 #include "ui/controls/hfloatsliderwidget.h"
 
 #include <cmath>
@@ -102,6 +103,11 @@ void HFloatSliderWidget::setRange(float minVal, float maxVal)
     ui->spinbox->setRange(minVal, maxVal);
 }
 
+void HFloatSliderWidget::setTypedMaximum(float typedMax)
+{
+    ui->spinbox->setRange(minVal, std::max(typedMax, maxVal));
+}
+
 void HFloatSliderWidget::setDecimals(int decimals)
 {
     ui->spinbox->setDecimals(decimals);
@@ -131,7 +137,7 @@ void  HFloatSliderWidget::setValue( float value )
         ui->spinbox->setValue(value);
 
         const float span = maxVal - minVal;
-        const float mappedValue = span > 0.0f ? (value - minVal) / span : 0.0f;
+        const float mappedValue = span > 0.0f ? std::min(std::max((value - minVal) / span, 0.0f), 1.0f) : 0.0f;
         ui->slider->setValue((int) (mappedValue * precision));
     }
 
@@ -170,7 +176,7 @@ void HFloatSliderWidget::onValueSpinboxChanged(double val)
 
     this->value = val;
 
-    float mappedValue = (value - minVal) / (maxVal - minVal);
+    float mappedValue = std::min(std::max((value - minVal) / (maxVal - minVal), 0.0f), 1.0f);
 
     ui->slider->blockSignals(true);
     ui->slider->setValue((int) (mappedValue * precision));

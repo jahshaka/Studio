@@ -144,7 +144,6 @@ QVariantMap postFxMap(const View &view)
         case LookKind::OldMovie:   return QStringLiteral("oldMovie");
         case LookKind::Posterize:  return QStringLiteral("posterize");
         case LookKind::Sharpen:    return QStringLiteral("sharpen");
-        case LookKind::FilmGrade:  return QStringLiteral("filmGrade");
         case LookKind::Count:      break;
         }
         return QStringLiteral("unknown");
@@ -172,6 +171,23 @@ QVariantMap postFxMap(const View &view)
     // exists to name a difference between two descriptions, and a field left
     // out of it is a difference nobody can see.
     m[QStringLiteral("bloomAmount")] = fx.bloomAmount;
+    // THE IMAGE BLOCK (IMAGE-1): the eyes keep all of it but the vignette.
+    {
+        QVariantMap img;
+        img[QStringLiteral("contrast")] = fx.image.contrast;
+        img[QStringLiteral("saturation")] = fx.image.saturation;
+        img[QStringLiteral("shadows")] = fx.image.shadows;
+        img[QStringLiteral("highlights")] = fx.image.highlights;
+        img[QStringLiteral("whiteTemperature")] = fx.image.whiteTemperature;
+        img[QStringLiteral("whiteTint")] = fx.image.whiteTint;
+        img[QStringLiteral("vignette")] = fx.image.vignette;
+        img[QStringLiteral("filmSlope")] = fx.image.filmSlope;
+        img[QStringLiteral("filmToe")] = fx.image.filmToe;
+        img[QStringLiteral("filmShoulder")] = fx.image.filmShoulder;
+        img[QStringLiteral("filmBlackClip")] = fx.image.filmBlackClip;
+        img[QStringLiteral("filmWhiteClip")] = fx.image.filmWhiteClip;
+        m[QStringLiteral("image")] = img;
+    }
     m[QStringLiteral("ssao")] = fx.ssao;
     m[QStringLiteral("smaaPreset")] = fx.smaaPreset;
     m[QStringLiteral("ssr")] = fx.ssr;

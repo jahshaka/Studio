@@ -1569,6 +1569,24 @@ add_dependencies(test_gi_voxel_coverage JahshakaEngineMedia)
 jah_gpu_row(gi.voxel_coverage CLASS engine TOKENS 3 COMMAND test_gi_voxel_coverage
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.voxel_coverage PROPERTIES TIMEOUT 300 LABELS "engine" RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
+# gi.lamp_falloff — A LAMP'S BOUNCE FALLS OFF EXACTLY AS ITS DIRECT LIGHT (IMAGE-1): a
+# point lamp's injected voxel radiance follows the pixel's own falloff (inverse square,
+# windowed to the range) within 5 % from 1 m to R/2, and no voxel past the range holds any.
+add_executable(test_gi_lamp_falloff test_gi_lamp_falloff.cpp)
+set_target_properties(test_gi_lamp_falloff PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_lamp_falloff PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_lamp_falloff PRIVATE JahshakaEngine)
+add_dependencies(test_gi_lamp_falloff JahshakaEngineMedia)
+jah_gpu_row(gi.lamp_falloff CLASS engine TOKENS 2 COMMAND test_gi_lamp_falloff
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.lamp_falloff PROPERTIES TIMEOUT 300 LABELS "engine" RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
 # gi.voxel_lab — THE VOXEL LAB (PHOTON-VOXEL-4): the reader's plane march on the CPU
 # (tests/support/voxel_lab.h) over analytic stores - gi.ddgi_ambient's sealed shell per
 # surface class and its open scene per cone set, on the cone-trace reference and the

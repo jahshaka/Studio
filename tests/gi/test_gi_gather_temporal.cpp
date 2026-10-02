@@ -112,8 +112,10 @@ static GiParams gatherGi()
 /// high in the middle, two in opposite corners — and a few objects on the
 /// floor). Matte everywhere, one warm wall and one cool block so the bounce has
 /// a colour; the ambient is black, so every indirect photon is the gather's.
-/// The sample's own lamp intensities (0.65 in the middle, 0.5 in the corners).
-static const float kLampScale = 1.0f;
+/// The sample's own lamp intensities, re-keyed for the inverse square law the way
+/// the sample was (IMAGE-1: the light each gave the floor beneath it, kept):
+/// 0.65 -> 38.2 in the middle (6.2 m up), 0.5 -> 20.3 in the corners (5 m up).
+static const float kCentreLamp = 38.2f, kCornerLamp = 20.3f;
 static void buildShowroom(Scene *s)
 {
     const MeshId cube = s->createMesh(enginetest::unitCubeMesh());
@@ -130,9 +132,9 @@ static void buildShowroom(Scene *s)
     addBox(s, cube, matte(Colour(0.25f, 0.45f, 0.80f)), Vec3(-4.0f, 1.0f, 0.0f), Vec3(2.0f, 2.0f, 2.0f));
     addBox(s, cube, matte(Colour(0.85f, 0.85f, 0.80f)), Vec3(3.5f, 0.75f, -2.0f), Vec3(1.5f, 1.5f, 3.0f));
     addBox(s, cube, matte(Colour(0.30f, 0.65f, 0.30f)), Vec3(1.0f, 0.5f, 7.0f), Vec3(1.0f, 1.0f, 1.0f));
-    gCentreLamp = addPointLamp(s, Vec3(0.0f, 6.2f, 0.0f), kLampScale * 0.65f, 30.0f);
-    addPointLamp(s, Vec3(-8.0f, 5.0f, -5.0f), kLampScale * 0.5f, 30.0f);
-    addPointLamp(s, Vec3(8.0f, 5.0f, 5.0f), kLampScale * 0.5f, 30.0f);
+    gCentreLamp = addPointLamp(s, Vec3(0.0f, 6.2f, 0.0f), kCentreLamp, 30.0f);
+    addPointLamp(s, Vec3(-8.0f, 5.0f, -5.0f), kCornerLamp, 30.0f);
+    addPointLamp(s, Vec3(8.0f, 5.0f, 5.0f), kCornerLamp, 30.0f);
 }
 
 static const unsigned kW = 768u, kH = 432u;
@@ -180,7 +182,7 @@ static float meanDiff(const Image &a, const Image &b, unsigned x0, unsigned x1, 
 struct StableReading {
     unsigned worstStep = 0u;      ///< the largest frame-to-frame step of any sampled pixel, codes
     double meanStep = 0.0;        ///< mean |step| over every pixel of the region, codes
-    double overTwo = 0.0;         ///< fraction of region pixels whose worst step reached 2 codes
+    double overTwo = 0.0;         ///< fraction of region pixels whose worst step reached the threshold (2 codes unless the caller scales it)
 };
 
 /// A binary PPM of an 8-bit picture (a debugging door: JAH_GATHER_DUMP=<dir>).
@@ -193,7 +195,8 @@ static void writePpm(const Image &img, const std::string &path)
     std::fclose(f);
 }
 
-static StableReading stableReading(Engine *e, View *view, int frames, const char *tag = nullptr)
+static StableReading stableReading(Engine *e, View *view, int frames, const char *tag = nullptr,
+                                   double threshold = 2.0)
 {
     StableReading r;
     Image prev, cur;
@@ -240,7 +243,7 @@ static StableReading stableReading(Engine *e, View *view, int frames, const char
     size_t over = 0;
     for (unsigned y = y0; y < y1; ++y)
         for (unsigned x = 0; x < kW; ++x)
-            if (worst[size_t(y) * kW + x] >= 2u) ++over;
+            if (double(worst[size_t(y) * kW + x]) >= threshold) ++over;
     r.meanStep = n ? sum / double(n) : 0.0;
     r.overTwo = double(over) / double(size_t(kW) * (y1 - y0));
     return r;
@@ -312,7 +315,7 @@ static int stableMain(Engine *e)
         LightDesc on;
         on.type = LightType::Point;
         on.colour = Colour(1.0f, 0.97f, 0.92f);
-        on.intensity = kLampScale * 0.65f;
+        on.intensity = kCentreLamp;
         on.range = 30.0f;
         s->setLight(gCentreLamp, on);
         s->refreshGlobalIllumination();   // the mirror's job in the app: a light edit re-injects
@@ -354,18 +357,51 @@ static int stableMain(Engine *e)
     // rest, shows every frame. (Measured on the rgba16f + r32ui pair it
     // replaced, the same arm: spikes/photon-ga-vr/EVIDENCE.md.)
     {
+        // THE STORAGE ITSELF, AT THE ABSOLUTE BAR (IMAGE-1 fix round): with the probes at
+        // their cells' centres and every ray at its texel's centre (jitterOff +
+        // rayJitterOff) a still view's estimate is the SAME every frame, so whatever the
+        // EMA's picture still steps by is the packed 8-byte texel's own rounding — the
+        // flicker this arm exists for. Held to the bar the packing was accepted on
+        // (photon-ga-vr: no sampled pixel steps by 2 codes, under 1 % of the region does).
+        GatherTuning tq;
+        tq.restOff = true;
+        tq.jitterOff = true;
+        tq.rayJitterOff = true;
+        s->setGatherTuning(tq);
+        render(e, 120);
+        const StableReading store = stableReading(e, view, 60, "packed-store");
+        std::printf("     the packed history with a fixed estimate (restOff, no jitter): worst step "
+                    "%u, mean |step| %.3f, pixels whose worst step reached 2: %.2f %%\n",
+                    store.worstStep, store.meanStep, 100.0 * store.overTwo);
+        CHECK_MSG(store.worstStep < 2u && store.overTwo < 0.01,
+                  "THE PACKED TEXEL DOES NOT FLICKER: with a fixed estimate the EMA steps no "
+                  "sampled pixel by 2/255 (worst %u) and %.2f %% of the region (bar < 1 %%)",
+                  store.worstStep, 100.0 * store.overTwo);
+    }
+    {
         GatherTuning tr;
         tr.restOff = true;
         s->setGatherTuning(tr);
         render(e, 120);
-        const StableReading ema = stableReading(e, view, 60, "packed-ema");
+        // RELATIVE TO THE ESTIMATOR (IMAGE-1, AMENDMENT 4): the bar — no sampled pixel steps by
+        // 2 codes, and under 1 % of the region ever does — was set against a per-frame estimate
+        // whose mean |step| was 1.298 codes (spikes/photon-ga-vr/packed-history/
+        // gather_stable-packed.txt: each frame alone 1.298 mean, 99.90 % of pixels >= 2; the
+        // packed EMA 0.194 mean, worst 1, 0.18 %). The same factor holds now: the 2-code
+        // threshold scales by THIS run's per-frame mean over 1.298 (the noise the accumulator
+        // is handed), and the share stays 1 %. (A share ratio cannot carry it: the per-frame
+        // share saturates near 100 % in both runs.)
+        const double kNoiseRatio = std::max(1.0, without.meanStep / 1.298);
+        const double kStepBar = 2.0 * kNoiseRatio;
+        const StableReading ema = stableReading(e, view, 60, "packed-ema", kStepBar);
         std::printf("     the history's EMA every frame (restOff): worst step at the 128 sampled pixels "
-                    "%u, mean |step| %.3f, pixels whose worst step reached 2: %.2f %%\n",
-                    ema.worstStep, ema.meanStep, 100.0 * ema.overTwo);
-        CHECK_MSG(ema.worstStep < 2u && ema.overTwo < 0.01,
+                    "%u, mean |step| %.3f, pixels whose worst step reached %.2f: %.2f %%\n",
+                    ema.worstStep, ema.meanStep, kStepBar, 100.0 * ema.overTwo);
+        CHECK_MSG(double(ema.worstStep) < kStepBar && ema.overTwo < 0.01,
                   "THE PACKED HISTORY IS STILL: its EMA, shown every frame, steps no sampled pixel "
-                  "by 2/255 (worst %u) and %.2f %% of the region (bar < 1 %%)",
-                  ema.worstStep, 100.0 * ema.overTwo);
+                  "by %.2f codes (2 x this run's per-frame noise %.3f / 1.298; worst %u) and %.2f %% "
+                  "of the region (bar < 1 %%)",
+                  kStepBar, without.meanStep, ema.worstStep, 100.0 * ema.overTwo);
         s->setGatherTuning(GatherTuning());
         render(e, 30);
     }
@@ -541,7 +577,9 @@ static int motionMain(Engine *e)
     // rejected everything under motion would show.
     setNoTemporal(true);
     const float yawAlone = runMove(e, view, yawPose, "yaw, each frame alone (lever)");
+    const float yawAloneTile = gLastTile;
     const float truckAlone = runMove(e, view, truckPose, "truck, each frame alone (lever)");
+    const float truckAloneTile = gLastTile;
     setNoTemporal(false);
     // THE ACCEPT-ALL ARM (PHOTON-GATHER-1d, the 1c audit's m2 — landed as a test
     // door, GatherTuning::historyValidationOff, where 1c measured it with a
@@ -596,42 +634,51 @@ static int motionMain(Engine *e)
     // test validation at all — under a pure turn every depth on a pixel's ray
     // reprojects to one place, nothing is disoccluded (0.203 not validated) — so
     // its tile bar, 2.4, is the midpoint to the reject-everything arm (3.41).
-    // SCALED BY THE PICTURE'S INDIRECT AMPLITUDE (PHOTON-VOXEL-5 item (iv)): every arm above is
-    // a difference of the gather's own light, so it scales with how much of it the picture
-    // carries. The hit read now takes the texel holding a hit's surface (jah_rq_hit.glsl): hits
-    // that were handed back are shaded, and THE GATHER IS IN THE PICTURE rose 24.455 -> 25.488
-    // codes, x 1.042 - the table and every bar below scale by it (the good arms measured with
-    // it: still 0.194, yaw 0.245, truck 0.265; worst tiles 1.315 / 2.395 / 2.798).
-    // ...AND AGAIN (PHOTON-VOXEL-5 item (ii), light per face side and per half-axis): the picture
-    // carries 26.443 codes of indirect light (was 25.488) - x 1.0813 of the table's 24.455.
-    // THE TRUCK'S RE-CENTRE SHARE (measured, PHOTON-VOXEL-5): a sliding camera re-centres the
-    // cascade chain, and every snap RE-VOXELISES the store exactly (the leaky store smeared it)
-    // - the sliding room read 0.286 against the yaw's 0.249; with the chain pinned
-    // (JAHSHAKA_GI_NO_RECENTRE, the measurement switch) 0.248, the yaw's class. So the truck's
-    // bar is the amplitude rule x (1 + the re-centre share): 0.26 x 1.0813 x (1 + (0.286 -
-    // 0.248) / 0.248) = 0.26 x 1.0813 x 1.153 = 0.324 - still under the un-reprojected slide
-    // (0.354 x 1.0813 = 0.383) and each frame alone (0.85).
-    const float kAmplitude = 26.443f / 24.455f;
+    // THE BARS ARE RELATIVE TO THE ESTIMATOR (IMAGE-1, the lead's AMENDMENT 4). This suite tests
+    // the ACCUMULATOR: how much of the per-frame estimate's noise the history removes. The
+    // absolute bars above were derived on the old near-flat lamp falloff, whose indirect was
+    // smooth; under the inverse square law the per-frame estimate itself is 4x noisier (each
+    // frame alone, yaw tile 3.41 -> 14.68: WHICH surface a texel's ray reaches near a lamp's hot
+    // ceiling — filed as plan row 9cf, Photon II) and no accumulator could hold the old numbers.
+    // So every bar is now its DERIVATION FACTOR — the bar over the per-frame arm it was set
+    // against, both from the table above (PHOTON-GATHER-1c's run; the later amplitude and
+    // re-centre rescalings applied to bar and arm alike, so they cancel except the truck's
+    // re-centre share, which only the bar carried) — times the per-frame arm measured in THIS
+    // run. No factor is loosened:
+    //     the control   0.21 / 0.532 (the yaw's per-frame region)            = 0.395
+    //     the yaw       0.26 / 0.532                                         = 0.489
+    //     the truck     0.26 x 1.153 (the re-centre share) / 0.506           = 0.592
+    //     yaw tile      2.4 / 3.414                                          = 0.703
+    //     truck tile    4.0 / 7.014                                          = 0.570
+    // (The yaw tile's factor is 2.4 / 3.414, both from the one run; the amplitude-scaled 2.60
+    // over the unscaled 3.41 would be 0.76, looser.)
     const float kRecentreShare = (0.286f - 0.248f) / 0.248f;
-    const float kStillBar = 0.21f * kAmplitude;
-    const float kYawBar = 0.26f * kAmplitude;
-    const float kTruckBar = 0.26f * kAmplitude * (1.0f + kRecentreShare);
-    CHECK_MSG(still < kStillBar, "THE CONTROL: a still camera's room is settled (%.3f codes < %.3f)",
-              still, kStillBar);
+    const float kStillFactor = 0.21f / 0.532f;
+    const float kYawFactor = 0.26f / 0.532f;
+    const float kTruckFactor = 0.26f * (1.0f + kRecentreShare) / 0.506f;
+    const float kYawTileFactor = 2.4f / 3.414f;
+    const float kTruckTileFactor = 4.0f / 7.014f;
+    const float kStillBar = kStillFactor * yawAlone;
+    const float kYawBar = kYawFactor * yawAlone;
+    const float kTruckBar = kTruckFactor * truckAlone;
+    const float kYawTileBar = kYawTileFactor * yawAloneTile;
+    const float kTruckTileBar = kTruckTileFactor * truckAloneTile;
+    CHECK_MSG(still < kStillBar,
+              "THE CONTROL: a still camera's room is settled (%.3f codes < %.3f = %.3f x the yaw's "
+              "per-frame %.3f)", still, kStillBar, kStillFactor, yawAlone);
     CHECK_MSG(yaw < kYawBar,
-              "A TURNING CAMERA: the moving room is within %.3f codes of the settled one (%.3f; each "
-              "frame alone %.3f)", kYawBar, yaw, yawAlone);
+              "A TURNING CAMERA: the moving room is within %.3f codes of the settled one (%.3f; "
+              "%.3f x each frame alone %.3f)", kYawBar, yaw, kYawFactor, yawAlone);
     CHECK_MSG(truck < kTruckBar,
-              "A SLIDING CAMERA: the moving room is within %.3f codes of the settled one (%.3f; each "
-              "frame alone %.3f)", kTruckBar, truck, truckAlone);
-    const float kTruckTileBar = 4.0f * kAmplitude, kYawTileBar = 2.4f * kAmplitude;
+              "A SLIDING CAMERA: the moving room is within %.3f codes of the settled one (%.3f; "
+              "%.3f x each frame alone %.3f)", kTruckBar, truck, kTruckFactor, truckAlone);
     CHECK_MSG(truckTile < kTruckTileBar,
               "NO SMEAR AT A DISOCCLUSION EDGE: the sliding camera's worst 16 x 16 tile is %.3f codes "
-              "from the settled one (bar %.2f; a history that accepts every texel reads 8.50)",
-              truckTile, kTruckTileBar);
+              "from the settled one (bar %.2f = %.3f x each frame alone's %.2f)",
+              truckTile, kTruckTileBar, kTruckTileFactor, truckAloneTile);
     CHECK_MSG(yawTile < kYawTileBar,
-              "...and the turning camera's worst tile %.3f (bar %.2f; each frame alone 3.41)", yawTile,
-              kYawTileBar);
+              "...and the turning camera's worst tile %.3f (bar %.2f = %.3f x each frame alone's "
+              "%.2f) — the history does not trail", yawTile, kYawTileBar, kYawTileFactor, yawAloneTile);
     CHECK_MSG(truckAcceptAllTile >= kTruckTileBar,
               "THE BAR DISCRIMINATES THE DEFECT: with the validation off (every reprojected texel "
               "accepted) the sliding camera's worst tile reads %.3f codes, at or over the bar %.2f "

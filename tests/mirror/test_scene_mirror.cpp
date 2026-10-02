@@ -528,7 +528,9 @@ int main(int argc, char **argv)
     target->setAmbient(Colour(0.02f, 0.02f, 0.02f), Colour(0.02f, 0.02f, 0.02f));
     auto point = iris::LightNode::create();
     point->lightType = iris::LightType::Point;
-    point->intensity = 4.0f;
+    // 135 since IMAGE-1: the inverse square law at the cube, ~4.8 m away, gives it the
+    // light 4 gave it under the retired near-flat curve.
+    point->intensity = 135.0f;
     point->distance = 20.0f;
     point->color = QColor(255, 255, 255);
     point->setLocalPos(iris::Vec3(4.0f, 1.0f, 2.5f));   // camera-right of the cube

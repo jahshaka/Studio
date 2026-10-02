@@ -78,7 +78,10 @@ void EngineAssetScene::buildDocument()
     plight->setName("ae98cx7u");
     plight->setLocalPos(iris::Vec3(0, 0, -3));
     plight->color = QColor(210, 210, 255);
-    plight->intensity = 0.47f;
+    // 5.5 at 3 m from the asset (IMAGE-1): the inverse square law gives the
+    // asset the light the old 0.47 gave it under the retired near-flat curve
+    // (0.47 x 1.28 at 3 m with the default range), so a thumbnail keeps its fill.
+    plight->intensity = 5.5f;
     plight->setShadowMapType(iris::ShadowMapType::Soft);
     plight->setShadowMapResolution(2048);
     plight->isBuiltIn = true;

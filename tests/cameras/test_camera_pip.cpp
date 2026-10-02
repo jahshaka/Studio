@@ -208,11 +208,10 @@ int main(int argc, char **argv)
     mirror.setSource(doc);
 
     // THE SUBJECT: a cube whose light is its own, at 1.4 x WHITE. §14's window
-    // is narrow and deliberate — the raw path saturates at 1.0 and the filmic
-    // curve's grade tail saturates at about 1.77 at this exposure (the pinned
-    // chain 0.97882 below, x 2.0), so 1.4 is over-range for raw
-    // and inside the grade (code ~238). That is the whole band this feature
-    // recovers, and a value of 8 would clip in both.
+    // is deliberate — the raw path saturates at 1.0 and Unreal's film curve
+    // (IMAGE-1) reaches white only near 11 at this exposure (the pinned chain
+    // 0.97882 below, x 2.0: film input 2.8, code ~245), so 1.4 is over-range for
+    // raw and inside the grade. That is the band this feature recovers.
     auto cube = iris::MeshNode::create();
     cube->setName("hot cube");
     cube->setMesh(testmesh::load(":assets/models/cube.obj"));
@@ -234,8 +233,8 @@ int main(int argc, char **argv)
     // THE WORLD GRADES. hdrEnabled is what makes the main view's chain tonemap,
     // and it is what a host reads into ViewPipDesc::tonemap for the inset.
     doc->hdrEnabled = true;
-    // MANUAL, at a PINNED grade: chain E = 0.97882 (x 2.0, the film tail
-    // saturating at 1.77 x white), written as the stops it is from whatever the
+    // MANUAL, at a PINNED grade: chain E = 0.97882 (x 2.0 into the film),
+    // written as the stops it is from whatever the
     // default anchor is — so the 1.4 x white window below does not ride a
     // re-derivation of the default exposure (SKY-DEFAULTS-1's merge read). Manual
     // is the chain's fixed form, so this grade is a number from the first frame.

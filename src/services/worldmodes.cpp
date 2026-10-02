@@ -1265,6 +1265,26 @@ static QVector<ParamRow> buildPostFxParams()
         p.set = [](const iris::ScenePtr &s, double v) { s->exposureMeterHighPercent = float(v); };
         out.append(p);
     }
+    // THE IMAGE BLOCK (IMAGE-1): the world camera's development, one row per
+    // iris::lens::imageParams() entry, under the exposure rows — the world's
+    // defaults for the editor's view and every camera (each camera overrides
+    // any of them through camera.postFx under the same id).
+    for (int i = 0; i < iris::lens::ImageParamCount; ++i) {
+        const iris::lens::ImageParamDef &d = iris::lens::imageParams()[i];
+        ParamRow p;
+        p.id = QLatin1String(d.id);
+        p.label = QLatin1String(d.label);
+        p.ownerRowId = QStringLiteral("exposureMode");
+        p.minValue = d.minValue; p.maxValue = d.maxValue;
+        p.perPixelStep = d.perPixelStep; p.decimals = d.decimals;
+        p.doc = QString::fromUtf8(d.doc);
+        if (d.advanced)
+            p.doc += QStringLiteral(" (Film, advanced: Unreal's filmic tonemapper.)");
+        p.enabled = [](const iris::ScenePtr &s) { return s->hdrEnabled; };
+        p.get = [i](const iris::ScenePtr &s) { return double(s->image[i]); };
+        p.set = [i](const iris::ScenePtr &s, double v) { s->image[i] = float(v); };
+        out.append(p);
+    }
     {
         // THE OWNER'S R17 ROW, and it sits FIRST of the three bloom parameters
         // because it is the one a person reaches for: "how much bloom", right
