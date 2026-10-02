@@ -111,6 +111,13 @@ public:
     /// fly keys and helper state to give back, and VrModule::shutdown used to
     /// reach past it straight into the engine. Returns whether anything ended.
     bool endForShutdown();
+    /// THE MODULE'S ORDERED TEARDOWN (VrModule::shutdown, VR-TEARDOWN-1): ends a
+    /// session as endForShutdown does, then detaches the interaction from the
+    /// viewport while it still exists. This object is owned by the ScriptEngine
+    /// and outlives the viewport (~MainWindow -> ~ShellScripting ->
+    /// ~ScriptEngine), so nothing it owns may hold a live route to the host after
+    /// this. Returns whether a session ended.
+    bool shutdown();
     /// The editor preview's state, for the shell's VR button (VrModule).
     bool editorPreviewActive() const { return editor.isActive(); }
 

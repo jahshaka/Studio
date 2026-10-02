@@ -961,6 +961,15 @@ bool VrApi::endForShutdown()
     return true;
 }
 
+bool VrApi::shutdown()
+{
+    const bool ended = endForShutdown();
+    interaction.detachHost();
+    interactionSessionActive = false;
+    interactionClock.invalidate();
+    return ended;
+}
+
 bool VrApi::proxies(const QVariant &on)
 {
     if (on.isValid()) {
