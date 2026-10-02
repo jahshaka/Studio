@@ -136,6 +136,25 @@ jah_gpu_row(gi.reflect_mover CLASS engine COMMAND test_reflect_mover
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.reflect_mover PROPERTIES TIMEOUT 300 LABELS "engine")
 
+# ID-DEPTH-1: a still, stock-drawn character in front of a moving Atom mover keeps its
+# own (zero) motion in the march's object motion — the id pass's own depth against the
+# scene's identifies "not the id's surface" (rq_motion.comp, rq_motion_skin.comp).
+add_executable(test_id_depth test_id_depth.cpp)
+set_target_properties(test_id_depth PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_id_depth PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+add_dependencies(test_id_depth JahshakaEngineMedia)
+target_link_libraries(test_id_depth PRIVATE JahshakaEngine)
+jah_gpu_row(gi.id_depth CLASS engine COMMAND test_id_depth
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.id_depth PROPERTIES TIMEOUT 300 LABELS "engine")
+
 # A REFLECTED ASSET'S LEVEL CHANGE (REFLECT-LOD-POP-1): two metal hemispheres
 # reflecting a baked multi-level asset while the camera dollies at them — the
 # frame-to-frame change of the reflection at every ray-level crossing against the
@@ -221,3 +240,23 @@ target_link_libraries(test_rt_alpha_tested PRIVATE JahshakaEngine OgreNext)
 jah_gpu_row(gi.rt_alpha_tested CLASS engine COMMAND test_rt_alpha_tested
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.rt_alpha_tested PROPERTIES TIMEOUT 240 LABELS "engine")
+
+# THE RAY TIER'S LEVEL CAP (architecture audit D1): a mesh deeper than the GPU scene's
+# eight levels is traced at level 7 at most, so its hits decode against its own rows —
+# a 12-level sphere whose levels are one surface in rotated triangle orders reflects as
+# its 8-level twin does.
+add_executable(test_ray_levels test_ray_levels.cpp)
+set_target_properties(test_ray_levels PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_ray_levels PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+add_dependencies(test_ray_levels JahshakaEngineMedia)
+target_link_libraries(test_ray_levels PRIVATE JahshakaEngine)
+jah_gpu_row(gi.ray_levels CLASS engine COMMAND test_ray_levels
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.ray_levels PROPERTIES TIMEOUT 300 LABELS "engine")

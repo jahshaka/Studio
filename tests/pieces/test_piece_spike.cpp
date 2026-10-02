@@ -22,6 +22,8 @@
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
 
+#include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
@@ -344,6 +346,56 @@ void broken_piece_is_reported() {
 }
 
 // ---------------------------------------------------------------------------
+// 5c: A PIECE THAT DOES NOT COMPILE COSTS ONE FRAME, NOT EVERY FRAME (the broken-piece
+// cost, architecture audit D7 — MEASURED, lane ATOM-ENGINE-1). A piece that passes the
+// bind (the file exists, its pieces are not duplicates) but whose GLSL does not compile
+// throws from the shader build inside the first frame that draws it: that frame is lost
+// and the compile (~10 ms) is paid once. Ogre keeps the failed program, so no later frame
+// retries it — measured 1 frame lost of 30, ~0.9 ms a frame after it — and the material
+// draws BLACK from then on (printed, not gated: a quarantine that drops the piece is a
+// decision for the shader-library lane, recorded in the report). This case gates the
+// cost: at most one frame lost, no per-frame retry.
+void broken_piece_costs_one_frame() {
+    Fixture f; Engine *e = f.e;
+    CubeScene cs = makeCubeScene(f, "spike-broken-cost", Colour(0.0f, 0.0f, 1.0f));
+    REQUIRE(cs.material);
+    render(e, 5);
+    Image good;
+    REQUIRE(cs.v->readPixels(good));
+    const std::string path = writePiece(
+        "spike_broken_glsl.piece_ps.glsl",
+        "@piece( custom_ps_preLights )\n\tpixelData.diffuse.xyz = jahNoSuchFunction( 1.0 );\n@end\n");
+    const bool bound = cs.s->setMaterialCustomPiece(cs.material, path, CustomPieceStage::PixelPreLights);
+    std::printf("    a non-compiling piece binds -> %s\n", bound ? "accepted (the compile is the frame's)" : "refused");
+    int lost = 0;
+    double worstMs = 0.0, sumMs = 0.0;
+    const int frames = 30;
+    for (int i = 0; i < frames; ++i) {
+        // lastError() is sticky: a known refusal first, so a frame that threw shows as a
+        // different message after it.
+        cs.s->setMaterialCustomPiece(MaterialId(0x7FFFFFF0u), path, CustomPieceStage::PixelPreLights);
+        const std::string sentinel = e->lastError();
+        const auto t0 = std::chrono::steady_clock::now();
+        e->renderOneFrame();
+        const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+        if (e->lastError() != sentinel) ++lost;
+        worstMs = std::max(worstMs, ms);
+        sumMs += ms;
+    }
+    Image after;
+    const bool readable = cs.v->readPixels(after);
+    const Px c = centre(after), g = centre(good);
+    std::printf("RESULT a non-compiling piece over %d frames: %d frame(s) lost, %.2f ms mean, %.2f worst; the centre "
+                "(%d,%d,%d) vs the material without a piece (%d,%d,%d); lastError '%s'\n",
+                frames, lost, sumMs / frames, worstMs, c.r, c.g, c.b, g.r, g.g, g.b, e->lastError().c_str());
+    CHECK_MSG(readable && lost <= 1, "a piece that does not compile loses at most ONE frame (%d of %d lost)", lost,
+              frames);
+    CHECK_MSG(sumMs / frames < 10.0, "...and no frame after it pays a recompile (%.2f ms mean)", sumMs / frames);
+    cs.s->setMaterialCustomPiece(cs.material, "", CustomPieceStage::PixelPreLights);
+    render(e);
+}
+
+// ---------------------------------------------------------------------------
 // 5b: the VERTEX stage exists and moves geometry (the sockets the baker has
 // always classified `unsupported`).
 void vertex_piece_moves_geometry() {
@@ -398,6 +450,7 @@ int main(int argc, char **argv) {
         { "edit_is_a_new_file_and_reuse_is_refused", edit_is_a_new_file_and_reuse_is_refused },
         { "vertex_piece_moves_geometry", vertex_piece_moves_geometry },
         { "broken_piece_is_reported", broken_piece_is_reported },
+        { "broken_piece_costs_one_frame", broken_piece_costs_one_frame },
     };
     for (const Case &c : cases) {
         std::printf("== %s\n", c.name);

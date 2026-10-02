@@ -19,8 +19,8 @@
 //       or back toward the sun, the same within 5 %), a back-culled plane with its back
 //       toward the sun casts nothing (the arm's control), and the two-sided plane's lit
 //       front equals the back-culled one's (the caster map is the same map: no new acne);
-//   (e) the MASTER material's own two-sided flag toggled at run time moves the route and
-//       the bucket within a bounded number of frames.
+//   (e) the NODES' cull toggled one-sided and back at run time (a material has no cull of
+//       its own) moves the route and the bucket within a bounded number of frames.
 // FRAMES, NEVER TIME: every picture is read until two consecutive reads agree to a code.
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
@@ -264,7 +264,6 @@ int main()
     PbrParams twoSided;
     twoSided.albedo = Colour(0.70f, 0.55f, 0.35f);
     twoSided.roughness = 0.45f;
-    twoSided.twoSided = true;
     const MaterialId twoSidedMat = F.scene->createPbrMaterial(twoSided);
     PbrParams planeP = twoSided;
     planeP.albedo = Colour(0.35f, 0.60f, 0.70f);
@@ -273,9 +272,11 @@ int main()
     F.sphere = F.scene->createNode();
     F.scene->attachMesh(F.sphere, F.scene->createMesh(sphereMesh(48, 24, 0.6f)), twoSidedMat);
     enginetest::setNodePosition(F.scene, F.sphere, Vec3(-1.3f, 0.8f, 0.0f));
+    F.scene->setNodeFaceCull(F.sphere, FaceCull::TwoSided);   // the node is the authority on its cull
     F.plane = F.scene->createNode();
     F.scene->attachMesh(F.plane, F.scene->createMesh(openPlane(8, 1.6f)), planeMat);
     enginetest::setNodePosition(F.scene, F.plane, Vec3(1.2f, 1.0f, 0.0f));
+    F.scene->setNodeFaceCull(F.plane, FaceCull::TwoSided);
     {
         MeshData g;
         g.positions = { -20.0f, 0.0f, -20.0f, 20.0f, 0.0f, -20.0f, 20.0f, 0.0f, 20.0f, -20.0f, 0.0f, 20.0f };
@@ -311,15 +312,15 @@ int main()
         CHECK_MSG(fr.cullFront == 1 && fr.atomItems == 2 && fr.atomTwoSided == 1,
                   "(a) a FRONT-culled node stays on PBS under cullFront (cullFront %u, atom %u)", fr.cullFront,
                   fr.atomItems);
-        F.scene->setNodeFaceCull(F.sphere, FaceCull::Material);
+        F.scene->setNodeFaceCull(F.sphere, FaceCull::TwoSided);
         for (int i = 0; i < 3; ++i) F.e->renderOneFrame();
     }
 
-    // ---- (e) THE MASTER MATERIAL'S OWN FLAG, AT RUN TIME --------------------------------
-    // Not a node cull (the twins, (a)): the two materials themselves turn one-sided and back.
-    // The route (kGpuTwoSided on the slot, atomTwoSided) and the bucket (the two-sided
-    // permutation's bucket empties: every item one-sided shares ONE bucket) follow within
-    // a bounded number of frames.
+    // ---- (e) THE NODES' CULL, AT RUN TIME ----------------------------------------------
+    // The material has no cull of its own (the node is the authority): both nodes turn
+    // one-sided and back. The route (kGpuTwoSided on the slot, atomTwoSided) and the
+    // bucket (the two-sided permutation's bucket empties: every item one-sided shares ONE
+    // bucket) follow within a bounded number of frames.
     {
         auto flagsOf = [&](NodeId n) {
             const unsigned s = F.slotOf(n);
@@ -335,21 +336,19 @@ int main()
             }
             return false;
         };
-        PbrParams sphereOne = twoSided, planeOne = planeP;
-        sphereOne.twoSided = planeOne.twoSided = false;
-        F.scene->setPbrMaterial(twoSidedMat, sphereOne);
-        F.scene->setPbrMaterial(planeMat, planeOne);
+        F.scene->setNodeFaceCull(F.sphere, FaceCull::Material);
+        F.scene->setNodeFaceCull(F.plane, FaceCull::Material);
         int f1 = 0, f2 = 0;
         const bool off = waitFor(0u, 1u, f1);
         const bool offFlag = !(flagsOf(F.plane) & detail::kGpuTwoSided) && !(flagsOf(F.sphere) & detail::kGpuTwoSided);
-        F.scene->setPbrMaterial(twoSidedMat, twoSided);
-        F.scene->setPbrMaterial(planeMat, planeP);
+        F.scene->setNodeFaceCull(F.sphere, FaceCull::TwoSided);
+        F.scene->setNodeFaceCull(F.plane, FaceCull::TwoSided);
         const bool on = waitFor(2u, 2u, f2);
         const bool onFlag = (flagsOf(F.plane) & detail::kGpuTwoSided) && (flagsOf(F.sphere) & detail::kGpuTwoSided);
-        std::printf("  (e) master flag off: %s in %d frame(s); back on: %s in %d frame(s)\n", off ? "moved" : "STUCK", f1,
+        std::printf("  (e) node cull one-sided: %s in %d frame(s); back on: %s in %d frame(s)\n", off ? "moved" : "STUCK", f1,
                     on ? "moved" : "STUCK", f2);
         CHECK_MSG(off && offFlag,
-                  "(e) the masters turned one-sided: the items stay Atom, lose kGpuTwoSided and share ONE bucket "
+                  "(e) the nodes turned one-sided: the items stay Atom, lose kGpuTwoSided and share ONE bucket "
                   "within %d frames", f1);
         CHECK_MSG(on && onFlag,
                   "(e) turned two-sided again: kGpuTwoSided back and the two-sided bucket back within %d frames", f2);
@@ -375,7 +374,7 @@ int main()
         std::vector<uint32_t> cx, cy;
         const bool culledRead = readIds(F.ov, cx, cy);
         const unsigned sphereSlot = F.slotOf(F.sphere);
-        F.scene->setNodeFaceCull(F.sphere, FaceCull::Material);
+        F.scene->setNodeFaceCull(F.sphere, FaceCull::TwoSided);
         {
             size_t covered = 0, differ = 0;
             for (size_t p = 0; idsRead && culledRead && p < ix.size(); ++p) {
@@ -445,7 +444,7 @@ int main()
         const bool r2 = shot(back2, mBack);
         F.scene->setNodeFaceCull(F.plane, FaceCull::Back);
         const bool r3 = shot(culled, mCulled);
-        F.scene->setNodeFaceCull(F.plane, FaceCull::Material);
+        F.scene->setNodeFaceCull(F.plane, FaceCull::TwoSided);
         auto shadowed = [&](const Image &img, const std::vector<uint8_t> &m) {
             size_t count = 0;
             for (size_t p = 0; p < m.size() && img.rgba.size() == ref.rgba.size(); ++p)
@@ -496,7 +495,7 @@ int main()
         const std::vector<uint8_t> m = F.maskOf(F.plane);
         F.scene->setNodeFaceCull(F.plane, FaceCull::Back);
         settle(F.e, F.view, one, f);
-        F.scene->setNodeFaceCull(F.plane, FaceCull::Material);
+        F.scene->setNodeFaceCull(F.plane, FaceCull::TwoSided);
         const Stat st = compare(two, one, m);
         std::printf("  (d) the plane's sunlit front, two-sided vs back-culled: %zu px mean %.3f worst %d\n", st.n, st.mean,
                     st.worst);

@@ -320,10 +320,10 @@ int main()
         p.albedo = Colour(1.0f, 1.0f, 1.0f);
         p.metalness = 1.0f;
         p.roughness = 0.05f;
-        p.twoSided = true;
         const MaterialId mat = s->createPbrMaterial(p);
         const MeshId mesh = s->createMesh(enginetest::unitCubeMesh());
-        CHECK(mat && mesh && s->attachMesh(twoSided, mesh, mat), "…with a two-sided material");
+        CHECK(mat && mesh && s->attachMesh(twoSided, mesh, mat), "…a plate");
+        s->setNodeFaceCull(twoSided, FaceCull::TwoSided);   // the node is the authority on its cull
         enginetest::setNodeScale(s, twoSided, Vec3(3.0f, 0.15f, 3.0f));
         enginetest::setNodePosition(s, twoSided, Vec3(0.0f, -60.0f, 0.0f));
 
@@ -334,12 +334,38 @@ int main()
         std::printf("   refusal message: %s\n", engine->lastError().c_str());
         CHECK(!s->nodePlanarReflector(twoSided), "the refused node did not become a reflector");
 
-        // Same node, same geometry, single-sided material: accepted. This is
-        // what makes the case above a statement about the MATERIAL.
-        p.twoSided = false;
-        CHECK(s->setPbrMaterial(mat, p), "the material is turned single-sided");
+        // Same node, same geometry, single-sided: accepted. This is what makes
+        // the case above a statement about the CULL.
+        s->setNodeFaceCull(twoSided, FaceCull::Material);
         CHECK(s->setNodePlanarReflector(twoSided, true),
               "…and the very same plate is then accepted");
+        // A MATERIAL SWAP UNDER THE ARMED MIRROR moves nothing it cares about (a
+        // material has no cull of its own): the reflector is NOT torn down and re-armed.
+        {
+            PbrParams q = p;
+            q.albedo = Colour(0.9f, 0.85f, 0.8f);
+            const MaterialId other = s->createPbrMaterial(q);
+            const unsigned armsBefore = s->planarReflectorArms();
+            CHECK(other && s->setNodeMaterial(twoSided, other) && s->setNodeMaterial(twoSided, mat),
+                  "two material swaps under the armed plate");
+            std::printf("   reflector arms across two swaps: %u -> %u\n", armsBefore, s->planarReflectorArms());
+            CHECK(armsBefore > 0 && s->planarReflectorArms() == armsBefore && s->nodePlanarReflector(twoSided),
+                  "…re-arm the mirror ZERO times and leave it armed");
+            s->destroyMaterial(other);
+        }
+        // THE NODE TURNS TWO-SIDED UNDER THE ARMED MIRROR (CULL-TWIN-DEBTS-1): the
+        // refusal is re-derived on the spot (it used to wait for the next flag change).
+        engine->renderOneFrame();
+        // lastError() is sticky: put an unrelated reason there first, so the check
+        // below reads THIS refusal and not the one above.
+        CHECK(!s->setNodePlanarReflector(NodeId(0x7FFFFFF0u), true) &&
+              engine->lastError().find("two-sided") == std::string::npos, "an unrelated error first");
+        s->setNodeFaceCull(twoSided, FaceCull::TwoSided);
+        CHECK(engine->lastError().find("two-sided") != std::string::npos,
+              "…and the armed mirror is refused again, naming two-sidedness");
+        CHECK(s->nodePlanarReflector(twoSided), "…keeping its flag for when it is one-sided again");
+        s->setNodeFaceCull(twoSided, FaceCull::Material);
+        engine->renderOneFrame();
         CHECK(s->setNodePlanarReflector(twoSided, false), "cleared again, leaving the scene as found");
     }
 

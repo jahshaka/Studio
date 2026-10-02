@@ -2406,7 +2406,8 @@ static void bakeDeterminism()
         CHECK_LOUD(f.open(QIODevice::WriteOnly) && f.write(out) == out.size(), "the two-object model is written");
     }
     const QString fp = iris::MeshBake::fingerprintFor(QStringLiteral("deadbeef").repeated(8));
-    const int hardware = [] { iris::MeshBake::setBakeThreads(0); return iris::MeshBake::bakeThreads(); }();
+    // the hardware's width, asked for explicitly: the default is 4 (BAKE-WIDTH-2), the proof wants the widest
+    const int hardware = [] { iris::MeshBake::setBakeThreads(1 << 16); return iris::MeshBake::bakeThreads(); }();
     std::printf("  hardware threads: %d\n", hardware);
     CHECK_LOUD(hardware >= 2, "the box has more than one thread (else this suite proves nothing)");
     const QStringList subjects = { twoPath, QStringLiteral(JAH_CLUSTER_FIXTURE_DIR "/matcaps_dragon.obj") };
@@ -2416,7 +2417,7 @@ static void bakeDeterminism()
         qint64 ms[3] = { 0, 0, 0 };
         int meshes = 0, chained = 0, dags = 0;
         for (int run = 0; run < 3; ++run) {
-            iris::MeshBake::setBakeThreads(run == 0 ? 1 : 0);
+            iris::MeshBake::setBakeThreads(run == 0 ? 1 : hardware);
             QTemporaryDir scratch;
             QElapsedTimer t; t.start();
             const iris::MeshBake::Model model = iris::MeshBake::buildFromFile(path, fp, scratch.path());
@@ -2452,7 +2453,7 @@ static void bakeDeterminism()
         QTemporaryDir scratch;
         iris::MeshBake::setBakeThreads(1);
         const QByteArray reference = iris::MeshBake::serialize(iris::MeshBake::buildFromFile(twoPath, fp, scratch.path()));
-        for (const int width : { 1, 0 }) {
+        for (const int width : { 1, hardware }) {
             iris::MeshBake::setBakeThreads(width);
             for (const int n : { 1, 3, 40, 400, 2000 }) {
                 iris::MeshBake::failBakeAfterChunksForTest(n);
