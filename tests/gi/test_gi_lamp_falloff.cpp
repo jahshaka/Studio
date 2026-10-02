@@ -181,13 +181,11 @@ int main()
     // factor, windowed to the same range. The voxel's stored radiance over the pixel's
     // (linear, readPixelsHdr straight down at the voxel), divided by the same ratio for a
     // point lamp at the same place (the store's normalisation and the voxel's lobe cancel),
-    // is how far the two area models disagree at that distance. THE SCALE IS RECORDED, NOT
-    // BARRED: the approximate area light's pixel and the injection's LTC form factor are two
-    // different models of the emitter (measured 0.231 at 1.5 m and 0.252 at 2.5 m: the voxels
-    // hold about a quarter of what the approximation draws — the approximation's roughness
-    // booster and the form factor's normalisation, a pre-existing gap filed with IMAGE-1's
-    // report). THE LAW IS BARRED: the ratio holds across distance within 15 %, i.e. the
-    // injection falls off and is windowed as the pixel is.
+    // is how far the two area models disagree at that distance. THE SCALE IS gi.area_energy's
+    // (AREA-SCALE-1): both paths against the rectangle's closed form — the injection is exact
+    // and the approximation's pixel over-draws (its roughness booster, its far-field law).
+    // THE LAW IS BARRED HERE: the ratio holds across distance within 15 %, i.e. the injection
+    // falls off and is windowed as the pixel is.
     {
         PostFxDesc fx;
         fx.hdrReadback = true;

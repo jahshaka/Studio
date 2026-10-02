@@ -1587,6 +1587,31 @@ add_dependencies(test_gi_lamp_falloff JahshakaEngineMedia)
 jah_gpu_row(gi.lamp_falloff CLASS engine TOKENS 2 COMMAND test_gi_lamp_falloff
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.lamp_falloff PROPERTIES TIMEOUT 300 LABELS "engine" RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
+# gi.area_energy — ONE AREA-LIGHT ENERGY, HELD TO A CLOSED FORM (AREA-SCALE-1): an area light
+# of intensity I is a Lambertian emitter of radiance I; on its axis a floor of albedo a reflects
+# a I F(h), F the point-to-rectangle form factor. The voxel store (Photon's injection) and the
+# accurate (LTC) pixel within 5 % of it at 1, 1.5 and 2.5 m, each normalised by a point lamp at
+# the same place. gi.area_energy_target (--pixel): the approximate area light's pixel against the
+# same closed form — a photon-target row (the approximation is fork media: its roughness
+# booster and its far-field law); it prints and does not gate.
+add_executable(test_gi_area_energy test_gi_area_energy.cpp)
+set_target_properties(test_gi_area_energy PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_area_energy PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_area_energy PRIVATE JahshakaEngine)
+add_dependencies(test_gi_area_energy JahshakaEngineMedia)
+jah_gpu_row(gi.area_energy CLASS engine TOKENS 2 COMMAND test_gi_area_energy
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.area_energy PROPERTIES TIMEOUT 300 LABELS "engine" RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
+jah_gpu_row(gi.area_energy_target CLASS engine TOKENS 2 COMMAND test_gi_area_energy --pixel
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.area_energy_target PROPERTIES TIMEOUT 300 LABELS "engine;photon-target" RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
 # gi.voxel_lab — THE VOXEL LAB (PHOTON-VOXEL-4): the reader's plane march on the CPU
 # (tests/support/voxel_lab.h) over analytic stores - gi.ddgi_ambient's sealed shell per
 # surface class and its open scene per cone set, on the cone-trace reference and the
