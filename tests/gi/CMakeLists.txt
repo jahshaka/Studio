@@ -1612,6 +1612,27 @@ set_tests_properties(gi.area_energy PROPERTIES TIMEOUT 300 LABELS "engine" RESOU
 jah_gpu_row(gi.area_energy_target CLASS engine TOKENS 2 COMMAND test_gi_area_energy --pixel
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.area_energy_target PROPERTIES TIMEOUT 300 LABELS "engine;photon-target" RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
+# gi.field_edge_target — THE IRRADIANCE FIELD IS FLAT OVER AN OPEN FLOOR TO ITS STATED REACH
+# (FIELD-EDGE-1): an 80 m matte floor under a constant sky at the Low tier (the field carries the
+# diffuse), read along eight directions from the centre out past the field's stated box
+# (GiStatus ifdMin/ifdMax): within 2 % of the centre everywhere inside it. A photon-target row:
+# the plan row's premise (the edge) is false — the 0.86 is the cage's view bias crossing a probe
+# layer (the test's header; spikes/photon-ii-1/); it prints and does not gate.
+add_executable(test_gi_field_edge test_gi_field_edge.cpp)
+set_target_properties(test_gi_field_edge PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_field_edge PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_field_edge PRIVATE JahshakaEngine)
+add_dependencies(test_gi_field_edge JahshakaEngineMedia)
+jah_gpu_row(gi.field_edge_target CLASS engine TOKENS 2 COMMAND test_gi_field_edge
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.field_edge_target PROPERTIES TIMEOUT 300 LABELS "engine;photon-target" RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
 # gi.voxel_lab — THE VOXEL LAB (PHOTON-VOXEL-4): the reader's plane march on the CPU
 # (tests/support/voxel_lab.h) over analytic stores - gi.ddgi_ambient's sealed shell per
 # surface class and its open scene per cone set, on the cone-trace reference and the
