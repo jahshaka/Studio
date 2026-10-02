@@ -154,6 +154,12 @@ target_link_libraries(test_reflect_fog PRIVATE JahshakaEngine)
 jah_gpu_row(gi.reflect_fog CLASS engine COMMAND test_reflect_fog
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.reflect_fog PROPERTIES TIMEOUT 300 LABELS "engine")
+# ...and the paths a machine without ray queries reflects through: the screen march
+# alone and the voxel march (the same law, JahSsrResolve_ps.glsl / PhotonVct).
+jah_gpu_row(gi.reflect_fog_norays CLASS engine COMMAND test_reflect_fog
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.reflect_fog_norays PROPERTIES TIMEOUT 300 LABELS "engine"
+                     ENVIRONMENT "JAHSHAKA_NO_RAY_QUERY=1")
 
 # A REFLECTED ASSET'S LEVEL CHANGE (REFLECT-LOD-POP-1): two metal hemispheres
 # reflecting a baked multi-level asset while the camera dollies at them — the
