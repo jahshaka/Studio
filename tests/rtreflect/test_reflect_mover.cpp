@@ -640,14 +640,14 @@ int main(int argc, char **argv)
         // dither: 5.94 codes and 2.2x the still grain before), and a floor's
         // reflection of a mover where only the rays answer (a headset; 22.8 codes of
         // trail before) — and a mirror, which has no history to get wrong.
-        { "glossy sphere 0.25, its own reflection", 0.0f, 0.9f, 1.0f, 0.25f, Region::Sphere, true, 4.5f,
+        { "glossy sphere 0.25, its own reflection", 0.0f, 0.9f, 1.0f, 0.25f, Region::Sphere, true, 3.0f,
           1.6f },
         { "rays: glossy floor 0.2, the sphere's reflection", 1.0f, 0.2f, 0.0f, 0.8f, Region::Reflected,
           false, 8.0f, 1.5f, false, 1.5f, 6.75f },
         { "rays: mirror floor 0.05, the sphere's reflection", 1.0f, 0.05f, 0.0f, 0.8f, Region::Reflected,
           false, 0.0f, 1.5f },
         { "rays: glossy sphere 0.25, its own reflection", 0.0f, 0.9f, 1.0f, 0.25f, Region::Sphere, false,
-          4.5f, 1.6f },
+          3.0f, 1.6f },
         // REFLECT-MOVERS-2: a SKINNED mover's reflection — the node still, the pose
         // carrying it (a character's limbs). Measured first, gated after.
         { "rays: glossy floor 0.2, a SKINNED sphere's reflection", 1.0f, 0.2f, 0.0f, 0.8f, Region::Reflected,
@@ -659,19 +659,15 @@ int main(int argc, char **argv)
         { "march: glossy floor 0.2, a SKINNED sphere's reflection", 1.0f, 0.2f, 0.0f, 0.8f, Region::Reflected,
           true, 2.8f, 0.0f, true, 0.0f, 0.0f, 1.5f, 0 },
         { "march: a SKINNED glossy sphere 0.25, its own reflection", 0.0f, 0.9f, 1.0f, 0.25f, Region::Sphere,
-          true, 4.5f, 1.6f, true, 0.0f, 0.0f, 1.5f, 2 },
+          true, 3.0f, 1.6f, true, 0.0f, 0.0f, 1.5f, 2 },
     };
-    // THE THREE GLOSSY-SPHERE ARMS' CONVERGENCE ENVELOPE (the lead's verdict, CONTACT-
-    // OCCLUSION-1): the sky pass puts the sky's direct term in the store, so the floor the
-    // sphere reflects is brighter (the region's settled mean 90.5 -> 112.9 codes at frame 60)
-    // and the history lags it — at frame 60 the moving frame reads 117.7 against the settled
-    // 112.9, the settled mean BELOW the fresh estimate. Measured at frame 60 on this arm:
-    // 2.69 codes with the sky pass off, 6.43 with it on and no mover gate, 6.74 with the gate
-    // (the gate adds 0.3). The cause is REFLECT-CONVERGE-1's (plan row 9bd): the history
-    // blend bias — the settled mean below the fresh estimate under a brighter floor; it
-    // restores 4.0 / 3.0 / 3.0 / 3.0. Until then each CHECKPOINT carries its own bar (never
-    // an average across them), and the whole-run bar is their mean, 4.5.
-    static const float kSphereEnvelope[kCheckpoints] = { 7.5f, 4.0f, 4.0f, 2.0f };
+    // THE THREE GLOSSY-SPHERE ARMS' CONVERGENCE ENVELOPE, per checkpoint (never an
+    // average across them), and the whole run at 3.0: a moving reflector's mean is an
+    // eight-frame mean (REFLECT-CONVERGE-1, rq_reflect.comp kMovingReflectorFloor).
+    // Measured at the lane: frame 60 1.92 / 1.84 / 1.85 codes (4.62 / 4.74 / 4.63 at
+    // the thirty-two-frame floor, which trailed the floor the sky pass brightened),
+    // 120-180 at most 1.59, 240 at most 0.72; the whole run 1.31-1.38.
+    static const float kSphereEnvelope[kCheckpoints] = { 4.0f, 3.0f, 3.0f, 3.0f };
     // THE EDGE'S NATURE (REFLECT-EDGE-2, --edge): the rays glossy floor's band read
     // through the trace's class overlay (JAH_R7_EDGE_CLASSES on the Hits view) —
     // per band texel per frame: did the ray hit the mover, did the mean restart,
