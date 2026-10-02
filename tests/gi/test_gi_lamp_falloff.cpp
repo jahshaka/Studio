@@ -100,7 +100,7 @@ int main()
     GiParams gi;
     gi.mode = GiMode::Vct;
     gi.quality = GiQuality::Medium;
-    gi.numBounces = 0;            // the DIRECT store alone
+    gi.numBounces = 0;            // the DIRECT store alone (section 4 holds it to that)
     gi.ddgi = GiToggle::Off;
     gi.cascadeCount = 1;
     gi.cascadeSet[0] = GiParams::GiCascadeDesc{ 4.0f, 64, 0.0f };
@@ -229,6 +229,43 @@ int main()
                   "AN AREA LAMP'S BOUNCE FALLS OFF AS ITS DIRECT LIGHT: the injection-to-pixel ratio "
                   "holds from 1.5 m to 2.5 m (%.3f -> %.3f, within 15 %%)", areaRatio[0], areaRatio[1]);
         view->setPostFx(PostFxDesc());
+    }
+
+    // ---- 4. numBounces 0 IS THE DIRECT STORE ALONE (BOUNCES-ZERO-1) ------------------
+    // A constant sky lights the floor too. At 0 bounces the store holds the lamp's direct
+    // light and nothing a surface re-emits of the sky: the floor voxel reads what it read
+    // with no sky at all. At 1 it re-emits the sky as well, and reads more.
+    {
+        LightDesc l;
+        l.type = LightType::Point;
+        l.intensity = 4.0f;
+        l.range = 6.0f;
+        l.castShadows = false;
+        s->setLight(lamp, l);
+        s->setNodeTransform(lamp, Vec3(float(cx), float(cy + 1.0), float(cz)), Quat(), Vec3(1, 1, 1));
+        gi.numBounces = 0;
+        s->setGlobalIllumination(gi);
+        render(e, 8);
+        const double noSky = settledVoxel(e, s, vx, vy, vz, v);
+        const unsigned char px[4] = { 128, 128, 128, 255 };
+        SkyDesc sky;
+        sky.mode = SkyMode::Equirectangular;
+        sky.equirect = s->createTexture(1, 1, px, true);
+        s->setSky(sky);
+        s->setEnvironmentLight(Colour(1.0f, 1.0f, 1.0f));
+        render(e, 30);
+        const double zero = settledVoxel(e, s, vx, vy, vz, v);
+        gi.numBounces = 1;
+        s->setGlobalIllumination(gi);
+        render(e, 8);
+        const double one = settledVoxel(e, s, vx, vy, vz, v);
+        std::printf("   the floor voxel, lamp 1 m up: no sky %.6f | sky, 0 bounces %.6f | sky, 1 bounce %.6f\n",
+                    noSky, zero, one);
+        CHECK_MSG(noSky > 0.0 && std::fabs(zero / noSky - 1.0) <= 1e-3,
+                  "numBounces 0 IS THE DIRECT STORE ALONE: the sky changes the stored light by %.4f %% (bar 0.1 %%)",
+                  100.0 * (zero / noSky - 1.0));
+        CHECK_MSG(one > zero * 1.05, "...and at 1 bounce the floor re-emits the sky as well (%.6f > %.6f)", one,
+                  zero);
     }
 
     GiParams off; off.mode = GiMode::Off;

@@ -481,7 +481,7 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
         // a scene that pinned a volume OPENS UNPINNED, with the automatic fit,
         // which is the only behaviour left. Deliberately no tolerance and no
         // migration — there is nothing the pin could be migrated to.
-        scene->giNumBounces = qBound(1, sceneObj.value("giNumBounces").toInt(scene->giNumBounces), 4);
+        scene->giNumBounces = qBound(0, sceneObj.value("giNumBounces").toInt(scene->giNumBounces), 4);
         // THE GI UPDATE BUDGET (FIX WAVE B1).
         scene->giUpdateBudget =
             qBound(0, sceneObj.value("giUpdateBudget").toInt(scene->giUpdateBudget), 512);
