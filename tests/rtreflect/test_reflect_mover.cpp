@@ -513,7 +513,18 @@ static int costPosedMain(Engine *e)
     std::printf("target: 1920x1080, 30 posed glossy spheres over a glossy floor: the reflection %.4f ms on / %.4f ms "
                 "off, the motion jobs %.4f / %.4f ms; the posed identification costs %+.4f ms [%d / %d frames]\n",
                 a, b, am, bm, (a + am) - (b + bm), nOn, nOff);
-    return 0;
+    // THE BAR (POSED-COST-1, lane ATOM-ENGINE-1): the posed identification at 1080p within
+    // 2 % of the desktop target's frame (60 fps: 16.7 ms -> 0.33 ms), measured under
+    // scripts/gpu-exclusive.sh with the clocks locked. Measured 2026-10-02 at 2100 MHz:
+    // +0.22 ms (the job 0.17 ms) for 30 posed spheres — inside the bar, so the job stays a
+    // per-pixel pass. A per-ITEM pass (the posed items' screen rectangles) would need
+    // posed bounds the GPU scene does not keep (its box is Ogre's Item AABB: the mesh's,
+    // which a pose does not move).
+    const double posed = (a + am) - (b + bm);
+    const bool within = nOn > 0 && nOff > 0 && posed <= 0.33;
+    std::printf("%s: the posed identification %+.4f ms at 1920x1080 (bar 0.33 ms: 2%% of a 60 fps frame)\n",
+                within ? "ok" : "FAIL", posed);
+    return within ? 0 : 1;
 }
 
 int main(int argc, char **argv)
@@ -702,7 +713,7 @@ int main(int argc, char **argv)
             render(e, 60);
             for (int i = 0; i < 240; ++i) {
                 const int mode = 1 + (i & 1);
-                setenv("JAH_R7_EDGE_CLASSES", getenv("JAH_EDGE_MODE3") ? "3" : mode == 1 ? "1" : "2", 1);
+                setenv("JAH_R7_EDGE_CLASSES", mode == 1 ? "1" : "2", 1);
                 if (phase == 0) ++frame;
                 if (phase == 0) edgePlace(pathAt(frame));
                 render(e, 1);

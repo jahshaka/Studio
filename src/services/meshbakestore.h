@@ -158,7 +158,7 @@ QVector<BakeTarget> modelBakesNeeded(QSqlDatabase conn, const QString &root,
 // must never run on the UI thread, and the store write is a rename once the
 // bytes are staged. So: PREPARE on the database thread (resolve the settings
 // and the transform), RUN anywhere (parse, serialize, stage + flush into the
-// store — the bake itself is as wide as the machine, MeshBake::setBakeThreads),
+// store — the bake itself is 4 wide by default, MeshBake::setBakeThreads),
 // COMMIT on the database thread (publish the staged object under every row that
 // names the content). ProjectArchiver's import bakes this way.
 

@@ -1353,6 +1353,14 @@ VrInteraction::Teleport VrInteraction::traceArc(unsigned hand, const VrHandState
 
 VrInteraction::~VrInteraction() { releaseArc(); }
 
+void VrInteraction::detachHost()
+{
+    if (mInstalled) end();
+    releaseArc();
+    mDeps = Deps();
+    mSource = nullptr;
+}
+
 void VrInteraction::releaseArc()
 {
     // NOTHING BUILT, NOTHING ASKED. This is the state every ordinary path is
@@ -1362,7 +1370,9 @@ void VrInteraction::releaseArc()
     // is being taken apart, and a destructor is the worst place to find out.
     if (!mArc) return;
     // THE SCENE THAT OWNS THE NODES, if it still answers (vrarc.h's lifetime
-    // note): give them back. A different answer — or none — means the scene
+    // note): give them back. After detachHost() the callable is empty, so a
+    // destructor running after the shell's teardown never consults the viewport
+    // (VR-TEARDOWN-1: ~VrApi under ~ScriptEngine called it on a dead one). A different answer — or none — means the scene
     // was destroyed and took them with it, so they are merely forgotten.
     Scene *target = mDeps.engineScene ? mDeps.engineScene() : nullptr;
     if (target && target == mArc->target()) mArc->clear();

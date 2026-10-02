@@ -246,7 +246,6 @@ int main()
         PbrParams p;
         p.shadingModel = ShadingModel::Distortion;
         p.alpha = 1.0f;                 // the material's own strength
-        p.twoSided = true;
         distortMat = s->createPbrMaterial(p);
         REQUIRE(distortMat);
         REQUIRE(s->setPbrTexture(distortMat, PbrTextureSlot::Normal, map));
@@ -255,6 +254,7 @@ int main()
     REQUIRE(quadMesh);
     const NodeId emitter = s->createNode();
     REQUIRE(emitter && s->attachMesh(emitter, quadMesh, distortMat));
+    s->setNodeFaceCull(emitter, FaceCull::TwoSided);   // both faces warp (the node's cull)
     // A flat quad covering the middle of the frame, in FRONT of the wall.
     enginetest::setNodeScale(s, emitter, Vec3(1.6f, 1.6f, 1.0f));
     enginetest::setNodePosition(s, emitter, Vec3(0.0f, 0.0f, -1.0f));

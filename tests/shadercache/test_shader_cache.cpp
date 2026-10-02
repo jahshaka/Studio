@@ -29,6 +29,7 @@
 // `--corruption-only`, i.e. cases 2-4 ALONE, because those are the only cases
 // instrumentation adds anything to (TEST_GATE_AUDIT.md §3).
 #include "jahshaka/engine/Engine.h"
+#include "../support/enginetesthelpers.h"
 
 #include <cstdio>
 #include <cstdlib>
@@ -556,7 +557,142 @@ static void abandoned_save_leaves_no_torn_file(const char *self) {
     CHECK(after.files > 0, "the cache directory works again after the abandoned saves");
 }
 
+// ---------------------------------------------------------------------------
+// --engine-pipelines: A PIPELINE THE ENGINE BUILDS LAZILY REACHES THE DISK
+// (PIPELINE-CACHE-1 fix round). The ray tier's compute pipelines go through the
+// device's VkPipelineCache, but the save's dirt was Hlms-only: a warm-Hlms run
+// that first builds one (here: a mover's velocity job on the ray tier) compiled
+// nothing, so its pipelines were never saved and every later boot rebuilt them
+// cold. Three engine PROCESSES against one directory, the driver's own disk cache
+// OFF (the ctest row sets __GL_SHADER_DISK_CACHE=0, else the driver hides the
+// cost): SEED (the scene on the ray tier, everything compiled and saved); then the
+// PIPELINE LAYER ALONE is lost (pipeline.cache becomes bytes the driver refuses,
+// its manifest line made to match — case 9's technique: the Hlms and microcode
+// layers stay warm); LAZY (the same scene: no Hlms shader compiles, every engine
+// pipeline is built cold — the run the old dirt rule never saved); REBOOT (LAZY
+// again). Gate: LAZY compiles nothing, builds the engine pipelines and its save
+// rewrites pipeline.cache; REBOOT loads that layer and builds the same pipelines in
+// under a quarter of LAZY's time.
+static ShaderCacheStats enginePipelineCycle(const char *what) {
+    ShaderCacheStats stats;
+    std::string error;
+    auto e = Engine::create(cacheConfig(), error);
+    if (!e) { std::printf("FAIL: %s: Engine::create: %s\n", what, error.c_str()); ++gFailures; return stats; }
+    e->setFixedFrameDelta(1.0f / 60.0f);
+    View *v = e->createOffscreenView("view", 640, 360, Colour(0.45f, 0.55f, 0.70f));
+    Scene *s = v ? e->createScene("scene") : nullptr;
+    if (v && s) {
+        v->setScene(s);
+        const MeshId cube = s->createMesh(enginetest::unitCubeMesh());
+        const NodeId floor = s->createNode();
+        PbrParams fp; fp.albedo = Colour(0.85f, 0.85f, 0.85f); fp.metalness = 1.0f; fp.roughness = 0.2f;
+        s->attachMesh(floor, cube, s->createPbrMaterial(fp));
+        enginetest::setNodeScale(s, floor, Vec3(30.0f, 0.2f, 30.0f));
+        enginetest::setNodePosition(s, floor, Vec3(0.0f, -0.1f, 0.0f));
+        const NodeId box = s->createNode();
+        s->setNodeMovable(box, true);
+        PbrParams bp; bp.albedo = Colour(0.95f, 0.8f, 0.6f); bp.metalness = 1.0f; bp.roughness = 0.25f;
+        s->attachMesh(box, cube, s->createPbrMaterial(bp));
+        enginetest::addDirectionalLight(s, Vec3(-0.3f, -1.0f, 0.4f), 2.0f);
+        GiParams gi; gi.mode = GiMode::Vct; gi.quality = GiQuality::High; gi.numBounces = 1;
+        gi.cascadeCount = 1;
+        gi.cascadeSet[0] = GiParams::GiCascadeDesc{ 20.0f, 128, 0.0f };
+        s->setGlobalIllumination(gi);
+        PostFxDesc fx; fx.allowOffscreen = true; fx.ssr = 2;
+        v->setPostFx(fx);
+        enginetest::testCameraLookAt(v, Vec3(0.0f, 1.5f, 6.0f), Vec3(0.0f, 0.5f, 0.0f));
+        for (int i = 0; i < 60; ++i) {
+            enginetest::setNodePosition(s, box, Vec3(-1.5f + 0.05f * float(i), 0.5f, 0.0f));
+            e->renderOneFrame();
+        }
+    }
+    e->saveShaderCache();
+    CHECK(e->flushShaderCache(30000), "the shader cache's write finished inside its budget");
+    stats = e->shaderCacheStats();
+    if (s) e->destroyScene(s);
+    if (v) e->destroyView(v);
+    e.reset();
+    std::printf("    [%s] compiled=%u fromCache=%u pipeline=%s engine pipelines %u in %.3f ms\n", what,
+                stats.compiledThisRun, stats.loadedThisRun, stats.pipelineCacheReason.c_str(),
+                stats.enginePipelinesThisRun, stats.enginePipelineMs);
+    std::fflush(stdout);
+    return stats;
+}
+
+static long long mtimeNs(const std::string &p) {
+    struct stat st{};
+    if (::stat(p.c_str(), &st) != 0) return 0;
+    return (long long)st.st_mtim.tv_sec * 1000000000LL + st.st_mtim.tv_nsec;
+}
+
+/// One cycle per PROCESS (the pipeline counters are process-wide, like the device).
+static int enginePipelinesMain(const char *self) {
+    gCacheDir = "shadercache-pipelines";
+    ::mkdir(gCacheDir.c_str(), 0755);
+    wipeDir();
+    std::string err;
+    const auto child = [&](const char *what) {
+        const std::string cmd = std::string(self) + " --engine-pipelines-cycle " + what + " > ep-" + what + ".log 2>&1";
+        const int rc = std::system(cmd.c_str());
+        std::ifstream f(std::string("ep-") + what + ".log");
+        std::string line, kv;
+        while (std::getline(f, line))
+            if (line.rfind("EPSTATS ", 0) == 0) kv = line.substr(8);
+            else if (line.rfind("ok:", 0) == 0 || line.rfind("FAIL", 0) == 0 || line.rfind("    [", 0) == 0)
+                std::printf("%s\n", line.c_str());
+        if (rc != 0) { std::printf("FAIL: the %s cycle exited %d\n", what, rc); ++gFailures; }
+        return kv;
+    };
+    const std::string seed = child("seed");
+    // THE PIPELINE LAYER LOST, the others kept: microcode bytes under the pipeline
+    // name, the manifest line stamped to match (the driver refuses the header).
+    {
+        std::vector<char> mbytes, micro;
+        const std::string manifest = gCacheDir + "/cache-manifest.txt";
+        if (!readFile(manifest, mbytes) || !readFile(gCacheDir + "/microcode.cache", micro)) {
+            std::printf("FAIL: the seed wrote no manifest/microcode\n");
+            return 1;
+        }
+        std::string text(mbytes.begin(), mbytes.end());
+        const size_t mAt = text.find("file microcode.cache "), pAt = text.find("file pipeline.cache ");
+        if (mAt == std::string::npos || pAt == std::string::npos) {
+            std::printf("FAIL: the manifest lists no pipeline layer\n");
+            return 1;
+        }
+        const std::string microTail = text.substr(mAt + 21, text.find('\n', mAt) - (mAt + 21));
+        text.replace(pAt, text.find('\n', pAt) - pAt, "file pipeline.cache " + microTail);
+        writeFile(manifest, std::vector<char>(text.begin(), text.end()));
+        writeFile(gCacheDir + "/pipeline.cache", micro);
+    }
+    const long long seedMtime = mtimeNs(gCacheDir + "/pipeline.cache");
+    const std::string lazy = child("lazy");
+    const long long lazyMtime = mtimeNs(gCacheDir + "/pipeline.cache");
+    const std::string reboot = child("reboot");
+    unsigned sc = 0, sn = 0, lc = 0, ln = 0, rc = 0, rn = 0; double sm = 0, lm = 0, rm = 0;
+    std::sscanf(seed.c_str(), "%u %u %lf", &sc, &sn, &sm);
+    std::sscanf(lazy.c_str(), "%u %u %lf", &lc, &ln, &lm);
+    std::sscanf(reboot.c_str(), "%u %u %lf", &rc, &rn, &rm);
+    if (sn == 0) { std::printf("ok:   no engine pipelines on this machine (no ray tier); nothing to persist\n"); return gFailures ? 1 : 0; }
+    std::printf("RESULT seed %u pipelines %.3f ms (compiled %u); lazy %u pipelines %.3f ms (compiled %u); "
+                "reboot %u pipelines %.3f ms (compiled %u)\n", sn, sm, sc, ln, lm, lc, rn, rm, rc);
+    CHECK(lc == 0, "the LAZY run is warm-Hlms: it compiled no shader");
+    CHECK(ln == sn, "...and built the SEED run's engine pipelines again, the pipeline layer lost");
+    CHECK(lazyMtime > seedMtime, "the LAZY run's save rewrote pipeline.cache (an engine pipeline is dirt)");
+    CHECK(rn == ln, "the REBOOT builds the same engine pipelines");
+    CHECK(rm < 0.25 * lm, "...from the pipeline layer: under a quarter of the LAZY run's build time");
+    std::printf("%d check(s), %d failure(s)\n", gChecks, gFailures);
+    return gFailures ? 1 : 0;
+}
+
 int main(int argc, char **argv) {
+    if (argc > 1 && std::strcmp(argv[1], "--engine-pipelines") == 0) return enginePipelinesMain(argv[0]);
+    if (argc > 2 && std::strcmp(argv[1], "--engine-pipelines-cycle") == 0) {
+        gCacheDir = "shadercache-pipelines";
+        const std::string what = argv[2];
+        const ShaderCacheStats st = enginePipelineCycle(what.c_str());
+        std::printf("EPSTATS %u %u %.4f\n", st.compiledThisRun, st.enginePipelinesThisRun, st.enginePipelineMs);
+        return gFailures ? 1 : 0;
+    }
     // The cache directory lives beside the binary; ctest gives each suite its
     // own working directory, so nothing here can reach a real user's cache.
     gCacheDir = "shadercache-test";
