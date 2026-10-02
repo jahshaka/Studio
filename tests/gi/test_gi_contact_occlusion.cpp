@@ -734,12 +734,16 @@ int main()
     // same pixels with the cube hidden: DIRECTLY (a low camera beside it: the floor pixel,
     // the gather's rays meeting the mover) and IN A MIRROR (a vertical mirror 3 m away:
     // the reflection ray's HIT on the floor under the mover, whose store radiance the
-    // mover must gate — jahMoverSkyVisibility). Bars: the direct reading within 0.05 of
-    // the closed form, the mirror's within 0.05 of the direct one.
-    // THE MIRROR HALF GATES (gi.contact_occlusion); THE DIRECT HALF is a target
-    // (gi.contact_occlusion_target): the floor pixel reads 0.380 against 0.446 — the
-    // gather's own answer, too dark by 0.066 (HOVER-GATHER-1).
-    if (rays && !measureMode) {
+    // mover must gate — jahMoverSkyVisibility). BOTH HALVES GATE (gi.contact_occlusion).
+    // THE DIRECT READING IS TAKEN WITH THE MIRROR HIDDEN (HOVER-GATHER-1, measured): the
+    // mirror is a 3 x 8 m slab 3 m from the point — it stands in the point's sky up to
+    // 45 degrees over a 106-degree arc, and with the cube shown it REFLECTS the cube's
+    // dark side into the point (a reflected ray at 9.5-26.6 degrees returns through the
+    // cube). Seen with it, the floor read 0.380 against a closed form that assumes an
+    // open sky — the fixture's own extra occluder, not the gather's (the open floor read
+    // 0.563 of the sky's 0.647: the mirror's share). Hidden, the gather reads 0.454; the
+    // centre-of-texel quadrature (rayJitterOff) 0.496 — the jitter is what makes it exact.
+    if (rays && !measureMode && !targetMode) {
         const Tier &epic = kTiers[0];
         setTier(f, epic, GiToggle::Auto, GiToggle::Auto);
         {   // THE RAY TIER'S REFLECTION ROW (Epic's trace): the mirror answers with rays,
@@ -779,6 +783,7 @@ int main()
         const auto readCentre = [&](const Vec3 &target, bool cube) {
             f.s->setNodeVisible(hover, cube);
             const bool viaMirror = target.x < x0 - 3.0f;
+            f.s->setNodeVisible(mirror, viaMirror);
             f.view->setCamera(enginetest::testCameraDescLookAt(viaMirror ? mirrorEye : eye, target));
             f.s->refreshGlobalIllumination();
             int frames = 120;
@@ -808,20 +813,17 @@ int main()
                     dOpen, mirrored, mCube, mOpen);
         std::printf("   (each reading settled: 120 frames, then until giAtRest, then 8 averaged — at most %d "
                     "frames)\n", settleFrames);
-        if (targetMode) {
-            // THE TARGET: the floor pixel itself (the gather's own answer) — 0.380 at
-            // delivery, too dark by 0.066 (HOVER-GATHER-1).
-            CHECK_MSG(std::fabs(direct - closed) <= 0.05,
-                      "the floor under a hovering mover is darkened by its sky occlusion: %.3f against the "
-                      "closed form %.3f (bar 0.05)", direct, closed);
-        } else {
-            // THE MOVER GATE'S BAR: the mirror's reflection ray HITS the floor under the
-            // cube and reads the store, which holds no mover — only the hit's mover gate
-            // (jahMoverSkyVisibility) can darken it. 0.501 at delivery.
-            CHECK_MSG(std::fabs(mirrored - closed) <= 0.06,
-                      "a mirror's reflection of the floor under a hovering mover carries the mover's sky "
-                      "occlusion: %.3f against the closed form %.3f (bar 0.06)", mirrored, closed);
-        }
+        // THE GATHER'S OWN ANSWER: the floor pixel under the mover (0.454 at HOVER-GATHER-1,
+        // the open sky's 1 - F = 0.446 — the jittered estimator's mean).
+        CHECK_MSG(std::fabs(direct - closed) <= 0.02,
+                  "the floor under a hovering mover is darkened by its sky occlusion: %.3f against the "
+                  "closed form %.3f (bar 0.02)", direct, closed);
+        // THE MOVER GATE'S BAR: the mirror's reflection ray HITS the floor under the
+        // cube and reads the store, which holds no mover — only the hit's mover gate
+        // (jahMoverSkyVisibility) can darken it. 0.501 at delivery.
+        CHECK_MSG(std::fabs(mirrored - closed) <= 0.06,
+                  "a mirror's reflection of the floor under a hovering mover carries the mover's sky "
+                  "occlusion: %.3f against the closed form %.3f (bar 0.06)", mirrored, closed);
     }
 
     f.view->setScene(nullptr);

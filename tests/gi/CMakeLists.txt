@@ -1520,10 +1520,10 @@ set_tests_properties(gi.gather_trace PROPERTIES
 # voxel and card stores (fork sky pass, CONTACT-OCCLUSION-1). The photon-target twin:
 # the field alone (Low: arm A 0.08 — the probe spacing, 0.31 m across and 0.625 m in
 # height: the floor reads its cage's upper layer 0.47 m above it — and arm B 0.06) and
-# Epic's three bounces against the three-bounce solve (0.03); and case D, the floor under
-# a hovering 2 m MOVER at Epic: 0.380 against the closed form 0.446 (the gather's own answer,
-# too dark by 0.066 — HOVER-GATHER-1). Case D's MIRROR half gates in gi.contact_occlusion:
-# the reflection's hit on the floor under the mover within 0.06 of 0.446 (the mover gate).
+# Epic's three bounces against the three-bounce solve (0.03). Case D gates in
+# gi.contact_occlusion: the floor under a hovering 2 m MOVER at Epic within 0.02 of the
+# closed form 0.446 (read with the fixture's mirror hidden — HOVER-GATHER-1), and the
+# mirror's reflection of that point within 0.06 of it (the mover gate).
 add_executable(test_gi_contact_occlusion test_gi_contact_occlusion.cpp)
 set_target_properties(test_gi_contact_occlusion PROPERTIES
     AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
