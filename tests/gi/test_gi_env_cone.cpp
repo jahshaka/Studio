@@ -3,7 +3,8 @@
 // Every escape in the renderer reads the sky through ONE function,
 // jahEnvCone( dir, tan(half-angle) ) (src/rayquery/include/jah_environment.glsl):
 // ONE fetch of the GGX-prefiltered sky chain at the mip whose lobe matches the
-// cone. A GGX lobe is not a box, so this is an approximation — the mapping
+// cone (a cone wider than tan 0.45: seven fetches, its seven equal cells, each
+// at its own cell's lobe — CONE-ENV-EDGE-1). A GGX lobe is not a box, so this is an approximation — the mapping
 // picks the lobe whose mean of (1 - cos) about its axis is 0.6 of the uniform
 // cone's (the factor measured HERE: 1.0 is the band-1-exact match, but a GGX
 // lobe's heavy tail then reaches the horizon glow from a zenith cone; the
@@ -117,19 +118,11 @@ int main()
                         double(dirs[worstIdx].x), double(dirs[worstIdx].y), double(dirs[worstIdx].z),
                         lum(ans[worstIdx].lookup), lum(ans[worstIdx].reference), counted);
             if (std::string(a.name).find("printed") != std::string::npos) continue;
-            // CONE-ENV-EDGE-1 (owner-filed, SKY-ATMOSPHERE-1): the six-cone
-            // diffuse aperture at a 5-degree sun is a PRINTED TARGET, not a gate.
-            // The physical sky has a hard horizon over a dark planet band, and
-            // the one-fetch GGX lobe (the 0.6 lobe factor was fitted on the
-            // retired smooth sky) reads a wide cone over that edge 9.5 % off the
-            // box integral (35 degrees: 4.3 %). The bar is NOT widened; the
-            // arm is reported until the lookup is refitted.
-            if (elevDeg < 10.0f && a.tan > 0.5f) {
-                std::printf("   TARGET CONE-ENV-EDGE-1: %s at sun %.0f deg — mean |err| %.2f %% against "
-                            "the %.0f %% bar (reported, not gating)\n",
-                            a.name, elevDeg, 100.0 * mean, 100.0 * kBar);
-                continue;
-            }
+            // CONE-ENV-EDGE-1: the six-cone aperture at a 5-degree sun (the physical
+            // sky's hard horizon over the dark planet band, the glow round a low sun)
+            // read 9.5-12.0 % off the box integral through ONE wide GGX lobe; a wide
+            // cone is now seven narrow ones (jah_environment.glsl): 4.04 % (35 degrees
+            // 1.06 %), and the arm gates at the bar it always had.
             char msg[160];
             std::snprintf(msg, sizeof msg,
                           "the cone lookup is within %.0f %% of the cone integral (%s, sun %.0f deg)",
