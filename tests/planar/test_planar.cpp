@@ -339,6 +339,20 @@ int main()
         s->setNodeFaceCull(twoSided, FaceCull::Material);
         CHECK(s->setNodePlanarReflector(twoSided, true),
               "…and the very same plate is then accepted");
+        // A MATERIAL SWAP UNDER THE ARMED MIRROR moves nothing it cares about (a
+        // material has no cull of its own): the reflector is NOT torn down and re-armed.
+        {
+            PbrParams q = p;
+            q.albedo = Colour(0.9f, 0.85f, 0.8f);
+            const MaterialId other = s->createPbrMaterial(q);
+            const unsigned armsBefore = s->planarReflectorArms();
+            CHECK(other && s->setNodeMaterial(twoSided, other) && s->setNodeMaterial(twoSided, mat),
+                  "two material swaps under the armed plate");
+            std::printf("   reflector arms across two swaps: %u -> %u\n", armsBefore, s->planarReflectorArms());
+            CHECK(armsBefore > 0 && s->planarReflectorArms() == armsBefore && s->nodePlanarReflector(twoSided),
+                  "…re-arm the mirror ZERO times and leave it armed");
+            s->destroyMaterial(other);
+        }
         // THE NODE TURNS TWO-SIDED UNDER THE ARMED MIRROR (CULL-TWIN-DEBTS-1): the
         // refusal is re-derived on the spot (it used to wait for the next flag change).
         engine->renderOneFrame();
