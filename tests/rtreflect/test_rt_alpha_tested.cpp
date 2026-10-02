@@ -419,13 +419,14 @@ int main(int argc, char **argv)
     }
     // THE FENCE: a Cutout material over the bars, and its opaque twin.
     f.fence = s->createNode();
+    TextureId bars = 0;
     {
         PbrParams p; p.albedo = Colour(1.0f, 1.0f, 1.0f); p.roughness = 0.7f; p.twoSided = true;
         p.alphaMode = PbrAlphaMode::Cutout; p.alphaCutoff = 0.5f;
         f.fenceCut = s->createPbrMaterial(p);
         PbrParams o = p; o.alphaMode = PbrAlphaMode::Opaque;
         f.fenceSolid = s->createPbrMaterial(o);
-        const TextureId bars = barsTexture(s);
+        bars = barsTexture(s);
         if (!(bars && s->setPbrTexture(f.fenceCut, PbrTextureSlot::Albedo, bars) &&
               s->setPbrTexture(f.fenceSolid, PbrTextureSlot::Albedo, bars))) {
             std::printf("FAIL: the bars texture\n"); return 1;
@@ -550,6 +551,48 @@ int main(int argc, char **argv)
     // submesh orders. Each ray is tested against ITS OWN submesh's datablock and row:
     // the bars carry the mask's coverage, the panel all of it.
     s->setNodeMaterial(f.floor, f.floorMatte);
+
+    // A TEXTURE RE-UPLOADED IN PLACE RE-MAKES THE MASK (ALPHA-MASK-IDENTITY-1). The
+    // mask's identity was (pointer, name, size, test) and the card sun-term trigger
+    // keyed on the material word: neither moves when updateTexture writes new texels
+    // into the same texture, so the rays and the cards kept the OLD holes. Both now
+    // key on the texture's upload generation: the bars written SOLID in place must
+    // shadow like the opaque fence, and the bars written back like the bars.
+    {
+        enginetest::testCameraLookAt(f.view, Vec3(0.0f, 5.0f, -6.0f), Vec3(0.0f, 0.0f, -1.0f));
+        f.view->setPostFx(fx);
+        wear(1);
+        const unsigned n = 64;
+        std::vector<unsigned char> solid(size_t(n) * n * 4u);
+        for (size_t i = 0; i < size_t(n) * n; ++i) {
+            solid[i * 4u] = 230; solid[i * 4u + 1u] = 40; solid[i * 4u + 2u] = 30; solid[i * 4u + 3u] = 255;
+        }
+        const bool wrote = s->updateTexture(bars, n, n, solid.data());
+        settle();
+        int a = 0, cr = 0;
+        float an = 0.0f;
+        const float raySolid = rayCoverage(s, an, a);
+        const float cardSolid = cardCoverage(s, cr);
+        // ...and back to the bars, in place again.
+        std::vector<unsigned char> barsRgba(size_t(n) * n * 4u);
+        for (unsigned y = 0; y < n; ++y)
+            for (unsigned x = 0; x < n; ++x) {
+                unsigned char *p = &barsRgba[(size_t(y) * n + x) * 4u];
+                p[0] = 230; p[1] = 40; p[2] = 30; p[3] = ((x * kBars / n) % 2u) == 0u ? 255 : 0;
+            }
+        const bool wroteBack = s->updateTexture(bars, n, n, barsRgba.data());
+        settle();
+        const float rayBars = rayCoverage(s, an, a);
+        const float cardBars = cardCoverage(s, cr);
+        std::printf("RESULT in-place re-upload: solid -> ray %.3f card %.3f; bars again -> ray %.3f card %.3f\n",
+                    raySolid, cardSolid, rayBars, cardBars);
+        CHECK_MSG(wrote && raySolid > 0.95f && cardSolid > 0.9f,
+                  "a mask re-uploaded SOLID in place: the rays (%.3f) and the cards (%.3f) see no holes", raySolid,
+                  cardSolid);
+        CHECK_MSG(wroteBack && std::fabs(rayBars - analytic) <= 0.05f && std::fabs(cardBars - analytic) <= 0.05f,
+                  "...and the bars re-uploaded in place: the holes are back (ray %.3f, card %.3f vs %.3f +- 0.05)",
+                  rayBars, cardBars, analytic);
+    }
     s->setNodeVisible(f.fence, false);
     auto *os = static_cast<jahshaka::engine::detail::OgreScene *>(s);
     for (int order = 0; order < 2; ++order) {
