@@ -569,8 +569,7 @@ int convertPbrMaterial(Ctx &c, iris::PbrMaterial *pbr, iris::FaceCullingMode cul
     default: break;   // OPAQUE is the glTF default
     }
 
-    const bool matTwoSided = pbr->renderStates.rasterState.cullMode == iris::CullMode::None;
-    if (matTwoSided || cullMode == iris::FaceCullingMode::None) m["doubleSided"] = true;
+    if (cullMode == iris::FaceCullingMode::None) m["doubleSided"] = true;   // the node's cull
 
     // Clear coat has a real glTF home (HLMS_ADOPTION P1 §3.4): three.js maps
     // KHR_materials_clearcoat straight onto MeshPhysicalMaterial.clearcoat /

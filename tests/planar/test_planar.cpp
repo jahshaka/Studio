@@ -340,6 +340,21 @@ int main()
         CHECK(s->setPbrMaterial(mat, p), "the material is turned single-sided");
         CHECK(s->setNodePlanarReflector(twoSided, true),
               "…and the very same plate is then accepted");
+        // THE MATERIAL TURNS TWO-SIDED UNDER THE ARMED MIRROR (CULL-TWIN-DEBTS-1): the
+        // refusal is re-derived on the spot (it used to wait for the next flag change).
+        engine->renderOneFrame();
+        // lastError() is sticky: put an unrelated reason there first, so the check
+        // below reads THIS refusal and not the one above.
+        CHECK(!s->setNodePlanarReflector(NodeId(0x7FFFFFF0u), true) &&
+              engine->lastError().find("two-sided") == std::string::npos, "an unrelated error first");
+        p.twoSided = true;
+        CHECK(s->setPbrMaterial(mat, p), "the armed plate's material turns two-sided");
+        CHECK(engine->lastError().find("two-sided") != std::string::npos,
+              "…and the armed mirror is refused again, naming two-sidedness");
+        CHECK(s->nodePlanarReflector(twoSided), "…keeping its flag for when it is one-sided again");
+        p.twoSided = false;
+        CHECK(s->setPbrMaterial(mat, p), "one-sided again");
+        engine->renderOneFrame();
         CHECK(s->setNodePlanarReflector(twoSided, false), "cleared again, leaving the scene as found");
     }
 
