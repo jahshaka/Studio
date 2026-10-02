@@ -741,8 +741,8 @@ QString ProjectArchiver::importedText() const
 }
 
 namespace {
-/// The worker: every job in turn (each bake is as wide as the machine on its
-/// own), stopping at a cancel. `report(i, n)` runs on the worker.
+/// The worker: every job in turn (each bake runs the pool at its own width,
+/// MeshBake::setBakeThreads), stopping at a cancel. `report(i, n)` runs on the worker.
 QVector<MeshBakeStore::BakeResult> bakeAll(const QVector<MeshBakeStore::BakeJob> &jobs,
                                            const std::atomic<bool> *canceled,
                                            const std::function<void(int, int)> &report)
