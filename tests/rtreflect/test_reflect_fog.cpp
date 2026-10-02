@@ -157,7 +157,7 @@ int main(int argc, char **argv)
     // THE COST (--cost; under scripts/gpu-exclusive.sh with locked clocks): the World
     // fog and the height fog on, the mirror filling a 1080p view, the reflection's own
     // timestamps (trace + decode + filter) with the fog along it and without
-    // (JAHSHAKA_REFLECT_FOG_OFF, read per frame), alternating 30-frame blocks in ONE
+    // (Scene::setReflectionFogEnabled, the door), alternating 30-frame blocks in ONE
     // process, each block's first 10 frames skipped (the timestamps come back late);
     // the still wall and the moving one (the write-back's share).
     if (cost && !costFrame) {
@@ -175,7 +175,7 @@ int main(int argc, char **argv)
             int n[2] = { 0, 0 };
             for (int round = 0; round < 24; ++round)
                 for (int arm = 0; arm < 2; ++arm) {
-                    if (arm) setenv("JAHSHAKA_REFLECT_FOG_OFF", "1", 1); else unsetenv("JAHSHAKA_REFLECT_FOG_OFF");
+                    s->setReflectionFogEnabled(arm == 0);
                     for (int i = 0; i < 30; ++i) {
                         if (which) enginetest::setNodePosition(s, walls[1], Vec3(0.0f, 0.001f * float(i & 1), kWallZ + 0.1f));
                         e->renderOneFrame();
@@ -183,7 +183,7 @@ int main(int argc, char **argv)
                         if (i >= 10 && st.reflectMs > 0.0f) { sum[arm] += st.reflectMs; ++n[arm]; }
                     }
                 }
-            unsetenv("JAHSHAKA_REFLECT_FOG_OFF");
+            s->setReflectionFogEnabled(true);
             std::printf("COST 1920x1080, %s: the reflection %.4f ms with the fog along it (n %d), %.4f ms without "
                         "(n %d)\n", which ? "a moving wall (records)" : "a still wall", n[0] ? sum[0] / n[0] : -1.0,
                         n[0], n[1] ? sum[1] / n[1] : -1.0, n[1]);
