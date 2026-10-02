@@ -1684,11 +1684,12 @@ set_tests_properties(gi.voxel_feed PROPERTIES
     TIMEOUT 120 LABELS "engine" RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
 
 # gi.env_cone — THE ONE ENVIRONMENT'S CONE LOOKUP, MEASURED (PHOTON-ENV-1).
-# jahEnvCone reads the GGX-prefiltered sky chain at the mip whose lobe matches a
-# cone; this suite measures it against a 64-direction integral of the cube over
-# the same cone on the shipped (analytic) sky at the renderer's three apertures
-# (Engine::environmentCones: one job built from the shared file). Its own binary:
-# one engine per process.
+# jahEnvCone reads the GGX-prefiltered sky chain as equal-solid-angle cells (7, or
+# 19 for a wide cone, CONE-ENV-EDGE-1); this suite measures it against a
+# 1024-direction integral of the cube over the same cone on the shipped
+# (analytic) sky at the renderer's four apertures, and sweeps the aperture for a
+# step (Engine::environmentCones: one job built from the shared file). Its own
+# binary: one engine per process.
 add_executable(test_gi_env_cone test_gi_env_cone.cpp)
 set_target_properties(test_gi_env_cone PROPERTIES
     AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
