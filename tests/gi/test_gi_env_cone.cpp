@@ -187,9 +187,8 @@ int main()
         // measurement behind the field-against-cones step of gi.chain_face): the
         // TRUTH is the cosine-weighted mean of the cube's radiance over the upper
         // hemisphere (64 cosine-stratified directions, each a 0.05 cone's
-        // reference); against it the nine-band SH's irradiance / pi at +Y and the
-        // pixel's four-cone set (weights .25, 45 degrees off the normal, tan 0.983)
-        // through the lookup.
+        // reference); against it the nine-band SH's irradiance / pi at +Y (printed) and the
+        // four-cone set's escapes (weights .25, 45 degrees off the normal; gated below).
         {
             std::vector<EnvironmentConeQuery> q;
             const double g = 2.39996323;
@@ -203,23 +202,39 @@ int main()
             double truth = 0.0;
             for (const auto &x : ans) truth += lum(x.reference);
             truth /= double(ans.size() ? ans.size() : 1);
+            // THE FOUR-CONE SET'S ESCAPE (jahEnvQuadrant: each cone's azimuthal quadrant,
+            // cosine-weighted; the harness's negative tan) — GATED: its open-sky sum is the
+            // irradiance over pi within 5 % (CONE-ENV-EDGE-1; each cone's 44.5-degree solid
+            // angle read uniformly gave 1.07x at 35 degrees and 1.40x at 5).
             const double four[4][3] = { { 0.707107, 0.707107, 0 }, { 0, 0.707107, 0.707107 },
                                         { -0.707107, 0.707107, 0 }, { 0, 0.707107, -0.707107 } };
             std::vector<EnvironmentConeQuery> q4;
             for (const auto &d : four)
-                q4.push_back(EnvironmentConeQuery{ Vec3(float(d[0]), float(d[1]), float(d[2])), 0.98269f });
+                q4.push_back(EnvironmentConeQuery{ Vec3(float(d[0]), float(d[1]), float(d[2])), -1.0f });
             std::vector<EnvironmentConeAnswer> a4;
             e->environmentCones(scene, q4, a4);
-            double cones = 0.0;
-            for (size_t i = 0; i < a4.size(); ++i) cones += 0.25 * lum(a4[i].lookup);
+            // The quadrant query's reference is its quadrant's cosine-weighted mean over 1024
+            // directions (the harness): their 0.25-weighted sum is the irradiance over pi at
+            // 4096 directions, the truth the set gates against (the 64 0.05-cones above print).
+            double cones = 0.0, truth4 = 0.0;
+            for (size_t i = 0; i < a4.size(); ++i) {
+                cones += 0.25 * lum(a4[i].lookup);
+                truth4 += 0.25 * lum(a4[i].reference);
+                std::printf("   quadrant %zu: escape %.4f reference %.4f (%.3fx)\n", i, lum(a4[i].lookup),
+                            lum(a4[i].reference), lum(a4[i].lookup) / std::max(lum(a4[i].reference), 1e-9));
+            }
             float sh[27] = { 0 };
             scene->skyAmbientSh(sh);
             // +Y: 1, y = 1, z = 0, x = 0 -> c0 + c1 + c6 (3z^2 - 1 = -1) x -1 + c8 (x^2 - y^2 = -1) x -1
             float shUp[3];
             for (int c = 0; c < 3; ++c) shUp[c] = sh[c] + sh[3 + c] - sh[18 + c] - sh[24 + c];
-            std::printf("   IRRADIANCE AT +Y (luminance, radiance units): truth %.4f | SH %.4f (%.2fx) "
-                        "| four cones %.4f (%.2fx)\n", truth, lum(shUp), lum(shUp) / truth, cones,
-                        cones / truth);
+            std::printf("   IRRADIANCE AT +Y (luminance, radiance units): truth %.4f (64 cones %.4f) | SH %.4f "
+                        "(%.3fx) | four cones %.4f (%.3fx)\n", truth4, truth, lum(shUp), lum(shUp) / truth4,
+                        cones, cones / truth4);
+            char imsg[200];
+            std::snprintf(imsg, sizeof imsg, "the four-cone set's escape sums to the sky's irradiance within 5 %% "
+                          "(%.3fx, sun %.0f deg)", cones / truth4, elevDeg);
+            CHECK(truth4 > 1e-6 && std::fabs(cones / truth4 - 1.0) < 0.05, imsg);
         }
     }
 
