@@ -1308,6 +1308,12 @@ jah_gpu_row(cloud_2d.shape CLASS engine COMMAND test_cloud_2d shape
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(cloud_2d.shape PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
                      TIMEOUT 120 LABELS "engine")
+# cloud_2d.budget (CLOUD-BAKE-MEMORY-1): the cloud layer's textures after two bakes — the field
+# its stated budget to the texture manager's rounding (Types.h kCloudFieldBytes, every tier), the bake's intermediates gone.
+jah_gpu_row(cloud_2d.budget CLASS engine COMMAND test_cloud_2d budget
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(cloud_2d.budget PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+                     TIMEOUT 120 LABELS "engine")
 # gi.card_blend (PHOTON-GATHER-1d fix round): a Blend material on a card subject renders, holds no card.
 jah_gpu_row(gi.card_blend CLASS engine COMMAND test_gi_cards blend
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")

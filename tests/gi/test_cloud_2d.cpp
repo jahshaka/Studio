@@ -56,6 +56,12 @@ static int failures = 0;
         if (cond) std::printf("ok: %s\n", msg);                                 \
         else { std::printf("FAIL: %s\n", msg); ++failures; }                    \
     } while (0)
+#define CHECK_MSG(cond, fmt, ...)                                               \
+    do {                                                                        \
+        char buf_[512];                                                         \
+        std::snprintf(buf_, sizeof(buf_), fmt, __VA_ARGS__);                    \
+        CHECK(cond, buf_);                                                      \
+    } while (0)
 
 namespace {
 constexpr unsigned kSize = 128;
@@ -700,6 +706,49 @@ int caseBakeCost() {
                 res[0][2][2] - res[0][1][2], res[1][2][2] - res[1][1][2], cs.fieldBakes);
     return 0;
 }
+// cloud_2d.budget — THE CLOUD LAYER'S TEXTURE BUDGET (CLOUD-BAKE-MEMORY-1): after a bake, every
+// texture the cloud layer holds — the field (kCloudFieldBytes, Types.h: the 2048^2 R16F tile
+// with its mip chain, the same at every tier) and its two 1 x 1 stand-ins — within the stated
+// budget, and the bake's three 512^2 intermediates gone with the workspace that made them.
+int caseBudget() {
+    Rig r;
+    if (!r.make("test-cloud-2d-budget-ogre.log")) return 1;
+    r.sunAt(40.0f, 0.0f);
+    r.clouds(true, 0.5f, 1.0f);
+    r.settle();
+    // a second bake (a coverage edit): the field is re-rendered in place, never re-allocated
+    r.clouds(true, 0.6f, 1.0f);
+    r.settle();
+    const CloudStatus cs = r.escene->cloudStatus();
+    CHECK(cs.drawn && cs.fieldBakes >= 2, "the layer is drawn and its field baked twice");
+    std::vector<TextureMemoryEntry> tex;
+    CHECK(r.engine->textureMemory(tex), "the renderer lists its textures");
+    unsigned long long field = 0, layer = 0;
+    int fields = 0, intermediates = 0;
+    for (const TextureMemoryEntry &t : tex) {
+        const bool isField = t.name.find("cloudfield") != std::string::npos;
+        const bool isLayer = isField || t.name.find("cloudweathernone") != std::string::npos ||
+                             t.name.find("cloudnoair") != std::string::npos;
+        const bool isBake = t.name.find("cloudFootprint") != std::string::npos ||
+                            t.name.find("cloudBlur") != std::string::npos;
+        if (isLayer || isBake)
+            std::printf("   %-40s %4u x %4u %2u mips %-12s %10llu B %s\n", t.name.c_str(), t.width, t.height,
+                        t.mipmaps, t.format.c_str(), t.bytes, t.residency.c_str());
+        if (isField) { field += t.bytes; ++fields; }
+        if (isLayer) layer += t.bytes;
+        if (isBake && t.residency == "Resident") ++intermediates;
+    }
+    std::printf("   the field %llu B (%.2f MiB; the stated budget %llu B), the layer %llu B in all\n", field,
+                double(field) / 1048576.0, kCloudFieldBytes, layer);
+    // the texture manager rounds the smallest mips up a few bytes (11,184,812 B measured)
+    CHECK_MSG(fields == 1 && field >= kCloudFieldBytes && field <= kCloudFieldBytes + 64ull,
+              "ONE cloud field, the stated budget to the texture manager's rounding (%llu B of %llu)", field,
+              kCloudFieldBytes);
+    CHECK_MSG(layer <= kCloudFieldBytes + 1024ull,
+              "the layer's textures in all within the field's budget plus its 1 x 1 stand-ins (%llu B)", layer);
+    CHECK_MSG(intermediates == 0, "the bake's intermediates are not resident after it (%d)", intermediates);
+    return 0;
+}
 }  // namespace
 
 int main(int argc, char **argv) {
@@ -710,6 +759,7 @@ int main(int argc, char **argv) {
     int rc = 1;
     if (which == "energy") rc = caseEnergy();
     else if (which == "shape") rc = caseShape();
+    else if (which == "budget") rc = caseBudget();
     else if (which == "look" && argc > 2) return caseLook(argv[2]);
     else if (which == "bake-cost") return caseBakeCost();
     else { std::printf("FAIL: unknown case '%s'\n", which.c_str()); return 2; }
