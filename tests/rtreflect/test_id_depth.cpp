@@ -24,6 +24,13 @@
 // touches. The STILL case — the sphere parked at the same pose for the same frames
 // from a fresh start — is the control. Gate: moving within 1.5x the still case + 0.5
 // codes (measured in the lane: base vs fixed in spikes/atom-engine-1).
+//
+// `--cost`: THE COPY'S PRICE. The id pass's depth copy ("Jahshaka atom id depth") runs
+// every frame on a chain whose velocity job runs; this mode renders the same fixture
+// at 1920x1080 with the sphere sliding, the render-loop monitor at Review, and reads
+// the copy's own GPU timestamps. Run it under scripts/gpu-exclusive.sh with the
+// clocks locked. Bar 0.05 ms (0.45 % of VR's 11.1 ms frame); past it the mode exits
+// non-zero.
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
 
@@ -44,7 +51,7 @@ static int failures = 0;
         if (!(cond)) ++failures;                                                 \
     } while (0)
 
-static const unsigned kWidth = 640, kHeight = 360;
+static unsigned kWidth = 640, kHeight = 360;
 static const int kWarm = 90, kSettle = 60;
 static const float kStep = 0.06f, kSphereR = 0.45f;
 static void render(Engine *e, int n) { for (int i = 0; i < n; ++i) e->renderOneFrame(); }
@@ -105,8 +112,44 @@ static double meanDiff(const Image &a, const Image &b, const std::vector<unsigne
     return n ? sum / (3.0 * n) : 0.0;
 }
 
-int main()
+/// --cost: the depth copy's GPU ms per frame, from the monitor's per-pass timestamps.
+static int costMain(Engine *e, Scene *s, NodeId sphere)
 {
+    static const double kBarMs = 0.05;
+    e->setFrameMonitor(MonitorLevel::Review);
+    std::vector<FrameRecord> recs;
+    double copy = 0.0, frame = 0.0;
+    int nCopy = 0, nFrame = 0, f = 0;
+    for (int round = 0; round < 12; ++round) {
+        for (int i = 0; i < 60; ++i) {
+            enginetest::setNodePosition(s, sphere, sphereAt(f++ % 66));
+            e->renderOneFrame();
+        }
+        recs.clear();
+        e->takeFrameRecords(recs);
+        if (round == 0) continue;   // warm-up: the first second is pipeline creation
+        for (const FrameRecord &r : recs) {
+            double c = -1.0;
+            for (const FramePass &p : r.passes)
+                if (p.pass == "Jahshaka atom id depth" && p.gpuMs >= 0.0f) c = (c < 0.0 ? 0.0 : c) + p.gpuMs;
+            if (c >= 0.0) { copy += c; ++nCopy; }
+            if (r.gpuMs > 0.0f) { frame += r.gpuMs; ++nFrame; }
+        }
+    }
+    e->setFrameMonitor(MonitorLevel::Off);
+    recs.clear();
+    e->takeFrameRecords(recs);
+    const double c = nCopy ? copy / nCopy : -1.0, fr = nFrame ? frame / nFrame : -1.0;
+    std::printf("target: 1920x1080, a moving Atom sphere behind a still skinned comb on a mirror floor: the id "
+                "depth copy %.4f ms of a %.4f ms frame (bar %.2f) [%d / %d frames]\n", c, fr, kBarMs, nCopy, nFrame);
+    if (nCopy < 100) { std::printf("FAIL: the copy's pass was not timed (%d frames)\n", nCopy); return 1; }
+    return c <= kBarMs ? 0 : 1;
+}
+
+int main(int argc, char **argv)
+{
+    const bool cost = argc > 1 && std::string(argv[1]) == "--cost";
+    if (cost) { kWidth = 1920; kHeight = 1080; }
     std::string err;
     EngineConfig cfg;
     cfg.pluginDir = JAHSHAKA_TEST_PLUGIN_DIR;
@@ -171,6 +214,7 @@ int main()
     fx.ssr = 2;   // the screen march on (the desktop default) over the ray tier
     view->setPostFx(fx);
     enginetest::testCameraLookAt(view, Vec3(0.0f, 1.0f, 6.0f), Vec3(0.0f, 0.4f, 0.0f));
+    if (cost) return costMain(e, s, sphere);
 
     // THE REGION: the floor's reflection of the comb — the pixels the comb changes
     // (comb shown vs hidden, the sphere away) below the comb's own foot on screen.
