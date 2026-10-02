@@ -1980,7 +1980,7 @@ static int footprintSweepMain(Engine *e)
 /// rows run on LAVAPIPE, the second device of the box: without the deny it must
 /// NOT refuse (both formats are core-mandatory storage formats, so every
 /// conformant driver stores to them — the check is a driver-defect guard), and
-/// with `JAHSHAKA_RAY_DENY_STORAGE_FORMAT=R32G32_SFLOAT` (fault injection) the same device must
+/// with `JAHSHAKA_RAY_DENY_STORAGE_FORMAT=R32G32B32A32_SFLOAT` (fault injection) the same device must
 /// refuse through the one gate: no ray query, a view at the ray tier with no
 /// trace, frames that still draw, and the line in the log.
 static bool logContains(const std::string &path, const char *needle)

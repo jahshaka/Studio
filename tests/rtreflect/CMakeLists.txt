@@ -71,7 +71,7 @@ if(EXISTS "${_rt_lvp_icd}")
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
     set_tests_properties(gi.rt_reflect_format_refused_lavapipe PROPERTIES TIMEOUT 120
                          LABELS "engine"
-                         ENVIRONMENT "VK_ICD_FILENAMES=${_rt_lvp_icd};JAHSHAKA_RAY_DENY_STORAGE_FORMAT=R32G32_SFLOAT")
+                         ENVIRONMENT "VK_ICD_FILENAMES=${_rt_lvp_icd};JAHSHAKA_RAY_DENY_STORAGE_FORMAT=R32G32B32A32_SFLOAT")
 endif()
 
 # ENV-RAY-MATCH (PHOTON P3): a silver floor under the realistic sky, the
@@ -135,6 +135,25 @@ target_link_libraries(test_reflect_mover PRIVATE JahshakaEngine)
 jah_gpu_row(gi.reflect_mover CLASS engine COMMAND test_reflect_mover
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.reflect_mover PROPERTIES TIMEOUT 300 LABELS "engine")
+
+# A REFLECTION IS FOGGED ALONG ITS OWN PATH (PHOTON-I-1 fix 5): a mirror's off-screen
+# reflection of an emissive wall against the wall seen from the mirror's virtual eye,
+# under no medium, the World fog and the height fog.
+add_executable(test_reflect_fog test_reflect_fog.cpp)
+set_target_properties(test_reflect_fog PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_reflect_fog PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+add_dependencies(test_reflect_fog JahshakaEngineMedia)
+target_link_libraries(test_reflect_fog PRIVATE JahshakaEngine)
+jah_gpu_row(gi.reflect_fog CLASS engine COMMAND test_reflect_fog
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.reflect_fog PROPERTIES TIMEOUT 300 LABELS "engine")
 
 # A REFLECTED ASSET'S LEVEL CHANGE (REFLECT-LOD-POP-1): two metal hemispheres
 # reflecting a baked multi-level asset while the camera dollies at them — the
