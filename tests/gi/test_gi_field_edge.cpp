@@ -117,10 +117,14 @@ int main()
     view->setScene(s);
     view->setCamera(topDownCamera());
 
-    const unsigned char px[4] = { 128, 128, 128, 255 };
+    // JAH_FIELD_EDGE_GRADSKY=1 (a measurement): a 1x2 equirect, the upper hemisphere bright and
+    // the lower dark, in place of the constant grey.
+    const bool gradSky = std::getenv("JAH_FIELD_EDGE_GRADSKY") != nullptr;
+    const unsigned char px[8] = { 128, 128, 128, 255, 128, 128, 128, 255 };
+    const unsigned char pxGrad[8] = { 230, 230, 240, 255, 40, 40, 40, 255 };
     SkyDesc sky;
     sky.mode = SkyMode::Equirectangular;
-    sky.equirect = s->createTexture(1, 1, px, true);
+    sky.equirect = gradSky ? s->createTexture(1, 2, pxGrad, true) : s->createTexture(1, 1, px, true);
     CHECK_MSG(s->setSky(sky), "%s", "the constant sky binds");
     s->setEnvironmentLight(Colour(1.0f, 1.0f, 1.0f));
 
@@ -140,7 +144,8 @@ int main()
     gi.quality = GiQuality::Low;
     gi.numBounces = 1;
     gi.gather = GiToggle::Off;
-    gi.ddgi = GiToggle::On;
+    gi.ddgi = std::getenv("JAH_FIELD_EDGE_NOFIELD") ? GiToggle::Off : GiToggle::On;   // measurement
+    if (std::getenv("JAH_FIELD_EDGE_GIOFF")) gi.mode = GiMode::Off;                     // measurement
     if (const char *c = std::getenv("JAH_FIELD_EDGE_CASCADE")) {   // measurement: "half,res"
         float half = 5.0f; int res = 64;
         std::sscanf(c, "%f,%d", &half, &res);
@@ -154,7 +159,8 @@ int main()
     frames += 60;
     while (!s->giStatus().giAtRest && frames < 2400) { render(e, 10); frames += 10; }
     const GiStatus st = s->giStatus();
-    CHECK_MSG(st.giAtRest && st.ifdBound, "the field is bound and at rest (%d frames)", frames);
+    CHECK_MSG(st.giAtRest && (st.ifdBound || gi.ddgi == GiToggle::Off || gi.mode == GiMode::Off),
+              "the field is bound and at rest (%d frames)", frames);
     std::printf("   the field's stated box: (%.3f %.3f %.3f) .. (%.3f %.3f %.3f), %d probes\n",
                 double(st.ifdMin.x), double(st.ifdMin.y), double(st.ifdMin.z), double(st.ifdMax.x),
                 double(st.ifdMax.y), double(st.ifdMax.z), st.ifdProbes);

@@ -2365,14 +2365,13 @@ static int caseView()
     };
     // `closed(x, z)` = the term's radiance shape at a floor point (a scale is
     // enough: only its relative change across the texel is read) — 0 for none.
-    // THE SKY QUADRATURE (CONTACT-OCCLUSION-1): at GI ON the card's environment half is
-    // gathered on jahSkyShareFine (sixteen 20.4-degree cones) while the raster's diffuse
-    // at the field-off pixel is the pixel's own four-cone set — two quadratures of one
-    // integral. The fine set reads the exact SH irradiance on this open floor (the GI-OFF
-    // card and raster); the four-cone raster reads it high. The difference is MEASURED
-    // here (the GI-ON raster against the GI-OFF raster, same point, same eye) and stated
-    // as a term of the ambient rows' bar at GI ON — 0 in every other row.
-    double quadTerm = 0.0;
+    // THE SKY QUADRATURE (CONTACT-OCCLUSION-1; CARD-VIEW-BIAS-1): at GI ON the card's
+    // environment half is gathered on jahSkyShareFine (sixteen 20.4-degree cones) while the
+    // raster's diffuse at the field-off pixel is the pixel's own four-cone set — two
+    // quadratures of one integral. Both must read the SH irradiance on this open floor (the
+    // GI-OFF raster): the four-cone set's escape reads the SH at the set's own band weights
+    // (jah_voxel_cones.glsl), exact on an open floor. GATED below, under 0.2 % (it read 1.05 %
+    // with the cone lookup's 3/2 band-1 de-convolution: 1.061 x band 1 at 45 degrees).
     const auto row = [&](const char *arm, const char *term, double x, double z,
                          const std::function<double(double, double)> &closed) {
         const Eye *eyes[2] = { &head, &graze };
@@ -2410,15 +2409,15 @@ static int caseView()
                                                   : 0.0;
                 const double nv = i == 0 ? 1.0 : 0.15;
                 const double oct = 0.007 * curRough * std::pow(1.0 - nv, 5.0);
-                const double bar = quantum + oct + tex + quadTerm;
+                const double bar = quantum + oct + tex;
                 const double rel = want > 1e-6 ? std::fabs(got / want - 1.0) : std::fabs(got);
                 CHECK_MSG(want > 1e-3 && rel <= bar,
                           "%s, %s at (%.1f, %.1f), %s, channel %d: the card read %.4f, the raster %.4f"
                           " (%+.2f %%; bar %.2f %% = the store %.2f + the direction %.2f + the texel %.2f"
-                          " + the sky quadrature %.2f), r %.1f",
+                          "), r %.1f",
                           arm, term, x, z, i == 0 ? "HEAD-ON" : "GRAZING", k, got, want,
                           100.0 * (got / want - 1.0), 100.0 * bar, 100.0 * quantum, 100.0 * oct, 100.0 * tex,
-                          100.0 * quadTerm, curRough);
+                          curRough);
             }
         }
     };
@@ -2519,17 +2518,18 @@ static int caseView()
             if (!arm.gi && arm.rough == 1.0) {
                 for (int i = 0; i < 2; ++i) for (int k = 0; k < 3; ++k) ambientOff[i][k] = r[i][k];
             } else if (arm.gi && arm.rough == 1.0) {
-                quadTerm = 0.0;
+                double quad = 0.0;
                 for (int i = 0; i < 2; ++i)
                     for (int k = 0; k < 3; ++k)
                         if (ambientOff[i][k] > 1e-6)
-                            quadTerm = std::max(quadTerm, std::fabs(r[i][k] / ambientOff[i][k] - 1.0));
-                std::printf("   the sky quadrature: the four-cone raster against the SH raster, worst %.2f %%\n",
-                            100.0 * quadTerm);
+                            quad = std::max(quad, std::fabs(r[i][k] / ambientOff[i][k] - 1.0));
+                CHECK_MSG(quad <= 0.002,
+                          "%s: THE FOUR-CONE SET READS THE SH IRRADIANCE on an open floor — the GI-ON raster "
+                          "against the GI-OFF raster, both eyes, every channel, worst %.3f %% (bar 0.2 %%)",
+                          arm.name, 100.0 * quad);
             }
         }
         row(arm.name, "ambient", 0.3, -0.5, nullptr);
-        quadTerm = 0.0;
         if (arm.gi) {
             // NEVER TWICE: the stored environment half at GI ON is the chain's
             // alone — the head-on raster x A_hemi(1) / A(1, 1).
