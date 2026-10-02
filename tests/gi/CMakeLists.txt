@@ -1520,10 +1520,10 @@ set_tests_properties(gi.gather_trace PROPERTIES
 # voxel and card stores (fork sky pass, CONTACT-OCCLUSION-1). The photon-target twin:
 # the field alone (Low: arm A 0.08 — the probe spacing, 0.31 m across and 0.625 m in
 # height: the floor reads its cage's upper layer 0.47 m above it — and arm B 0.06) and
-# Epic's three bounces against the three-bounce solve (0.03); and case D, the floor under
-# a hovering 2 m MOVER at Epic: 0.380 against the closed form 0.446 (the gather's own answer,
-# too dark by 0.066 — HOVER-GATHER-1). Case D's MIRROR half gates in gi.contact_occlusion:
-# the reflection's hit on the floor under the mover within 0.06 of 0.446 (the mover gate).
+# Epic's three bounces against the three-bounce solve (0.03). Case D gates in
+# gi.contact_occlusion: the floor under a hovering 2 m MOVER at Epic within 0.02 of the
+# closed form 0.446 (read with the fixture's mirror hidden — HOVER-GATHER-1), and the
+# mirror's reflection of that point within 0.06 of it (the mover gate).
 add_executable(test_gi_contact_occlusion test_gi_contact_occlusion.cpp)
 set_target_properties(test_gi_contact_occlusion PROPERTIES
     AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
@@ -1684,11 +1684,12 @@ set_tests_properties(gi.voxel_feed PROPERTIES
     TIMEOUT 120 LABELS "engine" RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
 
 # gi.env_cone — THE ONE ENVIRONMENT'S CONE LOOKUP, MEASURED (PHOTON-ENV-1).
-# jahEnvCone reads the GGX-prefiltered sky chain at the mip whose lobe matches a
-# cone; this suite measures it against a 64-direction integral of the cube over
-# the same cone on the shipped (analytic) sky at the renderer's three apertures
-# (Engine::environmentCones: one job built from the shared file). Its own binary:
-# one engine per process.
+# jahEnvCone reads the GGX-prefiltered sky chain as equal-solid-angle cells (7, or
+# 19 for a wide cone, CONE-ENV-EDGE-1); this suite measures it against a
+# 1024-direction integral of the cube over the same cone on the shipped
+# (analytic) sky at the renderer's four apertures, and sweeps the aperture for a
+# step (Engine::environmentCones: one job built from the shared file). Its own
+# binary: one engine per process.
 add_executable(test_gi_env_cone test_gi_env_cone.cpp)
 set_target_properties(test_gi_env_cone PROPERTIES
     AUTOMOC OFF AUTOUIC OFF AUTORCC OFF

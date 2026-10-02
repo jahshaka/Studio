@@ -136,6 +136,31 @@ jah_gpu_row(gi.reflect_mover CLASS engine COMMAND test_reflect_mover
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.reflect_mover PROPERTIES TIMEOUT 300 LABELS "engine")
 
+# A REFLECTION IS FOGGED ALONG ITS OWN PATH (PHOTON-I-1 fix 5): a mirror's off-screen
+# reflection of an emissive wall against the wall seen from the mirror's virtual eye,
+# under no medium, the World fog and the height fog.
+add_executable(test_reflect_fog test_reflect_fog.cpp)
+set_target_properties(test_reflect_fog PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_reflect_fog PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+add_dependencies(test_reflect_fog JahshakaEngineMedia)
+target_link_libraries(test_reflect_fog PRIVATE JahshakaEngine)
+jah_gpu_row(gi.reflect_fog CLASS engine COMMAND test_reflect_fog
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.reflect_fog PROPERTIES TIMEOUT 300 LABELS "engine")
+# ...and the paths a machine without ray queries reflects through: the screen march
+# alone and the voxel march (the same law, JahSsrResolve_ps.glsl / PhotonVct).
+jah_gpu_row(gi.reflect_fog_norays CLASS engine COMMAND test_reflect_fog
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.reflect_fog_norays PROPERTIES TIMEOUT 300 LABELS "engine"
+                     ENVIRONMENT "JAHSHAKA_NO_RAY_QUERY=1")
+
 # ID-DEPTH-1: a still, stock-drawn character in front of a moving Atom mover keeps its
 # own (zero) motion in the march's object motion — the id pass's own depth against the
 # scene's identifies "not the id's surface" (rq_motion.comp, rq_motion_skin.comp).
