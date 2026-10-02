@@ -213,6 +213,21 @@ for (var cycle = 1; cycle <= 3; cycle++) {
     }
     console.log("LIVE DIFF cycle " + cycle + " (" + liveFresh.length + " live object(s), dropped from the gate): " +
                 (ld.length ? ld.join(" | ") : "none"));
+    // THE REOPENED SKY IS THE FRESH ONE (REOPEN-SKY-1): the environment capture's mean
+    // is a function of the document, not of the camera's history — the capture sees
+    // the sky from its own observer. Float tolerance (the capture's half-float SH).
+    var skyFresh = null, skyNow = null;
+    for (var si = 0; si < liveFresh.length; si++)
+        if (liveFresh[si].path === "world.clouds.live") skyFresh = liveFresh[si].value.skyMean;
+    for (var sj = 0; sj < LIVE_READOUTS.length; sj++)
+        if (LIVE_READOUTS[sj].path === "world.clouds.live") skyNow = LIVE_READOUTS[sj].value.skyMean;
+    assert(skyFresh && skyNow && skyFresh.length === 3 && skyNow.length === 3,
+           "cycle " + cycle + ": the sky's mean is read fresh and reopened");
+    var skyWorst = 0;
+    for (var sc = 0; sc < 3; sc++)
+        skyWorst = Math.max(skyWorst, Math.abs(skyNow[sc] - skyFresh[sc]) / Math.max(Math.abs(skyFresh[sc]), 1e-6));
+    assert(skyWorst <= 1e-5, "cycle " + cycle + ": the reopened sky's mean equals the fresh one (worst relative " +
+           skyWorst.toExponential(2) + ", bar 1e-5)");
     LIVE_READOUTS = liveFresh;
     var g = groundOf(s);
     assert(g.mat.baseColorMap === g0.mat.baseColorMap,
@@ -239,6 +254,66 @@ for (var cycle = 1; cycle <= 3; cycle++) {
         console.log("  cycle " + cycle + ": ..." + s.substr(Math.max(0, i - 60), 160));
     }
     assert(s === s0, "cycle " + cycle + ": the whole document is field-identical to the fresh scene");
+}
+
+// ---------------------------------------------------------------------------
+// THE REOPENED SKY ABOVE 50 M, DRAWN AND CAPTURED (REOPEN-SKY-1, the merge read's
+// fix round). The cycles above keep the template's camera under 50 m, where the
+// environment is photographed from the ground's 2 m whatever the camera did; the
+// drawn sky's tables and, above 50 m, the environment's own altitude follow the
+// camera, and with hysteresis they followed its HISTORY — a fresh scene and the
+// same scene reopened could draw and capture different skies. At rest both are
+// functions of the camera's altitude alone (OgreScene::noteAtmosphereObserver). The
+// fresh scene's camera gets there by a HISTORY that leaves both bands elsewhere —
+// 200 m (the environment captured from 200 m), then 110 m (the drawn sky rebuilt at
+// 110 m; the environment kept: under an octave from 200 m), then 120 m (inside the
+// drawn sky's quarter octave of 110 m) — and the reopened scene's camera is loaded
+// at 120 m. Without the rest rule the fresh scene would keep 110 m / 200 m and the
+// reopened one draw 120 m / capture 100 m (measured: the arm fails with the rule
+// off). Two reopen cycles must read the same drawn observer and environment observer
+// to the bit, the same capture mean to float tolerance and the same sky pixels.
+function skyLive() {
+    var w = world.get();
+    return w.clouds && w.clouds.live ? w.clouds.live : null;
+}
+function highSky(tag, path) {
+    for (var hy = 0; hy < path.length; hy++) {
+        editor.setCamera({ position: { x: 0, y: path[hy], z: 90 }, lookAt: { x: 0, y: path[hy] - 20, z: 0 } });
+        settle();
+        editor.frame(40, 1 / 60);   // the camera's rest (8 frames) and the capture it asks for land
+    }
+    var live = skyLive();
+    var shot = editor.screenshot(tag + ".png", 640, 480, [{ x: 0.5, y: 0.2 }, { x: 0.2, y: 0.4 }, { x: 0.8, y: 0.4 }]);
+    console.log("high sky " + tag + ": drawn observer " + (live && live.drawnObserverM) + " m, environment observer " +
+                (live && live.environmentObserverM) + " m, skyMean " + JSON.stringify(live && live.skyMean) +
+                ", sky probes " + JSON.stringify(shot.probes));
+    return { live: live, probes: shot.probes };
+}
+var hi0 = highSky("high-fresh", [200, 110, 120]);
+assert(hi0.live && hi0.live.drawnObserverM !== undefined && hi0.live.environmentObserverM !== undefined &&
+       hi0.live.skyMean, "high camera: the sky's live readouts are there (the atmosphere is the sky)");
+assert(Math.abs(hi0.live.drawnObserverM - 120) < 0.01,
+       "high camera at rest: the drawn sky's observer is the camera's altitude (" + hi0.live.drawnObserverM + " m)");
+assert(hi0.live.environmentObserverM === 100,
+       "high camera at rest: the environment is captured from the octave lattice's 100 m (" +
+       hi0.live.environmentObserverM + " m)");
+for (var hc = 1; hc <= 2; hc++) {
+    assert(project.save() === true, "high cycle " + hc + ": project.save");
+    assert(project.close() === true, "high cycle " + hc + ": project.close");
+    assert(project.open(guid) === true, "high cycle " + hc + ": project.open");
+    var hi = highSky("high-reopen" + hc, [120]);
+    assert(hi.live.drawnObserverM === hi0.live.drawnObserverM && hi.live.environmentObserverM === hi0.live.environmentObserverM,
+           "high cycle " + hc + ": the reopened sky is drawn and captured from the fresh scene's altitudes (" +
+           hi.live.drawnObserverM + " / " + hi.live.environmentObserverM + " m)");
+    var hw = 0;
+    for (var hk = 0; hk < 3; hk++)
+        hw = Math.max(hw, Math.abs(hi.live.skyMean[hk] - hi0.live.skyMean[hk]) / Math.max(Math.abs(hi0.live.skyMean[hk]), 1e-6));
+    assert(hw <= 1e-5, "high cycle " + hc + ": the reopened capture's mean equals the fresh one (worst relative " +
+           hw.toExponential(2) + ", bar 1e-5)");
+    for (var hp = 0; hp < hi0.probes.length; hp++)
+        assert(hi.probes[hp].r === hi0.probes[hp].r && hi.probes[hp].g === hi0.probes[hp].g && hi.probes[hp].b === hi0.probes[hp].b,
+               "high cycle " + hc + ": the drawn sky's pixel " + hp + " is the fresh one (" + JSON.stringify(hi.probes[hp]) +
+               " vs " + JSON.stringify(hi0.probes[hp]) + ")");
 }
 
 // ---------------------------------------------------------------------------

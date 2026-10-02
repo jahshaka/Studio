@@ -368,3 +368,45 @@ verdict, the time, the load, why it was selected. It is how the testing rules ge
 facts. `scripts/gate_runlog.py longest` lists this week's longest tests; `scripts/gate_runlog.py
 load-reds` lists the tests that went red in a gate and green alone. The fields are in that
 directory's `README.md`.
+
+## 9. The engine's environment switches (ENV-SWEEP-2)
+
+An environment variable read inside `irisgl/engine/src` is a MEASUREMENT switch or a
+test door, never a product mode: every one below has a reader in the tree (the suite or
+script that sets it), and a switch that loses its reader is deleted, not kept "in case".
+A product setting is a verb or an `EngineConfig` field. The switches the Photon files
+read (`photon/`, `OgreScreenProbeGather*`, `OgreSurfaceCache*`) are listed by their own
+lanes. Deleted by the sweep (no reader): `JAHSHAKA_GI_DEBUG` (17 diagnostic log sites),
+`JAHSHAKA_HIT_LIST_OFF`, `JAHSHAKA_GI_NO_RECENTRE`.
+
+| Switch | Read in | Reader | What it does |
+|---|---|---|---|
+| `JAHSHAKA_NO_RAY_QUERY` | OgreEngine.cpp | tests/CMakeLists.txt, ssr, app rows | boots without the ray-query tier (the no-rays rows) |
+| `JAHSHAKA_NO_DITHER` | OgreChain.cpp | vr, samples, scale | the chain without its dither (byte-comparable pictures) |
+| `JAHSHAKA_WARMUP_PASS` | OgreChain.cpp | shadercache.warm_up, projectrunner | the shader warm-up pass (an engine route with a known crash, off unless asked) |
+| `JAHSHAKA_HLMS_DEBUG_DIR` | OgreEngine.cpp | app/shader_gate_warm.sh, docs/SCRIPTING.md | dumps the generated Hlms shaders |
+| `JAHSHAKA_ATOM_DRAW_OFF` | OgreScene.cpp | the `--engine-selftest` hash A/B (no script can reach the selftest) | the Atom split off: every item through PBS |
+| `JAHSHAKA_ATOM_OCCLUSION_OFF` | OgreScene.cpp | the `--engine-selftest` hash A/B | the id pass frustum-only |
+| `JAHSHAKA_ATOM_DECODE_OFF` | OgreAtomDraw.cpp | engine.atom_draw, scale | the screen decode unarmed (proves the passes skip the queue) |
+| `JAHSHAKA_ATOM_DISCRIMINATE` | HlmsAtom.cpp | scale | a colour code per failed decode term instead of the discard |
+| `JAHSHAKA_ATOM_TRACE` | OgreGpuScene.cpp | scale | the GPU scene's per-frame trace lines |
+| `JAHSHAKA_HIT_WORLD_LIGHTS`, `JAHSHAKA_HIT_VCT_SPECULAR` | HlmsAtom.cpp | gi.hit_shade | the hit decode's light list / VCT specular arms |
+| `JAHSHAKA_CARD_FOOTPRINT_K` | OgreRayQuery.cpp | gi.rt_reflect `--footprint-sweep` | the card read's footprint gate |
+| `JAHSHAKA_RAY_DENY_STORAGE_FORMAT` | OgreRayQuery.cpp | gi.rt_reflect | refuses a storage format (the fallback path) |
+| `JAH_RQ_REFIT` | OgreRayQuery.cpp | atom/far_blas_measure | TLAS refit instead of rebuild (measured, not assumed better) |
+| `JAH_R5_NO_MOTION` | OgreRayQuery.cpp | gi.reflect_mover | the march's object motion off (paired arm) |
+| `JAH_R5_MONO_EYES` | OgreRayQuery.cpp | vr.session | one eye's trace for both |
+| `JAH_R6_NO_ALPHA` | OgreRayQuery.cpp | gi.rt_alpha_tested `--cost` | no alpha table: every ray asks opaque |
+| `JAH_R7_NO_POSED` | OgreRayQuery.cpp | gi.reflect_mover `--cost-posed` | the posed velocity job off (paired arm) |
+| `JAH_R7_EDGE_CLASSES` | OgreRayQuery.cpp | gi.reflect_mover `--edge` | the Hits view's history classes (modes 1, 2) |
+| `JAH_ORTHO_POSTFX` | OgreView.cpp | ssr.e2e | post effects on an orthographic view |
+| `JAH_GI_CASCADE_FAULT`, `JAH_GI_CASCADE_FAULT_POST` | OgreGi.cpp | gi.cascades | a cascade build throws before / after the placement moves |
+| `JAH_VCT_REFUSE_GEOMETRY` | OgreGi.cpp | gi.voxel_resident | the voxeliser reads no geometry (an empty volume must build) |
+| `JAHSHAKA_GI_FIELD_NO_SCROLL` | OgreGi.cpp | gi.field_scroll | the field re-placed whole instead of scrolled |
+| `JAHSHAKA_GI_FIELD_RAYS` | OgreGi.cpp | gi.field_thin_wall | the field's rays per depth texel |
+| `JAHSHAKA_GI_FIELD_SAMPLES` | OgreGi.cpp | gi.field_thin_wall | the field's sample target per texel |
+| `JAHSHAKA_GI_FIELD_STATIC` | OgreGi.cpp | gi.field_thin_wall | the field's rays NOT rotated per frame (the fixed-set arm) |
+| `JAHSHAKA_GI_NO_REBUILD_SETTLE` | OgreGi.cpp | gi.chain_converge | the rebuild settle off (paired arm) |
+| `JAH_TEXTURE_CACHE`, `JAH_TEXTURE_MULTILOAD`, `JAH_TEXTURE_SYNC_LOAD` | OgreEngine.cpp, OgreMaterials.cpp | scripts/threading/texture-ab.sh | the texture-load A/B arms |
+| `JAH_TEXTURE_WAIT_MS`, `JAH_TEXTURE_WAIT_FAULT`, `JAH_TEXTURE_DRAIN_ADVANCE_MS` | OgreEngine.cpp | threading.texture_wait_watchdog, app.* verbs (docs/SCRIPTING.md) | the texture wait budget and its fault hook |
+| `JAHSHAKA_VR_TEST_INJECT`, `JAHSHAKA_VR_TEST_NO_ACTIONS` | EnginePrivate.h, OgreVrSession.cpp | vr.session, the VR session scripts | injected controllers / an action-set refusal |

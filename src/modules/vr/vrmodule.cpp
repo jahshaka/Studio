@@ -201,8 +201,11 @@ void VrModule::shutdown()
     // fly keys, and ending the session underneath it left all of that in place
     // — harmless at shutdown only for as long as the order never changes,
     // which is not a thing to rely on. The plain path below is the fallback for
-    // a session this process's API object cannot reach any more.
-    if (api && api->endForShutdown()) return;
+    // a session this process's API object cannot reach any more. VrApi::shutdown
+    // also detaches the controllers' interaction from the viewport: the API
+    // object lives on inside the ScriptEngine until ~MainWindow, after the
+    // viewport is gone (VR-TEARDOWN-1).
+    if (api && api->shutdown()) return;
     if (!host.engine) return;
     const auto e = host.engine->engine();
     if (!e) return;

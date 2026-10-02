@@ -3,7 +3,9 @@
 // Every escape in the renderer reads the sky through ONE function,
 // jahEnvCone( dir, tan(half-angle) ) (src/rayquery/include/jah_environment.glsl):
 // ONE fetch of the GGX-prefiltered sky chain at the mip whose lobe matches the
-// cone. A GGX lobe is not a box, so this is an approximation — the mapping
+// cone (a wide cone: 7 or 19 equal cells, each at its own cell's lobe, the count
+// growing with the aperture and blended across each threshold — CONE-ENV-EDGE-1).
+// A GGX lobe is not a box, so this is an approximation — the mapping
 // picks the lobe whose mean of (1 - cos) about its axis is 0.6 of the uniform
 // cone's (the factor measured HERE: 1.0 is the band-1-exact match, but a GGX
 // lobe's heavy tail then reaches the horizon glow from a zenith cone; the
@@ -14,14 +16,28 @@
 // uniformly over the cone's solid angle, computed in the same job
 // (Engine::environmentCones).
 //
-// THREE APERTURES, the ones the renderer asks for: the six-cone diffuse set's
-// (tan 0.577), the irradiance field's probe ray (tan(2 pi / 144), 144 rays per
-// probe), and a 0.1 rad specular cone. BAR: the mean relative luminance error
-// over 26 directions below 5 % at each, at two sun heights (noon-ish and a low
-// sun, whose horizon glow is the sky's sharpest feature).
+// FOUR APERTURES, the ones the renderer asks for: the four-cone diffuse set's
+// (tan 0.983 — THE set every reader walks, PhotonVoxelLighting::kConeDirs), the
+// surface store's fine sky set (tan 0.372, jahSkyShareFine), the irradiance
+// field's probe ray (tan(2 pi / 144), 144 rays per probe), and a 0.1 rad
+// specular cone. BAR: the mean relative luminance error over 26 directions below
+// 5 % at each, at two sun heights (noon-ish and a low sun, whose horizon glow
+// over the dark planet is the sky's sharpest feature).
+//
+// THE COUNT NEVER STEPS (CONE-ENV-EDGE-1): a reflection's footprint and a gather
+// ray's spread vary continuously and cross the cell-count changes, so the
+// aperture is swept (tan 0 to 1.10 by 0.000625) and the read's second difference
+// between neighbouring apertures may not pass 4 % of the sky's level at that
+// aperture (the mean reference over the 26 directions) at any direction: a slope
+// is physics, a switch of reads with no hand-over is a jump the second
+// difference shows whole. MEASURED (35 / 5-degree sun): the shipped read 0.30 /
+// 2.33 % (toward a low sun's glow; it does not shrink with the step as a
+// curvature would — the sampler's filtering precision, by its behaviour); a hard 7-to-19 switch at tan
+// 0.5 5.8 / 16.5 %; a hard one-fetch-to-7 switch at tan 0.3 12.0 / 563 %.
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <string>
@@ -65,10 +81,10 @@ int main()
 
     struct Aperture { const char *name; float tan; };
     const Aperture apertures[] = {
-        { "six-cone diffuse (tan 0.577)", 0.577f },
+        { "four-cone diffuse (tan 0.983)", 0.98269f },
+        { "fine sky set (tan 0.372)", 0.372f },
         { "field probe ray (tan 2pi/144)", std::tan(6.28318531f / 144.0f) },
         { "specular 0.1 rad", std::tan(0.1f) },
-        { "four-cone diffuse (tan 0.983), printed", 0.98269f },
     };
     const float kBar = 0.05f;
 
@@ -84,7 +100,7 @@ int main()
         // The capture runs inside a frame and the convolution lands at the top
         // of the next: wait for the cube in FRAMES.
         std::vector<EnvironmentConeAnswer> probe;
-        const std::vector<EnvironmentConeQuery> one = { EnvironmentConeQuery{ Vec3(0, 1, 0), 0.577f } };
+        const std::vector<EnvironmentConeQuery> one = { EnvironmentConeQuery{ Vec3(0, 1, 0), 0.98269f } };
         bool ready = false;
         for (int f = 0; f < 30 && !ready; ++f) {
             e->renderOneFrame();
@@ -116,32 +132,63 @@ int main()
                         a.name, double(ans[0].lod), 100.0 * mean, 100.0 * worst,
                         double(dirs[worstIdx].x), double(dirs[worstIdx].y), double(dirs[worstIdx].z),
                         lum(ans[worstIdx].lookup), lum(ans[worstIdx].reference), counted);
-            if (std::string(a.name).find("printed") != std::string::npos) continue;
-            // CONE-ENV-EDGE-1 (owner-filed, SKY-ATMOSPHERE-1): the six-cone
-            // diffuse aperture at a 5-degree sun is a PRINTED TARGET, not a gate.
-            // The physical sky has a hard horizon over a dark planet band, and
-            // the one-fetch GGX lobe (the 0.6 lobe factor was fitted on the
-            // retired smooth sky) reads a wide cone over that edge 9.5 % off the
-            // box integral (35 degrees: 4.3 %). The bar is NOT widened; the
-            // arm is reported until the lookup is refitted.
-            if (elevDeg < 10.0f && a.tan > 0.5f) {
-                std::printf("   TARGET CONE-ENV-EDGE-1: %s at sun %.0f deg — mean |err| %.2f %% against "
-                            "the %.0f %% bar (reported, not gating)\n",
-                            a.name, elevDeg, 100.0 * mean, 100.0 * kBar);
-                continue;
-            }
+            // CONE-ENV-EDGE-1: one wide GGX lobe read the four-cone aperture at a
+            // 5-degree sun 18.9 % off the box integral (the physical sky's hard horizon
+            // over the dark planet, the glow round a low sun), seven cells 8.95 %; the
+            // cell count now grows with the aperture (19 cells here) and every shipped
+            // aperture gates at the bar.
             char msg[160];
             std::snprintf(msg, sizeof msg,
                           "the cone lookup is within %.0f %% of the cone integral (%s, sun %.0f deg)",
                           100.0 * kBar, a.name, elevDeg);
             CHECK(counted == dirs.size() && mean < kBar, msg);
         }
+        // THE APERTURE SWEEP: the read's SECOND difference between neighbouring
+        // apertures. A slope is not a step — toward a low sun's glow the cone's
+        // integral itself moves 12 % of the sky's level per 0.0025 of tan — but a
+        // switch of reads shows in the second difference as the whole jump, where
+        // a continuous read leaves its curvature times 0.000625^2 (and a kink, the
+        // lod table's segments, its slope change times 0.000625).
+        {
+            double worst = 0.0, worstAt = 0.0, worstRef = 0.0;
+            std::vector<EnvironmentConeAnswer> prev2, prev;
+            bool ran = true;
+            for (int i = 0; i <= 1760; ++i) {
+                const float t = 0.000625f * float(i);
+                std::vector<EnvironmentConeQuery> q;
+                for (const Vec3 &d : dirs) q.push_back(EnvironmentConeQuery{ d, t });
+                std::vector<EnvironmentConeAnswer> ans;
+                if (!e->environmentCones(scene, q, ans) || ans.size() != dirs.size()) { ran = false; break; }
+                double level = 0.0;
+                for (const auto &x : ans) level += lum(x.reference) / double(ans.size());
+                if (!prev2.empty() && level > 1e-6)
+                    for (size_t k = 0; k < ans.size(); ++k) {
+                        const double d2 = std::fabs(lum(ans[k].lookup) - 2.0 * lum(prev[k].lookup) +
+                                                    lum(prev2[k].lookup)) / level;
+                        const double r2 = std::fabs(lum(ans[k].reference) - 2.0 * lum(prev[k].reference) +
+                                                    lum(prev2[k].reference)) / level;
+                        if (d2 > worst) { worst = d2; worstAt = t - 0.000625; }
+                        worstRef = std::max(worstRef, r2);
+                    }
+                prev2.swap(prev);
+                prev.swap(ans);
+            }
+            CHECK(ran, "the aperture sweep ran");
+            std::printf("   APERTURE SWEEP tan 0-1.10 by 0.000625: the read's largest second difference %.3f %% of the "
+                        "sky's level (at tan %.4f); the reference's own %.3f %%\n", 100.0 * worst, worstAt,
+                        100.0 * worstRef);
+            char msg[200];
+            std::snprintf(msg, sizeof msg,
+                          "the read never steps as the aperture varies: second difference %.3f %% <= 4 %% of the "
+                          "sky's level (sun %.0f deg)", 100.0 * worst, elevDeg);
+            CHECK(ran && worst <= 0.04, msg);
+        }
         // THE SKY'S IRRADIANCE AT AN UPWARD NORMAL, three ways, PRINTED (the
         // measurement behind the field-against-cones step of gi.chain_face): the
         // TRUTH is the cosine-weighted mean of the cube's radiance over the upper
         // hemisphere (64 cosine-stratified directions, each a 0.05 cone's
-        // reference); against it the nine-band SH's irradiance / pi at +Y and the
-        // pixel's six-cone set (weights .25 / 5 x .15, tan 0.577) through the lookup.
+        // reference); against it the nine-band SH's irradiance / pi at +Y (printed) and the
+        // four-cone set's escapes (weights .25, 45 degrees off the normal; gated below).
         {
             std::vector<EnvironmentConeQuery> q;
             const double g = 2.39996323;
@@ -155,25 +202,39 @@ int main()
             double truth = 0.0;
             for (const auto &x : ans) truth += lum(x.reference);
             truth /= double(ans.size() ? ans.size() : 1);
-            const double six[6][3] = { { 0, 1, 0 }, { 0.866025, 0.5, 0 }, { 0.267617, 0.5, 0.823639 },
-                                       { -0.700629, 0.5, 0.509037 }, { -0.700629, 0.5, -0.509037 },
-                                       { 0.267617, 0.5, -0.823639 } };
-            const double w6[6] = { 0.25, 0.15, 0.15, 0.15, 0.15, 0.15 };
-            std::vector<EnvironmentConeQuery> q6;
-            for (const auto &d : six)
-                q6.push_back(EnvironmentConeQuery{ Vec3(float(d[0]), float(d[1]), float(d[2])), 0.577f });
-            std::vector<EnvironmentConeAnswer> a6;
-            e->environmentCones(scene, q6, a6);
-            double cones = 0.0;
-            for (size_t i = 0; i < a6.size(); ++i) cones += w6[i] * lum(a6[i].lookup);
+            // THE FOUR-CONE SET'S ESCAPE (jahEnvQuadrant: each cone's azimuthal quadrant,
+            // cosine-weighted; the harness's negative tan) — GATED: its open-sky sum is the
+            // irradiance over pi within 5 % (CONE-ENV-EDGE-1; each cone's 44.5-degree solid
+            // angle read uniformly gave 1.07x at 35 degrees and 1.40x at 5).
+            const double four[4][3] = { { 0.707107, 0.707107, 0 }, { 0, 0.707107, 0.707107 },
+                                        { -0.707107, 0.707107, 0 }, { 0, 0.707107, -0.707107 } };
+            std::vector<EnvironmentConeQuery> q4;
+            for (const auto &d : four)
+                q4.push_back(EnvironmentConeQuery{ Vec3(float(d[0]), float(d[1]), float(d[2])), -1.0f });
+            std::vector<EnvironmentConeAnswer> a4;
+            e->environmentCones(scene, q4, a4);
+            // The quadrant query's reference is its quadrant's cosine-weighted mean over 1024
+            // directions (the harness): their 0.25-weighted sum is the irradiance over pi at
+            // 4096 directions, the truth the set gates against (the 64 0.05-cones above print).
+            double cones = 0.0, truth4 = 0.0;
+            for (size_t i = 0; i < a4.size(); ++i) {
+                cones += 0.25 * lum(a4[i].lookup);
+                truth4 += 0.25 * lum(a4[i].reference);
+                std::printf("   quadrant %zu: escape %.4f reference %.4f (%.3fx)\n", i, lum(a4[i].lookup),
+                            lum(a4[i].reference), lum(a4[i].lookup) / std::max(lum(a4[i].reference), 1e-9));
+            }
             float sh[27] = { 0 };
             scene->skyAmbientSh(sh);
             // +Y: 1, y = 1, z = 0, x = 0 -> c0 + c1 + c6 (3z^2 - 1 = -1) x -1 + c8 (x^2 - y^2 = -1) x -1
             float shUp[3];
             for (int c = 0; c < 3; ++c) shUp[c] = sh[c] + sh[3 + c] - sh[18 + c] - sh[24 + c];
-            std::printf("   IRRADIANCE AT +Y (luminance, radiance units): truth %.4f | SH %.4f (%.2fx) "
-                        "| six cones %.4f (%.2fx)\n", truth, lum(shUp), lum(shUp) / truth, cones,
-                        cones / truth);
+            std::printf("   IRRADIANCE AT +Y (luminance, radiance units): truth %.4f (64 cones %.4f) | SH %.4f "
+                        "(%.3fx) | four cones %.4f (%.3fx)\n", truth4, truth, lum(shUp), lum(shUp) / truth4,
+                        cones, cones / truth4);
+            char imsg[200];
+            std::snprintf(imsg, sizeof imsg, "the four-cone set's escape sums to the sky's irradiance within 5 %% "
+                          "(%.3fx, sun %.0f deg)", cones / truth4, elevDeg);
+            CHECK(truth4 > 1e-6 && std::fabs(cones / truth4 - 1.0) < 0.05, imsg);
         }
     }
 

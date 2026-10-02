@@ -38,7 +38,11 @@
 // SWAP IS NOT VISIBLE. What IS: a voxel cascade's re-centre (the `rebuilt` column)
 // on an asset with NO CARDS (`--no-cards`, a parsed model's shape) — +8 to +9 codes
 // of region mean on the mirror dome in one frame (the reflection of the asset
-// appears), identical on the chain and the control.
+// appears), identical on the chain and the control. `--skinned` (PHOTON-I-1, the
+// AVATAR's class: rigged, card-less by rule, every hit a decode record) read the same
+// re-centres at +1.7 / +2.0 / +2.9 / +1.7 codes on the mirror dome and within +-0.7 on
+// the glossy one, the asset reflected on every frame — the carded asset +1.3..+2.1
+// (spikes/photon-i-1). (Its sanity checks red: one level, no chain — an instrument.)
 // The PAIRED CONTROL (trap 12, one process): the identical walk with a CHAIN-LESS
 // twin of the asset (the same level-0 geometry and DAG, no chain: its ray level
 // is 0 for ever) — printed beside the chain walk at the same poses, the chain's
@@ -340,11 +344,15 @@ int main(int argc, char **argv)
     // `--no-cards`: the asset with no surface-cache cards (a PARSED model's shape — every
     // hit on it voxel-answered). A diagnosis switch, not a suite arm.
     bool noCards = false;
+    // `--skinned`: the asset skinned whole to one bone (an AVATAR's class: a rigged item has
+    // no cards BY RULE, and every ray hit on it is a hit-list record the decode shades).
+    bool skinned = false;
     for (int i = 1; i < argc; ++i) {
         const std::string a = argv[i];
         if (a == "--cost") cost = true;
         else if (a == "--asset" && i + 1 < argc) assetPath = argv[++i];
         else if (a == "--no-cards") noCards = true;
+        else if (a == "--skinned") skinned = true;
     }
     std::string err;
     EngineConfig cfg;
@@ -360,7 +368,15 @@ int main(int argc, char **argv)
     if (!loadBaked(assetPath, kAssetExtent, asset) || !loadBaked(assetPath, kAssetExtent, twin, false)) {
         std::printf("FAIL: the asset %s\n", assetPath.c_str()); return 1;
     }
-    if (noCards) { asset.data.cards.clear(); twin.data.cards.clear(); }
+    if (skinned) asset = twin;   // a rigged item draws one level (attachSkinnedMesh)
+    if (noCards || skinned) { asset.data.cards.clear(); twin.data.cards.clear(); }
+    if (skinned)
+        for (Placed *pl : { &asset, &twin }) {
+            const size_t nv = pl->data.positions.size() / 3u;
+            pl->data.blendIndices.assign(nv * 4u, 0);
+            pl->data.blendWeights.assign(nv * 4u, 0.0f);
+            for (size_t i = 0; i < nv; ++i) pl->data.blendWeights[i * 4u] = 1.0f;
+        }
     std::printf("    asset %s: %zu triangles, %zu coarser levels, bounds (mesh units, x scale %.4f):",
                 assetPath.c_str(), asset.data.indices.size() / 3u, asset.data.lodBounds.size(), asset.scale);
     for (float b : asset.data.lodBounds) std::printf(" %.5f", b);
@@ -411,8 +427,12 @@ int main(int argc, char **argv)
     const MaterialId am = s->createPbrMaterial(ap);
     const NodeId nodes[2] = { s->createNode(), s->createNode() };
     const MeshId meshes[2] = { s->createMesh(asset.data), s->createMesh(twin.data) };
+    SkeletonDesc rig;
+    rig.id = "gi.reflect_lod_pop skinned asset rig v1";
+    { BoneDesc root; root.name = "root"; rig.bones.push_back(root); }
     for (int k = 0; k < 2; ++k) {
-        if (!(nodes[k] && meshes[k] && s->attachMesh(nodes[k], meshes[k], am))) {
+        if (!(nodes[k] && meshes[k] &&
+              (skinned ? s->attachSkinnedMesh(nodes[k], meshes[k], am, rig) : s->attachMesh(nodes[k], meshes[k], am)))) {
             std::printf("FAIL: the asset node: %s\n", e->lastError().c_str()); return 1;
         }
         enginetest::setNodeScale(s, nodes[k], Vec3(asset.scale, asset.scale, asset.scale));

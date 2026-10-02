@@ -19,8 +19,6 @@ For more information see the LICENSE file
 #include "irisgl/document/assets/vertexbuffer.h"
 #include "irisgl/document/assets/texture.h"
 #include "irisgl/document/assets/texture2d.h"
-#include "irisgl/document/materials/renderstates.h"
-#include "irisgl/document/materials/rasterizerstate.h"
 #include "irisgl/core/viewport.h"
 #include <QMap>
 #include "data/constants.h"

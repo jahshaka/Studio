@@ -878,6 +878,7 @@ QVariantMap VrApi::info() { return available(); }
 
 bool VrApi::begin(const QVariantMap &options)
 {
+    if (shutDown) return refuse(QStringLiteral("vr.begin: the VR module has shut down"));
     // THE WHOLE VERB IS A CALLER OF EditorVrPreview (phase 4): the session, the
     // rig's placement on the editor's render camera, the fly redirect and the
     // proxies are one object's business, and the Player's VR mode is the other
@@ -959,6 +960,23 @@ bool VrApi::endForShutdown()
     e->setVrMirrorView(nullptr);
     e->endVrSession();
     return true;
+}
+
+bool VrApi::shutdown()
+{
+    const bool ended = endForShutdown();
+    interaction.detachHost();
+    interactionSessionActive = false;
+    interactionClock.invalidate();
+    // NOTHING OF THE HOST SURVIVES THE TEARDOWN STEP: the per-frame hook comes
+    // off the driver and the context copy is emptied, so a verb a script calls
+    // from here on reads null everywhere and refuses (no dangling viewport,
+    // engine host or services pointer is reachable from this object any more).
+    if (moduleHost.engine && moduleHost.engine->driver())
+        disconnect(moduleHost.engine->driver(), nullptr, this, nullptr);
+    moduleHost = StudioContext();
+    shutDown = true;
+    return ended;
 }
 
 bool VrApi::proxies(const QVariant &on)

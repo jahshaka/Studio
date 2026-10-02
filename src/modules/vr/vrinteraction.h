@@ -272,6 +272,14 @@ public:
     void begin();
     void end();
     bool installed() const { return mInstalled; }
+    /// THE HOST IS GOING AWAY (VR-TEARDOWN-1). Ends an installed interaction,
+    /// gives the arc's nodes back while the viewport and its scene still
+    /// answer, and DROPS every dependency — so nothing this object does later,
+    /// its own destructor included, can reach a viewport the shell has since
+    /// taken apart. Called from the module's `shutdown()` (StudioModule v2:
+    /// the ordered teardown, engine and viewport still up); the object owning
+    /// this one (VrApi, owned by the ScriptEngine) is destroyed long after.
+    void detachHost();
 
     /// ONE INTERACTION FRAME: read both hands, hover, run the button edges,
     /// follow a live gesture, walk the wearer. `seconds` is the frame's own
