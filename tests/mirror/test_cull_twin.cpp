@@ -27,6 +27,8 @@
 //      material has no cull of its own: the node is the authority.)
 //   8. A CULL EDIT RE-VOXELISES NOTHING (CULL-TWIN-DEBTS-1): the voxelisers read no
 //      cull, so no cascade rebuilds for one.
+//   9. A SCENE THAT IS NEVER DRAWN (so never swept) keeps its sweep list bounded by
+//      its live twins, however many cull edits it sees (the fix round's item 5).
 #include <QGuiApplication>
 #include <cmath>
 #include <cstdio>
@@ -339,6 +341,27 @@ int main(int argc, char **argv)
         GiParams off;
         scene->setGlobalIllumination(off);
         frames(2);
+    }
+
+    // ---- 9. A SCENE NEVER DRAWN: THE SWEEP LIST STAYS BOUNDED ------------------
+    {
+        Scene *hidden = engine->createScene("cull-never-drawn");   // in no view: never swept
+        CHECK(hidden != nullptr, "(9) a scene no view draws");
+        if (hidden) {
+            PbrParams p;
+            const MaterialId m = hidden->createPbrMaterial(p);
+            const NodeId n = hidden->createNode();
+            CHECK(m && n && hidden->attachMesh(n, hidden->createMesh(enginetest::unitCubeMesh()), m),
+                  "(9) a cube in it");
+            for (int i = 0; i < 1000; ++i)
+                hidden->setNodeFaceCull(n, (i & 1) ? FaceCull::Material : FaceCull::TwoSided);
+            engine->renderOneFrame();
+            std::printf("    never-drawn scene after 1000 cull edits: %u twin(s), %u candidate(s)\n",
+                        hidden->cullTwinCount(), hidden->cullTwinCandidateCount());
+            CHECK(hidden->cullTwinCount() == 1 && hidden->cullTwinCandidateCount() <= hidden->cullTwinCount(),
+                  "(9) 1000 cull edits on a never-drawn scene: one twin, the sweep list no longer than the twins");
+            engine->destroyScene(hidden);
+        }
     }
 
     mirror.setSource(nullptr);
