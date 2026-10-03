@@ -22,7 +22,8 @@
 // is 1 to five decimals.
 //
 // THE BARS. gi.area_energy: the VOXEL store, the accurate (LTC) pixel and the APPROXIMATE area
-// light's pixel, each within 5 % of the closed form at every height.
+// light's pixel, each within 5 % of the closed form at every height; and NEAR THE RANGE (F5)
+// the LTC pixel and the voxel store both follow JahBrdf's window within 5 %.
 //
 // WHAT IT FOUND (AREA-SCALE-1, d-build c5fbe870c, a matte floor at roughness 1): the voxel store
 // and the LTC pixel were the closed form to 0.04 %; the approximate area light drew 5.32 / 4.59 /
@@ -210,6 +211,43 @@ int main()
         worstPixel = std::max(worstPixel, std::fabs(pixRatio - 1.0));
         worstLtc = std::max(worstLtc, std::fabs(ltcRatio - 1.0));
     }
+    // THE RANGE WINDOW, ONE LAW (PHOTON-II-1 F5): the LTC light 1.5 m over the floor with its
+    // range brought in to 1.7 / 2.0 / 2.5 m, each path against itself at the far range: the
+    // ratio is JahBrdf's window saturate(1 - (d/R)^4)^2 on both — the pixel (the fork's LTC
+    // piece, which cut hard at the range before) and the voxel store (the injection's window).
+    double worstWinPix = 0.0, worstWinVox = 0.0;
+    {
+        const double h = 1.5;
+        LightDesc l;
+        l.castShadows = false;
+        l.intensity = 4.0f;
+        l.type = LightType::Area;
+        l.accurate = true;
+        l.rectWidth = float(kW);
+        l.rectHeight = float(kL);
+        const auto both = [&](double range, double &pix, double &vox) {
+            l.range = float(range);
+            s->setLight(lamp, l);
+            s->setNodeTransform(lamp, Vec3(float(cx), float(h), float(cz)), Quat(), Vec3(1, 1, 1));
+            pix = pixelAt();
+            view->setCamera(wide);
+            s->setNodeTransform(lamp, Vec3(float(cx), float(cy + h), float(cz)), Quat(), Vec3(1, 1, 1));
+            vox = settledVoxel(e, s, vx, vy, vz, v);
+        };
+        double farPix = 0.0, farVox = 0.0;
+        both(kRange, farPix, farVox);
+        for (double R : { 1.7, 2.0, 2.5 }) {
+            double pix = 0.0, vox = 0.0;
+            both(R, pix, vox);
+            const double x = h / R, w = std::pow(std::max(0.0, 1.0 - x * x * x * x), 2.0);
+            const double wFar = std::pow(1.0 - std::pow(h / kRange, 4.0), 2.0);
+            const double rp = farPix > 0.0 ? (pix / farPix) * wFar / w : -1.0;
+            const double rv = farVox > 0.0 ? (vox / farVox) * wFar / w : -1.0;
+            std::printf("   LTC at h 1.5 m, range %.1f m: window %.4f — pixel %.4f, voxel %.4f of it\n", R, w, rp, rv);
+            worstWinPix = std::max(worstWinPix, std::fabs(rp - 1.0));
+            worstWinVox = std::max(worstWinVox, std::fabs(rv - 1.0));
+        }
+    }
     view->setPostFx(PostFxDesc());
     if (const char *pic = std::getenv("JAH_AREA_PICTURE")) {   // measurement: a before/after picture
         // a 1 x 1 m approximate area light 1.5 m over the floor, a grey cube beside it, from the side
@@ -250,6 +288,9 @@ int main()
     CHECK_MSG(worstLtc <= 0.05, "...and so does the accurate (LTC) pixel (worst %.2f %%)", 100.0 * worstLtc);
     CHECK_MSG(worstPixel <= 0.05,
               "...and so does the APPROXIMATE area light's pixel (worst %.2f %%)", 100.0 * worstPixel);
+    CHECK_MSG(worstWinPix <= 0.05 && worstWinVox <= 0.05,
+              "ONE RANGE LAW: near its range the LTC light's pixel and its voxels both follow JahBrdf's window "
+              "(worst pixel %.2f %%, voxel %.2f %%)", 100.0 * worstWinPix, 100.0 * worstWinVox);
 
     GiParams off; off.mode = GiMode::Off;
     s->setGlobalIllumination(off);
