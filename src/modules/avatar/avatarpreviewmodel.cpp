@@ -543,6 +543,7 @@ iris::AnimationPtr AvatarPreviewModel::buildClipAnimation(const iris::SkeletalAn
     auto inPlace = iris::SkeletalAnimation::create();
     inPlace->name = skel->name;
     inPlace->source = skel->source;
+    inPlace->assetGuid = skel->assetGuid;
     inPlace->declaredLength = skel->declaredLength;
     inPlace->boneAnimations = skel->boneAnimations;
     inPlace->boneAnimations[rootChannel] = QSharedPointer<iris::BoneAnimation>(stripped);

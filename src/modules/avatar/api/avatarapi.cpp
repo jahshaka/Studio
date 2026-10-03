@@ -1507,7 +1507,10 @@ bool AvatarApi::attachClipsFromFile(const char *verb, const iris::SceneNodePtr &
     QList<iris::AnimationPtr> added;
     for (const auto &s : scored) {
         if (s.ratio < rig::kRigMatchThreshold) continue;    // a foreign clip in a mixed file
-        auto clip = iris::Animation::createFromSkeletalAnimation(s.skel);
+        // The clip's REFERENCE is the asset it was read from (CLIP-REF-1):
+        // the scene persists {assetGuid, name} and resolves it through the store.
+        auto clip = iris::Animation::createFromSkeletalAnimation(
+            iris::SkeletalAnimation::referencedAs(s.skel, assetGuid));
         if (clip.isNull()) continue;
         // The same display-name rule the preview uses: every Mixamo clip is
         // literally called "mixamo.com", so a junk name becomes the FILE's base

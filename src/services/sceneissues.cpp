@@ -246,11 +246,29 @@ void SceneIssues::raiseMissingModels(const QStringList &paths)
         issue.id = QStringLiteral("model.missing:") + path;
         issue.kind = QStringLiteral("model.missing");
         issue.nodeName = file;
-        issue.message = tr("The model '%1' is missing from the scene: it has no mesh bake, and "
-                           "none could be rebuilt from its source.").arg(file);
-        issue.action = tr("Its source file is not in the asset store (or its bake could not be "
-                          "rebuilt from it — the log says why): re-import the model, or the project "
-                          "archive it came in.");
+        issue.message = tr("The model '%1' is missing from the scene: the asset store holds no "
+                           "current mesh bake for it.").arg(file);
+        issue.action = tr("Re-import the model (or the project archive it came in); the log names "
+                          "the file it looked for.");
+        raise(issue);
+    }
+}
+
+void SceneIssues::raiseMissingClips(const QVector<MissingClipRef> &clips)
+{
+    for (const MissingClipRef &clip : clips) {
+        const QString asset = clip.assetName.isEmpty()
+                                  ? (clip.assetGuid.isEmpty() ? tr("no asset") : clip.assetGuid)
+                                  : QFileInfo(clip.assetName).fileName();
+        SceneIssue issue;
+        issue.id = QStringLiteral("clip.missing:%1|%2|%3")
+                       .arg(clip.nodeName, clip.assetGuid, clip.clipName);
+        issue.kind = QStringLiteral("clip.missing");
+        issue.nodeName = clip.nodeName;
+        issue.message = tr("The animation clip '%1' on '%2' (from %3) could not be loaded: %4.")
+                            .arg(clip.clipName, clip.nodeName, asset, clip.why);
+        issue.action = tr("The node stands in its bind pose. Load the clip again (Avatar module or "
+                          "avatar.loadClip), or re-import %1.").arg(asset);
         raise(issue);
     }
 }

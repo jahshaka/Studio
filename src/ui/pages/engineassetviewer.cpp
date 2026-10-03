@@ -225,7 +225,7 @@ void EngineAssetViewer::loadJafModel(QString path, QString guid, bool firstAdd, 
 {
     Q_UNUSED(firstAdd);
     showProgress();
-    auto node = readJafModel(path, guid);
+    auto node = readJafModel(guid);
     if (node) {
         // Cached UNDER THE GUID. It was cached under the file's base name —
         // which in the CAS is a sha256 — while every lookup (AssetView's tile
@@ -272,7 +272,7 @@ QImage EngineAssetViewer::takeScreenshot(int width, int height)
 
 // ---- database -> document (AssetViewer::addJaf*) ----
 
-iris::SceneNodePtr EngineAssetViewer::readJafModel(const QString &path, const QString &guid)
+iris::SceneNodePtr EngineAssetViewer::readJafModel(const QString &guid)
 {
     if (!mDb) return iris::SceneNodePtr();
 
@@ -285,15 +285,6 @@ iris::SceneNodePtr EngineAssetViewer::readJafModel(const QString &path, const QS
     // download is 17.2 m authored and 1.75 m placed, and the preview camera
     // ended up inside the model.
     iris::SceneNodePtr node = libraryasset::fromLibrary(mDb, mProject, guid);
-    if (!node) return node;
-
-    // rename animation sources to relative paths
-    if (mProject) {
-        auto relativePath = QDir(mProject->folderPath).relativeFilePath(path);
-        for (auto anim : node->getAnimations()) {
-            if (!!anim->skeletalAnimation) anim->skeletalAnimation->source = relativePath;
-        }
-    }
     return node;
 }
 

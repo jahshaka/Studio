@@ -15,6 +15,7 @@ For more information see the LICENSE file
 #include <QSharedPointer>
 #include "io/assetiobase.h"
 #include "io/sceneformat.h"
+#include "io/missingclipref.h"
 #include <QDir>
 #include <QFile>
 #include <QJsonArray>
@@ -23,6 +24,7 @@ For more information see the LICENSE file
 #include <QJsonValueRef>
 #include <QJsonDocument>
 #include <QMap>
+#include <QVector>
 
 #include "data/project.h"
 
@@ -56,6 +58,7 @@ class SceneReader : public AssetIOBase
     // We can choose to load assets from a flat file or from those already cached
     // TODO - also cache assets in the viewer
     QStringList missingModelPaths;
+    QVector<MissingClipRef> missingClipRefs;
     /// `giCascadeSet` rows past kGiTierMaxCascades the last readScene dropped.
     int cascadeRowsDroppedCount = 0;
 
@@ -64,6 +67,9 @@ public:
     /// they are missing from the open — never parsed — and the caller reports
     /// them as scene issues.
     const QStringList &missingModels() const { return missingModelPaths; }
+    /// The skeletal clips this reader could NOT resolve (CLIP-REF-1) — which
+    /// clip, which asset, why; the caller raises them as `clip.missing` issues.
+    const QVector<MissingClipRef> &missingClips() const { return missingClipRefs; }
     /// How many pinned cascade rows the scene carried past the renderer's slot table
     /// (io/cascadesetformat.h): dropped, and the caller raises `gi.cascades.clamped`.
     int cascadeRowsDropped() const { return cascadeRowsDroppedCount; }
@@ -214,32 +220,15 @@ public:
     iris::MeshPtr getMesh(QString filePath, int index,
                           const QString &assetGuid = QString());
 
-    /// `assetGuid` (F5, optional) is the STABLE half of the reference: a
-    /// stored file's name is a sha256, so the persisted path cannot resolve a
-    /// clip that came from the asset store once the store has moved. When a
-    /// guid is given it is tried FIRST. Absent in every scene written before
-    /// 2026-09-06, which is why it has a default.
-    ///
-    /// `ownModelGuid` (optional) is the model row the clip's OWN node subtree
-    /// was built from (ownModelGuidFor): the last resort when the clip has no
-    /// guid and its persisted path is gone — a rigged model's own clips, in
-    /// an import blob or a placed instance, name the model's file and nothing
-    /// else.
-    iris::SkeletalAnimationPtr getSkeletalAnimation(QString filePath, QString animName,
-                                                    const QString &assetGuid = QString(),
-                                                    const QString &ownModelGuid = QString());
-
-    /// The Mesh row, among the meshes of `nodeObj`'s OWN subtree (the node and
-    /// its descendants, as the blob names them — by guid), whose file name is
-    /// `sourceFileName`; empty when none is. This is how a skeletal clip that
-    /// carries no guid finds its model's bytes: by the guids of the meshes it
-    /// animates, compared by file name against THOSE rows only — the rule
-    /// SceneEditService::addMaterialMesh already uses to tell a model's own
-    /// clips from borrowed ones. It replaced a catalog-wide query for any row
-    /// in the project CALLED like the clip's file (plan item 15c), which was
-    /// the only thing that made a placed rigged model keep its animation once
-    /// the file it was imported from was gone.
-    QString ownModelGuidFor(const QJsonObject &nodeObj, const QString &sourceFileName) const;
+    /// A skeletal clip by its REFERENCE (CLIP-REF-1): the asset guid and the
+    /// clip's name within it. The path is derived from the guid through the
+    /// store (the project's pin, or the library source); there is no other
+    /// route. A clip that does not resolve is recorded in missingClips() with
+    /// the reason, and comes back null (the node keeps its bind pose).
+    /// `nodeName` names the node holding the clip, for that record.
+    iris::SkeletalAnimationPtr getSkeletalAnimation(const QString &assetGuid,
+                                                    const QString &animName,
+                                                    const QString &nodeName);
 };
 
 #endif // SCENEREADER_H

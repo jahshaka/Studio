@@ -15,15 +15,11 @@
 #      store names an object by its sha256, so a file on disk carrying one of
 #      those NAMES can only be such a copy.
 #
-#   3. THE RIGGED-MODEL ARM: the one real consumer the deleted by-name lookup
-#      had. A rigged model's own skeletal clips carry no guid in its import
-#      blob (and none in a placed instance saved since — the writer's by-name
-#      fallback used to supply one). When the file it was imported from is
-#      gone, the clips were found again ONLY by asking the catalog for a row
-#      called like the file. They are found now through the guid of the mesh
-#      rows their own subtree carries (SceneReader::ownModelGuidFor): import
-#      from a scratch copy, delete the copy, place the model, and its clips
-#      must be real — before and after a save/reopen.
+#   3. THE RIGGED-MODEL ARM: a rigged model's own skeletal clips are
+#      referenced by the model's own asset guid in its import blob
+#      (CLIP-REF-1), never by the file it was imported from: import from a
+#      scratch copy, delete the copy, place the model, and its clips must be
+#      real — before and after a save/reopen.
 #
 # $1 = the Jahshaka binary, $2 = the script, $3 = a rigged model with clips
 set -u

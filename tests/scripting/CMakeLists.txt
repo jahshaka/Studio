@@ -768,6 +768,25 @@ set_tests_properties(scripting.e2e.shipped_assets PROPERTIES
     LABELS "scripting"
     TIMEOUT 120)
 
+# scripting.e2e.clip_ref — a skeletal clip is referenced by its ASSET GUID
+# (CLIP-REF-1): an avatar with embedded clips + a loaded clip and a placed model
+# with its own clip keep every clip, with zero issues, across save -> switch ->
+# reopen (twice) with the projects outside the data root, and again from a
+# COPY of the data root opened with --data-root. Two --headless processes.
+set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-clip_ref)
+file(MAKE_DIRECTORY ${_home}/run)
+add_test(NAME scripting.e2e.clip_ref
+         COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/clip_ref.sh
+                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
+                 ${CMAKE_SOURCE_DIR}/tests/avatar/fixtures/rig2.glb
+                 ${CMAKE_SOURCE_DIR}/tests/avatar/fixtures/rig2_walk_anim.glb
+                 ${CMAKE_SOURCE_DIR}/tests/skeletal/fixtures/mixamo_tpose.fbx
+         WORKING_DIRECTORY ${_home}/run)
+set_tests_properties(scripting.e2e.clip_ref PROPERTIES
+    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
+    LABELS "scripting"
+    TIMEOUT 300)   # two processes, measured 98 s (import bakes dominate)
+
 # scripting.e2e.perf_capture_frames — THE CAPTURE WINDOW IS COUNTED IN FRAMES
 # (PERF-CAPTURE-SCRIPT-1, lane FENCE-1). Two halves like perf.capture_bundle:
 # the app records, the shell half reads frames.jsonl and machine.json, because
@@ -1247,7 +1266,8 @@ jah_pool_arm(doc_assets import_settings ${CMAKE_CURRENT_BINARY_DIR}/e2e_import_s
 
 jah_no_display(
     scripting.e2e.store_root
-    scripting.e2e.shipped_assets)
+    scripting.e2e.shipped_assets
+    scripting.e2e.clip_ref)
 
 # scripting.e2e.glb_textures — the owner's "the glb imports still don't work,
 # they import without the textures" (2026-09-09), as the round trip it really

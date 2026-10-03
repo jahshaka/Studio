@@ -678,33 +678,16 @@ void SceneWriter::writeAnimationData(QJsonObject& sceneNodeObj,iris::SceneNodePt
         if (anim->hasSkeletalAnimation()) {
             auto skelAnim = anim->getSkeletalAnimation();
             QJsonObject skelObj;
-            // Never persist an ABSOLUTE source (GLB importer fix phase 1):
-            // import sets SkeletalAnimation::source to the model's absolute
-            // path, which breaks the {source, name} reference on any other
-            // machine (or after the project moves). Store it relative to the
-            // project dir — SceneReader::getSkeletalAnimation resolves
-            // relative sources via getAbsolutePath and re-relativizes after
-            // load, so saved scenes converge on the stable relative form.
-            QString source = skelAnim->source;
-            // THE ASSET GUID (F5, 2026-09-06): the stable half of the reference.
-            // Since the CAS a stored file's NAME is its sha256, so the reader's
-            // name-based re-home (deleted with plan item 15c) could never find
-            // the catalog row for a clip that came from the store — a project whose
-            // store had moved lost every externally loaded clip, silently, at
-            // bind pose. The guid survives that. Resolved from the ABSOLUTE
-            // form so a re-save of an already-relative source keeps it, and
-            // written only when there IS a row (a clip from a loose file on
-            // disk still travels by path alone, exactly as before).
-            const QString absolute = source.isEmpty()
-                ? QString()
-                : (QFileInfo(source).isAbsolute() ? source
-                                                  : staticRelativeBase.absoluteFilePath(source));
-            const QString sourceGuid = assetGuidForTexturePath(
-                absolute, AssetCas::GuidPreference::Any);
-            if (!sourceGuid.isEmpty()) skelObj["guid"] = sourceGuid;
-            if (!source.isEmpty() && QFileInfo(source).isAbsolute())
-                source = staticRelativeBase.relativeFilePath(source);
-            skelObj["source"] = source;
+            // THE REFERENCE IS THE ASSET GUID (CLIP-REF-1), carried on the clip
+            // from the moment it was read or attached — never re-derived from a
+            // path here. It used to be: the guid was recovered from the clip's
+            // path on every save, and the reader kept the PERSISTED relative
+            // path, so a save after a project switch looked up a path outside
+            // the store, found no row, and wrote the clip without its guid —
+            // the next open could not find the model and the character stood in
+            // its bind pose. No path is written: the reader derives it from the
+            // guid through the store, wherever the data root lives.
+            if (!skelAnim->assetGuid.isEmpty()) skelObj["guid"] = skelAnim->assetGuid;
             skelObj["name"] = skelAnim->name;
             animObj["skeletalAnimation"] = skelObj;
         }

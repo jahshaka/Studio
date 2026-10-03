@@ -85,7 +85,6 @@ QJsonObject sampleNodeObject()
 
     QJsonObject skel;
     skel[QStringLiteral("guid")] = QString::fromLatin1(kClipGuid);
-    skel[QStringLiteral("source")] = QStringLiteral("clips/walk.dae");
     QJsonObject anim;
     anim[QStringLiteral("name")] = QStringLiteral("Walk");
     anim[QStringLiteral("skeletalAnimation")] = skel;

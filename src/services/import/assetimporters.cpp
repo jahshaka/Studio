@@ -42,6 +42,8 @@ For more information see the LICENSE file
 #include "services/videoutils.h"
 #include "irisgl/core/irisutils.h"
 #include "irisgl/core/properties/property.h"
+#include "irisgl/document/animation/animation.h"
+#include "irisgl/document/animation/skeletalanimation.h"
 #include "irisgl/document/scenegraph/meshnode.h"
 #include "irisgl/import/materialhelper.h"
 #include "irisgl/import/meshbake.h"
@@ -312,6 +314,16 @@ bool MeshImporter::convert(const ImportRequest &request, const QString &stagingD
             if (QFileInfo(meshNode->meshPath).fileName() == sourceInfo.fileName())
                 meshNode->meshPath = out.meshGuid;
             meshNode->setGUID(out.mainGuid);
+        }
+        // THE MODEL'S OWN CLIPS are referenced by the model's own asset
+        // (CLIP-REF-1): every skeletal clip on the fragment came out of this
+        // file, and the blob records it as {Mesh row guid, name}. The import
+        // path is provenance only — a placement or a spawn resolves the clip
+        // through the store, never through the file the user imported from.
+        for (const auto &anim : n->getAnimations()) {
+            if (anim && anim->hasSkeletalAnimation())
+                anim->setSkeletalAnimation(iris::SkeletalAnimation::referencedAs(
+                    anim->getSkeletalAnimation(), out.meshGuid));
         }
         for (auto &child : n->children()) rewrite(child);
     };

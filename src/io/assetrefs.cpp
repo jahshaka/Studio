@@ -123,9 +123,8 @@ void visitAssetSlots(QJsonObject &nodeObj, const QString &prefix, Fn fn)
         }
     }
 
-    // animations[].skeletalAnimation.guid — the skeletal CLIP asset. The
-    // sibling `source` is a relative path the reader falls back to; it is not
-    // a guid and is not touched.
+    // animations[].skeletalAnimation.guid — the skeletal clip's asset, its
+    // whole reference beside the clip name (CLIP-REF-1).
     if (nodeObj.contains(QStringLiteral("animations"))) {
         QJsonArray animations = nodeObj.value(QStringLiteral("animations")).toArray();
         bool changed = false;

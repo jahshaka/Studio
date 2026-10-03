@@ -80,7 +80,7 @@ protected:
 
 private:
     /// Database -> document, the AssetViewer::addJaf* readers.
-    iris::SceneNodePtr readJafModel(const QString &path, const QString &guid);
+    iris::SceneNodePtr readJafModel(const QString &guid);
     iris::MaterialPtr readJafMaterial(const QString &guid);
     void applyJafSky(const QString &guid);
     /// IDENTITY: the mirror renders PbrMaterial, the one material class the
