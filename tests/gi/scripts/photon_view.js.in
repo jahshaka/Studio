@@ -78,17 +78,13 @@ var COMBO = ["voxels", "probes", "screenProbes", "diffuse", "reflections", "hits
 function bothOff() {
     assert(world.setPhotonView("off") === true && world.setAtomView("off") === true, "both views off");
 }
-// `tolerance`: how many pixels 'off' may differ from the off picture. ZERO on the default
-// scene (deterministic, the atom.view rule). NOT zero on Showroom 2 at High: its picture is
-// not bit-stable from one shot to the next with no view ever on (measured on the rig: 255
-// of 14,400 pixels between two consecutive shots, 274 after 150 frames — the ray-traced
-// reflections' temporal edges), so there 'restores' means within five times that noise's
-// order (5 % of the pixels) — the arm logs its own consecutive-shot count beside it.
-// RE-BASELINED BY SSAO-DOUBLE-1 (2026-09-29): 5 % was measured on the picture WITH SSAO,
-// whose blurred multiply damped those temporal edges. With SSAO refused under the GI the
-// same two consecutive shots differ in 0 / 624 / 780 pixels over three runs (the combos' own
-// "off" pictures: 0..790), so the bar keeps the first baseline's margin — 720 over a worst
-// noise of 274, 2.6x — over the new worst noise: 2.6 x 780 = 2030, 14 % of the pixels.
+// `tolerance`: how many pixels 'off' may differ from the off picture — ZERO on both
+// scenes. A still scene's shot is a pure function of the scene and the camera
+// (PHOTON-VIEW-NOISE-1, 2026-10-03): Showroom 2's consecutive shots used to differ in up
+// to 780 of 14,400 pixels by up to 14 codes over whole probe cells, because the gather's
+// adaptive budget (a quarter of the grid: 15 probes at 160 x 90) picked its winners by an
+// atomic's arrival order. The placement now ranks them in a fixed order
+// (rq_probe_place.comp), and the arm below asserts the two shots EQUAL.
 function combination(tag, offPic, refusals, tolerance) {
     var ran = 0;
     for (var c = 0; c < COMBO.length; ++c) {
@@ -251,8 +247,9 @@ for (var k = 0; k < MODES.length; ++k) {
 }
 assert(world.setPhotonView("off") === true, "Showroom 2: off before the combination");
 var srNoise = changed(shot("showroom_noise_a"), shot("showroom_noise_b"));
-console.log("Showroom 2: two consecutive off shots differ in " + srNoise + " pixels (the scene's own noise)");
-var comboShowroom = combination("showroom", srOff, ss.viewRefusals, Math.round(0.14 * W * H));
+assert(srNoise === 0, "Showroom 2: two consecutive off shots are the same picture (" + srNoise +
+       " pixels differ; the adaptive budget's winners are ranked, never raced)");
+var comboShowroom = combination("showroom", srOff, ss.viewRefusals, 0);
 assert(comboShowroom === COMBO.length, "Showroom 2 ran every combination (" + comboShowroom + ")");
 ownerWindowCombination("showroom", ss.viewRefusals);
 
