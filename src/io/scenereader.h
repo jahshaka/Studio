@@ -56,12 +56,17 @@ class SceneReader : public AssetIOBase
     // We can choose to load assets from a flat file or from those already cached
     // TODO - also cache assets in the viewer
     QStringList missingModelPaths;
+    /// `giCascadeSet` rows past kGiTierMaxCascades the last readScene dropped.
+    int cascadeRowsDroppedCount = 0;
 
 public:
     /// The model files this reader found with NO current bake (FORWARD-ONLY-1):
     /// they are missing from the open — never parsed — and the caller reports
     /// them as scene issues.
     const QStringList &missingModels() const { return missingModelPaths; }
+    /// How many pinned cascade rows the scene carried past the renderer's slot table
+    /// (io/cascadesetformat.h): dropped, and the caller raises `gi.cascades.clamped`.
+    int cascadeRowsDropped() const { return cascadeRowsDroppedCount; }
 
 	void setDatabaseHandle(Database *db) {
 		this->handle = db;

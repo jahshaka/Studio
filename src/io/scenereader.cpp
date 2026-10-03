@@ -9,6 +9,7 @@ and/or modify it under the terms of the MIT License
 For more information see the LICENSE file
 *************************************************************************/
 
+#include "io/cascadesetformat.h"
 #include "irisgl/core/math/quat.h"
 #include "irisgl/core/math/vec.h"
 #include "irisgl/document/scenegraph/looks.h"
@@ -517,14 +518,9 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
             0.0, sceneObj.value("giCardRadius").toDouble(double(scene->giCardRadius)), 100000.0));
         scene->giDragMoverChannel = qBound(
             0, sceneObj.value("giDragMoverChannel").toInt(scene->giDragMoverChannel), 1);
-        scene->giCascadeSet.clear();
-        for (const QJsonValue &v : sceneObj.value("giCascadeSet").toArray()) {
-            const QJsonArray row = v.toArray();
-            if (row.size() < 3) continue;
-            scene->giCascadeSet.append(iris::Vec3(float(row.at(0).toDouble()),
-                                                  float(row.at(1).toDouble()),
-                                                  float(row.at(2).toDouble())));
-        }
+        // CLAMPED TO THE RENDERER'S SLOT TABLE, AND SAID (io/cascadesetformat.h).
+        cascadeRowsDroppedCount =
+            sceneformat::readCascadeSet(sceneObj.value("giCascadeSet").toArray(), scene->giCascadeSet);
         // DDGI (GI_UNIFIED_SPEC.md §4 P1). Absent in every document written
         // before this phase, and the fallbacks ARE the constructor's values —
         // -1 (auto, which resolves OFF while there is no Photon tier) is what

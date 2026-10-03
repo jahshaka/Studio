@@ -255,6 +255,20 @@ void SceneIssues::raiseMissingModels(const QStringList &paths)
     }
 }
 
+void SceneIssues::raiseCascadeSetClamped(int dropped)
+{
+    if (dropped <= 0) return;
+    SceneIssue issue;
+    issue.id = QStringLiteral("gi.cascades.clamped");
+    issue.kind = QStringLiteral("gi.cascades.clamped");
+    issue.message = tr("The scene pinned %n cascade row(s) more than the renderer holds (%1); "
+                       "the rows past it were dropped.", nullptr, dropped)
+                        .arg(jahshaka::engine::kGiTierMaxCascades);
+    issue.action = tr("Check the scene's cascade table (world.gi({cascadeSet})), or hand it back to "
+                      "the tier (world.gi({cascadeSet: []})); saving keeps the clamped table.");
+    raise(issue);
+}
+
 void SceneIssues::reset()
 {
     if (mIssues.isEmpty()) return;

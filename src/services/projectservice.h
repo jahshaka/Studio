@@ -138,6 +138,8 @@ public:
     /// (FORWARD-ONLY-1): missing from the open, never parsed. The shell raises
     /// one `model.missing` scene issue per file after it binds the scene.
     QStringList missingModels() const { return mMissingModels; }
+    /// The open's pinned cascade rows past the renderer's table (SceneReader).
+    int cascadeRowsDropped() const { return mCascadeRowsDropped; }
 
     /// The reader half of openProject: reads the scene blob into a document
     /// scene. editorData is an output parameter exactly as SceneReader hands
@@ -223,6 +225,7 @@ private:
     std::function<iris::ScenePtr()> sceneProvider;
     std::function<void()> mPreWrite;
     QStringList mMissingModels;
+    int mCascadeRowsDropped = 0;
 };
 
 #endif // PROJECTSERVICE_H

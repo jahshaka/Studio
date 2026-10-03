@@ -254,3 +254,14 @@ add_test(NAME document.sky_write COMMAND test_sky_write
 set_tests_properties(document.sky_write PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "document" TIMEOUT 60)
 jah_no_display(document.sky_write)
+
+# document.cascade_set_reader — a scene's pinned cascade table past the renderer's slot table
+# is read clamped and the dropped rows counted (the open raises gi.cascades.clamped).
+add_executable(test_cascade_set_reader test_cascade_set_reader.cpp)
+set_target_properties(test_cascade_set_reader PROPERTIES AUTOMOC OFF)
+target_include_directories(test_cascade_set_reader PRIVATE ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/irisgl ${CMAKE_SOURCE_DIR}/irisgl/engine/include)
+target_link_libraries(test_cascade_set_reader PRIVATE IrisGL Qt6::Core)
+add_test(NAME document.cascade_set_reader COMMAND test_cascade_set_reader)
+set_tests_properties(document.cascade_set_reader PROPERTIES LABELS "document" TIMEOUT 30)
+jah_no_display(document.cascade_set_reader)

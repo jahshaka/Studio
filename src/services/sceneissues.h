@@ -118,6 +118,9 @@ public:
     /// no current bake that could not be rebuilt from its source — the open's
     /// SceneReader::missingModels(), and a library placement's.
     void raiseMissingModels(const QStringList &paths);
+    /// `gi.cascades.clamped`: the open scene pinned more cascade rows than the renderer's
+    /// slot table holds; the reader kept the first kGiTierMaxCascades and dropped `dropped`.
+    void raiseCascadeSetClamped(int dropped);
 
     /// Every live issue, in the STABLE order the bar lists them in: by kind,
     /// then by the object each is about, then by id. There is no second,
