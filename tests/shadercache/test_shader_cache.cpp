@@ -573,6 +573,11 @@ static void abandoned_save_leaves_no_torn_file(const char *self) {
 // again). Gate: LAZY compiles nothing, builds the engine pipelines and its save
 // rewrites pipeline.cache; REBOOT loads that layer and builds the same pipelines in
 // under a quarter of LAZY's time.
+// THE PHOTON PIPELINES TOO (PHOTON-II-1 item 12): the scene gathers (a StillPicture view,
+// the gather row on) and reflects by rays, so every cycle also asserts that the
+// reflection's two pipelines and the gather's five were built THROUGH the cache —
+// ShaderCacheStats names every engine pipeline the tier's builder made; one built
+// beside it (the VK_NULL_HANDLE cache they took before) would be missing.
 static ShaderCacheStats enginePipelineCycle(const char *what) {
     ShaderCacheStats stats;
     std::string error;
@@ -582,6 +587,7 @@ static ShaderCacheStats enginePipelineCycle(const char *what) {
     View *v = e->createOffscreenView("view", 640, 360, Colour(0.45f, 0.55f, 0.70f));
     Scene *s = v ? e->createScene("scene") : nullptr;
     if (v && s) {
+        v->setOffscreenContract(OffscreenContract::StillPicture);   // a gathering picture
         v->setScene(s);
         const MeshId cube = s->createMesh(enginetest::unitCubeMesh());
         const NodeId floor = s->createNode();
@@ -597,6 +603,7 @@ static ShaderCacheStats enginePipelineCycle(const char *what) {
         GiParams gi; gi.mode = GiMode::Vct; gi.quality = GiQuality::High; gi.numBounces = 1;
         gi.cascadeCount = 1;
         gi.cascadeSet[0] = GiParams::GiCascadeDesc{ 20.0f, 128, 0.0f };
+        gi.gather = GiToggle::On;
         s->setGlobalIllumination(gi);
         PostFxDesc fx; fx.allowOffscreen = true; fx.ssr = 2;
         v->setPostFx(fx);
@@ -609,6 +616,17 @@ static ShaderCacheStats enginePipelineCycle(const char *what) {
     e->saveShaderCache();
     CHECK(e->flushShaderCache(30000), "the shader cache's write finished inside its budget");
     stats = e->shaderCacheStats();
+    if (stats.enginePipelinesThisRun > 0) {
+        for (const char *want : { "reflect", "reflect filter", "gather place", "gather place select",
+                                  "gather trace", "gather filter", "gather integrate" }) {
+            bool found = false;
+            for (const std::string &n : stats.enginePipelineNames) found |= n == want;
+            char msg[160];
+            std::snprintf(msg, sizeof(msg), "[%s] the '%s' pipeline was built through the pipeline cache", what,
+                          want);
+            CHECK(found, msg);
+        }
+    }
     if (s) e->destroyScene(s);
     if (v) e->destroyView(v);
     e.reset();

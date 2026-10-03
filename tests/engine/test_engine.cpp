@@ -2353,7 +2353,12 @@ void two_area_lights_both_light() {
     LightDesc d;
     // Unclipped, as everywhere else here: a saturated wall reads 1.0 whether
     // one light or two reach it, which is exactly the bug this test exists for.
-    d.type = LightType::Area; d.intensity = 0.05f; d.range = 12.0f;
+    // RE-KEYED BY AREA-SCALE-1 (PHOTON-II-1): the approximate area light lost its
+    // roughness booster and falls off by the disc law, ~5x less at this 1.2 m — so
+    // the intensity is 5x the old 0.05 and the margins below keep their meaning (the
+    // old key read 0.035 / 0.012 with one light, 0.047 / 0.047 with two: both sides
+    // lit, under the 0.05 margins).
+    d.type = LightType::Area; d.intensity = 0.25f; d.range = 12.0f;
     d.rectWidth = 1.5f; d.rectHeight = 1.5f;
 
     NodeId left = s->createNode();

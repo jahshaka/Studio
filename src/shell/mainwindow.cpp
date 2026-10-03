@@ -996,6 +996,7 @@ void MainWindow::bindWorld(const iris::ScenePtr &scene, EditorData *editorData, 
 	// the reader never parses in its place. setScene cleared the issue store,
 	// so this is raised after it.
 	SceneIssues::instance().raiseMissingModels(projectService->missingModels());
+	SceneIssues::instance().raiseCascadeSetClamped(projectService->cascadeRowsDropped());
 	assistant->refreshChatContext();   // D1: rebind an open chat to the new project
 	// THE MODULES HEAR THE PROJECT (StudioModule::onProjectChanged): the
 	// Materials page's open tabs are per project (MATERIALS_TABS_SPEC §2.7).

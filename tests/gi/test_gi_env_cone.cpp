@@ -100,7 +100,14 @@ int main()
         // The capture runs inside a frame and the convolution lands at the top
         // of the next: wait for the cube in FRAMES.
         std::vector<EnvironmentConeAnswer> probe;
-        const std::vector<EnvironmentConeQuery> one = { EnvironmentConeQuery{ Vec3(0, 1, 0), 0.98269f } };
+        // THE DEFAULT APERTURE IS THE ONE DIFFUSE SET'S (the merge read's F7): a default query
+        // is a four-cone set's cone (tan 0.98269, jah_voxel_cones.glsl's coneAngleTan) — the
+        // six-cone set's 0.577 it named is deleted. Only this harness reads the struct: no
+        // pixel moves.
+        EnvironmentConeQuery dflt;
+        dflt.dirWorld = Vec3(0, 1, 0);
+        CHECK(dflt.tanHalfAngle == 0.98269f, "a default EnvironmentConeQuery is the four-cone set's aperture");
+        const std::vector<EnvironmentConeQuery> one = { dflt };
         bool ready = false;
         for (int f = 0; f < 30 && !ready; ++f) {
             e->renderOneFrame();

@@ -25,6 +25,16 @@
 // from a fresh start — is the control. Gate: moving within 1.5x the still case + 0.5
 // codes (measured in the lane: base vs fixed in spikes/atom-engine-1).
 //
+// `--rays`: THE RAY REFLECTION'S OWN MOTION (PHOTON-II-1 item 11, `gi.id_depth_rays`). The
+// ray tier's reflection reads the same id image for "this surface, last frame"
+// (rq_reflect.comp, REFLECT-MOVERS-1): a pixel the id names as a MOVED slot finds its
+// history through that slot's two poses. Behind a stock-drawn character the id names the
+// mover, so the character's OWN reflection was carried back through the mover's motion
+// and restarted where the mover passed behind it. Same fixture, the march OFF (the rays
+// ARE the reflection) and the comb a glossy metal, so its own reflection is traced; the
+// region is the COMB'S OWN PIXELS (outside every pixel the sphere touches), the same
+// moving-vs-settled error against the same still control and the same bar.
+//
 // `--cost`: THE COPY'S PRICE. The id pass's depth copy ("Jahshaka atom id depth") runs
 // every frame on a chain whose velocity job runs; this mode renders the same fixture
 // at 1920x1080 with the sphere sliding, the render-loop monitor at Review, and reads
@@ -52,6 +62,7 @@ static int failures = 0;
     } while (0)
 
 static unsigned kWidth = 640, kHeight = 360;
+static bool gRays = false;   // --rays: the ray reflection's own motion (see the header)
 static const int kWarm = 90, kSettle = 60;
 static const float kStep = 0.06f, kSphereR = 0.45f;
 static void render(Engine *e, int n) { for (int i = 0; i < n; ++i) e->renderOneFrame(); }
@@ -149,6 +160,7 @@ static int costMain(Engine *e, Scene *s, NodeId sphere)
 int main(int argc, char **argv)
 {
     const bool cost = argc > 1 && std::string(argv[1]) == "--cost";
+    gRays = argc > 1 && std::string(argv[1]) == "--rays";
     if (cost) { kWidth = 1920; kHeight = 1080; }
     std::string err;
     EngineConfig cfg;
@@ -194,6 +206,7 @@ int main(int argc, char **argv)
         BoneDesc root; root.name = "root";
         rig.bones.push_back(root);
         PbrParams cp; cp.albedo = Colour(0.1f, 0.35f, 0.95f); cp.roughness = 0.7f;
+        if (gRays) { cp.metalness = 1.0f; cp.roughness = 0.25f; cp.albedo = Colour(0.6f, 0.75f, 0.95f); }
         if (!(comb && s->attachSkinnedMesh(comb, s->createMesh(combMesh()), s->createPbrMaterial(cp), rig))) {
             std::printf("FAIL: the comb: %s\n", e->lastError().c_str()); return 1;
         }
@@ -212,6 +225,7 @@ int main(int argc, char **argv)
     PostFxDesc fx;
     fx.allowOffscreen = true;
     fx.ssr = 2;   // the screen march on (the desktop default) over the ray tier
+    if (gRays) fx.ssrScreenMarch = false;   // --rays: the rays ARE the reflection
     view->setPostFx(fx);
     enginetest::testCameraLookAt(view, Vec3(0.0f, 1.0f, 6.0f), Vec3(0.0f, 0.4f, 0.0f));
     if (cost) return costMain(e, s, sphere);
@@ -252,7 +266,9 @@ int main(int argc, char **argv)
                 const size_t p = size_t(y) * kWidth + x;
                 bool d = false;
                 for (int c = 0; c < 3; ++c) d |= std::abs(int(with.rgba[p * 4u + c]) - int(without.rgba[p * 4u + c])) > 12;
-                if (d && y > floorLine + 2u) region[p] = 1;
+                // --rays: the comb's OWN pixels (above its foot's reflection); else the
+                // floor's reflection of it.
+                if (d && (gRays ? y + 2u < floorLine : y > floorLine + 2u)) region[p] = 1;
             }
     }
     double moving[3] = {}, still[3] = {};
@@ -298,8 +314,9 @@ int main(int argc, char **argv)
     }
     for (int k = 0; k < 3; ++k)
         CHECK_MSG(pixels[k] > 200 && moving[k] <= 1.5 * still[k] + 0.5,
-                  "checkpoint %d: a still character in front of a moving Atom mover keeps its own motion (moving %.3f "
-                  "vs still %.3f codes; bar 1.5x + 0.5; %d px)", checkpoints[k], moving[k], still[k], pixels[k]);
+                  "checkpoint %d: a still character in front of a moving Atom mover keeps its own %s (moving %.3f "
+                  "vs still %.3f codes; bar 1.5x + 0.5; %d px)", checkpoints[k],
+                  gRays ? "reflection (the ray tier's)" : "motion", moving[k], still[k], pixels[k]);
     std::printf("%s\n", failures ? "FAILED" : "PASSED");
     return failures ? 1 : 0;
 }

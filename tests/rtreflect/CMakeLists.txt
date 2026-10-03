@@ -179,6 +179,11 @@ target_link_libraries(test_id_depth PRIVATE JahshakaEngine)
 jah_gpu_row(gi.id_depth CLASS engine COMMAND test_id_depth
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.id_depth PROPERTIES TIMEOUT 300 LABELS "engine")
+# ...and the RAY REFLECTION's own motion (PHOTON-II-1 item 11): the march off, the comb a
+# glossy metal; its own traced reflection keeps its history where the mover passes behind.
+jah_gpu_row(gi.id_depth_rays CLASS engine COMMAND test_id_depth --rays
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.id_depth_rays PROPERTIES TIMEOUT 300 LABELS "engine")
 
 # A REFLECTED ASSET'S LEVEL CHANGE (REFLECT-LOD-POP-1): two metal hemispheres
 # reflecting a baked multi-level asset while the camera dollies at them — the

@@ -1308,6 +1308,12 @@ jah_gpu_row(cloud_2d.shape CLASS engine COMMAND test_cloud_2d shape
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(cloud_2d.shape PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
                      TIMEOUT 120 LABELS "engine")
+# cloud_2d.budget (CLOUD-BAKE-MEMORY-1): the cloud layer's textures after two bakes — the field
+# its stated budget to the texture manager's rounding (Types.h kCloudFieldBytes, every tier), the bake's intermediates gone.
+jah_gpu_row(cloud_2d.budget CLASS engine COMMAND test_cloud_2d budget
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(cloud_2d.budget PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+                     TIMEOUT 120 LABELS "engine")
 # gi.card_blend (PHOTON-GATHER-1d fix round): a Blend material on a card subject renders, holds no card.
 jah_gpu_row(gi.card_blend CLASS engine COMMAND test_gi_cards blend
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
@@ -1587,6 +1593,46 @@ add_dependencies(test_gi_lamp_falloff JahshakaEngineMedia)
 jah_gpu_row(gi.lamp_falloff CLASS engine TOKENS 2 COMMAND test_gi_lamp_falloff
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.lamp_falloff PROPERTIES TIMEOUT 300 LABELS "engine" RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
+# gi.area_energy — ONE AREA-LIGHT ENERGY, HELD TO A CLOSED FORM (AREA-SCALE-1): an area light
+# of intensity I is a Lambertian emitter of radiance I; on its axis a floor of albedo a reflects
+# a I F(h), F the point-to-rectangle form factor. The voxel store (Photon's injection), the
+# accurate (LTC) pixel and the approximate area light's pixel within 5 % of it at 1, 1.5 and
+# 2.5 m, each normalised by a point lamp at the same place.
+add_executable(test_gi_area_energy test_gi_area_energy.cpp)
+set_target_properties(test_gi_area_energy PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_area_energy PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_area_energy PRIVATE JahshakaEngine)
+add_dependencies(test_gi_area_energy JahshakaEngineMedia)
+jah_gpu_row(gi.area_energy CLASS engine TOKENS 2 COMMAND test_gi_area_energy
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.area_energy PROPERTIES TIMEOUT 300 LABELS "engine" RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
+# gi.field_edge — THE IRRADIANCE FIELD IS FLAT OVER AN OPEN FLOOR TO ITS STATED REACH
+# (FIELD-EDGE-1): an 80 m matte floor under a constant sky at the Low tier (the field carries the
+# diffuse), read along eight directions from the centre out past the field's stated box
+# (GiStatus ifdMin/ifdMax), at seven eye heights: no sample inside it below 0.95 of the centre -
+# crossing a probe layer never fades the field (FIELD-EDGE-1: the view bias's normal share drifted).
+add_executable(test_gi_field_edge test_gi_field_edge.cpp)
+set_target_properties(test_gi_field_edge PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_field_edge PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_field_edge PRIVATE JahshakaEngine)
+add_dependencies(test_gi_field_edge JahshakaEngineMedia)
+jah_gpu_row(gi.field_edge CLASS engine TOKENS 2 COMMAND test_gi_field_edge
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.field_edge PROPERTIES TIMEOUT 600 LABELS "engine" RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
 # gi.voxel_lab — THE VOXEL LAB (PHOTON-VOXEL-4): the reader's plane march on the CPU
 # (tests/support/voxel_lab.h) over analytic stores - gi.ddgi_ambient's sealed shell per
 # surface class and its open scene per cone set, on the cone-trace reference and the
@@ -1631,8 +1677,9 @@ set_tests_properties(gi.voxel_emissive PROPERTIES
 # CONE-EMITTER-1): a 1 m panel of radiance 5 over a white metal plate at roughness 0.05 / 0.2 / 0.5,
 # the plate's reflection read as radiance against the same plate under a uniform sky (the split
 # sum's DFG measured, not computed), with the fixture in cascade 0 and in cascade 1; a covered
-# lobe reads >= 0.9 L, the 0.5 lobe the GGX coverage of the panel within 10 %; and (c) the panel's
-# voxels hold L x their opacity. The chain family: it drives a full chain and downloads volumes.
+# lobe reads >= 0.9 L (the gate: roughness 0.05, a covered lobe); and (c) the panel's voxels hold
+# L x their opacity. The 0.2 and 0.5 lobes against the GGX coverage are NOT gated: CONE-LOBE-1 was
+# declined on cost (PHOTON-II-1 part 1; the cone reads 1.48x / 1.58x), the target row below. The chain family: it drives a full chain and downloads volumes.
 add_executable(test_gi_cone_emitter test_gi_cone_emitter.cpp)
 set_target_properties(test_gi_cone_emitter PROPERTIES
     AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
@@ -1657,7 +1704,6 @@ jah_gpu_row(gi.cone_emitter_lobe_target CLASS engine COMMAND test_gi_cone_emitte
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.cone_emitter_lobe_target PROPERTIES
     TIMEOUT 120 LABELS "engine;photon-target" RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
-
 # gi.voxel_feed — THE VOXELISER IS FED ON THE DEVICE (ATOM P4b, SPECS/atom/
 # A5b_VOXELISER_FEED_AND_FAR_BLAS_DESIGN.md §2-§3). The gather jobs' own counts
 # (attach set, enclosed set, one record per partition that reaches a cascade's
@@ -1850,6 +1896,25 @@ foreach(_arm stable motion)
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
     set_tests_properties(gi.gather_${_arm} PROPERTIES TIMEOUT 600 LABELS "engine")
 endforeach()
+
+# gi.gather_adaptive_fair — THE ADAPTIVE BUDGET STARVES NO CELL (PHOTON-II-1 F3): with the cap at
+# a quarter of the demand, every frame spends the budget and every asking cell gets its second
+# probe within 32 frames (the placement's ranking rotates across tiles and inside them).
+add_executable(test_gi_gather_adaptive test_gi_gather_adaptive.cpp)
+set_target_properties(test_gi_gather_adaptive PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_gather_adaptive PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_gather_adaptive PRIVATE JahshakaEngine)
+add_dependencies(test_gi_gather_adaptive JahshakaEngineMedia)
+jah_gpu_row(gi.gather_adaptive_fair CLASS engine COMMAND test_gi_gather_adaptive
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.gather_adaptive_fair PROPERTIES TIMEOUT 300 LABELS "engine")
 
 # ...and the plane fixture's COMPLETE closed form at the brief's 5 %. It was a TARGET
 # row until the card read at the hit (GA-1e) closed the voxel-read residual; GREEN,

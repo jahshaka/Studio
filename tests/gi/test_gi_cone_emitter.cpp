@@ -43,6 +43,27 @@
 // wider than the GGX lobe) and the footprint kernel (a bilinear read of a texel K weighs a
 // small central object as A / K^2, a uniform disc of radius K as A / (pi K^2)). A covered lobe
 // is exact either way; the partial one is the reader's own lane.
+// CONE-LOBE-1 (PHOTON-II-1, d-build c5fbe870c, STOPPED with the numbers; spikes/photon-ii-1/):
+// the 0.5 lobe in cascade 0 / cascade 1 against the GGX coverage 0.396 -
+//   shipped (tan(r pi/2 0.99), the floored kernel)                1.48 / 1.58
+//   A  the GGX lobe's half-energy cone, tan = 2a / (1 - a^2)      2.18 / 1.32
+//   B  A + the kernel's AREA normalised (footprint x sqrt(pi))    1.53 / 1.60 (r 0.05 c1: 0.65)
+//   C  A + the lateral kernel only                                1.62 / 1.38
+//   D  A + the plane's own level only                             1.78 / 1.66
+//   F  the shipped aperture + the area-normalised kernel          1.40 / 1.23 (r 0.2 c1: 0.55)
+// and on the CPU lab (march / the uniform-disc reference, nine start points) no single level
+// offset normalises the kernel across apertures (0.95-2.8 at tan 0.98, 1.0 at tan 0.3-0.4): the
+// lateral read is a box x tent at an integer-or-fractional level whose central weight depends on
+// the object's size against the texel, not a disc. A normalised kernel is a re-designed lateral
+// read (a quadrature of the disc), not a constant.
+// THE QUADRATURE (part 1b, DECLINED ON COST by the lead): the plane read as the disc's degree-3
+// rule (the centre at 1/4, six taps at sqrt(2/3) R at 1/8) with the aperture holding 55 % of the
+// GGX lobe's energy (tan th = alpha sqrt(0.55/0.45), the reflection 2 th) reached the bar -
+// covered 1.000 / 0.981, roughness 0.2 1.049 / 1.035 x, roughness 0.5 0.950 / 1.023 x the GGX
+// coverage (cascade 0 / 1) - at 16.5 ms against 5.8 ms of frame GPU time on a full-screen 1080p
+// roughness-0.5 plate (locked 2100 MHz, ABBA). The patches: spikes/photon-ii-1/cone-lobe-quadrature.*.
+// The cheap path (a pre-integrated lobe table, or the scheduler's budget) is filed for V2; this
+// row stays a target.
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
 
