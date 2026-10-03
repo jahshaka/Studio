@@ -144,6 +144,9 @@ static bool makeFixture(Fixture &f, const char *name)
 
 /// The GI arm every case runs under: a pinned volume so the cache's numbers are
 /// about the cache and not about where an automatic fit landed.
+/// The cube arm's bar (gi.card_view section 5), set from its measurement.
+static const double kCubeQuadBar = 0.002;
+
 static GiParams baseGi()
 {
     GiParams gi;
@@ -2546,6 +2549,72 @@ static int caseView()
         }
         s->setAmbient(Colour(0, 0, 0), Colour(0, 0, 0));
         render(e, 30);
+    }
+
+    // 5. THE ENVIRONMENT CUBE (the merge read's F4): with a sky cube bound the four-cone
+    //    set's escape reads each cone's QUADRANT of the cube (jahEnvQuadrant's cube branch, a
+    //    3 x 3 cosine-stratified quadrature a quadrant) instead of the SH. On an open floor
+    //    under a UNIFORM sky of radiance L the four quadrants must sum to L exactly, as the
+    //    SH branch's do under a uniform ambient: the floor's radiance over its sky's, GI ON
+    //    (Medium, the field off: the pixel's own cones), against the same ratio under the
+    //    ambient (section 4's identity; the ambient colour is an irradiance, pi L). The sky's
+    //    L is read where the picture shows it. Measured: 0.02 % (both eyes); the bar is the SH
+    //    arm's 0.2 %.
+    {
+        GiParams gi = baseGi();
+        gi.quality = GiQuality::Medium;
+        gi.ddgi = GiToggle::Off;
+        gi.gather = GiToggle::Off;
+        gi.cardResidencyRadius = 40.0f;
+        CHECK_MSG(s->setGlobalIllumination(gi), "%s", "the cube arm: GI ON (Medium, field off)");
+        view->setPostFx(fx);
+        const double kAmb = 0.5;
+        s->setAmbient(Colour(float(kAmb), float(kAmb), float(kAmb)), Colour(float(kAmb), float(kAmb), float(kAmb)));
+        render(e, 90);
+        double shFloor[2][3];
+        rasterAt(head, 0.3, -0.5, shFloor[0]);
+        rasterAt(graze, 0.3, -0.5, shFloor[1]);
+        s->setAmbient(Colour(0, 0, 0), Colour(0, 0, 0));
+        std::vector<unsigned char> face(16 * 16 * 4, 160);
+        TextureId faces[6];
+        for (int k = 0; k < 6; ++k) faces[k] = s->createTexture(16, 16, face.data(), false);
+        SkyDesc sky;
+        sky.mode = SkyMode::Cubemap;
+        for (int k = 0; k < 6; ++k) sky.faces[k] = faces[k];
+        CHECK_MSG(s->setSky(sky), "%s", "the cube arm: a uniform cubemap sky");
+        render(e, 120);
+        double cubeFloor[2][3];
+        rasterAt(head, 0.3, -0.5, cubeFloor[0]);
+        rasterAt(graze, 0.3, -0.5, cubeFloor[1]);
+        // THE SKY'S OWN RADIANCE, where the picture shows it: straight up.
+        CameraDesc up;
+        up.position = Vec3(0.3f, 1.0f, -0.5f);
+        up.orientation = Quat(float(std::sin(kPi / 4)), 0.0f, 0.0f, float(std::cos(kPi / 4)));
+        up.orthographic = false;
+        view->setCamera(up);
+        render(e, 8);
+        ImageF im;
+        view->readPixelsHdr(im);
+        const Colour c = im.at(kPx / 2u, kPx / 2u);
+        const double skyL[3] = { double(c.r), double(c.g), double(c.b) };
+        double worst = 0.0;
+        for (int i = 0; i < 2; ++i)
+            for (int k = 0; k < 3; ++k) {
+                const double rCube = skyL[k] > 1e-6 ? cubeFloor[i][k] / skyL[k] : 0.0;
+                // The ambient colour is an IRRADIANCE E (HlmsPbs's hemisphere ambient, the SH
+                // branch's input): a uniform sky of radiance L is E = pi L.
+                const double rSh = shFloor[i][k] / (kAmb / kPi);
+                const double rel = rSh > 1e-6 ? std::fabs(rCube / rSh - 1.0) : 1.0;
+                std::printf("   cube arm, %s, channel %d: floor/sky under the cube %.5f (sky %.5f), under the ambient "
+                            "%.5f (%+.3f %%)\n", i == 0 ? "HEAD-ON" : "GRAZING", k, rCube, skyL[k], rSh,
+                            100.0 * (rSh > 1e-6 ? rCube / rSh - 1.0 : 1.0));
+                worst = std::max(worst, rel);
+            }
+        CHECK_MSG(worst <= kCubeQuadBar,
+                  "THE FOUR-CONE SET READS A UNIFORM CUBE'S IRRADIANCE on an open floor (jahEnvQuadrant's cube "
+                  "branch), as the SH branch reads the uniform ambient: both eyes, every channel, worst %.3f %% "
+                  "(bar %.1f %%)", 100.0 * worst, 100.0 * kCubeQuadBar);
+        s->setSky(SkyDesc());
     }
     return failures ? 1 : 0;
 }
