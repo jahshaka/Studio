@@ -2616,6 +2616,61 @@ static int caseView()
                   "(bar %.1f %%)", 100.0 * worst, 100.0 * kCubeQuadBar);
         s->setSky(SkyDesc());
     }
+    // 6. A DIRECTIONAL SH (the merge read's worth-a-look 3): with no cube the escape reads
+    //    each quadrant from the SH at the set's band weights (sqrt 2, 4), and under a
+    //    strongly directional SH a quadrant's value goes NEGATIVE while the set's sum - the
+    //    SH irradiance - does not. Clamping each cone broke the sum (the CPU replica: a light
+    //    at 45 degrees over the floor, the set read +14.3 %; spikes/photon-ii-1/p2/wal3); the
+    //    set's sum is what is clamped. The SH of one light at 45 degrees, E / pi =
+    //    max(n.s, 0) / pi, projected numerically; GI ON (the field off) against GI OFF (the
+    //    SH evaluated at the normal), both eyes, under the SH arm's 0.2 %.
+    {
+        const double sl[3] = { 0.70710678, 0.70710678, 0.0 };
+        const double norms[9] = { 0.282095, 0.488603, 0.488603, 0.488603, 1.092548,
+                                  1.092548, 0.315392, 1.092548, 0.546274 };
+        double c[9] = {};
+        const int kN = 400;
+        for (int a = 0; a < kN; ++a)
+            for (int b = 0; b < 2 * kN; ++b) {
+                const double z = -1.0 + (a + 0.5) * 2.0 / kN, ph = (b + 0.5) * kPi / kN;
+                const double r = std::sqrt(std::max(0.0, 1.0 - z * z));
+                const double d[3] = { r * std::cos(ph), r * std::sin(ph), z };   // (x, y, z)
+                const double f = std::max(0.0, d[0] * sl[0] + d[1] * sl[1] + d[2] * sl[2]) / kPi;
+                const double x = d[0], y = d[1], zz = d[2];
+                const double basis[9] = { 1.0, y, zz, x, x * y, y * zz, 3.0 * zz * zz - 1.0, zz * x, x * x - y * y };
+                const double dw = 4.0 * kPi / (double(kN) * 2.0 * kN);
+                for (int k = 0; k < 9; ++k) c[k] += f * basis[k] * norms[k] * norms[k] * dw;
+            }
+        float sh[27];
+        for (int k = 0; k < 9; ++k) sh[3 * k] = sh[3 * k + 1] = sh[3 * k + 2] = float(c[k]);
+        double dir[2][2][3];
+        for (int on = 0; on < 2; ++on) {
+            GiParams gi = baseGi();
+            gi.mode = on ? GiMode::Vct : GiMode::Off;
+            gi.quality = GiQuality::Medium;
+            gi.ddgi = GiToggle::Off;
+            gi.gather = GiToggle::Off;
+            gi.cardResidencyRadius = 40.0f;
+            CHECK_MSG(s->setGlobalIllumination(gi), "the directional-SH arm: GI %s", on ? "ON" : "OFF");
+            view->setPostFx(fx);
+            s->setAmbientSh(sh);
+            render(e, 90);
+            rasterAt(head, 0.3, -0.5, dir[on][0]);
+            rasterAt(graze, 0.3, -0.5, dir[on][1]);
+        }
+        double worst = 0.0;
+        for (int i = 0; i < 2; ++i)
+            for (int k = 0; k < 3; ++k) {
+                const double rel = dir[0][i][k] > 1e-6 ? std::fabs(dir[1][i][k] / dir[0][i][k] - 1.0) : 1.0;
+                worst = std::max(worst, rel);
+            }
+        std::printf("   directional SH (a light at 45 degrees): head-on GI ON %.5f / OFF %.5f, grazing %.5f / %.5f\n",
+                    dir[1][0][1], dir[0][0][1], dir[1][1][1], dir[0][1][1]);
+        CHECK_MSG(worst <= 0.002,
+                  "UNDER A DIRECTIONAL SH THE SET'S SUM HOLDS: the four-cone set reads the SH irradiance on an "
+                  "open floor although a quadrant is negative, worst %.3f %% (bar 0.2 %%)", 100.0 * worst);
+        s->setAmbient(Colour(0, 0, 0), Colour(0, 0, 0));
+    }
     return failures ? 1 : 0;
 }
 
