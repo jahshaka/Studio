@@ -119,12 +119,6 @@ ALLOWED = [
 # of the line, and why the implicit 0/false is not a second definition of a
 # document default.
 ALLOWED_NOARG = [
-    ('scene->giCascadeSet.append(iris::Vec3(float(row.at(0).toDouble())',
-     'ARRAY DATA, not a field: a cascade row is three numbers read out of the '
-     'file, and a row with fewer than three is skipped by the guard above. '
-     'There is no "constructor value" for the second element of a row'),
-    ('float(row.at(1).toDouble())', 'the same cascade row'),
-    ('float(row.at(2).toDouble())', 'the same cascade row'),
 
     ('auto time = keyObj["time"].toDouble();',
      "a KEYFRAME KEY's own data. The key does not exist until addKey(val, time) "
