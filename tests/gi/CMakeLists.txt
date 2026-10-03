@@ -1677,8 +1677,9 @@ set_tests_properties(gi.voxel_emissive PROPERTIES
 # CONE-EMITTER-1): a 1 m panel of radiance 5 over a white metal plate at roughness 0.05 / 0.2 / 0.5,
 # the plate's reflection read as radiance against the same plate under a uniform sky (the split
 # sum's DFG measured, not computed), with the fixture in cascade 0 and in cascade 1; a covered
-# lobe reads >= 0.9 L, the 0.2 and 0.5 lobes the GGX coverage of the panel within 10 % (CONE-LOBE-1); and (c) the panel's
-# voxels hold L x their opacity. The chain family: it drives a full chain and downloads volumes.
+# lobe reads >= 0.9 L (the gate: roughness 0.05, a covered lobe); and (c) the panel's voxels hold
+# L x their opacity. The 0.2 and 0.5 lobes against the GGX coverage are NOT gated: CONE-LOBE-1 was
+# declined on cost (PHOTON-II-1 part 1; the cone reads 1.48x / 1.58x), the target row below. The chain family: it drives a full chain and downloads volumes.
 add_executable(test_gi_cone_emitter test_gi_cone_emitter.cpp)
 set_target_properties(test_gi_cone_emitter PROPERTIES
     AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
@@ -1695,6 +1696,14 @@ jah_gpu_row(gi.cone_emitter CLASS engine COMMAND test_gi_cone_emitter
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.cone_emitter PROPERTIES
     TIMEOUT 120 LABELS "engine" RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
+# gi.cone_emitter_lobe_target — the same fixture's roughness-0.5 lobe against the GGX coverage of
+# the panel (bar 10 %): the cone over-reads a partly covered wide lobe (the aperture and the
+# footprint kernel, the test's header). LABEL photon-target: it prints and does not gate; the
+# lane that fits the reader's lobe to GGX deletes the label.
+jah_gpu_row(gi.cone_emitter_lobe_target CLASS engine COMMAND test_gi_cone_emitter --lobe-target
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.cone_emitter_lobe_target PROPERTIES
+    TIMEOUT 120 LABELS "engine;photon-target" RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
 # gi.voxel_feed — THE VOXELISER IS FED ON THE DEVICE (ATOM P4b, SPECS/atom/
 # A5b_VOXELISER_FEED_AND_FAR_BLAS_DESIGN.md §2-§3). The gather jobs' own counts
 # (attach set, enclosed set, one record per partition that reaches a cascade's
