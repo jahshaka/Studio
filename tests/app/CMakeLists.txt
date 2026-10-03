@@ -230,3 +230,37 @@ set_tests_properties(pool.runner PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
     LABELS "pool;scripting" TIMEOUT 180)
 jah_no_display(pool.runner)
+
+# app.sky_swap_presented — NO PRESENTED FRAME LOSES THE SKY ENVIRONMENT (SKY-SWAP-1,
+# the owner's smoke bug #3: the flicker in 'were'). Every sky re-capture used to
+# present ONE frame with a black environment (the swap destroyed the old cube
+# while the Atom decode twins still sampled it). scripting.e2e.sky_swap_transient
+# reads offscreen renders, which never see the presented frame; this row reads
+# the X server's copy of the viewport (xwd of the root) while the UI thread is
+# frozen on each frame after a change — the sun disc into the probes, the cloud
+# altitude, clouds off/on and an observer-band crossing, at Medium and at Epic.
+# Its own private Xvfb (301-340), like play_select: the capture reads the whole
+# root. Not in the GPU-timing lock: it measures no time — app.blockUiThread holds
+# each frame on screen, and the reads are pixel means.
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    find_program(JAH_XWD xwd)
+    find_program(JAH_XDPYINFO xdpyinfo)
+    find_program(JAH_XVFB Xvfb)
+    if(JAH_XWD AND JAH_XDPYINFO AND JAH_XVFB)
+        set(_ssp_home ${CMAKE_CURRENT_BINARY_DIR}/sky-swap-presented-home)
+        file(MAKE_DIRECTORY ${_ssp_home}/run)
+        jah_gpu_row(app.sky_swap_presented CLASS app
+                 COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/sky_swap_presented.py"
+                         "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" "${_ssp_home}/out"
+                 WORKING_DIRECTORY ${_ssp_home}/run)
+        set_tests_properties(app.sky_swap_presented PROPERTIES
+            ENVIRONMENT "HOME=${_ssp_home};JAHSHAKA_DATA_ROOT=${_ssp_home}/.local/share/Jahshaka"
+            SKIP_RETURN_CODE 77
+            # 6x the measured run: ~600 s on a warm shader cache beside another lane's gate
+            # (three tiers x eight arms x five held frames, each a 4 s UI freeze)
+            TIMEOUT 3600
+            LABELS "app")
+    else()
+        message(STATUS "app.sky_swap_presented skipped: needs xwd, xdpyinfo and Xvfb")
+    endif()
+endif()
