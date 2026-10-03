@@ -1897,6 +1897,25 @@ foreach(_arm stable motion)
     set_tests_properties(gi.gather_${_arm} PROPERTIES TIMEOUT 600 LABELS "engine")
 endforeach()
 
+# gi.gather_adaptive_fair — THE ADAPTIVE BUDGET STARVES NO CELL (PHOTON-II-1 F3): with the cap at
+# a quarter of the demand, every frame spends the budget and every asking cell gets its second
+# probe within 32 frames (the placement's ranking rotates across tiles and inside them).
+add_executable(test_gi_gather_adaptive test_gi_gather_adaptive.cpp)
+set_target_properties(test_gi_gather_adaptive PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_gather_adaptive PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_gather_adaptive PRIVATE JahshakaEngine)
+add_dependencies(test_gi_gather_adaptive JahshakaEngineMedia)
+jah_gpu_row(gi.gather_adaptive_fair CLASS engine COMMAND test_gi_gather_adaptive
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.gather_adaptive_fair PROPERTIES TIMEOUT 300 LABELS "engine")
+
 # ...and the plane fixture's COMPLETE closed form at the brief's 5 %. It was a TARGET
 # row until the card read at the hit (GA-1e) closed the voxel-read residual; GREEN,
 # and the `photon-target` label is off (lane D6B-GATE-SHAPE, 2026-09-27: 3/3 green on
