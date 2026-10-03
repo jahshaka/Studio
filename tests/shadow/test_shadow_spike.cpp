@@ -696,6 +696,86 @@ static void cacheKindsCase()
 }
 
 // ---------------------------------------------------------------------------
+// helpercasters: AN EDITOR HELPER IS NOT A CASTER (SHADOW-FIT-1; gate row
+// `shadow.helper_casters`).
+//
+// The shadow node's casters box (SceneManager::_calculateCurrentCastersBox) is
+// what fits the sun's splits, and it reads Ogre's LAYER_SHADOW_CASTER bit under
+// the VIEWPORT's mask — not the shadow passes' channels. A helper (kHelperBit:
+// a light icon, a gizmo part) is drawn by no shadow pass, yet it was born with
+// the bit and sized the fit: the editor viewport fitted the sun around the
+// light's icon and the screenshot did not (spikes/shadow-cut-1). One caster at
+// the origin, one helper cube 30 m away, a view with its helpers drawn:
+//   the helper's Item carries no caster bit and the box is the caster's alone;
+//   un-marked, the same cube IS a caster and the box reaches it (the control:
+//   the box reads exactly this bit); marked again, it drops out again; and a
+//   castShadow write on a helper cannot put the bit back.
+static void helperCastersCase()
+{
+    std::printf("-- an editor helper is not a shadow caster\n");
+    std::string err;
+    EngineConfig cfg = config("spike-helpercasters.log");
+    auto engine = Engine::create(cfg, err);
+    if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); ++failures; return; }
+    View *v = engine->createOffscreenView("spike", 256, 256, Colour(0, 0, 0));
+    v->setHelpersVisible(true);                      // the editor viewport's channel set
+    Scene *s = engine->createScene("helperCasters");
+    v->setScene(s);
+    auto *scene = static_cast<jahshaka::engine::detail::OgreScene *>(s);
+    const MeshId mesh = s->createMesh(cubeMesh());
+    PbrParams white; white.albedo = Colour(0.8f, 0.8f, 0.8f);
+    const MaterialId mat = s->createPbrMaterial(white);
+    const NodeId caster = s->createNode();
+    s->attachMesh(caster, mesh, mat);
+    s->setNodeTransform(caster, Vec3(0, 1, 0), Quat(), Vec3(1, 1, 1));
+    const NodeId helper = s->createNode();
+    s->setNodeHelper(helper, true);                  // marked BEFORE its geometry, as the mirror does
+    s->attachMesh(helper, mesh, mat);
+    s->setNodeTransform(helper, Vec3(30, -20, 30), Quat(), Vec3(1, 1, 1));
+    const NodeId sun = s->createNode();
+    LightDesc d; d.type = LightType::Directional; d.intensity = 0.5f; d.castShadows = true;
+    s->setLight(sun, d);
+    s->setNodeTransform(sun, Vec3(0, 10, 0), Quat(0.9238795f, 0.3826834f, 0, 0), Vec3(1, 1, 1));
+    CameraDesc c;
+    c.position = Vec3(0.0f, 3.0f, 8.0f);
+    c.fovDegrees = 45.0f;
+    v->setCamera(c);
+    v->setShadows(true);
+    render(engine.get(), 4);
+
+    auto *view = static_cast<OgreView *>(v);
+    const auto itemOf = [&](NodeId id) -> Ogre::MovableObject * {
+        Ogre::SceneNode *n = scene->node(id);
+        return n && n->numAttachedObjects() ? n->getAttachedObject(0) : nullptr;
+    };
+    const auto box = [&]() -> Ogre::AxisAlignedBox {
+        Ogre::CompositorShadowNode *sn = view->shadowNodeInstance();
+        return sn ? sn->getCastersBox() : Ogre::AxisAlignedBox::BOX_NULL;
+    };
+    const auto reaches = [](const Ogre::AxisAlignedBox &b) { return !b.isNull() && b.getMaximum().x > 20.0f; };
+    Ogre::MovableObject *hi = itemOf(helper), *ci = itemOf(caster);
+    CHECK(hi && ci && view->shadowNodeInstance(), "the items and the view's shadow node exist");
+    if (!hi || !ci || !view->shadowNodeInstance()) { engine.reset(); return; }
+    Ogre::AxisAlignedBox b = box();
+    std::printf("    casters box (%.2f %.2f %.2f)-(%.2f %.2f %.2f)\n", b.getMinimum().x, b.getMinimum().y,
+                b.getMinimum().z, b.getMaximum().x, b.getMaximum().y, b.getMaximum().z);
+    CHECK(ci->getCastShadows(), "the real object casts");
+    CHECK(!hi->getCastShadows(), "the helper's item carries NO caster bit");
+    CHECK(!b.isNull() && !reaches(b), "the casters box is the real object's alone");
+
+    s->setNodeHelper(helper, false);
+    render(engine.get(), 2);
+    b = box();
+    CHECK(hi->getCastShadows() && reaches(b), "un-marked, the same cube casts and the box reaches it (the control)");
+    s->setNodeHelper(helper, true);
+    s->setNodeCastShadow(helper, true);              // a castShadow write cannot re-arm a helper
+    render(engine.get(), 2);
+    b = box();
+    CHECK(!hi->getCastShadows() && !reaches(b), "marked again (and castShadow written true), it drops out again");
+    engine.reset();
+}
+
+// ---------------------------------------------------------------------------
 // scancost: what the per-frame item walks cost (ENGINE_CACHE_POLICY_SPEC E2,
 // lead review item 4). N cube nodes in a grid, 4 shadow-casting point lamps and
 // a shadowed hybrid-GI scene (so the GI movement scan runs every frame too);
@@ -798,6 +878,7 @@ int main(int argc, char **argv)
     else if (mode == "r3")     r3Case();
     else if (mode == "atten")  attenCase();
     else if (mode == "cachekinds") cacheKindsCase();
+    else if (mode == "helpercasters") helperCastersCase();
     else if (mode == "scancost") {
         for (int i = 2; i < argc; ++i) scanCostCase(std::atoi(argv[i]));
     }
