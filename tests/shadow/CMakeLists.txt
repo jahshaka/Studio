@@ -75,3 +75,12 @@ set_tests_properties(shadow.atlas_rebuilds PROPERTIES TIMEOUT 120 LABELS "engine
 jah_gpu_row(shadow.atlas_binding CLASS engine COMMAND test_shadow_maps t3y
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(shadow.atlas_binding PROPERTIES TIMEOUT 120 LABELS "engine")
+
+# AN EDITOR HELPER IS NOT A SHADOW CASTER (SHADOW-FIT-1): the shadow node's casters
+# box — what fits the sun's splits — reads Ogre's caster bit under the VIEWPORT's
+# mask, so a helper (a light icon, a gizmo part) that kept the bit moved the fit in
+# the editor viewport and not in a screenshot. The helper's item carries no bit, the
+# box is the real casters' alone, and the un-marked control proves the box reads it.
+jah_gpu_row(shadow.helper_casters CLASS engine COMMAND test_shadow_spike helpercasters
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(shadow.helper_casters PROPERTIES TIMEOUT 120 LABELS "engine")

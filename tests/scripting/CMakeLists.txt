@@ -434,6 +434,13 @@ jah_pool_arm(world_sky height_fog ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_height
 # default, validation, one undo step, the file round trip, and what the renderer
 # did (gi.sun_contact is the picture).
 jah_pool_arm(world_light sun_contact ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_sun_contact.js 16)
+# THE SUN'S SHADOW IS THE SPHERE'S PROJECTION (SHADOW-FIT-1, the owner's smoke bug
+# #1): on the Basic template (a floor that casts nothing) a sphere at four heights
+# under three suns throws exactly its closed-form ellipse, in the "scene" and the
+# "viewport" grades (helpers hidden / kept), and a cube anywhere leaves it alone.
+# Red before the fork's Concentric receiver fold: the near splits' far plane sat
+# at the casters' box and cut the footprint or dropped it.
+jah_pool_arm(world_light shadow_fit_receivers ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_shadow_fit_receivers.js 66)
 # A WORLD ROW SHOWS WHAT A VERB WROTE (SMALL-FIXES-3): every World section that
 # shows a sceneprops key (or a World Mode registry row) re-reads it on a
 # changed external write — one verb, then the row read with no gesture between.
