@@ -1137,7 +1137,33 @@ assert(costKeyRefused, "editor.selectionCost refuses an unknown key");
 
 for (var ri = 0; ri < burst.length; ri++) node.remove(burst[ri]);
 
+// ---------------------------------------------------------------------------
+// A DROP ON EMPTY GROUND (BUGS-1, MA-18). With no surface under the cursor the
+// drop falls back to the y = 0 ground plane (EngineSceneViewport::dropPositionAt
+// -> IntersectionHelper::computePlaneND). That helper used to read the plane's
+// normal before the plane existed (undefined behaviour, an uninitialised d),
+// and the S2 arm above never reached it: it drops onto the template's floor. An
+// EMPTY template has no geometry at all, so every pixel here is the fallback.
+var emptyScene = project.create("Drop Empty Ground " + Date.now(), { template: "empty" });
+assert(emptyScene.length > 10, "an Empty-template project (no geometry under any pixel)");
+var evp = editor.viewportState();
+var eLeft = editor.dropPointAt(evp.width * 0.30, evp.height * 0.85);
+var eRight = editor.dropPointAt(evp.width * 0.70, evp.height * 0.85);
+assert(eLeft !== null && eRight !== null, "an empty-ground drop answers with a world point");
+assert(isFinite(eLeft.x) && isFinite(eLeft.y) && isFinite(eLeft.z) && isFinite(eRight.x),
+    "the empty-ground drop point is finite");
+assert(near(eLeft.y, 0, 1e-3) && near(eRight.y, 0, 1e-3),
+    "a drop with nothing under the cursor lands ON y = 0 (" + eLeft.y + ", " + eRight.y + ")");
+assert(Math.abs(eLeft.x - eRight.x) > 1.0,
+    "...where the cursor is, not at the origin (" + eLeft.x.toFixed(2) + " vs "
+    + eRight.x.toFixed(2) + ")");
+var eDropped = scene.addPrimitive("cube", { position: eLeft });
+var edp = node.transform(eDropped).position;
+assert(near(edp.y, 0, 1e-2) && near(edp.x, eLeft.x, 1e-2) && near(edp.z, eLeft.z, 1e-2),
+    "the primitive is born on the empty ground at the drop point ("
+    + [edp.x, edp.y, edp.z].join(",") + ")");
+
 console.log("editor_controls: fly speed, post-fx params, screenshot grades, the "
-          + "new-scene defaults, the drop point, the drop TARGET, the "
+          + "new-scene defaults, the drop point (on a floor and on empty ground), the drop TARGET, the "
           + "properties tabs and the column mount/refill counters and the "
           + "per-consumer selection cost verified");

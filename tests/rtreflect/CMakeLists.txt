@@ -223,8 +223,8 @@ set_tests_properties(gi.reflect_lod_pop PROPERTIES TIMEOUT 600 LABELS "photon-ta
 # milliseconds and GPU ratios, and a suite that measures time or GPU budget holds
 # the lock - a sibling sharing the GPU moves both (a ratio of two passes cancels
 # the clock, not a sibling's work inside one of the two windows). The four
-# millisecond bars print as `target:` (ATOM-FARBLAS-1); the ratio bars gate. The
-# bars' arithmetic over both clock states (free and locked) is in costMain.
+# millisecond bars GATE (BUGS-1) and still print as `target:` (the run log's
+# per-tip reading); the ratio bars gate. The bars' arithmetic is in costMain.
 jah_gpu_exclusive_test(NAME gi.rt_reflect_cost CLASS engine RUN_TIMEOUT 300 COMMAND test_rt_reflect
                        WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.rt_reflect_cost PROPERTIES

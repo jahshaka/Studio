@@ -428,11 +428,8 @@ var ctrlBefore = vr.state().head;
 editor.frame(2);
 var ctrlAfter = vr.state().head;
 var driftM = dist2(ctrlAfter, ctrlBefore);
-var driftDeg = Math.abs(yawDelta(ctrlAfter.yaw, ctrlBefore.yaw));
-console.log("      the runtime's OWN drift over two frames: " + driftM.toFixed(5) + " m, "
-            + driftDeg.toFixed(3) + " degrees");
+console.log("      the runtime's OWN drift over two frames: " + driftM.toFixed(5) + " m");
 var posBudget = Math.max(0.25, driftM * 4.0);
-var yawBudget = Math.max(2.0, driftDeg * 4.0);
 
 var headBefore = vr.state().head;
 var rigBefore = showRig("before the snap turn");
@@ -458,11 +455,24 @@ assert(dist2(headAfter, headBefore) < posBudget,
        "AND THE WEARER STAYED WHERE THEY WERE STANDING (" + dist2(headAfter, headBefore).toFixed(5)
        + " m, against a budget of " + posBudget.toFixed(5) + " m measured off this runtime's "
        + "own drift) — the turn moved the room around them, it did not carry them");
-assert(near(yawDelta(headAfter.yaw, headBefore.yaw), -30.0, yawBudget),
+// THE FACING, WITH THE HEAD'S OWN TURN TAKEN OUT (BUGS-1). The world head is the
+// rig composed with the runtime's TRACKING-space head, and Monado's simulated HMD
+// wobbles that head on the runtime's display clock (run_vr_app.sh starts it with
+// no SIMULATED_ROTATE). Its own turn between the two reads grows with the WALL
+// TIME the frames between them took: a quiet run reads 0.1-0.7 degrees, a loaded
+// one read 10-14 (the gate's reds), and a budget measured over a separate
+// two-frame control at another moment bounded neither. So the head's tracking-
+// space yaw (world yaw less the rig's) is read at both ends and subtracted: what
+// is left is the turn the RIG gave the wearer's facing, exact whatever the load.
+var localBefore = yawDelta(headBefore.yaw, rigBefore.yaw);
+var localAfter = yawDelta(headAfter.yaw, rigAfter.yaw);
+var ownTurn = yawDelta(localAfter, localBefore);
+var facingTurn = yawDelta(yawDelta(headAfter.yaw, headBefore.yaw) - ownTurn, 0.0);
+console.log("      the head's own tracking-space turn over the snap: " + ownTurn.toFixed(3) + " degrees");
+assert(near(facingTurn, -30.0, 0.5),
        "...while what they are facing turned by the same 30 degrees ("
-       + headBefore.yaw.toFixed(2) + " -> " + headAfter.yaw.toFixed(2) + ", delta "
-       + yawDelta(headAfter.yaw, headBefore.yaw).toFixed(2) + ", budget "
-       + yawBudget.toFixed(2) + ") — through the ±180 WRAP, because a head yaw comes out of "
+       + headBefore.yaw.toFixed(2) + " -> " + headAfter.yaw.toFixed(2) + ", less the head's own "
+       + ownTurn.toFixed(2) + " = " + facingTurn.toFixed(2) + ", bar 0.5) — through the ±180 WRAP, because a head yaw comes out of "
        + "a quaternion and a plain subtraction across the seam reads 330 for a 30-degree turn");
 
 // ONE FLICK, ONE TURN: the stick held over does nothing until it comes back.
