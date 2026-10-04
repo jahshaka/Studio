@@ -456,9 +456,9 @@ QVector<VerbInfo> VrApi::verbs() const
           "that is what a second press of one button means. `player.endVr()` is the other "
           "order — leave VR, keep playing.\n\n"
           "Answers whether the player is IN VR after the call: true on entry, false on exit AND "
-          "false on a refusal, with app.lastError saying which (a box with no runtime cannot "
-          "enter, and VR capability is fixed at boot — a process that booted without VR "
-          "(Start in VR off, --no-vr, JAHSHAKA_VR=0) never has any).",
+          "false on a refusal, with app.lastError saying which (no runtime, the wrong runtime, no "
+          "headset — each a fresh connection, so connecting the headset and calling again is "
+          "the whole retry; a run with --no-vr or JAHSHAKA_VR=0 never has VR).",
           Needs::Engine },
         { "inject",
           "vr.inject(hand, {valid?, aim?, grip? (defaults to aim), manip?, profile?, joints?, "

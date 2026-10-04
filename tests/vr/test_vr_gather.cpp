@@ -244,6 +244,21 @@ bool session(Engine *e, Scene *s, float worldScale, GatherStatus &out) {
 
 }   // namespace
 
+/// SKIP ONLY WHAT A BOX CAN LACK (VR-START-1 fix round): with the runner's own
+/// private runtime named (JAH_VR_EXPECT_RUNTIME), a probe that reached it and
+/// failed — a broken runtime, a GPU or extension mismatch, a version refusal —
+/// is a DEFECT and fails; only "no runtime" / "no headset" may skip.
+static int probeFailedExit(const VrInfo &info) {
+    const bool absent = info.failure == VrFailure::NoRuntime || info.failure == VrFailure::NoHeadset;
+    if (std::getenv("JAH_VR_EXPECT_RUNTIME") && !absent) {
+        std::printf("FAIL: the runner's runtime answered but the connection failed: %s\n",
+                    info.reason.c_str());
+        return 1;
+    }
+    std::printf("SKIP: no OpenXR session-capable runtime: %s\n", info.reason.c_str());
+    return 77;
+}
+
 int main() {
     std::printf("vr.gather_stereo — the screen-probe gather on a two-eye target (PHOTON-GA-VR)\n");
     std::unique_ptr<Engine> engine;
@@ -254,10 +269,7 @@ int main() {
     }
     View *desktop = engine->createOffscreenView("desktop", 320, 240, Colour(0, 0, 0));
     if (!desktop) { std::printf("SKIP: no offscreen view: %s\n", engine->lastError().c_str()); return 77; }
-    if (!engine->vrProbe()) {   // VR-START-1: nothing connects at boot
-        std::printf("SKIP: no OpenXR session-capable runtime: %s\n", engine->vrInfo().reason.c_str());
-        return 77;
-    }
+    if (!engine->vrProbe()) return probeFailedExit(engine->vrInfo());   // nothing connects at boot
     if (const char *want = std::getenv("JAH_VR_EXPECT_RUNTIME"))
         CHECK_MSG(engine->vrInfo().runtime.find(want) != std::string::npos,
                   "the runtime is the one the runner named ('%s', got '%s')", want,

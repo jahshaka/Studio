@@ -74,7 +74,6 @@ private:
     /// check) or the dialog (an explicit --vr).
     void scheduleStartCheck();
     void runStartCheck();
-    bool mStartCheckArmed = false;
     /// EVERY VR START FAILURE ENDS HERE (VR-START-1 §1): the desktop stays the
     /// editor and the user gets ONE clear message with an action — the dialog
     /// (explicit asks: the button, --vr, a dropped session) with Try again, or

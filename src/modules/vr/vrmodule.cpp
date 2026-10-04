@@ -13,6 +13,8 @@ For more information see the LICENSE file
 
 #include <QAction>
 #include <QColor>
+#include <functional>
+#include <QEvent>
 #include <QMessageBox>
 #include <QPushButton>
 #include <QTimer>
@@ -237,17 +239,46 @@ void VrModule::contribute(Contributions &c)
     if (mCapable && vrLaunch().startCheck) scheduleStartCheck();
 }
 
+namespace {
+/// Runs `fn` once, on the watched widget's first Show event, then removes
+/// itself — the start check waits for the WINDOW, never for a clock.
+class ShowOnce final : public QObject
+{
+public:
+    ShowOnce(QWidget *watched, std::function<void()> fn) : QObject(watched), mFn(std::move(fn))
+    {
+        watched->installEventFilter(this);
+    }
+
+protected:
+    bool eventFilter(QObject *watched, QEvent *event) override
+    {
+        if (event->type() == QEvent::Show) {
+            watched->removeEventFilter(this);
+            // Posted, so the window finishes showing before the check paints.
+            QTimer::singleShot(0, watched, mFn);
+            deleteLater();
+        }
+        return QObject::eventFilter(watched, event);
+    }
+
+private:
+    std::function<void()> mFn;
+};
+}
+
 void VrModule::scheduleStartCheck()
 {
     // ONCE THE WINDOW IS UP, not here: the modules contribute inside
     // MainWindow's constructor (the splash may still hold the event loop for
     // the shader build), and a notice shown on a hidden window is a notice
-    // nobody saw. Polled at a tenth of a second — it is a one-off.
-    QTimer::singleShot(mStartCheckArmed ? 100 : 0, mAction.get(), [this]() {
-        mStartCheckArmed = true;
-        if (host.shellWidget && !host.shellWidget->isVisible()) { scheduleStartCheck(); return; }
-        runStartCheck();
-    });
+    // nobody saw. Driven by the window's own Show event — no wall clock
+    // (ENGINE trap 7); a shell already showing gets it on the next event turn.
+    if (!host.shellWidget || host.shellWidget->isVisible()) {
+        QTimer::singleShot(0, mAction.get(), [this]() { runStartCheck(); });
+        return;
+    }
+    new ShowOnce(host.shellWidget, [this]() { runStartCheck(); });
 }
 
 void VrModule::runStartCheck()
@@ -277,7 +308,7 @@ void VrModule::toggle()
     }
     if (!player) return;
     // OFF THE EDITOR PAGE THE BUTTON MEANS THE PLAYER, AND THE PLAYER NEEDS A
-    // WORLD (SMOKE-FIX-1's fix round, F7). On a `--vr` boot this icon is live
+    // WORLD (SMOKE-FIX-1's fix round, F7). On a VR-enabled run this icon is live
     // on the DESKTOP page, where there is nothing to play: the toggle used to
     // open the Player page over no project at all and start it. Say so and stop
     // — the service's own refusal is the same predicate, this is the sentence.

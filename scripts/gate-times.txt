@@ -576,7 +576,6 @@ vr.mirror_live 73.64
 vr.no_picture_start 61.77
 vr.session 75.88
 vr.session_undithered 7.12
-vr.spike_1a 5.88
 vr.warmup 32.8
 vr.warmup.fresh_home 0.01
 vr.warmup.timing 49.73
