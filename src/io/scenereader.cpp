@@ -1938,6 +1938,15 @@ iris::MeshPtr SceneReader::getMesh(QString filePath, int index, const QString &a
     return iris::MeshPtr();
 }
 
+QStringList SceneReader::clipNames(const QString &assetGuid)
+{
+    if (assetGuid.isEmpty()) return QStringList();
+    const QString path = resolveAssetPath(assetGuid);
+    if (path.isEmpty() || !QFileInfo::exists(path)) return QStringList();
+    extractAssetsFromAssimpScene(path, assetGuid);
+    return animations.value(assetCacheKey(path, assetGuid)).keys();
+}
+
 iris::SkeletalAnimationPtr SceneReader::getSkeletalAnimation(const QString &assetGuid,
                                                              const QString &animName,
                                                              const QString &nodeName)
@@ -1971,18 +1980,19 @@ iris::SkeletalAnimationPtr SceneReader::getSkeletalAnimation(const QString &asse
 
     extractAssetsFromAssimpScene(path, assetGuid);
     const auto clips = animations.value(assetCacheKey(path, assetGuid));
-    if (clips.isEmpty())
+    if (clips.isEmpty()) {
+        // ONE CAUSE, ONE ISSUE: a model with no bake is already `model.missing`
+        // (the extraction above recorded it); its own clips say nothing more.
+        if (missingModelPaths.contains(path)) return iris::SkeletalAnimationPtr();
         return miss(QStringLiteral("the asset has no current bake holding its clips"));
+    }
 
-    iris::SkeletalAnimationPtr found;
-    if (clips.contains(animName)) found = clips.value(animName);
-    // A name miss with exactly one clip in the asset takes it: a clip named
-    // after its first channel used to extract as "" (a name that no longer
-    // exists). With several there is no safe guess.
-    else if (clips.size() == 1) found = clips.first();
-    else
+    // THE NAME IS PART OF THE REFERENCE: there is no "take the only clip"
+    // guess (forward only — the shipped samples carry their bakes' real names).
+    if (!clips.contains(animName))
         return miss(QStringLiteral("the asset holds no clip of that name (it holds: %1)")
                         .arg(QStringList(clips.keys()).join(QStringLiteral(", "))));
+    iris::SkeletalAnimationPtr found = clips.value(animName);
 
     found = iris::SkeletalAnimation::referencedAs(found, assetGuid);
     found->source = path;

@@ -912,7 +912,12 @@ iris::SceneNodePtr SceneEditService::rebuildFragment(const SceneFragment &fragme
     reader.setDatabaseHandle(db);
     reader.setProject(project);
     reader.setLibrarySource();
-    return reader.readFragment(fragment);
+    auto node = reader.readFragment(fragment);
+    // An undo or a paste reads models and clips like an open: what it cannot
+    // resolve is said, never a silent bind pose.
+    SceneIssues::instance().raiseMissingModels(reader.missingModels());
+    SceneIssues::instance().raiseMissingClips(reader.missingClips());
+    return node;
 }
 
 namespace {

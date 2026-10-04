@@ -94,6 +94,10 @@ public:
 	/// reads (SHIPPED-BAKES-1). DB work: the caller's thread.
 	QStringList collectClipSources(const QJsonObject &projectObj);
 
+	/// The skeletal clip NAMES the asset's current bake holds — exactly the
+	/// names a {guid, name} clip reference to it may use (assets.clips).
+	QStringList clipNames(const QString &assetGuid);
+
 	void setProject(Project *p) { project = p; }
 
     /// FALSE MEANS "resolve by the open project's PIN", which is what a project

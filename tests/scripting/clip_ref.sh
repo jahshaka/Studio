@@ -15,8 +15,9 @@
 #
 # ARM 1 (process 1, data root R1, projects OUTSIDE the data root, the staged
 #   source files still on disk): import + spawn an avatar with embedded clips,
-#   load an extra clip, place a model with its own clip -> zero issues, every
-#   clip resolved; save -> switch project -> reopen, twice.
+#   load an extra clip, place a model with its own clip, DUPLICATE the avatar ->
+#   zero issues, every clip resolved (the copy's too); save -> switch project ->
+#   reopen, twice.
 # ARM 2 (process 2): the data root COPIED to R2 and opened with --data-root
 #   (the projects stay where they were, so any path they persisted points at
 #   R1's store): zero issues, every clip resolved, after open and after
@@ -70,6 +71,7 @@ P1="$(grep -o 'CLIPREF P1=[^ ]*' arm1.log | cut -d= -f2)"
 P2="$(grep -o ' P2=[^ ]*' arm1.log | cut -d= -f2)"
 AV="$(grep -o ' AV=[^ ]*' arm1.log | cut -d= -f2)"
 PL="$(grep -o ' PL=[^ ]*' arm1.log | cut -d= -f2)"
+DUP="$(grep -o ' DUP=[^ ]*' arm1.log | cut -d= -f2)"
 
 [ -n "$P1" ] && [ -n "$P2" ] || { echo "FAIL: arm 1 named no projects; arm 2 cannot run"; exit 1; }
 
@@ -77,7 +79,7 @@ PL="$(grep -o ' PL=[^ ]*' arm1.log | cut -d= -f2)"
 mkdir -p "$(dirname "$R2")" && cp -a "$R1" "$R2"
 check $? "the data root is copied to $R2"
 
-{ cat "$LIB"; echo "arm2(\"$P1\", \"$P2\", \"$AV\", \"$PL\");"; } > arm2.run.js
+{ cat "$LIB"; echo "arm2(\"$P1\", \"$P2\", \"$AV\", \"$PL\", \"$DUP\");"; } > arm2.run.js
 JAHSHAKA_DATA_ROOT="$R2" "$BIN" --headless --data-root "$R2" --script arm2.run.js > arm2.log 2>&1
 rc=$?
 grep -E "^ok:|assert failed|issues:|ALL OK" arm2.log
