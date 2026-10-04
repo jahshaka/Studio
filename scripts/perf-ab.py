@@ -262,7 +262,8 @@ def frame_rows(rec):
         add("frame  GPU unattributed", rec.get("unattributedGpuMs"))
     add("frame  CPU (totalMs)", rec.get("totalMs"))
     for p in rec.get("passes") or []:
-        add("pass   %s/%s/%s" % (p.get("workspace", ""), p.get("node", ""), p.get("pass", "")), p.get("gpuMs"))
+        # the node and the pass name it (a workspace instance's name carries a per-run address)
+        add("pass   %s/%s" % (p.get("node", ""), p.get("pass", "")), p.get("gpuMs"))
     for w in rec.get("cacheWork") or []:
         add("row    %s" % w.get("detail", ""), w.get("gpuMs"))
     for s in rec.get("stages") or []:
@@ -370,7 +371,7 @@ def render(header, tables, labels, top):
             ci = lambda c: ("[%s,%s]" % (fmt(c[0], 7), fmt(c[1], 7))) if c else " " * 17 + "-"
             dci = r.get("deltaPctCi")
             lines.append("%-58s %s %19s %s | %s %19s %s | %s %s %17s" % (
-                r["row"][:58], fmt(A["median"]), ci(A["ci"]), fmt(A["p95"]), fmt(B["median"]), ci(B["ci"]),
+                (r["row"] if len(r["row"]) <= 58 else r["row"][:7] + "~" + r["row"][-50:]), fmt(A["median"]), ci(A["ci"]), fmt(A["p95"]), fmt(B["median"]), ci(B["ci"]),
                 fmt(B["p95"]), fmt(r.get("deltaMs")), fmt(r.get("deltaPct"), 7, 1),
                 ("[%s,%s]" % (fmt(dci[0], 7, 1), fmt(dci[1], 7, 1))) if dci else "-"))
             shown += 1
@@ -413,8 +414,9 @@ def main():
     ts = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
     lane = git(["rev-parse", "--abbrev-ref", "HEAD"]) or "perf-ab"
     out = os.path.abspath(a.out or os.path.expanduser("~/Developer/spikes/%s/ab-%s" % (lane, ts)))
-    bundles = os.path.join(out, "bundles")
     home, run = os.path.join(out, "home"), os.path.join(out, "run")
+    # perf.capture writes only under the data root's capture root (<data-root>/perf)
+    bundles = os.path.join(home, "data", "perf", "bundles")
     for d in (bundles, home, run):
         os.makedirs(d, exist_ok=True)
     driver = os.path.join(out, "driver.js")
