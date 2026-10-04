@@ -197,11 +197,41 @@ void run(int checkEvery)
               "a sleeping body's node written behind its back is pinned back to the body");
     }
     {
-        // The GROUP moves: its sleeping bodies keep their world pose.
+        // THE WRITE JOURNAL'S REACH (graph::writeJournal): a write to a node with
+        // NO body under it re-checks no sleeping body at all...
+        pile.scene->advance(kDt);   // the frame after a check: settle the journal
+        auto lonely = iris::SceneNode::create();
+        pile.scene->getRootNode()->addChild(lonely);
+        pile.scene->advance(kDt);
+        lonely->setLocalPos(iris::Vec3(3, 0, 0));
+        pile.scene->advance(kDt);
+        std::printf("    a write to a body-less node re-checked %d sleeping bodies\n",
+                    env->lastWriteBackRechecks());
+        CHECK(env->lastWriteBackRechecks() == 0, "a write to a node with no body under it re-checks 0 sleeping bodies");
+    }
+    {
+        // ...and a write to a body's ANCESTOR re-checks exactly that subtree's
+        // bodies: the GROUP moves, its sleeping bodies keep their world pose.
+        int under = 0;
+        for (const iris::SceneNodePtr &b : pile.bodies)
+            if (b->getParent() == pile.group) ++under;
         pile.group->setLocalPos(pile.group->getLocalPos() + iris::Vec3(2.0f, 0, 0));
         pile.scene->advance(kDt);
+        std::printf("    a write to the group re-checked %d sleeping bodies (%d live under it)\n",
+                    env->lastWriteBackRechecks(), under);
+        CHECK(under > 0 && env->lastWriteBackRechecks() == under,
+              "a write to a body's ancestor re-checks exactly that subtree's bodies");
         CHECK(oldWriteChanges(*pile.scene, *env, pile.bodies) == 0,
               "sleeping bodies under a moved group are pinned to their bodies' world pose");
+    }
+    {
+        // A REPARENT during play: a sleeping body moved under the (offset)
+        // group keeps its local transform, so its world pose moved — pinned back.
+        const iris::SceneNodePtr &b = pile.bodies[7];
+        pile.group->addChild(b);
+        pile.scene->advance(kDt);
+        CHECK(oldWriteChanges(*pile.scene, *env, pile.bodies) == 0,
+              "a sleeping body reparented during play is pinned to its body's world pose");
     }
     {
         // The carrier is woken and moved; its nested rider (asleep) is pinned.
