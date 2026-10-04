@@ -98,8 +98,8 @@ QString CliOptions::usageText()
         "  --test-tier <mode>          put every scene on a World Mode (low, medium, high, epic)\n"
         "  --clear-shader-cache        delete the shader cache before the engine starts\n"
         "  --no-ray-query              boot with the hardware ray-query tier off\n"
-        "  --vr                        boot on the OpenXR runtime (VR), over the Start in VR setting\n"
-        "  --no-vr                     boot without VR, over the Start in VR setting\n"
+        "  --vr                        VR with any OpenXR runtime, the headset checked at startup\n"
+        "  --no-vr                     no VR (no OpenXR call) in this run\n"
         "                              (JAHSHAKA_VR=1 / JAHSHAKA_VR=0 are the same two switches)\n"
         "  --log-level <lvl|cat=lvl>   session-log levels (repeatable, comma-separated)\n"
         "  --log-file <path>           the session log file\n"
@@ -208,13 +208,13 @@ CliOptions CliOptions::parse(int argc, char *argv[])
 }
 
 CliOptions::VrChoice CliOptions::resolveVr(bool cliVr, bool cliNoVr, const QByteArray &env,
-                                           bool setting)
+                                           bool startInVr)
 {
-    if (cliVr)   return { true,  QStringLiteral("--vr") };
-    if (cliNoVr) return { false, QStringLiteral("--no-vr") };
-    if (env == "1") return { true,  QStringLiteral("JAHSHAKA_VR=1") };
-    if (env == "0") return { false, QStringLiteral("JAHSHAKA_VR=0") };
-    return { setting, QStringLiteral("setting") };
+    if (cliVr)      return { true,  true,  true,  QStringLiteral("--vr") };
+    if (cliNoVr)    return { false, false, false, QStringLiteral("--no-vr") };
+    if (env == "1") return { true,  true,  true,  QStringLiteral("JAHSHAKA_VR=1") };
+    if (env == "0") return { false, false, false, QStringLiteral("JAHSHAKA_VR=0") };
+    return { true, false, startInVr, QStringLiteral("setting") };
 }
 
 void CliOptions::applyPlatformPolicy() const

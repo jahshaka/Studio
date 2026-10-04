@@ -26,6 +26,7 @@ For more information see the LICENSE file
 // View and a workspace on a target that is about to die.
 
 #include <QPointer>
+#include <QVariantMap>
 
 #include <memory>
 
@@ -34,6 +35,7 @@ For more information see the LICENSE file
 class QAction;
 struct ScriptHost;
 class VrApi;
+class QMessageBox;
 
 class VrModule : public StudioModule
 {
@@ -57,23 +59,32 @@ public:
     /// calls. Both are the verbs' own paths, never a second one.
     void toggle();
 
-    /// THE START-IN-VR NOTICE (VR-SETTING-1): the text this process showed,
-    /// once, because the Start in VR preference asked for a VR boot and no
-    /// runtime or headset answered — empty when none was shown. Read by
-    /// `vr.startInVr()`, so a script can see what the user saw.
-    static QString bootNotice();
-    static QString bootNoticeText();
+    /// THE VR START REPORT (VR-START-1): the last start failure this process
+    /// told the user about — {failure, reason, title, text, dialogs, notices,
+    /// dialogOpen} — so `vr.startReport()` can see what the user saw.
+    QVariantMap startReport() const;
+    /// The failure dialog's primary action, exactly as its button runs it:
+    /// close the dialog and press the VR button again. False when no dialog
+    /// is open.
+    bool tryAgain();
 
 private:
-    /// Shows the Start in VR notice once, on the first frame, when the
-    /// preference (not a flag) asked for VR and the boot came up without it.
-    void showBootNoticeIfNeeded();
-    void scheduleBootNotice();
-    bool mBootNoticeArmed = false;
+    /// THE STARTUP HEADSET CHECK (Start in VR, --vr): once the window is up,
+    /// ask the engine for a probe; on a miss, the notice (the preference's
+    /// check) or the dialog (an explicit --vr).
+    void scheduleStartCheck();
+    void runStartCheck();
+    bool mStartCheckArmed = false;
+    /// EVERY VR START FAILURE ENDS HERE (VR-START-1 §1): the desktop stays the
+    /// editor and the user gets ONE clear message with an action — the dialog
+    /// (explicit asks: the button, --vr, a dropped session) with Try again, or
+    /// the non-modal notice (the Start in VR check). `fallbackReason` is the
+    /// refusal's own words when the engine has no failure class for it.
+    void reportStartFailure(bool dialog, const QString &fallbackReason = QString());
+    QPointer<QMessageBox> mStartDialog;
+
     bool toggleEditorPreview();
     bool isEditorPreviewActive() const;
-    /// Says on screen why a VR toggle did not start (the reason is the verb's own).
-    void showRefusal(const QString &reason);
     /// Icon + tooltip + enabled state of the VR action, from the live session.
     void refreshUi();
 
@@ -83,9 +94,9 @@ private:
     /// What the icon is currently showing, so the per-frame refresh only
     /// rebuilds when the answer moves.
     bool mIconActive = false;
-    /// Can this PROCESS do VR at all? Fixed at boot (the engine asks the
-    /// runtime once, and only under `--vr`), so the per-frame follower reads
-    /// this cached bool first and an ordinary launch pays nothing.
+    /// May this PROCESS attempt VR at all (the policy: not --no-vr /
+    /// JAHSHAKA_VR=0, not headless)? Fixed for the process, so the per-frame
+    /// follower reads this cached bool first and a VR-off run pays nothing.
     bool mCapable = false;
     /// The module's ApiModule, owned by the ScriptEngine — held weakly so
     /// shutdown() can end a session through the object that owns it.

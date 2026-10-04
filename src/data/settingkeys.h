@@ -52,10 +52,14 @@ inline constexpr SettingKey<const char *> mouseControls{ "mouse_controls", "defa
 inline constexpr SettingKey<bool> watchdogEnabled{ "watchdog_enabled", true };
 inline constexpr SettingKey<bool> autoSave{ "auto_save", true };
 inline constexpr SettingKey<bool> openInPlayer{ "open_in_player", false };
-/// "Start in VR" (VR-SETTING-1): boot on the OpenXR runtime when one is there.
-/// Read once in main() before the engine exists; --vr/--no-vr and JAHSHAKA_VR
-/// override it for one run (CliOptions::resolveVr). Takes effect at the next launch.
+/// "Start in VR" (VR-START-1): look for the headset at startup and say so once
+/// when it is not there. Read once in main(); --vr/--no-vr and JAHSHAKA_VR
+/// override it for one run (CliOptions::resolveVr). The VR button works either way.
 inline constexpr SettingKey<bool> startInVr{ "vr/start_in_vr", true };
+/// "Headset runtime" (VR-START-1): the ONE OpenXR runtime a VR start may use
+/// ("WiVRn", "SteamVR" or "Monado"). Any other active runtime is refused before
+/// the loader is opened. --vr / JAHSHAKA_VR=1 allow any runtime for one run.
+inline constexpr SettingKey<const char *> vrHeadsetRuntime{ "vr/headset_runtime", "WiVRn" };
 inline constexpr SettingKey<bool> scriptFeedbackLive{ "script_feedback_live", true };
 /// Where new projects go; empty = AppPaths' default projects root.
 inline constexpr SettingKey<const char *> defaultDirectory{ "default_directory", "" };

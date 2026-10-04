@@ -97,16 +97,21 @@ private:
 void setCliNoRayQuery(bool on);
 bool cliNoRayQuery();
 
-/// THE VR BOOT LATCH (SPECS/VR_SPEC.md §4.1, lane VR-SETTING-1). main() sets it
-/// once, before any engine exists, from CliOptions::resolveVr — `--vr`/`--no-vr`,
-/// then JAHSHAKA_VR=1/0, then the "Start in VR" preference (ON by default) — and
-/// EngineHost::resolveConfig turns it into EngineConfig::vr. `source` is the word
-/// that decided ("--vr", "--no-vr", "JAHSHAKA_VR=1", "JAHSHAKA_VR=0", "setting").
-/// An OFF boot never opens the OpenXR loader; an ON boot with no runtime or no
-/// headset boots the desktop route (Engine.h VrMode::IfAvailable).
-void setVrBoot(bool on, const QString &source);
-bool vrBootRequested();
-QString vrBootSource();
+/// THE VR LAUNCH LATCH (SPECS/VR_SPEC.md §4.1, lane VR-START-1). main() sets it
+/// once, before any engine exists, from CliOptions::resolveVr and the two VR
+/// preferences; EngineHost::resolveConfig turns it into EngineConfig::vr (the
+/// VrPolicy: enabled, and either any runtime or the user's headset runtime).
+/// Nothing about the BOOT depends on it — every engine runs on its own device —
+/// only whether, and to which runtime, a VR session may connect.
+struct VrLaunch {
+    bool enabled = false;      ///< may this process use OpenXR at all
+    bool anyRuntime = false;   ///< --vr / JAHSHAKA_VR=1: no headset-runtime check
+    bool startCheck = false;   ///< look for the headset at startup (Start in VR)
+    QString source;            ///< "--vr", "--no-vr", "JAHSHAKA_VR=1", "JAHSHAKA_VR=0", "setting"
+    QString headsetRuntime;    ///< the preference's runtime ("WiVRn", "SteamVR", "Monado")
+};
+void setVrLaunch(const VrLaunch &launch);
+const VrLaunch &vrLaunch();
 
 /// Factory for the engine-backed editor viewport (defined in
 /// src/widgets/enginesceneviewport.cpp so MainWindow never names that class).

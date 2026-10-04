@@ -82,8 +82,8 @@ set_tests_properties(app.startup_quiet PROPERTIES
     TIMEOUT 300
     LABELS "app")
 
-# app.start_in_vr — THE START IN VR PREFERENCE (VR-SETTING-1): ON by default; with no OpenXR
-# runtime the boot takes the desktop route and says so ONCE; OFF and JAHSHAKA_VR=0 never ask.
+# app.start_in_vr — THE VR PREFERENCES (VR-START-1): Start in VR (on) and the headset runtime (WiVRn);
+# a policy refusal opens no OpenXR runtime and ends in the editor plus one notice or dialog.
 # Three boots of one fresh home (start_in_vr.sh). `JAHSHAKA_VR=` (empty) keeps the tests/ walk
 # from adding JAHSHAKA_VR=0: this row is the one that lets the preference decide.
 set(_siv_home ${CMAKE_CURRENT_BINARY_DIR}/start-in-vr-home)

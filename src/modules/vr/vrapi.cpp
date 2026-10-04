@@ -263,32 +263,65 @@ QVector<VerbInfo> VrApi::verbs() const
 {
     return {
         { "available",
-          "vr.available() -> {available, reason, runtime, version, system, openxr, "
-          "eyeSize:[w,h], refreshHz, visibilityMask, depthLayer}",
-          "Whether this process reached an OpenXR runtime, and what the runtime is. "
-          "NEVER throws and never blocks: with no loader, no runtime manifest or no headset "
-          "on the cable it answers `available: false` and `reason` says which in words.\n\n"
-          "VR capability is decided ONCE, at engine boot — by the Start in VR preference (ON by "
-          "default; `vr.startInVr`), or for one run by `--vr`/`--no-vr` (JAHSHAKA_VR=1/0): the "
-          "OpenXR route has the RUNTIME create the Vulkan instance and device the whole engine "
-          "then runs on, so it cannot be turned on later, and an OFF boot is bit-identical to an "
-          "engine that has never heard of VR. "
-          "Plugging a headset in after launch therefore needs a restart — WiVRn only writes its "
-          "runtime manifest when the headset connects.",
+          "vr.available() -> {available, headset, failure, reason, manifest, manifestRuntime, openxrCalls, "
+          "runtime, version, system, openxr, eyeSize:[w,h], refreshHz, visibilityMask, depthLayer}",
+          "Whether this process may start VR, and what the LAST connection found. NEVER throws "
+          "and never blocks.\n\n"
+          "VR IS NOT DECIDED AT BOOT (VR-START-1): every engine runs on its own Vulkan device, "
+          "created with the OpenXR interop extensions, and each session connects afresh through "
+          "XR_KHR_vulkan_enable — so a headset plugged in after launch, or reconnected after a "
+          "drop, is simply the next `vr.begin` / VR button. `available` is false only when this "
+          "run cannot do VR at all (`--no-vr`, JAHSHAKA_VR=0, headless). `headset` is whether the "
+          "last connection (a session, or the startup check) reached a headset; `failure` "
+          "classifies the last miss — \"noRuntime\", \"wrongRuntime\" (the active runtime is "
+          "not the headset runtime: NO OpenXR call was made), \"noHeadset\", "
+          "\"runtimeBroken\", \"deviceMismatch\", \"connectionLost\", \"disabled\", "
+          "\"headless\" or \"none\" — and `reason` says it in words. `manifest` / "
+          "`manifestRuntime` are the active runtime manifest as the OpenXR loader would resolve "
+          "it, read WITHOUT opening the loader; `openxrCalls` counts the connections this process "
+          "let reach the loader (a policy refusal does not move it).",
           Needs::Engine },
         { "startInVr",
-          "vr.startInVr(on?) -> {on, thisRun, source, available, notice}",
-          "THE START IN VR PREFERENCE (Settings > General > Editor), ON by default: whether the "
-          "NEXT launch boots on the OpenXR runtime. `on` (true or false; anything else throws) "
-          "writes it; with no argument it only reads. It takes effect at the next launch, because "
-          "VR capability is fixed at boot.\n\n"
-          "The rest of the map is THIS run: `thisRun` is whether this process asked the runtime "
-          "for a VR boot, `source` is what decided it — \"--vr\", \"--no-vr\", "
-          "\"JAHSHAKA_VR=1\", \"JAHSHAKA_VR=0\" or \"setting\", in that precedence — "
-          "`available` is whether it got one, and `notice` is the one notice shown when the "
-          "preference asked and no runtime or headset answered (empty when none was shown). "
-          "Such a run boots the desktop route; nothing else changes.",
+          "vr.startInVr(on?) -> {on, headsetRuntime, enabled, anyRuntime, startCheck, source}",
+          "THE START IN VR PREFERENCE (Settings > General > Editor), ON by default: look for the "
+          "headset at startup and, when it is not there, say so once in a notice. `on` (true or "
+          "false; anything else throws) writes it for the NEXT launch; with no argument it only "
+          "reads. The VR button works either way.\n\n"
+          "The rest is THIS run: `enabled` (may it use OpenXR at all), `anyRuntime` (no "
+          "headset-runtime check), `startCheck` (the startup check ran or will) and `source`, "
+          "what decided them — \"--vr\", \"--no-vr\", \"JAHSHAKA_VR=1\", "
+          "\"JAHSHAKA_VR=0\" or \"setting\", in that precedence.",
           Needs::Document },
+        { "headsetRuntime",
+          "vr.headsetRuntime(name?) -> {headsetRuntime, thisRun}",
+          "THE HEADSET RUNTIME PREFERENCE: the one OpenXR runtime a VR start may use — "
+          "\"WiVRn\" (the default), \"SteamVR\" or \"Monado\"; anything else throws. A start "
+          "whose ACTIVE runtime is another one is refused before the OpenXR loader is opened (a "
+          "socket-activated system runtime would otherwise be spawned on the desktop). Takes "
+          "effect at the next launch; `thisRun` is the runtime this run checks for (empty: any, "
+          "under `--vr` / JAHSHAKA_VR=1).",
+          Needs::Document },
+        { "press",
+          "vr.press() -> bool",
+          "THE VR BUTTON, exactly as the toolbar button and Ctrl+Shift+V press it: on the editor "
+          "page the editor preview (vr.begin / vr.end), elsewhere the Player's run. A start that "
+          "fails ends where every VR failure ends — the editor, unchanged, plus ONE dialog that "
+          "says why with a Try again button (`vr.startReport`, `vr.tryAgain`). Answers whether VR "
+          "is on after the press.",
+          Needs::Window },
+        { "startReport",
+          "vr.startReport() -> {failure, reason, title, text, dialogs, notices, dialogOpen}",
+          "What the user was last told about a VR start that did not happen: the failure class "
+          "(as vr.available().failure spells it), the reason in the runtime's words, the dialog's "
+          "or notice's title and text, how many dialogs and notices this process has shown, and "
+          "whether the dialog is open now.",
+          Needs::Document },
+        { "tryAgain",
+          "vr.tryAgain() -> bool",
+          "The failure dialog's Try again button: closes the dialog and presses the VR button "
+          "again (`vr.press`). False when no dialog is open. After connecting the headset this is "
+          "the whole recovery — no restart.",
+          Needs::Window },
         { "info", "vr.info() -> {…}",
           "The same map as vr.available(). Kept as its own verb because \"is VR available\" and "
           "\"what is this runtime\" are two questions a caller asks at different times, and a "
@@ -874,6 +907,11 @@ QVariantMap VrApi::available()
     Engine *e = engine();
     const VrInfo info = e ? e->vrInfo() : VrInfo();
     out[QStringLiteral("available")] = e ? e->vrAvailable() : false;
+    out[QStringLiteral("headset")] = info.available;
+    out[QStringLiteral("failure")] = vrnames::failure(e ? info.failure : VrFailure::Headless);
+    out[QStringLiteral("manifest")] = QString::fromStdString(info.manifest);
+    out[QStringLiteral("manifestRuntime")] = QString::fromStdString(info.manifestRuntime);
+    out[QStringLiteral("openxrCalls")] = info.openxrCalls;
     out[QStringLiteral("reason")] =
         e ? QString::fromStdString(info.reason)
           : QStringLiteral("no engine is running in this process");
@@ -904,14 +942,56 @@ QVariantMap VrApi::startInVr(const QVariant &on)
         // THE SAME WRITE the Settings page's checkbox makes.
         settings->set(settingkeys::startInVr, on.toBool());
     }
-    Engine *e = engine();
     QVariantMap out;
     out[QStringLiteral("on")] = settings->get(settingkeys::startInVr);
-    out[QStringLiteral("thisRun")] = vrBootRequested();
-    out[QStringLiteral("source")] = vrBootSource();
-    out[QStringLiteral("available")] = e ? e->vrAvailable() : false;
-    out[QStringLiteral("notice")] = VrModule::bootNotice();
+    out[QStringLiteral("headsetRuntime")] = settings->get(settingkeys::vrHeadsetRuntime);
+    out[QStringLiteral("enabled")] = vrLaunch().enabled;
+    out[QStringLiteral("anyRuntime")] = vrLaunch().anyRuntime;
+    out[QStringLiteral("startCheck")] = vrLaunch().startCheck;
+    out[QStringLiteral("source")] = vrLaunch().source;
     return out;
+}
+
+QVariantMap VrApi::headsetRuntime(const QVariant &name)
+{
+    SettingsManager *settings = moduleHost.settings ? moduleHost.settings
+                                                    : SettingsManager::getDefaultManager();
+    static const QStringList known = { QStringLiteral("WiVRn"), QStringLiteral("SteamVR"),
+                                       QStringLiteral("Monado") };
+    if (name.isValid() && !name.isNull()) {
+        if (name.typeId() != QMetaType::QString || !known.contains(name.toString())) {
+            fail(QStringLiteral("vr.headsetRuntime: name must be one of %1")
+                     .arg(known.join(QStringLiteral(", "))));
+            return QVariantMap();
+        }
+        // THE SAME WRITE the Settings page's combo makes.
+        settings->set(settingkeys::vrHeadsetRuntime, name.toString());
+    }
+    QVariantMap out;
+    out[QStringLiteral("headsetRuntime")] = settings->get(settingkeys::vrHeadsetRuntime);
+    out[QStringLiteral("thisRun")] = vrLaunch().anyRuntime ? QString() : vrLaunch().headsetRuntime;
+    return out;
+}
+
+bool VrApi::press()
+{
+    if (!vrModule) return refuse(QStringLiteral("vr.press: the VR module is not wired"));
+    vrModule->toggle();
+    const VrStatus st = engine() ? engine()->vrStatus() : VrStatus();
+    return st.active;
+}
+
+QVariantMap VrApi::startReport()
+{
+    return vrModule ? vrModule->startReport() : QVariantMap();
+}
+
+bool VrApi::tryAgain()
+{
+    if (!vrModule) return refuse(QStringLiteral("vr.tryAgain: the VR module is not wired"));
+    if (!vrModule->tryAgain()) return refuse(QStringLiteral("vr.tryAgain: no VR start dialog is open"));
+    const VrStatus st = engine() ? engine()->vrStatus() : VrStatus();
+    return st.active;
 }
 
 bool VrApi::begin(const QVariantMap &options)
@@ -960,9 +1040,10 @@ bool VrApi::begin(const QVariantMap &options)
     }
     Engine *e = engine();
     if (!e) return refuse(QStringLiteral("vr.begin: no engine is running in this process"));
-    if (!e->vrAvailable() && QString::fromStdString(e->vrInfo().reason).isEmpty())
-        return refuse(QStringLiteral("vr.begin: VR is not available (this process booted "
-                                     "without VR: Start in VR off, --no-vr or JAHSHAKA_VR=0)"));
+    if (!e->vrAvailable())
+        return refuse(QStringLiteral("vr.begin: VR is off for this run (--no-vr, JAHSHAKA_VR=0 "
+                                     "or a headless engine): %1")
+                          .arg(QString::fromStdString(e->vrInfo().reason)));
     QString error;
     if (!editor.begin(moduleHost.engine ? moduleHost.engine->engine() : nullptr,
                       moduleHost.viewport,

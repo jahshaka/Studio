@@ -682,7 +682,17 @@ console.log("      before the throw: rig (" + rigBefore.x.toFixed(2) + ", "
             + rigBefore.y.toFixed(2) + ", " + rigBefore.z.toFixed(2) + ") yaw "
             + rigBefore.yaw.toFixed(2) + ", the head " + eyeHeight.toFixed(3)
             + " m above its floor");
-rightThrow(0);
+// THE THROW, INLINE: the head the teleport uses is the one the frame BEFORE
+// vr.step() located, so that is the head (and rig) the claim is measured from.
+var throwPose = { x: 3, y: 1.4, z: 0 };
+var wroteThrow = vr.inject("right", { valid: true, aim: throwPose, grip: throwPose,
+                                      select: 0, grab: 0, menuPressed: false,
+                                      stick: { x: 0, y: 0 } });
+editor.frame(1);
+var headAtThrow = vr.state().head;
+var rigAtThrow = vr.interactionMode().rig;
+eyeHeight = headAtThrow.y - rigAtThrow.y;
+assert(wroteThrow === true && vr.step() === true, "one frame with the dominant stick at y = 0");
 var arcAfter = vr.inputState().teleport;
 var rigAfter = vr.interactionMode().rig;
 // ONE RENDERED FRAME BEFORE THE HEAD IS BELIEVED, and it is the session's own
@@ -702,10 +712,26 @@ assert(arcAfter.armed === false, "letting the stick go took the landing");
 assert(arcAfter.drawn === 0 && arcAfter.marker === false,
        "...and took the curve out of the world");
 assert(arcAfter.teleports === 1, "one teleport happened");
-assert(near(headAfter.x, arc.landing.x, 0.02) && near(headAfter.z, arc.landing.z, 0.02),
-       "THE WEARER IS STANDING ON THE LANDING POINT: the head is over (3, -5.343)");
-assert(near(headAfter.y, arc.landing.y + eyeHeight, 0.02),
-       "at the same height above their floor as before (" + eyeHeight.toFixed(3) + " m)");
+// THE HEAD'S OWN TRACKING-SPACE MOTION TAKEN OUT (VR-START-1 §4, the BUGS-1 rule
+// for yaw applied to position). The teleport placed the rig from the head's
+// tracking offset of the last located frame; Monado's simulated HMD then sways
+// that offset on its own display clock (±0.1 m, more under a stretched frame)
+// before the next read. The rig does not turn here, so the head's own motion in
+// world space is just the change of (head - rig) between the two reads, and the
+// claim — the wearer was put on the landing at their own eye height — is what
+// is left after subtracting it.
+function ownMotion(headA, rigA, headB, rigB) {
+    return { x: (headB.x - rigB.x) - (headA.x - rigA.x),
+             y: (headB.y - rigB.y) - (headA.y - rigA.y),
+             z: (headB.z - rigB.z) - (headA.z - rigA.z) };
+}
+var own = ownMotion(headAtThrow, rigAtThrow, headAfter, rigAfter);
+console.log("      the head's own tracking-space motion over the throw: (" + own.x.toFixed(3)
+            + ", " + own.y.toFixed(3) + ", " + own.z.toFixed(3) + ")");
+assert(near(headAfter.x - own.x, arc.landing.x, 0.02) && near(headAfter.z - own.z, arc.landing.z, 0.02),
+       "THE WEARER IS STANDING ON THE LANDING POINT: the head, less its own sway, is over (3, -5.343)");
+assert(near(headAfter.y - own.y, arc.landing.y + eyeHeight, 0.02),
+       "at the same height above their floor as before (" + eyeHeight.toFixed(3) + " m, less the sway)");
 assert(near(rigAfter.yaw, rigBefore.yaw, 1e-3),
        "and facing exactly the way they already faced — a teleport does not turn anybody");
 
@@ -743,19 +769,24 @@ assert(vr.inject("right", { valid: true, aim: highPose, grip: highPose,
        && vr.step() === true, "the stick comes back");
 editor.frame(1);
 var arrived = vr.state().head;
-assert(near(arrived.y, 5.0 + eyeHeight, 0.05),
+var arrivedRig = vr.interactionMode().rig;
+var ownArrived = ownMotion(headAtThrow, rigAtThrow, arrived, arrivedRig);
+assert(near(arrived.y - ownArrived.y, 5.0 + eyeHeight, 0.02),
        "and the wearer is standing on it, at their own eye height ("
-       + arrived.y.toFixed(2) + ")");
+       + arrived.y.toFixed(2) + ", less the head's own sway " + ownArrived.y.toFixed(3) + ")");
 
 // AND THE VERB DOES THE SAME THING, to a named place (no arc, no slope test —
 // a script that says where means it).
 var teleportsBeforeNamed = vr.inputState().teleport.teleports;
+var headPreNamed = vr.state().head;
+var rigPreNamed = vr.interactionMode().rig;
 assert(vr.teleport({ to: { x: -4, y: 0, z: 7 } }) === true,
        "vr.teleport({to}) stands the wearer at a named point");
 editor.frame(1);                        // ...and the frame that re-locates the head
 var headNamed = vr.state().head;
-assert(near(headNamed.x, -4, 0.02) && near(headNamed.z, 7, 0.02),
-       "...and the head is over it: (" + headNamed.x.toFixed(2) + ", "
+var ownNamed = ownMotion(headPreNamed, rigPreNamed, headNamed, vr.interactionMode().rig);
+assert(near(headNamed.x - ownNamed.x, -4, 0.02) && near(headNamed.z - ownNamed.z, 7, 0.02),
+       "...and the head, less its own sway, is over it: (" + headNamed.x.toFixed(2) + ", "
        + headNamed.z.toFixed(2) + ")");
 assert(near(vr.interactionMode().rig.yaw, rigBefore.yaw, 1e-3), "still facing the same way");
 assert(vr.inputState().teleport.teleports === teleportsBeforeNamed + 1,

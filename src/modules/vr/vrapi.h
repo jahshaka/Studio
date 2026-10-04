@@ -38,6 +38,8 @@ For more information see the LICENSE file
 #include "modules/vr/vrinteraction.h"
 #include "scripting/apimodule.h"
 
+class VrModule;
+
 class VrApi : public ApiModule
 {
     Q_OBJECT
@@ -50,6 +52,13 @@ public:
     Q_INVOKABLE QVariantMap available();
     Q_INVOKABLE QVariantMap info();
     Q_INVOKABLE QVariantMap startInVr(const QVariant &on = QVariant());
+    Q_INVOKABLE QVariantMap headsetRuntime(const QVariant &name = QVariant());
+    Q_INVOKABLE bool press();
+    Q_INVOKABLE QVariantMap startReport();
+    Q_INVOKABLE bool tryAgain();
+    /// The module that owns the VR button and its failure dialog (VR-START-1):
+    /// `vr.press` / `vr.tryAgain` / `vr.startReport` are that button's verbs.
+    void setModule(VrModule *module) { vrModule = module; }
     Q_INVOKABLE bool begin(const QVariantMap &options = QVariantMap());
     Q_INVOKABLE bool end();
     Q_INVOKABLE QVariantMap state();
@@ -179,6 +188,7 @@ private:
     /// markers off does not want them back on the next time they put a headset
     /// on.
     bool showProxies = true;
+    VrModule *vrModule = nullptr;
 };
 
 #endif // VRAPI_H

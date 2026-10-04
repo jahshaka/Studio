@@ -45,6 +45,25 @@ inline QString state(jahshaka::engine::VrState s)
     return QStringLiteral("unknown");
 }
 
+/// VR-START-1: why a VR start did not happen, as `vr.available().failure` and
+/// `vr.startReport().failure` spell it.
+inline QString failure(jahshaka::engine::VrFailure f)
+{
+    using jahshaka::engine::VrFailure;
+    switch (f) {
+    case VrFailure::None:           return QStringLiteral("none");
+    case VrFailure::Disabled:       return QStringLiteral("disabled");
+    case VrFailure::Headless:       return QStringLiteral("headless");
+    case VrFailure::NoRuntime:      return QStringLiteral("noRuntime");
+    case VrFailure::WrongRuntime:   return QStringLiteral("wrongRuntime");
+    case VrFailure::NoHeadset:      return QStringLiteral("noHeadset");
+    case VrFailure::RuntimeBroken:  return QStringLiteral("runtimeBroken");
+    case VrFailure::DeviceMismatch: return QStringLiteral("deviceMismatch");
+    case VrFailure::ConnectionLost: return QStringLiteral("connectionLost");
+    }
+    return QStringLiteral("unknown");
+}
+
 inline QString mirror(jahshaka::engine::VrMirrorMode m)
 {
     using jahshaka::engine::VrMirrorMode;

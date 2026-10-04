@@ -78,7 +78,7 @@ EngineConfig vrConfig() {
     cfg.pluginDir    = JAHSHAKA_TEST_PLUGIN_DIR;
     cfg.hlmsMediaDir = JAHSHAKA_TEST_MEDIA_DIR;
     cfg.logFile      = "test_vr_session-ogre.log";
-    cfg.vr           = VrMode::IfAvailable;
+    cfg.vr.enabled   = true;   // any runtime: the runner names it (JAH_VR_EXPECT_RUNTIME)
     return cfg;
 }
 
@@ -269,12 +269,21 @@ int main() {
         engine.reset(Engine::create(vrConfig(), error).release());
         if (!engine) { std::printf("SKIP: the engine did not start: %s\n", error.c_str()); return 77; }
     }
+    // A View FIRST: the engine registers its Hlms with the first one, and
+    // createScene refuses before that.
+    View *desktop = engine->createOffscreenView("desktop", 320, 240, Colour{ 0.16f, 0.20f, 0.28f, 1.0f });
+    if (!desktop) {
+        std::printf("SKIP: no offscreen view: %s\n", engine->lastError().c_str());
+        return 77;
+    }
+    // VR-START-1: nothing connects at boot; the probe connects, asks and disconnects.
+    const bool probed = engine->vrProbe();
     const VrInfo info = engine->vrInfo();
     std::printf("RUNTIME '%s' %s | system '%s' | OpenXR %u.%u | eye %ux%u | mask=%d depth=%d\n",
                 info.runtime.c_str(), info.runtimeVersion.c_str(), info.system.c_str(),
                 info.apiMajor, info.apiMinor, info.eyeWidth, info.eyeHeight,
                 int(info.visibilityMask), int(info.depthLayer));
-    if (!engine->vrAvailable()) {
+    if (!probed) {
         std::printf("SKIP: no OpenXR session-capable runtime: %s\n", info.reason.c_str());
         return 77;
     }
@@ -286,13 +295,6 @@ int main() {
                   "the runtime is the one the runner named ('%s', got '%s')", want,
                   info.runtime.c_str());
 
-    // A View FIRST: the engine registers its Hlms with the first one, and
-    // createScene refuses before that.
-    View *desktop = engine->createOffscreenView("desktop", 320, 240, Colour{ 0.16f, 0.20f, 0.28f, 1.0f });
-    if (!desktop) {
-        std::printf("SKIP: no offscreen view: %s\n", engine->lastError().c_str());
-        return 77;
-    }
     Scene *scene = engine->createScene("vr");
     REQUIRE(scene != nullptr);
     buildScene(scene);

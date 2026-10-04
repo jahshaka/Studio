@@ -82,7 +82,7 @@ EngineConfig vrConfig() {
     cfg.pluginDir    = JAHSHAKA_TEST_PLUGIN_DIR;
     cfg.hlmsMediaDir = JAHSHAKA_TEST_MEDIA_DIR;
     cfg.logFile      = "test_vr_gather-ogre.log";
-    cfg.vr           = VrMode::IfAvailable;
+    cfg.vr.enabled   = true;   // any runtime: the runner names it (JAH_VR_EXPECT_RUNTIME)
     return cfg;
 }
 
@@ -252,7 +252,9 @@ int main() {
         engine.reset(Engine::create(vrConfig(), error).release());
         if (!engine) { std::printf("SKIP: the engine did not start: %s\n", error.c_str()); return 77; }
     }
-    if (!engine->vrAvailable()) {
+    View *desktop = engine->createOffscreenView("desktop", 320, 240, Colour(0, 0, 0));
+    if (!desktop) { std::printf("SKIP: no offscreen view: %s\n", engine->lastError().c_str()); return 77; }
+    if (!engine->vrProbe()) {   // VR-START-1: nothing connects at boot
         std::printf("SKIP: no OpenXR session-capable runtime: %s\n", engine->vrInfo().reason.c_str());
         return 77;
     }
@@ -260,8 +262,6 @@ int main() {
         CHECK_MSG(engine->vrInfo().runtime.find(want) != std::string::npos,
                   "the runtime is the one the runner named ('%s', got '%s')", want,
                   engine->vrInfo().runtime.c_str());
-    View *desktop = engine->createOffscreenView("desktop", 320, 240, Colour(0, 0, 0));
-    if (!desktop) { std::printf("SKIP: no offscreen view: %s\n", engine->lastError().c_str()); return 77; }
     Scene *scene = engine->createScene("vr-gather");
     if (!scene) { std::printf("FAIL: no scene\n"); return 1; }
     desktop->setScene(scene);

@@ -23,14 +23,12 @@
 
 namespace {
 bool gCliNoRayQuery = false;
-bool gVrBoot = false;
-QString gVrBootSource = QStringLiteral("setting");
+VrLaunch gVrLaunch;
 }
 void setCliNoRayQuery(bool on) { gCliNoRayQuery = on; }
 bool cliNoRayQuery() { return gCliNoRayQuery; }
-void setVrBoot(bool on, const QString &source) { gVrBoot = on; gVrBootSource = source; }
-bool vrBootRequested() { return gVrBoot; }
-QString vrBootSource() { return gVrBootSource; }
+void setVrLaunch(const VrLaunch &launch) { gVrLaunch = launch; }
+const VrLaunch &vrLaunch() { return gVrLaunch; }
 
 
 using namespace jahshaka::engine;
@@ -199,13 +197,13 @@ EngineConfig EngineHost::resolveConfig()
     // picture a machine without the hardware renders and every fallback is
     // proved on each push instead of assumed.
     cfg.rayTracing = !cliNoRayQuery();
-    // OPENXR, PER RUN (SPECS/VR_SPEC.md §4.1 / VrMode). The latch main() set
-    // from the command line, JAHSHAKA_VR or the Start in VR preference: the
-    // IfAvailable route creates the Vulkan instance and device THROUGH THE
-    // RUNTIME before the render system loads, so it is a different boot, and a
-    // run that is told OFF never opens the loader at all.
-    cfg.vr = vrBootRequested() ? jahshaka::engine::VrMode::IfAvailable
-                     : jahshaka::engine::VrMode::Disabled;
+    // OPENXR, PER RUN (SPECS/VR_SPEC.md §4.1, VR-START-1): the policy only —
+    // the boot is the same either way. With a headset runtime named, a session
+    // whose active runtime is anything else is refused before the loader is
+    // opened (a socket-activated system runtime would spawn on the desktop).
+    cfg.vr.enabled = vrLaunch().enabled;
+    if (!vrLaunch().anyRuntime && !vrLaunch().headsetRuntime.isEmpty())
+        cfg.vr.runtimes = { vrLaunch().headsetRuntime.toStdString() };
     // OFF REACHES THE DEVICE through the config itself: the engine hands
     // EngineConfig::rayTracing to the fork's VulkanDevice (msRayQueryAllowed)
     // before the render system loads, so a no-rays launch creates the device a

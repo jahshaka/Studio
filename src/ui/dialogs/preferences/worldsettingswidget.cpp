@@ -688,9 +688,10 @@ void WorldSettingsWidget::configureEditor()
 		ThemeManager::setThemeId(themeCombo->itemData(idx).toString());
 	});
 
-	// START IN VR (VR-SETTING-1): the preference main() reads before the engine
-	// boots (--vr / --no-vr / JAHSHAKA_VR override it for one run). The box
-	// writes the same SettingsManager key `vr.startInVr(on)` writes.
+	// START IN VR + HEADSET RUNTIME (VR-START-1): the two VR preferences main()
+	// reads (--vr / --no-vr / JAHSHAKA_VR override them for one run). Each
+	// widget writes the same SettingsManager key its verb writes
+	// (`vr.startInVr(on)`, `vr.headsetRuntime(name)`).
 	auto startInVrLabel = new QLabel("Start In VR :");
 	StyleSheet::setStyle({ startInVrLabel });
 	setSizePolicyForWidgets(startInVrLabel);
@@ -698,21 +699,37 @@ void WorldSettingsWidget::configureEditor()
 	startInVr->setObjectName(QStringLiteral("startInVrCheckbox"));
 	StyleSheet::setStyle({ startInVr });
 	startInVr->setChecked(settings->get(settingkeys::startInVr));
-	startInVr->setToolTip("Start In VR | Boot on the OpenXR runtime so the headset is ready. "
-	                      "With no runtime or headset the editor starts normally and says so once.");
+	startInVr->setToolTip("Start In VR | Look for the headset when Jahshaka starts and say so "
+	                      "once if it is not there. The VR button works either way.");
 	auto startInVrLayout = new QHBoxLayout;
 	startInVrLayout->setContentsMargins(0, 0, 0, 0);
 	startInVrLayout->addStretch();
 	startInVrLayout->addWidget(startInVr);
-	auto startInVrNote = new QLabel("Takes effect at the next launch. Start WiVRn and connect the "
-	                                "headset first.");
+	auto runtimeLabel = new QLabel("Headset Runtime :");
+	StyleSheet::setStyle({ runtimeLabel });
+	setSizePolicyForWidgets(runtimeLabel);
+	auto runtimeCombo = new QComboBox;
+	runtimeCombo->setObjectName(QStringLiteral("vrHeadsetRuntimeCombo"));
+	StyleSheet::setStyle({ runtimeCombo });
+	runtimeCombo->addItems({ QStringLiteral("WiVRn"), QStringLiteral("SteamVR"),
+	                         QStringLiteral("Monado") });
+	runtimeCombo->setCurrentText(settings->get(settingkeys::vrHeadsetRuntime));
+	runtimeCombo->setToolTip("Headset Runtime | The one OpenXR runtime VR may use. Any other "
+	                         "active runtime is never started.");
+	auto startInVrNote = new QLabel("Takes effect at the next launch. Start the headset runtime "
+	                                "and connect the headset first.");
 	startInVrNote->setStyleSheet(StyleSheet::MutedInfoText());
 	ThemeRoles::setTone(startInVrNote, ThemeRoles::Tone::Muted);
 	layout->addWidget(startInVrLabel, 7, 0);
 	layout->addLayout(startInVrLayout, 7, 1);
-	layout->addWidget(startInVrNote, 8, 1);
+	layout->addWidget(runtimeLabel, 8, 0);
+	layout->addWidget(runtimeCombo, 8, 1);
+	layout->addWidget(startInVrNote, 9, 1);
 	connect(startInVr, &QCheckBox::toggled, this, [this](bool on) {
 		settings->set(settingkeys::startInVr, on);
+	});
+	connect(runtimeCombo, &QComboBox::currentTextChanged, this, [this](const QString &name) {
+		settings->set(settingkeys::vrHeadsetRuntime, name);
 	});
 
 	layout->setRowStretch(layout->rowCount() + 1, 100);
