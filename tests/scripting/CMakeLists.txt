@@ -477,6 +477,27 @@ set_tests_properties(scripting.e2e.texture_missing PROPERTIES
     TIMEOUT 300 LABELS "scripting")
 jah_tsan_blocked(scripting.e2e.texture_missing)   # spawns the app
 jah_lsan_blocked(scripting.e2e.texture_missing)   # spawns the app
+# scripting.e2e.pump_defer — a UI-thread operation's pump delivers no other work
+# (STUDIO-D1 fix round; services/uithreadwait.h): an MCP request sent while a
+# script's synchronous imports pump is answered after them, and the imports are
+# never held by a nested waitForScriptIdle (its 30 s ceiling). Two MCP clients.
+add_executable(test_pump_defer test_pump_defer.cpp)
+set_target_properties(test_pump_defer PROPERTIES CXX_STANDARD 17
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+target_link_libraries(test_pump_defer PRIVATE Qt6::Core Qt6::Gui Qt6::Network)
+target_include_directories(test_pump_defer PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_compile_definitions(test_pump_defer PRIVATE
+    JAHSHAKA_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
+    JAHSHAKA_BINARY="$<TARGET_FILE:${CMAKE_PROJECT_NAME}>")
+set(_pumpdefer_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-pump_defer)
+file(MAKE_DIRECTORY ${_pumpdefer_home}/run)
+jah_gpu_row(scripting.e2e.pump_defer CLASS app COMMAND test_pump_defer
+         WORKING_DIRECTORY ${_pumpdefer_home}/run)
+set_tests_properties(scripting.e2e.pump_defer PROPERTIES
+    ENVIRONMENT "HOME=${_pumpdefer_home};JAHSHAKA_DATA_ROOT=${_pumpdefer_home}/.local/share/Jahshaka"
+    TIMEOUT 300 LABELS "scripting")
+jah_tsan_blocked(scripting.e2e.pump_defer)   # spawns the app
+jah_lsan_blocked(scripting.e2e.pump_defer)   # spawns the app
 # THE PROJECT'S VR SETTINGS (lane VR-WORLD-1, owner request 2026-09-18) — the
 # World panel's VR section as a verb: `world.vr` reads and writes six document
 # fields (the fly speed in m/s, the fly direction, the turn and its step or
