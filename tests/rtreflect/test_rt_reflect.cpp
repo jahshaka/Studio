@@ -1176,7 +1176,7 @@ static int costMain(Engine *e, const char *, const char *)
                   "%s: %.3f GPU ms, median of the last 30 (bar %.2f)", what, median, bar);
         // THE HIT DECODE, between the reflection's two halves (PHOTON-HIT-SHADE-1): it used to be
         // inside the reflection's one timestamp span and is its own pass row now (lane TEST-1), so
-        // it is printed on its own — a target with no bar (the reflect rows' bars are BUGS-1's).
+        // it is printed on its own — a target with no bar (the reflect bars below are on trace + filter).
         {
             std::vector<FrameRecord> recs;
             e->takeFrameRecords(recs);
@@ -1200,25 +1200,18 @@ static int costMain(Engine *e, const char *, const char *)
         return median;
     };
 
-    // THE ABSOLUTE BARS (BUGS-1, 2026-10-04): each is the worst of six solo
-    // runs of THIS fixture (gpu-exclusive, clocks UNLOCKED — the owner's rule
-    // for now, the gate's own state; Debug engine, RTX 4080 SUPER / 595.84)
-    // x 1.15, twice the widest spread any arm showed across the runs (the mirror
-    // full-res arm, 0.423-0.453, 7 %):
-    //   mirror full 0.423-0.453 -> 0.53   mirror half 0.223-0.224 -> 0.26
-    //   glossy full 1.284-1.292 -> 1.49   glossy half 0.374-0.378 -> 0.44
-    // The glossy bars and the half-res mirror bar are ABOVE the old 0.90 / 0.20
-    // budget lines, which the base had already missed before either of
-    // gi.rt_reflect_cost's two steps (321983ce2: glossy full 1.22, mirror half
-    // 0.225; 0.78 / 0.072 on 2026-09-22): that growth is unbisected and is the
-    // lead's finding, not a verdict of this suite. The ratio block at the end of
-    // this function stays the box-independent check. These bars are on today's
-    // reflectMs (one span, trace to filter, the hit decode between them); when it
-    // becomes the trace + filter rows alone (lane TEST-1) they are re-derived by
-    // the same rule on those rows, and the hit-list check above keeps the decode
-    // out of this fixture under either definition.
-    const float mirrorFull = measureMs(2, "1080p FULL-res, mirror-heavy", 0.53f);
-    const float mirrorHalf = measureMs(1, "1080p HALF-res, mirror-heavy", 0.26f);
+    // THE ABSOLUTE BARS (BUGS-1's rule, re-derived by lane TEST-1 on its definition, 2026-10-04):
+    // reflectMs is now the trace's and the filter's monitor rows summed — the hit decode between
+    // the halves is its own pass row, printed as its own target — so each bar is the worst of six
+    // solo runs of THIS fixture ON THOSE ROWS (gpu-exclusive, clocks UNLOCKED — the owner's rule
+    // for now; Debug engine, RTX 4080 SUPER / 595.84) x 1.15:
+    //   mirror full 0.327-0.349 -> 0.40   mirror half 0.126-0.127 -> 0.15
+    //   glossy full 1.168-1.175 -> 1.35   glossy half 0.244-0.245 -> 0.28
+    // (BUGS-1's bars on the one-span definition were 0.53 / 0.26 / 1.49 / 0.44; the hit decode
+    // the span held read 0.375-0.398 / 0.170-0.171 / 0.756-0.760 / 0.304-0.307 in the same runs.)
+    // The ratio block at the end of this function stays the box-independent check.
+    const float mirrorFull = measureMs(2, "1080p FULL-res, mirror-heavy", 0.40f);
+    const float mirrorHalf = measureMs(1, "1080p HALF-res, mirror-heavy", 0.15f);
 
     // ...AND THE FILTER'S OWN WORST CASE, which a box of MIRRORS does not
     // measure (round C). The spatial filter's radius is 0 on a mirror by
@@ -1233,8 +1226,8 @@ static int costMain(Engine *e, const char *, const char *)
         glossy.roughness = 0.39f;                 // just inside the 0.40 gate
         CHECK(s->setPbrMaterial(mirrorMat, glossy), "the mirror box goes glossy");
         e->renderOneFrame();
-        glossyFull = measureMs(2, "1080p FULL-res, GLOSSY (max filter)", 1.49f);
-        glossyHalf = measureMs(1, "1080p HALF-res, GLOSSY (max filter)", 0.44f);
+        glossyFull = measureMs(2, "1080p FULL-res, GLOSSY (max filter)", 1.35f);
+        glossyHalf = measureMs(1, "1080p HALF-res, GLOSSY (max filter)", 0.28f);
     }
 
     // ---- THE CLOCK-FREE HALF OF THE SAME MEASUREMENT (ATOM-RESUMES-1 item 4) --
@@ -1296,13 +1289,12 @@ static int costMain(Engine *e, const char *, const char *)
     // refuses the regression it exists for: a resolution row that stopped
     // applying would read ~1.0.
     //
-    // RE-DERIVED BY THE SAME RULE FOR THE BOX-HOLDING CASCADE (BUGS-1): the fixture
-    // now shades its hits from the store instead of the decode, so the four
-    // ratios moved; worst of three runs x 1.3:
-    //   filter/trace full  3.05 -> 4.0      filter/trace half  1.69 -> 2.2
-    //   half/full mirror   0.53 -> 0.70     half/full glossy   0.29 -> 0.38
-    // Three are tighter or unchanged; the glossy resolution ratio is looser
-    // (0.30 held a 0.29 reading to 3 % of room) and still refuses ~1.0.
+    // RE-DERIVED BY THE SAME RULE ON THE TRACE + FILTER ROWS (lane TEST-1; BUGS-1 set them
+    // on the one span, decode included): worst of the six runs above x 1.3:
+    //   filter/trace full  3.58 -> 4.65     filter/trace half  1.93 -> 2.5
+    //   half/full mirror   0.39 -> 0.51     half/full glossy   0.21 -> 0.27
+    // Without the decode in both terms the filter's share is larger and the resolution
+    // ratios smaller; each still refuses ~1.0 (a resolution row that stopped applying).
     if (mirrorFull > 0.0f && mirrorHalf > 0.0f && glossyFull > 0.0f && glossyHalf > 0.0f) {
         const float filterFull = glossyFull / mirrorFull;
         const float filterHalf = glossyHalf / mirrorHalf;
@@ -1311,17 +1303,17 @@ static int costMain(Engine *e, const char *, const char *)
         std::printf("\n    the same four numbers as RATIOS (clock-free): filter/trace %.2fx full, "
                     "%.2fx half; half/full %.2f mirror, %.2f glossy\n",
                     filterFull, filterHalf, resMirror, resGlossy);
-        CHECK_MSG(filterFull <= 4.0f,
-                  "THE FILTER'S WORST CASE costs %.2fx the trace it filters at full res (bar 4.0x)",
+        CHECK_MSG(filterFull <= 4.65f,
+                  "THE FILTER'S WORST CASE costs %.2fx the trace it filters at full res (bar 4.65x)",
                   filterFull);
-        CHECK_MSG(filterHalf <= 2.2f,
+        CHECK_MSG(filterHalf <= 2.5f,
                   "...and %.2fx at half res, where the kernel covers four times the frame per "
-                  "traced pixel (bar 2.2x)", filterHalf);
-        CHECK_MSG(resMirror <= 0.70f,
+                  "traced pixel (bar 2.5x)", filterHalf);
+        CHECK_MSG(resMirror <= 0.51f,
                   "A QUARTER OF THE RAYS COSTS LESS: the mirror arm's half-res pass is %.2f of its "
-                  "full-res one (bar 0.70)", resMirror);
-        CHECK_MSG(resGlossy <= 0.38f,
-                  "...and the glossy arm's is %.2f of its own full-res pass (bar 0.38)", resGlossy);
+                  "full-res one (bar 0.51)", resMirror);
+        CHECK_MSG(resGlossy <= 0.27f,
+                  "...and the glossy arm's is %.2f of its own full-res pass (bar 0.27)", resGlossy);
     } else {
         std::printf("FAIL: one of the four cost arms never read a timestamp back\n");
         ++failures;
