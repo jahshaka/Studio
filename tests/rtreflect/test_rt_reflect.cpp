@@ -1167,19 +1167,23 @@ static int costMain(Engine *e, const char *, const char *)
         return median;
     };
 
-    // THE ABSOLUTE BARS (BUGS-1, 2026-10-04): each is the worst of three solo
-    // runs of THIS fixture (gpu-exclusive, clocks free; Debug engine, RTX 4080
-    // SUPER / 595.84) x 1.15 — 7 % for the locked-clock state (ATOM-RESUMES-1:
-    // a 2550 MHz lock caps a 3105 MHz card and every arm reads ~7 % slower) and
-    // 8 % for run-to-run spread (the mirror full-res arm read 0.424-0.453):
-    //   mirror full 0.424 / 0.437 / 0.453 -> 0.53   mirror half 0.223-0.224 -> 0.26
-    //   glossy full 1.285 / 1.291 / 1.292 -> 1.49   glossy half 0.375-0.378 -> 0.44
+    // THE ABSOLUTE BARS (BUGS-1, 2026-10-04): each is the worst of six solo
+    // runs of THIS fixture (gpu-exclusive, clocks UNLOCKED — the owner's rule
+    // for now, the gate's own state; Debug engine, RTX 4080 SUPER / 595.84)
+    // x 1.15, twice the widest spread any arm showed across the runs (the mirror
+    // full-res arm, 0.423-0.453, 7 %):
+    //   mirror full 0.423-0.453 -> 0.53   mirror half 0.223-0.224 -> 0.26
+    //   glossy full 1.284-1.292 -> 1.49   glossy half 0.374-0.378 -> 0.44
     // The glossy bars and the half-res mirror bar are ABOVE the old 0.90 / 0.20
     // budget lines, which the base had already missed before either of
     // gi.rt_reflect_cost's two steps (321983ce2: glossy full 1.22, mirror half
     // 0.225; 0.78 / 0.072 on 2026-09-22): that growth is unbisected and is the
     // lead's finding, not a verdict of this suite. The ratio block at the end of
-    // this function stays the box-independent check.
+    // this function stays the box-independent check. These bars are on today's
+    // reflectMs (one span, trace to filter, the hit decode between them); when it
+    // becomes the trace + filter rows alone (lane TEST-1) they are re-derived by
+    // the same rule on those rows, and the hit-list check above keeps the decode
+    // out of this fixture under either definition.
     const float mirrorFull = measureMs(2, "1080p FULL-res, mirror-heavy", 0.53f);
     const float mirrorHalf = measureMs(1, "1080p HALF-res, mirror-heavy", 0.26f);
 
