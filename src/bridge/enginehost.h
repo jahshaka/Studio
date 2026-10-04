@@ -97,13 +97,16 @@ private:
 void setCliNoRayQuery(bool on);
 bool cliNoRayQuery();
 
-/// THE --vr LATCH (SPECS/VR_SPEC.md §4.1). main() sets it from the command line
-/// (or JAHSHAKA_VR=1) before any engine exists, and EngineHost::resolveConfig
-/// turns it into EngineConfig::vr. There is no preference beside it: asking a
-/// runtime for a device is a property of THIS RUN, not a saved setting, and a
-/// launch without it must be bit-identical to one from before VR existed.
-void setCliVr(bool on);
-bool cliVr();
+/// THE VR BOOT LATCH (SPECS/VR_SPEC.md §4.1, lane VR-SETTING-1). main() sets it
+/// once, before any engine exists, from CliOptions::resolveVr — `--vr`/`--no-vr`,
+/// then JAHSHAKA_VR=1/0, then the "Start in VR" preference (ON by default) — and
+/// EngineHost::resolveConfig turns it into EngineConfig::vr. `source` is the word
+/// that decided ("--vr", "--no-vr", "JAHSHAKA_VR=1", "JAHSHAKA_VR=0", "setting").
+/// An OFF boot never opens the OpenXR loader; an ON boot with no runtime or no
+/// headset boots the desktop route (Engine.h VrMode::IfAvailable).
+void setVrBoot(bool on, const QString &source);
+bool vrBootRequested();
+QString vrBootSource();
 
 /// Factory for the engine-backed editor viewport (defined in
 /// src/widgets/enginesceneviewport.cpp so MainWindow never names that class).

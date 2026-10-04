@@ -19,6 +19,8 @@ For more information see the LICENSE file
 
 #include "bridge/enginehost.h"
 #include "bridge/vrnames.h"
+#include "data/settingsmanager.h"
+#include "modules/vr/vrmodule.h"
 #include "irisgl/document/scenegraph/scene.h"
 #include "irisgl/document/scenegraph/scenenode.h"
 #include "scripting/modules/moduleshared.h"   // quatFromJs (the one pose reader)
@@ -266,13 +268,27 @@ QVector<VerbInfo> VrApi::verbs() const
           "Whether this process reached an OpenXR runtime, and what the runtime is. "
           "NEVER throws and never blocks: with no loader, no runtime manifest or no headset "
           "on the cable it answers `available: false` and `reason` says which in words.\n\n"
-          "VR capability is decided ONCE, at engine boot, and only when the process was "
-          "started with `--vr` (or JAHSHAKA_VR=1): the OpenXR route has the RUNTIME create the "
-          "Vulkan instance and device the whole engine then runs on, so it cannot be turned on "
-          "later, and a plain launch is bit-identical to an engine that has never heard of VR. "
+          "VR capability is decided ONCE, at engine boot — by the Start in VR preference (ON by "
+          "default; `vr.startInVr`), or for one run by `--vr`/`--no-vr` (JAHSHAKA_VR=1/0): the "
+          "OpenXR route has the RUNTIME create the Vulkan instance and device the whole engine "
+          "then runs on, so it cannot be turned on later, and an OFF boot is bit-identical to an "
+          "engine that has never heard of VR. "
           "Plugging a headset in after launch therefore needs a restart — WiVRn only writes its "
           "runtime manifest when the headset connects.",
           Needs::Engine },
+        { "startInVr",
+          "vr.startInVr(on?) -> {on, thisRun, source, available, notice}",
+          "THE START IN VR PREFERENCE (Settings > General > Editor), ON by default: whether the "
+          "NEXT launch boots on the OpenXR runtime. `on` (true or false; anything else throws) "
+          "writes it; with no argument it only reads. It takes effect at the next launch, because "
+          "VR capability is fixed at boot.\n\n"
+          "The rest of the map is THIS run: `thisRun` is whether this process asked the runtime "
+          "for a VR boot, `source` is what decided it — \"--vr\", \"--no-vr\", "
+          "\"JAHSHAKA_VR=1\", \"JAHSHAKA_VR=0\" or \"setting\", in that precedence — "
+          "`available` is whether it got one, and `notice` is the one notice shown when the "
+          "preference asked and no runtime or headset answered (empty when none was shown). "
+          "Such a run boots the desktop route; nothing else changes.",
+          Needs::Document },
         { "info", "vr.info() -> {…}",
           "The same map as vr.available(). Kept as its own verb because \"is VR available\" and "
           "\"what is this runtime\" are two questions a caller asks at different times, and a "
@@ -408,8 +424,8 @@ QVector<VerbInfo> VrApi::verbs() const
           "order — leave VR, keep playing.\n\n"
           "Answers whether the player is IN VR after the call: true on entry, false on exit AND "
           "false on a refusal, with app.lastError saying which (a box with no runtime cannot "
-          "enter, and VR capability is fixed at boot — a process not started with --vr never "
-          "has any).",
+          "enter, and VR capability is fixed at boot — a process that booted without VR "
+          "(Start in VR off, --no-vr, JAHSHAKA_VR=0) never has any).",
           Needs::Engine },
         { "inject",
           "vr.inject(hand, {valid?, aim?, grip? (defaults to aim), manip?, profile?, joints?, "
@@ -876,6 +892,28 @@ QVariantMap VrApi::available()
 
 QVariantMap VrApi::info() { return available(); }
 
+QVariantMap VrApi::startInVr(const QVariant &on)
+{
+    SettingsManager *settings = moduleHost.settings ? moduleHost.settings
+                                                    : SettingsManager::getDefaultManager();
+    if (on.isValid() && !on.isNull()) {
+        if (on.typeId() != QMetaType::Bool) {
+            fail(QStringLiteral("vr.startInVr: on must be true or false"));
+            return QVariantMap();
+        }
+        // THE SAME WRITE the Settings page's checkbox makes.
+        settings->set(settingkeys::startInVr, on.toBool());
+    }
+    Engine *e = engine();
+    QVariantMap out;
+    out[QStringLiteral("on")] = settings->get(settingkeys::startInVr);
+    out[QStringLiteral("thisRun")] = vrBootRequested();
+    out[QStringLiteral("source")] = vrBootSource();
+    out[QStringLiteral("available")] = e ? e->vrAvailable() : false;
+    out[QStringLiteral("notice")] = VrModule::bootNotice();
+    return out;
+}
+
 bool VrApi::begin(const QVariantMap &options)
 {
     if (shutDown) return refuse(QStringLiteral("vr.begin: the VR module has shut down"));
@@ -923,8 +961,8 @@ bool VrApi::begin(const QVariantMap &options)
     Engine *e = engine();
     if (!e) return refuse(QStringLiteral("vr.begin: no engine is running in this process"));
     if (!e->vrAvailable() && QString::fromStdString(e->vrInfo().reason).isEmpty())
-        return refuse(QStringLiteral("vr.begin: VR is not available (this process was not "
-                                     "started with --vr)"));
+        return refuse(QStringLiteral("vr.begin: VR is not available (this process booted "
+                                     "without VR: Start in VR off, --no-vr or JAHSHAKA_VR=0)"));
     QString error;
     if (!editor.begin(moduleHost.engine ? moduleHost.engine->engine() : nullptr,
                       moduleHost.viewport,

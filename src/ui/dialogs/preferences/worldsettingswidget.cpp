@@ -688,6 +688,33 @@ void WorldSettingsWidget::configureEditor()
 		ThemeManager::setThemeId(themeCombo->itemData(idx).toString());
 	});
 
+	// START IN VR (VR-SETTING-1): the preference main() reads before the engine
+	// boots (--vr / --no-vr / JAHSHAKA_VR override it for one run). The box
+	// writes the same SettingsManager key `vr.startInVr(on)` writes.
+	auto startInVrLabel = new QLabel("Start In VR :");
+	StyleSheet::setStyle({ startInVrLabel });
+	setSizePolicyForWidgets(startInVrLabel);
+	auto startInVr = new QCheckBox;
+	startInVr->setObjectName(QStringLiteral("startInVrCheckbox"));
+	StyleSheet::setStyle({ startInVr });
+	startInVr->setChecked(settings->get(settingkeys::startInVr));
+	startInVr->setToolTip("Start In VR | Boot on the OpenXR runtime so the headset is ready. "
+	                      "With no runtime or headset the editor starts normally and says so once.");
+	auto startInVrLayout = new QHBoxLayout;
+	startInVrLayout->setContentsMargins(0, 0, 0, 0);
+	startInVrLayout->addStretch();
+	startInVrLayout->addWidget(startInVr);
+	auto startInVrNote = new QLabel("Takes effect at the next launch. Start WiVRn and connect the "
+	                                "headset first.");
+	startInVrNote->setStyleSheet(StyleSheet::MutedInfoText());
+	ThemeRoles::setTone(startInVrNote, ThemeRoles::Tone::Muted);
+	layout->addWidget(startInVrLabel, 7, 0);
+	layout->addLayout(startInVrLayout, 7, 1);
+	layout->addWidget(startInVrNote, 8, 1);
+	connect(startInVr, &QCheckBox::toggled, this, [this](bool on) {
+		settings->set(settingkeys::startInVr, on);
+	});
+
 	layout->setRowStretch(layout->rowCount() + 1, 100);
 
 

@@ -31,6 +31,7 @@
 #     --out DIR         scratch root (default: a mktemp dir, removed at exit)
 #     --keep            keep the scratch root
 set -u
+export JAHSHAKA_VR="${JAHSHAKA_VR-0}"   # the desktop route: Start in VR is ON by default (VR-SETTING-1)
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 root="$(cd "$here/../.." && pwd)"

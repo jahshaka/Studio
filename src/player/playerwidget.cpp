@@ -62,7 +62,7 @@ void PlayerWidget::createUI()
 	// (PlayerService::toggleVr, the same thing `vr.toggle()` calls); the shell
 	// hands the call over with setVrToggle, so this widget learns nothing about
 	// services, engines or runtimes. Disabled until the shell says VR is
-	// available — which on a process that was not started with --vr is never.
+	// available — which on a process that booted without VR is never.
 	vrBtn = new QPushButton(playerControls);
 	vrBtn->setObjectName(QStringLiteral("playerVrButton"));
 	vrBtn->setCursor(Qt::PointingHandCursor);

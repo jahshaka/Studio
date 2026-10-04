@@ -227,6 +227,37 @@ int main(int argc, char **argv)
               "the usage text names the options");
     }
 
+    // ---- THE VR BOOT PRECEDENCE (VR-SETTING-1) ------------------------------
+    // --vr / --no-vr, then JAHSHAKA_VR=1 / 0, then the Start in VR preference.
+    {
+        const CliOptions o = parsed({ "--no-vr" });
+        CHECK(o.errors.isEmpty() && o.noVr && !o.vr, "--no-vr parses");
+        const CliOptions both = parsed({ "--vr", "--no-vr" });
+        CHECK(!both.errors.isEmpty(), "--vr with --no-vr is refused, never guessed");
+        CHECK(CliOptions::usageText().contains(QStringLiteral("--no-vr")),
+              "the usage text names --no-vr");
+    }
+    {
+        struct Row { bool vr, noVr; const char *env; bool setting; bool on; const char *source; };
+        const Row rows[] = {
+            { false, false, "",  true,  true,  "setting" },          // the default: ON
+            { false, false, "",  false, false, "setting" },          // the box unticked
+            { false, false, "garbage", true, true, "setting" },      // only 0/1 mean anything
+            { false, false, "0", true,  false, "JAHSHAKA_VR=0" },    // the test launchers' form
+            { false, false, "1", false, true,  "JAHSHAKA_VR=1" },
+            { false, true,  "1", true,  false, "--no-vr" },          // the flag beats the env
+            { true,  false, "0", false, true,  "--vr" },             // a VR suite under the launchers' 0
+        };
+        for (const Row &r : rows) {
+            const CliOptions::VrChoice c =
+                CliOptions::resolveVr(r.vr, r.noVr, QByteArray(r.env), r.setting);
+            CHECK(c.on == r.on && c.source == QLatin1String(r.source),
+                  "vr=%d no-vr=%d JAHSHAKA_VR='%s' setting=%d -> on=%d from %s (got %d from %s)",
+                  int(r.vr), int(r.noVr), r.env, int(r.setting), int(r.on), r.source,
+                  int(c.on), qPrintable(c.source));
+        }
+    }
+
     std::printf(failures ? "FAILED: %d check(s)\n" : "ALL CHECKS PASSED\n", failures);
     return failures ? 1 : 0;
 }

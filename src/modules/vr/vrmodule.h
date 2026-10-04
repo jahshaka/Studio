@@ -57,7 +57,19 @@ public:
     /// calls. Both are the verbs' own paths, never a second one.
     void toggle();
 
+    /// THE START-IN-VR NOTICE (VR-SETTING-1): the text this process showed,
+    /// once, because the Start in VR preference asked for a VR boot and no
+    /// runtime or headset answered — empty when none was shown. Read by
+    /// `vr.startInVr()`, so a script can see what the user saw.
+    static QString bootNotice();
+    static QString bootNoticeText();
+
 private:
+    /// Shows the Start in VR notice once, on the first frame, when the
+    /// preference (not a flag) asked for VR and the boot came up without it.
+    void showBootNoticeIfNeeded();
+    void scheduleBootNotice();
+    bool mBootNoticeArmed = false;
     bool toggleEditorPreview();
     bool isEditorPreviewActive() const;
     /// Says on screen why a VR toggle did not start (the reason is the verb's own).

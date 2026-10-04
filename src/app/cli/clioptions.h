@@ -118,13 +118,15 @@ struct CliOptions
     /// saved with the scene), and this flag overrides it downward for one run
     /// without touching the document.
     bool noRayQuery = false;
-    /// `--vr`: ask the OpenXR runtime for a session-capable boot
-    /// (SPECS/VR_SPEC.md §4.1). OFF by default and per process, because the
-    /// route has the RUNTIME create the Vulkan instance and device the whole
-    /// engine runs on — a plain launch must stay bit-identical to an engine
-    /// that has never heard of VR. JAHSHAKA_VR=1 does the same for a runner
-    /// that cannot pass an argument.
+    /// `--vr` / `--no-vr`: force this run's OpenXR boot on or off
+    /// (SPECS/VR_SPEC.md §4.1), over the "Start in VR" preference
+    /// (settingkeys::startInVr, ON by default). The route has the RUNTIME
+    /// create the Vulkan instance and device the whole engine runs on, so the
+    /// decision is made once, before the engine exists — resolveVr() below.
+    /// JAHSHAKA_VR=1 / JAHSHAKA_VR=0 are the same two switches for a runner
+    /// that cannot pass an argument; both flags at once is refused.
     bool vr = false;
+    bool noVr = false;
     /// `--test-tier <low|medium|high|epic>`: THE PROCESS'S TEST TIER (lane
     /// TEST-TIER-1, services/testtier.h). Every scene this process binds to the
     /// editor — new or opened — is put on that World Mode (the `world.mode`
@@ -145,6 +147,16 @@ struct CliOptions
     bool version = false;
 
     static CliOptions parse(int argc, char *argv[]);
+
+    /// THIS RUN'S VR DECISION, in one place (lane VR-SETTING-1). The command
+    /// line wins over the environment, the environment over the preference —
+    /// the house order (compiled default -> ini -> environment -> command line).
+    /// `env` is JAHSHAKA_VR's value: "1" forces on, "0" forces off, anything
+    /// else (unset, empty) leaves the decision to the preference. `source` is
+    /// the word `vr.startInVr()` reports: "--vr", "--no-vr", "JAHSHAKA_VR=1",
+    /// "JAHSHAKA_VR=0" or "setting".
+    struct VrChoice { bool on = false; QString source; };
+    static VrChoice resolveVr(bool cliVr, bool cliNoVr, const QByteArray &env, bool setting);
 
     /// The usage text `--help` prints (every flag the parser accepts).
     static QString usageText();

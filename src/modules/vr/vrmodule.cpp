@@ -13,6 +13,8 @@ For more information see the LICENSE file
 
 #include <QAction>
 #include <QColor>
+#include <QTimer>
+#include <QWidget>
 
 #include "bridge/enginehost.h"
 #include "modules/vr/vrapi.h"
@@ -28,6 +30,34 @@ For more information see the LICENSE file
 
 VrModule::VrModule() = default;
 VrModule::~VrModule() = default;
+
+namespace {
+/// The one Start in VR notice this process showed (empty = none). Process-wide
+/// because the decision it reports is: VR is fixed at boot.
+QString gBootNotice;
+}
+
+QString VrModule::bootNotice() { return gBootNotice; }
+
+QString VrModule::bootNoticeText()
+{
+    return QObject::tr("VR is on in Settings but no headset was found: start WiVRn, connect the "
+                       "headset, then restart");
+}
+
+void VrModule::showBootNoticeIfNeeded()
+{
+    // ONLY THE PREFERENCE'S BOOT. `--vr` and JAHSHAKA_VR=1 are a developer's or
+    // a runner's explicit ask and keep their tooltip; an OFF boot never asked.
+    if (!gBootNotice.isEmpty() || !host.shell) return;
+    if (!vrBootRequested() || vrBootSource() != QLatin1String("setting")) return;
+    PlayerService *player = host.services ? host.services->player : nullptr;
+    if (player && player->vrAvailable()) return;
+    gBootNotice = bootNoticeText();
+    qWarning("Jahshaka VR: Start in VR is on but the boot has no VR - %s",
+             qPrintable(player ? player->vrUnavailableReason() : QString()));
+    host.shell->showNotice(QObject::tr("VR is not running"), gBootNotice);
+}
 
 void VrModule::contribute(Contributions &c)
 {
@@ -83,6 +113,24 @@ void VrModule::contribute(Contributions &c)
         });
     }
     refreshUi();
+    // Armed only for the one case it can report: the preference asked, the boot
+    // has no VR. Every other launch (a flag, the runners' JAHSHAKA_VR, a headset
+    // that answered) pays nothing.
+    if (vrBootRequested() && vrBootSource() == QLatin1String("setting") && !mCapable)
+        scheduleBootNotice();
+}
+
+void VrModule::scheduleBootNotice()
+{
+    // THE START-IN-VR NOTICE ONCE THE WINDOW IS UP, not here: the modules
+    // contribute inside MainWindow's constructor (the splash may still hold the
+    // event loop for the shader build), and a toast shown on a hidden window is a
+    // toast nobody saw. Polled at a tenth of a second — it is a one-off.
+    QTimer::singleShot(mBootNoticeArmed ? 100 : 0, mAction.get(), [this]() {
+        mBootNoticeArmed = true;
+        if (host.shellWidget && !host.shellWidget->isVisible()) { scheduleBootNotice(); return; }
+        showBootNoticeIfNeeded();
+    });
 }
 
 void VrModule::toggle()
@@ -171,8 +219,9 @@ void VrModule::refreshUi()
                                          "mirrored here)")));
     } else {
         QString why = player ? player->vrUnavailableReason() : QString();
-        if (!cliVr())
-            why = QStringLiteral("VR capability is fixed at boot — restart with --vr");
+        if (!vrBootRequested())
+            why = QStringLiteral("VR capability is fixed at boot — turn on Start in VR in "
+                                 "Settings (or start with --vr) and restart");
         mAction->setToolTip(QStringLiteral("Enter VR | Unavailable: %1").arg(why));
     }
     if (host.shell) host.shell->showPlayerVrState(available, active);

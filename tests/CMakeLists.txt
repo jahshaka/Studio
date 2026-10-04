@@ -21,6 +21,33 @@ else()
     set(JAH_TEST_DISPLAY_ENV "DISPLAY=${JAH_TEST_DISPLAY};")
 endif()
 
+# EVERY TEST BOOTS THE DESKTOP ROUTE UNLESS IT SAYS OTHERWISE (VR-SETTING-1). The
+# app's "Start in VR" preference is ON by default, so an app launched by a test
+# with a fresh data root would ask the OpenXR runtime for its boot. This walk runs
+# ONCE, after every directory below has registered its tests, and appends
+# JAHSHAKA_VR=0 to each test's ENVIRONMENT — the one place, so no suite's own
+# ENVIRONMENT line (which REPLACES the property) can forget it. A VR suite passes
+# `--vr`, which wins over the environment (CliOptions::resolveVr). A test that
+# names JAHSHAKA_VR itself is left alone: `JAHSHAKA_VR=` (empty) is how
+# app.start_in_vr lets the preference decide.
+function(_jah_vr_off_walk dir)
+    get_property(_tests DIRECTORY "${dir}" PROPERTY TESTS)
+    foreach(_t IN LISTS _tests)
+        get_property(_env TEST "${_t}" DIRECTORY "${dir}" PROPERTY ENVIRONMENT)
+        if(NOT _env MATCHES "(^|;)JAHSHAKA_VR=")
+            set_property(TEST "${_t}" DIRECTORY "${dir}" APPEND PROPERTY ENVIRONMENT "JAHSHAKA_VR=0")
+        endif()
+    endforeach()
+    get_property(_subs DIRECTORY "${dir}" PROPERTY SUBDIRECTORIES)
+    foreach(_s IN LISTS _subs)
+        _jah_vr_off_walk("${_s}")
+    endforeach()
+endfunction()
+if(CMAKE_VERSION VERSION_LESS 3.28)
+    message(FATAL_ERROR "tests/: CMake 3.28+ is needed (set_property(TEST ... DIRECTORY), the JAHSHAKA_VR=0 walk)")
+endif()
+cmake_language(DEFER DIRECTORY "${CMAKE_SOURCE_DIR}" CALL _jah_vr_off_walk "${CMAKE_CURRENT_SOURCE_DIR}")
+
 # THE ASan ENGINE SUITES' OPTIONS, in one place (PHOTON_SPEC §7 R1).
 #
 # `protect_shadow_gap=0` is LOAD-BEARING and was MEASURED, not guessed. With the

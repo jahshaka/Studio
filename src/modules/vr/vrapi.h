@@ -49,6 +49,7 @@ public:
 
     Q_INVOKABLE QVariantMap available();
     Q_INVOKABLE QVariantMap info();
+    Q_INVOKABLE QVariantMap startInVr(const QVariant &on = QVariant());
     Q_INVOKABLE bool begin(const QVariantMap &options = QVariantMap());
     Q_INVOKABLE bool end();
     Q_INVOKABLE QVariantMap state();

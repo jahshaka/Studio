@@ -82,6 +82,23 @@ set_tests_properties(app.startup_quiet PROPERTIES
     TIMEOUT 300
     LABELS "app")
 
+# app.start_in_vr — THE START IN VR PREFERENCE (VR-SETTING-1): ON by default; with no OpenXR
+# runtime the boot takes the desktop route and says so ONCE; OFF and JAHSHAKA_VR=0 never ask.
+# Three boots of one fresh home (start_in_vr.sh). `JAHSHAKA_VR=` (empty) keeps the tests/ walk
+# from adding JAHSHAKA_VR=0: this row is the one that lets the preference decide.
+set(_siv_home ${CMAKE_CURRENT_BINARY_DIR}/start-in-vr-home)
+file(MAKE_DIRECTORY ${_siv_home}/run)
+jah_gpu_row(app.start_in_vr CLASS app
+         COMMAND sh ${JAH_FRESH_HOME} --warm ${_siv_home} --
+                 bash "${CMAKE_CURRENT_SOURCE_DIR}/start_in_vr.sh"
+                 "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>"
+                 "${CMAKE_CURRENT_SOURCE_DIR}/start_in_vr.js"
+         WORKING_DIRECTORY ${_siv_home}/run)
+set_tests_properties(app.start_in_vr PROPERTIES
+    ENVIRONMENT "HOME=${_siv_home};JAHSHAKA_DATA_ROOT=${_siv_home}/.local/share/Jahshaka;JAHSHAKA_VR=;JAHSHAKA_TEST_TIER=low"
+    TIMEOUT 300
+    LABELS "app")
+
 # app.shader_gate_warm — THE STARTUP SHADER GATE KNOWS A WARM CACHE (TEST-TIER-1): a cold boot
 # (--clear-shader-cache) compiles and runs the GI warm-up; the second boot in the same home compiles
 # ZERO programs and skips it. A ROW of its own: its claim is two boots of one home, the first
