@@ -418,7 +418,10 @@ static void pipeline_layer_reports_acceptance() {
         return;
     }
     // Lift the microcode line's "<bytes> <hash>" and stamp it onto the pipeline
-    // line, then make pipeline.cache actually be those bytes.
+    // line — KEEPING the pipeline line's own layer key (CS-1: each line names its
+    // layer's key, and a microcode key on the pipeline line would be dropped by the
+    // key check before the driver ever saw the bytes) — then make pipeline.cache
+    // actually be those bytes.
     std::string text(mbytes.begin(), mbytes.end());
     const size_t mAt = text.find("file microcode.cache ");
     const size_t pAt = text.find("file pipeline.cache ");
@@ -426,9 +429,13 @@ static void pipeline_layer_reports_acceptance() {
         CHECK(false, "F7: the manifest lists both files");
         return;
     }
-    const std::string microTail = text.substr(mAt + 21, text.find('\n', mAt) - (mAt + 21));
+    std::istringstream mLine(text.substr(mAt + 21, text.find('\n', mAt) - (mAt + 21)));
+    std::istringstream pLine(text.substr(pAt + 20, text.find('\n', pAt) - (pAt + 20)));
+    std::string mBytes, mHash, pBytes, pHash, pKey;
+    mLine >> mBytes >> mHash;
+    pLine >> pBytes >> pHash >> pKey;
     const size_t pEol = text.find('\n', pAt);
-    text.replace(pAt, pEol - pAt, "file pipeline.cache " + microTail);
+    text.replace(pAt, pEol - pAt, "file pipeline.cache " + mBytes + " " + mHash + " " + pKey);
     writeFile(manifest, std::vector<char>(text.begin(), text.end()));
     writeFile(gCacheDir + "/pipeline.cache", micro);
 
