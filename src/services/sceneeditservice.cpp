@@ -105,6 +105,19 @@ namespace { void regenerateGuids(const iris::SceneNodePtr &root,
 
 #include "zip.h"
 
+// A MATERIAL THAT CARRIES GENERATED PIECES NAMES ITS SOURCE (TORNADO-1): the
+// scene file writes `customPieceGraph` from the material's guid, which is what
+// lets a reopened scene re-emit a piece this machine does not have. graph.
+// toMaterial stamps it; an apply from the library must too. Only for a material
+// with a piece, so an ordinary material is untouched.
+static void stampPieceSource(const iris::MaterialPtr &mat, const QString &assetGuid)
+{
+    auto pbr = mat.dynamicCast<iris::PbrMaterial>();
+    if (!pbr || assetGuid.isEmpty()) return;
+    if (pbr->customPiecePixel.isEmpty() && pbr->customPieceVertex.isEmpty()) return;
+    pbr->setGuid(assetGuid);
+}
+
 SceneEditService::SceneEditService(Database *db,
                                    Project *project,
                                    UndoService *undo,
@@ -1219,7 +1232,9 @@ iris::MaterialPtr SceneEditService::resolveMaterial(const QString &presetOrGuid,
         const QJsonObject matObject =
             MaterialBundle::read(db, wanted, fromLibrary ? nullptr : project);
         if (matObject.isEmpty()) return iris::MaterialPtr();
-        return reader.parseMaterialTyped(matObject, db);
+        auto mat = reader.parseMaterialTyped(matObject, db);
+        stampPieceSource(mat, wanted);
+        return mat;
     }
 
     // (THE SHADER BRANCH IS GONE — MATERIAL_BUNDLE_SPEC phase 2's Deletes
@@ -1519,6 +1534,7 @@ bool SceneEditService::applyMaterialAsset(const QString &assetGuid, iris::SceneN
         // PbrMaterial instead of a broken shader-less CustomMaterial.
         auto mat = reader.parseMaterialTyped(matObject, db);
         if (!mat) continue;
+        stampPieceSource(mat, assetGuid);
         undo->push(new ChangeMaterialCommand(meshNode, mat));
     }
     // THE USE EDGES, INSIDE THE MACRO AND AS COMMANDS (fix round F7). "This

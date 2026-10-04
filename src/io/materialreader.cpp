@@ -13,6 +13,10 @@ For more information see the LICENSE file
 #include <QJsonArray>
 
 #include "io/materialreader.h"
+#include "modules/materials/core/materialhelper.h"
+#include "modules/materials/core/pieceemitter.h"
+#include "modules/materials/graph/nodegraph.h"
+#include "services/assethome.h"
 #include "irisgl/irisgl.h"
 #include "irisgl/document/assets/mesh.h"
 #include "irisgl/document/assets/vertexlayout.h"
@@ -152,8 +156,35 @@ iris::PbrMaterialPtr MaterialReader::parsePbrMaterial(QJsonObject matObject, Dat
 			mat->setValue(QStringLiteral("textureVelocityV"), velocity[1].toDouble());
 		}
 	}
+	restoreGeneratedPieces(mat, matObject);
 
 	return mat;
+}
+
+// THE GENERATED SHADER PIECES TRAVEL WITH THE DEFINITION (TORNADO-1). A graph
+// material whose emitter took sockets says so in its bake record
+// (`bake.emittedSockets`, GraphDefinition::buildDefinition) and carries its
+// graph (`shadergraph`); emission is deterministic and content-addressed, so
+// re-emitting here names the same files the save did — a cache hit in the
+// ordinary case, a rewrite on a wiped cache or another machine. Every reader of
+// a definition (an apply from the library, a hover preview, a thumbnail, a
+// scene's regeneration of a missing piece) therefore gets a LIVE material, by
+// this one route. A definition with no emitted sockets costs nothing here.
+void MaterialReader::restoreGeneratedPieces(iris::PbrMaterialPtr mat, const QJsonObject& matObject)
+{
+	if (!mat) return;
+	const QJsonArray emitted = matObject.value(QStringLiteral("bake")).toObject()
+	                               .value(QStringLiteral("emittedSockets")).toArray();
+	if (emitted.isEmpty() || !matObject.contains(QStringLiteral("shadergraph"))) return;
+	NodeGraph* graph = MaterialHelper::extractNodeGraphFromMaterialDefinition(matObject);
+	if (!graph) return;
+	// BUILDING a material is a read: PathOnly, never an import.
+	MaterialHelper::resolveAppRelativeTextures(graph, MaterialHelper::TextureBinding::PathOnly,
+	                                           assethome::library());
+	const QJsonObject pieces = materials::PieceEmitter::emitAndStore(graph, MaterialHelper::textureResolver());
+	mat->setCustomPiecePixel(pieces.value(QStringLiteral("customPiecePixel")).toString());
+	mat->setCustomPieceVertex(pieces.value(QStringLiteral("customPieceVertex")).toString());
+	delete graph;
 }
 
 QJsonObject MaterialReader::getShaderObjectFromId(QString shaderGuid, Database* db)
