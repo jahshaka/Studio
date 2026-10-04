@@ -434,7 +434,7 @@ QVector<VerbInfo> AppApi::verbs() const
           "threads any one pass can compile on and the count the shader disk cache is applied "
           "with at startup. Cheap: two engine reads and a walk of the scene list.",
           Needs::Engine },
-        { "textureStreaming", "app.textureStreaming() -> {multiLoadThreads, doneStreaming, loadRequests, metadataCacheEntries, channelCacheEntries, waitTimeouts, waitWorstMs, waitBudgetMs, waitAdvances}",
+        { "textureStreaming", "app.textureStreaming() -> {multiLoadThreads, doneStreaming, loadRequests, metadataCacheEntries, waitTimeouts, waitWorstMs, waitBudgetMs, waitAdvances}",
           "WHAT THE TEXTURE LOADER IS DOING (SPECS/THREADING_ADOPTION_SPEC.md P2). Since the "
           "batched-loading phase, loading a texture SCHEDULES it and the frame edge waits once "
           "for all of them, instead of the caller blocking on each texture in turn — so N "
@@ -447,12 +447,10 @@ QVector<VerbInfo> AppApi::verbs() const
           "middle of an open. `loadRequests` is a MONOTONIC counter of load requests this "
           "process has made: only differences mean anything, and it moving across a render is "
           "exactly the condition the offscreen readbacks' double-render guard tests. "
-          "`metadataCacheEntries` and `channelCacheEntries` are the two halves of the persistent "
-          "texture cache — resolution/format/pool per path (Ogre's own, which lets the main "
-          "thread reserve the right pool slice before anything is decoded) and our path -> "
-          "channel-count sidecar (which is what stops every image being decoded twice). Both are "
-          "derived data in the shader cache's directory and both die with the Clear Cache "
-          "button. NOTE metadataCacheEntries is the one expensive field: the backend exposes no "
+          "`metadataCacheEntries` is the persistent texture cache — resolution/format/pool per "
+          "path (Ogre's own, which lets the main thread reserve the right pool slice before "
+          "anything is decoded), derived data in the shader cache's directory that dies with the "
+          "Clear Cache button. NOTE it is the one expensive field: the backend exposes no "
           "size() for that map, so asking exports it to count the rows. "
           "`waitTimeouts` IS THE HEALTH FIELD and it MUST be 0: the frame's texture wait is "
           "bounded (Engine.h's texture-wait contract), and a non-zero count means the wait gave "
@@ -1687,7 +1685,6 @@ QVariantMap AppApi::textureStreaming()
     out.insert("doneStreaming", engine->texturesDoneStreaming());
     out.insert("loadRequests", QVariant::fromValue(qulonglong(engine->textureLoadRequests())));
     out.insert("metadataCacheEntries", engine->textureMetadataCacheEntries());
-    out.insert("channelCacheEntries", engine->textureChannelCacheEntries());
     out.insert("waitTimeouts", engine->textureWaitTimeouts());
     out.insert("waitWorstMs", engine->textureWaitWorstMs());
     out.insert("waitBudgetMs", engine->textureWaitBudgetMs());

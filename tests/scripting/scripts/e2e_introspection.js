@@ -311,8 +311,7 @@ assert(stats.incompletePsoRequests === 0,
 var streaming = app.textureStreaming();
 assert(typeof streaming.loadRequests === "number" &&
        typeof streaming.multiLoadThreads === "number" &&
-       typeof streaming.metadataCacheEntries === "number" &&
-       typeof streaming.channelCacheEntries === "number",
+       typeof streaming.metadataCacheEntries === "number",
        "app.textureStreaming() reports the full map");
 assert(streaming.doneStreaming === true,
        "nothing is in flight in a session that has loaded no textures");

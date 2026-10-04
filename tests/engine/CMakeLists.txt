@@ -282,3 +282,25 @@ add_dependencies(test_engine_media_check JahshakaEngineMedia)
 jah_gpu_row(engine.media_check CLASS engine COMMAND test_engine_media_check
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(engine.media_check PROPERTIES TIMEOUT 180 LABELS "engine")
+
+# engine.gray_expansion — A GRAYSCALE MAP IS THE SAME BYTES, EXPANDED ON THE STREAMING WORKER
+# (SPEED-CPU CS-3; the fork's TextureFilter::ExpandMonochrome). The nine shipped gray preset
+# maps in both colour spaces, loaded through OgreScene::loadTexture and read back mip by mip,
+# against the old UI-thread expansion's bytes computed in the suite by the old calls. White-box
+# (EnginePrivate.h for the GPU texture behind a TextureId).
+add_executable(test_gray_expansion test_gray_expansion.cpp)
+set_target_properties(test_gray_expansion PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH "${OGRE_NEXT_PREFIX}/lib" INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_include_directories(test_gray_expansion PRIVATE
+    "${CMAKE_SOURCE_DIR}/irisgl/engine/src" "${JAHSHAKA_ENGINE_BUILD_ID_DIR}")
+target_compile_definitions(test_gray_expansion PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/"
+    JAHSHAKA_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+target_link_libraries(test_gray_expansion PRIVATE JahshakaEngine OgreNext)
+add_dependencies(test_gray_expansion JahshakaEngineMedia)
+jah_gpu_row(engine.gray_expansion CLASS engine COMMAND test_gray_expansion
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(engine.gray_expansion PROPERTIES TIMEOUT 120 LABELS "engine")

@@ -359,8 +359,9 @@ int main(int argc, char **argv)
             const TextureId t = s->loadTexture(sneaky.toStdString(), true);
             CHECK(t != 0, "engine loads PNG bytes under a .jpg name (tolerant read)");
         }
-        // Grayscale PNG bytes under a .jpg name: exercises the probe path
-        // (the grayscale expansion is where the strict load used to throw).
+        // Grayscale PNG bytes under a .jpg name: the streaming worker's tolerant
+        // read, then its grayscale expansion (the fork's ExpandMonochrome filter;
+        // the old UI-thread expansion is where the strict load used to throw).
         {
             QImage img(8, 8, QImage::Format_Grayscale8);
             img.fill(128);
