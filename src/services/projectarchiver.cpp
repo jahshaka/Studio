@@ -39,6 +39,7 @@ For more information see the LICENSE file
 #include "services/materialbundle.h"
 #include "services/assetstorepaths.h"
 #include "services/uistep.h"
+#include "services/uithreadwait.h"
 
 using exportformat::ExportManifest;
 using exportformat::ManifestAsset;
@@ -111,8 +112,9 @@ ProjectArchiver::~ProjectArchiver()
 
 void ProjectArchiver::emitProgress(int percent, const QString &text)
 {
-    if (mThreaded && QThread::currentThread() != thread()) {
-        // From the worker: through the event loop, never blocking. `this` is
+    if (QThread::currentThread() != thread()) {
+        // From the worker (the threaded drivers', or the synchronous verbs'
+        // pumped one): through the event loop, never blocking. `this` is
         // the context object, so a dead archiver simply drops the call.
         QMetaObject::invokeMethod(this, [this, percent, text]() {
             emit progress(percent, text);
@@ -365,7 +367,15 @@ ProjectArchiver::Result ProjectArchiver::exportArchive(const QString &destZipPat
     mExporting = true;
     mCanceled.store(false);
     mRunning.store(true);
-    if (planExport(destZipPath) && workExport()) installExport();
+    // THE FILE HALF OFF THE UI THREAD here too (STUDIO-D1 item 4): the verb
+    // still answers in the same call, but the copies and the zip run on a pool
+    // thread while this one pumps (services/uithreadwait.h) — measured, the
+    // sync verb blocked the UI for its whole 1.5 s wall on a small world.
+    if (planExport(destZipPath)) {
+        bool worked = false;
+        UiThreadWait::run([&]() { worked = workExport(); });
+        if (worked) installExport();
+    }
     const bool canceled = mCanceled.load();
     finish(canceled);
     return mResult;
@@ -863,7 +873,9 @@ ProjectArchiver::Result ProjectArchiver::importArchive(const QString &zipPath)
     mExporting = false;
     mCanceled.store(false);
     mRunning.store(true);
-    if (planImport(zipPath) && workImport()) {
+    bool worked = false;
+    if (planImport(zipPath)) UiThreadWait::run([&]() { worked = workImport(); });
+    if (worked) {
         beginInstallImport();
         while (mResult.error.isEmpty() && !mCanceled.load() && mNextIngest < mIngest.size())
             installImportSlice();
