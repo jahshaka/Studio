@@ -71,6 +71,8 @@ For more information see the LICENSE file
 
 #include "irisgl/irisglfwd.h"
 
+#include "io/missingclipref.h"
+
 class QFileSystemWatcher;
 
 /// One thing wrong with the open scene that the user can fix.
@@ -118,6 +120,9 @@ public:
     /// no current bake that could not be rebuilt from its source — the open's
     /// SceneReader::missingModels(), and a library placement's.
     void raiseMissingModels(const QStringList &paths);
+    /// One `clip.missing` per skeletal clip a reader could not resolve
+    /// (SceneReader::missingClips()): which clip, which asset, and why.
+    void raiseMissingClips(const QVector<MissingClipRef> &clips);
     /// `gi.cascades.clamped`: the open scene pinned more cascade rows than the renderer's
     /// slot table holds; the reader kept the first kGiTierMaxCascades and dropped `dropped`.
     void raiseCascadeSetClamped(int dropped);

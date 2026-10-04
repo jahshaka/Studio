@@ -29,6 +29,9 @@ For more information see the LICENSE file
 #include <QHash>
 #include <QString>
 #include <QStringList>
+#include <QVector>
+
+#include "io/missingclipref.h"
 
 #include "irisgl/irisglfwd.h"
 #include "irisgl/import/meshprewarm.h"
@@ -138,6 +141,8 @@ public:
     /// (FORWARD-ONLY-1): missing from the open, never parsed. The shell raises
     /// one `model.missing` scene issue per file after it binds the scene.
     QStringList missingModels() const { return mMissingModels; }
+    /// The skeletal clips the last open could not resolve (CLIP-REF-1).
+    QVector<MissingClipRef> missingClips() const { return mMissingClips; }
     /// The open's pinned cascade rows past the renderer's table (SceneReader).
     int cascadeRowsDropped() const { return mCascadeRowsDropped; }
 
@@ -225,6 +230,7 @@ private:
     std::function<iris::ScenePtr()> sceneProvider;
     std::function<void()> mPreWrite;
     QStringList mMissingModels;
+    QVector<MissingClipRef> mMissingClips;
     int mCascadeRowsDropped = 0;
 };
 

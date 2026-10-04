@@ -43,6 +43,7 @@ public:
     Q_INVOKABLE QString importFile(const QString &path, int drawerId = -1,
                                    const QVariantMap &options = QVariantMap());
     Q_INVOKABLE bool rename(const QString &guid, const QString &name);
+    Q_INVOKABLE QStringList clips(const QString &guid);
     Q_INVOKABLE QString duplicate(const QString &guid);
     Q_INVOKABLE QVariantList setTags(const QString &guid, const QVariant &tags);
     Q_INVOKABLE QVariantList tags(const QString &guid);

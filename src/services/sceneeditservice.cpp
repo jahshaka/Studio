@@ -411,6 +411,7 @@ void SceneEditService::addMaterialMesh(const QString &path, bool ignore, iris::V
     // A LIBRARY MODEL WITH NO BAKE IS SAID (FORWARD-ONLY-1 D4): the placed node
     // arrives without geometry, and the user is told which file — not a log line.
     SceneIssues::instance().raiseMissingModels(reader->missingModels());
+    SceneIssues::instance().raiseMissingClips(reader->missingClips());
     delete reader;
     if (!node) return;
 
@@ -422,33 +423,11 @@ void SceneEditService::addMaterialMesh(const QString &path, bool ignore, iris::V
     // Same remap the paste path (insertFragment) uses.
     regenerateGuids(node);
 
-    // Animation sources: point the model's OWN clips at the model's file, and
-    // leave everybody else's alone.
-    //
-    // This used to rewrite EVERY skeletal clip on the node to the model file,
-    // unconditionally (AVATAR_MODULE_SPEC §A.9). That is right for the clips
-    // that came out of the model itself — their stored source is whatever path
-    // the author's machine had — and wrong for every clip loaded from another
-    // file: an avatar with a Walking.fbx clip had that clip re-sourced to the
-    // character on the next instantiation, so on reopen it resolved to the
-    // character's own animation and the character stopped walking.
-    //
-    // A clip belongs to this model when its source names the same FILE. Since
-    // the CAS a stored object's file name is its sha256, so the comparison is
-    // on the base name the writer recorded, not on the resolved path.
-    const QString meshGuid = db->fetchObjectMesh(guid, static_cast<int>(ModelTypes::Object),
-                                                 static_cast<int>(ModelTypes::Mesh));
-    const QString modelName = db->fetchAsset(meshGuid).name;
-    const QString relPath = QDir(project->folderPath).relativeFilePath(modelName);
-    const QString modelFile = QFileInfo(modelName).fileName();
-    for (auto anim : node->getAnimations()) {
-        if (!anim->skeletalAnimation) continue;
-        const QString source = anim->skeletalAnimation->source;
-        // Empty (a clip the blob never sourced) or this model's own file.
-        if (source.isEmpty() || QFileInfo(source).fileName() == modelFile
-            || QFileInfo(source).fileName() == QFileInfo(relPath).fileName())
-            anim->skeletalAnimation->source = relPath;
-    }
+    // The model's OWN clips need no re-sourcing (CLIP-REF-1): the blob names
+    // them by the model's asset guid, and the reader above resolved them
+    // through the store. (A path rewrite here ran AFTER the reader had already
+    // tried the original import path, so a placement on a box where that file
+    // still existed lost its own clip.)
 
     // Honour the drop position (the viewport computed where the cursor hit the
     // scene) — legacy addMesh does the same; without this every dropped asset
@@ -933,7 +912,12 @@ iris::SceneNodePtr SceneEditService::rebuildFragment(const SceneFragment &fragme
     reader.setDatabaseHandle(db);
     reader.setProject(project);
     reader.setLibrarySource();
-    return reader.readFragment(fragment);
+    auto node = reader.readFragment(fragment);
+    // An undo or a paste reads models and clips like an open: what it cannot
+    // resolve is said, never a silent bind pose.
+    SceneIssues::instance().raiseMissingModels(reader.missingModels());
+    SceneIssues::instance().raiseMissingClips(reader.missingClips());
+    return node;
 }
 
 namespace {

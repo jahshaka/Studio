@@ -1130,19 +1130,12 @@ void SceneReader::readAnimationData(QJsonObject& nodeObj,iris::SceneNodePtr scen
             animation->addPropertyAnim(propAnim);
         }
 
-        if (animObj.contains("skeletalAnimation")) {
-            auto skelAnim = animObj["skeletalAnimation"].toObject();
-            const QString source = skelAnim["source"].toString();
-            const QString clipGuid = skelAnim["guid"].toString();
-            // The own-model route is the last resort when neither the clip's
-            // guid nor its persisted path resolves — worked out for every
-            // clip, because a clip WITH a guid whose row was purged needs it
-            // too (15c review #2; the deleted by-name lookup ran in that case).
-            // One walk of this node's subtree per skeletal clip.
-            const QString ownModel = ownModelGuidFor(nodeObj, QFileInfo(source).fileName());
-
-            auto skel = this->getSkeletalAnimation(source, skelAnim["name"].toString(),
-                                                  clipGuid, ownModel);
+        if (animObj.contains(QLatin1String("skeletalAnimation"))) {
+            // {guid, name} — the clip's whole reference (CLIP-REF-1).
+            const QJsonObject skelAnim = animObj.value(QLatin1String("skeletalAnimation")).toObject();
+            auto skel = this->getSkeletalAnimation(skelAnim.value(QLatin1String("guid")).toString(),
+                                                   skelAnim.value(QLatin1String("name")).toString(),
+                                                   sceneNode->getName());
             animation->setSkeletalAnimation(skel);
         }
 
@@ -1945,91 +1938,63 @@ iris::MeshPtr SceneReader::getMesh(QString filePath, int index, const QString &a
     return iris::MeshPtr();
 }
 
-QString SceneReader::ownModelGuidFor(const QJsonObject &nodeObj, const QString &sourceFileName) const
+QStringList SceneReader::clipNames(const QString &assetGuid)
 {
-    if (!handle || sourceFileName.isEmpty()) return QString();
-    QString found;
-    std::function<void(const QJsonObject &)> walk = [&](const QJsonObject &obj) {
-        if (!found.isEmpty()) return;
-        if (obj.value(QLatin1String("type")).toString() == QLatin1String("mesh")) {
-            // A mesh node names its model by the Mesh ROW's guid (the importer
-            // rewrites it so); a built-in primitive names a ':/' resource and a
-            // pre-store blob a path — neither is a row, and neither is looked up.
-            const QString mesh = obj.value(QLatin1String("mesh")).toString();
-            if (!mesh.isEmpty() && !mesh.startsWith(QLatin1Char(':'))
-                && !mesh.contains(QLatin1Char('/')) && !mesh.contains(QLatin1Char('\\'))) {
-                const QString rowName = handle->fetchAsset(mesh).name;
-                if (!rowName.isEmpty()
-                    && QFileInfo(rowName).fileName().compare(sourceFileName, Qt::CaseInsensitive) == 0)
-                    found = mesh;
-            }
-        }
-        for (const auto &child : obj.value(QLatin1String("children")).toArray())
-            walk(child.toObject());
-    };
-    walk(nodeObj);
-    return found;
+    if (assetGuid.isEmpty()) return QStringList();
+    const QString path = resolveAssetPath(assetGuid);
+    if (path.isEmpty() || !QFileInfo::exists(path)) return QStringList();
+    extractAssetsFromAssimpScene(path, assetGuid);
+    return animations.value(assetCacheKey(path, assetGuid)).keys();
 }
 
-iris::SkeletalAnimationPtr SceneReader::getSkeletalAnimation(QString filePath, QString animName,
-                                                             const QString &assetGuid,
-                                                             const QString &ownModelGuid)
+iris::SkeletalAnimationPtr SceneReader::getSkeletalAnimation(const QString &assetGuid,
+                                                             const QString &animName,
+                                                             const QString &nodeName)
 {
-    auto relPath = filePath;
-    // The GUID FIRST when the file carries one (F5). It is the only reference
-    // that survives the store moving: a CAS object's file name is its sha256,
-    // so neither the persisted relative path nor the name-based re-home below
-    // can find it again, and the clip came back null — a character at bind
-    // pose with nothing in the log.
-    QString resolvedByGuid;
-    if (!assetGuid.isEmpty()) resolvedByGuid = resolveAssetPath(assetGuid);
-    if (!resolvedByGuid.isEmpty() && QFileInfo::exists(resolvedByGuid)) {
-        extractAssetsFromAssimpScene(resolvedByGuid, assetGuid);
-        auto byGuid = animations[assetCacheKey(resolvedByGuid, assetGuid)];
-        for (auto anim : byGuid) anim->source = relPath;
-        if (byGuid.contains(animName)) return byGuid[animName];
-        if (byGuid.size() == 1) return byGuid.first();
+    // THE GUID IS THE REFERENCE (CLIP-REF-1). There is no path route: a
+    // persisted path pointed at whatever store the scene was last saved
+    // against (relative to the PROJECT folder, which need not live in the data
+    // root), so after a project switch or a moved data root it named a file
+    // the bake store refuses, and the clip came back null with the issue bar
+    // blaming a "missing model". The own-model route (the clip's subtree's
+    // mesh rows matched by file name) went with it: a model's own clips carry
+    // the model's guid since the import records it.
+    const QString assetName = (handle && !assetGuid.isEmpty())
+                                  ? handle->fetchAsset(assetGuid).name : QString();
+    const auto miss = [&](const QString &why) {
+        missingClipRefs.append({ animName, assetGuid, assetName, nodeName, why });
+        irisLog(QStringLiteral("scene reader: the clip '%1' on '%2' (asset %3) is missing: %4 — "
+                               "the node keeps its bind pose")
+                    .arg(animName, nodeName,
+                         assetGuid.isEmpty() ? QStringLiteral("none") : assetGuid, why));
+        return iris::SkeletalAnimationPtr();
+    };
+
+    if (assetGuid.isEmpty())
+        return miss(QStringLiteral("the scene names no asset for it"));
+    const QString path = resolveAssetPath(assetGuid);
+    if (path.isEmpty() || !QFileInfo::exists(path))
+        return miss(assetName.isEmpty()
+                        ? QStringLiteral("its asset is not in the asset store")
+                        : QStringLiteral("the asset's stored file is not in the asset store"));
+
+    extractAssetsFromAssimpScene(path, assetGuid);
+    const auto clips = animations.value(assetCacheKey(path, assetGuid));
+    if (clips.isEmpty()) {
+        // ONE CAUSE, ONE ISSUE: a model with no bake is already `model.missing`
+        // (the extraction above recorded it); its own clips say nothing more.
+        if (missingModelPaths.contains(path)) return iris::SkeletalAnimationPtr();
+        return miss(QStringLiteral("the asset has no current bake holding its clips"));
     }
-    // The persisted relative source, for a clip saved without a guid (a clip
-    // from a loose file on disk, or a model's own clip in an import blob).
-    filePath = this->getAbsolutePath(filePath);
-    // ...and when that file is gone, the model the clip's OWN subtree was
-    // built from, by the guid its mesh nodes carry (ownModelGuidFor). This
-    // used to be a catalog-wide by-NAME query for any row in the open project
-    // called like the clip's file (Database::fetchAssetGUIDByName, deleted by
-    // plan item 15c): it found the right row only when the model had been
-    // imported into THIS project, and the wrong one whenever two assets
-    // shared a file name.
-    if ((filePath.isEmpty() || !QFileInfo::exists(filePath)) && !ownModelGuid.isEmpty()) {
-        const QString resolved = resolveAssetPath(ownModelGuid);
-        if (!resolved.isEmpty()) filePath = resolved;
-    }
-    extractAssetsFromAssimpScene(filePath, ownModelGuid);
 
-    auto animMap = animations[assetCacheKey(filePath, ownModelGuid)];
+    // THE NAME IS PART OF THE REFERENCE: there is no "take the only clip"
+    // guess (forward only — the shipped samples carry their bakes' real names).
+    if (!clips.contains(animName))
+        return miss(QStringLiteral("the asset holds no clip of that name (it holds: %1)")
+                        .arg(QStringList(clips.keys()).join(QStringLiteral(", "))));
+    iris::SkeletalAnimationPtr found = clips.value(animName);
 
-    //reset relative paths for animations since they have the absolute path
-    for(auto anim : animMap)
-        anim->source = relPath;
-
-    if (animMap.contains(animName)) return animMap[animName];
-
-    // Name miss with exactly one clip in the source: take it. Heals scenes
-    // saved before clip names were fixed (extraction used to collapse a clip
-    // named after its first channel to "", a name that no longer exists in
-    // the re-extracted map). With several clips there is no safe guess —
-    // warn instead of silently dropping the animation.
-    if (animMap.size() == 1) return animMap.first();
-    if (!animMap.isEmpty())
-        qWarning() << "getSkeletalAnimation: no clip named" << animName
-                   << "in" << relPath << "- clips:" << animMap.keys();
-    else
-        // Nothing resolved at all — the guid, the persisted path and the
-        // clip's own model all missed. Say so: the character is at bind pose
-        // and this is the only trace of why (15c review #3).
-        qWarning() << "getSkeletalAnimation: clip" << animName << "from" << relPath
-                   << "could not be resolved (guid" << assetGuid << "/ own model" << ownModelGuid
-                   << ") — the node keeps its bind pose";
-
-    return iris::SkeletalAnimationPtr();
+    found = iris::SkeletalAnimation::referencedAs(found, assetGuid);
+    found->source = path;
+    return found;
 }

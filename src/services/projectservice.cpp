@@ -296,6 +296,7 @@ iris::ScenePtr ProjectService::readProjectScene(EditorData **editorData,
     }
     iris::ScenePtr scene = reader->readScene(project->getProjectFolder(), blob, editorData);
     mMissingModels = reader->missingModels();
+    mMissingClips = reader->missingClips();
     mCascadeRowsDropped = reader->cascadeRowsDropped();
     return scene;
 }

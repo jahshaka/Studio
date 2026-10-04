@@ -293,7 +293,7 @@ int main(int argc, char **argv)
         CHECK(x > 4.9f, "child samples the ORIGINAL scene time, not the parent's looped time (S5)");
     }
 
-    // ================= 5. skeletal source persists RELATIVE =================
+    // ================= 5. a skeletal clip persists by REFERENCE (CLIP-REF-1) =================
     {
         QTemporaryDir tmp;
         const QString model = QDir(tmp.path()).filePath("anim.glb");
@@ -316,8 +316,11 @@ int main(int argc, char **argv)
             auto animated = findAnimated(node);
             CHECK(!animated.isNull(), "an imported node carries the skeletal animation");
             if (animated) {
-                CHECK(QFileInfo(animated->getAnimation()->getSkeletalAnimation()->source).isAbsolute(),
-                      "in-memory source is absolute at import time (precondition)");
+                // The reference is the asset guid the clip carries (the
+                // importer binds a model's own clips to its Mesh row); the
+                // writer writes it and the clip name, and NO path.
+                animated->getAnimation()->getSkeletalAnimation()->assetGuid =
+                    QStringLiteral("{clip-ref-1-test-guid}");
                 TestSceneWriter writer;
                 writer.setAssetPath(QDir(tmp.path()).filePath("scene.jah"));
                 QJsonObject obj;
@@ -325,11 +328,13 @@ int main(int argc, char **argv)
                 const QJsonArray anims = obj["animations"].toArray();
                 CHECK(!anims.isEmpty(), "animation serialized");
                 if (!anims.isEmpty()) {
-                    const QString src = anims.first().toObject()["skeletalAnimation"]
-                                            .toObject()["source"].toString();
-                    std::printf("    persisted source: '%s'\n", src.toStdString().c_str());
-                    CHECK(!src.isEmpty() && !QFileInfo(src).isAbsolute(),
-                          "persisted skeletal source is RELATIVE to the project dir");
+                    const QJsonObject skel = anims.first().toObject()["skeletalAnimation"].toObject();
+                    std::printf("    persisted clip ref: guid '%s' name '%s'\n",
+                                skel.value("guid").toString().toStdString().c_str(),
+                                skel.value("name").toString().toStdString().c_str());
+                    CHECK(skel.value("guid").toString() == QLatin1String("{clip-ref-1-test-guid}"),
+                          "the clip persists by the asset guid it carries");
+                    CHECK(!skel.contains("source"), "no path is persisted as the clip's reference");
                 }
             }
         }

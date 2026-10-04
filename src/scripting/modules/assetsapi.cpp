@@ -175,6 +175,12 @@ QVector<VerbInfo> AssetsApi::verbs() const
           "Nothing reads a card yet: the capture is phase 2 and the hit lighting is phase 4. This verb is how the list they will spend is inspected. "
           "An EMPTY list is the honest answer for: a model with no bake yet (assets.bakeAll builds them), a SKINNED mesh (a card baked against a bind pose is a lie — the same limit Epic states), a mesh with no surface area, and an asset imported with `maxCards: 0`. The budget is `maxCards` on the import record (assets.importSettings / assets.import / assets.reimport), 12 by default.",
           Needs::Document },
+        { "clips", "assets.clips(guid) -> [name]",
+          "The skeletal clip NAMES the asset's current bake holds (a rigged model's own clips, or an "
+          "animation file's) — exactly the names a scene's clip reference {guid, name} to it may use; "
+          "the reader takes a clip by that name and nothing else (CLIP-REF-1). Resolved through the "
+          "library source. An EMPTY list: no such asset, no stored bytes, no current bake, or no clips.",
+          Needs::Document },
         { "duplicate", "assets.duplicate(guid) -> guid",
           "THE PROJECT TRAY'S Duplicate (TRAY-DUPLICATE-1, the owner 2026-09-28): a copy of one of "
           "the OPEN PROJECT's materials — the bundle: its definition as this project renders it, "
@@ -894,6 +900,25 @@ QVariantList AssetsApi::pins(const QString &guid)
                                 { "name", pin.projectName },
                                 { "live", pin.live } });
     return out;
+}
+
+QStringList AssetsApi::clips(const QString &guid)
+{
+    if (!host.db) {
+        fail("assets: not available in this session");
+        return QStringList();
+    }
+    if (host.db->fetchAsset(guid).guid.isEmpty()) {
+        fail(QStringLiteral("assets.clips: no asset with guid '%1'").arg(guid));
+        return QStringList();
+    }
+    // The SCENE READER's own extraction, so the names are the ones a clip
+    // reference resolves against — one rule, not a second copy of it.
+    SceneReader reader;
+    reader.setDatabaseHandle(host.db);
+    reader.setProject(host.project);
+    reader.setLibrarySource();
+    return reader.clipNames(guid);
 }
 
 QString AssetsApi::duplicate(const QString &guid)
