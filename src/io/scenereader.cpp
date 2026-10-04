@@ -1658,10 +1658,15 @@ iris::ParticleSystemNodePtr SceneReader::createParticleSystem(QJsonObject& nodeO
         particleNode->scaleKeys.append(k);
     }
 
-    if (handle) {
-        const QString texturePath = resolveAssetPath(nodeObj["texture"].toString());
-        if (!texturePath.isEmpty())
-            particleNode->setTexture(iris::Texture2D::load(texturePath));
+    // THE IMAGE BY ITS ASSET (TEX-REF-1): the guid is bound whether or not the
+    // store resolves it — a miss keeps the reference (the next save writes it
+    // back, and SceneIssues says texture.missing), never a path.
+    {
+        const QString textureGuid = nodeObj["texture"].toString();
+        const QString texturePath = handle ? resolveAssetPath(textureGuid) : QString();
+        particleNode->setTexture(texturePath.isEmpty() ? iris::Texture2DPtr()
+                                                       : iris::Texture2D::load(texturePath),
+                                 textureGuid);
     }
 	particleNode->setVisible(nodeObj["visible"].toBool(particleNode->isVisible()));
 
@@ -1735,19 +1740,15 @@ iris::MaterialPtr SceneReader::readPbrMaterial(const QJsonObject& matObj)
 			mat->setValue(prop->name, val.toBool());
 			break;
 		case iris::PropertyType::Texture: {
-			// SceneWriter stores a texture as the asset GUID when saving against
-			// the project database (relative == true), or as a scene-relative
-			// path otherwise. Resolve the GUID the way MaterialReader::parseMaterial
-			// does (asset name joined onto the project folder / asset directory),
-			// and fall back to treating the value as a path relative to the scene
-			// file. An empty result clears the map.
+			// A TEXTURE IS ITS ASSET GUID (TEX-REF-1). The row binds the bytes
+			// the store resolves it to AND the guid itself, so the guid travels
+			// to the next save unchanged. A guid the store cannot resolve stays
+			// bound with no file (SceneIssues raises texture.missing for it);
+			// there is no path arm — the one that turned a miss into
+			// getAbsolutePath(guid) saved a meaningless path on the next write.
 			const QString stored = val.toString();
-			QString path;
-			if (!stored.isEmpty()) {
-				path = resolveAssetPath(stored);
-				if (path.isEmpty()) path = getAbsolutePath(stored);
-			}
-			mat->setValue(prop->name, path);
+			mat->setValue(prop->name, iris::Material::textureRef(
+				stored.isEmpty() ? QString() : resolveAssetPath(stored), stored));
 			break;
 		}
 		default:

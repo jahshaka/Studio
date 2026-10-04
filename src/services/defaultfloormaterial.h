@@ -109,7 +109,11 @@ inline QString shippedTilePath()
 /// surface (the Assets module's preview scene, the editor's Ground plane
 /// widget) wears exactly the floor's material without linking the pinning
 /// half below.
-inline iris::PbrMaterialPtr createUnpinned(const QString &tilePath = shippedTilePath())
+/// `tileGuid` is the tile's asset (the pinned row) — the identity the map row
+/// carries to a save (TEX-REF-1); empty for the shipped file a database-free
+/// surface wears, which nothing saves.
+inline iris::PbrMaterialPtr createUnpinned(const QString &tilePath = shippedTilePath(),
+                                           const QString &tileGuid = QString())
 {
     // A PbrMaterial (HLMS_ADOPTION P4b). The workflow/ior/specular trio is the
     // floor's ZERO SPECULAR, and the notes above state why it takes two values
@@ -119,7 +123,7 @@ inline iris::PbrMaterialPtr createUnpinned(const QString &tilePath = shippedTile
     // MULTIPLIES the base-colour map; the constructor's default is a physical
     // grey (RENDER_AUDIT I-1), which would dim the checker by 0.58.
     material->setValue("baseColor", QColor(255, 255, 255));
-    material->setValue("baseColorMap", tilePath);
+    material->setValue("baseColorMap", iris::Material::textureRef(tilePath, tileGuid));
     material->setValue("textureScale", kTextureScale);
     material->setValue("roughness", kRoughness);
     material->setValue("metallic", kMetallic);

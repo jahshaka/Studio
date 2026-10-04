@@ -59,7 +59,8 @@ iris::PbrMaterialPtr fromTexture(const QString &textureGuid, Database *db,
     // UNTINTED, stated (DRAG-1): baseColor multiplies the map, and an image
     // shown on a plane must be the image. See defaultfloormaterial for the same note.
     material->setValue(QStringLiteral("baseColor"), QColor(255, 255, 255));
-    material->setValue(QStringLiteral("baseColorMap"), path);
+    // The row binds the file AND the image asset it is (TEX-REF-1).
+    material->setValue(QStringLiteral("baseColorMap"), iris::Material::textureRef(path, textureGuid));
     material->setValue(QStringLiteral("roughness"), 1.0f);
     material->setValue(QStringLiteral("metallic"), 0.0f);
     if (hasAlpha) {
@@ -94,14 +95,11 @@ QString createMaterialAsset(const QString &textureGuid, Database *db,
     if (!material)
         return failWith(QStringLiteral("'%1' resolves to no readable image").arg(record.name));
 
-    // Serialize like MaterialImporter: writeSceneNodeMaterial, then the
-    // texture reference becomes the ASSET GUID (readers resolve pin-first
-    // through the CAS — no path ever reaches the stored definition).
+    // Serialize like MaterialImporter: the writer persists the asset guid the
+    // map row carries (readers resolve it pin-first through the CAS — no path
+    // ever reaches the stored definition).
     QJsonObject blob;
-    SceneWriter::writeSceneNodeMaterial(blob, material, /*relative=*/false);
-    QJsonObject values = blob.value(QStringLiteral("values")).toObject();
-    values[QStringLiteral("baseColorMap")] = textureGuid;
-    blob[QStringLiteral("values")] = values;
+    SceneWriter::writeSceneNodeMaterial(blob, material);
 
     const QString matName = QFileInfo(record.name).completeBaseName();
     blob[QStringLiteral("name")] = matName;

@@ -39,18 +39,16 @@ For more information see the LICENSE file
 void AssetHelper::updateNodeMaterial(iris::SceneNodePtr &node, QJsonObject definition,
                                      Database *db)
 {
-    // Texture values in stored definitions are member asset guids; every
-    // branch below must resolve them to store files before setValue() hands
-    // them to Texture2D::load (same CAS resolution as
-    // MaterialReader::resolveTextureGuid). Old blobs that stored plain paths
-    // still work: an unresolvable value falls back to itself.
+    // Texture values in stored definitions are member asset GUIDS; each row
+    // binds the store file the guid resolves to AND the guid (TEX-REF-1), so
+    // the identity reaches the next save. A guid that does not resolve stays
+    // bound with no file (texture.missing); there is no path arm.
     Q_UNUSED(db);
-    const auto resolveTexture = [&](const QString &stored, const QString &slot) -> QString {
-        Q_UNUSED(slot);
-        if (stored.isEmpty()) return stored;
+    const auto textureRef = [](const QString &stored) -> QVariant {
+        if (stored.isEmpty()) return iris::Material::textureRef(QString(), QString());
         QSqlDatabase conn = QSqlDatabase::database();
-        const QString path = AssetCas::resolveSource(conn, AssetStorePaths::root(), stored);
-        return path.isEmpty() ? stored : path;
+        return iris::Material::textureRef(
+            AssetCas::resolveSource(conn, AssetStorePaths::root(), stored), stored);
     };
 
     if (node->getSceneNodeType() == iris::SceneNodeType::Mesh) {
@@ -75,9 +73,7 @@ void AssetHelper::updateNodeMaterial(iris::SceneNodePtr &node, QJsonObject defin
                 pbr->setValue(property->name,
                               QVariant::fromValue(values.value(property->name).toVariant().value<QColor>()));
             else if (property->type == iris::PropertyType::Texture)
-                pbr->setValue(property->name,
-                              resolveTexture(values.value(property->name).toString(),
-                                             property->name));
+                pbr->setValue(property->name, textureRef(values.value(property->name).toString()));
             else
                 pbr->setValue(property->name, values.value(property->name).toVariant());
         }

@@ -373,7 +373,7 @@ int main(int argc, char **argv)
         linkedNode->avatarLink.name = "Jennifer";
 
         QJsonObject written;
-        SceneWriter::writeSceneNode(written, linkedNode, false);
+        SceneWriter::writeSceneNode(written, linkedNode);
         const QJsonObject block = written.value("avatar").toObject();
         CHECK(block.value("asset").toString() == avatarGuid, "T10: the link's asset is written");
         CHECK(block.value("version").toString() == "abc123", "T10: ... and its version");
@@ -385,7 +385,7 @@ int main(int argc, char **argv)
         scratch->setName("scratch");
         scratch->setAvatarComponent(iris::AvatarMovementPtr(new iris::AvatarMovement()));
         QJsonObject scratchObj;
-        SceneWriter::writeSceneNode(scratchObj, scratch, false);
+        SceneWriter::writeSceneNode(scratchObj, scratch);
         const QJsonObject scratchBlock = scratchObj.value("avatar").toObject();
         CHECK(!scratchBlock.contains("asset") && !scratchBlock.contains("version"),
               "T10: an UNLINKED scratch avatar writes no link");

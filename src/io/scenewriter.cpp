@@ -52,22 +52,8 @@ For more information see the LICENSE file
 #include "io/assetiobase.h"
 #include "data/constants.h"
 #include "data/database/database.h"
-#include "data/project.h"
-#include "services/assetcas.h"
-#include "services/assetstorepaths.h"
-#include <QSqlDatabase>
 #include "viewport/editordata.h"
 
-Project *SceneWriter::projectHandle = nullptr;
-QDir SceneWriter::staticRelativeBase;
-
-QString SceneWriter::relativeToStaticBase(QString filename)
-{
-    // Same contract as AssetIOBase::getRelativePath: resources pass through.
-    if (filename.trimmed().startsWith(":") || filename.trimmed().startsWith("qrc:"))
-        return filename;
-    return staticRelativeBase.relativeFilePath(filename);
-}
 
 // DELETED: writeScene(QString filePath, ...) — the only place a scene was ever
 // written to a FILE, and it had no callers (STABILITY_PROGRAM_SPEC.md Lane 2).
@@ -84,8 +70,6 @@ QByteArray SceneWriter::getSceneObject(QString projectPath,
                                        EditorData *editorData)
 {
     dir = projectPath;
-    // Publish it for the static writer family (see scenewriter.h).
-    staticRelativeBase = dir;
     QJsonObject projectObj;
     projectObj["version"] = Constants::CONTENT_VERSION;
     // THE FORMAT HEADER (src/io/sceneformat.h). `version` above is the APP's
@@ -348,12 +332,12 @@ void SceneWriter::writeEditorData(QJsonObject& projectObj, EditorData* editorDat
     projectObj["editor"] = editorObj;
 }
 
-SceneFragment SceneWriter::captureFragment(const iris::SceneNodePtr &node, bool relative)
+SceneFragment SceneWriter::captureFragment(const iris::SceneNodePtr &node)
 {
     SceneFragment fragment;
     if (!node) return fragment;
 
-    writeSceneNode(fragment.node, node, relative);
+    writeSceneNode(fragment.node, node);
 
     // The ANCHOR. A parent is named by GUID and not by pointer for the same
     // reason a socket owner is: it survives the node objects being rebuilt, a
@@ -381,7 +365,7 @@ SceneFragment SceneWriter::captureFragment(const iris::SceneNodePtr &node, bool 
     return fragment;
 }
 
-void SceneWriter::writeSceneNode(QJsonObject& sceneNodeObj, iris::SceneNodePtr sceneNode, bool relative)
+void SceneWriter::writeSceneNode(QJsonObject& sceneNodeObj, iris::SceneNodePtr sceneNode)
 {
 	sceneNodeObj["guid"] = sceneNode->getGUID();
     sceneNodeObj["name"] = sceneNode->getName();
@@ -539,7 +523,7 @@ void SceneWriter::writeSceneNode(QJsonObject& sceneNodeObj, iris::SceneNodePtr s
     //todo: write data specific to node type
     switch (sceneNode->sceneNodeType) {
         case iris::SceneNodeType::Mesh:
-            writeMeshData(sceneNodeObj, sceneNode.staticCast<iris::MeshNode>(), relative);
+            writeMeshData(sceneNodeObj, sceneNode.staticCast<iris::MeshNode>());
         break;
         case iris::SceneNodeType::Light:
             writeLightData(sceneNodeObj, sceneNode.staticCast<iris::LightNode>());
@@ -600,7 +584,7 @@ void SceneWriter::writeSceneNode(QJsonObject& sceneNodeObj, iris::SceneNodePtr s
         iris::SceneNode *child = sceneNode->childAt(i);
         if (!child) continue;
         QJsonObject childNodeObj;
-        writeSceneNode(childNodeObj, child->sharedFromThis(), relative);
+        writeSceneNode(childNodeObj, child->sharedFromThis());
         childrenArray.append(childNodeObj);
     }
 
@@ -698,7 +682,7 @@ void SceneWriter::writeAnimationData(QJsonObject& sceneNodeObj,iris::SceneNodePt
     sceneNodeObj["animations"] = animListObj;
 }
 
-void SceneWriter::writeMeshData(QJsonObject& sceneNodeObject, iris::MeshNodePtr meshNode, bool relative)
+void SceneWriter::writeMeshData(QJsonObject& sceneNodeObject, iris::MeshNodePtr meshNode)
 {
     // It's a safe assumption that the filename is safe to use here in queries if need be
 	sceneNodeObject["mesh"]          = meshNode->meshPath;
@@ -753,7 +737,7 @@ void SceneWriter::writeMeshData(QJsonObject& sceneNodeObject, iris::MeshNodePtr 
 
     // todo: check if material actually exists
     QJsonObject matObj;
-    writeSceneNodeMaterial(matObj, meshNode->getMaterial(), relative);
+    writeSceneNodeMaterial(matObj, meshNode->getMaterial());
 	sceneNodeObject["material"] = matObj;
 }
 
@@ -769,11 +753,10 @@ void SceneWriter::writeParticleData(QJsonObject& sceneNodeObject, iris::Particle
     sceneNodeObject["blendMode"]            = node->useAdditive;
     sceneNodeObject["lifeLength"]           = node->lifeLength;
     sceneNodeObject["speed"]                = node->speed;
-    // An emitter can have no texture (cleared in the property panel): write an
-    // empty guid instead of dereferencing null (audit defect #6).
-    sceneNodeObject["texture"]              = node->texture
-        ? assetGuidForTexturePath(node->texture->getSource())
-        : QString();
+    // THE IMAGE'S ASSET, as the node carries it (TEX-REF-1) — never a guid
+    // derived back from the loaded file's path. An emitter with no image, or
+    // one nobody named (the shipped default with no project open), writes "".
+    sceneNodeObject["texture"]              = node->textureGuid;
 
     // ---- ParticleFX2 keys (PARTICLES_FX2_SPEC §5) --------------------------
     // Purely ADDITIVE to the ten keys above, and the reader defaults every one
@@ -835,34 +818,7 @@ void SceneWriter::writeParticleData(QJsonObject& sceneNodeObject, iris::Particle
     sceneNodeObject["scaleKeys"] = scaleKeys;
 }
 
-QString SceneWriter::assetGuidForTexturePath(const QString &path,
-                                            AssetCas::GuidPreference prefer)
-{
-    if (path.isEmpty()) return QString();
-    // CAS first: a resolved path is <store>/objects/<xx>/<sha256>.<ext>, whose
-    // file name carries no trace of the display name the catalog knows it by.
-    // Matching on that name (what this code did until 2026-09-03) returned
-    // nothing, so every save wrote an empty guid and the next open rendered the
-    // Particles sample's fire as untextured white billboards and its meshes
-    // untextured grey. The oid is the join key that actually exists.
-    //
-    // THE ONLY ANSWER (plan item 15c). There used to be a second one: a
-    // by-NAME catalog lookup within the project (Database::fetchAssetGUIDByName)
-    // for files sitting in a project folder under their own name. Its last
-    // producers — the default ground's Tile.png copy, the default particle
-    // image and the material/sky presets — all go through the import pipeline
-    // and a pin now, so every texture a scene can hold is either a store
-    // object (answered here) or a loose file with no guid at all (the material
-    // writer persists that by relative path). Nothing is left for a name to
-    // find — and a name was never an identity: two different files called
-    // "diffuse.png" were one asset to it.
-    if (!projectHandle || projectHandle->getProjectGuid().isEmpty()) return QString();
-    return AssetCas::guidForStorePath(QSqlDatabase::database(), AssetStorePaths::root(), path,
-                                      projectHandle->getProjectGuid(), prefer);
-}
-
-
-void SceneWriter::writeSceneNodeMaterial(QJsonObject& matObj, iris::MaterialPtr mat, bool relative)
+void SceneWriter::writeSceneNodeMaterial(QJsonObject& matObj, iris::MaterialPtr mat)
 {
 	if (!mat) return;
 
@@ -917,15 +873,15 @@ void SceneWriter::writeSceneNodeMaterial(QJsonObject& matObj, iris::MaterialPtr 
 				valuesObj[prop->name] = QString();
 				continue;
 			}
-			auto id = relative
-				? assetGuidForTexturePath(prop->getValue().toString())
-				: relativeToStaticBase(prop->getValue().toString());
-			// A texture that is not a database asset (no GUID) would otherwise be
-			// written as an empty string and lost; fall back to a relative path,
-			// which the reader also resolves.
-			if (relative && id.isEmpty() && !prop->getValue().toString().isEmpty())
-				id = relativeToStaticBase(prop->getValue().toString());
-			valuesObj[prop->name] = id;
+			// THE ROW'S ASSET, AS THE ROW CARRIES IT (TEX-REF-1) — the guid a
+			// read, a pick, a verb or an import bound beside the path, and
+			// nothing else. It is NEVER derived back from the path (the
+			// derivation lost the reference the moment a guid failed to resolve
+			// at read: the reader fell back to a path and this wrote that path
+			// out, relative and meaningless), and there is no path arm: a file
+			// nobody named has no identity a scene can keep, and is written as
+			// absent.
+			valuesObj[prop->name] = mat->textureGuid(prop->name);
         }
 
 		if (prop->type == iris::PropertyType::Vec2) {

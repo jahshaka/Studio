@@ -31,6 +31,7 @@ For more information see the LICENSE file
 #include "io/materialpresetreader.h"
 #include "ui/ishellview.h"
 #include "services/assetcas.h"
+#include "services/assetservice.h"
 #include "services/assetstorepaths.h"
 #include "services/imagematerial.h"
 #include "services/livetextures.h"
@@ -1292,7 +1293,7 @@ QVector<VerbInfo> MaterialApi::verbs() const
           "its mind.",
           Needs::Document },
         { "set", "material.set(nodeId, {baseColor, roughness, metallic, baseColorMap, textureScale, ...}) -> bool",
-          "Sets material properties on a mesh node (PBR keys; *Map keys take texture paths or asset guids). Undoable per property. "
+          "Sets material properties on a mesh node (PBR keys; *Map keys take a texture ASSET guid, a live texture, or an image FILE — a file is imported into the library first, exactly as assets.importFile would, and bound by the guid it gets: a map row names an asset, and a saved scene stores that guid and never a path). Undoable per property. "
           "A texture ASSET guid on a map key pins that image into the open project as a binding "
           "(the scene uses it; no companion material is minted) and records the node -> texture "
           "dependency the material panel's texture row records — so it is a tile in the editor's "
@@ -1313,7 +1314,8 @@ QVector<VerbInfo> MaterialApi::verbs() const
           "that renders through a GENERATED SHADER PIECE (HLMS_ADOPTION P5) also reports "
           "`customPiecePixel` / `customPieceVertex` — read-only paths into the per-user piece "
           "cache, and the only way to tell from outside that the surface is live rather than "
-          "baked.",
+          "baked. `textureAssets` maps each map row to the texture ASSET guid it names — what a "
+          "saved scene stores for it (a map value is the file this session renders from).",
           Needs::Document },
         { "properties", "material.properties(nodeId) -> {class, rows:[{name, displayName, type, value, min?, max?}], writableKeys:[…]}",
           "What this node's material can be told, without guessing. 'class' is PbrMaterial for "
@@ -1558,19 +1560,38 @@ bool MaterialApi::set(const QString &nodeId, const QVariantMap &values)
                         "frame instead of following its generation"));
                 newValue = LiveTextureCatalog::refFor(ref);
             }
-            else if (!ref.isEmpty() && !QFileInfo::exists(ref)) {
-                if (!host.db || !host.isProjectOpen())
-                    return fail(QStringLiteral("material.set: '%1' is not a file and no project is open to resolve it as an asset").arg(ref));
-                const auto record = host.db->fetchAsset(ref);
+            else if (!ref.isEmpty()) {
+                // A MAP ROW NAMES AN ASSET (TEX-REF-1): the row carries the
+                // guid to the next save, so a scene never stores a path. A FILE
+                // given here is therefore IMPORTED first — the one pipeline,
+                // as assets.importFile would (it lands in the library as the
+                // user's own image) — and bound by the guid it gets.
+                if (!host.db || !host.services || !host.services->assets)
+                    return fail(QStringLiteral("material.set: no library in this session to "
+                                               "hold the texture '%1'").arg(ref));
+                QString guid = ref;
+                if (QFileInfo(ref).isFile()) {
+                    const auto imported = host.services->assets->importFile(
+                        ref, -1, static_cast<int>(ModelTypes::Texture));
+                    if (imported.objectGuid.isEmpty())
+                        return fail(QStringLiteral("material.set: importing the texture '%1' "
+                                                   "failed: %2").arg(ref, imported.error));
+                    guid = imported.objectGuid;
+                }
+                const auto record = host.db->fetchAsset(guid);
                 if (record.guid.isEmpty())
                     return fail(QStringLiteral("material.set: no texture file or asset '%1'").arg(ref));
-                // The pinned bytes, else the library source (resolvePinned
-                // falls back itself). No projectFolder + row-name join after
-                // it (plan item 15c): nothing puts asset files there.
-                newValue = AssetCas::resolvePinned(QSqlDatabase::database(), AssetStorePaths::root(),
-                                                   host.project->getProjectGuid(), ref);
-                if (record.type == static_cast<int>(ModelTypes::Texture) && !boundTextures.contains(ref))
-                    boundTextures << ref;
+                // The pinned bytes in a project (resolvePinned falls back to the
+                // library source itself), the library source otherwise.
+                QSqlDatabase conn = QSqlDatabase::database();
+                const QString path = host.isProjectOpen()
+                    ? AssetCas::resolvePinned(conn, AssetStorePaths::root(),
+                                              host.project->getProjectGuid(), guid)
+                    : AssetCas::resolveSource(conn, AssetStorePaths::root(), guid);
+                newValue = iris::Material::textureRef(path, guid);
+                if (host.isProjectOpen() && record.type == static_cast<int>(ModelTypes::Texture)
+                    && !boundTextures.contains(guid))
+                    boundTextures << guid;
             }
         }
 
@@ -1581,7 +1602,10 @@ bool MaterialApi::set(const QString &nodeId, const QVariantMap &values)
         bool known = false;
         for (auto prop : props) {
             if (prop->name != key) continue;
-            oldValue = prop->getValue(); known = true;
+            // A map row's undo restores its file AND its asset (TEX-REF-1).
+            oldValue = prop->type == iris::PropertyType::Texture ? material->textureRefOf(key)
+                                                                 : prop->getValue();
+            known = true;
             // ENUM ROWS ACCEPT THEIR OWN VOCABULARY, not just the index.
             // ListProperty::setValue is `value.toInt()`, so a script that wrote
             // the label — `{workflow: "Specular"}`, `{alphaMode: "Glass"}` —
@@ -1822,6 +1846,15 @@ QVariantMap MaterialApi::get(const QString &nodeId)
         if (!pbr->customPiecePixel.isEmpty()) out["customPiecePixel"] = pbr->customPiecePixel;
         if (!pbr->customPieceVertex.isEmpty()) out["customPieceVertex"] = pbr->customPieceVertex;
     }
+    // WHICH ASSET EACH MAP ROW NAMES (TEX-REF-1), read-only: the guid a saved
+    // scene stores for the row, beside the file the row renders from. A row with
+    // a file and no guid here is a texture a save cannot keep; a guid with no
+    // file is one the store could not resolve (texture.missing).
+    QVariantMap textureAssets;
+    for (auto prop : declaredProperties(material))
+        if (prop->type == iris::PropertyType::Texture && !material->textureGuid(prop->name).isEmpty())
+            textureAssets[prop->name] = material->textureGuid(prop->name);
+    out["textureAssets"] = textureAssets;
     return out;
 }
 

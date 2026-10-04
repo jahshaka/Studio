@@ -791,6 +791,27 @@ set_tests_properties(scripting.e2e.clip_ref PROPERTIES
     LABELS "scripting"
     TIMEOUT 300)   # two processes: 98 s measured on a cold shader cache, 8 s warm
 
+# scripting.e2e.tex_ref — a texture is referenced by its ASSET GUID (TEX-REF-1):
+# a cube's maps bound from a file and by guid, an imported textured model and an
+# emitter's image keep their assets, with zero issues, across save -> switch ->
+# reopen (twice) with the projects outside the data root; again from a COPY of the
+# data root (--data-root); and a THIRD copy with one map's object deleted raises
+# texture.missing and keeps writing the same guid. Three --headless processes.
+set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-tex_ref)
+file(MAKE_DIRECTORY ${_home}/run)
+add_test(NAME scripting.e2e.tex_ref
+         COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/tex_ref.sh
+                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
+                 ${CMAKE_CURRENT_SOURCE_DIR}/fixtures/implane_wide.png
+                 ${CMAKE_CURRENT_SOURCE_DIR}/fixtures/implane_tall.png
+                 ${CMAKE_SOURCE_DIR}/tests/importer/fixtures/textured_pbr_quad.glb
+                 ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_tex_ref.js
+         WORKING_DIRECTORY ${_home}/run)
+set_tests_properties(scripting.e2e.tex_ref PROPERTIES
+    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
+    LABELS "scripting"
+    TIMEOUT 300)   # three processes, like clip_ref's two (98 s cold, 8 s warm)
+
 # scripting.e2e.perf_capture_frames — THE CAPTURE WINDOW IS COUNTED IN FRAMES
 # (PERF-CAPTURE-SCRIPT-1, lane FENCE-1). Two halves like perf.capture_bundle:
 # the app records, the shell half reads frames.jsonl and machine.json, because
@@ -1271,7 +1292,8 @@ jah_pool_arm(doc_assets import_settings ${CMAKE_CURRENT_BINARY_DIR}/e2e_import_s
 jah_no_display(
     scripting.e2e.store_root
     scripting.e2e.shipped_assets
-    scripting.e2e.clip_ref)
+    scripting.e2e.clip_ref
+    scripting.e2e.tex_ref)
 
 # scripting.e2e.glb_textures — the owner's "the glb imports still don't work,
 # they import without the textures" (2026-09-09), as the round trip it really

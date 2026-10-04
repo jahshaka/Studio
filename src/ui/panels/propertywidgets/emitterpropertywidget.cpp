@@ -565,19 +565,19 @@ void EmitterPropertyWidget::onBillboardImageChanged(const QString &path, const Q
     if (!services || !services->sceneEdit) {
         // No service (headless hosts, the panel suites): keep the node's own
         // texture in step, exactly as this row always did.
-        if (!path.isEmpty()) node->setTexture(iris::Texture2D::load(path));
+        if (!path.isEmpty()) node->setTexture(iris::Texture2D::load(path), guid);
         return;
     }
-    const QString before = node->texture ? node->texture->getSource() : QString();
+    // THE UNDO RESTORES THE IMAGE AND THE ASSET IT WAS (TEX-REF-1): the old
+    // texture handle and its guid, as they were — an empty pair clears the
+    // image, which is what the row showed before anything was bound.
+    const iris::Texture2DPtr beforeTexture = node->texture;
+    const QString beforeGuid = node->textureGuid;
     SceneEditService *edit = services->sceneEdit;
     if (!edit->setParticleTexture(node, guid)) return;
     panelundo::pushEdit(services, tr("Particle Image"),
                         [edit, node, guid]() { edit->setParticleTexture(node, guid); },
-                        [edit, node, before]() {
-                            // The old binding is a PATH the picker resolved; an
-                            // empty one clears the image, which is what the row
-                            // showed before anything was bound.
-                            if (before.isEmpty()) { node->texture.clear(); return; }
-                            node->setTexture(iris::Texture2D::load(before));
+                        [node, beforeTexture, beforeGuid]() {
+                            node->setTexture(beforeTexture, beforeGuid);
                         });
 }

@@ -216,8 +216,8 @@ int main(int argc, char **argv)
               "NOTHING is at the content-addressed path — the object either exists whole "
               "or does not exist");
         // A killed process cannot clean up after itself; what it may leave is a
-        // temp, and a temp is inert: guidForStorePath rejects it (its
-        // completeBaseName is not 64 hex chars) and no resolver will ever open it.
+        // temp, and a temp is inert: no catalog row names it, so no resolver
+        // will ever open it.
         for (const QString &leftover : stagingLeftovers(root))
             std::printf("info: staging leftover from the killed run: %s\n",
                         qPrintable(QFileInfo(leftover).fileName()));

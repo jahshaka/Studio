@@ -340,8 +340,8 @@ void PropertyWidget::addTextureProperty(iris::Property *prop)
     const int slot = takeSlot(prop, textureWidget);   // see addFloatProperty
     rowByName.insert(prop->name, textureWidget);
 
-    connect(textureWidget, &TexturePickerWidget::valueChanged, this,
-           [this, slot](QString value)
+    connect(textureWidget, &TexturePickerWidget::valuesChanged, this,
+           [this, slot](QString value, QString assetGuid)
     {
         auto *p = propertyAt(slot);
         if (!p) return;
@@ -350,7 +350,10 @@ void PropertyWidget::addTextureProperty(iris::Property *prop)
         // BEFORE the write - the listener records the old value from the prop.
         if (listener) listener->onPropertyChangeStart(p);
 
-        p->setValue(QVariant(value));
+        // THE ROW TAKES THE FILE AND THE ASSET THE PICKER CHOSE (TEX-REF-1):
+        // a picked or dropped library row carries its guid, and a saved scene
+        // persists that guid, never one recovered from the path.
+        p->setValue(iris::Material::textureRef(value, assetGuid));
 
         if (listener) {
             listener->onPropertyChanged(p);

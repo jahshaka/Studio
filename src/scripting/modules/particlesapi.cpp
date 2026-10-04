@@ -50,7 +50,9 @@ QVector<VerbInfo> ParticlesApi::verbs() const
           "(node.setProperty(id, 'distortion', true)): the particles draw no colour and warp "
           "what is behind them through the world's distortion post effect (world.set "
           "distortion on), reading the emitter's image as the displacement map and each "
-          "particle's colour alpha as its strength — heat haze, shock rings, exhaust.",
+          "particle's colour alpha as its strength — heat haze, shock rings, exhaust. "
+          "`texture` is the image file this session draws, `textureGuid` the image ASSET a saved "
+          "scene stores for it (empty for an image nobody named).",
           Needs::Document },
         { "colourKeys", "particles.colourKeys(id) -> [{time, r, g, b, a}]",
           "The colour-over-life ramp, in ascending time. Empty means no ramp.",
@@ -173,6 +175,8 @@ QVariantMap ParticlesApi::describe(const QString &id)
     m["emitColourStart"] = colorToJs(ps->emitColourStart);
     m["emitColourEnd"] = colorToJs(ps->emitColourEnd);
     m["texture"] = ps->texture ? ps->texture->getSource() : QString();
+    // The IMAGE'S ASSET (TEX-REF-1): what a saved scene stores for `texture`.
+    m["textureGuid"] = ps->textureGuid;
     m["colourKeys"] = colourKeys(id);
     m["scaleKeys"] = scaleKeys(id);
     // ADDENDUM A-4: the four affectors the renderer always had.

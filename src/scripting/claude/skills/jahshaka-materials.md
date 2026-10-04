@@ -51,7 +51,9 @@ material.set(nodeId, {
   metallic: 1.0,          // 0 = dielectric, 1 = metal
 });
 
-// Texture maps: *Map keys take file paths or asset guids
+// Texture maps: *Map keys take texture asset guids or image files — a file is
+// imported into the library first and the map names that asset (a saved scene
+// stores the guid, never a path; material.get(...).textureAssets lists them)
 material.set(nodeId, {
   baseColorMap: "/path/to/albedo.png",
   normalMap: "/path/to/normal.png",

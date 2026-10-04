@@ -71,7 +71,7 @@ public:
     }
 
 
-    /// The texture paths the CURRENT material had when this panel adopted it —
+    /// The texture ASSETS (row -> guid) the CURRENT material had when this panel adopted it —
     /// the "before" side of updateTextureDependency's project bookkeeping.
     /// Public so the blade-reuse contract is assertable: the properties panel
     /// keeps its blades as hidden children and reuses them across selections,
@@ -137,6 +137,9 @@ private:
     void onPropertyChanged(iris::Property*) override;
     void onPropertyChangeStart(iris::Property*) override;
     void onPropertyChangeEnd(iris::Property*) override;
+    /// What an undo entry records for a row: a texture row's {path, guid}
+    /// (iris::Material::textureRefOf), any other row's value.
+    QVariant undoValueOf(iris::Property *prop) const;
 
     // for undo/redo
     QVariant startValue;

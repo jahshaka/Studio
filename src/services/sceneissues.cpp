@@ -18,10 +18,13 @@ For more information see the LICENSE file
 #include <QVector>
 
 #include <algorithm>
+#include <functional>
 
 #include "irisgl/document/assets/livetextures.h"
 #include "irisgl/document/assets/texture2d.h"
 #include "irisgl/document/materials/material.h"
+#include "irisgl/core/properties/property.h"
+#include "irisgl/document/scenegraph/particlesystemnode.h"
 #include "irisgl/document/scenegraph/lightnode.h"
 #include "irisgl/document/scenegraph/meshnode.h"
 #include "irisgl/document/scenegraph/scene.h"
@@ -547,6 +550,18 @@ int SceneIssues::scan(const iris::ScenePtr &scene)
                 if (textureExists(path)) continue;
                 missing << tr("%1 (%2)").arg(textureSlotName(it.key()), QFileInfo(path).fileName());
             }
+            // A ROW THAT NAMES AN ASSET THE STORE COULD NOT RESOLVE (TEX-REF-1):
+            // the reader keeps the guid with no file bound, so the next save
+            // writes the same reference back — and this says so, by the asset
+            // the scene names (there is no file name to show: there is no file).
+            for (iris::Property *prop : material->properties) {
+                if (!prop || prop->type != iris::PropertyType::Texture) continue;
+                const QString guid = material->textureGuid(prop->name);
+                if (guid.isEmpty() || material->textures.value(QStringLiteral("u_") + prop->name))
+                    continue;
+                missing << tr("%1 (asset %2: not in this library's store)")
+                               .arg(textureSlotName(QStringLiteral("u_") + prop->name), guid);
+            }
             if (missing.isEmpty()) continue;
             SceneIssue issue;
             issue.kind = QStringLiteral("texture.missing");
@@ -566,6 +581,33 @@ int SceneIssues::scan(const iris::ScenePtr &scene)
             else raise(issue);
             live << issue.id;
         }
+
+        // AN EMITTER'S IMAGE, the same rule (TEX-REF-1): a billboard image the
+        // scene names by guid and the store could not resolve.
+        std::function<void(const iris::SceneNodePtr &)> emitters =
+            [&](const iris::SceneNodePtr &node) {
+            if (!node) return;
+            if (node->getSceneNodeType() == iris::SceneNodeType::ParticleSystem) {
+                auto *ps = static_cast<iris::ParticleSystemNode *>(node.data());
+                if (!ps->textureGuid.isEmpty() && !ps->texture) {
+                    SceneIssue issue;
+                    issue.kind = QStringLiteral("texture.missing");
+                    issue.node = ps->getGUID();
+                    issue.nodeName = ps->getName();
+                    issue.message = tr("\"%1\" uses a texture file that is missing: Particle "
+                                       "Image (asset %2: not in this library's store).")
+                                        .arg(ps->getName(), ps->textureGuid);
+                    issue.action = tr("Re-import the missing image, or pick another one for the "
+                                      "emitter. Until then its particles draw untextured.");
+                    issue.id = issue.kind + QLatin1Char(':') + issue.node;
+                    if (indexOf(issue.id) >= 0) update(issue.id, issue.message);
+                    else raise(issue);
+                    live << issue.id;
+                }
+            }
+            for (const auto &child : node->children()) emitters(child);
+        };
+        emitters(scene->getRootNode());
     }
 
     // ---- clear what the scene no longer justifies -------------------------

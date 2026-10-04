@@ -17,7 +17,10 @@ For more information see the LICENSE file
 // trace was one engine error string nobody read. The scene-issue scanner now
 // raises `texture.missing:<node>` — one line per object, naming each missing
 // slot and its file, with the action "re-import or re-link" — and clears it
-// when the file comes back.
+// when the file comes back. Since TEX-REF-1 a file handed to material.set is
+// imported, so the file that vanishes here is the STORE OBJECT the row renders
+// from (an external delete, a damaged store) — scripting.e2e.tex_ref covers the
+// other miss, a guid the store cannot resolve at all.
 //
 // Why a harness and not a --script suite: the condition is a file vanishing
 // from disk UNDER a running editor, and no verb deletes a file (none should).
@@ -32,6 +35,7 @@ For more information see the LICENSE file
 #include <QColor>
 #include <QDir>
 #include <QFile>
+#include <QFileInfo>
 #include <QImage>
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -135,8 +139,9 @@ int main(int argc, char **argv)
     mcp.clientName = QStringLiteral("texture-missing-test");
     mcp.initialize();
 
-    // A textured cube (two slots bound to the files above, by path) and a
-    // plain cube whose material binds no file at all.
+    // A textured cube (two slots bound to the files above — material.set
+    // IMPORTS a file it is given and binds the asset, TEX-REF-1) and a plain
+    // cube whose material binds no file at all.
     const QJsonObject built = readJson(mcp, QStringLiteral(
         "(function () {"
         "  project.create('TextureMissing');"
@@ -146,21 +151,42 @@ int main(int argc, char **argv)
         "  var plain = scene.addPrimitive('cube', {position: {x: 1, y: 0.5, z: 0}});"
         "  editor.frame(2);"
         "  return {textured: textured, plain: plain,"
-        "          bound: material.get(textured).baseColorMap};"
+        "          bound: material.get(textured).baseColorMap,"
+        "          boundNormal: material.get(textured).normalMap,"
+        "          assets: material.get(textured).textureAssets};"
         "})()").arg(base, normal)).toObject();
     const QString textured = built.value("textured").toString();
     const QString plain = built.value("plain").toString();
     std::printf("info: the material holds %s\n", qUtf8Printable(built.value("bound").toString()));
     CHECK(!textured.isEmpty() && !plain.isEmpty(), "a textured cube and a plain one");
-    CHECK(built.value("bound").toString() == base,
-          "the material holds the file's own path (what the mirror loads)");
+    // WHAT GOES MISSING NOW is the STORE OBJECT the row renders from: a file
+    // bound by path was imported, so the source files above are no longer what
+    // the scene reads (TEX-REF-1). The suite deletes and restores those objects.
+    const QString storeBase = built.value("bound").toString();
+    const QString storeNormal = built.value("boundNormal").toString();
+    const QString baseName = QFileInfo(storeBase).fileName();
+    const QString normalName = QFileInfo(storeNormal).fileName();
+    std::printf("info: the rows render %s and %s (assets %s)\n", qUtf8Printable(storeBase),
+                qUtf8Printable(storeNormal),
+                QJsonDocument(built.value("assets").toObject()).toJson(QJsonDocument::Compact).constData());
+    CHECK(!storeBase.isEmpty() && storeBase != base && QFileInfo::exists(storeBase) &&
+              !storeNormal.isEmpty() && storeNormal != normal && QFileInfo::exists(storeNormal) &&
+              baseName != normalName,
+          "material.set imported both files: each row renders its own store object");
+    CHECK(built.value("assets").toObject().value("baseColorMap").toString().size() > 10 &&
+              built.value("assets").toObject().value("normalMap").toString().size() > 10,
+          "...and names the asset it is (textureAssets)");
+    const QString backupBase = QDir(dir).absoluteFilePath(QStringLiteral("backup_base.bin"));
+    const QString backupNormal = QDir(dir).absoluteFilePath(QStringLiteral("backup_normal.bin"));
+    CHECK(QFile::copy(storeBase, backupBase) && QFile::copy(storeNormal, backupNormal),
+          "the two store objects are kept aside to put back");
 
     // ---- 1. every file present: no issue --------------------------------------
     QJsonArray live = scanOnce(mcp);
     CHECK(live.isEmpty(), "every texture file present: no texture.missing issue");
 
     // ---- 2. a file deleted on disk: ONE issue, on the textured cube -------------
-    CHECK(QFile::remove(base), "delete the base colour file from disk");
+    CHECK(QFile::remove(storeBase), "delete the base colour's store object from disk");
     const int passes = scansUntil(mcp, 1, 2, &live);
     std::printf("info: raised after %d scan(s)\n", passes);
     CHECK(passes <= 2, "texture.missing is raised within 2 scans");
@@ -171,10 +197,10 @@ int main(int argc, char **argv)
     std::printf("info: message: %s\ninfo: action:  %s\n",
                 qUtf8Printable(issue.value("message").toString()),
                 qUtf8Printable(issue.value("action").toString()));
-    CHECK(issue.value("message").toString().contains(QLatin1String("brick_colour.png")) &&
+    CHECK(issue.value("message").toString().contains(baseName) &&
           issue.value("message").toString().contains(QLatin1String("Base Color")),
           "...the message names the slot and the file");
-    CHECK(!issue.value("message").toString().contains(QLatin1String("brick_normal.png")),
+    CHECK(!issue.value("message").toString().contains(normalName),
           "...and only the file that is missing");
     const QString action = issue.value("action").toString().toLower();
     CHECK(action.contains(QLatin1String("re-import")) && action.contains(QLatin1String("re-link")),
@@ -185,27 +211,27 @@ int main(int argc, char **argv)
     // ---- 3. a second slot missing on the SAME node: one line, named afresh ------
     // The wording follows the disk (SceneIssues::update): the same issue, the
     // same row, its message now naming BOTH files.
-    CHECK(QFile::remove(normal), "delete the normal map too");
-    const int bothPasses = scansUntilMessage(mcp, QStringLiteral("brick_normal.png"), true, 2, &live);
+    CHECK(QFile::remove(storeNormal), "delete the normal map's store object too");
+    const int bothPasses = scansUntilMessage(mcp, normalName, true, 2, &live);
     std::printf("info: message after %d scan(s): %s\n", bothPasses,
                 live.isEmpty() ? "" : qUtf8Printable(live.at(0).toObject().value("message").toString()));
     CHECK(live.size() == 1, "two missing slots on one object are ONE issue, not one per slot");
-    CHECK(bothPasses <= 2 && messageOf(live).contains(QLatin1String("brick_colour.png")) &&
-          messageOf(live).contains(QLatin1String("Normal (brick_normal.png)")),
+    CHECK(bothPasses <= 2 && messageOf(live).contains(baseName) &&
+          messageOf(live).contains(QStringLiteral("Normal (%1)").arg(normalName)),
           "...and within 2 scans its message names BOTH missing files");
 
     // ---- 4. one of the two restored: still one line, naming only the other -------
-    CHECK(writeImage(base, QColor(180, 60, 40)), "put the base colour file back");
-    const int onePasses = scansUntilMessage(mcp, QStringLiteral("brick_colour.png"), false, 2, &live);
+    CHECK(QFile::copy(backupBase, storeBase), "put the base colour's object back");
+    const int onePasses = scansUntilMessage(mcp, baseName, false, 2, &live);
     std::printf("info: message after %d scan(s): %s\n", onePasses,
                 live.isEmpty() ? "" : qUtf8Printable(live.at(0).toObject().value("message").toString()));
     CHECK(live.size() == 1 && live.at(0).toObject().value("node").toString() == textured,
           "one file back, one still missing: the issue stays, on the same object");
-    CHECK(onePasses <= 2 && messageOf(live).contains(QLatin1String("brick_normal.png")),
+    CHECK(onePasses <= 2 && messageOf(live).contains(normalName),
           "...and within 2 scans it names only the file still missing");
 
     // ---- 5. restore: cleared within 2 scans ---------------------------------------
-    CHECK(writeImage(normal, QColor(128, 128, 255)), "put the normal map back");
+    CHECK(QFile::copy(backupNormal, storeNormal), "put the normal map's object back");
     const int clearPasses = scansUntil(mcp, 0, 2, &live);
     std::printf("info: cleared after %d scan(s)\n", clearPasses);
     CHECK(clearPasses <= 2, "restoring the last file clears the issue within 2 scans");

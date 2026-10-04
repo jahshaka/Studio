@@ -438,7 +438,7 @@ int main(int argc, char **argv)
                   "4: ... with a non-black emissive colour");
 
             QJsonObject matObj;
-            SceneWriter::writeSceneNodeMaterial(matObj, unlitNode->getMaterial(), false);
+            SceneWriter::writeSceneNodeMaterial(matObj, unlitNode->getMaterial());
             const QJsonObject values = matObj.value(QStringLiteral("values")).toObject();
             CHECK(nearly(float(values.value(QStringLiteral("emissiveIntensity")).toDouble()), 1.0f),
                   "4: the saved material blob carries emissiveIntensity 1");

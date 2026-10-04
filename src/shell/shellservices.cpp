@@ -12,7 +12,6 @@ For more information see the LICENSE file
 #include "shell/shellservices.h"
 
 #include "data/database/database.h"
-#include "io/scenewriter.h"
 #include "services/assetservice.h"
 #include "services/clipboardservice.h"
 #include "services/loadtimeline.h"
@@ -118,9 +117,6 @@ ShellServices::ShellServices(const Deps &deps, QObject *parent) : QObject(parent
     mProject->setPreWriteHook([this]() { if (mPreview) mPreview->end(); });
 
     ThumbnailGenerator::getSingleton()->setProject(project);
-    // SceneWriter's two project reads live in static methods (see scenewriter.h),
-    // so the pointer rides a class static wired once, like its Database handle.
-    SceneWriter::setProject(project);
 }
 
 void ShellServices::destroyPlain()

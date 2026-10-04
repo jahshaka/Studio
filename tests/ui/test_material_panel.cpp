@@ -604,11 +604,13 @@ static void testTextureSnapshotDoesNotAccumulate()
     img.fill(Qt::magenta);
     img.save(imgPath);
 
+    // The row names its ASSET (TEX-REF-1), and the snapshot records that.
+    const QString imgGuid = QStringLiteral("00000000-snapshot-texture");
     PanelRig rig([&](const QSharedPointer<iris::PbrMaterial> &m) {
-        m->setValue(QStringLiteral("baseColorMap"), imgPath);
+        m->setValue(QStringLiteral("baseColorMap"), iris::Material::textureRef(imgPath, imgGuid));
     });
-    CHECK(rig.panel.shownTextures().value("baseColorMap") == imgPath,
-          "snapshot: the shown material's texture row is recorded");
+    CHECK(rig.panel.shownTextures().value("baseColorMap") == imgGuid,
+          "snapshot: the shown material's texture row's asset is recorded");
 
     // A NON-MESH selection: nothing is shown, so nothing may be remembered.
     auto light = iris::SceneNode::create();          // an Empty, not a mesh
@@ -623,7 +625,7 @@ static void testTextureSnapshotDoesNotAccumulate()
     rig.panel.setSceneNode(second);
     for (auto it = rig.panel.shownTextures().constBegin();
          it != rig.panel.shownTextures().constEnd(); ++it)
-        CHECK(it.value() != imgPath, "snapshot: no row anywhere still holds the old path");
+        CHECK(it.value() != imgGuid, "snapshot: no row anywhere still names the old asset");
 
     // A MESH WITH NO MATERIAL AT ALL is the same statement: nothing shown,
     // nothing remembered. (setSceneNode returns early here too.)

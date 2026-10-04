@@ -48,9 +48,6 @@ For more information see the LICENSE file
 #include "data/database/database.h"
 #include "io/materialreader.h"
 #include "services/materialbundle.h"
-#include "services/assetcas.h"
-#include "services/assetstorepaths.h"
-#include <QSqlDatabase>
 
 // WHAT THE SHOWN MATERIAL'S TEXTURE ROWS HELD, recorded fresh every time the
 // shown material changes.
@@ -76,9 +73,11 @@ void MaterialPropertyWidget::snapshotTextures()
 {
     existingTextures.clear();
     if (!material) return;
+    // The ASSET each row names (TEX-REF-1), not its path: a dependency is a
+    // row-to-row edge, and the row carries its guid.
     for (auto prop : material->properties)
         if (prop->type == iris::PropertyType::Texture)
-            existingTextures.insert(prop->name, prop->getValue().toString());
+            existingTextures.insert(prop->name, material->textureGuid(prop->name));
 }
 
 // SHOWING ANOTHER MESH'S MATERIAL IS A REFILL, NOT A REBUILD (ADD-1, 2026-09-15).
@@ -350,7 +349,7 @@ void MaterialPropertyWidget::materialChanged(int index)
     // used to be uninitialised rather than null.
     if (db && project) {
         QJsonObject node;
-        SceneWriter::writeSceneNode(node, meshNode, false);
+        SceneWriter::writeSceneNode(node, meshNode);
 
         db->updateAssetAsset(meshNode->getGUID(), QJsonDocument(node).toJson());
         db->removeDependenciesByType(meshNode->getGUID(), ModelTypes::Material);
@@ -362,21 +361,8 @@ void MaterialPropertyWidget::materialChanged(int index)
         );
     }
 
-    for (auto prop : material->properties) {
-        if (!project) break;
-        if (prop->type != iris::PropertyType::Texture) continue;
-        auto guidValue = prop->getValue().toString();
-        if (guidValue.isEmpty() || QFile::exists(guidValue)) continue;
-        // guid-valued texture reference: resolve through the CAS (pinned in
-        // project context, else the library source). The flat projectFolder
-        // + row-name join that followed is gone (plan item 15c).
-        const QString path = AssetCas::resolvePinned(QSqlDatabase::database(),
-                                                     AssetStorePaths::root(),
-                                                     project->getProjectGuid(), guidValue);
-        if (!path.isEmpty() && QFile::exists(path))
-            material->setValue(prop->name, path);
-    }
-
+    // (MaterialReader binds every map row as {resolved path, asset guid} —
+    // TEX-REF-1 — so there is no guid-valued row left to resolve here.)
     setWidgetProperties();
 }
 
@@ -411,6 +397,9 @@ void MaterialPropertyWidget::onPropertyChanged(iris::Property *prop)
     // but not what RENDERS — that was the dead material panel: edits appeared to
     // do nothing live and only showed up after a scene reload rebuilt the
     // material from JSON through setValue.
+    // A texture row arrives already bound to its file AND its asset (the
+    // picker hands PropertyWidget {path, guid}, which the row keeps — TEX-REF-1);
+    // the same path re-applied here keeps that identity.
     material->setValue(prop->name, prop->getValue());
     if (prop->type == iris::PropertyType::Texture)
         updateTextureDependency(prop);
@@ -423,22 +412,12 @@ void MaterialPropertyWidget::updateTextureDependency(iris::Property *prop)
 {
     if (!db || !project) return;
 
-    // The texture row holds a RESOLVED PATH; the asset behind it is found the
-    // way the scene writer finds it — through the store object's oid, never by
-    // the file's NAME (plan item 15c: a pinned texture's file is called
-    // <sha256>.<ext>, so the by-name lookup that was here matched nothing for
-    // any image a user imported, and both dependency writes below were dead).
-    auto textureGuidFor = [this](const QString &path) {
-        if (path.isEmpty() || project->getProjectGuid().isEmpty()) return QString();
-        return AssetCas::guidForStorePath(QSqlDatabase::database(), AssetStorePaths::root(),
-                                          path, project->getProjectGuid(),
-                                          AssetCas::GuidPreference::Texture);
-    };
-
+    // THE ROW CARRIES ITS ASSET (TEX-REF-1): the edge is to the guid the pick
+    // bound, never one recovered from the resolved path.
     // HANDLE CASE where the widget isn't deselected
-    const QString assetGuid = textureGuidFor(prop->getValue().toString());
+    const QString assetGuid = material ? material->textureGuid(prop->name) : QString();
     if (assetGuid.isEmpty()) {
-        const QString previous = textureGuidFor(existingTextures.value(prop->name));
+        const QString previous = existingTextures.value(prop->name);
         if (!previous.isEmpty()) db->deleteDependency(meshNodeGuid, previous);
     }
     else {
@@ -453,7 +432,8 @@ void MaterialPropertyWidget::updateTextureDependency(iris::Property *prop)
 
 void MaterialPropertyWidget::onPropertyChangeStart(iris::Property* prop)
 {
-    startValue = prop->getValue();
+    // A texture row's undo restores its file AND its asset (TEX-REF-1).
+    startValue = undoValueOf(prop);
     // A GESTURE THAT REALLY STARTED (round 2, item 9). The edit gate makes
     // these rows inert while a script runs — the row's own handlers return
     // before this is ever called — so a picker held open ACROSS the end of a
@@ -471,8 +451,16 @@ void MaterialPropertyWidget::onPropertyChangeEnd(iris::Property* prop)
     // A gesture that ended on its starting value (slider pressed and released
     // in place, colour dialog cancelled, Enter on an unchanged field) is not
     // an edit - don't pollute the undo stack with a no-op command.
-    if (startValue == prop->getValue()) return;
+    const QVariant endValue = undoValueOf(prop);
+    if (startValue == endValue) return;
 
     if (services && services->undo)
-        services->undo->push(new ChangeMaterialPropertyCommand(material, prop->name, startValue, prop->getValue()));
+        services->undo->push(new ChangeMaterialPropertyCommand(material, prop->name, startValue, endValue));
+}
+
+QVariant MaterialPropertyWidget::undoValueOf(iris::Property *prop) const
+{
+    if (prop->type == iris::PropertyType::Texture && material)
+        return material->textureRefOf(prop->name);
+    return prop->getValue();
 }

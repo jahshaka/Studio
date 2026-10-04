@@ -507,7 +507,7 @@ int main(int argc, char **argv)
     differential(r, "emitter.setSpeedError",     [&] { r.emitter->setSpeedError(0.3f); });
     differential(r, "emitter.setLifeError",      [&] { r.emitter->setLifeError(0.2f); });
     differential(r, "emitter.setScaleError",     [&] { r.emitter->setScaleError(0.15f); });
-    differential(r, "emitter.setTexture",        [&] { r.emitter->setTexture(iris::Texture2DPtr()); });
+    differential(r, "emitter.setTexture",        [&] { r.emitter->setTexture(iris::Texture2DPtr(), QString()); });
     differential(r, "emitter.applyPreset",       [&] {
         r.emitter->applyPreset(iris::ParticlePreset::Smoke);
     });
