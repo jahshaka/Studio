@@ -188,7 +188,9 @@ int main(int argc, char **argv)
         CHECK(shape.match(before[0]).hasMatch() && shape.match(before[1]).hasMatch(),
               qPrintable("a created project's stamps are datetime()'s shape: " + before.join(" | ")));
         QDir().mkpath("rt-export");
-        db.createExportScene(QStringLiteral("rt-export"), "guid-rt");
+        CHECK(Database::writeExportCatalog(QStringLiteral("rt-export"),
+                                           db.readExportCatalog("guid-rt"), nullptr),
+              "the archive's catalog snapshot is written (read here, written by the archive's worker)");
         // THE ARCHIVE'S STAMPS ARE NEVER READ (an import is a write here): an
         // archive an older build wrote in the ISO form imports all the same,
         // stamped with the import moment.

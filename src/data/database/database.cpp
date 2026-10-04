@@ -2929,147 +2929,32 @@ QByteArray Database::fetchCachedThumbnail(const QString &name) const
     return QByteArray();
 }
 
-void Database::createExportScene(const QString &outTempFilePath, const QString &projectGuid)
+Database::ExportCatalog Database::readExportCatalog(const QString &projectGuid)
 {
+    // THE LIBRARY CONNECTION'S HALF (STUDIO-D1 item 4): reads only. The rows a
+    // project archive carries — the project row, its member and pinned assets
+    // (reference-with-pin, phase 4), their outgoing edges and the project's
+    // folders — as values the worker writes into the archive's own file.
+    ExportCatalog out;
     QSqlQuery query;
     query.prepare("SELECT name, scene, thumbnail, version, last_written, last_accessed, guid FROM projects WHERE guid = ?");
     query.addBindValue(projectGuid);
-
-    if (query.exec()) {
-        query.next();
-    } else {
-        irisLog(
-            "There was an error fetching a row to be exported " + query.lastError().text()
-        );
+    if (!query.exec()) {
+        irisLog("There was an error fetching a row to be exported " + query.lastError().text());
+        return out;
     }
-
-    auto sceneName  = query.value(0).toString();
-    auto sceneBlob  = query.value(1).toByteArray();
-    auto sceneThumb = query.value(2).toByteArray();
-    auto sceneVersion = query.value(3).toString();
+    if (!query.next()) return out;
+    out.found = true;
+    out.name = query.value(0).toString();
+    out.scene = query.value(1).toByteArray();
+    out.thumbnail = query.value(2).toByteArray();
+    out.version = query.value(3).toString();
     // Our own column, already the one format (written by datetime()), carried
     // as TEXT into the archive's .db — which nothing ever reads back: an import
     // stamps the import moment (importProject).
-    const QString sceneLastW = query.value(4).toString();
-    const QString sceneLastA = query.value(5).toString();
-    auto sceneGuid  = query.value(6).toString();
-
-    // ScopedConnection: "myUniqueSQLITEConnection" was registered here and
-    // NEVER removed — the one leak of the four that leaked on the SUCCESS path
-    // too, so every project export in a session re-registered the same name
-    // (deep audit 2026-09, area 6). The name was also a lie: it was a fixed
-    // string, hence not unique at all across concurrent exports.
-    ScopedConnection scoped(Constants::DB_DRIVER, QStringLiteral("SceneExport"),
-                            QDir(outTempFilePath).filePath(projectGuid + ".db"));
-    QSqlDatabase &dbe = scoped.db;
-    if (!dbe.open()) {
-        irisLog(QString("Couldn't open the export database! %1").arg(dbe.lastError().text()));
-        return;
-    }
-
-    // One transaction for the whole bundle, like its three siblings: an atomic
-    // export file and one fsync instead of one per row.
-    dbe.transaction();
-
-    QString schema = "CREATE TABLE IF NOT EXISTS projects ("
-                     "    name              VARCHAR(64),"
-                     "    thumbnail         BLOB,"
-                     "    last_accessed     DATETIME,"
-                     "    last_written      DATETIME,"
-                     "    date_created      DATETIME DEFAULT CURRENT_TIMESTAMP,"
-                     "    scene             BLOB,"
-                     "    version           VARCHAR(8),"
-                     "    description       TEXT,"
-                     "    url               TEXT,"
-                     "    guid              VARCHAR(32) PRIMARY KEY"
-                     ")";
-
-    QSqlQuery query2(dbe);
-    query2.prepare(schema);
-    executeAndCheckQuery(query2, "createExportGlobalDb");
-
-    QSqlQuery query3(dbe);
-    query3.prepare(
-        "INSERT INTO projects "
-        "(name, scene, thumbnail, version, last_written, last_accessed, guid) "
-        "VALUES (:name, :scene, :thumbnail, :version, :last_written, :last_accessed, :guid)"
-    );
-    query3.bindValue(":name",           sceneName);
-    query3.bindValue(":scene",          sceneBlob);
-    query3.bindValue(":thumbnail",      sceneThumb);
-    query3.bindValue(":version",      sceneVersion);
-    query3.bindValue(":last_written",   sceneLastW);
-    query3.bindValue(":last_accessed",  sceneLastA);
-    query3.bindValue(":guid",           sceneGuid);
-
-    executeAndCheckQuery(query3, "insertSceneGlobal");
-
-    // NO `listed` COLUMN HERE, deliberately (lead call 2026-09-10). This is
-    // the PROJECT archive: importProject re-homes every row it carries into
-    // the newly created project (project_guid = the new scene guid,
-    // view_filter = Editor), so the rows are project members and never
-    // library tiles — there is no library visibility for them to carry. The
-    // ASSET archive (createBlobFromAsset, on assetsTableSchema) does carry
-    // it.
-    QString createAssetsTableSchema =
-        "CREATE TABLE IF NOT EXISTS assets ("
-        "    guid              VARCHAR(32),"
-        "	 type			   INTEGER,"
-        "    name              VARCHAR(128),"
-        "	 collection		   INTEGER,"
-        "	 times_used		   INTEGER,"
-        "    project_guid      VARCHAR(32),"
-        "    date_created      DATETIME DEFAULT CURRENT_TIMESTAMP,"
-        "    last_updated      DATETIME,"
-        "	 author			   VARCHAR(128),"
-        "    license		   VARCHAR(64),"
-        "    hash              VARCHAR(16),"
-        "    version           VARCHAR(8),"
-        "    parent            VARCHAR(32),"
-        "    tags			   BLOB,"
-        "    properties        BLOB,"
-        "    asset             BLOB,"
-        "    thumbnail         BLOB,"
-		"    view_filter       INTEGER"
-        ")";
-
-    QSqlQuery createAssetsTableQuery(dbe);
-    createAssetsTableQuery.prepare(createAssetsTableSchema);
-    executeAndCheckQuery(createAssetsTableQuery, "createExportGlobalDb");
-
-    QString dependenciesSchema =
-        "CREATE TABLE IF NOT EXISTS dependencies ("
-        "	 depender_type  INTEGER,"
-        "	 dependee_type  INTEGER,"
-        "    project_guid	VARCHAR(32),"
-        "    depender		VARCHAR(32),"
-        "    dependee		VARCHAR(32),"
-        "    id				VARCHAR(32) PRIMARY KEY"
-        ")";
-
-    QSqlQuery dependenciesCreateSchema(dbe);
-    dependenciesCreateSchema.prepare(dependenciesSchema);
-    executeAndCheckQuery(dependenciesCreateSchema, "createExportDependencies");
-
-    QString folderSchema =
-        "CREATE TABLE IF NOT EXISTS folders ("
-        "    guid              VARCHAR(32) PRIMARY KEY,"
-        "    parent            VARCHAR(32),"
-        "    project_guid      VARCHAR(32),"
-        "    name              VARCHAR(128),"
-        "    date_created      DATETIME DEFAULT CURRENT_TIMESTAMP,"
-        "    last_updated      DATETIME,"
-        "    hash              VARCHAR(16),"
-        "    version           VARCHAR(8),"
-        "    count			   INTEGER,"
-        "    visible           INTEGER"
-        ")";
-
-    QSqlQuery folderCreateSchema(dbe);
-    folderCreateSchema.prepare(folderSchema);
-    executeAndCheckQuery(folderCreateSchema, "folderCreateSchema");
-
-    QVector<AssetRecord> assetList;
+    out.lastWritten = query.value(4).toString();
+    out.lastAccessed = query.value(5).toString();
+    out.guid = query.value(6).toString();
 
     QSqlQuery selectAssetQuery;
     selectAssetQuery.prepare(
@@ -3083,9 +2968,7 @@ void Database::createExportScene(const QString &outTempFilePath, const QString &
     selectAssetQuery.addBindValue(projectGuid);
     selectAssetQuery.addBindValue(projectGuid);
     executeAndCheckQuery(selectAssetQuery, "selectAssetQuery");
-
     while (selectAssetQuery.next()) {
-        QSqlRecord record = query.record();
         AssetRecord data;
         data.guid = selectAssetQuery.value(0).toString();
         data.type = selectAssetQuery.value(1).toInt();
@@ -3105,42 +2988,8 @@ void Database::createExportScene(const QString &outTempFilePath, const QString &
         data.asset = selectAssetQuery.value(15).toByteArray();
         data.thumbnail = selectAssetQuery.value(16).toByteArray();
         data.view_filter = selectAssetQuery.value(17).toInt();
-        assetList.push_back(data);
+        out.assets.push_back(data);
     }
-
-    for (const auto &asset : assetList) {
-        QSqlQuery insertExportAssetQuery(dbe);
-        insertExportAssetQuery.prepare(
-            "INSERT INTO assets"
-            " (guid, type, name, collection, times_used, project_guid, date_created, last_updated, author,"
-            " license, hash, version, parent, tags, properties, asset, thumbnail, view_filter)"
-            " VALUES(:guid, :type, :name, :collection, :times_used, :project_guid, :date_created, :last_updated, :author,"
-            " :license, :hash, :version, :parent, :tags, :properties, :asset, :thumbnail, :view_filter)"
-        );
-
-        insertExportAssetQuery.bindValue(":guid", asset.guid);
-        insertExportAssetQuery.bindValue(":type", asset.type);
-        insertExportAssetQuery.bindValue(":name", asset.name);
-        insertExportAssetQuery.bindValue(":collection", asset.collection);
-        insertExportAssetQuery.bindValue(":times_used", asset.timesUsed);
-        insertExportAssetQuery.bindValue(":project_guid", asset.projectGuid);
-        insertExportAssetQuery.bindValue(":date_created", asset.dateCreated);
-        insertExportAssetQuery.bindValue(":last_updated", asset.lastUpdated);
-        insertExportAssetQuery.bindValue(":author", asset.author);
-        insertExportAssetQuery.bindValue(":license", asset.license);
-        insertExportAssetQuery.bindValue(":hash", asset.hash);
-        insertExportAssetQuery.bindValue(":version", asset.version);
-        insertExportAssetQuery.bindValue(":parent", asset.parent);
-        insertExportAssetQuery.bindValue(":tags", asset.tags);
-        insertExportAssetQuery.bindValue(":properties", asset.properties);
-        insertExportAssetQuery.bindValue(":asset", asset.asset);
-        insertExportAssetQuery.bindValue(":thumbnail", asset.thumbnail);
-        insertExportAssetQuery.bindValue(":view_filter", asset.view_filter);
-
-        executeAndCheckQuery(insertExportAssetQuery, "insertExportAssetQuery");
-    }
-
-    QVector<DependencyRecord> dependenciesToExport;
 
     QSqlQuery selectDep;
     selectDep.prepare(
@@ -3151,7 +3000,6 @@ void Database::createExportScene(const QString &outTempFilePath, const QString &
     selectDep.addBindValue(projectGuid);
     selectDep.addBindValue(projectGuid);
     executeAndCheckQuery(selectDep, "selectDep");
-
     while (selectDep.next()) {
         DependencyRecord record;
         record.dependerType = selectDep.value(0).toInt();
@@ -3160,27 +3008,8 @@ void Database::createExportScene(const QString &outTempFilePath, const QString &
         record.depender = selectDep.value(3).toString();
         record.dependee = selectDep.value(4).toString();
         record.id = selectDep.value(5).toString();
-        dependenciesToExport.append(record);
+        out.dependencies.append(record);
     }
-
-    for (const auto &dep : dependenciesToExport) {
-        QSqlQuery exportDep(dbe);
-        exportDep.prepare(
-            "INSERT INTO dependencies (depender_type, dependee_type, project_guid, depender, dependee, id) "
-            "VALUES (:depender_type, :dependee_type, :project_guid, :depender, :dependee, :id)"
-        );
-
-        exportDep.bindValue(":depender_type", dep.dependerType);
-        exportDep.bindValue(":dependee_type", dep.dependeeType);
-        exportDep.bindValue(":project_guid", dep.projectGuid);
-        exportDep.bindValue(":depender", dep.depender);
-        exportDep.bindValue(":dependee", dep.dependee);
-        exportDep.bindValue(":id", dep.id);
-
-        executeAndCheckQuery(exportDep, "exportDep");
-    }
-
-    QVector<FolderRecord> foldersToExport;
 
     QSqlQuery selectFolder;
     selectFolder.prepare(
@@ -3188,7 +3017,6 @@ void Database::createExportScene(const QString &outTempFilePath, const QString &
 	);
     selectFolder.addBindValue(projectGuid);
     executeAndCheckQuery(selectFolder, "selectFolder");
-
     while (selectFolder.next()) {
         FolderRecord record;
         record.guid = selectFolder.value(0).toString();
@@ -3199,16 +3027,183 @@ void Database::createExportScene(const QString &outTempFilePath, const QString &
         record.dateCreated = selectFolder.value(5).toDateTime();
         record.lastUpdated = selectFolder.value(6).toDateTime();
         record.visible = selectFolder.value(7).toBool();
-        foldersToExport.append(record);
+        out.folders.append(record);
+    }
+    return out;
+}
+
+bool Database::writeExportCatalog(const QString &outDir, const ExportCatalog &catalog,
+                                  QString *errorOut)
+{
+    // THE FILE'S HALF, ANY THREAD (STUDIO-D1 item 4): a NEW SQLite file — its
+    // own connection, opened, written and closed on the calling thread (the
+    // archive's worker), so its journal writes and its fsync never wait on the
+    // thread that draws. Nothing here touches the library connection or the
+    // statement accounting (Database::executeAndCheckQuery's statics are the
+    // UI thread's), so each statement is checked in place.
+    const auto failed = [errorOut](const QString &why) {
+        irisLog(QStringLiteral("export catalog: %1").arg(why));
+        if (errorOut) *errorOut = why;
+        return false;
+    };
+    if (!catalog.found) return failed(QStringLiteral("the project row was not found"));
+    // ScopedConnection: a uniquely named side connection, closed and
+    // unregistered on every path (the export used to leak a fixed-name one).
+    ScopedConnection scoped(Constants::DB_DRIVER, QStringLiteral("SceneExport"),
+                            QDir(outDir).filePath(catalog.guid + ".db"));
+    QSqlDatabase &dbe = scoped.db;
+    if (!dbe.open()) return failed(QStringLiteral("could not open the export database: %1")
+                                       .arg(dbe.lastError().text()));
+    const auto run = [&](QSqlQuery &q, const char *what) {
+        if (q.exec()) return true;
+        failed(QStringLiteral("%1: %2").arg(QLatin1String(what), q.lastError().text()));
+        return false;
+    };
+
+    // One transaction for the whole bundle, like its three siblings: an atomic
+    // export file and one fsync instead of one per row.
+    dbe.transaction();
+
+    QSqlQuery query2(dbe);
+    query2.prepare("CREATE TABLE IF NOT EXISTS projects ("
+                   "    name              VARCHAR(64),"
+                   "    thumbnail         BLOB,"
+                   "    last_accessed     DATETIME,"
+                   "    last_written      DATETIME,"
+                   "    date_created      DATETIME DEFAULT CURRENT_TIMESTAMP,"
+                   "    scene             BLOB,"
+                   "    version           VARCHAR(8),"
+                   "    description       TEXT,"
+                   "    url               TEXT,"
+                   "    guid              VARCHAR(32) PRIMARY KEY"
+                   ")");
+    if (!run(query2, "createExportGlobalDb")) return false;
+
+    QSqlQuery query3(dbe);
+    query3.prepare(
+        "INSERT INTO projects "
+        "(name, scene, thumbnail, version, last_written, last_accessed, guid) "
+        "VALUES (:name, :scene, :thumbnail, :version, :last_written, :last_accessed, :guid)"
+    );
+    query3.bindValue(":name",           catalog.name);
+    query3.bindValue(":scene",          catalog.scene);
+    query3.bindValue(":thumbnail",      catalog.thumbnail);
+    query3.bindValue(":version",        catalog.version);
+    query3.bindValue(":last_written",   catalog.lastWritten);
+    query3.bindValue(":last_accessed",  catalog.lastAccessed);
+    query3.bindValue(":guid",           catalog.guid);
+    if (!run(query3, "insertSceneGlobal")) return false;
+
+    // NO `listed` COLUMN HERE, deliberately (lead call 2026-09-10). This is
+    // the PROJECT archive: importProject re-homes every row it carries into
+    // the newly created project (project_guid = the new scene guid,
+    // view_filter = Editor), so the rows are project members and never
+    // library tiles — there is no library visibility for them to carry. The
+    // ASSET archive (createBlobFromAsset, on assetsTableSchema) does carry
+    // it.
+    QSqlQuery createAssetsTableQuery(dbe);
+    createAssetsTableQuery.prepare(
+        "CREATE TABLE IF NOT EXISTS assets ("
+        "    guid              VARCHAR(32),"
+        "	 type			   INTEGER,"
+        "    name              VARCHAR(128),"
+        "	 collection		   INTEGER,"
+        "	 times_used		   INTEGER,"
+        "    project_guid      VARCHAR(32),"
+        "    date_created      DATETIME DEFAULT CURRENT_TIMESTAMP,"
+        "    last_updated      DATETIME,"
+        "	 author			   VARCHAR(128),"
+        "    license		   VARCHAR(64),"
+        "    hash              VARCHAR(16),"
+        "    version           VARCHAR(8),"
+        "    parent            VARCHAR(32),"
+        "    tags			   BLOB,"
+        "    properties        BLOB,"
+        "    asset             BLOB,"
+        "    thumbnail         BLOB,"
+		"    view_filter       INTEGER"
+        ")");
+    if (!run(createAssetsTableQuery, "createExportGlobalDb")) return false;
+
+    QSqlQuery dependenciesCreateSchema(dbe);
+    dependenciesCreateSchema.prepare(
+        "CREATE TABLE IF NOT EXISTS dependencies ("
+        "	 depender_type  INTEGER,"
+        "	 dependee_type  INTEGER,"
+        "    project_guid	VARCHAR(32),"
+        "    depender		VARCHAR(32),"
+        "    dependee		VARCHAR(32),"
+        "    id				VARCHAR(32) PRIMARY KEY"
+        ")");
+    if (!run(dependenciesCreateSchema, "createExportDependencies")) return false;
+
+    QSqlQuery folderCreateSchema(dbe);
+    folderCreateSchema.prepare(
+        "CREATE TABLE IF NOT EXISTS folders ("
+        "    guid              VARCHAR(32) PRIMARY KEY,"
+        "    parent            VARCHAR(32),"
+        "    project_guid      VARCHAR(32),"
+        "    name              VARCHAR(128),"
+        "    date_created      DATETIME DEFAULT CURRENT_TIMESTAMP,"
+        "    last_updated      DATETIME,"
+        "    hash              VARCHAR(16),"
+        "    version           VARCHAR(8),"
+        "    count			   INTEGER,"
+        "    visible           INTEGER"
+        ")");
+    if (!run(folderCreateSchema, "folderCreateSchema")) return false;
+
+    QSqlQuery insertAsset(dbe);
+    insertAsset.prepare(
+        "INSERT INTO assets"
+        " (guid, type, name, collection, times_used, project_guid, date_created, last_updated, author,"
+        " license, hash, version, parent, tags, properties, asset, thumbnail, view_filter)"
+        " VALUES(:guid, :type, :name, :collection, :times_used, :project_guid, :date_created, :last_updated, :author,"
+        " :license, :hash, :version, :parent, :tags, :properties, :asset, :thumbnail, :view_filter)"
+    );
+    for (const auto &asset : catalog.assets) {
+        insertAsset.bindValue(":guid", asset.guid);
+        insertAsset.bindValue(":type", asset.type);
+        insertAsset.bindValue(":name", asset.name);
+        insertAsset.bindValue(":collection", asset.collection);
+        insertAsset.bindValue(":times_used", asset.timesUsed);
+        insertAsset.bindValue(":project_guid", asset.projectGuid);
+        insertAsset.bindValue(":date_created", asset.dateCreated);
+        insertAsset.bindValue(":last_updated", asset.lastUpdated);
+        insertAsset.bindValue(":author", asset.author);
+        insertAsset.bindValue(":license", asset.license);
+        insertAsset.bindValue(":hash", asset.hash);
+        insertAsset.bindValue(":version", asset.version);
+        insertAsset.bindValue(":parent", asset.parent);
+        insertAsset.bindValue(":tags", asset.tags);
+        insertAsset.bindValue(":properties", asset.properties);
+        insertAsset.bindValue(":asset", asset.asset);
+        insertAsset.bindValue(":thumbnail", asset.thumbnail);
+        insertAsset.bindValue(":view_filter", asset.view_filter);
+        if (!run(insertAsset, "insertExportAssetQuery")) return false;
     }
 
-    for (const auto &folder : foldersToExport) {
-        QSqlQuery exportFolder(dbe);
-        exportFolder.prepare(
-            "INSERT INTO folders (guid, name, parent, count, project_guid, date_created, last_updated, visible) "
-            "VALUES (:guid, :name, :parent, :count, :project_guid, :date_created, :last_updated, :visible)"
-        );
+    QSqlQuery exportDep(dbe);
+    exportDep.prepare(
+        "INSERT INTO dependencies (depender_type, dependee_type, project_guid, depender, dependee, id) "
+        "VALUES (:depender_type, :dependee_type, :project_guid, :depender, :dependee, :id)"
+    );
+    for (const auto &dep : catalog.dependencies) {
+        exportDep.bindValue(":depender_type", dep.dependerType);
+        exportDep.bindValue(":dependee_type", dep.dependeeType);
+        exportDep.bindValue(":project_guid", dep.projectGuid);
+        exportDep.bindValue(":depender", dep.depender);
+        exportDep.bindValue(":dependee", dep.dependee);
+        exportDep.bindValue(":id", dep.id);
+        if (!run(exportDep, "exportDep")) return false;
+    }
 
+    QSqlQuery exportFolder(dbe);
+    exportFolder.prepare(
+        "INSERT INTO folders (guid, name, parent, count, project_guid, date_created, last_updated, visible) "
+        "VALUES (:guid, :name, :parent, :count, :project_guid, :date_created, :last_updated, :visible)"
+    );
+    for (const auto &folder : catalog.folders) {
         exportFolder.bindValue(":guid", folder.guid);
         exportFolder.bindValue(":name", folder.name);
         exportFolder.bindValue(":parent", folder.parent);
@@ -3217,11 +3212,11 @@ void Database::createExportScene(const QString &outTempFilePath, const QString &
         exportFolder.bindValue(":date_created", folder.dateCreated);
         exportFolder.bindValue(":last_updated", folder.lastUpdated);
         exportFolder.bindValue(":visible", folder.visible);
-
-        executeAndCheckQuery(exportFolder, "exportFolder");
+        if (!run(exportFolder, "exportFolder")) return false;
     }
 
-    dbe.commit();
+    if (!dbe.commit()) return failed(QStringLiteral("commit: %1").arg(dbe.lastError().text()));
+    return true;
     // close + unregister: ~ScopedConnection
 }
 

@@ -34,6 +34,7 @@ For more information see the LICENSE file
 #include "data/project.h"
 #include "export/exportmanifest.h"
 #include "io/ziphelper.h"
+#include "irisgl/core/logger.h"
 #include "services/assetcas.h"
 #include "services/materialbundle.h"
 #include "services/assetstorepaths.h"
@@ -175,10 +176,19 @@ bool ProjectArchiver::planExport(const QString &destZipPath)
 
     emitProgress(5, QStringLiteral("Reading the catalog…"));
 
-    // 1. The catalog snapshot (pin-aware since phase 4).
-    db->createExportScene(mStage->path(), projectGuid);
-    if (!QFileInfo::exists(QDir(mStage->path()).filePath(projectGuid + ".db"))) {
-        mResult.error = QStringLiteral("could not write the catalog snapshot");
+    // 1. The catalog snapshot's ROWS (pin-aware since phase 4). The file they
+    //    go into is the worker's to write (workExport): a new SQLite database
+    //    is a journal and an fsync, and no durable write belongs on the thread
+    //    that draws.
+    QElapsedTimer readClock;
+    readClock.start();
+    mCatalog = db->readExportCatalog(projectGuid);
+    irisLog(QStringLiteral("export: the catalog snapshot's rows read in %1 ms (%2 assets) on the "
+                           "database thread; the file is the worker's")
+                .arg(readClock.nsecsElapsed() / 1.0e6, 0, 'f', 1)
+                .arg(mCatalog.assets.size()));
+    if (!mCatalog.found) {
+        mResult.error = QStringLiteral("could not read the project's catalog rows");
         return false;
     }
 
@@ -291,6 +301,18 @@ bool ProjectArchiver::planExport(const QString &destZipPath)
 bool ProjectArchiver::workExport()
 {
     // WORKER THREAD (or inline for the synchronous verb). File work only.
+    emitProgress(8, QStringLiteral("Writing the catalog…"));
+    QString catalogError;
+    QElapsedTimer writeClock;
+    writeClock.start();
+    if (!Database::writeExportCatalog(mStage->path(), mCatalog, &catalogError)) {
+        mResult.error = QStringLiteral("could not write the catalog snapshot: %1").arg(catalogError);
+        return false;
+    }
+    irisLog(QStringLiteral("export: the catalog snapshot file written in %1 ms (off the UI thread "
+                           "when threaded)")
+                .arg(writeClock.nsecsElapsed() / 1.0e6, 0, 'f', 1));
+    mCatalog = Database::ExportCatalog();   // the rows are in the file now; free the blobs
     const QString objectsDir = QDir(mStage->path()).filePath(QStringLiteral("objects"));
     if (!mCopies.isEmpty()) QDir().mkpath(objectsDir);
 

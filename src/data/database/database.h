@@ -723,7 +723,23 @@ public:
     bool importProject(const QString &inFilePath, const QString &newGuid, QString &worldName, QMap<QString, QString> &assetGuids, QSet<QString> *knownGuids = nullptr);
 
     // EXPORT ===============================================================================
-    void createExportScene(const QString& outTempFilePath, const QString &projectGuid);
+    /// THE PROJECT ARCHIVE'S CATALOG SNAPSHOT, in two halves (STUDIO-D1 item 4): the READ
+    /// is this library connection's (the UI thread's), the WRITE is a new SQLite file —
+    /// its journal and its fsync — on whatever thread calls it (the archive's worker).
+    struct ExportCatalog
+    {
+        bool found = false;             ///< the project row exists
+        QString name, version, lastWritten, lastAccessed, guid;
+        QByteArray scene, thumbnail;
+        QVector<AssetRecord> assets;    ///< the project's rows + its pinned library rows
+        QVector<DependencyRecord> dependencies;
+        QVector<FolderRecord> folders;
+    };
+    ExportCatalog readExportCatalog(const QString &projectGuid);
+    /// Writes `<outDir>/<guid>.db` through its own side connection. False with
+    /// `errorOut` set when any statement failed.
+    static bool writeExportCatalog(const QString &outDir, const ExportCatalog &catalog,
+                                   QString *errorOut);
 
     bool checkIfTableExists(const QString &tableName);
     bool checkIfColumnExists(const QString &tableName, const QString &columnName);
