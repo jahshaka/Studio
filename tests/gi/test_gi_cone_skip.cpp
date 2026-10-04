@@ -194,6 +194,65 @@ int main()
         e->destroyScene(s);
     }
 
+    // ---- PH-1's exception: a CLEAR COAT under parallax-corrected probes ---------------
+    // There the cone's hit position also weighs the coat's own probe term, which the SSR
+    // composite does not replace, so the skip is compiled out for that material
+    // (PhotonVct_piece_ps.any). A coated mirror floor and a plain glossy column under a
+    // probe grid and the screen march: the arm on and off are the same floats.
+    {
+        std::printf("-- PH-1 exception: a clear-coated floor under a probe grid, the screen march\n");
+        e->setRayTracing(false);
+        View *view = e->createOffscreenView("skip-coat", kW, kH, Colour(0, 0, 0));
+        Scene *s = e->createScene("skip-coat");
+        view->setScene(s);
+        s->setAmbient(Colour(0.25f, 0.27f, 0.30f), Colour(0.20f, 0.18f, 0.15f));
+        const NodeId floor = s->createNode();
+        {
+            PbrParams p;
+            p.albedo = Colour(0.30f, 0.05f, 0.05f);
+            p.roughness = 0.6f;
+            p.clearCoat = 1.0f;
+            p.clearCoatRoughness = 0.02f;
+            const MaterialId mat = s->createPbrMaterial(p);
+            const MeshId mesh = s->createMesh(enginetest::unitCubeMesh());
+            CHECK(floor && mat && mesh && s->attachMesh(floor, mesh, mat), "the coated floor exists");
+        }
+        enginetest::setNodeScale(s, floor, Vec3(30.0f, 0.2f, 30.0f));
+        enginetest::setNodePosition(s, floor, Vec3(0.0f, -0.1f, 0.0f));
+        const NodeId col = enginetest::addTestCube(s, Colour(0.9f, 0.9f, 0.9f), 1.0f, 0.05f);
+        enginetest::setNodeScale(s, col, Vec3(1.0f, 2.5f, 1.0f));
+        enginetest::setNodePosition(s, col, Vec3(0.0f, 1.25f, 5.0f));
+        const NodeId wall = enginetest::addTestCube(s, Colour(0.1f, 0.6f, 0.2f), 0.0f, 0.8f);
+        enginetest::setNodeScale(s, wall, Vec3(8.0f, 3.0f, 0.3f));
+        enginetest::setNodePosition(s, wall, Vec3(0.0f, 1.5f, 9.0f));
+        enginetest::addDirectionalLight(s, Vec3(-0.4f, -1.0f, 0.5f), 2.0f);
+        GiParams gi;
+        gi.mode = GiMode::VctPccHybrid;
+        gi.quality = GiQuality::Medium;
+        gi.numBounces = 1;
+        gi.updateBudget = 0;
+        gi.pccProbesX = 2; gi.pccProbesY = 1; gi.pccProbesZ = 2;
+        CHECK(s->setGlobalIllumination(gi), "the hybrid arm builds");
+        PostFxDesc fx;
+        fx.allowOffscreen = true;
+        fx.ssr = 1;                    // the screen march (no rays bound)
+        view->setPostFx(fx);
+        enginetest::testCameraLookAt(view, Vec3(0.0f, 1.4f, -2.0f), Vec3(0.0f, 0.6f, 9.0f));
+        render(e, 120);
+        CHECK(s->giStatus().pccBound, "the probe grid is bound");
+        ImageF on, off, on2;
+        CHECK(shot(e, view, "photon.specularConeSkip", 1.0, 30, on), "skip ON rendered");
+        CHECK(shot(e, view, "photon.specularConeSkip", 0.0, 30, off), "skip OFF rendered");
+        CHECK(shot(e, view, "photon.specularConeSkip", 1.0, 30, on2), "skip ON again rendered");
+        const size_t still = floatsDiffering(on, on2);
+        CHECK_MSG(still == 0, "the frame is still (%zu floats differ)", still);
+        const size_t d = floatsDiffering(on, off);
+        CHECK_MSG(d == 0, "THE COAT IS UNTOUCHED: skip ON and OFF are the same floats (%zu of %zu differ, worst %.3g)",
+                  d, on.rgba.size(), worstAbs(on, off));
+        e->destroyView(view);
+        e->destroyScene(s);
+    }
+
     std::printf("%s\n", failures ? "FAILED" : "PASSED");
     return failures ? 1 : 0;
 }
