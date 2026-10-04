@@ -238,7 +238,8 @@ jah_no_display(pool.runner)
 # reads offscreen renders, which never see the presented frame; this row reads
 # the X server's copy of the viewport (xwd of the root) while the UI thread is
 # frozen on each frame after a change — the sun disc into the probes, the cloud
-# altitude, clouds off/on and an observer-band crossing, at Medium and at Epic.
+# altitude, clouds off/on and an observer-band crossing, at Medium and at Epic
+# with rays off (Epic as shipped hides the flash under its traced reflections).
 # Its own private Xvfb (301-340), like play_select: the capture reads the whole
 # root. Not in the GPU-timing lock: it measures no time — app.blockUiThread holds
 # each frame on screen, and the reads are pixel means.
@@ -256,9 +257,9 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
         set_tests_properties(app.sky_swap_presented PROPERTIES
             ENVIRONMENT "HOME=${_ssp_home};JAHSHAKA_DATA_ROOT=${_ssp_home}/.local/share/Jahshaka"
             SKIP_RETURN_CODE 77
-            # 6x the measured run: ~600 s on a warm shader cache beside another lane's gate
-            # (three tiers x eight arms x five held frames, each a 4 s UI freeze)
-            TIMEOUT 3600
+            # measured 123-290 s (two tiers x eight arms x five held frames, each a 1 s
+            # UI freeze; three lanes on the box); 900 = 3x the worst run
+            TIMEOUT 900
             LABELS "app")
     else()
         message(STATUS "app.sky_swap_presented skipped: needs xwd, xdpyinfo and Xvfb")

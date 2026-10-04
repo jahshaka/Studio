@@ -27,7 +27,7 @@ THE TRIGGERS (the brief's list): the sun disc into the probes and back, the
 cloud layer's altitude, the cloud layer off and on, and an observer-band
 crossing (a vertical camera move past 2^0.25 of the observer's band — the
 'were' repro; world.clouds().live.changeCaptures proves each crossing captured),
-each at Medium and at Epic.
+each at Medium and at Epic with rays off.
 
 THE ASSERTION, per arm and per sample patch (a metal sphere — the reflection
 cube's own reader — and the floor), in mean grey codes:
@@ -58,7 +58,8 @@ import urllib.request
 TAG = "sky_swap_presented"
 DIP_LIMIT = 1.0          # grey codes beyond the change's own steady-state difference
 FRAMES_AFTER = 3         # presented frames read after each change
-FREEZE_MS = 4000         # the UI-thread freeze that holds a frame on screen
+FREEZE_MS = 1000         # the UI-thread freeze that holds a frame on screen (the grab
+                         # fires within ~20 ms of the marker)
 
 
 def say(msg):
@@ -118,6 +119,8 @@ class App:
                 break
             time.sleep(0.5)
         if not self.token:
+            # never leave a live Vulkan client behind for the Xvfb kill that follows
+            self.close()
             raise RuntimeError("the app never published an MCP token and port")
         self.post({"jsonrpc": "2.0", "id": 1, "method": "initialize",
                    "params": {"protocolVersion": "2025-06-18", "capabilities": {},
@@ -150,6 +153,7 @@ class App:
                 self.proc.wait(20)
             except subprocess.TimeoutExpired:
                 self.proc.kill()
+                self.proc.wait()
         self.log.close()
 
 
@@ -208,11 +212,11 @@ ARMS = [
 ]
 
 # (label, World Mode, extra set-up). Epic traces its reflections by rays on this
-# box, and the rays hide most of the flash (the diagnosis: Epic -6 codes on the
-# floor, rays off -17), so Epic runs twice: as shipped, and with rays off.
+# box, and in this scene the rays hid the flash entirely (no dip on the base
+# binary either), so Epic runs with rays OFF, where the base dipped 36-44 codes.
+# Epic as shipped is covered by the live repro on 'were' (spikes/sky-swap-1).
 TIERS = [
     ("medium", "medium", ""),
-    ("epic", "epic", "world.rayTracing('auto')"),
     ("epic_norays", "epic", "world.rayTracing('off')"),
 ]
 
