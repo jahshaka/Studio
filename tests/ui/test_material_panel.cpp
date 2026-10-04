@@ -278,12 +278,22 @@ static void testTextureRow()
     // rows appear in property order; the first texture property is baseColorMap
     TexturePickerWidget *baseMap = textures.first();
     const int before = rig.stack.count();
-    QMetaObject::invokeMethod(baseMap, "valueChanged", Q_ARG(QString, imgPath));
+    // The picker hands the row the file AND the library row it picked (TEX-REF-1).
+    const QString pickedGuid = QStringLiteral("00000000-picked-texture-row");
+    QMetaObject::invokeMethod(baseMap, "valuesChanged", Q_ARG(QString, imgPath),
+                              Q_ARG(QString, pickedGuid));
     CHECK(rig.pbr->textures.contains("u_baseColorMap"), "texture: map lands on the material");
+    CHECK(rig.pbr->textureGuid(QStringLiteral("baseColorMap")) == pickedGuid,
+          "texture: ...and the row names the asset the picker chose");
     CHECK(rig.stack.count() == before + 1, "texture: one undo entry per pick");
 
     rig.undo.undo();
     CHECK(!rig.pbr->textures.contains("u_baseColorMap"), "texture: undo clears the map");
+    CHECK(rig.pbr->textureGuid(QStringLiteral("baseColorMap")).isEmpty(),
+          "texture: ...and its asset");
+    rig.undo.redo();
+    CHECK(rig.pbr->textureGuid(QStringLiteral("baseColorMap")) == pickedGuid,
+          "texture: redo binds the file and the asset again");
 }
 
 // The Alpha Mode row is an ENUM row (iris::ListProperty) rendered as a labeled
