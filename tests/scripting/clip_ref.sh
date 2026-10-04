@@ -24,9 +24,9 @@
 #
 # $1 = the Jahshaka binary, $2 = a rig with embedded clips (rig2.glb),
 # $3 = an animation file for it (rig2_walk_anim.glb), $4 = a model with its own
-# clip (mixamo_tpose.fbx)
+# clip (mixamo_tpose.fbx), $5 = the JS half (scripts/e2e_clip_ref.js)
 set -u
-BIN="$1"; RIG="$2"; WALK="$3"; MODEL="$4"
+BIN="$1"; RIG="$2"; WALK="$3"; MODEL="$4"; LIB="$5"
 fail=0
 check() { if [ "$1" = "0" ]; then echo "ok:   $2"; else echo "FAIL: $2"; fail=1; fi }
 
@@ -47,57 +47,8 @@ find "$PWD" -mindepth 1 -maxdepth 1 -exec rm -rf {} + 2>/dev/null
 mkdir -p staged "$LOC"
 cp "$RIG" staged/Hero.glb && cp "$WALK" staged/HeroWalk.glb && cp "$MODEL" staged/Prop.fbx
 
-# The shared checks: every clip of a subtree resolved (skeletal), no issue.
-cat > common.js <<'JS'
-function assert(c, m) { if (!c) throw new Error("assert failed: " + m); console.log("ok: " + m); }
-function skeletal(root) {
-    var nodes = scene.nodes({ subtree: root }), n = 0, all = 0;
-    for (var i = 0; i < nodes.length; i++) {
-        var clips = anim.list(nodes[i].id);
-        for (var k = 0; k < clips.length; k++) { all++; if (clips[k].skeletal) n++; }
-    }
-    return { skeletal: n, all: all };
-}
-function state(av, pl, what) {
-    var issues = editor.issues();
-    console.log(what + " issues: " + JSON.stringify(issues.map(function (i) { return i.id + " — " + i.message; })));
-    var a = skeletal(av), p = skeletal(pl);
-    assert(issues.length === 0, what + ": ZERO issues (" + issues.length + ")");
-    assert(a.skeletal === 3 && a.all === 3,
-           what + ": the avatar has its two own clips + the loaded one, all resolved (" + JSON.stringify(a) + ")");
-    assert(p.skeletal === 1 && p.all === 1,
-           what + ": the placed model has its own clip, resolved (" + JSON.stringify(p) + ")");
-}
-function roundTrips(p1, p2, av, pl, what) {
-    for (var round = 1; round <= 2; round++) {
-        assert(project.save() === true, what + " round " + round + ": save");
-        assert(project.open(p2) === true && project.save() === true,
-               what + " round " + round + ": switch to the other project (and save it)");
-        assert(project.open(p1) === true, what + " round " + round + ": reopen");
-        state(av, pl, what + " round " + round + " reopened");
-    }
-}
-JS
-
-cat > arm1.js <<JS
-var p1 = project.create("clip ref one", { location: "$LOC" });
-var r = avatar.importAvatar("$PWD/staged/Hero.glb", { scope: "project" });
-assert(r && r.asset, "the avatar imports (" + JSON.stringify(r) + ")");
-var av = avatar.spawn(r.asset, { position: { x: 0, y: 0, z: 0 } });
-var loaded = avatar.loadClip(av, "$PWD/staged/HeroWalk.glb");
-assert(loaded && loaded.added >= 1, "the extra clip loads onto the spawned avatar");
-var placed = assets.importAndPlace("$PWD/staged/Prop.fbx", { position: { x: 3, y: 0, z: 0 } });
-var pl = placed.nodeId;
-state(av, pl, "fresh");
-assert(project.save() === true, "save the first project");
-var p2 = project.create("clip ref two", { location: "$LOC" });
-assert(project.open(p1) === true, "back to the first project");
-state(av, pl, "first reopen");
-roundTrips(p1, p2, av, pl, "R1");
-console.log("CLIPREF P1=" + p1 + " P2=" + p2 + " AV=" + av + " PL=" + pl);
-console.log("arm 1: ALL OK");
-JS
-cat common.js arm1.js > arm1.run.js
+# The JS half is $5 (scripts/e2e_clip_ref.js); each process runs it plus ONE call.
+{ cat "$LIB"; echo "arm1(\"$PWD/staged\", \"$LOC\");"; } > arm1.run.js
 # THE PROCESS RUNS FROM A DIRECTORY AS DEEP UNDER \$HOME AS A PROJECT FOLDER
 # ($LOC/Projects/<guid>). Before the lane, an import blob recorded the model's
 # own clips by the import path RELATIVE to the open project's folder, and a
@@ -126,13 +77,7 @@ PL="$(grep -o ' PL=[^ ]*' arm1.log | cut -d= -f2)"
 mkdir -p "$(dirname "$R2")" && cp -a "$R1" "$R2"
 check $? "the data root is copied to $R2"
 
-cat > arm2.js <<JS
-assert(project.open("$P1") === true, "the relocated data root opens the first project");
-state("$AV", "$PL", "relocated open");
-roundTrips("$P1", "$P2", "$AV", "$PL", "R2");
-console.log("arm 2: ALL OK");
-JS
-cat common.js arm2.js > arm2.run.js
+{ cat "$LIB"; echo "arm2(\"$P1\", \"$P2\", \"$AV\", \"$PL\");"; } > arm2.run.js
 JAHSHAKA_DATA_ROOT="$R2" "$BIN" --headless --data-root "$R2" --script arm2.run.js > arm2.log 2>&1
 rc=$?
 grep -E "^ok:|assert failed|issues:|ALL OK" arm2.log

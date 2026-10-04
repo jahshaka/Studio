@@ -781,11 +781,12 @@ add_test(NAME scripting.e2e.clip_ref
                  ${CMAKE_SOURCE_DIR}/tests/avatar/fixtures/rig2.glb
                  ${CMAKE_SOURCE_DIR}/tests/avatar/fixtures/rig2_walk_anim.glb
                  ${CMAKE_SOURCE_DIR}/tests/skeletal/fixtures/mixamo_tpose.fbx
+                 ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_clip_ref.js
          WORKING_DIRECTORY ${_home}/run)
 set_tests_properties(scripting.e2e.clip_ref PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
     LABELS "scripting"
-    TIMEOUT 300)   # two processes, measured 98 s (import bakes dominate)
+    TIMEOUT 300)   # two processes: 98 s measured on a cold shader cache, 8 s warm
 
 # scripting.e2e.perf_capture_frames — THE CAPTURE WINDOW IS COUNTED IN FRAMES
 # (PERF-CAPTURE-SCRIPT-1, lane FENCE-1). Two halves like perf.capture_bundle:
