@@ -264,7 +264,7 @@ tree's three shas, the box (load over the suite's own window; the GPU clock stat
 gates sampled AT THE SUITE'S START — ctest's `Start N:` line, TEST-SELECTOR-1 L1; -j, the display).
 `gpu_ms` is gone (TEST-SELECTOR-1 L4: no suite ever printed one — 0 of 38,269 records; a GPU time
 reaches the log as a target line, `target: <value> (bar <bar>) <what>`). The fields are `testing/runs/README.md`; the two
-standing queries are `scripts/gate_runlog.py longest` and `scripts/gate_runlog.py load-reds`.
+standing queries are `scripts/gate_runlog.py longest`, `scripts/gate_runlog.py load-reds` and `scripts/gate_runlog.py trend` (TEST-1: every `target:` row as a series over tips; a STEP is a reading outside 3.5 x MAD of the trailing 10 tips it DESCENDS from, under one condition — clock locked or not, the GPU solo or shared — confirmed by the next two descendant readings all out of band on the same side; it names the first tip, its lane and the last in-band tip. Every gate prints it for its own tip after its verdict — `UNCONFIRMED` is a step's first day —, rc-gate.sh writes it to the state file and the d-build merge prints it in its summary. NON-GATING: a step gets the lead's verdict, as a red does).
 
 **THE BUILT FORK MUST BE THE PIN (TESTING-DEBTS-1 T12).** `irisgl/scripts/build-ogre.sh` writes
 `<install>/BUILT_FROM` (the ogre-next commit it built, `dirty` on a second line for a dirty

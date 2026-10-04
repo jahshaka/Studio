@@ -2032,6 +2032,7 @@ def main():
                                        reasons=why) if J["command"] else 0
             if J["serial_command"]:
                 rc = gate_runlog.run_ctest(J["serial_command"], build, a.tier or "joint", lane, 1, reasons=why) or rc
+            gate_runlog.trend_at_gate_end()
             sys.exit(rc)
         return
     lane = a.lane or gate_runlog._git(["rev-parse", "--abbrev-ref", "HEAD"])
@@ -2150,6 +2151,7 @@ def main():
         print("\n=== the timing phase (serial, after the parallel phase) ===")
         r2 = gate_runlog.run_ctest(merge_tier_serial(), build, tier_name, lane, 1, reasons={}, rng=log_range,
                                    labels=labels)
+        gate_runlog.trend_at_gate_end()
         return r1 or r2
 
     def run_tier(reason):
@@ -2224,6 +2226,7 @@ def main():
         trc = gate_runlog.run_ctest(target_cmd, build, "target", lane, 1, reasons=selected_targets,
                                     rng=log_range, labels=labels, gating=lambda n: False)
         print("=== target tests exited %d — NOT part of any gate's verdict ===" % trc)
+        gate_runlog.trend_at_gate_end()
         return
     if a.run:
         labels = {n: t["labels"] for n, t in inv.items()}
@@ -2241,6 +2244,7 @@ def main():
         # any target runs. The targets used to run inline after this point, at -j1, and the gate's
         # exit waited for them (7-13 min of every engine lane's gate, the gate-speed audit's S1).
         print("\n=== GATE VERDICT: %s (exit %d) — the gating phases only ===" % ("GREEN" if rc == 0 else "RED", rc))
+        gate_runlog.trend_at_gate_end()
         if target_cmd and not a.no_targets:
             start_target_step(a, build)
         sys.exit(rc)
