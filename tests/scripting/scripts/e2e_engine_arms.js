@@ -2,7 +2,9 @@
 // audit's A2). engine.arm(name, value?) / engine.arms() over Engine::setArm and
 // Engine::arms: the registry that replaced the ray tier's per-frame environment
 // doors (JAH_R5_NO_MOTION, JAH_R7_NO_POSED, JAH_R6_NO_ALPHA, JAH_R7_EDGE_CLASSES,
-// JAH_R5_MONO_EYES, JAH_RQ_REFIT). What a harness relies on, asserted:
+// JAH_R5_MONO_EYES, JAH_RQ_REFIT) and the per-frame JAHSHAKA_GATHER_NO_TEMPORAL,
+// JAHSHAKA_ATOM_DECODE_OFF, JAHSHAKA_CARD_FOOTPRINT_K and JAHSHAKA_GI_FIELD_NO_SCROLL doors.
+// What a harness relies on, asserted:
 //   * the table: every arm listed with its default = the shipped picture, its
 //     range and a sentence of what it changes;
 //   * THE LATCH: a value set between two frames is read from the NEXT frame,
@@ -21,7 +23,8 @@ function assert(cond, msg) {
 }
 
 var EXPECTED = { "reflect.motion": 1, "reflect.posed": 1, "reflect.alphaTested": 1,
-                 "reflect.edgeClasses": 0, "reflect.monoEyes": 0, "rayquery.tlasRefit": 0 };
+                 "reflect.edgeClasses": 0, "reflect.monoEyes": 0, "rayquery.tlasRefit": 0,
+                 "gather.temporal": 1, "atom.decode": 1, "cards.footprintTexels": 4, "gi.fieldScroll": 1 };
 
 var guid = project.create("Engine Arms " + Date.now());
 assert(guid.length > 10, "project.create -> " + guid);

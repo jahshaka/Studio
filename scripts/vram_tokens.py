@@ -48,12 +48,12 @@ THE CONTRACT
 
   * THE CLOCKS COME BACK (lane TEST-1, plan 9cl CLOCK-TRAP-1: PHOTON-I-1's cost run left the card
     locked at 2550 MHz when its own trap did not run). `--lock-clocks MIN,MAX` locks the GPU clocks
-    AFTER the admission (the card is this row's) and restores them in a `finally` — a normal end,
-    a non-zero exit, a forwarded SIGTERM/SIGINT/SIGHUP, a crash of the row — before the tokens go.
-    And every TIMING run checks the card at its end: a row that locked the clocks itself and left
-    them so (the signature: an idle card that does not clock down) is restored here too, unless
-    the lead declared a series lock (JAH_GPU_CLOCKS_HELD=1). Locking needs `sudo -n nvidia-smi`;
-    where the box refuses it the run says `gpu-clocks: NOT locked … provisional` and goes on.
+    AFTER the admission (the card is this row's), RECORDS the lock with its owner
+    (/tmp/jah-gpu-clocks.lock: pid, label, spec) and restores them before the tokens go — a normal
+    end, a non-zero exit, a forwarded SIGTERM/SIGINT/SIGHUP, a crash of the row. It restores ONLY a
+    lock it recorded itself: a lock somebody else holds (a live owner's record) is neither taken
+    nor undone, and a lock nobody recorded is nobody's business here (rc-gate's close reports it).
+    Locking needs `sudo -n nvidia-smi`; refused, the run says `gpu-clocks: NOT locked … provisional`.
 
 Usage:
   vram_tokens.py admit <k>|all [--label <text>] [--timing] [--run-timeout <s>] [--lock-clocks MIN,MAX]
@@ -351,7 +351,7 @@ def main(argv):
     # THE ROW'S OWN BUDGET, from AFTER the admission (LOCK-WAIT-1): the queue is never charged to it.
     if run:
         rest = ["timeout", "--verbose", "-k", "15", run] + rest
-    locked = lock_clocks(lock) if lock else False
+    locked = lock_clocks(lock, label) if lock else False
     done = []
 
     def clocks_back():
@@ -363,8 +363,6 @@ def main(argv):
         done.append(1)
         if locked:
             restore_clocks("the row's lock")
-        elif timing and not os.environ.get("JAH_GPU_CLOCKS_HELD"):
-            left_locked_check()
     try:
         return supervise(rest, held, label, on_end=clocks_back)
     finally:
@@ -380,41 +378,58 @@ def _smi(args):
         return 1, str(e)
 
 
-def lock_clocks(spec):
-    """Locks the GPU clocks to MIN,MAX (sudo -n nvidia-smi -lgc). True when it took."""
+CLOCK_RECORD = "/tmp/jah-gpu-clocks.lock"
+
+
+def _record():
+    """The live clock lock's record {pid, label, spec}, or None (none, or its owner is dead)."""
+    try:
+        rec = __import__("json").load(open(CLOCK_RECORD))
+        os.kill(int(rec["pid"]), 0)
+        return rec
+    except (OSError, ValueError, KeyError, TypeError):
+        return None
+
+
+def lock_clocks(spec, label):
+    """Locks the GPU clocks to MIN,MAX (sudo -n nvidia-smi -lgc) and RECORDS the lock with its owner
+    (this admission's pid, the row's label) in CLOCK_RECORD. A lock another live owner recorded is
+    left alone — this row runs at that owner's clocks and restores nothing. True = this run locked."""
+    held = _record()
+    if held:
+        sys.stderr.write("gpu-clocks: held by %s (pid %s, %s) — this run neither locks nor restores\n"
+                         % (held.get("label"), held.get("pid"), held.get("spec")))
+        return False
     rc, out = _smi(["-lgc", spec])
-    if rc == 0:
-        sys.stderr.write("gpu-clocks: locked %s\n" % spec)
-    else:
+    if rc != 0:
         sys.stderr.write("gpu-clocks: NOT locked (%s) — every GPU ms of this run is provisional\n"
                          % (out.splitlines()[-1] if out else "sudo refused"))
+        sys.stderr.flush()
+        return False
+    with open(CLOCK_RECORD, "w") as f:
+        __import__("json").dump({"pid": os.getpid(), "label": label, "spec": spec}, f)
+    sys.stderr.write("gpu-clocks: locked %s (recorded: pid %d)\n" % (spec, os.getpid()))
     sys.stderr.flush()
-    return rc == 0
+    return True
 
 
 def restore_clocks(why):
+    """Restores the clocks THIS process locked — and only those: its own record, nobody else's."""
+    held = _record()
+    if held and int(held.get("pid", -1)) != os.getpid():
+        sys.stderr.write("gpu-clocks: the record is %s's, not ours — nothing restored\n" % held.get("label"))
+        return
     rc, out = _smi(["-rgc"])
     if rc == 0:
+        try:
+            os.unlink(CLOCK_RECORD)
+        except OSError:
+            pass
         sys.stderr.write("gpu-clocks: restored (%s)\n" % why)
     else:
         sys.stderr.write("gpu-clocks: COULD NOT RESTORE (%s: %s) — run `sudo nvidia-smi -rgc`\n"
                          % (why, out.splitlines()[-1] if out else "sudo refused"))
     sys.stderr.flush()
-
-
-def left_locked_check():
-    """A timing row that locked the clocks ITSELF and left them so: an idle card that does not clock
-    down (gate_runlog.gpu_clocks' signature, 2550 MHz idle under -lgc against ~210-645 free). A busy
-    card cannot tell and is left alone; so is a series the lead declared (JAH_GPU_CLOCKS_HELD)."""
-    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-    try:
-        import gate_runlog
-        st = gate_runlog.gpu_clocks()
-    except Exception:
-        return
-    if st.get("state") == "locked?":
-        sys.stderr.write("gpu-clocks: the row LEFT THE CLOCKS LOCKED (idle at %s MHz)\n" % st.get("graphics_mhz"))
-        restore_clocks("left locked by the row")
 
 
 def _pdeathsig():

@@ -381,11 +381,16 @@ lanes. Deleted by the sweep (no reader): `JAHSHAKA_GI_DEBUG` (17 diagnostic log 
 
 THE RAY TIER'S MEASURING DOORS ARE ARMS (lane TEST-1, the perf audit's A2): `JAH_RQ_REFIT`,
 `JAH_R5_NO_MOTION`, `JAH_R5_MONO_EYES`, `JAH_R6_NO_ALPHA`, `JAH_R7_NO_POSED` and
-`JAH_R7_EDGE_CLASSES` — five of them read per frame inside shipped code — are deleted. Each is
-a registered arm now (`Engine::setArm` / the verb `engine.arm(name, value)`, latched at the top
+`JAH_R7_EDGE_CLASSES` — five of them read per frame inside shipped code — are deleted, and so
+are the per-frame `JAHSHAKA_GATHER_NO_TEMPORAL`, `JAHSHAKA_ATOM_DECODE_OFF`, `JAHSHAKA_CARD_FOOTPRINT_K`
+and `JAHSHAKA_GI_FIELD_NO_SCROLL`. Each is a registered arm now (`Engine::setArm` / the verb `engine.arm(name, value)`, latched at the top
 of the next frame; `Engine::arms()` / `engine.arms()` list them with their defaults):
 `rayquery.tlasRefit`, `reflect.motion`, `reflect.monoEyes`, `reflect.alphaTested`,
-`reflect.posed`, `reflect.edgeClasses`. A new measuring switch is a row in that table
+`reflect.posed`, `reflect.edgeClasses`, `gather.temporal`, `atom.decode`, `cards.footprintTexels`,
+`gi.fieldScroll`. Still environment reads on a per-frame or per-pass path (not converted, listed
+for the next lane): `JAHSHAKA_ATOM_DISCRIMINATE`, `JAHSHAKA_HIT_WORLD_LIGHTS`,
+`JAHSHAKA_HIT_VCT_SPECULAR` (HlmsAtom, per pass preparation) and `JAHSHAKA_GI_NO_REBUILD_SETTLE`
+(OgreGi, per frame). A new measuring switch is a row in that table
 (OgreFrameMonitor.cpp `kArms`), never a `getenv`. `scripts/perf-ab.py` drives the arms.
 
 | Switch | Read in | Reader | What it does |
@@ -396,16 +401,13 @@ of the next frame; `Engine::arms()` / `engine.arms()` list them with their defau
 | `JAHSHAKA_HLMS_DEBUG_DIR` | OgreEngine.cpp | app/shader_gate_warm.sh, docs/SCRIPTING.md | dumps the generated Hlms shaders |
 | `JAHSHAKA_ATOM_DRAW_OFF` | OgreScene.cpp | the `--engine-selftest` hash A/B (no script can reach the selftest) | the Atom split off: every item through PBS |
 | `JAHSHAKA_ATOM_OCCLUSION_OFF` | OgreScene.cpp | the `--engine-selftest` hash A/B | the id pass frustum-only |
-| `JAHSHAKA_ATOM_DECODE_OFF` | OgreAtomDraw.cpp | engine.atom_draw, scale | the screen decode unarmed (proves the passes skip the queue) |
 | `JAHSHAKA_ATOM_DISCRIMINATE` | HlmsAtom.cpp | scale | a colour code per failed decode term instead of the discard |
 | `JAHSHAKA_ATOM_TRACE` | OgreGpuScene.cpp | scale | the GPU scene's per-frame trace lines |
 | `JAHSHAKA_HIT_WORLD_LIGHTS`, `JAHSHAKA_HIT_VCT_SPECULAR` | HlmsAtom.cpp | gi.hit_shade | the hit decode's light list / VCT specular arms |
-| `JAHSHAKA_CARD_FOOTPRINT_K` | OgreRayQuery.cpp | gi.rt_reflect `--footprint-sweep` | the card read's footprint gate |
 | `JAHSHAKA_RAY_DENY_STORAGE_FORMAT` | OgreRayQuery.cpp | gi.rt_reflect | refuses a storage format (the fallback path) |
 | `JAH_ORTHO_POSTFX` | OgreView.cpp | ssr.e2e | post effects on an orthographic view |
 | `JAH_GI_CASCADE_FAULT`, `JAH_GI_CASCADE_FAULT_POST` | OgreGi.cpp | gi.cascades | a cascade build throws before / after the placement moves |
 | `JAH_VCT_REFUSE_GEOMETRY` | OgreGi.cpp | gi.voxel_resident | the voxeliser reads no geometry (an empty volume must build) |
-| `JAHSHAKA_GI_FIELD_NO_SCROLL` | OgreGi.cpp | gi.field_scroll | the field re-placed whole instead of scrolled |
 | `JAHSHAKA_GI_FIELD_RAYS` | OgreGi.cpp | gi.field_thin_wall | the field's rays per depth texel |
 | `JAHSHAKA_GI_FIELD_SAMPLES` | OgreGi.cpp | gi.field_thin_wall | the field's sample target per texel |
 | `JAHSHAKA_GI_FIELD_STATIC` | OgreGi.cpp | gi.field_thin_wall | the field's rays NOT rotated per frame (the fixed-set arm) |

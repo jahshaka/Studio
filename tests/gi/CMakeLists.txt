@@ -1876,7 +1876,7 @@ foreach(_arm plane deterministic cards)
 endforeach()
 # THE GATHER'S HISTORIES (PHOTON-GATHER-1c; C2 design section 2): gi.gather_stable
 # (a still Showroom-2-shaped room moves < 2/255 frame to frame after the warm-up,
-# and the JAHSHAKA_GATHER_NO_TEMPORAL arm in the same process shows the history is
+# and the arm "gather.temporal" = 0 in the same process shows the history is
 # what stills it) and gi.gather_motion (a truck and a yaw against the frames they
 # settle to, gi.reflect_motion's method).
 add_executable(test_gi_gather_temporal test_gi_gather_temporal.cpp)

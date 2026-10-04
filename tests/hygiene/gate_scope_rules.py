@@ -379,6 +379,34 @@ def main(source, build):
           "parallel lanes: lane A's step is named once at a0, and lane B's tips stay in band (%r)"
           % [rows[x["i"]][1] for x in st])
 
+    # 14. ONE BUILD, ONE SELECTION, FROM ANY CHECKOUT (TEST-1 fix round, CLIP-REF-1's finding): the
+    # merge judge runs d-build's copy of the scripts against a LANE's build, and the build's graph
+    # names files under the lane's tree — read against the script's own checkout every touched path
+    # was "not in the build graph" (448 rows against the lane's own 372). The scripts copied to a
+    # foreign root must select exactly what they select at home, through the graph.
+    import shutil
+    foreign = tempfile.mkdtemp(prefix="gate-scope-root-")
+    try:
+        os.makedirs(os.path.join(foreign, "scripts"))
+        for f in ("gate-scope.py", "gate_graph.py", "gate_runlog.py", "vram_tokens.py", "kernel_xid.py"):
+            if os.path.isfile(os.path.join(source, "scripts", f)):
+                shutil.copy(os.path.join(source, "scripts", f), os.path.join(foreign, "scripts", f))
+        probe = ["--files", "irisgl/engine/src/OgreFrameMonitor.cpp", "src/scripting/modules/perfapi.cpp",
+                 "--build", build, "--json"]
+        c1, o1, e1 = run([tool] + probe, source)
+        c2, o2, e2 = run([os.path.join(foreign, "scripts", "gate-scope.py")] + probe, foreign)
+        try:
+            d1, d2 = json.loads(o1), json.loads(o2)
+        except ValueError:
+            d1, d2 = {}, {}
+        s1 = set(d1.get("suites", [])) | set(d1.get("targets", []))
+        s2 = set(d2.get("suites", [])) | set(d2.get("targets", []))
+        check(c1 == 0 and c2 == 0 and s1 and s1 == s2 and "not in the build graph" not in o2 + e2,
+              "the same files and build select the same %d rows from a foreign checkout (%d there; "
+              "only here %s, only there %s)" % (len(s1), len(s2), sorted(s1 - s2)[:5], sorted(s2 - s1)[:5]))
+    finally:
+        shutil.rmtree(foreign, ignore_errors=True)
+
     if FAILURES:
         print("source.gate_scope_rules: FAILED (%d)" % len(FAILURES))
         return 1

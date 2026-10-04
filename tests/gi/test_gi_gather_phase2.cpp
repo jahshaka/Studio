@@ -453,7 +453,7 @@ static int cardsMain(Engine *e)
     t.readback = true;
     t.freezeFrameIndex = true;
     s->setGatherTuning(t);
-    setenv("JAHSHAKA_GATHER_NO_TEMPORAL", "1", 1);
+    e->setArm("gather.temporal", 0.0);
 
     const float stride = 16.0f * (2.0f * kOrthoHalf / float(kPlaneSize));
     // The profile: from just in front of the panel out to three strides.
@@ -526,7 +526,7 @@ static int cardsMain(Engine *e)
     const ArmResult open = readArm("the ESTIMATOR arm (cards, 4 px, 64 live frames)", true,
                                    kFineStride, 64);
     const float fineStride = float(kFineStride) * (2.0f * kOrthoHalf / float(kPlaneSize));
-    unsetenv("JAHSHAKA_GATHER_NO_TEMPORAL");
+    e->setArm("gather.temporal", 1.0);
     CHECK(vox.ran && card.ran && open.ran, "all three arms ran the gather and read it back");
     CHECK_MSG(vox.cards == 0u && card.cards > 0u && open.cards > 0u,
               "the cache is off in the voxel arm and resident in the card arms (%u / %u / %u cards)",

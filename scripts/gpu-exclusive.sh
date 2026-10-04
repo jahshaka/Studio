@@ -21,10 +21,12 @@
 # admission's child with the token fds inherited: the tokens die with the pair, whatever ends it,
 # and the kernel's word on the row (an Xid) is read after it (scripts/kernel_xid.py).
 #
-# THE CLOCKS (lane TEST-1, plan 9cl CLOCK-TRAP-1): `--lock-clocks MIN,MAX` locks the GPU clocks once
+# THE CLOCKS (lane TEST-1, plan 9cl CLOCK-TRAP-1). OWNER DECISION 2026-10-04: the clocks are NOT
+# locked — no script and no tier passes the flag below; it stays an opt-in, and its restore is the
+# guard. `--lock-clocks MIN,MAX` locks the GPU clocks once
 # the card is the row's and restores them on EVERY exit path before the tokens go (vram_tokens.py's
-# `finally`); a timing run whose row locked the clocks itself and left them locked is restored at
-# its end too, unless the lead declared a series lock (JAH_GPU_CLOCKS_HELD=1). The lock needs
+# `finally`), recording the lock with its owner in /tmp/jah-gpu-clocks.lock and restoring ONLY a lock
+# it recorded — a lock another live owner holds is neither taken nor undone. The lock needs
 # `sudo -n nvidia-smi`; refused, the run prints `gpu-clocks: NOT locked … provisional` and goes on.
 here="$(cd "$(dirname "$0")" && pwd)"
 opts=()

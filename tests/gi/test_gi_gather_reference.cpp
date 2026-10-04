@@ -656,7 +656,7 @@ int main()
             GatherTuning lever;
             lever.restOff = true;
             s->setGatherTuning(lever);
-            setenv("JAHSHAKA_GATHER_NO_TEMPORAL", "1", 1);
+            e->setArm("gather.temporal", 0.0);
             s->refreshGlobalIllumination();
             render(e, 20);
             std::vector<double> a1(points.size(), 0.0), a2(points.size(), 0.0);
@@ -673,7 +673,7 @@ int main()
                     a2[i] += m[0] * m[0];
                 }
             }
-            unsetenv("JAHSHAKA_GATHER_NO_TEMPORAL");
+            e->setArm("gather.temporal", 1.0);
             for (size_t i = 0; i < points.size(); ++i) {
                 const double mean = a1[i] / kN;
                 sigmaRaw[i] = mean > 0.0 ? std::sqrt(std::max(0.0, a2[i] / kN - mean * mean)) / mean : 0.0;

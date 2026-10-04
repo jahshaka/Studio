@@ -1174,6 +1174,29 @@ static int costMain(Engine *e, const char *, const char *)
                     what, (median >= 0.0f && median <= bar) ? " -- MET" : "");
         CHECK_MSG(median >= 0.0f && median <= bar,
                   "%s: %.3f GPU ms, median of the last 30 (bar %.2f)", what, median, bar);
+        // THE HIT DECODE, between the reflection's two halves (PHOTON-HIT-SHADE-1): it used to be
+        // inside the reflection's one timestamp span and is its own pass row now (lane TEST-1), so
+        // it is printed on its own — a target with no bar (the reflect rows' bars are BUGS-1's).
+        {
+            std::vector<FrameRecord> recs;
+            e->takeFrameRecords(recs);
+            std::vector<float> dec;
+            for (const FrameRecord &r : recs) {
+                float sum = -1.0f;
+                for (const FramePass &p : r.passes)
+                    if (p.pass.find("hit decode") != std::string::npos && p.gpuMs >= 0.0f)
+                        sum = (sum < 0.0f ? 0.0f : sum) + p.gpuMs;
+                if (sum >= 0.0f) dec.push_back(sum);
+            }
+            float dmed = -1.0f;
+            if (!dec.empty()) {
+                std::vector<float> tail(dec.end() - std::min<size_t>(30u, dec.size()), dec.end());
+                std::sort(tail.begin(), tail.end());
+                dmed = tail[tail.size() / 2];
+            }
+            std::printf("target: %.3f (bar none yet) %s: the HIT DECODE pass between the halves, GPU ms, "
+                        "median of the last 30 (%zu frames carried it)\n", dmed, what, dec.size());
+        }
         return median;
     };
 
@@ -1894,7 +1917,7 @@ static int hitresMain(Engine *e)
 ///
 /// THE TWO ERRORS, per roughness, over the wall pixels that show the cube,
 /// each arm in its own view warmed 60 frames (the temporal mean at its floor):
-///   card  the card read ALONE (the gate open, JAHSHAKA_CARD_FOOTPRINT_K huge):
+///   card  the card read ALONE (the gate open, the arm "cards.footprintTexels" huge):
 ///         the per-pixel standard deviation of two CONSECUTIVE frames — the
 ///         noise one texel-exact sample per frame leaves after the mean, which
 ///         grows with the footprint (the speckle);
@@ -1987,10 +2010,10 @@ static int footprintSweepMain(Engine *e)
     for (const float rough : { 0.03f, 0.05f, 0.07f, 0.09f, 0.12f, 0.15f, 0.2f, 0.25f, 0.3f }) {
         wallParams.roughness = rough;
         s->setPbrMaterial(wallMat, wallParams);
-        setenv("JAHSHAKA_CARD_FOOTPRINT_K", "1e9", 1);
+        e->setArm("cards.footprintTexels", 1e9);
         Image c0, c1, v0, v1;
         shots(60, c0, c1);
-        setenv("JAHSHAKA_CARD_FOOTPRINT_K", "0", 1);
+        e->setArm("cards.footprintTexels", 0.0);
         shots(60, v0, v1);
         double ec = 0.0, ev = 0.0;
         int n = 0;
@@ -2013,7 +2036,7 @@ static int footprintSweepMain(Engine *e)
             crossing = prevF + (f - prevF) * (-prevDiff) / (diff - prevDiff);
         prevDiff = diff; prevF = f; havePrev = true;
     }
-    unsetenv("JAHSHAKA_CARD_FOOTPRINT_K");
+    e->setArm("cards.footprintTexels", 4.0);
     std::printf("crossing: the card's noise meets the voxel's bias at a footprint of %.2f card texels\n",
                 crossing);
     return 0;

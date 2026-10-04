@@ -235,7 +235,8 @@ def contention_list():
     return dict(s) if isinstance(s, dict) else None
 
 
-def _git(args, cwd=ROOT):
+def _git(args, cwd=None):
+    cwd = cwd or ROOT
     try:
         r = subprocess.run(["git"] + args, cwd=cwd, capture_output=True, text=True)
         return r.stdout.strip() if r.returncode == 0 else ""
@@ -257,7 +258,7 @@ def tree_shas():
             "irisgl_dirty": i_dirty}
 
 
-def fork_pin_problem(root=ROOT):
+def fork_pin_problem(root=None):
     """THE BUILT FORK MUST BE THE PIN (TESTING-DEBTS-1 T12). None when the ogre-next checkout AND
     the install (`<install>/BUILT_FROM`, written by irisgl/scripts/build-ogre.sh; the install is
     OGRE_PREFIX when set, as build-ogre.sh reads it) are both at the commit irisgl pins; else the
@@ -265,6 +266,7 @@ def fork_pin_problem(root=ROOT):
     checkout) is not judged. REFLECT-MOVERS-1, 2026-09-28: a worktree whose install was built
     from an older fork commit than the pin ran a 124-minute gate — its PBS media failed to
     compile ("atmoNprSkyRadiance: no matching overloaded function"): 76 reds, 3 Xids, void."""
+    root = root or ROOT
     ig = os.path.join(root, "irisgl")
     pin = _git(["rev-parse", "HEAD:thirdparty/ogre-next"], cwd=ig) if os.path.isdir(ig) else ""
     if not pin:

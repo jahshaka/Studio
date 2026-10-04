@@ -3,7 +3,7 @@
 
     scripts/perf-ab.py <fixture> --arm A=<arm=value[,arm=value]> --arm B=<...>
                        [--tier epic] [--res 1080p[,4k|WxH]] [--warm 120] [--frames 240] [--abba 4]
-                       [--settle 30] [--vr] [--lock-clocks 2100,2550] [--build build-linux] [--out DIR]
+                       [--settle 30] [--vr] [--build build-linux] [--out DIR]
 
 Before it, every measuring lane wrote its own rig: a capture driver, a parser, a clock dance and a
 "measuring door" in engine code (116 such scripts in 39 spike dirs; process-tooling.md A1). This is
@@ -12,9 +12,10 @@ the one rig. In order, it:
   1. takes its own memory scope (~/Developer/scripts/lead/scoped.sh 40G), its OWN Xvfb (a free display
      in 60-99, 1920x1080x24, killed by the pid it recorded), a scratch HOME and --data-root, and the
      WHOLE CARD (scripts/gpu-exclusive.sh: every VRAM token, the run log's timing class);
-  2. locks the GPU clocks for the run and restores them on every exit path (gpu-exclusive.sh
-     --lock-clocks, plan 9cl CLOCK-TRAP-1) — where the box refuses `sudo -n nvidia-smi` the header
-     says NOT LOCKED and every number is provisional;
+  2. leaves the GPU clocks UNLOCKED (owner decision 2026-10-04: no clock locks; revisited later) —
+     the method is the paired arms in one process, ABBA, with medians and a bootstrap CI, and the
+     clock state is read before and after the run and printed in the header. `--lock-clocks MIN,MAX`
+     is an opt-in nothing uses (gpu-exclusive.sh's guard restores it on every exit path);
   3. opens the fixture, sets the tier, sizes the viewport and WARMS UP (frames, never seconds);
   4. alternates the arms in ONE app process, ABBA (A B B A, repeated --abba times), each block a
      frame-counted perf.capture({frames}) window after --settle frames on the new arm — an arm is a
@@ -260,6 +261,7 @@ def frame_rows(rec):
     add("frame  GPU top-level passes (gpuMs)", rec.get("gpuMs"))
     if rec.get("frameGpuMs", -1) is not None and rec.get("frameGpuMs", -1) >= 0:
         add("frame  GPU unattributed", rec.get("unattributedGpuMs"))
+        add("frame  GPU idle (waiting for submissions)", rec.get("gpuIdleMs"))
     add("frame  CPU (totalMs)", rec.get("totalMs"))
     for p in rec.get("passes") or []:
         # the node and the pass name it (a workspace instance's name carries a per-run address)
@@ -393,7 +395,10 @@ def main():
     ap.add_argument("--settle", type=int, default=30, help="frames on a new arm before its block is captured")
     ap.add_argument("--abba", type=int, default=4, help="ABBA repetitions (4 = 16 blocks)")
     ap.add_argument("--vr", action="store_true", help="a VR session (Monado's simulated headset) drives the frames")
-    ap.add_argument("--lock-clocks", default="2100,2550", help="MIN,MAX MHz, or 'none'")
+    ap.add_argument("--lock-clocks", default="none",
+                    help="MIN,MAX MHz — an opt-in nothing uses: owner decision 2026-10-04: off (clocks stay "
+                         "unlocked; the method is ABBA in one process, medians and a bootstrap CI, the clock "
+                         "state in the header)")
     ap.add_argument("--build", default="build-linux")
     ap.add_argument("--out", default=None)
     ap.add_argument("--top", type=int, default=40, help="rows printed per table (the frame rows always)")

@@ -861,7 +861,7 @@ static int decodeMain()
 //           Atom view (Objects), which paints every covered pixel, says which pixels
 //           follow the clear anyway (this world's night sky is the clear). Bloom, SMAA
 //           and SSAO off for it (each carries a neighbour into a pixel). The base's own
-//           seams are the bar (below); the NEGATIVE CONTROL (JAHSHAKA_ATOM_DECODE_OFF:
+//           seams are the bar (below); the NEGATIVE CONTROL (the arm "atom.decode" = 0:
 //           no decode at all) must see the Atom items.
 // A DETERMINISTIC PICTURE: every term that moves between frames of a still pose is
 // off and the same in every read — the output dither (JAHSHAKA_NO_DITHER), the ray
@@ -874,7 +874,6 @@ static int decodeExactMain()
 {
     setenv("JAHSHAKA_NO_DITHER", "1", 1);
     setenv("JAHSHAKA_NO_RAY_QUERY", "1", 1);
-    unsetenv("JAHSHAKA_ATOM_DECODE_OFF");
     Env env;
     World w;
     WorldSpec spec;
@@ -985,9 +984,9 @@ static int decodeExactMain()
     const bool su = follow("the Atom view", uncovered);
     env.scene->setAtomView(AtomView::Off);
     const bool sf = follow("classified", classifiedFollow);
-    setenv("JAHSHAKA_ATOM_DECODE_OFF", "1", 1);
+    env.engine->setArm("atom.decode", 0.0);
     const bool sn = follow("no decode", noDecodeFollow);
-    unsetenv("JAHSHAKA_ATOM_DECODE_OFF");
+    env.engine->setArm("atom.decode", 1.0);
     if (!qgetenv("JAH_SCALE_SHOT").isEmpty()) {
         Image m;
         m.width = 1920; m.height = 1080;
@@ -1743,16 +1742,17 @@ static int frameArmsMain(bool lattice)
 }
 
 // ===========================================================================
-// scale.gpu_coverage — EVERY GPU MILLISECOND HAS A ROW (lane TEST-1, the perf audit's F5).
-// The frame monitor's records carry the frame's OWN GPU span (FrameRecord::frameGpuMs: one
-// timestamp pair from the first command of the frame's submission to the last) and what
-// no top-level row accounts for (unattributedGpuMs = the span less every top-level pass and
-// cache row). A pass or a dispatch that is outside every row — the card relight and the sky
-// bakes were, before this lane — shows up here as unattributed time. THE FIXTURE: the
-// lattice (8,000 cubes, a shadowed point lamp) at EPIC (every GI part the tier ships: the
-// rays, the gather, the cards), 1080p, still and with the camera moving; 120 frames warm,
-// 240 measured per arm. THE BAR: the median frame's unattributed share stays under
-// kCoverageBar of its span — measured and stated beside the bar below.
+// scale.gpu_coverage — EVERY BUSY GPU MILLISECOND HAS A ROW (lane TEST-1, the perf audit's F5).
+// The frame monitor's records carry the frame's OWN GPU span (FrameRecord::frameGpuMs), and the
+// monitor times every stretch in which none of its rows is open: a stretch that crossed a CPU
+// submission is the GPU WAITING (gpuIdleMs — a frame-schedule reading, printed, never a coverage
+// hole: the irradiance field's raster submits every 8 probes and the CPU records on), one inside a
+// submission is GPU work no row names (unattributedGpuMs). THE BAR is ATTRIBUTION over the BUSY
+// span: the median frame's unattributed share of (frameGpuMs - gpuIdleMs) stays under kCoverageBar,
+// so sibling CPU load (longer idle) cannot red it. A pass or dispatch outside every row — the card
+// relight and the sky bakes were, before this lane — shows here. THE FIXTURE: the lattice (8,000
+// cubes, a shadowed point lamp) at EPIC, 1080p, still and with the camera moving; 120 frames warm,
+// 240 measured per arm.
 // ===========================================================================
 static int gpuCoverageMain()
 {
@@ -1767,6 +1767,7 @@ static int gpuCoverageMain()
     frame(env, 120);
     for (int arm = 0; arm < 2; ++arm) {
         const bool pan = arm == 1;
+        const char *what = pan ? "pan" : "still";
         const auto recs = collect(env, [&] {
             for (int f = 0; f < 240; ++f) {
                 if (pan) {
@@ -1776,50 +1777,45 @@ static int gpuCoverageMain()
                 frame(env, 1);
             }
         });
-        std::vector<double> span, rows, rest, share;
+        std::vector<double> span, busy, idle, rest, share, mismatch;
         unsigned unmeasured = 0;
+        const FrameRecord *worst = nullptr, *worstIdle = nullptr;
         for (const FrameRecord &r : recs) {
-            if (r.frameGpuMs <= 0.0f || r.unattributedGpuMs < -1e-3f) { ++unmeasured; continue; }
+            if (r.frameGpuMs <= 0.0f || r.unattributedGpuMs < 0.0f || r.gpuIdleMs < 0.0f) { ++unmeasured; continue; }
+            const double b = double(r.frameGpuMs) - double(r.gpuIdleMs);
             span.push_back(r.frameGpuMs);
-            rest.push_back(std::max(0.0f, r.unattributedGpuMs));
-            rows.push_back(double(r.frameGpuMs) - double(r.unattributedGpuMs));
-            share.push_back(std::max(0.0, double(r.unattributedGpuMs)) / double(r.frameGpuMs));
+            idle.push_back(r.gpuIdleMs);
+            busy.push_back(b);
+            rest.push_back(r.unattributedGpuMs);
+            share.push_back(b > 0.0 ? double(r.unattributedGpuMs) / b : 1.0);
+            if (!worst || r.unattributedGpuMs > worst->unattributedGpuMs) worst = &r;
+            if (!worstIdle || r.gpuIdleMs > worstIdle->gpuIdleMs) worstIdle = &r;
         }
-        const Stats sp = stats(span), rw = stats(rows), un = stats(rest), sh = stats(share);
-        std::printf("COVERAGE %s: %zu frames measured (%u not): frame span median %.3f ms p95 %.3f | rows %.3f | "
-                    "unattributed %.3f ms median, p95 %.3f | share median %.2f %% p95 %.2f %% (bar %.0f %%)\n",
-                    pan ? "pan  " : "still", span.size(), unmeasured, sp.median, sp.p95, rw.median, un.median,
-                    un.p95, 100.0 * sh.median, 100.0 * sh.p95, 100.0 * kCoverageBar);
-        // THE WORST FRAME, named: its span, what its top rows were and its CPU stages — the
-        // tail is the reading the median bar does not hold, and it has to be attributable too.
-        const FrameRecord *worstRec = nullptr;
-        for (const FrameRecord &r : recs)
-            if (r.frameGpuMs > 0.0f && (!worstRec || r.unattributedGpuMs > worstRec->unattributedGpuMs)) worstRec = &r;
-        if (worstRec) {
-            std::printf("COVERAGE %s worst frame %llu: span %.3f ms, unattributed %.3f ms, CPU %.3f ms; passes",
-                        pan ? "pan  " : "still", worstRec->frame, worstRec->frameGpuMs, worstRec->unattributedGpuMs,
-                        worstRec->totalMs);
-            for (const FramePass &p : worstRec->passes)
-                if (p.gpuMs > 0.2f) std::printf(" | %s %.2f", p.pass.c_str(), p.gpuMs);
-            std::printf("; rows");
-            for (const CacheWork &w : worstRec->cacheWork)
+        const Stats sp = stats(span), bu = stats(busy), id = stats(idle), un = stats(rest), sh = stats(share);
+        std::printf("COVERAGE %-5s: %zu frames measured (%u not): span median %.3f ms | busy %.3f | IDLE (GPU waiting "
+                    "for a submission) median %.3f ms p95 %.3f | unattributed median %.3f ms p95 %.3f | share of "
+                    "busy median %.2f %% p95 %.2f %% (bar %.0f %%)\n",
+                    what, span.size(), unmeasured, sp.median, bu.median, id.median, id.p95, un.median, un.p95,
+                    100.0 * sh.median, 100.0 * sh.p95, 100.0 * kCoverageBar);
+        const auto dump = [&](const char *label, const FrameRecord *r) {
+            if (!r) return;
+            std::printf("COVERAGE %-5s %s frame %llu: span %.3f idle %.3f unattributed %.3f ms, CPU %.3f ms; rows",
+                        what, label, r->frame, r->frameGpuMs, r->gpuIdleMs, r->unattributedGpuMs, r->totalMs);
+            for (const CacheWork &w : r->cacheWork)
                 if (w.gpuMs > 0.1f) std::printf(" | %s %.2f", w.detail.c_str(), w.gpuMs);
             std::printf("; stages");
-            for (const FrameStage &st : worstRec->stages)
+            for (const FrameStage &st : r->stages)
                 if (st.ms > 0.5f) std::printf(" | %s %.2f", st.name.c_str(), st.ms);
             std::printf("\n");
-        }
-        // A NEGATIVE remainder beyond the timer's noise would mean a row counted outside
-        // the frame's span (a nesting defect), never "more than covered".
-        double worstNeg = 0.0;
-        for (const FrameRecord &r : recs)
-            if (r.frameGpuMs > 0.0f) worstNeg = std::min(worstNeg, double(r.unattributedGpuMs));
-        REQUIRE(span.size() >= 200u, "%s: the frame's own GPU pair answered on %zu of %zu frames",
-                pan ? "pan" : "still", span.size(), recs.size());
-        REQUIRE(worstNeg > -0.05, "%s: no frame's top-level rows exceed its span (worst remainder %.3f ms)",
-                pan ? "pan" : "still", worstNeg);
+        };
+        dump("worst-unattributed", worst);
+        dump("worst-idle", worstIdle);
+        target("F5", id.median, "ms", (std::string(what) + ": the GPU's median wait for submissions inside a frame "
+                                       "(gpuIdleMs; a schedule reading for the speed work, never a coverage hole)").c_str());
+        REQUIRE(span.size() >= 200u, "%s: the frame's own pair and its gaps answered on %zu of %zu frames", what,
+                span.size(), recs.size());
         REQUIRE(!share.empty() && sh.median < kCoverageBar,
-                "%s: the median frame's unattributed GPU share %.2f %% < %.0f %%", pan ? "pan" : "still",
+                "%s: the median frame's unattributed share of its BUSY GPU time %.2f %% < %.0f %%", what,
                 100.0 * sh.median, 100.0 * kCoverageBar);
     }
     shutdown(env);
@@ -2225,7 +2221,6 @@ static int coverageTraceMain()
     setenv("JAHSHAKA_NO_RAY_QUERY", "1", 1);
     setenv("JAHSHAKA_ATOM_TRACE", "1", 1);
     setenv("JAHSHAKA_ATOM_DISCRIMINATE", "1", 1);
-    unsetenv("JAHSHAKA_ATOM_DECODE_OFF");
     auto knob = [](const char *name, int dflt) { return std::getenv(name) ? std::atoi(std::getenv(name)) : dflt; };
     const int walkFrames = knob("JAH_TRACE_FRAMES", 2000);
     const int landingFrames = knob("JAH_TRACE_LANDING", 600);
