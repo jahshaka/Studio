@@ -218,6 +218,18 @@ QVector<VerbInfo> ProjectApi::verbs() const
           "session's verbs and the desktop page's alike (project.openSample's import is the page's), "
           "so a caller waiting on an archive can always see the one it started.",
           Needs::Window },
+        { "waitArchive", "project.waitArchive(maxSeconds?) -> {ok, error, canceled, path, guid, name, assets, objects, waited}",
+          "WAITS FOR THE ARCHIVE IN FLIGHT TO FINISH — any of them, project.openSample's import included "
+          "(archiveState()'s reach) — and answers its outcome (archiveResult()'s map, plus `waited`: "
+          "false when nothing was running). It services the app's queued work while it waits (the "
+          "extract's completion, the install slices, the import's bakes), so the archive's OWN "
+          "completion ends the wait: an extract on a loaded box takes what it takes, which a "
+          "frame-counted poll cannot know (plan row 9cm SAMPLE-OPEN-WAIT-1: a 40,000-frame poll ran out "
+          "at 9.4 s under load and failed two pools). `maxSeconds` (1800 by default) is a hang guard, "
+          "never a budget: past it the answer is {ok:false, error:'still running…'} and the archive "
+          "keeps going. Frames are not drawn while it waits; the open that follows an import is still "
+          "polled with project.openState() and a frame in the loop.",
+          Needs::Window },
         { "archiveResult", "project.archiveResult() -> {ok, error, canceled, path, guid, name, assets, objects}",
           "The outcome of the most recent archive operation in this PROCESS — the same reach "
           "archiveState() has, so the import project.openSample starts (the desktop page's, not this "
@@ -853,6 +865,23 @@ QVariantMap ProjectApi::archiveResult()
     out["name"] = r.worldName;
     out["assets"] = r.assets;
     out["objects"] = r.objects;
+    return out;
+}
+
+QVariantMap ProjectApi::waitArchive(double maxSeconds)
+{
+    const bool running = ProjectArchiver::anyRunning();
+    if (running && !ProjectArchiver::waitForAll(int(qBound(1.0, maxSeconds, 86400.0) * 1000.0))) {
+        QVariantMap out;
+        out["ok"] = false;
+        out["error"] = QStringLiteral("still running after %1 s (the hang guard; the archive goes on)")
+                           .arg(maxSeconds);
+        out["waited"] = true;
+        refuse(QStringLiteral("project.waitArchive: %1").arg(out["error"].toString()));
+        return out;
+    }
+    QVariantMap out = archiveResult();
+    out["waited"] = running;
     return out;
 }
 

@@ -435,6 +435,30 @@ int main() {
         }
         int worst = 0;
         const size_t diff = differingBytes(l.px, r.px, &worst);
+        if (undithered && diff != 0u) {
+            // THE BYTES THEMSELVES (plan 9v VR-UNDITHERED-1): this arm went red once under a
+            // loaded gate — 4 of 307,200 bytes, worst 2/255 — and was green 3/3 solo, with
+            // nothing left to say WHERE. A red now names every differing pixel (up to 32:
+            // x, y, the channel, left / right) and leaves both halves beside the test
+            // (eyediff-left.ppm / eyediff-right.ppm in its working directory), so the next
+            // occurrence is a pixel to look at, not a count.
+            int listed = 0;
+            for (size_t i = 0; i < l.px.size() && i < r.px.size() && listed < 32; ++i) {
+                if (l.px[i] == r.px[i]) continue;
+                const size_t px = i / 4u;
+                std::printf("EYEDIFF x=%u y=%u ch=%c left=%u right=%u\n", unsigned(px % l.w),
+                            unsigned(px / l.w), "RGBA"[i % 4u], unsigned(l.px[i]), unsigned(r.px[i]));
+                ++listed;
+            }
+            for (int k = 0; k < 2; ++k) {
+                const Half &h = k ? r : l;
+                FILE *f = std::fopen(k ? "eyediff-right.ppm" : "eyediff-left.ppm", "wb");
+                if (!f) continue;
+                std::fprintf(f, "P6\n%u %u\n255\n", h.w, h.h);
+                for (size_t i = 0; i < size_t(h.w) * h.h; ++i) std::fwrite(&h.px[i * 4], 1, 3, f);
+                std::fclose(f);
+            }
+        }
         if (undithered) {
             CHECK_MSG(diff == 0u,
                       "AT worldScale 0, UNDITHERED, THE TWO EYES ARE BYTE-IDENTICAL: %zu of "
@@ -2039,8 +2063,13 @@ int main() {
             // a young mean at a reduced confidence for its first frames by
             // design, and a mirror converges on the first ray. Counted, never
             // timed.
-            pump(engine.get(), engine->vrStatus().frames + 32ull, 900u);
-            const RayQueryStatus rq = scene->rayQueryStatus();
+            RayQueryStatus rq;
+            {
+                // reflectMs is the monitor's row (lane TEST-1): a capture for the pump.
+                enginetest::GpuTimingWindow gpuTiming(engine.get());
+                pump(engine.get(), engine->vrStatus().frames + 32ull, 900u);
+                rq = scene->rayQueryStatus();
+            }
             std::printf("    rayQuery: available=%d enabled=%d reflect=%d rays=%d ms=%.3f\n",
                         int(rq.available), int(rq.enabled), int(rq.reflect), rq.reflectRays,
                         rq.reflectMs);
@@ -2138,7 +2167,7 @@ int main() {
                     // pictures may differ only by the last bits of two chains'
                     // arithmetic. THIS IS THE ASSERTION THE LANE EXISTS FOR: tracing the
                     // stereo target through ONE camera for both halves (reproducible
-                    // with `JAH_R5_MONO_EYES=1`) read a mean of 2.702/255 at 5.6 % of
+                    // with the arm "reflect.monoEyes" = 1) read a mean of 2.702/255 at 5.6 % of
                     // bytes over 8 in the LEFT eye and 6.258 at 12.8 % in the RIGHT one
                     // (the rendering camera carries the left eye's projection,
                     // OgreVrSession.cpp's F2).

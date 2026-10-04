@@ -16,6 +16,7 @@ scripts — rc-gate.sh — and anyone running a whole tier):
     scripts/gate_runlog.py longest [--days 7] [-n 10] # the ten longest suites/arms this week
     scripts/gate_runlog.py load-reds [--days 7]       # red in a gate, green solo at the same tip
     scripts/gate_runlog.py trend [--days 30] [--tip <sha>] [--suite S]  # steps in the target rows (non-gating)
+    scripts/gate_runlog.py clocks                     # the GPU clock state now; exit 3 = left locked
 
 `run` streams ctest's output through (the caller still sees and may redirect every line),
 samples the load average every 2 s and the box (sibling ctests, the GPU's clocks) at EACH SUITE'S
@@ -937,6 +938,7 @@ def main():
     q.add_argument("--days", type=int, default=7); q.add_argument("-n", type=int, default=10)
     q2 = sub.add_parser("load-reds", help="red in a gate, green solo at the same tip")
     q2.add_argument("--days", type=int, default=7)
+    q4 = sub.add_parser("clocks", help="the GPU's clock state now (exit 3 when it reads locked)")
     q3 = sub.add_parser("trend", help="steps in the target rows' readings across tips (non-gating)")
     q3.add_argument("--days", type=int, default=30); q3.add_argument("--k", type=float, default=TREND_K)
     q3.add_argument("--tip", default=None, help="only the steps whose first tip is this sha")
@@ -966,6 +968,12 @@ def main():
         query_load_reds(a.days); return
     if a.cmd == "trend":
         query_trend(a.days, a.suite, a.tip, a.k); return
+    if a.cmd == "clocks":
+        # THE STAGE CLOSE'S CLOCK CHECK (plan 9cl CLOCK-TRAP-1): a card left locked after a run
+        # reads `locked?` (idle and not clocking down); rc-gate.sh prints this and reds on exit 3.
+        st = gpu_clocks()
+        print(json.dumps(st, sort_keys=True))
+        sys.exit(3 if st.get("state") == "locked?" else 0)
     if a.cmd == "times":
         for k, v in sorted(median_times(a.days).items()): print(f"{k} {v:.2f}")
 

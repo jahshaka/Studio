@@ -46,11 +46,22 @@ THE CONTRACT
     sibling GPU rows (gi.rt_reflect_cost, gi.field_scroll). A solo retry (`gate-scope.sh --solo`)
     sets JAH_VRAM_ALL=1: every admission of it takes all the tokens, so "solo" is solo on the card.
 
+  * THE CLOCKS COME BACK (lane TEST-1, plan 9cl CLOCK-TRAP-1: PHOTON-I-1's cost run left the card
+    locked at 2550 MHz when its own trap did not run). `--lock-clocks MIN,MAX` locks the GPU clocks
+    AFTER the admission (the card is this row's) and restores them in a `finally` — a normal end,
+    a non-zero exit, a forwarded SIGTERM/SIGINT/SIGHUP, a crash of the row — before the tokens go.
+    And every TIMING run checks the card at its end: a row that locked the clocks itself and left
+    them so (the signature: an idle card that does not clock down) is restored here too, unless
+    the lead declared a series lock (JAH_GPU_CLOCKS_HELD=1). Locking needs `sudo -n nvidia-smi`;
+    where the box refuses it the run says `gpu-clocks: NOT locked … provisional` and goes on.
+
 Usage:
-  vram_tokens.py admit <k>|all [--label <text>] [--timing] [--run-timeout <s>] -- <command> [args...]
+  vram_tokens.py admit <k>|all [--label <text>] [--timing] [--run-timeout <s>] [--lock-clocks MIN,MAX]
+                 -- <command> [args...]
       (scripts/gpu-admit.sh; scripts/gpu-exclusive.sh = `admit all --timing`). --timing prints the
       wait as `gpu-lock: waited <s> s` (the run log's lockWaitS, never the row's time);
-      --run-timeout starts the row's own budget AFTER the admission (timeout(1)).
+      --run-timeout starts the row's own budget AFTER the admission (timeout(1));
+      --lock-clocks locks the GPU clocks for the row and restores them on every exit path.
   vram_tokens.py status                                              (who holds what, now)
 Python: `acquire(k, label)` -> [fds] (inheritable), `release(fds)`; run_pool.py uses these.
 """
@@ -304,16 +315,20 @@ def main(argv):
             sys.stderr.write("vram_tokens.py: token count '%s' is not a number or 'all'\n" % argv[1])
             return 64
     rest = argv[2:]
-    label, timing, run = "", False, ""
-    while rest and rest[0] in ("--label", "--timing", "--run-timeout"):
+    label, timing, run, lock = "", False, "", ""
+    while rest and rest[0] in ("--label", "--timing", "--run-timeout", "--lock-clocks"):
         if rest[0] == "--timing":
             timing, rest = True, rest[1:]
         elif len(rest) >= 2:
             if rest[0] == "--label": label = rest[1]
+            elif rest[0] == "--lock-clocks": lock = rest[1]
             else: run = rest[1]
             rest = rest[2:]
         else:
             break
+    if lock and not __import__("re").fullmatch(r"\d{3,4},\d{3,4}", lock):
+        sys.stderr.write("vram_tokens.py: --lock-clocks wants MIN,MAX in MHz (e.g. 2100,2550), not '%s'\n" % lock)
+        return 64
     if rest[:1] == ["--"]:
         rest = rest[1:]
     if not rest:
@@ -336,7 +351,70 @@ def main(argv):
     # THE ROW'S OWN BUDGET, from AFTER the admission (LOCK-WAIT-1): the queue is never charged to it.
     if run:
         rest = ["timeout", "--verbose", "-k", "15", run] + rest
-    return supervise(rest, held, label)
+    locked = lock_clocks(lock) if lock else False
+    done = []
+
+    def clocks_back():
+        # CLOCK-TRAP-1: back to the driver's own clocks before the tokens go, whatever ended the row.
+        # Called by supervise the moment the row ends — BEFORE it re-raises a signal the row died of
+        # (a re-raised signal never reaches a `finally`) — and by the `finally` below for anything
+        # else (an exception out of supervise itself). Once.
+        if done: return
+        done.append(1)
+        if locked:
+            restore_clocks("the row's lock")
+        elif timing and not os.environ.get("JAH_GPU_CLOCKS_HELD"):
+            left_locked_check()
+    try:
+        return supervise(rest, held, label, on_end=clocks_back)
+    finally:
+        clocks_back()
+
+
+def _smi(args):
+    import subprocess
+    try:
+        r = subprocess.run(["sudo", "-n", "nvidia-smi"] + args, capture_output=True, text=True, timeout=20)
+        return r.returncode, (r.stdout + r.stderr).strip()
+    except (OSError, subprocess.TimeoutExpired) as e:
+        return 1, str(e)
+
+
+def lock_clocks(spec):
+    """Locks the GPU clocks to MIN,MAX (sudo -n nvidia-smi -lgc). True when it took."""
+    rc, out = _smi(["-lgc", spec])
+    if rc == 0:
+        sys.stderr.write("gpu-clocks: locked %s\n" % spec)
+    else:
+        sys.stderr.write("gpu-clocks: NOT locked (%s) — every GPU ms of this run is provisional\n"
+                         % (out.splitlines()[-1] if out else "sudo refused"))
+    sys.stderr.flush()
+    return rc == 0
+
+
+def restore_clocks(why):
+    rc, out = _smi(["-rgc"])
+    if rc == 0:
+        sys.stderr.write("gpu-clocks: restored (%s)\n" % why)
+    else:
+        sys.stderr.write("gpu-clocks: COULD NOT RESTORE (%s: %s) — run `sudo nvidia-smi -rgc`\n"
+                         % (why, out.splitlines()[-1] if out else "sudo refused"))
+    sys.stderr.flush()
+
+
+def left_locked_check():
+    """A timing row that locked the clocks ITSELF and left them so: an idle card that does not clock
+    down (gate_runlog.gpu_clocks' signature, 2550 MHz idle under -lgc against ~210-645 free). A busy
+    card cannot tell and is left alone; so is a series the lead declared (JAH_GPU_CLOCKS_HELD)."""
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    try:
+        import gate_runlog
+        st = gate_runlog.gpu_clocks()
+    except Exception:
+        return
+    if st.get("state") == "locked?":
+        sys.stderr.write("gpu-clocks: the row LEFT THE CLOCKS LOCKED (idle at %s MHz)\n" % st.get("graphics_mhz"))
+        restore_clocks("left locked by the row")
 
 
 def _pdeathsig():
@@ -349,7 +427,7 @@ def _pdeathsig():
         pass
 
 
-def supervise(argv, held, label):
+def supervise(argv, held, label, on_end=None):
     """THE ROW RUNS AS THIS ADMISSION'S CHILD (TEST-SELECTOR-1 H4 — it was exec'd in place, and
     no one was left to read how it ended): the tokens stay held here and are inherited by the row;
     a SIGTERM/SIGINT/SIGHUP to the pid ctest started is forwarded; the row's process tree is
@@ -381,6 +459,8 @@ def supervise(argv, held, label):
         except InterruptedError:
             continue
     tracker.stop()
+    if on_end:
+        on_end()
     if rc != 0 and not os.environ.get("JAH_KERNEL_JOURNAL") and sys.platform.startswith("linux"):
         time.sleep(1.0)      # journald's ingest of the ring (run_pool.py: why one second is enough)
     xids = kernel_xid.kernel_xids(t0 - 1, tracker.pids)

@@ -20,14 +20,21 @@
 # and ctest's TIMEOUT is only the backstop (budget + the wait's bound). The command runs as the
 # admission's child with the token fds inherited: the tokens die with the pair, whatever ends it,
 # and the kernel's word on the row (an Xid) is read after it (scripts/kernel_xid.py).
+#
+# THE CLOCKS (lane TEST-1, plan 9cl CLOCK-TRAP-1): `--lock-clocks MIN,MAX` locks the GPU clocks once
+# the card is the row's and restores them on EVERY exit path before the tokens go (vram_tokens.py's
+# `finally`); a timing run whose row locked the clocks itself and left them locked is restored at
+# its end too, unless the lead declared a series lock (JAH_GPU_CLOCKS_HELD=1). The lock needs
+# `sudo -n nvidia-smi`; refused, the run prints `gpu-clocks: NOT locked … provisional` and goes on.
 here="$(cd "$(dirname "$0")" && pwd)"
 opts=()
 while [ "$#" -gt 0 ]; do
     case "$1" in
         --run-timeout) opts+=(--run-timeout "${2:?--run-timeout needs seconds}"); shift 2 ;;
         --label) opts+=(--label "${2:?--label needs text}"); shift 2 ;;
+        --lock-clocks) opts+=(--lock-clocks "${2:?--lock-clocks needs MIN,MAX}"); shift 2 ;;
         *) break ;;
     esac
 done
-[ "$#" -gt 0 ] || { echo "usage: gpu-exclusive.sh [--run-timeout <s>] [--label <text>] <command> [args...]" >&2; exit 64; }
+[ "$#" -gt 0 ] || { echo "usage: gpu-exclusive.sh [--run-timeout <s>] [--label <text>] [--lock-clocks MIN,MAX] <command> [args...]" >&2; exit 64; }
 exec python3 "$here/vram_tokens.py" admit all --timing "${opts[@]}" -- "$@"

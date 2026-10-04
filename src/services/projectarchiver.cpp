@@ -919,6 +919,21 @@ bool ProjectArchiver::waitForDone(int msTimeout)
     return self.isNull() || !self->mRunning.load();
 }
 
+bool ProjectArchiver::waitForAll(int msBackstop)
+{
+    QElapsedTimer timer;
+    timer.start();
+    while (anyRunning()) {
+        if (timer.elapsed() > msBackstop) return false;
+        // The same servicing waitForDone does, over every live archiver: the
+        // worker's completion hop and the install slices drain through their
+        // normal path; user input stays out.
+        QCoreApplication::processEvents(QEventLoop::ExcludeUserInputEvents, 20);
+        if (anyRunning()) QThread::msleep(5);
+    }
+    return true;
+}
+
 bool ProjectArchiver::shutdownArchives(int msTimeout)
 {
     // Step 2 of the shutdown order. Bounded in TOTAL, not per archiver: the
