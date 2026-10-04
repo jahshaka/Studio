@@ -34,6 +34,27 @@ set_tests_properties(document.characterisation PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "document" TIMEOUT 60)
 jah_no_display(document.characterisation)
 
+# document.physics_writeback — THE PHYSICS WRITE-BACK WRITES ONLY WHAT MOVED
+# (SPEED-CPU item 1, perf audit 2026-10-03 D1): a 146-body pile (a group, a
+# nested body) played to sleep; after every checked frame the old
+# write-everything loop would change no node by a bit, a sleeping pile's frame
+# makes zero transform writes, and a node written behind its body's back, a
+# moved group and a moving carrier are each pinned back exactly as before.
+# Document only: NULL render system, no display.
+add_executable(test_physics_writeback test_physics_writeback.cpp)
+set_target_properties(test_physics_writeback PROPERTIES AUTOMOC OFF)
+target_include_directories(test_physics_writeback PRIVATE ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/irisgl
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
+target_link_libraries(test_physics_writeback PRIVATE IrisGL Qt6::Gui)
+jah_document_graph(test_physics_writeback)
+add_test(NAME document.physics_writeback COMMAND test_physics_writeback
+         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(document.physics_writeback PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "document" TIMEOUT 120)
+jah_no_display(document.physics_writeback)
+
 # document.mobility — THE RESOLUTION RULE (SPECS/REALTIME_REFLECTIONS_SPEC.md
 # §3.3.2): which objects the renderer may bake into the room's lighting and
 # which it has to handle per frame. Every driver with its own reason, rule 2's

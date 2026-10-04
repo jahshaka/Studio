@@ -221,11 +221,6 @@ EngineConfig EngineHost::resolveConfig()
         const QString dataDir = shaderCacheDirectory();
         if (!dataDir.isEmpty()) cfg.shaderCacheDir = dataDir.toStdString();
     }
-    // The app's contribution to the cache fingerprint. Version + commit, because
-    // OUR C++ decides which Hlms properties are set and which datablocks exist;
-    // no hash inside Ogre can see a change to src/. A user updating the app
-    // therefore pays exactly one cold launch, which is correct and is the same
-    // property Unreal's DDC has.
     // ---- The engine's log, forwarded (SESSION_LOG_SPEC F3-B) ----------------
     // Installed through the CONFIG rather than through Engine::setLogSink so it
     // is live before the plugins load and the render system initialises —
@@ -246,12 +241,6 @@ EngineConfig EngineHost::resolveConfig()
         if (level == 1) JAH_LOG(JahLog::engine, Error, text);
         else            JAH_LOG(JahLog::ogre, Log, text);
     };
-
-    cfg.appBuildId = QStringLiteral("%1/%2/%3")
-                         .arg(Constants::CONTENT_VERSION,
-                              QStringLiteral(GIT_COMMIT_HASH),
-                              QStringLiteral(GIT_COMMIT_DATE))
-                         .toStdString();
 
     return cfg;
 }
@@ -518,9 +507,8 @@ void EngineHost::shutdown()
     }
     // THE TEXTURE CACHE, beside it and for the same reason
     // (THREADING_ADOPTION_SPEC.md P2 item 6): resolution/format/pool per texture
-    // path, plus our channel sidecar, so the next launch can reserve the right
-    // pool slice before the streaming worker has decoded anything and can skip
-    // the channel probe entirely. Same directory, same derived-data contract,
+    // path, so the next launch can reserve the right pool slice before the
+    // streaming worker has decoded anything. Same directory, same derived-data contract,
     // same "clear cache" button — its own manifest and its own validity key
     // (I-5), which deliberately does not name the GPU: a driver update has no
     // business invalidating a PNG's channel count.

@@ -89,7 +89,6 @@ int main() {
     // Deliberately configured: the engine must REFUSE to persist a shader cache
     // written by the NULL render system (a real device would be offered it).
     cfg.shaderCacheDir = "headless-cache-must-not-exist";
-    cfg.appBuildId     = "test_engine_headless";
 
     std::string error;
     std::unique_ptr<Engine> engine = Engine::create(cfg, error);
