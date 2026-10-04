@@ -167,6 +167,7 @@ int main(int argc, char **argv)
         s->setHeightFog(h);
         s->setNodeVisible(mirror, true);
         enginetest::testCameraLookAt(view, Vec3(0.0f, 0.0f, 1.0f), Vec3(0.0f, 0.0f, 0.0f));
+        enginetest::GpuTimingWindow gpuTiming(e);   // reflectMs is the monitor's row (lane TEST-1)
         for (int which = 0; which < 2; ++which) {
             s->setNodeVisible(walls[0], which == 0);
             s->setNodeVisible(walls[1], which == 1);

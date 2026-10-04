@@ -112,9 +112,9 @@ assert(typo !== null && typo.indexOf("unknown primitive") >= 0,
 // honest read is one of those samples, opened, still standing on its teapot.
 assert(project.openSample("Mirror Room") === true,
        "project.openSample('Mirror Room') (" + app.lastError() + ")");
+// The import by its own completion (plan 9cm SAMPLE-OPEN-WAIT-1), never a frame count.
+assert(project.waitArchive().ok === true && project.archiveState() === "idle", "the sample's import finished");
 var turns = 0;
-while (project.archiveState() === "running") { editor.frame(1); if (++turns > 40000) break; }
-assert(project.archiveState() === "idle", "the sample's import finished");
 while (project.openState() === "opening") { editor.frame(1); if (++turns > 40000) break; }
 assert(project.openState() === "idle", "the open finished (" + turns + " frames)");
 

@@ -8,7 +8,7 @@
 //                      gather on, the frame index LIVE: after the warm-up the
 //                      picture moves by less than 2/255 frame to frame at the
 //                      room's indirect-lit pixels. The lever's pair runs in the
-//                      same process: with `JAHSHAKA_GATHER_NO_TEMPORAL` set the
+//                      same process: with the arm "gather.temporal" at 0 the
 //                      same pixels carry each frame's estimate alone, and the
 //                      suite asserts they DO move — the history is what stills
 //                      them, and the lever is what says so.
@@ -54,11 +54,9 @@ static int failures = 0;
 
 static void render(Engine *e, int frames) { for (int i = 0; i < frames; ++i) e->renderOneFrame(); }
 
-static void setNoTemporal(bool on)
-{
-    if (on) ::setenv("JAHSHAKA_GATHER_NO_TEMPORAL", "1", 1);
-    else    ::unsetenv("JAHSHAKA_GATHER_NO_TEMPORAL");
-}
+// The pixel history's measurement arm (lane TEST-1: was JAHSHAKA_GATHER_NO_TEMPORAL),
+// latched at the top of the next frame.
+static void setNoTemporal(Engine *e, bool on) { e->setArm("gather.temporal", on ? 0.0 : 1.0); }
 
 static PbrParams matte(const Colour &albedo, const Colour &emissive = Colour(0, 0, 0))
 {
@@ -261,7 +259,7 @@ static int stableMain(Engine *e)
     buildShowroom(s);
     enginetest::testCameraLookAt(view, Vec3(2.0f, 1.8f, 10.5f), Vec3(-1.0f, 1.2f, -6.0f));
     CHECK(s->setGlobalIllumination(gatherGi()), "the chain builds over the room");
-    setNoTemporal(false);
+    setNoTemporal(e, false);
     render(e, 120);   // THE WARM-UP: the chain settled, the history past its floor
     const GatherStatus st = s->giStatus().gather;
     CHECK_MSG(st.running && st.temporal && st.historyAge > 60u,
@@ -270,13 +268,13 @@ static int stableMain(Engine *e)
     const StableReading with = stableReading(e, view, 60, "history");
 
     // THE LEVER'S PAIR: the same view, each frame's estimate alone.
-    setNoTemporal(true);
+    setNoTemporal(e, true);
     render(e, 8);
     const GatherStatus st2 = s->giStatus().gather;
-    CHECK_MSG(!st2.temporal, "JAHSHAKA_GATHER_NO_TEMPORAL turns the pixel history off (temporal %d)",
+    CHECK_MSG(!st2.temporal, "the arm gather.temporal = 0 turns the pixel history off (temporal %d)",
               int(st2.temporal));
     const StableReading without = stableReading(e, view, 60, "alone");
-    setNoTemporal(false);
+    setNoTemporal(e, false);
 
     std::printf("   the room's lower two thirds, 60 live frames after the warm-up (codes, 8-bit):\n"
                 "     %-26s worst step at the 128 sampled pixels %u, mean |step| %.3f, pixels "
@@ -308,7 +306,7 @@ static int stableMain(Engine *e)
     // history's lag, and it is bounded by its floor: a 1/10 blend leaves 0.9^k
     // of a step after k frames.
     const auto lagOf = [&](bool history, unsigned historyFrames) {
-        setNoTemporal(!history);
+        setNoTemporal(e, !history);
         GatherTuning t;
         t.historyFrames = historyFrames;
         s->setGatherTuning(t);
@@ -338,7 +336,7 @@ static int stableMain(Engine *e)
         const float whole = meanDiff(before, frames[120], 0u, kW, kH / 3u, kH);
         s->setLight(gCentreLamp, on);
         s->refreshGlobalIllumination();
-        setNoTemporal(false);
+        setNoTemporal(e, false);
         std::printf("     the middle lamp OFF, %s (memory %u): the first frame within 1 code (mean) of the settled "
                     "picture is frame %d (the first frame after the switch is %.2f codes from it; the "
                     "whole switch %.2f codes)\n",
@@ -575,12 +573,12 @@ static int motionMain(Engine *e)
     const float truckTile = gLastTile;
     // THE LEVER'S ARM: every frame its own estimate — what a history that
     // rejected everything under motion would show.
-    setNoTemporal(true);
+    setNoTemporal(e, true);
     const float yawAlone = runMove(e, view, yawPose, "yaw, each frame alone (lever)");
     const float yawAloneTile = gLastTile;
     const float truckAlone = runMove(e, view, truckPose, "truck, each frame alone (lever)");
     const float truckAloneTile = gLastTile;
-    setNoTemporal(false);
+    setNoTemporal(e, false);
     // THE ACCEPT-ALL ARM (PHOTON-GATHER-1d, the 1c audit's m2 — landed as a test
     // door, GatherTuning::historyValidationOff, where 1c measured it with a
     // one-off shader edit): every reprojected texel accepted, the distance and

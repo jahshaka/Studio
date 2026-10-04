@@ -149,6 +149,15 @@ set_tests_properties(scale.cpu_walks PROPERTIES LABELS "scale")
 # Locked: it times the CPU and the GPU.
 jah_scale_row(scale.shadow_cut   --shadow-cut    ${SCALE_T_SHADOW}       TRUE)
 set_tests_properties(scale.shadow_cut PROPERTIES LABELS "scale")
+# scale.gpu_coverage — EVERY BUSY GPU MILLISECOND HAS A ROW (lane TEST-1, the perf audit's F5): on
+# the lattice at Epic, still and panning, the GPU work no monitor row names against the frame's BUSY
+# span (its own GPU span less the GPU's wait for submissions, FrameRecord::gpuIdleMs — printed as a
+# target, never gated); the median frame's unattributed share stays under 5 %. A BAR, so it gates
+# (label `scale`); locked: it reads GPU time. Measured 208 s after the admission in Debug
+# (the lattice's settle is most of it); the run budget is ~3x that.
+set(SCALE_T_COVERAGE 600)
+jah_scale_row(scale.gpu_coverage --gpu-coverage  ${SCALE_T_COVERAGE}     TRUE)
+set_tests_properties(scale.gpu_coverage PROPERTIES LABELS "scale")
 jah_no_display(scale.bake)
 
 # atom.decode_exact — ATOM-DECODE-CLASS-1: the world at ~200 buckets, the classified decode

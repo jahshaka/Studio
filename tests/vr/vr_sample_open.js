@@ -39,8 +39,11 @@ ok(player.state().playing === false, "…and nothing is playing");
 
 ok(project.openSample("Matcaps") === true,
    "project.openSample('Matcaps') was accepted (" + app.lastError() + ")");
+// The import is waited on by its own completion (plan 9cm SAMPLE-OPEN-WAIT-1), never a
+// frame count; the sliced open after it is UI work and is polled with a frame.
+var imported = project.waitArchive();
+ok(imported.ok === true, "the sample's import finished (" + JSON.stringify(imported) + ")");
 var turns = 0;
-while (project.archiveState() === "running") { editor.frame(1); if (++turns > 40000) break; }
 while (project.openState() === "opening") { editor.frame(1); if (++turns > 40000) break; }
 ok(project.openState() === "idle", "the open finished (" + turns + " frames)");
 

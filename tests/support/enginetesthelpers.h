@@ -458,4 +458,34 @@ inline Vec3 groundPointForPixel(const Vec3 &pos, const Vec3 &target, unsigned px
     return Vec3(pos.x + d.x * s, planeY, pos.z + d.z * s);
 }
 
+/// GPU MILLISECONDS ARE A CAPTURE'S (lane TEST-1). Every GPU time a status
+/// readout reports — RayQueryStatus::reflectMs / tlasMs / blasMs / skinMs, the
+/// gather's four jobs, SunContactStatus::gpuMs, the cards' relight and traces — is
+/// the frame monitor's row for that job (Engine.h: one GPU-timing facility), so it
+/// reads -1 outside a capture: by owner decision D3 no query pool exists outside
+/// one. A measuring window holds one of these for its life — opened AFTER the first
+/// view exists (the device it samples on comes up with it; a capture started earlier is
+/// CPU-only for its whole life). Nests: an engine whose monitor is already on (a
+/// suite's own capture) is left as it is.
+class GpuTimingWindow {
+public:
+    explicit GpuTimingWindow(Engine *e) : mE(e) {
+        if (mE && mE->frameMonitor() == MonitorLevel::Off) {
+            mE->setFrameMonitor(MonitorLevel::Review);
+            mArmed = true;
+        }
+    }
+    ~GpuTimingWindow() {
+        if (!mArmed) return;
+        mE->setFrameMonitor(MonitorLevel::Off);
+        std::vector<FrameRecord> tail;   // the capture's records are not this window's subject
+        mE->takeFrameRecords(tail);
+    }
+    GpuTimingWindow(const GpuTimingWindow &) = delete;
+    GpuTimingWindow &operator=(const GpuTimingWindow &) = delete;
+private:
+    Engine *mE = nullptr;
+    bool mArmed = false;
+};
+
 }  // namespace enginetest

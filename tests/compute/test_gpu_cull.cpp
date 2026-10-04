@@ -508,15 +508,29 @@ int main()
         const unsigned n = scene->gpuSceneStatus().slotCount;
         GpuCullRequest r = requestFor(e, view, 1.0f, 2u);
         r.flagsRequired = 1u;
-        r.measureIterations = 64u;
+        // THE JOBS' GPU TIME is each job's monitor row in a capture (lane TEST-1 deleted
+        // the wall-clock slope this arm printed): the tool's dispatch is a between-frames
+        // row the next frame adopts, answered once the GPU has finished it.
+        e->setFrameMonitor(MonitorLevel::Review);
         GpuCullResult big;
-        if (!e->gpuCull(scene, view, r, false, big)) {
+        const bool culled = e->gpuCull(scene, view, r, false, big);
+        for (int i = 0; i < 6; ++i) e->renderOneFrame();
+        e->setFrameMonitor(MonitorLevel::Off);
+        std::vector<FrameRecord> recs;
+        e->takeFrameRecords(recs);
+        double jobMs[3] = { -1.0, -1.0, -1.0 };
+        static const char *kJobs[3] = { "cull.test", "cull.compact", "cull.draws" };
+        for (const FrameRecord &f : recs)
+            for (const CacheWork &w : f.cacheWork)
+                for (int k = 0; k < 3; ++k)
+                    if (w.detail == kJobs[k] && w.gpuMs >= 0.0f && jobMs[k] < 0.0) jobMs[k] = w.gpuMs;
+        if (!culled) {
             std::printf("FAIL: the 8,001 arm: %s\n", e->takeLastError().c_str());
             ++failures;
         } else {
             std::printf("   %u instances, %u survivors\n", n, big.survivors);
-            std::printf("   test %.4f ms · compact %.4f ms · draws %.4f ms (slope of 64 "
-                        "dispatches)\n", big.testMs, big.compactMs, big.drawsMs);
+            std::printf("   test %.4f ms · compact %.4f ms · draws %.4f ms (each job's monitor row; -1 = "
+                        "no GPU timestamps in this build)\n", jobMs[0], jobMs[1], jobMs[2]);
             std::printf("   the host's share: %.4f ms\n", big.requestMs);
             CHECK(n >= 8001u, "the table grew to 8,001 instances");
             JAH_TIMING_CHECK("engine.gpu_cull", big.requestMs < 1.0,

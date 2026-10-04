@@ -37,9 +37,13 @@ ok(project.openSample("Matcaps") === true,
 // BOTH halves are threaded and they run in that order: the archive import
 // first, then the sliced open. A frame in each poll body (project.openState's
 // note: a poll with no frame starves the very install it waits for).
+// THE IMPORT IS WAITED ON BY ITS OWN COMPLETION (plan 9cm SAMPLE-OPEN-WAIT-1): a
+// 40,000-frame poll ran out at 9.4 s under a loaded gate (an extract is disk and CPU
+// work on a worker; a UI frame is no clock for it).
+var imported = project.waitArchive();
+ok(imported.ok === true && project.archiveState() === "idle",
+   "the sample's import finished (" + JSON.stringify(imported) + ")");
 var turns = 0;
-while (project.archiveState() === "running") { editor.frame(1); if (++turns > 40000) break; }
-ok(project.archiveState() === "idle", "the sample's import finished");
 while (project.openState() === "opening") { editor.frame(1); if (++turns > 40000) break; }
 ok(project.openState() === "idle", "the open finished (" + turns + " frames)");
 
@@ -74,7 +78,7 @@ var namesBefore = scene.nodes().length;
 ok(project.openSample("Mirror Room") === true,
    "a SECOND sample opens over the first (" + app.lastError() + ")");
 turns = 0;
-while (project.archiveState() === "running") { editor.frame(1); if (++turns > 40000) break; }
+ok(project.waitArchive().ok === true, "the second sample's import finished");
 while (project.openState() === "opening") { editor.frame(1); if (++turns > 40000) break; }
 ok(project.openState() === "idle", "the second open finished");
 ok(project.current().name === "Mirror Room", "the Mirror Room is open now");

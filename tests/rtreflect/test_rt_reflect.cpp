@@ -137,8 +137,10 @@ static float measure(Engine *e, View *v, const char *what, int frames, Image *ou
 /// an env-selected path and not a second source file: the cost of a trace is
 /// the cost of THIS trace over THIS geometry, and a second fixture would be
 /// measuring something else. It reports GPU milliseconds from the pass' own
-/// timestamp pair (`giStatus().rayQuery.reflectMs`, the fork 1a81f866a+1bccc3f93 (was 0027) mechanism),
-/// read back with the availability bit several frames later and never with a
+/// monitor rows (`giStatus().rayQuery.reflectMs` = the "rq.reflect.trace" and
+/// "rq.reflect.filter" CacheScopes summed — the hit decode between them is its own
+/// pass row, which the private ring's one span used to include — read
+/// inside a capture — lane TEST-1), answered several frames later and never with a
 /// wait — so it renders well past the frames-in-flight depth before reading.
 ///
 /// MIRROR-HEAVY means what it says: every surface in the shot is inside the
@@ -357,9 +359,13 @@ int main(int argc, char **argv)
 
     // ---- 1 + 2: the two arms ------------------------------------------------
     Image img;
-    const float red = measure(e, view, raysWanted ? "SSR + rays" : "SSR alone (fallback)", 24,
-                              &img);
-    const RayQueryStatus rq = s->rayQueryStatus();
+    float red = 0.0f;
+    RayQueryStatus rq;
+    {
+        enginetest::GpuTimingWindow gpuTiming(e);   // rq.reflectMs is the monitor's row
+        red = measure(e, view, raysWanted ? "SSR + rays" : "SSR alone (fallback)", 24, &img);
+        rq = s->rayQueryStatus();
+    }
     std::printf("    rayQuery: available=%d enabled=%d reflect=%d rays=%d ms=%.3f instances=%d\n",
                 int(rq.available), int(rq.enabled), int(rq.reflect), rq.reflectRays, rq.reflectMs,
                 rq.instances);
@@ -1033,6 +1039,10 @@ static int costMain(Engine *e, const char *, const char *)
     Scene *s = e->createScene("rtcost");
     if (!view || !s) { std::printf("FAIL: view/scene: %s\n", e->lastError().c_str()); return 1; }
     view->setScene(s);
+    // THE READING IS THE MONITOR'S TRACE + FILTER ROWS (lane TEST-1: one GPU-timing facility;
+    // reflectMs is -1 outside a capture). Armed AFTER the first view: GPU sampling needs the
+    // device, which the first view brings up — a capture started before it is CPU-only.
+    enginetest::GpuTimingWindow gpuTiming(e);
     if (!e->rayQueryAvailable() || !e->rayTracing()) {
         std::printf("ok: no ray queries on this machine — gi.rt_reflect_cost skips cleanly\n");
         return 0;
@@ -1164,28 +1174,44 @@ static int costMain(Engine *e, const char *, const char *)
                     what, (median >= 0.0f && median <= bar) ? " -- MET" : "");
         CHECK_MSG(median >= 0.0f && median <= bar,
                   "%s: %.3f GPU ms, median of the last 30 (bar %.2f)", what, median, bar);
+        // THE HIT DECODE, between the reflection's two halves (PHOTON-HIT-SHADE-1): it used to be
+        // inside the reflection's one timestamp span and is its own pass row now (lane TEST-1), so
+        // it is printed on its own — a target with no bar (the reflect bars below are on trace + filter).
+        {
+            std::vector<FrameRecord> recs;
+            e->takeFrameRecords(recs);
+            std::vector<float> dec;
+            for (const FrameRecord &r : recs) {
+                float sum = -1.0f;
+                for (const FramePass &p : r.passes)
+                    if (p.pass.find("hit decode") != std::string::npos && p.gpuMs >= 0.0f)
+                        sum = (sum < 0.0f ? 0.0f : sum) + p.gpuMs;
+                if (sum >= 0.0f) dec.push_back(sum);
+            }
+            float dmed = -1.0f;
+            if (!dec.empty()) {
+                std::vector<float> tail(dec.end() - std::min<size_t>(30u, dec.size()), dec.end());
+                std::sort(tail.begin(), tail.end());
+                dmed = tail[tail.size() / 2];
+            }
+            std::printf("target: %.3f (bar none yet) %s: the HIT DECODE pass between the halves, GPU ms, "
+                        "median of the last 30 (%zu frames carried it)\n", dmed, what, dec.size());
+        }
         return median;
     };
 
-    // THE ABSOLUTE BARS (BUGS-1, 2026-10-04): each is the worst of six solo
-    // runs of THIS fixture (gpu-exclusive, clocks UNLOCKED — the owner's rule
-    // for now, the gate's own state; Debug engine, RTX 4080 SUPER / 595.84)
-    // x 1.15, twice the widest spread any arm showed across the runs (the mirror
-    // full-res arm, 0.423-0.453, 7 %):
-    //   mirror full 0.423-0.453 -> 0.53   mirror half 0.223-0.224 -> 0.26
-    //   glossy full 1.284-1.292 -> 1.49   glossy half 0.374-0.378 -> 0.44
-    // The glossy bars and the half-res mirror bar are ABOVE the old 0.90 / 0.20
-    // budget lines, which the base had already missed before either of
-    // gi.rt_reflect_cost's two steps (321983ce2: glossy full 1.22, mirror half
-    // 0.225; 0.78 / 0.072 on 2026-09-22): that growth is unbisected and is the
-    // lead's finding, not a verdict of this suite. The ratio block at the end of
-    // this function stays the box-independent check. These bars are on today's
-    // reflectMs (one span, trace to filter, the hit decode between them); when it
-    // becomes the trace + filter rows alone (lane TEST-1) they are re-derived by
-    // the same rule on those rows, and the hit-list check above keeps the decode
-    // out of this fixture under either definition.
-    const float mirrorFull = measureMs(2, "1080p FULL-res, mirror-heavy", 0.53f);
-    const float mirrorHalf = measureMs(1, "1080p HALF-res, mirror-heavy", 0.26f);
+    // THE ABSOLUTE BARS (BUGS-1's rule, re-derived by lane TEST-1 on its definition, 2026-10-04):
+    // reflectMs is now the trace's and the filter's monitor rows summed — the hit decode between
+    // the halves is its own pass row, printed as its own target — so each bar is the worst of six
+    // solo runs of THIS fixture ON THOSE ROWS (gpu-exclusive, clocks UNLOCKED — the owner's rule
+    // for now; Debug engine, RTX 4080 SUPER / 595.84) x 1.15:
+    //   mirror full 0.327-0.349 -> 0.40   mirror half 0.126-0.127 -> 0.15
+    //   glossy full 1.168-1.175 -> 1.35   glossy half 0.244-0.245 -> 0.28
+    // (BUGS-1's bars on the one-span definition were 0.53 / 0.26 / 1.49 / 0.44; the hit decode
+    // the span held read 0.375-0.398 / 0.170-0.171 / 0.756-0.760 / 0.304-0.307 in the same runs.)
+    // The ratio block at the end of this function stays the box-independent check.
+    const float mirrorFull = measureMs(2, "1080p FULL-res, mirror-heavy", 0.40f);
+    const float mirrorHalf = measureMs(1, "1080p HALF-res, mirror-heavy", 0.15f);
 
     // ...AND THE FILTER'S OWN WORST CASE, which a box of MIRRORS does not
     // measure (round C). The spatial filter's radius is 0 on a mirror by
@@ -1200,8 +1226,8 @@ static int costMain(Engine *e, const char *, const char *)
         glossy.roughness = 0.39f;                 // just inside the 0.40 gate
         CHECK(s->setPbrMaterial(mirrorMat, glossy), "the mirror box goes glossy");
         e->renderOneFrame();
-        glossyFull = measureMs(2, "1080p FULL-res, GLOSSY (max filter)", 1.49f);
-        glossyHalf = measureMs(1, "1080p HALF-res, GLOSSY (max filter)", 0.44f);
+        glossyFull = measureMs(2, "1080p FULL-res, GLOSSY (max filter)", 1.35f);
+        glossyHalf = measureMs(1, "1080p HALF-res, GLOSSY (max filter)", 0.28f);
     }
 
     // ---- THE CLOCK-FREE HALF OF THE SAME MEASUREMENT (ATOM-RESUMES-1 item 4) --
@@ -1263,13 +1289,12 @@ static int costMain(Engine *e, const char *, const char *)
     // refuses the regression it exists for: a resolution row that stopped
     // applying would read ~1.0.
     //
-    // RE-DERIVED BY THE SAME RULE FOR THE BOX-HOLDING CASCADE (BUGS-1): the fixture
-    // now shades its hits from the store instead of the decode, so the four
-    // ratios moved; worst of three runs x 1.3:
-    //   filter/trace full  3.05 -> 4.0      filter/trace half  1.69 -> 2.2
-    //   half/full mirror   0.53 -> 0.70     half/full glossy   0.29 -> 0.38
-    // Three are tighter or unchanged; the glossy resolution ratio is looser
-    // (0.30 held a 0.29 reading to 3 % of room) and still refuses ~1.0.
+    // RE-DERIVED BY THE SAME RULE ON THE TRACE + FILTER ROWS (lane TEST-1; BUGS-1 set them
+    // on the one span, decode included): worst of the six runs above x 1.3:
+    //   filter/trace full  3.58 -> 4.65     filter/trace half  1.93 -> 2.5
+    //   half/full mirror   0.39 -> 0.51     half/full glossy   0.21 -> 0.27
+    // Without the decode in both terms the filter's share is larger and the resolution
+    // ratios smaller; each still refuses ~1.0 (a resolution row that stopped applying).
     if (mirrorFull > 0.0f && mirrorHalf > 0.0f && glossyFull > 0.0f && glossyHalf > 0.0f) {
         const float filterFull = glossyFull / mirrorFull;
         const float filterHalf = glossyHalf / mirrorHalf;
@@ -1278,17 +1303,17 @@ static int costMain(Engine *e, const char *, const char *)
         std::printf("\n    the same four numbers as RATIOS (clock-free): filter/trace %.2fx full, "
                     "%.2fx half; half/full %.2f mirror, %.2f glossy\n",
                     filterFull, filterHalf, resMirror, resGlossy);
-        CHECK_MSG(filterFull <= 4.0f,
-                  "THE FILTER'S WORST CASE costs %.2fx the trace it filters at full res (bar 4.0x)",
+        CHECK_MSG(filterFull <= 4.65f,
+                  "THE FILTER'S WORST CASE costs %.2fx the trace it filters at full res (bar 4.65x)",
                   filterFull);
-        CHECK_MSG(filterHalf <= 2.2f,
+        CHECK_MSG(filterHalf <= 2.5f,
                   "...and %.2fx at half res, where the kernel covers four times the frame per "
-                  "traced pixel (bar 2.2x)", filterHalf);
-        CHECK_MSG(resMirror <= 0.70f,
+                  "traced pixel (bar 2.5x)", filterHalf);
+        CHECK_MSG(resMirror <= 0.51f,
                   "A QUARTER OF THE RAYS COSTS LESS: the mirror arm's half-res pass is %.2f of its "
-                  "full-res one (bar 0.70)", resMirror);
-        CHECK_MSG(resGlossy <= 0.38f,
-                  "...and the glossy arm's is %.2f of its own full-res pass (bar 0.38)", resGlossy);
+                  "full-res one (bar 0.51)", resMirror);
+        CHECK_MSG(resGlossy <= 0.27f,
+                  "...and the glossy arm's is %.2f of its own full-res pass (bar 0.27)", resGlossy);
     } else {
         std::printf("FAIL: one of the four cost arms never read a timestamp back\n");
         ++failures;
@@ -1884,7 +1909,7 @@ static int hitresMain(Engine *e)
 ///
 /// THE TWO ERRORS, per roughness, over the wall pixels that show the cube,
 /// each arm in its own view warmed 60 frames (the temporal mean at its floor):
-///   card  the card read ALONE (the gate open, JAHSHAKA_CARD_FOOTPRINT_K huge):
+///   card  the card read ALONE (the gate open, the arm "cards.footprintTexels" huge):
 ///         the per-pixel standard deviation of two CONSECUTIVE frames — the
 ///         noise one texel-exact sample per frame leaves after the mean, which
 ///         grows with the footprint (the speckle);
@@ -1977,10 +2002,10 @@ static int footprintSweepMain(Engine *e)
     for (const float rough : { 0.03f, 0.05f, 0.07f, 0.09f, 0.12f, 0.15f, 0.2f, 0.25f, 0.3f }) {
         wallParams.roughness = rough;
         s->setPbrMaterial(wallMat, wallParams);
-        setenv("JAHSHAKA_CARD_FOOTPRINT_K", "1e9", 1);
+        e->setArm("cards.footprintTexels", 1e9);
         Image c0, c1, v0, v1;
         shots(60, c0, c1);
-        setenv("JAHSHAKA_CARD_FOOTPRINT_K", "0", 1);
+        e->setArm("cards.footprintTexels", 0.0);
         shots(60, v0, v1);
         double ec = 0.0, ev = 0.0;
         int n = 0;
@@ -2003,7 +2028,7 @@ static int footprintSweepMain(Engine *e)
             crossing = prevF + (f - prevF) * (-prevDiff) / (diff - prevDiff);
         prevDiff = diff; prevF = f; havePrev = true;
     }
-    unsetenv("JAHSHAKA_CARD_FOOTPRINT_K");
+    e->setArm("cards.footprintTexels", 4.0);
     std::printf("crossing: the card's noise meets the voxel's bias at a footprint of %.2f card texels\n",
                 crossing);
     return 0;

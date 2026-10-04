@@ -165,6 +165,12 @@ public:
     /// import is a stretch of seconds where this thread has a progress bar to
     /// draw, and the save has no deadline (FSYNC-1).
     static bool anyRunning();
+    /// WAIT ON THE ARCHIVES' OWN COMPLETION (plan 9cm SAMPLE-OPEN-WAIT-1): pumps
+    /// queued events (the workers' completion hops, the install slices, the
+    /// bakes' commits) until NO archiver is running. UI thread. `msBackstop` is a
+    /// hang guard, never a budget: an extract under a loaded box takes what it
+    /// takes. True when everything finished.
+    static bool waitForAll(int msBackstop);
 
     /// Every live archiver, cancelled and joined within msTimeout TOTAL.
     /// Step 2 of the shutdown order (shell/shutdownorder.h) calls this; it is

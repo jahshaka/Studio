@@ -61,6 +61,7 @@ public:
     Q_INVOKABLE bool importArchiveAsync(const QString &path);
     Q_INVOKABLE QString archiveState();
     Q_INVOKABLE QVariantMap archiveResult();
+    Q_INVOKABLE QVariantMap waitArchive(double maxSeconds = 1800.0);
     Q_INVOKABLE bool cancelArchive();
 
 private:

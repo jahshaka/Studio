@@ -32,7 +32,7 @@
 // locked): a 10,000-cube world at 1920x1080 — the reflection, the gather's trace
 // and the sun contact GPU ms — with ONE cut-out fence in it (the scene has an
 // alpha table, so every ray query asks without the opaque flag and the loop is
-// live) against the measuring door JAH_R6_NO_ALPHA (no table: every ray asks
+// live) against the arm "reflect.alphaTested" = 0 (no table: every ray asks
 // opaque, the pre-lane traversal), alternating 30-frame blocks in one process.
 // A world with NO alpha-tested item has no table and asks opaque by
 // construction — the pre-lane flags exactly.
@@ -315,11 +315,12 @@ static int costMainImpl(Engine *e, Scene *s, View *view, MaterialId fenceCut, No
     sc.enabled = true;
     s->setSunContact(sc);
     for (int i = 0; i < 240; ++i) e->renderOneFrame();
+    // The three GPU readings are the monitor's rows (lane TEST-1): a capture for the arms.
+    enginetest::GpuTimingWindow gpuTiming(e);
     double sum[2][3] = {}, n[2][3] = {};
     for (int round = 0; round < 24; ++round)
         for (int arm = 0; arm < 2; ++arm) {
-            if (arm) setenv("JAH_R6_NO_ALPHA", "1", 1);
-            else unsetenv("JAH_R6_NO_ALPHA");
+            e->setArm("reflect.alphaTested", arm ? 0.0 : 1.0);
             for (int i = 0; i < 30; ++i) {
                 e->renderOneFrame();
                 if (i < 10) continue;   // the timestamps come back a few frames late
@@ -329,10 +330,10 @@ static int costMainImpl(Engine *e, Scene *s, View *view, MaterialId fenceCut, No
                     if (v[k] > 0.0f) { sum[arm][k] += v[k]; n[arm][k] += 1.0; }
             }
         }
-    unsetenv("JAH_R6_NO_ALPHA");
+    e->setArm("reflect.alphaTested", 1.0);
     // THE FOLIAGE STACK (the fable read's H1): eight cut-out layers above the world,
     // every sun ray and most reflection rays through all of them — the candidate
-    // loop's cliff. Paired the same way; the opaque arm (JAH_R6_NO_ALPHA) stops at
+    // loop's cliff. Paired the same way; the opaque arm ("reflect.alphaTested" 0) stops at
     // the first layer. Printed, never gated.
     std::vector<NodeId> stack;
     for (int l = 0; l < 8; ++l) {
@@ -345,8 +346,7 @@ static int costMainImpl(Engine *e, Scene *s, View *view, MaterialId fenceCut, No
     double ssum[2][3] = {}, sn[2][3] = {};
     for (int round = 0; round < 24; ++round)
         for (int arm = 0; arm < 2; ++arm) {
-            if (arm) setenv("JAH_R6_NO_ALPHA", "1", 1);
-            else unsetenv("JAH_R6_NO_ALPHA");
+            e->setArm("reflect.alphaTested", arm ? 0.0 : 1.0);
             for (int i = 0; i < 30; ++i) {
                 e->renderOneFrame();
                 if (i < 10) continue;
@@ -356,7 +356,7 @@ static int costMainImpl(Engine *e, Scene *s, View *view, MaterialId fenceCut, No
                     if (v[k] > 0.0f) { ssum[arm][k] += v[k]; sn[arm][k] += 1.0; }
             }
         }
-    unsetenv("JAH_R6_NO_ALPHA");
+    e->setArm("reflect.alphaTested", 1.0);
     const char *what[3] = { "reflection", "gather trace", "sun contact" };
     for (int k = 0; k < 3; ++k) {
         const double live = sn[0][k] ? ssum[0][k] / sn[0][k] : -1.0, door = sn[1][k] ? ssum[1][k] / sn[1][k] : -1.0;
@@ -367,7 +367,7 @@ static int costMainImpl(Engine *e, Scene *s, View *view, MaterialId fenceCut, No
     for (int k = 0; k < 3; ++k) {
         const double live = n[0][k] ? sum[0][k] / n[0][k] : -1.0, door = n[1][k] ? sum[1][k] / n[1][k] : -1.0;
         std::printf("target: 1920x1080, 10k cubes + one fence: the %s %.4f ms with the alpha loop live, %.4f ms "
-                    "opaque (JAH_R6_NO_ALPHA): %+.2f %% (bar 2 %%) [%.0f / %.0f frames]\n",
+                    "opaque (reflect.alphaTested 0): %+.2f %% (bar 2 %%) [%.0f / %.0f frames]\n",
                     what[k], live, door, door > 0.0 ? 100.0 * (live - door) / door : 0.0, n[0][k], n[1][k]);
     }
     return 0;

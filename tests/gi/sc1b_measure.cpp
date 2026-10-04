@@ -53,6 +53,7 @@ static unsigned gCapturingFrames = 0u;
 /// used to add a hidden sun a round) — an albedo nudge, no shader change.
 static double measureCaptures(Engine *e, Scene *s, unsigned &cardsOut, double &wsOut)
 {
+    enginetest::GpuTimingWindow gpuTiming(e);   // the GPU readings are monitor rows (lane TEST-1)
     double sum = 0.0, sumWs = 0.0, gpu = 0.0;
     unsigned captured = 0u, gpuFrames = 0u, gpuCards = 0u, frames = 0u;
     for (int round = 0; round < 3; ++round) {

@@ -343,7 +343,8 @@ def nightly_tier():
     return f'ctest -j1 --output-on-failure -L "^({rx})$"'
 
 
-def sh(cmd, cwd=ROOT):
+def sh(cmd, cwd=None):
+    cwd = cwd or ROOT
     # A failing git/ctest call must not read as "nothing touched" / "no suites": that was
     # a silently green empty gate (platform audit H4.2, 2026-09-10).
     r = subprocess.run(cmd, cwd=cwd, shell=True, capture_output=True, text=True)
@@ -353,8 +354,9 @@ def sh(cmd, cwd=ROOT):
     return r.stdout
 
 
-def _git_try(args, cwd=ROOT):
+def _git_try(args, cwd=None):
     """git's stdout (stripped), or None when the command fails (an unknown sha is an answer here)."""
+    cwd = cwd or ROOT
     try:
         r = subprocess.run(["git"] + args, cwd=cwd, capture_output=True, text=True)
     except OSError:
@@ -368,9 +370,10 @@ INTEGRATION_REFS = ("d-build", "origin/d-build", "main/d-build", "o3de", "origin
                     "origin/ogre", "main/ogre")
 
 
-def integration_line(cwd=ROOT):
+def integration_line(cwd=None):
     """Every commit on the first-parent line of the repo's integration branches (JAH_INTEGRATION_REFS,
     space-separated, overrides INTEGRATION_REFS): the commits a forward merge can bring in."""
+    cwd = cwd or ROOT
     if cwd in _LINE_CACHE: return _LINE_CACHE[cwd]
     refs = os.environ.get("JAH_INTEGRATION_REFS", "").split() or INTEGRATION_REFS
     line = set()
@@ -381,7 +384,7 @@ def integration_line(cwd=ROOT):
     return line
 
 
-def own_base(base, tip, cwd=ROOT):
+def own_base(base, tip, cwd=None):
     """THE LANE'S OWN DIFF (TEST-SELECTOR-1 T1; audit ARCH_AUDIT_2026-09-30 testing-tooling T1).
 
     A two-dot `base..tip` across a FORWARD MERGE (d-build merged into the lane) is the lane's
@@ -398,6 +401,7 @@ def own_base(base, tip, cwd=ROOT):
     scratch-repo replay: counting it as forward dropped laneA..laneC from the diff; over-selection
     is the safe side). Returns (own base sha, [(merge sha, its second parent)] of the forward merges
     seen, newest first) — or (base, []) when git cannot resolve the range (a replay's fake revisions)."""
+    cwd = cwd or ROOT
     key = (base, tip, cwd)
     if key in _OWN_BASE_CACHE: return _OWN_BASE_CACHE[key]
     b, t = _git_try(["rev-parse", "--verify", "-q", base + "^{commit}"], cwd), \
@@ -485,8 +489,40 @@ def resolve_build(arg):
     """
     cands = [arg] if os.path.isabs(arg) else [os.path.abspath(arg), os.path.join(ROOT, arg)]
     for c in cands:
-        if os.path.isfile(os.path.join(c, "CTestTestfile.cmake")): return c
+        if os.path.isfile(os.path.join(c, "CTestTestfile.cmake")):
+            bind_root(c)
+            return c
     return cands[-1]          # nothing configured: keep the documented resolution for the error
+
+
+def build_source_dir(build):
+    """The source tree a build dir was configured from (CMakeCache's CMAKE_HOME_DIRECTORY), or None."""
+    try:
+        for line in open(os.path.join(build, "CMakeCache.txt"), errors="replace"):
+            if line.startswith("CMAKE_HOME_DIRECTORY:"):
+                d = line.split("=", 1)[1].strip()
+                return os.path.realpath(d) if os.path.isdir(d) else None
+    except OSError:
+        pass
+    return None
+
+
+def bind_root(build):
+    """THE TREE A SELECTION READS IS THE BUILD'S (TEST-1 fix round, CLIP-REF-1's finding). The build's
+    dependency graph names files under the tree it was configured FROM; read from another checkout
+    (d-build's merge judge, ci_gate_check, judging a lane's build) every touched path was "not in the
+    build graph" and selection fell back to path rules alone — 448 rows where the lane's own gate
+    selected 372, for one range and one build. So the root every path, git command and source read
+    resolves against is the build's source dir (the scripts' own checkout only when that cannot be
+    read). The RULES stay the running script's — which is what a judge is for — and the facts are
+    the build's tree's: one range and one build select the same rows from any checkout."""
+    global ROOT, TIMES_FILE
+    src = build_source_dir(build)
+    if not src or os.path.realpath(src) == os.path.realpath(ROOT):
+        return
+    ROOT = src
+    TIMES_FILE = os.path.join(ROOT, "scripts", "gate-times.txt")
+    gate_runlog.ROOT = src
 
 
 def load_inventory(build):
@@ -2032,6 +2068,7 @@ def main():
                                        reasons=why) if J["command"] else 0
             if J["serial_command"]:
                 rc = gate_runlog.run_ctest(J["serial_command"], build, a.tier or "joint", lane, 1, reasons=why) or rc
+            gate_runlog.trend_at_gate_end()
             sys.exit(rc)
         return
     lane = a.lane or gate_runlog._git(["rev-parse", "--abbrev-ref", "HEAD"])
@@ -2150,6 +2187,7 @@ def main():
         print("\n=== the timing phase (serial, after the parallel phase) ===")
         r2 = gate_runlog.run_ctest(merge_tier_serial(), build, tier_name, lane, 1, reasons={}, rng=log_range,
                                    labels=labels)
+        gate_runlog.trend_at_gate_end()
         return r1 or r2
 
     def run_tier(reason):
@@ -2224,6 +2262,7 @@ def main():
         trc = gate_runlog.run_ctest(target_cmd, build, "target", lane, 1, reasons=selected_targets,
                                     rng=log_range, labels=labels, gating=lambda n: False)
         print("=== target tests exited %d — NOT part of any gate's verdict ===" % trc)
+        gate_runlog.trend_at_gate_end()
         return
     if a.run:
         labels = {n: t["labels"] for n, t in inv.items()}
@@ -2241,6 +2280,7 @@ def main():
         # any target runs. The targets used to run inline after this point, at -j1, and the gate's
         # exit waited for them (7-13 min of every engine lane's gate, the gate-speed audit's S1).
         print("\n=== GATE VERDICT: %s (exit %d) — the gating phases only ===" % ("GREEN" if rc == 0 else "RED", rc))
+        gate_runlog.trend_at_gate_end()
         if target_cmd and not a.no_targets:
             start_target_step(a, build)
         sys.exit(rc)

@@ -15,6 +15,8 @@ scripts — rc-gate.sh — and anyone running a whole tier):
     scripts/gate_runlog.py times [--days 14]          # suite -> median PASS seconds (gate-scope's estimate)
     scripts/gate_runlog.py longest [--days 7] [-n 10] # the ten longest suites/arms this week
     scripts/gate_runlog.py load-reds [--days 7]       # red in a gate, green solo at the same tip
+    scripts/gate_runlog.py trend [--days 30] [--tip <sha>] [--suite S]  # steps in the target rows (non-gating)
+    scripts/gate_runlog.py clocks                     # the GPU clock state now; exit 3 = left locked
 
 `run` streams ctest's output through (the caller still sees and may redirect every line),
 samples the load average every 2 s and the box (sibling ctests, the GPU's clocks) at EACH SUITE'S
@@ -233,7 +235,8 @@ def contention_list():
     return dict(s) if isinstance(s, dict) else None
 
 
-def _git(args, cwd=ROOT):
+def _git(args, cwd=None):
+    cwd = cwd or ROOT
     try:
         r = subprocess.run(["git"] + args, cwd=cwd, capture_output=True, text=True)
         return r.stdout.strip() if r.returncode == 0 else ""
@@ -255,7 +258,7 @@ def tree_shas():
             "irisgl_dirty": i_dirty}
 
 
-def fork_pin_problem(root=ROOT):
+def fork_pin_problem(root=None):
     """THE BUILT FORK MUST BE THE PIN (TESTING-DEBTS-1 T12). None when the ogre-next checkout AND
     the install (`<install>/BUILT_FROM`, written by irisgl/scripts/build-ogre.sh; the install is
     OGRE_PREFIX when set, as build-ogre.sh reads it) are both at the commit irisgl pins; else the
@@ -263,6 +266,7 @@ def fork_pin_problem(root=ROOT):
     checkout) is not judged. REFLECT-MOVERS-1, 2026-09-28: a worktree whose install was built
     from an older fork commit than the pin ran a 124-minute gate — its PBS media failed to
     compile ("atmoNprSkyRadiance: no matching overloaded function"): 76 reds, 3 Xids, void."""
+    root = root or ROOT
     ig = os.path.join(root, "irisgl")
     pin = _git(["rev-parse", "HEAD:thirdparty/ogre-next"], cwd=ig) if os.path.isdir(ig) else ""
     if not pin:
@@ -693,6 +697,231 @@ def query_load_reds(days=7):
                       f"(siblings {b.get('other_ctests')}, -j{b.get('jobs')})  solo {len(solo)}/{len(solo)} PASS")
 
 
+# THE TREND CHECK (TEST-1 item 1; the perf audit's D2). The run log has carried every `target:` line since
+# 2026-09-27 and nothing compared one merge's number with the last; gi.rt_reflect_cost went 0.39 -> 1.03 ms
+# and sat four days unread (D1). `trend` reads each target row as a SERIES over tips and names the first tip
+# of every STEP and the lane that brought it. It is a REPORT, never a verdict: a step gets the lead's
+# verdict, as a red does (a known trade like BAKE-WIDTH-2's bake cost is verdicted once).
+#
+# The rule, chosen so the comparison is honest:
+#   - ONE VALUE PER TIP: the median of the row's readings at that tip under one CONDITION;
+#   - a CONDITION is (the clock, the GPU's sharing). The clock: `locked` (gpu_clocks.state "locked?")
+#     or `unlocked` — "free" and "busy" are both an unlocked card ("busy" is the sampler's "cannot tell
+#     idle", not a third clock), and splitting on it cut D1's series in pieces too short to judge. The
+#     sharing: `solo` (the row ran -j1 with no sibling ctest on the box — the timing phase, the target
+#     step) or `shared` (anything else). A shared reading carries other suites' GPU and CPU time in it
+#     (rt_reflect_cost read 4.9 ms beside three siblings and 1.03 alone at the same tip), so the two are
+#     never compared with each other;
+#   - a reading is OUT OF BAND when it sits outside k x MAD (scaled to a standard deviation, 1.4826) of
+#     the trailing TREND_WINDOW tips' values in the same condition; the MAD has a floor of 1 % of the
+#     median, so a row whose window is flat (a count, an exact 0) still flags any change;
+#   - a STEP needs confirmation: the out-of-band reading AND the next TREND_CONFIRM - 1 readings that
+#     descend from its tip must ALL sit outside the band on the same side. A shared reading's noise is
+#     one-sided (contention only adds time: rt_reflect_cost read 0.6 and 2.5 at one tip) and about one
+#     shared reading in three is such a spike, so a median of three still "confirmed" two spikes as a
+#     step; all three out of band does not. A reading too recent to be confirmed prints as UNCONFIRMED (the day a step lands it is one
+#     reading: the gate that brought it prints it, and the next gates confirm or clear it);
+#   - after a confirmed step the baseline restarts at the step's first tip (the old level is history).
+TREND_K = 3.5
+TREND_WINDOW = 10
+TREND_MIN = 3
+TREND_CONFIRM = 3
+_NUM = r"[-+]?\d+(?:\.\d+)?(?:[eE][-+]?\d+)?"
+
+
+def target_value(text):
+    """The number a `target:` line reports. The standard shape is `<value> (bar <bar>) <what>`, so a
+    line that STARTS with a number (or an `a/b` ratio) is that number; otherwise the last number before
+    the word `bar` (`[march: glossy floor 0.2, …] grain 9.52x the still case's (bar 1.5)` -> 9.52).
+    None when there is neither (a line with no number is not a series)."""
+    t = (text or "").strip()
+    m = re.match(rf"({_NUM})\s*/\s*({_NUM})\b", t)
+    if m and float(m.group(2)) != 0:
+        return float(m.group(1)) / float(m.group(2))
+    m = re.match(rf"({_NUM})(?![\w.])", t)
+    if m:
+        return float(m.group(1))
+    i = t.find("bar")
+    if i > 0:
+        nums = re.findall(rf"(?<![\w.]){_NUM}", t[:i])
+        if nums:
+            return float(nums[-1])
+    return None
+
+
+def _condition(r):
+    b = r.get("box") or {}
+    clock = "locked" if (b.get("gpu_clocks") or {}).get("state") == "locked?" else "unlocked"
+    share = "solo" if (b.get("jobs") == 1 and b.get("other_ctests") == 0) else "shared"
+    return f"{clock}/{share}"
+
+
+def _band(vals):
+    med = statistics.median(vals)
+    mad = statistics.median([abs(v - med) for v in vals]) * 1.4826
+    return med, max(mad, 0.01 * abs(med), 1e-9)
+
+
+def trend_series(days=30, suites=None):
+    """(suite, condition) -> [(first ts, tip sha, lane, value, n readings)], tips in time order."""
+    acc = {}
+    for r in _records(days):
+        if r.get("arm") or not r.get("target"):
+            continue
+        if suites and r["suite"] not in suites:
+            continue
+        v = target_value(r["target"])
+        if v is None:
+            continue
+        tip = (r.get("tip") or {}).get("studio") or "?"
+        key = (r["suite"], _condition(r))
+        e = acc.setdefault(key, {}).setdefault(tip, {"ts": r.get("ts") or "", "lane": r.get("lane") or "?", "v": []})
+        e["ts"] = min(e["ts"], r.get("ts") or e["ts"])
+        e["v"].append(v)
+    out = {}
+    for key, tips in acc.items():
+        rows = sorted(((e["ts"], t, e["lane"], statistics.median(e["v"]), len(e["v"])) for t, e in tips.items()))
+        out[key] = rows
+    return out
+
+
+def tip_ancestry(tips, days):
+    """tip -> the set of OTHER tips it descends from (the commit graph, `git rev-list --parents`).
+    None when git cannot answer (a tip the object store does not hold): the caller then orders by
+    time alone and says so."""
+    tips = sorted(t for t in tips if re.fullmatch(r"[0-9a-f]{40}", t or ""))
+    if not tips:
+        return None
+    r = subprocess.run(["git", "cat-file", "--batch-check"], input="\n".join(tips) + "\n",
+                       cwd=ROOT, capture_output=True, text=True)
+    if r.returncode != 0 or "missing" in r.stdout:
+        return None
+    r = subprocess.run(["git", "rev-list", "--parents", f"--since={days + 30}.days"] + tips,
+                       cwd=ROOT, capture_output=True, text=True)
+    if r.returncode != 0:
+        return None
+    parents = {}
+    for line in r.stdout.splitlines():
+        c, *ps = line.split()
+        parents[c] = ps
+    tipset, memo = set(tips), {}
+
+    def reach(c):                      # the tips reachable from c, c excluded
+        if c in memo: return memo[c]
+        out, stack, seen = set(), list(parents.get(c, [])), set()
+        while stack:
+            x = stack.pop()
+            if x in seen: continue
+            seen.add(x)
+            if x in tipset:
+                out.add(x)
+                if x in memo:          # a tip already walked: take its answer, stop here
+                    out |= memo[x]; continue
+            stack.extend(parents.get(x, []))
+        memo[c] = out
+        return out
+    for t in sorted(tips, key=lambda t: len(parents.get(t, []))):
+        reach(t)
+    return {t: reach(t) for t in tips}
+
+
+def trend_steps(rows, anc=None, k=TREND_K, window=TREND_WINDOW, min_n=TREND_MIN, confirm=TREND_CONFIRM):
+    """The steps in one series: dicts {i, kind: STEP | UNCONFIRMED, before, after, band, n}; `i` indexes
+    `rows` (time order), the step's first tip.
+
+    THE BASELINE IS THE TIP'S OWN HISTORY: with the commit graph (`anc`), a tip is compared with the
+    trailing tips it DESCENDS from, and confirmed by the tips that descend from IT — lanes run in
+    parallel, so time order alone compares a lane's tip with a sibling lane's and reports their
+    difference as a step and back again. After a confirmed step at s, a descendant of s takes its
+    baseline only from s and s's descendants (the old level is history). Without the graph every earlier
+    tip is an ancestor (time order)."""
+    tips = [x[1] for x in rows]
+    if anc is None:
+        anc = {t: set(tips[:j]) for j, t in enumerate(tips)}
+    steps, confirmed = [], []          # confirmed: the tips that start a confirmed step
+    for i, (ts, t, lane, v, cnt) in enumerate(rows):
+        a = anc.get(t, set())
+        floor = [s for s in confirmed if s in a]
+        hist = [x for x in rows[:i] if x[1] in a]
+        if floor:
+            # the latest confirmed step in this tip's history restarts the baseline
+            last = max(floor, key=lambda s: tips.index(s))
+            hist = [x for x in hist if x[1] == last or last in anc.get(x[1], set())]
+        base = [x[3] for x in hist[-window:]]
+        if len(base) < min_n:
+            continue
+        med, sd = _band(base)
+        # the last tip of this one's history that read inside the band: the step lies between it and t
+        good = next((x[1] for x in reversed(hist) if abs(x[3] - med) <= k * sd), None)
+        if abs(v - med) <= k * sd:
+            continue
+        side = 1 if v > med else -1
+        later = [x[3] for x in rows[i + 1:] if t in anc.get(x[1], set())]
+        ahead = [v] + later[:confirm - 1]
+        after = statistics.median(ahead)
+        if len(ahead) < confirm:
+            steps.append({"i": i, "kind": "UNCONFIRMED", "before": med, "after": after,
+                          "band": k * sd, "n": len(ahead), "good": good, "readings": ahead})
+        elif all((x - med) * side > k * sd for x in ahead):
+            steps.append({"i": i, "kind": "STEP", "before": med, "after": after, "band": k * sd,
+                          "n": len(ahead), "good": good, "readings": ahead})
+            confirmed.append(t)
+    # an UNCONFIRMED reading inside a confirmed step's run is that step's, not a second report; and
+    # sibling tips that left the SAME last in-band tip on the same side are ONE step (two lanes branched
+    # from the d-build commit that brought it): the earliest is named, the rest counted
+    out, by_good = [], {}
+    for s in steps:
+        t = tips[s["i"]]
+        if s["kind"] == "UNCONFIRMED" and any(c in anc.get(t, set()) for c in confirmed):
+            continue
+        key = (s["good"], s["after"] > s["before"])
+        if s["good"] is not None and key in by_good:
+            by_good[key]["siblings"].append(s["i"])
+            if s["kind"] == "STEP": by_good[key]["kind"] = "STEP"
+            continue
+        s["siblings"] = []
+        by_good[key] = s
+        out.append(s)
+    return out
+
+
+def query_trend(days=30, suites=None, tip=None, k=TREND_K, quiet_ok=False):
+    """Prints every step (or, with `tip`, the steps whose first tip is `tip` plus where each of `suites`
+    stands at it). Returns the number of steps printed."""
+    series = trend_series(days, suites)
+    anc = tip_ancestry({x[1] for rows in series.values() for x in rows}, days)
+    n = 0
+    lines = []
+    for (suite, cond), rows in sorted(series.items()):
+        for s in trend_steps(rows, anc, k=k):
+            ts, t, lane, v, cnt = rows[s["i"]]
+            if tip and not any(rows[j][1].startswith(tip[:9]) for j in [s["i"]] + (s.get("siblings") or [])):
+                continue
+            rel = (s["after"] / s["before"] - 1.0) * 100 if s["before"] else float("inf")
+            good = f", last in band {s['good'][:9]}" if s.get("good") else ""
+            sib = "".join(f"; sibling {rows[j][1][:9]} ({rows[j][2]})" for j in s.get("siblings") or [])
+            lines.append(f"  {s['kind']:11s} {suite:34s} {s['before']:.4g} -> {s['after']:.4g} ({rel:+.0f} %, "
+                         f"band +-{s['band']:.3g}; read {', '.join(f'{x:.4g}' for x in s['readings'])}) "
+                         f"first at {t[:9]} ({lane}, {ts[:16]}{good}{sib}) [{cond}]")
+            n += 1
+    if lines or not quiet_ok:
+        print(f"TREND (target rows, last {days} d; k={k} x MAD of the trailing {TREND_WINDOW} tips in one "
+              f"condition{'' if anc is not None else '; NO COMMIT GRAPH: time order'}; NON-GATING: a step "
+              f"gets the lead's verdict):")
+        print("\n".join(lines) if lines else "  no step")
+    return n
+
+
+def trend_at_gate_end(tip=None):
+    """THE GATE'S TREND LINE (TEST-1): every gate prints, after its verdict, the target rows whose
+    reading at THIS tip left its history's band — the day a step lands it is one UNCONFIRMED reading.
+    A report: it never changes an exit code and never raises."""
+    try:
+        query_trend(30, None, tip or tree_shas()["studio"])
+    except Exception as e:             # a report must never break the gate it reports on
+        print(f"TREND: not computed ({type(e).__name__}: {e})")
+
+
 def main():
     ap = argparse.ArgumentParser()
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -711,6 +940,11 @@ def main():
     q.add_argument("--days", type=int, default=7); q.add_argument("-n", type=int, default=10)
     q2 = sub.add_parser("load-reds", help="red in a gate, green solo at the same tip")
     q2.add_argument("--days", type=int, default=7)
+    q4 = sub.add_parser("clocks", help="the GPU's clock state now (exit 3 when it reads locked)")
+    q3 = sub.add_parser("trend", help="steps in the target rows' readings across tips (non-gating)")
+    q3.add_argument("--days", type=int, default=30); q3.add_argument("--k", type=float, default=TREND_K)
+    q3.add_argument("--tip", default=None, help="only the steps whose first tip is this sha")
+    q3.add_argument("--suite", action="append", default=None)
     a = ap.parse_args()
     if a.cmd == "run":
         cmd = a.ctest[1:] if a.ctest and a.ctest[0] == "--" else a.ctest
@@ -734,6 +968,14 @@ def main():
         query_longest(a.days, a.n); return
     if a.cmd == "load-reds":
         query_load_reds(a.days); return
+    if a.cmd == "trend":
+        query_trend(a.days, a.suite, a.tip, a.k); return
+    if a.cmd == "clocks":
+        # THE STAGE CLOSE'S CLOCK CHECK (plan 9cl CLOCK-TRAP-1): a card left locked after a run
+        # reads `locked?` (idle and not clocking down); rc-gate.sh prints this and reds on exit 3.
+        st = gpu_clocks()
+        print(json.dumps(st, sort_keys=True))
+        sys.exit(3 if st.get("state") == "locked?" else 0)
     if a.cmd == "times":
         for k, v in sorted(median_times(a.days).items()): print(f"{k} {v:.2f}")
 

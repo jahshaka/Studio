@@ -26,7 +26,7 @@
 //      each settled until its field has CONVERGED (the field is a mean over rotated
 //      integrations: "the same picture" is the converged value, not one pass's bytes) -
 //      the field scrolling, and the field re-placed whole on the same lattice at
-//      every step (`JAHSHAKA_GI_FIELD_NO_SCROLL`, the behaviour replaced) - and the
+//      every step (the arm "gi.fieldScroll" = 0, the behaviour replaced) - and the
 //      return pose renders the same picture both ways (the pose BEFORE a walk is
 //      not a reference: the chain's hysteretic placement does not come back to
 //      where a from-scratch build put it, scroll or no scroll).
@@ -234,7 +234,7 @@ int main()
     // and the walk home, at the shipped budget, from a
     // from-scratch build at the same pose - once with the field SCROLLING, once
     // with every step RE-PLACING the whole field on the same lattice
-    // (`JAHSHAKA_GI_FIELD_NO_SCROLL`, the behaviour the scroll replaced). The chain
+    // (the arm "gi.fieldScroll" = 0, the behaviour the scroll replaced). The chain
     // walks the same path both times, so its placements match; after the walk
     // and its settle both fields hold whole integrations of one chain at one
     // window, and the return pose must render the same picture - which is what
@@ -344,7 +344,7 @@ int main()
     };
     const auto walk = [&](bool noScroll, const char *rays) {
         Arm arm;
-        if (noScroll) ::setenv("JAHSHAKA_GI_FIELD_NO_SCROLL", "1", 1);
+        if (noScroll) e->setArm("gi.fieldScroll", 0.0);
         if (rays) ::setenv("JAHSHAKA_GI_FIELD_RAYS", rays, 1);
         GiParams offGi; offGi.mode = GiMode::Off;
         scene->setGlobalIllumination(offGi);
@@ -401,7 +401,7 @@ int main()
                 arm.units = std::max(arm.units, w.units);
                 arm.scrollCpu = std::max(arm.scrollCpu, w.ms);
             }
-        if (noScroll) ::unsetenv("JAHSHAKA_GI_FIELD_NO_SCROLL");
+        if (noScroll) e->setArm("gi.fieldScroll", 1.0);
         if (rays) ::unsetenv("JAHSHAKA_GI_FIELD_RAYS");
         return arm;
     };

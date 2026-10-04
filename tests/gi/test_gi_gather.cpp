@@ -175,7 +175,7 @@ int main()
     // run — the frozen frame index's pair: the frozen index makes consecutive
     // frames the same estimate, the lever makes each picture that estimate.
     // gi.gather_stable and gi.gather_motion are what measure the history.
-    ::setenv("JAHSHAKA_GATHER_NO_TEMPORAL", "1", 1);
+    e->setArm("gather.temporal", 0.0);
 
     const unsigned kSize = 256u;
     View *view = e->createOffscreenView("gather", kSize, kSize, Colour(0, 0, 0));
@@ -426,6 +426,7 @@ int main()
         GiParams gatherGi;
         gatherGi.mode = GiMode::Vct; gatherGi.quality = GiQuality::High;
         gatherGi.ddgi = GiToggle::Off; gatherGi.numBounces = 1;
+        enginetest::GpuTimingWindow gpuTiming(e);   // the gather jobs' GPU times are monitor rows (lane TEST-1)
         armGather(s, gatherGi, true);
         render(e, 40);
         const GatherStatus stats = gatherStatus(s);
@@ -857,7 +858,7 @@ static int costMain(Engine *e)
     // THE ARMS' EXTRA KNOBS (PHOTON-GATHER-1b): the SH bands the integrate
     // evaluates (9 shipped; 4 = the memory-traffic arm the SH9 record is priced
     // against) and the filter in probe space off (the arm that prices it).
-    // PHOTON-GATHER-1c: the pixel history off (the JAHSHAKA_GATHER_NO_TEMPORAL
+    // PHOTON-GATHER-1c: the pixel history off (the arm "gather.temporal"
     // lever — the phase-2 block exactly).
     struct Knobs { unsigned shBands = 0u; bool filterOff = false; bool noTemporal = false; };
     float lastIntegrate = 0.0f;
@@ -873,8 +874,8 @@ static int costMain(Engine *e)
             t.filterOff = k.filterOff;
             s->setGatherTuning(t);
         }
-        if (k.noTemporal) ::setenv("JAHSHAKA_GATHER_NO_TEMPORAL", "1", 1);
-        else              ::unsetenv("JAHSHAKA_GATHER_NO_TEMPORAL");
+        e->setArm("gather.temporal", k.noTemporal ? 0.0 : 1.0);
+        enginetest::GpuTimingWindow gpuTiming(e);   // the gather jobs' GPU times are monitor rows (lane TEST-1)
         std::vector<float> place, trace, filter, integrate;
         for (int i = 0; i < 90; ++i) {
             e->renderOneFrame();
@@ -902,7 +903,7 @@ static int costMain(Engine *e)
                     double(fin.vramBytes) / (1024.0 * 1024.0));
         CHECK_MSG(pm > 0.0f && tm > 0.0f && fm > 0.0f && im > 0.0f,
                   "%s: all four stages were timed", what);
-        ::unsetenv("JAHSHAKA_GATHER_NO_TEMPORAL");
+        e->setArm("gather.temporal", 1.0);
         lastIntegrate = im;
         armGather(s, gi, false);
         render(e, 2);
@@ -1096,6 +1097,7 @@ static int shippedCostMain(Engine *e)
             t.restOff = true;
             s->setGatherTuning(t);
             render(e, 60);
+            enginetest::GpuTimingWindow gpuTiming(e);   // the gather jobs' GPU times are monitor rows (lane TEST-1)
             std::vector<float> pl, tr, fi, in, tot;
             for (int i = 0; i < 60; ++i) {
                 e->renderOneFrame();

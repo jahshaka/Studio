@@ -344,6 +344,69 @@ def main(source, build):
     check(code == 0 and "-L " in out and "nightly" in plain(out) and "-j1" in out,
           "`--nightly-tier` prints the nightly tier (%r)" % out.strip())
 
+    # 13. THE TREND CHECK (TEST-1): `gate_runlog.py trend` names the first tip of a step and not a spike.
+    sys.path.insert(0, os.path.join(source, "scripts"))
+    import gate_runlog as grl
+    check(grl.target_value("0.380 (bar 0.90) 1080p FULL-res") == 0.38
+          and grl.target_value("12/255 (bar 2/255) - the sealed room") == 12 / 255
+          and grl.target_value("[march: glossy floor 0.2, x] grain 9.52x the still case's (bar 1.5)") == 9.52
+          and grl.target_value("scale.shadow_cut world caster CPU ratio 0.177 (bar 0.33)") == 0.177,
+          "the target value parser reads the leading number, a ratio, or the last number before `bar`")
+    def series(vals):                  # a straight line of tips t0 < t1 < ... (each descends from all before)
+        rows = [("2026-10-01T%02d" % i, "t%02d" % i, "lane%d" % i, v, 1) for i, v in enumerate(vals)]
+        return rows, {r[1]: {x[1] for x in rows[:i]} for i, r in enumerate(rows)}
+    rows, anc = series([1.00, 1.02, 0.99, 1.01, 1.00, 3.5, 1.01, 0.98, 1.02, 1.00])
+    check(grl.trend_steps(rows, anc) == [], "one contended spike in a flat series is not a step")
+    rows, anc = series([1.00, 1.02, 0.99, 1.01, 1.00, 1.60, 1.61, 1.59, 1.62, 1.60])
+    st = grl.trend_steps(rows, anc)
+    check(len(st) == 1 and st[0]["kind"] == "STEP" and rows[st[0]["i"]][1] == "t05",
+          "a level change is ONE step named at its first tip (%r)" % [(rows[x["i"]][1], x["kind"]) for x in st])
+    rows, anc = series([1.00, 1.02, 0.99, 1.01, 1.00, 1.60])
+    st = grl.trend_steps(rows, anc)
+    check(len(st) == 1 and st[0]["kind"] == "UNCONFIRMED" and rows[st[0]["i"]][1] == "t05",
+          "the gate that brings a step prints it UNCONFIRMED (one reading)")
+    # two lanes branched from t04: lane A steps up, lane B does not -> B is never compared with A
+    base, _ = series([1.00, 1.02, 0.99, 1.01, 1.00])
+    a = [("2026-10-02T%02d" % i, "a%d" % i, "A", 1.6, 1) for i in range(3)]
+    b = [("2026-10-02T%02dZ" % i, "b%d" % i, "B", 1.0, 1) for i in range(3)]
+    rows = sorted(base + a + b)
+    anc = {r[1]: set() for r in rows}
+    for i, r in enumerate(base): anc[r[1]] = {x[1] for x in base[:i]}
+    for lane in (a, b):
+        for i, r in enumerate(lane): anc[r[1]] = {x[1] for x in base} | {x[1] for x in lane[:i]}
+    st = grl.trend_steps(rows, anc)
+    check([rows[x["i"]][1] for x in st] == ["a0"],
+          "parallel lanes: lane A's step is named once at a0, and lane B's tips stay in band (%r)"
+          % [rows[x["i"]][1] for x in st])
+
+    # 14. ONE BUILD, ONE SELECTION, FROM ANY CHECKOUT (TEST-1 fix round, CLIP-REF-1's finding): the
+    # merge judge runs d-build's copy of the scripts against a LANE's build, and the build's graph
+    # names files under the lane's tree — read against the script's own checkout every touched path
+    # was "not in the build graph" (448 rows against the lane's own 372). The scripts copied to a
+    # foreign root must select exactly what they select at home, through the graph.
+    import shutil
+    foreign = tempfile.mkdtemp(prefix="gate-scope-root-")
+    try:
+        os.makedirs(os.path.join(foreign, "scripts"))
+        for f in ("gate-scope.py", "gate_graph.py", "gate_runlog.py", "vram_tokens.py", "kernel_xid.py"):
+            if os.path.isfile(os.path.join(source, "scripts", f)):
+                shutil.copy(os.path.join(source, "scripts", f), os.path.join(foreign, "scripts", f))
+        probe = ["--files", "irisgl/engine/src/OgreFrameMonitor.cpp", "src/scripting/modules/perfapi.cpp",
+                 "--build", build, "--json"]
+        c1, o1, e1 = run([tool] + probe, source)
+        c2, o2, e2 = run([os.path.join(foreign, "scripts", "gate-scope.py")] + probe, foreign)
+        try:
+            d1, d2 = json.loads(o1), json.loads(o2)
+        except ValueError:
+            d1, d2 = {}, {}
+        s1 = set(d1.get("suites", [])) | set(d1.get("targets", []))
+        s2 = set(d2.get("suites", [])) | set(d2.get("targets", []))
+        check(c1 == 0 and c2 == 0 and s1 and s1 == s2 and "not in the build graph" not in o2 + e2,
+              "the same files and build select the same %d rows from a foreign checkout (%d there; "
+              "only here %s, only there %s)" % (len(s1), len(s2), sorted(s1 - s2)[:5], sorted(s2 - s1)[:5]))
+    finally:
+        shutil.rmtree(foreign, ignore_errors=True)
+
     if FAILURES:
         print("source.gate_scope_rules: FAILED (%d)" % len(FAILURES))
         return 1

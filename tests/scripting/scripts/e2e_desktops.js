@@ -226,8 +226,8 @@ var aNodes = scene.nodes().length;
 app.space("desktop");
 var expPath = project.current().folder + "-export-b.zip";
 assert(desktop.exportTile(expB, expPath) === true, "export: B exported from its tile (" + app.lastError() + ")");
-var turns = 0;
-while (project.archiveState() === "running") { editor.frame(1); if (++turns > 40000) break; }
+// The export by its own completion (plan 9cm SAMPLE-OPEN-WAIT-1), never a frame count.
+project.waitArchive();
 assert(project.archiveResult().ok === true, "export: the archive finished ok (" + project.archiveResult().error + ")");
 assert(project.current().guid === expA, "export: the current project is still A");
 assert(project.save() === true, "export: A saved after the export");

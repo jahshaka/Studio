@@ -19,6 +19,7 @@ For more information see the LICENSE file
 #include "scripting/modules/cameraapi.h"
 #include "scripting/modules/desktopapi.h"
 #include "scripting/modules/editorapi.h"
+#include "scripting/modules/engineapi.h"
 #include "scripting/modules/inputapi.h"
 #include "scripting/modules/logapi.h"
 #include "scripting/modules/nodeapi.h"
@@ -69,6 +70,9 @@ void registerStudioModules(ScriptEngine &engine)
     // registry order every generated doc and tool schema already has stays
     // unchanged.
     engine.addModule(new PerfApi(host));
+    // The engine's measurement arms (lane TEST-1). Appended: the registry order
+    // every generated doc and tool schema already has stays unchanged.
+    engine.addModule(new EngineApi(host));
     // The materials/material/graph verbs are the materials module's — the
     // shell's module loop calls MaterialsModule::registerApi right after this
     // (audit §6.3.4), keeping the registry order unchanged.

@@ -684,11 +684,11 @@ int main()
         // decode left unarmed nothing draws the Atom items, so every cell reads the
         // background — a split whose skip did nothing would still show them (PBS).
         if (ai == 0) {
-            setenv("JAHSHAKA_ATOM_DECODE_OFF", "1", 1);
+            e->setArm("atom.decode", 0.0);
             Image off;
             int fo = 0;
             settle(e, view, off, fo);
-            unsetenv("JAHSHAKA_ATOM_DECODE_OFF");
+            e->setArm("atom.decode", 1.0);
             size_t n = 0, dark = 0;
             for (size_t p = 0; p < cpu0.size() && off.rgba.size() == size_t(kW) * kH * 4u; ++p) {
                 if (!interior(p)) continue;

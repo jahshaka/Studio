@@ -233,6 +233,7 @@ set(SRCS
     src/scripting/modules/videoapi.cpp
     src/scripting/modules/clipboardapi.cpp
     src/scripting/modules/perfapi.cpp
+    src/scripting/modules/engineapi.cpp
     src/modules/materials/api/materialsapi.cpp
     src/modules/materials/materialsmodule.cpp
     src/modules/publish/publishapi.cpp
