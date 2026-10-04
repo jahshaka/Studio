@@ -50,6 +50,7 @@ static void render(Engine *e, int frames) { for (int i = 0; i < frames; ++i) e->
 /// How many float components differ (bit for bit) between two readbacks.
 static size_t floatsDiffering(const ImageF &a, const ImageF &b)
 {
+    if (a.rgba.empty() || b.rgba.empty()) return size_t(-1);   // nothing read is no proof
     if (a.width != b.width || a.height != b.height || a.rgba.size() != b.rgba.size()) return size_t(-1);
     size_t n = 0;
     for (size_t i = 0; i < a.rgba.size(); ++i)
@@ -78,7 +79,7 @@ static bool shot(Engine *e, View *v, const char *arm, double value, int settle, 
 
 /// A floor that runs far past cascade 0's field (the ring the cones answer), walls and
 /// columns standing on it inside the field, a sun.
-static void buildWorld(Scene *s, float floorMetal, float floorRough)
+static void buildWorld(Scene *s, float floorMetal, float floorRough, bool sunShadows = true)
 {
     s->setAmbient(Colour(0.25f, 0.27f, 0.30f), Colour(0.20f, 0.18f, 0.15f));
     const NodeId floor = enginetest::addTestCube(s, Colour(0.70f, 0.68f, 0.64f), floorMetal, floorRough);
@@ -92,7 +93,16 @@ static void buildWorld(Scene *s, float floorMetal, float floorRough)
         enginetest::setNodeScale(s, col, Vec3(0.6f, 2.5f, 0.6f));
         enginetest::setNodePosition(s, col, Vec3(i % 2 ? 2.5f : -2.5f, 1.25f, 2.0f + 5.0f * float(i)));
     }
-    enginetest::addDirectionalLight(s, Vec3(-0.4f, -1.0f, 0.5f), 2.0f);
+    const NodeId sun = enginetest::addDirectionalLight(s, Vec3(-0.4f, -1.0f, 0.5f), 2.0f);
+    if (!sunShadows) {
+        // the traced sun contact samples a new pattern every frame: no shadow, no per-frame term
+        LightDesc l;
+        l.type = LightType::Directional;
+        l.colour = Colour(1.f, 1.f, 1.f);
+        l.intensity = 2.0f / 3.14159265358979323846f;
+        l.castShadows = false;
+        s->setLight(sun, l);
+    }
 }
 
 int main()
@@ -125,6 +135,10 @@ int main()
         gi.gather = GiToggle::Off;
         gi.updateBudget = 0;           // a PAUSED field: converged at the build, then still
         CHECK(s->setGlobalIllumination(gi), "the Low chain with its field builds");
+        PostFxDesc fx;
+        fx.allowOffscreen = true;
+        fx.hdrReadback = true;         // the scene radiance, float for float
+        view->setPostFx(fx);
         // Low and looking down the floor: the near floor and the wall inside cascade 0's
         // field, the far floor in the ring outside it.
         enginetest::testCameraLookAt(view, Vec3(0.0f, 1.6f, -1.5f), Vec3(0.0f, 0.4f, 30.0f));
@@ -161,17 +175,21 @@ int main()
         View *view = e->createOffscreenView("skip-specular", kW, kH, Colour(0, 0, 0));
         Scene *s = e->createScene("skip-specular");
         view->setScene(s);
-        buildWorld(s, 1.0f, 0.05f);
+        // A MIRROR (roughness 0): one ray is the whole lobe, so the trace's answer is the same
+        // every frame and a still frame is a fixed point the arms can be compared at.
+        buildWorld(s, 1.0f, 0.0f, false);
         GiParams gi;
         gi.mode = GiMode::Vct;
         gi.quality = GiQuality::High;
         gi.numBounces = 1;
         gi.ddgi = GiToggle::On;
+        gi.gather = GiToggle::Off;     // the gather's history is the other per-frame estimator
         gi.updateBudget = 0;
         CHECK(s->setGlobalIllumination(gi), "the High chain builds");
         PostFxDesc fx;
         fx.allowOffscreen = true;
         fx.ssr = 2;                    // full-resolution rays
+        fx.hdrReadback = true;
         view->setPostFx(fx);
         enginetest::testCameraLookAt(view, Vec3(0.0f, 1.6f, -1.5f), Vec3(0.0f, 0.4f, 30.0f));
         render(e, 120);
@@ -180,15 +198,32 @@ int main()
             std::printf("SKIP: no ray-query device; PH-1's ray half cannot run here\n");
         } else {
             CHECK(rq.reflect, "the view traces its reflections");
-            ImageF on, off, on2;
-            CHECK(shot(e, view, "photon.specularConeSkip", 1.0, 30, on), "skip ON rendered");
-            CHECK(shot(e, view, "photon.specularConeSkip", 0.0, 30, off), "skip OFF rendered");
-            CHECK(shot(e, view, "photon.specularConeSkip", 1.0, 30, on2), "skip ON again rendered");
-            const size_t still = floatsDiffering(on, on2);
-            CHECK_MSG(still == 0, "the frame is still: skip ON twice is the same floats (%zu differ)", still);
-            const size_t d = floatsDiffering(on, off);
-            CHECK_MSG(d == 0, "PH-1 IS EXACT: skip ON and OFF are the same floats (%zu of %zu differ, worst %.3g)",
-                      d, on.rgba.size(), worstAbs(on, off));
+            ImageF on, off, reflOn, reflOff;
+            CHECK(shot(e, view, "photon.specularConeSkip", 1.0, 30, on) && view->readReflectionHdr(reflOn),
+                  "skip ON rendered, its reflection read");
+            CHECK(shot(e, view, "photon.specularConeSkip", 0.0, 30, off) && view->readReflectionHdr(reflOff),
+                  "skip OFF rendered, its reflection read");
+            // THE TRACE'S HISTORY IS NOT A FIXED POINT EVERYWHERE: on this fixture ~1 % of the
+            // answered pixels (the floor nearest the camera) move between frames of the SAME arm by an
+            // RGBA16F rounding of the temporal mean, so a whole-frame comparison cannot prove the skip.
+            // The proof is CONDITIONAL instead, and exact: where the reflection answered whole (w = 1)
+            // the composite replaces the environment term by the reflection, so a pixel whose
+            // reflection texel holds the SAME bits in the two frames must shade to the SAME floats
+            // with the skip on and off. (The screen march alone never answers a pixel whole - its
+            // weight carries a distance fade - so the ray tier is the skip's whole territory.)
+            size_t answered = 0, sameInput = 0, moved = 0;
+            for (size_t i = 0; i + 3 < on.rgba.size() && i + 3 < reflOn.rgba.size() && i + 3 < reflOff.rgba.size(); i += 4) {
+                if (!( reflOn.rgba[i + 3] >= 1.0f && reflOff.rgba[i + 3] >= 1.0f)) continue;
+                ++answered;
+                if (std::memcmp(&reflOn.rgba[i], &reflOff.rgba[i], 4 * sizeof(float)) != 0) continue;
+                ++sameInput;
+                if (std::memcmp(&on.rgba[i], &off.rgba[i], 4 * sizeof(float)) != 0) ++moved;
+            }
+            CHECK_MSG(answered > (on.rgba.size() / 4u) / 10u && sameInput > answered * 9u / 10u,
+                      "the trace answers %zu pixels whole, %zu with the same reflection in both frames",
+                      answered, sameInput);
+            CHECK_MSG(moved == 0, "PH-1 IS EXACT: of those %zu pixels, %zu shade differently with the skip ON and OFF",
+                      sameInput, moved);
         }
         e->destroyView(view);
         e->destroyScene(s);
@@ -205,6 +240,9 @@ int main()
         View *view = e->createOffscreenView("skip-coat", kW, kH, Colour(0, 0, 0));
         Scene *s = e->createScene("skip-coat");
         view->setScene(s);
+        // gi.leak_room's shell (the probes keep only what they see enclosed), a coated slab on
+        // its floor and a mirror column, the camera inside.
+        enginetest::leakroom::build(s, view, 0.3f);
         s->setAmbient(Colour(0.25f, 0.27f, 0.30f), Colour(0.20f, 0.18f, 0.15f));
         const NodeId floor = s->createNode();
         {
@@ -215,31 +253,29 @@ int main()
             p.clearCoatRoughness = 0.02f;
             const MaterialId mat = s->createPbrMaterial(p);
             const MeshId mesh = s->createMesh(enginetest::unitCubeMesh());
-            CHECK(floor && mat && mesh && s->attachMesh(floor, mesh, mat), "the coated floor exists");
+            CHECK(floor && mat && mesh && s->attachMesh(floor, mesh, mat), "the coated slab exists");
         }
-        enginetest::setNodeScale(s, floor, Vec3(30.0f, 0.2f, 30.0f));
-        enginetest::setNodePosition(s, floor, Vec3(0.0f, -0.1f, 0.0f));
-        const NodeId col = enginetest::addTestCube(s, Colour(0.9f, 0.9f, 0.9f), 1.0f, 0.05f);
-        enginetest::setNodeScale(s, col, Vec3(1.0f, 2.5f, 1.0f));
-        enginetest::setNodePosition(s, col, Vec3(0.0f, 1.25f, 5.0f));
-        const NodeId wall = enginetest::addTestCube(s, Colour(0.1f, 0.6f, 0.2f), 0.0f, 0.8f);
-        enginetest::setNodeScale(s, wall, Vec3(8.0f, 3.0f, 0.3f));
-        enginetest::setNodePosition(s, wall, Vec3(0.0f, 1.5f, 9.0f));
-        enginetest::addDirectionalLight(s, Vec3(-0.4f, -1.0f, 0.5f), 2.0f);
+        s->setNodeTransform(floor, Vec3(0.0f, 0.02f, 0.0f), Quat(), Vec3(9.0f, 0.04f, 9.0f));
+        const NodeId col = enginetest::addTestCube(s, Colour(0.9f, 0.9f, 0.9f), 1.0f, 0.0f);
+        s->setNodeTransform(col, Vec3(0.0f, 1.25f, 2.5f), Quat(), Vec3(1.0f, 2.5f, 1.0f));
         GiParams gi;
         gi.mode = GiMode::VctPccHybrid;
         gi.quality = GiQuality::Medium;
         gi.numBounces = 1;
-        gi.updateBudget = 0;
+        gi.updateBudget = 1;           // the probes capture, then the stale set is empty
         gi.pccProbesX = 2; gi.pccProbesY = 1; gi.pccProbesZ = 2;
         CHECK(s->setGlobalIllumination(gi), "the hybrid arm builds");
         PostFxDesc fx;
         fx.allowOffscreen = true;
         fx.ssr = 1;                    // the screen march (no rays bound)
+        fx.hdrReadback = true;
         view->setPostFx(fx);
-        enginetest::testCameraLookAt(view, Vec3(0.0f, 1.4f, -2.0f), Vec3(0.0f, 0.6f, 9.0f));
-        render(e, 120);
-        CHECK(s->giStatus().pccBound, "the probe grid is bound");
+        enginetest::testCameraLookAt(view, Vec3(0.0f, 1.6f, -3.5f), Vec3(0.0f, 0.4f, 4.0f));
+        render(e, 160);
+        const GiStatus pst = s->giStatus();
+        CHECK_MSG(pst.pccBound && pst.probeCount > 0,
+                  "the probe grid is bound (%d probes, by rays %d, dropped %d, stale %d)", pst.probeCount,
+                  int(pst.probeGridByRays), pst.probesDropped, pst.staleProbes);
         ImageF on, off, on2;
         CHECK(shot(e, view, "photon.specularConeSkip", 1.0, 30, on), "skip ON rendered");
         CHECK(shot(e, view, "photon.specularConeSkip", 0.0, 30, off), "skip OFF rendered");
