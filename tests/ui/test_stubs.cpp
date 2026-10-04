@@ -89,7 +89,7 @@ iris::MaterialPtr MaterialReader::parseMaterialTyped(QJsonObject definition, Dat
     return iris::PbrMaterial::create().staticCast<iris::Material>();
 }
 
-void SceneWriter::writeSceneNode(QJsonObject &, iris::SceneNodePtr, bool)
+void SceneWriter::writeSceneNode(QJsonObject &, iris::SceneNodePtr)
 {
 }
 
