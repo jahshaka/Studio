@@ -143,6 +143,15 @@ iris::PbrMaterialPtr MaterialReader::parsePbrMaterial(QJsonObject matObject, Dat
 			break;
 		}
 	}
+	// THE UV SCROLL (TORNADO-1): graph-owned, not a Property row — the animated
+	// UV fold writes it as a two-element array (GraphBaker::runCompiled).
+	{
+		const QJsonArray velocity = values.value(QStringLiteral("textureVelocity")).toArray();
+		if (velocity.size() == 2) {
+			mat->setValue(QStringLiteral("textureVelocityU"), velocity[0].toDouble());
+			mat->setValue(QStringLiteral("textureVelocityV"), velocity[1].toDouble());
+		}
+	}
 
 	return mat;
 }

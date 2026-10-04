@@ -1757,6 +1757,14 @@ iris::MaterialPtr SceneReader::readPbrMaterial(const QJsonObject& matObj)
 	}
 
 	restoreCustomPieces(mat, values);
+	// THE UV SCROLL (TORNADO-1): graph-owned like the pieces, not a Property row.
+	{
+		const QJsonArray velocity = values["textureVelocity"].toArray();
+		if (velocity.size() == 2) {
+			mat->setValue(QStringLiteral("textureVelocityU"), velocity[0].toDouble());
+			mat->setValue(QStringLiteral("textureVelocityV"), velocity[1].toDouble());
+		}
+	}
 	return mat;
 }
 

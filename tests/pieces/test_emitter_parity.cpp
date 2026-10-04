@@ -154,6 +154,7 @@ struct Probe
     Scene *scene = nullptr;
     View *view = nullptr;
     MaterialId material = 0;
+    NodeId node = 0;
 };
 
 Probe makeProbe(Engine *e, const std::string &name)
@@ -165,6 +166,7 @@ Probe makeProbe(Engine *e, const std::string &name)
     p.scene->setAmbient(Colour(0.25f, 0.25f, 0.25f), Colour(0.2f, 0.2f, 0.2f));
     enginetest::addDirectionalLight(p.scene, Vec3(-0.5f, -0.7f, -0.5f), 3.14159f);
     const NodeId node = p.scene->createNode();
+    p.node = node;
     const MeshId mesh = p.scene->createMesh(enginetest::unitCubeMesh());
     PbrParams params;
     params.albedo = Colour(0.5f, 0.5f, 0.5f);
@@ -260,6 +262,249 @@ void oracle(const QString &name, const QStringList &ops, const std::function<voi
         if (!gCoveredOps.contains(op)) gCoveredOps << op;
 
     gEmitted.scene->setMaterialCustomPiece(gEmitted.material, "", CustomPieceStage::PixelPreLights);
+    delete rig.graph;
+}
+
+// ============================================================================
+// THE PER-OP DIVERGENCE RULE (TORNADO-1, G3 — the lead's decision). fresnel,
+// worldNormal and localNormal have no meaningful CPU-bake value: the baker
+// evaluates them against an IDENTITY tangent frame (normal (0,0,1), view
+// (0,0,1)), which is not any real surface. In a LIVE graph the piece computes
+// the real value, so these rows compare the GPU against an ANALYTIC reference
+// computed here from the fixture's own geometry — never against the baker.
+// ============================================================================
+
+struct V3 { double x, y, z; };
+V3 sub(V3 a, V3 b) { return { a.x - b.x, a.y - b.y, a.z - b.z }; }
+V3 add3(V3 a, V3 b) { return { a.x + b.x, a.y + b.y, a.z + b.z }; }
+V3 mul(V3 a, double k) { return { a.x * k, a.y * k, a.z * k }; }
+double dot3(V3 a, V3 b) { return a.x * b.x + a.y * b.y + a.z * b.z; }
+V3 cross(V3 a, V3 b) { return { a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x }; }
+V3 norm(V3 a) { const double l = std::sqrt(dot3(a, a)); return { a.x / l, a.y / l, a.z / l }; }
+
+/// The world ray through the centre() pixel of a 48x48 testCameraLookAt view
+/// (vertical fov 45, square target), and where it meets the probe's cube
+/// (half-extent 0.5 * 1.4, axis-aligned, at the origin): the hit point and the
+/// face's outward normal.
+struct Hit { V3 point, normal; bool ok = false; };
+Hit centreHit(V3 eye)
+{
+    const V3 f = norm(sub({ 0, 0, 0 }, eye));
+    const V3 r = norm(cross(f, { 0, 1, 0 }));
+    const V3 u = cross(r, f);
+    const double t = std::tan(45.0 * 0.5 * 3.14159265358979323846 / 180.0);
+    const double px = 48 / 2, py = 48 / 2;
+    const double nx = ((px + 0.5) / 48.0) * 2.0 - 1.0;
+    const double ny = 1.0 - ((py + 0.5) / 48.0) * 2.0;
+    const V3 d = norm(add3(f, add3(mul(r, nx * t), mul(u, ny * t))));
+    Hit best;
+    double bestT = 1e30;
+    const double h = 0.7;
+    const double eyeC[3] = { eye.x, eye.y, eye.z }, dC[3] = { d.x, d.y, d.z };
+    for (int axis = 0; axis < 3; ++axis) {
+        for (int sgn = -1; sgn <= 1; sgn += 2) {
+            if (std::abs(dC[axis]) < 1e-12) continue;
+            const double tt = (sgn * h - eyeC[axis]) / dC[axis];
+            if (tt <= 0 || tt >= bestT) continue;
+            const V3 p = add3(eye, mul(d, tt));
+            const double pc[3] = { p.x, p.y, p.z };
+            bool inside = true;
+            for (int k = 0; k < 3; ++k)
+                if (k != axis && std::abs(pc[k]) > h) inside = false;
+            if (!inside) continue;
+            bestT = tt;
+            best.point = p;
+            best.normal = { axis == 0 ? double(sgn) : 0.0, axis == 1 ? double(sgn) : 0.0,
+                            axis == 2 ? double(sgn) : 0.0 };
+            best.ok = true;
+        }
+    }
+    return best;
+}
+
+/// The Base Color oracle with an ANALYTIC reference at a chosen eye.
+void oracleAnalytic(const QString &name, const QStringList &ops, const std::function<void(Rig &)> &build,
+                    V3 eye, const std::function<V3(const Hit &, V3 eye)> &expected)
+{
+    const Vec3 eyeF(float(eye.x), float(eye.y), float(eye.z));
+    enginetest::testCameraLookAt(gEmitted.view, eyeF, Vec3(0.0f, 0.0f, 0.0f));
+    enginetest::testCameraLookAt(gReference.view, eyeF, Vec3(0.0f, 0.0f, 0.0f));
+    const Hit hit = centreHit(eye);
+    Rig rig;
+    build(rig);
+    const auto compiled = materials::GraphBaker::compile(rig.graph);
+    const auto emitted = materials::PieceEmitter::lower(compiled);
+    ++gChecks;
+    if (!hit.ok || !emitted.accepted || !emitted.emittedSockets.contains(QStringLiteral("Base Color"))) {
+        ++gFailures;
+        std::printf("    FAIL %s: %s\n", qPrintable(name),
+                    !hit.ok ? "the centre ray misses the cube"
+                            : qPrintable(emitted.fallbackReasons.value(QStringLiteral("Base Color"))));
+    } else {
+        const QString path = materials::PieceEmitter::write(gDir, emitted.pixelSource, false);
+        gEmitted.scene->setMaterialCustomPiece(gEmitted.material, path.toStdString(),
+                                               CustomPieceStage::PixelPreLights);
+        gEmitted.scene->setShaderTime(0.4f);
+        const V3 want = expected(hit, eye);
+        PbrParams ref;
+        ref.albedo = Colour(float(want.x), float(want.y), float(want.z));
+        ref.metalness = 0.0f;
+        ref.roughness = 0.6f;
+        gReference.scene->setPbrMaterial(gReference.material, ref);
+        render(gEngine.get());
+        Image a, b;
+        gEmitted.view->readPixels(a);
+        gReference.view->readPixels(b);
+        const Px pa = centre(a), pb = centre(b);
+        const int worst = std::max(std::abs(pa.r - pb.r), std::max(std::abs(pa.g - pb.g), std::abs(pa.b - pb.b)));
+        if (worst > 2) {
+            ++gFailures;
+            std::printf("    FAIL %-22s analytic(%.4f %.4f %.4f) gpu %3d %3d %3d vs ref %3d %3d %3d (worst %d/255)\n",
+                        qPrintable(name), want.x, want.y, want.z, pa.r, pa.g, pa.b, pb.r, pb.g, pb.b, worst);
+        } else {
+            std::printf("    ok   %-22s analytic(%.4f %.4f %.4f) -> %3d %3d %3d  (worst %d/255)\n",
+                        qPrintable(name), want.x, want.y, want.z, pa.r, pa.g, pa.b, worst);
+        }
+        // THE CONTROL the rule owes: the baker's identity-context value would
+        // have drawn something else here, or the row proves nothing.
+        const auto *program = &compiled.sockets[0].program;
+        materials::EvalContext ctx; ctx.time = 0.4;
+        const auto cpu = program->evaluate(ctx).coerced(3);
+        const double gap = std::max(std::abs(cpu.x - want.x), std::max(std::abs(cpu.y - want.y), std::abs(cpu.z - want.z)));
+        ++gChecks;
+        if (gap < 0.05) {
+            ++gFailures;
+            std::printf("    FAIL %s: the analytic value equals the baker's (%.3f) — the fixture cannot "
+                        "tell the real value from the approximation\n", qPrintable(name), gap);
+        }
+        for (const QString &op : ops)
+            if (!gCoveredOps.contains(op)) gCoveredOps << op;
+        gEmitted.scene->setMaterialCustomPiece(gEmitted.material, "", CustomPieceStage::PixelPreLights);
+    }
+    delete rig.graph;
+    enginetest::testCameraLookAt(gEmitted.view, Vec3(2.2f, 1.8f, 2.6f), Vec3(0.0f, 0.0f, 0.0f));
+    enginetest::testCameraLookAt(gReference.view, Vec3(2.2f, 1.8f, 2.6f), Vec3(0.0f, 0.0f, 0.0f));
+}
+
+/// Rotates v by the unit quaternion q.
+V3 rotate(const Quat &q, V3 v)
+{
+    const V3 qv{ q.x, q.y, q.z };
+    const V3 t = mul(cross(qv, v), 2.0);
+    return add3(add3(v, mul(t, q.w)), cross(qv, t));
+}
+
+/// THE VERTEX-STAGE NORMALS. A Vertex Offset of `normal * k` moves each face of
+/// a ROTATED cube along that normal. The reference is the displacement done by
+/// hand, on the CPU, in the mesh's own space — a second cube whose vertices are
+/// already where the piece must put them — and the WHOLE image is compared
+/// (a flat face's shading does not move, its silhouette does). The control is
+/// the other normal's displacement, which must NOT match.
+void vertexNormalOracle(const QString &name, bool local)
+{
+    const double k = 0.15, scale = 1.4;
+    // R = Ry(30) * Rx(20)
+    const double a = 30.0 * 3.14159265358979323846 / 360.0, b = 20.0 * 3.14159265358979323846 / 360.0;
+    const Quat ry(0.0f, float(std::sin(a)), 0.0f, float(std::cos(a)));
+    const Quat rx(float(std::sin(b)), 0.0f, 0.0f, float(std::cos(b)));
+    const Quat q(ry.w * rx.x + ry.x * rx.w + ry.y * rx.z - ry.z * rx.y,
+                 ry.w * rx.y - ry.x * rx.z + ry.y * rx.w + ry.z * rx.x,
+                 ry.w * rx.z + ry.x * rx.y - ry.y * rx.x + ry.z * rx.w,
+                 ry.w * rx.w - ry.x * rx.x - ry.y * rx.y - ry.z * rx.z);
+    const Quat qi(-q.x, -q.y, -q.z, q.w);
+
+    auto build = [&](Probe &p, const MeshData &mesh) {
+        static int serial = 0;
+        const std::string id = "vtx_" + std::to_string(++serial);
+        p.view = gEngine->createOffscreenView(id, 48, 48, Colour(0.0f, 0.0f, 0.0f));
+        p.scene = gEngine->createScene(id);
+        p.scene->setAmbient(Colour(0.25f, 0.25f, 0.25f), Colour(0.2f, 0.2f, 0.2f));
+        enginetest::addDirectionalLight(p.scene, Vec3(-0.5f, -0.7f, -0.5f), 3.14159f);
+        p.node = p.scene->createNode();
+        PbrParams params;
+        params.albedo = Colour(0.5f, 0.5f, 0.5f);
+        params.roughness = 0.6f;
+        params.metalness = 0.0f;
+        p.material = p.scene->createPbrMaterial(params);
+        p.scene->attachMesh(p.node, p.scene->createMesh(mesh), p.material);
+        p.scene->setNodeTransform(p.node, Vec3(0, 0, 0), q, Vec3(float(scale), float(scale), float(scale)));
+        p.view->setScene(p.scene);
+        enginetest::testCameraLookAt(p.view, Vec3(2.2f, 1.8f, 2.6f), Vec3(0.0f, 0.0f, 0.0f));
+    };
+    // the displaced reference mesh: world offset W = k * n (n world or local),
+    // mesh-space displacement R^-1 W / scale
+    auto displaced = [&](bool useLocal) {
+        MeshData m = enginetest::unitCubeMesh();
+        for (size_t i = 0; i < m.positions.size(); i += 3) {
+            const V3 nl{ m.normals[i], m.normals[i + 1], m.normals[i + 2] };
+            const V3 w = useLocal ? mul(nl, k) : mul(rotate(q, nl), k);
+            const V3 dm = mul(rotate(qi, w), 1.0 / scale);
+            m.positions[i] += float(dm.x);
+            m.positions[i + 1] += float(dm.y);
+            m.positions[i + 2] += float(dm.z);
+        }
+        return m;
+    };
+
+    Rig rig;
+    auto n = rig.add(local ? "localNormal" : "worldNormal");
+    auto kk = rig.add("multiply");
+    rig.connect(n, 0, kk, 0);
+    rig.connect(rig.addFloat(k), 0, kk, 1);
+    auto zero = rig.add("multiply");
+    rig.connect(rig.add("time"), 0, zero, 0);
+    rig.connect(rig.addFloat(0.0), 0, zero, 1);
+    auto sum = rig.add("add");
+    rig.connect(kk, 0, sum, 0);
+    rig.connect(zero, 0, sum, 1);
+    rig.connect(sum, 0, rig.master, 7);   // Vertex Offset
+    const auto emitted = materials::PieceEmitter::lower(materials::GraphBaker::compile(rig.graph));
+    ++gChecks;
+    if (!emitted.accepted || emitted.vertexSource.isEmpty()) {
+        ++gFailures;
+        std::printf("    FAIL %s: the emitter refused — %s\n", qPrintable(name),
+                    qPrintable(emitted.fallbackReasons.value(QStringLiteral("Vertex Offset"))));
+        delete rig.graph;
+        return;
+    }
+    Probe live, want, other;
+    build(live, enginetest::unitCubeMesh());
+    build(want, displaced(local));
+    build(other, displaced(!local));
+    const QString path = materials::PieceEmitter::write(gDir, emitted.vertexSource, true);
+    live.scene->setMaterialCustomPiece(live.material, path.toStdString(), CustomPieceStage::VertexPreTransform);
+    render(gEngine.get(), 3);
+    Image il, iw, io;
+    live.view->readPixels(il);
+    want.view->readPixels(iw);
+    other.view->readPixels(io);
+    auto differing = [](const Image &x, const Image &y) {
+        int nDiff = 0;
+        for (size_t i = 0; i + 3 < x.rgba.size() && i + 3 < y.rgba.size(); i += 4) {
+            int w = 0;
+            for (int c = 0; c < 3; ++c) w = std::max(w, std::abs(int(x.rgba[i + c]) - int(y.rgba[i + c])));
+            if (w > 2) ++nDiff;
+        }
+        return nDiff;
+    };
+    const int dWant = differing(il, iw), dOther = differing(il, io);
+    ++gChecks;
+    // An edge pixel may flip between two computations of the same vertex
+    // (world-space add vs a pre-displaced mesh): a handful, never a face.
+    if (dWant > 6 || dOther < 40) {
+        ++gFailures;
+        std::printf("    FAIL %-22s %d pixels off the analytic displacement, %d off the other normal's\n",
+                    qPrintable(name), dWant, dOther);
+    } else {
+        std::printf("    ok   %-22s %d pixels off the analytic displacement (control: %d off the other "
+                    "normal's)\n", qPrintable(name), dWant, dOther);
+    }
+    const QString op = local ? QStringLiteral("localNormal") : QStringLiteral("worldNormal");
+    if (!gCoveredOps.contains(op)) gCoveredOps << op;
+    for (Probe *p : { &live, &want, &other }) {
+        gEngine->destroyView(p->view);
+        gEngine->destroyScene(p->scene);
+    }
     delete rig.graph;
 }
 
@@ -604,6 +849,29 @@ int main(int argc, char **argv)
         r.connect(pulse, 0, op, 2);
         r.toBaseColor(op);
     }, 0.55);
+
+    std::printf("\n== live-only ops vs an ANALYTIC reference (TORNADO-1, G3)\n");
+    // fresnel(power 2) at the centre pixel: the +Z face from the standard eye.
+    oracleAnalytic("fresnel (power 2)", { "fresnel" }, [](Rig &r) {
+        auto op = r.add("fresnel");
+        r.connect(r.addFloat(2.0), 0, op, 1);
+        r.toBaseColor(op);
+    }, V3{ 2.2, 1.8, 2.6 }, [](const Hit &h, V3 eye) {
+        const double d = std::max(0.0, dot3(h.normal, norm(sub(eye, h.point))));
+        const double f = std::pow(1.0 - d, 2.0);
+        return V3{ f, f, f };
+    });
+    // abs(worldNormal) from an eye that sees the +X face: (1,0,0). The baker's
+    // identity frame says (0,0,1); a view-space normal would be neither.
+    oracleAnalytic("worldNormal (+X face)", { "worldNormal" }, [](Rig &r) {
+        auto op = r.add("abs");
+        r.connect(r.add("worldNormal"), 0, op, 0);
+        r.toBaseColor(op);
+    }, V3{ 2.6, 1.8, 2.2 }, [](const Hit &h, V3) {
+        return V3{ std::abs(h.normal.x), std::abs(h.normal.y), std::abs(h.normal.z) };
+    });
+    vertexNormalOracle(QStringLiteral("worldNormal (vertex)"), false);
+    vertexNormalOracle(QStringLiteral("localNormal (vertex)"), true);
 
     std::printf("\n== control\n");
     control_detects_a_wrong_reference();

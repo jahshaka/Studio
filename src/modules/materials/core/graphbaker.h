@@ -96,6 +96,29 @@ public:
 		MasterSlot slot;
 		bool connected = false;
 		BakeProgram program;
+
+		// ---- THE LIVE SPLIT (TORNADO-1), LIVE GRAPHS AND THE EMISSIVE SOCKET ONLY.
+		// The socket's chain is a SUM (an add tree), and its terms are of two kinds:
+		// a LIVE term (no texture, every op lowerable, and reading the clock or a
+		// view-dependent op such as fresnel) runs in the generated piece, which
+		// ADDS it to the emissive inside HlmsPbs' DoEmissiveLight; every other term
+		// stays with the baker — usually a texture, which the material's maps
+		// (and the animated UV fold) serve. Addition is exact, so the two halves
+		// sum to the graph. `liveWhole`: every term is live (the piece owns the
+		// socket, nothing bakes). `split`: both kinds exist — `program` is then
+		// the BAKED half and `live` the piece's half, and `unsplit` keeps the
+		// whole chain for a run whose emitter did not take the socket (the
+		// baker then bakes it exactly as before this existed).
+		bool liveWhole = false;
+		bool split = false;
+		BakeProgram live;
+		BakeProgram unsplit;
+		/// THE FACTOR FOLD on the baked half of a split: `texture x constant`
+		/// lands as the texture (bound at full resolution) with the constant on
+		/// the material's emissive colour and intensity — so an HDR constant
+		/// stays HDR instead of being clamped into an 8-bit map.
+		bool hasFactor = false;
+		Value factor;
 	};
 	struct CompiledGraph
 	{
@@ -109,6 +132,11 @@ public:
 		/// at full resolution) and runCompiled lands textureScale/Offset/
 		/// Rotation beside the maps. `valid == false` carries the reason.
 		BakeProgram::UvFold uvFold;
+		/// THE GRAPH IS LIVE (TORNADO-1): some connected socket reads the shader
+		/// clock. Everything the live paths change — the animated UV fold, the
+		/// emissive split, the view-dependent ops — is gated on this, so a
+		/// STATIC graph compiles, bakes and emits exactly as before.
+		bool live = false;
 		// The master's Blend Mode setting (material state, not texel math):
 		// runCompiled lands it on the emitted alphaMode after the auto rules.
 		BlendMode blendMode = BlendMode::Opaque;
@@ -120,6 +148,9 @@ public:
 	/// Intersects every socket's admissible UV transform into the material's
 	/// one, applies it to the compiled programs, and records it on `compiled`.
 	static void resolveUvFold(CompiledGraph& compiled);
+	/// The emissive split and its factor fold (see CompiledSlot). Live graphs only.
+	static void splitLiveEmissive(CompiledGraph& compiled);
+	static void foldEmissiveFactor(CompiledGraph& compiled);
 	static Result runCompiled(const CompiledGraph& compiled, const Options& opts);
 
 	static Result run(NodeGraph* graph, const Options& opts,

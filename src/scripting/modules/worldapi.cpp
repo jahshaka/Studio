@@ -35,6 +35,7 @@ For more information see the LICENSE file
 #include "services/sceneeditservice.h"
 #include "services/services.h"
 #include "viewport/ieditorviewport.h"
+#include "irisgl/mirror/scenemirror.h"
 #include "irisgl/document/assets/texture2d.h"
 #include "irisgl/document/scenegraph/lightnode.h"
 #include "irisgl/document/scenegraph/meshnode.h"
@@ -332,6 +333,16 @@ QVector<VerbInfo> WorldApi::verbs() const
           "'triangles' colours every triangle a random bright colour (per object, cluster and triangle); 'levels' shows how deep in each object's CLUSTER DAG the renderer's cut drew every pixel (the renderer chooses the detail PER CLUSTER GROUP by its error projected to pixels, never per object), a fixed ramp from depth 0 (the authored surface) = red, 1 = orange, 2 = yellow, 3 = lime, 4 = green, 5 = cyan, 6 = blue, 7 = violet, then 8 = pink, 9 = light grey, 10 = brown, 11 = teal, 12 = tan, 13 = slate, 14 = maroon and 15 or deeper = dark grey; 'buckets' gives each material DECODE DRAW its own colour (world.atomStatus().buckets counts them; materials that share one draw share a colour); 'objects' gives each object its own colour; 'off' is the ordinary picture, byte for byte. "
           "Objects the renderer keeps on the stock PBR shader keep their lit picture in every mode — transparent, two-sided, planar-mirror, alpha-tested and SKINNED (posed characters) objects among them; world.atomStatus() names why each one is there — and so does anything standing in front of a coloured surface. Nothing CAN be painted at the Low tier (its viewport draws straight into the window with no id pass), with the split shut (world.setAtomDraw(false)) or in a VR headset (a stereo view draws everything through the stock shader): in the first two the verb REFUSES every mode but 'off' (world.atomStatus().viewPaintable says which), and a view already on paints nothing until the id pass is back. "
           "A viewing aid, not a setting: not saved, not undoable, switching rebuilds nothing (the price: one depth texture per view that carries the id pass, on or off — 8.3 MB at 1920x1080, 33 MB at 4K), and opening or creating a scene starts 'off'. A screenshot taken while it is on shows it; the project thumbnail never does. Answers true when the view was accepted (false for an unknown name or with no engine viewport).",
+          Needs::Document },
+        { "shaderTime", "world.shaderTime({t}) -> {t, pinned, live}",
+          "THE SHADER CLOCK that animated graph materials read — a generated shader piece and a map that "
+          "scrolls (a graph whose constant-speed panner feeds its textures). {t: seconds} PINS it at exactly "
+          "that time (t >= 0), so a frame of an animated surface is reproducible: the same t draws the same "
+          "pixels every run. {t: null} hands it back to the FREE clock, which counts the scene's own "
+          "simulation steps at 1/60 s each (never the wall clock) and resumes from where it was. With no "
+          "argument it only reads. Returns 't' (the time the next frame draws at), 'pinned' and 'live' — "
+          "whether any material in the open scene reads the clock (false: nothing on screen would move). "
+          "Not saved, not undoable: a viewing and testing control, like the timeline's playhead.",
           Needs::Document },
         { "atomView", "world.atomView() -> string",
           "The open scene's Atom view — 'off', 'triangles', 'levels', 'buckets' or 'objects' (world.setAtomView).",
@@ -1662,6 +1673,39 @@ bool WorldApi::setAtomView(const QString &view)
     }
     es->setAtomView(static_cast<jahshaka::engine::AtomView>(mode));
     return true;
+}
+
+QVariantMap WorldApi::shaderTime(const QVariantMap &params)
+{
+    QVariantMap out;
+    auto scene = sceneOrFail(QStringLiteral("world.shaderTime"));
+    if (!scene) return out;
+    SceneMirror *mirror = host.viewport ? host.viewport->sceneMirror() : nullptr;
+    if (!mirror) {
+        fail(QStringLiteral("world.shaderTime: no engine viewport — the shader clock belongs to the "
+                            "renderer's view of the scene"));
+        return out;
+    }
+    if (params.contains(QStringLiteral("t"))) {
+        const QVariant v = params.value(QStringLiteral("t"));
+        if (!v.isValid() || v.isNull() || v.typeId() == QMetaType::Nullptr) {
+            mirror->setShaderTimeOverride(-1.0f);
+        } else {
+            bool ok = false;
+            const double t = v.toDouble(&ok);
+            if (!ok || !std::isfinite(t) || t < 0.0) {
+                fail(QStringLiteral("world.shaderTime: t must be a number of seconds >= 0, or null "
+                                    "for the free clock"));
+                return out;
+            }
+            mirror->setShaderTimeOverride(float(t));
+        }
+    }
+    const bool pinned = mirror->shaderTimeOverride() >= 0.0f;
+    out[QStringLiteral("t")] = pinned ? double(mirror->shaderTimeOverride()) : mirror->shaderSeconds();
+    out[QStringLiteral("pinned")] = pinned;
+    out[QStringLiteral("live")] = mirror->shaderClockLive();
+    return out;
 }
 
 bool WorldApi::setPhotonView(const QString &view, const QVariantMap &options)

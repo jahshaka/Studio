@@ -206,6 +206,12 @@ QJsonObject GraphBaker::classify(NodeGraph* graph, BakeProgram::TextureResolver 
 		fold["offset"] = offset;
 		fold["rotation"] = compiled.uvFold.rotationDeg;
 		fold["samplers"] = compiled.uvFold.samplers;
+		if (compiled.uvFold.velocityX != 0.0 || compiled.uvFold.velocityY != 0.0) {
+			QJsonArray velocity;
+			velocity.append(compiled.uvFold.velocityX);
+			velocity.append(compiled.uvFold.velocityY);
+			fold["velocity"] = velocity;
+		}
 		out["fold"] = fold;
 	}
 	else {
@@ -239,8 +245,197 @@ GraphBaker::CompiledGraph GraphBaker::compile(NodeGraph* graph, BakeProgram::Tex
 		out.sockets.append(cs);
 	}
 
+	// LIVE (TORNADO-1): a graph that reads the clock anywhere. Decided on the
+	// programs AS COMPILED, before any rewrite, and the only gate on every live
+	// path below — a static graph takes none of them.
+	for (const auto& cs : out.sockets)
+		if (cs.connected && cs.program.animated) out.live = true;
+	if (out.live) splitLiveEmissive(out);
+
 	resolveUvFold(out);
+	if (out.live) foldEmissiveFactor(out);
 	return out;
+}
+
+// ------------------------------------------------------------- the live split
+
+namespace {
+
+/// Every op of the subtree under `root` (inclusive), each once.
+QVector<int> subtreeOps(const BakeProgram& p, int root)
+{
+	QVector<int> out;
+	QVector<bool> seen(p.ops.size(), false);
+	QVector<int> stack{ root };
+	while (!stack.isEmpty()) {
+		const int i = stack.takeLast();
+		if (i < 0 || i >= p.ops.size() || seen[i]) continue;
+		seen[i] = true;
+		out.append(i);
+		for (const auto& ref : p.ops[i].inputs)
+			if (ref.op >= 0) stack.append(ref.op);
+	}
+	return out;
+}
+
+/// A LIVE TERM for the PIXEL stage: every op lowerable there, no texture, and
+/// it reads the clock or a view-dependent op (the reason it cannot bake).
+bool isLivePixelTerm(const BakeProgram& p, int root)
+{
+	bool animated = false, viewDependent = false;
+	for (int i : subtreeOps(p, root)) {
+		const BakeOp& op = p.ops[i];
+		if (!op.unsupportedReason.isEmpty()) return false;
+		if (op.hasLiteral) continue;
+		if (!BakeProgram::pieceOps().contains(op.typeName)) return false;
+		// object space does not reach the pixel stage (pieceemitter's rule)
+		if (op.typeName == "localNormal") return false;
+		// the piece uses the surface's own normal; a connected one has no frame
+		if (op.typeName == "fresnel" && !op.inputs.isEmpty() && op.inputs[0].op >= 0) return false;
+		if (BakeProgram::liveOnlyOps().contains(op.typeName)) viewDependent = true;
+		animated |= op.animated;
+		for (const auto& ref : op.inputs)
+			if (ref.op < 0 && ref.fallbackKind == BakeInputRef::Time) animated = true;
+	}
+	return animated || viewDependent;
+}
+
+/// The add-tree terms of `p`: (add op, input index) pairs, or {-1, root} when
+/// the root is not an add. An inner add joins the tree only when the tree is
+/// its one reader, so zeroing a term never changes another chain.
+QVector<QPair<int, int>> sumTerms(const BakeProgram& p)
+{
+	QVector<QPair<int, int>> terms;
+	if (p.rootOp < 0 || p.rootOp >= p.ops.size()) return terms;
+	if (p.ops[p.rootOp].typeName != QLatin1String("add")) {
+		terms.append({ -1, p.rootOp });
+		return terms;
+	}
+	QVector<int> readers(p.ops.size(), 0);
+	for (const auto& op : p.ops)
+		for (const auto& ref : op.inputs)
+			if (ref.op >= 0) ++readers[ref.op];
+	QVector<int> stack{ p.rootOp };
+	while (!stack.isEmpty()) {
+		const int a = stack.takeLast();
+		const BakeOp& add = p.ops[a];
+		for (int k = 0; k < add.inputs.size() && k < 2; ++k) {
+			const int src = add.inputs[k].op;
+			if (src >= 0 && p.ops[src].typeName == QLatin1String("add") && readers[src] == 1)
+				stack.append(src);
+			else
+				terms.append({ a, k });
+		}
+	}
+	return terms;
+}
+
+/// Replaces one add input with a literal zero of the socket's arity: x + 0 == x
+/// exactly, on the CPU and in GLSL.
+void zeroRef(BakeInputRef& ref)
+{
+	ref.op = -1;
+	ref.fallbackKind = BakeInputRef::Literal;
+	ref.fallback = Value(0.0).coerced(ref.arity > 0 ? ref.arity : 1);
+}
+
+} // namespace
+
+void GraphBaker::splitLiveEmissive(CompiledGraph& compiled)
+{
+	for (auto& cs : compiled.sockets) {
+		if (!cs.connected || cs.slot.socketName != QLatin1String("Emissive")) continue;
+		const BakeProgram& p = cs.program;
+		const auto terms = sumTerms(p);
+		if (terms.isEmpty()) continue;
+		QVector<bool> live(terms.size(), false);
+		int nLive = 0;
+		for (int t = 0; t < terms.size(); ++t) {
+			const int a = terms[t].first, k = terms[t].second;
+			const int op = a < 0 ? k : p.ops[a].inputs[k].op;
+			live[t] = op >= 0 && isLivePixelTerm(p, op);
+			nLive += live[t] ? 1 : 0;
+		}
+		if (nLive == 0) continue;
+		if (nLive == terms.size()) {
+			cs.liveWhole = true;
+			cs.live = p;
+			continue;
+		}
+		// Both kinds: the piece's half zeroes the baked terms, the baker's half
+		// zeroes the live ones. (A root that is not an add is one term, so a
+		// mixed split always has an add tree.)
+		cs.unsplit = p;
+		cs.live = p;
+		BakeProgram baked = p;
+		for (int t = 0; t < terms.size(); ++t) {
+			const int a = terms[t].first, k = terms[t].second;
+			zeroRef(live[t] ? baked.ops[a].inputs[k] : cs.live.ops[a].inputs[k]);
+		}
+		cs.live.prune();
+		cs.live.refreshFlags();
+		baked.prune();
+		baked.refreshFlags();
+		cs.program = baked;
+		cs.split = true;
+	}
+}
+
+// THE FACTOR FOLD (TORNADO-1). The baked half of a split emissive is, in the
+// common case, `texture x constant` behind the zeroed adds. Baking it would
+// clamp the constant into an 8-bit map; landing the texture as the map and the
+// constant on the material's emissive colour/intensity (HlmsPbs multiplies the
+// two) keeps the map at full resolution and an HDR constant HDR. Split halves
+// only — the whole-chain bake of every other graph is untouched.
+void GraphBaker::foldEmissiveFactor(CompiledGraph& compiled)
+{
+	for (auto& cs : compiled.sockets) {
+		if (!cs.split) continue;
+		const BakeProgram& p = cs.program;
+		int at = p.rootOp;
+		// walk through the adds a zeroed term left behind
+		while (at >= 0 && p.ops[at].typeName == QLatin1String("add") && p.ops[at].inputs.size() >= 2) {
+			const auto& r0 = p.ops[at].inputs[0];
+			const auto& r1 = p.ops[at].inputs[1];
+			auto isZero = [](const BakeInputRef& r) {
+				return r.op < 0 && r.fallbackKind == BakeInputRef::Literal && r.fallback.x == 0.0
+				       && r.fallback.y == 0.0 && r.fallback.z == 0.0 && r.fallback.w == 0.0;
+			};
+			if (isZero(r0) && r1.op >= 0) at = r1.op;
+			else if (isZero(r1) && r0.op >= 0) at = r0.op;
+			else break;
+		}
+		if (at < 0 || p.ops[at].typeName != QLatin1String("multiply") || p.ops[at].inputs.size() < 2)
+			continue;
+		for (int side = 0; side < 2; ++side) {
+			const int x = p.ops[at].inputs[side].op;
+			const auto& uRef = p.ops[at].inputs[1 - side];
+			if (x < 0) continue;
+			// the constant: a literal ref, or a chain with nothing varying in it
+			Value u;
+			if (uRef.op < 0) {
+				if (uRef.fallbackKind != BakeInputRef::Literal) continue;
+				u = uRef.fallback;
+			}
+			else {
+				const BakeOp& uo = p.ops[uRef.op];
+				if (uo.varying || uo.animated || !uo.unsupportedReason.isEmpty()) continue;
+				BakeProgram up = p;
+				up.rootOp = uRef.op;
+				up.prune();
+				u = up.evaluate(EvalContext());
+			}
+			BakeProgram xp = p;
+			xp.rootOp = x;
+			xp.prune();
+			xp.refreshFlags();
+			if (xp.classification != BakeProgram::SocketClass::Passthrough) continue;
+			cs.program = xp;
+			cs.hasFactor = true;
+			cs.factor = u;
+			break;
+		}
+	}
 }
 
 // THE FOLD (MATERIAL_UV_NODES_SPEC 3.2, decision D-1a).
@@ -267,7 +462,11 @@ void GraphBaker::resolveUvFold(CompiledGraph& compiled)
 
 	for (const auto& cs : compiled.sockets) {
 		if (!cs.connected) continue;
-		const UvFold f = cs.program.uvFold();
+		// A LIVE graph's vertex sockets never bake — the piece owns them — so
+		// their UV math (a wave travelling up the mesh's v) is no reason to
+		// refuse the material's fold (TORNADO-1).
+		if (compiled.live && cs.slot.target == MasterSlot::NoTarget) continue;
+		const UvFold f = cs.program.uvFold(compiled.live);
 		if (!f.valid) {
 			if (f.reason.isEmpty()) continue;   // no samplers here at all
 			compiled.uvFold = UvFold();
@@ -283,7 +482,8 @@ void GraphBaker::resolveUvFold(CompiledGraph& compiled)
 		}
 		if (merged.scaleX != f.scaleX || merged.scaleY != f.scaleY
 		    || merged.offsetX != f.offsetX || merged.offsetY != f.offsetY
-		    || merged.rotationDeg != f.rotationDeg) {
+		    || merged.rotationDeg != f.rotationDeg
+		    || merged.velocityX != f.velocityX || merged.velocityY != f.velocityY) {
 			compiled.uvFold = UvFold();
 			compiled.uvFold.reason =
 			    QStringLiteral("two master inputs tile differently; the material carries "
@@ -311,11 +511,24 @@ void GraphBaker::resolveUvFold(CompiledGraph& compiled)
 	// material's stored values for no reason.
 	const bool identity = merged.scaleX == 1.0 && merged.scaleY == 1.0
 	                      && merged.offsetX == 0.0 && merged.offsetY == 0.0
-	                      && merged.rotationDeg == 0.0;
+	                      && merged.rotationDeg == 0.0
+	                      && merged.velocityX == 0.0 && merged.velocityY == 0.0;
 	if (identity) return;
 
-	for (auto& cs : compiled.sockets)
-		if (cs.connected) cs.program.applyUvFold();
+	for (auto& cs : compiled.sockets) {
+		if (!cs.connected) continue;
+		if (compiled.live && cs.slot.target == MasterSlot::NoTarget) continue;
+		cs.program.applyUvFold();
+		// A LIVE graph's rewrite can cut the clock off a chain (the scroll is
+		// the material's now), so its flags are re-derived from what remains.
+		if (compiled.live) {
+			cs.program.refreshFlags();
+			if (cs.split) {
+				cs.unsplit.applyUvFold();
+				cs.unsplit.refreshFlags();
+			}
+		}
+	}
 }
 
 GraphBaker::Result GraphBaker::run(NodeGraph* graph, const Options& opts,
@@ -324,8 +537,18 @@ GraphBaker::Result GraphBaker::run(NodeGraph* graph, const Options& opts,
 	return runCompiled(compile(graph, resolver), opts);
 }
 
-GraphBaker::Result GraphBaker::runCompiled(const CompiledGraph& compiled, const Options& opts)
+GraphBaker::Result GraphBaker::runCompiled(const CompiledGraph& compiledIn, const Options& opts)
 {
+	// THE SPLIT IS HONOURED ONLY WHEN THE PIECE TOOK ITS HALF (TORNADO-1): a run
+	// whose emitter did not take a split socket bakes the WHOLE chain, exactly as
+	// it did before the split existed — never the baked half alone.
+	CompiledGraph compiled = compiledIn;
+	for (auto& cs : compiled.sockets) {
+		if (!cs.split || opts.emittedSockets.contains(cs.slot.socketName)) continue;
+		cs.program = cs.unsplit;
+		cs.split = false;
+		cs.hasFactor = false;
+	}
 	Result out;
 	QElapsedTimer timer;
 	timer.start();
@@ -366,7 +589,7 @@ GraphBaker::Result GraphBaker::runCompiled(const CompiledGraph& compiled, const 
 		// A socket the shader-piece emitter took (HLMS_ADOPTION P5) is not
 		// this baker's business any more: whatever it landed would be
 		// overwritten in the pixel shader before a light was accumulated.
-		if (opts.emittedSockets.contains(state.cs->slot.socketName)) continue;
+		if (opts.emittedSockets.contains(state.cs->slot.socketName) && !state.cs->split) continue;
 		const MasterSlot& slot = state.cs->slot;
 		const BakeProgram& program = state.cs->program;
 
@@ -458,6 +681,28 @@ GraphBaker::Result GraphBaker::runCompiled(const CompiledGraph& compiled, const 
 	};
 	for (auto it = out.passthrough.begin(); it != out.passthrough.end(); ++it)
 		applyMapFactorRules(it.key());
+	// THE FACTOR FOLD's landing (TORNADO-1): the constant the map was multiplied
+	// by rides the emissive colour (its hue, at most 1 per channel) and the
+	// intensity (its peak) — HDR survives, because HlmsPbs multiplies the map by
+	// colour x intensity in the shader.
+	for (const auto& cs : compiled.sockets) {
+		if (!cs.hasFactor || !out.passthrough.contains(cs.slot.mapKey)) continue;
+		const Value c = cs.factor.coerced(3);
+		const double peak = std::max(c.x, std::max(c.y, c.z));
+		if (peak > 0.0) {
+			QJsonObject colour;
+			colour["r"] = qBound(0.0, c.x / peak, 1.0);
+			colour["g"] = qBound(0.0, c.y / peak, 1.0);
+			colour["b"] = qBound(0.0, c.z / peak, 1.0);
+			colour["a"] = 1.0;
+			out.eval.values["emissiveColor"] = colour;
+			out.eval.values["emissiveIntensity"] = peak;
+		}
+		else {
+			out.eval.values["emissiveColor"] = colorToJson(QColor(Qt::black));
+			out.eval.values["emissiveIntensity"] = 1.0;
+		}
+	}
 
 	// ---- bake ----------------------------------------------------------
 	QSet<QString> keepFiles;
@@ -628,6 +873,12 @@ GraphBaker::Result GraphBaker::runCompiled(const CompiledGraph& compiled, const 
 			}
 			if (f.rotationDeg != 0.0)
 				out.eval.values["textureRotation"] = f.rotationDeg;
+		}
+		// THE SCROLL (TORNADO-1): UV units per second of the shader clock, the
+		// material's own; absent (zero) for every graph that does not scroll.
+		if (f.velocityX != 0.0 || f.velocityY != 0.0) {
+			QJsonArray velocity; velocity.append(f.velocityX); velocity.append(f.velocityY);
+			out.eval.values["textureVelocity"] = velocity;
 		}
 	}
 

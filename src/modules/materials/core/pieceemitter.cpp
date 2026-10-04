@@ -101,29 +101,28 @@ const char *kComp[4] = { "x", "y", "z", "w" };
 // value on both backends", which the parity oracle would catch anyway.
 const QStringList &emittableOps()
 {
-	static const QStringList ops = {
-		// literals
-		"float", "color", "vector2", "vector3", "vector4", "property",
-		// arithmetic
-		"add", "subtract", "multiply", "vectorMultiply", "divide", "power", "sqrt",
-		"min", "max", "abs", "sign", "ceil", "floor", "round", "trunc", "fraction",
-		"oneminus", "negate", "sine",
-		// interpolation / comparison
-		"step", "smoothstep", "clamp", "lerp",
-		// vector algebra
-		"reflect", "dot", "length", "distance", "normalize",
-		"splitvector", "composevector", "makeColor",
-		// uv + normals
-		"uv", "panner", "flipbook",
-		"normalintensity", "combinenormals",
-		// the clock
-		"time", "pulsate",
-	};
-	return ops;
+	// ONE LIST (TORNADO-1): BakeProgram::pieceOps, shared with the graph's live
+	// split, whose live terms must be lowerable by construction. The live-only
+	// ops in it (fresnel, worldNormal, localNormal) lower in a LIVE graph only —
+	// see rejectionFor.
+	return BakeProgram::pieceOps();
 }
 
-QString rejectionFor(const QString &type)
+QString rejectionFor(const QString &type, bool live = false, bool vertexStage = false)
 {
+	// THE PER-OP DIVERGENCE RULE (TORNADO-1, G3 — the lead's decision). In a LIVE
+	// graph these ops lower to their REAL values: the CPU's fake-context value
+	// (identity normal and view) means nothing for a view-dependent surface, so
+	// shadergraph.emitter_parity checks them against an ANALYTIC reference at
+	// fixed inputs rather than against the baker, which keeps its approximation
+	// for static use. Two stage limits remain, each with its reason.
+	if (live && type == "localNormal" && !vertexStage)
+		return QStringLiteral("the object-space normal exists in the VERTEX stage only (the object's "
+		                      "matrix is not bound to the pixel shader, and the emitter never adds an "
+		                      "interpolant) — use worldNormal here, or localNormal in a vertex socket");
+	if (live && type == "fresnel" && vertexStage)
+		return QStringLiteral("fresnel is view-dependent per PIXEL (the surface normal against the view "
+		                      "direction); it lowers in the pixel stage only");
 	// Texture sampling: HlmsPbs' 16 texture units are SEMANTIC (albedo, normal,
 	// metalness, roughness, emissive, reflection) and bound by the material
 	// system, not by the graph. A piece could sample the slots that happen to
@@ -144,11 +143,12 @@ QString rejectionFor(const QString &type)
 	// number — and the parity oracle exists to refuse two backends that
 	// disagree. Lowering these needs the oracle to grow a per-op "the GPU is
 	// allowed to differ here" rule first; that is a decision, not a patch.
-	if (type == "worldNormal" || type == "localNormal" || type == "fresnel" || type == "depth")
+	if (type == "depth" || (!live && (type == "worldNormal" || type == "localNormal" || type == "fresnel")))
 		return QStringLiteral("evaluates against the fake fragment context on the CPU "
 		                      "(identity normal/view, depth 0), so the two backends would "
-		                      "legitimately disagree — kept on the baker until the parity "
-		                      "oracle has a rule for per-op divergence");
+		                      "legitimately disagree — a STATIC graph keeps them on the baker; "
+		                      "a graph that reads the clock lowers the normals and fresnel "
+		                      "to their real values (depth has no lowering)");
 	return QStringLiteral("no lowering for node type '%1'").arg(type);
 }
 
@@ -162,6 +162,9 @@ struct Lowered
 	QString rootVar;      ///< the variable holding the chain's result
 	int rootArity = 4;
 	bool animated = false;
+	/// A live-only op (fresnel, a normal) was lowered: the chain cannot bake
+	/// either, so it is the piece's even without the clock (TORNADO-1).
+	bool viewDependent = false;
 };
 
 /// Result arity of an op, given its inputs' SOCKET arities. Every rule here
@@ -180,6 +183,9 @@ int arityOf(const BakeOp &op)
 	if (t == "composevector" || t == "makeColor") return 4;
 	if (t == "uv" || t == "panner" || t == "flipbook")
 		return 2;
+	// the CPU's values: fresnel splats to four components, the normals are three
+	if (t == "fresnel") return 4;
+	if (t == "worldNormal" || t == "localNormal") return 3;
 	if (t == "normalintensity") return 3;
 	if (t == "smoothstep" || t == "clamp") return in(2);
 	// everything else is componentwise over its FIRST input (cw1/cw2/lerp/
@@ -190,8 +196,9 @@ int arityOf(const BakeOp &op)
 class Lowerer
 {
 public:
-	explicit Lowerer(const BakeProgram &program, const QString &prefix)
-	    : mProgram(program), mPrefix(prefix) {}
+	Lowerer(const BakeProgram &program, const QString &prefix, bool live = false,
+	        bool vertexStage = false)
+	    : mProgram(program), mPrefix(prefix), mLive(live), mVertex(vertexStage) {}
 
 	Lowered run()
 	{
@@ -209,8 +216,26 @@ public:
 				return out;
 			}
 			if (!op.hasLiteral && !emittableOps().contains(op.typeName)) {
-				out.reason = rejectionFor(op.typeName);
+				out.reason = rejectionFor(op.typeName, mLive, mVertex);
 				return out;
+			}
+			// The live-only ops: a static graph keeps them on the baker, and each
+			// has a stage it cannot lower in.
+			if (!op.hasLiteral && BakeProgram::liveOnlyOps().contains(op.typeName)) {
+				const bool stageRefused = (op.typeName == "localNormal" && !mVertex) ||
+				                          (op.typeName == "fresnel" && mVertex);
+				if (!mLive || stageRefused) {
+					out.reason = rejectionFor(op.typeName, mLive, mVertex);
+					return out;
+				}
+				// THE SURFACE'S OWN NORMAL: a connected Normal on fresnel would be
+				// a value in no particular frame (the CPU reads it in tangent space)
+				if (op.typeName == "fresnel" && !op.inputs.isEmpty() && op.inputs[0].op >= 0) {
+					out.reason = QStringLiteral("a fresnel with its Normal connected: the piece uses the "
+					                            "surface's own normal against the view direction, so "
+					                            "leave the Normal socket empty");
+					return out;
+				}
 			}
 			if (!emitOp(i, out)) return out;
 		}
@@ -219,6 +244,7 @@ public:
 		out.rootArity = mArity[mProgram.rootOp];
 		out.lines = mLines;
 		out.animated = mAnimated;
+		out.viewDependent = mViewDependent;
 		return out;
 	}
 
@@ -354,6 +380,33 @@ private:
 			expr = QStringLiteral("float4( %1, 0.0, 0.0, 0.0 )").arg(kClock);
 			mAnimated = true;
 		}
+		// ---- THE LIVE-ONLY OPS (TORNADO-1, G3): real values, live graphs only.
+		// fresnel: pow(1 - max(0, dot(N, V)), power) with the surface's normal
+		// and view direction — both VIEW space in HlmsPbs' pixelData, and the
+		// dot is the same in any frame. Splat to four, as the CPU's value is.
+		else if (t == "fresnel") {
+			expr = QStringLiteral("float4( pow( 1.0 - max( 0.0, dot( float3( pixelData.normal ), "
+			                      "float3( pixelData.viewDir ) ) ), %1 ) )")
+			           .arg(scalar(op, 1));
+			mViewDependent = true;
+		}
+		// worldNormal: the pixel stage turns the shading normal (view space) back
+		// by the view's rotation — mul( M, v ) is M * v under Ogre's GLSL mul, the
+		// inverse of the vertex stage's mul( v, M ) for an orthonormal M. The
+		// vertex stage reads the same normal the extrusion moves along.
+		else if (t == "worldNormal") {
+			if (mVertex)
+				expr = QStringLiteral("float4( jahWorldNormal, 0.0 )");
+			else
+				expr = QStringLiteral("float4( normalize( mul( toFloat3x3( passBuf.view ), "
+				                      "float3( pixelData.normal ) ) ), 0.0 )");
+			mViewDependent = true;
+		}
+		// localNormal: the mesh's own normal, vertex stage only (rejectionFor).
+		else if (t == "localNormal") {
+			expr = QStringLiteral("float4( jahLocalNormal, 0.0 )");
+			mViewDependent = true;
+		}
 		else if (t == "pulsate") {
 			expr = QStringLiteral("float4( sin( %1 * %2 ) * 0.5 + 0.5, 0.0, 0.0, 0.0 )")
 			           .arg(kClock, scalar(op, 0));
@@ -388,6 +441,9 @@ private:
 	QVector<int> mArity;
 	QStringList mLines;
 	bool mAnimated = false;
+	bool mLive = false;
+	bool mVertex = false;
+	bool mViewDependent = false;
 };
 
 // The master sockets each stage can land, and how.
@@ -400,9 +456,25 @@ const SocketPlan kPlans[] = {
 	{ "Base Color", false },
 	{ "Metallic", false },
 	{ "Roughness", false },
+	// THE EMISSIVE LANDING (TORNADO-1, G2): the fork's custom_ps_emissive hook at
+	// the end of HlmsPbs' DoEmissiveLight, where a piece ADDS to the light the
+	// material's own emissive (colour x map) already put in finalColour. Live
+	// graphs only — a static graph's emissive bakes exactly as before.
+	{ "Emissive", false },
 	{ "Vertex Offset", true },
 	{ "Vertex Extrusion", true },
 };
+
+/// The value a COLOUR socket lands, as GLSL, with the baker's arity rules
+/// (GraphBaker's colorFromValue): a scalar splats to grey, a vec2 lands (x, y, 0).
+QString colourOf(const QString &var, int arity)
+{
+	switch (arity) {
+	case 1: return QStringLiteral("float3( (%1).xxx )").arg(var);
+	case 2: return QStringLiteral("float3( (%1).xy, 0.0 )").arg(var);
+	default: return QStringLiteral("(%1).xyz").arg(var);
+	}
+}
 
 QString reasonForUnsupportedSocket(const QString &name)
 {
@@ -412,9 +484,9 @@ QString reasonForUnsupportedSocket(const QString &name)
 		                      "piece cannot write it safely — and a baked normal map is exactly "
 		                      "what this socket already produces, at no loss");
 	if (name == "Emissive")
-		return QStringLiteral("emissive is read from the material constant buffer, which is "
-		                      "READ-ONLY in the shader (`material` is a #define onto a const "
-		                      "buffer array) — a piece cannot override it");
+		return QStringLiteral("a STATIC graph's emissive bakes (a constant or a map on the "
+		                      "material); only a graph that reads the clock lands it in a piece "
+		                      "(the fork's custom_ps_emissive hook)");
 	if (name == "Alpha" || name == "Alpha Cutoff")
 		return QStringLiteral("alpha is consumed before this hook (it scales F0 and drives the "
 		                      "alpha test) and is material STATE rather than surface maths");
@@ -433,14 +505,20 @@ PieceEmitter::Result PieceEmitter::lower(const GraphBaker::CompiledGraph &compil
 	QMap<QString, Lowered> lowered;
 	bool anyVarying = false;
 
+	result.live = compiled.live;
 	for (const SocketPlan &plan : kPlans) {
+		// The emissive landing is a LIVE path: a static graph never reaches it.
+		if (!compiled.live && QLatin1String(plan.name) == QLatin1String("Emissive")) continue;
 		const GraphBaker::CompiledSlot *slot = nullptr;
 		for (const auto &cs : compiled.sockets)
 			if (cs.slot.socketName == QLatin1String(plan.name)) { slot = &cs; break; }
 		if (!slot || !slot->connected) continue;
 
-		Lowerer lowerer(slot->program, QStringLiteral("jah%1_")
-		                                   .arg(QString(plan.name).remove(' ')));
+		// A SPLIT emissive (GraphBaker::splitLiveEmissive): the piece lowers its
+		// live half, the material's maps serve the rest.
+		const BakeProgram &program = (slot->liveWhole || slot->split) ? slot->live : slot->program;
+		Lowerer lowerer(program, QStringLiteral("jah%1_").arg(QString(plan.name).remove(' ')),
+		                compiled.live, plan.vertex);
 		Lowered low = lowerer.run();
 		if (!low.ok) {
 			result.fallbackReasons.insert(plan.name, low.reason);
@@ -460,10 +538,13 @@ PieceEmitter::Result PieceEmitter::lower(const GraphBaker::CompiledGraph &compil
 		//     the way it did.
 		// Lifting this needs an export-time re-bake first; the emitter is
 		// ready for it (nothing else in the lowering cares).
-		if (!low.animated && !plan.vertex) {
+		if (!low.animated && !low.viewDependent && !plan.vertex) {
 			const bool constantFold =
 			    slot->program.classification == BakeProgram::SocketClass::Uniform;
-			result.fallbackReasons.insert(
+			// In a LIVE graph this is not a fallback at all: nothing in the chain
+			// moves (a fold may have taken its scroll onto the material), so the
+			// baker's answer IS the picture (TORNADO-1).
+			(compiled.live ? result.bakedReasons : result.fallbackReasons).insert(
 			    plan.name,
 			    constantFold
 			        ? QStringLiteral("the chain folds to a constant, which the baker already "
@@ -476,7 +557,27 @@ PieceEmitter::Result PieceEmitter::lower(const GraphBaker::CompiledGraph &compil
 			continue;
 		}
 		lowered.insert(plan.name, low);
-		if (low.animated) anyVarying = true;
+		if (low.animated || low.viewDependent) anyVarying = true;
+		// A split whose MAP half still reads the clock: the UV fold could not
+		// carry its scroll, so that half bakes FROZEN at t=0 — a fallback, said.
+		if (slot->split && slot->program.animated)
+			result.fallbackReasons.insert(
+			    QString::fromLatin1(plan.name) + QStringLiteral(" (map term)"),
+			    QStringLiteral("the texture terms bake frozen at t=0: %1")
+			        .arg(compiled.uvFold.reason.isEmpty() ? QStringLiteral("their UVs do not fold")
+			                                              : compiled.uvFold.reason));
+		else if (slot->split)
+			result.bakedReasons.insert(
+			    plan.name,
+			    QStringLiteral("SPLIT: the piece adds the live terms; the other terms (%1) land on "
+			                   "the material%2")
+			        .arg(slot->hasFactor ? QStringLiteral("a texture times a constant, as the map "
+			                                              "and the emissive colour x intensity")
+			                             : QStringLiteral("baked"),
+			             compiled.uvFold.valid && (compiled.uvFold.velocityX != 0.0 ||
+			                                       compiled.uvFold.velocityY != 0.0)
+			                 ? QStringLiteral(", scrolling through the material's UV fold")
+			                 : QString()));
 	}
 
 	// Sockets the emitter has no landing for at all, reported so a user can see
@@ -484,10 +585,26 @@ PieceEmitter::Result PieceEmitter::lower(const GraphBaker::CompiledGraph &compil
 	for (const auto &cs : compiled.sockets) {
 		if (!cs.connected) continue;
 		bool planned = false;
-		for (const SocketPlan &plan : kPlans)
+		for (const SocketPlan &plan : kPlans) {
+			// a static graph's Emissive has no landing (the plan loop skipped it)
+			if (!compiled.live && QLatin1String(plan.name) == QLatin1String("Emissive")) continue;
 			if (cs.slot.socketName == QLatin1String(plan.name)) { planned = true; break; }
-		if (!planned) result.fallbackReasons.insert(cs.slot.socketName,
-		                                            reasonForUnsupportedSocket(cs.slot.socketName));
+		}
+		if (planned) continue;
+		// In a LIVE graph a socket the emitter has no landing for is only a
+		// FALLBACK when its chain still moves (it is then frozen at t=0); one the
+		// UV fold took the clock out of, or a constant, is served exactly.
+		if (compiled.live && !cs.program.animated) {
+			result.bakedReasons.insert(
+			    cs.slot.socketName,
+			    cs.program.classification == BakeProgram::SocketClass::Uniform
+			        ? QStringLiteral("a constant, which the baker lands exactly")
+			        : QStringLiteral("nothing in the chain moves once the material's UV fold "
+			                         "carries the scroll, so the baked map is exact"));
+			continue;
+		}
+		result.fallbackReasons.insert(cs.slot.socketName,
+		                              reasonForUnsupportedSocket(cs.slot.socketName));
 	}
 
 	if (lowered.isEmpty()) return result;
@@ -511,6 +628,7 @@ PieceEmitter::Result PieceEmitter::lower(const GraphBaker::CompiledGraph &compil
 			     slot->program.classification == BakeProgram::SocketClass::Passthrough);
 			if (!needsMap) continue;
 			Result refused;
+			refused.live = compiled.live;
 			refused.fallbackReasons.insert(
 			    QString(), QStringLiteral("'%1' needs a baked map while another surface socket "
 			                              "emits a piece; base colour and metalness are fused "
@@ -590,6 +708,23 @@ PieceEmitter::Result PieceEmitter::lower(const GraphBaker::CompiledGraph &compil
 		}
 		ps << QStringLiteral("}") << QStringLiteral("@end");
 	}
+	// ---- the emissive piece (TORNADO-1, G2): ADDED inside DoEmissiveLight, after
+	// the material's own emissive, through the fork's custom_ps_emissive hook.
+	if (lowered.contains("Emissive")) {
+		const Lowered &low = lowered["Emissive"];
+		ps << QStringLiteral("@piece( custom_ps_emissive )")
+		   << QStringLiteral("{")
+		   << QStringLiteral("\t@property( hlms_uv_count )")
+		   << QStringLiteral("\t\tconst float2 jahUv = inPs.uv0.xy;")
+		   << QStringLiteral("\t@else")
+		   << QStringLiteral("\t\tconst float2 jahUv = float2( 0.0, 0.0 );")
+		   << QStringLiteral("\t@end");
+		for (const QString &line : low.lines) ps << QStringLiteral("\t") + line;
+		ps << QStringLiteral("\tfinalColour += midf3_c( %1 );").arg(colourOf(low.rootVar, low.rootArity))
+		   << QStringLiteral("}") << QStringLiteral("@end");
+		result.emittedSockets << QStringLiteral("Emissive");
+		result.animated |= low.animated;
+	}
 
 	// ---- the vertex piece
 	QStringList vs;
@@ -601,6 +736,27 @@ PieceEmitter::Result PieceEmitter::lower(const GraphBaker::CompiledGraph &compil
 		   << QStringLiteral("\t@else")
 		   << QStringLiteral("\t\tconst float2 jahUv = float2( 0.0, 0.0 );")
 		   << QStringLiteral("\t@end");
+		// THE NORMALS (TORNADO-1, G3), declared only when a chain reads one, so
+		// every vertex piece that does not is byte-identical to before (its file
+		// name is a hash of these bytes). The world normal is the one the
+		// extrusion below moves along.
+		bool readsNormal = false;
+		for (const char *name : { "Vertex Offset", "Vertex Extrusion" })
+			if (lowered.contains(name) && lowered[name].viewDependent) readsNormal = true;
+		if (readsNormal) {
+			vs << QStringLiteral("\t@property( hlms_normal || hlms_qtangent )")
+			   << QStringLiteral("\t\tconst float3 jahLocalNormal = normalize( float3( inputNormal ) );")
+			   << QStringLiteral("\t\t@property( hlms_skeleton )")
+			   << QStringLiteral("\t\t\tconst float3 jahWorldNormal = normalize( float3( worldNorm ) );")
+			   << QStringLiteral("\t\t@else")
+			   << QStringLiteral("\t\t\tconst float3 jahWorldNormal = normalize( mul( float4( float3( inputNormal ), "
+			                     "0.0 ), worldMat ) ).xyz;")
+			   << QStringLiteral("\t\t@end")
+			   << QStringLiteral("\t@else")
+			   << QStringLiteral("\t\tconst float3 jahLocalNormal = float3( 0.0, 0.0, 1.0 );")
+			   << QStringLiteral("\t\tconst float3 jahWorldNormal = float3( 0.0, 0.0, 1.0 );")
+			   << QStringLiteral("\t@end");
+		}
 		for (const char *name : { "Vertex Offset", "Vertex Extrusion" }) {
 			if (!lowered.contains(name)) continue;
 			for (const QString &line : lowered[name].lines) vs << QStringLiteral("\t") + line;

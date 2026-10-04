@@ -912,6 +912,11 @@ void SceneWriter::writeSceneNodeMaterial(QJsonObject& matObj, iris::MaterialPtr 
 			valuesObj["customPiece"] = QFileInfo(pbr->customPiecePixel).fileName();
 		if (!pbr->customPieceVertex.isEmpty())
 			valuesObj["customPieceVertex"] = QFileInfo(pbr->customPieceVertex).fileName();
+		// THE UV SCROLL (TORNADO-1): the animated UV fold's velocity, graph-owned
+		// like the pieces; absent when the material does not scroll.
+		if (pbr->textureVelocityU != 0.0f || pbr->textureVelocityV != 0.0f)
+			valuesObj["textureVelocity"] = QJsonArray{ double(pbr->textureVelocityU),
+			                                           double(pbr->textureVelocityV) };
 		if ((!pbr->customPiecePixel.isEmpty() || !pbr->customPieceVertex.isEmpty()) &&
 		    !pbr->getGuid().isEmpty())
 			valuesObj["customPieceGraph"] = pbr->getGuid();
