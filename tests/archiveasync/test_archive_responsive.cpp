@@ -509,7 +509,7 @@ int main(int argc, char **argv)
                     QJsonDocument(hb).toJson(QJsonDocument::Compact).constData());
         CHECK(sync.value("ok").toBool() && QFileInfo::exists(syncZip),
               "project.exportArchive (synchronous) wrote its archive");
-        CHECK(hb.value("ticks").toInt() > 0 || syncMs < 200,
+        CHECK(hb.value("ticks").toInt() > 0,
               "...and the UI thread kept ticking inside the verb (its file half is the worker's)");
         QFile::remove(syncZip);
     }

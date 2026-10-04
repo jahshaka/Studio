@@ -162,6 +162,10 @@ private:
 
     Database *db = nullptr;
     Project *project;
+    /// The open project's guid AS IT WAS when this service was made (the UI
+    /// thread). prepare() runs on a pool thread and must not read `project`
+    /// there: the converters get it through ImportRequest::projectGuid.
+    QString mProjectGuid;
     QVector<AssetImporterBase *> mImporters;
 };
 

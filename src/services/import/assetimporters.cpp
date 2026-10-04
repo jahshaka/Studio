@@ -105,11 +105,11 @@ bool MeshImporter::convert(const ImportRequest &request, const QString &stagingD
                            Database *db, Project *project, StagedAsset &out,
                            QString *errorOut, const ImportProgressFn &progress)
 {
-    Q_UNUSED(db);
+    Q_UNUSED(db); Q_UNUSED(project);
     const QFileInfo sourceInfo(request.sourcePath);
-    const QString projectGuid = !request.projectGuid.isEmpty()
-                                    ? request.projectGuid
-                                    : (project ? project->getProjectGuid() : QString());
+    // The spine fills it on the thread that owns the project (prepare runs on a
+    // pool thread; AssetImportService::mProjectGuid).
+    const QString projectGuid = request.projectGuid;
 
     // THE CALLER'S GUID WHEN IT OWNS ONE (ImportRequest::reservedGuid): the
     // shipped primitive seeds are the same library row in every library. The

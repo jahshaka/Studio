@@ -42,7 +42,7 @@ For more information see the LICENSE file
 #include "irisgl/import/parsecensus.h"
 
 AssetImportService::AssetImportService(Database *db, Project *project)
-    : db(db), project(project)
+    : db(db), project(project), mProjectGuid(project ? project->getProjectGuid() : QString())
 {
     // BEFORE MeshImporter, deliberately: the two share every model extension
     // and only the file's CONTENTS separate them (a clip file has no meshes),
@@ -367,7 +367,13 @@ PreparedImport AssetImportService::prepare(const ImportRequest &request,
     }
 
     StagedAsset &staged = prepared.staged;
-    if (!importer->convert(request, prepared.staging->path(), db, project, staged,
+    // The project the import is FOR, read on the thread that made this service
+    // — never `project` here: prepare() runs on a pool thread. The commit still
+    // sees the caller's own request (an explicit projectGuid means something
+    // there).
+    ImportRequest converting = request;
+    if (converting.projectGuid.isEmpty()) converting.projectGuid = mProjectGuid;
+    if (!importer->convert(converting, prepared.staging->path(), db, project, staged,
                            &result.error, progress)) {
         if (result.error.isEmpty()) result.error = QStringLiteral("import failed");
         return prepared;
@@ -799,10 +805,16 @@ AssetImportService::Reimported AssetImportService::reimport(const QString &guid,
         }
         AssetCas::flushStaged(bakeBytes);
     });
-    if (!converted) {
-        AssetCas::discardStaged(bakeBytes);
+    // EVERY RETURN BELOW DISCARDS WHAT WAS STAGED AND NOT PUBLISHED: a
+    // committed entry's tmpPath is cleared by commitStaged, so this removes
+    // exactly the temps a failed path left (fix round, item 5).
+    struct DiscardOnExit
+    {
+        QVector<AssetCas::Staged> &bytes;
+        ~DiscardOnExit() { AssetCas::discardStaged(bytes); }
+    } discardOnExit{ bakeBytes };
+    if (!converted)
         return fail(error.isEmpty() ? QStringLiteral("reimport failed") : error);
-    }
 
     // ---- commit ONLY the derived products ---------------------------------
     //
@@ -932,6 +944,7 @@ QJsonObject AssetImportService::checkConsistency(const QString &guid)
     const QString linked = QDir(staging.path()).filePath(sourceName);
     QFile::copy(sourcePath, linked);
     request.sourcePath = linked;
+    request.projectGuid = mProjectGuid;   // the converter runs on a pool thread
 
     QString error;
     AssetImporterBase *importer = pickImporter(request, &error);
