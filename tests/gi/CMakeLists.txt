@@ -2128,3 +2128,23 @@ add_dependencies(test_gi_probe_nan JahshakaEngineMedia)
 jah_gpu_row(gi.probe_nan CLASS engine COMMAND test_gi_probe_nan
             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.probe_nan PROPERTIES LABELS "engine" TIMEOUT 120 RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
+# gi.cone_skip — THE PIXEL'S VOXEL CONES RUN ONLY WHERE THEIR ANSWER IS READ (SPEED-GPU,
+# perf audit PH-2 / PH-1): the diffuse set only where the field's fallback weight is
+# above zero, the specular cone only where the reflection's confidence is below one;
+# each skip's arm on and off renders the same floats, in one process. In the gi_chain
+# family like every cascade suite.
+add_executable(test_gi_cone_skip test_gi_cone_skip.cpp)
+set_target_properties(test_gi_cone_skip PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_cone_skip PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_cone_skip PRIVATE JahshakaEngine)
+add_dependencies(test_gi_cone_skip JahshakaEngineMedia)
+jah_gpu_row(gi.cone_skip CLASS engine COMMAND test_gi_cone_skip
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.cone_skip PROPERTIES TIMEOUT 180 LABELS "engine" RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
