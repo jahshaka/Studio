@@ -221,11 +221,6 @@ EngineConfig EngineHost::resolveConfig()
         const QString dataDir = shaderCacheDirectory();
         if (!dataDir.isEmpty()) cfg.shaderCacheDir = dataDir.toStdString();
     }
-    // The app's contribution to the cache fingerprint. Version + commit, because
-    // OUR C++ decides which Hlms properties are set and which datablocks exist;
-    // no hash inside Ogre can see a change to src/. A user updating the app
-    // therefore pays exactly one cold launch, which is correct and is the same
-    // property Unreal's DDC has.
     // ---- The engine's log, forwarded (SESSION_LOG_SPEC F3-B) ----------------
     // Installed through the CONFIG rather than through Engine::setLogSink so it
     // is live before the plugins load and the render system initialises —
@@ -246,12 +241,6 @@ EngineConfig EngineHost::resolveConfig()
         if (level == 1) JAH_LOG(JahLog::engine, Error, text);
         else            JAH_LOG(JahLog::ogre, Log, text);
     };
-
-    cfg.appBuildId = QStringLiteral("%1/%2/%3")
-                         .arg(Constants::CONTENT_VERSION,
-                              QStringLiteral(GIT_COMMIT_HASH),
-                              QStringLiteral(GIT_COMMIT_DATE))
-                         .toStdString();
 
     return cfg;
 }

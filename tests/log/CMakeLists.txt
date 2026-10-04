@@ -28,7 +28,6 @@ target_include_directories(test_jahlog PRIVATE
 # machinery has to stay covered for the day an unfixable upstream flood earns
 # an entry — so the suite drives a message no real defect ever emits.
 target_compile_definitions(test_jahlog PRIVATE
-    GIT_COMMIT_HASH="${GIT_COMMIT_HASH}" GIT_COMMIT_DATE="${GIT_COMMIT_DATE}"
     JAHSHAKA_VERSION="${JAHSHAKA_VERSION}"
     JAH_KNOWN_NOISE_SELFTEST=1)
 target_link_libraries(test_jahlog PRIVATE IrisGL Qt6::Core Qt6::Gui)

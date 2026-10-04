@@ -159,6 +159,24 @@ set_property(GLOBAL PROPERTY AUTOGEN_TARGETS_FOLDER AutoMocFolder)
 # the media/plugin paths.
 include(IncludeOgre)
 
+# ---- CCACHE ACROSS TREES (SPEED-CPU, perf audit B2) --------------------------
+# Every lane worktree and rc tree shares one ccache (base_dir = the workspace). Its
+# DIRECT mode — a hash of the command line and the included files, no preprocessor
+# run — hits across trees only when no argument names THIS tree. base_dir rewrites
+# path ARGUMENTS (-I, the source file) but not the values of -D's, so:
+#   * a -D whose value is an absolute path lives only on the TUs that read it
+#     (enginehost.cpp's engine defaults below; the suites' own sources in tests/,
+#     jah_scope_path_defines there), and the commit values are a generated header;
+#   * -ffile-prefix-map takes the tree out of __FILE__ and the debug info: every
+#     object then names its sources relative to the tree it was built in, and an
+#     object served from another tree's compile no longer points gdb at that tree
+#     (a dead worktree, often). gdb: `directory <tree>` once, or run from the tree.
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    add_compile_options("-ffile-prefix-map=${CMAKE_SOURCE_DIR}/=")
+endif()
+set(JAH_GENERATED_DIR "${CMAKE_BINARY_DIR}/generated")
+include_directories(${JAH_GENERATED_DIR})
+
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/irisgl)
 
 add_subdirectory_with_folder("Extras" ${CMAKE_CURRENT_SOURCE_DIR}/extras/downloader)
@@ -863,6 +881,13 @@ set(WIDGETS
 # the document never links it — and keeps build-linux/engine as its binary dir
 # so test and tooling paths are unchanged.
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/irisgl/engine ${CMAKE_CURRENT_BINARY_DIR}/engine)
+# The HOST's compile-time defaults for the engine's plugin and media directories
+# (EngineHost::resolveConfig tries <exe dir>/media and the env overrides first) —
+# on the ONE TU that reads them, never on the engine's interface (SPEED-CPU B2:
+# an absolute path on every engine-linking TU defeats ccache's direct mode).
+set_property(SOURCE src/bridge/enginehost.cpp APPEND PROPERTY COMPILE_DEFINITIONS
+    JAHSHAKA_OGRE_PLUGIN_DIR_DEFAULT="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_OGRE_MEDIA_DIR_DEFAULT="${JAHSHAKA_MEDIA_DIR}/")
 
 # Headless engine tests (tests/). include(CTest) defines BUILD_TESTING and calls
 # enable_testing() at top level, which add_test in a subdirectory requires.
@@ -942,7 +967,6 @@ execute_process(
     OUTPUT_VARIABLE GIT_COMMIT_HASH
     OUTPUT_STRIP_TRAILING_WHITESPACE
 )
-add_definitions("-DGIT_COMMIT_HASH=\"${GIT_COMMIT_HASH}\"")
 
 execute_process(
     COMMAND git log -1 --pretty=format:%cd
@@ -950,7 +974,6 @@ execute_process(
     OUTPUT_VARIABLE GIT_COMMIT_DATE
     OUTPUT_STRIP_TRAILING_WHITESPACE
 )
-add_definitions("-DGIT_COMMIT_DATE=\"${GIT_COMMIT_DATE}\"")
 
 # ---- THE TREE'S PROVENANCE, for a perf capture's machine.json ---------------
 # RENDER_LOOP_MONITOR_SPEC §4.8 asks every capture bundle to name the Studio and
@@ -969,7 +992,6 @@ execute_process(
 if(NOT IRISGL_COMMIT_HASH)
     set(IRISGL_COMMIT_HASH "unknown")
 endif()
-add_definitions("-DIRISGL_COMMIT_HASH=\"${IRISGL_COMMIT_HASH}\"")
 
 execute_process(
     COMMAND git log -1 --pretty=format:%h
@@ -981,7 +1003,12 @@ execute_process(
 if(NOT OGRE_PIN_HASH)
     set(OGRE_PIN_HASH "unknown")
 endif()
-add_definitions("-DOGRE_PIN_HASH=\"${OGRE_PIN_HASH}\"")
+# ...INTO ONE GENERATED HEADER, not -D's (SPEED-CPU, perf audit B2): the four
+# values above were add_definitions on every app TU, so every one of them missed
+# ccache's direct mode in any tree at another commit — for macros three files read
+# (main.cpp, sessionheader.cpp, framemonitor.cpp include jah_provenance.h). The
+# include directory is added before the first subdirectory (JAH_GENERATED_DIR).
+configure_file(${CMAKE_SOURCE_DIR}/cmake/jah_provenance.h.in ${JAH_GENERATED_DIR}/jah_provenance.h @ONLY)
 
 # (OGRE_PATCH_STACK — the 88 patch FILENAMES a capture bundle used to list — is
 # DELETED with the patch stack itself, 2026-09-22: the engine source is our fork

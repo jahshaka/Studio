@@ -21,12 +21,7 @@ For more information see the LICENSE file
 #include <QStandardPaths>
 #include <QVector>
 
-#ifndef GIT_COMMIT_HASH
-#define GIT_COMMIT_HASH "0000"
-#endif
-#ifndef GIT_COMMIT_DATE
-#define GIT_COMMIT_DATE "unknown"
-#endif
+#include "jah_provenance.h"   // GIT_COMMIT_HASH / _DATE (generated; SPEED-CPU B2)
 #ifndef JAHSHAKA_VERSION
 #define JAHSHAKA_VERSION "unknown"
 #endif
@@ -59,9 +54,7 @@ Rows baseRows()
     Rows r;
     r << Row { QStringLiteral("app version"), Constants::CONTENT_VERSION };
     r << Row { QStringLiteral("build version"), QStringLiteral(JAHSHAKA_VERSION) };
-    // THE SAME TRIPLE the shader-cache fingerprint uses (enginehost.cpp
-    // resolveConfig's appBuildId) — reused verbatim so a log and a cache
-    // directory can be correlated by eye.
+    // The app's build identity: version, commit and commit date.
     r << Row { QStringLiteral("build id"),
                QStringLiteral("%1/%2/%3").arg(Constants::CONTENT_VERSION,
                                               QStringLiteral(GIT_COMMIT_HASH),

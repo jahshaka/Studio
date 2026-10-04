@@ -10,6 +10,7 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "services/framemonitor.h"
+#include "jah_provenance.h"   // the commits a bundle names (generated; SPEED-CPU B2)
 
 #include <QAbstractEventDispatcher>
 #include <QCoreApplication>

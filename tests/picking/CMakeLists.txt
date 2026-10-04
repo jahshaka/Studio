@@ -43,3 +43,19 @@ set_tests_properties(picking.fov_cap PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=off
 # triangle/BVH scratch per pick.
 # QUARANTINED (L2 LightNode::shadowMap — 12 bytes, the suite's only leak).
 jah_lsan_blocked(picking.document)
+
+# picking.trimesh_index — THE PICKING MESH'S SPATIAL INDEX GIVES THE BRUTE-FORCE
+# ANSWER (SPEED-CPU, perf audit 2026-10-03 P1): the shipped primitives, the
+# bake's grid fixture, a 233k-triangle soup and the degenerate cases, each
+# picked by hundreds of segments through the TriangleBvh and through the
+# brute-force loop — same hits, same order, same bits. Pure geometry: no
+# engine, no display. assimp only to read the fixtures (jah_links_assimp).
+add_executable(test_trimesh_index test_trimesh_index.cpp)
+set_target_properties(test_trimesh_index PROPERTIES AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17)
+target_include_directories(test_trimesh_index PRIVATE ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/irisgl)
+target_compile_definitions(test_trimesh_index PRIVATE JAHSHAKA_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+target_link_libraries(test_trimesh_index PRIVATE IrisGL Qt6::Core)
+jah_links_assimp(test_trimesh_index)
+add_test(NAME picking.trimesh_index COMMAND test_trimesh_index WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(picking.trimesh_index PROPERTIES LABELS "document" TIMEOUT 120)
+jah_no_display(picking.trimesh_index)
