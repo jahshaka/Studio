@@ -21,7 +21,8 @@ function state(w, root, what) {
     var issues = editor.issues();
     console.log(what + " issues: " + J(issues.map(function (i) { return i.id + " — " + i.message; })));
     assert(issues.length === 0, what + ": ZERO issues (" + issues.length + ")");
-    [["cube", w.cube, w.cubeGuids], ["model", w.model, w.modelGuids]].forEach(function (c) {
+    [["cube", w.cube, w.cubeGuids], ["model", w.model, w.modelGuids],
+     ["graph cube", w.graphCube, w.graphGuids]].forEach(function (c) {
         var m = material.get(c[1]);
         var saved = savedMaps(c[1]);
         Object.keys(c[2]).forEach(function (row) {
@@ -66,6 +67,15 @@ function arm1(staged, loc, root) {
     assert(w.cubeGuids.baseColorMap && w.cubeGuids.baseColorMap.length > 10 &&
            w.cubeGuids.normalMap === normalGuid,
            "both rows carry their asset (" + J(w.cubeGuids) + ")");
+    // THE SAME FILE TWICE IS ONE ASSET (fix round, defect 2): a second
+    // material.set of the same image answers the row the first one made.
+    var twin = scene.addPrimitive("cube", { position: { x: -4, y: 0.5, z: 0 } });
+    assert(material.set(twin, { baseColorMap: staged + "/brick.png" }) === true,
+           "the same file bound again, on another cube");
+    assert(material.get(twin).textureAssets.baseColorMap === w.cubeGuids.baseColorMap,
+           "...names the SAME asset — no duplicate row (" +
+           material.get(twin).textureAssets.baseColorMap + ")");
+    node.remove(twin);
     // An imported model: its maps are the model's member Texture rows.
     var placed = assets.importAndPlace(staged + "/quad.glb", { position: { x: 2, y: 0, z: 0 } });
     assert(placed && placed.nodeId, "a textured model imports and places (" + J(placed) + ")");
@@ -86,6 +96,24 @@ function arm1(staged, loc, root) {
     w.emitterGuid = assets.importFile(staged + "/spark.png");
     assert(node.setParticleTexture(w.emitter, w.emitterGuid) === true,
            "an emitter's image binds by asset guid");
+    // A GRAPH MATERIAL (the lead's fix-round defect 1): a texture node bound by
+    // asset guid feeds Base Color; graph.toMaterial builds the node's material
+    // from the evaluator's values — the map must name the node's asset, or the
+    // save writes nothing and the reopen is untextured.
+    var graphTex = assets.importFile(staged + "/graph.png");
+    assert(graphTex && graphTex.length > 10, "an image for the graph imports (" + graphTex + ")");
+    assert(materials.create("TexRefGraph", { graph: true }).length > 10, "a graph material");
+    var master = null;
+    graph.nodes().forEach(function (n) { if (n.master) master = n.id; });
+    var texNode = graph.addNode("texture");
+    assert(graph.setValue(texNode, graphTex), "the texture node takes the asset guid");
+    assert(graph.connect(texNode, 0, master, "Base Color"), "texture -> Base Color (a passthrough)");
+    w.graphCube = scene.addPrimitive("cube", { position: { x: 0, y: 0.5, z: 3 } });
+    assert(graph.toMaterial(w.graphCube) === true, "graph.toMaterial applies to a cube");
+    w.graphGuids = { baseColorMap: material.get(w.graphCube).textureAssets.baseColorMap };
+    assert(w.graphGuids.baseColorMap === graphTex,
+           "the graph material's base map names the texture node's asset (" +
+           w.graphGuids.baseColorMap + ")");
     state(w, root, "fresh");
     assert(project.save() === true, "save the first project");
     w.p2 = project.create("tex ref two", { location: loc });

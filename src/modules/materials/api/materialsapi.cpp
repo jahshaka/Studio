@@ -31,7 +31,6 @@ For more information see the LICENSE file
 #include "io/materialpresetreader.h"
 #include "ui/ishellview.h"
 #include "services/assetcas.h"
-#include "services/assetservice.h"
 #include "services/assetstorepaths.h"
 #include "services/imagematerial.h"
 #include "services/livetextures.h"
@@ -1563,20 +1562,24 @@ bool MaterialApi::set(const QString &nodeId, const QVariantMap &values)
             else if (!ref.isEmpty()) {
                 // A MAP ROW NAMES AN ASSET (TEX-REF-1): the row carries the
                 // guid to the next save, so a scene never stores a path. A FILE
-                // given here is therefore IMPORTED first — the one pipeline,
-                // as assets.importFile would (it lands in the library as the
-                // user's own image) — and bound by the guid it gets.
-                if (!host.db || !host.services || !host.services->assets)
+                // given here is therefore brought in through THE door a
+                // material's texture picker uses (materials.addTexture):
+                // ShippedAssets::importTexture, identified by CONTENT — the
+                // same bytes answer the same row, so setting the same file
+                // twice mints one row, not two. Its home is the open project's
+                // (the library when none is open).
+                if (!host.db)
                     return fail(QStringLiteral("material.set: no library in this session to "
                                                "hold the texture '%1'").arg(ref));
                 QString guid = ref;
                 if (QFileInfo(ref).isFile()) {
-                    const auto imported = host.services->assets->importFile(
-                        ref, -1, static_cast<int>(ModelTypes::Texture));
-                    if (imported.objectGuid.isEmpty())
+                    const ShippedAssets::Pinned imported = ShippedAssets::importTexture(
+                        ref, QFileInfo(ref).fileName(), host.db, host.project,
+                        assethome::current(host.project));
+                    if (!imported.ok() || imported.guid.isEmpty())
                         return fail(QStringLiteral("material.set: importing the texture '%1' "
                                                    "failed: %2").arg(ref, imported.error));
-                    guid = imported.objectGuid;
+                    guid = imported.guid;
                 }
                 const auto record = host.db->fetchAsset(guid);
                 if (record.guid.isEmpty())

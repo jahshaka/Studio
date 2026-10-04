@@ -427,8 +427,10 @@ struct Compiler
 		if (!source) return false;
 
 		QString stored;
+		QString guid;
 		if (source->typeName == "texture") {
 			stored = static_cast<TextureNode*>(source)->getTexturePath();
+			guid = static_cast<TextureNode*>(source)->getTextureGuid();
 		}
 		if (stored.isEmpty()) return false;
 
@@ -439,6 +441,7 @@ struct Compiler
 		if (image.isNull()) return false;
 		op.image = image.convertToFormat(QImage::Format_RGBA8888);
 		op.imagePath = path;
+		op.imageGuid = guid;
 		op.imageStamp = imageStampFor(path);
 		return true;
 	}
@@ -587,6 +590,7 @@ struct Compiler
 			const QString path = (resolve && !stored.isEmpty()) ? resolve(stored) : stored;
 			if (!path.isEmpty()) {
 				op.imagePath = path;
+				op.imageGuid = texNode->getTextureGuid();
 				op.imageStamp = imageStampFor(path);
 				QImage image(path);
 				if (!image.isNull())
@@ -707,6 +711,7 @@ void BakeProgram::reclassify()
 	}
 	passthroughPath.clear();
 	passthroughStamp.clear();
+	passthroughGuid.clear();
 
 	const BakeOp& root = ops[rootOp];
 	animated = root.animated;
@@ -728,6 +733,7 @@ void BakeProgram::reclassify()
 		classification = SocketClass::Passthrough;
 		passthroughPath = root.imagePath;
 		passthroughStamp = root.imageStamp;
+		passthroughGuid = root.imageGuid;
 		return;
 	}
 	// A SAMPLER ROOT over the bake UV is the same picture as binding the source
@@ -745,6 +751,7 @@ void BakeProgram::reclassify()
 			classification = SocketClass::Passthrough;
 			passthroughPath = root.imagePath;
 			passthroughStamp = root.imageStamp;
+			passthroughGuid = root.imageGuid;
 			return;
 		}
 	}

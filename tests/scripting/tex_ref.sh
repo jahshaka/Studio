@@ -12,7 +12,8 @@
 #
 # ARM 1 (process 1, data root R1, projects OUTSIDE the data root): a cube with a
 #   map bound from a FILE (imported on the way) and one by asset guid, an
-#   imported textured model, an emitter with an image by guid -> zero issues,
+#   imported textured model, an emitter with an image by guid, a GRAPH material
+#   (a texture node by guid -> graph.toMaterial) on a second cube -> zero issues,
 #   every row names its asset, renders from R1, saves the guid; save -> switch
 #   -> reopen, twice.
 # ARM 2 (process 2): the data root COPIED to R2 and opened with --data-root
@@ -46,10 +47,10 @@ rm -rf "$R1" "$HOME/relocated" "$HOME/missing" "$HOME/Documents"
 find "$PWD" -mindepth 1 -maxdepth 1 -exec rm -rf {} + 2>/dev/null
 mkdir -p staged "$LOC"
 cp "$IMG" staged/brick.png && cp "$IMG2" staged/normal.png && cp "$IMG" staged/spark.png \
-    && cp "$MODEL" staged/quad.glb
+    && cp "$IMG2" staged/graph.png && cp "$MODEL" staged/quad.glb
 # Three distinct pictures: the store is content-addressed, so equal bytes would be
 # one object and a deleted object would take every row that shares it.
-printf 'n' >> staged/normal.png; printf 's' >> staged/spark.png
+printf 'n' >> staged/normal.png; printf 's' >> staged/spark.png; printf 'g' >> staged/graph.png
 
 { cat "$LIB"; echo "arm1(\"$PWD/staged\", \"$LOC\", \"$R1\");"; } > arm1.run.js
 "$BIN" --headless --script "$PWD/arm1.run.js" > arm1.log 2>&1

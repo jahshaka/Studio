@@ -1662,7 +1662,7 @@ iris::ParticleSystemNodePtr SceneReader::createParticleSystem(QJsonObject& nodeO
     // store resolves it — a miss keeps the reference (the next save writes it
     // back, and SceneIssues says texture.missing), never a path.
     {
-        const QString textureGuid = nodeObj["texture"].toString();
+        const QString textureGuid = nodeObj.value(QStringLiteral("texture")).toString();
         const QString texturePath = handle ? resolveAssetPath(textureGuid) : QString();
         particleNode->setTexture(texturePath.isEmpty() ? iris::Texture2DPtr()
                                                        : iris::Texture2D::load(texturePath),
