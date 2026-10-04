@@ -55,6 +55,7 @@ For more information see the LICENSE file
 #include "ui/dialogs/softwareupdatedialog.h"
 #include "ui/controls/tooltip.h"
 #include "app/versionsplashscreen.h"
+#include "jah_provenance.h"   // GIT_COMMIT_HASH / _DATE (generated; SPEED-CPU B2)
 #include "app/shaderbuildgate.h"
 #include "ui/style/thememanager.h"
 #include "services/framepacing.h"
@@ -74,20 +75,8 @@ extern "C"
 }
 #endif
 
-inline void GetGitCommitHash()
-{
-// NB: `#ifndef A && B` is not valid conditional logic - #ifndef takes a single
-// identifier and everything after it is ignored, so this only ever tested
-// GIT_COMMIT_HASH. Spelled out with #if !defined(...) || !defined(...).
-#if !defined(GIT_COMMIT_HASH) || !defined(GIT_COMMIT_DATE)
-#define GIT_COMMIT_HASH "0000" // means uninitialized
-#endif
-}
-
 int main(int argc, char *argv[])
 {
-    GetGitCommitHash();
-
     const CliOptions cli = CliOptions::parse(argc, argv);
     // --help / --version ANSWER AND EXIT HERE (lane HELP-FLAG-1): before the
     // refusals below, before QApplication, the data root, the settings file, the
@@ -364,8 +353,6 @@ int main(int argc, char *argv[])
         r << SessionHeader::Row { QStringLiteral("optimizeShadowMeshes"),
                                   cfg.optimizeShadowMeshes ? QStringLiteral("true")
                                                            : QStringLiteral("false") };
-        r << SessionHeader::Row { QStringLiteral("appBuildId"),
-                                  QString::fromStdString(cfg.appBuildId) };
         r << SessionHeader::Row { QStringLiteral("shaderCacheEnabled"),
                                   EngineHost::shaderCacheEnabled() ? QStringLiteral("true")
                                                                    : QStringLiteral("false") };

@@ -227,10 +227,13 @@ int main(int argc, char **argv) {
         CHECK(tm.getSegmentIntersections(iris::Vec3(5, 1, 5), iris::Vec3(5, -1, 5), r) == 0,
               "trimesh: a segment outside the triangle misses");
 
-        // isHitBySegment carries the same fold.
+        // The one triangle test both narrow-phase paths share carries the fold
+        // (isHitBySegment, its first-hit twin, had no caller and is deleted).
         iris::Vec3 hp;
-        CHECK(tm.isHitBySegment(iris::Vec3(-0.5f, -1, -0.5f), iris::Vec3(-0.5f, 1, -0.5f), hp),
-              "trimesh: isHitBySegment is two-sided as well");
+        float t = 0.0f;
+        CHECK(iris::TriMesh::segmentHitsTriangle(tm.triangles.at(0), iris::Vec3(-0.5f, -1, -0.5f),
+                                                 iris::Vec3(-0.5f, 1, -0.5f), t, hp),
+              "trimesh: segmentHitsTriangle is two-sided as well");
     }
 
     // ...and end to end, through the picker: a plane picked from underneath.

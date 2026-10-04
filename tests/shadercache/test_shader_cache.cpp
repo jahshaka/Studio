@@ -15,7 +15,7 @@
 //   2. truncation, per file.
 //   3. a flipped bit, per file.
 //   4. a zero-length file, per file.
-//   5. a changed fingerprint term: the directory is discarded wholesale.
+//   5. a changed layer key: that layer alone is dropped; all of them, a cold run.
 //   6. two processes at once: no corruption, no deadlock, both succeed.
 // (--clear-shader-cache and the verbs are the app-level e2e's half; this is the
 // container's.)
@@ -60,7 +60,6 @@ EngineConfig cacheConfig() {
     cfg.hlmsMediaDir   = JAHSHAKA_TEST_MEDIA_DIR;
     cfg.logFile        = "test_shader_cache-ogre.log";
     cfg.shaderCacheDir = gCacheDir;
-    cfg.appBuildId     = "test-shader-cache/1";
     return cfg;
 }
 
@@ -252,35 +251,69 @@ static void zerolength_files() {
 }
 
 // ---------------------------------------------------------------------------
-// 5. Fingerprint invalidation.
+// 5. Key invalidation, PER LAYER (SPEED-CPU, perf audit CS-1).
 //
-// Driven by rewriting the manifest's own fingerprint line rather than by
-// rebuilding the engine with a different build id: it exercises exactly the
-// comparison every real invalidation term (app build, engine build, ogre patch
-// series, Hlms media, GPU, debug/release) funnels into, and it does so without
-// needing a second binary.
-static void fingerprint_mismatch() {
-    wipeDir();
-    runCycle("seed");
+// Each manifest line names its file's LAYER key (pipeline, microcode, Hlms —
+// OgreShaderCache.cpp configure() says which terms each one holds). Driven by
+// rewriting one file's key in the manifest rather than by rebuilding the engine
+// with a different term: it exercises exactly the comparison every real
+// invalidation (engine build, fork commit, glslang, Hlms media, GPU,
+// debug/release) funnels into, without a second binary.
+//   (a) the microcode layer's key moves: that layer alone is dropped — the
+//       pipeline blob and the Hlms caches still load, the dropped layer is
+//       recompiled, and the next run is fully warm again;
+//   (b) every layer's key moves: nothing loads, the run is cold, and the
+//       directory is rewritten under the current keys.
+namespace {
+/// Rewrites the key column of every manifest `file` line whose name passes
+/// `which`. Returns how many lines it changed.
+int staleKeys(bool (*which)(const std::string &)) {
     const std::string manifest = gCacheDir + "/cache-manifest.txt";
     std::vector<char> bytes;
-    CHECK(readFile(manifest, bytes), "the manifest exists");
-
-    std::string text(bytes.begin(), bytes.end());
-    const size_t at = text.find("fingerprint ");
-    CHECK(at != std::string::npos, "the manifest carries a fingerprint line");
-    if (at != std::string::npos) text.insert(at + 12, "SOMETHING-ELSE-");
+    if (!readFile(manifest, bytes)) return 0;
+    std::istringstream in(std::string(bytes.begin(), bytes.end()));
+    std::ostringstream out;
+    std::string line;
+    int changed = 0;
+    while (std::getline(in, line)) {
+        std::istringstream ls(line);
+        std::string tag, name, size, hash, key;
+        ls >> tag >> name >> size >> hash >> key;
+        if (tag == "file" && !key.empty() && which(name)) {
+            out << tag << " " << name << " " << size << " " << hash << " stale-" << key << "\n";
+            ++changed;
+        } else {
+            out << line << "\n";
+        }
+    }
+    const std::string text = out.str();
     writeFile(manifest, std::vector<char>(text.begin(), text.end()));
+    return changed;
+}
+}  // namespace
 
-    const ShaderCacheStats after = runCycle("after-fingerprint-change");
-    CHECK(after.compiledThisRun > 0, "a changed fingerprint forces a cold rebuild");
-    CHECK(!after.microcodeLoaded && !after.pipelineCacheLoaded,
-          "a changed fingerprint loads NO layer");
-    // And the stale generation is gone rather than lying around forever.
-    bool stale = false;
-    for (const std::string &n : cacheFiles())
-        if (n == "cache-manifest.txt") stale = true;
-    CHECK(stale, "the directory was rewritten, not merely ignored");
+static void layer_key_mismatch() {
+    wipeDir();
+    runCycle("seed");
+    CHECK(staleKeys([](const std::string &n) { return n == "microcode.cache"; }) == 1,
+          "the manifest names the microcode layer's key");
+    const ShaderCacheStats one = runCycle("after-microcode-key-change");
+    CHECK(!one.microcodeLoaded, "a moved microcode key drops the microcode layer");
+    CHECK(one.pipelineCacheLoaded, "...while the pipeline layer still loads");
+    CHECK(one.hlmsCachesLoaded > 0, "...and the Hlms layer still applies");
+    CHECK(one.compiledThisRun > 0, "the dropped layer is recompiled");
+    const ShaderCacheStats again = runCycle("after-microcode-rewrite");
+    CHECK(again.microcodeLoaded && again.compiledThisRun == 0,
+          "the next run is warm again: the layer was rewritten under the current key");
+
+    CHECK(staleKeys([](const std::string &) { return true; }) >= 3,
+          "every layer's key can be moved at once");
+    const ShaderCacheStats all = runCycle("after-every-key-change");
+    CHECK(all.compiledThisRun > 0, "every key moved forces a cold rebuild");
+    CHECK(!all.microcodeLoaded && !all.pipelineCacheLoaded && all.hlmsCachesLoaded == 0,
+          "every key moved loads NO layer");
+    const ShaderCacheStats warm = runCycle("after-every-key-rewrite");
+    CHECK(warm.compiledThisRun == 0, "the directory was rewritten, not merely ignored");
 }
 
 // A missing manifest with the payload still present: the shape a partial
@@ -779,7 +812,7 @@ int main(int argc, char **argv) {
     std::printf("[ RUN  ] zerolength_files\n");      zerolength_files();
     if (!corruptionOnly) {
         std::printf("[ RUN  ] cold_then_warm\n");        cold_then_warm();
-        std::printf("[ RUN  ] fingerprint_mismatch\n");  fingerprint_mismatch();
+        std::printf("[ RUN  ] layer_key_mismatch\n");  layer_key_mismatch();
         std::printf("[ RUN  ] manifest_missing\n");      manifest_missing();
         std::printf("[ RUN  ] concurrent_processes\n");  concurrent_processes(argv[0]);
         // The caching-audit fix wave (SHADER_CACHE_AUDIT.md F6/F7/F11).

@@ -13,17 +13,11 @@
 
 #include <QApplication>
 #include <QElapsedTimer>
-#include <QThread>
 
 using namespace jahshaka::engine;
 
 namespace {
 
-/// How long the compile count has to stand still before we call the burst over.
-/// Measured shape of a cold startup on this box: 47 shaders in the first
-/// second, 19 in the second, then nothing. The gaps INSIDE a burst are tens of
-/// milliseconds, so 250 ms is comfortably outside them — and every millisecond
-/// here is paid on every launch, warm or cold, so it is not free.
 /// The World Mode a new scene of this process is born with: Epic (the product), or the
 /// process's test tier (TEST-TIER-1) — the tier the warm-up must compile for.
 worldmodes::Mode bornMode()
@@ -31,7 +25,17 @@ worldmodes::Mode bornMode()
     return testtier::active() ? worldmodes::modeFromName(testtier::name()) : worldmodes::Mode::Epic;
 }
 
-constexpr int kSettleMs = 250;
+/// THE SETTLE, IN FRAMES (SPEED-CPU, perf audit CS-2; ENGINE trap 7 — the engine
+/// has no wall clock). Every compile this gate can cause runs INSIDE a frame: the
+/// parallel Hlms queue is joined before renderOneFrame returns (fork
+/// OgreRenderQueue.cpp, stopAndWait), HlmsDiskCache::applyTo joins its threads, and
+/// a compute job compiles synchronously on its dispatch. So the build is over the
+/// first time a whole frame compiles nothing — and a frame cannot pass that test
+/// while anything is still being built. This used to be a 250 ms wall-clock wait
+/// for the count to stand still, paid on every launch, warm or cold (measured: the
+/// whole warm gate was 251-252 ms of which 250 were the wait). The bound below is a
+/// hang guard for a pathological driver, not a settle.
+constexpr int kSettleFrameCap = 64;
 
 /// Hard ceiling. A gate that can hang the launch forever is worse than a launch
 /// that shows the window with a few shaders still to build: if we are still
@@ -93,7 +97,6 @@ unsigned holdSplashForShaderBuild(QApplication &app, VersionSplashScreen &splash
     const unsigned entryTotal = compiled + cached;
 
     QElapsedTimer total;      total.start();
-    QElapsedTimer sinceMove;  sinceMove.start();
     unsigned last = entryTotal;
     bool shown = false;
 
@@ -102,7 +105,6 @@ unsigned holdSplashForShaderBuild(QApplication &app, VersionSplashScreen &splash
         const unsigned now = compiled + cached;
         if (now == last) return;
         last = now;
-        sinceMove.restart();
         splash.showShaderBuild(int(now), int(expected));
         shown = true;
         splash.repaint();
@@ -166,7 +168,7 @@ unsigned holdSplashForShaderBuild(QApplication &app, VersionSplashScreen &splash
     // the tier list in bridge/sceneworkerthreads.h says so at the Utility entry.
     //
     // The measured shape this is aimed at: 47 shaders in the first second of a
-    // cold start and 19 in the second (kSettleMs above), all on one core.
+    // cold start and 19 in the second, all on one core.
     // Worthless without mode 2 — P1 — and free the moment it lands, because the
     // per-scene warm-up on the editor scene (viewport/enginesceneviewport.cpp)
     // already runs at Tier::Primary and always satisfied the predicate.
@@ -451,19 +453,20 @@ unsigned holdSplashForShaderBuild(QApplication &app, VersionSplashScreen &splash
     if (warmScene) engine->destroyScene(warmScene);
     if (warmView)  warmView->setEnabled(false);
 
-    // ---- Wait for it to settle --------------------------------------------
-    // Anything the warm-up kicked off asynchronously, plus whatever the render
-    // driver's own frames add, has to stop moving before the window appears.
-    for (;;) {
-        app.processEvents(QEventLoop::AllEvents, 20);
-        QThread::msleep(2);
+    // ---- Settle: until one whole frame compiles nothing -----------------------
+    // The splash gets its events between frames; the count is read after each.
+    for (int frame = 0; frame < kSettleFrameCap; ++frame) {
+        app.processEvents(QEventLoop::AllEvents);
+        engine->shaderBuildProgress(compiled, cached, expected);
+        const unsigned before = compiled + cached;
+        engine->renderOneFrame();
         poll();
+        if (last == before) break;
         if (total.elapsed() > kDeadlineMs) {
             qWarning("shader build gate: still compiling after %d ms (%u shaders) — "
                      "showing the window anyway", kDeadlineMs, last);
             break;
         }
-        if (sinceMove.elapsed() > kSettleMs) break;
     }
 
     if (shown) splash.showShaderBuild(-1, 0);
