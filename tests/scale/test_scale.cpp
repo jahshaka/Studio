@@ -431,7 +431,13 @@ static void geometryDoc(Env &env)
 /// ran, and the bucket draws) PLUS the opaque pass — the one number that reads the
 /// same before the classification (the bucket draws were the opaque pass's first)
 /// and after it. `decodePassMs` is the decode pass alone.
-struct IdRead { double tris = -1, idMs = -1, decodeMs = -1, decodePassMs = -1; unsigned survivors = 0; };
+struct IdRead {
+    double tris = -1, idMs = -1, decodeMs = -1, decodePassMs = -1;
+    /// The id pass's four cull jobs, each its monitor row per frame (summed over the
+    /// frame's early and late culls): test, compact, cut, emit. -1 = unsampled.
+    double cullMs[4] = { -1, -1, -1, -1 };
+    unsigned survivors = 0;
+};
 /// The opaque side of one frame (see IdRead): negative when the opaque pass carries
 /// no GPU sample.
 static double opaqueSideMs(const FrameRecord &r, double *decodePassMs = nullptr)
@@ -462,7 +468,8 @@ static IdRead readIdPass(Env &env, int frames)
     static const size_t kWant = 8;
     static const int kMaxFrames = 600;
     IdRead out;
-    std::vector<double> tris, id, dec, decPass;
+    std::vector<double> tris, id, dec, decPass, cull[4];
+    static const char *kCullRows[4] = { "id.cull.test", "id.cull.compact", "id.cull.cut", "id.cull.emit" };
     int drawn = 0;
     unsigned dropped = 0;
     size_t records = 0;
@@ -480,6 +487,12 @@ static IdRead readIdPass(Env &env, int frames)
             const double ms = opaqueSideMs(r, &dp);
             if (ms >= 0) dec.push_back(ms);
             if (dp >= 0) decPass.push_back(dp);
+            for (int k = 0; k < 4; ++k) {
+                double sum = -1;
+                for (const CacheWork &w : r.cacheWork)
+                    if (w.detail == kCullRows[k] && w.gpuMs >= 0) sum = (sum < 0 ? 0 : sum) + w.gpuMs;
+                if (sum >= 0) cull[k].push_back(sum);
+            }
         }
         if (id.size() >= kWant && dec.size() >= kWant) break;
     }
@@ -487,6 +500,7 @@ static IdRead readIdPass(Env &env, int frames)
     out.idMs = stats(id).median;
     out.decodeMs = stats(dec).median;
     out.decodePassMs = decPass.empty() ? -1.0 : stats(decPass).median;
+    for (int k = 0; k < 4; ++k) out.cullMs[k] = cull[k].empty() ? -1.0 : stats(cull[k]).median;
     if (id.size() < kWant || dec.size() < kWant)
         std::printf("   (GPU samples short after %d frames: %zu records, id %zu, decode %zu, %u GPU marks dropped)\n",
                     drawn, records, id.size(), dec.size(), dropped);
@@ -601,10 +615,9 @@ static int clusterCutMain()
 // D1): THE FLAT CUT'S COST AT 10k INSTANCES. The world fixture, the id pass's own request
 // (visible | Atom, one sample x the LOD bias, mode 3) at five poses across it. THE GPU
 // NUMBER IS THE ID PASS'S OWN ROW (the monitor's timestamp pair around the pass: the four
-// cull jobs AND the draw), which bounds the cut from above. GpuCullResult's per-job
-// "slopes" are printed beside it and are NOT GPU time: `measureJob` flushes without waiting
-// (VulkanRenderSystem::flushCommands submits, it does not block), so they are the CPU's
-// recording and submission per dispatch — a finding about the substrate's door, reported.
+// cull jobs AND the draw), which bounds the cut from above — and each cull job is its own
+// row inside it (lane TEST-1: "id.cull.cut" ...; the wall-clock "slopes" that stood here
+// measured the CPU's recording and submission, not the GPU, and are deleted).
 // The design owes the hierarchical traversal (E) IF the flat evaluation reads above 0.5 ms.
 // ===========================================================================
 static int cutCostMain()
@@ -625,30 +638,36 @@ static int cutCostMain()
         req.flagsRequired = 1u | 512u;   // visible | ATOM (GpuSceneEntry::flags, Types.h)
         req.pixelTolerance = kLodBudgetPixels * env.scene->lodBias();
         req.mode = 3u;
-        req.measureIterations = 20u;
         GpuCullResult r;
         if (!env.engine->gpuCull(env.scene, env.view, req, false, r)) continue;
         ++sampled;
         overflow += r.cutOverflow;
-        cutMs.push_back(r.cutMs);
-        emitMs.push_back(r.emitMs);
-        testMs.push_back(r.testMs);
-        compactMs.push_back(r.compactMs);
+        if (ir.cullMs[0] >= 0) testMs.push_back(ir.cullMs[0]);
+        if (ir.cullMs[1] >= 0) compactMs.push_back(ir.cullMs[1]);
+        if (ir.cullMs[2] >= 0) cutMs.push_back(ir.cullMs[2]);
+        if (ir.cullMs[3] >= 0) emitMs.push_back(ir.cullMs[3]);
         if (ir.idMs >= 0) idMs.push_back(ir.idMs);
         evaluated.push_back(r.cutEvaluated);
         clusters.push_back(r.cutClusters);
         tris.push_back(r.cutTriangles);
         indices.push_back(r.cutIndices);
         std::printf("CUT pose %d: %u of %u instances survive, %u (instance, cluster) pairs evaluated, %u clusters / %u "
-                    "tris / %u indices drawn (budget %u, overflow %u) | test %.3f compact %.3f CUT %.3f emit %.3f ms "
-                    "(slopes) | the id pass %s GPU\n",
+                    "tris / %u indices drawn (budget %u, overflow %u) | test %s compact %s CUT %s emit %s GPU "
+                    "(the id pass's rows) | the id pass %s GPU\n",
                     s, r.survivors, r.instances, r.cutEvaluated, r.cutClusters, r.cutTriangles, r.cutIndices,
-                    r.cutIndexBudget, r.cutOverflow, r.testMs, r.compactMs, r.cutMs, r.emitMs, msText(ir.idMs).c_str());
+                    r.cutIndexBudget, r.cutOverflow, msText(ir.cullMs[0]).c_str(), msText(ir.cullMs[1]).c_str(),
+                    msText(ir.cullMs[2]).c_str(), msText(ir.cullMs[3]).c_str(), msText(ir.idMs).c_str());
     }
     REQUIRE(sampled >= 3, "the cut was measured at %u poses", sampled);
     REQUIRE(overflow == 0, "no pose overflowed the cut's stream (%u)", overflow);
-    target("D1", stats(cutMs).median, "ms", "the cut job's CPU recording + submission per dispatch (slope; not GPU)");
-    target("D1", stats(emitMs).median, "ms", "the emit job's, likewise (slope; not GPU)");
+    std::printf("D1 the id pass's other cull jobs, median GPU ms: test %s compact %s\n",
+                msText(testMs.empty() ? -1.0 : stats(testMs).median).c_str(),
+                msText(compactMs.empty() ? -1.0 : stats(compactMs).median).c_str());
+    // THE CUT'S OWN GPU MS (lane TEST-1: the job's monitor row inside the id pass; it was a
+    // CPU recording slope, so the trend steps here once — a re-definition, not a regression).
+    target("D1", cutMs.empty() ? -1.0 : stats(cutMs).median, "ms",
+           "the cut job's GPU ms per frame (its monitor row inside the id pass)");
+    target("D1", emitMs.empty() ? -1.0 : stats(emitMs).median, "ms", "the emit job's, likewise");
     target("D1", stats(evaluated).median, "pairs", "(instance, cluster) pairs the rule evaluated");
     target("D1", stats(tris).median, "tris", "triangles the cut draws");
     target("D1", stats(indices).median, "indices", "the compacted stream per frame");
@@ -1723,6 +1742,90 @@ static int frameArmsMain(bool lattice)
     return 0;
 }
 
+// ===========================================================================
+// scale.gpu_coverage — EVERY GPU MILLISECOND HAS A ROW (lane TEST-1, the perf audit's F5).
+// The frame monitor's records carry the frame's OWN GPU span (FrameRecord::frameGpuMs: one
+// timestamp pair from the first command of the frame's submission to the last) and what
+// no top-level row accounts for (unattributedGpuMs = the span less every top-level pass and
+// cache row). A pass or a dispatch that is outside every row — the card relight and the sky
+// bakes were, before this lane — shows up here as unattributed time. THE FIXTURE: the
+// lattice (8,000 cubes, a shadowed point lamp) at EPIC (every GI part the tier ships: the
+// rays, the gather, the cards), 1080p, still and with the camera moving; 120 frames warm,
+// 240 measured per arm. THE BAR: the median frame's unattributed share stays under
+// kCoverageBar of its span — measured and stated beside the bar below.
+// ===========================================================================
+static int gpuCoverageMain()
+{
+    static constexpr double kCoverageBar = 0.05;
+    Env env;
+    if (!boot(env, "test-scale-gpu-coverage-ogre.log")) return 1;
+    buildLattice(env);
+    worldmodes::setMode(env.doc, worldmodes::Mode::Epic);
+    worldmodes::setPhoton(env.doc, true, worldmodes::PhotonTier::Epic);
+    for (int f = 0; f < 900; ++f) { frame(env, 1); if (f > 30 && env.scene->giStatus().giAtRest) break; }
+    armMonitor(env);
+    frame(env, 120);
+    for (int arm = 0; arm < 2; ++arm) {
+        const bool pan = arm == 1;
+        const auto recs = collect(env, [&] {
+            for (int f = 0; f < 240; ++f) {
+                if (pan) {
+                    const float a = 0.004f * float(f);
+                    setCamera(env, iris::Vec3(30.0f * std::sin(a), 12.0f, 30.0f * std::cos(a)), iris::Vec3(0, 8, 0));
+                }
+                frame(env, 1);
+            }
+        });
+        std::vector<double> span, rows, rest, share;
+        unsigned unmeasured = 0;
+        for (const FrameRecord &r : recs) {
+            if (r.frameGpuMs <= 0.0f || r.unattributedGpuMs < -1e-3f) { ++unmeasured; continue; }
+            span.push_back(r.frameGpuMs);
+            rest.push_back(std::max(0.0f, r.unattributedGpuMs));
+            rows.push_back(double(r.frameGpuMs) - double(r.unattributedGpuMs));
+            share.push_back(std::max(0.0, double(r.unattributedGpuMs)) / double(r.frameGpuMs));
+        }
+        const Stats sp = stats(span), rw = stats(rows), un = stats(rest), sh = stats(share);
+        std::printf("COVERAGE %s: %zu frames measured (%u not): frame span median %.3f ms p95 %.3f | rows %.3f | "
+                    "unattributed %.3f ms median, p95 %.3f | share median %.2f %% p95 %.2f %% (bar %.0f %%)\n",
+                    pan ? "pan  " : "still", span.size(), unmeasured, sp.median, sp.p95, rw.median, un.median,
+                    un.p95, 100.0 * sh.median, 100.0 * sh.p95, 100.0 * kCoverageBar);
+        // THE WORST FRAME, named: its span, what its top rows were and its CPU stages — the
+        // tail is the reading the median bar does not hold, and it has to be attributable too.
+        const FrameRecord *worstRec = nullptr;
+        for (const FrameRecord &r : recs)
+            if (r.frameGpuMs > 0.0f && (!worstRec || r.unattributedGpuMs > worstRec->unattributedGpuMs)) worstRec = &r;
+        if (worstRec) {
+            std::printf("COVERAGE %s worst frame %llu: span %.3f ms, unattributed %.3f ms, CPU %.3f ms; passes",
+                        pan ? "pan  " : "still", worstRec->frame, worstRec->frameGpuMs, worstRec->unattributedGpuMs,
+                        worstRec->totalMs);
+            for (const FramePass &p : worstRec->passes)
+                if (p.gpuMs > 0.2f) std::printf(" | %s %.2f", p.pass.c_str(), p.gpuMs);
+            std::printf("; rows");
+            for (const CacheWork &w : worstRec->cacheWork)
+                if (w.gpuMs > 0.1f) std::printf(" | %s %.2f", w.detail.c_str(), w.gpuMs);
+            std::printf("; stages");
+            for (const FrameStage &st : worstRec->stages)
+                if (st.ms > 0.5f) std::printf(" | %s %.2f", st.name.c_str(), st.ms);
+            std::printf("\n");
+        }
+        // A NEGATIVE remainder beyond the timer's noise would mean a row counted outside
+        // the frame's span (a nesting defect), never "more than covered".
+        double worstNeg = 0.0;
+        for (const FrameRecord &r : recs)
+            if (r.frameGpuMs > 0.0f) worstNeg = std::min(worstNeg, double(r.unattributedGpuMs));
+        REQUIRE(span.size() >= 200u, "%s: the frame's own GPU pair answered on %zu of %zu frames",
+                pan ? "pan" : "still", span.size(), recs.size());
+        REQUIRE(worstNeg > -0.05, "%s: no frame's top-level rows exceed its span (worst remainder %.3f ms)",
+                pan ? "pan" : "still", worstNeg);
+        REQUIRE(!share.empty() && sh.median < kCoverageBar,
+                "%s: the median frame's unattributed GPU share %.2f %% < %.0f %%", pan ? "pan" : "still",
+                100.0 * sh.median, 100.0 * kCoverageBar);
+    }
+    shutdown(env);
+    return failures ? 1 : 0;
+}
+
 // ---------------------------------------------------------------------------
 // scale.shadow_cut — THE CASTER PASS FROM THE CUT (ATOM-SHADOWS-1): the shadow node's CPU
 // and GPU time with the Atom casters drawn by the light's cluster cut (one indirect draw a
@@ -2358,8 +2461,9 @@ int main(int argc, char **argv)
     if (mode == "--frame-arms-lattice") return frameArmsMain(true);
     if (mode == "--decode-exact") return decodeExactMain();
     if (mode == "--coverage-trace") return coverageTraceMain();
+    if (mode == "--gpu-coverage") return gpuCoverageMain();
     std::printf("usage: test_scale --world|--voxel-scroll|--lights|--cluster-cut|--levels|--cut-cost|--residency|--decode|"
                 "--occlusion|--tlas|--atlas|--far-field|--bake|--hit-list|--cpu-walks|--lattice-owed|--decode-exact|"
-                "--coverage-trace\n");
+                "--coverage-trace|--gpu-coverage\n");
     return 2;
 }

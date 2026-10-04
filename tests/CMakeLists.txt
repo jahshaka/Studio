@@ -275,7 +275,10 @@ set(JAH_GPU_EXCLUSIVE_SUITES
     # ATOM-CLUSTER-CUT: the flat cut's milliseconds at 10k instances (D1's decision number).
     scale.cut_cost
     # ATOM-SHADOWS-1: the caster pass's CPU and GPU ms, cut against per-instance (paired arms).
-    scale.shadow_cut)
+    scale.shadow_cut
+    # TEST-1 (the perf audit's F5): the frame's own GPU span against its monitor rows — a share
+    # of two GPU times read in one frame, which a sibling's GPU work inside the span would inflate.
+    scale.gpu_coverage)
 # THE VRAM BUDGET (lane GATE-ADMIT-1; docs/TESTING_GATE.md §4b; SPECS/audits/
 # GPU_LOSS_AUDIT_2026-09-27.md A3/A4). Every lane's gate is its own ctest process, so nothing
 # inside ctest (RESOURCE_GROUPS, RESOURCE_LOCK, RUN_SERIAL) can bound what FOUR gates put on one

@@ -426,6 +426,7 @@ int main()
         GiParams gatherGi;
         gatherGi.mode = GiMode::Vct; gatherGi.quality = GiQuality::High;
         gatherGi.ddgi = GiToggle::Off; gatherGi.numBounces = 1;
+        enginetest::GpuTimingWindow gpuTiming(e);   // the gather jobs' GPU times are monitor rows (lane TEST-1)
         armGather(s, gatherGi, true);
         render(e, 40);
         const GatherStatus stats = gatherStatus(s);
@@ -875,6 +876,7 @@ static int costMain(Engine *e)
         }
         if (k.noTemporal) ::setenv("JAHSHAKA_GATHER_NO_TEMPORAL", "1", 1);
         else              ::unsetenv("JAHSHAKA_GATHER_NO_TEMPORAL");
+        enginetest::GpuTimingWindow gpuTiming(e);   // the gather jobs' GPU times are monitor rows (lane TEST-1)
         std::vector<float> place, trace, filter, integrate;
         for (int i = 0; i < 90; ++i) {
             e->renderOneFrame();
@@ -1096,6 +1098,7 @@ static int shippedCostMain(Engine *e)
             t.restOff = true;
             s->setGatherTuning(t);
             render(e, 60);
+            enginetest::GpuTimingWindow gpuTiming(e);   // the gather jobs' GPU times are monitor rows (lane TEST-1)
             std::vector<float> pl, tr, fi, in, tot;
             for (int i = 0; i < 60; ++i) {
                 e->renderOneFrame();

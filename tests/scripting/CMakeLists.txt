@@ -248,6 +248,9 @@ jah_pool_arm(player play_fly ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_play_fly.js
 # performance figure this architecture has, which the render loop used to
 # measure and throw away.
 jah_pool_arm(editor_view render_stats ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_render_stats.js 8)
+# THE MEASUREMENT ARMS (lane TEST-1, the perf audit's A2): engine.arm / engine.arms over
+# Engine::setArm — the table, the per-frame latch, the refusals, the reset.
+jah_pool_arm(editor_view engine_arms ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_engine_arms.js 4)
 # PLANAR_REFLECTIONS_SPEC §8: the reflector flag, the budget/resolution/shadow
 # settings, the World Mode row driving them, and the save/reopen round trip.
 jah_pool_arm(world_sky planar ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_planar.js 12)

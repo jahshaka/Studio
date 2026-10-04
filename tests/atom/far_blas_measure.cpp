@@ -16,9 +16,9 @@
 //       (pictureMode's own note).
 //   far_blas_measure tlas    — THE LATTICE: 8,000 instances cycling over those
 //       meshes (+ a ground), one instance moved every frame so every frame
-//       rebuilds (or, with JAH_RQ_REFIT=1 in the environment, refits) the TLAS:
-//       the TLAS bytes, the TLAS GPU ms (median of 120 frames, read back from the
-//       tier's own timestamps), and the CPU ms of the instance write.
+//       rebuilds (or, with `tlas --refit`: the arm "rayquery.tlasRefit", refits) the TLAS:
+//       the TLAS bytes, the TLAS GPU ms (median of 120 frames, the monitor's
+//       "rq.tlas" row), and the CPU ms of the instance write.
 //
 // CLOCKS: the GPU ms here are absolute and therefore provisional (an agent cannot
 // lock the clocks); compare the two binaries' rows as a RATIO taken minutes apart.
@@ -164,8 +164,11 @@ static int tlasMode(Engine *e, View *view)
     view->setCamera(enginetest::testCameraDescLookAt(Vec3{ 0.0f, 20.0f, 45.0f }, Vec3{ 0, 10, 0 }));
     render(e, 90);   // BLAS builds + compaction settle
 
+    enginetest::GpuTimingWindow gpuTiming(e);   // the GPU readings are monitor rows (lane TEST-1)
     std::vector<float> tlasMs, gatherMs;
-    const bool refit = std::getenv("JAH_RQ_REFIT") != nullptr;
+    bool refit = false;
+    for (const ArmInfo &arm : e->arms())
+        if (arm.name == "rayquery.tlasRefit") refit = arm.value != 0.0;
     for (int f = 0; f < 150; ++f) {
         // ONE instance moves every frame: the epoch moves, so the tier re-writes
         // every instance and rebuilds (or refits) the TLAS — the per-frame cost
@@ -181,7 +184,7 @@ static int tlasMode(Engine *e, View *view)
     }
     const RayQueryStatus st = s->rayQueryStatus();
     std::printf("== the lattice: %u instances over %zu meshes + a ground; %s every frame ==\n",
-                kInstances, ids.size(), refit ? "REFIT (JAH_RQ_REFIT)" : "REBUILD");
+                kInstances, ids.size(), refit ? "REFIT (the arm rayquery.tlasRefit)" : "REBUILD");
     std::printf("   tlas instances %d (+%d far), blas %d (%d tris, %llu bytes; coarse %d, %llu B), "
                 "tlas bytes %llu, lastWasRefit %d, builds %llu refits %llu\n",
                 st.instances, st.farInstances, st.blasCount, st.triangles,
@@ -324,6 +327,7 @@ static int pictureMode(Engine *e, View *view)
     big->setCamera(cam);
     tuneFar(s, 0.0f, false);
     render(e, 120);
+    enginetest::GpuTimingWindow gpuTiming(e);   // the GPU readings are monitor rows (lane TEST-1)
     std::vector<float> ms[3];
     for (int round = 0; round < 10; ++round)
         for (int a = 0; a < 3; ++a) {
@@ -364,7 +368,15 @@ int main(int argc, char **argv)
         std::printf("FAIL: this machine has no ray queries\n");
         return 1;
     }
-    if (mode == "tlas") return tlasMode(e, view);
+    if (mode == "tlas") {
+        // `tlas --refit`: the measurement arm (lane TEST-1 deleted the JAH_RQ_REFIT door).
+        if (argc > 2 && std::string(argv[2]) == "--refit" && !e->setArm("rayquery.tlasRefit", 1.0)) {
+            std::printf("FAIL: %s\n", e->lastError().c_str());
+            return 1;
+        }
+        e->renderOneFrame();   // the arm is latched at the top of a frame
+        return tlasMode(e, view);
+    }
     if (mode == "picture") return pictureMode(e, view);
     return assetsMode(e, view);
 }

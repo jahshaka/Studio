@@ -525,6 +525,7 @@ static int sweepMain(Engine *e, View *view)
             big->setEnabled(true);
             tune(s, len[2]);
             render(e, 120);
+            enginetest::GpuTimingWindow gpuTiming(e);   // the GPU readings are monitor rows (lane TEST-1)
             std::vector<float> ms[3];
             for (int round = 0; round < 10; ++round)
                 for (int a = 0; a < 3; ++a) {
@@ -785,6 +786,7 @@ static int farBlasMain(Engine *e, View *view)
             big->setEnabled(true);
             tuneFar(s, 0.0f, false);
             render(e, 120);
+            enginetest::GpuTimingWindow gpuTiming(e);   // the GPU readings are monitor rows (lane TEST-1)
             std::vector<float> ms[3];
             for (int round = 0; round < 10; ++round)
                 for (int a = 0; a < 3; ++a) {

@@ -38,8 +38,8 @@
 //   i. THE OBSERVER IS THE CAMERA: at 500 m and 5 km the horizon dips by the
 //      geometric angle within a pixel and a level surface is seen through the
 //      air at that altitude.
-// And it PRINTS the four tables' cost (Scene::measureAtmosphere; a slope, an
-// upper bound — no bar here, the number is the lane's report).
+// And it PRINTS the four tables' cost — each table job's own monitor row in a
+// capture (the COST lines below; no bar here, the number is the lane's report).
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
 
@@ -323,11 +323,6 @@ int main()
         CHECK_MSG(q.transmittanceBuilds == h.transmittanceBuilds && q.skyViewBuilds == h.skyViewBuilds &&
                   q.aerialBuilds == h.aerialBuilds,
                   "(e) the aerial scale is a constant: it rebuilds nothing");
-        AtmosphereCost cost;
-        if (r.s->measureAtmosphere(20u, cost))
-            std::printf("    cost per rebuild (slope over 20 dispatches, an upper bound): transmittance "
-                        "%.4f ms, multi-scatter %.4f ms, sky view %.4f ms, aerial %.4f ms\n",
-                        cost.transmittanceMs, cost.multiScatterMs, cost.skyViewMs, cost.aerialMs);
     }
 
     // ---- f. NO SKY -----------------------------------------------------------

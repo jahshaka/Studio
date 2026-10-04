@@ -308,6 +308,7 @@ static int costMain(Engine *e, const Placed &asset)
     float z = 32.0f, dz = -0.15f;
     auto place = [&]() { enginetest::testCameraLookAt(view, Vec3(0.0f, 1.6f, z), Vec3(0.0f, 1.2f, z + (dz < 0 ? -10.0f : 10.0f))); };
     place();
+    enginetest::GpuTimingWindow gpuTiming(e);   // tlasMs / blasMs are the monitor's rows (lane TEST-1)
     for (int i = 0; i < kWarmFrames; ++i) e->renderOneFrame();
     const GpuSceneStatus g0 = s->gpuSceneStatus();
     const RayQueryStatus r0 = s->rayQueryStatus();

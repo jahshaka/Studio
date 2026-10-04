@@ -77,7 +77,7 @@
 // character, so a pixel no moving Atom item drew is identified through the TLAS
 // while a pose moves — gated against the rigid twin arms (4.5 -> ~1.97 codes against
 // the rigid 1.99; own surface 5.2 -> ~1.68 against 1.70). `--cost-posed` prints the
-// identification's paired cost (JAH_R7_NO_POSED).
+// identification's paired cost (the arm "reflect.posed").
 // (A HIT on any mover, rigid or posed, is followed — the hit record carries the slot.)
 //
 //   F3 the GATHER on a moving matte object: 0.33-0.49 codes moving against
@@ -357,7 +357,7 @@ struct Arm {
 
 /// THE COST (--cost): the per-pixel motion read at 1080p, PAIRED in one process —
 /// the reflection pass' GPU ms with the id image bound against the same frames with
-/// it withheld (JAH_R5_NO_MOTION, read per frame), alternating blocks over a moving
+/// it withheld (the arm "reflect.motion", latched per frame), alternating blocks over a moving
 /// glossy sphere on a glossy floor. Run it under scripts/gpu-exclusive.sh with the
 /// clocks locked; it prints, it does not gate (a millisecond bar is a target).
 static int costMain(Engine *e)
@@ -390,10 +390,11 @@ static int costMain(Engine *e)
     // THE LANE'S GPU TIME, by its own timestamps: the reflection's pair spans the
     // trace (the mover branches), the hit decode and the filter (the restart
     // band); the march's object-motion job has a pair of its own. Every branch is
-    // behind the one switch (JAH_R5_NO_MOTION, read per frame), so ONE process
+    // behind the one arm ("reflect.motion", latched per frame), so ONE process
     // holds both arms (trap 12), alternating 30-frame blocks; each block's first
     // 10 frames are skipped (the timestamps come back a few frames late). The
     // withheld arm runs no motion job: its share is zero, not its last reading.
+    enginetest::GpuTimingWindow gpuTiming(e);   // the rows below are the monitor's (lane TEST-1)
     int frame = 0;
     double on = 0.0, off = 0.0, onMotion = 0.0;
     int nOn = 0, nOff = 0, nMotion = 0;
@@ -414,12 +415,12 @@ static int costMain(Engine *e)
     };
     step(120, true, false);
     for (int round = 0; round < 24; ++round) {
-        unsetenv("JAH_R5_NO_MOTION");
+        e->setArm("reflect.motion", 1.0);
         step(30, true, true);
-        setenv("JAH_R5_NO_MOTION", "1", 1);
+        e->setArm("reflect.motion", 0.0);
         step(30, false, true);
     }
-    unsetenv("JAH_R5_NO_MOTION");
+    e->setArm("reflect.motion", 1.0);
     const double a = nOn ? on / nOn : -1.0, b = nOff ? off / nOff : -1.0,
                  m = nMotion ? onMotion / nMotion : 0.0;
     std::printf("target: 1920x1080, a moving glossy sphere over a glossy floor: the reflection %.4f ms on / "
@@ -431,7 +432,7 @@ static int costMain(Engine *e)
 /// THE POSED COST (--cost-posed, REFLECT-EDGE-2 / SKINNED-VELOCITY-1): 30 SKINNED glossy
 /// spheres whose bones run small circles at 1080p over a glossy floor, the march on — the
 /// reflection's GPU ms plus the march's motion job with the posed identification on
-/// against the same frames with it withheld (JAH_R7_NO_POSED, read per frame), alternating
+/// against the same frames with it withheld (the arm "reflect.posed", latched per frame), alternating
 /// 30-frame blocks in ONE process (trap 12). Run under scripts/gpu-exclusive.sh with the
 /// clocks locked; it prints, it does not gate.
 static int costPosedMain(Engine *e)
@@ -479,6 +480,7 @@ static int costPosedMain(Engine *e)
     PostFxDesc fx; fx.allowOffscreen = true; fx.ssr = 2;
     view->setPostFx(fx);
     enginetest::testCameraLookAt(view, kCamPos, kCamTarget);
+    enginetest::GpuTimingWindow gpuTiming(e);   // the rows below are the monitor's (lane TEST-1)
     int frame = 0;
     double onR = 0.0, offR = 0.0, onM = 0.0, offM = 0.0;
     int nOn = 0, nOff = 0;
@@ -502,12 +504,12 @@ static int costPosedMain(Engine *e)
     };
     step(120, true, false);
     for (int round = 0; round < 24; ++round) {
-        unsetenv("JAH_R7_NO_POSED");
+        e->setArm("reflect.posed", 1.0);
         step(30, true, true);
-        setenv("JAH_R7_NO_POSED", "1", 1);
+        e->setArm("reflect.posed", 0.0);
         step(30, false, true);
     }
-    unsetenv("JAH_R7_NO_POSED");
+    e->setArm("reflect.posed", 1.0);
     const double a = nOn ? onR / nOn : -1.0, b = nOff ? offR / nOff : -1.0;
     const double am = nOn ? onM / nOn : -1.0, bm = nOff ? offM / nOff : -1.0;
     std::printf("target: 1920x1080, 30 posed glossy spheres over a glossy floor: the reflection %.4f ms on / %.4f ms "
@@ -680,7 +682,7 @@ int main(int argc, char **argv)
     // 120-180 at most 1.59, 240 at most 0.72; the whole run 1.31-1.38.
     static const float kSphereEnvelope[kCheckpoints] = { 4.0f, 3.0f, 3.0f, 3.0f };
     // THE EDGE'S NATURE (REFLECT-EDGE-2, --edge): the rays glossy floor's band read
-    // through the trace's class overlay (JAH_R7_EDGE_CLASSES on the Hits view) —
+    // through the trace's class overlay (the arm "reflect.edgeClasses" on the Hits view) —
     // per band texel per frame: did the ray hit the mover, did the mean restart,
     // was the history found through the reflected image; and the new count's bins —
     // beside the analytic coverage change of the band pixel's lobe footprint.
@@ -713,7 +715,7 @@ int main(int argc, char **argv)
             render(e, 60);
             for (int i = 0; i < 240; ++i) {
                 const int mode = 1 + (i & 1);
-                setenv("JAH_R7_EDGE_CLASSES", mode == 1 ? "1" : "2", 1);
+                e->setArm("reflect.edgeClasses", double(mode));
                 if (phase == 0) ++frame;
                 if (phase == 0) edgePlace(pathAt(frame));
                 render(e, 1);
@@ -745,7 +747,7 @@ int main(int argc, char **argv)
                     }
             }
         }
-        unsetenv("JAH_R7_EDGE_CLASSES");
+        e->setArm("reflect.edgeClasses", 0.0);
         s->setPhotonView(PhotonView::Off);
         const char *gname[4] = { "band leading", "band trailing", "band tangential", "interior" };
         const char *cname[8] = { "miss/surf", "HIT/surf", "miss/RESTART", "HIT/RESTART", "miss/virt?", "HIT/virtual",

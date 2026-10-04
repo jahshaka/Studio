@@ -587,6 +587,7 @@ static int costMain(Engine *e)
     enginetest::testCameraLookAt(view, Vec3(0.0f, 6.0f, -18.0f), Vec3(0.0f, 1.0f, 0.0f));
     render(e, 240);   // the compile storm, the captures, the settle
 
+    enginetest::GpuTimingWindow gpuTiming(e);   // the GPU readings are monitor rows (lane TEST-1)
     const int arms[3] = { 0, 1, 30 };
     double traceMs[3] = {}, relightMs[3] = {}, traced[3] = {}, relit[3] = {}, texels[3] = {};
     int traceN[3] = {}, relightN[3] = {}, frames[3] = {};

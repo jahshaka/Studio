@@ -379,6 +379,15 @@ read (`photon/`, `OgreScreenProbeGather*`, `OgreSurfaceCache*`) are listed by th
 lanes. Deleted by the sweep (no reader): `JAHSHAKA_GI_DEBUG` (17 diagnostic log sites),
 `JAHSHAKA_HIT_LIST_OFF`, `JAHSHAKA_GI_NO_RECENTRE`.
 
+THE RAY TIER'S MEASURING DOORS ARE ARMS (lane TEST-1, the perf audit's A2): `JAH_RQ_REFIT`,
+`JAH_R5_NO_MOTION`, `JAH_R5_MONO_EYES`, `JAH_R6_NO_ALPHA`, `JAH_R7_NO_POSED` and
+`JAH_R7_EDGE_CLASSES` — five of them read per frame inside shipped code — are deleted. Each is
+a registered arm now (`Engine::setArm` / the verb `engine.arm(name, value)`, latched at the top
+of the next frame; `Engine::arms()` / `engine.arms()` list them with their defaults):
+`rayquery.tlasRefit`, `reflect.motion`, `reflect.monoEyes`, `reflect.alphaTested`,
+`reflect.posed`, `reflect.edgeClasses`. A new measuring switch is a row in that table
+(OgreFrameMonitor.cpp `kArms`), never a `getenv`. `scripts/perf-ab.py` drives the arms.
+
 | Switch | Read in | Reader | What it does |
 |---|---|---|---|
 | `JAHSHAKA_NO_RAY_QUERY` | OgreEngine.cpp | tests/CMakeLists.txt, ssr, app rows | boots without the ray-query tier (the no-rays rows) |
@@ -393,12 +402,6 @@ lanes. Deleted by the sweep (no reader): `JAHSHAKA_GI_DEBUG` (17 diagnostic log 
 | `JAHSHAKA_HIT_WORLD_LIGHTS`, `JAHSHAKA_HIT_VCT_SPECULAR` | HlmsAtom.cpp | gi.hit_shade | the hit decode's light list / VCT specular arms |
 | `JAHSHAKA_CARD_FOOTPRINT_K` | OgreRayQuery.cpp | gi.rt_reflect `--footprint-sweep` | the card read's footprint gate |
 | `JAHSHAKA_RAY_DENY_STORAGE_FORMAT` | OgreRayQuery.cpp | gi.rt_reflect | refuses a storage format (the fallback path) |
-| `JAH_RQ_REFIT` | OgreRayQuery.cpp | atom/far_blas_measure | TLAS refit instead of rebuild (measured, not assumed better) |
-| `JAH_R5_NO_MOTION` | OgreRayQuery.cpp | gi.reflect_mover | the march's object motion off (paired arm) |
-| `JAH_R5_MONO_EYES` | OgreRayQuery.cpp | vr.session | one eye's trace for both |
-| `JAH_R6_NO_ALPHA` | OgreRayQuery.cpp | gi.rt_alpha_tested `--cost` | no alpha table: every ray asks opaque |
-| `JAH_R7_NO_POSED` | OgreRayQuery.cpp | gi.reflect_mover `--cost-posed` | the posed velocity job off (paired arm) |
-| `JAH_R7_EDGE_CLASSES` | OgreRayQuery.cpp | gi.reflect_mover `--edge` | the Hits view's history classes (modes 1, 2) |
 | `JAH_ORTHO_POSTFX` | OgreView.cpp | ssr.e2e | post effects on an orthographic view |
 | `JAH_GI_CASCADE_FAULT`, `JAH_GI_CASCADE_FAULT_POST` | OgreGi.cpp | gi.cascades | a cascade build throws before / after the placement moves |
 | `JAH_VCT_REFUSE_GEOMETRY` | OgreGi.cpp | gi.voxel_resident | the voxeliser reads no geometry (an empty volume must build) |

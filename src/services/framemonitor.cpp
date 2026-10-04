@@ -484,6 +484,9 @@ void FrameMonitor::Bundle::writeFrame(const FrameRecord &r)
         { "orphanedPasses", int(r.orphanedPasses) },
         { "textureWaitMs", double(r.textureWaitMs) },
         { "gpuMs", double(r.gpuMs) },
+        // The frame's own GPU span and what no row accounts for (lane TEST-1, F5).
+        { "frameGpuMs", double(r.frameGpuMs) },
+        { "unattributedGpuMs", double(r.unattributedGpuMs) },
         { "overheadMs", double(r.overheadMs) },
         { "gpuMarksDropped", int(r.gpuMarksDropped) },
         { "stages", stages },

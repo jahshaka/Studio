@@ -137,8 +137,10 @@ static float measure(Engine *e, View *v, const char *what, int frames, Image *ou
 /// an env-selected path and not a second source file: the cost of a trace is
 /// the cost of THIS trace over THIS geometry, and a second fixture would be
 /// measuring something else. It reports GPU milliseconds from the pass' own
-/// timestamp pair (`giStatus().rayQuery.reflectMs`, the fork 1a81f866a+1bccc3f93 (was 0027) mechanism),
-/// read back with the availability bit several frames later and never with a
+/// monitor rows (`giStatus().rayQuery.reflectMs` = the "rq.reflect.trace" and
+/// "rq.reflect.filter" CacheScopes summed — the hit decode between them is its own
+/// pass row, which the private ring's one span used to include — read
+/// inside a capture — lane TEST-1), answered several frames later and never with a
 /// wait — so it renders well past the frames-in-flight depth before reading.
 ///
 /// MIRROR-HEAVY means what it says: every surface in the shot is inside the
@@ -357,9 +359,13 @@ int main(int argc, char **argv)
 
     // ---- 1 + 2: the two arms ------------------------------------------------
     Image img;
-    const float red = measure(e, view, raysWanted ? "SSR + rays" : "SSR alone (fallback)", 24,
-                              &img);
-    const RayQueryStatus rq = s->rayQueryStatus();
+    float red = 0.0f;
+    RayQueryStatus rq;
+    {
+        enginetest::GpuTimingWindow gpuTiming(e);   // rq.reflectMs is the monitor's row
+        red = measure(e, view, raysWanted ? "SSR + rays" : "SSR alone (fallback)", 24, &img);
+        rq = s->rayQueryStatus();
+    }
     std::printf("    rayQuery: available=%d enabled=%d reflect=%d rays=%d ms=%.3f instances=%d\n",
                 int(rq.available), int(rq.enabled), int(rq.reflect), rq.reflectRays, rq.reflectMs,
                 rq.instances);
@@ -1033,6 +1039,10 @@ static int costMain(Engine *e, const char *, const char *)
     Scene *s = e->createScene("rtcost");
     if (!view || !s) { std::printf("FAIL: view/scene: %s\n", e->lastError().c_str()); return 1; }
     view->setScene(s);
+    // THE READING IS THE MONITOR'S TRACE + FILTER ROWS (lane TEST-1: one GPU-timing facility;
+    // reflectMs is -1 outside a capture). Armed AFTER the first view: GPU sampling needs the
+    // device, which the first view brings up — a capture started before it is CPU-only.
+    enginetest::GpuTimingWindow gpuTiming(e);
     if (!e->rayQueryAvailable() || !e->rayTracing()) {
         std::printf("ok: no ray queries on this machine — gi.rt_reflect_cost skips cleanly\n");
         return 0;
