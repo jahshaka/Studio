@@ -23,10 +23,13 @@ var WALK = "@SOURCE_DIR@/tests/avatar/fixtures/rig2_walk_anim.glb";
 // ---- 1. THE BOOT: the fresh library seeded (BAKED) every shipped mesh ------
 var boot = census("boot");
 assert(parses(boot) === 0, "the fresh library's boot made NO runtime parse");
-// THE SEED BAKES ON THE UI THREAD (shelllifecycle -> PrimitiveAssets::seedAll):
-// a first boot's cost, reported, not a run-time read.
+// THE SEED BAKES ON A WORKER (VERB-IMPORT-OFF-UI-1: shelllifecycle ->
+// PrimitiveAssets::seedAll plans, a worker builds, the UI thread commits).
 console.log("census boot: " + boot.uiThreadBakeBuilds + " of " + boot.bakeBuilds +
             " seed bake builds ran on the UI thread, " + boot.uiThreadBakeBuildMs.toFixed(1) + " ms");
+assert(boot.uiThreadBakeBuilds === 0,
+       "the first boot's seed built NO bake on the UI thread (" + boot.uiThreadBakeBuilds +
+       ", " + boot.uiThreadBakeBuildMs.toFixed(1) + " ms)");
 assert(boot.bakeBuilds === SEED_ROWS,
        "the seed BAKED every shipped mesh — the primitives, the Teapot, the preview subjects " +
        "and the VR controllers: " + boot.bakeBuilds + " bake builds, one per seed row (" +
@@ -55,13 +58,34 @@ var added = avatar.loadAnimation(WALK);
 assert(!!added && added.added === 1 && added.asset,
        "the walk clip landed on the character from its CLIP bake");
 assert(assets.metadata(added.asset).kind === "animation", "...an Animation asset");
-// THE VERB-DRIVEN IMPORTS: avatar.importAvatar and avatar.loadAnimation(path)
-// import SYNCHRONOUSLY on the UI thread (resolveClipAsset -> importFile) — a
-// known cost, reported here, and the lead's own row (not this lane's).
+// THE VERB-DRIVEN IMPORTS (VERB-IMPORT-OFF-UI-1): avatar.importAvatar and
+// avatar.loadAnimation(path) import through resolveClipAsset -> importFile ->
+// AssetImportService::import, and so do assets.importFile / assets.import; the
+// re-read of assets.reimport and assets.checkConsistency is the same convert.
+// Each one's parse + bake runs on a worker while the UI thread pumps — the
+// verb still answers in the same call.
+var MODEL = "@SOURCE_DIR@/tests/importer/fixtures/scaled_two_meshes.glb";
+var byFile = assets.importFile(MODEL);
+assert(byFile && byFile.length > 10, "assets.importFile(model) answers its guid in the same call");
+var withSettings = assets.import("@SOURCE_DIR@/tests/importer/fixtures/textured_pbr_quad.glb",
+                                 { scale: 2 });
+assert(withSettings && withSettings.length > 10, "assets.import(model, {scale}) answers its guid");
+var re = assets.reimport(byFile, { scale: 3 });
+assert(re && re.bakeOid && re.bakeOid.length > 10,
+       "assets.reimport rebuilt the bake under the new settings: " + JSON.stringify(re));
+var consistent = assets.checkConsistency(byFile);
+assert(consistent.ok === true, "assets.checkConsistency re-ran the convert: " + JSON.stringify(consistent));
 var imports = census("verb imports");
 assert(parses(imports) === 0, "the verb imports made no runtime parse (their parses BUILT bakes)");
 console.log("census verb imports: " + imports.uiThreadBakeBuilds + " UI-thread bake build(s), " +
-            imports.uiThreadBakeBuildMs.toFixed(1) + " ms (last " + imports.lastUiThreadBakeBuild + ")");
+            imports.uiThreadBakeBuildMs.toFixed(1) + " ms (last " + imports.lastUiThreadBakeBuild +
+            "), " + imports.bakeBuilds + " bake build(s) in all");
+assert(imports.bakeBuilds >= 6,
+       "the verbs above really built bakes (" + imports.bakeBuilds + ": the character, its clip, " +
+       "two models, the reimport's re-read, the consistency re-run)");
+assert(imports.uiThreadBakeBuilds === 0,
+       "...and NONE of them on the UI thread (" + imports.uiThreadBakeBuilds + ", last " +
+       imports.lastUiThreadBakeBuild + ")");
 
 var clips = avatar.clips();
 var walk = clips[clips.length - 1];

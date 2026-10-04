@@ -17,10 +17,12 @@ For more information see the LICENSE file
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QMutex>
 #include <QSqlDatabase>
 #include <QSqlQuery>
 #include <QTemporaryDir>
 
+#include <atomic>
 #include <utility>
 
 #include "irisgl/import/meshbake.h"
@@ -34,6 +36,7 @@ For more information see the LICENSE file
 #include "services/meshbakestore.h"
 #include "services/assetstorepaths.h"
 #include "services/import/assetimporters.h"
+#include "services/uithreadwait.h"
 #include "services/jahlog.h"
 #include "irisgl/core/logger.h"
 #include "irisgl/import/parsecensus.h"
@@ -229,7 +232,60 @@ ImportResult AssetImportService::import(const ImportRequest &request,
     QElapsedTimer clock;
     clock.start();
 
-    PreparedImport prepared = prepare(request, progress);
+    // THE CPU HALF OFF THE UI THREAD (VERB-IMPORT-OFF-UI-1). Every door that
+    // imports synchronously — assets.importFile / import / importAndPlace, the
+    // avatar verbs' resolveClipAsset, a shipped asset's first use, the seed's
+    // single re-seed — used to parse and BAKE right here on the thread that
+    // draws; only ImportBatchRunner used a worker. prepare() is worker-safe by
+    // contract (no default connection, no GUI object), so it runs on a pool
+    // thread while this one pumps (services/uithreadwait.h); the DB half below
+    // stays on the connection's thread, as the batch runner's hop keeps it.
+    //
+    // The caller's progress function was written for THIS thread: the worker
+    // only records the latest stage and answers the cancel the caller last
+    // gave, and the waiting thread relays the stage to the caller between
+    // pumps.
+    PreparedImport prepared;
+    if (UiThreadWait::onUiThread()) {
+        struct Relay
+        {
+            QMutex lock;
+            QString stage;
+            int done = 0;
+            int total = 0;
+            bool fresh = false;
+            std::atomic<bool> cancelled { false };
+        } relay;
+        ImportProgressFn workerProgress;
+        if (progress) {
+            workerProgress = [&relay](const QString &stage, int done, int total) {
+                QMutexLocker locked(&relay.lock);
+                relay.stage = stage;
+                relay.done = done;
+                relay.total = total;
+                relay.fresh = true;
+                return !relay.cancelled.load();
+            };
+        }
+        const auto tick = [&relay, &progress]() {
+            if (!progress) return;
+            QString stage;
+            int done = 0, total = 0;
+            {
+                QMutexLocker locked(&relay.lock);
+                if (!relay.fresh) return;
+                relay.fresh = false;
+                stage = relay.stage;
+                done = relay.done;
+                total = relay.total;
+            }
+            if (!progress(stage, done, total)) relay.cancelled.store(true);
+        };
+        UiThreadWait::run([&]() { prepared = prepare(request, workerProgress); },
+                          UiThreadWait::Pump::Events, tick);
+    } else {
+        prepared = prepare(request, progress);
+    }
     ImportResult out = prepared.ok() ? commit(prepared, progress) : prepared.result;
 
     logImportRecord(request, out, clock.elapsed());
@@ -718,10 +774,35 @@ AssetImportService::Reimported AssetImportService::reimport(const QString &guid,
                               .arg(record.name)
                         : error);
 
+    // THE RE-READ AND THE NEW BAKE'S BYTES OFF THE UI THREAD (VERB-IMPORT-OFF-UI-1):
+    // the convert parses and bakes, and the bake's store write is a copy + a
+    // flush — both the worker's, exactly as prepare() splits a first import. The
+    // catalog half below stays on this (the connection's) thread.
     QTemporaryDir convertStaging;
     StagedAsset staged;
-    if (!importer->convert(request, convertStaging.path(), db, project, staged, &error, {}))
+    bool converted = false;
+    QVector<AssetCas::Staged> bakeBytes;
+    UiThreadWait::run([&]() {
+        iris::ParseCensus::BakeBuildScope building;   // a reimport's parse BUILDS the bake
+        converted = importer->convert(request, convertStaging.path(), db, project, staged,
+                                      &error, {});
+        if (!converted) return;
+        for (const StagedFile &file : std::as_const(staged.files)) {
+            if (file.role != iris::MeshBake::casRole()) continue;
+            AssetCas::Staged entry;
+            entry.srcPath = file.path;
+            entry.role = file.role;
+            entry.name = file.name;
+            // A staging failure is not fatal: the commit ingests synchronously.
+            if (AssetCas::stage(root, entry)) bakeBytes.append(entry);
+            break;
+        }
+        AssetCas::flushStaged(bakeBytes);
+    });
+    if (!converted) {
+        AssetCas::discardStaged(bakeBytes);
         return fail(error.isEmpty() ? QStringLiteral("reimport failed") : error);
+    }
 
     // ---- commit ONLY the derived products ---------------------------------
     //
@@ -779,9 +860,15 @@ AssetImportService::Reimported AssetImportService::reimport(const QString &guid,
 
     if (!bakePath.isEmpty()) {
         QString oid;
-        if (!AssetCas::ingestFile(conn, root, bakePath, guid, iris::MeshBake::casRole(),
-                                  bakeName, &oid, &error))
+        // The worker staged and flushed the bytes: publishing them is a rename.
+        if (!bakeBytes.isEmpty() && bakeBytes.first().srcPath == bakePath) {
+            if (!AssetCas::commitStaged(conn, root, guid, bakeBytes.first(), &error))
+                return fail(error);
+            oid = bakeBytes.first().oid;
+        } else if (!AssetCas::ingestFile(conn, root, bakePath, guid, iris::MeshBake::casRole(),
+                                         bakeName, &oid, &error)) {
             return fail(error);
+        }
         out.bakeOid = oid;
         if (!meshGuid.isEmpty()
             && !AssetCas::ingestFile(conn, root, bakePath, meshGuid, iris::MeshBake::casRole(),
@@ -852,7 +939,14 @@ QJsonObject AssetImportService::checkConsistency(const QString &guid)
 
     QTemporaryDir convertStaging;
     StagedAsset staged;
-    if (!importer->convert(request, convertStaging.path(), db, project, staged, &error, {})) {
+    bool converted = false;
+    // The re-run convert parses (and bakes): the worker's, like every import's.
+    UiThreadWait::run([&]() {
+        iris::ParseCensus::BakeBuildScope building;
+        converted = importer->convert(request, convertStaging.path(), db, project, staged,
+                                      &error, {});
+    });
+    if (!converted) {
         report["ok"] = false;
         report["error"] = error;
         return report;
