@@ -1083,10 +1083,21 @@ static int costMain(Engine *e, const char *, const char *)
     gi.mode = GiMode::Vct;
     gi.quality = GiQuality::High;
     gi.numBounces = 1;
-    // ONE PINNED CAMERA-CENTRED CASCADE where the deleted single volume was pinned
-    // (D4-PHOTON-TIERS): the subject is the rays against one voxel volume.
+    // ONE PINNED CAMERA-CENTRED CASCADE THAT HOLDS THE WHOLE BOX (BUGS-1): the
+    // subject is the rays against one voxel volume, every hit shaded from it.
+    // D4-PHOTON-TIERS re-aimed this fixture at a 13 m half-size cascade where the
+    // deleted single volume (the box's bounds) had been, but the cascade is
+    // centred on the CAMERA (z = -4), so it ended at z = +9 while the far wall
+    // stands at +12: 714k of the frame's 2.07M reflection hits (35 %) fell
+    // outside every voxel volume and went to the hit decode (HlmsAtom's raster
+    // re-shade), 1.2k before. The row then measured the decode, not the trace:
+    // 0.41 -> 0.59 ms at the re-aim, and -> 1.06 when CONE-EMITTER-1's correct
+    // specular start let 73k of those decoded hits (just outside the volume,
+    // reflecting back into it) march it. 20 m from the camera covers the box's
+    // 16.2 m reach with room for the cascade's snap; the decoded hits are then
+    // ~100 a frame, and `hitRecords` below holds the premise.
     gi.cascadeCount = 1;
-    gi.cascadeSet[0] = GiParams::GiCascadeDesc{ 13.0f, 128, 0.0f };
+    gi.cascadeSet[0] = GiParams::GiCascadeDesc{ 20.0f, 128, 0.0f };
     CHECK(s->setGlobalIllumination(gi), "the voxel arm builds over the mirror box");
     enginetest::testCameraLookAt(view, Vec3(0.0f, 3.0f, -4.0f), Vec3(2.0f, 3.0f, 6.0f));
 
@@ -1108,10 +1119,26 @@ static int costMain(Engine *e, const char *, const char *)
         // still printed, because the spread between the two is itself the
         // reading that says whether the number is stable.
         std::vector<float> readings;
+        std::vector<unsigned long long> hits;
         for (int i = 0; i < 90; ++i) {
             e->renderOneFrame();
             const RayQueryStatus rq = s->rayQueryStatus();
             if (rq.reflectMs >= 0.0f) readings.push_back(rq.reflectMs);
+            if (i >= 60) hits.push_back(rq.hitRecords);
+        }
+        // THE FIXTURE'S PREMISE, HELD (BUGS-1): the hits are shaded from the voxel
+        // store, not re-shaded by the hit decode. The reflection's timestamp pair
+        // spans the decode pass (the trace runs in front of it, the filter after),
+        // so a fixture whose hits leave the volume measures the decode instead —
+        // that is what hid gi.rt_reflect_cost's 2.7x for a week. At most 1 % of
+        // the frame's pixels may go to the hit list (measured ~100 mirror, ~400
+        // glossy; 714k when the cascade missed the far wall).
+        {
+            std::sort(hits.begin(), hits.end());
+            const unsigned long long decoded = hits.empty() ? 0ull : hits[hits.size() / 2];
+            CHECK_MSG(decoded <= 1920ull * 1080ull / 100ull,
+                      "%s: %llu hits a frame went to the hit decode (bar 1 %% of the frame, 20736: "
+                      "the voxel volume holds the mirror box)", what, decoded);
         }
         const int seen = int(readings.size());
         float best = -1.0f, median = -1.0f;
@@ -1126,34 +1153,35 @@ static int costMain(Engine *e, const char *, const char *)
                     "(bar %.2f, %.1f %% of a 16.67 ms frame)\n", what, median, best, seen, bar,
                     100.0f * median / 16.67f);
         CHECK_MSG(seen > 0, "%s: the timestamp pair was read back at all", what);
-        // THE ABSOLUTE BAR IS A TARGET, NOT A GATE (ATOM-FARBLAS-1's gate, 2026-09-23:
-        // the full-res glossy arm read 1.213 ms against 0.90 inside a -j2 scoped
-        // gate beside two sibling lanes' gates and 0.78 solo, 3/3). A millisecond
-        // is a reading about the device and whoever else holds it; it is printed
-        // in the `target:` convention (reported, never failing) and the RATIO
-        // block below — one pass against another in this process — gates.
+        // THE ABSOLUTE BAR GATES (BUGS-1). It used to be a target that printed and
+        // never failed (ATOM-FARBLAS-1, 2026-09-23: a -j2 scoped gate beside two
+        // siblings read the glossy arm 1.213 against 0.78 solo). Since
+        // TEST-SELECTOR-1 a timing row runs ALONE holding the whole card
+        // (gpu-exclusive.sh), and the printed-only bar hid a 2.7x step in the run
+        // log for a week (PERF_AUDIT_2026-10-03 D1). The `target:` line stays: it
+        // is the run log's per-tip reading, the input of the trend query.
         std::printf("target: %.3f (bar %.2f) %s: GPU ms, median of the last 30%s\n", median, bar,
                     what, (median >= 0.0f && median <= bar) ? " -- MET" : "");
+        CHECK_MSG(median >= 0.0f && median <= bar,
+                  "%s: %.3f GPU ms, median of the last 30 (bar %.2f)", what, median, bar);
         return median;
     };
 
-    // THE ABSOLUTE BARS, AND THE ONE THAT HAD TO MOVE (ATOM-RESUMES-1 fix round).
-    // 0.8 ms at full res was measured in ONE device state. With the SM clock
-    // LOCKED at 2550 MHz for a measurement — the rig's own recipe for a GPU
-    // number — every arm of this suite gets ~7 % slower (0.780 -> 0.833 ms
-    // full-res glossy, 0.072 -> 0.077 half-res mirror), because the lock CAPS a
-    // card whose ceiling is 3105 MHz: 2550 is 82 % of it, and this pass is
-    // partly clock bound. (It is not bandwidth: the memory clock was read at
-    // 11251 of 11501 MHz DURING the locked runs — it is only the idle reading
-    // between them that sits at 810 in P5.) The pass is identical; the box is
-    // not. So the FULL-res bar is
-    // 0.90 ms = the worst of the two measured device states (0.834) x 1.08,
-    // which still refuses a 9 % regression from the slow state and a 15 % one
-    // from the fast state, and the half-res bar stays at 0.20 (worst 0.142, 29 %
-    // of room). The regression detection that does NOT depend on the box at all
-    // is the ratio block at the end of this function.
-    const float mirrorFull = measureMs(2, "1080p FULL-res, mirror-heavy", 0.9f);
-    const float mirrorHalf = measureMs(1, "1080p HALF-res, mirror-heavy", 0.2f);
+    // THE ABSOLUTE BARS (BUGS-1, 2026-10-04): each is the worst of three solo
+    // runs of THIS fixture (gpu-exclusive, clocks free; Debug engine, RTX 4080
+    // SUPER / 595.84) x 1.15 — 7 % for the locked-clock state (ATOM-RESUMES-1:
+    // a 2550 MHz lock caps a 3105 MHz card and every arm reads ~7 % slower) and
+    // 8 % for run-to-run spread (the mirror full-res arm read 0.424-0.453):
+    //   mirror full 0.424 / 0.437 / 0.453 -> 0.53   mirror half 0.223-0.224 -> 0.26
+    //   glossy full 1.285 / 1.291 / 1.292 -> 1.49   glossy half 0.375-0.378 -> 0.44
+    // The glossy bars and the half-res mirror bar are ABOVE the old 0.90 / 0.20
+    // budget lines, which the base had already missed before either of
+    // gi.rt_reflect_cost's two steps (321983ce2: glossy full 1.22, mirror half
+    // 0.225; 0.78 / 0.072 on 2026-09-22): that growth is unbisected and is the
+    // lead's finding, not a verdict of this suite. The ratio block at the end of
+    // this function stays the box-independent check.
+    const float mirrorFull = measureMs(2, "1080p FULL-res, mirror-heavy", 0.53f);
+    const float mirrorHalf = measureMs(1, "1080p HALF-res, mirror-heavy", 0.26f);
 
     // ...AND THE FILTER'S OWN WORST CASE, which a box of MIRRORS does not
     // measure (round C). The spatial filter's radius is 0 on a mirror by
@@ -1168,8 +1196,8 @@ static int costMain(Engine *e, const char *, const char *)
         glossy.roughness = 0.39f;                 // just inside the 0.40 gate
         CHECK(s->setPbrMaterial(mirrorMat, glossy), "the mirror box goes glossy");
         e->renderOneFrame();
-        glossyFull = measureMs(2, "1080p FULL-res, GLOSSY (max filter)", 0.9f);
-        glossyHalf = measureMs(1, "1080p HALF-res, GLOSSY (max filter)", 0.2f);
+        glossyFull = measureMs(2, "1080p FULL-res, GLOSSY (max filter)", 1.49f);
+        glossyHalf = measureMs(1, "1080p HALF-res, GLOSSY (max filter)", 0.44f);
     }
 
     // ---- THE CLOCK-FREE HALF OF THE SAME MEASUREMENT (ATOM-RESUMES-1 item 4) --
@@ -1179,11 +1207,10 @@ static int costMain(Engine *e, const char *, const char *)
     // DEVICE as much as about the pass: under Xvfb the card can sit at its idle
     // clock (210 of 3105 MHz) and the identical pass has been measured at 0.46 ms
     // in one run and 10.3 ms in another (DOCS/traps/GATE_AND_RIG.md, PHOTON-E2).
-    // A bar in milliseconds therefore states the BUDGET — 0.8 ms of a 16.67 ms
-    // frame is what the design may spend, and that claim is worth keeping — but it
-    // cannot by itself tell a regression in this pass from a slower box, and
-    // `gi.rt_reflect_cost`'s FULL-res glossy arm sits at 97 % of its bar, so a
-    // triager has to be able to tell those two apart.
+    // A bar in milliseconds therefore states the BUDGET — what the design may
+    // spend of a 16.67 ms frame, and that claim is worth keeping — but it cannot
+    // by itself tell a regression in this pass from a slower box, so a triager
+    // has to be able to tell those two apart.
     //
     // So the four arms, measured in ONE process at one pose minutes apart, are
     // also held to each other. A ratio of two passes on the same device cancels
@@ -1231,6 +1258,14 @@ static int costMain(Engine *e, const char *, const char *)
     // per-pixel work shrinks — and 0.60 gave that only 13 % of room. It still
     // refuses the regression it exists for: a resolution row that stopped
     // applying would read ~1.0.
+    //
+    // RE-DERIVED BY THE SAME RULE FOR THE BOX-HOLDING CASCADE (BUGS-1): the fixture
+    // now shades its hits from the store instead of the decode, so the four
+    // ratios moved; worst of three runs x 1.3:
+    //   filter/trace full  3.05 -> 4.0      filter/trace half  1.69 -> 2.2
+    //   half/full mirror   0.53 -> 0.70     half/full glossy   0.29 -> 0.38
+    // Three are tighter or unchanged; the glossy resolution ratio is looser
+    // (0.30 held a 0.29 reading to 3 % of room) and still refuses ~1.0.
     if (mirrorFull > 0.0f && mirrorHalf > 0.0f && glossyFull > 0.0f && glossyHalf > 0.0f) {
         const float filterFull = glossyFull / mirrorFull;
         const float filterHalf = glossyHalf / mirrorHalf;
@@ -1239,17 +1274,17 @@ static int costMain(Engine *e, const char *, const char *)
         std::printf("\n    the same four numbers as RATIOS (clock-free): filter/trace %.2fx full, "
                     "%.2fx half; half/full %.2f mirror, %.2f glossy\n",
                     filterFull, filterHalf, resMirror, resGlossy);
-        CHECK_MSG(filterFull <= 7.5f,
-                  "THE FILTER'S WORST CASE costs %.2fx the trace it filters at full res (bar 7.5x)",
+        CHECK_MSG(filterFull <= 4.0f,
+                  "THE FILTER'S WORST CASE costs %.2fx the trace it filters at full res (bar 4.0x)",
                   filterFull);
-        CHECK_MSG(filterHalf <= 2.5f,
+        CHECK_MSG(filterHalf <= 2.2f,
                   "...and %.2fx at half res, where the kernel covers four times the frame per "
-                  "traced pixel (bar 2.5x)", filterHalf);
+                  "traced pixel (bar 2.2x)", filterHalf);
         CHECK_MSG(resMirror <= 0.70f,
                   "A QUARTER OF THE RAYS COSTS LESS: the mirror arm's half-res pass is %.2f of its "
                   "full-res one (bar 0.70)", resMirror);
-        CHECK_MSG(resGlossy <= 0.30f,
-                  "...and the glossy arm's is %.2f of its own full-res pass (bar 0.30)", resGlossy);
+        CHECK_MSG(resGlossy <= 0.38f,
+                  "...and the glossy arm's is %.2f of its own full-res pass (bar 0.38)", resGlossy);
     } else {
         std::printf("FAIL: one of the four cost arms never read a timestamp back\n");
         ++failures;
