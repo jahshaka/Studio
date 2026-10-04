@@ -380,11 +380,8 @@ int main(int argc, char *argv[])
     auto pixmap = QPixmap(":/images/splashv3.png");
     splash.setPixmap(pixmap.scaled(900, 506, Qt::KeepAspectRatio, Qt::SmoothTransformation));
 
-#ifdef GIT_COMMIT_HASH
-    if (GIT_COMMIT_HASH != "0000")
-        splash.showMessage(QString("Revision - %1 %2").arg(GIT_COMMIT_HASH).arg(GIT_COMMIT_DATE),
-                           Qt::AlignBottom | Qt::AlignLeft, QColor(255, 255, 255));
-#endif // GIT_COMMIT_HASH
+    splash.showMessage(QString("Revision - %1 %2").arg(GIT_COMMIT_HASH).arg(GIT_COMMIT_DATE),
+                       Qt::AlignBottom | Qt::AlignLeft, QColor(255, 255, 255));
 
     splash.updateVersion(Constants::CONTENT_VERSION);
 
