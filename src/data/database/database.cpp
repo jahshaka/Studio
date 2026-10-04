@@ -24,6 +24,7 @@ For more information see the LICENSE file
 #include <QDebug>
 #include <QDir>
 #include <QFile>
+#include <QFileInfo>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QSet>
@@ -35,6 +36,12 @@ For more information see the LICENSE file
 #include <QUuid>
 
 #include <algorithm>
+#include <atomic>
+#include <condition_variable>
+#include <memory>
+#include <mutex>
+#include <thread>
+#include <unordered_map>
 #include <vector>
 
 namespace
@@ -503,7 +510,127 @@ void Database::announceBatchCommit(bool ok)
 //     a clean re-import, not a torn library. The bytes are still fsynced by
 //     AssetCas (Durability::Flush) so nothing half-written ever bears a name.
 // Reverting is one line: SQLite converts the journal mode back in place.
-static void applyDurabilityPragmas(QSqlDatabase &conn)
+// THE CHECKPOINT IS THE DATABASE WORKER'S (STUDIO-D1 item 3, measured).
+//
+// WAL + synchronous=NORMAL makes a COMMIT wait for nothing — but SQLite's
+// automatic checkpoint (wal_autocheckpoint, 1000 pages) runs INSIDE the commit
+// that crosses the threshold, on the committing connection's thread: it
+// fdatasyncs the -wal, copies the pages back and fdatasyncs the database. That
+// thread is the UI thread. Measured under strace on this box during one model
+// import (spikes/studio-d1/stall/): fdatasync(JahLibrary.db-wal) 5,061 ms +
+// fdatasync(JahLibrary.db) 2,317 ms on the main thread, inside the import's
+// commit — the "~6 s" import stall; a 7.1 s and a 7.7 s UI gap in the same runs.
+//
+// So the library connection never checkpoints by itself
+// (wal_autocheckpoint = 0), and a worker with ITS OWN connection to the same
+// file runs PASSIVE checkpoints once the -wal passes the threshold SQLite would
+// have used. PASSIVE takes no lock a writer waits on, so the UI thread's commits
+// never wait for it; ORDER is untouched — commits are appended to the WAL in
+// the order the UI thread makes them, and a checkpoint only copies committed
+// frames back. The durability contract above is unchanged (the WAL sync still
+// happens at each checkpoint, just not on the thread that draws). The last
+// connection to close (the library's own, at shutdown step 7) checkpoints what
+// is left, as SQLite always did.
+namespace {
+class WalCheckpointer
+{
+public:
+    explicit WalCheckpointer(const QString &dbPath) : mPath(dbPath)
+    {
+        mThread = std::thread([this]() { run(); });
+    }
+    ~WalCheckpointer()
+    {
+        {
+            std::lock_guard<std::mutex> lock(mMutex);
+            mStop = true;
+        }
+        mWake.notify_all();
+        if (mThread.joinable()) mThread.join();
+    }
+    WalCheckpointer(const WalCheckpointer &) = delete;
+    WalCheckpointer &operator=(const WalCheckpointer &) = delete;
+
+    /// The size SQLite's own auto-checkpoint fires at: 1000 pages of 4 KiB.
+    static constexpr qint64 kThresholdBytes = 1000 * 4096;
+    /// How often the worker looks at the -wal's size (a stat; no I/O wait).
+    static constexpr int kPollMs = 500;
+
+private:
+    void run()
+    {
+        ScopedConnection scoped(Constants::DB_DRIVER, QStringLiteral("WalCheckpoint"), mPath);
+        if (!scoped.db.open()) {
+            irisLog(QStringLiteral("library: the WAL checkpoint worker could not open %1 (%2) — "
+                                   "the -wal grows until the library closes")
+                        .arg(mPath, scoped.db.lastError().text()));
+            return;
+        }
+        const QString wal = mPath + QStringLiteral("-wal");
+        std::unique_lock<std::mutex> lock(mMutex);
+        while (!mStop) {
+            mWake.wait_for(lock, std::chrono::milliseconds(kPollMs), [this] { return mStop; });
+            if (mStop) break;
+            // A -wal is not truncated by a checkpoint (the next writer rewinds
+            // it), so its SIZE stays past the threshold afterwards: a new
+            // checkpoint is owed only once something was written since the last.
+            const QFileInfo info(wal);
+            if (info.size() < kThresholdBytes) continue;
+            const QDateTime written = info.lastModified();
+            if (written == mLastCheckpointed) continue;
+            mLastCheckpointed = written;
+            lock.unlock();
+            QSqlQuery checkpoint(scoped.db);
+            if (!checkpoint.exec(QStringLiteral("PRAGMA wal_checkpoint(PASSIVE)")))
+                irisLog(QStringLiteral("library: WAL checkpoint failed: %1")
+                            .arg(checkpoint.lastError().text()));
+            checkpoint.finish();
+            lock.lock();
+        }
+    }
+
+    QString mPath;
+    std::thread mThread;
+    std::mutex mMutex;
+    std::condition_variable mWake;
+    bool mStop = false;
+    QDateTime mLastCheckpointed;
+};
+
+/// One worker per open library Database (normally exactly one in the app; a
+/// DB suite opens its own throwaway files). File-static so database.h — which
+/// half the tree includes — does not change shape for it.
+std::mutex &checkpointersLock()
+{
+    static std::mutex m;
+    return m;
+}
+std::unordered_map<const Database *, std::unique_ptr<WalCheckpointer>> &checkpointers()
+{
+    static std::unordered_map<const Database *, std::unique_ptr<WalCheckpointer>> map;
+    return map;
+}
+void startCheckpointer(const Database *owner, const QString &path)
+{
+    std::lock_guard<std::mutex> lock(checkpointersLock());
+    checkpointers()[owner] = std::make_unique<WalCheckpointer>(path);
+}
+void stopCheckpointer(const Database *owner)
+{
+    std::unique_ptr<WalCheckpointer> worker;
+    {
+        std::lock_guard<std::mutex> lock(checkpointersLock());
+        auto it = checkpointers().find(owner);
+        if (it == checkpointers().end()) return;
+        worker = std::move(it->second);
+        checkpointers().erase(it);
+    }
+    worker.reset();   // joins outside the lock
+}
+}   // namespace
+
+/// True when the connection is in WAL mode (the checkpoint worker only exists then).
+static bool applyDurabilityPragmas(QSqlDatabase &conn)
 {
     QSqlQuery pragma(conn);
     // SQLite reports a REFUSED journal mode by its RETURN VALUE, not by an
@@ -514,9 +641,18 @@ static void applyDurabilityPragmas(QSqlDatabase &conn)
     else if (!pragma.next() || pragma.value(0).toString().compare(QStringLiteral("wal"), Qt::CaseInsensitive) != 0)
         irisLog(QString("the library did not enter WAL mode (answered '%1'); it stays at its previous journal mode")
                     .arg(pragma.next() ? pragma.value(0).toString() : pragma.value(0).toString()));
+    bool wal = false;
+    if (pragma.exec(QStringLiteral("PRAGMA journal_mode")) && pragma.next())
+        wal = pragma.value(0).toString().compare(QStringLiteral("wal"), Qt::CaseInsensitive) == 0;
     if (!pragma.exec(QStringLiteral("PRAGMA synchronous = NORMAL")))
         irisLog(QString("could not set the library's synchronous mode: %1")
                     .arg(pragma.lastError().text()));
+    // The checkpoint is the worker's (see WalCheckpointer above): this
+    // connection — the UI thread's — never runs one inside a commit.
+    if (wal && !pragma.exec(QStringLiteral("PRAGMA wal_autocheckpoint = 0")))
+        irisLog(QString("could not hand the library's checkpoints to the worker: %1")
+                    .arg(pragma.lastError().text()));
+    return wal;
 }
 
 bool Database::initializeDatabase(const QString &pathToBlob)
@@ -531,7 +667,7 @@ bool Database::initializeDatabase(const QString &pathToBlob)
 
     if (db.isValid()) {
         if (!db.open()) irisLog(QString("Couldn't open a database connection! %1").arg(db.lastError().text()));
-        if (db.isOpen()) applyDurabilityPragmas(db);
+        if (db.isOpen() && applyDurabilityPragmas(db)) startCheckpointer(this, pathToBlob);
         return db.isOpen();
     }
     else {
@@ -577,6 +713,9 @@ void Database::closeDatabase()
     // Capture the name first; every QSqlDatabase copy must be gone before
     // removeDatabase or Qt warns that the connection is still in use, which is
     // why `db` is invalidated in between.
+    // The checkpoint worker's connection goes FIRST, so the library's own close
+    // is the last one and checkpoints whatever the -wal still holds.
+    stopCheckpointer(this);
     const QString name = db.connectionName();
     if (db.isOpen()) db.close();
     db = QSqlDatabase(); // important that we make an invalid object
