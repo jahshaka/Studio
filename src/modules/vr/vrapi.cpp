@@ -314,13 +314,17 @@ QVector<VerbInfo> VrApi::verbs() const
           "What the user was last told about a VR start that did not happen: the failure class "
           "(as vr.available().failure spells it), the reason in the runtime's words, the dialog's "
           "or notice's title and text, how many dialogs and notices this process has shown, and "
-          "whether the dialog is open now.",
+          "whether the dialog is open now. A session that comes up by any path answers the last "
+          "failure: the dialog closes and failure, reason, title and text are empty again (the "
+          "counts stay).",
           Needs::Document },
         { "tryAgain",
           "vr.tryAgain() -> bool",
-          "The failure dialog's Try again button: closes the dialog and presses the VR button "
-          "again (`vr.press`). False when no dialog is open. After connecting the headset this is "
-          "the whole recovery — no restart.",
+          "The failure dialog's Try again button: closes the dialog and STARTS VR again (the "
+          "start `vr.press` makes; never a toggle, so a session already up keeps running). "
+          "Answers whether VR is on afterwards — false when no dialog is open, and false when "
+          "the retry failed too (the dialog is open again, saying why). After connecting the "
+          "headset this is the whole recovery — no restart.",
           Needs::Window },
         { "info", "vr.info() -> {…}",
           "The same map as vr.available(). Kept as its own verb because \"is VR available\" and "

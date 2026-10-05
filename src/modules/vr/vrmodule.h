@@ -64,8 +64,9 @@ public:
     /// dialogOpen} — so `vr.startReport()` can see what the user saw.
     QVariantMap startReport();
     /// The failure dialog's primary action, exactly as its button runs it:
-    /// close the dialog and press the VR button again. False when no dialog
-    /// is open.
+    /// close the dialog and START VR again (never a toggle: a Try again that
+    /// lands after a session came up by another path leaves it running). False
+    /// when no dialog is open.
     bool tryAgain();
 
 private:
@@ -84,6 +85,16 @@ private:
     /// refusal's own words when the engine has no failure class for it.
     void reportStartFailure(bool dialog, const QString &fallbackReason = QString());
     QPointer<QMessageBox> mStartDialog;
+    /// Try again's action: a start when VR is off, nothing when it is on.
+    void retryStart();
+    /// A SESSION THAT IS UP ANSWERS THE LAST FAILURE (VR-START-2): the start
+    /// dialog closes and the failure record clears, whichever path started it
+    /// (Try again, the button, the chord, a script, the Player).
+    void settleStart();
+    /// A start is running on this thread (VR-START-2): a press that re-enters
+    /// toggle() from an event loop pumped inside the start is ignored, never a
+    /// second attempt and never a failure report for the first.
+    bool mStarting = false;
 
     bool toggleEditorPreview();
     bool isEditorPreviewActive() const;

@@ -79,8 +79,35 @@ bool VrModule::tryAgain()
 {
     if (mStartDialog.isNull() || !mStartDialog->isVisible()) return false;
     mStartDialog->hide();
-    toggle();
+    retryStart();
     return true;
+}
+
+void VrModule::retryStart()
+{
+    // TRY AGAIN MEANS "START", NEVER "TOGGLE" (VR-START-2): the button's retry
+    // is posted, and a session the VR button started in between must not be
+    // ended by it.
+    PlayerService *player = host.services ? host.services->player : nullptr;
+    if (isEditorPreviewActive() || (player && player->isVrActive())) {
+        refreshUi();
+        return;
+    }
+    toggle();
+}
+
+void VrModule::settleStart()
+{
+    // VR IS UP, SO THE LAST FAILURE IS ANSWERED (VR-START-2): a start by any
+    // path closes the dialog a previous attempt opened and clears what
+    // `vr.startReport()` says — the phase-3 push tier ended in VR under an open
+    // "VR did not start" (a press succeeding right after a failed Try again).
+    // The counters stay: they are how many times the user was told.
+    if (!mStartDialog.isNull() && mStartDialog->isVisible()) mStartDialog->hide();
+    gStart.failure.clear();
+    gStart.reason.clear();
+    gStart.title.clear();
+    gStart.text.clear();
 }
 
 void VrModule::reportStartFailure(bool dialog, const QString &fallbackReason)
@@ -168,7 +195,7 @@ void VrModule::reportStartFailure(bool dialog, const QString &fallbackReason)
         // A QMessageBox button closes the box itself; the retry runs after it,
         // on the same path vr.tryAgain() takes.
         QObject::connect(again, &QPushButton::clicked, mAction.get(), [this]() {
-            QTimer::singleShot(0, mAction.get(), [this]() { toggle(); });
+            QTimer::singleShot(0, mAction.get(), [this]() { retryStart(); });
         });
     }
     mStartDialog->setWindowTitle(title);
@@ -301,6 +328,17 @@ void VrModule::runStartCheck()
 
 void VrModule::toggle()
 {
+    // ONE START AT A TIME (VR-START-2). A start is synchronous on this thread,
+    // but it can pump an event loop (a shader compile dialog), and a press
+    // landing there would begin a second session under the first or report a
+    // failure for it. Ignored, not queued: the press it answers is already
+    // being served.
+    if (mStarting) {
+        qWarning("Jahshaka VR: a press during a VR start was ignored (one start at a time)");
+        return;
+    }
+    mStarting = true;
+    struct Clear { bool &flag; ~Clear() { flag = false; } } clear{mStarting};
     PlayerService *player = host.services ? host.services->player : nullptr;
     ProjectService *projects = host.services ? host.services->project : nullptr;
     if (host.shell && host.shell->space() == QLatin1String("editor")) {
@@ -348,6 +386,7 @@ void VrModule::refreshUi()
     mAction->setEnabled(available);
     mAction->setChecked(active);
     mIconActive = active;
+    if (active) settleStart();
     // THE ICON IS DEAD ONLY WHEN THIS RUN CANNOT DO VR AT ALL (--no-vr,
     // JAHSHAKA_VR=0, headless). A missing headset is the click's answer — the
     // dialog with Try again — never a dead icon (VR-START-1).
