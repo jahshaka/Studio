@@ -1074,6 +1074,11 @@ void MainWindow::showOpenProgress(int percent, const QString &text)
     if (pmContainer) pmContainer->showOpenProgress(percent, text);
 }
 
+void MainWindow::showOpenCompileProgress(unsigned compiled)
+{
+    if (pmContainer) pmContainer->showOpenCompileProgress(compiled);
+}
+
 void MainWindow::hideOpenProgress()
 {
     if (pmContainer) pmContainer->hideOpenProgress();

@@ -4,7 +4,8 @@ find_package(Qt6 REQUIRED COMPONENTS Gui OpenGL)
 add_executable(test_gizmo_overlay test_gizmo_overlay.cpp test_stubs.cpp
     ${CMAKE_SOURCE_DIR}/src/viewport/gizmooverlay.cpp ${CMAKE_SOURCE_DIR}/irisgl/mirror/scenemirror.cpp
     ${CMAKE_SOURCE_DIR}/src/viewport/gizmo.cpp ${CMAKE_SOURCE_DIR}/src/viewport/snapsettings.cpp ${CMAKE_SOURCE_DIR}/src/viewport/gizmomeshes.cpp ${CMAKE_SOURCE_DIR}/src/viewport/translationgizmo.cpp
-    ${CMAKE_SOURCE_DIR}/src/viewport/rotationgizmo.cpp ${CMAKE_SOURCE_DIR}/src/viewport/scalegizmo.cpp)
+    ${CMAKE_SOURCE_DIR}/src/viewport/rotationgizmo.cpp ${CMAKE_SOURCE_DIR}/src/viewport/scalegizmo.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/settingsstore.cpp)
 set_target_properties(test_gizmo_overlay PROPERTIES AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
     BUILD_RPATH "${OGRE_NEXT_PREFIX}/lib" INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
@@ -26,7 +27,8 @@ set_tests_properties(gizmo.overlay PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offsc
 add_executable(test_gizmo_screen_size test_gizmo_screen_size.cpp test_stubs.cpp
     ${CMAKE_SOURCE_DIR}/src/viewport/gizmo.cpp ${CMAKE_SOURCE_DIR}/src/viewport/snapsettings.cpp
     ${CMAKE_SOURCE_DIR}/src/viewport/gizmomeshes.cpp ${CMAKE_SOURCE_DIR}/src/viewport/translationgizmo.cpp
-    ${CMAKE_SOURCE_DIR}/src/viewport/rotationgizmo.cpp ${CMAKE_SOURCE_DIR}/src/viewport/scalegizmo.cpp)
+    ${CMAKE_SOURCE_DIR}/src/viewport/rotationgizmo.cpp ${CMAKE_SOURCE_DIR}/src/viewport/scalegizmo.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/settingsstore.cpp)
 set_target_properties(test_gizmo_screen_size PROPERTIES AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
 target_include_directories(test_gizmo_screen_size PRIVATE ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/src
@@ -50,7 +52,8 @@ jah_no_display(gizmo.screen_size)
 add_executable(test_gizmo_ring_pick test_gizmo_ring_pick.cpp test_stubs.cpp
     ${CMAKE_SOURCE_DIR}/src/viewport/gizmo.cpp ${CMAKE_SOURCE_DIR}/src/viewport/snapsettings.cpp
     ${CMAKE_SOURCE_DIR}/src/viewport/gizmomeshes.cpp ${CMAKE_SOURCE_DIR}/src/viewport/translationgizmo.cpp
-    ${CMAKE_SOURCE_DIR}/src/viewport/rotationgizmo.cpp ${CMAKE_SOURCE_DIR}/src/viewport/scalegizmo.cpp)
+    ${CMAKE_SOURCE_DIR}/src/viewport/rotationgizmo.cpp ${CMAKE_SOURCE_DIR}/src/viewport/scalegizmo.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/settingsstore.cpp)
 set_target_properties(test_gizmo_ring_pick PROPERTIES AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
 target_include_directories(test_gizmo_ring_pick PRIVATE ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/src
@@ -76,7 +79,8 @@ add_executable(test_gizmo_group test_gizmo_group.cpp
     ${CMAKE_SOURCE_DIR}/src/commands/transformscenenodecommand.cpp
     ${CMAKE_SOURCE_DIR}/src/commands/staticstate.cpp
     ${CMAKE_SOURCE_DIR}/src/services/undoservice.cpp
-    test_group_stubs.cpp)
+    test_group_stubs.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/settingsstore.cpp)
 set_target_properties(test_gizmo_group PROPERTIES AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
 target_include_directories(test_gizmo_group PRIVATE ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/src
@@ -100,7 +104,8 @@ jah_no_display(gizmo.group_transform)
 add_executable(test_gizmo_drag_frame test_gizmo_drag_frame.cpp test_stubs.cpp
     ${CMAKE_SOURCE_DIR}/src/viewport/gizmo.cpp ${CMAKE_SOURCE_DIR}/src/viewport/snapsettings.cpp
     ${CMAKE_SOURCE_DIR}/src/viewport/gizmomeshes.cpp ${CMAKE_SOURCE_DIR}/src/viewport/translationgizmo.cpp
-    ${CMAKE_SOURCE_DIR}/src/viewport/rotationgizmo.cpp ${CMAKE_SOURCE_DIR}/src/viewport/scalegizmo.cpp)
+    ${CMAKE_SOURCE_DIR}/src/viewport/rotationgizmo.cpp ${CMAKE_SOURCE_DIR}/src/viewport/scalegizmo.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/settingsstore.cpp)
 set_target_properties(test_gizmo_drag_frame PROPERTIES AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
 target_include_directories(test_gizmo_drag_frame PRIVATE ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/src
@@ -123,7 +128,8 @@ jah_no_display(gizmo.drag_frame)
 add_executable(test_gizmo_planes test_gizmo_planes.cpp test_stubs.cpp
     ${CMAKE_SOURCE_DIR}/src/viewport/gizmo.cpp ${CMAKE_SOURCE_DIR}/src/viewport/snapsettings.cpp
     ${CMAKE_SOURCE_DIR}/src/viewport/gizmomeshes.cpp ${CMAKE_SOURCE_DIR}/src/viewport/translationgizmo.cpp
-    ${CMAKE_SOURCE_DIR}/src/viewport/rotationgizmo.cpp ${CMAKE_SOURCE_DIR}/src/viewport/scalegizmo.cpp)
+    ${CMAKE_SOURCE_DIR}/src/viewport/rotationgizmo.cpp ${CMAKE_SOURCE_DIR}/src/viewport/scalegizmo.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/settingsstore.cpp)
 set_target_properties(test_gizmo_planes PROPERTIES AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
 target_include_directories(test_gizmo_planes PRIVATE ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/src
@@ -149,7 +155,8 @@ jah_no_display(gizmo.plane_handles)
 add_executable(test_gizmo_scale_lock test_gizmo_scale_lock.cpp test_stubs.cpp
     ${CMAKE_SOURCE_DIR}/src/viewport/gizmo.cpp ${CMAKE_SOURCE_DIR}/src/viewport/snapsettings.cpp
     ${CMAKE_SOURCE_DIR}/src/viewport/gizmomeshes.cpp ${CMAKE_SOURCE_DIR}/src/viewport/translationgizmo.cpp
-    ${CMAKE_SOURCE_DIR}/src/viewport/rotationgizmo.cpp ${CMAKE_SOURCE_DIR}/src/viewport/scalegizmo.cpp)
+    ${CMAKE_SOURCE_DIR}/src/viewport/rotationgizmo.cpp ${CMAKE_SOURCE_DIR}/src/viewport/scalegizmo.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/settingsstore.cpp)
 set_target_properties(test_gizmo_scale_lock PROPERTIES AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
 target_include_directories(test_gizmo_scale_lock PRIVATE ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/src

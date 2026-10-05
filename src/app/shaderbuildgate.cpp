@@ -3,6 +3,8 @@
 
 #include "app/versionsplashscreen.h"
 #include "bridge/enginehost.h"
+#include "data/settingsmanager.h"
+#include "jah_provenance.h"   // GIT_COMMIT_HASH
 #include "services/defaultfloormaterial.h"
 #include "services/worldmodes.h"
 #include "services/testtier.h"
@@ -10,6 +12,20 @@
 #include "irisgl/document/scenegraph/scene.h"
 #include "irisgl/document/materials/pbrmaterial.h"
 #include "irisgl/mirror/scenemirror.h"
+#include "irisgl/document/scenegraph/cameranode.h"
+#include "irisgl/document/scenegraph/meshnode.h"
+#include "data/guidmanager.h"
+#include "data/materialpreset.h"
+#include "io/builtinmaterials.h"
+#include "io/materialpresets.h"
+#include "services/scenenodehelper.h"
+#include "services/scenetemplate.h"
+#include "services/scenetemplatebuilder.h"
+#include "viewport/gizmooverlay.h"
+#include "viewport/snapsettings.h"
+#include "viewport/translationgizmo.h"
+
+#include <functional>
 
 #include <QApplication>
 #include <QElapsedTimer>
@@ -85,9 +101,141 @@ MeshData warmUpBox()
 /// One more of the warm box, in `scene` (a mesh per call: the floor stands in twice).
 MeshId boxMeshFor(Scene *scene) { return scene ? scene->createMesh(warmUpBox()) : MeshId(0); }
 
+/// Frames the warm worlds may take: the arm binds and the compiles stop well inside it
+/// (measured cold: the Basic world settles in ~60 frames).
+constexpr int kWarmWorldFrameCap = 240;
+/// ...and "stopped" means this many frames in a row compiled nothing (ENGINE trap 7:
+/// frames, never a wall-clock wait).
+constexpr int kWarmWorldQuietFrames = 30;
+
+/// One shipped preset per sphere, in rows in front of the editor's default camera (a
+/// sphere the camera cannot see is culled and compiles nothing).
+void addPresetRow(const iris::ScenePtr &doc, Database *db)
+{
+    const QVector<MaterialPreset> &presets = MaterialPresets::all();
+    for (int i = 0; i < presets.size(); ++i) {
+        iris::MeshNodePtr node = SceneNodeHelper::createBasicMeshNode(
+            QStringLiteral(":/content/primitives/sphere.obj"), presets[i].name,
+            GUIDManager::generateGUID(), db);
+        if (!node) continue;
+        node->setLocalPos(iris::Vec3(-4.0f + 2.0f * float(i % 5), 1.0f, 2.0f - 2.0f * float(i / 5)));
+        node->setLocalScale(iris::Vec3(0.8f, 0.8f, 0.8f));
+        node->setMaterial(BuiltinMaterials::fromPreset(presets[i]));
+        doc->rootNode->addChild(node);
+    }
+}
+
+/// THE EDITOR'S WORLD, AS THE EDITOR DRAWS IT (SHADER-WARM-2; see the call site). The
+/// template's own document, a mirror configured as EngineSceneViewport configures its
+/// own, the editor's helpers at their defaults (plus the grid and a selected node with
+/// its gizmo, so their shaders are in the set too), the editor's camera pose, and the
+/// world's environment and its whole post chain (the offscreen opt-in). Born LOADING like
+/// a created world (the parked arm's permutations), then released so the arm builds (its
+/// compute set and the lit permutations), then graded like the project tile. Returns the
+/// frames rendered.
+int warmEditorWorld(Engine &engine, View *view, const EngineHost::WarmUpShape &shape,
+                    Database *db, SceneTemplate kind, bool presets,
+                    const std::function<void()> &poll)
+{
+    iris::ScenePtr doc = scenetemplate::build(kind, db, nullptr);
+    if (!doc || !view) return 0;
+    worldmodes::setMode(doc, bornMode());
+    if (presets) addPresetRow(doc, db);
+    // The node the editor would have selected: the first mesh (the floor).
+    iris::SceneNodePtr selected;
+    for (const iris::SceneNodePtr &child : doc->rootNode->children())
+        if (child && child->getSceneNodeType() == iris::SceneNodeType::Mesh) { selected = child; break; }
+    iris::CameraNodePtr camera = iris::CameraNode::create();
+    camera->setLocalPos(iris::Vec3(0, 5, 14));      // EngineSceneViewport's explorer pose
+    camera->lookAt(iris::Vec3(0, 0, 0));
+    camera->setAspectRatio(16.0f / 9.0f);
+
+    Scene *es = engine.createScene(kind == SceneTemplate::Basic ? "startup-warmup-basic"
+                                                                : "startup-warmup-world",
+                                   sceneworkers::count(sceneworkers::Tier::Primary));
+    if (!es) return 0;
+    es->setAmbient(Colour(0.25f, 0.27f, 0.32f), Colour(0.15f, 0.15f, 0.18f));   // the editor's
+    int frames = 0;
+    {
+        SceneMirror mirror(es);
+        mirror.setGroundPlaneMaterial(defaultfloormaterial::createUnpinned());
+        GizmoOverlay overlay(es);
+        TranslationGizmo gizmo;
+        if (selected) gizmo.setSelectedNode(selected);
+        es->setLoading(true);
+        mirror.setSource(doc);
+        view->setScene(es);
+        view->setShadows(shape.shadows);
+        if (shape.samples > 1) view->setSampleCount(shape.samples);
+        view->setVrHelpersVisible(true);
+        mirror.invalidateEnvironment();
+        // pushEditorHelpers at the editor's defaults, and the grid on (a View
+        // Options toggle away, so its shader belongs to the set).
+        mirror.setHideDefaultFloor(false);
+        mirror.setGroundPlane(false);
+        mirror.setLightWires(true);
+        mirror.setCameraBodies(true);
+        mirror.setHighlightWireframe(false);
+        mirror.setHighlightedNodes(selected ? QList<iris::SceneNodePtr>{ selected }
+                                            : QList<iris::SceneNodePtr>{},
+                                   selected);
+        mirror.setGrid(true, SnapSettings::translateSize(), SceneMirror::GridPlane::Floor);
+        auto frame = [&]() {
+            mirror.sync();
+            gizmo.updateSize(camera);
+            overlay.update(selected ? &gizmo : nullptr, camera->getGlobalPosition(),
+                           iris::Vec3(0, 0, -1), iris::Vec3(0, 0, -1));
+            mirror.applySky(view);
+            mirror.applyCamera(camera, view);
+            engine.renderOneFrame();
+            ++frames;
+            poll();
+        };
+        // THE WORLD'S ENVIRONMENT ONCE, AND ITS WHOLE CHAIN ON THIS OFFSCREEN VIEW.
+        // An offscreen view ignores the post chain unless the description opts in
+        // (PostFxDesc::allowOffscreen) — measured: the editor's first frames then
+        // compiled SMAA's three passes and the PBS permutations under them. The
+        // screenshot's Scene grade is that opt-in (secondaryfx::applyScene), and it
+        // is pushed once: the mirror re-pushes its own description on every
+        // applyEnvironment, and the two flags alternating would rebuild the
+        // workspace every frame.
+        mirror.sync();
+        mirror.applyEnvironment(view, &engine);
+        secondaryfx::applyScene(view, 0.0f);
+        // (1) arriving: the parked arm, the way a create's first frames draw it.
+        for (int i = 0; i < kWarmUpFrames; ++i) frame();
+        // (2) on screen: the arm builds; until it is BOUND and nothing has compiled
+        // for kWarmWorldQuietFrames frames, or the cap. Bound, not at rest: the
+        // field's convergence after the bind (~200 frames) compiles nothing.
+        es->setLoading(false);
+        unsigned c = 0, f = 0, e = 0;
+        engine.shaderBuildProgress(c, f, e);
+        unsigned last = c;
+        int quiet = 0;
+        while (frames < kWarmWorldFrameCap && quiet < kWarmWorldQuietFrames) {
+            frame();
+            engine.shaderBuildProgress(c, f, e);
+            const GiStatus gi = es->giStatus();
+            const bool armed = gi.mode == GiMode::Off || gi.vctBound;
+            quiet = (c == last && armed) ? quiet + 1 : 0;
+            last = c;
+        }
+        // (3) the project tile's shot (a create saves one; takeScreenshot's Tonemap
+        // grade): the world's description WITHOUT the offscreen opt-in — no prepass,
+        // no SSR — and the filmic grade alone, at the world's exposure.
+        mirror.applyEnvironment(view, &engine);
+        secondaryfx::apply(view, true, view->postFx().exposure);
+        for (int i = 0; i < kWarmUpFrames; ++i) frame();
+        view->setScene(nullptr);
+        mirror.setSource(nullptr);
+    }
+    engine.destroyScene(es);
+    return frames;
+}
+
 }  // namespace
 
-unsigned holdSplashForShaderBuild(QApplication &app, VersionSplashScreen &splash)
+unsigned holdSplashForShaderBuild(QApplication &app, VersionSplashScreen &splash, Database *db)
 {
     auto engine = EngineHost::instance().engine();
     if (!engine) return 0;   // headless: no engine, no shaders, no wait
@@ -110,6 +258,32 @@ unsigned holdSplashForShaderBuild(QApplication &app, VersionSplashScreen &splash
         splash.repaint();
         app.processEvents(QEventLoop::ExcludeUserInputEvents, 5);
     };
+    // THE BAR MOVES INSIDE A FRAME TOO (SHADER-WARM-2). A frame that builds the
+    // warm scene's lighting arm compiles thirty-odd compute permutations in ONE
+    // renderOneFrame — measured 1,667 ms on the owner's cold launch with the bar
+    // standing still. The engine calls this after each compile it makes on this
+    // thread; it repaints the splash and nothing else (no event processing: we
+    // are inside the frame), at most every 33 ms.
+    QElapsedTimer sincePaint; sincePaint.start();
+    engine->setCompileObserver([&]() {
+        if (sincePaint.elapsed() < 33) return;
+        sincePaint.restart();
+        unsigned c = 0, f = 0, e = 0;
+        engine->shaderBuildProgress(c, f, e);
+        splash.showShaderBuild(int(c + f), int(e));
+        shown = true;
+        // QWidget's repaint, NOT QSplashScreen's: the splash's own repaint()
+        // calls QCoreApplication::processEvents() (qsplashscreen.cpp), and an
+        // event pass from inside a compile runs the render loop's timer — a
+        // frame inside a frame, which deadlocked on Ogre's log mutex (measured,
+        // the first cut of this lane).
+        splash.QWidget::repaint();
+    });
+    // ...cleared on every way out: it captures this function's locals.
+    struct ClearObserver {
+        Engine *engine = nullptr;
+        ~ClearObserver() { if (engine) engine->setCompileObserver({}); }
+    } clearObserver{ engine.get() };
 
     // ---- Drive the build ---------------------------------------------------
     // MEASURED, and the reason this function is not just a wait loop: at this
@@ -268,7 +442,19 @@ unsigned holdSplashForShaderBuild(QApplication &app, VersionSplashScreen &splash
     int giFrames = 0;
     QElapsedTimer giTimer; giTimer.start();
     engine->shaderBuildProgress(compiled, cached, expected);
-    const bool coldCache = compiled > 0;
+    // THE GLOBAL PASS RUNS WHEN ITS KEY MOVED, not only when Ogre's cache was cold
+    // (the merge read): the cache key never names the Studio build, so a Studio-only
+    // change to a preset, a template or a helper shader left Ogre's cache warm and the
+    // pass skipped — and the change compiled LIVE. The key of the last COMPLETED pass is
+    // the Studio commit plus the cache fingerprint; a cold cache runs it as well.
+    SettingsManager *settings = SettingsManager::getDefaultManager();
+    const QString passKey = QStringLiteral(GIT_COMMIT_HASH) + QLatin1Char('|') +
+                            QString::fromStdString(engine->shaderCacheStats().fingerprint);
+    const bool keyMoved = settings->get(settingkeys::shaderWarmPass) != passKey;
+    const bool runPass = compiled > 0 || keyMoved;
+    if (keyMoved && compiled == 0)
+        qInfo("startup shader build: the global pass's key moved (a new Studio build) — running it "
+              "over a warm cache");
     unsigned lastCompiled = compiled;
     int quiet = 0;
     // ...AND UNTIL THE LIGHTING ARM IS BOUND (TEST-TIER-1): the ungathered frames below draw the
@@ -282,7 +468,7 @@ unsigned holdSplashForShaderBuild(QApplication &app, VersionSplashScreen &splash
         return warmScene->giStatus().vctBound;
     };
     int boundFrames = 0;
-    for (; coldCache && warmScene && giFrames < kWarmUpGiFrames &&
+    for (; runPass && warmScene && giFrames < kWarmUpGiFrames &&
            ((quiet < kGiQuietFrames && !warmScene->giStatus().giAtRest) || boundFrames < kWarmUpFrames);
          ++giFrames) {
         engine->renderOneFrame();
@@ -299,7 +485,7 @@ unsigned holdSplashForShaderBuild(QApplication &app, VersionSplashScreen &splash
     // binds only after its compute set compiled, has handed the box to Atom by then and never
     // draws that permutation; the second boot after every cache rebuild compiled it and ran this
     // whole warm-up again. Drawn here on the cold boot: the id pass off, the gather parked.
-    if (coldCache && warmScene && haveWarmGi && warmGi.mode != GiMode::Off) {
+    if (runPass && warmScene && haveWarmGi && warmGi.mode != GiMode::Off) {
         GiParams ungathered = warmGi;
         ungathered.gather = GiToggle::Off;
         warmScene->setAtomDrawEnabled(false);
@@ -312,100 +498,45 @@ unsigned holdSplashForShaderBuild(QApplication &app, VersionSplashScreen &splash
         warmScene->setGlobalIllumination(warmGi);
     }
     qInfo("startup shader build: the GI compute set's warm-up took %d frames, %lld ms%s%s", giFrames,
-          static_cast<long long>(giTimer.elapsed()), coldCache ? "" : " (a warm cache: skipped)",
-          coldCache && boundFrames == 0 ? " (the lighting arm never bound)" : "");
+          static_cast<long long>(giTimer.elapsed()), runPass ? "" : " (a warm cache: skipped — the global pass's key is the recorded one)",
+          runPass && boundFrames == 0 ? " (the lighting arm never bound)" : "");
 
-    // THE DEFAULT WORLD'S OWN MATERIAL, IN THE PASSES A NEW PROJECT DRAWS IT IN (ATOM
-    // S3-DRAW). The visibility buffer shades the ground through a DECODE TWIN of its
-    // material — a permutation of its own per pass shape — and the first place those
-    // passes run is `project.create`: the initial thumbnail (the Tonemap grade, GI
-    // parked off) and the viewport's first frames (the world's whole chain, GI not yet
-    // armed). Left to them, the twins compile inside the create (measured +500 ms,
-    // threading.newproject_stall). So the floor's REAL material (defaultfloormaterial's factory,
-    // through the mirror's own conversion) stands in the warm scene, with its backdrop
-    // twin (the editor's Ground plane widget: the same material through stock PBS), under the Epic
-    // world's chain with GI off, then under the thumbnail's grade. What it cannot reach
-    // is anything the document adds later (a user's material, another tier).
-    if (coldCache && warmScene && warmView) {
-        engine->shaderBuildProgress(compiled, cached, expected);
-        const unsigned before = compiled;
-        QElapsedTimer worldTimer; worldTimer.start();
-        // A SCENE OF ITS OWN, NEVER GI-ARMED: a new project's scene has had no GI when
-        // its thumbnail and first frames draw, and a scene whose GI was switched off
-        // still binds the torn-down arm's pass state for a while (measured: the box
-        // scene's floor compiled irradiance-field variants nothing in a create draws).
+    // THE EDITOR'S WORLDS, THROUGH THE EDITOR'S OWN MIRROR (SHADER-WARM-2; was ATOM
+    // S3-DRAW's hand-built floor). The owner's shape: the startup gate compiles the
+    // GLOBAL set — the engine's passes, the editor's own (the outline, the light
+    // wires, the camera bodies, the grid, the gizmo) and the DEFAULT MATERIALS (the
+    // templates' floors, the shipped presets) — so the Desktop, a new Basic or World
+    // project and a preset dropped on a node compile nothing after the splash.
+    //
+    // MEASURED, and why the hand-built floor had to go: on a cold launch it left 19
+    // compiles to the editor's first frames (the PBS permutations with the world's
+    // HEIGHT FOG and atmosphere buffer — jah_height_fog, hlms_fog, jah_atmo_buf —
+    // which a hand-set sky never pushes; the unlit light wires; the GI card light
+    // job and its capture pass) and 15 more to a Basic create. The remedy is not a
+    // closer imitation: it is the real document (scenetemplate::build, the verb's
+    // own builder, with no project, so it writes nothing) pushed by a SceneMirror
+    // configured as the editor configures its own (EngineSceneViewport::
+    // ensureEngineScene / pushEditorHelpers), under the world's own environment
+    // (applyEnvironment — the same call the viewport makes every frame).
+    if (runPass && warmView && db) {
         warmView->setScene(nullptr);
-        engine->destroyScene(warmScene);
-        warmScene = engine->createScene("startup-warmup-world",
-                                        sceneworkers::count(sceneworkers::Tier::Primary));
-        iris::ScenePtr world = iris::Scene::create();
-        worldmodes::setMode(world, bornMode());
-        PbrParams floorParams;
-        const iris::PbrMaterialPtr floorMat = defaultfloormaterial::create(nullptr, nullptr);
-        if (warmScene && warmView->setScene(warmScene) && floorMat &&
-            SceneMirror::toPbrParams(floorMat.data(), floorParams)) {
-            warmView->setShadows(shape.shadows);
-            warmScene->setAmbient(Colour(0.3f, 0.3f, 0.35f), Colour(0.1f, 0.1f, 0.12f));
-            if (const NodeId sun = warmScene->createNode()) {
-                LightDesc l;
-                l.type = LightType::Directional;
-                l.castShadows = shape.shadows;
-                warmScene->setLight(sun, l);
-            }
-            {
-                SkyDesc sky;
-                sky.mode = SkyMode::Atmosphere;
-                warmScene->setSky(sky);
-            }
-            const MaterialId fm = warmScene->createPbrMaterial(floorParams);
-            const TextureId tile =
-                fm ? warmScene->loadTexture(defaultfloormaterial::shippedTilePath().toStdString(), true) : TextureId(0);
-            if (tile) warmScene->setPbrTexture(fm, PbrTextureSlot::Albedo, tile);
-            const NodeId ground = fm ? warmScene->createNode() : NodeId(0);
-            const NodeId horizon = fm ? warmScene->createNode() : NodeId(0);
-            if (ground && horizon && warmScene->attachMesh(ground, boxMeshFor(warmScene), fm) &&
-                warmScene->attachMesh(horizon, boxMeshFor(warmScene), fm)) {
-                warmScene->setNodeBackdrop(horizon, true);
-                // The tier's planar budget and rays (both are pass properties).
-                PlanarReflectionParams pr;
-                pr.budget = qBound(0, world->planarReflectionBudget, 8);
-                pr.resolution = 256u;
-                warmScene->setPlanarReflections(pr);
-                warmScene->setRayTracing(RayTracingMode::Auto);
-                // NO VOXELS, NO FIELD, AND THE GATHER ON — how a new project's viewport
-                // draws before its deferred GI arms (the tier's gather row is live, the
-                // voxel volume and the field are not built yet: the permutation compiled
-                // inside the create carried jah_probe_gather and no irradiance field). The
-                // gather is graph shape (a gathering view carries the prepass), so it is
-                // asked for by name here: with the mode off, Auto would decline it.
-                {
-                    GiParams parked;
-                    parked.mode = GiMode::Off;
-                    parked.gather = GiToggle::On;
-                    parked.quality = GiQuality(qBound(0, int(world->giQuality), 3));
-                    warmScene->setGlobalIllumination(parked);
-                }
-                // (1) the viewport: the Epic world's chain (the mirror's applyEnvironment).
-                PostFxDesc fx;
-                fx.allowOffscreen = true;
-                fx.hdr = world->hdrEnabled;
-                fx.bloom = world->bloomEnabled;
-                fx.ssao = world->ssaoEnabled;
-                fx.ssaoScale = world->ssaoScale;
-                fx.smaaPreset = world->smaaPreset;
-                fx.ssr = world->ssrMode;
-                fx.ssrMarchPhase = qBound(0, world->ssrMarch, 2);
-                fx.reflectionRoughnessCutoff = float(world->reflectionRoughnessCutoff) * 0.01f;
-                warmView->setPostFx(fx);
-                for (int i = 0; i < kWarmUpFrames; ++i) { engine->renderOneFrame(); poll(); }
-                // (2) the thumbnail: the Tonemap grade.
-                secondaryfx::apply(warmView, true, 0.0f);
-                for (int i = 0; i < kWarmUpFrames; ++i) { engine->renderOneFrame(); poll(); }
-            }
+        if (warmScene) engine->destroyScene(warmScene);
+        warmScene = nullptr;
+        const SceneTemplate kinds[] = { SceneTemplate::Basic, SceneTemplate::World };
+        for (const SceneTemplate kind : kinds) {
+            engine->shaderBuildProgress(compiled, cached, expected);
+            const unsigned before = compiled;
+            QElapsedTimer worldTimer; worldTimer.start();
+            const int frames = warmEditorWorld(*engine, warmView, shape, db, kind,
+                                               /*presets*/ kind == SceneTemplate::Basic, poll);
+            engine->shaderBuildProgress(compiled, cached, expected);
+            qInfo("startup shader build: the %s template's world took %d frames, %lld ms and "
+                  "compiled %u shader(s)",
+                  kind == SceneTemplate::Basic ? "Basic (and the presets')" : "World", frames,
+                  static_cast<long long>(worldTimer.elapsed()), compiled - before);
         }
-        engine->shaderBuildProgress(compiled, cached, expected);
-        qInfo("startup shader build: the default world's material took %lld ms and compiled %u shader(s)",
-              static_cast<long long>(worldTimer.elapsed()), compiled - before);
+        // Recorded only once the pass has COMPLETED: a launch killed half way runs it again.
+        settings->set(settingkeys::shaderWarmPass, passKey);
     }
 
     // THE RECORDED SET IS GONE (WARMUPSET-2, 2026-09-21). A replay used to run

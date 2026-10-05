@@ -202,7 +202,8 @@ set(SRCS
     src/ui/panels/timeline/timelinewidget.cpp 
     src/ui/panels/timeline/nodekeyframeanimation.cpp 
     src/data/project.cpp 
-    src/data/settingsmanager.cpp 
+    src/data/settingsmanager.cpp
+    src/data/settingsstore.cpp
     src/viewport/editorcameracontroller.cpp 
     src/viewport/engineviewwidget.cpp
     irisgl/mirror/scenemirror.cpp
@@ -557,6 +558,7 @@ set(HEADERS
     src/ui/panels/timeline/nodekeyframeanimation.h 
     src/data/project.h 
     src/data/settingsmanager.h 
+    src/data/settingsstore.h
     src/data/settingkeys.h
     src/viewport/editorcameracontroller.h 
     src/viewport/engineviewwidget.h
@@ -1007,8 +1009,9 @@ if(NOT OGRE_PIN_HASH)
 endif()
 # ...INTO ONE GENERATED HEADER, not -D's (SPEED-CPU, perf audit B2): the four
 # values above were add_definitions on every app TU, so every one of them missed
-# ccache's direct mode in any tree at another commit — for macros three files read
-# (main.cpp, sessionheader.cpp, framemonitor.cpp include jah_provenance.h). The
+# ccache's direct mode in any tree at another commit — for macros four files read
+# (main.cpp, sessionheader.cpp, framemonitor.cpp and app/shaderbuildgate.cpp — the global
+# shader pass's key — include jah_provenance.h). The
 # include directory is added before the first subdirectory (JAH_GENERATED_DIR).
 configure_file(${CMAKE_SOURCE_DIR}/cmake/jah_provenance.h.in ${JAH_GENERATED_DIR}/jah_provenance.h @ONLY)
 

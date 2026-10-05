@@ -230,7 +230,8 @@ add_executable(test_preset_copy test_preset_copy.cpp
     ${CMAKE_SOURCE_DIR}/src/services/vrworld.cpp
     ${CMAKE_SOURCE_DIR}/src/io/assetiobase.cpp
     ${CMAKE_SOURCE_DIR}/src/services/jahlog.cpp
-    ${CMAKE_SOURCE_DIR}/src/data/constants.cpp)
+    ${CMAKE_SOURCE_DIR}/src/data/constants.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/settingsstore.cpp)
 set_target_properties(test_preset_copy PROPERTIES
     AUTOMOC ON AUTOUIC OFF AUTORCC OFF
     CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
@@ -286,7 +287,8 @@ add_executable(test_pin_asset test_pin_asset.cpp
     ${CMAKE_SOURCE_DIR}/src/services/vrworld.cpp
     ${CMAKE_SOURCE_DIR}/src/io/assetiobase.cpp
     ${CMAKE_SOURCE_DIR}/src/services/jahlog.cpp
-    ${CMAKE_SOURCE_DIR}/src/data/constants.cpp)
+    ${CMAKE_SOURCE_DIR}/src/data/constants.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/settingsstore.cpp)
 set_target_properties(test_pin_asset PROPERTIES
     AUTOMOC ON AUTOUIC OFF AUTORCC OFF
     CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON

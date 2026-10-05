@@ -58,7 +58,7 @@ class QLabel;
 class QPlainTextEdit;
 class QPushButton;
 class QScrollArea;
-class QSettings;
+class SettingsStore;
 class QStackedWidget;
 class QToolButton;
 class QVBoxLayout;
@@ -69,7 +69,7 @@ class ClaudeChatWindow : public QWidget
 public:
     /// `settings` (nullable) persists geometry; `host` (nullable, not owned)
     /// may also be attached later via setHost.
-    explicit ClaudeChatWindow(QSettings *settings, ClaudeChatHost *host = nullptr,
+    explicit ClaudeChatWindow(SettingsStore *settings, ClaudeChatHost *host = nullptr,
                               QWidget *parent = nullptr);
     ~ClaudeChatWindow() override;
 
@@ -144,7 +144,7 @@ private:
     /// project-switch path must not clear the session).
     void clearTranscript();
 
-    QSettings *mSettings = nullptr;
+    SettingsStore *mSettings = nullptr;
     ClaudeChatHost *mHost = nullptr;
 
     // Header / states / chrome.

@@ -13,13 +13,15 @@ For more information see the LICENSE file
 #define SETTINGSMANAGER_H
 
 #include <QCoreApplication>
-#include <QSettings>
 #include <QVariant>
+
+#include <cstdlib>
 #include <QDir>
 #include <QStandardPaths>
 #include <QApplication>
 
 #include "data/settingkeys.h"
+#include "data/settingsstore.h"
 #include "services/apppaths.h"
 
 class SettingsManager
@@ -30,12 +32,25 @@ public:
     static SettingsManager* getDefaultManager() {
         if (defaultSettings == nullptr) {
             defaultSettings = new SettingsManager();
+            // THE LAST WRITE OF A SESSION REACHES THE FILE. The manager is
+            // never destroyed (anything may read a preference until the
+            // process ends — ~MainWindow saves the dock layout after main's
+            // finalizeAppExit), so its store's writer is joined by nobody:
+            // the exit handler drains and JOINS it instead (no timeout: a
+            // writer still syncing when Qt's statics die would crash and lose
+            // the write). Registered after the
+            // store's first QSettings, so it runs before Qt's own settings
+            // statics are torn down.
+            std::atexit([] { if (defaultSettings) defaultSettings->settings->shutdown(); });
         }
 
         return defaultSettings;
     }
 
-    QSettings* settings = nullptr;
+    /// THE store (data/settingsstore.h): reads and writes are memory, the
+    /// file is written on the store's own thread. Never a QSettings: a
+    /// QSettings syncs on the UI thread.
+    SettingsStore* settings = nullptr;
 
     // WHERE THE SETTINGS FILE IS, in one place: AppPaths::settingsFilePath.
     //
@@ -58,7 +73,7 @@ public:
     }
 
     void loadSettings(QString path) {
-        settings = new QSettings(path, QSettings::IniFormat);
+        settings = new SettingsStore(path);
     }
 
     void setValue(QString name, QVariant value) {
@@ -76,20 +91,20 @@ public:
     template <typename T, typename V>
     void set(const SettingKey<T> &key, const V &value) { write(settings, key, value); }
 
-    /// The same, on a QSettings a widget was handed directly (the Claude chat
+    /// The same, on a store a widget was handed directly (the Claude chat
     /// window takes one so its suite can point it at a scratch file).
     template <typename T>
-    static T read(const QSettings *s, const SettingKey<T> &key) {
+    static T read(const SettingsStore *s, const SettingKey<T> &key) {
         return s ? s->value(QLatin1String(key.name), QVariant::fromValue(key.fallback))
                        .template value<T>()
                  : key.fallback;
     }
-    static QString read(const QSettings *s, const SettingKey<const char *> &key) {
+    static QString read(const SettingsStore *s, const SettingKey<const char *> &key) {
         return s ? s->value(QLatin1String(key.name), QString::fromUtf8(key.fallback)).toString()
                  : QString::fromUtf8(key.fallback);
     }
     template <typename T, typename V>
-    static void write(QSettings *s, const SettingKey<T> &key, const V &value) {
+    static void write(SettingsStore *s, const SettingKey<T> &key, const V &value) {
         if (s) s->setValue(QLatin1String(key.name), QVariant::fromValue(value));
     }
 };

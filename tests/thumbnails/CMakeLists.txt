@@ -49,6 +49,7 @@ add_executable(test_shader_thumbnail test_shader_thumbnail.cpp
     ${CMAKE_SOURCE_DIR}/src/data/guidmanager.cpp
     ${CMAKE_SOURCE_DIR}/src/data/constants.cpp
     ${CMAKE_SOURCE_DIR}/src/data/settingsmanager.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/settingsstore.cpp
     ${CMAKE_SOURCE_DIR}/src/services/subscriber.cpp
     ${CMAKE_SOURCE_DIR}/src/services/assethelper.cpp
     ${CMAKE_SOURCE_DIR}/src/services/assetmetadata.cpp
@@ -195,6 +196,7 @@ add_executable(test_thumbnail_sweep test_thumbnail_sweep.cpp
     ${CMAKE_SOURCE_DIR}/src/data/guidmanager.cpp
     ${CMAKE_SOURCE_DIR}/src/data/constants.cpp
     ${CMAKE_SOURCE_DIR}/src/data/settingsmanager.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/settingsstore.cpp
     ${CMAKE_SOURCE_DIR}/tests/shadergraph/test_stubs.cpp)
 set_target_properties(test_thumbnail_sweep PROPERTIES AUTOMOC ON AUTOUIC ON AUTORCC OFF CXX_STANDARD 17
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"

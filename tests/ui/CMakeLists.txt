@@ -514,6 +514,7 @@ set(JAH_PROPERTIES_COLUMN_SOURCES
     ${CMAKE_SOURCE_DIR}/src/data/project.cpp
     ${CMAKE_SOURCE_DIR}/src/data/constants.cpp
     ${CMAKE_SOURCE_DIR}/src/data/settingsmanager.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/settingsstore.cpp
     ${CMAKE_SOURCE_DIR}/thirdparty/qtawesome/QtAwesome.cpp
     ${CMAKE_SOURCE_DIR}/thirdparty/qtawesome/QtAwesomeAnim.cpp)
 
@@ -732,6 +733,7 @@ add_executable(test_panel_undo
     ${CMAKE_SOURCE_DIR}/src/data/project.cpp
     ${CMAKE_SOURCE_DIR}/src/data/constants.cpp
     ${CMAKE_SOURCE_DIR}/src/data/settingsmanager.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/settingsstore.cpp
     ${CMAKE_SOURCE_DIR}/thirdparty/qtawesome/QtAwesome.cpp
     ${CMAKE_SOURCE_DIR}/thirdparty/qtawesome/QtAwesomeAnim.cpp)
 set_target_properties(test_panel_undo PROPERTIES
@@ -864,6 +866,7 @@ add_executable(test_panel_lifetime
     ${CMAKE_SOURCE_DIR}/src/data/project.cpp
     ${CMAKE_SOURCE_DIR}/src/data/constants.cpp
     ${CMAKE_SOURCE_DIR}/src/data/settingsmanager.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/settingsstore.cpp
     ${CMAKE_SOURCE_DIR}/thirdparty/qtawesome/QtAwesome.cpp
     ${CMAKE_SOURCE_DIR}/thirdparty/qtawesome/QtAwesomeAnim.cpp)
 set_target_properties(test_panel_lifetime PROPERTIES
@@ -1006,6 +1009,7 @@ set(JAH_PROPERTIES_PANEL_SOURCES
     ${CMAKE_SOURCE_DIR}/src/data/project.cpp
     ${CMAKE_SOURCE_DIR}/src/data/constants.cpp
     ${CMAKE_SOURCE_DIR}/src/data/settingsmanager.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/settingsstore.cpp
     ${CMAKE_SOURCE_DIR}/thirdparty/qtawesome/QtAwesome.cpp
     ${CMAKE_SOURCE_DIR}/thirdparty/qtawesome/QtAwesomeAnim.cpp)
 
@@ -1163,6 +1167,7 @@ add_executable(test_project_tile test_project_tile.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/style/stylesheet.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/style/classicsheets.cpp
     ${CMAKE_SOURCE_DIR}/src/data/settingsmanager.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/settingsstore.cpp
     ${CMAKE_SOURCE_DIR}/src/data/constants.cpp)
 set_target_properties(test_project_tile PROPERTIES
     AUTOMOC ON
@@ -1206,7 +1211,8 @@ set_tests_properties(ui.toast PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "ui")
 jah_no_display(ui.toast)
 
-add_executable(test_dock_state test_dock_state.cpp)
+add_executable(test_dock_state test_dock_state.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/settingsstore.cpp)
 set_target_properties(test_dock_state PROPERTIES
     AUTOMOC ON CXX_STANDARD 17
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
@@ -1254,6 +1260,7 @@ add_executable(test_tree_multiselect
     ${CMAKE_SOURCE_DIR}/src/data/project.cpp
     ${CMAKE_SOURCE_DIR}/src/data/constants.cpp
     ${CMAKE_SOURCE_DIR}/src/data/settingsmanager.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/settingsstore.cpp
     ${CMAKE_SOURCE_DIR}/thirdparty/qtawesome/QtAwesome.cpp
     ${CMAKE_SOURCE_DIR}/thirdparty/qtawesome/QtAwesomeAnim.cpp)
 set_target_properties(test_tree_multiselect PROPERTIES
@@ -1304,6 +1311,7 @@ add_executable(test_tree_scroll
     ${CMAKE_SOURCE_DIR}/src/data/project.cpp
     ${CMAKE_SOURCE_DIR}/src/data/constants.cpp
     ${CMAKE_SOURCE_DIR}/src/data/settingsmanager.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/settingsstore.cpp
     ${CMAKE_SOURCE_DIR}/thirdparty/qtawesome/QtAwesome.cpp
     ${CMAKE_SOURCE_DIR}/thirdparty/qtawesome/QtAwesomeAnim.cpp)
 set_target_properties(test_tree_scroll PROPERTIES
@@ -1354,6 +1362,7 @@ add_executable(test_tree_reselect
     ${CMAKE_SOURCE_DIR}/src/data/project.cpp
     ${CMAKE_SOURCE_DIR}/src/data/constants.cpp
     ${CMAKE_SOURCE_DIR}/src/data/settingsmanager.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/settingsstore.cpp
     ${CMAKE_SOURCE_DIR}/thirdparty/qtawesome/QtAwesome.cpp
     ${CMAKE_SOURCE_DIR}/thirdparty/qtawesome/QtAwesomeAnim.cpp)
 set_target_properties(test_tree_reselect PROPERTIES
@@ -1403,6 +1412,7 @@ add_executable(test_hierarchy_root
     ${CMAKE_SOURCE_DIR}/src/data/project.cpp
     ${CMAKE_SOURCE_DIR}/src/data/constants.cpp
     ${CMAKE_SOURCE_DIR}/src/data/settingsmanager.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/settingsstore.cpp
     ${CMAKE_SOURCE_DIR}/thirdparty/qtawesome/QtAwesome.cpp
     ${CMAKE_SOURCE_DIR}/thirdparty/qtawesome/QtAwesomeAnim.cpp)
 set_target_properties(test_hierarchy_root PROPERTIES
@@ -1574,6 +1584,7 @@ add_executable(test_mcp_prefs
     ${CMAKE_SOURCE_DIR}/src/ui/style/stylesheet.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/style/classicsheets.cpp
     ${CMAKE_SOURCE_DIR}/src/data/settingsmanager.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/settingsstore.cpp
     ${CMAKE_SOURCE_DIR}/src/data/constants.cpp)
 set_target_properties(test_mcp_prefs PROPERTIES AUTOMOC ON CXX_STANDARD 17
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
@@ -1676,6 +1687,7 @@ add_executable(test_new_project_dialog test_new_project_dialog.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/style/classicsheets.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/style/thememanager.cpp
     ${CMAKE_SOURCE_DIR}/src/data/settingsmanager.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/settingsstore.cpp
     ${CMAKE_SOURCE_DIR}/src/data/constants.cpp)
 set_target_properties(test_new_project_dialog PROPERTIES
     AUTOMOC ON AUTORCC ON CXX_STANDARD 17

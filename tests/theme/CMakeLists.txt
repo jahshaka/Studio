@@ -7,6 +7,7 @@ add_executable(test_theme_manager test_theme_manager.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/style/stylesheet.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/style/classicsheets.cpp
     ${CMAKE_SOURCE_DIR}/src/data/settingsmanager.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/settingsstore.cpp
     ${CMAKE_SOURCE_DIR}/src/data/constants.cpp)
 set_target_properties(test_theme_manager PROPERTIES AUTOMOC ON CXX_STANDARD 17)
 target_include_directories(test_theme_manager PRIVATE
@@ -32,6 +33,7 @@ add_executable(test_style_contracts test_style_contracts.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/style/stylesheet.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/style/classicsheets.cpp
     ${CMAKE_SOURCE_DIR}/src/data/settingsmanager.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/settingsstore.cpp
     ${CMAKE_SOURCE_DIR}/src/data/constants.cpp)
 set_target_properties(test_style_contracts PROPERTIES AUTOMOC ON AUTOUIC ON CXX_STANDARD 17
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")

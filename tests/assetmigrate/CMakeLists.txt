@@ -10,6 +10,7 @@ add_executable(test_asset_migrate test_asset_migrate.cpp
     ${CMAKE_SOURCE_DIR}/src/services/assetstore.cpp
     ${CMAKE_SOURCE_DIR}/src/services/assetstorepaths.cpp
     ${CMAKE_SOURCE_DIR}/src/data/settingsmanager.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/settingsstore.cpp
     ${CMAKE_SOURCE_DIR}/src/data/database/database.cpp
     # database.cpp's link closure (Project, guids, asset helpers)
     ${CMAKE_SOURCE_DIR}/src/data/project.cpp

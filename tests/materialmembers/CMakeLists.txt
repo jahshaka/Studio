@@ -36,7 +36,8 @@ add_executable(test_material_members test_material_members.cpp
     ${CMAKE_SOURCE_DIR}/src/services/vrworld.cpp
     ${CMAKE_SOURCE_DIR}/src/io/assetiobase.cpp
     ${CMAKE_SOURCE_DIR}/src/services/jahlog.cpp
-    ${CMAKE_SOURCE_DIR}/src/data/constants.cpp)
+    ${CMAKE_SOURCE_DIR}/src/data/constants.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/settingsstore.cpp)
 set_target_properties(test_material_members PROPERTIES AUTOMOC ON)
 target_include_directories(test_material_members PRIVATE
     ${CMAKE_SOURCE_DIR}

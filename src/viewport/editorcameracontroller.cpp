@@ -234,11 +234,8 @@ void EditorCameraController::onMouseDown(Qt::MouseButton button)
 void EditorCameraController::onMouseUp(Qt::MouseButton button)
 {
 	CameraControllerBase::onMouseUp(button);
-	// THE FLY IS OVER: drop the wheel's leftover fraction, and give the dial's
-	// deferred store write its gesture end (CameraSpeed::flush) so the value
-	// the user settled on is on disk without a single notch of the scroll
-	// having waited for one.
-	if (button == Qt::RightButton) { clearKeys(); speedWheel.reset(); CameraSpeed::flush(); }
+	// THE FLY IS OVER: drop the wheel's leftover fraction.
+	if (button == Qt::RightButton) { clearKeys(); speedWheel.reset(); }
 }
 
 void EditorCameraController::onKeyPressed(Qt::Key key)

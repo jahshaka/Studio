@@ -100,6 +100,11 @@ public:
         virtual void registerSessionAssetGuids(const QStringList &guids,
                                                const iris::MeshPrewarmPtr &prewarm) = 0;
         virtual void showOpenProgress(int percent, const QString &text) = 0;
+        /// THE OPEN'S COMPILE LINE (SHADER-WARM-2): "Compiling shaders — n",
+        /// called from INSIDE the warm-up frame after each shader it compiles on
+        /// the UI thread — so it repaints the dialog itself and must not pump
+        /// events (a frame inside a frame).
+        virtual void showOpenCompileProgress(unsigned compiled) = 0;
         virtual void hideOpenProgress() = 0;
         /// The open world's force save (autosave), for an export of it.
         virtual void saveOpenWorld() = 0;

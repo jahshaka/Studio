@@ -12,7 +12,7 @@
 //                                                  press = latches exactly once)
 
 #include <QGuiApplication>
-#include <QSettings>
+#include "data/settingsstore.h"
 #include <QTemporaryDir>
 #include <cmath>
 #include <cstdio>
@@ -174,14 +174,14 @@ int main(int argc, char **argv)
     QTemporaryDir dir;
     const QString iniPath = dir.filePath("jahsettings.ini");
     {
-        QSettings ini(iniPath, QSettings::IniFormat);
+        SettingsStore ini(iniPath);
         InputMap map;
         map.bind(InputAction::Jump, { { Qt::Key_Return, 0, 0 } });
         map.save(ini);
-        ini.sync();
+        ini.flush();
     }
     {
-        QSettings ini(iniPath, QSettings::IniFormat);
+        SettingsStore ini(iniPath);
         InputMap map;
         map.load(ini);
         CHECK(map.bindings(InputAction::Jump).size() == 1 &&
@@ -192,7 +192,7 @@ int main(int argc, char **argv)
     }
     {
         // An action with NO stored row keeps its default rather than unbinding.
-        QSettings ini(dir.filePath("empty.ini"), QSettings::IniFormat);
+        SettingsStore ini(dir.filePath("empty.ini"));
         InputMap map;
         map.load(ini);
         CHECK(map.bindings(InputAction::Move).size() == 8, "an empty settings file keeps defaults");

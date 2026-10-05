@@ -1396,7 +1396,12 @@ public:
     /// first frames after the cover drops are the ones that stutter. Returns
     /// the number of shaders built (0 when there was nothing to do, or when
     /// this viewport has no engine). LENGTHENS a cold open by design.
-    virtual unsigned warmUpShaders() { return 0; }
+    /// `onCompile` (SHADER-WARM-2) is called with the running count after each
+    /// shader the warm-up compiles ON THE UI THREAD (the engine's compile
+    /// observer; the parallel Hlms workers' compiles are counted when the frame
+    /// ends) — the open's dialog repaints its line from it.
+    virtual unsigned warmUpShaders(const std::function<void(unsigned)> &onCompile = {})
+    { (void)onCompile; return 0; }
     /// Remembers the PASS SHAPE the editor is drawing this world with — shadows
     /// on/off and the ACHIEVED MSAA sample count — for the NEXT launch's
     /// startup gate, whose tiny offscreen warm-up view is built to match

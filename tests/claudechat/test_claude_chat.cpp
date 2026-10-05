@@ -29,7 +29,7 @@
 #include <QPlainTextEdit>
 #include <QProcess>
 #include <QPushButton>
-#include <QSettings>
+#include "data/settingsstore.h"
 #include <QStandardPaths>
 #include <QTemporaryDir>
 #include <QTimer>
@@ -901,7 +901,7 @@ static void testWindow(const QString &scratch)
     present.version = "9.9.9";
 
     {
-        QSettings ini(iniPath, QSettings::IniFormat);
+        SettingsStore ini(iniPath);
         ClaudeChatWindow window(&ini);
         CHECK((window.windowFlags() & Qt::WindowType_Mask) == Qt::Tool,
               "window: Qt::Tool (floats over the app, not a dock)");
@@ -1006,7 +1006,7 @@ static void testWindow(const QString &scratch)
         window.close();          // saves geometry
     }
     {
-        QSettings ini(iniPath, QSettings::IniFormat);
+        SettingsStore ini(iniPath);
         CHECK(!ini.value("claude_chat/geometry").toByteArray().isEmpty(),
               "window: geometry persisted under claude_chat/geometry");
         ClaudeChatWindow window(&ini);
@@ -1027,7 +1027,7 @@ static void testWindow(const QString &scratch)
 // bubble it was drawn in.
 static void testUserBubbleVisible(const QString &scratch)
 {
-    QSettings ini(scratch + "/bubble.ini", QSettings::IniFormat);
+    SettingsStore ini(scratch + "/bubble.ini");
     ClaudeCliProbe::Result present;
     present.status = ClaudeCliProbe::Status::Found;
     present.version = "9.9.9";

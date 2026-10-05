@@ -49,7 +49,7 @@ For more information see the LICENSE file
 
 #include <functional>
 
-class QSettings;
+class SettingsStore;
 
 /// QT'S WHEEL IDIOM, once (FLYSPEED-1 fix round item 4). A wheel event carries
 /// `angleDelta` in EIGHTHS OF A DEGREE and a mouse notch is 120 of them — but
@@ -118,20 +118,9 @@ public:
     static float playerSpeed();
 
     /// Loads the persisted value and writes every future set through
-    /// `settings` (see `flush` for WHEN). Nullable (unbinds, after flushing
-    /// what the old store was owed). Not owned.
-    static void bindSettings(QSettings *settings);
-
-    /// WRITES THE PENDING VALUE NOW, if there is one. Called at the end of a
-    /// gesture and when the app shuts down; see `flush`'s note in the .cpp for
-    /// why a set does not write by itself.
-    static void flush();
-
-    /// HOW MANY TIMES THE VALUE HAS REALLY BEEN WRITTEN TO THE STORE, for the
-    /// suite that pins "a burst of sets is one write" — monotonic for the life
-    /// of the process, the house rule for anything a loaded box could slow
-    /// down (a wall clock measures the box, not the gesture).
-    static int storeWrites();
+    /// `settings`, at once (the store's writes are memory). Nullable
+    /// (unbinds). Not owned.
+    static void bindSettings(SettingsStore *settings);
 
     /// THE VALUE CHANGED, by whatever hand — the wheel in the editor, the
     /// wheel in the PLAYER, the popover, the verb. The shell installs one

@@ -371,6 +371,7 @@ add_executable(test_asset_widget_db
     ${CMAKE_SOURCE_DIR}/src/services/assetstorepaths.cpp
     ${CMAKE_SOURCE_DIR}/src/data/project.cpp
     ${CMAKE_SOURCE_DIR}/src/data/settingsmanager.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/settingsstore.cpp
     ${CMAKE_SOURCE_DIR}/src/data/constants.cpp)
 set_target_properties(test_asset_widget_db PROPERTIES
     AUTOMOC ON

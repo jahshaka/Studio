@@ -279,6 +279,7 @@ add_executable(test_avatar_assets test_avatar_assets.cpp
     ${CMAKE_SOURCE_DIR}/src/services/subscriber.cpp
     ${CMAKE_SOURCE_DIR}/src/data/database/database.cpp
     ${CMAKE_SOURCE_DIR}/src/data/settingsmanager.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/settingsstore.cpp
     ${CMAKE_SOURCE_DIR}/src/data/project.cpp
     ${CMAKE_SOURCE_DIR}/src/data/guidmanager.cpp
     ${CMAKE_SOURCE_DIR}/src/data/constants.cpp

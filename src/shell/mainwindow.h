@@ -186,6 +186,9 @@ public:
     virtual void closeEvent(QCloseEvent *event);
 
     SettingsManager* getSettingsManager();
+    /// The library (the startup shader gate builds the templates' documents
+    /// against it — scenetemplate::build reads the shipped primitives' bakes).
+    Database *database() const { return db; }
 
     iris::ScenePtr getScene();
 
@@ -442,6 +445,7 @@ private:
     void registerSessionAssetGuids(const QStringList &guids,
                                    const iris::MeshPrewarmPtr &prewarm) override;
     void showOpenProgress(int percent, const QString &text) override;
+    void showOpenCompileProgress(unsigned compiled) override;
     void hideOpenProgress() override;
     void saveOpenWorld() override;
     iris::ScenePtr openWorld() const override;

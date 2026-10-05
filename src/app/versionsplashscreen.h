@@ -4,6 +4,8 @@
 #include <QSplashScreen>
 #include <QLabel>
 
+class QProgressBar;
+
 class VersionSplashScreen : public QSplashScreen
 {
     Q_OBJECT
@@ -18,7 +20,10 @@ public:
     /// startup happens behind the launch screen, never behind the live UI).
     /// `total` is what the last saved run needed; 0 means we have never saved a
     /// cache and there is no denominator yet, so only the count is shown.
-    /// Passing done < 0 hides the line again.
+    /// Passing done < 0 hides the line again. Shown as a BAR and the line
+    /// "Compiling shaders — n of N" (SHADER-WARM-2, the owner: "a dialog with a
+    /// progress bar so the user knows what's happening"); with no denominator
+    /// the bar is a busy bar and the line the count alone.
     void showShaderBuild(int done, int total);
 
 signals:
@@ -26,6 +31,7 @@ signals:
 private:
     QLabel* version_label_ = nullptr;
     QLabel* shader_label_ = nullptr;
+    QProgressBar* shader_bar_ = nullptr;
 };
 
 #endif // VERSIONSPLASHSCREEN_H

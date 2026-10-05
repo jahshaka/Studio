@@ -81,6 +81,22 @@ jah_gpu_row(shadercache.app CLASS app COMMAND test_shader_cache_app
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(shadercache.app PROPERTIES TIMEOUT 600 LABELS "shadercache")
 
+# shader.live_compiles (SHADER-WARM-2): after the splash, nothing compiles on the UI
+# thread outside a compile window — a create/open in flight or a compile dialog
+# (src/services/livecompiles.h). A cold launch, a warm one and a warm one whose global-pass
+# key moved (a Studio-only change), each creating a Basic and a World project and re-opening
+# the first; every phase must count 0 live compiles.
+add_executable(test_live_compiles test_live_compiles.cpp)
+set_target_properties(test_live_compiles PROPERTIES CXX_STANDARD 17
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+target_link_libraries(test_live_compiles PRIVATE Qt6::Core)
+target_compile_definitions(test_live_compiles PRIVATE
+    JAHSHAKA_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
+    JAHSHAKA_BINARY="$<TARGET_FILE:${CMAKE_PROJECT_NAME}>")
+jah_gpu_row(shader.live_compiles CLASS app COMMAND test_live_compiles
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(shader.live_compiles PROPERTIES TIMEOUT 600 LABELS "shadercache")
+
 # The per-scene PSO precache (SHADER_CACHE_SPEC.md §5), asserted by COUNTING
 # COMPILES: after View::warmUpShaders() the first real frame must compile
 # nothing. Its own process, like every engine suite (one Engine per process).

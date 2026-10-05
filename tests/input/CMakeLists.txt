@@ -8,7 +8,8 @@
 find_package(Qt6 REQUIRED COMPONENTS Gui)
 
 add_executable(test_input_actions test_input_actions.cpp
-    ${CMAKE_SOURCE_DIR}/irisgl/document/input/inputmap.cpp)
+    ${CMAKE_SOURCE_DIR}/irisgl/document/input/inputmap.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/settingsstore.cpp)
 set_target_properties(test_input_actions PROPERTIES AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
     CXX_STANDARD 17 RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 target_include_directories(test_input_actions PRIVATE
@@ -38,6 +39,7 @@ add_executable(test_fly_controls test_fly_controls.cpp
     ${CMAKE_SOURCE_DIR}/src/viewport/cameraspeed.cpp
     ${CMAKE_SOURCE_DIR}/src/viewport/keyboardstate.cpp
     ${CMAKE_SOURCE_DIR}/src/data/settingsmanager.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/settingsstore.cpp
     ${CMAKE_SOURCE_DIR}/src/player/playermousecontroller.cpp)
 set_target_properties(test_fly_controls PROPERTIES AUTOMOC ON AUTOUIC OFF AUTORCC OFF
     CXX_STANDARD 17 RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
@@ -71,7 +73,8 @@ add_executable(test_axis_view_lock test_axis_view_lock.cpp
     ${CMAKE_SOURCE_DIR}/src/viewport/orbitalcameracontroller.cpp
     ${CMAKE_SOURCE_DIR}/src/viewport/cameracontrollerbase.cpp
     ${CMAKE_SOURCE_DIR}/src/viewport/cameraspeed.cpp
-    ${CMAKE_SOURCE_DIR}/src/data/settingsmanager.cpp)
+    ${CMAKE_SOURCE_DIR}/src/data/settingsmanager.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/settingsstore.cpp)
 set_target_properties(test_axis_view_lock PROPERTIES AUTOMOC ON AUTOUIC OFF AUTORCC OFF
     CXX_STANDARD 17 RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 target_include_directories(test_axis_view_lock PRIVATE
@@ -101,7 +104,8 @@ add_executable(test_alt_orbit test_alt_orbit.cpp
     ${CMAKE_SOURCE_DIR}/src/viewport/orbitalcameracontroller.cpp
     ${CMAKE_SOURCE_DIR}/src/viewport/cameracontrollerbase.cpp
     ${CMAKE_SOURCE_DIR}/src/viewport/cameraspeed.cpp
-    ${CMAKE_SOURCE_DIR}/src/data/settingsmanager.cpp)
+    ${CMAKE_SOURCE_DIR}/src/data/settingsmanager.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/settingsstore.cpp)
 set_target_properties(test_alt_orbit PROPERTIES AUTOMOC ON AUTOUIC OFF AUTORCC OFF
     CXX_STANDARD 17 RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 target_include_directories(test_alt_orbit PRIVATE

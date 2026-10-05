@@ -14,7 +14,8 @@ find_package(Qt6 REQUIRED COMPONENTS Core Gui)
 add_executable(test_jahlog test_jahlog.cpp
     ${CMAKE_SOURCE_DIR}/src/services/jahlog.cpp
     ${CMAKE_SOURCE_DIR}/src/services/sessionheader.cpp
-    ${CMAKE_SOURCE_DIR}/src/data/constants.cpp)
+    ${CMAKE_SOURCE_DIR}/src/data/constants.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/settingsstore.cpp)
 set_target_properties(test_jahlog PROPERTIES AUTOMOC ON AUTOUIC OFF AUTORCC OFF
     CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")

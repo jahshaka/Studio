@@ -363,11 +363,8 @@ void ShellLifecycle::teardownWindow()
     editgate::setNoticeHook({});
 
     // ...and so did the camera-speed dial (fix round item 1). CameraSpeed is
-    // process-wide too, so a handler capturing the window must not outlive
-    // it. Its pending value goes to the store here, on the way out: a deferred
-    // write that a quit could swallow would be a preference that did not stick.
+    // process-wide too, so a handler capturing the window must not outlive it.
     CameraSpeed::setOnChanged({});
-    CameraSpeed::flush();
 
     // ORDER IS LOAD-BEARING. Undo commands owe the database work when they die
     // (DeleteSceneNodeCommand finalises the asset row once no undo can reach

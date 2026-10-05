@@ -11,9 +11,7 @@ For more information see the LICENSE file
 
 #include "viewport/cameraspeed.h"
 
-#include <QCoreApplication>
-#include <QSettings>
-#include <QTimer>
+#include "data/settingsstore.h"
 #include <algorithm>
 
 namespace {
@@ -27,45 +25,19 @@ const char *kRetiredEditorKey = "camera/flySpeedEditor";
 const char *kRetiredPlayerKey = "camera/flySpeedPlayer";
 
 int sValue = CameraSpeed::kDefault;
-QSettings *sStore = nullptr;
+SettingsStore *sStore = nullptr;
 std::function<void()> sOnChanged;
 
-// THE DEFERRED STORE WRITE (fix round item 2, measured on Qt 6.10.2: a
-// QSettings::setValue makes the NEXT pass of the event loop rewrite
-// jahsettings.ini through a QSaveFile — two fdatasyncs and a rename, on the UI
-// THREAD). One notch of the wheel mid-fly, or one mouse-move of a slider drag,
-// must not be a durable write: the house law since FSYNC-2 is that nothing
-// that draws also waits for a disk.
-//
-// So a set moves `sValue` at once — every reader, every fly step and the
-// toolbar see it immediately — and only ARMS the write. The arm is not
-// restarted by later sets (a continuous drag would postpone it forever): the
-// first set of a burst starts the clock, the write at the end of it stores
-// whatever the dial ended on, once.
-bool sPending = false;
-bool sArmed = false;
-int  sWrites = 0;
-constexpr int kFlushDelayMs = 500;
-
-void writeNow()
+// EVERY SET IS STORED AT ONCE. The store answers from memory and writes the
+// file on its own thread (data/settingsstore.h, SHADER-WARM-2), so a wheel
+// notch mid-fly or a slider drag's mouse-move costs a map insert; the deferred
+// write that used to stand here (a QSettings set was a UI-thread fsync) went
+// with the QSettings.
+void store()
 {
-    if (!sStore || !sPending) return;
-    sPending = false;
-    ++sWrites;
+    if (!sStore) return;
     if (sValue == CameraSpeed::kDefault) sStore->remove(QLatin1String(kKey));
     else                                 sStore->setValue(QLatin1String(kKey), sValue);
-}
-
-void armWrite()
-{
-    if (sArmed) return;
-    // NO EVENT LOOP, NO TIMER: a unit test (and --dump-api-docs) may never
-    // reach one, and a value that is never written is worse than a write on a
-    // thread that is not drawing anything.
-    QCoreApplication *app = QCoreApplication::instance();
-    if (!app) { writeNow(); return; }
-    sArmed = true;
-    QTimer::singleShot(kFlushDelayMs, app, [] { sArmed = false; writeNow(); });
 }
 
 void announce()
@@ -89,7 +61,7 @@ void CameraSpeed::setValue(int n)
     const int was = sValue;
     sValue = clamp(n);
     if (sValue == was) return;   // a set that changes nothing is not a gesture
-    if (sStore) { sPending = true; armWrite(); }
+    store();
     announce();
 }
 
@@ -97,16 +69,6 @@ int CameraSpeed::step(int delta)
 {
     setValue(sValue + delta);
     return sValue;
-}
-
-void CameraSpeed::flush()
-{
-    writeNow();
-}
-
-int CameraSpeed::storeWrites()
-{
-    return sWrites;
 }
 
 void CameraSpeed::setOnChanged(std::function<void()> handler)
@@ -134,11 +96,9 @@ float CameraSpeed::playerSpeed()
     return applyTo(kPlayerBase);
 }
 
-void CameraSpeed::bindSettings(QSettings *settings)
+void CameraSpeed::bindSettings(SettingsStore *settings)
 {
-    writeNow();                  // what the OLD store was owed goes to it
     sStore = settings;
-    sPending = false;
     if (!sStore) return;
     sStore->remove(QLatin1String(kRetiredEditorKey));
     sStore->remove(QLatin1String(kRetiredPlayerKey));
@@ -153,7 +113,6 @@ void CameraSpeed::bindSettings(QSettings *settings)
 void CameraSpeed::reset()
 {
     if (sStore) sStore->remove(QLatin1String(kKey));
-    sPending = false;
     const bool moved = sValue != kDefault;
     sValue = kDefault;
     if (moved) announce();

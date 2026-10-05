@@ -11,7 +11,8 @@ add_executable(test_claude_chat test_claude_chat.cpp
     ${CMAKE_SOURCE_DIR}/src/scripting/claude/claudestreamparser.cpp
     ${CMAKE_SOURCE_DIR}/src/scripting/claude/claudechathost.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/windows/claudechatwindow.cpp
-    ${CMAKE_SOURCE_DIR}/src/scripting/claude/claudeskills.qrc)
+    ${CMAKE_SOURCE_DIR}/src/scripting/claude/claudeskills.qrc
+    ${CMAKE_SOURCE_DIR}/src/data/settingsstore.cpp)
 set_target_properties(test_claude_chat PROPERTIES AUTOMOC ON AUTORCC ON CXX_STANDARD 17)
 target_include_directories(test_claude_chat PRIVATE
     ${CMAKE_SOURCE_DIR}

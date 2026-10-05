@@ -1290,6 +1290,15 @@ void ProjectManager::showOpenProgress(int percent, const QString &text)
 	progressDialog->setValueAndText(percent, text);
 }
 
+void ProjectManager::showOpenCompileProgress(unsigned compiled)
+{
+	if (!progressDialog || !progressDialog->isVisible()) return;
+	progressDialog->setPumpsEventLoop(false);   // never an event pass from inside a frame
+	progressDialog->setValueAndText(95, tr("Compiling shaders \u2014 %1").arg(compiled));
+	// QWidget's own repaint: synchronous, and it processes no events.
+	progressDialog->QWidget::repaint();
+}
+
 void ProjectManager::hideOpenProgress()
 {
 	if (!progressDialog) return;

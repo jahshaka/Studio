@@ -11,6 +11,7 @@ For more information see the LICENSE file
 
 #include <algorithm>
 
+#include "services/livecompiles.h"
 #include "app/notices.h"
 #include "services/services.h"
 #include "services/projectservice.h"
@@ -209,7 +210,7 @@ QVector<VerbInfo> AppApi::verbs() const
                          "microcodeEntries, hlmsCachesLoaded, "
                          "compiledThisRun, loadedThisRun, expectedShaders, lastSaved, "
                          "passCacheEntries, passCacheCapacity, renderableCacheEntries, "
-                         "renderableCacheCapacity}",
+                         "renderableCacheCapacity, liveCompiles}",
           "The persistent shader cache (SHADER_CACHE_SPEC.md): what is on disk and what this run "
           "did with it. compiledThisRun counts shaders the compiler actually built; loadedThisRun "
           "counts shaders served straight from the cache, so a warm launch shows the second number "
@@ -220,7 +221,10 @@ QVector<VerbInfo> AppApi::verbs() const
           "rejected / silent happened ('outdated' is the ordinary cost of a driver update; "
           "'silent' means the render system has the broken-pipeline-cache workaround on and this "
           "layer does nothing at all on this device). The counters work whether or not the cache "
-          "itself is enabled. "
+          "itself is enabled. liveCompiles counts the shaders compiled on the UI thread AFTER the "
+          "startup splash outside a compile dialog (an open in flight, or the open's compile "
+          "dialog) — each one froze the window for its compile and is a named defect "
+          "(SHADER-WARM-2; the log says '[shader] ... a UI-thread compile is a defect'). "
           "passCacheEntries and renderableCacheEntries are the LIVE SIZES of the two caches "
           "Ogre's 32-bit shader hash addresses — the pass property sets and the material/mesh "
           "property sets this process has produced so far — reported for the fullest Hlms, with "
@@ -824,6 +828,7 @@ QVariantMap AppApi::shaderCache()
     m["passCacheCapacity"]       = s.passCacheCapacity;
     m["renderableCacheEntries"]  = s.renderableCacheEntries;
     m["renderableCacheCapacity"] = s.renderableCacheCapacity;
+    m["liveCompiles"]            = livecompiles::live();
     return m;
 }
 
@@ -1171,6 +1176,12 @@ QVariantMap AppApi::resetLibrary(const QVariantMap &options)
     // is the same wherever the app was launched from, and `restarted` is a
     // FACT rather than a hope.
     const QStringList args = QCoreApplication::arguments().mid(1);
+    // THE RESET'S SETTINGS ARE ON DISK BEFORE THE NEW PROCESS READS THEM: the
+    // store writes on its own thread (data/settingsstore.h), so a restart
+    // spawned now could read the file before the writer has synced it.
+    // Bounded — a wedged disk must not hold the restart forever.
+    if (!SettingsManager::getDefaultManager()->settings->flush(10000))
+        qWarning("app.resetLibrary: the settings write is still in flight after 10 s — restarting anyway");
     qint64 pid = 0;
     const bool spawned = QProcess::startDetached(QCoreApplication::applicationFilePath(), args,
                                                  QDir::currentPath(), &pid);
