@@ -330,7 +330,8 @@ int main(int argc, char **argv)
         QFile f(sidecar);
         f.open(QIODevice::ReadOnly);
         const QJsonObject side = QJsonDocument::fromJson(f.readAll()).object();
-        CHECK(side.value("formatVersion").toInt() == 2, "7: sidecar format 2 (G5)");
+        CHECK(side.value("formatVersion").toInt() == 3 && side.value("home").toString() == "assets",
+              "7: sidecar format 3 (G5 + ASSETS-HOME-1: the home is recorded)");
         // THE PAYLOAD — a DB-only kind's meaning, which v1 carried nowhere, so
         // a rebuilt catalog restored a material that resolved to nothing.
         const QJsonObject blob = side.value("asset").toObject();

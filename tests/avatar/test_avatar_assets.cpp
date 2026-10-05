@@ -69,13 +69,16 @@ static QString makeObjectRow(Database *db, const QString &modelFile, const QStri
     db->createAssetEntry(objectGuid, name, static_cast<int>(ModelTypes::Object), QString(),
                          assethome::assets(), assethome::Origin::Import, QString(), QString(), QByteArray("PNGTHUMB"), QByteArray(),
                          QByteArray(), QByteArray());
+    // A member takes its owner's home and its edge is intrinsic (ASSETS-HOME-1),
+    // as the import pipeline writes them.
     db->createAssetEntry(meshGuid, file, static_cast<int>(ModelTypes::Mesh), objectGuid,
-                         assethome::project(projectGuid), assethome::Origin::Create, QString(), QString(), QByteArray(), QByteArray(),
+                         assethome::assets(), assethome::Origin::Import, QString(), QString(), QByteArray(), QByteArray(),
                          QByteArray(), QByteArray());
     AssetCas::ingestFile(conn, root, modelFile, objectGuid, "source", file, nullptr, nullptr);
     AssetCas::ingestFile(conn, root, modelFile, meshGuid, "source", file, nullptr, nullptr);
     db->createDependency(static_cast<int>(ModelTypes::Object), static_cast<int>(ModelTypes::Mesh),
-                         objectGuid, meshGuid, projectGuid);
+                         objectGuid, meshGuid, QString());
+    Q_UNUSED(projectGuid);
     if (meshGuidOut) *meshGuidOut = meshGuid;
     return objectGuid;
 }

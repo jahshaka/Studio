@@ -46,11 +46,15 @@ assert(assets.dependencies(AVATAR).indexOf(RIG) >= 0, "the avatar's edge to its 
 assert(assets.dependencies(MODEL).length > 0, "the model's edges to its members are back");
 
 // THE BAKES ARE RE-DERIVED, never read from the old build: the bump dropped
-// them, the sweep makes them again from the stored sources.
-var before = assets.bakeAll({ dryRun: true });
-assert(before.needed > 0, "the bump dropped the derived bakes (" + before.needed + " needed)");
-var baked = assets.bakeAll({ dryRun: false });
-assert(baked.failed === 0, "…they rebuild from the stored sources (" + baked.baked + " baked)");
-assert(assets.bakeAll({ dryRun: true }).needed === 0, "…and none is left to bake");
+// them (keep.sh reads the library's background rebuild starting on them in the
+// log) and they come back from the stored sources.
+var deadline = Date.now() + 120000;
+var left = assets.bakeAll({ dryRun: true }).needed;
+while (left > 0 && Date.now() < deadline) { sleep(100); left = assets.bakeAll({ dryRun: true }).needed; }
+if (left > 0) {
+    var baked = assets.bakeAll({ dryRun: false });
+    assert(baked.failed === 0, "…the rest rebuild on demand (" + baked.baked + " baked)");
+}
+assert(assets.bakeAll({ dryRun: true }).needed === 0, "every dropped bake is rebuilt from its source");
 assert(assets.meshLods(MODEL).length > 0, "the model draws from its rebuilt bake");
 console.log("ALL PASS");

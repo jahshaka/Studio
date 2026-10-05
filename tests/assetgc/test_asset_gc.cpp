@@ -464,11 +464,11 @@ int main(int argc, char **argv)
         db.closeDatabase();
 
         writeFile(AssetStorePaths::sidecarPathIn(root, "guidTombstone"), QByteArray(
-            "{\"formatVersion\":1,\"guid\":\"guidTombstone\",\"name\":\"gone.bin\",\"type\":1,"
+            "{\"formatVersion\":3,\"home\":\"assets\",\"origin\":\"import\",\"guid\":\"guidTombstone\",\"name\":\"gone.bin\",\"type\":1,"
             "\"files\":[{\"role\":\"source\",\"oid\":\"" + QString(64, QLatin1Char('c')).toUtf8()
             + "\",\"name\":\"gone.bin\",\"size\":10,\"ext\":\"bin\"}]}"));
         writeFile(AssetStorePaths::sidecarPathIn(root, "guidFileless"), QByteArray(
-            "{\"formatVersion\":1,\"guid\":\"guidFileless\",\"name\":\"dbonly\",\"type\":1,\"files\":[]}"));
+            "{\"formatVersion\":3,\"home\":\"assets\",\"origin\":\"import\",\"guid\":\"guidFileless\",\"name\":\"dbonly\",\"type\":1,\"files\":[]}"));
         // and a real one for a live asset
         CHECK(db.initializeDatabase(dbPath), "database reopened to write a live sidecar");
         QString err;

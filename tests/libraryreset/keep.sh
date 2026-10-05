@@ -66,6 +66,8 @@ JAHSHAKA_TEST_LIBRARY_GENERATION=$NEXT "$BIN" --headless --data-root "$PWD/keep-
 check $? "the bumped boot ($GEN -> $NEXT) exits 0"
 grep -q "^ALL PASS" bump.log
 check $? "A FORMAT BUMP KEEPS THE STORAGES: every row rebuilt in its home, bakes re-derived (see bump.log)"
+grep -qE "rebuilding [1-9][0-9]* stale bake" bump.log
+check $? "…the bump DROPPED the kept rows' bakes and the background rebuild re-derived them"
 printf 'var g = app.libraryGeneration(); if (g.outcome !== "current") throw new Error(g.outcome); console.log("ALL PASS");\n' \
        > again.run.js
 JAHSHAKA_TEST_LIBRARY_GENERATION=$NEXT "$BIN" --headless --data-root "$PWD/keep-bump" \
