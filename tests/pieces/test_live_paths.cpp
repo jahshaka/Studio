@@ -5,10 +5,10 @@
 // camera, the whole image compared byte for byte:
 //
 //   G1, THE UV SCROLL. A material whose maps scroll at velocity v, drawn at
-//       shader time t, IS the same material with its maps offset by v*t: the UV
-//       macro (JahFog_piece_vs_piece_ps.any, under our `jah_uv_scroll`
-//       property) adds userValue[2].xy * clock after the transform. Exact for v
-//       and t whose product is exact in float, which is what is used here.
+//       shader time t, IS the same material with its maps offset by v*t
+//       (wrapped to [0,1)): the backend writes that offset into userValue[2].zw
+//       at every setShaderTime and the UV macro (JahFog_piece_vs_piece_ps.any,
+//       under our `jah_uv_scroll` property) adds it after the transform.
 //       A control proves the scroll is visible (t = 0 against the same offset
 //       must differ), and a zero velocity is inert (no property, no clock).
 //
@@ -159,8 +159,10 @@ void g1_scroll_is_an_offset() {
     scroll.uvVelocity[0] = 0.25f;
     scroll.uvVelocity[1] = -0.5f;
     PbrParams offset = baseParams();
-    offset.uvOffset[0] = 0.25f;     // v * t at t = 1.0, exact in float
-    offset.uvOffset[1] = -0.5f;
+    // v * t at t = 1.0, WRAPPED to [0,1) as the backend wraps it (the maps
+    // repeat, so a whole-unit shift is no shift): (0.25, -0.5) -> (0.25, 0.5).
+    offset.uvOffset[0] = 0.25f;
+    offset.uvOffset[1] = 0.5f;
     gA.scene->setPbrMaterial(gA.material, scroll);
     gB.scene->setPbrMaterial(gB.material, offset);
     gA.scene->setShaderTime(1.0f);
@@ -169,7 +171,7 @@ void g1_scroll_is_an_offset() {
     Image a, b;
     CHECK_MSG(readBoth(a, b), "readback");
     const Diff same = compare(a, b);
-    CHECK_MSG(same.pixels == 0, "scroll (0.25,-0.5) at t=1 == offset (0.25,-0.5): %d pixels differ "
+    CHECK_MSG(same.pixels == 0, "scroll (0.25,-0.5) at t=1 == offset (0.25,0.5) [wrapped]: %d pixels differ "
               "(worst %d/255)", same.pixels, same.worst);
 
     // THE CONTROL: the same scroll at t = 0 is NOT that offset.
@@ -182,14 +184,14 @@ void g1_scroll_is_an_offset() {
 
     // And at t = 2 it is the offset doubled — the motion is linear in the clock.
     PbrParams offset2 = baseParams();
-    offset2.uvOffset[0] = 0.5f;
-    offset2.uvOffset[1] = -1.0f;
+    offset2.uvOffset[0] = 0.5f;     // (0.5, -1.0) wrapped
+    offset2.uvOffset[1] = 0.0f;
     gB.scene->setPbrMaterial(gB.material, offset2);
     gA.scene->setShaderTime(2.0f);
     render();
     CHECK_MSG(readBoth(a, b), "readback");
     const Diff twice = compare(a, b);
-    CHECK_MSG(twice.pixels == 0, "scroll at t=2 == offset (0.5,-1.0): %d pixels differ (worst %d/255)",
+    CHECK_MSG(twice.pixels == 0, "scroll at t=2 == offset (0.5,0.0) [wrapped]: %d pixels differ (worst %d/255)",
               twice.pixels, twice.worst);
 
     // INERT: a zero velocity is the plain material, whatever the clock says.
