@@ -36,10 +36,12 @@ public:
             // never destroyed (anything may read a preference until the
             // process ends — ~MainWindow saves the dock layout after main's
             // finalizeAppExit), so its store's writer is joined by nobody:
-            // the exit handler waits for it instead. Registered after the
+            // the exit handler drains and JOINS it instead (no timeout: a
+            // writer still syncing when Qt's statics die would crash and lose
+            // the write). Registered after the
             // store's first QSettings, so it runs before Qt's own settings
             // statics are torn down.
-            std::atexit([] { if (defaultSettings) defaultSettings->settings->flush(); });
+            std::atexit([] { if (defaultSettings) defaultSettings->settings->shutdown(); });
         }
 
         return defaultSettings;

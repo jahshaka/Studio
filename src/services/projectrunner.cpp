@@ -95,11 +95,12 @@ void ProjectRunner::stageBind(bool playMode)
 void ProjectRunner::stageReveal(bool playMode)
 {
 	LoadTimeline::mark(QStringLiteral("switchSpace"));
-	// A REVEAL INTO A VIEW THAT COULD NOT BE CREATED stops early, and has
-	// always left the bake scope and the ledger's run open behind it (the next
-	// stageBegin closes the scope; the run stays open until an open ends one).
-	// Kept as it was — D10 moved this, it did not change it.
-	if (!mHost->revealWorld(playMode)) return;
+	// A REVEAL INTO A VIEW THAT COULD NOT BE CREATED stops early. It leaves the
+	// bake scope open behind it (the next stageBegin closes it) — but NOT the
+	// ledger's run any more (SHADER-WARM-2's merge read): an open run is a
+	// compile window (services/livecompiles.h), and one left open by a failed
+	// reveal switched the live-compile sentry off for the rest of the session.
+	if (!mHost->revealWorld(playMode)) { LoadTimeline::end(); return; }
 	MeshBakeStore::endScope();
 	LoadTimeline::end();
 }

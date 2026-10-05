@@ -1,6 +1,7 @@
 // shader.live_compiles — a compile on the UI thread after the splash is a named defect
-// (SHADER-WARM-2; services/livecompiles.h). Two launches into a scratch home: COLD (the
-// shader cache wiped — the owner's first launch after a driver update) and WARM. Each
+// (SHADER-WARM-2; services/livecompiles.h). Three launches into a scratch home: COLD (the
+// shader cache wiped — the owner's first launch after a driver update), WARM, and WARM WITH A
+// MOVED GLOBAL-PASS KEY (a Studio-only change: the pass must run, nothing compile live). Each
 // creates a Basic and a World project, renders their frames and re-opens the first; the
 // script prints app.shaderCache().liveCompiles per phase and this asserts every phase 0.
 #include <QCoreApplication>
@@ -9,6 +10,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QProcess>
+#include <QSettings>
 #include <cstdio>
 
 static int failures = 0;
@@ -16,6 +18,8 @@ static int failures = 0;
     else { std::printf("FAIL: %s\n", msg); ++failures; } } while (0)
 
 namespace {
+
+QString gLastOutput;
 
 QJsonObject runApp(const QString &home, const QString &script)
 {
@@ -34,6 +38,7 @@ QJsonObject runApp(const QString &home, const QString &script)
         return {};
     }
     const QString out = QString::fromUtf8(app.readAll());
+    gLastOutput = out;
     QJsonObject last;
     for (const QString &line : out.split('\n')) {
         const int at = line.indexOf(QStringLiteral("LIVECOMPILES "));
@@ -79,6 +84,29 @@ int main(int argc, char **argv)
 
     const QJsonObject warm = runApp(home, script);
     assertRun("warm", warm);
+    const QString passLine = QStringLiteral("template's world took");
+    CHECK(!gLastOutput.contains(passLine),
+          "a warm launch with the same key does not run the global pass again");
+
+    // ---- A STUDIO-ONLY CHANGE (the merge read): Ogre's cache stays warm, but the
+    // global pass's key — the Studio commit + the cache fingerprint — moved. The pass
+    // must run over the warm cache, and nothing may compile live after it. Simulated
+    // by a stale key in the settings file, which is exactly what a new build reads.
+    {
+        QSettings ini(home + "/.local/share/Jahshaka/jahsettings.ini", QSettings::IniFormat);
+        ini.setValue(QStringLiteral("shader_warm_pass"), QStringLiteral("an-older-studio-build|0"));
+        ini.sync();
+    }
+    const QJsonObject moved = runApp(home, script);
+    assertRun("keymoved", moved);
+    CHECK(gLastOutput.contains(QStringLiteral("the global pass's key moved")),
+          "a moved key with a warm Ogre cache is SEEN");
+    CHECK(gLastOutput.contains(passLine), "...and the global pass RUNS over the warm cache");
+    {
+        QSettings ini(home + "/.local/share/Jahshaka/jahsettings.ini", QSettings::IniFormat);
+        CHECK(ini.value(QStringLiteral("shader_warm_pass")).toString() != QStringLiteral("an-older-studio-build|0"),
+              "...and records the new key once it completed");
+    }
 
     std::printf("%s (%d failure(s))\n", failures ? "FAIL" : "PASS", failures);
     return failures ? 1 : 0;

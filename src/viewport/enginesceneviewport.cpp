@@ -4162,9 +4162,17 @@ unsigned EngineSceneViewport::warmUpShaders(const std::function<void(unsigned)> 
     {
         LoadTimeline::Accumulate warm(QStringLiteral("engine:warmUpShaders"));
         unsigned seen = 0;
-        if (onCompile) mEngine->setCompileObserver([&]() { onCompile(++seen); });
+        // Cleared on EVERY way out (an engine exception included): the observer
+        // captures this frame's locals.
+        struct ClearObserver {
+            jahshaka::engine::Engine *engine = nullptr;
+            ~ClearObserver() { if (engine) engine->setCompileObserver({}); }
+        } clear;
+        if (onCompile) {
+            mEngine->setCompileObserver([&]() { onCompile(++seen); });
+            clear.engine = mEngine.get();
+        }
         view()->warmUpShaders();
-        if (onCompile) mEngine->setCompileObserver({});
     }
     unsigned after = 0;
     mEngine->shaderBuildProgress(after, cached, expected);

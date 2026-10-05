@@ -398,11 +398,17 @@ int main(int argc, char **argv)
         const QString path = dir.filePath("jahsettings.ini");
         SettingsStore store(path);
         CameraSpeed::bindSettings(&store);
+        CHECK(store.flush(), "the store is idle before the burst");
+        const int writesBefore = store.completedWrites();
         for (int n = 11; n <= 20; ++n) CameraSpeed::setValue(n);   // a drag, or ten notches
         CHECK(CameraSpeed::value() == 20, "the dial moved to 20 at once");
         CHECK(store.value("camera/speed").toInt() == 20,
               "...and the store holds 20 at once, without anyone flushing anything");
         CHECK(store.flush(), "the store's writer drains the burst");
+        // A BURST IS ONE WRITE (the merge read): the writer coalesces what arrives
+        // within its window, so ten notches are ONE durable commit of the ini.
+        CHECK(store.completedWrites() == writesBefore + 1,
+              "the ten sets of the burst were ONE write of the file");
         QSettings file(path, QSettings::IniFormat);
         CHECK(file.value("camera/speed").toInt() == 20, "...and 20 is what the file says");
         CameraSpeed::bindSettings(nullptr);

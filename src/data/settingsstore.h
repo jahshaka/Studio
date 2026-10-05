@@ -23,9 +23,15 @@
 // writes are exactly what they were. Operations arriving while a sync runs
 // are batched into the next one; there is no timer.
 //
-// flush() waits for the worker (the clean quit, and a test that reads the
-// file back). The UI thread calls it exactly once in a session, at the
-// ordered exit, where the window is already gone.
+// A batch WAITS kCoalesceMs before it is written, so a burst of sets (a wheel,
+// a slider drag) is one durable commit. flush() waits for the worker (a test
+// that reads the file back) and cuts that wait short; shutdown() drains and
+// JOINS it — the destructor, and the exit handler for the default store, with
+// no timeout, so the writer never outlives Qt's static destructors.
+//
+// THE LOSS MODEL: a change is in memory at once and on disk within ~250 ms plus
+// the sync. A crash, a SIGKILL or a SIGTERM (no exit handlers) loses the
+// changes not yet synced; a clean exit loses none.
 //
 // Not shared across threads: every method but flush()/pendingWrites() is for
 // the thread that created the store (the UI thread, in the app).
@@ -81,6 +87,10 @@ public:
     /// Blocks until every change made so far is in the file (or the budget
     /// runs out). True when nothing is left to write.
     bool flush(int budgetMs = 20000);
+    /// Drains every queued change into the file and JOINS the writer, with no
+    /// timeout (the destructor, and the process exit for the default store).
+    /// Idempotent. A change made after it is kept in memory and never written.
+    void shutdown();
     /// Writes queued or in flight (diagnostics; any thread).
     int pendingWrites() const;
     /// Syncs the writer has completed this session (diagnostics; any thread).
@@ -106,6 +116,8 @@ private:
     std::condition_variable mIdle;     // flush(): the writer drained the queue
     std::deque<Op> mQueue;             // GUARDED_BY(mMutex)
     int mInFlight = 0;                 // ops taken by the writer, not yet synced
+    int mFlushers = 0;                 // threads waiting in flush(): no coalescing wait
+    static constexpr int kCoalesceMs = 250;
     int mCompleted = 0;
     bool mStop = false;
     std::thread mWriter;

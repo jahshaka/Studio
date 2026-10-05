@@ -45,6 +45,10 @@ inline constexpr SettingKey<int>  shaderWarmupSamples{ "shader_warmup_samples", 
 inline constexpr SettingKey<bool> shaderWarmupShadows{ "shader_warmup_shadows", true };
 inline constexpr SettingKey<bool> shaderWarmupOnOpen{ "shader_warmup_on_open", true };
 inline constexpr SettingKey<bool> shaderCacheEnabled{ "shader_cache_enabled", true };
+/// The key of the last COMPLETED startup global pass (SHADER-WARM-2): the Studio commit
+/// and the shader cache's fingerprint. A pass runs whenever it differs — a Studio-only
+/// change to a preset or a helper shader moves no Ogre cache key.
+inline constexpr SettingKey<const char *> shaderWarmPass{ "shader_warm_pass", "" };
 /// "default" | "jahshaka" (left-drag orbits in the Jahshaka scheme).
 inline constexpr SettingKey<const char *> mouseControls{ "mouse_controls", "default" };
 

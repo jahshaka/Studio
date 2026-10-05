@@ -83,8 +83,9 @@ set_tests_properties(shadercache.app PROPERTIES TIMEOUT 600 LABELS "shadercache"
 
 # shader.live_compiles (SHADER-WARM-2): after the splash, nothing compiles on the UI
 # thread outside a compile window — a create/open in flight or a compile dialog
-# (src/services/livecompiles.h). A cold launch and a warm one, each creating a Basic and
-# a World project and re-opening the first; every phase must count 0 live compiles.
+# (src/services/livecompiles.h). A cold launch, a warm one and a warm one whose global-pass
+# key moved (a Studio-only change), each creating a Basic and a World project and re-opening
+# the first; every phase must count 0 live compiles.
 add_executable(test_live_compiles test_live_compiles.cpp)
 set_target_properties(test_live_compiles PROPERTIES CXX_STANDARD 17
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")

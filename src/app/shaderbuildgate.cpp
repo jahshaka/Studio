@@ -3,6 +3,8 @@
 
 #include "app/versionsplashscreen.h"
 #include "bridge/enginehost.h"
+#include "data/settingsmanager.h"
+#include "jah_provenance.h"   // GIT_COMMIT_HASH
 #include "services/defaultfloormaterial.h"
 #include "services/worldmodes.h"
 #include "services/testtier.h"
@@ -277,6 +279,11 @@ unsigned holdSplashForShaderBuild(QApplication &app, VersionSplashScreen &splash
         // the first cut of this lane).
         splash.QWidget::repaint();
     });
+    // ...cleared on every way out: it captures this function's locals.
+    struct ClearObserver {
+        Engine *engine;
+        ~ClearObserver() { engine->setCompileObserver({}); }
+    } clearObserver{ engine.get() };
 
     // ---- Drive the build ---------------------------------------------------
     // MEASURED, and the reason this function is not just a wait loop: at this
@@ -435,7 +442,19 @@ unsigned holdSplashForShaderBuild(QApplication &app, VersionSplashScreen &splash
     int giFrames = 0;
     QElapsedTimer giTimer; giTimer.start();
     engine->shaderBuildProgress(compiled, cached, expected);
-    const bool coldCache = compiled > 0;
+    // THE GLOBAL PASS RUNS WHEN ITS KEY MOVED, not only when Ogre's cache was cold
+    // (the merge read): the cache key never names the Studio build, so a Studio-only
+    // change to a preset, a template or a helper shader left Ogre's cache warm and the
+    // pass skipped — and the change compiled LIVE. The key of the last COMPLETED pass is
+    // the Studio commit plus the cache fingerprint; a cold cache runs it as well.
+    SettingsManager *settings = SettingsManager::getDefaultManager();
+    const QString passKey = QStringLiteral(GIT_COMMIT_HASH) + QLatin1Char('|') +
+                            QString::fromStdString(engine->shaderCacheStats().fingerprint);
+    const bool keyMoved = settings->get(settingkeys::shaderWarmPass) != passKey;
+    const bool runPass = compiled > 0 || keyMoved;
+    if (keyMoved && compiled == 0)
+        qInfo("startup shader build: the global pass's key moved (a new Studio build) — running it "
+              "over a warm cache");
     unsigned lastCompiled = compiled;
     int quiet = 0;
     // ...AND UNTIL THE LIGHTING ARM IS BOUND (TEST-TIER-1): the ungathered frames below draw the
@@ -449,7 +468,7 @@ unsigned holdSplashForShaderBuild(QApplication &app, VersionSplashScreen &splash
         return warmScene->giStatus().vctBound;
     };
     int boundFrames = 0;
-    for (; coldCache && warmScene && giFrames < kWarmUpGiFrames &&
+    for (; runPass && warmScene && giFrames < kWarmUpGiFrames &&
            ((quiet < kGiQuietFrames && !warmScene->giStatus().giAtRest) || boundFrames < kWarmUpFrames);
          ++giFrames) {
         engine->renderOneFrame();
@@ -466,7 +485,7 @@ unsigned holdSplashForShaderBuild(QApplication &app, VersionSplashScreen &splash
     // binds only after its compute set compiled, has handed the box to Atom by then and never
     // draws that permutation; the second boot after every cache rebuild compiled it and ran this
     // whole warm-up again. Drawn here on the cold boot: the id pass off, the gather parked.
-    if (coldCache && warmScene && haveWarmGi && warmGi.mode != GiMode::Off) {
+    if (runPass && warmScene && haveWarmGi && warmGi.mode != GiMode::Off) {
         GiParams ungathered = warmGi;
         ungathered.gather = GiToggle::Off;
         warmScene->setAtomDrawEnabled(false);
@@ -479,8 +498,8 @@ unsigned holdSplashForShaderBuild(QApplication &app, VersionSplashScreen &splash
         warmScene->setGlobalIllumination(warmGi);
     }
     qInfo("startup shader build: the GI compute set's warm-up took %d frames, %lld ms%s%s", giFrames,
-          static_cast<long long>(giTimer.elapsed()), coldCache ? "" : " (a warm cache: skipped)",
-          coldCache && boundFrames == 0 ? " (the lighting arm never bound)" : "");
+          static_cast<long long>(giTimer.elapsed()), runPass ? "" : " (a warm cache and the same key: skipped)",
+          runPass && boundFrames == 0 ? " (the lighting arm never bound)" : "");
 
     // THE EDITOR'S WORLDS, THROUGH THE EDITOR'S OWN MIRROR (SHADER-WARM-2; was ATOM
     // S3-DRAW's hand-built floor). The owner's shape: the startup gate compiles the
@@ -499,7 +518,7 @@ unsigned holdSplashForShaderBuild(QApplication &app, VersionSplashScreen &splash
     // configured as the editor configures its own (EngineSceneViewport::
     // ensureEngineScene / pushEditorHelpers), under the world's own environment
     // (applyEnvironment — the same call the viewport makes every frame).
-    if (coldCache && warmView && db) {
+    if (runPass && warmView && db) {
         warmView->setScene(nullptr);
         if (warmScene) engine->destroyScene(warmScene);
         warmScene = nullptr;
@@ -516,6 +535,8 @@ unsigned holdSplashForShaderBuild(QApplication &app, VersionSplashScreen &splash
                   kind == SceneTemplate::Basic ? "Basic (and the presets')" : "World", frames,
                   static_cast<long long>(worldTimer.elapsed()), compiled - before);
         }
+        // Recorded only once the pass has COMPLETED: a launch killed half way runs it again.
+        settings->set(settingkeys::shaderWarmPass, passKey);
     }
 
     // THE RECORDED SET IS GONE (WARMUPSET-2, 2026-09-21). A replay used to run
@@ -579,7 +600,6 @@ unsigned holdSplashForShaderBuild(QApplication &app, VersionSplashScreen &splash
         }
     }
 
-    engine->setCompileObserver({});
     if (shown) splash.showShaderBuild(-1, 0);
     // NOT recorded in LoadTimeline: that ledger belongs to a scene OPEN, and
     // add() is a documented no-op outside begin()/end(). The startup build's

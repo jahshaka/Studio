@@ -29,12 +29,21 @@ SettingsStore::SettingsStore(const QString &path) : mPath(path)
 
 SettingsStore::~SettingsStore()
 {
-    flush();
+    shutdown();
+}
+
+void SettingsStore::shutdown()
+{
     {
         std::lock_guard<std::mutex> lock(mMutex);
+        if (mStop) return;
         mStop = true;
     }
     mWake.notify_all();
+    // NO TIMEOUT: the writer drains every queued op and then returns, and this
+    // waits for it however long the disk takes (the owner's box measured a 19 s
+    // sync) — a bounded wait would leave the thread running into Qt's static
+    // destructors mid-sync, a crash and a lost write.
     if (mWriter.joinable()) mWriter.join();
 }
 
@@ -138,8 +147,12 @@ void SettingsStore::enqueue(Op op)
 bool SettingsStore::flush(int budgetMs)
 {
     std::unique_lock<std::mutex> lock(mMutex);
-    return mIdle.wait_for(lock, std::chrono::milliseconds(budgetMs),
-                          [this] { return mQueue.empty() && mInFlight == 0; });
+    ++mFlushers;            // the writer skips its coalescing wait while anyone flushes
+    mWake.notify_all();
+    const bool idle = mIdle.wait_for(lock, std::chrono::milliseconds(budgetMs),
+                                     [this] { return mQueue.empty() && mInFlight == 0; });
+    --mFlushers;
+    return idle;
 }
 
 int SettingsStore::pendingWrites() const
@@ -162,6 +175,12 @@ void SettingsStore::writerLoop()
             std::unique_lock<std::mutex> lock(mMutex);
             mWake.wait(lock, [this] { return mStop || !mQueue.empty(); });
             if (mQueue.empty()) return;   // stopping, and nothing left to write
+            // COALESCE (the merge read): a wheel's notches or a slider's drag are
+            // dozens of sets a second, and each batch is one durable QSaveFile
+            // commit. Whatever arrives in the next kCoalesceMs joins this batch —
+            // unless the store is stopping or somebody is waiting in flush().
+            mWake.wait_for(lock, std::chrono::milliseconds(kCoalesceMs),
+                           [this] { return mStop || mFlushers > 0; });
             batch.swap(mQueue);
             mInFlight = int(batch.size());
         }

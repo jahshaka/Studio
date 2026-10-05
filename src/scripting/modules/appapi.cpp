@@ -1176,6 +1176,12 @@ QVariantMap AppApi::resetLibrary(const QVariantMap &options)
     // is the same wherever the app was launched from, and `restarted` is a
     // FACT rather than a hope.
     const QStringList args = QCoreApplication::arguments().mid(1);
+    // THE RESET'S SETTINGS ARE ON DISK BEFORE THE NEW PROCESS READS THEM: the
+    // store writes on its own thread (data/settingsstore.h), so a restart
+    // spawned now could read the file before the writer has synced it.
+    // Bounded — a wedged disk must not hold the restart forever.
+    if (!SettingsManager::getDefaultManager()->settings->flush(10000))
+        qWarning("app.resetLibrary: the settings write is still in flight after 10 s — restarting anyway");
     qint64 pid = 0;
     const bool spawned = QProcess::startDetached(QCoreApplication::applicationFilePath(), args,
                                                  QDir::currentPath(), &pid);

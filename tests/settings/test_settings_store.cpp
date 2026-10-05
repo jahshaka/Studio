@@ -16,7 +16,9 @@
 #include <QSettings>
 #include <QTemporaryDir>
 
+#include <chrono>
 #include <cstdio>
+#include <thread>
 
 static int failures = 0;
 #define CHECK(cond, msg) do { \
@@ -130,6 +132,45 @@ int main(int argc, char **argv)
         QSettings back(path, QSettings::IniFormat);
         CHECK(back.value("burst/n").toInt() == 99, "the last value of the burst is the file's");
         CHECK(!back.contains("mine/key"), "...and the remove landed with it");
+    }
+
+    // ---- §6 A BURST IS ONE WRITE -------------------------------------------
+    // A wheel's notches and a slider's drag are dozens of sets a second; each
+    // write is a QSaveFile commit (fdatasync + rename). The writer waits its
+    // coalescing window after the first op, so the burst lands as ONE write —
+    // without anybody flushing (bounded wait, it must land by itself), and the
+    // same through flush().
+    {
+        SettingsStore s(path);
+        CHECK(s.flush(), "idle before the burst");
+        int before = s.completedWrites();
+        for (int i = 0; i < 50; ++i) s.setValue("burst/drag", i);
+        QElapsedTimer t;
+        t.start();
+        while (s.completedWrites() == before && t.elapsed() < 5000)
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        CHECK(s.completedWrites() == before + 1, "50 sets with nobody flushing land as ONE write");
+        CHECK(s.flush() && s.completedWrites() == before + 1, "...and nothing is left to write");
+        before = s.completedWrites();
+        for (int i = 0; i < 50; ++i) s.setValue("burst/drag", 100 + i);
+        CHECK(s.flush(), "flush() cuts the coalescing window short");
+        CHECK(s.completedWrites() == before + 1, "50 sets then a flush: ONE write");
+        QSettings back(path, QSettings::IniFormat);
+        CHECK(back.value("burst/drag").toInt() == 149, "...carrying the last value");
+    }
+
+    // ---- §7 shutdown() drains and joins; a set after it stays in memory ------
+    {
+        SettingsStore s(path);
+        s.setValue("shut/down", 1);
+        s.shutdown();
+        {
+            QSettings back(path, QSettings::IniFormat);
+            CHECK(back.value("shut/down").toInt() == 1, "shutdown() wrote what was queued");
+        }
+        s.setValue("after/shutdown", 1);
+        CHECK(s.value("after/shutdown").toInt() == 1, "a set after shutdown() is still readable");
+        s.shutdown();   // idempotent; the destructor calls it again
     }
 
     std::printf("%s (%d failure(s))\n", failures ? "FAIL" : "PASS", failures);
