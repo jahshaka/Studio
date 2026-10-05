@@ -67,19 +67,19 @@ function comparePostFx(fx, what) {
            "policy's" + (differing.length ? " — DIFFERING: " + differing.join(", ") : ""));
     // ...and the policy's own fields are what the policy says they are, so a
     // future change to it cannot quietly stop applying.
-    assert(fx.eye.bloom === false, what + ": bloom is off in the eye (one blur ladder, two eyes)");
-    assert(fx.eye.ssao === false, what + ": SSAO is off in the eye (one projection, two eyes)");
-    assert(fx.eye.smaaPreset === -1, what + ": SMAA is off in the eye (its search crosses the seam)");
+    assert(fx.eye.bloom === false, what + ": bloom is off in the eye (one fixed ladder holds one picture)");
+    assert(fx.eye.ssao === false, what + ": SSAO is off in the eye (its passes are not per layer)");
+    assert(fx.eye.smaaPreset === -1, what + ": SMAA is off in the eye (its passes are not per layer)");
     assert(fx.eye.ssrScreenMarch === false, what + ": the screen-space march is off in the eye");
     assert(fx.eye.refractions === false && fx.eye.distortion === false,
-           what + ": refractions and distortion are off in the eye (both READ the target at " +
-           "an offset coordinate and fall back only at the frame's edges — at the seam there " +
-           "is no fallback and the other eye is what they read)");
+           what + ": refractions and distortion are off in the eye (their scene copy is not " +
+           "per layer)");
     assert(fx.eye.allowOffscreen === true, what + ": the eye pair keeps the post chain");
-    // THE IMAGE BLOCK (IMAGE-1): every field rides but the vignette, which is 0.
+    // THE IMAGE BLOCK (IMAGE-1): every field rides, the vignette included — each
+    // eye is its own layer with its own centre (LAYERED-STEREO-1).
     var ik = Object.keys(fx.desktop.image);
     for (var j = 0; j < ik.length; ++j) {
-        var want = ik[j] === "vignette" ? 0 : fx.desktop.image[ik[j]];
+        var want = fx.desktop.image[ik[j]];
         assert(fx.eye.image[ik[j]] === want,
                what + ": the eye's image." + ik[j] + " is " + want + " (got " + fx.eye.image[ik[j]] + ")");
     }
@@ -311,10 +311,12 @@ world.postFx({ exposureEv: 0 });
 world.sky("color", { color: "#808080" });
 editor.frame(60);
 
-// ---- (h) THE LOOKS THAT RIDE, AND THE ONES THAT CANNOT ---------------------
+// ---- (h) THE LOOKS RIDE, ALL OF THEM ----------------------------------------
 //
 // The stereo chain builds its looks stage here for the first time: the arm is
-// as much "does the session survive it" as "is the right subset kept".
+// as much "does the session survive it" as "is the stack the project's". Each eye
+// is its own layer (LAYERED-STEREO-1), so even a centre-relative look (the radial
+// blur) and the vignette are measured from each eye's own centre.
 world.addLook("sharpen", { amount: 0.5 });
 world.addLook("radialBlur", { amount: 0.5 });
 world.addLook("desaturate", { amount: 0.4 });
@@ -324,15 +326,14 @@ editor.frame(60);
 var looked = vr.state().postFx;
 comparePostFx(looked, "with a looks stack");
 var kept = looked.eye.looks.map(function (l) { return l.id; });
-assert(kept.length === 2 && kept[0] === "sharpen" && kept[1] === "desaturate",
-       "the eye keeps the pointwise looks in the project's order and drops the radial blur " +
-       "(kept: " + kept.join(", ") + ")");
-assert(looked.eye.image.vignette === 0 && looked.desktop.image.vignette > 0.59,
-       "...with the image block's vignette zeroed in the eyes (it is measured from the frame's " +
-       "centre) and kept on the desktop");
+assert(kept.length === 3 && kept[0] === "sharpen" && kept[1] === "radialBlur" &&
+       kept[2] === "desaturate",
+       "the eye keeps every look in the project's order (kept: " + kept.join(", ") + ")");
+assert(looked.eye.image.vignette > 0.59 && looked.desktop.image.vignette > 0.59,
+       "...with the image block's vignette riding in the eyes as on the desktop");
 assert(Math.abs(looked.eye.image.contrast - 1.1) < 1e-6,
        "...and the rest of the image block rides (eye contrast " + looked.eye.image.contrast + ")");
-assert(looked.desktop.looks.length === 3, "while the desktop keeps all three");
+assert(looked.desktop.looks.length === 3, "and the desktop keeps the same three");
 var lookShot = vr.eyeScreenshot(0, OUT + "/eye-looks.png");
 assert(lookShot.center.r > 0 || lookShot.center.g > 0 || lookShot.center.b > 0,
        "and the session still renders a picture through the looks stage (centre " +
