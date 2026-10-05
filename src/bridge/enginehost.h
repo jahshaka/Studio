@@ -97,13 +97,21 @@ private:
 void setCliNoRayQuery(bool on);
 bool cliNoRayQuery();
 
-/// THE --vr LATCH (SPECS/VR_SPEC.md §4.1). main() sets it from the command line
-/// (or JAHSHAKA_VR=1) before any engine exists, and EngineHost::resolveConfig
-/// turns it into EngineConfig::vr. There is no preference beside it: asking a
-/// runtime for a device is a property of THIS RUN, not a saved setting, and a
-/// launch without it must be bit-identical to one from before VR existed.
-void setCliVr(bool on);
-bool cliVr();
+/// THE VR LAUNCH LATCH (SPECS/VR_SPEC.md §4.1, lane VR-START-1). main() sets it
+/// once, before any engine exists, from CliOptions::resolveVr and the two VR
+/// preferences; EngineHost::resolveConfig turns it into EngineConfig::vr (the
+/// VrPolicy: enabled, and either any runtime or the user's headset runtime).
+/// Nothing about the BOOT depends on it — every engine runs on its own device —
+/// only whether, and to which runtime, a VR session may connect.
+struct VrLaunch {
+    bool enabled = false;      ///< may this process use OpenXR at all
+    bool anyRuntime = false;   ///< --vr / JAHSHAKA_VR=1: no headset-runtime check
+    bool startCheck = false;   ///< look for the headset at startup (Start in VR)
+    QString source;            ///< "--vr", "--no-vr", "JAHSHAKA_VR=1", "JAHSHAKA_VR=0", "setting"
+    QString headsetRuntime;    ///< the preference's runtime ("WiVRn", "SteamVR", "Monado")
+};
+void setVrLaunch(const VrLaunch &launch);
+const VrLaunch &vrLaunch();
 
 /// Factory for the engine-backed editor viewport (defined in
 /// src/widgets/enginesceneviewport.cpp so MainWindow never names that class).

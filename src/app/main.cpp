@@ -222,11 +222,23 @@ int main(int argc, char *argv[])
     // which is the user's and which a test run must not rewrite (the engine
     // carries the config to the device itself).
     if (cli.noRayQuery) setCliNoRayQuery(true);
-    // THE --vr LATCH (SPECS/VR_SPEC.md §4.1), the same shape and the same
-    // reason: EngineConfig::vr is decided before any engine exists, because on
-    // the OpenXR route the runtime creates the Vulkan instance and device the
-    // engine boots on. JAHSHAKA_VR=1 is the runner's form (the suites use it).
-    if (cli.vr || qgetenv("JAHSHAKA_VR") == "1") setCliVr(true);
+    // THE VR LAUNCH LATCH (SPECS/VR_SPEC.md §4.1, VR-START-1), before any engine
+    // exists, like the ray latch above. THE ONE PRECEDENCE: --vr / --no-vr, then
+    // JAHSHAKA_VR=1 / 0 (the runners' form — every non-VR test launcher sets 0),
+    // then the two VR preferences (Start in VR, ON by default; the headset
+    // runtime, WiVRn by default). The boot is the same either way.
+    {
+        SettingsManager *sm = SettingsManager::getDefaultManager();
+        const CliOptions::VrChoice vr = CliOptions::resolveVr(
+            cli.vr, cli.noVr, qgetenv("JAHSHAKA_VR"), sm->get(settingkeys::startInVr));
+        VrLaunch launch;
+        launch.enabled = vr.enabled;
+        launch.anyRuntime = vr.anyRuntime;
+        launch.startCheck = vr.startCheck;
+        launch.source = vr.source;
+        launch.headsetRuntime = sm->get(settingkeys::vrHeadsetRuntime);
+        setVrLaunch(launch);
+    }
     // The funnel is what makes the ~61 existing qDebug/qWarning call sites land
     // in the file with zero edits to any of them — LoadTimeline's open profile,
     // the slow-frame warning, the watchdog's stall line, SceneMirror's skeleton

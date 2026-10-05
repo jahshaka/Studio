@@ -10,6 +10,10 @@
 # for any reason. A wait past JAH_VRAM_WAIT (900 s) exits 75 and never runs the command.
 # `scripts/gpu-admit.sh status` lists the holders. The implementation is scripts/vram_tokens.py
 # (run_pool.py imports the same code to take a pool's tokens once per app process).
+# THE DESKTOP ROUTE BY DEFAULT (VR-SETTING-1): the app's Start in VR preference is ON by default, so
+# every run admitted here gets JAHSHAKA_VR=0 unless the caller set JAHSHAKA_VR itself (empty included:
+# `JAHSHAKA_VR=` lets the preference decide). A VR run passes `--vr`, which wins over the environment.
+export JAHSHAKA_VR="${JAHSHAKA_VR-0}"
 here="$(cd "$(dirname "$0")" && pwd)"
 [ "$#" -gt 0 ] || { echo "usage: gpu-admit.sh <tokens> [--label <text>] -- <command> [args...] | status" >&2; exit 64; }
 if [ "$1" = status ]; then exec python3 "$here/vram_tokens.py" status; fi

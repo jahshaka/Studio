@@ -28,6 +28,10 @@
 # `finally`), recording the lock with its owner in /tmp/jah-gpu-clocks.lock and restoring ONLY a lock
 # it recorded — a lock another live owner holds is neither taken nor undone. The lock needs
 # `sudo -n nvidia-smi`; refused, the run prints `gpu-clocks: NOT locked … provisional` and goes on.
+# THE DESKTOP ROUTE BY DEFAULT (VR-SETTING-1): the app's Start in VR preference is ON by default, so
+# every run admitted here gets JAHSHAKA_VR=0 unless the caller set JAHSHAKA_VR itself (empty included:
+# `JAHSHAKA_VR=` lets the preference decide). A VR run passes `--vr`, which wins over the environment.
+export JAHSHAKA_VR="${JAHSHAKA_VR-0}"
 here="$(cd "$(dirname "$0")" && pwd)"
 opts=()
 while [ "$#" -gt 0 ]; do

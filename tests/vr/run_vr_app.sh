@@ -61,21 +61,62 @@ trap cleanup EXIT
 # to put a Touch profile in a hand on a box whose runtime has no Touch model.
 CONTROLLERS=(SIMULATED_LEFT=simple SIMULATED_RIGHT=simple)
 [ "${JAH_MONADO_CONTROLLERS:-simple}" = none ] && CONTROLLERS=()
-env XDG_RUNTIME_DIR="$XDG_DIR" SIMULATED_ENABLE=1 "${CONTROLLERS[@]}" \
-    XRT_COMPOSITOR_NULL=1 XRT_NO_STDIN=1 \
-    monado-service > "$XDG_DIR/monado.log" 2>&1 &
-MON_PID=$!
+start_runtime() {
+    rm -f "$XDG_DIR/monado_comp_ipc"
+    env XDG_RUNTIME_DIR="$XDG_DIR" SIMULATED_ENABLE=1 "${CONTROLLERS[@]}" \
+        XRT_COMPOSITOR_NULL=1 XRT_NO_STDIN=1 \
+        monado-service >> "$XDG_DIR/monado.log" 2>&1 &
+    MON_PID=$!
+    for _ in $(seq 1 100); do
+        [ -S "$XDG_DIR/monado_comp_ipc" ] && return 0
+        kill -0 "$MON_PID" 2>/dev/null || { echo "monado-service died:"; cat "$XDG_DIR/monado.log"; return 1; }
+        sleep 0.2
+    done
+    echo "monado-service never opened its socket:"; tail -20 "$XDG_DIR/monado.log"; return 1
+}
+stop_runtime() {   # the runtime going away under a live session (VR-START-1 case e)
+    [ -n "$MON_PID" ] || return 0
+    kill -9 "$MON_PID" 2>/dev/null; wait "$MON_PID" 2>/dev/null
+    MON_PID=""
+    rm -f "$XDG_DIR/monado_comp_ipc"
+}
 
-for _ in $(seq 1 100); do
-    [ -S "$XDG_DIR/monado_comp_ipc" ] && break
-    kill -0 "$MON_PID" 2>/dev/null || { echo "monado-service died:"; cat "$XDG_DIR/monado.log"; exit 1; }
-    sleep 0.2
-done
-[ -S "$XDG_DIR/monado_comp_ipc" ] || { echo "monado-service never opened its socket:"; tail -20 "$XDG_DIR/monado.log"; exit 1; }
+# THE RUNNER'S EVENTS (VR-START-1): with JAH_VR_RUNNER_EVENTS=1 the app's stdout is
+# watched for `VRRUNNER: stop-runtime` / `VRRUNNER: start-runtime` lines, which kill
+# or (re)start the PRIVATE runtime under the running app — the headset dropping, the
+# headset arriving after launch. JAH_VR_RUNNER_DEFER=1 launches the app with NO
+# runtime up. Either way the runtime is the private one: XDG_RUNTIME_DIR is ours, so
+# the client can never reach (or socket-activate) the user's system Monado.
+if [ "${JAH_VR_RUNNER_DEFER:-0}" != 1 ]; then
+    start_runtime || exit 1
+fi
 
 rc=0
 if [ "$LAUNCH" = 1 ]; then
     XDG_RUNTIME_DIR="$XDG_DIR" XR_RUNTIME_JSON="$MANIFEST" "$@" || rc=$?
+elif [ "${JAH_VR_RUNNER_EVENTS:-0}" = 1 ]; then
+    OUT="$XDG_DIR/app.out"; : > "$OUT"
+    # --script-live: the driver keeps rendering between the script's verbs, so
+    # the VR button's per-frame follower (the one that tells the user a session
+    # was dropped) runs exactly as it does for a person.
+    XDG_RUNTIME_DIR="$XDG_DIR" XR_RUNTIME_JSON="$MANIFEST" \
+        "$APP" --vr --script-live --script "$SCRIPT" > "$OUT" 2>&1 &
+    APP_PID=$!
+    seen=0
+    while kill -0 "$APP_PID" 2>/dev/null; do
+        n=$(grep -c '^VRRUNNER: ' "$OUT")
+        while [ "$seen" -lt "$n" ]; do
+            seen=$((seen + 1))
+            ev=$(grep '^VRRUNNER: ' "$OUT" | sed -n "${seen}p")
+            case "$ev" in
+                "VRRUNNER: stop-runtime")  echo "runner: stopping the private runtime"; stop_runtime ;;
+                "VRRUNNER: start-runtime") echo "runner: starting the private runtime"; start_runtime ;;
+            esac
+        done
+        sleep 0.2
+    done
+    wait "$APP_PID"; rc=$?
+    cat "$OUT"
 else
     XDG_RUNTIME_DIR="$XDG_DIR" XR_RUNTIME_JSON="$MANIFEST" \
         "$APP" --vr --script "$SCRIPT" || rc=$?

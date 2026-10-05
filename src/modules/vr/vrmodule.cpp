@@ -13,8 +13,15 @@ For more information see the LICENSE file
 
 #include <QAction>
 #include <QColor>
+#include <functional>
+#include <QEvent>
+#include <QMessageBox>
+#include <QPushButton>
+#include <QTimer>
+#include <QWidget>
 
 #include "bridge/enginehost.h"
+#include "bridge/vrnames.h"
 #include "modules/vr/vrapi.h"
 #include "scripting/scriptengine.h"
 #include "scripting/scripthost.h"
@@ -28,6 +35,148 @@ For more information see the LICENSE file
 
 VrModule::VrModule() = default;
 VrModule::~VrModule() = default;
+
+namespace {
+/// THE LAST VR START FAILURE THE USER WAS TOLD ABOUT (VR-START-1), process-wide
+/// like the session: what `vr.startReport()` reads.
+struct StartRecord {
+    QString failure;
+    QString reason;
+    QString title;
+    QString text;
+    int dialogs = 0;
+    int notices = 0;
+};
+StartRecord gStart;
+
+jahshaka::engine::Engine *engineOf(const StudioContext &host)
+{
+    if (!host.engine) return nullptr;
+    const auto e = host.engine->engine();
+    return e ? e.get() : nullptr;
+}
+}
+
+QVariantMap VrModule::startReport()
+{
+    // THE REPORT IS THE UI AS OF NOW: the follower runs on the driver's frames,
+    // and a caller between them (a script stepping editor.frame, which bypasses
+    // the driver) gets the same follow first — what it reads is what a person
+    // would see on the next frame.
+    followSession();
+    QVariantMap out;
+    out[QStringLiteral("failure")] = gStart.failure;
+    out[QStringLiteral("reason")] = gStart.reason;
+    out[QStringLiteral("title")] = gStart.title;
+    out[QStringLiteral("text")] = gStart.text;
+    out[QStringLiteral("dialogs")] = gStart.dialogs;
+    out[QStringLiteral("notices")] = gStart.notices;
+    out[QStringLiteral("dialogOpen")] = !mStartDialog.isNull() && mStartDialog->isVisible();
+    return out;
+}
+
+bool VrModule::tryAgain()
+{
+    if (mStartDialog.isNull() || !mStartDialog->isVisible()) return false;
+    mStartDialog->hide();
+    toggle();
+    return true;
+}
+
+void VrModule::reportStartFailure(bool dialog, const QString &fallbackReason)
+{
+    using jahshaka::engine::VrFailure;
+    jahshaka::engine::Engine *e = engineOf(host);
+    const jahshaka::engine::VrInfo info = e ? e->vrInfo() : jahshaka::engine::VrInfo();
+    const VrFailure f = e ? info.failure : VrFailure::Headless;
+    const QString runtime = vrLaunch().anyRuntime || vrLaunch().headsetRuntime.isEmpty()
+                                ? QObject::tr("the VR runtime")
+                                : vrLaunch().headsetRuntime;
+    const QString reason = f == VrFailure::None || info.reason.empty()
+                               ? fallbackReason
+                               : QString::fromStdString(info.reason);
+    QString title, text;
+    switch (f) {
+    case VrFailure::NoRuntime:
+        title = QObject::tr("No headset found");
+        text = QObject::tr("No VR runtime is running. Start %1, connect the headset, then click "
+                           "Try again.").arg(runtime);
+        break;
+    case VrFailure::WrongRuntime:
+        title = QObject::tr("No headset found");
+        text = QObject::tr("The active VR runtime is %1, not %2. Start %2 and connect the headset, "
+                           "then click Try again. (Settings > General > Editor chooses the headset "
+                           "runtime.)")
+                   .arg(QString::fromStdString(info.manifestRuntime.empty() ? info.manifest
+                                                                            : info.manifestRuntime),
+                        runtime);
+        break;
+    case VrFailure::NoHeadset:
+        title = QObject::tr("No headset found");
+        text = QObject::tr("%1 is running but no headset is connected. Connect the headset, then "
+                           "click Try again.").arg(runtime);
+        break;
+    case VrFailure::ConnectionLost:
+        title = QObject::tr("The headset disconnected");
+        text = QObject::tr("The headset or its runtime went away. The editor is still here: "
+                           "reconnect the headset, then click Try again.");
+        break;
+    case VrFailure::DeviceMismatch:
+        title = QObject::tr("VR did not start");
+        text = QObject::tr("The VR runtime cannot use the GPU this editor runs on.");
+        break;
+    case VrFailure::Disabled:
+        title = QObject::tr("VR is off");
+        text = QObject::tr("VR is off for this run (--no-vr or JAHSHAKA_VR=0).");
+        break;
+    case VrFailure::Headless:
+        title = QObject::tr("VR is off");
+        text = QObject::tr("This run has no renderer to share with a headset.");
+        break;
+    case VrFailure::RuntimeBroken:
+    case VrFailure::None:
+        title = QObject::tr("VR did not start");
+        text = QObject::tr("The VR runtime failed to start a session. Restart %1, then click Try "
+                           "again.").arg(runtime);
+        break;
+    }
+    gStart.failure = vrnames::failure(f);
+    gStart.reason = reason;
+    gStart.title = title;
+    gStart.text = text;
+    qWarning("Jahshaka VR: %s - %s (%s)", qPrintable(title), qPrintable(reason),
+             qPrintable(gStart.failure));
+    if (!dialog) {
+        ++gStart.notices;
+        if (host.shell) host.shell->showNotice(title, text);
+        return;
+    }
+    ++gStart.dialogs;
+    if (!host.shellWidget) return;
+    // ONE DIALOG, REUSED, NEVER MODAL: a VR failure must not block the editor
+    // (nor a script driving it), and a second failure updates the open one
+    // rather than stacking a second.
+    if (mStartDialog.isNull()) {
+        mStartDialog = new QMessageBox(host.shellWidget);
+        mStartDialog->setObjectName(QStringLiteral("vrStartDialog"));
+        mStartDialog->setIcon(QMessageBox::Warning);
+        mStartDialog->setWindowModality(Qt::NonModal);
+        QPushButton *again = mStartDialog->addButton(QObject::tr("Try again"),
+                                                     QMessageBox::AcceptRole);
+        mStartDialog->addButton(QMessageBox::Close);
+        mStartDialog->setDefaultButton(again);
+        // A QMessageBox button closes the box itself; the retry runs after it,
+        // on the same path vr.tryAgain() takes.
+        QObject::connect(again, &QPushButton::clicked, mAction.get(), [this]() {
+            QTimer::singleShot(0, mAction.get(), [this]() { toggle(); });
+        });
+    }
+    mStartDialog->setWindowTitle(title);
+    mStartDialog->setText(text);
+    mStartDialog->setInformativeText(reason);
+    mStartDialog->show();
+    mStartDialog->raise();
+}
 
 void VrModule::contribute(Contributions &c)
 {
@@ -66,22 +215,87 @@ void VrModule::contribute(Contributions &c)
     // not would be a lie.
     //
     // WHAT IT COSTS, stated honestly (lead review F8): in a process that CANNOT
-    // do VR — every ordinary launch, since capability is fixed at boot and only
-    // `--vr` asks for it — this is one cached bool and nothing else, which is
-    // the case that must not pay. In a VR-capable process it is a `VrStatus`
+    // do VR (--no-vr, JAHSHAKA_VR=0 — every test run) this is one cached bool
+    // and nothing else. In a VR-capable process it is a `VrStatus`
     // read per frame on the UI thread (a ~20-word struct built from the
     // session's own counters, no lock and no runtime call), and the icon is
     // rebuilt only when the answer moves.
     if (host.engine && host.engine->driver()) {
         QObject::connect(host.engine->driver(), &EngineRenderDriver::beforeFrame, mAction.get(),
-                         [this]() {
-            if (!mCapable) return;
-            PlayerService *player = host.services ? host.services->player : nullptr;
-            if ((player && player->isVrActive()) != mIconActive
-                || (isEditorPreviewActive() && !mIconActive))
-                refreshUi();
-        });
+                         [this]() { followSession(); });
     }
+    refreshUi();
+    // THE STARTUP HEADSET CHECK, armed only when this run asked for it (Start
+    // in VR, or --vr / JAHSHAKA_VR=1). A VR-off run pays nothing.
+    if (mCapable && vrLaunch().startCheck) scheduleStartCheck();
+}
+
+namespace {
+/// Runs `fn` once, on the watched widget's first Show event, then removes
+/// itself — the start check waits for the WINDOW, never for a clock.
+class ShowOnce final : public QObject
+{
+public:
+    ShowOnce(QWidget *watched, std::function<void()> fn) : QObject(watched), mFn(std::move(fn))
+    {
+        watched->installEventFilter(this);
+    }
+
+protected:
+    bool eventFilter(QObject *watched, QEvent *event) override
+    {
+        if (event->type() == QEvent::Show) {
+            watched->removeEventFilter(this);
+            // Posted, so the window finishes showing before the check paints.
+            QTimer::singleShot(0, watched, mFn);
+            deleteLater();
+        }
+        return QObject::eventFilter(watched, event);
+    }
+
+private:
+    std::function<void()> mFn;
+};
+}
+
+void VrModule::followSession()
+{
+    if (!mCapable) return;
+    PlayerService *player = host.services ? host.services->player : nullptr;
+    if ((player && player->isVrActive()) != mIconActive
+        || (isEditorPreviewActive() && !mIconActive)) {
+        const bool wasActive = mIconActive;
+        refreshUi();
+        // (e) A SESSION THE HEADSET OR RUNTIME DROPPED: the engine has ended
+        // it; the editor carries on and the user is told once.
+        jahshaka::engine::Engine *e = engineOf(host);
+        if (wasActive && !mIconActive && e &&
+            e->vrInfo().failure == jahshaka::engine::VrFailure::ConnectionLost)
+            reportStartFailure(true);
+    }
+}
+
+void VrModule::scheduleStartCheck()
+{
+    // ONCE THE WINDOW IS UP, not here: the modules contribute inside
+    // MainWindow's constructor (the splash may still hold the event loop for
+    // the shader build), and a notice shown on a hidden window is a notice
+    // nobody saw. Driven by the window's own Show event — no wall clock
+    // (ENGINE trap 7); a shell already showing gets it on the next event turn.
+    if (!host.shellWidget || host.shellWidget->isVisible()) {
+        QTimer::singleShot(0, mAction.get(), [this]() { runStartCheck(); });
+        return;
+    }
+    new ShowOnce(host.shellWidget, [this]() { runStartCheck(); });
+}
+
+void VrModule::runStartCheck()
+{
+    jahshaka::engine::Engine *e = engineOf(host);
+    if (!e || e->vrProbe()) { refreshUi(); return; }
+    // THE PREFERENCE'S CHECK IS A NOTICE (the user did not ask for VR this
+    // launch); an explicit --vr / JAHSHAKA_VR=1 is answered with the dialog.
+    reportStartFailure(vrLaunch().source != QLatin1String("setting"));
     refreshUi();
 }
 
@@ -96,13 +310,13 @@ void VrModule::toggle()
         // happens when I click it" — the runtime had refused the session six
         // times and the only witness was the log). The verb's own reason is in
         // the host's error slot, where `app.lastError()` reads it.
-        if (!was && !on) showRefusal(scriptHost ? scriptHost->lastError : QString());
+        if (!was && !on) reportStartFailure(true, scriptHost ? scriptHost->lastError : QString());
         refreshUi();
         return;
     }
     if (!player) return;
     // OFF THE EDITOR PAGE THE BUTTON MEANS THE PLAYER, AND THE PLAYER NEEDS A
-    // WORLD (SMOKE-FIX-1's fix round, F7). On a `--vr` boot this icon is live
+    // WORLD (SMOKE-FIX-1's fix round, F7). On a VR-enabled run this icon is live
     // on the DESKTOP page, where there is nothing to play: the toggle used to
     // open the Player page over no project at all and start it. Say so and stop
     // — the service's own refusal is the same predicate, this is the sentence.
@@ -116,30 +330,9 @@ void VrModule::toggle()
     const bool wasVr = player->isVrActive();
     if (!player->toggleVr() && !wasVr) {
         qWarning("Jahshaka VR: the toggle did not start - %s", qPrintable(player->lastError()));
-        showRefusal(player->lastError());
+        reportStartFailure(true, player->lastError());
     }
     refreshUi();
-}
-
-void VrModule::showRefusal(const QString &reason)
-{
-    // THE SENTENCE A PERSON CAN ACT ON FIRST, the runtime's own words second.
-    // One case deserves its own sentence because nothing in the reason says
-    // what to DO: the OpenXR runtime created this process's Vulkan device at
-    // boot, so a runtime connection that died afterwards — WiVRn starts a fresh
-    // streaming process every time the headset reconnects, and the one this
-    // app connected to is gone — cannot be re-made in place. Every
-    // xrCreateSession then fails XR_ERROR_RUNTIME_FAILURE for the life of the
-    // process (measured, the owner's #51 smoke).
-    const bool connectionDied = reason.contains(QLatin1String("XR_ERROR_RUNTIME_FAILURE"))
-                             || reason.contains(QLatin1String("XR_ERROR_INSTANCE_LOST"))
-                             || reason.contains(QLatin1String("XR_ERROR_RUNTIME_UNAVAILABLE"));
-    QString text = connectionDied
-        ? QObject::tr("The headset's connection changed after Jahshaka started. Put the headset on, "
-                      "check it is connected, then restart Jahshaka.")
-        : QObject::tr("The headset did not start.");
-    if (!reason.isEmpty()) text += QStringLiteral("\n") + reason;
-    if (host.shell) host.shell->showNotice(QObject::tr("VR did not start"), text);
 }
 
 void VrModule::refreshUi()
@@ -149,17 +342,15 @@ void VrModule::refreshUi()
     const bool available = player && player->vrAvailable();
     const bool previewActive = isEditorPreviewActive();
     const bool active = available && (player->isVrActive() || previewActive);
-    // FIXED AT BOOT, so it is asked once and cached: the per-frame follower
-    // tests this before it asks anything else.
+    // FIXED FOR THE PROCESS (the policy), so it is cached: the per-frame
+    // follower tests this before it asks anything else.
     mCapable = available;
     mAction->setEnabled(available);
     mAction->setChecked(active);
     mIconActive = active;
-    // THE TOOLTIP CARRIES THE RUNTIME'S OWN REASON when the icon is dead, plus
-    // the sentence a user can act on: VR capability is decided once, at boot,
-    // because the OpenXR route has the RUNTIME create the Vulkan device the
-    // whole engine runs on (VR_SPEC §7 risk 11). Plugging a headset in later
-    // needs a restart, and nothing in the editor can change that at runtime.
+    // THE ICON IS DEAD ONLY WHEN THIS RUN CANNOT DO VR AT ALL (--no-vr,
+    // JAHSHAKA_VR=0, headless). A missing headset is the click's answer — the
+    // dialog with Try again — never a dead icon (VR-START-1).
     if (available) {
         const bool onEditor = host.shell && host.shell->space() == QLatin1String("editor");
         mAction->setToolTip(active
@@ -170,9 +361,7 @@ void VrModule::refreshUi()
                         : QStringLiteral("Enter VR | Run the scene in the headset (the Player page, "
                                          "mirrored here)")));
     } else {
-        QString why = player ? player->vrUnavailableReason() : QString();
-        if (!cliVr())
-            why = QStringLiteral("VR capability is fixed at boot — restart with --vr");
+        const QString why = player ? player->vrUnavailableReason() : QString();
         mAction->setToolTip(QStringLiteral("Enter VR | Unavailable: %1").arg(why));
     }
     if (host.shell) host.shell->showPlayerVrState(available, active);
@@ -186,6 +375,7 @@ void VrModule::registerApi(ScriptEngine &engine)
     // the scripting engine may well be torn down first.
     scriptHost = &engine.scriptHost();
     api = new VrApi(engine.scriptHost(), host);
+    api->setModule(this);
     engine.addModule(api);
 }
 

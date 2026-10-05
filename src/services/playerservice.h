@@ -72,9 +72,9 @@ public:
     bool restart();
 
     // ---- THE VR MODE (SPECS/VR_SPEC.md §4.5, phase 3) ---------------------
-    /// Can this process do VR at all? Fixed at boot (the engine asks the
-    /// runtime once, and only when the process was started with --vr), so the
-    /// UI can enable or disable its icon and never has to re-ask.
+    /// May this process attempt VR at all? False only under --no-vr,
+    /// JAHSHAKA_VR=0 or a headless engine (VR-START-1); whether a headset
+    /// answers is each session's own question (a fresh connection per start).
     bool vrAvailable() const;
     /// Why not, in words, when it cannot — straight from the runtime or the
     /// loader, plus the sentence a user can act on when this run simply never

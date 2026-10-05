@@ -227,6 +227,43 @@ int main(int argc, char **argv)
               "the usage text names the options");
     }
 
+    // ---- THE VR BOOT PRECEDENCE (VR-SETTING-1) ------------------------------
+    // --vr / --no-vr, then JAHSHAKA_VR=1 / 0, then the Start in VR preference.
+    {
+        const CliOptions o = parsed({ "--no-vr" });
+        CHECK(o.errors.isEmpty() && o.noVr && !o.vr, "--no-vr parses");
+        const CliOptions both = parsed({ "--vr", "--no-vr" });
+        CHECK(!both.errors.isEmpty(), "--vr with --no-vr is refused, never guessed");
+        CHECK(CliOptions::usageText().contains(QStringLiteral("--no-vr")),
+              "the usage text names --no-vr");
+    }
+    {
+        // enabled = OpenXR may be used at all; any = no headset-runtime check;
+        // start = the startup headset check (Start in VR).
+        struct Row { bool vr, noVr; const char *env; bool setting;
+                     bool enabled, any, start; const char *source; };
+        const Row rows[] = {
+            { false, false, "",  true,  true,  false, true,  "setting" },        // the default
+            { false, false, "",  false, true,  false, false, "setting" },        // unticked: the button still works
+            { false, false, "garbage", true, true, false, true, "setting" },     // only 0/1 mean anything
+            { false, false, "0", true,  false, false, false, "JAHSHAKA_VR=0" },  // the test launchers' form
+            { false, false, "1", false, true,  true,  true,  "JAHSHAKA_VR=1" },
+            { false, true,  "1", true,  false, false, false, "--no-vr" },        // the flag beats the env
+            { true,  false, "0", false, true,  true,  true,  "--vr" },           // a VR suite under the launchers' 0
+        };
+        for (const Row &r : rows) {
+            const CliOptions::VrChoice c =
+                CliOptions::resolveVr(r.vr, r.noVr, QByteArray(r.env), r.setting);
+            CHECK(c.enabled == r.enabled && c.anyRuntime == r.any && c.startCheck == r.start &&
+                      c.source == QLatin1String(r.source),
+                  "vr=%d no-vr=%d JAHSHAKA_VR='%s' setting=%d -> enabled=%d any=%d start=%d from %s "
+                  "(got %d %d %d from %s)",
+                  int(r.vr), int(r.noVr), r.env, int(r.setting), int(r.enabled), int(r.any),
+                  int(r.start), r.source, int(c.enabled), int(c.anyRuntime), int(c.startCheck),
+                  qPrintable(c.source));
+        }
+    }
+
     std::printf(failures ? "FAILED: %d check(s)\n" : "ALL CHECKS PASSED\n", failures);
     return failures ? 1 : 0;
 }

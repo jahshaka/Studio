@@ -1,15 +1,6 @@
-# vr.spike_1a — VR phase 1a's spike, as a gate suite (SPECS/VR_SPEC.md §6).
-#
-# The SUBJECT is the external-device route: an OpenXR runtime creates the
-# VkInstance and the VkDevice, Ogre renders on them, the frame reaches the
-# runtime's swapchain. It is the only test in the tree that would catch a pin
-# bump undoing fork d014b064f+1bccc3f93 (was 0068) (the validateDevice veto, the exported extension
-# list + feature chain).
-#
-# It compiles `xr_spike.cpp` beside this file — ONE source, which `standalone/`
-# also builds as a plain binary (that is how phase 1b points it at WiVRn and a
-# real headset without building Studio). A second copy would rot; phase 2 replaces
-# both with the engine's VrSession and its `vr.session` suite.
+# THE VR SUITES (SPECS/VR_SPEC.md §6). (`vr.spike_1a`, phase 1a's external-device
+# spike, was deleted by VR-START-1 with the route it proved: the engine no longer
+# boots on a runtime-made device; `vr.session` is the session's suite.)
 #
 # EVERYTHING BELOW THE FIRST GUARD IS OPTIONAL. Without libopenxr-dev, without
 # the Vulkan render system, or on macOS, none of the RUNTIME suites is built and
@@ -58,57 +49,18 @@ endif()
 find_package(OpenXR QUIET)
 find_package(Vulkan QUIET)
 if(NOT OpenXR_FOUND OR NOT Vulkan_FOUND OR NOT OGRE_NEXT_VULKAN_RS_LIB)
-    message(STATUS "Jahshaka: vr.spike_1a NOT built — openxr=${OpenXR_FOUND} "
+    message(STATUS "Jahshaka: the VR runtime suites NOT built — openxr=${OpenXR_FOUND} "
                    "vulkan=${Vulkan_FOUND} vulkanRs='${OGRE_NEXT_VULKAN_RS_LIB}'")
     return()
 endif()
 
-set(JAH_VR_SPIKE_SRC "${CMAKE_CURRENT_SOURCE_DIR}/xr_spike.cpp")
-if(NOT EXISTS "${JAH_VR_SPIKE_SRC}")
-    message(STATUS "Jahshaka: vr.spike_1a NOT built — no ${JAH_VR_SPIKE_SRC}")
-    return()
-endif()
 
-add_executable(test_vr_spike_1a "${JAH_VR_SPIKE_SRC}")
-set_target_properties(test_vr_spike_1a PROPERTIES
-    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
-    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
-    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
-    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
-    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
-target_include_directories(test_vr_spike_1a PRIVATE
-    "${OGRE_NEXT_PREFIX}/include/OGRE-Next"
-    "${OGRE_NEXT_PREFIX}/include/OGRE-Next/Hlms/Common"
-    "${OGRE_NEXT_PREFIX}/include/OGRE-Next/Hlms/Pbs"
-    "${OGRE_NEXT_PREFIX}/include/OGRE-Next/Hlms/Unlit"
-    # Both Vulkan header roots — the install flattens the render system's headers
-    # but they include their siblings as `Vao/...`, which only resolves under
-    # .../include (the trap recorded in irisgl/engine/CMakeLists.txt).
-    "${OGRE_NEXT_PREFIX}/include/OGRE-Next/RenderSystems/Vulkan"
-    "${OGRE_NEXT_PREFIX}/include/OGRE-Next/RenderSystems/Vulkan/include"
-    ${Vulkan_INCLUDE_DIRS})
-target_link_directories(test_vr_spike_1a PRIVATE "${OGRE_NEXT_PREFIX}/lib")
-target_link_libraries(test_vr_spike_1a PRIVATE
-    OgreNextMain OgreNextHlmsPbs OgreNextHlmsUnlit
-    "${OGRE_NEXT_VULKAN_RS_LIB}" ${Vulkan_LIBRARIES} OpenXR::openxr_loader)
-target_compile_definitions(test_vr_spike_1a PRIVATE
-    JAH_OGRE_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
-    # The TREE'S OWN staged media, so the suite fails when the media a patch
-    # needs is missing rather than reading the engine source tree behind the
-    # staging step's back.
-    JAH_OGRE_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}")
-add_dependencies(test_vr_spike_1a JahshakaEngineMedia)
-
-# The manifest is named EXPLICITLY and the runtime's name is asserted inside the
-# spike: the USER-level manifest (~/.config/openxr/1/) is WiVRn's and is
+# The manifest is named EXPLICITLY and the runtime's name is asserted by the
+# suites (JAH_VR_EXPECT_RUNTIME): the USER-level manifest (~/.config/openxr/1/) is WiVRn's and is
 # rewritten whenever the owner plugs a headset in (VR_SPEC §2.6, §7 item 10).
 set(JAH_MONADO_MANIFEST "/usr/share/openxr/1/openxr_monado.json"
     CACHE FILEPATH "OpenXR manifest of the simulated-HMD runtime the VR gate uses")
 
-jah_gpu_row(vr.spike_1a CLASS vr
-         COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/run_vr_spike.sh"
-                 "$<TARGET_FILE:test_vr_spike_1a>" "${JAH_MONADO_MANIFEST}" 60
-         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 # ---------------------------------------------------------------------------
 # vr.session — PHASE 2's suite: the session inside the engine (VR_SPEC §6).
 #
@@ -270,6 +222,41 @@ set_tests_properties(vr.mirror_live PROPERTIES
     RESOURCE_LOCK monado COST ${JAH_COST_MONADO}
     SKIP_RETURN_CODE 77
     ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}HOME=${_vr_mirror_home};JAHSHAKA_DATA_ROOT=${_vr_mirror_home}/.local/share/Jahshaka;JAHSHAKA_VR_TEST_BLINK_EVERY=30;JAHSHAKA_VR_TEST_BLINK_FRAMES=12")
+
+# ---------------------------------------------------------------------------
+# vr.start_recovery (VR-START-1) — no runtime at launch -> the dialog; the runtime
+# arrives -> Try again starts VR in the same process; the runtime dies mid-session
+# -> the editor stays, the dialog says so; a NEW runtime process -> Try again
+# reconnects. All against the runner's PRIVATE Monado (run_vr_app.sh's events).
+set(_vr_start_home "${CMAKE_CURRENT_BINARY_DIR}/vr-start-home")
+jah_gpu_row(vr.start_recovery CLASS vr
+         COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/run_vr_app.sh"
+                 "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" "${JAH_MONADO_MANIFEST}"
+                 "${CMAKE_CURRENT_SOURCE_DIR}/vr_start.js"
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(vr.start_recovery PROPERTIES
+    LABELS "scripting"
+    TIMEOUT 300
+    RESOURCE_LOCK monado COST ${JAH_COST_MONADO}
+    SKIP_RETURN_CODE 77
+    ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}HOME=${_vr_start_home};JAHSHAKA_DATA_ROOT=${_vr_start_home}/.local/share/Jahshaka;JAH_VR_RUNNER_EVENTS=1;JAH_VR_RUNNER_DEFER=1")
+
+# vr.start_broken (VR-START-1 case d): the active manifest's runtime library cannot be
+# loaded. The runner still owns a private runtime (unused); the manifest is ours.
+file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/broken-openxr-runtime.json"
+     "{ \"file_format_version\": \"1.0.0\", \"runtime\": { \"name\": \"Broken\", \"library_path\": \"/nonexistent/libopenxr_broken.so\" } }\n")
+set(_vr_broken_home "${CMAKE_CURRENT_BINARY_DIR}/vr-start-broken-home")
+jah_gpu_row(vr.start_broken CLASS vr
+         COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/run_vr_app.sh"
+                 "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" "${CMAKE_CURRENT_BINARY_DIR}/broken-openxr-runtime.json"
+                 "${CMAKE_CURRENT_SOURCE_DIR}/vr_start_broken.js"
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(vr.start_broken PROPERTIES
+    LABELS "scripting"
+    TIMEOUT 240
+    RESOURCE_LOCK monado COST ${JAH_COST_MONADO}
+    SKIP_RETURN_CODE 77
+    ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}HOME=${_vr_broken_home};JAHSHAKA_DATA_ROOT=${_vr_broken_home}/.local/share/Jahshaka")
 
 # ---------------------------------------------------------------------------
 # vr.input_session — LOCOMOTION AGAINST A REAL RUNTIME (stage 1,
@@ -466,15 +453,6 @@ set_tests_properties(vr.eye_grade PROPERTIES
 # scripting.e2e.sample_open; this is the same route on the boot that reported
 # it. No session is begun — the subject is the boot, not the headset.
 
-set_tests_properties(vr.spike_1a PROPERTIES
-    LABELS "engine"
-    TIMEOUT 120
-    # The runtime is a SECOND Vulkan instance beside ours; its IPC socket lives
-    # in the runner's private XDG_RUNTIME_DIR. One Monado at a time (the family
-    # lock, tests/CMakeLists.txt); the rest of the gate keeps running.
-    RESOURCE_LOCK monado COST ${JAH_COST_MONADO}
-    SKIP_RETURN_CODE 77
-    ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}JAHSHAKA_DATA_ROOT=${CMAKE_CURRENT_BINARY_DIR}/vr-home")
 
 # EVERY ROW OF THIS DIRECTORY CARRIES THE `vr` LABEL (lane D6B-GATE-SHAPE; audit §8: the VR
 # rows were labelled `scripting`, `engine` or `services` and there was no way to say "the VR

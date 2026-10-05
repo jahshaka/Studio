@@ -98,7 +98,9 @@ QString CliOptions::usageText()
         "  --test-tier <mode>          put every scene on a World Mode (low, medium, high, epic)\n"
         "  --clear-shader-cache        delete the shader cache before the engine starts\n"
         "  --no-ray-query              boot with the hardware ray-query tier off\n"
-        "  --vr                        ask the OpenXR runtime for a session-capable boot\n"
+        "  --vr                        VR with any OpenXR runtime, the headset checked at startup\n"
+        "  --no-vr                     no VR (no OpenXR call) in this run\n"
+        "                              (JAHSHAKA_VR=1 / JAHSHAKA_VR=0 are the same two switches)\n"
         "  --log-level <lvl|cat=lvl>   session-log levels (repeatable, comma-separated)\n"
         "  --log-file <path>           the session log file\n"
         "  --log-dir <dir>             the session log directory\n"
@@ -169,6 +171,7 @@ CliOptions CliOptions::parse(int argc, char *argv[])
         else if (qstrcmp(argv[i], "--no-log") == 0) o.noLog = true;
         else if (qstrcmp(argv[i], "--no-ray-query") == 0) o.noRayQuery = true;
         else if (qstrcmp(argv[i], "--vr") == 0) o.vr = true;
+        else if (qstrcmp(argv[i], "--no-vr") == 0) o.noVr = true;
         else if (qstrncmp(argv[i], "--test-tier=", 12) == 0) o.testTier = QString::fromLocal8Bit(argv[i] + 12);
         else if (qstrcmp(argv[i], "--test-tier") == 0) {
             // A bare flag is refused, like --mcp-port: dropping it would boot the
@@ -199,7 +202,19 @@ CliOptions CliOptions::parse(int argc, char *argv[])
     if ((!o.poolName.isEmpty() || !o.poolArms.isEmpty() || !o.poolBaseline.isEmpty()) &&
         o.poolScripts.isEmpty())
         o.errors << QStringLiteral("--pool/--arms/--pool-baseline: need --scripts <dir-or-list>");
+    if (o.vr && o.noVr)
+        o.errors << QStringLiteral("--vr and --no-vr: pass one or the other, not both");
     return o;
+}
+
+CliOptions::VrChoice CliOptions::resolveVr(bool cliVr, bool cliNoVr, const QByteArray &env,
+                                           bool startInVr)
+{
+    if (cliVr)      return { true,  true,  true,  QStringLiteral("--vr") };
+    if (cliNoVr)    return { false, false, false, QStringLiteral("--no-vr") };
+    if (env == "1") return { true,  true,  true,  QStringLiteral("JAHSHAKA_VR=1") };
+    if (env == "0") return { false, false, false, QStringLiteral("JAHSHAKA_VR=0") };
+    return { true, false, startInVr, QStringLiteral("setting") };
 }
 
 void CliOptions::applyPlatformPolicy() const

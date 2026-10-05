@@ -1,9 +1,8 @@
 // vr.session — the VR SESSION, in the engine (SPECS/VR_SPEC.md §6, phase 2).
 //
-// WHAT IT IS FOR. `vr.spike_1a` beside it proves the FLOOR: that an engine
-// booted on a device an OpenXR runtime created renders the same picture as one
-// on a device Ogre created (fork d014b064f+1bccc3f93 (was 0068)). This suite proves the PHASE-2
-// engine on top of it:
+// WHAT IT IS FOR. Since VR-START-1 the engine runs on its OWN device (the
+// fork's OpenXR interop set) and a session connects through XR_KHR_vulkan_enable;
+// this suite proves the session on that device:
 //
 //   1. A session begins on the simulated runtime, walks the runtime's own
 //      lifecycle to FOCUSED and submits frames the runtime ACCEPTS.
@@ -78,7 +77,7 @@ EngineConfig vrConfig() {
     cfg.pluginDir    = JAHSHAKA_TEST_PLUGIN_DIR;
     cfg.hlmsMediaDir = JAHSHAKA_TEST_MEDIA_DIR;
     cfg.logFile      = "test_vr_session-ogre.log";
-    cfg.vr           = VrMode::IfAvailable;
+    cfg.vr.enabled   = true;   // any runtime: the runner names it (JAH_VR_EXPECT_RUNTIME)
     return cfg;
 }
 
@@ -260,6 +259,21 @@ unsigned long long pump(Engine *e, unsigned long long want, unsigned budget) {
 
 }  // namespace
 
+/// SKIP ONLY WHAT A BOX CAN LACK (VR-START-1 fix round): with the runner's own
+/// private runtime named (JAH_VR_EXPECT_RUNTIME), a probe that reached it and
+/// failed — a broken runtime, a GPU or extension mismatch, a version refusal —
+/// is a DEFECT and fails; only "no runtime" / "no headset" may skip.
+static int probeFailedExit(const VrInfo &info) {
+    const bool absent = info.failure == VrFailure::NoRuntime || info.failure == VrFailure::NoHeadset;
+    if (std::getenv("JAH_VR_EXPECT_RUNTIME") && !absent) {
+        std::printf("FAIL: the runner's runtime answered but the connection failed: %s\n",
+                    info.reason.c_str());
+        return 1;
+    }
+    std::printf("SKIP: no OpenXR session-capable runtime: %s\n", info.reason.c_str());
+    return 77;
+}
+
 int main() {
     std::printf("vr.session — the VR session in the engine (VR_SPEC §6)\n");
 
@@ -269,15 +283,21 @@ int main() {
         engine.reset(Engine::create(vrConfig(), error).release());
         if (!engine) { std::printf("SKIP: the engine did not start: %s\n", error.c_str()); return 77; }
     }
+    // A View FIRST: the engine registers its Hlms with the first one, and
+    // createScene refuses before that.
+    View *desktop = engine->createOffscreenView("desktop", 320, 240, Colour{ 0.16f, 0.20f, 0.28f, 1.0f });
+    if (!desktop) {
+        std::printf("SKIP: no offscreen view: %s\n", engine->lastError().c_str());
+        return 77;
+    }
+    // VR-START-1: nothing connects at boot; the probe connects, asks and disconnects.
+    const bool probed = engine->vrProbe();
     const VrInfo info = engine->vrInfo();
     std::printf("RUNTIME '%s' %s | system '%s' | OpenXR %u.%u | eye %ux%u | mask=%d depth=%d\n",
                 info.runtime.c_str(), info.runtimeVersion.c_str(), info.system.c_str(),
                 info.apiMajor, info.apiMinor, info.eyeWidth, info.eyeHeight,
                 int(info.visibilityMask), int(info.depthLayer));
-    if (!engine->vrAvailable()) {
-        std::printf("SKIP: no OpenXR session-capable runtime: %s\n", info.reason.c_str());
-        return 77;
-    }
+    if (!probed) return probeFailedExit(info);
     // THE MANIFEST LAW (VR_SPEC §2.6): the runner names the runtime and this
     // asserts it, so a gate can never silently run against whatever the owner's
     // headset last wrote into ~/.config/openxr/1/.
@@ -286,13 +306,6 @@ int main() {
                   "the runtime is the one the runner named ('%s', got '%s')", want,
                   info.runtime.c_str());
 
-    // A View FIRST: the engine registers its Hlms with the first one, and
-    // createScene refuses before that.
-    View *desktop = engine->createOffscreenView("desktop", 320, 240, Colour{ 0.16f, 0.20f, 0.28f, 1.0f });
-    if (!desktop) {
-        std::printf("SKIP: no offscreen view: %s\n", engine->lastError().c_str());
-        return 77;
-    }
     Scene *scene = engine->createScene("vr");
     REQUIRE(scene != nullptr);
     buildScene(scene);
