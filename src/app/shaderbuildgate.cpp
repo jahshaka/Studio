@@ -281,8 +281,8 @@ unsigned holdSplashForShaderBuild(QApplication &app, VersionSplashScreen &splash
     });
     // ...cleared on every way out: it captures this function's locals.
     struct ClearObserver {
-        Engine *engine;
-        ~ClearObserver() { engine->setCompileObserver({}); }
+        Engine *engine = nullptr;
+        ~ClearObserver() { if (engine) engine->setCompileObserver({}); }
     } clearObserver{ engine.get() };
 
     // ---- Drive the build ---------------------------------------------------
@@ -498,7 +498,7 @@ unsigned holdSplashForShaderBuild(QApplication &app, VersionSplashScreen &splash
         warmScene->setGlobalIllumination(warmGi);
     }
     qInfo("startup shader build: the GI compute set's warm-up took %d frames, %lld ms%s%s", giFrames,
-          static_cast<long long>(giTimer.elapsed()), runPass ? "" : " (a warm cache and the same key: skipped)",
+          static_cast<long long>(giTimer.elapsed()), runPass ? "" : " (a warm cache: skipped — the global pass's key is the recorded one)",
           runPass && boundFrames == 0 ? " (the lighting arm never bound)" : "");
 
     // THE EDITOR'S WORLDS, THROUGH THE EDITOR'S OWN MIRROR (SHADER-WARM-2; was ATOM
