@@ -180,7 +180,7 @@ void MaterialReader::restoreGeneratedPieces(iris::PbrMaterialPtr mat, const QJso
 	if (!graph) return;
 	// BUILDING a material is a read: PathOnly, never an import.
 	MaterialHelper::resolveAppRelativeTextures(graph, MaterialHelper::TextureBinding::PathOnly,
-	                                           assethome::library());
+	                                           assethome::materials());
 	const QJsonObject pieces = materials::PieceEmitter::emitAndStore(graph, MaterialHelper::textureResolver());
 	mat->setCustomPiecePixel(pieces.value(QStringLiteral("customPiecePixel")).toString());
 	mat->setCustomPieceVertex(pieces.value(QStringLiteral("customPieceVertex")).toString());
