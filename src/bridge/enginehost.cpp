@@ -430,8 +430,8 @@ EngineHost::WarmUpShape EngineHost::warmUpShape()
 void EngineHost::rememberWarmUpShape(const WarmUpShape &shape)
 {
     SettingsManager *sm = SettingsManager::getDefaultManager();
-    // Written only on change: this runs on the open path and setValue reaches
-    // QSettings, which syncs to disk.
+    // Written only on change (the store writes the file on its own thread,
+    // but an unchanged preference is not a change).
     const WarmUpShape had = warmUpShape();
     if (had.samples != shape.samples) sm->set(settingkeys::shaderWarmupSamples, int(shape.samples));
     if (had.shadows != shape.shadows) sm->set(settingkeys::shaderWarmupShadows, shape.shadows);
@@ -513,7 +513,13 @@ void EngineHost::shutdown()
     // same "clear cache" button — its own manifest and its own validity key
     // (I-5), which deliberately does not name the GPU: a driver update has no
     // business invalidating a PNG's channel count.
-    if (mEngine) mEngine->saveTextureCache();
+    // Its WRITE goes to the shader cache's writer thread like the shader
+    // cache's own (SHADER-WARM-2: no file sync on the UI thread); the quit
+    // waits for it here, beside the wait above.
+    if (mEngine) {
+        mEngine->saveTextureCache();
+        mEngine->flushShaderCache(20000);
+    }
     if (mDriver) {
         mDriver->stop();
         delete mDriver;

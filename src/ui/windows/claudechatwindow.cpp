@@ -28,7 +28,7 @@ For more information see the LICENSE file
 #include <QPushButton>
 #include <QScrollArea>
 #include <QScrollBar>
-#include <QSettings>
+#include "data/settingsstore.h"
 #include <QSizeGrip>
 #include <QStackedWidget>
 #include <QStyle>
@@ -110,7 +110,7 @@ QLabel#claudeMcpBannerText { color: #e8d9a0; font-size: 11px; }
 
 } // namespace
 
-ClaudeChatWindow::ClaudeChatWindow(QSettings *settings, ClaudeChatHost *host, QWidget *parent)
+ClaudeChatWindow::ClaudeChatWindow(SettingsStore *settings, ClaudeChatHost *host, QWidget *parent)
     : QWidget(parent, Qt::Tool | Qt::FramelessWindowHint), mSettings(settings)
 {
     setObjectName(QStringLiteral("claudeChatRoot"));

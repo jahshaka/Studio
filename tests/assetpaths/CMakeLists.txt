@@ -9,6 +9,7 @@ add_executable(test_asset_paths test_asset_paths.cpp
     ${CMAKE_SOURCE_DIR}/src/services/assetstorepaths.cpp
     ${CMAKE_SOURCE_DIR}/src/services/assetstore.cpp
     ${CMAKE_SOURCE_DIR}/src/data/settingsmanager.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/settingsstore.cpp
     ${CMAKE_SOURCE_DIR}/src/data/database/database.cpp
     # database.cpp's link closure (Project, guids, asset helpers)
     ${CMAKE_SOURCE_DIR}/src/data/project.cpp
@@ -48,7 +49,8 @@ if(UNIX AND NOT APPLE)
     add_executable(test_asset_torn_write test_asset_torn_write.cpp
         ${CMAKE_SOURCE_DIR}/src/services/assetcas.cpp
         ${CMAKE_SOURCE_DIR}/src/services/assetstorepaths.cpp
-        ${CMAKE_SOURCE_DIR}/src/data/settingsmanager.cpp)
+        ${CMAKE_SOURCE_DIR}/src/data/settingsmanager.cpp
+        ${CMAKE_SOURCE_DIR}/src/data/settingsstore.cpp)
     set_target_properties(test_asset_torn_write PROPERTIES AUTOMOC ON
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
     target_include_directories(test_asset_torn_write PRIVATE

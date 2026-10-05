@@ -1893,11 +1893,8 @@ QVariantMap EditorApi::cameraSpeed(const QVariant &speed)
     }
     // NOTHING TO TELL THE SHELL: the toolbar's speed button follows the dial
     // itself (CameraSpeed::setOnChanged), which is what makes the Player's
-    // wheel move it too — and nothing to write, either. The store write is
-    // deferred (CameraSpeed::flush's note) precisely so a caller in a loop —
-    // a script here, a mouse-move on the slider there — cannot turn a setting
-    // into one durable rewrite of jahsettings.ini each; the value reaches the
-    // file half a second later, or at the latest when the window closes.
+    // wheel move it too — and nothing to write, either: the dial stores
+    // itself, and the settings store writes the file on its own thread.
     return cameraSpeedState();
 }
 

@@ -75,7 +75,7 @@
 #include "irisgl/document/scenegraph/scenenode.h"
 #include "irisgl/document/scenegraph/cameranode.h"
 #include "data/settingsmanager.h"
-#include <QSettings>
+#include "data/settingsstore.h"
 #include "ui/controls/assetdrag.h"
 
 
@@ -103,7 +103,7 @@ EngineSceneViewport::EngineSceneViewport(const std::shared_ptr<Engine> &engine,
     // The selection-preview preferences (CAMERAS_SPEC D3). Read once here
     // rather than per frame; the Preferences page and editor.setPip write them
     // back through setPipEnabled/setPipSize.
-    if (QSettings *st = SettingsManager::getDefaultManager()->settings) {
+    if (SettingsStore *st = SettingsManager::getDefaultManager()->settings) {
         mPipEnabled = st->value("camera/pip", true).toBool();
         mPipSize    = qBound(0.08, st->value("camera/pip_size", 0.28).toDouble(), 0.6);
     }
@@ -2340,7 +2340,7 @@ void EngineSceneViewport::setPipEnabled(bool on)
 {
     if (on == mPipEnabled) return;
     mPipEnabled = on;
-    if (QSettings *st = SettingsManager::getDefaultManager()->settings)
+    if (SettingsStore *st = SettingsManager::getDefaultManager()->settings)
         st->setValue("camera/pip", on);
 }
 
@@ -2349,7 +2349,7 @@ void EngineSceneViewport::setPipSize(double fraction)
     const double f = qBound(0.08, fraction, 0.6);
     if (qFuzzyCompare(f, mPipSize)) return;
     mPipSize = f;
-    if (QSettings *st = SettingsManager::getDefaultManager()->settings)
+    if (SettingsStore *st = SettingsManager::getDefaultManager()->settings)
         st->setValue("camera/pip_size", f);
 }
 

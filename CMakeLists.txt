@@ -202,7 +202,8 @@ set(SRCS
     src/ui/panels/timeline/timelinewidget.cpp 
     src/ui/panels/timeline/nodekeyframeanimation.cpp 
     src/data/project.cpp 
-    src/data/settingsmanager.cpp 
+    src/data/settingsmanager.cpp
+    src/data/settingsstore.cpp
     src/viewport/editorcameracontroller.cpp 
     src/viewport/engineviewwidget.cpp
     irisgl/mirror/scenemirror.cpp
@@ -557,6 +558,7 @@ set(HEADERS
     src/ui/panels/timeline/nodekeyframeanimation.h 
     src/data/project.h 
     src/data/settingsmanager.h 
+    src/data/settingsstore.h
     src/data/settingkeys.h
     src/viewport/editorcameracontroller.h 
     src/viewport/engineviewwidget.h

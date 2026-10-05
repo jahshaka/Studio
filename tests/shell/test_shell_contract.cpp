@@ -26,7 +26,7 @@
 #include <QApplication>
 #include <QLabel>
 #include <QMainWindow>
-#include <QSettings>
+#include "data/settingsstore.h"
 #include <QStackedWidget>
 #include <QTemporaryDir>
 #include <QToolBar>
@@ -133,7 +133,7 @@ int main(int argc, char **argv)
 {
     QApplication app(argc, argv);
     QTemporaryDir dir;
-    QSettings settings(dir.filePath(QStringLiteral("shortcuts.ini")), QSettings::IniFormat);
+    SettingsStore settings(dir.filePath(QStringLiteral("shortcuts.ini")));
 
     QMainWindow window;
     auto *stack = new QStackedWidget;

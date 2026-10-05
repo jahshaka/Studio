@@ -34,7 +34,7 @@ For more information see the LICENSE file
 #include <QFile>
 #include <QProcess>
 #include <QRegularExpression>
-#include <QSettings>
+#include "data/settingsstore.h"
 #include <QTemporaryDir>
 #include <QTextStream>
 
@@ -121,11 +121,11 @@ int childPrecedence(const QString &iniPath)
     JahLog::applyProfileDefaults(JahLog::Profile::Development);
     if (JahLog::db.level() != JahLog::Level::Log) return 10;      // layer 1
 
-    QSettings ini(iniPath, QSettings::IniFormat);
+    SettingsStore ini(iniPath);
     ini.setValue(QStringLiteral("log/db"), QStringLiteral("warning"));
     ini.setValue(QStringLiteral("log/nosuchcategory"), QStringLiteral("warning"));
     ini.setValue(QStringLiteral("log/mirror"), QStringLiteral("notalevel"));
-    ini.sync();
+    ini.flush();
     JahLog::applyIniLevels(&ini);
     if (JahLog::db.level() != JahLog::Level::Warning) return 11;  // layer 2 beats 1
     if (JahLog::mirror.level() != JahLog::Level::Log) return 12;  // bad value ignored

@@ -45,7 +45,7 @@ For more information see the LICENSE file
 #include <atomic>
 #include <functional>
 
-class QSettings;
+class SettingsStore;
 
 namespace JahLog {
 
@@ -196,7 +196,7 @@ struct Options
 /// Layer 2 of the precedence chain for the OPTIONS (as applyIniLevels is for
 /// the levels): `log/dir`, `log/maxFiles`, `log/purgeDays`, `log/timestamps`.
 /// The CLI then overrides whatever it names, and start() takes the result.
-Options optionsFromSettings(QSettings *settings);
+Options optionsFromSettings(SettingsStore *settings);
 
 /// Applies the profile's default table (spec §3.4). Pure data, exposed so a
 /// test can assert both tables from one Debug build.
@@ -221,7 +221,7 @@ bool isStarted();
 /// Layer 2 of the precedence chain (compiled default → INI → CLI → runtime).
 /// Reads `log/global`, `log/<category>`, `log/timestamps`,
 /// `log/perfSampleSeconds`, `log/maxFiles`, `log/purgeDays`.
-void applyIniLevels(QSettings *settings);
+void applyIniLevels(SettingsStore *settings);
 /// Layer 3: `--log-level=<level>` or `--log-level=<cat>=<lvl>[,<cat>=<lvl>…]`,
 /// repeated as often as you like. Unknown names are reported into the log.
 void applyLevelSpec(const QString &spec);

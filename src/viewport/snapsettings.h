@@ -24,7 +24,7 @@ For more information see the LICENSE file
 
 #include <QVector>
 
-class QSettings;
+class SettingsStore;
 
 class SnapSettings
 {
@@ -49,7 +49,7 @@ public:
 
     /// Loads persisted values from `settings` and writes every future set
     /// through it. Nullable (unbinds). Not owned.
-    static void bindSettings(QSettings *settings);
+    static void bindSettings(SettingsStore *settings);
 
     /// Back to defaults, persisted values cleared. Mainly for tests.
     static void reset();

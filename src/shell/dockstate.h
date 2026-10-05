@@ -36,7 +36,7 @@ For more information see the LICENSE file
 #include <QDockWidget>
 #include <QList>
 #include <QMainWindow>
-#include <QSettings>
+#include "data/settingsstore.h"
 #include <QString>
 
 namespace DockState {
@@ -87,7 +87,7 @@ inline QByteArray snapshot(const QMainWindow *window)
 
 /// Writes a layout blob under `key`. An empty blob writes nothing: a session
 /// with nothing to say about the layout must leave the stored one alone.
-inline void store(QSettings *settings, const QString &key, const QByteArray &blob)
+inline void store(SettingsStore *settings, const QString &key, const QByteArray &blob)
 {
     if (!settings || blob.isEmpty()) return;
     settings->setValue(key, blob);
@@ -95,7 +95,7 @@ inline void store(QSettings *settings, const QString &key, const QByteArray &blo
 
 /// Writes `window`'s dock layout under `key`. Cheap and unconditional — the
 /// caller decides when (on close, for the editor).
-inline void save(const QMainWindow *window, QSettings *settings, const QString &key)
+inline void save(const QMainWindow *window, SettingsStore *settings, const QString &key)
 {
     store(settings, key, snapshot(window));
 }
@@ -128,7 +128,7 @@ inline bool hasVisibleDock(const QMainWindow *window)
 /// way to ask for the panels back except by switching space. A layout that
 /// records no panels is not a layout: it is refused here, the window is put
 /// back exactly as it was, and the caller applies the default.
-inline bool restore(QMainWindow *window, QSettings *settings, const QString &key)
+inline bool restore(QMainWindow *window, SettingsStore *settings, const QString &key)
 {
     if (!window || !settings) return false;
     const QByteArray blob = settings->value(key).toByteArray();

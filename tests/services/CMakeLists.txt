@@ -153,7 +153,8 @@ jah_no_display(services.animation_undo)
 # or a takeover of the owner's screen.
 add_executable(test_ogre_samples test_ogre_samples.cpp
     ${CMAKE_SOURCE_DIR}/src/services/ogresamples.cpp
-    ${CMAKE_SOURCE_DIR}/src/data/settingsmanager.cpp)
+    ${CMAKE_SOURCE_DIR}/src/data/settingsmanager.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/settingsstore.cpp)
 set_target_properties(test_ogre_samples PROPERTIES AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
     CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")

@@ -188,13 +188,6 @@ void EditorToolbar::build(const Deps &deps)
 	CameraSpeed::setOnChanged([this] { syncCameraSpeedUi(); });
 	syncCameraSpeedUi();
 
-	// ...AND THE POPOVER CLOSING IS A GESTURE ENDING: the store write is
-	// deferred (CameraSpeed::flush's note) so a slider drag is not one durable
-	// rewrite of jahsettings.ini per mouse-move, and this is where a drag with
-	// this window's hand on it is over.
-	connect(speedMenu, &QMenu::aboutToHide, this, [] { CameraSpeed::flush(); });
-	connect(cameraSpeedSlider, &QSlider::sliderReleased, this, [] { CameraSpeed::flush(); });
-
 	toolBar->addSeparator();
 
     connect(actionTranslate,    &QAction::triggered, this, &EditorToolbar::translateGizmo);

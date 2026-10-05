@@ -11,7 +11,7 @@ For more information see the LICENSE file
 
 #include "services/shortcutregistry.h"
 
-#include <QSettings>
+#include "data/settingsstore.h"
 #include <QShortcut>
 #include <QWidget>
 
@@ -19,7 +19,7 @@ namespace {
 QString settingsKey(const QString &id) { return QStringLiteral("shortcut/") + id; }
 }
 
-ShortcutRegistry::ShortcutRegistry(QSettings *settings, QObject *parent)
+ShortcutRegistry::ShortcutRegistry(SettingsStore *settings, QObject *parent)
     : QObject(parent), mSettings(settings)
 {
 }

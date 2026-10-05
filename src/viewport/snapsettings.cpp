@@ -11,7 +11,7 @@ For more information see the LICENSE file
 
 #include "viewport/snapsettings.h"
 
-#include <QSettings>
+#include "data/settingsstore.h"
 #include <algorithm>
 
 namespace {
@@ -22,7 +22,7 @@ constexpr float kScaleDefault = 0.25f;
 float sTranslate = kTranslateDefault;
 float sRotate = kRotateDefault;
 float sScale = kScaleDefault;
-QSettings *sStore = nullptr;
+SettingsStore *sStore = nullptr;
 
 float clampTranslate(float v) { return std::min(std::max(v, 0.01f), 100.0f); }
 float clampRotate(float v)    { return std::min(std::max(v, 0.1f), 180.0f); }
@@ -89,7 +89,7 @@ float SnapSettings::stepped(const QVector<float> &steps, float current, int dire
     return steps.first();
 }
 
-void SnapSettings::bindSettings(QSettings *settings)
+void SnapSettings::bindSettings(SettingsStore *settings)
 {
     sStore = settings;
     if (!sStore) return;

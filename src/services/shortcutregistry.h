@@ -31,7 +31,7 @@ For more information see the LICENSE file
 #include <QVector>
 #include <functional>
 
-class QSettings;
+class SettingsStore;
 class QShortcut;
 class QWidget;
 
@@ -50,7 +50,7 @@ public:
     };
 
     /// `settings` (nullable) is where overrides persist; not owned.
-    explicit ShortcutRegistry(QSettings *settings, QObject *parent = nullptr);
+    explicit ShortcutRegistry(SettingsStore *settings, QObject *parent = nullptr);
 
     /// Registers a remappable action and creates its QShortcut on `parent`
     /// (Qt::WindowShortcut by default, like the hand-rolled ones before).
@@ -95,7 +95,7 @@ private:
     int indexOf(const QString &id) const;
     void persist(const Entry &e);
 
-    QSettings *mSettings = nullptr;
+    SettingsStore *mSettings = nullptr;
     QVector<Entry> mEntries;
 };
 

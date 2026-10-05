@@ -64,6 +64,7 @@ add_executable(test_grid_layout test_grid_layout.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/style/stylesheet.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/style/classicsheets.cpp
     ${CMAKE_SOURCE_DIR}/src/data/settingsmanager.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/settingsstore.cpp
     ${CMAKE_SOURCE_DIR}/src/data/constants.cpp)
 set_target_properties(test_grid_layout PROPERTIES AUTOMOC ON AUTOUIC ON CXX_STANDARD 17)
 set_property(TARGET test_grid_layout PROPERTY AUTOUIC_SEARCH_PATHS ${CMAKE_SOURCE_DIR}/src/ui/dialogs)

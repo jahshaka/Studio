@@ -32,6 +32,7 @@ add_executable(test_mesh_bake test_mesh_bake.cpp
     ${CMAKE_SOURCE_DIR}/src/services/videoutils.cpp
     ${CMAKE_SOURCE_DIR}/src/services/subscriber.cpp
     ${CMAKE_SOURCE_DIR}/src/data/settingsmanager.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/settingsstore.cpp
     # database.cpp's link closure (same set tests/importer links)
     ${CMAKE_SOURCE_DIR}/src/data/database/database.cpp
     ${CMAKE_SOURCE_DIR}/src/data/project.cpp

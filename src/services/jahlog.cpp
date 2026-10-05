@@ -24,7 +24,7 @@ For more information see the LICENSE file
 #include <QMutex>
 #include <QMutexLocker>
 #include <QRegularExpression>
-#include <QSettings>
+#include "data/settingsstore.h"
 #include <QStandardPaths>
 #include <QTimer>
 #include <QVector>
@@ -743,7 +743,7 @@ QVariantMap paths()
 // Configuration layers 2 and 3
 // ---------------------------------------------------------------------------
 
-Options optionsFromSettings(QSettings *settings)
+Options optionsFromSettings(SettingsStore *settings)
 {
     Options o;
     if (!settings) return o;
@@ -754,7 +754,7 @@ Options optionsFromSettings(QSettings *settings)
     return o;
 }
 
-void applyIniLevels(QSettings *settings)
+void applyIniLevels(SettingsStore *settings)
 {
     if (!settings) return;
     settings->beginGroup(QStringLiteral("log"));

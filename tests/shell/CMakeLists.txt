@@ -7,7 +7,8 @@ add_executable(test_shell_contract test_shell_contract.cpp
     ${CMAKE_SOURCE_DIR}/src/shell/actionhost.cpp
     ${CMAKE_SOURCE_DIR}/src/shell/modulehub.cpp
     ${CMAKE_SOURCE_DIR}/src/shell/pagehost.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/shortcutregistry.cpp)
+    ${CMAKE_SOURCE_DIR}/src/services/shortcutregistry.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/settingsstore.cpp)
 set_target_properties(test_shell_contract PROPERTIES AUTOMOC ON CXX_STANDARD 17)
 target_include_directories(test_shell_contract PRIVATE
     ${CMAKE_SOURCE_DIR}

@@ -10,4 +10,5 @@ For more information see the LICENSE file
 *************************************************************************/
 #include "data/settingsmanager.h"
 
+
 SettingsManager* SettingsManager::defaultSettings = nullptr;

@@ -46,7 +46,7 @@ For more information see the LICENSE file
 #include <QDockWidget>
 #include <QMainWindow>
 #include <QAction>
-#include <QSettings>
+#include "data/settingsstore.h"
 #include <QTabWidget>
 #include <QTemporaryDir>
 #include <QToolBar>
@@ -143,7 +143,7 @@ int main(int argc, char **argv)
 
     // ---- 2. nothing stored: restore refuses, and says so --------------------
     {
-        QSettings settings(iniPath, QSettings::IniFormat);
+        SettingsStore settings(iniPath);
         Shell shell;
         CHECK(!DockState::restore(&shell.window, &settings, "viewportDockState"),
               "empty settings: restore() is false (the caller then applies the default)");
@@ -154,7 +154,7 @@ int main(int argc, char **argv)
     // widen the right column; save; build a FRESH shell (a new "launch"); the
     // layout must come back, and it must not be the default any more.
     {
-        QSettings settings(iniPath, QSettings::IniFormat);
+        SettingsStore settings(iniPath);
         Shell shell;
         shell.window.addDockWidget(Qt::LeftDockWidgetArea, shell.presets);
         shell.window.splitDockWidget(shell.hierarchy, shell.presets, Qt::Vertical);
@@ -165,7 +165,7 @@ int main(int argc, char **argv)
         app.processEvents();
         const int savedWidth = shell.properties->width();
         DockState::save(&shell.window, &settings, "viewportDockState");
-        settings.sync();
+        settings.flush();
         CHECK(!settings.value("viewportDockState").toByteArray().isEmpty(),
               "round trip: a blob reaches the settings file");
 
@@ -192,7 +192,7 @@ int main(int argc, char **argv)
 
     // ---- 4. a blob from another layout VERSION is refused -------------------
     {
-        QSettings settings(scratch.filePath("versioned.ini"), QSettings::IniFormat);
+        SettingsStore settings(scratch.filePath("versioned.ini"));
         Shell shell;
         settings.setValue("viewportDockState", shell.window.saveState(DockState::kVersion + 1));
         Shell fresh;
@@ -207,7 +207,7 @@ int main(int argc, char **argv)
     // nothing but the 3D view. The stored blob is what the shell used to write
     // when the app was quit from the Player space (every dock hidden).
     {
-        QSettings settings(scratch.filePath("empty-layout.ini"), QSettings::IniFormat);
+        SettingsStore settings(scratch.filePath("empty-layout.ini"));
         Shell saver;
         saver.window.show();
         app.processEvents();
@@ -216,7 +216,7 @@ int main(int argc, char **argv)
             d->setVisible(false);               // MainWindow::hideEditorPanels()
         app.processEvents();
         DockState::save(&saver.window, &settings, "viewportDockState");
-        settings.sync();
+        settings.flush();
         CHECK(!DockState::hasVisibleDock(&saver.window),
               "empty layout: the saved window really has no dock on screen");
 
@@ -236,14 +236,14 @@ int main(int argc, char **argv)
     // The rule has to be "no panels at all", not "any panel closed": a user who
     // closes the Timeline must still get their layout back.
     {
-        QSettings settings(scratch.filePath("one-closed.ini"), QSettings::IniFormat);
+        SettingsStore settings(scratch.filePath("one-closed.ini"));
         Shell saver;
         saver.window.show();
         app.processEvents();
         saver.timeline->setVisible(false);
         app.processEvents();
         DockState::save(&saver.window, &settings, "viewportDockState");
-        settings.sync();
+        settings.flush();
 
         Shell relaunched;
         relaunched.window.show();
@@ -261,7 +261,7 @@ int main(int argc, char **argv)
     // the user quit from. store() of an empty blob leaves the stored layout
     // alone, which is what a session that never opened the editor must do.
     {
-        QSettings settings(scratch.filePath("quit-from-player.ini"), QSettings::IniFormat);
+        SettingsStore settings(scratch.filePath("quit-from-player.ini"));
         Shell shell;
         shell.window.show();
         app.processEvents();
@@ -271,7 +271,7 @@ int main(int argc, char **argv)
             d->setVisible(false);                                         // the player space
         app.processEvents();
         DockState::store(&settings, "viewportDockState", captured);       // closeEvent
-        settings.sync();
+        settings.flush();
 
         Shell relaunched;
         relaunched.window.show();
@@ -283,7 +283,7 @@ int main(int argc, char **argv)
 
         const QByteArray before = settings.value("viewportDockState").toByteArray();
         DockState::store(&settings, "viewportDockState", QByteArray());
-        settings.sync();
+        settings.flush();
         CHECK(settings.value("viewportDockState").toByteArray() == before,
               "a session with nothing to say (an empty snapshot) leaves the stored layout alone");
     }
@@ -302,7 +302,7 @@ int main(int argc, char **argv)
     // exactly this reason). The two obvious alternatives are asserted WRONG
     // below, because both were proposed: isVisible() and the toggleViewAction.
     {
-        QSettings settings(scratch.filePath("tabbed.ini"), QSettings::IniFormat);
+        SettingsStore settings(scratch.filePath("tabbed.ini"));
         Shell saver;
         saver.window.show();
         app.processEvents();
@@ -313,7 +313,7 @@ int main(int argc, char **argv)
         CHECK(saver.timeline->geometry().right() < 0 && saver.assets->geometry().right() >= 0,
               "tabs: ...it is parked off-screen, which is how the front tab is told apart");
         DockState::save(&saver.window, &settings, "viewportDockState");
-        settings.sync();
+        settings.flush();
 
         Shell relaunched;
         CHECK(!relaunched.timeline->isHidden() && !relaunched.assets->isHidden(),
@@ -353,7 +353,7 @@ int main(int argc, char **argv)
             w.addToolBar(Qt::TopToolBarArea, bar);
             return bar;
         };
-        QSettings settings(iniPath, QSettings::IniFormat);
+        SettingsStore settings(iniPath);
         QMainWindow saver;
         QToolBar *moved = build(saver);
         saver.addToolBar(Qt::LeftToolBarArea, moved);   // the user drags it to the left edge

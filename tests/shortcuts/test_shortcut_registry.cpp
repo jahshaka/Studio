@@ -9,7 +9,7 @@
 #include <QApplication>
 #include <QKeyEvent>
 #include <QKeySequence>
-#include <QSettings>
+#include "data/settingsstore.h"
 #include <QShortcut>
 #include <QTemporaryDir>
 #include <QWidget>
@@ -71,7 +71,7 @@ int main(int argc, char **argv)
 
     // ---- defaults + registration ----
     {
-        QSettings ini(iniPath, QSettings::IniFormat);
+        SettingsStore ini(iniPath);
         ShortcutRegistry reg(&ini);
         int fired = 0;
         reg.add("tool.translate", "Translate Tool", "Tools", QKeySequence(Qt::Key_W),
@@ -106,12 +106,12 @@ int main(int argc, char **argv)
         // ---- unbind ----
         CHECK(reg.setBinding("tool.translate", QKeySequence()), "unbinding (empty) accepted");
         CHECK(reg.sequence("tool.translate").isEmpty(), "unbound entry has no sequence");
-        ini.sync();
+        ini.flush();
     }
 
     // ---- persistence round-trip: a fresh registry over the same ini ----
     {
-        QSettings ini(iniPath, QSettings::IniFormat);
+        SettingsStore ini(iniPath);
         ShortcutRegistry reg(&ini);
         reg.add("tool.translate", "Translate Tool", "Tools", QKeySequence(Qt::Key_W), &window, nullptr);
         reg.add("tool.rotate", "Rotate Tool", "Tools", QKeySequence(Qt::Key_E), &window, nullptr);
@@ -123,12 +123,12 @@ int main(int argc, char **argv)
         CHECK(reg.sequence("tool.rotate") == QKeySequence(Qt::Key_E), "reset restores the default");
         reg.resetAll();
         CHECK(reg.sequence("tool.translate") == QKeySequence(Qt::Key_W), "resetAll restores every default");
-        ini.sync();
+        ini.flush();
     }
 
     // ---- after resetAll nothing is persisted ----
     {
-        QSettings ini(iniPath, QSettings::IniFormat);
+        SettingsStore ini(iniPath);
         CHECK(!ini.contains("shortcut/tool.translate") && !ini.contains("shortcut/tool.rotate"),
               "defaults leave no override keys behind");
     }
@@ -160,14 +160,14 @@ int main(int argc, char **argv)
 
     // Persistence round-trip through a bound QSettings.
     {
-        QSettings ini(iniPath, QSettings::IniFormat);
+        SettingsStore ini(iniPath);
         SnapSettings::bindSettings(&ini);
         SnapSettings::setTranslateSize(0.5f);
         SnapSettings::setRotateSize(45.0f);
-        ini.sync();
+        ini.flush();
     }
     {
-        QSettings ini(iniPath, QSettings::IniFormat);
+        SettingsStore ini(iniPath);
         SnapSettings::bindSettings(&ini);
         CHECK(SnapSettings::translateSize() == 0.5f, "translate snap persists");
         CHECK(SnapSettings::rotateSize() == 45.0f, "rotate snap persists");
@@ -194,7 +194,7 @@ int main(int argc, char **argv)
         stub->resize(200, 200);
         stub->setFocusForTest();
 
-        QSettings ini(dir.filePath("playmode.ini"), QSettings::IniFormat);
+        SettingsStore ini(dir.filePath("playmode.ini"));
         ShortcutRegistry reg(&ini);
         int translateFired = 0, cycleFired = 0, focusFired = 0;
         reg.add("tool.translate", "Translate Tool", "Tools", QKeySequence(Qt::Key_W),

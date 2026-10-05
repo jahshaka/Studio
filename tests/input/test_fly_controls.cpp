@@ -42,6 +42,7 @@ For more information see the LICENSE file
 #include <QElapsedTimer>
 #include <QEventLoop>
 #include <QGuiApplication>
+#include "data/settingsstore.h"
 #include <QSettings>
 #include <QTemporaryDir>
 #include <cmath>
@@ -332,7 +333,7 @@ int main(int argc, char **argv)
 
     // ---- IT SURVIVES A RELAUNCH (it is a preference) ---------------------
     //
-    // Two QSettings over one file, the second one bound after the first is
+    // Two settings stores over one file, the second one bound after the first is
     // gone: that is what the next launch of the app does with the shared
     // settings file, and the only way to prove a preference is persisted
     // without spawning a process.
@@ -341,17 +342,16 @@ int main(int argc, char **argv)
         CHECK(dir.isValid(), "a scratch directory for the settings file");
         const QString path = dir.filePath("jahsettings.ini");
         {
-            QSettings first(path, QSettings::IniFormat);
+            SettingsStore first(path);
             CameraSpeed::bindSettings(&first);
             CHECK(CameraSpeed::value() == 10, "an empty settings file leaves the default standing");
             CameraSpeed::setValue(23);
-            CameraSpeed::flush();
-            first.sync();
+            first.flush();
             CameraSpeed::bindSettings(nullptr);
         }
         CameraSpeed::setValue(4);                // whatever the process did after
         {
-            QSettings second(path, QSettings::IniFormat);
+            SettingsStore second(path);
             CHECK(second.value("camera/speed").toInt() == 23,
                   "the dial is written as the preference camera/speed, as an INTEGER");
             CameraSpeed::bindSettings(&second);
@@ -361,8 +361,7 @@ int main(int argc, char **argv)
             // been touched and one that was set back to normal are the same
             // file (the house rule for every persisted default).
             CameraSpeed::setValue(10);
-            CameraSpeed::flush();
-            second.sync();
+            second.flush();
             CHECK(!second.contains("camera/speed"), "setting it back to 10 removes the key");
 
             // A KEY THAT IS NOT A WHOLE NUMBER leaves the default standing
@@ -386,56 +385,26 @@ int main(int argc, char **argv)
         CameraSpeed::reset();
     }
 
-    // ---- A BURST OF SETS IS ONE WRITE (the fix round's item 2) -----------
+    // ---- A BURST OF SETS IS MEMORY; THE FILE IS THE STORE'S THREAD'S -----
     //
-    // MEASURED on Qt 6.10.2: a QSettings::setValue makes the NEXT pass of the
-    // event loop rewrite the whole ini through a QSaveFile — two fdatasyncs
-    // and a rename, ON THE UI THREAD. One notch of the wheel mid-fly is one of
-    // those, and a slider drag is one per mouse-move; the house law since
-    // FSYNC-2 is that the thread that draws never waits for a disk.
-    //
-    // So a set moves the value at once and only ARMS the write, and a burst
-    // inside one gesture writes ONCE, at the end of it.
+    // A wheel notch mid-fly or a slider drag's mouse-move sets the dial, and
+    // the dial stores itself at once. That costs nothing on the thread that
+    // draws: the settings store answers from memory and writes the file on its
+    // own thread (data/settingsstore.h, SHADER-WARM-2 — a QSettings used to
+    // rewrite the ini through a QSaveFile, two fdatasyncs and a rename, on the
+    // UI thread, which is why a deferred write stood here before).
     {
         QTemporaryDir dir;
         const QString path = dir.filePath("jahsettings.ini");
-        QSettings store(path, QSettings::IniFormat);
+        SettingsStore store(path);
         CameraSpeed::bindSettings(&store);
-
-        const int before = CameraSpeed::storeWrites();
         for (int n = 11; n <= 20; ++n) CameraSpeed::setValue(n);   // a drag, or ten notches
-        CHECK(CameraSpeed::value() == 20, "the dial moved to 20 at once — the VALUE is immediate");
-        CHECK(CameraSpeed::storeWrites() == before,
-              "...and not one of the ten sets has touched the disk yet");
-
-        // The gesture ends (an RMB release, a slider release, the popover
-        // closing, the window shutting down) — or, failing all of those, the
-        // half-second timer this armed.
-        CameraSpeed::flush();
-        CHECK(CameraSpeed::storeWrites() == before + 1,
-              "ONE write for the whole burst, and it is the value the dial ended on");
-        store.sync();
-        CHECK(store.value("camera/speed").toInt() == 20, "...which is 20, in the file");
-        CHECK(CameraSpeed::storeWrites() == before + 1,
-              "a second flush with nothing pending writes nothing");
-        CameraSpeed::flush();
-        CHECK(CameraSpeed::storeWrites() == before + 1, "...still nothing");
-
-        // AND NOBODY HAS TO CALL flush(): the arm is a half-second single shot
-        // on the application's own event loop, which is what makes a wheel
-        // notch in a window nobody closes durable anyway.
-        const int armed = CameraSpeed::storeWrites();
-        CameraSpeed::setValue(7);
-        CHECK(CameraSpeed::storeWrites() == armed, "the set is still not a write");
-        QElapsedTimer clock;
-        clock.start();
-        while (clock.elapsed() < 2000 && CameraSpeed::storeWrites() == armed)
-            QCoreApplication::processEvents(QEventLoop::AllEvents, 25);
-        std::printf("    the deferred write landed after %lld ms\n", clock.elapsed());
-        CHECK(CameraSpeed::storeWrites() == armed + 1, "the armed write lands on its own");
-        store.sync();
-        CHECK(store.value("camera/speed").toInt() == 7, "...carrying 7");
-
+        CHECK(CameraSpeed::value() == 20, "the dial moved to 20 at once");
+        CHECK(store.value("camera/speed").toInt() == 20,
+              "...and the store holds 20 at once, without anyone flushing anything");
+        CHECK(store.flush(), "the store's writer drains the burst");
+        QSettings file(path, QSettings::IniFormat);
+        CHECK(file.value("camera/speed").toInt() == 20, "...and 20 is what the file says");
         CameraSpeed::bindSettings(nullptr);
         CameraSpeed::reset();
     }
