@@ -527,6 +527,11 @@ static size_t cutTriangles(Env &env, const QList<iris::MeshPtr> &pieces, const i
         v.tolerance = kLodBudgetPixels * env.scene->lodBias();
         v.projScaleY = req.projScaleY;
         v.viewportHeight = req.viewportHeight;
+        // ...and the view's frustum, cluster by cluster, as the cut job tests it
+        // (SPEED-VR-MEM, Types.h clusterInFrustum).
+        v.cullPlanes = true;
+        for (int i = 0; i < 6; ++i)
+            for (int c = 0; c < 4; ++c) v.planes[i][c] = req.planes[i * 4 + c];
         std::vector<unsigned> drawn;
         total += clusterCut(d.clusterGroups, d.clusters, v, drawn);
     }

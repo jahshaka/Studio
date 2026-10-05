@@ -235,6 +235,73 @@ static void report(const char *label, const Tally &t)
               label, t.differingFrames, t.firstBad, t.worstPixels);
 }
 
+/// THE PYRAMID ITSELF (SPEED-VR-MEM: the id pass's pyramid in ONE dispatch,
+/// JahHzbBuild_cs). Every level of the occluding view's `jahHzb` must be EXACTLY the
+/// farthest depth of its footprint in mip 0 — the footprint composed level by level
+/// from the reducer's rule (texels 2i and 2i+1, plus 2i+2 for the last texel of an
+/// odd source, clamped), which is what the per-level reducer built. Min and max are
+/// exact, so the single pass's different order of the same picks must agree bit for
+/// bit. (chain.hzb asserts the same of a view's own pyramid; this is the id pass's.)
+static void footprint(unsigned size0, unsigned level, std::vector<unsigned> &b, std::vector<unsigned> &e)
+{
+    b.resize(size0); e.resize(size0);
+    for (unsigned i = 0; i < size0; ++i) { b[i] = i; e[i] = i; }
+    unsigned src = size0;
+    for (unsigned L = 1; L <= level; ++L) {
+        const unsigned dst = std::max(src >> 1u, 1u);
+        std::vector<unsigned> nb(dst), ne(dst);
+        for (unsigned i = 0; i < dst; ++i) {
+            const unsigned a = std::min(2u * i, src - 1u);
+            unsigned z = std::min(2u * i + 1u, src - 1u);
+            if ((src & 1u) != 0u && i == dst - 1u) z = std::min(2u * i + 2u, src - 1u);
+            nb[i] = b[a]; ne[i] = e[z];
+        }
+        b.swap(nb); e.swap(ne);
+        src = dst;
+    }
+}
+
+static void checkIdPyramid(Engine *e, View *view, const char *label)
+{
+    HzbStatus st;
+    if (!e->hzbStatus(view, st) || !st.built || st.levels < 2u) {
+        CHECK_MSG(false, "%s: the id pass's pyramid exists (levels %u)", label, st.levels);
+        return;
+    }
+    std::vector<float> mip0;
+    unsigned w0 = 0, h0 = 0;
+    if (!e->readHzbLevel(view, 0u, mip0, w0, h0) || mip0.empty()) {
+        CHECK_MSG(false, "%s: mip 0 reads back", label);
+        return;
+    }
+    // FARTHEST under reverse-Z is the SMALLER value.
+    const auto farther = [&](float a, float b) { return st.reverseDepth ? std::min(a, b) : std::max(a, b); };
+    const float seed = st.reverseDepth ? 1.0f : 0.0f;
+    size_t wrong = 0, texels = 0;
+    unsigned nearer = 0;
+    for (float d : mip0) if (d != (st.reverseDepth ? 0.0f : 1.0f)) ++nearer;
+    for (unsigned L = 1u; L < st.levels; ++L) {
+        std::vector<float> lev;
+        unsigned wl = 0, hl = 0;
+        if (!e->readHzbLevel(view, L, lev, wl, hl) || lev.empty()) { ++wrong; continue; }
+        std::vector<unsigned> bx, ex, by, ey;
+        footprint(w0, L, bx, ex);
+        footprint(h0, L, by, ey);
+        for (unsigned y = 0; y < hl; ++y)
+            for (unsigned x = 0; x < wl; ++x) {
+                float foot = seed;
+                for (unsigned fy = by[y]; fy <= ey[y]; ++fy)
+                    for (unsigned fx = bx[x]; fx <= ex[x]; ++fx) foot = farther(foot, mip0[size_t(fy) * w0 + fx]);
+                ++texels;
+                if (std::memcmp(&foot, &lev[size_t(y) * wl + x], sizeof(float)) != 0) ++wrong;
+            }
+    }
+    CHECK_MSG(nearer > 1000u, "%s: the id pass's mip 0 holds the scene's depth (%u texels nearer than far)",
+              label, nearer);
+    CHECK_MSG(wrong == 0, "%s: every texel of levels 1..%u is EXACTLY its footprint's farthest (%zu of %zu differ)",
+              label, st.levels - 1u, wrong, texels);
+}
+
 int main()
 {
     std::printf("== atom.occlusion_exact (engine): two lockstep worlds, the id pass with the two-pass occlusion "
@@ -282,6 +349,7 @@ int main()
     Tally still;
     for (int i = 0; i < 30; ++i) stepCompare(on, off, still, "(a) still");
     report("(a) still", still);
+    checkIdPyramid(gE, on.view, "(a) still");
     CHECK_MSG(still.occludedMax > 0u, "(a) the depth test rejects objects behind the wall (occluded %u)", still.occludedMax);
     CHECK_MSG(still.statFrames > 0 && still.trisOn < still.trisOff,
               "(a) the id pass draws fewer triangles with the occlusion (%llu < %llu)", still.trisOn, still.trisOff);
