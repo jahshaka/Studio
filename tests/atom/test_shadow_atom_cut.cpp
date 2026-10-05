@@ -294,6 +294,11 @@ static void checkOneCut(World &w, const OgreScene::CasterProbe &p, const char *l
         v.projScaleY = p.projScaleY;
         v.viewportHeight = p.viewportHeight;
         v.orthographic = p.orthographic;
+        // ...and the request's frustum: the cut drops a cluster wholly outside the map's
+        // view (SPEED-VR-MEM, Types.h clusterInFrustum).
+        v.cullPlanes = true;
+        for (int i = 0; i < 6; ++i)
+            for (int k = 0; k < 4; ++k) v.planes[i][k] = p.planes[i * 4 + k];
         std::vector<unsigned> cpu;
         clusterCut(f.data.clusterGroups, f.data.clusters, v, cpu);
         std::set<unsigned> gpuSet, cpuSet(cpu.begin(), cpu.end());
@@ -594,6 +599,78 @@ static int parityMain()
                   label, double(p99));
         CHECK_MSG(double(flips) <= 0.005 * double(covered), "%s: at most 0.5 %% of its texels flip lit/shadowed "
                   "(%u of %u)", label, flips, covered);
+    }
+    // ---- THE CASTER IN FRONT OF THE LIGHT'S NEAR PLANE (SPEED-VR-MEM fix round) ----------
+    // A shadow camera draws with DEPTH CLAMP (Camera::getNeedsDepthClamp): a caster between
+    // the light and its near plane still writes the near depth and shadows what lies below.
+    // The Atom cull used to test caster requests against all six planes, near included, so
+    // such a caster vanished from the map at INSTANCE level while the stock caster drew it.
+    // Three small casters high up the sun's ray over three visible ground points, in both
+    // worlds: every one must cover its own texel in every PSSM split that sees its ground
+    // point, in the cut world as in the dense one.
+    {
+        const Vec3 sun(-0.45f, -0.8f, -0.4f);
+        const float sl = std::sqrt(sun.x * sun.x + sun.y * sun.y + sun.z * sun.z);
+        const Vec3 up(-sun.x / sl, -sun.y / sl, -sun.z / sl);
+        const float heights[3] = { 12.0f, 40.0f, 120.0f };
+        const Vec3 grounds[3] = { Vec3(-3.0f, 0.0f, -1.5f), Vec3(0.0f, 0.0f, -2.0f), Vec3(3.0f, 0.0f, -1.5f) };
+        Vec3 at[3];
+        for (int i = 0; i < 3; ++i) {
+            at[i] = Vec3(grounds[i].x + up.x * heights[i], grounds[i].y + up.y * heights[i],
+                         grounds[i].z + up.z * heights[i]);
+            for (World *w : { &a, &b }) {
+                const float sc = 0.8f / std::max(0.01f, gFixtures[0].extent);
+                const NodeId n = w->scene->createNode();
+                w->scene->setNodeTransform(n, at[i], Quat(), Vec3(sc, sc, sc));
+                PbrParams cp;
+                w->scene->attachMesh(n, w->scene->createMesh(gFixtures[0].data), w->scene->createPbrMaterial(cp));
+            }
+        }
+        for (int i = 0; i < 40; ++i) gE->renderOneFrame();
+        Atlas A2, B2;
+        CHECK(readAtlas(sa, A2) && readAtlas(sb, B2) && A2.w == B2.w, "both atlases read back (high casters)");
+        unsigned seen = 0, cutMissing = 0, denseMissing = 0;
+        for (const auto &m : maps) {
+            if (m.second != Ogre::Light::LT_DIRECTIONAL || A2.d.empty()) continue;
+            const unsigned idx = m.first;
+            const Ogre::ShadowTextureDefinition *td = def->getShadowTextureDefinition(idx);
+            const Ogre::Matrix4 vp = sa->getViewProjectionMatrix(idx);
+            const unsigned x0 = unsigned(float(td->uvOffset.x) * float(A2.w)), y0 = unsigned(float(td->uvOffset.y) * float(A2.h));
+            const unsigned mw = unsigned(float(td->uvLength.x) * float(A2.w)), mh = unsigned(float(td->uvLength.y) * float(A2.h));
+            // the map's clear: the most frequent value of the dense map's rectangle
+            float empty = 0.0f;
+            {
+                std::map<float, unsigned> freq;
+                for (unsigned y = y0; y < y0 + mh; ++y)
+                    for (unsigned x = x0; x < x0 + mw; ++x) ++freq[B2.d[size_t(y) * B2.w + x]];
+                unsigned best = 0;
+                for (const auto &kv : freq)
+                    if (kv.second > best) { best = kv.second; empty = kv.first; }
+            }
+            for (int i = 0; i < 3; ++i) {
+                const Ogre::Vector4 c = vp * Ogre::Vector4(at[i].x, at[i].y, at[i].z, 1.0f);
+                if (std::fabs(c.w) < 1e-12f) continue;
+                const float u = float(c.x / c.w), v = float(c.y / c.w);
+                const int tx = int(u * float(A2.w)), ty = int(v * float(A2.h));
+                if (tx < int(x0) + 2 || ty < int(y0) + 2 || tx >= int(x0 + mw) - 2 || ty >= int(y0 + mh) - 2) continue;
+                ++seen;
+                bool ca = false, cb = false;
+                for (int dy = -1; dy <= 1; ++dy)
+                    for (int dx = -1; dx <= 1; ++dx) {
+                        const size_t o = size_t(ty + dy) * A2.w + size_t(tx + dx);
+                        ca = ca || A2.d[o] != empty;
+                        cb = cb || B2.d[o] != empty;
+                    }
+                if (!ca) ++cutMissing;
+                if (!cb) ++denseMissing;
+                std::printf("   high caster %d (%.0f m up) in map %u at texel (%d,%d): cut %s, dense %s\n", i,
+                            double(heights[i]), idx, tx, ty, ca ? "drawn" : "MISSING", cb ? "drawn" : "MISSING");
+            }
+        }
+        CHECK_MSG(seen >= 3u, "the high casters land inside a PSSM split (%u placements)", seen);
+        CHECK_MSG(denseMissing == 0u, "the stock caster draws every high caster (%u missing)", denseMissing);
+        CHECK_MSG(cutMissing == 0u, "the caster cut draws every high caster in front of the light's near plane, as "
+                  "depth clamp does (%u missing)", cutMissing);
     }
     for (World *w : { &a, &b }) {
         gE->destroyView(w->view);
