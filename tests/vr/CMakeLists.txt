@@ -241,6 +241,23 @@ set_tests_properties(vr.start_recovery PROPERTIES
     SKIP_RETURN_CODE 77
     ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}HOME=${_vr_start_home};JAHSHAKA_DATA_ROOT=${_vr_start_home}/.local/share/Jahshaka;JAH_VR_RUNNER_EVENTS=1;JAH_VR_RUNNER_DEFER=1")
 
+# vr.start_press (VR-START-2) — the phase-3 push tier's red made deterministic: the
+# startup check's dialog is open, the VR BUTTON (not Try again) is pressed until the
+# private runtime answers, and the press that succeeds must close the dialog and
+# clear the failure record (at the base the session came up under it).
+set(_vr_press_home "${CMAKE_CURRENT_BINARY_DIR}/vr-start-press-home")
+jah_gpu_row(vr.start_press CLASS vr
+         COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/run_vr_app.sh"
+                 "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" "${JAH_MONADO_MANIFEST}"
+                 "${CMAKE_CURRENT_SOURCE_DIR}/vr_start_press.js"
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(vr.start_press PROPERTIES
+    LABELS "scripting"
+    TIMEOUT 300
+    RESOURCE_LOCK monado COST ${JAH_COST_MONADO}
+    SKIP_RETURN_CODE 77
+    ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}HOME=${_vr_press_home};JAHSHAKA_DATA_ROOT=${_vr_press_home}/.local/share/Jahshaka;JAH_VR_RUNNER_EVENTS=1;JAH_VR_RUNNER_DEFER=1")
+
 # vr.start_broken (VR-START-1 case d): the active manifest's runtime library cannot be
 # loaded. The runner still owns a private runtime (unused); the manifest is ours.
 file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/broken-openxr-runtime.json"
