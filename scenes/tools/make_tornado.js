@@ -54,7 +54,7 @@ function J(x) { return JSON.stringify(x); }
 
 // THE HDR GAIN on the orange: the core must bloom like the still's. Tuned by eye
 // against reference.png at the original camera.
-var GLOW = 4.0;
+var GLOW = 1.5;
 
 // The three layers (audit §1.2). height = the authored 0.05 x the squared
 // radial scale (see the header).

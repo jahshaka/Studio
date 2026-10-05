@@ -1077,6 +1077,7 @@ QDialog *ProjectManager::prepareSampleBrowser()
     samples.insert("preview/world.png",      "World Background");
     samples.insert("preview/physics.png",    "Physics");
     samples.insert("preview/showroom.png",   "Showroom");
+    samples.insert("preview/tornado.png",    "Tornado");   // TORNADO-1 (scenes/tools/make_tornado.js)
     // The Grand Showroom at 2x (owner, 2026-09-12: "too small to fly around
     // in") — the same generator at S = 1 (scenes/tools/make_grand_showroom.js).
     // It sits beside the original, which stays as the owner's reference until
