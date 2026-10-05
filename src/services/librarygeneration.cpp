@@ -39,7 +39,7 @@ bool isInside(const QString &path, const QString &root)
 }
 }   // namespace
 
-int generation() { return CasSchema::kUserVersion; }
+int generation() { return CasSchema::userVersion(); }
 
 Result checkAndWipe(const QString &dbPath, const QString &dataRoot, SettingsManager *settings)
 {
@@ -109,6 +109,11 @@ Result checkAndWipe(const QString &dbPath, const QString &dataRoot, SettingsMana
                                  Constants::PROJECT_FOLDER)
         : QString();
     const QString root = dataRoot;
+    // THE USER'S STORAGES ARE KEPT ACROSS A BUMP, their derived files re-derived.
+    libraryreset::Keep keep;
+    keep.assets = true;
+    keep.materials = true;
+    keep.dropDerived = true;
     const libraryreset::Result wiped = libraryreset::reset(
         &library, settings, isInside(projectsRoot, root) ? projectsRoot : QString(),
         [&library, root](const QString &guid) -> QString {
@@ -117,12 +122,17 @@ Result checkAndWipe(const QString &dbPath, const QString &dataRoot, SettingsMana
             if (location.isEmpty() || !isInside(location, root)) return QString();
             return QDir(location).filePath(QStringLiteral("Projects/") + guid);
         },
-        /*seedPresets*/ false);
+        /*seedPresets*/ false, keep);
     library.closeDatabase();
     result.outcome = wiped.ok ? Outcome::Wiped : Outcome::Failed;
+    result.keptRows = wiped.kept.rows;
+    result.unreadable = wiped.kept.unreadable;
     if (!wiped.ok) result.reason = wiped.error;
-    irisLog(wiped.ok ? QStringLiteral("library: WIPED (%1) — no migrations exist").arg(result.reason)
-                     : QStringLiteral("library: the wipe failed: %1").arg(wiped.error));
+    irisLog(wiped.ok ? QStringLiteral("library: RESET (%1) — no migrations exist; %2 storage rows "
+                                      "rebuilt from their sidecars, %3 sidecars of an older format "
+                                      "not read")
+                           .arg(result.reason).arg(wiped.kept.rows).arg(wiped.kept.unreadable)
+                     : QStringLiteral("library: the reset failed: %1").arg(wiped.error));
     sLast = result;
     return result;
 }
@@ -138,11 +148,29 @@ QString refusalText(const Result &result)
     return QStringLiteral("Jahshaka cannot open this library:\n%1").arg(result.reason);
 }
 
-QString noticeText()
+QString noticeText(const Result &result)
 {
-    return QStringLiteral(
-        "Your library was reset for this build: projects and assets from the previous build "
-        "were removed. Project folders stored outside the app's data folder were left on disk "
-        "(they are no longer listed).");
+    // ONE LINE FOR WHAT HAPPENED TO THE USER'S STORAGES (the lead, 2026-10-05):
+    // what was cleared, and that a later update keeps them.
+    QString storages;
+    if (result.keptRows == 0 && result.unreadable > 0)
+        storages = QStringLiteral("Your Assets and Materials from the previous build were cleared "
+                                  "too: that build did not record where they belong. From this "
+                                  "build on, an update keeps your Assets, Materials and Avatars.");
+    else
+        storages = QStringLiteral("Your Assets, Materials and Avatars were kept (%1 items "
+                                  "rebuilt); their bakes and thumbnails are rebuilt in the "
+                                  "background. Later updates keep them the same way.")
+                       .arg(result.keptRows);
+    // ANY RECORD NOT READ IS SAID, also in a mixed update (some kept, some not).
+    if (result.unreadable > 0 && result.keptRows > 0)
+        storages += QStringLiteral(" %1 stored item(s) could not be read and were not kept; the "
+                                   "session log (the logs folder in the app's data folder) names "
+                                   "each file.").arg(result.unreadable);
+    return QStringLiteral("Your library was updated for this build: projects from the previous "
+                          "build were removed (project folders stored outside the app's data "
+                          "folder were left on disk, no longer listed). ") + storages;
 }
+
+QString noticeText() { return noticeText(sLast); }
 }   // namespace librarygeneration

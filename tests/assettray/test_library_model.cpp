@@ -103,9 +103,8 @@ int main(int argc, char **argv)
         for (int i = 0; i < kAssets; ++i) {
             const QString g = newGuid();
             db.createAssetEntry(g, QStringLiteral("asset_%1.png").arg(i, 4, 10, QLatin1Char('0')),
-                                static_cast<int>(ModelTypes::Texture), QString(), QString(), QString(),
-                                QString(), png(i), QByteArray(), QByteArray(), QByteArray(),
-                                AssetViewFilter::AssetsView);
+                                static_cast<int>(ModelTypes::Texture), QString(), assethome::assets(), assethome::Origin::Import, QString(),
+                                QString(), png(i), QByteArray(), QByteArray(), QByteArray());
             if (i % 4 == 0) db.switchAssetCollection(drawer, g);
             guids << g;
         }
@@ -114,8 +113,8 @@ int main(int argc, char **argv)
     db.createProject(projectGuid, QStringLiteral("Library Model"));
     for (int i = 0; i < 20; ++i)
         db.createAssetEntry(newGuid(), QStringLiteral("own_%1.png").arg(i), static_cast<int>(ModelTypes::Texture),
-                            QString(), projectGuid, QString(), QString(), png(i), QByteArray(), QByteArray(),
-                            QByteArray(), AssetViewFilter::Editor);
+                            QString(), assethome::project(projectGuid), assethome::Origin::Create, QString(), QString(), png(i), QByteArray(), QByteArray(),
+                            QByteArray());
     for (int i = 0; i < 10; ++i) AssetCas::writePin(QSqlDatabase::database(), projectGuid, guids.at(i), QString());
     for (int i = 0; i < 5; ++i) db.addFavorite(guids.at(i));
 
@@ -151,7 +150,7 @@ int main(int argc, char **argv)
     db.fetchProjectPinnedAssets(projectGuid);
     db.fetchAssetsByType(static_cast<int>(ModelTypes::Texture), projectGuid);
     db.fetchFavorites();
-    db.fetchAssetsByViewFilter(AssetViewFilter::AssetsView, static_cast<int>(ModelTypes::Material));
+    db.fetchAssetsInHome(assethome::Kind::MaterialsLibrary, static_cast<int>(ModelTypes::Material));
     db.fetchProjects(0);
     db.fetchProjects(1);
     assettray::list(&db, projectGuid, QString(), -1, false);

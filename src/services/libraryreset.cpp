@@ -22,6 +22,8 @@ For more information see the LICENSE file
 #include "data/database/database.h"
 #include "io/assetrefs.h"
 #include "data/project.h"
+#include "services/assetgc.h"
+#include "services/assetmigration.h"
 #include "services/assetstore.h"
 #include "services/assetstorepaths.h"
 #include "services/import/importbatchrunner.h"
@@ -114,6 +116,24 @@ QVariantMap Removed::toMap() const
     return out;
 }
 
+QSet<assethome::Kind> Keep::homes() const
+{
+    QSet<assethome::Kind> out;
+    if (assets) out << assethome::Kind::Assets << assethome::Kind::AvatarLibrary;
+    if (materials) out << assethome::Kind::MaterialsLibrary;
+    return out;
+}
+
+QVariantMap Kept::toMap() const
+{
+    QVariantMap out;
+    out.insert(QStringLiteral("rows"), rows);
+    out.insert(QStringLiteral("objects"), objects);
+    out.insert(QStringLiteral("edges"), edges);
+    out.insert(QStringLiteral("unreadable"), unreadable);
+    return out;
+}
+
 QString refusalReason()
 {
     if (ImportBatchRunner::anyRunning())
@@ -135,7 +155,7 @@ QString refusalReason()
 
 Result reset(Database *db, SettingsManager *settings, const QString &projectsRoot,
              const std::function<QString(const QString &)> &folderForProject,
-             bool seedPresets)
+             bool seedPresets, const Keep &keep)
 {
     Result result;
     if (!db) {
@@ -210,10 +230,16 @@ Result reset(Database *db, SettingsManager *settings, const QString &projectsRoo
             if (!removePath(path) && result.error.isEmpty())
                 result.error = QStringLiteral("%1 could not be removed").arg(path);
         };
-        take(AssetStorePaths::objectsDir());
-        take(QDir(storeRoot).filePath(QStringLiteral("sidecar")));
+        // A KEPT STORAGE keeps the store's objects, sidecars and identity:
+        // the rebuild below reads its sidecars, and the collector then takes
+        // every object and sidecar no kept row names (step 4b). The derived
+        // caches always go — they are re-derived.
+        if (!keep.any()) {
+            take(AssetStorePaths::objectsDir());
+            take(QDir(storeRoot).filePath(QStringLiteral("sidecar")));
+            take(AssetStorePaths::storeInfoPath());
+        }
         take(QDir(storeRoot).filePath(QStringLiteral("derived")));
-        take(AssetStorePaths::storeInfoPath());
 
         const QFileInfoList entries =
             QDir(storeRoot).entryInfoList(QDir::AllEntries | QDir::NoDotAndDotDot
@@ -254,11 +280,53 @@ Result reset(Database *db, SettingsManager *settings, const QString &projectsRoo
     db->wipeDatabase();
     db->createAllTables();
 
+    // ---- 4b. THE KEPT STORAGES, REBUILT FROM THEIR SIDECARS --------------
+    // Never from the old tables (forward-only: nothing reads an old schema):
+    // the content-addressed objects and their sidecars ARE the storage, and
+    // the rebuild re-derives the rows under THIS build's schema. Then the
+    // collector takes what no kept row names — the projects' and the
+    // platform's objects, their sidecars — so a kept store holds exactly its
+    // storages and nothing else.
+    //
+    // ON THE CALLING (UI) THREAD, deliberately: the button's reset is followed
+    // by a restart and the bump's runs before any window exists, so nothing is
+    // waiting on a frame while it works.
+    if (keep.any() && !storeRoot.isEmpty() && QDir(storeRoot).exists()) {
+        // The rebuild writes through its OWN connection: the main one must hold
+        // no transaction (a script run's gesture batch would hold the write
+        // lock) — a top-level guard makes the batch commit and stand down.
+        {
+            DbTransaction yield(db->getDb());
+            yield.commit();
+        }
+        AssetMigration::RebuildOptions options;
+        options.homes = keep.homes();
+        options.dropDerived = keep.dropDerived;
+        const AssetMigration::RebuildReport rebuilt =
+            AssetMigration::rebuildCatalog(db->getDb().databaseName(), storeRoot, options);
+        if (!rebuilt.ok) {
+            if (result.error.isEmpty())
+                result.error = QStringLiteral("the kept storages could not be rebuilt: %1")
+                                   .arg(rebuilt.error);
+        } else {
+            result.kept.rows = rebuilt.assets;
+            result.kept.edges = rebuilt.edges;
+            result.kept.unreadable = rebuilt.unreadable;
+            result.kept.objects = AssetMigration::keptObjects(storeRoot, options).size();
+        }
+        const AssetGc::Report collected =
+            AssetGc::sweep(db->getDb(), storeRoot, /*dryRun*/ false, /*force*/ true);
+        if (!collected.ok && result.error.isEmpty() && !collected.error.isEmpty())
+            result.error = QStringLiteral("the store could not be collected: %1")
+                               .arg(collected.error);
+    }
+
     // ---- 5. THE FRESH-INSTALL BOOTSTRAP ----------------------------------
     // The store's own identity first: the root is recreated (it is the default
-    // one, or a custom one that still exists) and given a NEW store.json, which
-    // is what a first launch on an empty machine writes. A new storeId is the
-    // truth — this is not the store that was here a moment ago.
+    // one, or a custom one that still exists). With nothing kept it gets a NEW
+    // store.json, what a first launch on an empty machine writes — this is not
+    // the store that was here a moment ago. With a storage kept, store.json was
+    // left in place and keeps its storeId: it IS the same store (ASSETS-HOME-1).
     if (!storeRoot.isEmpty() && AssetStorePaths::root() == AssetStorePaths::defaultRoot())
         QDir().mkpath(storeRoot);
     AssetStoreService::bootstrapFromSettings(settings);

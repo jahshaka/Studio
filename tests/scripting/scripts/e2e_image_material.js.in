@@ -106,9 +106,9 @@ assert(thrown, "materials.createFromImage refuses a non-texture guid");
 // a separate, explicit gesture), and no ModelTypes::Shader row exists at all.
 var shaderGuid = materials.createFromImage(texGuid, { graph: true });
 assert(shaderGuid.length > 10, "createFromImage({graph:true}) -> material guid");
-var libraryMaterials = assets.list({ scope: "store", type: "material" })
-                             .map(function (s) { return s.guid; });
-assert(libraryMaterials.indexOf(shaderGuid) >= 0, "graph twin is ONE library Material bundle");
+assert(assets.metadata(shaderGuid).type === "material"
+       && assets.metadata(shaderGuid).home === "materials",
+       "graph twin is ONE Material bundle in the Materials storage (ASSETS-HOME-1)");
 var loaded = materials.loadGraph(shaderGuid);
 assert(loaded.nodes === 3, "graph twin loads: master + texture + textureSampler (3 nodes)");
 assert(("" + loaded.master).length > 0, "graph twin has a master node");

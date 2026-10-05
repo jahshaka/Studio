@@ -37,8 +37,15 @@ function assert(cond, msg) {
 var GOLD  = "00000000-0000-0000-0000-000000002024";   // Gold PBR: colours only
 var BRICK = "00000000-0000-0000-0000-000000002014";   // Brick PBR: three maps
 
+// THE LIBRARY'S MATERIAL ROWS: the shipped presets are PLATFORM rows
+// (ASSETS-HOME-1), read by their reserved guids, plus whatever Assets holds.
 function materialRows() {
-    return assets.list({ scope: "store", type: "material" });
+    var rows = assets.list({ scope: "store", type: "material" });
+    materials.presets().forEach(function (p) {
+        try { if (assets.metadata(p.guid).home === "platform") rows.push({ guid: p.guid, name: p.name }); }
+        catch (e) {}
+    });
+    return rows;
 }
 function names(rows) {
     return rows.map(function (r) { return r.name; }).sort();
@@ -138,6 +145,8 @@ assert(materials.seedPresets() === 20, "the first-run seed: twenty bundles");
 var seeded = materialRows();
 assert(seeded.length === 20,
        "…and that is the whole library's material list (" + seeded.length + ")");
+assert(assets.list({ scope: "store", type: "material" }).length === 0,
+       "…every one a PLATFORM row: Assets lists none of them (ASSETS-HOME-1)");
 assert(materials.seedPresets() === 20, "seeding again is idempotent");
 assert(materialRows().length === 20, "…and mints nothing the second time");
 
@@ -266,12 +275,28 @@ assert(copy1 && copy1.length > 10, "materials.createFromPreset -> a guid");
 assert(copy1 !== GOLD, "…a NEW guid: the copy is not the preset");
 var copy1Name = assets.metadata(copy1).name;
 assert(copy1Name === "Gold PBR-1", "…named 'Gold PBR-1' (got '" + copy1Name + "')");
-// WITH A PROJECT OPEN THE COPY IS THE PROJECT'S (ASSETS-SCOPE-1): pinned into
-// it, and never a library tile.
+// THE COPY LANDS IN THE MATERIALS STORAGE, project open or not (ASSETS-HOME-1,
+// the Presets drawer's right-click "Create material"): never an Assets tile,
+// and adding it to the project is a separate gesture.
 assert(assets.list({ scope: "store" }).map(function (a) { return a.guid; }).indexOf(copy1) < 0
        && assets.list({ scope: "project", type: "material" })
-              .map(function (a) { return a.guid; }).indexOf(copy1) >= 0,
-       "…and it is the open project's material, not a library row");
+              .map(function (a) { return a.guid; }).indexOf(copy1) < 0
+       && assets.metadata(copy1).home === "materials",
+       "…and it is a Materials-storage material: not an Assets tile, not the project's");
+
+// A UNIQUE BUNDLE IN FULL (the lead's ruling 2026-10-05): a copy of a preset
+// with maps owns COPIES of them — its own member rows over the same bytes,
+// in its own home — never the preset's platform rows.
+var brickCopy = materials.createFromPreset(BRICK);
+var presetMaps = materials.members(BRICK).map(function (m) { return m.guid; });
+var copyMaps = materials.members(brickCopy);
+assert(copyMaps.length === presetMaps.length,
+       "the Brick copy names as many maps as the preset (" + copyMaps.length + ")");
+copyMaps.forEach(function (m) {
+    var meta = assets.metadata(m.guid);
+    assert(presetMaps.indexOf(m.guid) < 0 && meta.home === "materials",
+           "…" + m.name + " is the copy's OWN row in the Materials storage (" + meta.home + ")");
+});
 
 var copy2 = materials.createFromPreset(GOLD);
 var copy2Name = assets.metadata(copy2).name;
@@ -282,15 +307,16 @@ var named = materials.createFromPreset("Brick PBR", { name: "My Bricks" });
 var namedName = assets.metadata(named).name;
 assert(namedName === "My Bricks", "…and {name} wins when it is given");
 
-// THE COPY SHARES THE PRESET'S MEMBERS (one object, used by two) and IS
-// editable — which is the whole point of Customise.
+// THE COPY OWNS ITS MAPS (ASSETS-HOME-1: a unique bundle in full — its own
+// rows over the preset's stored bytes, never the preset's platform rows) and
+// IS editable — which is the whole point of Create material.
 var copyMembers = materials.members(named);
-assert(copyMembers.length === 3, "the copy names the preset's three maps (" + copyMembers.length + ")");
+assert(copyMembers.length === 3, "the copy names three maps, as the preset does (" + copyMembers.length + ")");
 var presetMemberGuids = materials.members(BRICK).map(function (m) { return m.guid; }).sort();
-assert(JSON.stringify(copyMembers.map(function (m) { return m.guid; }).sort())
-           === JSON.stringify(presetMemberGuids),
-       "…the SAME rows, not copies of them");
-assert(copyMembers[0].usedBy >= 2, "…so the shared picture reads 'used by 2' or more");
+assert(copyMembers.every(function (m) { return presetMemberGuids.indexOf(m.guid) < 0; }),
+       "…its OWN rows, not the preset's");
+assert(copyMembers.every(function (m) { return assets.metadata(m.guid).home === "materials"; }),
+       "…every one in the Materials storage with the copy");
 
 // A COPY IS A GRAPH MATERIAL, so its slots come from the graph — the slot
 // door says so by name and imports the picture anyway rather than losing it.
@@ -562,9 +588,10 @@ assert(editor.undoState().macroOpen === true,
 var renameRefused = false;
 try { assets.rename(GOLD, "Fred"); } catch (e) { renameRefused = true; console.log("   " + e.message); }
 assert(renameRefused, "a shipped preset cannot be RENAMED (one guid, two names, for ever)");
-assert(assets.list({ scope: "store" }).filter(function (a) { return a.guid === GOLD; })[0].name
-           === "Gold PBR",
+assert(assets.metadata(GOLD).name === "Gold PBR",
        "…and the row still carries the preset's name");
+assert(assets.list({ scope: "store" }).filter(function (a) { return a.guid === GOLD; }).length === 0,
+       "…and the preset is NOT an Assets tile: it resolves by guid, a platform row (ASSETS-HOME-1)");
 assert(assets.setTags(GOLD, ["kitchen"]).length === 1,
        "…while TAGGING one is still the user's own business");
 assert(assets.rename(copy1, "My Gold") === true, "the COPY renames, as any material does");

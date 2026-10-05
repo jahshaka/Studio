@@ -35,8 +35,11 @@ assert(beforeProjects > 0, "…and " + beforeProjects + " project(s)");
 var live = project.create("Open When Reset");
 assert(live.length > 10, "a project is open when the reset is asked for");
 
-var result = app.resetLibrary();
-assert(result.ok === true, "app.resetLibrary() -> ok (" + app.lastError() + ")");
+// THE WHOLE RESET: both boxes ticked (ASSETS-HOME-1 — without them Assets and
+// the Materials storage are KEPT; tests/libraryreset/keep.sh is that half).
+var ALL = { clearAssets: true, clearMaterials: true };
+var result = app.resetLibrary(ALL);
+assert(result.ok === true, "app.resetLibrary(ALL) -> ok (" + app.lastError() + ")");
 assert(result.restarted === false, "…and it did NOT restart (nobody asked it to)");
 console.log("REMOVED_OBJECTS=" + result.removed.objects);
 console.log("REMOVED_SIDECARS=" + result.removed.sidecars);
@@ -98,12 +101,12 @@ assert(project.close() === true, "close the project the assertion made");
 
 // A SECOND RESET IS A NO-OP — bar the one project and one texture the
 // assertion above just made, which it takes as well.
-var second = app.resetLibrary();
+var second = app.resetLibrary(ALL);
 assert(second.ok === true, "a second reset also succeeds");
 console.log("SECOND_OBJECTS=" + second.removed.objects);
 console.log("SECOND_STAGING=" + second.removed.staging);
 assert(second.removed.staging === 0, "…with no staging temps left to find");
-var third = app.resetLibrary();
+var third = app.resetLibrary(ALL);
 assert(third.ok === true, "a third reset on an empty library succeeds");
 // THE STEADY STATE, not zero (ATOM P2). A reset ends as a FIRST LAUNCH, and a
 // first launch holds the shipped geometry: the twelve primitives, the Ground and
@@ -111,7 +114,7 @@ assert(third.ok === true, "a third reset on an empty library succeeds");
 // of a library with nothing of the user's in it removes exactly what the last one
 // seeded and seeds it again — the invariant is that the number stops moving, and
 // that nothing of the user's is in it.
-var fourth = app.resetLibrary();
+var fourth = app.resetLibrary(ALL);
 assert(fourth.ok === true, "a fourth reset succeeds");
 assert(fourth.removed.objects === third.removed.objects
        && fourth.removed.sidecars === third.removed.sidecars,

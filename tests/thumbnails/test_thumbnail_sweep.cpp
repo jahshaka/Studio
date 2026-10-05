@@ -45,7 +45,7 @@ static void addRow(Database &db, const QString &guid, const char *name, ModelTyp
                    const QByteArray &thumbnail, const QByteArray &definition)
 {
     db.createAssetEntry(guid, QString::fromUtf8(name), static_cast<int>(type), QString(),
-                        QString(), QString(), QString(), thumbnail, QByteArray(), QByteArray(),
+                        assethome::platform(), assethome::Origin::Create, QString(), QString(), thumbnail, QByteArray(), QByteArray(),
                         definition);
 }
 

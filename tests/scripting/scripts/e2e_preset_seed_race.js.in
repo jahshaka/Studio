@@ -39,7 +39,15 @@ var WOOD = "Wood PBR";
 // first import, 3.4 s wall for the whole seed). The count is asserted because
 // a test that stopped racing would still pass every assertion below while
 // proving nothing at all.
-var bundlesAtImport = assets.list({ scope: "store", type: "material" }).length;
+// THE PRESETS ARE PLATFORM ROWS (ASSETS-HOME-1): counted by reserved guid.
+function platformBundles() {
+    var n = 0;
+    materials.presets().forEach(function (p) {
+        try { if (assets.metadata(p.guid).home === "platform") n++; } catch (e) {}
+    });
+    return n;
+}
+var bundlesAtImport = platformBundles();
 var table = materials.presets();
 var expected = table.length;
 var woodGuid = "";
@@ -72,7 +80,7 @@ var watchUntil = Date.now() + 8000;
 var highWater = bundlesAtImport;
 while (Date.now() < watchUntil) {
     sleep(200);
-    var now = assets.list({ scope: "store", type: "material" }).length;
+    var now = platformBundles();
     if (now > highWater) highWater = now;
 }
 assert(highWater === bundlesAtImport,
@@ -91,45 +99,23 @@ assert(meta.memberOf === undefined, "…and no origin");
 var seeded = materials.seedPresets();
 assert(seeded === expected, "the rest of the presets seed (" + seeded + " of " + expected + ")");
 
-// ---- and the preset resolves TO their row --------------------------------
+// ---- the preset names ITS OWN platform row; the user's stays theirs -------
+// One picture may be two rows in two homes over one stored object: the
+// preset's map is the platform's, the user's import is the user's (a Clear
+// Database that keeps Assets must keep their row whole, and a reset re-seeds
+// the platform's).
 var woodMaps = materials.members(woodGuid);
-var named = [];
-for (var i = 0; i < woodMaps.length; ++i) named.push(woodMaps[i].guid);
-assert(named.indexOf(mine) >= 0,
-       "THE PRESET NAMES THE USER'S OWN ROW — one picture, one object, one guid ("
-       + MAP_NAME + ")");
+var presetMap = "";
+for (var i = 0; i < woodMaps.length; ++i) if (woodMaps[i].name === MAP_NAME) presetMap = woodMaps[i].guid;
+assert(presetMap.length > 10 && presetMap !== mine,
+       "THE PRESET NAMES ITS OWN ROW for " + MAP_NAME + ", never the user's");
+assert(assets.metadata(presetMap).home === "platform", "…a PLATFORM row");
 
-// ---- no duplicate anywhere in the library --------------------------------
-// Every texture row, members included, with the user's picture among them
-// exactly once. Before the fix this listing carried the same file twice: the
-// user's tile and a stamped member row.
+// ---- Assets holds exactly the user's row --------------------------------
 var all = assets.list({ scope: "store", type: "texture", members: true });
-var sameName = [];
-for (var t = 0; t < all.length; ++t)
-    if (all[t].name === MAP_NAME) sameName.push(all[t].guid);
-assert(sameName.length === 1,
-       "ONE ROW FOR THOSE BYTES IN THE WHOLE LIBRARY (" + sameName.length + ": "
-       + sameName.join(", ") + ")");
-assert(sameName[0] === mine, "…and it is the USER'S row, not a stamped duplicate");
-
-// …and it is still a tile of theirs on the Assets page.
-var tiles = assets.list({ scope: "store", type: "texture" });
-var mineIsATile = false;
-for (var k = 0; k < tiles.length; ++k) if (tiles[k].guid === mine) mineIsATile = true;
-assert(mineIsATile, "their picture is still a TILE — a seed may not hide a row it did not mint");
-
-// THE CENSUS RULE, as everywhere else (SEED-SMALL-1): every member row a
-// bundle names, once, plus the user's own.
-var members = {}, memberCount = 0;
-var mats = assets.list({ scope: "store", type: "material" });
-for (var m = 0; m < mats.length; ++m) {
-    var list = materials.members(mats[m].guid);
-    for (var j = 0; j < list.length; ++j)
-        if (!members.hasOwnProperty(list[j].guid)) { members[list[j].guid] = true; memberCount++; }
-}
-console.log("MAP_COUNT=" + memberCount);
-assert(all.length === memberCount,
-       "'Show member textures' finds each map ONCE and nothing else (" + all.length
-       + " rows, " + memberCount + " members)");
+assert(all.length === 1 && all[0].guid === mine,
+       "ASSETS HOLDS THE USER'S PICTURE AND NOTHING OF THE SEED'S (" + all.length + " rows)");
+assert(assets.metadata(mine).home === "assets" && assets.metadata(mine).origin === "import",
+       "…an import in Assets, a tile of theirs");
 
 console.log("ALL PASS");

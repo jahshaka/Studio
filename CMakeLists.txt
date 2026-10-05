@@ -332,7 +332,6 @@ set(SRCS
     src/services/materialpresetseeder.cpp
     src/services/materialmembers.cpp
     src/services/memberstamp.cpp
-    src/services/presetrestamp.cpp
     src/services/assetshare.cpp
     src/services/bundlewriter.cpp
     src/services/projectarchiver.cpp
@@ -459,6 +458,7 @@ set(SRCS
     src/ui/controls/libraryassetpicker.cpp 
     src/ui/panels/timeline/keyframelabel.cpp 
     src/ui/panels/timeline/keyframecurvewidget.cpp 
+    src/ui/dialogs/cleardatabasedialog.cpp 
     src/ui/dialogs/getnamedialog.cpp 
     src/ui/dialogs/importsettingsdialog.cpp
     src/ui/panels/timeline/createanimationwidget.cpp 
@@ -770,6 +770,7 @@ set(HEADERS
     src/ui/panels/timeline/keyframelabel.h 
     src/ui/panels/timeline/keyframecurvewidget.h 
     src/ui/panels/timeline/animationwidgetdata.h 
+    src/ui/dialogs/cleardatabasedialog.h 
     src/ui/dialogs/getnamedialog.h 
     src/ui/dialogs/importsettingsdialog.h
     src/ui/panels/timeline/createanimationwidget.h 

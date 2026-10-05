@@ -64,7 +64,7 @@ void MaterialPresetSeeder::finishNow() {}
 
 namespace MaterialPresetAssets {
 QString guidFor(const QString &) { return QString(); }
-QString customise(const QString &, const QString &, Database *, Project *, QString *)
+QString createFromPreset(const QString &, const QString &, Database *, QString *)
 {
     return QString();
 }

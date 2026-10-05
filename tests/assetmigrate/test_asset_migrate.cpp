@@ -62,8 +62,8 @@ static QByteArray readFile(const QString &path)
 static void insertAsset(const QString &guid, int type, const QString &name, int viewFilter)
 {
     QSqlQuery q;
-    q.prepare("INSERT INTO assets (guid, type, name, view_filter, collection, author, license, properties) "
-              "VALUES (?, ?, ?, ?, 0, 'tester', 'MIT', '{\"metadata\":{\"kind\":\"test\"}}')");
+    q.prepare("INSERT INTO assets (guid, type, name, view_filter, collection, author, license, properties, origin) "
+              "VALUES (?, ?, ?, ?, 0, 'tester', 'MIT', '{\"metadata\":{\"kind\":\"test\"}}', 'import')");
     q.addBindValue(guid);
     q.addBindValue(type);
     q.addBindValue(name);
@@ -111,7 +111,7 @@ int main(int argc, char **argv)
     db.createAllTables();   // fresh-DB bootstrap creates the FULL final schema
 
     insertAsset("guidA", 1, "a.glb", 2);
-    insertAsset("guidB", 7, "b.png", 3);
+    insertAsset("guidB", 7, "b.png", 5);   // the Materials storage
     insertAsset("guidC", 1, "ghost.glb", 2);    // DB-only row, no bytes
 
     QSqlDatabase conn = QSqlDatabase::database();
@@ -174,7 +174,7 @@ int main(int argc, char **argv)
     // and the commit is what makes the object and its rows exist.
     {
         writeFile(srcDir + "/staged.png", contentW);
-        insertAsset("guidS", 7, "staged.png", 3);
+        insertAsset("guidS", 7, "staged.png", 5);
 
         QVector<AssetCas::Staged> batch;
         AssetCas::Staged file;
@@ -288,7 +288,7 @@ int main(int argc, char **argv)
     // A pre-CAS <root>/<guid>/ folder is not a place the resolver looks: a row
     // whose bytes sit only there resolves to nothing.
     {
-        insertAsset("guidLegacy", 2, "legacy.png", 3);
+        insertAsset("guidLegacy", 2, "legacy.png", 5);
         writeFile(root + "/guidLegacy/legacy.png", contentY);
         QString legacyName;
         CHECK(AssetCas::resolveSource(conn, root, "guidLegacy", &legacyName).isEmpty()
@@ -337,6 +337,19 @@ int main(int argc, char **argv)
         writeFile(objectY, contentY);   // restore
     }
     CHECK(AssetMigration::verify(dbPath, root).ok, "verify clean again after restore");
+    {
+        // A STORAGE ROW WITHOUT ITS SIDECAR is a finding (ASSETS-HOME-1): a
+        // Clear Database or a format bump could not rebuild it.
+        const QString side = AssetStorePaths::sidecarPathIn(root, "guidB");
+        const bool hadIt = AssetMigration::verify(dbPath, root).missingSidecars.indexOf("guidB") < 0;
+        CHECK(hadIt && QFile::rename(side, side + ".away"), "guidB's sidecar is taken away");
+        const auto noSide = AssetMigration::verify(dbPath, root);
+        CHECK(noSide.missingSidecars.contains("guidB"),
+              "verify names the storage row that has no sidecar");
+        CHECK(QFile::rename(side + ".away", side), "...and it is put back");
+        CHECK(!AssetMigration::verify(dbPath, root).missingSidecars.contains("guidB"),
+              "...and verify is clean of it again");
+    }
 
     // ---- rebuildCatalog into a FRESH database (the honest I2 test) ----
     const QString rebuiltDb = cwd + "/cas_rebuilt.db";
@@ -362,8 +375,8 @@ int main(int argc, char **argv)
         QSqlQuery q(check);
         q.exec("SELECT name, type, view_filter FROM assets WHERE guid = 'guidB'");
         CHECK(q.next() && q.value(0).toString() == "b.png" && q.value(1).toInt() == 7
-                  && q.value(2).toInt() == 3,
-              "rebuilt row matches (name/type/view_filter)");
+                  && q.value(2).toInt() == 5,
+              "rebuilt row matches (name/type/home)");
 
         // THE ASSERTION THE ITEM EXISTS FOR: resolve the COW-edited asset
         // through the REBUILT catalog and get the edited bytes back.
@@ -420,7 +433,7 @@ int main(int argc, char **argv)
             img.save(texPng, "PNG");
         }
         const QString texGuid = "11111111-2222-3333-4444-555555555555";
-        insertAsset(texGuid, 2 /* Texture */, "resolve_me.png", 3);
+        insertAsset(texGuid, 2 /* Texture */, "resolve_me.png", 5);
         QString oid, err;
         CHECK(AssetCas::ingestFile(QSqlDatabase::database(), root, texPng,
                                    texGuid, "source", "resolve_me.png", &oid, &err),

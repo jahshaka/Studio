@@ -338,7 +338,6 @@ int main(int argc, char **argv)
         row.guid = QStringLiteral("guid-cancel-after-ingest");
         row.name = QStringLiteral("cancel_after_ingest.png");
         row.type = static_cast<int>(ModelTypes::Texture);
-        row.viewFilter = 2;   // AssetsView
         prepared.staged.mainGuid = row.guid;
         prepared.staged.rows.append(row);
 

@@ -154,7 +154,6 @@ public:
 	void focusInEvent(QFocusEvent *event);
 	bool eventFilter(QObject *watched, QEvent *event);
     void toggleFilterPane(bool);
-	void addToJahLibrary(const QString fileName, const QString guid, bool jfx = false);
 	void spaceSplits();
     void closeViewer();
 	void clearViewer();
@@ -186,7 +185,10 @@ public:
 	/// stored thumbnail is absent or undecodable — the same routine per asset
 	/// as `assets.refreshThumbnail`, run over the library one row at a time
 	/// with the event loop turning between them (THUMBS-1 item 4).
-	void rebuildMissingThumbnails();
+	/// `afterUpdate`: the automatic run after a format bump rebuilt the user's
+	/// storages (ASSETS-HOME-1) — nobody clicked, so failures go to the log and
+	/// a toast, never a modal box.
+	void rebuildMissingThumbnails(bool afterUpdate = false);
 	/// Tile context menu → "Create Material from Image" (IMAGE_PLANE_SPEC
 	/// option B1): mints the companion PBR material asset, pins it into the
 	/// open project and adds its library tile.

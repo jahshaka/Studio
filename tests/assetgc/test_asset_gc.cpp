@@ -68,8 +68,8 @@ static QByteArray readFile(const QString &path)
 static void insertAsset(const QString &guid, int type, const QString &name)
 {
     QSqlQuery q;
-    q.prepare("INSERT INTO assets (guid, type, name, view_filter, collection, author, license, properties) "
-              "VALUES (?, ?, ?, 2, 0, 'tester', 'MIT', '{}')");
+    q.prepare("INSERT INTO assets (guid, type, name, view_filter, collection, author, license, properties, origin) "
+              "VALUES (?, ?, ?, 2, 0, 'tester', 'MIT', '{}', 'import')");
     q.addBindValue(guid);
     q.addBindValue(type);
     q.addBindValue(name);
@@ -407,9 +407,11 @@ int main(int argc, char **argv)
                   .value("metadata").toObject().value("kind").toString() == "test",
               "updateAssetProperties refreshed the sidecar's properties");
 
-        CHECK(db.updateAssetViewFilter("guidSolo", 3), "updateAssetViewFilter");
-        CHECK(QJsonDocument::fromJson(readFile(path)).object().value("viewFilter").toInt() == 3,
-              "updateAssetViewFilter refreshed the sidecar");
+        CHECK(db.setAssetHome("guidSolo", assethome::materials(), assethome::Origin::Create),
+              "setAssetHome");
+        CHECK(QJsonDocument::fromJson(readFile(path)).object().value("home").toString()
+                  == QLatin1String("materials"),
+              "setAssetHome refreshed the sidecar");
 
         CHECK(db.switchAssetCollection(7, "guidSolo"), "switchAssetCollection");
         CHECK(QJsonDocument::fromJson(readFile(path)).object().value("collection").toInt() == 7,
@@ -462,11 +464,12 @@ int main(int argc, char **argv)
         db.closeDatabase();
 
         writeFile(AssetStorePaths::sidecarPathIn(root, "guidTombstone"), QByteArray(
-            "{\"formatVersion\":1,\"guid\":\"guidTombstone\",\"name\":\"gone.bin\",\"type\":1,"
+            "{\"formatVersion\":3,\"home\":\"assets\",\"origin\":\"import\",\"guid\":\"guidTombstone\",\"name\":\"gone.bin\",\"type\":1,"
             "\"files\":[{\"role\":\"source\",\"oid\":\"" + QString(64, QLatin1Char('c')).toUtf8()
             + "\",\"name\":\"gone.bin\",\"size\":10,\"ext\":\"bin\"}]}"));
+        writeFile(AssetStorePaths::sidecarPathIn(root, "guidBroken"), QByteArray("{not json"));
         writeFile(AssetStorePaths::sidecarPathIn(root, "guidFileless"), QByteArray(
-            "{\"formatVersion\":1,\"guid\":\"guidFileless\",\"name\":\"dbonly\",\"type\":1,\"files\":[]}"));
+            "{\"formatVersion\":3,\"home\":\"assets\",\"origin\":\"import\",\"guid\":\"guidFileless\",\"name\":\"dbonly\",\"type\":1,\"files\":[]}"));
         // and a real one for a live asset
         CHECK(db.initializeDatabase(dbPath), "database reopened to write a live sidecar");
         QString err;
@@ -479,6 +482,9 @@ int main(int argc, char **argv)
         const auto rebuild = AssetMigration::rebuildCatalog(rebuiltDb, root);
         CHECK(rebuild.ok, "rebuildCatalog succeeded");
         CHECK(rebuild.skipped == 1, "exactly one sidecar was skipped as a tombstone");
+        CHECK(rebuild.unreadable == 1 && rebuild.unreadableFiles.size() == 1
+                  && rebuild.unreadableFiles.first().endsWith("guidBroken.json"),
+              "an UNPARSEABLE sidecar is counted and named, never skipped silently");
 
         QSqlDatabase check = QSqlDatabase::addDatabase("QSQLITE", "GcRebuildCheck");
         check.setDatabaseName(rebuiltDb);

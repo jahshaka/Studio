@@ -82,7 +82,9 @@ iris::SceneNodePtr buildFloor(SceneTemplate kind, Database *db, Project *project
             QJsonObject props;
             props.insert(QStringLiteral("type"), QStringLiteral("builtin"));
             db->createAssetEntry(guid, name, static_cast<int>(ModelTypes::Object),
-                                 project->getProjectGuid(), project->getProjectGuid(),
+                                 project->getProjectGuid(),
+                                 assethome::project(project->getProjectGuid()),
+                                 assethome::Origin::Create,
                                  QString(), QString(), QByteArray(),
                                  QJsonDocument(props).toJson(), QByteArray(), QByteArray());
         }

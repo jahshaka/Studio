@@ -147,12 +147,12 @@ int main(int argc, char **argv)
 
     const QString victimGuid = db.createAssetEntry(
         "guid-victim", "victim.png", static_cast<int>(ModelTypes::Texture),
-        QString(), projectGuid, QString(), QString(), QByteArray(), QByteArray(),
-        QByteArray(), QByteArray(), AssetViewFilter::AssetsView);
+        QString(), assethome::assets(), assethome::Origin::Import, QString(), QString(), QByteArray(), QByteArray(),
+        QByteArray(), QByteArray());
     const QString keeperGuid = db.createAssetEntry(
         "guid-keeper", "keeper.png", static_cast<int>(ModelTypes::Texture),
-        QString(), projectGuid, QString(), QString(), QByteArray(), QByteArray(),
-        QByteArray(), QByteArray(), AssetViewFilter::AssetsView);
+        QString(), assethome::assets(), assethome::Origin::Import, QString(), QString(), QByteArray(), QByteArray(),
+        QByteArray(), QByteArray());
     CHECK(!victimGuid.isEmpty() && !keeperGuid.isEmpty(), "two asset rows created");
 
     QSqlDatabase conn = QSqlDatabase::database();
@@ -221,12 +221,12 @@ int main(int argc, char **argv)
     // --- 2. deleteAssetAndDependencies ---------------------------------------
     const QString parentGuid = db.createAssetEntry(
         "guid-parent", "parent.obj", static_cast<int>(ModelTypes::Object),
-        QString(), projectGuid, QString(), QString(), QByteArray(), QByteArray(),
-        QByteArray(), QByteArray(), AssetViewFilter::AssetsView);
+        QString(), assethome::assets(), assethome::Origin::Import, QString(), QString(), QByteArray(), QByteArray(),
+        QByteArray(), QByteArray());
     const QString childGuid = db.createAssetEntry(
         "guid-child", "child.png", static_cast<int>(ModelTypes::Texture),
-        QString(), projectGuid, QString(), QString(), QByteArray(), QByteArray(),
-        QByteArray(), QByteArray(), AssetViewFilter::AssetsView);
+        QString(), assethome::assets(), assethome::Origin::Import, QString(), QString(), QByteArray(), QByteArray(),
+        QByteArray(), QByteArray());
     QString childOid;
     CHECK(AssetCas::ingestFile(conn, storeRoot, ownSrc, childGuid, "source", "child.png",
                                &childOid, &err), "child ingests content");
@@ -291,8 +291,8 @@ int main(int argc, char **argv)
     // the driver reports the misleading "Parameter count mismatch".
     const QString survivorGuid = db.createAssetEntry(
         "guid-survivor", "survivor.png", static_cast<int>(ModelTypes::Texture),
-        QString(), projectGuid, QString(), QString(), QByteArray(), QByteArray(),
-        QByteArray(), QByteArray(), AssetViewFilter::AssetsView);
+        QString(), assethome::assets(), assethome::Origin::Import, QString(), QString(), QByteArray(), QByteArray(),
+        QByteArray(), QByteArray());
     CHECK(!survivorGuid.isEmpty(), "survivor asset row created");
 
     // Mirror what the AssetManager cache holds, so we can prove the cache is
@@ -334,8 +334,8 @@ int main(int argc, char **argv)
         conn = QSqlDatabase::database();
         const QString atomicGuid = db.createAssetEntry(
             "guid-atomic", "atomic.png", static_cast<int>(ModelTypes::Texture),
-            QString(), projectGuid, QString(), QString(), QByteArray(), QByteArray(),
-            QByteArray(), QByteArray(), AssetViewFilter::AssetsView);
+            QString(), assethome::assets(), assethome::Origin::Import, QString(), QString(), QByteArray(), QByteArray(),
+            QByteArray(), QByteArray());
         QString atomicOid;
         CHECK(AssetCas::ingestFile(conn, storeRoot, ownSrc, atomicGuid, "source", "own.png",
                                    &atomicOid, &err), "atomicity fixture ingests content");
@@ -369,8 +369,8 @@ int main(int argc, char **argv)
 
         const QString pinnedGuid = db.createAssetEntry(
             "guid-pinned", "pinned.png", static_cast<int>(ModelTypes::Texture),
-            QString(), doomedProject, QString(), QString(), QByteArray(), QByteArray(),
-            QByteArray(), QByteArray(), AssetViewFilter::AssetsView);
+            QString(), assethome::assets(), assethome::Origin::Import, QString(), QString(), QByteArray(), QByteArray(),
+            QByteArray(), QByteArray());
         QString pinnedOid;
         CHECK(AssetCas::ingestFile(conn, storeRoot, sharedSrc, pinnedGuid, "source", "shared.png",
                                    &pinnedOid, &err), "project asset ingested");
@@ -402,17 +402,17 @@ int main(int argc, char **argv)
     {
         const QString ownerGuid = db.createAssetEntry(
             "guid-filter-owner", "owner.obj", static_cast<int>(ModelTypes::Object),
-            QString(), projectGuid, QString(), QString(), QByteArray(), QByteArray(),
-            QByteArray(), QByteArray(), AssetViewFilter::AssetsView);
+            QString(), assethome::assets(), assethome::Origin::Import, QString(), QString(), QByteArray(), QByteArray(),
+            QByteArray(), QByteArray());
         // Dependees whose NAMES have no suffix — exactly what the filter drops.
         const QString bare1 = db.createAssetEntry(
             "guid-bare-one", "bareone", static_cast<int>(ModelTypes::Texture),
-            QString(), projectGuid, QString(), QString(), QByteArray(), QByteArray(),
-            QByteArray(), QByteArray(), AssetViewFilter::AssetsView);
+            QString(), assethome::assets(), assethome::Origin::Import, QString(), QString(), QByteArray(), QByteArray(),
+            QByteArray(), QByteArray());
         const QString bare2 = db.createAssetEntry(
             "guid-bare-two", "baretwo", static_cast<int>(ModelTypes::Texture),
-            QString(), projectGuid, QString(), QString(), QByteArray(), QByteArray(),
-            QByteArray(), QByteArray(), AssetViewFilter::AssetsView);
+            QString(), assethome::assets(), assethome::Origin::Import, QString(), QString(), QByteArray(), QByteArray(),
+            QByteArray(), QByteArray());
         CHECK(db.createDependency(static_cast<int>(ModelTypes::Object),
                                   static_cast<int>(ModelTypes::Texture),
                                   ownerGuid, bare1, projectGuid), "bare dependency 1");
@@ -472,8 +472,8 @@ int main(int argc, char **argv)
 
         const QString shared = db.createAssetEntry(
             "guid-two-pins", "two-pins.png", static_cast<int>(ModelTypes::Texture),
-            QString(), QString(), QString(), QString(), QByteArray(), QByteArray(),
-            QByteArray(), QByteArray(), AssetViewFilter::AssetsView);
+            QString(), assethome::assets(), assethome::Origin::Import, QString(), QString(), QByteArray(), QByteArray(),
+            QByteArray(), QByteArray());
         CHECK(!shared.isEmpty(), "the two-pin asset row created");
         QString oid, e;
         CHECK(AssetCas::ingestFile(conn, storeRoot, ownSrc, shared, "source", "two-pins.png", &oid, &e),
@@ -537,8 +537,8 @@ int main(int argc, char **argv)
         const QString ghost = "proj-that-never-existed";
         const QString hauntedGuid = db.createAssetEntry(
             "guid-haunted", "haunted.png", static_cast<int>(ModelTypes::Texture),
-            QString(), QString(), QString(), QString(), QByteArray(), QByteArray(),
-            QByteArray(), QByteArray(), AssetViewFilter::AssetsView);
+            QString(), assethome::assets(), assethome::Origin::Import, QString(), QString(), QByteArray(), QByteArray(),
+            QByteArray(), QByteArray());
         QString hauntedOid, he;
         CHECK(AssetCas::ingestFile(conn, storeRoot, ownSrc, hauntedGuid, "source", "haunted.png",
                                    &hauntedOid, &he), "the haunted asset has content");
@@ -566,8 +566,8 @@ int main(int argc, char **argv)
         // A LIVE pin still vetoes, in the same session, on the same shape.
         const QString livingGuid = db.createAssetEntry(
             "guid-living", "living.png", static_cast<int>(ModelTypes::Texture),
-            QString(), QString(), QString(), QString(), QByteArray(), QByteArray(),
-            QByteArray(), QByteArray(), AssetViewFilter::AssetsView);
+            QString(), assethome::assets(), assethome::Origin::Import, QString(), QString(), QByteArray(), QByteArray(),
+            QByteArray(), QByteArray());
         QString livingOid;
         CHECK(AssetCas::ingestFile(conn, storeRoot, ownSrc, livingGuid, "source", "living.png",
                                    &livingOid, &he), "the living asset has content");
@@ -594,12 +594,12 @@ int main(int argc, char **argv)
 
         const QString inFolder = db.createAssetEntry(
             "guid-in-folder", "infolder.png", static_cast<int>(ModelTypes::Texture),
-            folderGuid, QString(), QString(), QString(), QByteArray(), QByteArray(),
-            QByteArray(), QByteArray(), AssetViewFilter::AssetsView);
+            folderGuid, assethome::assets(), assethome::Origin::Import, QString(), QString(), QByteArray(), QByteArray(),
+            QByteArray(), QByteArray());
         const QString folderDep = db.createAssetEntry(
             "guid-folder-dep", "folderdep.png", static_cast<int>(ModelTypes::Texture),
-            folderGuid, QString(), QString(), QString(), QByteArray(), QByteArray(),
-            QByteArray(), QByteArray(), AssetViewFilter::AssetsView);
+            folderGuid, assethome::assets(), assethome::Origin::Import, QString(), QString(), QByteArray(), QByteArray(),
+            QByteArray(), QByteArray());
         QString inFolderOid, fe;
         CHECK(AssetCas::ingestFile(conn, storeRoot, ownSrc, inFolder, "source", "infolder.png",
                                    &inFolderOid, &fe), "the folder member has content");
@@ -641,8 +641,8 @@ int main(int argc, char **argv)
         CHECK(db.createProject(fragile, "Fragile"), "fragile project created");
         const QString orphanGuid = db.createAssetEntry(
             "guid-orphan-reap", "orphan.png", static_cast<int>(ModelTypes::Texture),
-            QString(), QString(), QString(), QString(), QByteArray(), QByteArray(),
-            QByteArray(), QByteArray(), AssetViewFilter::AssetsView);
+            QString(), assethome::assets(), assethome::Origin::Import, QString(), QString(), QByteArray(), QByteArray(),
+            QByteArray(), QByteArray());
         QString orphanOid, oe;
         CHECK(AssetCas::ingestFile(conn, storeRoot, ownSrc, orphanGuid, "source", "orphan.png",
                                    &orphanOid, &oe), "the future orphan has content");
@@ -691,12 +691,12 @@ int main(int argc, char **argv)
 
         const QString firstGuid = db.createAssetEntry(
             "guid-reap-first", "first.png", static_cast<int>(ModelTypes::Texture),
-            QString(), QString(), QString(), QString(), QByteArray(), QByteArray(),
-            QByteArray(), QByteArray(), AssetViewFilter::AssetsView);
+            QString(), assethome::assets(), assethome::Origin::Import, QString(), QString(), QByteArray(), QByteArray(),
+            QByteArray(), QByteArray());
         const QString secondGuid = db.createAssetEntry(
             "guid-reap-second", "second.png", static_cast<int>(ModelTypes::Texture),
-            QString(), QString(), QString(), QString(), QByteArray(), QByteArray(),
-            QByteArray(), QByteArray(), AssetViewFilter::AssetsView);
+            QString(), assethome::assets(), assethome::Origin::Import, QString(), QString(), QByteArray(), QByteArray(),
+            QByteArray(), QByteArray());
         QString firstOid, secondOid, re;
         CHECK(AssetCas::ingestFile(conn, storeRoot, sharedSrc, firstGuid, "source", "first.png",
                                    &firstOid, &re), "the first orphan has content");
@@ -785,8 +785,8 @@ int main(int argc, char **argv)
         }
         const QString texGuid = db.createAssetEntry(
             "guid-companion-tex", "companion.png", static_cast<int>(ModelTypes::Texture),
-            QString(), QString(), QString(), QString(), QByteArray(), QByteArray(),
-            QByteArray(), QByteArray(), AssetViewFilter::AssetsView);
+            QString(), assethome::assets(), assethome::Origin::Import, QString(), QString(), QByteArray(), QByteArray(),
+            QByteArray(), QByteArray());
         QString texOid, ce;
         CHECK(AssetCas::ingestFile(conn, storeRoot, pngPath, texGuid, "source", "companion.png",
                                    &texOid, &ce), "the image is in the store");
@@ -794,7 +794,7 @@ int main(int argc, char **argv)
         // (1) the companion the app would mint
         QString mintError;
         const QString companion =
-            ImageMaterial::createMaterialAsset(texGuid, &db, nullptr, assethome::library(), &mintError);
+            ImageMaterial::createMaterialAsset(texGuid, &db, nullptr, assethome::assets(), &mintError);
         CHECK(!companion.isEmpty(),
               qPrintable(QStringLiteral("the companion material was minted -> %1 %2")
                              .arg(companion, mintError)));
@@ -821,9 +821,8 @@ int main(int argc, char **argv)
         // single dependency, no stamp.
         const QString theirs = db.createAssetEntry(
             "guid-user-material", "Their Material", static_cast<int>(ModelTypes::Material),
-            QString(), QString(), QString(), QString(), QByteArray(), QByteArray(),
-            QByteArray(), QByteArray("{\"materialType\":\"pbr\",\"values\":{}}"),
-            AssetViewFilter::AssetsView);
+            QString(), assethome::assets(), assethome::Origin::Import, QString(), QString(), QByteArray(), QByteArray(),
+            QByteArray(), QByteArray("{\"materialType\":\"pbr\",\"values\":{}}"));
         CHECK(db.createDependency(static_cast<int>(ModelTypes::Material),
                                   static_cast<int>(ModelTypes::Texture), theirs, texGuid,
                                   QString()),
@@ -834,12 +833,12 @@ int main(int argc, char **argv)
         // (3) a second stamped companion that an OBJECT depends on — applied
         // to something in the project, so the project keeps it.
         const QString applied =
-            ImageMaterial::createMaterialAsset(texGuid, &db, nullptr, assethome::library(), nullptr);
+            ImageMaterial::createMaterialAsset(texGuid, &db, nullptr, assethome::assets(), nullptr);
         CHECK(!applied.isEmpty() && applied != companion, "a second stamped material exists");
         const QString userObject = db.createAssetEntry(
             "guid-companion-object", "thing.obj", static_cast<int>(ModelTypes::Object),
-            QString(), QString(), QString(), QString(), QByteArray(), QByteArray(),
-            QByteArray(), QByteArray(), AssetViewFilter::AssetsView);
+            QString(), assethome::assets(), assethome::Origin::Import, QString(), QString(), QByteArray(), QByteArray(),
+            QByteArray(), QByteArray());
         CHECK(db.createDependency(static_cast<int>(ModelTypes::Object),
                                   static_cast<int>(ModelTypes::Material), userObject, applied,
                                   QString()),
@@ -883,20 +882,17 @@ int main(int argc, char **argv)
                                  const QString &parent) {
             // (thumbnail, PROPERTIES, tags, asset) — the stamp is a property.
             return db.createAssetEntry(guid, name, static_cast<int>(ModelTypes::Texture),
-                                       parent, QString(), QString(), QString(), QByteArray(),
-                                       props, QByteArray(), QByteArray(),
-                                       AssetViewFilter::AssetsView);
+                                       parent, assethome::assets(), assethome::Origin::Import, QString(), QString(), QByteArray(),
+                                       props, QByteArray(), QByteArray());
         };
         const QString bundle = db.createAssetEntry(
             "guid-g4-bundle", "G4 Bundle", static_cast<int>(ModelTypes::Material),
-            QString(), QString(), QString(), QString(), QByteArray(), QByteArray(),
-            QByteArray(), QByteArray("{\"materialType\":\"pbr\",\"values\":{}}"),
-            AssetViewFilter::AssetsView);
+            QString(), assethome::assets(), assethome::Origin::Import, QString(), QString(), QByteArray(), QByteArray(),
+            QByteArray(), QByteArray("{\"materialType\":\"pbr\",\"values\":{}}"));
         const QString other = db.createAssetEntry(
             "guid-g4-other", "G4 Other", static_cast<int>(ModelTypes::Material),
-            QString(), QString(), QString(), QString(), QByteArray(), QByteArray(),
-            QByteArray(), QByteArray("{\"materialType\":\"pbr\",\"values\":{}}"),
-            AssetViewFilter::AssetsView);
+            QString(), assethome::assets(), assethome::Origin::Import, QString(), QString(), QByteArray(), QByteArray(),
+            QByteArray(), QByteArray("{\"materialType\":\"pbr\",\"values\":{}}"));
         const QString picked = makeTex("guid-g4-picked", "picked.png",
                                        QByteArray("{\"member\":true,\"memberOf\":\"guid-g4-bundle\"}"),
                                        QString());

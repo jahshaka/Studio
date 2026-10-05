@@ -32,6 +32,10 @@ public:
 	void dropEvent(QDropEvent *event) override;
     bool shaderContextMenuAllowed = false;
 	bool addToProjectMenuAllowed = false;
+	/// The Presets drawer's one item: "Create material" (ASSETS-HOME-1).
+	bool presetMenuAllowed = false;
+	/// The Materials storage's "Save to Assets" (ASSETS-HOME-1).
+	bool saveToAssetsMenuAllowed = false;
 	/// Injected by the module window: is a project scene open? (Phase 4:
 	/// was UiManager::isSceneOpen). Null-safe: no probe = treated as closed.
 	std::function<bool()> sceneOpenProbe;
@@ -74,6 +78,10 @@ signals:
     void createShader(QString guid);
     void importShader(QString guid);
 	void addToProject(QListWidgetItem *item);
+	/// A unique copy of this preset in the Materials storage.
+	void createFromPreset(QString guid);
+	/// A full copy of this material in Assets.
+	void saveToAssets(QString guid);
 
 	void resizeItem(int size);
 };

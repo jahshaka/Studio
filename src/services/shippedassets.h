@@ -128,13 +128,14 @@ Pinned importTexture(const QString &sourcePath, const QString &displayName,
                      Database *db, Project *project, const assethome::Home &home,
                      const QString &knownOid = QString());
 
-/// The LIBRARY Texture row whose stored bytes are `oid`, or empty. The same
+/// The Texture row OF `home` whose stored bytes are `oid`, or empty. The same
 /// by-content lookup the imports above use to answer "I already have this" —
 /// exposed because the preset seeder must ask it on the UI thread BEFORE it
 /// hands a file to the import pipeline: the store dedups BYTES, but the
 /// pipeline would still mint a second Texture ROW for content the library
 /// already has under one.
-QString libraryTextureFor(const QString &oid, const QString &projectGuid = QString());
+QString libraryTextureFor(const QString &oid, const assethome::Home &home,
+                          const QString &projectGuid = QString());
 
 /// The shipped cube-sky presets (app/content/skies/alternative/<dir>/).
 struct SkyPreset

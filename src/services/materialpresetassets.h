@@ -88,8 +88,7 @@ bool isPreset(const QString &presetOrGuid);
 
 /// EVERY SHIPPED PRESET'S GUID, in the shipped table's order — the set that
 /// means "the app's own read-only bundles", for a caller that has to reason
-/// about all of them at once (the boot re-stamp of their maps,
-/// services/presetrestamp.h). `guidFor` is the rule; this is it, applied to
+/// about all of them at once. `guidFor` is the rule; this is it, applied to
 /// the table, in one place instead of a loop at each caller.
 QStringList allGuids();
 
@@ -162,13 +161,15 @@ int seedAll(Database *db, QString *errorOut = nullptr);
 /// LIVES HERE, once, for every caller — including one that supplies a name.
 QString customiseName(Database *db, const QString &wanted);
 
-/// R18 — mint an EDITABLE copy of a preset in the library's custom drawer,
-/// named by `customiseName` unless `name` is given. The copy is an ordinary
-/// material bundle: the same member textures (one object, shared — that is
-/// what the bundle model is for) and a fresh guid nothing calls reserved, so
-/// every edit gesture works on it. Pinned into `project` when one is open, so
-/// it lands in the project's drawer and the editor's tray too. Empty on
-/// failure with `errorOut`.
+/// CREATE MATERIAL FROM A PRESET (R18; ASSETS-HOME-1, the owner 2026-10-04:
+/// "right-click a preset, Create material — a unique copy in the Materials
+/// storage"). Mints an EDITABLE copy of a preset in the MATERIALS MODULE'S
+/// STORAGE — whatever project is open; adding it to a project is a separate
+/// gesture — named by `customiseName` unless `name` is given. The copy is a
+/// unique bundle IN FULL: a fresh guid nothing calls reserved, and its maps its
+/// OWN member rows (copied from the preset's platform rows by the bundle
+/// writer, same bytes), so it survives a Clear Database that keeps Materials.
+/// Empty on failure with `errorOut`.
 ///
 /// AND IT RENDERS THE COPY'S TILE (owner review R9(a), PREVIEWENV-2): a
 /// material's tile is a picture OF THAT MATERIAL on the studio sphere, and the
@@ -176,8 +177,8 @@ QString customiseName(Database *db, const QString &wanted);
 /// here rather than at each of the three Customise doors — through
 /// services/materialtile.h, which logs a refusal instead of discarding it.
 /// Headless it fails by name and the inherited tile stands.
-QString customise(const QString &presetOrGuid, const QString &name,
-                  Database *db, Project *project, QString *errorOut = nullptr);
+QString createFromPreset(const QString &presetOrGuid, const QString &name, Database *db,
+                         QString *errorOut = nullptr);
 
 } // namespace MaterialPresetAssets
 

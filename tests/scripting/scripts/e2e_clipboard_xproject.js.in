@@ -245,7 +245,7 @@ assert(anyway.missing.length === 1, "and still reports the gap");
 var hostile = JSON.parse(clipboard.text());
 var evilGuid = runGuid("e");
 var evilEntry = {
-    name: "../../../../etc/passwd", type: "texture", typeId: 2, viewFilter: 2,
+    name: "../../../../etc/passwd", type: "texture", typeId: 2,
     dependencies: [],
     files: [{ role: "source", name: "../../../../etc/passwd", ext: "",
               size: 1, oid: "../../../../etc/passwd" }]
@@ -286,7 +286,7 @@ function refuses(mutate, what) {
     var payload = JSON.parse(JSON.stringify(hostile));
     payload.assets = {};
     var guid = runGuid("0123456789abcdef".charAt(refuses.n = (refuses.n || 0) + 1));
-    var entry = { name: "x.png", type: "texture", typeId: 2, viewFilter: 2, dependencies: [],
+    var entry = { name: "x.png", type: "texture", typeId: 2, dependencies: [],
                   files: [{ role: "source", name: "x.png", ext: "png",
                             size: 1, oid: "0000000000000000000000000000000000000000000000000000000000000000" }] };
     mutate(entry);

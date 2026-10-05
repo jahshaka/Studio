@@ -29,7 +29,6 @@ For more information see the LICENSE file
 #include "services/jahlog.h"
 #include "services/materialpresetassets.h"
 #include "services/memberstamp.h"
-#include "services/presetrestamp.h"
 
 MaterialPresetSeeder &MaterialPresetSeeder::instance()
 {
@@ -55,16 +54,11 @@ bool MaterialPresetSeeder::start(Database *db)
         pending.append(preset.name);
     }
     if (pending.isEmpty()) {
-        // SEEDED ALREADY — AND THAT IS WHERE THE REPAIR BELONGS (SEED-RESTAMP-1).
-        // A library minted by a seed older than SEED-STAMP-1 holds its preset
-        // maps with no member stamp, and this pass is idempotent, so it never
-        // looks at them again: the owner's tray showed thirty-five loose map
-        // tiles beside the seven bundles they came in through. The re-stamp is
-        // that one repair, by CONTENT: 16-27 ms the once, 3-6 ms on every
-        // launch after it (services/presetrestamp.h measures both).
-        restampExistingMaps(db);
-        // …AND IT IS A PASS LIKE ANY OTHER: queued, so a listener built after
-        // this call (the tray is, at boot) still hears it.
+        // SEEDED ALREADY. (The re-stamp repair that ran here for libraries
+        // seeded before SEED-STAMP-1 is deleted, ASSETS-HOME-1: such a library
+        // records no homes and is wiped at the 4->5 bump, and a platform map
+        // can no longer lose its stamp to a user's import.) A PASS LIKE ANY
+        // OTHER: queued, so a listener built after this call still hears it.
         QMetaObject::invokeMethod(this, [this]() { emit finished(0); }, Qt::QueuedConnection);
         return false;
     }
@@ -139,7 +133,7 @@ void MaterialPresetSeeder::importMapsThenRows()
     for (const auto &entry : mPrepared.mapOwners) {
         const QString oid = mPrepared.mapOids.value(entry.first);
         if (oid.isEmpty()) continue;
-        if (!ShippedAssets::libraryTextureFor(oid).isEmpty()) continue;
+        if (!ShippedAssets::libraryTextureFor(oid, assethome::platform()).isEmpty()) continue;
         // ONE PICTURE, ONE ROW — INSIDE THIS BATCH TOO (SEED-STAMP-1,
         // measured). The library test above is asked BEFORE anything is
         // imported, so two shipped files with the same BYTES both answered
@@ -163,6 +157,9 @@ void MaterialPresetSeeder::importMapsThenRows()
         // off — and a User-intent import of the same bytes later is exactly
         // the gesture that does.
         request.intent = ImportRequest::Intent::Material;
+        // A PRESET'S MAP IS THE PLATFORM'S (ASSETS-HOME-1): hidden, nobody's
+        // storage, re-seeded after a reset.
+        request.home = assethome::platform();
         requests.append(request);
         // AND WHO IT CAME IN THROUGH, for the stamp this pass now writes
         // itself (below).
@@ -230,32 +227,9 @@ void MaterialPresetSeeder::importMapsThenRows()
     mRunner->start();
 }
 
-presetrestamp::Report MaterialPresetSeeder::restamp(Database *db)
-{
-    const presetrestamp::Report report = restampExistingMaps(db);
-    emit finished(0);
-    return report;
-}
-
-presetrestamp::Report MaterialPresetSeeder::restampExistingMaps(Database *db)
-{
-    // `db`, not `mDb`: the "nothing to seed" call happens BEFORE a run is set
-    // up, so the member is still null there (it is set when a run starts).
-    if (!db) return presetrestamp::Report();
-    // The shipped set is the table's, in its order (MaterialPresetAssets::
-    // allGuids) — the same order the seed mints in, so the first preset that
-    // names a picture owns it. The pass logs its own line.
-    return presetrestamp::restamp(db, MaterialPresetAssets::allGuids());
-}
-
 void MaterialPresetSeeder::seedNextRow()
 {
     if (mAborted.load() || !mDb || mPending.isEmpty()) {
-        // …AND AFTER THE SEED'S OWN PASS (SEED-RESTAMP-1): a library that was
-        // PARTLY seeded by an older build gets its remaining maps repaired the
-        // moment this run finishes the rest. Not after an abort — that run
-        // seeded nothing it can reason about, and the next launch repairs.
-        if (!mAborted.load()) restampExistingMaps(mDb);
         mRunning.store(false);
         emit finished(mSeeded);
         return;

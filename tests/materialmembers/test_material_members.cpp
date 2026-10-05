@@ -70,9 +70,8 @@ static QString textureRow(Database &db, const QString &guid, const QString &name
                           const QString &storeRoot, const QString &srcPath)
 {
     db.createAssetEntry(guid, name, static_cast<int>(ModelTypes::Texture),
-                        QString(), QString(), QString(), QString(), QByteArray(),
-                        QByteArray(), QByteArray(), QByteArray(),
-                        AssetViewFilter::AssetsView);
+                        QString(), assethome::materials(), assethome::Origin::Create, QString(), QString(), QByteArray(),
+                        QByteArray(), QByteArray(), QByteArray());
     QString oid, err;
     AssetCas::ingestFile(QSqlDatabase::database(), storeRoot, srcPath, guid,
                          QStringLiteral("source"), name, &oid, &err);
@@ -156,7 +155,7 @@ int main(int argc, char **argv)
     definition["shadergraph"] = graph;
 
     QString error;
-    const QString woody = MaterialBundle::create(&db, "woody", definition, assethome::library(), QByteArray(), &error);
+    const QString woody = MaterialBundle::create(&db, "woody", definition, assethome::materials(), QByteArray(), &error);
     CHECK(!woody.isEmpty(), qPrintable(QStringLiteral("a bundle was minted (%1)").arg(error)));
 
     // =======================================================================
@@ -186,7 +185,7 @@ int main(int argc, char **argv)
     QJsonObject sharedValues;
     sharedValues["baseColorMap"] = "tex-wood";
     shared["values"] = sharedValues;
-    const QString planks = MaterialBundle::create(&db, "planks", shared, assethome::library(), QByteArray(), &error);
+    const QString planks = MaterialBundle::create(&db, "planks", shared, assethome::materials(), QByteArray(), &error);
     CHECK(!planks.isEmpty(), "1: a second bundle on the same picture");
     CHECK(materialmembers::usedBy(&db, "tex-wood") == 2,
           "1: 'used by' counts EVERY material that names it (one object, two bundles)");
@@ -281,8 +280,8 @@ int main(int argc, char **argv)
     // the bake block DOES name ("tex-baked") is left alone.
     {
         db.createAssetEntry("tex-bake-old", "old-normal.png", static_cast<int>(ModelTypes::Texture),
-                            woody, QString(), QString(), QString(), QByteArray(),
-                            QByteArray(), QByteArray(), QByteArray(), AssetViewFilter::AssetsView);
+                            woody, assethome::materials(), assethome::Origin::Create, QString(), QString(), QByteArray(),
+                            QByteArray(), QByteArray(), QByteArray());
         const auto stale = materialmembers::unused(&db, nullptr, woody);
         CHECK(stale.size() == 1 && stale.first().guid == "tex-bake-old",
               "3b: the orphaned baked map (parent = woody, not in the bake block) is listed");
@@ -479,7 +478,7 @@ int main(int argc, char **argv)
         graphed["materialType"] = "pbr";
         graphed["values"] = bakeValues;
         graphed["bake"] = bake2;
-        const QString original = MaterialBundle::create(&db, "Graphed", graphed, assethome::library(), QByteArray(), &error);
+        const QString original = MaterialBundle::create(&db, "Graphed", graphed, assethome::materials(), QByteArray(), &error);
         CHECK(!original.isEmpty(), "8: a bundle with a picture and a baked map");
 
         QString dupError;
@@ -510,9 +509,9 @@ int main(int argc, char **argv)
         // precisely how a baked map used to outlive its material for ever.
         memberstamp::stamp(&db, "tex-bake2", original);   // the picked one
         db.createAssetEntry("tex-bakedchild", "child.png",
-                            static_cast<int>(ModelTypes::Texture), original, QString(),
+                            static_cast<int>(ModelTypes::Texture), original, assethome::materials(), assethome::Origin::Create,
                             QString(), QString(), QByteArray(), QByteArray(), QByteArray(),
-                            QByteArray(), AssetViewFilter::AssetsView);
+                            QByteArray());
         CHECK(!db.fetchAsset("tex-bakedchild").guid.isEmpty(),
               "8: a BAKED member row, parented to the material");
 

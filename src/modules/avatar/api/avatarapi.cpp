@@ -2325,7 +2325,10 @@ QVariantList AvatarApi::library(const QVariantMap &options)
     // 2026-09-09): the avatar is gone from the library grid and still in
     // every project that used it, so the project scope has to read the pins
     // rather than filter a library listing that no longer contains them.
-    QVector<AssetRecord> rows = host.db->fetchAssetsForAssetView();
+    // THE AVATAR MODULE'S OWN STORAGE (ASSETS-HOME-1): its avatars are not
+    // Assets tiles; this listing is where they live.
+    QVector<AssetRecord> rows =
+        host.db->fetchAssetsInHome(assethome::Kind::AvatarLibrary, static_cast<int>(ModelTypes::Avatar));
     if (hasProject) {
         // A SET, not a scan per pin (D11-LIBRARY-SCALE: the listing is the whole
         // library — pins x rows was 10,000 comparisons per pinned asset).

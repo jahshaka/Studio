@@ -214,8 +214,10 @@ int main(int argc, char **argv)
         bool everyResolved = !textures.isEmpty();
         for (const QString &tex : textures) {
             const AssetRecord rec = db.fetchAsset(tex);
-            everyEditorFiltered = everyEditorFiltered
-                && rec.view_filter == static_cast<int>(AssetViewFilter::Editor);
+            // A MEMBER TAKES ITS OWNER'S HOME (ASSETS-HOME-1): parented to the
+            // model and in the model's home, never a home of its own.
+            everyEditorFiltered = everyEditorFiltered && rec.parent == objectGuid
+                && rec.view_filter == db.fetchAsset(objectGuid).view_filter;
             const QString path = AssetHelper::storedFilePath(rec);
             QFile got(path), want(AssetCas::resolvePinned(conn, root, projectGuid, tex));
             const bool same = got.open(QIODevice::ReadOnly) && want.open(QIODevice::ReadOnly)
@@ -223,7 +225,8 @@ int main(int argc, char **argv)
             if (!same) std::printf("    %s -> '%s'\n", qPrintable(rec.name), qPrintable(path));
             everyResolved = everyResolved && same;
         }
-        CHECK(everyEditorFiltered, "an imported model's textures are Editor-filtered rows");
+        CHECK(everyEditorFiltered,
+              "an imported model's textures are its members, in the model's own home");
         CHECK(everyResolved,
               "the material exporter resolves every one of them to its stored bytes "
               "(not a <Documents>/Jahshaka/<name> path that no longer exists)");

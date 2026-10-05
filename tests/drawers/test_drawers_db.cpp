@@ -138,13 +138,54 @@ int main(int argc, char **argv)
     // --- Delete reassigns the subtree's assets to Uncategorized -------------
     const QString swordGuid = db.createAssetEntry(
         "guid-sword-01", "sword.obj", static_cast<int>(ModelTypes::Object),
-        QString(), QString(), QString(), QString(), QByteArray(), QByteArray(),
-        QByteArray(), QByteArray(), AssetViewFilter::AssetsView);
+        QString(), assethome::assets(), assethome::Origin::Import, QString(), QString(), QByteArray(), QByteArray(),
+        QByteArray(), QByteArray());
     const QString shieldGuid = db.createAssetEntry(
         "guid-shield-01", "shield.obj", static_cast<int>(ModelTypes::Object),
-        QString(), QString(), QString(), QString(), QByteArray(), QByteArray(),
-        QByteArray(), QByteArray(), AssetViewFilter::AssetsView);
+        QString(), assethome::assets(), assethome::Origin::Import, QString(), QString(), QByteArray(), QByteArray(),
+        QByteArray(), QByteArray());
     CHECK(!swordGuid.isEmpty() && !shieldGuid.isEmpty(), "asset rows created");
+
+    // --- THE DOOR RULE (ASSETS-HOME-1): Assets takes only imports and saves --
+    {
+        QString why;
+        const QString created = db.createAssetEntry(
+            "guid-door-create", "made.mat", static_cast<int>(ModelTypes::Material), QString(),
+            assethome::assets(), assethome::Origin::Create, QString(), QString(), QByteArray(),
+            QByteArray(), QByteArray(), QByteArray(), &why);
+        CHECK(created.isEmpty() && db.fetchAsset("guid-door-create").guid.isEmpty(),
+              "createAssetEntry REFUSES an Assets row whose origin is a creation");
+        CHECK(why.contains("Assets holds only what the user imports or saves"),
+              "...and says why in the user's words");
+        why.clear();
+        const QString noProject = db.createAssetEntry(
+            "guid-door-noproj", "x", static_cast<int>(ModelTypes::Object), QString(),
+            assethome::project(QString()), assethome::Origin::Create, QString(), QString(),
+            QByteArray(), QByteArray(), QByteArray(), QByteArray(), &why);
+        CHECK(noProject.isEmpty() && !why.isEmpty(), "...and a project row with no project");
+        CHECK(!db.createAssetEntry("guid-door-saved", "saved.mat",
+                                   static_cast<int>(ModelTypes::Material), QString(),
+                                   assethome::assets(), assethome::Origin::ExplicitSave)
+                   .isEmpty(),
+              "an explicit save into Assets is accepted");
+        CHECK(!db.createAssetEntry("guid-door-mat", "mine.mat",
+                                   static_cast<int>(ModelTypes::Material), QString(),
+                                   assethome::materials(), assethome::Origin::Create)
+                   .isEmpty(),
+              "a creation in the Materials storage is accepted");
+        const AssetRecord mine = db.fetchAsset("guid-door-mat");
+        CHECK(mine.home() == assethome::materials() && mine.projectGuid.isEmpty()
+                  && mine.origin == QLatin1String("create"),
+              "...and the stored flags are the home's: Materials, no project, origin create");
+        CHECK(!db.setAssetHome("guid-door-mat", assethome::assets(), assethome::Origin::Create),
+              "setAssetHome refuses to move a creation into Assets");
+        CHECK(db.fetchAsset("guid-door-mat").home() == assethome::materials(),
+              "...and the row stays where it was");
+        bool listed = false;
+        for (const AssetRecord &r : db.fetchAssetsForAssetView())
+            listed |= r.guid == QLatin1String("guid-door-mat");
+        CHECK(!listed, "a Materials-storage row is never an Assets tile");
+    }
     CHECK(db.switchAssetCollection(swords, swordGuid), "sword filed under Swords");
     CHECK(db.switchAssetCollection(weapons, shieldGuid), "shield filed under Weaponry");
     CHECK(db.countAssetsInCollections(db.fetchCollectionSubtree(props)) == 2,

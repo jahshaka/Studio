@@ -175,7 +175,6 @@ BundleStage stageNode(Database *db, Project *project, const QJsonObject &nodeObj
     row.name = name.isEmpty() ? QStringLiteral("Node") : name;
     row.typeId = typeId;
     row.type = scriptmod::assetTypeName(typeId);
-    row.viewFilter = static_cast<int>(AssetViewFilter::AssetsView);
     row.blob = QJsonDocument(nodeObject).toJson(QJsonDocument::Compact);
     for (const QString &ref : assetrefs::collectAssetGuids(nodeObject))
         if (assets.contains(ref) && !row.dependencies.contains(ref)) row.dependencies.append(ref);

@@ -361,6 +361,10 @@ private:
 	/// (the members are SHARED, not copied — Make unique is how a picture
 	/// becomes private to one material).
 	void duplicateShader(QString guid);
+	/// The Presets drawer's "Create material" (materials.createFromPreset).
+	void createMaterialFromPreset(const QString &presetGuid);
+	/// The Custom drawer's "Save to Assets" (materials.saveToAssets).
+	void saveMaterialToAssets(const QString &guid);
     void restoreGraphPositions(MaterialDocument *doc, const QJsonObject& data);
     bool deleteShader(QString guid);
 

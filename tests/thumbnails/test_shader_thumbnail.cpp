@@ -123,8 +123,8 @@ int main(int argc, char **argv)
 
     QString createError;
     const QString shaderGuid = MaterialBundle::create(
-        &db, QStringLiteral("Red Graph"), bundleDefinitionWithColour(0.85, 0.10, 0.10), assethome::library(),
-        QByteArray(), &createError);
+        &db, QStringLiteral("Red Graph"), bundleDefinitionWithColour(0.85, 0.10, 0.10), assethome::assets(),
+        QByteArray(), &createError, assethome::Origin::ExplicitSave);
     CHECK(!shaderGuid.isEmpty(),
           qPrintable(QStringLiteral("a graph material bundle was written (%1)").arg(createError)));
 
@@ -228,7 +228,7 @@ int main(int argc, char **argv)
             QString error;
             const QString bundleGuid = MaterialBundle::create(
                 &db, QStringLiteral("Bundle Green"),
-                bundleDefinitionWithColour(0.10, 0.85, 0.10), assethome::library(), QByteArray(), &error);
+                bundleDefinitionWithColour(0.10, 0.85, 0.10), assethome::assets(), QByteArray(), &error, assethome::Origin::ExplicitSave);
             CHECK(!bundleGuid.isEmpty(),
                   qPrintable(QStringLiteral("5b: the bundle was written (%1)").arg(error)));
 
@@ -252,8 +252,8 @@ int main(int argc, char **argv)
         {
             QString blueError;
             const QString blueGuid = MaterialBundle::create(
-                &db, QStringLiteral("Blue Graph"), bundleDefinitionWithColour(0.1, 0.1, 0.85), assethome::library(),
-                QByteArray(), &blueError);
+                &db, QStringLiteral("Blue Graph"), bundleDefinitionWithColour(0.1, 0.1, 0.85), assethome::assets(),
+                QByteArray(), &blueError, assethome::Origin::ExplicitSave);
             CHECK(!blueGuid.isEmpty(), "a second bundle was written");
             QImage blue = renderer.renderMaterial(
                 reader.parseMaterialTyped(MaterialBundle::read(&db, blueGuid), &db), size);

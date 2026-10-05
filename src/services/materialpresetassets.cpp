@@ -31,7 +31,6 @@ For more information see the LICENSE file
 #include "services/materialbundle.h"
 #include "services/materialtile.h"
 #include "services/memberstamp.h"
-#include "services/projectassets.h"
 #include "services/shippedassets.h"
 
 namespace MaterialPresetAssets
@@ -217,7 +216,7 @@ QJsonObject definitionFor(const MaterialPreset &preset, Database *db, QString *e
         // of the thread that draws (see `Prepared`).
         const QString knownOid = prepared ? prepared->mapOids.value(file) : QString();
         const ShippedAssets::Pinned pinned =
-            ShippedAssets::importTexture(file, QString(), db, nullptr, assethome::library(), knownOid);
+            ShippedAssets::importTexture(file, QString(), db, nullptr, assethome::platform(), knownOid);
         if (!pinned.error.isEmpty() || pinned.guid.isEmpty()) {
             if (errorOut)
                 *errorOut = QStringLiteral("'%1' could not import %2: %3")
@@ -332,12 +331,12 @@ QString ensureSeeded(const QString &presetOrGuid, Database *db, QString *errorOu
                                 ? prepared->thumbnails.value(preset.name)
                                 : thumbnailFor(preset);
     if (existing.guid.isEmpty())
+        // A PLATFORM ROW (ASSETS-HOME-1, audit D1): what the app ships is
+        // nobody's storage and never an Assets tile — hidden, as the
+        // primitives are. The Presets drawer reads the shipped table.
         db->createAssetEntry(guid, preset.name, static_cast<int>(ModelTypes::Material),
-                             QString(),          // a library row: no parent folder
-                             QString(),          // a library row: no project guid
-                             QString(), QString(), tile,
-                             QByteArray(), QByteArray(), QByteArray(),
-                             AssetViewFilter::AssetsView);
+                             QString(), assethome::platform(), assethome::Origin::Create,
+                             QString(), QString(), tile);
 
     // THE SEEDER'S DOOR. Every other writer is refused on a reserved guid —
     // that refusal is what "read-only in fact" means — so the one place that
@@ -374,8 +373,8 @@ QString customiseName(Database *db, const QString &wanted)
     return MaterialBundle::uniqueName(db, wanted);
 }
 
-QString customise(const QString &presetOrGuid, const QString &name,
-                  Database *db, Project *project, QString *errorOut)
+QString createFromPreset(const QString &presetOrGuid, const QString &name, Database *db,
+                         QString *errorOut)
 {
     const auto fail = [errorOut](const QString &why) {
         if (errorOut) *errorOut = why;
@@ -411,23 +410,16 @@ QString customise(const QString &presetOrGuid, const QString &name,
     }
 
     // AN ORDINARY BUNDLE, with a guid nothing calls reserved: that is what
-    // makes the copy editable where the preset is not. Its member textures
-    // are the preset's own rows — one object, "used by 2" — which is the
-    // point of a bundle owning members by reference.
-    // WITH A PROJECT OPEN IT IS THAT PROJECT'S (ASSETS-SCOPE-1): the copy is
-    // pinned into the project below and is never a library tile; with none it
-    // is a library material.
-    const QString copy = MaterialBundle::create(db, chosen, definition,
-                                                assethome::current(project),
+    // makes the copy editable where the preset is not. IN FULL (ASSETS-HOME-1,
+    // materials-are-bundles): the preset's maps are PLATFORM rows, so the
+    // bundle writer copies each into the copy's own home as its member — same
+    // bytes, its own rows — and never leaves a storage naming a platform row.
+    // THE MATERIALS MODULE'S STORAGE, whatever project is open (ASSETS-HOME-1).
+    const QString copy = MaterialBundle::create(db, chosen, definition, assethome::materials(),
                                                 thumbnailFor(preset), &error);
     if (copy.isEmpty())
         return fail(error.isEmpty() ? QStringLiteral("the library refused the copy") : error);
 
-    // Into the project too, when there is one: the owner's gesture is "give me
-    // this preset to edit", and a material they cannot see in their project
-    // would be half an answer. Direct, because THEY asked for it.
-    if (project && !project->getProjectGuid().isEmpty())
-        ProjectAssets::addToProject(copy, db, project, ProjectAssets::AddKind::Direct);
     // AND ITS TILE IS A RENDER OF IT (owner review R9(a)), HERE rather than at
     // every door: the copy carries the shipped preset's ICON until something
     // draws it, and that is a picture of the PRESET — not a sphere of this
@@ -436,7 +428,7 @@ QString customise(const QString &presetOrGuid, const QString &name,
     // copy of the call, so a fourth would have had to remember.
     // (services/materialtile.h: one gesture, one render, and a refusal is
     // logged by name instead of discarded.)
-    materialtile::mint(db, project, copy, "Customise");
+    materialtile::mint(db, nullptr, copy, "Create material from preset");
     return copy;
 }
 

@@ -50,6 +50,8 @@ For more information see the LICENSE file
 #include "data/constants.h"
 #include "app/updatechecker.h"
 #include "services/librarygeneration.h"
+#include "ui/pages/assetview.h"
+#include <QTimer>
 #include "irisgl/core/irisutils.h"
 #include "irisgl/core/logger.h"
 #include "ui/dialogs/softwareupdatedialog.h"
@@ -461,9 +463,18 @@ int main(int argc, char *argv[])
     // above); the scripted surface is app.libraryGeneration().
     // (Belt and braces with the CLI returns above: the ordinary windowed run a
     // rig starts with --data-root is DRIVEN too — D7 — and gets no modal.)
-    if (librarygeneration::wipedAtStartup() && !FirstRun::isDrivenSession(cli))
+    if (librarygeneration::wipedAtStartup() && !FirstRun::isDrivenSession(cli)) {
         QMessageBox::information(&window, QObject::tr("Library reset"),
                                  librarygeneration::noticeText());
+        // THE KEPT STORAGES' TILES COME BACK BY THEMSELVES (ASSETS-HOME-1): a
+        // thumbnail is not in a sidecar, so the rows the bump rebuilt have none.
+        // The library's own missing-thumbnail sweep runs once, queued after the
+        // window is up, the event loop turning between assets as it always does.
+        if (librarygeneration::lastResult().keptRows > 0)
+            QTimer::singleShot(0, &window, [&window]() {
+                if (AssetView *page = window.assetsPage()) page->rebuildMissingThumbnails(true);
+            });
+    }
 
     // FIRST LAUNCH, ONCE: the donate greeting (owner decision D3, 2026-09-12).
     // It used to run modally inside MainWindow::closeEvent — the last thing a

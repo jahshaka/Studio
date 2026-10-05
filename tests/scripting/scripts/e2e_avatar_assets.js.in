@@ -61,9 +61,13 @@ assert(rigged.indexOf(modelGuid) >= 0, "assets.list({rigged:true}) finds it");
 
 var avatarGuid = avatar.createAsset(modelGuid);
 assert(avatarGuid.length > 10, "avatar.createAsset -> " + avatarGuid);
+assert(avatar.library({ scope: "library" })
+           .filter(function (a) { return a.guid === avatarGuid; }).length === 1
+       && assets.metadata(avatarGuid).home === "avatars",
+       "it is an avatar in the Avatar module's own storage (ASSETS-HOME-1)");
 assert(assets.list({ type: "avatar" })
-           .filter(function (a) { return a.guid === avatarGuid; }).length === 1,
-       "it is an 'avatar' library row");
+           .filter(function (a) { return a.guid === avatarGuid; }).length === 0,
+       "…and not an Assets tile");
 
 // The rigged model must NOT vanish from the library because an avatar now
 // depends on it — the "hide dependees" rule is about import MEMBERS.

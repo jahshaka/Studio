@@ -79,7 +79,6 @@ For more information see the LICENSE file
 #include <atomic>
 
 #include "services/materialpresetassets.h"
-#include "services/presetrestamp.h"
 
 class Database;
 class ImportBatchRunner;
@@ -125,31 +124,18 @@ public:
     /// abort skipped (`isSeeded` is the test).
     void finishNow();
 
-    /// THE RE-STAMP AS A PASS OF ITS OWN (SEED-RESTAMP-1's repair, on demand —
-    /// `assets.restampSeed`): the same call the launch makes beside the seed,
-    /// ending in `finished(0)` like every other pass, so whatever shows the
-    /// library's tiles hears that member stamps may have moved. UI thread.
-    presetrestamp::Report restamp(Database *db);
 
 signals:
     /// A PASS OVER THE LIBRARY ENDED (UI thread): a seed run (`seeded` = the
-    /// presets it gave a row), the launch's re-stamp of an already-seeded
-    /// library, or a `restamp()` call (both `seeded` = 0). Once per pass. The
-    /// editor tray repopulates on it — a re-stamp folds loose map tiles into
-    /// their bundles, and nothing else announces that (TRAY-REPOP-1).
+    /// presets it gave a row), or a launch on an already-seeded library
+    /// (`seeded` = 0). Once per pass. The editor tray repopulates on it
+    /// (TRAY-REPOP-1).
     void finished(int seeded);
 
 private:
     MaterialPresetSeeder() = default;
 
     void hashMapsOnWorker(const QStringList &presetNames);
-    /// THE REPAIR BESIDE THE SEED (SEED-RESTAMP-1): the shipped preset maps of
-    /// a library that ALREADY EXISTS get the member stamp a seed older than
-    /// SEED-STAMP-1 never wrote. Run once per launch, after this class's own
-    /// pass — both when there was nothing to seed and when the row pass ends.
-    /// Idempotent and matched by content; the rule and its one blind spot are
-    /// services/presetrestamp.h.
-    presetrestamp::Report restampExistingMaps(Database *db);
     void importMapsThenRows();
     void seedNextRow();
 

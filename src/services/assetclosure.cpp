@@ -110,7 +110,6 @@ QMap<QString, clipboardformat::ClipAsset> describe(const QStringList &guids, Dat
         asset.typeId = record.type;
         asset.type = scriptmod::assetTypeName(record.type);
         asset.parent = record.parent;
-        asset.viewFilter = record.view_filter;
         asset.dependencies = edges.value(guid);
         if (options.includeRowBlobs) db->fetchAssetRowBlobs(guid, &asset.blob, &asset.properties);
 

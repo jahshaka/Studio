@@ -36,16 +36,27 @@ var EXPECTED_BUNDLES = materials.presets().length;
 // Nothing here calls `materials.seedPresets()`: that verb stands the seeder
 // down and does the work itself, which is exactly the route this arm is not
 // about.
+// THE PRESETS ARE PLATFORM ROWS (ASSETS-HOME-1): read by their reserved
+// guids, never off the Assets listing — which must hold none of them.
+function platformPresets() {
+    var out = [];
+    materials.presets().forEach(function (p) {
+        try { if (assets.metadata(p.guid).home === "platform") out.push(p); } catch (e) {}
+    });
+    return out;
+}
 function waitForSeed(what) {
     var deadline = Date.now() + 120000;
     var mats = [];
     while (Date.now() < deadline) {
-        mats = assets.list({ scope: "store", type: "material" });
+        mats = platformPresets();
         if (mats.length >= EXPECTED_BUNDLES) break;
         sleep(50);
     }
     assert(mats.length === EXPECTED_BUNDLES,
            what + " (" + mats.length + " of " + EXPECTED_BUNDLES + " bundles)");
+    assert(assets.list({ scope: "store", type: "material" }).length === 0,
+           what + ": …and none of them is an Assets tile");
     return mats;
 }
 
@@ -59,7 +70,8 @@ function auditMaps(mats, what) {
             seen[list[j].guid] = true;
             count++;
             var meta = assets.metadata(list[j].guid);
-            if (meta.member !== true || !meta.memberOf) unstamped.push(list[j].name);
+            if (meta.member !== true || !meta.memberOf || meta.home !== "platform")
+                unstamped.push(list[j].name);
         }
     }
     // THE RULE, NOT THE NUMBER (SEED-SMALL-1): however many maps the shipped
@@ -69,13 +81,12 @@ function auditMaps(mats, what) {
     console.log(what + ": the bundles name " + count + " map textures");
     assert(count > 0, what + ": the bundles name maps at all (" + count + ")");
     assert(unstamped.length === 0,
-           what + ": EVERY ONE IS STAMPED A MEMBER (" + unstamped.join(", ") + ")");
+           what + ": EVERY ONE IS A STAMPED PLATFORM MEMBER (" + unstamped.join(", ") + ")");
     var tiles = assets.list({ scope: "store", type: "texture" });
     assert(tiles.length === 0, what + ": …so the library shows no texture tile ("
                                + tiles.length + ")");
-    assert(assets.list({ scope: "store", type: "texture", members: true }).length === count,
-           what + ": …and 'Show member textures' finds all " + count
-           + " — one row per picture, none the seed minted twice");
+    assert(assets.list({ scope: "store", type: "texture", members: true }).length === 0,
+           what + ": …and not even 'Show member textures' finds one — none is in Assets");
 }
 
 // ---- the LAUNCH seed this session took -----------------------------------
@@ -89,7 +100,7 @@ auditMaps(mats, "after the launch seed");
 var result = {};
 var deadline = Date.now() + 30000;
 while (Date.now() < deadline) {
-    result = app.resetLibrary();
+    result = app.resetLibrary({ clearAssets: true, clearMaterials: true });
     if (result.ok === true) break;
     sleep(50);
 }

@@ -160,6 +160,15 @@ QVector<Unused> cleanUnused(Database *db, Project *project, const QString &mater
 QString duplicate(Database *db, Project *project, const QString &materialGuid,
                   const QString &name = QString(), QString *errorOut = nullptr);
 
+/// SAVE TO ASSETS (ASSETS-HOME-1; the owner: Assets changes only on an import
+/// or an explicit "Save to Assets"). A COPY of `materialGuid` — a Materials-
+/// module material or a project's — as a new bundle in Assets, IN FULL: its
+/// definition as `project` renders it (bake included) and every member copied
+/// in as the new row's own (same bytes). The original stays where it is.
+/// `name` empty = the original's, made unique. Empty + `errorOut` on failure.
+QString saveToAssets(Database *db, Project *project, const QString &materialGuid,
+                     const QString &name = QString(), QString *errorOut = nullptr);
+
 /// THE PROJECT'S OWN NAMING (MATERIAL-DROP-1 / TRAY-DUPLICATE-1, the owner
 /// 2026-09-28): the name a new project material born from `sourceName` takes —
 /// `sourceName` itself while the project holds no material of that name, then

@@ -116,12 +116,17 @@ public:
     ClipboardResolveReport apply(const clipboardformat::Envelope &envelope,
                                  const QSet<QString> *limitTo = nullptr);
 
-    /// WHERE THE ROWS A PASTE REGISTERS LIVE (ASSETS-SCOPE-1, services/
-    /// assethome.h). The library (the default — a paste into the Assets page:
-    /// each row keeps the placement its payload carries) or the project the
-    /// paste lands in (a paste into the editor: every row is that project's
-    /// own and never a library tile).
-    void setHome(const assethome::Home &home) { mHome = home; }
+    /// WHERE THE ROWS A PASTE REGISTERS LIVE, and how they arrived
+    /// (ASSETS-HOME-1, data/assethomekind.h). The default is an IMPORT into
+    /// Assets (a shared asset file); a paste into the Assets page is an explicit
+    /// save there; a paste into the editor lands the project's own rows. Every
+    /// row of one paste takes the one home: a member is a member by its
+    /// `parent` (and its stamp), never by a flag of its own.
+    void setHome(const assethome::Home &home, assethome::Origin origin)
+    {
+        mHome = home;
+        mOrigin = origin;
+    }
 
 private:
     ClipboardResolveReport run(const clipboardformat::Envelope &envelope, bool commit,
@@ -133,7 +138,8 @@ private:
 
     Database *db = nullptr;
     Project *project;
-    assethome::Home mHome;
+    assethome::Home mHome = assethome::assets();
+    assethome::Origin mOrigin = assethome::Origin::Import;
 };
 
 #endif // CLIPBOARDRESOLVER_H

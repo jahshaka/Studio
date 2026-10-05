@@ -1018,7 +1018,7 @@ MaterialDocument *EffectsPage::openDocument(const QString &guid, shaderInfo::Ori
 	// thread that draws, for a gesture that reads.
 	if (!shipped.isEmpty())
 		MaterialHelper::resolveAppRelativeTextures(
-		    graph, MaterialHelper::TextureBinding::PathOnly, assethome::library());
+		    graph, MaterialHelper::TextureBinding::PathOnly, assethome::materials());
 	progressDialog->setValueAndText(6, "Deserialize Graph");
 
 	// A TAB OF ITS OWN (MATERIALS_TABS_SPEC §2.2). This is the line the whole
@@ -1250,6 +1250,50 @@ void EffectsPage::duplicateShader(QString guid)
 	loadGraph(copy, shaderInfo::Origin::Library);
 }
 
+void EffectsPage::createMaterialFromPreset(const QString &presetGuid)
+{
+	// THE VERB'S OWN IMPLEMENTATION (API-first): `materials.createFromPreset`
+	// and the Presets drawer's "Create material" are one function — a unique
+	// copy, in full, in the Materials module's storage (ASSETS-HOME-1).
+	if (!dataBase || presetGuid.isEmpty()) return;
+	MaterialPresetSeeder::instance().finishNow();   // one importer at a time
+	QString error;
+	const QString copy = MaterialPresetAssets::createFromPreset(presetGuid, QString(), dataBase,
+	                                                            &error);
+	if (copy.isEmpty()) {
+		QMessageBox::warning(this, tr("Create material"),
+		                     tr("The material could not be created: %1").arg(error));
+		return;
+	}
+	auto *asset = new AssetMaterial;
+	asset->fileName = dataBase->fetchAsset(copy).name;
+	asset->assetGuid = copy;
+	AssetManager::addAsset(asset);
+	// The drawers first, then the open (duplicateShader's order, fix round F1).
+	refreshShaderGraph();
+	tabWidget->setCurrentIndex(static_cast<int>(ShaderWorkspace::MyEffects));
+	if (auto *item = selectCorrectItemFromDrop(copy))
+		ListWidget::highlightNodeForInterval(2, item);
+	loadGraph(copy, shaderInfo::Origin::Library);
+}
+
+void EffectsPage::saveMaterialToAssets(const QString &guid)
+{
+	// THE VERB'S OWN IMPLEMENTATION (API-first): `materials.saveToAssets` and
+	// the Custom drawer's "Save to Assets" are one function (ASSETS-HOME-1).
+	if (!dataBase || guid.isEmpty()) return;
+	QString error;
+	const QString saved = materialmembers::saveToAssets(dataBase, mProject, guid, QString(), &error);
+	if (saved.isEmpty()) {
+		QMessageBox::warning(this, tr("Save to Assets"),
+		                     tr("The material could not be saved to Assets: %1").arg(error));
+		return;
+	}
+	materialtile::mint(dataBase, nullptr, saved, "the module's Save to Assets");
+	QMessageBox::information(this, tr("Save to Assets"),
+	                         tr("\"%1\" is in Assets now.").arg(dataBase->fetchAsset(saved).name));
+}
+
 void EffectsPage::restoreGraphPositions(MaterialDocument *doc, const QJsonObject &data)
 {
     if (!doc || !doc->scene) return;
@@ -1374,11 +1418,16 @@ void EffectsPage::configureAssetsDock()
 	// read-only library bundles with a Customise gesture; until then the
 	// drawer must not offer edits it cannot honour).
 	presets->shaderContextMenuAllowed = false;
+	// …and its ONE item is "Create material" (ASSETS-HOME-1): a unique copy in
+	// the Materials module's storage.
+	presets->presetMenuAllowed = true;
+	effects->saveToAssetsMenuAllowed = true;
 	// …and it has no menu at all since PRESET-EDIT-1: Customise was its one
 	// item, and the first edit is that gesture now.
 	presets->setToolTip(tr("Shipped materials. Double-click one to see its graph — and to edit "
 	                       "it: with a project open, the first edit makes that project its own "
-	                       "copy, under the same name."));
+	                       "copy, under the same name. Right-click, Create material, for a copy "
+	                       "of your own in Materials."));
 	presets->setStyleSheet(StyleSheet::EffectsPresetsList());
 
 	// THE SHIPPED PRESETS — ONE LIST, TWO WINDOWS (PRESET-UNIFY-1, the owner
@@ -1555,14 +1604,12 @@ void EffectsPage::createShader(NodeGraphPreset preset, bool loadNewGraph, const 
 	}
 
 
-	// A LIBRARY BUNDLE. It is created in the library, not in a project — the
-	// user adds it to a project when they want it there (the four-drawer rule,
-	// OWNER_REVIEW 9) — and the row is an ordinary AssetsView Material, so the
-	// Assets page and the Materials module browse ONE world.
+	// THE MATERIALS MODULE'S OWN STORAGE (ASSETS-HOME-1, the owner 2026-10-04:
+	// "it needs its own storage"). Not a project's and not an Assets tile — the
+	// user adds it to a project when they want it there, and saves it to Assets
+	// only by saying so ("Save to Assets").
 	dataBase->createAssetEntry(assetGuid, newShader, static_cast<int>(ModelTypes::Material),
-	                           QString(), QString(), QString(), QString(),
-	                           QByteArray(), QByteArray(), QByteArray(), QByteArray(),
-	                           AssetViewFilter::AssetsView);
+	                           QString(), assethome::materials(), assethome::Origin::Create);
 	auto assetShader = new AssetMaterial;
 	assetShader->fileName = newShader;
 	assetShader->assetGuid = assetGuid;
@@ -1612,7 +1659,7 @@ void EffectsPage::loadGraphFromTemplate(NodeGraphPreset preset, const QString &n
 	// guids (a definition may never name a path — F3) and the pictures are
 	// the same objects the preset's own bundle uses.
 	MaterialHelper::resolveAppRelativeTextures(graph, MaterialHelper::TextureBinding::Import,
-	                                           assethome::library());   // New Material is a library gesture
+	                                           assethome::materials());   // New Material: the module's storage
 
 	// THE GRAPH CARRIES THE NEW MATERIAL'S NAME, not the preset's (fix round
 	// 2, found on the rig). `buildDefinition` writes the graph's settings name
@@ -1669,13 +1716,16 @@ void EffectsPage::configureUI()
 	nodePropertiesPanel->setTexturePicker([this](std::function<void(const QString &)> chosen) {
 		auto *picker = new AssetPickerWidget(ModelTypes::Texture);
 		picker->setImportFromDisk([this](const QString &path) -> QString {
-			// THE ACTIVE DOCUMENT'S HOME (ASSETS-SCOPE-1 F1): a picture picked
-			// for the project's material is the project's; for a LIBRARY
-			// material it is a library row, whatever project is open.
+			// THE ACTIVE DOCUMENT'S HOME (ASSETS-HOME-1): a picture picked for
+			// the project's material is the project's; for one of the module's
+			// own materials it is a row of the Materials storage, whatever
+			// project is open — a material's members live where it does.
 			const MaterialDocument *doc = activeDoc();
 			const assethome::Home home =
 			    (doc && doc->info.origin == shaderInfo::Origin::Project)
-			        ? assethome::current(mProject) : assethome::library();
+			        ? assethome::current(mProject, assethome::materials())
+			        : assethome::of(dataBase, doc ? doc->info.GUID : QString(),
+			                        assethome::materials());
 			auto *tex = TextureManager::getSingleton()->importTexture(path, home);
 			return tex ? tex->guid : QString();
 		});
@@ -2007,13 +2057,13 @@ void EffectsPage::updateAssetDock()
 	if (currentProjectShader && currentProjectShader->listWidget() == effects)
 		currentProjectShader = nullptr;
 	effects->clear();
-	// THE TWO LIBRARY WORLDS MERGED (spec 2.4): the module lists the same
-	// library MATERIAL bundles the Assets page does — there is no private
-	// "Effects" world any more, and no ModelTypes::Shader tile.
-	// THE TYPE IS A PREDICATE (D11-LIBRARY-SCALE): the library's MATERIAL rows,
+	// THE MATERIALS MODULE'S OWN STORAGE (ASSETS-HOME-1, the owner 2026-10-04:
+	// "it needs its own storage"): every material the user made here, and
+	// nothing from Assets — Assets is long-term storage the user fills by
+	// importing or saving there. MATERIAL rows by predicate (D11-LIBRARY-SCALE),
 	// no thumbnail column — the tiles come from the tile cache by guid.
-	auto assets = dataBase->fetchAssetsByViewFilter(AssetViewFilter::AssetsView,
-	                                                static_cast<int>(ModelTypes::Material));
+	auto assets = dataBase->fetchAssetsInHome(assethome::Kind::MaterialsLibrary,
+	                                          static_cast<int>(ModelTypes::Material));
 		for (const auto &asset : assets)  //dp something{
 		{
 			// THE CUSTOM DRAWER IS THE USER'S OWN MATERIALS, once (the
@@ -2035,15 +2085,8 @@ void EffectsPage::updateAssetDock()
 				const bool companion = !blob.value(QStringLiteral("companionOf")).toString().isEmpty()
 				                       && !blob.contains(QStringLiteral("shadergraph"));
 				if (companion) continue;
-				// NOT A SHIPPED PRESET EITHER (phase 3): a seeded preset
-				// bundle is an ordinary library Material row, and Custom is
-				// the drawer of materials the user may EDIT. A preset lives
-				// in Presets, read-only, and its Customise copy — an
-				// ordinary guid — is what lands here.
-				if (!MaterialBundle::shippedPresetName(asset.guid).isEmpty()) continue;
-				// (A project's copy of a preset — and every material made in the
-				// editor — is its project's OWN row since ASSETS-SCOPE-1: the
-				// library listing above never contains one.)
+				// (A shipped preset is a PLATFORM row and a project's material
+				// its project's own: neither is ever in this storage.)
 				if (mProject && !mProject->getProjectGuid().isEmpty()
 				    && dataBase->isAssetPinnedBy(mProject->getProjectGuid(), asset.guid))
 					continue;
@@ -2814,6 +2857,10 @@ void EffectsPage::configureConnections()
     connect(effects, &ListWidget::duplicateShader, [=](QString guid){
         duplicateShader(guid);
     });
+	connect(effects, &ListWidget::saveToAssets, this,
+	        [this](QString guid) { saveMaterialToAssets(guid); });
+	connect(presets, &ListWidget::createFromPreset, this,
+	        [this](QString guid) { createMaterialFromPreset(guid); });
     connect(effects, &ListWidget::createShader, [=](QString guid){
         createNewGraph();
     });

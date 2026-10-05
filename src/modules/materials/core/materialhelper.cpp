@@ -216,7 +216,7 @@ iris::PbrMaterialPtr MaterialHelper::createPbrMaterialFromDefinition(QJsonObject
 		if (NodeGraph* graph = extractNodeGraphFromMaterialDefinition(matObj)) {
 			// BUILDING a material for display is a read: PathOnly, never an
 			// import (PRESET-UNIFY-1 fix round).
-			resolveAppRelativeTextures(graph, TextureBinding::PathOnly, assethome::library());
+			resolveAppRelativeTextures(graph, TextureBinding::PathOnly, assethome::materials());
 			const QJsonObject pieces =
 			    materials::PieceEmitter::emitAndStore(graph, textureResolver());
 			material->setCustomPiecePixel(pieces["customPiecePixel"].toString());

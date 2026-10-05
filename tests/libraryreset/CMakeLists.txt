@@ -35,3 +35,26 @@ set_tests_properties(app.library_generation PROPERTIES
 set_property(TEST app.library_generation APPEND PROPERTY ENVIRONMENT_MODIFICATION
              "JAHSHAKA_DATA_ROOT=unset:")
 jah_no_display(app.library_generation)
+
+# app.library_keep (ASSETS-HOME-1): Clear Database keeps exactly the unticked
+# storages (four arms: none, Assets, Materials, both) and a format bump (a
+# test-only JAHSHAKA_TEST_LIBRARY_GENERATION one above this build's) rebuilds
+# every storage row from its sidecar — home, origin, members, edges,
+# definitions — with its bakes re-derived. A library with a row in every home
+# is made first: imports, an avatar, a New Material, a material created from a
+# preset, a material saved to Assets, a project's own material.
+set(_keep_home ${CMAKE_CURRENT_BINARY_DIR}/library-keep-home)
+file(MAKE_DIRECTORY ${_keep_home}/run)
+add_test(NAME app.library_keep
+         COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/keep.sh"
+                 "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>"
+                 "${CMAKE_SOURCE_DIR}/tests/scripting/fixtures/tiny.png"
+                 "${CMAKE_BINARY_DIR}/tests/avatar/fixtures/beta_mannequin.dae"
+                 "${CMAKE_BINARY_DIR}/tests/avatar/fixtures/beta_walk.dae"
+                 "${CMAKE_SOURCE_DIR}/tests/importer/fixtures/unit_cube_mm.fbx"
+         WORKING_DIRECTORY ${_keep_home}/run)
+set_tests_properties(app.library_keep PROPERTIES
+    ENVIRONMENT "HOME=${_keep_home}" TIMEOUT 600 LABELS "app")
+set_property(TEST app.library_keep APPEND PROPERTY ENVIRONMENT_MODIFICATION
+             "JAHSHAKA_DATA_ROOT=unset:")
+jah_no_display(app.library_keep)

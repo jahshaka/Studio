@@ -101,7 +101,8 @@ QString humanSize(qint64 bytes)
 
 }  // namespace
 
-QString AssetImportService::relistUnlistedMatch(const StagedAsset &staged)
+QString AssetImportService::relistUnlistedMatch(const ImportRequest &request,
+                                                const StagedAsset &staged)
 {
     if (!db) return QString();
     QSqlDatabase conn = QSqlDatabase::database();
@@ -148,9 +149,13 @@ QString AssetImportService::relistUnlistedMatch(const StagedAsset &staged)
     match.prepare("SELECT AF.asset_guid FROM asset_files AF "
                   "JOIN assets A ON A.guid = AF.asset_guid "
                   "WHERE AF.role = 'source' AND AF.oid = ? AND A.listed = 0 "
+                  // ONE HOME: an unlisted row of another home is not this
+                  // import's to take (ASSETS-HOME-1, no cross-home rows).
+                  "AND A.view_filter = ? "
                   "AND " + Database::memberSubquery(QStringLiteral("A.guid")) + " "
                   "ORDER BY A.date_created DESC, A.rowid DESC LIMIT 1");
     match.addBindValue(oid);
+    match.addBindValue(request.home.stored());
     if (!match.exec() || !match.next()) return QString();
 
     const QString guid = match.value(0).toString();
@@ -181,6 +186,11 @@ QString AssetImportService::claimStampedMemberForUser(const ImportRequest &reque
 
     const QString guid = memberstamp::stampedTextureFor(db, oid);
     if (guid.isEmpty()) return QString();
+    // ONLY A MEMBER OF THE IMPORT'S OWN HOME (ASSETS-HOME-1): a Materials-
+    // module material's or a preset's map is not moved into Assets — the import
+    // mints the user's own row on the same bytes (one object, two homes), so
+    // no storage ever depends on a row another storage clears.
+    if (db->fetchAsset(guid).home() != request.home) return QString();
     // A row whose object is no longer in the store cannot serve this import;
     // a normal import brings the bytes back under a new row rather than
     // handing out a guid that resolves to nothing (the same guard
@@ -459,7 +469,7 @@ ImportResult AssetImportService::commit(PreparedImport &prepared,
     // may touch the database (prepare runs on a worker), so this is where the
     // check that stops a duplicate row lives — once, for both entry points.
     // The staged convert is thrown away; correctness beats the wasted work.
-    if (const QString relisted = relistUnlistedMatch(staged); !relisted.isEmpty()) {
+    if (const QString relisted = relistUnlistedMatch(request, staged); !relisted.isEmpty()) {
         ImportResult back;
         back.assetGuid = relisted;
         back.warnings = result.warnings;
@@ -472,11 +482,6 @@ ImportResult AssetImportService::commit(PreparedImport &prepared,
         // The re-listed row IS this import's answer, so it must land where the
         // import asked (code review 2026-09-10) — a drop into a drawer that
         // happened to match an unlisted row used to file nothing at all.
-        // Only an EXPLICIT project guid is stamped: the ambient open project
-        // is what commitStagedAsset falls back to for a NEW row, and stamping
-        // it here would re-home a library row the user only re-imported.
-        if (!request.projectGuid.isEmpty())
-            db->updateAssetProject(relisted, request.projectGuid);
         if (request.drawerId > 0) {
             if (db->fetchCollectionSubtree(request.drawerId).isEmpty())
                 back.error = QStringLiteral("imported, but drawer %1 does not exist")
@@ -504,13 +509,11 @@ ImportResult AssetImportService::commit(PreparedImport &prepared,
         ImportResult back;
         back.assetGuid = mine;
         back.warnings = result.warnings;
-        // AND IT IS A LIBRARY ROW NOW (ASSETS-SCOPE-1): a picture a project's
-        // material brought in is that project's own row, and the user's import
-        // of the same bytes is the explicit "add to Assets" — the one door that
-        // moves a row into the library.
-        if (db->fetchAsset(mine).view_filter != AssetViewFilter::AssetsView)
-            db->updateAssetViewFilter(mine, static_cast<int>(AssetViewFilter::AssetsView));
-        if (!request.projectGuid.isEmpty()) db->updateAssetProject(mine, request.projectGuid);
+        // The row is already the import's home (claimStampedMemberForUser);
+        // what changes is that it is the user's import now.
+        db->setAssetHome(mine, request.home, request.home.kind == assethome::Kind::Assets
+                                                 ? assethome::Origin::Import
+                                                 : assethome::Origin::Create);
         if (request.drawerId > 0) {
             if (db->fetchCollectionSubtree(request.drawerId).isEmpty())
                 back.error = QStringLiteral("imported, but drawer %1 does not exist")
@@ -592,9 +595,6 @@ bool AssetImportService::commitStagedAsset(const ImportRequest &request, StagedA
 {
     QSqlDatabase conn = QSqlDatabase::database();
     const QString root = AssetStorePaths::root();
-    const QString projectGuid = !request.projectGuid.isEmpty()
-                                    ? request.projectGuid
-                                    : (project ? project->getProjectGuid() : QString());
 
     QStringList createdOids;      // objects written by THIS import — rollback set
     QStringList touchedGuids;     // sidecar + legacy-view targets
@@ -663,22 +663,34 @@ bool AssetImportService::commitStagedAsset(const ImportRequest &request, StagedA
             props["import"] = staged.importRecord;
             properties = QJsonDocument(props).toJson();
         }
-        // A library row unless the request says the project owns what it
-        // mints (ASSETS-SCOPE-1): then every row is the project's own.
-        const AssetViewFilter viewFilter =
-            request.shipped ? AssetViewFilter::DontShow
-            : (request.ownedByProject && !projectGuid.isEmpty())
-                ? AssetViewFilter::Editor
-                : static_cast<AssetViewFilter>(row.viewFilter);
-        db->createAssetEntry(row.guid, row.name, row.type, row.parent, projectGuid,
-                             QString(), QString(), row.thumbnail, properties,
-                             row.tags, row.asset, viewFilter);
+        // THE REQUEST'S HOME, every row of it (ASSETS-HOME-1). The user's
+        // import into Assets is an Import; a material's picture or the
+        // platform's file is minted for its owner (a creation of that home).
+        const assethome::Origin origin = request.home.kind == assethome::Kind::Assets
+                                             ? assethome::Origin::Import
+                                             : assethome::Origin::Create;
+        QString refused;
+        if (db->createAssetEntry(row.guid, row.name, row.type, row.parent, request.home, origin,
+                                 QString(), QString(), row.thumbnail, properties,
+                                 row.tags, row.asset, &refused).isEmpty()) {
+            result.error = refused.isEmpty()
+                               ? QStringLiteral("the library refused the row '%1'").arg(row.name)
+                               : refused;
+            rollbackAndCleanupObjects();
+            return false;
+        }
         touchedGuids.append(row.guid);
     }
+    // AN IMPORT'S OWN EDGES (a model's meshes and textures) are INTRINSIC
+    // to it — no project stamp — unless the import is a project's own: a
+    // storage row's membership is a fact about the row, and only an intrinsic
+    // edge rides its sidecar (so a rebuild restores it).
     for (const StagedDep &dep : staged.deps)
         db->createDependency(dep.dependerType, dep.dependeeType,
                              dep.depender, dep.dependee,
-                             dep.projectGuid.isEmpty() ? projectGuid : dep.projectGuid);
+                             !dep.projectGuid.isEmpty() ? dep.projectGuid
+                             : request.home.isProject() ? request.home.projectGuid
+                                                        : QString());
 
     int done = 0;
     for (const StagedFile &file : staged.files) {
@@ -711,11 +723,24 @@ bool AssetImportService::commitStagedAsset(const ImportRequest &request, StagedA
     // on a filesystem without hardlinks the view was a second full copy of
     // every imported file (Windows: 152MB store → 438MB, a second full write
     // per import).
+    // A SIDECAR THAT CANNOT BE WRITTEN FAILS THE IMPORT VISIBLY (ASSETS-HOME-1):
+    // the rows are committed and stay, but the user is told the import is not
+    // safe — a row without its sidecar cannot be rebuilt by Clear Database or
+    // a format bump.
     touchedGuids.removeDuplicates();
+    QString sidecarFailure;
     for (const QString &guid : touchedGuids) {
         QString casError;
-        AssetCas::writeSidecar(conn, root, guid, &casError);
-        if (!casError.isEmpty()) irisLog("import post-commit: " + casError);
+        if (!AssetCas::writeSidecar(conn, root, guid, &casError) && sidecarFailure.isEmpty())
+            sidecarFailure = casError.isEmpty() ? guid : casError;
+    }
+    if (!sidecarFailure.isEmpty()) {
+        irisLog("import post-commit: " + sidecarFailure);
+        result.error = QStringLiteral("imported, but its record in the store (sidecar) could not "
+                                      "be written (%1) — it would not survive Clear Database or "
+                                      "an update").arg(sidecarFailure);
+        AssetCas::discardStaged(staged.stagedBytes);
+        return false;
     }
 
     // Anything prepare() staged that this plan never named (it should be

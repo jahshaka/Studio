@@ -11,6 +11,7 @@ For more information see the LICENSE file
 
 #include "services/avatarassets.h"
 
+#include <QSqlQuery>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
@@ -112,7 +113,12 @@ void AvatarAssets::reconcileDependencies(const QString &guid,
                                          Project *project)
 {
     if (!db) return;
-    const QString projectGuid = project ? project->getProjectGuid() : QString();
+    // THE AVATAR'S OWN MEMBERSHIP: intrinsic (no project stamp) for an avatar in
+    // the Avatar storage — a fact about the avatar, carried by its sidecar so a
+    // rebuild restores it (ASSETS-HOME-1); stamped only for a project's own.
+    Q_UNUSED(project);
+    const assethome::Home home = db->fetchAsset(guid).home();
+    const QString projectGuid = home.isProject() ? home.projectGuid : QString();
 
     // The definition IS the dependency list: whatever it names now is what the
     // closure (pins, archive walkers, gc) must see. Edges it no longer names go
@@ -215,11 +221,11 @@ QString AvatarAssets::create(const QString &objectGuid, Scope scope, Database *d
     // project's own row (pinned below) and never a library tile.
     const assethome::Home home = scope == Scope::Project
                                      ? assethome::project(project->getProjectGuid())
-                                     : assethome::library();
+                                     : assethome::avatars();
     db->createAssetEntry(guid, definition.name, static_cast<int>(ModelTypes::Avatar), QString(),
-                         home.projectGuid,
+                         home, assethome::Origin::Create,
                          QString(), QString(), record.thumbnail, QByteArray(), QByteArray(),
-                         QByteArray(), home.viewFilter());
+                         QByteArray());
     reconcileDependencies(guid, definition, db, project);
     AssetCas::writeSidecar(conn, AssetStorePaths::root(), guid, nullptr);
 
@@ -379,8 +385,16 @@ QString AvatarAssets::saveToLibrary(const QString &guid, Database *db, Project *
         // Created IN this project: PROMOTE IN PLACE (§4 D6-A). The row keeps
         // its guid — a fresh library row would orphan every instance that
         // already names this one, in scenes that may not even be open.
-        if (!db->updateAssetProject(guid, QString()))
+        if (!db->setAssetHome(guid, assethome::avatars(), assethome::Origin::Create))
             return refuse(QStringLiteral("could not promote '%1' to the library").arg(record.name));
+        // Its membership becomes the avatar's own (intrinsic) with it, as
+        // reconcileDependencies writes for a storage avatar.
+        {
+            QSqlQuery restamp(QSqlDatabase::database());
+            restamp.prepare("UPDATE dependencies SET project_guid = NULL WHERE depender = ?");
+            restamp.addBindValue(guid);
+            restamp.exec();
+        }
         // Its dependencies are project rows too when they were imported here;
         // they stay where they are (a library avatar may depend on a project
         // model, and the pin carries the bytes) — recorded, not silently

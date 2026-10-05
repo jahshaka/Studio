@@ -22,12 +22,19 @@ For more information see the LICENSE file
 //     itself: graph blend names, library object blobs, bakes);
 //   * the COLUMNS — Database::schemaMatchesFresh().
 //
-// A mismatch WIPES the library through the one reset (libraryreset::reset):
-// catalog, the store's own layout, and the project folders INSIDE the data root.
-// Project folders filed outside the data root (a custom location, a preference
-// pointing elsewhere) are left on disk — only unlisted. The wipe REFUSES when
-// another instance holds the data root (the `<db>.lock` QLockFile): it would
-// delete that instance's files under it. The GUI shows a one-time notice.
+// A mismatch RESETS the library through the one reset (libraryreset::reset),
+// KEEPING THE USER'S STORAGES (ASSETS-HOME-1; the owner: "a format bump rebuilds
+// derived data from the stored sources; it never deletes the user's Assets or
+// Materials"). The catalog is dropped and the Assets, Materials and Avatar
+// storages are REBUILT from their own sidecars under this build's schema
+// (AssetMigration::rebuildCatalog — never a read of the old tables); their
+// bakes are dropped and re-derived from their sources, their thumbnails redrawn.
+// Projects, the platform's seeds and the derived caches are cleared. A sidecar
+// that records no home (a library older than generation 5) is not read, so
+// such a library is cleared whole — once. Project folders filed outside the
+// data root are left on disk — only unlisted. The reset REFUSES when another
+// instance holds the data root (the `<db>.lock` QLockFile). The GUI shows a
+// one-time notice that says what was cleared and what was kept.
 
 #include <QString>
 
@@ -49,9 +56,11 @@ struct Result
     Outcome outcome = Outcome::NoLibrary;
     int generationOnDisk = 0;   ///< PRAGMA user_version found (0 = none)
     QString reason;             ///< why it was wiped / refused / failed
+    int keptRows = 0;           ///< storage rows rebuilt from their sidecars
+    int unreadable = 0;         ///< sidecars of an older format, not read (cleared)
 };
 
-/// This build's generation (= CasSchema::kUserVersion).
+/// This build's generation (= CasSchema::userVersion()).
 int generation();
 
 /// THE CHECK, and the wipe it decides. `dbPath` is the library file;
@@ -63,8 +72,10 @@ Result checkAndWipe(const QString &dbPath, const QString &dataRoot, SettingsMana
 Result lastResult();
 bool wipedAtStartup();
 
-/// The notice the GUI shows once after a wipe.
+/// The notice the GUI shows once after a reset: what was cleared, what was
+/// kept, and that a later update keeps the user's storages.
 QString noticeText();
+QString noticeText(const Result &result);
 /// The message the GUI shows before it refuses to start (Refused / Failed).
 QString refusalText(const Result &result);
 }

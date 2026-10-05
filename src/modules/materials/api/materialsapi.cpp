@@ -261,11 +261,21 @@ QVector<VerbInfo> MaterialsApi::verbs() const
           "are never removed here — a superseded object waits for assets.gc, which lists before it removes too.",
           Needs::Document },
         { "duplicate", "materials.duplicate(guid, {name}) -> guid",
-          "Copies ONE material into a second LIBRARY bundle — the drawer's Duplicate, as a verb. The copy names "
+          "Copies ONE material into a second bundle — the drawer's Duplicate, as a verb: a project's material "
+          "into that project, anything else into the MATERIALS MODULE'S STORAGE (ASSETS-HOME-1). The copy names "
           "the same TEXTURES (one object, 'used by 2' — sharing is what the bundle model is for; materials."
           "makeUnique gives one back its privacy), but it carries NO BAKED MAPS: a bake is born inside exactly "
           "one material and is never shared, so the copy bakes its own at its next save. `name` defaults to "
           "'<original> copy' and is numbered against the library's own material names.",
+          Needs::Document },
+        { "saveToAssets", "materials.saveToAssets(guid, {name}) -> guid",
+          "SAVE A MATERIAL TO ASSETS (ASSETS-HOME-1; the owner: Assets is long-term storage and changes only on "
+          "an import or an explicit save). Copies ONE material — one of the Materials module's own, or the open "
+          "project's — into Assets as a new bundle IN FULL: its definition as the open project renders it, bake "
+          "included, and every member (picked pictures, baked maps) copied in as the new row's OWN rows over the "
+          "same stored bytes, so the saved copy is complete without the original. The original stays where it "
+          "is. `name` defaults to the original's, made unique against every material name. Refused for a "
+          "material already in Assets and for a shipped preset (create a material from it first).",
           Needs::Document },
         { "makeUnique", "materials.makeUnique(materialGuid, textureGuid) -> guid",
           "Gives THIS material its own copy of a shared texture: a second Texture row over the SAME bytes (the "
@@ -325,11 +335,12 @@ QVector<VerbInfo> MaterialsApi::verbs() const
           "THE COPY CARRIES THE PRESET'S GRAPH, so it opens in the node editor and every edit gesture works "
           "on it — that is what 'a custom preset is a new material based on the preset it was customised from' "
           "means (PRESET-UNIFY-1). "
-          "The copy names the preset's own member textures (one object, shared) and takes the name "
-          "'<Preset>-1', the suffix bumped against the material names the library already holds, unless {name} "
-          "says otherwise. With a project open it is THAT PROJECT'S OWN material (ASSETS-SCOPE-1: pinned, in the "
-          "project's materials drawer and the editor's asset tray, never a library row); with none, a library "
-          "material. NOT undoable (it is an asset, like an import).",
+          "The copy is a UNIQUE BUNDLE IN FULL (ASSETS-HOME-1): its maps are its OWN member rows, copied from the "
+          "preset's platform rows over the same stored bytes, and it takes the name '<Preset>-1', the suffix "
+          "bumped against every material name, unless {name} says otherwise. It lands in the MATERIALS MODULE'S "
+          "STORAGE whatever project is open (the Presets drawer's right-click 'Create material' is this verb) — "
+          "never an Assets tile; adding it to a project is a separate gesture. NOT undoable (it is an asset, "
+          "like an import).",
           Needs::Document },
         { "edit", "materials.edit(guidOrName) -> {guid, master, copied, editable}",
           "MAKE THIS MATERIAL EDITABLE IN THE OPEN PROJECT, and answer the guid every later edit "
@@ -444,12 +455,12 @@ QString MaterialsApi::resolveMaterialGuid(const QString &guidOrName) const
     // made in the editor is the project's row, absent from the library)...
     for (const auto &asset : pinnedMaterials)
         if (asset.name.compare(wanted, Qt::CaseInsensitive) == 0) return asset.guid;
-    // ...or a library material's NAME, which is what the user calls it.
-    // (The library's MATERIAL rows only, by predicate — D11-LIBRARY-SCALE.)
-    const auto assets = host.db->fetchAssetsByViewFilter(AssetViewFilter::AssetsView,
-                                                         static_cast<int>(ModelTypes::Material));
-    for (const auto &asset : assets)
-        if (asset.name.compare(wanted, Qt::CaseInsensitive) == 0) return asset.guid;
+    // ...or a stored material's NAME, which is what the user calls it: the
+    // Materials module's storage first (where the user makes them), then
+    // Assets (imported or saved there). MATERIAL rows only, by predicate.
+    for (const assethome::Kind home : { assethome::Kind::MaterialsLibrary, assethome::Kind::Assets })
+        for (const auto &asset : host.db->fetchAssetsInHome(home, static_cast<int>(ModelTypes::Material)))
+            if (asset.name.compare(wanted, Qt::CaseInsensitive) == 0) return asset.guid;
     return QString();
 }
 
@@ -600,7 +611,8 @@ QString MaterialsApi::createFromImage(const QString &textureGuid, const QVariant
     QString error;
     const QString materialGuid =
         ImageMaterial::createMaterialAsset(textureGuid, host.db, host.project,
-                                           assethome::current(host.project), &error);
+                                           assethome::current(host.project, assethome::materials()),
+                                           &error);
     if (materialGuid.isEmpty()) {
         fail(QStringLiteral("materials.createFromImage: %1").arg(error));
         return QString();
@@ -640,9 +652,8 @@ QString MaterialsApi::createFromPreset(const QString &presetOrGuid, const QVaria
 
     MaterialPresetSeeder::instance().finishNow();   // one importer at a time
     QString error;
-    const QString copy = MaterialPresetAssets::customise(
-        presetOrGuid, options.value(QStringLiteral("name")).toString(),
-        host.db, host.project, &error);
+    const QString copy = MaterialPresetAssets::createFromPreset(
+        presetOrGuid, options.value(QStringLiteral("name")).toString(), host.db, &error);
     if (copy.isEmpty()) {
         fail(QStringLiteral("materials.createFromPreset: %1").arg(error));
         return QString();
@@ -701,11 +712,12 @@ QString MaterialsApi::createImageGraph(const QString &textureGuid)
     seed["materialType"] = "pbr";
     seed["name"] = shaderName;
     QString error;
-    // THE GRAPH TWIN IS A LIBRARY MATERIAL (its documented contract: adding it
-    // to a project is a separate gesture), so its home is the library's
-    // (ASSETS-SCOPE-1: an explicit library gesture) — no editor door mints it.
+    // THE GRAPH TWIN IS ONE OF THE MATERIALS MODULE'S OWN (its documented
+    // contract: adding it to a project is a separate gesture) — its home is the
+    // module's storage (ASSETS-HOME-1), and its picture is copied in as its own
+    // member when it lives anywhere else (MaterialBundle::write).
     const QString assetGuid = MaterialBundle::create(host.db, shaderName, seed,
-                                                     assethome::library(), QByteArray(), &error);
+                                                     assethome::materials(), QByteArray(), &error);
     if (assetGuid.isEmpty()) {
         delete graph;
         fail(QStringLiteral("materials.createFromImage: %1").arg(error));
@@ -796,8 +808,9 @@ QString MaterialsApi::create(const QString &name, const QVariantMap &options)
     if (name.trimmed().isEmpty()) { fail("materials.create: a name is required"); return QString(); }
     const QString materialName = name.trimmed();
 
-    // WITHOUT {folder}: A LIBRARY BUNDLE — no project needed, and adding it to a
-    // project is a separate, explicit gesture (`assets.addToProject`). WITH
+    // WITHOUT {folder}: THE MATERIALS MODULE'S STORAGE (ASSETS-HOME-1) — no
+    // project needed, never an Assets tile, and adding it to a project is a
+    // separate, explicit gesture (`assets.addToProject`). WITH
     // {folder}: the editor's Create Material, so it is THE PROJECT'S OWN
     // material (ASSETS-SCOPE-1, owner 2026-09-26: "adding a material to a
     // project in the editor should add it to the editor, not the default
@@ -809,7 +822,7 @@ QString MaterialsApi::create(const QString &name, const QVariantMap &options)
         return QString();
     }
     const assethome::Home home = inProject ? assethome::project(host.project->getProjectGuid())
-                                           : assethome::library();
+                                           : assethome::materials();
     NodeGraph *graph = nullptr;
     QJsonObject definition;
     definition["materialType"] = "pbr";
@@ -1116,6 +1129,26 @@ QString MaterialsApi::duplicate(const QString &materialGuid, const QVariantMap &
     // (services/materialtile.h).
     materialtile::mint(host.db, host.project, copy, "materials.duplicate");
     return copy;
+}
+
+QString MaterialsApi::saveToAssets(const QString &materialGuid, const QVariantMap &options)
+{
+    if (!host.db) { fail("materials: not available in this session"); return QString(); }
+    static const QStringList knownOptions = { QStringLiteral("name") };
+    const QString refusal = refuseUnknownKeys(QStringLiteral("materials.saveToAssets"), options,
+                                              knownOptions);
+    if (!refusal.isEmpty()) { fail(refusal); return QString(); }
+    const QString guid = resolveMaterialGuid(materialGuid);
+    QString error;
+    const QString saved = materialmembers::saveToAssets(
+        host.db, host.isProjectOpen() ? host.project : nullptr, guid.isEmpty() ? materialGuid : guid,
+        options.value(QStringLiteral("name")).toString(), &error);
+    if (saved.isEmpty()) {
+        fail(QStringLiteral("materials.saveToAssets: %1").arg(error));
+        return QString();
+    }
+    materialtile::mint(host.db, nullptr, saved, "materials.saveToAssets");
+    return saved;
 }
 
 QString MaterialsApi::makeUnique(const QString &materialGuid, const QString &textureGuid)
@@ -1567,7 +1600,8 @@ bool MaterialApi::set(const QString &nodeId, const QVariantMap &values)
                 // ShippedAssets::importTexture, identified by CONTENT — the
                 // same bytes answer the same row, so setting the same file
                 // twice mints one row, not two. Its home is the open project's
-                // (the library when none is open).
+                // (the Materials storage when none is open — Platform is the
+                // app's shipped content only).
                 if (!host.db)
                     return fail(QStringLiteral("material.set: no library in this session to "
                                                "hold the texture '%1'").arg(ref));
@@ -1575,7 +1609,7 @@ bool MaterialApi::set(const QString &nodeId, const QVariantMap &values)
                 if (QFileInfo(ref).isFile()) {
                     const ShippedAssets::Pinned imported = ShippedAssets::importTexture(
                         ref, QFileInfo(ref).fileName(), host.db, host.project,
-                        assethome::current(host.project));
+                        assethome::current(host.project, assethome::materials()));
                     if (!imported.ok() || imported.guid.isEmpty())
                         return fail(QStringLiteral("material.set: importing the texture '%1' "
                                                    "failed: %2").arg(ref, imported.error));
@@ -1692,9 +1726,9 @@ bool MaterialApi::set(const QString &nodeId, const QVariantMap &values)
                                       static_cast<int>(ModelTypes::Texture),
                                       nodeId, textureGuid, projectGuid);
             if (host.db->isAssetPinnedBy(projectGuid, textureGuid)) continue;
-            if (row.view_filter != AssetViewFilter::AssetsView
-                && row.view_filter != AssetViewFilter::Effects)
-                continue;
+            // A row the project does not own (a storage's, the platform's) is
+            // used by PINNING it; a project's own row needs no pin.
+            if (row.guid.isEmpty() || row.home().isProject()) continue;
             ProjectAssets::addToProject(textureGuid, host.db, host.project,
                                         ProjectAssets::AddKind::Binding);
         }
