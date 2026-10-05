@@ -54,21 +54,9 @@ QString resolveSkyAssetFile(Project *project, const QString &guid)
                                    project->getProjectGuid(), guid);
 }
 
-// The asset a picked sky image IS. The picker carries the guid of the row the
-// user chose or dropped; a path with no guid (only reachable programmatically)
-// is recovered through the store object's oid, the way the scene writer does
-// it. Never by the file's NAME (plan item 15c): this used to ask the catalog
-// for a row CALLED like the picked file, and a store object is called
-// <sha256>.<ext>, so a pick resolved only when a preset had copied a file into
-// the project folder under the same name as a bare row.
-QString skyTextureGuid(Project *project, const QString &path, const QString &carriedGuid)
-{
-    if (!carriedGuid.isEmpty()) return carriedGuid;
-    if (path.isEmpty() || !project || project->getProjectGuid().isEmpty()) return QString();
-    return AssetCas::guidForStorePath(QSqlDatabase::database(), AssetStorePaths::root(), path,
-                                      project->getProjectGuid(),
-                                      AssetCas::GuidPreference::Texture);
-}
+// The asset a picked sky image IS is the guid the picker carries — the row the
+// user chose or dropped (TEX-REF-1). Never recovered from the picked file's
+// path: there is no pick without a row.
 
 // The "Material" sky was broken even in the legacy renderer (its handlers were
 // commented out and marked BROKEN!), so it is gone from the UI. Old scenes and
@@ -303,7 +291,7 @@ void SkyPropertyWidget::skyTypeChanged(int index)
 			connect(equiTexture, &TexturePickerWidget::valuesChanged, this,
 			        [this](QString value, QString carriedGuid) {
 				if (loading || !db || !project) return;
-				const QString assetGuid = skyTextureGuid(project, value, carriedGuid);
+				const QString assetGuid = value.isEmpty() ? QString() : carriedGuid;
 				const QVariant before = sceneprops::get(liveScene(), QStringLiteral("sky"));
 				db->removeDependenciesByType(skyGuid, ModelTypes::Texture);
 				if (!assetGuid.isEmpty()) {
@@ -464,7 +452,7 @@ void SkyPropertyWidget::onSlotChanged(QString value, QString guid, int index)
 	// face.
 	static const char *const kFaces[] = { "front", "back", "left", "right", "top", "bottom" };
 	const QString face = (index >= 0 && index < 6) ? QLatin1String(kFaces[index]) : QString();
-	const QString assetGuid = value.isEmpty() ? QString() : skyTextureGuid(project, value, guid);
+	const QString assetGuid = value.isEmpty() ? QString() : guid;
 	// The dependency the face HAD goes (it used to delete the edge to the NEW
 	// guid, just before re-creating it, and leave the replaced face's edge
 	// behind forever).

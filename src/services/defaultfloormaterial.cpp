@@ -24,7 +24,7 @@ QString pinTile(Database *db, Project *project, QString *tileGuid, bool *tileNew
     // real project it goes through the one import pipeline the first time any
     // project needs it (identified by its bytes, so every later project reuses
     // the same row) and is PINNED here: the material holds the pinned store
-    // object, the writer saves its guid through the CAS and both readers
+    // object and the map row carries its guid to the save (TEX-REF-1), both readers
     // resolve it pin-first — the same round trip as any texture a user
     // imports, and a project export carries it.
     //
@@ -70,7 +70,10 @@ QString pinTile(Database *db, Project *project, QString *tileGuid, bool *tileNew
 iris::PbrMaterialPtr create(Database *db, Project *project, QString *tileGuid,
                             bool *tileNewlyPinned)
 {
-    return createUnpinned(pinTile(db, project, tileGuid, tileNewlyPinned));
+    QString guid;
+    const QString path = pinTile(db, project, &guid, tileNewlyPinned);
+    if (tileGuid) *tileGuid = guid;
+    return createUnpinned(path, guid);
 }
 
 }   // namespace defaultfloormaterial

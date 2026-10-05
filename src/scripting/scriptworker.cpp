@@ -10,6 +10,9 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "scripting/scriptworker.h"
+#include "services/uithreadwait.h"
+
+#include <QSemaphore>
 
 #include <algorithm>
 #include <cmath>
@@ -398,12 +401,30 @@ QVariant ScriptBridge::call(const QString &module, const QString &verb, const QV
     } else {
         // THE HOP. Blocking, so the verbs still execute in the script's order
         // and the script still reads its own writes; the UI thread is free for
-        // everything that happens between two of them.
-        QMetaObject::invokeMethod(mDispatcher,
-                                  [this, &out, &module, &verb, &list]() {
-                                      out = mDispatcher->dispatch(module, verb, list);
+        // everything that happens between two of them. A hop that arrives while
+        // a UI-thread operation is waiting on its worker (an import's pump)
+        // does not run inside it: UiThreadWait::afterOperation holds it until
+        // the operation ends (services/uithreadwait.h — the one rule). The
+        // worker waits on the semaphore exactly as it waited on the blocking
+        // connection.
+        QSemaphore done;
+        VerbDispatcher *dispatcher = mDispatcher;
+        VerbOutcome *outcome = &out;
+        const QString *mod = &module, *name = &verb;
+        const QVariantList *arguments = &list;
+        QSemaphore *finished = &done;
+        // Every pointer names this worker's stack, which stays put until the
+        // semaphore is released — by the call, whenever it runs.
+        QMetaObject::invokeMethod(dispatcher,
+                                  [dispatcher, outcome, mod, name, arguments, finished]() {
+                                      UiThreadWait::afterOperation(
+                                          [dispatcher, outcome, mod, name, arguments, finished]() {
+                                              *outcome = dispatcher->dispatch(*mod, *name, *arguments);
+                                              finished->release();
+                                          });
                                   },
-                                  Qt::BlockingQueuedConnection);
+                                  Qt::QueuedConnection);
+        done.acquire();
     }
 
     if (out.threw) {

@@ -17,10 +17,12 @@ For more information see the LICENSE file
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QMutex>
 #include <QSqlDatabase>
 #include <QSqlQuery>
 #include <QTemporaryDir>
 
+#include <atomic>
 #include <utility>
 
 #include "irisgl/import/meshbake.h"
@@ -34,12 +36,13 @@ For more information see the LICENSE file
 #include "services/meshbakestore.h"
 #include "services/assetstorepaths.h"
 #include "services/import/assetimporters.h"
+#include "services/uithreadwait.h"
 #include "services/jahlog.h"
 #include "irisgl/core/logger.h"
 #include "irisgl/import/parsecensus.h"
 
 AssetImportService::AssetImportService(Database *db, Project *project)
-    : db(db), project(project)
+    : db(db), project(project), mProjectGuid(project ? project->getProjectGuid() : QString())
 {
     // BEFORE MeshImporter, deliberately: the two share every model extension
     // and only the file's CONTENTS separate them (a clip file has no meshes),
@@ -229,7 +232,60 @@ ImportResult AssetImportService::import(const ImportRequest &request,
     QElapsedTimer clock;
     clock.start();
 
-    PreparedImport prepared = prepare(request, progress);
+    // THE CPU HALF OFF THE UI THREAD (VERB-IMPORT-OFF-UI-1). Every door that
+    // imports synchronously — assets.importFile / import / importAndPlace, the
+    // avatar verbs' resolveClipAsset, a shipped asset's first use, the seed's
+    // single re-seed — used to parse and BAKE right here on the thread that
+    // draws; only ImportBatchRunner used a worker. prepare() is worker-safe by
+    // contract (no default connection, no GUI object), so it runs on a pool
+    // thread while this one pumps (services/uithreadwait.h); the DB half below
+    // stays on the connection's thread, as the batch runner's hop keeps it.
+    //
+    // The caller's progress function was written for THIS thread: the worker
+    // only records the latest stage and answers the cancel the caller last
+    // gave, and the waiting thread relays the stage to the caller between
+    // pumps.
+    PreparedImport prepared;
+    if (UiThreadWait::onUiThread()) {
+        struct Relay
+        {
+            QMutex lock;
+            QString stage;
+            int done = 0;
+            int total = 0;
+            bool fresh = false;
+            std::atomic<bool> cancelled { false };
+        } relay;
+        ImportProgressFn workerProgress;
+        if (progress) {
+            workerProgress = [&relay](const QString &stage, int done, int total) {
+                QMutexLocker locked(&relay.lock);
+                relay.stage = stage;
+                relay.done = done;
+                relay.total = total;
+                relay.fresh = true;
+                return !relay.cancelled.load();
+            };
+        }
+        const auto tick = [&relay, &progress]() {
+            if (!progress) return;
+            QString stage;
+            int done = 0, total = 0;
+            {
+                QMutexLocker locked(&relay.lock);
+                if (!relay.fresh) return;
+                relay.fresh = false;
+                stage = relay.stage;
+                done = relay.done;
+                total = relay.total;
+            }
+            if (!progress(stage, done, total)) relay.cancelled.store(true);
+        };
+        UiThreadWait::run([&]() { prepared = prepare(request, workerProgress); },
+                          UiThreadWait::Pump::Events, tick);
+    } else {
+        prepared = prepare(request, progress);
+    }
     ImportResult out = prepared.ok() ? commit(prepared, progress) : prepared.result;
 
     logImportRecord(request, out, clock.elapsed());
@@ -311,7 +367,13 @@ PreparedImport AssetImportService::prepare(const ImportRequest &request,
     }
 
     StagedAsset &staged = prepared.staged;
-    if (!importer->convert(request, prepared.staging->path(), db, project, staged,
+    // The project the import is FOR, read on the thread that made this service
+    // — never `project` here: prepare() runs on a pool thread. The commit still
+    // sees the caller's own request (an explicit projectGuid means something
+    // there).
+    ImportRequest converting = request;
+    if (converting.projectGuid.isEmpty()) converting.projectGuid = mProjectGuid;
+    if (!importer->convert(converting, prepared.staging->path(), db, project, staged,
                            &result.error, progress)) {
         if (result.error.isEmpty()) result.error = QStringLiteral("import failed");
         return prepared;
@@ -589,7 +651,15 @@ bool AssetImportService::commitStagedAsset(const ImportRequest &request, StagedA
         QByteArray properties = row.properties;
         if (row.guid == staged.mainGuid) {
             QJsonObject props = QJsonDocument::fromJson(properties).object();
-            if (!staged.metadata.isEmpty()) props["metadata"] = staged.metadata;
+            // A VIDEO block probed off the GUI thread is DEGRADED (no
+            // QMediaPlayer on a worker — prepare() runs on one for every
+            // import route now): it is not persisted, by AssetMetadata::
+            // ensure's own rule, so the first GUI-thread read probes and
+            // stores the real one.
+            const bool degradedVideo =
+                staged.metadata.value(QStringLiteral("kind")).toString() == QLatin1String("video")
+                && !staged.metadata.contains(QStringLiteral("duration"));
+            if (!staged.metadata.isEmpty() && !degradedVideo) props["metadata"] = staged.metadata;
             props["import"] = staged.importRecord;
             properties = QJsonDocument(props).toJson();
         }
@@ -718,9 +788,40 @@ AssetImportService::Reimported AssetImportService::reimport(const QString &guid,
                               .arg(record.name)
                         : error);
 
+    // THE RE-READ AND THE NEW BAKE'S BYTES OFF THE UI THREAD (VERB-IMPORT-OFF-UI-1):
+    // the convert parses and bakes, and the bake's store write is a copy + a
+    // flush — both the worker's, exactly as prepare() splits a first import. The
+    // catalog half below stays on this (the connection's) thread.
     QTemporaryDir convertStaging;
     StagedAsset staged;
-    if (!importer->convert(request, convertStaging.path(), db, project, staged, &error, {}))
+    bool converted = false;
+    QVector<AssetCas::Staged> bakeBytes;
+    UiThreadWait::run([&]() {
+        iris::ParseCensus::BakeBuildScope building;   // a reimport's parse BUILDS the bake
+        converted = importer->convert(request, convertStaging.path(), db, project, staged,
+                                      &error, {});
+        if (!converted) return;
+        for (const StagedFile &file : std::as_const(staged.files)) {
+            if (file.role != iris::MeshBake::casRole()) continue;
+            AssetCas::Staged entry;
+            entry.srcPath = file.path;
+            entry.role = file.role;
+            entry.name = file.name;
+            // A staging failure is not fatal: the commit ingests synchronously.
+            if (AssetCas::stage(root, entry)) bakeBytes.append(entry);
+            break;
+        }
+        AssetCas::flushStaged(bakeBytes);
+    });
+    // EVERY RETURN BELOW DISCARDS WHAT WAS STAGED AND NOT PUBLISHED: a
+    // committed entry's tmpPath is cleared by commitStaged, so this removes
+    // exactly the temps a failed path left (fix round, item 5).
+    struct DiscardOnExit
+    {
+        QVector<AssetCas::Staged> &bytes;
+        ~DiscardOnExit() { AssetCas::discardStaged(bytes); }
+    } discardOnExit{ bakeBytes };
+    if (!converted)
         return fail(error.isEmpty() ? QStringLiteral("reimport failed") : error);
 
     // ---- commit ONLY the derived products ---------------------------------
@@ -779,9 +880,15 @@ AssetImportService::Reimported AssetImportService::reimport(const QString &guid,
 
     if (!bakePath.isEmpty()) {
         QString oid;
-        if (!AssetCas::ingestFile(conn, root, bakePath, guid, iris::MeshBake::casRole(),
-                                  bakeName, &oid, &error))
+        // The worker staged and flushed the bytes: publishing them is a rename.
+        if (!bakeBytes.isEmpty() && bakeBytes.first().srcPath == bakePath) {
+            if (!AssetCas::commitStaged(conn, root, guid, bakeBytes.first(), &error))
+                return fail(error);
+            oid = bakeBytes.first().oid;
+        } else if (!AssetCas::ingestFile(conn, root, bakePath, guid, iris::MeshBake::casRole(),
+                                         bakeName, &oid, &error)) {
             return fail(error);
+        }
         out.bakeOid = oid;
         if (!meshGuid.isEmpty()
             && !AssetCas::ingestFile(conn, root, bakePath, meshGuid, iris::MeshBake::casRole(),
@@ -845,6 +952,7 @@ QJsonObject AssetImportService::checkConsistency(const QString &guid)
     const QString linked = QDir(staging.path()).filePath(sourceName);
     QFile::copy(sourcePath, linked);
     request.sourcePath = linked;
+    request.projectGuid = mProjectGuid;   // the converter runs on a pool thread
 
     QString error;
     AssetImporterBase *importer = pickImporter(request, &error);
@@ -852,7 +960,14 @@ QJsonObject AssetImportService::checkConsistency(const QString &guid)
 
     QTemporaryDir convertStaging;
     StagedAsset staged;
-    if (!importer->convert(request, convertStaging.path(), db, project, staged, &error, {})) {
+    bool converted = false;
+    // The re-run convert parses (and bakes): the worker's, like every import's.
+    UiThreadWait::run([&]() {
+        iris::ParseCensus::BakeBuildScope building;
+        converted = importer->convert(request, convertStaging.path(), db, project, staged,
+                                      &error, {});
+    });
+    if (!converted) {
         report["ok"] = false;
         report["error"] = error;
         return report;

@@ -324,7 +324,7 @@ int main(int argc, char **argv)
                 TestSceneWriter writer;
                 writer.setAssetPath(QDir(tmp.path()).filePath("scene.jah"));
                 QJsonObject obj;
-                SceneWriter::writeSceneNode(obj, animated, false);
+                SceneWriter::writeSceneNode(obj, animated);
                 const QJsonArray anims = obj["animations"].toArray();
                 CHECK(!anims.isEmpty(), "animation serialized");
                 if (!anims.isEmpty()) {

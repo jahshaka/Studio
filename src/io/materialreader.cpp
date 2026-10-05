@@ -130,16 +130,13 @@ iris::PbrMaterialPtr MaterialReader::parsePbrMaterial(QJsonObject matObject, Dat
 			break;
 		case iris::PropertyType::Texture: {
 			if (!loadTextures) break;
-			// Stored as an asset guid (saved against the project database) or
-			// as a path. Resolve the guid to the project/global file; fall back
-			// to treating it as a path.
+			// Stored as the texture's ASSET GUID (TEX-REF-1): the row binds the
+			// file the guid resolves to AND the guid, so the identity reaches
+			// the next save. A miss keeps the guid with no file; there is no
+			// path arm (a definition stores no path).
 			const QString stored = val.toString();
-				QString path;
-				if (!stored.isEmpty()) {
-					path = resolveTextureGuid(stored);
-					if (path.isEmpty() && QFileInfo::exists(stored)) path = stored;
-				}
-			mat->setValue(prop->name, path);
+			mat->setValue(prop->name, iris::Material::textureRef(
+				stored.isEmpty() ? QString() : resolveTextureGuid(stored), stored));
 			break;
 		}
 		default:

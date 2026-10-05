@@ -52,6 +52,6 @@ bool SceneEditService::setParticleTexture(const iris::ParticleSystemNodePtr &emi
 {
     if (!emitter) return false;
     if (textureGuid.isEmpty()) { emitter->texture.clear(); return true; }
-    emitter->setTexture(iris::Texture2D::createLive(textureGuid, textureGuid, 4, 4, false));
+    emitter->setTexture(iris::Texture2D::createLive(textureGuid, textureGuid, 4, 4, false), textureGuid);
     return true;
 }

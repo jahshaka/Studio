@@ -9,6 +9,7 @@ and/or modify it under the terms of the MIT License
 For more information see the LICENSE file
 *************************************************************************/
 #include "pbrgraphevaluator.h"
+#include <QFileInfo>
 
 #include <QJsonArray>
 
@@ -61,10 +62,20 @@ iris::PbrMaterialPtr PbrGraphEvaluator::materialFromValues(const QJsonObject& va
 			                            ? QVariant(QColor())
 			                            : QVariant(colorFromJson(values[key].toObject())));
 		else if (mapKeys.contains(key)) {
-			// baked maps store project-relative paths (BakedMaps/...); the
-			// resolver seam re-absolutizes them at material-build time
+			// A stored map is the texture's ASSET GUID (a baked map is a
+			// member Texture row of the bundle); the resolver turns it into the
+			// file, and the row keeps the guid beside it (TEX-REF-1) so a node
+			// wearing this material saves the reference, not the path. A value
+			// that is already a file (a graph texture node a session loaded)
+			// has no identity to carry.
 			const QString stored = values[key].toString();
-			material->setValue(key, resolver ? resolver(stored) : stored);
+			if (stored.isEmpty() || QFileInfo::exists(stored)) {
+				material->setValue(key, stored);
+			} else {
+				const QString path = resolver ? resolver(stored) : QString();
+				material->setValue(key, iris::Material::textureRef(path == stored ? QString() : path,
+				                                                   stored));
+			}
 		}
 		else if (key == "alphaMode")
 			material->setValue(key, values[key].toInt());

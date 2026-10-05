@@ -86,7 +86,7 @@ iris::SceneNodePtr buildFloor(SceneTemplate kind, Database *db, Project *project
                                  QString(), QString(), QByteArray(),
                                  QJsonDocument(props).toJson(), QByteArray(), QByteArray());
         }
-        node->setMaterial(defaultfloormaterial::createUnpinned(tilePath));
+        node->setMaterial(defaultfloormaterial::createUnpinned(tilePath, tileGuid));
         if (realProject && !tileGuid.isEmpty())
             db->createDependency(static_cast<int>(ModelTypes::Object),
                                  static_cast<int>(ModelTypes::Texture), guid, tileGuid,

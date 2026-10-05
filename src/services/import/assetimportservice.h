@@ -51,10 +51,13 @@ public:
     AssetImportService(Database *db, Project *project);
     ~AssetImportService();
 
-    /// The one entry point: run the full pipeline for one source file,
-    /// synchronously on the calling thread (headless/verb imports). Equal to
-    /// prepare() + commit(); interactive imports run those halves on separate
-    /// threads through ImportBatchRunner instead.
+    /// The one entry point: run the full pipeline for one source file and
+    /// return its result (headless/verb imports). Equal to prepare() +
+    /// commit(). Called on the UI thread, prepare() runs on a pool thread
+    /// while the caller pumps (services/uithreadwait.h) and commit() runs
+    /// here — no import parses or bakes on the thread that draws; anywhere
+    /// else both run inline. Interactive imports run the halves through
+    /// ImportBatchRunner instead.
     ImportResult import(const ImportRequest &request,
                         const ImportProgressFn &progress = ImportProgressFn());
 
@@ -159,6 +162,10 @@ private:
 
     Database *db = nullptr;
     Project *project;
+    /// The open project's guid AS IT WAS when this service was made (the UI
+    /// thread). prepare() runs on a pool thread and must not read `project`
+    /// there: the converters get it through ImportRequest::projectGuid.
+    QString mProjectGuid;
     QVector<AssetImporterBase *> mImporters;
 };
 

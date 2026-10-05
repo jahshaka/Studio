@@ -139,7 +139,12 @@ assert(dist(h0, c0) <= 6, "the two spheres start identical (" + dist(h0, c0) + "
 // ---- bind the override --------------------------------------------------
 assert(material.set(hero, { reflectionMap: equirect }) === true,
        "material.set({reflectionMap: <equirect image>})");
-assert(material.get(hero).reflectionMap === equirect, "the row holds the image");
+// A FILE bound to a map row is imported and the row names that asset
+// (TEX-REF-1): the row renders the stored object and carries its guid.
+var boundMap = material.get(hero).reflectionMap;
+var boundAsset = material.get(hero).textureAssets.reflectionMap;
+assert(("" + boundMap).length > 0 && ("" + boundAsset).length > 10,
+       "the row holds the image, as its imported asset (" + boundAsset + ")");
 
 var h1 = probeOf(hero, "reflection_hero_after.png");
 var c1 = probeOf(control, "reflection_control_after.png");
@@ -192,7 +197,8 @@ assert(Math.abs(heroCast - controlCast) <= 8,
        "more of the sky than the control does (" + heroCast + " vs " + controlCast + ")");
 assert(app.engineErrors().recorded === 0,
        "and nothing failed: no shader error, no engine complaint");
-assert(material.get(hero).reflectionMap === equirect,
+assert(material.get(hero).reflectionMap === boundMap
+       && material.get(hero).textureAssets.reflectionMap === boundAsset,
        "the DOCUMENT still holds the override — it is suppressed, not thrown away");
 
 // ---- THE SKY LIGHT GATE DOES NOT TOUCH AN AUTHORED MAP -------------------

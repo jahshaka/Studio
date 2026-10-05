@@ -36,13 +36,16 @@ For more information see the LICENSE file
 // keep working. The reserved GUID is the LIBRARY row's identity (a favourite,
 // the tiles' drop payload, `assets.builtins`); the seed PATH is the document's.
 //
-// SEEDED ONCE PER LIBRARY, SYNCHRONOUSLY, WHERE THE LIBRARY IS OPENED, and never
-// on a background thread: a seed that lands between two `assets.list` calls is a
-// row count that moves under a script's feet (MaterialPresetSeeder's header
-// states that defect; it cost scripting.e2e.full_surface a red). So the shell
-// runs `seedAll` when it opens a library — every session, driven or not, starts
-// with the same rows — and a library that already holds them pays one catalog
-// query per row and starts nothing.
+// SEEDED ONCE PER LIBRARY, SYNCHRONOUSLY, WHERE THE LIBRARY IS OPENED: the rows
+// are committed before `seedAll` returns, never later from a background thread —
+// a seed that lands between two `assets.list` calls is a row count that moves
+// under a script's feet (MaterialPresetSeeder's header states that defect; it
+// cost scripting.e2e.full_surface a red). So the shell runs `seedAll` when it
+// opens a library — every session, driven or not, starts with the same rows —
+// and a library that already holds them pays one catalog query per row and
+// starts nothing. THE BAKES ARE NOT BUILT ON THE CALLER'S THREAD
+// (VERB-IMPORT-OFF-UI-1): the imports' parse + bake run on one worker and the
+// caller JOINS it, then commits every row in list order (primitiveseed.cpp).
 //
 // TWO TRANSLATION UNITS. `mesh` RESOLVES (catalog + the bake reader);
 // `ensureSeeded`/`seedAll` CREATE (the whole import pipeline). They are split

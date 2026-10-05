@@ -670,67 +670,6 @@ QString resolvePinned(QSqlDatabase conn, const QString &root,
     return resolveSource(conn, root, guid, nameOut);
 }
 
-QString guidForStorePath(QSqlDatabase conn, const QString &root, const QString &path,
-                         const QString &projectGuid, GuidPreference prefer)
-{
-    // THE INVERSE of resolvePinned/resolveSource, and the reason it has to
-    // exist: the document holds RESOLVED PATHS (the renderer opens files), the
-    // scene blob holds GUIDS, and since the CAS an object's file name is its
-    // sha256 — not its display name. Any writer that recovers the guid by
-    // matching the file NAME (SceneWriter did, for particle textures and for
-    // every material texture property) looks up "df4501e5….png", finds nothing,
-    // and writes an empty guid: one save silently erased the fire's texture and
-    // every mesh's maps from the Particles sample (2026-09-03).
-    if (path.isEmpty()) return QString();
-    const QFileInfo info(path);
-    const QString objectsDir = QDir::cleanPath(
-        QDir(root).absoluteFilePath(QStringLiteral("objects")));
-    const QString dir = QDir::cleanPath(info.absolutePath());
-    // <root>/objects/<xx>/<oid>.<ext> — anything else is not a store object.
-    if (!dir.startsWith(objectsDir + QLatin1Char('/'))) return QString();
-    const QString oid = info.completeBaseName().toLower();
-    if (oid.length() != 64) return QString();
-
-    // One object can back SEVERAL assets (content dedup is the whole point of
-    // the store), so the row has to be CHOSEN, not taken. Schema facts the
-    // ordering below rests on:
-    //
-    //   * asset_files is (asset_guid, role, oid, name), PK (guid, role, name),
-    //     with the only index on oid — so an unordered lookup by oid answers
-    //     in index/rowid order, which is INSERTION order, which is an accident
-    //     of the importer's append sequence.
-    //   * An imported model writes its textures twice: {Object, 'texture'}
-    //     first, {member Texture, 'source'} second (assetimporters.cpp).
-    //   * ProjectAssets::addToProject pins the WHOLE dependency closure, so
-    //     both of those rows are pinned by the project — pinnedness cannot
-    //     break that tie (the GLB texture-loss defect: the Object won, the
-    //     writer stored the .glb's guid in every map slot, and the reader
-    //     resolved it straight back to the .glb).
-    //
-    // Order: pinned first (a project's own content beats a library sibling's),
-    // then the KIND the caller asked for, then role='source' — the row the
-    // readers resolve through (resolveSource) — then the guid itself, so two
-    // otherwise equal candidates always answer the same way on every machine.
-    const int wantType = (prefer == GuidPreference::Texture)
-                             ? static_cast<int>(ModelTypes::Texture) : -1;
-    QSqlQuery query(conn);
-    query.prepare("SELECT AF.asset_guid FROM asset_files AF "
-                  "LEFT JOIN project_assets PA ON PA.asset_guid = AF.asset_guid "
-                  "                           AND PA.project_guid = ? "
-                  "LEFT JOIN assets A ON A.guid = AF.asset_guid "
-                  "WHERE AF.oid = ? "
-                  "ORDER BY (PA.asset_guid IS NOT NULL) DESC, "
-                  "         CASE WHEN ? >= 0 AND A.type = ? THEN 0 ELSE 1 END, "
-                  "         CASE AF.role WHEN 'source' THEN 0 ELSE 1 END, "
-                  "         AF.asset_guid");
-    query.addBindValue(projectGuid);
-    query.addBindValue(oid);
-    query.addBindValue(wantType);
-    query.addBindValue(wantType);
-    if (query.exec() && query.next()) return query.value(0).toString();
-    return QString();
-}
-
 bool writeStoreInfo(const QString &root, QString *errorOut)
 {
     const QString path = AssetStorePaths::storeInfoPathIn(root);

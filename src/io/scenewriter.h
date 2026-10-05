@@ -16,7 +16,6 @@ For more information see the LICENSE file
 #include "irisgl/core/math/vec.h"
 #include <QSharedPointer>
 #include "io/assetiobase.h"
-#include "services/assetcas.h"   // AssetCas::GuidPreference (the guid a path means)
 #include "io/sceneformat.h"
 #include <QDir>
 #include <QFile>
@@ -28,43 +27,10 @@ For more information see the LICENSE file
 #include "irisgl/irisglfwd.h"
 
 class EditorData;
-class Project;
 
 class SceneWriter : public AssetIOBase
 {
-	// The live Project (Phase 4: was the Globals::project static). Static
-	// because both project reads live in *static* writer methods
-	// (writeParticleData / writeSceneNodeMaterial) that a dozen call sites
-	// invoke unqualified, so there is no instance to hang it off. Wired once by
-	// the shell in MainWindow::setupServices.
-	//
-	// A `static Database *handle` used to sit beside it (ENGINEERING_DEBT_SPEC
-	// item 7). It was DEAD: `setDatabaseHandle` had no caller on a writer (all
-	// seven were SceneReader / asset-panel objects with a setter of the same
-	// name), so it stayed null for the process's whole life while two writer
-	// paths dereferenced it — UB that only ever "worked" because the by-name
-	// lookup they called touched no member. The member went first; the by-name
-	// lookup itself went with plan item 15c (shipped assets through the CAS).
-	static Project *projectHandle;
-
-	/// The base directory the STATIC writers relativize against.
-	///
-	/// AssetIOBase::dir is per instance now (it used to be one static QDir
-	/// shared by every reader and writer in the process — the import worker's
-	/// SceneReader rewrote it under the UI thread's). SceneWriter's write
-	/// family is static for the same reason `projectHandle` is: a
-	/// dozen call sites invoke it unqualified with no instance in sight
-	/// ("SceneWriter statics", ENGINEERING_DEBT_SPEC). Until that debt is
-	/// paid, the static writers keep their own base, published by
-	/// getSceneObject() — the exact behaviour they had before, and no longer
-	/// entangled with the readers'.
-	static QDir staticRelativeBase;
-	/// getRelativePath() for the static writers.
-	static QString relativeToStaticBase(QString filename);
 public:
-	static void setProject(Project *p) {
-		projectHandle = p;
-	}
     /// The scene as bytes. There is deliberately NO write-to-file overload:
     /// a scene is stored as a blob in the projects table (one atomic UPDATE),
     /// and the file-writing one that used to sit here was dead code doing an
@@ -84,13 +50,13 @@ public:
     /// metadata the handles already hold — no mesh bytes, no textures, no
     /// database round trip (materials travel as asset guids exactly as they do
     /// in a scene file).
-    static SceneFragment captureFragment(const iris::SceneNodePtr &node, bool relative = true);
+    static SceneFragment captureFragment(const iris::SceneNodePtr &node);
 
-    static void writeSceneNode(QJsonObject& sceneNodeObj, iris::SceneNodePtr node, bool relative = true);
+    static void writeSceneNode(QJsonObject& sceneNodeObj, iris::SceneNodePtr node);
 	static void writeAnimationData(QJsonObject& sceneNodeObj, iris::SceneNodePtr node);
-    static void writeMeshData(QJsonObject& sceneNodeObject, iris::MeshNodePtr node, bool relative = true);
+    static void writeMeshData(QJsonObject& sceneNodeObject, iris::MeshNodePtr node);
 	static void writeParticleData(QJsonObject& sceneNodeObject, iris::ParticleSystemNodePtr node);
-	static void writeSceneNodeMaterial(QJsonObject& matObj, iris::MaterialPtr mat, bool relative = true);
+	static void writeSceneNodeMaterial(QJsonObject& matObj, iris::MaterialPtr mat);
     static void writeLightData(QJsonObject& sceneNodeObject, iris::LightNodePtr node);
     /// Decals (DECALS_SPEC): the IMAGE is stored as a guid, never a path — the
     /// reader resolves it pin-first through the CAS like every other asset.
@@ -105,23 +71,6 @@ public:
 	static QJsonObject jsonVector3(iris::Vec3 vec);
 	static QJsonObject jsonVector4(iris::Vec4 vec);
 	static QJsonObject jsonQuaternion(iris::Quat q);
-
-    /// The asset guid behind a RESOLVED file path, for the writers that
-    /// persist references as guids (particle emitters, material texture
-    /// properties, skeletal-clip sources). Goes through the CAS oid — since
-    /// the store landed an object's file name is its sha256, so a
-    /// match-by-display-name finds nothing — and nothing else: the by-name
-    /// fallback for files copied into a project folder is gone with its last
-    /// producers (plan item 15c). Empty means "not a store object of this
-    /// project's library"; callers decide what to write then.
-    ///
-    /// `prefer` says what the reference MEANS, because one stored object can
-    /// back several assets: a texture map must ask for the Texture asset or it
-    /// gets the model the texture was imported inside (AssetCas::
-    /// GuidPreference — the GLB texture-loss defect, 2026-09-09).
-    static QString assetGuidForTexturePath(
-        const QString &path,
-        AssetCas::GuidPreference prefer = AssetCas::GuidPreference::Texture);
 
     static QString getSceneNodeTypeName(iris::SceneNodeType nodeType);
 	static QString getLightNodeTypeName(iris::LightType lightType);

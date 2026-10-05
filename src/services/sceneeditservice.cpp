@@ -357,7 +357,9 @@ iris::ParticleSystemNodePtr SceneEditService::addParticleSystem(iris::ParticlePr
         // the project HAS, and a tray tile like any other image in the scene.
         ShippedAssets::Ownership::Project);
     if (!image.guid.isEmpty()) setParticleTexture(node, image.guid);
-    else if (!image.path.isEmpty()) node->setTexture(iris::Texture2D::load(image.path));
+    // No project to pin into: the emitter draws the shipped file, which has no
+    // asset identity — nothing is saved, as the comment above says.
+    else if (!image.path.isEmpty()) node->setTexture(iris::Texture2D::load(image.path), QString());
     if (!image.error.isEmpty())
         irisLog("addParticleSystem: the default particle image was not bound - " + image.error);
 
@@ -650,7 +652,7 @@ bool SceneEditService::setParticleTexture(const iris::ParticleSystemNodePtr &emi
                                           const QString &textureGuid)
 {
     if (!emitter) return false;
-    if (textureGuid.isEmpty()) { emitter->texture.clear(); return true; }
+    if (textureGuid.isEmpty()) { emitter->setTexture(iris::Texture2DPtr(), QString()); return true; }
     if (!db || !project || project->getProjectGuid().isEmpty()) return false;
 
     // BINDING membership, never a direct add: an emitter REFERS to an existing
@@ -666,7 +668,7 @@ bool SceneEditService::setParticleTexture(const iris::ParticleSystemNodePtr &emi
         QSqlDatabase::database(), AssetStorePaths::root(),
         project->getProjectGuid(), textureGuid);
     if (path.isEmpty()) return false;
-    emitter->setTexture(iris::Texture2D::load(path));
+    emitter->setTexture(iris::Texture2D::load(path), textureGuid);
     return !!emitter->texture;
 }
 
@@ -704,7 +706,9 @@ void SceneEditService::addAssetParticleSystem(bool ignore, iris::Vec3 position, 
             const QString texPath = AssetCas::resolvePinned(
                 QSqlDatabase::database(), AssetStorePaths::root(),
                 project->getProjectGuid(), textureGuid);
-            if (!texPath.isEmpty()) particleNode->setTexture(iris::Texture2D::load(texPath));
+            particleNode->setTexture(texPath.isEmpty() ? iris::Texture2DPtr()
+                                                       : iris::Texture2D::load(texPath),
+                                     textureGuid);
         }
     }
     particleNode->setVisible(pDefs["visible"].toBool(true));
@@ -897,7 +901,6 @@ QString SceneEditService::renameNode(const iris::SceneNodePtr &node, const QStri
 SceneFragment SceneEditService::captureFragment(const iris::SceneNodePtr &node) const
 {
     if (!node) return SceneFragment();
-    SceneWriter::setProject(project);
     return SceneWriter::captureFragment(node);
 }
 

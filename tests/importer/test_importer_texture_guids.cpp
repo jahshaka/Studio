@@ -16,8 +16,9 @@
 // Sections:
 //   1. The import plan itself: one Object, one Mesh member, three Texture
 //      members, texture bytes recorded under BOTH guids (the ambiguity).
-//   2. WRITER: guidForStorePath answers the TEXTURE for a texture lookup and
-//      is deterministic; the Any preference still answers for a model file.
+//   (2. the writer's path -> guid lookup is DELETED with TEX-REF-1: a map row
+//      carries its Texture asset's guid from the import on, and the writer
+//      writes that — there is no tie to break.)
 //   3. ROUND TRIP: a PbrMaterial whose maps hold resolved store paths, written
 //      the way a scene save writes it, reopens with every map resolving to a
 //      Texture asset whose bytes are the texture — never the .glb.
@@ -110,7 +111,6 @@ int main(int argc, char **argv)
     const QString projectGuid = QStringLiteral("proj-glbtex-0001");
     Project project;
     project.setProjectGuid(projectGuid);
-    SceneWriter::setProject(&project);
 
     const QString glb =
         QString(JAHSHAKA_TEST_SOURCE_DIR "/tests/importer/fixtures/textured_pbr_quad.glb");
@@ -152,39 +152,11 @@ int main(int argc, char **argv)
     for (const QString &tex : textures)
         AssetCas::writePin(conn, projectGuid, tex, sourceOid(conn, tex));
 
-    // ---- 2. the writer ----------------------------------------------------
-    bool everyLookupIsTexture = true, everyLookupStable = true;
-    for (const QString &tex : textures) {
-        const QString path = AssetCas::resolvePinned(conn, root, projectGuid, tex);
-        const QString found = AssetCas::guidForStorePath(conn, root, path, projectGuid,
-                                                         AssetCas::GuidPreference::Texture);
-        everyLookupIsTexture = everyLookupIsTexture && (found == tex);
-        // Deterministic: the same question answers the same way every time,
-        // whatever order SQLite happens to walk the index in.
-        for (int i = 0; i < 4; ++i)
-            everyLookupStable = everyLookupStable
-                && AssetCas::guidForStorePath(conn, root, path, projectGuid,
-                                              AssetCas::GuidPreference::Texture) == found;
-    }
-    CHECK(everyLookupIsTexture,
-          "a texture path resolves to its Texture asset, never to the .glb Object");
-    CHECK(everyLookupStable, "the lookup is deterministic across repeats");
-
-    // The model file itself still resolves — the Any preference (skeletal clip
-    // sources ask this question) is unchanged in meaning.
-    {
-        const QString modelPath = AssetCas::resolvePinned(conn, root, projectGuid, objectGuid);
-        const QString found = AssetCas::guidForStorePath(conn, root, modelPath, projectGuid,
-                                                         AssetCas::GuidPreference::Any);
-        CHECK(!found.isEmpty()
-                  && AssetCas::resolvePinned(conn, root, projectGuid, found) == modelPath,
-              "the model file still resolves to an asset holding those bytes");
-    }
-
     // ---- 3. the save/reopen round trip ------------------------------------
     //
-    // A material as the session holds it after import: maps are RESOLVED
-    // PATHS. Saving turns them into guids; reopening turns them back.
+    // A material as the session holds it after import: each map row holds its
+    // RESOLVED PATH and carries its Texture asset's guid (TEX-REF-1). Saving
+    // writes the carried guid; reopening turns it back into the bytes.
     const QString baseTex = textures.value(0);
     QMap<QString, QString> slotToTexture;   // slot name -> the texture we set
     {
@@ -195,12 +167,17 @@ int main(int argc, char **argv)
                                         QStringLiteral("roughnessMap") };
         for (int i = 0; i < slotNames.size(); ++i) {
             const QString tex = textures.value(i);
-            mat->setValue(slotNames[i], AssetCas::resolvePinned(conn, root, projectGuid, tex));
+            mat->setValue(slotNames[i], iris::Material::textureRef(
+                AssetCas::resolvePinned(conn, root, projectGuid, tex), tex));
             slotToTexture.insert(slotNames[i], tex);
         }
+        // A FILE NOBODY NAMED has no identity a scene can keep: bound by path
+        // alone, the row is written as absent — never as a path.
+        mat->setValue(QStringLiteral("emissiveMap"),
+                      AssetCas::resolvePinned(conn, root, projectGuid, textures.value(3)));
 
         QJsonObject matObj;
-        SceneWriter::writeSceneNodeMaterial(matObj, mat, /*relative*/ true);
+        SceneWriter::writeSceneNodeMaterial(matObj, mat);
         const QJsonObject values = matObj.value(QStringLiteral("values")).toObject();
 
         bool everySlotSaved = true, everySlotReopens = true, noneIsTheModel = true;
@@ -217,6 +194,8 @@ int main(int argc, char **argv)
                 && reopened == AssetCas::resolvePinned(conn, root, projectGuid, it.value());
         }
         CHECK(everySlotSaved, "the save writes each map's own Texture guid");
+        CHECK(values.value(QStringLiteral("emissiveMap")).toString().isEmpty(),
+              "a map bound by path alone is written as absent, never as a path (TEX-REF-1)");
         CHECK(noneIsTheModel, "no map is saved as the .glb Object guid (the defect)");
         CHECK(everySlotReopens, "every map reopens as a Texture whose bytes are the texture");
     }
@@ -250,7 +229,6 @@ int main(int argc, char **argv)
               "(not a <Documents>/Jahshaka/<name> path that no longer exists)");
     }
 
-    SceneWriter::setProject(nullptr);
     std::printf(failures == 0 ? "\nALL PASS\n" : "\n%d FAILURE(S)\n", failures);
     return failures == 0 ? 0 : 1;
 }

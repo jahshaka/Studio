@@ -485,6 +485,35 @@ int main(int argc, char **argv)
     CHECK(QFileInfo::exists(outZip) && QFileInfo(outZip).size() > 1024,
           "the archive was written and is not empty");
 
+    // ---- 2a. the SYNCHRONOUS verb keeps the UI thread alive too ------------
+    // (STUDIO-D1 item 4) project.exportArchive answers in the same call, but its
+    // file half (the copies, the catalog file, the zip) runs on a pool thread
+    // while the UI thread pumps: the heartbeat TICKS inside the one request.
+    // A count, not a millisecond bar: before the lane it ticked 0 times.
+    {
+        const QString syncZip = QDir(QFileInfo(outZip).absolutePath()).filePath(
+            QStringLiteral("sync-export.zip"));
+        QFile::remove(syncZip);
+        mcp.runScript(QStringLiteral("app.heartbeat(0)"));
+        mcp.runScript(QStringLiteral("app.heartbeat(50)"));
+        QElapsedTimer syncClock;
+        syncClock.start();
+        const QJsonObject sync = mcp.runScript(
+            QStringLiteral("JSON.stringify(project.exportArchive('%1'))").arg(syncZip));
+        const qint64 syncMs = syncClock.elapsed();
+        const QJsonObject hb = QJsonDocument::fromJson(
+            mcp.runScript(QStringLiteral("JSON.stringify(app.heartbeatStats())"))
+                .value("result").toString().toUtf8()).object();
+        mcp.runScript(QStringLiteral("app.heartbeat(0)"));
+        std::printf("info: [sync export] %lld ms, heartbeat %s\n", static_cast<long long>(syncMs),
+                    QJsonDocument(hb).toJson(QJsonDocument::Compact).constData());
+        CHECK(sync.value("ok").toBool() && QFileInfo::exists(syncZip),
+              "project.exportArchive (synchronous) wrote its archive");
+        CHECK(hb.value("ticks").toInt() > 0,
+              "...and the UI thread kept ticking inside the verb (its file half is the worker's)");
+        QFile::remove(syncZip);
+    }
+
     // ---- 2b. WHAT the archive ships (PUBLISH_AUDIT #2) --------------------
     // The mesh bake is derived data keyed on the BUILD that produced it: the
     // importing installation rejects a foreign bake as stale on sight and the

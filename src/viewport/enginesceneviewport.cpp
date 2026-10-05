@@ -1334,15 +1334,16 @@ void EngineSceneViewport::dropEvent(QDropEvent *event)
             }
             if (texPath.isEmpty()) return;
             if (auto pbr = meshNode->getMaterial().dynamicCast<iris::PbrMaterial>()) {
-                // The PBR repair: baseColorMap, undoable like the panel edit.
-                QVariant oldMap;
-                for (auto *prop : pbr->properties)
-                    if (prop->name == QStringLiteral("baseColorMap")) { oldMap = prop->getValue(); break; }
+                // The PBR repair: baseColorMap, undoable like the panel edit —
+                // the row binds the dropped image's file AND its asset, and the
+                // undo restores the row's previous pair (TEX-REF-1).
+                const QVariant oldMap = pbr->textureRefOf(QStringLiteral("baseColorMap"));
+                const QVariant newMap = iris::Material::textureRef(texPath, textureGuid);
                 if (mServices && mServices->undo) {
                     mServices->undo->push(new ChangeMaterialPropertyCommand(
-                        pbr, QStringLiteral("baseColorMap"), oldMap, texPath));
+                        pbr, QStringLiteral("baseColorMap"), oldMap, newMap));
                 } else {
-                    pbr->setValue(QStringLiteral("baseColorMap"), texPath);
+                    pbr->setValue(QStringLiteral("baseColorMap"), newMap);
                 }
                 if (mMainWindow) mMainWindow->sceneNodeSelected(node);
             }

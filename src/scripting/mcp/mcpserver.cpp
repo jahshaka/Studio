@@ -10,6 +10,7 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "scripting/mcp/mcpserver.h"
+#include "services/uithreadwait.h"
 
 #include <QHostAddress>
 #include <QHttpHeaders>
@@ -173,6 +174,14 @@ void McpServer::handlePost(const QHttpServerRequest &request, QHttpServerRespond
 void McpServer::drainQueue()
 {
     if (mBusy) return;
+    // NOT INSIDE A UI-THREAD OPERATION'S PUMP (services/uithreadwait.h — the
+    // one rule): the request waits in the queue and is drained when the
+    // operation ends. Without it a tool could nest a wait (waitForScriptIdle)
+    // inside the pump and hold the operation's verb for its whole ceiling.
+    if (UiThreadWait::inOperation()) {
+        UiThreadWait::afterOperation([this]() { drainQueue(); });
+        return;
+    }
     mBusy = true;
     while (!mQueue.empty()) {
         Pending pending = std::move(mQueue.front());

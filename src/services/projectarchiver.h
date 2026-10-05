@@ -18,8 +18,8 @@ For more information see the LICENSE file
 //   jah.manifest.json      manifest v2, kind "project": per-asset file lists
 //                          {role, name, oid} — the pinned content ids
 //   <projectGuid>.db       the catalog snapshot (projects/assets/deps rows —
-//                          the same blob db Database::createExportScene has
-//                          always written, now pin-aware)
+//                          Database::readExportCatalog's rows, written by
+//                          writeExportCatalog on the worker; pin-aware)
 //   objects/<oid>.<ext>    the pinned bytes, materialized from the CAS
 //
 // Export materializes pinned oids (a reference-based project leaves the
@@ -35,9 +35,12 @@ For more information see the LICENSE file
 // one SceneOpenRunner and ImportBatchRunner already landed, for the same
 // reason they landed it:
 //
-//   plan     (UI thread) — every DATABASE read: the catalog snapshot, the
-//                          membership sweep, the dependency edges, the pins,
-//                          and the CAS paths those resolve to. It cannot move.
+//   plan     (UI thread) — every DATABASE read: the catalog snapshot's rows,
+//                          the membership sweep, the dependency edges, the
+//                          pins, and the CAS paths those resolve to. It cannot
+//                          move. (It READS the snapshot; the snapshot FILE — a
+//                          new SQLite database, its journal and its fsync — is
+//                          written by the worker.)
 //                          Database's methods all ride the implicit default
 //                          QSqlDatabase connection, which is bound to the
 //                          thread that opened it; ImportBatchRunner hops its
@@ -46,8 +49,9 @@ For more information see the LICENSE file
 //                          the same conclusion independently. So do we. There
 //                          is no per-thread connection here and there must
 //                          not be one.
-//   worker   (worker)    — the file half: copying CAS objects into the stage,
-//                          writing the manifest, and ZipHelper compress /
+//   worker   (worker)    — the file half: the catalog snapshot's .db, copying
+//                          CAS objects into the stage, writing the manifest,
+//                          and ZipHelper compress /
 //                          extract. No DB, no widgets, no Qt event loop. This
 //                          is the part that used to freeze the window.
 //   install  (UI thread,  — the catalog writes an import makes, in CHUNKS: one
@@ -77,6 +81,7 @@ For more information see the LICENSE file
 #include <QSet>
 #include <atomic>
 
+#include "data/database/database.h"
 #include "export/exportmanifest.h"
 #include "services/assetcas.h"
 #include "services/meshbakestore.h"
@@ -244,6 +249,9 @@ private:
     QString mSourceZip;                      ///< import source
     QTemporaryDir *mStage = nullptr;         ///< the staging directory
     exportformat::ExportManifest mManifest;  ///< export: built in plan, written in worker
+    /// export: the catalog snapshot's ROWS, read in plan (the library connection)
+    /// and written into the stage's <guid>.db by the worker (STUDIO-D1 item 4).
+    Database::ExportCatalog mCatalog;
     struct Copy { QString src; QString dst; };
     QVector<Copy> mCopies;                   ///< export: CAS objects to materialize
 

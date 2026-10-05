@@ -196,43 +196,6 @@ QString resolvePinned(QSqlDatabase conn, const QString &root,
                       const QString &projectGuid, const QString &guid,
                       QString *nameOut = nullptr);
 
-/// What a caller means the guid to BE, when one object backs several assets.
-///
-/// An imported model records its textures TWICE (assetimporters.cpp): the
-/// bytes hang off the Object under role 'texture' AND off the member Texture
-/// asset under role 'source'. Both are pinned by the project, so a lookup by
-/// oid alone has a real tie to break, and the answer differs by caller: a
-/// material's baseColorMap wants the TEXTURE, a skeletal clip's source wants
-/// whatever asset owns the model file.
-enum class GuidPreference
-{
-    Any,        ///< any asset backed by these bytes (source-role rows first)
-    Texture     ///< a Texture asset if one is backed by these bytes
-};
-
-/// The INVERSE of resolvePinned/resolveSource: the asset guid whose stored
-/// bytes live at `path`, or empty when the path is not a store object. Since
-/// the CAS an object's file NAME is its sha256, so a writer that recovers a
-/// guid from a resolved path must go through the oid — matching by display
-/// name finds nothing and silently loses the reference (the particle/material
-/// texture-erasing save, 2026-09-03). `projectGuid` breaks ties when one
-/// object backs several assets: the asset this project pins wins.
-///
-/// TIE-BREAK, and why it is spelled out (the GLB texture-loss defect,
-/// 2026-09-09 — every imported model lost its maps on save+reopen). Pinnedness
-/// alone did NOT decide between the .glb Object's role='texture' row and the
-/// member Texture's role='source' row over the same oid: an imported object
-/// pins its whole dependency closure, so BOTH rows are pinned, and the
-/// remaining order was SQLite's index order — the Object's row, written first.
-/// The writer therefore stored the .glb's own guid in baseColorMap, and the
-/// reader (resolveSource, role='source' first) resolved it back to the .glb:
-/// every map on every imported model came back empty. The order is now fully
-/// determined: pinned, then the requested KIND, then role='source', then the
-/// guid itself so two equal candidates always answer the same way.
-QString guidForStorePath(QSqlDatabase conn, const QString &root, const QString &path,
-                         const QString &projectGuid,
-                         GuidPreference prefer = GuidPreference::Any);
-
 /// Write <root>/sidecar/<guid>.json — the catalog-rebuild record (invariant
 /// I2): identity, organization, metadata and the file manifest.
 bool writeSidecar(QSqlDatabase conn, const QString &root, const QString &guid,

@@ -118,6 +118,7 @@ struct BakeOp
 
 	QImage image;             // the texture this op samples (RGBA8888)
 	QString imagePath;        // resolved source path
+	QString imageGuid;        // the texture ASSET it came from (TEX-REF-1); empty = a file nobody named
 	QString imageStamp;       // path|mtime|size - cache-key ingredient
 	bool isTextureCarrier = false; // texture node out 0 with no UV connected
 
@@ -163,6 +164,9 @@ public:
 	// Passthrough: the source image bound directly as the map, no bake.
 	QString passthroughPath;
 	QString passthroughStamp;
+	/// The passthrough image's asset guid (TEX-REF-1): what a material built from
+	/// the graph names, so a save keeps the map. Empty for a DB-less file.
+	QString passthroughGuid;
 
 	// Maps a texture reference (asset GUID or path) to an image path.
 	using TextureResolver = std::function<QString(const QString&)>;

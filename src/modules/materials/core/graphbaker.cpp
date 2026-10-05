@@ -386,7 +386,15 @@ GraphBaker::Result GraphBaker::runCompiled(const CompiledGraph& compiled, const 
 				state.needsBake = true; // RGB sampled from the source, A from the alpha chain
 			}
 			else {
-				out.eval.values[slot.mapKey] = program.passthroughPath;
+				// THE MAP NAMES ITS ASSET (TEX-REF-1): the value a material is
+				// built from is the texture node's guid — the evaluator resolves
+				// it to the file and keeps it on the row, so a node wearing the
+				// material saves the reference. A file with no asset (a DB-less
+				// session) stays a path and is not saved. `passthrough` keeps
+				// the PATH: it is what the definition builder and the baker read.
+				out.eval.values[slot.mapKey] = program.passthroughGuid.isEmpty()
+				                                   ? program.passthroughPath
+				                                   : program.passthroughGuid;
 				out.passthrough[slot.mapKey] = program.passthroughPath;
 			}
 			break;

@@ -95,10 +95,13 @@ Database *ShellLifecycle::openLibrary()
 	});
     // THE SEEDS (services/primitiveassets.h). The primitives and the samples'
     // Teapot are baked library assets now: one import and one bake each,
-    // the first time a library is opened, SYNCHRONOUSLY here — not on a worker,
-    // because a library whose row count moves while a script runs is the defect
-    // MaterialPresetSeeder's header describes. A library that already holds them
-    // pays one catalog query per row.
+    // the first time a library is opened, COMMITTED here before this returns —
+    // never later from a background thread, because a library whose row count
+    // moves while a script runs is the defect MaterialPresetSeeder's header
+    // describes. The bakes themselves run on a worker this thread joins
+    // (primitiveseed.cpp: a join, not a pump — we are inside MainWindow's
+    // constructor). A library that already holds them pays one catalog query
+    // per row.
     QStringList seedErrors;
     const int seeded = PrimitiveAssets::seedAll(mDb, &seedErrors);
     if (seeded > 0) irisLog(QStringLiteral("primitives: baked %1 shipped meshes").arg(seeded));
