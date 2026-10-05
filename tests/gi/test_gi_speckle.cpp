@@ -468,6 +468,7 @@ int main()
         // mirror's).
         unsigned n = 0;
         double sumL = 0.0, maxL = 0.0;
+        unsigned hot = 0;   // the sun's lobe: the mirrored sky alone peaks at 0.61
         for (unsigned y = kBand0 - 45; y < kH; ++y)
             for (unsigned x = kW / 2 - 120; x < kW / 2 + 120; ++x) {
                 const size_t i = (size_t(y) * kW + x) * 4u;
@@ -481,10 +482,12 @@ int main()
                     255.0;
                 sumL += l;
                 maxL = std::max(maxL, l);
+                if (l > 0.85) ++hot;
                 ++n;
             }
         const double meanL = n ? sumL / n : 0.0;
-        std::printf("   the sphere's reflection: %u px, mean display luminance %.3f, max %.3f\n", n, meanL, maxL);
+        std::printf("   the sphere's reflection: %u px, mean display luminance %.3f, max %.3f, %u px above 0.85\n", n, meanL,
+                    maxL, hot);
         if (dump) {
             writePpm("speckle-mirror.ppm", withSphere);
             writePpm("speckle-mirror-without.ppm", without);
@@ -493,6 +496,12 @@ int main()
         CHECK_MSG(meanL > 0.15 && maxL > 0.6,
                   "...as its SPECULAR picture — the sky and the sun's highlight it mirrors (mean %.3f, max %.3f; a "
                   "diffuse-only metal reflects black)", meanL, maxL);
+        // THE SUN'S LOBE ITSELF: the highlight a reflection record shades with the
+        // direct light's specular (the lane measured ~319 px above 0.85; the
+        // mirrored sky alone reaches 0.61, so a reflection that lost the direct
+        // specular has none).
+        CHECK_MSG(hot > 150, "...and the SUN'S HIGHLIGHT is in it: %u px above 0.85 (bar 150; the sky alone gives 0)",
+                  hot);
         f.s->attachMesh(f.floor, f.cube, f.floorMatte);
     }
 
