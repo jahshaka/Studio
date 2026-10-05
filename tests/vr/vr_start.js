@@ -27,6 +27,10 @@ function untilActive(passes, retry) {
     return vr.state().active;
 }
 
+// A script run starts on the Desktop page; the VR button means the editor
+// preview only on the EDITOR page, so open a world there first.
+if (project.create("vr start") === false) throw new Error("project.create failed");
+if (app.columns().space !== "editor") app.space("editor");
 editor.frame(5);
 var r = report();
 assert(vr.available().available === true, "--vr: this run may use VR");
@@ -34,7 +38,7 @@ assert(!vr.state().active, "no runtime at launch: no session");
 assert(r.dialogs >= 1 && r.dialogOpen === true, "the startup check answered with the dialog");
 assert(r.failure === "noRuntime" || r.failure === "runtimeBroken",
        "the failure is classified (" + r.failure + ")");
-assert(app.columns().space !== undefined, "the editor is up and answers");
+assert(app.columns().space === "editor", "the editor is up and answers");
 
 console.log("VRRUNNER: start-runtime");
 assert(untilActive(120, true), "Try again brought the session up in the same process");

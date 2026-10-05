@@ -62,7 +62,7 @@ public:
     /// THE VR START REPORT (VR-START-1): the last start failure this process
     /// told the user about — {failure, reason, title, text, dialogs, notices,
     /// dialogOpen} — so `vr.startReport()` can see what the user saw.
-    QVariantMap startReport() const;
+    QVariantMap startReport();
     /// The failure dialog's primary action, exactly as its button runs it:
     /// close the dialog and press the VR button again. False when no dialog
     /// is open.
@@ -73,6 +73,9 @@ private:
     /// ask the engine for a probe; on a miss, the notice (the preference's
     /// check) or the dialog (an explicit --vr).
     void scheduleStartCheck();
+    /// THE ICON FOLLOWS THE SESSION, and a session the headset or the runtime
+    /// dropped is reported once (§1 e). Every driver frame, and startReport().
+    void followSession();
     void runStartCheck();
     /// EVERY VR START FAILURE ENDS HERE (VR-START-1 §1): the desktop stays the
     /// editor and the user gets ONE clear message with an action — the dialog

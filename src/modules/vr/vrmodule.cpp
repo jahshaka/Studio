@@ -57,8 +57,13 @@ jahshaka::engine::Engine *engineOf(const StudioContext &host)
 }
 }
 
-QVariantMap VrModule::startReport() const
+QVariantMap VrModule::startReport()
 {
+    // THE REPORT IS THE UI AS OF NOW: the follower runs on the driver's frames,
+    // and a caller between them (a script stepping editor.frame, which bypasses
+    // the driver) gets the same follow first — what it reads is what a person
+    // would see on the next frame.
+    followSession();
     QVariantMap out;
     out[QStringLiteral("failure")] = gStart.failure;
     out[QStringLiteral("reason")] = gStart.reason;
@@ -217,21 +222,7 @@ void VrModule::contribute(Contributions &c)
     // rebuilt only when the answer moves.
     if (host.engine && host.engine->driver()) {
         QObject::connect(host.engine->driver(), &EngineRenderDriver::beforeFrame, mAction.get(),
-                         [this]() {
-            if (!mCapable) return;
-            PlayerService *player = host.services ? host.services->player : nullptr;
-            if ((player && player->isVrActive()) != mIconActive
-                || (isEditorPreviewActive() && !mIconActive)) {
-                const bool wasActive = mIconActive;
-                refreshUi();
-                // (e) A SESSION THE HEADSET OR RUNTIME DROPPED: the engine has
-                // ended it; the editor carries on and the user is told once.
-                jahshaka::engine::Engine *e = engineOf(host);
-                if (wasActive && !mIconActive && e &&
-                    e->vrInfo().failure == jahshaka::engine::VrFailure::ConnectionLost)
-                    reportStartFailure(true);
-            }
-        });
+                         [this]() { followSession(); });
     }
     refreshUi();
     // THE STARTUP HEADSET CHECK, armed only when this run asked for it (Start
@@ -265,6 +256,23 @@ protected:
 private:
     std::function<void()> mFn;
 };
+}
+
+void VrModule::followSession()
+{
+    if (!mCapable) return;
+    PlayerService *player = host.services ? host.services->player : nullptr;
+    if ((player && player->isVrActive()) != mIconActive
+        || (isEditorPreviewActive() && !mIconActive)) {
+        const bool wasActive = mIconActive;
+        refreshUi();
+        // (e) A SESSION THE HEADSET OR RUNTIME DROPPED: the engine has ended
+        // it; the editor carries on and the user is told once.
+        jahshaka::engine::Engine *e = engineOf(host);
+        if (wasActive && !mIconActive && e &&
+            e->vrInfo().failure == jahshaka::engine::VrFailure::ConnectionLost)
+            reportStartFailure(true);
+    }
 }
 
 void VrModule::scheduleStartCheck()

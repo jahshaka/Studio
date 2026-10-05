@@ -18,7 +18,11 @@ assert(threw, "vr.startInVr refuses a value that is not true or false");
 threw = false;
 try { vr.headsetRuntime("Oculus"); } catch (e) { threw = String(e).indexOf("one of") >= 0; }
 assert(threw, "vr.headsetRuntime refuses a runtime it does not know");
-assert(app.columns().space !== undefined, "the editor is up and answers");
+// A script run starts on the Desktop page; the VR button means the editor
+// preview only on the EDITOR page, so open a world there first.
+if (project.create("vr start") === false) throw new Error("project.create failed");
+if (app.columns().space !== "editor") app.space("editor");
+assert(app.columns().space === "editor", "the editor is up and answers");
 
 if (s.source === "setting" && s.startCheck) {
     // ARM 1: the defaults (Start in VR ON, WiVRn) with NO active manifest.

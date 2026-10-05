@@ -6,6 +6,10 @@ function assert(cond, msg) {
     if (!cond) throw new Error("assert failed: " + msg);
     console.log("ok: " + msg);
 }
+// A script run starts on the Desktop page; the VR button means the editor
+// preview only on the EDITOR page, so open a world there first.
+if (project.create("vr start") === false) throw new Error("project.create failed");
+if (app.columns().space !== "editor") app.space("editor");
 editor.frame(5);
 var r = vr.startReport();
 assert(r.dialogs === 1 && r.dialogOpen, "the startup check answered with the dialog (" + r.failure + ")");
@@ -17,5 +21,5 @@ for (var i = 0; i < 3; ++i) {
 r = vr.startReport();
 assert(r.dialogs === 4 && r.dialogOpen && r.reason.length > 0,
        "one dialog per attempt, reused, with the loader's reason (" + r.reason + ")");
-assert(app.columns().space !== undefined, "the editor still answers");
+assert(app.columns().space === "editor", "the editor still answers");
 console.log("vr_start_broken: PASS");
