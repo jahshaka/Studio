@@ -23,9 +23,8 @@
 //     orange (1, 0.5, 0.035) plus a fresnel rim -> EMISSION; the noise's red
 //     channel -> ALPHA (the shells' cut-out); and a travelling sine up the
 //     funnel, sin(Waves * (v + WaveSpeed * t)) * WaveHeight * v -> VERTEX
-//     EXTRUSION. Unlit in the original (acceptLighting false): here it is our
-//     ONE PBR master with a black base, so the picture is the emissive (a black
-//     dielectric still keeps an F0 0.04 specular — the audit's risk, accepted).
+//     EXTRUSION, over a lit white diffuse. Here it is our ONE PBR master with a
+//     lit base (BASE below) and the emission on top.
 //   * THE OLD ENGINE APPLIED THE WORLD MATRIX TWICE (verified in its generated
 //     vertex source), so with no translation every scale acted SQUARED. The
 //     scales below are the squares, or the funnel is half the height of the
@@ -52,9 +51,27 @@ function assert(cond, msg) {
 function log(m) { console.log("[tornado] " + m); }
 function J(x) { return JSON.stringify(x); }
 
-// THE HDR GAIN on the orange: the core must bloom like the still's. Tuned by eye
-// against reference.png at the original camera.
+// THE COLOUR MAPPING, measured against reference.png (side_by_side_t1_5.png in
+// spikes/tornado-1). The old engine was display-referred and LDR: its fragment
+// was `emission + lighting`, written straight to the screen.
+//   * THE RIM. fresnel = pow(1 - N.V, FresnelPower) was a DISPLAY value; in our
+//     linear-light pipeline the same rim is pow(display, 2.2), i.e. the power
+//     times the display gamma (decode(pow(x, p)) = pow(x, 2.2 p)). Left at the
+//     authored 1.17 the rim covered the whole cone and washed it white (the
+//     first cut) — that was the defect, not the intensity.
+//   * THE ORANGE, at the authored (1, 0.5, 0.035) times the noise, through our
+//     exposure + film curve + sRGB encode, lands within ~10 % of the still's
+//     display values on the body (the film's toe and the encode roughly cancel
+//     here; decoding the constant to linear first crushed green to a fifth —
+//     measured). GLOW 1.5 is the HDR gain that sets that level.
+//   * THE GREY LIFT: the original's diffuse was WHITE and LIT (its blue reads
+//     ~0.2 where the orange gives ~0.02). Here that term is a physical lit
+//     base of albedo BASE under the scene's sun and Sky Light; 0.5 matches the
+//     still's lift (1.0 overshoots: our sun and sky are physically brighter
+//     than its grey-96 ambient).
+var DISPLAY_GAMMA = 2.2;
 var GLOW = 1.5;
+var BASE = 0.5;
 
 // The three layers (audit §1.2). height = the authored 0.05 x the squared
 // radial scale (see the header).
@@ -116,7 +133,7 @@ function buildGraph(L) {
 
     // EMISSIVE = fresnel(FresnelPower) + noise x (orange x GLOW)
     var orange = graph.addNode("color");
-    assert(graph.setValue(orange, { r: 1.0, g: 0.50, b: 0.035, a: 1.0 }), L.name + ": orange");
+    assert(graph.setValue(orange, { r: 1.0, g: 0.50, b: 0.035, a: 1.0 }), L.name + ": orange (as authored)");
     var gain = graph.addNode("float");
     assert(graph.setValue(gain, GLOW), L.name + ": glow");
     var hot = graph.addNode("multiply");
@@ -124,17 +141,22 @@ function buildGraph(L) {
     var lit = graph.addNode("multiply");
     assert(graph.connect(sample, 0, lit, 0) && graph.connect(hot, 0, lit, 1), L.name + ": noise x orange");
     var power = graph.addNode("float");
-    assert(graph.setValue(power, L.fresnel), L.name + ": FresnelPower");
+    assert(graph.setValue(power, L.fresnel * DISPLAY_GAMMA), L.name + ": FresnelPower, in linear light");
     var rim = graph.addNode("fresnel");
     assert(graph.connect(power, 0, rim, 1), L.name + ": fresnel");
     var glow = graph.addNode("add");
     assert(graph.connect(rim, 0, glow, 0) && graph.connect(lit, 0, glow, 1), L.name + ": rim + noise");
     assert(graph.connect(glow, 0, master, "Emissive"), L.name + ": -> Emissive");
 
-    // BASE COLOUR black: the picture is the emission.
-    var black = graph.addNode("color");
-    assert(graph.setValue(black, { r: 0, g: 0, b: 0, a: 1 }), L.name + ": black");
-    assert(graph.connect(black, 0, master, "Base Color"), L.name + ": -> Base Color");
+    // BASE COLOUR WHITE: the original's diffuse was white and LIT — its fragment
+    // was `emission + lighting` (the audit's decode; acceptLighting was not
+    // honoured by its generator) — and that lit white is the grey lift under
+    // the orange in the still (its blue channel reads ~0.2 where the orange
+    // contributes ~0.02). A lit white surface under the scene's sun and sky is
+    // the physical form of the same term.
+    var white = graph.addNode("color");
+    assert(graph.setValue(white, { r: BASE, g: BASE, b: BASE, a: 1 }), L.name + ": white base");
+    assert(graph.connect(white, 0, master, "Base Color"), L.name + ": -> Base Color");
 
     // THE SHELLS' CUT-OUT: the noise's red channel, cut at AlphaCutoff.
     if (L.cutoff > 0) {
