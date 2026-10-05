@@ -10,6 +10,7 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "services/loadtimeline.h"
+#include "services/livecompiles.h"
 
 #include "services/jahlog.h"
 
@@ -90,14 +91,21 @@ namespace LoadTimeline {
 
 void begin(const QString &label)
 {
-    QMutexLocker locked(&lock());
-    Run &r = run();
-    r.running = true;
-    r.label = label;
-    r.stages.clear();
-    r.counters.clear();
-    r.wall.start();
-    r.stageStartNs = 0;
+    bool wasRunning = false;
+    {
+        QMutexLocker locked(&lock());
+        Run &r = run();
+        wasRunning = r.running;
+        r.running = true;
+        r.label = label;
+        r.stages.clear();
+        r.counters.clear();
+        r.wall.start();
+        r.stageStartNs = 0;
+    }
+    // AN OPEN IN FLIGHT IS A COMPILE WINDOW (services/livecompiles.h): what it
+    // compiles is its own, and what came before it is settled first.
+    if (!wasRunning) livecompiles::enterWindow();
 }
 
 void mark(const QString &stage)
@@ -127,6 +135,12 @@ void setStatsProvider(std::function<QStringList()> provider)
 
 void end()
 {
+    // ...and the compile window closes with the ledger (begin's note) — after
+    // the lock below is released, on every path that ended a running ledger.
+    struct CloseWindow {
+        bool armed = false;
+        ~CloseWindow() { if (armed) livecompiles::leaveWindow(); }
+    } closeWindow;
     QString line;
     QString label;
     double total = 0.0;
@@ -138,6 +152,7 @@ void end()
         if (!r.running) return;
         closeStageLocked();
         r.running = false;
+        closeWindow.armed = true;
 
         total = double(r.wall.nsecsElapsed()) / 1.0e6;
         label = r.label;

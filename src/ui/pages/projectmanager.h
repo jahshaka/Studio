@@ -161,6 +161,9 @@ public:
     /// a slice re-enters the event loop and can destroy objects the slice is
     /// still using (ProgressDialog::setPumpsEventLoop documents the scar).
     void showOpenProgress(int percent, const QString &text);
+    /// "Compiling shaders — n" on the open's dialog, painted NOW (no event
+    /// pass: the caller is inside a frame). A no-op when the dialog is down.
+    void showOpenCompileProgress(unsigned compiled);
     void hideOpenProgress();
 
 public slots:

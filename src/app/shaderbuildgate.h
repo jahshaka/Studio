@@ -35,11 +35,14 @@
 
 class QApplication;
 class VersionSplashScreen;
+class Database;
 
 /// Pumps the event loop until the startup shader build settles. Returns the
 /// number of shaders built or served (0 when no engine is running — headless
 /// runs return immediately). Safe to call when the cache is disabled: the
 /// counters run regardless, and the gate simply waits for the same burst.
-unsigned holdSplashForShaderBuild(QApplication &app, VersionSplashScreen &splash);
+/// `db` is the library the templates' documents are built against (their floors
+/// wear the shipped, BAKED cube); null skips the editor worlds.
+unsigned holdSplashForShaderBuild(QApplication &app, VersionSplashScreen &splash, Database *db);
 
 #endif // SHADERBUILDGATE_H

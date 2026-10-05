@@ -57,6 +57,7 @@ For more information see the LICENSE file
 #include "ui/dialogs/softwareupdatedialog.h"
 #include "ui/controls/tooltip.h"
 #include "app/versionsplashscreen.h"
+#include "services/livecompiles.h"
 #include "jah_provenance.h"   // GIT_COMMIT_HASH / _DATE (generated; SPEED-CPU B2)
 #include "app/shaderbuildgate.h"
 #include "ui/style/thememanager.h"
@@ -416,7 +417,16 @@ int main(int argc, char *argv[])
     // the window still hidden, shows "Building shaders N/M" on the splash, and
     // returns when the count settles. A cold first launch pays for its whole
     // build here; a warm one races through cache hits.
-    holdSplashForShaderBuild(app, splash);
+    holdSplashForShaderBuild(app, splash, window.database());
+    // ...and from here a compile on the UI thread outside a compile dialog is a
+    // named defect (services/livecompiles.h, SHADER-WARM-2).
+    if (auto engine = EngineHost::instance().engine()) {
+        livecompiles::arm([weak = std::weak_ptr<jahshaka::engine::Engine>(engine)]() {
+            unsigned compiled = 0, cached = 0, expected = 0;
+            if (auto e = weak.lock()) e->shaderBuildProgress(compiled, cached, expected);
+            return compiled;
+        });
+    }
     // From now on any NEW compile burst (a scene open, a material edit) is
     // written to disk a few seconds after it settles, so a crash costs at most
     // that much recompilation.

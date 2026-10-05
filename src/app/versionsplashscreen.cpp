@@ -2,6 +2,8 @@
 #include "ui/style/stylesheet.h"
 #include "ui/style/themeroles.h"
 
+#include <QProgressBar>
+
 VersionSplashScreen::VersionSplashScreen(const QPixmap &pixmap)
     : QSplashScreen{pixmap}
 {
@@ -27,6 +29,11 @@ VersionSplashScreen::VersionSplashScreen(const QPixmap &pixmap)
     ThemeRoles::setTone(shader_label_, ThemeRoles::Tone::Muted);
     shader_label_->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
     shader_label_->hide();
+
+    // ...and its BAR, a thin one along the bottom edge.
+    shader_bar_ = new QProgressBar(this);
+    shader_bar_->setTextVisible(false);
+    shader_bar_->hide();
 }
 
 VersionSplashScreen::~VersionSplashScreen()
@@ -44,13 +51,22 @@ void VersionSplashScreen::updateVersion(const QString &version)
 
 void VersionSplashScreen::showShaderBuild(int done, int total)
 {
-    if (done < 0) { shader_label_->hide(); return; }
+    if (done < 0) { shader_label_->hide(); shader_bar_->hide(); return; }
 
-    // Bottom right, on the same baseline as the revision message on the left.
-    shader_label_->setGeometry(0, height() - 34, width() - 14, 22);
-    shader_label_->setText(total > 0
-        ? tr("Building shaders %1/%2").arg(done).arg(total)
-        : tr("Building shaders %1").arg(done));
+    // Bottom right, on the same baseline as the revision message on the left;
+    // the bar under it, across the splash.
+    shader_label_->setGeometry(0, height() - 40, width() - 14, 22);
+    // A count past the last run's total (this run built more) reads as the
+    // count alone rather than "80 of 74".
+    const bool bounded = total > 0 && done <= total;
+    shader_label_->setText(bounded
+        ? tr("Compiling shaders \u2014 %1 of %2").arg(done).arg(total)
+        : tr("Compiling shaders \u2014 %1").arg(done));
     shader_label_->show();
     shader_label_->raise();
+    shader_bar_->setGeometry(14, height() - 14, width() - 28, 6);
+    if (bounded) { shader_bar_->setRange(0, total); shader_bar_->setValue(done); }
+    else shader_bar_->setRange(0, 0);   // busy: the denominator is unknown
+    shader_bar_->show();
+    shader_bar_->raise();
 }

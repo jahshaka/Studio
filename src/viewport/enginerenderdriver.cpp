@@ -7,6 +7,7 @@
 #include "services/engineerrorpump.h"
 #include "services/framemonitor.h"
 #include "services/jahlog.h"
+#include "services/livecompiles.h"
 #include "services/loadtimeline.h"
 #include "viewport/devicelossend.h"
 
@@ -170,6 +171,11 @@ EngineRenderDriver::EngineRenderDriver(jahshaka::engine::Engine *engine, QObject
         // minutes later), so an orderly quit through ~Engine IS the freeze. The
         // message goes out first, then `_exit`.
         devicelossend::checkAfterFrame(mEngine);
+        // A COMPILE THE USER WAITED FOR IS SAID (services/livecompiles.h,
+        // SHADER-WARM-2): after the startup gate, whatever the engine's compile
+        // total moved by outside an open in flight or a compile dialog froze
+        // this thread for the compile's length.
+        livecompiles::check("a render-loop frame");
         // The Live pacing clock, restarted from the END of the frame (see the
         // header). Unconditional and two instructions, so the no-script loop
         // reads exactly as it did.

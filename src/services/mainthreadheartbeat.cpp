@@ -11,6 +11,7 @@ For more information see the LICENSE file
 
 #include "services/mainthreadheartbeat.h"
 
+#include "services/livecompiles.h"
 #include "services/loadtimeline.h"
 #include "services/uistep.h"
 
@@ -29,6 +30,7 @@ struct Probe
     int           intervalMs = 250;
     int           ticks = 0;
     double        maxGapMs = 0.0;
+    unsigned      compilesAtTick = 0;   ///< livecompiles::observed() at the last tick
 };
 
 Probe &probe()
@@ -59,6 +61,7 @@ void start(int intervalMs)
     p.intervalMs = qMax(10, intervalMs);
     p.ticks = 0;
     p.maxGapMs = 0.0;
+    p.compilesAtTick = livecompiles::observed();
     if (!p.timer) {
         // Parentless and never deleted: the probe outlives every page and
         // every project, and a singleton timer on the UI thread costs one
@@ -77,10 +80,19 @@ void start(int intervalMs)
                 // the two blocks that used to print "-" and cost a lane each.
                 QString where = LoadTimeline::currentStage();
                 if (where.isEmpty()) where = UiStep::current();
+                // ...or the SHADER COMPILES the render loop saw in the gap
+                // (services/livecompiles.h): "-" used to hide the owner's.
+                const unsigned compiles = livecompiles::observed() - q.compilesAtTick;
+                if (where.isEmpty() && compiles > 0)
+                    where = livecompiles::armed() && !livecompiles::inWindow()
+                                ? QStringLiteral("shader compilation (%1) — a UI-thread compile "
+                                                 "after the splash (SHADER-WARM-2)").arg(compiles)
+                                : QStringLiteral("shader compilation (%1)").arg(compiles);
                 qWarning("[heartbeat] UI thread blocked %.0f ms (stage: %s)", gap,
                          where.isEmpty() ? "-" : qUtf8Printable(where));
             }
             ++q.ticks;
+            q.compilesAtTick = livecompiles::observed();
             q.sinceTick.restart();
             // Publish LAST: everything above is the UI thread's own
             // bookkeeping, and the watchdog only cares that a tick happened.

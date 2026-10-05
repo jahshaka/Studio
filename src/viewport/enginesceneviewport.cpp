@@ -1,3 +1,4 @@
+#include "services/livecompiles.h"
 #include "irisgl/core/math/mat4.h"
 #include "irisgl/core/math/quat.h"
 #include "irisgl/core/math/vec.h"
@@ -2896,6 +2897,8 @@ void EngineSceneViewport::renderFrames(int n, float dt)
         if (framemonitor::active())
             mEngine->setNextFrameCause(jahshaka::engine::FrameCause::Scripted);
         mEngine->renderOneFrame();
+        // ...and a compile it caused is said like a driver frame's (SHADER-WARM-2).
+        livecompiles::check("a scripted frame");
         // ...and the device-loss end for the same reason (lane XID-2): a
         // scripted run that loses the GPU would otherwise keep calling frames
         // that all throw -- measured at 4,348 VK_ERROR_DEVICE_LOST in one run,
@@ -4124,7 +4127,7 @@ void EngineSceneViewport::primeSceneEnvironment()
     if (viewCamera()) mMirror->applyCamera(viewCamera(), view(), freeCameraFramingAspect());
 }
 
-unsigned EngineSceneViewport::warmUpShaders()
+unsigned EngineSceneViewport::warmUpShaders(const std::function<void(unsigned)> &onCompile)
 {
     // The third prime (SHADER_CACHE_SPEC §5). Runs on the open path, after the
     // geometry and environment pushes and BEFORE the page is revealed — the
@@ -4158,7 +4161,10 @@ unsigned EngineSceneViewport::warmUpShaders()
 
     {
         LoadTimeline::Accumulate warm(QStringLiteral("engine:warmUpShaders"));
+        unsigned seen = 0;
+        if (onCompile) mEngine->setCompileObserver([&]() { onCompile(++seen); });
         view()->warmUpShaders();
+        if (onCompile) mEngine->setCompileObserver({});
     }
     unsigned after = 0;
     mEngine->shaderBuildProgress(after, cached, expected);

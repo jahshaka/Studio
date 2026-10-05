@@ -476,9 +476,10 @@ void ProjectRunner::startOpenRun(bool playMode)
 	// JAHSHAKA_WARMUP_PASS=1 (the crash is documented in OgreChain.cpp).
 	// The switch stays in Preferences -> Cache for anyone who wants it off.
 	if (mSettings->get(settingkeys::shaderWarmupOnOpen)) {
-		slices.append({ QStringLiteral("Precompiling shaders…"), 95, [this]() {
+		slices.append({ QStringLiteral("Compiling shaders…"), 95, [this]() {
 			LoadTimeline::mark(QStringLiteral("warmUpShaders"));
-			const unsigned built = mViewport->warmUpShaders();
+			const unsigned built = mViewport->warmUpShaders(
+			    [this](unsigned n) { mHost->showOpenCompileProgress(n); });
 			if (built) qInfo("scene open: precompiled %u shader(s) behind the cover", built);
 		} });
 	}
@@ -614,9 +615,10 @@ void ProjectRunner::startCreateRun(const QString &guid, const QString &filename,
         mViewport->primeSceneEnvironment();
     } });
     if (mSettings->get(settingkeys::shaderWarmupOnOpen)) {
-        slices.append({ QStringLiteral("Precompiling shaders…"), 95, [this]() {
+        slices.append({ QStringLiteral("Compiling shaders…"), 95, [this]() {
             LoadTimeline::mark(QStringLiteral("warmUpShaders"));
-            const unsigned built = mViewport->warmUpShaders();
+            const unsigned built = mViewport->warmUpShaders(
+                [this](unsigned n) { mHost->showOpenCompileProgress(n); });
             if (built) qInfo("scene create: precompiled %u shader(s) behind the cover", built);
         } });
     }
