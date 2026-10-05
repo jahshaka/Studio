@@ -31,6 +31,16 @@ jah_gpu_row(pieces.spike CLASS engine
 set_tests_properties(pieces.spike PROPERTIES TIMEOUT 120 LABELS "pieces")
 file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/pieces")
 
+# pieces.live_paths — the engine half of the LIVE graph paths (TORNADO-1): the UV
+# scroll equals the same offset (G1) and an emissive added through the fork's
+# custom_ps_emissive hook equals the material's own emissive (G2), whole image,
+# byte for byte, each with a control that proves the comparison can see.
+jahshaka_piece_test(test_live_paths test_live_paths.cpp)
+jah_gpu_row(pieces.live_paths CLASS engine
+         COMMAND test_live_paths "${CMAKE_CURRENT_BINARY_DIR}/pieces"
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(pieces.live_paths PROPERTIES TIMEOUT 120 LABELS "pieces")
+
 # shadergraph.emitter_parity — THE DIFFERENTIAL ORACLE. Needs BOTH halves: the
 # graph/evaluator slice (Qt widgets, because node models carry live widgets) and
 # the engine (to render what the emitter produced). Modelled on

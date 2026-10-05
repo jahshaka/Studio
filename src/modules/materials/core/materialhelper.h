@@ -74,11 +74,6 @@ public:
 	static materials::PieceEmitter::Result applyEmittedPieces(NodeGraph* graph,
 	                                                          iris::PbrMaterialPtr material);
 
-	// Rebuilds the evaluated PBR material from a stored material definition
-	// (the "pbrMaterial" object written by serialize). Returns null when the
-	// definition predates Option B and carries no evaluated output.
-	static iris::PbrMaterialPtr createPbrMaterialFromDefinition(QJsonObject matObj);
-
 	// Maps a texture property's stored asset GUID to an image path via
 	// TextureManager or the CAS; passes real file paths through untouched.
 	// (`projectRoot`/`setProjectRoot` went with the project-folder bake: there
@@ -100,8 +95,10 @@ public:
 
 	// (generateShader/createMaterialFromShaderGraph/generateMaterialFrom-
 	// MaterialDefinition died in MATERIALS_EVALUATOR phase 5 — the GLSL
-	// pipeline is gone. Graph-backed definitions load through
-	// createPbrMaterialFromDefinition.
+	// pipeline is gone. Graph-backed definitions load through MaterialReader,
+	// whose restoreGeneratedPieces re-emits their pieces (TORNADO-1); the old
+	// createPbrMaterialFromDefinition read a retired definition shape and is
+	// deleted.
 	//
 	// parseMaterialProperties/parseMaterialStates went with iris::CustomMaterial
 	// at HLMS_ADOPTION P4b: they filled a CustomMaterial's property list and

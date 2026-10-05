@@ -1882,6 +1882,10 @@ QVariantMap MaterialApi::get(const QString &nodeId)
     if (auto *pbr = dynamic_cast<iris::PbrMaterial *>(material.data())) {
         if (!pbr->customPiecePixel.isEmpty()) out["customPiecePixel"] = pbr->customPiecePixel;
         if (!pbr->customPieceVertex.isEmpty()) out["customPieceVertex"] = pbr->customPieceVertex;
+        // The animated UV fold's scroll (TORNADO-1), read-only like the pieces.
+        if (pbr->textureVelocityU != 0.0f || pbr->textureVelocityV != 0.0f)
+            out["textureVelocity"] = QVariantList{ double(pbr->textureVelocityU),
+                                                   double(pbr->textureVelocityV) };
     }
     // WHICH ASSET EACH MAP ROW NAMES (TEX-REF-1), read-only: the guid a saved
     // scene stores for the row, beside the file the row renders from. A row with
@@ -1982,14 +1986,23 @@ QVector<VerbInfo> GraphApi::verbs() const
           "costs resolution (a 4x tiling into a 1024 bake keeps 256 px per tile), so the reason "
           "is worth reading.",
           Needs::Document },
-        { "emitInfo", "graph.emitInfo() -> {accepted, animated, emitted: [socket], fallback: {socket: reason}, "
-          "ops: [opKey], pixelSource, vertexSource}",
+        { "emitInfo", "graph.emitInfo() -> {route, accepted, animated, emitted: [socket], fallback: {socket: reason}, "
+          "baked: {socket: reason}, fold, ops: [opKey], pixelSource, vertexSource}",
           "What the SHADER-PIECE EMITTER makes of the current graph (HLMS_ADOPTION P5): which master "
           "sockets it lowers into generated GLSL that runs on the GPU per pixel (and per vertex), and "
           "— the half that matters when something did not animate — the REASON every other socket was "
           "left to the CPU baker, in words. `ops` is the emitter's whole op vocabulary. The two source "
           "strings are the generated pieces themselves, for eyeballing and for tests; nothing is "
-          "written to disk by this verb.",
+          "written to disk by this verb. `route` is 'baked' for a STATIC graph (nothing in it reads the "
+          "clock: it compiles, bakes and renders exactly as a baked material, and `fallback` names every "
+          "socket the emitter did not take) and 'live' for a graph that reads the clock anywhere: its "
+          "live paths apply — a constant-speed panner feeding every texture folds to a SCROLL the "
+          "material carries (`fold.velocity`, UV units per second of the shader clock, world.shaderTime), "
+          "an emissive that sums live terms (the clock, fresnel, a normal) and texture terms is SPLIT "
+          "between the piece and the material's maps, and fresnel/worldNormal/localNormal lower to their "
+          "real values. In a live graph `fallback` lists only what is still FROZEN at t=0 (with why) and "
+          "`baked` what the baker serves exactly (a constant, a static or scrolling map, the baked half "
+          "of a split).",
           Needs::Document },
         { "bake", "graph.bake({resolution?, time?}) -> {values, maps, passthrough, approximated, unsupported, animated, msElapsed}",
           "Full-quality synchronous bake of the current graph: UV-varying chains render per texel into "
@@ -2354,8 +2367,25 @@ QVariantMap GraphApi::emitInfo()
     QVariantMap out;
     auto graph = graphOrFail(QStringLiteral("graph.emitInfo"));
     if (!graph) return out;
-    const auto result = materials::PieceEmitter::lower(graph, MaterialHelper::textureResolver());
+    const auto compiled = materials::GraphBaker::compile(graph, MaterialHelper::textureResolver());
+    const auto result = materials::PieceEmitter::lower(compiled);
+    out["route"] = result.live ? QStringLiteral("live") : QStringLiteral("baked");
     out["accepted"] = result.accepted;
+    QVariantMap baked;
+    for (auto it = result.bakedReasons.constBegin(); it != result.bakedReasons.constEnd(); ++it)
+        baked[it.key()] = it.value();
+    out["baked"] = baked;
+    if (compiled.uvFold.valid) {
+        QVariantMap fold;
+        fold["scale"] = QVariantList{ compiled.uvFold.scaleX, compiled.uvFold.scaleY };
+        fold["offset"] = QVariantList{ compiled.uvFold.offsetX, compiled.uvFold.offsetY };
+        fold["rotation"] = compiled.uvFold.rotationDeg;
+        fold["velocity"] = QVariantList{ compiled.uvFold.velocityX, compiled.uvFold.velocityY };
+        out["fold"] = fold;
+    } else {
+        out["fold"] = QVariant();
+        if (!compiled.uvFold.reason.isEmpty()) out["foldReason"] = compiled.uvFold.reason;
+    }
     out["animated"] = result.animated;
     out["emitted"] = QVariant(result.emittedSockets);
     QVariantMap fallback;

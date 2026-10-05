@@ -70,8 +70,9 @@ public:
 	// so these had no content left to read.)
 
 	iris::PbrMaterialPtr parsePbrMaterial(QJsonObject matObject, Database* handle, bool loadTextures = true);
-	/// The row's stored definition blob (the shader-piece regeneration).
-	QJsonObject getShaderObjectFromId(QString shaderGuid, Database* db);
+	/// Re-emits a graph material's generated shader pieces from its own
+	/// definition (TORNADO-1): the one route by which pieces travel.
+	static void restoreGeneratedPieces(iris::PbrMaterialPtr mat, const QJsonObject& matObject);
 
 
 // (readJahShader/getParsedShader and the `parsedShader` member they filled

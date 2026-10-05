@@ -28,6 +28,7 @@ For more information see the LICENSE file
 #include "io/materialreader.h"
 #include "modules/materials/core/materialhelper.h"
 #include "modules/materials/core/pieceemitter.h"
+#include "services/materialbundle.h"
 #include "io/scenereader.h"
 #include "io/sceneformat.h"
 #include "services/scenefolders.h"
@@ -1757,6 +1758,14 @@ iris::MaterialPtr SceneReader::readPbrMaterial(const QJsonObject& matObj)
 	}
 
 	restoreCustomPieces(mat, values);
+	// THE UV SCROLL (TORNADO-1): graph-owned like the pieces, not a Property row.
+	{
+		const QJsonArray velocity = values["textureVelocity"].toArray();
+		if (velocity.size() == 2) {
+			mat->setValue(QStringLiteral("textureVelocityU"), velocity[0].toDouble(mat->textureVelocityU));
+			mat->setValue(QStringLiteral("textureVelocityV"), velocity[1].toDouble(mat->textureVelocityV));
+		}
+	}
 	return mat;
 }
 
@@ -1795,16 +1804,14 @@ void SceneReader::restoreCustomPieces(iris::PbrMaterialPtr mat, const QJsonObjec
 	    (vertexPath.isEmpty() && !vertexName.isEmpty())) {
 		const QString graphGuid = values["customPieceGraph"].toString();
 		if (!graphGuid.isEmpty() && handle) {
-			MaterialReader reader;
-			reader.setProject(project);
-			const QJsonObject definition = reader.getShaderObjectFromId(graphGuid, handle);
+			// THE ONE ROUTE (TORNADO-1): the material's own definition re-emits
+			// its pieces (MaterialReader::restoreGeneratedPieces), writing the
+			// files as a side effect; we want the PATHS, not the material.
+			const QJsonObject definition = MaterialBundle::read(handle, graphGuid, project);
 			if (!definition.isEmpty()) {
-				// createPbrMaterialFromDefinition re-emits and writes the piece
-				// files as a side effect; we want the PATHS, not the material.
-				if (auto regenerated = MaterialHelper::createPbrMaterialFromDefinition(definition)) {
-					if (pixelPath.isEmpty()) pixelPath = resolve(pixelName);
-					if (vertexPath.isEmpty()) vertexPath = resolve(vertexName);
-				}
+				MaterialReader::restoreGeneratedPieces(iris::PbrMaterial::create(), definition);
+				if (pixelPath.isEmpty()) pixelPath = resolve(pixelName);
+				if (vertexPath.isEmpty()) vertexPath = resolve(vertexName);
 			}
 		}
 	}

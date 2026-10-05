@@ -23,6 +23,10 @@
 #include "modules/materials/models/libraryv1.h"
 #include "modules/materials/models/nodemodel.h"
 #include "modules/materials/nodes/pbrmasternode.h"
+#include "modules/materials/nodes/test.h"
+#include <QImage>
+#include <QJsonArray>
+#include <cmath>
 
 using materials::PieceEmitter;
 
@@ -249,11 +253,24 @@ int main(int argc, char **argv)
               "the Normal socket reports the tangent-space reason");
     }
     {
-        Rig r;   // Emissive: the material buffer is read-only in the shader
+        // EMISSIVE (TORNADO-1, G2). It used to report the read-only material
+        // buffer; the fork's custom_ps_emissive hook is its landing now — in a
+        // LIVE graph. A static emissive keeps baking, with its reason.
+        Rig r;
         r.toMaster(r.pulsingColour(0.2, 0.2, 0.2), 0, 4);
         const auto res = PieceEmitter::lower(r.graph);
-        CHECK(res.fallbackReasons.value(QStringLiteral("Emissive")).contains(QStringLiteral("READ-ONLY")),
-              "the Emissive socket reports the read-only material buffer");
+        CHECK(res.emittedSockets.contains(QStringLiteral("Emissive")),
+              "a pulsating Emissive is EMITTED (the fork's custom_ps_emissive hook)");
+        CHECK(definedPieces(res.pixelSource) == QSet<QString>{ QStringLiteral("custom_ps_emissive") },
+              "...into custom_ps_emissive and nothing else");
+        CHECK(res.pixelSource.contains(QStringLiteral("finalColour += midf3_c(")),
+              "...ADDING to the light DoEmissiveLight already accumulated");
+        Rig s;
+        s.toMaster(s.addColor(0.2, 0.2, 0.2), 0, 4);
+        const auto still = PieceEmitter::lower(s.graph);
+        CHECK(!still.live && !still.accepted && still.fallbackReasons.value(QStringLiteral("Emissive"))
+                                                    .contains(QStringLiteral("STATIC")),
+              "a STATIC emissive stays on the baker and says why");
     }
 
     // ------------------------------------------------ the baker's hand-off
@@ -311,6 +328,294 @@ int main(int argc, char **argv)
               "the emitter takes the same chain as animated instead");
     }
 
+    // ============================================== THE LIVE PATHS (TORNADO-1)
+    // A noise image the fold fixtures sample.
+    const QString noisePath = tmp.path() + QStringLiteral("/noise.png");
+    {
+        QImage noise(8, 8, QImage::Format_RGBA8888);
+        for (int y = 0; y < 8; ++y)
+            for (int x = 0; x < 8; ++x)
+                noise.setPixelColor(x, y, QColor((x * 37 + y * 11) % 256, (x * 5 + y * 71) % 256, 90));
+        noise.save(noisePath);
+    }
+    // texture( uv(tiling 1,2) -> panner(speed, time) ) — the Tornado's noise
+    // lookup: the Texture node sampling itself at its UV input (D-2 option B1).
+    // (Not textureSampler: its fold reads the UV at input index 1, but the
+    // compiled op carries the UV at index 0 — a pre-existing mismatch that makes
+    // a textureSampler never fold; reported, not changed here: changing it would
+    // move STATIC graphs.)
+    auto scrollingNoise = [&](Rig &r, double vx, double vy, bool withClock) {
+        auto tex = r.add("texture");
+        static_cast<TextureNode *>(tex)->setTexturePath(noisePath);
+        auto tiling = r.add("vector2");
+        QJsonObject t2; t2["x"] = 1.0; t2["y"] = 2.0;
+        tiling->deserializeWidgetValue(t2);
+        auto uv = r.add("uv");
+        r.connect(tiling, 0, uv, 1);
+        if (withClock) {
+            auto speed = r.add("vector2");
+            QJsonObject v2; v2["x"] = vx; v2["y"] = vy;
+            speed->deserializeWidgetValue(v2);
+            auto pan = r.add("panner");
+            r.connect(uv, 0, pan, 0);
+            r.connect(speed, 0, pan, 1);
+            r.connect(pan, 0, tex, 0);
+        }
+        else {
+            r.connect(uv, 0, tex, 0);
+        }
+        return tex;
+    };
+
+    // ---- G1: the animated UV fold
+    {
+        Rig r;
+        auto sampler = scrollingNoise(r, -0.5, -0.25, true);
+        auto tint = r.add("multiply");
+        r.connect(sampler, 0, tint, 0);
+        r.connect(r.addColor(1.0, 0.5, 0.035), 0, tint, 1);
+        r.toMaster(tint, 0, 0);
+        const auto compiled = materials::GraphBaker::compile(r.graph);
+        CHECK(compiled.live, "G1: a panner on the clock makes the graph LIVE");
+        if (!compiled.uvFold.valid)
+            std::printf("      (fold reason: %s)\n", qPrintable(compiled.uvFold.reason));
+        CHECK(compiled.uvFold.valid && compiled.uvFold.velocityX == -0.5 &&
+                  compiled.uvFold.velocityY == -0.25 && compiled.uvFold.scaleX == 1.0 &&
+                  compiled.uvFold.scaleY == 2.0,
+              "G1: a constant-speed panner feeding the sampler folds to tiling (1,2) + velocity (-0.5,-0.25)");
+        CHECK(!compiled.sockets[0].program.animated,
+              "G1: the folded Base Color chain no longer reads the clock (the material scrolls)");
+        materials::GraphBaker::Options opts;
+        opts.outputDir = tmp.path() + QStringLiteral("/g1");
+        opts.relativePrefix = QStringLiteral("x/");
+        const auto baked = materials::GraphBaker::runCompiled(compiled, opts);
+        const QJsonArray vel = baked.eval.values.value(QStringLiteral("textureVelocity")).toArray();
+        CHECK(vel.size() == 2 && vel[0].toDouble() == -0.5 && vel[1].toDouble() == -0.25,
+              "G1: the bake lands textureVelocity [-0.5, -0.25]");
+        CHECK(baked.eval.values.value(QStringLiteral("textureScale")).toArray().size() == 2,
+              "G1: ...beside the folded tiling");
+        // THE FOLD IS EXACT: the baked map at the bake UV equals the unfolded
+        // chain at uv*tiling + velocity*t, for any t — the shader adds
+        // velocity*t after the transform, the panner added speed*t after it.
+        const auto unfolded = [&] {
+            // the same graph compiled with the panner's TIME pinned is not
+            // possible through the graph, so evaluate the raw program instead
+            Rig q;
+            auto s2 = scrollingNoise(q, -0.5, -0.25, true);
+            auto t2 = q.add("multiply");
+            q.connect(s2, 0, t2, 0);
+            q.connect(q.addColor(1.0, 0.5, 0.035), 0, t2, 1);
+            q.toMaster(t2, 0, 0);
+            return materials::BakeProgram::compile(q.master->inSockets[0], {});
+        }();
+        const auto &folded = compiled.sockets[0].program;
+        double worst = 0.0;
+        for (double t : { 0.0, 0.75, 1.5 }) {
+            for (int i = 0; i < 16; ++i) {
+                materials::EvalContext a, b;
+                a.u = (i % 4 + 0.3) / 4.0; a.v = (i / 4 + 0.6) / 4.0; a.time = t;
+                // the folded program at the TRANSFORMED uv
+                b.u = a.u * 1.0 - 0.5 * t;
+                b.v = a.v * 2.0 - 0.25 * t;
+                const auto x = unfolded.evaluate(a), y = folded.evaluate(b);
+                worst = std::max(worst, std::max(std::abs(x.x - y.x), std::abs(x.y - y.y)));
+            }
+        }
+        CHECK(worst < 1e-9, qPrintable(QStringLiteral("G1: folded(uv*s + v*t) == unfolded(uv, t) "
+                                                      "(worst %1)").arg(worst)));
+    }
+    {
+        // A panner whose speed is COMPUTED, or whose time is not the plain
+        // clock, cannot fold — it bakes, with its reason.
+        Rig r;
+        auto tex = r.add("texture");
+        static_cast<TextureNode *>(tex)->setTexturePath(noisePath);
+        auto pan = r.add("panner");
+        auto twice = r.add("multiply");
+        r.connect(r.add("time"), 0, twice, 0);
+        r.connect(r.addFloat(2.0), 0, twice, 1);
+        r.connect(twice, 0, pan, 2);
+        r.connect(pan, 0, tex, 0);
+        r.toMaster(tex, 0, 0);
+        const auto compiled = materials::GraphBaker::compile(r.graph);
+        CHECK(compiled.live && !compiled.uvFold.valid &&
+                  compiled.uvFold.reason.contains(QStringLiteral("shader clock")),
+              "G1: a panner on time*2 does not fold, and says why");
+    }
+
+    // ---- THE STATIC-GRAPH GUARD: a graph with no clock takes none of it
+    {
+        Rig r;
+        auto sampler = scrollingNoise(r, 0.0, 0.0, false);
+        auto tint = r.add("multiply");
+        r.connect(sampler, 0, tint, 0);
+        r.connect(r.addColor(1.0, 0.5, 0.035), 0, tint, 1);
+        r.toMaster(tint, 0, 4);                       // Emissive
+        auto rim = r.add("fresnel");
+        r.connect(r.addFloat(2.0), 0, rim, 1);
+        r.toMaster(rim, 0, 0);                        // Base Color
+        const auto compiled = materials::GraphBaker::compile(r.graph);
+        CHECK(!compiled.live, "guard: no clock anywhere -> the graph is STATIC");
+        if (!compiled.uvFold.valid)
+            std::printf("      (fold reason: %s)\n", qPrintable(compiled.uvFold.reason));
+        CHECK(!compiled.sockets[4].split && !compiled.sockets[4].liveWhole,
+              "guard: a static emissive is never split");
+        CHECK(compiled.uvFold.valid && compiled.uvFold.velocityX == 0.0,
+              "guard: its fold is the constant one it always was");
+        const auto res = PieceEmitter::lower(compiled);
+        CHECK(!res.live && !res.accepted && res.bakedReasons.isEmpty(),
+              "guard: the emitter takes nothing and reports the BAKED route");
+        CHECK(res.fallbackReasons.value(QStringLiteral("Base Color"))
+                  .contains(QStringLiteral("fake fragment context")),
+              "guard: a static fresnel keeps today's reason");
+        materials::GraphBaker::Options opts;
+        opts.outputDir = tmp.path() + QStringLiteral("/guard");
+        opts.relativePrefix = QStringLiteral("x/");
+        const auto baked = materials::GraphBaker::runCompiled(compiled, opts);
+        CHECK(!baked.eval.values.contains(QStringLiteral("textureVelocity")),
+              "guard: a static graph lands no velocity");
+        CHECK(baked.maps.contains(QStringLiteral("emissiveMap")),
+              "guard: its texture x colour emissive BAKES a map, as before");
+    }
+
+    // ---- the emissive SPLIT and its factor fold: the Tornado's emissive
+    {
+        Rig r;
+        auto sampler = scrollingNoise(r, -0.5, -0.5, true);
+        // noise x (colour x 6): the HDR constant is a constant CHAIN
+        auto hot = r.add("multiply");
+        r.connect(r.addColor(1.0, 0.5, 0.035), 0, hot, 0);
+        r.connect(r.addFloat(6.0), 0, hot, 1);
+        auto hdr = r.add("multiply");
+        r.connect(sampler, 0, hdr, 0);
+        r.connect(hot, 0, hdr, 1);
+        auto rim = r.add("fresnel");
+        r.connect(r.addFloat(1.17), 0, rim, 1);
+        auto sum = r.add("add");
+        r.connect(rim, 0, sum, 0);
+        r.connect(hdr, 0, sum, 1);
+        r.toMaster(sum, 0, 4);
+        const auto compiled = materials::GraphBaker::compile(r.graph);
+        const auto &em = compiled.sockets[4];
+        CHECK(compiled.live && em.split, "split: fresnel + texture*colour splits (live term + map term)");
+        bool liveHasTexture = false;
+        for (const auto &op : em.live.ops)
+            if (op.typeName == "textureSampler" || op.typeName == "texture") liveHasTexture = true;
+        CHECK(!liveHasTexture, "split: the piece's half samples no texture");
+        CHECK(em.hasFactor && std::abs(em.factor.x - 6.0) < 1e-3 && std::abs(em.factor.y - 3.0) < 1e-3,
+              "split: the map half folds to map x constant (the factor fold), the constant = colour x 6");
+        const auto res = PieceEmitter::lower(compiled);
+        CHECK(res.emittedSockets.contains(QStringLiteral("Emissive")) && res.fallbackReasons.isEmpty(),
+              "split: Emissive is EMITTED with NO fallback");
+        CHECK(res.pixelSource.contains(QStringLiteral("pixelData.viewDir")),
+              "split: the piece computes the REAL fresnel (the view direction)");
+        materials::GraphBaker::Options opts;
+        opts.outputDir = tmp.path() + QStringLiteral("/split");
+        opts.relativePrefix = QStringLiteral("x/");
+        opts.emittedSockets = res.emittedSockets;
+        const auto withPiece = materials::GraphBaker::runCompiled(compiled, opts);
+        opts.emittedSockets.clear();
+        opts.outputDir = tmp.path() + QStringLiteral("/unsplit");
+        const auto withoutPiece = materials::GraphBaker::runCompiled(compiled, opts);
+        CHECK(withoutPiece.maps.contains(QStringLiteral("emissiveMap")),
+              "split: a run whose emitter did NOT take Emissive bakes the WHOLE chain (today's path)");
+        CHECK(withPiece.passthrough.contains(QStringLiteral("emissiveMap")),
+              "split+factor: the noise binds as the emissive map itself");
+        CHECK(withPiece.eval.values.value(QStringLiteral("emissiveIntensity")).toDouble() == 6.0,
+              "split+factor: the HDR constant lands on emissiveIntensity (6), unclamped");
+    }
+    {
+        // the factor fold proper: texture x constant directly under the sum
+        Rig r;
+        auto sampler = scrollingNoise(r, -0.5, -0.5, true);
+        auto tint = r.add("multiply");
+        r.connect(sampler, 0, tint, 0);
+        r.connect(r.addColor(1.0, 0.5, 0.035), 0, tint, 1);
+        auto rim = r.add("fresnel");
+        r.connect(r.addFloat(1.0), 0, rim, 1);
+        auto sum = r.add("add");
+        r.connect(rim, 0, sum, 0);
+        r.connect(tint, 0, sum, 1);
+        r.toMaster(sum, 0, 4);
+        const auto compiled = materials::GraphBaker::compile(r.graph);
+        const auto res = PieceEmitter::lower(compiled);
+        materials::GraphBaker::Options opts;
+        opts.outputDir = tmp.path() + QStringLiteral("/factor");
+        opts.relativePrefix = QStringLiteral("x/");
+        opts.emittedSockets = res.emittedSockets;
+        const auto baked = materials::GraphBaker::runCompiled(compiled, opts);
+        const QJsonObject c = baked.eval.values.value(QStringLiteral("emissiveColor")).toObject();
+        CHECK(compiled.sockets[4].hasFactor &&
+                  baked.passthrough.value(QStringLiteral("emissiveMap")).toString() == noisePath,
+              "factor: texture x colour lands the texture itself as the emissive map");
+        CHECK(std::abs(c.value("g").toDouble() - 0.5) < 1e-3 &&
+                  std::abs(c.value("b").toDouble() - 0.035) < 1e-3 &&
+                  baked.eval.values.value(QStringLiteral("emissiveIntensity")).toDouble() == 1.0,
+              "factor: ...with the colour (1, 0.5, 0.035) on the material");
+        CHECK(!baked.maps.contains(QStringLiteral("emissiveMap")), "factor: and nothing is baked for it");
+    }
+
+    // ---- a LIVE graph's plain-texture Emissive is SERVED, not a fallback
+    {
+        Rig r;
+        auto tex = r.add("texture");
+        static_cast<TextureNode *>(tex)->setTexturePath(noisePath);
+        r.toMaster(tex, 0, 4);                        // Emissive: a bare texture
+        r.toMaster(r.pulsingColour(0.2, 0.4, 0.8), 0, 0);   // the clock lives elsewhere
+        const auto res = PieceEmitter::lower(r.graph);
+        CHECK(res.live && !res.fallbackReasons.contains(QStringLiteral("Emissive")) &&
+                  res.bakedReasons.contains(QStringLiteral("Emissive")),
+              "live graph: a plain-texture Emissive is reported BAKED (served exactly), not a fallback");
+    }
+
+    // ---- G3: the live-only ops lower in a live graph, with their stage limits
+    {
+        Rig r;
+        auto rim = r.add("fresnel");
+        r.connect(r.addFloat(2.0), 0, rim, 1);
+        auto sum = r.add("add");
+        r.connect(rim, 0, sum, 0);
+        auto zero = r.add("multiply");
+        r.connect(r.add("time"), 0, zero, 0);
+        r.connect(r.addFloat(0.0), 0, zero, 1);
+        r.connect(zero, 0, sum, 1);
+        r.toMaster(sum, 0, 0);
+        const auto res = PieceEmitter::lower(r.graph);
+        CHECK(res.live && res.emittedSockets.contains(QStringLiteral("Base Color")),
+              "G3: fresnel in a live graph lowers to its real value");
+        Rig v;
+        auto nrm = v.add("localNormal");
+        auto k = v.add("multiply");
+        v.connect(nrm, 0, k, 0);
+        v.connect(v.add("time"), 0, k, 1);
+        v.toMaster(k, 0, 7);
+        const auto vres = PieceEmitter::lower(v.graph);
+        CHECK(vres.emittedSockets.contains(QStringLiteral("Vertex Offset")) &&
+                  vres.vertexSource.contains(QStringLiteral("jahLocalNormal")),
+              "G3: localNormal lowers in the vertex stage");
+        Rig p;
+        auto pn = p.add("localNormal");
+        auto pk = p.add("multiply");
+        p.connect(pn, 0, pk, 0);
+        p.connect(p.add("time"), 0, pk, 1);
+        p.toMaster(pk, 0, 0);
+        const auto pres = PieceEmitter::lower(p.graph);
+        CHECK(pres.fallbackReasons.value(QStringLiteral("Base Color")).contains(QStringLiteral("VERTEX stage")),
+              "G3: localNormal in the pixel stage is refused with the stage reason");
+    }
+    {
+        // A vertex piece that reads no normal is byte-identical to before: no
+        // normal preamble (its file name is a hash of its bytes).
+        Rig r;
+        auto offset = r.add("multiply");
+        r.connect(r.add("time"), 0, offset, 0);
+        r.connect(r.addFloat(0.1), 0, offset, 1);
+        r.toMaster(offset, 0, 7);
+        const auto res = PieceEmitter::lower(r.graph);
+        CHECK(!res.vertexSource.contains(QStringLiteral("jahWorldNormal")),
+              "guard: a vertex piece that reads no normal declares none");
+    }
+
     // ------------------------------------------------------- the op vocabulary
     {
         // The coverage table is part of the contract: a silently shrinking op
@@ -322,11 +627,16 @@ int main(int argc, char **argv)
             CHECK(ops.contains(QString::fromLatin1(must)),
                   qPrintable(QStringLiteral("op '%1' is still lowered").arg(must)));
         for (const char *never : { "texture", "textureSampler", "texelsize",
-                                   "propertyNormalSample", "worldNormal", "fresnel", "depth" })
+                                   "propertyNormalSample", "depth" })
             CHECK(!ops.contains(QString::fromLatin1(never)),
                   qPrintable(QStringLiteral("op '%1' is deliberately NOT lowered").arg(never)));
-        CHECK(PieceEmitter::supportedSockets().size() == 5,
-              "five master sockets have a piece landing (3 pixel, 2 vertex)");
+        // THE PER-OP DIVERGENCE RULE (TORNADO-1, G3): lowered in a LIVE graph only.
+        for (const char *liveOnly : { "fresnel", "worldNormal", "localNormal" })
+            CHECK(ops.contains(QString::fromLatin1(liveOnly)) &&
+                      materials::BakeProgram::liveOnlyOps().contains(QString::fromLatin1(liveOnly)),
+                  qPrintable(QStringLiteral("op '%1' lowers in a live graph only").arg(liveOnly)));
+        CHECK(PieceEmitter::supportedSockets().size() == 6,
+              "six master sockets have a piece landing (4 pixel incl. Emissive, 2 vertex)");
     }
 
     std::printf("%s\n", failures == 0 ? "emitter_pieces: all checks passed"

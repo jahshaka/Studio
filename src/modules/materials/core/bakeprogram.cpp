@@ -904,25 +904,50 @@ bool BakeProgram::isIdentityUvOp(const BakeOp& op)
 // op consumes a `uv` output (a `uv -> split -> Roughness` chain would see
 // transformed UVs in the bake and untransformed ones at render time — two
 // different pictures from one graph, which is the one outcome worth refusing).
-BakeProgram::UvFold BakeProgram::uvFold() const
+BakeProgram::UvFold BakeProgram::uvFold(bool live) const
 {
 	UvFold fold;
 	bool first = true;
+
+	auto isSamplerOp = [](const BakeOp& op) {
+		return op.typeName == "textureSampler" || (op.typeName == "texture" && !op.isTextureCarrier);
+	};
+	auto samplerUvIndex = [](const BakeOp& op) { return op.typeName == "textureSampler" ? 1 : 0; };
+
+	// THE SCROLL (TORNADO-1, live graphs only). A `panner` whose output is read
+	// by sampler UV slots and by nothing else is a candidate for the material's
+	// velocity; whether it QUALIFIES (constant speed, the plain clock) is asked
+	// per sampler below, with its reason.
+	QVector<bool> pannerScrolls(ops.size(), false);
+	if (live) {
+		QVector<bool> toSampler(ops.size(), false), toOther(ops.size(), false);
+		for (const auto& op : ops) {
+			for (int i = 0; i < op.inputs.size(); ++i) {
+				const int src = op.inputs[i].op;
+				if (src < 0 || src >= ops.size() || ops[src].typeName != "panner") continue;
+				const bool uvSlot = isSamplerOp(op) && i == samplerUvIndex(op);
+				(uvSlot ? toSampler : toOther)[src] = true;
+			}
+		}
+		for (int i = 0; i < ops.size(); ++i) pannerScrolls[i] = toSampler[i] && !toOther[i];
+	}
 
 	// Every op that reads a `uv` op's output, and how.
 	QVector<bool> uvOpConsumedBySampler(ops.size(), false);
 	QVector<bool> uvOpConsumedByOther(ops.size(), false);
 
-	for (const auto& op : ops) {
-		const bool isSampler = op.typeName == "textureSampler"
-		                       || (op.typeName == "texture" && !op.isTextureCarrier);
+	for (int c = 0; c < ops.size(); ++c) {
+		const BakeOp& op = ops[c];
+		const bool isSampler = isSamplerOp(op);
 		for (int i = 0; i < op.inputs.size(); ++i) {
 			const int src = op.inputs[i].op;
 			if (src < 0 || src >= ops.size()) continue;
 			if (ops[src].typeName != "uv") continue;
-			// a sampler's UV input is index 1 on textureSampler, 0 on texture
-			const bool uvSlot = isSampler
-			                    && i == (op.typeName == "textureSampler" ? 1 : 0);
+			// a sampler's UV input is index 1 on textureSampler, 0 on texture —
+			// and, in a live graph, a scrolling panner's UV input stands for the
+			// samplers it feeds
+			const bool uvSlot = (isSampler && i == samplerUvIndex(op))
+			                    || (live && pannerScrolls[c] && i == 0);
 			if (uvSlot) uvOpConsumedBySampler[src] = true;
 			else uvOpConsumedByOther[src] = true;
 		}
@@ -936,25 +961,69 @@ BakeProgram::UvFold BakeProgram::uvFold() const
 		return fold;
 	}
 
+	// The literal behind one input of `op`, coerced to the socket's arity.
+	auto literalOf = [this](const BakeOp& op, int index, Value& out) {
+		if (index >= op.inputs.size()) return false;
+		const auto& ref = op.inputs[index];
+		if (ref.op < 0) {
+			if (ref.fallbackKind != BakeInputRef::Literal) return false;
+			out = ref.fallback.coerced(ref.arity > 0 ? ref.arity : 1);
+			return true;
+		}
+		if (!ops[ref.op].hasLiteral) return false;
+		out = ops[ref.op].literal.coerced(ref.arity > 0 ? ref.arity : 1);
+		return true;
+	};
+	// The input is the shader clock itself: the socket's default, or a `time` node.
+	auto isClock = [this](const BakeOp& op, int index) {
+		if (index >= op.inputs.size()) return false;
+		const auto& ref = op.inputs[index];
+		if (ref.op < 0) return ref.fallbackKind == BakeInputRef::Time;
+		return ops[ref.op].typeName == "time";
+	};
+
 	for (int i = 0; i < ops.size(); ++i) {
 		const BakeOp& op = ops[i];
-		const bool isSampler = op.typeName == "textureSampler"
-		                       || (op.typeName == "texture" && !op.isTextureCarrier);
-		if (!isSampler) continue;
+		if (!isSamplerOp(op)) continue;
 		if (op.image.isNull()) continue; // an empty slot samples vec4(0); it tiles nothing
-		const int uvIndex = op.typeName == "textureSampler" ? 1 : 0;
+		const int uvIndex = samplerUvIndex(op);
 		if (uvIndex >= op.inputs.size()) continue;
 		const auto& ref = op.inputs[uvIndex];
 
-		double sx = 1, sy = 1, ox = 0, oy = 0, rot = 0;
-		if (ref.op < 0) {
-			if (ref.fallbackKind != BakeInputRef::Uv) {
+		double sx = 1, sy = 1, ox = 0, oy = 0, rot = 0, vx = 0, vy = 0;
+		// The ref the TRANSFORM is read from: the sampler's own, or — through a
+		// scrolling panner — the panner's UV input.
+		const BakeInputRef* transformRef = &ref;
+		if (ref.op >= 0 && live && ops[ref.op].typeName == "panner" && pannerScrolls[ref.op]) {
+			const BakeOp& pan = ops[ref.op];
+			Value speed;
+			if (!literalOf(pan, 1, speed)) {
+				fold.reason = QStringLiteral("a texture scrolls at a computed speed; the material "
+				                             "carries one constant velocity, so these bake");
+				return fold;
+			}
+			if (!isClock(pan, 2)) {
+				fold.reason = QStringLiteral("a texture's panner runs on something other than the "
+				                             "shader clock itself, so these bake");
+				return fold;
+			}
+			vx = speed.x;
+			vy = speed.arity > 1 ? speed.y : speed.x;
+			transformRef = pan.inputs.isEmpty() ? nullptr : &pan.inputs[0];
+			if (!transformRef) {
+				fold.reason = QStringLiteral("a texture's panner has no UV input");
+				return fold;
+			}
+		}
+
+		if (transformRef->op < 0) {
+			if (transformRef->fallbackKind != BakeInputRef::Uv) {
 				fold.reason = QStringLiteral("a texture samples a computed UV, not the mesh's");
 				return fold;
 			}
 		}
 		else {
-			const BakeOp& src = ops[ref.op];
+			const BakeOp& src = ops[transformRef->op];
 			if (src.typeName != "uv" || !src.uvOpKnown) {
 				fold.reason = QStringLiteral("a texture's UV comes from math the material "
 				                             "cannot carry (only one UV node with constant "
@@ -970,10 +1039,12 @@ BakeProgram::UvFold BakeProgram::uvFold() const
 			fold.scaleX = sx; fold.scaleY = sy;
 			fold.offsetX = ox; fold.offsetY = oy;
 			fold.rotationDeg = rot;
+			fold.velocityX = vx; fold.velocityY = vy;
 			first = false;
 		}
 		else if (fold.scaleX != sx || fold.scaleY != sy || fold.offsetX != ox
-		         || fold.offsetY != oy || fold.rotationDeg != rot) {
+		         || fold.offsetY != oy || fold.rotationDeg != rot
+		         || fold.velocityX != vx || fold.velocityY != vy) {
 			fold.reason = QStringLiteral("two textures use different UV transforms; the "
 			                             "material carries one, so these bake");
 			return fold;
@@ -983,6 +1054,98 @@ BakeProgram::UvFold BakeProgram::uvFold() const
 
 	fold.valid = !first;
 	return fold;
+}
+
+// ------------------------------------------------------- the live rewrites
+
+void BakeProgram::refreshFlags()
+{
+	for (auto& op : ops) {
+		if (op.hasLiteral) {
+			op.varying = false;
+			op.animated = false;
+			continue;
+		}
+		bool varying = false;
+		bool animated = nodeIsAnimated(op.typeName);
+		bool approximated = nodeIsApproximated(op.typeName) || nodeIsAnimated(op.typeName)
+		                    || (op.typeName == "uv" && op.uvSet > 0);
+		for (const auto& ref : op.inputs) {
+			if (ref.op >= 0 && ref.op < ops.size()) {
+				const BakeOp& src = ops[ref.op];
+				varying |= src.varying;
+				animated |= src.animated;
+				approximated |= src.approximated;
+			}
+			else if (ref.op < 0 && ref.fallbackKind == BakeInputRef::Uv) varying = true;
+			else if (ref.op < 0 && ref.fallbackKind == BakeInputRef::Time) animated = true;
+		}
+		// no image -> vec4(0) everywhere: a constant whatever feeds its UV
+		const bool sampler = op.typeName == "textureSampler"
+		                     || (op.typeName == "texture" && !op.isTextureCarrier);
+		if (sampler && op.image.isNull() && op.unsupportedReason.isEmpty()) varying = false;
+		op.varying = varying;
+		op.animated = animated;
+		op.approximated = approximated;
+	}
+	reclassify();
+}
+
+void BakeProgram::prune()
+{
+	if (rootOp < 0 || rootOp >= ops.size()) return;
+	QVector<bool> keep(ops.size(), false);
+	QVector<int> stack{ rootOp };
+	while (!stack.isEmpty()) {
+		const int i = stack.takeLast();
+		if (i < 0 || i >= ops.size() || keep[i]) continue;
+		keep[i] = true;
+		for (const auto& ref : ops[i].inputs)
+			if (ref.op >= 0) stack.append(ref.op);
+	}
+	QVector<int> remap(ops.size(), -1);
+	QVector<BakeOp> kept;
+	for (int i = 0; i < ops.size(); ++i) {
+		if (!keep[i]) continue;
+		remap[i] = kept.size();
+		kept.append(ops[i]);
+	}
+	for (auto& op : kept)
+		for (auto& ref : op.inputs)
+			if (ref.op >= 0) ref.op = remap[ref.op];
+	ops = kept;
+	rootOp = remap[rootOp];
+}
+
+const QStringList& BakeProgram::pieceOps()
+{
+	static const QStringList list = {
+		// literals
+		"float", "color", "vector2", "vector3", "vector4", "property",
+		// arithmetic
+		"add", "subtract", "multiply", "vectorMultiply", "divide", "power", "sqrt",
+		"min", "max", "abs", "sign", "ceil", "floor", "round", "trunc", "fraction",
+		"oneminus", "negate", "sine",
+		// interpolation / comparison
+		"step", "smoothstep", "clamp", "lerp",
+		// vector algebra
+		"reflect", "dot", "length", "distance", "normalize",
+		"splitvector", "composevector", "makeColor",
+		// uv + normals
+		"uv", "panner", "flipbook",
+		"normalintensity", "combinenormals",
+		// the clock
+		"time", "pulsate",
+		// the live-only ops (liveOnlyOps): lowered in a LIVE graph only
+		"fresnel", "worldNormal", "localNormal",
+	};
+	return list;
+}
+
+const QStringList& BakeProgram::liveOnlyOps()
+{
+	static const QStringList list = { "fresnel", "worldNormal", "localNormal" };
+	return list;
 }
 
 QString BakeProgram::classToString(SocketClass c)

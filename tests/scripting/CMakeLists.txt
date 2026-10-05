@@ -217,6 +217,12 @@ jah_pool_arm(shading bake_pipeline ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_bake_
 # real scene material to the renderer, and the save/close/open round trip that
 # proves re-emission is deterministic.
 jah_pool_arm(shading custom_piece ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_custom_piece.js 4)
+# TORNADO-1 G7: world.shaderTime pins the shader clock — t=0 and t=1 differ, t=1
+# twice is the identical frame; null frees it; a negative t is refused.
+jah_pool_arm(shading shader_time ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_shader_time.js 8)
+# TORNADO-1: a live graph material applied FROM THE LIBRARY keeps its generated
+# pieces (they travel with the material's definition) and animates.
+jah_pool_arm(shading live_material_apply ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_live_material_apply.js 8)
 # EDITOR_SHORTCUTS_SPEC §5: the verbs behind the Unreal-style editor controls.
 jah_pool_arm(editor_view editor_controls ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_editor_controls.js 30)
 # scripting.e2e.editor_controls.timing — the per-selection 11 ms frame bar, nightly (lane

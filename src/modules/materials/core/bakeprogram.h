@@ -200,12 +200,19 @@ public:
 		double scaleX = 1, scaleY = 1;
 		double offsetX = 0, offsetY = 0;
 		double rotationDeg = 0;
+		/// THE ANIMATED FOLD (TORNADO-1): UV units per second of the shader
+		/// clock, from a constant-speed `panner` between the transform and
+		/// every sampler. Only uvFold(true) — a LIVE graph — ever sets it.
+		double velocityX = 0, velocityY = 0;
 		int samplers = 0;      // how many sampler ops the transform covers
 		QString reason;        // why not, when !valid and a sampler exists
 	};
 	/// The fold this program alone admits. GraphBaker intersects the per-socket
-	/// answers into the material's one transform.
-	UvFold uvFold() const;
+	/// answers into the material's one transform. `live` (TORNADO-1: the graph
+	/// reads the clock somewhere) also admits a `panner` with a constant speed
+	/// on the shader clock between the transform and the samplers — the scroll
+	/// the material then carries as a velocity. A static graph never asks.
+	UvFold uvFold(bool live = false) const;
 
 	/// Rewrites every sampler's UV input to the BAKE UV, as if the transform
 	/// had never been in the graph — the material carries it instead. Only
@@ -214,6 +221,27 @@ public:
 	/// Base Color` chain that was Baked becomes Passthrough, and the source
 	/// image binds at full resolution.
 	void applyUvFold();
+
+	/// Re-derives every op's varying/animated/approximated flags from its inputs
+	/// and the program's classification from them — after a rewrite has cut a
+	/// chain off (a folded scroll leaves its clock unreachable). Used by the LIVE
+	/// paths only, so a static graph's program is never touched by it.
+	void refreshFlags();
+
+	/// Drops every op the root cannot reach and renumbers the rest (in order).
+	/// An op's index is its identity inside one program only, so this is safe
+	/// after a split; the signature then names exactly what the root reads.
+	void prune();
+
+	/// THE OPS THE SHADER-PIECE EMITTER LOWERS (HLMS_ADOPTION P5), one list for
+	/// the emitter and for the graph's live split (TORNADO-1) — whose LIVE
+	/// terms must be lowerable by construction.
+	static const QStringList& pieceOps();
+	/// The ops that lower ONLY in a live graph (TORNADO-1, G3: the per-op
+	/// divergence rule): the CPU evaluates them against its fake fragment
+	/// context, the piece computes the real value, and the parity oracle checks
+	/// the GPU against an analytic reference instead of the baker.
+	static const QStringList& liveOnlyOps();
 
 	/// Recomputes `classification` (and the passthrough fields) from the op
 	/// list. Split out of compile() so a fold can re-run it.

@@ -193,40 +193,6 @@ materials::PieceEmitter::Result MaterialHelper::applyEmittedPieces(NodeGraph* gr
 	return result;
 }
 
-iris::PbrMaterialPtr MaterialHelper::createPbrMaterialFromDefinition(QJsonObject matObj)
-{
-	if (!matObj.contains("pbrMaterial"))
-		return iris::PbrMaterialPtr();
-
-	const QJsonObject pbrObj = matObj["pbrMaterial"].toObject();
-	auto values = pbrObj["values"].toObject();
-	auto material = PbrGraphEvaluator::materialFromValues(values, textureResolver());
-
-	// RE-EMIT (HLMS_ADOPTION P5). The definition says a piece exists but never
-	// where: the file lives in a per-user cache under a name that is a hash of
-	// its own bytes, so re-emitting from the stored GRAPH reproduces the same
-	// name and either finds the file already there (the ordinary case, free) or
-	// writes it back (a wiped cache, a fresh machine, a first open). That is
-	// what makes the cache genuinely disposable.
-	//
-	// Only for definitions that HAVE a piece: deserializing a graph is not
-	// free, and an ordinary baked material must not pay for a feature it does
-	// not use.
-	if (material && pbrObj.contains("customPiece")) {
-		if (NodeGraph* graph = extractNodeGraphFromMaterialDefinition(matObj)) {
-			// BUILDING a material for display is a read: PathOnly, never an
-			// import (PRESET-UNIFY-1 fix round).
-			resolveAppRelativeTextures(graph, TextureBinding::PathOnly, assethome::materials());
-			const QJsonObject pieces =
-			    materials::PieceEmitter::emitAndStore(graph, textureResolver());
-			material->setCustomPiecePixel(pieces["customPiecePixel"].toString());
-			material->setCustomPieceVertex(pieces["customPieceVertex"].toString());
-			delete graph;
-		}
-	}
-	return material;
-}
-
 NodeLibrary* MaterialHelper::sharedNodeLibrary()
 {
 	// Function-local static, built on first use (after QApplication, so its

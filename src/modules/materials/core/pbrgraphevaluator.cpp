@@ -83,6 +83,13 @@ iris::PbrMaterialPtr PbrGraphEvaluator::materialFromValues(const QJsonObject& va
 		// is a two-element array when the axes differ and a plain number when
 		// they do not — and every material written before per-axis tiling
 		// existed carries the number, so both spellings are read here forever.
+		// THE SCROLL (TORNADO-1): the animated UV fold's velocity, a two-element
+		// array in UV units per second of the shader clock.
+		else if (key == "textureVelocity") {
+			const auto arr = values[key].toArray();
+			material->setValue(QStringLiteral("textureVelocityU"), arr.size() > 0 ? arr[0].toDouble() : 0.0);
+			material->setValue(QStringLiteral("textureVelocityV"), arr.size() > 1 ? arr[1].toDouble() : 0.0);
+		}
 		else if (key == "textureScale" || key == "textureOffset") {
 			const auto val = values[key];
 			const bool isScale = key == "textureScale";

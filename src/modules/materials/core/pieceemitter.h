@@ -51,6 +51,9 @@ For more information see the LICENSE file
 // override of DoAtmosphereNprSky. The emitter therefore defines EXACTLY ONE
 // piece per stage, from a hard-coded allow-list, and never an interpolant:
 // everything the pixel stage needs comes from `inPs` and the pass buffer.
+// (TORNADO-1 adds ONE more hook to the list, in the PIXEL piece's file:
+// custom_ps_emissive, the fork's hook inside HlmsPbs' DoEmissiveLight — nothing
+// in our library defines it.)
 
 #include <QJsonObject>
 #include <QMap>
@@ -85,6 +88,17 @@ public:
 		/// This is what graph.emitInfo() reports, and the reason a user is
 		/// never left guessing why their graph did not animate.
 		QMap<QString, QString> fallbackReasons;
+
+		/// LIVE GRAPHS ONLY (TORNADO-1): the sockets the BAKER serves EXACTLY —
+		/// a constant, a static map, a map whose scroll the material's UV fold
+		/// carries, the baked half of a split emissive — by socket name. Not a
+		/// fallback: nothing in them moves. A static graph leaves this empty and
+		/// reports every socket it does not take in fallbackReasons, as before.
+		QMap<QString, QString> bakedReasons;
+
+		/// The graph reads the clock somewhere (GraphBaker::CompiledGraph::live):
+		/// the live paths apply. graph.emitInfo reports it as the ROUTE.
+		bool live = false;
 
 		/// True when any emitted chain reads the clock (time / pulsate, or a
 		/// panner/flipbook fed by one). The host pushes Scene::setShaderTime

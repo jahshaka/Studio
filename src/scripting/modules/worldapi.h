@@ -55,6 +55,9 @@ public:
     Q_INVOKABLE bool setAtomOcclusion(bool on);
     Q_INVOKABLE bool setAtomView(const QString &view);
     Q_INVOKABLE QString atomView();
+    /// THE SHADER CLOCK (TORNADO-1, G7): pin it for a reproducible frame of an
+    /// animated material, or hand it back to the free (frame-counted) clock.
+    Q_INVOKABLE QVariantMap shaderTime(const QVariantMap &params = QVariantMap());
     /// THE PHOTON VIEW (PHOTON-VIEW-1): the lighting's debug pictures.
     Q_INVOKABLE bool setPhotonView(const QString &view, const QVariantMap &options = QVariantMap());
     Q_INVOKABLE QString photonView();
