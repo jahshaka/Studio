@@ -2023,6 +2023,32 @@ add_dependencies(test_gi_hit_shade JahshakaEngineMedia)
 jah_gpu_row(gi.hit_shade CLASS engine TOKENS 2 COMMAND test_gi_hit_shade
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.hit_shade PROPERTIES TIMEOUT 180 LABELS "engine")
+# gi.speckle — THE GATHER'S HITS ARE DIFFUSE-ONLY ON EVERY ROUTE (SPECKLE-FIX-1;
+# the owner's smoke: "speckly circular reflections flashing when the silver sphere
+# moves"; spikes/speckle-1). A gather hit answered by the decode was the full PBS
+# lobe (the sun's GGX highlight), by the caches the diffuse alone; a moved object's
+# cards re-allocate, the route alternated, the floor flashed. Arms: (a) the
+# controls (still, a matte sphere moved: 0 bursts on the floor band), (b) the
+# silver sphere moved: 0 bursts, (c) the same sphere MOVABLE (every hit decoded):
+# 0 bursts, (e) the reflection keeps the full lobe (the sphere in a mirror floor),
+# (d) ROUTE AGREEMENT: a static box's bounce gathered through the caches and through
+# the decode (the arm "gather.decodeHits") within the cards' 3 %.
+# JAH_SPECKLE_DUMP=1 writes each moving arm's worst frame pair as PPMs.
+add_executable(test_gi_speckle test_gi_speckle.cpp)
+set_target_properties(test_gi_speckle PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_speckle PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_speckle PRIVATE JahshakaEngine)
+add_dependencies(test_gi_speckle JahshakaEngineMedia)
+jah_gpu_row(gi.speckle CLASS engine TOKENS 2 COMMAND test_gi_speckle
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.speckle PROPERTIES TIMEOUT 180 LABELS "engine")
 # gi.hit_offscreen_lights (D3-HIT-SHADE-2): THE WORLD LIGHT LIST — a point lamp and
 # a spot whose ranges touch no frustum light a mover's hit seen in a mirror as its
 # raster shows them (2 %), and with the list switched off in the same process the
