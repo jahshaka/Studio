@@ -25,7 +25,7 @@ function assert(cond, msg) {
 var EXPECTED = { "reflect.motion": 1, "reflect.posed": 1, "reflect.alphaTested": 1,
                  "reflect.edgeClasses": 0, "reflect.monoEyes": 0, "rayquery.tlasRefit": 0,
                  "gather.temporal": 1, "atom.decode": 1, "cards.footprintTexels": 4, "gi.fieldScroll": 1,
-                 "photon.diffuseConeSkip": 1, "photon.specularConeSkip": 1 };
+                 "photon.diffuseConeSkip": 1, "photon.specularConeSkip": 1, "gather.decodeHits": 0 };
 
 var guid = project.create("Engine Arms " + Date.now());
 assert(guid.length > 10, "project.create -> " + guid);
