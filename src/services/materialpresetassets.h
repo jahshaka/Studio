@@ -88,8 +88,7 @@ bool isPreset(const QString &presetOrGuid);
 
 /// EVERY SHIPPED PRESET'S GUID, in the shipped table's order — the set that
 /// means "the app's own read-only bundles", for a caller that has to reason
-/// about all of them at once (the boot re-stamp of their maps,
-/// services/presetrestamp.h). `guidFor` is the rule; this is it, applied to
+/// about all of them at once. `guidFor` is the rule; this is it, applied to
 /// the table, in one place instead of a loop at each caller.
 QStringList allGuids();
 

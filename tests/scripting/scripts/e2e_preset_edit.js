@@ -49,8 +49,15 @@ function assert(cond, msg) {
 // rows the copy-on-write MINTS through the union and the by-guid read.
 function materialRows() {
     var seen = {};
+    // The shipped presets are PLATFORM rows (ASSETS-HOME-1): counted by their
+    // reserved guids, beside Assets and the open project.
     var rows = assets.list({ scope: "store", type: "material" })
+                   .concat(assets.list({ scope: "materials", type: "material" }))
                    .concat(assets.list({ scope: "project", type: "material" }));
+    materials.presets().forEach(function (p) {
+        try { if (assets.metadata(p.guid).home === "platform") rows.push({ guid: p.guid }); }
+        catch (e) {}
+    });
     return rows.filter(function (a) {
         if (seen[a.guid]) return false;
         seen[a.guid] = true;
@@ -203,8 +210,9 @@ assert(nameOf(copy) === "Wood PBR" && materials.masterOf(copy) === WOOD,
 // (projectCopyOf answers the first copy pinned).
 function woodIn(rows) { return rows.filter(function (a) { return a.name === "Wood PBR"; }); }
 var libWood = woodIn(assets.list({ scope: "store" }));
-assert(libWood.length === 1 && libWood[0].guid === WOOD,
-       "the library list shows ONE 'Wood PBR' — the master (" + JSON.stringify(libWood) + ")");
+assert(libWood.length === 0 && assets.metadata(WOOD).home === "platform",
+       "the Assets list shows NO 'Wood PBR' — the master is a platform row (ASSETS-HOME-1) ("
+       + JSON.stringify(libWood) + ")");
 var storeGuids = assets.list({ scope: "store", members: true }).map(function (a) { return a.guid; });
 assert(storeGuids.indexOf(copy) < 0 && storeGuids.indexOf(editB.guid) < 0,
        "…and neither project's copy is a library row at all, members shown or not");

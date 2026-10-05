@@ -37,8 +37,15 @@ function assert(cond, msg) {
 var GOLD  = "00000000-0000-0000-0000-000000002024";   // Gold PBR: colours only
 var BRICK = "00000000-0000-0000-0000-000000002014";   // Brick PBR: three maps
 
+// THE LIBRARY'S MATERIAL ROWS: the shipped presets are PLATFORM rows
+// (ASSETS-HOME-1), read by their reserved guids, plus whatever Assets holds.
 function materialRows() {
-    return assets.list({ scope: "store", type: "material" });
+    var rows = assets.list({ scope: "store", type: "material" });
+    materials.presets().forEach(function (p) {
+        try { if (assets.metadata(p.guid).home === "platform") rows.push({ guid: p.guid, name: p.name }); }
+        catch (e) {}
+    });
+    return rows;
 }
 function names(rows) {
     return rows.map(function (r) { return r.name; }).sort();
@@ -138,6 +145,8 @@ assert(materials.seedPresets() === 20, "the first-run seed: twenty bundles");
 var seeded = materialRows();
 assert(seeded.length === 20,
        "…and that is the whole library's material list (" + seeded.length + ")");
+assert(assets.list({ scope: "store", type: "material" }).length === 0,
+       "…every one a PLATFORM row: Assets lists none of them (ASSETS-HOME-1)");
 assert(materials.seedPresets() === 20, "seeding again is idempotent");
 assert(materialRows().length === 20, "…and mints nothing the second time");
 

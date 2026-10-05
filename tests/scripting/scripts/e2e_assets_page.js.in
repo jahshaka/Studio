@@ -133,9 +133,9 @@ assert(material.apply(foldCube, "Wood PBR") === true, "fold: project A applies W
 var editA = materials.edit("Wood PBR");
 assert(editA.copied === true && editA.guid !== WOOD, "fold: A's first edit makes A's own copy");
 var libWood = woodIn(assets.list({ scope: "store" }));
-assert(libWood.length === 1 && libWood[0].guid === WOOD,
-       "fold: the Assets page's library list shows ONE 'Wood PBR', the master ("
-       + JSON.stringify(libWood) + ")");
+assert(libWood.length === 0,
+       "fold: the Assets page lists NO 'Wood PBR' — neither the master (a platform row, "
+       + "ASSETS-HOME-1) nor A's copy (" + JSON.stringify(libWood) + ")");
 app.space("materials");
 assert(guidsIn(materials.projectDrawer()).indexOf(editA.guid) >= 0,
        "fold: A's own Project drawer shows A's copy");
