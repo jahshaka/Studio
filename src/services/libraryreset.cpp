@@ -287,6 +287,10 @@ Result reset(Database *db, SettingsManager *settings, const QString &projectsRoo
     // collector takes what no kept row names — the projects' and the
     // platform's objects, their sidecars — so a kept store holds exactly its
     // storages and nothing else.
+    //
+    // ON THE CALLING (UI) THREAD, deliberately: the button's reset is followed
+    // by a restart and the bump's runs before any window exists, so nothing is
+    // waiting on a frame while it works.
     if (keep.any() && !storeRoot.isEmpty() && QDir(storeRoot).exists()) {
         // The rebuild writes through its OWN connection: the main one must hold
         // no transaction (a script run's gesture batch would hold the write
@@ -319,9 +323,10 @@ Result reset(Database *db, SettingsManager *settings, const QString &projectsRoo
 
     // ---- 5. THE FRESH-INSTALL BOOTSTRAP ----------------------------------
     // The store's own identity first: the root is recreated (it is the default
-    // one, or a custom one that still exists) and given a NEW store.json, which
-    // is what a first launch on an empty machine writes. A new storeId is the
-    // truth — this is not the store that was here a moment ago.
+    // one, or a custom one that still exists). With nothing kept it gets a NEW
+    // store.json, what a first launch on an empty machine writes — this is not
+    // the store that was here a moment ago. With a storage kept, store.json was
+    // left in place and keeps its storeId: it IS the same store (ASSETS-HOME-1).
     if (!storeRoot.isEmpty() && AssetStorePaths::root() == AssetStorePaths::defaultRoot())
         QDir().mkpath(storeRoot);
     AssetStoreService::bootstrapFromSettings(settings);

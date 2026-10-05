@@ -67,6 +67,12 @@ materials.members(saved).forEach(function (m) {
 });
 assert(home(fromPreset) === "materials", "…and the original stays in Materials");
 
+// ---- an UNLISTED Assets row: deleted from the library while the project pins it
+var pinned = assets.importFile(KEEP_MODEL);
+assets.addToProject(pinned);
+assets.remove(pinned);
+assert(assets.metadata(pinned).listed === false, "a pinned row deleted from Assets is unlisted");
+
 // ---- a project's own material (cleared by every reset) ---------------------
 var projMat = materials.create("Keep Project Mat", { folder: "" });
 assert(home(projMat) === "project", "the editor's material is the project's own");
@@ -80,4 +86,5 @@ console.log("MAT=" + mat);
 console.log("FROMPRESET=" + fromPreset);
 console.log("SAVED=" + saved);
 console.log("PROJMAT=" + projMat);
+console.log("UNLISTED=" + pinned);
 console.log("ALL PASS");

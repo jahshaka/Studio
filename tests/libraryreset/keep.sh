@@ -32,7 +32,7 @@ cat "$HERE/keep_populate.js" >> populate.run.js
 check $? "the populate run exits 0"
 grep -q "^ALL PASS" populate.log
 check $? "every home holds what its door put there (see populate.log)"
-GUIDS="$(grep -E '^(TEXTURE|MODEL|RIG|CLIP|AVATAR|MAT|FROMPRESET|SAVED|PROJMAT)=' populate.log \
+GUIDS="$(grep -E '^(TEXTURE|MODEL|RIG|CLIP|AVATAR|MAT|FROMPRESET|SAVED|PROJMAT|UNLISTED)=' populate.log \
          | sed -E 's/^([A-Z]+)=(.*)$/var \1 = "\2";/' | tr '\n' ' ')"
 test -n "$GUIDS"
 check $? "it printed the guids"
@@ -68,11 +68,13 @@ grep -q "^ALL PASS" bump.log
 check $? "A FORMAT BUMP KEEPS THE STORAGES: every row rebuilt in its home, bakes re-derived (see bump.log)"
 grep -qE "rebuilding [1-9][0-9]* stale bake" bump.log
 check $? "…the bump DROPPED the kept rows' bakes and the background rebuild re-derived them"
+ONDISK="$(python3 -c "import sqlite3,glob,sys; print(sqlite3.connect(glob.glob(sys.argv[1]+'/*.db')[0]).execute('PRAGMA user_version').fetchone()[0])" "$PWD/keep-bump")"
+[ "$ONDISK" = "$GEN" ]
+check $? "…and the library on disk is stamped $GEN, never the test's $NEXT ($ONDISK)"
 printf 'var g = app.libraryGeneration(); if (g.outcome !== "current") throw new Error(g.outcome); console.log("ALL PASS");\n' \
        > again.run.js
-JAHSHAKA_TEST_LIBRARY_GENERATION=$NEXT "$BIN" --headless --data-root "$PWD/keep-bump" \
-    --script again.run.js > again.log 2>&1
+"$BIN" --headless --data-root "$PWD/keep-bump" --script again.run.js > again.log 2>&1
 grep -q "^ALL PASS" again.log
-check $? "…and the next boot at $NEXT finds the library current"
+check $? "…the override is never WRITTEN: the next real boot ($GEN) finds the library current, not newer"
 
 exit $fail

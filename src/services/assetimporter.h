@@ -18,7 +18,8 @@ For more information see the LICENSE file
 //
 // Same store layout and DB contract as the widget: one guid names the Object
 // row, the AssetStore/<guid> folder and the parent of every member row; the
-// Object row alone gets AssetViewFilter::AssetsView; the blob's mesh path and
+// Object row is the Assets tile and its members ride it by `parent`, in its
+// home (ASSETS-HOME-1); the blob's mesh path and
 // texture references are rewritten to guids; Object->Mesh and Object->Texture
 // dependency rows link the members. Referenced on-disk textures are copied and
 // registered; embedded textures are not extracted (v1, same bytes-on-disk gap

@@ -39,6 +39,7 @@ QVariantMap VerifyReport::toMap() const
     map["bytes"] = bytes;
     map["corrupt"] = corrupt;
     map["missing"] = missing;
+    map["missingSidecars"] = missingSidecars;
     map["elapsedMs"] = elapsedMs;
     return map;
 }
@@ -55,7 +56,9 @@ QVariantMap RebuildReport::toMap() const
     map["edges"] = edges;
     map["skipped"] = skipped;
     map["otherHomes"] = otherHomes;
+    map["unlistedDropped"] = unlistedDropped;
     map["unreadable"] = unreadable;
+    map["unreadableFiles"] = unreadableFiles;
     map["elapsedMs"] = elapsedMs;
     return map;
 }
@@ -122,7 +125,24 @@ VerifyReport verify(const QString &dbPath, const QString &storeRoot)
         }
     }
 
+    // EVERY STORAGE ROW HAS ITS SIDECAR (ASSETS-HOME-1): a row of Assets, the
+    // Materials or the Avatar storage without one is a row a Clear Database or
+    // a format bump cannot rebuild — it would be lost, so it is a finding.
+    QSqlQuery rows(scoped.db);
+    rows.prepare("SELECT guid FROM assets WHERE view_filter IN (?, ?, ?)");
+    rows.addBindValue(static_cast<int>(assethome::StoredAssets));
+    rows.addBindValue(static_cast<int>(assethome::StoredMaterialsLibrary));
+    rows.addBindValue(static_cast<int>(assethome::StoredAvatarLibrary));
+    if (rows.exec())
+        while (rows.next()) {
+            const QString guid = rows.value(0).toString();
+            if (!QFileInfo::exists(AssetStorePaths::sidecarPathIn(storeRoot, guid)))
+                report.missingSidecars << guid;
+        }
+
     report.elapsedMs = timer.elapsed();
+    // `ok` stays the BYTES' verdict (every object present and bit-identical);
+    // a missing sidecar is its own finding, reported beside it.
     report.ok = report.corrupt.isEmpty() && report.missing.isEmpty();
     return report;
 }
@@ -156,17 +176,62 @@ QVector<QJsonObject> restorable(const QString &storeRoot, const RebuildOptions &
                                 RebuildReport *report)
 {
     QVector<QJsonObject> out;
+    QSet<QString> dropped;
     const QDir sidecarDir(QDir(storeRoot).filePath(QStringLiteral("sidecar")));
     QDirIterator it(sidecarDir.path(), { "*.json" }, QDir::Files);
     while (it.hasNext()) {
         const QString path = it.next();
+        // NOTHING IS SKIPPED SILENTLY: a sidecar that cannot be opened, parsed,
+        // or placed in a home is COUNTED and NAMED (the log and the report), so
+        // a rebuild that keeps less than the store holds says so.
+        const auto unreadable = [&](const QString &why) {
+            qWarning("rebuildCatalog: sidecar %s not read: %s", qUtf8Printable(path),
+                     qUtf8Printable(why));
+            if (report) {
+                ++report->unreadable;
+                report->unreadableFiles.append(path);
+            }
+        };
         QFile file(path);
-        if (!file.open(QIODevice::ReadOnly)) continue;
-        const QJsonObject sidecar = QJsonDocument::fromJson(file.readAll()).object();
-        if (sidecar.value("guid").toString().isEmpty()) continue;
+        if (!file.open(QIODevice::ReadOnly)) { unreadable(QStringLiteral("cannot open it")); continue; }
+        QJsonParseError parseError;
+        const QJsonDocument doc = QJsonDocument::fromJson(file.readAll(), &parseError);
+        if (parseError.error != QJsonParseError::NoError || !doc.isObject()) {
+            unreadable(QStringLiteral("not JSON (%1)").arg(parseError.errorString()));
+            continue;
+        }
+        const QJsonObject sidecar = doc.object();
+        if (sidecar.value("guid").toString().isEmpty()) { unreadable(QStringLiteral("no guid")); continue; }
         assethome::Home home;
-        if (!sidecarHome(sidecar, &home)) { if (report) ++report->unreadable; continue; }
+        if (!sidecarHome(sidecar, &home)) {
+            unreadable(QStringLiteral("no home in this format (formatVersion %1)")
+                           .arg(sidecar.value("formatVersion").toInt()));
+            continue;
+        }
         if (!wanted(home, options)) { if (report) ++report->otherHomes; continue; }
+        // THE ONE DOOR'S RULE, HERE TOO (ASSETS-HOME-1): a rebuild is not a
+        // second way into a home. A sidecar whose (home, origin) the door would
+        // refuse is not restored — counted, named, logged.
+        {
+            assethome::Origin origin;
+            if (!assethome::originFromName(sidecar.value("origin").toString(), &origin)) {
+                unreadable(QStringLiteral("no origin in this format"));
+                continue;
+            }
+            const QString refused = assethome::refusal(home, origin);
+            if (!refused.isEmpty()) { unreadable(refused); continue; }
+        }
+        // AN UNLISTED ROW lives only for the projects that pin it (a library
+        // delete those projects vetoed). A rebuild that restores no project has
+        // no pin to keep it for: it is dropped, and the collector takes its
+        // objects — never an invisible row holding bytes for ever.
+        const bool restoresProjects =
+            options.homes.isEmpty() || options.homes.contains(assethome::Kind::Project);
+        if (!sidecar.value("listed").toBool(true) && !restoresProjects) {
+            if (report) ++report->unlistedDropped;
+            dropped.insert(sidecar.value("guid").toString());
+            continue;
+        }
 
         // TOMBSTONE GUARD (deep audit 2026-09, area 6): a sidecar whose
         // recorded objects are ALL gone from the store describes an asset the
@@ -190,6 +255,20 @@ QVector<QJsonObject> restorable(const QString &storeRoot, const RebuildOptions &
         }
         if (!anyPresent) { if (report) ++report->skipped; continue; }
         out.append(sidecar);
+    }
+    // A MEMBER GOES WITH ITS OWNER: a row whose parent was dropped above (a
+    // model's mesh, a material's baked map) would otherwise come back as a
+    // loose tile of its own. Repeated until nothing more falls.
+    for (bool more = !dropped.isEmpty(); more;) {
+        more = false;
+        for (int i = out.size() - 1; i >= 0; --i) {
+            const QString parent = out.at(i).value("parent").toString();
+            if (parent.isEmpty() || !dropped.contains(parent)) continue;
+            dropped.insert(out.at(i).value("guid").toString());
+            if (report) ++report->unlistedDropped;
+            out.removeAt(i);
+            more = true;
+        }
     }
     return out;
 }

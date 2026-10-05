@@ -616,12 +616,23 @@ WriteResult writeImpl(Database *db, Project *project, const QString &guid,
     // AFTER the commit, deliberately: a sidecar is a PROJECTION of committed
     // rows (FSYNC-2's Durability::Derived rule). Writing it inside the guard
     // would describe rows a rollback then took away.
+    // A SIDECAR THAT CANNOT BE WRITTEN IS A FAILURE THE USER SEES (ASSETS-HOME-1):
+    // the rows are committed, but a storage row with no sidecar is one a Clear
+    // Database or a format bump cannot rebuild — it would be lost later,
+    // silently. So the write answers ok=false and says exactly that.
     QString sidecarError;
-    for (const QString &member : std::as_const(adopted))
-        AssetCas::writeSidecar(conn, root, member, nullptr);
-    if (!AssetCas::writeSidecar(conn, root, guid, &sidecarError))
-        qWarning("MaterialBundle::write: could not refresh the sidecar for %s (%s)",
-                 qUtf8Printable(guid), qUtf8Printable(sidecarError));
+    for (const QString &member : std::as_const(adopted)) {
+        QString memberError;
+        if (!AssetCas::writeSidecar(conn, root, member, &memberError) && sidecarError.isEmpty())
+            sidecarError = memberError;
+    }
+    if (!AssetCas::writeSidecar(conn, root, guid, &sidecarError) || !sidecarError.isEmpty()) {
+        result.ok = false;
+        result.error = QStringLiteral("the material was saved, but its record in the store "
+                                      "(sidecar) could not be written (%1) — it would not survive "
+                                      "Clear Database or an update").arg(sidecarError);
+        return result;
+    }
 
     result.ok = true;
     return result;

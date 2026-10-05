@@ -30,6 +30,8 @@ expect(AVATAR, "avatars", keepAssets, "the avatar (it follows the Assets box)");
 expect(MAT, "materials", keepMaterials, "the New Material");
 expect(FROMPRESET, "materials", keepMaterials, "the material created from a preset");
 expect(PROJMAT, "project", false, "the project's own material");
+expect(UNLISTED, "assets", false,
+       "an UNLISTED Assets row (its pinning project is gone, so nothing keeps it)");
 assert(project.list().length === 0, "every project is cleared");
 
 // THE KEPT BUNDLES ARE WHOLE: every member comes back in its owner's home.
@@ -50,7 +52,9 @@ if (keepAssets) {
 }
 
 // THE ASSETS LISTING is exactly the kept Assets rows.
-var tiles = assets.list({ scope: "store" }).map(function (r) { return r.guid; });
+var tileRows = assets.list({ scope: "store" });
+console.log("TILES=" + tileRows.map(function (r) { return r.name + ":" + r.type; }).join(", "));
+var tiles = tileRows.map(function (r) { return r.guid; });
 var wantTiles = keepAssets ? [TEXTURE, MODEL, RIG, CLIP, SAVED] : [];
 assert(tiles.length === wantTiles.length
        && wantTiles.every(function (g) { return tiles.indexOf(g) >= 0; }),

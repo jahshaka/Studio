@@ -1600,8 +1600,8 @@ bool MaterialApi::set(const QString &nodeId, const QVariantMap &values)
                 // ShippedAssets::importTexture, identified by CONTENT — the
                 // same bytes answer the same row, so setting the same file
                 // twice mints one row, not two. Its home is the open project's
-                // (the platform's when none is open: a scripted session's node
-                // material is nobody's storage).
+                // (the Materials storage when none is open — Platform is the
+                // app's shipped content only).
                 if (!host.db)
                     return fail(QStringLiteral("material.set: no library in this session to "
                                                "hold the texture '%1'").arg(ref));
@@ -1609,7 +1609,7 @@ bool MaterialApi::set(const QString &nodeId, const QVariantMap &values)
                 if (QFileInfo(ref).isFile()) {
                     const ShippedAssets::Pinned imported = ShippedAssets::importTexture(
                         ref, QFileInfo(ref).fileName(), host.db, host.project,
-                        assethome::current(host.project, assethome::platform()));
+                        assethome::current(host.project, assethome::materials()));
                     if (!imported.ok() || imported.guid.isEmpty())
                         return fail(QStringLiteral("material.set: importing the texture '%1' "
                                                    "failed: %2").arg(ref, imported.error));

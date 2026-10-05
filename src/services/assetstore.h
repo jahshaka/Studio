@@ -45,8 +45,8 @@ public:
     /// Is the active root reachable right now?
     static bool online();
 
-    /// {root, online, missing, storeId?, formatVersion?} — missing = library
-    /// rows (view_filter 2 AND 3, preflight §1.6) that RECORD stored bytes
+    /// {root, online, missing, storeId?, formatVersion?} — missing = rows of
+    /// the user's storages (Assets, Materials, Avatars — ASSETS-HOME-1) that RECORD stored bytes
     /// (asset_files) and have none of those objects under the active root.
     /// Rows with no stored bytes exist legitimately (node-JSON-only assets)
     /// and are not missing; offline reporting keys on `online`, not on

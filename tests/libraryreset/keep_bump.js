@@ -26,6 +26,8 @@ assert(gen.keptRows > 0 && gen.unreadable === 0,
     assert(m.home === e[1] && m.origin === e[2],
            e[0] + " is back in " + e[1] + " as '" + e[2] + "' (" + m.home + "/" + m.origin + ")");
 });
+assert(meta(UNLISTED).home === undefined,
+       "an unlisted Assets row whose project is gone is dropped, not kept invisible");
 assert(meta(PROJMAT).home === undefined && project.list().length === 0,
        "the project and its own material are cleared");
 

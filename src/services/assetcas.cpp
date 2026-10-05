@@ -321,8 +321,8 @@ void ensureCasSchema(QSqlDatabase conn)
     versionQuery.exec("PRAGMA user_version");
     int current = 0;
     if (versionQuery.next()) current = versionQuery.value(0).toInt();
-    if (current != CasSchema::userVersion())
-        QSqlQuery(QStringLiteral("PRAGMA user_version = %1").arg(CasSchema::userVersion()), conn);
+    if (current != CasSchema::kUserVersion)
+        QSqlQuery(QStringLiteral("PRAGMA user_version = %1").arg(CasSchema::kUserVersion), conn);
 }
 
 bool ingestFile(QSqlDatabase conn, const QString &root, const QString &srcPath,

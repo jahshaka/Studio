@@ -723,11 +723,24 @@ bool AssetImportService::commitStagedAsset(const ImportRequest &request, StagedA
     // on a filesystem without hardlinks the view was a second full copy of
     // every imported file (Windows: 152MB store → 438MB, a second full write
     // per import).
+    // A SIDECAR THAT CANNOT BE WRITTEN FAILS THE IMPORT VISIBLY (ASSETS-HOME-1):
+    // the rows are committed and stay, but the user is told the import is not
+    // safe — a row without its sidecar cannot be rebuilt by Clear Database or
+    // a format bump.
     touchedGuids.removeDuplicates();
+    QString sidecarFailure;
     for (const QString &guid : touchedGuids) {
         QString casError;
-        AssetCas::writeSidecar(conn, root, guid, &casError);
-        if (!casError.isEmpty()) irisLog("import post-commit: " + casError);
+        if (!AssetCas::writeSidecar(conn, root, guid, &casError) && sidecarFailure.isEmpty())
+            sidecarFailure = casError.isEmpty() ? guid : casError;
+    }
+    if (!sidecarFailure.isEmpty()) {
+        irisLog("import post-commit: " + sidecarFailure);
+        result.error = QStringLiteral("imported, but its record in the store (sidecar) could not "
+                                      "be written (%1) — it would not survive Clear Database or "
+                                      "an update").arg(sidecarFailure);
+        AssetCas::discardStaged(staged.stagedBytes);
+        return false;
     }
 
     // Anything prepare() staged that this plan never named (it should be

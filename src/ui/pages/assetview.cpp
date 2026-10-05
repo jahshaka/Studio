@@ -2516,7 +2516,10 @@ void AssetView::createMaterialFromImageTile(const QString &textureGuid)
 
 	QString error;
 	const QString materialGuid =
-	    ImageMaterial::createMaterialAsset(textureGuid, db, project, assethome::assets(), &error);
+	    // A CREATION, so it lands in the Materials storage (the lead's ruling,
+	    // ASSETS-HOME-1) — Assets only takes imports and saves; the picture is
+	    // copied in as the new material's own member.
+	    ImageMaterial::createMaterialAsset(textureGuid, db, project, assethome::materials(), &error);
 	if (materialGuid.isEmpty()) {
 		QMessageBox::warning(this, tr("Create Material from Image"),
 		                     tr("Could not create the material: %1").arg(error));
@@ -2539,7 +2542,7 @@ void AssetView::createMaterialFromImageTile(const QString &textureGuid)
 	addLibraryTileForAsset(materialGuid);
 }
 
-void AssetView::rebuildMissingThumbnails()
+void AssetView::rebuildMissingThumbnails(bool afterUpdate)
 {
 	if (!db) return;
 
@@ -2566,8 +2569,9 @@ void AssetView::rebuildMissingThumbnails()
 	for (const QString &guid : result.rebuiltGuids) libraryModel->refreshTile(guid);
 
 	if (result.rebuilt == 0 && result.failed.isEmpty()) {
-		libraryToast()->showToast(tr("Thumbnails"),
-		                          tr("Every asset that can have a thumbnail already has one."));
+		if (!afterUpdate)
+			libraryToast()->showToast(tr("Thumbnails"),
+			                          tr("Every asset that can have a thumbnail already has one."));
 		return;
 	}
 	// THE DENOMINATOR IS WHAT WAS ATTEMPTED, not what was looked at (F10):
@@ -2584,6 +2588,14 @@ void AssetView::rebuildMissingThumbnails()
 	QStringList lines;
 	for (const auto &failure : result.failed)
 		lines << QStringLiteral("%1: %2").arg(failure.guid, failure.reason);
+	if (afterUpdate) {
+		irisLog(QStringLiteral("thumbnails after the update: %1 of %2 rebuilt; not rebuilt: %3")
+		            .arg(result.rebuilt).arg(attempted).arg(lines.join(QStringLiteral("; "))));
+		libraryToast()->showToast(tr("Thumbnails"),
+		                          tr("Rebuilt %1 of %2 thumbnails after the update; the log lists "
+		                             "the rest.").arg(result.rebuilt).arg(attempted));
+		return;
+	}
 	QMessageBox::warning(this, tr("Rebuild missing thumbnails"),
 	                     tr("Rebuilt %1 of %2. These could not be rebuilt:\n\n%3")
 	                         .arg(result.rebuilt)

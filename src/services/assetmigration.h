@@ -18,8 +18,8 @@ For more information see the LICENSE file
 //     near the live one (preflight §3.2);
 //   - migration REFUSES while another process holds the library lock
 //     ("close Jahshaka first", preflight §6.2);
-//   - migration scans LIBRARY rows: view_filter IN (2,3) — Effects rows ARE
-//     library tiles (preflight §1.6);
+//   - the user's STORAGE rows are view_filter IN (2,5,6) — Assets, the
+//     Materials and the Avatar storage (ASSETS-HOME-1, data/assethomekind.h);
 //   - everything is idempotent: run twice = same store, zero new objects.
 
 #include <QSet>
@@ -39,6 +39,7 @@ struct VerifyReport
     qint64 bytes = 0;
     QStringList corrupt;        // oid: bytes no longer hash to the oid
     QStringList missing;        // oid: object file absent
+    QStringList missingSidecars;  // guid: a storage row with no sidecar (a rebuild would lose it)
     qint64 elapsedMs = 0;
 
     QVariantMap toMap() const;
@@ -55,7 +56,9 @@ struct RebuildReport
     int edges = 0;              // intrinsic dependency edges restored
     int skipped = 0;            // tombstones: sidecars whose objects are all gone
     int otherHomes = 0;         // sidecars of a home the caller did not ask for
-    int unreadable = 0;         // sidecars of another format (no recorded home): not read
+    int unlistedDropped = 0;    // unlisted rows with no project left to pin them
+    int unreadable = 0;         // sidecars not read: unparseable, or no recorded home
+    QStringList unreadableFiles;  // ...and which (also named in the log)
     qint64 elapsedMs = 0;
 
     QVariantMap toMap() const;

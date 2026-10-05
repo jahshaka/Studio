@@ -68,8 +68,8 @@ static QByteArray readFile(const QString &path)
 static void insertAsset(const QString &guid, int type, const QString &name)
 {
     QSqlQuery q;
-    q.prepare("INSERT INTO assets (guid, type, name, view_filter, collection, author, license, properties) "
-              "VALUES (?, ?, ?, 2, 0, 'tester', 'MIT', '{}')");
+    q.prepare("INSERT INTO assets (guid, type, name, view_filter, collection, author, license, properties, origin) "
+              "VALUES (?, ?, ?, 2, 0, 'tester', 'MIT', '{}', 'import')");
     q.addBindValue(guid);
     q.addBindValue(type);
     q.addBindValue(name);
@@ -467,6 +467,7 @@ int main(int argc, char **argv)
             "{\"formatVersion\":3,\"home\":\"assets\",\"origin\":\"import\",\"guid\":\"guidTombstone\",\"name\":\"gone.bin\",\"type\":1,"
             "\"files\":[{\"role\":\"source\",\"oid\":\"" + QString(64, QLatin1Char('c')).toUtf8()
             + "\",\"name\":\"gone.bin\",\"size\":10,\"ext\":\"bin\"}]}"));
+        writeFile(AssetStorePaths::sidecarPathIn(root, "guidBroken"), QByteArray("{not json"));
         writeFile(AssetStorePaths::sidecarPathIn(root, "guidFileless"), QByteArray(
             "{\"formatVersion\":3,\"home\":\"assets\",\"origin\":\"import\",\"guid\":\"guidFileless\",\"name\":\"dbonly\",\"type\":1,\"files\":[]}"));
         // and a real one for a live asset
@@ -481,6 +482,9 @@ int main(int argc, char **argv)
         const auto rebuild = AssetMigration::rebuildCatalog(rebuiltDb, root);
         CHECK(rebuild.ok, "rebuildCatalog succeeded");
         CHECK(rebuild.skipped == 1, "exactly one sidecar was skipped as a tombstone");
+        CHECK(rebuild.unreadable == 1 && rebuild.unreadableFiles.size() == 1
+                  && rebuild.unreadableFiles.first().endsWith("guidBroken.json"),
+              "an UNPARSEABLE sidecar is counted and named, never skipped silently");
 
         QSqlDatabase check = QSqlDatabase::addDatabase("QSQLITE", "GcRebuildCheck");
         check.setDatabaseName(rebuiltDb);

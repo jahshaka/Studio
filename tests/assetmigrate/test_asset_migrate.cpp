@@ -62,8 +62,8 @@ static QByteArray readFile(const QString &path)
 static void insertAsset(const QString &guid, int type, const QString &name, int viewFilter)
 {
     QSqlQuery q;
-    q.prepare("INSERT INTO assets (guid, type, name, view_filter, collection, author, license, properties) "
-              "VALUES (?, ?, ?, ?, 0, 'tester', 'MIT', '{\"metadata\":{\"kind\":\"test\"}}')");
+    q.prepare("INSERT INTO assets (guid, type, name, view_filter, collection, author, license, properties, origin) "
+              "VALUES (?, ?, ?, ?, 0, 'tester', 'MIT', '{\"metadata\":{\"kind\":\"test\"}}', 'import')");
     q.addBindValue(guid);
     q.addBindValue(type);
     q.addBindValue(name);
@@ -337,6 +337,19 @@ int main(int argc, char **argv)
         writeFile(objectY, contentY);   // restore
     }
     CHECK(AssetMigration::verify(dbPath, root).ok, "verify clean again after restore");
+    {
+        // A STORAGE ROW WITHOUT ITS SIDECAR is a finding (ASSETS-HOME-1): a
+        // Clear Database or a format bump could not rebuild it.
+        const QString side = AssetStorePaths::sidecarPathIn(root, "guidB");
+        const bool hadIt = AssetMigration::verify(dbPath, root).missingSidecars.indexOf("guidB") < 0;
+        CHECK(hadIt && QFile::rename(side, side + ".away"), "guidB's sidecar is taken away");
+        const auto noSide = AssetMigration::verify(dbPath, root);
+        CHECK(noSide.missingSidecars.contains("guidB"),
+              "verify names the storage row that has no sidecar");
+        CHECK(QFile::rename(side + ".away", side), "...and it is put back");
+        CHECK(!AssetMigration::verify(dbPath, root).missingSidecars.contains("guidB"),
+              "...and verify is clean of it again");
+    }
 
     // ---- rebuildCatalog into a FRESH database (the honest I2 test) ----
     const QString rebuiltDb = cwd + "/cas_rebuilt.db";

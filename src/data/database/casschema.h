@@ -34,9 +34,13 @@ namespace CasSchema
 //     only what is not storage. Bump whenever stored data is read differently.
 inline constexpr int kUserVersion = 5;
 
-/// The generation this PROCESS reads and writes: kUserVersion, or — for the
-/// format-bump suite ONLY — `JAHSHAKA_TEST_LIBRARY_GENERATION`, so a test can
-/// stage a bump (5 -> 6) without a second build. Never set outside a test.
+/// The generation this process COMPARES a library against at startup
+/// (services/librarygeneration.h): kUserVersion, or — for the format-bump suite
+/// ONLY — `JAHSHAKA_TEST_LIBRARY_GENERATION`, so a test can stage a bump (5 -> 6)
+/// without a second build. It is NEVER WRITTEN: every library is stamped
+/// kUserVersion (Database::createCasTables, AssetCas::ensureCasSchema), so a
+/// leaked variable can make a boot rebuild the storages once more, but never
+/// leave a library a real build would refuse as "newer".
 inline int userVersion()
 {
     bool ok = false;
