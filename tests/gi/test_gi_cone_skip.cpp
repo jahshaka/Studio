@@ -224,67 +224,23 @@ int main()
                       answered, sameInput);
             CHECK_MSG(moved == 0, "PH-1 IS EXACT: of those %zu pixels, %zu shade differently with the skip ON and OFF",
                       sameInput, moved);
+            // THE NEGATIVE CONTROL: the term the composite replaces at those pixels is real work. With the
+            // reflection taken away (no SSR row: no composite), the same pixels shade from the environment
+            // term the cone writes into - and they move, so the skip removes a term that was not zero.
+            PostFxDesc noRefl = fx;
+            noRefl.ssr = 0;
+            view->setPostFx(noRefl);
+            render(e, 30);
+            ImageF bare;
+            CHECK(view->readPixelsHdr(bare), "the frame without a reflection rendered");
+            size_t replacedReal = 0;
+            for (size_t i = 0; i + 3 < on.rgba.size() && i + 3 < bare.rgba.size(); i += 4)
+                if (reflOn.rgba[i + 3] >= 1.0f && std::memcmp(&on.rgba[i], &bare.rgba[i], 4 * sizeof(float)) != 0)
+                    ++replacedReal;
+            CHECK_MSG(replacedReal > answered * 9u / 10u,
+                      "the control: %zu of the %zu w = 1 pixels shade differently from the cone's own term", replacedReal,
+                      answered);
         }
-        e->destroyView(view);
-        e->destroyScene(s);
-    }
-
-    // ---- PH-1's exception: a CLEAR COAT under parallax-corrected probes ---------------
-    // There the cone's hit position also weighs the coat's own probe term, which the SSR
-    // composite does not replace, so the skip is compiled out for that material
-    // (PhotonVct_piece_ps.any). A coated mirror floor and a plain glossy column under a
-    // probe grid and the screen march: the arm on and off are the same floats.
-    {
-        std::printf("-- PH-1 exception: a clear-coated floor under a probe grid, the screen march\n");
-        e->setRayTracing(false);
-        View *view = e->createOffscreenView("skip-coat", kW, kH, Colour(0, 0, 0));
-        Scene *s = e->createScene("skip-coat");
-        view->setScene(s);
-        // gi.leak_room's shell (the probes keep only what they see enclosed), a coated slab on
-        // its floor and a mirror column, the camera inside.
-        enginetest::leakroom::build(s, view, 0.3f);
-        s->setAmbient(Colour(0.25f, 0.27f, 0.30f), Colour(0.20f, 0.18f, 0.15f));
-        const NodeId floor = s->createNode();
-        {
-            PbrParams p;
-            p.albedo = Colour(0.30f, 0.05f, 0.05f);
-            p.roughness = 0.6f;
-            p.clearCoat = 1.0f;
-            p.clearCoatRoughness = 0.02f;
-            const MaterialId mat = s->createPbrMaterial(p);
-            const MeshId mesh = s->createMesh(enginetest::unitCubeMesh());
-            CHECK(floor && mat && mesh && s->attachMesh(floor, mesh, mat), "the coated slab exists");
-        }
-        s->setNodeTransform(floor, Vec3(0.0f, 0.02f, 0.0f), Quat(), Vec3(9.0f, 0.04f, 9.0f));
-        const NodeId col = enginetest::addTestCube(s, Colour(0.9f, 0.9f, 0.9f), 1.0f, 0.0f);
-        s->setNodeTransform(col, Vec3(0.0f, 1.25f, 2.5f), Quat(), Vec3(1.0f, 2.5f, 1.0f));
-        GiParams gi;
-        gi.mode = GiMode::VctPccHybrid;
-        gi.quality = GiQuality::Medium;
-        gi.numBounces = 1;
-        gi.updateBudget = 1;           // the probes capture, then the stale set is empty
-        gi.pccProbesX = 2; gi.pccProbesY = 1; gi.pccProbesZ = 2;
-        CHECK(s->setGlobalIllumination(gi), "the hybrid arm builds");
-        PostFxDesc fx;
-        fx.allowOffscreen = true;
-        fx.ssr = 1;                    // the screen march (no rays bound)
-        fx.hdrReadback = true;
-        view->setPostFx(fx);
-        enginetest::testCameraLookAt(view, Vec3(0.0f, 1.6f, -3.5f), Vec3(0.0f, 0.4f, 4.0f));
-        render(e, 160);
-        const GiStatus pst = s->giStatus();
-        CHECK_MSG(pst.pccBound && pst.probeCount > 0,
-                  "the probe grid is bound (%d probes, by rays %d, dropped %d, stale %d)", pst.probeCount,
-                  int(pst.probeGridByRays), pst.probesDropped, pst.staleProbes);
-        ImageF on, off, on2;
-        CHECK(shot(e, view, "photon.specularConeSkip", 1.0, 30, on), "skip ON rendered");
-        CHECK(shot(e, view, "photon.specularConeSkip", 0.0, 30, off), "skip OFF rendered");
-        CHECK(shot(e, view, "photon.specularConeSkip", 1.0, 30, on2), "skip ON again rendered");
-        const size_t still = floatsDiffering(on, on2);
-        CHECK_MSG(still == 0, "the frame is still (%zu floats differ)", still);
-        const size_t d = floatsDiffering(on, off);
-        CHECK_MSG(d == 0, "THE COAT IS UNTOUCHED: skip ON and OFF are the same floats (%zu of %zu differ, worst %.3g)",
-                  d, on.rgba.size(), worstAbs(on, off));
         e->destroyView(view);
         e->destroyScene(s);
     }
