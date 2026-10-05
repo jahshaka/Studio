@@ -229,7 +229,8 @@ WriteResult writeShipped(Database *db, const QString &guid, const QJsonObject &d
 /// failure.
 QString create(Database *db, const QString &name, const QJsonObject &definition,
                const assethome::Home &home, const QByteArray &thumbnail = QByteArray(),
-               QString *errorOut = nullptr);
+               QString *errorOut = nullptr,
+               assethome::Origin origin = assethome::Origin::Create);
 
 /// THE PROJECT'S OWN COPY OF A SHIPPED PRESET (PRESET-EDIT-1, the owner's
 /// rule: "only the MASTER materials should be locked; if they are added to a

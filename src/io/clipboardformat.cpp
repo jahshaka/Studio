@@ -121,7 +121,6 @@ QByteArray Envelope::toText() const
             obj[QStringLiteral("type")] = asset.type;
             if (asset.typeId >= 0) obj[QStringLiteral("typeId")] = asset.typeId;
             if (!asset.parent.isEmpty()) obj[QStringLiteral("parent")] = asset.parent;
-            if (asset.viewFilter >= 0) obj[QStringLiteral("viewFilter")] = asset.viewFilter;
             if (!asset.dependencies.isEmpty()) {
                 QJsonArray deps;
                 for (const QString &dep : asset.dependencies) deps.append(dep);
@@ -225,7 +224,6 @@ Envelope Envelope::fromText(const QByteArray &text, QString *error, qint64 maxBy
         asset.type = obj.value(QStringLiteral("type")).toString();
         asset.typeId = obj.value(QStringLiteral("typeId")).toInt(-1);
         asset.parent = obj.value(QStringLiteral("parent")).toString();
-        asset.viewFilter = obj.value(QStringLiteral("viewFilter")).toInt(-1);
         for (const QJsonValue &dep : obj.value(QStringLiteral("dependencies")).toArray())
             asset.dependencies << dep.toString();
         for (const QJsonValue &file : obj.value(QStringLiteral("files")).toArray())

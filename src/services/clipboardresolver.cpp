@@ -437,28 +437,21 @@ bool ClipboardResolver::registerAsset(const ClipAsset &asset,
     // it commits (invariant I2).
     DbTransaction tx(conn);
 
-    // The row is stamped with the CURRENT project, exactly as the import spine
-    // stamps an import (assetimportservice.cpp:304) — a clipboard paste is an
-    // import, and a row with no project guid is a row the Assets page files
-    // differently from every other imported asset.
-    const QString projectGuid = project ? project->getProjectGuid() : QString();
     // The row's INSERT can fail (SQLITE_BUSY from another connection, SQLITE_FULL)
     // while the object store and the commit still succeed — the dangling-guid
     // class the review named; a refused row is a failed import, nothing else.
-    // A PASTE INTO THE EDITOR IS THE PROJECT'S (ASSETS-SCOPE-1): the rows it
-    // lands are the project's own (Editor) and never library tiles. A paste
-    // into the Assets page keeps the clip's own placement (a member stays a
-    // member, a tile is a library tile).
-    const AssetViewFilter viewFilter =
-        mHome.isProject() ? AssetViewFilter::Editor
-        : asset.viewFilter >= 0 ? static_cast<AssetViewFilter>(asset.viewFilter)
-                                : AssetViewFilter::AssetsView;
+    // THE PASTE'S ONE HOME (ASSETS-HOME-1): the project's own rows for a paste
+    // into the editor, Assets for a paste into the Assets page or a shared
+    // file's import.
+    QString refused;
     const QString row = db->createAssetEntry(
         asset.guid, safeFileName(asset.name), asset.typeId, asset.parent,
-        projectGuid, QString(), QString(), QByteArray(),
-        asset.properties, QByteArray(), asset.blob, viewFilter);
+        mHome, mOrigin, QString(), QString(), QByteArray(),
+        asset.properties, QByteArray(), asset.blob, &refused);
     if (row.isEmpty()) {
-        if (errorOut) *errorOut = QStringLiteral("the library refused the asset row");
+        if (errorOut)
+            *errorOut = refused.isEmpty() ? QStringLiteral("the library refused the asset row")
+                                          : refused;
         return false;   // the transaction rolls back with tx
     }
 

@@ -78,9 +78,8 @@ static QString textureRow(Database &db, const QString &guid, const QString &name
                           const QString &storeRoot, const QString &srcPath)
 {
     db.createAssetEntry(guid, name, static_cast<int>(ModelTypes::Texture),
-                        QString(), QString(), QString(), QString(), QByteArray(),
-                        QByteArray(), QByteArray(), QByteArray(),
-                        AssetViewFilter::AssetsView);
+                        QString(), assethome::assets(), assethome::Origin::Import, QString(), QString(), QByteArray(),
+                        QByteArray(), QByteArray(), QByteArray());
     QString oid, err;
     AssetCas::ingestFile(QSqlDatabase::database(), storeRoot, srcPath, guid,
                          QStringLiteral("source"), name, &oid, &err);
@@ -142,8 +141,8 @@ int main(int argc, char **argv)
     definition["values"] = values;
 
     QString createError;
-    const QString woodyGuid = MaterialBundle::create(&db, "woody", definition, assethome::library(),
-                                                     QByteArray(), &createError);
+    const QString woodyGuid = MaterialBundle::create(&db, "woody", definition, assethome::assets(),
+                                                     QByteArray(), &createError, assethome::Origin::ExplicitSave);
     CHECK(!woodyGuid.isEmpty(), qPrintable(QStringLiteral("1: the bundle was minted (%1)").arg(createError)));
     CHECK(db.fetchAsset(woodyGuid).type == static_cast<int>(ModelTypes::Material),
           "1: it is ONE Material row");
@@ -288,8 +287,8 @@ int main(int argc, char **argv)
     graphDefinition["values"] = graphValues;
     graphDefinition["shadergraph"] = okGraph;
 
-    const QString graphyGuid = MaterialBundle::create(&db, "graphy", graphDefinition, assethome::library(),
-                                                      QByteArray(), &createError);
+    const QString graphyGuid = MaterialBundle::create(&db, "graphy", graphDefinition, assethome::assets(),
+                                                      QByteArray(), &createError, assethome::Origin::ExplicitSave);
     CHECK(!graphyGuid.isEmpty(), "5: a graph material is minted");
     CHECK(countWhere("SELECT COUNT(*) FROM assets") == rowsBefore + 1,
           "5: exactly ONE new row — no Shader row (§2.3)");
@@ -351,10 +350,8 @@ int main(int argc, char **argv)
         {
             db.createAssetEntry("tex-member", "roughnessMap.png",
                                 static_cast<int>(ModelTypes::Texture),
-                                graphyGuid,          // parent = the MATERIAL
-                                QString(), QString(), QString(), QByteArray(),
-                                QByteArray(), QByteArray(), QByteArray(),
-                                AssetViewFilter::AssetsView);
+                                graphyGuid,          assethome::assets(), assethome::Origin::Import, QString(), QString(), QByteArray(),
+                                QByteArray(), QByteArray(), QByteArray());
             QString oid, err;
             AssetCas::ingestFile(conn, storeRoot, bakeSrc, "tex-member",
                                  QStringLiteral("source"), "roughnessMap.png", &oid, &err);
@@ -390,8 +387,8 @@ int main(int argc, char **argv)
         colourDef["materialType"] = "pbr";
         colourDef["values"] = colourValues;
 
-        const QString redGuid = MaterialBundle::create(&db, "red", colourDef, assethome::library(),
-                                                       QByteArray(), &createError);
+        const QString redGuid = MaterialBundle::create(&db, "red", colourDef, assethome::assets(),
+                                                       QByteArray(), &createError, assethome::Origin::ExplicitSave);
         CHECK(!redGuid.isEmpty(), "8b: a definition with an object-valued colour is accepted");
         const QJsonObject stored = MaterialBundle::read(&db, redGuid);
         const QJsonValue base = stored.value("values").toObject().value("baseColor");
@@ -422,8 +419,8 @@ int main(int argc, char **argv)
         QJsonObject libDef;
         libDef["materialType"] = "pbr";
         libDef["values"] = libValues;
-        const QString sharedGuid = MaterialBundle::create(&db, "shared", libDef, assethome::library(),
-                                                          QByteArray(), &createError);
+        const QString sharedGuid = MaterialBundle::create(&db, "shared", libDef, assethome::assets(),
+                                                          QByteArray(), &createError, assethome::Origin::ExplicitSave);
         CHECK(!sharedGuid.isEmpty(), "9: a library bundle naming tex-wood");
         CHECK(AssetCas::writePin(conn, projectGuid, sharedGuid,
                                  AssetCas::sourceOid(conn, sharedGuid)),
@@ -479,9 +476,8 @@ int main(int argc, char **argv)
               "11: an ordinary guid is not a preset");
 
         db.createAssetEntry(presetGuid, "Gold PBR", static_cast<int>(ModelTypes::Material),
-                            QString(), QString(), QString(), QString(), QByteArray(),
-                            QByteArray(), QByteArray(), QByteArray(),
-                            AssetViewFilter::AssetsView);
+                            QString(), assethome::assets(), assethome::Origin::Import, QString(), QString(), QByteArray(),
+                            QByteArray(), QByteArray(), QByteArray());
         QJsonObject presetValues;
         presetValues["baseColor"] = "#ffd700";
         QJsonObject presetDef;
@@ -533,9 +529,9 @@ int main(int argc, char **argv)
         const QString goldGuid = Constants::Reserved::DefaultMaterials.key("Gold PBR");
         const QString mine = GUIDManager::generateGUID();
         db.createAssetEntry(mine, QStringLiteral("My Material"),
-                            static_cast<int>(ModelTypes::Material), QString(), QString(),
+                            static_cast<int>(ModelTypes::Material), QString(), assethome::assets(), assethome::Origin::Import,
                             QString(), QString(), QByteArray(), QByteArray(), QByteArray(),
-                            QByteArray(), AssetViewFilter::AssetsView);
+                            QByteArray());
 
         CHECK(assettags::rename(&db, mine, QStringLiteral("Something Else")),
               "12: an ordinary material renames");
@@ -550,9 +546,9 @@ int main(int argc, char **argv)
               "12: ...and the refused rename changed nothing");
 
         db.createAssetEntry(goldGuid, QStringLiteral("Gold PBR"),
-                            static_cast<int>(ModelTypes::Material), QString(), QString(),
+                            static_cast<int>(ModelTypes::Material), QString(), assethome::assets(), assethome::Origin::Import,
                             QString(), QString(), QByteArray(), QByteArray(), QByteArray(),
-                            QByteArray(), AssetViewFilter::AssetsView);
+                            QByteArray());
         CHECK(!assettags::rename(&db, goldGuid, QStringLiteral("Fred")),
               "12: and the preset itself cannot be renamed");
         CHECK(db.fetchAsset(goldGuid).name == QLatin1String("Gold PBR"),

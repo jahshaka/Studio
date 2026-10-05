@@ -111,6 +111,11 @@ public:
     /// drawer's Duplicate is this verb's implementation.
     Q_INVOKABLE QString duplicate(const QString &materialGuid,
                                   const QVariantMap &options = QVariantMap());
+    /// SAVE TO ASSETS (ASSETS-HOME-1): a full copy of the material in Assets —
+    /// the one explicit gesture that puts a material there. The drawer's
+    /// "Save to Assets" is this verb's implementation.
+    Q_INVOKABLE QString saveToAssets(const QString &materialGuid,
+                                     const QVariantMap &options = QVariantMap());
     Q_INVOKABLE QVariantMap loadGraph(const QString &guidOrPath);
     Q_INVOKABLE bool regenerate(const QString &shaderGuid);
     Q_INVOKABLE QString createFromImage(const QString &textureGuid,

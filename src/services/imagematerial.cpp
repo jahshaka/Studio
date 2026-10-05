@@ -146,8 +146,11 @@ QString createMaterialAsset(const QString &textureGuid, Database *db,
     // shipped preset's (an image called "Gold PBR.png" gets "Gold PBR-1").
     const QString chosenName = MaterialBundle::uniqueName(db, matName);
     QString createError;
+    // An explicit gesture either way: into Assets (the Assets page's "Create
+    // Material from Image") it is the user's save there (ASSETS-HOME-1).
     const QString materialGuid = MaterialBundle::create(db, chosenName, blob, home, thumbnail,
-                                                        &createError);
+                                                        &createError,
+                                                        assethome::bornInside(home));
     if (materialGuid.isEmpty())
         return failWith(createError.isEmpty() ? QStringLiteral("the companion material could not be stored")
                                               : createError);
@@ -166,7 +169,7 @@ bool hasCompanionMaterial(const QString &textureGuid, const QString &projectGuid
     query.addBindValue(textureGuid);
     query.addBindValue(static_cast<int>(ModelTypes::Material));
     query.addBindValue(projectGuid);
-    query.addBindValue(static_cast<int>(AssetViewFilter::Editor));
+    query.addBindValue(static_cast<int>(assethome::StoredProject));
     query.addBindValue(projectGuid);
     return query.exec() && query.next();
 }

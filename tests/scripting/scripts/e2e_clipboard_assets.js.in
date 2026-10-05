@@ -43,8 +43,8 @@ var payload = JSON.parse(clipboard.text());
 assert(payload.items[0].kind === "asset", "the item is an `asset` item");
 assert(payload.items[0].guid === tex, "naming the guid");
 assert(payload.assets[tex].files[0].inline.length > 0, "and the closure carries the bytes");
-assert(payload.assets[tex].viewFilter >= 0,
-       "with the row's VIEW FILTER — a paste must not turn a member row into a library tile");
+assert(payload.assets[tex].viewFilter === undefined,
+       "and NO home of its own: the paste decides where the rows live (ASSETS-HOME-1)");
 
 var described = clipboard.contents();
 assert(described.items[0].kind === "asset" && described.items[0].name === "tiny.png",

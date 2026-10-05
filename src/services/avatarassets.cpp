@@ -215,11 +215,11 @@ QString AvatarAssets::create(const QString &objectGuid, Scope scope, Database *d
     // project's own row (pinned below) and never a library tile.
     const assethome::Home home = scope == Scope::Project
                                      ? assethome::project(project->getProjectGuid())
-                                     : assethome::library();
+                                     : assethome::avatars();
     db->createAssetEntry(guid, definition.name, static_cast<int>(ModelTypes::Avatar), QString(),
-                         home.projectGuid,
+                         home, assethome::Origin::Create,
                          QString(), QString(), record.thumbnail, QByteArray(), QByteArray(),
-                         QByteArray(), home.viewFilter());
+                         QByteArray());
     reconcileDependencies(guid, definition, db, project);
     AssetCas::writeSidecar(conn, AssetStorePaths::root(), guid, nullptr);
 
@@ -379,7 +379,7 @@ QString AvatarAssets::saveToLibrary(const QString &guid, Database *db, Project *
         // Created IN this project: PROMOTE IN PLACE (§4 D6-A). The row keeps
         // its guid — a fresh library row would orphan every instance that
         // already names this one, in scenes that may not even be open.
-        if (!db->updateAssetProject(guid, QString()))
+        if (!db->setAssetHome(guid, assethome::avatars(), assethome::Origin::Create))
             return refuse(QStringLiteral("could not promote '%1' to the library").arg(record.name));
         // Its dependencies are project rows too when they were imported here;
         // they stay where they are (a library avatar may depend on a project

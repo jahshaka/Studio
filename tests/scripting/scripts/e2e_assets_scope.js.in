@@ -30,8 +30,15 @@ function inProject(g, type) {
 }
 
 var projA = project.create("Assets scope " + Date.now());
-materials.seedPresets();          // the shipped library, before the count
 var storeBefore = store().length;
+materials.seedPresets();          // the shipped presets: PLATFORM rows (ASSETS-HOME-1)
+assert(store().length === storeBefore,
+       "seeding the shipped presets adds NOTHING to Assets (" + store().length + " vs "
+       + storeBefore + ")");
+materials.presets().forEach(function (p) {
+    assert(!inStore(p.guid) && assets.metadata(p.guid).home === "platform",
+           p.name + " is a platform row, not an Assets tile");
+});
 
 // ---- 1. a material made in the editor, with a picture from disk -----------
 var mat = materials.create("Scope Mat " + Date.now(), { folder: "" });
@@ -72,9 +79,10 @@ assert(store().length === storeBefore + 1,
 // ---- 3. the library doors ---------------------------------------------------
 assert(inStore(imported), "an import into the library IS in the store");
 var libMat = materials.create("Library Mat " + Date.now());
-assert(inStore(libMat), "materials.create without {folder} is a library material");
+assert(!inStore(libMat) && assets.metadata(libMat).home === "materials",
+       "materials.create without {folder} lands in the MATERIALS storage, not Assets");
 assert(!inProject(libMat, "material"), "...and the project does not hold it");
-// ---- 4. F1: a LIBRARY material's picture is a LIBRARY row, project or not ---
+// ---- 4. F1: a stored material's picture lives where the material does ------
 // Project open, a library material edited, a picture picked from disk: the
 // row is the library's (the material's home decides, never "a project is
 // open") — and it is NOT the project's own row on the same bytes (section 1
@@ -83,7 +91,8 @@ assert(!inProject(libMat, "material"), "...and the project does not hold it");
 var libEdit = materials.create("Library Edit " + Date.now());
 var libTex = materials.addTexture(libEdit, IMAGE, { slot: "baseColorMap" });
 assert(libTex !== tex, "the library material's picture is NOT the project's row on the same bytes");
-assert(inStore(libTex), "...it is a LIBRARY row (members shown)");
+assert(!inStore(libTex) && assets.metadata(libTex).home === "materials",
+       "...it is a row of the material's own home, the Materials storage");
 assets.removeFromProject(libTex);
 assert(assets.metadata(libTex).name.length > 0, "...and it survives the project's remove");
 assert(materials.members(libEdit).some(function (m) { return m.guid === libTex; }),

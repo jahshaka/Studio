@@ -407,9 +407,11 @@ int main(int argc, char **argv)
                   .value("metadata").toObject().value("kind").toString() == "test",
               "updateAssetProperties refreshed the sidecar's properties");
 
-        CHECK(db.updateAssetViewFilter("guidSolo", 3), "updateAssetViewFilter");
-        CHECK(QJsonDocument::fromJson(readFile(path)).object().value("viewFilter").toInt() == 3,
-              "updateAssetViewFilter refreshed the sidecar");
+        CHECK(db.setAssetHome("guidSolo", assethome::materials(), assethome::Origin::Create),
+              "setAssetHome");
+        CHECK(QJsonDocument::fromJson(readFile(path)).object().value("home").toString()
+                  == QLatin1String("materials"),
+              "setAssetHome refreshed the sidecar");
 
         CHECK(db.switchAssetCollection(7, "guidSolo"), "switchAssetCollection");
         CHECK(QJsonDocument::fromJson(readFile(path)).object().value("collection").toInt() == 7,

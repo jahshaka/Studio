@@ -139,7 +139,7 @@ void MaterialPresetSeeder::importMapsThenRows()
     for (const auto &entry : mPrepared.mapOwners) {
         const QString oid = mPrepared.mapOids.value(entry.first);
         if (oid.isEmpty()) continue;
-        if (!ShippedAssets::libraryTextureFor(oid).isEmpty()) continue;
+        if (!ShippedAssets::libraryTextureFor(oid, assethome::platform()).isEmpty()) continue;
         // ONE PICTURE, ONE ROW — INSIDE THIS BATCH TOO (SEED-STAMP-1,
         // measured). The library test above is asked BEFORE anything is
         // imported, so two shipped files with the same BYTES both answered
@@ -163,6 +163,9 @@ void MaterialPresetSeeder::importMapsThenRows()
         // off — and a User-intent import of the same bytes later is exactly
         // the gesture that does.
         request.intent = ImportRequest::Intent::Material;
+        // A PRESET'S MAP IS THE PLATFORM'S (ASSETS-HOME-1): hidden, nobody's
+        // storage, re-seeded after a reset.
+        request.home = assethome::platform();
         requests.append(request);
         // AND WHO IT CAME IN THROUGH, for the stamp this pass now writes
         // itself (below).

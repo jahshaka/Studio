@@ -141,7 +141,7 @@ private:
     /// row the user can never see. The source oid comes from the staged
     /// import record — prepare() stamps one for every import, on the worker
     /// thread, so this never reads the source file again.
-    QString relistUnlistedMatch(const StagedAsset &staged);
+    QString relistUnlistedMatch(const ImportRequest &request, const StagedAsset &staged);
 
     /// THE MEMBER THE USER IMPORTS THEMSELVES (IMPORT-INTENT-1, the bundle
     /// spec's F14). An import the USER asked for whose bytes are already in

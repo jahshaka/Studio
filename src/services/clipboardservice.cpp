@@ -442,8 +442,11 @@ ClipboardPasteResult ClipboardService::paste(const ClipboardPasteOptions &option
 
     ClipboardResolver resolver(db, project);
     // Rows landed by a paste into the EDITOR are the project's own; a paste
-    // into the Assets page lands library rows (ASSETS-SCOPE-1).
-    resolver.setHome(toAssets ? assethome::library() : assethome::current(project));
+    // into the Assets page is the user's explicit save there (ASSETS-HOME-1).
+    if (toAssets || !project || project->getProjectGuid().isEmpty())
+        resolver.setHome(assethome::assets(), assethome::Origin::ExplicitSave);
+    else
+        resolver.setHome(assethome::project(project->getProjectGuid()), assethome::Origin::Create);
     const ClipboardResolveReport plan = resolver.plan(envelope, &candidateNeeds);
     result.missing = plan.missing;
     if (!plan.error.isEmpty()) {

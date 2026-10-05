@@ -11,6 +11,8 @@ For more information see the LICENSE file
 #ifndef CASSCHEMA_H
 #define CASSCHEMA_H
 
+#include <QtGlobal>
+
 // Content-addressed-store schema (ASSET_PIPELINE_SPEC §3.1.3, phase 2) —
 // shared between the live Database (createAllTables) and the migration/
 // verify/rebuild tools, which operate on EXPLICIT db paths over their own
@@ -25,9 +27,22 @@ namespace CasSchema
 // user-data migrations (the app ships new; the owner's library is wiped).
 // 3 = the listing indexes (D11-LIBRARY-SCALE; Database::createIndexes).
 // 4 = FORWARD-ONLY-1: the LIBRARY GENERATION (services/librarygeneration.h).
-//     Stored data is read differently with no column moved, so a library of
-//     any other value is wiped at startup. Bump it whenever that is true again.
-inline constexpr int kUserVersion = 4;
+// 5 = ASSETS-HOME-1: the typed homes (`view_filter` = the home, the `origin`
+//     column, the sidecar's `home`/`origin`). A library of generation 4 records
+//     no home, so it is WIPED once; from 5 on a bump REBUILDS the catalog from
+//     the user's storages' sidecars (services/librarygeneration.h) and wipes
+//     only what is not storage. Bump whenever stored data is read differently.
+inline constexpr int kUserVersion = 5;
+
+/// The generation this PROCESS reads and writes: kUserVersion, or — for the
+/// format-bump suite ONLY — `JAHSHAKA_TEST_LIBRARY_GENERATION`, so a test can
+/// stage a bump (5 -> 6) without a second build. Never set outside a test.
+inline int userVersion()
+{
+    bool ok = false;
+    const int forced = qEnvironmentVariableIntValue("JAHSHAKA_TEST_LIBRARY_GENERATION", &ok);
+    return (ok && forced > 0) ? forced : kUserVersion;
+}
 
 // Reference-with-pin (ASSET_PIPELINE_SPEC §3.1.5, phase 4): a project "use"
 // of an asset is a row here, pinning the source oid AT ADD TIME. Content is
@@ -106,7 +121,19 @@ inline constexpr const char *kAssetsTableForRebuild =
     "    tags              BLOB,"
     "    properties        BLOB,"
     "    view_filter       INTEGER,"
+    "    origin            TEXT,"
     "    listed            INTEGER NOT NULL DEFAULT 1"
+    ")";
+// The dependencies table for the same fresh-recovery case (database.cpp's
+// dependenciesTableSchema — same columns, same order).
+inline constexpr const char *kDependenciesTableForRebuild =
+    "CREATE TABLE IF NOT EXISTS dependencies ("
+    "    depender_type  INTEGER,"
+    "    dependee_type  INTEGER,"
+    "    project_guid   VARCHAR(32),"
+    "    depender       VARCHAR(32),"
+    "    dependee       VARCHAR(32),"
+    "    id             VARCHAR(32) PRIMARY KEY"
     ")";
 } // namespace CasSchema
 

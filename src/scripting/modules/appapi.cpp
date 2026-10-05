@@ -519,18 +519,27 @@ QVector<VerbInfo> AppApi::verbs() const
           "projects under the `default_directory` preference. READ-ONLY on purpose: a setter "
           "would have to move a live database and a live asset store while they are open.",
           Needs::Document },
-        { "libraryGeneration", "app.libraryGeneration() -> {generation, onDisk, outcome, wipedAtStartup, reason}",
+        { "libraryGeneration", "app.libraryGeneration() -> {generation, onDisk, outcome, wipedAtStartup, reason, keptRows, unreadable}",
           "THE LIBRARY GENERATION (FORWARD-ONLY-1): `generation` is the one this build writes and "
           "reads (PRAGMA user_version); `onDisk` what the library carried when this process "
           "started; `outcome` what the startup check did — \"noLibrary\" (a first launch), "
-          "\"current\", \"wiped\" (an older library: there are no migrations, it was reset — "
-          "project folders outside the data root are left on disk, only unlisted — and the GUI "
-          "said so once), \"refused\" (never seen here: that process exits) or \"failed\". "
+          "\"current\", \"wiped\" (an older library: there are no migrations, it was reset KEEPING "
+          "the user's Assets, Materials and Avatars — rebuilt from their sidecars, `keptRows` of "
+          "them; `unreadable` sidecars of a format that records no home were not read — and "
+          "project folders outside the data root are left on disk, only unlisted; the GUI said "
+          "so once), \"refused\" (never seen here: that process exits) or \"failed\". "
           "Read-only.",
           Needs::Document },
-        { "resetLibrary", "app.resetLibrary({restart}) -> {ok, removed: {objects, sidecars, projects, thumbnails, staging}, restarted}",
+        { "resetLibrary", "app.resetLibrary({clearAssets, clearMaterials, restart}) -> {ok, removed: {objects, sidecars, projects, thumbnails, staging}, kept: {rows, objects, edges, unreadable}, restarted}",
           "RESET THE LIBRARY TO A FIRST LAUNCH (owner review R10.2) — the gesture behind "
-          "Preferences > World > Clear Database, and everything that button never did. It closes "
+          "Preferences > World > Clear Database — EXCEPT THE USER'S STORAGES THE CALLER KEEPS "
+          "(ASSETS-HOME-1): `clearAssets` (default false) also clears Assets and the Avatar "
+          "module's avatars (an avatar names its model in Assets), `clearMaterials` (default "
+          "false) the Materials module's storage. A kept storage comes back exactly — every row "
+          "rebuilt from its own sidecar under this build's schema with its members, edges, "
+          "definitions, creation time and use count, its stored objects kept, the store's "
+          "identity kept — and the rest of the store (projects', the platform's) is collected; "
+          "`kept` counts the rebuilt rows. With both boxes ticked it is the whole reset below. It closes "
           "the open project WITHOUT SAVING, drops every catalog table and creates them again, "
           "removes the CONTENTS of the asset store (objects, sidecars, derived caches, the store's "
           "identity and its abandoned staging temps — never the store ROOT directory, which the "
@@ -1059,7 +1068,9 @@ QVariantMap AppApi::libraryGeneration()
                         { QStringLiteral("onDisk"), r.generationOnDisk },
                         { QStringLiteral("outcome"), QString::fromLatin1(outcome) },
                         { QStringLiteral("wipedAtStartup"), librarygeneration::wipedAtStartup() },
-                        { QStringLiteral("reason"), r.reason } };
+                        { QStringLiteral("reason"), r.reason },
+                        { QStringLiteral("keptRows"), r.keptRows },
+                        { QStringLiteral("unreadable"), r.unreadable } };
 }
 
 QVariantMap AppApi::resetLibrary(const QVariantMap &options)
@@ -1126,12 +1137,20 @@ QVariantMap AppApi::resetLibrary(const QVariantMap &options)
     // `seedPresets`): started here it would run in a process that is already
     // on its way out, and two seeders over one store is how a
     // content-addressed library still gets two rows for one picture.
+    // THE TWO BOXES (ASSETS-HOME-1; the owner, 2026-10-04): everything else is
+    // always cleared; Assets (with the avatars, which name their models there)
+    // and the Materials module's storage only when the caller says so. Both
+    // default to KEPT — the dialog's boxes are off by default.
+    libraryreset::Keep keep;
+    keep.assets = !options.value(QStringLiteral("clearAssets"), false).toBool();
+    keep.materials = !options.value(QStringLiteral("clearMaterials"), false).toBool();
     const libraryreset::Result result = libraryreset::reset(
         host.db, SettingsManager::getDefaultManager(), projectsRoot, folderFor,
-        /*seedPresets*/ !restart);
+        /*seedPresets*/ !restart, keep);
 
     out.insert(QStringLiteral("ok"), result.ok);
     out.insert(QStringLiteral("removed"), result.removed.toMap());
+    out.insert(QStringLiteral("kept"), result.kept.toMap());
     out.insert(QStringLiteral("restarted"), false);
     if (!result.ok) {
         // A PARTIAL RESET IS STILL REPORTED: the catalog may already be empty,

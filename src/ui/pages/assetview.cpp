@@ -1953,24 +1953,6 @@ void AssetView::applyImageZoom()
 		imageZoomLabel->setText(QStringLiteral("%1%").arg(qRound(imageZoom * 100)));
 }
 
-void AssetView::addToJahLibrary(const QString fileName, const QString guid, bool jfx)
-{
-    Q_UNUSED(fileName);
-    Q_UNUSED(jfx);
-	db->updateAssetViewFilter(guid, 2);
-	const int type = db->fetchAsset(guid).type;
-	if (type != static_cast<int>(ModelTypes::Sky))
-        db->updateAssetProperties(guid, QJsonDocument(viewer->getSceneProperties()).toJson());
-
-    viewer->cacheCurrentModel(guid);
-    addLibraryTileForAsset(guid);
-    openTile(guid);
-
-    renameWidget->setVisible(true);
-    tagWidget->setVisible(true);
-    updateAsset->setVisible(true);
-}
-
 // ---- rich metadata formatting (ASSET_DRAWERS_SPEC addendum) ----
 
 static QString formatCount(qint64 n)
@@ -2534,7 +2516,7 @@ void AssetView::createMaterialFromImageTile(const QString &textureGuid)
 
 	QString error;
 	const QString materialGuid =
-	    ImageMaterial::createMaterialAsset(textureGuid, db, project, assethome::library(), &error);
+	    ImageMaterial::createMaterialAsset(textureGuid, db, project, assethome::assets(), &error);
 	if (materialGuid.isEmpty()) {
 		QMessageBox::warning(this, tr("Create Material from Image"),
 		                     tr("Could not create the material: %1").arg(error));

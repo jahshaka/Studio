@@ -89,9 +89,9 @@ int main(int argc, char **argv)
     const QByteArray thumb(4096, 'T');   // a BLOB the closure must never read
     const auto make = [&](ModelTypes type, const QString &name) {
         const QString g = newGuid();
-        db.createAssetEntry(g, name, static_cast<int>(type), QString(), QString(), QString(), QString(), thumb,
+        db.createAssetEntry(g, name, static_cast<int>(type), QString(), assethome::assets(), assethome::Origin::Import, QString(), QString(), thumb,
                             QByteArray("{\"p\":\"") + name.toUtf8() + "\"}", QByteArray(),
-                            QByteArray("{\"a\":\"") + name.toUtf8() + "\"}", AssetViewFilter::AssetsView);
+                            QByteArray("{\"a\":\"") + name.toUtf8() + "\"}");
         return g;
     };
     QStringList textures, materials, models;
@@ -159,7 +159,7 @@ int main(int argc, char **argv)
         const auto it = described.constFind(guid);
         if (it == described.constEnd()) { same = false; continue; }
         same &= it->name == row.name && it->typeId == row.type && it->parent == row.parent
-                && it->viewFilter == row.view_filter && it->blob == row.asset && it->properties == row.properties
+                && it->blob == row.asset && it->properties == row.properties
                 && it->dependencies == db.fetchAssetGUIDAndDependencies(guid, false);
     }
     CHECK(same, "every described row equals fetchAsset's fields and the per-node edges");

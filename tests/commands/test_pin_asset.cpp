@@ -61,9 +61,8 @@ static void textureRow(Database &db, const QString &guid, const QString &name,
                        const QString &storeRoot, const QString &srcPath)
 {
     db.createAssetEntry(guid, name, static_cast<int>(ModelTypes::Texture),
-                        QString(), QString(), QString(), QString(), QByteArray(),
-                        QByteArray(), QByteArray(), QByteArray(),
-                        AssetViewFilter::AssetsView);
+                        QString(), assethome::assets(), assethome::Origin::Import, QString(), QString(), QByteArray(),
+                        QByteArray(), QByteArray(), QByteArray());
     QString oid, err;
     AssetCas::ingestFile(QSqlDatabase::database(), storeRoot, srcPath, guid,
                          QStringLiteral("source"), name, &oid, &err);
@@ -79,7 +78,7 @@ static QString materialRow(Database &db, const QString &name, const QString &tex
     definition[QStringLiteral("materialType")] = QStringLiteral("pbr");
     definition[QStringLiteral("values")] = values;
     QString error;
-    const QString guid = MaterialBundle::create(&db, name, definition, assethome::library(), QByteArray(), &error);
+    const QString guid = MaterialBundle::create(&db, name, definition, assethome::assets(), QByteArray(), &error, assethome::Origin::ExplicitSave);
     if (guid.isEmpty()) printf("info: material '%s' not created: %s\n",
                                qPrintable(name), qPrintable(error));
     return guid;

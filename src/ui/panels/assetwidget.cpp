@@ -1218,7 +1218,8 @@ void AssetWidget::createMaterialFromImage()
     QString error;
     const QString materialGuid =
         ImageMaterial::createMaterialAsset(textureGuid, db, project,
-                                           assethome::current(project), &error);
+                                           assethome::current(project, assethome::materials()),
+                                           &error);
     if (materialGuid.isEmpty()) {
         QMessageBox::warning(this, tr("Create Material from Image"),
                              tr("Could not create the material: %1").arg(error));
@@ -1721,7 +1722,8 @@ void AssetWidget::createSky()
 		"Sky",
 		static_cast<int>(ModelTypes::Sky),
 		project->getProjectGuid(),
-		project->getProjectGuid(),
+		assethome::project(project->getProjectGuid()),
+		assethome::Origin::Create,
 		QString(),
 		QString(),
 		AssetHelper::makeBlobFromPixmap(QPixmap(":/icons/icons8-file-sky.png")),

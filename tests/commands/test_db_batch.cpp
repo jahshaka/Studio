@@ -134,7 +134,7 @@ QString makePrimitiveRow(Database &db, const QString &projectGuid, int n)
     props["type"] = "builtin";
     db.createAssetEntry(guid, QStringLiteral("Cube %1").arg(n),
                         static_cast<int>(ModelTypes::Object),
-                        projectGuid, projectGuid, QString(), QString(), QByteArray(),
+                        projectGuid, assethome::project(projectGuid), assethome::Origin::Create, QString(), QString(), QByteArray(),
                         QJsonDocument(props).toJson(), QByteArray(), QByteArray());
     return guid;
 }
@@ -226,7 +226,7 @@ int main(int argc, char **argv)
                 const QString guid = GUIDManager::generateGUID();
                 db.createAssetEntry(guid, probeName + QStringLiteral("row"),
                                     static_cast<int>(ModelTypes::Object),
-                                    projectGuid, projectGuid);
+                                    projectGuid, assethome::project(projectGuid), assethome::Origin::Create);
                 CHECK(db.batchDepth() == 1, "the batch reads depth 1 while it is open");
                 CHECK(probeCount() == 0,
                       "...and the row is NOT visible to another connection yet");
@@ -272,7 +272,7 @@ int main(int argc, char **argv)
         {
             DbBatch batch(&db);
             db.createAssetEntry(kept, QStringLiteral("Stand-down kept"),
-                                static_cast<int>(ModelTypes::Object), projectGuid, projectGuid);
+                                static_cast<int>(ModelTypes::Object), projectGuid, assethome::project(projectGuid), assethome::Origin::Create);
             {
                 DbTransaction tx(QSqlDatabase::database());
                 CHECK(tx.isActive(),
@@ -280,7 +280,7 @@ int main(int argc, char **argv)
                 CHECK(!db.batchTransactionLive(),
                       "...because the batch committed what it had and stood down");
                 db.createAssetEntry(rolled, QStringLiteral("Stand-down rolled"),
-                                    static_cast<int>(ModelTypes::Object), projectGuid, projectGuid);
+                                    static_cast<int>(ModelTypes::Object), projectGuid, assethome::project(projectGuid), assethome::Origin::Create);
                 tx.rollback();
             }
             CHECK(db.batchDepth() == 1, "the batch SCOPE survived the nested owner");
@@ -314,7 +314,7 @@ int main(int argc, char **argv)
             {
                 DbBatch batch(&db);
                 db.createAssetEntry(GUIDManager::generateGUID(), QStringLiteral("Side-batched"),
-                                    static_cast<int>(ModelTypes::Object), projectGuid, projectGuid);
+                                    static_cast<int>(ModelTypes::Object), projectGuid, assethome::project(projectGuid), assethome::Origin::Create);
                 DbTransaction outerElsewhere(side);
                 CHECK(outerElsewhere.isActive(), "the side connection's guard is live");
                 {
@@ -325,7 +325,7 @@ int main(int argc, char **argv)
                           "...and the batch still stood down for it");
                     db.createAssetEntry(rolled, QStringLiteral("Side-rolled"),
                                         static_cast<int>(ModelTypes::Object),
-                                        projectGuid, projectGuid);
+                                        projectGuid, assethome::project(projectGuid), assethome::Origin::Create);
                     ours.rollback();
                 }
                 CHECK(db.batchTransactionLive(),
@@ -349,7 +349,7 @@ int main(int argc, char **argv)
         for (int i = 0; i < 6; ++i) {
             const QString tex = GUIDManager::generateGUID();
             db.createAssetEntry(tex, QStringLiteral("Reset tex %1").arg(i),
-                                static_cast<int>(ModelTypes::Texture), projectGuid, projectGuid);
+                                static_cast<int>(ModelTypes::Texture), projectGuid, assethome::project(projectGuid), assethome::Origin::Create);
             defaultTextures.append(tex);
         }
         // What the node uses TODAY: six edges the reset has to drop.
@@ -357,7 +357,7 @@ int main(int argc, char **argv)
         for (int i = 0; i < 6; ++i) {
             const QString tex = GUIDManager::generateGUID();
             db.createAssetEntry(tex, QStringLiteral("Old tex %1").arg(i),
-                                static_cast<int>(ModelTypes::Texture), projectGuid, projectGuid);
+                                static_cast<int>(ModelTypes::Texture), projectGuid, assethome::project(projectGuid), assethome::Origin::Create);
             db.createDependency(static_cast<int>(ModelTypes::Object),
                                 static_cast<int>(ModelTypes::Texture), nodeGuid, tex, projectGuid);
             oldTextures.append(tex);
@@ -424,7 +424,7 @@ int main(int argc, char **argv)
         {
             DbBatch batch(&db);
             db.createAssetEntry(GUIDManager::generateGUID(), QStringLiteral("Announced"),
-                                static_cast<int>(ModelTypes::Object), projectGuid, projectGuid);
+                                static_cast<int>(ModelTypes::Object), projectGuid, assethome::project(projectGuid), assethome::Origin::Create);
             CHECK(batch.end(), "a batch that commits reports success to its caller");
         }
         CHECK(heard.size() == 1 && heard.last() == true,
@@ -434,7 +434,7 @@ int main(int argc, char **argv)
         {
             DbBatch batch(&db);
             db.createAssetEntry(GUIDManager::generateGUID(), QStringLiteral("Lost"),
-                                static_cast<int>(ModelTypes::Object), projectGuid, projectGuid);
+                                static_cast<int>(ModelTypes::Object), projectGuid, assethome::project(projectGuid), assethome::Origin::Create);
             QSqlQuery(QStringLiteral("ROLLBACK"), QSqlDatabase::database());   // the failure
             CHECK(!batch.end(), "a batch that CANNOT commit reports failure to its caller");
         }
@@ -455,7 +455,7 @@ int main(int argc, char **argv)
     {
         db.beginBatch();
         db.createAssetEntry(survivor, QStringLiteral("Closed mid-batch"),
-                            static_cast<int>(ModelTypes::Object), projectGuid, projectGuid);
+                            static_cast<int>(ModelTypes::Object), projectGuid, assethome::project(projectGuid), assethome::Origin::Create);
         CHECK(db.batchDepth() == 1, "a batch is open when the close begins");
         db.closeDatabase();
         CHECK(db.batchDepth() == 0, "closeDatabase() dropped the scope");
@@ -493,7 +493,7 @@ int main(int argc, char **argv)
         {
             DbBatch batch(&closing);
             closing.createAssetEntry(guid, QStringLiteral("Closed under a guard"),
-                                     static_cast<int>(ModelTypes::Object), QString(), QString());
+                                     static_cast<int>(ModelTypes::Object), QString(), assethome::platform(), assethome::Origin::Create);
             CHECK(closing.batchDepth() == 1, "the guard's scope is open");
             closing.closeDatabase();
             CHECK(closing.batchDepth() == 0, "...and the close dropped it");

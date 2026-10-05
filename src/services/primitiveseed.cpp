@@ -185,9 +185,10 @@ Plan planSeed(const primitives::Def &def, Database *db)
     // the platform needs the geometry it ships in order to draw a floor or a
     // cube, so it may not take a member stamp off a row somebody else owns.
     plan.request.intent = ImportRequest::Intent::Material;
-    // NO PROJECT. A primitive belongs to the LIBRARY and to every project at
-    // once; stamping it with whichever project happened to be open would make
-    // app furniture look like that project's content.
+    // THE PLATFORM'S (ASSETS-HOME-1). A primitive belongs to every project at
+    // once and to nobody's storage: never an Assets tile, re-seeded after a
+    // reset, and no project stamp.
+    plan.request.home = assethome::platform();
     return plan;
 }
 
@@ -245,16 +246,14 @@ QString commitSeed(Plan &plan, Database *db, QString *errorOut)
                           .arg(QString::fromLatin1(plan.def->name), result.assetGuid));
     }
 
-    // PLATFORM FURNITURE, MARKED AND OUT OF THE LIBRARY LISTINGS (the same two
-    // marks the default floor's checker carries — services/shippedassets.h,
-    // services/assettray.h rule 4). A primitive is offered by its TILE and by
-    // `scene.addPrimitive`; it is not one of the user's imports, and the Assets
-    // page listing is theirs.
+    // PLATFORM FURNITURE, MARKED (the marker the default floor's checker
+    // carries — services/assettray.h rule 4; the home kept it out of every
+    // listing already). A primitive is offered by its TILE and by
+    // `scene.addPrimitive`; it is not one of the user's imports.
     const AssetRecord row = db->fetchAsset(plan.guid);
     QJsonObject props = QJsonDocument::fromJson(row.properties).object();
     props.insert(QStringLiteral("type"), QStringLiteral("platform"));
     db->updateAssetProperties(plan.guid, QJsonDocument(props).toJson());
-    db->updateAssetViewFilter(plan.guid, static_cast<int>(AssetViewFilter::Editor));
     return plan.guid;
 }
 

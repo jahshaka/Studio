@@ -33,6 +33,7 @@ For more information see the LICENSE file
 #include <functional>
 #include <memory>
 
+#include "data/assethomekind.h"
 #include "services/assetcas.h"
 
 class QTemporaryDir;
@@ -83,20 +84,14 @@ struct ImportRequest
     QJsonObject settings;       // recorded per-import; part of the determinism key
     bool wantViewerThumbnail = false;  // UI refreshes the thumbnail after preview
     Intent intent = Intent::User;      // see above — every user-facing door
-    /// THE ROWS THIS IMPORT MINTS ARE THE PROJECT'S OWN (ASSETS-SCOPE-1,
-    /// services/assethome.h): an image a MATERIAL brought into a project while
-    /// the user edited it (the texture picker, a graph texture node) belongs to
-    /// that project — `view_filter` Editor, never a library tile. False — the
-    /// default — for every import a person asks for: an import IS the library.
-    /// Needs a project guid (the request's or the service's project).
-    bool ownedByProject = false;
-    /// A FILE THE APP SHIPS (the default floor's checker, the emitter's default
-    /// image — ShippedAssets::pinTexture): the row it mints is the PLATFORM's,
-    /// `view_filter` DontShow — one row per content shared by every project
-    /// that pins it ("the same shipped bytes are the same row in every
-    /// project"), never a library tile and never any project's own row, so no
-    /// project's remove or delete can reap it from under the others.
-    bool shipped = false;
+    /// WHERE EVERY ROW THIS IMPORT MINTS LIVES (ASSETS-HOME-1,
+    /// data/assethomekind.h) — the main row and its members alike (a member is
+    /// a member by its `parent`). Assets for every import a person asks for: an
+    /// import IS the Assets door. A material's picture lands in that material's
+    /// home (a project's, the Materials module's); a file the app ships (the
+    /// floor's checker, a preset's map, the emitter's image) is the PLATFORM's —
+    /// one row per content shared by every project that pins it.
+    assethome::Home home = assethome::assets();
 };
 
 /// Is this path a MODEL file — the one kind the import dialog asks about?
@@ -136,7 +131,6 @@ struct StagedRow
     QByteArray properties;      // JSON (may be empty)
     QByteArray tags;
     QByteArray asset;           // node/definition JSON blob (may be empty)
-    int viewFilter = 1;         // AssetViewFilter value (Editor=1, AssetsView=2)
 };
 
 struct StagedDep

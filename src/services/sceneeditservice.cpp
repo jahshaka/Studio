@@ -150,7 +150,8 @@ void SceneEditService::addPrimitive(const QString &text,
         nodeGuid, node->getName(),
         static_cast<int>(ModelTypes::Object),
         project->getProjectGuid(),
-        project->getProjectGuid(),
+        assethome::project(project->getProjectGuid()),
+        assethome::Origin::Create,
         QString(),
         QString(),
         QByteArray(),
@@ -330,7 +331,8 @@ iris::ParticleSystemNodePtr SceneEditService::addParticleSystem(iris::ParticlePr
             nodeGuid, node->getName(),
             static_cast<int>(ModelTypes::ParticleSystem),
             fguid,
-            project->getProjectGuid(),
+            assethome::project(project->getProjectGuid()),
+            assethome::Origin::Create,
             QString(),
             QString(),
             QByteArray(),
@@ -523,7 +525,7 @@ iris::MeshNodePtr SceneEditService::addImagePlane(const QString &textureGuid,
     props["type"] = "builtin";
     db->createAssetEntry(nodeGuid, node->getName(),
                          static_cast<int>(ModelTypes::Object),
-                         project->getProjectGuid(), project->getProjectGuid(),
+                         project->getProjectGuid(), assethome::project(project->getProjectGuid()), assethome::Origin::Create,
                          QString(), QString(), QByteArray(),
                          QJsonDocument(props).toJson(), QByteArray(), QByteArray());
     db->createDependency(static_cast<int>(ModelTypes::Object),
@@ -560,7 +562,7 @@ iris::DecalNodePtr SceneEditService::addDecal(const QString &textureGuid,
         props["type"] = "builtin";
         db->createAssetEntry(nodeGuid, node->getName(),
                              static_cast<int>(ModelTypes::Object),
-                             project->getProjectGuid(), project->getProjectGuid(),
+                             project->getProjectGuid(), assethome::project(project->getProjectGuid()), assethome::Origin::Create,
                              QString(), QString(), QByteArray(),
                              QJsonDocument(props).toJson(), QByteArray(), QByteArray());
         node->isBuiltIn = true;
@@ -1505,8 +1507,8 @@ bool SceneEditService::applyMaterialAsset(const QString &assetGuid, iris::SceneN
     // the project stops holding it.
     if (project && !project->getProjectGuid().isEmpty()) {
         const AssetRecord row = db->fetchAsset(assetGuid);
-        const bool libraryRow = row.view_filter == AssetViewFilter::AssetsView
-                                || row.view_filter == AssetViewFilter::Effects;
+        // Not the project's own row (a storage's or the platform's): used by pinning.
+        const bool libraryRow = !row.guid.isEmpty() && !row.home().isProject();
         if (libraryRow && !db->isAssetPinnedBy(project->getProjectGuid(), assetGuid))
             undo->push(new PinAssetCommand(db, project, assetGuid));
     }
@@ -1679,7 +1681,8 @@ void SceneEditService::createMaterialFromNode(iris::SceneNodePtr node, const QSt
             QFileInfo(fileName).fileName(),
             static_cast<int>(ModelTypes::Material),
             folderGuid,
-            project->getProjectGuid(),
+            assethome::project(project->getProjectGuid()),
+            assethome::Origin::Create,
             QString(),
             QString(),
             QByteArray(),

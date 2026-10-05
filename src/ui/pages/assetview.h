@@ -154,7 +154,6 @@ public:
 	void focusInEvent(QFocusEvent *event);
 	bool eventFilter(QObject *watched, QEvent *event);
     void toggleFilterPane(bool);
-	void addToJahLibrary(const QString fileName, const QString guid, bool jfx = false);
 	void spaceSplits();
     void closeViewer();
 	void clearViewer();

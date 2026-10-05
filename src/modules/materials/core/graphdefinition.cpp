@@ -85,9 +85,7 @@ QString bakedMemberRow(Database *db, const QString &materialGuid, const QString 
         // bakes project rows, a library material library rows.
         const assethome::Home home = assethome::of(db, materialGuid);
         db->createAssetEntry(guid, name, static_cast<int>(ModelTypes::Texture),
-                             materialGuid, home.projectGuid, QString(), QString(),
-                             QByteArray(), QByteArray(), QByteArray(), QByteArray(),
-                             home.viewFilter());
+                             materialGuid, home, assethome::bornInside(home));
     }
 
     QSqlDatabase conn = QSqlDatabase::database();

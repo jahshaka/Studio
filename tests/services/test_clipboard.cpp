@@ -250,7 +250,6 @@ void testEnvelope()
     asset.type = QStringLiteral("texture");
     asset.typeId = 2;
     asset.parent = QStringLiteral("parent-guid");
-    asset.viewFilter = 2;
     asset.dependencies = QStringList{ QString::fromLatin1(kNormalGuid) };
     ClipFile file;
     file.role = QStringLiteral("source");
@@ -295,7 +294,7 @@ void testEnvelope()
 
     CHECK(read.assets.size() == 1, "the closure survives");
     const ClipAsset back = read.assets.value(QString::fromLatin1(kTextureGuid));
-    CHECK(back.name == QLatin1String("brick.png") && back.typeId == 2 && back.viewFilter == 2 &&
+    CHECK(back.name == QLatin1String("brick.png") && back.typeId == 2 &&
           back.parent == QLatin1String("parent-guid"),
           "the catalog row's identity, type and placement survive");
     CHECK(back.dependencies == QStringList{ QString::fromLatin1(kNormalGuid) },

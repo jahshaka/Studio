@@ -53,10 +53,13 @@ For more information see the LICENSE file
 // rows and bytes is here, which is what lets the headless suite drive the
 // whole of it.
 
+#include <QSet>
 #include <QString>
 #include <QStringList>
 #include <QVariantMap>
 #include <functional>
+
+#include "data/assethomekind.h"
 
 class Database;
 class SettingsManager;
@@ -76,11 +79,46 @@ struct Removed
     QVariantMap toMap() const;
 };
 
+/// WHAT A RESET KEEPS (ASSETS-HOME-1; the owner, 2026-10-04: "Clear Database"
+/// with two boxes, both off by default). Everything else is always cleared —
+/// projects, the platform's seeds (re-seeded), the derived caches. A storage
+/// that is kept comes back EXACTLY, rebuilt from its own sidecars
+/// (AssetMigration::rebuildCatalog) under this build's schema: every row in its
+/// home with its members, edges, definitions, creation time and use count; its
+/// stored objects stay, everything else in the store is collected.
+struct Keep
+{
+    /// Assets AND the Avatar module's avatars: an avatar names its character
+    /// model, an Assets import, so the two are kept or cleared together.
+    bool assets = false;
+    /// The Materials module's storage.
+    bool materials = false;
+    /// A FORMAT BUMP: the kept rows' derived files (mesh and clip bakes) are
+    /// dropped and re-derived from their sources by this build
+    /// (MeshBakeStore's background rebuild) — never read from an old build.
+    bool dropDerived = false;
+
+    bool any() const { return assets || materials; }
+    QSet<assethome::Kind> homes() const;
+};
+
+/// What came back of the kept storages.
+struct Kept
+{
+    int rows = 0;         ///< catalog rows rebuilt from sidecars
+    int objects = 0;      ///< stored objects those rows still name
+    int edges = 0;        ///< intrinsic dependency edges restored
+    int unreadable = 0;   ///< sidecars of another format (no recorded home), not read
+
+    QVariantMap toMap() const;
+};
+
 struct Result
 {
     bool ok = false;
     QString error;        ///< empty when ok
     Removed removed;
+    Kept kept;
 };
 
 /// Why a reset must not run right now, or empty when it may.
@@ -98,7 +136,8 @@ struct Result
 /// that drive with nothing left that names it.
 QString refusalReason();
 
-/// THE RESET.
+/// THE RESET. `keep` names the user's storages that survive it (above); with
+/// none kept it is the whole first-launch reset described here.
 ///
 ///   1. counts what is there (the numbers above);
 ///   2. removes every project FOLDER — each one resolved through
@@ -140,7 +179,7 @@ QString refusalReason();
 /// document, a window or the engine.
 Result reset(Database *db, SettingsManager *settings, const QString &projectsRoot,
              const std::function<QString(const QString &)> &folderForProject,
-             bool seedPresets = true);
+             bool seedPresets = true, const Keep &keep = Keep());
 
 }   // namespace libraryreset
 

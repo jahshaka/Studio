@@ -44,85 +44,82 @@ var userMapName = PRESET_MAP.split("/").pop();
 //
 // HOW MANY BUNDLES is the shipped TABLE, read live, never a literal: the one
 // place in the tree that names its size is tests/libraryreset/reset.js.
-var EXPECTED_BUNDLES = materials.presets().length;
+//
+// THE PRESETS ARE PLATFORM ROWS (ASSETS-HOME-1, audit D1): never an Assets
+// tile, so the wait reads each preset's own row by its reserved guid, and the
+// Assets listing must hold NONE of them.
+var PRESETS = materials.presets();
+var EXPECTED_BUNDLES = PRESETS.length;
+function homeOf(guid) {
+    try { return assets.metadata(guid).home; } catch (e) { return ""; }
+}
+function seededCount() {
+    var n = 0;
+    for (var i = 0; i < PRESETS.length; ++i) if (homeOf(PRESETS[i].guid) === "platform") n++;
+    return n;
+}
 var deadline = Date.now() + 120000;
-var mats = [];
+var seeded = 0;
 while (Date.now() < deadline) {
-    mats = assets.list({ scope: "store", type: "material" });
-    if (mats.length >= EXPECTED_BUNDLES) break;
+    seeded = seededCount();
+    if (seeded >= EXPECTED_BUNDLES) break;
     sleep(50);
 }
-assert(mats.length === EXPECTED_BUNDLES,
-       "the LAUNCH seed put every shipped preset bundle in the library ("
-       + mats.length + " of " + EXPECTED_BUNDLES + ")");
+assert(seeded === EXPECTED_BUNDLES,
+       "the LAUNCH seed made every shipped preset a PLATFORM row (" + seeded + " of "
+       + EXPECTED_BUNDLES + ")");
+assert(assets.list({ scope: "store", type: "material" }).length === 0,
+       "THE ASSETS PAGE LISTS NO PRESET (audit D1): the store holds no material at all");
 
-// ---- every map is a MEMBER, stamped with the preset it came in through ----
+// ---- every map is a PLATFORM member of its preset -------------------------
 var members = {};          // guid -> name
 var memberCount = 0;
-var userGuid = "";
-for (var i = 0; i < mats.length; ++i) {
-    var list = materials.members(mats[i].guid);
+var presetGuids = {};
+for (var i = 0; i < PRESETS.length; ++i) {
+    presetGuids[PRESETS[i].guid] = true;
+    var list = materials.members(PRESETS[i].guid);
     for (var j = 0; j < list.length; ++j) {
         var m = list[j];
         if (!members.hasOwnProperty(m.guid)) { members[m.guid] = m.name; memberCount++; }
-        if (m.name === userMapName) userGuid = m.guid;
     }
 }
-// THE RULE, NOT THE NUMBER: the census is whatever the shipped table names,
-// and every assertion below is stated against THAT (SEED-SMALL-1). Printed so
-// a change in the content is readable in the log without being a failure.
+// THE RULE, NOT THE NUMBER (SEED-SMALL-1): printed so a change in the content
+// is readable in the log without being a failure.
 console.log("MAP_COUNT=" + memberCount);
 assert(memberCount > 0, "they name map textures between them (" + memberCount + ")");
-assert(userGuid.length > 10, "…including the one the user imported first (" + userMapName + ")");
 
-var presetGuids = {};
-for (var p = 0; p < mats.length; ++p) presetGuids[mats[p].guid] = true;
-
-var stamped = 0, unstamped = [];
+var notPlatform = [], unstamped = [];
 for (var guid in members) {
     if (!members.hasOwnProperty(guid)) continue;
     var meta = assets.metadata(guid);
-    if (meta.member === true) {
-        stamped++;
-        assert(presetGuids.hasOwnProperty(meta.memberOf),
-               "…" + members[guid] + " names a shipped preset as its origin (" + meta.memberOf + ")");
-    } else {
-        unstamped.push(members[guid] + " " + guid);
-    }
+    if (meta.home !== "platform") notPlatform.push(members[guid] + " (" + meta.home + ")");
+    if (meta.member !== true || !presetGuids.hasOwnProperty(meta.memberOf))
+        unstamped.push(members[guid]);
 }
-// EVERY MAP BUT THE USER'S OWN ONE — the rule the count 30-of-31 used to
-// spell out, now stated so a twenty-first preset cannot red it.
-assert(stamped === memberCount - 1,
-       "THE LAUNCH SEED STAMPED EVERY MAP IT MINTED (" + stamped + " of " + memberCount
-       + ", the one it did not mint being the user's)");
-assert(unstamped.length === 1 && unstamped[0].indexOf(userMapName) === 0,
-       "…and exactly one is unstamped: the picture the USER imported before the seed ("
-       + unstamped.join(", ") + ")");
+assert(notPlatform.length === 0,
+       "EVERY PRESET MAP IS A PLATFORM ROW — none is the user's (" + notPlatform.join(", ") + ")");
+assert(unstamped.length === 0,
+       "…and every one names its shipped preset as its origin (" + unstamped.join(", ") + ")");
 
-// A SEED MAY NOT QUIETLY HIDE A ROW THE USER ALREADY HAD (V-2's other half):
-// the preset uses their row — one picture, one object, one guid — and it is
-// still their tile.
-var userMeta = assets.metadata(userGuid);
-assert(userMeta.member !== true, "the user's own row was NOT stamped by the seed");
-assert(userMeta.memberOf === undefined, "…and carries no origin");
-
-// ---- and so they are not tiles -------------------------------------------
+// ---- the user's own import of one of those pictures stays THEIRS ----------
+// Arm 1 imported a preset map's bytes into Assets before the seed ran. One
+// picture may be two rows in two homes (one stored object): the preset never
+// takes the user's row, and the user's row is never folded into a preset.
 var tiles = assets.list({ scope: "store", type: "texture" });
-assert(tiles.length === 1 && tiles[0].guid === userGuid,
-       "THE ASSETS PAGE LISTS NO PRESET MAP — only the user's own picture ("
-       + tiles.length + " texture tile(s))");
+assert(tiles.length === 1 && tiles[0].name === userMapName,
+       "THE ASSETS PAGE LISTS ONLY THE USER'S OWN PICTURE (" + tiles.length + " texture tile(s))");
+var userGuid = tiles[0].guid;
+assert(!members.hasOwnProperty(userGuid), "…and no preset names the user's row as a member");
+var userMeta = assets.metadata(userGuid);
+assert(userMeta.home === "assets" && userMeta.origin === "import",
+       "…which is an Assets row the user imported (" + userMeta.home + "/" + userMeta.origin + ")");
+assert(userMeta.member !== true && userMeta.memberOf === undefined,
+       "…and the seed did not stamp it");
 
 var withMembers = assets.list({ scope: "store", type: "texture", members: true });
-// ONE ROW PER PICTURE. The seed asks the library "do you have these bytes"
-// BEFORE it imports anything, so two shipped spellings of one file used to
-// answer "no" twice and mint two rows — and the second, named by no
-// definition, could never be stamped and stood in the tray for ever (3 of the
-// 34 rows this route used to leave). Equality here is that guard: every
-// texture row in the library is a map some bundle names, or the user's own.
-assert(withMembers.length === memberCount,
-       "…'Show member textures' finds each of them ONCE and nothing else — the seed "
-       + "minted no row no bundle names (" + withMembers.length + " rows, "
-       + memberCount + " members)");
+assert(withMembers.length === 1,
+       "…'Show member textures' finds nothing more: no preset map is in Assets ("
+       + withMembers.length + " rows)");
 
 // ---- the editor tray says the same thing ---------------------------------
 var made = project.create("Seed Boot Tray");
@@ -130,8 +127,7 @@ assert(made.length > 10, "a project opens for the tray listing");
 var tray = assets.list({ scope: "project", tray: true, type: "texture" });
 var leaked = [];
 for (var t = 0; t < tray.length; ++t)
-    if (members.hasOwnProperty(tray[t].guid) && tray[t].guid !== userGuid)
-        leaked.push(tray[t].name);
+    if (members.hasOwnProperty(tray[t].guid)) leaked.push(tray[t].name);
 assert(leaked.length === 0, "THE TRAY CARRIES NO PRESET MAP (" + leaked.join(", ") + ")");
 
 console.log("ALL PASS");

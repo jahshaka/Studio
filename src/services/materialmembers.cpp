@@ -156,7 +156,14 @@ QVector<Unused> unused(Database *db, Project *project, const QString &materialGu
         // referenced by nothing. The origin stamp is the only link left once
         // the definition stopped naming them — the edges are derived from the
         // definition, so they went with the slot.
-        for (const auto &row : db->fetchAssetsForAssetView()) {
+        // THE MATERIAL'S OWN HOME (ASSETS-HOME-1): its picked pictures live
+        // where it does — the Materials storage, Assets for a saved one.
+        const assethome::Home materialHome = assethome::of(db, materialGuid);
+        const QVector<AssetRecord> homeRows =
+            materialHome.isProject() ? QVector<AssetRecord>()
+                                     : db->fetchAssetsInHome(materialHome.kind,
+                                                             static_cast<int>(ModelTypes::Texture));
+        for (const auto &row : homeRows) {
             if (row.type != static_cast<int>(ModelTypes::Texture)) continue;
             if (!memberstamp::isStamped(row.properties)) continue;
             if (memberstamp::originOf(row.properties) != materialGuid) continue;
@@ -321,14 +328,55 @@ QString duplicate(Database *db, Project *project, const QString &materialGuid,
     definition[QStringLiteral("name")] = chosen;
 
     QString error;
-    // THE COPY LIVES WHERE ITS ORIGINAL LIVES (ASSETS-SCOPE-1): a library
-    // material's copy is a library material, a project's is that project's.
-    const QString copy = MaterialBundle::create(db, chosen, definition,
-                                                assethome::of(db, materialGuid),
+    // THE COPY LIVES WHERE ITS ORIGINAL LIVES when that is a project (its own
+    // row) or the Materials module's storage; a copy of anything else — an
+    // Assets material, a platform row — is a NEW material, made in the
+    // Materials storage (ASSETS-HOME-1: Assets only takes imports and saves).
+    const assethome::Home source = assethome::of(db, materialGuid);
+    const assethome::Home home = source.isProject() ? source : assethome::materials();
+    const QString copy = MaterialBundle::create(db, chosen, definition, home,
                                                 row.thumbnail, &error);
     if (copy.isEmpty()) return fail(error.isEmpty() ? QStringLiteral("the library refused the copy")
                                                     : error);
     return copy;
+}
+
+QString saveToAssets(Database *db, Project *project, const QString &materialGuid,
+                     const QString &name, QString *errorOut)
+{
+    const auto fail = [errorOut](const QString &why) {
+        if (errorOut) *errorOut = why;
+        return QString();
+    };
+    if (!db) return fail(QStringLiteral("no library"));
+    const AssetRecord row = db->fetchAsset(materialGuid);
+    if (row.guid.isEmpty() || row.type != static_cast<int>(ModelTypes::Material))
+        return fail(QStringLiteral("'%1' is not a material").arg(materialGuid));
+    if (row.home().kind == assethome::Kind::Assets)
+        return fail(QStringLiteral("'%1' is in Assets already").arg(row.name));
+    if (!MaterialBundle::shippedPresetName(materialGuid).isEmpty())
+        return fail(QStringLiteral("'%1' is a material the app ships — create a material from it "
+                                   "first").arg(row.name));
+
+    // THE WHOLE BUNDLE, BAKE INCLUDED: the version the user sees (pin-first in
+    // the open project), and every member — picked pictures and baked maps
+    // alike — copied into Assets as the new row's own by the bundle writer
+    // (MaterialBundle::write, the member rule), so the saved copy is complete
+    // on its own and outlives whatever it was saved from.
+    QJsonObject definition = MaterialBundle::read(db, materialGuid, project);
+    if (definition.isEmpty())
+        return fail(QStringLiteral("'%1' has no definition to save").arg(row.name));
+    const QString chosen = MaterialBundle::uniqueName(db, name.trimmed().isEmpty() ? row.name
+                                                                                   : name.trimmed());
+    definition[QStringLiteral("name")] = chosen;
+
+    QString error;
+    const QString saved = MaterialBundle::create(db, chosen, definition, assethome::assets(),
+                                                 row.thumbnail, &error,
+                                                 assethome::Origin::ExplicitSave);
+    if (saved.isEmpty())
+        return fail(error.isEmpty() ? QStringLiteral("Assets refused the copy") : error);
+    return saved;
 }
 
 QVector<Unused> reapExclusiveMembers(Database *db, const QString &materialGuid)
@@ -442,10 +490,9 @@ QString makeUnique(Database *db, Project *project, const QString &materialGuid,
                                               : assethome::of(db, materialGuid);
     DbBatch batch(db);
     db->createAssetEntry(newGuid, texture.name, static_cast<int>(ModelTypes::Texture),
-                         parent, home.projectGuid,
+                         parent, home, assethome::bornInside(home),
                          texture.license, texture.author, texture.thumbnail,
-                         props, texture.tags, QByteArray(),
-                         home.viewFilter());
+                         props, texture.tags, QByteArray());
 
     QString error;
     QString oid;

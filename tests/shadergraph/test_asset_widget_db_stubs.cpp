@@ -43,15 +43,9 @@ bool Database::createFolder(const QString &, const QString &, const QString &, c
     return false;
 }
 QString Database::createAssetEntry(const QString &, const QString &, const int &, const QString &,
-                                   const QString &, const QString &, const QString &,
-                                   const QByteArray &, const QByteArray &, const QByteArray &,
-                                   const QByteArray &, const AssetViewFilter)
-{
-    return QString();
-}
-
-QString Database::createAssetEntry(const QString &, const QString &, const QString &, const int &,
-                                   const QByteArray &, const QByteArray &, const AssetViewFilter)
+                                   const assethome::Home &, assethome::Origin, const QString &,
+                                   const QString &, const QByteArray &, const QByteArray &,
+                                   const QByteArray &, const QByteArray &, QString *)
 {
     return QString();
 }

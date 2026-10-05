@@ -232,6 +232,12 @@ void ListWidget::customContextMenu(QPoint pos)
 			});
 
             menu.addActions({actionEdit,actionRename,actionDuplicate,actionExport,actionDelete});
+			if (saveToAssetsMenuAllowed) {
+				auto *actionSave = menu.addAction(tr("Save to Assets"));
+				connect(actionSave, &QAction::triggered, this, [guid, this]() {
+					emit saveToAssets(guid);
+				});
+			}
 			if (sceneOpenProbe && sceneOpenProbe() && addToProjectMenuAllowed) menu.addAction(actionProject);
             menu.exec(this->mapToGlobal(pos));
         }else{
@@ -249,11 +255,17 @@ void ListWidget::customContextMenu(QPoint pos)
             menu.exec(this->mapToGlobal(pos));
         }
     }
-    // (THE PRESETS DRAWER HAS NO MENU — PRESET-EDIT-1's Deletes. Its one item
-    // was Customise, which existed because a preset was locked wherever it
-    // was; a preset a project holds is editable in place now and the first
-    // edit makes the project its own copy, so the gesture has nothing left to
-    // do. Double-clicking a preset opens it, which is the whole interaction.)
+    // THE PRESETS DRAWER'S ONE ITEM (ASSETS-HOME-1, the owner 2026-10-04):
+    // "Create material" — a unique copy of the preset in the Materials
+    // module's own storage, the fast path to a material of your own. A preset
+    // is read-only, so it has nothing else (no Rename, Delete or Export).
+    if (presetMenuAllowed && index.isValid() && !guid.isEmpty()) {
+        auto *actionCreate = menu.addAction(tr("Create material"));
+        connect(actionCreate, &QAction::triggered, this, [guid, this]() {
+            emit createFromPreset(guid);
+        });
+        menu.exec(this->mapToGlobal(pos));
+    }
 }
 
 

@@ -23,6 +23,7 @@ For more information see the LICENSE file
 
 #include <functional>
 
+#include "data/assethomekind.h"
 #include "data/project.h"
 
 #include "irisgl/irisglfwd.h"
@@ -321,26 +322,26 @@ public:
     /// creating the folder is what filed every emitter after the first under a
     /// guid nothing owned (small-items round B). Empty on failure.
     QString ensureFolder(const QString &folderName, const QString &projectGuid, bool visible = true);
+    /// THE ONE DOOR A CATALOG ROW COMES IN BY (ASSETS-HOME-1). `home` is where
+    /// the row lives and `origin` how it came to exist (data/assethomekind.h);
+    /// the stored `view_filter` and `project_guid` are DERIVED from the home, so
+    /// they cannot disagree. Refused — an empty return and `errorOut` set — when
+    /// `assethome::refusal(home, origin)` says so: an Assets row that is neither
+    /// an import nor an explicit save, a project row with no project, a library
+    /// row carrying a project guid.
     QString createAssetEntry(const QString &guid,
                              const QString &assetname,
                              const int &type,
-                             const QString &parentFolder,
-                             const QString &projectGuid,
+                             const QString &parent,
+                             const assethome::Home &home,
+                             assethome::Origin origin,
                              const QString &license = QString(),
                              const QString &author = QString(),
                              const QByteArray &thumbnail = QByteArray(),
                              const QByteArray &properties = QByteArray(),
                              const QByteArray &tags = QByteArray(),
                              const QByteArray &asset = QByteArray(),
-							 const AssetViewFilter view_filter = AssetViewFilter::Editor);
-
-	QString createAssetEntry(const QString &projectGuid,
-							 const QString &guid,
-							 const QString &assetname,
-							 const int &type,
-							 const QByteArray &asset = QByteArray(),
-							 const QByteArray &properties = QByteArray(),
-							 const AssetViewFilter view_filter = AssetViewFilter::Editor);
+                             QString *errorOut = nullptr);
 
     /// A LISTENER FOR DEPENDENCY-EDGE CHANGES. The editor's asset tray reads
     /// USE from these edges (services/assettray.h — a directly-added image
@@ -507,13 +508,14 @@ public:
     bool updateSceneThumbnail(const QString &guid, const QByteArray &asset);
     bool updateAssetMetadata(const QString &guid, const QString &name, const QByteArray &tags);
     bool updateAssetProperties(const QString &guid, const QByteArray &asset);
-	bool updateAssetViewFilter(const QString& guid, const int& filter);
-    /// Re-home an asset row: which PROJECT owns it, or none (an empty guid =
-    /// a LIBRARY row). "Save to Library" for an avatar minted inside a project
-    /// promotes it IN PLACE with this (AVATAR_ASSET_SPEC §4 D6-A) — the row
-    /// keeps its guid, so every instance that already points at it stays valid
-    /// where minting a fresh library row would have orphaned them all.
-    bool updateAssetProject(const QString &guid, const QString &projectGuid);
+    /// RE-HOME an existing row, IN PLACE (its guid, so everything that points
+    /// at it stays valid): the same door rule as createAssetEntry, the
+    /// `view_filter` and `project_guid` written together from `home`. "Save to
+    /// Library" for an avatar minted in a project (AVATAR_ASSET_SPEC §4 D6-A)
+    /// and the user's import of a picture a material had brought in are the
+    /// callers. False (and `errorOut`) on a refusal or a database error.
+    bool setAssetHome(const QString &guid, const assethome::Home &home, assethome::Origin origin,
+                      QString *errorOut = nullptr);
 	bool updateProjectDesktop(const QString &guid, int desktop);
 
 	/// WHERE THIS PROJECT'S FOLDER LIVES — the ROOT it was created under, not
@@ -535,9 +537,11 @@ public:
     /// Assets page's list view Size column. guid → bytes; assets with no
     /// stored content are absent.
     QMap<QString, qint64> fetchAssetFileSizes();
-    /// Guids of LIBRARY rows — view_filter IN (2,3): AssetsView + Effects
-    /// (preflight §1.6 — Effects rows ARE library tiles; any store scan that
-    /// forgets filter 3 silently skips most of a real library).
+    /// THE SAME LISTING for any home that is not a project's: Assets (the grid
+    /// above), the Materials module's storage, the Avatar module's.
+    QVector<AssetRecord> fetchAssetsInHome(assethome::Kind home, int type = -1);
+    /// Guids of the listed rows of the user's STORAGES (Assets, Materials,
+    /// Avatars) — the store's "missing content" report.
     QStringList fetchLibraryAssetGuids();
     /// One catalog row as a maintenance sweep needs it: what it IS and whether
     /// it has a picture — and not one byte more.
@@ -651,8 +655,6 @@ public:
     bool unpinAsset(const QString &projectGuid, const QString &assetGuid);
     QVector<AssetRecord> fetchAssetsFromParent(const QString &guid);
 	QVector<AssetRecord> fetchAssetsByType(const int &type, const QString &projectGuid);
-	/// A LISTING (no thumbnail): the listed rows of `filter`, of `type` when >= 0.
-	QVector<AssetRecord> fetchAssetsByViewFilter(const AssetViewFilter& filter, int type = -1);
     QVector<AssetRecord> fetchFilteredAssets(const QString &guid, const int &type);
     QVector<AssetRecord> fetchFavorites();
     QVector<CollectionRecord> fetchCollections();

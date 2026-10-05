@@ -66,9 +66,8 @@ static void textureRow(Database &db, const QString &guid, const QString &name,
                        const QString &storeRoot, const QString &srcPath)
 {
     db.createAssetEntry(guid, name, static_cast<int>(ModelTypes::Texture),
-                        QString(), QString(), QString(), QString(), QByteArray(),
-                        QByteArray(), QByteArray(), QByteArray(),
-                        AssetViewFilter::AssetsView);
+                        QString(), assethome::assets(), assethome::Origin::Import, QString(), QString(), QByteArray(),
+                        QByteArray(), QByteArray(), QByteArray());
     QString oid, err;
     AssetCas::ingestFile(QSqlDatabase::database(), storeRoot, srcPath, guid,
                          QStringLiteral("source"), name, &oid, &err);
@@ -110,8 +109,8 @@ int main(int argc, char **argv)
     textureRow(db, "tex-wood", "wood.jpg", storeRoot,
                writeTempFile(scratchDir, "wood.jpg", QByteArray("wood-bytes")));
     db.createAssetEntry(master, presetName, static_cast<int>(ModelTypes::Material),
-                        QString(), QString(), QString(), QString(), QByteArray("tile"),
-                        QByteArray(), QByteArray(), QByteArray(), AssetViewFilter::AssetsView);
+                        QString(), assethome::assets(), assethome::Origin::Import, QString(), QString(), QByteArray("tile"),
+                        QByteArray(), QByteArray(), QByteArray());
     {
         QJsonObject values;
         values[QStringLiteral("baseColorMap")] = QStringLiteral("tex-wood");
@@ -159,7 +158,7 @@ int main(int argc, char **argv)
     CHECK(copies.size() == 1, "1: exactly one new material row");
     const QString copy = copies.value(0);
     CHECK(!copy.isEmpty() && copy != master, "1: …on a guid of its own");
-    CHECK(db.fetchAsset(copy).view_filter == AssetViewFilter::Editor
+    CHECK(db.fetchAsset(copy).view_filter == assethome::StoredProject
               && db.fetchAsset(copy).projectGuid == projectGuid,
           "1: …the PROJECT'S OWN row (Editor, owned), never a library tile");
     CHECK(db.fetchAsset(copy).name == presetName,
@@ -211,7 +210,7 @@ int main(int argc, char **argv)
     // ---- 5. redo re-makes the same material -------------------------------
     stack.redo();
     CHECK(!db.fetchAsset(copy).guid.isEmpty(), "5: redo re-makes the copy on THE SAME guid");
-    CHECK(db.fetchAsset(copy).view_filter == AssetViewFilter::Editor
+    CHECK(db.fetchAsset(copy).view_filter == assethome::StoredProject
               && db.fetchAsset(copy).projectGuid == projectGuid,
           "5: …still the project's own row");
     CHECK(db.fetchAsset(copy).name == presetName, "5: …with the same name");

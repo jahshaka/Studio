@@ -118,13 +118,10 @@ struct ClipAsset
     int typeId = -1;          // raw ModelTypes value (lossless)
     QStringList dependencies; // outgoing edges, guids
     /// The catalog row's own placement: `parent` is the guidchain a member row
-    /// hangs under (an imported model's Texture rows hang under the Object),
-    /// `viewFilter` is AssetViewFilter — a library TILE (2) or a member the
-    /// library does not list on its own (1). A resolver that registered every
-    /// row at the root with the default filter would turn one pasted model
-    /// into a library full of loose textures.
+    /// hangs under (an imported model's Texture rows hang under the Object), so
+    /// a pasted model's members stay inside it. The HOME is the paste's, never
+    /// the clip's (ASSETS-HOME-1).
     QString parent;
-    int viewFilter = -1;
     QVector<ClipFile> files;
     QByteArray blob;          // the row's `asset` column (Object/Material rows)
     QByteArray properties;    // the row's `properties` column

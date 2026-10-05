@@ -294,7 +294,6 @@ bool MeshImporter::convert(const ImportRequest &request, const QString &stagingD
         texRow.type = static_cast<int>(ModelTypes::Texture);
         texRow.parent = out.mainGuid;
         texRow.thumbnail = pngBlobFromImage(texThumb);
-        texRow.viewFilter = static_cast<int>(AssetViewFilter::Editor);
         out.rows.append(texRow);
 
         out.deps.append({ static_cast<int>(ModelTypes::Object), static_cast<int>(ModelTypes::Texture),
@@ -351,7 +350,6 @@ bool MeshImporter::convert(const ImportRequest &request, const QString &stagingD
     meshRow.name = sourceInfo.fileName();
     meshRow.type = static_cast<int>(ModelTypes::Mesh);
     meshRow.parent = out.mainGuid;
-    meshRow.viewFilter = static_cast<int>(AssetViewFilter::Editor);
     out.rows.append(meshRow);
 
     // The Object row — the one library tile.
@@ -360,7 +358,6 @@ bool MeshImporter::convert(const ImportRequest &request, const QString &stagingD
     objectRow.name = sourceInfo.baseName();
     objectRow.type = static_cast<int>(ModelTypes::Object);
     objectRow.asset = QJsonDocument(blob).toJson();
-    objectRow.viewFilter = static_cast<int>(AssetViewFilter::AssetsView);
     out.rows.append(objectRow);
 
     out.deps.append({ static_cast<int>(ModelTypes::Object), static_cast<int>(ModelTypes::Mesh),
@@ -464,7 +461,6 @@ bool MediaImporter::convert(const ImportRequest &request, const QString &staging
     row.name = sourceInfo.fileName();
     row.type = mType;
     row.thumbnail = pngBlobFromImage(thumbnailImageFor(mType, request.sourcePath));
-    row.viewFilter = static_cast<int>(AssetViewFilter::AssetsView);
     out.rows.append(row);
     return true;
 }
@@ -523,7 +519,6 @@ bool IesImporter::convert(const ImportRequest &request, const QString &stagingDi
     // A polar plot of the candela lobe: two profiles look identical as file
     // names and completely different as light.
     row.thumbnail = pngBlobFromImage(profile.polarThumbnail(256));
-    row.viewFilter = static_cast<int>(AssetViewFilter::AssetsView);
     out.rows.append(row);
     return true;
 }
@@ -650,7 +645,6 @@ bool AnimationImporter::convert(const ImportRequest &request, const QString &sta
     // indistinguishable as tiles, which is the same reason a light profile
     // gets a polar plot instead of a file icon.
     row.thumbnail = pngBlobFromImage(poseStrip);
-    row.viewFilter = static_cast<int>(AssetViewFilter::AssetsView);
     out.rows.append(row);
 
     for (const auto &clip : contents.clips)
@@ -740,7 +734,6 @@ bool MaterialImporter::convert(const ImportRequest &request, const QString &stag
         texRow.type = static_cast<int>(ModelTypes::Texture);
         texRow.parent = out.mainGuid;
         texRow.thumbnail = pngBlobFromImage(texThumb);
-        texRow.viewFilter = static_cast<int>(AssetViewFilter::Editor);
         out.rows.append(texRow);
         out.deps.append({ static_cast<int>(ModelTypes::Material), static_cast<int>(ModelTypes::Texture),
                           out.mainGuid, tex.guid, QString() });
@@ -754,7 +747,6 @@ bool MaterialImporter::convert(const ImportRequest &request, const QString &stag
     row.name = sourceInfo.baseName();
     row.type = static_cast<int>(ModelTypes::Material);
     row.asset = QJsonDocument(blob).toJson();
-    row.viewFilter = static_cast<int>(AssetViewFilter::AssetsView);
     out.rows.append(row);
 
     // The session registration used to park the hydrated material in the
@@ -792,7 +784,6 @@ bool FileImporter::convert(const ImportRequest &request, const QString &stagingD
     row.guid = out.mainGuid;
     row.name = sourceInfo.fileName();
     row.type = static_cast<int>(ModelTypes::File);
-    row.viewFilter = static_cast<int>(AssetViewFilter::AssetsView);
     out.rows.append(row);
 
     const QString guid = out.mainGuid;

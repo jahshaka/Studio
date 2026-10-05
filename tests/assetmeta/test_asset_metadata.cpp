@@ -217,9 +217,8 @@ int main(int argc, char **argv)
     QString cubeOid, ingestError;
     QJsonObject camProps{ { "camera", QJsonObject{ { "distFromPivot", 5.0 } } } };
     db.createAssetEntry(guid, "cube", static_cast<int>(ModelTypes::Object), QString(),
-                        QString(), QString(), QString(), QByteArray(),
-                        QJsonDocument(camProps).toJson(), QByteArray(), QByteArray(),
-                        AssetViewFilter::AssetsView);
+                        assethome::assets(), assethome::Origin::Import, QString(), QString(), QByteArray(),
+                        QJsonDocument(camProps).toJson(), QByteArray(), QByteArray());
     CHECK(AssetCas::ingestFile(QSqlDatabase::database(), storeRoot, CUBE_OBJ, guid, "source",
                                "cube.obj", &cubeOid, &ingestError),
           "the model is ingested into the store");

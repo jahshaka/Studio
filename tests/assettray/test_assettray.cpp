@@ -152,16 +152,16 @@ int main(int argc, char **argv)
     for (int i = 0; i < 12; ++i) {
         const QString object = newGuid();
         db.createAssetEntry(object, QStringLiteral("model_%1.glb").arg(i),
-                            static_cast<int>(ModelTypes::Object), QString(), QString(),
+                            static_cast<int>(ModelTypes::Object), QString(), assethome::assets(), assethome::Origin::Import,
                             QString(), QString(), QByteArray(), QByteArray(), QByteArray(),
-                            QByteArray(), AssetViewFilter::AssetsView);
+                            QByteArray());
         models << object;
 
         const QString mesh = newGuid();
         db.createAssetEntry(mesh, QStringLiteral("model_%1.mesh").arg(i),
-                            static_cast<int>(ModelTypes::Mesh), object, QString(),
+                            static_cast<int>(ModelTypes::Mesh), object, assethome::assets(), assethome::Origin::Import,
                             QString(), QString(), QByteArray(), QByteArray(), QByteArray(),
-                            QByteArray(), AssetViewFilter::AssetsView);
+                            QByteArray());
         db.createDependency(static_cast<int>(ModelTypes::Object), static_cast<int>(ModelTypes::Mesh),
                             object, mesh, QString());
         meshes << mesh;
@@ -169,9 +169,9 @@ int main(int argc, char **argv)
         for (int t = 0; t < 2; ++t) {
             const QString tex = newGuid();
             db.createAssetEntry(tex, QStringLiteral("model_%1_tex%2.png").arg(i).arg(t),
-                                static_cast<int>(ModelTypes::Texture), object, QString(),
+                                static_cast<int>(ModelTypes::Texture), object, assethome::assets(), assethome::Origin::Import,
                                 QString(), QString(), QByteArray(), QByteArray(), QByteArray(),
-                                QByteArray(), AssetViewFilter::AssetsView);
+                                QByteArray());
             db.createDependency(static_cast<int>(ModelTypes::Object),
                                 static_cast<int>(ModelTypes::Texture), object, tex, QString());
             memberTextures << tex;
@@ -181,9 +181,9 @@ int main(int argc, char **argv)
     for (int i = 0; i < 40; ++i) {
         const QString tex = newGuid();
         db.createAssetEntry(tex, QStringLiteral("image_%1.png").arg(i),
-                            static_cast<int>(ModelTypes::Texture), QString(), QString(),
+                            static_cast<int>(ModelTypes::Texture), QString(), assethome::assets(), assethome::Origin::Import,
                             QString(), QString(), QByteArray(), QByteArray(), QByteArray(),
-                            QByteArray(), AssetViewFilter::AssetsView);
+                            QByteArray());
         standalone << tex;
     }
 
@@ -194,10 +194,9 @@ int main(int argc, char **argv)
         QJsonObject props;
         if (builtin) props["type"] = "builtin";
         db.createAssetEntry(guid, QStringLiteral("node_%1").arg(i),
-                            static_cast<int>(ModelTypes::Object), projectGuid, projectGuid,
+                            static_cast<int>(ModelTypes::Object), projectGuid, assethome::project(projectGuid), assethome::Origin::Create,
                             QString(), QString(), QByteArray(),
-                            QJsonDocument(props).toJson(), QByteArray(), QByteArray(),
-                            AssetViewFilter::Editor);
+                            QJsonDocument(props).toJson(), QByteArray(), QByteArray());
         sceneNodes << guid;
     }
 
@@ -219,9 +218,9 @@ int main(int argc, char **argv)
         QJsonObject definition;
         definition["companionOf"] = companionImage;
         db.createAssetEntry(companion, "image_0 material",
-                            static_cast<int>(ModelTypes::Material), QString(), QString(),
+                            static_cast<int>(ModelTypes::Material), QString(), assethome::assets(), assethome::Origin::Import,
                             QString(), QString(), QByteArray(), QByteArray(), QByteArray(),
-                            QJsonDocument(definition).toJson(), AssetViewFilter::AssetsView);
+                            QJsonDocument(definition).toJson());
         db.createDependency(static_cast<int>(ModelTypes::Material),
                             static_cast<int>(ModelTypes::Texture),
                             companion, companionImage, projectGuid);
@@ -235,9 +234,9 @@ int main(int argc, char **argv)
         QJsonObject definition;
         definition["companionOf"] = foldedImage;
         db.createAssetEntry(foldedCompanion, "image_25 material",
-                            static_cast<int>(ModelTypes::Material), QString(), QString(),
+                            static_cast<int>(ModelTypes::Material), QString(), assethome::assets(), assethome::Origin::Import,
                             QString(), QString(), QByteArray(), QByteArray(), QByteArray(),
-                            QJsonDocument(definition).toJson(), AssetViewFilter::AssetsView);
+                            QJsonDocument(definition).toJson());
         db.createDependency(static_cast<int>(ModelTypes::Material),
                             static_cast<int>(ModelTypes::Texture),
                             foldedCompanion, foldedImage, projectGuid);
@@ -279,9 +278,9 @@ int main(int argc, char **argv)
         const QString userOwnUsedByMaterial = standalone[33];
         const QString pickerMaterial = newGuid();
         db.createAssetEntry(pickerMaterial, "picked material",
-                            static_cast<int>(ModelTypes::Material), QString(), QString(),
+                            static_cast<int>(ModelTypes::Material), QString(), assethome::assets(), assethome::Origin::Import,
                             QString(), QString(), QByteArray(), QByteArray(), QByteArray(),
-                            QByteArray("{}"), AssetViewFilter::AssetsView);
+                            QByteArray("{}"));
         for (const QString &tex : { bundleOnly, bundleAndNode, userOwnUsedByMaterial })
             db.createDependency(static_cast<int>(ModelTypes::Material),
                                 static_cast<int>(ModelTypes::Texture), pickerMaterial, tex,
@@ -379,9 +378,9 @@ int main(int argc, char **argv)
             const QString guid = newGuid();
             if (filedTexture.isEmpty()) filedTexture = guid;
             db.createAssetEntry(guid, QStringLiteral("filed_%1_%2.png").arg(i).arg(j),
-                                static_cast<int>(ModelTypes::Texture), folder, projectGuid,
+                                static_cast<int>(ModelTypes::Texture), folder, assethome::project(projectGuid), assethome::Origin::Create,
                                 QString(), QString(), QByteArray(), QByteArray(), QByteArray(),
-                                QByteArray(), AssetViewFilter::Editor);
+                                QByteArray());
         }
     }
     Measured keystroke = measure([&] {
@@ -492,8 +491,8 @@ int main(int argc, char **argv)
         // does for every row it brings in.
         const QString filed = newGuid();
         db.createAssetEntry(filed, "Emitter Row", static_cast<int>(ModelTypes::Material),
-                            first, projectGuid, QString(), QString(), QByteArray(),
-                            QByteArray(), QByteArray(), QByteArray(), AssetViewFilter::Editor);
+                            first, assethome::project(projectGuid), assethome::Origin::Create, QString(), QString(), QByteArray(),
+                            QByteArray(), QByteArray(), QByteArray());
         pin(projectGuid, filed);
         CHECK(listed(assettray::list(&db, projectGuid, first), filed),
               "a row filed in Systems/ lists in that folder");
@@ -777,9 +776,9 @@ int main(int argc, char **argv)
         CHECK(box.ok, "a folder for the owned+pinned row");
         const QString ownedAndPinned = newGuid();
         db.createAssetEntry(ownedAndPinned, "owned_and_pinned.png",
-                            static_cast<int>(ModelTypes::Texture), projectGuid, projectGuid,
+                            static_cast<int>(ModelTypes::Texture), projectGuid, assethome::project(projectGuid), assethome::Origin::Create,
                             QString(), QString(), QByteArray(), QByteArray(), QByteArray(),
-                            QByteArray(), AssetViewFilter::Editor);
+                            QByteArray());
         pin(projectGuid, ownedAndPinned);
         CHECK(projectfolders::moveTo(&db, projectGuid, { ownedAndPinned }, box.guid).moved == 1,
               "an owned AND pinned row moves");

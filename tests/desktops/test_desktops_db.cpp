@@ -238,17 +238,20 @@ int main(int argc, char **argv)
         const int obj = static_cast<int>(ModelTypes::Object);
         CHECK(db.createProject("guid-own", "Owner"), "a project that owns rows");
         CHECK(db.createProject("guid-other", "Other"), "...and another project");
-        auto row = [&](const QString &g, int type, const QString &parent, const QString &project,
-                       AssetViewFilter vf) {
-            db.createAssetEntry(g, g, type, parent, project, QString(), QString(), QByteArray(),
-                                QByteArray(), QByteArray(), QByteArray(), vf);
+        auto row = [&](const QString &g, int type, const QString &parent,
+                       const assethome::Home &home) {
+            db.createAssetEntry(g, g, type, parent, home,
+                                home.isProject() ? assethome::Origin::Create
+                                                 : assethome::Origin::Import);
         };
-        row("own-mat", mat, QString(), "guid-own", AssetViewFilter::Editor);
-        row("own-tex", tex, "own-mat", "guid-own", AssetViewFilter::Editor);
-        row("own-node", obj, "guid-own", "guid-own", AssetViewFilter::Editor);
-        row("own-shared", mat, QString(), "guid-own", AssetViewFilter::Editor);
-        row("lib-obj", obj, QString(), "guid-own", AssetViewFilter::AssetsView);
-        row("lib-member", tex, "lib-obj", "guid-own", AssetViewFilter::Editor);
+        const assethome::Home own = assethome::project("guid-own");
+        row("own-mat", mat, QString(), own);
+        row("own-tex", tex, "own-mat", own);
+        row("own-node", obj, "guid-own", own);
+        row("own-shared", mat, QString(), own);
+        row("lib-obj", obj, QString(), assethome::assets());
+        // A member takes its owner's home (ASSETS-HOME-1).
+        row("lib-member", tex, "lib-obj", assethome::assets());
         QString oid, err;
         CHECK(AssetCas::ingestFile(QSqlDatabase::database(), AssetStorePaths::root(), "own-pic.png",
                                    "own-tex", "source", "own-pic.png", &oid, &err),

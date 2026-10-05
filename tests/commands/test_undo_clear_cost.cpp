@@ -136,7 +136,7 @@ QString makePrimitiveRow(Database &db, const QString &projectGuid, int n)
     props["type"] = "builtin";
     db.createAssetEntry(guid, QStringLiteral("Cube %1").arg(n),
                         static_cast<int>(ModelTypes::Object),
-                        projectGuid, projectGuid, QString(), QString(), QByteArray(),
+                        projectGuid, assethome::project(projectGuid), assethome::Origin::Create, QString(), QString(), QByteArray(),
                         QJsonDocument(props).toJson(), QByteArray(), QByteArray());
     return guid;
 }

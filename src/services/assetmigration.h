@@ -22,9 +22,12 @@ For more information see the LICENSE file
 //     library tiles (preflight §1.6);
 //   - everything is idempotent: run twice = same store, zero new objects.
 
+#include <QSet>
 #include <QString>
 #include <QStringList>
 #include <QVariantMap>
+
+#include "data/assethomekind.h"
 
 namespace AssetMigration
 {
@@ -49,7 +52,10 @@ struct RebuildReport
     int files = 0;              // files rows
     int links = 0;              // asset_files rows
     int pins = 0;               // project_assets rows (pin-only objects, item 1c')
+    int edges = 0;              // intrinsic dependency edges restored
     int skipped = 0;            // tombstones: sidecars whose objects are all gone
+    int otherHomes = 0;         // sidecars of a home the caller did not ask for
+    int unreadable = 0;         // sidecars of another format (no recorded home): not read
     qint64 elapsedMs = 0;
 
     QVariantMap toMap() const;
@@ -60,12 +66,33 @@ struct RebuildReport
 /// bit-rot and missing objects, with counts and bytes.
 VerifyReport verify(const QString &dbPath, const QString &storeRoot);
 
+/// What a rebuild restores.
+struct RebuildOptions
+{
+    /// Only sidecars of these homes (empty = every home). A format bump and a
+    /// Clear Database rebuild the user's KEPT storages this way.
+    QSet<assethome::Kind> homes;
+    /// Drop the DERIVED files (role "bake": mesh and clip bakes) instead of
+    /// restoring them — a format bump re-derives them from the stored sources
+    /// (MeshBakeStore's background rebuild), never reads an old build's.
+    bool dropDerived = false;
+};
+
 /// Reconstruct catalog rows (assets + files + asset_files + project_assets
-/// pins) from sidecar/*.json into dbPath — the honest I2 test and the
-/// Unity-Library-delete recovery story. Existing rows with the same guid are
-/// left untouched (INSERT OR IGNORE); thumbnails are not recoverable from
-/// sidecars (they are regenerable).
-RebuildReport rebuildCatalog(const QString &dbPath, const QString &storeRoot);
+/// pins + the intrinsic dependency edges) from sidecar/*.json into dbPath — the
+/// honest I2 test, the Unity-Library-delete recovery story, and what a format
+/// bump and a Clear Database run to keep the user's storages. Every row comes
+/// back as it was: its HOME and origin, its parent, its definition blob, its
+/// creation time and use count. Existing rows with the same guid are left
+/// untouched (INSERT OR IGNORE). Thumbnails are not in a sidecar: they are
+/// regenerated (assets.rebuildThumbnails). FORWARD-ONLY: a sidecar of another
+/// format — one that records no home — is not read (`unreadable`).
+RebuildReport rebuildCatalog(const QString &dbPath, const QString &storeRoot,
+                             const RebuildOptions &options = RebuildOptions());
+
+/// The oids a rebuild with `options` keeps alive (every file and pin of every
+/// sidecar it would restore) — what a selective reset must not delete.
+QSet<QString> keptObjects(const QString &storeRoot, const RebuildOptions &options);
 } // namespace AssetMigration
 
 #endif // ASSETMIGRATION_H

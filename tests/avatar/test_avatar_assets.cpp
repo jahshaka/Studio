@@ -67,11 +67,11 @@ static QString makeObjectRow(Database *db, const QString &modelFile, const QStri
     const QString file = QFileInfo(modelFile).fileName();
 
     db->createAssetEntry(objectGuid, name, static_cast<int>(ModelTypes::Object), QString(),
-                         projectGuid, QString(), QString(), QByteArray("PNGTHUMB"), QByteArray(),
-                         QByteArray(), QByteArray(), AssetViewFilter::AssetsView);
+                         assethome::assets(), assethome::Origin::Import, QString(), QString(), QByteArray("PNGTHUMB"), QByteArray(),
+                         QByteArray(), QByteArray());
     db->createAssetEntry(meshGuid, file, static_cast<int>(ModelTypes::Mesh), objectGuid,
-                         projectGuid, QString(), QString(), QByteArray(), QByteArray(),
-                         QByteArray(), QByteArray(), AssetViewFilter::Editor);
+                         assethome::project(projectGuid), assethome::Origin::Create, QString(), QString(), QByteArray(), QByteArray(),
+                         QByteArray(), QByteArray());
     AssetCas::ingestFile(conn, root, modelFile, objectGuid, "source", file, nullptr, nullptr);
     AssetCas::ingestFile(conn, root, modelFile, meshGuid, "source", file, nullptr, nullptr);
     db->createDependency(static_cast<int>(ModelTypes::Object), static_cast<int>(ModelTypes::Mesh),
@@ -83,9 +83,9 @@ static QString makeObjectRow(Database *db, const QString &modelFile, const QStri
 static QString clipAssetRow(Database *db, const QString &clipFile, const QString &name)
 {
     const QString guid = GUIDManager::generateGUID();
-    db->createAssetEntry(guid, name, static_cast<int>(ModelTypes::Object), QString(), QString(),
+    db->createAssetEntry(guid, name, static_cast<int>(ModelTypes::Object), QString(), assethome::assets(), assethome::Origin::Import,
                          QString(), QString(), QByteArray(), QByteArray(), QByteArray(),
-                         QByteArray(), AssetViewFilter::AssetsView);
+                         QByteArray());
     AssetCas::ingestFile(QSqlDatabase::database(), AssetStorePaths::root(), clipFile, guid,
                          "source", QFileInfo(clipFile).fileName(), nullptr, nullptr);
     return guid;

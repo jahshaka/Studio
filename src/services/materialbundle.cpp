@@ -330,6 +330,81 @@ WriteResult writeShipped(Database *db, const QString &guid, const QJsonObject &d
 
 namespace {
 
+/// A MATERIAL'S MEMBERS LIVE WHERE IT LIVES (ASSETS-HOME-1; the lead's ruling
+/// 2026-10-05: "a user material that uses a preset's map COPIES the map into its
+/// own bundle — never a cross-home dependency"). For a material in one of the
+/// user's STORAGES, every member row of another home (a preset's platform map,
+/// an Assets picture picked into a Materials-module material, a project's row)
+/// is copied into the material's home as ITS OWN member: a new row, parented to
+/// the material, linked to the SAME stored objects (content-addressed — not a
+/// byte is copied), and the definition renamed to it. Then Clear Database can
+/// keep one storage and clear another, and a format bump can rebuild a storage
+/// from its own sidecars, without a bundle ever naming a row that is gone.
+///
+/// Runs inside the caller's transaction; returns the definition to store, and
+/// appends each minted guid to `minted` (their sidecars are written after the
+/// commit). Empty + `errorOut` on a refusal.
+QJsonObject adoptForeignMembers(Database *db, const QString &materialGuid,
+                                const assethome::Home &home, const QJsonObject &definition,
+                                QStringList *minted, QString *errorOut)
+{
+    QString text = QString::fromUtf8(QJsonDocument(definition).toJson(QJsonDocument::Compact));
+    bool renamed = false;
+    for (const QString &member : memberGuids(definition)) {
+        const AssetRecord row = db->fetchAsset(member);
+        if (row.guid.isEmpty() || row.home() == home) continue;
+        // ONCE PER PICTURE: an editor still holding the old guid saves again
+        // (the graph page autosaves every 1.5 s) — the copy this material
+        // already made of the same bytes is the answer, not another row.
+        {
+            QSqlQuery mine(QSqlDatabase::database());
+            mine.prepare("SELECT A.guid FROM assets A "
+                         "JOIN asset_files F ON F.asset_guid = A.guid AND F.role = 'source' "
+                         "WHERE A.parent = ? AND A.view_filter = ? AND F.oid = "
+                         "(SELECT oid FROM asset_files WHERE asset_guid = ? AND role = 'source' "
+                         " LIMIT 1) LIMIT 1");
+            mine.addBindValue(materialGuid);
+            mine.addBindValue(home.stored());
+            mine.addBindValue(member);
+            if (mine.exec() && mine.next()) {
+                text.replace(member, mine.value(0).toString());
+                renamed = true;
+                continue;
+            }
+        }
+        const QString copy = GUIDManager::generateGUID();
+        QJsonObject props = QJsonDocument::fromJson(row.properties).object();
+        props.remove(QStringLiteral("member"));
+        props.remove(QStringLiteral("memberOf"));
+        props.remove(QStringLiteral("type"));       // a platform row's furniture marker
+        QString refused;
+        if (db->createAssetEntry(copy, row.name, row.type, materialGuid, home,
+                                 assethome::bornInside(home), row.license, row.author,
+                                 row.thumbnail, QJsonDocument(props).toJson(), row.tags,
+                                 row.asset, &refused).isEmpty()) {
+            if (errorOut)
+                *errorOut = QStringLiteral("could not copy the member '%1' into the material: %2")
+                                .arg(row.name, refused);
+            return QJsonObject();
+        }
+        QSqlQuery links(QSqlDatabase::database());
+        links.prepare("INSERT OR IGNORE INTO asset_files (asset_guid, role, oid, name) "
+                      "SELECT ?, role, oid, name FROM asset_files WHERE asset_guid = ?");
+        links.addBindValue(copy);
+        links.addBindValue(member);
+        if (!links.exec()) {
+            if (errorOut)
+                *errorOut = QStringLiteral("could not link the member '%1''s bytes").arg(row.name);
+            return QJsonObject();
+        }
+        text.replace(member, copy);
+        renamed = true;
+        if (minted) minted->append(copy);
+    }
+    if (!renamed) return definition;
+    return QJsonDocument::fromJson(text.toUtf8()).object();
+}
+
 WriteResult writeImpl(Database *db, Project *project, const QString &guid,
                       const QJsonObject &definition, Scope scope, bool allowShipped)
 {
@@ -372,6 +447,9 @@ WriteResult writeImpl(Database *db, Project *project, const QString &guid,
     // material rendered BLACK.)
     QJsonObject stored = normaliseUv(normaliseColours(definition));
     stored[QStringLiteral("version")] = kDefinitionVersion;
+    // THE MATERIAL'S HOME, for the member rule below (ASSETS-HOME-1).
+    const assethome::Home materialHome = db->fetchAsset(guid).home();
+    const bool adopts = scope == Scope::Library && !allowShipped && materialHome.isStorage();
     if (!stored.contains(QStringLiteral("materialType")))
         stored[QStringLiteral("materialType")] = QStringLiteral("pbr");
 
@@ -438,6 +516,26 @@ WriteResult writeImpl(Database *db, Project *project, const QString &guid,
     // is the one that cannot be repaired, and this function never produces it.
     DbTransaction tx(conn);
 
+    // MEMBERS COPIED INTO THE MATERIAL'S OWN HOME first, inside the same
+    // transaction, so the definition published below names only rows of its
+    // home (adoptForeignMembers).
+    QStringList adopted;
+    if (adopts) {
+        QString adoptError;
+        const QJsonObject own = adoptForeignMembers(db, guid, materialHome, stored, &adopted,
+                                                    &adoptError);
+        if (own.isEmpty()) return fail(adoptError);
+        if (own != stored) {
+            stored = own;
+            const QByteArray ownBytes = QJsonDocument(stored).toJson(QJsonDocument::Compact);
+            QFile file(tmpPath);
+            if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate)
+                || file.write(ownBytes) != ownBytes.size())
+                return fail(QStringLiteral("could not stage the definition"));
+        }
+    }
+    const QByteArray published = QJsonDocument(stored).toJson(QJsonDocument::Compact);
+
     if (!AssetCas::ingestFile(conn, root, tmpPath, guid, QStringLiteral("source"),
                               definitionFileName(), &oid, &error))
         return fail(error.isEmpty() ? QStringLiteral("the store refused the definition") : error);
@@ -465,7 +563,7 @@ WriteResult writeImpl(Database *db, Project *project, const QString &guid,
     // what every listing, thumbnailer and search reads without touching disk.
     // A project-scope save must not move it: the library's version did not
     // change.
-    if (scope == Scope::Library) db->updateAssetAsset(guid, bytes);
+    if (scope == Scope::Library) db->updateAssetAsset(guid, published);
 
     // INTRINSIC EDGES ARE THE LIBRARY'S (F7). A PROJECT-scope save is a
     // copy-on-write: it moves THIS project's pin and must leave the library
@@ -519,6 +617,8 @@ WriteResult writeImpl(Database *db, Project *project, const QString &guid,
     // rows (FSYNC-2's Durability::Derived rule). Writing it inside the guard
     // would describe rows a rollback then took away.
     QString sidecarError;
+    for (const QString &member : std::as_const(adopted))
+        AssetCas::writeSidecar(conn, root, member, nullptr);
     if (!AssetCas::writeSidecar(conn, root, guid, &sidecarError))
         qWarning("MaterialBundle::write: could not refresh the sidecar for %s (%s)",
                  qUtf8Printable(guid), qUtf8Printable(sidecarError));
@@ -566,20 +666,23 @@ namespace {
 /// a refused mint leaves nothing behind.
 QString mintRow(Database *db, const QString &guid, const QString &name,
                 const QJsonObject &definition, const QByteArray &thumbnail,
-                const assethome::Home &home, QString *errorOut)
+                const assethome::Home &home, assethome::Origin origin, QString *errorOut)
 {
     QJsonObject stored = definition;
     stored[QStringLiteral("name")] = name;
 
-    // THE ROW'S HOME IS THE CALLER'S GESTURE (ASSETS-SCOPE-1): a library row
-    // (AssetsView, no project) or the project's own (Editor, owned) — never a
-    // library tile minted for a project's content.
-    db->createAssetEntry(guid, name, static_cast<int>(ModelTypes::Material),
-                         QString(),          // no parent folder: filing rides the pin
-                         home.projectGuid,
-                         QString(), QString(), thumbnail,
-                         QByteArray(), QByteArray(), QByteArray(),
-                         home.viewFilter());
+    // THE ROW'S HOME IS THE CALLER'S GESTURE (ASSETS-HOME-1): the Materials
+    // module's storage, a project's own, or Assets for an explicit save — the
+    // door (Database::createAssetEntry) refuses any other origin there.
+    QString refused;
+    if (db->createAssetEntry(guid, name, static_cast<int>(ModelTypes::Material),
+                             QString(),          // no parent folder: filing rides the pin
+                             home, origin,
+                             QString(), QString(), thumbnail,
+                             QByteArray(), QByteArray(), QByteArray(), &refused).isEmpty()) {
+        if (errorOut) *errorOut = refused;
+        return QString();
+    }
 
     const WriteResult written = write(db, nullptr, guid, stored, Scope::Library);
     if (!written.ok) {
@@ -593,7 +696,8 @@ QString mintRow(Database *db, const QString &guid, const QString &name,
 } // namespace
 
 QString create(Database *db, const QString &name, const QJsonObject &definition,
-               const assethome::Home &home, const QByteArray &thumbnail, QString *errorOut)
+               const assethome::Home &home, const QByteArray &thumbnail, QString *errorOut,
+               assethome::Origin origin)
 {
     if (!db) {
         if (errorOut) *errorOut = QStringLiteral("no database");
@@ -614,7 +718,8 @@ QString create(Database *db, const QString &name, const QJsonObject &definition,
         return QString();
     }
 
-    return mintRow(db, GUIDManager::generateGUID(), name, definition, thumbnail, home, errorOut);
+    return mintRow(db, GUIDManager::generateGUID(), name, definition, thumbnail, home, origin,
+                   errorOut);
 }
 
 QString createPresetCopy(Database *db, const QString &guid, const QString &projectGuid,
@@ -634,7 +739,8 @@ QString createPresetCopy(Database *db, const QString &guid, const QString &proje
     // THE PROJECT'S OWN ROW (ASSETS-SCOPE-1): it is that project's material,
     // never a library tile.
     return mintRow(db, guid.isEmpty() ? GUIDManager::generateGUID() : guid, name,
-                   definition, thumbnail, assethome::project(projectGuid), errorOut);
+                   definition, thumbnail, assethome::project(projectGuid),
+                   assethome::Origin::Create, errorOut);
 }
 
 } // namespace MaterialBundle

@@ -162,6 +162,9 @@ Database::Database()
         "    tags			   BLOB,"
         "    properties        BLOB,"
 		"    view_filter       INTEGER,"
+        // HOW THE ROW CAME TO EXIST (ASSETS-HOME-1, data/assethomekind.h):
+        // "import" | "save" | "create". Assets admits only the first two.
+        "    origin            TEXT,"
         // LIBRARY VISIBILITY (library delete keeps project pins): 1 = the row
         // is a library tile; 0 = it was deleted from the library while
         // projects still pinned it, so the content and every pin live on and
@@ -936,9 +939,9 @@ void Database::createCasTables()
     versionQuery.exec("PRAGMA user_version");
     int current = 0;
     if (versionQuery.next()) current = versionQuery.value(0).toInt();
-    if (current != CasSchema::kUserVersion) {
+    if (current != CasSchema::userVersion()) {
         QSqlQuery setVersion;
-        setVersion.exec(QStringLiteral("PRAGMA user_version = %1").arg(CasSchema::kUserVersion));
+        setVersion.exec(QStringLiteral("PRAGMA user_version = %1").arg(CasSchema::userVersion()));
     }
 }
 
@@ -1110,12 +1113,12 @@ bool Database::createFolder(const QString &folderName, const QString &parentFold
 // created.
 bool Database::isProjectOwned(const AssetRecord &row)
 {
-    if (row.guid.isEmpty() || row.view_filter != AssetViewFilter::Editor || row.projectGuid.isEmpty())
+    if (row.guid.isEmpty() || row.view_filter != assethome::StoredProject || row.projectGuid.isEmpty())
         return false;
     if (row.parent.isEmpty()) return true;
     const AssetRecord parent = fetchAsset(row.parent);
     if (parent.guid.isEmpty()) return true;        // filed in a folder / the project root
-    return parent.view_filter == AssetViewFilter::Editor && parent.projectGuid == row.projectGuid;
+    return parent.view_filter == assethome::StoredProject && parent.projectGuid == row.projectGuid;
 }
 
 QString Database::ensureFolder(const QString &folderName, const QString &projectGuid, bool visible)
@@ -1141,29 +1144,43 @@ QString Database::createAssetEntry(
 	const QString &assetName,
 	const int &type,
 	const QString &parentFolder,
-	const QString &projectGuid,
+	const assethome::Home &home,
+	assethome::Origin origin,
 	const QString &license,
 	const QString &author,
 	const QByteArray &thumbnail,
 	const QByteArray &properties,
 	const QByteArray &tags,
 	const QByteArray &asset,
-	const AssetViewFilter view_filter)
+	QString *errorOut)
 {
+	// THE DOOR RULE (ASSETS-HOME-1): one place decides whether a row may be
+	// minted where the caller asks, and the stored flags come from the home.
+	const QString refused = assethome::refusal(home, origin);
+	if (!refused.isEmpty()) {
+		if (errorOut) *errorOut = refused;
+		irisLog(QStringLiteral("createAssetEntry refused '%1': %2").arg(assetName, refused));
+		return QString();
+	}
+
 	QSqlQuery query;
 	query.prepare(
 		"INSERT INTO assets"
 		" (name, thumbnail, parent, type, project_guid, collection, version, date_created,"
-		" last_updated, guid, properties, author, asset, license, tags, view_filter)"
+		" last_updated, guid, properties, author, asset, license, tags, view_filter, origin,"
+		" times_used)"
 		" VALUES (:name, :thumbnail, :parent, :type, :project_guid, 0, :version, datetime(),"
-		" datetime(), :guid, :properties, :author, :asset, :license, :tags, :view_filter)"
+		" datetime(), :guid, :properties, :author, :asset, :license, :tags, :view_filter, :origin,"
+		" 0)"
 	);
 
 	query.bindValue(":name", assetName);
 	query.bindValue(":thumbnail", thumbnail);
 	query.bindValue(":parent", parentFolder);
 	query.bindValue(":type", type);
-	query.bindValue(":project_guid", projectGuid);
+	// A non-project home stores NULL, never '' (the listings test NULL-ness).
+	query.bindValue(":project_guid", home.isProject() ? QVariant(home.projectGuid)
+	                                                  : QVariant(QMetaType(QMetaType::QString)));
 	query.bindValue(":version", Constants::CONTENT_VERSION);
 	query.bindValue(":guid", guid);
 	query.bindValue(":properties", properties);
@@ -1171,77 +1188,34 @@ QString Database::createAssetEntry(
 	query.bindValue(":asset", asset);
 	query.bindValue(":license", license);
 	query.bindValue(":tags", tags);
-	query.bindValue(":view_filter", view_filter);
+	query.bindValue(":view_filter", home.stored());
+	query.bindValue(":origin", assethome::originName(origin));
 
 	if (executeAndCheckQuery(query, "CreateAssetEntry")) {
 		return guid;
 	}
-
+	if (errorOut) *errorOut = query.lastError().text();
 	return QString();
 }
 
-QString Database::createAssetEntry(
-	const QString &projectGuid,
-	const QString &guid,
-	const QString &assetName,
-	const int &type,
-	const QByteArray &asset,
-	const QByteArray &properties,
-	const AssetViewFilter view_filter)
+bool Database::setAssetHome(const QString &guid, const assethome::Home &home,
+                            assethome::Origin origin, QString *errorOut)
 {
-	QSqlQuery query;
-	query.prepare(
-		"INSERT INTO assets"
-		" (name, thumbnail, parent, type, project_guid, collection, version, date_created,"
-		" last_updated, guid, properties, author, asset, license, tags, view_filter)"
-		" VALUES (:name, :thumbnail, :parent, :type, :project_guid, 0, :version, datetime(),"
-		" datetime(), :guid, :properties, :author, :asset, :license, :tags, :view_filter)"
-	);
-
-	query.bindValue(":name", assetName);
-	query.bindValue(":thumbnail", QByteArray());
-	query.bindValue(":parent", QString());
-	query.bindValue(":type", type);
-	query.bindValue(":project_guid", projectGuid);
-	query.bindValue(":version", Constants::CONTENT_VERSION);
-	query.bindValue(":guid", guid);
-	query.bindValue(":properties", properties);
-	query.bindValue(":author", QString());
-	query.bindValue(":asset", asset);
-	query.bindValue(":license", QString());
-	query.bindValue(":tags", QByteArray());
-	query.bindValue(":view_filter", view_filter);
-
-	if (executeAndCheckQuery(query, "CreateAssetEntry")) {
-		return guid;
+	const QString refused = assethome::refusal(home, origin);
+	if (!refused.isEmpty()) {
+		if (errorOut) *errorOut = refused;
+		return false;
 	}
-
-	return QString();
-}
-
-bool Database::updateAssetViewFilter(const QString& guid, const int& filter)
-{
 	QSqlQuery query;
-	query.prepare("UPDATE assets SET view_filter = ? WHERE guid = ?");
-	query.addBindValue(filter);
+	query.prepare("UPDATE assets SET view_filter = ?, project_guid = ?, origin = ? WHERE guid = ?");
+	query.addBindValue(home.stored());
+	query.addBindValue(home.isProject() ? QVariant(home.projectGuid)
+	                                    : QVariant(QMetaType(QMetaType::QString)));
+	query.addBindValue(assethome::originName(origin));
 	query.addBindValue(guid);
-	const bool ok = executeAndCheckQuery(query, "UpdateAssetViewFilter");
-	if (ok) refreshSidecar(guid);   // view_filter is a sidecar field (I2)
-	return ok;
-}
-
-bool Database::updateAssetProject(const QString &guid, const QString &projectGuid)
-{
-	QSqlQuery query;
-	query.prepare("UPDATE assets SET project_guid = ? WHERE guid = ?");
-	// An empty project guid must be stored as NULL, not as '': the library
-	// listings test the column for NULL-ness (fetchAssetsForAssetView), and an
-	// empty string would be a project row belonging to a project named "".
-	query.addBindValue(projectGuid.isEmpty() ? QVariant(QMetaType(QMetaType::QString))
-	                                         : QVariant(projectGuid));
-	query.addBindValue(guid);
-	const bool ok = executeAndCheckQuery(query, "UpdateAssetProject");
-	if (ok) refreshSidecar(guid);   // project_guid is a sidecar field (I2)
+	const bool ok = executeAndCheckQuery(query, "SetAssetHome");
+	if (ok) refreshSidecar(guid);   // home + origin are sidecar fields (I2)
+	else if (errorOut) *errorOut = query.lastError().text();
 	return ok;
 }
 
@@ -1593,9 +1567,9 @@ bool Database::deleteProject(const QString &guid)
                        "AND NOT EXISTS (SELECT 1 FROM assets P WHERE P.guid = A.parent "
                        "                AND NOT (P.view_filter = ? AND P.project_guid = ?)) "
                        "AND NOT EXISTS (SELECT 1 FROM project_assets PA WHERE PA.asset_guid = A.guid)");
-        oquery.addBindValue(static_cast<int>(AssetViewFilter::Editor));
+        oquery.addBindValue(static_cast<int>(assethome::StoredProject));
         oquery.addBindValue(guid);
-        oquery.addBindValue(static_cast<int>(AssetViewFilter::Editor));
+        oquery.addBindValue(static_cast<int>(assethome::StoredProject));
         oquery.addBindValue(guid);
         QStringList owned;
         if (executeAndCheckQuery(oquery, "FetchUnpinnedProjectRows"))
@@ -2212,7 +2186,7 @@ AssetRecord Database::fetchAsset(const QString &guid)
     // caught. APPENDED, so every positional index below is untouched; the row
     // already carries the thumbnail BLOB, so one more blob is not a new class
     // of cost.
-    query.prepare("SELECT name, thumbnail, guid, parent, type, properties, view_filter, date_created, collection, tags, project_guid, listed, asset FROM assets WHERE guid = ? ");
+    query.prepare("SELECT name, thumbnail, guid, parent, type, properties, view_filter, date_created, collection, tags, project_guid, listed, asset, origin, times_used FROM assets WHERE guid = ? ");
     query.addBindValue(guid);
     // ONE exec. This used to run executeAndCheckQuery AND `query.exec()`, so
     // every by-guid read — the most called query in the catalog — cost two
@@ -2241,6 +2215,8 @@ AssetRecord Database::fetchAsset(const QString &guid)
             // answers for unlisted rows too — it just reports which it is.
             data.listed = query.value(11).toInt() != 0;
             data.asset = query.value(12).toByteArray();
+            data.origin = query.value(13).toString();
+            data.timesUsed = query.value(14).toInt();
             return data;
         }
     }
@@ -2254,14 +2230,14 @@ AssetRecord Database::fetchAsset(const QString &guid)
 QStringList Database::fetchLibraryAssetGuids()
 {
     QSqlQuery query;
-    // view_filter IN (2,3) — AssetsView AND Effects are both library rows
-    // (ASSET_PIPELINE_SPEC preflight amendment 2).
+    // THE USER'S STORAGES: Assets, the Materials module's, the Avatar module's.
     // LIBRARY LISTING: unlisted rows are excluded. This feeds the store's
     // "missing content" count, which is a report about the LIBRARY the user
     // can see; an unlisted row's content is the pinning project's business.
-    query.prepare("SELECT guid FROM assets WHERE view_filter IN (?, ?) AND listed = 1");
-    query.addBindValue(static_cast<int>(AssetViewFilter::AssetsView));
-    query.addBindValue(static_cast<int>(AssetViewFilter::Effects));
+    query.prepare("SELECT guid FROM assets WHERE view_filter IN (?, ?, ?) AND listed = 1");
+    query.addBindValue(static_cast<int>(assethome::StoredAssets));
+    query.addBindValue(static_cast<int>(assethome::StoredMaterialsLibrary));
+    query.addBindValue(static_cast<int>(assethome::StoredAvatarLibrary));
     executeAndCheckQuery(query, "FetchLibraryAssetGuids");
 
     QStringList guids;
@@ -2476,7 +2452,7 @@ QVector<AssetRecord> Database::fetchAssetsForAssetView()
         "AND " + memberSubquery(QStringLiteral("A.guid")) + " "
         "ORDER BY A.name DESC"
     );
-    query.bindValue(":view_filter", AssetViewFilter::AssetsView);
+    query.bindValue(":view_filter", static_cast<int>(assethome::StoredAssets));
     executeAndCheckQuery(query, "FetchAssets");
 
     QVector<AssetRecord> tileData;
@@ -2688,10 +2664,11 @@ QVector<AssetRecord> Database::fetchAssetsByType(const int &type, const QString 
     return tileData;
 }
 
-QVector<AssetRecord> Database::fetchAssetsByViewFilter(const AssetViewFilter& filter, int type)
+QVector<AssetRecord> Database::fetchAssetsInHome(assethome::Kind home, int type)
 {
 	QSqlQuery query;
-	// LIBRARY LISTING (the Materials module's drawers): unlisted rows out. The
+	// A STORAGE'S LISTING (the Materials module's Custom drawer reads its own,
+	// the Avatar module its own): unlisted rows out. The
 	// TYPE is a predicate (D11-LIBRARY-SCALE): the drawer wants materials, and
 	// reading every library row's definition to drop all but those in C++ cost
 	// the whole library per refresh. NO THUMBNAIL: the tile cache paints it.
@@ -2699,9 +2676,9 @@ QVector<AssetRecord> Database::fetchAssetsByViewFilter(const AssetViewFilter& fi
 	                             "WHERE view_filter = ? AND listed = 1");
 	if (type >= 0) sql += QStringLiteral(" AND type = ?");
 	query.prepare(sql);
-	query.addBindValue(filter);
+	query.addBindValue(assethome::Home{ home, QString() }.stored());
 	if (type >= 0) query.addBindValue(type);
-	executeAndCheckQuery(query, "fetchAssetsByViewFilter");
+	executeAndCheckQuery(query, "fetchAssetsInHome");
 
 	QVector<AssetRecord> tileData;
 	while (query.next()) {
@@ -2713,6 +2690,8 @@ QVector<AssetRecord> Database::fetchAssetsByViewFilter(const AssetViewFilter& fi
 		// The row's own facts (a project's copy of a preset is one —
 		// the Custom drawer folds it, PRESET-FOLD-1).
 		data.properties = query.value(4).toByteArray();
+		data.view_filter = assethome::Home{ home, QString() }.stored();
+		data.listed = true;
 		tileData.push_back(data);
 	}
 
@@ -3992,7 +3971,7 @@ bool Database::importProject(const QString &inFilePath, const QString &newSceneG
         data.properties = selectAssetQuery.value(14).toByteArray();
         data.asset = selectAssetQuery.value(15).toByteArray();
         data.thumbnail = selectAssetQuery.value(16).toByteArray();
-		data.view_filter = AssetViewFilter::Editor;
+		data.view_filter = assethome::StoredProject;
         assetList.push_back(data);
     }
 
@@ -4028,9 +4007,9 @@ bool Database::importProject(const QString &inFilePath, const QString &newSceneG
         insertImportAssetQuery.prepare(
             "INSERT INTO assets"
             " (guid, type, name, collection, times_used, project_guid, date_created, last_updated, author,"
-            " license, hash, version, parent, tags, properties, asset, thumbnail, view_filter)"
+            " license, hash, version, parent, tags, properties, asset, thumbnail, view_filter, origin)"
             " VALUES(:guid, :type, :name, :collection, :times_used, :project_guid, :date_created, :last_updated, :author,"
-            " :license, :hash, :version, :parent, :tags, :properties, :asset, :thumbnail, :view_filter)"
+            " :license, :hash, :version, :parent, :tags, :properties, :asset, :thumbnail, :view_filter, 'import')"
         );
 
         insertImportAssetQuery.bindValue(":guid", asset.guid);

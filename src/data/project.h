@@ -15,6 +15,8 @@ For more information see the LICENSE file
 #include <QString>
 #include <QDateTime>
 
+#include "data/assethomekind.h"
+
 class Project
 {
 public:
@@ -52,13 +54,6 @@ struct ProjectTileData {
     int         sliderIndex = 0;    // 0-based order within the row
 };
 
-enum AssetViewFilter : int
-{
-	Editor = 1,
-	AssetsView,
-	Effects,
-	DontShow // Use for dependencies and hidden types later on
-};
 
 // The int fields default: not every fetch query selects every column, and an
 // unselected column left the field UNINITIALIZED — assets.list's project
@@ -83,11 +78,17 @@ struct AssetRecord
 	QByteArray  asset;
 	QByteArray  tags;
 	QByteArray  properties;
+	/// THE ROW'S HOME (data/assethomekind.h: assethome::StoredHome) — read it
+	/// through `home()`, never as a bare number.
 	int			view_filter = 0;
+	/// How the row came to exist ("import" | "save" | "create").
+	QString		origin;
 	/// LIBRARY VISIBILITY (library-delete keeps pins): false = the row was
 	/// deleted from the library while projects still pinned it. It resolves
 	/// by guid exactly as before — it is only absent from library LISTINGS.
 	bool		listed = true;
+
+	assethome::Home home() const { return assethome::fromStored(view_filter, projectGuid); }
 };
 
 /// One project's pin on an asset (a project_assets row), named for a human:

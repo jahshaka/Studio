@@ -10,6 +10,7 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "ui/dialogs/preferences/worldsettingswidget.h"
+#include "ui/dialogs/cleardatabasedialog.h"
 
 #include "services/apppaths.h"
 #include "services/loadingcover.h"
@@ -1012,17 +1013,10 @@ void WorldSettingsWidget::configureDatabaseWidget()
 	setSizePolicyForWidgets(l1);
 
 	connect(btn, &QPushButton::clicked, [=]() {
-		auto option = QMessageBox::warning(this, "Reset your library",
-			"This deletes EVERYTHING in your library and starts Jahshaka again as a "
-			"first launch:\n\n"
-			"  \u2022 every project, and its folder on disk\n"
-			"  \u2022 every imported model, texture, sound and video, and its stored files\n"
-			"  \u2022 every material, avatar and thumbnail\n\n"
-			"Your preferences are kept. Nothing here can be undone.\n\n"
-			"Reset the library and restart?",
-			QMessageBox::Yes | QMessageBox::No
-		);
-		if (option != QMessageBox::Yes) return;
+		// THE TWO BOXES, both off by default (ASSETS-HOME-1): the user's
+		// storages are kept unless they say otherwise.
+		ClearDatabaseDialog confirm(this);
+		if (confirm.exec() != QDialog::Accepted) return;
 
 		// THE VERB, THROUGH THE SHELL-CALLER CONVENTION (ApiModule::quietly):
 		// a refusal comes back as a string for the box instead of waiting in
@@ -1034,7 +1028,7 @@ void WorldSettingsWidget::configureDatabaseWidget()
 			return;
 		}
 		AppApi api(scripting->scriptHost());
-		QVariantMap options;
+		QVariantMap options = confirm.options();
 		options.insert(QStringLiteral("restart"), true);
 		const QVariantMap result = api.quietly([&] { return api.resetLibrary(options); });
 		if (result.value(QStringLiteral("ok")).toBool()

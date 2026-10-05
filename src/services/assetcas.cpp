@@ -10,6 +10,8 @@ For more information see the LICENSE file
 *************************************************************************/
 #include "services/assetcas.h"
 
+#include "data/assethomekind.h"
+
 #include <QCryptographicHash>
 #include <QDir>
 #include <QDirIterator>
@@ -319,8 +321,8 @@ void ensureCasSchema(QSqlDatabase conn)
     versionQuery.exec("PRAGMA user_version");
     int current = 0;
     if (versionQuery.next()) current = versionQuery.value(0).toInt();
-    if (current != CasSchema::kUserVersion)
-        QSqlQuery(QStringLiteral("PRAGMA user_version = %1").arg(CasSchema::kUserVersion), conn);
+    if (current != CasSchema::userVersion())
+        QSqlQuery(QStringLiteral("PRAGMA user_version = %1").arg(CasSchema::userVersion()), conn);
 }
 
 bool ingestFile(QSqlDatabase conn, const QString &root, const QString &srcPath,
@@ -460,7 +462,7 @@ bool writeSidecar(QSqlDatabase conn, const QString &root, const QString &guid,
 {
     QSqlQuery assetQuery(conn);
     assetQuery.prepare("SELECT name, type, view_filter, collection, author, license, properties, tags, listed, "
-                       "parent, asset "
+                       "parent, asset, project_guid, origin, date_created, times_used "
                        "FROM assets WHERE guid = ?");
     assetQuery.addBindValue(guid);
     if (!assetQuery.exec() || !assetQuery.next()) {
@@ -476,11 +478,24 @@ bool writeSidecar(QSqlDatabase conn, const QString &root, const QString &guid,
     // bindings, a bundle's members showed as loose tiles and every closure
     // walk came back empty. A reader of a v1 sidecar simply finds the three
     // keys below absent, which is exactly what it meant before.
-    sidecar["formatVersion"] = 2;
+    //
+    // FORMAT 3 (ASSETS-HOME-1): the row's HOME and ORIGIN by name, and its
+    // creation time and use count — what a format bump needs to rebuild the
+    // user's storages exactly (services/librarygeneration.h). The home replaces
+    // the old bare `viewFilter` number.
+    sidecar["formatVersion"] = 3;
     sidecar["guid"] = guid;
     sidecar["name"] = assetQuery.value(0).toString();
     sidecar["type"] = assetQuery.value(1).toInt();
-    sidecar["viewFilter"] = assetQuery.value(2).toInt();
+    {
+        const assethome::Home home = assethome::fromStored(assetQuery.value(2).toInt(),
+                                                           assetQuery.value(11).toString());
+        sidecar["home"] = assethome::kindName(home.kind);
+        if (home.isProject()) sidecar["projectGuid"] = home.projectGuid;
+        sidecar["origin"] = assetQuery.value(12).toString();
+        sidecar["dateCreated"] = assetQuery.value(13).toString();
+        sidecar["timesUsed"] = assetQuery.value(14).toInt();
+    }
     sidecar["collection"] = assetQuery.value(3).toInt();
     sidecar["author"] = assetQuery.value(4).toString();
     sidecar["license"] = assetQuery.value(5).toString();
