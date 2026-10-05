@@ -555,6 +555,19 @@ int main(int argc, char **argv)
         CHECK(!baked.maps.contains(QStringLiteral("emissiveMap")), "factor: and nothing is baked for it");
     }
 
+    // ---- a LIVE graph's plain-texture Emissive is SERVED, not a fallback
+    {
+        Rig r;
+        auto tex = r.add("texture");
+        static_cast<TextureNode *>(tex)->setTexturePath(noisePath);
+        r.toMaster(tex, 0, 4);                        // Emissive: a bare texture
+        r.toMaster(r.pulsingColour(0.2, 0.4, 0.8), 0, 0);   // the clock lives elsewhere
+        const auto res = PieceEmitter::lower(r.graph);
+        CHECK(res.live && !res.fallbackReasons.contains(QStringLiteral("Emissive")) &&
+                  res.bakedReasons.contains(QStringLiteral("Emissive")),
+              "live graph: a plain-texture Emissive is reported BAKED (served exactly), not a fallback");
+    }
+
     // ---- G3: the live-only ops lower in a live graph, with their stage limits
     {
         Rig r;

@@ -187,10 +187,3 @@ void MaterialReader::restoreGeneratedPieces(iris::PbrMaterialPtr mat, const QJso
 	delete graph;
 }
 
-QJsonObject MaterialReader::getShaderObjectFromId(QString shaderGuid, Database* db)
-{
-	// The row's stored definition blob — the one reader left is the generated
-	// shader piece's regeneration (SceneReader::restoreCustomPieces).
-	if (!db) return QJsonObject();
-	return QJsonDocument::fromJson(db->fetchAssetData(shaderGuid)).object();
-}

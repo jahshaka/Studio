@@ -493,6 +493,17 @@ QString reasonForUnsupportedSocket(const QString &name)
 	return QStringLiteral("this master socket has no piece landing in v1");
 }
 
+/// A chain the baker serves EXACTLY: nothing reads the clock and no op is one
+/// whose CPU value is only an approximation of the surface (the live-only ops).
+bool servedByBaker(const BakeProgram &program)
+{
+	if (program.animated) return false;
+	for (const auto &op : program.ops)
+		if (BakeProgram::liveOnlyOps().contains(op.typeName) || op.typeName == QLatin1String("depth"))
+			return false;
+	return true;
+}
+
 } // namespace
 
 // ------------------------------------------------------------------- emit
@@ -521,7 +532,16 @@ PieceEmitter::Result PieceEmitter::lower(const GraphBaker::CompiledGraph &compil
 		                compiled.live, plan.vertex);
 		Lowered low = lowerer.run();
 		if (!low.ok) {
-			result.fallbackReasons.insert(plan.name, low.reason);
+			// In a LIVE graph a chain that does not move and reads no view-
+			// dependent op (a plain texture, a constant) is SERVED by the baker
+			// exactly — the Lowerer's refusal is no fallback for it (the
+			// unplanned-socket rule below, TORNADO-1 fix round).
+			if (compiled.live && servedByBaker(program))
+				result.bakedReasons.insert(plan.name,
+				                           QStringLiteral("nothing in the chain moves or depends on "
+				                                          "the view, so the baker serves it exactly"));
+			else
+				result.fallbackReasons.insert(plan.name, low.reason);
 			continue;
 		}
 		// THE v1 SCOPE RULE, and it is a scope rule rather than a capability
@@ -594,7 +614,7 @@ PieceEmitter::Result PieceEmitter::lower(const GraphBaker::CompiledGraph &compil
 		// In a LIVE graph a socket the emitter has no landing for is only a
 		// FALLBACK when its chain still moves (it is then frozen at t=0); one the
 		// UV fold took the clock out of, or a constant, is served exactly.
-		if (compiled.live && !cs.program.animated) {
+		if (compiled.live && servedByBaker(cs.program)) {
 			result.bakedReasons.insert(
 			    cs.slot.socketName,
 			    cs.program.classification == BakeProgram::SocketClass::Uniform

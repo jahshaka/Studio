@@ -51,27 +51,27 @@ function assert(cond, msg) {
 function log(m) { console.log("[tornado] " + m); }
 function J(x) { return JSON.stringify(x); }
 
-// THE COLOUR MAPPING, measured against reference.png (side_by_side_t1_5.png in
-// spikes/tornado-1). The old engine was display-referred and LDR: its fragment
-// was `emission + lighting`, written straight to the screen.
-//   * THE RIM. fresnel = pow(1 - N.V, FresnelPower) was a DISPLAY value; in our
-//     linear-light pipeline the same rim is pow(display, 2.2), i.e. the power
-//     times the display gamma (decode(pow(x, p)) = pow(x, 2.2 p)). Left at the
-//     authored 1.17 the rim covered the whole cone and washed it white (the
-//     first cut) — that was the defect, not the intensity.
-//   * THE ORANGE, at the authored (1, 0.5, 0.035) times the noise, through our
-//     exposure + film curve + sRGB encode, lands within ~10 % of the still's
-//     display values on the body (the film's toe and the encode roughly cancel
-//     here; decoding the constant to linear first crushed green to a fifth —
-//     measured). GLOW 1.5 is the HDR gain that sets that level.
-//   * THE GREY LIFT: the original's diffuse was WHITE and LIT (its blue reads
-//     ~0.2 where the orange gives ~0.02). Here that term is a physical lit
-//     base of albedo BASE under the scene's sun and Sky Light; 0.5 matches the
-//     still's lift (1.0 overshoots: our sun and sky are physically brighter
-//     than its grey-96 ambient).
+// THE COLOUR MAPPING — A TUNED LOOK, NOT PHYSICS, said plainly. The old engine
+// was display-referred and LDR (its fragment `emission + lighting` went straight
+// to the screen); ours is scene-referred with a film curve. The colour
+// management below is therefore MIXED, and each choice was measured against
+// reference.png at shaderTime 1.5 (spikes/tornado-1/side_by_side_t1_5.png):
+//   * THE RIM: fresnel's power x the display gamma (2.2) — pow(display, 2.2) is
+//     the same curve in linear light; at the authored 1.17 the rim covered the
+//     cone and washed it white. Tinted warm (RIM_TINT): the still's edges are
+//     warm yellow-white (~(255, 245, 185)), a white rim clipped over orange.
+//   * THE ORANGE stays as authored (1, 0.5, 0.035) x the noise, used as a
+//     LINEAR value: through our exposure + film curve + encode it lands near
+//     the still's display values (decoding it to linear first crushed green to
+//     a fifth — measured). GLOW 2.0 sets the level.
+//   * THE LIFT: the still's grey lift came from a lit white diffuse under its
+//     grey-96 ambient; under our physically brighter sun and sky the matching
+//     albedo is small (BASE 0.08). The body's blue still reads lower than the
+//     still's (~20 vs ~60 codes): the film's toe, accepted rather than hacked.
 var DISPLAY_GAMMA = 2.2;
-var GLOW = 1.5;
-var BASE = 0.5;
+var GLOW = 2.0;
+var BASE = 0.08;
+var RIM_TINT = [1.0, 0.85, 0.6];
 
 // The three layers (audit §1.2). height = the authored 0.05 x the squared
 // radial scale (see the header).
@@ -144,8 +144,13 @@ function buildGraph(L) {
     assert(graph.setValue(power, L.fresnel * DISPLAY_GAMMA), L.name + ": FresnelPower, in linear light");
     var rim = graph.addNode("fresnel");
     assert(graph.connect(power, 0, rim, 1), L.name + ": fresnel");
+    // the rim's warmth (see THE COLOUR MAPPING): fresnel x RIM_TINT
+    var tint = graph.addNode("color");
+    assert(graph.setValue(tint, { r: RIM_TINT[0], g: RIM_TINT[1], b: RIM_TINT[2], a: 1.0 }), L.name + ": rim tint");
+    var warmRim = graph.addNode("multiply");
+    assert(graph.connect(rim, 0, warmRim, 0) && graph.connect(tint, 0, warmRim, 1), L.name + ": fresnel x tint");
     var glow = graph.addNode("add");
-    assert(graph.connect(rim, 0, glow, 0) && graph.connect(lit, 0, glow, 1), L.name + ": rim + noise");
+    assert(graph.connect(warmRim, 0, glow, 0) && graph.connect(lit, 0, glow, 1), L.name + ": rim + noise");
     assert(graph.connect(glow, 0, master, "Emissive"), L.name + ": -> Emissive");
 
     // BASE COLOUR WHITE: the original's diffuse was white and LIT — its fragment
