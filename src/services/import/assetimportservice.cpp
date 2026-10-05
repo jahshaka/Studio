@@ -651,7 +651,15 @@ bool AssetImportService::commitStagedAsset(const ImportRequest &request, StagedA
         QByteArray properties = row.properties;
         if (row.guid == staged.mainGuid) {
             QJsonObject props = QJsonDocument::fromJson(properties).object();
-            if (!staged.metadata.isEmpty()) props["metadata"] = staged.metadata;
+            // A VIDEO block probed off the GUI thread is DEGRADED (no
+            // QMediaPlayer on a worker — prepare() runs on one for every
+            // import route now): it is not persisted, by AssetMetadata::
+            // ensure's own rule, so the first GUI-thread read probes and
+            // stores the real one.
+            const bool degradedVideo =
+                staged.metadata.value(QStringLiteral("kind")).toString() == QLatin1String("video")
+                && !staged.metadata.contains(QStringLiteral("duration"));
+            if (!staged.metadata.isEmpty() && !degradedVideo) props["metadata"] = staged.metadata;
             props["import"] = staged.importRecord;
             properties = QJsonDocument(props).toJson();
         }
