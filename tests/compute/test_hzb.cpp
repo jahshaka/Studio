@@ -1,8 +1,8 @@
 // chain.hzb — THE HIERARCHICAL DEPTH PYRAMID (SPECS/NANITE_SPEC.md §4.3).
 //
 // WHAT IT IS. One R32_FLOAT texture at the view's resolution with a full mip
-// chain down to 1x1, built once per frame right after the opaque pass by one
-// compute pass per level: mip 0 is a copy of the scene depth, and every level
+// chain down to 1x1, built once per frame right after the opaque pass by ONE
+// compute pass (the single-pass build, JahHzbBuild_cs): mip 0 is a copy of the scene depth, and every level
 // after it holds the CLOSEST depth of its footprint in the level above. A
 // stackless screen-space trace walks it instead of stepping pixel by pixel —
 // Epic measure the ray compaction that rides on it at up to a 50% tracing
@@ -65,6 +65,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <cstring>
 #include <string>
 #include <vector>
 
@@ -130,7 +131,7 @@ static float pickExtreme(float a, float b, bool reverseZ, bool farthest)
 }
 
 /// WHICH MIP-0 TEXELS A LEVEL-`level` TEXEL COVERS, one axis, composed level by
-/// level from the reducer's own rule (JahHzbReduce_cs.glsl): destination texel i
+/// level from the reducer's own rule (JahHzbBuild_cs.glsl): destination texel i
 /// gathers source texels 2i and 2i+1, plus 2i+2 when the source size is odd AND
 /// i is the last texel of the axis (the uncovered source column/row is the last
 /// one, so nothing else needs the third sample). Source reads are clamped to the
@@ -243,6 +244,40 @@ static void checkPyramid(Engine *e, View *view, const char *what, unsigned w, un
     CHECK(minSpanX == 8u && minSpanY == 8u,
           "the interior footprint is exactly 8 texels per axis (no neighbour absorbed)");
 
+    // ---- EVERY level, the same equality (SPEED-VR-MEM: the single-pass build) ----
+    // The build reduces a 64x64 tile per workgroup to level 6 in shared memory and
+    // the tail in the last workgroup: a different ORDER of the same picks. Min and
+    // max are exact, so each level must equal its composed footprint's extreme
+    // bit for bit — which is the pyramid the per-level reducer built.
+    {
+        size_t wrong = 0, texels = 0;
+        unsigned firstWrongLevel = 0;
+        for (unsigned L = 1u; L < st.levels; ++L) {
+            std::vector<float> lev;
+            unsigned wl = 0, hl = 0;
+            if (!e->readHzbLevel(view, L, lev, wl, hl) || lev.empty()) { ++wrong; continue; }
+            std::vector<unsigned> lbx, lex, lby, ley;
+            coverage(w0, L, lbx, lex);
+            coverage(h0, L, lby, ley);
+            for (unsigned y = 0; y < hl; ++y)
+                for (unsigned x = 0; x < wl; ++x) {
+                    float foot = extremeSeed(st.reverseDepth, st.farthest);
+                    for (unsigned fy = lby[y]; fy <= ley[y]; ++fy)
+                        for (unsigned fx = lbx[x]; fx <= lex[x]; ++fx)
+                            foot = pickExtreme(foot, mip0[size_t(fy) * w0 + fx], st.reverseDepth,
+                                               st.farthest);
+                    ++texels;
+                    if (std::memcmp(&foot, &lev[size_t(y) * wl + x], sizeof(float)) != 0) {
+                        if (!wrong) firstWrongLevel = L;
+                        ++wrong;
+                    }
+                }
+        }
+        std::printf("   every level 1..%u: %zu of %zu texels differ from their footprint's extreme"
+                    " (first at level %u)\n", st.levels - 1u, wrong, texels, firstWrongLevel);
+        CHECK(wrong == 0, "every texel of every level is EXACTLY its footprint's extreme");
+    }
+
     // ---- the top level is the whole frame ---------------------------------
     std::printf("   top level %.6f vs the frame's own %s %.6f\n", top[0],
                 st.farthest ? "farthest" : "closest", extreme0);
@@ -345,9 +380,9 @@ int main()
         ++measuredFrames;
         if (bestMs < 0.0f || sum < bestMs) bestMs = sum;
     }
-    std::printf("   HZB passes seen per frame: %u (expected %u); frames with GPU samples: %u\n",
-                passCount, bst.levels, measuredFrames);
-    CHECK(passCount == bst.levels, "one compute pass per level runs every frame");
+    std::printf("   HZB passes seen per frame: %u (expected 1); frames with GPU samples: %u\n",
+                passCount, measuredFrames);
+    CHECK(passCount == 1u, "ONE compute pass builds every level every frame (the single-pass build)");
     if (bestMs >= 0.0f) {
         std::printf("   HZB GPU cost at 1920x1080: %.4f ms (best of %u measured frames)\n",
                     bestMs, measuredFrames);
@@ -364,8 +399,8 @@ int main()
 
     // =====================================================================
     // AND THE COST AT 4K (the design asked for both). 3840x2160 is four times
-    // 1080p's pixels and one more level; the build is bandwidth-bound in its seed,
-    // so this is the number that says whether the per-mip chain scales.
+    // 1080p's pixels and one more level; the build is bandwidth-bound in its mip-0
+    // copy, so this is the number that says whether the single-pass build scales.
     // =====================================================================
     std::printf("\n== 3840x2160: levels and cost ==\n");
     Scene *uhdScene = nullptr;
@@ -398,8 +433,8 @@ int main()
             ++measured;
             if (best < 0.0f || sum < best) best = sum;
         }
-        std::printf("   HZB passes per frame: %u (expected %u); frames with GPU samples: %u\n",
-                    passes, ust.levels, measured);
+        std::printf("   HZB passes per frame: %u (expected 1); frames with GPU samples: %u\n",
+                    passes, measured);
         if (best >= 0.0f)
             std::printf("   HZB GPU cost at 3840x2160: %.4f ms (best of %u measured frames)\n",
                         best, measured);
