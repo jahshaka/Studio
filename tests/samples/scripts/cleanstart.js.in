@@ -94,6 +94,12 @@ var EXPECTED = {
     // The three dragons became Dragon / Dragon2 / Dragon3 on 2026-09-09: they
     // were all "SceneNode24" (an importer leftover) and the first had no guid
     // at all, so no by-name or by-id verb could tell them apart.
+    // THE TORNADO (TORNADO-1, scenes/tools/make_tornado.js): one twisted cone
+    // three times — Main, Top Shell, Bottom Wave — each one mesh node
+    // wearing a LIVE graph material (scrolling noise, a fresnel rim,
+    // a vertex wave), on the Basic template (floor, sun, Sky Light).
+    "Tornado": { tier: "epic", nodes: 7, names: ["Main", "Top Shell", "Bottom Wave", "Floor", "Sky Light"],
+                 types: { mesh: 4, light: 2 } },
     "World Background": { exposureEv: -0.9, tier: "medium", nodes: 8, names: ["Dragon", "Dragon3", "Floor", "Sky Light"],
                           types: { mesh: 4, light: 3 } }
 };
@@ -426,6 +432,12 @@ var SCALE = {
         // carried scale 0.04, so the dancer stood 7.2 m tall. 0.01 is cm -> m.
         extent: { x: 1.94, y: 1.81, z: 0.31 }, cameraHeight: 1.28, fov: 45,
         objects: { "capoeira": { y: 1.81 } }
+    },
+    "Tornado": {
+        // The archive's funnel at the old engine's SQUARED scales: an 8 m
+        // cone (scale 4 on a 2 m mesh) over a 5.4 m-wide ground swirl.
+        extent: { x: 4.83, y: 8.0, z: 4.26 }, cameraHeight: 6.02, fov: 45,
+        objects: { "Main": { y: 8.0 } }
     },
     "World Background": {
         // Three dragon statues on the shared ground plane; the sample is about

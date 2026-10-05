@@ -88,6 +88,9 @@ node.transform(sun, { position: { x: 4, y: 4, z: 0 }, rotation: { x: 15, y: 0, z
 // The archive's two noise images are byte-identical (md5 738562860cd7...): ONE ships.
 var meshGuid = assets.importFile(SRC + "/tornado.obj");
 assert(meshGuid && meshGuid.length > 10, "imported tornado.obj");
+// PINNED INTO THE PROJECT, or the archive ships without the mesh (the
+// portability law: every archive carries its whole closure).
+assert(assets.addToProject(meshGuid) === meshGuid, "the mesh pinned into the project");
 
 // ---- one graph material per layer -------------------------------------------
 function buildGraph(L) {

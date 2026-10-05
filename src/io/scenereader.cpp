@@ -1762,8 +1762,8 @@ iris::MaterialPtr SceneReader::readPbrMaterial(const QJsonObject& matObj)
 	{
 		const QJsonArray velocity = values["textureVelocity"].toArray();
 		if (velocity.size() == 2) {
-			mat->setValue(QStringLiteral("textureVelocityU"), velocity[0].toDouble());
-			mat->setValue(QStringLiteral("textureVelocityV"), velocity[1].toDouble());
+			mat->setValue(QStringLiteral("textureVelocityU"), velocity[0].toDouble(mat->textureVelocityU));
+			mat->setValue(QStringLiteral("textureVelocityV"), velocity[1].toDouble(mat->textureVelocityV));
 		}
 	}
 	return mat;
