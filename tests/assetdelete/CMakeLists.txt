@@ -37,7 +37,8 @@ add_executable(test_asset_delete test_asset_delete.cpp
     # the project's VR settings table: the writer/reader are generated from it (VR-WORLD-1)
     ${CMAKE_SOURCE_DIR}/src/services/vrworld.cpp
     ${CMAKE_SOURCE_DIR}/src/io/assetiobase.cpp
-    ${CMAKE_SOURCE_DIR}/src/data/constants.cpp)
+    ${CMAKE_SOURCE_DIR}/src/data/constants.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/settingsstore.cpp)
 set_target_properties(test_asset_delete PROPERTIES AUTOMOC ON)
 target_include_directories(test_asset_delete PRIVATE
     ${CMAKE_SOURCE_DIR}

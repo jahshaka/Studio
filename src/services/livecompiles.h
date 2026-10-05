@@ -19,16 +19,14 @@
 // names a long gap that compiled ("stage: shader compilation (N)") instead of "-".
 // Whatever it moved by inside a window is that window's, and is not counted.
 //
-// Header-only, UI-thread state: the driver, the viewport's scripted frames, the
-// heartbeat, the open ledger and the gate all reach it without a link dependency.
+// Header-only, UI-thread state, and it includes nothing of ours: the driver, the
+// viewport's scripted frames, the heartbeat, the open ledger and the gate all reach it
+// without a link dependency (a suite that compiles loadtimeline.cpp links nothing new).
 
-#include <QString>
 #include <QtGlobal>
 
 #include <atomic>
 #include <functional>
-
-#include "services/uistep.h"
 
 namespace livecompiles
 {
@@ -60,12 +58,10 @@ inline void check(const char *where)
     if (now <= before || !s.armed || s.windows > 0) return;
     const unsigned n = now - before;
     s.live.fetch_add(n, std::memory_order_relaxed);
-    const QString step = UiStep::current();
     qWarning("[shader] %u shader(s) compiled on the UI thread after the splash, outside a "
-             "compile dialog (%s; stage: %s; %u this session) — a UI-thread compile is a defect "
+             "compile dialog (%s; %u this session) — a UI-thread compile is a defect "
              "(SHADER-WARM-2)",
-             n, where, step.isEmpty() ? "-" : qUtf8Printable(step),
-             s.live.load(std::memory_order_relaxed));
+             n, where, s.live.load(std::memory_order_relaxed));
 }
 
 /// The startup gate is over. `total` reads the engine's running compile count; what the

@@ -32,7 +32,8 @@ add_executable(test_script_engine test_script_engine.cpp
     # the behaviour under test — the fake module pushes through it exactly as
     # the editor's verbs do. Another leaf: QUndoStack plus a header-only
     # StudioCommand base, no MainWindow, no engine, no document.
-    ${CMAKE_SOURCE_DIR}/src/services/undoservice.cpp)
+    ${CMAKE_SOURCE_DIR}/src/services/undoservice.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/settingsstore.cpp)
 set_target_properties(test_script_engine PROPERTIES AUTOMOC ON)
 target_include_directories(test_script_engine PRIVATE ${CMAKE_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/src

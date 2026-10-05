@@ -50,7 +50,8 @@ add_executable(test_assettray test_assettray.cpp
     # the project's VR settings table: the writer/reader are generated from it (VR-WORLD-1)
     ${CMAKE_SOURCE_DIR}/src/services/vrworld.cpp
     ${CMAKE_SOURCE_DIR}/src/io/assetiobase.cpp
-    ${CMAKE_SOURCE_DIR}/src/data/constants.cpp)
+    ${CMAKE_SOURCE_DIR}/src/data/constants.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/settingsstore.cpp)
 set_target_properties(test_assettray PROPERTIES AUTOMOC ON)
 target_include_directories(test_assettray PRIVATE
     ${CMAKE_SOURCE_DIR}
@@ -121,7 +122,8 @@ set(_d11_db_closure
     ${CMAKE_SOURCE_DIR}/src/io/scenewriter.cpp
     ${CMAKE_SOURCE_DIR}/src/services/vrworld.cpp
     ${CMAKE_SOURCE_DIR}/src/io/assetiobase.cpp
-    ${CMAKE_SOURCE_DIR}/src/data/constants.cpp)
+    ${CMAKE_SOURCE_DIR}/src/data/constants.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/settingsstore.cpp)
 find_package(Qt6 REQUIRED COMPONENTS Concurrent Test Qml)
 function(jah_d11_suite _target _test _source)
     add_executable(${_target} ${_source} ${_d11_db_closure} ${ARGN})
