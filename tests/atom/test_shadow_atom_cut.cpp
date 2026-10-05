@@ -294,6 +294,11 @@ static void checkOneCut(World &w, const OgreScene::CasterProbe &p, const char *l
         v.projScaleY = p.projScaleY;
         v.viewportHeight = p.viewportHeight;
         v.orthographic = p.orthographic;
+        // ...and the request's frustum: the cut drops a cluster wholly outside the map's
+        // view (SPEED-VR-MEM, Types.h clusterInFrustum).
+        v.cullPlanes = true;
+        for (int i = 0; i < 6; ++i)
+            for (int k = 0; k < 4; ++k) v.planes[i][k] = p.planes[i * 4 + k];
         std::vector<unsigned> cpu;
         clusterCut(f.data.clusterGroups, f.data.clusters, v, cpu);
         std::set<unsigned> gpuSet, cpuSet(cpu.begin(), cpu.end());
