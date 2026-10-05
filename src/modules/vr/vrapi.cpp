@@ -173,7 +173,7 @@ QVariantMap postFxMap(const View &view)
     // exists to name a difference between two descriptions, and a field left
     // out of it is a difference nobody can see.
     m[QStringLiteral("bloomAmount")] = fx.bloomAmount;
-    // THE IMAGE BLOCK (IMAGE-1): the eyes keep all of it but the vignette.
+    // THE IMAGE BLOCK (IMAGE-1): the eyes keep all of it (LAYERED-STEREO-1).
     {
         QVariantMap img;
         img[QStringLiteral("contrast")] = fx.image.contrast;

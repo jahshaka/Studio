@@ -4761,15 +4761,15 @@ void object_counts_track_lifetimes() {
 // one explicit door through that — allowOffscreen — and these tests are the
 // reason it exists (the other caller is screenshot({postFx:true})).
 
-/// THE VR VIEW POLICY, AS ARITHMETIC (lane EYE-GRADE-1; jahshaka::engine::
-/// applyVrViewPolicy and stereoSafeLook, Types.h).
+/// THE VR VIEW POLICY, AS ARITHMETIC (lane EYE-GRADE-1, LAYERED-STEREO-1;
+/// jahshaka::engine::applyVrViewPolicy, Types.h).
 ///
 /// The policy decides what the person in the headset sees of the project's post
 /// chain, and until this case it had no direct test at all: it was exercised
 /// only through a live session, i.e. only on a box with an OpenXR runtime. It
 /// is pure arithmetic on a struct, so it belongs here — no device, no session,
 /// no runtime, and a failure names the field rather than a pixel.
-void vr_view_policy_keeps_the_project_and_drops_what_a_seam_breaks() {
+void vr_view_policy_keeps_the_project_and_drops_what_has_no_per_eye_form() {
     // A description with EVERYTHING on, the way a project at Epic with a full
     // looks stack reaches a view.
     PostFxDesc world;
@@ -4804,18 +4804,16 @@ void vr_view_policy_keeps_the_project_and_drops_what_a_seam_breaks() {
     PostFxDesc eye = world;
     applyVrViewPolicy(eye);
 
-    // ---- what the seam takes away -----------------------------------------
-    CHECK_MSG(!eye.bloom, "bloom is dropped (one 256x256 ladder, 65-tap blurs, two eyes)");
-    CHECK_MSG(!eye.ssao, "SSAO is dropped (one projection for two eyes)");
-    CHECK_MSG(eye.smaaPreset < 0, "SMAA is dropped (its search crosses the seam)");
-    CHECK_MSG(!eye.ssrScreenMarch, "the screen-space march is dropped (it walks the target)");
-    CHECK_MSG(!eye.refractions, "refractions are dropped: the piece samples the TARGET at "
-                                "screenPosUv + offset and falls back only at the FRAME's "
-                                "edges, so a pane at an eye's nasal edge shows the other eye");
+    // ---- what has no per-eye form yet --------------------------------------
+    CHECK_MSG(!eye.bloom, "bloom is dropped (one fixed 256x256 ladder holds one picture)");
+    CHECK_MSG(!eye.ssao, "SSAO is dropped (its passes are not per layer)");
+    CHECK_MSG(eye.smaaPreset < 0, "SMAA is dropped (its passes are not per layer)");
+    CHECK_MSG(!eye.ssrScreenMarch, "the screen-space march is dropped (the rays run per layer)");
+    CHECK_MSG(!eye.refractions, "refractions are dropped (their copy is not per layer)");
     CHECK_MSG(!eye.distortion, "distortion is dropped for the same reason");
-    CHECK_MSG(!eye.hzb, "the depth pyramid is dropped (it would reduce across the seam)");
-    CHECK_MSG(eye.allowOffscreen, "and the pair keeps its chain: offscreen only because two "
-                                  "eyes share one texture");
+    CHECK_MSG(!eye.hzb, "the depth pyramid is dropped (its compute is not per layer)");
+    CHECK_MSG(eye.allowOffscreen, "and the pair keeps its chain: offscreen only because the "
+                                  "runtime owns the display");
 
     // ---- what the project keeps, whole ------------------------------------
     CHECK_MSG(eye.hdr == world.hdr && eye.tonemapFixed == world.tonemapFixed &&
@@ -4830,29 +4828,16 @@ void vr_view_policy_keeps_the_project_and_drops_what_a_seam_breaks() {
                   eye.reflectionRoughnessCutoff == world.reflectionRoughnessCutoff,
               "so is the reflection row and every tuning value");
 
-    // ---- the looks: kept, dropped, and the one that is edited -------------
-    CHECK_MSG(eye.looks.size() == 3u, "three of six looks are dropped (%zu kept)",
-              eye.looks.size());
-    CHECK_MSG(eye.looks[0].kind == LookKind::Desaturate &&
-                  eye.looks[1].kind == LookKind::Posterize &&
-                  eye.looks[2].kind == LookKind::Sharpen,
-              "the pointwise looks ride, IN THE PROJECT'S ORDER; the centre-relative ones "
-              "(radial blur, glass warp, old movie) do not");
-    CHECK_MSG(eye.image.vignette == 0.0f,
-              "the image block's VIGNETTE is zeroed — it is the one term measured from the "
-              "frame's centre, which in a two-eye target is the inner edge of both");
-    {
-        ImageGrade rest = world.image;
-        rest.vignette = 0.0f;
-        CHECK_MSG(eye.image == rest,
-                  "...and NOTHING else of the image block moves: contrast, saturation, the "
-                  "white balance and the film are the author's");
-    }
-    CHECK_MSG(stereoSafeLook(LookKind::Desaturate) && stereoSafeLook(LookKind::Posterize) &&
-                  stereoSafeLook(LookKind::Sharpen) &&
-                  !stereoSafeLook(LookKind::RadialBlur) &&
-                  !stereoSafeLook(LookKind::GlassWarp) && !stereoSafeLook(LookKind::OldMovie),
-              "stereoSafeLook answers the same by kind");
+    // ---- the looks and the image block ride WHOLE -------------------------
+    // Each eye is its own layer (LAYERED-STEREO-1), so a look or a vignette
+    // measured from the frame's centre is measured from each eye's own centre.
+    CHECK_MSG(eye.looks.size() == world.looks.size(), "every look rides (%zu of %zu)",
+              eye.looks.size(), world.looks.size());
+    for (size_t i = 0; i < eye.looks.size() && i < world.looks.size(); ++i)
+        CHECK_MSG(eye.looks[i].kind == world.looks[i].kind,
+                  "look %zu rides IN THE PROJECT'S ORDER", i);
+    CHECK_MSG(eye.image == world.image,
+              "the image block is the author's, the vignette included");
 
     // ---- the reflection override (VrConfig::ssr / vr.begin({reflections})) --
     {
@@ -6536,8 +6521,8 @@ int main(int argc, char **argv) {
         { "hud_overlay_toggle_does_not_rebuild_the_workspace", hud_overlay_toggle_does_not_rebuild_the_workspace },
         { "render_stats_are_live_and_lazily_recorded", render_stats_are_live_and_lazily_recorded },
         { "object_counts_track_lifetimes",          object_counts_track_lifetimes },
-        { "vr_view_policy_keeps_the_project_and_drops_what_a_seam_breaks",
-                                                    vr_view_policy_keeps_the_project_and_drops_what_a_seam_breaks },
+        { "vr_view_policy_keeps_the_project_and_drops_what_has_no_per_eye_form",
+                                                    vr_view_policy_keeps_the_project_and_drops_what_has_no_per_eye_form },
         { "postfx_is_ignored_offscreen_unless_asked", postfx_is_ignored_offscreen_unless_asked },
         { "hdr_tonemap_and_exposure",               hdr_tonemap_and_exposure },
         { "fixed_exposure_tonemap",                 fixed_exposure_tonemap },
