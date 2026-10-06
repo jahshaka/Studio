@@ -108,9 +108,12 @@ if (STAGE === "author") {
     assert(node.rename(cube, "LiveCutCube"), "named");
     assert(graph.toMaterial(cube), "graph.toMaterial");
     assert(node.setProperty(cube, "faceCullingMode", "none"), "two-sided");
-    // NO SHADOW: the frames compare the MATERIAL. An alpha-tested caster's shadow is
-    // engine state that differs between the applying session and a reload (absent
-    // there, solid after it — never holed; reported by LIVE-PERSIST-1), not persistence.
+    // NO SHADOW: the frames compare the MATERIAL. Measured (LIVE-PERSIST-1,
+    // spikes/live-persist-1/shadow-diag): a cut-out caster's shadow is NOT
+    // deterministic within ONE authoring session — the identical script, no save,
+    // drew no shadow in two runs and a SOLID one in a third — and it is never
+    // holed, in-session or after a reload; the datablock a reload builds carries
+    // the same alpha_test and baked diffuse map. An engine defect, not persistence.
     assert(node.setCastShadow(cube, false), "casts no shadow");
     var m = material.get(cube);
     assert(m.alphaMode !== undefined, "the material reads back " + J({ alphaMode: m.alphaMode, cutoff: m.alphaCutoff }));
