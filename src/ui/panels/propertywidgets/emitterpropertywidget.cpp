@@ -121,7 +121,7 @@ void restoreOnto(const iris::ParticleSystemNodePtr &ps, const QVariantMap &state
         k.b = f[3].toFloat();    k.a = f[4].toFloat();
         colour.append(k);
     }
-    ps->colourKeys = colour;
+    ps->setColourKeys(colour);
     QVector<iris::ParticleScaleKey> scale;
     for (const QVariant &v : state.value(QStringLiteral("scaleKeys")).toList()) {
         const QVariantList f = v.toList();
@@ -130,7 +130,7 @@ void restoreOnto(const iris::ParticleSystemNodePtr &ps, const QVariantMap &state
         k.time = f[0].toFloat(); k.scale = f[1].toFloat();
         scale.append(k);
     }
-    ps->scaleKeys = scale;
+    ps->setScaleKeys(scale);
 }
 
 QString prettyPreset(const QString &id)
@@ -445,7 +445,7 @@ void EmitterPropertyWidget::pushColourKeys()
                      });
     QVector<iris::ParticleColourKey> keys;
     for (const ParticleRampStop &s : stops) keys.append(fromStop(s));
-    node->colourKeys = keys;
+    node->setColourKeys(keys);
     // The ramp is not a reflected key (it is a list, and the renderer reads it
     // whole), so the step carries the emitter's whole editable state — the same
     // restore the preset row uses.
@@ -467,7 +467,7 @@ void EmitterPropertyWidget::pushScaleKeys()
         iris::ParticleScaleKey k; k.time = s.time; k.scale = s.scale;
         keys.append(k);
     }
-    node->scaleKeys = keys;
+    node->setScaleKeys(keys);
     pushWideEdit(node, tr("Particle Scale Ramp"), before, snapshotOf(node));
 }
 
