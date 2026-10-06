@@ -26,6 +26,9 @@ For more information see the LICENSE file
 //   3. a cancelled write leaves nothing at the destination — and a file already there
 //      survives it (the write is beside, then renamed over);
 //   4. the owed bytes land inline: the payload carries every file's content;
+//   6. THE REPLACE IS ONE rename(2) (RENAME-ATOMIC-1): writing over an existing file never
+//      DELETES the destination — the directory sees the archive moved in over it and no
+//      unlink of its name (inotify, Linux), so there is no instant with no file there;
 //   5. THE READER'S BOUND (unpackBundle): the legitimate 200-entry pack unpacks whole, and a
 //      file whose payload is larger than its own manifest accounts for is REFUSED with the
 //      reason before the payload is read.
@@ -39,7 +42,13 @@ For more information see the LICENSE file
 #include <QTimer>
 
 #include <cstdio>
+#include <cstring>
 #include <limits>
+
+#ifdef Q_OS_LINUX
+#include <sys/inotify.h>
+#include <unistd.h>
+#endif
 
 #include "io/clipboardformat.h"
 #include "export/exportmanifest.h"
@@ -201,6 +210,48 @@ int main(int argc, char **argv)
     const assetshare::ExportResult c = cancelled.wait();
     CHECK(c.canceled && !QFile::exists(fresh) && !QFile::exists(fresh + QStringLiteral(".partial")),
           "a cancelled job writes nothing at a fresh destination");
+
+    // ---- 6: the replace is ONE rename(2) — never a delete, then a rename ---------
+#ifdef Q_OS_LINUX
+    {
+        QTemporaryDir watched;
+        const QString target = QDir(watched.path()).filePath(QStringLiteral("over.jbundle"));
+        {
+            QFile f(target);
+            f.open(QIODevice::WriteOnly);
+            f.write("the user's older file");
+        }
+        const int fd = inotify_init1(IN_NONBLOCK);
+        const int wd = fd >= 0 ? inotify_add_watch(fd, QFile::encodeName(watched.path()).constData(),
+                                                   IN_DELETE | IN_MOVED_TO)
+                               : -1;
+        CHECK(fd >= 0 && wd >= 0, "an inotify watch on the destination's directory");
+        const assetshare::ExportResult over =
+            assetshare::writeBundle(stagePack(paths.mid(0, 3)), target);
+        CHECK(over.ok(), "a write over an existing file succeeds");
+        int deletes = 0, movesIn = 0;
+        alignas(inotify_event) char buf[64 * 1024];
+        for (;;) {
+            const ssize_t n = fd >= 0 ? ::read(fd, buf, sizeof buf) : -1;
+            if (n <= 0) break;
+            for (char *p = buf; p < buf + n;) {
+                const auto *ev = reinterpret_cast<const inotify_event *>(p);
+                const bool isTarget = ev->len > 0 && std::strcmp(ev->name, "over.jbundle") == 0;
+                if (isTarget && (ev->mask & IN_DELETE)) ++deletes;
+                if (isTarget && (ev->mask & IN_MOVED_TO)) ++movesIn;
+                p += sizeof(inotify_event) + ev->len;
+            }
+        }
+        if (fd >= 0) ::close(fd);
+        std::printf("info: the destination saw %d delete(s) and %d rename(s) onto it\n",
+                    deletes, movesIn);
+        CHECK(deletes == 0 && movesIn == 1,
+              "the existing file is REPLACED by one rename(2), never deleted first");
+        CHECK(entryBytes(target, QStringLiteral("jah.manifest.json")).size() > 0,
+              "...and the destination is the new archive");
+        CHECK(!QFile::exists(target + QStringLiteral(".partial")), "no .partial is left behind");
+    }
+#endif
 
     // ---- 5: the reader's bound --------------------------------------------------
     {
