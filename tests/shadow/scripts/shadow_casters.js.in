@@ -1,0 +1,85 @@
+// shadow.cutout_caster / shadow.two_sided_caster (CUTOUT-CASTER-1). One process = one RUN;
+// shadow_casters.sh runs it N times and reads the frames (the verdicts are in the wrapper).
+//
+// THE RIG. The basic template's sun (direction (0, -0.766, -0.643)) over its floor; a 3 x 3 m
+// plane primitive HIGH above the floor (y = 4), so its shadow lands 3.36 m towards -z, clear of
+// the plane's own image; the camera straight above the shadow. A horizontal caster over a
+// horizontal floor under parallel light casts an exact TRANSLATED copy of itself, and a camera
+// looking straight down sees that copy as a scaled one: the shadow of a 4 x 4 checker is a
+// 4 x 4 checker filling the solid caster's shadow box — the analytic projection the wrapper
+// checks cell by cell.
+//
+// Every frame is a PAIR: castShadow on, then off. Their difference is the shadow alone (the
+// caster's own image, the floor's checker and every other term cancel).
+var OUT = "@OUT@";
+var FIX = "@FIXTURE@";
+var WHAT = "@WHAT@";          // cutout | twosided: the arms one row needs
+function J(x) { return JSON.stringify(x); }
+function assert(c, m) { if (!c) throw new Error("assert failed: " + m); console.log("ok: " + m); }
+
+assert(project.create("Casters", { template: "basic" }).length > 10, "project.create");
+var sun = world.sun();
+assert(sun.castsShadows && Math.abs(sun.direction.y + 0.766) < 0.01 && Math.abs(sun.direction.z + 0.643) < 0.01,
+       "the template's sun " + J(sun.direction));
+var H = 4.0;
+var shadowZ = H * sun.direction.z / -sun.direction.y;          // -3.36
+var p = scene.addPrimitive("plane", { position: { x: 0, y: H, z: 0 }, scale: { x: 1.5, y: 1, z: 1.5 } });
+editor.select(null);
+editor.setCamera({ position: { x: 0, y: 14, z: shadowZ + 0.001 }, lookAt: { x: 0, y: 0, z: shadowZ }, fov: 40 });
+
+function pair(name) {
+    assert(node.setCastShadow(p, true), name + ": casting");
+    editor.frame(60);
+    editor.screenshot(OUT + "_" + name + "_on.png", 480, 480, [], "scene");
+    assert(node.setCastShadow(p, false), name + ": not casting");
+    editor.frame(60);
+    editor.screenshot(OUT + "_" + name + "_off.png", 480, 480, [], "scene");
+}
+
+// 1. THE SOLID REFERENCE: the opaque single-sided plane (faces the sun).
+pair("solid");
+if (WHAT === "twosided") {
+    // 2. TWO-SIDED (shadow.two_sided_caster): the same plane, both faces drawn — and the plane
+    //    turned over (only its back faces the sun), which casts only through the two-sided cull.
+    assert(node.setProperty(p, "faceCullingMode", "none"), "two-sided");
+    pair("twosided");
+    assert(node.transform(p, { rotation: { x: 180, y: 0, z: 0 } }).rotation.x !== 0, "turned over");
+    pair("twosided_flipped");
+    assert(node.transform(p, { rotation: { x: 0, y: 0, z: 0 } }).rotation.x === 0, "upright again");
+    console.log("shadow_casters: PASS");
+} else {
+    // 3. THE CUT-OUT (shadow.cutout_caster): a 4 x 4 checker of solid and empty squares, cut at 0.5.
+    assert(material.set(p, { baseColorMap: FIX, alphaMode: "Masked", alphaCutoff: 0.5 }), "the cut-out");
+    pair("cutout");
+    // 4. THE SCROLL (TORNADO-1's route): a LIVE graph material whose map is read through a panner
+    //    on the shader clock at (0.25, 0) of the texture a second -- the folded UV scroll, the
+    //    material's userValue[2] the caster's alpha test must read too. The map's RED is the
+    //    cut (the fixture's solid squares are 230, its holes 0). A pinned clock at t = 0 and
+    //    t = 1 moves the pattern by one checker square along u: the shadow's holes must move.
+    var guid = materials.create("CasterScroll", { graph: true });
+    assert(guid.length > 10, "materials.create");
+    var picture = materials.addTexture(guid, FIX);
+    assert(picture && picture.length > 10, "the checker is a texture of the material");
+    var master = null;
+    graph.nodes().forEach(function (n) { if (n.master) master = n.id; });
+    var tex = graph.addNode("texture");
+    assert(graph.setValue(tex, picture), "the checker on a texture node");
+    var uv = graph.addNode("uv"), pan = graph.addNode("panner"), speed = graph.addNode("vector2"),
+        clock = graph.addNode("time");
+    assert(graph.setValue(speed, { x: 0.25, y: 0 }), "speed (0.25, 0)");
+    assert(graph.connect(uv, 0, pan, 0) && graph.connect(speed, 0, pan, 1) && graph.connect(clock, 0, pan, 2) &&
+           graph.connect(pan, 0, tex, 0), "uv -> panner(speed, time) -> texture");
+    var red = graph.addNode("splitvector");
+    assert(graph.connect(tex, 0, red, 0) && graph.connect(red, 0, master, "Alpha"), "red -> Alpha");
+    var cut = graph.addNode("float");
+    assert(graph.setValue(cut, 0.5) && graph.connect(cut, 0, master, "Alpha Cutoff"), "cut at 0.5");
+    var info = graph.emitInfo();
+    assert(info.route === "live", "the LIVE route " + J(info));
+    assert(graph.toMaterial(p), "graph.toMaterial");
+    world.shaderTime({ t: 0.0 });
+    pair("scroll0");
+    world.shaderTime({ t: 1.0 });
+    pair("scroll1");
+    world.shaderTime({ t: null });
+    console.log("shadow_casters: PASS");
+}

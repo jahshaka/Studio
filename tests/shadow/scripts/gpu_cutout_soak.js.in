@@ -1,0 +1,59 @@
+// gpu.cutout_soak (CUTOUT-CASTER-1): a cut-out material must never lose the GPU. Before the
+// fork's caster fix an alpha-tested caster bound its datablock's texture set over a root layout
+// one slot short (the reflection map spilled into the sampler binding) and the alpha test
+// sampled through an unwritten sampler: Xid 109 CTX SWITCH TIMEOUT within ~2 minutes of the
+// LIVE-PERSIST-1 author stage. The soak drives what that stage drove — the live graph cut-out
+// (a pulsing emissive piece, two-sided), plain cut-outs on a cube and a sphere, the viewport
+// and the offscreen screenshot path, a pinned and a free shader clock — for 5,000 frames, then
+// the Tornado sample for 5,000 more. The row runs under the Khronos validation layer: any
+// "Validation Error" fails it (FAIL_REGULAR_EXPRESSION), and so does a lost device.
+var OUT = "@OUT@";
+var FIX = "@FIXTURE@";
+var TORNADO = "@TORNADO@";
+function J(x) { return JSON.stringify(x); }
+function assert(c, m) { if (!c) throw new Error("assert failed: " + m); console.log("ok: " + m); }
+
+function soak(frames, tag) {
+    for (var f = 0; f < frames; f += 250) {
+        world.shaderTime({ t: (f / 250) % 2 === 0 ? 0.4 : null });
+        editor.frame(250);
+        editor.screenshot(OUT + "_" + tag + ".png", 320, 240, [{ x: 0.5, y: 0.5 }], "scene");
+    }
+    world.shaderTime({ t: null });
+    console.log("SOAK " + tag + " " + frames + " frames");
+}
+
+assert(project.create("Cutout Soak", { template: "basic" }).length > 10, "project.create");
+var cube = scene.addPrimitive("cube", { position: { x: -1.2, y: 1, z: 0 } });
+var sphere = scene.addPrimitive("sphere", { position: { x: 1.2, y: 1, z: 0 } });
+[cube, sphere].forEach(function (id) {
+    assert(material.set(id, { baseColorMap: FIX, alphaMode: "Masked", alphaCutoff: 0.5 }), "a plain cut-out");
+});
+// THE LIVE GRAPH CUT-OUT the hang was found on: red -> Alpha at 0.5, a pulsing emissive.
+var guid = materials.create("SoakLive", { graph: true });
+var picture = materials.addTexture(guid, FIX);
+var master = null;
+graph.nodes().forEach(function (n) { if (n.master) master = n.id; });
+var tex = graph.addNode("texture"); graph.setValue(tex, picture);
+var uv = graph.addNode("uv"); graph.setValue(uv, { tileX: 2, tileY: 2 }); graph.connect(uv, 0, tex, 0);
+var red = graph.addNode("splitvector");
+assert(graph.connect(tex, 0, red, 0) && graph.connect(red, 0, master, "Alpha"), "red -> Alpha");
+var cut = graph.addNode("float");
+assert(graph.setValue(cut, 0.5) && graph.connect(cut, 0, master, "Alpha Cutoff"), "cut at 0.5");
+var hot = graph.addNode("color"); graph.setValue(hot, { r: 1.0, g: 0.3, b: 0.05, a: 1 });
+var pulse = graph.addNode("pulsate"), rate = graph.addNode("float"), glow = graph.addNode("multiply");
+graph.setValue(rate, 2.0); graph.connect(rate, 0, pulse, 0);
+assert(graph.connect(hot, 0, glow, 0) && graph.connect(pulse, 0, glow, 1) && graph.connect(glow, 0, master, "Emissive"),
+       "pulsing orange -> Emissive");
+var live = scene.addPrimitive("cube", { position: { x: 0, y: 1, z: -1.5 } });
+assert(graph.toMaterial(live), "graph.toMaterial");
+assert(node.setProperty(live, "faceCullingMode", "none"), "two-sided");
+editor.select(null);
+editor.setCamera({ position: { x: 2.2, y: 2.4, z: 4.6 }, lookAt: { x: 0, y: 1.0, z: -0.3 }, fov: 50 });
+soak(5000, "primitives");
+assert(project.close(), "closed");
+
+var imported = project.importArchive(TORNADO);
+assert(imported && imported.guid && project.open(imported.guid), "the Tornado sample");
+soak(5000, "tornado");
+console.log("gpu_cutout_soak: PASS");

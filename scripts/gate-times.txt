@@ -16,6 +16,7 @@
 #   gi.field_follows.timing 12.58  <- its push row's worst gate run (same binary)
 #   gi.gather_cost 33.04  <- the worst recorded run (spikes/)
 #   meshbake.cards.timing 0.78  <- its D6B dev run
+#   gpu.cutout_soak 268.44  <- its first scoped gate run (CUTOUT-CASTER-1, 2026-10-06, -j4 beside other lanes)
 #   open.crash_soak 114.30  <- a recorded nightly run (spikes/)
 #   open.responsive.timing 281.33  <- its push row's worst gate run (same binary)
 #   rigperf.benchmark 100.00  <- NO recorded run: its 600 s budget / 6
@@ -258,6 +259,7 @@ gizmo.plane_handles 0.1
 gizmo.ring_pick 0.3
 gizmo.scale_lock 0.06
 gizmo.screen_size 0.12
+gpu.cutout_soak 268.44
 hdr.bloom_amount 2.2
 hdr.bloom_amount_asan 11.8
 hdr.dither 2.49
