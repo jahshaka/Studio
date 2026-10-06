@@ -16,6 +16,7 @@ For more information see the LICENSE file
 #include "services/services.h"
 #include "services/projectservice.h"
 #include "scripting/modules/appapi.h"
+#include <QImage>
 #include "scripting/modules/moduleshared.h"
 
 #include "ui/ishellview.h"
@@ -300,6 +301,13 @@ QVector<VerbInfo> AppApi::verbs() const
           "driver about its screen (0 = unknown, which falls back to 16 ms). The setting persists "
           "as viewport/pacing and is the same one Preferences > Viewport > Frame Pacing writes.",
           Needs::Window },
+        { "compareImages", "app.compareImages(pathA, pathB, tolerance=0) -> {width, height, maxDelta, meanDelta, over, overFraction}",
+          "A MEASURING INSTRUMENT for two pictures of the same size (PNG files): per pixel, the largest "
+          "difference over R, G and B in 8-bit codes; `maxDelta` is the worst pixel, `meanDelta` the mean of "
+          "that per-pixel figure, `over` how many pixels differ by MORE than `tolerance` and `overFraction` "
+          "that count over the pixel count. Alpha is ignored. Fails when either file does not load or the "
+          "sizes differ.",
+          Needs::Document },
         { "renderStats", "app.renderStats() -> {sceneTriangles, submittedTriangles, gpuCountLagFrames, draws, perPass:[{name, triangles, draws}], perObject:[{id, name, level, levels, triangles, cut}], metricsRecording, fps, frameMs, lastMs, p95Ms, p99Ms, bestMs, worstMs, batches, vertices, instances, incompletePsoRequests, forwardPlusLights, forwardPlusBudget, forwardPlusOverBudget, resourceAdvances}",
           "What the RENDERER measured, straight off the engine boundary — the numbers behind the F3 "
           "stats overlay, and the read-back answer for an agent that wants to know what a frame costs "
@@ -1442,6 +1450,43 @@ QVariantMap AppApi::pacing(const QString &mode)
     out.insert("refreshHz", driver->refreshHz());
     out.insert("vsync", framepacing::vsyncFor(driver->pacingMode()));
     out.insert("running", driver->isRunning());
+    return out;
+}
+
+QVariantMap AppApi::compareImages(const QString &a, const QString &b, int tolerance)
+{
+    QVariantMap out;
+    QImage ia(a), ib(b);
+    if (ia.isNull() || ib.isNull()) {
+        fail(QStringLiteral("app.compareImages: could not load '%1'").arg(ia.isNull() ? a : b));
+        return out;
+    }
+    if (ia.size() != ib.size()) {
+        fail(QStringLiteral("app.compareImages: the sizes differ (%1x%2 against %3x%4)")
+                 .arg(ia.width()).arg(ia.height()).arg(ib.width()).arg(ib.height()));
+        return out;
+    }
+    ia = ia.convertToFormat(QImage::Format_RGBA8888);
+    ib = ib.convertToFormat(QImage::Format_RGBA8888);
+    int maxDelta = 0;
+    qint64 sum = 0, over = 0;
+    for (int y = 0; y < ia.height(); ++y) {
+        const uchar *pa = ia.constScanLine(y), *pb = ib.constScanLine(y);
+        for (int x = 0; x < ia.width(); ++x, pa += 4, pb += 4) {
+            const int d = std::max({ std::abs(int(pa[0]) - int(pb[0])), std::abs(int(pa[1]) - int(pb[1])),
+                                     std::abs(int(pa[2]) - int(pb[2])) });
+            maxDelta = std::max(maxDelta, d);
+            sum += d;
+            if (d > tolerance) ++over;
+        }
+    }
+    const qint64 n = qint64(ia.width()) * ia.height();
+    out["width"] = ia.width();
+    out["height"] = ia.height();
+    out["maxDelta"] = maxDelta;
+    out["meanDelta"] = n ? double(sum) / double(n) : 0.0;
+    out["over"] = over;
+    out["overFraction"] = n ? double(over) / double(n) : 0.0;
     return out;
 }
 

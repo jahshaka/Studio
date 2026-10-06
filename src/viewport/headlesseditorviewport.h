@@ -100,7 +100,6 @@ public:
     void setShowFps(bool) override {}
     void setShowPerspeciveLabel(bool) override {}
     QImage takeScreenshot(int, int) override { return QImage(); }
-    QImage takeScreenshot(QSize) override { return QImage(); }
 
     // ---- lifecycle ----
     void begin() override {}

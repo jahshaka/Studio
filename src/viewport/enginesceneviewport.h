@@ -215,7 +215,11 @@ public:
     bool getShowFps() const override { return mShowStats; }
     void setShowPerspeciveLabel(bool) override {}
     QImage takeScreenshot(int width = 1920, int height = 1080) override;
-    QImage takeScreenshot(QSize dimension) override;
+    // THE PRESENTED FRAME, READ BACK (CLOSE-SHOT-2) — IEditorViewport's note.
+    bool requestPresentedFrame(PresentedFrameDone done, bool keepHelpers = false) override;
+    void settlePresentedFrame() override;
+    QImage capturePresentedFrame(bool keepHelpers = false) override;
+    void cancelPresentedFrame() override;
     QImage takeScreenshot(int width, int height, ScreenshotGrade grade) override;
     void settleGiBeforeNextScreenshot(int maxFrames) override { mShotSettleFrames = maxFrames; }
     void readRadianceWithNextScreenshot() override { mShotRadianceWanted = true; }
@@ -650,6 +654,13 @@ private:
     /// driver's ticks, editor.frame(), and presentCovered itself. Deliberately
     /// not View::framesPresented, which resets on every scene bind.
     qulonglong mFrameEpoch = 0;
+    /// The presented-frame requests waiting on the view's one capture
+    /// (requestPresentedFrame), and whether that capture keeps the helpers.
+    std::vector<PresentedFrameDone> mPresentedDone;
+    bool mPresentedKeepHelpers = false;
+    /// Answers the pending requests once the view's capture is ready — at every
+    /// tick (`wait` false) and from settlePresentedFrame (`wait` true).
+    void pollPresentedFrame(bool wait);
     /// settleGiBeforeNextScreenshot's cap, consumed by the next takeScreenshot.
     int mShotSettleFrames = 0;
     /// readRadianceWithNextScreenshot's request, and what the shot read.

@@ -220,6 +220,13 @@ jah_pool_arm(player scene_switch_after_play ${CMAKE_CURRENT_SOURCE_DIR}/scripts/
 # "one selected" arm) and the GROUND never is (its ground arm).
 jah_pool_arm(editor_view multiselect_outline ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_multiselect_outline.js 11)
 
+# ---- app.close_shot ---------------------------------------------------------
+# A PROJECT'S DESKTOP TILE IS THE PRESENTED FRAME (CLOSE-SHOT-2): read back from
+# the window (View::requestFrameCapture), drawn once without the grid, outline and
+# gizmo — no second render, no settle. The frame as shown against the capture, the
+# save's tile against a clean capture, and the close's tile showing an edit.
+jah_pool_arm(editor_view close_shot ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_close_shot.js 12)
+
 # ---- app.window_fits --------------------------------------------------------
 # A FRESH PROFILE'S WINDOW FITS ON ITS SCREEN (hygiene lane, 2026-09-09).
 # MainWindow::fitToScreen is only reachable when there is no stored geometry, so

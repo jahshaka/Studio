@@ -52,6 +52,7 @@ public:
     Q_INVOKABLE bool moveToDesktop(const QString &guid, int desktop);
     Q_INVOKABLE bool setPosition(const QString &guid, double x, double y);
     Q_INVOKABLE QVariant current();
+    Q_INVOKABLE QVariantMap thumbnail(const QString &path, const QString &guid = QString());
     Q_INVOKABLE QVariantMap exportWeb(const QString &dir = QString());
     Q_INVOKABLE QVariantMap previewWeb(const QString &dir = QString());
     Q_INVOKABLE QVariantMap exportManifest(const QString &dir = QString());

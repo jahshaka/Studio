@@ -48,6 +48,7 @@ public:
     Q_INVOKABLE QVariantMap frameStats(const QVariantMap &options = QVariantMap());
     Q_INVOKABLE QVariantMap pacing(const QString &mode = QString());
     Q_INVOKABLE QVariantMap renderStats();
+    Q_INVOKABLE QVariantMap compareImages(const QString &a, const QString &b, int tolerance = 0);
     Q_INVOKABLE QVariantMap engineObjects();
     Q_INVOKABLE QVariantMap threading();
     Q_INVOKABLE QVariantMap memoryStats();

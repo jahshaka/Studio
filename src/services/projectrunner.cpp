@@ -630,12 +630,9 @@ void ProjectRunner::startCreateRun(const QString &guid, const QString &filename,
     // process, so the machinery was deleted — WARMUPSET-2, 2026-09-21.)
     slices.append({ QStringLiteral("Precompiling shaders…"), 96,
                     [this]() { mViewport->rememberPassShape(); } });
-    // THE INITIAL SAVE GOES LAST, AFTER THE WARM-UP, and the order is measured
-    // rather than tidy. It renders the project's TILE — an offscreen view of
-    // the new world — and on a cold shader cache that view's first frame
-    // compiles its whole PSO set: 460 ms of the create's 891 when the save ran
-    // before the warm-up, against 156 warm. Running it after `warmUpShaders`
-    // lets it find those permutations already built.
+    // THE INITIAL SAVE GOES LAST, AFTER THE WARM-UP. It ASKS for the project's
+    // TILE — the new world's first presented frame (CLOSE-SHOT-2), stored when
+    // the reveal below has drawn it; nothing is rendered for it here.
     // Nothing downstream reads the row in between: the reveal below switches
     // the page, and the desktop re-reads the tile when it is next shown.
     //

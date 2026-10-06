@@ -599,8 +599,7 @@ void EditorPage::takeScreenshot()
     // THE USER'S DOOR, AND IT ASKS FOR THE SCENE'S OWN PICTURE (owner,
     // 2026-09-13: "match the screenshot to the scene properly"). The grade is
     // named here rather than left to the viewport's default because the default
-    // door is the THUMBNAIL grade and has other callers — project preview tiles
-    // and the asset viewer — which must stay cheap. See
+    // door is the THUMBNAIL grade, the selftest's, which must stay cheap. See
     // IEditorViewport::ScreenshotGrade for what each answer is a picture of.
     auto img = sceneView->takeScreenshot(1920, 1080,
                                          IEditorViewport::ScreenshotGrade::Scene);

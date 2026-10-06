@@ -25,6 +25,7 @@ For more information see the LICENSE file
 // a thumbnail through the viewport.
 
 #include <functional>
+#include <memory>
 
 #include <QHash>
 #include <QString>
@@ -184,8 +185,18 @@ public:
     /// MainWindow::saveScene(filename, projectPath)).
     void saveInitialScene(const QString &projectPath);
 
-    /// Screenshot -> scene thumbnail + desktop tile (the encode on a worker).
+    /// The presented frame -> scene thumbnail + desktop tile, synchronously
+    /// read (one frame), the encode on a worker.
     void updateCurrentSceneThumbnail();
+
+    /// THE PROJECT TILE IS THE PRESENTED FRAME (CLOSE-SHOT-2): the window's
+    /// picture (IEditorViewport::requestPresentedFrame — no second render, no
+    /// settle) cropped about its centre to the tile's aspect and scaled to the
+    /// stored size (Constants::TILE_SIZE * 2). Null in, null out.
+    static QImage tileFromFrame(const QImage &frame);
+    /// Satisfies a presented-frame request still pending (the shutdown path,
+    /// before the last encodes are drained while the engine is alive).
+    void settleThumbnailCapture();
 
     /// Encodes `img` as `guid`'s thumbnail PNG on a worker; on completion,
     /// on this thread, writes the row's thumbnail and the tile. A later call
@@ -219,6 +230,12 @@ private:
     /// replaces what it would have written).
     void supersedeThumbnail(const QString &guid);
     QHash<QString, QFutureWatcher<QByteArray> *> mThumbEncodes;
+    /// What an asynchronous tile request holds instead of `this`: the viewport
+    /// may answer after this service is gone.
+    std::shared_ptr<char> mAlive = std::make_shared<char>(0);
+    /// Asks the viewport for the presented frame and stores it as `guid`'s tile
+    /// when it lands (storeThumbnailLater).
+    void requestTile(const QString &guid);
 
     bool sceneOpen = false;
     Database *db = nullptr;

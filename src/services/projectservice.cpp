@@ -66,8 +66,8 @@ ProjectService::~ProjectService()
 // A save used to deflate its thumbnail PNG on the UI thread: ~100 ms of every
 // close, every Ctrl+S and every create (measured: the create's
 // `saveInitialScene` 131 ms, of which the screenshot 25-36 and the rest the
-// encode). The screenshot stays where it is — it reads the GPU — and the
-// QImage it hands back is ENCODED on a worker; the database write and the
+// encode). The picture is the presented frame read back (CLOSE-SHOT-2,
+// requestTile) and the QImage it hands back is ENCODED on a worker; the database write and the
 // tile follow on this thread when the worker is done (the DB is SQLite on the
 // UI thread; the worker never touches it).
 //
@@ -377,9 +377,12 @@ bool ProjectService::saveProjectBlob()
     // A null screenshot (engine scene mid-swap, or a readback failure) must
     // never overwrite the stored tile with an empty PNG — fall back to the
     // blob-only save.
+    // THE PRESENTED FRAME, READ NOW (CLOSE-SHOT-2): this verb's contract is a
+    // written row, so it takes the synchronous door — one frame and its fence,
+    // never a settle.
     QImage img;
     if (viewport && viewport->isInitialized())
-        img = viewport->takeScreenshot(Constants::TILE_SIZE * 2);
+        img = tileFromFrame(viewport->capturePresentedFrame());
     // THE VERB'S ENCODE STAYS SYNCHRONOUS (CREATE-GAP-1, stated): this is
     // project.save — a script's call, never a person's key, whose contract is
     // that the row (thumbnail included) is written when it returns. It
@@ -425,10 +428,13 @@ void ProjectService::saveOpenScene()
                                      sceneProvider(),
                                      viewport->getEditorData());
     }
-    QImage img;
     {
+        // THE TILE IS THE NEXT PRESENTED FRAME (CLOSE-SHOT-2): asked for here,
+        // answered by the driver's next tick (or by the close's settle, before
+        // the world is torn down) — this row measures the ask, which is all the
+        // save pays.
         LoadTimeline::Accumulate row(QStringLiteral("saveOpen:thumbnail"));
-        img = viewport->takeScreenshot(Constants::TILE_SIZE * 2);
+        requestTile(guid);
     }
     {
         // THE ESSENTIAL WRITE IS SYNCHRONOUS: the scene is in the row before
@@ -438,8 +444,6 @@ void ProjectService::saveOpenScene()
     }
     undo->markSaved();
     projectManager->touchTile(guid);
-    // A null screenshot never replaces the stored tile with an empty PNG.
-    if (!img.isNull()) storeThumbnailLater(guid, img);
 }
 
 void ProjectService::saveInitialScene(const QString &projectPath)
@@ -458,36 +462,12 @@ void ProjectService::saveInitialScene(const QString &projectPath)
                                                                       : nullptr);
     }
 
-    // Headless (scripted project.create): the viewport never initialized — the
-    // legacy widget's takeScreenshot would touch a GL context that isn't there.
-    QImage img;
-    if (viewport->isInitialized()) {
-        // A 256-PIXEL TILE DOES NOT NEED GLOBAL ILLUMINATION (defect
-        // 2026-09-08). takeScreenshot pushes the document's environment into
-        // the shot view, and pushing it is what ARMS GI for the scene — so on a
-        // brand-new project at the default Epic tier this line was the first
-        // thing in the process to build a VCT volume and a per-pixel PCC probe
-        // grid, synchronously, on the UI thread: measured 7.4 s inside
-        // PccPerPixelGridPlacement::buildStart, all of it charged to
-        // `project.create`, for a thumbnail in which not one probe is visible.
-        //
-        // So the first arm is DEFERRED, not skipped: the document's GI mode is
-        // parked at OFF for the length of the shot and restored immediately
-        // after, which leaves the live viewport's next environment push to arm
-        // GI on a frame the user is actually waiting on rather than inside
-        // project creation. The mirror pushes GI on CHANGE
-        // (scenemirror.cpp:3330), so the restore is what re-arms it, and
-        // nothing is torn down here: on a new project GI has never been built
-        // when this runs.
-        const iris::ScenePtr scene = sceneProvider();
-        const iris::GiMode parkedGi = scene ? scene->giMode : iris::GiMode::OFF;
-        if (scene) scene->giMode = iris::GiMode::OFF;
-        LoadTimeline::Accumulate shot(QStringLiteral("save:thumbnail"));
-        img = viewport->takeScreenshot(Constants::TILE_SIZE * 2);
-        shot.stop();
-        if (scene) scene->giMode = parkedGi;
-    }
-
+    // Headless (scripted project.create): the viewport never initialized, so
+    // there is no picture and the row keeps its empty thumbnail. Otherwise the
+    // tile is the new world's first PRESENTED frame (CLOSE-SHOT-2), asked for
+    // below and stored when the reveal has drawn it — no second render, and so
+    // nothing here arms GI for a picture (the GI park this used to need is gone).
+    const bool wantTile = viewport->isInitialized();
     const QString guid = project->getProjectGuid();
     {
         LoadTimeline::Accumulate row(QStringLiteral("save:updateProject"));
@@ -496,15 +476,43 @@ void ProjectService::saveInitialScene(const QString &projectPath)
 
     undo->markSaved();
     projectManager->touchTile(guid);
-    // The thumbnail's encode is a worker's (see storeThumbnailLater); a
-    // headless create has no viewport and so no picture, and keeps the row's
-    // empty thumbnail exactly as before.
-    storeThumbnailLater(guid, img);
+    if (wantTile) {
+        LoadTimeline::Accumulate shot(QStringLiteral("save:thumbnail"));
+        requestTile(guid);
+    }
 }
 
 void ProjectService::updateCurrentSceneThumbnail()
 {
-    // Never wipes the tile with an empty PNG: a null shot stores nothing.
+    // The editor page is on its way out, so its view will draw no next tick:
+    // the synchronous door (one frame, its fence). Never wipes the tile with an
+    // empty PNG: a null frame stores nothing.
     storeThumbnailLater(project->getProjectGuid(),
-                        viewport->takeScreenshot(Constants::TILE_SIZE * 2));
+                        tileFromFrame(viewport->capturePresentedFrame()));
+}
+
+QImage ProjectService::tileFromFrame(const QImage &frame)
+{
+    if (frame.isNull()) return QImage();
+    const QSize tile = Constants::TILE_SIZE * 2;
+    // The largest rectangle of the tile's aspect inside the frame, about its centre.
+    const QSize crop = tile.scaled(frame.size(), Qt::KeepAspectRatio);
+    const QRect r(QPoint((frame.width() - crop.width()) / 2, (frame.height() - crop.height()) / 2),
+                  crop);
+    return frame.copy(r).scaled(tile, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+}
+
+void ProjectService::requestTile(const QString &guid)
+{
+    if (!viewport || guid.isEmpty()) return;
+    const std::weak_ptr<char> alive = mAlive;
+    viewport->requestPresentedFrame([this, alive, guid](const QImage &frame) {
+        if (alive.expired()) return;
+        storeThumbnailLater(guid, tileFromFrame(frame));
+    });
+}
+
+void ProjectService::settleThumbnailCapture()
+{
+    if (viewport) viewport->settlePresentedFrame();
 }
