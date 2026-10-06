@@ -10,6 +10,7 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "services/materialbundle.h"
+#include "irisgl/core/colorjson.h"
 
 #include <QColor>
 #include <QDir>
@@ -268,11 +269,7 @@ QJsonObject normaliseColours(const QJsonObject &definition)
         if (!value.isObject()) continue;
         const QJsonObject rgba = value.toObject();
         if (!rgba.contains(QStringLiteral("r"))) continue;
-        const QColor colour = QColor::fromRgbF(
-            qBound(0.0, rgba.value(QStringLiteral("r")).toDouble(), 1.0),
-            qBound(0.0, rgba.value(QStringLiteral("g")).toDouble(), 1.0),
-            qBound(0.0, rgba.value(QStringLiteral("b")).toDouble(), 1.0),
-            qBound(0.0, rgba.value(QStringLiteral("a")).toDouble(1.0), 1.0));
+        const QColor colour = iris::colorFromJson(rgba);
         values[key] = colour.name();
         moved = true;
     }

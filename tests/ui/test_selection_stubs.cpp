@@ -74,11 +74,6 @@ bool Database::checkIfRecordExists(const QString &, const QVariant &, const QStr
     return false;
 }
 
-QJsonObject SceneWriter::jsonColor(QColor)
-{
-    return QJsonObject();
-}
-
 void SceneWriter::writeParticleData(QJsonObject &, iris::ParticleSystemNodePtr)
 {
 }

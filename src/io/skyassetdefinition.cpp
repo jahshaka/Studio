@@ -10,6 +10,7 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "io/skyassetdefinition.h"
+#include "irisgl/core/colorjson.h"
 
 #include <QFileInfo>
 #include <QImage>
@@ -42,13 +43,13 @@ bool applyToScene(const iris::ScenePtr &scene, iris::SkyType type,
 
     switch (type) {
     case iris::SkyType::SINGLE_COLOR:
-        scene->skyColor = AssetIOBase::readColor(skyData.value("skyColor").toObject());
+        scene->skyColor = iris::colorFromJson(skyData.value("skyColor").toObject());
         return true;
 
     case iris::SkyType::GRADIENT:
-        scene->gradientTop = AssetIOBase::readColor(skyData.value("gradientTop").toObject());
-        scene->gradientMid = AssetIOBase::readColor(skyData.value("gradientMid").toObject());
-        scene->gradientBot = AssetIOBase::readColor(skyData.value("gradientBot").toObject());
+        scene->gradientTop = iris::colorFromJson(skyData.value("gradientTop").toObject());
+        scene->gradientMid = iris::colorFromJson(skyData.value("gradientMid").toObject());
+        scene->gradientBot = iris::colorFromJson(skyData.value("gradientBot").toObject());
         scene->gradientOffset = float(skyData.value("gradientOffset").toDouble());
         return true;
 

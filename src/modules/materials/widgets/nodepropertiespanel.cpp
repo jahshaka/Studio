@@ -9,6 +9,7 @@ and/or modify it under the terms of the MIT License
 For more information see the LICENSE file
 *************************************************************************/
 #include "nodepropertiespanel.h"
+#include "irisgl/core/colorjson.h"
 
 #include <QCheckBox>
 #include <QComboBox>
@@ -359,21 +360,10 @@ void NodePropertiesPanel::rebuildNodeEditors()
 	if (type == "color") {
 		auto swatch = new ColorPickerWidget;
 		swatch->setFixedHeight(22);
-		auto obj = value.toObject();
-		QColor col;
-		col.setRedF(obj["r"].toDouble());
-		col.setGreenF(obj["g"].toDouble());
-		col.setBlueF(obj["b"].toDouble());
-		col.setAlphaF(obj["a"].toDouble(1.0));
-		swatch->setColor(col);
+		swatch->setColor(iris::colorFromJson(value.toObject(), Qt::black));
 		mColorSwatch = swatch;
 		connect(swatch, &ColorPickerWidget::onColorChanged, this, [this](QColor color) {
-			QJsonObject out;
-			out["r"] = color.redF();
-			out["g"] = color.greenF();
-			out["b"] = color.blueF();
-			out["a"] = color.alphaF();
-			writeValue(out);
+			writeValue(iris::colorToJson(color));
 		});
 		addRow(tr("Color"), swatch);
 		return;
@@ -566,13 +556,7 @@ void NodePropertiesPanel::refreshFromNode()
 		}
 	}
 	else if (type == "color" && mColorSwatch != nullptr) {
-		auto obj = value.toObject();
-		QColor col;
-		col.setRedF(obj["r"].toDouble());
-		col.setGreenF(obj["g"].toDouble());
-		col.setBlueF(obj["b"].toDouble());
-		col.setAlphaF(obj["a"].toDouble(1.0));
-		mColorSwatch->setColor(col);
+		mColorSwatch->setColor(iris::colorFromJson(value.toObject(), Qt::black));
 	}
 	else if (type == "uv" && mNumberBoxes.size() >= 5) {
 		auto obj = value.toObject();

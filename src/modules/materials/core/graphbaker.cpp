@@ -9,6 +9,7 @@ and/or modify it under the terms of the MIT License
 For more information see the LICENSE file
 *************************************************************************/
 #include "graphbaker.h"
+#include "irisgl/core/colorjson.h"
 
 #include "services/filewriteatomic.h"
 
@@ -87,16 +88,6 @@ void logUnsupportedOnce(const QString& socketName, const QString& what)
 	said.insert(key);
 	qWarning().noquote() << "materials: the" << socketName
 	                     << "input (" + what + ") has no PBR target and is dropped by the bake";
-}
-
-QJsonObject colorToJson(const QColor& c)
-{
-	QJsonObject obj;
-	obj["r"] = c.redF();
-	obj["g"] = c.greenF();
-	obj["b"] = c.blueF();
-	obj["a"] = c.alphaF();
-	return obj;
 }
 
 // The QColor a folded chain value lands as on a color slot. arity 1 splats
@@ -644,7 +635,7 @@ GraphBaker::Result GraphBaker::runCompiled(const CompiledGraph& compiledIn, cons
 				out.eval.values[slot.valueKey] = qBound(0.0, s, 1.0);
 			}
 			else if (slot.target == MasterSlot::ColorSlot) {
-				out.eval.values[slot.valueKey] = colorToJson(colorFromValue(v));
+				out.eval.values[slot.valueKey] = iris::colorToJson(colorFromValue(v));
 			}
 			else {
 				unsupported(slot.socketName, rootTypeName(program)); // Normal: map-only
@@ -671,11 +662,11 @@ GraphBaker::Result GraphBaker::runCompiled(const CompiledGraph& compiledIn, cons
 		// texture rendered its own picture at 0.784x, silently. It is the
 		// same statement as the others: the graph says the colour IS the
 		// map, so the tint that multiplies it is 1.
-		if (mapKey == "baseColorMap") out.eval.values["baseColor"] = colorToJson(QColor(Qt::white));
+		if (mapKey == "baseColorMap") out.eval.values["baseColor"] = iris::colorToJson(QColor(Qt::white));
 		else if (mapKey == "metallicMap") out.eval.values["metallic"] = 1.0;
 		else if (mapKey == "roughnessMap") out.eval.values["roughness"] = 1.0;
 		else if (mapKey == "emissiveMap") {
-			out.eval.values["emissiveColor"] = colorToJson(QColor(Qt::white));
+			out.eval.values["emissiveColor"] = iris::colorToJson(QColor(Qt::white));
 			out.eval.values["emissiveIntensity"] = 1.0;
 		}
 	};
@@ -690,16 +681,13 @@ GraphBaker::Result GraphBaker::runCompiled(const CompiledGraph& compiledIn, cons
 		const Value c = cs.factor.coerced(3);
 		const double peak = std::max(c.x, std::max(c.y, c.z));
 		if (peak > 0.0) {
-			QJsonObject colour;
-			colour["r"] = qBound(0.0, c.x / peak, 1.0);
-			colour["g"] = qBound(0.0, c.y / peak, 1.0);
-			colour["b"] = qBound(0.0, c.z / peak, 1.0);
-			colour["a"] = 1.0;
-			out.eval.values["emissiveColor"] = colour;
+			out.eval.values["emissiveColor"] = iris::colorToJson(QColor::fromRgbF(
+				float(qBound(0.0, c.x / peak, 1.0)), float(qBound(0.0, c.y / peak, 1.0)),
+				float(qBound(0.0, c.z / peak, 1.0))));
 			out.eval.values["emissiveIntensity"] = peak;
 		}
 		else {
-			out.eval.values["emissiveColor"] = colorToJson(QColor(Qt::black));
+			out.eval.values["emissiveColor"] = iris::colorToJson(QColor(Qt::black));
 			out.eval.values["emissiveIntensity"] = 1.0;
 		}
 	}

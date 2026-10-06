@@ -9,6 +9,7 @@ and/or modify it under the terms of the MIT License
 For more information see the LICENSE file
 *************************************************************************/
 #include "bakeprogram.h"
+#include "irisgl/core/colorjson.h"
 
 #include <QDebug>
 #include <QFileInfo>
@@ -566,9 +567,8 @@ struct Compiler
 			op.hasLiteral = true;
 		}
 		else if (type == "color") {
-			const auto obj = node->serializeWidgetValue().toObject();
-			const Value rgba(obj["r"].toDouble(), obj["g"].toDouble(),
-			                 obj["b"].toDouble(), obj["a"].toDouble(1.0));
+			const QColor c = iris::colorFromJson(node->serializeWidgetValue().toObject(), Qt::black);
+			const Value rgba(c.redF(), c.greenF(), c.blueF(), c.alphaF());
 			// out 0 is RGBA; 1-4 are the R,G,B,A channels
 			op.literal = op.outIndex == 0 ? rgba : Value(rgba.component(op.outIndex - 1));
 			op.hasLiteral = true;

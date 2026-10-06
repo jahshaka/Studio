@@ -10,6 +10,7 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "irisgl/core/math/vec.h"
+#include "irisgl/core/colorjson.h"
 #include "scripting/modules/worldapi.h"
 #include <QtMath>
 
@@ -2812,7 +2813,7 @@ bool WorldApi::sky(const QString &type, const QVariantMap &params)
         }
         scene->skyColor = c;
         QJsonObject def;
-        def.insert("skyColor", SceneWriter::jsonColor(c));
+        def.insert("skyColor", iris::colorToJson(c));
         scene->skyData.insert("SingleColor", def);
         scene->skyType = iris::SkyType::SINGLE_COLOR;
     } else if (t == "gradient") {
@@ -2834,9 +2835,9 @@ bool WorldApi::sky(const QString &type, const QVariantMap &params)
         }
         if (params.contains("offset")) scene->gradientOffset = params.value("offset").toFloat();
         QJsonObject def;
-        def.insert("gradientTop", SceneWriter::jsonColor(scene->gradientTop));
-        def.insert("gradientMid", SceneWriter::jsonColor(scene->gradientMid));
-        def.insert("gradientBot", SceneWriter::jsonColor(scene->gradientBot));
+        def.insert("gradientTop", iris::colorToJson(scene->gradientTop));
+        def.insert("gradientMid", iris::colorToJson(scene->gradientMid));
+        def.insert("gradientBot", iris::colorToJson(scene->gradientBot));
         def.insert("gradientOffset", double(scene->gradientOffset));
         scene->skyData.insert("Gradient", def);
         scene->skyType = iris::SkyType::GRADIENT;
