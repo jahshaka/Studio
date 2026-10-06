@@ -18,7 +18,8 @@
 //   A2 a plain frame again — the replay's own determinism, the guard that makes
 //      A against B mean something.
 // (A warm-up run W goes first and is not compared.) The next FIVE presented frames (the window's own bytes, read without a
-// capture of the clean kind) must be byte-identical A to A2 and A to B.
+// capture of the clean kind) must match A to A2 and A to B: byte-identical on a
+// quiet box; the bar is the replay's own measured floor (see the assertion).
 
 function assert(cond, msg) {
     if (!cond) throw new Error("assert failed: " + msg);
@@ -72,7 +73,16 @@ for (var j = 0; j < 5; ++j) {
     var rep = app.compareImages(A[j], A2[j], 0);
     var cap = app.compareImages(A[j], B[j], 0);
     console.log("frame +" + (j + 1) + ": replay " + J(rep) + "  capture " + J(cap));
-    assert(rep.over === 0, "frame +" + (j + 1) + ": the replay is exact (" + rep.over + " px)");
-    assert(cap.over === 0, "frame +" + (j + 1) + ": a capture changed nothing presented after it (" +
-           cap.over + " px)");
+    // THE REPLAY'S OWN FLOOR, MEASURED: quiet it is byte-exact (0 px on every frame,
+    // A to A2 and A to B); inside the full -j4 gate one run of the three differed
+    // from the other two by ONE code on 9 px of frame +1 — the replay itself (A2
+    // against A), not the capture. A capture that steps the view's state is not
+    // that: the ray tier's double step moved frame +1 by 42,798 px, up to 17 codes
+    // (the guard removed, measured). So the bar is the floor, stated: at most 64
+    // pixels, at most one code — for the replay and for the capture alike.
+    assert(rep.over <= 64 && rep.maxDelta <= 1,
+           "frame +" + (j + 1) + ": the replay holds (" + rep.over + " px, max " + rep.maxDelta + ")");
+    assert(cap.over <= 64 && cap.maxDelta <= 1,
+           "frame +" + (j + 1) + ": a capture changed nothing presented after it beyond the replay's floor (" +
+           cap.over + " px, max " + cap.maxDelta + ")");
 }
