@@ -96,21 +96,22 @@ set_tests_properties(shadow.helper_casters PROPERTIES TIMEOUT 120 LABELS "engine
 #                             10/10, and a SCROLLING cut-out's shadow holes move with the scroll.
 #   shadow.two_sided_caster — the opaque plane two-sided, upright and turned over: the opaque
 #                             plane's shadow (area within 10 %) 10/10.
-foreach(_what cutout twosided)
-    if(_what STREQUAL cutout)
-        set(_row shadow.cutout_caster)
-    else()
-        set(_row shadow.two_sided_caster)
-    endif()
-    jah_gpu_row(${_row} CLASS app
-             COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/scripts/shadow_casters.sh ${_what}
-                     $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
-                     ${CMAKE_CURRENT_SOURCE_DIR}/scripts/shadow_casters.js.in
-                     ${CMAKE_CURRENT_SOURCE_DIR}/fixtures/cutout_holes.png
-                     ${CMAKE_CURRENT_BINARY_DIR}/${_row} 10
-             WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
-    set_tests_properties(${_row} PROPERTIES LABELS "engine" TIMEOUT 900)
-endforeach()
+jah_gpu_row(shadow.cutout_caster CLASS app
+         COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/scripts/shadow_casters.sh cutout
+                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
+                 ${CMAKE_CURRENT_SOURCE_DIR}/scripts/shadow_casters.js.in
+                 ${CMAKE_CURRENT_SOURCE_DIR}/fixtures/cutout_holes.png
+                 ${CMAKE_CURRENT_BINARY_DIR}/shadow.cutout_caster 10
+         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(shadow.cutout_caster PROPERTIES LABELS "engine" TIMEOUT 900)
+jah_gpu_row(shadow.two_sided_caster CLASS app
+         COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/scripts/shadow_casters.sh twosided
+                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
+                 ${CMAKE_CURRENT_SOURCE_DIR}/scripts/shadow_casters.js.in
+                 ${CMAKE_CURRENT_SOURCE_DIR}/fixtures/cutout_holes.png
+                 ${CMAKE_CURRENT_BINARY_DIR}/shadow.two_sided_caster 10
+         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(shadow.two_sided_caster PROPERTIES LABELS "engine" TIMEOUT 900)
 # gpu.cutout_soak — 5,000 frames of cut-outs (plain on a cube and a sphere, the live graph
 # cut-out the hang was found on, the screenshot path, a pinned and a free clock), then 5,000 of
 # the Tornado sample, under the Khronos validation layer. MINUTES OF ONE PROCESS: nightly; its
