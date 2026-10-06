@@ -1897,6 +1897,31 @@ foreach(_arm stable motion)
     set_tests_properties(gi.gather_${_arm} PROPERTIES TIMEOUT 600 LABELS "engine")
 endforeach()
 
+# gi.flythrough_noise.Showroom2 (GATHER-NOISE-1): the rig's flythrough of a
+# Showroom-2-shaped room at Epic, the gather's own answer read back at ten poses;
+# the moving floor's noise (two flights of one path) against the pre-lane estimator
+# in the same process (-40 %), and its mean against a converged reference (no bias).
+add_executable(test_gi_flythrough_noise test_gi_flythrough_noise.cpp)
+set_target_properties(test_gi_flythrough_noise PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_flythrough_noise PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_flythrough_noise PRIVATE JahshakaEngine)
+add_dependencies(test_gi_flythrough_noise JahshakaEngineMedia)
+# ...and gi.flythrough_noise.Open, the control: the same blocks under the open sky
+# (most rays escape to it) must be no noisier and keep their mean.
+foreach(_arm Showroom2 Open)
+    string(TOLOWER ${_arm} _lower)
+    jah_gpu_row(gi.flythrough_noise.${_arm} CLASS engine COMMAND test_gi_flythrough_noise ${_lower}
+             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+    set_tests_properties(gi.flythrough_noise.${_arm} PROPERTIES TIMEOUT 900 LABELS "engine")
+endforeach()
+
 # gi.gather_adaptive_fair — THE ADAPTIVE BUDGET STARVES NO CELL (PHOTON-II-1 F3): with the cap at
 # a quarter of the demand, every frame spends the budget and every asking cell gets its second
 # probe within 32 frames (the placement's ranking rotates across tiles and inside them).
