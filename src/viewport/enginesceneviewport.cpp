@@ -2667,15 +2667,20 @@ void EngineSceneViewport::settlePresentedFrame()
     if (mPresentedDone.empty()) return;
     jahshaka::engine::View *v = view();
     if (mEngine && v && v->frameCaptureState() == jahshaka::engine::FrameCaptureState::Armed) {
+        if (!v->isEnabled()) {
+            // A HIDDEN VIEW PRESENTS NOTHING, so there is no presented frame to
+            // read: its window is not on screen and may have been resized under
+            // it while hidden (forcing a frame into it there lost the device —
+            // Xid 13 "3D WIDTH ZT", scripting.e2e.material_tabs's close from the
+            // Materials page). The requests are answered with no picture and
+            // the stored tile keeps the last one.
+            v->cancelFrameCapture();
+            cancelPresentedFrame();
+            return;
+        }
         // THE ONE FRAME, drawn now: the deterministic step at dt 0 (the
-        // document's clock does not move), with the view enabled for it — the
-        // page may be on its way out (the Desktop switch, the close), exactly
-        // the presentCovered rule.
-        const bool wasEnabled = v->isEnabled();
-        v->setEnabled(true);
+        // document's clock does not move) — the view is on screen.
         renderFrames(1, 0.0f);
-        v = view();
-        if (v) v->setEnabled(wasEnabled);
         if (mDriver) mDriver->noteExternalFrame();
     }
     pollPresentedFrame(true);
