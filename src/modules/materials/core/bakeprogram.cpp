@@ -765,7 +765,9 @@ void BakeProgram::applyUvFold()
 		const bool isSampler = op.typeName == "textureSampler"
 		                       || (op.typeName == "texture" && !op.isTextureCarrier);
 		if (!isSampler) continue;
-		const int uvIndex = op.typeName == "textureSampler" ? 1 : 0;
+		// The UV is the sampler's ONLY input ref, on both node shapes (the
+		// texture socket resolves into op.image, never a ref) — index 0.
+		const int uvIndex = 0;
 		if (uvIndex >= op.inputs.size()) continue;
 		BakeInputRef ref;
 		ref.arity = 2;
@@ -912,7 +914,11 @@ BakeProgram::UvFold BakeProgram::uvFold(bool live) const
 	auto isSamplerOp = [](const BakeOp& op) {
 		return op.typeName == "textureSampler" || (op.typeName == "texture" && !op.isTextureCarrier);
 	};
-	auto samplerUvIndex = [](const BakeOp& op) { return op.typeName == "textureSampler" ? 1 : 0; };
+	// The UV is a sampler's ONLY input ref on both node shapes: compile()
+	// resolves the texture socket into op.image and appends the UV at index 0
+	// (TORNADO-2: this read 1 on textureSampler, so `uv -> textureSampler`
+	// refused the fold and a bare sampler was skipped).
+	constexpr int kSamplerUv = 0;
 
 	// THE SCROLL (TORNADO-1, live graphs only). A `panner` whose output is read
 	// by sampler UV slots and by nothing else is a candidate for the material's
@@ -925,7 +931,7 @@ BakeProgram::UvFold BakeProgram::uvFold(bool live) const
 			for (int i = 0; i < op.inputs.size(); ++i) {
 				const int src = op.inputs[i].op;
 				if (src < 0 || src >= ops.size() || ops[src].typeName != "panner") continue;
-				const bool uvSlot = isSamplerOp(op) && i == samplerUvIndex(op);
+				const bool uvSlot = isSamplerOp(op) && i == kSamplerUv;
 				(uvSlot ? toSampler : toOther)[src] = true;
 			}
 		}
@@ -943,10 +949,10 @@ BakeProgram::UvFold BakeProgram::uvFold(bool live) const
 			const int src = op.inputs[i].op;
 			if (src < 0 || src >= ops.size()) continue;
 			if (ops[src].typeName != "uv") continue;
-			// a sampler's UV input is index 1 on textureSampler, 0 on texture —
-			// and, in a live graph, a scrolling panner's UV input stands for the
-			// samplers it feeds
-			const bool uvSlot = (isSampler && i == samplerUvIndex(op))
+			// a sampler's UV input (index 0 on both shapes) — and, in a live
+			// graph, a scrolling panner's UV input stands for the samplers it
+			// feeds
+			const bool uvSlot = (isSampler && i == kSamplerUv)
 			                    || (live && pannerScrolls[c] && i == 0);
 			if (uvSlot) uvOpConsumedBySampler[src] = true;
 			else uvOpConsumedByOther[src] = true;
@@ -986,7 +992,7 @@ BakeProgram::UvFold BakeProgram::uvFold(bool live) const
 		const BakeOp& op = ops[i];
 		if (!isSamplerOp(op)) continue;
 		if (op.image.isNull()) continue; // an empty slot samples vec4(0); it tiles nothing
-		const int uvIndex = samplerUvIndex(op);
+		const int uvIndex = kSamplerUv;
 		if (uvIndex >= op.inputs.size()) continue;
 		const auto& ref = op.inputs[uvIndex];
 
