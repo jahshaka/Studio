@@ -298,6 +298,113 @@ int main() {
                   "and the view is still alive with the inset gone");
     }
 
+    // ---- 5: THE PRESENTED FRAME, READ BACK (CLOSE-SHOT-2) ---------------------
+    // The swapchain image after the view's last pass, before the present — one
+    // frame, with the helper channels cleared for that frame only.
+    {
+        const NodeId helper = enginetest::addTestCube(s, Colour(0.05f, 0.95f, 0.05f), 0.0f, 0.8f);
+        enginetest::setNodePosition(s, helper, Vec3(0.0f, 1.1f, 0.0f));
+        enginetest::setNodeScale(s, helper, Vec3(0.6f, 0.6f, 0.6f));
+        s->setNodeHelper(helper, true);
+        render(3);
+        // Green-dominant pixels: the helper cube and nothing else in this scene
+        // (orange cube, blue background).
+        const auto greens = [](const Image &img) {
+            size_t n = 0;
+            for (size_t i = 0; i + 3 < img.rgba.size(); i += 4)
+                if (img.rgba[i + 1] > img.rgba[i] + 60 && img.rgba[i + 1] > img.rgba[i + 2] + 60) ++n;
+            return n;
+        };
+        const auto blues = [](const Image &img) {
+            size_t n = 0;
+            for (size_t i = 0; i + 3 < img.rgba.size(); i += 4)
+                if (img.rgba[i + 2] > 200 && img.rgba[i] < 40 && img.rgba[i + 1] < 40) ++n;
+            return n;
+        };
+        Image none;
+        CHECK_MSG(v->frameCaptureState() == FrameCaptureState::Idle && !v->takeFrameCapture(none, true),
+                  "nothing asked, nothing to take");
+
+        CHECK_MSG(v->requestFrameCapture(true), "a capture that keeps the helpers is armed");
+        CHECK_MSG(v->frameCaptureState() == FrameCaptureState::Armed && !v->takeFrameCapture(none, true),
+                  "an armed capture answers nothing until the view renders");
+        render(1);
+        const FrameCaptureState after = v->frameCaptureState();
+        CHECK_MSG(after == FrameCaptureState::InFlight || after == FrameCaptureState::Ready,
+                  "the frame's copy is recorded (state %d)", int(after));
+        Image shown;
+        const bool tookShown = v->takeFrameCapture(shown, true);
+        CHECK_MSG(tookShown && shown.width == v->width() && shown.height == v->height(),
+                  "the presented frame reads back at the window's size (%ux%u)", shown.width, shown.height);
+        CHECK_MSG(v->frameCaptureState() == FrameCaptureState::Idle, "and the capture is spent");
+        const size_t greenShown = greens(shown), blueShown = blues(shown);
+        CHECK_MSG(greenShown > 200 && blueShown > 1000,
+                  "the frame as shown carries the helper (%zu px) over the background (%zu px)",
+                  greenShown, blueShown);
+
+        // THE CLEAN CAPTURE NEVER TOUCHES THE PRESENTED FRAME: the same frame as
+        // presented (alsoPresented) is byte-identical to the frames either side of it.
+        CHECK_MSG(v->requestFrameCapture(false, true), "a clean capture (with the frame as presented) is armed");
+        render(1);
+        Image clean, presentedSame;
+        CHECK_MSG(v->takeFrameCapture(clean, true, &presentedSame) && clean.width == shown.width &&
+                      clean.height == shown.height,
+                  "the clean frame reads back (%ux%u)", clean.width, clean.height);
+        const size_t greenClean = greens(clean), blueClean = blues(clean);
+        CHECK_MSG(greenClean == 0 && blueClean > blueShown,
+                  "the captured frame drops the helper (%zu green px; the background behind it shows: %zu px)",
+                  greenClean, blueClean);
+        CHECK_MSG(presentedSame.rgba == shown.rgba,
+                  "the PRESENTED frame of the capturing frame is byte-identical to the frame before it "
+                  "(helper %zu px)", greens(presentedSame));
+        // Outside the helper the clean picture IS the presented one.
+        {
+            size_t differ = 0, outside = 0;
+            for (size_t i = 0; i + 3 < clean.rgba.size(); i += 4) {
+                const bool helperPx = shown.rgba[i + 1] > shown.rgba[i] + 60 &&
+                                      shown.rgba[i + 1] > shown.rgba[i + 2] + 60;
+                if (helperPx) continue;
+                ++outside;
+                if (std::abs(int(clean.rgba[i]) - int(shown.rgba[i])) > 2 ||
+                    std::abs(int(clean.rgba[i + 1]) - int(shown.rgba[i + 1])) > 2 ||
+                    std::abs(int(clean.rgba[i + 2]) - int(shown.rgba[i + 2])) > 2)
+                    ++differ;
+            }
+            CHECK_MSG(differ * 1000 <= outside,
+                      "outside the helper the clean picture matches the presented one (%zu of %zu px over 2 codes)",
+                      differ, outside);
+        }
+
+        // ...for THAT frame only: the next capture that keeps the helpers sees it again.
+        CHECK_MSG(v->requestFrameCapture(true), "re-armed with the helpers");
+        render(1);
+        Image again;
+        CHECK_MSG(v->takeFrameCapture(again, true) && again.rgba == shown.rgba,
+                  "the frame AFTER the capture is byte-identical too (helper %zu px)", greens(again));
+
+        // ...and through an MSAA window (the resolved swapchain image is what is read).
+        v->setSampleCount(4);
+        render(2);
+        CHECK_MSG(v->requestFrameCapture(true), "armed on a %ux window", v->sampleCount());
+        render(1);
+        Image msaa;
+        CHECK_MSG(v->takeFrameCapture(msaa, true) && msaa.width == v->width() && greens(msaa) > 200 &&
+                      blues(msaa) > 1000,
+                  "an MSAA window reads back resolved (%ux%u, helper %zu px)", msaa.width, msaa.height,
+                  greens(msaa));
+        v->setSampleCount(1);
+        render(2);
+
+        // A capture left armed dies with the scene's detach (a new world never
+        // answers for the old one).
+        CHECK_MSG(v->requestFrameCapture(false), "armed once more");
+        v->setScene(nullptr);
+        CHECK_MSG(v->frameCaptureState() == FrameCaptureState::Idle, "and dropped by the detach");
+        v->setScene(s);
+        s->removeNode(helper);
+        render(2);
+    }
+
     // ---- teardown, in the mandated order ------------------------------------
     engine->destroyView(v);
     engine->destroyScene(s);

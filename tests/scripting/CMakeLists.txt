@@ -999,6 +999,11 @@ jah_pool_arm(avatar_anim skinning ${CMAKE_CURRENT_BINARY_DIR}/e2e_skinning.js 13
 # bodies where play did; a pause holds the clock; an over-bound dt is refused.
 # Renders (physics steps in the engine viewport's syncFrame) -> needs a display.
 configure_file(scripts/e2e_fixed_clock.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_fixed_clock.js @ONLY)
+# app.capture_steps (CLOSE-SHOT-2): a tile capture's second draw of the frame steps
+# none of the view's temporal state — the five presented frames after it are
+# byte-identical to a replay without it (a mover and a skinned character in play).
+configure_file(scripts/e2e_capture_steps.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_capture_steps.js @ONLY)
+jah_pool_arm(editor_view capture_steps ${CMAKE_CURRENT_BINARY_DIR}/e2e_capture_steps.js 40)
 jah_pool_arm(player fixed_clock ${CMAKE_CURRENT_BINARY_DIR}/e2e_fixed_clock.js 19)
 
 # World Modes (POST_CHAIN_SPEC.md §9): the scalability registry, tier

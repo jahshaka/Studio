@@ -412,7 +412,41 @@ public:
     virtual bool getShowFps() const { return false; }
     virtual void setShowPerspeciveLabel(bool value) = 0;
     virtual QImage takeScreenshot(int width = 1920, int height = 1080) = 0;
-    virtual QImage takeScreenshot(QSize dimension) = 0;
+
+    /// THE PRESENTED FRAME, READ BACK (CLOSE-SHOT-2; the engine's
+    /// View::requestFrameCapture) — the project tile's picture. NO settle and
+    /// NOTHING ON SCREEN CHANGES: the on-screen view's next frame is presented
+    /// exactly as it would have been, and the same frame is drawn once more
+    /// off screen without the editor's furniture (grid, wires, outline, gizmo,
+    /// the HUD, the Atom/Photon viewing aids) — its settled GI, grade and
+    /// exposure — unless `keepHelpers` asks for the presented frame itself.
+    /// Full window size; the caller crops/scales.
+    ///
+    /// `requestPresentedFrame` returns at once; `done` runs on the UI thread when
+    /// the copy's fence signals (polled each driver tick), with a NULL image when
+    /// the request could not be satisfied (no engine view, the world closed first,
+    /// the readback refused). Several requests before the frame share it.
+    /// `settlePresentedFrame` completes whatever is pending NOW — one frame
+    /// rendered if none has been since the request, then the fence waited (about
+    /// one frame) — and is what the close runs before teardown.
+    /// `capturePresentedFrame` is request + settle: the synchronous door
+    /// (project.save's contract, the page leaving the editor).
+    /// `cancelPresentedFrame` answers every pending request with a null image.
+    using PresentedFrameDone = std::function<void(const QImage &)>;
+    virtual bool requestPresentedFrame(PresentedFrameDone done, bool keepHelpers = false) {
+        (void)keepHelpers;
+        if (done) done(QImage());
+        return false;
+    }
+    virtual void settlePresentedFrame() {}
+    virtual QImage capturePresentedFrame(bool keepHelpers = false) { (void)keepHelpers; return QImage(); }
+    virtual void cancelPresentedFrame() {}
+    /// ONE frame, both ways: the clean picture (returned) and the same frame AS
+    /// PRESENTED (`presented`) — the proof that a capture leaves the screen alone.
+    virtual QImage capturePresentedFramePair(QImage *presented) {
+        if (presented) *presented = QImage();
+        return QImage();
+    }
     /// HOW A SCREENSHOT IS DEVELOPED — ONE FUNCTION, AN EXPLICIT MODE
     /// (owner, 2026-09-13: "match the screenshot to the scene properly", and
     /// "your pixel tests can have their own screenshot ... use the same

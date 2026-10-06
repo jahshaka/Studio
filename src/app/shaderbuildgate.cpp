@@ -220,12 +220,18 @@ int warmEditorWorld(Engine &engine, View *view, const EngineHost::WarmUpShape &s
             quiet = (c == last && armed) ? quiet + 1 : 0;
             last = c;
         }
-        // (3) the project tile's shot (a create saves one; takeScreenshot's Tonemap
-        // grade): the world's description WITHOUT the offscreen opt-in — no prepass,
-        // no SSR — and the filmic grade alone, at the world's exposure.
-        mirror.applyEnvironment(view, &engine);
-        secondaryfx::apply(view, true, view->postFx().exposure);
-        for (int i = 0; i < kWarmUpFrames; ++i) frame();
+        // (3) the project tile's capture (CLOSE-SHOT-2: a save's tile is the view's
+        // own frame drawn a second time without the furniture, View::
+        // requestFrameCapture) — its chain instance has no shadow node and the
+        // furniture baked out, and its first frame compiled HlmsAtom permutations
+        // on the UI thread (measured: 5 on Showroom 2, 10 with 16 lamps, on the
+        // close that took the session's first tile). Taken here, once, on this
+        // view's whole chain.
+        if (view->requestFrameCapture(false)) {
+            frame();
+            jahshaka::engine::Image tile;
+            view->takeFrameCapture(tile, true);
+        }
         view->setScene(nullptr);
         mirror.setSource(nullptr);
     }

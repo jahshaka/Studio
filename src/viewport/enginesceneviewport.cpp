@@ -2426,6 +2426,9 @@ EditorData *EngineSceneViewport::getEditorData()
 
 void EngineSceneViewport::syncFrame(float dtOverride)
 {
+    // A presented-frame capture drawn on an earlier tick answers here, once its
+    // fence has signalled (CLOSE-SHOT-2) — never a wait.
+    pollPresentedFrame(false);
     if (!mActive || !view()) return;
     if (!ensureEngineScene()) return;
     // The wall clock, unless a caller supplied a step. mFrameTimer is restarted
@@ -2595,24 +2598,124 @@ void EngineSceneViewport::syncFrame(float dtOverride)
         mEngine->setFixedFrameDelta(mLastFrameDelta);
 }
 
-QImage EngineSceneViewport::takeScreenshot(QSize dimension)
+// ---- THE PRESENTED FRAME, READ BACK (CLOSE-SHOT-2) --------------------------
+//
+// The project tile's picture. It used to be a SECOND render — an offscreen shot
+// view at the tile's size, the Tonemap grade, its own GI settle (1.7-3.7 s per
+// close) and, for the save, the scene's GI parked at OFF so the tile did not
+// even show the lit scene. Now it is the frame the user is looking at: the
+// engine's View::requestFrameCapture draws the view's next frame once with the
+// furniture off and copies its final target before the present. Nothing here
+// renders a picture of its own except settlePresentedFrame's ONE frame, when a
+// caller cannot wait for the driver's next tick.
+
+bool EngineSceneViewport::requestPresentedFrame(PresentedFrameDone done, bool keepHelpers)
 {
-    // THE PROJECT TILE'S SHOT (ProjectService's four thumbnail captures are this
-    // overload's only callers): the Atom view (world.setAtomView) is a viewing aid,
-    // never the project's picture, so it is parked Off for the length of the shot.
-    // ...AND SO IS THE PHOTON VIEW (world.setPhotonView, PHOTON-VIEW-1), for the
-    // same reason.
-    jahshaka::engine::Scene *es = engineScene();
-    const jahshaka::engine::AtomView parked = es ? es->atomView() : jahshaka::engine::AtomView::Off;
-    const jahshaka::engine::PhotonView parkedPhoton =
-        es ? es->photonView() : jahshaka::engine::PhotonView::Off;
-    if (es && parked != jahshaka::engine::AtomView::Off) es->setAtomView(jahshaka::engine::AtomView::Off);
-    if (es && parkedPhoton != jahshaka::engine::PhotonView::Off)
-        es->setPhotonView(jahshaka::engine::PhotonView::Off);
-    QImage img = takeScreenshot(dimension.width(), dimension.height());
-    if (es && parked != jahshaka::engine::AtomView::Off) es->setAtomView(parked);
-    if (es && parkedPhoton != jahshaka::engine::PhotonView::Off) es->setPhotonView(parkedPhoton);
-    return img;
+    jahshaka::engine::View *v = view();
+    if (!mEngine || !v || !mEngineScene) {
+        if (done) done(QImage());
+        return false;
+    }
+    // ONE capture per frame: a request that wants the other helpers answer gets
+    // the pending one finished first.
+    if (!mPresentedDone.empty() && keepHelpers != mPresentedKeepHelpers) settlePresentedFrame();
+    if (mPresentedDone.empty()) {
+        if (!v->requestFrameCapture(keepHelpers, mPresentedCompanionWanted && !keepHelpers)) {
+            if (done) done(QImage());
+            return false;
+        }
+        mPresentedKeepHelpers = keepHelpers;
+    }
+    mPresentedDone.push_back(std::move(done));
+    return true;
+}
+
+void EngineSceneViewport::pollPresentedFrame(bool wait)
+{
+    if (mPresentedDone.empty()) return;
+    jahshaka::engine::View *v = view();
+    QImage frame;
+    if (v) {
+        const jahshaka::engine::FrameCaptureState st = v->frameCaptureState();
+        if (st == jahshaka::engine::FrameCaptureState::Armed) return;   // not drawn yet
+        if (st == jahshaka::engine::FrameCaptureState::InFlight && !wait) return;
+        // Idle = dropped (the world closed, the view was rebuilt, the readback was
+        // refused): the requests are answered with a null picture.
+        const auto toQImage = [](const Image &img) {
+            QImage q;
+            if (!img.width || !img.height) return q;
+            q = QImage(int(img.width), int(img.height), QImage::Format_RGBA8888);
+            for (unsigned y = 0; y < img.height; ++y)
+                memcpy(q.scanLine(int(y)), &img.rgba[size_t(y) * img.width * 4u], img.width * 4u);
+            return q;
+        };
+        Image img, presented;
+        if (st != jahshaka::engine::FrameCaptureState::Idle && v->takeFrameCapture(img, true, &presented)) {
+            frame = toQImage(img);
+            mPresentedCompanion = toQImage(presented);
+        }
+    }
+    // Moved out first: a callback may ask for another frame.
+    std::vector<PresentedFrameDone> done;
+    done.swap(mPresentedDone);
+    for (PresentedFrameDone &d : done)
+        if (d) d(frame);
+}
+
+void EngineSceneViewport::settlePresentedFrame()
+{
+    if (mPresentedDone.empty()) return;
+    jahshaka::engine::View *v = view();
+    if (mEngine && v && v->frameCaptureState() == jahshaka::engine::FrameCaptureState::Armed) {
+        if (!v->isEnabled()) {
+            // A HIDDEN VIEW PRESENTS NOTHING, so there is no presented frame to
+            // read: its window is not on screen and may have been resized under
+            // it while hidden (forcing a frame into it there lost the device —
+            // Xid 13 "3D WIDTH ZT", scripting.e2e.material_tabs's close from the
+            // Materials page). The requests are answered with no picture and
+            // the stored tile keeps the last one — the last editor frame, which
+            // is what the user last saw of the world (the lead's ruling: a close
+            // from a non-editor page keeps it).
+            v->cancelFrameCapture();
+            cancelPresentedFrame();
+            return;
+        }
+        // THE ONE FRAME, drawn now: the deterministic step at dt 0 (the
+        // document's clock does not move) — the view is on screen.
+        renderFrames(1, 0.0f);
+        if (mDriver) mDriver->noteExternalFrame();
+    }
+    pollPresentedFrame(true);
+}
+
+QImage EngineSceneViewport::capturePresentedFrame(bool keepHelpers)
+{
+    QImage out;
+    if (!requestPresentedFrame([&out](const QImage &frame) { out = frame; }, keepHelpers))
+        return out;
+    settlePresentedFrame();
+    return out;
+}
+
+QImage EngineSceneViewport::capturePresentedFramePair(QImage *presented)
+{
+    // Anything pending is answered first: the pair is ONE frame of its own.
+    settlePresentedFrame();
+    mPresentedCompanion = QImage();
+    mPresentedCompanionWanted = true;
+    const QImage clean = capturePresentedFrame(false);
+    mPresentedCompanionWanted = false;
+    if (presented) *presented = mPresentedCompanion;
+    mPresentedCompanion = QImage();
+    return clean;
+}
+
+void EngineSceneViewport::cancelPresentedFrame()
+{
+    std::vector<PresentedFrameDone> done;
+    done.swap(mPresentedDone);
+    for (PresentedFrameDone &d : done)
+        if (d) d(QImage());
 }
 
 bool EngineSceneViewport::planarReflectorAccepted(iris::SceneNodePtr node) const
@@ -3078,8 +3181,9 @@ QString EngineSceneViewport::dumpMaterial(const QString &nodeGuid) const
 QImage EngineSceneViewport::takeScreenshot(int width, int height)
 {
     // THE DEFAULT DOOR IS THE THUMBNAIL GRADE, and it is not the user's door.
-    // Its callers are project preview tiles (ProjectService) and the asset
-    // viewer — pictures OF CONTENT, taken in sweeps, which must stay cheap
+    // Its caller is the engine selftest (a project's Desktop tile is the
+    // PRESENTED frame since CLOSE-SHOT-2, requestPresentedFrame) — a picture OF
+    // CONTENT, which must stay cheap
     // (SS1 keeps `secondaryfx`'s minimal chain exactly where it belongs). The
     // USER's Screenshot action asks for ScreenshotGrade::Scene explicitly
     // (MainWindow::takeScreenshot); the SCRIPT door defaults to Plain,
@@ -4223,6 +4327,12 @@ void EngineSceneViewport::cleanup()
 
 void EngineSceneViewport::clearScene()
 {
+    // THE CLOSE'S TILE FIRST (CLOSE-SHOT-2). The close's autosave asked for the
+    // presented frame a moment ago; it is satisfied HERE, while the world is still
+    // whole — one frame if the driver has not drawn it yet, then its fence — and
+    // never left standing for the teardown below (the engine drops a capture when
+    // its scene detaches, and the next world must never answer for this one).
+    settlePresentedFrame();
     // Project-swap teardown: destroy the scene-scoped objects (overlay, mirror,
     // engine scene) but keep the View — its native window and swapchain stay
     // valid across project close/open. Script sessions never leave the editor

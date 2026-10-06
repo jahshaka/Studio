@@ -12,6 +12,8 @@ For more information see the LICENSE file
 #include "scripting/modules/projectapi.h"
 
 #include <QDir>
+#include <QFile>
+#include <QImage>
 #include <QFileInfo>
 #include <QStandardPaths>
 
@@ -178,6 +180,14 @@ QVector<VerbInfo> ProjectApi::verbs() const
           Needs::Document },
         { "current", "project.current() -> {guid, name, folder} | null",
           "The open project, or null.",
+          Needs::Document },
+        { "thumbnail", "project.thumbnail(path, guid=current) -> {guid, path, empty, bytes, width, height}",
+          "Writes a project's STORED Desktop tile (the PNG in its row) to `path` — the picture the Desktop "
+          "shows. Encodes still in flight are finished and written first, so a save's tile is readable the "
+          "moment the save (or the close that saved) returns. The tile is the editor's PRESENTED frame "
+          "(CLOSE-SHOT-2): read back from the window, drawn once without the grid, wires, outline, gizmo "
+          "and HUD, cropped about its centre to the tile's aspect — never a second render. `empty` is true "
+          "(and nothing is written) when the row holds no tile.",
           Needs::Document },
         { "exportWeb", "project.exportWeb(dir) -> {dir, indexHtml, glb, nodes, materials, extensions, warnings, ...}",
           "Exports the open scene for the web (glTF 2.0 + self-contained WebGPU viewer): index.html (double-clickable), "
@@ -501,6 +511,40 @@ QString ProjectApi::openState()
 {
     if (!host.shell) { fail("project: not available in this session"); return QStringLiteral("idle"); }
     return openInFlight() ? QStringLiteral("opening") : QStringLiteral("idle");
+}
+
+QVariantMap ProjectApi::thumbnail(const QString &path, const QString &guid)
+{
+    QVariantMap out;
+    if (!host.db || !host.services || !host.services->project) {
+        fail("project.thumbnail: not available in this session");
+        return out;
+    }
+    if (path.isEmpty()) { fail("project.thumbnail: a file path is required"); return out; }
+    const QString id = guid.isEmpty() ? host.services->project->current()->getProjectGuid() : guid;
+    if (id.isEmpty()) { fail("project.thumbnail: no project is open and no guid was given"); return out; }
+    // A save's encode runs on a worker; the stored tile is the one after it.
+    host.services->project->drainThumbnailEncodes();
+    const QByteArray png = host.db->fetchProjectThumbnailBytes({ id }).value(id);
+    out["guid"] = id;
+    out["bytes"] = png.size();
+    out["empty"] = png.isEmpty();
+    out["width"] = 0;
+    out["height"] = 0;
+    if (png.isEmpty()) return out;
+    QImage img;
+    if (!img.loadFromData(png, "PNG")) { fail("project.thumbnail: the stored tile is not a PNG"); return out; }
+    QFileInfo info(path);
+    if (!info.dir().exists()) info.dir().mkpath(".");
+    QFile f(path);
+    if (!f.open(QIODevice::WriteOnly) || f.write(png) != png.size()) {
+        fail(QStringLiteral("project.thumbnail: could not write '%1'").arg(path));
+        return out;
+    }
+    out["path"] = info.absoluteFilePath();
+    out["width"] = img.width();
+    out["height"] = img.height();
+    return out;
 }
 
 bool ProjectApi::save()

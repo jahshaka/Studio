@@ -146,6 +146,8 @@ public:
                                        const QVariantList &probes = QVariantList(),
                                        const QVariant &grade = QVariant(),
                                        const QVariantMap &options = QVariantMap());
+    Q_INVOKABLE QVariantMap presentedFrame(const QString &path,
+                                           const QVariantMap &options = QVariantMap());
     Q_INVOKABLE bool beginBatch();
     Q_INVOKABLE bool endBatch();
     Q_INVOKABLE bool importAssets(const QVariant &paths);

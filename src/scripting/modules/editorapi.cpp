@@ -43,6 +43,7 @@ For more information see the LICENSE file
 #include "ui/panels/scenehierarchywidget.h"
 #include "services/editgate.h"
 #include "services/services.h"
+#include "services/projectservice.h"
 #include "services/playerservice.h"
 #include "services/playbackservice.h"
 #include "services/sceneissues.h"
@@ -931,10 +932,24 @@ QVector<VerbInfo> EditorApi::verbs() const
           "\"tonemap\" is the THUMBNAIL picture: the deterministic filmic grade only (the scene's exposure as a constant; no bloom, no ambient occlusion, no SMAA, no reflections), so a bright scene does not clip to white and a sweep of hundreds stays cheap. "
           "\"scene\" is THE EDITOR'S OWN PICTURE and what the Screenshot button in the editor takes: the scene's WHOLE post chain exactly as the world has it — global illumination, screen-space reflections, ambient occlusion, bloom, SMAA, the looks stack, HDR and the tonemap — at this camera's pose and lens, graded at the exposure the on-screen viewport has currently converged on (carried across as a constant, so the shot is repeatable). A world with HDR switched off photographs ungraded, like the viewport. "
           "\"viewport\" (or true) is the same whole chain but with the chain's OWN adaptive exposure re-seeded from the scene's (or the driving camera's) exposure value; an offscreen view lives about two frames and cannot converge, so it grades at that seed. It exists for camera.screenshot, where there is no on-screen view measuring the camera in question — for the editor camera prefer \"scene\". "
-          "The editor's own Screenshot action uses \"scene\"; project preview tiles and asset thumbnails use \"tonemap\". "
+          "The editor's own Screenshot action uses \"scene\"; asset thumbnails use \"tonemap\"; a project's Desktop tile is the PRESENTED frame instead (editor.presentedFrame). "
           "{radiance: true} (the plain grade only, the editor's own picture only) ALSO READS THE SCENE RADIANCE IN FLOAT — the linear value the plain bytes are an 8-bit store of, unclipped — and every probe gains `radiance:{r,g,b}`, the float mean of the same 5x5 block. It is for a measurement that lives inside one code of the bytes (an A/B whose whole effect is a fraction of a code, a transmittance); the bytes and the PNG are unchanged. "
           "THE TWO COLOUR SPACES (PLAIN-GRADE-1 measured them; SRGB-ENCODE-1 put the encode in): the graded answers (\"tonemap\", \"scene\", \"viewport\") are THE WINDOW'S OWN BYTES — the film curve's output through the exact sRGB encode, so an 18 % card at the default exposure reads 118 — while \"plain\" is LINEAR RADIANCE, the instrument every pixel suite asserts (a sky picked as #808080 reads 55, the sRGB decode of the colour the user picked). The answer reports `grade` and `encoding` (\"linear\" or \"display\") so a reader is told which space it is holding, and a DISPLAY grade's probes also carry `light:{r,g,b}` — the same 5x5 block decoded to linear light pixel by pixel BEFORE the mean (0..255 floats), because the mean of encoded bytes is not the encode of the mean light across an edge. "
           ,
+          Needs::Engine },
+        { "presentedFrame", "editor.presentedFrame(path, {helpers=false, tile=false, presented}) -> {path, width, height, center:{r,g,b}, presented?}",
+          "THE FRAME THE EDITOR PRESENTS, READ BACK (CLOSE-SHOT-2) — what a project's Desktop tile is made from. "
+          "NO settle, and NOTHING ON SCREEN CHANGES: the on-screen view's next frame is drawn (one frame, at dt 0 — "
+          "the document's clock does not move) and presented exactly as it would have been; the SAME frame is "
+          "drawn once more off screen WITHOUT the editor's furniture — the grid, the light and camera wires, the "
+          "selection outline, the gizmo, the GI boxes, the HUD and the Atom/Photon viewing aids — with the frame's "
+          "camera, settled GI and exposure, and that picture is copied out when the copy's fence signals. "
+          "{helpers: true} reads the presented frame itself instead (the window's own image). {presented: path2} "
+          "writes the SAME frame as presented beside the clean one — the proof that the capture left the screen "
+          "alone. {tile: true} crops it about its "
+          "centre to the tile's aspect and scales it to the stored tile size, exactly as a save does. The bytes "
+          "are the window's own (the graded, encoded picture), full window size otherwise. Unlike "
+          "editor.screenshot this reads what IS on screen, GI wherever it has got to.",
           Needs::Engine },
         { "beginBatch", "editor.beginBatch() -> bool",
           "Opens a nested undo macro inside the script's run (finer-grained grouping).",
@@ -3068,6 +3083,56 @@ QVariantMap EditorApi::issueBar()
     // answer. One pass, then report.
     host.shell->updateSceneIssues();
     return host.shell->sceneIssueBarState();
+}
+
+QVariantMap EditorApi::presentedFrame(const QString &path, const QVariantMap &options)
+{
+    QVariantMap out;
+    if (!requireEngine()) return out;
+    if (path.isEmpty()) { fail("editor.presentedFrame: a file path is required"); return out; }
+    for (auto it = options.constBegin(); it != options.constEnd(); ++it) {
+        if (it.key() != QLatin1String("helpers") && it.key() != QLatin1String("tile") &&
+            it.key() != QLatin1String("presented")) {
+            fail(QStringLiteral("editor.presentedFrame: unknown option '%1' (helpers, tile, presented)").arg(it.key()));
+            return out;
+        }
+    }
+    const bool helpers = options.value(QStringLiteral("helpers")).toBool();
+    const QString presentedPath = options.value(QStringLiteral("presented")).toString();
+    if (helpers && !presentedPath.isEmpty()) {
+        fail("editor.presentedFrame: {presented} pairs a CLEAN capture with its frame as shown — not with {helpers: true}");
+        return out;
+    }
+    QImage shown;
+    QImage img = presentedPath.isEmpty() ? host.viewport->capturePresentedFrame(helpers)
+                                         : host.viewport->capturePresentedFramePair(&shown);
+    if (img.isNull()) {
+        fail("editor.presentedFrame: the viewport presented no readable frame (no world, or no on-screen view)");
+        return out;
+    }
+    if (options.value(QStringLiteral("tile")).toBool()) img = ProjectService::tileFromFrame(img);
+    QFileInfo info(path);
+    if (!info.dir().exists()) info.dir().mkpath(".");
+    if (!img.save(path, "PNG")) {
+        fail(QStringLiteral("editor.presentedFrame: could not save '%1'").arg(path));
+        return out;
+    }
+    if (!presentedPath.isEmpty()) {
+        if (shown.isNull()) { fail("editor.presentedFrame: the frame as presented was not read"); return out; }
+        QFileInfo pinfo(presentedPath);
+        if (!pinfo.dir().exists()) pinfo.dir().mkpath(".");
+        if (!shown.save(presentedPath, "PNG")) {
+            fail(QStringLiteral("editor.presentedFrame: could not save '%1'").arg(presentedPath));
+            return out;
+        }
+        out["presented"] = pinfo.absoluteFilePath();
+    }
+    const QColor center = img.pixelColor(img.width() / 2, img.height() / 2);
+    out["path"] = info.absoluteFilePath();
+    out["width"] = img.width();
+    out["height"] = img.height();
+    out["center"] = QVariantMap{ { "r", center.red() }, { "g", center.green() }, { "b", center.blue() } };
+    return out;
 }
 
 QVariantMap EditorApi::screenshot(const QString &path, int width, int height,

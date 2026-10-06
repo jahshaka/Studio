@@ -238,6 +238,13 @@ void ShellLifecycle::stopBackgroundWork()
     // STEP 2 of the shutdown order (see shelllifecycle.h / shell/shutdownorder.h).
     JAH_SHUTDOWN_STEP(ShutdownOrder::BackgroundWork, "shutdownBackgroundWork: workers joined");
 
+    // THE CLOSE'S TILE (CLOSE-SHOT-2). closeEvent's autosave ASKED for the
+    // presented frame; it is satisfied here, first, with the world and the engine
+    // whole (step 4 releases the engine) — one frame and its fence, never a
+    // settle — and its encode is then drained with the others below.
+    if (ProjectService *projectService = mParts.services ? mParts.services->project() : nullptr)
+        projectService->settleThumbnailCapture();
+
     // A RUNNING CAPTURE IS FINISHED AND WRITTEN FIRST, before anything below
     // touches the engine (CLEANUP-1 item 1). The owner presses Ctrl+F4, sees
     // the problem, and closes the window — and until this line the bundle was
@@ -385,8 +392,12 @@ void ShellLifecycle::teardownWindow()
     // the --script / --dump-api-docs paths never reach stopBackgroundWork,
     // where a window close drains it (CREATE-GAP-1). Idempotent; nothing left
     // is nothing done.
-    if (ProjectService *projectService = mParts.services ? mParts.services->project() : nullptr)
+    // A tile still asked for is answered first (the engine views die at step 6);
+    // on the window-close path step 2 already did, and this is nothing.
+    if (ProjectService *projectService = mParts.services ? mParts.services->project() : nullptr) {
+        projectService->settleThumbnailCapture();
         projectService->drainThumbnailEncodes();
+    }
 
     // The modules. ONE TEARDOWN PATH: on the window-close path step 3 has
     // already shut them down and this only deletes them; the --script /
