@@ -12,8 +12,10 @@ For more information see the LICENSE file
 #include "services/ambienceservice.h"
 
 #include <QAudioOutput>
+#include <QEventLoop>
 #include <QFileInfo>
 #include <QMediaPlayer>
+#include <QTimer>
 #include <QUrl>
 #include <QtMath>
 
@@ -91,6 +93,31 @@ void AmbienceService::sync(const iris::ScenePtr &scene)
                                                   QtAudio::LogarithmicVolumeScale,
                                                   QtAudio::LinearVolumeScale));
     }
+}
+
+void AmbienceService::settle(int timeoutMs)
+{
+    if (!mPlayer || mSource.isEmpty()) return;
+    const auto settled = [this]() {
+        const QMediaPlayer::MediaStatus s = mPlayer->mediaStatus();
+        if (s == QMediaPlayer::InvalidMedia || mPlayer->error() != QMediaPlayer::NoError) return true;
+        if (s == QMediaPlayer::LoadingMedia || s == QMediaPlayer::NoMedia) return false;
+        return mPlayer->playbackState() == QMediaPlayer::PlayingState;
+    };
+    if (settled()) return;
+    QEventLoop loop;
+    QTimer deadline;
+    deadline.setSingleShot(true);
+    connect(&deadline, &QTimer::timeout, &loop, &QEventLoop::quit);
+    const auto check = [&]() { if (settled()) loop.quit(); };
+    const auto a = connect(mPlayer, &QMediaPlayer::mediaStatusChanged, &loop, check);
+    const auto b = connect(mPlayer, &QMediaPlayer::playbackStateChanged, &loop, check);
+    const auto c = connect(mPlayer, &QMediaPlayer::errorOccurred, &loop, check);
+    deadline.start(timeoutMs);
+    loop.exec(QEventLoop::ExcludeUserInputEvents);
+    disconnect(a);
+    disconnect(b);
+    disconnect(c);
 }
 
 QString AmbienceService::fileFor(const QString &guid) const

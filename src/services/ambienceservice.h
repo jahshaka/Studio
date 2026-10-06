@@ -63,6 +63,14 @@ public:
     /// starts (looping), the same guid keeps playing where it is, a changed
     /// volume is applied in place, and no scene or no guid stops it.
     void sync(const iris::ScenePtr &scene);
+    /// The player opens its media ASYNCHRONOUSLY (Qt Multimedia's ffmpeg
+    /// backend): play() on a source still loading reads Stopped until the
+    /// media is open. This spins a local event loop until the media has
+    /// settled — loaded and playing, or failed — or `timeoutMs` passes (a
+    /// deadline, never a measurement; the LiveVideoBinding::step pattern).
+    /// Returns at once when nothing is loading. The verb calls it so its
+    /// answer is what plays, not what was asked for.
+    void settle(int timeoutMs = 4000);
     /// Stops and forgets the source (a world closed).
     void stop();
     /// The file a Music guid resolves to (empty when none) — the same

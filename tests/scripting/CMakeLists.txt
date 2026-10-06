@@ -703,7 +703,7 @@ jah_pool_arm(doc metadata ${CMAKE_CURRENT_BINARY_DIR}/e2e_metadata.js 1 HEADLESS
 # output, and the answer is its state — playing, through a save and reopen.
 # Qt Multimedia's ffmpeg backend plays with no display, so this is --headless.
 configure_file(scripts/e2e_ambience.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_ambience.js @ONLY)
-jah_pool_arm(doc ambience ${CMAKE_CURRENT_BINARY_DIR}/e2e_ambience.js 1 HEADLESS)
+jah_pool_arm(doc ambience ${CMAKE_CURRENT_BINARY_DIR}/e2e_ambience.js 6 HEADLESS)
 
 # Video assets (ASSET_MEDIA_SPEC §1): importFile(mp4) → Video row + frame-grab
 # thumbnail + probed metadata block. Qt Multimedia's ffmpeg backend decodes

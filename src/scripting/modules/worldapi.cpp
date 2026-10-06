@@ -2139,6 +2139,7 @@ QVariantMap WorldApi::ambience(const QVariantMap &params)
     AmbienceService *player = host.services ? host.services->ambience : nullptr;
     if (player) {
         player->sync(scene);
+        player->settle();
         out = player->state();
     }
     out.remove(QStringLiteral("guid"));

@@ -125,7 +125,10 @@ void MediaLazyTest::ambiencePlaysOnlyWhatTheSceneNames()
     QMediaPlayer *player = players.first();
     QCOMPARE(player->source(), QUrl::fromLocalFile(wav));
     QVERIFY2(player->audioOutput() != nullptr, "the player has an audio output");
+    // The media opens asynchronously: settle() is the bounded wait the verb uses.
+    ambience->settle(15000);
     QCOMPARE(player->playbackState(), QMediaPlayer::PlayingState);
+    QCOMPARE(ambience->state().value("state").toString(), QStringLiteral("playing"));
     QCOMPARE(player->loops(), int(QMediaPlayer::Infinite));
     const float loud = player->audioOutput()->volume();
     QVERIFY(loud > 0.0f && loud <= 1.0f);
