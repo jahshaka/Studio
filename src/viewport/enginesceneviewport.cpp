@@ -2620,7 +2620,7 @@ bool EngineSceneViewport::requestPresentedFrame(PresentedFrameDone done, bool ke
     // the pending one finished first.
     if (!mPresentedDone.empty() && keepHelpers != mPresentedKeepHelpers) settlePresentedFrame();
     if (mPresentedDone.empty()) {
-        if (!v->requestFrameCapture(keepHelpers)) {
+        if (!v->requestFrameCapture(keepHelpers, mPresentedCompanionWanted && !keepHelpers)) {
             if (done) done(QImage());
             return false;
         }
@@ -2641,12 +2641,18 @@ void EngineSceneViewport::pollPresentedFrame(bool wait)
         if (st == jahshaka::engine::FrameCaptureState::InFlight && !wait) return;
         // Idle = dropped (the world closed, the view was rebuilt, the readback was
         // refused): the requests are answered with a null picture.
-        Image img;
-        if (st != jahshaka::engine::FrameCaptureState::Idle && v->takeFrameCapture(img, true) &&
-            img.width && img.height) {
-            frame = QImage(int(img.width), int(img.height), QImage::Format_RGBA8888);
+        const auto toQImage = [](const Image &img) {
+            QImage q;
+            if (!img.width || !img.height) return q;
+            q = QImage(int(img.width), int(img.height), QImage::Format_RGBA8888);
             for (unsigned y = 0; y < img.height; ++y)
-                memcpy(frame.scanLine(int(y)), &img.rgba[size_t(y) * img.width * 4u], img.width * 4u);
+                memcpy(q.scanLine(int(y)), &img.rgba[size_t(y) * img.width * 4u], img.width * 4u);
+            return q;
+        };
+        Image img, presented;
+        if (st != jahshaka::engine::FrameCaptureState::Idle && v->takeFrameCapture(img, true, &presented)) {
+            frame = toQImage(img);
+            mPresentedCompanion = toQImage(presented);
         }
     }
     // Moved out first: a callback may ask for another frame.
@@ -2682,6 +2688,19 @@ QImage EngineSceneViewport::capturePresentedFrame(bool keepHelpers)
         return out;
     settlePresentedFrame();
     return out;
+}
+
+QImage EngineSceneViewport::capturePresentedFramePair(QImage *presented)
+{
+    // Anything pending is answered first: the pair is ONE frame of its own.
+    settlePresentedFrame();
+    mPresentedCompanion = QImage();
+    mPresentedCompanionWanted = true;
+    const QImage clean = capturePresentedFrame(false);
+    mPresentedCompanionWanted = false;
+    if (presented) *presented = mPresentedCompanion;
+    mPresentedCompanion = QImage();
+    return clean;
 }
 
 void EngineSceneViewport::cancelPresentedFrame()

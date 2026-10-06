@@ -219,6 +219,7 @@ public:
     bool requestPresentedFrame(PresentedFrameDone done, bool keepHelpers = false) override;
     void settlePresentedFrame() override;
     QImage capturePresentedFrame(bool keepHelpers = false) override;
+    QImage capturePresentedFramePair(QImage *presented) override;
     void cancelPresentedFrame() override;
     QImage takeScreenshot(int width, int height, ScreenshotGrade grade) override;
     void settleGiBeforeNextScreenshot(int maxFrames) override { mShotSettleFrames = maxFrames; }
@@ -658,6 +659,9 @@ private:
     /// (requestPresentedFrame), and whether that capture keeps the helpers.
     std::vector<PresentedFrameDone> mPresentedDone;
     bool mPresentedKeepHelpers = false;
+    /// capturePresentedFramePair's companion: the same frame as presented.
+    bool mPresentedCompanionWanted = false;
+    QImage mPresentedCompanion;
     /// Answers the pending requests once the view's capture is ready — at every
     /// tick (`wait` false) and from settlePresentedFrame (`wait` true).
     void pollPresentedFrame(bool wait);

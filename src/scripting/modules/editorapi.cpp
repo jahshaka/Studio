@@ -937,14 +937,16 @@ QVector<VerbInfo> EditorApi::verbs() const
           "THE TWO COLOUR SPACES (PLAIN-GRADE-1 measured them; SRGB-ENCODE-1 put the encode in): the graded answers (\"tonemap\", \"scene\", \"viewport\") are THE WINDOW'S OWN BYTES — the film curve's output through the exact sRGB encode, so an 18 % card at the default exposure reads 118 — while \"plain\" is LINEAR RADIANCE, the instrument every pixel suite asserts (a sky picked as #808080 reads 55, the sRGB decode of the colour the user picked). The answer reports `grade` and `encoding` (\"linear\" or \"display\") so a reader is told which space it is holding, and a DISPLAY grade's probes also carry `light:{r,g,b}` — the same 5x5 block decoded to linear light pixel by pixel BEFORE the mean (0..255 floats), because the mean of encoded bytes is not the encode of the mean light across an edge. "
           ,
           Needs::Engine },
-        { "presentedFrame", "editor.presentedFrame(path, {helpers=false, tile=false}) -> {path, width, height, center:{r,g,b}}",
+        { "presentedFrame", "editor.presentedFrame(path, {helpers=false, tile=false, presented}) -> {path, width, height, center:{r,g,b}, presented?}",
           "THE FRAME THE EDITOR PRESENTS, READ BACK (CLOSE-SHOT-2) — what a project's Desktop tile is made from. "
-          "NO second render and NO settle: the on-screen view's next frame is drawn (one frame, at dt 0 — the "
-          "document's clock does not move) and its final colour target, after the grade and before the present, "
-          "is copied out when the copy's fence signals. That frame is drawn WITHOUT the editor's furniture — the "
-          "grid, the light and camera wires, the selection outline, the gizmo, the GI boxes, the HUD and the "
-          "Atom/Photon viewing aids — unless {helpers: true} asks for the frame exactly as the window shows it "
-          "(the comparison arm: the two differ only where the furniture is). {tile: true} crops it about its "
+          "NO settle, and NOTHING ON SCREEN CHANGES: the on-screen view's next frame is drawn (one frame, at dt 0 — "
+          "the document's clock does not move) and presented exactly as it would have been; the SAME frame is "
+          "drawn once more off screen WITHOUT the editor's furniture — the grid, the light and camera wires, the "
+          "selection outline, the gizmo, the GI boxes, the HUD and the Atom/Photon viewing aids — with the frame's "
+          "camera, settled GI and exposure, and that picture is copied out when the copy's fence signals. "
+          "{helpers: true} reads the presented frame itself instead (the window's own image). {presented: path2} "
+          "writes the SAME frame as presented beside the clean one — the proof that the capture left the screen "
+          "alone. {tile: true} crops it about its "
           "centre to the tile's aspect and scales it to the stored tile size, exactly as a save does. The bytes "
           "are the window's own (the graded, encoded picture), full window size otherwise. Unlike "
           "editor.screenshot this reads what IS on screen, GI wherever it has got to.",
@@ -3089,13 +3091,21 @@ QVariantMap EditorApi::presentedFrame(const QString &path, const QVariantMap &op
     if (!requireEngine()) return out;
     if (path.isEmpty()) { fail("editor.presentedFrame: a file path is required"); return out; }
     for (auto it = options.constBegin(); it != options.constEnd(); ++it) {
-        if (it.key() != QLatin1String("helpers") && it.key() != QLatin1String("tile")) {
-            fail(QStringLiteral("editor.presentedFrame: unknown option '%1' (helpers, tile)").arg(it.key()));
+        if (it.key() != QLatin1String("helpers") && it.key() != QLatin1String("tile") &&
+            it.key() != QLatin1String("presented")) {
+            fail(QStringLiteral("editor.presentedFrame: unknown option '%1' (helpers, tile, presented)").arg(it.key()));
             return out;
         }
     }
     const bool helpers = options.value(QStringLiteral("helpers")).toBool();
-    QImage img = host.viewport->capturePresentedFrame(helpers);
+    const QString presentedPath = options.value(QStringLiteral("presented")).toString();
+    if (helpers && !presentedPath.isEmpty()) {
+        fail("editor.presentedFrame: {presented} pairs a CLEAN capture with its frame as shown — not with {helpers: true}");
+        return out;
+    }
+    QImage shown;
+    QImage img = presentedPath.isEmpty() ? host.viewport->capturePresentedFrame(helpers)
+                                         : host.viewport->capturePresentedFramePair(&shown);
     if (img.isNull()) {
         fail("editor.presentedFrame: the viewport presented no readable frame (no world, or no on-screen view)");
         return out;
@@ -3106,6 +3116,16 @@ QVariantMap EditorApi::presentedFrame(const QString &path, const QVariantMap &op
     if (!img.save(path, "PNG")) {
         fail(QStringLiteral("editor.presentedFrame: could not save '%1'").arg(path));
         return out;
+    }
+    if (!presentedPath.isEmpty()) {
+        if (shown.isNull()) { fail("editor.presentedFrame: the frame as presented was not read"); return out; }
+        QFileInfo pinfo(presentedPath);
+        if (!pinfo.dir().exists()) pinfo.dir().mkpath(".");
+        if (!shown.save(presentedPath, "PNG")) {
+            fail(QStringLiteral("editor.presentedFrame: could not save '%1'").arg(presentedPath));
+            return out;
+        }
+        out["presented"] = pinfo.absoluteFilePath();
     }
     const QColor center = img.pixelColor(img.width() / 2, img.height() / 2);
     out["path"] = info.absoluteFilePath();

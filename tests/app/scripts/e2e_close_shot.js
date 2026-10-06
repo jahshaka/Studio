@@ -8,10 +8,10 @@
 // furniture and read back from the window before the present
 // (View::requestFrameCapture). The claims, in pixels:
 //
-//   1. THE LIVE FRAME CARRIES FURNITURE, THE CAPTURE DOES NOT: with a cube
-//      selected (gizmo + outline) over the grid, the frame read back as shown
-//      ({helpers: true}) and the frame read back for a tile differ on a real
-//      number of pixels — and only there.
+//   1. NOTHING ON SCREEN CHANGES, AND THE CAPTURE HAS NO FURNITURE: the frame
+//      PRESENTED on the capturing frame is pixel-identical to the frames before
+//      and after it (gizmo, outline and grid all visible), while the clean
+//      picture of that same frame differs from it on a real number of pixels.
 //   2. project.save's TILE IS THE CLEAN PRESENTED FRAME: it matches a clean
 //      capture of the same still scene (cropped and scaled the same way) within
 //      a small tolerance, and differs from the frame as shown wherever the
@@ -42,16 +42,24 @@ editor.frame(60, 1 / 60);
 editor.select(cube);
 editor.frame(4, 1 / 60);
 
-// ---- 1. the frame as shown against the frame a tile is made of --------------
-var shown = editor.presentedFrame("cs_shown.png", { helpers: true });
-var clean = editor.presentedFrame("cs_clean.png");
-console.log("shown " + J(shown) + "  clean " + J(clean));
-assert(shown.width > 0 && shown.width === clean.width && shown.height === clean.height,
-       "both captures are the full window (" + shown.width + "x" + shown.height + ")");
-var furniture = app.compareImages(shown.path, clean.path, TOL);
-console.log("shown vs clean: " + J(furniture));
+// ---- 1. the presented frame never changes; the capture drops the furniture ---
+var before = editor.presentedFrame("cs_before.png", { helpers: true });
+var clean = editor.presentedFrame("cs_clean.png", { presented: "cs_capture_shown.png" });
+var after = editor.presentedFrame("cs_after.png", { helpers: true });
+console.log("before " + J(before) + "  clean " + J(clean) + "  after " + J(after));
+assert(before.width > 0 && before.width === clean.width && before.height === clean.height,
+       "the captures are the full window (" + before.width + "x" + before.height + ")");
+var sameBefore = app.compareImages(clean.presented, before.path, 0);
+var sameAfter = app.compareImages(clean.presented, after.path, 0);
+console.log("capture frame as presented vs before " + J(sameBefore) + "  vs after " + J(sameAfter));
+assert(sameBefore.over === 0 && sameAfter.over === 0,
+       "the PRESENTED frame of the capturing frame is pixel-identical to the frames either side " +
+       "(" + sameBefore.over + " / " + sameAfter.over + " px differ)");
+var furniture = app.compareImages(clean.presented, clean.path, TOL);
+console.log("presented vs clean (one frame): " + J(furniture));
 assert(furniture.over >= 2000,
-       "the presented frame carries the furniture and the capture drops it (" + furniture.over + " px)");
+       "the presented frame carries the furniture and the capture of the same frame drops it (" +
+       furniture.over + " px)");
 var clean2 = editor.presentedFrame("cs_clean2.png");
 var still = app.compareImages(clean.path, clean2.path, TOL);
 console.log("clean vs clean (the next frame): " + J(still));

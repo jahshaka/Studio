@@ -342,22 +342,45 @@ int main() {
                   "the frame as shown carries the helper (%zu px) over the background (%zu px)",
                   greenShown, blueShown);
 
-        CHECK_MSG(v->requestFrameCapture(false), "a clean capture is armed");
+        // THE CLEAN CAPTURE NEVER TOUCHES THE PRESENTED FRAME: the same frame as
+        // presented (alsoPresented) is byte-identical to the frames either side of it.
+        CHECK_MSG(v->requestFrameCapture(false, true), "a clean capture (with the frame as presented) is armed");
         render(1);
-        Image clean;
-        CHECK_MSG(v->takeFrameCapture(clean, true) && clean.width == shown.width,
-                  "the clean frame reads back");
+        Image clean, presentedSame;
+        CHECK_MSG(v->takeFrameCapture(clean, true, &presentedSame) && clean.width == shown.width &&
+                      clean.height == shown.height,
+                  "the clean frame reads back (%ux%u)", clean.width, clean.height);
         const size_t greenClean = greens(clean), blueClean = blues(clean);
         CHECK_MSG(greenClean == 0 && blueClean > blueShown,
                   "the captured frame drops the helper (%zu green px; the background behind it shows: %zu px)",
                   greenClean, blueClean);
+        CHECK_MSG(presentedSame.rgba == shown.rgba,
+                  "the PRESENTED frame of the capturing frame is byte-identical to the frame before it "
+                  "(helper %zu px)", greens(presentedSame));
+        // Outside the helper the clean picture IS the presented one.
+        {
+            size_t differ = 0, outside = 0;
+            for (size_t i = 0; i + 3 < clean.rgba.size(); i += 4) {
+                const bool helperPx = shown.rgba[i + 1] > shown.rgba[i] + 60 &&
+                                      shown.rgba[i + 1] > shown.rgba[i + 2] + 60;
+                if (helperPx) continue;
+                ++outside;
+                if (std::abs(int(clean.rgba[i]) - int(shown.rgba[i])) > 2 ||
+                    std::abs(int(clean.rgba[i + 1]) - int(shown.rgba[i + 1])) > 2 ||
+                    std::abs(int(clean.rgba[i + 2]) - int(shown.rgba[i + 2])) > 2)
+                    ++differ;
+            }
+            CHECK_MSG(differ * 1000 <= outside,
+                      "outside the helper the clean picture matches the presented one (%zu of %zu px over 2 codes)",
+                      differ, outside);
+        }
 
         // ...for THAT frame only: the next capture that keeps the helpers sees it again.
         CHECK_MSG(v->requestFrameCapture(true), "re-armed with the helpers");
         render(1);
         Image again;
-        CHECK_MSG(v->takeFrameCapture(again, true) && greens(again) > 200,
-                  "the helper is back on the frame after (%zu px)", greens(again));
+        CHECK_MSG(v->takeFrameCapture(again, true) && again.rgba == shown.rgba,
+                  "the frame AFTER the capture is byte-identical too (helper %zu px)", greens(again));
 
         // ...and through an MSAA window (the resolved swapchain image is what is read).
         v->setSampleCount(4);
