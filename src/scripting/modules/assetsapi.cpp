@@ -265,9 +265,9 @@ QVector<VerbInfo> AssetsApi::verbs() const
           "like any other: it is a real row, and the verbs refuse to rename, move or delete it "
           "because the editor finds it BY NAME.",
           Needs::Document },
-        { "createSky", "assets.createSky({name?, type?, color?, top?, mid?, bottom?, offset?, texture?, front?, back?, left?, right?}) -> guid",
+        { "createSky", "assets.createSky({name?, type?, folder?, color?, top?, mid?, bottom?, offset?, texture?, front?, back?, left?, right?}) -> guid",
           "Mints a SKY asset in the open project and returns its guid — the Assets tray's right-click > Create > "
-          "Sky, as a verb (the menu calls this). `type` is \"color\" (default), \"gradient\", \"equirectangular\", "
+          "Sky, as a verb (the menu calls this). `folder` files it in a project folder (assets.folders(); default the root). `type` is \"color\" (default, the sky panel's grey 72/255), \"gradient\", \"equirectangular\", "
           "\"cubemap\" or \"realistic\", and the rest is that type's definition, in world.sky's vocabulary: "
           "`color` for a colour sky; `top`/`mid`/`bottom` colours and `offset` for a gradient; `texture` (a texture "
           "asset guid) for an equirectangular sky; `front`/`back`/`left`/`right`/`top`/`bottom` face texture guids "
@@ -1234,7 +1234,8 @@ QString AssetsApi::createSky(const QVariantMap &options)
         QStringLiteral("name"), QStringLiteral("type"), QStringLiteral("color"),
         QStringLiteral("top"), QStringLiteral("mid"), QStringLiteral("bottom"),
         QStringLiteral("offset"), QStringLiteral("texture"), QStringLiteral("front"),
-        QStringLiteral("back"), QStringLiteral("left"), QStringLiteral("right") };
+        QStringLiteral("back"), QStringLiteral("left"), QStringLiteral("right"),
+        QStringLiteral("folder") };
     for (const QString &key : options.keys())
         if (!known.contains(key)) {
             fail(QStringLiteral("%1: unknown option '%2' (%3)").arg(verb, key, known.join(", ")));
@@ -1277,7 +1278,9 @@ QString AssetsApi::createSky(const QVariantMap &options)
     QJsonObject definition;
     if (t == QLatin1String("color") || t == QLatin1String("singlecolor")) {
         QColor c;
-        if (!colour("color", QColor(Qt::white), &c)) return QString();
+        // The sky panel's FRESH colour sky (skypropertywidget's default): one
+        // default, whichever door minted the row.
+        if (!colour("color", QColor(72, 72, 72), &c)) return QString();
         definition.insert(QStringLiteral("skyColor"), iris::colorToJson(c));
     } else if (t == QLatin1String("gradient")) {
         type = iris::SkyType::GRADIENT;
@@ -1321,6 +1324,22 @@ QString AssetsApi::createSky(const QVariantMap &options)
     }
 
     const QString projectGuid = host.project->getProjectGuid();
+    // THE FOLDER IT IS FILED IN (the tray mints into the folder it shows, so
+    // the tile's parent and the row agree): a project folder's guid; absent,
+    // empty or the project's own guid = the root. Judged before anything is
+    // written.
+    QString folder = options.value(QStringLiteral("folder")).toString().trimmed();
+    if (folder == projectGuid) folder.clear();
+    if (!folder.isEmpty()) {
+        bool known = false;
+        for (const projectfolders::Info &f : projectfolders::list(host.db, projectGuid))
+            if (f.guid == folder) known = true;
+        if (!known) {
+            fail(QStringLiteral("%1: no folder '%2' in this project (assets.folders() lists them)")
+                     .arg(verb, folder));
+            return QString();
+        }
+    }
     const QString guid = GUIDManager::generateGUID();
     definition.insert(QStringLiteral("guid"), guid);
     QJsonObject properties;
@@ -1337,6 +1356,7 @@ QString AssetsApi::createSky(const QVariantMap &options)
                  .arg(verb, error.isEmpty() ? QString() : QStringLiteral(": ") + error));
         return QString();
     }
+    if (!folder.isEmpty()) projectfolders::file(host.db, projectGuid, guid, folder);
     for (const QString &tex : textures) {
         ProjectAssets::addToProject(tex, host.db, host.project, ProjectAssets::AddKind::Binding);
         host.db->createDependency(static_cast<int>(ModelTypes::Sky),

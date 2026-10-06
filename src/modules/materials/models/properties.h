@@ -231,7 +231,9 @@ struct ColorProperty : public Property
 
     void deserialize(const QJsonObject& obj) override
     {
-        value = iris::colorFromJson(obj["value"].toObject(), Qt::black);
+        // THE READER-DEFAULTS LAW: an absent value reads as the constructor's
+        // default (an unset QColor), never as a colour nobody wrote.
+        value = iris::colorFromJson(obj["value"].toObject(), ColorProperty().value);
     }
 };
 

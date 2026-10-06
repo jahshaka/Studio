@@ -54,6 +54,24 @@ if (KIND === "texture") {
            skyMeta.sky.definition.equiSkyGuid === tex,
            "it is an equirectangular sky over the image: " + J(skyMeta.sky));
     assert(assets.dependencies(sky).indexOf(tex) >= 0, "its texture is a Sky -> Texture dependency");
+    // The tray's default (no options): the sky panel's fresh grey 72, and a
+    // `folder` files the row where the tray's tile shows it.
+    var plain = assets.createSky();
+    var plainDef = assets.metadata(plain).sky;
+    assert(plainDef.type === "color" && Math.abs(plainDef.definition.skyColor.r - 72 / 255) < 1e-4,
+           "a default sky is the panel's grey 72: " + J(plainDef.definition));
+    var skies = assets.createFolder("Skies");
+    var countIn = function () {
+        var n = -1;
+        assets.folders().forEach(function (f) { if (f.guid === skies) n = f.count; });
+        return n;
+    };
+    var before = countIn();
+    var filed = assets.createSky({ folder: skies });
+    assert(countIn() === before + 1, "createSky({folder}) files the row in that folder (" + before + " -> " + countIn() + ")");
+    var badFolder = null;
+    try { assets.createSky({ folder: "no-such-folder" }); } catch (e) { badFolder = "" + e; }
+    assert(badFolder !== null && badFolder.indexOf("folder") >= 0, "an unknown folder is refused: " + badFolder);
     entries = [sky];
 } else if (KIND === "pack") {
     var packMat = materials.createFromImage(tex);

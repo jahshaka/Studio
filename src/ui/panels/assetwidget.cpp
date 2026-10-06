@@ -1699,7 +1699,10 @@ void AssetWidget::createSky()
     if (!db || !project || project->getProjectGuid().isEmpty()) return;
     if (!shell || !shell->scriptHost()) return;
     AssetsApi api(*shell->scriptHost());
-    const QString guid = api.quietly([&] { return api.createSky(); });
+    // Minted INTO the folder the tray is showing, so the row and the tile agree.
+    QVariantMap options;
+    if (!assetItem.selectedGuid.isEmpty()) options.insert(QStringLiteral("folder"), assetItem.selectedGuid);
+    const QString guid = api.quietly([&] { return api.createSky(options); });
     if (guid.isEmpty()) {
         QMessageBox::warning(this, tr("Create Sky"), tr("The sky could not be created: %1")
                                                          .arg(api.lastError()));
