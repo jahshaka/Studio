@@ -69,6 +69,26 @@ assert(Math.abs(world.get().sky.data.skyColor.r - 32 / 255) < 1e-4,
 world.sky("gradient", { top: "#88bbff", mid: "#ffffff", bottom: "#334455", offset: 0.6 });
 var sky = world.get().sky;
 assert(sky.type === "Gradient" && near(sky.data.gradientOffset, 0.6), "gradient sky + skyData");
+// THE ONE ENCODING IS THE VERBS' TOO (D10): what world.get() hands out goes
+// straight back into world.sky and is the identity — the colour maps it answers
+// are 0..1 floats, and colorFromJs reads exactly that (it used to read 0-255,
+// so writing a read value back gave black).
+function sameColour(a, b) {
+    return ["r", "g", "b", "a"].every(function (k) { return Math.abs(a[k] - b[k]) < 1e-4; });
+}
+var gotSky = world.get().sky.data;
+world.sky("gradient", { top: gotSky.gradientTop, mid: gotSky.gradientMid, bottom: gotSky.gradientBot,
+                        offset: gotSky.gradientOffset });
+var backSky = world.get().sky.data;
+assert(sameColour(backSky.gradientTop, gotSky.gradientTop) && sameColour(backSky.gradientMid, gotSky.gradientMid) &&
+       sameColour(backSky.gradientBot, gotSky.gradientBot),
+       "D10: a sky colour read through world.get() and written back through world.sky is the identity: " +
+       JSON.stringify(backSky.gradientTop) + " vs " + JSON.stringify(gotSky.gradientTop));
+world.sky("color", { color: "#204060" });
+var gotColour = world.get().sky.data.skyColor;
+world.sky("color", { color: gotColour });
+assert(sameColour(world.get().sky.data.skyColor, gotColour), "...and a colour sky's, the same");
+world.sky("gradient", { top: "#88bbff", mid: "#ffffff", bottom: "#334455", offset: 0.6 });
 var thrown = false;
 try { world.sky("volumetric"); } catch (e) { thrown = true; }
 assert(thrown, "unknown sky type refused");

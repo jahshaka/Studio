@@ -55,9 +55,13 @@ refuses(function () { world.sky("gradient", { top: "#112233", mid: "nope" }); },
 // A map-shaped colour with a non-numeric channel is the same lie.
 refuses(function () { node.setProperty(lamp, "lightColor", { r: "ff", g: 0, b: 0 }); },
         "F8: a {r,g,b} map with a non-numeric channel is refused");
+// …and so is the RETIRED 0-255 form: the one colour encoding (D10) is 0..1
+// channels, and a value outside it is refused, never rescaled or clamped.
+refuses(function () { node.setProperty(lamp, "lightColor", { r: 255, g: 0, b: 0 }); },
+        "D10: a {r,g,b} map with a channel outside 0..1 (the old 0-255 form) is refused");
 // …but a good map still works.
-assert(node.setProperty(lamp, "lightColor", { r: 255, g: 0, b: 0 }) === true,
-       "a numeric {r,g,b} map is still accepted");
+assert(node.setProperty(lamp, "lightColor", { r: 1, g: 0, b: 0 }) === true,
+       "a numeric {r,g,b} map with 0..1 channels is accepted");
 assert(node.property(lamp, "lightColor") === "#ff0000", "and it took");
 
 // The colour path through the keyframe writer.
