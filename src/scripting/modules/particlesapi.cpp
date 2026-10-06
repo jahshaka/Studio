@@ -208,8 +208,7 @@ bool ParticlesApi::setColourRamp(const QString &id, const QString &assetGuid)
         if (host.db && host.project && !ps->colourRampGuid.isEmpty() &&
             !host.project->getProjectGuid().isEmpty())
             host.db->deleteDependency(ps->getGUID(), ps->colourRampGuid);
-        ps->colourRampGuid.clear();
-        ps->colourRampImage.clear();
+        ps->setColourRamp(QString(), QString());
         return true;
     }
     if (!host.db || host.db->fetchAsset(guid).guid.isEmpty())
@@ -234,8 +233,7 @@ bool ParticlesApi::setColourRamp(const QString &id, const QString &assetGuid)
     if (path.isEmpty())
         return fail(QStringLiteral("particles.setColourRamp: could not resolve the bytes of '%1'")
                         .arg(guid));
-    ps->colourRampGuid = guid;
-    ps->colourRampImage = path;
+    ps->setColourRamp(guid, path);
     return true;
 }
 
@@ -283,7 +281,7 @@ bool ParticlesApi::setColourKeys(const QString &id, const QVariant &keys)
                      [](const iris::ParticleColourKey &a, const iris::ParticleColourKey &b) {
                          return a.time < b.time;
                      });
-    ps->colourKeys = out;
+    ps->setColourKeys(out);
     return true;
 }
 
@@ -318,7 +316,7 @@ bool ParticlesApi::setScaleKeys(const QString &id, const QVariant &keys)
                      [](const iris::ParticleScaleKey &a, const iris::ParticleScaleKey &b) {
                          return a.time < b.time;
                      });
-    ps->scaleKeys = out;
+    ps->setScaleKeys(out);
     return true;
 }
 

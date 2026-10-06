@@ -84,8 +84,8 @@ step("cleared");
 console.log("SHADERCACHE-PRESKY " + JSON.stringify(app.shaderCache()));
 var t0 = Date.now();
 for (var sky = 0; sky < 300; ++sky) {
-    world.sky("color", { color: { r: (sky * 7) % 255, g: (sky * 13) % 255,
-                                  b: (sky * 29) % 255 } });
+    world.sky("color", { color: { r: ((sky * 7) % 255) / 255, g: ((sky * 13) % 255) / 255,
+                                  b: ((sky * 29) % 255) / 255 } });
     editor.frame(2, 1.0 / 60.0);
     if (sky % 100 === 99) step("sky " + sky);
 }

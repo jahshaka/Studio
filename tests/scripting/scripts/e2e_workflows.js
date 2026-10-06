@@ -124,7 +124,7 @@ assert(material.dumpDatablock(ball).indexOf("0.169") >= 0,
        "the renderer computed F0 from the IOR with its own formula");
 
 assert(material.set(ball, { useFresnelColor: true,
-                            fresnelColor: { r: 255, g: 0, b: 0 },
+                            fresnelColor: { r: 1, g: 0, b: 0 },
                             separateFresnel: true }),
        "material.set an explicit per-channel F0");
 editor.frame(2);
@@ -133,7 +133,7 @@ assert(dumpF0.indexOf("0.169") < 0, "an explicit F0 REPLACES the IOR-derived one
 assert(dumpF0.indexOf("\"fresnel\"") >= 0, "the fresnel block is still there");
 
 // ---- 6. kS is live in EVERY workflow, metallic included ----
-assert(material.set(ball, { workflow: "Metallic", specularColor: { r: 0, g: 0, b: 255 } }),
+assert(material.set(ball, { workflow: "Metallic", specularColor: { r: 0, g: 0, b: 1 } }),
        "kS on a METALLIC material");
 editor.frame(2);
 var dumpKs = material.dumpDatablock(ball);
@@ -176,7 +176,7 @@ function maxProbeDelta(a, b) {
     return m;
 }
 assert(material.set(ball, { workflow: "Metallic", metallic: 1.0, roughness: 0.15,
-                            specularColor: { r: 255, g: 255, b: 255 },
+                            specularColor: { r: 1, g: 1, b: 1 },
                             useFresnelColor: false }),
        "author a full metal");
 var metalPx = ballProbes("workflow_metallic.png");
@@ -193,7 +193,7 @@ assert(maxProbeDelta(metalPx, specPx) > 6,
 // ---- 8. save / close / open, values kept across a workflow switch ----
 assert(material.set(ball, { workflow: "Specular (Fresnel)", ior: 1.8,
                             useFresnelColor: false, separateFresnel: true,
-                            specularColor: { r: 12, g: 34, b: 56 } }),
+                            specularColor: { r: 12 / 255, g: 34 / 255, b: 56 / 255 } }),
        "author the third workflow");
 assert(project.save() === true, "project.save");
 assert(project.close() === true, "project.close");

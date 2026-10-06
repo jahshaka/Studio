@@ -54,7 +54,7 @@ For more information see the LICENSE file
 #include "ui/pages/assetview.h"
 #include "data/constants.h"
 
-#include "shell/mainwindow.h"
+#include "ui/ishellview.h"
 #include "data/database/database.h"
 #include "data/guidmanager.h"
 #include "data/project.h"
@@ -1198,12 +1198,12 @@ void AssetWidget::renameViewItem()
 
 void AssetWidget::favoriteItem()
 {
-    mainWindow->favoriteItem(assetItem.wItem);
+    if (shell) shell->favoriteAsset(assetItem.wItem);
 }
 
 void AssetWidget::refreshThumbnail()
 {
-    mainWindow->refreshThumbnail(assetItem.wItem);
+    if (shell) shell->refreshAssetThumbnail(assetItem.wItem);
 }
 
 void AssetWidget::editFileExternally()
@@ -1695,44 +1695,30 @@ void AssetWidget::deleteItem()
 
 void AssetWidget::createSky()
 {
+    // THE VERB (SKY-VERB-1): one colour sky, the tile the menu always made.
+    if (!db || !project || project->getProjectGuid().isEmpty()) return;
+    if (!shell || !shell->scriptHost()) return;
+    AssetsApi api(*shell->scriptHost());
+    // Minted INTO the folder the tray is showing, so the row and the tile agree.
+    QVariantMap options;
+    if (!assetItem.selectedGuid.isEmpty()) options.insert(QStringLiteral("folder"), assetItem.selectedGuid);
+    const QString guid = api.quietly([&] { return api.createSky(options); });
+    if (guid.isEmpty()) {
+        QMessageBox::warning(this, tr("Create Sky"), tr("The sky could not be created: %1")
+                                                         .arg(api.lastError()));
+        return;
+    }
     QListWidgetItem *item = new QListWidgetItem;
     item->setFlags(item->flags() | Qt::ItemIsEditable);
     item->setSizeHint(currentSize);
     item->setTextAlignment(Qt::AlignCenter);
     item->setIcon(QIcon(":/icons/icons8-file-sky.png"));
-
-    const QString assetGuid = GUIDManager::generateGUID();
-
-    item->setData(MODEL_GUID_ROLE, assetGuid);
+    item->setData(MODEL_GUID_ROLE, guid);
     item->setData(MODEL_PARENT_ROLE, assetItem.selectedGuid);
     item->setData(MODEL_ITEM_TYPE, MODEL_ASSET);
     item->setData(MODEL_TYPE_ROLE, static_cast<int>(ModelTypes::Sky));
     item->setData(SKY_TYPE_ROLE, static_cast<int>(iris::SkyType::SINGLE_COLOR));
-
-	QJsonObject properties;
-	QJsonObject skyProps;
-	skyProps.insert("type", item->data(SKY_TYPE_ROLE).toInt());
-	properties.insert("sky", skyProps);
-
-	QJsonObject skyDescription;
-	// Need to leave the defaut sky properties empty, the widget will set it
-
-	db->createAssetEntry(
-		assetGuid,
-		"Sky",
-		static_cast<int>(ModelTypes::Sky),
-		project->getProjectGuid(),
-		assethome::project(project->getProjectGuid()),
-		assethome::Origin::Create,
-		QString(),
-		QString(),
-		AssetHelper::makeBlobFromPixmap(QPixmap(":/icons/icons8-file-sky.png")),
-        QJsonDocument(properties).toJson(),
-		QByteArray(),
-        QJsonDocument(skyDescription).toJson()
-	);
-
-    item->setText("Sky");
+    item->setText(db->fetchAsset(guid).name);
     ui->assetView->addItem(item);
 }
 
@@ -1814,11 +1800,11 @@ void AssetWidget::createMaterial()
 	// "creating in the project should add it to the project drawer in Materials
 	// automatically", made true by construction rather than by a second call.
 	if (!db || !project || project->getProjectGuid().isEmpty()) return;
-	if (!mainWindow || !mainWindow->scripting()) return;
+	if (!shell || !shell->scriptHost()) return;
 
 	const QString folder = assetItem.selectedGuid.isEmpty() ? project->getProjectGuid()
 	                                                        : assetItem.selectedGuid;
-	MaterialsApi api(mainWindow->scripting()->scriptHost());
+	MaterialsApi api(*shell->scriptHost());
 	const QString name = MaterialBundle::uniqueName(db, tr("New Material"));
 	const QString guid = api.quietly([&] {
 		return api.create(name, QVariantMap{ { QStringLiteral("folder"), folder } });
@@ -1847,8 +1833,8 @@ void AssetWidget::createMaterial()
 void AssetWidget::duplicateMaterial(const QString &materialGuid)
 {
 	if (!db || !project || project->getProjectGuid().isEmpty()) return;
-	if (!mainWindow || !mainWindow->scripting()) return;
-	AssetsApi api(mainWindow->scripting()->scriptHost());
+	if (!shell || !shell->scriptHost()) return;
+	AssetsApi api(*shell->scriptHost());
 	const QString copy = api.quietly([&] { return api.duplicate(materialGuid); });
 	if (copy.isEmpty()) {
 		QMessageBox::warning(this, tr("Duplicate"),

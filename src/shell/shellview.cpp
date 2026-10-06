@@ -10,6 +10,7 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "shell/shellview.h"
+#include "scripting/scriptengine.h"
 
 #include "shell/mainwindow.h"
 #include "shell/spaces.h"
@@ -355,3 +356,27 @@ void ShellView::showPlayerVrState(bool available, bool active)
 {
     mWindow->showPlayerVrState(available, active);
 }
+
+// ---- the editor's surfaces (9bz) ---------------------------------------------
+StudioServices *ShellView::services() const { return mWindow->studioServices(); }
+IEditorViewport *ShellView::editorViewport() const { return mWindow->viewport(); }
+ScriptHost *ShellView::scriptHost() const
+{
+    return mWindow->scripting() ? &mWindow->scripting()->scriptHost() : nullptr;
+}
+void ShellView::selectNode(const iris::SceneNodePtr &node) { mWindow->sceneNodeSelected(node); }
+void ShellView::deleteSelection() { mWindow->deleteNode(); }
+void ShellView::duplicateSelection() { mWindow->duplicateNode(); }
+void ShellView::createMaterialFromSelection() { mWindow->createMaterial(); }
+void ShellView::exportNode(const iris::SceneNodePtr &node, ModelTypes type) { mWindow->exportNode(node, type); }
+void ShellView::refreshPropertiesFromDocument() { mWindow->refreshPropertiesFromDocument(); }
+void ShellView::spawnAvatarAsset(const QString &guid, const iris::Vec3 &position, bool hasPosition)
+{
+    mWindow->spawnAvatarAsset(guid, position, hasPosition);
+}
+void ShellView::assignAnimationAsset(const QString &guid, const iris::SceneNodePtr &node)
+{
+    mWindow->assignAnimationAsset(guid, node);
+}
+void ShellView::favoriteAsset(QListWidgetItem *item) { mWindow->favoriteItem(item); }
+void ShellView::refreshAssetThumbnail(QListWidgetItem *item) { mWindow->refreshThumbnail(item); }

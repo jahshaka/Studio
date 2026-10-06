@@ -10,6 +10,7 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "irisgl/core/math/qtinterop.h"
+#include "irisgl/core/colorjson.h"
 #include "irisgl/core/math/quat.h"
 #include "irisgl/core/math/vec.h"
 #include "irisgl/document/scenegraph/looks.h"
@@ -145,7 +146,7 @@ void SceneWriter::writeScene(QJsonObject& projectObj, iris::ScenePtr scene)
 	sceneObj["ambientMusicVolume"] = scene->ambientMusicVolume;
     sceneObj["gravity"] = scene->gravity;
 
-    sceneObj["fogColor"] = jsonColor(scene->fogColor);
+    sceneObj["fogColor"] = iris::colorToJson(scene->fogColor);
     // (`fogStart`/`fogEnd`, the retired LINEAR pair, and `fogAtmosphere`, the
     // retired aerial switch, are neither written nor read — CRUD law.
     // `fogDensity` below is the whole distance fog.)
@@ -788,13 +789,13 @@ void SceneWriter::writeParticleData(QJsonObject& sceneNodeObject, iris::Particle
     sceneNodeObject["extents"]          = jsonVector3(node->extents);
     sceneNodeObject["innerExtents"]     = jsonVector3(node->innerExtents);
     sceneNodeObject["wind"]             = jsonVector3(node->wind);
-    sceneNodeObject["emitColourStart"]  = jsonColor(node->emitColourStart);
-    sceneNodeObject["emitColourEnd"]    = jsonColor(node->emitColourEnd);
+    sceneNodeObject["emitColourStart"]  = iris::colorToJson(node->emitColourStart);
+    sceneNodeObject["emitColourEnd"]    = iris::colorToJson(node->emitColourEnd);
     // ADDENDUM A-4. Written unconditionally, read tolerant-absent: every
     // default is neutral, so an old file with none of these keys loads to
     // exactly the emitter it always was.
-    sceneNodeObject["colourFade1"]      = jsonColor(node->colourFade1);
-    sceneNodeObject["colourFade2"]      = jsonColor(node->colourFade2);
+    sceneNodeObject["colourFade1"]      = iris::colorToJson(node->colourFade1);
+    sceneNodeObject["colourFade2"]      = iris::colorToJson(node->colourFade2);
     sceneNodeObject["colourFadeSwitch"] = node->colourFadeSwitch;
     sceneNodeObject["colourRampGuid"]   = node->colourRampGuid;
     sceneNodeObject["scaleRate"]        = node->scaleRate;
@@ -925,17 +926,6 @@ void SceneWriter::writeSceneNodeMaterial(QJsonObject& matObj, iris::MaterialPtr 
 	matObj["values"] = valuesObj;
 }
 
-QJsonObject SceneWriter::jsonColor(QColor color)
-{
-    QJsonObject colObj;
-    colObj["r"] = color.red();
-    colObj["g"] = color.green();
-    colObj["b"] = color.blue();
-    colObj["a"] = color.alpha();
-
-    return colObj;
-}
-
 QJsonObject SceneWriter::jsonVector2(iris::Vec2 vec)
 {
     QJsonObject obj;
@@ -1028,7 +1018,7 @@ void SceneWriter::writeLightData(QJsonObject& sceneNodeObject,iris::LightNodePtr
     // photometric scale are runtime state the reader re-derives from the store.
     sceneNodeObject["iesProfile"] = lightNode->iesProfileGuid;
     sceneNodeObject["lightTexture"] = lightNode->lightTextureGuid;
-	sceneNodeObject["color"] = jsonColor(lightNode->color);
+	sceneNodeObject["color"] = iris::colorToJson(lightNode->color);
 
     // (`shadowAlpha`, `shadowColor` and `shadowBias` are no longer written —
     // the three fields are gone from the document, CRUD law: the renderer never

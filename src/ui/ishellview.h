@@ -36,6 +36,8 @@ For more information see the LICENSE file
 
 #include "services/scenetemplate.h"
 
+#include "irisgl/irisglfwd.h"
+
 class AssetMaterialPanel;
 class AssetView;
 class AssetWidget;
@@ -43,6 +45,12 @@ class ProjectManager;
 class QDockWidget;
 class QWidget;
 class SceneHierarchyWidget;
+class IEditorViewport;
+class QListWidgetItem;
+struct ScriptHost;
+struct StudioServices;
+enum class ModelTypes;
+namespace iris { class Vec3; }
 
 class IShellView
 {
@@ -166,6 +174,26 @@ public:
 
     // ---- feedback ------------------------------------------------------
     /// The one transient toast over the editor viewport.
+    // ---- THE EDITOR'S SURFACES, for the panels that act on them (9bz) -------
+    // The tray, the outliner, the presets, the Desktop page, the Preferences
+    // page and the viewport reach the window through these — never through
+    // shell/mainwindow.h (source.shell_boundaries covers ui/ and viewport/).
+    virtual StudioServices *services() const = 0;
+    virtual IEditorViewport *editorViewport() const = 0;
+    /// The verbs' host, for a panel that calls a verb (an ApiModule over it);
+    /// null in a session with no scripting.
+    virtual ScriptHost *scriptHost() const = 0;
+    virtual void selectNode(const iris::SceneNodePtr &node) = 0;
+    virtual void deleteSelection() = 0;
+    virtual void duplicateSelection() = 0;
+    virtual void createMaterialFromSelection() = 0;
+    virtual void exportNode(const iris::SceneNodePtr &node, ModelTypes type) = 0;
+    virtual void refreshPropertiesFromDocument() = 0;
+    virtual void spawnAvatarAsset(const QString &guid, const iris::Vec3 &position, bool hasPosition) = 0;
+    virtual void assignAnimationAsset(const QString &guid, const iris::SceneNodePtr &node) = 0;
+    virtual void favoriteAsset(QListWidgetItem *item) = 0;
+    virtual void refreshAssetThumbnail(QListWidgetItem *item) = 0;
+
     virtual void showViewportToast(const QString &title, const QString &text) = 0;
     /// The window-centre notice (a page that cannot start, VR that did not).
     virtual void showNotice(const QString &title, const QString &text) = 0;

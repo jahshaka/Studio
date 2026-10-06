@@ -61,6 +61,7 @@ public:
     // these five verbs.
     Q_INVOKABLE QVariantList folders(const QVariantMap &options = QVariantMap());
     Q_INVOKABLE QString createFolder(const QString &name, const QVariantMap &options = QVariantMap());
+    Q_INVOKABLE QString createSky(const QVariantMap &options = QVariantMap());
     Q_INVOKABLE bool renameFolder(const QString &guid, const QString &name);
     Q_INVOKABLE bool deleteFolder(const QString &guid, const QVariantMap &options = QVariantMap());
     Q_INVOKABLE int moveToFolder(const QVariant &guidOrGuids, const QVariant &folderGuid);

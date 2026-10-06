@@ -15,9 +15,10 @@
 // material samples the fixture's TEAL texel (tests/scripting/fixtures/tiny.png is 8x8 of
 // (40,160,160)), not grey, not white, not sky.
 //
-// (No sky arm: nothing in this build mints a ModelTypes::Sky row — the only producer was the
-// legacy .jaf importer — so a sky entry exists only in a library that imported one; the
-// tray's Export Sky calls this same verb with its guid.)
+// THE SKY ARM (SKY-VERB-1): assets.createSky mints the row (the tray's Create > Sky calls the
+// same verb), an equirectangular sky over the teal image — its texture is a Sky -> Texture
+// edge, so the file carries it, and after the empty-library import the sky comes back WITH
+// its texture and its definition still names it.
 
 function assert(cond, msg) {
     if (!cond) throw new Error("assert failed: " + msg);
@@ -45,6 +46,33 @@ if (KIND === "texture") {
     assert(mat && mat.length > 10, "a material bundle made from the image: " + mat);
     assert(assets.dependencies(mat).indexOf(tex) >= 0, "the material's member is the texture");
     entries = [mat];
+} else if (KIND === "sky") {
+    var sky = assets.createSky({ name: "Teal Sky", type: "equirectangular", texture: tex });
+    assert(sky && sky.length > 10, "assets.createSky minted a sky row: " + sky);
+    var skyMeta = assets.metadata(sky);
+    assert(skyMeta.type === "sky" && skyMeta.sky.type === "equirectangular" &&
+           skyMeta.sky.definition.equiSkyGuid === tex,
+           "it is an equirectangular sky over the image: " + J(skyMeta.sky));
+    assert(assets.dependencies(sky).indexOf(tex) >= 0, "its texture is a Sky -> Texture dependency");
+    // The tray's default (no options): the sky panel's fresh grey 72, and a
+    // `folder` files the row where the tray's tile shows it.
+    var plain = assets.createSky();
+    var plainDef = assets.metadata(plain).sky;
+    assert(plainDef.type === "color" && Math.abs(plainDef.definition.skyColor.r - 72 / 255) < 1e-4,
+           "a default sky is the panel's grey 72: " + J(plainDef.definition));
+    var skies = assets.createFolder("Skies");
+    var countIn = function () {
+        var n = -1;
+        assets.folders().forEach(function (f) { if (f.guid === skies) n = f.count; });
+        return n;
+    };
+    var before = countIn();
+    var filed = assets.createSky({ folder: skies });
+    assert(countIn() === before + 1, "createSky({folder}) files the row in that folder (" + before + " -> " + countIn() + ")");
+    var badFolder = null;
+    try { assets.createSky({ folder: "no-such-folder" }); } catch (e) { badFolder = "" + e; }
+    assert(badFolder !== null && badFolder.indexOf("folder") >= 0, "an unknown folder is refused: " + badFolder);
+    entries = [sky];
 } else if (KIND === "pack") {
     var packMat = materials.createFromImage(tex);
     var model = assets.import(MODEL);
@@ -87,9 +115,15 @@ everything.forEach(function (g) {
     assert(assets.metadata(g).type === types[g], "...as a " + types[g]);
 });
 
+if (KIND === "sky") {
+    var back = assets.metadata(entries[0]).sky;
+    assert(back.type === "equirectangular" && back.definition.equiSkyGuid === tex,
+           "the landed sky is still an equirectangular sky over the same image: " + J(back));
+}
+
 // ---- the pictures are the file's own bytes ------------------------------------------
 var wear = null;
-if (KIND === "texture") wear = materials.createFromImage(tex);
+if (KIND === "texture" || KIND === "sky") wear = materials.createFromImage(tex);
 else if (KIND === "material") wear = entries[0];
 else wear = entries[1];
 var cube = scene.addPrimitive("cube", { position: { x: 0, y: 1, z: 0 } });

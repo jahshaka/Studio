@@ -10,6 +10,7 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "ui/dialogs/preferences/worldsettingswidget.h"
+#include "ui/ishellview.h"
 #include "ui/dialogs/cleardatabasedialog.h"
 
 #include "services/apppaths.h"
@@ -55,13 +56,11 @@ For more information see the LICENSE file
 
 #include "data/constants.h"
 #include "viewport/ieditorviewport.h"
-#include "shell/mainwindow.h"
 #include "services/services.h"
 #include "services/projectservice.h"
 #include "scripting/modules/appapi.h"
 #include "scripting/scriptengine.h"
 #include "viewport/ieditorviewport.h"
-#include "shell/mainwindow.h"
 #include "ui/style/stylesheet.h"
 #include "ui/style/thememanager.h"
 #include "services/perfsampler.h"
@@ -479,9 +478,8 @@ void WorldSettingsWidget::configureViewport()
 		settings->set(settingkeys::perfSampleSeconds, seconds);
 		// The LIVE sampler is re-timed too — a preference that only takes
 		// effect next launch is a preference nobody trusts.
-		if (mainWindow && mainWindow->studioServices()
-		    && mainWindow->studioServices()->perfSampler)
-			mainWindow->studioServices()->perfSampler->start(seconds);
+		if (shell && shell->services() && shell->services()->perfSampler)
+			shell->services()->perfSampler->start(seconds);
 	});
 
 	// ---- the render monitor's capture length (RENDER_LOOP_MONITOR_SPEC §4.6)
@@ -1021,13 +1019,13 @@ void WorldSettingsWidget::configureDatabaseWidget()
 		// THE VERB, THROUGH THE SHELL-CALLER CONVENTION (ApiModule::quietly):
 		// a refusal comes back as a string for the box instead of waiting in
 		// the host's pending slot for a bridge nobody is going to run.
-		ScriptEngine *scripting = mainWindow ? mainWindow->scripting() : nullptr;
-		if (!scripting) {
+		ScriptHost *host = shell ? shell->scriptHost() : nullptr;
+		if (!host) {
 			QMessageBox::warning(this, "Reset your library",
 			                     "This session cannot reset the library.");
 			return;
 		}
-		AppApi api(scripting->scriptHost());
+		AppApi api(*host);
 		QVariantMap options = confirm.options();
 		options.insert(QStringLiteral("restart"), true);
 		const QVariantMap result = api.quietly([&] { return api.resetLibrary(options); });

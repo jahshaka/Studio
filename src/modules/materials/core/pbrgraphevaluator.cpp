@@ -9,6 +9,7 @@ and/or modify it under the terms of the MIT License
 For more information see the LICENSE file
 *************************************************************************/
 #include "pbrgraphevaluator.h"
+#include "irisgl/core/colorjson.h"
 #include <QFileInfo>
 
 #include <QJsonArray>
@@ -23,12 +24,6 @@ For more information see the LICENSE file
 
 namespace
 {
-
-QColor colorFromJson(const QJsonObject& obj)
-{
-	return QColor::fromRgbF(obj["r"].toDouble(), obj["g"].toDouble(),
-	                        obj["b"].toDouble(), obj["a"].toDouble(1.0));
-}
 
 } // namespace
 
@@ -60,7 +55,7 @@ iris::PbrMaterialPtr PbrGraphEvaluator::materialFromValues(const QJsonObject& va
 		if (colorKeys.contains(key))
 			material->setValue(key, values[key].toObject().isEmpty()
 			                            ? QVariant(QColor())
-			                            : QVariant(colorFromJson(values[key].toObject())));
+			                            : QVariant(iris::colorFromJson(values[key].toObject())));
 		else if (mapKeys.contains(key)) {
 			// A stored map is the texture's ASSET GUID (a baked map is a
 			// member Texture row of the bundle); the resolver turns it into the

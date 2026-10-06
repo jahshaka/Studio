@@ -48,7 +48,7 @@ public:
 
     QWidget *asWidget() override { return this; }
     EditorViewportEvents *events() override { return &mEvents; }
-    void setMainWindow(MainWindow *window) override { mMainWindow = window; }
+    void setShell(IShellView *shell) override { mShell = shell; }
     void setHierarchyDragSource(QWidget *source) override { mHierarchyDragSource = source; }
     void setServices(StudioServices *services) override;
     void setDatabase(Database *db) override { mDatabase = db; }
@@ -597,7 +597,7 @@ private:
     jahshaka::engine::Scene *mEngineScene = nullptr;
     std::unique_ptr<SceneMirror> mMirror;
     EditorViewportEvents mEvents;
-    MainWindow *mMainWindow = nullptr;
+    IShellView *mShell = nullptr;
     StudioServices *mServices = nullptr;      // undo + scene-edit for Alt+drag / snap-to-floor
     bool mAltDragMacroOpen = false;           // duplicate+move rides one undo macro
     /// IS THE GIZMO DRAG THIS VIEWPORT'S? (VR phase 4b stage 2.)

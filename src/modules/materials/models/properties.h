@@ -2,6 +2,7 @@
 #define PROPERTIES_H
 
 #include "irisgl/core/math/qtinterop.h"
+#include "irisgl/core/colorjson.h"
 #include "irisgl/core/math/vec.h"
 #include <QVariant>
 #include <QColor>
@@ -223,23 +224,16 @@ struct ColorProperty : public Property
     QJsonObject serialize() override
     {
         auto obj = Property::serialize();
-        QJsonObject colObj;
-        colObj["r"] = value.red();
-        colObj["g"] = value.green();
-        colObj["b"] = value.blue();
-        colObj["a"] = value.alpha();
-        obj["value"] = colObj;
+        obj["value"] = iris::colorToJson(value);
 
         return obj;
     }
 
     void deserialize(const QJsonObject& obj) override
     {
-        auto colorObj = obj["value"].toObject();
-        value.setRed(colorObj["r"].toInt());
-        value.setGreen(colorObj["g"].toInt());
-        value.setBlue(colorObj["b"].toInt());
-        value.setAlpha(colorObj["a"].toInt());
+        // THE READER-DEFAULTS LAW: an absent value reads as the constructor's
+        // default (an unset QColor), never as a colour nobody wrote.
+        value = iris::colorFromJson(obj["value"].toObject(), ColorProperty().value);
     }
 };
 

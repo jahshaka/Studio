@@ -698,6 +698,13 @@ jah_pool_arm(doc light_bindings ${CMAKE_CURRENT_BINARY_DIR}/e2e_light_bindings.j
 
 jah_pool_arm(doc metadata ${CMAKE_CURRENT_BINARY_DIR}/e2e_metadata.js 1 HEADLESS)
 
+# THE WORLD'S AMBIENT MUSIC PLAYS (audit D8): world.ambience writes the scene's
+# music + volume, AmbienceService gives the player a source and an audio
+# output, and the answer is its state — playing, through a save and reopen.
+# Qt Multimedia's ffmpeg backend plays with no display, so this is --headless.
+configure_file(scripts/e2e_ambience.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_ambience.js @ONLY)
+jah_pool_arm(doc ambience ${CMAKE_CURRENT_BINARY_DIR}/e2e_ambience.js 6 HEADLESS)
+
 # Video assets (ASSET_MEDIA_SPEC §1): importFile(mp4) → Video row + frame-grab
 # thumbnail + probed metadata block. Qt Multimedia's ffmpeg backend decodes
 # with no display (verified under QT_QPA_PLATFORM=offscreen), so this runs
@@ -875,11 +882,11 @@ jah_pool_arm(assets_import import_render ${CMAKE_CURRENT_BINARY_DIR}/e2e_import_
 configure_file(scripts/e2e_node_archive_roundtrip.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_node_archive_roundtrip.js @ONLY)
 jah_pool_arm(assets_import node_archive_roundtrip ${CMAKE_CURRENT_BINARY_DIR}/e2e_node_archive_roundtrip.js 12)
 
-# assets_import.bundle_export_{texture,material,pack} — JAF-EXPORTS-1: the Assets tray's exports
+# assets_import.bundle_export_{texture,material,pack,sky} — JAF-EXPORTS-1: the Assets tray's exports
 # are the share file (assets.exportBundle, one entry or a pack); each kind's file re-imports into
 # an emptied library with its members, and a cube wearing the landed material samples the
 # fixture's own texel. One template, configured per kind. Engine up.
-foreach(BUNDLE_KIND texture material pack)
+foreach(BUNDLE_KIND texture material pack sky)
     configure_file(scripts/e2e_bundle_export.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_bundle_export_${BUNDLE_KIND}.js @ONLY)
     jah_pool_arm(assets_import bundle_export_${BUNDLE_KIND} ${CMAKE_CURRENT_BINARY_DIR}/e2e_bundle_export_${BUNDLE_KIND}.js 2)
 endforeach()

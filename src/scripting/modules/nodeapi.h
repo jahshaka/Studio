@@ -97,6 +97,7 @@ public:
     Q_INVOKABLE QVariantMap mobility(const QString &id);
     Q_INVOKABLE bool physics(const QString &id, const QVariantMap &change = QVariantMap());
     Q_INVOKABLE QVariantMap physicsInfo(const QString &id);
+    Q_INVOKABLE bool addConstraint(const QString &id, const QString &toId, const QString &type);
 
     // ---- sockets (CAMERAS_SPEC §5/§6, D9) --------------------------------
     Q_INVOKABLE QVariantMap addSocket(const QString &id, const QVariantMap &socket);

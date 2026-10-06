@@ -39,7 +39,7 @@
 #include "data/constants.h"
 #include "data/primitives.h"
 #include "bridge/enginehost.h"
-#include "shell/mainwindow.h"
+#include "ui/ishellview.h"
 #include "data/project.h"
 #include "data/database/database.h"
 #include "io/assetmanager.h"
@@ -72,6 +72,7 @@
 #include "irisgl/mirror/scenemirror.h"
 #include "viewport/editordata.h"
 #include "irisgl/document/physics/environment.h"
+#include "irisgl/document/scenegraph/lightnode.h"
 #include "irisgl/document/scenegraph/scene.h"
 #include "irisgl/document/scenegraph/scenenode.h"
 #include "irisgl/document/scenegraph/cameranode.h"
@@ -1018,8 +1019,8 @@ iris::SceneNodePtr EngineSceneViewport::dropTargetAt(const QPointF &point, bool 
 bool EngineSceneViewport::refuseDropOnLocked(const iris::SceneNodePtr &node, const QString &what)
 {
     if (!node || node->isPickable()) return false;
-    if (mMainWindow)
-        mMainWindow->showViewportToast(
+    if (mShell)
+        mShell->showViewportToast(
             tr("Locked"),
             tr("%1 is locked — unlock it in the hierarchy to apply %2.")
                 .arg(node->getName(), what));
@@ -1249,14 +1250,14 @@ void EngineSceneViewport::dropEvent(QDropEvent *event)
         // AVATAR_ASSET_SPEC §5.5: dropping an avatar row spawns a LINKED
         // instance of the project's version — the same `avatar.spawn` verb the
         // drawer's "Add to Scene" and a script call, at the tracked drop point.
-        if (mMainWindow) mMainWindow->spawnAvatarAsset(role.value(3).toString(), mDragScenePos, true);
+        if (mShell) mShell->spawnAvatarAsset(role.value(3).toString(), mDragScenePos, true);
     } else if (type == static_cast<int>(ModelTypes::Animation)) {
         // A CLIP IS WORN, NOT PLACED (S9): dropping an animation row on a
         // character assigns it through avatar.loadClip; on empty space it says
         // so in a toast instead of silently doing nothing (which is exactly
         // what this branch's absence used to do).
-        if (mMainWindow)
-            mMainWindow->assignAnimationAsset(role.value(3).toString(),
+        if (mShell)
+            mShell->assignAnimationAsset(role.value(3).toString(),
                                               pickAt(event->position(), true));
     } else if (!materialDragSource(event->mimeData()).isEmpty()) {
         const QString source = materialDragSource(event->mimeData());
@@ -1293,7 +1294,7 @@ void EngineSceneViewport::dropEvent(QDropEvent *event)
         // from the PROJECT's tray is assigned as it is.
         if (target && target->getSceneNodeType() == iris::SceneNodeType::Mesh
             && mServices && mServices->sceneEdit) {
-            if (mMainWindow) mMainWindow->sceneNodeSelected(target);
+            if (mShell) mShell->selectNode(target);
             const bool fromProject =
                 AssetDrag::originOf(event->mimeData()) == AssetDrag::Origin::Project;
             QString error;
@@ -1346,7 +1347,7 @@ void EngineSceneViewport::dropEvent(QDropEvent *event)
                 } else {
                     pbr->setValue(QStringLiteral("baseColorMap"), newMap);
                 }
-                if (mMainWindow) mMainWindow->sceneNodeSelected(node);
+                if (mShell) mShell->selectNode(node);
             }
             // (The CustomMaterial branch that dropped the texture into the
             // shader's first texture slot went with the class — every mesh
@@ -1904,8 +1905,8 @@ bool EngineSceneViewport::refuseDragOnDrivenNode()
     if (mSelectedNode && !moved.contains(mSelectedNode)) moved.prepend(mSelectedNode);
     for (const iris::SceneNodePtr &n : moved) {
         if (const char *driver = drivenBy(n)) {
-            if (mMainWindow)
-                mMainWindow->showViewportToast(
+            if (mShell)
+                mShell->showViewportToast(
                     tr("Driven by the run"),
                     tr("%1 is moved by %2 while the scene plays — stop the scene to move it by "
                        "hand.").arg(n->getName(), tr(driver)));

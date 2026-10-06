@@ -1967,7 +1967,7 @@ QVector<VerbInfo> GraphApi::verbs() const
           "behaves exactly as graph.removeNode's does. False when there is no such pipe.",
           Needs::Document },
         { "setValue", "graph.setValue(nodeId, value) -> bool",
-          "Sets a node's value through the same path the editor uses (numbers, {r,g,b,a} colors, {x,y,z} vectors).",
+          "Sets a node's value through the same path the editor uses (numbers, {r,g,b,a} colors with 0..1 channels, {x,y,z} vectors).",
           Needs::Document },
         { "getValue", "graph.getValue(nodeId) -> value",
           "Reads a node's value back.",

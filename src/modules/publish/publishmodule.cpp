@@ -31,6 +31,8 @@ For more information see the LICENSE file
 #include "viewport/ieditorviewport.h"
 #include "export/previewlauncher.h"
 #include "services/sceneeditservice.h"
+#include "irisgl/document/scenegraph/scene.h"
+#include "services/ambienceservice.h"
 #include "services/services.h"
 #include "ui/style/stylesheet.h"
 #include "ui/style/themeroles.h"
@@ -430,7 +432,10 @@ void PublishPage::onProcess()
     // (CLOUDS-2D-1) — the same argument the verb passes.
     const auto r = ExportService::exportWeb(scene, host.project ? host.project->getProjectName()
                                                                 : QString(), dir,
-                                            host.viewport ? host.viewport->engineScene() : nullptr);
+                                            host.viewport ? host.viewport->engineScene() : nullptr,
+                                            (scene && host.services && host.services->ambience)
+                                                ? host.services->ambience->fileFor(scene->ambientMusicGuid)
+                                                : QString());
     if (!r.ok) {
         setStatus(QStringLiteral("Export failed: %1").arg(r.error), true);
         refreshState();

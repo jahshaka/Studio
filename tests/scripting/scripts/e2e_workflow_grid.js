@@ -85,7 +85,7 @@ for (var z = 0; z < N; z++) {
             roughness: Math.max(0.02, x / (N - 1)),
             specularColor: "#ffffff",
             useFresnelColor: true,
-            fresnelColor: { r: v, g: v, b: v },
+            fresnelColor: { r: v / 255, g: v / 255, b: v / 255 },
             separateFresnel: false
         }), "material.set on sphere " + x + "," + z);
         ids.push(id);

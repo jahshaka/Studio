@@ -276,6 +276,25 @@ set_tests_properties(document.sky_write PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "document" TIMEOUT 60)
 jah_no_display(document.sky_write)
 
+# document.color_json — ONE COLOUR ENCODING (audit D10): the codec in
+# irisgl/core/colorjson.h (0..1 floats, the engine's), its round trip, clamp
+# and absent-object rules, and the document's own writer using it. Every writer
+# and reader of {r, g, b, a} goes through it; the 0..255 integer form is gone.
+# Document only: NULL render system, no display.
+add_executable(test_color_json test_color_json.cpp)
+set_target_properties(test_color_json PROPERTIES AUTOMOC OFF)
+target_include_directories(test_color_json PRIVATE ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/irisgl
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
+target_link_libraries(test_color_json PRIVATE IrisGL Qt6::Gui)
+jah_document_graph(test_color_json)
+add_test(NAME document.color_json COMMAND test_color_json
+         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(document.color_json PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "document" TIMEOUT 60)
+jah_no_display(document.color_json)
+
 # document.cascade_set_reader — a scene's pinned cascade table past the renderer's slot table
 # is read clamped and the dropped rows counted (the open raises gi.cascades.clamped).
 add_executable(test_cascade_set_reader test_cascade_set_reader.cpp)

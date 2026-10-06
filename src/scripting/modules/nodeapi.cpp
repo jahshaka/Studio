@@ -24,6 +24,7 @@ For more information see the LICENSE file
 #include "services/extentmeasure.h"
 #include "services/planarreflectors.h"
 #include "commands/nodeeditcommand.h"
+#include "services/physicsconstraints.h"
 #include "commands/reparentscenenodecommand.h"
 #include "commands/scenefoldercommand.h"
 #include "commands/setnodepropertycommand.h"
@@ -390,9 +391,20 @@ QVector<VerbInfo> NodeApi::verbs() const
           "The node's physics body settings, enums as names. `enabled` is the isPhysicsBody flag "
           "(false = the node is not in the simulation and nothing else here is written to the "
           "scene file). `isStatic` is derived, not set directly: it is true for type \"static\" or "
-          "mass 0. `constraints` is the COUNT of inter-node constraints on this node — those have "
-          "their own UI path and no verb yet (AI_SURFACE_PROGRAM_SPEC owner row D4a), and "
-          "node.physics never touches them.",
+          "mass 0. `constraints` is the node's inter-node constraints, `[{to, type}]` (`to` the other "
+          "body's id, `type` \"ball\" | \"dof6\"); node.addConstraint adds one, and node.physics "
+          "never touches them.",
+          Needs::Document },
+        { "addConstraint", "node.addConstraint(id, toId, type) -> bool",
+          "Joins two physics bodies with a constraint — the outliner's Physics > Add Constraint "
+          "menu, as a verb (the menu calls this). `type` is \"ball\" (Bullet's point-to-point "
+          "joint) or \"dof6\" (its generic six-degree-of-freedom joint at Bullet's default "
+          "limits: translation locked, rotation free); both pin the FIRST body's origin to the "
+          "point it occupies relative to the second body when the simulation starts. Both nodes must already be physics bodies "
+          "(node.physics), anywhere in the tree; a node cannot be joined to itself, and the same "
+          "pair with the same type twice is refused rather than stacked. The constraint is "
+          "stored on the FIRST node and built when a simulation starts (editor.simulate / "
+          "editor.play). Saved with the scene. Undoable.",
           Needs::Document },
         { "addSocket", "node.addSocket(id, {name, bone, position?, rotation?, scale?}) -> {name, bone, position, rotation, scale, builtIn, resolves}",
           "Adds a SOCKET — a named attach point on one BONE of a rigged mesh "
@@ -1597,7 +1609,7 @@ QVariantMap physicsToJs(const iris::SceneNodePtr &node)
         { "damping",         p.objectDamping },
         { "collisionMargin", p.objectCollisionMargin },
         { "isStatic",        p.isStatic },
-        { "constraints",     p.constraints.size() },
+        { "constraints",     physicsconstraints::describe(node) },
     };
 }
 
@@ -1731,6 +1743,22 @@ bool NodeApi::physics(const QString &id, const QVariantMap &change)
     recordNodeEdit(QStringLiteral("physics"),
                    [node, next, nextIsBody, apply]() { apply(node, next, nextIsBody); },
                    [node, was, wasBody, apply]() { apply(node, was, wasBody); });
+    return true;
+}
+
+// THE CONSTRAINT VERB (audit D5): a thin skin over physicsconstraints::add,
+// the rule the outliner's menu calls too.
+bool NodeApi::addConstraint(const QString &id, const QString &toId, const QString &type)
+{
+    const QString verb = QStringLiteral("node.addConstraint");
+    auto node = nodeOrFail(id, verb);
+    if (!node) return false;
+    auto other = nodeOrFail(toId, verb);
+    if (!other) return false;
+    QString error;
+    if (!physicsconstraints::add(node, other, type, host.services ? host.services->undo : nullptr,
+                                 &error))
+        return fail(QStringLiteral("%1: %2").arg(verb, error));
     return true;
 }
 

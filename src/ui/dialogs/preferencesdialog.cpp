@@ -81,9 +81,9 @@ void PreferencesDialog::saveSettings()
 	close();
 }
 
-void PreferencesDialog::wireEditor(IEditorViewport *viewport, MainWindow *mainWindow)
+void PreferencesDialog::wireEditor(IEditorViewport *viewport, IShellView *shell)
 {
-    if (worldSettings) worldSettings->wireEditor(viewport, mainWindow);
+    if (worldSettings) worldSettings->wireEditor(viewport, shell);
 }
 
 void PreferencesDialog::wireMcp(McpServer *server, std::function<bool(quint16, QString *)> start)

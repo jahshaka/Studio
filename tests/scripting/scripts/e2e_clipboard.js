@@ -148,27 +148,15 @@ assert(camera.settings(pastedCam).focusTarget === pastedSubject,
        "the PASTED camera tracks the PASTED cube, not the original: " +
        camera.settings(pastedCam).focusTarget + " vs original " + subject);
 
-// (b) a physics constraint between two bodies. Constraints have no verb yet
-// (node.physicsInfo reports only their count), so the pair is authored the one
-// way a text clipboard makes possible: by editing the payload. That is a fair
-// test of the remap — the reader, the fresh-guid pass and the writer are all
-// the real ones.
+// (b) a physics constraint between two bodies, authored by its verb
+// (node.addConstraint) and carried through copy -> paste.
 var bodyA = scene.addPrimitive("cube");
 var bodyB = scene.addPrimitive("sphere");
 assert(node.physics(bodyA, { type: "rigidbody", shape: "cube" }), "body A is a rigid body");
 assert(node.physics(bodyB, { type: "rigidbody", shape: "sphere" }), "body B is a rigid body");
+assert(node.addConstraint(bodyA, bodyB, "ball"), "body A is joined to body B");
 editor.select([bodyA, bodyB]);
 clipboard.copy();
-var rigged = JSON.parse(clipboard.text());
-var itemA = null;
-for (var n = 0; n < rigged.items.length; ++n)
-    if (rigged.items[n].node.guid === bodyA) itemA = rigged.items[n];
-assert(!!itemA, "the payload carries body A's node object");
-assert(!!itemA.node.physicsProperties, "with its physics block: " + J(Object.keys(itemA.node)));
-itemA.node.physicsProperties.constraints = [
-    { constraintFrom: bodyA, constraintTo: bodyB, constraintType: 1 }
-];
-assert(clipboard.setText(JSON.stringify(rigged)).valid, "the rewritten payload is accepted");
 
 var riggedPaste = clipboard.paste();
 assert(riggedPaste.pasted.length === 2, "both bodies pasted");

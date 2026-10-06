@@ -10,6 +10,7 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "io/cascadesetformat.h"
+#include "irisgl/core/colorjson.h"
 #include "irisgl/core/math/quat.h"
 #include "irisgl/core/math/vec.h"
 #include "irisgl/document/scenegraph/looks.h"
@@ -338,14 +339,11 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
 		if (QFileInfo(weather).isFile())
 			scene->cloudWeatherMap = iris::Texture2D::load(weather, false);
 	}
+	// The music is DATA here; the editor's AmbienceService starts it once the
+	// opened scene is the live one (audit D8) — a reader plays nothing.
 	scene->ambientMusicGuid = sceneObj.value("ambientMusicGuid").toString();
-	auto volume = sceneObj.value("ambientMusicVolume").toDouble(scene->ambientMusicVolume);
-	scene->setAmbientMusicVolume(volume);
-	const QString ambientMusicPath = resolveAssetPath(scene->ambientMusicGuid);
-	if (!ambientMusicPath.isEmpty()) {
-		scene->setAmbientMusic(ambientMusicPath);
-		scene->startPlayingAmbientMusic();
-	}
+	scene->ambientMusicVolume = qBound(0.0f,
+	    float(sceneObj.value("ambientMusicVolume").toDouble(scene->ambientMusicVolume)), 100.0f);
 
 	// THE READER-DEFAULTS LAW, no-argument form (READER-DEFAULTS-2): a bare
 	// toInt() is an implicit 0 — it agreed with SkyType::SingleColor only by
@@ -360,7 +358,7 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
 
 	switch (scene->skyType) {
         case iris::SkyType::SINGLE_COLOR: {
-			scene->skyColor = readColor(scene->skyData.value("SingleColor").value("skyColor").toObject());
+			scene->skyColor = iris::colorFromJson(scene->skyData.value("SingleColor").value("skyColor").toObject());
 			break;
 		}
 
@@ -424,9 +422,9 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
         case iris::SkyType::GRADIENT: {
 			auto gradientDefinition = scene->skyData.value("Gradient");
 
-			scene->gradientTop = SceneReader::readColor(gradientDefinition.value("gradientTop").toObject());
-			scene->gradientMid = SceneReader::readColor(gradientDefinition.value("gradientMid").toObject());
-			scene->gradientBot = SceneReader::readColor(gradientDefinition.value("gradientBot").toObject());
+			scene->gradientTop = iris::colorFromJson(gradientDefinition.value("gradientTop").toObject());
+			scene->gradientMid = iris::colorFromJson(gradientDefinition.value("gradientMid").toObject());
+			scene->gradientBot = iris::colorFromJson(gradientDefinition.value("gradientBot").toObject());
 			scene->gradientOffset =
 			    gradientDefinition.value("gradientOffset").toDouble(scene->gradientOffset);
 			break;
@@ -436,11 +434,11 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
     }
 
 
-    // readColor returns an INVALID QColor for an absent object, and an invalid
+    // colorFromJson returns an INVALID QColor for an absent object, and an invalid
     // colour is not the constructor's (250,250,250) — so an absent key keeps
     // what the Scene was born with instead of blanking it.
     {
-        const QColor fogColor = this->readColor(sceneObj.value("fogColor").toObject());
+        const QColor fogColor = iris::colorFromJson(sceneObj.value("fogColor").toObject());
         if (fogColor.isValid()) scene->fogColor = fogColor;
     }
     scene->fogEnabled = sceneObj.value("fogEnabled").toBool(scene->fogEnabled);
@@ -1367,7 +1365,7 @@ iris::LightNodePtr SceneReader::createLight(QJsonObject& nodeObj)
         LightBindings::normalisationFor(lightNode->iesProfileGuid, handle);
     lightNode->lightTextureGuid = nodeObj["lightTexture"].toString();
     lightNode->lightTexturePath = resolveAssetPath(lightNode->lightTextureGuid);
-    lightNode->color = readColor(nodeObj["color"].toObject());
+    lightNode->color = iris::colorFromJson(nodeObj["color"].toObject());
 	lightNode->setVisible(nodeObj["visible"].toBool(lightNode->isVisible()));
 
 	// (`shadowAlpha`, `shadowColor` and `shadowBias` were READ here into three
@@ -1625,15 +1623,15 @@ iris::ParticleSystemNodePtr SceneReader::createParticleSystem(QJsonObject& nodeO
     if (nodeObj.contains("wind"))
         particleNode->wind = readVector3(nodeObj["wind"].toObject());
     if (nodeObj.contains("emitColourStart"))
-        particleNode->emitColourStart = readColor(nodeObj["emitColourStart"].toObject());
+        particleNode->emitColourStart = iris::colorFromJson(nodeObj["emitColourStart"].toObject());
     if (nodeObj.contains("emitColourEnd"))
-        particleNode->emitColourEnd = readColor(nodeObj["emitColourEnd"].toObject());
+        particleNode->emitColourEnd = iris::colorFromJson(nodeObj["emitColourEnd"].toObject());
     // ADDENDUM A-4, tolerant-absent: an old scene has none of these keys and
     // every default is the neutral value, so it loads unchanged.
     if (nodeObj.contains("colourFade1"))
-        particleNode->colourFade1 = readColor(nodeObj["colourFade1"].toObject());
+        particleNode->colourFade1 = iris::colorFromJson(nodeObj["colourFade1"].toObject());
     if (nodeObj.contains("colourFade2"))
-        particleNode->colourFade2 = readColor(nodeObj["colourFade2"].toObject());
+        particleNode->colourFade2 = iris::colorFromJson(nodeObj["colourFade2"].toObject());
     particleNode->colourFadeSwitch  =
         (float) nodeObj["colourFadeSwitch"].toDouble(particleNode->colourFadeSwitch);
     particleNode->colourRampGuid    = nodeObj["colourRampGuid"].toString();

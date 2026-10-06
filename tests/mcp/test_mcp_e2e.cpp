@@ -886,6 +886,25 @@ int main(int argc, char **argv)
         CHECK(reverted.value("type").toString() == "rigidbody"
                   && reverted.value("shape").toString() == "sphere",
               "...and the keys the second run never touched are still what the first wrote");
+
+        // THE CONSTRAINT VERB (audit D5) is undoable the same way: one run
+        // joins the body to a second one, undo_redo takes the joint off.
+        const QJsonObject joined = toolJson(callTool(net, url, token, ++id, "run_script",
+            QJsonObject{ { "script", QStringLiteral(
+                               "var post = scene.addPrimitive('cube', {position:{x:3,y:1,z:0}});"
+                               "node.physics(post, {type:'static', shape:'cube'});"
+                               "node.addConstraint('%1', post, 'dof6');"
+                               "node.physicsInfo('%1').constraints.length").arg(cubeId) },
+                         { "label", "join it to a post" } }));
+        CHECK(joined.value("ok").toBool() && joined.value("result").toInt() == 1,
+              "D5: a run joins the body to a post (one constraint)");
+        const QJsonObject unjoin = toolJson(callTool(net, url, token, ++id, "undo_redo",
+                                                     QJsonObject{ { "action", "undo" } }));
+        CHECK(unjoin.value("applied").toBool(), "undo_redo applies");
+        const QJsonObject afterUnjoin = toolJson(callTool(net, url, token, ++id, "run_script",
+            QJsonObject{ { "script", QStringLiteral("node.physicsInfo('%1').constraints.length").arg(cubeId) } }));
+        CHECK(afterUnjoin.value("ok").toBool() && afterUnjoin.value("result").toInt() == 0,
+              "D5: undo_redo took the scripted constraint off again (0 constraints)");
     }
 
     // ---- smoke L10 item 5: the WORLD verbs are UNDOABLE -------------------

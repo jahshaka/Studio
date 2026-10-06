@@ -28,7 +28,7 @@
 #include "irisgl/irisglfwd.h"
 
 class QWidget;
-class MainWindow;
+class IShellView;
 struct StudioServices;
 class Database;
 class Project;
@@ -105,7 +105,7 @@ public:
     virtual QWidget *asWidget() = 0;
     virtual EditorViewportEvents *events() = 0;
 
-    virtual void setMainWindow(MainWindow *window) = 0;
+    virtual void setShell(IShellView *shell) = 0;
     /// The widget whose drags mean "reparent inside the hierarchy panel" —
     /// the viewport ignores those. Optional; headless viewports don't care.
     virtual void setHierarchyDragSource(QWidget *) {}

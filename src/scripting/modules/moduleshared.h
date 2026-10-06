@@ -14,7 +14,7 @@ For more information see the LICENSE file
 
 // Conversions shared by the Studio API modules: JSON-native values in and out
 // (SCRIPTING_SPEC — ids are GUID strings, vectors are {x,y,z}, colors are
-// "#rrggbb" strings or {r,g,b} maps with 0-255 channels).
+// "#rrggbb" strings or {r,g,b} maps with 0..1 channels — D10's one encoding).
 
 #include "irisgl/core/math/quat.h"
 #include "irisgl/core/math/qtinterop.h"
@@ -23,6 +23,7 @@ For more information see the LICENSE file
 #include <QVector3D>
 #include <QJSValue>
 #include <QJsonArray>
+#include <QJsonDocument>
 #include <QJsonObject>
 #include <QVariant>
 #include <QVariantMap>
@@ -166,7 +167,7 @@ inline QString colorToJs(const QColor &c)
     return c.name(c.alpha() < 255 ? QColor::HexArgb : QColor::HexRgb);
 }
 
-/// Accepts "#rrggbb"/named strings and {r,g,b[,a]} maps (0-255 channels).
+/// Accepts "#rrggbb"/named strings and {r,g,b[,a]} maps (0..1 channels, D10).
 ///
 /// `ok` (AI_SURFACE_AUDIT F8) reports whether the value was UNDERSTOOD. It used
 /// to be impossible to tell: an unparseable colour string silently returned the
@@ -180,20 +181,32 @@ inline QColor colorFromJs(const QVariant &raw, const QColor &fallback = QColor()
     if (ok) *ok = true;
     const QVariant value = normalizeJs(raw);
     if (value.typeId() == QMetaType::QVariantMap) {
+        // THE ONE COLOUR ENCODING (D10): a map's channels are 0..1 floats —
+        // what every answer hands out (world.get().sky.data, assets.metadata's
+        // sky definition, the scene file), so a value read can be written back
+        // as it is. A channel that is not a number, or lies outside 0..1 (the
+        // retired 0-255 form, {r: 255}), is REFUSED, never clamped or rescaled:
+        // there is no reader of the integer form. An absent channel keeps the
+        // fallback's (alpha: opaque).
         const auto m = value.toMap();
-        // A channel that is present but not a number is the map-shaped version
-        // of the same lie ({r: "ff"} used to read as 0).
-        for (const char *channel : { "r", "g", "b", "a" }) {
-            const QString key = QString::fromLatin1(channel);
+        double channel[4] = { fallback.isValid() ? fallback.redF() : 0.0,
+                              fallback.isValid() ? fallback.greenF() : 0.0,
+                              fallback.isValid() ? fallback.blueF() : 0.0,
+                              fallback.isValid() && fallback.alpha() ? fallback.alphaF() : 1.0 };
+        const char *const names[4] = { "r", "g", "b", "a" };
+        for (int i = 0; i < 4; ++i) {
+            const QString key = QString::fromLatin1(names[i]);
             if (!m.contains(key)) continue;
             bool numeric = false;
-            m.value(key).toDouble(&numeric);
-            if (!numeric && ok) *ok = false;
+            const double v = m.value(key).toDouble(&numeric);
+            if (!numeric || v < 0.0 || v > 1.0) {
+                if (ok) *ok = false;
+                return fallback;
+            }
+            channel[i] = v;
         }
-        return QColor(m.value("r", fallback.red()).toInt(),
-                      m.value("g", fallback.green()).toInt(),
-                      m.value("b", fallback.blue()).toInt(),
-                      m.value("a", fallback.alpha() ? fallback.alpha() : 255).toInt());
+        return QColor::fromRgbF(float(channel[0]), float(channel[1]), float(channel[2]),
+                                float(channel[3]));
     }
     const QColor named(value.toString());
     if (named.isValid()) return named;
@@ -206,8 +219,12 @@ inline QColor colorFromJs(const QVariant &raw, const QColor &fallback = QColor()
 inline QString colorHelp(const QVariant &raw)
 {
     return QStringLiteral("'%1' is not a colour — use \"#rrggbb\"/\"#aarrggbb\", "
-                          "an SVG colour name (\"red\"), or {r,g,b[,a]} with 0-255 channels")
-        .arg(normalizeJs(raw).toString());
+                          "an SVG colour name (\"red\"), or {r,g,b[,a]} with 0..1 channels "
+                          "(the one colour encoding — what world.get() and assets.metadata answer)")
+        .arg(normalizeJs(raw).typeId() == QMetaType::QVariantMap
+                 ? QString::fromUtf8(QJsonDocument(QJsonObject::fromVariantMap(normalizeJs(raw).toMap()))
+                                         .toJson(QJsonDocument::Compact))
+                 : normalizeJs(raw).toString());
 }
 
 /// The shared "an unknown key is a typo the caller must SEE" check

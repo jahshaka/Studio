@@ -407,7 +407,7 @@ void EditorPage::build(const Deps &deps)
     sceneView->asWidget()->setParent(viewPort);
     sceneView->asWidget()->setFocusPolicy(Qt::ClickFocus);
     sceneView->asWidget()->setFocus();
-    sceneView->setMainWindow(deps.shell);
+    sceneView->setShell(deps.shell ? deps.shell->view() : nullptr);
     sceneView->setDatabase(deps.db);
 
 	// The player page: PlayerWidget gets an EnginePlayerView (a second engine

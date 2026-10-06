@@ -74,13 +74,6 @@ protected:
 	iris::Vec4 readVector4(const QJsonObject& vecObj);
 
 public:
-	/**
-	 * Reads r,g,b and a from color json object
-	 * returns default QColor() if colorObj is null
-	 * @param colorObj
-	 * @return
-	 */
-	static QColor readColor(const QJsonObject& colorObj);
 };
 
 #endif // SCENEIOBASE_H

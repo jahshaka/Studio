@@ -68,21 +68,6 @@ QString AssetIOBase::getAbsolutePath(QString filename)
     return absPath;
 }
 
-QColor AssetIOBase::readColor(const QJsonObject& colorObj)
-{
-    if (colorObj.isEmpty()) {
-        return QColor();
-    }
-
-    QColor col;
-    col.setRed(colorObj["r"].toInt(0));
-    col.setGreen(colorObj["g"].toInt(0));
-    col.setBlue(colorObj["b"].toInt(0));
-    col.setAlpha(colorObj["a"].toInt(255));
-
-    return col;
-}
-
 iris::Vec2 AssetIOBase::readVector2(const QJsonObject& vecObj)
 {
     if(vecObj.isEmpty())

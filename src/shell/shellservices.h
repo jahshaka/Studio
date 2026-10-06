@@ -28,6 +28,7 @@ For more information see the LICENSE file
 
 #include "irisgl/irisglfwd.h"
 
+class AmbienceService;
 class AssetService;
 class ClipboardService;
 class Database;
@@ -81,6 +82,7 @@ public:
     ClipboardService *clipboard() const { return mClipboard; }
     ThumbnailService *thumbnails() const { return mThumbnails; }
     AssetService *assets() const { return mAssets; }
+    AmbienceService *ambience() const { return mAmbience; }
 
 private:
     StudioServices *mAggregate = nullptr;
@@ -95,6 +97,7 @@ private:
     ClipboardService *mClipboard = nullptr;
     ThumbnailService *mThumbnails = nullptr;
     AssetService *mAssets = nullptr;
+    AmbienceService *mAmbience = nullptr;
     PerfSampler *mPerf = nullptr;
 };
 

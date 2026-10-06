@@ -30,6 +30,9 @@
 // was raised on leaves a hidden model's children drawn and voxelised with no
 // backstop anywhere in the system.
 #include <QColor>
+#include <QDir>
+#include <QFile>
+#include <QImage>
 
 #include "../support/testmesh.h"
 #include <QGuiApplication>
@@ -511,6 +514,91 @@ int main(int argc, char **argv)
     differential(r, "emitter.applyPreset",       [&] {
         r.emitter->applyPreset(iris::ParticlePreset::Smoke);
     });
+
+    // ---- D2: THE A-4 AFFECTORS REACH THE LIVE EMITTER ---------------------
+    // The differential above proves dirty == full; it cannot see a PUSH KEY
+    // both walks share. These six inputs were read by affectorsFor and missing
+    // from syncParticles' signature, so a change marked the node, the visit ran
+    // — and pushed nothing: the engine kept the old affectors. Each must now
+    // make the visit push the emitter's definition again.
+    {
+        const QString rampPath = QDir::temp().filePath(QStringLiteral("dirty_mirror_ramp.png"));
+        QImage ramp(16, 1, QImage::Format_RGBA8888);
+        for (int x = 0; x < 16; ++x) ramp.setPixelColor(x, 0, QColor(255, 16 * x, 0));
+        CHECK(ramp.save(rampPath), "D2: a 16x1 ramp image on disk");
+        struct Case { const char *what; std::function<void()> mutate; };
+        const Case cases[] = {
+            { "colourFade1", [&] { r.emitter->setPropertyValue(QStringLiteral("colourFade1"), QColor(200, 128, 128, 100)); } },
+            { "colourFade2", [&] { r.emitter->setPropertyValue(QStringLiteral("colourFade2"), QColor(128, 60, 128, 90)); } },
+            { "colourFadeSwitch", [&] { r.emitter->setPropertyValue(QStringLiteral("colourFadeSwitch"), 0.75f); } },
+            { "scaleRate", [&] { r.emitter->setPropertyValue(QStringLiteral("scaleRate"), 0.5f); } },
+            { "scaleRateMultiply", [&] { r.emitter->setPropertyValue(QStringLiteral("scaleRateMultiply"), true); } },
+            { "colourRamp (setColourRamp)", [&] { r.emitter->setColourRamp(QStringLiteral("ramp-guid"), rampPath); } },
+        };
+        for (const Case &c : cases) {
+            r.mirror->sync();
+            const quint64 before = r.mirror->visitPushCount();
+            c.mutate();
+            r.mirror->sync();
+            const quint64 pushes = r.mirror->visitPushCount() - before;
+            std::printf("info: D2 %-28s %llu push(es)\n", c.what, (unsigned long long)pushes);
+            CHECK(pushes > 0, qPrintable(QStringLiteral("D2: a live emitter's %1 change reaches the engine "
+                                                        "(the definition is pushed again)")
+                                             .arg(QLatin1String(c.what))));
+            differential(r, qPrintable(QStringLiteral("D2 emitter.%1").arg(QLatin1String(c.what))), [] {});
+        }
+        CHECK(r.engine->lastError().find("colour ramp") == std::string::npos &&
+                  r.engine->lastError().find("Image format") == std::string::npos,
+              "D2: the ramp image loaded into the affector (no ramp error from the engine)");
+        // TWO RAMPS IN ONE SHARD (the store shards objects by hash): the second
+        // file appears in a directory the engine already registered for the
+        // first, while the first is in use. Ogre indexes a location once, at
+        // add — the second ramp must still resolve, not be dropped as missing.
+        {
+            const QString shard = QDir::temp().filePath(QStringLiteral("dirty_mirror_shard"));
+            QDir(shard).removeRecursively();
+            QDir().mkpath(shard);
+            const QString first = QDir(shard).filePath(QStringLiteral("rampA.png"));
+            const QString second = QDir(shard).filePath(QStringLiteral("rampB.png"));
+            CHECK(ramp.save(first), "D2: ramp A written into the shard");
+            r.mirror->sync();
+            r.emitter->setColourRamp(QStringLiteral("ramp-a"), first);
+            r.mirror->sync();
+            CHECK(r.engine->lastError().find("colour ramp") == std::string::npos,
+                  "D2: ramp A resolves (its shard is now a registered location)");
+            QImage other = ramp.mirrored(true, false);
+            CHECK(other.save(second), "D2: ramp B written into the SAME shard, after A is in use");
+            const quint64 before = r.mirror->visitPushCount();
+            r.emitter->setColourRamp(QStringLiteral("ramp-b"), second);
+            r.mirror->sync();
+            std::printf("info: D2 second ramp in a registered shard: %llu push(es), engine error '%s'\n",
+                        (unsigned long long)(r.mirror->visitPushCount() - before),
+                        r.engine->lastError().c_str());
+            CHECK(r.mirror->visitPushCount() > before &&
+                      r.engine->lastError().find("colour ramp not found") == std::string::npos,
+                  "D2: a ramp imported later into an already-registered shard is found and pushed");
+            QDir(shard).removeRecursively();
+        }
+        // ...and the list setters the verbs and the panel call mark too.
+        for (const Case &c : {
+                 Case{ "setColourKeys", [&] {
+                     iris::ParticleColourKey k; k.time = 0.0f; k.r = 2.0f; k.g = 1.0f; k.b = 0.2f; k.a = 1.0f;
+                     r.emitter->setColourRamp(QString(), QString());
+                     r.emitter->setColourKeys({ k });
+                 } },
+                 Case{ "setScaleKeys", [&] {
+                     iris::ParticleScaleKey k; k.time = 0.5f; k.scale = 1.7f;
+                     r.emitter->setScaleKeys({ k });
+                 } } }) {
+            r.mirror->sync();
+            const quint64 before = r.mirror->visitPushCount();
+            c.mutate();
+            r.mirror->sync();
+            CHECK(r.mirror->visitPushCount() > before,
+                  qPrintable(QStringLiteral("D2: emitter.%1 reaches the engine").arg(QLatin1String(c.what))));
+        }
+        QFile::remove(rampPath);
+    }
 
     differential(r, "camera.setProjection",       [&] {
         r.camera->setProjection(iris::CameraProjection::Orthogonal);

@@ -373,10 +373,11 @@ note "assets page: scene nodes $guard0 -> $kept0 after Ctrl+Z"
 [ "$kept0" -eq "$guard0" ] \
     && ok "Ctrl+Z on the Assets page (no document) left the SCENE alone" \
     || bad "Ctrl+Z on the Assets page undid a scene edit ($guard0 -> $kept0)"
-# The same no-op on two more pages with no document — the Publish page and
-# the Player (a running scene, still not a document the chord may move). Each
-# edit is made on the editor first, so the scene's stack has a step to lose.
-for sp in publish player; do
+# The same no-op on every other page with no document — the Desktop, the
+# Avatar module, the Publish page and the Player (a running scene, still not a
+# document the chord may move); the audit's D4 named all five. Each edit is
+# made on the editor first, so the scene's stack has a step to lose.
+for sp in desktop avatar publish player; do
     js 'app.space("editor")' > /dev/null || bad "the Editor space could be shown"
     guardN=$(js "scene.addPrimitive(\"cube\", {name:\"pacing_cube_$sp\"}); scene.nodes().length")
     js "app.space(\"$sp\")" > /dev/null || bad "the $sp space could be shown"

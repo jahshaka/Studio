@@ -11,8 +11,14 @@ For more information see the LICENSE file
 
 #include "shell/shellservices.h"
 
+#include <QSqlDatabase>
+
 #include "data/database/database.h"
+#include "data/project.h"
+#include "services/ambienceservice.h"
+#include "services/assetcas.h"
 #include "services/assetservice.h"
+#include "services/assetstorepaths.h"
 #include "services/clipboardservice.h"
 #include "services/loadtimeline.h"
 #include "services/materialpreviewservice.h"
@@ -87,6 +93,16 @@ ShellServices::ShellServices(const Deps &deps, QObject *parent) : QObject(parent
     mAggregate->clipboard = mClipboard;
     mAggregate->thumbnails = mThumbnails;
     mAggregate->assets = mAssets;
+    // THE WORLD'S MUSIC (audit D8): a Music guid resolves the way every bound
+    // asset does — the project's pin, else the library's bytes.
+    mAmbience = new AmbienceService([project](const QString &guid) {
+        if (!project || project->getProjectGuid().isEmpty()) return QString();
+        return AssetCas::resolvePinned(QSqlDatabase::database(), AssetStorePaths::root(),
+                                       project->getProjectGuid(), guid);
+    }, this);
+    mAggregate->ambience = mAmbience;
+    // A world that opens with music starts it here — the reader plays nothing.
+    mAggregate->onSceneOpened([this, scene]() { mAmbience->sync(scene()); });
 
     // The perf sampler (SESSION_LOG_SPEC §8-R3). Started HERE, from the
     // settings, so it is running long before anything the owner does — a

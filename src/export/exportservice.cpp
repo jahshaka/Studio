@@ -99,7 +99,8 @@ QByteArray readmeText(const QString &sceneName, bool inlined, bool cloudsBaked)
 ExportService::WebExportResult ExportService::exportWeb(const iris::ScenePtr &scene,
                                                         const QString &sceneName,
                                                         const QString &outDir,
-                                                        jahshaka::engine::Scene *renderer)
+                                                        jahshaka::engine::Scene *renderer,
+                                                        const QString &musicPath)
 {
     WebExportResult r;
     if (outDir.trimmed().isEmpty()) { r.error = QStringLiteral("no output directory given"); return r; }
@@ -125,7 +126,7 @@ ExportService::WebExportResult ExportService::exportWeb(const iris::ScenePtr &sc
                 std::memcpy(img.scanLine(y), &rgba[size_t(y) * size_t(w) * 4u], size_t(w) * 4u);
             return img;
         };
-    GltfExporter::Result g = GltfExporter::exportScene(scene, title, bakeSky);
+    GltfExporter::Result g = GltfExporter::exportScene(scene, title, bakeSky, musicPath);
     const bool cloudsBaked = g.cloudsBaked;
     if (!g.ok) { r.error = g.error; return r; }
 

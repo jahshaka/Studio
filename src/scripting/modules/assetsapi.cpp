@@ -47,6 +47,8 @@ For more information see the LICENSE file
 #include "irisgl/document/assets/vertexbuffer.h"
 #include "jahshaka/engine/Types.h"
 #include "data/constants.h"
+#include "irisgl/document/scenegraph/scene.h"
+#include "irisgl/core/colorjson.h"
 #include "data/primitives.h"
 #include "data/settingsmanager.h"
 #include "services/assethelper.h"
@@ -262,6 +264,18 @@ QVector<VerbInfo> AssetsApi::verbs() const
           "The editor's own hidden folder (Systems, which holds a row per particle emitter) is listed "
           "like any other: it is a real row, and the verbs refuse to rename, move or delete it "
           "because the editor finds it BY NAME.",
+          Needs::Document },
+        { "createSky", "assets.createSky({name?, type?, folder?, color?, top?, mid?, bottom?, offset?, texture?, front?, back?, left?, right?}) -> guid",
+          "Mints a SKY asset in the open project and returns its guid — the Assets tray's right-click > Create > "
+          "Sky, as a verb (the menu calls this). `folder` files it in a project folder (assets.folders(); default the root). `type` is \"color\" (default, the sky panel's grey 72/255), \"gradient\", \"equirectangular\", "
+          "\"cubemap\" or \"realistic\", and the rest is that type's definition, in world.sky's vocabulary: "
+          "`color` for a colour sky; `top`/`mid`/`bottom` colours and `offset` for a gradient; `texture` (a texture "
+          "asset guid) for an equirectangular sky; `front`/`back`/`left`/`right`/`top`/`bottom` face texture guids "
+          "for a cubemap (at least one); a realistic sky takes the atmosphere's defaults. Every texture a sky names "
+          "becomes a Sky -> Texture dependency, so exporting the sky (assets.exportBundle) carries its pictures and "
+          "an import into an empty library brings them back. `name` defaults to \"Sky\". Refuses an unknown type "
+          "or key, a colour it cannot read, and a texture guid that is not a stored texture. assets.metadata(guid) "
+          "reports the sky's `type` and `definition`.",
           Needs::Document },
         { "createFolder", "assets.createFolder(name, {parent}) -> guid",
           "Creates a folder in the open project and returns its guid — the editor tray's right-click > Create > "
@@ -875,6 +889,17 @@ QVariantMap AssetsApi::metadata(const QString &guid)
         const QString origin = memberstamp::originOf(record.properties);
         if (!origin.isEmpty()) out["memberOf"] = origin;
     }
+    // A SKY says what it is (SKY-VERB-1): its type by name and its definition,
+    // the block assets.createSky wrote and the sky panel edits.
+    if (record.type == static_cast<int>(ModelTypes::Sky)) {
+        const int skyType = QJsonDocument::fromJson(record.properties).object()
+                                .value(QStringLiteral("sky")).toObject().value(QStringLiteral("type")).toInt();
+        static const char *const kNames[] = { "color", "cubemap", "equirectangular", "gradient",
+                                              "material", "realistic", "none" };
+        out["sky"] = QVariantMap{
+            { "type", (skyType >= 0 && skyType < 7) ? QString::fromLatin1(kNames[skyType]) : QString() },
+            { "definition", QJsonDocument::fromJson(host.db->fetchAssetData(guid)).object().toVariantMap() } };
+    }
     if (record.dateCreated.isValid())
         out["imported"] = record.dateCreated.toString(Qt::ISODate);
     return out;
@@ -1191,6 +1216,153 @@ QVariantList AssetsApi::folders(const QVariantMap &options)
                                                                          : folder.parent },
                                 { "count", folder.count } });
     return out;
+}
+
+// ---------------------------------------------------------------------------
+// SKY-VERB-1: a Sky row, minted by a verb (the tray's Create > Sky calls it).
+// The definition is the scene's own skyData block for the type (the shape the
+// sky panel and the viewport's sky drop read), so an asset sky and a world sky
+// are one format; its textures are Sky -> Texture edges, which is what makes
+// the share file carry them.
+// ---------------------------------------------------------------------------
+QString AssetsApi::createSky(const QVariantMap &options)
+{
+    const QString verb = QStringLiteral("assets.createSky");
+    if (!host.db) { fail("assets: not available in this session"); return QString(); }
+    if (!requireProject()) return QString();
+    static const QStringList known = {
+        QStringLiteral("name"), QStringLiteral("type"), QStringLiteral("color"),
+        QStringLiteral("top"), QStringLiteral("mid"), QStringLiteral("bottom"),
+        QStringLiteral("offset"), QStringLiteral("texture"), QStringLiteral("front"),
+        QStringLiteral("back"), QStringLiteral("left"), QStringLiteral("right"),
+        QStringLiteral("folder") };
+    for (const QString &key : options.keys())
+        if (!known.contains(key)) {
+            fail(QStringLiteral("%1: unknown option '%2' (%3)").arg(verb, key, known.join(", ")));
+            return QString();
+        }
+
+    const QString t = options.value(QStringLiteral("type"), QStringLiteral("color")).toString()
+                          .trimmed().toLower();
+    QString name = options.value(QStringLiteral("name")).toString().trimmed();
+    if (name.isEmpty()) name = QStringLiteral("Sky");
+
+    // A texture the sky names: a stored Texture row, pinned into the project
+    // the way every other binding is (no companion material is minted).
+    QStringList textures;
+    const auto texture = [&](const QVariant &raw, const QString &what, QString *guidOut) {
+        const QString guid = raw.toString().trimmed();
+        const AssetRecord rec = host.db->fetchAsset(guid);
+        const bool stored = !guid.isEmpty() && rec.type == static_cast<int>(ModelTypes::Texture)
+            && !AssetCas::resolvePinned(QSqlDatabase::database(), AssetStorePaths::root(),
+                                        host.project->getProjectGuid(), guid).isEmpty();
+        if (!stored)
+            return fail(QStringLiteral("%1: %2 '%3' is not a texture asset with stored bytes "
+                                       "(assets.list({type:\"texture\"}) lists them)")
+                            .arg(verb, what, guid));
+        *guidOut = guid;
+        textures << guid;
+        return true;
+    };
+    const auto colour = [&](const char *key, const QColor &fallback, QColor *out) {
+        if (!options.contains(QLatin1String(key))) { *out = fallback; return true; }
+        bool ok = false;
+        *out = scriptmod::colorFromJs(options.value(QLatin1String(key)), fallback, &ok);
+        if (!ok)
+            return fail(QStringLiteral("%1: '%2' — %3").arg(verb, QLatin1String(key),
+                                                            scriptmod::colorHelp(options.value(QLatin1String(key)))));
+        return true;
+    };
+
+    iris::SkyType type = iris::SkyType::SINGLE_COLOR;
+    QJsonObject definition;
+    if (t == QLatin1String("color") || t == QLatin1String("singlecolor")) {
+        QColor c;
+        // The sky panel's FRESH colour sky (skypropertywidget's default): one
+        // default, whichever door minted the row.
+        if (!colour("color", QColor(72, 72, 72), &c)) return QString();
+        definition.insert(QStringLiteral("skyColor"), iris::colorToJson(c));
+    } else if (t == QLatin1String("gradient")) {
+        type = iris::SkyType::GRADIENT;
+        QColor top, mid, bottom;
+        if (!colour("top", QColor(255, 146, 138), &top) || !colour("mid", QColor(Qt::white), &mid)
+            || !colour("bottom", QColor(64, 128, 255), &bottom))
+            return QString();
+        definition.insert(QStringLiteral("gradientTop"), iris::colorToJson(top));
+        definition.insert(QStringLiteral("gradientMid"), iris::colorToJson(mid));
+        definition.insert(QStringLiteral("gradientBot"), iris::colorToJson(bottom));
+        definition.insert(QStringLiteral("gradientOffset"),
+                          options.value(QStringLiteral("offset"), 0.73).toDouble());
+    } else if (t == QLatin1String("equirectangular") || t == QLatin1String("equirect")) {
+        type = iris::SkyType::EQUIRECTANGULAR;
+        QString guid;
+        if (!texture(options.value(QStringLiteral("texture")), QStringLiteral("texture"), &guid))
+            return QString();
+        definition.insert(QStringLiteral("equiSkyGuid"), guid);
+    } else if (t == QLatin1String("cubemap")) {
+        type = iris::SkyType::CUBEMAP;
+        for (const char *face : { "front", "back", "left", "right", "top", "bottom" }) {
+            QString guid;
+            if (options.contains(QLatin1String(face))
+                && !texture(options.value(QLatin1String(face)),
+                            QStringLiteral("face '%1'").arg(QLatin1String(face)), &guid))
+                return QString();
+            definition.insert(QLatin1String(face), guid);
+        }
+        if (textures.isEmpty()) {
+            fail(QStringLiteral("%1: a cubemap needs at least one face texture "
+                                "(front/back/left/right/top/bottom)").arg(verb));
+            return QString();
+        }
+    } else if (t == QLatin1String("realistic")) {
+        type = iris::SkyType::REALISTIC;
+        definition = iris::Scene::skyRealisticJson(iris::SkyRealistic());
+    } else {
+        fail(QStringLiteral("%1: unknown type '%2' (color, gradient, equirectangular, cubemap, realistic)")
+                 .arg(verb, t));
+        return QString();
+    }
+
+    const QString projectGuid = host.project->getProjectGuid();
+    // THE FOLDER IT IS FILED IN (the tray mints into the folder it shows, so
+    // the tile's parent and the row agree): a project folder's guid; absent,
+    // empty or the project's own guid = the root. Judged before anything is
+    // written.
+    QString folder = options.value(QStringLiteral("folder")).toString().trimmed();
+    if (folder == projectGuid) folder.clear();
+    if (!folder.isEmpty()) {
+        bool known = false;
+        for (const projectfolders::Info &f : projectfolders::list(host.db, projectGuid))
+            if (f.guid == folder) known = true;
+        if (!known) {
+            fail(QStringLiteral("%1: no folder '%2' in this project (assets.folders() lists them)")
+                     .arg(verb, folder));
+            return QString();
+        }
+    }
+    const QString guid = GUIDManager::generateGUID();
+    definition.insert(QStringLiteral("guid"), guid);
+    QJsonObject properties;
+    properties.insert(QStringLiteral("sky"), QJsonObject{ { QStringLiteral("type"), int(type) } });
+    QString error;
+    host.db->createAssetEntry(guid, name, static_cast<int>(ModelTypes::Sky), projectGuid,
+                              assethome::project(projectGuid), assethome::Origin::Create,
+                              QString(), QString(),
+                              AssetHelper::makeBlobFromPixmap(QPixmap(":/icons/icons8-file-sky.png")),
+                              QJsonDocument(properties).toJson(), QByteArray(),
+                              QJsonDocument(definition).toJson(), &error);
+    if (host.db->fetchAsset(guid).guid.isEmpty()) {
+        fail(QStringLiteral("%1: the sky row could not be written%2")
+                 .arg(verb, error.isEmpty() ? QString() : QStringLiteral(": ") + error));
+        return QString();
+    }
+    if (!folder.isEmpty()) projectfolders::file(host.db, projectGuid, guid, folder);
+    for (const QString &tex : textures) {
+        ProjectAssets::addToProject(tex, host.db, host.project, ProjectAssets::AddKind::Binding);
+        host.db->createDependency(static_cast<int>(ModelTypes::Sky),
+                                  static_cast<int>(ModelTypes::Texture), guid, tex, projectGuid);
+    }
+    return guid;
 }
 
 QString AssetsApi::createFolder(const QString &name, const QVariantMap &options)

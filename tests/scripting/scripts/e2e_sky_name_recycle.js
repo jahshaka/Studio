@@ -43,7 +43,7 @@ function skyArrays() {
 project.create("Sky name recycle " + Date.now());
 
 // A colour sky is the cheapest host-uploaded equirect there is: a 64x32 strip.
-world.sky("color", { color: { r: 10, g: 40, b: 200 } });
+world.sky("color", { color: { r: 10 / 255, g: 40 / 255, b: 200 / 255 } });
 editor.frame(3);
 
 // SINCE ATOM-S3-PARITY every host-uploaded texture IS a one-slice 2D array (the
@@ -57,13 +57,13 @@ assert(first.names.length === 0, "a host-uploaded equirect sky needs no sky-arra
 // Sixty changes of colour and type — every one of them a fresh upload and a
 // fresh array copy, with the previous one destroyed.
 for (var k = 0; k < 60; k++) {
-    if (k % 3 === 0)      world.sky("color", { color: { r: (k * 4) % 250, g: 40, b: 200 } });
-    else if (k % 3 === 1) world.sky("gradient", { top: { r: (k * 7) % 250, g: 10, b: 90 } });
+    if (k % 3 === 0)      world.sky("color", { color: { r: ((k * 4) % 250) / 255, g: 40 / 255, b: 200 / 255 } });
+    else if (k % 3 === 1) world.sky("gradient", { top: { r: ((k * 7) % 250) / 255, g: 10 / 255, b: 90 / 255 } });
     else                  world.sky("realistic", { sunHaze: 1 + (k % 5) * 20 });
     editor.frame(2);
 }
 // Back to a host-uploaded sky, so there is a live array to look at.
-world.sky("color", { color: { r: 200, g: 40, b: 10 } });
+world.sky("color", { color: { r: 200 / 255, g: 40 / 255, b: 10 / 255 } });
 // SIX frames, not three (PHOTON-GATHER-1d): a sky change rebuilds the view's
 // workspace, and where the screen-probe gather runs (on by default at High and
 // Epic) the old chain's irradiance texture goes through the ray tier's retire
