@@ -24,7 +24,7 @@ namespace physicsconstraints {
 
 namespace {
 
-struct TypeRow { const char *name; iris::PhysicsConstraintType type; };
+struct TypeRow { const char *name = nullptr; iris::PhysicsConstraintType type = iris::PhysicsConstraintType::None; };
 
 // None is the enum's "unset" value: a constraint of no type builds nothing in
 // PhysicsHelper, so it is not a name a caller can pass.
