@@ -104,10 +104,14 @@ if (STAGE === "author") {
     assert(info.route === "live" && info.emitted.indexOf("Emissive") >= 0,
            "the LIVE route: Emissive is emitted " + J(info.emitted));
 
-    var cube = scene.addPrimitive("cube", { position: { x: 0, y: 1, z: 0 } });
+    var cube = scene.addPrimitive("plane", { position: { x: 0, y: 1, z: 0 } });
     assert(node.rename(cube, "LiveCutCube"), "named");
     assert(graph.toMaterial(cube), "graph.toMaterial");
     assert(node.setProperty(cube, "faceCullingMode", "none"), "two-sided");
+    // NO SHADOW: the frames compare the MATERIAL. An alpha-tested caster's shadow is
+    // engine state that differs between the applying session and a reload (absent
+    // there, solid after it — never holed; reported by LIVE-PERSIST-1), not persistence.
+    assert(node.setCastShadow(cube, false), "casts no shadow");
     var m = material.get(cube);
     assert(m.alphaMode !== undefined, "the material reads back " + J({ alphaMode: m.alphaMode, cutoff: m.alphaCutoff }));
     checkPersisted(cube);
