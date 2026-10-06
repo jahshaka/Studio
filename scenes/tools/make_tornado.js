@@ -31,6 +31,18 @@
 //     still. The extrusion moved in the mesh's own space before that double
 //     matrix, so its height is scaled by the same square (ours extrudes in
 //     world units along the world normal).
+//   * THE ORIGINAL'S V RAN UP FROM THE BOTTOM; OURS RUNS DOWN FROM THE TOP
+//     (TORNADO-2). The document keeps assimp's GL bottom-left UVs and the
+//     mirror hands the engine v' = 1 - v (scenemirror.cpp, TexCoord0: Ogre
+//     samples top-left-origin images unflipped), so a graph's `uv` node reads
+//     v' = 1 - v. A texture LOOKUP is the same picture either way (the image
+//     is no longer mirrored at load), but MATH ON V is not: the original's
+//     `sin(Waves*(v + WaveSpeed*t)) * WaveHeight * v` read verbatim on v'
+//     puts the biggest waves at the BOTTOM of the funnel and none at the top,
+//     and its ScrollDir.y moves the noise the other way. Ported faithfully:
+//     the extrusion reads v = oneminus(v'), and the scroll's y is negated
+//     (gl(sx, sy) -> ours(sx, -sy); with the integer 1 x 2 tiling the texel
+//     at every point and time is then the original's exactly).
 //
 // THE LIVE PATHS IT RIDES (TORNADO-1): the scrolling noise is the material's
 // UV fold (G1 — the emissive map and the cut-out scroll on the shader clock);
@@ -76,6 +88,7 @@ var RIM_TINT = [1.0, 0.85, 0.6];
 // The three layers (audit §1.2). height = the authored 0.05 x the squared
 // radial scale (see the header).
 var LAYERS = [
+    // `scroll` is the ORIGINAL's ScrollDir (GL v up); scrollOf() ports it.
     { name: "Main", scale: { x: 4.0, y: 4.0, z: 4.0 },
       waveSpeed: -0.56, waveHeight: 0.05 * 4.0, waves: 31.5, scroll: [-0.5, -0.5],
       cutoff: 0.0, fresnel: 1.17, twoSided: false },
@@ -86,6 +99,9 @@ var LAYERS = [
       waveSpeed: -0.1, waveHeight: 0.05 * 5.07, waves: 40.0, scroll: [-0.5, -0.2],
       cutoff: 0.56, fresnel: 1.0, twoSided: true },
 ];
+
+// The original's ScrollDir in our V convention (see the header): y negated.
+function scrollOf(L) { return [L.scroll[0], -L.scroll[1]]; }
 
 // ---- the world ---------------------------------------------------------------
 assert(project.create("Tornado", { template: "basic" }).length > 0, "created the project (Basic: one floor)");
@@ -124,7 +140,7 @@ function buildGraph(L) {
     var tile = graph.addNode("uv");
     assert(graph.setValue(tile, { tileX: 1, tileY: 2 }), L.name + ": tiled 1 x 2");
     var scrollDir = graph.addNode("vector2");
-    assert(graph.setValue(scrollDir, { x: L.scroll[0], y: L.scroll[1] }), L.name + ": ScrollDir");
+    assert(graph.setValue(scrollDir, { x: scrollOf(L)[0], y: scrollOf(L)[1] }), L.name + ": ScrollDir (ours: y negated)");
     var pan = graph.addNode("panner");
     assert(graph.connect(tile, 0, pan, 0) && graph.connect(scrollDir, 0, pan, 1), L.name + ": panner");
     // the Texture node samples itself at its UV input (its RGBA out)
@@ -173,28 +189,34 @@ function buildGraph(L) {
         assert(graph.connect(cut, 0, master, "Alpha Cutoff"), L.name + ": -> Alpha Cutoff");
     }
 
-    // VERTEX EXTRUSION = sin(Waves * (v + WaveSpeed * t)) * WaveHeight * v
+    // VERTEX EXTRUSION = sin(Waves * (v + WaveSpeed * t)) * WaveHeight * v, with
+    // the original's v (up from the bottom) = oneminus(our v'). The phase rides
+    // a panner at -WaveSpeed: 1 - (v' - WaveSpeed*t) = v + WaveSpeed*t.
     var uv = graph.addNode("uv");
     var speed = graph.addNode("vector2");
-    assert(graph.setValue(speed, { x: L.waveSpeed, y: L.waveSpeed }), L.name + ": WaveSpeed");
+    assert(graph.setValue(speed, { x: -L.waveSpeed, y: -L.waveSpeed }), L.name + ": -WaveSpeed");
     var wpan = graph.addNode("panner");
     assert(graph.connect(uv, 0, wpan, 0) && graph.connect(speed, 0, wpan, 1), L.name + ": wave panner");
+    var py = graph.addNode("splitvector");
+    assert(graph.connect(wpan, 0, py, 0), L.name + ": panned uv -> split");
+    var up = graph.addNode("oneminus");
+    assert(graph.connect(py, 1, up, 0), L.name + ": 1 - (v' - WaveSpeed t) = v + WaveSpeed t");
     var waves = graph.addNode("float");
     assert(graph.setValue(waves, L.waves), L.name + ": Waves");
     var phase = graph.addNode("multiply");
-    assert(graph.connect(wpan, 0, phase, 0) && graph.connect(waves, 0, phase, 1), L.name + ": x Waves");
-    var py = graph.addNode("splitvector");
-    assert(graph.connect(phase, 0, py, 0), L.name + ": phase -> split");
+    assert(graph.connect(up, 0, phase, 0) && graph.connect(waves, 0, phase, 1), L.name + ": x Waves");
     var sine = graph.addNode("sine");
-    assert(graph.connect(py, 1, sine, 0), L.name + ": .y -> sine");
+    assert(graph.connect(phase, 0, sine, 0), L.name + ": sine");
     var height = graph.addNode("float");
     assert(graph.setValue(height, L.waveHeight), L.name + ": WaveHeight");
     var amp = graph.addNode("multiply");
     assert(graph.connect(sine, 0, amp, 0) && graph.connect(height, 0, amp, 1), L.name + ": x WaveHeight");
     var vs = graph.addNode("splitvector");
     assert(graph.connect(uv, 0, vs, 0), L.name + ": uv -> split");
+    var vUp = graph.addNode("oneminus");
+    assert(graph.connect(vs, 1, vUp, 0), L.name + ": v = 1 - v'");
     var grow = graph.addNode("multiply");
-    assert(graph.connect(amp, 0, grow, 0) && graph.connect(vs, 1, grow, 1), L.name + ": x v");
+    assert(graph.connect(amp, 0, grow, 0) && graph.connect(vUp, 0, grow, 1), L.name + ": x v");
     assert(graph.connect(grow, 0, master, "Vertex Extrusion"), L.name + ": -> Vertex Extrusion");
 
     // THE CONTRACT: both live sockets EMITTED, nothing frozen.
@@ -205,8 +227,8 @@ function buildGraph(L) {
     assert(info.emitted.indexOf("Emissive") >= 0 && info.emitted.indexOf("Vertex Extrusion") >= 0,
            L.name + ": Emissive and Vertex Extrusion are EMITTED");
     assert(Object.keys(info.fallback).length === 0, L.name + ": NO fallback " + J(info.fallback));
-    assert(info.fold && Math.abs(info.fold.velocity[0] - L.scroll[0]) < 1e-6 &&
-           Math.abs(info.fold.velocity[1] - L.scroll[1]) < 1e-6,
+    assert(info.fold && Math.abs(info.fold.velocity[0] - scrollOf(L)[0]) < 1e-6 &&
+           Math.abs(info.fold.velocity[1] - scrollOf(L)[1]) < 1e-6,
            L.name + ": the noise scrolls through the material's UV fold " + J(info.fold));
     assert(graph.save(), L.name + ": graph.save");
     return guid;
@@ -230,7 +252,8 @@ LAYERS.forEach(function (L) {
     assert(typeof m.customPiecePixel === "string" && m.customPiecePixel.length > 0 &&
            typeof m.customPieceVertex === "string" && m.customPieceVertex.length > 0,
            L.name + ": the material carries both generated pieces");
-    assert(m.textureVelocity && Math.abs(m.textureVelocity[0] - L.scroll[0]) < 1e-6, L.name + ": the material scrolls");
+    assert(m.textureVelocity && Math.abs(m.textureVelocity[0] - scrollOf(L)[0]) < 1e-6
+           && Math.abs(m.textureVelocity[1] - scrollOf(L)[1]) < 1e-6, L.name + ": the material scrolls");
     nodes[L.name] = mesh;
 });
 
