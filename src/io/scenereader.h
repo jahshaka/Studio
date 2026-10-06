@@ -193,10 +193,10 @@ public:
      */
     iris::MaterialPtr readMaterial(QJsonObject &nodeObj);
     iris::MaterialPtr readPbrMaterial(const QJsonObject& matObj);
-    /// Puts a material's GENERATED SHADER PIECES back (HLMS_ADOPTION P5): the
-    /// scene stores their content-addressed file NAMES, this finds them in the
-    /// per-user piece cache or regenerates them from the shader asset the
-    /// scene names. See the implementation for the fallback order.
+    /// Puts a material's GENERATED SHADER PIECES back (HLMS_ADOPTION P5) by
+    /// re-emitting them from the definition of the material the scene names
+    /// (`customPieceGraph`), and puts that guid back on the material. The
+    /// piece cache is only a cache; there is no lookup by file name.
     void restoreCustomPieces(iris::PbrMaterialPtr mat, const QJsonObject& values);
 
     // extracts meshes and animations from model file

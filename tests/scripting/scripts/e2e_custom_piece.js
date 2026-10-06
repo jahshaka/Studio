@@ -70,7 +70,7 @@ assert(typeof mat.customPiecePixel === "string" && mat.customPiecePixel.length >
        "material.get reports a generated pixel piece: " + mat.customPiecePixel);
 var piecePath = mat.customPiecePixel;
 assert(piecePath.indexOf("ShaderPieces") !== -1,
-       "the piece lives in the per-user ShaderPieces cache, not in the project");
+       "the piece lives in the ShaderPieces cache under the data root, not in the project");
 assert(piecePath.indexOf(".piece_ps.glsl") === piecePath.length - ".piece_ps.glsl".length,
        "the piece file is named <hash>.piece_ps.glsl");
 assert(piecePath.indexOf(projectFolder) !== 0,

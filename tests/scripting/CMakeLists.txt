@@ -223,6 +223,17 @@ jah_pool_arm(shading shader_time ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_shader_
 # TORNADO-1: a live graph material applied FROM THE LIBRARY keeps its generated
 # pieces (they travel with the material's definition) and animates.
 jah_pool_arm(shading live_material_apply ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_live_material_apply.js 8)
+# material.live_roundtrip — LIVE-PERSIST-1: ANY live graph material is a complete, persistent
+# bundle. A cut-out (baked) + live-emissive (piece) graph material survives save -> reopen with
+# its piece cache DELETED -> export -> import into an EMPTY library, three processes with scratch
+# HOME/XDG_CACHE_HOME; the frames agree and the cut-out is visible (a solid control frame).
+jah_gpu_row(material.live_roundtrip CLASS app
+         COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/scripts/material_live_roundtrip.sh $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
+                 ${CMAKE_CURRENT_SOURCE_DIR}/scripts/material_live_roundtrip.js.in
+                 ${CMAKE_CURRENT_SOURCE_DIR}/fixtures/cutout_checker.png
+                 ${CMAKE_CURRENT_BINARY_DIR}/material-live-roundtrip
+         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(material.live_roundtrip PROPERTIES LABELS "scripting" TIMEOUT 600)
 # EDITOR_SHORTCUTS_SPEC §5: the verbs behind the Unreal-style editor controls.
 jah_pool_arm(editor_view editor_controls ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_editor_controls.js 30)
 # scripting.e2e.editor_controls.timing — the per-selection 11 ms frame bar, nightly (lane

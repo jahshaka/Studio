@@ -28,7 +28,6 @@ For more information see the LICENSE file
 #include "irisgl/document/animation/locomotion.h"
 #include "io/materialreader.h"
 #include "modules/materials/core/materialhelper.h"
-#include "modules/materials/core/pieceemitter.h"
 #include "services/materialbundle.h"
 #include "io/scenereader.h"
 #include "io/sceneformat.h"
@@ -1767,54 +1766,36 @@ iris::MaterialPtr SceneReader::readPbrMaterial(const QJsonObject& matObj)
 	return mat;
 }
 
-/// GENERATED SHADER PIECES (HLMS_ADOPTION P5), on the way back in.
+/// GENERATED SHADER PIECES (HLMS_ADOPTION P5), on the way back in — DERIVED,
+/// NEVER LOOKED UP (LIVE-PERSIST-1).
 ///
-/// The scene stores the piece by FILE NAME (a hash of the file's own bytes) and
-/// the guid of the shader asset it was generated from. Two ways home, in order:
+/// The scene names the MATERIAL the pieces came from (`customPieceGraph`, the
+/// bundle's guid) and nothing else. Its definition — pin-first, so the project
+/// reads the version it was built with — carries the graph, and
+/// `MaterialReader::restoreGeneratedPieces` re-emits from it: emission is
+/// deterministic and content-addressed, so the piece cache under the data root
+/// turns the write into a hit, and a clean machine with an empty cache gets the
+/// identical files. There used to be a first route — "the file is already in
+/// this user's cache, by the name the scene stored" — and it was the defect:
+/// the cache was per-USER and moved by no data root, so a scene whose graph
+/// was not in its project still came back live on any machine that had once
+/// run the script that made it, and smooth on every other.
 ///
-///   1. the file is already in this user's piece cache — the ordinary case,
-///      free, and the reason the name rather than a path is what gets written
-///      (the cache lives somewhere different on every machine);
-///   2. it is not, because this is another machine or a wiped cache — then the
-///      SHADER ASSET is fetched by guid and re-emitted. The graph is the source
-///      of truth and emission is deterministic, so the regenerated file has the
-///      same name the scene asked for.
-///
-/// If neither works (no database, the asset is gone) the material simply loads
-/// as its baked self: an animated surface renders its t=0 fold instead of
-/// moving. That is a visible degradation, never a broken material.
+/// The guid goes back on the material too — ALWAYS, even when the definition
+/// is missing — so the next save writes `customPieceGraph` again; a reopened
+/// material that lost it saved its pieces away for good.
 void SceneReader::restoreCustomPieces(iris::PbrMaterialPtr mat, const QJsonObject& values)
 {
-	const QString pixelName  = values["customPiece"].toString();
-	const QString vertexName = values["customPieceVertex"].toString();
-	if (pixelName.isEmpty() && vertexName.isEmpty()) return;
-
-	const QString dir = materials::PieceEmitter::cacheDir();
-	auto resolve = [&dir](const QString& name) {
-		if (name.isEmpty()) return QString();
-		const QString path = dir + QLatin1Char('/') + name;
-		return QFileInfo::exists(path) ? path : QString();
-	};
-	QString pixelPath = resolve(pixelName);
-	QString vertexPath = resolve(vertexName);
-
-	if ((pixelPath.isEmpty() && !pixelName.isEmpty()) ||
-	    (vertexPath.isEmpty() && !vertexName.isEmpty())) {
-		const QString graphGuid = values["customPieceGraph"].toString();
-		if (!graphGuid.isEmpty() && handle) {
-			// THE ONE ROUTE (TORNADO-1): the material's own definition re-emits
-			// its pieces (MaterialReader::restoreGeneratedPieces), writing the
-			// files as a side effect; we want the PATHS, not the material.
-			const QJsonObject definition = MaterialBundle::read(handle, graphGuid, project);
-			if (!definition.isEmpty()) {
-				MaterialReader::restoreGeneratedPieces(iris::PbrMaterial::create(), definition);
-				if (pixelPath.isEmpty()) pixelPath = resolve(pixelName);
-				if (vertexPath.isEmpty()) vertexPath = resolve(vertexName);
-			}
-		}
-	}
-	mat->setCustomPiecePixel(pixelPath);
-	mat->setCustomPieceVertex(vertexPath);
+	const QString graphGuid = values["customPieceGraph"].toString();
+	if (graphGuid.isEmpty()) return;
+	// THE GUID FIRST, whatever the read finds: a scene opened while its graph
+	// material is missing must keep naming it, or the next save drops the key
+	// and the pieces never come back once the asset does.
+	mat->setGuid(graphGuid);
+	if (!handle) return;
+	const QJsonObject definition = MaterialBundle::read(handle, graphGuid, project);
+	if (definition.isEmpty()) return;   // SceneIssues names the missing asset
+	MaterialReader::restoreGeneratedPieces(mat, definition);
 }
 
 iris::MaterialPtr SceneReader::readMaterial(QJsonObject& nodeObj)

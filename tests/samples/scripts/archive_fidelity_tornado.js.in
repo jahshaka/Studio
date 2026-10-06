@@ -1,0 +1,81 @@
+// samples.archive_fidelity.Tornado (LIVE-PERSIST-1) — THE SHIPPED ARCHIVE, opened
+// on a clean machine, is the picture the sample promises.
+//
+// The gap this closes: TORNADO-2 measured the scene make_tornado.js builds IN
+// MEMORY, never the archive the owner opens. Two of the three layers' live graph
+// materials did not survive save -> export -> import (their graphs were left out
+// of the archive, their baked cut-out map was written absent, their pieces were
+// read from a per-user cache by file name), so the shipped sample opened smooth
+// with no holes, and every gate stayed green.
+//
+// This script is the APP half: import the archive into the virgin data root the
+// wrapper (archive_fidelity.sh) made — HOME and XDG_CACHE_HOME point into it
+// too, so no piece cache exists anywhere — open it, keep the sample's own Epic
+// row, and take the tornado.jpg camera's frame at four pinned shader times. The
+// wrapper's metric script judges the frames against the reference still.
+// It also asserts the PERSISTENCE half by name: every layer comes back with its
+// generated pieces, its source graph and (the two shells) its baked cut-out map.
+
+var ZIP = "@ZIP@";
+var OUT = "@OUT@";
+
+function assert(cond, msg) {
+    if (!cond) throw new Error("assert failed: " + msg);
+    console.log("ok: " + msg);
+}
+function J(x) { return JSON.stringify(x); }
+
+var imported = project.importArchive(ZIP);
+assert(imported && imported.guid && imported.guid.length > 10, "importArchive " + ZIP);
+assert(project.open(imported.guid) === true, "project.open");
+assert(world.photon().tier === "epic", "the sample's own row is Epic (" + world.photon().tier + ")");
+
+// THE LAYERS, by name: the named node is the import's group; its mesh is the child.
+var meshes = {};
+var all = scene.nodes();
+var byId = {};
+all.forEach(function (n) { byId[n.id] = n; });
+all.forEach(function (n) {
+    if (n.type !== "mesh") return;
+    var p = byId[n.parent];
+    var name = p && ["Main", "Top Shell", "Bottom Wave"].indexOf(p.name) >= 0 ? p.name : n.name;
+    if (["Main", "Top Shell", "Bottom Wave"].indexOf(name) >= 0) meshes[name] = n.id;
+});
+["Main", "Top Shell", "Bottom Wave"].forEach(function (name) {
+    assert(!!meshes[name], name + ": the layer is in the archive");
+    var m = material.get(meshes[name]);
+    assert(typeof m.customPiecePixel === "string" && m.customPiecePixel.length > 0 &&
+           typeof m.customPieceVertex === "string" && m.customPieceVertex.length > 0,
+           name + ": both generated pieces re-emitted from the graph, with an EMPTY piece cache");
+    assert(String(m.customPiecePixel).indexOf("@HOME@") === 0,
+           name + ": ...into the cache under this run's data root (" + m.customPiecePixel + ")");
+    if (name !== "Main")
+        assert(typeof m.baseColorMap === "string" && m.baseColorMap.length > 0,
+               name + ": the baked cut-out map came back (baseColorMap " + J(m.baseColorMap) + ")");
+});
+
+// THE REFERENCE CAMERA: tornado.jpg's fitted pinhole (spikes/tornado-2/camfit2.py).
+editor.setCamera({ position: { x: 1.172, y: 6.751, z: 9.241 }, lookAt: { x: 0, y: 5.0, z: 0 }, fov: 55.9 });
+editor.select(null);
+editor.gameView(true);
+[0.25, 0.75, 1.25, 1.75].forEach(function (t) {
+    world.shaderTime({ t: t });
+    // SETTLE IN FRAMES until the picture stops moving (a fresh data root compiles
+    // its shaders and fills its caches over the first frames).
+    var probes = [];
+    for (var py = 0.2; py < 1.0; py += 0.2)
+        for (var px = 0.2; px < 1.0; px += 0.2) probes.push({ x: px, y: py });
+    var shot = OUT + "/t" + String(t).replace(".", "_") + ".png";
+    var last = "", stable = 0;
+    for (var k = 0; k < 40 && stable < 2; ++k) {
+        editor.frame(30);
+        var now = J(editor.screenshot(shot, 800, 600, probes, "scene").probes);
+        stable = now === last ? stable + 1 : 0;
+        last = now;
+    }
+    assert(stable >= 2, "t=" + t + ": the picture settled");
+});
+world.shaderTime({ t: null });
+editor.gameView(false);
+assert(project.close(), "closed");
+console.log("archive_fidelity: frames written");

@@ -1,0 +1,173 @@
+// material.live_roundtrip (LIVE-PERSIST-1) — ANY live graph material is a complete,
+// persistent bundle. One stage per process (material_live_roundtrip.sh runs them):
+//
+//   author  a graph material with a CUT-OUT (a picture's red channel -> Alpha, cut at
+//           0.5: a BAKED baseColorMap) and a LIVE emissive (pulsate -> a generated
+//           piece), applied by graph.toMaterial to a cube; frame F0; save; close.
+//   reopen  the same data root with its PIECE CACHE DELETED by the wrapper: the
+//           pieces come back from the graph, `customPieceGraph` is in the saved node,
+//           the baked map is bound; frame F1; export the archive; close.
+//   import  a VIRGIN data root (an empty library, an empty store, no piece cache):
+//           import the archive, open it; the same three facts; frame F2.
+//   drop    the first data root: the graph material is DELETED (assets.remove,
+//           force); the project opens with no pieces but still NAMES the material
+//           (`customPieceGraph`), and is saved that way.
+//   restore the wrapper puts the material's catalog rows and sidecar back from a
+//           copy; the reopened scene's pieces come back from the graph — the save
+//           made while the asset was missing did not lose the key.
+//
+// The wrapper compares F1 and F2 against F0. Before LIVE-PERSIST-1 the reopen lost
+// the cut-out (the baked map had no guid and was written ABSENT) and the import lost
+// the graph (it was neither pinned nor used by the project, so the archive left it).
+
+var STAGE = "@STAGE@";
+var WORK = "@WORK@";
+var FIXTURE = "@FIXTURE@";
+var ARCHIVE = WORK + "/live_roundtrip.zip";
+
+function assert(cond, msg) {
+    if (!cond) throw new Error("assert failed: [" + STAGE + "] " + msg);
+    console.log("ok: [" + STAGE + "] " + msg);
+}
+function J(x) { return JSON.stringify(x); }
+
+function theCube() {
+    var id = null;
+    scene.nodes().forEach(function (n) { if (n.type === "mesh" && n.name === "LiveCutCube") id = n.id; });
+    assert(id !== null, "the cube is in the scene");
+    return id;
+}
+
+function frame(name) {
+    editor.select(null);
+    editor.setCamera({ position: { x: 2.2, y: 1.9, z: 2.6 }, lookAt: { x: 0, y: 1.0, z: 0 }, fov: 45 });
+    world.shaderTime({ t: 0.4 });
+    // SETTLE IN FRAMES until the picture stops moving (a fresh data root compiles
+    // its shaders and fills its shadow cache over the first frames; a frame taken
+    // before that compares the warm-up, not the material).
+    var probes = [];
+    for (var py = 0.2; py < 1.0; py += 0.2)
+        for (var px = 0.2; px < 1.0; px += 0.2) probes.push({ x: px, y: py });
+    var last = "", stable = 0;
+    for (var k = 0; k < 40 && stable < 2; ++k) {
+        editor.frame(30);
+        var now = J(editor.screenshot(WORK + "/" + name + ".png", 320, 240, probes, "scene").probes);
+        stable = now === last ? stable + 1 : 0;
+        last = now;
+    }
+    assert(stable >= 2, name + ": the picture settled");
+    world.shaderTime({ t: null });
+}
+
+// The three facts a persisted live material must show after any read.
+function checkPersisted(id) {
+    var m = material.get(id);
+    assert(typeof m.customPiecePixel === "string" && m.customPiecePixel.length > 0,
+           "the generated pixel piece is bound (" + m.customPiecePixel + ")");
+    assert(m.customPiecePixel.indexOf(WORK) === 0,
+           "...re-emitted into the piece cache under THIS data root, not a per-user cache");
+    assert(typeof m.baseColorMap === "string" && m.baseColorMap.length > 0,
+           "the baked cut-out map is bound (" + J(m.baseColorMap) + ")");
+    var values = node.serialize(id).node.material.values;
+    assert(typeof values.customPieceGraph === "string" && values.customPieceGraph.length > 10,
+           "the saved node names its graph material (customPieceGraph " + J(values.customPieceGraph) + ")");
+    assert(typeof values.baseColorMap === "string" && values.baseColorMap.length > 10,
+           "...and its baked map by guid (" + J(values.baseColorMap) + ")");
+    assert(values.customPiece === undefined && values.customPieceVertex === undefined,
+           "no piece FILE NAME is written: pieces are derived, never looked up");
+}
+
+if (STAGE === "author") {
+    var pg = project.create("Live Roundtrip", { template: "basic" });
+    assert(pg.length > 10, "project.create");
+    var guid = materials.create("LiveCut", { graph: true });
+    assert(guid.length > 10, "materials.create");
+    var picture = materials.addTexture(guid, FIXTURE);
+    assert(picture && picture.length > 10, "the checker is a texture of the material");
+    var master = null;
+    graph.nodes().forEach(function (n) { if (n.master) master = n.id; });
+    var tex = graph.addNode("texture");
+    assert(graph.setValue(tex, picture), "the checker on a texture node");
+    // sampled at the mesh's UVs (a texture node with no UV input folds to one texel)
+    var uv = graph.addNode("uv");
+    assert(graph.setValue(uv, { tileX: 2, tileY: 2 }) && graph.connect(uv, 0, tex, 0), "uv (2 x 2) -> texture");
+    var red = graph.addNode("splitvector");
+    assert(graph.connect(tex, 0, red, 0) && graph.connect(red, 0, master, "Alpha"), "red -> Alpha");
+    var cut = graph.addNode("float");
+    assert(graph.setValue(cut, 0.5) && graph.connect(cut, 0, master, "Alpha Cutoff"), "cut at 0.5");
+    var white = graph.addNode("color");
+    assert(graph.setValue(white, { r: 0.8, g: 0.8, b: 0.8, a: 1 }) &&
+           graph.connect(white, 0, master, "Base Color"), "a light base");
+    var hot = graph.addNode("color");
+    assert(graph.setValue(hot, { r: 1.0, g: 0.3, b: 0.05, a: 1 }), "an orange glow");
+    var pulse = graph.addNode("pulsate");
+    var rate = graph.addNode("float");
+    assert(graph.setValue(rate, 2.0) && graph.connect(rate, 0, pulse, 0), "pulse rate");
+    var glow = graph.addNode("multiply");
+    assert(graph.connect(hot, 0, glow, 0) && graph.connect(pulse, 0, glow, 1) &&
+           graph.connect(glow, 0, master, "Emissive"), "pulsing orange -> Emissive");
+    var info = graph.emitInfo();
+    assert(info.route === "live" && info.emitted.indexOf("Emissive") >= 0,
+           "the LIVE route: Emissive is emitted " + J(info.emitted));
+
+    var cube = scene.addPrimitive("plane", { position: { x: 0, y: 1, z: 0 } });
+    assert(node.rename(cube, "LiveCutCube"), "named");
+    assert(graph.toMaterial(cube), "graph.toMaterial");
+    assert(node.setProperty(cube, "faceCullingMode", "none"), "two-sided");
+    // NO SHADOW: the frames compare the MATERIAL. Measured (LIVE-PERSIST-1,
+    // spikes/live-persist-1/shadow-diag): a cut-out caster's shadow is NOT
+    // deterministic within ONE authoring session — the identical script, no save,
+    // drew no shadow in two runs and a SOLID one in a third — and it is never
+    // holed, in-session or after a reload; the datablock a reload builds carries
+    // the same alpha_test and baked diffuse map. An engine defect, not persistence.
+    assert(node.setCastShadow(cube, false), "casts no shadow");
+    var m = material.get(cube);
+    assert(m.alphaMode !== undefined, "the material reads back " + J({ alphaMode: m.alphaMode, cutoff: m.alphaCutoff }));
+    checkPersisted(cube);
+    frame("F0");
+    assert(project.save(), "saved");
+    assert(project.close(), "closed");
+} else if (STAGE === "reopen") {
+    var list = project.list();
+    var pg2 = null;
+    list.forEach(function (p) { if (p.name === "Live Roundtrip") pg2 = p.guid; });
+    assert(pg2 !== null, "the project is listed");
+    assert(project.open(pg2), "project.open with an EMPTY piece cache");
+    checkPersisted(theCube());
+    frame("F1");
+    var out = project.exportArchive(ARCHIVE);
+    assert(out && out.assets > 0, "exported " + J(out));
+    assert(project.close(), "closed");
+} else if (STAGE === "import") {
+    var imported = project.importArchive(ARCHIVE);
+    assert(imported && imported.guid && imported.guid.length > 10, "importArchive into an EMPTY library");
+    assert(project.open(imported.guid), "project.open");
+    checkPersisted(theCube());
+    frame("F2");
+    // THE CONTROL: the same cube with its cut-out switched off, so the wrapper can
+    // prove the frames it compares actually carry holes (a material that lost its
+    // cut-out everywhere would otherwise compare equal to itself).
+    assert(material.set(theCube(), { alphaMode: 0 }), "control: the cut-out off");
+    frame("Fsolid");
+    assert(project.close(), "closed");
+} else if (STAGE === "drop" || STAGE === "restore") {
+    var pg3 = null;
+    project.list().forEach(function (p) { if (p.name === "Live Roundtrip") pg3 = p.guid; });
+    assert(pg3 !== null && project.open(pg3), "project.open");
+    if (STAGE === "drop") {
+        var graphGuid = node.serialize(theCube()).node.material.values.customPieceGraph;
+        assert(typeof graphGuid === "string" && graphGuid.length > 10, "the scene names its graph " + graphGuid);
+        assert(project.close(), "closed");
+        assert(assets.remove(graphGuid, { force: true }), "the graph material DELETED");
+        assert(project.open(pg3), "reopened with the graph material missing");
+        var dm = material.get(theCube());
+        assert(!dm.customPiecePixel, "no pieces without the graph (" + dm.customPiecePixel + ")");
+        assert(node.serialize(theCube()).node.material.values.customPieceGraph === graphGuid,
+               "...but the node still names it");
+        assert(project.save(), "saved while the graph is missing");
+    } else {
+        checkPersisted(theCube());
+    }
+    assert(project.close(), "closed");
+}
+console.log("material_live_roundtrip: " + STAGE + " PASS");

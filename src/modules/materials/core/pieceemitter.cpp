@@ -10,13 +10,13 @@ For more information see the LICENSE file
 *************************************************************************/
 #include "pieceemitter.h"
 
+#include "services/apppaths.h"
 #include "services/filewriteatomic.h"
 
 #include <QCryptographicHash>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
-#include <QStandardPaths>
 
 namespace materials {
 
@@ -840,9 +840,13 @@ QString PieceEmitter::fileNameFor(const QString &source, bool vertexStage)
 
 QString PieceEmitter::cacheDir()
 {
-	const QString root = QStandardPaths::writableLocation(QStandardPaths::CacheLocation);
-	return (root.isEmpty() ? QDir::homePath() + QStringLiteral("/.cache/jahshaka") : root) +
-	       QStringLiteral("/ShaderPieces");
+	// BESIDE THE SHADER CACHE, UNDER THE DATA ROOT (LIVE-PERSIST-1): the two
+	// caches are one state (a missing piece aborts the Hlms disk-cache load),
+	// and `--data-root` moves both. It was the per-USER ~/.cache, which no
+	// data root moved: a "clean" run inherited every piece an earlier run had
+	// written, and that is how a scene that could not regenerate its own
+	// pieces passed for one that could.
+	return QDir(AppPaths::dataRoot()).filePath(QStringLiteral("ShaderPieces"));
 }
 
 QString PieceEmitter::write(const QString &dir, const QString &source, bool vertexStage)

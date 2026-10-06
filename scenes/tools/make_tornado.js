@@ -282,6 +282,15 @@ LAYERS.forEach(function (L) {
     assert(worst > 0, "...and animates: t=1.0 differs from t=0 (worst " + worst + ")");
     world.shaderTime({ t: null });
     assert(node.remove(probe), "the probe cube removed");
+    // AND ITS ROW: a primitive is born with a project asset row ("Cube", which
+    // the apply made depend on Main) that removing the node leaves behind, so
+    // the archive shipped an orphan object. The probe goes without a trace.
+    var orphans = assets.list({ scope: "project", type: "object", query: "Cube" })
+                        .filter(function (a) { return a.name === "Cube"; });
+    assert(orphans.length === 1, "the probe's row is the project's one Cube " + J(orphans));
+    assert(assets.remove(orphans[0].guid, { force: true }), "...and it is removed");
+    assert(assets.list({ scope: "project", type: "object", query: "Cube" })
+                 .filter(function (a) { return a.name === "Cube"; }).length === 0, "no Cube row remains");
 })();
 
 // ---- the camera: the original editor camera ----------------------------------

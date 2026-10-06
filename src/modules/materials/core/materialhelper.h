@@ -60,20 +60,6 @@ public:
 	// materials::buildDefinition now — core/graphdefinition.h — and its maps
 	// are member textures in the store.)
 
-	// Option B phase 1: the graph evaluated to the document's PBR material
-	// (which SceneMirror already mirrors into the engine). Texture-property
-	// GUIDs are resolved through TextureManager.
-	static iris::PbrMaterialPtr createPbrMaterialFromShaderGraph(NodeGraph* graph);
-
-	// Runs the shader-piece emitter over `graph` and lands the result on
-	// `material` (HLMS_ADOPTION P5). Sets both piece paths unconditionally —
-	// including to EMPTY — so a graph edited into something the emitter
-	// refuses drops the piece it used to carry instead of rendering it
-	// forever. Returns what the emitter did, including the per-socket reasons
-	// for everything it left to the baker.
-	static materials::PieceEmitter::Result applyEmittedPieces(NodeGraph* graph,
-	                                                          iris::PbrMaterialPtr material);
-
 	// Maps a texture property's stored asset GUID to an image path via
 	// TextureManager or the CAS; passes real file paths through untouched.
 	// (`projectRoot`/`setProjectRoot` went with the project-folder bake: there

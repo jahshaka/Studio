@@ -2011,7 +2011,10 @@ QVector<VerbInfo> GraphApi::verbs() const
           "bare textures pass through. Map values are project-relative paths.",
           Needs::Document },
         { "toMaterial", "graph.toMaterial(nodeId) -> bool",
-          "Evaluates the current graph and applies the resulting PBR material to a mesh node.",
+          "Saves the current graph material (the definition write: its graph and its baked maps as member "
+          "textures - graph.save) and applies that saved bundle to a mesh node through the one apply "
+          "(pinned into the project with its members, one undo step). A graph that is not a material "
+          "asset is refused.",
           Needs::Document },
         { "save", "graph.save() -> bool",
           "Serializes the current graph back into its shader asset (only for graphs opened from an asset guid).",
@@ -2446,41 +2449,30 @@ bool GraphApi::toMaterial(const QString &nodeId)
     auto node = findNodeByGuid(scene->getRootNode(), nodeId);
     if (!node || node->getSceneNodeType() != iris::SceneNodeType::Mesh)
         return fail(QStringLiteral("graph.toMaterial: '%1' is not a mesh node").arg(nodeId));
+    if (!host.db || mAssetGuid.isEmpty())
+        return fail("graph.toMaterial: this graph is not a material asset - create or open one "
+                    "(materials.create(name, {graph: true}) / materials.open) so what the node "
+                    "wears is a bundle that persists");
 
-    // APPLYING IS A FINAL-BAKE TRIGGER (spec section 2). The bake lands in the
-    // store's derived cache and the material is built from the PATHS it
-    // produced — this is the BUILD side of the bundle's lock 2, where paths
-    // are legitimate; only what is STORED must name guids.
-    iris::PbrMaterialPtr material;
-    {
-        QString guid = mAssetGuid.isEmpty() ? graph->materialGuid : mAssetGuid;
-        if (guid.isEmpty()) guid = QStringLiteral("scratch");
-
-        materials::GraphBaker::Options opts;
-        opts.resolution = graph->settings.bakeResolution;
-        opts.outputDir = AssetStorePaths::derivedPath(QStringLiteral("materialbake/") + guid);
-        opts.relativePrefix = opts.outputDir + QLatin1Char('/');   // the map must NAME its file
-        QDir().mkpath(opts.outputDir);
-        // The emitter first, so the baker skips what the piece owns
-        // (HLMS_ADOPTION P5).
-        materials::PieceEmitter::Result emitted = materials::PieceEmitter::lower(
-            graph, MaterialHelper::textureResolver());
-        opts.emittedSockets = emitted.emittedSockets;
-        const auto baked = materials::GraphBaker::run(graph, opts, MaterialHelper::textureResolver());
-        material = PbrGraphEvaluator::materialFromValues(baked.eval.values, MaterialHelper::textureResolver());
-        MaterialHelper::applyEmittedPieces(graph, material);
-    }
-    if (!material) return fail("graph.toMaterial: evaluation produced no material");
-    // Stamp the SOURCE GRAPH's asset guid on the material. It costs nothing for
-    // an ordinary material and it is what lets a reopened scene regenerate a
-    // GENERATED SHADER PIECE (HLMS_ADOPTION P5) whose cache file this machine
-    // does not have: the guid names the asset, the asset carries the graph, and
-    // the graph re-emits byte-identical source.
-    {
-        const QString guid = mAssetGuid.isEmpty() ? graph->materialGuid : mAssetGuid;
-        if (!guid.isEmpty()) material->setGuid(guid);
-    }
-    node.staticCast<iris::MeshNode>()->setMaterial(material);
+    // A LIVE MATERIAL IS A BUNDLE, AND THE NODE WEARS THE BUNDLE (LIVE-PERSIST-1).
+    // This verb used to evaluate the graph in hand into a private material: its
+    // baked maps were loose files in the derived cache (no guid, so the scene
+    // writer wrote them ABSENT and a reopen lost the cut-out), the material was
+    // neither pinned nor used by the project (so the archive left its graph
+    // behind), and its pieces lived only in a per-user cache. Applying is still
+    // a FINAL-BAKE TRIGGER, but the bake is the SAVE: `save()` writes the
+    // definition with its graph and its baked maps as MEMBER textures, and the
+    // ONE apply (SceneEditService::applyMaterialAsset) binds that definition —
+    // pinning its whole closure, writing the use edge, stamping the piece
+    // source, as one undo step. What the node wears is exactly what a reopen,
+    // an export and an import read back.
+    // A picture the graph names by FILE becomes a library asset first (the rule
+    // material.set's map keys follow): a definition may never carry a path.
+    MaterialHelper::resolveAppRelativeTextures(graph, MaterialHelper::TextureBinding::Import,
+                                               assethome::of(host.db, mAssetGuid));
+    if (!save()) return false;   // save() said why
+    if (!host.services->sceneEdit->applyMaterialAsset(mAssetGuid, node))
+        return fail(QStringLiteral("graph.toMaterial: the saved material '%1' did not apply").arg(mAssetGuid));
     return true;
 }
 

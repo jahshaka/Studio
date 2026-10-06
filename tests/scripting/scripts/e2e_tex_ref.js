@@ -102,7 +102,8 @@ function arm1(staged, loc, root) {
     // save writes nothing and the reopen is untextured.
     var graphTex = assets.importFile(staged + "/graph.png");
     assert(graphTex && graphTex.length > 10, "an image for the graph imports (" + graphTex + ")");
-    assert(materials.create("TexRefGraph", { graph: true }).length > 10, "a graph material");
+    var graphMat = materials.create("TexRefGraph", { graph: true });
+    assert(graphMat.length > 10, "a graph material");
     var master = null;
     graph.nodes().forEach(function (n) { if (n.master) master = n.id; });
     var texNode = graph.addNode("texture");
@@ -111,7 +112,16 @@ function arm1(staged, loc, root) {
     w.graphCube = scene.addPrimitive("cube", { position: { x: 0, y: 0.5, z: 3 } });
     assert(graph.toMaterial(w.graphCube) === true, "graph.toMaterial applies to a cube");
     w.graphGuids = { baseColorMap: material.get(w.graphCube).textureAssets.baseColorMap };
-    assert(w.graphGuids.baseColorMap === graphTex,
+    // graph.toMaterial SAVES the bundle first (LIVE-PERSIST-1), and a saved
+    // material's members live where it lives (ASSETS-HOME-1: the picked library
+    // picture is adopted as the material's own member — same stored bytes, its
+    // own row). So the map names the texture node's asset AS SAVED: the
+    // material's baseColorMap member, which is the picture graph.png.
+    var member = null;
+    materials.members(graphMat).forEach(function (m) { if (m.slot === "baseColorMap") member = m; });
+    assert(member !== null && member.name === "graph.png" && member.baked === false,
+           "the material's baseColorMap member is the picture (" + JSON.stringify(member) + ")");
+    assert(w.graphGuids.baseColorMap === member.guid,
            "the graph material's base map names the texture node's asset (" +
            w.graphGuids.baseColorMap + ")");
     state(w, root, "fresh");
