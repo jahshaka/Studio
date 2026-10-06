@@ -410,6 +410,36 @@ unsigned holdSplashForShaderBuild(QApplication &app, VersionSplashScreen &splash
             sky.mode = SkyMode::Atmosphere;
             warmScene->setSky(sky);
         }
+        // THE VOXELISER'S OTHER TWO VARIANTS (ASYNC-SHADERS-1). The voxeliser compiles one
+        // compute variant per texture combination it meets (none, albedo, emissive, both —
+        // PhotonVoxelizer.cpp's c_numVctProperties) and a scene's first GI build dispatches
+        // the ones its materials need inside one frame: measured, the Tornado sample's
+        // open compiled two of them on the UI thread after its dialog. The box above is the
+        // albedo variant; two more boxes carry an emissive map, with and without an albedo,
+        // so the cold gate builds all four.
+        if (boxMesh) {
+            const unsigned char glow[4 * 4 * 4] = {
+                40, 30, 20, 255, 40, 30, 20, 255, 40, 30, 20, 255, 40, 30, 20, 255,
+                40, 30, 20, 255, 40, 30, 20, 255, 40, 30, 20, 255, 40, 30, 20, 255,
+                40, 30, 20, 255, 40, 30, 20, 255, 40, 30, 20, 255, 40, 30, 20, 255,
+                40, 30, 20, 255, 40, 30, 20, 255, 40, 30, 20, 255, 40, 30, 20, 255 };
+            for (int withAlbedo = 0; withAlbedo < 2; ++withAlbedo) {
+                const NodeId extra = warmScene->createNode();
+                PbrParams m;
+                m.albedo = Colour(0.5f, 0.5f, 0.5f);
+                const MaterialId mat = extra ? warmScene->createPbrMaterial(m) : MaterialId(0);
+                if (!mat) continue;
+                const TextureId emissive = warmScene->createTexture(4u, 4u, glow, true, true);
+                if (emissive) warmScene->setPbrTexture(mat, PbrTextureSlot::Emissive, emissive);
+                if (withAlbedo) {
+                    const TextureId albedo = warmScene->createTexture(4u, 4u, glow, true, true);
+                    if (albedo) warmScene->setPbrTexture(mat, PbrTextureSlot::Albedo, albedo);
+                }
+                warmScene->attachMesh(extra, boxMesh, mat);
+                warmScene->setNodeTransform(extra, Vec3(withAlbedo ? 3.0f : -3.0f, 0.0f, 0.0f),
+                                            Quat(), Vec3(1.0f, 1.0f, 1.0f));
+            }
+        }
         if (box && boxMesh && boxMatId && warmScene->attachMesh(box, boxMesh, boxMatId)) {
             // ...the tier a new scene of THIS PROCESS is born with: Epic, or the process's
             // test tier (TEST-TIER-1, services/testtier.h — a Low test process must not build
@@ -502,6 +532,46 @@ unsigned holdSplashForShaderBuild(QApplication &app, VersionSplashScreen &splash
         }
         warmScene->setAtomDrawEnabled(true);
         warmScene->setGlobalIllumination(warmGi);
+    }
+    // EVERY OTHER TIER'S COMPUTE SET TOO (ASYNC-SHADERS-1). After a project is open a tier
+    // change must not compile on the UI thread, and the voxel arm's compute permutations
+    // (the injection, the bounce, the field's integration, the card light — per cascade
+    // count, anisotropy and bounce count) cannot be drawn with a placeholder: the arm is
+    // rebuilt from scratch and dispatches them inside one frame. Measured on a cold cache:
+    // a Basic world's change to Low compiled five of them in the frame (1.25 s). So the
+    // cold gate builds each tier's arm once over the warm-up box, until its compiles go
+    // quiet; a warm launch skips it with the rest of the pass.
+    if (runPass && warmScene && haveWarmGi) {
+        for (int t = 0; t <= 3; ++t) {
+            const worldmodes::PhotonTier tier = worldmodes::PhotonTier(t);
+            GiParams gi = warmGi;
+            gi.mode = GiMode(qBound(0, worldmodes::photonTechnique(tier), 2));
+            gi.quality = GiQuality(qBound(0, worldmodes::photonQuality(tier), 3));
+            gi.numBounces = worldmodes::photonBounces(tier);
+            gi.ddgi = worldmodes::photonDdgi(tier) ? GiToggle::On : GiToggle::Off;
+            if (gi.mode == warmGi.mode && gi.quality == warmGi.quality &&
+                gi.numBounces == warmGi.numBounces && gi.ddgi == warmGi.ddgi)
+                continue;  // the born tier: built above
+            warmScene->setGlobalIllumination(gi);
+            int tierQuiet = 0, tierFrames = 0;
+            engine->shaderBuildProgress(compiled, cached, expected);
+            unsigned tierLast = compiled;
+            for (; tierFrames < kWarmUpGiFrames &&
+                   (tierQuiet < kGiQuietFrames || !warmScene->giStatus().vctBound);
+                 ++tierFrames) {
+                engine->renderOneFrame();
+                poll();
+                engine->shaderBuildProgress(compiled, cached, expected);
+                tierQuiet = compiled == tierLast ? tierQuiet + 1 : 0;
+                tierLast = compiled;
+            }
+            giFrames += tierFrames;
+        }
+        warmScene->setGlobalIllumination(warmGi);
+        for (int i = 0; i < kWarmUpFrames; ++i) {
+            engine->renderOneFrame();
+            poll();
+        }
     }
     qInfo("startup shader build: the GI compute set's warm-up took %d frames, %lld ms%s%s", giFrames,
           static_cast<long long>(giTimer.elapsed()), runPass ? "" : " (a warm cache: skipped — the global pass's key is the recorded one)",

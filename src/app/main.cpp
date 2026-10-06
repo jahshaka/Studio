@@ -423,9 +423,19 @@ int main(int argc, char *argv[])
     if (auto engine = EngineHost::instance().engine()) {
         livecompiles::arm([weak = std::weak_ptr<jahshaka::engine::Engine>(engine)]() {
             unsigned compiled = 0, cached = 0, expected = 0;
-            if (auto e = weak.lock()) e->shaderBuildProgress(compiled, cached, expected);
-            return compiled;
+            auto e = weak.lock();
+            if (!e) return 0u;
+            e->shaderBuildProgress(compiled, cached, expected);
+            // What the background compiler built, no frame waited for (ASYNC-SHADERS-1):
+            // only the rest can be a live compile.
+            const unsigned background = e->asyncShaderStats().compiledInBackground;
+            return compiled >= background ? compiled - background : 0u;
         });
+        // AFTER THE STARTUP GATE, THE EDITOR COMPILES IN THE BACKGROUND (ASYNC-SHADERS-1):
+        // an interactive session's view never waits for a shader outside an open's dialog.
+        // A scripted run and the engine selftest keep every frame a complete picture (a
+        // script may ask, app.setAsyncShaders; the selftest asserts it drew no placeholder).
+        livecompiles::setAsyncPolicy(!cli.isScriptRun() && cli.selftestPng.isEmpty());
     }
     // From now on any NEW compile burst (a scene open, a material edit) is
     // written to disk a few seconds after it settles, so a crash costs at most

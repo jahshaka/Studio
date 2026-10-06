@@ -2431,6 +2431,10 @@ void EngineSceneViewport::syncFrame(float dtOverride)
     pollPresentedFrame(false);
     if (!mActive || !view()) return;
     if (!ensureEngineScene()) return;
+    // THE VIEW'S COMPILE MODE, every frame (ASYNC-SHADERS-1; services/livecompiles.h):
+    // blocking during startup and inside an open's or a dialog's window, in the background
+    // otherwise — a shader not built yet draws the engine's placeholder until it lands.
+    view()->setAsyncShaders(livecompiles::asyncNow());
     // The wall clock, unless a caller supplied a step. mFrameTimer is restarted
     // either way: after a fixed-dt frame the NEXT free-running frame must not
     // charge the document for the time the scripted one took. Nanoseconds,

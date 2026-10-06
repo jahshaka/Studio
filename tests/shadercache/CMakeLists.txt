@@ -97,6 +97,33 @@ jah_gpu_row(shader.live_compiles CLASS app COMMAND test_live_compiles
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(shader.live_compiles PROPERTIES TIMEOUT 600 LABELS "shadercache")
 
+# shader.async_after_open (ASYNC-SHADERS-1): after a project is open, a new material and a tier
+# change compile in the BACKGROUND — 0 UI-thread compiles, the placeholder in the presented
+# frames, the pending count up then back to 0, the settled picture the warm launch's.
+add_executable(test_async_after_open test_async_after_open.cpp)
+set_target_properties(test_async_after_open PROPERTIES CXX_STANDARD 17
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+target_link_libraries(test_async_after_open PRIVATE Qt6::Core Qt6::Gui)
+target_compile_definitions(test_async_after_open PRIVATE
+    JAHSHAKA_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
+    JAHSHAKA_BINARY="$<TARGET_FILE:${CMAKE_PROJECT_NAME}>")
+jah_gpu_row(shader.async_after_open CLASS app COMMAND test_async_after_open
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(shader.async_after_open PROPERTIES TIMEOUT 1200 LABELS "shadercache")
+
+# shader.sample_opens_quiet (ASYNC-SHADERS-1): every shipped sample opened on a cold cache with the
+# background compiler on; after each open's window, 0 UI-thread compiles (the sentry).
+add_executable(test_sample_opens_quiet test_sample_opens_quiet.cpp)
+set_target_properties(test_sample_opens_quiet PROPERTIES CXX_STANDARD 17
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+target_link_libraries(test_sample_opens_quiet PRIVATE Qt6::Core)
+target_compile_definitions(test_sample_opens_quiet PRIVATE
+    JAHSHAKA_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
+    JAHSHAKA_BINARY="$<TARGET_FILE:${CMAKE_PROJECT_NAME}>")
+jah_gpu_row(shader.sample_opens_quiet CLASS app COMMAND test_sample_opens_quiet
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(shader.sample_opens_quiet PROPERTIES TIMEOUT 1800 LABELS "shadercache")
+
 # The per-scene PSO precache (SHADER_CACHE_SPEC.md §5), asserted by COUNTING
 # COMPILES: after View::warmUpShaders() the first real frame must compile
 # nothing. Its own process, like every engine suite (one Engine per process).
