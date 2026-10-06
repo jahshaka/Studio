@@ -550,6 +550,35 @@ int main(int argc, char **argv)
         CHECK(r.engine->lastError().find("colour ramp") == std::string::npos &&
                   r.engine->lastError().find("Image format") == std::string::npos,
               "D2: the ramp image loaded into the affector (no ramp error from the engine)");
+        // TWO RAMPS IN ONE SHARD (the store shards objects by hash): the second
+        // file appears in a directory the engine already registered for the
+        // first, while the first is in use. Ogre indexes a location once, at
+        // add — the second ramp must still resolve, not be dropped as missing.
+        {
+            const QString shard = QDir::temp().filePath(QStringLiteral("dirty_mirror_shard"));
+            QDir(shard).removeRecursively();
+            QDir().mkpath(shard);
+            const QString first = QDir(shard).filePath(QStringLiteral("rampA.png"));
+            const QString second = QDir(shard).filePath(QStringLiteral("rampB.png"));
+            CHECK(ramp.save(first), "D2: ramp A written into the shard");
+            r.mirror->sync();
+            r.emitter->setColourRamp(QStringLiteral("ramp-a"), first);
+            r.mirror->sync();
+            CHECK(r.engine->lastError().find("colour ramp") == std::string::npos,
+                  "D2: ramp A resolves (its shard is now a registered location)");
+            QImage other = ramp.mirrored(true, false);
+            CHECK(other.save(second), "D2: ramp B written into the SAME shard, after A is in use");
+            const quint64 before = r.mirror->visitPushCount();
+            r.emitter->setColourRamp(QStringLiteral("ramp-b"), second);
+            r.mirror->sync();
+            std::printf("info: D2 second ramp in a registered shard: %llu push(es), engine error '%s'\n",
+                        (unsigned long long)(r.mirror->visitPushCount() - before),
+                        r.engine->lastError().c_str());
+            CHECK(r.mirror->visitPushCount() > before &&
+                      r.engine->lastError().find("colour ramp not found") == std::string::npos,
+                  "D2: a ramp imported later into an already-registered shard is found and pushed");
+            QDir(shard).removeRecursively();
+        }
         // ...and the list setters the verbs and the panel call mark too.
         for (const Case &c : {
                  Case{ "setColourKeys", [&] {
