@@ -759,6 +759,15 @@ void MainWindow::switchSpace(WindowSpaces space, bool force)
 	spaceRefusal.clear();
 	SessionMarkers::logSpaceSwitch(spaces::id(currentSpace), spaces::id(space));
 
+	// THE PROJECT'S TILE IS TAKEN BEFORE THE PAGE IT COMES FROM IS LEFT
+	// (CLOSE-SHOT-2): it is the editor's PRESENTED frame, and leaving the editor
+	// takes its view off screen — a hidden view has no frame to read
+	// (EngineSceneViewport::settlePresentedFrame). From any other page the editor
+	// is already hidden and the tile keeps the last editor frame, which is what
+	// the user last saw of the world.
+	if (space == WindowSpaces::DESKTOP && projectService->isSceneOpen() && sceneView->isInitialized())
+		updateCurrentSceneThumbnail();
+
 	// properly shutdown previous space
 	switch (currentSpace) {
 	case WindowSpaces::PLAYER:
@@ -774,8 +783,6 @@ void MainWindow::switchSpace(WindowSpaces space, bool force)
     previousSpace = currentSpace;
     switch (currentSpace = space) {
         case WindowSpaces::DESKTOP: {
-			if (projectService->isSceneOpen() && sceneView->isInitialized())
-				updateCurrentSceneThumbnail();
 			// THE GRID IS NOT REBUILT HERE (CREATE-GAP-1). It was, on every entry
 			// (TRAY-REPOP-1: a close used to come back to a grid that had never
 			// seen the projects made since boot) — correct, and O(N) PNG decodes

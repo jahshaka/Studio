@@ -66,6 +66,19 @@ console.log("clean vs clean (the next frame): " + J(still));
 assert(still.overFraction <= 0.005,
        "two clean captures of the still scene agree (" + still.over + " px over " + TOL + ")");
 
+// ---- 1b. with the furniture off ON SCREEN (Game View), the clean picture IS the
+// presented frame, byte for byte: the capture draws the same frame — its shadow
+// maps, its reflection, its gather, its exposure — and only the furniture differs.
+assert(editor.gameView(true) === true, "Game View on (no furniture on screen)");
+editor.frame(10, 1 / 60);
+var gv = editor.presentedFrame("cs_gv_clean.png", { presented: "cs_gv_shown.png" });
+var gvSame = app.compareImages(gv.path, gv.presented, 0);
+console.log("Game View: clean vs presented, one frame: " + J(gvSame));
+assert(gvSame.over === 0, "the clean picture is the presented frame wherever no furniture is (" +
+       gvSame.over + " px differ, max " + gvSame.maxDelta + ")");
+editor.gameView(false);
+editor.frame(10, 1 / 60);
+
 // ---- 2. project.save's tile -------------------------------------------------
 assert(project.save() === true, "project.save");
 var tile = project.thumbnail("cs_tile.png");
@@ -86,7 +99,25 @@ assert(furnitureInTile.over >= 200 && vsShown.over >= furnitureInTile.over / 2,
        "the tile has no gizmo, outline or grid: it differs from the frame as shown where they are (" +
        vsShown.over + " px; the furniture covers " + furnitureInTile.over + ")");
 
-// ---- 3. the close writes the tile -------------------------------------------
+// ---- 3. the Desktop switch writes the tile ---------------------------------
+// The tile is the editor's presented frame, taken BEFORE the editor page is
+// left (MainWindow::switchSpace) — a hidden view has no frame to read.
+node.setProperty(cube, "position", [-3, 1, 0]);
+editor.frame(30, 1 / 60);
+var beforeDesk = editor.presentedFrame("cs_desk_expected_tile.png", { tile: true });
+assert(app.space("desktop") === true, "app.space('desktop') with the project open");
+var desk = project.thumbnail("cs_desk_tile.png", guid);
+console.log("desktop tile " + J(desk));
+var vsDesk = app.compareImages(desk.path, beforeDesk.path, TOL);
+var vsSave = app.compareImages(desk.path, tile.path, TOL);
+console.log("desktop tile vs the frame before the switch " + J(vsDesk) + "  vs the save " + J(vsSave));
+assert(!desk.empty && vsDesk.overFraction <= 0.005 && vsSave.over > vsDesk.over * 4,
+       "the Desktop switch's tile shows the edit (" + vsDesk.over + " px from the frame, " +
+       vsSave.over + " from the save)");
+assert(app.space("editor") === true, "back to the editor");
+editor.frame(10, 1 / 60);
+
+// ---- 4. the close writes the tile -------------------------------------------
 node.setProperty(cube, "position", [3, 1, 0]);
 editor.frame(30, 1 / 60);
 var moved = editor.presentedFrame("cs_moved_tile.png", { tile: true });

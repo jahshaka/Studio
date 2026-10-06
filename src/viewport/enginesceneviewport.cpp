@@ -2673,7 +2673,9 @@ void EngineSceneViewport::settlePresentedFrame()
             // it while hidden (forcing a frame into it there lost the device —
             // Xid 13 "3D WIDTH ZT", scripting.e2e.material_tabs's close from the
             // Materials page). The requests are answered with no picture and
-            // the stored tile keeps the last one.
+            // the stored tile keeps the last one — the last editor frame, which
+            // is what the user last saw of the world (the lead's ruling: a close
+            // from a non-editor page keeps it).
             v->cancelFrameCapture();
             cancelPresentedFrame();
             return;
