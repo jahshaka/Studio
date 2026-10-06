@@ -23,6 +23,7 @@ For more information see the LICENSE file
 #include <QVector3D>
 #include <QJSValue>
 #include <QJsonArray>
+#include <QJsonDocument>
 #include <QJsonObject>
 #include <QVariant>
 #include <QVariantMap>
@@ -220,7 +221,10 @@ inline QString colorHelp(const QVariant &raw)
     return QStringLiteral("'%1' is not a colour — use \"#rrggbb\"/\"#aarrggbb\", "
                           "an SVG colour name (\"red\"), or {r,g,b[,a]} with 0..1 channels "
                           "(the one colour encoding — what world.get() and assets.metadata answer)")
-        .arg(normalizeJs(raw).toString());
+        .arg(normalizeJs(raw).typeId() == QMetaType::QVariantMap
+                 ? QString::fromUtf8(QJsonDocument(QJsonObject::fromVariantMap(normalizeJs(raw).toMap()))
+                                         .toJson(QJsonDocument::Compact))
+                 : normalizeJs(raw).toString());
 }
 
 /// The shared "an unknown key is a typo the caller must SEE" check
