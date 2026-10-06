@@ -600,7 +600,9 @@ def load_inventory(build):
         files_in_argv = [os.path.normpath(c) for c in run[1:]
                          if c.endswith((".js", ".sh", ".py", ".js.in", ".cmake")) and os.path.isfile(c)]
         if not script:
-            script = next((f for f in files_in_argv if f.endswith(".js")), None)
+            # a wrapper's own .js.in template counts too (`bash run.sh <app> <x.js.in> ...`): its
+            # verbs are what the row tests, and a shell wrapper's text is not JS (LIVE-PERSIST-1)
+            script = next((f for f in files_in_argv if f.endswith((".js", ".js.in"))), None)
         if not script and run and run[0].endswith(("bash", "/sh", "sh")) and files_in_argv:
             script = files_in_argv[0]
         # A POOL row (SUITE-POOL-1: `run_pool.py --pool <p> --arm <arm> <script> <budget> ...`):

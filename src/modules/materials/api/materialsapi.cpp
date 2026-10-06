@@ -2466,6 +2466,10 @@ bool GraphApi::toMaterial(const QString &nodeId)
     // pinning its whole closure, writing the use edge, stamping the piece
     // source, as one undo step. What the node wears is exactly what a reopen,
     // an export and an import read back.
+    // A picture the graph names by FILE becomes a library asset first (the rule
+    // material.set's map keys follow): a definition may never carry a path.
+    MaterialHelper::resolveAppRelativeTextures(graph, MaterialHelper::TextureBinding::Import,
+                                               assethome::of(host.db, mAssetGuid));
     if (!save()) return false;   // save() said why
     if (!host.services->sceneEdit->applyMaterialAsset(mAssetGuid, node))
         return fail(QStringLiteral("graph.toMaterial: the saved material '%1' did not apply").arg(mAssetGuid));
