@@ -433,9 +433,12 @@ int main(int argc, char *argv[])
         });
         // AFTER THE STARTUP GATE, THE EDITOR COMPILES IN THE BACKGROUND (ASYNC-SHADERS-1):
         // an interactive session's view never waits for a shader outside an open's dialog.
-        // A scripted run and the engine selftest keep every frame a complete picture (a
-        // script may ask, app.setAsyncShaders; the selftest asserts it drew no placeholder).
-        livecompiles::setAsyncPolicy(!cli.isScriptRun() && cli.selftestPng.isEmpty());
+        // A scripted run, an MCP session (the suites and the rig drive the app through it)
+        // and the engine selftest keep every frame a complete picture: their pixel reads
+        // must never meet a placeholder (app.sky_swap_presented did). A session asks for
+        // the background path with app.setAsyncShaders(true); the selftest asserts it drew
+        // no placeholder.
+        livecompiles::setAsyncPolicy(!cli.isScriptRun() && cli.selftestPng.isEmpty() && !cli.mcpServe);
     }
     // From now on any NEW compile burst (a scene open, a material edit) is
     // written to disk a few seconds after it settles, so a crash costs at most
