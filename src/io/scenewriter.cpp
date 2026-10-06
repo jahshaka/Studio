@@ -900,19 +900,13 @@ void SceneWriter::writeSceneNodeMaterial(QJsonObject& matObj, iris::MaterialPtr 
 		// add vector properties
     }
 
-	// GENERATED SHADER PIECES (HLMS_ADOPTION P5). Not Property rows — they are
-	// a cache reference the emitter owns, not something a user sets — so they
-	// are written explicitly, and by FILE NAME rather than path: the piece
-	// lives in a per-USER cache whose location differs on every machine, while
-	// the name is a hash of the file's own content and is therefore the same
-	// everywhere. `customPieceGraph` names the shader asset the piece came
-	// from, so a machine that does not have the file can regenerate it from the
-	// graph instead of silently falling back to the baked surface.
+	// GENERATED SHADER PIECES (HLMS_ADOPTION P5). Not Property rows: a piece is
+	// DERIVED from its material's graph, so the scene names the MATERIAL
+	// (`customPieceGraph`, the bundle's guid) and never the piece — the reader
+	// re-emits from the definition (LIVE-PERSIST-1). The cache file NAMES this
+	// block used to write were a lookup key into a per-user cache, and that
+	// lookup is what let a scene whose graph never travelled look live.
 	if (auto pbr = mat.dynamicCast<iris::PbrMaterial>()) {
-		if (!pbr->customPiecePixel.isEmpty())
-			valuesObj["customPiece"] = QFileInfo(pbr->customPiecePixel).fileName();
-		if (!pbr->customPieceVertex.isEmpty())
-			valuesObj["customPieceVertex"] = QFileInfo(pbr->customPieceVertex).fileName();
 		// THE UV SCROLL (TORNADO-1): the animated UV fold's velocity, graph-owned
 		// like the pieces; absent when the material does not scroll.
 		if (pbr->textureVelocityU != 0.0f || pbr->textureVelocityV != 0.0f)
@@ -921,6 +915,9 @@ void SceneWriter::writeSceneNodeMaterial(QJsonObject& matObj, iris::MaterialPtr 
 		if ((!pbr->customPiecePixel.isEmpty() || !pbr->customPieceVertex.isEmpty()) &&
 		    !pbr->getGuid().isEmpty())
 			valuesObj["customPieceGraph"] = pbr->getGuid();
+		// (A material with pieces and NO guid — a graph evaluated in hand —
+		// cannot be written live: there is no definition to re-emit from.
+		// graph.toMaterial no longer makes one; LIVE-PERSIST-1.)
 	}
 
 	matObj["values"] = valuesObj;

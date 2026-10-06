@@ -80,3 +80,19 @@ jah_gpu_row(samples.mirror_room_boots CLASS app
                  ${CMAKE_CURRENT_SOURCE_DIR}/scripts/mirror_room_boot.js.in ${CMAKE_CURRENT_BINARY_DIR}/mirror-room-boots 10
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(samples.mirror_room_boots PROPERTIES LABELS "scripting;nightly" TIMEOUT 1800)
+
+# samples.archive_fidelity.Tornado — LIVE-PERSIST-1: the SHIPPED Tornado archive, opened on a clean
+# machine (a virgin data root, HOME and XDG_CACHE_HOME — no piece cache anywhere), keeps its live
+# graph materials: every layer re-emits its pieces from its graph, the shells keep their baked
+# cut-out, and the torn silhouette at tornado.jpg's camera (detached flaps + see-through, the mean
+# of four pinned shader times) is within 25 % of the reference still and 10 % of the in-memory scene
+# make_tornado.js builds. The archive that shipped before this lane opens smooth: 0 px / 0.00x.
+jah_gpu_row(samples.archive_fidelity.Tornado CLASS app
+         COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/scripts/archive_fidelity.sh $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
+                 ${CMAKE_CURRENT_SOURCE_DIR}/scripts/archive_fidelity_tornado.js.in
+                 ${CMAKE_SOURCE_DIR}/scenes/Tornado.zip
+                 ${CMAKE_CURRENT_BINARY_DIR}/archive-fidelity-Tornado
+                 ${CMAKE_CURRENT_SOURCE_DIR}/data/tornado_reference.jpg
+                 ${CMAKE_CURRENT_SOURCE_DIR}/scripts/tornado_metrics.py
+         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(samples.archive_fidelity.Tornado PROPERTIES LABELS "scripting" TIMEOUT 480)

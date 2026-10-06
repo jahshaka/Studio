@@ -130,11 +130,13 @@ public:
 	///     re-use a name with changed content.
 	static QString fileNameFor(const QString &source, bool vertexStage);
 
-	/// The per-user cache directory pieces live in — NOT the project. Pieces
-	/// are a regenerable cache, exactly like BakedMaps: the graph is the truth
-	/// and the piece is derived, so a project archive ships the graph.
+	/// The cache directory pieces live in — NOT the project: `<data root>/
+	/// ShaderPieces`, beside the shader cache, so `--data-root` moves both.
+	/// Pieces are ONLY a cache: the graph (the material definition's
+	/// `shadergraph`) is the truth, every read re-emits from it, and a project
+	/// archive ships the graph — never a piece (LIVE-PERSIST-1).
 	///
-	/// Per-USER rather than per-project for a hard reason: a piece file that
+	/// Per-ROOT rather than per-project for a hard reason: a piece file that
 	/// disappears aborts the ENTIRE Hlms disk cache load (OgreHlmsDiskCache.cpp
 	/// applyTo() clears the whole shader cache and returns), so project-local
 	/// pieces would mean opening project B threw away every shader project A
