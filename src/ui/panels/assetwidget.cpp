@@ -1695,44 +1695,27 @@ void AssetWidget::deleteItem()
 
 void AssetWidget::createSky()
 {
+    // THE VERB (SKY-VERB-1): one colour sky, the tile the menu always made.
+    if (!db || !project || project->getProjectGuid().isEmpty()) return;
+    if (!mainWindow || !mainWindow->scripting()) return;
+    AssetsApi api(mainWindow->scripting()->scriptHost());
+    const QString guid = api.quietly([&] { return api.createSky(); });
+    if (guid.isEmpty()) {
+        QMessageBox::warning(this, tr("Create Sky"), tr("The sky could not be created: %1")
+                                                         .arg(api.lastError()));
+        return;
+    }
     QListWidgetItem *item = new QListWidgetItem;
     item->setFlags(item->flags() | Qt::ItemIsEditable);
     item->setSizeHint(currentSize);
     item->setTextAlignment(Qt::AlignCenter);
     item->setIcon(QIcon(":/icons/icons8-file-sky.png"));
-
-    const QString assetGuid = GUIDManager::generateGUID();
-
-    item->setData(MODEL_GUID_ROLE, assetGuid);
+    item->setData(MODEL_GUID_ROLE, guid);
     item->setData(MODEL_PARENT_ROLE, assetItem.selectedGuid);
     item->setData(MODEL_ITEM_TYPE, MODEL_ASSET);
     item->setData(MODEL_TYPE_ROLE, static_cast<int>(ModelTypes::Sky));
     item->setData(SKY_TYPE_ROLE, static_cast<int>(iris::SkyType::SINGLE_COLOR));
-
-	QJsonObject properties;
-	QJsonObject skyProps;
-	skyProps.insert("type", item->data(SKY_TYPE_ROLE).toInt());
-	properties.insert("sky", skyProps);
-
-	QJsonObject skyDescription;
-	// Need to leave the defaut sky properties empty, the widget will set it
-
-	db->createAssetEntry(
-		assetGuid,
-		"Sky",
-		static_cast<int>(ModelTypes::Sky),
-		project->getProjectGuid(),
-		assethome::project(project->getProjectGuid()),
-		assethome::Origin::Create,
-		QString(),
-		QString(),
-		AssetHelper::makeBlobFromPixmap(QPixmap(":/icons/icons8-file-sky.png")),
-        QJsonDocument(properties).toJson(),
-		QByteArray(),
-        QJsonDocument(skyDescription).toJson()
-	);
-
-    item->setText("Sky");
+    item->setText(db->fetchAsset(guid).name);
     ui->assetView->addItem(item);
 }
 

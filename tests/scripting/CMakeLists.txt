@@ -882,11 +882,11 @@ jah_pool_arm(assets_import import_render ${CMAKE_CURRENT_BINARY_DIR}/e2e_import_
 configure_file(scripts/e2e_node_archive_roundtrip.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_node_archive_roundtrip.js @ONLY)
 jah_pool_arm(assets_import node_archive_roundtrip ${CMAKE_CURRENT_BINARY_DIR}/e2e_node_archive_roundtrip.js 12)
 
-# assets_import.bundle_export_{texture,material,pack} — JAF-EXPORTS-1: the Assets tray's exports
+# assets_import.bundle_export_{texture,material,pack,sky} — JAF-EXPORTS-1: the Assets tray's exports
 # are the share file (assets.exportBundle, one entry or a pack); each kind's file re-imports into
 # an emptied library with its members, and a cube wearing the landed material samples the
 # fixture's own texel. One template, configured per kind. Engine up.
-foreach(BUNDLE_KIND texture material pack)
+foreach(BUNDLE_KIND texture material pack sky)
     configure_file(scripts/e2e_bundle_export.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_bundle_export_${BUNDLE_KIND}.js @ONLY)
     jah_pool_arm(assets_import bundle_export_${BUNDLE_KIND} ${CMAKE_CURRENT_BINARY_DIR}/e2e_bundle_export_${BUNDLE_KIND}.js 2)
 endforeach()
