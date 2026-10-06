@@ -79,7 +79,6 @@ QJsonObject sampleNodeObject()
     // project-relative path, and the walk must leave it alone.
     values[QStringLiteral("roughnessMap")] = QStringLiteral("Textures/rough.png");
     values[QStringLiteral("customPieceGraph")] = QString::fromLatin1(kShaderGuid);
-    values[QStringLiteral("customPiece")] = QStringLiteral("a3f9e2.piece");
     material[QStringLiteral("values")] = values;
     material[QStringLiteral("materialType")] = QStringLiteral("pbr");
 

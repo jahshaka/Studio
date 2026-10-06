@@ -9,6 +9,12 @@
 //           the baked map is bound; frame F1; export the archive; close.
 //   import  a VIRGIN data root (an empty library, an empty store, no piece cache):
 //           import the archive, open it; the same three facts; frame F2.
+//   drop    the first data root: the graph material is DELETED (assets.remove,
+//           force); the project opens with no pieces but still NAMES the material
+//           (`customPieceGraph`), and is saved that way.
+//   restore the wrapper puts the material's catalog rows and sidecar back from a
+//           copy; the reopened scene's pieces come back from the graph — the save
+//           made while the asset was missing did not lose the key.
 //
 // The wrapper compares F1 and F2 against F0. Before LIVE-PERSIST-1 the reopen lost
 // the cut-out (the baked map had no guid and was written ABSENT) and the import lost
@@ -143,6 +149,25 @@ if (STAGE === "author") {
     // cut-out everywhere would otherwise compare equal to itself).
     assert(material.set(theCube(), { alphaMode: 0 }), "control: the cut-out off");
     frame("Fsolid");
+    assert(project.close(), "closed");
+} else if (STAGE === "drop" || STAGE === "restore") {
+    var pg3 = null;
+    project.list().forEach(function (p) { if (p.name === "Live Roundtrip") pg3 = p.guid; });
+    assert(pg3 !== null && project.open(pg3), "project.open");
+    if (STAGE === "drop") {
+        var graphGuid = node.serialize(theCube()).node.material.values.customPieceGraph;
+        assert(typeof graphGuid === "string" && graphGuid.length > 10, "the scene names its graph " + graphGuid);
+        assert(project.close(), "closed");
+        assert(assets.remove(graphGuid, { force: true }), "the graph material DELETED");
+        assert(project.open(pg3), "reopened with the graph material missing");
+        var dm = material.get(theCube());
+        assert(!dm.customPiecePixel, "no pieces without the graph (" + dm.customPiecePixel + ")");
+        assert(node.serialize(theCube()).node.material.values.customPieceGraph === graphGuid,
+               "...but the node still names it");
+        assert(project.save(), "saved while the graph is missing");
+    } else {
+        checkPersisted(theCube());
+    }
     assert(project.close(), "closed");
 }
 console.log("material_live_roundtrip: " + STAGE + " PASS");

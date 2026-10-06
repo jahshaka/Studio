@@ -60,8 +60,20 @@ editor.select(null);
 editor.gameView(true);
 [0.25, 0.75, 1.25, 1.75].forEach(function (t) {
     world.shaderTime({ t: t });
-    editor.frame(60);
-    editor.screenshot(OUT + "/t" + String(t).replace(".", "_") + ".png", 800, 600, [], "scene");
+    // SETTLE IN FRAMES until the picture stops moving (a fresh data root compiles
+    // its shaders and fills its caches over the first frames).
+    var probes = [];
+    for (var py = 0.2; py < 1.0; py += 0.2)
+        for (var px = 0.2; px < 1.0; px += 0.2) probes.push({ x: px, y: py });
+    var shot = OUT + "/t" + String(t).replace(".", "_") + ".png";
+    var last = "", stable = 0;
+    for (var k = 0; k < 40 && stable < 2; ++k) {
+        editor.frame(30);
+        var now = J(editor.screenshot(shot, 800, 600, probes, "scene").probes);
+        stable = now === last ? stable + 1 : 0;
+        last = now;
+    }
+    assert(stable >= 2, "t=" + t + ": the picture settled");
 });
 world.shaderTime({ t: null });
 editor.gameView(false);

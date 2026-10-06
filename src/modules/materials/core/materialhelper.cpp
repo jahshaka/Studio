@@ -171,28 +171,6 @@ PbrGraphEvaluator::TextureResolver MaterialHelper::textureResolver()
 	};
 }
 
-iris::PbrMaterialPtr MaterialHelper::createPbrMaterialFromShaderGraph(NodeGraph* graph)
-{
-	auto material = PbrGraphEvaluator::createMaterial(graph, textureResolver());
-	applyEmittedPieces(graph, material);
-	return material;
-}
-
-materials::PieceEmitter::Result MaterialHelper::applyEmittedPieces(NodeGraph* graph,
-                                                                   iris::PbrMaterialPtr material)
-{
-	materials::PieceEmitter::Result result;
-	if (!graph || !material) return result;
-	const QJsonObject pieces = materials::PieceEmitter::emitAndStore(graph, textureResolver(),
-	                                                                &result);
-	// Set BOTH, always, including to empty: a material being re-evaluated after
-	// an edit that made its graph un-emittable has to LOSE the piece it had, or
-	// the renderer would keep drawing the previous surface.
-	material->setCustomPiecePixel(pieces["customPiecePixel"].toString());
-	material->setCustomPieceVertex(pieces["customPieceVertex"].toString());
-	return result;
-}
-
 NodeLibrary* MaterialHelper::sharedNodeLibrary()
 {
 	// Function-local static, built on first use (after QApplication, so its

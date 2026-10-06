@@ -3,6 +3,8 @@
 # save -> reopen (EMPTY piece cache) -> export -> EMPTY library -> import. Three processes
 # (the stages of material_live_roundtrip.js.in); HOME and XDG_CACHE_HOME are scratch, so no
 # per-user cache can stand in for what the bundle must carry. The three frames must agree.
+# Then the graph material is deleted, the project saved without it, the material restored:
+# the reopen must come back live (the save kept `customPieceGraph`).
 # usage: material_live_roundtrip.sh <app> <script.js.in> <fixture.png> <workdir>
 set -u
 APP="$1"; SCRIPT_IN="$2"; FIXTURE="$3"; WORK="$4"
@@ -22,6 +24,23 @@ run author "$WORK/root-a"
 rm -rf "$WORK/root-a/ShaderPieces"
 run reopen "$WORK/root-a"
 run import "$WORK/root-b"
+# THE GRAPH GOES MISSING AND COMES BACK: the drop stage deletes it and saves; the restore
+# puts its catalog rows (every table but the projects' scenes) and its sidecar back from
+# a copy taken before the drop, then the restore stage reopens.
+rm -rf "$WORK/root-a.bak"; cp -a "$WORK/root-a" "$WORK/root-a.bak"
+run drop "$WORK/root-a"
+db=$(cd "$WORK/root-a" && ls *.db | head -1)
+python3 - "$WORK/root-a/$db" "$WORK/root-a.bak/$db" <<'PYEOF' || { echo "FAIL: could not restore the catalog rows"; exit 1; }
+import sqlite3, sys
+c = sqlite3.connect(sys.argv[1])
+c.execute("ATTACH DATABASE ? AS bak", (sys.argv[2],))
+for (t,) in c.execute("SELECT name FROM bak.sqlite_master WHERE type='table'").fetchall():
+    if t in ("projects",) or t.startswith("sqlite_"): continue
+    c.execute('INSERT OR IGNORE INTO main."%s" SELECT * FROM bak."%s"' % (t, t))
+c.commit()
+PYEOF
+cp -rn "$WORK/root-a.bak/AssetStore/." "$WORK/root-a/AssetStore/"
+run restore "$WORK/root-a"
 python3 - "$WORK" <<'EOF'
 import sys
 from PIL import Image

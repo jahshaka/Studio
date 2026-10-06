@@ -1781,18 +1781,21 @@ iris::MaterialPtr SceneReader::readPbrMaterial(const QJsonObject& matObj)
 /// was not in its project still came back live on any machine that had once
 /// run the script that made it, and smooth on every other.
 ///
-/// The guid goes back on the material too, so the next save writes
-/// `customPieceGraph` again — a reopened material that lost it saved its pieces
-/// away for good.
+/// The guid goes back on the material too — ALWAYS, even when the definition
+/// is missing — so the next save writes `customPieceGraph` again; a reopened
+/// material that lost it saved its pieces away for good.
 void SceneReader::restoreCustomPieces(iris::PbrMaterialPtr mat, const QJsonObject& values)
 {
 	const QString graphGuid = values["customPieceGraph"].toString();
-	if (graphGuid.isEmpty() || !handle) return;
+	if (graphGuid.isEmpty()) return;
+	// THE GUID FIRST, whatever the read finds: a scene opened while its graph
+	// material is missing must keep naming it, or the next save drops the key
+	// and the pieces never come back once the asset does.
+	mat->setGuid(graphGuid);
+	if (!handle) return;
 	const QJsonObject definition = MaterialBundle::read(handle, graphGuid, project);
 	if (definition.isEmpty()) return;   // SceneIssues names the missing asset
 	MaterialReader::restoreGeneratedPieces(mat, definition);
-	if (!mat->customPiecePixel.isEmpty() || !mat->customPieceVertex.isEmpty())
-		mat->setGuid(graphGuid);
 }
 
 iris::MaterialPtr SceneReader::readMaterial(QJsonObject& nodeObj)

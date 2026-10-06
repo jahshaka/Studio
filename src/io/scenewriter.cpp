@@ -912,12 +912,11 @@ void SceneWriter::writeSceneNodeMaterial(QJsonObject& matObj, iris::MaterialPtr 
 		if (pbr->textureVelocityU != 0.0f || pbr->textureVelocityV != 0.0f)
 			valuesObj["textureVelocity"] = QJsonArray{ double(pbr->textureVelocityU),
 			                                           double(pbr->textureVelocityV) };
-		if ((!pbr->customPiecePixel.isEmpty() || !pbr->customPieceVertex.isEmpty()) &&
-		    !pbr->getGuid().isEmpty())
+		// WHENEVER THE MATERIAL NAMES ITS SOURCE, pieces bound or not: a material
+		// whose graph is missing right now has no pieces, and dropping the key
+		// for that would lose them for good when the asset comes back.
+		if (!pbr->getGuid().isEmpty())
 			valuesObj["customPieceGraph"] = pbr->getGuid();
-		// (A material with pieces and NO guid — a graph evaluated in hand —
-		// cannot be written live: there is no definition to re-emit from.
-		// graph.toMaterial no longer makes one; LIVE-PERSIST-1.)
 	}
 
 	matObj["values"] = valuesObj;
