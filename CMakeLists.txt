@@ -380,6 +380,7 @@ set(SRCS
     src/services/vrworld.cpp
     src/services/worldmodes.cpp
     src/services/planarreflectors.cpp
+    src/services/physicsconstraints.cpp
     src/services/animationedits.cpp
     src/services/playerservice.cpp
     src/services/playbackservice.cpp
@@ -697,6 +698,7 @@ set(HEADERS
     src/services/testtier.h
     src/services/scenefolders.h
     src/services/planarreflectors.h
+    src/services/physicsconstraints.h
     src/services/animationedits.h
     src/services/playbackservice.h
     src/ui/panels/presets/assetpanel.h 

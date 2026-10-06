@@ -50,7 +50,7 @@ assert(fresh.enabled === false, "a fresh node is NOT a physics body");
 assert(fresh.type === "none", "type defaults to 'none'");
 assert(fresh.shape === "none", "shape defaults to 'none'");
 assert(near(fresh.mass, 1.0), "mass defaults to 1 (the struct's default)");
-assert(fresh.constraints === 0, "no constraints");
+assert(fresh.constraints.length === 0, "no constraints");
 
 assert(node.physics(box, {
     type: "rigidbody",
@@ -160,6 +160,28 @@ assert(node.physics(box, {
     restitution: 0.6, friction: 0.4, damping: 0.05, collisionMargin: 0.02
 }) === true, "the values to persist");
 
+// THE CONSTRAINT VERB (audit D5): node.addConstraint, its refusals, and the
+// list physicsInfo reports.
+var partner = scene.addPrimitive("cube", { position: { x: 3, y: 3, z: 0 } });
+var refusedNotBody = caught(function () { node.addConstraint(box, partner, "ball"); });
+assert(refusedNotBody !== null && refusedNotBody.indexOf("not a physics body") >= 0,
+       "a constraint to a node that is not a body is refused: " + refusedNotBody);
+assert(node.physics(partner, { type: "static", shape: "cube" }) === true, "the partner is a static body");
+var refusedSelf = caught(function () { node.addConstraint(box, box, "ball"); });
+assert(refusedSelf !== null && refusedSelf.indexOf("itself") >= 0,
+       "a node cannot be joined to itself: " + refusedSelf);
+var refusedType = caught(function () { node.addConstraint(box, partner, "hinge"); });
+assert(refusedType !== null && refusedType.indexOf("ball") >= 0 && refusedType.indexOf("dof6") >= 0,
+       "an unknown constraint type is refused with the list: " + refusedType);
+assert(node.physicsInfo(box).constraints.length === 0, "the refusals wrote nothing");
+assert(node.addConstraint(box, partner, "ball") === true, "node.addConstraint(box, partner, ball)");
+var refusedTwice = caught(function () { node.addConstraint(box, partner, "ball"); });
+assert(refusedTwice !== null && refusedTwice.indexOf("already") >= 0,
+       "the same pair and type twice is refused, never stacked: " + refusedTwice);
+var joined = node.physicsInfo(box).constraints;
+assert(joined.length === 1 && joined[0].to === partner && joined[0].type === "ball",
+       "physicsInfo lists the constraint by name: " + JSON.stringify(joined));
+
 assert(project.save() === true, "project.save");
 assert(project.close() === true, "project.close");
 assert(project.open(proj) === true, "project.open (REOPEN)");
@@ -174,6 +196,9 @@ assert(near(loaded.restitution, 0.6, 1e-3), "restitution survived: " + loaded.re
 assert(near(loaded.friction, 0.4, 1e-3), "friction survived: " + loaded.friction);
 assert(near(loaded.damping, 0.05, 1e-3), "damping survived: " + loaded.damping);
 assert(near(loaded.collisionMargin, 0.02, 1e-3), "collisionMargin survived: " + loaded.collisionMargin);
+assert(loaded.constraints.length === 1 && loaded.constraints[0].to === partner &&
+       loaded.constraints[0].type === "ball",
+       "the constraint survived: " + JSON.stringify(loaded.constraints));
 
 // ---- 4. the behavioural assertion ------------------------------------------
 // Two spheres side by side at the same height, identical in every way except
@@ -185,8 +210,19 @@ assert(node.physics(faller, { type: "rigidbody", shape: "sphere", mass: 1 }) ===
 assert(node.physics(anchor, { type: "static", shape: "sphere" }) === true,
        "anchor: static (mass 0) — the ONLY difference");
 
+// ...and a THIRD sphere, dynamic like the faller, but held by a ball joint to
+// a static post beside it: the constraint is the only difference, so only a
+// constraint that reaches Bullet keeps it up.
+var hung = scene.addPrimitive("sphere", { position: { x: 6, y: 12, z: 0 } });
+var post = scene.addPrimitive("cube", { position: { x: 8, y: 12, z: 0 } });
+assert(node.physics(hung, { type: "rigidbody", shape: "sphere", mass: 1 }) === true,
+       "hung: a dynamic rigid body like the faller");
+assert(node.physics(post, { type: "static", shape: "cube" }) === true, "post: static");
+assert(node.addConstraint(hung, post, "ball") === true, "hung is ball-jointed to the post");
+
 var fallerY0 = nodeById(faller).position.y;
 var anchorY0 = nodeById(anchor).position.y;
+var hungY0 = nodeById(hung).position.y;
 
 assert(editor.simulate(true) === true, "editor.simulate(true)");
 editor.frame(120, 1.0 / 60.0);   // 2 deterministic seconds of gravity
@@ -196,6 +232,10 @@ editor.frame(120, 1.0 / 60.0);   // 2 deterministic seconds of gravity
 // position is only observable before the switch is turned off.
 var fallerY1 = nodeById(faller).position.y;
 var anchorY1 = nodeById(anchor).position.y;
+var hungY1 = nodeById(hung).position.y;
+console.log("    hung y: " + hungY0 + " -> " + hungY1);
+assert(near(hungY1, hungY0, 0.25),
+       "THE JOINTED BODY DID NOT FALL: its ball joint reached Bullet (" + hungY0 + " -> " + hungY1 + ")");
 console.log("    faller y: " + fallerY0 + " -> " + fallerY1);
 console.log("    anchor y: " + anchorY0 + " -> " + anchorY1);
 assert(fallerY1 < fallerY0 - 5.0,

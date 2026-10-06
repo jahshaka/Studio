@@ -25,7 +25,6 @@ For more information see the LICENSE file
 
 #include "ui/panels/scenetreewidget.h"
 
-#include <qcombobox.h>
 #include "irisgl/irisglfwd.h"
 #include "ui/style/thememanager.h"
 #include "irisgl/document/scenegraph/scenenode.h"
@@ -127,7 +126,6 @@ public:
     void removeChild(iris::SceneNodePtr childNode);
 
     void OnLstItemsCommitData(QWidget *listItem);
-    QComboBox *box = nullptr;
 
     QTreeWidget *getWidget();
 
@@ -187,7 +185,6 @@ protected slots:
     /// empty folder when nothing is selected. NEVER reparents (§6b LAW).
     void newFolderFromSelection();
 
-    void constraintsPicked(int constraintGuidToIndex, iris::PhysicsConstraintType type);
 
     void deleteNode();
 	void duplicateNode();
@@ -304,6 +301,10 @@ private:
     QSharedPointer<iris::SceneNode> selectedNode;
     MainWindow* mainWindow;
 
+    /// The Add Constraint menu's one action: physicsconstraints::add, the
+    /// rule node.addConstraint calls too, with a refusal shown (audit D5).
+    void addConstraint(const iris::SceneNodePtr &from, const iris::SceneNodePtr &to,
+                       const QString &type);
 
     /// D1(b): the owner's Shift rule, applied on the PRESS. Selects everything
     /// from the topmost currently-selected row to `clicked`, inclusive.

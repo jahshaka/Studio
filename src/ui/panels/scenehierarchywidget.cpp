@@ -48,8 +48,7 @@ For more information see the LICENSE file
 #include <QMessageBox>
 #include "bridge/enginehost.h"
 #include "io/scenewriter.h"
-#include <qdialog.h>
-#include <qcombobox.h>
+#include "services/physicsconstraints.h"
 #include <QBrush>
 #include "ui/style/stylesheet.h"
 #include "ui/controls/assetdrag.h"
@@ -1175,55 +1174,37 @@ void SceneHierarchyWidget::sceneTreeCustomContextMenu(const QPoint& pos)
 		menu.addAction(action);
 	}
 
+    // ADD CONSTRAINT (audit D5): one row per OTHER physics body in the scene,
+    // under each joint type. Each row is one physicsconstraints::add call, the
+    // rule node.addConstraint calls too: both bodies, no self, no duplicate,
+    // one undo step.
     if (node->isPhysicsBody) {
-        QMenu *physicsMenu = menu.addMenu("Physics");
-        QMenu *addConstraintsMenu = physicsMenu->addMenu("Add Constraint");
-        QAction *p2pConstraint = addConstraintsMenu->addAction("Ball Constraint");
-        QAction *dof6Constraint = addConstraintsMenu->addAction("6Dof Constraint");
-
-        box = new QComboBox;
-
-        auto rootNode = scene->getRootNode();
-
-        connect(p2pConstraint, &QAction::triggered, this, [&]() {
-            box->addItem("null", "");
-
-            for (auto childNode : rootNode->children()) {
-                if (childNode->isPhysicsBody && childNode->getGUID() != node->getGUID()) {
-                    box->addItem(childNode->getName(), childNode->getGUID());
-                }
+        QVector<iris::SceneNodePtr> bodies;
+        std::function<void(const iris::SceneNodePtr &)> collect = [&](const iris::SceneNodePtr &n) {
+            for (const auto &child : n->children()) {
+                if (child->isPhysicsBody && child != node) bodies.append(child);
+                collect(child);
             }
+        };
+        collect(scene->getRootNode());
 
-            connect<void(QComboBox::*)(int)>(box, &QComboBox::currentIndexChanged, this, [&](int index) {
-                constraintsPicked(index, iris::PhysicsConstraintType::Ball);
-            });
-
-            QDialog d;
-            auto dl = new QVBoxLayout();
-            dl->addWidget(box);
-            d.setLayout(dl);
-            d.exec();
-        });
-
-        connect(dof6Constraint, &QAction::triggered, this, [&]() {
-            box->addItem("null", "");
-
-            for (auto childNode : rootNode->children()) {
-                if (childNode->isPhysicsBody && childNode->getGUID() != node->getGUID()) {
-                    box->addItem(childNode->getName(), childNode->getGUID());
-                }
+        QMenu *physicsMenu = menu.addMenu(tr("Physics"));
+        QMenu *addConstraintsMenu = physicsMenu->addMenu(tr("Add Constraint"));
+        const struct { const char *label; const char *type; } kinds[] = {
+            { QT_TR_NOOP("Ball Constraint"), "ball" },
+            { QT_TR_NOOP("6Dof Constraint"), "dof6" },
+        };
+        for (const auto &kind : kinds) {
+            QMenu *kindMenu = addConstraintsMenu->addMenu(tr(kind.label));
+            kindMenu->setEnabled(!bodies.isEmpty());
+            for (const iris::SceneNodePtr &body : bodies) {
+                QAction *to = kindMenu->addAction(body->getName());
+                const QString type = QLatin1String(kind.type);
+                connect(to, &QAction::triggered, this, [this, node, body, type]() {
+                    addConstraint(node, body, type);
+                });
             }
-
-            connect<void(QComboBox::*)(int)>(box, &QComboBox::currentIndexChanged, this, [&](int index) {
-                constraintsPicked(index, iris::PhysicsConstraintType::Dof6);
-            });
-
-            QDialog d;
-            auto dl = new QVBoxLayout();
-            dl->addWidget(box);
-            d.setLayout(dl);
-            d.exec();
-        });
+        }
     }
 
 	if (node->isExportable()) {
@@ -1272,14 +1253,14 @@ void SceneHierarchyWidget::sceneTreeCustomContextMenu(const QPoint& pos)
     menu.exec(ui->sceneTree->mapToGlobal(pos));
 }
 
-void SceneHierarchyWidget::constraintsPicked(int constraintGuidToIndex, iris::PhysicsConstraintType type)
+void SceneHierarchyWidget::addConstraint(const iris::SceneNodePtr &from, const iris::SceneNodePtr &to,
+                                         const QString &type)
 {
-	iris::ConstraintProperty constraintProp;
-	constraintProp.constraintFrom = selectedNode->getGUID();
-	constraintProp.constraintTo = box->itemData(constraintGuidToIndex).toString();
-	constraintProp.constraintType = type;
-
-	selectedNode->physicsProperty.constraints.append(constraintProp);
+	QString error;
+	UndoService *undo = (mainWindow && mainWindow->studioServices()) ? mainWindow->studioServices()->undo
+	                                                                 : nullptr;
+	if (!physicsconstraints::add(from, to, type, undo, &error))
+		QMessageBox::warning(this, tr("Add Constraint"), error);
 }
 
 // The menu rows and the toolbar button act on the SELECTION SET

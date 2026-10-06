@@ -1240,6 +1240,8 @@ add_executable(test_tree_multiselect
     test_tree_multiselect.cpp
     test_tree_stubs.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/scenehierarchywidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/physicsconstraints.cpp
+    ${CMAKE_SOURCE_DIR}/src/commands/nodeeditcommand.cpp
     # COMPONENTS-1: the outliner's icons live in one place now.
     ${CMAKE_SOURCE_DIR}/src/ui/controls/nodeicons.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/controls/assetdrag.cpp
@@ -1294,6 +1296,8 @@ add_executable(test_tree_scroll
     test_tree_scroll.cpp
     test_tree_stubs.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/scenehierarchywidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/physicsconstraints.cpp
+    ${CMAKE_SOURCE_DIR}/src/commands/nodeeditcommand.cpp
     # COMPONENTS-1: the outliner's icons live in one place now.
     ${CMAKE_SOURCE_DIR}/src/ui/controls/nodeicons.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/controls/assetdrag.cpp
@@ -1345,6 +1349,8 @@ add_executable(test_tree_reselect
     test_tree_reselect.cpp
     test_tree_stubs.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/scenehierarchywidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/physicsconstraints.cpp
+    ${CMAKE_SOURCE_DIR}/src/commands/nodeeditcommand.cpp
     # COMPONENTS-1: the outliner's icons live in one place now.
     ${CMAKE_SOURCE_DIR}/src/ui/controls/nodeicons.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/controls/assetdrag.cpp
@@ -1395,6 +1401,8 @@ add_executable(test_hierarchy_root
     test_hierarchy_root.cpp
     test_tree_stubs.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/scenehierarchywidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/physicsconstraints.cpp
+    ${CMAKE_SOURCE_DIR}/src/commands/nodeeditcommand.cpp
     # COMPONENTS-1: the outliner's icons live in one place now.
     ${CMAKE_SOURCE_DIR}/src/ui/controls/nodeicons.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/controls/assetdrag.cpp
