@@ -47,7 +47,7 @@ all.forEach(function (n) {
     assert(typeof m.customPiecePixel === "string" && m.customPiecePixel.length > 0 &&
            typeof m.customPieceVertex === "string" && m.customPieceVertex.length > 0,
            name + ": both generated pieces re-emitted from the graph, with an EMPTY piece cache");
-    assert(m.customPiecePixel.indexOf("@HOME@") === 0,
+    assert(String(m.customPiecePixel).indexOf("@HOME@") === 0,
            name + ": ...into the cache under this run's data root (" + m.customPiecePixel + ")");
     if (name !== "Main")
         assert(typeof m.baseColorMap === "string" && m.baseColorMap.length > 0,

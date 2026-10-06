@@ -36,8 +36,20 @@ function frame(name) {
     editor.select(null);
     editor.setCamera({ position: { x: 2.2, y: 1.9, z: 2.6 }, lookAt: { x: 0, y: 1.0, z: 0 }, fov: 45 });
     world.shaderTime({ t: 0.4 });
-    editor.frame(60);
-    editor.screenshot(WORK + "/" + name + ".png", 320, 240, [], "scene");
+    // SETTLE IN FRAMES until the picture stops moving (a fresh data root compiles
+    // its shaders and fills its shadow cache over the first frames; a frame taken
+    // before that compares the warm-up, not the material).
+    var probes = [];
+    for (var py = 0.2; py < 1.0; py += 0.2)
+        for (var px = 0.2; px < 1.0; px += 0.2) probes.push({ x: px, y: py });
+    var last = "", stable = 0;
+    for (var k = 0; k < 40 && stable < 2; ++k) {
+        editor.frame(30);
+        var now = J(editor.screenshot(WORK + "/" + name + ".png", 320, 240, probes, "scene").probes);
+        stable = now === last ? stable + 1 : 0;
+        last = now;
+    }
+    assert(stable >= 2, name + ": the picture settled");
     world.shaderTime({ t: null });
 }
 
