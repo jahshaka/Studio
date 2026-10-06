@@ -208,6 +208,12 @@ int main(int argc, char** argv)
         r.graph->addConnection(tex, 0, sampler, 0);
         r.graph->addConnection(uvt, 0, sampler, 1);
         r.toMaster(sampler, 0, 0); // Base Color
+        // The UV node is also read by a splitvector — the documented fold
+        // refusal (3.2) — so this exercises the RESAMPLE route on purpose:
+        // without it the chain folds (3g-s, TORNADO-2) and writes no map.
+        auto split = r.add("splitvector");
+        r.graph->addConnection(uvt, 0, split, 0);
+        r.toMaster(split, 0, 2);   // U -> Roughness
 
         auto res = bake(r, baseDir + "/uvtile", 4);
         CHECK(res.maps.contains("baseColorMap"), "uvTransform: UV math breaks passthrough -> baked map");
@@ -405,6 +411,54 @@ int main(int argc, char** argv)
               "fold: values.textureScale == [4,4]");
         CHECK(!res.eval.values.contains("textureRotation"),
               "fold: no rotation key when there is no rotation");
+    }
+
+    // ---- 3g-s. THE SAMPLER FOLDS TOO (TORNADO-2) ---------------------------
+    // `uv -> textureSampler.UV` is the same tiling as 3g through the two-node
+    // shape. The fold detector read a textureSampler's UV at input index 1, but
+    // compile() resolves the texture socket into op.image and appends the UV as
+    // the ONLY input ref, at 0 — so this chain refused the fold ("a UV node
+    // feeds something other than a texture") and resampled the source into
+    // the bake. Parity: it folds exactly like the Texture node's own UV pin,
+    // binds the full-resolution source and writes no map.
+    {
+        const QString texPath = baseDir + "/fixture2x2_foldsampler.png";
+        QImage fix(2, 2, QImage::Format_RGBA8888);
+        fix.setPixelColor(0, 0, QColor(255, 0, 0));
+        fix.setPixelColor(1, 0, QColor(0, 255, 0));
+        fix.setPixelColor(0, 1, QColor(0, 0, 255));
+        fix.setPixelColor(1, 1, QColor(255, 255, 255));
+        CHECK(fix.save(texPath), "sampler fold: 2x2 fixture written");
+
+        Rig r;
+        auto tex = r.add("texture");
+        static_cast<TextureNode*>(tex)->setTexturePath(texPath);
+        auto uv = r.add("uv");
+        QJsonObject widget;
+        widget["tileX"] = 4.0; widget["tileY"] = 2.0;
+        uv->deserializeWidgetValue(widget);
+        auto sampler = r.add("textureSampler");
+        r.graph->addConnection(tex, 0, sampler, 0);
+        r.graph->addConnection(uv, 0, sampler, 1);
+        r.toMaster(sampler, 0, 0); // Base Color
+
+        const auto info = PbrGraphEvaluator::bakeInfo(r.graph, nullptr);
+        const auto fold = info["fold"].toObject();
+        CHECK(!info["fold"].isNull(), "sampler fold: bakeInfo reports a fold");
+        CHECK(fold["scale"].toArray().at(0).toDouble() == 4.0
+              && fold["scale"].toArray().at(1).toDouble() == 2.0,
+              "sampler fold: bakeInfo.fold.scale == [4,2]");
+        CHECK(fold["samplers"].toInt() == 1, "sampler fold: one sampler covered");
+        CHECK(info["perSocket"].toObject()["Base Color"].toString() == "passthrough",
+              "sampler fold: the folded chain classifies passthrough, not baked");
+
+        auto res = bake(r, baseDir + "/foldsampler", 4);
+        CHECK(res.maps.isEmpty(), "sampler fold: NO map file is written (no resample)");
+        CHECK(res.passthrough["baseColorMap"].toString() == texPath,
+              "sampler fold: the full-resolution source binds directly");
+        const auto scale = res.eval.values["textureScale"].toArray();
+        CHECK(scale.size() == 2 && scale[0].toDouble() == 4.0 && scale[1].toDouble() == 2.0,
+              "sampler fold: values.textureScale == [4,2]");
     }
 
     // ---- 3h. per-axis tiling folds too ------------------------------------
