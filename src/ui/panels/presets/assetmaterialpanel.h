@@ -21,7 +21,6 @@ For more information see the LICENSE file
 #include "data/database/database.h"
 #include "data/materialpreset.h"
 
-class MainWindow;
 struct StudioServices;
 
 class AssetMaterialPanel : public AssetPanel
@@ -31,10 +30,6 @@ class AssetMaterialPanel : public AssetPanel
 public:
     explicit AssetMaterialPanel(QWidget *parent = 0);
     ~AssetMaterialPanel();
-
-    void setMainWindow(MainWindow* mainWindow) {
-        this->mainWindow = mainWindow;
-    }
 
     /// The service layer (§2.3's opportunistic rule). The tray's double-click
     /// is a LIBRARY drop onto the selection (SceneEditService::dropMaterial —

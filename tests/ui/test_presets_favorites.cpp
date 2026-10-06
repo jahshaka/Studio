@@ -4,7 +4,7 @@
 // MainWindow and given their Database AFTERWARDS:
 //
 //     assetModelPanel = new AssetModelPanel;          // mainwindow.cpp
-//     assetModelPanel->setMainWindow(this);
+//     assetModelPanel->setServices(services);
 //     assetModelPanel->setDatabaseHandle(db);
 //
 // Both constructors used to call addFavorites() anyway, i.e. read the library

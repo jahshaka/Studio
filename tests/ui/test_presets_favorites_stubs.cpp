@@ -10,7 +10,7 @@ For more information see the LICENSE file
 *************************************************************************/
 
 // Link stubs for ui.presets_favorites (the tests/ui idiom). The two presets
-// panels reach the library, the editor's add-primitive verb and MainWindow's
+// panels reach the library, the editor's add-primitive verb and the
 // material-preset action — all of them only from context menus and
 // double-clicks this suite never performs. The library READS the suite does
 // care about (fetchFavorites, fetchObjectMesh) are faked in the test itself,
@@ -21,7 +21,6 @@ For more information see the LICENSE file
 #include "services/materialpresetassets.h"
 #include "services/materialpresetseeder.h"
 #include "services/sceneeditservice.h"
-#include "shell/mainwindow.h"
 
 Database::Database() {}
 Database::~Database() {}

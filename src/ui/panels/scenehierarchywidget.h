@@ -43,6 +43,7 @@ namespace iris
 
 class QTreeWidgetItem;
 class MainWindow;
+class IShellView;
 
 class TreeItemDelegate : public QStyledItemDelegate
 {
@@ -101,7 +102,7 @@ public:
     ~SceneHierarchyWidget();
 
     void setScene(QSharedPointer<iris::Scene> scene);
-    void setMainWindow(MainWindow* mainWin);
+    void setShell(IShellView *shellView);
 
     void setSelectedNode(QSharedPointer<iris::SceneNode> sceneNode);
 
@@ -299,7 +300,7 @@ private:
     Ui::SceneHierarchyWidget *ui;
     QSharedPointer<iris::Scene> scene;
     QSharedPointer<iris::SceneNode> selectedNode;
-    MainWindow* mainWindow;
+    IShellView *shell = nullptr;
 
     /// The Add Constraint menu's one action: physicsconstraints::add, the
     /// rule node.addConstraint calls too, with a refusal shown (audit D5).

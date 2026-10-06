@@ -197,7 +197,7 @@ void EditorDocks::build(const Deps &deps)
     // The editor's left column is the one the other pages copy, so it is sized
     // from the constant rather than from whatever the tree's sizeHint asks for.
     sceneHierarchyWidget->setMinimumWidth(PanelMetrics::leftColumnMinWidth);
-    sceneHierarchyWidget->setMainWindow(mShell);
+    sceneHierarchyWidget->setShell(mShell->view());
     if (sceneView) sceneView->setHierarchyDragSource(sceneHierarchyWidget->getWidget());
 
     connect(sceneHierarchyWidget,   SIGNAL(sceneNodeSelected(iris::SceneNodePtr)),
@@ -276,7 +276,6 @@ void EditorDocks::build(const Deps &deps)
     QWidget *presetDockContents = new ColumnBody(PanelMetrics::presetsPanelWidth);
     presetDockContents->setStyleSheet(StyleSheet::MainWindowPresetsDock());
     SkyPresets *skyPresets = new SkyPresets;
-    skyPresets->setMainWindow(mShell);
 	skyPresets->setDatabase(db);
 	skyPresets->setProject(project);
 
@@ -284,11 +283,10 @@ void EditorDocks::build(const Deps &deps)
 			sceneNodePropertiesWidget, &SceneNodePropertiesWidget::acceptCubemapTexturesFromSkyPresets);
 
     assetModelPanel = new AssetModelPanel;
-    assetModelPanel->setMainWindow(mShell);
+    assetModelPanel->setServices(services);
     assetModelPanel->setDatabaseHandle(db);
 
     assetMaterialPanel = new AssetMaterialPanel;
-    assetMaterialPanel->setMainWindow(mShell);
     assetMaterialPanel->setServices(services);
     assetMaterialPanel->setDatabaseHandle(db);
 
@@ -342,7 +340,7 @@ void EditorDocks::build(const Deps &deps)
     assetDock = new QDockWidget(tr("Assets"), viewPort);
     assetDock->setObjectName(QStringLiteral("assetDock"));
     assetWidget = new AssetWidget(db, viewPort);
-    assetWidget->setMainWindow(mShell);
+    assetWidget->setShell(mShell->view());
     assetWidget->setEventBus(services->eventBus);
     assetWidget->setProject(project);
     assetWidget->setAcceptDrops(true);

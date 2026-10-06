@@ -12,7 +12,6 @@ For more information see the LICENSE file
 #include "ui/panels/presets/skypresets.h"
 #include "ui_skypresets.h"
 
-#include "shell/mainwindow.h"
 #include "irisgl/core/logger.h"
 #include "services/shippedassets.h"
 #include "ui/style/stylesheet.h"
@@ -25,7 +24,6 @@ SkyPresets::SkyPresets(QWidget *parent) :
     // skypresets.ui used to embed these (classic-only now; theme sweep)
     setStyleSheet(StyleSheet::SkyPresetsRoot());
 
-    mainWindow = nullptr;
 
     ui->skyList->setAttribute(Qt::WA_MacShowFocusRect, false);
     ui->skyList->setViewMode(QListWidget::IconMode);
@@ -57,7 +55,7 @@ void SkyPresets::addCubeSky(const QString &thumbnail, const QString &name)
 
 void SkyPresets::applyCubeSky(QListWidgetItem* item)
 {
-    if (!mainWindow || !item) return;
+    if (!item) return;
 
     // THE SAME DOOR AS world.skyPreset (services/shippedassets.h, plan item
     // 15c): the six faces become library textures through the one import

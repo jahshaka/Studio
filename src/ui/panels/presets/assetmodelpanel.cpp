@@ -9,6 +9,9 @@ and/or modify it under the terms of the MIT License
 For more information see the LICENSE file
 *************************************************************************/
 
+#include <QDrag>
+#include <QMenu>
+#include <QVBoxLayout>
 #include "ui/panels/presets/assetmodelpanel.h"
 
 #include <QApplication>
@@ -25,7 +28,8 @@ For more information see the LICENSE file
 #include "data/materialpreset.h"
 #include "data/guidmanager.h"
 #include "io/materialpresetreader.h"
-#include "shell/mainwindow.h"
+#include "services/services.h"
+#include "services/sceneeditservice.h"
 #include "ui/panels/singledragowner.h"
 #include "services/sceneeditservice.h"
 #include "services/services.h"
@@ -235,13 +239,13 @@ bool AssetModelPanel::eventFilter(QObject *watched, QEvent *event)
 
 void AssetModelPanel::addObjectToScene(QModelIndex itemIndex)
 {
-    if (mainWindow == Q_NULLPTR) return;
+    if (!services || !services->sceneEdit) return;
     auto item = listView->item(itemIndex.row());
     auto text = item->text();
 
     // The audit's emblematic reroute (§7.5): the panel calls the service verb
     // that is also the scripting registry's scene.addPrimitive.
-    mainWindow->studioServices()->sceneEdit->addPrimitive(text);
+    services->sceneEdit->addPrimitive(text);
 }
 
 void AssetModelPanel::removeFavorite(const QString &assetGuid)

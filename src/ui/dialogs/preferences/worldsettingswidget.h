@@ -16,7 +16,7 @@ class SettingsManager;
 class Database;
 
 class IEditorViewport;
-class MainWindow;
+class IShellView;
 class ShortcutRegistry;
 
 class WorldSettingsWidget : public QWidget
@@ -26,8 +26,8 @@ class WorldSettingsWidget : public QWidget
 
 public:
     /// Wired by the shell once the viewport exists (Phase 4: was UiManager).
-    void wireEditor(IEditorViewport *viewport, MainWindow *mainWindow) {
-        this->editorViewport = viewport; this->mainWindow = mainWindow;
+    void wireEditor(IEditorViewport *viewport, IShellView *shell) {
+        this->editorViewport = viewport; this->shell = shell;
     }
     /// Wired by the shell once the registry exists — generates the Shortcuts
     /// page from it (EDITOR_SHORTCUTS_SPEC §1; the old page was 11 stale labels).
@@ -55,7 +55,7 @@ public:
 
 private:
     IEditorViewport *editorViewport = nullptr;
-    MainWindow *mainWindow = nullptr;
+    IShellView *shell = nullptr;
     ShortcutRegistry *shortcutRegistry = nullptr;
     QWidget *shortcutsTable = nullptr;   // rebuilt whenever bindings change
 	QPushButton * viewport;

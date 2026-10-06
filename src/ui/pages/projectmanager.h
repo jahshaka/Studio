@@ -53,7 +53,7 @@ namespace Ui {
 
 class SettingsManager;
 class ProjectService;
-class MainWindow;
+class IShellView;
 class Project;
 
 using AssetList = QPair<QString, QString>;
@@ -118,7 +118,7 @@ public:
 
     bool checkForEmptyState();
 
-	MainWindow *mainWindow = nullptr;
+	IShellView *shell = nullptr;   ///< the window (set by the shell)
 	/// Is this tile the project whose scene is open right now? (highlight rule)
 	bool isOpenProjectTile(const QString &guid) const;
 

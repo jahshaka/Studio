@@ -9,6 +9,9 @@ and/or modify it under the terms of the MIT License
 For more information see the LICENSE file
 *************************************************************************/
 
+#include <QDrag>
+#include <QMenu>
+#include <QVBoxLayout>
 #include "ui/panels/presets/assetmaterialpanel.h"
 
 #include <QApplication>
@@ -25,7 +28,6 @@ For more information see the LICENSE file
 #include "io/materialpresetreader.h"
 #include "bridge/enginehost.h"
 #include "io/assetmanager.h"
-#include "shell/mainwindow.h"
 #include "modules/materials/core/materialhelper.h"
 
 #include "io/scenewriter.h"

@@ -33,19 +33,20 @@ failures=0
 
 strip_comments() { grep -nE "$1" "$2" 2>/dev/null | grep -vE '^[0-9]+:\s*//' ; }
 
-# 1. modules/ and scripting/ never include the shell.
+# 1. modules/, scripting/, ui/ and viewport/ never include the shell (9bz: the panels,
+#    pages and the viewport reach the window through IShellView).
 hits=""
 while IFS= read -r f; do
     h=$(strip_comments '^\s*#\s*include\s+"shell/' "$f")
     [ -n "$h" ] && hits="$hits"$'\n'"$f: $h"
-done < <(find src/modules src/scripting -name '*.cpp' -o -name '*.h' | sort)
+done < <(find src/modules src/scripting src/ui src/viewport -name '*.cpp' -o -name '*.h' | sort)
 if [ -n "$hits" ]; then
-    echo "source.shell_boundaries: FAIL — a shell/ include under src/modules or src/scripting"
+    echo "source.shell_boundaries: FAIL — a shell/ include under src/modules, src/scripting, src/ui or src/viewport"
     echo "$hits" | sed '/^$/d; s/^/    /'
     echo "    the window is reached through ui/ishellview.h (IShellView), never the shell's headers."
     failures=1
 else
-    echo "source.shell_boundaries: ok — no shell/ include under src/modules or src/scripting"
+    echo "source.shell_boundaries: ok — no shell/ include under src/modules, src/scripting, src/ui or src/viewport"
 fi
 
 # 2. no literal stack index in the shell.

@@ -20,7 +20,7 @@ For more information see the LICENSE file
 #include "data/project.h"
 #include "data/database/database.h"
 
-class MainWindow;
+struct StudioServices;
 
 class AssetModelPanel : public AssetPanel
 {
@@ -30,9 +30,9 @@ public:
     explicit AssetModelPanel(QWidget *parent = 0);
     ~AssetModelPanel();
 
-    void setMainWindow(MainWindow* mainWindow) {
-        this->mainWindow = mainWindow;
-    }
+    /// The service layer: a tile's double-click is SceneEditService's
+    /// addPrimitive, the verb scene.addPrimitive calls too.
+    void setServices(StudioServices *services) { this->services = services; }
 
     /// The favourites are listed HERE, not in the constructor: the panel is
     /// built before MainWindow has a database to give it, and reading the
@@ -60,6 +60,7 @@ public slots:
     void addObjectToScene(QModelIndex itemIndex);
 
 private:
+    StudioServices *services = nullptr;
     // (`defaultModels` is gone — the starter tiles come straight from
     // src/data/primitives.h now and were never read back after being built.)
     QVector<AssetRecord> objectAssets;

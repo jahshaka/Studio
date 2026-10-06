@@ -686,7 +686,7 @@ void MainWindow::setupServices()
 
     if (sceneView) { sceneView->setServices(services); sceneView->setProject(project); }
     page->setServices(services);
-    if (prefsDialog) prefsDialog->wireEditor(sceneView, this);
+    if (prefsDialog) prefsDialog->wireEditor(sceneView, shellView.get());
 }
 
 void MainWindow::setupUndoRedo()
@@ -1622,7 +1622,7 @@ AssetView *MainWindow::ensureAssetsPage()
 void MainWindow::setupDesktop()
 {
 	pmContainer = new ProjectManager(db, project, this);
-	pmContainer->mainWindow = this;
+	pmContainer->shell = shellView.get();
 	projectService->setProjectManager(pmContainer);
 	// ...and the other half of that pairing: the desktop's New Scene button
 	// creates through the SERVICE, not through a second copy of it (R1).
@@ -1794,6 +1794,11 @@ void MainWindow::redo()
 // the one the active space's edit target names — the editor's scene stack, the
 // Materials page's open tab — and a space with none has no active stack, so the
 // chord moves nothing.
+
+IShellView *MainWindow::view() const
+{
+    return shellView.get();
+}
 
 void MainWindow::undoActiveSpace()
 {

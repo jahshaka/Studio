@@ -27,7 +27,7 @@ public:
     QWidget *asWidget() override { return mWidget; }
     EditorViewportEvents *events() override { return mEvents; }
 
-    void setMainWindow(MainWindow *) override {}
+    void setShell(IShellView *) override {}
     void setDatabase(Database *) override {}
 
     // ---- document ----

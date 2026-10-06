@@ -63,7 +63,7 @@ typedef struct directory_tupleA
 #include <QStyledItemDelegate>
 #include <QPainter>
 
-class MainWindow;
+class IShellView;
 
 class ListViewDelegate : public QStyledItemDelegate
 {
@@ -266,11 +266,9 @@ public:
     void trigger();
     void refresh();
 
-    void setMainWindow(MainWindow* mainWindow) {
-        this->mainWindow = mainWindow;
-    }
+    void setShell(IShellView *shellView) { shell = shellView; }
 
-    MainWindow *mainWindow = nullptr;
+    IShellView *shell = nullptr;
 
 	IEditorViewport *sceneView = nullptr;
 

@@ -50,7 +50,9 @@ For more information see the LICENSE file
 #include "data/constants.h"
 #include "ui/controls/dynamicgrid.h"
 #include "ui/controls/itemgridwidget.h"
-#include "shell/mainwindow.h"
+#include "ui/ishellview.h"
+#include "services/services.h"
+#include "services/projectservice.h"
 #include "services/services.h"
 #include "services/projectservice.h"
 
@@ -184,7 +186,7 @@ ProjectManager::~ProjectManager()
 void ProjectManager::openProjectFromWidget(ItemGridWidget *widget, bool playMode)
 {
 	if (project->getProjectGuid() == widget->tileData.guid) {
-		    mainWindow->switchSpace(WindowSpaces::EDITOR);
+		    shell->setSpace(QStringLiteral("editor"));
 
 		return;
 	}
@@ -192,8 +194,8 @@ void ProjectManager::openProjectFromWidget(ItemGridWidget *widget, bool playMode
     // If we're opening a new scene, close the old one first — and the page the
     // user is on stays, because this close is the first half of an open
     // (MainWindow::CloseIntent, VIEW-REBUILD-1).
-    if (mainWindow->studioServices()->project->isSceneOpen())
-        mainWindow->projectRunner()->close(true);   // the first half of an open: the page stays
+    if (shell->services()->project->isSceneOpen())
+        shell->closeProject(true);   // the first half of an open: the page stays
 
 	// WHERE THIS PROJECT ACTUALLY IS (SMALL-UI-A fix round F1). This rebuilt
 	// the path from the DEFAULT projects root, so a project created at a chosen
@@ -392,8 +394,8 @@ void ProjectManager::onArchiveImportFinished(bool canceled)
         // one was simply dropped: no autosave under `auto_save`, no undo-stack
         // reset, the user's unsaved edits gone. It has to happen BEFORE the
         // re-point, because closeProject saves the project the pointer names.
-        if (mainWindow->studioServices()->project->isSceneOpen())
-            mainWindow->projectRunner()->close(true);   // the first half of an open: the page stays
+        if (shell->services()->project->isSceneOpen())
+            shell->closeProject(true);   // the first half of an open: the page stays
         project->setProjectPath(pDir, result.worldName);
         project->setProjectGuid(result.projectGuid);
         LoadTimeline::begin(QStringLiteral("open(import) %1").arg(result.worldName));
@@ -1276,7 +1278,7 @@ void ProjectManager::loadProjectAssets(ProjectOpenMode mode)
 	// that did the registrations inline and emitted `fileToOpen` — dead since
 	// the ProjectManager is only ever built by MainWindow, which sets the
 	// pointer in the next statement (CRUD).
-	mainWindow->openProjectAsync(mode == ProjectOpenMode::Player);
+	shell->openProjectAsync(mode == ProjectOpenMode::Player);
 }
 
 void ProjectManager::showOpenProgress(int percent, const QString &text)
@@ -1381,7 +1383,7 @@ void ProjectManager::updateTile(const QString &id, const QByteArray &arr)
 
 bool ProjectManager::isOpenProjectTile(const QString &guid) const
 {
-    return mainWindow && mainWindow->studioServices() && mainWindow->studioServices()->project
-        && mainWindow->studioServices()->project->isSceneOpen()
+    return shell && shell->services() && shell->services()->project
+        && shell->services()->project->isSceneOpen()
         && guid == project->getProjectGuid();
 }

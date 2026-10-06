@@ -33,7 +33,7 @@ class CacheSettingsWidget;
 class McpServer;
 class IEditorViewport;
 class ShortcutRegistry;
-class MainWindow;
+class IShellView;
 class Database;
 class ProjectManager;
 
@@ -54,7 +54,7 @@ protected:
 public:
     explicit PreferencesDialog(QWidget* parent, Database *db, SettingsManager* settings);
     /// Forwards the editor wiring to the world-settings page (Phase 4).
-    void wireEditor(IEditorViewport *viewport, MainWindow *mainWindow);
+    void wireEditor(IEditorViewport *viewport, IShellView *shell);
     /// Forwards the MCP server and its start to the settings page (created
     /// after the dialog).
     void wireMcp(McpServer *server, std::function<bool(quint16, QString *)> start);

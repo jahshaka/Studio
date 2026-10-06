@@ -19,7 +19,6 @@ class SkyPresets;
 }
 
 class QListWidgetItem;
-class MainWindow;
 class Database;
 class Project;
 
@@ -34,11 +33,6 @@ public:
     /// One tile: `name` is a ShippedAssets::skyPresets() name, `thumbnail`
     /// the face shown on it.
     void addCubeSky(const QString &thumbnail, const QString &name);
-
-    void setMainWindow(MainWindow* mainWindow)
-    {
-        this->mainWindow = mainWindow;
-    }
 
 	void setDatabase(Database *db)
 	{
@@ -60,7 +54,6 @@ signals:
 
 private:
     Ui::SkyPresets *ui;
-    MainWindow* mainWindow = nullptr;
     /// Set by setDatabase after construction (CRUD, lane DBPTR-1: it used to
     /// be a public member BESIDE its own setter — two doors to one handle).
     Database *db = nullptr;

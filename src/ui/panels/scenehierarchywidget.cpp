@@ -35,7 +35,7 @@ For more information see the LICENSE file
 #include "irisgl/document/scenegraph/decalnode.h"
 #include "irisgl/core/irisutils.h"
 #include "ui/controls/nodeicons.h"
-#include "shell/mainwindow.h"
+#include "ui/ishellview.h"
 #include "services/services.h"
 #include "services/undoservice.h"
 #include "services/nodeexport.h"
@@ -63,7 +63,7 @@ SceneHierarchyWidget::SceneHierarchyWidget(QWidget *parent) :
     ui->widget->setStyleSheet(StyleSheet::SceneHierarchyWidget());
     ui->sceneTree->setStyleSheet(StyleSheet::SceneHierarchySceneTree());
 
-    mainWindow = nullptr;
+    shell = nullptr;
 
 	ui->sceneTree->header()->setSectionResizeMode(0, QHeaderView::Stretch);
 	ui->sceneTree->header()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
@@ -116,9 +116,9 @@ void SceneHierarchyWidget::setScene(QSharedPointer<iris::Scene> scene)
     this->repopulateTree();
 }
 
-void SceneHierarchyWidget::setMainWindow(MainWindow *mainWin)
+void SceneHierarchyWidget::setShell(IShellView *shellView)
 {
-    mainWindow = mainWin;
+    shell = shellView;
 
     QMenu* addMenu = new QMenu();
 	addMenu->setStyleSheet(StyleSheet::QMenuDark());
@@ -136,7 +136,7 @@ void SceneHierarchyWidget::setMainWindow(MainWindow *mainWin)
     // THE ROWS CALL THE SERVICE, not the window (D10): the window's eleven
     // one-line forwarding slots are gone; the service is the capability the
     // verbs call too.
-    auto edit = [this]() { return mainWindow->studioServices()->sceneEdit; };
+    auto edit = [this]() { return shell->services()->sceneEdit; };
     QAction *action = nullptr;
     for (const primitives::Def &def : primitives::all()) {
         // A PRIMITIVE only: the Platform and Furniture seed rows (the samples'
@@ -202,7 +202,7 @@ void SceneHierarchyWidget::setMainWindow(MainWindow *mainWin)
     ui->addBtn->setMenu(addMenu);
     ui->addBtn->setPopupMode(QToolButton::InstantPopup);
 
-    connect(ui->deleteBtn, SIGNAL(clicked(bool)), mainWindow, SLOT(deleteNode()));
+    connect(ui->deleteBtn, &QAbstractButton::clicked, this, [this]() { deleteNode(); });
 }
 
 void SceneHierarchyWidget::setSelectedNode(QSharedPointer<iris::SceneNode> sceneNode)
@@ -621,7 +621,7 @@ bool SceneHierarchyWidget::eventFilter(QObject *watched, QEvent *event)
 
         // ASSET BIN -> DECAL: bind a Texture asset as the decal's image.
         if (!internal && dropEventPtr->mimeData() &&
-            dropEventPtr->mimeData()->hasFormat(kTreeMime) && mainWindow) {
+            dropEventPtr->mimeData()->hasFormat(kTreeMime) && shell) {
             QTreeWidgetItem *row = ui->sceneTree->itemAt(dropEventPtr->position().toPoint());
             iris::SceneNodePtr target =
                 row ? nodeList.value(row->data(0, Qt::UserRole).toLongLong()) : iris::SceneNodePtr();
@@ -631,7 +631,7 @@ bool SceneHierarchyWidget::eventFilter(QObject *watched, QEvent *event)
                 QMap<int, QVariant> roleDataMap;
                 while (!stream.atEnd()) stream >> roleDataMap;
                 if (roleDataMap.value(0).toInt() == static_cast<int>(ModelTypes::Texture)) {
-                    mainWindow->studioServices()->sceneEdit->setDecalTexture(
+                    shell->services()->sceneEdit->setDecalTexture(
                         target.staticCast<iris::DecalNode>(), roleDataMap.value(3).toString());
                     dropEventPtr->acceptProposedAction();
                     return true;
@@ -687,13 +687,13 @@ bool SceneHierarchyWidget::eventFilter(QObject *watched, QEvent *event)
             if (ReparentSceneNodeCommand::wouldCreateCycle(n, target)) continue;
             moves.append(n);
         }
-        if (moves.isEmpty() || !mainWindow) {
+        if (moves.isEmpty() || !shell) {
             dropEventPtr->setDropAction(Qt::IgnoreAction);
             dropEventPtr->ignore();
             return true;
         }
 
-        auto *undo = mainWindow->studioServices()->undo;
+        auto *undo = shell->services()->undo;
         // One GESTURE is one undo step even when it moved five objects.
         const bool macro = moves.size() > 1 && undo->stack();
         // The edit gate (ledger §423), before the macro opens: refusing the
@@ -805,10 +805,10 @@ void SceneHierarchyWidget::runFolderEdit(const QString &text, const std::functio
     const auto before = scenefolders::snapshot(scene);
     if (!fn()) return;
     repopulateTree();
-    if (mainWindow && mainWindow->studioServices() && mainWindow->studioServices()->undo) {
+    if (shell && shell->services() && shell->services()->undo) {
         auto *cmd = new SceneFolderCommand(text, scene, before);
         cmd->setPanel(this);
-        mainWindow->studioServices()->undo->push(cmd);
+        shell->services()->undo->push(cmd);
     }
 }
 
@@ -994,8 +994,8 @@ void SceneHierarchyWidget::sceneTreeCustomContextMenu(const QPoint& pos)
         connect(newFolder, &QAction::triggered, this,
                 &SceneHierarchyWidget::newFolderFromSelection);
 
-        ClipboardService *clip = mainWindow && mainWindow->studioServices()
-                                     ? mainWindow->studioServices()->clipboard : nullptr;
+        ClipboardService *clip = shell && shell->services()
+                                     ? shell->services()->clipboard : nullptr;
         // Offered only when a tree paste has something to land — a row that
         // always exists and usually refuses teaches nothing (the rule the row
         // menu below follows too).
@@ -1008,7 +1008,7 @@ void SceneHierarchyWidget::sceneTreeCustomContextMenu(const QPoint& pos)
                 ClipboardPasteOptions options;
                 options.parentGuid = scene->getRootNode()->getGUID();   // the World itself
                 const auto result = clip->paste(options);
-                if (!result.missing.isEmpty() && mainWindow)
+                if (!result.missing.isEmpty() && shell)
                     QMessageBox::warning(this, tr("Paste"),
                         tr("%1 asset(s) the copied objects need are not in this library.")
                             .arg(result.missing.size()));
@@ -1019,8 +1019,8 @@ void SceneHierarchyWidget::sceneTreeCustomContextMenu(const QPoint& pos)
         QAction *focus = menu.addAction(tr("Focus Camera"));
         focus->setToolTip(tr("Frames the whole scene."));
         connect(focus, &QAction::triggered, this, [this]() {
-            if (mainWindow && mainWindow->viewport())
-                mainWindow->viewport()->focusOnNode(scene->getRootNode());
+            if (shell && shell->editorViewport())
+                shell->editorViewport()->focusOnNode(scene->getRootNode());
         });
 
         menu.exec(ui->sceneTree->mapToGlobal(pos));
@@ -1108,8 +1108,8 @@ void SceneHierarchyWidget::sceneTreeCustomContextMenu(const QPoint& pos)
     // same ClipboardService verbs the chords do — never a second implementation
     // — and act on the SAME target set the rest of this menu does (the
     // right-clicked row, or the whole selection when the row is part of it).
-    if (ClipboardService *clip = mainWindow && mainWindow->studioServices()
-                                     ? mainWindow->studioServices()->clipboard : nullptr) {
+    if (ClipboardService *clip = shell && shell->services()
+                                     ? shell->services()->clipboard : nullptr) {
         // No `isRootNode` case any more: every row in this tree is an object
         // (the World row is gone), so Copy and Cut are unconditional.
         menu.addSeparator();
@@ -1144,7 +1144,7 @@ void SceneHierarchyWidget::sceneTreeCustomContextMenu(const QPoint& pos)
                 // (A row with no parent was the World row; it has no row now,
                 // and pasting at the top level is the EMPTY-SPACE menu above.)
                 const auto result = clip->paste(options);
-                if (!result.missing.isEmpty() && mainWindow)
+                if (!result.missing.isEmpty() && shell)
                     QMessageBox::warning(this, tr("Paste"),
                         tr("%1 asset(s) the copied objects need are not in this library.")
                             .arg(result.missing.size()));
@@ -1167,7 +1167,7 @@ void SceneHierarchyWidget::sceneTreeCustomContextMenu(const QPoint& pos)
 		action = new QAction(QIcon(), isReflector ? "Stop Reflecting" : "Make Reflective", this);
 		connect(action, &QAction::triggered, this, [this, node, isReflector]() {
 			QString error;
-			IEditorViewport *vp = mainWindow ? mainWindow->viewport() : nullptr;
+			IEditorViewport *vp = shell ? shell->editorViewport() : nullptr;
 			if (!planarreflectors::set(node, !isReflector, vp, &error))
 				QMessageBox::warning(this, tr("Not a reflection plane"), error);
 		});
@@ -1217,7 +1217,7 @@ void SceneHierarchyWidget::sceneTreeCustomContextMenu(const QPoint& pos)
             if (nodeexport::typeFor(node) == ModelTypes::Object) {
                 QAction *exportAsset = subMenu->addAction("Export Object");
                 connect(exportAsset, &QAction::triggered, this, [this, node]() {
-                    mainWindow->exportNode(node, ModelTypes::Object);
+                    shell->exportNode(node, ModelTypes::Object);
                 });
             }
 
@@ -1229,7 +1229,7 @@ void SceneHierarchyWidget::sceneTreeCustomContextMenu(const QPoint& pos)
 		else if (node->getSceneNodeType() == iris::SceneNodeType::ParticleSystem) {
 			QAction *exportPSystem = subMenu->addAction("Export Particle System");
 			connect(exportPSystem, &QAction::triggered, this, [this, node]() {
-                mainWindow->exportNode(node, ModelTypes::ParticleSystem);
+                shell->exportNode(node, ModelTypes::ParticleSystem);
 			});
 		}
 	}
@@ -1257,7 +1257,7 @@ void SceneHierarchyWidget::addConstraint(const iris::SceneNodePtr &from, const i
                                          const QString &type)
 {
 	QString error;
-	UndoService *undo = (mainWindow && mainWindow->studioServices()) ? mainWindow->studioServices()->undo
+	UndoService *undo = (shell && shell->services()) ? shell->services()->undo
 	                                                                 : nullptr;
 	if (!physicsconstraints::add(from, to, type, undo, &error))
 		QMessageBox::warning(this, tr("Add Constraint"), error);
@@ -1270,31 +1270,31 @@ void SceneHierarchyWidget::addConstraint(const iris::SceneNodePtr &from, const i
 // undo step.
 void SceneHierarchyWidget::deleteNode()
 {
-    mainWindow->deleteNode();
+    shell->deleteSelection();
     selectedNode.clear();
 }
 
 void SceneHierarchyWidget::duplicateNode()
 {
-    mainWindow->duplicateNode();
+    shell->duplicateSelection();
 }
 
 void SceneHierarchyWidget::focusOnNode()
 {
 	// focusOnSelection frames the whole set's union bounds (§2.3); the
 	// single-node call is the fallback for a viewport that has no set.
-	if (mainWindow && mainWindow->viewport()) {
-		if (mainWindow->studioServices() && mainWindow->studioServices()->selection &&
-			mainWindow->studioServices()->selection->count() > 1)
-			mainWindow->viewport()->focusOnSelection();
+	if (shell && shell->editorViewport()) {
+		if (shell->services() && shell->services()->selection &&
+			shell->services()->selection->count() > 1)
+			shell->editorViewport()->focusOnSelection();
 		else
-			mainWindow->viewport()->focusOnNode(selectedNode);
+			shell->editorViewport()->focusOnNode(selectedNode);
 	}
 }
 
 void SceneHierarchyWidget::createMaterial()
 {
-	mainWindow->createMaterial();
+	shell->createMaterialFromSelection();
 }
 
 void SceneHierarchyWidget::attachAllChildren()
@@ -1478,7 +1478,7 @@ void SceneHierarchyWidget::setItemVisible(QTreeWidgetItem *item, bool visible)
 	};
 	collect(item);
 
-	auto *undo = (mainWindow && mainWindow->studioServices()) ? mainWindow->studioServices()->undo : nullptr;
+	auto *undo = (shell && shell->services()) ? shell->services()->undo : nullptr;
 	const bool macro = undo && undo->stack() && nodes.size() > 1;
 	if (editgate::refuse()) return;          // the edit gate, before the macro opens
 	if (macro) undo->stack()->beginMacro(visible ? tr("Show Objects") : tr("Hide Objects"));
@@ -1514,7 +1514,7 @@ void SceneHierarchyWidget::setItemVisible(QTreeWidgetItem *item, bool visible)
 	// the Components section arrived nothing did: the outliner repaints its own
 	// rows and the column kept whatever the last pick left. The padlock below
 	// has the same gap and the same one-line answer.
-	if (mainWindow) mainWindow->refreshPropertiesFromDocument();
+	if (shell) shell->refreshPropertiesFromDocument();
 }
 
 //todo : attach physics objects
@@ -1573,7 +1573,7 @@ void SceneHierarchyWidget::setItemLocked(QTreeWidgetItem *item, bool locked)
     };
     collect(item);
 
-    auto *undo = (mainWindow && mainWindow->studioServices()) ? mainWindow->studioServices()->undo
+    auto *undo = (shell && shell->services()) ? shell->services()->undo
                                                              : nullptr;
     const bool macro = undo && undo->stack() && nodes.size() > 1;
     if (macro) undo->stack()->beginMacro(locked ? tr("Lock Objects") : tr("Unlock Objects"));
@@ -1604,7 +1604,7 @@ void SceneHierarchyWidget::setItemLocked(QTreeWidgetItem *item, bool locked)
 
     // See setItemVisible's tail: the column is told, because the stack-moved
     // hook is not going to tell it.
-    if (mainWindow) mainWindow->refreshPropertiesFromDocument();
+    if (shell) shell->refreshPropertiesFromDocument();
 }
 
 void SceneHierarchyWidget::insertChild(iris::SceneNodePtr childNode)
@@ -1703,8 +1703,8 @@ void SceneHierarchyWidget::OnLstItemsCommitData(QWidget *listItem)
     iris::SceneNodePtr node = nodeList.value(nodeId);
     if (!node) node = selectedNode;
     if (!node) return;
-    SceneEditService *service = (mainWindow && mainWindow->studioServices())
-                                    ? mainWindow->studioServices()->sceneEdit : nullptr;
+    SceneEditService *service = (shell && shell->services())
+                                    ? shell->services()->sceneEdit : nullptr;
     const QString given = service ? service->renameNode(node, newName) : QString();
     // The service rebuilds the tree on success; on a refusal (or no service)
     // put the row back to the name the document actually holds.

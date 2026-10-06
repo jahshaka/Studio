@@ -198,6 +198,8 @@ public:
     /// The service layer (APP_ARCHITECTURE_AUDIT §3.3). Owned by the window;
     /// valid from the end of the constructor.
     StudioServices *studioServices() const { return services; }
+    /// The window as the ui/ and viewport/ layers see it (IShellView, 9bz).
+    IShellView *view() const;
 
     /// Blob-only save (SCRIPTING_SPEC §1.6.2): writes the scene into the
     /// project row — with a viewport thumbnail when one is available — and
