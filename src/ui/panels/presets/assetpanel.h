@@ -25,9 +25,6 @@ For more information see the LICENSE file
 #include "data/project.h"
 #include "data/database/database.h"
 
-// Forward declaration only: including mainwindow.h at header scope broke
-// every includer with the whole shell (audit §7.4); the panels hold a pointer.
-
 // (`DefaultModel` is gone with the third copy of the primitive list it held —
 // owner review R6. The one table is src/data/primitives.h.)
 
@@ -161,8 +158,8 @@ public:
 
     /// THE FAVOURITES ARE READ WHEN THE DATABASE ARRIVES, NOT AT CONSTRUCTION.
     ///
-    /// `handle` is set by setDatabaseHandle, which MainWindow calls after the
-    /// panel is built (mainwindow.cpp) — and both subclasses' constructors used
+    /// `handle` is set by setDatabaseHandle, which the shell calls after the
+    /// panel is built (shell/editordocks.cpp) — and both subclasses' constructors used
     /// to call addFavorites(), i.e. this, so the read went through an
     /// UNINITIALISED pointer on every startup. It survived only because
     /// Database::fetchFavorites happens to touch no member of `this`

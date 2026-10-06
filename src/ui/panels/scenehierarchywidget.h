@@ -42,7 +42,6 @@ namespace iris
 }
 
 class QTreeWidgetItem;
-class MainWindow;
 class IShellView;
 
 class TreeItemDelegate : public QStyledItemDelegate
@@ -96,7 +95,6 @@ class SceneHierarchyWidget : public QWidget
 {
     Q_OBJECT
 
-    friend class MainWindow;
 public:
     explicit SceneHierarchyWidget(QWidget *parent = 0);
     ~SceneHierarchyWidget();
