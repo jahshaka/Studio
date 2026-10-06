@@ -338,14 +338,11 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
 		if (QFileInfo(weather).isFile())
 			scene->cloudWeatherMap = iris::Texture2D::load(weather, false);
 	}
+	// The music is DATA here; the editor's AmbienceService starts it once the
+	// opened scene is the live one (audit D8) — a reader plays nothing.
 	scene->ambientMusicGuid = sceneObj.value("ambientMusicGuid").toString();
-	auto volume = sceneObj.value("ambientMusicVolume").toDouble(scene->ambientMusicVolume);
-	scene->setAmbientMusicVolume(volume);
-	const QString ambientMusicPath = resolveAssetPath(scene->ambientMusicGuid);
-	if (!ambientMusicPath.isEmpty()) {
-		scene->setAmbientMusic(ambientMusicPath);
-		scene->startPlayingAmbientMusic();
-	}
+	scene->ambientMusicVolume = qBound(0.0f,
+	    float(sceneObj.value("ambientMusicVolume").toDouble(scene->ambientMusicVolume)), 100.0f);
 
 	// THE READER-DEFAULTS LAW, no-argument form (READER-DEFAULTS-2): a bare
 	// toInt() is an implicit 0 — it agreed with SkyType::SingleColor only by

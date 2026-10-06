@@ -107,6 +107,7 @@ set_tests_properties(ui.property_anim PROPERTIES
 find_package(Qt6 REQUIRED COMPONENTS Multimedia)
 add_executable(test_media_lazy test_media_lazy.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/controls/videopreviewwidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/ambienceservice.cpp
     # the widget's Classic sheet lives in the theme archive (theme sweep)
     ${CMAKE_SOURCE_DIR}/src/ui/style/stylesheet.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/style/classicsheets.cpp)
@@ -115,7 +116,8 @@ set_target_properties(test_media_lazy PROPERTIES
     CXX_STANDARD 17
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 target_compile_definitions(test_media_lazy PRIVATE
-    JAHSHAKA_TINY_MP4="${CMAKE_SOURCE_DIR}/tests/scripting/fixtures/tiny.mp4")
+    JAHSHAKA_TINY_MP4="${CMAKE_SOURCE_DIR}/tests/scripting/fixtures/tiny.mp4"
+    JAHSHAKA_TINY_WAV="${CMAKE_SOURCE_DIR}/tests/scripting/fixtures/tiny.wav")
 target_include_directories(test_media_lazy PRIVATE
     ${CMAKE_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/src

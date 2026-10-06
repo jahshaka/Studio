@@ -63,10 +63,13 @@ public:
     /// `renderer` is the scene's live engine scene when there is one: the one
     /// thing it is used for is baking the sky's cloud layer into the exported
     /// sky image (CLOUDS-2D-1) — null (headless) exports without the layer.
+    /// `musicPath` is the file the scene's ambient music resolves to
+    /// (AmbienceService::fileFor), copied beside the export; empty = none.
     static WebExportResult exportWeb(const iris::ScenePtr &scene,
                                      const QString &sceneName,
                                      const QString &outDir,
-                                     jahshaka::engine::Scene *renderer = nullptr);
+                                     jahshaka::engine::Scene *renderer = nullptr,
+                                     const QString &musicPath = QString());
 
     /// GLB payloads above this refuse to inline into index.html (audit §3).
     static constexpr qint64 kInlineCeilingBytes = 75ll * 1024 * 1024;

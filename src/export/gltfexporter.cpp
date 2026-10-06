@@ -961,7 +961,7 @@ QJsonObject orientationShimNode(const QString &name)
 // ---- the exporter ----------------------------------------------------------
 
 GltfExporter::Result GltfExporter::exportScene(const iris::ScenePtr &scene, const QString &sceneName,
-                                              const SkyBaker &bakeSky)
+                                              const SkyBaker &bakeSky, const QString &musicPath)
 {
     Result res;
     if (!scene || !scene->rootNode) {
@@ -1590,12 +1590,12 @@ GltfExporter::Result GltfExporter::exportScene(const iris::ScenePtr &scene, cons
     jahScene["rayTracing"] = QString::fromLatin1(iris::rayTracingModeName(scene->rayTracing));
     if (scene->giMode != iris::GiMode::OFF)
         jahScene["gi"] = QStringLiteral("engine-only (mode %1)").arg(int(scene->giMode));
-    if (!scene->ambientMusicPath.isEmpty()) {
+    if (!scene->ambientMusicGuid.isEmpty() && !musicPath.isEmpty()) {
         QJsonObject audio;
-        audio["file"] = QFileInfo(scene->ambientMusicPath).fileName();
+        audio["file"] = QFileInfo(musicPath).fileName();
         audio["volume"] = double(scene->ambientMusicVolume);
         jahScene["audio"] = audio;
-        res.audioSourcePath = scene->ambientMusicPath;
+        res.audioSourcePath = musicPath;
     }
 
     // ---- assemble the JSON document ----

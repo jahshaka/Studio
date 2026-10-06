@@ -38,6 +38,7 @@ class MaterialPreviewService;
 class ClipboardService;
 class ThumbnailService;
 class AssetService;
+class AmbienceService;
 class PerfSampler;
 
 #include <functional>
@@ -63,6 +64,7 @@ struct StudioServices
     ClipboardService *clipboard  = nullptr;
     ThumbnailService *thumbnails = nullptr;
     AssetService     *assets     = nullptr;
+    AmbienceService  *ambience   = nullptr;   ///< the world's music, played (audit D8)
     /// The session log's periodic performance sampler (SESSION_LOG_SPEC §8-R3).
     /// Behind log.perf / log.sample; null in hosts with no shell.
     PerfSampler      *perfSampler = nullptr;

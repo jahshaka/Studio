@@ -154,8 +154,15 @@ QVector<sceneprops::Field> buildFields()
         [](const ScenePtr &s, const QVariant &v) {
             s->setPlayMode(static_cast<iris::ScenePlayMode>(v.toInt()));
         });
+    // THE AMBIENT MUSIC: data only. AmbienceService mirrors both fields to the
+    // audio device on its next sync, so a write here, its undo and the verb
+    // all play the same way (audit D8).
+    add("ambientMusic", [](const ScenePtr &s) { return QVariant(s->ambientMusicGuid); },
+        [](const ScenePtr &s, const QVariant &v) { s->ambientMusicGuid = v.toString(); });
     add("ambientMusicVolume", [](const ScenePtr &s) { return QVariant(s->ambientMusicVolume); },
-        [](const ScenePtr &s, const QVariant &v) { s->setAmbientMusicVolume(v.toFloat()); });
+        [](const ScenePtr &s, const QVariant &v) {
+            s->ambientMusicVolume = qBound(0.0f, v.toFloat(), 100.0f);
+        });
 
     // ---- Fog section ------------------------------------------------------
     add("fogEnabled", [](const ScenePtr &s) { return QVariant(s->fogEnabled); },

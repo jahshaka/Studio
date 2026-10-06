@@ -9,10 +9,7 @@ and/or modify it under the terms of the MIT License
 For more information see the LICENSE file
 *************************************************************************/
 
-#include "services/assetcas.h"
 #include "ui/panels/propertyrows.h"
-#include "services/assetstorepaths.h"
-#include <QSqlDatabase>
 #include "ui/panels/propertywidgets/worldpropertywidget.h"
 
 #include "irisgl/document/scenegraph/scene.h"
@@ -149,9 +146,15 @@ WorldPropertyWidget::WorldPropertyWidget()
 	ambientMusicSelector = this->addComboBox("Background Ambience");
 	ambientMusicVolume = this->addFloatValueSlider("Volume", 1, 100, 50);
 
-	connect(ambientMusicSelector,		SIGNAL(currentIndexChanged(int)),
-			this,						SLOT(onBackgroundAmbienceChanged(int)));
-
+	// THE MUSIC IS A ROW LIKE ANY OTHER (audit D8): the combo writes the
+	// document's "ambientMusic" field through the same sceneprops key
+	// world.ambience writes, one undo step each, and AmbienceService plays
+	// whatever the field names — the panel no longer starts a player itself.
+	rowundo::bind(ambientMusicSelector, rows(QStringLiteral("ambientMusic"),
+	                                         tr("Background Ambience"),
+	                                         [this](const QVariant &row) {
+		return QVariant(ambientMusicSelector->getItemData(row.toInt()).toString());
+	}));
 	rowundo::bind(ambientMusicVolume, rows(QStringLiteral("ambientMusicVolume"), tr("Ambience Volume")));
 	rowundo::bind(worldGravity, rows(QStringLiteral("gravity"), tr("Gravity")));
 	rowundo::bind(sunDiscVisible, rows(QStringLiteral("sunDiscVisible"), tr("Sun Disc")));
@@ -254,42 +257,3 @@ void WorldPropertyWidget::refreshRows()
     loading = false;
 }
 
-void WorldPropertyWidget::applyAmbientMusic(const QString &guid)
-{
-	if (!scene) return;
-	if (guid.isEmpty() || !project) {
-		scene->ambientMusicGuid.clear();
-		scene->stopPlayingAmbientMusic();
-		return;
-	}
-	// Pin-world resolution: project pin -> library source (phase 4).
-	QString fullPathToAudio = AssetCas::resolvePinned(
-		QSqlDatabase::database(), AssetStorePaths::root(),
-		project->getProjectGuid(), guid);
-
-	scene->ambientMusicGuid = guid;
-	scene->setAmbientMusic(fullPathToAudio);
-	scene->startPlayingAmbientMusic();
-}
-
-void WorldPropertyWidget::onBackgroundAmbienceChanged(int index)
-{
-	Q_UNUSED(index)
-	if (loading || !scene) return;
-	const QString before = scene->ambientMusicGuid;
-	const QString after = ambientMusicSelector->getCurrentItemData();
-	if (before == after) return;
-	// The clip is a document field with a SIDE EFFECT (playback), so it does
-	// not go through the generic sceneprops write — the undo step replays the
-	// same call the row just made, which is what stops the two drifting apart.
-	//
-	// THE PUSH DOES THE APPLY. NodeEditCommand has no first-redo skip (unlike
-	// the value commands), so QUndoStack::push replays redo() immediately — and
-	// applying twice here RESTARTS the clip from the top, audibly (code review).
-	// With no undo stack (headless hosts, the panel suites) nothing would run
-	// at all, so that case applies by hand.
-	auto redo = [this, after]() { applyAmbientMusic(after); };
-	if (!services || !services->undo) { redo(); return; }
-	panelundo::pushEdit(services, tr("Background Ambience"), redo,
-	                    [this, before]() { applyAmbientMusic(before); refreshRows(); });
-}

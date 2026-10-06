@@ -381,6 +381,7 @@ set(SRCS
     src/services/worldmodes.cpp
     src/services/planarreflectors.cpp
     src/services/physicsconstraints.cpp
+    src/services/ambienceservice.cpp
     src/services/animationedits.cpp
     src/services/playerservice.cpp
     src/services/playbackservice.cpp
@@ -699,6 +700,7 @@ set(HEADERS
     src/services/scenefolders.h
     src/services/planarreflectors.h
     src/services/physicsconstraints.h
+    src/services/ambienceservice.h
     src/services/animationedits.h
     src/services/playbackservice.h
     src/ui/panels/presets/assetpanel.h 

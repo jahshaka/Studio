@@ -40,6 +40,7 @@ For more information see the LICENSE file
 #include "services/perfsampler.h"
 
 #include "bridge/enginehost.h"
+#include "services/ambienceservice.h"
 #include "viewport/enginerenderdriver.h"
 #include "services/assethelper.h"
 
@@ -597,6 +598,18 @@ void MainWindow::setupServices()
     clipboardService = serviceLayer->clipboard();
     thumbnailService = serviceLayer->thumbnails();
     assetService = serviceLayer->assets();
+    // THE WORLD'S MUSIC FOLLOWS THE DOCUMENT EVERY TICK (audit D8), like the
+    // mirror: the driver's beforeFrame fires on every tick, drawn or not, and a
+    // still frame costs AmbienceService two compares. Undo of the music row,
+    // the volume slider and the verb all land here without a hook of their own.
+    if (EngineRenderDriver *driver = EngineHost::instance().driver()) {
+        AmbienceService *ambience = serviceLayer->ambience();
+        connect(driver, &EngineRenderDriver::beforeFrame, ambience,
+                [this, ambience]() {
+            ambience->sync(projectService && projectService->isSceneOpen() ? scene
+                                                                           : iris::ScenePtr());
+        });
+    }
 
     connect(selectionService, &SelectionService::selectionChanged,
             docks, &EditorDocks::showSelection);
@@ -1176,11 +1189,10 @@ void MainWindow::closeWorld(bool reopenInPlace)
     // A tile's close control can fire with no scene open (double-fired close,
     // or closing while an open never completed): every line below dereferences
     // `scene`, so the first one crashed on null (crash-1788555267.log,
-    // stopPlayingAmbientMusic at offset 0x320 of a null Scene). Nothing open
-    // means nothing to close.
+    // the first line at offset 0x320 of a null Scene). Nothing open means
+    // nothing to close.
     if (!scene) return;
     {
-		scene->stopPlayingAmbientMusic();
         scene->getPhysicsEnvironment()->stopPhysics();
         scene->getPhysicsEnvironment()->stopSimulation();
 
@@ -1203,6 +1215,10 @@ void MainWindow::closeWorld(bool reopenInPlace)
     }
 
     projectService->setSceneOpen(false);
+    // The world's music stops with the world (audit D8). The tick's sync reads
+    // the scene only while one is OPEN, so nothing restarts it before the
+    // scene pointer goes.
+    if (services && services->ambience) services->ambience->stop();
     // Nothing to force-save any more (owner, 2026-09-18: the button is always
     // THERE, and it is live exactly while there is a world under it).
     actionSaveScene->setEnabled(false);

@@ -30,6 +30,7 @@ For more information see the LICENSE file
 
 #include "ui/controls/videopreviewwidget.h"
 #include "irisgl/document/scenegraph/scene.h"
+#include "services/ambienceservice.h"
 
 class MediaLazyTest : public QObject
 {
@@ -39,7 +40,7 @@ private slots:
     void videoWidgetHasNoPlayerUntilShown();
     void videoWidgetStopBeforePlayIsSafe();
     void videoWidgetPlaysAfterDeferredConstruction();
-    void sceneHasNoAmbientPlayerUntilPlayed();
+    void ambiencePlaysOnlyWhatTheSceneNames();
 };
 
 // The regression this whole lane exists for: a freshly constructed preview
@@ -95,17 +96,58 @@ void MediaLazyTest::videoWidgetPlaysAfterDeferredConstruction()
     w.stop();
 }
 
-// The document half: iris::Scene's ambient-music player. It is parentless, so
-// there is nothing to findChild for — the observable contract is that a Scene
-// that never played music can be told to stop and does not crash, which is
-// exactly what the nullptr guard buys.
-void MediaLazyTest::sceneHasNoAmbientPlayerUntilPlayed()
+// The world's music (audit D8): the DOCUMENT owns no player any more —
+// AmbienceService plays what the scene names. It must still build nothing for
+// a world without music, and for a world WITH music it must build a player
+// that has a SOURCE and an AUDIO OUTPUT and is PLAYING — the two halves the
+// document's old player never had (it played silence). Headless-safe: the
+// assertions are the player's state, never a sound.
+void MediaLazyTest::ambiencePlaysOnlyWhatTheSceneNames()
 {
+    QObject owner;
+    const QString wav = QStringLiteral(JAHSHAKA_TINY_WAV);
+    auto *ambience = new AmbienceService([wav](const QString &guid) {
+        return guid == QLatin1String("music-guid") ? wav : QString();
+    }, &owner);
     auto scene = iris::Scene::create();
     QVERIFY(!scene.isNull());
-    scene->stopPlayingAmbientMusic();   // would have been a null deref
-    scene->setAmbientMusicVolume(25);
-    scene->stopPlayingAmbientMusic();
+
+    ambience->sync(scene);                 // no music named
+    ambience->stop();                      // never played: safe
+    QCOMPARE(ambience->findChildren<QMediaPlayer *>().size(), 0);
+    QCOMPARE(ambience->state().value("state").toString(), QStringLiteral("stopped"));
+
+    scene->ambientMusicGuid = QStringLiteral("music-guid");
+    scene->ambientMusicVolume = 80.0f;
+    ambience->sync(scene);
+    const QList<QMediaPlayer *> players = ambience->findChildren<QMediaPlayer *>();
+    QCOMPARE(players.size(), 1);
+    QMediaPlayer *player = players.first();
+    QCOMPARE(player->source(), QUrl::fromLocalFile(wav));
+    QVERIFY2(player->audioOutput() != nullptr, "the player has an audio output");
+    QCOMPARE(player->playbackState(), QMediaPlayer::PlayingState);
+    QCOMPARE(player->loops(), int(QMediaPlayer::Infinite));
+    const float loud = player->audioOutput()->volume();
+    QVERIFY(loud > 0.0f && loud <= 1.0f);
+
+    // The volume moves in place: same player, same source, still playing.
+    scene->ambientMusicVolume = 20.0f;
+    ambience->sync(scene);
+    QCOMPARE(ambience->findChildren<QMediaPlayer *>().size(), 1);
+    QCOMPARE(player->playbackState(), QMediaPlayer::PlayingState);
+    QVERIFY(player->audioOutput()->volume() < loud);
+
+    // A guid with no file plays nothing and says why.
+    scene->ambientMusicGuid = QStringLiteral("missing-guid");
+    ambience->sync(scene);
+    QCOMPARE(player->playbackState(), QMediaPlayer::StoppedState);
+    QVERIFY(!ambience->state().value("error").toString().isEmpty());
+
+    // No music again: stopped, source dropped.
+    scene->ambientMusicGuid.clear();
+    ambience->sync(scene);
+    QCOMPARE(player->playbackState(), QMediaPlayer::StoppedState);
+    QCOMPARE(player->source(), QUrl());
 }
 
 QTEST_MAIN(MediaLazyTest)

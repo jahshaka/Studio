@@ -26,6 +26,7 @@ For more information see the LICENSE file
 
 #include "scripting/modules/moduleshared.h"
 #include "data/database/database.h"
+#include "services/ambienceservice.h"
 #include "services/assetcas.h"
 #include "services/assetstorepaths.h"
 #include <QSqlDatabase>
@@ -417,6 +418,9 @@ QVector<VerbInfo> WorldApi::verbs() const
           Needs::Document },
         { "sunDisc", "world.sunDisc({visible, inProbes, size}) -> {visible, inProbes, size}",
           "THE SUN DISC — the bright disc drawn in the sky where the scene's sun light points. It is the SUN's, not the sky's: one mechanism, drawn over EVERY sky type (colour, gradient, realistic, equirect, cubemap), and it moves when the light is rotated. `visible` (default true) is the scene-level switch. `size` is its ANGULAR DIAMETER IN DEGREES, 0.1 to 10, default 2.12: the real sun is 0.53 degrees across, but a photograph's sun looks several times larger because glare in the lens and in the eye spreads the saturated core, so the default is four times the physical angle. THE SIZE COSTS NO LIGHT: the disc's radiance is normalised per solid angle, so a wider disc spreads the SAME energy over more of the sky — bloom and an `inProbes` capture read the same total at every size, and only the sun light's own colour and intensity say how bright it is. NOTE for image skies: an equirect or cubemap sky usually has a sun PAINTED into it, and the disc will only line up with it if you aim the sun light at it — otherwise the scene shows two suns, so either align the light or turn the disc off here. `inProbes` (default FALSE) says whether reflection-probe captures contain it: off, because the sun's energy already reaches glossy surfaces through the directional light's own specular highlight, and capturing the disc as well paints a SECOND sun on everything the probes light. Turn it on if you want probe-lit mirrors to show the disc. A sun that has set draws no disc at all. Called with no argument it reads. One undo step.",
+          Needs::Document },
+        { "ambience", "world.ambience({music?, volume?}) -> {music, volume, source, state, output, gain, error}",
+          "THE WORLD'S AMBIENT MUSIC — the World panel's Background Ambience and Volume rows, as a verb (the rows write the same two scene fields). `music` is a Music asset's guid (assets.list({type:\"music\"}) lists them; an imported .wav/.mp3/.ogg is one), or \"\" for none. `volume` is 0..100, a slider position (perceived loudness; the output's linear `gain` is converted from it), default 50, clamped. Both are SAVED WITH THE SCENE and the music starts whenever a world that names it is opened, loops until the world closes or the music changes, and stops when it is set to \"\". The answer is what plays: `source` (the file the guid resolved to — the project's pin, else the library's bytes), `state` (\"playing\" | \"paused\" | \"stopped\"), `output` (the player has an audio output) and `error` (why a named music cannot play, empty when it can). A guid that is not a Music asset, a volume that is not a number, or an unknown key is refused and nothing is written. Called with no argument it reads. One undo step.",
           Needs::Document },
         { "clouds", "world.clouds({enabled?, coverage?, density?, speed?, direction?, altitude?, shadow?, weatherMap?}) -> {enabled, coverage, density, speed, direction, altitude, shadow, weatherMap, drawsOver, live}",
           "THE 2D CLOUD LAYER — one sheet of cloud at a fixed altitude, drawn over the sky (HDRP's Cloud Layer is the model). OFF by default, and a scene whose layer is at the defaults writes nothing into its file. It is drawn over the COLOUR, GRADIENT and REALISTIC skies only: an equirectangular or cubemap sky is a photograph with its own clouds in it, and the layer is not drawn over one (`drawsOver` says whether the current sky takes it). It is part of the SKY: the Sky Light's ambient and every reflection see it, because the renderer's environment capture photographs it — so an overcast sky changes the scene's ambient light, and a full overcast changes the exposure too (correct: the key moves). It also SHADOWS THE GROUND: the sun's light on a surface is multiplied by the fraction of the beam that crosses the sheet, where the sun ray from that surface meets it (a material that receives no shadows, and a sun that casts none, are not shaded — as for every shadow). It runs at every quality tier and in VR — it is the VR cloud. There is no parallax inside it and the camera never enters it; volumetric clouds are a separate, parked program. "
@@ -2084,6 +2088,62 @@ QVariantMap WorldApi::sunDisc(const QVariantMap &params)
     out[QStringLiteral("visible")] = scene->sunDiscVisible;
     out[QStringLiteral("inProbes")] = scene->sunDiscInProbes;
     out[QStringLiteral("size")] = scene->sunDiscSize;
+    return out;
+}
+
+// ---------------------------------------------------------------------------
+// THE WORLD'S AMBIENT MUSIC (audit D8)
+// ---------------------------------------------------------------------------
+// The two scene fields through their sceneprops keys (the panel's rows), then
+// AmbienceService's sync at once, so the answer is what plays NOW — the
+// service would otherwise pick the change up on the next render tick.
+QVariantMap WorldApi::ambience(const QVariantMap &params)
+{
+    QVariantMap out;
+    auto scene = sceneOrFail(QStringLiteral("world.ambience"));
+    if (!scene) return out;
+    if (!params.isEmpty()) {
+        static const QStringList known = { QStringLiteral("music"), QStringLiteral("volume") };
+        const QString refusal = refuseUnknownKeys(QStringLiteral("world.ambience"), params, known);
+        if (!refusal.isEmpty()) { fail(refusal); return out; }
+        // VALIDATED BEFORE ANYTHING IS WRITTEN.
+        QString music = scene->ambientMusicGuid;
+        if (params.contains(QStringLiteral("music"))) {
+            music = params.value(QStringLiteral("music")).toString().trimmed();
+            if (!music.isEmpty()) {
+                const int type = host.db ? host.db->fetchAsset(music).type : -1;
+                if (type != static_cast<int>(ModelTypes::Music)) {
+                    fail(QStringLiteral("world.ambience: '%1' is not a Music asset "
+                                        "(assets.list({type:\"music\"}) lists them; \"\" is none)")
+                             .arg(music));
+                    return out;
+                }
+            }
+        }
+        double volume = scene->ambientMusicVolume;
+        if (params.contains(QStringLiteral("volume"))) {
+            const QVariant raw = scriptmod::normalizeJs(params.value(QStringLiteral("volume")));
+            bool numeric = false;
+            volume = raw.toDouble(&numeric);
+            if (!numeric || raw.typeId() == QMetaType::Bool) {
+                fail(QStringLiteral("world.ambience: 'volume' must be a number 0..100, got '%1'")
+                         .arg(params.value(QStringLiteral("volume")).toString()));
+                return out;
+            }
+        }
+        WorldEdit edit(scene, { QStringLiteral("ambientMusic"), QStringLiteral("ambientMusicVolume") });
+        sceneprops::set(scene, QStringLiteral("ambientMusic"), music);
+        sceneprops::set(scene, QStringLiteral("ambientMusicVolume"), qBound(0.0, volume, 100.0));
+        edit.commit(host.services ? host.services->undo : nullptr, QStringLiteral("Background Ambience"));
+    }
+    AmbienceService *player = host.services ? host.services->ambience : nullptr;
+    if (player) {
+        player->sync(scene);
+        out = player->state();
+    }
+    out.remove(QStringLiteral("guid"));
+    out[QStringLiteral("music")] = scene->ambientMusicGuid;
+    out[QStringLiteral("volume")] = double(scene->ambientMusicVolume);
     return out;
 }
 

@@ -1,0 +1,79 @@
+// scripting.e2e.ambience — THE WORLD'S AMBIENT MUSIC PLAYS (audit D8).
+//
+// The document's QMediaPlayer was built with no source and no audio output,
+// so every world with music played silence. Playback now lives in the
+// editor's AmbienceService, which mirrors the scene's two fields (the music
+// guid, the volume) to a player that HAS both; world.ambience writes the same
+// fields the World panel's rows write and answers what the player is doing.
+//
+// Headless-safe: Qt Multimedia's ffmpeg backend opens and plays with no
+// display; the assertions are the player's source, its output and its state,
+// never a sound.
+
+function assert(cond, msg) {
+    if (!cond) throw new Error("assert failed: " + msg);
+    console.log("ok: " + msg);
+}
+function caught(fn) {
+    try { fn(); } catch (e) { return "" + e; }
+    return null;
+}
+var J = JSON.stringify;
+
+var proj = project.create("Ambience " + Date.now());
+assert(proj.length > 10, "project.create -> " + proj);
+
+// ---- a Music asset ----------------------------------------------------------
+var wav = assets.importFile("@SOURCE_DIR@/tests/scripting/fixtures/tiny.wav");
+assert(wav.length > 10, "the wav imports -> " + wav);
+var musics = assets.list({ type: "music" }).map(function (a) { return a.guid || a; });
+assert(musics.indexOf(wav) >= 0, "and is a Music asset: " + J(musics));
+
+// ---- nothing plays in a world with no music ---------------------------------
+var quiet = world.ambience();
+console.log("fresh world: " + J(quiet));
+assert(quiet.music === "" && quiet.state === "stopped", "a fresh world plays nothing");
+
+// ---- the refusals write nothing ---------------------------------------------
+var unknown = caught(function () { world.ambience({ track: wav }); });
+assert(unknown !== null, "an unknown key is refused: " + unknown);
+var notMusic = caught(function () { world.ambience({ music: "not-a-guid" }); });
+assert(notMusic !== null && notMusic.indexOf("Music asset") >= 0,
+       "a guid that is not a Music asset is refused: " + notMusic);
+var loud = caught(function () { world.ambience({ music: wav, volume: "loud" }); });
+assert(loud !== null && loud.indexOf("number") >= 0, "a non-numeric volume is refused: " + loud);
+assert(world.ambience().music === "", "...and none of them wrote the music");
+
+// ---- it PLAYS: a source, an output, state playing ---------------------------
+var on = world.ambience({ music: wav, volume: 80 });
+console.log("music on: " + J(on));
+assert(on.music === wav && on.volume === 80, "the scene names the music at volume 80");
+assert(on.source.length > 0 && /\.wav$/i.test(on.source), "the player has a SOURCE: " + on.source);
+assert(on.output === true, "the player has an AUDIO OUTPUT");
+assert(on.state === "playing", "the player is PLAYING (state " + on.state + ", error '" + on.error + "')");
+assert(on.gain > 0 && on.gain <= 1, "the output's gain follows the volume: " + on.gain);
+
+// ---- the volume moves in place (no restart) ---------------------------------
+var softer = world.ambience({ volume: 20 });
+assert(softer.state === "playing" && softer.source === on.source,
+       "a volume change keeps the same clip playing");
+assert(softer.gain < on.gain, "and lowers the gain (" + on.gain + " -> " + softer.gain + ")");
+var clamped = world.ambience({ volume: 500 });
+assert(clamped.volume === 100, "a volume past the dial is clamped: " + clamped.volume);
+
+// ---- it is the WORLD's: saved, and it starts again on open ------------------
+assert(project.save() === true, "project.save");
+assert(project.close() === true, "project.close");
+assert(project.open(proj) === true, "project.open (REOPEN)");
+var reopened = world.ambience();
+console.log("reopened: " + J(reopened));
+assert(reopened.music === wav && reopened.volume === 100, "the music and volume survived the save");
+assert(reopened.state === "playing" && reopened.source.length > 0,
+       "and the reopened world plays it (" + reopened.state + ")");
+
+// ---- and "" stops it --------------------------------------------------------
+var off = world.ambience({ music: "" });
+assert(off.music === "" && off.state === "stopped" && off.source === "",
+       "music \"\" stops it and drops the source: " + J(off));
+
+console.log("scripting.e2e.ambience PASSED");

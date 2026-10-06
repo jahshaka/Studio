@@ -50,17 +50,9 @@ public:
     /// exactly as "Show Grid" is of the grid's (WORLD-MODEL-1).
     void setGroundPlaneAction(QAction *action);
 
-public slots:
-    void onBackgroundAmbienceChanged(int index);
-
 private:
     /// Re-reads every row from the document in place (selection, and undo).
     void refreshRows();
-    /// Binds the scene's ambient music to `guid` and starts (or stops) it. The
-    /// one place that resolves the clip — both the row and its undo step call
-    /// it, so they cannot diverge.
-    void applyAmbientMusic(const QString &guid);
-
     QSharedPointer<iris::Scene> scene;
     StudioServices *services = nullptr;
     /// Populating the rows, not showing an edit (see rowundo::Binding::guard).

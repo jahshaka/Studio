@@ -71,8 +71,12 @@ public:
 
     /// Converts the live document scene to a binary glTF. `sceneName` becomes
     /// the glTF scene name. Never throws; failures land in Result::error.
+    /// `musicPath` is the file the scene's ambient music guid resolves to (the
+    /// caller resolves it — the document holds a guid, not a path); empty =
+    /// no audio block.
     static Result exportScene(const iris::ScenePtr &scene, const QString &sceneName,
-                              const SkyBaker &bakeSky = SkyBaker());
+                              const SkyBaker &bakeSky = SkyBaker(),
+                              const QString &musicPath = QString());
 };
 
 #endif // GLTFEXPORTER_H

@@ -28,6 +28,7 @@ For more information see the LICENSE file
 #include "ui/ishellview.h"
 #include "services/projectservice.h"
 #include "services/loadtimeline.h"
+#include "services/ambienceservice.h"
 #include "services/services.h"
 #include "ui/pages/projectmanager.h"
 #include <QPointer>
@@ -631,7 +632,11 @@ QVariantMap ProjectApi::exportWeb(const QString &dir)
     // the exported sky image (CLOUDS-2D-1); headless exports go without it.
     jahshaka::engine::Scene *renderer =
         (host.isEngineReady() && host.viewport) ? host.viewport->engineScene() : nullptr;
-    const auto r = ExportService::exportWeb(scene, host.project->getProjectName(), outDir, renderer);
+    const QString musicPath = (host.services && host.services->ambience)
+                                  ? host.services->ambience->fileFor(scene->ambientMusicGuid)
+                                  : QString();
+    const auto r = ExportService::exportWeb(scene, host.project->getProjectName(), outDir, renderer,
+                                            musicPath);
     if (!r.ok) { fail(QStringLiteral("project.exportWeb: %1").arg(r.error)); return out; }
 
     out["dir"] = r.dir;
