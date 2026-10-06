@@ -84,3 +84,47 @@ set_tests_properties(shadow.atlas_binding PROPERTIES TIMEOUT 120 LABELS "engine"
 jah_gpu_row(shadow.helper_casters CLASS engine COMMAND test_shadow_spike helpercasters
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(shadow.helper_casters PROPERTIES TIMEOUT 120 LABELS "engine")
+
+# CUTOUT-CASTER-1 — AN ALPHA-TESTED CASTER'S SHADOW IS ITS MAP, AND IT NEVER LOSES THE GPU.
+# The fork's caster fix (HlmsPbs: the caster's root layout holds the datablock's reflection map,
+# fork 5afd7a796): before it the cut-out's texture set spilled into the sampler binding and its
+# shadow was solid, absent or an Xid 109 from process to process. Each row runs its script in
+# TEN processes (shadow_casters.sh): one process proves nothing about the next.
+#   shadow.cutout_caster    — a 3 m plane, a 4 x 4 hole checker, under the template's sun: the
+#                             shadow is the checker cell by cell (the analytic projection: a
+#                             horizontal caster over the floor casts a translated copy), the same
+#                             10/10, and a SCROLLING cut-out's shadow holes move with the scroll.
+#   shadow.two_sided_caster — the opaque plane two-sided, upright and turned over: the opaque
+#                             plane's shadow (area within 10 %) 10/10.
+foreach(_what cutout twosided)
+    if(_what STREQUAL cutout)
+        set(_row shadow.cutout_caster)
+    else()
+        set(_row shadow.two_sided_caster)
+    endif()
+    jah_gpu_row(${_row} CLASS app
+             COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/scripts/shadow_casters.sh ${_what}
+                     $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
+                     ${CMAKE_CURRENT_SOURCE_DIR}/scripts/shadow_casters.js.in
+                     ${CMAKE_CURRENT_SOURCE_DIR}/fixtures/cutout_holes.png
+                     ${CMAKE_CURRENT_BINARY_DIR}/${_row} 10
+             WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+    set_tests_properties(${_row} PROPERTIES LABELS "engine" TIMEOUT 900)
+endforeach()
+# gpu.cutout_soak — 5,000 frames of cut-outs (plain on a cube and a sphere, the live graph
+# cut-out the hang was found on, the screenshot path, a pinned and a free clock), then 5,000 of
+# the Tornado sample, under the Khronos validation layer. MINUTES OF ONE PROCESS: nightly; its
+# push-time guard is shadow.cutout_caster's ten processes.
+jah_gpu_row(gpu.cutout_soak CLASS app
+         COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/scripts/gpu_cutout_soak.sh
+                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
+                 ${CMAKE_CURRENT_SOURCE_DIR}/scripts/gpu_cutout_soak.js.in
+                 ${CMAKE_CURRENT_SOURCE_DIR}/fixtures/cutout_holes.png
+                 ${CMAKE_SOURCE_DIR}/scenes/Tornado.zip
+                 ${CMAKE_CURRENT_BINARY_DIR}/gpu.cutout_soak
+         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(gpu.cutout_soak PROPERTIES
+    LABELS "engine;nightly" TIMEOUT 1800
+    ENVIRONMENT "VK_LOADER_LAYERS_ENABLE=VK_LAYER_KHRONOS_validation"
+    PASS_REGULAR_EXPRESSION "gpu_cutout_soak: PASS"
+    FAIL_REGULAR_EXPRESSION "Validation Error;DEVICE WAS LOST;assert failed")
