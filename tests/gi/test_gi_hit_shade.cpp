@@ -1584,9 +1584,13 @@ static int planarMain(Engine *e, bool pinnedChain)
                 st.hitRecords);
     CHECK_MSG(core.n > 300, "B's silhouette is seen in both pictures (%u px)", core.n);
     CHECK_MSG(st.hitRecords > 0, "B's hits are decode records (%llu)", st.hitRecords);
-    CHECK_MSG(lum(cr) > 0.1f && lum(cb) < 0.1f * lum(cr),
-              "BEFORE (B answered by the caches, a diffuse store): black — %.4f against the true %.4f", lum(cb),
-              lum(cr));
+    // BEFORE B IS A PLANAR REFLECTOR it is still a METAL, and since REFLECT-FIX-1 a
+    // reflection ray's hit on any metal is the decode's (jahHitReflectionDecodes), not
+    // its diffuse-only card's — so the control that used to read black (the caches)
+    // now reads B's colour. What it guards is that rule: never black.
+    CHECK_MSG(lum(cr) > 0.1f && lum(cb) > 0.5f * lum(cr),
+              "BEFORE (B a metal, not yet a planar reflector): decoded, NOT black — %.4f against the true %.4f",
+              lum(cb), lum(cr));
     // THE BAR IS THE ENGINE'S OWN CONE: B at a hit is shaded by the same specular
     // environment term the screen reads for B without its planar render — the hit
     // may not be further from the true picture than that picture is (plus the
