@@ -310,8 +310,9 @@ bool VideoRecorder::start(const Options &options, QString *why)
     QMediaFormat format(QMediaFormat::MPEG4);
     // QT'S ENCODER PROBE: its FIRST call in a process enumerates the encoders
     // (~0.7 s, measured in VIDEO-REC-2 — the "585 ms first click" of
-    // VIDEO-REC-1). Not warmed at boot (app.startup_quiet: Qt Multimedia is
-    // not constructed at boot, Lane 6a). Timed: `probeMs`.
+    // VIDEO-REC-1). Made by the process's first project open/create, behind its
+    // progress (services/encoderprobe.h; never at boot: app.startup_quiet's Lane
+    // 6a guard), so here it is a lookup. Timed: `probeMs`.
     QElapsedTimer probeTimer;
     probeTimer.start();
     const bool haveH264 = options.fault != QLatin1String("noEncoder") &&

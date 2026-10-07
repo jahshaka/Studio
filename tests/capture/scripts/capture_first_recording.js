@@ -3,9 +3,10 @@
 // VIDEO-REC-1 measured a 585 ms click on the first recording of a session. VIDEO-REC-2 found its
 // cause: Qt's encoder probe (the first QMediaFormat::supportedVideoCodecs(Encode) of a process,
 // ~0.7 s); the recorder's view and its NV12 job compiled (cold cache) or loaded (warm) on its first
-// frames too. The startup shader gate now makes the probe and draws that very view
-// (recordingview::create, armed every frame) behind the splash, so the first recording's start,
-// warm-up and first recorded frames compile and load ZERO shaders and the click is a lookup.
+// frames too. The startup shader gate draws that very view (recordingview::create, armed every
+// frame) behind the splash, and the first project open makes the probe behind its progress, so the
+// first recording's start, warm-up and first recorded frames compile and load ZERO shaders and the
+// click is a lookup.
 // FIRST in the pool: the claim is about the process's first recording.
 
 function assert(cond, msg) {
@@ -38,8 +39,11 @@ assert(sc1.liveCompiles === sc0.liveCompiles, "and no live compile was reported"
 // never drew would still have to LOAD its programs (the NV12 job) on its first frames.
 assert(sc1.loadedThisRun === sc0.loadedThisRun, "nor loaded one from the cache: " +
        (sc1.loadedThisRun - sc0.loadedThisRun));
-// THE ENCODER PROBE (the real 585 ms) is NOT warmed at boot: app.startup_quiet's guard (Lane 6a,
-// STABILITY_PROGRAM_SPEC §1.7c) forbids constructing Qt Multimedia at boot. Reported, not asserted:
-// the first click's probeMs is the probe itself (~0.7 s) until the lead decides where it is made.
+// THE ENCODER PROBE (the real 585 ms): never at boot (app.startup_quiet's Lane 6a guard) but in the
+// process's FIRST project open/create, behind its progress — so after project.create above, the first
+// click's probe is a lookup and the click itself costs well under 50 ms of UI time.
+assert(first.probeMs < 20, "Qt's encoder probe was made by the project open: " + first.probeMs.toFixed(2) + " ms");
+assert(first.startMs < 50, "the first record click after an open costs under 50 ms of UI time: " +
+       first.startMs.toFixed(1) + " ms");
 assert(capture.stop({ wait: true, timeoutMs: 30000 }) !== null && capture.status().state === "done", "finished");
 console.log("capture.first_recording: PASS");
