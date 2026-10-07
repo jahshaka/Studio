@@ -74,6 +74,7 @@
 #include "irisgl/document/physics/environment.h"
 #include "irisgl/document/scenegraph/lightnode.h"
 #include "irisgl/document/scenegraph/scene.h"
+#include "viewport/recordingview.h"
 #include "irisgl/document/scenegraph/scenenode.h"
 #include "irisgl/document/scenegraph/cameranode.h"
 #include "data/settingsmanager.h"
@@ -121,6 +122,18 @@ EngineSceneViewport::EngineSceneViewport(const std::shared_ptr<Engine> &engine,
             // View::framesPresented is not one: it RESETS to 0 whenever a scene
             // is bound, which made a close/reopen of the same world collide with
             // a previous cover and skip the present that should have raised it.
+            // THE OFFLINE RECORDER'S BACKPRESSURE (VIDEO-REC-2): its encoder
+            // queue is full, so this tick neither syncs nor renders — the scene
+            // clock does not move and no temporal state steps without a recorded
+            // frame; the event loop runs on and the encoder drains it. Never a
+            // dropped frame. (The UI stays live: a held tick costs nothing.)
+            if (mRecordView && mRecordHooks.offline && mRecordHooks.hold) {
+                const std::function<bool()> hold = mRecordHooks.hold;
+                if (hold()) {
+                    if (mDriver) mDriver->holdThisTick();
+                    return;
+                }
+            }
             ++mFrameEpoch;
             syncFrame();
             // WHAT THE LAST FRAME LEFT OWED (OPEN_COVER_SPEC §2.1, lane
@@ -2448,7 +2461,16 @@ void EngineSceneViewport::syncFrame(float dtOverride)
     // would drift the grid against the wall.
     const float wall = float(double(mFrameTimer.nsecsElapsed()) * 1e-9);
     mFrameTimer.restart();
-    const float dt = dtOverride >= 0.0f ? dtOverride : wall;
+    // ...UNLESS AN OFFLINE RECORDING RUNS (VIDEO-REC-2): then this frame IS one
+    // video frame, and the clock is handed exactly ONE grid step for it — not
+    // the wall time it took (a 50 ms Debug frame would buy three steps and the
+    // clip would jump), not a script's dt — so the document, the particles and
+    // the shader clock advance 1/60 s per recorded frame however slowly the
+    // editor runs. The clock's epsilon makes the float step count as one whole
+    // step, and a carried remainder (< one step) can never buy a second.
+    const bool offlineStep = mRecordView && mRecordHooks.offline;
+    const float dt = offlineStep ? float(iris::SimulationClock::kStepSeconds)
+                                 : (dtOverride >= 0.0f ? dtOverride : wall);
     // THE ONE CLOCK (ENGINEERING_DEBT_SPEC A4.2): `dt` goes to the document's
     // SimulationClock through exactly one of these two calls, and the seconds
     // it converts into grid steps come back as `simulated` — physics and
@@ -3526,33 +3548,15 @@ jahshaka::engine::View *EngineSceneViewport::beginRecordingView(unsigned width, 
     if (!mEngineScene || !mScene) return refuse(QStringLiteral("no world is open"));
     if (mRecordView) return refuse(QStringLiteral("a recording is already running"));
     if (width == 0 || height == 0) return refuse(QStringLiteral("the recording has no size"));
-    jahshaka::engine::View *rv = mEngine->createOffscreenView(
-        "recording-" + std::to_string(++mViewSerial), width, height, Colour(0.10f, 0.11f, 0.14f));
-    if (!rv) return refuse(QString::fromStdString(mEngine->lastError()));
-    rv->setOffscreenContract(jahshaka::engine::OffscreenContract::StillPicture);
-    // THE SWITCH (owner §10.5): the helper channel of the view's passes — graph
-    // shape, set once here. The engine ANDs the mask with its reserved flags
-    // (ENGINE trap 6 lives inside setHelpersVisible). The wearer's VR channel
-    // stays shut: a recording of the desk is never a recording of a headset.
-    rv->setHelpersVisible(helpers);
-    if (!rv->setScene(mEngineScene)) {
-        const QString reason = QString::fromStdString(mEngine->lastError());
-        mEngine->destroyView(rv);
-        return refuse(reason);
-    }
-    if (!rv->setVideoReadback(true)) {
-        const QString reason = QString::fromStdString(mEngine->lastError());
-        mEngine->destroyView(rv);
-        return refuse(reason);
-    }
+    QString viewWhy;
+    jahshaka::engine::View *rv = recordingview::create(*mEngine, mEngineScene,
+                                                       "recording-" + std::to_string(++mViewSerial),
+                                                       width, height, helpers, &viewWhy);
+    if (!rv) return refuse(viewWhy);
     mRecordView = rv;
     mRecordHooks = std::move(hooks);
     // The first push now, so the seed below is derived from the right description.
-    if (mMirror) {
-        mMirror->applySky(rv);
-        mMirror->applyViewEnvironment(rv, viewCamera(), /*offscreenChain=*/true);
-        if (viewCamera()) mMirror->applyCamera(viewCamera(), rv, freeCameraFramingAspect());
-    }
+    if (mMirror) recordingview::push(*mMirror, rv, viewCamera(), freeCameraFramingAspect());
     const float measured = view()->measuredExposureScale();
     if (measured > 0.0f) rv->seedExposureHistory(measured);
     else rv->resetExposureHistory();
@@ -3562,13 +3566,9 @@ jahshaka::engine::View *EngineSceneViewport::beginRecordingView(unsigned width, 
 void EngineSceneViewport::syncRecordingView()
 {
     if (!mRecordView) return;
-    if (mMirror) {
-        mMirror->applySky(mRecordView);
-        // The per-view half only (never applyEnvironment twice: its scene half
-        // counts GI settle frames), the whole chain in ONE push.
-        mMirror->applyViewEnvironment(mRecordView, viewCamera(), /*offscreenChain=*/true);
-        if (viewCamera()) mMirror->applyCamera(viewCamera(), mRecordView, freeCameraFramingAspect());
-    }
+    // The per-view half only (never applyEnvironment twice: its scene half
+    // counts GI settle frames), the whole chain in ONE push.
+    if (mMirror) recordingview::push(*mMirror, mRecordView, viewCamera(), freeCameraFramingAspect());
     // COPIED BEFORE IT IS CALLED: the hook may end the recording (a failure).
     if (const std::function<void(quint64)> frame = mRecordHooks.frame)
         frame(mScene ? quint64(mScene->clock.steps()) : 0u);

@@ -229,6 +229,9 @@ AREA_RULES = [
     (r"^src/modules/vr/", ["vr", "player", "app"], ["vr", "player"]),
     # THE VIDEO RECORDER (VIDEO-REC-1): its own pool, and the shell's button rows.
     (r"^src/modules/capture/", ["capture", "ui"], ["capture"]),
+    # ...and the recorder's view, built in one place for the recorder and the startup
+    # gate's warm (VIDEO-REC-2), and the gate itself: the capture pool's first recording.
+    (r"^src/(viewport/recordingview|app/shaderbuildgate)", ["capture"], ["capture"]),
     (r"^src/(modules/publish|export)/", ["export", "ui"], ["project", "publish"]),
     # …and here because source.panel_rows_guarded and source.db_pointers_initialised
     # read src/ui and src/shell (the panels' rows and their database pointers).

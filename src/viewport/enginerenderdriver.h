@@ -206,6 +206,14 @@ public:
     /// lie this round of the readout exists to remove.
     void noteExternalFrame();
 
+    /// THIS TICK DRAWS NOTHING (VIDEO-REC-2). Called by a beforeFrame
+    /// subscriber that must not have the frame it is in rendered — the offline
+    /// recorder's backpressure: its encoder queue is full, and a frame rendered
+    /// now would step the scene's temporal state (the GI histories, the
+    /// exposure) without a recorded frame for it. Consumed by the tick it was
+    /// set in; the timer keeps running, so the next tick asks again.
+    void holdThisTick() { mHoldTick = true; }
+
 signals:
     /// Emitted before each frame — animate here.
     void beforeFrame();
@@ -234,6 +242,8 @@ private:
     double  mRefreshHz = 0.0;
     /// What the script run in flight (if any) is doing to this loop.
     ScriptRun mScriptRun = ScriptRun::None;
+    /// holdThisTick's flag: set inside beforeFrame, consumed by the same tick.
+    bool mHoldTick = false;
     /// True between Engine::beginVrSession and endVrSession (setVrSessionActive).
     bool mVrSession = false;
     /// True while that session is actually PUMPING — i.e. while renderOneFrame

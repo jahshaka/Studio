@@ -24,6 +24,15 @@ jah_pool_arm(capture failure ${CMAKE_CURRENT_SOURCE_DIR}/scripts/capture_failure
 # capture.abandon — quit while saving: the shutdown's abandonSave publishes the encoder's own
 #   complete file at the final path (playable, said in the warning), never only a hidden raw file.
 jah_pool_arm(capture abandon ${CMAKE_CURRENT_SOURCE_DIR}/scripts/capture_abandon.js 10)
+# capture.first_recording — the session's FIRST recording compiles no shader: the startup gate
+#   drew the recorder's own view (its chain and the NV12 job) behind the splash (VIDEO-REC-2).
+jah_pool_arm(capture first_recording ${CMAKE_CURRENT_SOURCE_DIR}/scripts/capture_first_recording.js 15 FIRST)
+# capture.offline_unique — THE OFFLINE MODE (VIDEO-REC-2): a spinning bar + sparks recorded with
+#   the editor slowed on purpose (50 ms blocked per frame, the frames on the wall clock) gives N
+#   frames at 60/1, one clock step per frame, no two consecutive decoded pictures the same, and
+#   1.5 deg (1/60 s of 90 deg/s) per frame read off the decoded pixels; real time under the same
+#   load is the control (it holds frames).
+jah_pool_arm(capture offline_unique ${CMAKE_CURRENT_SOURCE_DIR}/scripts/capture_offline_unique.js 60)
 jah_add_pool(capture TIER epic LABELS scripting capture)
 
 # capture.faststart — the fast-start step (src/modules/capture/mp4faststart.cpp) on SYNTHETIC

@@ -12,6 +12,7 @@ For more information see the LICENSE file
 #include "modules/capture/captureapi.h"
 
 #include <QEventLoop>
+#include <QRect>
 #include <QFileInfo>
 #include <QImage>
 #include <QMediaPlayer>
@@ -20,22 +21,73 @@ For more information see the LICENSE file
 #include <QVideoFrame>
 #include <QVideoSink>
 
+#include <cmath>
+#include <cstdlib>
+#include <vector>
+
 #include "modules/capture/capturemodule.h"
 #include "modules/capture/mp4faststart.h"
 #include "modules/capture/videorecorder.h"
 #include "scripting/modules/moduleshared.h"
+
+namespace {
+/// A decoded frame's LUMA plane, row-packed: plane 0 of a YUV frame as it is;
+/// any other format through Qt's own conversion (Rec. 709 weights on RGB).
+bool lumaOf(const QVideoFrame &source, std::vector<unsigned char> &out)
+{
+    QVideoFrame f(source);
+    const int w = f.width(), h = f.height();
+    if (w <= 0 || h <= 0) return false;
+    out.resize(size_t(w) * h);
+    const QVideoFrameFormat::PixelFormat pf = f.pixelFormat();
+    const bool yuv = pf == QVideoFrameFormat::Format_NV12 || pf == QVideoFrameFormat::Format_NV21 ||
+                     pf == QVideoFrameFormat::Format_YUV420P || pf == QVideoFrameFormat::Format_YV12 ||
+                     pf == QVideoFrameFormat::Format_P010 || pf == QVideoFrameFormat::Format_P016 ||
+                     pf == QVideoFrameFormat::Format_YUV420P10;
+    if (yuv && f.map(QVideoFrame::ReadOnly)) {
+        const bool wide = pf == QVideoFrameFormat::Format_P010 || pf == QVideoFrameFormat::Format_P016 ||
+                          pf == QVideoFrameFormat::Format_YUV420P10;
+        const uchar *base = f.bits(0);
+        const int stride = f.bytesPerLine(0);
+        for (int y = 0; y < h; ++y) {
+            const uchar *row = base + size_t(y) * stride;
+            for (int x = 0; x < w; ++x)
+                out[size_t(y) * w + x] = wide ? uchar(reinterpret_cast<const quint16 *>(row)[x] >> 8) : row[x];
+        }
+        f.unmap();
+        return true;
+    }
+    const QImage img = f.toImage().convertToFormat(QImage::Format_RGB888);
+    if (img.width() != w || img.height() != h) return false;
+    for (int y = 0; y < h; ++y) {
+        const uchar *row = img.constScanLine(y);
+        for (int x = 0; x < w; ++x)
+            out[size_t(y) * w + x] = uchar(qBound(0.0, 0.2126 * row[3 * x] + 0.7152 * row[3 * x + 1] +
+                                                          0.0722 * row[3 * x + 2] + 0.5, 255.0));
+    }
+    return true;
+}
+}   // namespace
 
 CaptureApi::CaptureApi(ScriptHost &host, CaptureModule *module) : ApiModule(host), mModule(module) {}
 
 QVector<VerbInfo> CaptureApi::verbs() const
 {
     return {
-        { "start", "capture.start({path?, helpers?}) -> status | null",
+        { "start", "capture.start({path?, helpers?, mode?}) -> status | null",
           "STARTS A VIDEO RECORDING of the editor's camera (VIDEO_CAPTURE_SPEC §10): a SEPARATE "
           "1920x1080 render of this camera every frame, converted to NV12 on the GPU (BT.709, "
           "limited range) and encoded H.264 at ~14 Mbps by the machine's hardware encoder where "
           "Qt finds one; 60 fps on the SCENE's clock — one video frame per 1/60 s step the scene "
           "advanced, a slow editor frame HELD over the steps it spanned, never a sped-up file. "
+          "`mode` (default \"realtime\", what that sentence describes) or \"offline\": PERFECT 60 — "
+          "every frame the editor draws is one video frame and the scene clock is handed EXACTLY one "
+          "1/60 s step for it (animation, physics, particles, the shader clock and every per-frame "
+          "temporal history step once per recorded frame, as a 60 fps run would show them), never "
+          "the wall time and never a script's editor.frame dt; nothing is held or dropped — a full "
+          "readback ring is waited out (one GPU frame at most) and a full encoder queue holds the "
+          "render loop's ticks until it drains. The editor runs as slowly as it must and stays "
+          "interactive; `clipSeconds` against `wallSeconds` in the status says how much slower. "
           "`path` (.mp4) defaults to ~/Videos/Jahshaka/<scene>_<date-time>.mp4; `helpers` "
           "(default false: scene only, the photo rule) draws the editor's grid, gizmo, outline "
           "and icons into the picture. The first recorded frame comes after the view's warm-up "
@@ -53,16 +105,21 @@ QVector<VerbInfo> CaptureApi::verbs() const
           "(state `finishing` -> `done`, or `failed`). `wait: true` waits for that here (a nested "
           "event loop, at most `timeoutMs`, default 30000). Null when nothing is recording.",
           Needs::Engine },
-        { "status", "capture.status() -> {state, recording, path, frames, armed, held, sent, queued, "
-          "dropped, encoderDropped, inFlight, elapsed, warming, startMs, encoder, hardwareEncoder, width, "
-          "height, fps, bitRate, helpers, error?, warning?}",
+        { "status", "capture.status() -> {state, recording, path, mode, frames, armed, held, sent, queued, "
+          "dropped, encoderDropped, inFlight, elapsed, clipSeconds, wallSeconds, heldTicks, ringWaits, "
+          "worstRingWaitMs, warming, startMs, encoder, hardwareEncoder, width, height, fps, bitRate, "
+          "helpers, error?, warning?}",
           "The recorder now. `state` is idle | recording | finishing | done | failed; `frames` "
           "the video frames written (one per scene step, holds included), `held` how many were a "
           "previous picture held over a step, `dropped` frames the GPU readback ring had to skip "
           "(the recorder fell three frames behind), `encoderDropped` frames the encoder's queue "
           "refused; `elapsed` = frames / 60 s; `encoder` the codec implementation Qt opened "
           "(\"h264_nvenc\" here) and `hardwareEncoder` whether Qt called it a hardware one; "
-          "`path` the file (the finished one once `done`).",
+          "`path` the file (the finished one once `done`). `mode` is realtime | offline; "
+          "`clipSeconds` (= `elapsed`) is the video recorded and `wallSeconds` the wall time since "
+          "the start (frozen at the stop) — an offline recording's clip runs slower than the wall; "
+          "`heldTicks` the render-loop ticks an offline recording held for its encoder, `ringWaits` "
+          "the frames it waited for a readback ticket and `worstRingWaitMs` the longest such wait.",
           Needs::Document },
         { "wait", "capture.wait(timeoutMs=30000) -> status",
           "Waits (a nested event loop) until the recorder is neither recording nor finishing, at "
@@ -75,9 +132,10 @@ QVector<VerbInfo> CaptureApi::verbs() const
           "the status's `warning` saying so. A no-op unless the state is `finishing` with the "
           "fast-start step running.",
           Needs::Engine },
-        { "inspect", "capture.inspect(path, {decode?, timeoutMs?}) -> {ok, fastStart, moovOffset, "
+        { "inspect", "capture.inspect(path, {decode?, perFrame?, timeoutMs?}) -> {ok, fastStart, moovOffset, "
           "mdatOffset, codec, width, height, timescale, duration, frames, keyframes, constantRate, "
-          "sampleDelta, lastDelta, fps, presentationMs, decoded?:{frames, width, height, mean:[r,g,b]}}",
+          "sampleDelta, lastDelta, fps, presentationMs, decoded?:{frames, width, height, mean:[r,g,b], "
+          "perFrame?:[{diff, angle, area}]}}",
           "Reads an MP4's own boxes: where the index sits (`fastStart`: moov before mdat), and the "
           "video track's sample entry (codec, coded size), timescale, sample count (`frames`) and "
           "whether every sample but the last has one duration (`constantRate`, `fps` = timescale / "
@@ -86,7 +144,13 @@ QVector<VerbInfo> CaptureApi::verbs() const
           "the fast-start step: N frames are N steps long in every box that states a duration. "
           "`decode: true` also plays it through Qt's decoder (at half speed, so no late frame is "
           "skipped) and counts the frames delivered, "
-          "with the first frame's size and mean colour. A measuring instrument.",
+          "with the first frame's size and mean colour. `perFrame: {rect:[x,y,w,h], threshold}` (decoded "
+          "pixels; it implies decode, played at a tenth of the speed) also measures EVERY decoded frame "
+          "on its luma plane: `diff` the mean absolute luma difference from the previous decoded frame "
+          "(0 for the first; ~0 = the same picture sent twice), and inside `rect` the pixels whose luma "
+          "is at least `threshold` — `area` how many, `angle` the orientation of their principal axis in "
+          "degrees (-90..90, image x right, y down; from the second moments), the instrument a spinning "
+          "bar's motion per frame is read with. A measuring instrument.",
           Needs::Document },
         { "lastFrame", "capture.lastFrame(path) -> bool",
           "Writes the last frame the recorder handed the encoder as a PNG — the NV12 picture "
@@ -98,15 +162,22 @@ QVector<VerbInfo> CaptureApi::verbs() const
           "switch) when idle, stops when recording. A refusal shows the button's failure "
           "dialog. True when the click started or stopped a recording.",
           Needs::Window },
-        { "button", "capture.button() -> {text, toolTip, enabled, red, recording, helpers, placed, "
+        { "button", "capture.button() -> {text, toolTip, enabled, red, recording, helpers, mode, placed, "
           "visible, width, height, barHeight, menu:[rows], menuOpen, failure, dialogOpen}",
-          "What the record button shows: its text (the elapsed \"m:ss\" while recording; icon "
-          "only while idle), whether its "
+          "What the record button shows: its text (the elapsed \"m:ss\" while recording — an "
+          "OFFLINE recording shows its clip time against the wall time, \"m:ss / m:ss\"; icon "
+          "only while idle), its popup's mode switch (`mode`), whether its "
           "icon is the red dot, its size and its bar's height (it never makes the bar taller, and adds "
           "only its layout gap to the window's minimum width), its popup's rows (press-and-hold or right-click), and the last "
           "failure message with whether its "
           "dialog is open.",
           Needs::Window },
+        { "mode", "capture.mode(mode?) -> \"realtime\" | \"offline\"",
+          "The record button's MODE switch (its popup's two rows, persisted `capture/mode`, default "
+          "\"realtime\"): with no argument answers it, with \"realtime\" or \"offline\" sets it (the "
+          "next press records in that mode; capture.start's `mode` is independent). Anything else is "
+          "refused.",
+          Needs::Document },
         { "helpers", "capture.helpers(on?) -> bool",
           "The record button's helpers switch (persisted `capture/helpers`): with no argument "
           "answers it, with one sets it.",
@@ -120,7 +191,7 @@ QVector<VerbInfo> CaptureApi::verbs() const
 QVariant CaptureApi::start(const QVariantMap &options)
 {
     static const QStringList known = { QStringLiteral("path"), QStringLiteral("helpers"),
-                                       QStringLiteral("fault") };
+                                       QStringLiteral("fault"), QStringLiteral("mode") };
     const QString unknown = scriptmod::refuseUnknownKeys(QStringLiteral("capture.start"), options, known);
     if (!unknown.isEmpty()) { fail(unknown); return jsNull(); }
     VideoRecorder *r = mModule ? mModule->recorder() : nullptr;
@@ -129,6 +200,11 @@ QVariant CaptureApi::start(const QVariantMap &options)
     o.path = options.value(QStringLiteral("path")).toString();
     o.helpers = options.value(QStringLiteral("helpers"), false).toBool();
     o.fault = options.value(QStringLiteral("fault")).toString();
+    const QString mode = options.value(QStringLiteral("mode"), QStringLiteral("realtime")).toString();
+    if (!VideoRecorder::parseMode(mode, &o.mode)) {
+        fail(QStringLiteral("capture.start: mode must be \"realtime\" or \"offline\""));
+        return jsNull();
+    }
     if (!o.fault.isEmpty() && o.fault != QLatin1String("noEncoder") && o.fault != QLatin1String("encoderError") &&
         o.fault != QLatin1String("slowSave")) {
         fail(QStringLiteral("capture.start: fault must be \"noEncoder\", \"encoderError\" or \"slowSave\""));
@@ -187,11 +263,26 @@ QVariantMap CaptureApi::wait(int timeoutMs)
 
 QVariantMap CaptureApi::inspect(const QString &path, const QVariantMap &options)
 {
-    static const QStringList known = { QStringLiteral("decode"), QStringLiteral("timeoutMs") };
+    static const QStringList known = { QStringLiteral("decode"), QStringLiteral("timeoutMs"),
+                                       QStringLiteral("perFrame") };
     const QString unknown = scriptmod::refuseUnknownKeys(QStringLiteral("capture.inspect"), options, known);
     if (!unknown.isEmpty()) { fail(unknown); return QVariantMap(); }
     QVariantMap out = mp4::inspect(path).toMap();
-    if (!options.value(QStringLiteral("decode"), false).toBool()) return out;
+    // THE PER-FRAME INSTRUMENT (VIDEO-REC-2): every decoded frame's luma, against
+    // the previous one and as a principal axis inside a rect.
+    const bool perFrame = options.contains(QStringLiteral("perFrame"));
+    QRect rect;
+    int threshold = 128;
+    if (perFrame) {
+        const QVariantMap pf = options.value(QStringLiteral("perFrame")).toMap();
+        const QVariantList r = pf.value(QStringLiteral("rect")).toList();
+        if (r.size() != 4) { fail(QStringLiteral("capture.inspect: perFrame.rect must be [x, y, w, h]")); return QVariantMap(); }
+        rect = QRect(r[0].toInt(), r[1].toInt(), r[2].toInt(), r[3].toInt());
+        threshold = pf.value(QStringLiteral("threshold"), 128).toInt();
+    }
+    if (!perFrame && !options.value(QStringLiteral("decode"), false).toBool()) return out;
+    QVariantList perFrameRows;
+    std::vector<unsigned char> previousLuma, luma;
     // THE DECODER'S OWN ANSWER: Qt plays the file into a sink, every frame counted.
     QMediaPlayer player;
     QVideoSink sink;
@@ -201,6 +292,39 @@ QVariantMap CaptureApi::inspect(const QString &path, const QVariantMap &options)
     double mean[3] = { 0, 0, 0 };
     QObject::connect(&sink, &QVideoSink::videoFrameChanged, &sink, [&](const QVideoFrame &f) {
         if (!f.isValid()) return;
+        if (perFrame) {
+            QVariantMap row;
+            if (lumaOf(f, luma)) {
+                const int w = f.width(), h = f.height();
+                double diff = 0.0;
+                if (previousLuma.size() == luma.size()) {
+                    quint64 sum = 0;
+                    for (size_t i = 0; i < luma.size(); ++i) sum += quint64(std::abs(int(luma[i]) - int(previousLuma[i])));
+                    diff = double(sum) / double(luma.size());
+                }
+                // The principal axis of the bright pixels inside the rect.
+                const QRect r = rect.intersected(QRect(0, 0, w, h));
+                double n = 0, sx = 0, sy = 0, sxx = 0, syy = 0, sxy = 0;
+                for (int y = r.top(); y <= r.bottom(); ++y)
+                    for (int x = r.left(); x <= r.right(); ++x)
+                        if (luma[size_t(y) * w + x] >= threshold) {
+                            n += 1; sx += x; sy += y; sxx += double(x) * x; syy += double(y) * y; sxy += double(x) * y;
+                        }
+                double angle = 0.0;
+                if (n > 0) {
+                    const double mx = sx / n, my = sy / n;
+                    const double mu20 = sxx / n - mx * mx, mu02 = syy / n - my * my, mu11 = sxy / n - mx * my;
+                    angle = 0.5 * std::atan2(2.0 * mu11, mu20 - mu02) * 180.0 / M_PI;
+                }
+                row["diff"] = diff;
+                row["angle"] = angle;
+                row["area"] = int(n);
+                previousLuma.swap(luma);
+            } else {
+                row["error"] = QStringLiteral("no luma plane");
+            }
+            perFrameRows << row;
+        }
         if (frames == 0) {
             size = f.size();
             const QImage img = f.toImage().convertToFormat(QImage::Format_RGB888);
@@ -228,7 +352,8 @@ QVariantMap CaptureApi::inspect(const QString &path, const QVariantMap &options)
     player.setSource(QUrl::fromLocalFile(QFileInfo(path).absoluteFilePath()));
     // At half speed: a player keeps its clock by skipping late frames, and an
     // instrument that counts frames must not be the one under time pressure.
-    player.setPlaybackRate(0.5);
+    // ...and at a tenth when every frame is measured on this thread.
+    player.setPlaybackRate(perFrame ? 0.1 : 0.5);
     player.play();
     deadline.start(options.value(QStringLiteral("timeoutMs"), 20000).toInt());
     loop.exec();
@@ -240,6 +365,7 @@ QVariantMap CaptureApi::inspect(const QString &path, const QVariantMap &options)
     d["mean"] = QVariantList{ mean[0], mean[1], mean[2] };
     if (!error.isEmpty()) d["error"] = error;
     d["timedOut"] = !deadline.isActive();
+    if (perFrame) d["perFrame"] = perFrameRows;
     out["decoded"] = d;
     return out;
 }
@@ -262,6 +388,20 @@ bool CaptureApi::press()
 QVariantMap CaptureApi::button()
 {
     return mModule ? mModule->button() : QVariantMap();
+}
+
+QVariant CaptureApi::mode(const QVariant &mode)
+{
+    if (!mModule) return jsNull();
+    if (mode.isValid() && !mode.isNull()) {
+        VideoRecorder::Mode m;
+        if (!VideoRecorder::parseMode(mode.toString(), &m)) {
+            fail(QStringLiteral("capture.mode: mode must be \"realtime\" or \"offline\""));
+            return jsNull();
+        }
+        mModule->setModeSwitch(m);
+    }
+    return VideoRecorder::modeName(mModule->modeSwitch());
 }
 
 bool CaptureApi::helpers(const QVariant &on)

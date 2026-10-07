@@ -208,6 +208,7 @@ set(SRCS
     src/viewport/engineviewwidget.cpp
     irisgl/mirror/scenemirror.cpp
     src/viewport/enginesceneviewport.cpp
+    src/viewport/recordingview.cpp
     src/viewport/scenepicker.cpp
     src/viewport/gizmooverlay.cpp
     src/viewport/enginerenderdriver.cpp

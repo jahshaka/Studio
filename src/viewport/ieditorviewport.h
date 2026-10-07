@@ -1357,6 +1357,20 @@ public:
         /// Esc in the viewport. True = it stopped a recording and the key is
         /// consumed; false = not recording, the key keeps its meaning.
         std::function<bool()> escape;
+        /// THE OFFLINE MODE (VIDEO-REC-2): every synced frame is ONE recorded
+        /// frame and the scene clock is handed EXACTLY one 1/60 s grid step for
+        /// it — never the wall time a frame took, never a script's dt — so
+        /// animation, physics, particles and the shader clock move by 1/60 s per
+        /// video frame however slowly the editor runs (the camera controller's
+        /// fly takes the same step). False: the real-time mode, the scene runs on
+        /// the wall clock and a slow frame is held across the steps it spanned.
+        bool offline = false;
+        /// Asked at the top of every DRIVER tick in the offline mode: true = the
+        /// recorder cannot take another frame yet (its encoder queue is full),
+        /// and the tick neither syncs nor renders — the clock does not move, the
+        /// event loop runs, the encoder drains. Backpressure, never a drop. A
+        /// scripted editor.frame is never held (the script owns its frames).
+        std::function<bool()> hold;
     };
     /// THE OWNER'S FRAMING (§10.2): a SEPARATE offscreen render of the editor's
     /// own camera at `width` x `height`, drawn every frame while recording —

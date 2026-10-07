@@ -4,6 +4,8 @@
 #include <QElapsedTimer>
 #include <QTimer>
 
+#include <utility>
+
 #include "services/engineerrorpump.h"
 #include "services/framemonitor.h"
 #include "services/jahlog.h"
@@ -148,12 +150,15 @@ EngineRenderDriver::EngineRenderDriver(jahshaka::engine::Engine *engine, QObject
         jahshaka::engine::StreamingWork owedBefore;
         if (mEngine) owedBefore = mEngine->streamingWork();
         const bool anythingToDraw = mEngine && mEngine->hasEnabledViews();
+        // A subscriber held this tick (holdThisTick: the offline recorder's
+        // backpressure). Still "drawing" — the views are up — but no frame.
+        const bool rendering = anythingToDraw && !std::exchange(mHoldTick, false);
         // THE LIVE STATE, not a lifetime counter (owner review answer Q3): the
         // tick that draws nothing no longer increments anything at all — it
         // simply says so, and `ticks - rendered` is still there for a caller
         // who wants the total.
         mStats.drawing = anythingToDraw;
-        if (anythingToDraw) {
+        if (rendering) {
             mEngine->renderOneFrame();
             ++mStats.rendered;
             mDrawn.add(nowMs());
@@ -202,7 +207,7 @@ EngineRenderDriver::EngineRenderDriver(jahshaka::engine::Engine *engine, QObject
         // Only RENDERED ticks are banked — a skipped tick costs ~nothing and
         // would drag the average toward zero while the user sits on a page
         // with no viewport.
-        if (anythingToDraw) {
+        if (rendering) {
             mWork[mWorkNext] = ms;
             mWorkNext = (mWorkNext + 1) % kWorkWindow;
             if (mWorkFilled < kWorkWindow) ++mWorkFilled;
@@ -215,7 +220,7 @@ EngineRenderDriver::EngineRenderDriver(jahshaka::engine::Engine *engine, QObject
         // process where a frame has just finished, and re-arms the gap clock —
         // only for ticks that actually rendered (a skipped tick keeps the clock
         // running, so an absence arrives as one gap instead of none).
-        FrameMonitor::instance().noteTickEnd(anythingToDraw);
+        FrameMonitor::instance().noteTickEnd(rendering);
         if (ms >= kSlowFrameMs) {
             ++mStats.slowFrames;
             // …and into the rolling minute, which is what the readout shows.

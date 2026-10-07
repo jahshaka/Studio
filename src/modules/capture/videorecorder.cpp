@@ -219,6 +219,25 @@ VideoRecorder::~VideoRecorder()
     teardownEncoder(true);
 }
 
+QString VideoRecorder::modeName(Mode m)
+{
+    return m == Mode::Offline ? QStringLiteral("offline") : QStringLiteral("realtime");
+}
+
+bool VideoRecorder::parseMode(const QString &name, Mode *out)
+{
+    if (name == QLatin1String("realtime")) { if (out) *out = Mode::Realtime; return true; }
+    if (name == QLatin1String("offline")) { if (out) *out = Mode::Offline; return true; }
+    return false;
+}
+
+double VideoRecorder::wallSeconds() const
+{
+    if (!mWall.isValid()) return 0.0;
+    if (mState != State::Recording && mStopWallMs > 0) return double(mStopWallMs) / 1000.0;
+    return double(mWall.elapsed()) / 1000.0;
+}
+
 QString VideoRecorder::stateName(State s)
 {
     switch (s) {
@@ -299,6 +318,8 @@ bool VideoRecorder::start(const Options &options, QString *why)
     hooks.frame = [this](quint64 step) { onFrame(step); };
     hooks.ends = [this]() { stop(); };
     hooks.escape = [this]() { return escape(); };
+    hooks.offline = options.mode == Mode::Offline;
+    if (hooks.offline) hooks.hold = [this]() { return holdTick(); };
     QString viewWhy;
     mView = mViewport->beginRecordingView(kWidth, kHeight, options.helpers, std::move(hooks), &viewWhy);
     if (!mView) return refuse(viewWhy.isEmpty() ? QStringLiteral("the recording view could not be made") : viewWhy);
@@ -338,6 +359,8 @@ bool VideoRecorder::start(const Options &options, QString *why)
     mArmed = 0;
     mHaveStep0 = false;
     mStep0 = mNextSlot = mHeld = mEncoderDropped = mSent = 0;
+    mOfflineSerial = mHeldTicks = mRingWaits = 0;
+    mWorstRingWaitMs = 0.0;
     mLast.clear();
     mQueue.clear();
     mEndPending = mEndSent = false;
@@ -362,6 +385,34 @@ void VideoRecorder::onFrame(quint64 step)
     while (mView && mView->takeVideoFrame(mFrame, false)) deliver(mFrame);
     if (mState != State::Recording || !mView) return;
     if (mWarm > 0) { --mWarm; return; }
+    if (mOptions.mode == Mode::Offline) {
+        // OFFLINE: THIS FRAME IS A VIDEO FRAME, whatever the clock did (the host
+        // handed it exactly one step; a paused scene is a still picture the user
+        // asked for). Tagged with the recording's own serial, so the slots run
+        // 0, 1, 2 ... with no gap and nothing is ever held.
+        //
+        // NEVER DROPPED: a frame armed while all three tickets are pending would
+        // not be read back, so the oldest is TAKEN first, waiting for its copy.
+        // That wait is free in practice: the oldest ticket was recorded three
+        // frames ago, and Ogre waits for frame N-3's fence before it records
+        // frame N anyway (OgreVideoReadback.cpp) — the UI thread waits here
+        // instead of a moment later, for at most one GPU frame. Measured and
+        // reported (ringWaits, worstRingWaitMs).
+        const jahshaka::engine::VideoReadbackStatus rb = mView->videoReadbackStatus();
+        if (rb.ringSize > 0 && rb.pending >= rb.ringSize) {
+            QElapsedTimer waited;
+            waited.start();
+            if (mView->takeVideoFrame(mFrame, true)) deliver(mFrame);
+            const double ms = double(waited.nsecsElapsed()) / 1e6;
+            ++mRingWaits;
+            if (ms > mWorstRingWaitMs) mWorstRingWaitMs = ms;
+            if (mState != State::Recording || !mView) return;
+        }
+        mView->armVideoFrame(mOfflineSerial++);
+        mArmedAny = true;
+        ++mArmed;
+        return;
+    }
     // ONE FRAME PER GRID STEP: a frame that bought no step (the scene paused, a
     // fast panel's odd frame) shows an instant the file already holds.
     if (mArmedAny && step == mLastArmedStep) return;
@@ -395,10 +446,13 @@ void VideoRecorder::deliver(jahshaka::engine::VideoFrameNv12 &frame)
 
 void VideoRecorder::enqueue(const std::vector<unsigned char> &nv12, quint64 slot)
 {
-    // Bounded: 24 frames (~75 MB) of an encoder that has fallen behind. Past it a
-    // frame is dropped and counted — the file then holds the previous picture a
-    // frame longer, never stalls the editor.
-    if (mQueue.size() >= 24) { ++mEncoderDropped; return; }
+    // REAL-TIME: bounded at kQueueBound (~75 MB) of an encoder that has fallen
+    // behind. Past it a frame is dropped and counted — the file then holds the
+    // previous picture a frame longer, never stalls the editor.
+    // OFFLINE: never dropped. The bound is enforced UPSTREAM instead — the
+    // driver's ticks are held while the queue is at it (holdTick) — so only a
+    // script's own editor.frame(n) can carry it past, by at most its n.
+    if (mOptions.mode == Mode::Realtime && mQueue.size() >= kQueueBound) { ++mEncoderDropped; return; }
     QVideoFrame f(mFormat);
     if (!f.map(QVideoFrame::WriteOnly)) { ++mEncoderDropped; return; }
     const size_t w = kWidth, h = kHeight;
@@ -498,6 +552,17 @@ void VideoRecorder::startFastStart()
         FileWrite::fsyncPath(partial);
         return QString();
     }));
+}
+
+bool VideoRecorder::holdTick()
+{
+    if (mState != State::Recording || mOptions.mode != Mode::Offline) return false;
+    // Whatever Qt's input will take now goes first: a hold is only for a queue
+    // the encoder really cannot accept yet.
+    flush();
+    if (mQueue.size() < kQueueBound) return false;
+    ++mHeldTicks;
+    return true;
 }
 
 bool VideoRecorder::stop(QString *why)
@@ -624,6 +689,14 @@ QVariantMap VideoRecorder::status() const
     m["queued"] = int(mQueue.size());
     m["encoderDropped"] = qulonglong(mEncoderDropped);
     m["elapsed"] = elapsedSeconds();
+    // THE CLIP AGAINST THE WALL (VIDEO-REC-2): an offline recording renders every
+    // frame, so its clip time runs slower than the wall's — both, side by side.
+    m["mode"] = modeName(mOptions.mode);
+    m["clipSeconds"] = elapsedSeconds();
+    m["wallSeconds"] = wallSeconds();
+    m["heldTicks"] = qulonglong(mHeldTicks);
+    m["ringWaits"] = qulonglong(mRingWaits);
+    m["worstRingWaitMs"] = mWorstRingWaitMs;
     m["warming"] = mState == State::Recording && mWarm > 0;
     m["startMs"] = mStartMs;
     const jahshaka::engine::VideoReadbackStatus rb =

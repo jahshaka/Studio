@@ -22,8 +22,11 @@ For more information see the LICENSE file
 //
 // THE BUTTON (§10.6): press to record, press again to stop. While recording it
 // is RED with the elapsed time of the video; there is NO toast. Its popup holds
-// the scene-only/helpers switch (§10.5, persisted `capture/helpers`) and, once a
-// recording has finished, the file and "Open folder" (the tooltip names it too).
+// the MODE switch (VIDEO-REC-2: real-time, the default, or offline — perfect 60,
+// persisted `capture/mode`; an offline recording shows its clip time against the
+// wall time, "0:04 / 0:13"), the scene-only/helpers switch (§10.5, persisted
+// `capture/helpers`) and, once a recording has finished, the file and "Open
+// folder" (the tooltip names it too).
 // Esc stops a recording from the viewport (IEditorViewport::RecordingHooks).
 // A failure is said once, in a dialog with the reason (the VR rule), never a
 // crash and never a silent no-file.
@@ -34,14 +37,15 @@ For more information see the LICENSE file
 
 #include <memory>
 
+#include "modules/capture/videorecorder.h"
 #include "modules/studiomodule.h"
 
 class CaptureApi;
 class QAction;
 class QMenu;
 class QMessageBox;
+class QTimer;
 class QToolButton;
-class VideoRecorder;
 
 class CaptureModule : public StudioModule
 {
@@ -69,6 +73,9 @@ public:
     /// The helpers switch (the popup's row and `capture/helpers`).
     bool helpersSwitch() const;
     void setHelpersSwitch(bool on);
+    /// The mode switch (the popup's two rows and `capture/mode`).
+    VideoRecorder::Mode modeSwitch() const;
+    void setModeSwitch(VideoRecorder::Mode mode);
     /// Closes the failure dialog; false when none is open.
     bool dismissFailure();
 
@@ -82,7 +89,12 @@ private:
     std::unique_ptr<VideoRecorder> mRecorder;
     std::unique_ptr<QAction> mAction;
     std::unique_ptr<QMenu> mMenu;
+    QAction *mRealtimeRow = nullptr;
+    QAction *mOfflineRow = nullptr;
     QAction *mHelpersRow = nullptr;
+    /// Rebuilds the button's "clip / wall" text while an OFFLINE recording runs:
+    /// its wall time moves when no clip second does.
+    std::unique_ptr<QTimer> mWallTicker;
     QAction *mFileRow = nullptr;
     QAction *mOpenFolderRow = nullptr;
     QPointer<QToolButton> mButton;

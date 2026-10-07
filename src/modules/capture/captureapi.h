@@ -43,6 +43,7 @@ public:
     Q_INVOKABLE bool lastFrame(const QString &path);
     Q_INVOKABLE bool press();
     Q_INVOKABLE QVariantMap button();
+    Q_INVOKABLE QVariant mode(const QVariant &mode = QVariant());
     Q_INVOKABLE bool helpers(const QVariant &on = QVariant());
     Q_INVOKABLE bool dismiss();
 
