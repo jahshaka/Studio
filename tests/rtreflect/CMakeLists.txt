@@ -290,3 +290,40 @@ target_link_libraries(test_ray_levels PRIVATE JahshakaEngine)
 jah_gpu_row(gi.ray_levels CLASS engine COMMAND test_ray_levels
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.ray_levels PROPERTIES TIMEOUT 300 LABELS "engine")
+
+# THE OWNER'S TEAPOT TEARING AND ITS THREE NEIGHBOURS (REFLECT-FIX-1;
+# spikes/reflect-tear-audit): one binary, four rows. The march's stale history (a
+# floor point a moving object uncovered held that object in last frame's picture),
+# with the ray tier and with the march alone; the editor's helpers out of every
+# reflection and of the SSR history; a moved still keeping its cards past the
+# atlas's 7/8 gate; a metal seen in a reflection answered by the decode, not by its
+# (diffuse-only, black) card.
+add_executable(test_reflect_uncover test_reflect_uncover.cpp)
+set_target_properties(test_reflect_uncover PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_reflect_uncover PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+add_dependencies(test_reflect_uncover JahshakaEngineMedia)
+target_link_libraries(test_reflect_uncover PRIVATE JahshakaEngine)
+jah_gpu_row(gi.reflect_uncover CLASS engine COMMAND test_reflect_uncover
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.reflect_uncover PROPERTIES TIMEOUT 300 LABELS "engine")
+jah_gpu_row(gi.reflect_uncover_norays CLASS engine COMMAND test_reflect_uncover
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.reflect_uncover_norays PROPERTIES
+                     TIMEOUT 300 LABELS "engine"
+                     ENVIRONMENT "JAHSHAKA_NO_RAY_QUERY=1")
+jah_gpu_row(gi.reflect_no_helpers CLASS engine COMMAND test_reflect_uncover --helpers
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.reflect_no_helpers PROPERTIES TIMEOUT 300 LABELS "engine")
+jah_gpu_row(gi.cards_move_keep CLASS engine COMMAND test_reflect_uncover --cards
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.cards_move_keep PROPERTIES TIMEOUT 300 LABELS "engine")
+jah_gpu_row(gi.reflect_metal_hit CLASS engine COMMAND test_reflect_uncover --metal
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.reflect_metal_hit PROPERTIES TIMEOUT 300 LABELS "engine")
