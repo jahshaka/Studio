@@ -2,13 +2,14 @@
 // validation layer on (the driver sets it): 50 material applies while the camera flies, a
 // BLOCKING render meeting a pending permutation (an offscreen screenshot right after a new
 // material: the in-frame queue's workers and the service's publish in one frame), a SCENE
-// SWITCH while compiles are pending, and a quit with compiles pending. The driver asserts a
+// SWITCH while compiles are pending (a second create, then an open), and a quit with
+// compiles pending. The driver asserts a
 // clean exit, no validation message, no failed permutation and no UI-thread compile from the
 // asynchronous view.
 app.setAsyncShaders(true);
 // The counters before this script's frames (the startup gate's tier sweep draws placeholders).
 var s0 = app.asyncShaders();
-project.create("as1 soak", { template: "basic" });
+var firstWorld = project.create("as1 soak", { template: "basic" });
 editor.frame(60);
 var objs = [scene.find("Floor"),
             scene.addPrimitive("Sphere", { position: [0, 1, 0] }),
@@ -72,9 +73,21 @@ project.create("as1 soak world", { template: "world" });
 editor.frame(120);
 app.waitForAsyncShaders();
 editor.frame(10);
+// ...AND AN OPEN WHILE COMPILES ARE PENDING: never-seen permutations in the World, then back
+// to the first project by OPEN (the other way a scene switches).
+var worldObj = scene.addPrimitive("Sphere", { position: [0, 1, 0] });
+editor.frame(2);
+if (worldObj) material.set(worldObj, { clearCoat: 0.7, anisotropy: 0.35, useFresnelColor: true,
+                                       emissiveIntensity: 0.5, metallic: 0.6 });
+editor.frame(1);
+var pendingAtOpen = app.asyncShaders().pending;
+project.open(firstWorld);
+editor.frame(120);
+app.waitForAsyncShaders();
+editor.frame(10);
 console.log("AS1SOAK " + JSON.stringify({ start: s0, applied: applied, maxPending: maxPending, stats: s1,
                                           live: liveBeforeBlocking, pendingAtShot: pendingAtShot,
-                                          shot: shot, pendingAtSwitch: pendingAtSwitch,
+                                          shot: shot, pendingAtSwitch: pendingAtSwitch, pendingAtOpen: pendingAtOpen,
                                           after: app.asyncShaders() }));
 objs = [scene.addPrimitive("Sphere", { position: [0, 1, 0] }),
         scene.addPrimitive("Cube", { position: [2, 0.5, 0] }), null, null];

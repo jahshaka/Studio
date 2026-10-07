@@ -26,6 +26,7 @@
 #include "viewport/translationgizmo.h"
 
 #include <functional>
+#include <optional>
 
 #include <QApplication>
 #include <QElapsedTimer>
@@ -232,8 +233,21 @@ int warmEditorWorld(Engine &engine, View *view, const EngineHost::WarmUpShape &s
         {
             const worldmodes::PhotonTier born = worldmodes::photonTier(doc);
             const bool photonOn = worldmodes::photonEnabled(doc);
-            view->setAsyncShaders(true);
-            engine.setAsyncShaderPlaceholdersOnly(true);
+            // SCOPED: the mode is process-wide, and left on it would leave every asynchronous
+            // object of the session on its placeholder. Whatever leaves this block turns it off.
+            struct PlaceholdersOnly {
+                Engine &e;
+                View *v;
+                PlaceholdersOnly(Engine &engine_, View *view_) : e(engine_), v(view_) {
+                    v->setAsyncShaders(true);
+                    e.setAsyncShaderPlaceholdersOnly(true);
+                }
+                ~PlaceholdersOnly() {
+                    e.setAsyncShaderPlaceholdersOnly(false);
+                    v->setAsyncShaders(false);
+                }
+            };
+            std::optional<PlaceholdersOnly> sweep(std::in_place, engine, view);
             for (int t = 0; t <= 3; ++t) {
                 const worldmodes::PhotonTier tier = worldmodes::PhotonTier(t);
                 if (tier == born) continue;
@@ -258,8 +272,7 @@ int warmEditorWorld(Engine &engine, View *view, const EngineHost::WarmUpShape &s
                     lastDone = as.completed;
                 }
             }
-            engine.setAsyncShaderPlaceholdersOnly(false);
-            view->setAsyncShaders(false);
+            sweep.reset();
             worldmodes::setPhoton(doc, photonOn, born);
             mirror.sync();
             mirror.applyEnvironment(view, &engine);

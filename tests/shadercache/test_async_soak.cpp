@@ -72,10 +72,11 @@ int main(int argc, char **argv)
     const double ownPlaceholders = st.value("placeholderDraws").toDouble() -
                                    start.value("placeholderDraws").toDouble();
     std::printf("    applied %d  maxPending %d  completed %d  placeholderDraws %lld  live %d  "
-                "pending at the shot %d  at the switch %d\n",
+                "pending at the shot %d  at the create switch %d  at the open switch %d\n",
                 r.value("applied").toInt(), r.value("maxPending").toInt(), st.value("completed").toInt(),
                 (long long)ownPlaceholders, r.value("live").toInt(),
-                r.value("pendingAtShot").toInt(), r.value("pendingAtSwitch").toInt());
+                r.value("pendingAtShot").toInt(), r.value("pendingAtSwitch").toInt(),
+                r.value("pendingAtOpen").toInt());
     CHECK(r.value("applied").toInt() == 50, "50 material applies");
     CHECK(st.value("completed").toInt() > start.value("completed").toInt() && ownPlaceholders > 0,
           "the background compiler built permutations and the view drew placeholders");
@@ -83,7 +84,7 @@ int main(int argc, char **argv)
     CHECK(QFileInfo::exists(r.value("shot").toObject().value("path").toString()),
           "the blocking screenshot that met a pending permutation rendered");
     CHECK(after.value("failed").toInt() == 0, "no permutation failed to build");
-    CHECK(after.value("pending").toInt() == 0, "everything pending across the scene switch landed");
+    CHECK(after.value("pending").toInt() == 0, "everything pending across both scene switches (a create, an open) landed");
     std::printf("%s (%d failure(s))\n", failures ? "FAIL" : "PASS", failures);
     return failures ? 1 : 0;
 }
