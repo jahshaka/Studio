@@ -47,6 +47,7 @@ For more information see the LICENSE file
 
 class QAction;
 class QToolBar;
+class QToolButton;
 class QWidget;
 class ShortcutRegistry;
 
@@ -87,6 +88,11 @@ public:
     /// does not exist YET (the modules contribute before the toolbar is
     /// built) keeps the action until it does.
     void addToolbarAction(const QString &slot, QAction *action);
+    /// A ONE-ACTION slot that IS a button already laid out by the shell (the
+    /// record button beside the photo button, `editor.capture`): the action
+    /// contributed to `slot` becomes the button's default action. No toolbar,
+    /// so nothing of a toolbar's margins or extension reaches the bar it sits in.
+    void addButtonSlot(QToolButton *button, const QString &slot);
 
 private:
     struct Row {
@@ -111,6 +117,7 @@ private:
     bool mCommitted = false;
     struct Slot { QPointer<QToolBar> bar; QPointer<QAction> marker; };
     QHash<QString, Slot> mSlots;
+    QHash<QString, QPointer<QToolButton>> mButtonSlots;
     QHash<QString, QVector<QPointer<QAction>>> mPendingToolbar;
 };
 

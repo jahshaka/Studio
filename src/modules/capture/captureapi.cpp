@@ -90,9 +90,12 @@ QVector<VerbInfo> CaptureApi::verbs() const
           "dialog. True when the click started or stopped a recording.",
           Needs::Window },
         { "button", "capture.button() -> {text, toolTip, enabled, red, recording, helpers, placed, "
-          "visible, menu:[rows], menuOpen, failure, dialogOpen}",
-          "What the record button shows: its text (\"REC m:ss\" while recording), whether its "
-          "icon is the red dot, its popup's rows, and the last failure message with whether its "
+          "visible, width, height, barHeight, menu:[rows], menuOpen, failure, dialogOpen}",
+          "What the record button shows: its text (the elapsed \"m:ss\" while recording; icon "
+          "only while idle), whether its "
+          "icon is the red dot, its size and its bar's height (it never makes the bar taller, and adds "
+          "only its layout gap to the window's minimum width), its popup's rows (press-and-hold or right-click), and the last "
+          "failure message with whether its "
           "dialog is open.",
           Needs::Window },
         { "helpers", "capture.helpers(on?) -> bool",

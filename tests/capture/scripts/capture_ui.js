@@ -1,6 +1,6 @@
 // capture.ui — THE RECORD BUTTON (VIDEO-REC-1; owner §10.6).
 //
-// Press records; while recording the button is the RED dot with "REC m:ss" (the video's
+// Press records; while recording the button is the RED dot with "m:ss" (the video's
 // own elapsed time); Esc in the viewport stops it ONLY while recording; press again stops;
 // once a recording is finished, the button's popup holds the file and "Open folder" and its
 // tooltip names it. The button records to the default folder — ~/Videos/Jahshaka under this run's
@@ -33,8 +33,8 @@ steps(16 + 75);   // the warm-up, then 75 frames = 1.25 s of video
 var b1 = capture.button();
 console.log("recording: " + JSON.stringify(b1));
 assert(b1.recording === true && b1.red === true, "recording: the red dot");
-assert(/^REC \d+:\d\d$/.test(b1.text), "the elapsed time on the button: " + b1.text);
-assert(b1.text === "REC 0:01", "1.25 s of video reads 0:01");
+assert(/^\d+:\d\d$/.test(b1.text), "the elapsed time on the button: " + b1.text);
+assert(b1.text === "0:01", "1.25 s of video reads 0:01");
 var st1 = capture.status();
 assert(st1.path.indexOf("/Videos/Jahshaka/") >= 0, "the default folder: " + st1.path);
 

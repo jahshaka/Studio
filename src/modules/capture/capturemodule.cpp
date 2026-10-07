@@ -31,7 +31,6 @@ For more information see the LICENSE file
 #include "scripting/scriptengine.h"
 #include "thirdparty/qtawesome/QtAwesome.h"
 #include "ui/controls/fonticons.h"
-#include "ui/style/thememanager.h"
 #include "viewport/ieditorviewport.h"
 
 namespace {
@@ -138,9 +137,14 @@ void CaptureModule::styleButton()
         if (auto *b = qobject_cast<QToolButton *>(o)) { mButton = b; break; }
     }
     if (!mButton) return;
-    mButton->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
-    mButton->setPopupMode(QToolButton::MenuButtonPopup);
-    if (!ThemeManager::classicActive()) mButton->setStyleSheet(ThemeManager::chromeButtonSheet());
+    // A CLICK RECORDS; the popup is press-and-hold or a right-click. (The split
+    // arrow of MenuButtonPopup makes the button 2 px taller than the bar and
+    // wider than the window's floor allows.)
+    mButton->setPopupMode(QToolButton::DelayedPopup);
+    mButton->setContextMenuPolicy(Qt::CustomContextMenu);
+    QObject::connect(mButton, &QWidget::customContextMenuRequested, mButton, [this](const QPoint &at) {
+        if (mMenu && mButton) mMenu->popup(mButton->mapToGlobal(at));
+    });
 }
 
 void CaptureModule::refreshUi()
@@ -150,7 +154,7 @@ void CaptureModule::refreshUi()
     const bool recording = mRecorder && mRecorder->recording();
     const bool finishing = mRecorder && mRecorder->state() == VideoRecorder::State::Finishing;
     QString text;
-    if (recording) text = QObject::tr("REC %1").arg(clock(mRecorder->elapsedSeconds()));
+    if (recording) text = clock(mRecorder->elapsedSeconds());
     else if (finishing) text = QObject::tr("Saving…");
     else text = QObject::tr("Record");
     if (text == mLastShownText && mAction->property("jahRed").toBool() == recording) return;
@@ -163,6 +167,9 @@ void CaptureModule::refreshUi()
     mAction->setIcon(fonticons::shared().icon(recording ? fa::circle : fa::videocamera, options));
     mAction->setText(text);
     mAction->setProperty("jahRed", recording);
+    // ICON ONLY while idle, like the photo button beside it (the bar's width is
+    // the window's minimum); the elapsed time beside the red dot while recording.
+    if (mButton) mButton->setToolButtonStyle(recording ? Qt::ToolButtonTextBesideIcon : Qt::ToolButtonIconOnly);
     mAction->setEnabled(bool(mRecorder) && !finishing);
     const QString last = mRecorder ? mRecorder->lastPath() : QString();
     QString tip;
@@ -171,9 +178,9 @@ void CaptureModule::refreshUi()
         tip = QObject::tr("Recording %1 — click, or press Esc in the viewport, to stop")
                   .arg(QDir::toNativeSeparators(mRecorder->status().value("path").toString()));
     else {
-        tip = QObject::tr("Record a 1920x1080, 60 fps video of this camera");
+        tip = QObject::tr("Record a 1920x1080, 60 fps video of this camera (hold or right-click: options)");
         if (!last.isEmpty())
-            tip += QObject::tr("\nSaved: %1 — the arrow opens its folder").arg(QDir::toNativeSeparators(last));
+            tip += QObject::tr("\nSaved: %1 — hold or right-click to open its folder").arg(QDir::toNativeSeparators(last));
     }
     mAction->setToolTip(tip);
     if (mFileRow) {
@@ -253,6 +260,11 @@ QVariantMap CaptureModule::button() const
     m["helpers"] = helpersSwitch();
     m["placed"] = bool(mButton);
     m["visible"] = mButton && mButton->isVisible();
+    if (mButton) {
+        m["width"] = mButton->width();
+        m["height"] = mButton->height();
+        if (QWidget *bar = mButton->parentWidget()) m["barHeight"] = bar->height();
+    }
     QStringList rows;
     if (mMenu)
         for (QAction *a : mMenu->actions())
