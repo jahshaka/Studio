@@ -18,6 +18,10 @@ static int failures = 0;
 /// THE SETTLED PICTURE'S TOLERANCE against the warm launch's (mean |difference| per channel,
 /// codes 0-255). Measured: see the evidence file named in the lane report.
 static constexpr double kSettledMeanTolerance = 0.5;
+/// THE SAFETY NET'S BOUND per phase: a frame held because an object had neither its shader
+/// nor a placeholder. Measured 0 (material and tier, a cold cache); a frame or two of slack
+/// for a placeholder that lands one frame late under a loaded box.
+static constexpr int kMaxHeldFrames = 2;
 #define CHECK(cond, msg) do { if (cond) std::printf("ok:   %s\n", msg); \
     else { std::printf("FAIL: %s\n", msg); ++failures; } } while (0)
 
@@ -133,11 +137,14 @@ int main(int argc, char **argv)
         CHECK(c.value("pendingPeak").toInt() > 0, ("cold " + n + ": the pending count rose").constData());
         CHECK(c.value("pendingEnd").toInt() == 0, ("cold " + n + ": ...and fell back to 0").constData());
         CHECK(c.value("failed").toInt() == 0, ("cold " + n + ": no permutation failed").constData());
-        // WHILE A SHADER BUILDS THE VIEW NEVER SHOWS A HOLE: a forward (PBS) object draws the
-        // grey placeholder; a frame with an object that has none yet (the Atom decode, unlit,
-        // anything right after a pass change) is HELD — the last complete picture stays.
-        CHECK(c.value("placeholderDraws").toInt() > 0 || c.value("heldFrames").toInt() > 0,
-              ("cold " + n + ": the waiting objects drew the placeholder or the frame was held").constData());
+        // WHILE A SHADER BUILDS THE WAITING OBJECTS DRAW GREY: the PBS and the Atom decode
+        // placeholders (a tier's are built by the startup gate's sweep, the placeholders-only
+        // pass). A frame with an object that has none yet is HELD, never presented with a hole
+        // — the safety net, which must stay rare: measured 0 frames for both phases.
+        CHECK(c.value("placeholderDraws").toInt() > 0,
+              ("cold " + n + ": the waiting objects drew the grey placeholder").constData());
+        CHECK(c.value("heldFrames").toInt() <= kMaxHeldFrames,
+              ("cold " + n + ": the held-frame safety net stayed rare").constData());
         CHECK(c.value("holeyPresented").toInt() == 0,
               ("cold " + n + ": no frame with a hole was presented").constData());
         CHECK(w.value("placeholderDraws").toInt() == 0 && w.value("pendingSkips").toInt() == 0,

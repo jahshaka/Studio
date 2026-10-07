@@ -220,6 +220,52 @@ int warmEditorWorld(Engine &engine, View *view, const EngineHost::WarmUpShape &s
             quiet = (c == last && armed) ? quiet + 1 : 0;
             last = c;
         }
+        // (2b) EVERY OTHER TIER'S PLACEHOLDERS (ASYNC-SHADERS-1). A tier is a new PASS, and the
+        // grey placeholder an object waits under is itself a permutation of that pass — so
+        // unless it is built here, a tier change has nothing to draw its waiting objects with
+        // until the placeholder's own compile lands (measured on a cold cache, a Basic world's
+        // change to Low: 90 frames held). Drawn with the view asynchronous and the compiler in
+        // its placeholders-only mode, every object requests the placeholder for the new pass
+        // and nothing else; the frame waits for the background compiler until the tier
+        // compiles nothing. (Building the worlds' own permutations at every tier too was
+        // measured: +29 s on the cold gate. Their compile is what the placeholder covers.)
+        {
+            const worldmodes::PhotonTier born = worldmodes::photonTier(doc);
+            const bool photonOn = worldmodes::photonEnabled(doc);
+            view->setAsyncShaders(true);
+            engine.setAsyncShaderPlaceholdersOnly(true);
+            for (int t = 0; t <= 3; ++t) {
+                const worldmodes::PhotonTier tier = worldmodes::PhotonTier(t);
+                if (tier == born) continue;
+                worldmodes::setPhoton(doc, photonOn, tier);
+                mirror.sync();
+                mirror.applyEnvironment(view, &engine);
+                secondaryfx::applyScene(view, 0.0f);
+                AsyncShaderStats as = engine.asyncShaderStats();
+                unsigned long long lastDone = as.completed;
+                engine.shaderBuildProgress(c, f, e);
+                last = c;
+                quiet = 0;
+                for (int tf = 0; tf < kWarmWorldFrameCap && quiet < kWarmWorldQuietFrames; ++tf) {
+                    frame();
+                    engine.waitForAsyncShaders();
+                    as = engine.asyncShaderStats();
+                    engine.shaderBuildProgress(c, f, e);
+                    const GiStatus gi = es->giStatus();
+                    const bool armed = gi.mode == GiMode::Off || gi.vctBound;
+                    quiet = (c == last && as.completed == lastDone && armed) ? quiet + 1 : 0;
+                    last = c;
+                    lastDone = as.completed;
+                }
+            }
+            engine.setAsyncShaderPlaceholdersOnly(false);
+            view->setAsyncShaders(false);
+            worldmodes::setPhoton(doc, photonOn, born);
+            mirror.sync();
+            mirror.applyEnvironment(view, &engine);
+            secondaryfx::applyScene(view, 0.0f);
+            for (int i = 0; i < kWarmUpFrames; ++i) frame();
+        }
         // (3) the project tile's capture (CLOSE-SHOT-2: a save's tile is the view's
         // own frame drawn a second time without the furniture, View::
         // requestFrameCapture) — its chain instance has no shadow node and the

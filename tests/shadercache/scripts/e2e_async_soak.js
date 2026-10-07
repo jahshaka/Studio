@@ -6,11 +6,6 @@
 // clean exit, no validation message, no failed permutation and no UI-thread compile from the
 // asynchronous view.
 app.setAsyncShaders(true);
-// The world the scene switch goes to, made first (a second CREATE after a first project draws
-// validation errors on the base build too — VUID-vkCmdDraw-None-09600 / oldLayout-01197, a
-// pre-existing finding — so the switch is an OPEN, which is clean on the base).
-var otherWorld = project.create("as1 soak other", { template: "basic" });
-editor.frame(30);
 project.create("as1 soak", { template: "basic" });
 editor.frame(60);
 var objs = [scene.find("Floor"),
@@ -63,12 +58,15 @@ editor.frame(1);
 var pendingAtShot = app.asyncShaders().pending;
 var shot = editor.screenshot(OUTDIR + "/blocking_meets_pending.png", 256, 256);
 fly(30);
-// A SCENE SWITCH WHILE COMPILES ARE PENDING: new permutations requested, then another world.
+// A SCENE SWITCH WHILE COMPILES ARE PENDING: new permutations requested, then a second CREATE,
+// of the World template (the Atom decode, the surface cache, the atmosphere: the switch that
+// found the two pre-existing layout defects — the sky tables drawn before their first build,
+// the card atlas read through an open copy session).
 material.set(objs[2], { clearCoat: 0.45, anisotropy: 0.2, useFresnelColor: true, metallic: 0.8 });
 material.set(objs[3], { clearCoat: 0.15, anisotropy: 0.6, emissiveIntensity: 1.0, metallic: 0.1 });
 editor.frame(1);
 var pendingAtSwitch = app.asyncShaders().pending;
-project.open(otherWorld);
+project.create("as1 soak world", { template: "world" });
 editor.frame(120);
 app.waitForAsyncShaders();
 editor.frame(10);
