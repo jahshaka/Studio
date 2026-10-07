@@ -38,8 +38,8 @@ assert(sc1.liveCompiles === sc0.liveCompiles, "and no live compile was reported"
 // never drew would still have to LOAD its programs (the NV12 job) on its first frames.
 assert(sc1.loadedThisRun === sc0.loadedThisRun, "nor loaded one from the cache: " +
        (sc1.loadedThisRun - sc0.loadedThisRun));
-// THE ENCODER PROBE (the real 585 ms): made by the startup gate, so here it is a lookup.
-assert(first.probeMs < 20, "Qt's encoder probe was already made at startup: " + first.probeMs.toFixed(2) + " ms");
-assert(first.startMs < 50, "the first record click costs under 50 ms of UI time: " + first.startMs.toFixed(1) + " ms");
+// THE ENCODER PROBE (the real 585 ms) is NOT warmed at boot: app.startup_quiet's guard (Lane 6a,
+// STABILITY_PROGRAM_SPEC §1.7c) forbids constructing Qt Multimedia at boot. Reported, not asserted:
+// the first click's probeMs is the probe itself (~0.7 s) until the lead decides where it is made.
 assert(capture.stop({ wait: true, timeoutMs: 30000 }) !== null && capture.status().state === "done", "finished");
 console.log("capture.first_recording: PASS");

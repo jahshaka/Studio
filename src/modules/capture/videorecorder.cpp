@@ -220,14 +220,6 @@ VideoRecorder::~VideoRecorder()
     teardownEncoder(true);
 }
 
-double VideoRecorder::warmEncoderProbe()
-{
-    QElapsedTimer t;
-    t.start();
-    (void)QMediaFormat(QMediaFormat::MPEG4).supportedVideoCodecs(QMediaFormat::Encode);
-    return double(t.nsecsElapsed()) / 1e6;
-}
-
 QString VideoRecorder::modeName(Mode m)
 {
     return m == Mode::Offline ? QStringLiteral("offline") : QStringLiteral("realtime");
@@ -318,8 +310,8 @@ bool VideoRecorder::start(const Options &options, QString *why)
     QMediaFormat format(QMediaFormat::MPEG4);
     // QT'S ENCODER PROBE: its FIRST call in a process enumerates the encoders
     // (~0.7 s, measured in VIDEO-REC-2 — the "585 ms first click" of
-    // VIDEO-REC-1); the startup shader gate makes that call behind the splash
-    // (warmEncoderProbe), so here it is a lookup. Timed: `probeMs`.
+    // VIDEO-REC-1). Not warmed at boot (app.startup_quiet: Qt Multimedia is
+    // not constructed at boot, Lane 6a). Timed: `probeMs`.
     QElapsedTimer probeTimer;
     probeTimer.start();
     const bool haveH264 = options.fault != QLatin1String("noEncoder") &&

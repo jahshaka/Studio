@@ -133,12 +133,6 @@ public:
 
     static QString stateName(State s);
     static QString modeName(Mode m);
-    /// QT'S ENCODER PROBE, made once (VIDEO-REC-2): the first
-    /// QMediaFormat::supportedVideoCodecs(Encode) of a process enumerates the
-    /// machine's encoders — ~0.7 s on the UI thread, which was the session's
-    /// first record click. The startup shader gate calls this behind the splash,
-    /// on the UI thread where Qt expects it; returns the ms it took.
-    static double warmEncoderProbe();
     /// "realtime" | "offline" -> the mode; false for anything else.
     static bool parseMode(const QString &name, Mode *out);
     Mode mode() const { return mOptions.mode; }
