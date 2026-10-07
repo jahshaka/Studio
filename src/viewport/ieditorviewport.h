@@ -35,7 +35,7 @@ class Project;
 class EditorData;
 class Gizmo;
 class SceneMirror;
-namespace jahshaka { namespace engine { class Scene; } }
+namespace jahshaka { namespace engine { class Scene; class View; } }
 enum class SceneMode;         // playbackservice.h
 
 /// Signals a viewport emits. A separate QObject so the interface itself stays a
@@ -1338,6 +1338,46 @@ public:
     /// is destroying), so a host that never calls this cannot crash — it just
     /// ends the session less politely.
     virtual void setVrPreviewEnds(std::function<void()> ends) { Q_UNUSED(ends); }
+
+    // ---- THE RECORDING VIEW (VIDEO-REC-1; SPECS/VIDEO_CAPTURE_SPEC.md §10) ----
+    /// What the video recorder hands the editor for the life of one recording.
+    struct RecordingHooks {
+        /// Once per SYNCED FRAME (a driver tick and a scripted editor.frame
+        /// alike — the VR step's reason), after the recording view has been
+        /// given this frame's camera, sky and grade and before the frame
+        /// renders: `step` is the scene clock's step count (the 1/60 s grid
+        /// the document advanced to). The recorder takes finished frames and
+        /// arms this one here.
+        std::function<void(quint64 step)> frame;
+        /// The recording cannot continue: the world is about to go (a close, an
+        /// open in place) or the editor page is being left. Called BEFORE the
+        /// engine scene is destroyed, with the view still alive, so the
+        /// recorder drains and finishes the file properly.
+        std::function<void()> ends;
+        /// Esc in the viewport. True = it stopped a recording and the key is
+        /// consumed; false = not recording, the key keeps its meaning.
+        std::function<bool()> escape;
+    };
+    /// THE OWNER'S FRAMING (§10.2): a SEPARATE offscreen render of the editor's
+    /// own camera at `width` x `height`, drawn every frame while recording —
+    /// the photo tool's route made persistent. The view is the editor's own
+    /// picture: its own full chain with its own adaptive exposure, seeded from
+    /// the on-screen view's measured one so a recording does not open on a
+    /// fade; StillPicture (it gathers like a screenshot does); the editor's
+    /// furniture (grid, gizmo, outline, wires, icons) drawn only when
+    /// `helpers` (§10.5, the switch; the helper channel of the view's passes).
+    /// Its NV12 readback is on. Null with `why` set when there is no engine,
+    /// no world, or one is already running.
+    virtual jahshaka::engine::View *beginRecordingView(unsigned width, unsigned height, bool helpers,
+                                                       RecordingHooks hooks, QString *why)
+    {
+        Q_UNUSED(width); Q_UNUSED(height); Q_UNUSED(helpers); Q_UNUSED(hooks);
+        if (why) *why = QStringLiteral("this viewport has no engine");
+        return nullptr;
+    }
+    /// Destroys the recording view and drops the hooks. Safe with none.
+    virtual void endRecordingView() {}
+    virtual jahshaka::engine::View *recordingView() const { return nullptr; }
     /// "A world is about to be loaded into me": raises the loading cover and
     /// PRESENTS it before returning, so it is on screen before the load blocks
     /// the thread. `title` names the world (shown under the message). A no-op

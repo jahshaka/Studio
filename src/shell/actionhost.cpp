@@ -13,6 +13,7 @@ For more information see the LICENSE file
 
 #include <QAction>
 #include <QToolBar>
+#include <QToolButton>
 #include <QWidget>
 
 #include "services/shortcutregistry.h"
@@ -136,9 +137,22 @@ void ActionHost::addToolbarSlot(QToolBar *bar, const QString &slot)
         if (action) bar->insertAction(marker, action);
 }
 
+void ActionHost::addButtonSlot(QToolButton *button, const QString &slot)
+{
+    if (!button || slot.isEmpty()) return;
+    mButtonSlots.insert(slot, button);
+    const QVector<QPointer<QAction>> pending = mPendingToolbar.take(slot);
+    for (const QPointer<QAction> &action : pending)
+        if (action) button->setDefaultAction(action);
+}
+
 void ActionHost::addToolbarAction(const QString &slot, QAction *action)
 {
     if (!action) return;
+    if (const auto b = mButtonSlots.constFind(slot); b != mButtonSlots.cend() && *b) {
+        (*b)->setDefaultAction(action);
+        return;
+    }
     const auto it = mSlots.constFind(slot);
     if (it == mSlots.cend() || !it->bar || !it->marker) {
         mPendingToolbar[slot].append(action);

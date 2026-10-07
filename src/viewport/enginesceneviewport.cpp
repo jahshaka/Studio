@@ -1645,6 +1645,15 @@ void EngineSceneViewport::keyPressEvent(QKeyEvent *e)
     // EJECT (CAMERAS_SPEC D8). Not a ShortcutRegistry entry: Esc is a viewport
     // MODE key like V-hold, it only does anything while piloting, and a global
     // shortcut for it would take Esc away from every dialog in the app.
+    // ...AND WHILE A RECORDING RUNS, Esc STOPS IT FIRST (VIDEO-REC-1, owner
+    // §10.6). Only while recording: with no recording the hook answers false
+    // and the key keeps every meaning it had (the eject below). While recording
+    // AND piloting, the first Esc ends the recording and the next one ejects —
+    // ejecting first would cut the shot being recorded to the editor camera.
+    if (e->key() == Qt::Key_Escape && mRecordHooks.escape) {
+        const std::function<bool()> esc = mRecordHooks.escape;   // stopping may clear it
+        if (esc()) return;
+    }
     if (e->key() == Qt::Key_Escape && mPilot) { pilotCamera(iris::CameraNodePtr()); return; }
     if (e->key() == Qt::Key_V) mVertexSnapHeld = true;
     if (mCamController) mCamController->onKeyPressed(static_cast<Qt::Key>(e->key()));
@@ -2585,6 +2594,9 @@ void EngineSceneViewport::syncFrame(float dtOverride)
             mMirror->applyCamera(viewCamera(), view(), freeCameraFramingAspect());
         syncPip();
     }
+    // THE RECORDER'S VIEW, BESIDE THIS ONE (VIDEO-REC-1): the same camera, sky and
+    // grade, pushed every synced frame, then the recorder takes and arms frames.
+    if (mRecordView) syncRecordingView();
     // A SCRIPTED step (editor.frame(n, dt)) has to be deterministic for the
     // particles too. They are simulated inside the engine, which has NO clock
     // of its own (Engine.h "Simulation clock"): every frame is told how many
@@ -3485,6 +3497,99 @@ QImage EngineSceneViewport::takeScreenshot(int width, int height, ScreenshotGrad
     return result;
 }
 
+// ---- THE RECORDING VIEW (VIDEO-REC-1; SPECS/VIDEO_CAPTURE_SPEC.md §10) ------
+//
+// The photo tool's route made persistent (owner §10.2): a SEPARATE offscreen view
+// of this scene at the recording's size, looking through the camera this viewport
+// looks through, drawn every frame by the engine's own loop beside the on-screen
+// view (one extra render a frame while recording, the price the owner accepted).
+//
+// WHAT IT IS NOT: a screenshot. A screenshot lives two frames, so it pins the
+// exposure to the on-screen view's measurement and settles the GI before it reads
+// (takeScreenshot above). A recording view lives for the whole recording, so it
+// carries its OWN chain and adapts on its own — seeded once from the on-screen
+// measurement so the file does not open on a fade — and nothing is ever settled
+// per frame: a settle renders frames of this scene outside the driver's tick and
+// would step every temporal history the viewport shares with it (CLOSE-SHOT-2's
+// app.capture_steps lesson). It is a StillPicture view: it gathers where the
+// scene gathers, exactly like the photo, rather than taking the Live contract's
+// field-only answer — the recording is the picture the photo would be.
+jahshaka::engine::View *EngineSceneViewport::beginRecordingView(unsigned width, unsigned height,
+                                                               bool helpers, RecordingHooks hooks,
+                                                               QString *why)
+{
+    const auto refuse = [why](const QString &reason) -> jahshaka::engine::View * {
+        if (why) *why = reason;
+        return nullptr;
+    };
+    if (!mEngine || !view()) return refuse(QStringLiteral("the engine viewport is not running"));
+    if (!mEngineScene || !mScene) return refuse(QStringLiteral("no world is open"));
+    if (mRecordView) return refuse(QStringLiteral("a recording is already running"));
+    if (width == 0 || height == 0) return refuse(QStringLiteral("the recording has no size"));
+    jahshaka::engine::View *rv = mEngine->createOffscreenView(
+        "recording-" + std::to_string(++mViewSerial), width, height, Colour(0.10f, 0.11f, 0.14f));
+    if (!rv) return refuse(QString::fromStdString(mEngine->lastError()));
+    rv->setOffscreenContract(jahshaka::engine::OffscreenContract::StillPicture);
+    // THE SWITCH (owner §10.5): the helper channel of the view's passes — graph
+    // shape, set once here. The engine ANDs the mask with its reserved flags
+    // (ENGINE trap 6 lives inside setHelpersVisible). The wearer's VR channel
+    // stays shut: a recording of the desk is never a recording of a headset.
+    rv->setHelpersVisible(helpers);
+    if (!rv->setScene(mEngineScene)) {
+        const QString reason = QString::fromStdString(mEngine->lastError());
+        mEngine->destroyView(rv);
+        return refuse(reason);
+    }
+    if (!rv->setVideoReadback(true)) {
+        const QString reason = QString::fromStdString(mEngine->lastError());
+        mEngine->destroyView(rv);
+        return refuse(reason);
+    }
+    mRecordView = rv;
+    mRecordHooks = std::move(hooks);
+    // The first push now, so the seed below is derived from the right description.
+    if (mMirror) {
+        mMirror->applySky(rv);
+        mMirror->applyViewEnvironment(rv, viewCamera(), /*offscreenChain=*/true);
+        if (viewCamera()) mMirror->applyCamera(viewCamera(), rv, freeCameraFramingAspect());
+    }
+    const float measured = view()->measuredExposureScale();
+    if (measured > 0.0f) rv->seedExposureHistory(measured);
+    else rv->resetExposureHistory();
+    return rv;
+}
+
+void EngineSceneViewport::syncRecordingView()
+{
+    if (!mRecordView) return;
+    if (mMirror) {
+        mMirror->applySky(mRecordView);
+        // The per-view half only (never applyEnvironment twice: its scene half
+        // counts GI settle frames), the whole chain in ONE push.
+        mMirror->applyViewEnvironment(mRecordView, viewCamera(), /*offscreenChain=*/true);
+        if (viewCamera()) mMirror->applyCamera(viewCamera(), mRecordView, freeCameraFramingAspect());
+    }
+    // COPIED BEFORE IT IS CALLED: the hook may end the recording (a failure).
+    if (const std::function<void(quint64)> frame = mRecordHooks.frame)
+        frame(mScene ? quint64(mScene->clock.steps()) : 0u);
+}
+
+void EngineSceneViewport::endRecordingView()
+{
+    mRecordHooks = RecordingHooks();
+    if (mRecordView && mEngine) mEngine->destroyView(mRecordView);
+    mRecordView = nullptr;
+}
+
+void EngineSceneViewport::endRecordingForTeardown()
+{
+    if (!mRecordView) return;
+    // The owner finishes the file (drain, stop, fast-start) and calls
+    // endRecordingView itself; if it did not, the view still goes here.
+    if (const std::function<void()> ends = mRecordHooks.ends) ends();
+    endRecordingView();
+}
+
 void EngineSceneViewport::begin()
 {
     mActive = true;
@@ -3524,6 +3629,8 @@ void EngineSceneViewport::end()
     // COPIED BEFORE IT IS CALLED, like the clearScene() call of the same hook:
     // ending the session clears this very std::function.
     if (const std::function<void()> ends = mVrPreviewEnds) ends();
+    // ...and so does a recording (VIDEO-REC-1): its view is this page's camera.
+    endRecordingForTeardown();
     if (view()) view()->setEnabled(false);
 }
 
@@ -4351,6 +4458,10 @@ void EngineSceneViewport::clearScene()
     // alone). COPIED BEFORE IT IS CALLED: ending the session clears this very
     // std::function, and a closure must not be destroyed while it runs.
     if (const std::function<void()> ends = mVrPreviewEnds) ends();
+    // A RECORDING ENDS WITH ITS WORLD (VIDEO-REC-1), while the scene its view
+    // draws is still whole: the recorder drains its readback and finishes the
+    // file, then the view goes.
+    endRecordingForTeardown();
     // THE PASS SHAPE, BEFORE THE WORLD GOES (WARMUPSET-2). The view still
     // answers for the pass the editor was drawing; a line later the scene is
     // gone. (This used to record the permutation SET as well — deleted: it

@@ -36,6 +36,7 @@ For more information see the LICENSE file
 #include "services/selectionservice.h"
 #include "services/services.h"
 #include "services/surfaceplacement.h"
+#include "shell/actionhost.h"
 #include "shell/mainwindow.h"
 #include "thirdparty/qtawesome/QtAwesome.h"
 #include "ui/dialogs/screenshotwidget.h"
@@ -224,8 +225,37 @@ void EditorPage::build(const Deps &deps)
 	playSimBtn->setToolTip("Simulate physics only");
 	playSimBtn->setStyleSheet(StyleSheet::BackgroundTransparent());
 
-    controlBarLayout->setSpacing(8);
-    controlBarLayout->addWidget(screenShotBtn);
+    // 4, not 8 (VIDEO-REC-1): the record button's 28 px come out of this bar's own
+    // gaps. Its minimum IS the window's floor, and at a test tier's 1280-wide window
+    // the floor sets the viewport's width (727 px at 1259) — so the floor must not
+    // move, or every framing-sensitive low-tier picture moves with it.
+    controlBarLayout->setSpacing(4);
+    // The photo and the video button are one pair, 2 px apart.
+    auto *shotPair = new QHBoxLayout;
+    shotPair->setSpacing(2);
+    shotPair->setContentsMargins(0, 0, 0, 0);
+    shotPair->addWidget(screenShotBtn);
+    controlBarLayout->addLayout(shotPair);
+    // THE RECORD BUTTON'S PLACE (VIDEO-REC-1): beside the photo button, a slot
+    // the capture module's action goes into (shell/actionhost.h) — the shell
+    // never names the module.
+    QToolButton *recordBtn = nullptr;
+    if (deps.actions) {
+        recordBtn = new QToolButton;
+        recordBtn->setObjectName(QStringLiteral("recordButton"));
+        recordBtn->setIconSize(QSize(16, 17));
+        recordBtn->setAutoRaise(true);
+        // ITS SHARE OF THE WINDOW'S FLOOR IS 28 PX — a clickable icon. This bar's
+        // width IS the window's minimum (ui.window_minimum's 1366 budget, a test
+        // tier's 1280x720 window): the button takes its full width wherever the
+        // window has it and keeps at least the icon on the narrowest one.
+        // IT ADDS NOTHING TO THE BAR'S HEIGHT: vertically it takes the height the others give
+        // the bar (its own hint, with the popup's arrow, is 2 px taller).
+        // (Set once the chrome sheet has polished it, below: a polish resets a
+        // tool button's policy.)
+        deps.actions->addButtonSlot(recordBtn, QStringLiteral("editor.capture"));
+        shotPair->addWidget(recordBtn);
+    }
 	controlBarLayout->addWidget(cameraControls.projection);
     controlBarLayout->addWidget(wireFramesButton);
     controlBarLayout->addWidget(cameraControls.views);
@@ -245,11 +275,16 @@ void EditorPage::build(const Deps &deps)
         // footer, owner direction): rounded grey, consistent height,
         // horizontal text gutters — replaces the square edge-tight look.
         for (QWidget *chromeBtn :
-             std::initializer_list<QWidget *>{ screenShotBtn, cameraControls.projection,
+             std::initializer_list<QWidget *>{ screenShotBtn, recordBtn, cameraControls.projection,
                                                wireFramesButton, cameraControls.views,
                                                cameraControls.cameras,
                                                playSceneBtn, playSimBtn })
-            chromeBtn->setStyleSheet(ThemeManager::chromeButtonSheet());
+            if (chromeBtn) chromeBtn->setStyleSheet(ThemeManager::chromeButtonSheet());
+    }
+    if (recordBtn) {
+        recordBtn->ensurePolished();
+        recordBtn->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Ignored);
+        recordBtn->setMinimumSize(28, 1);
     }
 
     mPlayerControls = new QWidget;

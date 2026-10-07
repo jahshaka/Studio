@@ -1572,6 +1572,7 @@ void MainWindow::setupViewPort()
 	pageDeps.icons = fontIcons;
 	pageDeps.db = db;
 	pageDeps.cameraControls = viewController->createCameraControls();
+	pageDeps.actions = actionHost;
 	pageDeps.engineStarted = [this](const std::shared_ptr<jahshaka::engine::Engine> &engine) {
 		// Non-owning: step 6 of the shutdown order checks it died with the
 		// viewports (shell/shelllifecycle.h).

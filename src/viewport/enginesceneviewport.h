@@ -277,6 +277,11 @@ public:
     bool vrPreview() const override { return bool(mVrPreviewStep); }
     void setVrPreviewEnds(std::function<void()> ends) override
     { mVrPreviewEnds = std::move(ends); }
+    /// The video recorder's view (VIDEO-REC-1) — see IEditorViewport.
+    jahshaka::engine::View *beginRecordingView(unsigned width, unsigned height, bool helpers,
+                                               RecordingHooks hooks, QString *why) override;
+    void endRecordingView() override;
+    jahshaka::engine::View *recordingView() const override { return mRecordView; }
     /// Bridges EngineViewWidget's own (non-virtual, and on the OTHER base) copy
     /// onto the interface — C++ does not override across hierarchies, and the
     /// shell holds an IEditorViewport*.
@@ -786,6 +791,15 @@ private:
     /// called from clearScene() while the engine scene is still alive, and from
     /// end() when the page it is hosted on is left.
     std::function<void()> mVrPreviewEnds;
+    /// THE RECORDING VIEW (VIDEO-REC-1): the recorder's own 1080p offscreen
+    /// view of this scene, pushed beside the viewport's every synced frame
+    /// (syncRecordingView), and the recorder's hooks for its life.
+    jahshaka::engine::View *mRecordView = nullptr;
+    RecordingHooks mRecordHooks;
+    /// The per-frame push of the recording view, then the recorder's frame hook.
+    void syncRecordingView();
+    /// The recording ends with the world or the page (the hooks' `ends`), once.
+    void endRecordingForTeardown();
     bool mShowShadowAtlas = false;
     QString mCameraView = QStringLiteral("perspective"); // last canonical view requested
     /// The grid plane pushGridForView last PUSHED to the mirror (not what a
