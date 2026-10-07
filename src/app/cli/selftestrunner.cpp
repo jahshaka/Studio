@@ -147,7 +147,9 @@ void settleShotIfGathering(MainWindow &window)
 // a sequence of verbs the editor itself offers, so it cannot drift from what the
 // application can express, and every verb it needs already existed.
 const char *const kFixtureBScript = R"JS(
-var g = project.create("selftest-fixture-B", { template: "empty" });
+// A FREE NAME (PROJECT-NAMES-1): names are unique in a library, and a data root
+// that has run the self-test before already holds a "selftest-fixture-B".
+var g = project.create(project.nextFreeName("selftest-fixture-B"), { template: "empty" });
 if (!g || g.length < 10) throw new Error("project.create refused");
 
 // The sun FIRST: the realistic sky takes its sun position from the scene's sun

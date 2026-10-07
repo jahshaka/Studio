@@ -24,7 +24,7 @@ var TEXDIR = "@TEXDIR@";
 var CUBES = 12;
 var SLOTS = ["baseColorMap", "normalMap", "roughnessMap", "metallicMap"];
 
-var guid = project.create("TextureAB");
+var guid = project.create(project.nextFreeName("TextureAB"));   // a reused home already holds one (PROJECT-NAMES-1)
 assert(guid && guid.length > 10, "project.create -> " + guid);
 
 var n = 0;
