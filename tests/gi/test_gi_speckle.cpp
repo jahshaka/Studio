@@ -327,6 +327,9 @@ static void routeAgreement(Engine *e)
     s->setGatherTuning(t);
 
     // The strip beside the box's lit face: x in [1.1, 2.1] m, z in [-0.7, 0.7] m.
+    // THE INSTRUMENT REFUSES A DROPPED HIT (GATHER-NOISE-1): a record the full
+    // list dropped leaves its ray black, which reads as a route DISAGREEMENT.
+    unsigned long long dropped = 0;
     const auto strip = [&](double &mean, unsigned &n, unsigned long long &records) {
         render(e, 120);
         mean = 0.0;
@@ -335,6 +338,7 @@ static void routeAgreement(Engine *e)
         for (int k = 0; k < 8; ++k) {
             render(e, 1);
             records += s->rayQueryStatus().hitRecords;
+            dropped += s->rayQueryStatus().hitDropped;
             const GatherStatus g = s->giStatus().gather;
             if (g.irradiance.empty()) continue;
             const double halfW = 4.0 * double(g.irradianceW) / double(g.irradianceH);
@@ -364,6 +368,7 @@ static void routeAgreement(Engine *e)
                 "(%u px, %llu records); decode / caches %.4f\n",
                 cacheE, cacheN, cacheRec, decodeE, decodeN, decodeRec, cacheE > 0.0 ? decodeE / cacheE : 0.0);
     CHECK_MSG(armed, "the arm \"gather.decodeHits\" exists");
+    CHECK_MSG(dropped == 0u, "the decode route dropped no hit (%llu dropped): every ray is measured", dropped);
     CHECK_MSG(cacheN > 1000 && decodeN > 1000 && cacheE > 1e-4,
               "the strip beside the box is gathered and lit by its bounce (%u / %u px, E/pi %.5f)", cacheN, decodeN,
               cacheE);
