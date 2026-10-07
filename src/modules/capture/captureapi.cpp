@@ -81,21 +81,30 @@ QVector<VerbInfo> CaptureApi::verbs() const
           "Qt finds one; 60 fps on the SCENE's clock — one video frame per 1/60 s step the scene "
           "advanced, a slow editor frame HELD over the steps it spanned, never a sped-up file. "
           "`mode` (default \"realtime\", what that sentence describes) or \"offline\": PERFECT 60 — "
-          "every frame the editor draws is one video frame and the scene clock is handed EXACTLY one "
-          "1/60 s step for it (animation, physics, particles, the shader clock and every per-frame "
-          "temporal history step once per recorded frame, as a 60 fps run would show them), never "
-          "the wall time and never a script's editor.frame dt; nothing is held or dropped — a full "
-          "readback ring is waited out (one GPU frame at most) and a full encoder queue holds the "
-          "render loop's ticks until it drains. The editor runs as slowly as it must and stays "
-          "interactive; `clipSeconds` against `wallSeconds` in the status says how much slower. "
+          "every render-loop frame (and every editor.frame) is one video frame and the scene clock is "
+          "handed EXACTLY one 1/60 s step for it (animation, physics, particles, the shader clock, the "
+          "recording view's temporal histories and the PLAYING VIDEO TEXTURES — decoded forward to "
+          "the frame's time — step once per recorded frame, as a 60 fps run would show them), never "
+          "the wall time and never a script's editor.frame dt; any other frame (a panel's refresh, a "
+          "screenshot's settle) is outside the recording: dt 0, the recording view not drawn. Nothing "
+          "is held or dropped — a full readback ring is waited out (one GPU frame at most), a full "
+          "encoder queue or a video texture still decoding holds the render loop's ticks (an "
+          "editor.frame waits) until it is ready. The editor runs as slowly as it must and stays "
+          "interactive (on a display faster than 60 Hz its world runs FASTER than real time while "
+          "recording); `clipSeconds` against `wallSeconds` in the status says how much slower. "
+          "REFUSED while a VR session is live (the wearer would see the recording's pace), and a VR "
+          "session that starts during one ENDS it (the file is kept). The VR rig and interaction "
+          "clocks stay on the wall clock. "
           "`path` (.mp4) defaults to ~/Videos/Jahshaka/<scene>_<date-time>.mp4; `helpers` "
           "(default false: scene only, the photo rule) draws the editor's grid, gizmo, outline "
           "and icons into the picture. The first recorded frame comes after the view's warm-up "
           "(`warming` in the status). Null when it cannot start (no engine viewport, no world, "
           "no H.264 encoder, a folder that cannot be written), with the reason in app.lastError. "
-          "`fault: \"noEncoder\" | \"encoderError\" | \"slowSave\"` is a test instrument on the "
+          "`fault: \"noEncoder\" | \"encoderError\" | \"slowSave\" | \"slowEncoder\" | \"skipPoll\"` is a test instrument on the "
           "path the real event takes: no encoder; the recorder emitting errorOccurred mid-recording; "
-          "a save that runs until it is cancelled (capture.abandon). A stop during the warm-up is a "
+          "a save that runs until it is cancelled (capture.abandon); `\"slowEncoder\"` an encoder input "
+          "that takes one frame per 50 ms (the queue fills: the offline mode's hold runs); `\"skipPoll\"` "
+          "a readback ring nobody polls (it fills: the offline mode's ring wait runs). A stop during the warm-up is a "
           "quiet cancel (state idle, warning \"cancelled before the first frame\").",
           Needs::Engine },
         { "stop", "capture.stop({wait?, timeoutMs?}) -> status | null",
@@ -107,7 +116,7 @@ QVector<VerbInfo> CaptureApi::verbs() const
           Needs::Engine },
         { "status", "capture.status() -> {state, recording, path, mode, frames, armed, held, sent, queued, "
           "dropped, encoderDropped, inFlight, elapsed, clipSeconds, wallSeconds, heldTicks, ringWaits, "
-          "worstRingWaitMs, warming, startMs, encoder, hardwareEncoder, width, height, fps, bitRate, "
+          "worstRingWaitMs, warming, startMs, probeMs, encoder, hardwareEncoder, width, height, fps, bitRate, "
           "helpers, error?, warning?}",
           "The recorder now. `state` is idle | recording | finishing | done | failed; `frames` "
           "the video frames written (one per scene step, holds included), `held` how many were a "
@@ -118,7 +127,10 @@ QVector<VerbInfo> CaptureApi::verbs() const
           "`path` the file (the finished one once `done`). `mode` is realtime | offline; "
           "`clipSeconds` (= `elapsed`) is the video recorded and `wallSeconds` the wall time since "
           "the start (frozen at the stop) — an offline recording's clip runs slower than the wall; "
-          "`heldTicks` the render-loop ticks an offline recording held for its encoder, `ringWaits` "
+          "`startMs` is the start's own UI-thread time and `probeMs` the part of it Qt's encoder probe took "
+          "(the startup gate makes the process's first, ~0.7 s, probe behind the splash). "
+          "`heldTicks` counts the frames an offline recording held back (a render-loop tick held, or an "
+          "editor.frame that waited) for its encoder or a video texture's stepped frame, `ringWaits` "
           "the frames it waited for a readback ticket and `worstRingWaitMs` the longest such wait.",
           Needs::Document },
         { "wait", "capture.wait(timeoutMs=30000) -> status",
@@ -205,9 +217,11 @@ QVariant CaptureApi::start(const QVariantMap &options)
         fail(QStringLiteral("capture.start: mode must be \"realtime\" or \"offline\""));
         return jsNull();
     }
-    if (!o.fault.isEmpty() && o.fault != QLatin1String("noEncoder") && o.fault != QLatin1String("encoderError") &&
-        o.fault != QLatin1String("slowSave")) {
-        fail(QStringLiteral("capture.start: fault must be \"noEncoder\", \"encoderError\" or \"slowSave\""));
+    static const QStringList faults = { QStringLiteral("noEncoder"), QStringLiteral("encoderError"),
+                                        QStringLiteral("slowSave"), QStringLiteral("slowEncoder"),
+                                        QStringLiteral("skipPoll") };
+    if (!o.fault.isEmpty() && !faults.contains(o.fault)) {
+        fail(QStringLiteral("capture.start: fault must be one of %1").arg(faults.join(QStringLiteral(", "))));
         return jsNull();
     }
     QString why;

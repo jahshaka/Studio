@@ -152,7 +152,19 @@ EngineRenderDriver::EngineRenderDriver(jahshaka::engine::Engine *engine, QObject
         const bool anythingToDraw = mEngine && mEngine->hasEnabledViews();
         // A subscriber held this tick (holdThisTick: the offline recorder's
         // backpressure). Still "drawing" — the views are up — but no frame.
-        const bool rendering = anythingToDraw && !std::exchange(mHoldTick, false);
+        // A VR-pumping tick is never held: its render is the session's heartbeat.
+        const bool held = std::exchange(mHoldTick, false) && !vrPumping();
+        const bool rendering = anythingToDraw && !held;
+        // NO SPIN WHILE HELD: an Unlimited (0 ms) or fast pacing beats no faster
+        // than kHeldIntervalMs while ticks are held; the pacing's own interval
+        // returns with the first tick that renders.
+        if (held && !mHeldPacing && mTimer->interval() < kHeldIntervalMs) {
+            mHeldPacing = true;
+            mTimer->start(kHeldIntervalMs);
+        } else if (!held && mHeldPacing) {
+            mHeldPacing = false;
+            if (mTimer->isActive()) mTimer->start(pacedIntervalMs());
+        }
         // THE LIVE STATE, not a lifetime counter (owner review answer Q3): the
         // tick that draws nothing no longer increments anything at all — it
         // simply says so, and `ticks - rendered` is still there for a caller
@@ -163,6 +175,7 @@ EngineRenderDriver::EngineRenderDriver(jahshaka::engine::Engine *engine, QObject
             ++mStats.rendered;
             mDrawn.add(nowMs());
         }
+        emit afterFrame();
 
         // THE GPU IS GONE: SAY SO AND END, NEVER FREEZE (lane XID-2, 2026-09-17).
         // The one render loop is the one place that can notice. After a device

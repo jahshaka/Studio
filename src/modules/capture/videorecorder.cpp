@@ -35,6 +35,7 @@ For more information see the LICENSE file
 
 #include "jahshaka/engine/Engine.h"
 #include "modules/capture/mp4faststart.h"
+#include "services/livevideo.h"
 #include "services/filewriteatomic.h"
 #include "viewport/ieditorviewport.h"
 
@@ -219,6 +220,14 @@ VideoRecorder::~VideoRecorder()
     teardownEncoder(true);
 }
 
+double VideoRecorder::warmEncoderProbe()
+{
+    QElapsedTimer t;
+    t.start();
+    (void)QMediaFormat(QMediaFormat::MPEG4).supportedVideoCodecs(QMediaFormat::Encode);
+    return double(t.nsecsElapsed()) / 1e6;
+}
+
 QString VideoRecorder::modeName(Mode m)
 {
     return m == Mode::Offline ? QStringLiteral("offline") : QStringLiteral("realtime");
@@ -307,15 +316,22 @@ bool VideoRecorder::start(const Options &options, QString *why)
 
     // ---- the encoder: H.264 into MPEG-4, or no recording at all --------------
     QMediaFormat format(QMediaFormat::MPEG4);
+    // QT'S ENCODER PROBE: its FIRST call in a process enumerates the encoders
+    // (~0.7 s, measured in VIDEO-REC-2 — the "585 ms first click" of
+    // VIDEO-REC-1); the startup shader gate makes that call behind the splash
+    // (warmEncoderProbe), so here it is a lookup. Timed: `probeMs`.
+    QElapsedTimer probeTimer;
+    probeTimer.start();
     const bool haveH264 = options.fault != QLatin1String("noEncoder") &&
                           format.supportedVideoCodecs(QMediaFormat::Encode).contains(QMediaFormat::VideoCodec::H264);
+    mProbeMs = double(probeTimer.nsecsElapsed()) / 1e6;
     if (!haveH264)
         return refuse(QStringLiteral("no H.264 video encoder is available on this machine "
                                      "(Qt Multimedia's FFmpeg backend offers none)"));
 
     // ---- the picture: the separate 1080p view (§10.2) -------------------------
     IEditorViewport::RecordingHooks hooks;
-    hooks.frame = [this](quint64 step) { onFrame(step); };
+    hooks.frame = [this](quint64 step) { return onFrame(step); };
     hooks.ends = [this]() { stop(); };
     hooks.escape = [this]() { return escape(); };
     hooks.offline = options.mode == Mode::Offline;
@@ -368,6 +384,13 @@ bool VideoRecorder::start(const Options &options, QString *why)
     mEncoderHardware = false;
     mFaultSent = false;
     mFastStartRunning = false;
+    mSlowEncoderSince.invalidate();
+    mSlowEncoderRetry = false;
+    // THE VIDEO TEXTURES LEAVE THE WALL CLOCK (offline): each playing clip is
+    // paused and advanced one 1/60 s per recorded frame (LiveVideo's stepped
+    // clock), or a 20 fps editor would show them at 3x in the clip.
+    mVideoStepped = options.mode == Mode::Offline;
+    if (mVideoStepped) LiveVideo::beginStepped();
     mWall.start();
     mStopWallMs = 0;
     spyListen(true);
@@ -378,13 +401,16 @@ bool VideoRecorder::start(const Options &options, QString *why)
     return true;
 }
 
-void VideoRecorder::onFrame(quint64 step)
+bool VideoRecorder::onFrame(quint64 step)
 {
-    if (!mView) return;
+    if (!mView) return false;
     // What finished since the last frame, oldest first — a poll, never a wait.
-    while (mView && mView->takeVideoFrame(mFrame, false)) deliver(mFrame);
-    if (mState != State::Recording || !mView) return;
-    if (mWarm > 0) { --mWarm; return; }
+    // ("skipPoll", a test instrument, leaves the ring to fill.)
+    if (mOptions.fault != QLatin1String("skipPoll"))
+        while (mView && mView->takeVideoFrame(mFrame, false)) deliver(mFrame);
+    if (mState != State::Recording || !mView) return false;
+    // THE WARM-UP DRAWS (the view's young histories settle) but records nothing.
+    if (mWarm > 0) { --mWarm; return true; }
     if (mOptions.mode == Mode::Offline) {
         // OFFLINE: THIS FRAME IS A VIDEO FRAME, whatever the clock did (the host
         // handed it exactly one step; a paused scene is a still picture the user
@@ -406,20 +432,25 @@ void VideoRecorder::onFrame(quint64 step)
             const double ms = double(waited.nsecsElapsed()) / 1e6;
             ++mRingWaits;
             if (ms > mWorstRingWaitMs) mWorstRingWaitMs = ms;
-            if (mState != State::Recording || !mView) return;
+            if (mState != State::Recording || !mView) return false;
         }
         mView->armVideoFrame(mOfflineSerial++);
         mArmedAny = true;
         ++mArmed;
-        return;
+        // ...and the video textures step to the NEXT recorded frame's time (the
+        // next frame is held until their frames have landed: holdTick).
+        if (mVideoStepped) LiveVideo::advanceStepped(1000000 / kFps);
+        return true;
     }
     // ONE FRAME PER GRID STEP: a frame that bought no step (the scene paused, a
-    // fast panel's odd frame) shows an instant the file already holds.
-    if (mArmedAny && step == mLastArmedStep) return;
+    // fast panel's odd frame) shows an instant the file already holds — and
+    // the view does not draw it.
+    if (mArmedAny && step == mLastArmedStep) return false;
     mView->armVideoFrame(step);
     mArmedAny = true;
     mLastArmedStep = step;
     ++mArmed;
+    return true;
 }
 
 void VideoRecorder::deliver(jahshaka::engine::VideoFrameNv12 &frame)
@@ -476,7 +507,19 @@ void VideoRecorder::flush()
     if (!mRecorder || !mInput) return;
     if (mRecorder->recorderState() != QMediaRecorder::RecordingState) return;
     while (!mQueue.empty()) {
+        // THE "slowEncoder" INSTRUMENT: the input takes one frame per 50 ms —
+        // an encoder that has fallen behind, on the path a real one takes.
+        if (mOptions.fault == QLatin1String("slowEncoder")) {
+            if (mSlowEncoderSince.isValid() && mSlowEncoderSince.elapsed() < 50) {
+                if (!mSlowEncoderRetry) {
+                    mSlowEncoderRetry = true;
+                    QTimer::singleShot(50, this, [this]() { mSlowEncoderRetry = false; flush(); });
+                }
+                return;
+            }
+        }
         if (!mInput->sendVideoFrame(mQueue.front())) return;   // readyToSendVideoFrame resumes it
+        mSlowEncoderSince.start();
         mQueue.pop_front();
         ++mSent;
     }
@@ -560,7 +603,9 @@ bool VideoRecorder::holdTick()
     // Whatever Qt's input will take now goes first: a hold is only for a queue
     // the encoder really cannot accept yet.
     flush();
-    if (mQueue.size() < kQueueBound) return false;
+    // ...and a video texture whose stepped frame has not landed yet (bounded
+    // per frame inside LiveVideo).
+    if (mQueue.size() < kQueueBound && !(mVideoStepped && LiveVideo::steppedPending())) return false;
     ++mHeldTicks;
     return true;
 }
@@ -630,6 +675,8 @@ void VideoRecorder::fail(const QString &message)
 
 void VideoRecorder::teardownView()
 {
+    // The video textures go back to the wall clock with the recording's view.
+    if (mVideoStepped) { mVideoStepped = false; LiveVideo::endStepped(); }
     if (mView && mViewport) mViewport->endRecordingView();
     mView = nullptr;
 }
@@ -699,6 +746,7 @@ QVariantMap VideoRecorder::status() const
     m["worstRingWaitMs"] = mWorstRingWaitMs;
     m["warming"] = mState == State::Recording && mWarm > 0;
     m["startMs"] = mStartMs;
+    m["probeMs"] = mProbeMs;
     const jahshaka::engine::VideoReadbackStatus rb =
         mView ? mView->videoReadbackStatus() : jahshaka::engine::VideoReadbackStatus();
     m["dropped"] = qulonglong(rb.dropped);

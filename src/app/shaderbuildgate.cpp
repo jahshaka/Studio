@@ -25,6 +25,7 @@
 #include "viewport/snapsettings.h"
 #include "viewport/translationgizmo.h"
 #include "viewport/recordingview.h"
+#include "modules/capture/videorecorder.h"
 
 #include <functional>
 
@@ -642,6 +643,13 @@ unsigned holdSplashForShaderBuild(QApplication &app, VersionSplashScreen &splash
             break;
         }
     }
+
+    // QT'S ENCODER PROBE (VIDEO-REC-2): the first supportedVideoCodecs(Encode)
+    // of a process enumerates the machine's encoders, ~0.7 s on the UI thread.
+    // Made HERE, behind the splash, so the session's first record click is a
+    // lookup — on the UI thread, where Qt Multimedia expects its calls.
+    const double probeMs = VideoRecorder::warmEncoderProbe();
+    qInfo("startup shader build: the video encoder probe took %.0f ms", probeMs);
 
     if (shown) splash.showShaderBuild(-1, 0);
     // NOT recorded in LoadTimeline: that ledger belongs to a scene OPEN, and

@@ -108,7 +108,11 @@ void CaptureModule::contribute(Contributions &c)
     auto *modes = new QActionGroup(mMenu.get());
     modes->setExclusive(true);
     mRealtimeRow = mMenu->addAction(QObject::tr("Real time (the scene's own clock)"));
-    mOfflineRow = mMenu->addAction(QObject::tr("Offline: perfect 60 fps (renders every frame, slower than real time)"));
+    // Each drawn frame is 1/60 s of the world while recording offline: a slow
+    // editor runs behind the wall clock, and a FAST panel (144 Hz) runs the
+    // editor's world faster than real time — said on the row itself.
+    mOfflineRow = mMenu->addAction(QObject::tr("Offline: perfect 60 fps (1/60 s of the world per drawn frame: "
+                                               "slower than real time, faster on a fast display)"));
     for (QAction *row : { mRealtimeRow, mOfflineRow }) {
         row->setCheckable(true);
         modes->addAction(row);

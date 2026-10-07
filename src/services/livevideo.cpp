@@ -45,6 +45,10 @@ LiveVideoBinding::LiveVideoBinding(const QString &videoGuid_, const QString &tex
     // moment a material started animating.
     player->setVideoSink(sink);
     connect(sink, &QVideoSink::videoFrameChanged, this, &LiveVideoBinding::onFrame);
+    // A stepped clip that ENDED will deliver nothing more: its step is done.
+    connect(player, &QMediaPlayer::mediaStatusChanged, this, [this](QMediaPlayer::MediaStatus st) {
+        if (st == QMediaPlayer::EndOfMedia) steppedAwaiting = false;
+    });
     player->setSource(QUrl::fromLocalFile(filePath));
 }
 
@@ -69,23 +73,94 @@ void LiveVideoBinding::onFrame(const QVideoFrame &frame)
         image = image.convertToFormat(QImage::Format_RGBA8888);
     if (!LiveTextureCatalog::write(liveGuid, image, &lastError)) return;
     ++frameCount;
+    // WHERE THE CLIP IS, on an unwrapped timeline (a loop's wraps counted): the
+    // stepped clock compares its target with it.
+    const qint64 raw = frame.startTime() >= 0 ? frame.startTime() : player->position() * 1000;
+    if (rawLastUs >= 0 && raw + 1000 < rawLastUs && player->duration() > 0) ++wraps;
+    rawLastUs = raw;
+    lastFrameUs = wraps * player->duration() * 1000 + raw;
+    if (frame.endTime() > frame.startTime() && frame.startTime() >= 0)
+        lastFrameDurUs = frame.endTime() - frame.startTime();
+    if (stepped && steppedAwaiting && lastFrameUs + qMax<qint64>(lastFrameDurUs, 1) > steppedTargetUs) {
+        // The frame the target asks for has landed: hold it there.
+        player->pause();
+        steppedAwaiting = false;
+    }
     emit frameDelivered();
+}
+
+bool LiveVideoBinding::playing() const
+{
+    return player->playbackState() == QMediaPlayer::PlayingState;
+}
+
+void LiveVideoBinding::beginStepped()
+{
+    // What the USER asked for (play/pause/stop), not Qt's state: a clip whose
+    // play() is still opening its media reads Stopped for a moment.
+    if (stepped || !intendPlaying) return;
+    stepped = true;
+    steppedAwaiting = false;
+    player->pause();
+    steppedTargetUs = lastFrameUs >= 0 ? lastFrameUs : player->position() * 1000;
+}
+
+void LiveVideoBinding::advanceStepped(qint64 microseconds)
+{
+    if (!stepped) return;
+    steppedTargetUs += microseconds;
+    steppedPoll();
+}
+
+void LiveVideoBinding::steppedPoll()
+{
+    // DECODED FORWARD, never sought: played until the next frame's start passes
+    // the target, then paused (onFrame). A frame already covering the target
+    // needs nothing.
+    if (player->mediaStatus() == QMediaPlayer::EndOfMedia) { steppedAwaiting = false; return; }
+    const bool behind = lastFrameUs < 0 || lastFrameUs + qMax<qint64>(lastFrameDurUs, 1) <= steppedTargetUs;
+    if (!behind) return;
+    steppedAwaiting = true;
+    awaitingFor.start();
+    if (!playing()) player->play();
+}
+
+bool LiveVideoBinding::steppedPending()
+{
+    if (!stepped || !steppedAwaiting) return false;
+    // BOUNDED: a clip that cannot deliver (a decoder stall) costs the recording
+    // at most half a second a frame, never a hang — then it is held where it is.
+    if (awaitingFor.isValid() && awaitingFor.elapsed() < 500) return true;
+    steppedAwaiting = false;
+    player->pause();
+    return false;
+}
+
+void LiveVideoBinding::endStepped()
+{
+    if (!stepped) return;
+    stepped = false;
+    steppedAwaiting = false;
+    player->play();
 }
 
 bool LiveVideoBinding::play()
 {
+    intendPlaying = true;
     player->play();
     return true;
 }
 
 bool LiveVideoBinding::pause()
 {
+    intendPlaying = false;
     player->pause();
     return true;
 }
 
 bool LiveVideoBinding::stop()
 {
+    intendPlaying = false;
     player->stop();
     return true;
 }
@@ -194,6 +269,28 @@ LiveVideoBinding *LiveVideo::find(const QString &videoGuid)
 QStringList LiveVideo::bound()
 {
     return bindings().keys();
+}
+
+void LiveVideo::beginStepped()
+{
+    for (LiveVideoBinding *b : bindings()) b->beginStepped();
+}
+
+void LiveVideo::advanceStepped(qint64 microseconds)
+{
+    for (LiveVideoBinding *b : bindings()) b->advanceStepped(microseconds);
+}
+
+bool LiveVideo::steppedPending()
+{
+    for (LiveVideoBinding *b : bindings())
+        if (b->steppedPending()) return true;
+    return false;
+}
+
+void LiveVideo::endStepped()
+{
+    for (LiveVideoBinding *b : bindings()) b->endStepped();
 }
 
 void LiveVideo::clear()

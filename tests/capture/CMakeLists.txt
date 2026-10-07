@@ -32,7 +32,12 @@ jah_pool_arm(capture first_recording ${CMAKE_CURRENT_SOURCE_DIR}/scripts/capture
 #   frames at 60/1, one clock step per frame, no two consecutive decoded pictures the same, and
 #   1.5 deg (1/60 s of 90 deg/s) per frame read off the decoded pixels; real time under the same
 #   load is the control (it holds frames).
-jah_pool_arm(capture offline_unique ${CMAKE_CURRENT_SOURCE_DIR}/scripts/capture_offline_unique.js 60)
+jah_pool_arm(capture offline_unique ${CMAKE_CURRENT_SOURCE_DIR}/scripts/capture_offline_unique.js 120)
+# capture.offline_video — a PLAYING video texture rides the offline clock: decoded forward one
+#   1/60 s per recorded frame (8 video frames a second of an 8 fps clip, whatever the wall time).
+set(SOURCE_DIR ${CMAKE_SOURCE_DIR})
+configure_file(scripts/capture_offline_video.js.in ${CMAKE_CURRENT_BINARY_DIR}/capture_offline_video.js @ONLY)
+jah_pool_arm(capture offline_video ${CMAKE_CURRENT_BINARY_DIR}/capture_offline_video.js 30)
 jah_add_pool(capture TIER epic LABELS scripting capture)
 
 # capture.faststart — the fast-start step (src/modules/capture/mp4faststart.cpp) on SYNTHETIC

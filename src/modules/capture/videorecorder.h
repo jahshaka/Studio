@@ -81,7 +81,10 @@ public:
         Mode mode = Mode::Realtime;
         /// TEST INSTRUMENTS, each on the path a real one takes: "noEncoder" answers
         /// the encoder check with none, "encoderError" has the recorder emit
-        /// errorOccurred, "slowSave" holds the fast-start step until cancelled.
+        /// errorOccurred, "slowSave" holds the fast-start step until cancelled,
+        /// "slowEncoder" has the encoder's input accept at most one frame per
+        /// 50 ms (an encoder that has fallen behind: the queue fills), "skipPoll"
+        /// never polls the readback ring (it fills: the offline ring wait runs).
         QString fault;
     };
 
@@ -130,6 +133,12 @@ public:
 
     static QString stateName(State s);
     static QString modeName(Mode m);
+    /// QT'S ENCODER PROBE, made once (VIDEO-REC-2): the first
+    /// QMediaFormat::supportedVideoCodecs(Encode) of a process enumerates the
+    /// machine's encoders — ~0.7 s on the UI thread, which was the session's
+    /// first record click. The startup shader gate calls this behind the splash,
+    /// on the UI thread where Qt expects it; returns the ms it took.
+    static double warmEncoderProbe();
     /// "realtime" | "offline" -> the mode; false for anything else.
     static bool parseMode(const QString &name, Mode *out);
     Mode mode() const { return mOptions.mode; }
@@ -146,7 +155,7 @@ signals:
     void finished(bool ok, const QString &path, const QString &error);
 
 private:
-    void onFrame(quint64 step);
+    bool onFrame(quint64 step);
     /// RecordingHooks::hold — the offline backpressure (the encoder queue full).
     bool holdTick();
     void deliver(jahshaka::engine::VideoFrameNv12 &frame);
@@ -181,6 +190,11 @@ private:
     /// thread waited for (the ring full) and the longest such wait, in ms.
     quint64 mOfflineSerial = 0, mHeldTicks = 0, mRingWaits = 0;
     double mWorstRingWaitMs = 0.0;
+    /// The "slowEncoder" instrument: when the input last accepted a frame.
+    QElapsedTimer mSlowEncoderSince;
+    bool mSlowEncoderRetry = false;
+    /// The offline recording moved the video textures onto its stepped clock.
+    bool mVideoStepped = false;
     jahshaka::engine::VideoFrameNv12 mFrame;        ///< the poll's buffer
     std::vector<unsigned char> mLast;               ///< the last frame enqueued (holds)
 
@@ -197,6 +211,7 @@ private:
     std::shared_ptr<std::atomic<bool>> mCancel;
     QElapsedTimer mWall;
     double mStartMs = 0.0;
+    double mProbeMs = 0.0;
     bool mFastStartRunning = false;
     bool mFaultSent = false;
     qint64 mStopWallMs = 0;

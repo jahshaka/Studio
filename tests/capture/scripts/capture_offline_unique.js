@@ -100,6 +100,52 @@ var worst = 0;
 for (var t = 0; t < off.turns.length; ++t) worst = Math.max(worst, Math.abs(off.turns[t] - DEG));
 assert(worst < 0.2, "every frame turns the bar 1/60 s of its 90 deg/s: |turn - 1.5 deg| <= " + worst.toFixed(3));
 
+// ---- OUT-OF-LOOP FRAMES are outside the recording: a screenshot mid-recording (its own view, its
+// settle frames, a dt-0 frame) neither steps the clock nor records a frame ----
+assert(editor.play() === true, "play again");
+var so = capture.start({ path: dir + "/outofloop.mp4", mode: "offline" });
+assert(so !== null, "an offline recording for the out-of-loop check");
+editor.frame(16 + 10);
+var s0 = scene.clock().steps, k0 = capture.status().armed;
+editor.screenshot(dir + "/mid.png");
+var s1 = scene.clock().steps, k1 = capture.status().armed;
+console.log("a screenshot mid-recording: clock " + s0 + " -> " + s1 + ", armed " + k0 + " -> " + k1);
+assert(s1 === s0 && k1 === k0, "the screenshot's frames stepped no clock and recorded nothing");
+editor.frame(5);
+assert(scene.clock().steps === s1 + 5 && capture.status().armed === k1 + 5, "and editor.frame records again, one step each");
+capture.stop({ wait: true, timeoutMs: 30000 });
+editor.stop();
+
+// ---- BACKPRESSURE, both branches (the instruments on the paths real ones take) ----
+// An encoder that has fallen behind ("slowEncoder": one frame per 50 ms in): the queue fills and
+// frames are HELD (the editor.frame waits), never dropped; the clip is still N in, N out at 60/1.
+function recordFault(name, fault, n) {
+    assert(editor.play() === true, name + ": play");
+    var st = capture.start({ path: dir + "/" + name + ".mp4", mode: "offline", fault: fault });
+    assert(st !== null, name + ": recording with " + fault + " " + app.lastError());
+    var guard = 0;
+    while (capture.status().armed < n && guard++ < 1000) editor.frame(1);
+    capture.stop({ wait: true, timeoutMs: 60000 });
+    var done = capture.status();
+    editor.stop();
+    var f = capture.inspect(done.path, { decode: true, timeoutMs: 60000 });
+    console.log(name + ": " + JSON.stringify({ frames: done.frames, held: done.held, heldTicks: done.heldTicks,
+                ringWaits: done.ringWaits, worstRingWaitMs: done.worstRingWaitMs, dropped: done.dropped,
+                encoderDropped: done.encoderDropped, file: f.frames, fps: f.fps, decoded: f.decoded.frames }));
+    assert(done.state === "done" && done.frames === n && done.held === 0, name + ": N frames, none held");
+    assert(done.dropped === 0 && done.encoderDropped === 0, name + ": nothing dropped");
+    assert(f.frames === n && f.constantRate === true && Math.abs(f.fps - 60) < 1e-9 && f.decoded.frames === n,
+           name + ": N in, N out, at a constant 60/1");
+    return done;
+}
+var slow = recordFault("slowencoder", "slowEncoder", 60);
+assert(slow.heldTicks > 0, "the encoder's backpressure HELD frames: " + slow.heldTicks);
+// A readback ring nobody polls ("skipPoll"): it fills, and the next frame WAITS for the oldest
+// ticket (one GPU frame at most) instead of dropping it.
+var ring = recordFault("ringfull", "skipPoll", 30);
+assert(ring.ringWaits > 0, "the full ring was waited out: " + ring.ringWaits + " waits");
+assert(ring.worstRingWaitMs < 100, "no UI-thread wait over 100 ms: " + ring.worstRingWaitMs.toFixed(2) + " ms");
+
 // ---- REAL-TIME under the same load (the control) ----
 var rt = record("realtime", "realtime");
 assert(rt.status.held > 0, "real time HOLDS frames under the load: " + rt.status.held + " of " + rt.status.frames);

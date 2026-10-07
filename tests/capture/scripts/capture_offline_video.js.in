@@ -1,0 +1,54 @@
+// capture.offline_video — A PLAYING VIDEO TEXTURE RIDES THE OFFLINE CLOCK (VIDEO-REC-2).
+//
+// A live video texture decodes on Qt's player, on the WALL clock. In an offline recording the
+// editor runs slower than real time, so on the wall clock the clip would show the video at the
+// editor's slowdown (~3x at 20 fps). The recorder moves every playing clip onto its stepped clock:
+// paused, then decoded forward one 1/60 s per recorded frame. The fixture is 8 fps
+// (tests/scripting/fixtures/tiny.mp4, 16 frames, looped): one second of clip = ~8 video frames,
+// whatever the wall time — here ~5 s of it, the editor slowed on purpose (50 ms blocked a frame),
+// where a wall-clock clip would deliver ~40.
+
+function assert(cond, msg) {
+    if (!cond) throw new Error("assert failed: " + msg);
+    console.log("ok: " + msg);
+}
+
+assert(project.create("capture video " + Date.now()) !== false, "project.create");
+var vid = assets.importFile("@SOURCE_DIR@/tests/scripting/fixtures/tiny.mp4");
+assert(typeof vid === "string" && vid.length > 0, "the clip imports");
+var screen = texture.createLive("screen", 32, 32);
+assert(video.bind(vid, screen) === true, "bound to a live texture");
+video.loop(vid, true);
+assert(video.play(vid) === true, "play");
+// Qt opens the media asynchronously: the player reads Playing a few event-loop turns later.
+var g0 = 0;
+while (!video.state(vid).playing && g0++ < 300) editor.frame(1, 1 / 60);
+assert(video.state(vid).playing === true, "playing on the wall clock");
+editor.setCamera({ position: { x: 3, y: 2, z: 4 }, lookAt: { x: 0, y: 0, z: 0 } });
+editor.frame(4, 1 / 60);
+
+var N = 60;
+var st = capture.start({ path: app.dataRoot().root + "/capture-video/video.mp4", mode: "offline" });
+assert(st !== null, "recording offline " + app.lastError());
+var guard = 0;
+while (capture.status().warming && guard++ < 100) editor.frame(1);
+var f0 = video.state(vid).frames;
+var a0 = capture.status().armed;
+guard = 0;
+while (capture.status().armed < a0 + N && guard++ < 1000) {
+    app.blockUiThread(50);
+    editor.frame(1);
+}
+var during = video.state(vid).frames - f0;
+var mid = capture.status();
+console.log("over " + N + " recorded frames (" + (N / 60) + " s of clip, " + mid.wallSeconds + " s of wall): " +
+            during + " video frames delivered; held " + mid.heldTicks);
+assert(during >= 6 && during <= 10, "the clip advanced ~1 s of video (8 fps): " + during + " frames, not the wall's ~" +
+       Math.round(mid.wallSeconds * 8));
+assert(video.state(vid).playing === false, "the clip is held between recorded frames (stepped, not playing)");
+capture.stop({ wait: true, timeoutMs: 30000 });
+assert(capture.status().state === "done", "finished");
+var g1 = 0;
+while (!video.state(vid).playing && g1++ < 300) editor.frame(1, 1 / 60);
+assert(video.state(vid).playing === true, "after the recording the clip plays on the wall clock again");
+console.log("capture.offline_video: PASS");

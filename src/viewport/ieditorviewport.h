@@ -1209,6 +1209,12 @@ public:
     /// turns either into whole grid steps — iris::SimulationClock). A negative
     /// `dt` means "use the wall clock" and is identical to renderFrames(n).
     virtual void renderFrames(int n, float dt) { Q_UNUSED(n); Q_UNUSED(dt); }
+    /// editor.frame's frames (VIDEO-REC-2): exactly renderFrames, except that
+    /// they are TIMELINE frames — what a script steps the world by. During an
+    /// offline recording each is one recorded 1/60 s frame; every other
+    /// renderFrames caller (a panel's refresh, a settle) draws OUTSIDE the
+    /// recording (dt 0, nothing recorded).
+    virtual void stepFrames(int n, float dt) { renderFrames(n, dt); }
     /// CAN renderFrames() ACTUALLY DRAW? (lane OPEN-FRAMES-1) renderFrames is
     /// a no-op on a viewport with no engine, and silently: a caller that needs
     /// to know whether a frame really happened — the scene open's slice
@@ -1342,13 +1348,14 @@ public:
     // ---- THE RECORDING VIEW (VIDEO-REC-1; SPECS/VIDEO_CAPTURE_SPEC.md §10) ----
     /// What the video recorder hands the editor for the life of one recording.
     struct RecordingHooks {
-        /// Once per SYNCED FRAME (a driver tick and a scripted editor.frame
-        /// alike — the VR step's reason), after the recording view has been
-        /// given this frame's camera, sky and grade and before the frame
-        /// renders: `step` is the scene clock's step count (the 1/60 s grid
-        /// the document advanced to). The recorder takes finished frames and
-        /// arms this one here.
-        std::function<void(quint64 step)> frame;
+        /// Once per RECORDABLE frame (a driver tick and a scripted frame alike;
+        /// in an offline recording only a driver tick or editor.frame), at the
+        /// frame's LAST moment before its render: `step` is the scene clock's
+        /// step count (the 1/60 s grid the document advanced to). The recorder
+        /// takes finished frames and arms this one here, and answers whether
+        /// the recording view DRAWS this frame (its warm-up, or an armed frame):
+        /// the view is enabled for that one render and no other (VIDEO-REC-2).
+        std::function<bool(quint64 step)> frame;
         /// The recording cannot continue: the world is about to go (a close, an
         /// open in place) or the editor page is being left. Called BEFORE the
         /// engine scene is destroyed, with the view still alive, so the
@@ -1365,11 +1372,11 @@ public:
         /// fly takes the same step). False: the real-time mode, the scene runs on
         /// the wall clock and a slow frame is held across the steps it spanned.
         bool offline = false;
-        /// Asked at the top of every DRIVER tick in the offline mode: true = the
-        /// recorder cannot take another frame yet (its encoder queue is full),
-        /// and the tick neither syncs nor renders — the clock does not move, the
-        /// event loop runs, the encoder drains. Backpressure, never a drop. A
-        /// scripted editor.frame is never held (the script owns its frames).
+        /// Asked before every recordable frame in the offline mode: true = the
+        /// recorder cannot take another frame yet (its encoder queue is full, or
+        /// a video texture's stepped frame has not landed). A driver tick is
+        /// then HELD (no sync, no render; never a VR-pumping one); a script's
+        /// editor.frame waits for it (bounded). Backpressure, never a drop.
         std::function<bool()> hold;
     };
     /// THE OWNER'S FRAMING (§10.2): a SEPARATE offscreen render of the editor's
