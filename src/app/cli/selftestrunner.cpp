@@ -227,6 +227,10 @@ editor.frame(300);
 
 int runEngineSelftest(MainWindow &window, QApplication &app, const QString &outPng)
 {
+    // The background compiler's counts BEFORE the selftest's own frames: the startup gate's
+    // tier sweep draws placeholders on purpose (it builds them), in its own scenes.
+    jahshaka::engine::AsyncShaderStats asyncAtStart;
+    if (const auto eng = EngineHost::instance().engine()) asyncAtStart = eng->asyncShaderStats();
     window.show();
     app.processEvents();
 
@@ -648,10 +652,11 @@ int runEngineSelftest(MainWindow &window, QApplication &app, const QString &outP
     // a placeholder could reach a hash.
     if (const auto eng = EngineHost::instance().engine()) {
         const jahshaka::engine::AsyncShaderStats a = eng->asyncShaderStats();
+        const unsigned long long ph = a.placeholderDraws - asyncAtStart.placeholderDraws;
+        const unsigned long long skips = a.pendingSkips - asyncAtStart.pendingSkips;
         std::fprintf(stderr, "engine-selftest: placeholder draws %llu, pending skips %llu (%s)\n",
-                     a.placeholderDraws, a.pendingSkips,
-                     a.placeholderDraws == 0 && a.pendingSkips == 0 ? "PASS" : "FAIL");
-        if (a.placeholderDraws != 0 || a.pendingSkips != 0) return 1;
+                     ph, skips, ph == 0 && skips == 0 ? "PASS" : "FAIL");
+        if (ph != 0 || skips != 0) return 1;
     }
     return 0;
 }

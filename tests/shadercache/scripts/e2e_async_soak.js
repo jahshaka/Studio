@@ -6,6 +6,8 @@
 // clean exit, no validation message, no failed permutation and no UI-thread compile from the
 // asynchronous view.
 app.setAsyncShaders(true);
+// The counters before this script's frames (the startup gate's tier sweep draws placeholders).
+var s0 = app.asyncShaders();
 project.create("as1 soak", { template: "basic" });
 editor.frame(60);
 var objs = [scene.find("Floor"),
@@ -70,7 +72,7 @@ project.create("as1 soak world", { template: "world" });
 editor.frame(120);
 app.waitForAsyncShaders();
 editor.frame(10);
-console.log("AS1SOAK " + JSON.stringify({ applied: applied, maxPending: maxPending, stats: s1,
+console.log("AS1SOAK " + JSON.stringify({ start: s0, applied: applied, maxPending: maxPending, stats: s1,
                                           live: liveBeforeBlocking, pendingAtShot: pendingAtShot,
                                           shot: shot, pendingAtSwitch: pendingAtSwitch,
                                           after: app.asyncShaders() }));

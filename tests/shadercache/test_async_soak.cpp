@@ -66,14 +66,18 @@ int main(int argc, char **argv)
     CHECK(validation == 0, "no validation message");
     CHECK(!r.isEmpty(), "the run reported");
     if (r.isEmpty()) { std::printf("%s\n", qPrintable(out.right(4000))); return 1; }
-    const QJsonObject st = r.value("stats").toObject(), after = r.value("after").toObject();
+    const QJsonObject st = r.value("stats").toObject(), after = r.value("after").toObject(),
+                      start = r.value("start").toObject();
+    // The soak's own draws (the session's counters minus the startup gate's sweep).
+    const double ownPlaceholders = st.value("placeholderDraws").toDouble() -
+                                   start.value("placeholderDraws").toDouble();
     std::printf("    applied %d  maxPending %d  completed %d  placeholderDraws %lld  live %d  "
                 "pending at the shot %d  at the switch %d\n",
                 r.value("applied").toInt(), r.value("maxPending").toInt(), st.value("completed").toInt(),
-                (long long)st.value("placeholderDraws").toDouble(), r.value("live").toInt(),
+                (long long)ownPlaceholders, r.value("live").toInt(),
                 r.value("pendingAtShot").toInt(), r.value("pendingAtSwitch").toInt());
     CHECK(r.value("applied").toInt() == 50, "50 material applies");
-    CHECK(st.value("completed").toInt() > 0 && st.value("placeholderDraws").toDouble() > 0,
+    CHECK(st.value("completed").toInt() > start.value("completed").toInt() && ownPlaceholders > 0,
           "the background compiler built permutations and the view drew placeholders");
     CHECK(r.value("live").toInt() == 0, "no UI-thread compile while the asynchronous view flew");
     CHECK(QFileInfo::exists(r.value("shot").toObject().value("path").toString()),
