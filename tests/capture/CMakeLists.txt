@@ -21,6 +21,9 @@ jah_pool_arm(capture ui ${CMAKE_CURRENT_SOURCE_DIR}/scripts/capture_ui.js 20)
 # capture.failure — no encoder, an unwritable folder and an encoder error mid-recording each
 #   end cleanly with one message (and no published file); the next recording works.
 jah_pool_arm(capture failure ${CMAKE_CURRENT_SOURCE_DIR}/scripts/capture_failure.js 15)
+# capture.abandon — quit while saving: the shutdown's abandonSave publishes the encoder's own
+#   complete file at the final path (playable, said in the warning), never only a hidden raw file.
+jah_pool_arm(capture abandon ${CMAKE_CURRENT_SOURCE_DIR}/scripts/capture_abandon.js 10)
 jah_add_pool(capture TIER epic LABELS scripting capture)
 
 # capture.faststart — the fast-start step (src/modules/capture/mp4faststart.cpp) on SYNTHETIC

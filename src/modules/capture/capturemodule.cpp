@@ -289,6 +289,9 @@ void CaptureModule::shutdown()
         if (mRecorder->recording()) mRecorder->stop();
         // The encoder's own stop is asynchronous: give it the shell's budget.
         mRecorder->waitFinished(3000);
+        // A SAVE STILL RUNNING is not thrown away: the encoder's own complete
+        // file is published at the final path (VideoRecorder::abandonSave).
+        mRecorder->abandonSave();
     }
     if (mFailureDialog) mFailureDialog->close();
     if (mMenu) mMenu->close();

@@ -25,6 +25,7 @@ For more information see the LICENSE file
 #include <QRegularExpression>
 #include <QStandardPaths>
 #include <QTemporaryFile>
+#include <QThread>
 #include <QTimer>
 #include <QUrl>
 #include <QVideoFrameInput>
@@ -143,6 +144,16 @@ void nv12ToRgb(const unsigned char *nv12, int w, int h, QImage &out)
     }
 }
 
+/// A recording's leftovers can be gigabytes: unlinking one is disk work, so it
+/// runs on the pool (the shell's quit waits for the pool), never on the UI thread.
+void removeOffThread(const QStringList &paths)
+{
+    QStringList live;
+    for (const QString &p : paths) if (!p.isEmpty()) live << p;
+    if (live.isEmpty()) return;
+    (void)QtConcurrent::run([live]() { for (const QString &p : live) QFile::remove(p); });
+}
+
 }   // namespace
 
 VideoRecorder::VideoRecorder(IEditorViewport *viewport, std::function<QString()> sceneName,
@@ -150,39 +161,62 @@ VideoRecorder::VideoRecorder(IEditorViewport *viewport, std::function<QString()>
     : QObject(parent), mViewport(viewport), mSceneName(std::move(sceneName))
 {
     connect(&mFastStart, &QFutureWatcher<QString>::finished, this, [this]() {
-        const QString error = mFastStart.result();
-        QString renameError;
-        if (error.isEmpty()) {
-            // ONE rename(2) THAT REPLACES (RENAME-ATOMIC-1): the destination is
-            // nothing until the instant it is the whole, playable file.
-            if (FileWrite::atomicRename(mPartialPath, mFinalPath, &renameError)) {
-                QFile::remove(mRawPath);
-            } else {
-                fail(QStringLiteral("the recording could not be moved into place: %1").arg(renameError));
-                return;
-            }
-        } else {
-            // The encoder's own file is complete and plays; only the index is at
-            // the end. Published as it is, and said so — never a lost recording.
-            QFile::remove(mPartialPath);
-            if (!FileWrite::atomicRename(mRawPath, mFinalPath, &renameError)) {
-                fail(QStringLiteral("the recording could not be moved into place: %1").arg(renameError));
-                return;
-            }
-            mWarning = QStringLiteral("saved without fast-start (%1)").arg(error);
-        }
-        mLastPath = mFinalPath;
-        setState(State::Done);
-        emit finished(true, mFinalPath, QString());
+        if (mState == State::Finishing && mFastStartRunning) publish(mFastStart.result(), true);
     });
+}
+
+bool VideoRecorder::publish(const QString &fastStartError, bool notify)
+{
+    mFastStartRunning = false;
+    QString renameError;
+    if (fastStartError.isEmpty()) {
+        // ONE rename(2) THAT REPLACES (RENAME-ATOMIC-1): the destination is
+        // nothing until the instant it is the whole, playable file.
+        if (!FileWrite::atomicRename(mPartialPath, mFinalPath, &renameError)) {
+            if (notify) fail(QStringLiteral("the recording could not be moved into place: %1").arg(renameError));
+            return false;
+        }
+        removeOffThread({ mRawPath });
+    } else {
+        // The encoder's own file is complete and plays; only the index is at
+        // the end. Published as it is, and said so — never a lost recording.
+        removeOffThread({ mPartialPath });
+        if (!FileWrite::atomicRename(mRawPath, mFinalPath, &renameError)) {
+            if (notify) fail(QStringLiteral("the recording could not be moved into place: %1").arg(renameError));
+            return false;
+        }
+        mWarning = QStringLiteral("saved without fast-start (%1)").arg(fastStartError);
+    }
+    mLastPath = mFinalPath;
+    if (!notify) { mState = State::Done; return true; }
+    setState(State::Done);
+    emit finished(true, mFinalPath, QString());
+    return true;
+}
+
+bool VideoRecorder::abandonSave()
+{
+    // WHAT QUITTING DOES TO A RECORDING STILL BEING SAVED (the fix round's
+    // defect 1): the fast-start worker is stopped and the ENCODER'S OWN file —
+    // complete, playable, its index at the end — is published at the final
+    // path, said in the status's warning. Never a hidden raw file and no file.
+    if (mState != State::Finishing || !mFastStartRunning) return false;
+    if (mCancel) mCancel->store(true);
+    mFastStart.waitForFinished();
+    const QString error = mFastStart.result();
+    const bool ok = publish(error.isEmpty() ? error : QStringLiteral("the app quit while it ran"), false);
+    if (ok) qWarning("capture: %s — %s", qPrintable(mFinalPath), qPrintable(mWarning.isEmpty() ? QStringLiteral("saved") : mWarning));
+    emit stateChanged();
+    return ok;
 }
 
 VideoRecorder::~VideoRecorder()
 {
+    abandonSave();
     if (mCancel) mCancel->store(true);
     mFastStart.waitForFinished();
     teardownView();
-    teardownEncoder();
+    teardownEncoder(true);
 }
 
 QString VideoRecorder::stateName(State s)
@@ -227,6 +261,8 @@ bool VideoRecorder::start(const Options &options, QString *why)
         if (why) *why = reason;
         return false;
     };
+    QElapsedTimer clickTimer;
+    clickTimer.start();
     if (mState == State::Recording) return refuse(QStringLiteral("a recording is already running"));
     if (mState == State::Finishing) return refuse(QStringLiteral("the last recording is still being saved"));
     if (!mViewport) return refuse(QStringLiteral("there is no editor viewport"));
@@ -248,7 +284,7 @@ bool VideoRecorder::start(const Options &options, QString *why)
     mFinalPath = path;
     mRawPath = dir + QStringLiteral("/.") + fi.completeBaseName() + QStringLiteral(".recording.mp4");
     mPartialPath = path + QStringLiteral(".partial");
-    QFile::remove(mRawPath);
+    removeOffThread({ mRawPath });
 
     // ---- the encoder: H.264 into MPEG-4, or no recording at all --------------
     QMediaFormat format(QMediaFormat::MPEG4);
@@ -307,11 +343,15 @@ bool VideoRecorder::start(const Options &options, QString *why)
     mEndPending = mEndSent = false;
     mEncoderName.clear();
     mEncoderHardware = false;
+    mFaultSent = false;
+    mFastStartRunning = false;
     mWall.start();
     mStopWallMs = 0;
     spyListen(true);
     setState(State::Recording);
     mRecorder->record();
+    // THE CLICK'S OWN COST on the UI thread (the view, the session, the encoder's open).
+    mStartMs = double(clickTimer.nsecsElapsed()) / 1e6;
     return true;
 }
 
@@ -388,9 +428,16 @@ void VideoRecorder::flush()
     }
     // THE INJECTED ENCODER ERROR (capture.start fault "encoderError"): the very
     // path a real errorOccurred takes, once the encoder has a frame.
-    if (mOptions.fault == QLatin1String("encoderError") && mSent > 0 && mState == State::Recording) {
-        fail(QStringLiteral("the encoder failed: a fault injected by capture.start({fault: \"encoderError\"})"));
-        return;
+    if (mOptions.fault == QLatin1String("encoderError") && mSent > 0 && mState == State::Recording &&
+        !mFaultSent) {
+        mFaultSent = true;
+        // EMITTED BY THE RECORDER, queued: the handler runs exactly as for a real
+        // error — inside the recorder's own emission.
+        QMediaRecorder *r = mRecorder.get();
+        QMetaObject::invokeMethod(r, [r]() {
+            emit r->errorOccurred(QMediaRecorder::ResourceError,
+                                  QStringLiteral("a fault injected by capture.start({fault: \"encoderError\"})"));
+        }, Qt::QueuedConnection);
     }
     if (mEncoderName.isEmpty() && mSent > 0) {
         mEncoderName = spyName(&mEncoderHardware);
@@ -434,9 +481,15 @@ void VideoRecorder::startFastStart()
     mCancel = std::make_shared<std::atomic<bool>>(false);
     const QString raw = mRawPath, partial = mPartialPath;
     const std::shared_ptr<std::atomic<bool>> cancel = mCancel;
+    // A TEST INSTRUMENT (`fault: "slowSave"`): the save holds until it is
+    // cancelled — what a multi-GB file looks like when the app quits.
+    const bool slow = mOptions.fault == QLatin1String("slowSave");
+    mFastStartRunning = true;
     // On a WORKER: the media is streamed through once, which for a long
     // recording is seconds of disk.
-    mFastStart.setFuture(QtConcurrent::run([raw, partial, cancel]() -> QString {
+    mFastStart.setFuture(QtConcurrent::run([raw, partial, cancel, slow]() -> QString {
+        for (int i = 0; slow && !cancel->load() && i < 6000; ++i) QThread::msleep(10);
+        if (slow) return QStringLiteral("cancelled");
         QString error;
         if (!mp4::fastStart(raw, partial, &error, cancel.get())) {
             QFile::remove(partial);
@@ -462,7 +515,9 @@ bool VideoRecorder::stop(QString *why)
     }
     teardownView();
     if (mNextSlot == 0) {
-        fail(QStringLiteral("the recording ended before its first frame"));
+        // STOPPED DURING THE WARM-UP (a second click within a quarter second):
+        // nothing was recorded and nothing went wrong — a quiet cancel.
+        cancelQuietly();
         return true;
     }
     mEndPending = true;
@@ -475,6 +530,17 @@ bool VideoRecorder::escape()
     if (mState != State::Recording) return false;
     stop();
     return true;
+}
+
+void VideoRecorder::cancelQuietly()
+{
+    spyListen(false);
+    teardownView();
+    teardownEncoder();
+    removeOffThread({ mRawPath, mPartialPath });
+    mError.clear();
+    mWarning = QStringLiteral("cancelled before the first frame");
+    setState(State::Idle);
 }
 
 void VideoRecorder::fail(const QString &message)
@@ -491,8 +557,8 @@ void VideoRecorder::fail(const QString &message)
     teardownView();
     teardownEncoder();
     if (mCancel) mCancel->store(true);
-    QFile::remove(mRawPath);
-    QFile::remove(mPartialPath);
+    mFastStartRunning = false;
+    removeOffThread({ mRawPath, mPartialPath });
     setState(State::Failed);
     emit finished(false, QString(), mError);
 }
@@ -503,15 +569,24 @@ void VideoRecorder::teardownView()
     mView = nullptr;
 }
 
-void VideoRecorder::teardownEncoder()
+void VideoRecorder::teardownEncoder(bool now)
 {
     if (mRecorder) mRecorder->disconnect(this);
     if (mInput) mInput->disconnect(this);
     mQueue.clear();
-    // The session first (it holds the other two).
-    mSession.reset();
-    mInput.reset();
-    mRecorder.reset();
+    if (now) {
+        // The session first (it holds the other two).
+        mSession.reset();
+        mInput.reset();
+        mRecorder.reset();
+        return;
+    }
+    // DEFERRED: this runs inside the recorder's own recorderStateChanged /
+    // errorOccurred emission, and an object must not be deleted in its own
+    // signal. Posted in order, so the session still goes first.
+    if (mSession) mSession.release()->deleteLater();
+    if (mInput) mInput.release()->deleteLater();
+    if (mRecorder) mRecorder.release()->deleteLater();
 }
 
 bool VideoRecorder::waitFinished(int timeoutMs)
@@ -550,6 +625,7 @@ QVariantMap VideoRecorder::status() const
     m["encoderDropped"] = qulonglong(mEncoderDropped);
     m["elapsed"] = elapsedSeconds();
     m["warming"] = mState == State::Recording && mWarm > 0;
+    m["startMs"] = mStartMs;
     const jahshaka::engine::VideoReadbackStatus rb =
         mView ? mView->videoReadbackStatus() : jahshaka::engine::VideoReadbackStatus();
     m["dropped"] = qulonglong(rb.dropped);

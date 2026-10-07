@@ -69,8 +69,9 @@ public:
     struct Options {
         QString path;         ///< empty = ~/Videos/Jahshaka/<scene>_<date-time>.mp4
         bool helpers = false; ///< the editor's furniture in the picture (§10.5)
-        /// A TEST INSTRUMENT, the same failure path a real one takes: "noEncoder"
-        /// answers the encoder check with "none" (capture.failure).
+        /// TEST INSTRUMENTS, each on the path a real one takes: "noEncoder" answers
+        /// the encoder check with none, "encoderError" has the recorder emit
+        /// errorOccurred, "slowSave" holds the fast-start step until cancelled.
         QString fault;
     };
 
@@ -108,6 +109,10 @@ public:
     bool lastFrameImage(class QImage &out) const;
     /// The Esc route: stops a running recording, true when it did.
     bool escape();
+    /// QUIT WHILE SAVING: stops the fast-start worker and publishes the encoder's
+    /// own complete file at the final path (status warning "saved without
+    /// fast-start"). The destructor runs it; capture.abandon is the test door.
+    bool abandonSave();
 
     static QString stateName(State s);
 
@@ -127,8 +132,10 @@ private:
     void onRecorderState();
     void startFastStart();
     void fail(const QString &message);
+    void cancelQuietly();
+    bool publish(const QString &fastStartError, bool notify);
     void teardownView();
-    void teardownEncoder();
+    void teardownEncoder(bool now = false);
     void setState(State s);
     QString defaultPath() const;
 
@@ -160,6 +167,9 @@ private:
     QFutureWatcher<QString> mFastStart;
     std::shared_ptr<std::atomic<bool>> mCancel;
     QElapsedTimer mWall;
+    double mStartMs = 0.0;
+    bool mFastStartRunning = false;
+    bool mFaultSent = false;
     qint64 mStopWallMs = 0;
 };
 

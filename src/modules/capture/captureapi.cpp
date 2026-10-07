@@ -41,8 +41,10 @@ QVector<VerbInfo> CaptureApi::verbs() const
           "and icons into the picture. The first recorded frame comes after the view's warm-up "
           "(`warming` in the status). Null when it cannot start (no engine viewport, no world, "
           "no H.264 encoder, a folder that cannot be written), with the reason in app.lastError. "
-          "`fault: \"noEncoder\" | \"encoderError\"` is a test instrument: the same failure path "
-          "a real missing encoder or a mid-recording encoder error takes.",
+          "`fault: \"noEncoder\" | \"encoderError\" | \"slowSave\"` is a test instrument on the "
+          "path the real event takes: no encoder; the recorder emitting errorOccurred mid-recording; "
+          "a save that runs until it is cancelled (capture.abandon). A stop during the warm-up is a "
+          "quiet cancel (state idle, warning \"cancelled before the first frame\").",
           Needs::Engine },
         { "stop", "capture.stop({wait?, timeoutMs?}) -> status | null",
           "Ends the recording: the frames already on the GPU are drained, the recording view is "
@@ -52,7 +54,7 @@ QVector<VerbInfo> CaptureApi::verbs() const
           "event loop, at most `timeoutMs`, default 30000). Null when nothing is recording.",
           Needs::Engine },
         { "status", "capture.status() -> {state, recording, path, frames, armed, held, sent, queued, "
-          "dropped, encoderDropped, inFlight, elapsed, warming, encoder, hardwareEncoder, width, "
+          "dropped, encoderDropped, inFlight, elapsed, warming, startMs, encoder, hardwareEncoder, width, "
           "height, fps, bitRate, helpers, error?, warning?}",
           "The recorder now. `state` is idle | recording | finishing | done | failed; `frames` "
           "the video frames written (one per scene step, holds included), `held` how many were a "
@@ -65,6 +67,13 @@ QVector<VerbInfo> CaptureApi::verbs() const
         { "wait", "capture.wait(timeoutMs=30000) -> status",
           "Waits (a nested event loop) until the recorder is neither recording nor finishing, at "
           "most `timeoutMs`. A script's way to the finished file after capture.stop().",
+          Needs::Engine },
+        { "abandon", "capture.abandon() -> status",
+          "WHAT QUITTING DOES TO A RECORDING STILL BEING SAVED (the module's shutdown and the "
+          "recorder's destructor run it): the fast-start step is stopped and the encoder's own "
+          "complete file is published at the final path — playable, its index at the end — with "
+          "the status's `warning` saying so. A no-op unless the state is `finishing` with the "
+          "fast-start step running.",
           Needs::Engine },
         { "inspect", "capture.inspect(path, {decode?, timeoutMs?}) -> {ok, fastStart, moovOffset, "
           "mdatOffset, codec, width, height, timescale, duration, frames, keyframes, constantRate, "
@@ -120,8 +129,9 @@ QVariant CaptureApi::start(const QVariantMap &options)
     o.path = options.value(QStringLiteral("path")).toString();
     o.helpers = options.value(QStringLiteral("helpers"), false).toBool();
     o.fault = options.value(QStringLiteral("fault")).toString();
-    if (!o.fault.isEmpty() && o.fault != QLatin1String("noEncoder") && o.fault != QLatin1String("encoderError")) {
-        fail(QStringLiteral("capture.start: fault must be \"noEncoder\" or \"encoderError\""));
+    if (!o.fault.isEmpty() && o.fault != QLatin1String("noEncoder") && o.fault != QLatin1String("encoderError") &&
+        o.fault != QLatin1String("slowSave")) {
+        fail(QStringLiteral("capture.start: fault must be \"noEncoder\", \"encoderError\" or \"slowSave\""));
         return jsNull();
     }
     QString why;
@@ -160,6 +170,12 @@ QVariantMap CaptureApi::status()
         return m;
     }
     return r->status();
+}
+
+QVariantMap CaptureApi::abandon()
+{
+    if (VideoRecorder *r = mModule ? mModule->recorder() : nullptr) r->abandonSave();
+    return status();
 }
 
 QVariantMap CaptureApi::wait(int timeoutMs)

@@ -38,6 +38,7 @@ public:
     Q_INVOKABLE QVariant stop(const QVariantMap &options = QVariantMap());
     Q_INVOKABLE QVariantMap status();
     Q_INVOKABLE QVariantMap wait(int timeoutMs = 30000);
+    Q_INVOKABLE QVariantMap abandon();
     Q_INVOKABLE QVariantMap inspect(const QString &path, const QVariantMap &options = QVariantMap());
     Q_INVOKABLE bool lastFrame(const QString &path);
     Q_INVOKABLE bool press();

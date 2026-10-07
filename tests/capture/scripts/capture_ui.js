@@ -22,10 +22,21 @@ var b0 = capture.button();
 console.log("idle: " + JSON.stringify(b0));
 assert(b0.placed === true && b0.visible === true, "the button is placed beside the photo button");
 assert(b0.text === "Record" && b0.red === false && b0.recording === false, "idle: Record, not red");
+assert(b0.width >= 28, "a clickable button: " + b0.width + " px");
 
 // ---- Esc with nothing recording keeps its meaning (nothing to stop) ----
 editor.key("Esc");
 assert(capture.status().recording === false, "Esc with no recording starts nothing");
+
+// ---- press, press inside the warm-up: a quiet cancel, never the failure dialog ----
+assert(capture.press() === true, "press starts a recording");
+editor.frame(2, 1 / 60);
+assert(capture.status().warming === true, "still in the warm-up");
+assert(capture.press() === true, "a second press during the warm-up stops it");
+var bc = capture.button();
+var sc = capture.status();
+assert(sc.state === "idle" && sc.warning === "cancelled before the first frame", "a quiet cancel: " + sc.state);
+assert(bc.dialogOpen === false && bc.failure === "" && bc.red === false, "no failure dialog, not red");
 
 // ---- press -> recording, red, elapsed ----
 assert(capture.press() === true, "press starts a recording");
@@ -36,6 +47,7 @@ assert(b1.recording === true && b1.red === true, "recording: the red dot");
 assert(/^\d+:\d\d$/.test(b1.text), "the elapsed time on the button: " + b1.text);
 assert(b1.text === "0:01", "1.25 s of video reads 0:01");
 var st1 = capture.status();
+console.log("the click's own UI-thread time: " + st1.startMs + " ms");
 assert(st1.path.indexOf("/Videos/Jahshaka/") >= 0, "the default folder: " + st1.path);
 
 // ---- Esc stops it, only while recording ----
