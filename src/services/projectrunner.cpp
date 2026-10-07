@@ -9,6 +9,7 @@ and/or modify it under the terms of the MIT License
 For more information see the LICENSE file
 *************************************************************************/
 
+#include "services/encoderprobe.h"
 #include "services/projectrunner.h"
 
 #include <QCoreApplication>
@@ -493,6 +494,15 @@ void ProjectRunner::startOpenRun(bool playMode)
 	// nothing in the next process and warmed the default datablock instead; the
 	// whole machinery is deleted. The slice above, the per-scene PSO precache
 	// behind the cover, is what actually precompiles a world, and it stays.)
+	// QT'S VIDEO ENCODER PROBE, ONCE PER PROCESS (VIDEO-REC-2): the first open or
+	// create of a session makes it here, behind the open's progress (~0.7-1.0 s on
+	// the UI thread), so the session's first record click is a lookup. Never at
+	// boot (app.startup_quiet's Lane 6a guard); a later open skips the slice.
+	if (!encoderprobe::warmed())
+		slices.append({ QStringLiteral("Preparing the video recorder…"), 96, []() {
+			LoadTimeline::mark(QStringLiteral("encoderProbe"));
+			qInfo("scene open: the video encoder probe took %.0f ms", encoderprobe::warm());
+		} });
 	slices.append({ QStringLiteral("Precompiling shaders…"), 96,
 	                [this]() { mViewport->rememberPassShape(); } });
 	slices.append({ QStringLiteral("Opening…"), 100,
@@ -628,6 +638,15 @@ void ProjectRunner::startCreateRun(const QString &guid, const QString &filename,
     // RECORD the world's permutation set as well; the set named its materials
     // by a process-unique datablock name and warmed nothing in the next
     // process, so the machinery was deleted — WARMUPSET-2, 2026-09-21.)
+    // QT'S VIDEO ENCODER PROBE, ONCE PER PROCESS (VIDEO-REC-2): the first open or
+    // create of a session makes it here, behind the open's progress (~0.7-1.0 s on
+    // the UI thread), so the session's first record click is a lookup. Never at
+    // boot (app.startup_quiet's Lane 6a guard); a later open skips the slice.
+    if (!encoderprobe::warmed())
+        slices.append({ QStringLiteral("Preparing the video recorder…"), 96, []() {
+            LoadTimeline::mark(QStringLiteral("encoderProbe"));
+            qInfo("scene open: the video encoder probe took %.0f ms", encoderprobe::warm());
+        } });
     slices.append({ QStringLiteral("Precompiling shaders…"), 96,
                     [this]() { mViewport->rememberPassShape(); } });
     // THE INITIAL SAVE GOES LAST, AFTER THE WARM-UP. It ASKS for the project's

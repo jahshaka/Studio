@@ -249,6 +249,7 @@ public:
     bool planarReflectorAccepted(iris::SceneNodePtr node) const override;
     void renderFrames(int n) override;
     void renderFrames(int n, float dt) override;
+    void stepFrames(int n, float dt) override;
     bool canRenderFrames() const override;
     MirrorStats mirrorStats() const override;
     RigStatsInfo rigStats() const override;
@@ -388,7 +389,9 @@ public:
     /// One document->engine sync. `dt` >= 0 overrides the wall clock: that is
     /// what makes editor.frame(n, dt) deterministic in PLAY mode, where the
     /// document's animation clock is advanced by dt.
-    void syncFrame(float dtOverride = -1.0f);
+    /// `recordable` (VIDEO-REC-2): false for a frame OUTSIDE an offline
+    /// recording (a panel's refresh, a VR-pumping tick) — dt 0, nothing armed.
+    void syncFrame(float dtOverride = -1.0f, bool recordable = true);
 
     /// Picks the document object under a viewport pixel (legacy selection rule).
     /// `hitPoint` receives the world-space hit when a node is returned.
@@ -796,8 +799,16 @@ private:
     /// (syncRecordingView), and the recorder's hooks for its life.
     jahshaka::engine::View *mRecordView = nullptr;
     RecordingHooks mRecordHooks;
-    /// The per-frame push of the recording view, then the recorder's frame hook.
+    /// The per-frame push of the recording view (state only).
     void syncRecordingView();
+    /// The recorder's frame hook at the frame's LAST moment before its render,
+    /// and the recording view enabled only when the recorder draws this frame.
+    void armRecordingFrame(bool recordable);
+    /// An offline recording's backpressure on the SCRIPTED path: waits (event
+    /// loop, bounded) until the recorder can take a frame. False on the bound.
+    bool waitRecorderReady();
+    /// Set by stepFrames: the frames in flight are editor.frame's TIMELINE frames.
+    bool mTimelineFrames = false;
     /// The recording ends with the world or the page (the hooks' `ends`), once.
     void endRecordingForTeardown();
     bool mShowShadowAtlas = false;

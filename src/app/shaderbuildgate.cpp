@@ -24,6 +24,7 @@
 #include "viewport/gizmooverlay.h"
 #include "viewport/snapsettings.h"
 #include "viewport/translationgizmo.h"
+#include "viewport/recordingview.h"
 
 #include <functional>
 
@@ -107,6 +108,11 @@ constexpr int kWarmWorldFrameCap = 240;
 /// ...and "stopped" means this many frames in a row compiled nothing (ENGINE trap 7:
 /// frames, never a wall-clock wait).
 constexpr int kWarmWorldQuietFrames = 30;
+/// THE RECORDER'S VIEW (VIDEO-REC-2): drawn until no shader has compiled for
+/// this many frames (its chain compiles on its first frames; the NV12 job on
+/// the first ARMED frame), at most kWarmRecordFrameCap.
+constexpr int kWarmRecordQuietFrames = 8;
+constexpr int kWarmRecordFrameCap = 48;
 
 /// One shipped preset per sphere, in rows in front of the editor's default camera (a
 /// sphere the camera cannot see is culled and compiles nothing).
@@ -231,6 +237,37 @@ int warmEditorWorld(Engine &engine, View *view, const EngineHost::WarmUpShape &s
             frame();
             jahshaka::engine::Image tile;
             view->takeFrameCapture(tile, true);
+        }
+        // (4) THE VIDEO RECORDER'S VIEW (VIDEO-REC-2): the view a recording draws
+        // (recordingview::create — the recorder's own builder, at the recording's
+        // size), pushed as the recorder pushes it, every frame ARMED so the NV12
+        // compute job dispatches. Measured in VIDEO-REC-1: the session's FIRST
+        // recording compiled this on the UI thread (a 585 ms click). Scene only —
+        // the switch's default; the helpers' shaders are the editor view's above.
+        {
+            QString why;
+            View *rv = recordingview::create(engine, es, "startup-warmup-recording", recordingview::kWidth,
+                                             recordingview::kHeight, /*helpers*/ false, &why);
+            if (rv) {
+                unsigned c = 0, f = 0, e = 0;
+                engine.shaderBuildProgress(c, f, e);
+                unsigned last = c + f;
+                int quiet = 0;
+                jahshaka::engine::VideoFrameNv12 picture;
+                for (int i = 0; i < kWarmRecordFrameCap && quiet < kWarmRecordQuietFrames; ++i) {
+                    recordingview::push(mirror, rv, camera, 0.0f);
+                    rv->armVideoFrame(quint64(i));
+                    frame();
+                    while (rv->takeVideoFrame(picture, false)) {}
+                    engine.shaderBuildProgress(c, f, e);
+                    quiet = (c + f == last) ? quiet + 1 : 0;
+                    last = c + f;
+                }
+                while (rv->takeVideoFrame(picture, true)) {}
+                engine.destroyView(rv);
+            } else {
+                qWarning("startup shader build: the recorder's view could not be made: %s", qPrintable(why));
+            }
         }
         view->setScene(nullptr);
         mirror.setSource(nullptr);

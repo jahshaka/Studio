@@ -80,4 +80,26 @@ assert(b3.toolTip.indexOf(done2.path.split("/").pop()) >= 0, "and the tooltip sa
 assert(b3.menuOpen === false, "nothing popped up by itself");
 var f = capture.inspect(done2.path);
 assert(f.ok && f.fastStart && f.width === 1920, "the button's file is a fast-start 1080p MP4");
+// ---- THE MODE SWITCH (VIDEO-REC-2): real time by default; offline from the popup ----
+assert(capture.mode() === "realtime", "the mode is real time by default");
+var bm = capture.button();
+assert(bm.mode === "realtime" && bm.menu.join("|").indexOf("Offline") >= 0 && bm.menu.join("|").indexOf("Real time") >= 0,
+       "the popup holds the two modes: " + bm.menu.join(" | "));
+assert(capture.mode("offline") === "offline" && capture.button().mode === "offline", "the switch set to offline");
+assert(capture.press() === true, "press records offline");
+assert(capture.status().mode === "offline", "the press took the switch's mode");
+steps(16 + 70);
+var bo = capture.button();
+console.log("offline: " + JSON.stringify(bo));
+assert(bo.red === true && /^\d+:\d\d \/ \d+:\d\d$/.test(bo.text), "the clip time against the wall time: " + bo.text);
+assert(bo.text.indexOf("0:01 /") === 0, "70 recorded frames read 0:01 of clip: " + bo.text);
+assert(bo.toolTip.indexOf("OFFLINE") >= 0, "the tooltip says offline");
+assert(capture.press() === true, "press stops it");
+capture.wait(30000);
+var so = capture.status();
+assert(so.state === "done" && so.frames === 70 && so.held === 0, "an offline file of 70 frames: " + so.frames);
+var threw = false;
+try { capture.mode("sideways"); } catch (e) { threw = true; }
+assert(threw, "an unknown mode is refused (a thrown misuse)");
+assert(capture.mode("realtime") === "realtime", "back to real time");
 console.log("capture.ui: PASS");

@@ -32,6 +32,8 @@
 #include <QDragMoveEvent>
 #include <QDropEvent>
 #include <QMimeData>
+#include <QEventLoop>
+#include <QTimer>
 #include <QDataStream>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -74,6 +76,7 @@
 #include "irisgl/document/physics/environment.h"
 #include "irisgl/document/scenegraph/lightnode.h"
 #include "irisgl/document/scenegraph/scene.h"
+#include "viewport/recordingview.h"
 #include "irisgl/document/scenegraph/scenenode.h"
 #include "irisgl/document/scenegraph/cameranode.h"
 #include "data/settingsmanager.h"
@@ -121,8 +124,26 @@ EngineSceneViewport::EngineSceneViewport(const std::shared_ptr<Engine> &engine,
             // View::framesPresented is not one: it RESETS to 0 whenever a scene
             // is bound, which made a close/reopen of the same world collide with
             // a previous cover and skip the present that should have raised it.
+            // THE OFFLINE RECORDER'S BACKPRESSURE (VIDEO-REC-2): its encoder
+            // queue is full or a video texture's next frame has not landed, so
+            // this tick neither syncs nor renders — the scene clock does not move
+            // and no temporal state steps without a recorded frame; the event loop
+            // runs on (the driver beats at its held interval, no spin) and the
+            // encoder drains. Never a dropped frame.
+            // ...EXCEPT A VR-PUMPING TICK, which must render (it is the session's
+            // heartbeat): it is drawn as a frame OUTSIDE the recording — dt 0,
+            // nothing armed, the recording view disabled.
+            bool recordable = true;
+            if (mRecordView && mRecordHooks.offline) {
+                if (mDriver && mDriver->vrPumping()) {
+                    recordable = false;
+                } else if (const std::function<bool()> hold = mRecordHooks.hold; hold && hold()) {
+                    if (mDriver) mDriver->holdThisTick();
+                    return;
+                }
+            }
             ++mFrameEpoch;
-            syncFrame();
+            syncFrame(-1.0f, recordable);
             // WHAT THE LAST FRAME LEFT OWED (OPEN_COVER_SPEC §2.1, lane
             // OPEN-COVER-2b). Sampled HERE, once per driver tick and before the
             // overlay is composed, because two of its three numbers are
@@ -158,6 +179,18 @@ EngineSceneViewport::EngineSceneViewport(const std::shared_ptr<Engine> &engine,
                 // endSceneLoad, and deliberately sticky across clearScene.
                 if (!mWorldArriving && mStreamFramesLeft > 0) --mStreamFramesLeft;
             }
+            // THE RECORDER ARMS LAST (VIDEO-REC-2): after refreshOverlay, whose
+            // cover can present frames INLINE — an arm set before it would be
+            // spent on one of those instead of this tick's own render.
+            armRecordingFrame(recordable);
+        });
+    if (mDriver)
+        // ...and the recording view is drawn ONLY in the frame it was armed for:
+        // every other renderOneFrame (a screenshot's settle, a cover, a panel's
+        // refresh) skips it, so its histories step once per recorded frame and
+        // a 1080p render is never paid for a frame nobody records.
+        connect(mDriver, &EngineRenderDriver::afterFrame, this, [this]() {
+            if (mRecordView) mRecordView->setEnabled(false);
         });
 }
 
@@ -2433,7 +2466,7 @@ EditorData *EngineSceneViewport::getEditorData()
     return mEditorData;
 }
 
-void EngineSceneViewport::syncFrame(float dtOverride)
+void EngineSceneViewport::syncFrame(float dtOverride, bool recordable)
 {
     // A presented-frame capture drawn on an earlier tick answers here, once its
     // fence has signalled (CLOSE-SHOT-2) — never a wait.
@@ -2448,7 +2481,19 @@ void EngineSceneViewport::syncFrame(float dtOverride)
     // would drift the grid against the wall.
     const float wall = float(double(mFrameTimer.nsecsElapsed()) * 1e-9);
     mFrameTimer.restart();
-    const float dt = dtOverride >= 0.0f ? dtOverride : wall;
+    // ...UNLESS AN OFFLINE RECORDING RUNS (VIDEO-REC-2): then a RECORDABLE
+    // frame (a driver tick, a script's editor.frame) IS one video frame, and
+    // the clock is handed exactly ONE grid step for it — not the wall time it
+    // took (a 50 ms Debug frame would buy three steps and the clip would jump),
+    // not a script's dt — so the document, the particles and the shader clock
+    // advance 1/60 s per recorded frame however slowly the editor runs. The
+    // clock's epsilon makes the float step count as one whole step, and a
+    // carried remainder (< one step) can never buy a second. Any OTHER frame
+    // (a panel's refresh, a VR-pumping tick) is outside the recording: dt 0,
+    // so the clip never skips the time it would have taken.
+    const bool offlineStep = mRecordView && mRecordHooks.offline;
+    const float dt = offlineStep ? (recordable ? float(iris::SimulationClock::kStepSeconds) : 0.0f)
+                                 : (dtOverride >= 0.0f ? dtOverride : wall);
     // THE ONE CLOCK (ENGINEERING_DEBT_SPEC A4.2): `dt` goes to the document's
     // SimulationClock through exactly one of these two calls, and the seconds
     // it converts into grid steps come back as `simulated` — physics and
@@ -2595,7 +2640,8 @@ void EngineSceneViewport::syncFrame(float dtOverride)
         syncPip();
     }
     // THE RECORDER'S VIEW, BESIDE THIS ONE (VIDEO-REC-1): the same camera, sky and
-    // grade, pushed every synced frame, then the recorder takes and arms frames.
+    // grade, pushed every synced frame (the recorder arms at the frame's last
+    // moment, armRecordingFrame).
     if (mRecordView) syncRecordingView();
     // A SCRIPTED step (editor.frame(n, dt)) has to be deterministic for the
     // particles too. They are simulated inside the engine, which has NO clock
@@ -2974,6 +3020,15 @@ IEditorViewport::GiStatusInfo EngineSceneViewport::giStatus() const
     return out;
 }
 
+void EngineSceneViewport::stepFrames(int n, float dt)
+{
+    // editor.frame's own frames: TIMELINE frames (see renderFrames).
+    const bool was = mTimelineFrames;
+    mTimelineFrames = true;
+    renderFrames(n, dt);
+    mTimelineFrames = was;
+}
+
 void EngineSceneViewport::renderFrames(int n)
 {
     renderFrames(n, -1.0f);
@@ -3000,7 +3055,13 @@ void EngineSceneViewport::renderFrames(int n, float dt)
     // chain is driven by absolute time.
     if (!mEngine) return;
     for (int i = 0; i < n; ++i) {
-        syncFrame(dt);
+        // AN OFFLINE RECORDING RECORDS ONLY TIMELINE FRAMES (VIDEO-REC-2): a
+        // script's editor.frame (stepFrames) is one; a panel's refresh or a
+        // screenshot's settle is not, and draws with dt 0 and nothing armed.
+        const bool offline = mRecordView && mRecordHooks.offline;
+        const bool recordable = !offline || mTimelineFrames;
+        if (offline && recordable) waitRecorderReady();
+        syncFrame(dt, recordable);
         // The indicator's reading is per FRAME THIS VIEWPORT DREW, whoever
         // drove it (OPEN_COVER_SPEC §2.1): the open runner's slice boundaries
         // come through here, and during a load they are most of the frames.
@@ -3012,7 +3073,9 @@ void EngineSceneViewport::renderFrames(int n, float dt)
         // it to Driver on every frame.
         if (framemonitor::active())
             mEngine->setNextFrameCause(jahshaka::engine::FrameCause::Scripted);
+        armRecordingFrame(recordable);
         mEngine->renderOneFrame();
+        if (mRecordView) mRecordView->setEnabled(false);
         // ...and a compile it caused is said like a driver frame's (SHADER-WARM-2).
         livecompiles::check("a scripted frame");
         // ...and the device-loss end for the same reason (lane XID-2): a
@@ -3526,33 +3589,24 @@ jahshaka::engine::View *EngineSceneViewport::beginRecordingView(unsigned width, 
     if (!mEngineScene || !mScene) return refuse(QStringLiteral("no world is open"));
     if (mRecordView) return refuse(QStringLiteral("a recording is already running"));
     if (width == 0 || height == 0) return refuse(QStringLiteral("the recording has no size"));
-    jahshaka::engine::View *rv = mEngine->createOffscreenView(
-        "recording-" + std::to_string(++mViewSerial), width, height, Colour(0.10f, 0.11f, 0.14f));
-    if (!rv) return refuse(QString::fromStdString(mEngine->lastError()));
-    rv->setOffscreenContract(jahshaka::engine::OffscreenContract::StillPicture);
-    // THE SWITCH (owner §10.5): the helper channel of the view's passes — graph
-    // shape, set once here. The engine ANDs the mask with its reserved flags
-    // (ENGINE trap 6 lives inside setHelpersVisible). The wearer's VR channel
-    // stays shut: a recording of the desk is never a recording of a headset.
-    rv->setHelpersVisible(helpers);
-    if (!rv->setScene(mEngineScene)) {
-        const QString reason = QString::fromStdString(mEngine->lastError());
-        mEngine->destroyView(rv);
-        return refuse(reason);
-    }
-    if (!rv->setVideoReadback(true)) {
-        const QString reason = QString::fromStdString(mEngine->lastError());
-        mEngine->destroyView(rv);
-        return refuse(reason);
-    }
+    // OFFLINE WHILE A HEADSET IS ON (VIDEO-REC-2): one 1/60 s step per recorded
+    // frame would run the wearer's world at the recording's pace — refused.
+    if (hooks.offline && mEngine->vrView())
+        return refuse(QStringLiteral("offline recording is not available while a VR session is live: "
+                                     "it steps the world one 1/60 s per recorded frame, which the headset "
+                                     "would show sped up or slowed down — end the VR session, or record "
+                                     "in real time"));
+    QString viewWhy;
+    jahshaka::engine::View *rv = recordingview::create(*mEngine, mEngineScene,
+                                                       "recording-" + std::to_string(++mViewSerial),
+                                                       width, height, helpers, &viewWhy);
+    if (!rv) return refuse(viewWhy);
+    // Drawn only in the frames the recorder asks for (armRecordingFrame).
+    rv->setEnabled(false);
     mRecordView = rv;
     mRecordHooks = std::move(hooks);
     // The first push now, so the seed below is derived from the right description.
-    if (mMirror) {
-        mMirror->applySky(rv);
-        mMirror->applyViewEnvironment(rv, viewCamera(), /*offscreenChain=*/true);
-        if (viewCamera()) mMirror->applyCamera(viewCamera(), rv, freeCameraFramingAspect());
-    }
+    if (mMirror) recordingview::push(*mMirror, rv, viewCamera(), freeCameraFramingAspect());
     const float measured = view()->measuredExposureScale();
     if (measured > 0.0f) rv->seedExposureHistory(measured);
     else rv->resetExposureHistory();
@@ -3562,16 +3616,52 @@ jahshaka::engine::View *EngineSceneViewport::beginRecordingView(unsigned width, 
 void EngineSceneViewport::syncRecordingView()
 {
     if (!mRecordView) return;
-    if (mMirror) {
-        mMirror->applySky(mRecordView);
-        // The per-view half only (never applyEnvironment twice: its scene half
-        // counts GI settle frames), the whole chain in ONE push.
-        mMirror->applyViewEnvironment(mRecordView, viewCamera(), /*offscreenChain=*/true);
-        if (viewCamera()) mMirror->applyCamera(viewCamera(), mRecordView, freeCameraFramingAspect());
+    // The per-view half only (never applyEnvironment twice: its scene half
+    // counts GI settle frames), the whole chain in ONE push.
+    if (mMirror) recordingview::push(*mMirror, mRecordView, viewCamera(), freeCameraFramingAspect());
+}
+
+void EngineSceneViewport::armRecordingFrame(bool recordable)
+{
+    if (!mRecordView) return;
+    // AN OFFLINE RECORDING ENDS WHEN A VR SESSION GOES LIVE: its one step per
+    // recorded frame would run the wearer's world at the recording's pace (1.5x
+    // at a 40 fps editor, 2.4x on a 144 Hz panel). The file is finished as it is.
+    if (mRecordHooks.offline && mEngine && mEngine->vrView()) {
+        if (const std::function<void()> ends = mRecordHooks.ends) ends();
+        return;
     }
+    bool draw = false;
     // COPIED BEFORE IT IS CALLED: the hook may end the recording (a failure).
-    if (const std::function<void(quint64)> frame = mRecordHooks.frame)
-        frame(mScene ? quint64(mScene->clock.steps()) : 0u);
+    if (recordable)
+        if (const std::function<bool(quint64)> frame = mRecordHooks.frame)
+            draw = frame(mScene ? quint64(mScene->clock.steps()) : 0u);
+    // DRAWN ONLY WHEN THE RECORDER WANTS THIS FRAME (its warm-up or an armed
+    // one); disabled again right after the render (afterFrame / renderFrames).
+    if (mRecordView) mRecordView->setEnabled(draw);
+}
+
+bool EngineSceneViewport::waitRecorderReady()
+{
+    // THE SCRIPTED PATH'S BACKPRESSURE (an editor.frame of an offline
+    // recording): the driver's ticks are held instead, but a script's frame is
+    // one the script asked for, so it WAITS — the event loop runs (the encoder
+    // drains, a video texture's frame lands), bounded at 10 s.
+    const std::function<bool()> hold = mRecordHooks.hold;
+    if (!hold || !hold()) return true;
+    QEventLoop loop;
+    QTimer poll, deadline;
+    poll.setInterval(EngineRenderDriver::kHeldIntervalMs);
+    deadline.setSingleShot(true);
+    bool ready = false;
+    connect(&poll, &QTimer::timeout, &loop, [&]() {
+        if (!mRecordView || !mRecordHooks.hold || !mRecordHooks.hold()) { ready = true; loop.quit(); }
+    });
+    connect(&deadline, &QTimer::timeout, &loop, &QEventLoop::quit);
+    poll.start();
+    deadline.start(10000);
+    loop.exec();
+    return ready;
 }
 
 void EngineSceneViewport::endRecordingView()

@@ -4,6 +4,8 @@
 #include <QElapsedTimer>
 #include <QTimer>
 
+#include <utility>
+
 #include "services/engineerrorpump.h"
 #include "services/framemonitor.h"
 #include "services/jahlog.h"
@@ -148,16 +150,32 @@ EngineRenderDriver::EngineRenderDriver(jahshaka::engine::Engine *engine, QObject
         jahshaka::engine::StreamingWork owedBefore;
         if (mEngine) owedBefore = mEngine->streamingWork();
         const bool anythingToDraw = mEngine && mEngine->hasEnabledViews();
+        // A subscriber held this tick (holdThisTick: the offline recorder's
+        // backpressure). Still "drawing" — the views are up — but no frame.
+        // A VR-pumping tick is never held: its render is the session's heartbeat.
+        const bool held = std::exchange(mHoldTick, false) && !vrPumping();
+        const bool rendering = anythingToDraw && !held;
+        // NO SPIN WHILE HELD: an Unlimited (0 ms) or fast pacing beats no faster
+        // than kHeldIntervalMs while ticks are held; the pacing's own interval
+        // returns with the first tick that renders.
+        if (held && !mHeldPacing && mTimer->interval() < kHeldIntervalMs) {
+            mHeldPacing = true;
+            mTimer->start(kHeldIntervalMs);
+        } else if (!held && mHeldPacing) {
+            mHeldPacing = false;
+            if (mTimer->isActive()) mTimer->start(pacedIntervalMs());
+        }
         // THE LIVE STATE, not a lifetime counter (owner review answer Q3): the
         // tick that draws nothing no longer increments anything at all — it
         // simply says so, and `ticks - rendered` is still there for a caller
         // who wants the total.
         mStats.drawing = anythingToDraw;
-        if (anythingToDraw) {
+        if (rendering) {
             mEngine->renderOneFrame();
             ++mStats.rendered;
             mDrawn.add(nowMs());
         }
+        emit afterFrame();
 
         // THE GPU IS GONE: SAY SO AND END, NEVER FREEZE (lane XID-2, 2026-09-17).
         // The one render loop is the one place that can notice. After a device
@@ -202,7 +220,7 @@ EngineRenderDriver::EngineRenderDriver(jahshaka::engine::Engine *engine, QObject
         // Only RENDERED ticks are banked — a skipped tick costs ~nothing and
         // would drag the average toward zero while the user sits on a page
         // with no viewport.
-        if (anythingToDraw) {
+        if (rendering) {
             mWork[mWorkNext] = ms;
             mWorkNext = (mWorkNext + 1) % kWorkWindow;
             if (mWorkFilled < kWorkWindow) ++mWorkFilled;
@@ -215,7 +233,7 @@ EngineRenderDriver::EngineRenderDriver(jahshaka::engine::Engine *engine, QObject
         // process where a frame has just finished, and re-arms the gap clock —
         // only for ticks that actually rendered (a skipped tick keeps the clock
         // running, so an absence arrives as one gap instead of none).
-        FrameMonitor::instance().noteTickEnd(anythingToDraw);
+        FrameMonitor::instance().noteTickEnd(rendering);
         if (ms >= kSlowFrameMs) {
             ++mStats.slowFrames;
             // …and into the rolling minute, which is what the readout shows.

@@ -22,9 +22,15 @@ For more information see the LICENSE file
 //                 BT.709, limited range, on the display codes);
 //   the readback  a ring of three AsyncTextureTickets, polled once a frame —
 //                 the UI thread never waits on the GPU;
-//   the time      the SCENE's clock (the 1/60 s grid, §10.3): a video frame per
-//                 grid step, a slow editor frame HELD across the steps it
-//                 spanned (the same picture sent again), never a sped-up file;
+//   the time      REAL-TIME (the default): the SCENE's clock (the 1/60 s grid,
+//                 §10.3): a video frame per grid step, a slow editor frame HELD
+//                 across the steps it spanned (the same picture sent again),
+//                 never a sped-up file;
+//                 OFFLINE (VIDEO-REC-2, §2.3's "perfect 60"): every synced frame
+//                 IS a video frame and the scene clock is handed exactly one
+//                 1/60 s step for it (RecordingHooks::offline), so every frame is
+//                 a new simulation step and nothing is ever held or dropped; the
+//                 editor runs as slowly as it must, the clip is a true 60;
 //   the encoder   Qt's QVideoFrameInput -> QMediaCaptureSession -> QMediaRecorder,
 //                 NV12 frames (which is what makes Qt pick the hardware H.264
 //                 encoder, §9), the format-less input constructor (Qt's bug, §9);
@@ -53,6 +59,7 @@ For more information see the LICENSE file
 #include <vector>
 
 #include "jahshaka/engine/Types.h"
+#include "viewport/recordingview.h"
 
 namespace jahshaka { namespace engine { class View; } }
 
@@ -66,22 +73,32 @@ class VideoRecorder : public QObject
     Q_OBJECT
 public:
     enum class State { Idle, Recording, Finishing, Done, Failed };
+    /// How the recording's time is made (see the file's note).
+    enum class Mode { Realtime, Offline };
     struct Options {
         QString path;         ///< empty = ~/Videos/Jahshaka/<scene>_<date-time>.mp4
         bool helpers = false; ///< the editor's furniture in the picture (§10.5)
+        Mode mode = Mode::Realtime;
         /// TEST INSTRUMENTS, each on the path a real one takes: "noEncoder" answers
         /// the encoder check with none, "encoderError" has the recorder emit
-        /// errorOccurred, "slowSave" holds the fast-start step until cancelled.
+        /// errorOccurred, "slowSave" holds the fast-start step until cancelled,
+        /// "slowEncoder" has the encoder's input accept at most one frame per
+        /// 50 ms (an encoder that has fallen behind: the queue fills), "skipPoll"
+        /// never polls the readback ring (it fills: the offline ring wait runs).
         QString fault;
     };
 
-    static constexpr int kWidth = 1920, kHeight = 1080, kFps = 60;
+    static constexpr int kWidth = int(recordingview::kWidth), kHeight = int(recordingview::kHeight), kFps = 60;
     static constexpr int kBitRate = 14000000;   // §10.4: ~12-16 Mbps
     /// Frames the recording view renders before the first recorded one: its own
     /// young histories (the gather's pixel history, the ray tier's young-view
     /// fade, the exposure's first meter) settle in them — a quarter second of
     /// latency after the click, never a settle loop inside a frame.
     static constexpr int kWarmFrames = 16;
+    /// The encoder queue's bound (~75 MB of 1080p NV12). Real-time: a frame past
+    /// it is dropped and counted. Offline: past it the driver's ticks are HELD
+    /// (no sync, no render) until the encoder has drained below it.
+    static constexpr size_t kQueueBound = 24;
 
     VideoRecorder(IEditorViewport *viewport, std::function<QString()> sceneName,
                   QObject *parent = nullptr);
@@ -115,6 +132,14 @@ public:
     bool abandonSave();
 
     static QString stateName(State s);
+    static QString modeName(Mode m);
+    /// "realtime" | "offline" -> the mode; false for anything else.
+    static bool parseMode(const QString &name, Mode *out);
+    Mode mode() const { return mOptions.mode; }
+    /// Seconds of wall time since the recording started (its click), frozen at
+    /// the stop — beside elapsedSeconds() it says how much slower than real time
+    /// an offline recording runs.
+    double wallSeconds() const;
 
 signals:
     void stateChanged();
@@ -124,7 +149,9 @@ signals:
     void finished(bool ok, const QString &path, const QString &error);
 
 private:
-    void onFrame(quint64 step);
+    bool onFrame(quint64 step);
+    /// RecordingHooks::hold — the offline backpressure (the encoder queue full).
+    bool holdTick();
     void deliver(jahshaka::engine::VideoFrameNv12 &frame);
     void enqueue(const std::vector<unsigned char> &nv12, quint64 slot);
     void flush();
@@ -152,6 +179,16 @@ private:
     quint64 mArmed = 0;
     bool mHaveStep0 = false;
     quint64 mStep0 = 0, mNextSlot = 0, mHeld = 0, mEncoderDropped = 0, mSent = 0;
+    /// OFFLINE: the recorded frames' own serial (the tag each is armed with);
+    /// the driver ticks held for the encoder; the frames whose ticket the UI
+    /// thread waited for (the ring full) and the longest such wait, in ms.
+    quint64 mOfflineSerial = 0, mHeldTicks = 0, mRingWaits = 0;
+    double mWorstRingWaitMs = 0.0;
+    /// The "slowEncoder" instrument: when the input last accepted a frame.
+    QElapsedTimer mSlowEncoderSince;
+    bool mSlowEncoderRetry = false;
+    /// The offline recording moved the video textures onto its stepped clock.
+    bool mVideoStepped = false;
     jahshaka::engine::VideoFrameNv12 mFrame;        ///< the poll's buffer
     std::vector<unsigned char> mLast;               ///< the last frame enqueued (holds)
 
@@ -168,6 +205,7 @@ private:
     std::shared_ptr<std::atomic<bool>> mCancel;
     QElapsedTimer mWall;
     double mStartMs = 0.0;
+    double mProbeMs = 0.0;
     bool mFastStartRunning = false;
     bool mFaultSent = false;
     qint64 mStopWallMs = 0;

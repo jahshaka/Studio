@@ -206,9 +206,29 @@ public:
     /// lie this round of the readout exists to remove.
     void noteExternalFrame();
 
+    /// THIS TICK DRAWS NOTHING (VIDEO-REC-2). Called by a beforeFrame
+    /// subscriber that must not have the frame it is in rendered — the offline
+    /// recorder's backpressure: its encoder queue is full (or a video texture's
+    /// next frame has not landed), and a frame rendered now would step the
+    /// scene's temporal state without a recorded frame for it. Consumed by the
+    /// tick it was set in. NO SPIN: while ticks are held the loop beats at
+    /// kHeldIntervalMs at the fastest (an Unlimited pacing's 0 ms timer would
+    /// burn a core asking), and the pacing's own interval is back on the first
+    /// tick that renders. NEVER honoured while a VR session pumps: that render is
+    /// the session's heartbeat — a subscriber must not ask then (vrPumping()).
+    void holdThisTick() { mHoldTick = true; }
+    static constexpr int kHeldIntervalMs = 4;
+    /// A VR session is live and its runtime paces this loop (every tick must
+    /// render: renderOneFrame is where the session waits for its frame).
+    bool vrPumping() const { return mVrSession && mVrPumping; }
+
 signals:
     /// Emitted before each frame — animate here.
     void beforeFrame();
+    /// Emitted after each tick's render (or after a tick that drew nothing):
+    /// the place to undo what beforeFrame armed for exactly one frame — the
+    /// video recorder's view is enabled only for the frame it records.
+    void afterFrame();
     /// Mode, refresh rate or the resulting interval changed. The Preferences
     /// page listens so two open surfaces cannot disagree.
     void pacingChanged();
@@ -234,6 +254,10 @@ private:
     double  mRefreshHz = 0.0;
     /// What the script run in flight (if any) is doing to this loop.
     ScriptRun mScriptRun = ScriptRun::None;
+    /// holdThisTick's flag: set inside beforeFrame, consumed by the same tick.
+    bool mHoldTick = false;
+    /// The timer runs at kHeldIntervalMs because ticks are being held.
+    bool mHeldPacing = false;
     /// True between Engine::beginVrSession and endVrSession (setVrSessionActive).
     bool mVrSession = false;
     /// True while that session is actually PUMPING — i.e. while renderOneFrame

@@ -2556,7 +2556,7 @@ bool EditorApi::frame(int n, double dt)
         return host.services->player->stepFrames(qBound(1, n, 1000), float(dt)) ||
                fail(QStringLiteral("editor.frame: the player space is active but its view is not "
                                    "ready to render; show the page or use player.frame"));
-    host.viewport->renderFrames(qBound(1, n, 1000), float(dt));
+    host.viewport->stepFrames(qBound(1, n, 1000), float(dt));
     return true;
 }
 

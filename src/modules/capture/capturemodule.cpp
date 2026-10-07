@@ -12,6 +12,7 @@ For more information see the LICENSE file
 #include "modules/capture/capturemodule.h"
 
 #include <QAction>
+#include <QActionGroup>
 #include <QColor>
 #include <QDesktopServices>
 #include <QDir>
@@ -35,6 +36,7 @@ For more information see the LICENSE file
 
 namespace {
 const char *kHelpersKey = "capture/helpers";
+const char *kModeKey = "capture/mode";
 
 QString clock(double seconds)
 {
@@ -77,6 +79,22 @@ void CaptureModule::setHelpersSwitch(bool on)
     if (mHelpersRow && mHelpersRow->isChecked() != on) mHelpersRow->setChecked(on);
 }
 
+VideoRecorder::Mode CaptureModule::modeSwitch() const
+{
+    SettingsManager *sm = host.settings ? host.settings : SettingsManager::getDefaultManager();
+    VideoRecorder::Mode m = VideoRecorder::Mode::Realtime;
+    if (sm && sm->settings) VideoRecorder::parseMode(sm->settings->value(kModeKey, QStringLiteral("realtime")).toString(), &m);
+    return m;
+}
+
+void CaptureModule::setModeSwitch(VideoRecorder::Mode mode)
+{
+    SettingsManager *sm = host.settings ? host.settings : SettingsManager::getDefaultManager();
+    if (sm && sm->settings) sm->settings->setValue(kModeKey, VideoRecorder::modeName(mode));
+    QAction *row = mode == VideoRecorder::Mode::Offline ? mOfflineRow : mRealtimeRow;
+    if (row && !row->isChecked()) row->setChecked(true);
+}
+
 void CaptureModule::contribute(Contributions &c)
 {
     mAction.reset(new QAction);
@@ -86,6 +104,27 @@ void CaptureModule::contribute(Contributions &c)
     // THE POPUP: the switch, then (after a recording) the file and its folder.
     mMenu.reset(new QMenu);
     mMenu->setObjectName(QStringLiteral("recordMenu"));
+    // THE MODE (VIDEO-REC-2): two exclusive rows, real-time by default.
+    auto *modes = new QActionGroup(mMenu.get());
+    modes->setExclusive(true);
+    mRealtimeRow = mMenu->addAction(QObject::tr("Real time (the scene's own clock)"));
+    // Each drawn frame is 1/60 s of the world while recording offline: a slow
+    // editor runs behind the wall clock, and a FAST panel (144 Hz) runs the
+    // editor's world faster than real time — said on the row itself.
+    mOfflineRow = mMenu->addAction(QObject::tr("Offline: perfect 60 fps (1/60 s of the world per drawn frame: "
+                                               "slower than real time, faster on a fast display)"));
+    for (QAction *row : { mRealtimeRow, mOfflineRow }) {
+        row->setCheckable(true);
+        modes->addAction(row);
+    }
+    (modeSwitch() == VideoRecorder::Mode::Offline ? mOfflineRow : mRealtimeRow)->setChecked(true);
+    QObject::connect(mRealtimeRow, &QAction::toggled, mMenu.get(), [this](bool on) {
+        if (on) setModeSwitch(VideoRecorder::Mode::Realtime);
+    });
+    QObject::connect(mOfflineRow, &QAction::toggled, mMenu.get(), [this](bool on) {
+        if (on) setModeSwitch(VideoRecorder::Mode::Offline);
+    });
+    mMenu->addSeparator();
     mHelpersRow = mMenu->addAction(QObject::tr("Include editor helpers (grid, gizmo, selection)"));
     mHelpersRow->setCheckable(true);
     mHelpersRow->setChecked(helpersSwitch());
@@ -153,8 +192,22 @@ void CaptureModule::refreshUi()
     styleButton();
     const bool recording = mRecorder && mRecorder->recording();
     const bool finishing = mRecorder && mRecorder->state() == VideoRecorder::State::Finishing;
+    const bool offline = recording && mRecorder->mode() == VideoRecorder::Mode::Offline;
+    // An offline recording's wall time moves on its own: ticked twice a second.
+    if (offline && !mWallTicker) {
+        mWallTicker = std::make_unique<QTimer>();
+        mWallTicker->setInterval(500);
+        QObject::connect(mWallTicker.get(), &QTimer::timeout, mWallTicker.get(), [this]() { refreshUi(); });
+        mWallTicker->start();
+    } else if (!offline && mWallTicker) {
+        // Possibly from inside the ticker's own timeout: never deleted in its signal.
+        mWallTicker.release()->deleteLater();
+    }
     QString text;
-    if (recording) text = clock(mRecorder->elapsedSeconds());
+    // OFFLINE: the clip time AGAINST the wall time (the brief's "the user sees
+    // offline is slower than real time").
+    if (offline) text = QStringLiteral("%1 / %2").arg(clock(mRecorder->elapsedSeconds()), clock(mRecorder->wallSeconds()));
+    else if (recording) text = clock(mRecorder->elapsedSeconds());
     else if (finishing) text = QObject::tr("Saving…");
     else text = QObject::tr("Record");
     if (text == mLastShownText && mAction->property("jahRed").toBool() == recording) return;
@@ -174,6 +227,10 @@ void CaptureModule::refreshUi()
     const QString last = mRecorder ? mRecorder->lastPath() : QString();
     QString tip;
     if (!mRecorder) tip = QObject::tr("Recording needs the engine viewport");
+    else if (offline)
+        tip = QObject::tr("Recording OFFLINE (perfect 60 fps) %1 — the clip time / the wall time; "
+                          "click, or press Esc in the viewport, to stop")
+                  .arg(QDir::toNativeSeparators(mRecorder->status().value("path").toString()));
     else if (recording)
         tip = QObject::tr("Recording %1 — click, or press Esc in the viewport, to stop")
                   .arg(QDir::toNativeSeparators(mRecorder->status().value("path").toString()));
@@ -199,6 +256,7 @@ bool CaptureModule::press()
     if (mRecorder->busy()) return false;
     VideoRecorder::Options o;
     o.helpers = helpersSwitch();
+    o.mode = modeSwitch();
     QString why;
     if (!mRecorder->start(o, &why)) {
         reportFailure(why);
@@ -258,6 +316,7 @@ QVariantMap CaptureModule::button() const
     m["red"] = mAction->property("jahRed").toBool();
     m["recording"] = mRecorder && mRecorder->recording();
     m["helpers"] = helpersSwitch();
+    m["mode"] = VideoRecorder::modeName(modeSwitch());
     m["placed"] = bool(mButton);
     m["visible"] = mButton && mButton->isVisible();
     if (mButton) {
@@ -295,6 +354,7 @@ void CaptureModule::shutdown()
     }
     if (mFailureDialog) mFailureDialog->close();
     if (mMenu) mMenu->close();
+    mWallTicker.reset();
     mAction.reset();
     mMenu.reset();
     mRecorder.reset();

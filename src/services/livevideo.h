@@ -26,6 +26,7 @@ For more information see the LICENSE file
 // GUI THREAD ONLY, like every other Qt Multimedia object in this tree. The
 // scripting host runs there, which is where the verbs call from.
 
+#include <QElapsedTimer>
 #include <QImage>
 #include <QObject>
 #include <QString>
@@ -63,12 +64,26 @@ public:
     QVariantMap state() const;
     QString textureGuid() const { return liveGuid; }
     quint64 frames() const { return frameCount; }
+    bool playing() const;
+
+    // ---- THE STEPPED CLOCK (VIDEO-REC-2; LiveVideo::beginStepped) -------------
+    // While an OFFLINE recording runs, a playing video does not run on the wall
+    // clock: it is paused and advanced by the recorder, one 1/60 s step per
+    // recorded frame. The clip is decoded SEQUENTIALLY (played until the frame
+    // the target time asks for has landed, then paused) — never a seek per step,
+    // which re-decodes from the last keyframe every time.
+    void beginStepped();
+    void advanceStepped(qint64 microseconds);
+    /// True while the frame the target time asks for has not landed yet.
+    bool steppedPending();
+    void endStepped();
 
 signals:
     void frameDelivered();
 
 private:
     void onFrame(const QVideoFrame &frame);
+    void steppedPoll();
 
     QString videoGuid;
     QString liveGuid;
@@ -78,6 +93,18 @@ private:
     bool     looping = false;
     quint64  frameCount = 0;
     QString  lastError;
+    // The stepped clock: the target time and the last landed frame, both on an
+    // UNWRAPPED timeline (a looping clip's wraps counted), in microseconds.
+    /// play() was the last of play/pause/stop (step() leaves it as it was).
+    bool     intendPlaying = false;
+    bool     stepped = false;
+    bool     steppedAwaiting = false;
+    qint64   steppedTargetUs = 0;
+    qint64   lastFrameUs = -1;
+    qint64   lastFrameDurUs = 0;
+    qint64   wraps = 0;
+    qint64   rawLastUs = -1;
+    QElapsedTimer awaitingFor;
 };
 
 class LiveVideo
@@ -94,6 +121,17 @@ public:
     /// Drops every binding (the app's shutdown path; a stray QMediaPlayer
     /// outliving the media backend is a crash at exit).
     static void clear();
+
+    /// THE OFFLINE RECORDER'S CLOCK FOR VIDEO TEXTURES (VIDEO-REC-2). begin:
+    /// every PLAYING binding leaves the wall clock (paused where it stands);
+    /// advance: each moves its target on by `microseconds` and decodes forward
+    /// to it; pending: some binding's frame for its target has not landed (the
+    /// recorder holds its next frame until it has, at most ~0.5 s a frame);
+    /// end: they resume playing on the wall clock from where they got to.
+    static void beginStepped();
+    static void advanceStepped(qint64 microseconds);
+    static bool steppedPending();
+    static void endStepped();
 };
 
 #endif // LIVEVIDEO_H

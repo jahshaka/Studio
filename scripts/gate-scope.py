@@ -206,13 +206,17 @@ AREA_RULES = [
     # services rule below reaches none of them.
     (r"^src/services/libraryreset", ["libraryreset", "apppaths", "assets", "services"],
      ["app", "assets", "project"]),
+    # The video textures' player also runs on the offline recorder's stepped clock (VIDEO-REC-2).
+    (r"^src/services/livevideo", ["services", "*headless-scripts", "capture"], ["video", "capture"]),
     (r"^src/services/", ["services", "*headless-scripts"], []),
     (r"^src/(data|io|commands)/", ["document", "commands", "reopen", "export", "samples", "assetpaths",
                                    "assetmigrate", "services", "*headless-scripts"], ["project", "scene", "node"]),
     (r"^src/viewport/", ["app", "input", "gizmo", "picking", "cameras", "sockets", "ui",
                          # the render driver, the frame monitor host, the screenshot grades and the
                          # VR pacing live here (GATE-SCOPE-2, 2026-09-17)
-                         "perf", "hdr", "vr", "player", "thumbnails"],
+                         "perf", "hdr", "vr", "player", "thumbnails",
+                         # the recorder's view and its hooks in the frame loop (VIDEO-REC-2)
+                         "capture"],
      ["editor", "camera", "input", "perf", "vr"]),
     (r"^src/(bridge|player)/", ["player", "thumbnails", "materialpreview", "assets", "avatar", "app"],
      ["player", "avatar", "materials", "assets"]),
@@ -235,6 +239,11 @@ AREA_RULES = [
     (r"^src/(ui|shell)/",
      ["ui", "app", "theme", "shortcuts", "desktops", "drawers", "hygiene"],
      ["editor", "app", "desktop"]),
+    # THE STARTUP SHADER GATE also warms the video recorder (VIDEO-REC-2: its view and the
+    # encoder probe), so the capture pool's first-recording arm rides with the app dirs.
+    # (First match wins: this must sit BEFORE the generic ^src/app/ rule.)
+    (r"^src/app/shaderbuildgate", ["app", "apppaths", "cli", "log", "shutdown", "hygiene", "threading",
+                                   "api", "capture"], ["app", "capture"]),
     (r"^src/app/", ["app", "apppaths", "cli", "log", "shutdown", "hygiene", "threading", "api"], ["app"]),
     # --- data, docs, build ---------------------------------------------------------------
     (r"^docs/SCRIPTING\.md$", ["api"], []),
