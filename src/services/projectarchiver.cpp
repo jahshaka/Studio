@@ -538,6 +538,19 @@ void ProjectArchiver::beginInstallImport()
         mResult.error = QStringLiteral("the archive's catalog could not be imported");
         return;
     }
+    // A FREE NAME (PROJECT-NAMES-1): an import is always a NEW project, and a
+    // reopened sample used to arrive as a second "Matcaps" beside the first —
+    // two identical Desktop tiles. The archive's name is kept when free, else
+    // the next "<name> N" (the one rule, Database::nextFreeProjectName).
+    const QString freeName = db->nextFreeProjectName(mResult.worldName, newProjectGuid);
+    if (!freeName.isEmpty() && freeName != mResult.worldName) {
+        if (!db->renameProject(newProjectGuid, freeName)) {
+            db->deleteProject(newProjectGuid);
+            mResult.error = QStringLiteral("the imported project could not be named '%1'").arg(freeName);
+            return;
+        }
+        mResult.worldName = freeName;
+    }
     mResult.projectGuid = newProjectGuid;
     mResult.path = mStage->path();
     mNextIngest = 0;

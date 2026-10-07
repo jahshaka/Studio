@@ -681,6 +681,13 @@ jah_pool_arm(doc ai_surface ${CMAKE_CURRENT_BINARY_DIR}/e2e_ai_surface.js 1 HEAD
 # on the verb. Document verbs only -> --headless.
 jah_pool_arm(doc scene_query ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_scene_query.js 1 HEADLESS)
 
+# project.name_rules — PROJECT-NAMES-1: one name, one project. project.create and
+# project.rename refuse a taken name (case-insensitive) naming the free one
+# (project.nextFreeName: "A", "A 2", "A 3"); a rename never moves a guid; New
+# Scene records a location only when it is not the default root. Document verbs
+# only -> --headless.
+jah_pool_arm(doc project_name_rules ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_project_name_rules.js 2 HEADLESS)
+
 # AI_SURFACE_PROGRAM_SPEC lane 0 + lane A — DISCOVERY. app.apiProblems() runs
 # ApiRegistry::validate() over the real module set (the unit test only ever saw
 # its own fake module), and the lane A verbs that stop an agent guessing key
@@ -1625,6 +1632,10 @@ jah_pool_arm(gi_movers surface_cards ${CMAKE_CURRENT_BINARY_DIR}/e2e_surface_car
 #                      leaving the previous page's pixels on the screen.
 # Both are engine-up (they assert frames), so neither is --headless.
 jah_pool_arm(assets_import sample_open ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_sample_open.js 24)
+# desktop.sample_names — PROJECT-NAMES-1: a reopened sample is a fresh copy,
+# UNIQUELY NAMED ("Matcaps", "Matcaps 2", "Matcaps 3"), so the Desktop never
+# shows two identical tiles (spikes/double-thumb/). Three imports and opens.
+jah_pool_arm(assets_import sample_names ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_sample_names.js 30)
 # 300 like the other open-and-render suites: it imports an archive and opens it.
 
 configure_file(scripts/e2e_player_no_editor.js.in

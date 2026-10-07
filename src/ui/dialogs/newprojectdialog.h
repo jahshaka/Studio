@@ -18,6 +18,8 @@ For more information see the LICENSE file
 #include <QLayout>
 #include <QLineEdit>
 
+#include <functional>
+
 #include "services/scenetemplate.h"
 
 class QComboBox;
@@ -61,6 +63,16 @@ public:
     /// one write, so a test drives the button's effect rather than a copy.
     void setProjectLocation(const QString &path);
 
+    /// THE NAME RULE THE DIALOG ASKS (PROJECT-NAMES-1): given the typed name,
+    /// the free name the create would accept (ProjectService::nextFreeName —
+    /// the verb's own rule). When it differs, Create does NOT close: the
+    /// dialog says the name is taken, puts the free name in the box and
+    /// waits for a second Create (or an edit). Unset = no check (a dialog
+    /// opened by name for the theme walk).
+    void setNameCheck(std::function<QString(const QString &)> nextFree) { nameCheck = std::move(nextFree); }
+    /// The line under the name box that says a name is taken ("" when hidden).
+    QLabel *nameRefusalLabel() const { return nameRefusal; }
+
 protected slots:
     void setProjectPath();
     void createNewProject();
@@ -79,6 +91,8 @@ private:
             projectPath;
     SettingsManager *settingsManager;
 
+	std::function<QString(const QString &)> nameCheck;
+	QLabel* nameRefusal = nullptr;
 	QLabel* scene;
 	QLabel* path;
 	QLineEdit* projectPathEdit;

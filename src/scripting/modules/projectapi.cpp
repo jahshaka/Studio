@@ -73,7 +73,10 @@ QVector<VerbInfo> ProjectApi::verbs() const
           "projects root (the Jahshaka documents folder, or the run's --data-root). A location that does not "
           "exist, is not a folder or is not writable is REFUSED BY NAME — no project row is written and "
           "nothing is left pointing at a folder that was never made. These are the New Scene dialog's two "
-          "controls: its Template drop-down and its Browse button call this verb."
+          "controls: its Template drop-down and its Browse button call this verb. "
+          "A NAME ANOTHER PROJECT CARRIES (compared case-insensitively) IS REFUSED BY NAME, with the free "
+          "name offered — \"a project named 'A' already exists; 'A 2' is free\" (project.nextFreeName); "
+          "projects are identified by guid, and a name is a label no two of them share."
           "\n\nTHE WORLD'S LIGHTING ARRIVES ON THE FRAMES AFTER THIS RETURNS "
           "(SPECS/OPEN_COVER_SPEC.md §2 A). A world's FIRST global-illumination arm — the voxel "
           "cascades, the reflection-probe grid, the irradiance field — is the longest thing the "
@@ -133,7 +136,9 @@ QVector<VerbInfo> ProjectApi::verbs() const
           "separate statement (app.space('player')). BOTH HALVES ARE THREADED, like the browser's, and "
           "they run in that order: poll project.archiveState() until 'idle' (the import), then "
           "project.openState() until 'idle' (the open), with a frame in the loop. project.samples() "
-          "lists the names.",
+          "lists the names. A REOPENED SAMPLE IS ALWAYS A FRESH COPY, UNIQUELY NAMED: the first open of "
+          "Matcaps makes \"Matcaps\", the next \"Matcaps 2\", then \"Matcaps 3\" (project.nextFreeName's "
+          "rule; every archive import names its project the same way).",
           Needs::Window },
         { "samples", "project.samples() -> [name]",
           "The base names of every sample scene this tree ships, both sets (the Jahshaka samples and our "
@@ -164,7 +169,17 @@ QVector<VerbInfo> ProjectApi::verbs() const
           "the run records into a fresh entry. Nothing on the stack ever names a closed project's nodes.",
           Needs::Document },
         { "rename", "project.rename(guid, newName) -> bool",
-          "Renames a project in the database.",
+          "Renames a project (its row, the open project's caption, its Desktop tile). REFUSED BY NAME: an "
+          "empty name, an unknown guid, and a name another project carries (case-insensitive) — the "
+          "refusal names the free name (project.nextFreeName). A case-only change of the project's own "
+          "name is allowed. The guid never changes.",
+          Needs::Document },
+        { "nextFreeName", "project.nextFreeName(name) -> string",
+          "THE PROJECT NAME RULE: `name` (trimmed) when no project carries it, else the first free "
+          "\"<name> N\" from N = 2 (\"Matcaps\" -> \"Matcaps 2\" -> \"Matcaps 3\"; a taken \"Matcaps 2\" "
+          "whose stem is taken too continues the family rather than becoming \"Matcaps 2 2\"). "
+          "What project.create and project.rename offer when they refuse, what the New Scene and Rename "
+          "dialogs put in their name box, and what an archive import (a sample reopen) names its project.",
           Needs::Document },
         { "remove", "project.remove(guid) -> bool",
           "Deletes a project: its folder tree, its DB row and its asset/dependency rows. Refuses to delete the open project. NOT undoable.",
@@ -178,8 +193,10 @@ QVector<VerbInfo> ProjectApi::verbs() const
         { "setPosition", "project.setPosition(guid, x, y) -> bool",
           "Sets a tile's freeform position (normalized 0..1) on its desktop.",
           Needs::Document },
-        { "current", "project.current() -> {guid, name, folder} | null",
-          "The open project, or null.",
+        { "current", "project.current() -> {guid, name, folder, location} | null",
+          "The open project, or null. `location` is the root RECORDED with the project — \"\" when it lives "
+          "on the user's projects root (it then follows that root when it moves), the chosen folder when "
+          "project.create's `location` (the New Scene dialog's Browse) named somewhere else.",
           Needs::Document },
         { "thumbnail", "project.thumbnail(path, guid=current) -> {guid, path, empty, bytes, width, height}",
           "Writes a project's STORED Desktop tile (the PNG in its row) to `path` — the picture the Desktop "
@@ -208,7 +225,8 @@ QVector<VerbInfo> ProjectApi::verbs() const
           "pinned CAS objects. A reference-based project leaves the machine whole.",
           Needs::Document },
         { "importArchive", "project.importArchive(path) -> {guid, name, assets, objects, bakeFailures}",
-          "Imports a project archive as a NEW project: rows, objects ingested CAS-first, fresh pins, and "
+          "Imports a project archive as a NEW project under a FREE NAME (the archive's, or the next "
+          "\"<name> N\" — project.nextFreeName): rows, objects ingested CAS-first, fresh pins, and "
           "EVERY MODEL IT BRINGS BAKED before this returns (an archive carries no bakes); `bakeFailures` "
           "names the model files that could not be baked (they show as missing). "
           "Does not open it; its tile is on the Desktop when this returns (the grid is rebuilt).",
@@ -585,12 +603,25 @@ bool ProjectApi::close()
     return true;
 }
 
+QString ProjectApi::nextFreeName(const QString &name)
+{
+    if (!host.services || !host.services->project) {
+        fail("project: not available in this session");
+        return QString();
+    }
+    return host.services->project->nextFreeName(name);
+}
+
 bool ProjectApi::rename(const QString &guid, const QString &newName)
 {
-    if (!host.db) return fail("project: not available in this session");
-    if (newName.trimmed().isEmpty()) return fail("project.rename: a non-empty name is required");
-    if (!host.db->renameProject(guid, newName.trimmed()))
-        return fail(QStringLiteral("project.rename: no project with guid '%1'").arg(guid));
+    if (!host.db || !host.services || !host.services->project)
+        return fail("project: not available in this session");
+    // THE ONE RENAME (PROJECT-NAMES-1): the service refuses an empty name, an
+    // unknown guid and a taken name, each by a sentence — the desktop tile's
+    // Rename dialog goes through the same call.
+    QString why;
+    if (!host.services->project->renameProject(guid, newName, &why))
+        return fail(QStringLiteral("project.rename: %1").arg(why));
     if (host.project->getProjectGuid() == guid)
         host.project->setProjectPath(host.project->getProjectFolder(), newName.trimmed());
     // The caption follows (the Desktop used to learn it at its next rebuild).
@@ -741,6 +772,7 @@ QVariant ProjectApi::current()
     m["guid"] = host.project->getProjectGuid();
     m["name"] = host.project->getProjectName();
     m["folder"] = host.project->getProjectFolder();
+    m["location"] = host.db ? host.db->projectLocation(host.project->getProjectGuid()) : QString();
     return m;
 }
 

@@ -47,6 +47,7 @@ public:
     Q_INVOKABLE bool save();
     Q_INVOKABLE bool close();
     Q_INVOKABLE bool rename(const QString &guid, const QString &newName);
+    Q_INVOKABLE QString nextFreeName(const QString &name);
     Q_INVOKABLE bool remove(const QString &guid);
     Q_INVOKABLE QVariantList list(const QVariantMap &options = QVariantMap());
     Q_INVOKABLE bool moveToDesktop(const QString &guid, int desktop);
