@@ -14,9 +14,9 @@ function phase(label, fn) {
 }
 phase("desktop 60 frames", function () { editor.frame(60); });
 var basic = "";
-phase("create basic", function () { basic = project.create("live basic", { template: "basic" }); });
+phase("create basic", function () { basic = project.create(project.nextFreeName("live basic"), { template: "basic" }); });
 phase("basic 240 frames", function () { editor.frame(240); });
-phase("create world", function () { project.create("live world", { template: "world" }); });
+phase("create world", function () { project.create(project.nextFreeName("live world"), { template: "world" }); });
 phase("world 240 frames", function () { editor.frame(240); });
 phase("reopen basic", function () { project.open(basic); });
 phase("reopen 120 frames", function () { editor.frame(120); });

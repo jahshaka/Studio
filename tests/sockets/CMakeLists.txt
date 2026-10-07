@@ -103,3 +103,13 @@ add_test(NAME sockets.tags COMMAND test_socket_tags
 set_tests_properties(sockets.tags PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
                      TIMEOUT 120 LABELS "document")
 jah_no_display(sockets.tags)
+
+# FRESH HOMES (PROJECT-NAMES-1). A project name is unique in a library now (project.create
+# refuses a taken one), so a row that creates a project in a home nothing wipes went red on its
+# SECOND run in the same tree (an rc tree's solo retries, build-linux, the nightly) — and every
+# such home grew without bound (ui.column_law's held 66 'ColumnLaw' projects). Each row below
+# creates projects; its home is wiped at the start of every run (WARM: the shader caches stay).
+if(TEST sockets.e2e)
+    jah_fresh_home_fixture(sockets.e2e.fresh_home socketsE2eFreshHome "${CMAKE_CURRENT_BINARY_DIR}/sockets-home" WARM LABELS "scripting")
+    set_property(TEST sockets.e2e APPEND PROPERTY FIXTURES_REQUIRED socketsE2eFreshHome)
+endif()

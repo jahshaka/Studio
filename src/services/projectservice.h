@@ -96,8 +96,11 @@ public:
     bool projectLocationMissing(const QString &guid, QString *whyOut = nullptr) const;
 
     /// Resolves a guid-or-exact-name to a project guid. Returns the guid, or
-    /// empty when not found; *hits gets the number of name matches (>1 means
-    /// ambiguous — the caller decides how to report it).
+    /// empty when not found; *hits gets the number of name matches. The guid
+    /// is the identity and is tried first; a name is a convenience for a
+    /// script (names are unique since PROJECT-NAMES-1, but a case-variant or a
+    /// library written before it may still hold two — >1 stays ambiguous and
+    /// the caller reports it).
     QString resolveProjectGuid(const QString &guidOrName, QString *nameOut = nullptr,
                                int *hits = nullptr) const;
 
@@ -126,6 +129,23 @@ public:
     /// new project's folder. The desktop gets the new project's tile here.
     QString createProjectShell(const QString &name, const QString &location = QString(),
                                QString *whyOut = nullptr, QString *folderOut = nullptr);
+
+    /// THE NAME REFUSAL every naming door shows (PROJECT-NAMES-1): empty when
+    /// `name` is free (for any project but `exceptGuid`), else a sentence
+    /// naming the clash and the free name Database::nextFreeProjectName
+    /// offers — "a project named 'A' already exists; 'A 2' is free". The
+    /// create and the rename refuse with it; the dialogs show it.
+    QString nameRefusal(const QString &name, const QString &exceptGuid = QString()) const;
+
+    /// The free name `name` would become (Database::nextFreeProjectName) —
+    /// what project.nextFreeName answers and what the dialogs offer.
+    QString nextFreeName(const QString &name, const QString &exceptGuid = QString()) const;
+
+    /// THE ONE RENAME (PROJECT-NAMES-1): refuses an empty name, an unknown
+    /// guid and a name another project carries (nameRefusal), each by a
+    /// sentence in `whyOut`; then writes the row. The callers follow with
+    /// their own surfaces (the open project's caption, the tile's label).
+    bool renameProject(const QString &guid, const QString &newName, QString *whyOut = nullptr);
 
     /// Points the current project at an existing project. NO preload: the
     /// open registers the session assets in its own slices, with a worker's

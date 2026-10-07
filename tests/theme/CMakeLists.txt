@@ -109,3 +109,13 @@ if(Python3_Interpreter_FOUND)
     set_tests_properties(theme.no_raw_sheets PROPERTIES LABELS "theme" TIMEOUT 60)
     jah_no_display(theme.no_raw_sheets)
 endif()
+
+# FRESH HOMES (PROJECT-NAMES-1). A project name is unique in a library now (project.create
+# refuses a taken one), so a row that creates a project in a home nothing wipes went red on its
+# SECOND run in the same tree (an rc tree's solo retries, build-linux, the nightly) — and every
+# such home grew without bound (ui.column_law's held 66 'ColumnLaw' projects). Each row below
+# creates projects; its home is wiped at the start of every run (WARM: the shader caches stay).
+if(TEST theme.sheets)
+    jah_fresh_home_fixture(theme.sheets.fresh_home themeSheetsFreshHome "${CMAKE_CURRENT_BINARY_DIR}/e2e-home-theme-sheets" WARM LABELS "ui")
+    set_property(TEST theme.sheets APPEND PROPERTY FIXTURES_REQUIRED themeSheetsFreshHome)
+endif()

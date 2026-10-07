@@ -428,14 +428,34 @@ void ProjectManager::exportProjectFromWidget(ItemGridWidget *widget)
 
 void ProjectManager::renameProjectFromWidget(ItemGridWidget *widget)
 {
-    if (db->renameProject(widget->tileData.guid, widget->labelText)) {
-        widget->updateLabel(widget->labelText);
+    // THE ONE RENAME (PROJECT-NAMES-1) — the verb's call, so the tile refuses
+    // exactly what project.rename refuses. A TAKEN NAME is answered with the
+    // free one offered: Yes renames to it, No leaves the project as it was.
+    if (!projectService) return;
+    const QString guid = widget->tileData.guid;
+    const QString wanted = widget->labelText.trimmed();
+    if (wanted.isEmpty()) return;   // an emptied box is a cancel, not an error
+    QString why;
+    QString chosen = wanted;
+    if (!projectService->nameRefusal(wanted, guid).isEmpty()) {
+        chosen = projectService->nextFreeName(wanted, guid);
+        const auto answer = QMessageBox::question(
+            this, tr("Rename Scene"),
+            tr("A scene named \u201c%1\u201d already exists.\n\nRename it to \u201c%2\u201d instead?")
+                .arg(wanted, chosen),
+            QMessageBox::Yes | QMessageBox::No, QMessageBox::Yes);
+        if (answer != QMessageBox::Yes) return;
     }
-    else {
-        QMessageBox::warning(this,
-                             "Rename failed",
-                             "Failed to rename project, please try again!",
-                             QMessageBox::Ok);
+    if (projectService->renameProject(guid, chosen, &why)) {
+        widget->labelText = chosen;
+        widget->updateLabel(chosen);
+        widget->tileData.name = chosen;
+        // The open project's caption follows, as project.rename's does.
+        if (project && project->getProjectGuid() == guid)
+            project->setProjectPath(project->getProjectFolder(), chosen);
+    } else {
+        QMessageBox::warning(this, tr("Rename failed"),
+                             tr("The scene could not be renamed: %1").arg(why), QMessageBox::Ok);
     }
 }
 
@@ -959,6 +979,10 @@ void ProjectManager::newProject()
 	// refuses an empty name by name, and it is the same refusal
 	// `project.create` reports.
 	NewProjectDialog dialog(this);
+	// THE VERB'S NAME RULE, asked before the dialog closes (PROJECT-NAMES-1):
+	// a taken name is refused in the dialog with the free one offered.
+	if (projectService)
+		dialog.setNameCheck([this](const QString &name) { return projectService->nextFreeName(name); });
 	dialog.exec();
 
 	const ProjectInfo info = dialog.getProjectInfo();

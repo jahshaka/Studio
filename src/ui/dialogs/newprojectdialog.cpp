@@ -38,6 +38,10 @@ NewProjectDialog::NewProjectDialog(QWidget *parent) : QDialog(parent)
 	path = new QLabel("Location");
 	projectPathEdit = new QLineEdit();
 	projectNameEdit = new QLineEdit();
+	nameRefusal = new QLabel();
+	nameRefusal->setObjectName(QStringLiteral("nameRefusal"));
+	nameRefusal->setWordWrap(true);
+	nameRefusal->hide();
 	// BROWSE (owner review R1d). The location was a disabled read-out of one
 	// fixed folder; the button is what makes it a choice. Narrow and beside
 	// the field, so the field still shows the start of the path.
@@ -114,6 +118,7 @@ NewProjectDialog::NewProjectDialog(QWidget *parent) : QDialog(parent)
 
 	grid->addWidget(scene);
 	grid->addWidget(projectNameEdit);
+	grid->addWidget(nameRefusal);
 	grid->addWidget(path);
 	// The location row is FIELD + BROWSE, one line.
 	auto locationRow = new QWidget;
@@ -155,6 +160,7 @@ NewProjectDialog::NewProjectDialog(QWidget *parent) : QDialog(parent)
 	projectNameEdit->setStyleSheet(StyleSheet::QLineEdit());
 	projectPathEdit->setStyleSheet(StyleSheet::QLineEdit());
 	scene->setStyleSheet(StyleSheet::QLabelWhite());
+	nameRefusal->setStyleSheet(StyleSheet::QLabelWhite());
 	path->setStyleSheet(StyleSheet::QLabelWhite());
 	templateLabel->setStyleSheet(StyleSheet::QLabelWhite());
 	if (ThemeManager::classicActive()) templateBox->setStyleSheet(StyleSheet::QComboBox());
@@ -217,6 +223,24 @@ void NewProjectDialog::createNewProject()
 
 void NewProjectDialog::confirmProjectCreation()
 {
+    // A TAKEN NAME IS REFUSED HERE, not after the dialog has gone
+    // (PROJECT-NAMES-1): the template and the location the user chose are
+    // still on screen, and the free name is offered in the box itself.
+    const QString typed = projectNameEdit->text().trimmed();
+    if (nameCheck && !typed.isEmpty()) {
+        const QString free = nameCheck(typed);
+        if (!free.isEmpty() && free != typed) {
+            nameRefusal->setText(tr("A scene named \u201c%1\u201d already exists. "
+                                    "\u201c%2\u201d is free \u2014 press Create to use it.")
+                                     .arg(typed, free));
+            nameRefusal->show();
+            projectNameEdit->setText(free);
+            projectNameEdit->selectAll();
+            projectNameEdit->setFocus();
+            return;
+        }
+    }
+    nameRefusal->hide();
     createNewProject();
     this->close();
     emit accepted();

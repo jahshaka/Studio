@@ -67,3 +67,17 @@ set_tests_properties(app.watchdog_stall PROPERTIES
 # are pure thread-interaction contracts, and shutdown is where read-after-destroy
 # across threads traditionally hides.
 jah_tsan_blocked(app.shutdown_order app.shutdown_order.timing app.watchdog_stall)   # spawn the app
+
+# FRESH HOMES (PROJECT-NAMES-1). A project name is unique in a library now (project.create
+# refuses a taken one), so a row that creates a project in a home nothing wipes went red on its
+# SECOND run in the same tree (an rc tree's solo retries, build-linux, the nightly) — and every
+# such home grew without bound (ui.column_law's held 66 'ColumnLaw' projects). Each row below
+# creates projects; its home is wiped at the start of every run (WARM: the shader caches stay).
+if(TEST app.shutdown_order)
+    jah_fresh_home_fixture(app.shutdown_order.fresh_home appShutdownOrderFreshHome "${CMAKE_CURRENT_BINARY_DIR}/e2e-home-order" WARM LABELS "shutdown")
+    set_property(TEST app.shutdown_order APPEND PROPERTY FIXTURES_REQUIRED appShutdownOrderFreshHome)
+endif()
+if(TEST app.shutdown_order.timing)
+    jah_fresh_home_fixture(app.shutdown_order.timing.fresh_home appShutdownOrderTimingFreshHome "${CMAKE_CURRENT_BINARY_DIR}/e2e-home-order-timing" WARM LABELS "shutdown")
+    set_property(TEST app.shutdown_order.timing APPEND PROPERTY FIXTURES_REQUIRED appShutdownOrderTimingFreshHome)
+endif()

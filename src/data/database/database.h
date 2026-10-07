@@ -672,6 +672,18 @@ public:
     bool fetchProjectTile(const QString &guid, ProjectTileData *out);
     /// The projects called exactly `name` (the name half of a guid-or-name resolve).
     QVector<ProjectTileData> fetchProjectsNamed(const QString &name);
+    /// THE PROJECT NAME RULE (PROJECT-NAMES-1), the one place it lives. A
+    /// project is IDENTIFIED by its guid; its name is a label, and two labels
+    /// never match (case-insensitively). Returns `wanted` trimmed when no
+    /// project but `exceptGuid` carries it, else the first free `<stem> N`
+    /// (N = 2, 3, ...) — "Matcaps", "Matcaps 2", "Matcaps 3". A trailing " N"
+    /// is read as a copy number ONLY when `wanted` is a copy this rule made: its
+    /// stem and every "<stem> k" for 2 <= k < N taken (an unbroken chain). So a
+    /// second "Matcaps 2" becomes "Matcaps 3", never "Matcaps 2 2", while
+    /// "Area 51" stays the user's name and becomes "Area 51 2". Empty
+    /// in, empty out. Every door that names a project uses it: the create, the
+    /// rename and the archive import (a reopened sample is a fresh copy).
+    QString nextFreeProjectName(const QString &wanted, const QString &exceptGuid = QString());
     /// The guids on one desktop, no blobs — what the Desktop entry checks its
     /// tiles against without reading a thumbnail.
     QStringList fetchProjectGuids(int desktop);
@@ -686,7 +698,6 @@ public:
     QHash<QString, QByteArray> fetchProjectThumbnailBytes(const QStringList &guids);
     QByteArray fetchAssetData(const QString &guid) const;
 
-    QByteArray fetchCachedThumbnail(const QString& name) const;
     QStringList fetchFolderNameByParent(const QString &guid);
     QStringList fetchAssetNameByParent(const QString &guid);
     QStringList fetchFolderAndChildFolders(const QString &guid);
@@ -760,11 +771,6 @@ public:
 	bool isAuthorInfoPresent();
 	QString getAuthorName();
     bool switchAssetCollection(const int, const QString&);
-    void insertThumbnailGlobal(const QString &world_guid,
-                               const QString &name,
-                               const QByteArray &thumbnail,
-							   const QString &thumbnail_guid);
-    bool hasCachedThumbnail(const QString& name);
 
 	bool checkIfRecordExists(const QString &record, const QVariant &value, const QString &table, bool perProject = false, const QString &projectGuid = QString());
     bool checkIfDependencyExists(const QString &depender, const ModelTypes &type);

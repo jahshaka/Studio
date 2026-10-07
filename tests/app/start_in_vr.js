@@ -20,7 +20,8 @@ try { vr.headsetRuntime("Oculus"); } catch (e) { threw = String(e).indexOf("one 
 assert(threw, "vr.headsetRuntime refuses a runtime it does not know");
 // A script run starts on the Desktop page; the VR button means the editor
 // preview only on the EDITOR page, so open a world there first.
-if (project.create("vr start") === false) throw new Error("project.create failed");
+// Every boot under this suite's one HOME creates one: a free name (PROJECT-NAMES-1).
+if (project.create(project.nextFreeName("vr start")) === false) throw new Error("project.create failed");
 if (app.columns().space !== "editor") app.space("editor");
 assert(app.columns().space === "editor", "the editor is up and answers");
 

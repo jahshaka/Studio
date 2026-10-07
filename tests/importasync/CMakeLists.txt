@@ -113,3 +113,13 @@ jah_lsan_blocked(import.async)
 # the claim into a gate. Verified 2026-09-09: each of these passes displayless
 # with the same assertion count it has with a display.
 jah_no_display(import.async)
+
+# FRESH HOMES (PROJECT-NAMES-1). A project name is unique in a library now (project.create
+# refuses a taken one), so a row that creates a project in a home nothing wipes went red on its
+# SECOND run in the same tree (an rc tree's solo retries, build-linux, the nightly) — and every
+# such home grew without bound (ui.column_law's held 66 'ColumnLaw' projects). Each row below
+# creates projects; its home is wiped at the start of every run (WARM: the shader caches stay).
+if(TEST import.shutdown)
+    jah_fresh_home_fixture(import.shutdown.fresh_home importShutdownFreshHome "${CMAKE_CURRENT_BINARY_DIR}/e2e-home-shutdown" WARM LABELS "importer")
+    set_property(TEST import.shutdown APPEND PROPERTY FIXTURES_REQUIRED importShutdownFreshHome)
+endif()

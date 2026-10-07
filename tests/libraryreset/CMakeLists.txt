@@ -58,3 +58,21 @@ set_tests_properties(app.library_keep PROPERTIES
 set_property(TEST app.library_keep APPEND PROPERTY ENVIRONMENT_MODIFICATION
              "JAHSHAKA_DATA_ROOT=unset:")
 jah_no_display(app.library_keep)
+
+# FRESH HOMES (PROJECT-NAMES-1). A project name is unique in a library now (project.create
+# refuses a taken one), so a row that creates a project in a home nothing wipes went red on its
+# SECOND run in the same tree (an rc tree's solo retries, build-linux, the nightly) — and every
+# such home grew without bound (ui.column_law's held 66 'ColumnLaw' projects). Each row below
+# creates projects; its home is wiped at the start of every run (WARM: the shader caches stay).
+if(TEST app.reset_library)
+    jah_fresh_home_fixture(app.reset_library.fresh_home appResetLibraryFreshHome "${CMAKE_CURRENT_BINARY_DIR}/reset-library-home" WARM LABELS "app")
+    set_property(TEST app.reset_library APPEND PROPERTY FIXTURES_REQUIRED appResetLibraryFreshHome)
+endif()
+if(TEST app.library_generation)
+    jah_fresh_home_fixture(app.library_generation.fresh_home appLibraryGenerationFreshHome "${CMAKE_CURRENT_BINARY_DIR}/library-generation-home" WARM LABELS "app")
+    set_property(TEST app.library_generation APPEND PROPERTY FIXTURES_REQUIRED appLibraryGenerationFreshHome)
+endif()
+if(TEST app.library_keep)
+    jah_fresh_home_fixture(app.library_keep.fresh_home appLibraryKeepFreshHome "${CMAKE_CURRENT_BINARY_DIR}/library-keep-home" WARM LABELS "app")
+    set_property(TEST app.library_keep APPEND PROPERTY FIXTURES_REQUIRED appLibraryKeepFreshHome)
+endif()

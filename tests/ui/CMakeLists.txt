@@ -1711,3 +1711,29 @@ set_tests_properties(ui.new_project_dialog PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "ui")
 jah_no_display(ui.new_project_dialog)
 
+
+# FRESH HOMES (PROJECT-NAMES-1). A project name is unique in a library now (project.create
+# refuses a taken one), so a row that creates a project in a home nothing wipes went red on its
+# SECOND run in the same tree (an rc tree's solo retries, build-linux, the nightly) — and every
+# such home grew without bound (ui.column_law's held 66 'ColumnLaw' projects). Each row below
+# creates projects; its home is wiped at the start of every run (WARM: the shader caches stay).
+if(TEST ui.column_law)
+    jah_fresh_home_fixture(ui.column_law.fresh_home uiColumnLawFreshHome "${CMAKE_CURRENT_BINARY_DIR}/e2e-home-columns" WARM LABELS "ui")
+    set_property(TEST ui.column_law APPEND PROPERTY FIXTURES_REQUIRED uiColumnLawFreshHome)
+endif()
+if(TEST ui.space_docks)
+    jah_fresh_home_fixture(ui.space_docks.fresh_home uiSpaceDocksFreshHome "${CMAKE_CURRENT_BINARY_DIR}/e2e-home-space-docks" WARM LABELS "ui")
+    set_property(TEST ui.space_docks APPEND PROPERTY FIXTURES_REQUIRED uiSpaceDocksFreshHome)
+endif()
+if(TEST ui.window_minimum)
+    jah_fresh_home_fixture(ui.window_minimum.fresh_home uiWindowMinimumFreshHome "${CMAKE_CURRENT_BINARY_DIR}/e2e-home-window-minimum" WARM LABELS "ui")
+    set_property(TEST ui.window_minimum APPEND PROPERTY FIXTURES_REQUIRED uiWindowMinimumFreshHome)
+endif()
+if(TEST ui.material_drag)
+    jah_fresh_home_fixture(ui.material_drag.fresh_home uiMaterialDragFreshHome "${CMAKE_CURRENT_BINARY_DIR}/e2e-home-material-drag" WARM LABELS "ui")
+    set_property(TEST ui.material_drag APPEND PROPERTY FIXTURES_REQUIRED uiMaterialDragFreshHome)
+endif()
+if(TEST ui.shot_aspect)
+    jah_fresh_home_fixture(ui.shot_aspect.fresh_home uiShotAspectFreshHome "${CMAKE_CURRENT_BINARY_DIR}/e2e-home-shot-aspect" WARM LABELS "ui")
+    set_property(TEST ui.shot_aspect APPEND PROPERTY FIXTURES_REQUIRED uiShotAspectFreshHome)
+endif()

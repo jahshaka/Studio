@@ -2200,3 +2200,13 @@ add_dependencies(test_gi_cone_skip JahshakaEngineMedia)
 jah_gpu_row(gi.cone_skip CLASS engine COMMAND test_gi_cone_skip
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.cone_skip PROPERTIES TIMEOUT 180 LABELS "engine" RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
+
+# FRESH HOMES (PROJECT-NAMES-1). A project name is unique in a library now (project.create
+# refuses a taken one), so a row that creates a project in a home nothing wipes went red on its
+# SECOND run in the same tree (an rc tree's solo retries, build-linux, the nightly) — and every
+# such home grew without bound (ui.column_law's held 66 'ColumnLaw' projects). Each row below
+# creates projects; its home is wiped at the start of every run (WARM: the shader caches stay).
+if(TEST photon.view)
+    jah_fresh_home_fixture(photon.view.fresh_home photonViewFreshHome "${CMAKE_CURRENT_BINARY_DIR}/e2e-home-photon_view" WARM LABELS "scripting")
+    set_property(TEST photon.view APPEND PROPERTY FIXTURES_REQUIRED photonViewFreshHome)
+endif()

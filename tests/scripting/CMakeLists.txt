@@ -681,6 +681,13 @@ jah_pool_arm(doc ai_surface ${CMAKE_CURRENT_BINARY_DIR}/e2e_ai_surface.js 1 HEAD
 # on the verb. Document verbs only -> --headless.
 jah_pool_arm(doc scene_query ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_scene_query.js 1 HEADLESS)
 
+# project.name_rules — PROJECT-NAMES-1: one name, one project. project.create and
+# project.rename refuse a taken name (case-insensitive) naming the free one
+# (project.nextFreeName: "A", "A 2", "A 3"); a rename never moves a guid; New
+# Scene records a location only when it is not the default root. Document verbs
+# only -> --headless.
+jah_pool_arm(doc project_name_rules ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_project_name_rules.js 2 HEADLESS)
+
 # AI_SURFACE_PROGRAM_SPEC lane 0 + lane A — DISCOVERY. app.apiProblems() runs
 # ApiRegistry::validate() over the real module set (the unit test only ever saw
 # its own fake module), and the lane A verbs that stop an agent guessing key
@@ -1625,6 +1632,10 @@ jah_pool_arm(gi_movers surface_cards ${CMAKE_CURRENT_BINARY_DIR}/e2e_surface_car
 #                      leaving the previous page's pixels on the screen.
 # Both are engine-up (they assert frames), so neither is --headless.
 jah_pool_arm(assets_import sample_open ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_sample_open.js 24)
+# desktop.sample_names — PROJECT-NAMES-1: a reopened sample is a fresh copy,
+# UNIQUELY NAMED ("Matcaps", "Matcaps 2", "Matcaps 3"), so the Desktop never
+# shows two identical tiles (spikes/double-thumb/). Three imports and opens.
+jah_pool_arm(assets_import sample_names ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_sample_names.js 30)
 # 300 like the other open-and-render suites: it imports an archive and opens it.
 
 configure_file(scripts/e2e_player_no_editor.js.in
@@ -1937,3 +1948,33 @@ jah_add_pool(vr_noruntime TIER low LABELS scripting
 jah_add_pool(avatar_anim TIER low LABELS scripting)
 jah_add_pool(atom TIER epic LABELS scripting)
 
+
+# FRESH HOMES (PROJECT-NAMES-1). A project name is unique in a library now (project.create
+# refuses a taken one), so a row that creates a project in a home nothing wipes went red on its
+# SECOND run in the same tree (an rc tree's solo retries, build-linux, the nightly) — and every
+# such home grew without bound (ui.column_law's held 66 'ColumnLaw' projects). Each row below
+# creates projects; its home is wiped at the start of every run (WARM: the shader caches stay).
+if(TEST scripting.e2e.texture_missing)
+    jah_fresh_home_fixture(scripting.e2e.texture_missing.fresh_home scriptingE2eTextureMissingFreshHome "${CMAKE_CURRENT_BINARY_DIR}/e2e-home-texture_missing" WARM LABELS "scripting")
+    set_property(TEST scripting.e2e.texture_missing APPEND PROPERTY FIXTURES_REQUIRED scriptingE2eTextureMissingFreshHome)
+endif()
+if(TEST scripting.e2e.pump_defer)
+    jah_fresh_home_fixture(scripting.e2e.pump_defer.fresh_home scriptingE2ePumpDeferFreshHome "${CMAKE_CURRENT_BINARY_DIR}/e2e-home-pump_defer" WARM LABELS "scripting")
+    set_property(TEST scripting.e2e.pump_defer APPEND PROPERTY FIXTURES_REQUIRED scriptingE2ePumpDeferFreshHome)
+endif()
+if(TEST scripting.e2e.shipped_assets)
+    jah_fresh_home_fixture(scripting.e2e.shipped_assets.fresh_home scriptingE2eShippedAssetsFreshHome "${CMAKE_CURRENT_BINARY_DIR}/e2e-home-shipped_assets" WARM LABELS "scripting")
+    set_property(TEST scripting.e2e.shipped_assets APPEND PROPERTY FIXTURES_REQUIRED scriptingE2eShippedAssetsFreshHome)
+endif()
+if(TEST scripting.e2e.clip_ref)
+    jah_fresh_home_fixture(scripting.e2e.clip_ref.fresh_home scriptingE2eClipRefFreshHome "${CMAKE_CURRENT_BINARY_DIR}/e2e-home-clip_ref" WARM LABELS "scripting")
+    set_property(TEST scripting.e2e.clip_ref APPEND PROPERTY FIXTURES_REQUIRED scriptingE2eClipRefFreshHome)
+endif()
+if(TEST scripting.e2e.tex_ref)
+    jah_fresh_home_fixture(scripting.e2e.tex_ref.fresh_home scriptingE2eTexRefFreshHome "${CMAKE_CURRENT_BINARY_DIR}/e2e-home-tex_ref" WARM LABELS "scripting")
+    set_property(TEST scripting.e2e.tex_ref APPEND PROPERTY FIXTURES_REQUIRED scriptingE2eTexRefFreshHome)
+endif()
+if(TEST scripting.e2e.perf_capture_frames)
+    jah_fresh_home_fixture(scripting.e2e.perf_capture_frames.fresh_home scriptingE2ePerfCaptureFramesFreshHome "${CMAKE_CURRENT_BINARY_DIR}/e2e-home-perf_capture_frames" WARM LABELS "scripting")
+    set_property(TEST scripting.e2e.perf_capture_frames APPEND PROPERTY FIXTURES_REQUIRED scriptingE2ePerfCaptureFramesFreshHome)
+endif()

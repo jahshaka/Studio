@@ -448,7 +448,11 @@ def main(source, build):
         S = gs.select(paths, c["range"], build, 4, graph=graph, inv=copy.deepcopy(inv0), quiet_graph=True)
         whole = bool(S.fallback or S.full_tier)
         sel = set(S.selected)
-        gating = [n for n in sel if not (inv0[n]["labels"] & (gs.SCOPE_EXCLUDED_LABELS | gs.TARGET_LABELS))]
+        # A FIXTURE SETUP is not a suite (a home wipe, ~10 ms; ctest pulls it in with the row that
+        # requires it), so it is not a gating row either — PROJECT-NAMES-1 gave 50 project-creating
+        # rows a fresh-home fixture, and counting those would move every max_rows by its wipes.
+        gating = [n for n in sel if not (inv0[n]["labels"] & (gs.SCOPE_EXCLUDED_LABELS | gs.TARGET_LABELS))
+                  and not inv0[n].get("fixture_setup")]
         est = tier_s if whole else sum(costs.get(n, 10.0) for n in gating)
         env_hit = [e for e in c.get("env", []) if whole or chosen(S, e)]
         table.append((c["lane"], "TIER" if whole else len(gating), est))

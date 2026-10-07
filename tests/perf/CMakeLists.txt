@@ -227,3 +227,25 @@ set_tests_properties(perf.capture_off_is_free PROPERTIES
     # the suite says where its own root is.
     ENVIRONMENT "HOME=${_off_home};JAHSHAKA_DATA_ROOT=${_off_home}/.local/share/Jahshaka;JAHSHAKA_PERF_ROOT=${_off_home}/perf"
     LABELS "perf")
+
+# FRESH HOMES (PROJECT-NAMES-1). A project name is unique in a library now (project.create
+# refuses a taken one), so a row that creates a project in a home nothing wipes went red on its
+# SECOND run in the same tree (an rc tree's solo retries, build-linux, the nightly) — and every
+# such home grew without bound (ui.column_law's held 66 'ColumnLaw' projects). Each row below
+# creates projects; its home is wiped at the start of every run (WARM: the shader caches stay).
+if(TEST perf.offscreen_isolation)
+    jah_fresh_home_fixture(perf.offscreen_isolation.fresh_home perfOffscreenIsolationFreshHome "${CMAKE_CURRENT_BINARY_DIR}/e2e-home-offscreen_isolation" WARM LABELS "perf")
+    set_property(TEST perf.offscreen_isolation APPEND PROPERTY FIXTURES_REQUIRED perfOffscreenIsolationFreshHome)
+endif()
+if(TEST perf.capture_off_is_free)
+    jah_fresh_home_fixture(perf.capture_off_is_free.fresh_home perfCaptureOffIsFreeFreshHome "${CMAKE_CURRENT_BINARY_DIR}/e2e-home-capture_off" WARM LABELS "perf")
+    set_property(TEST perf.capture_off_is_free APPEND PROPERTY FIXTURES_REQUIRED perfCaptureOffIsFreeFreshHome)
+endif()
+if(TEST perf.capture_bundle)
+    jah_fresh_home_fixture(perf.capture_bundle.capture_bundle.fresh_home perfCaptureBundleCaptureBundleFreshHome "${CMAKE_CURRENT_BINARY_DIR}/e2e-home-capture_bundle" WARM LABELS "perf")
+    set_property(TEST perf.capture_bundle APPEND PROPERTY FIXTURES_REQUIRED perfCaptureBundleCaptureBundleFreshHome)
+endif()
+if(TEST perf.capture_bundle)
+    jah_fresh_home_fixture(perf.capture_bundle.capture_quit.fresh_home perfCaptureBundleCaptureQuitFreshHome "${CMAKE_CURRENT_BINARY_DIR}/e2e-home-capture_quit" WARM LABELS "perf")
+    set_property(TEST perf.capture_bundle APPEND PROPERTY FIXTURES_REQUIRED perfCaptureBundleCaptureQuitFreshHome)
+endif()

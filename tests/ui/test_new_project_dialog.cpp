@@ -184,8 +184,28 @@ int main(int argc, char **argv)
     CHECK(dialog.locationEdit()->width() > 100,
           "…with the location field still readable beside it");
 
+    // ---- A TAKEN NAME IS REFUSED IN THE DIALOG (PROJECT-NAMES-1) -------------
+    // The check is the verb's rule (ProjectService::nextFreeName in the app);
+    // here a stand-in that knows one taken name. Create must NOT close: it says
+    // the name is taken and puts the free one in the box.
+    dialog.setNameCheck([](const QString &name) {
+        return name == QLatin1String("Taken World") ? QStringLiteral("Taken World 2") : name;
+    });
+    dialog.nameEdit()->setText(QStringLiteral("Taken World"));
     dialog.createButton()->click();
     app.processEvents();
+    CHECK(dialog.isVisible(), "Create with a TAKEN name keeps the dialog open");
+    CHECK(dialog.nameRefusalLabel() && dialog.nameRefusalLabel()->isVisible()
+              && dialog.nameRefusalLabel()->text().contains(QLatin1String("Taken World 2")),
+          "…says so, naming the free name");
+    CHECK(dialog.nameEdit()->text() == QLatin1String("Taken World 2"),
+          "…and offers it in the name box");
+    CHECK(dialog.getProjectInfo().projectName.isEmpty(), "…and answers with nothing yet");
+    dialog.nameEdit()->setText(QStringLiteral("A New World"));
+
+    dialog.createButton()->click();
+    app.processEvents();
+    CHECK(!dialog.nameRefusalLabel()->isVisible(), "a free name clears the refusal");
     CHECK(dialog.getProjectInfo().projectName == QLatin1String("A New World"),
           "pressing Create answers with the typed name");
     CHECK(dialog.getProjectInfo().projectPath == chosen,

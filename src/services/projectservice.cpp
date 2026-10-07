@@ -142,6 +142,16 @@ QString ProjectService::projectsRoot() const
 }
 
 namespace {
+/// Two spellings of one folder (a trailing slash, a symlinked root): the
+/// canonical paths when both exist, the cleaned absolute ones otherwise.
+bool sameFolder(const QString &a, const QString &b)
+{
+    const QFileInfo fa(a), fb(b);
+    const QString ca = fa.canonicalFilePath(), cb = fb.canonicalFilePath();
+    if (!ca.isEmpty() && !cb.isEmpty()) return ca == cb;
+    return QDir::cleanPath(fa.absoluteFilePath()) == QDir::cleanPath(fb.absoluteFilePath());
+}
+
 /// THE ONE PLACE `Projects/<guid>` IS APPENDED TO A ROOT. See ProjectService's
 /// header for the seven hand-built copies of this expression it replaced and
 /// what they cost. Two callers: the resolver below, and the CREATE — which
@@ -209,6 +219,9 @@ QString ProjectService::createProjectShell(const QString &name, const QString &l
 
     if (name.trimmed().isEmpty())
         return fail(QStringLiteral("a non-empty name is required"));
+    // ONE NAME, ONE PROJECT (PROJECT-NAMES-1): a taken name is refused with
+    // the free one named, before anything is minted.
+    if (const QString refusal = nameRefusal(name); !refusal.isEmpty()) return fail(refusal);
 
     // WHERE IT LANDS. The user's projects root unless the dialog's Browse (or
     // the verb's `location`) named somewhere else. Checked before a guid is
@@ -249,13 +262,49 @@ QString ProjectService::createProjectShell(const QString &name, const QString &l
     // root: a project on the default root stores nothing, so it follows a
     // machine whose projects folder moves (a `default_directory` change, a
     // --data-root run) exactly as it always did — which is the behaviour every
-    // project in the owner's library has.
-    if (!location.trimmed().isEmpty()) db->setProjectLocation(guid, root);
+    // project in the owner's library has. THE DIALOG PRE-FILLS ITS LOCATION
+    // WITH THE DEFAULT ROOT, so a non-empty `location` is not a choice by
+    // itself: it is one only when it names somewhere else (PROJECT-NAMES-1 —
+    // every New Scene used to record the default root and so stopped
+    // following it).
+    if (!location.trimmed().isEmpty() && !sameFolder(root, projectsRoot()))
+        db->setProjectLocation(guid, root);
     // THE TILE IS MADE WITH THE PROJECT (CREATE-GAP-1): one row, one tile —
     // the Desktop never has to rebuild to learn a project exists.
     projectManager->addTile(guid);
     if (folderOut) *folderOut = fullProjectPath;
     return guid;
+}
+
+QString ProjectService::nextFreeName(const QString &name, const QString &exceptGuid) const
+{
+    return db ? db->nextFreeProjectName(name, exceptGuid) : name.trimmed();
+}
+
+QString ProjectService::nameRefusal(const QString &name, const QString &exceptGuid) const
+{
+    const QString wanted = name.trimmed();
+    const QString free = nextFreeName(wanted, exceptGuid);
+    if (wanted.isEmpty() || free == wanted) return QString();
+    return QStringLiteral("a project named '%1' already exists; '%2' is free").arg(wanted, free);
+}
+
+bool ProjectService::renameProject(const QString &guid, const QString &newName, QString *whyOut)
+{
+    if (whyOut) whyOut->clear();
+    const auto fail = [whyOut](const QString &why) {
+        if (whyOut) *whyOut = why;
+        return false;
+    };
+    if (!db) return fail(QStringLiteral("no library in this session"));
+    if (newName.trimmed().isEmpty()) return fail(QStringLiteral("a non-empty name is required"));
+    ProjectTileData row;
+    if (!db->fetchProjectTile(guid, &row))
+        return fail(QStringLiteral("no project with guid '%1'").arg(guid));
+    if (const QString refusal = nameRefusal(newName, guid); !refusal.isEmpty()) return fail(refusal);
+    if (!db->renameProject(guid, newName.trimmed()))
+        return fail(QStringLiteral("the database rejected the rename"));
+    return true;
 }
 
 void ProjectService::pointAtProject(const QString &guid, const QString &name)

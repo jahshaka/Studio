@@ -2746,22 +2746,6 @@ bool Database::switchAssetCollection(const int id, const QString &guid)
     return ok;
 }
 
-void Database::insertThumbnailGlobal(const QString &world_guid,
-                                     const QString &name,
-                                     const QByteArray &thumbnail,
-								     const QString &thumbnail_guid)
-{
-    QSqlQuery query;
-    query.prepare("INSERT INTO " + Constants::DB_THUMBS_TABLE + " (world_guid, name, thumbnail, guid)"
-                  " VALUES (:world_guid, :name, :thumbnail, :guid)");
-    query.bindValue(":world_guid",  world_guid);
-    query.bindValue(":thumbnail",   thumbnail);
-    query.bindValue(":name",        name);
-    query.bindValue(":guid",        thumbnail_guid);
-
-    executeAndCheckQuery(query, "insertThumbnailGlobal");
-}
-
 QByteArray Database::fetchAssetData(const QString &guid) const
 {
 	QSqlQuery query;
@@ -2777,24 +2761,6 @@ QByteArray Database::fetchAssetData(const QString &guid) const
 
 	return QByteArray();
 }
-
-bool Database::hasCachedThumbnail(const QString &name)
-{
-    QSqlQuery query;
-    query.prepare("SELECT EXISTS (SELECT 1 FROM " + Constants::DB_THUMBS_TABLE + " WHERE name = ? LIMIT 1)");
-    query.addBindValue(name);
-
-    if (query.exec()) {
-        if (query.first()) {
-            return query.record().value(0).toBool();
-        }
-    } else {
-        irisLog("hasCachedThumbnail query failed! " + query.lastError().text());
-    }
-
-    return false;
-}
-
 
 QVector<AssetRecord> Database::fetchFavorites()
 {
@@ -2963,6 +2929,43 @@ QVector<ProjectTileData> Database::fetchProjectsNamed(const QString &name)
     return rows;
 }
 
+QString Database::nextFreeProjectName(const QString &wanted, const QString &exceptGuid)
+{
+    const QString base = wanted.trimmed();
+    if (base.isEmpty()) return base;
+    QSet<QString> taken;
+    QSqlQuery query;
+    // `IS NOT`, never `<>`: a null QString binds SQL NULL, and `guid <> NULL`
+    // is NULL for every row — the rule then saw no project at all.
+    query.prepare("SELECT name FROM projects WHERE guid IS NOT ?");
+    query.addBindValue(exceptGuid);
+    if (executeAndCheckQuery(query, "nextFreeProjectName"))
+        while (query.next()) taken.insert(query.value(0).toString().trimmed().toCaseFolded());
+    if (!taken.contains(base.toCaseFolded())) return base;
+
+    // IS `base` A COPY THIS RULE MADE? Only then does its number continue the
+    // family ("Matcaps 2" taken -> "Matcaps 3"). A trailing number is the
+    // user's own otherwise ("Area 51" -> "Area 51 2", even with "Area" taken):
+    // the rule only ever writes "<stem> N" with ONE space and N >= 2 without a
+    // leading zero, and it fills the family from 2 upward, so a copy it made
+    // has its stem and EVERY "<stem> k" (2 <= k < N) taken — an unbroken chain.
+    QString stem = base;
+    static const QRegularExpression numbered(QStringLiteral("^(.*\\S) ([1-9][0-9]{0,8})$"));
+    const QRegularExpressionMatch m = numbered.match(base);
+    if (m.hasMatch()) {
+        const QString root = m.captured(1);
+        const qint64 number = m.captured(2).toLongLong();
+        bool chain = number >= 2 && number - 2 <= taken.size() && taken.contains(root.toCaseFolded());
+        for (qint64 k = 2; chain && k < number; ++k)
+            chain = taken.contains(QStringLiteral("%1 %2").arg(root).arg(k).toCaseFolded());
+        if (chain) stem = root;
+    }
+    for (int n = 2;; ++n) {
+        const QString candidate = QStringLiteral("%1 %2").arg(stem).arg(n);
+        if (!taken.contains(candidate.toCaseFolded())) return candidate;
+    }
+}
+
 QVector<ProjectTileData> Database::fetchProjects(int desktop)
 {
     // THE ONE QUERY, NEWEST FIRST, WITH A TIE-BREAK (DESKTOP-ORDER-1). The
@@ -3023,25 +3026,6 @@ QByteArray Database::getSceneBlobGlobal(const QString &projectGuid) const
         }
     } else {
         irisLog("There was an error getting the scene blob! " + query.lastError().text());
-    }
-
-    return QByteArray();
-}
-
-QByteArray Database::fetchCachedThumbnail(const QString &name) const
-{
-    QSqlQuery query;
-    query.prepare("SELECT thumbnail FROM " + Constants::DB_THUMBS_TABLE + " WHERE name = ?");
-    query.addBindValue(name);
-
-    if (query.exec()) {
-        if (query.first()) {
-            return query.value(0).toByteArray();
-        }
-    } else {
-        irisLog(
-            "There was an error fetching a thumbnail for a model (" + name + ")" + query.lastError().text()
-        );
     }
 
     return QByteArray();
