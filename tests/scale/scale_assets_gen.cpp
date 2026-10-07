@@ -1,7 +1,7 @@
 // scale_assets_gen — THE LARGE ASSETS (lane D1-SCALE-FIXTURES, brief §4.2), a
 // TOOL (EXCLUDE_FROM_ALL), never a suite.
 //
-//   scale_assets_gen [--force] <triangles>...     e.g. 1000000 5000000 10000000
+//   scale_assets_gen [--force] [<triangles>...]   default 250000 1000000 5000000 10000000
 //
 // Each count is enginetest::proceduralShell(triangles), written as a binary PLY
 // and baked through the PRODUCT'S import door (MeshBake::buildFromFile: parse,
@@ -31,7 +31,7 @@ int main(int argc, char **argv)
         if (!std::strcmp(argv[i], "--force")) force = true;
         else counts.push_back(size_t(std::strtoull(argv[i], nullptr, 10)));
     }
-    if (counts.empty()) counts = { 1000000u, 5000000u, 10000000u };
+    if (counts.empty()) counts = { 250000u, 1000000u, 5000000u, 10000000u };   // every shell a row reads
     std::printf("scale_assets_gen: cache %s\n", qPrintable(scale::cacheDir()));
     std::printf("%-14s %6s %10s %6s %8s %10s %10s %8s %10s %12s %8s %6s %10s %9s\n", "asset", "pieces", "tris",
                 "cached", "bake s", "s per MT", "dag s", "dag %", "read ms", "blob MB", "levels", "cards",

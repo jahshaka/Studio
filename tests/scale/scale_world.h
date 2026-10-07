@@ -43,11 +43,22 @@ constexpr float kDt = 1.0f / 60.0f;
 // THE BAKE CACHE
 // ---------------------------------------------------------------------------
 
-/// Where baked blobs live: $JAH_SCALE_ASSET_CACHE, else the build tree's
-/// tests/scale/asset-cache (SCALE_ASSET_CACHE_DIR). Keyed by the bake's own
-/// fingerprint, so a producer change (a format bump, a new bake source) misses
-/// the cache instead of reading a stale blob.
+/// THE SHARED SCALE CACHE (V2-P0A): ONE directory on the box that every tree's scale
+/// rows read — $JAH_SCALE_ASSET_CACHE, else SCALE_ASSET_CACHE_ROOT (CMake's
+/// JAH_SCALE_ASSET_CACHE_ROOT, default ~/Developer/testing/scale-cache) — so the
+/// 1 M / 5 M / 10 M shells are baked ONCE per bake producer, not once per build tree.
+QString cacheRoot();
+/// The directory blobs live in: cacheRoot()/v<format>-<producer hash>, so a bake
+/// change starts a fresh directory and never overwrites a blob another tree reads.
+/// Inside a ScopedCacheDir, that scope's private directory instead.
 QString cacheDir();
+/// Bake into a private directory for the scope (scale.bake: a forced bake must
+/// neither delete nor race the shared blob).
+struct ScopedCacheDir {
+    explicit ScopedCacheDir(const QString &dir);
+    ~ScopedCacheDir();
+    QString previous;
+};
 
 struct BakeInfo {
     QString name;
@@ -83,6 +94,10 @@ iris::MeshPtr bakedMesh(const QString &sourcePath, const QString &name, BakeInfo
 QList<iris::MeshPtr> shellAsset(size_t triangles, BakeInfo *info = nullptr, bool bakeIfMissing = true);
 /// The blob path a shell of `triangles` would be cached under (exists or not).
 QString shellBlobPath(size_t triangles);
+/// THE ROWS' DOOR: the cached shell of `triangles`, or a FAIL line saying why it is
+/// missing and how to bake it — never a smaller asset in its place (V2-P0A). Prints
+/// an ASSET line naming what was measured.
+QList<iris::MeshPtr> requireShell(size_t triangles, BakeInfo *info);
 
 /// VmHWM / VmRSS of this process, kB (Linux /proc/self/status).
 unsigned long long peakRssKb();
@@ -139,11 +154,18 @@ void shutdown(Env &env);
 // ---------------------------------------------------------------------------
 
 struct WorldSpec {
+    /// THE 2 KM WORLD (V2-P0A): the 10k instances and the 500 lamps spread over the
+    /// whole 2 km x 2 km ground (D1's 6 m pitch populated only its middle 600 m), so the
+    /// voxel scroll, the far field and the cut are judged over the distance V2 is built for.
     int   instances = 10000;         ///< ~20 baked meshes, jittered grid, three scales
-    float spacing = 6.0f;            ///< grid pitch, metres (100 x 100 -> a 600 m square)
+    float spacing = 20.0f;           ///< grid pitch, metres (100 x 100 -> a 1,980 m square)
     int   lights = 500;              ///< point/spot lamps on a `lightGrid` grid
-    float lightGrid = 30.0f;
+    float lightGrid = 90.0f;         ///< 23 x 23 lamps at 90 m -> the same 1,980 m square
     float groundSize = 2000.0f;      ///< the default ground's plane, scaled to 2 km
+    /// The document camera's far plane: the world's corner-to-corner diagonal (2,828 m)
+    /// and a margin, so a view from one edge reaches the other (the editor's default
+    /// CameraNode::farClip, 500 m, would end a 2 km world a quarter of the way across).
+    float farClip = 3000.0f;
     worldmodes::PhotonTier tier = worldmodes::PhotonTier::High;
     /// 0 = the editor's own shape: every object its own PbrMaterial
     /// (SceneEditService gives each placed primitive one). N > 0: N shared

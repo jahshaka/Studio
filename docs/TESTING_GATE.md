@@ -102,10 +102,13 @@ fails only when the measurement could not be taken. The label sits in `TARGET_LA
 `photon-target` and is handled the same way: selected and run by a scoped gate, reported and
 discarded; dropped from the MERGE and PUSH tiers. The part that closes a wall writes the bar
 into its row and removes the label. The rows that time the GPU or the frame are registered
-through the GPU-timing lock (§4). The 1 M / 5 M / 10 M bakes are W11 itself (tens of minutes
-in Debug), so they are made once by the tool `scale_assets_gen` (EXCLUDE_FROM_ALL) into the
-build tree's bake cache (`$JAH_SCALE_ASSET_CACHE` moves it); a row whose asset is not cached
-measures the largest one that is, or a 250 k shell it bakes, and says so.
+through the GPU-timing lock (§4). The 250 k / 1 M / 5 M / 10 M shells are baked by the fixture
+row `scale.assets` (the tool `scale_assets_gen`; ~15 min for the four, a no-op once cached) into
+THE SHARED SCALE CACHE, one per box and outside every tree: `~/Developer/testing/scale-cache/
+v<bake format>-<producer hash>/` (CMake `JAH_SCALE_ASSET_CACHE_ROOT`, `$JAH_SCALE_ASSET_CACHE`
+moves it), so a bake producer's shells are baked once for every worktree. ctest adds the
+fixture row to any selection naming a row that reads a shell; a row whose shell is missing
+FAILS and says how to bake it — no row measures a smaller asset in its place.
 
 ### 1d. THE NIGHTLY LABELS — `nightly` and `quiet-box` (lane D6B-GATE-SHAPE)
 

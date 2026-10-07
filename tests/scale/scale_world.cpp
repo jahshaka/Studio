@@ -24,6 +24,8 @@
 #include <QImage>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QLockFile>
+#include <QCoreApplication>
 #include <QMutex>
 #include <QRegularExpression>
 
@@ -32,6 +34,7 @@
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
+#include <functional>
 #include <fstream>
 #include <random>
 
@@ -66,12 +69,48 @@ unsigned long long rssKb() { return statusKb("VmRSS"); }
 // the bake cache
 // ---------------------------------------------------------------------------
 
-QString cacheDir()
+/// A scope's private bake directory (scale.bake's forced bake: a measurement that must
+/// never delete or race the SHARED blob another tree is reading). Empty = the shared cache.
+static QString g_cacheOverride;
+
+QString cacheRoot()
 {
     const QByteArray env = qgetenv("JAH_SCALE_ASSET_CACHE");
-    const QString d = env.isEmpty() ? QStringLiteral(SCALE_ASSET_CACHE_DIR) : QString::fromLocal8Bit(env);
+    return env.isEmpty() ? QStringLiteral(SCALE_ASSET_CACHE_ROOT) : QString::fromLocal8Bit(env);
+}
+
+QString cacheDir()
+{
+    if (!g_cacheOverride.isEmpty()) {
+        QDir().mkpath(g_cacheOverride);
+        return g_cacheOverride;
+    }
+    // ONE DIRECTORY PER BAKE PRODUCER (V2-P0A): the format version AND the producer's
+    // source hash name it, so trees on different bakes never overwrite each other's blobs
+    // (a blob's FILE NAME carries only the source's identity — the producer lives in the
+    // fingerprint inside it, and a tree whose fingerprint differs would re-bake over the
+    // other's file). Old directories are dead weight once no tree builds their producer.
+    const QString d = cacheRoot() + QStringLiteral("/v%1-%2").arg(iris::MeshBake::formatVersion())
+                                        .arg(iris::MeshBake::producerHash().left(12));
     QDir().mkpath(d);
     return d;
+}
+
+ScopedCacheDir::ScopedCacheDir(const QString &dir) : previous(g_cacheOverride) { g_cacheOverride = dir; }
+ScopedCacheDir::~ScopedCacheDir() { g_cacheOverride = previous; }
+
+/// Write `bytes` to `path` so a reader never sees half a file: a temp beside it, then
+/// rename(2) over the target (atomic on one filesystem; the shared cache is read by every
+/// tree's suites at once).
+static bool writeAtomically(const QString &path, const std::function<bool(const QString &)> &writer)
+{
+    const QString tmp = path + QStringLiteral(".tmp-%1").arg(QCoreApplication::applicationPid());
+    if (!writer(tmp)) { QFile::remove(tmp); return false; }
+    if (std::rename(QFile::encodeName(tmp).constData(), QFile::encodeName(path).constData()) != 0) {
+        QFile::remove(tmp);
+        return false;
+    }
+    return true;
 }
 
 static QString fileOid(const QString &path)
@@ -156,9 +195,12 @@ static QList<iris::MeshPtr> bakeOrRead(const QString &sourcePath, const QString 
             if (infoOut) *infoOut = info;
             return mesh;
         }
-        const QString extract = cacheDir() + "/extract-" + name;
+        const QString extract = cacheDir() + "/extract-" + name + QStringLiteral("-%1").arg(QCoreApplication::applicationPid());
         QDir().mkpath(extract);
         iris::MeshBake::Model m;
+        // THE BAKE'S OWN PEAK: VmHWM is the process's high-water mark, so reset it first
+        // (clear_refs 5) — a tool baking four shells in turn then records each one's.
+        { std::ofstream clear("/proc/self/clear_refs"); clear << "5"; }
         {
             DagLogTap tap;
             const auto t0 = Clock::now();
@@ -173,18 +215,20 @@ static QList<iris::MeshPtr> bakeOrRead(const QString &sourcePath, const QString 
             if (infoOut) *infoOut = info;
             return mesh;
         }
+        // THE SIDE RECORD FIRST, then the blob: a reader that finds the blob finds its record.
+        QJsonObject o;
+        o["bakeMs"] = info.bakeMs;
+        o["dagMs"] = info.dagMs;
+        o["peakRssKb"] = double(info.peakRssKb);
+        o["source"] = sourcePath;
+        o["bakeThreads"] = iris::MeshBake::bakeThreads();
+        writeAtomically(blob + ".json", [&](const QString &tmp) {
+            QFile side(tmp);
+            return side.open(QIODevice::WriteOnly) && side.write(QJsonDocument(o).toJson()) > 0;
+        });
         QString err;
-        if (!iris::MeshBake::write(blob, m, &err)) {
+        if (!writeAtomically(blob, [&](const QString &tmp) { return iris::MeshBake::write(tmp, m, &err); }))
             std::printf("   (the bake cache could not be written: %s)\n", qPrintable(err));
-        } else {
-            QJsonObject o;
-            o["bakeMs"] = info.bakeMs;
-            o["dagMs"] = info.dagMs;
-            o["peakRssKb"] = double(info.peakRssKb);
-            o["source"] = sourcePath;
-            QFile side(blob + ".json");
-            if (side.open(QIODevice::WriteOnly)) side.write(QJsonDocument(o).toJson());
-        }
         mesh = m.meshes;
     }
     info.blobBytes = QFileInfo(blob).size();
@@ -219,19 +263,28 @@ QList<iris::MeshPtr> shellAsset(size_t triangles, BakeInfo *info, bool bakeIfMis
 {
     const QString name = QStringLiteral("shell-%1").arg(qulonglong(triangles));
     const QString oid = shellOid(triangles);
-    // A cached blob a newer bake format refuses (its fingerprint names the old
-    // kFormatVersion) is MISSING, not an answer: it is re-baked when the caller
-    // bakes (CLUSTER-LOCK-2 found every format bump turning the cached shell into
-    // "FAIL: the large asset" on a tree that had run the scale rows before).
+    // A cached blob a newer bake refuses (its fingerprint names another producer) is
+    // MISSING, not an answer — and since the cache directory is per producer, that is
+    // only ever a torn or foreign file.
     if (QFileInfo::exists(shellBlobPath(triangles))) {
         QList<iris::MeshPtr> cached = bakeOrRead(QString(), name, oid, info, false);
         if (!cached.isEmpty()) return cached;
     }
     if (!bakeIfMissing) {
-        if (info) { *info = BakeInfo(); info->name = name; }
+        if (info) { *info = BakeInfo(); info->name = name; info->blobPath = shellBlobPath(triangles); }
         return QList<iris::MeshPtr>();
     }
-    const QString ply = cacheDir() + "/" + name + ".ply";
+    // ONE BAKER PER SHELL across every tree on the box: the 10 M bake is minutes and
+    // gigabytes, and two trees' fixture rows may start it together. The second waits on
+    // the lock and then reads what the first wrote.
+    QLockFile lock(cacheDir() + "/" + name + ".lock");
+    lock.setStaleLockTime(0);
+    lock.lock();
+    if (QFileInfo::exists(shellBlobPath(triangles))) {
+        QList<iris::MeshPtr> cached = bakeOrRead(QString(), name, oid, info, false);
+        if (!cached.isEmpty()) return cached;
+    }
+    const QString ply = cacheDir() + "/" + name + QStringLiteral("-%1.ply").arg(QCoreApplication::applicationPid());
     {
         const enginetest::ShellMesh s = enginetest::proceduralShell(triangles);
         if (!enginetest::writeBinaryPly(s, ply.toStdString())) {
@@ -242,6 +295,26 @@ QList<iris::MeshPtr> shellAsset(size_t triangles, BakeInfo *info, bool bakeIfMis
     QList<iris::MeshPtr> mesh = bakeOrRead(ply, name, oid, info, true);
     QFile::remove(ply);
     return mesh;
+}
+
+QList<iris::MeshPtr> requireShell(size_t triangles, BakeInfo *info)
+{
+    QList<iris::MeshPtr> m = shellAsset(triangles, info, false);
+    if (m.isEmpty()) {
+        std::printf("FAIL: the %zu-triangle shell is not in the scale cache %s (bake format v%d, producer %s): "
+                    "a scale row measures the REAL asset or nothing. The fixture row bakes it once per bake "
+                    "producer for every tree on the box (`ctest -R '^scale\\.assets$'`, ~15 min for the "
+                    "four shells), or `tests/scale/scale_assets_gen %zu` in the build tree.\n",
+                    triangles, qPrintable(cacheDir()), iris::MeshBake::formatVersion(),
+                    qPrintable(iris::MeshBake::producerHash().left(12)), triangles);
+        std::fflush(stdout);
+    } else if (info) {
+        std::printf("ASSET: %s = %zu triangles in %d pieces, read from the scale cache in %.0f ms (%s)\n",
+                    qPrintable(info->name), info->triangles, info->pieces, info->readMs,
+                    qPrintable(info->blobPath));
+        std::fflush(stdout);
+    }
+    return m;
 }
 
 // ---------------------------------------------------------------------------
@@ -387,7 +460,7 @@ static QString textureFile(int i)
         for (int y = 0; y < 16; ++y)
             for (int x = 0; x < 16; ++x)
                 img.setPixelColor(x, y, ((x / 4 + y / 4) & 1) ? QColor(r, g, b) : QColor(b, r, g));
-        img.save(path);
+        writeAtomically(path, [&](const QString &tmp) { return img.save(tmp, "PNG"); });
     }
     return path;
 }
@@ -524,7 +597,7 @@ bool buildWorld(Env &env, const WorldSpec &spec, World &world, int settleCap)
 
     applyMaterials(world, spec.materials, spec.textures);
 
-    // THE LAMPS: `lights` on a lightGrid-metre grid over the populated square,
+    // THE LAMPS: `lights` on a lightGrid-metre grid over the populated square (centred),
     // 4 m up, 15 m range; every fourth a spot pointing down.
     const int lside = std::max(1, int(std::ceil(std::sqrt(double(spec.lights)))));
     const float lhalf = 0.5f * spec.lightGrid * float(lside - 1);
@@ -548,6 +621,7 @@ bool buildWorld(Env &env, const WorldSpec &spec, World &world, int settleCap)
     world.documentMs = msSince(t0);
 
     // ---- the first sync + frame, then GI to rest ------------------------------
+    env.camera->farClip = spec.farClip;
     setCamera(env, worldEye() + iris::Vec3(0, 8.0f, 30.0f), worldEye());
     t0 = Clock::now();
     frame(env, 1);
@@ -559,10 +633,12 @@ bool buildWorld(Env &env, const WorldSpec &spec, World &world, int settleCap)
     }
     world.settleFrames = f;
     const GiStatus gi = env.scene->giStatus();
-    std::printf("WORLD: %d instances of %zu baked meshes + ground %.0f m, %d lamps on %.0f m, "
+    std::printf("WORLD: %d instances of %zu baked meshes at a %.0f m pitch (a %.0f m square) + ground %.0f m, "
+                "far plane %.0f m, %d lamps on %.0f m, "
                 "tier %s, %s materials, %d textures | meshes %.0f ms (%s), document %.0f ms, "
                 "first sync+frame %.0f ms, settle %d frames (atRest %d) | cascades %zu, rss %.0f MB\n",
-                spec.instances, meshes.size(), spec.groundSize, spec.lights, spec.lightGrid,
+                spec.instances, meshes.size(), spec.spacing, spec.spacing * float(side - 1), spec.groundSize,
+                double(env.camera->farClip), spec.lights, spec.lightGrid,
                 qPrintable(worldmodes::photonTierName(spec.tier)),
                 spec.materials ? qPrintable(QString::number(spec.materials)) : "per-instance", spec.textures,
                 world.bakeOrReadMs, world.meshes.empty() || world.meshes[0].fromCache ? "cache" : "baked",
