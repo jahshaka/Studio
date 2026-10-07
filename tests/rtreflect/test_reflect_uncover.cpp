@@ -69,6 +69,8 @@ static const float kBox = 0.4f;
 static const float kBoxZ = 0.95f;
 static const float kStep = 0.1f;
 static const float kHalfRun = 1.6f;
+// the arm "reflect.metalDecode"'s shipped default (GpuScene.h kReflectMetalDecodeRoughness)
+static const double kReflectMetalDecodeDefault = 0.30;
 
 static void render(Engine *e, int n) { for (int i = 0; i < n; ++i) e->renderOneFrame(); }
 
@@ -376,20 +378,114 @@ static int helpersMain(Engine *e, Scene *s, View *view, const char *dumpDir)
         if (magenta(shown, i)) ++onScreen;
     for (unsigned i : diskPixels(2.0f))
         if (magenta(shown, i) && !direct.in(float(i % kWidth) + 0.5f, float(i / kWidth) + 0.5f)) ++inSphere;
-    int inHistory = 0, inReflection = 0;
+    // THE HISTORY HOLDS THE HELPERS AS THE PICTURE DOES, AND MARKS THEM: its alpha is
+    // the depth the texel was drawn at, -1 where a helper shows (no surface) — every
+    // helper-coloured texel must be marked, or the resolve could read it.
+    int inHistory = 0, unmarked = 0;
+    int inReflection = 0;
     if (haveHistory)
         for (size_t i = 0; i < size_t(history.width) * history.height; ++i)
-            if (magentaF(history, i, false)) ++inHistory;
+            if (magentaF(history, i, false)) {
+                ++inHistory;
+                if (history.rgba[i * 4u + 3u] >= 0.0f) ++unmarked;
+            }
     if (haveReflection)
         for (size_t i = 0; i < size_t(reflection.width) * reflection.height; ++i)
             if (magentaF(reflection, i, true)) ++inReflection;
-    std::printf("   helper-coloured px: on screen %d, in the sphere's disk off the shell %d, in the SSR history %d, "
-                "in the reflection texture %d\n", onScreen, inSphere, inHistory, inReflection);
+    std::printf("   helper-coloured px: on screen %d, in the sphere's disk off the shell %d, in the SSR history %d "
+                "(%d of them NOT marked as no-surface), in the reflection texture %d\n", onScreen, inSphere, inHistory,
+                unmarked, inReflection);
     if (dumpDir) writePpm(shown, std::string(dumpDir) + "/helpers-shown.ppm");
     CHECK_MSG(onScreen > 400, "the outline and the grid are still DRAWN (%d px on screen)", onScreen);
-    CHECK_MSG(inHistory == 0, "NO HELPER IN THE SSR HISTORY (%d px)", inHistory);
+    CHECK_MSG(unmarked == 0, "EVERY HELPER TEXEL OF THE SSR HISTORY IS MARKED no-surface (%d of %d unmarked)",
+              unmarked, inHistory);
     CHECK_MSG(inReflection == 0, "NO HELPER IN THE REFLECTION TEXTURE (%d px)", inReflection);
     CHECK_MSG(inSphere <= 4, "NO HELPER IN THE CHROME SPHERE (%d px off the shell's own outline)", inSphere);
+
+    // THE HELPERS' DRAW ORDER IS ONE ORDER ON EVERY TIER: they draw in the opaque pass in
+    // their own queues, where they always drew. A translucent pane in front of the shell
+    // and the grid: the march chain must draw the pane's pixels as the non-march chain
+    // does (a helper moved after the blended items — this lane's first design — drew
+    // them crisp over the pane on the march chain alone: 17.5 codes).
+    {
+        const Vec3 paneAt(at.x, 0.35f, at.z + 0.45f);
+        const NodeId pane = s->createNode();
+        PbrParams gp; gp.albedo = Colour(0.6f, 0.6f, 0.65f); gp.roughness = 0.9f;
+        gp.alphaMode = PbrAlphaMode::Blend; gp.alpha = 0.5f;
+        s->attachMesh(pane, room.cube, s->createPbrMaterial(gp));
+        s->setNodeTransform(pane, paneAt, Quat(), Vec3(0.9f, 0.7f, 0.02f));
+        const Rect paneRect = boxRect(paneAt, 0.0f, 0.0f);
+        Rect r{ 1e9f, 1e9f, -1e9f, -1e9f };
+        for (int k = 0; k < 8; ++k) {
+            const Vec3 c(paneAt.x + ((k & 1) ? 0.45f : -0.45f), paneAt.y + ((k & 2) ? 0.35f : -0.35f),
+                         paneAt.z + ((k & 4) ? 0.01f : -0.01f));
+            float x, y, z;
+            if (!project(c, x, y, z)) continue;
+            r.x0 = std::min(r.x0, x); r.y0 = std::min(r.y0, y); r.x1 = std::max(r.x1, x); r.y1 = std::max(r.y1, y);
+        }
+        r.x0 += 3.0f; r.y0 += 3.0f; r.x1 -= 3.0f; r.y1 -= 3.0f;   // inside the pane's edge
+        (void)paneRect;
+        // THE HELPERS' OWN CONTRIBUTION per tier (with them minus without them), so the
+        // tiers' different lighting cancels and only where the helpers land is compared.
+        Image marchPic, plainPic, marchBare, plainBare;
+        const auto helpersOn = [&](bool on) {
+            GridDesc g = grid;
+            g.enabled = on;
+            s->setGrid(g);
+            s->setNodeVisible(shell, on);
+        };
+        render(e, 60);
+        view->readPixels(marchPic);
+        helpersOn(false);
+        render(e, 60);
+        view->readPixels(marchBare);
+        helpersOn(true);
+        PostFxDesc plain = view->postFx();
+        plain.ssr = 0;
+        view->setPostFx(plain);
+        render(e, 60);
+        view->readPixels(plainPic);
+        helpersOn(false);
+        render(e, 60);
+        view->readPixels(plainBare);
+        helpersOn(true);
+        // Per tier: the helpers' mean contribution INSIDE the pane against the same strip
+        // beside it (grid only, same lines) — the pane's attenuation of what is behind it.
+        // A helper drawn after the pane would read ~1 on one tier and less on the other.
+        const auto contribution = [&](const Image &with, const Image &bare, float x0, float x1, float y0, float y1) {
+            double c = 0.0;
+            int k = 0;
+            for (unsigned y = unsigned(std::max(0.0f, y0)); y < unsigned(std::min(float(kHeight), y1)); ++y)
+                for (unsigned x = unsigned(std::max(0.0f, x0)); x < unsigned(std::min(float(kWidth), x1)); ++x) {
+                    const unsigned char *p = &with.rgba[(size_t(y) * kWidth + x) * 4u];
+                    const unsigned char *q = &bare.rgba[(size_t(y) * kWidth + x) * 4u];
+                    c += std::abs(int(p[0]) - int(q[0])) + std::abs(int(p[1]) - int(q[1])) + std::abs(int(p[2]) - int(q[2]));
+                    ++k;
+                }
+            return k ? c / k : 0.0;
+        };
+        const float w = r.x1 - r.x0;
+        const double mIn = contribution(marchPic, marchBare, r.x0, r.x1, r.y0, r.y1);
+        const double mOut = contribution(marchPic, marchBare, r.x1 + 4.0f, r.x1 + 4.0f + w, r.y0, r.y1);
+        const double pIn = contribution(plainPic, plainBare, r.x0, r.x1, r.y0, r.y1);
+        const double pOut = contribution(plainPic, plainBare, r.x1 + 4.0f, r.x1 + 4.0f + w, r.y0, r.y1);
+        const double aMarch = mOut > 0.0 ? mIn / mOut : 0.0, aPlain = pOut > 0.0 ? pIn / pOut : 0.0;
+        int n = int((r.x1 - r.x0) * (r.y1 - r.y0));
+        int helperUnder = 0;
+        for (unsigned y = unsigned(std::max(0.0f, r.y0)); y < unsigned(std::min(float(kHeight), r.y1)); ++y)
+            for (unsigned x = unsigned(std::max(0.0f, r.x0)); x < unsigned(std::min(float(kWidth), r.x1)); ++x)
+                if (magenta(marchPic, y * kWidth + x)) ++helperUnder;
+        std::printf("   behind a 50 %% pane: the helpers' contribution inside / beside it: march %.2f / %.2f = %.3f, "
+                    "plain %.2f / %.2f = %.3f\n", mIn, mOut, aMarch, pIn, pOut, aPlain);
+        if (dumpDir) {
+            writePpm(marchPic, std::string(dumpDir) + "/helpers-pane-march.ppm");
+            writePpm(plainPic, std::string(dumpDir) + "/helpers-pane-plain.ppm");
+        }
+        CHECK_MSG(n > 500 && helperUnder > 20, "the pane covers helper pixels (%d px, %d tinted)", n, helperUnder);
+        CHECK_MSG(aPlain > 0.0 && std::fabs(aMarch - aPlain) <= 0.1 * aPlain,
+                  "ONE ORDER ON EVERY TIER: the pane passes the same share of the helpers on the march chain (%.3f) "
+                  "as on the plain one (%.3f), within 10 %%", aMarch, aPlain);
+    }
     return failures ? 1 : 0;
 }
 
@@ -534,7 +630,128 @@ static int metalMain(Engine *e, Scene *s, View *view, const char *dumpDir)
               "A METAL IN A REFLECTION IS NOT BLACK: the gold crate's image %.0f codes against the matte one's %.0f "
               "(bar 35 %%)", lumG, lumM);
     CHECK_MSG(gR > 1.15 * gB && gG > 1.05 * gB, "...and it is GOLD (R %.0f > G %.0f > B %.0f)", gR, gG, gB);
+
+    // AN IN-PLACE EDIT FLIPS THE ANSWER (the fix round's stale flag): the matte crate's
+    // OWN material edited to metalness 1 in a still scene — no node moves, no epoch —
+    // must reach the trace: the crate gold in the sphere, not its now-black card.
+    s->attachMesh(crate, room.cardedCube, matteMat);
+    s->setNodeVisible(crate, true);
+    render(e, 240);
+    PbrParams edited = matte; edited.metalness = 1.0f; edited.roughness = 0.3f;
+    s->setPbrMaterial(matteMat, edited);
+    Image afterEdit;
+    render(e, 120);
+    view->readPixels(afterEdit);
+    double eR = 0, eG = 0, eB = 0;
+    int en = 0;
+    for (unsigned i : disk) {
+        const unsigned char *a = &withMatte.rgba[size_t(i) * 4u], *z = &without.rgba[size_t(i) * 4u];
+        if (std::abs(int(a[0]) - int(z[0])) + std::abs(int(a[1]) - int(z[1])) + std::abs(int(a[2]) - int(z[2])) < 45)
+            continue;
+        const unsigned char *g = &afterEdit.rgba[size_t(i) * 4u];
+        eR += g[0]; eG += g[1]; eB += g[2];
+        ++en;
+    }
+    if (en) { eR /= en; eG /= en; eB /= en; }
+    const double lumE = 0.2126 * eR + 0.7152 * eG + 0.0722 * eB;
+    std::printf("   the matte crate's material edited to metal in place: (%.0f, %.0f, %.0f) in the sphere\n", eR, eG, eB);
+    CHECK_MSG(lumE >= 0.35 * lumM && eR > 1.15 * eB,
+              "AN IN-PLACE METALNESS EDIT REACHES THE TRACE: gold (%.0f, %.0f, %.0f), not black, with nothing moving",
+              eR, eG, eB);
+
+    // ...AND FROM A GLOSSY REFLECTOR (the voxel route, kReflectMetalDecodeRoughness): the
+    // sphere at roughness 0.35 takes the metal hit from the voxel store, not a decode.
+    PbrParams glossySphere; glossySphere.albedo = Colour(0.95f, 0.95f, 0.95f); glossySphere.metalness = 1.0f;
+    glossySphere.roughness = 0.35f;
+    s->attachMesh(room.sphere, s->createMesh(sphereMesh()), s->createPbrMaterial(glossySphere));
+    // The glossy lobe spreads the crate's image (and it darkens the sky it hides), so the
+    // route is judged against the FULL DECODE of the same frame (the arm at 1): the voxel
+    // store must give what the decode gives, within the measured 2-6 codes at r >= 0.3.
+    Image glossyShot, glossyDecode, glossyNone;
+    render(e, 240);
+    view->readPixels(glossyShot);
+    e->setArm("reflect.metalDecode", 1.0);
+    render(e, 240);
+    view->readPixels(glossyDecode);
+    e->setArm("reflect.metalDecode", kReflectMetalDecodeDefault);
+    s->setNodeVisible(crate, false);
+    render(e, 240);
+    view->readPixels(glossyNone);
+    s->setNodeVisible(crate, true);
+    double err = 0.0;
+    int vn = 0;
+    for (unsigned i : disk) {
+        const unsigned char *g = &glossyShot.rgba[size_t(i) * 4u], *dd = &glossyDecode.rgba[size_t(i) * 4u];
+        const unsigned char *z = &glossyNone.rgba[size_t(i) * 4u];
+        if (std::abs(int(dd[0]) - int(z[0])) + std::abs(int(dd[1]) - int(z[1])) + std::abs(int(dd[2]) - int(z[2])) < 20)
+            continue;
+        for (int k = 0; k < 3; ++k) err += std::abs(int(g[k]) - int(dd[k]));
+        ++vn;
+    }
+    err = vn ? err / (3.0 * vn) : 1e9;
+    std::printf("   from a glossy sphere (r 0.35, the voxel route): %.2f codes from the full decode over %d px\n", err, vn);
+    CHECK_MSG(vn > 50 && err <= 8.0,
+              "...and from a GLOSSY reflector the voxel route gives the decode's metal (%.2f codes, bar 8)", err);
     return failures ? 1 : 0;
+}
+
+// ---------------------------------------------------------------------------
+// --metal-measure (REFLECT-FIX-1 fix round; prints, never gates): the metal hit's
+// routes against the FULL-DECODE reference, over the reflector's roughness and the
+// hit's metalness — the measurement the arm "reflect.metalDecode"'s default and
+// kGpuMetalFloor stand on. Mean |difference| in display codes over the crate's
+// image in the sphere; run once more with JAH_TMP_METAL_FLOOR above a metalness to
+// read that metalness through its CARD (the unflagged route).
+// ---------------------------------------------------------------------------
+static int metalMeasureMain(Engine *e, Scene *s, View *view)
+{
+    Room room = buildRoom(e, s, view, true);
+    const Vec3 at(-1.2f, 0.8f, 6.5f);
+    const NodeId crate = s->createNode();
+    PbrParams cp; cp.albedo = Colour(1.0f, 0.77f, 0.34f); cp.metalness = 1.0f; cp.roughness = 0.3f;
+    const MaterialId crateMat = s->createPbrMaterial(cp);
+    s->attachMesh(crate, room.cardedCube, crateMat);
+    s->setNodeTransform(crate, at, Quat(), Vec3(1.6f, 1.6f, 1.6f));
+    PbrParams sp; sp.albedo = Colour(0.95f, 0.95f, 0.95f); sp.metalness = 1.0f; sp.roughness = 0.02f;
+    const MaterialId sphereMat = s->createPbrMaterial(sp);
+    s->attachMesh(room.sphere, s->createMesh(sphereMesh()), sphereMat);
+    const std::vector<unsigned> disk = diskPixels(3.0f);
+    const auto shot = [&](double arm, Image &img) {
+        e->setArm("reflect.metalDecode", arm);
+        render(e, 120);
+        view->readPixels(img);
+    };
+    const float roughs[] = { 0.02f, 0.1f, 0.15f, 0.2f, 0.25f, 0.3f, 0.39f };
+    const float metals[] = { 1.0f, 0.5f, 0.25f, 0.1f };
+    for (float m : metals) {
+        cp.metalness = m;
+        s->setPbrMaterial(crateMat, cp);
+        for (float r : roughs) {
+            sp.roughness = r;
+            s->setPbrMaterial(sphereMat, sp);
+            Image ref, vox, none;
+            s->setNodeVisible(crate, false);
+            shot(1.0, none);
+            s->setNodeVisible(crate, true);
+            shot(1.0, ref);
+            shot(0.0, vox);
+            double d = 0.0, lumRef = 0.0;
+            int n = 0;
+            for (unsigned i : disk) {
+                const unsigned char *a = &ref.rgba[size_t(i) * 4u], *z = &none.rgba[size_t(i) * 4u];
+                const unsigned char *v = &vox.rgba[size_t(i) * 4u];
+                if (std::abs(int(a[0]) - int(z[0])) + std::abs(int(a[1]) - int(z[1])) + std::abs(int(a[2]) - int(z[2])) < 30)
+                    continue;
+                for (int k = 0; k < 3; ++k) d += std::abs(int(a[k]) - int(v[k]));
+                lumRef += 0.2126 * a[0] + 0.7152 * a[1] + 0.0722 * a[2];
+                ++n;
+            }
+            std::printf("MEASURE metal %.2f reflector r %.2f: %d px, full-decode lum %.1f, the voxel/card route "
+                        "%.2f codes from it (records full %llu)\n", m, r, n, n ? lumRef / n : 0.0,
+                        n ? d / (3.0 * n) : 0.0, (unsigned long long)s->rayQueryStatus().hitRecords);
+        }
+    }
+    return 0;
 }
 
 int main(int argc, char **argv)
@@ -556,12 +773,13 @@ int main(int argc, char **argv)
     view->setScene(s);
     const bool rayTier = e->rayQueryAvailable() && e->rayTracing();
     const bool raysWanted = !getenv("JAHSHAKA_NO_RAY_QUERY");
-    if ((raysWanted || mode == "--metal") && !rayTier) {
+    if ((raysWanted || mode == "--metal" || mode == "--metal-measure") && !rayTier) {
         std::printf("ok: no ray queries on this machine — this row is about the ray tier; skipping\n");
         return 0;
     }
     if (mode == "--helpers") return helpersMain(e, s, view, dumpDir);
     if (mode == "--cards") return cardsMain(e, s, view);
     if (mode == "--metal") return metalMain(e, s, view, dumpDir);
+    if (mode == "--metal-measure") return metalMeasureMain(e, s, view);
     return uncoverMain(e, s, view, dumpDir);
 }
