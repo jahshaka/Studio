@@ -2365,6 +2365,13 @@ static int coverageTraceMain()
     World w;
     WorldSpec spec;
     spec.materials = 1;
+    // THIS SUITE KEEPS D1's DENSE 600 m WORLD (6 m pitch, lamps at 30 m, the editor's 500 m far
+    // plane): its budget arms above are measured against that world's index demand (a sparse
+    // 2 km world asks too little for the forced small budget to overflow, V2-P0A's gate), and
+    // what it guards is the cut's coverage under budget pressure, not the 2 km reach.
+    spec.spacing = 6.0f;
+    spec.lightGrid = 30.0f;
+    spec.farClip = 500.0f;
     if (!bootWorld(env, w, "test-atom-coverage-trace-ogre.log", spec)) return 1;
     env.doc->exposureMode = iris::ExposureMode::Manual;
     worldmodes::setMode(env.doc, worldmodes::Mode::High);
