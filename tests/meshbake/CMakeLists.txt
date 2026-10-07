@@ -259,3 +259,17 @@ set_tests_properties(meshbake.shipped_bakes PROPERTIES
     ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}HOME=${_shipped_home};JAHSHAKA_DATA_ROOT=${_shipped_home}/data"
     RESOURCE_LOCK monado
     TIMEOUT 400 LABELS "meshbake")
+
+# FRESH HOMES (PROJECT-NAMES-1). A project name is unique in a library now (project.create
+# refuses a taken one), so a row that creates a project in a home nothing wipes went red on its
+# SECOND run in the same tree (an rc tree's solo retries, build-linux, the nightly) — and every
+# such home grew without bound (ui.column_law's held 66 'ColumnLaw' projects). Each row below
+# creates projects; its home is wiped at the start of every run (WARM: the shader caches stay).
+if(TEST meshbake.archive_bakes)
+    jah_fresh_home_fixture(meshbake.archive_bakes.fresh_home meshbakeArchiveBakesFreshHome "${CMAKE_CURRENT_BINARY_DIR}/archive-bakes-home" WARM LABELS "meshbake")
+    set_property(TEST meshbake.archive_bakes APPEND PROPERTY FIXTURES_REQUIRED meshbakeArchiveBakesFreshHome)
+endif()
+if(TEST meshbake.shipped_bakes)
+    jah_fresh_home_fixture(meshbake.shipped_bakes.fresh_home meshbakeShippedBakesFreshHome "${CMAKE_CURRENT_BINARY_DIR}/shipped-bakes-home" WARM LABELS "meshbake")
+    set_property(TEST meshbake.shipped_bakes APPEND PROPERTY FIXTURES_REQUIRED meshbakeShippedBakesFreshHome)
+endif()

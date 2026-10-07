@@ -79,6 +79,24 @@ assert(refusal(function () { project.rename("no-such-guid", "Anything " + base);
            .indexOf("no project with guid") >= 0, "an unknown guid is refused by name");
 assert(refusal(function () { project.rename(a, "   "); }).length > 0, "an empty name is refused");
 
+// ---- 2b. the copy number -------------------------------------------------------
+// A trailing number is a COPY NUMBER only on a copy the rule made (an unbroken
+// chain from the stem); otherwise it is the user's own name.
+var area = "Area " + Date.now();
+var a1 = project.create(area), a51 = project.create(area + " 51");
+assert(a1.length > 10 && a51.length > 10, "create '" + area + "' and '" + area + " 51'");
+assert(project.nextFreeName(area + " 51") === area + " 51 2",
+       "'<x> 51' with '<x>' taken is the user's number: '<x> 51 2', not '<x> 2'");
+var a3 = project.create(area + " 3");
+assert(project.nextFreeName(area + " 3") === area + " 3 2",
+       "a broken chain ('<x>', '<x> 3', no '<x> 2') is not a copy either: '<x> 3 2'");
+var a2 = project.create(area + " 2");
+assert(project.nextFreeName(area + " 3") === area + " 4",
+       "an unbroken chain ('<x>', '<x> 2', '<x> 3') is: '<x> 3' continues at '<x> 4'");
+assert(project.nextFreeName(area) === area + " 4", "…as the stem itself does");
+assert(project.close() === true, "close (the Area family)");
+[a1, a51, a3, a2].forEach(function (g) { assert(project.remove(g) === true, "remove " + g); });
+
 // ---- 3. the location is recorded only when it was CHOSEN ---------------------
 var roots = app.dataRoot();
 var onDefault = project.create("Located Default " + base, { location: roots.projects });

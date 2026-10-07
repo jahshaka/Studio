@@ -2943,10 +2943,23 @@ QString Database::nextFreeProjectName(const QString &wanted, const QString &exce
         while (query.next()) taken.insert(query.value(0).toString().trimmed().toCaseFolded());
     if (!taken.contains(base.toCaseFolded())) return base;
 
+    // IS `base` A COPY THIS RULE MADE? Only then does its number continue the
+    // family ("Matcaps 2" taken -> "Matcaps 3"). A trailing number is the
+    // user's own otherwise ("Area 51" -> "Area 51 2", even with "Area" taken):
+    // the rule only ever writes "<stem> N" with ONE space and N >= 2 without a
+    // leading zero, and it fills the family from 2 upward, so a copy it made
+    // has its stem and EVERY "<stem> k" (2 <= k < N) taken — an unbroken chain.
     QString stem = base;
-    static const QRegularExpression numbered(QStringLiteral("^(.*\\S)\\s+(\\d+)$"));
+    static const QRegularExpression numbered(QStringLiteral("^(.*\\S) ([1-9][0-9]{0,8})$"));
     const QRegularExpressionMatch m = numbered.match(base);
-    if (m.hasMatch() && taken.contains(m.captured(1).toCaseFolded())) stem = m.captured(1);
+    if (m.hasMatch()) {
+        const QString root = m.captured(1);
+        const qint64 number = m.captured(2).toLongLong();
+        bool chain = number >= 2 && number - 2 <= taken.size() && taken.contains(root.toCaseFolded());
+        for (qint64 k = 2; chain && k < number; ++k)
+            chain = taken.contains(QStringLiteral("%1 %2").arg(root).arg(k).toCaseFolded());
+        if (chain) stem = root;
+    }
     for (int n = 2;; ++n) {
         const QString candidate = QStringLiteral("%1 %2").arg(stem).arg(n);
         if (!taken.contains(candidate.toCaseFolded())) return candidate;

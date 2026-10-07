@@ -104,3 +104,21 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
         message(STATUS "log.perf skipped: needs curl and jq")
     endif()
 endif()
+
+# FRESH HOMES (PROJECT-NAMES-1). A project name is unique in a library now (project.create
+# refuses a taken one), so a row that creates a project in a home nothing wipes went red on its
+# SECOND run in the same tree (an rc tree's solo retries, build-linux, the nightly) — and every
+# such home grew without bound (ui.column_law's held 66 'ColumnLaw' projects). Each row below
+# creates projects; its home is wiped at the start of every run (WARM: the shader caches stay).
+if(TEST log.events)
+    jah_fresh_home_fixture(log.events.fresh_home logEventsFreshHome "${CMAKE_CURRENT_BINARY_DIR}/log-events-home" WARM LABELS "log")
+    set_property(TEST log.events APPEND PROPERTY FIXTURES_REQUIRED logEventsFreshHome)
+endif()
+if(TEST log.engine)
+    jah_fresh_home_fixture(log.engine.fresh_home logEngineFreshHome "${CMAKE_CURRENT_BINARY_DIR}/log-engine-home" WARM LABELS "log")
+    set_property(TEST log.engine APPEND PROPERTY FIXTURES_REQUIRED logEngineFreshHome)
+endif()
+if(TEST log.perf)
+    jah_fresh_home_fixture(log.perf.fresh_home logPerfFreshHome "${CMAKE_CURRENT_BINARY_DIR}/log-perf-home" WARM LABELS "log")
+    set_property(TEST log.perf APPEND PROPERTY FIXTURES_REQUIRED logPerfFreshHome)
+endif()

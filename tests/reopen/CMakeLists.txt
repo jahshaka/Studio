@@ -15,3 +15,13 @@ set_tests_properties(scene.reopen_fidelity PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
     LABELS "scripting"
     TIMEOUT 300)
+
+# FRESH HOMES (PROJECT-NAMES-1). A project name is unique in a library now (project.create
+# refuses a taken one), so a row that creates a project in a home nothing wipes went red on its
+# SECOND run in the same tree (an rc tree's solo retries, build-linux, the nightly) — and every
+# such home grew without bound (ui.column_law's held 66 'ColumnLaw' projects). Each row below
+# creates projects; its home is wiped at the start of every run (WARM: the shader caches stay).
+if(TEST scene.reopen_fidelity)
+    jah_fresh_home_fixture(scene.reopen_fidelity.fresh_home sceneReopenFidelityFreshHome "${CMAKE_CURRENT_BINARY_DIR}/reopen-home" WARM LABELS "scripting")
+    set_property(TEST scene.reopen_fidelity APPEND PROPERTY FIXTURES_REQUIRED sceneReopenFidelityFreshHome)
+endif()

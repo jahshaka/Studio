@@ -41,3 +41,17 @@ set_tests_properties(avatar.responsive.timing PROPERTIES
 # Spawns the app (and therefore a Vulkan driver): neither sanitizer lane can
 # take it — same reason import.shutdown and archive.responsive are blocked.
 jah_tsan_blocked(avatar.responsive avatar.responsive.timing)
+
+# FRESH HOMES (PROJECT-NAMES-1). A project name is unique in a library now (project.create
+# refuses a taken one), so a row that creates a project in a home nothing wipes went red on its
+# SECOND run in the same tree (an rc tree's solo retries, build-linux, the nightly) — and every
+# such home grew without bound (ui.column_law's held 66 'ColumnLaw' projects). Each row below
+# creates projects; its home is wiped at the start of every run (WARM: the shader caches stay).
+if(TEST avatar.responsive)
+    jah_fresh_home_fixture(avatar.responsive.fresh_home avatarResponsiveFreshHome "${CMAKE_CURRENT_BINARY_DIR}/e2e-home-avatar-async" WARM LABELS "avatar")
+    set_property(TEST avatar.responsive APPEND PROPERTY FIXTURES_REQUIRED avatarResponsiveFreshHome)
+endif()
+if(TEST avatar.responsive.timing)
+    jah_fresh_home_fixture(avatar.responsive.timing.fresh_home avatarResponsiveTimingFreshHome "${CMAKE_CURRENT_BINARY_DIR}/e2e-home-avatar-async-timing" WARM LABELS "avatar")
+    set_property(TEST avatar.responsive.timing APPEND PROPERTY FIXTURES_REQUIRED avatarResponsiveTimingFreshHome)
+endif()

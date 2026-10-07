@@ -46,3 +46,17 @@ set_tests_properties(archive.responsive.timing PROPERTIES
 # The race lane (scripts/sanitize.sh tsan): the threaded export/import runner
 # plus its cancel path. Same wall-clock caveat as open.responsive.
 jah_tsan_blocked(archive.responsive archive.responsive.timing)   # spawns the app: see jah_tsan_blocked
+
+# FRESH HOMES (PROJECT-NAMES-1). A project name is unique in a library now (project.create
+# refuses a taken one), so a row that creates a project in a home nothing wipes went red on its
+# SECOND run in the same tree (an rc tree's solo retries, build-linux, the nightly) — and every
+# such home grew without bound (ui.column_law's held 66 'ColumnLaw' projects). Each row below
+# creates projects; its home is wiped at the start of every run (WARM: the shader caches stay).
+if(TEST archive.responsive)
+    jah_fresh_home_fixture(archive.responsive.fresh_home archiveResponsiveFreshHome "${CMAKE_CURRENT_BINARY_DIR}/e2e-home-archive" WARM LABELS "archive")
+    set_property(TEST archive.responsive APPEND PROPERTY FIXTURES_REQUIRED archiveResponsiveFreshHome)
+endif()
+if(TEST archive.responsive.timing)
+    jah_fresh_home_fixture(archive.responsive.timing.fresh_home archiveResponsiveTimingFreshHome "${CMAKE_CURRENT_BINARY_DIR}/e2e-home-archive-timing" WARM LABELS "archive")
+    set_property(TEST archive.responsive.timing APPEND PROPERTY FIXTURES_REQUIRED archiveResponsiveTimingFreshHome)
+endif()

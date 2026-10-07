@@ -289,3 +289,25 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
         message(STATUS "app.sky_swap_presented skipped: needs xwd, xdpyinfo and Xvfb")
     endif()
 endif()
+
+# FRESH HOMES (PROJECT-NAMES-1). A project name is unique in a library now (project.create
+# refuses a taken one), so a row that creates a project in a home nothing wipes went red on its
+# SECOND run in the same tree (an rc tree's solo retries, build-linux, the nightly) — and every
+# such home grew without bound (ui.column_law's held 66 'ColumnLaw' projects). Each row below
+# creates projects; its home is wiped at the start of every run (WARM: the shader caches stay).
+if(TEST app.startup_quiet)
+    jah_fresh_home_fixture(app.startup_quiet.fresh_home appStartupQuietFreshHome "${CMAKE_CURRENT_BINARY_DIR}/startup-quiet-home" WARM LABELS "app")
+    set_property(TEST app.startup_quiet APPEND PROPERTY FIXTURES_REQUIRED appStartupQuietFreshHome)
+endif()
+if(TEST app.input_keys)
+    jah_fresh_home_fixture(app.input_keys.fresh_home appInputKeysFreshHome "${CMAKE_CURRENT_BINARY_DIR}/input-keys-home" WARM LABELS "app")
+    set_property(TEST app.input_keys APPEND PROPERTY FIXTURES_REQUIRED appInputKeysFreshHome)
+endif()
+if(TEST app.play_select)
+    jah_fresh_home_fixture(app.play_select.fresh_home appPlaySelectFreshHome "${CMAKE_CURRENT_BINARY_DIR}/play-select-home" WARM LABELS "app")
+    set_property(TEST app.play_select APPEND PROPERTY FIXTURES_REQUIRED appPlaySelectFreshHome)
+endif()
+if(TEST app.sky_swap_presented)
+    jah_fresh_home_fixture(app.sky_swap_presented.fresh_home appSkySwapPresentedFreshHome "${CMAKE_CURRENT_BINARY_DIR}/sky-swap-presented-home" WARM LABELS "app")
+    set_property(TEST app.sky_swap_presented APPEND PROPERTY FIXTURES_REQUIRED appSkySwapPresentedFreshHome)
+endif()

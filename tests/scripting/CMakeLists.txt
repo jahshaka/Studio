@@ -1948,3 +1948,33 @@ jah_add_pool(vr_noruntime TIER low LABELS scripting
 jah_add_pool(avatar_anim TIER low LABELS scripting)
 jah_add_pool(atom TIER epic LABELS scripting)
 
+
+# FRESH HOMES (PROJECT-NAMES-1). A project name is unique in a library now (project.create
+# refuses a taken one), so a row that creates a project in a home nothing wipes went red on its
+# SECOND run in the same tree (an rc tree's solo retries, build-linux, the nightly) — and every
+# such home grew without bound (ui.column_law's held 66 'ColumnLaw' projects). Each row below
+# creates projects; its home is wiped at the start of every run (WARM: the shader caches stay).
+if(TEST scripting.e2e.texture_missing)
+    jah_fresh_home_fixture(scripting.e2e.texture_missing.fresh_home scriptingE2eTextureMissingFreshHome "${CMAKE_CURRENT_BINARY_DIR}/e2e-home-texture_missing" WARM LABELS "scripting")
+    set_property(TEST scripting.e2e.texture_missing APPEND PROPERTY FIXTURES_REQUIRED scriptingE2eTextureMissingFreshHome)
+endif()
+if(TEST scripting.e2e.pump_defer)
+    jah_fresh_home_fixture(scripting.e2e.pump_defer.fresh_home scriptingE2ePumpDeferFreshHome "${CMAKE_CURRENT_BINARY_DIR}/e2e-home-pump_defer" WARM LABELS "scripting")
+    set_property(TEST scripting.e2e.pump_defer APPEND PROPERTY FIXTURES_REQUIRED scriptingE2ePumpDeferFreshHome)
+endif()
+if(TEST scripting.e2e.shipped_assets)
+    jah_fresh_home_fixture(scripting.e2e.shipped_assets.fresh_home scriptingE2eShippedAssetsFreshHome "${CMAKE_CURRENT_BINARY_DIR}/e2e-home-shipped_assets" WARM LABELS "scripting")
+    set_property(TEST scripting.e2e.shipped_assets APPEND PROPERTY FIXTURES_REQUIRED scriptingE2eShippedAssetsFreshHome)
+endif()
+if(TEST scripting.e2e.clip_ref)
+    jah_fresh_home_fixture(scripting.e2e.clip_ref.fresh_home scriptingE2eClipRefFreshHome "${CMAKE_CURRENT_BINARY_DIR}/e2e-home-clip_ref" WARM LABELS "scripting")
+    set_property(TEST scripting.e2e.clip_ref APPEND PROPERTY FIXTURES_REQUIRED scriptingE2eClipRefFreshHome)
+endif()
+if(TEST scripting.e2e.tex_ref)
+    jah_fresh_home_fixture(scripting.e2e.tex_ref.fresh_home scriptingE2eTexRefFreshHome "${CMAKE_CURRENT_BINARY_DIR}/e2e-home-tex_ref" WARM LABELS "scripting")
+    set_property(TEST scripting.e2e.tex_ref APPEND PROPERTY FIXTURES_REQUIRED scriptingE2eTexRefFreshHome)
+endif()
+if(TEST scripting.e2e.perf_capture_frames)
+    jah_fresh_home_fixture(scripting.e2e.perf_capture_frames.fresh_home scriptingE2ePerfCaptureFramesFreshHome "${CMAKE_CURRENT_BINARY_DIR}/e2e-home-perf_capture_frames" WARM LABELS "scripting")
+    set_property(TEST scripting.e2e.perf_capture_frames APPEND PROPERTY FIXTURES_REQUIRED scriptingE2ePerfCaptureFramesFreshHome)
+endif()

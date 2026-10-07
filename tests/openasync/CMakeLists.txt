@@ -122,3 +122,21 @@ jah_gpu_row(open.crash_soak CLASS app
 set_tests_properties(open.crash_soak PROPERTIES
     TIMEOUT 900 RUN_SERIAL TRUE LABELS "nightly;quiet-box")
 jah_tsan_blocked(open.crash_soak)
+
+# FRESH HOMES (PROJECT-NAMES-1). A project name is unique in a library now (project.create
+# refuses a taken one), so a row that creates a project in a home nothing wipes went red on its
+# SECOND run in the same tree (an rc tree's solo retries, build-linux, the nightly) — and every
+# such home grew without bound (ui.column_law's held 66 'ColumnLaw' projects). Each row below
+# creates projects; its home is wiped at the start of every run (WARM: the shader caches stay).
+if(TEST open.responsive)
+    jah_fresh_home_fixture(open.responsive.fresh_home openResponsiveFreshHome "${CMAKE_CURRENT_BINARY_DIR}/e2e-home-open" WARM LABELS "openasync")
+    set_property(TEST open.responsive APPEND PROPERTY FIXTURES_REQUIRED openResponsiveFreshHome)
+endif()
+if(TEST open.responsive.timing)
+    jah_fresh_home_fixture(open.responsive.timing.fresh_home openResponsiveTimingFreshHome "${CMAKE_CURRENT_BINARY_DIR}/e2e-home-open-timing" WARM LABELS "openasync")
+    set_property(TEST open.responsive.timing APPEND PROPERTY FIXTURES_REQUIRED openResponsiveTimingFreshHome)
+endif()
+if(TEST open.frames)
+    jah_fresh_home_fixture(open.frames.fresh_home openFramesFreshHome "${CMAKE_CURRENT_BINARY_DIR}/e2e-home-frames" WARM LABELS "openasync")
+    set_property(TEST open.frames APPEND PROPERTY FIXTURES_REQUIRED openFramesFreshHome)
+endif()

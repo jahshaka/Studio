@@ -36,3 +36,13 @@ set_property(TEST app.data_root APPEND PROPERTY ENVIRONMENT_MODIFICATION
 # --headless boots the NULL render system: the whole point of this suite is
 # paths, never a pixel. Run with DISPLAY stripped so that stays true.
 jah_no_display(app.data_root)
+
+# FRESH HOMES (PROJECT-NAMES-1). A project name is unique in a library now (project.create
+# refuses a taken one), so a row that creates a project in a home nothing wipes went red on its
+# SECOND run in the same tree (an rc tree's solo retries, build-linux, the nightly) — and every
+# such home grew without bound (ui.column_law's held 66 'ColumnLaw' projects). Each row below
+# creates projects; its home is wiped at the start of every run (WARM: the shader caches stay).
+if(TEST app.data_root)
+    jah_fresh_home_fixture(app.data_root.fresh_home appDataRootFreshHome "${CMAKE_CURRENT_BINARY_DIR}/data-root-home" WARM LABELS "app")
+    set_property(TEST app.data_root APPEND PROPERTY FIXTURES_REQUIRED appDataRootFreshHome)
+endif()

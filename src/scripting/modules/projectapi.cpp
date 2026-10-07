@@ -176,8 +176,10 @@ QVector<VerbInfo> ProjectApi::verbs() const
           Needs::Document },
         { "nextFreeName", "project.nextFreeName(name) -> string",
           "THE PROJECT NAME RULE: `name` (trimmed) when no project carries it, else the first free "
-          "\"<name> N\" from N = 2 (\"Matcaps\" -> \"Matcaps 2\" -> \"Matcaps 3\"; a taken \"Matcaps 2\" "
-          "whose stem is taken too continues the family rather than becoming \"Matcaps 2 2\"). "
+          "\"<name> N\" from N = 2 (\"Matcaps\" -> \"Matcaps 2\" -> \"Matcaps 3\"). A trailing number is read "
+          "as a copy number only when the name is a copy this rule made — its stem and every \"<stem> k\" "
+          "below it taken, an unbroken chain — so a taken \"Matcaps 2\" continues at \"Matcaps 3\", while "
+          "\"Area 51\" is the user's own name and continues at \"Area 51 2\" even with \"Area\" taken. "
           "What project.create and project.rename offer when they refuse, what the New Scene and Rename "
           "dialogs put in their name box, and what an archive import (a sample reopen) names its project.",
           Needs::Document },

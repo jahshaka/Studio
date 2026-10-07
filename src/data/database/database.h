@@ -676,9 +676,11 @@ public:
     /// project is IDENTIFIED by its guid; its name is a label, and two labels
     /// never match (case-insensitively). Returns `wanted` trimmed when no
     /// project but `exceptGuid` carries it, else the first free `<stem> N`
-    /// (N = 2, 3, ...) — "Matcaps", "Matcaps 2", "Matcaps 3". The stem is
-    /// `wanted` with a trailing " N" removed when that stem is itself taken, so
-    /// a second "Matcaps 2" becomes "Matcaps 3", never "Matcaps 2 2". Empty
+    /// (N = 2, 3, ...) — "Matcaps", "Matcaps 2", "Matcaps 3". A trailing " N"
+    /// is read as a copy number ONLY when `wanted` is a copy this rule made: its
+    /// stem and every "<stem> k" for 2 <= k < N taken (an unbroken chain). So a
+    /// second "Matcaps 2" becomes "Matcaps 3", never "Matcaps 2 2", while
+    /// "Area 51" stays the user's name and becomes "Area 51 2". Empty
     /// in, empty out. Every door that names a project uses it: the create, the
     /// rename and the archive import (a reopened sample is a fresh copy).
     QString nextFreeProjectName(const QString &wanted, const QString &exceptGuid = QString());
