@@ -2666,6 +2666,11 @@ void EngineSceneViewport::pollPresentedFrame(bool wait)
         if (d) d(frame);
 }
 
+namespace {
+/// The frames a settled capture may step while its shaders build in the background.
+constexpr int kCaptureSettleFrames = 600;
+}
+
 void EngineSceneViewport::settlePresentedFrame()
 {
     if (mPresentedDone.empty()) return;
@@ -2688,6 +2693,15 @@ void EngineSceneViewport::settlePresentedFrame()
         // document's clock does not move) — the view is on screen.
         renderFrames(1, 0.0f);
         if (mDriver) mDriver->noteExternalFrame();
+        // ...AND MORE WHILE A SHADER IS STILL BUILDING (ASYNC-SHADERS-1): a capture whose frame
+        // met the background compiler's work stays armed, and is retried frame by frame until
+        // it lands (bounded — a permutation that never builds leaves the request armed and
+        // the poll below answers what it can).
+        for (int i = 0; i < kCaptureSettleFrames &&
+                        v->frameCaptureState() == jahshaka::engine::FrameCaptureState::Armed; ++i) {
+            renderFrames(1, 0.0f);
+            if (mDriver) mDriver->noteExternalFrame();
+        }
     }
     pollPresentedFrame(true);
 }

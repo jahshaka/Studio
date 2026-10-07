@@ -133,18 +133,27 @@ int main(int argc, char **argv)
         CHECK(c.value("pendingPeak").toInt() > 0, ("cold " + n + ": the pending count rose").constData());
         CHECK(c.value("pendingEnd").toInt() == 0, ("cold " + n + ": ...and fell back to 0").constData());
         CHECK(c.value("failed").toInt() == 0, ("cold " + n + ": no permutation failed").constData());
-        CHECK(c.value("placeholderDraws").toInt() > 0,
-              ("cold " + n + ": the waiting objects drew the placeholder").constData());
+        // WHILE A SHADER BUILDS THE VIEW NEVER SHOWS A HOLE: a forward (PBS) object draws the
+        // grey placeholder; a frame with an object that has none yet (the Atom decode, unlit,
+        // anything right after a pass change) is HELD — the last complete picture stays.
+        CHECK(c.value("placeholderDraws").toInt() > 0 || c.value("heldFrames").toInt() > 0,
+              ("cold " + n + ": the waiting objects drew the placeholder or the frame was held").constData());
+        CHECK(c.value("holeyPresented").toInt() == 0,
+              ("cold " + n + ": no frame with a hole was presented").constData());
         CHECK(w.value("placeholderDraws").toInt() == 0 && w.value("pendingSkips").toInt() == 0,
               ("warm " + n + ": nothing took the placeholder or skipped a draw").constData());
+        std::printf("    cold %s: placeholder draws %d, held frames %d\n", name,
+                    c.value("placeholderDraws").toInt(), c.value("heldFrames").toInt());
 
-        // The placeholder is ON SCREEN: the frame that drew it differs from the settled one.
+        // The placeholder is ON SCREEN when one was drawn: that frame differs from the settled one.
         const QString during = c.value("pictureDuring").toString();
         double m = 0.0, d = 0.0;
-        compare(during, c.value("pictureAfter").toString(), m, d);
-        std::printf("    cold %s: during vs settled mean |d| %.2f, %.1f %% of pixels\n", name, m, d * 100.0);
-        CHECK(QFileInfo::exists(during) && d > 0.001,
-              ("cold " + n + ": the placeholder is in the presented frame").constData());
+        if (c.value("placeholderDraws").toInt() > 0) {
+            compare(during, c.value("pictureAfter").toString(), m, d);
+            std::printf("    cold %s: during vs settled mean |d| %.2f, %.1f %% of pixels\n", name, m, d * 100.0);
+            CHECK(QFileInfo::exists(during) && d > 0.001,
+                  ("cold " + n + ": the placeholder is in the presented frame").constData());
+        }
 
         // ...and the settled picture is the warm run's.
         compare(c.value("pictureAfter").toString(), w.value("pictureAfter").toString(), m, d);

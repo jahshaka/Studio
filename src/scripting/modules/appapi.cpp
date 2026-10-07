@@ -235,7 +235,8 @@ QVector<VerbInfo> AppApi::verbs() const
           "the 2026-09-14 editor crash happened while the field was eight bits wide.",
           Needs::Engine },
         { "asyncShaders", "app.asyncShaders() -> {policy, active, running, threads, pending, completed, "
-                          "failed, placeholderDraws, pendingSkips, captureDeferredDraws, compiledInBackground}",
+                          "failed, placeholderDraws, pendingSkips, captureDeferredDraws, heldFrames, "
+                          "holeyPresented, compiledInBackground}",
           "THE BACKGROUND SHADER COMPILER (ASYNC-SHADERS-1). After a project is open the editor's "
           "view never waits for a shader: a permutation it has not built yet goes to the engine's "
           "compile service (its own low-priority threads) and the object draws with a neutral grey "
@@ -248,7 +249,11 @@ QVector<VerbInfo> AppApi::verbs() const
           "the placeholder / skipped because not even the placeholder was built, in the VIEWS (the "
           "editor's view, its mirrors and inset); captureDeferredDraws counts the draws of surface-cache "
           "captures that met a shader still building — those batches are discarded and retried, so a card "
-          "never holds the grey; compiledInBackground counts shaders compiled on the service's threads, which is why they "
+          "never holds the grey; heldFrames counts frames NOT presented because they drew a hole (an "
+          "object with neither its shader nor a placeholder yet, e.g. right after a tier change: the window "
+          "keeps the last complete picture), holeyPresented the frames with a hole that were presented "
+          "anyway (a hold longer than four seconds, or before the view had shown anything); "
+          "compiledInBackground counts shaders compiled on the service's threads, which is why they "
           "are not live compiles (app.shaderCache().liveCompiles).",
           Needs::Engine },
         { "setAsyncShaders", "app.setAsyncShaders(on) -> app.asyncShaders()",
@@ -884,6 +889,8 @@ QVariantMap AppApi::asyncShaders()
     m["placeholderDraws"]     = QVariant::fromValue(qulonglong(s.placeholderDraws));
     m["pendingSkips"]         = QVariant::fromValue(qulonglong(s.pendingSkips));
     m["captureDeferredDraws"] = QVariant::fromValue(qulonglong(s.captureDeferredDraws));
+    m["heldFrames"]           = QVariant::fromValue(qulonglong(s.heldFrames));
+    m["holeyPresented"]       = QVariant::fromValue(qulonglong(s.holeyPresented));
     m["compiledInBackground"] = s.compiledInBackground;
     return m;
 }

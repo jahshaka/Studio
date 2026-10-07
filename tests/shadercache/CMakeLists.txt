@@ -124,6 +124,19 @@ jah_gpu_row(shader.sample_opens_quiet CLASS app COMMAND test_sample_opens_quiet
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(shader.sample_opens_quiet PROPERTIES TIMEOUT 1800 LABELS "shadercache")
 
+# shader.async_soak (ASYNC-SHADERS-1): 50 applies while flying, a blocking render meeting a pending
+# permutation, a scene switch mid-compile and a quit with compiles pending — validation layer on.
+add_executable(test_async_soak test_async_soak.cpp)
+set_target_properties(test_async_soak PROPERTIES CXX_STANDARD 17
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+target_link_libraries(test_async_soak PRIVATE Qt6::Core)
+target_compile_definitions(test_async_soak PRIVATE
+    JAHSHAKA_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
+    JAHSHAKA_BINARY="$<TARGET_FILE:${CMAKE_PROJECT_NAME}>")
+jah_gpu_row(shader.async_soak CLASS app COMMAND test_async_soak
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(shader.async_soak PROPERTIES TIMEOUT 1200 LABELS "shadercache")
+
 # The per-scene PSO precache (SHADER_CACHE_SPEC.md §5), asserted by COUNTING
 # COMPILES: after View::warmUpShaders() the first real frame must compile
 # nothing. Its own process, like every engine suite (one Engine per process).
