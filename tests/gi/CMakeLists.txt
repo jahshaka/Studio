@@ -1914,8 +1914,9 @@ target_compile_definitions(test_gi_flythrough_noise PRIVATE
 target_link_libraries(test_gi_flythrough_noise PRIVATE JahshakaEngine)
 add_dependencies(test_gi_flythrough_noise JahshakaEngineMedia)
 # ...and gi.flythrough_noise.Open, the control: the same blocks under the open sky
-# (most rays escape to it) must be no noisier and keep their mean.
-foreach(_arm Showroom2 Open)
+# (most rays escape to it) must be no noisier and keep their mean; .Leak: a thin
+# partition, the camera turning onto its dark side — no light through the wall.
+foreach(_arm Showroom2 Open Leak)
     string(TOLOWER ${_arm} _lower)
     jah_gpu_row(gi.flythrough_noise.${_arm} CLASS engine COMMAND test_gi_flythrough_noise ${_lower}
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
