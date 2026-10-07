@@ -225,11 +225,12 @@ void EditorPage::build(const Deps &deps)
 	playSimBtn->setToolTip("Simulate physics only");
 	playSimBtn->setStyleSheet(StyleSheet::BackgroundTransparent());
 
-    // 6, not 8 (VIDEO-REC-1): the record button's 28 px had to come from somewhere —
-    // this bar's minimum IS the window's floor, and a test tier's window is 1280 wide.
-    controlBarLayout->setSpacing(6);
-    // The photo and the video button are one pair, 2 px apart (the rest of the
-    // 28 px budget: 1259 -> 1277, under the test tier's 1280).
+    // 4, not 8 (VIDEO-REC-1): the record button's 28 px come out of this bar's own
+    // gaps. Its minimum IS the window's floor, and at a test tier's 1280-wide window
+    // the floor sets the viewport's width (727 px at 1259) — so the floor must not
+    // move, or every framing-sensitive low-tier picture moves with it.
+    controlBarLayout->setSpacing(4);
+    // The photo and the video button are one pair, 2 px apart.
     auto *shotPair = new QHBoxLayout;
     shotPair->setSpacing(2);
     shotPair->setContentsMargins(0, 0, 0, 0);
