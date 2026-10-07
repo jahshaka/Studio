@@ -51,8 +51,20 @@ assert_absent "duplicate connection name" \
     "no duplicate SQL connection warning (Lane 6b)"
 assert_absent "invalid parameters in SMAA\.material" \
     "no SMAA.material parse error (Lane 6c / fork c290052de (was 0012))"
-assert_absent "qt\.multimedia\.ffmpeg: Using Qt multimedia" \
-    "Qt Multimedia is not constructed at boot (Lane 6a)"
+# LANE 6a IS ABOUT THE BOOT: the lines up to the payload's first print. The payload goes on to
+# create a project (the toolbar check below), and the FIRST open/create of a process makes Qt's
+# video encoder probe behind its progress (VIDEO-REC-2, services/encoderprobe.h) — after the boot.
+sed '/startup_quiet: booted/q' boot2.log > boot2-boot.log
+if grep -Eq "qt\.multimedia\.ffmpeg: Using Qt multimedia" boot2-boot.log; then
+    echo "startup_quiet: FAIL — Qt Multimedia is not constructed at boot (Lane 6a)"
+    grep -En "qt\.multimedia\.ffmpeg: Using Qt multimedia" boot2-boot.log | head -5
+    fail=1
+elif ! grep -q "startup_quiet: booted" boot2-boot.log; then
+    echo "startup_quiet: FAIL — the boot section (up to the payload's first line) is missing"
+    fail=1
+else
+    echo "startup_quiet: ok — Qt Multimedia is not constructed at boot (Lane 6a)"
+fi
 
 assert_absent "'objectName' not set for QToolBar" \
     "every toolbar in a saved window state is named (the editor toolbar, SMALL-FIXES-1)"
