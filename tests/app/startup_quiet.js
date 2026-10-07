@@ -8,6 +8,7 @@ console.log("startup_quiet: booted, openTimings=" + app.openTimings().length);
 // nested window's state (DockState::snapshot), which is where Qt warns about
 // any UNNAMED toolbar — a boot alone never takes one. So the payload opens a
 // project and leaves the editor once; the suite greps the warning's absence.
-if (project.create("startup quiet") === false) throw new Error("project.create failed");
+// Every boot under this suite's one HOME creates one: a free name (PROJECT-NAMES-1).
+if (project.create(project.nextFreeName("startup quiet")) === false) throw new Error("project.create failed");
 if (app.space("desktop") !== true) throw new Error("app.space('desktop') failed");
 console.log("startup_quiet: editor layout snapshot taken");
