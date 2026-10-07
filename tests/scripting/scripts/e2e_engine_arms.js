@@ -30,7 +30,7 @@ var EXPECTED = { "reflect.motion": 1, "reflect.posed": 1, "reflect.alphaTested":
                  "gather.filterRadius": 0, "gather.restOff": 0, "gather.restFrames": 0,
                  "gather.restSeed": 0, "gather.ageView": 0, "gather.freezeFrame": 0,
                  "gather.youngFrames": 0, "gather.youngReach": 0, "gather.validationOff": 0,
-                 "gather.crossStrata": 0 };
+                 "gather.crossStrata": 0, "reflect.metalDecode": 0.3 };
 
 var guid = project.create("Engine Arms " + Date.now());
 assert(guid.length > 10, "project.create -> " + guid);

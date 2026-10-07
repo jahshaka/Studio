@@ -1610,6 +1610,28 @@ static int planarMain(Engine *e, bool pinnedChain)
     CHECK_MSG(lum(cm) > 0.25f * lum(cr) && relDiff(cm, cc) < 1.0f,
               "B is neither black nor sky-only: %.0f %% of the true luminance, P's colour (worst channel %.0f %% "
               "from the cone picture's)", 100.0f * lum(cm) / lum(cr), 100.0f * relDiff(cm, cc));
+    // THE PLANAR ROUTE ALONE (REFLECT-FIX-1 fix round): a metal B is decoded by the metal
+    // rule with or without its planar flag, so the control above no longer isolates the
+    // planar route. A DIELECTRIC B — black, polished, metalness 0 — is not a metal: its
+    // card holds its ~0 diffuse, and only kJahHitGpuPlanar sends its hits to the decode,
+    // which shades its own specular reflection of P. Without the flag it must read black.
+    {
+        PbrParams darkGloss;
+        darkGloss.albedo = Colour(0.0f, 0.0f, 0.0f);
+        darkGloss.metalness = 0.0f;
+        darkGloss.roughness = 0.0f;
+        s->attachMesh(b, cube, s->createPbrMaterial(darkGloss));
+        s->setNodePlanarReflector(b, true);
+        const ImageF dOn = shot(true);
+        s->setNodePlanarReflector(b, false);
+        const ImageF dOff = shot(true);
+        const Colour con = maskMean(dOn, core, false), coff = maskMean(dOff, core, false);
+        std::printf("   a DIELECTRIC B (black, polished): planar (%.4f %.4f %.4f), not planar (%.4f %.4f %.4f)\n",
+                    con.r, con.g, con.b, coff.r, coff.g, coff.b);
+        CHECK_MSG(lum(con) > 4.0f * std::max(lum(coff), 1e-4f),
+                  "THE PLANAR ROUTE: a dielectric B shows its reflection only as a planar reflector (%.4f against "
+                  "%.4f without the flag, bar 4x)", lum(con), lum(coff));
+    }
     e->destroyView(view);
     e->destroyScene(s);
     return 0;
