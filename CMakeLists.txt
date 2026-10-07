@@ -245,6 +245,10 @@ set(SRCS
     src/modules/vr/vrarc.cpp
     src/modules/vr/vrinteraction.cpp
     src/modules/vr/vrmodule.cpp
+    src/modules/capture/capturemodule.cpp
+    src/modules/capture/captureapi.cpp
+    src/modules/capture/videorecorder.cpp
+    src/modules/capture/mp4faststart.cpp
     src/modules/avatar/avatarmodule.cpp
     src/modules/avatar/avatarpage.cpp
     src/modules/avatar/avatarpreviewmodel.cpp

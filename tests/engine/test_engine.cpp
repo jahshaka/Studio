@@ -16,6 +16,7 @@
 #include <memory>
 #include <thread>
 #include <string>
+#include <set>
 #include <vector>
 
 using namespace jahshaka::engine;
@@ -4372,6 +4373,106 @@ ViewOverlayDesc loudCover() {
 /// it explicitly opted in. Nothing about this is a matter of discipline — the
 /// gate is in one place (OgreView::overlaysAllowed, feeding ChainDesc::overlays
 /// into the single overlay-bearing pass) exactly like the post chain's.
+// ---- THE VIDEO READBACK (VIDEO-REC-1; View::setVideoReadback) --------------
+// The recorder's frames are the view's DISPLAYED picture through ONE matrix:
+// BT.709, limited range, on the very codes readPixels returns (VideoFrameNv12
+// states it). This holds the GPU pass to that closed form texel by texel — luma
+// to one code (the pass rounds in float, the reference in double), each 2x2
+// block's chroma to one code — on a lit cube over a coloured clear, so every
+// plane carries more than one value. Then the ring: three slots, a frame armed
+// with all three pending is DROPPED and counted, and the drain hands the
+// frames back in render order with their tags.
+namespace videorb {
+int code(double v) { return int(std::floor(std::min(255.0, std::max(0.0, v)) + 0.5)); }
+}
+void video_readback_is_bt709_nv12() {
+    Fixture f; Engine *e = f.e;
+    const unsigned W = 64, H = 32;
+    View *v = f.view("video", W, H, kCyan);
+    REQUIRE(v);
+    Scene *s = f.scene("video-s");
+    REQUIRE(s);
+    populate(s, kOrange);
+    CHECK(v->setScene(s));
+    aim(v);
+    // The size rule and the on-screen rule are refusals, never a crash.
+    {
+        View *odd = f.view("video-odd", 66, 32, kCyan);
+        REQUIRE(odd);
+        CHECK_MSG(!odd->setVideoReadback(true), "a width that is not a multiple of 4 is refused");
+        std::printf("    66x32 refused: %s\n", e->lastError().c_str());
+    }
+    REQUIRE(v->setVideoReadback(true));
+    const VideoReadbackStatus st0 = v->videoReadbackStatus();
+    CHECK(st0.on && st0.width == W && st0.height == H && st0.ringSize == 3u && st0.pending == 0u);
+    render(e, 2);
+    VideoFrameNv12 fr;
+    CHECK_MSG(!v->takeVideoFrame(fr, false), "nothing armed, nothing to take");
+
+    v->armVideoFrame(7);
+    e->renderOneFrame();
+    Image img;
+    REQUIRE(v->readPixels(img));
+    bool got = false;
+    for (int i = 0; i < 8 && !got; ++i) { got = v->takeVideoFrame(fr, false); if (!got) e->renderOneFrame(); }
+    REQUIRE(got);
+    CHECK(fr.tag == 7u && fr.width == W && fr.height == H && fr.nv12.size() == size_t(W) * H * 3 / 2);
+
+    int worstY = 0, worstC = 0;
+    std::set<int> lumas;
+    for (unsigned y = 0; y < H; ++y)
+        for (unsigned x = 0; x < W; ++x) {
+            const unsigned char *p = &img.rgba[(size_t(y) * W + x) * 4];
+            const double yp = (0.2126 * p[0] + 0.7152 * p[1] + 0.0722 * p[2]) / 255.0;
+            const int want = videorb::code(16.0 + 219.0 * yp);
+            const int have = fr.luma()[size_t(y) * W + x];
+            lumas.insert(have);
+            worstY = std::max(worstY, std::abs(want - have));
+        }
+    for (unsigned by = 0; by < H / 2; ++by)
+        for (unsigned bx = 0; bx < W / 2; ++bx) {
+            double cb = 0.0, cr = 0.0;
+            for (unsigned dy = 0; dy < 2; ++dy)
+                for (unsigned dx = 0; dx < 2; ++dx) {
+                    const unsigned char *p = &img.rgba[(size_t(by * 2 + dy) * W + bx * 2 + dx) * 4];
+                    const double r = p[0] / 255.0, g = p[1] / 255.0, b = p[2] / 255.0;
+                    const double yp = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+                    cb += (b - yp) / 1.8556;
+                    cr += (r - yp) / 1.5748;
+                }
+            const int wantCb = videorb::code(128.0 + 224.0 * cb * 0.25);
+            const int wantCr = videorb::code(128.0 + 224.0 * cr * 0.25);
+            const unsigned char *c = fr.chroma() + size_t(by) * W + bx * 2;
+            worstC = std::max({ worstC, std::abs(wantCb - int(c[0])), std::abs(wantCr - int(c[1])) });
+        }
+    std::printf("    NV12 vs BT.709 of readPixels: worst luma %d, worst chroma %d codes; %zu luma values\n",
+                worstY, worstC, lumas.size());
+    CHECK_MSG(worstY <= 1, "luma within one code of the closed form (worst %d)", worstY);
+    CHECK_MSG(worstC <= 1, "chroma within one code of the closed form (worst %d)", worstC);
+    CHECK_MSG(lumas.size() >= 4, "the picture is not flat (%zu luma values)", lumas.size());
+    CHECK_MSG(*lumas.begin() >= 16 && *lumas.rbegin() <= 235, "limited range");
+
+    // THE RING: five armed frames, nobody taking — three are read back, two dropped.
+    const unsigned long long dropped0 = v->videoReadbackStatus().dropped;
+    for (unsigned long long t = 100; t < 105; ++t) { v->armVideoFrame(t); e->renderOneFrame(); }
+    const VideoReadbackStatus st1 = v->videoReadbackStatus();
+    std::printf("    ring: pending %u recorded %llu delivered %llu dropped %llu\n", st1.pending,
+                st1.recorded, st1.delivered, st1.dropped);
+    CHECK(st1.pending == 3u);
+    CHECK(st1.dropped == dropped0 + 2u);
+    // The drain: in render order, with their tags.
+    for (unsigned long long t = 100; t < 103; ++t) {
+        VideoFrameNv12 d;
+        CHECK_MSG(v->takeVideoFrame(d, true) && d.tag == t, "drained tag %llu (got %llu)", t, d.tag);
+    }
+    CHECK(!v->takeVideoFrame(fr, true));
+    CHECK(v->videoReadbackStatus().pending == 0u);
+    CHECK(v->setVideoReadback(false));
+    CHECK(!v->videoReadbackStatus().on);
+    // Off again is free, and the view still renders.
+    render(e, 1);
+}
+
 void hud_overlay_is_ignored_offscreen_unless_asked() {
     Fixture fx;
     View *v = fx.view("hud-guard-view", 96, 96, kBlue); REQUIRE(v);
@@ -6514,6 +6615,7 @@ int main(int argc, char **argv) {
         { "workspace_seam_counts_every_rebuild",    workspace_seam_counts_every_rebuild },
         { "shadow_mesh_optimization_keeps_static_shadows", shadow_mesh_optimization_keeps_static_shadows },
         { "dynamic_mesh_shadow_follows_its_pose",   dynamic_mesh_shadow_follows_its_pose },
+        { "video_readback_is_bt709_nv12",          video_readback_is_bt709_nv12 },
         { "hud_overlay_is_ignored_offscreen_unless_asked", hud_overlay_is_ignored_offscreen_unless_asked },
         { "hud_overlay_draws_where_it_says_when_allowed", hud_overlay_draws_where_it_says_when_allowed },
         { "a_scene_less_view_clears_and_still_draws_its_panel",

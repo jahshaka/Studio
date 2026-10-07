@@ -12,6 +12,7 @@ For more information see the LICENSE file
 #include "modules/moduleregistry.h"
 
 #include "modules/avatar/avatarmodule.h"
+#include "modules/capture/capturemodule.h"
 #include "modules/materials/materialsmodule.h"
 #include "modules/publish/publishmodule.h"
 #include "modules/vr/vrmodule.h"
@@ -26,8 +27,10 @@ QVector<StudioModule *> createAll()
     // registers. The Player space contributes VERBS only (verb-coverage audit
     // F1); its page is the shell's PlayerWidget. A module with no page still
     // gets a place in the loop.
+    // CAPTURE (VIDEO-REC-1) has no page either: the record button beside the
+    // photo button and the `capture.*` verbs.
     return { new MaterialsModule, new PublishModule, new AvatarModule, new PlayerModule,
-             new VrModule };
+             new VrModule, new CaptureModule };
 }
 
 }   // namespace moduleregistry

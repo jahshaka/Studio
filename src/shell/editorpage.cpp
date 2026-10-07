@@ -23,6 +23,7 @@ For more information see the LICENSE file
 #include <QMenu>
 #include <QPushButton>
 #include <QSignalBlocker>
+#include <QToolBar>
 #include <QToolButton>
 #include <QVBoxLayout>
 
@@ -36,6 +37,7 @@ For more information see the LICENSE file
 #include "services/selectionservice.h"
 #include "services/services.h"
 #include "services/surfaceplacement.h"
+#include "shell/actionhost.h"
 #include "shell/mainwindow.h"
 #include "thirdparty/qtawesome/QtAwesome.h"
 #include "ui/dialogs/screenshotwidget.h"
@@ -226,6 +228,19 @@ void EditorPage::build(const Deps &deps)
 
     controlBarLayout->setSpacing(8);
     controlBarLayout->addWidget(screenShotBtn);
+    // THE RECORD BUTTON'S PLACE (VIDEO-REC-1): beside the photo button, a slot
+    // the capture module's action goes into (shell/actionhost.h) — the shell
+    // never names the module.
+    if (deps.actions) {
+        auto *captureBar = new QToolBar;
+        captureBar->setObjectName(QStringLiteral("captureBar"));
+        captureBar->setIconSize(QSize(16, 16));
+        captureBar->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+        captureBar->setMovable(false);
+        captureBar->setFloatable(false);
+        deps.actions->addToolbarSlot(captureBar, QStringLiteral("editor.capture"));
+        controlBarLayout->addWidget(captureBar);
+    }
 	controlBarLayout->addWidget(cameraControls.projection);
     controlBarLayout->addWidget(wireFramesButton);
     controlBarLayout->addWidget(cameraControls.views);

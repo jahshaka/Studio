@@ -33,6 +33,7 @@ For more information see the LICENSE file
 #include "modules/studiomodule.h"
 #include "shell/viewcontroller.h"
 
+class ActionHost;
 class Database;
 class EnginePlayerView;
 class IEditorViewport;
@@ -59,6 +60,9 @@ public:
         QtAwesome *icons = nullptr;
         Database *db = nullptr;
         ViewController::CameraControls cameraControls;
+        /// Where the bar's module slots are registered (`editor.capture`, the
+        /// record button beside the photo button — VIDEO-REC-1).
+        ActionHost *actions = nullptr;
         /// The engine viewport exists and the render driver is about to start:
         /// the window watches the Engine and paces the loop.
         std::function<void(const std::shared_ptr<jahshaka::engine::Engine> &)> engineStarted;

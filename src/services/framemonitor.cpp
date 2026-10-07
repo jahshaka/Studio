@@ -85,6 +85,7 @@ const char *cacheName(CacheKind c)
     case CacheKind::Texture:   return "texture";
     case CacheKind::Atmosphere: return "atmosphere";
     case CacheKind::Cull:       return "cull";
+    case CacheKind::Video:      return "video";
     }
     return "?";
 }
