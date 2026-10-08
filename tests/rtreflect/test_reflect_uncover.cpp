@@ -626,9 +626,9 @@ static int metalMain(Engine *e, Scene *s, View *view, const char *dumpDir)
     }
     CHECK_MSG(n > 100, "the sphere shows the crate behind the camera (%d px)", n);
     const double lumM = 0.2126 * mR + 0.7152 * mG + 0.0722 * mB, lumG = 0.2126 * gR + 0.7152 * gG + 0.0722 * gB;
-    CHECK_MSG(lumG >= 0.35 * lumM,
+    CHECK_MSG(lumG >= 0.8 * lumM,
               "A METAL IN A REFLECTION IS NOT BLACK: the gold crate's image %.0f codes against the matte one's %.0f "
-              "(bar 35 %%)", lumG, lumM);
+              "(bar 80 %%)", lumG, lumM);
     CHECK_MSG(gR > 1.15 * gB && gG > 1.05 * gB, "...and it is GOLD (R %.0f > G %.0f > B %.0f)", gR, gG, gB);
 
     // AN IN-PLACE EDIT FLIPS THE ANSWER (the fix round's stale flag): the matte crate's
@@ -655,7 +655,7 @@ static int metalMain(Engine *e, Scene *s, View *view, const char *dumpDir)
     if (en) { eR /= en; eG /= en; eB /= en; }
     const double lumE = 0.2126 * eR + 0.7152 * eG + 0.0722 * eB;
     std::printf("   the matte crate's material edited to metal in place: (%.0f, %.0f, %.0f) in the sphere\n", eR, eG, eB);
-    CHECK_MSG(lumE >= 0.35 * lumM && eR > 1.15 * eB,
+    CHECK_MSG(lumE >= 0.8 * lumM && eR > 1.15 * eB,
               "AN IN-PLACE METALNESS EDIT REACHES THE TRACE: gold (%.0f, %.0f, %.0f), not black, with nothing moving",
               eR, eG, eB);
 
@@ -692,6 +692,36 @@ static int metalMain(Engine *e, Scene *s, View *view, const char *dumpDir)
     std::printf("   from a glossy sphere (r 0.35, the voxel route): %.2f codes from the full decode over %d px\n", err, vn);
     CHECK_MSG(vn > 50 && err <= 8.0,
               "...and from a GLOSSY reflector the voxel route gives the decode's metal (%.2f codes, bar 8)", err);
+
+    // A SPECULAR-WORKFLOW DIELECTRIC IS NOT A METAL (the fix round's gpuIsMetal defect):
+    // SpecularAsFresnel, F0 0.04, a white specular colour kS — the shape of every
+    // spec-gloss import. Its metal answer is its F0, not kS: from a SHARP sphere its hits
+    // read its CARD — no decode records beyond the scene's own — where reading kS made it
+    // a metal and decoded every one of them.
+    PbrParams sharpSphere = glossySphere; sharpSphere.roughness = 0.02f;
+    s->attachMesh(room.sphere, s->createMesh(sphereMesh()), s->createPbrMaterial(sharpSphere));
+    PbrParams specDiel; specDiel.albedo = Colour(1.0f, 0.77f, 0.34f); specDiel.roughness = 0.5f;
+    specDiel.workflow = PbrParams::Workflow::SpecularAsFresnel;
+    specDiel.useFresnelColour = true; specDiel.fresnelColour = Colour(0.04f, 0.04f, 0.04f);
+    specDiel.specularColour = Colour(1.0f, 1.0f, 1.0f);
+    s->attachMesh(crate, room.cardedCube, s->createPbrMaterial(specDiel));
+    const auto records = [&]() {
+        std::vector<unsigned long long> r;
+        for (int f = 0; f < 30; ++f) { e->renderOneFrame(); r.push_back(s->rayQueryStatus().hitRecords); }
+        std::sort(r.begin(), r.end());
+        return r[r.size() / 2];
+    };
+    render(e, 240);
+    const unsigned long long withSpec = records();
+    s->setNodeVisible(crate, false);
+    render(e, 120);
+    const unsigned long long withoutCrate = records();
+    s->setNodeVisible(crate, true);
+    std::printf("   a SpecularAsFresnel dielectric crate (F0 0.04, white kS) from a sharp sphere: %llu decode records "
+                "a frame, %llu without the crate\n", withSpec, withoutCrate);
+    CHECK_MSG(withSpec <= withoutCrate + 10ull,
+              "A SPECULAR-WORKFLOW DIELECTRIC READS ITS CARD: %llu decode records a frame against %llu without it "
+              "(not a metal: F0 0.04, whatever its kS)", withSpec, withoutCrate);
     return failures ? 1 : 0;
 }
 
