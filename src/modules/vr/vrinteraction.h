@@ -419,6 +419,9 @@ public:
     QString sourceName() const;
     /// {dominant, turn, grabbing, hovering, source, snapping, far, distance}
     QVariantMap report() const;
+    /// `VrStatus::poseSerial` as the last step() read it (0 before any step):
+    /// the host half of the pose-order contract (VR-REORDER-1).
+    unsigned long long stepPoseSerial() const { return mStepPoseSerial; }
     /// WHAT THE WEARER'S GIZMO IS DOING (`vr.gizmo()`): {armed, mode, handle,
     /// dragging, scale, toleranceDegrees, eye, drags, commits}. `handle` is the
     /// name of the handle under the aim ray RIGHT NOW — the answer a press
@@ -701,6 +704,9 @@ private:
     mutable bool mRefreshed = false;
     /// Counts, for the suites: every number a COUNT, never a wall clock.
     unsigned long long mSelects = 0, mGrabs = 0, mCommits = 0, mCancels = 0, mTurns = 0;
+    /// THE POSE THE LAST STEP READ (VrStatus::poseSerial at the step), for the
+    /// pose-order contract `vr.state().stepPoseSerial` reports (VR-REORDER-1).
+    unsigned long long mStepPoseSerial = 0;
     /// The gizmo's own counters: drags begun, drags committed, modes cycled.
     unsigned long long mGizmoDrags = 0, mGizmoCommits = 0, mGizmoModes = 0;
     /// The teleport's: throws armed, throws taken, throws refused or cancelled.

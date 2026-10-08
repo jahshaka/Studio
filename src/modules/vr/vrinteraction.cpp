@@ -1522,6 +1522,9 @@ void VrInteraction::step(float seconds)
     const float dt = vrorigin::frameSeconds(seconds > 0.0f ? seconds : kNominalFrame);
     VrHandState hands[VrHandCount];
     for (unsigned i = 0; i < VrHandCount; ++i) hands[i] = handState(i);
+    // WHICH LOCATE THOSE HANDS CAME FROM (VR-REORDER-1): the frame that follows
+    // must draw with the same one, or everything this step moves lags the hand.
+    if (Engine *engine = engineNow()) mStepPoseSerial = engine->vrStatus().poseSerial;
 
     // THE SOURCE'S OWN ANSWER, whoever wrote the samples (VrEngineInput::
     // focused() reads the sample's `focused` bit when a hand is reporting and

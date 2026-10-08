@@ -309,6 +309,47 @@ set_tests_properties(vr.input_session PROPERTIES
     ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}HOME=${_vr_input_home};JAHSHAKA_DATA_ROOT=${_vr_input_home}/.local/share/Jahshaka;JAHSHAKA_VR_TEST_INJECT=1")
 
 # ---------------------------------------------------------------------------
+# vr.pose_order / vr.held_follows_hand — THE POSE BEFORE THE HOST'S VR STEP
+# (lane VR-REORDER-1; SPECS/ONE_PICTURE_SPEC.md A8).
+#
+# The OpenXR order is wait -> locate -> simulate with the pose -> render, and
+# the host's VR interaction step (the grabs, the gizmo drag, the ray, teleport)
+# is the "simulate". `vr.pose_order` asserts it as a number — the pose serial
+# the driver's interaction step read equals the serial the following frame drew
+# with, on 60 frames in a row; `vr.held_follows_hand` asserts what it buys —
+# a near-grabbed cube stays welded to the hand of its own frame while the
+# wearer is walked (no one-frame swim behind the wand).
+#
+# THE RENDER LOOP IS LIVE in both (`--script-live`, the runner's events mode):
+# the interaction is stepped by the DRIVER's tick, the path a headset runs, and
+# Monado's simulated rig supplies real located hands (nothing is injected — an
+# injected sample stands the driver's step down).
+set(_vr_order_home "${CMAKE_CURRENT_BINARY_DIR}/vr-order-home")
+jah_gpu_row(vr.pose_order CLASS vr
+         COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/run_vr_app.sh"
+                 "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" "${JAH_MONADO_MANIFEST}"
+                 "${CMAKE_SOURCE_DIR}/tests/scripting/scripts/e2e_vr_pose_order.js"
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(vr.pose_order PROPERTIES
+    LABELS "scripting"
+    TIMEOUT 300
+    RESOURCE_LOCK monado COST ${JAH_COST_MONADO}
+    SKIP_RETURN_CODE 77
+    ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}HOME=${_vr_order_home};JAHSHAKA_DATA_ROOT=${_vr_order_home}/.local/share/Jahshaka;JAH_VR_RUNNER_EVENTS=1")
+set(_vr_held_home "${CMAKE_CURRENT_BINARY_DIR}/vr-held-home")
+jah_gpu_row(vr.held_follows_hand CLASS vr
+         COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/run_vr_app.sh"
+                 "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" "${JAH_MONADO_MANIFEST}"
+                 "${CMAKE_SOURCE_DIR}/tests/scripting/scripts/e2e_vr_held_follows_hand.js"
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(vr.held_follows_hand PROPERTIES
+    LABELS "scripting"
+    TIMEOUT 300
+    RESOURCE_LOCK monado COST ${JAH_COST_MONADO}
+    SKIP_RETURN_CODE 77
+    ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}HOME=${_vr_held_home};JAHSHAKA_DATA_ROOT=${_vr_held_home}/.local/share/Jahshaka;JAH_VR_RUNNER_EVENTS=1")
+
+# ---------------------------------------------------------------------------
 # vr.warmup / vr.warmup_control — THE STEREO WARM-UP (lane VR-WARMUP-1;
 # SPECS/VR_SPEC.md §6, VrConfig::warmUpFrames).
 #
@@ -524,6 +565,14 @@ endif()
 if(TEST vr.input_session)
     jah_fresh_home_fixture(vr.input_session.fresh_home vrInputSessionFreshHome "${CMAKE_CURRENT_BINARY_DIR}/vr-input-home" WARM LABELS "scripting;vr")
     set_property(TEST vr.input_session APPEND PROPERTY FIXTURES_REQUIRED vrInputSessionFreshHome)
+endif()
+if(TEST vr.pose_order)
+    jah_fresh_home_fixture(vr.pose_order.fresh_home vrPoseOrderFreshHome "${CMAKE_CURRENT_BINARY_DIR}/vr-order-home" WARM LABELS "scripting;vr")
+    set_property(TEST vr.pose_order APPEND PROPERTY FIXTURES_REQUIRED vrPoseOrderFreshHome)
+endif()
+if(TEST vr.held_follows_hand)
+    jah_fresh_home_fixture(vr.held_follows_hand.fresh_home vrHeldFollowsHandFreshHome "${CMAKE_CURRENT_BINARY_DIR}/vr-held-home" WARM LABELS "scripting;vr")
+    set_property(TEST vr.held_follows_hand APPEND PROPERTY FIXTURES_REQUIRED vrHeldFollowsHandFreshHome)
 endif()
 if(TEST vr.frame_budget)
     jah_fresh_home_fixture(vr.frame_budget.fresh_home vrFrameBudgetFreshHome "${CMAKE_CURRENT_BINARY_DIR}/vr-budget-home" WARM LABELS "scripting;vr")

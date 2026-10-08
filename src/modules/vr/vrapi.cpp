@@ -521,7 +521,8 @@ QVector<VerbInfo> VrApi::verbs() const
           Needs::Engine },
         { "state",
           "vr.state() -> {active, state, runtime, version, space, eyeSize:[w,h], refreshHz, "
-          "frames, rendered, warmUp:{frames,ms}, ipd, mirror:{mode,showing}, worldScale, "
+          "frames, rendered, poseSerial, renderedPoseSerial, stepPoseSerial, "
+          "warmUp:{frames,ms}, ipd, mirror:{mode,showing}, worldScale, "
           "asymmetricFov, "
           "spaceChanges, head, "
           "hands:{left,right}, input:{left,right}, inputFocused, profile, "
@@ -540,6 +541,12 @@ QVector<VerbInfo> VrApi::verbs() const
           "re-setup) — each one is absorbed into the rig so the wearer does not move, and a "
           "count climbing while nobody touched the headset is a runtime problem. With no "
           "session every field is at its zero and `state` is \"idle\" or \"unavailable\".\n\n"
+          "THE POSE ORDER (VR-REORDER-1) is three counters: `poseSerial` moves with every "
+          "successful locate of the head, the hands and the controls; `renderedPoseSerial` is "
+          "the serial the last rendered frame drew the eyes with; `stepPoseSerial` is the "
+          "serial the VR interaction step (the grabs, the gizmo drag, the ray, teleport) last "
+          "read. Between frames `stepPoseSerial == renderedPoseSerial` is the contract: what "
+          "the wearer's hand moved was drawn with the pose of the hand that moved it.\n\n"
           "`head` and `hands.left` / `hands.right` are POSES in WORLD space — {valid, position, "
           "rotation, yaw} — the runtime's own, composed through the rig, which is the only frame "
           "a caller can reason in. The head's `valid` LATCHES once the session has located "
@@ -1510,6 +1517,11 @@ QVariantMap VrApi::state()
     out[QStringLiteral("refreshHz")] = info.refreshHz;
     out[QStringLiteral("frames")] = QVariant::fromValue(qulonglong(s.frames));
     out[QStringLiteral("rendered")] = QVariant::fromValue(qulonglong(s.rendered));
+    out[QStringLiteral("poseSerial")] = QVariant::fromValue(qulonglong(s.poseSerial));
+    out[QStringLiteral("renderedPoseSerial")] =
+        QVariant::fromValue(qulonglong(s.renderedPoseSerial));
+    out[QStringLiteral("stepPoseSerial")] =
+        QVariant::fromValue(qulonglong(interaction.stepPoseSerial()));
     // THE STEREO WARM-UP (lane VR-WARMUP-1): how many warm-up frames this
     // session has rendered before its first committed one, and what they cost.
     // A count and a measured value, like everything else here.
