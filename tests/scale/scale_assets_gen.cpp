@@ -1,7 +1,7 @@
 // scale_assets_gen — THE LARGE ASSETS (lane D1-SCALE-FIXTURES, brief §4.2), a
 // TOOL (EXCLUDE_FROM_ALL), never a suite.
 //
-//   scale_assets_gen [--force] <triangles>...     e.g. 1000000 5000000 10000000
+//   scale_assets_gen [--force] [<triangles>...]   default 250000 1000000 5000000 10000000
 //
 // Each count is enginetest::proceduralShell(triangles), written as a binary PLY
 // and baked through the PRODUCT'S import door (MeshBake::buildFromFile: parse,
@@ -31,17 +31,26 @@ int main(int argc, char **argv)
         if (!std::strcmp(argv[i], "--force")) force = true;
         else counts.push_back(size_t(std::strtoull(argv[i], nullptr, 10)));
     }
-    if (counts.empty()) counts = { 1000000u, 5000000u, 10000000u };
+    if (counts.empty()) counts = { 250000u, 1000000u, 5000000u, 10000000u };   // every shell a row reads
     std::printf("scale_assets_gen: cache %s\n", qPrintable(scale::cacheDir()));
+    scale::sweepStaleTemps();
+    // "dag cpu s" SUMS the pieces' DAG stages, which run in parallel: on a multi-piece model
+    // it can exceed the bake's wall time (its share is then over 100 %, by construction).
     std::printf("%-14s %6s %10s %6s %8s %10s %10s %8s %10s %12s %8s %6s %10s %9s\n", "asset", "pieces", "tris",
-                "cached", "bake s", "s per MT", "dag s", "dag %", "read ms", "blob MB", "levels", "cards",
+                "cached", "bake s", "s per MT", "dag cpu s", "dag/wall", "read ms", "blob MB", "levels", "cards",
                 "coarsest", "peak MB");
     int rc = 0;
     for (size_t t : counts) {
         if (force) QFile::remove(scale::shellBlobPath(t));
         scale::BakeInfo info;
-        const QList<iris::MeshPtr> m = scale::shellAsset(t, &info, true);
-        if (m.isEmpty()) { std::printf("FAIL: shell %zu\n", t); rc = 1; continue; }
+        // THE NO-OP PATH (the fixture row on a warm cache): a CURRENT blob (its header names
+        // this bake producer) with a complete record is reported from the record alone — no
+        // blob is read (four of them were 6.6 s and gigabytes of RSS). A stale one is
+        // re-baked in place; a missing one is baked.
+        if (!(scale::shellRecord(t, &info) && info.pieces > 0)) {
+            const QList<iris::MeshPtr> m = scale::shellAsset(t, &info, true);
+            if (m.isEmpty()) { std::printf("FAIL: shell %zu\n", t); rc = 1; continue; }
+        }
         const double s = info.bakeMs / 1000.0;
         std::printf("%-14s %6d %10zu %6s %8.1f %10.1f %10.1f %7.1f%% %10.0f %12.1f %8d %6d %10zu %9.0f\n",
                     qPrintable(info.name), info.pieces, info.triangles, info.fromCache ? "yes" : "no", s,

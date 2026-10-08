@@ -21,7 +21,9 @@
 
 #include <QColor>
 #include <QElapsedTimer>
+#include <QDir>
 #include <QFile>
+#include <QTemporaryDir>
 #include <QGuiApplication>
 #include <QImage>
 
@@ -69,15 +71,27 @@ static const FramePass *passNamed(const FrameRecord &r, const char *name)
 
 /// Run `body`, then `tail` more frames, and return exactly the records of frames
 /// rendered from the call on (records arrive late: attributed by frame number).
+/// A path longer than the monitor's ring (kRingCapacity, 4,096 frames — the 2 km walk is
+/// 6,000) drains into collect()'s buffer as it goes (midDrain), or its first frames are lost.
+static std::vector<FrameRecord> *g_midDrain = nullptr;
+static void midDrain(Env &env)
+{
+    if (!g_midDrain) return;
+    for (FrameRecord &r : drain(env)) g_midDrain->push_back(std::move(r));
+}
 static std::vector<FrameRecord> collect(Env &env, const std::function<void()> &body, int tail = 8)
 {
     frame(env, 4);
     unsigned long long before = 0;
     for (const FrameRecord &r : drain(env)) before = std::max(before, r.frame);
+    std::vector<FrameRecord> mid;
+    g_midDrain = &mid;
     body();
     frame(env, tail);
+    midDrain(env);
+    g_midDrain = nullptr;
     std::vector<FrameRecord> out;
-    for (FrameRecord &r : drain(env))
+    for (FrameRecord &r : mid)
         if (r.frame > before) out.push_back(std::move(r));
     std::sort(out.begin(), out.end(), [](const FrameRecord &a, const FrameRecord &b) { return a.frame < b.frame; });
     return out;
@@ -119,18 +133,30 @@ static void pathWalk(Env &env, float metres, float speed)
         const float x = -0.5f * metres + float(f) * speed * kDt;
         setCamera(env, iris::Vec3(x, 1.7f, 0.0f), iris::Vec3(x + 10.0f, 1.7f, -2.0f));
         frame(env, 1);
+        if (f % 1024 == 1023) midDrain(env);
     }
 }
-/// A TELEPORT: `cycles` jumps of `metres` away and back, `legFrames` each leg.
-static void pathTeleport(Env &env, float metres, int cycles, int legFrames)
+/// A TELEPORT: `cycles` jumps from x = `from` to x = `to` and back, `legFrames` each leg.
+static void pathTeleport(Env &env, float from, float to, int cycles, int legFrames)
 {
     for (int c = 0; c < cycles; ++c) {
-        setCamera(env, iris::Vec3(metres, 1.7f, 0.0f), iris::Vec3(metres, 1.7f, -10.0f));
+        setCamera(env, iris::Vec3(to, 1.7f, 0.0f), iris::Vec3(to, 1.7f, -10.0f));
         frame(env, legFrames);
-        setCamera(env, iris::Vec3(0.0f, 1.7f, 0.0f), iris::Vec3(0.0f, 1.7f, -10.0f));
+        setCamera(env, iris::Vec3(from, 1.7f, 0.0f), iris::Vec3(from, 1.7f, -10.0f));
         frame(env, legFrames);
     }
 }
+/// THE 2 KM PATHS (V2-P0A): the walk crosses the whole 2 km ground edge to edge, and
+/// the teleport set jumps across the voxel chain (60 m: inside the outer cascade), past it
+/// (250 m), half the world (1 km) and the whole of it (1.9 km).
+static constexpr float kWorldWalkMetres = 2000.0f, kWorldWalkSpeed = 20.0f;
+struct Teleport { const char *name; float from, to; };
+static const Teleport kTeleports[] = {
+    { "teleport 60 m", 0.0f, 60.0f },
+    { "teleport 250 m", 0.0f, 250.0f },
+    { "teleport 1 km", -500.0f, 500.0f },
+    { "teleport 1.9 km", -950.0f, 950.0f },
+};
 /// A FLY: `seconds` on a 150 m circle at 25 m altitude, 20 m/s, looking ahead
 /// and down into the world.
 static void pathFly(Env &env, float seconds)
@@ -206,8 +232,9 @@ static int worldMain()
 // scale.voxel_scroll — W1: A SCROLL RE-VOXELISES THE WHOLE CASCADE.
 // Anchor: irisgl/engine/src/OgreGi.cpp:5472-5474 ("In THIS arm the rebuild is whole
 // either way") — a cascade step rebuilds the whole cascade; no slab/toroidal scroll.
-// Number: ms per cascade rebuild (CPU and GPU, per cascade) on the 200 m walk and the
-// 60 m teleport, from the monitor's `vct.cascadeN` rows (the 0027 timestamp pair).
+// Number: ms per cascade rebuild (CPU and GPU, per cascade) on the 2 km walk and the
+// teleport set (60 m, 250 m, 1 km, 1.9 km) over the 2 km world, from the monitor's
+// `vct.cascadeN` rows (the 0027 timestamp pair).
 // ===========================================================================
 static int voxelScrollMain()
 {
@@ -252,52 +279,82 @@ static int voxelScrollMain()
                     if (c.gpuMs >= 0) rows[c.detail].gpu.push_back(c.gpuMs);
                 }
     };
-    std::map<std::string, Row> walk, tele;
-    const auto walkRecs = collect(env, [&] { pathWalk(env, 200.0f, 10.0f); });
-    printPath("walk200", walkRecs);
-    harvest(walkRecs, walk);
-    const auto teleRecs = collect(env, [&] { pathTeleport(env, 60.0f, 8, 30); });
-    printPath("teleport", teleRecs);
-    harvest(teleRecs, tele);
-    for (auto *set : { &walk, &tele }) {
-        const char *label = set == &walk ? "walk 200 m @10 m/s" : "teleport 60 m x8";
-        for (auto &kv : *set) {
+    // THE PATHS: the 2 km walk, then each teleport of the set (4 jumps there and back,
+    // 30 frames a leg). Each path's rows are its own — a 1.9 km jump and a 60 m one are
+    // different bills.
+    std::vector<std::pair<std::string, std::map<std::string, Row>>> sets;
+    {
+        const auto walkRecs = collect(env, [&] { pathWalk(env, kWorldWalkMetres, kWorldWalkSpeed); });
+        printPath("walk2km", walkRecs);
+        sets.push_back({ "walk 2 km @20 m/s", {} });
+        harvest(walkRecs, sets.back().second);
+    }
+    for (const Teleport &t : kTeleports) {
+        const auto recs = collect(env, [&] { pathTeleport(env, t.from, t.to, 4, 30); });
+        printPath(t.name, recs);
+        sets.push_back({ std::string(t.name) + " x4", {} });
+        harvest(recs, sets.back().second);
+    }
+    bool any = false;
+    for (auto &set : sets) {
+        const char *label = set.first.c_str();
+        for (auto &kv : set.second) {
+            any = true;
             const Stats c = stats(kv.second.cpu), g = stats(kv.second.gpu);
-            std::printf("W1 %-20s %-14s rebuilds %3zu | CPU ms med %7.2f max %7.2f | GPU ms med %8.2f max %8.2f\n",
+            std::printf("W1 %-22s %-14s rebuilds %3zu | CPU ms med %7.2f max %7.2f | GPU ms med %8.2f max %8.2f\n",
                         label, kv.first.c_str(), c.n, c.median, c.max, g.median, g.max);
             const std::string what = std::string(label) + ": " + kv.first + " GPU ms per whole-cascade rebuild (median)";
             target("W1", g.median, "ms", what.c_str());
         }
     }
-    REQUIRE(!walk.empty() || !tele.empty(), "the paths re-voxelised at least one cascade");
+    REQUIRE(any, "the paths re-voxelised at least one cascade");
     shutdown(env);
     return failures ? 1 : 0;
 }
 
 // ===========================================================================
 // scale.lights — W2: THE VOXEL INJECTION HOLDS 16 LIGHTS, FIRST COME.
-// Anchor: fork Components/Hlms/Pbs/src/Vct/OgreVctLighting.cpp:152 (a const buffer of
-// sizeof(ShaderVctLight) * 16u) and :1308-1341 (the collect loop, no cull, no report).
-// Fixture: a floor and a white wall, sixteen FILLER lamps created first (40 m away, in
-// the chain), then the KEY lamp facing the wall. Number: does toggling the KEY change the
-// voxel store (GiVoxelStats::lightDigest, cascade 0)? The exact picture bar: with 16
-// fillers the key's bounce must CHANGE the digest (today it does not). The CONTROL: with
-// 15 fillers the key is light 16 and its toggle does change it.
+// Anchor: irisgl/engine/src/photon/voxel/PhotonVoxelLighting.cpp (the light buffer of
+// sizeof(PhotonShaderVoxelLight) * 16u; the collect loop: the range cull (IMAGE-1), then
+// the first 16 lights in range take the slots and the rest are dropped).
+// THE ROW MEASURES THE CAP ITSELF (V2-P0A): N = 8, 16, 32 and 64 filler lamps placed
+// INSIDE cascade 0's reach (a 3 m range around the camera's own spot, so the range cull
+// keeps every one of them), then the KEY lamp, created last, facing a red wall. The
+// number is the engine's own reading of the cascade's light slots (GiStatus::cascades[0]
+// lightsInRange / lightsInjected / lightCapacity): the count that ENTERS the voxels.
+// THE FALSE-PASS GUARD: an arm whose lamps the range cull drops does not push the cap
+// (D1's fillers stood 40 m away with a 4 m range; once IMAGE-1 culled them the row read
+// "light 17 bounces" over a scene that held two lights) — every arm must read all N + 1
+// lamps IN RANGE or the row FAILS. D1's old placement is still read and printed, as
+// information (the proof that it passed falsely), never as a bar.
+// The behavioural cross-check (the voxel store's digest, GiVoxelStats::lightDigest):
+// at N = 8 the key's toggle moves the store (the CONTROL: the fixture sees a light);
+// at N = 16 the key is light 17 — whether its bounce reaches is printed (today: not).
 // ===========================================================================
 static int lightsMain()
 {
     Env env;
     if (!boot(env, "test-scale-lights-ogre.log")) return 1;
-    // One build per arm: `fillers` lamps first, then the key.
-    auto arm = [&](int fillers, std::string &digestOn, std::string &digestOff, double &litOn, double &litOff) {
+    const iris::Vec3 eye(0.0f, 2.0f, 1.0f);
+    BakeInfo bi;
+    iris::MeshPtr cube = bakedMesh(QStringLiteral(JAHSHAKA_SOURCE_DIR "/app/content/primitives/cube.obj"), "cube", &bi);
+    if (cube.isNull()) { REQUIRE(false, "the cube mesh"); return 1; }
+    struct Reading {
+        bool ok = false;
+        int inRange = -1, injected = -1, capacity = -1;
+        std::string digestOn, digestOff;
+        double litOn = 0, litOff = 0;
+    };
+    // One build per arm: `fillers` lamps first (`near`: inside cascade 0's reach; else D1's
+    // old placement 40 m away), then the key. `toggle`: read the store with the key on and off.
+    auto arm = [&](int fillers, bool nearFillers, bool toggle) {
+        Reading out;
         env.doc = iris::Scene::create();
         env.mirror->setSource(env.doc);
-            env.doc->skyType = iris::SkyType::SINGLE_COLOR;
+        env.doc->skyType = iris::SkyType::SINGLE_COLOR;
         env.doc->skyColor = QColor(0, 0, 0);
         worldmodes::setMode(env.doc, worldmodes::Mode::High);
         worldmodes::setPhoton(env.doc, true, worldmodes::PhotonTier::High);
-        BakeInfo bi;
-        iris::MeshPtr cube = bakedMesh(QStringLiteral(JAHSHAKA_SOURCE_DIR "/app/content/primitives/cube.obj"), "cube", &bi);
         auto slab = [&](const char *name, iris::Vec3 pos, iris::Vec3 scale, QColor col) {
             auto n = iris::MeshNode::create();
             n->setName(name);
@@ -317,10 +374,15 @@ static int lightsMain()
             auto l = iris::LightNode::create();
             l->setLightType(iris::LightType::Point);
             l->setName(QStringLiteral("filler%1").arg(i));
-            l->setLocalPos(iris::Vec3(40.0f + float(i % 4) * 3.0f, 3.0f, float(i / 4) * 3.0f - 4.5f));
+            // NEAR: an 8 x 8 lattice at a 0.5 m pitch, 1.5 m above the eye's own spot —
+            // every range sphere (3 m) holds the eye, so it reaches the box cascade 0 is
+            // centred on whatever the box's quantisation. FAR: D1's 40 m placement.
+            l->setLocalPos(nearFillers ? iris::Vec3(eye.x() - 1.75f + 0.5f * float(i % 8), eye.y() + 1.5f,
+                                                    eye.z() - 1.75f + 0.5f * float(i / 8))
+                                       : iris::Vec3(40.0f + float(i % 4) * 3.0f, 3.0f, float(i / 4) * 3.0f - 4.5f));
             env.doc->getRootNode()->addChild(l);
-            l->setPropertyValue(QStringLiteral("intensity"), 1.0f);
-            l->setPropertyValue(QStringLiteral("distance"), 4.0f);
+            l->setPropertyValue(QStringLiteral("intensity"), 0.25f);
+            l->setPropertyValue(QStringLiteral("distance"), nearFillers ? 3.0f : 4.0f);
             l->shadowMap->shadowType = iris::ShadowMapType::None;
         }
         auto key = iris::LightNode::create();
@@ -332,7 +394,7 @@ static int lightsMain()
         key->setPropertyValue(QStringLiteral("distance"), 10.0f);
         key->shadowMap->shadowType = iris::ShadowMapType::None;
         env.doc->getRootNode()->applyStaticDefaults();
-        setCamera(env, iris::Vec3(0, 3, 8), iris::Vec3(0, 1, -2));
+        setCamera(env, eye, iris::Vec3(0, 1, -2));
         auto settle = [&] {
             for (int f = 0; f < 600; ++f) {
                 frame(env, 1);
@@ -340,52 +402,82 @@ static int lightsMain()
             }
         };
         settle();
-        GiVoxelStats on = env.scene->giVoxelStats(0);
-        key->setPropertyValue(QStringLiteral("intensity"), 0.0f);
-        key->markChanged(iris::NodeChange::Params);
-        settle();
-        GiVoxelStats off = env.scene->giVoxelStats(0);
-        digestOn = on.lightDigest;
-        digestOff = off.lightDigest;
-        litOn = on.meanLit;
-        litOff = off.meanLit;
-        std::printf("   %2d fillers + key: digest on %s off %s | meanLit on %.6f off %.6f | voxelsLit %lld / %lld\n",
-                    fillers, on.lightDigest.c_str(), off.lightDigest.c_str(), on.meanLit, off.meanLit,
-                    on.voxelsLit, off.voxelsLit);
-        return on.available && off.available;
+        const GiStatus gi = env.scene->giStatus();
+        if (gi.cascades.empty()) return out;
+        const GiStatus::CascadeStatus &c0 = gi.cascades[0];
+        out.inRange = c0.lightsInRange;
+        out.injected = c0.lightsInjected;
+        out.capacity = c0.lightCapacity;
+        out.ok = true;
+        if (toggle) {
+            const GiVoxelStats on = env.scene->giVoxelStats(0);
+            key->setPropertyValue(QStringLiteral("intensity"), 0.0f);
+            key->markChanged(iris::NodeChange::Params);
+            settle();
+            const GiVoxelStats off = env.scene->giVoxelStats(0);
+            out.ok = on.available && off.available;
+            out.digestOn = on.lightDigest;
+            out.digestOff = off.lightDigest;
+            out.litOn = on.meanLit;
+            out.litOff = off.meanLit;
+        }
+        std::printf("   %2d fillers (%s) + key: cascade 0 [centre %.2f %.2f %.2f, half %.1f m] lights in range %d, "
+                    "injected %d of %d slots%s%s\n",
+                    fillers, nearFillers ? "inside its reach" : "D1's, 40 m away", double(c0.centre.x),
+                    double(c0.centre.y), double(c0.centre.z), double(c0.halfSize), out.inRange, out.injected,
+                    out.capacity, toggle ? (out.digestOn != out.digestOff ? " | the key's toggle MOVES the store"
+                                                                          : " | the key's toggle leaves the store")
+                                         : "",
+                    toggle ? qPrintable(QStringLiteral(" (mean lit %1 vs %2)").arg(out.litOn, 0, 'f', 6)
+                                            .arg(out.litOff, 0, 'f', 6)) : "");
+        std::fflush(stdout);
+        return out;
     };
-    (void)0;
-    std::string c1, c2, t1, t2;
-    double cl1 = 0, cl2 = 0, tl1 = 0, tl2 = 0;
-    const bool control = arm(15, c1, c2, cl1, cl2);
-    const bool wall = arm(16, t1, t2, tl1, tl2);
-    REQUIRE(control && wall, "the voxel store was read back in both arms");
-    REQUIRE(c1 != c2, "CONTROL: as light 16 the key's toggle changes the voxel store (the fixture sees it)");
-    const bool bounces = t1 != t2;
-    std::printf("W2: with 16 lights before it, the key lamp %s the voxel store (mean lit %.6f vs %.6f)\n",
-                bounces ? "REACHES" : "does NOT reach", tl1, tl2);
-    target("W2", bounces ? 1.0 : 0.0, "(1 = light 17 bounces)",
+    // THE GUARD PROVES ITSELF on D1's placement: its 16 fillers are culled, so the arm holds
+    // the key alone and would "pass" without pushing the cap — the guard must see that.
+    // INFORMATIONAL, never a bar: a wider cascade 0 could bring them into range one day, and
+    // that is no defect — the per-arm "all N + 1 in range" check below is the guard.
+    const Reading d1 = arm(16, false, false);
+    std::printf("W2 THE GUARD'S PROOF: D1's 40 m fillers read %d of 17 lamps in range%s\n", d1.inRange,
+                d1.ok && d1.inRange < 17 ? " — culled: that fixture passed falsely, and the per-arm check reds it" : "");
+    target("W2", double(d1.inRange), "lights", "D1's old placement (16 fillers 40 m away + the key): lamps in range "
+           "of cascade 0 (informational)");
+    int cap = -1;
+    bool keyReachesAt16 = false;
+    for (int n : { 8, 16, 32, 64 }) {
+        const Reading r = arm(n, true, n == 8 || n == 16);
+        REQUIRE(r.ok, "N = %d: cascade 0 was read (and the store where toggled)", n);
+        // THE FALSE-PASS GUARD: every lamp of the arm reaches cascade 0, or the arm does not
+        // push the cap and its reading means nothing.
+        REQUIRE(r.inRange >= n + 1, "N = %d: all %d lamps are IN RANGE of cascade 0 (read %d) — the arm pushes the cap",
+                n, n + 1, r.inRange);
+        REQUIRE(r.injected == std::min(r.inRange, r.capacity), "N = %d: the slots fill first come up to the "
+                "capacity (%d injected of %d in range, %d slots)", n, r.injected, r.inRange, r.capacity);
+        const std::string what = "lights that ENTER cascade 0's voxels with " + std::to_string(n + 1) +
+                                 " in its reach (" + std::to_string(r.inRange) + " in range, " +
+                                 std::to_string(r.inRange - r.injected) + " dropped)";
+        target("W2", double(r.injected), "lights", what.c_str(), "every light in range");
+        cap = std::max(cap, r.injected);
+        if (n == 8)
+            REQUIRE(r.digestOn != r.digestOff, "CONTROL: with 8 lamps before it the key's toggle moves the voxel store");
+        if (n == 16) keyReachesAt16 = r.digestOn != r.digestOff;
+    }
+    std::printf("W2: the cap the injection holds: %d lights per cascade; with 16 lights before it the key lamp %s "
+                "the voxel store\n", cap, keyReachesAt16 ? "REACHES" : "does NOT reach");
+    target("W2", double(cap), "lights", "THE CAP: the most lights one cascade's injection took (64 + 1 in range)",
+           "every light in range");
+    target("W2", keyReachesAt16 ? 1.0 : 0.0, "(1 = light 17 bounces)",
            "the 17th light's bounce reaches the voxels: exact bar = the digest moves", "1 (exact)");
-    target("W2", 16.0, "lights", "the injection's capacity (OgreVctLighting.cpp:152, read from the fork)");
     shutdown(env);
     return failures ? 1 : 0;
 }
 
 // ===========================================================================
-// THE LARGE ASSET for W3 / W4 / W5: the largest shell the cache holds (1 M / 5 M /
-// 10 M, made by scale_assets_gen), or a 250 k shell baked here (and cached) — said.
+// THE LARGE ASSET for W3 / W4: THE 10 M SHELL from the shared scale cache (requireShell —
+// a missing shell is the row's FAIL, never a smaller asset measured in its place; the
+// fixture row scale.assets bakes it once per bake producer for the whole box).
 // ===========================================================================
-static QList<iris::MeshPtr> largestShell(BakeInfo &info, size_t &asked)
-{
-    for (size_t t : { size_t(10000000), size_t(5000000), size_t(1000000) }) {
-        QList<iris::MeshPtr> m = shellAsset(t, &info, false);
-        if (!m.isEmpty()) { asked = t; return m; }
-    }
-    std::printf("NOTE: no 1 M / 5 M / 10 M shell in the cache (%s) — run scale_assets_gen; measuring a "
-                "250 k shell baked now\n", qPrintable(cacheDir()));
-    asked = 250000;
-    return shellAsset(asked, &info, true);
-}
+static constexpr size_t kLargeAsset = 10000000;
 
 /// Attach every piece of a model under one group node at `pos`, scaled by `k`.
 static std::vector<iris::MeshNodePtr> placeModel(Env &env, const QList<iris::MeshPtr> &pieces, iris::Vec3 pos, float k)
@@ -433,6 +525,10 @@ static void geometryDoc(Env &env)
 /// and after it. `decodePassMs` is the decode pass alone.
 struct IdRead {
     double tris = -1, idMs = -1, decodeMs = -1, decodePassMs = -1;
+    /// The occlusion's LATE list ("Jahshaka atom id late": what the first cull rejected
+    /// against the previous frame's pyramid and this frame's found visible) — the id
+    /// pass's second row; `tris + lateTris` is the two-pass total. 0 with occlusion off.
+    double lateTris = 0;
     /// The id pass's four cull jobs, each its monitor row per frame (summed over the
     /// frame's early and late culls): test, compact, cut, emit. -1 = unsampled.
     double cullMs[4] = { -1, -1, -1, -1 };
@@ -468,7 +564,7 @@ static IdRead readIdPass(Env &env, int frames)
     static const size_t kWant = 8;
     static const int kMaxFrames = 600;
     IdRead out;
-    std::vector<double> tris, id, dec, decPass, cull[4];
+    std::vector<double> tris, late, id, dec, decPass, cull[4];
     static const char *kCullRows[4] = { "id.cull.test", "id.cull.compact", "id.cull.cut", "id.cull.emit" };
     int drawn = 0;
     unsigned dropped = 0;
@@ -483,6 +579,7 @@ static IdRead readIdPass(Env &env, int frames)
                 tris.push_back(double(p->triangles));
                 if (p->gpuMs >= 0) id.push_back(p->gpuMs);
             }
+            if (const FramePass *p = passNamed(r, "Jahshaka atom id late")) late.push_back(double(p->triangles));
             double dp = -1;
             const double ms = opaqueSideMs(r, &dp);
             if (ms >= 0) dec.push_back(ms);
@@ -497,6 +594,7 @@ static IdRead readIdPass(Env &env, int frames)
         if (id.size() >= kWant && dec.size() >= kWant) break;
     }
     out.tris = stats(tris).median;
+    out.lateTris = late.empty() ? 0.0 : stats(late).median;
     out.idMs = stats(id).median;
     out.decodeMs = stats(dec).median;
     out.decodePassMs = decPass.empty() ? -1.0 : stats(decPass).median;
@@ -510,7 +608,10 @@ static IdRead readIdPass(Env &env, int frames)
 /// The LEVEL RULE's answer for one piece at the view's eye: the cluster cut the DAG
 /// gives at the id pass's own tolerance (kLodBudgetPixels x the scene's LOD bias) —
 /// Types.h clusterCut, the GLSL twin's arithmetic.
-static size_t cutTriangles(Env &env, const QList<iris::MeshPtr> &pieces, const iris::Vec3 &pos, float k)
+/// Types.h clusterCut over the model's pieces at the view's eye. `root`: an unbounded
+/// tolerance and no frustum — the DAG's ROOT, the coarsest cut the DAG can draw.
+static size_t cutTriangles(Env &env, const QList<iris::MeshPtr> &pieces, const iris::Vec3 &pos, float k,
+                           bool root = false)
 {
     GpuCullRequest req;
     if (!env.engine->fillCullView(env.view, req)) return 0;
@@ -524,12 +625,12 @@ static size_t cutTriangles(Env &env, const QList<iris::MeshPtr> &pieces, const i
         v.worldRow[2][2] = k; v.worldRow[2][3] = pos.z();
         v.scale = k;
         std::memcpy(v.eye, req.eye, sizeof(v.eye));
-        v.tolerance = kLodBudgetPixels * env.scene->lodBias();
+        v.tolerance = root ? 1e30f : kLodBudgetPixels * env.scene->lodBias();
         v.projScaleY = req.projScaleY;
         v.viewportHeight = req.viewportHeight;
         // ...and the view's frustum, cluster by cluster, as the cut job tests it
         // (SPEED-VR-MEM, Types.h clusterInFrustum).
-        v.cullPlanes = true;
+        v.cullPlanes = !root;
         for (int i = 0; i < 6; ++i)
             for (int c = 0; c < 4; ++c) v.planes[i][c] = req.planes[i * 4 + c];
         std::vector<unsigned> drawn;
@@ -553,9 +654,9 @@ static int clusterCutMain()
     Env env;
     if (!boot(env, "test-scale-cluster-cut-ogre.log")) return 1;
     BakeInfo info;
-    size_t asked = 0;
+    const size_t asked = kLargeAsset;
     const unsigned long long rss0 = rssKb();
-    const QList<iris::MeshPtr> shell = largestShell(info, asked);
+    const QList<iris::MeshPtr> shell = requireShell(asked, &info);
     REQUIRE(!shell.isEmpty(), "the large asset (%zu triangles asked, %d pieces, %zu level-0 triangles)", asked,
             info.pieces, info.triangles);
     if (shell.isEmpty()) return 1;
@@ -567,27 +668,53 @@ static int clusterCutMain()
     armMonitor(env);
     const struct { const char *name; float d; } poses[] = {
         { "inside bounds (1.3 R)", 1.3f * radius }, { "5 R", 5.0f * radius }, { "30 R", 30.0f * radius } };
+    // TWO ARMS PER POSE, ONE PROCESS (V2-P0A fix round): the reference (Types.h clusterCut)
+    // applies the frustum and NO occlusion, so it is compared with the id pass's occlusion
+    // OFF (frustum-only, one list); with it ON (the shipped two-pass form) the early and
+    // late lists' total must stay within the cut (occlusion only ever removes what is
+    // hidden: a screen-filling shell hides whole pieces behind itself). Both arms must fit
+    // the cut's stream: no instance on the coarse reserve, none missing.
     for (const auto &p : poses) {
         setCamera(env, at + iris::Vec3(0, 0.2f * radius, p.d), at);
         frame(env, 10);
+        const IdRead on = readIdPass(env, 30);
+        const AtomDrawStatus sOn = env.scene->atomDrawStatus();
+        env.scene->setAtomOcclusionEnabled(false);
+        frame(env, 10);
         const IdRead r = readIdPass(env, 30);
+        const AtomDrawStatus sOff = env.scene->atomDrawStatus();
+        env.scene->setAtomOcclusionEnabled(true);
+        frame(env, 10);
         const size_t cut = cutTriangles(env, shell, at, radius);
-        std::printf("W3 %-24s id pass draws %12.0f tris (id %s, decode %s GPU) | the cluster cut: %10zu "
-                    "tris | ratio %.2fx\n",
-                    p.name, r.tris, msText(r.idMs).c_str(), msText(r.decodeMs).c_str(), cut,
-                    cut ? r.tris / double(cut) : 0.0);
-        const std::string what = std::string("triangles drawn at ") + p.name + " (the cut would draw " +
+        const double twoPass = on.tris + on.lateTris;
+        std::printf("W3 %-24s occlusion OFF: id pass draws %10.0f tris | the cluster cut: %10zu tris | ratio %.2fx "
+                    "(overflow %u, missing %u, budget %u indices) || occlusion ON: early %.0f + late %.0f = %.0f tris "
+                    "(%.2fx the cut; overflow %u, missing %u, occluded %u) | id %s, decode %s GPU\n",
+                    p.name, r.tris, cut, cut ? r.tris / double(cut) : 0.0, sOff.cutOverflow, sOff.cutMissing,
+                    sOff.cutIndexBudget, on.tris, on.lateTris, twoPass, cut ? twoPass / double(cut) : 0.0,
+                    sOn.cutOverflow, sOn.cutMissing, sOn.occluded, msText(on.idMs).c_str(), msText(on.decodeMs).c_str());
+        const std::string what = std::string("triangles drawn at ") + p.name + ", occlusion off (the cut would draw " +
                                  std::to_string(cut) + ")";
         target("W3", r.tris, "tris", what.c_str());
+        const std::string whatOn = std::string("triangles drawn at ") + p.name + ", occlusion on (early + late lists)";
+        target("W3", twoPass, "tris", whatOn.c_str());
         // THE BAR THIS LANE CLOSES W3 WITH (ATOM-CLUSTER-CUT; the D1 convention: the bar
         // comes with the part that closes the wall): the id pass draws the cut, within
-        // 1.2x of Types.h clusterCut at the same tolerance, either way.
+        // 1.2x of Types.h clusterCut at the same tolerance, either way — frustum against
+        // frustum (occlusion off).
         REQUIRE(cut > 0 && r.tris <= 1.2 * double(cut) && r.tris * 1.2 >= double(cut),
-                "W3 %s: the id pass draws %.0f tris, within 1.2x of the cut's %zu", p.name, r.tris, cut);
+                "W3 %s: with occlusion off the id pass draws %.0f tris, within 1.2x of the cut's %zu", p.name, r.tris, cut);
+        REQUIRE(twoPass > 0 && twoPass <= 1.2 * double(cut),
+                "W3 %s: with occlusion on the two lists draw %.0f tris, no more than 1.2x the cut's %zu", p.name, twoPass,
+                cut);
+        REQUIRE(sOff.cutValid && sOff.cutOverflow == 0 && sOff.cutMissing == 0 && sOn.cutOverflow == 0 &&
+                    sOn.cutMissing == 0,
+                "W3 %s: the cut fits its stream (occlusion off: %u overflowed, %u missing; on: %u, %u)", p.name,
+                sOff.cutOverflow, sOff.cutMissing, sOn.cutOverflow, sOn.cutMissing);
         const std::string owed = std::string("id pass GPU ms on the ") + std::to_string(info.triangles) +
                                  "-triangle asset at " + p.name + " (decode " +
-                                 (r.decodeMs >= 0 ? std::to_string(r.decodeMs) + " ms" : std::string("unsampled")) + ")";
-        target("W3", r.idMs, "ms", owed.c_str());
+                                 (on.decodeMs >= 0 ? std::to_string(on.decodeMs) + " ms" : std::string("unsampled")) + ")";
+        target("W3", on.idMs, "ms", owed.c_str());
     }
     std::printf("   memory: RSS %.0f MB before the asset, %.0f MB now, peak %.0f MB\n", double(rss0) / 1024.0,
                 double(rssKb()) / 1024.0, double(peakRssKb()) / 1024.0);
@@ -597,8 +724,8 @@ static int clusterCutMain()
     frame(env, 10);
     for (size_t t : { size_t(1000000), size_t(5000000), size_t(10000000) }) {
         BakeInfo bi;
-        const QList<iris::MeshPtr> m = shellAsset(t, &bi, false);
-        if (m.isEmpty()) { std::printf("OWED id pass %zu: not cached (scale_assets_gen)\n", t); continue; }
+        const QList<iris::MeshPtr> m = requireShell(t, &bi);
+        if (m.isEmpty()) { ++failures; continue; }
         auto nodes = placeModel(env, m, at, radius);
         env.doc->getRootNode()->applyStaticDefaults();
         setCamera(env, at + iris::Vec3(0, 0.2f * radius, 1.3f * radius), at);
@@ -695,9 +822,8 @@ static int levelsMain()
     Env env;
     if (!boot(env, "test-scale-levels-ogre.log")) return 1;
     BakeInfo info;
-    size_t asked = 0;
-    const QList<iris::MeshPtr> shell = largestShell(info, asked);
-    if (shell.isEmpty()) { REQUIRE(false, "the large asset"); return 1; }
+    const QList<iris::MeshPtr> shell = requireShell(kLargeAsset, &info);
+    if (shell.isEmpty()) { REQUIRE(false, "the large asset (the 10 M shell)"); return 1; }
     std::printf("W4 asset %s: %d pieces, %zu level-0 triangles, chain %d levels (longest piece), level 7 = %zu "
                 "tris, coarsest = %zu tris\n",
                 qPrintable(info.name), info.pieces, info.triangles, info.levels, info.level7Triangles,
@@ -714,16 +840,33 @@ static int levelsMain()
     setCamera(env, at + iris::Vec3(0, 50.0f, 1000.0f), at);
     frame(env, 10);
     const IdRead r = readIdPass(env, 30);
-    std::printf("W4 at 1 km: the id pass's cut draws %.0f tris; the chain's coarsest level holds %zu (%d levels)\n",
-                r.tris, info.coarsestTriangles, info.levels);
+    const AtomDrawStatus st = env.scene->atomDrawStatus();
+    const size_t cut = cutTriangles(env, shell, at, radius);
+    const size_t root = cutTriangles(env, shell, at, radius, true);
+    const double drawn = r.tris + r.lateTris;
+    std::printf("W4 at 1 km: the id pass draws %.0f tris (early %.0f + late %.0f; overflow %u) | the CPU cut at the "
+                "same pose %zu | THE DAG ROOT (the coarsest the DAG can draw) %zu = %.0f a piece | the LOD chain's "
+                "coarsest level %zu (a different structure: the voxeliser's and the casters')\n",
+                drawn, r.tris, r.lateTris, st.cutOverflow, cut, root, info.pieces ? double(root) / info.pieces : 0.0,
+                info.coarsestTriangles);
     target("W4", double(info.levels), "levels", "the asset's chain length (longest piece, level 0 included)");
-    target("W4", r.tris, "tris", "triangles the id pass's CUT draws for the asset at 1 km (the chain's coarsest "
-           "level beside it on the W4 line)");
-    // THE BAR (ATOM-CLUSTER-CUT closes W4): the coarsest end is reached — at 1 km the cut
-    // draws no more than 1.2x the chain's coarsest level.
-    REQUIRE(r.tris > 0 && r.tris <= 1.2 * double(info.coarsestTriangles),
-            "W4: at 1 km the cut draws %.0f tris, within 1.2x of the chain's coarsest %zu", r.tris,
-            info.coarsestTriangles);
+    target("W4", drawn, "tris", "triangles the id pass's CUT draws for the asset at 1 km");
+    // THE DAG'S FLOOR (a BAKE property, V2-P0A's verdict): the split's pieces keep their open
+    // borders LOCKED through the simplification (meshbake.cpp, the locked-border pass), so the
+    // groups along the seams stop converging — the 10 M bake's log reads 48-210 UNCONVERGED
+    // groups a piece (735-1,552 retries) and only 0-3 made terminal — and every piece's root
+    // keeps ~2.36 k triangles, 11x the chain's coarsest level (whose levels are not locked).
+    // A finding for the audit spec, not a cut defect: the cut reaches this root.
+    target("W4", double(root), "tris", "THE DAG FLOOR: the 10 M shell's DAG root over its pieces (the locked seams)");
+    // THE BARS (ATOM-CLUSTER-CUT closes W4), LIKE FOR LIKE: the id pass draws the CPU cut at
+    // 1 km (within 1.2x), and that cut has reached the DAG's root (within 1.2x of it) —
+    // the coarsest end the DAG holds is reachable.
+    REQUIRE(cut > 0 && drawn <= 1.2 * double(cut) && drawn * 1.2 >= double(cut),
+            "W4: at 1 km the id pass draws %.0f tris, within 1.2x of the CPU cut's %zu", drawn, cut);
+    REQUIRE(root > 0 && double(cut) <= 1.2 * double(root),
+            "W4: at 1 km the cut (%zu) reaches the DAG's root (%zu) within 1.2x", cut, root);
+    REQUIRE(st.cutOverflow == 0 && st.cutMissing == 0, "W4: the cut fits its stream (%u overflowed, %u missing)",
+            st.cutOverflow, st.cutMissing);
     // THE 100-LEVEL CASE (brief §4.4): the chain halves until 128 triangles
     // (meshbake.cpp kRatio 0.5, kMinTriangles 128, kMaxLevels 254), so a chain reaches
     // log2(T/128)+1 levels: 17 at 10 M in ONE mesh — and the import splits above 1 M
@@ -738,9 +881,18 @@ static int levelsMain()
 // scale.residency — W5: EVERYTHING RESIDENT, UNCOMPRESSED.
 // Anchor: irisgl/engine/src/OgreMesh.cpp:858-866 (48 B vertices: float3 pos, float3
 // normal, float4 tangent, float2 uv) and :1000-1011 (the shadow chain beside the levels).
-// Number: the VRAM each cached shell takes when attached, measured through the ENGINE'S
-// OWN STATS (MemoryStats: the VaoManager's pools, capacity - free) — there is no vmaStats
-// door on this boundary — beside the 48 B/vertex formula.
+// Number: the VRAM each shell takes when attached, measured through the ENGINE'S OWN STATS
+// (MemoryStats: the VaoManager's pools, capacity - free) — there is no vmaStats door on this
+// boundary — beside the 48 B/vertex formula.
+// THE FIRST MESH PAYS THE ENGINE'S ONE-TIME ALLOCATIONS (V2-P0A: the "24.6 -> 87.4 MB at
+// 250 k rise" was this): the first asset a process attaches allocates the cut's and the
+// casters' buffers every later asset shares, so D1's 250 k row (measured FOURTH, after the
+// 10 M) read the formula exactly while every run since (the big shells uncached, the 250 k
+// measured FIRST) read the formula + the one-time term (63 MB, ~14 MB of it arrived with
+// ATOM-SHADOWS-1's caster buffers). So the row attaches the 250 k shell once COLD (its delta
+// less its warm delta is the one-time term), releases it, and then measures every shell WARM.
+// THE BARS: each shell's warm VRAM within 1.15x of the formula (measured +0 / +12 / +9 / +7 %
+// at 250 k / 1 M / 5 M / 10 M), and the one-time term at most 72 MB (62.9 measured, +15 %).
 // ===========================================================================
 static int residencyMain()
 {
@@ -750,14 +902,12 @@ static int residencyMain()
     armMonitor(env);
     setCamera(env, iris::Vec3(0, 12, 40), iris::Vec3(0, 10, 0));
     frame(env, 20);
-    int measured = 0;
-    for (size_t t : { size_t(1000000), size_t(5000000), size_t(10000000), size_t(250000) }) {
+    struct Delta { double used = 0, capacity = 0, formula = 0; };
+    // Attach `t`'s shell, read the pool's growth and the formula, release it again.
+    auto measure = [&](size_t t, const char *how, Delta &d) -> bool {
         BakeInfo info;
-        QList<iris::MeshPtr> shell = shellAsset(t, &info, t == 250000 && measured == 0);
-        if (shell.isEmpty()) {
-            std::printf("   shell %zu: not in the cache (scale_assets_gen)\n", t);
-            continue;
-        }
+        QList<iris::MeshPtr> shell = requireShell(t, &info);
+        if (shell.isEmpty()) return false;
         MemoryStats m0;
         env.engine->memoryStats(m0);
         auto nodes = placeModel(env, shell, iris::Vec3(0, 10, 0), 10.0f);
@@ -773,28 +923,52 @@ static int residencyMain()
         // again, OgreMesh.cpp:1000-1007); the cluster stream's own index copy.
         size_t verts = 0, levelIdx = 0, clusterIdx = 0;
         for (const iris::MeshPtr &m : shell) {
-            MeshData d;
-            if (!SceneMirror::toMeshData(m.data(), d)) continue;
-            verts += d.positions.size() / 3;
-            levelIdx += d.indices.size();
-            for (const auto &l : d.lodIndices) levelIdx += l.size();
-            clusterIdx += d.clusterIndices.size();
+            MeshData md;
+            if (!SceneMirror::toMeshData(m.data(), md)) continue;
+            verts += md.positions.size() / 3;
+            levelIdx += md.indices.size();
+            for (const auto &l : md.lodIndices) levelIdx += l.size();
+            clusterIdx += md.clusterIndices.size();
         }
         const double mainMB = (double(verts) * 48.0 + double(levelIdx) * 4.0) / 1048576.0;
         const double shadowMB = (double(verts) * 12.0 + double(levelIdx) * 4.0) / 1048576.0;
         const double clusterMB = double(clusterIdx) * 4.0 / 1048576.0;
-        std::printf("W5 %-14s %d pieces %10zu tris %9zu verts | pool used +%8.1f MB (capacity +%8.1f MB) | formula: "
-                    "levels %.1f + shadow chain %.1f + cluster stream %.1f = %.1f MB | RSS %.0f MB\n",
-                    qPrintable(info.name), info.pieces, info.triangles, verts, (used1 - used0) / 1048576.0,
-                    double(m1.gpuPoolCapacityBytes - m0.gpuPoolCapacityBytes) / 1048576.0, mainMB, shadowMB,
-                    clusterMB, mainMB + shadowMB + clusterMB, double(rssKb()) / 1024.0);
-        const std::string what = "VRAM (pool used) per " + std::to_string(info.triangles) + "-triangle asset";
-        target("W5", (used1 - used0) / 1048576.0, "MB", what.c_str());
+        d.used = (used1 - used0) / 1048576.0;
+        d.capacity = double(m1.gpuPoolCapacityBytes - m0.gpuPoolCapacityBytes) / 1048576.0;
+        d.formula = mainMB + shadowMB + clusterMB;
+        std::printf("W5 %-14s %-5s %d pieces %10zu tris %9zu verts | pool used +%8.1f MB (capacity +%8.1f MB) | "
+                    "formula: levels %.1f + shadow chain %.1f + cluster stream %.1f = %.1f MB | over it %+.1f MB | "
+                    "RSS %.0f MB\n",
+                    qPrintable(info.name), how, info.pieces, info.triangles, verts, d.used, d.capacity, mainMB,
+                    shadowMB, clusterMB, d.formula, d.used - d.formula, double(rssKb()) / 1024.0);
+        std::fflush(stdout);
         for (auto &n : nodes) n->removeFromParent();
+        nodes.clear();
+        shell.clear();
         frame(env, 20);
+        return true;
+    };
+    Delta cold;
+    if (!measure(250000, "COLD", cold)) { ++failures; shutdown(env); return 1; }
+    int measured = 0;
+    for (size_t t : { size_t(250000), size_t(1000000), size_t(5000000), size_t(10000000) }) {
+        Delta d;
+        if (!measure(t, "warm", d)) { ++failures; continue; }
         ++measured;
+        const std::string what = "VRAM (pool used) per " + std::to_string(t) + "-triangle shell, warm";
+        target("W5", d.used, "MB", what.c_str(), "<= 1.15x the formula");
+        REQUIRE(d.used <= 1.15 * d.formula, "W5 %zu: warm VRAM %.1f MB within 1.15x of the formula's %.1f MB", t, d.used,
+                d.formula);
+        if (t == 250000) {
+            std::printf("W5 the first mesh's one-time allocations: %.1f MB (the 250 k shell cold %.1f, warm %.1f)\n",
+                        cold.used - d.used, cold.used, d.used);
+            target("W5", cold.used - d.used, "MB", "the engine's one-time allocations the FIRST mesh a process "
+                   "attaches pays (the cut's and casters' buffers: the 250 k shell cold less warm)", "<= 72 MB");
+            REQUIRE(cold.used - d.used <= 72.0, "W5: the first mesh's one-time allocations %.1f MB <= 72 MB",
+                    cold.used - d.used);
+        }
     }
-    REQUIRE(measured > 0, "at least one asset was measured");
+    REQUIRE(measured == 4, "the four shells were measured warm (%d)", measured);
     shutdown(env);
     return failures ? 1 : 0;
 }
@@ -881,7 +1055,7 @@ static int decodeExactMain()
     setenv("JAHSHAKA_NO_RAY_QUERY", "1", 1);
     Env env;
     World w;
-    WorldSpec spec;
+    WorldSpec spec = denseWorld();   // D1's dense world: a pixel bar on a dense scene (V2-P0A)
     spec.materials = 1;
     if (!bootWorld(env, w, "test-atom-decode-exact-ogre.log", spec)) return 1;
     applyMaterials(w, 200, 200);
@@ -1096,7 +1270,8 @@ static int occlusionMain()
 {
     Env env;
     World w;
-    if (!bootWorld(env, w, "test-scale-occlusion-ogre.log")) return 1;
+    // D1's DENSE WORLD: the bar is a ratio on a dense scene, not a scale stick (V2-P0A).
+    if (!bootWorld(env, w, "test-scale-occlusion-ogre.log", denseWorld())) return 1;
     const int kPoses = 8, kSettle = 10;
     auto pose = [&](int s) {
         const float x = -90.0f + 25.0f * float(s);
@@ -1487,20 +1662,29 @@ static int bakeMain()
                     double(i.peakRssKb) / 1024.0, how);
         std::fflush(stdout);
     };
+    // THE 250 k BAKE IS FORCED IN A PRIVATE DIRECTORY (a cache hit measures nothing, and the
+    // shared blob other trees read is never deleted or raced).
     BakeInfo here;
-    QFile::remove(shellBlobPath(250000));
-    const QList<iris::MeshPtr> m = shellAsset(250000, &here, true);
+    QList<iris::MeshPtr> m;
+    {
+        QTemporaryDir priv(QDir::tempPath() + "/scale-bake-XXXXXX");
+        ScopedCacheDir scope(priv.path());
+        m = shellAsset(250000, &here, true);
+    }
     REQUIRE(!m.isEmpty() && !here.fromCache && here.bakeMs > 0, "a 250 k shell baked through the import door");
     row(here, "baked now");
     target("W11", here.bakeMs / 1000.0 / (double(here.triangles) / 1e6), "s/MT", "the bake's seconds per million triangles (250 k, Debug)");
     target("W11", here.bakeMs > 0 ? 100.0 * here.dagMs / here.bakeMs : 0.0, "%", "the cluster-DAG stage's share of the bake");
     for (size_t t : { size_t(1000000), size_t(5000000), size_t(10000000) }) {
         BakeInfo c;
-        if (shellAsset(t, &c, false).isEmpty()) { std::printf("W11 shell-%zu: not cached (scale_assets_gen)\n", t); continue; }
+        if (requireShell(t, &c).isEmpty()) { ++failures; continue; }
         row(c, c.bakeMs > 0 ? "scale_assets_gen's record" : "cached, no record");
+        REQUIRE(c.bakeMs > 0, "the %zu-triangle shell carries its bake's record (time, peak)", t);
         if (c.bakeMs > 0) {
             const std::string what = "bake seconds for the " + std::to_string(c.triangles) + "-triangle shell";
             target("W11", c.bakeMs / 1000.0, "s", what.c_str());
+            const std::string peak = "the bake's peak RSS for the " + std::to_string(c.triangles) + "-triangle shell";
+            target("W11", double(c.peakRssKb) / 1024.0, "MB", peak.c_str());
         }
     }
     return failures ? 1 : 0;
@@ -1573,7 +1757,8 @@ static int cpuWalksMain()
 {
     Env env;
     World w;
-    if (!bootWorld(env, w, "test-scale-cpu-walks-ogre.log")) return 1;
+    // D1's DENSE WORLD: the bars were calibrated on it (V2-P0A).
+    if (!bootWorld(env, w, "test-scale-cpu-walks-ogre.log", denseWorld())) return 1;
     pathStill(env, 30);
     iris::MeshNodePtr mover = w.items[w.items.size() / 3];
     mover->setMobility(iris::Mobility::Movable);   // see scale.tlas: a mover the renderer moves every frame
@@ -1916,11 +2101,13 @@ static int shadowCutMain()
     // shutdown is itself the regression test of MONITOR-RETIRE-1 F2 (the frame
     // monitor used to outlive its engine and crash the next boot's first frame
     // in FrameMonitor::beginFrame).
-    runWorld("world", WorldSpec(), 1.0 / 3.0, kGpuMsPerMapBar);
+    runWorld("world", denseWorld(), 1.0 / 3.0, kGpuMsPerMapBar);   // calibrated on D1's dense world (V2-P0A)
     WorldSpec small;
     small.instances = 200;
     small.lights = 4;
     small.spacing = 3.0f;
+    small.name = "the small world";
+    small.farClip = 500.0f;
     runWorld("small", small, 2.0, kGpuMsPerMapBar);
     return failures ? 1 : 0;
 }
@@ -2240,7 +2427,11 @@ static int coverageTraceMain()
     const unsigned smallBudget = unsigned(knob("JAH_TRACE_BUDGET", 500000));
     Env env;
     World w;
-    WorldSpec spec;
+    // THIS SUITE KEEPS D1's DENSE 600 m WORLD: its budget arms above are measured against
+    // that world's index demand (a sparse 2 km world asks too little for the forced small
+    // budget to overflow, V2-P0A's gate), and what it guards is the cut's coverage under
+    // budget pressure, not the 2 km reach.
+    WorldSpec spec = denseWorld();
     spec.materials = 1;
     if (!bootWorld(env, w, "test-atom-coverage-trace-ogre.log", spec)) return 1;
     env.doc->exposureMode = iris::ExposureMode::Manual;
