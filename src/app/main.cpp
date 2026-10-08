@@ -422,14 +422,14 @@ int main(int argc, char *argv[])
     // named defect (services/livecompiles.h, SHADER-WARM-2).
     if (auto engine = EngineHost::instance().engine()) {
         livecompiles::arm([weak = std::weak_ptr<jahshaka::engine::Engine>(engine)]() {
-            unsigned compiled = 0, cached = 0, expected = 0;
             auto e = weak.lock();
             if (!e) return 0u;
-            e->shaderBuildProgress(compiled, cached, expected);
-            // What the background compiler built, no frame waited for (ASYNC-SHADERS-1):
-            // only the rest can be a live compile.
-            const unsigned background = e->asyncShaderStats().compiledInBackground;
-            return compiled >= background ? compiled - background : 0u;
+            // ONLY WHAT A FRAME WAITED FOR (ASYNC-SHADERS-1): the shaders compiled off the
+            // background compiler's threads, ONE counter read once. It used to be compiled -
+            // compiledInBackground, two loads that a service-thread compile could land between
+            // (the difference dipped by one and came back: a phantom live compile, measured as
+            // shader.sample_opens_quiet's "1 shader(s)" under load).
+            return e->asyncShaderStats().compiledInForeground;
         });
         // AFTER THE STARTUP GATE, THE EDITOR COMPILES IN THE BACKGROUND (ASYNC-SHADERS-1):
         // an interactive session's view never waits for a shader outside an open's dialog.
