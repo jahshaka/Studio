@@ -89,6 +89,7 @@ import re
 import os
 import subprocess
 import sys
+import shutil
 import tempfile
 
 FAILURES = []
@@ -379,12 +380,46 @@ def main(source, build):
           "parallel lanes: lane A's step is named once at a0, and lane B's tips stay in band (%r)"
           % [rows[x["i"]][1] for x in st])
 
+    # 13b. EVERY TARGET LINE IS ITS OWN SERIES (V2-P0B; the deep audit's T6): the log kept a row's FIRST
+    # `target:` line only, so gi.chain_face_target read "0.0000 MET" while its [sky-low] arm was red.
+    face = "the face of cascade 0 is a boundary in a data structure and not in the world"
+    out3 = ("target: 0.0000 (bar 0.0500) %s [flat, chain, cam x=0] -- MET\nFAIL: x\n"
+            "target: 0.2100 (bar 0.0500) %s [sky-low, chain, cam x=0]\n"
+            "target: 12.5 (bar none yet) W1 ms: c0 rebuild\n" % (face, face))
+    lines3 = grl._suite_facts(out3)[0]
+    check(lines3 is not None and len(lines3) == 3, "a row printing 3 target lines records 3 (%r)" % lines3)
+    logs = tempfile.mkdtemp(prefix="runlog-targets-")
+    old_dir = os.environ.get("JAH_RUN_LOG_DIR")
+    os.environ["JAH_RUN_LOG_DIR"] = logs
+    try:
+        for i in range(3):
+            grl.append_records([{"suite": "gi.chain_face_target", "arm": None, "verdict": "FAIL", "gating": False,
+                                 "ts": "2026-10-08T0%d:00:00" % i, "tip": {"studio": "%040d" % i},
+                                 "box": {}, "targets": lines3}], "target", "%040d" % i)
+        grl.append_records([{"suite": "gi.old_row", "arm": None, "verdict": "PASS", "ts": "2026-10-08T00:00:00",
+                             "tip": {"studio": "%040d" % 0}, "box": {}, "target": "0.380 (bar 0.90) 1080p"}],
+                           "scoped", "%040d" % 0)
+        ser = grl.trend_series(30, ["gi.chain_face_target"])
+        keys = {k[1]: rows for k, rows in ser.items()}
+        check(len(keys) == 3, "the trend sees the row's 3 target lines as 3 series (%r)" % sorted(keys))
+        low = [rows for k, rows in keys.items() if "sky-low" in k]
+        check(len(low) == 1 and [x[3] for x in low[0]] == [0.21] * 3,
+              "the [sky-low] line red on the row's SECOND line reads 0.21 (not the first line's 0.0000 MET)")
+        check([k[1] for k in grl.trend_series(30, ["gi.old_row"])] == ["# (bar #) #p"],
+              "a record from before V2-P0B (one `target` line) reads as the 1-target case")
+        pro = grl.promotions(30, "%040d" % 2)
+        check(len(pro) == 1 and "[flat, chain" in pro[0][1],
+              "PROMOTE: the line MET at its last 3 tips, not the red [sky-low] line nor a `bar none` line (%r)" % pro)
+    finally:
+        if old_dir is None: os.environ.pop("JAH_RUN_LOG_DIR", None)
+        else: os.environ["JAH_RUN_LOG_DIR"] = old_dir
+        shutil.rmtree(logs, ignore_errors=True)
+
     # 14. ONE BUILD, ONE SELECTION, FROM ANY CHECKOUT (TEST-1 fix round, CLIP-REF-1's finding): the
     # merge judge runs d-build's copy of the scripts against a LANE's build, and the build's graph
     # names files under the lane's tree — read against the script's own checkout every touched path
     # was "not in the build graph" (448 rows against the lane's own 372). The scripts copied to a
     # foreign root must select exactly what they select at home, through the graph.
-    import shutil
     foreign = tempfile.mkdtemp(prefix="gate-scope-root-")
     try:
         os.makedirs(os.path.join(foreign, "scripts"))
