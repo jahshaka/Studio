@@ -436,7 +436,7 @@ def _leaks_of(text):
 
 
 def _suite_facts(text):
-    target, arms, begun = None, [], []
+    targets, arms, begun = [], [], []
     # arm -> its own output lines: from its ARM-BEGIN, and from the runner's dump of a red arm's
     # output (`---- <pool>.<arm>: its output …`, printed when the process ended), to its ARM line
     seg, cur = {}, None
@@ -447,7 +447,7 @@ def _suite_facts(text):
         if m: cur = m.group(1); seg.setdefault(cur, []); continue
         if cur is not None: seg[cur].append(line)
         m = _TARGET.match(line)
-        if m and target is None: target = m.group(1)[:200]
+        if m: targets.append(m.group(1)[:200])
         m = _ARM.match(line)
         if m:
             secs = None
@@ -464,7 +464,7 @@ def _suite_facts(text):
             bv, _ = budget_verdict("\n".join(seg.get(a, [])))
             v = bv or v
         out.append((a, v, secs))
-    return target, out
+    return targets or None, out
 
 
 def _file_for(tier, tip, date=None):
@@ -533,7 +533,7 @@ def run_ctest(cmd, cwd, tier, lane, jobs, reasons=None, gating=None, rng=None, r
     except OSError: pass
     recs = []
     for name, status, secs, t_end, load in seen:
-        target, arms = _suite_facts(outputs.get(name, ""))
+        targets, arms = _suite_facts(outputs.get(name, ""))
         # THE BOX AT THIS SUITE'S START (TEST-SELECTOR-1 L1): the gate's first second said nothing
         # about a suite that started an hour later beside two other gates
         at = starts.get(name) or {}
@@ -553,7 +553,7 @@ def run_ctest(cmd, cwd, tier, lane, jobs, reasons=None, gating=None, rng=None, r
         queued = wait if wait is not None else twait
         row = dict(base, arm=None, verdict=v, status=st,
                    seconds=(round(max(0.0, secs - queued), 2) if queued is not None else secs),
-                   target=target)
+                   targets=targets)
         if wait is not None:
             row["lockWaitS"] = wait
         if twait is not None:
@@ -578,7 +578,7 @@ def run_ctest(cmd, cwd, tier, lane, jobs, reasons=None, gating=None, rng=None, r
         for arm, v, s in arms:
             # an arm's reason: the selector's for that arm (`<row>::<arm>`), else its row's
             ar = reasons.get(f"{name}::{arm.split('.', 1)[-1]}", base["reason"])
-            rec = dict(base, arm=arm, verdict=v, status=v, seconds=s, target=None,
+            rec = dict(base, arm=arm, verdict=v, status=v, seconds=s, targets=None,
                        reason=ar)
             if arm in arm_mem:
                 rec["mem"] = arm_mem[arm]
@@ -616,7 +616,7 @@ def import_log(path, tier, tip, lane, jobs=None, reason=None):
                      "tip": {"studio": tip}, "reason": reason or f"imported from {path}",
                      "gating": True, "retry": False, "labels": [],
                      "verdict": verdict_of(m.group(2)), "status": m.group(2).strip("* "),
-                     "seconds": float(m.group(3)), "target": None,
+                     "seconds": float(m.group(3)), "targets": None,
                      "box": {"jobs": jobs}, "source": "import"})
     if recs:
         p = append_records(recs, tier, tip)
@@ -697,10 +697,11 @@ def query_load_reds(days=7):
                       f"(siblings {b.get('other_ctests')}, -j{b.get('jobs')})  solo {len(solo)}/{len(solo)} PASS")
 
 
-# THE TREND CHECK (TEST-1 item 1; the perf audit's D2). The run log has carried every `target:` line since
-# 2026-09-27 and nothing compared one merge's number with the last; gi.rt_reflect_cost went 0.39 -> 1.03 ms
-# and sat four days unread (D1). `trend` reads each target row as a SERIES over tips and names the first tip
-# of every STEP and the lane that brought it. It is a REPORT, never a verdict: a step gets the lead's
+# THE TREND CHECK (TEST-1 item 1; the perf audit's D2). The run log has carried a row's `target:` line since
+# 2026-09-27 (every line, each its own series keyed by target_key, since V2-P0B) and nothing compared
+# one merge's number with the last; gi.rt_reflect_cost went 0.39 -> 1.03 ms and sat four days unread (D1).
+# `trend` reads each target line as a SERIES over tips and names the first tip of every STEP and the lane
+# that brought it. It is a REPORT, never a verdict: a step gets the lead's
 # verdict, as a red does (a known trade like BAKE-WIDTH-2's bake cost is verdicted once).
 #
 # The rule, chosen so the comparison is honest:
@@ -749,6 +750,27 @@ def target_value(text):
     return None
 
 
+_MET = re.compile(r"\s*--\s*MET$")
+
+
+def target_key(line):
+    """A target line's KEY: its text with every number masked (`#`) and the ` -- MET` mark dropped,
+    so one line keeps one key from tip to tip whatever it reads."""
+    return re.sub(rf"(?<![\w.]){_NUM}", "#", _MET.sub("", (line or "").strip()))
+
+
+def target_lines(r):
+    """A record's target lines as [(key, line)], in print order. A record written before V2-P0B carries
+    its one line in `target` (the 1-target case). Two lines with one key take their order (`<key> [2]`)."""
+    lines = r.get("targets") or ([r["target"]] if r.get("target") else [])
+    out, seen = [], {}
+    for line in lines:
+        k = target_key(line)
+        seen[k] = seen.get(k, 0) + 1
+        out.append((k if seen[k] == 1 else f"{k} [{seen[k]}]", line))
+    return out
+
+
 def _condition(r):
     b = r.get("box") or {}
     clock = "locked" if (b.get("gpu_clocks") or {}).get("state") == "locked?" else "unlocked"
@@ -763,21 +785,21 @@ def _band(vals):
 
 
 def trend_series(days=30, suites=None):
-    """(suite, condition) -> [(first ts, tip sha, lane, value, n readings)], tips in time order."""
+    """(suite, target key, condition) -> [(first ts, tip sha, lane, value, n readings)], tips in time
+    order: every target line of a row is its own series."""
     acc = {}
     for r in _records(days):
-        if r.get("arm") or not r.get("target"):
-            continue
-        if suites and r["suite"] not in suites:
-            continue
-        v = target_value(r["target"])
-        if v is None:
+        if r.get("arm") or (suites and r["suite"] not in suites):
             continue
         tip = (r.get("tip") or {}).get("studio") or "?"
-        key = (r["suite"], _condition(r))
-        e = acc.setdefault(key, {}).setdefault(tip, {"ts": r.get("ts") or "", "lane": r.get("lane") or "?", "v": []})
-        e["ts"] = min(e["ts"], r.get("ts") or e["ts"])
-        e["v"].append(v)
+        for tkey, line in target_lines(r):
+            v = target_value(line)
+            if v is None:
+                continue
+            key = (r["suite"], tkey, _condition(r))
+            e = acc.setdefault(key, {}).setdefault(tip, {"ts": r.get("ts") or "", "lane": r.get("lane") or "?", "v": []})
+            e["ts"] = min(e["ts"], r.get("ts") or e["ts"])
+            e["v"].append(v)
     out = {}
     for key, tips in acc.items():
         rows = sorted(((e["ts"], t, e["lane"], statistics.median(e["v"]), len(e["v"])) for t, e in tips.items()))
@@ -892,7 +914,7 @@ def query_trend(days=30, suites=None, tip=None, k=TREND_K, quiet_ok=False):
     anc = tip_ancestry({x[1] for rows in series.values() for x in rows}, days)
     n = 0
     lines = []
-    for (suite, cond), rows in sorted(series.items()):
+    for (suite, tkey, cond), rows in sorted(series.items()):
         for s in trend_steps(rows, anc, k=k):
             ts, t, lane, v, cnt = rows[s["i"]]
             if tip and not any(rows[j][1].startswith(tip[:9]) for j in [s["i"]] + (s.get("siblings") or [])):
@@ -902,7 +924,7 @@ def query_trend(days=30, suites=None, tip=None, k=TREND_K, quiet_ok=False):
             sib = "".join(f"; sibling {rows[j][1][:9]} ({rows[j][2]})" for j in s.get("siblings") or [])
             lines.append(f"  {s['kind']:11s} {suite:34s} {s['before']:.4g} -> {s['after']:.4g} ({rel:+.0f} %, "
                          f"band +-{s['band']:.3g}; read {', '.join(f'{x:.4g}' for x in s['readings'])}) "
-                         f"first at {t[:9]} ({lane}, {ts[:16]}{good}{sib}) [{cond}]")
+                         f"first at {t[:9]} ({lane}, {ts[:16]}{good}{sib}) [{cond}] {tkey}")
             n += 1
     if lines or not quiet_ok:
         print(f"TREND (target rows, last {days} d; k={k} x MAD of the trailing {TREND_WINDOW} tips in one "
@@ -912,12 +934,44 @@ def query_trend(days=30, suites=None, tip=None, k=TREND_K, quiet_ok=False):
     return n
 
 
+PROMOTE_AFTER = 3
+
+
+def promotions(days=30, tip=None):
+    """THE PROMOTION LIST (the deep audit's T6): (suite, key) of every target line of a target row
+    that read green at the last PROMOTE_AFTER tips it ran at, the newest being `tip` when given. Green
+    = the line says MET, or its row PASSed; a `bar none` line has nothing to promote. Information
+    only: the lead decides a promotion."""
+    acc = {}
+    for r in _records(days):
+        if r.get("arm") or r.get("gating", True):
+            continue
+        t = (r.get("tip") or {}).get("studio") or "?"
+        for k, line in target_lines(r):
+            if "bar none" in line:
+                continue
+            e = acc.setdefault((r["suite"], k), {}).setdefault(t, {"ts": r.get("ts") or "", "green": True})
+            e["ts"] = min(e["ts"], r.get("ts") or e["ts"])
+            e["green"] &= bool(_MET.search(line.strip())) or r.get("verdict") == "PASS"
+    out = []
+    for key, tips in sorted(acc.items()):
+        last = sorted(tips.items(), key=lambda x: x[1]["ts"])[-PROMOTE_AFTER:]
+        if len(last) == PROMOTE_AFTER and all(e["green"] for _, e in last) \
+                and (not tip or last[-1][0].startswith(tip[:9])):
+            out.append(key)
+    return out
+
+
 def trend_at_gate_end(tip=None):
-    """THE GATE'S TREND LINE (TEST-1): every gate prints, after its verdict, the target rows whose
-    reading at THIS tip left its history's band — the day a step lands it is one UNCONFIRMED reading.
+    """THE GATE'S TREND LINE (TEST-1): every gate prints, after its verdict, the target lines whose
+    reading at THIS tip left its history's band — the day a step lands it is one UNCONFIRMED reading —
+    and a PROMOTE line for every target line green at its last PROMOTE_AFTER tips, this one the newest.
     A report: it never changes an exit code and never raises."""
     try:
-        query_trend(30, None, tip or tree_shas()["studio"])
+        tip = tip or tree_shas()["studio"]
+        query_trend(30, None, tip)
+        for suite, key in promotions(30, tip):
+            print(f"PROMOTE {suite} {key}    (green at its last {PROMOTE_AFTER} tips; information only)")
     except Exception as e:             # a report must never break the gate it reports on
         print(f"TREND: not computed ({type(e).__name__}: {e})")
 
