@@ -313,10 +313,219 @@ static int voxelScrollMain()
 }
 
 // ===========================================================================
-// scale.lights — W2: THE VOXEL INJECTION HOLDS 16 LIGHTS, FIRST COME.
-// Anchor: irisgl/engine/src/photon/voxel/PhotonVoxelLighting.cpp (the light buffer of
-// sizeof(PhotonShaderVoxelLight) * 16u; the collect loop: the range cull (IMAGE-1), then
-// the first 16 lights in range take the slots and the rest are dropped).
+// scale.lights, part 2 — W2: THE ONE LIGHT LIST (P1C-LIGHT-LIST; irisgl engine/src/SceneLightList.h).
+// The voxel injection used to take the FIRST 16 lights in memory order (after IMAGE-1's range
+// cull) and the cards the first 64 with no range cull. Now every consumer selects from the scene's
+// one list: range-culled against its own box, the budget's worth by contribution (the one falloff
+// at the box), the rest COUNTED (GiStatus::cascades[].lightsOverBudget, cards.lightsDropped).
+// Fixture: a floor and a red wall in front of the camera, a black sky, High.
+//   A  FITS:      15 dim fillers in range of cascade 0, then the KEY: 16 in range, all injected,
+//                 0 over; the key's toggle moves the cascade-0 voxel digest.
+//   B  BEST, NOT FIRST: 16 dim fillers FIRST, then the bright KEY (the 17th in memory order): 17 in
+//                 range, 16 injected, 1 over the budget — and the key's toggle STILL moves the
+//                 digest (the old rule dropped it: the 17th). The picture arm the brief names.
+//   C  EVERY CASCADE: lamps on a line at growing distances; each cascade's lightsInRange equals
+//                 the analytic count (range sphere vs the cascade's box from its status), injected
+//                 = min(in range, the budget), over = the rest — on every cascade.
+//   D  THE CARDS (where rays run): 64 dim fillers FIRST, then the KEY: the floor's card radiance
+//                 moves with the key (the old first-64 dropped it), cards.lightsDropped = 1.
+// ===========================================================================
+static void lightListArms(Env &env)
+{
+    iris::MeshPtr cube;
+    auto fixture = [&]() {
+        env.doc = iris::Scene::create();
+        env.mirror->setSource(env.doc);
+        env.doc->skyType = iris::SkyType::SINGLE_COLOR;
+        env.doc->skyColor = QColor(0, 0, 0);
+        worldmodes::setMode(env.doc, worldmodes::Mode::High);
+        worldmodes::setPhoton(env.doc, true, worldmodes::PhotonTier::High);
+        BakeInfo bi;
+        if (!cube) cube = bakedMesh(QStringLiteral(JAHSHAKA_SOURCE_DIR "/app/content/primitives/cube.obj"), "cube", &bi);
+        auto slab = [&](const char *name, iris::Vec3 pos, iris::Vec3 scale, QColor col) {
+            auto n = iris::MeshNode::create();
+            n->setName(name);
+            n->setMesh(cube);
+            n->setLocalPos(pos);
+            n->setLocalScale(scale);
+            auto m = iris::PbrMaterial::create();
+            m->setValue("baseColor", col);
+            m->setValue("roughness", 0.9f);
+            m->setValue("metallic", 0.0f);
+            n->setMaterial(m);
+            env.doc->getRootNode()->addChild(n);
+        };
+        slab("floor", iris::Vec3(0, -0.1f, 0), iris::Vec3(12, 0.2f, 12), QColor(230, 230, 230));
+        slab("wall", iris::Vec3(0, 2.0f, -3.0f), iris::Vec3(8, 4.0f, 0.4f), QColor(230, 40, 40));
+    };
+    auto lamp = [&](const QString &name, iris::Vec3 pos, float intensity, float range) {
+        auto l = iris::LightNode::create();
+        l->setLightType(iris::LightType::Point);
+        l->setName(name);
+        l->setLocalPos(pos);
+        env.doc->getRootNode()->addChild(l);
+        l->setPropertyValue(QStringLiteral("intensity"), intensity);
+        l->setPropertyValue(QStringLiteral("distance"), range);
+        l->shadowMap->shadowType = iris::ShadowMapType::None;
+        return l;
+    };
+    auto settle = [&] {
+        for (int f = 0; f < 600; ++f) {
+            frame(env, 1);
+            if (f > 30 && env.scene->giStatus().giAtRest) break;
+        }
+    };
+    // Dim fillers inside cascade 0's box, behind the camera (+z), away from the wall.
+    auto fillerPos = [](int i) {
+        return iris::Vec3(-3.0f + float(i % 4) * 2.0f, 0.6f + float((i / 4) % 4) * 0.8f, 3.0f + float(i / 16) * 0.3f);
+    };
+    const iris::Vec3 eye(0.0f, 1.6f, 1.0f), at(0.0f, 1.5f, -3.0f);
+
+    // ---- A and B: the voxels -------------------------------------------------
+    struct ArmVox { int inRange = -1, injected = -1, over = -1, capacity = -1; bool keyMoves = false; };
+    auto armVox = [&](int fillers) {
+        ArmVox r;
+        fixture();
+        for (int i = 0; i < fillers; ++i) lamp(QStringLiteral("filler%1").arg(i), fillerPos(i), 0.05f, 4.0f);
+        auto key = lamp(QStringLiteral("key"), iris::Vec3(0.0f, 2.0f, -1.5f), 6.0f, 10.0f);
+        env.doc->getRootNode()->applyStaticDefaults();
+        setCamera(env, eye, at);
+        settle();
+        const GiStatus st = env.scene->giStatus();
+        GiVoxelStats on = env.scene->giVoxelStats(0);
+        if (!st.cascades.empty()) {
+            r.inRange = st.cascades[0].lightsInRange;
+            r.injected = st.cascades[0].lightsInjected;
+            r.over = st.cascades[0].lightsOverBudget;
+            r.capacity = st.cascades[0].lightCapacity;
+        }
+        key->setPropertyValue(QStringLiteral("intensity"), 0.0f);
+        key->markChanged(iris::NodeChange::Params);
+        settle();
+        GiVoxelStats off = env.scene->giVoxelStats(0);
+        r.keyMoves = on.available && off.available && on.lightDigest != off.lightDigest;
+        std::printf("   %2d fillers + key: cascade 0 lights in range %d, injected %d, over budget %d (budget %d) | "
+                    "digest on %s off %s | meanLit on %.6f off %.6f\n",
+                    fillers, r.inRange, r.injected, r.over, r.capacity, on.lightDigest.c_str(),
+                    off.lightDigest.c_str(), on.meanLit, off.meanLit);
+        return r;
+    };
+    const ArmVox a = armVox(15);
+    const int budget = a.capacity;
+    REQUIRE(budget >= 16, "the per-cascade budget holds at least the old 16 (%d)", budget);
+    REQUIRE(a.inRange == 16 && a.injected == 16 && a.over == 0,
+            "A: 15 fillers + the key all reach cascade 0 and all enter it (%d in range, %d injected, %d over)",
+            a.inRange, a.injected, a.over);
+    REQUIRE(a.keyMoves, "A: the key's toggle moves the cascade-0 voxels");
+    const int bFillers = budget;   // the key is the (budget + 1)th light in memory order
+    const ArmVox b = armVox(bFillers);
+    REQUIRE(b.inRange == bFillers + 1 && b.injected == budget && b.over == 1,
+            "B: %d fillers + the key reach cascade 0; the budget's %d enter, ONE is over it and counted "
+            "(%d in range, %d injected, %d over)", bFillers, budget, b.inRange, b.injected, b.over);
+    REQUIRE(b.keyMoves,
+            "B: the bright key, the LAST light in memory order, still enters the voxels (best, not first): "
+            "its toggle moves the digest");
+    target("W2", double(b.keyMoves ? 1.0 : 0.0), "(1 = the brightest light enters)",
+           "the (budget+1)th light in memory order, the brightest at the cascade, reaches the voxels", "1 (exact)");
+    target("W2", double(budget), "lights", "cascade 0's budget (PhotonVoxelLighting::lightBudgetFor: 16 at 128^3, 128 at 64^3)");
+
+    // ---- C: every cascade, the analytic count ----------------------------------
+    {
+        fixture();
+        // Lamps on a line along +x from the eye, 2 m range: each reaches the cascades whose box
+        // its sphere touches. 132 more far out (x 40-57 m) reach only the outer cascade, past
+        // its budget (128 at 64^3, PhotonVoxelLighting::kLightSlots), so it alone goes over it.
+        std::vector<std::pair<iris::Vec3, float>> placed;
+        const float xs[] = { 1.0f, 4.0f, 6.5f, 9.0f, 12.0f, 16.0f, 22.0f, 40.0f, 58.0f };
+        int n = 0;
+        for (float x : xs) {
+            const iris::Vec3 p(eye.x() + x, 1.0f, eye.z());
+            lamp(QStringLiteral("line%1").arg(n++), p, 1.0f, 2.0f);
+            placed.push_back({ p, 2.0f });
+        }
+        for (int i = 0; i < 132; ++i) {
+            const iris::Vec3 p(eye.x() + 40.0f + float(i % 12) * 1.5f, 1.0f, eye.z() - 8.0f + float(i / 12) * 1.5f);
+            lamp(QStringLiteral("far%1").arg(i), p, 1.0f, 2.0f);
+            placed.push_back({ p, 2.0f });
+        }
+        env.doc->getRootNode()->applyStaticDefaults();
+        setCamera(env, eye, at);
+        settle();
+        const GiStatus st = env.scene->giStatus();
+        REQUIRE(st.cascades.size() >= 2, "C: the chain has its cascades (%zu)", st.cascades.size());
+        bool allMatch = !st.cascades.empty();
+        int anyOver = 0;
+        for (size_t c = 0; c < st.cascades.size(); ++c) {
+            const GiStatus::CascadeStatus &cs = st.cascades[c];
+            int expect = 0;
+            for (const auto &pl : placed) {
+                double d2 = 0.0;
+                const float p[3] = { pl.first.x(), pl.first.y(), pl.first.z() };
+                const float ctr[3] = { cs.centre.x, cs.centre.y, cs.centre.z };
+                for (int k = 0; k < 3; ++k) {
+                    const double lo = ctr[k] - cs.halfSize, hi = ctr[k] + cs.halfSize;
+                    const double q = std::min(std::max(double(p[k]), lo), hi);
+                    d2 += (q - p[k]) * (q - p[k]);
+                }
+                // A lamp within 1 cm of a box face is ambiguous to float: the fixture avoids it.
+                if (d2 <= double(pl.second) * pl.second) ++expect;
+            }
+            const int wantInjected = std::min(expect, cs.lightCapacity);
+            const bool ok = cs.lightsInRange == expect && cs.lightsInjected == wantInjected &&
+                            cs.lightsOverBudget == expect - wantInjected;
+            allMatch = allMatch && ok;
+            anyOver += cs.lightsOverBudget;
+            std::printf("   C cascade %zu [centre %.2f %.2f %.2f, half %.1f m]: in range %d (analytic %d), "
+                        "injected %d, over %d, budget %d %s\n", c, cs.centre.x, cs.centre.y, cs.centre.z,
+                        double(cs.halfSize), cs.lightsInRange, expect, cs.lightsInjected, cs.lightsOverBudget,
+                        cs.lightCapacity, ok ? "" : "<-- MISMATCH");
+        }
+        REQUIRE(allMatch, "C: every cascade takes every light within its range up to the budget, the rest "
+                          "counted over it");
+        REQUIRE(anyOver > 0, "C: the outer cascade's overflow is REPORTED (%d over)", anyOver);
+    }
+
+    // ---- D: the cards (they run where rays run) ---------------------------------
+    {
+        fixture();
+        for (int i = 0; i < 64; ++i) lamp(QStringLiteral("cfill%1").arg(i), fillerPos(i), 0.02f, 3.0f);
+        auto key = lamp(QStringLiteral("key"), iris::Vec3(0.0f, 2.0f, -1.5f), 6.0f, 10.0f);
+        env.doc->getRootNode()->applyStaticDefaults();
+        setCamera(env, eye, at);
+        settle();
+        for (int f = 0; f < 600 && env.scene->giStatus().cards.queueLength > 0; ++f) frame(env, 1);
+        frame(env, 30);
+        const CardCacheStatus c0 = env.scene->giStatus().cards;
+        if (!c0.built) {
+            std::printf("   D: no card cache on this machine (cards run where rays run): the arm is skipped\n");
+        } else {
+            CardSample on;
+            const bool okOn = env.scene->readCardAt(Vec3(0.0f, 0.1f, -1.5f), Vec3(0, 1, 0), on) && on.ok;
+            key->setPropertyValue(QStringLiteral("intensity"), 0.0f);
+            key->markChanged(iris::NodeChange::Params);
+            settle();
+            for (int f = 0; f < 600 && env.scene->giStatus().cards.queueLength > 0; ++f) frame(env, 1);
+            frame(env, 30);
+            CardSample off;
+            const bool okOff = env.scene->readCardAt(Vec3(0.0f, 0.1f, -1.5f), Vec3(0, 1, 0), off) && off.ok;
+            std::printf("   D: 64 dim fillers + the key: cards lights in range %u, dropped %u | the floor's card "
+                        "under the key: radiance (red) key on %.5f off %.5f (read %d/%d, lit %d/%d)\n",
+                        c0.lightsInRange, c0.lightsDropped, double(on.radiance[0]), double(off.radiance[0]),
+                        int(okOn), int(okOff), int(on.lit), int(off.lit));
+            REQUIRE(c0.lightsInRange == 65u && c0.lightsDropped == 1u,
+                    "D: 65 lights reach the relit cards, the relight's 64 hold all but one, counted (%u, %u)",
+                    c0.lightsInRange, c0.lightsDropped);
+            REQUIRE(okOn && okOff && on.radiance[0] > 2.0f * off.radiance[0] + 1e-4f,
+                    "D: the key, the 65th light in memory order and the brightest, lights the floor's card");
+        }
+    }
+}
+
+// ===========================================================================
+// scale.lights, part 1 — W2: THE VOXEL INJECTION'S BUDGET (V2-P0A's sweep; P1C-LIGHT-LIST's rule).
+// Anchor: irisgl/engine/src/photon/voxel/PhotonVoxelLighting.cpp (lightBudgetFor: 16 at
+// 128^3, 128 at 64^3) and SceneLightList::select (the range cull, then the budget by
+// contribution, the rest counted over it). Part 2 (lightListArms, above) holds the rule's arms.
 // THE ROW MEASURES THE CAP ITSELF (V2-P0A): N = 8, 16, 32 and 64 filler lamps placed
 // INSIDE cascade 0's reach (a 3 m range around the camera's own spot, so the range cull
 // keeps every one of them), then the KEY lamp, created last, facing a red wall. The
@@ -451,8 +660,8 @@ static int lightsMain()
         // push the cap and its reading means nothing.
         REQUIRE(r.inRange >= n + 1, "N = %d: all %d lamps are IN RANGE of cascade 0 (read %d) — the arm pushes the cap",
                 n, n + 1, r.inRange);
-        REQUIRE(r.injected == std::min(r.inRange, r.capacity), "N = %d: the slots fill first come up to the "
-                "capacity (%d injected of %d in range, %d slots)", n, r.injected, r.inRange, r.capacity);
+        REQUIRE(r.injected == std::min(r.inRange, r.capacity), "N = %d: the budget fills, by contribution, up to the "
+                "capacity (%d injected of %d in range, %d the budget)", n, r.injected, r.inRange, r.capacity);
         const std::string what = "lights that ENTER cascade 0's voxels with " + std::to_string(n + 1) +
                                  " in its reach (" + std::to_string(r.inRange) + " in range, " +
                                  std::to_string(r.inRange - r.injected) + " dropped)";
@@ -468,6 +677,67 @@ static int lightsMain()
            "every light in range");
     target("W2", keyReachesAt16 ? 1.0 : 0.0, "(1 = light 17 bounces)",
            "the 17th light's bounce reaches the voxels: exact bar = the digest moves", "1 (exact)");
+    lightListArms(env);
+    shutdown(env);
+    return failures ? 1 : 0;
+}
+
+// ===========================================================================
+// --lights-cost (a MEASURING mode, not a row; P1C-LIGHT-LIST): THE GI LIGHT TICK'S GPU ms on the
+// P0 world (500 lamps), `JAH_LIGHTS_COST_ROUNDS` (16) at-rest ticks forced by refreshGiLighting —
+// the `vct.light` rows' GPU ms (the whole tick: every cascade's injection, bounces, mips). With
+// `JAH_LIGHTS_COST_CLUSTER=N`, N more lamps around the eye (30 m range: every one reaches every
+// cascade) — the per-light cost the budget is chosen by. Run under scripts/gpu-exclusive.sh.
+// ===========================================================================
+static int lightsCostMain()
+{
+    Env env;
+    World w;
+    WorldSpec spec;
+    const char *cl = std::getenv("JAH_LIGHTS_COST_CLUSTER");
+    const int cluster = cl ? std::atoi(cl) : 0;
+    const char *rr = std::getenv("JAH_LIGHTS_COST_ROUNDS");
+    const int rounds = rr ? std::max(1, std::atoi(rr)) : 16;
+    if (!bootWorld(env, w, "test-scale-lights-cost-ogre.log", spec)) return 1;
+    REQUIRE(gpuTimed(env), "the frame monitor has GPU timing");
+    if (cluster > 0) {
+        const iris::Vec3 eye = env.camera->getLocalPos();
+        for (int i = 0; i < cluster; ++i) {
+            const float a = 6.2831853f * float(i) / float(cluster);
+            auto l = iris::LightNode::create();
+            l->setLightType(iris::LightType::Point);
+            l->setName(QStringLiteral("cluster%1").arg(i));
+            l->setLocalPos(iris::Vec3(eye.x() + 3.0f * std::cos(a), 3.0f, eye.z() + 3.0f * std::sin(a)));
+            env.doc->getRootNode()->addChild(l);
+            l->setPropertyValue(QStringLiteral("intensity"), 0.5f);
+            l->setPropertyValue(QStringLiteral("distance"), 30.0f);
+            l->shadowMap->shadowType = iris::ShadowMapType::None;
+        }
+        for (int f = 0; f < 600; ++f) {
+            frame(env, 1);
+            if (f > 30 && env.scene->giStatus().giAtRest) break;
+        }
+    }
+    {
+        const GiStatus st = env.scene->giStatus();
+        for (size_t c = 0; c < st.cascades.size(); ++c)
+            std::printf("   cascade %zu (half %.1f m): lights in range %d, injected %d, over budget %d\n", c,
+                        double(st.cascades[c].halfSize), st.cascades[c].lightsInRange,
+                        st.cascades[c].lightsInjected, st.cascades[c].lightsOverBudget);
+    }
+    std::vector<double> ms;
+    const auto recs = collect(env, [&] {
+        for (int r = 0; r < rounds; ++r) {
+            env.scene->refreshGiLighting(false);
+            frame(env, 8);
+        }
+    });
+    for (const FrameRecord &r : recs)
+        for (const CacheWork &cw : r.cacheWork)
+            if (cw.detail == "vct.light" && cw.gpuMs > 0.0f) ms.push_back(cw.gpuMs);
+    const Stats s = stats(ms);
+    std::printf("LIGHTS-COST cluster %d: the light tick's GPU ms median %.3f mean %.3f p95 %.3f max %.3f (n %zu)\n",
+                cluster, s.median, s.mean, s.p95, s.max, s.n);
     shutdown(env);
     return failures ? 1 : 0;
 }
@@ -1448,12 +1718,22 @@ static int atlasMain()
         wanted += size_t(n->getMesh()->cards.size());
     }
     std::printf("W9 atlas %u pages x %u px (%u used) | residency radius %.1f m | cards held %u on %u instances | "
-                "wanted %zu cards on %zu instances | lights dropped %u\n",
+                "wanted %zu cards on %zu instances | lights in range of the relit cards %u, over the 64 %u\n",
                 c.pages, c.pageSize, c.pagesUsed, double(c.residencyRadius), c.cardsResident, c.instancesResident,
-                wanted, instances, c.lightsDropped);
+                wanted, instances, c.lightsInRange, c.lightsDropped);
+    // THE ONE LIGHT LIST on the P0 world (P1C-LIGHT-LIST): each cascade's lights, culled by range
+    // against its box and over its budget by contribution — the overflow a count, never silent.
+    {
+        const GiStatus st = env.scene->giStatus();
+        for (size_t k = 0; k < st.cascades.size(); ++k)
+            std::printf("W9/W2 cascade %zu (half %.1f m): lights in range %d, injected %d, over budget %d\n", k,
+                        double(st.cascades[k].halfSize), st.cascades[k].lightsInRange,
+                        st.cascades[k].lightsInjected, st.cascades[k].lightsOverBudget);
+    }
     target("W9", double(c.cardsResident), "cards", ("held, of " + std::to_string(wanted) + " wanted inside the radius").c_str());
     target("W9", double(c.pagesUsed), "pages", ("used of " + std::to_string(c.pages) + " (the fixed 2k atlas)").c_str());
-    target("W9", double(c.lightsDropped), "lights", "dropped by the relight's 64-light sum (500 lamps in the world)");
+    target("W9", double(c.lightsDropped), "lights",
+           "in range of the relit cards but over the relight's 64 (the dimmest there; 500 lamps in the world)");
     // ONE LAMP MOVE: the captures and relights it costs until the queues drain.
     const unsigned long long cap0 = c.captures, inv0 = c.invalidSun, rel0 = c.relights;
     iris::LightNodePtr lamp = w.lights[w.lights.size() / 2];
@@ -2631,6 +2911,7 @@ int main(int argc, char **argv)
     if (mode == "--world") return worldMain();
     if (mode == "--voxel-scroll") return voxelScrollMain();
     if (mode == "--lights") return lightsMain();
+    if (mode == "--lights-cost") return lightsCostMain();
     if (mode == "--cluster-cut") return clusterCutMain();
     if (mode == "--levels") return levelsMain();
     if (mode == "--cut-cost") return cutCostMain();
@@ -2654,7 +2935,7 @@ int main(int argc, char **argv)
     if (mode == "--coverage-trace") return coverageTraceMain();
     if (mode == "--gpu-coverage") return gpuCoverageMain();
     std::printf("usage: test_scale --world|--voxel-scroll|--lights|--cluster-cut|--levels|--cut-cost|--residency|--decode|"
-                "--occlusion|--tlas|--atlas|--far-field|--bake|--hit-list|--cpu-walks|--lattice-owed|--decode-exact|"
+                "--lights-cost|--occlusion|--tlas|--atlas|--far-field|--bake|--hit-list|--cpu-walks|--lattice-owed|--decode-exact|"
                 "--coverage-trace|--gpu-coverage\n");
     return 2;
 }
