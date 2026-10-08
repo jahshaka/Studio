@@ -157,7 +157,13 @@ struct DagLogTap {
         iris::Logger::setSink([this](int, const QString &text) {
             static const QRegularExpression re(QStringLiteral("cluster DAG .*; ([0-9.]+) ms"));
             const auto m = re.match(text);
-            if (m.hasMatch()) ms += m.captured(1).toDouble();
+            if (m.hasMatch()) {
+                ms += m.captured(1).toDouble();
+                // THE BAKE'S OWN DAG LINE, per piece (clusters, groups, depth, the lock's
+                // retries and the groups it made TERMINAL — W4's reading, V2-P0A).
+                std::printf("   %s\n", qPrintable(text));
+                std::fflush(stdout);
+            }
         });
     }
     ~DagLogTap() { iris::Logger::setSink(nullptr); }

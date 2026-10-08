@@ -522,6 +522,10 @@ static void geometryDoc(Env &env)
 /// and after it. `decodePassMs` is the decode pass alone.
 struct IdRead {
     double tris = -1, idMs = -1, decodeMs = -1, decodePassMs = -1;
+    /// The occlusion's LATE list ("Jahshaka atom id late": what the first cull rejected
+    /// against the previous frame's pyramid and this frame's found visible) — the id
+    /// pass's second row; `tris + lateTris` is the two-pass total. 0 with occlusion off.
+    double lateTris = 0;
     /// The id pass's four cull jobs, each its monitor row per frame (summed over the
     /// frame's early and late culls): test, compact, cut, emit. -1 = unsampled.
     double cullMs[4] = { -1, -1, -1, -1 };
@@ -557,7 +561,7 @@ static IdRead readIdPass(Env &env, int frames)
     static const size_t kWant = 8;
     static const int kMaxFrames = 600;
     IdRead out;
-    std::vector<double> tris, id, dec, decPass, cull[4];
+    std::vector<double> tris, late, id, dec, decPass, cull[4];
     static const char *kCullRows[4] = { "id.cull.test", "id.cull.compact", "id.cull.cut", "id.cull.emit" };
     int drawn = 0;
     unsigned dropped = 0;
@@ -572,6 +576,7 @@ static IdRead readIdPass(Env &env, int frames)
                 tris.push_back(double(p->triangles));
                 if (p->gpuMs >= 0) id.push_back(p->gpuMs);
             }
+            if (const FramePass *p = passNamed(r, "Jahshaka atom id late")) late.push_back(double(p->triangles));
             double dp = -1;
             const double ms = opaqueSideMs(r, &dp);
             if (ms >= 0) dec.push_back(ms);
@@ -586,6 +591,7 @@ static IdRead readIdPass(Env &env, int frames)
         if (id.size() >= kWant && dec.size() >= kWant) break;
     }
     out.tris = stats(tris).median;
+    out.lateTris = late.empty() ? 0.0 : stats(late).median;
     out.idMs = stats(id).median;
     out.decodeMs = stats(dec).median;
     out.decodePassMs = decPass.empty() ? -1.0 : stats(decPass).median;
@@ -656,27 +662,53 @@ static int clusterCutMain()
     armMonitor(env);
     const struct { const char *name; float d; } poses[] = {
         { "inside bounds (1.3 R)", 1.3f * radius }, { "5 R", 5.0f * radius }, { "30 R", 30.0f * radius } };
+    // TWO ARMS PER POSE, ONE PROCESS (V2-P0A fix round): the reference (Types.h clusterCut)
+    // applies the frustum and NO occlusion, so it is compared with the id pass's occlusion
+    // OFF (frustum-only, one list); with it ON (the shipped two-pass form) the early and
+    // late lists' total must stay within the cut (occlusion only ever removes what is
+    // hidden: a screen-filling shell hides whole pieces behind itself). Both arms must fit
+    // the cut's stream: no instance on the coarse reserve, none missing.
     for (const auto &p : poses) {
         setCamera(env, at + iris::Vec3(0, 0.2f * radius, p.d), at);
         frame(env, 10);
+        const IdRead on = readIdPass(env, 30);
+        const AtomDrawStatus sOn = env.scene->atomDrawStatus();
+        env.scene->setAtomOcclusionEnabled(false);
+        frame(env, 10);
         const IdRead r = readIdPass(env, 30);
+        const AtomDrawStatus sOff = env.scene->atomDrawStatus();
+        env.scene->setAtomOcclusionEnabled(true);
+        frame(env, 10);
         const size_t cut = cutTriangles(env, shell, at, radius);
-        std::printf("W3 %-24s id pass draws %12.0f tris (id %s, decode %s GPU) | the cluster cut: %10zu "
-                    "tris | ratio %.2fx\n",
-                    p.name, r.tris, msText(r.idMs).c_str(), msText(r.decodeMs).c_str(), cut,
-                    cut ? r.tris / double(cut) : 0.0);
-        const std::string what = std::string("triangles drawn at ") + p.name + " (the cut would draw " +
+        const double twoPass = on.tris + on.lateTris;
+        std::printf("W3 %-24s occlusion OFF: id pass draws %10.0f tris | the cluster cut: %10zu tris | ratio %.2fx "
+                    "(overflow %u, missing %u, budget %u indices) || occlusion ON: early %.0f + late %.0f = %.0f tris "
+                    "(%.2fx the cut; overflow %u, missing %u, occluded %u) | id %s, decode %s GPU\n",
+                    p.name, r.tris, cut, cut ? r.tris / double(cut) : 0.0, sOff.cutOverflow, sOff.cutMissing,
+                    sOff.cutIndexBudget, on.tris, on.lateTris, twoPass, cut ? twoPass / double(cut) : 0.0,
+                    sOn.cutOverflow, sOn.cutMissing, sOn.occluded, msText(on.idMs).c_str(), msText(on.decodeMs).c_str());
+        const std::string what = std::string("triangles drawn at ") + p.name + ", occlusion off (the cut would draw " +
                                  std::to_string(cut) + ")";
         target("W3", r.tris, "tris", what.c_str());
+        const std::string whatOn = std::string("triangles drawn at ") + p.name + ", occlusion on (early + late lists)";
+        target("W3", twoPass, "tris", whatOn.c_str());
         // THE BAR THIS LANE CLOSES W3 WITH (ATOM-CLUSTER-CUT; the D1 convention: the bar
         // comes with the part that closes the wall): the id pass draws the cut, within
-        // 1.2x of Types.h clusterCut at the same tolerance, either way.
+        // 1.2x of Types.h clusterCut at the same tolerance, either way — frustum against
+        // frustum (occlusion off).
         REQUIRE(cut > 0 && r.tris <= 1.2 * double(cut) && r.tris * 1.2 >= double(cut),
-                "W3 %s: the id pass draws %.0f tris, within 1.2x of the cut's %zu", p.name, r.tris, cut);
+                "W3 %s: with occlusion off the id pass draws %.0f tris, within 1.2x of the cut's %zu", p.name, r.tris, cut);
+        REQUIRE(twoPass > 0 && twoPass <= 1.2 * double(cut),
+                "W3 %s: with occlusion on the two lists draw %.0f tris, no more than 1.2x the cut's %zu", p.name, twoPass,
+                cut);
+        REQUIRE(sOff.cutValid && sOff.cutOverflow == 0 && sOff.cutMissing == 0 && sOn.cutOverflow == 0 &&
+                    sOn.cutMissing == 0,
+                "W3 %s: the cut fits its stream (occlusion off: %u overflowed, %u missing; on: %u, %u)", p.name,
+                sOff.cutOverflow, sOff.cutMissing, sOn.cutOverflow, sOn.cutMissing);
         const std::string owed = std::string("id pass GPU ms on the ") + std::to_string(info.triangles) +
                                  "-triangle asset at " + p.name + " (decode " +
-                                 (r.decodeMs >= 0 ? std::to_string(r.decodeMs) + " ms" : std::string("unsampled")) + ")";
-        target("W3", r.idMs, "ms", owed.c_str());
+                                 (on.decodeMs >= 0 ? std::to_string(on.decodeMs) + " ms" : std::string("unsampled")) + ")";
+        target("W3", on.idMs, "ms", owed.c_str());
     }
     std::printf("   memory: RSS %.0f MB before the asset, %.0f MB now, peak %.0f MB\n", double(rss0) / 1024.0,
                 double(rssKb()) / 1024.0, double(peakRssKb()) / 1024.0);
