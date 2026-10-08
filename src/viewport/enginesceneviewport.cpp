@@ -2563,7 +2563,13 @@ void EngineSceneViewport::syncFrame(float dtOverride, bool recordable)
     // tick) and everything they move are drawn with the pose of the hand that
     // moved them. Once per frame — renderOneFrame does it for a caller that
     // did not — and a no-op without a session.
-    if (mEngine) mEngine->vrWaitFrame();
+    //
+    // ITS OWN STAGE: with a session it is where the tick BLOCKS (xrWaitFrame is
+    // the frame's clock), and left inside host.sync it would read as host work.
+    {
+        framemonitor::Stage waitStage("host.vr_wait");
+        if (mEngine) mEngine->vrWaitFrame();
+    }
     // AND THE CALLABLE IS COPIED BEFORE IT IS CALLED (VR-4-FIX finding 6): the
     // step can end the session — a runtime that stopped, a device lost — and
     // ending it clears mVrPreviewStep, which would destroy the closure that is

@@ -181,18 +181,20 @@ assert(st.spaceChanges === 0, "and never recentred the room under them");
 // It is what makes player.screenshot, a script's camera read and the desktop
 // Player agree about where the wearer is.
 //
-// READ THE HEAD FIRST, THEN STEP. The write is exact but one frame behind by
-// construction — the frame's step() writes the pose located by the PREVIOUS
-// frame, and the pose this frame locates is what `state()` reports afterwards
-// (the headset itself is never behind: the engine composes the rig inside the
-// pump). So the honest assertion is "the camera ends up at the head the step
-// had to work with", and it is an equality, not a tolerance.
+// THIS FRAME'S HEAD (VR-REORDER-1). The frame's step waits for the runtime
+// and locates BEFORE it writes the camera (PlayerVr::step -> vrWaitFrame), so
+// after a frame the camera is the head that frame located — exactly what
+// `state()` reports afterwards. It used to be one frame behind by construction
+// (the locate ran inside the render, after the step), and this assertion read
+// the head BEFORE stepping to match that lag; the lag is gone, so it reads after.
+// An equality, not a tolerance — and Monado's simulated head moves every frame,
+// so a camera one frame behind fails it.
 for (var i = 0; i < 5; ++i) {
-    var h = player.state().vr.head;
     player.frame(1);
+    var h = player.state().vr.head;
     var c = editor.camera().position;
     assert(near(c.x, h.x, 1e-4) && near(c.y, h.y, 1e-4) && near(c.z, h.z, 1e-4),
-           "frame " + i + ": the play camera IS the head (" + c.x.toFixed(4) + ", " +
+           "frame " + i + ": the play camera IS this frame's head (" + c.x.toFixed(4) + ", " +
            c.y.toFixed(4) + ", " + c.z.toFixed(4) + ")");
 }
 
@@ -358,11 +360,12 @@ console.log("the wearer stands at " + JSON.stringify(atShot) + " (the shot is at
 assert(Math.abs(atShot.x - 30) < 0.5 && Math.abs(atShot.y - 2) < 0.5 &&
        Math.abs(atShot.z + 18) < 0.5,
        "THE WEARER STANDS AT THE AUTHORED SHOT, not at the free camera");
-// ...and the head writes back to THAT camera, not to the free one.
-var beforeWrite = player.state().vr.head;
+// ...and the head writes back to THAT camera, not to the free one — this
+// frame's head, the one the frame located before the write (VR-REORDER-1).
 player.frame(1);
+var written = player.state().vr.head;
 var shotNow = node.transform(shotId).position;
-assert(near(shotNow.x, beforeWrite.x, 1e-3) && near(shotNow.z, beforeWrite.z, 1e-3),
+assert(near(shotNow.x, written.x, 1e-3) && near(shotNow.z, written.z, 1e-3),
        "and the head writes back to the ACTIVE camera (" + shotNow.x.toFixed(3) + ", " +
        shotNow.y.toFixed(3) + ", " + shotNow.z.toFixed(3) + ")");
 assert(player.stop() === true, "stop");
