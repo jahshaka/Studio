@@ -103,11 +103,12 @@ fails only when the measurement could not be taken. The label sits in `TARGET_LA
 discarded; dropped from the MERGE and PUSH tiers. The part that closes a wall writes the bar
 into its row and removes the label. The rows that time the GPU or the frame are registered
 through the GPU-timing lock (§4). The 250 k / 1 M / 5 M / 10 M shells are baked by the fixture
-row `scale.assets` (the tool `scale_assets_gen`; ~15 min for the four, a no-op once cached) into
-THE SHARED SCALE CACHE, one per box and outside every tree: `~/Developer/testing/scale-cache/
-v<bake format>-<producer hash>/` (CMake `JAH_SCALE_ASSET_CACHE_ROOT`, `$JAH_SCALE_ASSET_CACHE`
-moves it), so a bake producer's shells are baked once for every worktree. ctest adds the
-fixture row to any selection naming a row that reads a shell; a row whose shell is missing
+row `scale.assets` (the tool `scale_assets_gen`; ~25 min for the four, a no-op that reads no blob once
+cached; RUN_SERIAL) into THE SHARED SCALE CACHE, one per box and outside every tree:
+`~/Developer/testing/scale-cache/v<bake format>/` (CMake `JAH_SCALE_ASSET_CACHE_ROOT`,
+`$JAH_SCALE_ASSET_CACHE` moves it). Every reader checks a blob's fingerprint from its header; a
+blob another bake producer made is STALE and the fixture row re-bakes it in place. ctest adds the
+fixture row to any selection naming a row that reads a shell; a row whose shell is missing or stale
 FAILS and says how to bake it — no row measures a smaller asset in its place.
 
 ### 1d. THE NIGHTLY LABELS — `nightly` and `quiet-box` (lane D6B-GATE-SHAPE)

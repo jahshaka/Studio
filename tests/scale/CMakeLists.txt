@@ -16,16 +16,17 @@
 #   the ASSETS  — enginetest::proceduralShell (tests/support/proceduralshell.h)
 #                 at 250 k / 1 M / 5 M / 10 M triangles through the same bake. The
 #                 big bakes are W11 itself (minutes and gigabytes), so they are made
-#                 ONCE PER BAKE PRODUCER FOR THE WHOLE BOX by the fixture row
+#                 ONCE PER BAKE FORMAT FOR THE WHOLE BOX (re-baked in place when stale) by
+#                 the fixture row
 #                 `scale.assets` (the tool `scale_assets_gen`; a no-op once cached)
 #                 into THE SHARED SCALE CACHE; a row whose shell is missing FAILS and
 #                 says how to bake it — no row ever measures a smaller asset instead;
 #   the LIBRARY — test_scale_library.cpp generates it through the import door.
 # THE SHARED SCALE CACHE (V2-P0A): $JAH_SCALE_ASSET_CACHE, else JAH_SCALE_ASSET_CACHE_ROOT
 # (default ~/Developer/testing/scale-cache — outside every tree, so a new worktree reads the
-# shells the last one baked), with one sub-directory per bake producer
-# (v<kFormatVersion>-<producer hash>, scale_world.cpp cacheDir): a bake change starts a fresh
-# directory, ~1.1 GB for the four shells; delete the old ones by hand.
+# shells the last one baked), one sub-directory per bake FORMAT VERSION (v<kFormatVersion>,
+# scale_world.cpp cacheDir; ~1.1 GB): every reader checks a blob's fingerprint from its header,
+# and a blob another bake producer made is STALE — scale.assets re-bakes it in place.
 find_package(Qt6 REQUIRED COMPONENTS Gui OpenGL Core Network Sql)
 find_package(X11 REQUIRED)
 
@@ -94,7 +95,7 @@ target_compile_definitions(test_scale_library PRIVATE
 # Measured solo seconds (the rig, Debug, 2026-09-26) -> 6x, floor 120. The rows that
 # load the 1 M / 5 M / 10 M shells are sized for the 10 M one's deserialize + upload.
 set(SCALE_T_WORLD 1300)       # 210 s (still + the 30 s fly: 1,928 frames)
-set(SCALE_T_VOXEL 1100)       # 180 s (the 200 m walk + 8 teleports: 1,697 frames)
+set(SCALE_T_VOXEL 1100)       # 135 s solo (V2-P0A: the 2 km walk + the four teleport sets, ~7,000 frames)
 set(SCALE_T_LIGHTS 560)       # 93 s solo: five arms (the guard's + N = 8/16/32/64), two of them toggled
 set(SCALE_T_CUT 600)          # 12 s on the 5 M shell; the 10 M one and the owed 1/5/10 M table
 set(SCALE_T_LEVELS 300)       # 8 s on the 5 M shell
@@ -167,15 +168,18 @@ set_tests_properties(scale.gpu_coverage PROPERTIES LABELS "scale")
 jah_no_display(scale.bake)
 
 # scale.assets — THE SHELLS' FIXTURE ROW (V2-P0A): bakes every shell the rows read (250 k,
-# 1 M, 5 M, 10 M) into the shared cache when this bake producer has not baked it yet, and
-# is a no-op that reads them back otherwise. CPU only (no Vulkan, no display). The bake
-# takes a lock per shell, so two trees' rows never bake one shell twice. The 10 M bake was
-# 437.8 s at a 5.3 GB peak (IMPORT-SPEED-1, §1252); the budget covers all four on a busy box.
+# 1 M, 5 M, 10 M) into the shared cache when it is missing or STALE (another bake producer's,
+# re-baked in place), and otherwise reports the bake records from their side files without
+# reading a blob. It sweeps the pieces a killed baker left first. CPU only (no Vulkan, no
+# display); a lock per shell, so two trees' rows never bake one shell twice. The four took
+# 25 min at nice 19 beside a live gate (the 10 M 1,015 s at a 3.9 GB peak, 4 bake threads):
+# RUN_SERIAL with its 4 PROCESSORS, so no gate row shares its CPU.
 # ctest adds this row to any selection naming a row that requires it.
 set(SCALE_T_ASSETS 3600)
 add_test(NAME scale.assets COMMAND scale_assets_gen WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(scale.assets PROPERTIES TIMEOUT ${SCALE_T_ASSETS} LABELS "scale-target"
-                     FIXTURES_SETUP scale_shells ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+                     FIXTURES_SETUP scale_shells ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+                     RUN_SERIAL TRUE PROCESSORS 4)
 jah_no_display(scale.assets)
 set_tests_properties(scale.cluster_cut scale.levels scale.residency scale.bake PROPERTIES
                      FIXTURES_REQUIRED scale_shells)

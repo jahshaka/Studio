@@ -29,6 +29,10 @@
 #include <QMutex>
 #include <QRegularExpression>
 
+#include <cerrno>
+#include <csignal>
+#include <sys/types.h>
+
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -85,13 +89,13 @@ QString cacheDir()
         QDir().mkpath(g_cacheOverride);
         return g_cacheOverride;
     }
-    // ONE DIRECTORY PER BAKE PRODUCER (V2-P0A): the format version AND the producer's
-    // source hash name it, so trees on different bakes never overwrite each other's blobs
-    // (a blob's FILE NAME carries only the source's identity — the producer lives in the
-    // fingerprint inside it, and a tree whose fingerprint differs would re-bake over the
-    // other's file). Old directories are dead weight once no tree builds their producer.
-    const QString d = cacheRoot() + QStringLiteral("/v%1-%2").arg(iris::MeshBake::formatVersion())
-                                        .arg(iris::MeshBake::producerHash().left(12));
+    // ONE DIRECTORY PER BAKE FORMAT VERSION (V2-P0A fix round, the lead's call): a blob's
+    // FILE NAME carries only the source's identity; the producer lives in the fingerprint
+    // inside it, which every reader checks from the header (MeshBake::headerMatches). A
+    // blob another producer baked is STALE: the fixture row re-bakes it IN PLACE (atomic
+    // rename), so the cache heals itself and a bake-touching lane costs one re-bake, not a
+    // new 1.1 GB directory. A format bump starts a fresh directory; delete the old by hand.
+    const QString d = cacheRoot() + QStringLiteral("/v%1").arg(iris::MeshBake::formatVersion());
     QDir().mkpath(d);
     return d;
 }
@@ -228,6 +232,15 @@ static QList<iris::MeshPtr> bakeOrRead(const QString &sourcePath, const QString 
         o["peakRssKb"] = double(info.peakRssKb);
         o["source"] = sourcePath;
         o["bakeThreads"] = iris::MeshBake::bakeThreads();
+        {
+            BakeInfo t;
+            fillInfo(t, m.meshes);
+            o["pieces"] = t.pieces;
+            o["triangles"] = double(t.triangles);
+            o["levels"] = t.levels;
+            o["cards"] = t.cards;
+            o["coarsest"] = double(t.coarsestTriangles);
+        }
         writeAtomically(blob + ".json", [&](const QString &tmp) {
             QFile side(tmp);
             return side.open(QIODevice::WriteOnly) && side.write(QJsonDocument(o).toJson()) > 0;
@@ -239,6 +252,25 @@ static QList<iris::MeshPtr> bakeOrRead(const QString &sourcePath, const QString 
     }
     info.blobBytes = QFileInfo(blob).size();
     fillInfo(info, mesh);
+    // A RECORD WITHOUT THE BAKE TABLE'S FIELDS (written before they were) is completed
+    // from the blob just read, so the fixture row's no-op path never reads a blob again.
+    if (info.fromCache && !mesh.isEmpty()) {
+        QFile side(blob + ".json");
+        QJsonObject o;
+        if (side.open(QIODevice::ReadOnly)) o = QJsonDocument::fromJson(side.readAll()).object();
+        side.close();
+        if (!o.isEmpty() && !o.contains("pieces")) {
+            o["pieces"] = info.pieces;
+            o["triangles"] = double(info.triangles);
+            o["levels"] = info.levels;
+            o["cards"] = info.cards;
+            o["coarsest"] = double(info.coarsestTriangles);
+            writeAtomically(blob + ".json", [&](const QString &tmp) {
+                QFile f(tmp);
+                return f.open(QIODevice::WriteOnly) && f.write(QJsonDocument(o).toJson()) > 0;
+            });
+        }
+    }
     if (infoOut) *infoOut = info;
     return mesh;
 }
@@ -259,6 +291,59 @@ static QString shellOid(size_t triangles)
         QByteArray::fromStdString(enginetest::proceduralShellKey(triangles)), QCryptographicHash::Sha256).toHex());
 }
 
+static QString shellFingerprint(size_t triangles) { return iris::MeshBake::fingerprintFor(shellOid(triangles)); }
+
+ShellState shellState(size_t triangles)
+{
+    const QString blob = shellBlobPath(triangles);
+    if (!QFileInfo::exists(blob)) return ShellState::Missing;
+    return iris::MeshBake::headerMatches(blob, shellFingerprint(triangles)) ? ShellState::Current : ShellState::Stale;
+}
+
+bool shellRecord(size_t triangles, BakeInfo *info)
+{
+    if (shellState(triangles) != ShellState::Current) return false;
+    if (!info) return true;
+    *info = BakeInfo();
+    info->name = QStringLiteral("shell-%1").arg(qulonglong(triangles));
+    info->blobPath = shellBlobPath(triangles);
+    info->fromCache = true;
+    info->blobBytes = QFileInfo(info->blobPath).size();
+    QFile side(info->blobPath + ".json");
+    if (side.open(QIODevice::ReadOnly)) {
+        const QJsonObject o = QJsonDocument::fromJson(side.readAll()).object();
+        info->bakeMs = o.value("bakeMs").toDouble();
+        info->dagMs = o.value("dagMs").toDouble();
+        info->peakRssKb = (unsigned long long)o.value("peakRssKb").toDouble();
+        info->pieces = o.value("pieces").toInt();
+        info->triangles = size_t(o.value("triangles").toDouble());
+        info->levels = o.value("levels").toInt();
+        info->cards = o.value("cards").toInt();
+        info->coarsestTriangles = size_t(o.value("coarsest").toDouble());
+    }
+    return true;
+}
+
+void sweepStaleTemps()
+{
+    // A KILLED BAKER LEAVES ITS PIECES (a ~290 MB PLY, a half-written blob, an extract
+    // directory), each named by its pid: whatever names a pid no longer alive goes.
+    QDir d(cacheDir());
+    static const QRegularExpression re(QStringLiteral("(?:-|\\.tmp-)(\\d+)(?:\\.ply)?$"));
+    for (const QFileInfo &fi : d.entryInfoList(QDir::Files | QDir::Dirs | QDir::NoDotAndDotDot)) {
+        const QString n = fi.fileName();
+        if (!(n.endsWith(".ply") || n.contains(".tmp-") || n.startsWith("extract-"))) continue;
+        const auto m = re.match(n);
+        if (!m.hasMatch()) continue;
+        const long pid = m.captured(1).toLong();
+        if (pid <= 0 || (::kill(pid_t(pid), 0) != 0 && errno == ESRCH)) {
+            std::printf("   sweeping %s (its baker, pid %ld, is gone)\n", qPrintable(n), pid);
+            if (fi.isDir()) QDir(fi.filePath()).removeRecursively();
+            else QFile::remove(fi.filePath());
+        }
+    }
+}
+
 QString shellBlobPath(size_t triangles)
 {
     return cacheDir() + "/" + QStringLiteral("shell-%1").arg(qulonglong(triangles)) + "-" +
@@ -269,10 +354,9 @@ QList<iris::MeshPtr> shellAsset(size_t triangles, BakeInfo *info, bool bakeIfMis
 {
     const QString name = QStringLiteral("shell-%1").arg(qulonglong(triangles));
     const QString oid = shellOid(triangles);
-    // A cached blob a newer bake refuses (its fingerprint names another producer) is
-    // MISSING, not an answer — and since the cache directory is per producer, that is
-    // only ever a torn or foreign file.
-    if (QFileInfo::exists(shellBlobPath(triangles))) {
+    // A cached blob another producer baked (its header's fingerprint differs) is STALE,
+    // not an answer: the caller that bakes re-bakes it in place.
+    if (shellState(triangles) == ShellState::Current) {
         QList<iris::MeshPtr> cached = bakeOrRead(QString(), name, oid, info, false);
         if (!cached.isEmpty()) return cached;
     }
@@ -286,7 +370,7 @@ QList<iris::MeshPtr> shellAsset(size_t triangles, BakeInfo *info, bool bakeIfMis
     QLockFile lock(cacheDir() + "/" + name + ".lock");
     lock.setStaleLockTime(0);
     lock.lock();
-    if (QFileInfo::exists(shellBlobPath(triangles))) {
+    if (shellState(triangles) == ShellState::Current) {
         QList<iris::MeshPtr> cached = bakeOrRead(QString(), name, oid, info, false);
         if (!cached.isEmpty()) return cached;
     }
@@ -305,13 +389,15 @@ QList<iris::MeshPtr> shellAsset(size_t triangles, BakeInfo *info, bool bakeIfMis
 
 QList<iris::MeshPtr> requireShell(size_t triangles, BakeInfo *info)
 {
+    const ShellState state = shellState(triangles);
     QList<iris::MeshPtr> m = shellAsset(triangles, info, false);
     if (m.isEmpty()) {
-        std::printf("FAIL: the %zu-triangle shell is not in the scale cache %s (bake format v%d, producer %s): "
+        std::printf("FAIL: the %zu-triangle shell is %s in the scale cache %s (bake format v%d, producer %s): "
                     "a scale row measures the REAL asset or nothing. The fixture row bakes it once per bake "
-                    "producer for every tree on the box (`ctest -R '^scale\\.assets$'`, ~15 min for the "
-                    "four shells), or `tests/scale/scale_assets_gen %zu` in the build tree.\n",
-                    triangles, qPrintable(cacheDir()), iris::MeshBake::formatVersion(),
+                    "producer for every tree on the box, re-baking a stale one in place (`ctest -R "
+                    "'^scale\\.assets$'`, ~25 min for the four shells), or `tests/scale/scale_assets_gen %zu` in the build tree.\n",
+                    triangles, state == ShellState::Stale ? "STALE (another bake producer made it)" : "missing",
+                    qPrintable(cacheDir()), iris::MeshBake::formatVersion(),
                     qPrintable(iris::MeshBake::producerHash().left(12)), triangles);
         std::fflush(stdout);
     } else if (info) {
@@ -628,6 +714,7 @@ bool buildWorld(Env &env, const WorldSpec &spec, World &world, int settleCap)
 
     // ---- the first sync + frame, then GI to rest ------------------------------
     env.camera->farClip = spec.farClip;
+    g_targetWorld = spec.name ? spec.name : "";
     setCamera(env, worldEye() + iris::Vec3(0, 8.0f, 30.0f), worldEye());
     t0 = Clock::now();
     frame(env, 1);
@@ -692,8 +779,14 @@ double medianD(std::vector<double> v)
     return v[v.size() / 2];
 }
 
-void target(const char *wall, double value, const char *unit, const char *what, const char *bar)
+std::string g_targetWorld;
+
+void target(const char *wall, double value, const char *unit, const char *whatIn, const char *bar)
 {
+    // EVERY TARGET NAMES THE WORLD IT WAS MEASURED ON (V2-P0A): a row that built none
+    // (a shell, the lights room) names its asset on its ASSET / arm lines instead.
+    const std::string whatS = g_targetWorld.empty() ? std::string(whatIn) : std::string(whatIn) + " [" + g_targetWorld + "]";
+    const char *what = whatS.c_str();
     // A NEGATIVE READING IS "NOT MEASURED" (the monitor's convention: an unsampled GPU
     // ms, an empty median) and is never printed as a number.
     if (value < 0.0) {

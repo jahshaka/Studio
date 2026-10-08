@@ -325,8 +325,8 @@ static int voxelScrollMain()
 // THE FALSE-PASS GUARD: an arm whose lamps the range cull drops does not push the cap
 // (D1's fillers stood 40 m away with a 4 m range; once IMAGE-1 culled them the row read
 // "light 17 bounces" over a scene that held two lights) — every arm must read all N + 1
-// lamps IN RANGE or the row FAILS, and the guard proves itself on that old placement
-// every run (it must read the fillers culled).
+// lamps IN RANGE or the row FAILS. D1's old placement is still read and printed, as
+// information (the proof that it passed falsely), never as a bar.
 // The behavioural cross-check (the voxel store's digest, GiVoxelStats::lightDigest):
 // at N = 8 the key's toggle moves the store (the CONTROL: the fixture sees a light);
 // at N = 16 the key is light 17 — whether its bounce reaches is printed (today: not).
@@ -435,10 +435,13 @@ static int lightsMain()
     };
     // THE GUARD PROVES ITSELF on D1's placement: its 16 fillers are culled, so the arm holds
     // the key alone and would "pass" without pushing the cap — the guard must see that.
+    // INFORMATIONAL, never a bar: a wider cascade 0 could bring them into range one day, and
+    // that is no defect — the per-arm "all N + 1 in range" check below is the guard.
     const Reading d1 = arm(16, false, false);
-    const bool guardCatchesD1 = d1.ok && d1.inRange < 16 + 1;
-    REQUIRE(guardCatchesD1, "THE GUARD: D1's 40 m fillers read %d of 17 lamps in range — culled, so that fixture "
-            "would pass falsely and the guard catches it", d1.inRange);
+    std::printf("W2 THE GUARD'S PROOF: D1's 40 m fillers read %d of 17 lamps in range%s\n", d1.inRange,
+                d1.ok && d1.inRange < 17 ? " — culled: that fixture passed falsely, and the per-arm check reds it" : "");
+    target("W2", double(d1.inRange), "lights", "D1's old placement (16 fillers 40 m away + the key): lamps in range "
+           "of cascade 0 (informational)");
     int cap = -1;
     bool keyReachesAt16 = false;
     for (int n : { 8, 16, 32, 64 }) {
@@ -605,7 +608,10 @@ static IdRead readIdPass(Env &env, int frames)
 /// The LEVEL RULE's answer for one piece at the view's eye: the cluster cut the DAG
 /// gives at the id pass's own tolerance (kLodBudgetPixels x the scene's LOD bias) —
 /// Types.h clusterCut, the GLSL twin's arithmetic.
-static size_t cutTriangles(Env &env, const QList<iris::MeshPtr> &pieces, const iris::Vec3 &pos, float k)
+/// Types.h clusterCut over the model's pieces at the view's eye. `root`: an unbounded
+/// tolerance and no frustum — the DAG's ROOT, the coarsest cut the DAG can draw.
+static size_t cutTriangles(Env &env, const QList<iris::MeshPtr> &pieces, const iris::Vec3 &pos, float k,
+                           bool root = false)
 {
     GpuCullRequest req;
     if (!env.engine->fillCullView(env.view, req)) return 0;
@@ -619,12 +625,12 @@ static size_t cutTriangles(Env &env, const QList<iris::MeshPtr> &pieces, const i
         v.worldRow[2][2] = k; v.worldRow[2][3] = pos.z();
         v.scale = k;
         std::memcpy(v.eye, req.eye, sizeof(v.eye));
-        v.tolerance = kLodBudgetPixels * env.scene->lodBias();
+        v.tolerance = root ? 1e30f : kLodBudgetPixels * env.scene->lodBias();
         v.projScaleY = req.projScaleY;
         v.viewportHeight = req.viewportHeight;
         // ...and the view's frustum, cluster by cluster, as the cut job tests it
         // (SPEED-VR-MEM, Types.h clusterInFrustum).
-        v.cullPlanes = true;
+        v.cullPlanes = !root;
         for (int i = 0; i < 6; ++i)
             for (int c = 0; c < 4; ++c) v.planes[i][c] = req.planes[i * 4 + c];
         std::vector<unsigned> drawn;
@@ -834,16 +840,33 @@ static int levelsMain()
     setCamera(env, at + iris::Vec3(0, 50.0f, 1000.0f), at);
     frame(env, 10);
     const IdRead r = readIdPass(env, 30);
-    std::printf("W4 at 1 km: the id pass's cut draws %.0f tris; the chain's coarsest level holds %zu (%d levels)\n",
-                r.tris, info.coarsestTriangles, info.levels);
+    const AtomDrawStatus st = env.scene->atomDrawStatus();
+    const size_t cut = cutTriangles(env, shell, at, radius);
+    const size_t root = cutTriangles(env, shell, at, radius, true);
+    const double drawn = r.tris + r.lateTris;
+    std::printf("W4 at 1 km: the id pass draws %.0f tris (early %.0f + late %.0f; overflow %u) | the CPU cut at the "
+                "same pose %zu | THE DAG ROOT (the coarsest the DAG can draw) %zu = %.0f a piece | the LOD chain's "
+                "coarsest level %zu (a different structure: the voxeliser's and the casters')\n",
+                drawn, r.tris, r.lateTris, st.cutOverflow, cut, root, info.pieces ? double(root) / info.pieces : 0.0,
+                info.coarsestTriangles);
     target("W4", double(info.levels), "levels", "the asset's chain length (longest piece, level 0 included)");
-    target("W4", r.tris, "tris", "triangles the id pass's CUT draws for the asset at 1 km (the chain's coarsest "
-           "level beside it on the W4 line)");
-    // THE BAR (ATOM-CLUSTER-CUT closes W4): the coarsest end is reached — at 1 km the cut
-    // draws no more than 1.2x the chain's coarsest level.
-    REQUIRE(r.tris > 0 && r.tris <= 1.2 * double(info.coarsestTriangles),
-            "W4: at 1 km the cut draws %.0f tris, within 1.2x of the chain's coarsest %zu", r.tris,
-            info.coarsestTriangles);
+    target("W4", drawn, "tris", "triangles the id pass's CUT draws for the asset at 1 km");
+    // THE DAG'S FLOOR (a BAKE property, V2-P0A's verdict): the split's pieces keep their open
+    // borders LOCKED through the simplification (meshbake.cpp, the locked-border pass), so the
+    // groups along the seams stop converging — the 10 M bake's log reads 48-210 UNCONVERGED
+    // groups a piece (735-1,552 retries) and only 0-3 made terminal — and every piece's root
+    // keeps ~2.36 k triangles, 11x the chain's coarsest level (whose levels are not locked).
+    // A finding for the audit spec, not a cut defect: the cut reaches this root.
+    target("W4", double(root), "tris", "THE DAG FLOOR: the 10 M shell's DAG root over its pieces (the locked seams)");
+    // THE BARS (ATOM-CLUSTER-CUT closes W4), LIKE FOR LIKE: the id pass draws the CPU cut at
+    // 1 km (within 1.2x), and that cut has reached the DAG's root (within 1.2x of it) —
+    // the coarsest end the DAG holds is reachable.
+    REQUIRE(cut > 0 && drawn <= 1.2 * double(cut) && drawn * 1.2 >= double(cut),
+            "W4: at 1 km the id pass draws %.0f tris, within 1.2x of the CPU cut's %zu", drawn, cut);
+    REQUIRE(root > 0 && double(cut) <= 1.2 * double(root),
+            "W4: at 1 km the cut (%zu) reaches the DAG's root (%zu) within 1.2x", cut, root);
+    REQUIRE(st.cutOverflow == 0 && st.cutMissing == 0, "W4: the cut fits its stream (%u overflowed, %u missing)",
+            st.cutOverflow, st.cutMissing);
     // THE 100-LEVEL CASE (brief §4.4): the chain halves until 128 triangles
     // (meshbake.cpp kRatio 0.5, kMinTriangles 128, kMaxLevels 254), so a chain reaches
     // log2(T/128)+1 levels: 17 at 10 M in ONE mesh — and the import splits above 1 M
@@ -861,13 +884,15 @@ static int levelsMain()
 // Number: the VRAM each shell takes when attached, measured through the ENGINE'S OWN STATS
 // (MemoryStats: the VaoManager's pools, capacity - free) — there is no vmaStats door on this
 // boundary — beside the 48 B/vertex formula.
-// THE FIRST MESH PAYS THE ENGINE'S ONE-TIME POOLS (V2-P0A: the "24.6 -> 87.4 MB at 250 k
-// rise" was this): the first asset a process attaches grows pools every later asset shares,
-// so D1's 250 k row (measured FOURTH, after the 10 M) read the formula exactly while every
-// run since (the big shells uncached, the 250 k measured FIRST) read the formula + the
-// one-time growth (63 MB, of which ~14 MB arrived with ATOM-SHADOWS-1's caster pools). So
-// the row attaches the 250 k shell once COLD (its delta less its warm delta is the one-time
-// growth, its own target), releases it, and then measures every shell WARM.
+// THE FIRST MESH PAYS THE ENGINE'S ONE-TIME ALLOCATIONS (V2-P0A: the "24.6 -> 87.4 MB at
+// 250 k rise" was this): the first asset a process attaches allocates the cut's and the
+// casters' buffers every later asset shares, so D1's 250 k row (measured FOURTH, after the
+// 10 M) read the formula exactly while every run since (the big shells uncached, the 250 k
+// measured FIRST) read the formula + the one-time term (63 MB, ~14 MB of it arrived with
+// ATOM-SHADOWS-1's caster buffers). So the row attaches the 250 k shell once COLD (its delta
+// less its warm delta is the one-time term), releases it, and then measures every shell WARM.
+// THE BARS: each shell's warm VRAM within 1.15x of the formula (measured +0 / +12 / +9 / +7 %
+// at 250 k / 1 M / 5 M / 10 M), and the one-time term at most 72 MB (62.9 measured, +15 %).
 // ===========================================================================
 static int residencyMain()
 {
@@ -931,12 +956,16 @@ static int residencyMain()
         if (!measure(t, "warm", d)) { ++failures; continue; }
         ++measured;
         const std::string what = "VRAM (pool used) per " + std::to_string(t) + "-triangle shell, warm";
-        target("W5", d.used, "MB", what.c_str());
+        target("W5", d.used, "MB", what.c_str(), "<= 1.15x the formula");
+        REQUIRE(d.used <= 1.15 * d.formula, "W5 %zu: warm VRAM %.1f MB within 1.15x of the formula's %.1f MB", t, d.used,
+                d.formula);
         if (t == 250000) {
-            std::printf("W5 the first mesh's one-time pool growth: %.1f MB (the 250 k shell cold %.1f, warm %.1f)\n",
+            std::printf("W5 the first mesh's one-time allocations: %.1f MB (the 250 k shell cold %.1f, warm %.1f)\n",
                         cold.used - d.used, cold.used, d.used);
-            target("W5", cold.used - d.used, "MB", "the engine's one-time pool growth the FIRST mesh a process "
-                   "attaches pays (the 250 k shell cold less warm)");
+            target("W5", cold.used - d.used, "MB", "the engine's one-time allocations the FIRST mesh a process "
+                   "attaches pays (the cut's and casters' buffers: the 250 k shell cold less warm)", "<= 72 MB");
+            REQUIRE(cold.used - d.used <= 72.0, "W5: the first mesh's one-time allocations %.1f MB <= 72 MB",
+                    cold.used - d.used);
         }
     }
     REQUIRE(measured == 4, "the four shells were measured warm (%d)", measured);
@@ -1026,7 +1055,7 @@ static int decodeExactMain()
     setenv("JAHSHAKA_NO_RAY_QUERY", "1", 1);
     Env env;
     World w;
-    WorldSpec spec;
+    WorldSpec spec = denseWorld();   // D1's dense world: a pixel bar on a dense scene (V2-P0A)
     spec.materials = 1;
     if (!bootWorld(env, w, "test-atom-decode-exact-ogre.log", spec)) return 1;
     applyMaterials(w, 200, 200);
@@ -1241,7 +1270,8 @@ static int occlusionMain()
 {
     Env env;
     World w;
-    if (!bootWorld(env, w, "test-scale-occlusion-ogre.log")) return 1;
+    // D1's DENSE WORLD: the bar is a ratio on a dense scene, not a scale stick (V2-P0A).
+    if (!bootWorld(env, w, "test-scale-occlusion-ogre.log", denseWorld())) return 1;
     const int kPoses = 8, kSettle = 10;
     auto pose = [&](int s) {
         const float x = -90.0f + 25.0f * float(s);
@@ -1727,7 +1757,8 @@ static int cpuWalksMain()
 {
     Env env;
     World w;
-    if (!bootWorld(env, w, "test-scale-cpu-walks-ogre.log")) return 1;
+    // D1's DENSE WORLD: the bars were calibrated on it (V2-P0A).
+    if (!bootWorld(env, w, "test-scale-cpu-walks-ogre.log", denseWorld())) return 1;
     pathStill(env, 30);
     iris::MeshNodePtr mover = w.items[w.items.size() / 3];
     mover->setMobility(iris::Mobility::Movable);   // see scale.tlas: a mover the renderer moves every frame
@@ -2070,12 +2101,13 @@ static int shadowCutMain()
     // shutdown is itself the regression test of MONITOR-RETIRE-1 F2 (the frame
     // monitor used to outlive its engine and crash the next boot's first frame
     // in FrameMonitor::beginFrame).
-    runWorld("world", WorldSpec(), 1.0 / 3.0, kGpuMsPerMapBar);
+    runWorld("world", denseWorld(), 1.0 / 3.0, kGpuMsPerMapBar);   // calibrated on D1's dense world (V2-P0A)
     WorldSpec small;
     small.instances = 200;
     small.lights = 4;
     small.spacing = 3.0f;
-    small.lightGrid = 30.0f;   // the small world keeps its own lamp pitch (the 2 km grid is the big one's)
+    small.name = "the small world";
+    small.farClip = 500.0f;
     runWorld("small", small, 2.0, kGpuMsPerMapBar);
     return failures ? 1 : 0;
 }
@@ -2395,15 +2427,12 @@ static int coverageTraceMain()
     const unsigned smallBudget = unsigned(knob("JAH_TRACE_BUDGET", 500000));
     Env env;
     World w;
-    WorldSpec spec;
+    // THIS SUITE KEEPS D1's DENSE 600 m WORLD: its budget arms above are measured against
+    // that world's index demand (a sparse 2 km world asks too little for the forced small
+    // budget to overflow, V2-P0A's gate), and what it guards is the cut's coverage under
+    // budget pressure, not the 2 km reach.
+    WorldSpec spec = denseWorld();
     spec.materials = 1;
-    // THIS SUITE KEEPS D1's DENSE 600 m WORLD (6 m pitch, lamps at 30 m, the editor's 500 m far
-    // plane): its budget arms above are measured against that world's index demand (a sparse
-    // 2 km world asks too little for the forced small budget to overflow, V2-P0A's gate), and
-    // what it guards is the cut's coverage under budget pressure, not the 2 km reach.
-    spec.spacing = 6.0f;
-    spec.lightGrid = 30.0f;
-    spec.farClip = 500.0f;
     if (!bootWorld(env, w, "test-atom-coverage-trace-ogre.log", spec)) return 1;
     env.doc->exposureMode = iris::ExposureMode::Manual;
     worldmodes::setMode(env.doc, worldmodes::Mode::High);

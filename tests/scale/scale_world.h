@@ -46,10 +46,11 @@ constexpr float kDt = 1.0f / 60.0f;
 /// THE SHARED SCALE CACHE (V2-P0A): ONE directory on the box that every tree's scale
 /// rows read — $JAH_SCALE_ASSET_CACHE, else SCALE_ASSET_CACHE_ROOT (CMake's
 /// JAH_SCALE_ASSET_CACHE_ROOT, default ~/Developer/testing/scale-cache) — so the
-/// 1 M / 5 M / 10 M shells are baked ONCE per bake producer, not once per build tree.
+/// 1 M / 5 M / 10 M shells are baked once per bake format (re-baked in place when a bake
+/// change makes them stale), not once per build tree.
 QString cacheRoot();
-/// The directory blobs live in: cacheRoot()/v<format>-<producer hash>, so a bake
-/// change starts a fresh directory and never overwrites a blob another tree reads.
+/// The directory blobs live in: cacheRoot()/v<bake format version>; a blob another bake
+/// producer made is STALE by its header and is re-baked in place by the fixture row.
 /// Inside a ScopedCacheDir, that scope's private directory instead.
 QString cacheDir();
 /// Bake into a private directory for the scope (scale.bake: a forced bake must
@@ -94,6 +95,17 @@ iris::MeshPtr bakedMesh(const QString &sourcePath, const QString &name, BakeInfo
 QList<iris::MeshPtr> shellAsset(size_t triangles, BakeInfo *info = nullptr, bool bakeIfMissing = true);
 /// The blob path a shell of `triangles` would be cached under (exists or not).
 QString shellBlobPath(size_t triangles);
+/// A shell's blob: absent, baked by THIS bake producer (its header's fingerprint), or
+/// stale (another producer's — the fixture row re-bakes it in place).
+enum class ShellState { Missing, Current, Stale };
+ShellState shellState(size_t triangles);
+/// The cached shell's bake record from its side file alone (no blob read): false unless
+/// the blob is Current. The fixture row's no-op path.
+bool shellRecord(size_t triangles, BakeInfo *info);
+/// Delete the pieces a killed baker left in the cache (PLYs, temps, extract dirs whose pid
+/// is gone).
+void sweepStaleTemps();
+
 /// THE ROWS' DOOR: the cached shell of `triangles`, or a FAIL line saying why it is
 /// missing and how to bake it — never a smaller asset in its place (V2-P0A). Prints
 /// an ASSET line naming what was measured.
@@ -154,18 +166,21 @@ void shutdown(Env &env);
 // ---------------------------------------------------------------------------
 
 struct WorldSpec {
-    /// THE 2 KM WORLD (V2-P0A): the 10k instances and the 500 lamps spread over the
-    /// whole 2 km x 2 km ground (D1's 6 m pitch populated only its middle 600 m), so the
-    /// voxel scroll, the far field and the cut are judged over the distance V2 is built for.
+    /// THE 2 KM WORLD (V2-P0A, the scale sticks' world): the 10k instances spread over the
+    /// whole 2 km x 2 km ground (D1's 6 m pitch populated only its middle 600 m) and the
+    /// 500 lamps in a 660 m lit DISTRICT at its centre (a 30 m pitch, so a cascade holds
+    /// several lamps there; the 2 km walk and every teleport pass through it), the sun
+    /// lighting the rest. denseWorld() is D1's 600 m world, kept for the rows whose bars
+    /// are physics on a dense scene.
+    const char *name = "the 2 km world";
     int   instances = 10000;         ///< ~20 baked meshes, jittered grid, three scales
     float spacing = 20.0f;           ///< grid pitch, metres (100 x 100 -> a 1,980 m square)
-    int   lights = 500;              ///< point/spot lamps on a `lightGrid` grid
-    float lightGrid = 90.0f;         ///< 23 x 23 lamps at 90 m -> the same 1,980 m square
+    int   lights = 500;              ///< point/spot lamps on a `lightGrid` grid, centred
+    float lightGrid = 30.0f;         ///< 23 x 23 lamps at 30 m -> the 660 m district
     float groundSize = 2000.0f;      ///< the default ground's plane, scaled to 2 km
-    /// The document camera's far plane: the world's corner-to-corner diagonal (2,828 m)
-    /// and a margin, so a view from one edge reaches the other (the editor's default
-    /// CameraNode::farClip, 500 m, would end a 2 km world a quarter of the way across).
-    float farClip = 3000.0f;
+    /// The document camera's far plane: 1 km (the lead's call, V2-P0A — the editor's
+    /// CameraNode::farClip of 500 m was set for the old 600 m world).
+    float farClip = 1000.0f;
     worldmodes::PhotonTier tier = worldmodes::PhotonTier::High;
     /// 0 = the editor's own shape: every object its own PbrMaterial
     /// (SceneEditService gives each placed primitive one). N > 0: N shared
@@ -189,6 +204,22 @@ struct World {
     double firstSyncMs = 0.0;        ///< the mirror's adopting sync + the first frame
     int    settleFrames = 0;         ///< frames until GI reported at rest (or the cap)
 };
+
+/// D1's DENSE 600 m WORLD: the same 10k instances at a 6 m pitch, the lamps at 30 m, the
+/// editor's 500 m far plane — for the rows whose bars were calibrated on it (scale.occlusion,
+/// scale.shadow_cut's world arm, scale.cpu_walks, atom.decode_exact, atom.coverage_trace).
+inline WorldSpec denseWorld()
+{
+    WorldSpec s;
+    s.name = "the dense 600 m world";
+    s.spacing = 6.0f;
+    s.lightGrid = 30.0f;
+    s.farClip = 500.0f;
+    return s;
+}
+
+/// The world the process last built (its name rides on every target line); empty before.
+extern std::string g_targetWorld;
 
 /// Build `spec` into env's document and settle it (the first frame, then frames
 /// until `giAtRest` or `settleCap`). Prints one WORLD line with the build times.
