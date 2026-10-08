@@ -695,33 +695,39 @@ static int metalMain(Engine *e, Scene *s, View *view, const char *dumpDir)
 
     // A SPECULAR-WORKFLOW DIELECTRIC IS NOT A METAL (the fix round's gpuIsMetal defect):
     // SpecularAsFresnel, F0 0.04, a white specular colour kS — the shape of every
-    // spec-gloss import. Its metal answer is its F0, not kS: from a SHARP sphere its hits
-    // read its CARD — no decode records beyond the scene's own — where reading kS made it
-    // a metal and decoded every one of them.
+    // spec-gloss import. Its metal answer is its F0, not kS. The observable is the
+    // arm "reflect.metalDecode": it moves only a METAL hit's route (1 = decode, 0 = the
+    // voxel store), so the crate's decode records must not change with it — where
+    // reading kS made it a metal, the arm moved every one of them.
     PbrParams sharpSphere = glossySphere; sharpSphere.roughness = 0.02f;
     s->attachMesh(room.sphere, s->createMesh(sphereMesh()), s->createPbrMaterial(sharpSphere));
     PbrParams specDiel; specDiel.albedo = Colour(1.0f, 0.77f, 0.34f); specDiel.roughness = 0.5f;
     specDiel.workflow = PbrParams::Workflow::SpecularAsFresnel;
     specDiel.useFresnelColour = true; specDiel.fresnelColour = Colour(0.04f, 0.04f, 0.04f);
     specDiel.specularColour = Colour(1.0f, 1.0f, 1.0f);
-    s->attachMesh(crate, room.cardedCube, s->createPbrMaterial(specDiel));
-    const auto records = [&]() {
+    // a FRESH node at the crate's place (the crate itself is hidden): its flags are
+    // composed from this material at birth
+    s->setNodeVisible(crate, false);
+    const NodeId specCrate = s->createNode();
+    s->attachMesh(specCrate, room.cardedCube, s->createPbrMaterial(specDiel));
+    s->setNodeTransform(specCrate, at, Quat(), Vec3(1.6f, 1.6f, 1.6f));
+    const auto records = [&](double arm) {
+        e->setArm("reflect.metalDecode", arm);
+        render(e, 120);
         std::vector<unsigned long long> r;
         for (int f = 0; f < 30; ++f) { e->renderOneFrame(); r.push_back(s->rayQueryStatus().hitRecords); }
         std::sort(r.begin(), r.end());
         return r[r.size() / 2];
     };
     render(e, 240);
-    const unsigned long long withSpec = records();
-    s->setNodeVisible(crate, false);
-    render(e, 120);
-    const unsigned long long withoutCrate = records();
-    s->setNodeVisible(crate, true);
+    const unsigned long long decodeArm = records(1.0), voxelArm = records(0.0);
+    e->setArm("reflect.metalDecode", kReflectMetalDecodeDefault);
     std::printf("   a SpecularAsFresnel dielectric crate (F0 0.04, white kS) from a sharp sphere: %llu decode records "
-                "a frame, %llu without the crate\n", withSpec, withoutCrate);
-    CHECK_MSG(withSpec <= withoutCrate + 10ull,
-              "A SPECULAR-WORKFLOW DIELECTRIC READS ITS CARD: %llu decode records a frame against %llu without it "
-              "(not a metal: F0 0.04, whatever its kS)", withSpec, withoutCrate);
+                "a frame with every metal hit decoded, %llu with every metal hit on the voxel store\n", decodeArm,
+                voxelArm);
+    CHECK_MSG(decodeArm <= voxelArm + 10ull && voxelArm <= decodeArm + 10ull,
+              "A SPECULAR-WORKFLOW DIELECTRIC IS NOT A METAL: the metal route's arm leaves its records alone "
+              "(%llu / %llu) — F0 0.04, whatever its kS", decodeArm, voxelArm);
     return failures ? 1 : 0;
 }
 
