@@ -95,7 +95,7 @@ target_compile_definitions(test_scale_library PRIVATE
 # load the 1 M / 5 M / 10 M shells are sized for the 10 M one's deserialize + upload.
 set(SCALE_T_WORLD 1300)       # 210 s (still + the 30 s fly: 1,928 frames)
 set(SCALE_T_VOXEL 1100)       # 180 s (the 200 m walk + 8 teleports: 1,697 frames)
-set(SCALE_T_LIGHTS 300)       # five arms (the guard's + N = 8/16/32/64), two of them toggled
+set(SCALE_T_LIGHTS 560)       # 93 s solo: five arms (the guard's + N = 8/16/32/64), two of them toggled
 set(SCALE_T_CUT 600)          # 12 s on the 5 M shell; the 10 M one and the owed 1/5/10 M table
 set(SCALE_T_LEVELS 300)       # 8 s on the 5 M shell
 set(SCALE_T_CUT_COST 900)     # the world's boot + five poses (ATOM-CLUSTER-CUT)
