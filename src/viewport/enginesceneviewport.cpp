@@ -2544,12 +2544,8 @@ void EngineSceneViewport::syncFrame(float dtOverride, bool recordable)
         // the Views dropdown for the length of a session. The suppression is a
         // flag ON the controller, so the invariant holds for every caller.
         //
-        // AND THE CALLABLE IS COPIED BEFORE IT IS CALLED (finding 6): the step
-        // can end the session — a runtime that stopped, a device lost — and
-        // ending it clears mVrPreviewStep, which would destroy the closure that
-        // is executing.
+        // The wearer's step itself runs below, after the wait.
         if (mCamController) mCamController->setFlySuppressed(bool(mVrPreviewStep));
-        if (const std::function<void()> step = mVrPreviewStep) step();
         if (mCamController)            mCamController->update(dt);
         // A PAUSED play-in-place (PlayBack still playing, this flag down so the
         // editor camera answers the mouse) holds the document AND the engine's
@@ -2559,6 +2555,21 @@ void EngineSceneViewport::syncFrame(float dtOverride, bool recordable)
             simulated = mScene->advance(dt);
     }
     }
+    // THE POSE BEFORE THE VR STEP (lane VR-REORDER-1, the OpenXR order: wait ->
+    // locate -> simulate with the pose -> render). Everything above is
+    // pose-independent (the document clock, the camera controller); from here
+    // on `vrStatus()` is THIS frame's head, hands and controls, so the
+    // wearer's fly below, the VR interaction step (VrApi, on the same driver
+    // tick) and everything they move are drawn with the pose of the hand that
+    // moved them. Once per frame — renderOneFrame does it for a caller that
+    // did not — and a no-op without a session.
+    if (mEngine) mEngine->vrWaitFrame();
+    // AND THE CALLABLE IS COPIED BEFORE IT IS CALLED (VR-4-FIX finding 6): the
+    // step can end the session — a runtime that stopped, a device lost — and
+    // ending it clears mVrPreviewStep, which would destroy the closure that is
+    // executing. Only while EDITING: a run does not fly the wearer from here.
+    if (!(mPlaying && mPlayback))
+        if (const std::function<void()> step = mVrPreviewStep) step();
     // THE FOLLOW CAMERA (AVATAR_LOCOMOTION_SPEC §8.5) NEEDS NO HAND-OFF HERE.
     // The arm is computed AND APPLIED in the document (Scene::advance ->
     // AvatarPossession::updateFollowCamera writes Scene::camera, saves its

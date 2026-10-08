@@ -34,9 +34,10 @@ For more information see the LICENSE file
 // time. So it is built the way the editor's other helper geometry is built
 // (GizmoOverlay, src/viewport/gizmooverlay.cpp): engine nodes made by the host,
 // on `kHelperBit | kVrHelperBit`, with an unlit on-top material. The price is
-// stated rather than hidden — the arc is drawn from the pose the host last
-// heard, so at 90 Hz it lags the wearer's hand by a frame or two, which on a
-// curve a person is aiming slowly is not visible and on a flick is.
+// stated rather than hidden — the arc is a host-side build, so it is drawn from
+// the pose the interaction step read; since VR-REORDER-1 that is THIS frame's
+// (the host waits and locates before its VR step), so the curve leaves the
+// hand exactly where the wand is drawn.
 //
 // THE TWO CHANNELS. kHelperBit puts it in the desktop editor's viewport (so
 // somebody at the desk sees where the wearer is about to go) and kVrHelperBit

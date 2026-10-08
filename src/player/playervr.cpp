@@ -205,6 +205,11 @@ void PlayerVr::step(float dt, const iris::CameraNodePtr &camera)
 {
     auto engine = mEngine.lock();
     if (!engine || !mOwnsSession) return;
+    // THE POSE BEFORE THE WEARER'S STEP (lane VR-REORDER-1): the document has
+    // stepped (EnginePlayerScene::step calls this after PlayBack::update), so
+    // this frame's wait and locate run now and the head read below is the one
+    // the frame renders. Once per frame; a no-op when another host waited.
+    engine->vrWaitFrame();
     const VrStatus st = engine->vrStatus();
     if (!st.active) {
         // ENDED FROM SOMEWHERE ELSE — `vr.end()` from a script, a device lost
@@ -274,11 +279,11 @@ void PlayerVr::step(float dt, const iris::CameraNodePtr &camera)
     // Player picks up when the session ends — so the answer to "where am I"
     // is the same one in every space.
     //
-    // ONE FRAME BEHIND THE RIG, and that is by construction: `st` was located
-    // before this frame's fly moved the rig, and the engine composes the new
-    // rig on the next locate. The HEADSET is exact (the composition happens
-    // inside the pump); only the desktop's idea of the camera lags, by one
-    // frame, which is the same lag every host-side camera read has.
+    // ON THE RIG AS IT STANDS NOW (VR-REORDER-1): the fly above moved the rig
+    // after this frame's wait had located the head, and the engine re-composes
+    // the located poses through a rig moved in that window — so the head read
+    // again here is the one the eyes draw this frame, and the desktop camera
+    // no longer lags the headset by the fly's frame.
     //
     // A WORLD WRITE, through the one setter that takes both (one parent
     // resolution instead of two, and none at all at the root): the head's pose
@@ -289,7 +294,8 @@ void PlayerVr::step(float dt, const iris::CameraNodePtr &camera)
     // AUTHORED camera here: while a session runs the wearer IS the camera the
     // Player renders through, whichever camera that is.
     if (mCamera) {
-        mCamera->setGlobalPosRot(head, headRot);
+        const VrStatus now = delta.isNull() ? st : engine->vrStatus();
+        mCamera->setGlobalPosRot(toIris(now.headPosition), toIris(now.headRotation));
         mCamera->update(0);
     }
 }

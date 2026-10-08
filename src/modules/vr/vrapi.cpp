@@ -430,8 +430,8 @@ QVector<VerbInfo> VrApi::verbs() const
           "itself, read back out of the scene graph, as against `vr.state().hands` which is "
           "what the runtime REPORTED.\n\n"
           "The two are the same number when everything is right, and that is the point: the "
-          "poses do not exist until the runtime has been asked inside the frame, so a marker "
-          "positioned from outside the frame loop necessarily lags it (two frames, ~22 ms at "
+          "poses do not exist until the frame's wait has located them, so a marker "
+          "positioned from a host-side copy of a pose necessarily lags it (two frames, ~22 ms at "
           "90 Hz, before the engine took the placement over). This verb is how that is "
           "measured rather than assumed — `scripting.e2e`/`vr.verbs_session` asserts the two "
           "agree to a millimetre on the frame a move happens.\n\n"
@@ -1791,6 +1791,13 @@ void VrApi::stepInteraction()
                               ? float(double(interactionClock.nsecsElapsed()) * 1e-9)
                               : -1.0f;
     interactionClock.restart();
+    // THE POSE BEFORE THE STEP (lane VR-REORDER-1). The hosts that own a frame
+    // wait in their own step (EngineSceneViewport::syncFrame after the document
+    // clock, PlayerVr::step after the run's); this slot may be connected ahead
+    // of theirs, so it asks too — once per frame, the second call is nothing —
+    // and the grabs, the gizmo drag, the ray and teleport below read the pose
+    // the frame that follows renders.
+    if (Engine *e = engine()) e->vrWaitFrame();
     interaction.step(seconds);
 }
 
