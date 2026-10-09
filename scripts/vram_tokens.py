@@ -748,6 +748,7 @@ def supervise(argv, held, label, on_end=None):
             break
         except InterruptedError:
             continue
+    tracker.scan()           # the tree AT the row's end too: a descendant still alive there is the row's (GATE-COST-2)
     tracker.stop()
     if on_end:
         on_end()

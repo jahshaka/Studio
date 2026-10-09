@@ -193,19 +193,19 @@ def hold(name, k, nframes=60 * 120):
                             start_new_session=True)
 
 
-def wait_holds(pid, k):
+def wait_holds(proc, k):
     """THE HOLD IS AN EVENT, NOT A TIMEOUT (GATE-COST-2): wait until the kernel's lock table shows the k tokens
     held by `pid` — no bound of its own (the row's TIMEOUT is the only one); 4 s of polling gave up under
     IO pressure (PSI full 62 %) and the checks below then read an empty hold."""
     while True:
-        got = held_by_pid(tok).get(pid, set())
-        if len(got) == k:
+        got = held_by_pid(tok).get(proc.pid, set())
+        if len(got) == k or proc.poll() is not None:     # LIVE: a holder that died returns what it held (checked)
             return got
         time.sleep(0.01)
 
 
-A = hold("A", 2); a = wait_holds(A.pid, 2)
-B = hold("B", 1); b = wait_holds(B.pid, 1)
+A = hold("A", 2); a = wait_holds(A, 2)
+B = hold("B", 1); b = wait_holds(B, 1)
 check(a == {0, 1} and b == {2}, "A(2) holds %s, B(1) holds %s — the lowest free indices" % (sorted(a), sorted(b)))
 # The holder is the row's WHOLE process tree (fake.sh's `sleep` inherited the fds, as an app
 # spawned by a suite would): SIGKILL the group, as ctest's timeout kill does.
@@ -213,7 +213,7 @@ os.killpg(A.pid, signal.SIGKILL); A.wait()
 while A.pid in held_by_pid(tok):            # the release is the kernel's event: wait for it, no bound
     time.sleep(0.01)
 check(A.pid not in held_by_pid(tok), "SIGKILL on A's process tree: the kernel released its tokens")
-C = hold("C", 1); c = wait_holds(C.pid, 1)
+C = hold("C", 1); c = wait_holds(C, 1)
 check(c == {0}, "C(1) then holds %s — the killed holder's lowest token" % sorted(c))
 for p in (B, C):
     os.killpg(p.pid, signal.SIGKILL); p.wait()
@@ -237,7 +237,7 @@ print("5. the bounded wait")
 tok = os.path.join(D, "tok5"); ev = os.path.join(D, "events5")
 full = subprocess.Popen([ADMIT, "4", "--", FAKE, "full", frames(60 * 120), ev], env=env_for(tok, 4),
                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
-while len(held_by_pid(tok).get(full.pid, ())) != 4:     # the full hold is an event: wait for it, no bound
+while len(held_by_pid(tok).get(full.pid, ())) != 4 and full.poll() is None:   # the full hold: an event, LIVE
     time.sleep(0.01)
 check(len(held_by_pid(tok).get(full.pid, ())) == 4, "the full row holds all 4 tokens before the bounded waiter asks")
 r5 = r = subprocess.run([ADMIT, "1", "--", FAKE, "never", frames(1), ev], env=env_for(tok, 4, JAH_VRAM_WAIT=1),
@@ -266,7 +266,7 @@ mark, ready = os.path.join(D, "term6"), os.path.join(D, "term6.ready")
 p = subprocess.Popen([ADMIT, "1", "--", "sh", "-c", "trap 'echo got > %s; exit 3' TERM; touch %s; while :; do sleep 0.05; done"
                       % (mark, ready)], env=env_for(tok, 12), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 # the row's trap is SET (it says so) and the token is held: events, no bound (GATE-COST-2: no wall clock)
-while not (os.path.exists(ready) and len(held_by_pid(tok).get(p.pid, ())) == 1):
+while not (os.path.exists(ready) and len(held_by_pid(tok).get(p.pid, ())) == 1) and p.poll() is None:
     time.sleep(0.01)
 p.send_signal(signal.SIGTERM); p.wait()
 check(os.path.exists(mark) and p.returncode == 3, "a SIGTERM to the admission reaches the row (rc %d)" % p.returncode)
@@ -274,12 +274,22 @@ check(os.path.exists(mark) and p.returncode == 3, "a SIGTERM to the admission re
 # harness — since the launch turns a passing row red, printed; an unreadable journal is a FINDING.
 journal = os.path.join(D, "journal6")
 open(journal, "w").close()
-fault = os.path.join(D, "fault6.sh")
+fault = os.path.join(D, "fault6.py")
+# EVENTS, NO SLEEP (GATE-COST-2): the row leads its own process group, so its tree is the tracker's by pgid
+# whatever reparenting happens; the grandchild logs its Xid at once and LIVES until the admission (the row's
+# parent) is gone — the tracker sees it at the latest in its scan at the row's end; the row exits 0 only after
+# the line is in the journal (or its grandchild died: then the check below fails, never a hang). The grandchild
+# holds none of the test's pipes: its parent's admission, once ended, is reaped by the test and the loop ends
 with open(fault, "w") as f:
-    f.write("#!/bin/sh\n# a grandchild that logs an Xid for its own pid after 1.5 s, then the row passes\n"
-            "sh -c 'sleep 1.5; echo \"$(date +%s).5 box kernel: NVRM: Xid (PCI:0000:01:00): 109, pid=$$, "
-            "name=sh, Ch 0000\" >> \"$0\"' \"$1\"\nexit 0\n")
-p = subprocess.run([ADMIT, "1", "--", "sh", fault, journal],
+    f.write("import os, subprocess, sys, time\n"
+            "os.setpgid(0, 0)\n"
+            "j, admit = sys.argv[1], str(os.getppid())\n"
+            "g = subprocess.Popen(['sh', '-c', 'echo \"$(date +%s).5 box kernel: NVRM: Xid (PCI:0000:01:00): 109, pid=$$, "
+            "name=sh, Ch 0000\" >> \"$0\"; while kill -0 \"$1\" 2>/dev/null; do sleep 0.05; done', j, admit],\n"
+            "                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)\n"
+            "while 'Xid' not in open(j).read() and g.poll() is None: time.sleep(0.05)\n"
+            "sys.exit(0)\n")
+p = subprocess.run([ADMIT, "1", "--", sys.executable, fault, journal],
                    env=env_for(tok, 12, JAH_KERNEL_JOURNAL=journal), stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                    text=True)
 check(p.returncode != 0 and "XID 109 from pid" in p.stderr and "THE GPU FAULTED" in p.stderr,
