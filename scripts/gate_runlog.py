@@ -538,6 +538,7 @@ TIMING_LABEL = "timing"      # gate-scope.py's: a row that measures (the serial 
 CPU_LABEL = "hygiene"        # P8: the lint and selector rows — their own CPU phase, first
 DISPLAY_LOST = 6             # the exit code of a run that stopped because its display died (P6)
 ABORTED = None               # the abort line of the last run_ctest() that stopped, else None
+BATCH = None                 # the batch tag every record of this process carries (`batch`, TESTING_V3 §1.6), else none
 
 
 def _vram():
@@ -779,6 +780,7 @@ class _Run:
                             load=[round(x, 2) for x in load],
                             load_mean=self.sampler.mean(t_end - secs, t_end)),
                 "source": "run"}
+        if BATCH: base["batch"] = BATCH        # a batch candidate's gate or attribution: never a lane's own record
         v, st, bline = row_verdict(status, text, arms)
         wait, twait = lock_wait(text), token_wait(text)
         # a timing row's lock line and its admission line are the SAME wait: subtract it once

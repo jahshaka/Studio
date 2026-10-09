@@ -1934,8 +1934,8 @@ def attribute(row_args, lane_specs, tag, times, tier, candidate=None, controls=N
          the batch is REFUSED;
       6. green at the candidate too = NOT REPRODUCED (kind `nondeterminism`, registered): the verdict door.
     Every registered finding is written as <workspace>/testing/defects.pending/<id>.json in TESTING_V3_SPEC §1.5's
-    FULL schema (recheck, expires; uses/suspects/census for NOT REPRODUCED) — VERDICT-1's reader refuses the whole
-    registry on one malformed entry. Returns 0 (no defect, complete), 3 (a combination defect), 7 (an
+    FULL schema (recheck, expires; uses/suspects/census for NOT REPRODUCED) — VERDICT-1's reader QUARANTINES a
+    malformed entry (it never reaches the door). Returns 0 (no defect, complete), 3 (a combination defect), 7 (an
     INCOMPLETE or aborted attribution), 5 (a d-build defect only), 4 (a tree is unusable), 64 (usage)."""
     rows = []
     for arg in row_args or []:
@@ -2102,8 +2102,8 @@ def attribute(row_args, lane_specs, tag, times, tier, candidate=None, controls=N
 def _register(tag, kind, row, tip, rec, cause, suspects=None):
     """A finding REGISTERED, never printed only (TESTING_V3_SPEC §1.5): <registry dir>/defects.pending/<id>.json — the
     registry dir is that of testing/defects.json (JAH_DEFECTS_FILE moves it; JAH_DEFECTS_PENDING_DIR moves the
-    pending dir alone), in the FULL schema VERDICT-1's reader requires (it refuses the whole registry on one malformed
-    entry): {id, rows, kind, cause, first_seen {tip, pin, run}, state: open, found_by: gate, recheck (a DATE: the
+    pending dir alone), in the FULL schema VERDICT-1's reader requires (it QUARANTINES a malformed entry — the finding
+    would never reach the door): {id, rows, kind, cause, first_seen {tip, pin, run}, state: open, found_by: gate, recheck (a DATE: the
     next day — the next batch — for NOT REPRODUCED, +7 days for a combination / d-build defect), expires (= recheck)},
     and for NOT REPRODUCED the single-use fields {uses: 1, suspects: [the batch's lanes], census: {from the record}}.
     Returns the path."""
@@ -2207,7 +2207,8 @@ def main():
                     help="with --attribute (REQUIRED): the rig display, :60-:99 with its X lock — the environment's "
                          "DISPLAY is never read")
     ap.add_argument("--batch", metavar="TAG", default=None,
-                    help="with --attribute: the batch tag the records' reason names (`attribute:<tag>`)")
+                    help="the batch tag: every record carries `batch: <tag>` (a candidate's --run, an --attribute — "
+                         "whose reason is `attribute:<tag>`)")
     ap.add_argument("--fork-tier", action="store_true",
                     help="a range that moves the fork pin: run the MERGE tier (logged as tier `fork`) — §7b rule 4's "
                          "one full tier per bump, at the merge into d-build; ci_gate_check requires it")
@@ -2247,12 +2248,13 @@ def main():
         print(merge_tier_serial()); return
     if a.nightly_tier:
         print(nightly_tier()); return
+    gate_runlog.BATCH = a.batch            # `batch: <tag>` on every record (a candidate's gate, an attribution)
     if a.attribute:
         # each lane's OWN worktree and build (--lanes), never this checkout's
         sys.exit(attribute(a.attribute, a.lanes, a.batch, a.times, a.tier or "scoped", a.candidate, a.control,
                            a.display))
-    if a.lanes or a.batch or a.candidate or a.control or a.display:
-        ap.error("--lanes / --batch / --candidate / --control / --display go with --attribute")
+    if a.lanes or a.candidate or a.control or a.display:
+        ap.error("--lanes / --candidate / --control / --display go with --attribute")
     build = resolve_build(a.build)
     # THE BUILT FORK MUST BE THE PIN (TESTING-DEBTS-1 T12): a run on an install built from another
     # fork commit is void (stale media) — refused before a suite runs, with the lines that fix it.
