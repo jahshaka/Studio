@@ -38,7 +38,7 @@ file(MAKE_DIRECTORY ${_home}/run)
 # suite asserts on fell below the tool's 12-row default and the suite went
 # red on nothing (found by the 2026-09-05 gate). The setup fixture wipes it.
 jah_fresh_home_fixture(mcp.e2e.fresh_home mcpFreshHome "${_home}" LABELS "mcp")
-jah_gpu_row(mcp.e2e CLASS app COMMAND test_mcp_e2e
+jah_gpu_row(mcp.e2e CLASS app TIER epic NEEDS photon COMMAND test_mcp_e2e
          WORKING_DIRECTORY ${_home}/run)
 set_tests_properties(mcp.e2e PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"

@@ -96,7 +96,7 @@ set_tests_properties(shadow.helper_casters PROPERTIES TIMEOUT 120 LABELS "engine
 #                             10/10, and a SCROLLING cut-out's shadow holes move with the scroll.
 #   shadow.two_sided_caster — the opaque plane two-sided, upright and turned over: the opaque
 #                             plane's shadow (area within 10 %) 10/10.
-jah_gpu_row(shadow.cutout_caster CLASS app
+jah_gpu_row(shadow.cutout_caster CLASS app TIER epic NEEDS photon
          COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/scripts/shadow_casters.sh cutout
                  $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
                  ${CMAKE_CURRENT_SOURCE_DIR}/scripts/shadow_casters.js.in
@@ -104,7 +104,7 @@ jah_gpu_row(shadow.cutout_caster CLASS app
                  ${CMAKE_CURRENT_BINARY_DIR}/shadow.cutout_caster 10
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(shadow.cutout_caster PROPERTIES LABELS "engine" TIMEOUT 900)
-jah_gpu_row(shadow.two_sided_caster CLASS app
+jah_gpu_row(shadow.two_sided_caster CLASS app TIER epic NEEDS photon
          COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/scripts/shadow_casters.sh twosided
                  $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
                  ${CMAKE_CURRENT_SOURCE_DIR}/scripts/shadow_casters.js.in
@@ -116,7 +116,7 @@ set_tests_properties(shadow.two_sided_caster PROPERTIES LABELS "engine" TIMEOUT 
 # cut-out the hang was found on, the screenshot path, a pinned and a free clock), then 5,000 of
 # the Tornado sample, under the Khronos validation layer. MINUTES OF ONE PROCESS: nightly; its
 # push-time guard is shadow.cutout_caster's ten processes.
-jah_gpu_row(gpu.cutout_soak CLASS app
+jah_gpu_row(gpu.cutout_soak CLASS app TIER epic NEEDS photon
          COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/scripts/gpu_cutout_soak.sh
                  $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
                  ${CMAKE_CURRENT_SOURCE_DIR}/scripts/gpu_cutout_soak.js.in

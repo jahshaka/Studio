@@ -206,11 +206,11 @@ set_tests_properties(atom.coverage_trace PROPERTIES TIMEOUT 1300 LABELS "engine"
 # doors as an ordinary app row (2 tokens) in the parallel phase, and is a no-op once the template
 # exists; the locked measurement requires it and never generates (a missing template is its FAIL).
 # ctest adds a required setup row to any selection that names the measurement (`-L timing`, `-R`).
-jah_gpu_row(scale.library.fixture CLASS app COMMAND test_scale_library --generate
+jah_gpu_row(scale.library.fixture CLASS app TIER low NEEDS NONE COMMAND test_scale_library --generate
             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(scale.library.fixture PROPERTIES TIMEOUT ${SCALE_T_LIBRARY_FIXTURE} LABELS "scale"
                      FIXTURES_SETUP scale_library_template)
-jah_gpu_exclusive_test(NAME scale.library CLASS app RUN_TIMEOUT ${SCALE_T_LIBRARY} COMMAND test_scale_library
+jah_gpu_exclusive_test(NAME scale.library CLASS app TIER low NEEDS NONE RUN_TIMEOUT ${SCALE_T_LIBRARY} COMMAND test_scale_library
                        WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 # W14 IS CLOSED (D11-LIBRARY-SCALE): its row is a BAR, not a target.
 set_tests_properties(scale.library PROPERTIES LABELS "scale" FIXTURES_REQUIRED scale_library_template)

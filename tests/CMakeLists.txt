@@ -320,28 +320,14 @@ set(JAH_GPU_EXCLUSIVE_SUITES
 # failing an allocation mid-run. The owner's instance and a stray agent app take no token: the
 # slack the count leaves is theirs.
 #
-# THE CLASSES (the audit's A2 table, measured 2026-09-26 with nvidia-smi per pid):
-#   app      2  an app process or pool process at the document default (Epic) — `Jahshaka
-#               --script`, a harness that spawns it. THIN MARGIN: measured per pid median
-#               2,000 / p90 2,270 / max 2,600 MiB against 2 x 1,090 = 2,180; TEST-TIER-1's Low
-#               tier (280 MiB at boot, 468 peak, measured) is what widens it.
-#   selftest 2  `--engine-selftest` (the app's route at Epic)
-#   engine   1  a headless engine suite (its own tier, mostly Medium: ~0.6-1.2 GB)
-#   vr       3  a VR / Monado row (app + stereo views + the runtime's compositor, ~2 GB)
-#   none     0  RenderSystem_NULL / no display — such a row carries jah_no_display() and is
-#               not registered through jah_gpu_row at all; `none` exists only for a GPU-timing
-#               row (jah_gpu_exclusive_test) that runs with no display (a CPU-time claim).
-# A pool's TIER (TEST-TIER-1: the test tier boots Low — measured 280 MiB at boot, 468 peak, per
-# pid) lowers an app-class process to 1 token, and so does `TIER low` on a solo row that sets
-# JAHSHAKA_TEST_TIER=low; the lookup below is the one place that says so. A row MEASURED heavier than its
-# class (GATE-ADMIT-1's two-tier run, nvidia-smi per pid: the gather family at Epic, 2-3.6 GB)
-# says `TOKENS <k>` beside its CLASS, with the measured number in its comment — round(GB).
+# THE CLASSES, THE BOOT DECLARATION (TIER + NEEDS) AND THE TOKEN LOOKUP live in
+# tests/support/vram_tokens.cmake (TEST-NEEDS-1) — the one place, which the toy suite
+# gate.tokens_by_needs includes alone. A row MEASURED heavier than its class (GATE-ADMIT-1's
+# two-tier run, nvidia-smi per pid: the gather family at Epic, 2-3.6 GB) says `TOKENS <k>` beside
+# its CLASS, with the measured number in its comment — round(GB) (engine rows only: an app row's
+# tokens are its declaration's).
+include(${CMAKE_CURRENT_SOURCE_DIR}/support/vram_tokens.cmake)
 set(JAH_GPU_ADMIT "${CMAKE_SOURCE_DIR}/scripts/gpu-admit.sh")
-set(JAH_VRAM_TOKENS_APP 2)
-set(JAH_VRAM_TOKENS_SELFTEST 2)
-set(JAH_VRAM_TOKENS_ENGINE 1)
-set(JAH_VRAM_TOKENS_VR 3)
-set(JAH_VRAM_TOKENS_LOW_TIER 1)
 # The admission wait's bound (JAH_VRAM_WAIT in the helper). The wait happens BEFORE the command
 # starts but inside ctest's clock, so every registered row's TIMEOUT is its own budget PLUS this
 # bound, added ONCE, here (at the end of the row's directory, after its site set its TIMEOUT) —
@@ -349,26 +335,43 @@ set(JAH_VRAM_TOKENS_LOW_TIER 1)
 set(JAH_VRAM_WAIT_S 900)
 set(JAH_DEFAULT_ROW_TIMEOUT 120)
 
-# jah_vram_tokens(<class> <out-var> [TIER <tier>]) — THE CLASS -> TOKENS LOOKUP.
-function(jah_vram_tokens _class _out)
-    cmake_parse_arguments(V "" "TIER" "" ${ARGN})
-    if(_class STREQUAL "app")
-        set(_k ${JAH_VRAM_TOKENS_APP})
-        if(V_TIER STREQUAL "low")
-            set(_k ${JAH_VRAM_TOKENS_LOW_TIER})
-        endif()
-    elseif(_class STREQUAL "selftest")
-        set(_k ${JAH_VRAM_TOKENS_SELFTEST})
-    elseif(_class STREQUAL "engine")
-        set(_k ${JAH_VRAM_TOKENS_ENGINE})
-    elseif(_class STREQUAL "vr")
-        set(_k ${JAH_VRAM_TOKENS_VR})
-    elseif(_class STREQUAL "none")
-        set(_k 0)
-    else()
-        message(FATAL_ERROR "jah_vram_tokens: unknown class '${_class}' (app|selftest|engine|vr|none)")
+# THE BOOT DECLARATION ON THE ROW (TEST-NEEDS-1): JAHSHAKA_TEST_TIER / JAHSHAKA_TEST_NEEDS as
+# `set:` ENVIRONMENT_MODIFICATION entries, appended at the end of the row's directory (after the
+# site's own set_tests_properties, which would replace a list set now) — ctest's listing then
+# shows exactly what the process boots, and source.row_declares_needs reads it there.
+function(_jah_test_boot_register _row _tier)
+    jah_test_boot_env(_env "${_tier}" ${ARGN})
+    set_property(GLOBAL PROPERTY JAH_TEST_BOOT_${_row} "${_env}")
+    cmake_language(EVAL CODE "cmake_language(DEFER CALL _jah_test_boot_apply [[${_row}]])")
+endfunction()
+function(_jah_test_boot_apply _row)
+    get_property(_env GLOBAL PROPERTY JAH_TEST_BOOT_${_row})
+    set_property(TEST ${_row} APPEND PROPERTY ENVIRONMENT_MODIFICATION ${_env})
+endfunction()
+# A row that starts the APP declares TIER + NEEDS: every CLASS app row (the app, or a harness that
+# spawns it), and a CLASS vr row whose command names the app target (a VR engine suite such as
+# vr.session is an engine binary in the vr class). Every other row declares neither: an engine
+# binary sets its GI in C++, and the selftest route binds no editor scene.
+function(_jah_test_boot_declared _who _class _tier _cmd _out)
+    set(_needs ${ARGN})
+    set(_runs_app FALSE)
+    if(_class STREQUAL "vr")
+        foreach(_w IN LISTS _cmd)
+            if(_w STREQUAL "${CMAKE_PROJECT_NAME}" OR _w MATCHES "TARGET_FILE:${CMAKE_PROJECT_NAME}>")
+                set(_runs_app TRUE)
+            endif()
+        endforeach()
     endif()
-    set(${_out} ${_k} PARENT_SCOPE)
+    if(_class STREQUAL "app" OR _runs_app)
+        jah_test_boot_check("${_who}" "${_tier}" ${_needs})
+        set(${_out} TRUE PARENT_SCOPE)
+    else()
+        if(_tier OR _needs)
+            message(FATAL_ERROR "${_who}: this row starts no app (CLASS ${_class}) and takes no "
+                                "TIER/NEEDS — only a row that starts the app declares what it boots")
+        endif()
+        set(${_out} FALSE PARENT_SCOPE)
+    endif()
 endfunction()
 
 # The deferred half: at the end of the row's directory (after every set_tests_properties of the
@@ -399,22 +402,29 @@ function(_jah_vram_register _row _class _k)
     cmake_language(EVAL CODE "cmake_language(DEFER CALL _jah_vram_widen_timeout [[${_row}]])")
 endfunction()
 
-# jah_gpu_row(<row> CLASS app|selftest|engine|vr [TIER <tier>] COMMAND <exe-or-target> [args...]
-#             [WORKING_DIRECTORY <dir>])
+# jah_gpu_row(<row> CLASS app|selftest|engine|vr [TIER <tier> NEEDS <features…>|NONE] [TOKENS <k>]
+#             COMMAND <exe-or-target> [args...] [WORKING_DIRECTORY <dir>])
+# CLASS app|vr REQUIRES TIER + NEEDS (tests/support/vram_tokens.cmake): the row's process boots that
+# World Mode with only the named features on, and an app row's tokens are the declaration's.
 # add_test() through the VRAM budget — the ONE way a row that boots Vulkan is registered
 # (source.gpu_rows_closure fails a Vulkan row that is not). Like jah_gpu_exclusive_test, the
 # wrapper is applied at registration: a TARGET name as the first COMMAND word becomes
 # $<TARGET_FILE:...>. A pool is not registered here: its tokens are taken per APP PROCESS by
 # run_pool.py (jah_add_pool), so a restart re-takes them and the driver holds none.
 function(jah_gpu_row _row)
-    cmake_parse_arguments(G "" "CLASS;TIER;TOKENS;WORKING_DIRECTORY" "COMMAND" ${ARGN})
+    cmake_parse_arguments(G "" "CLASS;TIER;TOKENS;WORKING_DIRECTORY" "NEEDS;COMMAND" ${ARGN})
     if(NOT G_CLASS OR NOT G_COMMAND)
         message(FATAL_ERROR "jah_gpu_row(${_row}): CLASS and COMMAND are required")
     endif()
     if(G_UNPARSED_ARGUMENTS)
         message(FATAL_ERROR "jah_gpu_row(${_row}): unexpected arguments '${G_UNPARSED_ARGUMENTS}'")
     endif()
-    jah_vram_tokens(${G_CLASS} _k TIER "${G_TIER}")
+    _jah_test_boot_declared("jah_gpu_row(${_row})" "${G_CLASS}" "${G_TIER}" "${G_COMMAND}" _declared ${G_NEEDS})
+    jah_vram_tokens(${G_CLASS} _k TIER "${G_TIER}" NEEDS ${G_NEEDS})
+    if(G_TOKENS AND G_CLASS STREQUAL "app")
+        message(FATAL_ERROR "jah_gpu_row(${_row}): an app row's tokens are its declaration's (TIER + "
+                            "NEEDS) — measure, and move the lookup (tests/support/vram_tokens.cmake)")
+    endif()
     if(G_TOKENS)
         set(_k ${G_TOKENS})
     endif()
@@ -434,9 +444,12 @@ function(jah_gpu_row _row)
     # row declared an app-sized class
     add_test(NAME ${_row} COMMAND "${JAH_GPU_ADMIT}" ${_k} --label ${_row}:${G_CLASS} -- "${_exe}" ${G_COMMAND} ${_wd})
     _jah_vram_register(${_row} ${G_CLASS} ${_k})
+    if(_declared)
+        _jah_test_boot_register(${_row} "${G_TIER}" ${G_NEEDS})
+    endif()
 endfunction()
 
-# jah_gpu_exclusive_test(NAME <suite> CLASS <class> [TIER <tier>] RUN_TIMEOUT <s> COMMAND <exe-or-target> [args...]
+# jah_gpu_exclusive_test(NAME <suite> CLASS <class> [TIER <tier> NEEDS <features…>|NONE] RUN_TIMEOUT <s> COMMAND <exe-or-target> [args...]
 #                        [WORKING_DIRECTORY <dir>])
 # add_test() through the timing admission: ALL the VRAM tokens (scripts/gpu-exclusive.sh ->
 # vram_tokens.py admit all), whatever the row's class — the class stays in its label for the
@@ -445,7 +458,7 @@ endfunction()
 # is an argument of the wrapper now, and add_test resolves target names only in the command
 # position). A name outside JAH_GPU_EXCLUSIVE_SUITES is a configure error.
 function(jah_gpu_exclusive_test)
-    cmake_parse_arguments(G "" "NAME;CLASS;TIER;RUN_TIMEOUT;WORKING_DIRECTORY" "COMMAND" ${ARGN})
+    cmake_parse_arguments(G "" "NAME;CLASS;TIER;RUN_TIMEOUT;WORKING_DIRECTORY" "NEEDS;COMMAND" ${ARGN})
     if(NOT G_NAME IN_LIST JAH_GPU_EXCLUSIVE_SUITES)
         message(FATAL_ERROR "jah_gpu_exclusive_test(${G_NAME}): not in JAH_GPU_EXCLUSIVE_SUITES "
                             "(tests/CMakeLists.txt) — the GPU-timing list changes by a verdict only")
@@ -457,7 +470,8 @@ function(jah_gpu_exclusive_test)
         message(FATAL_ERROR "jah_gpu_exclusive_test(${G_NAME}): unexpected arguments '${G_UNPARSED_ARGUMENTS}' "
                             "(a timing row takes ALL the tokens: there is no TOKENS)")
     endif()
-    jah_vram_tokens(${G_CLASS} _k TIER "${G_TIER}")   # validates the class; the row takes ALL tokens
+    _jah_test_boot_declared("jah_gpu_exclusive_test(${G_NAME})" "${G_CLASS}" "${G_TIER}" "${G_COMMAND}" _declared ${G_NEEDS})
+    jah_vram_tokens(${G_CLASS} _k TIER "${G_TIER}" NEEDS ${G_NEEDS})   # validates the class; the row takes ALL tokens
     list(POP_FRONT G_COMMAND _exe)
     if(TARGET ${_exe})
         set(_exe "$<TARGET_FILE:${_exe}>")
@@ -478,6 +492,9 @@ function(jah_gpu_exclusive_test)
     set_property(TEST ${G_NAME} APPEND PROPERTY RESOURCE_LOCK gpu_timing)
     set_property(GLOBAL APPEND PROPERTY JAH_GPU_EXCLUSIVE_REGISTERED ${G_NAME})
     _jah_vram_register(${G_NAME} ${G_CLASS} all)
+    if(_declared)
+        _jah_test_boot_register(${G_NAME} "${G_TIER}" ${G_NEEDS})
+    endif()
     cmake_language(EVAL CODE "cmake_language(DEFER CALL _jah_timing_label [[${G_NAME}]])")
 endfunction()
 
@@ -567,7 +584,7 @@ endfunction()
 #       — one arm, declared WHERE ITS SUITE'S COMMENT LIVES (the comment says what it claims).
 #         Arms run in declaration order; FIRST puts the one arm whose claim is about the
 #         PROCESS ("the Player page has never been shown") before every other (one per pool).
-#   jah_add_pool(<pool> [HEADLESS] [TIER low|epic] [CLASS app|vr] [BASELINE <script>] [LABELS <label…>]
+#   jah_add_pool(<pool> [HEADLESS] [TIER <tier> NEEDS <features…>|NONE] [CLASS app|vr] [BASELINE <script>] [LABELS <label…>]
 #                [ENV <k=v…>] [LAUNCHER <cmd…>] [APP_ARGS <arg…>] [PROPS <property value…>])
 #       — the row, after its arms (in the family's CMakeLists, so gate-scope's "a file under
 #         tests/<dir>/ selects that dir's rows" keeps holding). LAUNCHER runs the driver inside
@@ -576,15 +593,15 @@ endfunction()
 #         ctest properties (a RESOURCE_LOCK, a SKIP_RETURN_CODE). BASELINE is a script the app
 #         runs after EVERY arm, green or red (--pool-baseline): what the family's arms change in
 #         the process and cannot put back on a red path.
-#         TIER (lane TEST-TIER-1; SPECS/audits/GPU_LOSS_AUDIT_2026-09-27.md §A2) is REQUIRED on an
-#         engine-up pool: `low` = every process runs `--test-tier low` (every scene it binds on
-#         the Low World Mode, the window 1280x720 — services/testtier.h; its measured VRAM is the
-#         `MEM` line run_pool.py prints at every boot) — for arms whose claims are verbs, UI
-#         state, counts, open/close; `epic` = no test tier, each scene keeps its own (a new one
-#         is Epic) — for an arm that asserts a picture, GI, Atom or a shipped-tier number. An
-#         arm that needs Epic lives in an Epic pool: MOVE it, never mix. A headless pool has no
-#         chain and takes no TIER. The tier is readable as the GLOBAL property
-#         JAH_POOL_<pool>_TIER (low|epic|headless) — the VRAM admission's class reads it.
+#         TIER + NEEDS (TEST-TIER-1, TEST-NEEDS-1; tests/support/vram_tokens.cmake) are
+#         REQUIRED on an engine-up pool: every process the pool starts boots that World Mode
+#         (JAHSHAKA_TEST_TIER: every scene it binds, new or opened, the window 1280x720 —
+#         services/testtier.h) with only the NEEDS features on (JAHSHAKA_TEST_NEEDS; NONE =
+#         no arm reads a picture). The declaration is the UNION of what the pool's arms claim:
+#         an arm whose claim needs a feature the pool does not keep MOVES to a pool that keeps
+#         it, never the other way. A headless pool has no chain and takes neither. The
+#         declaration is readable as the GLOBAL property JAH_POOL_<pool>_TIER
+#         ("<tier> <needs…>" | headless).
 #
 # <seconds> is the arm's MEASURED time INSIDE its pool (whole seconds, rounded up — the pool's
 # `ARM … <ms>` lines are the measurement). THE BUDGETS ARE DERIVED, NEVER TYPED: an arm is
@@ -638,7 +655,7 @@ function(jah_pool_arm pool arm script secs)
 endfunction()
 
 function(jah_add_pool pool)
-    cmake_parse_arguments(P "HEADLESS" "BASELINE;CLASS;TIER" "LABELS;ENV;LAUNCHER;APP_ARGS;PROPS" ${ARGN})
+    cmake_parse_arguments(P "HEADLESS" "BASELINE;CLASS;TIER" "NEEDS;LABELS;ENV;LAUNCHER;APP_ARGS;PROPS" ${ARGN})
     get_property(_arms GLOBAL PROPERTY JAH_POOL_${pool}_ARMS)
     if(NOT _arms)
         message(FATAL_ERROR "jah_add_pool(${pool}): no jah_pool_arm(${pool} …) before it")
@@ -647,27 +664,23 @@ function(jah_add_pool pool)
     set(_modeflag)
     # THE VRAM BUDGET (GATE-ADMIT-1): run_pool.py takes the class's tokens once per APP PROCESS
     # (a restart re-takes them; the driver itself holds none). A HEADLESS pool boots the NULL
-    # render system and takes none. CLASS defaults to app; a VR pool says `CLASS vr`. THE CLASS
-    # FOLLOWS THE POOL'S TIER (TEST-TIER-1): an app pool declared `TIER low` boots the Low chain
-    # (~0.3 GB measured) and takes JAH_VRAM_TOKENS_LOW_TIER.
+    # render system and takes none. CLASS defaults to app; a VR pool says `CLASS vr`. An app
+    # pool's tokens are its declaration's (jah_vram_tokens, TEST-NEEDS-1).
     if(NOT P_CLASS)
         set(P_CLASS app)
     endif()
-    jah_vram_tokens(${P_CLASS} _vram TIER "${P_TIER}")
     set(_tier headless)
+    set(_vram 0)
     if(P_HEADLESS)
         set(_want headless)
         set(_modeflag --headless)
-        set(_vram 0)
-        if(P_TIER)
-            message(FATAL_ERROR "jah_add_pool(${pool}): a HEADLESS pool has no chain and takes no TIER")
+        if(P_TIER OR P_NEEDS)
+            message(FATAL_ERROR "jah_add_pool(${pool}): a HEADLESS pool has no chain and takes no TIER/NEEDS")
         endif()
-    elseif(NOT P_TIER MATCHES "^(low|epic)$")
-        message(FATAL_ERROR "jah_add_pool(${pool}): TIER low|epic is required on an engine-up pool "
-                            "(low = no arm asserts a picture, GI, Atom or a shipped-tier number)")
     else()
-        set(_tier ${P_TIER})
-        list(APPEND _modeflag --tier ${P_TIER})
+        jah_test_boot_check("jah_add_pool(${pool})" "${P_TIER}" ${P_NEEDS})
+        jah_vram_tokens(${P_CLASS} _vram TIER "${P_TIER}" NEEDS ${P_NEEDS})
+        string(REPLACE ";" " " _tier "${P_TIER};${P_NEEDS}")
     endif()
     set(_home ${CMAKE_CURRENT_BINARY_DIR}/pool-home-${pool})
     file(MAKE_DIRECTORY ${_home}/run)
@@ -720,9 +733,10 @@ function(jah_add_pool pool)
         set_tests_properties(pool.${pool} PROPERTIES ${P_PROPS})
     endif()
     set_property(GLOBAL PROPERTY JAH_POOL_${pool}_ADDED TRUE)
-    set_property(GLOBAL PROPERTY JAH_POOL_${pool}_TIER ${_tier})
+    set_property(GLOBAL PROPERTY JAH_POOL_${pool}_TIER "${_tier}")
     if(NOT P_HEADLESS)
         _jah_vram_register(pool.${pool} ${P_CLASS} ${_vram})
+        _jah_test_boot_register(pool.${pool} "${P_TIER}" ${P_NEEDS})
     endif()
 endfunction()
 

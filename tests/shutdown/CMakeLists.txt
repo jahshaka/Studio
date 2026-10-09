@@ -18,7 +18,7 @@ target_compile_definitions(test_shutdown_order PRIVATE
 
 set(_order_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-order)
 file(MAKE_DIRECTORY ${_order_home}/run)
-jah_gpu_row(app.shutdown_order CLASS app COMMAND test_shutdown_order
+jah_gpu_row(app.shutdown_order CLASS app TIER epic NEEDS photon COMMAND test_shutdown_order
          WORKING_DIRECTORY ${_order_home}/run)
 set_tests_properties(app.shutdown_order PROPERTIES
     ENVIRONMENT "HOME=${_order_home};JAHSHAKA_DATA_ROOT=${_order_home}/.local/share/Jahshaka"
@@ -27,7 +27,7 @@ set_tests_properties(app.shutdown_order PROPERTIES
 # FIX-TIME): the same binary with JAHSHAKA_TIMING_BARS=1, quiet box, the GPU-timing lock.
 set(_order_timing_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-order-timing)
 file(MAKE_DIRECTORY ${_order_timing_home}/run)
-jah_gpu_exclusive_test(NAME app.shutdown_order.timing CLASS app RUN_TIMEOUT 120 COMMAND test_shutdown_order
+jah_gpu_exclusive_test(NAME app.shutdown_order.timing CLASS app TIER epic NEEDS photon RUN_TIMEOUT 120 COMMAND test_shutdown_order
          WORKING_DIRECTORY ${_order_timing_home}/run)
 set_tests_properties(app.shutdown_order.timing PROPERTIES
     ENVIRONMENT "HOME=${_order_timing_home};JAHSHAKA_DATA_ROOT=${_order_timing_home}/.local/share/Jahshaka;JAHSHAKA_TIMING_BARS=1"
@@ -47,7 +47,7 @@ target_compile_definitions(test_watchdog_stall PRIVATE
 set(_watchdog_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-watchdog)
 file(MAKE_DIRECTORY ${_watchdog_home}/run)
 # DEVPROCESS-1: registered through the GPU-timing lock; TIMEOUT = RUN_TIMEOUT + the lock's 900 s wait.
-jah_gpu_exclusive_test(NAME app.watchdog_stall CLASS app RUN_TIMEOUT 300 COMMAND test_watchdog_stall
+jah_gpu_exclusive_test(NAME app.watchdog_stall CLASS app TIER low NEEDS NONE RUN_TIMEOUT 300 COMMAND test_watchdog_stall
          WORKING_DIRECTORY ${_watchdog_home}/run)
 # RUN_SERIAL: this is a pure TIMING gate — it blocks the UI thread for 3 s and
 # for 100 ms and asserts the watchdog counted exactly one stall and exactly

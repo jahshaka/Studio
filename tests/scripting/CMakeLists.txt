@@ -81,14 +81,13 @@ foreach(_variant live off)
         set(_flag)
         set(_name scripting.live_off)
     endif()
-    jah_gpu_row(${_name} CLASS app TIER low
+    jah_gpu_row(${_name} CLASS app TIER low NEEDS NONE
              COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
                      $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
                      --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_live_feedback.js ${_flag}
              WORKING_DIRECTORY ${_home}/run)
     set_tests_properties(${_name} PROPERTIES
-        # JAHSHAKA_TEST_TIER=low (TEST-TIER-1): no claim here needs the shipped picture — the same verdict and ok count at Low (spikes/test-tier-1/solo-okcount.txt)
-        ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka;JAHSHAKA_TEST_TIER=low"
+        ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
         LABELS "scripting"
         TIMEOUT 180)
 endforeach()
@@ -172,7 +171,7 @@ jah_pool_arm(shading_live cube_shade ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_cub
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-lattice_placement)
 file(MAKE_DIRECTORY ${_home})
 file(MAKE_DIRECTORY ${_home}/run)
-jah_gpu_row(scripting.e2e.lattice_placement CLASS app
+jah_gpu_row(scripting.e2e.lattice_placement CLASS app TIER epic NEEDS photon
          COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
                  $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_lattice_placement.js
          WORKING_DIRECTORY ${_home}/run)
@@ -227,7 +226,7 @@ jah_pool_arm(shading live_material_apply ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e
 # bundle. A cut-out (baked) + live-emissive (piece) graph material survives save -> reopen with
 # its piece cache DELETED -> export -> import into an EMPTY library, three processes with scratch
 # HOME/XDG_CACHE_HOME; the frames agree and the cut-out is visible (a solid control frame).
-jah_gpu_row(material.live_roundtrip CLASS app
+jah_gpu_row(material.live_roundtrip CLASS app TIER epic NEEDS photon
          COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/scripts/material_live_roundtrip.sh $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
                  ${CMAKE_CURRENT_SOURCE_DIR}/scripts/material_live_roundtrip.js.in
                  ${CMAKE_CURRENT_SOURCE_DIR}/fixtures/cutout_checker.png
@@ -243,7 +242,7 @@ set(_ect_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-editor_controls-timing)
 file(MAKE_DIRECTORY ${_ect_home}/run)
 jah_timing_script(${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_editor_controls.js
                   ${CMAKE_CURRENT_BINARY_DIR}/e2e_editor_controls.timing.js)
-jah_gpu_exclusive_test(NAME scripting.e2e.editor_controls.timing CLASS app RUN_TIMEOUT 180
+jah_gpu_exclusive_test(NAME scripting.e2e.editor_controls.timing CLASS app TIER document   RUN_TIMEOUT 180
     COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_editor_controls.timing.js
     WORKING_DIRECTORY ${_ect_home}/run)
 set_tests_properties(scripting.e2e.editor_controls.timing PROPERTIES
@@ -327,7 +326,7 @@ jah_pool_arm(gi_movers movable_lamp_rest ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e
 # engine's own self-check (world.shadowStatus().shaderLightMismatches).
 set(_scHome ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-shadow_cache_probes)
 jah_fresh_home_fixture(scripting.e2e.shadow_cache_probes.fresh_home shadowCacheProbesFreshHome "${_scHome}" LABELS "scripting")
-jah_gpu_row(scripting.e2e.shadow_cache_probes CLASS app
+jah_gpu_row(scripting.e2e.shadow_cache_probes CLASS app TIER epic NEEDS photon
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script
                  ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_shadow_cache_probes.js
          WORKING_DIRECTORY ${_scHome}/run)
@@ -488,7 +487,7 @@ target_compile_definitions(test_texture_missing PRIVATE
     JAHSHAKA_BINARY="$<TARGET_FILE:${CMAKE_PROJECT_NAME}>")
 set(_texmiss_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-texture_missing)
 file(MAKE_DIRECTORY ${_texmiss_home}/run)
-jah_gpu_row(scripting.e2e.texture_missing CLASS app COMMAND test_texture_missing
+jah_gpu_row(scripting.e2e.texture_missing CLASS app TIER low NEEDS NONE COMMAND test_texture_missing
          WORKING_DIRECTORY ${_texmiss_home}/run)
 set_tests_properties(scripting.e2e.texture_missing PROPERTIES
     ENVIRONMENT "HOME=${_texmiss_home};JAHSHAKA_DATA_ROOT=${_texmiss_home}/.local/share/Jahshaka"
@@ -509,7 +508,7 @@ target_compile_definitions(test_pump_defer PRIVATE
     JAHSHAKA_BINARY="$<TARGET_FILE:${CMAKE_PROJECT_NAME}>")
 set(_pumpdefer_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-pump_defer)
 file(MAKE_DIRECTORY ${_pumpdefer_home}/run)
-jah_gpu_row(scripting.e2e.pump_defer CLASS app COMMAND test_pump_defer
+jah_gpu_row(scripting.e2e.pump_defer CLASS app TIER low NEEDS NONE COMMAND test_pump_defer
          WORKING_DIRECTORY ${_pumpdefer_home}/run)
 set_tests_properties(scripting.e2e.pump_defer PROPERTIES
     ENVIRONMENT "HOME=${_pumpdefer_home};JAHSHAKA_DATA_ROOT=${_pumpdefer_home}/.local/share/Jahshaka"
@@ -606,7 +605,7 @@ jah_pool_arm(world_sky sky_name_recycle ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_
 # shader or face stands between a change and its first frame. ~10 s solo.
 set(_sstHome ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-sky_swap_transient)
 jah_fresh_home_fixture(scripting.e2e.sky_swap_transient.fresh_home skySwapTransientFreshHome "${_sstHome}" LABELS "scripting")
-jah_gpu_row(scripting.e2e.sky_swap_transient CLASS app
+jah_gpu_row(scripting.e2e.sky_swap_transient CLASS app TIER epic NEEDS photon
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script
                  ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_sky_swap_transient.js
          WORKING_DIRECTORY ${_sstHome}/run)
@@ -876,7 +875,7 @@ file(MAKE_DIRECTORY ${_home}/run)
 set(JAH_TEST_BUNDLE ${_home}/perf/bundle)
 configure_file(scripts/e2e_perf_capture_frames.js.in
                ${CMAKE_CURRENT_BINARY_DIR}/e2e_perf_capture_frames.js @ONLY)
-jah_gpu_row(scripting.e2e.perf_capture_frames CLASS app
+jah_gpu_row(scripting.e2e.perf_capture_frames CLASS app TIER epic NEEDS photon
          COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/perf_capture_frames.sh
                  $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
                  ${CMAKE_CURRENT_BINARY_DIR}/e2e_perf_capture_frames.js
@@ -957,7 +956,7 @@ set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-thumbnails_order)
 # yesterday's assets.
 jah_fresh_home_fixture(scripting.e2e.thumbnails_order.fresh_home thumbnailsOrderHome "${_home}" LABELS "scripting")
 file(MAKE_DIRECTORY ${_home}/run)
-jah_gpu_row(scripting.e2e.thumbnails_order CLASS app
+jah_gpu_row(scripting.e2e.thumbnails_order CLASS app TIER low NEEDS NONE
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_thumbnails_order.js
          WORKING_DIRECTORY ${_home}/run)
 set_tests_properties(scripting.e2e.thumbnails_order PROPERTIES
@@ -1056,7 +1055,7 @@ jah_pool_arm(doc photon ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_photon.js 1 HEAD
 # the DEVICE a question, and there is no device without a display.
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-ray_row_norays)
 file(MAKE_DIRECTORY ${_home}/run)
-jah_gpu_row(scripting.e2e.ray_row_norays CLASS app
+jah_gpu_row(scripting.e2e.ray_row_norays CLASS app TIER epic NEEDS photon
          COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
                  $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_ray_row.js
          WORKING_DIRECTORY ${_home}/run)
@@ -1202,7 +1201,7 @@ configure_file(scripts/e2e_tray_panel.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_tray
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-tray_panel)
 jah_fresh_home_fixture(scripting.e2e.tray_panel.fresh_home tray_panel_home "${_home}" LABELS "scripting")
 file(MAKE_DIRECTORY ${_home}/run)
-jah_gpu_row(scripting.e2e.tray_panel CLASS app
+jah_gpu_row(scripting.e2e.tray_panel CLASS app TIER low NEEDS NONE
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_tray_panel.js
          WORKING_DIRECTORY ${_home}/run)
 set_tests_properties(scripting.e2e.tray_panel PROPERTIES
@@ -1220,7 +1219,7 @@ configure_file(scripts/gi_one_writer.js.in ${CMAKE_CURRENT_BINARY_DIR}/gi_one_wr
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-one_writer)
 jah_fresh_home_fixture(gi.one_writer.fresh_home one_writer_home "${_home}" LABELS "scripting")
 file(MAKE_DIRECTORY ${_home}/run)
-jah_gpu_row(gi.one_writer CLASS app
+jah_gpu_row(gi.one_writer CLASS app TIER epic NEEDS photon
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/gi_one_writer.js
          WORKING_DIRECTORY ${_home}/run)
 set_tests_properties(gi.one_writer PROPERTIES
@@ -1239,7 +1238,7 @@ set(JAH_PCC_RAY_OUT "${_home}/run/")
 configure_file(scripts/gi_pcc_mirror_ray_tier.js.in ${CMAKE_CURRENT_BINARY_DIR}/gi_pcc_mirror_ray_tier.js @ONLY)
 jah_fresh_home_fixture(gi.pcc_mirror.ray_tier.fresh_home pcc_ray_tier_home "${_home}" LABELS "scripting")
 file(MAKE_DIRECTORY ${_home}/run)
-jah_gpu_row(gi.pcc_mirror.ray_tier CLASS app
+jah_gpu_row(gi.pcc_mirror.ray_tier CLASS app TIER epic NEEDS photon
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/gi_pcc_mirror_ray_tier.js
          WORKING_DIRECTORY ${_home}/run)
 set_tests_properties(gi.pcc_mirror.ray_tier PROPERTIES
@@ -1259,7 +1258,7 @@ configure_file(scripts/gi_chain_converge_scenes.js.in ${CMAKE_CURRENT_BINARY_DIR
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-chain_converge_scenes)
 jah_fresh_home_fixture(gi.chain_converge_scenes.fresh_home chain_converge_scenes_home "${_home}" LABELS "scripting;nightly")
 file(MAKE_DIRECTORY ${_home}/run)
-jah_gpu_row(gi.chain_converge_scenes CLASS app
+jah_gpu_row(gi.chain_converge_scenes CLASS app TIER high NEEDS photon bloom ssao smaa planar
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/gi_chain_converge_scenes.js
          WORKING_DIRECTORY ${_home}/run)
 set_tests_properties(gi.chain_converge_scenes PROPERTIES
@@ -1448,7 +1447,7 @@ jah_pool_arm(doc ogre_samples ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_ogre_sampl
 configure_file(scripts/e2e_ogre_ports.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_ogre_ports.js @ONLY)
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-ogre_ports)
 jah_fresh_home_fixture(scripting.freshhome.ogre_ports scripting_home_ogre_ports "${_home}" LABELS "scripting")
-jah_gpu_row(scripting.e2e.ogre_ports CLASS app
+jah_gpu_row(scripting.e2e.ogre_ports CLASS app TIER document
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_ogre_ports.js
          WORKING_DIRECTORY ${_home}/run)
 set_tests_properties(scripting.e2e.ogre_ports PROPERTIES
@@ -1562,7 +1561,7 @@ set(SOURCE_DIR ${CMAKE_SOURCE_DIR})
 configure_file(scripts/e2e_ssr_mirror.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_ssr_mirror.js @ONLY)
 set(_ssrhome ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-ssr_mirror)
 file(MAKE_DIRECTORY ${_ssrhome}/run)
-jah_gpu_row(scripting.e2e.ssr_mirror CLASS app
+jah_gpu_row(scripting.e2e.ssr_mirror CLASS app TIER epic NEEDS photon planar
          COMMAND ${JAH_FRESH_HOME} --warm ${_ssrhome} --
                  $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_ssr_mirror.js
          WORKING_DIRECTORY ${_ssrhome}/run)
@@ -1642,7 +1641,7 @@ configure_file(scripts/e2e_player_no_editor.js.in
                ${CMAKE_CURRENT_BINARY_DIR}/e2e_player_no_editor.js @ONLY)
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-player_no_editor)
 file(MAKE_DIRECTORY ${_home}/run)
-jah_gpu_row(scripting.e2e.player_no_editor CLASS app TIER low
+jah_gpu_row(scripting.e2e.player_no_editor CLASS app TIER low NEEDS photon
          COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
                  $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_player_no_editor.js
          WORKING_DIRECTORY ${_home}/run)
@@ -1651,8 +1650,7 @@ jah_gpu_row(scripting.e2e.player_no_editor CLASS app TIER low
 # the editor page before the script's first line. Without it the editor's
 # engine scene already exists and this suite proves nothing — see the script.
 set_tests_properties(scripting.e2e.player_no_editor PROPERTIES
-    # JAHSHAKA_TEST_TIER=low (TEST-TIER-1): no claim here needs the shipped picture — the same verdict and ok count at Low (spikes/test-tier-1/solo-okcount.txt)
-    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka;JAHSHAKA_TEST_NO_EDITOR_BOOT=1;JAHSHAKA_TEST_TIER=low"
+    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka;JAHSHAKA_TEST_NO_EDITOR_BOOT=1"
     LABELS "scripting"
     TIMEOUT 300)
 
@@ -1668,7 +1666,7 @@ configure_file(scripts/e2e_player_bounce.js.in
                ${CMAKE_CURRENT_BINARY_DIR}/e2e_player_bounce.js @ONLY)
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-player_bounce)
 file(MAKE_DIRECTORY ${_home}/run)
-jah_gpu_row(scripting.e2e.player_bounce CLASS app
+jah_gpu_row(scripting.e2e.player_bounce CLASS app TIER epic NEEDS photon
          COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
                  $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_player_bounce.js
          WORKING_DIRECTORY ${_home}/run)
@@ -1704,7 +1702,7 @@ jah_pool_arm(editor add_primitive ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_add_pr
 set(_mtHome ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-material_tabs)
 jah_fresh_home_fixture(scripting.e2e.material_tabs.fresh_home materialTabsHome "${_mtHome}" LABELS "scripting")
 file(MAKE_DIRECTORY ${_mtHome}/run)
-jah_gpu_row(scripting.e2e.material_tabs CLASS app
+jah_gpu_row(scripting.e2e.material_tabs CLASS app TIER low NEEDS NONE
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_material_tabs.js
          WORKING_DIRECTORY ${_mtHome}/run)
 set_tests_properties(scripting.e2e.material_tabs PROPERTIES
@@ -1716,7 +1714,7 @@ set_tests_properties(scripting.e2e.material_tabs PROPERTIES
 
 # ...and a SECOND process on the same home: the tab set is persisted in the
 # app's settings, and only a relaunch can prove it is read back.
-jah_gpu_row(scripting.e2e.material_tabs.relaunch CLASS app
+jah_gpu_row(scripting.e2e.material_tabs.relaunch CLASS app TIER low NEEDS NONE
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_material_tabs_relaunch.js
          WORKING_DIRECTORY ${_mtHome}/run)
 set_tests_properties(scripting.e2e.material_tabs.relaunch PROPERTIES
@@ -1867,7 +1865,7 @@ set_tests_properties(scripting.e2e.preset_seed_boot.user_first PROPERTIES
     LABELS "scripting"
     TIMEOUT 180)
 jah_no_display(scripting.e2e.preset_seed_boot.user_first)
-jah_gpu_row(scripting.e2e.preset_seed_boot CLASS app
+jah_gpu_row(scripting.e2e.preset_seed_boot CLASS app TIER low NEEDS NONE
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
                  --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_preset_seed_boot.js
          WORKING_DIRECTORY ${_psHome}/run)
@@ -1897,7 +1895,7 @@ configure_file(scripts/e2e_preset_seed_race.js.in
                ${CMAKE_CURRENT_BINARY_DIR}/e2e_preset_seed_race.js @ONLY)
 jah_fresh_home_fixture(scripting.e2e.preset_seed_race.fresh_home presetSeedRaceHome "${_prHome}" LABELS "scripting")
 file(MAKE_DIRECTORY ${_prHome}/run)
-jah_gpu_row(scripting.e2e.preset_seed_race CLASS app
+jah_gpu_row(scripting.e2e.preset_seed_race CLASS app TIER low NEEDS NONE
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
                  --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_preset_seed_race.js
          WORKING_DIRECTORY ${_prHome}/run)
@@ -1907,11 +1905,11 @@ set_tests_properties(scripting.e2e.preset_seed_race PROPERTIES
     LABELS "scripting"
     TIMEOUT 300)
 
-# <pool>.tier — THE POOL'S TIER IS THE PROCESS'S (lane TEST-TIER-1, services/testtier.h): in a
-# `TIER low` pool app.testTier() is "low", a new scene AND an opened one (saved at Medium) report
-# world.mode() "low", and the window booted 1280x720; in a `TIER epic` pool the same script finds
-# no test tier, a new scene at the document's Epic and the reopened one at the Medium it saved.
-# One arm in a pool of each tier.
+# <pool>.tier — THE POOL'S DECLARATION IS THE PROCESS'S (lanes TEST-TIER-1, TEST-NEEDS-1;
+# services/testtier.h): in a `TIER low NEEDS NONE` pool app.testTier() is {tier:"low", needs:[]},
+# a new scene AND an opened one (saved at Medium) are put on Low with Photon off, and the window
+# booted 1280x720; in a `TIER document` pool the same script finds no test tier, a new scene at
+# the document's Epic and the reopened one at the Medium it saved. One arm in a pool of each.
 jah_pool_arm(editor tier ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_pool_tier.js 3)
 jah_pool_arm(gi_verbs tier ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_pool_tier.js 3)
 # THE SPLIT BY TIER (TEST-TIER-1, measured arm by arm, spikes/test-tier-1/okcount.md): editor,
@@ -1936,20 +1934,20 @@ jah_pool_arm(editor material_drop ${CMAKE_CURRENT_BINARY_DIR}/e2e_material_drop.
 
 jah_add_pool(doc HEADLESS LABELS scripting)
 jah_add_pool(doc_assets HEADLESS LABELS scripting)
-jah_add_pool(gi_verbs TIER epic LABELS scripting)
-jah_add_pool(gi_movers TIER epic LABELS scripting)
-jah_add_pool(editor TIER low LABELS scripting)
-jah_add_pool(editor_view TIER epic LABELS scripting)
-jah_add_pool(shading TIER epic LABELS scripting)
-jah_add_pool(shading_live TIER epic LABELS scripting)
-jah_add_pool(world_sky TIER epic LABELS scripting)
-jah_add_pool(world_light TIER epic LABELS scripting)
-jah_add_pool(player TIER low LABELS scripting)
-jah_add_pool(assets_import TIER low LABELS scripting)
-jah_add_pool(vr_noruntime TIER low LABELS scripting
+jah_add_pool(gi_verbs TIER document   LABELS scripting)
+jah_add_pool(gi_movers TIER document   LABELS scripting)
+jah_add_pool(editor TIER low NEEDS photon LABELS scripting)
+jah_add_pool(editor_view TIER document   LABELS scripting)
+jah_add_pool(shading TIER document   LABELS scripting)
+jah_add_pool(shading_live TIER document   LABELS scripting)
+jah_add_pool(world_sky TIER document   LABELS scripting)
+jah_add_pool(world_light TIER document   LABELS scripting)
+jah_add_pool(player TIER low NEEDS photon LABELS scripting)
+jah_add_pool(assets_import TIER low NEEDS photon LABELS scripting)
+jah_add_pool(vr_noruntime TIER low NEEDS NONE LABELS scripting
     BASELINE ${CMAKE_CURRENT_SOURCE_DIR}/scripts/pool_baseline_vr_noruntime.js)   # injected hands + gizmo mode, after every arm
-jah_add_pool(avatar_anim TIER low LABELS scripting)
-jah_add_pool(atom TIER epic LABELS scripting)
+jah_add_pool(avatar_anim TIER low NEEDS photon LABELS scripting)
+jah_add_pool(atom TIER document   LABELS scripting)
 
 
 # FRESH HOMES (PROJECT-NAMES-1). A project name is unique in a library now (project.create

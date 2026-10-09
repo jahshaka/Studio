@@ -488,18 +488,45 @@ environmental (look for the Xid). A PASS that logged an OOM warning stays PASS.
 `scripts/gpu-admit.sh status` lists the holders (the file of a held token names its pid and row).
 
 **THE CLASSES** (the audit's A2 table, nvidia-smi per pid, 2026-09-26) — `jah_vram_tokens()` in
-`tests/CMakeLists.txt` is the one lookup:
+`tests/support/vram_tokens.cmake` is the one lookup (the toy row `gate.tokens_by_needs` proves it):
 
 | class | tokens | what | measured |
 |---|---|---|---|
-| `app` | 2 | an app process (`Jahshaka --script`, a pool process, a harness that spawns it) at the document default, Epic | per pid median 2,000 / p90 2,270 / max 2,600 MiB — a THIN margin against 2 × 1,090 = 2,180; TEST-TIER-1's Low tier widens it |
-| `selftest` | 2 | `--engine-selftest` (the app's route) | = app |
+| `app` | by the declaration (below) | an app process (`Jahshaka --script`, a pool process, a harness that spawns it) | the old flat 2 was per pid median 2,000 / p90 2,270 / max 2,600 MiB — a THIN margin against 2 × 1,090 = 2,180 |
+| `selftest` | 2 | `--engine-selftest` (the app's own route; binds no editor scene, declares nothing) | = app at Epic |
 | `engine` | 1 | a headless engine / Qt+engine suite at its own tier (mostly Medium) | ~0.6-1.2 GB |
 | `vr` | 3 | a VR / Monado row (the app, stereo views, the runtime's compositor) | ~2 GB (est.) |
 | `none` | 0 | RenderSystem_NULL, no display, lavapipe — never registered | 0 |
 
-A pool with a declared `TIER low` (TEST-TIER-1's test tier, ~0.65 GB) costs 1 token as an app. A
-row MEASURED heavier than its class declares `TOKENS <k>` = round(its peak GB) with the number in
+**THE BOOT DECLARATION (TEST-NEEDS-1; owner 2026-10-09: "a test suite passes variables for what it
+needs; if you don't need Photon, run Low").** Every row that starts the app — `jah_gpu_row` /
+`jah_gpu_exclusive_test` CLASS app (and CLASS vr when its command names the app), every engine-up
+`jah_add_pool` — declares `TIER <low|medium|high|epic> NEEDS <photon bloom ssao smaa planar…>|NONE`,
+or `TIER document`. The helpers put it on the row as `JAHSHAKA_TEST_TIER` / `JAHSHAKA_TEST_NEEDS`
+(`set:`; `unset:` both for `document`); the process puts every scene it binds on that World Mode and
+switches every feature the list does not name OFF (`worldmodes::applyTestTier`; a pinned row stays;
+a named Photon runs at the mode's own Photon tier). `app.testTier()` reports `{tier, needs}`.
+- `low NONE` — the row reads no picture and exercises no engine lifecycle: UI state, document,
+  scripting verbs, counts.
+- `epic NEEDS photon` — the engine lifecycle (startup, open/close, teardown, shutdown order, crash
+  soaks): Photon stays on exactly where the teardown order matters (trap 1).
+- a GI claim — the tier its bar names, `NEEDS photon`; a shipped-picture claim — `epic` with every
+  feature it reads (all five for the shipped frame: perf.epic_steady_state, vr.frame_budget); a
+  script that calls `world.mode(X)` itself declares X with all five (setMode puts every column back).
+- `document` — no test tier: for a claim ABOUT the document's World state (a sample opens at its
+  authored tier with no deviations, a saved World row survives a reopen, the product's own boot);
+  a test tier would rewrite it before the claim reads it. Today's former `TIER epic` pools are
+  `document` (their contract was "each scene keeps its own tier").
+There is no default: an undeclared app row is a configure error, and `source.row_declares_needs`
+refuses one on what ctest will run — and refuses `NONE` on a row whose scripts read the picture
+(editor/player/camera.screenshot, vr.eyeScreenshot, editor.presentedFrame, capture.lastFrame;
+xwd, readPixels, --engine-selftest in a harness) or drive Photon (world.photon/gi/setPhotonView/
+giStatus/giVoxelStats).
+
+**THE APP'S TOKENS ARE THE DECLARATION'S** (`JAH_VRAM_TOKENS_BY_NEEDS`): `low` 1; `medium` 1;
+`high` 2; `epic` + photon 3, without 2; `document` 3. A test-tier window boots 1280x720.
+
+A row MEASURED heavier than its class declares `TOKENS <k>` = round(its peak GB) with the number in
 its comment (GATE-ADMIT-1's run, nvidia-smi per pid: test_gi_gather 3.6 GB → 4, voxel_coverage
 2.8 → 3, gather_reference / hit_shade / chain_face / every test_scale row 1.5-2.0 → 2). A HARNESS
 that spawns the app over MCP (compiled with JAHSHAKA_BINARY: open.responsive, ui.column_law,
