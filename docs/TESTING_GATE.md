@@ -428,7 +428,7 @@ Findings 2, 5 and 6 are REGISTERED, never only printed: one `<workspace>/testing
 each in TESTING_V3_SPEC §1.5's FULL schema (`{id, rows, kind, cause, first_seen {tip, pin, run}, state: open,
 found_by: gate, recheck, expires}` — recheck a DATE: the next day for NOT REPRODUCED, +7 days for a
 defect; NOT REPRODUCED also `uses: 1, suspects: [the batch's lanes], census`), which VERDICT-1's registry
-(`testing/defects.json`) ingests — its reader refuses the whole registry on one malformed entry, and
+(`testing/defects.json`) ingests — its reader quarantines a malformed entry (it never reaches the door), and
 gate.batch loads every pending file through it. Exit codes: 3 a
 combination defect, else 7 an INCOMPLETE or aborted attribution, else 5 a d-build defect, else 0; 4 an
 unusable tree, 64 usage. Every commit the batch tooling writes (the candidate's merges, the regenerated

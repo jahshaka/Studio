@@ -303,9 +303,9 @@ def run(source, scripts, merge, scratch, rl, build_dir):
     check(p.returncode == 0 and "SCRIPTING.md regenerated at" in rst and "rebuilt at" in rst,
           "rc-gate --scripting: the real binary's --dump-api-docs differed, the file was committed and the tree "
           "REBUILT (exit %d; %s)" % (p.returncode, rst.strip().splitlines()[-2:] if rst else p.stdout[-200:]))
-    check(rc == 0 and new and refs("batch-t1")[0] == new and git(D, "rev-parse", f"{new}^") == sc,
+    check(p.returncode == 0 and new and refs("batch-t1")[0] == new and git(D, "rev-parse", f"{new}^") == sc,
           "batch-scripting: the regenerated file is ONE commit on top of the candidate, and batch-t1 names it (%s)"
-          % out.strip()[-80:])
+          % log.strip()[-80:])
     if new:
         check(git(D, "log", "-1", "--format=%an|%s", new) == "jahshaka|SCRIPTING.md regenerated at batch t1",
               "...authored jahshaka, its message names the batch")
@@ -492,7 +492,8 @@ def run(source, scripts, merge, scratch, rl, build_dir):
     nr = [e for e in pending.values() if e["kind"] == "nondeterminism"]
     check(nr and nr[0]["uses"] == 1 and nr[0]["suspects"] == ["lane-h", "lane-i"] and isinstance(nr[0]["census"], dict),
           "...NOT REPRODUCED: uses 1, the batch's lanes as suspects, the record's census")
-    # VERDICT-1's reader refuses the WHOLE registry on one malformed entry: every pending file must load through it
+    # VERDICT-1's reader QUARANTINES a malformed entry (the finding never reaches the door): every pending file must
+    # load through it
     import importlib.util
     v1 = os.environ.get("JAH_VERDICT1_RUNLOG") or os.path.join(rl.workspace_root(), "jahshaka", ".claude", "worktrees",
                                                                "verdict-1", "scripts", "gate_runlog.py")
@@ -530,6 +531,24 @@ def run(source, scripts, merge, scratch, rl, build_dir):
     check(all(r["lanes"] == tips.get(r["tip"]["studio"]) for r in recs) and "lane" not in recs[0],
           "...each at ITS tree's own tip; `lanes` = that lane (the control's: rc-base), the candidate's = the batch's "
           "list; no `lane` string")
+    check(all(r.get("batch") == "t4" for r in recs), "...and every one carries `batch: t4` (TESTING_V3 §1.6: never a "
+          "lane's own record)")
+    # THE EXIT CODES besides 3: only an unfinished row -> 7; only a red on d-build's tip -> 5
+    def only(rows_):
+        out_ = list(args); i_ = out_.index("--attribute"); out_[i_ + 1] = rows_
+        return subprocess.run([sys.executable, os.path.join(scripts, "gate-scope.py")] + out_, capture_output=True,
+                              text=True, env=dict(aenv, JAH_RUN_LOG_DIR=os.path.join(scratch, "runs-codes")))
+    fake_x = subprocess.Popen([sys.executable, "-c", "import socket,time,sys,os\nos.path.exists(sys.argv[1]) and "
+                               "os.unlink(sys.argv[1])\ns=socket.socket(socket.AF_UNIX)\ns.bind(sys.argv[1])\n"
+                               "s.listen(16)\nwhile True:\n    c, _ = s.accept(); c.close()", sock])
+    for _ in range(50):
+        time.sleep(0.1)
+        if os.path.exists(sock): break
+    open(os.path.join(x11, ".X97-lock"), "w").write("%10d\n" % fake_x.pid)
+    p7, p5 = only("row.noadmit"), only("row.base")
+    fake_x.kill(); fake_x.wait()
+    check(p7.returncode == 7, "an attribution left INCOMPLETE (row.noadmit alone) exits 7 (exit %d)" % p7.returncode)
+    check(p5.returncode == 5, "a d-build defect alone (row.base) exits 5 (exit %d)" % p5.returncode)
     git(lanes4["lane-i"][0], "commit", "-q", "--allow-empty", "-m", "lane-i moved on")
     p = subprocess.run([sys.executable, os.path.join(scripts, "gate-scope.py")] + args, capture_output=True,
                        text=True, env=aenv)
