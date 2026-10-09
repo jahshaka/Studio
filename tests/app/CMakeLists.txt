@@ -108,7 +108,7 @@ set_tests_properties(app.test_needs_boot PROPERTIES
 # from adding JAHSHAKA_VR=0: this row is the one that lets the preference decide.
 set(_siv_home ${CMAKE_CURRENT_BINARY_DIR}/start-in-vr-home)
 file(MAKE_DIRECTORY ${_siv_home}/run)
-jah_gpu_row(app.start_in_vr CLASS app TIER epic NEEDS photon
+jah_gpu_row(app.start_in_vr CLASS app TIER epic NEEDS photon TEST_WINDOW
          COMMAND sh ${JAH_FRESH_HOME} --warm ${_siv_home} --
                  bash "${CMAKE_CURRENT_SOURCE_DIR}/start_in_vr.sh"
                  "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>"
@@ -174,7 +174,7 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
         # it back; two suites both naming 8751 is what made -j4 unsafe
         # (TEST_GATE_AUDIT.md §4.1).
         # DEVPROCESS-1: registered through the GPU-timing lock; TIMEOUT = RUN_TIMEOUT + the lock's 900 s wait.
-        jah_gpu_exclusive_test(NAME app.input_keys CLASS app TIER low NEEDS NONE RUN_TIMEOUT 600
+        jah_gpu_exclusive_test(NAME app.input_keys CLASS app TIER low NEEDS NONE TEST_WINDOW RUN_TIMEOUT 600
                  COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/input_keys.sh"
                          "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" 0
                  WORKING_DIRECTORY ${_ik_home}/run)
@@ -206,7 +206,7 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     if(JAH_XDOTOOL AND JAH_CURL AND JAH_JQ AND JAH_XVFB)
         set(_ps_home ${CMAKE_CURRENT_BINARY_DIR}/play-select-home)
         file(MAKE_DIRECTORY ${_ps_home}/run)
-        jah_gpu_exclusive_test(NAME app.play_select CLASS app TIER low NEEDS NONE RUN_TIMEOUT 400
+        jah_gpu_exclusive_test(NAME app.play_select CLASS app TIER low NEEDS NONE TEST_WINDOW RUN_TIMEOUT 400
                  COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/play_select.sh"
                          "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" 0
                  WORKING_DIRECTORY ${_ps_home}/run)

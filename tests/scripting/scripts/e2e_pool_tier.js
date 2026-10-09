@@ -4,7 +4,7 @@
 // A pool declared `TIER low NEEDS NONE` runs its process under JAHSHAKA_TEST_TIER=low /
 // JAHSHAKA_TEST_NEEDS=none: EVERY scene the process binds — a new one, and an opened one AFTER
 // its reader — is put on the Low World Mode through the call world.mode makes, every switchable
-// feature the list does not name (Photon among them) is off, and the window boots 1280x720. A
+// feature the list does not name (Photon among them) is off, and (TEST_WINDOW) the window boots 1280x720. A
 // pool declared `TIER document` has no test tier: a new scene is the product's (Epic) and an
 // opened scene keeps the tier it SAVED. The same script runs as an arm in one pool of each, and
 // asserts whichever it is in:
@@ -13,7 +13,7 @@
 //   2. a new scene reports world.mode() == that tier (else "epic", the document's), and Photon is
 //      on iff the list names it;
 //   3. a scene saved at Medium and reopened reports the test tier (else "medium");
-//   4. the window is 1280x720 under a test tier (the pool's baseline puts back
+//   4. the window is 1280x720 when the pool declares TEST_WINDOW (the pool's baseline puts back
 //      whatever size the boot had, so an arm always starts at it).
 //
 // world.mode() may read "custom" in a test-tier process whose list leaves Photon off on a mode
@@ -28,9 +28,10 @@ function J(x) { return JSON.stringify(x); }
 var tt = app.testTier();
 console.log("testTier: " + J(tt));
 var tier = tt.tier, needs = tt.needs;
+// a host list reaches the script as an array-like: read it by length, never Array.isArray
 assert(tier === "" || tier === "low" || tier === "medium" || tier === "high" || tier === "epic",
        "app.testTier().tier is a World Mode name or '' (got " + J(tier) + ")");
-assert(Array.isArray(needs) && (tier !== "" || needs.length === 0),
+assert(needs && typeof needs.length === "number" && (tier !== "" || needs.length === 0),
        "app.testTier().needs is a list, empty with no test tier (got " + J(needs) + ")");
 function atTier(m) { return m === tier || (m === "custom" && needs.indexOf("photon") < 0); }
 
@@ -61,12 +62,12 @@ assert(tier === "" ? reopened === "medium" : atTier(reopened),
 // ---- 4. the window ------------------------------------------------------------------
 var w = app.window();
 console.log("window: " + w.width + "x" + w.height);
-if (tier !== "")
+if (tt.window === "1280x720")
     assert(w.width === 1280 && w.height === 720,
-           "a test-tier process boots its window at 1280x720 (got " + w.width + "x" + w.height + ")");
+           "a process whose row declares the test window boots at 1280x720 (got " + w.width + "x" + w.height + ")");
 else
     assert(w.width > 1280 || w.height > 720,
-           "a process with no test tier keeps the screen-sized boot window (got " + w.width + "x" + w.height + ")");
+           "a process with no test window keeps the screen-sized boot window (got " + w.width + "x" + w.height + ")");
 
 var m = app.memoryStats();
 console.log("gpuPoolUsed MB: " + Math.round((m.gpuPoolCapacityBytes - m.gpuPoolFreeBytes) / 1048576));

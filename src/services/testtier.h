@@ -23,7 +23,8 @@ For more information see the LICENSE file
 // the process binds to the editor — a new one or an opened one — is put on that World Mode
 // through the same call `world.mode` makes (worldmodes::setMode, rows the scene pinned with
 // world.override survive), AFTER the reader has run, so the reader's absent-key defaults stay
-// the constructor's. A windowed script run also boots at kWindowWidth x kWindowHeight.
+// the constructor's. A windowed script run boots at kWindowWidth x kWindowHeight when its row
+// also declares the test window (JAHSHAKA_TEST_WINDOW; a separate declaration since TEST-NEEDS-1).
 //
 // It is a PROCESS setting, applied IN MEMORY: nothing here changes the document default
 // (iris::Scene::giTier), and a process with no test tier (every pixel pool, the owner's app)
@@ -64,11 +65,19 @@ inline void set(const QString &worldModeName) { detail::slot() = worldModeName; 
 inline QString name() { return detail::slot(); }
 inline bool active() { return !detail::slot().isEmpty(); }
 
-/// The window a windowed script run boots at under a test tier: 1280x720 —
-/// the chain's render targets scale with it, a 16:9 aspect like the rig's
-/// 1920x1080 screen, so an arm's framing is the same picture, smaller.
+/// The window a windowed script run boots at when its row DECLARES the test window: 1280x720 —
+/// the chain's render targets scale with it, a 16:9 aspect like the rig's 1920x1080 screen, so
+/// an arm's framing is the same picture, smaller. THE WINDOW IS ITS OWN DECLARATION
+/// (TEST-NEEDS-1 fix round, F6): a tier does not imply it — JAHSHAKA_TEST_WINDOW=1280x720 (the
+/// ctest helpers' `TEST_WINDOW`) asks for it, and a row that does not keeps the screen-sized
+/// boot window its bars were measured at (no silent bar move when a row gained a tier).
 constexpr int kWindowWidth = 1280;
 constexpr int kWindowHeight = 720;
+constexpr const char *kWindowEnvVar = "JAHSHAKA_TEST_WINDOW";
+inline bool testWindow()
+{
+    return qgetenv(kWindowEnvVar).trimmed() == QByteArrayLiteral("1280x720");
+}
 
 /// The environment form of `--test-tier`, for a runner that cannot pass an argument.
 constexpr const char *kEnvVar = "JAHSHAKA_TEST_TIER";

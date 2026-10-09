@@ -109,8 +109,8 @@ engine-up pool — like every row that starts the app — declares what its proc
 
 - `TIER low NEEDS NONE` — JAHSHAKA_TEST_TIER=low / JAHSHAKA_TEST_NEEDS=none (`services/testtier.h`):
   every scene it binds, a new one and an opened one (after its reader), is put on the Low World
-  Mode through the call `world.mode` makes, every switchable feature off, and the window boots
-  1280x720. For arms whose claims are verbs, UI state, counts — nothing that reads the picture.
+  Mode through the call `world.mode` makes, every switchable feature off, and (`TEST_WINDOW`,
+  its own declaration) the window boots 1280x720. For arms whose claims are verbs, UI state, counts — nothing that reads the picture.
   `app.testTier()` reads it (`{tier: "low", needs: []}`).
 - `TIER document` — no test tier: a new scene is the product's Epic, an opened scene keeps the
   tier it saved (`app.testTier().tier` is `""`). For an arm that asserts a picture, GI, Atom, a

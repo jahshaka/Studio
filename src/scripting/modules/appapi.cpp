@@ -669,7 +669,7 @@ QVector<VerbInfo> AppApi::verbs() const
           "setting gave THIS run, and is 'off' for a --script run unless it was started with "
           "--script-live.",
           Needs::Document },
-        { "testTier", "app.testTier() -> {tier, needs}",
+        { "testTier", "app.testTier() -> {tier, needs, window}",
           "THE PROCESS'S TEST TIER AND WHAT IT NEEDS (TEST-TIER-1, TEST-NEEDS-1). `tier` is the "
           "World Mode ('low', 'medium', 'high', 'epic') this process puts EVERY scene it binds "
           "on — a new scene or an opened one, after the reader, through the same call world.mode "
@@ -680,8 +680,9 @@ QVector<VerbInfo> AppApi::verbs() const
           "scene (a pinned row stays), and a named Photon runs at the tier's own Photon tier. Set "
           "per PROCESS by `--test-tier <mode>` or JAHSHAKA_TEST_TIER (the flag wins) and "
           "JAHSHAKA_TEST_NEEDS (space-separated; the app refuses an unknown word); every ctest "
-          "row that starts the app declares both (TIER + NEEDS). A windowed script run under a "
-          "test tier also boots its window at 1280x720. Reads only: it cannot be changed from a "
+          "row that starts the app declares both (TIER + NEEDS). `window` is '1280x720' when the "
+          "row also declares the test window (JAHSHAKA_TEST_WINDOW; a windowed script run then "
+          "boots at that size), else '' (the screen-sized boot). Reads only: it cannot be changed from a "
           "script, and world.mode still switches the open scene as usual.",
           Needs::Document },
         { "window", "app.window() -> {x, y, width, height, minWidth, minHeight, visible, fullScreen, fits, screen:{name, width, height, availWidth, availHeight}}",
@@ -1366,11 +1367,13 @@ QVariantMap AppApi::testTier()
 {
     QVariantMap out;
     out[QStringLiteral("tier")] = testtier::name();
-    QStringList needs;
+    QVariantList needs;   // a plain JS array (a QStringList arrives as a sequence Array.isArray refuses)
     if (testtier::active())
         for (const QString &w : testtier::needs())
             if (w != QLatin1String(testtier::kNoNeeds)) needs << w;
     out[QStringLiteral("needs")] = needs;
+    out[QStringLiteral("window")] = testtier::testWindow()
+        ? QStringLiteral("%1x%2").arg(testtier::kWindowWidth).arg(testtier::kWindowHeight) : QString();
     return out;
 }
 

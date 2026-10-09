@@ -17,14 +17,14 @@ arm() {   # arm <name> <tier> <needs> <expected testTier json>
     local name="$1" tier="$2" needs="$3" want="$4"
     JAHSHAKA_TEST_TIER="$tier" JAHSHAKA_TEST_NEEDS="$needs" "$BIN" --script "$SCRIPT" > "$name.log" 2>&1
     local rc=$?
-    grep -E '^(ok|TESTTIER|new scene|opened scene)' "$name.log" | sed "s/^/  [$name] /"
+    grep -E '^(ok|TESTTIER|new scene|opened scene|pinned scene)' "$name.log" | sed "s/^/  [$name] /"
     [ "$rc" -eq 0 ] && ok "$name: the script passed" || { bad "$name: exited $rc"; tail -30 "$name.log"; }
     grep -qF "TESTTIER $want" "$name.log" && ok "$name: app.testTier() is $want" \
         || bad "$name: app.testTier() is not $want ($(grep TESTTIER "$name.log"))"
 }
-arm high_photon high "photon" '{"needs":["photon"],"tier":"high"}'
-arm low_none low "none" '{"needs":[],"tier":"low"}'
-arm epic_photon_bloom epic "photon bloom" '{"needs":["photon","bloom"],"tier":"epic"}'
+arm high_photon high "photon" '{"needs":["photon"],"tier":"high","window":""}'
+arm low_none low "none" '{"needs":[],"tier":"low","window":""}'
+arm epic_photon_bloom epic "photon bloom" '{"needs":["photon","bloom"],"tier":"epic","window":""}'
 
 refuse() {   # refuse <name> <env…>
     local name="$1"; shift

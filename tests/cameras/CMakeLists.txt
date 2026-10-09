@@ -215,4 +215,4 @@ jah_pool_arm(cameras pip_rebuild ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_pip_reb
 # ---- THE POOL (lane SUITE-POOL-1): cameras.e2e and its four siblings (lens, postfx, pilot,
 # axis_lock) were five boots of the same verb module on the same scratch-home contract; they are
 # five arms of ONE process now (SPECS/audits/SUITE_REDUNDANCY_AUDIT_2026-09-27.md §6).
-jah_add_pool(cameras TIER low NEEDS NONE NEEDS_WHY "camera verbs and post-FX shots at Low with Photon off, as TEST-TIER-1 measured them (no GI claim)" LABELS scripting)
+jah_add_pool(cameras TIER low NEEDS NONE NEEDS_WHY "camera verbs and post-FX shots at Low with Photon off, as TEST-TIER-1 measured them (no GI claim)" TEST_WINDOW LABELS scripting)

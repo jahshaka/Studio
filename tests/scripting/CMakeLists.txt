@@ -81,7 +81,7 @@ foreach(_variant live off)
         set(_flag)
         set(_name scripting.live_off)
     endif()
-    jah_gpu_row(${_name} CLASS app TIER low NEEDS NONE
+    jah_gpu_row(${_name} CLASS app TIER low NEEDS NONE TEST_WINDOW
              COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
                      $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
                      --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_live_feedback.js ${_flag}
@@ -1641,7 +1641,7 @@ configure_file(scripts/e2e_player_no_editor.js.in
                ${CMAKE_CURRENT_BINARY_DIR}/e2e_player_no_editor.js @ONLY)
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-player_no_editor)
 file(MAKE_DIRECTORY ${_home}/run)
-jah_gpu_row(scripting.e2e.player_no_editor CLASS app TIER low NEEDS NONE NEEDS_WHY "the player boots without the editor, its shot is a non-black check at Low, Photon off (no GI claim)"
+jah_gpu_row(scripting.e2e.player_no_editor CLASS app TIER low NEEDS NONE NEEDS_WHY "the player boots without the editor, its shot is a non-black check at Low, Photon off (no GI claim)" TEST_WINDOW
          COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
                  $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_player_no_editor.js
          WORKING_DIRECTORY ${_home}/run)
@@ -1936,17 +1936,17 @@ jah_add_pool(doc HEADLESS LABELS scripting)
 jah_add_pool(doc_assets HEADLESS LABELS scripting)
 jah_add_pool(gi_verbs TIER document   LABELS scripting)
 jah_add_pool(gi_movers TIER document   LABELS scripting)
-jah_add_pool(editor TIER low NEEDS NONE NEEDS_WHY "editor verbs and their screenshots at Low with Photon off, as TEST-TIER-1 measured them (no GI claim)" LABELS scripting)
+jah_add_pool(editor TIER low NEEDS NONE NEEDS_WHY "editor verbs and their screenshots at Low with Photon off, as TEST-TIER-1 measured them (no GI claim)" TEST_WINDOW LABELS scripting)
 jah_add_pool(editor_view TIER document   LABELS scripting)
 jah_add_pool(shading TIER document   LABELS scripting)
 jah_add_pool(shading_live TIER document   LABELS scripting)
 jah_add_pool(world_sky TIER document   LABELS scripting)
 jah_add_pool(world_light TIER document   LABELS scripting)
-jah_add_pool(player TIER low NEEDS NONE NEEDS_WHY "player verbs and frames at Low with Photon off, as TEST-TIER-1 measured them (no GI claim)" LABELS scripting)
-jah_add_pool(assets_import TIER low NEEDS NONE NEEDS_WHY "imports render non-black at Low with Photon off, as TEST-TIER-1 measured them (no GI claim)" LABELS scripting)
-jah_add_pool(vr_noruntime TIER low NEEDS NONE LABELS scripting
+jah_add_pool(player TIER low NEEDS NONE NEEDS_WHY "player verbs and frames at Low with Photon off, as TEST-TIER-1 measured them (no GI claim)" TEST_WINDOW LABELS scripting)
+jah_add_pool(assets_import TIER low NEEDS NONE NEEDS_WHY "imports render non-black at Low with Photon off, as TEST-TIER-1 measured them (no GI claim)" TEST_WINDOW LABELS scripting)
+jah_add_pool(vr_noruntime TIER low NEEDS NONE TEST_WINDOW LABELS scripting
     BASELINE ${CMAKE_CURRENT_SOURCE_DIR}/scripts/pool_baseline_vr_noruntime.js)   # injected hands + gizmo mode, after every arm
-jah_add_pool(avatar_anim TIER low NEEDS NONE NEEDS_WHY "skinning and rig frames at Low with Photon off, as TEST-TIER-1 measured them (no GI claim)" LABELS scripting)
+jah_add_pool(avatar_anim TIER low NEEDS NONE NEEDS_WHY "skinning and rig frames at Low with Photon off, as TEST-TIER-1 measured them (no GI claim)" TEST_WINDOW LABELS scripting)
 jah_add_pool(atom TIER document   LABELS scripting)
 
 
