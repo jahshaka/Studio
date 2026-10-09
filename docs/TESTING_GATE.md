@@ -404,7 +404,9 @@ AT the old tip. Forward only: schema-2 records; the historic cases are `scripts/
 cause, first_seen {tip, pin, run}, state: open | {fixed: {tip}} | retired, recheck: YYYY-MM-DD, found_by:
 read|gate|owner|lane}]}`; a `nondeterminism` entry is single-use (`uses: 1, suspects, census`) or `enrolled {by, rate,
 census, date}` by the lead. BATCH-GATE-1's pending entries (`testing/defects.pending/<id>.json`) are read with it. The
-judge REFUSES TO LOAD a registry with an entry missing its shape (exit 2, the entries named). The contention class is
+malformed entry or pending file is QUARANTINED (moved / copied to `testing/defects.quarantine/` with a `.why`, printed as
+`REGISTRY: <file> quarantined: <why>`, a finding until fixed) and the rest loads; only an unreadable registry FILE
+leaves the judge unusable (exit 2). The contention class is
 the enrolled nondeterminism subset; `contention.json` is gone.
 
 **THE Xid IN THE RECORD (VERDICT-1 U3).** `vram_tokens.py`'s supervise reads the kernel journal (through
