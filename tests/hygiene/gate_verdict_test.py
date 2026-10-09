@@ -239,7 +239,13 @@ def case_verdict_door(E):
         st, why = E.judge([r, vrec("real:BUDGET-7", T % "15:00")])
         check(st == "red" and "naming a ticket" in why, "%s + a registered id with no proof -> refused (%s)" % (cls, why[:60]))
         st, _ = E.judge([r, rec("PASS", T % "14:40"), vrec("real:BUDGET-7", T % "15:00")])
-        check(st == "green", "%s + real:<registered id> + a PASS at the tip -> green" % cls)
+        check(st == "red", "F1: %s + real:<id> + one re-run PASS at the SAME sha -> refused" % cls)
+        st, _ = E.judge([dict(r, tip=RED_SHA), rec("PASS", T % "14:40", tip=FIX_SHA), vrec("real:BUDGET-7", T % "15:00")])
+        check(st == "green", "%s + real:<registered id> + a PASS at a later sha -> green" % cls)
+        st, why = E.judge([r] + [rec("PASS", T % ("14:3%d" % i), retry=True) for i in range(3)]
+                          + [vrec("real:NONDET-FIXTURE-1", T % "15:00")], listed=True)
+        check(st == "red" and "kind: defect" in why, "F2: %s + real:<a nondeterminism id> + 3/3 -> refused (only a defect "
+              "entry) (%s)" % (cls, why[:70]))
     xr = rec("CRASH", T % "14:20", box=BUSY,
              xid={"pid": 4242, "window": "2026-10-09T14:10:00+02:00..2026-10-09T14:20:00+02:00", "lines": ["NVRM: Xid 109"]})
     xok3 = [rec("PASS", T % ("14:3%d" % i), retry=True) for i in range(3)]
@@ -248,7 +254,11 @@ def case_verdict_door(E):
     st, why = E.judge([xr, vrec("xid-read:2026-10-09T14:00..14:30 none", T % "15:00")])
     check(st == "red" and "real:<registered id>" in why, "...and xid-read: on it -> refused too (only real:<id>)")
     st, _ = E.judge([xr, rec("PASS", T % "14:40"), vrec("real:VIEWS-XID-1", T % "15:00")])
-    check(st == "green", "...real:<registered id> + a PASS at the tip -> green")
+    check(st == "red", "F1: ...real:<id> + one gate re-run PASS at the Xid's own sha -> refused (the merge read's hole)")
+    st, _ = E.judge([dict(xr, tip=RED_SHA), rec("PASS", T % "14:40", tip=FIX_SHA), vrec("real:VIEWS-XID-1", T % "15:00")])
+    check(st == "green", "...real:<registered id> + a PASS at a later sha -> green")
+    st, why = E.judge([xr] + xok3 + [vrec("real:NONDET-FIXTURE-1", T % "15:00")], listed=True)
+    check(st == "red" and "kind: defect" in why, "F2: an Xid red + real:<a nondeterminism id> + 3/3 -> refused (%s)" % why[:70])
     st, why = E.judge([xr] + xok3, listed=True)
     check(st == "red" and "DEFECT" in why, "an xid red on a contention row is not cleared by 3/3 solo (%s)" % why[:80])
     st, why = E.judge([rec("CRASH", T % "14:20", box=BUSY)] + xok3, listed=True)

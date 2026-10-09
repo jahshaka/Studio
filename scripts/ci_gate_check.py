@@ -217,6 +217,10 @@ def _real(m, row, reds, solos, defects, tip_recs, base_recs, tip_sha=None, mode=
         return False, f"real:{did} is RETIRED in the registry", False
     if gate_runlog.recheck_past(e):
         return False, f"real:{did} is past its recheck date {e['recheck']} — re-verdict the entry first", False
+    hard = sorted({r.get("verdict") for r in reds} & set(HARD))
+    if e["kind"] == "nondeterminism" and (hard or any(r.get("xid") for r in reds)):
+        return False, (f"real:{did} is a nondeterminism entry — a {'/'.join(hard) or 'red with an Xid'} takes only a "
+                       f"`kind: defect` entry (a crash, a loss, an Xid is never nondeterminism)"), False
     if e["kind"] == "nondeterminism":
         if gate_runlog.single_use(e):
             at = (e.get("first_seen") or {}).get("tip") or ""
