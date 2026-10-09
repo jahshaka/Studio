@@ -9,8 +9,9 @@ lane and rc worktrees laid out as the lead's are), a PRIVATE run log, token dire
 judge is a stub that logs how it was called (the real judge is gate.ci_check's and gate.fix_round's subject;
 its diff is empty):
 
-  1. THREE LANES -> ONE CANDIDATE on batch-<tag> (d-build untouched); pins r0 / f1 / f2 -> P = f2, the fork
-     tier printed; two lanes touched docs/SCRIPTING.md -> the state says regenerate, `batch-scripting` (what
+  1. THE FORK IS FROZEN PER BATCH: lanes on r0 (d-build's) / f1 / f2 are refused, each lane behind named
+     ("re-pin <lane> to <P>"); THREE LANES on the one pin f2 -> ONE CANDIDATE on batch-<tag> (d-build
+     untouched), P = f2, the fork tier printed; two lanes touched docs/SCRIPTING.md -> the state says regenerate, `batch-scripting` (what
      rc-gate.sh runs on the built candidate) commits the REGENERATED file onto batch-<tag>, and batch-land runs
      ONE judge on d-build..<that sha> and fast-forwards BOTH repos to it;
   2. CONFLICTS refuse the whole batch, naming the lane and the file, nothing moved, no stray ref: a Studio
@@ -244,9 +245,18 @@ def run(source, scripts, merge, scratch, rl, build_dir):
         return git(D, "rev-parse", "HEAD"), git(os.path.join(D, "irisgl"), "rev-parse", "HEAD")
 
     # ---- 1. three lanes -> one candidate; SCRIPTING.md regenerated; one judge; both repos fast-forwarded ----
-    print("1. three lanes -> one candidate (pins r0 / f1 / f2: ancestors of P = f2)")
-    Wa, sta, ita, spa = lane("lane-a", {"src/a.txt": "a1\nA2\na3\n"}, {"engine.txt": "one\nTWO\nthree\n"})
-    Wb, stb, itb, spb = lane("lane-b", {"src/b.txt": "B\n", "docs/SCRIPTING.md": "verbs vb\n"}, None, pin=f1)
+    print("1. the fork is FROZEN per batch: pins r0 (d-build's) / f1 / f2 -> refused, the lanes behind named")
+    _, _, _, spp1 = lane("lane-p1", {"src/p1.txt": "p\n"})
+    _, _, _, spp2 = lane("lane-p2", {"src/p2.txt": "p\n"}, None, pin=f1)
+    _, _, _, spp3 = lane("lane-p3", {"src/p3.txt": "p\n"}, None, pin=f2)
+    rc, out = mscript("batch", "t1x", spp1, spp2, spp3)
+    check(rc == 5 and f"re-pin lane-p1 to {f2[:9]}" in out and f"re-pin lane-p2 to {f2[:9]}" in out
+          and "re-pin lane-p3" not in out, "ANCESTOR pins are refused: each lane behind the batch's one pin is named "
+          "(\"re-pin <lane> to <P>\"; exit %d)" % rc)
+    check(stray("t1x", ["lane-p1", "lane-p2", "lane-p3"]) == [], "...nothing moved, no stray ref")
+    print("1b. three lanes on the ONE pin f2 (the batch's bump) -> one candidate")
+    Wa, sta, ita, spa = lane("lane-a", {"src/a.txt": "a1\nA2\na3\n"}, {"engine.txt": "one\nTWO\nthree\n"}, pin=f2)
+    Wb, stb, itb, spb = lane("lane-b", {"src/b.txt": "B\n", "docs/SCRIPTING.md": "verbs vb\n"}, None, pin=f2)
     Wc, stc, itc, spc = lane("lane-c", {"src/c.txt": "c\n", "docs/SCRIPTING.md": "verbs vc\n"},
                              {"render.txt": "r\n"}, pin=f2)
     s0, i0 = dbuild()
@@ -256,7 +266,7 @@ def run(source, scripts, merge, scratch, rl, build_dir):
     check(rc == 0 and sc and ic, "the batch is accepted and batch-t1 exists in both repos (exit %d)" % rc)
     check(dbuild() == (s0, i0), "...and d-build did NOT move (the candidate is on its own branches)")
     check(all(f"fork pins: {l} " in out for l in ("lane-a", "lane-b", "lane-c")), "...every lane's fork pin is printed")
-    check(f"fork pin P = {f2[:9]}" in out and "MOVED" in out, "...P = f2 (the descendant of every pin), said as a move")
+    check(f"fork pin P = {f2[:9]}" in out and "MOVED" in out, "...P = f2, the batch's one pin, said as a move")
     state = open(os.path.join(lead, "batch-t1.state")).read() if os.path.exists(os.path.join(lead, "batch-t1.state")) else ""
     check("SCRIPTING_REGEN=1" in state and "touched by 2 lanes" in out,
           "...two lanes touched docs/SCRIPTING.md: the state asks rc-gate to regenerate it")
@@ -348,13 +358,13 @@ def run(source, scripts, merge, scratch, rl, build_dir):
     _, _, _, spf = lane("lane-f", {"src/f.txt": "f\n"}, None, pin=fx)
     _, _, _, spg = lane("lane-g", {"src/g.txt": "g\n"})
     rc, out = mscript("batch", "t3", spf, spg)
-    check(rc == 5 and "the pins diverge" in out and fx[:9] in out,
+    check(rc == 5 and "two fork lines" in out and fx[:9] in out,
           "fx against d-build's f2: refused, the pins named (exit %d)" % rc)
     check(dbuild() == s1 and stray("t3", ["lane-f", "lane-g"]) == [], "...nothing moved, no stray ref")
     _, _, _, spg1 = lane("lane-g1", {"src/g1.txt": "g\n"}, None, pin=g1)
     _, _, _, spg2 = lane("lane-g2", {"src/g2.txt": "g\n"}, None, pin=g2)
     rc, out = mscript("batch", "t3b", spg1, spg2)
-    check(rc == 5 and "the pins diverge" in out and g1[:9] in out and g2[:9] in out,
+    check(rc == 5 and "two fork lines" in out and g1[:9] in out and g2[:9] in out,
           "g1 and g2, BOTH descending from d-build's pin, diverge from each other: refused, exit 5 (exit %d)" % rc)
     check(stray("t3b", ["lane-g1", "lane-g2"]) == [], "...no stray ref")
 

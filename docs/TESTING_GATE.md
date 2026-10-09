@@ -395,10 +395,12 @@ conflicted), `batch` records `SCRIPTING_REGEN=1` in the batch's state; `rc-gate.
 the candidate and BEFORE its gate, runs `merge-dbuild-lane.sh batch-scripting <tag> <rc tree>`: the
 candidate's own binary regenerates the file, a difference is committed onto `batch-<tag>` ("SCRIPTING.md
 regenerated at batch <tag>", author jahshaka), the tree is rebuilt and THAT sha is gated and landed.
-**THE FORK FREEZE.** Every lane's fork pin (and d-build's) is printed; the batch is REFUSED unless
-they are equal or each is an ancestor (in the fork clone, `git merge-base --is-ancestor`) of ONE pin
-P; the candidate pins P (diverging fork lines cannot be one gated tree — land the pin-bumping lane
-first, or rebase the other on it). P ≠ d-build's pin = the candidate moves the pin = the full tier.
+**THE FORK FREEZE** (owner decision 4; TESTING_V3_SPEC §1.3.2). Every lane's fork pin (and d-build's)
+is printed; the batch carries ONE pin P — d-build's, or the one bump it carries (a pin descending from
+d-build's) — and EVERY lane must pin exactly P: a lane on any other pin, an ancestor included, is
+REFUSED BY NAME ("re-pin <lane> to <P>") and the lead has it re-pinned before the cut; two pins that
+are two fork lines refuse the batch (exit 5). P ≠ d-build's pin = the candidate moves the pin = the
+full tier.
 
 **THE ATTRIBUTION.** Each red row runs 3x `--solo`-style in each lane's OWN worktree at its exact
 batch tip (the lanes' built trees; a worktree moved past its tip is refused), 3x at the CANDIDATE
