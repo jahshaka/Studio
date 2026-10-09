@@ -80,7 +80,7 @@ def records_by_tip(pins):
             t = r.get("tip") or {}
             sha = t.get("studio")
             if sha not in out or t.get("studio_dirty") or t.get("irisgl_dirty"): continue
-            if gate_runlog.stale_build(t): continue          # built from another commit, or dirty (GATE-COST-2 #8)
+            if not r.get("kind") and gate_runlog.stale_build(t): continue   # a RUN of another build (GATE-COST-2 #8, F4)
             # the engine that ran must be the one the tip PINS (F1): a record from a tree whose
             # irisgl was checked out elsewhere tested other code
             if pins[sha] and t.get("irisgl") != pins[sha]: continue
