@@ -13,6 +13,15 @@ function assert(cond, msg) {
     if (!cond) throw new Error("assert failed: " + msg);
     console.log("ok: " + msg);
 }
+// A MILLISECOND BAR (TESTING-CLEANUP-2 P10f; tests/support/timingbars.h's rule for a script):
+// asserted in capture.first_recording.timing — a copy of this script with JAH_TIMING_BARS defined
+// (jah_timing_script), on the quiet box under the GPU-timing lock — and PRINTED here, where the
+// pool's arm keeps every count (no shader compiled, none loaded, frames recorded).
+function timingBar(cond, msg) {
+    if (typeof JAH_TIMING_BARS !== "undefined" && JAH_TIMING_BARS) assert(cond, msg);
+    else console.log("time: " + (cond ? "within" : "OVER") + ": " + msg +
+                     " (a millisecond bar: capture.first_recording.timing asserts it)");
+}
 
 assert(project.create("capture first " + Date.now()) !== false, "project.create");
 scene.addPrimitive("cube", { position: [0, 0.5, 0] });
@@ -42,8 +51,8 @@ assert(sc1.loadedThisRun === sc0.loadedThisRun, "nor loaded one from the cache: 
 // THE ENCODER PROBE (the real 585 ms): never at boot (app.startup_quiet's Lane 6a guard) but in the
 // process's FIRST project open/create, behind its progress — so after project.create above, the first
 // click's probe is a lookup and the click itself costs well under 50 ms of UI time.
-assert(first.probeMs < 20, "Qt's encoder probe was made by the project open: " + first.probeMs.toFixed(2) + " ms");
-assert(first.startMs < 50, "the first record click after an open costs under 50 ms of UI time: " +
-       first.startMs.toFixed(1) + " ms");
+timingBar(first.probeMs < 20, "Qt's encoder probe was made by the project open: " + first.probeMs.toFixed(2) + " ms");
+timingBar(first.startMs < 50, "the first record click after an open costs under 50 ms of UI time: " +
+          first.startMs.toFixed(1) + " ms");
 assert(capture.stop({ wait: true, timeoutMs: 30000 }) !== null && capture.status().state === "done", "finished");
 console.log("capture.first_recording: PASS");
