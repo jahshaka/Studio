@@ -70,11 +70,11 @@ function refusedWith(view, pattern) {
     return false;
 }
 
-var MODES = ["voxels", "probes", "cards", "screenProbes", "diffuse", "reflections", "hits"];
+var MODES = ["voxels", "probes", "cards", "screenProbes", "diffuse", "reflections", "hits", "gatherHits"];
 
 // ---- (f) the combination, as a function: called on each scene ----------------------
 // Cards LAST — the owner's last switch before the fault.
-var COMBO = ["voxels", "probes", "screenProbes", "diffuse", "reflections", "hits", "cards"];
+var COMBO = ["voxels", "probes", "screenProbes", "diffuse", "reflections", "hits", "gatherHits", "cards"];
 function bothOff() {
     assert(world.setPhotonView("off") === true && world.setAtomView("off") === true, "both views off");
 }
@@ -207,6 +207,7 @@ var noRays = world.giStatus().viewRefusals;
 console.log("refusals without rays: " + J(noRays));
 assert(refusedWith("hits", /traces reflections/), "'hits' is refused with ray tracing off");
 assert(refusedWith("screenProbes", /gather/), "'screenProbes' is refused with ray tracing off");
+assert(refusedWith("gatherHits", /gather/), "'gatherHits' is refused with ray tracing off");
 world.rayTracing("auto");
 editor.frame(6);
 world.mode({ mode: "low" });
@@ -277,6 +278,29 @@ function walkTo(x, z) {
     editor.setCamera({ position: { x: x, y: 3.0, z: z }, lookAt: { x: x + 1.5, y: 0.3, z: z - 5 } });
 }
 settle();
+// THE GATHER-HITS READBACK BY THE VERBS (FAR-SUN-1): not ready without the arm; with it, every
+// counted ray of the view's probes names its source and the shares add up to one; off again, not ready.
+{
+    var g0 = world.gatherHits();
+    assert(g0.ready === false, "world.gatherHits is not ready without the arm (" + g0.reason + ")");
+    assert(engine.arm("gather.hitsReadback", 1) === true, "the arm gather.hitsReadback is set");
+    var gh = null;
+    for (var gi = 0; gi < 40 && !(gh && gh.ready); ++gi) { editor.frame(2); gh = world.gatherHits({ rays: 8 }); }
+    assert(gh && gh.ready && gh.rays > 0 && gh.probes > 0, "world.gatherHits reads the view's rays (" +
+           (gh ? gh.rays + " rays, " + gh.probes + " probes" : "none") + ")");
+    var share = 0, count = 0;
+    for (var k in gh.sources) { share += gh.sources[k].share; count += gh.sources[k].count; }
+    assert(Math.abs(share - 1) < 1e-6 && count === gh.rays, "every counted ray names one source (" + count + " of " +
+           gh.rays + ", shares " + share.toFixed(6) + ")");
+    assert(gh.samples.length === Math.min(8, gh.rays), "{rays: 8} returns eight rays one by one");
+    engine.arm("gather.hitsReadback", 0);
+    editor.frame(4);
+    assert(world.gatherHits().ready === false, "world.gatherHits is not ready once the arm is off");
+    var cam = editor.camera().position;
+    var vr = world.giVoxelRead({ cascade: 0, points: [cam] });
+    assert(vr.available === true && vr.points.length === 1 && vr.cell > 0,
+           "world.giVoxelRead reads cascade 0 at the camera (cell " + vr.cell + ")");
+}
 // THE WALK, a step a couple of frames, then the field at rest.
 for (var wk = 1; wk <= 30; ++wk) { walkTo(0.1 * wk, 14 - 0.13 * wk); editor.frame(2); }
 editor.frame(3);
