@@ -43,7 +43,7 @@ import threading
 import time
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-SCHEMA = 1
+SCHEMA = 2      # 2 (VERDICT-1 + GATE-LOG-1): xid, noadmit_arms, slot_wait_s, drain_s, hold_s, box.mem, box.queue_depth
 # THE TIER NAMES (TESTING-DEBTS-1 T11) — the only ones a record may carry; testing/runs/README.md
 # documents the same list. gate-scope.sh writes the first four (`scoped`; `scoped-fallback` = a
 # scoped gate that fell back to the whole tier; `scoped-tier` = the tier by rule, a fork pin;
@@ -178,6 +178,46 @@ def budget_verdict(text):
     return ("OOM", oom) if oom else (None, None)
 
 
+# THE Xid IN THE RECORD (VERDICT-1 U3): scripts/vram_tokens.py's supervise() reads the kernel journal
+# through scripts/kernel_xid.py after every admitted row and prints `XID <n> from pid <p> of the row
+# <label> — …: <the kernel's line>` per fault from the row's OWN process tree, then `XID-WINDOW
+# <start>..<end> <label>`; tests/support/run_pool.py turns an arm whose process faulted into `ARM
+# <pool>.<arm> CRASH <ms> xid <n> (the kernel's GPU fault from pid <p> at HH:MM:SS)`. The record
+# carries `xid: null | {pid, window, lines[]}` — a red with an xid is a DEFECT by law (CLAUDE.md:
+# never environmental), and ci_gate_check's verdict door accepts only `real:<defect id>` on it.
+_XID_ROW = re.compile(r"^\s*(?:\|\s*)*XID (\d+) from pid (\d+) of the row .*?: (.*)$")
+_XID_WINDOW = re.compile(r"^\s*(?:\|\s*)*XID-WINDOW (\S+\.\.\S+)")
+_XID_ARM = re.compile(r"^\s*ARM\s+(\S+)\s+CRASH\b.*?\bxid (\d+) \(the kernel's GPU fault from pid (\d+) at "
+                      r"(\d\d:\d\d:\d\d)\)")
+
+
+def xid_of(text, day=None):
+    """(the row's xid, {arm: its xid}) from a row's output — each None / absent when no fault."""
+    row, window, arms = None, None, {}
+    day = day or datetime.date.today().isoformat()
+    for line in (text or "").splitlines():
+        m = _XID_ROW.match(line)
+        if m:
+            if row is None: row = {"pid": int(m.group(2)), "window": None, "lines": []}
+            row["lines"].append(m.group(3).strip()[:300]); continue
+        m = _XID_WINDOW.match(line)
+        if m:
+            window = m.group(1); continue
+        m = _XID_ARM.match(line)
+        if m:
+            at = f"{day}T{m.group(4)}"
+            arms[m.group(1)] = {"pid": int(m.group(3)), "window": f"{at}..{at}",
+                                "lines": [line.strip()[:300]]}
+    if row is not None:
+        row["window"] = window
+    for a in arms.values():
+        if window: a["window"] = window
+    if row is None and arms:
+        first = next(iter(arms.values()))
+        row = {"pid": first["pid"], "window": first["window"], "lines": [l for a in arms.values() for l in a["lines"]]}
+    return row, arms
+
+
 def row_verdict(status, text, arms):
     """(verdict, status, budget line|None) of a row from ctest's status and its output: NOADMIT
     (never ran), else OOM / LOST for a red that carries the budget texts, else ctest's class."""
@@ -185,6 +225,11 @@ def row_verdict(status, text, arms):
     na = noadmit_line(text) if v == "FAIL" else None
     if na and not arms:
         return "NOADMIT", na, None
+    # VERDICT-1 U2: A POOL WHOSE EVERY ARM GOT NO ADMISSION NEVER RAN — NOADMIT, never FAIL (13 such
+    # pools were recorded FAIL in the audit week, and 4 of them were cleared by a verdict's prose); a
+    # pool with a MIX stays FAIL, its NOADMIT arms named on the row (`noadmit_arms`)
+    if v != "PASS" and arms and all(a[1] == "NOADMIT" for a in arms):
+        return "NOADMIT", na or ("every arm NOADMIT (%d): the pool never ran" % len(arms)), None
     if v == "FAIL":
         if any(_RUNTIMEOUT.match(l) for l in (text or "").splitlines()):
             v = "TIMEOUT"
@@ -813,6 +858,13 @@ class _Run:
             fl = fail_line(text)
             if fl: row["failLine"] = fl
         if bline: row["budget"] = bline
+        xid, arm_xid = xid_of(text, datetime.date.fromtimestamp(t_end).isoformat())
+        row["xid"] = xid
+        noadmit = [a for a, av, _ in arms if av == "NOADMIT"]
+        if v != "PASS" and v != "NOADMIT" and noadmit:
+            row["noadmit_arms"] = noadmit
+            if "failLine" not in row:
+                row["failLine"] = f"NOADMIT arm(s), never ran: {' '.join(noadmit[:12])}"
         mem = _mem_of(text)
         if mem is not None: row["mem"] = mem
         leak = _leaks_of(text)
@@ -822,7 +874,8 @@ class _Run:
         for arm, av, s in arms:
             # an arm's reason: the selector's for that arm (`<row>::<arm>`), else its row's
             ar = self.reasons.get(f"{name}::{arm.split('.', 1)[-1]}", base["reason"])
-            rec = dict(base, arm=arm, verdict=av, status=av, seconds=s, targets=None, reason=ar)
+            rec = dict(base, arm=arm, verdict=av, status=av, seconds=s, targets=None, reason=ar,
+                       xid=arm_xid.get(arm))
             if arm in arm_mem: rec["mem"] = arm_mem[arm]
             rec.update(arm_find.get(arm, {}))
             recs.append(rec)

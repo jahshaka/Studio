@@ -64,6 +64,14 @@ def kernel_xids(since, pids=None):
     return out
 
 
+def window(t0, t1):
+    """The journal window a read covered, as the run log and a verdict spell it: local ISO-8601
+    seconds, `<start>..<end>` (VERDICT-1 U3: a record's `xid.window`; the `xid-read:<window>` token)."""
+    import datetime
+    iso = lambda t: datetime.datetime.fromtimestamp(t).astimezone().isoformat(timespec="seconds")
+    return "%s..%s" % (iso(t0), iso(t1))
+
+
 def _proc_table():
     """{pid: (ppid, pgid)} of every process now (Linux /proc); {} elsewhere."""
     table = {}

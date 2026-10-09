@@ -669,6 +669,8 @@ def supervise(argv, held, label, on_end=None):
         for t, n, pid, line in xids:
             sys.stderr.write("XID %d from pid %d of the row %s — THE GPU FAULTED (never environmental): %s\n"
                              % (n, pid, label, line))
+        # VERDICT-1 U3: the journal window this read covered — the run log's `xid.window`
+        sys.stderr.write("XID-WINDOW %s %s\n" % (kernel_xid.window(t0 - 1, time.time()), label))
     sys.stderr.flush()
     if rc < 0:
         sys.stderr.write("row-exit: %s died of signal %d\n" % (label, -rc)); sys.stderr.flush()
