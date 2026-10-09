@@ -1137,7 +1137,7 @@ def run_ctest(cmd, cwd, tier, lane, jobs, reasons=None, gating=None, rng=None, r
                                                if k in held_env})
         drained = _vram().LAST_DRAIN_TIMEOUT
         if drained:
-            phase_record("drain-timeout", tier, lane, rng, tree_shas(), **drained)
+            phase_record("drain-timeout", tier, lane, rng, tree_shas(), fallback="drain-timeout", **drained)
             R.fallback = "drain-timeout"           # every record of this run: not a whole-card measurement
     phases = [(cmd, None)]
     if rows is not None:
@@ -1199,7 +1199,7 @@ def run_ctest(cmd, cwd, tier, lane, jobs, reasons=None, gating=None, rng=None, r
         reds_ = [d_ for d_ in R.dropped if d_["verdict"] != "PASS"]
         R.path = phase_record("abort", tier, lane, rng, R.shas, why=R.dead, dropped=R.dropped,
                               droppedRed=[d_["suite"] for d_ in reds_], inFlight=sorted(R.running),
-                              run=R.run_id) or R.path
+                              run=R.run_id, **({"fallback": R.fallback} if R.fallback else {})) or R.path
         ABORTED = (f"=== GATE ABORTED: {R.dead} — the run was stopped; {R.recorded} record(s) were written before "
                    f"it, {len(R.dropped)} row(s) that ended after it were NOT recorded ({len(reds_)} of them red: "
                    f"{' '.join(d_['suite'] for d_ in reds_[:8])}) — the abort record lists them; on a live display: "

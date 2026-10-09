@@ -484,6 +484,21 @@ def main(source, build):
     check(len(solo_) == 3 and all(c["tier"] == "solo" and "chain_face_target" in c["cmd"] for c in solo_)
           and out.index("dropped reds' solos") < out.index("GATE VERDICT"),
           "...and re-runs the dropped red as a SOLO, 3x, tier solo, before the verdict (#9)")
+    # round 2, C: the dropped reds' solos whose drain times out write the phase record and run with the fallback
+    real_hold = g.gate_runlog._vram().hold_card
+
+    def timed_out_hold(label, log=None, wait=None):
+        vt_mod.LAST_DRAIN_TIMEOUT = {"label": label, "waitS": 1.0, "why": "test", "holders": ["token.00 HELD by x"]}
+        return [], {k: v for k, v in os.environ.items() if k != "JAH_VRAM_HELD"}
+    vt_mod.hold_card = timed_out_hold
+    calls.clear()
+    code, out = gs_main(files + ["--resume"])
+    vt_mod.hold_card = real_hold
+    solo_ = [c for c in calls if c.get("retry")]
+    dtr = [r for r in records() if r.get("kind") == "drain-timeout" and r.get("tier") == "solo"]
+    check(len(solo_) == 3 and all(c.get("fallback") == "drain-timeout" for c in solo_) and dtr
+          and dtr[-1].get("fallback") == "drain-timeout",
+          "the dropped reds' solos on a drain timeout: a drain-timeout record and `fallback` on every run (round 2, C/D)")
     calls.clear()
     code, out = gs_main(files + ["--run", "--targets-only", "--resume"])
     solo_ = [c for c in calls if c.get("retry")]
@@ -549,7 +564,7 @@ def main(source, build):
     tc = [r for r in records() if r["suite"] == "time.card"]
     check(tc and all(r.get("fallback") == "drain-timeout" for r in tc),
           "every record of the phase whose drain timed out carries `fallback: drain-timeout` (F2; not a measurement)")
-    check(rc == 0 and len(dt) == 1 and dt[0]["suite"] == "@drain-timeout" and any("blocker" in h and " for " in h
+    check(rc == 0 and len(dt) == 1 and dt[0]["suite"] == "@drain-timeout" and dt[0].get("fallback") == "drain-timeout" and any("blocker" in h and " for " in h
                                                                                 for h in dt[0].get("holders", []))
           and "HELD by" in buf.getvalue(),
           "a drain past JAH_VRAM_PHASE_WAIT prints the holders with their age and writes a `kind: drain-timeout` "
@@ -590,6 +605,17 @@ def main(source, build):
     check(pa.returncode == 75 and "gate slot was not free" in pa.stderr and pb_.returncode == 0
           and "queued at position 1" in pb_.stderr,
           "`admit all` takes the slot like every whole-card hold: NOADMIT past its bound behind a gate, else it waits")
+    # ...and INSIDE a gate (its rows inherit the gate's live pid) it never queues behind its own gate (round 2, E)
+    gh = subprocess.Popen([sys.executable, vt, "gate", "--label", "GE", "--", "sleep", "5"],
+                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    time.sleep(0.8)
+    t0 = time.monotonic()
+    pi = subprocess.run([sys.executable, vt, "admit", "all", "--timing", "--", "true"], capture_output=True, text=True,
+                        env=dict(os.environ, JAH_VRAM_WAIT="30", JAH_GATE_SLOT_HELD=str(gh.pid)))
+    dt_in = time.monotonic() - t0
+    gh.wait()
+    check(pi.returncode == 0 and "queued" not in pi.stderr and dt_in < 4,
+          "`admit all` inside a gate takes the card at once, never queueing behind its own gate (%.1f s)" % dt_in)
     env_x = {k: v for k, v in os.environ.items() if k != "JAH_KERNEL_JOURNAL"}
     t0 = time.monotonic()
     p_ = subprocess.run([sys.executable, vt, "admit", "1", "--", "true"], env=env_x, capture_output=True, text=True)

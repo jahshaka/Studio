@@ -2038,6 +2038,19 @@ def main():
             sys.exit(5)
     slot, owed = [], []
 
+    def solo_card(label):
+        """A solo batch's whole card (hold_card: the slot first outside a gate), and on a drain timeout the
+        phase record + the tool's fallback (round 2, C — both solo paths): (fds, env, fallback|None)."""
+        card_, env_ = gate_runlog._vram().hold_card(label, log=sys.stdout)
+        drained_ = gate_runlog._vram().LAST_DRAIN_TIMEOUT
+        if not drained_ or env_.get("JAH_VRAM_HELD"):
+            return card_, env_, None
+        gate_runlog.phase_record("drain-timeout", a.tier or "solo", lane, log_range, gate_runlog.tree_shas(),
+                                 fallback="drain-timeout", **drained_)
+        # every admission of a run takes the card itself; the TOOL set it — a fallback, never an override (F2)
+        env_["JAH_VRAM_ALL"] = "1"
+        return card_, env_, "drain-timeout"
+
     def gate(what):
         """THE GATE SLOT (P1), once per gate run: queue (FIFO, no bound, the position printed), then hold
         it in THIS process to its end (the ctest trees below die with it: gate_runlog F2)."""
@@ -2081,7 +2094,7 @@ def main():
         if not owed:
             return 0
         print(f"\n=== the dropped reds' solos: {len(owed)} row(s), 3x each, the whole card held once ===")
-        card, env_ = gate_runlog._vram().hold_card(f"{lane} dropped-red solos", log=sys.stdout)
+        card, env_, fb_ = solo_card(f"{lane} dropped-red solos")
         rc_ = 0
         try:
             for s_ in owed:
@@ -2089,7 +2102,7 @@ def main():
                     rc_ = lost(gate_runlog.run_ctest(
                         f"ctest -j1 --timeout 900 --output-on-failure --no-tests=error -R '^{re.escape(s_)}$'",
                         build, "solo", lane, 1, reasons={s_: "solo: dropped red by an abort"}, rng=log_range,
-                        retry=True, env=env_, labels=labels, whole_card=False)) or rc_
+                        retry=True, env=env_, labels=labels, whole_card=False, fallback=fb_)) or rc_
         finally:
             gate_runlog._vram().release(card)
         return rc_
@@ -2149,17 +2162,7 @@ def main():
         # (GATE-COST-2): the batch queues FIFO with the gates before it drains (hold_card does it), so its drain
         # never starves the gate in the slot into NOADMIT.
         gate_runlog.on_signals()
-        card, env = gate_runlog._vram().hold_card(f"{lane} --solo {' '.join(a.solo)[:80]}", log=sys.stdout)
-        drained = gate_runlog._vram().LAST_DRAIN_TIMEOUT
-        if drained:
-            gate_runlog.phase_record("drain-timeout", a.tier or "solo", lane, log_range, gate_runlog.tree_shas(),
-                                     **drained)
-        fallback = None
-        if drained and not env.get("JAH_VRAM_HELD"):
-            # no hold (the drain timed out): every admission of a run takes the card. The TOOL set it: the runs'
-            # records carry `fallback: drain-timeout`, never an override (F2)
-            env["JAH_VRAM_ALL"] = "1"
-            fallback = "drain-timeout"
+        card, env, fallback = solo_card(f"{lane} --solo {' '.join(a.solo)[:80]}")
         try:
             for s in a.solo:
                 for _ in range(a.times):
