@@ -2,6 +2,7 @@
 """gate-scope — the SCOPED tier: what a change CAN REACH, and why (MODULAR-GATE-1).
 
     scripts/gate-scope.sh <base>..<tip> [--build build-linux] [--run [--no-targets | --targets-only]] [--json] [-j N]
+    scripts/gate-scope.sh <base>..<tip> --resume [...]          # --run, only the rows with no record at the tip
     scripts/gate-scope.sh --files path [path ...]
     scripts/gate-scope.sh --solo <suite> [...] [--times 3]     # the flake protocol, logged
     scripts/gate-scope.sh --record-times                       # gate-times.txt from the run log
@@ -12,7 +13,15 @@ the diff, never guessed — and the full tiers stay where the process needs them
 close, a fork pin bump, nightly, the phase's push: PHOTON_ATOM_CONTRACT §7b). The tool turns a
 git range into an exact `ctest -R '^(a|b|c)$'` selection with one rationale line per touched
 path and one reason per selected row, estimates the wall time from THE RUN LOG (T8), and
-`--run` writes every row's verdict into the run log (scripts/gate_runlog.py).
+`--run` writes every row's verdict into the run log (scripts/gate_runlog.py) as the row ends.
+
+A RUN IS A GATE, AND THE BOX RUNS ONE AT A TIME (GATE-COST-1, SPECS/audits/GATE_COST_2026-10-09.md):
+`--run` (scoped, a fallback, `--fork-tier`, `--joint`, `--targets-only`) queues for THE GATE SLOT
+(scripts/vram_tokens.py; FIFO, no bound, its position printed) and holds it to its last process;
+`--solo` never takes it. Inside it: the `hygiene` rows first, as their own CPU phase (P8); the GPU
+rows; a row that got no admission re-queued at the end (P5); the timing rows serial on ONE whole-card
+hold (P2); the verdict; then the target rows on the same display and card (P9). `--resume` runs only
+the rows with no record at the tip (P6); a gate whose display dies stops and says so (P6).
 
 THE THREE SELECTORS (the Selection class below has the detail):
   1. REBUILT ARTEFACTS — a compiled row runs iff the build graph (build.ninja + ninja's deps
@@ -303,8 +312,8 @@ SCOPE_EXCLUDED_LABELS = {"quiet-box", "shadercache-attack"}
 #
 # So the exclusion is from PASS/FAIL, never from the run. gate-scope runs the
 # gating suites (their exit code is the gate's) and prints the verdict; the target
-# suites are THEIR OWN STEP after it (GATE-SPEED-1: `--run` starts `--targets-only`
-# detached, run-log tier `target`), whose result is reported and discarded. The MERGE
+# suites are THEIR OWN STEP after it (GATE-SPEED-1; GATE-COST-1 P9: after the verdict line,
+# inside the gate, run-log tier `target`), whose result is reported and discarded. The MERGE
 # and PUSH tiers drop them with -LE, which is the only shape ctest offers for
 # "do not let these decide the tier"; their values are read from a lane's scoped
 # run, where they are printed.
@@ -1937,64 +1946,21 @@ def joint(range_a, range_b, build, jobs):
     return out
 
 
-TARGET_PIDFILE = "gate-targets.pid"
-
-
-def _launch_target_step(args, build):
-    """Start `args` in its OWN SESSION (so its pid is its process group), output in
-    <build>/gate-targets.log, the pid in <build>/gate-targets.pid. Returns the pid."""
-    log = os.path.join(build, "gate-targets.log")
-    with open(log, "w") as out:
-        p = subprocess.Popen(args, cwd=ROOT, stdout=out, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL,
-                             start_new_session=True)
-    with open(os.path.join(build, TARGET_PIDFILE), "w") as f:
-        f.write(f"{p.pid}\n")
-    return p.pid
-
-
-def start_target_step(a, build):
-    """THE TARGET STEP, DETACHED (GATE-SPEED-1 item 2): the same range with `--targets-only`, in its
-    own session, its output in <build>/gate-targets.log and its pid (= its process group) in
-    <build>/gate-targets.pid. The gate's exit does not wait for it, and nothing that judges a gate
-    reads it (ci_gate_check needs no target record). It is stopped by GROUP — `kill -- -<pid>` takes
-    the ctest and every suite under it — and the next `--run` / `--solo` on this build dir stops it by
-    itself before it starts (stop_target_step): the targets are a report and can be re-run."""
-    args = [sys.executable, os.path.abspath(__file__)] + (["--files"] + list(a.files) if a.files else [a.range]) \
-        + ["--build", build, "--run", "--targets-only"]
-    if a.lane: args += ["--lane", a.lane]
-    pid = _launch_target_step(args, build)
-    print(f"=== target tests: started as their own step (process group {pid}, run-log tier `target`), NOT waited for;\n"
-          f"    log {os.path.join(build, 'gate-targets.log')} — stop it with `kill -- -{pid}`; the next --run or "
-          f"--solo here stops it first")
-
-
-def stop_target_step(build):
-    """Stop a LIVE target step of this build dir by its process group, before a gate or a retry runs
-    on the tree (the lead's merge read, F2). Only a group whose leader is a target step (`gate-scope`
-    and `--targets-only` in its argv) is touched — a pid the system reused is left alone. Returns the
-    pid it stopped, or None."""
-    path = os.path.join(build, TARGET_PIDFILE)
-    try:
-        pid = int(open(path).read().split()[0])
-    except (OSError, ValueError, IndexError):
-        return None
-    try:
-        argv = open(f"/proc/{pid}/cmdline", "rb").read().split(b"\0")
-    except OSError:
-        argv = []
-    stopped = None
-    if any(b"gate-scope" in x for x in argv) and b"--targets-only" in argv:
-        import signal
-        try:
-            os.killpg(pid, signal.SIGTERM)
-            stopped = pid
-            print(f"gate-scope: stopped the live target step of {build} (process group {pid}) before this run — "
-                  f"the targets are a report; re-run them with --targets-only")
-        except OSError:
-            pass
-    try: os.unlink(path)
-    except OSError: pass
-    return stopped
+def run_target_step(target_cmd, build, lane, log_range, labels, reasons, exclude=None):
+    """THE TARGET STEP (GATE-COST-1 P9; TARGET-STEP-DISPLAY-1, ledger §1851): the selection's target
+    rows, -j1, run-log tier `target`, AFTER the gating verdict and INSIDE the gate — on the gate's own
+    display, under its slot, holding the whole card once (they used to run DETACHED after the gate's
+    exit: the lane killed its Xvfb and the step carried on against a dead display, 159 "Malformed
+    resolution string" records). Reported, never gating: its exit code is printed and dropped. A
+    display that dies under it stops it like any run (gate_runlog's guard). Returns nothing."""
+    print("\n=== target tests (label %s): reported, not gating — the gate's display, the whole card ==="
+          % "/".join(sorted(TARGET_LABELS)))
+    trc = gate_runlog.run_ctest(target_cmd, build, "target", lane, 1, reasons=reasons, rng=log_range,
+                                labels=labels, gating=lambda n: False, whole_card=True, exclude=exclude)
+    if trc == gate_runlog.DISPLAY_LOST or trc < 0 or trc > 128:
+        print("=== target tests STOPPED (the display died, or their ctest was killed) — NOT part of any gate's verdict ===")
+    else:
+        print("=== target tests exited %d — NOT part of any gate's verdict ===" % trc)
 
 
 def main():
@@ -2032,6 +1998,9 @@ def main():
                     help="print the NIGHTLY tier's ctest command (every `nightly` row, -j1) and exit")
     ap.add_argument("--gate-jobs", action="store_true",
                     help="print GATE_JOBS, the gate's parallel width (rc-gate.sh reads it), and exit")
+    ap.add_argument("--resume", action="store_true",
+                    help="--run, but only the rows with no record at this tip (a gate that was killed or lost its "
+                         "display: the rows it finished are in the run log already)")
     tg = ap.add_mutually_exclusive_group()
     tg.add_argument("--no-targets", action="store_true",
                     help="with --run: do not start the target tests' step after the gating verdict")
@@ -2039,6 +2008,8 @@ def main():
                     help="with --run: run ONLY the selection's target tests (-j1, run-log tier `target`), in the "
                          "foreground; reported, exit 0 whatever they read — the step --run starts by itself")
     a = ap.parse_args()
+    if a.resume:
+        a.run = True
     if a.gate_jobs:
         print(GATE_JOBS); return
     if a.record_times:
@@ -2059,8 +2030,39 @@ def main():
         if bad:
             sys.stderr.write("gate-scope: " + bad + "\n")
             sys.exit(4)
-        if not a.targets_only:
-            stop_target_step(build)
+    slot = []
+
+    def gate(what):
+        """THE GATE SLOT (P1), once per gate run: queue (FIFO, no bound, the position printed), then hold
+        it in THIS process to its end (the ctest trees below die with it: gate_runlog F2)."""
+        if not slot:
+            gate_runlog.on_signals()
+            fd = gate_runlog._vram().gate_slot(f"{a.lane or os.path.basename(gate_runlog.ROOT)} {what}", log=sys.stdout)
+            slot.append(fd)
+        return None
+
+    def lost(rc):
+        """A run whose display died (P6) — or whose ctest was KILLED (a signal; 128 + it through a shell:
+        F4) — ends the gate here, with its verdict line: no timing phase, no target step after it."""
+        if rc == gate_runlog.DISPLAY_LOST:
+            print("\n=== GATE VERDICT: ABORTED — the display died; nothing after it ran and no row was recorded "
+                  "against it; re-run with --resume on a live display ===")
+            sys.exit(gate_runlog.DISPLAY_LOST)
+        if rc < 0 or rc > 128:
+            sig = -rc if rc < 0 else rc - 128
+            print(f"\n=== GATE ABORTED: ctest was killed (signal {sig}); the rows it finished are recorded ===\n"
+                  f"=== GATE VERDICT: ABORTED — nothing after it ran; re-run with --resume ===")
+            sys.exit(128 + sig)
+        return rc
+
+    def done_rows():
+        """--resume: the rows with a record at this tip (not run again)."""
+        if not a.resume:
+            return None
+        got = gate_runlog.recorded_rows()
+        print(f"gate-scope --resume: {len(got)} row(s) already have a record at this tip")
+        return got
+
     if a.joint:
         J = joint(a.joint[0], a.joint[1], build, a.jobs)
         if a.json:
@@ -2077,10 +2079,13 @@ def main():
         if a.run and (J["command"] or J["serial_command"]):
             lane = a.lane or "joint"
             why = {n: ("joint: both" if n in J["joint"] else "joint: union") for n in J["union"]}
-            rc = gate_runlog.run_ctest(J["command"], build, a.tier or "joint", lane, a.jobs,
-                                       reasons=why) if J["command"] else 0
+            gate("joint"); skip = done_rows()
+            labels = {n: t["labels"] for n, t in load_inventory(build).items()}
+            rc = lost(gate_runlog.run_ctest(J["command"], build, a.tier or "joint", lane, a.jobs, reasons=why,
+                                            labels=labels, exclude=skip)) if J["command"] else 0
             if J["serial_command"]:
-                rc = gate_runlog.run_ctest(J["serial_command"], build, a.tier or "joint", lane, 1, reasons=why) or rc
+                rc = lost(gate_runlog.run_ctest(J["serial_command"], build, a.tier or "joint", lane, 1, reasons=why,
+                                                labels=labels, exclude=skip, whole_card=True)) or rc
             gate_runlog.trend_at_gate_end()
             sys.exit(rc)
         return
@@ -2106,15 +2111,24 @@ def main():
                 print(f"gate-scope --solo: {s} is NOT in the contention class ({gate_runlog.contention_file()}): "
                       f"the retries are logged, and its red still needs a recorded verdict "
                       f"(scripts/ci-gate-check.sh <range> --verdict \"{s}=<text>\")")
-        for s in a.solo:
-            for _ in range(a.times):
-                rx = "^" + re.escape(s) + "$"
-                # SOLO ON THE CARD TOO (G1+G2): every admission of the retry takes all the VRAM
-                # tokens, so no sibling lane's GPU row runs beside it
-                r = gate_runlog.run_ctest(f"ctest -j1 --timeout 900 --output-on-failure --no-tests=error -R '{rx}'",
-                                          build, a.tier or "scoped", lane, 1, reasons={s: "solo retry"},
-                                          rng=log_range, retry=True, env=dict(os.environ, JAH_VRAM_ALL="1"))
-                rc = rc or r
+        # SOLO ON THE CARD, ONE DRAIN PER BATCH (G1+G2; GATE-COST-1 P2): the whole batch holds every VRAM
+        # token once and each run's admissions are nested on it, so no sibling lane's GPU row runs beside
+        # any of them — and the card drains once, not once per run. A solo batch never takes the gate slot.
+        gate_runlog.on_signals()
+        card, env = gate_runlog._vram().hold_card(f"{lane} --solo {' '.join(a.solo)[:80]}", log=sys.stdout)
+        if not card and not env.get("JAH_VRAM_HELD"):
+            env["JAH_VRAM_ALL"] = "1"      # no hold (the drain timed out): every admission of a run takes the card
+        try:
+            for s in a.solo:
+                for _ in range(a.times):
+                    rx = "^" + re.escape(s) + "$"
+                    r = lost(gate_runlog.run_ctest(
+                        f"ctest -j1 --timeout 900 --output-on-failure --no-tests=error -R '{rx}'",
+                        build, a.tier or "scoped", lane, 1, reasons={s: "solo retry"},
+                        rng=log_range, retry=True, env=env, whole_card=False))
+                    rc = rc or r
+        finally:
+            gate_runlog._vram().release(card)
         sys.exit(rc)
     if not (a.range or a.files):
         ap.error("give a range (base..tip) or --files")
@@ -2195,11 +2209,12 @@ def main():
     def run_both(tier_name):
         """The MERGE tier, both phases (parallel, then the timing rows serial); the worse exit code."""
         labels = {n: t["labels"] for n, t in inv.items()}
-        r1 = gate_runlog.run_ctest(merge_tier(a.jobs), build, tier_name, lane, a.jobs, reasons={}, rng=log_range,
-                                   labels=labels)
-        print("\n=== the timing phase (serial, after the parallel phase) ===")
-        r2 = gate_runlog.run_ctest(merge_tier_serial(), build, tier_name, lane, 1, reasons={}, rng=log_range,
-                                   labels=labels)
+        gate(tier_name); skip = done_rows()
+        r1 = lost(gate_runlog.run_ctest(merge_tier(a.jobs), build, tier_name, lane, a.jobs, reasons={}, rng=log_range,
+                                        labels=labels, exclude=skip))
+        print("\n=== the timing phase (serial, after the parallel phase; the whole card held once) ===")
+        r2 = lost(gate_runlog.run_ctest(merge_tier_serial(), build, tier_name, lane, 1, reasons={}, rng=log_range,
+                                        labels=labels, exclude=skip, whole_card=True))
         gate_runlog.trend_at_gate_end()
         return r1 or r2
 
@@ -2271,10 +2286,7 @@ def main():
         if not target_cmd:
             print("\n=== target tests: none selected ==="); return
         labels = {n: t["labels"] for n, t in inv.items()}
-        print("\n=== target tests (label %s): reported, not gating ===" % "/".join(sorted(TARGET_LABELS)))
-        trc = gate_runlog.run_ctest(target_cmd, build, "target", lane, 1, reasons=selected_targets,
-                                    rng=log_range, labels=labels, gating=lambda n: False)
-        print("=== target tests exited %d — NOT part of any gate's verdict ===" % trc)
+        run_target_step(target_cmd, build, lane, log_range, labels, selected_targets, exclude=(gate("targets"), done_rows())[1])
         gate_runlog.trend_at_gate_end()
         return
     if a.run:
@@ -2283,25 +2295,35 @@ def main():
         for r in subsets:
             for arm in subsets[r]: reasons[f"{r}::{arm}"] = S.arms[r][arm]
         env = dict(os.environ, JAH_POOL_ARMS=pool_env) if pool_env else None
-        rc = gate_runlog.run_ctest(cmd.split(" ", 1)[1] if pool_env else cmd, build, a.tier or "scoped", lane,
-                                   a.jobs, reasons=reasons, rng=log_range, labels=labels, env=env) if cmd else 0
+        gate(a.tier or "scoped"); skip = done_rows()
+        rc = lost(gate_runlog.run_ctest(cmd.split(" ", 1)[1] if pool_env else cmd, build, a.tier or "scoped", lane,
+                                        a.jobs, reasons=reasons, rng=log_range, labels=labels, env=env,
+                                        exclude=skip)) if cmd else 0
         if timing_cmd:
-            print("\n=== the timing phase: %d row(s), serial, the GPU theirs ===" % len(timing))
-            rc = gate_runlog.run_ctest(timing_cmd, build, a.tier or "scoped", lane, 1, reasons=reasons,
-                                       rng=log_range, labels=labels) or rc
-        # THE VERDICT IS THE GATING PHASES' (GATE-SPEED-1 item 2): printed and returned here, before
-        # any target runs. The targets used to run inline after this point, at -j1, and the gate's
-        # exit waited for them (7-13 min of every engine lane's gate, the gate-speed audit's S1).
+            print("\n=== the timing phase: %d row(s), serial, the whole card held once ===" % len(timing))
+            rc = lost(gate_runlog.run_ctest(timing_cmd, build, a.tier or "scoped", lane, 1, reasons=reasons,
+                                            rng=log_range, labels=labels, exclude=skip, whole_card=True)) or rc
+        # THE VERDICT IS THE GATING PHASES' (GATE-SPEED-1 item 2): printed, and every gating record
+        # written, before any target runs; the exit code is this one whatever the targets read. THE
+        # TARGETS RUN AFTER IT, INSIDE THE GATE (GATE-COST-1 P9): on the gate's display, under its slot,
+        # on one whole-card hold — the lane reads its verdict from the line below, not from the exit.
         print("\n=== GATE VERDICT: %s (exit %d) — the gating phases only ===" % ("GREEN" if rc == 0 else "RED", rc))
-        gate_runlog.trend_at_gate_end()
+        sys.stdout.flush()
         if target_cmd and not a.no_targets:
-            start_target_step(a, build)
+            run_target_step(target_cmd, build, lane, log_range, labels, selected_targets, exclude=skip)
+        gate_runlog.trend_at_gate_end()
         sys.exit(rc)
 
 
 if __name__ == "__main__":
     try:
         main()
+    except gate_runlog.GateSignal as e:
+        # F2: a gate told to stop — every run below has stopped its ctest tree and released its card on the
+        # way here; the slot goes with this process
+        print(f"\n=== GATE ABORTED: signal {e.sig} — the ctest tree was stopped, the slot and the card released ===",
+              flush=True)
+        sys.exit(128 + e.sig)
     except gate_graph.GraphError as e:
         # H1: an unreadable graph is a refusal, never an empty (green) selection
         sys.stderr.write(f"gate-scope: REFUSED — {e}. Install binutils (nm) or fix the build dir; "

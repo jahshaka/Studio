@@ -8,13 +8,17 @@
 # failing an allocation. The command is EXEC'D IN PLACE with the token fds inherited: the pid
 # ctest started is the suite, and the tokens are freed when it (and everything it spawned) exits
 # for any reason. A wait past JAH_VRAM_WAIT (900 s) exits 75 and never runs the command.
-# `scripts/gpu-admit.sh status` lists the holders. The implementation is scripts/vram_tokens.py
+# `scripts/gpu-admit.sh status` lists the holders and THE GATE SLOT's holder and queue (GATE-COST-1 P1: one gate
+# at a time, box-wide; `gpu-admit.sh gate [--label <text>] -- <command>` runs a whole gate under the slot —
+# queued FIFO with no bound, the command exec'd holding it; gate-scope.sh --run and gate_runlog.py run take it
+# themselves). The implementation is scripts/vram_tokens.py
 # (run_pool.py imports the same code to take a pool's tokens once per app process).
 # THE DESKTOP ROUTE BY DEFAULT (VR-SETTING-1): the app's Start in VR preference is ON by default, so
 # every run admitted here gets JAHSHAKA_VR=0 unless the caller set JAHSHAKA_VR itself (empty included:
 # `JAHSHAKA_VR=` lets the preference decide). A VR run passes `--vr`, which wins over the environment.
 export JAHSHAKA_VR="${JAHSHAKA_VR-0}"
 here="$(cd "$(dirname "$0")" && pwd)"
-[ "$#" -gt 0 ] || { echo "usage: gpu-admit.sh <tokens> [--label <text>] -- <command> [args...] | status" >&2; exit 64; }
+[ "$#" -gt 0 ] || { echo "usage: gpu-admit.sh <tokens> [--label <text>] -- <command> [args...] | status | gate [--label <text>] -- <command>" >&2; exit 64; }
 if [ "$1" = status ]; then exec python3 "$here/vram_tokens.py" status; fi
+if [ "$1" = gate ]; then shift; exec python3 "$here/vram_tokens.py" gate "$@"; fi
 exec python3 "$here/vram_tokens.py" admit "$@"
