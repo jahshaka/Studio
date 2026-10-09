@@ -915,7 +915,10 @@ def run_ctest(cmd, cwd, tier, lane, jobs, reasons=None, gating=None, rng=None, r
             bool(rows) and all(TIMING_LABEL in (labels or {}).get(r, ()) for r in rows))
     card = []
     if whole_card and not (env or os.environ).get("JAH_VRAM_HELD"):
-        card, env = _vram().hold_card(f"{lane} {tier} phase", log=sys.stdout)
+        card, held_env = _vram().hold_card(f"{lane} {tier} phase", log=sys.stdout)
+        if card:
+            # THE CALLER'S ENVIRONMENT OVER THE HELD COPY (F5): JAH_POOL_ARMS and the rest survive the hold
+            env = dict(held_env, **(env or {}), JAH_VRAM_HELD=held_env["JAH_VRAM_HELD"])
     phases = [(cmd, None)]
     if rows is not None:
         skip = [r for r in rows if r in exclude]
