@@ -64,8 +64,9 @@ THE CONTRACT
     tickets (<dir>/gate-queue/<seq>.<pid>, each flocked by its waiter for exactly its life — a dead
     waiter's ticket is reaped by the next reader), the head of the queue IS the holder, and there is
     NO bound: a waiting gate prints `gate-slot: queued at position <p> behind <holder>` (again when the
-    position moves) and runs when its turn comes. The ticket fd is INHERITED by the gate's ctest, so
-    the slot is free when the last process of the gate is gone, not before. Small things never take
+    position moves) and runs when its turn comes. The ticket fd is the GATE PROCESS's (not its
+    ctest's): the gate's ctest tree dies with it (gate_runlog: PDEATHSIG, a reaper, its signal
+    handlers), so the slot is free the moment the gate is gone. (`gate` exec's its command with it.) Small things never take
     it: a single-row `--solo` batch, a lane's own hand run, a build, `admit`. A process already inside
     a gate (JAH_GATE_SLOT_HELD) never queues again. JAH_GATE_SLOT=0 turns the slot off.
   * THE WHOLE CARD ONCE PER PHASE (GATE-COST-1 P2; the audit's §3f: 278 per-row drains in 38 h,
@@ -364,7 +365,7 @@ def _take_ticket(label):
 
 def gate_slot(label="", log=sys.stderr):
     """Queue for THE GATE SLOT (FIFO, no bound) and return its fd once this gate is the head —
-    inheritable, so the gate's ctest holds it too; closing every copy gives it up. None when the
+    inheritable across an exec (the `gate` command), never handed to a ctest; closing it gives it up. None when the
     slot is off (JAH_GATE_SLOT=0) or this process is already inside a gate (JAH_GATE_SLOT_HELD)."""
     if os.environ.get("JAH_GATE_SLOT_HELD"):
         _say(log, "gate-slot: already held by this gate (pid %s) — %s" % (os.environ["JAH_GATE_SLOT_HELD"], label))

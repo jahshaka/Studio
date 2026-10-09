@@ -513,8 +513,8 @@ _VNOISE = re.compile(r"^(test \d+|UpdateCTestConfiguration .*|Constructing a lis
                      r"Checking test dependency graph(\.\.\.| end))\s*$")
 _PREAMBLE = re.compile(r"^(Test command: |Working Directory: |Environment variables: ?$|Environment variable "
                        r"modifications: ?$|Test timeout computed to be: )")
-_RESULT_ID = re.compile(r"^\s*\d+/\d+\s+Test\s+#(\d+):")
 _LISTED = re.compile(r"^\s*Test\s+#\d+:\s+(\S+)\s*$")
+_RESULT_ID = re.compile(r"^\s*\d+/\d+\s+Test\s+#(\d+):")
 TIMING_LABEL = "timing"      # gate-scope.py's: a row that measures (the serial phase)
 CPU_LABEL = "hygiene"        # P8: the lint and selector rows — their own CPU phase, first
 DISPLAY_LOST = 6             # the exit code of a run that stopped because its display died (P6)
@@ -605,19 +605,80 @@ def _descendants(pid):
 
 
 def _kill_tree(pid):
-    """SIGTERM the run's whole process tree (the shell, ctest, every row under it), SIGKILL what is
-    left 15 s later."""
+    """SIGTERM the run's whole process tree — ctest is its own process group (ctest itself dies of a
+    SIGTERM and ORPHANS its rows: measured), so the group and every descendant still parented to it —
+    and SIGKILL what is left 15 s later. The timer is NOT a daemon: a gate that is exiting waits for it
+    rather than leave the rows running (the merge read's worth-a-look 1)."""
     import signal
     procs = [pid] + _descendants(pid)
-    for p in procs:
-        try: os.kill(p, signal.SIGTERM)
-        except OSError: pass
 
-    def finish():
+    def hit(sig):
+        try: os.killpg(pid, sig)
+        except OSError: pass
         for p in procs:
-            try: os.kill(p, signal.SIGKILL)
+            try: os.kill(p, sig)
             except OSError: pass
-    t = threading.Timer(15.0, finish); t.daemon = True; t.start()
+    hit(signal.SIGTERM)
+    t = threading.Timer(15.0, hit, args=(signal.SIGKILL,)); t.daemon = False; t.start()
+    return t
+
+
+# THE ctest TREE DIES WITH ITS GATE (GATE-COST-1 F2, the merge read): a gate process that dies — oomd, a
+# kill, a timeout — used to leave its ctest running, unrecorded, and the lane's own --resume queued
+# behind the orphan. ctest starts in its OWN process group with PR_SET_PDEATHSIG = SIGTERM (it dies with
+# the gate), and a REAPER — a tiny detached process that outlives a SIGKILLed gate — kills the group
+# (SIGTERM, then SIGKILL 15 s later) the moment the gate's pid is gone, since ctest's SIGTERM orphans its
+# rows. A gate that is signalled (SIGTERM/SIGINT/SIGHUP: on_signals()) stops the tree itself and releases
+# its slot and tokens on the way out. Neither the slot nor the tokens are inherited by ctest: they are
+# the gate process's, so they are free the moment the gate is gone.
+_REAPER = r"""
+import os, sys, time, signal
+gate, grp = int(sys.argv[1]), int(sys.argv[2])
+def alive(pid):
+    try: os.kill(pid, 0); return True
+    except ProcessLookupError: return False
+    except PermissionError: return True
+def group():
+    try: os.killpg(grp, 0); return True
+    except OSError: return False
+while alive(gate) and group(): time.sleep(1.0)
+if group():
+    try: os.killpg(grp, signal.SIGTERM)
+    except OSError: pass
+    for _ in range(15):
+        time.sleep(1.0)
+        if not group(): break
+    try: os.killpg(grp, signal.SIGKILL)
+    except OSError: pass
+"""
+
+
+def _child_setup():
+    """In ctest's child, before exec: its own process group, and SIGTERM when the gate dies."""
+    os.setpgrp()
+    try:
+        import ctypes
+        ctypes.CDLL(None, use_errno=True).prctl(1, 15)      # PR_SET_PDEATHSIG, SIGTERM
+    except (OSError, AttributeError):
+        pass
+
+
+class GateSignal(BaseException):
+    """A gate was told to stop (SIGTERM/SIGINT/SIGHUP): the runs below stop their trees on the way out."""
+    def __init__(self, sig):
+        super().__init__(sig); self.sig = sig
+
+
+def on_signals():
+    """THE GATE'S OWN SIGNALS (F2): turn SIGTERM/SIGINT/SIGHUP into GateSignal, so every `finally` on the
+    way out runs — the phase stops its ctest tree, the run releases its tokens, the process its slot."""
+    import signal
+
+    def raise_(sig, _frame):
+        raise GateSignal(sig)
+    for sig in (signal.SIGTERM, signal.SIGINT, signal.SIGHUP):
+        try: signal.signal(sig, raise_)
+        except (OSError, ValueError): pass        # not the main thread (a test drives run_ctest from one)
 
 
 def recorded_rows(shas=None):
@@ -715,14 +776,31 @@ class _Run:
             recs.append(rec)
         return recs
 
-    def phase(self, cmd, cwd, env, final, fds=()):
+    def phase(self, cmd, cwd, env, final):
         """Run one ctest line; each row's records are appended as it ends. A row that never got its
         admission (P5: NOADMIT, or a pool whose every arm was) is HELD BACK unless `final`, and
         returned to be re-queued. Returns (rc, reds, held)."""
         vcmd, oof = _verbose(cmd)
-        p = subprocess.Popen(vcmd, cwd=cwd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                             text=True, bufsize=1, errors="replace", env=env, pass_fds=tuple(fds))
+        linux = sys.platform.startswith("linux")
+        # `exec`: the shell BECOMES ctest, so the group leader and the PDEATHSIG are ctest's own
+        p = subprocess.Popen("exec " + vcmd, cwd=cwd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                             text=True, bufsize=1, errors="replace", env=env,
+                             preexec_fn=_child_setup if linux else None, start_new_session=not linux)
+        reaper = subprocess.Popen([sys.executable, "-c", _REAPER, str(os.getpid()), str(p.pid)],
+                                  stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                                  start_new_session=True, close_fds=True)
         stop = threading.Event()
+        try:
+            return self._stream(p, oof, final, stop)
+        finally:
+            stop.set()
+            if p.poll() is None:                 # an exception or a signal on the way out: never an orphan
+                _kill_tree(p.pid)
+                try: p.wait(timeout=20)
+                except subprocess.TimeoutExpired: pass
+            reaper.poll()
+
+    def _stream(self, p, oof, final, stop):
 
         def watch():
             while not stop.wait(2.0):
@@ -791,12 +869,11 @@ class _Run:
             self.path = append_records(recs, self.tier, self.shas["studio"])
             self.recorded += len(recs)
         rc = p.wait()
-        stop.set()
         return rc, reds, held
 
 
 def run_ctest(cmd, cwd, tier, lane, jobs, reasons=None, gating=None, rng=None, retry=False,
-              labels=None, echo=True, env=None, exclude=None, fds=(), whole_card=None):
+              labels=None, echo=True, env=None, exclude=None, whole_card=None):
     """Run a ctest command line (a string, as gate-scope prints it), stream its output, and append
     each row's records (+ its arms') to the run log AS THE ROW ENDS. Returns ctest's exit code — 0
     when every row's last run passed — or DISPLAY_LOST when the display died (ABORTED says why).
@@ -805,8 +882,8 @@ def run_ctest(cmd, cwd, tier, lane, jobs, reasons=None, gating=None, rng=None, r
         run FIRST, as their own CPU phase, at the same -j, before any GPU row starts;
       * P5: a row that got no admission within its wait is re-queued at the end of the run (normal
         admission, after the other rows), up to requeue_times(); only its last try is recorded;
-      * P6: `exclude` = rows not to run (gate-scope --resume: those with a record at the tip);
-        `fds` = descriptors the run's processes inherit (the gate slot, a phase's tokens);
+      * P6: `exclude` = rows not to run (gate-scope --resume: those with a record at the tip); the
+        ctest tree dies with the gate (F2: _child_setup, the reaper, on_signals);
       * P2: `whole_card` — the run takes EVERY VRAM token once and its rows run nested on them (one
         drain for the phase, not one per row); None = when every row it selects is a `timing` row
         (the serial phase, however it was started)."""
@@ -839,7 +916,6 @@ def run_ctest(cmd, cwd, tier, lane, jobs, reasons=None, gating=None, rng=None, r
     card = []
     if whole_card and not (env or os.environ).get("JAH_VRAM_HELD"):
         card, env = _vram().hold_card(f"{lane} {tier} phase", log=sys.stdout)
-        fds = tuple(fds) + tuple(card)
     phases = [(cmd, None)]
     if rows is not None:
         skip = [r for r in rows if r in exclude]
@@ -860,7 +936,7 @@ def run_ctest(cmd, cwd, tier, lane, jobs, reasons=None, gating=None, rng=None, r
     try:
         for c, title in phases:
             if title: R.say(f"\n=== {title} ===")
-            prc, preds, pheld = R.phase(c, cwd, env, final=requeue_times() == 0, fds=fds)
+            prc, preds, pheld = R.phase(c, cwd, env, final=requeue_times() == 0)
             if R.dead: break
             reds += preds; held += pheld
             if prc and not preds and not pheld: rc = rc or prc       # ctest's own error, no red row
@@ -877,7 +953,7 @@ def run_ctest(cmd, cwd, tier, lane, jobs, reasons=None, gating=None, rng=None, r
             R.say(f"\n=== re-queued {len(held)} row(s) that got no admission (try {k + 1} of {n + 1}, normal "
                   f"admission, after the other rows): {' '.join(held[:12])}{' …' if len(held) > 12 else ''} ===")
             prc, preds, pheld = R.phase(f"{cmd} --tests-from-file {listfile('requeue%d' % k, held)}", cwd, env,
-                                        final=k == n, fds=fds)
+                                        final=k == n)
             if R.dead: break
             reds += preds; held = pheld
             if prc and not preds and not pheld: rc = rc or prc
@@ -1324,9 +1400,17 @@ def main():
         # alternation carries `|`, so it must reach the shell as ONE string); several = an argv
         line = cmd[0] if len(cmd) == 1 else shlex.join(cmd)
         # A `run` IS A GATE (GATE-COST-1 P1): one at a time, box-wide — it queues for the slot first
-        slot = _vram().gate_slot(f"{lane} {a.tier} (gate_runlog run)", log=sys.stdout)
-        rc = run_ctest(line, build, a.tier, lane, jobs, labels=inventory_labels(build),
-                       fds=(slot,) if slot is not None else ())
+        on_signals()
+        slot = None
+        try:
+            slot = _vram().gate_slot(f"{lane} {a.tier} (gate_runlog run)", log=sys.stdout)
+            rc = run_ctest(line, build, a.tier, lane, jobs, labels=inventory_labels(build))
+        except GateSignal as e:
+            print(f"\n=== GATE ABORTED: signal {e.sig} — the ctest tree was stopped, the slot and the card released ===")
+            rc = 128 + e.sig
+        finally:
+            if slot is not None:
+                os.close(slot)
         sys.exit(rc)
     if a.cmd == "import":
         import_log(a.log, a.tier, a.tip, a.lane, a.jobs); return
