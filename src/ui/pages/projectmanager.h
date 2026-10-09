@@ -274,6 +274,7 @@ private:
     int lastBuildDecodes = 0;
     int lastBuildSlices = 0;
     qint64 lastBuildMaxSliceMs = 0;   // the longest single slice: the build's worst UI-thread block
+    int lastBuildMaxSliceTiles = 0;   // the most tiles one slice built: the block's WORK, counted
 
     // THE GRID IS BUILT IN SLICES (D11-LIBRARY-SCALE): a desktop of 500
     // projects cost 600+ ms of tile widgets in ONE event-loop turn — inside a

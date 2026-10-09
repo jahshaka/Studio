@@ -817,6 +817,7 @@ void ProjectManager::populateDesktop()
     lastBuildDecodes = 0;   // the UI thread decodes nothing: the cache's pool does
     lastBuildSlices = 0;
     lastBuildMaxSliceMs = 0;
+    lastBuildMaxSliceTiles = 0;
     // The first slice now (what the desktop shows first), the rest a slice per turn.
     buildGridSlice(buildGeneration);
     checkForEmptyState();
@@ -842,6 +843,7 @@ void ProjectManager::buildGridSlice(int generation)
     }
     lastBuildMs += timer.elapsed();
     lastBuildMaxSliceMs = qMax(lastBuildMaxSliceMs, timer.elapsed());
+    lastBuildMaxSliceTiles = qMax(lastBuildMaxSliceTiles, n);
     ++lastBuildSlices;
     if (!pendingRows.isEmpty()) {
         QMetaObject::invokeMethod(this, [this, generation]() { buildGridSlice(generation); },
@@ -871,6 +873,10 @@ QVariantMap ProjectManager::gridStats() const
     stats["lastBuildDecodes"] = lastBuildDecodes;
     stats["lastBuildSlices"] = lastBuildSlices;
     stats["lastBuildMaxSliceMs"] = lastBuildMaxSliceMs;
+    // THE SLICE AS COUNTED WORK (TESTING-CLEANUP-2 item 6): the most tiles one turn built, and
+    // the bound the slicing promises — scale.library's bar, a fact about the code, not the box.
+    stats["lastBuildMaxSliceTiles"] = lastBuildMaxSliceTiles;
+    stats["sliceTiles"] = kGridSlice;
     stats["pendingTiles"] = int(pendingRows.size());
     stats["decodes"] = ItemGridWidget::thumbnailDecodeCount();
     stats["outOfStep"] = outOfStepEntries;
