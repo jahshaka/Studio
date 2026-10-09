@@ -38,6 +38,9 @@ def check(ok, what):
 def main(source, build):
     tool = os.path.join(source, "scripts", "ci-gate-check.sh")
     rows = ["api.contract", "app.startup_quiet", "photon.view"]
+    base = subprocess.run(["git", "rev-parse", "51e9f2c49"], cwd=source, capture_output=True, text=True).stdout.strip()
+    base_pin = subprocess.run(["git", "rev-parse", "51e9f2c49:irisgl"], cwd=source, capture_output=True,
+                              text=True).stdout.strip()
     tip = subprocess.run(["git", "rev-parse", "3756b2f18"], cwd=source, capture_output=True, text=True).stdout.strip()
     check(bool(tip), "the recorded tip 3756b2f18 is in this clone")
     if not tip: return 1
@@ -53,7 +56,11 @@ def main(source, build):
                    if kind == "nondeterminism" else {}),
                 "first_seen": {"tip": "0" * 9, "pin": "0" * 9, "run": "20261009T120000-000000000"},
                 "recheck": "2099-12-31", "found_by": "lane"}
-    fixtures = [entry("FIXTURE-1", rows), entry("FIXTURE-2", rows)]
+    fixtures = [entry("FIXTURE-1", rows), entry("FIXTURE-2", rows),
+                dict(entry("NOTREPRO-FIXTURE-1", ["photon.view"], "nondeterminism"), uses=1, suspects=["ci-check"],
+                     census={"other_ctests": 1}, first_seen={"tip": tip[:9], "pin": "0" * 9,
+                                                             "run": "20261009T120000-" + tip[:9]})]
+    fixtures[-1].pop("enrolled", None)
     listed = os.path.join(scratch, "defects-listed.json")
     unlisted = os.path.join(scratch, "defects.json")
     json.dump({"defects": fixtures + [entry("NONDET-FIXTURE-1", ["photon.view"], "nondeterminism")]}, open(listed, "w"))
@@ -93,7 +100,8 @@ def main(source, build):
     # (VERDICT-1's door: with solos after the red, a verdict clears it only at 3/3 — gate.verdict_door)
     put(rows[2:], "PASS", "2026-01-01T10:06:00", retry=True)
     put(rows[2:], "PASS", "2026-01-01T10:07:00", retry=True)
-    rc, out = run(RANGE, "--verdict", "photon.view=real:FIXTURE-1 fixed, the fixture's red, read by the test")
+    # (a PASS at the red's own sha proves no fix — F1; this red is NOT REPRODUCED by its 3/3: a single-use entry)
+    rc, out = run(RANGE, "--verdict", "photon.view=real:NOTREPRO-FIXTURE-1 the fixture's red, read by the test")
     check(rc == 0 and "recorded verdict" in out, "the same red with a recorded verdict -> accepted (%d)" % rc)
     vfiles = [f for f in os.listdir(os.environ["JAH_RUN_LOG_DIR"]) if "-verdict-" in f]
     vrec = [json.loads(l) for f in vfiles for l in open(os.path.join(os.environ["JAH_RUN_LOG_DIR"], f))]
@@ -113,7 +121,7 @@ def main(source, build):
     fresh(unlisted)
     put(rows[:1], "PASS", "2026-01-01T10:00:00")
     put(rows[1:], "FAIL", "2026-01-01T10:00:01")
-    put(rows[1:], "PASS", "2026-01-01T10:30:00")            # the fix's PASS at the tip (the checked real: token)
+    put(rows[1:], "FAIL", "2026-01-01T09:00:00", t=base, ig=base_pin, retry=True)   # the same red on the base: KNOWN
     rc, out = run(RANGE, "--verdict", "app.startup_quiet=real:FIXTURE-1 fixed first verdict", "--verdict",
                   "photon.view=real:FIXTURE-2 fixed second verdict")
     vrec = [json.loads(l) for f in os.listdir(os.environ["JAH_RUN_LOG_DIR"]) if "-verdict-" in f
@@ -124,7 +132,7 @@ def main(source, build):
     fresh(unlisted)
     put(rows[:1], "PASS", "2026-01-01T10:00:00")
     put(rows[1:], "FAIL", "2026-01-01T10:00:01")
-    put(rows[1:], "PASS", "2026-01-01T10:30:00")
+    put(rows[1:], "FAIL", "2026-01-01T09:00:00", t=base, ig=base_pin, retry=True)
     rc, out = run(RANGE, "--verdict", "app.startup_quiet=real:FIXTURE-1 fixed first verdict",
                   "photon.view=real:FIXTURE-2 fixed second verdict")
     check(rc == 0, "...and so does one --verdict with two pairs (%d)" % rc)

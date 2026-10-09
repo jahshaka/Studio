@@ -200,8 +200,13 @@ def masked(line):
     return re.sub(r"\d+(\.\d+)?", "#", (line or "").strip())
 
 
-def _real(m, row, reds, solos, defects, tip_recs, base_recs, tip_sha=None):
-    """`real:<ID>` checked: (ok, why, known)."""
+def _sha(r):
+    return (r.get("tip") or {}).get("studio")
+
+
+def _real(m, row, reds, solos, defects, tip_recs, base_recs, tip_sha=None, mode="merge"):
+    """`real:<ID>` checked: (ok, why, kind) — kind None | "known" (KNOWN RED) | "nondet" (cleared as nondeterminism:
+    a push / stage close re-asks it 3/3 at the candidate)."""
     did = m.group(1)
     e = (defects or {}).get(did)
     if e is None:
@@ -223,8 +228,15 @@ def _real(m, row, reds, solos, defects, tip_recs, base_recs, tip_sha=None):
             return True, f"real:{did} (nondeterminism, {len(solos)}/{len(solos)} solo PASS)", False
         return False, f"real:{did} is a nondeterminism entry: it clears only by 3/3 solo PASS after the red", False
     last = max(_when(r) for r in reds)
-    if any(r.get("kind") != "verdict" and r.get("verdict") == "PASS" and _when(r) > last for r in (tip_recs or [])):
-        return True, f"real:{did} fixed (a PASS of the row at the tip after the red)", False
+    red_shas = {_sha(r) for r in reds}
+    later = [r for r in (tip_recs or []) if r.get("kind") != "verdict" and r.get("verdict") == "PASS" and _when(r) > last]
+    # F1: THE FIX IS PROVED AT ANOTHER SHA — a PASS at the red's own sha is the same code passing once (nondeterminism:
+    # 3/3 solo, never "fixed")
+    if any(_sha(r) not in red_shas for r in later):
+        return True, f"real:{did} fixed (a PASS of the row at a later sha than the red)", False
+    if later:
+        return False, (f"real:{did}: the only PASS after the red is at the red's OWN sha — the same code passing once "
+                       f"proves no fix; a fix is a PASS at a later sha (or the red reproduced on the base)"), False
     # KNOWN RED: the SAME red on the base — the same verdict class and the same masked failLine (a lane that turns a
     # base FAIL into a CRASH, or another assertion, is not "known")
     lane_red = sorted(reds, key=_when)[-1]

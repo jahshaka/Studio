@@ -131,8 +131,9 @@ def vrec(text, ts):
 
 def case_verdict_door(E):
     T = "2026-10-09T%s:00+02:00"
-    red = rec("FAIL", T % "10:00")
-    fixpass = rec("PASS", T % "10:30")
+    RED_SHA, FIX_SHA = {"studio": "a" * 40}, {"studio": "f" * 40}
+    red = rec("FAIL", T % "10:00", tip=RED_SHA)
+    fixpass = rec("PASS", T % "10:30", tip=FIX_SHA)             # the fix: a PASS at a LATER sha than the red
     base_solo = [rec("FAIL", T % "09:00", retry=True)]
     # real:<id> — a REGISTERED fact, proved
     st, why = E.judge([red, vrec("real:NOT-REGISTERED-9 fixed", T % "11:00")])
@@ -144,8 +145,15 @@ def case_verdict_door(E):
     st, why = E.judge([red, vrec("real:VIEWS-XID-1 fixed in abc123", T % "11:00")])
     check(st == "red" and "naming a ticket clears nothing" in why,
           "real:<registered id> with no proof (no PASS at the tip, no red on the base) -> refused (%s)" % why[:90])
+    st, why = E.judge([red, rec("PASS", T % "10:30", tip=RED_SHA), vrec("real:VIEWS-XID-1", T % "11:00")])
+    check(st == "red" and "red's OWN sha" in why, "F1: real:<registered id> + a PASS at the red's OWN sha -> refused (the "
+          "same code passing once proves no fix) (%s)" % why[:80])
     st, why = E.judge([red, fixpass, vrec("real:VIEWS-XID-1", T % "11:00")])
-    check(st == "green", "real:<registered id> + its row PASS at the tip after the red -> green (%s: %s)" % (st, why[:70]))
+    check(st == "green", "real:<registered id> + its row PASS at a LATER sha than the red -> green (%s: %s)" % (st, why[:70]))
+    st, why = E.judge([rec("CRASH", T % "10:00", status="Exception: SegFault"), vrec("real:VIEWS-XID-1", T % "11:00")],
+                      base=[rec("CRASH", T % "09:00", retry=True, status="Exception: Child aborted")])
+    check(st == "red" and "not the SAME red" in why, "KNOWN RED with no failLine also needs the same status text "
+          "(SegFault vs abort) (%s)" % why[:80])
     st, why = E.judge([rec("FAIL", T % "10:00", failLine="FAIL: crash at frame 12"),
                        vrec("real:VIEWS-XID-1", T % "11:00")], base=[rec("CRASH", T % "09:00", retry=True)])
     check(st == "red" and "not the SAME red" in why, "KNOWN RED needs the SAME verdict class on the base: a base CRASH "
@@ -381,7 +389,7 @@ def case_contention_shape(E):
     E.fresh()
     E.put(ROWS[:2], "PASS", "2026-01-01T10:00:00")
     E.put(ROWS[2:], "FAIL", "2026-01-01T10:00:01")
-    E.put(ROWS[2:], "PASS", "2026-01-01T10:30:00")
+    E.put(ROWS[2:], "FAIL", "2026-01-01T09:00:00", tip=E.git("rev-parse", "51e9f2c49"), retry=True)   # KNOWN on the base
     good = defect("GOOD-1", ["photon.view"])
     q = lambda: E.rl.defects_quarantine_dir()
     cases = [("missing `%s`" % m, m, {k: v for k, v in defect("SHAPE-1", ["photon.view"]).items() if k != m})
