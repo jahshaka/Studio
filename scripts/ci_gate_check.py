@@ -91,6 +91,34 @@ def records_by_tip(pins):
 
 
 
+def lane_records(lanes, skip):
+    """VERDICT-1 U4 — A REBASE CARRIES ITS OPEN REDS: {tip: {(suite, arm): [records]}} of every gating
+    record of a lane named in `lanes` (`lane` or BATCH-GATE-1's `lanes` list — both shapes) at ANY tip
+    not in `skip`, ancestor or not, with every verdict record at those tips. Forward only: run records
+    of schema >= 2 (written since this rule landed) — the historic cases are gate-report.py --carried."""
+    out, verdicts = {}, {}
+    d = gate_runlog.log_dir()
+    if not lanes or not os.path.isdir(d): return out
+    for f in sorted(os.listdir(d)):
+        if not f.endswith(".jsonl"): continue
+        for line in open(os.path.join(d, f), errors="replace"):
+            try: r = json.loads(line)
+            except ValueError: continue
+            t = r.get("tip") or {}
+            sha = t.get("studio")
+            if not sha or sha in skip or t.get("studio_dirty") or t.get("irisgl_dirty"): continue
+            if r.get("kind") == "verdict":
+                verdicts.setdefault(sha, []).append(r); continue
+            if (r.get("schema") or 1) < 2 or r.get("gating") is False or r.get("tier") == "target": continue
+            if not (gate_runlog.record_lanes(r) & lanes): continue
+            out.setdefault(sha, {}).setdefault((r.get("suite"), r.get("arm")), []).append(r)
+    for sha, recs in out.items():
+        for v in verdicts.get(sha, []):
+            k = (v.get("suite"), v.get("arm"))
+            if k in recs: recs[k].append(v)
+    return out
+
+
 def _when(r):
     """A record's time, comparable across the log's two spellings (with and without an offset)."""
     ts = r.get("ts") or ""
@@ -320,8 +348,28 @@ def check(rng, build, gs=None, verdicts=None):
                            f"it; answer it there): {cwhy}")
                     break
             out[k] = (st, why, src)
+        # U4: THE LANE'S OTHER TIPS (a rebase, a superseded fix round): an open red there that the
+        # current tip never re-ran (a later record of the same row+arm at the tip that passes) and no
+        # accepted verdict answered is carried to this tip
+        carried.clear()
+        lanes = set()
+        for c in [tip_sha] + earlier:
+            for rs in got.get(c, {}).values():
+                for r in rs:
+                    if r.get("kind") != "verdict": lanes |= gate_runlog.record_lanes(r)
+        for t, recs in lane_records(lanes, {tip_sha, *earlier}).items():
+            for k, rs in recs.items():
+                cst, cwhy = judge(k, rs, contention)
+                if cst != "red": continue
+                last = max(_when(r) for r in rs if r.get("kind") != "verdict" and r.get("verdict") != "PASS")
+                at_tip = got[tip_sha].get(k, [])
+                later = [r for r in at_tip if r.get("kind") != "verdict" and r.get("verdict") not in NEVER_RAN
+                         and _when(r) > last]
+                if later and judge(k, at_tip, contention)[0] == "green": continue
+                carried[(t, k)] = cwhy
         return out
 
+    carried = {}
     judged = judge_all()
     if verdicts:
         pairs, unknown = {}, []
@@ -330,12 +378,15 @@ def check(rng, build, gs=None, verdicts=None):
             red_keys = [k for k in keys if judged[k][0] == "red"]
             for k in red_keys:
                 pairs.setdefault(judged[k][2], []).append((k, text))     # recorded where the red happened
+            for (t, k) in carried:                                       # U4: answered at the old tip
+                if k[0] == name or (k[1] and k[1] == name):
+                    pairs.setdefault(t, []).append((k, text)); red_keys.append(k)
             if not red_keys:
                 unknown.append(f"{name} ({'not selected' if not keys else judged[keys[0]][0]})")
         for u in unknown:
             print(f"ci-gate-check: no verdict recorded for {u} — a verdict answers a red row only")
         for at, ps in pairs.items():
-            path = record_verdicts(ps, at, pins.get(at) or "")
+            path = record_verdicts(ps, at, pins.get(at) or _git(["rev-parse", f"{at}:irisgl"], gs.ROOT))
             print(f"ci-gate-check: recorded {len(ps)} verdict(s) at {at[:9]} -> {path}")
         if pairs:
             judged = judge_all()
@@ -344,6 +395,12 @@ def check(rng, build, gs=None, verdicts=None):
         st, why, src = judged[k]
         print(f"ci-gate-check: row {label(k)} <- {src[:9]}{' (the tip)' if src == tip_sha else ''}: {st}"
               + (f" — {why}" if why else ""))
+        if st == "red" and why.startswith("VERDICT REFUSED: "):
+            print(f"VERDICT REFUSED {label(k)}: {why[len('VERDICT REFUSED: '):]}")
+    for (t, k), why in sorted(carried.items()):
+        print(f"OPEN RED carried from {t[:9]}: {label(k)} — {why}")
+        if why.startswith("VERDICT REFUSED: "):
+            print(f"VERDICT REFUSED {label(k)}: {why[len('VERDICT REFUSED: '):]}")
     missing = [label(k) for k, (st, _, _) in judged.items() if st == "missing"]
     red = [f"{label(k)}: {why}" for k, (st, why, _) in judged.items() if st == "red"]
     cleared = [f"{label(k)}: {why}" for k, (st, why, src) in judged.items()
@@ -355,12 +412,14 @@ def check(rng, build, gs=None, verdicts=None):
     if missing: reasons.append(f"{len(missing)} of {len(need)} row(s) of {what} have no record at {tip_sha[:9]} "
                                f"(nor a re-usable one earlier on the lane): {missing[:8]}")
     for r in red[:20]: reasons.append("RED " + r)
-    if not (missing or red):
+    for (t, k), why in sorted(carried.items())[:20]:
+        reasons.append(f"OPEN RED carried from {t[:9]}: {label(k)} — {why}")
+    if not (missing or red or carried):
         at_tip = len(need) - sum(reused.values())
         reasons.append(f"{what}: {len(need)} row(s) green — {at_tip} at {tip_sha[:9]}"
                        + "".join(f", {n} re-used from {c[:9]}" for c, n in reused.items())
                        + (f"; cleared by the law: {cleared[:6]}" if cleared else ""))
-    return not (missing or red), reasons
+    return not (missing or red or carried), reasons
 
 
 def main():
