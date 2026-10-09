@@ -177,16 +177,19 @@ def main(source, build):
     print("2. NOADMIT re-queued in-run")
     reset()
     rc, out = run("^(gpu\\.a|gpu\\.noadmit_once)$")
-    recs = [r for r in records() if r["suite"] == "gpu.noadmit_once"]
-    check(rc == 0 and len(recs) == 1 and recs[0]["verdict"] == "PASS" and "re-queued 1 row" in out,
-          "a row with no admission is re-queued at the end of the run and recorded ONCE, its passing run "
-          "(rc %r, %r)" % (rc, [r["verdict"] for r in recs]))
+    recs = [(r["verdict"], r.get("requeued")) for r in records() if r["suite"] == "gpu.noadmit_once"]
+    check(rc == 0 and recs == [("NOADMIT", 0), ("PASS", 1)] and "re-queued 1 row" in out,
+          "a row with no admission is re-queued at the end of the run; EVERY try is a record — the held one NOADMIT "
+          "requeued 0, the passing one requeued 1 (rc %r, %r)" % (rc, recs))
     reset()
     rc, out = run("^(gpu\\.a|gpu\\.noadmit_always)$")
-    recs = [r for r in records() if r["suite"] == "gpu.noadmit_always"]
-    check(rc != 0 and len(recs) == 1 and recs[0]["verdict"] == "NOADMIT" and out.count("re-queued 1 row") == 2,
-          "a row that never gets one is tried 1 + JAH_GATE_REQUEUE (2) times and recorded once, NOADMIT, the run red "
-          "(rc %r, %r, %d re-queue(s))" % (rc, [r["verdict"] for r in recs], out.count("re-queued 1 row")))
+    recs = [(r["verdict"], r.get("requeued")) for r in records() if r["suite"] == "gpu.noadmit_always"]
+    check(rc != 0 and recs == [("NOADMIT", 0), ("NOADMIT", 1), ("NOADMIT", 2)] and out.count("re-queued 1 row") == 2,
+          "a row that never gets one is tried 1 + JAH_GATE_REQUEUE (2) times, one NOADMIT record per try, the run red "
+          "(rc %r, %r)" % (rc, recs))
+    import ci_gate_check as cgc
+    st_, why_ = cgc.judge(("gpu.noadmit_always", None), [r for r in records() if r["suite"] == "gpu.noadmit_always"], {})
+    check(st_ == "missing", "...and the refusal still reads them as never-ran (%s: %s)" % (st_, why_))
 
     # ---- 3. P6: a killed ctest keeps what it finished; the rest runs on resume --------------------
     print("3. per-row records and resume")

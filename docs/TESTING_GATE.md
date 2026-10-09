@@ -477,10 +477,12 @@ it is bounded at 900 s (`JAH_VRAM_WAIT`), after which the command never runs (ex
 (`scripts/gate_runlog.py`) records that row — or a pool's never-started arms — as verdict
 `NOADMIT` with the line as its status, never a generic FAIL (the box was over-subscribed; nothing
 about the row's code). **A NOADMIT IS RE-QUEUED IN THE SAME RUN (GATE-COST-1 P5):** a row that got no
-admission within its wait (or a pool whose every arm got none) is not recorded; it is re-run at the
-end of the same `run_ctest()` — normal admission, after the other rows — up to `JAH_GATE_REQUEUE`
-(2) more times (`=== re-queued <n> row(s) that got no admission …`), and only its LAST try is
-recorded (a pass, a red, or NOADMIT after the last try — still "never ran" to the refusal). The
+admission within its wait (or a pool whose every arm got none) is re-run at the end of the same
+`run_ctest()` — normal admission, after the other rows — up to `JAH_GATE_REQUEUE` (2) more times
+(`=== re-queued <n> row(s) that got no admission …`). EVERY TRY IS RECORDED (GATE-COST-2): a held try
+as verdict `NOADMIT` with `requeued: <k>` (k = 0 for the first run), the last try as what it was (a
+pass, a red, or NOADMIT), also carrying `requeued` — NOADMIT is "never ran" to the refusal, so no
+verdict moves, and the run log still counts how often admission failed. The
 hand `--solo` re-run of a NOADMIT, which asked for the whole card and queued behind the same
 congestion (§1906: 15 rows, 3.4 h), is no longer the path. A burst of final NOADMITs means the box
 asked for more than 900 s of queue three times over.

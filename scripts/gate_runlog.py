@@ -826,7 +826,7 @@ class _Run:
             recs.append(rec)
         return recs
 
-    def phase(self, cmd, cwd, env, final):
+    def phase(self, cmd, cwd, env, final, attempt=0):
         """Run one ctest line; each row's records are appended as it ends. A row that never got its
         admission (P5: NOADMIT, or a pool whose every arm was) is HELD BACK unless `final`, and
         returned to be re-queued. Returns (rc, reds, held)."""
@@ -841,7 +841,7 @@ class _Run:
                                   start_new_session=True, close_fds=True)
         stop = threading.Event()
         try:
-            return self._stream(p, oof, final, stop)
+            return self._stream(p, oof, final, stop, attempt)
         finally:
             stop.set()
             if p.poll() is None:                 # an exception or a signal on the way out: never an orphan
@@ -850,10 +850,11 @@ class _Run:
                 except subprocess.TimeoutExpired: pass
             reaper.poll()
 
-    def _stream(self, p, oof, final, stop):
+    def _stream(self, p, oof, final, stop, attempt=0):
 
         def watch():
-            while not stop.wait(2.0):
+            # every 2 s (JAH_DISPLAY_POLL_S: a test widens it to prove the row-end check alone)
+            while not stop.wait(float(os.environ.get("JAH_DISPLAY_POLL_S", "2.0"))):
                 why = self.guard.dead()
                 if why and not self.dead:
                     self.dead = why
@@ -916,7 +917,15 @@ class _Run:
             v = recs[0]["verdict"]
             arms = recs[1:]
             never = v == "NOADMIT" or (v != "PASS" and arms and all(a["verdict"] == "NOADMIT" for a in arms))
+            if attempt or (never and not final):
+                for r_ in recs: r_["requeued"] = attempt       # the try: 0 = the first run, k = the k-th re-queue
             if never and not final:
+                # EVERY HELD TRY IS A RECORD (GATE-COST-2, the band-aid audit's #1): verdict NOADMIT with its
+                # try number — never-ran to the refusal (ci_gate_check NEVER_RAN), counted by the reports. The
+                # row is re-queued at the end of the run; only a final try can be anything but NOADMIT.
+                recs[0]["verdict"] = "NOADMIT"
+                self.path = append_records(recs, self.tier, self.shas["studio"])
+                self.recorded += len(recs)
                 held.append(name)
                 continue
             if v != "PASS":
@@ -1017,7 +1026,7 @@ def run_ctest(cmd, cwd, tier, lane, jobs, reasons=None, gating=None, rng=None, r
             R.say(f"\n=== re-queued {len(held)} row(s) that got no admission (try {k + 1} of {n + 1}, normal "
                   f"admission, after the other rows): {' '.join(held[:12])}{' …' if len(held) > 12 else ''} ===")
             prc, preds, pheld = R.phase(f"{cmd} --tests-from-file {listfile('requeue%d' % k, held)}", cwd, env,
-                                        final=k == n)
+                                        final=k == n, attempt=k)
             if R.dead: break
             reds += preds; held = pheld
             if prc and not preds and not pheld: rc = rc or prc
