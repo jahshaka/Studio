@@ -386,8 +386,8 @@ JAH_GATE_TIER=scoped JAH_GATE_RANGE=<d-build>..<candidate> JAH_GATE_LANES=<lane>
 #   d-build fast-forwarded to the candidate in both repos (irisgl first), the HASHES line; a stale candidate (d-build
 #   moved since `batch`) is refused; red: nothing moves and the red rows are ATTRIBUTED on the rig display NAMED by
 #   --display (:60-:99, its X lock present; the environment's DISPLAY is never read) — without it, the command:
-DISPLAY=:NN scripts/gate-scope.sh --attribute <row>[,<row>...] --batch <tag> --candidate <rc tree>:<candidate> \
-    --control <rc-base>:<d-build tip> --lanes <lane>:<worktree>:<tip> [...]
+scripts/gate-scope.sh --attribute <row>[,<row>...] --batch <tag> --candidate <rc tree>:<candidate> \
+    --control <rc-base>:<d-build tip> --display :NN --lanes <lane>:<worktree>:<tip> [...]
 ```
 **THE GENERATED FILE.** `docs/SCRIPTING.md` is `--dump-api-docs`'s output and `api.contract`
 byte-compares it: two lanes' versions cannot merge as text. When more than one lane touched it (or it
@@ -402,23 +402,33 @@ first, or rebase the other on it). P ≠ d-build's pin = the candidate moves the
 
 **THE ATTRIBUTION.** Each red row runs 3x `--solo`-style in each lane's OWN worktree at its exact
 batch tip (the lanes' built trees; a worktree moved past its tip is refused), 3x at the CANDIDATE
-(its rc tree) and 3x at every CONTROL (`--control`, several allowed; batch-land's is the BASE BUILD
-`rc-base`, `--control-tree` to move it — built at d-build's tip, refused with the reason when it is
-behind; never `$D`, the merge target, which has no binary; TESTING_V3_SPEC §1.3.2); the whole card is taken once through `hold_card()` — whatever the card's
+(its rc tree) and 3x at every CONTROL — `--control` is REQUIRED (several allowed); batch-land's is the
+BASE BUILD `rc-base` (`--control-tree` moves it), refused plainly when it is missing, its HEAD is not
+d-build's tip, or it has no build-linux — never `$D`, the merge target, which has no binary
+(TESTING_V3_SPEC §1.3.2). `--display :NN` is REQUIRED too (:60-:99 with its X lock; the environment's
+DISPLAY is never read). The whole card is taken once through `hold_card()` — whatever the card's
 admission demands, it never assumes the gate slot is free. One table `row | tree | n/3 red | the first
 failing check`; the records carry `reason: attribute:<tag>`, retry, and in `lanes` that lane (the
-candidate's: the batch's list). Only REAL verdicts count: a run that never got its admission
-(NOADMIT) or never ran leaves its cell INCOMPLETE — the lane is neither named nor cleared until it
-ran. A row a lane's build does not register is ABSENT there and never blames it. Per row:
-- red on a CONTROL (d-build's own tip) = a D-BUILD DEFECT: it names nobody and is registered as
-  d-build's (exit 5);
-- a lane is NAMED when ANY of its solos is red (the flake law: one red run is a red, never outvoted)
-  — it DROPS OUT and the rest are RE-GATED as a new candidate (a new tag — the exact-tip rule stands:
-  no prefix records);
-- red at the candidate and green on every lane's own tip = a COMBINATION DEFECT: a real interaction,
-  the batch is REFUSED and the defect filed (exit 3);
-- green at the candidate too = NOT REPRODUCED: a flake, answered at the verdict door — a
-  contention-class row by its 3/3 solos at the candidate tip, any other by a recorded `--verdict`.
+candidate's: the batch's list; a control's: its tree's name). Only REAL verdicts count: a run that
+never got its admission (NOADMIT) or never ran leaves its cell INCOMPLETE. A row a tree's build does
+not register is ABSENT there and never blames it. Per row, IN THIS ORDER:
+1. a CONTROL cell INCOMPLETE or aborted → the row is INCOMPLETE: nothing is named without its baseline;
+2. red on a CONTROL (d-build's own tip) = a D-BUILD DEFECT: it names nobody (kind `defect`);
+3. a lane is NAMED when ANY of its solos is red (the flake law: one red run is a red, never outvoted)
+   — it DROPS OUT and the rest are RE-GATED as a new candidate (a new tag — the exact-tip rule stands:
+   no prefix records);
+4. any other cell INCOMPLETE or aborted → INCOMPLETE (re-run the attribution);
+5. red at the candidate and green on every lane's own tip and on d-build's = a COMBINATION DEFECT
+   (kind `combination`): the batch is REFUSED;
+6. green at the candidate too = NOT REPRODUCED (kind `nondeterminism`): it passes the verdict door with
+   its solos recorded — a contention-class row by its 3/3 at the candidate tip, any other by `--verdict`.
+Findings 2, 5 and 6 are REGISTERED, never only printed: one `<workspace>/testing/defects.pending/<id>.json`
+each in TESTING_V3_SPEC §1.5's schema (`{id, rows, kind, cause, first_seen {tip, pin, run}, state: open,
+found_by: gate}`), which VERDICT-1's registry (`testing/defects.json`) ingests. Exit codes: 3 a
+combination defect, else 7 an INCOMPLETE or aborted attribution, else 5 a d-build defect, else 0; 4 an
+unusable tree, 64 usage. Every commit the batch tooling writes (the candidate's merges, the regenerated
+SCRIPTING.md) is authored jahshaka by the script itself, and batch-land runs check-trailers on the
+regenerated commit.
 
 The judge needs no change: `ci_gate_check.py` keys records on the exact Studio sha + its irisgl pin,
 and d-build fast-forwards to the gated candidate in both repos. The queue rules (a pin-bumping
