@@ -51,7 +51,10 @@ SCHEMA = 1
 # verdict — reported, never gating); rc-gate.sh writes JAH_GATE_TIER (merge by default: stage,
 # nightly, push, smoke — the owner's smoke rc —, fork).
 TIERS = ("scoped", "scoped-fallback", "scoped-tier", "joint", "target", "merge", "stage", "nightly", "push",
-         "smoke", "fork")
+         "smoke", "fork", "lane", "solo")
+# GATE-COST-2 #12: `lane` — a lane tool's own runs, recorded under the lane's name (the batch and push
+# judgement ignores it); `solo` — a --solo batch's retries (gate-scope's default for --solo, and the solo
+# re-run of a row an abort dropped red).
 
 
 def check_tier(tier):

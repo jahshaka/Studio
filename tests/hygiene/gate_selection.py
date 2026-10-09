@@ -239,8 +239,9 @@ def runlog_cases(source):
     # name outside it is refused before a run (never an hour of records under a stray name)
     print("  the run log's tier names: %s" % ", ".join(rl.TIERS))
     check(set(rl.TIERS) == {"scoped", "scoped-fallback", "scoped-tier", "joint", "target", "merge", "stage",
-                            "nightly", "push", "smoke", "fork"},
-          "the tier names are exactly the documented eleven (GATE-SPEED-1 added target and smoke)")
+                            "nightly", "push", "smoke", "fork", "lane", "solo"},
+          "the tier names are exactly the documented thirteen (GATE-SPEED-1 added target and smoke, GATE-COST-2 "
+          "lane and solo)")
     gsrc = open(os.path.join(source, "scripts", "gate-scope.py")).read()
     lits = set(re.findall(r'a\.tier or \(?"([a-z-]+)"', gsrc)) | set(re.findall(r'else "(scoped-[a-z]+)"', gsrc)) \
         | set(re.findall(r'run_ctest\(target_cmd, build, "([a-z-]+)"', gsrc))
