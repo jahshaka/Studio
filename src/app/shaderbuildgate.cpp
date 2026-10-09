@@ -36,11 +36,14 @@ using namespace jahshaka::engine;
 
 namespace {
 
-/// The World Mode a new scene of this process is born with: Epic (the product), or the
-/// process's test tier (TEST-TIER-1) — the tier the warm-up must compile for.
-worldmodes::Mode bornMode()
+/// Puts `doc` on the World a new scene of this process is born with: Epic (the product), or
+/// the process's test tier with what it does not NEED switched off (TEST-TIER-1, WORLD-MODE-1:
+/// worldmodes::applyTestTier, the same call MainWindow::setScene makes) — the state the
+/// warm-up must compile for.
+void applyBornWorld(const iris::ScenePtr &doc)
 {
-    return testtier::active() ? worldmodes::modeFromName(testtier::name()) : worldmodes::Mode::Epic;
+    if (testtier::active()) worldmodes::applyTestTier(doc);
+    else worldmodes::setMode(doc, worldmodes::Mode::Epic);
 }
 
 /// THE SETTLE, IN FRAMES (SPEED-CPU, perf audit CS-2; ENGINE trap 7 — the engine
@@ -146,7 +149,7 @@ int warmEditorWorld(Engine &engine, View *view, const EngineHost::WarmUpShape &s
 {
     iris::ScenePtr doc = scenetemplate::build(kind, db, nullptr);
     if (!doc || !view) return 0;
-    worldmodes::setMode(doc, bornMode());
+    applyBornWorld(doc);
     if (presets) addPresetRow(doc, db);
     // The node the editor would have selected: the first mesh (the floor).
     iris::SceneNodePtr selected;
@@ -542,7 +545,7 @@ unsigned holdSplashForShaderBuild(QApplication &app, VersionSplashScreen &splash
             // the Epic chain here either: measured, this warm-up was a 1.28 GB transient in a
             // process whose scenes then held 0.3 GB), resolved through the World Mode registry.
             const iris::ScenePtr born = iris::Scene::create();
-            worldmodes::setMode(born, bornMode());
+            applyBornWorld(born);
             const worldmodes::PhotonTier tier = worldmodes::photonTier(born);
             GiParams gi;
             gi.mode = worldmodes::photonEnabled(born)

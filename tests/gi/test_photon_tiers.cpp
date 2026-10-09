@@ -152,7 +152,7 @@ static void testSsrRow()
             CHECK(worldmodes::applyComboItem(s, *ssr, offItem) && s->worldOverrides.contains(QStringLiteral("ssr")) &&
                       worldmodes::resolved(s, *ssr) == 0,
                   qPrintable(QStringLiteral("%1: choosing Off pins the SSR row at 0").arg(worldmodes::photonTierName(t))));
-            const int tierCol = worldmodes::tierValue(*ssr, worldmodes::mode(s), s);
+            const int tierCol = worldmodes::tierValue(*ssr, worldmodes::pickedMode(s), s);
             CHECK(worldmodes::applyComboItem(s, *ssr, tracedItem),
                   qPrintable(QStringLiteral("%1: Traced can be chosen").arg(worldmodes::photonTierName(t))));
             const int after = worldmodes::resolved(s, *ssr);
@@ -166,7 +166,7 @@ static void testSsrRow()
             // value, so the entry chosen is the state the scene is in.
             worldmodes::setMode(s, worldmodes::Mode(0));
             worldmodes::setPhoton(s, true, t);
-            if (worldmodes::tierValue(*ssr, worldmodes::mode(s), s) == 0) {
+            if (worldmodes::tierValue(*ssr, worldmodes::pickedMode(s), s) == 0) {
                 CHECK(worldmodes::applyComboItem(s, *ssr, tracedItem) && worldmodes::resolved(s, *ssr) == tracedItem.value &&
                           s->worldOverrides.contains(QStringLiteral("ssr")),
                       qPrintable(QStringLiteral("%1: under a World mode whose SSR column is off, Traced pins %2")

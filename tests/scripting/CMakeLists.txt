@@ -1908,8 +1908,9 @@ set_tests_properties(scripting.e2e.preset_seed_race PROPERTIES
     TIMEOUT 300)
 
 # <pool>.tier — THE POOL'S TIER IS THE PROCESS'S (lane TEST-TIER-1, services/testtier.h): in a
-# `TIER low` pool app.testTier() is "low", a new scene AND an opened one (saved at Medium) report
-# world.mode() "low", and the window booted 1280x720; in a `TIER epic` pool the same script finds
+# `TIER low` pool app.testTier() is "low", a new scene AND an opened one (saved at Medium) are put
+# on Low with Photon off (no JAHSHAKA_TEST_NEEDS — WORLD-MODE-1: world.mode() reads "custom", the
+# photon row's tierValue is Low's column), and the window booted 1280x720; in a `TIER epic` pool the same script finds
 # no test tier, a new scene at the document's Epic and the reopened one at the Medium it saved.
 # One arm in a pool of each tier.
 jah_pool_arm(editor tier ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_pool_tier.js 3)

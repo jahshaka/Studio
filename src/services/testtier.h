@@ -40,7 +40,9 @@ For more information see the LICENSE file
 // read by the shell and the scripting layer — no translation unit of its own to link into the
 // test binaries that compile those files standalone.
 
+#include <QRegularExpression>
 #include <QString>
+#include <QStringList>
 
 namespace testtier {
 
@@ -68,6 +70,19 @@ constexpr int kWindowHeight = 720;
 
 /// The environment form of `--test-tier`, for a runner that cannot pass an argument.
 constexpr const char *kEnvVar = "JAHSHAKA_TEST_TIER";
+
+/// WHAT A TEST-TIER PROCESS NEEDS beyond the bare tier (WORLD-MODE-1; owner: "a test suite
+/// passes variables for what it needs"): JAHSHAKA_TEST_NEEDS, space-separated (`photon`,
+/// `bloom`). Each World Mode runs Photon at its own name, so a test-tier scene is booted with
+/// Photon and bloom OFF unless named here (worldmodes::applyTestTier). Read only while a test
+/// tier is active; a process with none honours the document.
+constexpr const char *kNeedsEnvVar = "JAHSHAKA_TEST_NEEDS";
+inline QStringList needs()
+{
+    return QString::fromLocal8Bit(qgetenv(kNeedsEnvVar)).toLower()
+        .split(QRegularExpression(QStringLiteral("\\s+")), Qt::SkipEmptyParts);
+}
+inline bool needs(const QString &what) { return needs().contains(what.toLower()); }
 
 }   // namespace testtier
 

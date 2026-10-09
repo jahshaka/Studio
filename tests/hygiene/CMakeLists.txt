@@ -95,6 +95,15 @@ add_test(NAME source.one_material_resolve
 set_tests_properties(source.one_material_resolve PROPERTIES TIMEOUT 60 LABELS "hygiene")
 jah_no_display(source.one_material_resolve)
 
+# source.photon_never_pinned — WORLD-MODE-1: the `photon` World row is never a pin (each
+# World Mode runs Photon at its own name and re-picking snaps it back); the reader deletes
+# a stored one. See the script's header.
+add_test(NAME source.photon_never_pinned
+         COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/photon_never_pinned.sh"
+                 "${CMAKE_SOURCE_DIR}")
+set_tests_properties(source.photon_never_pinned PROPERTIES TIMEOUT 60 LABELS "hygiene")
+jah_no_display(source.photon_never_pinned)
+
 # source.material_page_identity — LEGACY-CONVERT-CRUD fix round: the Materials
 # page takes on a material in ONE place, after its graph has loaded. Five tile
 # handlers used to write the page's saving identity BEFORE the read, so a

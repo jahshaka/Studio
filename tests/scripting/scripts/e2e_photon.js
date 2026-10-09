@@ -93,11 +93,12 @@ for (var t in expect) {
 assert(world.gi({ tier: "medium" }), "world.gi({tier:'medium'})");
 assert(world.photon().tier === "medium", "world.gi's tier key drives the same dial");
 // ... and so does the registry row, which is what the World Mode panel uses.
+// The row is SET, never pinned (WORLD-MODE-1): each World Mode runs Photon at
+// its own name, so a pick must always be able to snap it back.
 var row = world.override({ id: "photon", value: "high" });
-assert(row.valueId === "high" && row.source === "override",
-       "world.override({id:'photon'}) pins the dial: " + J([row.valueId, row.source]));
+assert(row.valueId === "high" && row.source !== "override",
+       "world.override({id:'photon'}) sets the dial without a pin: " + J([row.valueId, row.source]));
 assert(world.photon().tier === "high", "and the dial followed");
-world.clearOverride({ id: "photon" });
 
 // An unknown tier is refused, catchably, and changes nothing.
 var before = world.photon().tier;
