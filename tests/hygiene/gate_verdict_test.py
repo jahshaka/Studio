@@ -56,7 +56,7 @@ FIXTURE_DEFECTS = [defect("FIXTURE-1", ROWS + ["test_engine"]), defect("VIEWS-XI
                    defect("OTHER-ROW-1", ["api.contract"]), defect("NONDET-SOLO-1", ["photon.view"], "nondeterminism",
                                                                     state="retired")]
 NONDET = defect("NONDET-FIXTURE-1", ["photon.view"], "nondeterminism")
-BUSY = {"census": {"gpu_apps": [], "other_ctests": 2, "builds": 0, "psi10_mem": 0.0, "psi10_io": 0.0}}
+BUSY = {"census": {"gpu_apps": [], "gpu_competitors": [], "other_ctests": 2, "builds": 0, "psi10_mem": 0.0, "psi10_io": 0.0}}
 
 
 def check(ok, what):
@@ -207,7 +207,13 @@ def case_verdict_door(E):
                                                                    "psi10_mem": 0.0, "psi10_io": 0.0}}, drain_s=40.0)
     st, why = E.judge([own] + ok3 + [vrec("contention: the queue and the drain", T % "11:00")], listed=True)
     check(st == "red" and "COMPETITOR CENSUS" in why, "...the gate's own queue and drain are never competition (%s)" % why[:70])
-    for name, c in (("a GPU process outside the gate", {"gpu_apps": [{"pid": 7, "name": "Jahshaka", "mib": 2800}]}),
+    desk = rec("FAIL", T % "10:00", box={"census": {"gpu_apps": [{"pid": 9, "name": "chrome", "mib": 200, "ours": False}],
+                                                  "gpu_competitors": [], "other_ctests": 0, "builds": 0,
+                                                  "psi10_mem": 0.0, "psi10_io": 0.0}})
+    st, why = E.judge([desk] + ok3 + [vrec("contention: the desktop", T % "11:00")], listed=True)
+    check(st == "red" and "COMPETITOR CENSUS" in why, "F3: the idle desktop's GPU clients (in the baseline) are never "
+          "competition (%s)" % why[:60])
+    for name, c in (("a GPU process outside the gate", {"gpu_competitors": [{"pid": 7, "name": "Jahshaka", "mib": 2800}]}),
                     ("sibling ctests", {"other_ctests": 2}), ("a build", {"builds": 3}), ("memory pressure", {"psi10_mem": 22.0}),
                     ("IO pressure", {"psi10_io": 40.0})):
         r = rec("FAIL", T % "10:00", box={"census": dict({"gpu_apps": [], "other_ctests": 0, "builds": 0, "psi10_mem": 0.0,
@@ -511,9 +517,10 @@ def case_log_schema2(E):
         isinstance(mem["psi10"], float) and isinstance(mem["builds"], int))), "box.mem = {psi10, swap_used_mb, builds} (%s)"
           % mem)
     cen = (one.get("box") or {}).get("census") or {}
-    check(set(cen) == {"gpu_apps", "other_ctests", "builds", "psi10_mem", "psi10_io"}
+    check(set(cen) == {"gpu_apps", "gpu_competitors", "baseline", "other_ctests", "builds", "psi10_mem", "psi10_io"}
           and (not sys.platform.startswith("linux") or isinstance(cen["builds"], int)),
-          "box.census = the competitor census {gpu_apps (outside the gate), other_ctests, builds, psi10_mem, psi10_io} (%s)"
+          "box.census = the competitor census {gpu_apps, gpu_competitors (ours / off the idle baseline / over the floor), "
+          "baseline, other_ctests, builds (outside the gate), psi10_mem, psi10_io} (%s)"
           % {k: (v if k != "gpu_apps" else (len(v) if v is not None else None)) for k, v in cen.items()})
     check("xid" in one and one["xid"] is None and "journal_unreadable" not in one, "a row with no fault carries xid: null")
     R = E.rl._Run("scoped", "verdict-test", 1, None, None, None, False, {}, False, None)

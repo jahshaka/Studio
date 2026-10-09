@@ -646,9 +646,9 @@ def _psi(kind):
 
 
 def gpu_apps(own_root=None):
-    """[{pid, name, mib}] of the GPU compute/graphics processes OUTSIDE this gate's process tree (nvidia-smi
-    --query-compute-apps; the owner's instance, another lane's hand run, an un-admitted measurement), or
-    None when nvidia-smi cannot say (macOS, no driver)."""
+    """[{pid, name, mib, ours}] of the GPU processes OUTSIDE this gate's process tree (nvidia-smi
+    --query-compute-apps), or None when nvidia-smi cannot say (macOS, no driver). `ours` = a process of OUR stack
+    (the Jahshaka binary, a test_/bench_ binary, anything run from a jahshaka tree, an Xvfb client)."""
     try:
         r = subprocess.run(["nvidia-smi", "--query-compute-apps=pid,process_name,used_memory",
                             "--format=csv,noheader,nounits"], capture_output=True, text=True, timeout=10)
@@ -662,31 +662,96 @@ def gpu_apps(own_root=None):
         if len(f) < 3 or not f[0].isdigit(): continue
         pid = int(f[0])
         if _descends_from(pid, roots): continue
-        out.append({"pid": pid, "name": os.path.basename(f[1])[:40], "mib": int(f[2]) if f[2].isdigit() else None})
+        name = os.path.basename(f[1])[:40]
+        try: exe = os.path.realpath(os.readlink(f"/proc/{pid}/exe"))
+        except OSError: exe = None
+        out.append({"pid": pid, "name": name, "exe": exe, "mib": int(f[2]) if f[2].isdigit() else None,
+                    "ours": _ours(pid, name)})
     return out
 
 
-# THE COMPETITOR CENSUS (TESTING_V3 §1.4/§1.6): what ELSE was on the box when a row started — the one thing a
-# `contention:` verdict may stand on. GPU processes outside the gate, sibling ctests, builds and the box's
-# memory / IO pressure; NEVER the gate's own queue or drain (those are the gate waiting on itself).
+def _ours(pid, name):
+    if name == "Jahshaka" or name.startswith(("test_", "bench_")):
+        return True
+    try:
+        if "/jahshaka/" in os.readlink(f"/proc/{pid}/exe"):
+            return True
+    except OSError:
+        pass
+    try:
+        env = open(f"/proc/{pid}/environ", "rb").read().split(b"\0")
+        disp = [e[8:].decode("ascii", "replace") for e in env if e.startswith(b"DISPLAY=")]
+        return bool(disp) and disp[0] not in ("", ":0", ":0.0")     # a client of a rig Xvfb, never the desktop's
+    except OSError:
+        return False
+
+
+# THE COMPETITOR CENSUS (TESTING_V3 §1.4/§1.6; the merge read's F3): what ELSE competed when a row started — the
+# one thing a `contention:` verdict may stand on. A GPU competitor is a process of OURS outside the gate's tree, a
+# process whose exe is NOT in the box's IDLE BASELINE (testing/box-baseline.json `desktop`, written by the lead with
+# nvidia-smi on the idle desktop: the browser, the terminal, the editor are not competition), or ANY process above
+# the baseline's `vram_floor_mb` — without the baseline only our own processes count, and the census says so. Builds are those OUTSIDE the gate
+# (not its descendants, not run from its tree). Never the gate's own queue or drain.
 CENSUS_PSI = 10.0           # avg10 % of memory or IO pressure that counts as a competitor
+VRAM_FLOOR_MIB = 512
+
+
+def baseline_file():
+    return os.environ.get("JAH_BOX_BASELINE") or os.path.join(workspace_root(), "testing", "box-baseline.json")
+
+
+def box_baseline():
+    """({idle desktop exe}, vram floor MiB), or None when there is no readable baseline."""
+    try:
+        d = json.load(open(baseline_file()))
+        return {os.path.realpath(x) for x in d["desktop"]}, int(d.get("vram_floor_mb") or VRAM_FLOOR_MIB)
+    except (OSError, ValueError, KeyError, TypeError, AttributeError):
+        return None
+
+
+def builds_outside(own_root=None):
+    """ninja/cmake/make processes that are NOT the gate's own (its descendants, or run from its tree)."""
+    roots = {os.getpid()} | ({own_root} if own_root else set())
+    n = 0
+    try:
+        procs = [d for d in os.listdir("/proc") if d.isdigit()]
+    except OSError:
+        return None
+    for d in procs:
+        try:
+            with open(f"/proc/{d}/comm") as f:
+                if f.read().strip() not in _BUILD_COMMS: continue
+            if _descends_from(int(d), roots): continue
+            try:
+                if os.path.realpath(os.readlink(f"/proc/{d}/cwd")).startswith(os.path.realpath(ROOT) + os.sep): continue
+            except OSError:
+                pass
+            n += 1
+        except OSError:
+            continue
+    return n
 
 
 def census(own_root=None, mem=None, ctests=None):
     m = mem or box_mem()
     oc = other_ctests(own_root) if ctests is None else ctests
-    return {"gpu_apps": gpu_apps(own_root), "other_ctests": oc, "builds": m.get("builds"),
-            "psi10_mem": m.get("psi10"), "psi10_io": _psi("io")}
+    apps = gpu_apps(own_root)
+    base = box_baseline()
+    comp = None if apps is None else [a for a in apps if a.get("ours") or (
+        base is not None and (a.get("exe") not in base[0] or (a.get("mib") or 0) >= base[1]))]
+    return {"gpu_apps": apps, "gpu_competitors": comp,
+            "baseline": baseline_file() if base is not None else "MISSING: only our own GPU processes counted",
+            "other_ctests": oc, "builds": builds_outside(own_root), "psi10_mem": m.get("psi10"), "psi10_io": _psi("io")}
 
 
 def competitors(c):
     """The census's competitors as words ([] = none measured)."""
     c = c or {}
     out = []
-    if c.get("gpu_apps"): out.append("%d GPU process(es) outside the gate (%s)" % (
-        len(c["gpu_apps"]), ", ".join(f"{a['name']}:{a['pid']}" for a in c["gpu_apps"][:3])))
+    if c.get("gpu_competitors"): out.append("%d GPU process(es) competing (%s)" % (
+        len(c["gpu_competitors"]), ", ".join(f"{a['name']}:{a['pid']}" for a in c["gpu_competitors"][:3])))
     if (c.get("other_ctests") or 0) > 0: out.append(f"{c['other_ctests']} sibling ctest(s)")
-    if (c.get("builds") or 0) > 0: out.append(f"{c['builds']} build process(es)")
+    if (c.get("builds") or 0) > 0: out.append(f"{c['builds']} build process(es) outside the gate")
     for k in ("psi10_mem", "psi10_io"):
         if (c.get(k) or 0) >= CENSUS_PSI: out.append(f"{k.split('_')[1]} pressure {c[k]} %")
     return out
