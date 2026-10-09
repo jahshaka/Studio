@@ -597,8 +597,10 @@ process inside a gate (`JAH_GATE_SLOT_HELD`) never queues again. `JAH_GATE_SLOT=
    `source.one_material_resolve` walked `src irisgl` — the vendored submodules, the fork's build tree
    and install, ~26k entries and 104 MB of C++ per run in a lane tree — on the USB-stick root under
    `ionice -c 3` (idle-class I/O, starved beside three gates): 0-1 s rows that TIMED OUT at 60 s
-   (24 of the window's 34 TIMEOUTs were lints, §2 of the audit). They now skip `irisgl/thirdparty`
-   and `.git` (1,448 entries, 205 C++ files), as `source.assimp_import_only` always did.
+   (24 of the window's 34 TIMEOUTs were lints, §2 of the audit). They now skip irisgl's SUBMODULES —
+   exactly the `path =` lines of `irisgl/.gitmodules` (`tests/hygiene/first_party.sh`) — and `.git`;
+   the in-tree vendored directories (`meshoptimizer-clusterlod`, the `*-patches` stacks) and the build's
+   install dir are files of this tree and are still walked.
 2. **The GPU phase**, at the gate's width; a NOADMIT re-queued at its end (§4b, P5).
 3. **The timing phase**, serial, on ONE whole-card hold (§4, P2).
 4. **The verdict line** `=== GATE VERDICT: GREEN|RED (exit <n>) ===` — every gating record written.

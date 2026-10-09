@@ -32,15 +32,13 @@ cd "$ROOT" || { echo "source.one_material_resolve: no such root $ROOT"; exit 1; 
 
 failures=0
 
-# FIRST-PARTY PATHS ONLY (GATE-COST-1 P8): src and irisgl WITHOUT irisgl/thirdparty — the
-# vendored submodules (assimp, bullet3, zip, the Ogre fork: 6,300 C++ files, 104 MB in a
-# lane tree) cannot name an iris:: type, and reading them twice per run on the USB-stick
-# root under `ionice -c 3` beside three gates stalled this 1 s row past its 60 s budget
-# (SPECS/audits/GATE_COST_2026-10-09.md §2). Every other irisgl directory is read.
-OWN=(src irisgl/*.h)
-for d in irisgl/*/; do
-    case "$d" in irisgl/thirdparty/) ;; *) OWN+=("${d%/}") ;; esac
-done
+# FIRST-PARTY PATHS ONLY (GATE-COST-1 P8; GATE-COST-2): src and irisgl WITHOUT irisgl's SUBMODULES
+# (irisgl/.gitmodules: assimp, bullet3, zip, the Ogre fork, meshoptimizer — vendored code pinned from
+# elsewhere, which cannot name an iris:: type) and .git. The in-tree vendored dirs
+# (meshoptimizer-clusterlod, the *-patches stacks) ARE read. tests/hygiene/first_party.sh says why.
+. "$(dirname "$0")/first_party.sh"
+mapfile -t IRISGL_OWN < <(first_party_paths irisgl)
+OWN=(src "${IRISGL_OWN[@]}")
 
 # A material pointer handed to QVariant::fromValue. The names are the ones this
 # tree uses for a material: `material`, `mat`, `m`, and the two typedefs

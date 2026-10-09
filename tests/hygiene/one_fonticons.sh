@@ -34,13 +34,13 @@ failures=0
 
 # 1. THE SOURCES. thirdparty/qtawesome is the one copy; a QtAwesome*.cpp/.h
 #    anywhere else is a fork of vendored code by another name.
-#    FIRST-PARTY PATHS ONLY (GATE-COST-1 P8): irisgl/thirdparty is the vendored
-#    submodules (pinned, never edited — a copy cannot land there without a
-#    submodule bump) plus the fork's build tree and install, ~26k entries of a
-#    lane tree; walking it on the USB-stick root under `ionice -c 3` beside three
-#    gates stalled this 0 s row past its 60 s budget (SPECS/audits/
-#    GATE_COST_2026-10-09.md §2). The .git directories are not the tree either.
-copies=$(find src irisgl -path irisgl/thirdparty -prune -o -name .git -prune -o \
+#    FIRST-PARTY PATHS ONLY (GATE-COST-1 P8; GATE-COST-2): src and irisgl WITHOUT irisgl's
+#    SUBMODULES (irisgl/.gitmodules — vendored code pinned from elsewhere) and .git; the
+#    in-tree vendored dirs (meshoptimizer-clusterlod, the *-patches stacks) are walked.
+#    tests/hygiene/first_party.sh says why.
+. "$(dirname "$0")/first_party.sh"
+mapfile -t OWN < <(first_party_paths irisgl)
+copies=$(find src "${OWN[@]}" -name .git -prune -o \
               \( -name 'QtAwesome*.cpp' -o -name 'QtAwesome*.h' \) -print 2>/dev/null || true)
 if [ -n "$copies" ]; then
     echo "source.one_fonticons: FAIL — a second copy of the vendored QtAwesome sources"
