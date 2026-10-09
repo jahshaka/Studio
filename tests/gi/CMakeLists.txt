@@ -1357,13 +1357,13 @@ set_tests_properties(gi.cone_integrator_parity PROPERTIES TIMEOUT 120 LABELS "en
 # wall turned 30 degrees shows the card 1.64 % / 2.06 % below the pixel at two of
 # its six points (two R11G11B10F steps, and the card below the pixel at every
 # sample of both walls) — the 8-bit readback's half-code term (0.00196, ~2 % of
-# these values) hid it. LABEL `photon-target`: it runs, prints `target:` and
-# does not decide a gate; the lane that makes the card's off-axis cone frame
-# agree with the pixel's deletes the label.
+# these values) hid it. PROMOTED (TESTING-CLEANUP-2 H6c, the lead's decision on §1851's
+# candidates): the off-axis frame agrees — `target: 0.0000 -- MET` at 3/3 runs — so the label
+# is deleted and the bar (unchanged, 0) is an assertion in the binary: this row GATES.
 jah_gpu_row(gi.cone_integrator_parity_offaxis CLASS engine COMMAND test_gi_cards cone_parity_offaxis
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.cone_integrator_parity_offaxis PROPERTIES TIMEOUT 300
-                     LABELS "engine;photon-target")
+                     LABELS "engine")
 # PHOTON-CARDS-2 part B: a reflection ray's hit reads the surface cache first
 # (jah_rq_card.glsl); the GLSL pick = SurfaceCache::readAt's for 1,000 hits.
 jah_gpu_row(gi.card_read_parity CLASS engine COMMAND test_gi_cards read_parity
