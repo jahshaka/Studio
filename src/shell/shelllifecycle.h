@@ -73,6 +73,13 @@ class ShellLifecycle : public QObject
 {
     Q_OBJECT
 public:
+    /// THE FORCED EXIT'S CODE (TESTING-CLEANUP-2 H8c). The shutdown watchdog (a teardown past 20 s)
+    /// and the worker-reap refusal end the process with `std::_Exit` — a logged forced exit beats a
+    /// zombie or a teardown race — and that exit used to be code 0: a run that never finished its
+    /// teardown read as a clean quit to every test and every gate. It is 86 now, beside the log line
+    /// `shutdown watchdog: …` that says which of the two fired.
+    static constexpr int kForcedExitCode = 86;
+
     /// The shell's parts the order drives. Pointers are borrowed; a null one
     /// is a participant this session does not have.
     struct Parts {
