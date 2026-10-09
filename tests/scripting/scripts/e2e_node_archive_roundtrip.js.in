@@ -78,10 +78,17 @@ var mat = material.get(meshId);
 assert(typeof mat.baseColorMap === "string" && mat.baseColorMap.indexOf("/") >= 0,
        "its base-colour map resolves to a stored file: " + mat.baseColorMap);
 
-// Same framing as import_render: the centre pixel lands in the GREEN texel region.
+// THE FRAMING IS STATED, NOT INHERITED (TESTING-CLEANUP-2 H8d). The quad (2 m, scaled 4) at
+// (-2, 3) spans x -6..2, y -1..7; a camera on the axis through (0, 5) puts the centre pixel at
+// uv (0.75, 0.25), the GREEN region. This arm used to say editor.setView("front") and rely on
+// that view's centre being (0, 5) — true only after an earlier arm of the pool had left the
+// editor camera there: SOLO, in a fresh process, the front view sat at (0, 0) (measured:
+// position (0, 0, 14.87), orthographic). That was ONE of the two things the pool's order hid;
+// the other is a product defect this arm now reports solo (see the commit: the bundle's model
+// lands with no mesh bake once the library's own copy is collected).
 node.transform(nodeId, { scale: { x: 4, y: 4, z: 4 } });
 editor.select(null);
-editor.setView("front");
+editor.setCamera({ position: { x: 0, y: 5, z: 15 }, lookAt: { x: 0, y: 5, z: 0 } });
 editor.frame(5);
 var shot = editor.screenshot("node_archive_roundtrip.png", 512, 512);
 console.log("centre pixel " + J(shot.center));
