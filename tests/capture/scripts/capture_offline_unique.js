@@ -17,6 +17,15 @@ function assert(cond, msg) {
     if (!cond) throw new Error("assert failed: " + msg);
     console.log("ok: " + msg);
 }
+// A MILLISECOND BAR (TESTING-CLEANUP-2 P10f): the ring's worst UI-thread wait is asserted in
+// capture.offline_unique.timing (a jah_timing_script copy, the quiet box, the GPU-timing lock) and
+// PRINTED here, where the pool's arm keeps every count (frames, steps, held, dropped, the decoded
+// pictures, the ring's waits).
+function timingBar(cond, msg) {
+    if (typeof JAH_TIMING_BARS !== "undefined" && JAH_TIMING_BARS) assert(cond, msg);
+    else console.log("time: " + (cond ? "within" : "OVER") + ": " + msg +
+                     " (a millisecond bar: capture.offline_unique.timing asserts it)");
+}
 
 assert(project.create("capture offline " + Date.now(), { template: "empty" }) !== false, "project.create (empty)");
 var bar = scene.addPrimitive("cube", { position: [0, 0, 0], scale: [2.4, 0.1, 0.3] });
@@ -87,8 +96,8 @@ assert(off.steps === off.drawn, "ONE clock step per drawn frame under the load: 
 assert(off.status.clipSeconds === N / 60, "the clip is N/60 s: " + off.status.clipSeconds);
 assert(off.status.wallSeconds > off.status.clipSeconds, "slower than real time, and said so: clip " +
        off.status.clipSeconds + " s / wall " + off.status.wallSeconds + " s");
-assert(off.status.worstRingWaitMs < 100, "no UI-thread wait over 100 ms on the ring: " + off.status.worstRingWaitMs + " ms (" +
-       off.status.ringWaits + " waits)");
+timingBar(off.status.worstRingWaitMs < 100, "no UI-thread wait over 100 ms on the ring: " + off.status.worstRingWaitMs + " ms (" +
+          off.status.ringWaits + " waits)");
 assert(off.file.frames === N && off.file.constantRate === true && Math.abs(off.file.fps - 60) < 1e-9,
        "the file: N samples at a constant 60/1");
 assert(off.file.decoded.frames === N && off.rows.length === N, "N frames decoded and measured: " + off.rows.length);
@@ -144,7 +153,7 @@ assert(slow.heldTicks > 0, "the encoder's backpressure HELD frames: " + slow.hel
 // ticket (one GPU frame at most) instead of dropping it.
 var ring = recordFault("ringfull", "skipPoll", 30);
 assert(ring.ringWaits > 0, "the full ring was waited out: " + ring.ringWaits + " waits");
-assert(ring.worstRingWaitMs < 100, "no UI-thread wait over 100 ms: " + ring.worstRingWaitMs.toFixed(2) + " ms");
+timingBar(ring.worstRingWaitMs < 100, "no UI-thread wait over 100 ms: " + ring.worstRingWaitMs.toFixed(2) + " ms");
 
 // ---- REAL-TIME under the same load (the control) ----
 var rt = record("realtime", "realtime");

@@ -40,6 +40,28 @@ configure_file(scripts/capture_offline_video.js.in ${CMAKE_CURRENT_BINARY_DIR}/c
 jah_pool_arm(capture offline_video ${CMAKE_CURRENT_BINARY_DIR}/capture_offline_video.js 30)
 jah_add_pool(capture TIER epic LABELS scripting capture)
 
+# capture.first_recording.timing / capture.offline_unique.timing — THE RECORDER'S MILLISECOND BARS
+# (TESTING-CLEANUP-2 P10f; tests/support/timingbars.h's rule): the first click's 50 ms and the
+# encoder probe's 20 ms, and the readback ring's 100 ms worst UI-thread wait, ARMED in a
+# jah_timing_script copy of each arm's script, each its own process on its own wiped home (warm
+# caches, like the pool), on the quiet box under the GPU-timing lock. The pool's arms keep every
+# count and print these readings. RUN_TIMEOUT = 6x the measured run after the admission
+# (2026-10-09 on :71: first_recording 32 s, offline_unique 101 s).
+set(_cap_timing_first_recording 200)
+set(_cap_timing_offline_unique 610)
+foreach(_arm first_recording offline_unique)
+    jah_timing_script(${CMAKE_CURRENT_SOURCE_DIR}/scripts/capture_${_arm}.js
+                      ${CMAKE_CURRENT_BINARY_DIR}/capture_${_arm}.timing.js)
+    set(_home ${CMAKE_CURRENT_BINARY_DIR}/capture-timing-home-${_arm})
+    jah_gpu_exclusive_test(NAME capture.${_arm}.timing CLASS app RUN_TIMEOUT ${_cap_timing_${_arm}}
+        COMMAND sh "${JAH_FRESH_HOME}" --warm "${_home}" --
+                $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/capture_${_arm}.timing.js
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+    set_tests_properties(capture.${_arm}.timing PROPERTIES
+        ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
+        LABELS "scripting;capture;nightly;quiet-box")
+endforeach()
+
 # pool.capture_validation — THE RECORDER UNDER THE KHRONOS VALIDATION LAYER (TESTING-CLEANUP-2 H4):
 # the recording view's chain, the NV12 job and the readback ring had never run under the layer in
 # a gate. Its FIRST arm proves the layer is live (engine.validation()); then a basic recording runs
