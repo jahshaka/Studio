@@ -219,7 +219,7 @@ a report for the scheduler, never an assertion.
 ## 7. The run log and the merge refusal
 
 **Every gate leaves a record.** Whatever runs a gate — `scripts/gate-scope.sh <range> --run`,
-its solo retries (`--solo <suite>`), the joint suites, and the stage, nightly and push tiers
+its solo retries (`--solo <suite>`), a batch red's attribution (`--attribute`), and the stage, nightly and push tiers
 (`scripts/gate_runlog.py run --tier <tier> -- <ctest …>`) — appends one JSON line per ctest row
 to `~/Developer/testing/runs/<date>-<tier>-<tip>.jsonl`, and ONE MORE PER ARM of every pool it
 ran, read from the pool's `ARM <pool>.<arm> PASS|FAIL|CRASH|TIMEOUT <ms>` lines (an arm that
@@ -343,10 +343,10 @@ path it named — it gets a rule.
 
 ### Two lanes that touched the same files
 
-When two lanes that changed the same file family merge, the lead runs
-`scripts/gate-scope.sh --joint <rangeA> <rangeB> --run`: the union of both selections, with each
-lane's own tests that the other lane's change also reaches named apart — the combination neither
-gate saw. You do not run it for your own lane.
+There is no joint run for you to do: the lead gates ready lanes TOGETHER as one batch candidate
+(`docs/TESTING_GATE.md` §3c), so two lanes on one file family are gated on the tree that holds both.
+You run your brief's named acceptance tests and your subject suite; a batch red is attributed to
+the lane whose own tip makes it.
 
 ### A red in your gate
 

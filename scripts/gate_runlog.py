@@ -45,13 +45,30 @@ import time
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SCHEMA = 1
 # THE TIER NAMES (TESTING-DEBTS-1 T11) — the only ones a record may carry; testing/runs/README.md
-# documents the same list. gate-scope.sh writes the first four (`scoped`; `scoped-fallback` = a
-# scoped gate that fell back to the whole tier; `scoped-tier` = the tier by rule, a fork pin;
-# `joint` = --joint) and `target` (GATE-SPEED-1: the target tests' own step, after the gating
-# verdict — reported, never gating); rc-gate.sh writes JAH_GATE_TIER (merge by default: stage,
-# nightly, push, smoke — the owner's smoke rc —, fork).
-TIERS = ("scoped", "scoped-fallback", "scoped-tier", "joint", "target", "merge", "stage", "nightly", "push",
+# documents the same list. gate-scope.sh writes the first three (`scoped`; `scoped-fallback` = a
+# scoped gate that fell back to the whole tier; `scoped-tier` = the tier by rule, a fork pin) and
+# `target` (GATE-SPEED-1: the target tests' own step, after the gating verdict — reported, never
+# gating); rc-gate.sh writes JAH_GATE_TIER (merge by default: stage, nightly, push, smoke — the
+# owner's smoke rc —, fork; scoped for a BATCH candidate, BATCH-GATE-1). `joint` is gone with
+# `--joint` (BATCH-GATE-1: the batch gate is the joint gate); its old records stay readable.
+TIERS = ("scoped", "scoped-fallback", "scoped-tier", "target", "merge", "stage", "nightly", "push",
          "smoke", "fork")
+
+
+def lane_list(lane):
+    """THE RECORD'S `lanes` (BATCH-GATE-1): the batch's lanes as a LIST — a gate on a batch candidate
+    is every lane's gate at once; the single-lane case is a one-element list. Takes a name, a
+    comma-separated string, or a list of either; empty parts are dropped."""
+    if lane is None:
+        return []
+    parts = lane if isinstance(lane, (list, tuple)) else [lane]
+    out = []
+    for p in parts:
+        for n in str(p).split(","):
+            n = n.strip()
+            if n and n not in out:
+                out.append(n)
+    return out
 
 
 def check_tier(tier):
@@ -198,7 +215,7 @@ def verdict_of(status):
     s = status.lower()
     if "passed" in s: return "PASS"
     if "timeout" in s: return "TIMEOUT"
-    if "not run" in s or "disabled" in s: return "NOTRUN"
+    if "not run" in s or "disabled" in s or "skipped" in s: return "NOTRUN"   # SKIP_RETURN_CODE: it did not run
     if "exception" in s or "segfault" in s or "abort" in s or "signal" in s: return "CRASH"
     return "FAIL"
 
@@ -248,16 +265,19 @@ def _git(args, cwd=None):
         return ""
 
 
-def tree_shas():
-    studio = _git(["rev-parse", "HEAD"])
-    irisgl = _git(["rev-parse", "HEAD"], cwd=os.path.join(ROOT, "irisgl"))
-    fork = _git(["rev-parse", "HEAD"], cwd=os.path.join(ROOT, "irisgl", "thirdparty", "ogre-next"))
+def tree_shas(root=None):
+    """The tree that ran — this checkout's, or `root`'s (a batch's attribution runs each lane's solos
+    in THAT lane's worktree: its records must carry the lane's own tip)."""
+    root = root or ROOT
+    studio = _git(["rev-parse", "HEAD"], cwd=root)
+    irisgl = _git(["rev-parse", "HEAD"], cwd=os.path.join(root, "irisgl"))
+    fork = _git(["rev-parse", "HEAD"], cwd=os.path.join(root, "irisgl", "thirdparty", "ogre-next"))
     # THE TREE THAT RAN: Studio's own files AND irisgl's (an uncommitted engine edit gates green
     # and is never committed otherwise — the second Fable read, F1). irisgl's vendored submodules'
     # CONTENT is ignored: assimp's applied patch stack is configure-time state, not dirt.
-    s_dirty = bool(_git(["status", "--porcelain", "--untracked-files=no", "--ignore-submodules=dirty"]))
+    s_dirty = bool(_git(["status", "--porcelain", "--untracked-files=no", "--ignore-submodules=dirty"], cwd=root))
     i_dirty = bool(_git(["status", "--porcelain", "--untracked-files=no", "--ignore-submodules=dirty"],
-                        cwd=os.path.join(ROOT, "irisgl")))
+                        cwd=os.path.join(root, "irisgl")))
     return {"studio": studio, "irisgl": irisgl, "fork": fork, "studio_dirty": s_dirty or i_dirty,
             "irisgl_dirty": i_dirty}
 
@@ -518,6 +538,7 @@ TIMING_LABEL = "timing"      # gate-scope.py's: a row that measures (the serial 
 CPU_LABEL = "hygiene"        # P8: the lint and selector rows — their own CPU phase, first
 DISPLAY_LOST = 6             # the exit code of a run that stopped because its display died (P6)
 ABORTED = None               # the abort line of the last run_ctest() that stopped, else None
+BATCH = None                 # the batch tag every record of this process carries (`batch`, TESTING_V3 §1.6), else none
 
 
 def _vram():
@@ -731,10 +752,10 @@ def _verbose(cmd):
 class _Run:
     """One run_ctest() call: the context its phases share (one run id, one sampler, one guard)."""
 
-    def __init__(self, tier, lane, jobs, reasons, gating, rng, retry, labels, echo, env):
-        self.tier, self.lane, self.reasons, self.gating, self.rng = tier, lane, reasons or {}, gating, rng
+    def __init__(self, tier, lane, jobs, reasons, gating, rng, retry, labels, echo, env, root=None):
+        self.tier, self.lanes, self.reasons, self.gating, self.rng = tier, lane_list(lane), reasons or {}, gating, rng
         self.retry, self.labels, self.echo, self.env = retry, labels or {}, echo, env
-        self.shas = tree_shas()
+        self.shas = tree_shas() if root is None else tree_shas(root)
         self.box0 = {"jobs": jobs, "display": (env or os.environ).get("DISPLAY"), "gpu_clocks": gpu_clocks(),
                      "other_ctests": other_ctests(), "host": os.uname().nodename}
         self.run_id = f"{datetime.datetime.now().strftime('%Y%m%dT%H%M%S')}-{self.shas['studio'][:9]}"
@@ -751,7 +772,7 @@ class _Run:
         targets, arms = _suite_facts(text)
         base = {"schema": SCHEMA, "run": self.run_id,
                 "ts": datetime.datetime.fromtimestamp(t_end).astimezone().isoformat(timespec="seconds"),
-                "suite": name, "tier": self.tier, "lane": self.lane, "range": self.rng, "tip": self.shas,
+                "suite": name, "tier": self.tier, "lanes": self.lanes, "range": self.rng, "tip": self.shas,
                 "reason": self.reasons.get(name, self.tier), "gating": (self.gating(name) if self.gating else True),
                 "retry": self.retry, "labels": sorted(self.labels.get(name, [])),
                 "box": dict(self.box0, gpu_clocks=at.get("gpu_clocks", self.box0["gpu_clocks"]),
@@ -759,6 +780,7 @@ class _Run:
                             load=[round(x, 2) for x in load],
                             load_mean=self.sampler.mean(t_end - secs, t_end)),
                 "source": "run"}
+        if BATCH: base["batch"] = BATCH        # a batch candidate's gate or attribution: never a lane's own record
         v, st, bline = row_verdict(status, text, arms)
         wait, twait = lock_wait(text), token_wait(text)
         # a timing row's lock line and its admission line are the SAME wait: subtract it once
@@ -884,7 +906,7 @@ class _Run:
 
 
 def run_ctest(cmd, cwd, tier, lane, jobs, reasons=None, gating=None, rng=None, retry=False,
-              labels=None, echo=True, env=None, exclude=None, whole_card=None):
+              labels=None, echo=True, env=None, exclude=None, whole_card=None, root=None):
     """Run a ctest command line (a string, as gate-scope prints it), stream its output, and append
     each row's records (+ its arms') to the run log AS THE ROW ENDS. Returns ctest's exit code — 0
     when every row's last run passed — or DISPLAY_LOST when the display died (ABORTED says why).
@@ -897,14 +919,17 @@ def run_ctest(cmd, cwd, tier, lane, jobs, reasons=None, gating=None, rng=None, r
         ctest tree dies with the gate (F2: _child_setup, the reaper, on_signals);
       * P2: `whole_card` — the run takes EVERY VRAM token once and its rows run nested on them (one
         drain for the phase, not one per row); None = when every row it selects is a `timing` row
-        (the serial phase, however it was started)."""
+        (the serial phase, however it was started);
+      * `lane`: the record's `lanes` — one name, a comma-separated list or a list (lane_list);
+      * `root`: the tree whose shas the records carry (default this checkout; BATCH-GATE-1's
+        attribution runs a lane's solos in that lane's worktree)."""
     global ABORTED
     ABORTED = None
     check_tier(tier)       # before the run, never after an hour of it
     if env is not None and os.environ.get("JAH_GATE_SLOT_HELD"):
         # a row of this gate that starts a gate of its own (a selector test) must never queue behind it
         env = dict(env, JAH_GATE_SLOT_HELD=os.environ["JAH_GATE_SLOT_HELD"])
-    R = _Run(tier, lane, jobs, reasons, gating, rng, retry, labels, echo, env)
+    R = _Run(tier, lane, jobs, reasons, gating, rng, retry, labels, echo, env, root=root)
     why = R.guard.dead()
     if why:
         ABORTED = f"=== GATE ABORTED before its first row: {why} — nothing ran, nothing recorded ==="
@@ -926,7 +951,7 @@ def run_ctest(cmd, cwd, tier, lane, jobs, reasons=None, gating=None, rng=None, r
             bool(rows) and all(TIMING_LABEL in (labels or {}).get(r, ()) for r in rows))
     card = []
     if whole_card and not (env or os.environ).get("JAH_VRAM_HELD"):
-        card, held_env = _vram().hold_card(f"{lane} {tier} phase", log=sys.stdout)
+        card, held_env = _vram().hold_card(f"{'+'.join(lane_list(lane))} {tier} phase", log=sys.stdout)
         if card:
             # THE CALLER'S ENVIRONMENT OVER THE HELD COPY (F5): JAH_POOL_ARMS and the rest survive the hold
             env = dict(held_env, **(env or {}), JAH_VRAM_HELD=held_env["JAH_VRAM_HELD"])
@@ -1012,7 +1037,7 @@ def import_log(path, tier, tip, lane, jobs=None, reason=None):
         m = _RESULT.match(line.rstrip("\n"))
         if not m: continue
         recs.append({"schema": SCHEMA, "run": f"import-{os.path.basename(path)}", "ts": None,
-                     "suite": m.group(1), "arm": None, "tier": tier, "lane": lane, "range": None,
+                     "suite": m.group(1), "arm": None, "tier": tier, "lanes": lane_list(lane), "range": None,
                      "tip": {"studio": tip}, "reason": reason or f"imported from {path}",
                      "gating": True, "retry": False, "labels": [],
                      "verdict": verdict_of(m.group(2)), "status": m.group(2).strip("* "),
@@ -1197,7 +1222,7 @@ def trend_series(days=30, suites=None):
             if v is None:
                 continue
             key = (r["suite"], tkey, _condition(r))
-            e = acc.setdefault(key, {}).setdefault(tip, {"ts": r.get("ts") or "", "lane": r.get("lane") or "?", "v": []})
+            e = acc.setdefault(key, {}).setdefault(tip, {"ts": r.get("ts") or "", "lane": "+".join(r.get("lanes") or []) or "?", "v": []})
             e["ts"] = min(e["ts"], r.get("ts") or e["ts"])
             e["v"].append(v)
     out = {}
@@ -1381,13 +1406,14 @@ def main():
     sub = ap.add_subparsers(dest="cmd", required=True)
     r = sub.add_parser("run", help="run a ctest command and log every suite")
     r.add_argument("--tier", required=True, choices=TIERS)
-    r.add_argument("--lane", default=None)
+    r.add_argument("--lane", action="append", default=None,
+                   help="the record's lanes: repeat it or give a comma-separated list (a batch's lanes)")
     r.add_argument("--jobs", type=int, default=None)
     r.add_argument("--build", default="build-linux")
     r.add_argument("ctest", nargs=argparse.REMAINDER)
     i = sub.add_parser("import", help="records from an existing ctest output log")
     i.add_argument("log"); i.add_argument("--tier", required=True, choices=TIERS); i.add_argument("--tip", required=True)
-    i.add_argument("--lane", default=None); i.add_argument("--jobs", type=int, default=None)
+    i.add_argument("--lane", action="append", default=None); i.add_argument("--jobs", type=int, default=None)
     t = sub.add_parser("times", help="median PASS seconds per suite from the log")
     t.add_argument("--days", type=int, default=14)
     q = sub.add_parser("longest", help="the longest suites/arms by median PASS seconds")
@@ -1408,7 +1434,7 @@ def main():
             sys.stderr.write(bad + "\n"); sys.exit(4)
         build = a.build if os.path.isabs(a.build) else os.path.join(os.getcwd(), a.build) \
             if os.path.isdir(os.path.join(os.getcwd(), a.build)) else os.path.join(ROOT, a.build)
-        lane = a.lane or _git(["rev-parse", "--abbrev-ref", "HEAD"])
+        lane = lane_list(a.lane) or [_git(["rev-parse", "--abbrev-ref", "HEAD"])]
         jobs = a.jobs
         if jobs is None:
             m = re.search(r"-j\s*(\d+)", " ".join(cmd)); jobs = int(m.group(1)) if m else None
@@ -1419,7 +1445,7 @@ def main():
         on_signals()
         slot = None
         try:
-            slot = _vram().gate_slot(f"{lane} {a.tier} (gate_runlog run)", log=sys.stdout)
+            slot = _vram().gate_slot(f"{'+'.join(lane)} {a.tier} (gate_runlog run)", log=sys.stdout)
             rc = run_ctest(line, build, a.tier, lane, jobs, labels=inventory_labels(build))
         except GateSignal as e:
             print(f"\n=== GATE ABORTED: signal {e.sig} — the ctest tree was stopped, the slot and the card released ===")
