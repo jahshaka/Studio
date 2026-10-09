@@ -215,7 +215,7 @@ def verdict_of(status):
     s = status.lower()
     if "passed" in s: return "PASS"
     if "timeout" in s: return "TIMEOUT"
-    if "not run" in s or "disabled" in s: return "NOTRUN"
+    if "not run" in s or "disabled" in s or "skipped" in s: return "NOTRUN"   # SKIP_RETURN_CODE: it did not run
     if "exception" in s or "segfault" in s or "abort" in s or "signal" in s: return "CRASH"
     return "FAIL"
 
