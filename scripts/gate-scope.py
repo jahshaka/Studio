@@ -2148,8 +2148,12 @@ def main():
         if drained:
             gate_runlog.phase_record("drain-timeout", a.tier or "solo", lane, log_range, gate_runlog.tree_shas(),
                                      **drained)
-        if not env.get("JAH_VRAM_HELD"):
-            env["JAH_VRAM_ALL"] = "1"      # no hold (the drain timed out): every admission of a run takes the card
+        fallback = None
+        if drained and not env.get("JAH_VRAM_HELD"):
+            # no hold (the drain timed out): every admission of a run takes the card. The TOOL set it: the runs'
+            # records carry `fallback: drain-timeout`, never an override (F2)
+            env["JAH_VRAM_ALL"] = "1"
+            fallback = "drain-timeout"
         try:
             for s in a.solo:
                 for _ in range(a.times):
@@ -2157,7 +2161,7 @@ def main():
                     r = lost(gate_runlog.run_ctest(
                         f"ctest -j1 --timeout 900 --output-on-failure --no-tests=error -R '{rx}'",
                         build, a.tier or "solo", lane, 1, reasons={s: "solo retry"},
-                        rng=log_range, retry=True, env=env, whole_card=False))
+                        rng=log_range, retry=True, env=env, whole_card=False, fallback=fallback))
                     rc = rc or r
         finally:
             gate_runlog._vram().release(card)

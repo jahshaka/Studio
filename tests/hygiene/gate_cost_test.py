@@ -518,6 +518,9 @@ def main(source, build):
     os.environ.pop("JAH_VRAM_PHASE_WAIT")
     blocker.terminate(); blocker.wait()
     dt = [r for r in records() if r.get("kind") == "drain-timeout"]
+    tc = [r for r in records() if r["suite"] == "time.card"]
+    check(tc and all(r.get("fallback") == "drain-timeout" for r in tc),
+          "every record of the phase whose drain timed out carries `fallback: drain-timeout` (F2; not a measurement)")
     check(rc == 0 and len(dt) == 1 and dt[0]["suite"] == "@drain-timeout" and any("blocker" in h and " for " in h
                                                                                 for h in dt[0].get("holders", []))
           and "HELD by" in buf.getvalue(),
@@ -588,6 +591,18 @@ def main(source, build):
           and rl.law_overrides({"JAH_GATE_SLOT": "0", "JAH_JUDGE_READ": "x", "JAH_VRAM_ALL": "1"})
           == ["JAH_GATE_SLOT=0", "JAH_VRAM_ALL=1", "JAH_JUDGE_READ=x"],
           "every record carries the law switches in force for its run as `overrides` (%r)" % r_.get("overrides"))
+    reset()
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        rl.run_ctest("ctest -j1 --timeout 60 -R '^gpu\\.a$'", tb, "solo", "gate-cost-test", 1, retry=True,
+                     env=dict(os.environ, JAH_VRAM_ALL="1"), fallback="drain-timeout")
+    fr = [r for r in records() if r["suite"] == "gpu.a"]
+    check(fr and fr[0].get("fallback") == "drain-timeout" and not any(o.startswith("JAH_VRAM_ALL") for o in fr[0]["overrides"]),
+          "a JAH_VRAM_ALL the TOOL set after a drain timeout is `fallback: drain-timeout`, not an override (F2: %r)"
+          % fr[0].get("overrides") if fr else None)
+    vpath = cgc.record_verdicts([(("gpu.a", None), "read: x")], clean["studio"], clean["irisgl"])
+    vrec = [json.loads(l) for l in open(vpath)][-1]
+    check("overrides" not in vrec, "a --verdict is a lawful act through the door, never an override (F2)")
     p_ = subprocess.run([sys.executable, os.path.join(scripts, "gate_runlog.py"), "hash-move", "--tier", "smoke",
                          "--lane", "rc-x", "--pose", "B1", "--old", "a" * 64, "--new", "b" * 64],
                         capture_output=True, text=True, cwd=source)

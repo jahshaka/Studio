@@ -556,23 +556,27 @@ def _vram():
     return vram_tokens
 
 
-# THE LAW SWITCHES (GATE-COST-2 #10): an environment that changes how a gate admits, waits or judges. Every
-# record of a run carries the ones in force as `overrides: [names]` (empty when none); the push judge
-# (VERDICT-1) refuses a candidate whose records carry any. A hand --verdict marks its own records the same way
-# (ci_gate_check.py).
+# THE LAW SWITCHES (GATE-COST-2 #10, fix round F2): an environment A HUMAN set that changes how a gate admits,
+# waits or judges. Every record of a run carries the ones in force as `overrides: [names]` (empty when none);
+# the push judge (VERDICT-1) refuses a candidate whose records carry any. What the TOOLS set is not an
+# override: the JAH_VRAM_ALL a --solo batch sets after its whole-card drain timed out is recorded as
+# `fallback: drain-timeout` on every record of that run instead (and a timing row's record carrying a
+# fallback is not a measurement: the judge refuses it until the row re-runs under a real whole-card hold).
+# A --verdict is a lawful act through the door, never an override.
 LAW_SWITCHES = ("JAH_GATE_SLOT", "JAH_VRAM_TOKENS", "JAH_VRAM_ALL", "JAH_JUDGE_READ", "JAH_VRAM_WAIT",
                 "JAH_VRAM_PHASE_WAIT", "JAH_GATE_REQUEUE", "JAH_DISPLAY_POLL_S", "JAH_KERNEL_JOURNAL",
                 "JAH_VRAM_PROC_LOCKS")
 
 
-def law_overrides(env=None):
-    """[NAME=value …] of the law switches set in `env` (default os.environ). JAH_VRAM_TOKENS counts only
-    when it is not the default 11; JAH_GATE_SLOT only when it turns the slot off."""
+def law_overrides(env=None, tool_set=()):
+    """[NAME=value …] of the law switches set in `env` (default os.environ), minus `tool_set` — the switches
+    the tools set themselves for this run (its `fallback` says why). JAH_VRAM_TOKENS counts only when it is
+    not the default 11; JAH_GATE_SLOT only when it turns the slot off."""
     env = os.environ if env is None else env
     out = []
     for k in LAW_SWITCHES:
         v = env.get(k)
-        if v is None:
+        if v is None or k in tool_set:
             continue
         if k == "JAH_VRAM_TOKENS" and v.strip() == "11":
             continue
@@ -847,11 +851,12 @@ def _verbose(cmd):
 class _Run:
     """One run_ctest() call: the context its phases share (one run id, one sampler, one guard)."""
 
-    def __init__(self, tier, lane, jobs, reasons, gating, rng, retry, labels, echo, env, build=None):
+    def __init__(self, tier, lane, jobs, reasons, gating, rng, retry, labels, echo, env, build=None, fallback=None):
         self.tier, self.lane, self.reasons, self.gating, self.rng = tier, lane, reasons or {}, gating, rng
         self.retry, self.labels, self.echo, self.env = retry, labels or {}, echo, env
         self.shas = tree_shas()
-        self.overrides = law_overrides(env)
+        self.fallback = fallback
+        self.overrides = law_overrides(env, tool_set=("JAH_VRAM_ALL",) if fallback else ())
         # WHAT THE BINARIES WERE BUILT FROM rides every record (GATE-COST-2 #8): the refusal never counts a
         # record of a stale build as the tip's run
         b = built_from(build) if build else None
@@ -877,6 +882,7 @@ class _Run:
                 "suite": name, "tier": self.tier, "lane": self.lane, "range": self.rng, "tip": self.shas,
                 "reason": self.reasons.get(name, self.tier), "gating": (self.gating(name) if self.gating else True),
                 "retry": self.retry, "labels": sorted(self.labels.get(name, [])), "overrides": self.overrides,
+                **({"fallback": self.fallback} if self.fallback else {}),
                 "box": dict(self.box0, gpu_clocks=at.get("gpu_clocks", self.box0["gpu_clocks"]),
                             other_ctests=at.get("other_ctests", self.box0["other_ctests"]),
                             load=[round(x, 2) for x in load],
@@ -1021,7 +1027,7 @@ class _Run:
 
 
 def run_ctest(cmd, cwd, tier, lane, jobs, reasons=None, gating=None, rng=None, retry=False,
-              labels=None, echo=True, env=None, exclude=None, whole_card=None):
+              labels=None, echo=True, env=None, exclude=None, whole_card=None, fallback=None):
     """Run a ctest command line (a string, as gate-scope prints it), stream its output, and append
     each row's records (+ its arms') to the run log AS THE ROW ENDS. Returns ctest's exit code — 0
     when every row's last run passed — or DISPLAY_LOST when the display died (ABORTED says why).
@@ -1041,7 +1047,7 @@ def run_ctest(cmd, cwd, tier, lane, jobs, reasons=None, gating=None, rng=None, r
     if env is not None and os.environ.get("JAH_GATE_SLOT_HELD"):
         # a row of this gate that starts a gate of its own (a selector test) must never queue behind it
         env = dict(env, JAH_GATE_SLOT_HELD=os.environ["JAH_GATE_SLOT_HELD"])
-    R = _Run(tier, lane, jobs, reasons, gating, rng, retry, labels, echo, env, build=cwd)
+    R = _Run(tier, lane, jobs, reasons, gating, rng, retry, labels, echo, env, build=cwd, fallback=fallback)
     stale = stale_build(R.shas)
     if stale:
         R.say(f"=== STALE BUILD: {cwd} was {stale} ({R.shas['studio'][:9]}) — its records will NOT count as the tip's "
@@ -1075,6 +1081,7 @@ def run_ctest(cmd, cwd, tier, lane, jobs, reasons=None, gating=None, rng=None, r
         drained = _vram().LAST_DRAIN_TIMEOUT
         if drained:
             phase_record("drain-timeout", tier, lane, rng, tree_shas(), **drained)
+            R.fallback = "drain-timeout"           # every record of this run: not a whole-card measurement
     phases = [(cmd, None)]
     if rows is not None:
         skip = [r for r in rows if r in exclude]
