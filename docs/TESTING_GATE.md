@@ -353,8 +353,8 @@ on this lane's own two rounds: `spikes/gate-speed-1/`.
 
 A red of a CONTENTION-CLASS suite is re-run SOLO 3× (`scripts/gate-scope.sh --solo <suite>`: each
 admission of a solo run takes the whole card, §4b); 3/3 green = environmental, with the evidence
-string in the report (host-load timing, the texture-worker SEGV class). ANY OTHER red needs a
-recorded verdict (real + the failing assertion, or environmental + the evidence):
+string in the report (host-load timing). ANY OTHER red needs a
+recorded verdict that passes THE VERDICT DOOR (below; VERDICT-1):
 `scripts/ci-gate-check.sh <range> --verdict "<row>=<text>" ...` writes it into the run log, per row and timestamped (it clears only the reds logged before it; a row that never ran — NOADMIT — is missing, which no verdict clears). THE MERGE REFUSAL
 APPLIES THIS (TEST-SELECTOR-1 L2/L3): `ci-gate-check.sh` refuses a merge while a selected row was
 never run at the tip, a contention-class red lacks 3/3 solo PASS after it (a solo red means it is not
@@ -368,6 +368,38 @@ unadmitted process filled the card — the verdict names which (`scripts/gpu-adm
 the refusal and by `--solo` — never a prose list; a suite joins it by a recorded verdict. Every failure in a gate report carries a verdict
 (environmental + evidence, or real + the failing assertion); a report without verdicts is
 not a gate.
+
+**THE VERDICT DOOR (lane VERDICT-1, 2026-10-09; ONE_PICTURE_SPEC H1/H2; the preflight measured 58 verdicts of a
+week, 6 clearing solos below 3/3 by prose, 2 LOSTs called environmental with no journal read, 13 never-ran pools
+recorded FAIL).** `ci_gate_check.py`'s `judge()` parses a verdict's TEXT; `--verdict "<row>=<text>"` keeps its syntax.
+A verdict clears the open reds logged before it ONLY when:
+- **FAIL / TIMEOUT**: the text carries `real:<DEFECT-ID>` (the defect, filed — fixed, with the commit), or
+  `contention:<evidence>` AND the row reached **3/3 solo PASS after the red** (the solos may run after the verdict);
+- **LOST / OOM / CRASH**: the text carries `real:<DEFECT-ID>` or `xid-read:<journal window>` — the window the reader
+  read, covering the red (`xid-read:2026-10-09T14:00..14:30 none`); `environmental` on a LOST and any other text are
+  refused;
+- **a red whose record carries an `xid`** (an Xid from a pid of the row's own process tree — the run log's `xid`
+  field): ONLY `real:<DEFECT-ID>` — never environmental (CLAUDE.md);
+- **solos below 3/3 are NEVER cleared by text**, listed or not (2/3, 1/1, 0/3: fix it or run `--solo` to 3/3);
+- NOADMIT / NOTRUN never ran: no verdict clears them (unchanged).
+A refused verdict prints `VERDICT REFUSED <row>: <why>` (the rule named) and the row stays red. The contention list's
+3/3 solo clearance (no verdict needed) still applies to a listed row's FAIL/TIMEOUT — never to a LOST, OOM, CRASH
+or a red with an Xid (a crash is a defect row, never contention).
+
+**A REBASE CARRIES ITS OPEN REDS (VERDICT-1 U4).** The judge reads, for a lane's tip, every record of THAT LANE
+NAME (`lane`, or BATCH-GATE-1's `lanes` list — both shapes) at any other tip, ancestor or not, and refuses the tip
+while a red there has no later green record of the same row+arm at the tip and no verdict through the door:
+`OPEN RED carried from <old tip>: <row>`. `--verdict` records the answer AT the old tip. Forward only: schema-2
+records (since 2026-10-09); the historic cases are `scripts/gate-report.py --carried` (44 in the preflight).
+
+**THE LIST'S SHAPE (VERDICT-1 U5).** Every `contention.json` entry is `{reason, date, recheck}` — the verdict and its
+source, the date it was given (YYYY-MM-DD), the trigger that re-opens it (`"after P1 lands: solo 3x"`); the judge
+REFUSES TO LOAD a list with an entry missing one (exit 2, the entries named). A crash class never joins it.
+
+**THE Xid IN THE RECORD (VERDICT-1 U3).** `vram_tokens.py`'s supervise reads the kernel journal (through
+`kernel_xid.py`) after every admitted row and prints `XID … from pid <p> of the row …` and `XID-WINDOW <start>..<end>`;
+the run log records `xid: null | {pid, window, lines[]}` on the row (and an arm whose process faulted, from the pool
+runner's `ARM … CRASH … xid <n>`). The weekly read is `scripts/gate-report.py` (testing/runs/README.md).
 
 **THE GPU-TIMING ADMISSION (lane DEVPROCESS-1, 2026-09-23; THE TIMING LIST since D6B-GATE-SHAPE,
 2026-09-27; ONE ADMISSION since TEST-SELECTOR-1, 2026-10-01).** `RUN_SERIAL` serialises only
