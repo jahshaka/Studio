@@ -249,7 +249,9 @@ def main(source, build):
     t = threading.Thread(target=lambda: res.update(r=run("^(lint\\.one|gpu\\.a|gpu\\.wait|gpu\\.slow)$", jobs=3, env=env)))
     t.start()
     deadline = time.time() + 40
-    while not {"gpu.wait", "gpu.slow"} <= set(order()) and time.time() < deadline:
+    # the death comes once gpu.wait and gpu.slow run and gpu.a's record is written (a loaded box delays it)
+    while not ({"gpu.wait", "gpu.slow"} <= set(order()) and any(r["suite"] == "gpu.a" for r in records())) \
+            and time.time() < deadline:
         time.sleep(0.2)
     fake_x.kill(); fake_x.wait()
     open(os.path.join(state, "go"), "w").close()       # gpu.wait ends RED after the display died
