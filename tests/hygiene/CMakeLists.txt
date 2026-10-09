@@ -187,6 +187,38 @@ if(Python3_Interpreter_FOUND)
                      "${CMAKE_SOURCE_DIR}" "${CMAKE_BINARY_DIR}")
     set_tests_properties(gate.cost PROPERTIES TIMEOUT 180 LABELS "hygiene")
     jah_no_display(gate.cost)
+    # gate.verdict_door / noadmit_pool / carried_red / contention_shape / log_schema2 — THE JUDGE'S FOUR
+    # DOORS (VERDICT-1 + GATE-LOG-1; ONE_PICTURE_SPEC H1/H2; TESTING_GATE §4): a verdict clears a red only
+    # with a class token (real:<id>; contention: + 3/3 solo; xid-read:<window> on LOST/OOM/CRASH; an Xid in
+    # the record takes real:<id> only); an all-NOADMIT pool never ran; a rebase carries its open reds;
+    # the contention list's entries carry {reason, date, recheck}; schema 2's fields and gate-report.py
+    # (on the box's archive: the preflight's numbers). Toy logs, a private run log / list / token dir
+    # (~5-30 s each).
+    add_test(NAME gate.verdict_door
+             COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/gate_verdict_test.py" verdict_door
+                     "${CMAKE_SOURCE_DIR}" "${CMAKE_BINARY_DIR}")
+    set_tests_properties(gate.verdict_door PROPERTIES TIMEOUT 180 LABELS "hygiene")
+    jah_no_display(gate.verdict_door)
+    add_test(NAME gate.noadmit_pool
+             COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/gate_verdict_test.py" noadmit_pool
+                     "${CMAKE_SOURCE_DIR}" "${CMAKE_BINARY_DIR}")
+    set_tests_properties(gate.noadmit_pool PROPERTIES TIMEOUT 180 LABELS "hygiene")
+    jah_no_display(gate.noadmit_pool)
+    add_test(NAME gate.carried_red
+             COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/gate_verdict_test.py" carried_red
+                     "${CMAKE_SOURCE_DIR}" "${CMAKE_BINARY_DIR}")
+    set_tests_properties(gate.carried_red PROPERTIES TIMEOUT 180 LABELS "hygiene")
+    jah_no_display(gate.carried_red)
+    add_test(NAME gate.contention_shape
+             COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/gate_verdict_test.py" contention_shape
+                     "${CMAKE_SOURCE_DIR}" "${CMAKE_BINARY_DIR}")
+    set_tests_properties(gate.contention_shape PROPERTIES TIMEOUT 180 LABELS "hygiene")
+    jah_no_display(gate.contention_shape)
+    add_test(NAME gate.log_schema2
+             COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/gate_verdict_test.py" log_schema2
+                     "${CMAKE_SOURCE_DIR}" "${CMAKE_BINARY_DIR}")
+    set_tests_properties(gate.log_schema2 PROPERTIES TIMEOUT 180 LABELS "hygiene")
+    jah_no_display(gate.log_schema2)
 endif()
 
 # source.member_init — UNINIT-SWEEP-1: every scalar, pointer and enum member of ours
