@@ -323,10 +323,14 @@ def main(source, build):
     tree = rl._descendants(gk.pid)
     gk.kill(); gk.wait()
     t_kill = time.time()
-    while time.time() - t_kill < 20 and any(os.path.exists(f"/proc/{p_}") and
-                                             open(f"/proc/{p_}/stat").read().split()[2] != "Z" for p_ in tree):
+    def running(p_):
+        try:                                     # a process may vanish between any two reads
+            return open(f"/proc/{p_}/stat").read().rsplit(")", 1)[1].split()[0] != "Z"
+        except (OSError, IndexError):
+            return False
+    while time.time() - t_kill < 20 and any(running(p_) for p_ in tree):
         time.sleep(0.5)
-    left = [p_ for p_ in tree if os.path.exists(f"/proc/{p_}")]
+    left = [p_ for p_ in tree if running(p_)]
     os.environ.pop("TOY_SLOW")
     stt = subprocess.run([sys.executable, vt, "status"], capture_output=True, text=True).stdout
     check(tree and not left and time.time() - t_kill < 20 and "nobody holds it" in stt,
