@@ -44,8 +44,20 @@ set(JAH_VRAM_TOKENS_VR 3)
 #                       shadow atlas and the ray reflections stay; kept at 2 until measured)
 #   document         3  the document's own tier: a new scene is Epic with everything on, a
 #                       sample opens at what it saved (Epic for four of the nine)
-# MEASURED (TEST-NEEDS-1, nvidia-smi per pid, two rows per tier): see the lane's evidence,
-# spikes/test-needs-1/vram.txt — the numbers are entered here when the run is made.
+# MEASURED (TEST-NEEDS-1, 2026-10-09/10, nvidia-smi --query-compute-apps per pid, 0.5 s samples,
+# peak per process, rows run at -j2 on a 1920x1080 Xvfb; spikes/test-needs-1/vram-runs*.json):
+#   low NONE         median 1,461 / max 1,491 MiB  (23 processes: scripting.live/_off, mcp.e2e,
+#                    ui.shot_aspect, perf.offscreen_isolation, the low pools, test_needs_boot)
+#   medium none      1,587 MiB; medium photon 1,655 MiB (test_needs_boot.js by hand: no row
+#                    declares medium)
+#   high photon      1,777-2,089 MiB (gi.chain_converge_scenes, test_needs_boot high)
+#   epic photon      median 2,292 / max 2,532 MiB (56 processes: gi.one_writer, the pcc and
+#                    lattice rows, the lifecycle harnesses, the atom rows, all-five rows)
+#   document         median 2,226 / max 2,610 MiB (pool.gi_verbs, pool.atom, cleanstart Showroom 2)
+# Per pid that is ~1.35 tokens at Low/Medium against a lookup of 1: the token (1,090 MiB) was
+# calibrated on the SUM of a full gate's processes (GATE-ADMIT-1), where the per-process floor
+# the driver reports is not additive, and Low has run at 1 since TEST-TIER-1 with no OOM red.
+# Epic+photon / document peak at 2.3-2.6 GB: over 2 tokens (2,180), under 3 — hence 3.
 set(JAH_VRAM_TOKENS_BY_NEEDS
     low:none=1 low:photon=1
     medium:none=1 medium:photon=1

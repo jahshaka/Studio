@@ -4,6 +4,7 @@
 # validation proved to REFUSE a row without its words (each refusal a child `cmake -P` that
 # must fail, since a FATAL_ERROR ends the process that raised it).
 #   cmake -DSRC=<tests dir> -P tokens_by_needs.cmake
+# RED ON BASE (a5ab3a057): tests/support/vram_tokens.cmake does not exist — the include fails.
 if(NOT SRC)
     message(FATAL_ERROR "tokens_by_needs: -DSRC=<tests dir> is required")
 endif()
