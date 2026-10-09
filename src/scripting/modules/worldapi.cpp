@@ -349,7 +349,7 @@ QVector<VerbInfo> WorldApi::verbs() const
         { "atomView", "world.atomView() -> string",
           "The open scene's Atom view — 'off', 'triangles', 'levels', 'buckets' or 'objects' (world.setAtomView).",
           Needs::Document },
-        { "setPhotonView", "world.setPhotonView('off'|'voxels'|'probes'|'cards'|'screenProbes'|'diffuse'|'reflections'|'hits', {cascade}) -> bool",
+        { "setPhotonView", "world.setPhotonView('off'|'voxels'|'probes'|'cards'|'screenProbes'|'diffuse'|'reflections'|'hits'|'gatherHits', {cascade}) -> bool",
           "THE PHOTON VIEW: the lighting's own debug pictures, one at a time, over the finished frame of every view of the open scene that draws the post chain (the viewport, and the editor's graded screenshots while it is on). "
           "'voxels' draws the lit voxels of ONE voxel cascade as cubes, each the colour of the light it holds (Ogre's own VCT debug picture): by default the finest cascade that holds the scene's whole lit content (world.giStatus().boundsMin/Max; the outermost when none does), or the chain's cascade {cascade: n} (0 = the finest, a box of a few metres centred on the eye; clamped to the chain; -1 = the default again; world.giStatus().viewCascade reads it); "
           "'probes' draws every probe of the irradiance field as a sphere shaded by the irradiance it stores (Ogre's own irradiance-field debug picture); "
@@ -357,12 +357,13 @@ QVector<VerbInfo> WorldApi::verbs() const
           "'screenProbes' draws every screen-space probe of the gather as a disc at the point it sits on, coloured by the irradiance its rays traced (the picture behind is dimmed); "
           "'diffuse' is the picture lit by the indirect diffuse term alone and 'reflections' by the specular environment term alone (probes, voxels, screen-space and ray-traced reflections) — the same lighting text as every pixel, with direct light, emission, refraction and fog left out; "
           "'hits' colours every pixel whose reflection is ray-traced by what shaded its ray: green a surface card, blue the voxels, cyan the sky (the ray escaped), magenta the hit list (a mover, a rigged item or a surface no cache answered, shaded by the decode), red a record the full list dropped — pixels that trace no ray are dimmed; "
+          "'gatherHits' is the same reading for the SCREEN-PROBE GATHER's rays: every probe's cell of the picture painted ray by ray (one octahedral texel of the probe to one block of its cell) in the colour of what answered that ray — green a surface card, blue the voxels (darker at each coarser cascade: the finest that answered), cyan the sky, magenta a hit-list record (the decode), orange a FAR record (a ray past the near length, shaded by the decode on the mesh's coarsest level), red a dropped record — and a cell with no probe dimmed; its numbers are world.gatherHits; "
           "'off' is the ordinary picture, byte for byte. "
-          "Where a picture cannot be painted the verb REFUSES with the reason (world.giStatus().viewRefusals names it for every mode): the Low tier's viewport draws no post chain; 'voxels' needs voxel GI, 'probes' the irradiance field, 'cards' the surface cache, 'screenProbes' the screen-probe gather and 'hits' the reflection trace (both need ray tracing, High and Epic). While a stereo (headset) view draws the scene, 'voxels' and 'probes' refuse too: Ogre's voxel and probe visualizers are low-level materials the engine's instanced stereo does not serve (a mode set before the session keeps painting the desktop's view). "
+          "Where a picture cannot be painted the verb REFUSES with the reason (world.giStatus().viewRefusals names it for every mode): the Low tier's viewport draws no post chain; 'voxels' needs voxel GI, 'probes' the irradiance field, 'cards' the surface cache, 'screenProbes' and 'gatherHits' the screen-probe gather and 'hits' the reflection trace (all three need ray tracing, High and Epic). While a stereo (headset) view draws the scene, 'voxels' and 'probes' refuse too: Ogre's voxel and probe visualizers are low-level materials the engine's instanced stereo does not serve (a mode set before the session keeps painting the desktop's view). "
           "A viewing aid, not a setting: not saved, not undoable, switching rebuilds nothing, and opening or creating a scene starts 'off'; the project thumbnail never shows it. Answers true when the view was accepted.",
           Needs::Document },
         { "photonView", "world.photonView() -> string",
-          "The open scene's Photon view — 'off', 'voxels', 'probes', 'cards', 'screenProbes', 'diffuse', 'reflections' or 'hits' (world.setPhotonView); also world.giStatus().view.",
+          "The open scene's Photon view — 'off', 'voxels', 'probes', 'cards', 'screenProbes', 'diffuse', 'reflections', 'hits' or 'gatherHits' (world.setPhotonView); also world.giStatus().view.",
           Needs::Document },
         { "giVoxelStats", "world.giVoxelStats({cascade}) -> {available, cascade, width, height, depth, format, formatMax, multiplier, peak, peakDirect, meanLit, voxels, voxelsLit, voxelsAtMax, voxelsAboveOne, directAtMax, emissiveFormat, peakEmissive, emissiveAtMax, emissiveAboveOne, lightDigest}",
           "WHAT THE VOXEL LIGHTING VOLUME HOLDS — the bytes, not the picture. A TEST AND TOOL verb: the renderer flushes its command stream and downloads the whole 3D volume (8 MB at 128^3), which takes milliseconds and must never be called on a frame path. "
@@ -372,6 +373,16 @@ QVector<VerbInfo> WorldApi::verbs() const
           "'voxelsAtMax' is THE CLIP: voxels sitting on the format's top bin in any channel. On a fixed-range total a non-zero count means the bounce's fixed point did not fit — every one of those voxels is darker than the physics asked for, and in a hue the per-channel clip has shifted. 'voxelsAboveOne' is its counterpart on a float store: the voxels an 8-bit store WOULD have clipped, i.e. the range actually being used. 'directAtMax' is the same count on the direct volume. "
           "AND THE SOURCE, one stage upstream: 'emissiveFormat', 'peakEmissive', 'emissiveAtMax' and 'emissiveAboveOne' are the same reading over the VOXELISER'S EMISSIVE STORE — what the light injection SEEDS the volumes above from. They are in SCENE RADIANCE, not store units ('multiplier' does not apply to them): 'peakEmissive' over a scene with one emitter is that emitter's authored radiance, so an emitter authored at 3.0 that reads 1.0 here has been clipped on its way IN, which is a defect nothing downstream can tell from a dimmer emitter. 'emissiveAtMax' counts texels on a fixed-range store's top bin (the clip itself) and 'emissiveAboveOne' the texels an 8-bit store could not have held. 'emissiveFormat' is empty when the cascade has no voxeliser to read. "
           "'available' false — and nothing else — when there is no engine viewport, no voxel arm on this scene, or no such cascade; there is no document-side answer to fall back on, so a zero here is never a measurement. 'lightDigest' is a 64-bit hash of the raw bytes of every light volume a reader of that cascade samples (the total, then the three anisotropic axis volumes on an anisotropic tier), as 16 hex digits: two readings are equal exactly when the volumes are byte-identical, which is how the renderer proves that one at-rest injection sweep already IS the chain's fixed point (a second sweep changes no byte).",
+          Needs::Document },
+        { "gatherHits", "world.gatherHits({x, y, w, h, minDistance, maxDistance, rays}) -> {ready, frame, stride, octRes, probes, rays, sources, sunlitUp, shadedUp, other, samples}",
+          "THE GATHER-HITS READBACK — what answered the SCREEN-PROBE GATHER's rays, as numbers (the 'gatherHits' photon view is the same reading as a picture). An INSTRUMENT: it reads the renderer's per-ray records, which exist only while the arm is on — engine.arm('gather.hitsReadback', 1), then a few frames (the records arrive a few frames late, from the last frame that traced; with the arm on the view never holds its rest, so every frame traces) — and answers {ready: false, reason} otherwise. "
+          "The rectangle {x, y, w, h} is a fraction of the viewport (0..1; the whole view by default): every UNIFORM probe whose cell centre lies inside it counts, all of its rays (an adaptive probe, a cell's second, is not read back). 'minDistance' / 'maxDistance' (metres) keep only the rays whose hit lies that far (the sky has no distance and is kept by neither). "
+          "'sources' has one entry per answer — 'card' (the hit surface's card), 'voxel' (the cascade chain; its 'cascades' are the counts by the FINEST cascade that answered, innermost first), 'sky' (the ray escaped), 'decode' (a hit-list record the visibility-buffer decode shaded), 'decodeFar' (a record past the near length, the mesh's coarsest level), 'dropped' (a record the full list dropped: 0 radiance) — each {count, share (of the rays counted), luminance (the mean Rec.709 luminance of the radiance the rays RETURNED, read after the decode's write-back), radiance {r, g, b}, distance (the mean hit distance)}. "
+          "'sunlitUp', 'shadedUp' and 'other' split the HITS by what they landed on: an upward-facing surface (the hit normal's y above 0.7) where the hit's own sun ray reached the sun, one where it did not, and everything else — each {count, sources: {name: {count, luminance}}}: the reading that says what a ray on the sunlit street returned and who answered it. "
+          "'probes' is how many probes the rectangle held and 'rays' the rays counted; 'frame' which gather frame it is of. {rays: N} also returns the first N counted rays one by one as 'samples' — {source, cascade, cell, radiance [r, g, b], distance, hit [x, y, z] (half precision), normalY, sun} — for a caller that classifies the hits itself (a document raycast at each hit).",
+          Needs::Document },
+        { "giVoxelRead", "world.giVoxelRead({cascade, points: [{x, y, z}, ...]}) -> {available, cascade, cell, origin, multiplier, points: [{index, light, radiance, back, albedo, normal, coverageP, coverageN}]}",
+          "ONE CASCADE'S STORE AT WORLD POINTS — the voxel texel each point falls in, as it is STORED (before any read's kernel). A TEST AND TOOL verb: the renderer flushes and downloads the cascade's level-0 volumes whole (like world.giVoxelStats). Per point: 'index' [i, j, k] (null outside the cascade), 'light' the total light texel [r, g, b, a] in the store's units (premultiplied by the voxel's opacity a, times 'multiplier'), 'radiance' the surface radiance it stands for (rgb / a / multiplier), 'back' the same for the voxel's back side (the anisotropic tiers), 'albedo' [r, g, b, opacity], 'normal' the voxeliser's normal [x, y, z biased 0.5 + 0.5 n, 1 = two-sided], 'coverageP' / 'coverageN' the per-axis coverage of the faces looking +a / -a. 'cell' and 'origin' are the cascade's lattice in metres.",
           Needs::Document },
         { "photon", "world.photon({enabled, tier}) -> {enabled, tier, custom, deviations, technique, quality, ddgi, bounces, row, updateBudget}",
           "PHOTON — realtime global illumination, as one switch and one quality dial. This is the surface the World panel shows and the shortest way to say what a scene should look like; world.gi is the same model with every individual knob exposed, and world.settings()/world.override are the same model again as registry rows. "
@@ -1290,7 +1301,7 @@ static QVariantMap cardsToJs(const IEditorViewport::GiStatusInfo::CardsInfo &c)
 
 namespace {
 const char *const kPhotonViewNames[] = { "off", "voxels", "probes", "cards", "screenProbes",
-                                         "diffuse", "reflections", "hits" };
+                                         "diffuse", "reflections", "hits", "gatherHits" };
 static_assert(sizeof(kPhotonViewNames) / sizeof(kPhotonViewNames[0]) ==
                   size_t(jahshaka::engine::kPhotonViewCount),
               "one name per PhotonView, in its order");
@@ -1722,7 +1733,7 @@ bool WorldApi::setPhotonView(const QString &view, const QVariantMap &options)
         if (view.compare(QLatin1String(kPhotonViewNames[i]), Qt::CaseInsensitive) == 0) mode = i;
     if (mode < 0) {
         fail(QStringLiteral("world.setPhotonView: unknown view '%1' (off, voxels, probes, cards, "
-                            "screenProbes, diffuse, reflections, hits)")
+                            "screenProbes, diffuse, reflections, hits, gatherHits)")
                  .arg(view));
         return false;
     }
@@ -1793,6 +1804,164 @@ QVariantMap WorldApi::giVoxelStats(const QVariantMap &params)
                         { QStringLiteral("emissiveAtMax"), double(st.emissiveAtMax) },
                         { QStringLiteral("emissiveAboveOne"), double(st.emissiveAboveOne) },
                         { QStringLiteral("lightDigest"), st.lightDigest } };
+}
+
+QVariantMap WorldApi::gatherHits(const QVariantMap &params)
+{
+    auto scene = sceneOrFail(QStringLiteral("world.gatherHits"));
+    if (!scene) return QVariantMap();
+    jahshaka::engine::Scene *es =
+        (host.isEngineReady() && host.viewport) ? host.viewport->engineScene() : nullptr;
+    if (!es)
+        return QVariantMap{ { QStringLiteral("ready"), false },
+                            { QStringLiteral("reason"), QStringLiteral("no engine viewport") } };
+    const jahshaka::engine::GatherStatus g = es->giStatus().gather;
+    if (!g.running || g.rays.empty() || !g.stride || !g.targetW || !g.targetH)
+        return QVariantMap{ { QStringLiteral("ready"), false },
+                            { QStringLiteral("reason"),
+                              g.running ? QStringLiteral("no per-ray records yet: engine.arm('gather.hitsReadback', 1), "
+                                                         "then render a few frames")
+                                        : QStringLiteral("the screen-probe gather is not running on this view") } };
+    const double rx = params.value(QStringLiteral("x"), 0.0).toDouble();
+    const double ry = params.value(QStringLiteral("y"), 0.0).toDouble();
+    const double rw = params.value(QStringLiteral("w"), 1.0).toDouble();
+    const double rh = params.value(QStringLiteral("h"), 1.0).toDouble();
+    const double dMin = params.value(QStringLiteral("minDistance"), -1.0).toDouble();
+    const double dMax = params.value(QStringLiteral("maxDistance"), 1e30).toDouble();
+    const int wantRays = std::max(0, params.value(QStringLiteral("rays"), 0).toInt());
+    QVariantList rayList;
+    static const char *const kNames[7] = { "none", "card", "voxel", "sky", "decode", "decodeFar", "dropped" };
+    struct Acc { double n = 0, l = 0, r = 0, gg = 0, b = 0, d = 0; double cas[4] = { 0, 0, 0, 0 }; };
+    Acc src[7];
+    Acc cls[3][7];   // sunlitUp, shadedUp, other
+    unsigned probes = 0, rays = 0;
+    const unsigned eyeW = g.stereo ? g.targetW / 2u : g.targetW;
+    for (size_t i = 0; i < g.rays.size(); ++i) {
+        const jahshaka::engine::GatherRay &r = g.rays[i];
+        // the cell centre in the view (an eye's cells are its own; the left eye's under stereo)
+        const unsigned cx = g.stereo && g.eyeProbesX ? r.cellX % g.eyeProbesX : r.cellX;
+        const double u = (double(cx) + 0.5) * g.stride / double(eyeW);
+        const double v = (double(r.cellY) + 0.5) * g.stride / double(g.targetH);
+        if (u < rx || u > rx + rw || v < ry || v > ry + rh) continue;
+        if (r.source == 0 || r.source > 6) continue;
+        const bool isHit = r.distance > 0.0f;
+        if ((dMin >= 0.0 || dMax < 1e29) && (!isHit || r.distance < dMin || r.distance > dMax)) continue;
+        if (r.ray == 0) ++probes;
+        ++rays;
+        if (int(rayList.size()) < wantRays)
+            rayList.push_back(QVariantMap{
+                { QStringLiteral("source"), QLatin1String(kNames[r.source]) },
+                { QStringLiteral("cascade"), int(r.cascade) },
+                { QStringLiteral("cell"), QVariantList{ int(r.cellX), int(r.cellY) } },
+                { QStringLiteral("radiance"), QVariantList{ r.radiance[0], r.radiance[1], r.radiance[2] } },
+                { QStringLiteral("distance"), r.distance },
+                { QStringLiteral("hit"), QVariantList{ r.hitPos[0], r.hitPos[1], r.hitPos[2] } },
+                { QStringLiteral("normalY"), r.hitNormalY },
+                { QStringLiteral("sun"), r.sunVisibility } });
+        const double lum = 0.2126 * r.radiance[0] + 0.7152 * r.radiance[1] + 0.0722 * r.radiance[2];
+        const auto add = [&](Acc &a) {
+            a.n += 1; a.l += lum; a.r += r.radiance[0]; a.gg += r.radiance[1]; a.b += r.radiance[2];
+            a.d += isHit ? r.distance : 0.0;
+            if (r.source == jahshaka::engine::GatherRay::Voxel) a.cas[std::min<unsigned>(r.cascade, 3u)] += 1;
+        };
+        add(src[r.source]);
+        if (isHit) {
+            const int c = r.hitNormalY > 0.7f ? (r.sunVisibility > 0.5f ? 0 : 1) : 2;
+            add(cls[c][r.source]);
+        }
+    }
+    QVariantMap sources;
+    for (int k = 1; k < 7; ++k) {
+        const Acc &a = src[k];
+        QVariantMap m{ { QStringLiteral("count"), a.n },
+                       { QStringLiteral("share"), rays ? a.n / rays : 0.0 },
+                       { QStringLiteral("luminance"), a.n ? a.l / a.n : 0.0 },
+                       { QStringLiteral("radiance"),
+                         QVariantMap{ { QStringLiteral("r"), a.n ? a.r / a.n : 0.0 },
+                                      { QStringLiteral("g"), a.n ? a.gg / a.n : 0.0 },
+                                      { QStringLiteral("b"), a.n ? a.b / a.n : 0.0 } } },
+                       { QStringLiteral("distance"), a.n ? a.d / a.n : 0.0 } };
+        if (k == jahshaka::engine::GatherRay::Voxel)
+            m.insert(QStringLiteral("cascades"), QVariantList{ a.cas[0], a.cas[1], a.cas[2], a.cas[3] });
+        sources.insert(QLatin1String(kNames[k]), m);
+    }
+    const auto classMap = [&](int c) {
+        QVariantMap per;
+        double n = 0;
+        for (int k = 1; k < 7; ++k) {
+            n += cls[c][k].n;
+            if (!cls[c][k].n) continue;
+            QVariantMap m{ { QStringLiteral("count"), cls[c][k].n },
+                           { QStringLiteral("luminance"), cls[c][k].l / cls[c][k].n } };
+            if (k == jahshaka::engine::GatherRay::Voxel)
+                m.insert(QStringLiteral("cascades"), QVariantList{ cls[c][k].cas[0], cls[c][k].cas[1],
+                                                                   cls[c][k].cas[2], cls[c][k].cas[3] });
+            per.insert(QLatin1String(kNames[k]), m);
+        }
+        return QVariantMap{ { QStringLiteral("count"), n }, { QStringLiteral("sources"), per } };
+    };
+    return QVariantMap{ { QStringLiteral("ready"), true },
+                        { QStringLiteral("frame"), g.raysFrame },
+                        { QStringLiteral("stride"), g.stride },
+                        { QStringLiteral("octRes"), g.octRes },
+                        { QStringLiteral("probes"), probes },
+                        { QStringLiteral("rays"), rays },
+                        { QStringLiteral("sources"), sources },
+                        { QStringLiteral("sunlitUp"), classMap(0) },
+                        { QStringLiteral("shadedUp"), classMap(1) },
+                        { QStringLiteral("other"), classMap(2) },
+                        { QStringLiteral("samples"), rayList } };
+}
+
+QVariantMap WorldApi::giVoxelRead(const QVariantMap &params)
+{
+    auto scene = sceneOrFail(QStringLiteral("world.giVoxelRead"));
+    if (!scene) return QVariantMap();
+    const int cascade = params.value(QStringLiteral("cascade"), 0).toInt();
+    jahshaka::engine::Scene *es =
+        (host.isEngineReady() && host.viewport) ? host.viewport->engineScene() : nullptr;
+    jahshaka::engine::GiVoxelVolume vol;
+    if (!es || !es->giVoxelVolume(cascade, vol) || !vol.available)
+        return QVariantMap{ { QStringLiteral("available"), false }, { QStringLiteral("cascade"), cascade } };
+    const auto texel = [&](const std::vector<float> &a, size_t i) {
+        if (a.size() < (i + 1) * 4u) return QVariant();
+        return QVariant(QVariantList{ a[i * 4], a[i * 4 + 1], a[i * 4 + 2], a[i * 4 + 3] });
+    };
+    const double k = vol.multiplier > 0.0f ? double(vol.multiplier) : 1.0;
+    QVariantList out;
+    for (const QVariant &pv : params.value(QStringLiteral("points")).toList()) {
+        const QVariantMap pm = pv.toMap();
+        const double w[3] = { pm.value(QStringLiteral("x")).toDouble(), pm.value(QStringLiteral("y")).toDouble(),
+                              pm.value(QStringLiteral("z")).toDouble() };
+        int ix[3];
+        const int dims[3] = { vol.width, vol.height, vol.depth };
+        bool inside = true;
+        for (int a = 0; a < 3; ++a) {
+            ix[a] = int(std::floor((w[a] - vol.origin[a]) / std::max(double(vol.cell[a]), 1e-9)));
+            inside = inside && ix[a] >= 0 && ix[a] < dims[a];
+        }
+        if (!inside) { out.push_back(QVariantMap{ { QStringLiteral("index"), QVariant() } }); continue; }
+        const size_t i = (size_t(ix[2]) * size_t(vol.height) + size_t(ix[1])) * size_t(vol.width) + size_t(ix[0]);
+        const auto rad = [&](const std::vector<float> &a) {
+            if (a.size() < (i + 1) * 4u || !(a[i * 4 + 3] > 0.0f)) return QVariant();
+            const double c = a[i * 4 + 3];
+            return QVariant(QVariantList{ a[i * 4] / c / k, a[i * 4 + 1] / c / k, a[i * 4 + 2] / c / k });
+        };
+        out.push_back(QVariantMap{ { QStringLiteral("index"), QVariantList{ ix[0], ix[1], ix[2] } },
+                                   { QStringLiteral("light"), texel(vol.light, i) },
+                                   { QStringLiteral("radiance"), rad(vol.light) },
+                                   { QStringLiteral("back"), rad(vol.lightBack) },
+                                   { QStringLiteral("albedo"), texel(vol.albedo, i) },
+                                   { QStringLiteral("normal"), texel(vol.normal, i) },
+                                   { QStringLiteral("coverageP"), texel(vol.coverageP, i) },
+                                   { QStringLiteral("coverageN"), texel(vol.coverageN, i) } });
+    }
+    return QVariantMap{ { QStringLiteral("available"), true },
+                        { QStringLiteral("cascade"), cascade },
+                        { QStringLiteral("cell"), double(vol.cell[0]) },
+                        { QStringLiteral("origin"), QVariantList{ vol.origin[0], vol.origin[1], vol.origin[2] } },
+                        { QStringLiteral("multiplier"), k },
+                        { QStringLiteral("points"), out } };
 }
 
 bool WorldApi::refreshGi()

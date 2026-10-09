@@ -2229,3 +2229,33 @@ if(TEST photon.view)
     jah_fresh_home_fixture(photon.view.fresh_home photonViewFreshHome "${CMAKE_CURRENT_BINARY_DIR}/e2e-home-photon_view" WARM LABELS "scripting")
     set_property(TEST photon.view APPEND PROPERTY FIXTURES_REQUIRED photonViewFreshHome)
 endif()
+
+# gi.far_sun_* — WHAT A FAR SUNLIT HIT IS WORTH (FAR-SUN-1, SPECS/briefs/FAR-SUN-1.md): a
+# self-shaded wall in a canyon whose only light source is the sunlit floor, against the
+# CLOSED FORM (the floor's stored radiance x the cosine-weighted fraction of the wall's
+# hemisphere on sunlit floor). One binary, five rows by mode.
+add_executable(test_gi_far_sun test_gi_far_sun.cpp)
+set_target_properties(test_gi_far_sun PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_far_sun PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_far_sun PRIVATE JahshakaEngine)
+add_dependencies(test_gi_far_sun JahshakaEngineMedia)
+# The VOXEL ROUTE (cards off) is the one the static Bistro's street takes; the rows that
+# measure the cascades' store and read run it (the shipped canyon is all cards).
+foreach(_far_sun_row IN ITEMS "far_sun_share:share:voxels" "far_sun_clutter:clutter:voxels"
+                              "store_contrast:contrast:voxels" "gather_hits_view:hits:shipped"
+                              "cast_shadow_gi:castshadow:voxels")
+    string(REPLACE ":" ";" _far_sun_pair "${_far_sun_row}")
+    list(GET _far_sun_pair 0 _far_sun_name)
+    list(GET _far_sun_pair 1 _far_sun_mode)
+    list(GET _far_sun_pair 2 _far_sun_route)
+    jah_gpu_row(gi.${_far_sun_name} CLASS engine TOKENS 2 COMMAND test_gi_far_sun ${_far_sun_mode} ${_far_sun_route}
+             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+    set_tests_properties(gi.${_far_sun_name} PROPERTIES TIMEOUT 300 LABELS "engine")
+endforeach()
