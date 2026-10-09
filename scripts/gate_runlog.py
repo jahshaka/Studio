@@ -1437,7 +1437,7 @@ def trend_steps(rows, anc=None, k=TREND_K, window=TREND_WINDOW, min_n=TREND_MIN,
     return out
 
 
-def query_trend(days=30, suites=None, tip=None, k=TREND_K, quiet_ok=False):
+def query_trend(days=30, suites=None, tip=None, k=TREND_K, quiet_ok=False, record=None):
     """Prints every step (or, with `tip`, the steps whose first tip is `tip` plus where each of `suites`
     stands at it). Returns the number of steps printed."""
     series = trend_series(days, suites)
@@ -1452,6 +1452,12 @@ def query_trend(days=30, suites=None, tip=None, k=TREND_K, quiet_ok=False):
             rel = (s["after"] / s["before"] - 1.0) * 100 if s["before"] else float("inf")
             good = f", last in band {s['good'][:9]}" if s.get("good") else ""
             sib = "".join(f"; sibling {rows[j][1][:9]} ({rows[j][2]})" for j in s.get("siblings") or [])
+            if record:
+                # A TREND STEP IS A RECORD (GATE-COST-2 #11), not only a line: (tier, lane) of the gate that saw it
+                phase_record("trend-step", record[0], record[1], None, tree_shas(), row=suite, target=tkey,
+                             delta={"before": s["before"], "after": s["after"],
+                                    "rel": None if rel == float("inf") else round(rel, 2)},
+                             step=s["kind"], condition=str(cond), firstTip=t)
             lines.append(f"  {s['kind']:11s} {suite:34s} {s['before']:.4g} -> {s['after']:.4g} ({rel:+.0f} %, "
                          f"band +-{s['band']:.3g}; read {', '.join(f'{x:.4g}' for x in s['readings'])}) "
                          f"first at {t[:9]} ({lane}, {ts[:16]}{good}{sib}) [{cond}] {tkey}")
@@ -1492,14 +1498,14 @@ def promotions(days=30, tip=None):
     return out
 
 
-def trend_at_gate_end(tip=None):
+def trend_at_gate_end(tip=None, tier=None, lane=None):
     """THE GATE'S TREND LINE (TEST-1): every gate prints, after its verdict, the target lines whose
     reading at THIS tip left its history's band — the day a step lands it is one UNCONFIRMED reading —
     and a PROMOTE line for every target line green at its last PROMOTE_AFTER tips, this one the newest.
     A report: it never changes an exit code and never raises."""
     try:
         tip = tip or tree_shas()["studio"]
-        query_trend(30, None, tip)
+        query_trend(30, None, tip, record=(tier, lane) if tier else None)
         for suite, key in promotions(30, tip):
             print(f"PROMOTE {suite} {key}    (green at its last {PROMOTE_AFTER} tips; information only)")
     except Exception as e:             # a report must never break the gate it reports on
@@ -1525,10 +1531,15 @@ def main():
     q2 = sub.add_parser("load-reds", help="red in a gate, green solo at the same tip")
     q2.add_argument("--days", type=int, default=7)
     q4 = sub.add_parser("clocks", help="the GPU's clock state now (exit 3 when it reads locked)")
+    hm = sub.add_parser("hash-move", help="record a selftest hash that moved off its record (kind: hash-move)")
+    hm.add_argument("--tier", required=True, choices=TIERS); hm.add_argument("--lane", default=None)
+    hm.add_argument("--pose", required=True); hm.add_argument("--old", required=True); hm.add_argument("--new", required=True)
     q3 = sub.add_parser("trend", help="steps in the target rows' readings across tips (non-gating)")
     q3.add_argument("--days", type=int, default=30); q3.add_argument("--k", type=float, default=TREND_K)
     q3.add_argument("--tip", default=None, help="only the steps whose first tip is this sha")
     q3.add_argument("--suite", action="append", default=None)
+    q3.add_argument("--record", nargs=2, metavar=("TIER", "LANE"), default=None,
+                    help="also write every step as a `kind: trend-step` record under TIER/LANE")
     a = ap.parse_args()
     if a.cmd == "run":
         cmd = a.ctest[1:] if a.ctest and a.ctest[0] == "--" else a.ctest
@@ -1565,7 +1576,14 @@ def main():
     if a.cmd == "load-reds":
         query_load_reds(a.days); return
     if a.cmd == "trend":
-        query_trend(a.days, a.suite, a.tip, a.k); return
+        if a.record:
+            check_tier(a.record[0])
+        query_trend(a.days, a.suite, a.tip, a.k, record=tuple(a.record) if a.record else None); return
+    if a.cmd == "hash-move":
+        # A HASH MOVE IS A RECORD (GATE-COST-2 #11): rc-gate.sh writes one per pose that left its record
+        path = phase_record("hash-move", a.tier, a.lane or _git(["rev-parse", "--abbrev-ref", "HEAD"]), None,
+                            tree_shas(), pose=a.pose, old=a.old, new=a.new)
+        print(f"hash-move: pose {a.pose} {a.old[:12]} -> {a.new[:12]} recorded -> {path}"); return
     if a.cmd == "clocks":
         # THE STAGE CLOSE'S CLOCK CHECK (plan 9cl CLOCK-TRAP-1): a card left locked after a run
         # reads `locked?` (idle and not clocking down); rc-gate.sh prints this and reds on exit 3.

@@ -261,8 +261,17 @@ TESTING-DEBTS-1); the estimate line counts which source each cost came from).
 **THE RUN LOG (TESTING_V2 T8).** `--run` (its tier `scoped`, or `scoped-fallback` / `scoped-tier` when a scoped gate ran the whole tier), `--solo` and the rc-gate tiers
 (`scripts/gate_runlog.py run --tier <t> -- <ctest line>`) append one JSON record per row and per
 pool arm to `<workspace>/testing/runs/<date>-<tier>-<tip>.jsonl` — the tier one of
-`gate_runlog.TIERS` (scoped, scoped-fallback, scoped-tier, joint, merge, stage, nightly, push, fork;
-any other name is refused before the run): verdict (PASS | FAIL | CRASH | TIMEOUT | NOTRUN |
+`gate_runlog.TIERS` (scoped, scoped-fallback, scoped-tier, joint, target, merge, stage, nightly, push,
+smoke, fork, `lane` — a lane tool's own runs under the lane's name, ignored by batch and push judgement —
+and `solo` — a `--solo` batch, the default since GATE-COST-2; any other name is refused before the run).
+Every record carries `overrides: [NAME=value …]`, the law switches in force for its run
+(`gate_runlog.LAW_SWITCHES`: JAH_GATE_SLOT=0, a token count other than 11, JAH_VRAM_ALL, JAH_JUDGE_READ,
+the wait and re-queue knobs, a fake journal; a `--verdict` record carries `--verdict`) — the push judge
+refuses a candidate whose records carry any. A selftest hash that left its record and a trend step are
+RECORDS too (`kind: hash-move {pose, old, new}` via `gate_runlog.py hash-move`, `kind: trend-step {row,
+target, delta}` written by the gate's trend and `gate_runlog.py trend --record <tier> <lane>`), beside
+`kind: abort` and `kind: drain-timeout` (§4c, §4); their suites start with `@`, which no selection names.
+A row's record: verdict (PASS | FAIL | CRASH | TIMEOUT | NOTRUN |
 NOADMIT | OOM | LOST, §4b), retries, wall seconds, a target's value, the selection reason, the
 tree's three shas, the box (load over the suite's own window; the GPU clock state and the sibling
 gates sampled AT THE SUITE'S START — ctest's `Start N:` line, TEST-SELECTOR-1 L1; -j, the display).

@@ -2297,7 +2297,7 @@ def main():
             print("\n=== target tests: none selected ==="); return
         labels = {n: t["labels"] for n, t in inv.items()}
         run_target_step(target_cmd, build, lane, log_range, labels, selected_targets, exclude=(gate("targets"), done_rows())[1])
-        gate_runlog.trend_at_gate_end()
+        gate_runlog.trend_at_gate_end(tier="target", lane=lane)
         return
     if a.run:
         labels = {n: t["labels"] for n, t in inv.items()}
@@ -2321,7 +2321,7 @@ def main():
         sys.stdout.flush()
         if target_cmd and not a.no_targets:
             run_target_step(target_cmd, build, lane, log_range, labels, selected_targets, exclude=skip)
-        gate_runlog.trend_at_gate_end()
+        gate_runlog.trend_at_gate_end(tier=a.tier or "scoped", lane=lane)
         sys.exit(rc)
 
 

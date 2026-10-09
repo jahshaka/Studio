@@ -28,6 +28,8 @@ box's own queue, log or displays:
      lints prune exactly irisgl/.gitmodules; a green row waits for journald before its Xid read;
   10. THE STALE-BUILD HOLE: every build stamps BUILT_FROM last; a record carries it; a stale or dirty build's
      record is never the tip's run (the refusal, --resume). The admission's journal is a file here (#7);
+  11. every record's `overrides`; hash moves and trend steps as records; the tiers lane and solo; a row an
+     abort dropped red is owed a SOLO (3x, tier solo), never the ordinary pass;
   8. THE SLOT UNDER STRESS: a dead waiter's ticket is reaped; eight gates at once hold it one at a time;
      a SIGKILLed gate's ctest and rows die within 15 s and the slot is free; a killed ctest ends a gate.
 
@@ -550,6 +552,44 @@ def main(source, build):
     check(rl.stale_build(dict(clean, built=rl.built_from(tb))) == "built from a DIRTY tree",
           "a build made from a dirty tree is never the tip's")
     os.unlink(os.path.join(tb, "BUILT_FROM"))
+
+    # ---- 11. GATE-COST-2 #10-#12: overrides on every record; hash moves and trend steps are records; tiers ----
+    print("11. overrides, hash-move / trend-step records, the lane and solo tiers")
+    reset()
+    rc, out = run("^gpu\\.a$")
+    r_ = [r for r in records() if r["suite"] == "gpu.a"][0]
+    check("JAH_VRAM_TOKENS=3" in r_.get("overrides", []) and any(o.startswith("JAH_KERNEL_JOURNAL=") for o in r_["overrides"])
+          and rl.law_overrides({}) == [] and rl.law_overrides({"JAH_GATE_SLOT": "1", "JAH_VRAM_TOKENS": "11"}) == []
+          and rl.law_overrides({"JAH_GATE_SLOT": "0", "JAH_JUDGE_READ": "x", "JAH_VRAM_ALL": "1"})
+          == ["JAH_GATE_SLOT=0", "JAH_VRAM_ALL=1", "JAH_JUDGE_READ=x"],
+          "every record carries the law switches in force for its run as `overrides` (%r)" % r_.get("overrides"))
+    p_ = subprocess.run([sys.executable, os.path.join(scripts, "gate_runlog.py"), "hash-move", "--tier", "smoke",
+                         "--lane", "rc-x", "--pose", "B1", "--old", "a" * 64, "--new", "b" * 64],
+                        capture_output=True, text=True, cwd=source)
+    hm = [r for r in records() if r.get("kind") == "hash-move"]
+    check(p_.returncode == 0 and len(hm) == 1 and hm[0]["pose"] == "B1" and hm[0]["new"] == "b" * 64
+          and hm[0]["suite"] == "@hash-move",
+          "a hash move is a `kind: hash-move` record {pose, old, new} (gate_runlog.py hash-move)")
+    real_ts, real_st, real_anc = rl.trend_series, rl.trend_steps, rl.tip_ancestry
+    rl.trend_series = lambda *a, **k: {("gi.x", "cost #", "unlocked/solo"): [("2026-10-09T10:00", clean["studio"], "l",
+                                                                               2.0, 1)]}
+    rl.trend_steps = lambda rows, anc=None, **k: [{"i": 0, "kind": "STEP", "before": 1.0, "after": 2.0, "band": 0.1,
+                                                   "readings": [2.0]}]
+    rl.tip_ancestry = lambda *a: None
+    try:
+        with contextlib.redirect_stdout(io.StringIO()):
+            rl.query_trend(30, None, None, record=("scoped", "gate-cost-test"))
+    finally:
+        rl.trend_series, rl.trend_steps, rl.tip_ancestry = real_ts, real_st, real_anc
+    ts_ = [r for r in records() if r.get("kind") == "trend-step"]
+    check(len(ts_) == 1 and ts_[0]["row"] == "gi.x" and ts_[0]["target"] == "cost #"
+          and ts_[0]["delta"] == {"before": 1.0, "after": 2.0, "rel": 100.0},
+          "a trend step is a `kind: trend-step` record {row, target, delta}")
+    ok_t = True
+    for t_ in ("lane", "solo"):
+        try: rl.check_tier(t_)
+        except ValueError: ok_t = False
+    check(ok_t and "lane" in rl.TIERS and "solo" in rl.TIERS, "the tiers `lane` and `solo` are names a record may carry")
 
     shutil.rmtree(scratch, ignore_errors=True)
     if FAILURES:
