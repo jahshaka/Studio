@@ -670,6 +670,28 @@ def gpu_apps(own_root=None):
     return out
 
 
+def main_tree():
+    """The Studio repo's MAIN tree (the parent of the git common dir — the same for every worktree)."""
+    try:
+        cd = subprocess.run(["git", "rev-parse", "--path-format=absolute", "--git-common-dir"],
+                            cwd=ROOT, capture_output=True, text=True).stdout.strip()
+        if cd: return os.path.realpath(os.path.dirname(cd))
+    except OSError:
+        pass
+    return os.path.realpath(ROOT)
+
+
+def _under(path, root):
+    return bool(path) and (path == root or path.startswith(root.rstrip(os.sep) + os.sep))
+
+
+def ours_exe(exe):
+    """A binary of OUR trees: a lane / rc worktree (<main>/.claude/worktrees/) or the main tree's build
+    (<main>/build-linux) — never a match on the string "/jahshaka/" (the home directory carries it)."""
+    m = main_tree()
+    return _under(exe, os.path.join(m, ".claude", "worktrees")) or _under(exe, os.path.join(m, "build-linux"))
+
+
 def _ours(pid, name):
     if name == "Jahshaka" or name.startswith(("test_", "bench_")):
         return True
@@ -709,8 +731,16 @@ def box_baseline():
         return None
 
 
+def _own_tree(path):
+    """Is `path` inside the gate's OWN tree — this worktree (ROOT), but not a sibling worktree nested under the main
+    tree's .claude/worktrees/ (a gate in the main tree must still see every lane's build)?"""
+    root = os.path.realpath(ROOT)
+    if not _under(path, root): return False
+    return not _under(path, os.path.join(root, ".claude", "worktrees"))
+
+
 def builds_outside(own_root=None):
-    """ninja/cmake/make processes that are NOT the gate's own (its descendants, or run from its tree)."""
+    """ninja/cmake/make processes that are NOT the gate's own (its descendants, or run from its own tree)."""
     roots = {os.getpid()} | ({own_root} if own_root else set())
     n = 0
     try:
@@ -723,7 +753,7 @@ def builds_outside(own_root=None):
                 if f.read().strip() not in _BUILD_COMMS: continue
             if _descends_from(int(d), roots): continue
             try:
-                if os.path.realpath(os.readlink(f"/proc/{d}/cwd")).startswith(os.path.realpath(ROOT) + os.sep): continue
+                if _own_tree(os.path.realpath(os.readlink(f"/proc/{d}/cwd"))): continue
             except OSError:
                 pass
             n += 1
