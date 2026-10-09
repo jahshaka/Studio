@@ -5,6 +5,8 @@
     scripts/gate-scope.sh <base>..<tip> --resume [...]          # --run, only the rows with no record at the tip
     scripts/gate-scope.sh --files path [path ...]
     scripts/gate-scope.sh --solo <suite> [...] [--times 3]     # the flake protocol, logged
+    scripts/gate-scope.sh --attribute <row>[,<row>...] --batch <tag> --candidate <rc tree>:<tip> \
+        --control <rc-base>:<d-build tip> --display :NN --lanes <lane>:<worktree>:<tip> [...]   # a batch red
     scripts/gate-scope.sh --record-times                       # gate-times.txt from the run log
     scripts/gate-scope.sh --merge-tier [-j N] | --merge-tier-serial | --nightly-tier | --gate-jobs
 
@@ -16,9 +18,9 @@ path and one reason per selected row, estimates the wall time from THE RUN LOG (
 `--run` writes every row's verdict into the run log (scripts/gate_runlog.py) as the row ends.
 
 A RUN IS A GATE, AND THE BOX RUNS ONE AT A TIME (GATE-COST-1, SPECS/audits/GATE_COST_2026-10-09.md):
-`--run` (scoped, a fallback, `--fork-tier`, `--joint`, `--targets-only`) queues for THE GATE SLOT
+`--run` (scoped, a fallback, `--fork-tier`, `--targets-only`) queues for THE GATE SLOT
 (scripts/vram_tokens.py; FIFO, no bound, its position printed) and holds it to its last process;
-`--solo` never takes it. Inside it: the `hygiene` rows first, as their own CPU phase (P8); the GPU
+`--solo` and `--attribute` never take it. Inside it: the `hygiene` rows first, as their own CPU phase (P8); the GPU
 rows; a row that got no admission re-queued at the end (P5); the timing rows serial on ONE whole-card
 hold (P2); the verdict; then the target rows on the same display and card (P9). `--resume` runs only
 the rows with no record at the tip (P6); a gate whose display dies stops and says so (P6).
@@ -36,11 +38,19 @@ Build files are read by what their changed commands name. The FALLBACK to the ME
 only for a path with no rule, no symbol and no graph owner. A fork pin bump selects by the FORK
 DIFF'S reach (FORK_FAMILIES); its one full tier runs at the merge into d-build (`--fork-tier`,
 which ci_gate_check requires). THE RANGE IS THE LANE'S OWN: across a forward merge the scope
-starts at the merge's d-build parent (own_base), and what came in is the joint suites'. Tiers are contracts: the selection printed here is what runs, nothing
+starts at the merge's d-build parent (own_base), and what came in is the batch gate's.
+
+ONE GATE PER BATCH (BATCH-GATE-1; docs/TESTING_GATE.md §3c): builders run their named acceptance tests
++ their subject suite; the lead stacks the ready lanes on d-build as ONE candidate
+(`scripts/lead/merge-dbuild-lane.sh batch`) and runs ONE scoped gate on `d-build..candidate` — the
+candidate's merges have lane tips as second parents, so the union range scopes as a plain range. A
+red row is attributed by `--attribute`: 3 solo runs per lane on that lane's OWN tip and 3 at the
+candidate (the control); a row red at the candidate and on no lane's tip is a COMBINATION DEFECT. The `--joint` union this replaced is gone.
+Tiers are contracts: the selection printed here is what runs, nothing
 hand-picked out of it; a red a later tier finds that this selection missed is a defect of
 this tool, fixed here and added to tests/hygiene/gate_selection_cases.json.
 """
-import argparse, json, os, re, subprocess, sys, collections
+import argparse, json, os, re, subprocess, sys, collections, time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import gate_graph                                   # noqa: E402  the build graph, symbols, CMake
@@ -325,7 +335,7 @@ TARGET_LABELS = {"photon-target", "scale-target"}
 
 NIGHTLY_LABEL_RE = "|".join(sorted(re.escape(l) for l in NIGHTLY_LABELS | TARGET_LABELS))
 # THE GATE'S PARALLEL WIDTH — THE ONE CONSTANT (GATE-SPEED-1 item 9). Every gate's parallel phase
-# (the scoped selection, the MERGE tier, a fallback, the joint union), rc-gate.sh's ctest width
+# (the scoped selection, the MERGE tier, a fallback, a batch candidate's), rc-gate.sh's ctest width
 # (`gate-scope.py --gate-jobs`) and the merge refusal's re-selection read THIS; the docs name it
 # instead of quoting a number. Changing the box's width is this one line — and an owner decision
 # (PHOTON_ATOM_CONTRACT §7b rule 3; the gate-speed audit's replay: -j6 21.7 min against -j4's 31.0
@@ -472,7 +482,7 @@ def irisgl_pair(base, tip):
 
 def touched_paths(rng):
     """Files changed in the Studio range, plus the irisgl submodule's own diff (prefixed) — the
-    LANE'S OWN change (scope_range: what forward merges carried in is the joint suites' business)."""
+    LANE'S OWN change (scope_range: what forward merges carried in is the batch gate's business)."""
     rng = scope_range(rng)[0]
     files = [l for l in sh(f"git diff --name-only {rng}").splitlines() if l]
     if not files:
@@ -886,14 +896,11 @@ class Selection:
         for n, t in inv.items():
             for e in t["exes"]: self.exe_rows[e].append(n)
         self.row_names = set(inv)
-        self.owned = set()
         self._visited = set()
 
     # -- adding rows -----------------------------------------------------------------------
     def add(self, suites, why):
         for s in suites:
-            if why.startswith("tests/"):
-                self.owned.add(s.split("::", 1)[0])     # the lane's own guard (--joint)
             if "::" in s:
                 row, arm = s.split("::", 1)
                 if row in self.inv and row not in self.whole:
@@ -1905,44 +1912,242 @@ def select(paths, rng, build, jobs, graph=None, inv=None, quiet_graph=False):
     return S
 
 
-def joint(range_a, range_b, build, jobs):
-    """THE JOINT SUITES (TESTING_V2 T4, the simple form): two lanes that touched one file family
-    are merged on the UNION of their selections, and the rows BOTH select — the shared map in
-    practice: the subjects both changes reach — are named, because a combination is what neither
-    lane's own gate could see. Returns a dict (the --json form)."""
-    graph = gate_graph.NinjaGraph.load(build)
-    inv0 = load_inventory(build)
-    import copy as _copy
-    out = {}
-    sels = []
-    for rng in (range_a, range_b):
-        S = select(touched_paths(rng), rng, build, jobs, graph=graph, inv=_copy.deepcopy(inv0), quiet_graph=True)
-        sels.append(S)
-    A, B = sels
-    whole = bool(A.fallback or A.full_tier or B.fallback or B.full_tier)
-    gating = lambda n: not (inv0[n]["labels"] & (SCOPE_EXCLUDED_LABELS | TARGET_LABELS))
-    sa = {n for n in A.selected if gating(n)}
-    sb = {n for n in B.selected if gating(n)}
-    shared_paths = sorted(set(touched_paths(range_a)) & set(touched_paths(range_b)))
-    # THE JOINT ROWS: the lanes' OWN guards (the rows their test-side changes selected: a test
-    # source, a script, a registration) that the OTHER lane's change also reaches. Each guard
-    # passed on its own lane's tree; the merge is the first tree where the other change is in it.
-    # (Plain "selected by both" is the engine's whole reach for two engine lanes — hundreds of
-    # rows that say nothing about the combination.)
-    own = lambda S: {n for n in S.owned if n in S.selected}
-    both = sorted((own(A) & sb) | (own(B) & sa))
-    union = sorted(sa | sb)
-    ser = [n for n in union if TIMING_LABEL in inv0[n]["labels"]]
-    par = [n for n in union if n not in ser]
-    out = {"ranges": [range_a, range_b], "shared_paths": shared_paths, "joint": both,
-           "union": union, "whole_tier": whole,
-           "command": merge_tier(jobs) if whole else
-           ("ctest -j%d --timeout 120 --output-on-failure --no-tests=error -R '^(%s)$'"
-            % (jobs, "|".join(re.escape(n) for n in par)) if par else ""),
-           # the timing rows of the union: their own serial phase after it (W1)
-           "serial_command": merge_tier_serial() if whole else
-           ("ctest -j1 --timeout 120 --output-on-failure --no-tests=error -R '^(%s)$'"
-            % "|".join(re.escape(n) for n in ser) if ser else "")}
+ATTR_DEFECT_COMBINATION, ATTR_INCOMPLETE, ATTR_DEFECT_DBUILD = 3, 7, 5
+
+
+def attribute(row_args, lane_specs, tag, times, tier, candidate=None, controls=None, display=None):
+    """THE BATCH RED, ATTRIBUTED (BATCH-GATE-1; docs/TESTING_GATE.md §3c; TESTING_V3_SPEC §1.3.2). A batch
+    candidate's gate went red on <rows>: each row runs `times` times SOLO in each lane's OWN worktree at its exact
+    batch tip (the lanes' built trees), at the CANDIDATE's tip (its rc tree) and at every CONTROL (the base build
+    rc-base at d-build's tip), every run a logged retry at THAT tip (`reason: attribute:<tag>`; `lanes` = the
+    lane, the candidate's = the batch's list, a control's = its tree's name). The display is NAMED (`display`,
+    :60-:99 with its X lock) and the environment's DISPLAY is never read. The whole card is held ONCE for the
+    attribution through hold_card() — whatever the card's admission demands (it never assumes the gate slot is
+    free). Only REAL verdicts count: a run that never got its admission (NOADMIT) or never ran (NOTRUN) leaves its
+    cell INCOMPLETE. A row a tree's build does not REGISTER is ABSENT there (never run, never blamed). Per row, IN
+    THIS ORDER:
+      1. a control cell INCOMPLETE/ABORTED -> the row is INCOMPLETE (nothing is named without its baseline);
+      2. red on a control (any solo) = a D-BUILD DEFECT: it names nobody (kind `defect`, registered);
+      3. a lane is NAMED when ANY of its solos is red (the flake law: one red run is a red) — it drops out;
+      4. any other cell INCOMPLETE/ABORTED -> INCOMPLETE;
+      5. red at the candidate and green on every lane = a COMBINATION DEFECT (kind `combination`, registered):
+         the batch is REFUSED;
+      6. green at the candidate too = NOT REPRODUCED (kind `nondeterminism`, registered): the verdict door.
+    Every registered finding is written as <workspace>/testing/defects.pending/<id>.json in TESTING_V3_SPEC §1.5's
+    FULL schema (recheck, expires; uses/suspects/census for NOT REPRODUCED) — VERDICT-1's reader QUARANTINES a
+    malformed entry (it never reaches the door). Returns 0 (no defect, complete), 3 (a combination defect), 7 (an
+    INCOMPLETE or aborted attribution), 5 (a d-build defect only), 4 (a tree is unusable), 64 (usage)."""
+    rows = []
+    for arg in row_args or []:
+        for r in arg.split(","):
+            r = r.split(" :: ", 1)[0].strip()       # a pool arm is attributed by its row
+            if r and r not in rows:
+                rows.append(r)
+    if not rows or not lane_specs or not tag or not candidate or not controls or not display:
+        sys.stderr.write("gate-scope --attribute: give the red rows, --batch <tag>, --candidate <rc tree>:<tip>, "
+                         "--control <base build>:<d-build tip> (required: a red names nobody without its baseline), "
+                         "--display :NN and --lanes <lane>:<worktree>:<tip> [...]\n")
+        return 64
+    # THE DISPLAY IS NAMED, NEVER INHERITED (the lead's shell carries the owner's :0)
+    m = re.match(r"^:([6-9][0-9])$", display)
+    xroot = os.environ.get("JAH_X11_ROOT", "/tmp")
+    if not m:
+        sys.stderr.write(f"gate-scope --attribute: REFUSED — --display {display} is not a rig display (:60-:99)\n")
+        return 64
+    if not os.path.exists(os.path.join(xroot, f".X{m.group(1)}-lock")):
+        sys.stderr.write(f"gate-scope --attribute: REFUSED — --display {display} has no X server "
+                         f"(no {os.path.join(xroot, f'.X{m.group(1)}-lock')})\n")
+        return 64
+    specs = [(s, "lane") for s in lane_specs] + [("candidate:" + candidate, "candidate")]
+    for c in controls:
+        tree = c.rpartition(":")[0]
+        specs.append((f"{os.path.basename(os.path.normpath(tree)) or 'control'}:{c}", "control"))
+    trees, bad = [], []
+    for spec, kind in specs:
+        name, _, rest = spec.partition(":")
+        wt, _, tip = rest.rpartition(":")
+        if not (name and wt and tip):
+            bad.append(f"{spec}: not <name>:<worktree>:<tip>"); continue
+        wt = os.path.abspath(os.path.expanduser(wt))
+        build = os.path.join(wt, "build-linux")
+        head = gate_runlog._git(["rev-parse", "HEAD"], cwd=wt)
+        want = gate_runlog._git(["rev-parse", "--verify", "-q", tip + "^{commit}"], cwd=wt)
+        if not os.path.isdir(build):
+            bad.append(f"{name}: no built tree at {build}")
+        elif not want or head != want:
+            # THE EXACT-TIP RULE: a record says which tree ran; a worktree moved past its tip is another tree
+            bad.append(f"{name}: {wt} is at {head[:9] or '?'}, not the batch's tip {tip[:9]}")
+        else:
+            problem = gate_runlog.fork_pin_problem(root=wt)
+            if problem:
+                bad.append(f"{name}: {problem.splitlines()[0]}"); continue
+            raw, irc = gate_graph.ctest_inventory(build)
+            try:
+                names = {t["name"] for t in json.loads(raw or "{}").get("tests", [])} if irc == 0 else None
+            except ValueError:
+                names = None
+            if not names:
+                bad.append(f"{name}: {build} lists no ctest rows (ctest --show-only exit {irc})")
+            else:
+                trees.append((name, wt, build, head, names, kind))
+    if bad:
+        for b in bad: sys.stderr.write(f"gate-scope --attribute: REFUSED — {b}\n")
+        return 4
+    lanes = [t for t in trees if t[5] == "lane"]
+    ctrls = [t for t in trees if t[5] == "control"]
+    cand = [t for t in trees if t[5] == "candidate"][0]
+    reason = f"attribute:{tag}"
+    print(f"gate-scope --attribute (batch {tag}): {len(rows)} row(s) x ({len(lanes)} lane(s) + the candidate + "
+          f"{len(ctrls)} control(s)) x {times} solo run(s), each on its own tip, display {display}; the whole card "
+          f"held once (hold_card), never a gate")
+    gate_runlog.on_signals()
+    card, env = gate_runlog._vram().hold_card(f"attribute {tag}: {','.join(rows)[:80]}", log=sys.stdout)
+    env = dict(env, DISPLAY=display)
+    if not card and not env.get("JAH_VRAM_HELD"):
+        env["JAH_VRAM_ALL"] = "1"      # no hold (the drain timed out): every admission takes the card
+    cells = {}                          # (row, name) -> (state, reds, real runs, first failing check, last record)
+    try:
+        for row in rows:
+            rx = "^" + re.escape(row) + "$"
+            for name, wt, build, head, names, kind in trees:
+                if row not in names:
+                    cells[(row, name)] = ("ABSENT", 0, 0, None, None); continue
+                seen = len(_attribution_records(row, head, reason))
+                reds, real, first, never, last = 0, 0, None, [], None
+                for _ in range(times):
+                    rc = gate_runlog.run_ctest(
+                        f"ctest -j1 --timeout 900 --output-on-failure --no-tests=error -R '{rx}'", build, tier,
+                        [t[0] for t in lanes] if kind == "candidate" else [name], 1, reasons={row: reason},
+                        retry=True, env=env, whole_card=False, root=wt)
+                    if rc == gate_runlog.DISPLAY_LOST or rc < 0 or rc > 128:
+                        cells[(row, name)] = ("ABORTED", reds, real, f"exit {rc}", last)
+                        print(f"\n=== ATTRIBUTION ABORTED at {row} on {name} (exit {rc}): the display died or ctest "
+                              f"was killed — the table below is partial ===")
+                        raise _AttributionAborted()
+                    recs = _attribution_records(row, head, reason)
+                    new, seen = recs[seen:], len(recs)
+                    v = new[-1].get("verdict") if new else None
+                    if new: last = new[-1]
+                    if v is None or v in ("NOADMIT", "NOTRUN"):
+                        never.append(v or f"no record (exit {rc})")      # never ran: no verdict
+                        continue
+                    real += 1
+                    if v != "PASS":
+                        reds += 1
+                        if first is None:
+                            first = new[-1].get("failLine") or f"{v} ({new[-1].get('status')})"
+                cells[(row, name)] = ("RAN" if real == times else "INCOMPLETE", reds, real,
+                                      first if real == times or reds else
+                                      f"{times - real} run(s) never ran ({', '.join(map(str, never))})", last)
+    except _AttributionAborted:
+        pass
+    finally:
+        gate_runlog._vram().release(card)
+    print(f"\n=== ATTRIBUTION (batch {tag}) ===")
+    print("row | tree | red | the first failing check")
+    out = {"combination": False, "defect": False, "incomplete": False}
+    nil = ("ABORTED", 0, 0, None, None)
+    unfinished = ("INCOMPLETE", "ABORTED")
+    for row in rows:
+        for name, *rest in trees:
+            st, reds, real, first, _ = cells.get((row, name), nil)
+            who = {"candidate": "CANDIDATE", "control": f"CONTROL {name}"}.get(rest[-1], name)
+            if st == "ABSENT":
+                print(f"{row} | {who} | ABSENT | the row is not registered in this build")
+            elif st in unfinished:
+                print(f"{row} | {who} | {st} {reds}/{real} red of {real} that ran | {first or '-'}")
+            else:
+                print(f"{row} | {who} | {reds}/{real} red | {first or '-'}")
+        lc = [(t[0], cells.get((row, t[0]), nil)) for t in lanes]
+        ctl = [(t, cells.get((row, t[0]), nil)) for t in ctrls]
+        cc = cells.get((row, cand[0]), nil)
+        named = [f"{n} ({c[1]}/{c[2]} red on its own tip)" for n, c in lc if c[1] > 0]
+        if any(c[0] in unfinished for _, c in ctl):
+            out["incomplete"] = True
+            print(f"=> {row}: INCOMPLETE — a CONTROL never got its runs: no lane is named without the baseline; "
+                  f"re-run the attribution")
+        elif any(c[1] > 0 for _, c in ctl):
+            out["defect"] = True
+            t, c = [(t, c) for t, c in ctl if c[1] > 0][0]
+            path = _register(tag, "defect", row, t[3], c[4],
+                             f"red on d-build's own tip ({t[0]}: {c[1]}/{c[2]}; {c[3] or '-'}) — no lane makes it")
+            print(f"=> {row}: D-BUILD DEFECT — red on the control {t[0]} ({c[1]}/{c[2]}) without any lane: it names "
+                  f"nobody; registered {path}")
+        elif named:
+            print(f"=> {row}: NAMED {', '.join(named)} — any red solo names a lane; it drops out and the rest are "
+                  f"RE-GATED as a new candidate")
+        elif any(c[0] in unfinished for _, c in lc) or cc[0] in unfinished or cc[0] == "ABSENT":
+            out["incomplete"] = True
+            print(f"=> {row}: INCOMPLETE — a cell never got its runs (NOADMIT / NOTRUN / aborted, or the candidate "
+                  f"lacks the row): no lane is named or cleared until it ran; re-run the attribution")
+        elif cc[1] > 0:
+            out["combination"] = True
+            path = _register(tag, "combination", row, cand[3], cc[4],
+                             f"red at the candidate ({cc[1]}/{cc[2]}; {cc[3] or '-'}) and green on every lane's own "
+                             f"tip and on d-build's")
+            print(f"=> {row}: COMBINATION DEFECT — red at the candidate ({cc[1]}/{cc[2]}) and green on every lane's own "
+                  f"tip: the batch is REFUSED; registered {path}")
+        else:
+            path = _register(tag, "nondeterminism", row, cand[3], cc[4],
+                             f"red in batch {tag}'s gate; green {cc[2]}/{cc[2]} at the candidate, on every lane and "
+                             f"on d-build in the attribution", suspects=[t[0] for t in lanes])
+            print(f"=> {row}: NOT REPRODUCED — green at the candidate {cc[2]}/{cc[2]} and everywhere else: a "
+                  f"nondeterminism, registered {path}; it passes the verdict door with these solos recorded")
+    if out["combination"]: return ATTR_DEFECT_COMBINATION
+    if out["incomplete"]: return ATTR_INCOMPLETE
+    if out["defect"]: return ATTR_DEFECT_DBUILD
+    return 0
+
+
+def _register(tag, kind, row, tip, rec, cause, suspects=None):
+    """A finding REGISTERED, never printed only (TESTING_V3_SPEC §1.5): <registry dir>/defects.pending/<id>.json — the
+    registry dir is that of testing/defects.json (JAH_DEFECTS_FILE moves it; JAH_DEFECTS_PENDING_DIR moves the
+    pending dir alone), in the FULL schema VERDICT-1's reader requires (it QUARANTINES a malformed entry — the finding
+    would never reach the door): {id, rows, kind, cause, first_seen {tip, pin, run}, state: open, found_by: gate, recheck (a DATE: the
+    next day — the next batch — for NOT REPRODUCED, +7 days for a combination / d-build defect), expires (= recheck)},
+    and for NOT REPRODUCED the single-use fields {uses: 1, suspects: [the batch's lanes], census: {from the record}}.
+    Returns the path."""
+    import datetime as _dt
+    reg = os.environ.get("JAH_DEFECTS_FILE") or os.path.join(gate_runlog.workspace_root(), "testing", "defects.json")
+    d = os.environ.get("JAH_DEFECTS_PENDING_DIR") or os.path.join(os.path.dirname(reg), "defects.pending")
+    os.makedirs(d, exist_ok=True)
+    did = re.sub(r"[^A-Za-z0-9._-]+", "-", f"{tag}-{kind}-{row}")
+    rec = rec or {}
+    t = rec.get("tip") or {}
+    today = _dt.date.today()
+    recheck = (today + _dt.timedelta(days=1 if kind == "nondeterminism" else 7)).isoformat()
+    entry = {"id": did, "rows": [row], "kind": kind, "cause": cause,
+             "first_seen": {"tip": tip, "pin": t.get("fork") or "", "run": rec.get("run") or ""},
+             "state": "open", "found_by": "gate", "recheck": recheck, "expires": recheck}
+    if kind == "nondeterminism":
+        box = rec.get("box") or {}
+        entry.update(uses=1, suspects=list(suspects or []),
+                     census=box.get("census") if isinstance(box.get("census"), dict) else dict(box))
+    path = os.path.join(d, did + ".json")
+    with open(path, "w") as f:
+        json.dump(entry, f, indent=1, sort_keys=True)
+        f.write("\n")
+    return path
+
+
+class _AttributionAborted(Exception):
+    pass
+
+
+
+def _attribution_records(row, head, reason):
+    """The attribution records of `row` at `head` (oldest first): the row's own record per run."""
+    d = gate_runlog.log_dir()
+    out = []
+    for f in sorted(os.listdir(d)) if os.path.isdir(d) else []:
+        if head[:9] not in f or not f.endswith(".jsonl"): continue
+        for line in open(os.path.join(d, f), errors="replace"):
+            try: r = json.loads(line)
+            except ValueError: continue
+            if (r.get("suite") == row and r.get("arm") is None and r.get("reason") == reason
+                    and (r.get("tip") or {}).get("studio") == head):
+                out.append(r)
+    out.sort(key=lambda r: r.get("ts") or "")
     return out
 
 
@@ -1973,10 +2178,12 @@ def main():
     ap.add_argument("-j", "--jobs", type=int, default=GATE_JOBS,
                     help=f"ctest parallelism of the parallel phase (default GATE_JOBS = {GATE_JOBS}, the one constant)")
     ap.add_argument("--json", action="store_true")
-    ap.add_argument("--lane", default=None, help="the lane/stage name the run log records (default: the branch)")
+    ap.add_argument("--lane", action="append", default=None,
+                    help="the record's `lanes` (default: the branch): repeat it or give a comma-separated list — a "
+                         "batch candidate's gate names every lane in it (BATCH-GATE-1)")
     ap.add_argument("--tier", default=None, choices=gate_runlog.TIERS,
                     help="the run log's tier name (default: scoped; scoped-fallback / scoped-tier when a scoped "
-                         "gate runs the whole tier; joint for --joint)")
+                         "gate runs the whole tier)")
     ap.add_argument("--record-times", action="store_true",
                     help="refresh scripts/gate-times.txt from the run log (median PASS seconds, 14 days)")
     ap.add_argument("--solo", metavar="SUITE", nargs="+",
@@ -1985,9 +2192,23 @@ def main():
     ap.add_argument("--merge-tier", action="store_true",
                     help="print the MERGE tier's ctest command (at -j) and exit — the one source "
                          "docs/TESTING_GATE.md quotes instead of a copy of the -LE set")
-    ap.add_argument("--joint", nargs=2, metavar=("RANGE_A", "RANGE_B"),
-                    help="the joint suites of two lanes merged together: the union of both selections, "
-                         "naming the rows BOTH select (the shared map) and the paths both touched")
+    ap.add_argument("--attribute", metavar="ROW[,ROW...]", action="append", default=None,
+                    help="a BATCH red (BATCH-GATE-1): run each row --times times solo on each lane's OWN tip "
+                         "(--lanes), print the attribution table; never takes the gate slot")
+    ap.add_argument("--lanes", metavar="LANE:WORKTREE:TIP", nargs="+", default=None,
+                    help="with --attribute: the batch's lanes, each its worktree (built) and its exact Studio tip")
+    ap.add_argument("--candidate", metavar="RC_TREE:TIP", default=None,
+                    help="with --attribute: the candidate's rc tree and tip — the CONTROL (red there and green on every "
+                         "lane = a combination defect; green there = not reproduced)")
+    ap.add_argument("--control", metavar="TREE:TIP", nargs="+", default=None,
+                    help="with --attribute: CONTROL trees (d-build's built tree at its tip; several allowed) — a row red "
+                         "on one names nobody and is a d-build defect")
+    ap.add_argument("--display", metavar=":NN", default=None,
+                    help="with --attribute (REQUIRED): the rig display, :60-:99 with its X lock — the environment's "
+                         "DISPLAY is never read")
+    ap.add_argument("--batch", metavar="TAG", default=None,
+                    help="the batch tag: every record carries `batch: <tag>` (a candidate's --run, an --attribute — "
+                         "whose reason is `attribute:<tag>`)")
     ap.add_argument("--fork-tier", action="store_true",
                     help="a range that moves the fork pin: run the MERGE tier (logged as tier `fork`) — §7b rule 4's "
                          "one full tier per bump, at the merge into d-build; ci_gate_check requires it")
@@ -2007,6 +2228,13 @@ def main():
     tg.add_argument("--targets-only", action="store_true",
                     help="with --run: run ONLY the selection's target tests (-j1, run-log tier `target`), in the "
                          "foreground; reported, exit 0 whatever they read — the step --run starts by itself")
+    if "--joint" in sys.argv[1:]:
+        # RETIRED (BATCH-GATE-1): the union of two lanes' selections is what a batch candidate's ONE gate runs
+        sys.stderr.write("gate-scope: --joint is retired (BATCH-GATE-1) — the batch gate IS the joint gate: stack the "
+                         "lanes as one candidate with\n  scripts/lead/merge-dbuild-lane.sh batch <tag> "
+                         "<lane>:<studio tip>:<irisgl tip> [...]\nand gate `d-build..candidate` once (the command it "
+                         "prints); a red is attributed with `gate-scope.sh --attribute`\n")
+        sys.exit(2)
     a = ap.parse_args()
     if a.resume:
         a.run = True
@@ -2020,6 +2248,13 @@ def main():
         print(merge_tier_serial()); return
     if a.nightly_tier:
         print(nightly_tier()); return
+    gate_runlog.BATCH = a.batch            # `batch: <tag>` on every record (a candidate's gate, an attribution)
+    if a.attribute:
+        # each lane's OWN worktree and build (--lanes), never this checkout's
+        sys.exit(attribute(a.attribute, a.lanes, a.batch, a.times, a.tier or "scoped", a.candidate, a.control,
+                           a.display))
+    if a.lanes or a.candidate or a.control or a.display:
+        ap.error("--lanes / --candidate / --control / --display go with --attribute")
     build = resolve_build(a.build)
     # THE BUILT FORK MUST BE THE PIN (TESTING-DEBTS-1 T12): a run on an install built from another
     # fork commit is void (stale media) — refused before a suite runs, with the lines that fix it.
@@ -2037,7 +2272,8 @@ def main():
         it in THIS process to its end (the ctest trees below die with it: gate_runlog F2)."""
         if not slot:
             gate_runlog.on_signals()
-            fd = gate_runlog._vram().gate_slot(f"{a.lane or os.path.basename(gate_runlog.ROOT)} {what}", log=sys.stdout)
+            who = "+".join(gate_runlog.lane_list(a.lane)) or os.path.basename(gate_runlog.ROOT)
+            fd = gate_runlog._vram().gate_slot(f"{who} {what}", log=sys.stdout)
             slot.append(fd)
         return None
 
@@ -2063,33 +2299,7 @@ def main():
         print(f"gate-scope --resume: {len(got)} row(s) already have a record at this tip")
         return got
 
-    if a.joint:
-        J = joint(a.joint[0], a.joint[1], build, a.jobs)
-        if a.json:
-            print(json.dumps(J, indent=1)); return
-        print(f"gate-scope --joint: {a.joint[0]}  +  {a.joint[1]}")
-        print(f"\npaths BOTH changes touched ({len(J['shared_paths'])}):")
-        for p in J["shared_paths"]: print(f"  {p}")
-        print(f"\nTHE JOINT ROWS — each lane's own guards that the other lane's change also reaches (the "
-              f"shared map; the combination neither lane's gate saw) ({len(J['joint'])}):")
-        for n in J["joint"]: print(f"  {n}")
-        print(f"\nthe merge gate = the UNION of both selections: "
-              + ("the MERGE tier (one side selects it)" if J["whole_tier"] else f"{len(J['union'])} row(s)"))
-        print(f"\n{J['command']}\n{J['serial_command']}")
-        if a.run and (J["command"] or J["serial_command"]):
-            lane = a.lane or "joint"
-            why = {n: ("joint: both" if n in J["joint"] else "joint: union") for n in J["union"]}
-            gate("joint"); skip = done_rows()
-            labels = {n: t["labels"] for n, t in load_inventory(build).items()}
-            rc = lost(gate_runlog.run_ctest(J["command"], build, a.tier or "joint", lane, a.jobs, reasons=why,
-                                            labels=labels, exclude=skip)) if J["command"] else 0
-            if J["serial_command"]:
-                rc = lost(gate_runlog.run_ctest(J["serial_command"], build, a.tier or "joint", lane, 1, reasons=why,
-                                                labels=labels, exclude=skip, whole_card=True)) or rc
-            gate_runlog.trend_at_gate_end()
-            sys.exit(rc)
-        return
-    lane = a.lane or gate_runlog._git(["rev-parse", "--abbrev-ref", "HEAD"])
+    lane = gate_runlog.lane_list(a.lane) or [gate_runlog._git(["rev-parse", "--abbrev-ref", "HEAD"])]
     # the run log records the range by sha (HEAD moves; the record must not)
     log_range = a.range
     if a.range and ".." in a.range:
@@ -2115,7 +2325,7 @@ def main():
         # token once and each run's admissions are nested on it, so no sibling lane's GPU row runs beside
         # any of them — and the card drains once, not once per run. A solo batch never takes the gate slot.
         gate_runlog.on_signals()
-        card, env = gate_runlog._vram().hold_card(f"{lane} --solo {' '.join(a.solo)[:80]}", log=sys.stdout)
+        card, env = gate_runlog._vram().hold_card(f"{'+'.join(lane)} --solo {' '.join(a.solo)[:80]}", log=sys.stdout)
         if not card and not env.get("JAH_VRAM_HELD"):
             env["JAH_VRAM_ALL"] = "1"      # no hold (the drain timed out): every admission of a run takes the card
         try:
@@ -2136,13 +2346,13 @@ def main():
     own_rng, incoming, fwd = scope_range(a.range) if a.range and not a.files else (a.range, None, [])
     if fwd and not a.json:
         # THE LANE IS GATED ON ITS OWN DIFF (T1): what the forward merges carried in is the
-        # siblings' change, gated on their own lanes — the combination is the joint suites'.
+        # siblings' change, gated in their own batch — the combination is the batch gate's.
         short = lambda r: "..".join(x[:9] for x in r.split(".."))
         print(f"gate-scope: {len(fwd)} forward merge(s) in {a.range} — the lane's OWN change is "
               f"{short(own_rng)} (from the newest one's second parent {fwd[0][1][:9]})")
         if incoming:
-            print(f"  what came in through them ({short(incoming)}) is NOT this gate's: the joint suites are\n"
-                  f"  scripts/gate-scope.sh --joint {short(own_rng)} {short(incoming)}")
+            print(f"  what came in through them ({short(incoming)}) is NOT this gate's: the combination is the batch "
+                  f"gate's (scripts/lead/merge-dbuild-lane.sh batch)")
     if fwd:
         log_range = "..".join(x[:9] for x in own_rng.split(".."))
 

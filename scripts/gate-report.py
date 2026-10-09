@@ -34,7 +34,10 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import ci_gate_check  # noqa: E402  (the door)
 
-GATE_TIERS = ("scoped", "scoped-fallback", "scoped-tier", "fork", "joint")
+GATE_TIERS = ("scoped", "scoped-fallback", "scoped-tier", "fork")
+# THE ARCHIVE'S OWN SPELLINGS: a schema-1 record (before 2026-10-09) names its lane in `lane` and a joint run's tier
+# `joint` (both gone with BATCH-GATE-1). The REPORT reads them to re-count the past; the judge never does.
+ARCHIVE_GATE_TIERS = ("joint",)
 FULL_ROWS = 400
 ALONE_SIB = 0.2
 
@@ -85,7 +88,7 @@ def gates(R):
     for k, rs in runs.items():
         s = min(x["_t"] - datetime.timedelta(seconds=x.get("wallSeconds") or x.get("seconds") or 0) for x in rs)
         e = max(x["_t"] for x in rs)
-        G.append(dict(run=k, tier=rs[0].get("tier"), lane=rs[0].get("lane"), n=len(rs), start=s, end=e,
+        G.append(dict(run=k, tier=rs[0].get("tier"), lane="+".join(sorted(_lanes(rs[0]))), n=len(rs), start=s, end=e,
                       h=(e - s).total_seconds() / 3600, sib=sum((x.get("box") or {}).get("other_ctests") or 0
                                                                 for x in rs) / len(rs)))
     return rows, G
@@ -169,7 +172,8 @@ def carried(R, repo, ref):
     out = collections.defaultdict(list)
     for (t, s, a), rs in idx.items():
         if not t or a: continue
-        rs = [r for r in rs if r["_t"] and r.get("tier") in GATE_TIERS and r.get("gating", True)]
+        rs = [r for r in rs if r["_t"] and (r.get("tier") in GATE_TIERS or ((r.get("schema") or 1) < 2 and r.get("tier")
+                                                                             in ARCHIVE_GATE_TIERS)) and r.get("gating", True)]
         reds = [r for r in rs if r.get("verdict") not in ("PASS", "NOADMIT", "NOTRUN") and not r.get("retry")]
         if not reds: continue
         last = max(r["_t"] for r in reds)
@@ -183,7 +187,11 @@ def carried(R, repo, ref):
 
 
 def _lanes(r):
-    return set(ci_gate_check.gate_runlog.record_lanes(r))      # the one reader of `lane` / `lanes`
+    """`lanes` through the one reader; a schema-1 ARCHIVE record's `lane` string (the past only)."""
+    v = set(ci_gate_check.gate_runlog.record_lanes(r))
+    if not v and (r.get("schema") or 1) < 2 and isinstance(r.get("lane"), str) and r["lane"]:
+        v = {r["lane"]}
+    return v
 
 
 CONT = set()

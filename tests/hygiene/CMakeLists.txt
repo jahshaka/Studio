@@ -187,13 +187,27 @@ if(Python3_Interpreter_FOUND)
                      "${CMAKE_SOURCE_DIR}" "${CMAKE_BINARY_DIR}")
     set_tests_properties(gate.cost PROPERTIES TIMEOUT 180 LABELS "hygiene")
     jah_no_display(gate.cost)
+    # gate.batch — ONE GATE PER BATCH OF LANES (BATCH-GATE-1; TESTING_GATE §3c): the lead's
+    # `merge-dbuild-lane.sh batch` stacks the ready lanes as ONE candidate on its own branches (a conflict, or
+    # diverging fork pins, refuses the whole batch and moves nothing), `batch-land` runs the judge once on
+    # d-build..candidate and fast-forwards both repos on green; a red is attributed by `gate-scope.sh
+    # --attribute` (3 solo runs per lane on its own tip; red on none = the combination); records carry
+    # `lanes` as a list; `--joint` refuses. A toy repo pair, a private run log and token dir (~20 s).
+    # The merge script is the LEAD'S (<workspace>/scripts/lead/merge-dbuild-lane.sh; JAH_MERGE_SCRIPT overrides):
+    # on a box without the lead repo the row prints `SKIP: lead tooling not present` and exits 77 — ctest reports
+    # it Skipped (the run log: NOTRUN), an honest absence, never a FAIL and never a silent pass.
+    add_test(NAME gate.batch
+             COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/gate_batch_test.py"
+                     "${CMAKE_SOURCE_DIR}" "${CMAKE_BINARY_DIR}")
+    set_tests_properties(gate.batch PROPERTIES TIMEOUT 180 LABELS "hygiene" SKIP_RETURN_CODE 77)
+    jah_no_display(gate.batch)
     # gate.verdict_door / noadmit_pool / carried_red / contention_shape / log_schema2 — THE JUDGE'S FOUR
     # DOORS (VERDICT-1 + GATE-LOG-1; ONE_PICTURE_SPEC H1/H2; TESTING_GATE §4): a verdict clears a red only
-    # with a class token (real:<id>; contention: + 3/3 solo; xid-read:<window> on LOST/OOM/CRASH; an Xid in
-    # the record takes real:<id> only); an all-NOADMIT pool never ran; a rebase carries its open reds;
-    # the contention list's entries carry {reason, date, recheck}; schema 2's fields and gate-report.py
-    # (on the box's archive: the preflight's numbers). Toy logs, a private run log / list / token dir
-    # (~5-30 s each).
+    # through a registered fact (real:<id> of testing/defects.json, proved at a later sha that reaches the row or
+    # KNOWN RED on the base; contention: on an enrolled row with a competitor census + 3/3; xid-read: only on an
+    # unreadable journal); an all-NOADMIT pool never ran; a lane's own records carry their open reds; the
+    # registry's shape (a bad entry quarantined); schema 2's fields and gate-report.py (on the box's archive:
+    # the preflight's numbers). Toy logs, a private run log / registry / token dir (~5-50 s each).
     add_test(NAME gate.verdict_door
              COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/gate_verdict_test.py" verdict_door
                      "${CMAKE_SOURCE_DIR}" "${CMAKE_BINARY_DIR}")

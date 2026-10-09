@@ -99,7 +99,7 @@ class Env:
         t = tip or self.tip
         ig = self.pin if t == self.tip else self.git("rev-parse", "%s:irisgl" % t)
         self.rl.append_records([dict({"schema": schema, "suite": s, "arm": None, "verdict": verdict, "ts": ts,
-                                      "retry": retry, "lane": lane, "gating": True, "tier": tier,
+                                      "retry": retry, "lanes": [lane] if lane else [], "gating": True, "tier": tier,
                                       "tip": {"studio": t, "studio_dirty": False, "irisgl": ig,
                                               "irisgl_dirty": False}}, **extra) for s in suites], "scoped", t)
 
@@ -472,9 +472,10 @@ def case_carried_red(E):
     check(rc == 1 and "VERDICT REFUSED test_engine" in out, "...a verdict at A that fails the door -> refused (%d)" % rc)
     E.fresh()
     E.put(ROWS, "PASS", "2026-01-01T10:00:00")
-    E.put(["test_engine"], "FAIL", "2026-01-01T09:00:00", tip=A, lane=None, lanes=["lane-x"])
+    E.put(["test_engine"], "FAIL", "2026-01-01T09:00:00", tip=A, lanes=["lane-x"])
     rc, out = E.run()
-    check(rc == 1 and "OPEN RED carried" in out, "BATCH-GATE-1's `lanes == [lane-x]` carries like `lane` (%d)" % rc)
+    check(rc == 1 and "OPEN RED carried" in out, "`lanes == [lane-x]` carries (%d)"
+          % rc)
     for name, kw in (("a batch's record (lanes [lane-y, lane-x])", {"lanes": ["lane-y", "lane-x"]}),
                      ("a record with a `batch` tag", {"lanes": ["lane-x"], "batch": "batch-a"})):
         E.fresh()

@@ -59,7 +59,7 @@ THE CONTRACT
   * ONE GATE AT A TIME, BOX-WIDE (GATE-COST-1 P1; SPECS/audits/GATE_COST_2026-10-09.md §3e: the same
     ~600-row tier took 0.5-0.7 h with no sibling gate and 2.6-6.6 h beside 2.6-3.9 of them — the box
     finished FEWER tiers per hour the more ran at once). THE GATE SLOT sits beside the tokens: a gate
-    run (`gate-scope.sh --run`, `--fork-tier`, `--joint --run`, `gate_runlog.py run` — the rc tiers)
+    run (`gate-scope.sh --run`, `--fork-tier`, `gate_runlog.py run` — the rc tiers and a batch candidate's)
     holds it for its whole run, every phase and the target step included. Waiters queue FIFO on
     tickets (<dir>/gate-queue/<seq>.<pid>, each flocked by its waiter for exactly its life — a dead
     waiter's ticket is reaped by the next reader), the head of the queue IS the holder, and there is
