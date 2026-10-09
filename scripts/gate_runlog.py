@@ -513,7 +513,6 @@ _VNOISE = re.compile(r"^(test \d+|UpdateCTestConfiguration .*|Constructing a lis
                      r"Checking test dependency graph(\.\.\.| end))\s*$")
 _PREAMBLE = re.compile(r"^(Test command: |Working Directory: |Environment variables: ?$|Environment variable "
                        r"modifications: ?$|Test timeout computed to be: )")
-_LISTED = re.compile(r"^\s*Test\s+#\d+:\s+(\S+)\s*$")
 _RESULT_ID = re.compile(r"^\s*\d+/\d+\s+Test\s+#(\d+):")
 TIMING_LABEL = "timing"      # gate-scope.py's: a row that measures (the serial phase)
 CPU_LABEL = "hygiene"        # P8: the lint and selector rows — their own CPU phase, first
@@ -703,10 +702,22 @@ def recorded_rows(shas=None):
 
 
 def _listed_rows(cmd, cwd, env):
-    """The rows a ctest command line selects, in ctest's order (`<cmd> -N`), or None if it cannot list."""
-    r = subprocess.run(f"{cmd} -N", cwd=cwd, shell=True, capture_output=True, text=True, env=env, errors="replace")
-    rows = [m.group(1) for m in (_LISTED.match(l) for l in r.stdout.splitlines()) if m]
-    return rows if (rows or r.returncode == 0) else None
+    """(the rows a ctest command line selects — the fixture setups it pulls in included — in ctest's
+    order, the subset that takes part in a FIXTURE), or (None, set()) if it cannot list. Read from
+    `<cmd> --show-only=json-v1`."""
+    r = subprocess.run(f"{cmd} --show-only=json-v1", cwd=cwd, shell=True, capture_output=True, text=True, env=env,
+                       errors="replace")
+    try:
+        tests = json.loads(r.stdout).get("tests", [])
+    except ValueError:
+        return None, set()
+    rows, fx = [], set()
+    for t in tests:
+        props = {p_["name"]: p_["value"] for p_ in t.get("properties", [])}
+        rows.append(t["name"])
+        if any(props.get(k) for k in ("FIXTURES_SETUP", "FIXTURES_CLEANUP", "FIXTURES_REQUIRED")):
+            fx.add(t["name"])
+    return rows, fx
 
 
 def _verbose(cmd):
@@ -907,7 +918,7 @@ def run_ctest(cmd, cwd, tier, lane, jobs, reasons=None, gating=None, rng=None, r
             f.write("".join(r + "\n" for r in rows))
         return path
     exclude = set(exclude or ())
-    rows = _listed_rows(cmd, cwd, env) if (exclude or labels) else None
+    rows, fixtures = _listed_rows(cmd, cwd, env) if (exclude or labels) else (None, set())
     if whole_card is None:
         # the serial phase however it was started: a `-L "^timing$"` line (the fixtures it pulls in — a
         # fresh_home setup — carry no label), or rows that are all `timing`
@@ -922,7 +933,9 @@ def run_ctest(cmd, cwd, tier, lane, jobs, reasons=None, gating=None, rng=None, r
     phases = [(cmd, None)]
     if rows is not None:
         skip = [r for r in rows if r in exclude]
-        cpu = [r for r in rows if r not in exclude and CPU_LABEL in (labels or {}).get(r, ())]
+        # a row in a FIXTURE stays with its partners in the GPU phase: excluded there, ctest would pull a
+        # setup back in and run it twice (the merge read's worth-a-look 3; none is labelled hygiene today)
+        cpu = [r for r in rows if r not in exclude and r not in fixtures and CPU_LABEL in (labels or {}).get(r, ())]
         gpu = [r for r in rows if r not in exclude and r not in cpu]
         if skip:
             R.say(f"=== --resume: {len(skip)} of {len(rows)} row(s) already have a record at this tip; "

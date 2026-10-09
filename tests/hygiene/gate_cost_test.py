@@ -57,12 +57,20 @@ add_test(NAME gpu.b COMMAND sh -c "echo gpu.b >> ${T}/order; echo ok")
 add_test(NAME gpu.slow COMMAND sh -c "echo gpu.slow >> ${T}/order; sleep \${TOY_SLOW:-0}; echo ok")
 add_test(NAME gpu.noadmit_once COMMAND sh -c "if [ -e ${T}/na ]; then echo ok; else touch ${T}/na; echo 'NOADMIT vram: no admission for 2 tokens within 1 s (0 of 3 free at the last look) - gpu.noadmit_once'; exit 75; fi")
 add_test(NAME gpu.noadmit_always COMMAND sh -c "echo 'NOADMIT vram: no admission for 2 tokens within 1 s (0 of 3 free at the last look) - gpu.noadmit_always'; exit 75")
-add_test(NAME time.card COMMAND sh -c "python3 ${VT} status > ${T}/card.time; python3 ${VT} admit 1 -- true 2>> ${T}/card.time")
+add_test(NAME time.card COMMAND sh -c "python3 ${VT} status > ${T}/card.time; python3 ${VT} admit 1 -- true 2>> ${T}/card.time; echo ARMS=\$JAH_POOL_ARMS >> ${T}/card.time")
 set_tests_properties(time.card PROPERTIES LABELS "timing" FIXTURES_REQUIRED timeHome)
 add_test(NAME time.card.home COMMAND sh -c "echo setup")
 set_tests_properties(time.card.home PROPERTIES FIXTURES_SETUP timeHome)
 add_test(NAME tgt.card COMMAND sh -c "python3 ${VT} status > ${T}/card.tgt; python3 ${VT} admit 1 -- true 2>> ${T}/card.tgt")
 set_tests_properties(tgt.card PROPERTIES LABELS "photon-target")
+add_test(NAME id.env COMMAND sh -c "echo FOO=\$FOO; echo 'vram: admitted with 2 tokens 0,1 after 1.5 s'; echo 'target: 3 (bar 2)'")
+set_tests_properties(id.env PROPERTIES ENVIRONMENT "FOO=1;BAR=two")
+add_test(NAME id.envmod COMMAND sh -c "echo D=\${DISPLAY:-none}; echo 'gpu-lock: waited 2.5 s'")
+set_tests_properties(id.envmod PROPERTIES ENVIRONMENT_MODIFICATION "DISPLAY=unset:;JAH_X=set:1")
+add_test(NAME id.big COMMAND python3 -c "import sys; [print('line %d ' % i + 'x' * 90) for i in range(1000)]; print('target: 7 (bar 9)')")
+add_test(NAME id.red COMMAND sh -c "echo 'ok: a'; echo 'FAIL: the first assertion'; echo 'FAIL: the second'; exit 1")
+add_test(NAME id.stderr COMMAND sh -c "echo out; echo 'GPU out of memory (VK_ERROR_OUT_OF_DEVICE_MEMORY; the device is NOT lost)' >&2; exit 1")
+add_test(NAME id.arms COMMAND sh -c "echo 'ARM-BEGIN p.one'; echo 'ARM p.one PASS 120 ms'; echo 'ARM-BEGIN p.two'; echo 'MEM p.two gpuPoolUsed=10 textures=2'; echo 'ARM p.two FAIL 50 ms why'; echo 'ARM-BEGIN p.three'; echo 'MEM p gpuPoolUsed=100 textures=20 processMiB=300 tier=high'; exit 1")
 '''
 LABELS = {"lint.one": ["hygiene"], "time.card": ["timing"], "tgt.card": ["photon-target"]}
 
@@ -248,19 +256,93 @@ def main(source, build):
     check(rc == 0 and o[:1] == ["lint.one"] and "the CPU phase: 1" in out and out.index("the CPU phase") < out.index("the GPU phase"),
           "the hygiene row runs (and ends) in its own phase before any GPU row starts, at -j3 (%s)" % o)
 
-    # ---- 6. P2/P9: the whole card once per phase ---------------------------------------------------
-    print("6. the whole card")
+    # ---- 6. the records are the junit path's, byte for byte (P6's claim) ------------------------------
+    print("6. the per-row records equal the old junit path's")
+    reset()
+    rx = "^id\\.(env|envmod|big|red|stderr|arms)$"
+    rc, out = run(rx, jobs=3)
+    new = {(r["suite"], r.get("arm")): r for r in records()}
+    junit = os.path.join(scratch, "j.xml")
+    subprocess.run(f"ctest -j3 -R '{rx}' --output-junit {junit} --test-output-size-passed 262144 "
+                   f"--test-output-size-failed 262144", cwd=tb, shell=True, capture_output=True)
+    import xml.etree.ElementTree as ET
+    outs = {tc.get("name"): (tc.find("system-out").text or "") if tc.find("system-out") is not None else ""
+            for tc in ET.parse(junit).getroot().iter("testcase")}
+    R = rl._Run("scoped", "gate-cost-test", 3, None, None, None, False, LABELS, False, None)
+    R.sampler.stop()
+    skip = ("ts", "run", "box", "seconds", "wallSeconds", "retries")
+    same, n = True, 0
+    for name in sorted({k[0] for k in new}):
+        row = new[(name, None)]
+        old = R.records(name, row["status"], row["seconds"], 0, (0, 0, 0), outs.get(name, ""), {})
+        for o in old:
+            nr = new.get((name, o.get("arm")))
+            n += 1
+            strip = lambda d: {k: v for k, v in (d or {}).items() if k not in skip}
+            if strip(o) != strip(nr):
+                same = False
+                print("    differs: %s %s\n      junit: %s\n      rows:  %s" % (name, o.get("arm"), strip(o), strip(nr)))
+    check(same and n >= 9 and len(new) == n, "the per-row records equal the junit path's, record for record (%d records: "
+          "env, env-modification, big output, red, stderr, arms; ts/run/box/seconds aside)" % n)
+
+    # ---- 7. the slot under stress: a dead waiter, a race, a killed gate -----------------------------
+    print("7. the slot: reaping, the race, a killed gate")
+    holder = subprocess.Popen([sys.executable, vt, "gate", "--label", "H", "--", "sleep", "30"],
+                              stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    time.sleep(0.8)
+    waiter = subprocess.Popen([sys.executable, vt, "gate", "--label", "W", "--", "true"],
+                              stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    time.sleep(0.8)
+    before = [t[1] for t in vt_mod.gate_queue()]
+    waiter.kill(); waiter.wait()
+    qdir = os.path.join(os.environ["JAH_VRAM_DIR"], "gate-queue")
+    after = [t[1] for t in vt_mod.gate_queue()]
+    check(waiter.pid in before and waiter.pid not in after and not any(n.endswith(".%d" % waiter.pid) for n in os.listdir(qdir)),
+          "a dead waiter's ticket is reaped by the next reader (queue %s -> %s)" % (before, after))
+    holder.terminate(); holder.wait()
+    # F3: eight gates asked at once — never two inside the critical section
+    crit = os.path.join(state, "crit")
+    racers = [subprocess.Popen([sys.executable, vt, "gate", "--label", "R%d" % i, "--", "sh", "-c",
+                                f"mkdir {crit} 2>/dev/null || echo DOUBLE >> {state}/race; sleep 0.2; rmdir {crit}"],
+                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL) for i in range(8)]
+    for r_ in racers: r_.wait(timeout=60)
+    check(not os.path.exists(os.path.join(state, "race")),
+          "eight gates asking at once hold the slot one at a time (the ticket is renamed in under the counter's lock)")
+    # F2: a gate SIGKILLed mid-run — its ctest and rows die within 15 s, the slot is free
+    reset()
+    os.environ["TOY_SLOW"] = "60"
+    gk = subprocess.Popen([sys.executable, os.path.join(scripts, "gate_runlog.py"), "run", "--tier", "scoped",
+                           "--lane", "GK", "--build", tb, "--", "ctest -j1 -R '^gpu\\.slow$'"], cwd=source,
+                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    deadline = time.time() + 40
+    while "gpu.slow" not in order() and time.time() < deadline:
+        time.sleep(0.2)
+    tree = rl._descendants(gk.pid)
+    gk.kill(); gk.wait()
+    t_kill = time.time()
+    while time.time() - t_kill < 20 and any(os.path.exists(f"/proc/{p_}") and
+                                             open(f"/proc/{p_}/stat").read().split()[2] != "Z" for p_ in tree):
+        time.sleep(0.5)
+    left = [p_ for p_ in tree if os.path.exists(f"/proc/{p_}")]
+    os.environ.pop("TOY_SLOW")
+    stt = subprocess.run([sys.executable, vt, "status"], capture_output=True, text=True).stdout
+    check(tree and not left and time.time() - t_kill < 20 and "nobody holds it" in stt,
+          "a SIGKILLed gate: its ctest and its rows (%d processes) die within %.0f s and the slot is free"
+          % (len(tree), time.time() - t_kill))
+
+    # ---- 8. P2/P9: the whole card once per phase ---------------------------------------------------
+    print("8. the whole card")
     reset()
     buf = io.StringIO()
     with contextlib.redirect_stdout(buf):      # the serial phase as rc-gate starts it: -L, a fixture pulled in
         rc = rl.run_ctest("ctest -j1 --timeout 60 --output-on-failure -L '^timing$'", tb, "scoped", "gate-cost-test", 1,
-                          labels=LABELS)
+                          labels=LABELS, env=dict(os.environ, JAH_POOL_ARMS="p.x"))
     out = buf.getvalue()
     card = open(os.path.join(state, "card.time")).read()
     check(rc == 0 and "3 of 3 tokens held" in card and "already admitted by the parent" in card
-          and "whole card (3 tokens) held for the phase" in out and "time.card.home" in out,
+          and "whole card (3 tokens) held for the phase" in out and "time.card.home" in out and "ARMS=p.x" in card,
           "a timing phase (`-L ^timing$`, its unlabelled fixture pulled in) holds every token once; its row runs "
-          "nested on them")
+          "nested on them, with the caller's JAH_POOL_ARMS (F5)")
     rc, out = run("^tgt\\.card$", whole_card=True)
     card = open(os.path.join(state, "card.tgt")).read()
     check(rc == 0 and "3 of 3 tokens held" in card and "already admitted by the parent" in card,
@@ -290,12 +372,18 @@ def main(source, build):
             except SystemExit as e: code = e.code
         return code, buf.getvalue()
     files = ["--files", "tests/gi/test_gi_chain_face.cpp", "--build", build, "--lane", "gate-cost-test"]
+    mine = lambda: [t for t in vt_mod.gate_queue() if t[1] == os.getpid()]
+    seen = []
+    g.gate_runlog.run_ctest = lambda *a, **k: (seen.append(bool(mine())), 0)[1]
+    code, out = gs_main(["--solo", "gi.chain_face", "--times", "2", "--build", build, "--lane", "gate-cost-test"])
+    check(code == 0 and seen == [False, False] and "gate-slot" not in out and not mine(),
+          "--solo never takes the slot (%r)" % seen)
+    g.gate_runlog.run_ctest = lambda *a, **k: (calls.append(dict(k, tier=a[2], held=bool(mine()))), 0)[1]
     code, out = gs_main(files + ["--run"])
     gating = [c for c in calls if c["tier"] != "target"]
     tgt = [c for c in calls if c["tier"] == "target"]
-    fd_sets = {tuple(c.get("fds") or ()) for c in calls}
-    check(code == 0 and "gate-slot: taken" in out and len(fd_sets) == 1 and all(fd_sets.pop()),
-          "gate-scope --run takes the slot once and hands its fd to every phase (%d call(s))" % len(calls))
+    check(code == 0 and out.count("gate-slot: taken") == 1 and calls and all(c["held"] for c in calls),
+          "gate-scope --run takes the slot once and holds it through every phase (%d call(s))" % len(calls))
     if tgt:
         check(tgt[-1].get("whole_card") is True and out.index("GATE VERDICT") < out.index("target tests (label"),
               "the target step runs AFTER the verdict line, inside the gate, on the whole card")
@@ -303,6 +391,7 @@ def main(source, build):
         check(gating and "GATE VERDICT" in out, "(no target row selected by this path: the verdict printed, %d phase(s))"
               % len(gating))
     calls.clear()
+    g.gate_runlog.run_ctest = fake_run
     code, out = gs_main(files + ["--resume"])
     check(code == 0 and calls and all(c.get("exclude") == {"gi.chain_face"} for c in calls),
           "--resume runs the gate with the tip's recorded rows excluded from every phase (%r)"
@@ -312,6 +401,11 @@ def main(source, build):
     code, out = gs_main(files + ["--run"])
     check(code == rl.DISPLAY_LOST and "GATE VERDICT: ABORTED" in out and len(calls) == 1,
           "a run that lost its display ends the gate there with `GATE VERDICT: ABORTED` (exit %r)" % code)
+    calls.clear()
+    g.gate_runlog.run_ctest = lambda *a, **k: (calls.append(1), 137)[1]
+    code, out = gs_main(files + ["--run"])
+    check(code == 137 and "GATE ABORTED: ctest was killed" in out and len(calls) == 1,
+          "a ctest killed under the gate (137) ends it there: no timing phase, no target step (F4; exit %r)" % code)
     g.gate_runlog.run_ctest, g.gate_runlog.fork_pin_problem, g.gate_runlog.recorded_rows = real
     os.environ.pop("JAH_GATE_SLOT_HELD", None)
 
