@@ -73,8 +73,8 @@ public:
     Q_INVOKABLE QVariantMap libraryGeneration();
     Q_INVOKABLE QVariantMap resetLibrary(const QVariantMap &options = QVariantMap());
     Q_INVOKABLE QVariantMap mcpLogging(const QVariantMap &options = QVariantMap());
-    /// The process's test tier ("" = none; services/testtier.h).
-    Q_INVOKABLE QString testTier();
+    /// The process's test tier ("" = none) and its needs list (services/testtier.h).
+    Q_INVOKABLE QVariantMap testTier();
     Q_INVOKABLE QVariantMap window();
     Q_INVOKABLE QVariantMap resizeWindow(int width, int height);
     Q_INVOKABLE QVariantMap columns();

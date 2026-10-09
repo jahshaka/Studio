@@ -10,6 +10,7 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "services/worldmodes.h"
+#include "services/testtier.h"
 
 #include "irisgl/document/scenegraph/scene.h"
 #include "jahshaka/engine/Types.h"
@@ -2014,6 +2015,41 @@ void setMode(const iris::ScenePtr &scene, Mode m)
         if (r.tierSpace != TierSpace::World) continue;
         if (scene->worldOverrides.contains(r.id)) continue;   // pinned: survives the switch
         writeField(scene, r, r.tier[int(m)]);
+    }
+}
+
+void applyTestTier(const iris::ScenePtr &scene)
+{
+    if (!scene || !testtier::active()) return;
+    const Mode m = modeFromName(testtier::name());
+    setMode(scene, m);
+    // A TEST PASSES WHAT IT NEEDS (owner rule; WORLD-MODE-1 + TEST-NEEDS-1): a test-tier process
+    // boots every switchable feature its JAHSHAKA_TEST_NEEDS does not name OFF, so a row boots
+    // exactly the picture its claim names and holds no VRAM for the rest.
+    //
+    // PHOTON: off unless named; named, it runs at the World Mode's own Photon tier (`TIER medium
+    // NEEDS photon` is Photon Medium, on a mode whose column says Off too) — the identity of
+    // WORLD-MODE-1, which makes this write the column's own value.
+    if (!testtier::needs(QStringLiteral("photon")))
+        setPhoton(scene, false, photonTier(scene));
+    else if (m != Mode::Custom)
+        setPhoton(scene, true, PhotonTier(int(m)));
+    // THE FOUR CHAIN FEATURES: each word switches ONE World row to its Off value (the value
+    // every Low column holds). A row the scene PINNED (world.override, an Advanced edit saved
+    // with it) is the document's choice and stays — the same rule setMode keeps. SSAO is 0 in
+    // every column already (SSAO-DOUBLE-1: every tier is a GI tier), so `ssao` matters only for
+    // a scene that pinned it.
+    struct Feature { const char *need; const char *rowId; int off; };
+    static const Feature kFeatures[] = {
+        { "bloom",  "bloom",        0 },
+        { "ssao",   "ssao",         0 },
+        { "smaa",   "smaa",        -1 },
+        { "planar", "planarBudget", 0 },
+    };
+    for (const Feature &f : kFeatures) {
+        const QString rowId = QLatin1String(f.rowId);
+        if (testtier::needs(QLatin1String(f.need)) || scene->worldOverrides.contains(rowId)) continue;
+        setRowValue(scene, rowId, f.off, false);
     }
 }
 

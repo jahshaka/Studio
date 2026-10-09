@@ -14,10 +14,12 @@ For more information see the LICENSE file
 
 // THE PROCESS'S TEST TIER (lane TEST-TIER-1, SPECS/audits/GPU_LOSS_AUDIT_2026-09-27.md §A2).
 //
-// A test process whose claims need no shipped picture — verbs, UI state, counts, open/close —
-// boots at the document's default tier (Epic: the full voxel chain, ~1.5 GB of VRAM per
-// process) unless told otherwise. `--test-tier <low|medium|high|epic>` (or JAHSHAKA_TEST_TIER
-// for a runner that cannot pass an argument; the flag wins) is that "otherwise": EVERY scene
+// A process with no test tier boots at the document's default tier (Epic: the full voxel chain,
+// ~1.5-3 GB of VRAM per process). EVERY ctest row that starts the app declares what it boots
+// instead (TEST-NEEDS-1: `TIER` + `NEEDS`, or `TIER document` for a claim about the document's
+// own World state; tests/support/vram_tokens.cmake, docs/TESTING_GATE.md §4b).
+// `--test-tier <low|medium|high|epic>` (or JAHSHAKA_TEST_TIER for a runner that cannot pass an
+// argument; the flag wins) is the tier, JAHSHAKA_TEST_NEEDS the features it keeps: EVERY scene
 // the process binds to the editor — a new one or an opened one — is put on that World Mode
 // through the same call `world.mode` makes (worldmodes::setMode, rows the scene pinned with
 // world.override survive), AFTER the reader has run, so the reader's absent-key defaults stay
@@ -40,7 +42,9 @@ For more information see the LICENSE file
 // read by the shell and the scripting layer — no translation unit of its own to link into the
 // test binaries that compile those files standalone.
 
+#include <QRegularExpression>
 #include <QString>
+#include <QStringList>
 
 namespace testtier {
 
@@ -68,6 +72,46 @@ constexpr int kWindowHeight = 720;
 
 /// The environment form of `--test-tier`, for a runner that cannot pass an argument.
 constexpr const char *kEnvVar = "JAHSHAKA_TEST_TIER";
+
+/// WHAT A TEST-TIER PROCESS NEEDS beyond the bare tier (WORLD-MODE-1; owner: "a test suite
+/// passes variables for what it needs"): JAHSHAKA_TEST_NEEDS, space-separated (`photon`,
+/// `bloom`). Each World Mode runs Photon at its own name, so a test-tier scene is booted with
+/// Photon and bloom OFF unless named here (worldmodes::applyTestTier). Read only while a test
+/// tier is active; a process with none honours the document.
+constexpr const char *kNeedsEnvVar = "JAHSHAKA_TEST_NEEDS";
+inline QStringList needs()
+{
+    return QString::fromLocal8Bit(qgetenv(kNeedsEnvVar)).toLower()
+        .split(QRegularExpression(QStringLiteral("\\s+")), Qt::SkipEmptyParts);
+}
+inline bool needs(const QString &what) { return needs().contains(what.toLower()); }
+
+/// THE FIVE SWITCHABLE FEATURES (TEST-NEEDS-1): every one a test-tier process boots OFF unless
+/// JAHSHAKA_TEST_NEEDS names it — Photon, bloom, SSAO, SMAA and the planar mirrors
+/// (worldmodes::applyTestTier holds the row each word switches). Shadows, the sun and Atom are
+/// never switchable: they are the scene, not a feature of the chain. `none` is the explicit
+/// empty list — "this process reads no picture" — and stands alone. Every app-binary ctest row
+/// declares the list (jah_gpu_row / jah_add_pool `NEEDS`, tests/support/vram_tokens.cmake);
+/// main() refuses a word outside this list, `none` beside another word, and a list with no
+/// test tier, like any other argument the app cannot honour.
+inline QStringList switchable()
+{
+    return { QStringLiteral("photon"), QStringLiteral("bloom"), QStringLiteral("ssao"),
+             QStringLiteral("smaa"), QStringLiteral("planar") };
+}
+constexpr const char *kNoNeeds = "none";
+/// "" when `words` is a valid declaration, else what is wrong with it.
+inline QString needsError(const QStringList &words)
+{
+    if (words.contains(QLatin1String(kNoNeeds)))
+        return words.size() == 1 ? QString()
+                                 : QStringLiteral("'none' stands alone (got '%1')").arg(words.join(QLatin1Char(' ')));
+    for (const QString &w : words)
+        if (!switchable().contains(w))
+            return QStringLiteral("'%1' is not a switchable feature (%2, or none)")
+                .arg(w, switchable().join(QStringLiteral(", ")));
+    return QString();
+}
 
 }   // namespace testtier
 

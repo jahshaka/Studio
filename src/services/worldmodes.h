@@ -441,6 +441,12 @@ Mode mode(const iris::ScenePtr &scene);
 /// Applies a tier: writes each row's tier value into its backing field, EXCEPT
 /// rows present in scene->worldOverrides (overrides survive mode switches).
 void setMode(const iris::ScenePtr &scene, Mode m);
+/// THE PROCESS'S TEST TIER on a scene (services/testtier.h): setMode to the tier, then every
+/// switchable feature JAHSHAKA_TEST_NEEDS does not name OFF — Photon, bloom, SSAO, SMAA, the
+/// planar mirrors (TEST-NEEDS-1; WORLD-MODE-1 began it with the first two) — and Photon ON at
+/// the tier's own Photon tier when it is named and the column left it off. A pinned row is the
+/// document's and stays. A no-op in a process with no test tier.
+void applyTestTier(const iris::ScenePtr &scene);
 
 /// The row's tier value for `m`, or the row's current value when m == Custom.
 int tierValue(const Row &r, Mode m, const iris::ScenePtr &scene);
