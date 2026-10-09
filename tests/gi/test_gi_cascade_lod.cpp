@@ -223,6 +223,7 @@ int main()
     // =====================================================================
     CHECK(scene->setGlobalIllumination(cascadeGi(true)), "the four-cascade chain built");
     render(e, 8);
+    enginetest::settleVoxelReadings(e, scene);   // the voxel read-back lands frames late
     GiStatus st = scene->giStatus();
     CHECK(st.cascades.size() == 4, ("the chain has four cascades (" +
           std::to_string(st.cascades.size()) + ")").c_str());
@@ -322,6 +323,7 @@ int main()
     render(e, 2);
     CHECK(scene->setGlobalIllumination(cascadeGi(true)), "the chain is rebuilt at LOD bias 200");
     render(e, 8);
+    enginetest::settleVoxelReadings(e, scene);   // the voxel read-back lands frames late
     GiStatus biased = scene->giStatus();
     bool biasMoved = false;
     for (size_t i = 0; i < biased.cascades.size() && i < levelsAtBiasOne.size(); ++i)
@@ -332,6 +334,7 @@ int main()
     render(e, 2);
     CHECK(scene->setGlobalIllumination(cascadeGi(true)), "the chain is rebuilt at LOD bias 0");
     render(e, 8);
+    enginetest::settleVoxelReadings(e, scene);   // the voxel read-back lands frames late
     GiStatus pinned = scene->giStatus();
     bool pinnedMoved = false;
     for (size_t i = 0; i < pinned.cascades.size() && i < levelsAtBiasOne.size(); ++i)
@@ -343,6 +346,7 @@ int main()
     // ---- 4. THE A/B, IN ONE PROCESS ------------------------------------
     CHECK(scene->setGlobalIllumination(cascadeGi(false)), "the same chain with the levels OFF");
     render(e, 8);
+    enginetest::settleVoxelReadings(e, scene);   // the voxel read-back lands frames late
     GiStatus off = scene->giStatus();
     CHECK(off.cascades.size() == st.cascades.size(), "the same four cascades");
     bool allZero = true;
