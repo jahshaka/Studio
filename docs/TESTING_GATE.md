@@ -11,7 +11,7 @@ reshape followed.
 
 | Tier | What runs | When | Who runs it |
 |---|---|---|---|
-| **SCOPED** | the suites `scripts/gate-scope.sh <base>..<tip>` selects from the touched paths | a lane's own gate; a merge of that lane | the lane (feature-/engine-builder), or gate-runner with the selection |
+| **SCOPED** | the suites `scripts/gate-scope.sh <base>..<tip>` selects from the touched paths | ONE gate per BATCH of ready lanes, on `d-build..candidate` (§3c) — a builder runs its named acceptance tests + its subject suite, not a gate | the lead (`merge-dbuild-lane.sh batch` → `rc-gate.sh`), or gate-runner with the selection |
 | **MERGE** | TWO PHASES (TEST-SELECTOR-1): the parallel phase `python3 scripts/gate-scope.py --merge-tier [-j N]` prints (every row but the `timing` ones), then the serial phase `--merge-tier-serial` prints (the `timing` rows at -j1, each taking the whole GPU — inside the parallel phase they waited holding the admission's turnstile and stalled every admission on the box). The parallel phase is `ctest -j4 --timeout 120 --output-on-failure -LE` over `gate-scope.py`'s `NIGHTLY_LABELS` ∪ `TARGET_LABELS` ∪ {`timing`} (today: every `nightly` row — §1d —, the ASan shader-cache attack `shadercache-attack`, and the target tests `photon-target` and `scale-target`, §1b/§1c; the benches' `--smoke` rows, label `benchmark-smoke`, DO run). The set lives in the script ONLY; this doc never copies it (`source.gate_scope_rules` case 9 fails on a literal `-LE` list here), and neither may a script — `scripts/lead/rc-gate.sh` must run what `--merge-tier` prints. `--timeout 120` is the default for rows that set none; the box runs ONE gate at a time (§4c, the gate slot) — there is no lower width "while another lane's gate is live". **Measured (D6B-GATE-SHAPE, 2026-09-27): 56.7 min at -j4 beside other lanes' gates, 36.6 min simulated on the audit's quieter durations — the reshape's ~30 min goal (and its lane's ≤ 35 min bar) was NOT reached; §5 has the before/after pair and why** | a lane whose scope falls back (see §3), any merge the lead wants covered wider, and — while the full gate is under moratorium — the gate before a push | gate-runner |
 | **PUSH** | the MERGE tier + the `--engine-selftest` sha256 lines — **FOUR of them since lane FENCE-1**: `pose 1`, `pose 2`, `pose B1 (rays)`, `pose B2 (no rays)`. Poses 1-2 are the default scene at the PLAIN grade; pose pair B is a purpose-built fixture (glossy floor, cascade crossing, emissive 3.0, mirror pillar) at the VIEWPORT grade, which is the only grade that carries the SSR prepass and therefore the ray tier. Quote all four. (The moratorium of 2026-09-09 lifted 2026-09-10 with the cleanup: the four nightly suites are NIGHTLY, not push, unless the batch touched their subject) | once per BATCH of merged lanes, before a push | gate-runner |
 | **NIGHTLY** | `python3 scripts/gate-scope.py --nightly-tier` — every `nightly` row, `-j1` (§1d): the benches' `--assert` rows, shadercache.container_asan, **open.crash_soak** (OPEN-FRAMES-1: the async-open teardown repro twelve times under glibc's malloc checks; read one failure as "run it again", three as a regression of the open's slice-boundary drive), the minutes-of-one-process sweeps (atom.cluster_cut, atom.cluster_crack, gi.chain_converge_scenes), vr.frame_budget, and the `<suite>.timing` millisecond rows (§4) | once a day / before a tag, on a quiet box, and whenever a batch touched a nightly row's subject | the lead |
@@ -77,8 +77,8 @@ same pixel through a GREY mirror at L = 3.0 and at L = 0.8 and asserts the RATIO
 the store alone. Measured 1.255x unpatched / 3.745x patched.
 
 THE WIDTH IS ONE CONSTANT: `GATE_JOBS` in `scripts/gate-scope.py` (today **4**;
-`gate-scope.py --gate-jobs` prints it). The scoped gate, the MERGE tier, a fallback, the joint
-union, the merge refusal's re-selection and `rc-gate.sh`'s ctest all read it; changing the box's
+`gate-scope.py --gate-jobs` prints it). The scoped gate (a batch candidate's), the MERGE tier, a
+fallback, the merge refusal's re-selection and `rc-gate.sh`'s ctest all read it; changing the box's
 width is that one line and an owner decision (§7b rule 3). The gate-speed audit's scheduler replay
 (rc-smoke15a's durations, the registered locks and tokens) puts -j6 at 21.7 min against 31.0 at
 -j4, CPU contention unmeasured (`~/Developer/spikes/gate-speed-1/`). Every gate runs at
@@ -184,6 +184,8 @@ scripts/gate-scope.sh <range> --run --targets-only  # the target step alone (a s
 scripts/gate-scope.sh <range> --json           # machine-readable: suites, reasons, rationale, command
 scripts/gate-scope.sh --files src/x.cpp ...    # a file list instead of a range (no diff: no symbols, no CMake reading)
 scripts/gate-scope.sh --solo <suite> [--times 3]   # the flake protocol (§4), each run logged as a retry
+scripts/gate-scope.sh --attribute <row>[,<row>...] --batch <tag> --lanes <lane>:<worktree>:<tip> [...]
+                                               # a batch red: each row 3x solo on each lane's OWN tip (§3c)
 scripts/gate-scope.sh --record-times           # scripts/gate-times.txt from the run log (median PASS s, 14 days)
 ```
 
@@ -234,8 +236,9 @@ archive's flag change (`meshoptimizer`) enters through its first-party callers (
 
 **The lane's own range, the fork, and the fallback** (TEST-SELECTOR-1). The range is the LANE'S
 OWN diff: across a forward merge (a merge whose second parent is on d-build's first-parent line) it
-starts at that merge's d-build parent, and what came in is printed as the `--joint` command; an
-internal branch merged into the lane is the lane's own change. A fork pin bump
+starts at that merge's d-build parent, and what came in is the batch gate's (§3c); an
+internal branch merged into the lane is the lane's own change. A batch CANDIDATE (§3c) scopes as a
+plain range: its merges' second parents are lane tips, never on d-build's first-parent line. A fork pin bump
 (`irisgl/thirdparty/ogre-next`) selects by the FORK DIFF'S reach: every built or staged fork file
 selects the engine's pixel family and every executable that extracts the engine; only what the
 engine never stages (other render systems, unstaged samples media, docs, HLSL/Metal twins) selects
@@ -261,19 +264,22 @@ TESTING-DEBTS-1); the estimate line counts which source each cost came from).
 **THE RUN LOG (TESTING_V2 T8).** `--run` (its tier `scoped`, or `scoped-fallback` / `scoped-tier` when a scoped gate ran the whole tier), `--solo` and the rc-gate tiers
 (`scripts/gate_runlog.py run --tier <t> -- <ctest line>`) append one JSON record per row and per
 pool arm to `<workspace>/testing/runs/<date>-<tier>-<tip>.jsonl` — the tier one of
-`gate_runlog.TIERS` (scoped, scoped-fallback, scoped-tier, joint, target, merge, stage, nightly, push,
-smoke, fork, `lane` — a lane tool's own runs under the lane's name, ignored by batch and push judgement —
-and `solo` — a `--solo` batch, the default since GATE-COST-2; any other name is refused before the run).
-Every record carries `overrides: [NAME=value …]`, the law switches in force for its run
+`gate_runlog.TIERS` (scoped, scoped-fallback, scoped-tier, target, merge, stage, nightly, push, smoke,
+fork, `lane` — a lane tool's own runs under the lane's name, ignored by batch and push judgement — and
+`solo` — a `--solo` batch, the default since GATE-COST-2; any other name is refused before the run).
+Every record carries `overrides: [NAME=value …]`, the law switches a HUMAN set for its run
 (`gate_runlog.LAW_SWITCHES`: JAH_GATE_SLOT=0, a token count other than 11, JAH_VRAM_ALL, JAH_JUDGE_READ,
-the wait and re-queue knobs, a fake journal; a `--verdict` record carries `--verdict`) — the push judge
-refuses a candidate whose records carry any. A selftest hash that left its record and a trend step are
-RECORDS too (`kind: hash-move {pose, old, new}` via `gate_runlog.py hash-move`, `kind: trend-step {row,
-target, delta}` written by the gate's trend and `gate_runlog.py trend --record <tier> <lane>`), beside
+the wait and re-queue knobs, a fake journal, a private JAH_VRAM_DIR, a JAH_GATE_SLOT_HELD naming no live
+holder) — the push judge refuses a candidate whose records carry any; a `--verdict` is not one. What the
+TOOLS set after a whole-card drain timed out is `fallback: drain-timeout` on every record of that run, and
+a timing row's record carrying it is not a measurement. A selftest hash that left its record and a trend
+step are RECORDS too (`kind: hash-move {pose, old, new}` via `gate_runlog.py hash-move`, `kind: trend-step
+{row, target, delta}` written by the gate's trend and `gate_runlog.py trend --record <tier> <lane>`), beside
 `kind: abort` and `kind: drain-timeout` (§4c, §4); their suites start with `@`, which no selection names.
 A row's record: verdict (PASS | FAIL | CRASH | TIMEOUT | NOTRUN |
 NOADMIT | OOM | LOST, §4b), retries, wall seconds, a target's value, the selection reason, the
-tree's three shas, the box (load over the suite's own window; the GPU clock state and the sibling
+tree's three shas, `lanes` (the LIST of lanes the gated tree carries — a batch candidate's every
+lane; one lane = a one-element list; `--lane a,b` or repeated), the box (load over the suite's own window; the GPU clock state and the sibling
 gates sampled AT THE SUITE'S START — ctest's `Start N:` line, TEST-SELECTOR-1 L1; -j, the display).
 `gpu_ms` is gone (TEST-SELECTOR-1 L4: no suite ever printed one — 0 of 38,269 records; a GPU time
 reaches the log as a target line, `target: <value> (bar <bar>) <what>`). The fields are `testing/runs/README.md`; the two
@@ -296,10 +302,11 @@ scoped selection missed is a SELECTOR DEFECT: it is fixed in `gate-scope.py` and
 cases file** — never answered with a wider rule "to be safe". `source.gate_scope_rules` guards the
 tool's own traps (the empty inventory, `--build .`, the targets' split, the fallback's -j).
 
-**ENFORCEMENT (T6; §7b "the rules are tooling, not text").** (1) THE ONE COMMAND a developer runs
-before a merge is `scripts/gate-scope.sh <base>..HEAD --run`: it prints the selection and every
-reason, runs it, writes the run log, and exits non-zero on any gating red (target tests report,
-never gate, and run after the verdict as their own step). (2) `source.testing_rules` (label `hygiene`) lints the rules the tree can show: R1
+**ENFORCEMENT (T6; §7b "the rules are tooling, not text").** (1) THE ONE GATE before a merge is
+the BATCH's (§3c): `scripts/gate-scope.sh <d-build>..<candidate> --run`, run by `rc-gate.sh` on the
+candidate's tree: it prints the selection and every reason, runs it, writes the run log, and exits
+non-zero on any gating red (target tests report, never gate, and run after the verdict as their own
+step). (2) `source.testing_rules` (label `hygiene`) lints the rules the tree can show: R1
 every measuring row (`.timing`, `.benchmark`, `JAHSHAKA_TIMING_BARS=1`) inside the GPU lock; R2
 every `nightly` row priced in `scripts/gate-times.txt`; R3 no copied `ctest -LE` tier outside
 `gate-scope.py`; R4 no `RUN_SERIAL` without a comment naming its reason (or the GPU lock); R5 every
@@ -314,11 +321,10 @@ under the flake law (§4) — at the range's tip, or, for a row the last fix rou
 an earlier commit of the lane (§3b). It prints, per row, the commit its record came from. A hook
 or a CI job calls it; `gate.ci_check` and `gate.fix_round` prove it.
 
-**THE JOINT SUITES (T4).** At a merge where two lanes touched one file family, the lead runs
-`scripts/gate-scope.sh --joint <rangeA> <rangeB> [--run]`: the gate is the UNION of both
-selections, printed with the paths both touched and the JOINT ROWS — each lane's own guards
-(selected by its test-side changes) that the other lane's change also reaches, the combination
-neither lane's gate saw. No automation triggers it.
+**THE JOINT SUITES ARE THE BATCH GATE (BATCH-GATE-1).** `--joint` is retired (it refuses and
+names `merge-dbuild-lane.sh batch`): lanes that touched one file family are gated TOGETHER on one
+candidate (§3c), whose scoped selection is the union of their reaches and whose tree is the
+combination neither lane alone could show.
 
 **Measured at the landing** (thirteen recorded diffs of D's last eleven lanes, costed with the
 per-row seconds of a -j4 MERGE-tier run; `spikes/modular-gate-1/table.md`): the five that FELL
@@ -333,7 +339,9 @@ lane's time rests on.
 
 ## 3b. Re-gating after a fix (2026-09-11, owner: "no double checking"; MECHANICAL since GATE-SPEED-1)
 
-A lane that gets a red FIXES, then runs THE FIX ROUND: `scripts/gate-scope.sh <pre-fix
+UNDER THE BATCH GATE (§3c) a lane attributed a red drops out of its batch, fixes, and rides the
+next candidate; the reuse rule below is what the judge applies to every range, a candidate's
+included. A lane that gets a red FIXES, then runs THE FIX ROUND: `scripts/gate-scope.sh <pre-fix
 tip>..<post-fix tip> --run` — the scoped selection of the FIX's own diff, never the lane's whole
 selection again. After a forward merge of d-build into the lane, the fix round is `<merge
 commit>..<tip>` (the merge commit is the lane's own; a range across it scopes the whole lane again).
@@ -361,6 +369,91 @@ the fix does not reach holds an open red of it — a verdict-less red, or a cont
 A row the fix reaches needs its record at the tip. Every row prints its source
 (`row <name> <- <sha> (the tip)` or `... re-used from <sha>`); the summary counts both. Measured
 on this lane's own two rounds: `spikes/gate-speed-1/`.
+
+## 3c. ONE GATE PER BATCH (BATCH-GATE-1, 2026-10-09; the owner's question 3, spikes/preflight-testing-1)
+
+MEASURED: in the week to 2026-10-09, 87 full-size gates = 26 first gates + 51 re-gates (36 after a fix
+round, 11 after a rebase, 4 at the same tip) + 10 rc; a lone full gate 0.61 h, and a second gate on
+the one GPU adds no capacity (§4c). The lever left is ONE gate per BATCH of lanes, not one per lane.
+
+**Builders** run their NAMED ACCEPTANCE TESTS + their SUBJECT SUITE (the brief names both), by hand,
+never a gate — no slot:
+```
+DISPLAY=:NN nice -n 19 ionice -c 3 ctest --test-dir build-linux -R '^(<the named tests>|<the subject suite>)$' --output-on-failure
+```
+(a tooling lane — a change to the gate's own scripts — still runs its own scoped gate, the lead's
+exception.) The lead's per-lane merge (`merge-dbuild-lane.sh <lane> …`) still judges a single lane.
+
+**The lead** stacks the ready lanes as ONE CANDIDATE and gates it once:
+```
+~/Developer/scripts/lead/merge-dbuild-lane.sh batch <tag> <lane>:<studio tip>:<irisgl tip> [...]   # in the lead's order
+#   every lane, before any ref moves: the judge-diff refusal (JAH_JUDGE_READ="<tip> <tip>" for a read one), check-trailers,
+#   THE PIN CHECK, the dry merges of both repos against the RUNNING candidate (lane 1 on d-build, lane 2 on d-build +
+#   lane 1, …) — any conflict refuses the whole batch, naming the lane and the files, and nothing moves; then the
+#   candidate on branches batch-<tag> ($D, $D/irisgl; never d-build), fork-pin-check.sh on its irisgl tip, and it
+#   prints THE ONE gate command (a refusal at any point removes every ref the run made):
+JAH_GATE_TIER=scoped JAH_GATE_RANGE=<d-build>..<candidate> JAH_GATE_LANES=<lane>,<lane> \
+    setsid nohup ~/Developer/scripts/lead/rc-gate.sh batch-<tag> <candidate> > /tmp/jah-lead/rc-batch-<tag>.out 2>&1 < /dev/null & disown
+#   (JAH_GATE_TIER=fork when the candidate moved the fork pin: gate-scope's --fork-tier, the whole tier) — a fresh
+#   tree, the four hashes, the slot taken once, `gate-scope.py <range> --run` inside it (the card per phase)
+~/Developer/scripts/lead/merge-dbuild-lane.sh batch-land <tag> [--build <rc build>] [--display :NN] [--control-tree <dir>] [--verdict "<row>=<text>" ...]
+#   d-build's judge, UNCHANGED: ci_gate_check.py d-build..candidate --build <the candidate's build> — green:
+#   d-build fast-forwarded to the candidate in both repos (irisgl first), the HASHES line; a stale candidate (d-build
+#   moved since `batch`) is refused; red: nothing moves and the red rows are ATTRIBUTED on the rig display NAMED by
+#   --display (:60-:99, its X lock present; the environment's DISPLAY is never read) — without it, the command:
+scripts/gate-scope.sh --attribute <row>[,<row>...] --batch <tag> --candidate <rc tree>:<candidate> \
+    --control <rc-base>:<d-build tip> --display :NN --lanes <lane>:<worktree>:<tip> [...]
+```
+**THE GENERATED FILE.** `docs/SCRIPTING.md` is `--dump-api-docs`'s output and `api.contract`
+byte-compares it: two lanes' versions cannot merge as text. When more than one lane touched it (or it
+conflicted), `batch` records `SCRIPTING_REGEN=1` in the batch's state; `rc-gate.sh`, after building
+the candidate and BEFORE its gate, runs `merge-dbuild-lane.sh batch-scripting <tag> <rc tree>`: the
+candidate's own binary regenerates the file, a difference is committed onto `batch-<tag>` ("SCRIPTING.md
+regenerated at batch <tag>", author jahshaka), the tree is rebuilt and THAT sha is gated and landed.
+**THE FORK FREEZE** (owner decision 4; TESTING_V3_SPEC §1.3.2). Every lane's fork pin (and d-build's)
+is printed; the batch carries ONE pin P — d-build's, or a DESCENDANT of it on the fork's `jahshaka`
+branch (then a fork-tier batch) — and EVERY lane must pin exactly P: a lane on any other pin, an ancestor included, is
+REFUSED BY NAME ("re-pin <lane> to <P>") and the lead has it re-pinned before the cut; two pins that
+are two fork lines refuse the batch (exit 5). P ≠ d-build's pin = the candidate moves the pin = the
+full tier.
+
+**THE ATTRIBUTION.** Each red row runs 3x `--solo`-style in each lane's OWN worktree at its exact
+batch tip (the lanes' built trees; a worktree moved past its tip is refused), 3x at the CANDIDATE
+(its rc tree) and 3x at every CONTROL — `--control` is REQUIRED (several allowed); batch-land's is the
+BASE BUILD `rc-base` (`--control-tree` moves it), refused plainly when it is missing, its HEAD is not
+d-build's tip, or it has no build-linux — never `$D`, the merge target, which has no binary
+(TESTING_V3_SPEC §1.3.2). `--display :NN` is REQUIRED too (:60-:99 with its X lock; the environment's
+DISPLAY is never read). The whole card is taken once through `hold_card()` — whatever the card's
+admission demands, it never assumes the gate slot is free. One table `row | tree | n/3 red | the first
+failing check`; the records carry `reason: attribute:<tag>`, retry, and in `lanes` that lane (the
+candidate's: the batch's list; a control's: its tree's name). Only REAL verdicts count: a run that
+never got its admission (NOADMIT) or never ran leaves its cell INCOMPLETE. A row a tree's build does
+not register is ABSENT there and never blames it. Per row, IN THIS ORDER:
+1. a CONTROL cell INCOMPLETE or aborted → the row is INCOMPLETE: nothing is named without its baseline;
+2. red on a CONTROL (d-build's own tip) = a D-BUILD DEFECT: it names nobody (kind `defect`);
+3. a lane is NAMED when ANY of its solos is red (the flake law: one red run is a red, never outvoted)
+   — it DROPS OUT and the rest are RE-GATED as a new candidate (a new tag — the exact-tip rule stands:
+   no prefix records);
+4. any other cell INCOMPLETE or aborted → INCOMPLETE (re-run the attribution);
+5. red at the candidate and green on every lane's own tip and on d-build's = a COMBINATION DEFECT
+   (kind `combination`): the batch is REFUSED;
+6. green at the candidate too = NOT REPRODUCED (kind `nondeterminism`): it passes the verdict door with
+   its solos recorded — a contention-class row by its 3/3 at the candidate tip, any other by `--verdict`.
+Findings 2, 5 and 6 are REGISTERED, never only printed: one `<workspace>/testing/defects.pending/<id>.json`
+each in TESTING_V3_SPEC §1.5's FULL schema (`{id, rows, kind, cause, first_seen {tip, pin, run}, state: open,
+found_by: gate, recheck, expires}` — recheck a DATE: the next day for NOT REPRODUCED, +7 days for a
+defect; NOT REPRODUCED also `uses: 1, suspects: [the batch's lanes], census`), which VERDICT-1's registry
+(`testing/defects.json`) ingests — its reader quarantines a malformed entry (it never reaches the door), and
+gate.batch loads every pending file through it. Exit codes: 3 a
+combination defect, else 7 an INCOMPLETE or aborted attribution, else 5 a d-build defect, else 0; 4 an
+unusable tree, 64 usage. Every commit the batch tooling writes (the candidate's merges, the regenerated
+SCRIPTING.md) is authored jahshaka by the script itself, and batch-land runs check-trailers on the
+regenerated commit.
+
+The judge needs no change: `ci_gate_check.py` keys records on the exact Studio sha + its irisgl pin,
+and d-build fast-forwards to the gated candidate in both repos. The queue rules (a pin-bumping
+lane first, owed re-runs before a fresh tier) are the lead's, not tooling. Guard: `gate.batch`
+(tests/hygiene/gate_batch_test.py, a toy repo pair).
 
 ## 4. Flake protocol (the law in the refusal since TEST-SELECTOR-1)
 
@@ -582,10 +675,10 @@ the more ran at once (~1.6/h alone, ~0.75/h at four). Most NOADMITs, lint TIMEOU
 FAILs — and their solos and verdicts — came from gates beside gates.
 
 **THE RULE.** A GATE RUN holds THE GATE SLOT for its whole run; the box runs one at a time.
-A gate run is `gate-scope.sh --run` (scoped, a fallback, `--fork-tier`, `--joint --run`,
+A gate run is `gate-scope.sh --run` (scoped, a fallback, `--fork-tier`,
 `--targets-only`, `--resume`) and `gate_runlog.py run` (the rc tiers; `scripts/gpu-admit.sh gate
 -- <command>` holds the slot across a whole script that runs several). **A WHOLE-CARD HOLD ALWAYS TAKES
-IT** (GATE-COST-2): a `--solo` batch, an attribution, a timing phase run by hand — anything that drains
+IT** (GATE-COST-2): a `--solo` batch, an `--attribute` run, a timing phase run by hand — anything that drains
 the card through `hold_card()`, and `admit all` (`gpu-exclusive.sh`: a timing row run outside a gate, inside
 the admission's own 900 s bound — NOADMIT past it) — queues FIFO with the gates first. Per-row admissions of
 k tokens never take it (an `admit <k>`, a pool's app, a lane's own hand run), nor does a build. The waiting gate
@@ -720,12 +813,13 @@ scheduled as "phase 2" is built: §8 (the pools).
 
 ## 6. Who does what
 
-- **Lane** (feature-/engine-builder): gates its worktree on SCOPED (or MERGE when scope falls
-  back or the lane touches the engine), reports the tier + selection + wall time + every
-  failure's verdict.
-- **Lead**: audits the lane (diff, gate triage, `~/Developer/scripts/platform-audit.sh`),
-  merges, runs the merge tier on the tip when several lanes have landed, pushes at a sensible
-  batch (irisgl first), and runs NIGHTLY on a quiet box.
+- **Lane** (feature-/engine-builder): runs its NAMED acceptance tests + its subject suite (§3c),
+  never a gate (a tooling lane's own scoped gate is the lead's exception); reports what ran
+  and every failure's verdict.
+- **Lead**: audits the lane (diff, `~/Developer/scripts/platform-audit.sh`), stacks the ready lanes
+  as ONE candidate (`merge-dbuild-lane.sh batch`), runs ONE gate on it (`rc-gate.sh`, §3c), lands
+  it (`batch-land`) or attributes its reds, pushes at a sensible batch (irisgl first), and runs
+  the stage-close and nightly rows.
 - **gate-runner**: runs the tier it is given, never picks, restores what it touched, kills
   only its own pids.
 
