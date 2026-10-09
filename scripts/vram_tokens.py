@@ -457,7 +457,7 @@ def status(out=sys.stdout):
     out.write("vram: %d of %d tokens held (%s)\n" % (held, n, token_dir()))
     q = gate_queue()
     if not q:
-        out.write("gate-slot: free\n")
+        out.write("gate-slot: nobody holds it\n")      # (never the word " free": a token count greps for it)
     for i, (seq, pid, path) in enumerate(q):
         out.write("gate-slot: %s %s (ticket %d)\n" % ("HELD by" if i == 0 else "queued %d:" % i, _label_of(path), seq))
     return held

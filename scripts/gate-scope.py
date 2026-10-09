@@ -2078,7 +2078,7 @@ def main():
                                             labels=labels, fds=fds, exclude=skip)) if J["command"] else 0
             if J["serial_command"]:
                 rc = lost(gate_runlog.run_ctest(J["serial_command"], build, a.tier or "joint", lane, 1, reasons=why,
-                                                labels=labels, fds=fds, exclude=skip)) or rc
+                                                labels=labels, fds=fds, exclude=skip, whole_card=True)) or rc
             gate_runlog.trend_at_gate_end()
             sys.exit(rc)
         return
@@ -2206,7 +2206,7 @@ def main():
                                         labels=labels, fds=fds, exclude=skip))
         print("\n=== the timing phase (serial, after the parallel phase; the whole card held once) ===")
         r2 = lost(gate_runlog.run_ctest(merge_tier_serial(), build, tier_name, lane, 1, reasons={}, rng=log_range,
-                                        labels=labels, fds=fds, exclude=skip))
+                                        labels=labels, fds=fds, exclude=skip, whole_card=True))
         gate_runlog.trend_at_gate_end()
         return r1 or r2
 
@@ -2295,7 +2295,7 @@ def main():
         if timing_cmd:
             print("\n=== the timing phase: %d row(s), serial, the whole card held once ===" % len(timing))
             rc = lost(gate_runlog.run_ctest(timing_cmd, build, a.tier or "scoped", lane, 1, reasons=reasons,
-                                            rng=log_range, labels=labels, fds=fds, exclude=skip)) or rc
+                                            rng=log_range, labels=labels, fds=fds, exclude=skip, whole_card=True)) or rc
         # THE VERDICT IS THE GATING PHASES' (GATE-SPEED-1 item 2): printed, and every gating record
         # written, before any target runs; the exit code is this one whatever the targets read. THE
         # TARGETS RUN AFTER IT, INSIDE THE GATE (GATE-COST-1 P9): on the gate's display, under its slot,

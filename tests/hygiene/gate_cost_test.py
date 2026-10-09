@@ -58,7 +58,9 @@ add_test(NAME gpu.slow COMMAND sh -c "echo gpu.slow >> ${T}/order; sleep \${TOY_
 add_test(NAME gpu.noadmit_once COMMAND sh -c "if [ -e ${T}/na ]; then echo ok; else touch ${T}/na; echo 'NOADMIT vram: no admission for 2 tokens within 1 s (0 of 3 free at the last look) - gpu.noadmit_once'; exit 75; fi")
 add_test(NAME gpu.noadmit_always COMMAND sh -c "echo 'NOADMIT vram: no admission for 2 tokens within 1 s (0 of 3 free at the last look) - gpu.noadmit_always'; exit 75")
 add_test(NAME time.card COMMAND sh -c "python3 ${VT} status > ${T}/card.time; python3 ${VT} admit 1 -- true 2>> ${T}/card.time")
-set_tests_properties(time.card PROPERTIES LABELS "timing")
+set_tests_properties(time.card PROPERTIES LABELS "timing" FIXTURES_REQUIRED timeHome)
+add_test(NAME time.card.home COMMAND sh -c "echo setup")
+set_tests_properties(time.card.home PROPERTIES FIXTURES_SETUP timeHome)
 add_test(NAME tgt.card COMMAND sh -c "python3 ${VT} status > ${T}/card.tgt; python3 ${VT} admit 1 -- true 2>> ${T}/card.tgt")
 set_tests_properties(tgt.card PROPERTIES LABELS "photon-target")
 '''
@@ -249,17 +251,23 @@ def main(source, build):
     # ---- 6. P2/P9: the whole card once per phase ---------------------------------------------------
     print("6. the whole card")
     reset()
-    rc, out = run("^time\\.card$")
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):      # the serial phase as rc-gate starts it: -L, a fixture pulled in
+        rc = rl.run_ctest("ctest -j1 --timeout 60 --output-on-failure -L '^timing$'", tb, "scoped", "gate-cost-test", 1,
+                          labels=LABELS)
+    out = buf.getvalue()
     card = open(os.path.join(state, "card.time")).read()
     check(rc == 0 and "3 of 3 tokens held" in card and "already admitted by the parent" in card
-          and "whole card (3 tokens) held for the phase" in out,
-          "a timing phase holds every token once; its row runs nested on them")
+          and "whole card (3 tokens) held for the phase" in out and "time.card.home" in out,
+          "a timing phase (`-L ^timing$`, its unlabelled fixture pulled in) holds every token once; its row runs "
+          "nested on them")
     rc, out = run("^tgt\\.card$", whole_card=True)
     card = open(os.path.join(state, "card.tgt")).read()
     check(rc == 0 and "3 of 3 tokens held" in card and "already admitted by the parent" in card,
           "the target step (whole_card) holds the card for its rows")
-    check("0 of 3 tokens held" in subprocess.run([sys.executable, vt, "status"], capture_output=True, text=True).stdout,
-          "...and gives every token back after the phase")
+    stt = subprocess.run([sys.executable, vt, "status"], capture_output=True, text=True).stdout
+    check("0 of 3 tokens held" in stt and stt.count(" free") == 3,
+          "...and gives every token back after the phase (and the slot's line never reads as a free token)")
     # gate-scope's wiring: the slot once, its fd to every phase, the target step after the verdict
     spec = importlib.util.spec_from_file_location("gate_scope_c", os.path.join(scripts, "gate-scope.py"))
     g = importlib.util.module_from_spec(spec)

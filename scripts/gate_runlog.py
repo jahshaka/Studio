@@ -511,7 +511,8 @@ _VLINE = re.compile(r"^(\d+): ?(.*)$")
 _VNOISE = re.compile(r"^(test \d+|UpdateCTestConfiguration .*|Constructing a list of tests|Done constructing a list "
                      r"of tests|Updating test list for fixtures|Added \d+ tests? to meet fixture requirements|"
                      r"Checking test dependency graph(\.\.\.| end))\s*$")
-_PREAMBLE = re.compile(r"^(Test command: |Working Directory: |Environment variables: ?$|Test timeout computed to be: )")
+_PREAMBLE = re.compile(r"^(Test command: |Working Directory: |Environment variables: ?$|Environment variable "
+                       r"modifications: ?$|Test timeout computed to be: )")
 _RESULT_ID = re.compile(r"^\s*\d+/\d+\s+Test\s+#(\d+):")
 _LISTED = re.compile(r"^\s*Test\s+#\d+:\s+(\S+)\s*$")
 TIMING_LABEL = "timing"      # gate-scope.py's: a row that measures (the serial phase)
@@ -743,7 +744,7 @@ class _Run:
                     if txt.startswith("Test timeout computed to be: "):
                         pre[i] = False; continue
                     if _PREAMBLE.match(txt):
-                        pre[i] = "env" if txt.startswith("Environment variables") else True; continue
+                        pre[i] = "env" if txt.startswith("Environment variable") else True; continue
                     if st == "env" and txt.startswith(" "):
                         continue
                     pre[i] = False
@@ -831,7 +832,10 @@ def run_ctest(cmd, cwd, tier, lane, jobs, reasons=None, gating=None, rng=None, r
     exclude = set(exclude or ())
     rows = _listed_rows(cmd, cwd, env) if (exclude or labels) else None
     if whole_card is None:
-        whole_card = bool(rows) and all(TIMING_LABEL in (labels or {}).get(r, ()) for r in rows)
+        # the serial phase however it was started: a `-L "^timing$"` line (the fixtures it pulls in — a
+        # fresh_home setup — carry no label), or rows that are all `timing`
+        whole_card = bool(re.search(r"""-L\s+["']?\^?%s\$?["']?(\s|$)""" % TIMING_LABEL, cmd)) or (
+            bool(rows) and all(TIMING_LABEL in (labels or {}).get(r, ()) for r in rows))
     card = []
     if whole_card and not (env or os.environ).get("JAH_VRAM_HELD"):
         card, env = _vram().hold_card(f"{lane} {tier} phase", log=sys.stdout)
