@@ -328,6 +328,23 @@ def case_verdict_door(E):
     check(ok_m and not ok_p and any("not 3/3 solo green at the candidate" in w for w in why_p) and ok_p3,
           "F4: a nondeterminism-cleared row passes a merge, is re-asked 3/3 at the push candidate (refused with 0/0, "
           "accepted with 3/3) (%s, %s, %s)" % (ok_m, ok_p, ok_p3))
+    # ROUND 3 F-A: AN EMPTY COMMIT proves nothing. C1 = a lane commit (51e9f2c49's child carrying 3756b2f18's tree), X =
+    # an EMPTY commit on it (`git commit --allow-empty`, made here with commit-tree: objects only, no ref moves): red at
+    # C1, green at X -> refused (before: X..C1 read as unreadable -> ALL -> "the fix reached it" -> green, no verdict)
+    tree = E.git("rev-parse", "3756b2f18^{tree}")
+    env = dict(os.environ, GIT_AUTHOR_NAME="jahshaka", GIT_AUTHOR_EMAIL="jahshaka@gmail.com",
+               GIT_COMMITTER_NAME="jahshaka", GIT_COMMITTER_EMAIL="jahshaka@gmail.com")
+    c1 = subprocess.run(["git", "commit-tree", tree, "-p", E.git("rev-parse", "51e9f2c49"), "-m", "verdict test C1"],
+                        cwd=E.source, capture_output=True, text=True, env=env).stdout.strip()
+    x = subprocess.run(["git", "commit-tree", tree, "-p", c1, "-m", "verdict test: an empty commit"], cwd=E.source,
+                       capture_output=True, text=True, env=env).stdout.strip()
+    E.fresh()
+    E.put(ROWS, "PASS", "2026-01-01T09:00:00", tip=c1)
+    E.put(ROWS[2:], "FAIL", "2026-01-01T09:30:00", tip=c1)
+    E.put(ROWS, "PASS", "2026-01-01T10:00:00", tip=x)
+    rc, out = E.run(rng="51e9f2c49..%s" % x)
+    check(bool(c1 and x) and rc == 1 and "photon.view" in out and "OPEN red at %s" % c1[:9] in out,
+          "F-A: red at C1, a green re-run at an EMPTY commit X on it -> refused, no verdict passes it silently (%d)" % rc)
     # N5: a lane-tool PASS (tier `lane`) never answers a row for the judge
     E.fresh()
     E.put(ROWS[:2], "PASS", "2026-01-01T10:00:00")

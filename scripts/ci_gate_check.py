@@ -476,7 +476,8 @@ class Reach:
         """What the scoped selection of <a>..<b> reaches: a set of keys, or ALL (a fork pin change, a fallback, the
         tier by rule). `unreadable`: the answer for a range the selector cannot read or that selects nothing —
         ALL for re-use (the safe side there), an empty set for PROVING a fix (the safe side there)."""
-        if (a, b) in self.cache: return self.cache[(a, b)]
+        ck = (a, b, unreadable is Reach.ALL)          # the same range answers differently per caller's safe side
+        if ck in self.cache: return self.cache[ck]
         rng = f"{a}..{b}"
         reach = unreadable
         try:
@@ -496,7 +497,7 @@ class Reach:
                         reach.add((n, "*"))      # the whole pool: every arm
         except SystemExit:
             reach = unreadable
-        self.cache[(a, b)] = reach
+        self.cache[ck] = reach
         return reach
 
     @staticmethod
@@ -620,8 +621,10 @@ def check(rng, build, gs=None, verdicts=None, mode="merge", lane=None):
                 if reach is None:
                     reach = Reach(gs, build, tip_sha, tip_fork)
                 for c in have_earlier:
-                    if Reach.reaches(reach.of(c, fork_pin(gs, pins[c])), k):
-                        break                   # the fix reached it: the tip's run answers what came before
+                    # ROUND 3 F-A: the tip's run answers an earlier commit's red only when c..tip PROVES it (c an ancestor,
+                    # the range REACHING the row; an empty / unreadable range reaches nothing — never ALL here)
+                    if prover(c, tip_sha, k):
+                        break
                     recs = got[c].get(k, [])
                     if not recs: continue
                     cst, cwhy = judge(k, recs, defects, **ctx)
