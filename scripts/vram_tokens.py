@@ -340,9 +340,11 @@ def gate_queue():
 
 
 def _take_ticket(label):
-    """The next sequence number (under the counter's flock), and a ticket that is LOCKED BEFORE it
-    is visible (made under a private name, flocked, then renamed in): no reader ever sees a live
-    ticket unlocked and reaps it."""
+    """The next sequence number and its ticket, BOTH under the counter's flock (F3, the merge read: with
+    the rename after the unlock, a later number could be renamed in first, find no lower ticket and take
+    the slot while the earlier one, renamed in after it, did the same — two holders). The ticket is
+    LOCKED BEFORE it is visible (made under a private name, flocked, then renamed in): no reader ever
+    sees a live ticket unlocked and reaps it."""
     d = _queue_dir()
     os.makedirs(d, exist_ok=True)
     cf = _open(os.path.join(token_dir(), "gate-queue.seq"))
@@ -352,14 +354,13 @@ def _take_ticket(label):
         seq = (int(raw) if raw.isdigit() else 0) + 1
         os.ftruncate(cf, 0)
         os.pwrite(cf, str(seq).encode(), 0)
+        tmp = os.path.join(d, ".new.%d" % os.getpid())
+        fd = os.open(tmp, os.O_RDWR | os.O_CREAT | os.O_TRUNC, 0o666)
+        fcntl.flock(fd, fcntl.LOCK_EX)
+        os.pwrite(fd, ("%d %s\n" % (os.getpid(), label)).encode(), 0)
+        os.rename(tmp, os.path.join(d, "%012d.%d" % (seq, os.getpid())))
     finally:
         os.close(cf)
-    tmp = os.path.join(d, ".new.%d" % os.getpid())
-    fd = os.open(tmp, os.O_RDWR | os.O_CREAT | os.O_TRUNC, 0o666)
-    fcntl.flock(fd, fcntl.LOCK_EX)
-    os.pwrite(fd, ("%d %s\n" % (os.getpid(), label)).encode(), 0)
-    path = os.path.join(d, "%012d.%d" % (seq, os.getpid()))
-    os.rename(tmp, path)
     return seq, fd
 
 
