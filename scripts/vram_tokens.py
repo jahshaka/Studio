@@ -428,6 +428,9 @@ def _queue_for_slot(label, log, wait=None):
     if not slot_enabled():
         return None
     seq, fd = _take_ticket(label)
+    # the ticket is the queue's order (FIFO by it): said once, so a reader orders gates by the queue's own
+    # tickets, never by when it happened to start them (GATE-COST-2: no wall clock)
+    _say(log, "gate-slot: queued ticket %d — %s" % (seq, label))
     t0, last, said = time.monotonic(), None, time.monotonic()
     while True:
         ahead = [t for t in gate_queue() if t[0] < seq]
