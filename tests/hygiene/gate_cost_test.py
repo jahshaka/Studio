@@ -36,6 +36,7 @@ box's own queue, log or displays:
 Run: gate_cost_test.py <source-dir> <build-dir>   (the build dir is not read; ctest is found on PATH)
 """
 import contextlib
+import datetime
 import importlib.util
 import io
 import json
@@ -302,7 +303,19 @@ def main(source, build):
     solos = [r for r in records() if r["suite"] == "gpu.wait" and r.get("retry") and r["tier"] == "solo"]
     check(owed_after[:2] == [["gpu.wait"], ["gpu.wait"]],
           "an interrupted solo pass (1 or 2 of 3) leaves the dropped red OWED (F3; %r)" % owed_after[:2])
-    check(len(solos) == 3 and rl.owed_solos(clean) == [] and ab[0].get("droppedRed") == ["gpu.wait"],
+    # a pool dropped red: its ARM records and a held NOADMIT try are not solos (round 2, A)
+    later = (datetime.datetime.now().astimezone() + datetime.timedelta(seconds=2)).isoformat(timespec="seconds")
+    rl.phase_record("abort", "scoped", "gate-cost-test", None, clean, why="test", dropped=[],
+                    droppedRed=["pool.p"], inFlight=[])
+    pool_recs = []
+    for arm in (None, "p.one", "p.two"):
+        pool_recs.append({"suite": "pool.p", "arm": arm, "verdict": "PASS", "retry": True, "ts": later, "tip": clean})
+    pool_recs.append({"suite": "pool.p", "arm": None, "verdict": "NOADMIT", "retry": True, "ts": later, "tip": clean})
+    rl.append_records(pool_recs, "solo", clean["studio"])
+    check("pool.p" in rl.owed_solos(clean),
+          "a pool's arm records and a held NOADMIT try never count as its solos (one row solo + two arms + a NOADMIT "
+          "leave it owed)")
+    check(len(solos) == 3 and "gpu.wait" not in rl.owed_solos(clean) and ab[0].get("droppedRed") == ["gpu.wait"],
           "three solo retries (tier solo) answer it; the abort record keeps droppedRed for the judge (%d solo(s), "
           "owed %r)" % (len(solos), rl.owed_solos(clean)))
     rc, out = run("^gpu\\.a$", env=env)

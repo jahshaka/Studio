@@ -846,7 +846,10 @@ def owed_solos(shas=None):
         for line in open(os.path.join(d, f), errors="replace"):
             try: r = json.loads(line)
             except ValueError: continue
-            if r.get("retry") and not r.get("kind") and r.get("suite") in owed \
+            # a solo is a ROW's record that RAN (as recorded_rows counts): never a pool's arm records, never
+            # a held NOADMIT try (round 2, A)
+            if r.get("retry") and not r.get("kind") and r.get("suite") in owed and r.get("arm") is None \
+                    and r.get("verdict") not in ("NOADMIT", "NOTRUN") \
                     and (r.get("tip") or {}).get("studio") == shas["studio"]:
                 if (r.get("ts") or "") > owed[r["suite"]]:
                     after[r["suite"]] = after.get(r["suite"], 0) + 1
