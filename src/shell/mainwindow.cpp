@@ -308,6 +308,11 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     toolbarDeps.toggleDocks = [this]() { docks->openToggleDialog(); };
     toolbarDeps.toast = [this](const QString &title, const QString &text) { showViewportToast(title, text); };
     toolbarDeps.editorActive = [this]() { return currentSpace == WindowSpaces::EDITOR; };
+    // "Compiling shaders (N)" (ASYNC-SHADERS-1): the background compiler's pending count.
+    toolbarDeps.pendingShaders = []() -> unsigned {
+        auto eng = EngineHost::instance().engine();
+        return eng ? eng->asyncShaderStats().pending : 0u;
+    };
     toolbar->build(toolbarDeps);
     toolBar = toolbar->bar();
     actionSaveScene = toolbar->saveAction();

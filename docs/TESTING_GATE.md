@@ -12,7 +12,7 @@ reshape followed.
 | Tier | What runs | When | Who runs it |
 |---|---|---|---|
 | **SCOPED** | the suites `scripts/gate-scope.sh <base>..<tip>` selects from the touched paths | a lane's own gate; a merge of that lane | the lane (feature-/engine-builder), or gate-runner with the selection |
-| **MERGE** | TWO PHASES (TEST-SELECTOR-1): the parallel phase `python3 scripts/gate-scope.py --merge-tier [-j N]` prints (every row but the `timing` ones), then the serial phase `--merge-tier-serial` prints (the `timing` rows at -j1, each taking the whole GPU — inside the parallel phase they waited holding the admission's turnstile and stalled every admission on the box). The parallel phase is `ctest -j4 --timeout 120 --output-on-failure -LE` over `gate-scope.py`'s `NIGHTLY_LABELS` ∪ `TARGET_LABELS` ∪ {`timing`} (today: every `nightly` row — §1d —, the ASan shader-cache attack `shadercache-attack`, and the target tests `photon-target` and `scale-target`, §1b/§1c; the benches' `--smoke` rows, label `benchmark-smoke`, DO run). The set lives in the script ONLY; this doc never copies it (`source.gate_scope_rules` case 9 fails on a literal `-LE` list here), and neither may a script — `scripts/lead/rc-gate.sh` must run what `--merge-tier` prints. `--timeout 120` is the default for rows that set none; `-j 2` while another lane's gate is live. **Measured (D6B-GATE-SHAPE, 2026-09-27): 56.7 min at -j4 beside other lanes' gates, 36.6 min simulated on the audit's quieter durations — the reshape's ~30 min goal (and its lane's ≤ 35 min bar) was NOT reached; §5 has the before/after pair and why** | a lane whose scope falls back (see §3), any merge the lead wants covered wider, and — while the full gate is under moratorium — the gate before a push | gate-runner |
+| **MERGE** | TWO PHASES (TEST-SELECTOR-1): the parallel phase `python3 scripts/gate-scope.py --merge-tier [-j N]` prints (every row but the `timing` ones), then the serial phase `--merge-tier-serial` prints (the `timing` rows at -j1, each taking the whole GPU — inside the parallel phase they waited holding the admission's turnstile and stalled every admission on the box). The parallel phase is `ctest -j4 --timeout 120 --output-on-failure -LE` over `gate-scope.py`'s `NIGHTLY_LABELS` ∪ `TARGET_LABELS` ∪ {`timing`} (today: every `nightly` row — §1d —, the ASan shader-cache attack `shadercache-attack`, and the target tests `photon-target` and `scale-target`, §1b/§1c; the benches' `--smoke` rows, label `benchmark-smoke`, DO run). The set lives in the script ONLY; this doc never copies it (`source.gate_scope_rules` case 9 fails on a literal `-LE` list here), and neither may a script — `scripts/lead/rc-gate.sh` must run what `--merge-tier` prints. `--timeout 120` is the default for rows that set none; the box runs ONE gate at a time (§4c, the gate slot) — there is no lower width "while another lane's gate is live". **Measured (D6B-GATE-SHAPE, 2026-09-27): 56.7 min at -j4 beside other lanes' gates, 36.6 min simulated on the audit's quieter durations — the reshape's ~30 min goal (and its lane's ≤ 35 min bar) was NOT reached; §5 has the before/after pair and why** | a lane whose scope falls back (see §3), any merge the lead wants covered wider, and — while the full gate is under moratorium — the gate before a push | gate-runner |
 | **PUSH** | the MERGE tier + the `--engine-selftest` sha256 lines — **FOUR of them since lane FENCE-1**: `pose 1`, `pose 2`, `pose B1 (rays)`, `pose B2 (no rays)`. Poses 1-2 are the default scene at the PLAIN grade; pose pair B is a purpose-built fixture (glossy floor, cascade crossing, emissive 3.0, mirror pillar) at the VIEWPORT grade, which is the only grade that carries the SSR prepass and therefore the ray tier. Quote all four. (The moratorium of 2026-09-09 lifted 2026-09-10 with the cleanup: the four nightly suites are NIGHTLY, not push, unless the batch touched their subject) | once per BATCH of merged lanes, before a push | gate-runner |
 | **NIGHTLY** | `python3 scripts/gate-scope.py --nightly-tier` — every `nightly` row, `-j1` (§1d): the benches' `--assert` rows, shadercache.container_asan, **open.crash_soak** (OPEN-FRAMES-1: the async-open teardown repro twelve times under glibc's malloc checks; read one failure as "run it again", three as a regression of the open's slice-boundary drive), the minutes-of-one-process sweeps (atom.cluster_cut, atom.cluster_crack, gi.chain_converge_scenes), vr.frame_budget, and the `<suite>.timing` millisecond rows (§4) | once a day / before a tag, on a quiet box, and whenever a batch touched a nightly row's subject | the lead |
 
@@ -30,18 +30,15 @@ pass until its part lands is a **target test**:
 - it carries the ctest label **`photon-target`**, and its header states the PART that turns it
   green and today's measured value;
 - it is EXCLUDED FROM PASS/FAIL, never from the run. `scripts/gate-scope.sh` selects it,
-  prints it in a `TARGET TESTS` section, and runs it as ITS OWN STEP after the gate's verdict
-  (GATE-SPEED-1): `--run` prints the gating phases' verdict, exits with their code, and starts
-  `gate-scope.sh <range> --run --targets-only` DETACHED (its pid in `<build>/gate-targets.pid`,
-  its output in `<build>/gate-targets.log`, its records under the run log's tier `target`), so no
-  gate and no merge waits for it — the inline target run held every engine lane's gate 7-13 min
-  at `-j1` (the gate-speed audit's S1). `--no-targets` skips the step; `--targets-only` runs it in
-  the foreground. Still `-j1` (it is a measurement; a measurement sharing the GPU with three
-  siblings prints a number nobody can use), and its exit code is reported and discarded. The step
-  runs in its own session, so its pid IS its process group: stop it with `kill -- -<pid>` (the
-  ctest and every suite under it). Every `--run` and `--solo` on that build dir stops a live step's
-  group by itself before it starts, and says so — the targets are a report and can be re-run. A
-  rebuild does not run under a live step: stop the group first. The MERGE and PUSH tiers drop it
+  prints it in a `TARGET TESTS` section, and runs it as ITS OWN STEP after the gate's verdict:
+  `--run` prints the gating phases' verdict line (every gating record already written), THEN runs
+  the target rows INSIDE THE GATE — on the gate's own display, under its slot (§4c), holding the
+  whole card once (GATE-COST-1 P9; TARGET-STEP-DISPLAY-1, ledger §1851: the DETACHED step the gate
+  used to start outlived the lane's Xvfb and recorded 159 "Malformed resolution string" rows against
+  a dead display) — and exits with the gating phases' code whatever the targets read. The lane reads
+  its verdict from the `GATE VERDICT` line; the targets' records go under the run log's tier
+  `target`. `--no-targets` skips the step; `--targets-only` runs it alone (a stage close). Still `-j1`
+  (it is a measurement), and its exit code is reported and discarded. The MERGE and PUSH tiers drop it
   with `-LE`, which is the only shape ctest offers for "these do not decide the tier";
 - every run prints `target: <value> (bar <bar>) <what>`, so the distance to the bar is visible
   from any lane's scoped gate and a target that goes green EARLY is noticed rather than
@@ -85,10 +82,11 @@ union, the merge refusal's re-selection and `rc-gate.sh`'s ctest all read it; ch
 width is that one line and an owner decision (§7b rule 3). The gate-speed audit's scheduler replay
 (rc-smoke15a's durations, the registered locks and tokens) puts -j6 at 21.7 min against 31.0 at
 -j4, CPU contention unmeasured (`~/Developer/spikes/gate-speed-1/`). Every gate runs at
-`GATE_JOBS`, however many other lanes gate beside it: the box admits
-Vulkan processes by VRAM itself (§4b, GATE-ADMIT-1) — a row that does not fit waits for tokens
-instead of failing an allocation, so the old "-j2 while two or more other Vulkan gates are live"
-rule is retired.
+`GATE_JOBS`, and only ONE gate runs on the box at a time (§4c, the gate slot; GATE-COST-1): the
+same ~600-row tier took 0.5-0.7 h alone and 2.6-6.6 h beside 2.6-3.9 sibling gates, so the box
+finished fewer tiers per hour the more ran at once (SPECS/audits/GATE_COST_2026-10-09.md §3e).
+The box still admits Vulkan processes by VRAM itself (§4b, GATE-ADMIT-1). There is no "-j2 while
+other gates are live" rule.
 
 
 ### 1c. SCALE TARGETS — the `scale-target` label (lane D1-SCALE-FIXTURES)
@@ -177,10 +175,12 @@ the wall estimate and a fallback's MERGE tier all follow it.
 
 ```
 scripts/gate-scope.sh <base>..<tip>            # a lane: its base commit .. its tip — prints the selection and why
-scripts/gate-scope.sh <range> --run            # run it (DISPLAY, data root set); every row's verdict -> the run log;
-                                               #   exits with the GATING phases' code, then starts the target step
+scripts/gate-scope.sh <range> --run            # run it (DISPLAY, data root set) under THE GATE SLOT (§4c); each row's
+                                               #   record -> the run log as it ends; the verdict line, then the target
+                                               #   step inside the gate; exits with the GATING phases' code
+scripts/gate-scope.sh <range> --resume         # --run, only the rows with no record at the tip (a killed gate, a lost display)
 scripts/gate-scope.sh <range> --run --no-targets    # ...without the target step
-scripts/gate-scope.sh <range> --run --targets-only  # the target step alone, in the foreground (reported, exit 0)
+scripts/gate-scope.sh <range> --run --targets-only  # the target step alone (a stage close; reported, exit 0)
 scripts/gate-scope.sh <range> --json           # machine-readable: suites, reasons, rationale, command
 scripts/gate-scope.sh --files src/x.cpp ...    # a file list instead of a range (no diff: no symbols, no CMake reading)
 scripts/gate-scope.sh --solo <suite> [--times 3]   # the flake protocol (§4), each run logged as a retry
@@ -380,9 +380,16 @@ admit all --timing`: the turnstile keeps the queue behind a waiting timing row (
 requests cannot starve it), a bounded 900 s wait (`NOADMIT vram: …`, exit 75, the command never
 runs), the command exec'd in place so a ctest timeout still kills the suite itself and the tokens
 die with it. (Until TEST-SELECTOR-1 it was a separate `flock` that excluded only the OTHER timing
-rows: gi.rt_reflect_cost and gi.field_scroll went red beside sibling GPU rows — plan 9ab.) A
-`gate-scope.sh --solo` retry sets `JAH_VRAM_ALL=1`: every admission of a solo run takes the whole
-card, so a solo retry is solo on the GPU too.
+rows: gi.rt_reflect_cost and gi.field_scroll went red beside sibling GPU rows — plan 9ab.)
+**THE WHOLE CARD ONCE PER PHASE (GATE-COST-1 P2):** the gate's serial timing phase, a
+`gate-scope.sh --solo` batch and the target step take EVERY token ONCE (`vram_tokens.hold_card`;
+the line `vram: the whole card (11 tokens) held for the phase, drained in <s> s`) and their rows'
+own admissions run nested on it (`already admitted by the parent`; each timing row still prints
+its `gpu-lock: waited` line, 0 s). One drain per phase instead of one per row — 278 per-row drains
+in 38 h, the union of whole-card drain or hold 17.0 of ~27 active hours (the audit's §3f) — and
+nothing shares the card while any row of the phase measures. A solo retry is therefore solo on the
+GPU too (a drain past `JAH_VRAM_PHASE_WAIT`, 3600 s, falls back to `JAH_VRAM_ALL=1`: every
+admission of the solo run takes the whole card itself).
 
 **THE LOCK LIST IS THE TIMING LIST** (`JAH_GPU_EXCLUSIVE_SUITES`, `tests/CMakeLists.txt`,
 registered by `jah_gpu_exclusive_test()`, whose `RUN_TIMEOUT` is the suite's own budget and
@@ -464,7 +471,14 @@ it is bounded at 900 s (`JAH_VRAM_WAIT`), after which the command never runs (ex
 `NOADMIT vram: no admission for <k> tokens within 900 s (<n> of <N> free …) — <row>`: the run log
 (`scripts/gate_runlog.py`) records that row — or a pool's never-started arms — as verdict
 `NOADMIT` with the line as its status, never a generic FAIL (the box was over-subscribed; nothing
-about the row's code). A burst of NOADMITs means the lanes asked for more than 900 s of queue.
+about the row's code). **A NOADMIT IS RE-QUEUED IN THE SAME RUN (GATE-COST-1 P5):** a row that got no
+admission within its wait (or a pool whose every arm got none) is not recorded; it is re-run at the
+end of the same `run_ctest()` — normal admission, after the other rows — up to `JAH_GATE_REQUEUE`
+(2) more times (`=== re-queued <n> row(s) that got no admission …`), and only its LAST try is
+recorded (a pass, a red, or NOADMIT after the last try — still "never ran" to the refusal). The
+hand `--solo` re-run of a NOADMIT, which asked for the whole card and queued behind the same
+congestion (§1906: 15 rows, 3.4 h), is no longer the path. A burst of final NOADMITs means the box
+asked for more than 900 s of queue three times over.
 A red row (or pool arm) whose OWN output carries the engine's in-frame OOM line (`GPU out of memory
 (VK_ERROR_OUT_OF_DEVICE_MEMORY; the device is NOT lost)`, exit 1) is recorded `OOM`, one carrying the
 loss line (`THE GPU DEVICE WAS LOST` / `the graphics device was lost`, exit 3) `LOST` — the matched
@@ -539,6 +553,67 @@ reds each (`database is locked`, `could not save`, `No such file`) were the two 
 `e2e-home-*`/`pool-home-*` under that dir — the run's own artefact, not a rig defect; the union of
 those reds re-run alone was 100 of 101 green (the one red vr.eye_grade, a base red).
 
+## 4c. ONE GATE AT A TIME — the gate slot (lane GATE-COST-1, 2026-10-09)
+
+**Why** (`SPECS/audits/GATE_COST_2026-10-09.md`). The same ~600-row tier took **0.5-0.7 h on a box
+with no sibling gate** and **2.6-6.6 h beside 2.6-3.9 of them**: every row ran 2-2.5x slower on CPU
+and I/O, the VRAM queue added 12-20 row-hours per tier, and the box finished FEWER tiers per hour
+the more ran at once (~1.6/h alone, ~0.75/h at four). Most NOADMITs, lint TIMEOUTs and load-bar
+FAILs — and their solos and verdicts — came from gates beside gates.
+
+**THE RULE.** A GATE RUN holds THE GATE SLOT for its whole run; the box runs one at a time.
+A gate run is `gate-scope.sh --run` (scoped, a fallback, `--fork-tier`, `--joint --run`,
+`--targets-only`, `--resume`) and `gate_runlog.py run` (the rc tiers; `scripts/gpu-admit.sh gate
+-- <command>` holds the slot across a whole script that runs several). Small things NEVER take it:
+a `--solo` batch, a lane's own hand run, an `admit`, a build. The waiting gate prints
+`gate-slot: queued at position <p> (<p> gate(s) ahead) behind <holder>` (again whenever the position
+moves) and `gate-slot: taken after <s> s in the queue`; the queue is FIFO and has NO bound (a gate
+never gives up for the slot). `scripts/gpu-admit.sh status` names the holder and the queue.
+**Mechanism** (`scripts/vram_tokens.py`): each waiter flocks its own ticket
+`/tmp/jah-vram/gate-queue/<seq>.<pid>` (made locked under a private name, then renamed in); the
+lowest live ticket is the holder (a ticket is numbered AND renamed in under the counter's lock, so
+two gates never both find no lower ticket); a dead waiter's ticket is reaped by the next reader. The
+slot and a phase's tokens belong to the GATE PROCESS, never to its ctest, and THE ctest TREE DIES WITH
+THE GATE: ctest runs in its own process group with PR_SET_PDEATHSIG (SIGTERM), a detached reaper
+kills that group the moment the gate's pid is gone (ctest's own SIGTERM orphans its rows — measured),
+and a gate told SIGTERM/SIGINT/SIGHUP stops its tree, releases slot and card and prints `GATE ABORTED`.
+A gate SIGKILLed by oomd therefore frees the slot at once and leaves no rows running past 15 s. A
+process inside a gate (`JAH_GATE_SLOT_HELD`) never queues again. `JAH_GATE_SLOT=0` turns it off.
+
+**INSIDE A GATE, IN ORDER:**
+1. **The CPU phase (P8):** the `hygiene` rows (lints and the selector's own rows: no display, no GPU;
+   a row in a FIXTURE stays with its partners in the GPU phase) run first, at the gate's width, before any GPU row starts (`=== the CPU phase: <n> lint/selector
+   row(s) …`). Their walks stay on FIRST-PARTY paths: `source.one_fonticons` and
+   `source.one_material_resolve` walked `src irisgl` — the vendored submodules, the fork's build tree
+   and install, ~26k entries and 104 MB of C++ per run in a lane tree — on the USB-stick root under
+   `ionice -c 3` (idle-class I/O, starved beside three gates): 0-1 s rows that TIMED OUT at 60 s
+   (24 of the window's 34 TIMEOUTs were lints, §2 of the audit). They now skip `irisgl/thirdparty`
+   and `.git` (1,448 entries, 205 C++ files), as `source.assimp_import_only` always did.
+2. **The GPU phase**, at the gate's width; a NOADMIT re-queued at its end (§4b, P5).
+3. **The timing phase**, serial, on ONE whole-card hold (§4, P2).
+4. **The verdict line** `=== GATE VERDICT: GREEN|RED (exit <n>) ===` — every gating record written.
+5. **The target step** (§1b, P9), on the gate's display and the whole card, reported, never gating.
+
+**EACH ROW IS RECORDED AS IT ENDS, AND A GATE NEVER RUNS ON A DEAD DISPLAY (P6).** ctest runs with
+`-V`; the runner keeps each row's own lines and appends its records at its result line (the
+records used to be written after ctest exited: the oomd kill of 2026-10-09 took 303 finished rows of
+rc-smoke16a with it). The stream the caller sees is `--output-on-failure`'s. `gate-scope.sh <range>
+--resume` runs only the rows with no record at the tip (NOADMIT/NOTRUN are no record) — the rest of a
+killed gate. A gate on a local display `:N` reads its X server's pid from `/tmp/.X<N>-lock` at the
+start and checks, at every row's end and every 2 s, that the same pid lives, still owns the lock (a
+display NUMBER is reused) and accepts a connection; when it does not, the run's process tree is
+stopped, no row that ended after the death is recorded, and the gate ends with
+`=== GATE ABORTED: <why> …` and `=== GATE VERDICT: ABORTED …` (exit 6). A run on a display already
+dead refuses to start. (634 garbage records in the audit's window came from gates that kept running
+6-12 min after their Xvfb died.) A ctest killed by a signal ends the run the same way: what it
+finished is recorded, nothing else starts — no timing phase and no target step: the gate ends with
+`GATE VERDICT: ABORTED` (exit 128 + the signal).
+
+Guard: `gate.cost` (tests/hygiene/gate_cost_test.py; the slot's FIFO, `--solo` outside it, the reaped
+dead waiter, eight racing gates, a SIGKILLed gate's tree and slot, the in-run re-queue, the killed-ctest
+records and --resume, a killed ctest ending the gate, the dead display, the CPU phase, the whole-card
+phases with the caller's environment, and the per-row records equal to the old junit path's).
+
 ## 5. What the full gate costs, and where its wall goes
 
 **CURRENT COUNTS (2026-09-27, lane D6B-GATE-SHAPE, Studio d-build): 697 rows registered,
@@ -564,8 +639,8 @@ and apps held 15.0 of 16.4 GB (nvidia-smi: ~1.5-2.8 GB per Jahshaka process, not
 of the lock were 3/3 green solo, and the last two (vr.eye_grade, threading.newproject_stall)
 were red on the base tree's before-run with the same assertion. DEVPROCESS-1's "VRAM is not the
 constraint" was measured with three processes; with four gates it is. The box enforces that law
-itself since GATE-ADMIT-1 (§4b: box-wide VRAM tokens); the `-j2 while two or more other Vulkan
-gates are live` rule it replaced is retired.
+itself since GATE-ADMIT-1 (§4b: box-wide VRAM tokens), and since GATE-COST-1 runs one gate at a
+time (§4c).
 
 WHAT THE SHAPE CAN STILL WIN is the gap to busy/4 — about 8 % after D6B. The rest is
 suite-seconds: the tier grew ~20 rows between the audit and D6B (atom.lod_switch alone is
