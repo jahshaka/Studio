@@ -100,8 +100,11 @@ set_tests_properties(shadow.helper_casters PROPERTIES TIMEOUT 120 LABELS "engine
 # script in TEN processes (shadow_casters.sh's last argument), labels `stage-close` + `engine`, in the
 # stage-close batch beside gpu.cutout_soak and in a scoped gate only through a shadow/caster change
 # (gate-scope.py STAGE_CLOSE_SUBJECTS). 80 runs / 8.84 h in a week of gates, 0 red ever, before the split.
-# The one-process TIMEOUTs are 3x the worst of three measured runs (STAGE-CLOSE-1, 2026-10-09, alone on the
-# card at load ~25): cutout 164 / 136 / 118 s -> 500; two-sided 81 / 84 / 50 s -> 260.
+# The one-process TIMEOUTs are 6x the QUIET per-process worst (tests/CMakeLists.txt's policy): the run log's quietest
+# ten-process runs (load < 10) are 286-349 s cutout and 219-320 s two-sided, i.e. a worst of 35 s and 32 s a process
+# -> 210 / 195. Measured alone in the slot on 2026-10-09 (load 14-18, NOT quiet): cutout 124 / 179 / 84 s, two-sided
+# 144 / 80 / 129 s — of which ~34 s is the shutdown waiting on the shader-cache write under the box's I/O load
+# (a finding for STALL-ROW-1, not a reason to widen the bar).
 jah_gpu_row(shadow.cutout_caster CLASS app
          COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/scripts/shadow_casters.sh cutout
                  $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
@@ -109,7 +112,7 @@ jah_gpu_row(shadow.cutout_caster CLASS app
                  ${CMAKE_CURRENT_SOURCE_DIR}/fixtures/cutout_holes.png
                  ${CMAKE_CURRENT_BINARY_DIR}/shadow.cutout_caster 1
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
-set_tests_properties(shadow.cutout_caster PROPERTIES LABELS "engine" TIMEOUT 500)
+set_tests_properties(shadow.cutout_caster PROPERTIES LABELS "engine" TIMEOUT 210)
 jah_gpu_row(shadow.two_sided_caster CLASS app
          COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/scripts/shadow_casters.sh twosided
                  $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
@@ -117,7 +120,7 @@ jah_gpu_row(shadow.two_sided_caster CLASS app
                  ${CMAKE_CURRENT_SOURCE_DIR}/fixtures/cutout_holes.png
                  ${CMAKE_CURRENT_BINARY_DIR}/shadow.two_sided_caster 1
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
-set_tests_properties(shadow.two_sided_caster PROPERTIES LABELS "engine" TIMEOUT 260)
+set_tests_properties(shadow.two_sided_caster PROPERTIES LABELS "engine" TIMEOUT 195)
 jah_gpu_row(shadow.cutout_caster.churn CLASS app
          COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/scripts/shadow_casters.sh cutout
                  $<TARGET_FILE:${CMAKE_PROJECT_NAME}>

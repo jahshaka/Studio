@@ -25,6 +25,8 @@
 #   shadercache.container_asan 247.95  <- a recorded stage-close run (spikes/)
 #   shadow.cutout_caster.churn 349.39  <- the ten-process shadow.cutout_caster's run-log median before the split (STAGE-CLOSE-1)
 #   shadow.two_sided_caster.churn 272.42  <- the ten-process shadow.two_sided_caster's run-log median before the split
+#   shadow.cutout_caster 123.96  <- the median of three one-process runs alone in the slot (STAGE-CLOSE-1, load 14-18)
+#   shadow.two_sided_caster 129.16  <- the same
 #   ui.components.timing 2.97  <- its D6B dev run
 #   threading.newproject_stall.timing 14.72  <- its TESTING-DEBTS-1 dev run (the fixture: a wipe)
 #   ui.properties_filter.timing 0.73  <- its D6B dev run
@@ -467,8 +469,10 @@ shadergraph.selection 0.08
 shadow.atlas_binding 2.57
 shadow.atlas_rebuilds 4.51
 shadow.cache_kinds 6.54
+shadow.cutout_caster 123.96
 shadow.cutout_caster.churn 349.39
 shadow.layout 0.01
+shadow.two_sided_caster 129.16
 shadow.two_sided_caster.churn 272.42
 shortcuts.registry 0.02
 skeletal.clip_extract 0.09
