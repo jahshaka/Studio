@@ -272,7 +272,7 @@ set_tests_properties(source.row_declares_needs PROPERTIES TIMEOUT 120 LABELS "hy
 jah_no_display(source.row_declares_needs)
 
 # gate.tokens_by_needs — TEST-NEEDS-1: the token lookup (tests/support/vram_tokens.cmake, included
-# alone) returns 1/1/2/3 for low NONE / medium photon / high photon / epic photon, and refuses a
+# alone) returns 2/2/2/3 for low NONE / medium photon / high photon / epic photon, and refuses a
 # declaration that is missing a word or names one it does not know. A toy: no build needed.
 add_test(NAME gate.tokens_by_needs
          COMMAND ${CMAKE_COMMAND} -DSRC=${CMAKE_SOURCE_DIR}/tests

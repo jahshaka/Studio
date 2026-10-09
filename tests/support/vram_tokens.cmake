@@ -40,7 +40,7 @@ set(JAH_VRAM_TOKENS_VR 3)
 #   epic:photon      3  the audit's 2-3.6 GB for the gather family at Epic (GATE-ADMIT-1's
 #                       two-tier run); the old flat `app 2` was median 2,000 / p90 2,270 / max
 #                       2,600 MiB against 2,180 — the thin margin this closes
-#   medium/high/epic:none  1 / 2 / 2 — the chain without Photon (unmeasured at High/Epic: the
+#   medium/high/epic:none  2 / 2 / 2 — the chain without Photon (unmeasured at High/Epic: the
 #                       shadow atlas and the ray reflections stay; kept at 2 until measured)
 #   document         3  the document's own tier: a new scene is Epic with everything on, a
 #                       sample opens at what it saved (Epic for four of the nine)
@@ -54,13 +54,16 @@ set(JAH_VRAM_TOKENS_VR 3)
 #   epic photon      median 2,292 / max 2,532 MiB (56 processes: gi.one_writer, the pcc and
 #                    lattice rows, the lifecycle harnesses, the atom rows, all-five rows)
 #   document         median 2,226 / max 2,610 MiB (pool.gi_verbs, pool.atom, cleanstart Showroom 2)
-# ADDITIVE, MEASURED (2026-10-10, four processes booted at once on one Xvfb, each admitted through
-# gpu-admit like a row, a hold script; the card's memory.used minus the idle baseline at steady
-# state, corrected by every other process's own change; spikes/test-needs-1/conc-*.json):
-#   4 x low NONE       card +1,944 MiB against a per-pid sum of 1,888
+# ADDITIVITY, MEASURED AT STEADY STATE (2026-10-10, four processes booted at once on one Xvfb, each
+# admitted through gpu-admit like a row, running a HOLD script — an empty project, frames; the
+# card's memory.used minus the idle baseline at steady state, corrected by every other process's
+# own change; spikes/test-needs-1/conc-*.json):
+#   4 x low NONE       card +1,944 MiB against a per-pid sum of 1,888 (~472 per pid, max 567)
 #   4 x medium photon  card +2,617 MiB against a per-pid sum of 2,592
-# The card total IS the per-pid sum (within 3 %), so a process's per-pid peak is what it costs:
-# Low and Medium peak over 1 token (1,090) and take 2 = ceil(1,491 / 1,090) and ceil(1,655 / 1,090).
+# So the card adds per process at the hold's steady state. The ROW peaks (above, from
+# vram-runs*.json, 23 Low processes) are larger — 1,461 / 1,491 MiB Low, 1,587 / 1,655 Medium —
+# and were not measured concurrently; with the card additive per process, a Low or Medium row
+# takes ceil(row peak / 1,090) = 2.
 # Epic+photon / document peak at 2.3-2.6 GB: over 2 tokens (2,180), under 3 — hence 3.
 set(JAH_VRAM_TOKENS_BY_NEEDS
     low:none=2 low:photon=2

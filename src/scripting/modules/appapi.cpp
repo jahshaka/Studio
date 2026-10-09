@@ -16,6 +16,7 @@ For more information see the LICENSE file
 #include "services/services.h"
 #include "services/projectservice.h"
 #include "scripting/modules/appapi.h"
+#include <QJsonArray>
 #include <QImage>
 #include "scripting/modules/moduleshared.h"
 
@@ -1367,11 +1368,11 @@ QVariantMap AppApi::testTier()
 {
     QVariantMap out;
     out[QStringLiteral("tier")] = testtier::name();
-    QVariantList needs;   // a plain JS array (a QStringList arrives as a sequence Array.isArray refuses)
+    QStringList needs;
     if (testtier::active())
         for (const QString &w : testtier::needs())
             if (w != QLatin1String(testtier::kNoNeeds)) needs << w;
-    out[QStringLiteral("needs")] = needs;
+    out[QStringLiteral("needs")] = QJsonArray::fromStringList(needs);
     out[QStringLiteral("window")] = testtier::testWindow()
         ? QStringLiteral("%1x%2").arg(testtier::kWindowWidth).arg(testtier::kWindowHeight) : QString();
     return out;
