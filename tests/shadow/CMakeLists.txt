@@ -100,11 +100,13 @@ set_tests_properties(shadow.helper_casters PROPERTIES TIMEOUT 120 LABELS "engine
 # script in TEN processes (shadow_casters.sh's last argument), labels `stage-close` + `engine`, in the
 # stage-close batch beside gpu.cutout_soak and in a scoped gate only through a shadow/caster change
 # (gate-scope.py STAGE_CLOSE_SUBJECTS). 80 runs / 8.84 h in a week of gates, 0 red ever, before the split.
-# The one-process TIMEOUTs are 6x the QUIET per-process worst (tests/CMakeLists.txt's policy): the run log's quietest
-# ten-process runs (load < 10) are 286-349 s cutout and 219-320 s two-sided, i.e. a worst of 35 s and 32 s a process
-# -> 210 / 195. Measured alone in the slot on 2026-10-09 (load 14-18, NOT quiet): cutout 124 / 179 / 84 s, two-sided
-# 144 / 80 / 129 s — of which ~34 s is the shutdown waiting on the shader-cache write under the box's I/O load
-# (a finding for STALL-ROW-1, not a reason to widen the bar).
+# THE TIMEOUTS ARE 6x THE QUIET WORST (tests/CMakeLists.txt's policy), from the run-log ARCHIVE's quietest ten-process
+# runs: cutout 454 s, two-sided 427 s (45.4 / 42.7 s a process). The one-process gate rows: 6 x 45.4 -> 272, 6 x 42.7 ->
+# 256. The ten-process .churn twins: 6 x 349 -> 2100 and 6 x 320 -> 1950 (the run log's quiet ten-process worst
+# 349 / 320 s). Measured alone in the slot on 2026-10-09 at load 14-18 (NOT quiet): cutout 124 / 179 / 84 s, two-sided
+# 144 / 80 / 129 s — ~34 s of each the shutdown waiting on the shader-cache write under the box's I/O load. In the
+# first stage-close batch the churn twins took 1008 / 1159 s, over the old TIMEOUT 900: they passed only through
+# _jah_vram_widen_timeout's hidden +900 s on every gpu row (tests/CMakeLists.txt), a band-aid for part B.
 jah_gpu_row(shadow.cutout_caster CLASS app
          COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/scripts/shadow_casters.sh cutout
                  $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
@@ -112,7 +114,7 @@ jah_gpu_row(shadow.cutout_caster CLASS app
                  ${CMAKE_CURRENT_SOURCE_DIR}/fixtures/cutout_holes.png
                  ${CMAKE_CURRENT_BINARY_DIR}/shadow.cutout_caster 1
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
-set_tests_properties(shadow.cutout_caster PROPERTIES LABELS "engine" TIMEOUT 210)
+set_tests_properties(shadow.cutout_caster PROPERTIES LABELS "engine" TIMEOUT 272)
 jah_gpu_row(shadow.two_sided_caster CLASS app
          COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/scripts/shadow_casters.sh twosided
                  $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
@@ -120,7 +122,7 @@ jah_gpu_row(shadow.two_sided_caster CLASS app
                  ${CMAKE_CURRENT_SOURCE_DIR}/fixtures/cutout_holes.png
                  ${CMAKE_CURRENT_BINARY_DIR}/shadow.two_sided_caster 1
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
-set_tests_properties(shadow.two_sided_caster PROPERTIES LABELS "engine" TIMEOUT 195)
+set_tests_properties(shadow.two_sided_caster PROPERTIES LABELS "engine" TIMEOUT 256)
 jah_gpu_row(shadow.cutout_caster.churn CLASS app
          COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/scripts/shadow_casters.sh cutout
                  $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
@@ -128,7 +130,7 @@ jah_gpu_row(shadow.cutout_caster.churn CLASS app
                  ${CMAKE_CURRENT_SOURCE_DIR}/fixtures/cutout_holes.png
                  ${CMAKE_CURRENT_BINARY_DIR}/shadow.cutout_caster.churn 10
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
-set_tests_properties(shadow.cutout_caster.churn PROPERTIES LABELS "engine;stage-close" TIMEOUT 900)
+set_tests_properties(shadow.cutout_caster.churn PROPERTIES LABELS "engine;stage-close" TIMEOUT 2100)
 jah_gpu_row(shadow.two_sided_caster.churn CLASS app
          COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/scripts/shadow_casters.sh twosided
                  $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
@@ -136,7 +138,7 @@ jah_gpu_row(shadow.two_sided_caster.churn CLASS app
                  ${CMAKE_CURRENT_SOURCE_DIR}/fixtures/cutout_holes.png
                  ${CMAKE_CURRENT_BINARY_DIR}/shadow.two_sided_caster.churn 10
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
-set_tests_properties(shadow.two_sided_caster.churn PROPERTIES LABELS "engine;stage-close" TIMEOUT 900)
+set_tests_properties(shadow.two_sided_caster.churn PROPERTIES LABELS "engine;stage-close" TIMEOUT 1950)
 # gpu.cutout_soak — 5,000 frames of cut-outs (plain on a cube and a sphere, the live graph
 # cut-out the hang was found on, the screenshot path, a pinned and a free clock), then 5,000 of
 # the Tornado sample, under the Khronos validation layer. MINUTES OF ONE PROCESS: a stage-close row; its
