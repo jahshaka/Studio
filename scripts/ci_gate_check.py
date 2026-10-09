@@ -244,7 +244,8 @@ def record_verdicts(pairs, tip_sha, pin):
                                 "verdict": "VERDICT", "text": text, "ts": now.isoformat(timespec="seconds"),
                                 "tip": {"studio": tip_sha, "irisgl": pin, "studio_dirty": False,
                                         "irisgl_dirty": False},
-                                "reader": os.environ.get("USER", "")}, sort_keys=True) + "\n")
+                                "reader": os.environ.get("USER", ""),
+                                "overrides": ["--verdict"]}, sort_keys=True) + "\n")   # GATE-COST-2 #10
     return path
 
 

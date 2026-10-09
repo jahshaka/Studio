@@ -556,6 +556,32 @@ def _vram():
     return vram_tokens
 
 
+# THE LAW SWITCHES (GATE-COST-2 #10): an environment that changes how a gate admits, waits or judges. Every
+# record of a run carries the ones in force as `overrides: [names]` (empty when none); the push judge
+# (VERDICT-1) refuses a candidate whose records carry any. A hand --verdict marks its own records the same way
+# (ci_gate_check.py).
+LAW_SWITCHES = ("JAH_GATE_SLOT", "JAH_VRAM_TOKENS", "JAH_VRAM_ALL", "JAH_JUDGE_READ", "JAH_VRAM_WAIT",
+                "JAH_VRAM_PHASE_WAIT", "JAH_GATE_REQUEUE", "JAH_DISPLAY_POLL_S", "JAH_KERNEL_JOURNAL",
+                "JAH_VRAM_PROC_LOCKS")
+
+
+def law_overrides(env=None):
+    """[NAME=value …] of the law switches set in `env` (default os.environ). JAH_VRAM_TOKENS counts only
+    when it is not the default 11; JAH_GATE_SLOT only when it turns the slot off."""
+    env = os.environ if env is None else env
+    out = []
+    for k in LAW_SWITCHES:
+        v = env.get(k)
+        if v is None:
+            continue
+        if k == "JAH_VRAM_TOKENS" and v.strip() == "11":
+            continue
+        if k == "JAH_GATE_SLOT" and v.strip() != "0":
+            continue
+        out.append(f"{k}={v}")
+    return out
+
+
 def requeue_times():
     """P5: how many times a row that got no admission is re-queued inside the same run (JAH_GATE_REQUEUE)."""
     try:
@@ -714,7 +740,8 @@ def phase_record(kind, tier, lane, rng, shas, **fields):
     Returns the file it went to."""
     now = datetime.datetime.now().astimezone().isoformat(timespec="seconds")
     rec = dict(fields, schema=SCHEMA, kind=kind, suite="@" + kind, arm=None, verdict=kind.upper(), tier=tier,
-               lane=lane, range=rng, tip=shas, ts=now, source="run", gating=False, retry=False)
+               lane=lane, range=rng, tip=shas, ts=now, source="run", gating=False, retry=False,
+               overrides=law_overrides())
     try:
         return append_records([rec], tier, shas["studio"])
     except (OSError, ValueError, KeyError):
@@ -800,6 +827,7 @@ class _Run:
         self.tier, self.lane, self.reasons, self.gating, self.rng = tier, lane, reasons or {}, gating, rng
         self.retry, self.labels, self.echo, self.env = retry, labels or {}, echo, env
         self.shas = tree_shas()
+        self.overrides = law_overrides(env)
         # WHAT THE BINARIES WERE BUILT FROM rides every record (GATE-COST-2 #8): the refusal never counts a
         # record of a stale build as the tip's run
         b = built_from(build) if build else None
@@ -824,7 +852,7 @@ class _Run:
                 "ts": datetime.datetime.fromtimestamp(t_end).astimezone().isoformat(timespec="seconds"),
                 "suite": name, "tier": self.tier, "lane": self.lane, "range": self.rng, "tip": self.shas,
                 "reason": self.reasons.get(name, self.tier), "gating": (self.gating(name) if self.gating else True),
-                "retry": self.retry, "labels": sorted(self.labels.get(name, [])),
+                "retry": self.retry, "labels": sorted(self.labels.get(name, [])), "overrides": self.overrides,
                 "box": dict(self.box0, gpu_clocks=at.get("gpu_clocks", self.box0["gpu_clocks"]),
                             other_ctests=at.get("other_ctests", self.box0["other_ctests"]),
                             load=[round(x, 2) for x in load],
