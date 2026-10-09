@@ -94,6 +94,12 @@ def main(source, build):
     for d in (toy, state):
         os.makedirs(d)
     vt = os.path.join(scripts, "vram_tokens.py")
+    # THE JOURNAL IS A FILE HERE (GATE-COST-2 #7): every admission's Xid read runs `journalctl -k` with its own
+    # 30 s bound (scripts/kernel_xid.py), which on a loaded box alone tripped this test's 30 s bound on an
+    # `admit` — the test measured the journal, not the slot. JAH_KERNEL_JOURNAL is the admission's test source.
+    journal = os.path.join(scratch, "journal.txt")
+    open(journal, "w").close()
+    os.environ["JAH_KERNEL_JOURNAL"] = journal
     os.environ.update(JAH_VRAM_DIR=os.path.join(scratch, "vram"), JAH_VRAM_TOKENS="3", JAH_VRAM_WAIT="5",
                       JAH_RUN_LOG_DIR=os.path.join(scratch, "runs"), TOYDIR=state, JAH_GATE_REQUEUE="2")
     open(os.path.join(toy, "CMakeLists.txt"), "w").write(TOY.replace("${VT}", vt))
