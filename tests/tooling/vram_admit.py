@@ -275,8 +275,9 @@ check(os.path.exists(mark) and p.returncode == 3, "a SIGTERM to the admission re
 journal = os.path.join(D, "journal6")
 open(journal, "w").close()
 fault = os.path.join(D, "fault6.py")
-# EVENTS, NO SLEEP (GATE-COST-2): the row leads its own process group, so its tree is the tracker's by pgid
-# whatever reparenting happens; the grandchild logs its Xid at once and LIVES until the admission (the row's
+# EVENTS, NO SLEEP (GATE-COST-2): this FIXTURE row (fault6.py's os.setpgid) leads its own process group — the
+# admission does not do that; its only change is the end-of-row tracker.scan() — so the row's tree is the
+# tracker's by pgid whatever reparenting happens; the grandchild logs its Xid at once and LIVES until the admission (the row's
 # parent) is gone — the tracker sees it at the latest in its scan at the row's end; the row exits 0 only after
 # the line is in the journal (or its grandchild died: then the check below fails, never a hang). The grandchild
 # holds none of the test's pipes: its parent's admission, once ended, is reaped by the test and the loop ends
