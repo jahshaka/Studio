@@ -189,7 +189,8 @@ def judge_cases(source, build, scratch, rows):
     def rec(suite, verdict, ts):
         with open(os.path.join(logs, "2026-10-09-stage-close-%s.jsonl" % tip[:9]), "a") as f:
             f.write(json.dumps({"schema": 1, "suite": suite, "arm": None, "verdict": verdict, "ts": ts,
-                                "tip": {"studio": tip, "irisgl": pin, "studio_dirty": False, "irisgl_dirty": False}}) + "\n")
+                                "tip": {"studio": tip, "irisgl": pin, "studio_dirty": False, "irisgl_dirty": False,
+                                        "built": {"studio": tip, "irisgl": pin, "dirty": False}}}) + "\n")
 
     def judge(*extra):
         r = subprocess.run([sys.executable, os.path.join(source, "scripts", "ci_gate_check.py"), base + ".." + tip,

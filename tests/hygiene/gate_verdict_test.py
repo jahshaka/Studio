@@ -101,7 +101,10 @@ class Env:
         self.rl.append_records([dict({"schema": schema, "suite": s, "arm": None, "verdict": verdict, "ts": ts,
                                       "retry": retry, "lanes": [lane] if lane else [], "gating": True, "tier": tier,
                                       "tip": {"studio": t, "studio_dirty": False, "irisgl": ig,
-                                              "irisgl_dirty": False}}, **extra) for s in suites], "scoped", t)
+                                              "irisgl_dirty": False,
+                                              # GATE-COST-2 #8/F4: a run carries what it was built from (no stamp: stale)
+                                              "built": {"studio": t, "irisgl": ig, "dirty": False}}}, **extra)
+                                for s in suites], "scoped", t)
 
     def verdict(self, suite, text, ts, tip=None):
         t = tip or self.tip
@@ -409,7 +412,8 @@ def case_noadmit_pool(E):
     check(recs[0]["verdict"] == "FAIL" and recs[0].get("noadmit_arms") == ["toy.b", "toy.c"]
           and "toy.b" in (recs[0].get("failLine") or ""),
           "a mixed pool records FAIL with its NOADMIT arms named (%s, %s)" % (recs[0]["verdict"], recs[0].get("noadmit_arms")))
-    # the re-queue (GATE-COST-1 P5) treats it as a never-ran row: re-run once, recorded once, NOADMIT
+    # the re-queue (GATE-COST-1 P5) treats it as a never-ran row: re-run once; EVERY try is a record (GATE-COST-2 #2:
+    # requeued 0 and 1), each NOADMIT — never-ran to the judge
     fake = os.path.join(E.scratch, "fake_pool_ctest.sh")
     open(fake, "w").write("#!/bin/sh\n"
                           "echo '      Start  1: pool.toy'\n"
@@ -424,8 +428,9 @@ def case_noadmit_pool(E):
         del os.environ["JAH_GATE_REQUEUE"]
     got = [json.loads(l) for f in os.listdir(d) for l in open(os.path.join(d, f))]
     row = [r for r in got if r["suite"] == "pool.toy" and r["arm"] is None]
-    check(rc != 0 and len(row) == 1 and row[0]["verdict"] == "NOADMIT",
-          "...re-queued as a never-ran row and recorded once, NOADMIT (rc %s, %s)" % (rc, [r["verdict"] for r in row]))
+    check(rc != 0 and [(r["verdict"], r.get("requeued")) for r in row] == [("NOADMIT", 0), ("NOADMIT", 1)],
+          "...re-queued as a never-ran row, one NOADMIT record per try (rc %s, %s)"
+          % (rc, [(r["verdict"], r.get("requeued")) for r in row]))
 
 
 def case_carried_red(E):

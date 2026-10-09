@@ -241,7 +241,7 @@ def runlog_cases(source):
     check(set(rl.TIERS) == {"scoped", "scoped-fallback", "scoped-tier", "target", "merge", "stage",
                             "stage-close", "push", "smoke", "fork", "lane", "solo"},
           "the tier names are exactly the documented twelve (GATE-SPEED-1 added target and smoke; BATCH-GATE-1 "
-          "retired joint; STAGE-CLOSE-1 stage-close for nightly; GATE-COST-2 lane and solo)")
+          "retired joint; STAGE-CLOSE-1 added stage-close; GATE-COST-2 lane and solo)")
     gsrc = open(os.path.join(source, "scripts", "gate-scope.py")).read()
     lits = set(re.findall(r'a\.tier or \(?"([a-z-]+)"', gsrc)) | set(re.findall(r'else "(scoped-[a-z]+)"', gsrc)) \
         | set(re.findall(r'run_ctest\(target_cmd, build, "([a-z-]+)"', gsrc))

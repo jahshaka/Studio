@@ -164,7 +164,9 @@ def main(source, build):
         # VERDICT-1's checked door: a pre-existing defect is proved by its red reproduced on the base (a solo)
         gate_runlog.append_records([{"suite": k[0], "arm": None, "verdict": "FAIL", "ts": "2026-01-01T10:30:00",
                                      "retry": True, "tip": {"studio": revs[BASE], "studio_dirty": False,
-                                                            "irisgl": pin(revs[BASE]), "irisgl_dirty": False}}],
+                                                            "irisgl": pin(revs[BASE]), "irisgl_dirty": False,
+                                                            "built": {"studio": revs[BASE], "irisgl": pin(revs[BASE]),
+                                                                      "dirty": False}}}],
                                    "scoped", revs[BASE])
         rc, out = run(lane, "--verdict", f"{k[0]}=real:FIXTURE-1 pre-existing: the fixture's red, answered where it happened")
         vfiles = [f for f in os.listdir(os.environ["JAH_RUN_LOG_DIR"]) if "-verdict-" in f]
@@ -192,7 +194,9 @@ def main(source, build):
               "the tip's green is the same code passing again (ROUND 2 F1) (%d)" % (A, B, k[0], rc))
         gate_runlog.append_records([{"suite": k[0], "arm": None, "verdict": "FAIL", "ts": "2026-01-01T10:30:00",
                                      "retry": True, "tip": {"studio": revs[BASE], "studio_dirty": False,
-                                                            "irisgl": pin(revs[BASE]), "irisgl_dirty": False}}],
+                                                            "irisgl": pin(revs[BASE]), "irisgl_dirty": False,
+                                                            "built": {"studio": revs[BASE], "irisgl": pin(revs[BASE]),
+                                                                      "dirty": False}}}],
                                    "scoped", revs[BASE])
         rc, out = run(lane, "--verdict", f"{k[0]}=real:FIXTURE-1 the same red on the base")
         if rc: print("\n".join(l for l in out.splitlines() if "REFUSED" in l or "OPEN" in l)[:1500])
