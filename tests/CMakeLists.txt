@@ -339,8 +339,17 @@ set(JAH_DEFAULT_ROW_TIMEOUT 120)
 # `set:` ENVIRONMENT_MODIFICATION entries, appended at the end of the row's directory (after the
 # site's own set_tests_properties, which would replace a list set now) — ctest's listing then
 # shows exactly what the process boots, and source.row_declares_needs reads it there.
-function(_jah_test_boot_register _row _tier)
+function(_jah_test_boot_register _row _tier _why)
     jah_test_boot_env(_env "${_tier}" ${ARGN})
+    # NEEDS_WHY "<claim>" — the one way a row that READS THE PICTURE declares NONE: its claim is
+    # the picture with every switchable feature off (a "GI off" claim). Only beside NONE; the
+    # lint (source.row_declares_needs) refuses NONE on a picture row without it, and records it.
+    if(_why)
+        if(NOT "NONE" IN_LIST ARGN)
+            message(FATAL_ERROR "${_row}: NEEDS_WHY stands only beside NEEDS NONE")
+        endif()
+        list(APPEND _env "JAHSHAKA_TEST_NEEDS_WHY=set:${_why}")
+    endif()
     set_property(GLOBAL PROPERTY JAH_TEST_BOOT_${_row} "${_env}")
     cmake_language(EVAL CODE "cmake_language(DEFER CALL _jah_test_boot_apply [[${_row}]])")
 endfunction()
@@ -402,7 +411,7 @@ function(_jah_vram_register _row _class _k)
     cmake_language(EVAL CODE "cmake_language(DEFER CALL _jah_vram_widen_timeout [[${_row}]])")
 endfunction()
 
-# jah_gpu_row(<row> CLASS app|selftest|engine|vr [TIER <tier> NEEDS <features…>|NONE] [TOKENS <k>]
+# jah_gpu_row(<row> CLASS app|selftest|engine|vr [TIER <tier> NEEDS <features…>|NONE [NEEDS_WHY "<claim>"]] [TOKENS <k>]
 #             COMMAND <exe-or-target> [args...] [WORKING_DIRECTORY <dir>])
 # CLASS app|vr REQUIRES TIER + NEEDS (tests/support/vram_tokens.cmake): the row's process boots that
 # World Mode with only the named features on, and an app row's tokens are the declaration's.
@@ -412,7 +421,7 @@ endfunction()
 # $<TARGET_FILE:...>. A pool is not registered here: its tokens are taken per APP PROCESS by
 # run_pool.py (jah_add_pool), so a restart re-takes them and the driver holds none.
 function(jah_gpu_row _row)
-    cmake_parse_arguments(G "" "CLASS;TIER;TOKENS;WORKING_DIRECTORY" "NEEDS;COMMAND" ${ARGN})
+    cmake_parse_arguments(G "" "CLASS;TIER;TOKENS;WORKING_DIRECTORY;NEEDS_WHY" "NEEDS;COMMAND" ${ARGN})
     if(NOT G_CLASS OR NOT G_COMMAND)
         message(FATAL_ERROR "jah_gpu_row(${_row}): CLASS and COMMAND are required")
     endif()
@@ -445,7 +454,7 @@ function(jah_gpu_row _row)
     add_test(NAME ${_row} COMMAND "${JAH_GPU_ADMIT}" ${_k} --label ${_row}:${G_CLASS} -- "${_exe}" ${G_COMMAND} ${_wd})
     _jah_vram_register(${_row} ${G_CLASS} ${_k})
     if(_declared)
-        _jah_test_boot_register(${_row} "${G_TIER}" ${G_NEEDS})
+        _jah_test_boot_register(${_row} "${G_TIER}" "${G_NEEDS_WHY}" ${G_NEEDS})
     endif()
 endfunction()
 
@@ -458,7 +467,7 @@ endfunction()
 # is an argument of the wrapper now, and add_test resolves target names only in the command
 # position). A name outside JAH_GPU_EXCLUSIVE_SUITES is a configure error.
 function(jah_gpu_exclusive_test)
-    cmake_parse_arguments(G "" "NAME;CLASS;TIER;RUN_TIMEOUT;WORKING_DIRECTORY" "NEEDS;COMMAND" ${ARGN})
+    cmake_parse_arguments(G "" "NAME;CLASS;TIER;RUN_TIMEOUT;WORKING_DIRECTORY;NEEDS_WHY" "NEEDS;COMMAND" ${ARGN})
     if(NOT G_NAME IN_LIST JAH_GPU_EXCLUSIVE_SUITES)
         message(FATAL_ERROR "jah_gpu_exclusive_test(${G_NAME}): not in JAH_GPU_EXCLUSIVE_SUITES "
                             "(tests/CMakeLists.txt) — the GPU-timing list changes by a verdict only")
@@ -493,7 +502,7 @@ function(jah_gpu_exclusive_test)
     set_property(GLOBAL APPEND PROPERTY JAH_GPU_EXCLUSIVE_REGISTERED ${G_NAME})
     _jah_vram_register(${G_NAME} ${G_CLASS} all)
     if(_declared)
-        _jah_test_boot_register(${G_NAME} "${G_TIER}" ${G_NEEDS})
+        _jah_test_boot_register(${G_NAME} "${G_TIER}" "${G_NEEDS_WHY}" ${G_NEEDS})
     endif()
     cmake_language(EVAL CODE "cmake_language(DEFER CALL _jah_timing_label [[${G_NAME}]])")
 endfunction()
@@ -655,7 +664,7 @@ function(jah_pool_arm pool arm script secs)
 endfunction()
 
 function(jah_add_pool pool)
-    cmake_parse_arguments(P "HEADLESS" "BASELINE;CLASS;TIER" "NEEDS;LABELS;ENV;LAUNCHER;APP_ARGS;PROPS" ${ARGN})
+    cmake_parse_arguments(P "HEADLESS" "BASELINE;CLASS;TIER;NEEDS_WHY" "NEEDS;LABELS;ENV;LAUNCHER;APP_ARGS;PROPS" ${ARGN})
     get_property(_arms GLOBAL PROPERTY JAH_POOL_${pool}_ARMS)
     if(NOT _arms)
         message(FATAL_ERROR "jah_add_pool(${pool}): no jah_pool_arm(${pool} …) before it")
@@ -736,7 +745,7 @@ function(jah_add_pool pool)
     set_property(GLOBAL PROPERTY JAH_POOL_${pool}_TIER "${_tier}")
     if(NOT P_HEADLESS)
         _jah_vram_register(pool.${pool} ${P_CLASS} ${_vram})
-        _jah_test_boot_register(pool.${pool} "${P_TIER}" ${P_NEEDS})
+        _jah_test_boot_register(pool.${pool} "${P_TIER}" "${P_NEEDS_WHY}" ${P_NEEDS})
     endif()
 endfunction()
 

@@ -521,7 +521,8 @@ There is no default: an undeclared app row is a configure error, and `source.row
 refuses one on what ctest will run — and refuses `NONE` on a row whose scripts read the picture
 (editor/player/camera.screenshot, vr.eyeScreenshot, editor.presentedFrame, capture.lastFrame;
 xwd, readPixels, --engine-selftest in a harness) or drive Photon (world.photon/gi/setPhotonView/
-giStatus/giVoxelStats).
+giStatus/giVoxelStats) — unless its claim IS the picture with every feature off (a "GI off"
+claim), which it states: `NEEDS NONE NEEDS_WHY "<the claim>"` (the lint prints every one).
 
 **THE APP'S TOKENS ARE THE DECLARATION'S** (`JAH_VRAM_TOKENS_BY_NEEDS`): `low` 1; `medium` 1;
 `high` 2; `epic` + photon 3, without 2; `document` 3. A test-tier window boots 1280x720.

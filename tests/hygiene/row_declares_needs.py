@@ -19,7 +19,9 @@ scene) must carry BOTH entries with a valid value; no row may type JAHSHAKA_TEST
 JAHSHAKA_TEST_NEEDS into its plain ENVIRONMENT or pass `--test-tier` on its command line (the
 declaration is the one place). A headless or no-display row boots no chain and declares nothing.
 And NONE MEANS NONE: a row declaring it whose scripts read the picture (PIXEL_VERBS / PIXEL_TOOLS)
-or drive Photon (GI_VERBS) is refused — it must name what it needs. (A harness compiled from C++
+or drive Photon (GI_VERBS) is refused — it must name what it needs, unless its claim IS the
+picture with every feature off and it says so: `NEEDS_WHY "<the claim>"` (lead 2026-10-09), which
+rides as JAHSHAKA_TEST_NEEDS_WHY and is printed in the lint's record. (A harness compiled from C++
 is read through its source, tests/**/<binary>.cpp, found by the binary's name.)
 
 --self-test runs the check on a SYNTHETIC listing (a declared app row, an undeclared one, a
@@ -138,6 +140,14 @@ def site(test, listing):
     return "%s:%d" % (os.path.relpath(chain[0][0]), chain[0][1]) if chain else "?"
 
 
+def why_of(props):
+    for e in closure.as_list(props.get("ENVIRONMENT_MODIFICATION")):
+        e = str(e)
+        if e.startswith("JAHSHAKA_TEST_NEEDS_WHY=set:") and e[28:].strip():
+            return e[28:].strip()
+    return None
+
+
 def needs_error(value):
     words = value.split()
     if not words:
@@ -156,6 +166,7 @@ def check(listing, app, out):
     bad = []
     in_scope = 0
     by_decl = {}
+    whys = []
     for t in listing.get("tests") or []:
         props = closure.props_of(t)
         words = [str(w) for w in (t.get("command") or [])]
@@ -193,15 +204,22 @@ def check(listing, app, out):
             continue
         if needs.split() == ["none"]:
             why_pic = reads_picture(row_scripts(words, env))
-            if why_pic:
+            because = why_of(props)
+            if why_pic and because:
+                whys.append((t["name"], why_pic, because))
+            elif why_pic:
                 bad.append((t["name"], "declares NONE but reads the picture or drives Photon (%s) — name "
-                            "what it needs" % why_pic, where))
+                            "what it needs, or say NEEDS_WHY \"<the claim>\" when the claim IS every "
+                            "feature off" % why_pic, where))
                 continue
         key = "%s %s" % (tier, " ".join(sorted(needs.split())))
         by_decl[key] = by_decl.get(key, 0) + 1
     out.write("row_declares_needs: %d app rows; %d refused\n" % (in_scope, len(bad)))
     out.write("row_declares_needs: rows by declaration: %s\n"
               % ", ".join("%s: %d" % kv for kv in sorted(by_decl.items())))
+    out.write("row_declares_needs: %d picture row(s) declare NONE with NEEDS_WHY\n" % len(whys))
+    for name, what, because in whys:
+        out.write("  NEEDS_WHY %s (%s): %s\n" % (name, what, because))
     for name, why, where in bad:
         out.write("  UNDECLARED %s — %s — registered at %s\n" % (name, why, where))
     return bad
@@ -246,6 +264,10 @@ def self_test(app, out):
         {"name": "toy.pool_undeclared", "command": pool},
         {"name": "toy.none_reads_pixels", "command": admit + ["toy.none_reads_pixels:app", "--", app, "--script", PIXEL_TOY],
          "properties": mod("low", "none")},
+        {"name": "toy.none_why", "command": admit + ["toy.none_why:app", "--", app, "--script", PIXEL_TOY],
+         "properties": [{"name": "ENVIRONMENT_MODIFICATION", "value": [
+             "JAHSHAKA_TEST_TIER=set:low", "JAHSHAKA_TEST_NEEDS=set:none",
+             "JAHSHAKA_TEST_NEEDS_WHY=set:the GI-off picture is the claim"]}]},
         {"name": "toy.photon_reads_pixels", "command": admit + ["toy.photon_reads_pixels:app", "--", app, "--script", PIXEL_TOY],
          "properties": mod("epic", "photon")},
         {"name": "toy.selftest", "command": admit + ["toy.selftest:selftest", "--", app, "--engine-selftest", "o.png"]},
