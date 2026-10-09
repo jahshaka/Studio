@@ -108,6 +108,9 @@ set_tests_properties(app.test_needs_boot PROPERTIES
 # from adding JAHSHAKA_VR=0: this row is the one that lets the preference decide.
 set(_siv_home ${CMAKE_CURRENT_BINARY_DIR}/start-in-vr-home)
 file(MAKE_DIRECTORY ${_siv_home}/run)
+# TIER epic NEEDS photon (TEST-NEEDS-1, the lead's lifecycle rule): three boots that end in the
+# editor after a refused VR start — the engine's startup path with Photon on, as the product boots;
+# TEST_WINDOW keeps the 1280x720 window TEST-TIER-1 measured it at.
 jah_gpu_row(app.start_in_vr CLASS app TIER epic NEEDS photon TEST_WINDOW
          COMMAND sh ${JAH_FRESH_HOME} --warm ${_siv_home} --
                  bash "${CMAKE_CURRENT_SOURCE_DIR}/start_in_vr.sh"

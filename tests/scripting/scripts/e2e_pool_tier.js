@@ -28,10 +28,13 @@ function J(x) { return JSON.stringify(x); }
 var tt = app.testTier();
 console.log("testTier: " + J(tt));
 var tier = tt.tier, needs = tt.needs;
-// a host list reaches the script as an array-like: read it by length, never Array.isArray
 assert(tier === "" || tier === "low" || tier === "medium" || tier === "high" || tier === "epic",
        "app.testTier().tier is a World Mode name or '' (got " + J(tier) + ")");
-assert(needs && typeof needs.length === "number" && (tier !== "" || needs.length === 0),
+// MEASURED (2026-10-10, round 2): Array.isArray(needs) is false here even though appapi returns a
+// QVariantList — a list nested in a returned QVariantMap reaches the script as an array-like (both
+// tier arms red on it, editor and gi_verbs); so the check is by shape, never Array.isArray.
+assert(needs && typeof needs.length === "number" && typeof needs.indexOf === "function" &&
+       (tier !== "" || needs.length === 0),
        "app.testTier().needs is a list, empty with no test tier (got " + J(needs) + ")");
 function atTier(m) { return m === tier || (m === "custom" && needs.indexOf("photon") < 0); }
 
