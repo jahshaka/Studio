@@ -327,8 +327,10 @@ static int voxelScrollMain()
 //   C  EVERY CASCADE: lamps on a line at growing distances; each cascade's lightsInRange equals
 //                 the analytic count (range sphere vs the cascade's box from its status), injected
 //                 = min(in range, the budget), over = the rest — on every cascade.
-//   E  ONE UNIT: 16 dim point fillers + an area light delivering their sum: the area light
-//                 enters and moves the digest; a spot aimed away from the box is culled by its cone.
+//   E  ONE UNIT: 16 dim point fillers + an area light delivering x1.05 one filler enters and
+//                 moves the digest, its x0.95 twin goes over; a spot aimed away is culled by its cone.
+//   F  THE RANK: a dim NEAR lamp beats a bright FAR one and the reverse, the order computed from
+//                 the rank's law P W(d) / d_f^2 in the test.
 //   D  THE CARDS (where rays run): 64 dim fillers FIRST, then the KEY: the floor's card radiance
 //                 moves with the key (the old first-64 dropped it), cards.lightsDropped = 1.
 // ===========================================================================
@@ -489,13 +491,15 @@ static void lightListArms(Env &env)
 
     // ---- E: one unit for every type; the spot's cone ---------------------------
     // 16 dim point fillers inside cascade 0 (its budget, 16), then ONE 2 x 1 m AREA light
-    // whose irradiance delivered to the box equals the fillers' sum (each filler delivers
-    // I / d_f^2, the area light I r^2 / (r^2 + d_f^2), d_f = half the box's half-extent):
-    // it must ENTER (one filler goes over the budget) and its bounce must move the voxels.
-    // Two spots 7 m off the box's +x and -x faces, range 8 (both spheres reach the box),
-    // both aimed +x: the one aimed AWAY lights nothing in it and is CULLED, the one aimed
-    // AT it is counted (and, the dimmest at the box, goes over the budget).
-    {
+    // sized from the rank's own law so that it delivers to the box JUST ABOVE one filler
+    // (x 1.05; a filler delivers I / d_f^2, the area light I r^2 / (r^2 + d_f^2), r =
+    // sqrt(w h / pi), d_f = half the box's half-extent): it must ENTER (one filler goes over
+    // the budget) and its toggle must move the voxels. Its twin JUST BELOW (x 0.95) must go
+    // OVER the budget: its toggle leaves the voxels byte for byte. A wrong area unit fails
+    // one of the two. In the first arm, two spots 7 m off the box's +x and -x faces, range 8
+    // (both spheres reach the box), both aimed +x: the one aimed AWAY lights nothing in it
+    // and is CULLED, the one aimed AT it is counted (and, the dimmest at the box, goes over).
+    auto armE = [&](float k, bool spots) {
         fixture();
         const float fillerI = 0.05f;
         for (int i = 0; i < 16; ++i) lamp(QStringLiteral("efill%1").arg(i), fillerPos(i), fillerI, 4.0f);
@@ -509,7 +513,7 @@ static void lightListArms(Env &env)
         const float dF = 0.5f * half;
         const float rectW = 2.0f, rectH = 1.0f;
         const float r2 = rectW * rectH / 3.14159265f;
-        const float areaI = 16.0f * fillerI / (dF * dF) * (r2 + dF * dF) / r2;
+        const float areaI = k * fillerI / (dF * dF) * (r2 + dF * dF) / r2;
         auto area = iris::LightNode::create();
         area->setLightType(iris::LightType::Area);
         area->setName(QStringLiteral("area"));
@@ -533,9 +537,11 @@ static void lightListArms(Env &env)
             l->setPropertyValue(QStringLiteral("spotCutOff"), 30.0f);
             l->shadowMap->shadowType = iris::ShadowMapType::None;
         };
-        // 7 m outside the box's +x / -x faces (inside the 8 m range).
-        spot(QStringLiteral("spotAway"), g0.cascades[0].centre.x + half + 7.0f);
-        spot(QStringLiteral("spotAt"), g0.cascades[0].centre.x - half - 7.0f);
+        if (spots) {
+            // 7 m outside the box's +x / -x faces (inside the 8 m range).
+            spot(QStringLiteral("spotAway"), g0.cascades[0].centre.x + half + 7.0f);
+            spot(QStringLiteral("spotAt"), g0.cascades[0].centre.x - half - 7.0f);
+        }
         env.doc->getRootNode()->applyStaticDefaults();
         settle();
         const GiStatus st = env.scene->giStatus();
@@ -545,19 +551,96 @@ static void lightListArms(Env &env)
         settle();
         const GiVoxelStats off = env.scene->giVoxelStats(0);
         const GiStatus::CascadeStatus &c = st.cascades[0];
-        std::printf("   E: 16 fillers (%.2f) + a 2 x 1 m area light (%.3f, the fillers' sum at d_f %.2f m) + two "
-                    "spots: cascade 0 in range %d, injected %d, over %d (budget %d) | digest area on %s off %s\n",
-                    double(fillerI), double(areaI), double(dF), c.lightsInRange, c.lightsInjected,
-                    c.lightsOverBudget, c.lightCapacity, on.lightDigest.c_str(), off.lightDigest.c_str());
-        REQUIRE(c.lightsInRange == 18,
-                "E: the fillers, the area light and the spot aimed AT the box reach cascade 0; the spot aimed "
-                "AWAY is culled by its cone (%d in range, 18 expected)", c.lightsInRange);
+        const int want = spots ? 18 : 17;
+        std::printf("   E (x %.2f%s): 16 fillers (%.2f) + a 2 x 1 m area light (%.4f) : cascade 0 in range %d, "
+                    "injected %d, over %d (budget %d) | digest area on %s off %s\n",
+                    double(k), spots ? ", two spots" : "", double(fillerI), double(areaI), c.lightsInRange,
+                    c.lightsInjected, c.lightsOverBudget, c.lightCapacity, on.lightDigest.c_str(),
+                    off.lightDigest.c_str());
+        if (spots)
+            REQUIRE(c.lightsInRange == want,
+                    "E: the fillers, the area light and the spot aimed AT the box reach cascade 0; the spot aimed "
+                    "AWAY is culled by its cone (%d in range, %d expected)", c.lightsInRange, want);
+        else
+            REQUIRE(c.lightsInRange == want, "E: the fillers and the area light reach cascade 0 (%d of %d)",
+                    c.lightsInRange, want);
         REQUIRE(c.lightsInjected == c.lightCapacity && c.lightsOverBudget == c.lightsInRange - c.lightCapacity,
                 "E: the budget fills and the rest are counted (%d injected of %d, %d over)", c.lightsInjected,
                 c.lightsInRange, c.lightsOverBudget);
-        REQUIRE(on.available && off.available && on.lightDigest != off.lightDigest,
-                "E: the area light, ranked in the point lights' unit, ENTERS the voxels: its toggle moves the digest");
-    }
+        const bool moves = on.available && off.available && on.lightDigest != off.lightDigest;
+        if (k > 1.0f)
+            REQUIRE(moves, "E: the area light delivering x %.2f one filler, ranked in the point lights' unit, ENTERS "
+                    "the voxels: its toggle moves the digest", double(k));
+        else
+            REQUIRE(on.available && off.available && !moves,
+                    "E: its twin delivering x %.2f one filler goes OVER the budget: its toggle leaves the digest",
+                    double(k));
+    };
+    armE(1.05f, true);
+    armE(0.95f, false);
+
+    // ---- F: the rank is the irradiance the box receives, not the power -----------
+    // 15 bright fillers inside cascade 0 take 15 of its 16 slots; two lamps OUTSIDE the box
+    // on its +x side compete for the last: NEAR (3 m from the face, range 6) and FAR (6 m,
+    // range 12; both at d / range = 0.5). The expected winner is computed here from the
+    // rank's law, P x W(d) / d_f^2 with d_f = max(d, half the half-extent) and W(d) =
+    // (1 - (d/R)^4)^2: (1) a dim NEAR lamp beats a brighter FAR one; (2) the FAR lamp made
+    // bright enough beats the NEAR one. The winner's toggle moves the voxels; the loser's
+    // (over the budget) leaves them byte for byte. A rank by raw power fails (1).
+    auto armF = [&](float nearI, float farI) {
+        fixture();
+        for (int i = 0; i < 15; ++i) lamp(QStringLiteral("ffill%1").arg(i), fillerPos(i), 1.0f, 4.0f);
+        env.doc->getRootNode()->applyStaticDefaults();
+        setCamera(env, eye, at);
+        settle();
+        const GiStatus g0 = env.scene->giStatus();
+        REQUIRE(!g0.cascades.empty(), "F: the chain is built");
+        if (g0.cascades.empty()) return;
+        const GiStatus::CascadeStatus &c0 = g0.cascades[0];
+        const float half = c0.halfSize;
+        const float floorD = 0.5f * half;
+        auto score = [&](float I, float d, float R) {
+            const float x = d / R, x2 = x * x;
+            const float w = std::pow(std::max(0.0f, 1.0f - x2 * x2), 2.0f);
+            const float df = std::max(d, floorD);
+            return I * w / (df * df);
+        };
+        const float dN = 3.0f, rN = 6.0f, dFar = 6.0f, rF = 12.0f;
+        const float sN = score(nearI, dN, rN), sF = score(farI, dFar, rF), sFill = score(1.0f, 0.0f, 4.0f);
+        const bool nearWins = sN > sF;
+        auto nearL = lamp(QStringLiteral("near"), iris::Vec3(c0.centre.x + half + dN, c0.centre.y, c0.centre.z), nearI, rN);
+        auto farL = lamp(QStringLiteral("far"), iris::Vec3(c0.centre.x + half + dFar, c0.centre.y, c0.centre.z), farI, rF);
+        env.doc->getRootNode()->applyStaticDefaults();
+        settle();
+        const GiStatus st = env.scene->giStatus();
+        const GiVoxelStats base = env.scene->giVoxelStats(0);
+        auto toggleMoves = [&](iris::LightNodePtr l, float I) {
+            l->setPropertyValue(QStringLiteral("intensity"), 0.0f);
+            l->markChanged(iris::NodeChange::Params);
+            settle();
+            const GiVoxelStats off = env.scene->giVoxelStats(0);
+            l->setPropertyValue(QStringLiteral("intensity"), I);
+            l->markChanged(iris::NodeChange::Params);
+            settle();
+            return off.lightDigest != base.lightDigest;
+        };
+        const bool nearMoves = toggleMoves(nearL, nearI);
+        const bool farMoves = toggleMoves(farL, farI);
+        std::printf("   F: near %.2f at %.0f m (score %.5f) vs far %.2f at %.0f m (score %.5f), fillers %.5f: "
+                    "in range %d, injected %d, over %d | toggles move the voxels: near %d far %d\n",
+                    double(nearI), double(dN), double(sN), double(farI), double(dFar), double(sF), double(sFill),
+                    st.cascades[0].lightsInRange, st.cascades[0].lightsInjected, st.cascades[0].lightsOverBudget,
+                    int(nearMoves), int(farMoves));
+        REQUIRE(sFill > sN && sFill > sF && st.cascades[0].lightsInRange == 17 && st.cascades[0].lightsOverBudget == 1,
+                "F: the fillers outrank both, all 17 reach cascade 0 and one is over its 16");
+        REQUIRE(nearWins ? (nearMoves && !farMoves) : (farMoves && !nearMoves),
+                "F: the %s lamp (%.2f at %.0f m) takes the last slot by the irradiance it delivers, the %s one "
+                "(%.2f at %.0f m) goes over", nearWins ? "NEAR" : "FAR", double(nearWins ? nearI : farI),
+                double(nearWins ? dN : dFar), nearWins ? "FAR" : "NEAR", double(nearWins ? farI : nearI),
+                double(nearWins ? dFar : dN));
+    };
+    armF(0.5f, 1.5f);   // the dim near lamp wins: 0.5 W / 9 > 1.5 W / 36
+    armF(0.5f, 2.5f);   // the bright far lamp wins: 2.5 W / 36 > 0.5 W / 9
 
     // ---- D: the cards (they run where rays run) ---------------------------------
     {
