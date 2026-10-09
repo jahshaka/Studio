@@ -581,6 +581,30 @@ def main(source, build):
         except OSError:
             pass
     vt_mod.gate_queue()                          # reaps them
+    # GATE-LOG-1 x GATE-COST-2 (the stack read's F1): a whole-card hold that QUEUED for the slot hands its wait to
+    # the runs of its phase — a --solo batch's records carry slot_wait_s, never None after a real queue
+    relq = os.path.join(scratch, "q.release")
+    qh = spawn([sys.executable, vt, "gate", "--label", "QH", "--", "sh", "-c",
+                f"while [ ! -e {relq} ] && kill -0 {os.getpid()} 2>/dev/null; do sleep 0.05; done"])
+    wait_line(qh, "gate-slot: taken")
+    got_ = {}
+    th = threading.Thread(target=lambda: got_.update(r=vt_mod.hold_card("solo-like", log=io.StringIO())))
+    th.start()
+    check(wait_until(lambda: any(t_[1] == os.getpid() for t_ in vt_mod.gate_queue()), th),
+          "the solo-like hold queued behind the holder")
+    open(relq, "w").close(); qh.communicate(); th.join()
+    card_q, env_q = got_["r"]
+    reset()
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        rl.run_ctest("ctest -j1 --timeout 60 -R '^gpu\\.a$'", tb, "solo", "gate-cost-test", 1, retry=True, env=env_q,
+                     whole_card=False)
+    vt_mod.release(card_q)
+    rq = [r for r in records() if r["suite"] == "gpu.a"]
+    check(env_q.get("JAH_GATE_SLOT_WAIT_S") not in (None, "None") and rq
+          and rq[0].get("slot_wait_s") == float(env_q["JAH_GATE_SLOT_WAIT_S"]),
+          "a --solo-like hold that queued for the slot: its run's records carry slot_wait_s (%r)"
+          % (rq[0].get("slot_wait_s") if rq else None))
     relhand = os.path.join(scratch, "hand.release")
     hand = spawn([sys.executable, "-c", "import sys, os, time; sys.path.insert(0, sys.argv[1]); import vram_tokens as v;"
                   " fds, env = v.hold_card('hand phase'); print('HELD', env.get('JAH_GATE_SLOT_HELD'),"

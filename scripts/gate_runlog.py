@@ -1382,7 +1382,10 @@ class _Run:
         self.shas["built"] = built_from(build) if build else None
         self.box0 = {"jobs": jobs, "display": (env or os.environ).get("DISPLAY"), "gpu_clocks": gpu_clocks(),
                      "other_ctests": other_ctests(), "host": os.uname().nodename, "mem": box_mem()}
-        sw = os.environ.get("JAH_GATE_SLOT_WAIT_S") if os.environ.get("JAH_GATE_SLOT_HELD") else None
+        # the gate's queue wait for the slot: a gate's own environment, or the env a whole-card hold handed this
+        # run (hold_card exports it when IT took the slot: a --solo batch, a dropped-red solo)
+        e_ = env or os.environ
+        sw = e_.get("JAH_GATE_SLOT_WAIT_S") if e_.get("JAH_GATE_SLOT_HELD") else None
         try: self.slot_wait = float(sw) if sw is not None else None
         except ValueError: self.slot_wait = None
         self.run_id = f"{datetime.datetime.now().strftime('%Y%m%dT%H%M%S')}-{self.shas['studio'][:9]}"

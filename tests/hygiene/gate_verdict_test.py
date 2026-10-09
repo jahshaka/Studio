@@ -29,6 +29,7 @@ Run: gate_verdict_test.py <case> <source-dir> <build-dir>
 """
 import json
 import os
+import re
 import shlex
 import subprocess
 import sys
@@ -658,6 +659,24 @@ def case_log_schema2(E):
     p = subprocess.run([sys.executable, rep, d, "--ref", "HEAD"], capture_output=True, text=True)
     check(p.returncode == 0 and "TABLE gates" in p.stdout and "slot wait 0.0 h over 1 gate(s)" in p.stdout,
           "gate-report.py prints the weekly table on a toy log, reading its schema-2 fields (%d)" % p.returncode)
+    # the stack read's F2: a stage close (tier `stage-close`) is counted in section 7, and a lane tool's own run
+    # (tier `lane`, GATE-COST-2) never enters the gate wall
+    d2 = tempfile.mkdtemp(dir=E.scratch)
+    def rw(run, tier, ts, secs, suite):
+        with open(os.path.join(d2, "2026-10-09-%s-%s.jsonl" % (tier, E.tip[:9])), "a") as f:
+            f.write(json.dumps({"schema": 2, "run": run, "tier": tier, "suite": suite, "arm": None, "verdict": "PASS",
+                                "ts": ts, "seconds": secs, "retry": False, "lanes": ["x"], "box": {"other_ctests": 0},
+                                "tip": {"studio": E.tip, "irisgl": E.pin}}) + "\n")
+    rw("sc1", "stage-close", "2026-10-09T10:00:00+02:00", 60, "row.a")
+    rw("sc1", "stage-close", "2026-10-09T11:00:00+02:00", 60, "row.b")
+    rw("ln1", "lane", "2026-10-09T12:00:00+02:00", 7200, "row.c")
+    p = subprocess.run([sys.executable, rep, d2, "--week", "2026-10-09T17:30", "--ref", "HEAD"], capture_output=True,
+                       text=True)
+    m7 = re.search(r"stage runs (\d+)\s+rows (\d+)", p.stdout)
+    mw = re.search(r"summed gate wall \(every non-retry run, rc tiers included\): ([\d.]+) h", p.stdout)
+    check(p.returncode == 0 and m7 and m7.groups() == ("1", "2") and mw and float(mw.group(1)) < 1.5,
+          "gate-report counts a stage-close batch in section 7 (%s) and keeps a lane-tier run out of the gate wall (%s h)"
+          % (m7.groups() if m7 else None, mw.group(1) if mw else None))
     ws = E.rl.workspace_root()
     dirs = [os.path.join(ws, "testing", "runs-archive"), os.path.join(ws, "testing", "runs")]
     if not os.path.isdir(dirs[0]) or not E.git("rev-parse", "--verify", "-q", "420486e63^{commit}"):

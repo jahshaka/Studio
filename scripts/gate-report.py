@@ -225,7 +225,8 @@ def main():
           f"records read {len(R)} (to the week's end) from {', '.join(a.dirs)}")
 
     rows, G = gates(R)
-    GW = [g for g in G if g["start"] >= start]
+    # a lane tool's own runs (tier `lane`, GATE-COST-2) are no gate: never in the gate wall
+    GW = [g for g in G if g["start"] >= start and g["tier"] != "lane"]
     full = [g for g in GW if g["n"] >= FULL_ROWS]
     print("\n== 1. gates in the week (non-retry runs) ==")
     print(f"  runs {len(GW)}  full-size (>= {FULL_ROWS} rows) {len(full)}  their wall {h(sum(g['h'] for g in full) * 3600)}")
@@ -287,8 +288,9 @@ def main():
         if r.get("batch"): bt[r["batch"]].add(r.get("run"))
     print(f"  batch tags in the week: {len(bt)}; runs per batch (re-gates): "
           + ("  ".join(f"{b} {len(rs)}" for b, rs in sorted(bt.items())) or "-"))
-    st = [g for g in GW if g["tier"] == "stage"]
-    st_rows = [r for r in wk if r.get("tier") == "stage" and not r.get("retry")]
+    STAGE = ("stage", "stage-close")        # STAGE-CLOSE-1's batches are tier `stage-close`
+    st = [g for g in GW if g["tier"] in STAGE]
+    st_rows = [r for r in wk if r.get("tier") in STAGE and not r.get("retry")]
     print(f"\n== 7. stage-close rows ==\n  stage runs {len(st)}  rows {len(st_rows)}  {sum(g['h'] for g in st):.1f} h  reds "
           f"{sum(1 for r in st_rows if r.get('verdict') != 'PASS')}")
     s2 = [r for r in wk_all if (r.get("schema") or 1) >= 2]

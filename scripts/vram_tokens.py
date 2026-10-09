@@ -486,6 +486,7 @@ def hold_card(label="", log=sys.stderr, wait=None):
     slot = _queue_for_slot(label + " (whole card)", log)
     if slot is not None:
         env["JAH_GATE_SLOT_HELD"] = str(os.getpid())
+        env["JAH_GATE_SLOT_WAIT_S"] = str(LAST_SLOT_WAIT_S)     # GATE-LOG-1: the hold's queue wait rides its records
     try:
         fds = acquire(n, label, wait=phase_wait() if wait is None else wait, log=log)
     except AdmitTimeout as e:
