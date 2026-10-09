@@ -571,13 +571,18 @@ moves) and `gate-slot: taken after <s> s in the queue`; the queue is FIFO and ha
 never gives up for the slot). `scripts/gpu-admit.sh status` names the holder and the queue.
 **Mechanism** (`scripts/vram_tokens.py`): each waiter flocks its own ticket
 `/tmp/jah-vram/gate-queue/<seq>.<pid>` (made locked under a private name, then renamed in); the
-lowest live ticket is the holder; a dead waiter's ticket is reaped by the next reader; the ticket's
-fd is inherited by the gate's ctest, so the slot is free when the gate's LAST process is gone. A
+lowest live ticket is the holder (a ticket is numbered AND renamed in under the counter's lock, so
+two gates never both find no lower ticket); a dead waiter's ticket is reaped by the next reader. The
+slot and a phase's tokens belong to the GATE PROCESS, never to its ctest, and THE ctest TREE DIES WITH
+THE GATE: ctest runs in its own process group with PR_SET_PDEATHSIG (SIGTERM), a detached reaper
+kills that group the moment the gate's pid is gone (ctest's own SIGTERM orphans its rows — measured),
+and a gate told SIGTERM/SIGINT/SIGHUP stops its tree, releases slot and card and prints `GATE ABORTED`.
+A gate SIGKILLed by oomd therefore frees the slot at once and leaves no rows running past 15 s. A
 process inside a gate (`JAH_GATE_SLOT_HELD`) never queues again. `JAH_GATE_SLOT=0` turns it off.
 
 **INSIDE A GATE, IN ORDER:**
-1. **The CPU phase (P8):** the `hygiene` rows (lints and the selector's own rows: no display, no GPU)
-   run first, at the gate's width, before any GPU row starts (`=== the CPU phase: <n> lint/selector
+1. **The CPU phase (P8):** the `hygiene` rows (lints and the selector's own rows: no display, no GPU;
+   a row in a FIXTURE stays with its partners in the GPU phase) run first, at the gate's width, before any GPU row starts (`=== the CPU phase: <n> lint/selector
    row(s) …`). Their walks stay on FIRST-PARTY paths: `source.one_fonticons` and
    `source.one_material_resolve` walked `src irisgl` — the vendored submodules, the fork's build tree
    and install, ~26k entries and 104 MB of C++ per run in a lane tree — on the USB-stick root under
@@ -601,10 +606,13 @@ stopped, no row that ended after the death is recorded, and the gate ends with
 `=== GATE ABORTED: <why> …` and `=== GATE VERDICT: ABORTED …` (exit 6). A run on a display already
 dead refuses to start. (634 garbage records in the audit's window came from gates that kept running
 6-12 min after their Xvfb died.) A ctest killed by a signal ends the run the same way: what it
-finished is recorded, nothing else starts.
+finished is recorded, nothing else starts — no timing phase and no target step: the gate ends with
+`GATE VERDICT: ABORTED` (exit 128 + the signal).
 
-Guard: `gate.cost` (tests/hygiene/gate_cost_test.py; the slot's FIFO, the in-run re-queue, the
-killed-ctest records and --resume, the dead display, the CPU phase, the whole-card phases).
+Guard: `gate.cost` (tests/hygiene/gate_cost_test.py; the slot's FIFO, `--solo` outside it, the reaped
+dead waiter, eight racing gates, a SIGKILLed gate's tree and slot, the in-run re-queue, the killed-ctest
+records and --resume, a killed ctest ending the gate, the dead display, the CPU phase, the whole-card
+phases with the caller's environment, and the per-row records equal to the old junit path's).
 
 ## 5. What the full gate costs, and where its wall goes
 

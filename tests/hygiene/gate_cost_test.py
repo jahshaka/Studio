@@ -20,7 +20,10 @@ box's own queue, log or displays:
   5. P8 THE CPU PHASE FIRST: the `hygiene` row ends before any GPU row starts;
   6. P2/P9 THE WHOLE CARD ONCE PER PHASE: a timing phase and the target step hold every token once and
      their rows run nested on it (`already admitted by the parent`); gate-scope runs the target step
-     AFTER the verdict line, inside the gate, with the slot's fd and whole_card.
+     AFTER the verdict line, inside the gate, on whole_card; the caller's JAH_POOL_ARMS survives a hold;
+  7. P6's CLAIM: the per-row records equal the old junit path's, record for record (six rows);
+  8. THE SLOT UNDER STRESS: a dead waiter's ticket is reaped; eight gates at once hold it one at a time;
+     a SIGKILLed gate's ctest and rows die within 15 s and the slot is free; a killed ctest ends a gate.
 
 Run: gate_cost_test.py <source-dir> <build-dir>   (the build dir is not read; ctest is found on PATH)
 """
