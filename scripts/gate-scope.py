@@ -18,7 +18,8 @@ path and one reason per selected row, estimates the wall time from THE RUN LOG (
 A RUN IS A GATE, AND THE BOX RUNS ONE AT A TIME (GATE-COST-1, SPECS/audits/GATE_COST_2026-10-09.md):
 `--run` (scoped, a fallback, `--fork-tier`, `--joint`, `--targets-only`) queues for THE GATE SLOT
 (scripts/vram_tokens.py; FIFO, no bound, its position printed) and holds it to its last process;
-`--solo` never takes it. Inside it: the `hygiene` rows first, as their own CPU phase (P8); the GPU
+`--solo` takes it too — a whole-card hold always does (GATE-COST-2) — and a per-row admission never does.
+Before anything, the no-op build (gate_runlog.prebuild: HEAD's binaries, BUILT_FROM fresh). Inside it: the `hygiene` rows first, as their own CPU phase (P8); the GPU
 rows; a row that got no admission re-queued at the end (P5); the timing rows serial on ONE whole-card
 hold (P2); the verdict; then the target rows on the same display and card (P9). `--resume` runs only
 the rows with no record at the tip (P6); a gate whose display dies stops and says so (P6).

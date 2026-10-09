@@ -7,8 +7,8 @@ box's own queue, log or displays:
 
   1. P1 ONE GATE AT A TIME: a gate holds the slot; a second gate (`gate_runlog.py run`, what rc-gate
      runs) prints its queue position and runs only after the first is gone; a third waits behind both
-     (FIFO); `--solo` and a plain admission never take the slot; gate-scope's --run takes it once and
-     hands its fd to every phase;
+     (FIFO); a plain admission never takes the slot (a --solo batch, a whole-card hold, does: section 9);
+     gate-scope's --run takes it once and holds it through every phase;
   2. P5 NOADMIT RE-QUEUED IN-RUN: a row that got no admission is re-run at the end of the same run and
      recorded ONCE (its passing run); a row that never gets one is recorded once, as NOADMIT, after
      its JAH_GATE_REQUEUE tries — and the run is red;
@@ -179,7 +179,7 @@ def main(source, build):
     check(ts2 + 1 >= int(g1_end) and g3_start >= g1_end, "nothing ran before the holder was gone "
           "(holder ended %.1f s in; the third started %.1f s in)" % (g1_end - t0, g3_start - t0))
     check(time.time() - t0 < 60, "the queue has no 900 s bound and no stall (%.0f s)" % (time.time() - t0))
-    # small things never take it
+    # a per-row admission never takes it
     holder = subprocess.Popen([sys.executable, vt, "gate", "--label", "H", "--", "sleep", "20"],
                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     time.sleep(0.8)

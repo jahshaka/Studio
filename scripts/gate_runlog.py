@@ -811,7 +811,6 @@ def recorded_rows(shas=None):
     out, d = set(), log_dir()
     if shas.get("studio_dirty") or not os.path.isdir(d):
         return out
-    newest = {}
     for f in os.listdir(d):
         if not f.endswith(".jsonl") or shas["studio"][:9] not in f:
             continue
@@ -823,7 +822,6 @@ def recorded_rows(shas=None):
                     and not t.get("irisgl_dirty") and not stale_build(t) and r.get("kind") != "verdict" and r.get("arm") is None
                     and r.get("verdict") not in ("NOADMIT", "NOTRUN") and not r.get("kind")):
                 out.add(r.get("suite"))
-                newest[r.get("suite")] = max(newest.get(r.get("suite"), ""), r.get("ts") or "")
     return out
 
 
