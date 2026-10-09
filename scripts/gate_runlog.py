@@ -767,9 +767,8 @@ def dropped_red(shas):
 
 def recorded_rows(shas=None):
     """{suite} with a record that RAN at this tree (studio and irisgl shas, neither dirty) — what
-    `gate-scope.sh --resume` does not run again. NOADMIT/NOTRUN are no run (ci_gate_check's rule), and
-    a row an ABORT dropped red after its newest record is not recorded either (GATE-COST-2: it is re-run;
-    the abort record stays)."""
+    `gate-scope.sh --resume` does not run again. NOADMIT/NOTRUN are no run (ci_gate_check's rule). A row an
+    ABORT dropped red is gate-scope's to re-run as a SOLO (owed_solos), never in the ordinary pass."""
     shas = shas or tree_shas()
     out, d = set(), log_dir()
     if shas.get("studio_dirty") or not os.path.isdir(d):
@@ -787,10 +786,30 @@ def recorded_rows(shas=None):
                     and r.get("verdict") not in ("NOADMIT", "NOTRUN") and not r.get("kind")):
                 out.add(r.get("suite"))
                 newest[r.get("suite")] = max(newest.get(r.get("suite"), ""), r.get("ts") or "")
-    for n, at in dropped_red(shas).items():
-        if n in out and newest.get(n, "") <= at:
-            out.discard(n)
     return out
+
+
+def owed_solos(shas=None):
+    """[suite] an abort at this tip dropped RED and no SOLO retry has answered since (GATE-COST-2 #9): such a
+    row re-runs as a solo — 3x, tier `solo`, retry — never as a plain row in the next pass (a plain green
+    after a dropped red would be a retry hiding a red). The abort record keeps `droppedRed` for the judge."""
+    shas = shas or tree_shas()
+    owed = dropped_red(shas)
+    if not owed:
+        return []
+    last_solo, d = {}, log_dir()
+    for f in os.listdir(d):
+        if not f.endswith(".jsonl") or shas["studio"][:9] not in f:
+            continue
+        for line in open(os.path.join(d, f), errors="replace"):
+            try: r = json.loads(line)
+            except ValueError: continue
+            if r.get("retry") and not r.get("kind") and r.get("suite") in owed \
+                    and (r.get("tip") or {}).get("studio") == shas["studio"]:
+                last_solo[r["suite"]] = max(last_solo.get(r["suite"], ""), r.get("ts") or "")
+    # a solo in the abort's own second counts as after it (records are stamped to the second, and a solo
+    # is a later run than the one that aborted)
+    return sorted(n for n, at in owed.items() if last_solo.get(n, "") < at)
 
 
 def _listed_rows(cmd, cwd, env):

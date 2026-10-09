@@ -631,8 +631,9 @@ stopped, no row that ended after the death is recorded, and the gate ends with
 `=== GATE ABORTED: <why> …` and `=== GATE VERDICT: ABORTED …` (exit 6). THE ABORT IS A RECORD
 (GATE-COST-2): one `kind: abort` record (suite `@abort`) names every row that ended after the death
 with its status and FAIL line, and the rows still running at it (`inFlight`); the refusal reads nothing from it, and `--resume` re-runs a row the
-abort dropped RED even when it has an older record at the tip — the abort record stays beside the
-re-run. A run on a display already
+abort dropped RED as a SOLO — 3x, tier `solo`, retry, on one whole-card hold before the verdict — never
+in the ordinary pass (`gate_runlog.owed_solos`: until a solo answers it); the abort record keeps
+`droppedRed` for the judge. A run on a display already
 dead refuses to start. (634 garbage records in the audit's window came from gates that kept running
 6-12 min after their Xvfb died.) A ctest killed by a signal ends the run the same way: what it
 finished is recorded, nothing else starts — no timing phase and no target step: the gate ends with

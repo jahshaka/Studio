@@ -281,8 +281,18 @@ def main(source, build):
           "the abort is ONE `kind: abort` record: the row that ended RED after the death with its status and FAIL "
           "line, the row still running (%r)" % ({k: ab[0].get(k) for k in ("dropped", "inFlight")} if ab else None))
     done_ = rl.recorded_rows(clean)
-    check("gpu.wait" not in done_ and "gpu.a" in done_,
-          "--resume re-runs the row the abort dropped RED although it has an older record at the tip; the others stay done")
+    check(rl.owed_solos(clean) == ["gpu.wait"] and "gpu.a" in done_,
+          "the row the abort dropped RED is OWED A SOLO (#9: never the ordinary pass), whatever older record it has")
+    open(os.path.join(state, "go"), "w").close()
+    for _ in range(3):
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            rl.run_ctest("ctest -j1 --timeout 60 -R '^gpu\\.wait$'", tb, "solo", "gate-cost-test", 1, retry=True,
+                         labels=LABELS)
+    solos = [r for r in records() if r["suite"] == "gpu.wait" and r.get("retry") and r["tier"] == "solo"]
+    check(len(solos) == 3 and rl.owed_solos(clean) == [] and ab[0].get("droppedRed") == ["gpu.wait"],
+          "three solo retries (tier solo) answer it; the abort record keeps droppedRed for the judge (%d solo(s), "
+          "owed %r)" % (len(solos), rl.owed_solos(clean)))
     rc, out = run("^gpu\\.a$", env=env)
     check(rc == rl.DISPLAY_LOST and "before its first row" in out, "a run on a display already dead refuses to start")
     os.environ.pop("JAH_X11_ROOT")
@@ -406,6 +416,8 @@ def main(source, build):
     g.gate_runlog.run_ctest = fake_run
     g.gate_runlog.fork_pin_problem = lambda *a, **k: None
     g.gate_runlog.recorded_rows = lambda *a: {"gi.chain_face"}
+    real_owed = g.gate_runlog.owed_solos
+    g.gate_runlog.owed_solos = lambda *a: []
 
     def gs_main(argv):
         sys.argv = ["gate-scope.py"] + argv
@@ -435,10 +447,17 @@ def main(source, build):
               % len(gating))
     calls.clear()
     g.gate_runlog.run_ctest = fake_run
+    g.gate_runlog.owed_solos = lambda *a: ["gi.chain_face_target"]
     code, out = gs_main(files + ["--resume"])
-    check(code == 0 and calls and all(c.get("exclude") == {"gi.chain_face"} for c in calls),
-          "--resume runs the gate with the tip's recorded rows excluded from every phase (%r)"
-          % [(c["tier"], c.get("exclude")) for c in calls])
+    plain = [c for c in calls if not c.get("retry")]
+    solo_ = [c for c in calls if c.get("retry")]
+    check(code == 0 and plain and all(c.get("exclude") == {"gi.chain_face", "gi.chain_face_target"} for c in plain),
+          "--resume runs the gate with the tip's recorded rows AND the owed dropped red excluded from every ordinary "
+          "phase (%r)" % [(c["tier"], c.get("exclude")) for c in plain])
+    check(len(solo_) == 3 and all(c["tier"] == "solo" and "chain_face_target" in c["cmd"] for c in solo_)
+          and out.index("dropped reds' solos") < out.index("GATE VERDICT"),
+          "...and re-runs the dropped red as a SOLO, 3x, tier solo, before the verdict (#9)")
+    g.gate_runlog.owed_solos = lambda *a: []
     calls.clear()
     g.gate_runlog.run_ctest = lambda *a, **k: (calls.append(1), rl.DISPLAY_LOST)[1]
     code, out = gs_main(files + ["--run"])
@@ -450,6 +469,7 @@ def main(source, build):
     check(code == 137 and "GATE ABORTED: ctest was killed" in out and len(calls) == 1,
           "a ctest killed under the gate (137) ends it there: no timing phase, no target step (F4; exit %r)" % code)
     g.gate_runlog.run_ctest, g.gate_runlog.fork_pin_problem, g.gate_runlog.recorded_rows = real
+    g.gate_runlog.owed_solos = real_owed
     os.environ.pop("JAH_GATE_SLOT_HELD", None)
 
     # ---- 9. GATE-COST-2: whole-card holds in the slot, the drain timeout, the prune list, the ingest wait --

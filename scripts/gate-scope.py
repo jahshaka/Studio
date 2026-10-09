@@ -2030,7 +2030,7 @@ def main():
         if bad:
             sys.stderr.write("gate-scope: " + bad + "\n")
             sys.exit(4)
-    slot = []
+    slot, owed = [], []
 
     def gate(what):
         """THE GATE SLOT (P1), once per gate run: queue (FIFO, no bound, the position printed), then hold
@@ -2061,11 +2061,32 @@ def main():
             return None
         got = gate_runlog.recorded_rows()
         print(f"gate-scope --resume: {len(got)} row(s) already have a record at this tip")
-        red = sorted(gate_runlog.dropped_red(gate_runlog.tree_shas()))
-        if red:
-            print(f"gate-scope --resume: {len(red)} row(s) an abort dropped RED are re-run (the abort record stays): "
-                  f"{' '.join(red[:12])}")
-        return got
+        # A ROW AN ABORT DROPPED RED RE-RUNS AS A SOLO, never in the ordinary pass (GATE-COST-2 #9): out of the
+        # pass here, 3x solo by owed_solo_pass() before the verdict; the abort record keeps droppedRed
+        owed[:] = gate_runlog.owed_solos(gate_runlog.tree_shas())
+        if owed:
+            print(f"gate-scope --resume: {len(owed)} row(s) an abort dropped RED re-run as SOLOS (3x, tier solo), not "
+                  f"in the ordinary pass: {' '.join(owed[:12])}")
+        return got | set(owed)
+
+    def owed_solo_pass(labels):
+        """--resume's solos for the rows an abort dropped red: each 3x, tier `solo`, retry, on one whole-card
+        hold inside the gate. Returns the worst exit code (0 when none was owed)."""
+        if not owed:
+            return 0
+        print(f"\n=== the dropped reds' solos: {len(owed)} row(s), 3x each, the whole card held once ===")
+        card, env_ = gate_runlog._vram().hold_card(f"{lane} dropped-red solos", log=sys.stdout)
+        rc_ = 0
+        try:
+            for s_ in owed:
+                for _ in range(3):
+                    rc_ = lost(gate_runlog.run_ctest(
+                        f"ctest -j1 --timeout 900 --output-on-failure --no-tests=error -R '^{re.escape(s_)}$'",
+                        build, "solo", lane, 1, reasons={s_: "solo: dropped red by an abort"}, rng=log_range,
+                        retry=True, env=env_, labels=labels, whole_card=False)) or rc_
+        finally:
+            gate_runlog._vram().release(card)
+        return rc_
 
     if a.joint:
         J = joint(a.joint[0], a.joint[1], build, a.jobs)
@@ -2090,7 +2111,8 @@ def main():
             if J["serial_command"]:
                 rc = lost(gate_runlog.run_ctest(J["serial_command"], build, a.tier or "joint", lane, 1, reasons=why,
                                                 labels=labels, exclude=skip, whole_card=True)) or rc
-            gate_runlog.trend_at_gate_end()
+            rc = owed_solo_pass(labels) or rc
+            gate_runlog.trend_at_gate_end(tier=a.tier or "joint", lane=lane)
             sys.exit(rc)
         return
     lane = a.lane or gate_runlog._git(["rev-parse", "--abbrev-ref", "HEAD"])
@@ -2225,8 +2247,9 @@ def main():
         print("\n=== the timing phase (serial, after the parallel phase; the whole card held once) ===")
         r2 = lost(gate_runlog.run_ctest(merge_tier_serial(), build, tier_name, lane, 1, reasons={}, rng=log_range,
                                         labels=labels, exclude=skip, whole_card=True))
-        gate_runlog.trend_at_gate_end()
-        return r1 or r2
+        r3 = owed_solo_pass(labels)
+        gate_runlog.trend_at_gate_end(tier=tier_name, lane=lane)
+        return r1 or r2 or r3
 
     def run_tier(reason):
         print(f"\n{merge_tier(a.jobs)}\n{merge_tier_serial()}")
@@ -2313,6 +2336,7 @@ def main():
             print("\n=== the timing phase: %d row(s), serial, the whole card held once ===" % len(timing))
             rc = lost(gate_runlog.run_ctest(timing_cmd, build, a.tier or "scoped", lane, 1, reasons=reasons,
                                             rng=log_range, labels=labels, exclude=skip, whole_card=True)) or rc
+        rc = owed_solo_pass(labels) or rc
         # THE VERDICT IS THE GATING PHASES' (GATE-SPEED-1 item 2): printed, and every gating record
         # written, before any target runs; the exit code is this one whatever the targets read. THE
         # TARGETS RUN AFTER IT, INSIDE THE GATE (GATE-COST-1 P9): on the gate's display, under its slot,
