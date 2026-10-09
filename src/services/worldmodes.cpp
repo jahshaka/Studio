@@ -297,9 +297,10 @@ QVector<Row> buildRows()
         r.group = QStringLiteral("Rendering");
         r.type = RowType::Bool;
         r.tier[0] = 0; r.tier[1] = 1; r.tier[2] = 1; r.tier[3] = 1;
-        r.cost = QStringLiteral("Highlight glow. Rides the HDR chain's fixed 256x256 blur, so it "
-                                "costs almost nothing and does not scale with resolution — but it "
-                                "needs HDR, and does nothing without it.");
+        r.cost = QStringLiteral("Highlight glow, spreading evenly in every direction: a ladder of "
+                                "six half-size copies of the picture, from half the view down to a "
+                                "sixty-fourth. A fraction of a millisecond, and it needs HDR, and "
+                                "does nothing without it.");
         r.get = [](const iris::ScenePtr &s) { return s->bloomEnabled ? 1 : 0; };
         r.set = [](const iris::ScenePtr &s, int v) { s->bloomEnabled = v != 0; };
         out.append(r);

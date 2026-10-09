@@ -110,6 +110,17 @@ if(JAHSHAKA_ASAN)
                          ENVIRONMENT "${JAH_ASAN_ENGINE_OPTIONS}")
 endif()
 
+# THE BLOOM IS ISOTROPIC (BLOOM-1). One point light's round hot spot on a matte
+# wall at 960x540, bloomed and at amount 0 in ONE process: the halo's half-width
+# at half its peak across and down agree within 10 %, and the hot spot's row
+# carries no excess at the frame's edges (the old fixed 256x256 ladder blurred 65
+# taps across and 11 down: a full-width band). See the file header.
+jahshaka_hdr_test(test_hdr_bloom_isotropic test_hdr_bloom_isotropic.cpp)
+target_link_libraries(test_hdr_bloom_isotropic PRIVATE JahshakaEngine)
+jah_gpu_row(hdr.bloom_isotropic CLASS engine COMMAND test_hdr_bloom_isotropic
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(hdr.bloom_isotropic PROPERTIES TIMEOUT 120 LABELS "engine")
+
 # EXACTLY ONE sRGB ENCODE ON EVERY DISPLAY PATH (SRGB-ENCODE-1). A flat emissive
 # plane at a ramp of known radiances, read back four ways in ONE process: the
 # Plain instrument (linear, unchanged), the ungraded display picture in the
@@ -120,3 +131,20 @@ target_link_libraries(test_hdr_display_encode PRIVATE JahshakaEngine)
 jah_gpu_row(hdr.display_encode CLASS engine COMMAND test_hdr_display_encode
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(hdr.display_encode PROPERTIES TIMEOUT 120 LABELS "engine")
+
+# hdr.bloom_showroom — NO FULL-WIDTH BAND IN THE PRODUCT (BLOOM-1, the app half of
+# hdr.bloom_isotropic): Showroom 2 from its own camera, the editor's "scene" shot with
+# bloom and at bloomAmount 0; every row's two end pixels agree within 2 codes unless a
+# pixel bright enough to bloom lies within a halo's reach of them. An app run on the
+# rig's display; a FRESH home per run (the sample is imported).
+set(JAH_BLOOM_SHOWROOM "${CMAKE_SOURCE_DIR}/scenes/Showroom 2.zip")
+configure_file(scripts/bloom_showroom.js.in ${CMAKE_CURRENT_BINARY_DIR}/bloom_showroom.js @ONLY)
+set(_bloom_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-bloom_showroom)
+jah_fresh_home_fixture(hdr.bloom_showroom.fresh_home bloomShowroomHome "${_bloom_home}" LABELS "scripting")
+jah_gpu_row(hdr.bloom_showroom CLASS app
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/bloom_showroom.js
+         WORKING_DIRECTORY ${_bloom_home}/run)
+set_tests_properties(hdr.bloom_showroom PROPERTIES
+    FIXTURES_REQUIRED bloomShowroomHome
+    TIMEOUT 300 LABELS "scripting"
+    ENVIRONMENT "HOME=${_bloom_home};JAHSHAKA_DATA_ROOT=${_bloom_home}/.local/share/Jahshaka")

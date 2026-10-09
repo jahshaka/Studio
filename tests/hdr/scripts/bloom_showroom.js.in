@@ -1,0 +1,96 @@
+// hdr.bloom_showroom — NO FULL-WIDTH BAND IN SHOWROOM 2 (lane BLOOM-1; the app half of
+// hdr.bloom_isotropic). The defect (spikes/light-band-1): the old bloom blurred a fixed
+// 256x256 target 65 taps across and 11 down, so every highlight became a band across
+// the whole frame at its own height — Showroom 2, from its own camera, showed two (the
+// torus' highlight, the spheres' tops), present with bloom and gone at bloomAmount 0.
+//
+// THE CLAIM: at both ends of EVERY row of the editor's own picture ("scene" grade), the
+// bloomed picture equals the bloomAmount 0 picture within 2 codes — except where the
+// end pixel lies inside a halo's own radius, i.e. within kHaloReach of a pixel bright
+// enough to bloom. "Bright enough" is read off the scene's own radiance (the plain
+// grade's float readback, times the grade's exposure multiplier, against the bloom
+// threshold: below it the prefilter passes nothing).
+// A halo is a disc; a band is a row. The disc's reach is the ladder's (measured by
+// hdr.bloom_isotropic at 960 wide: a saturated hot spot's halo stays >= 1 code out to
+// ~1/4 of the width); kHaloReach is set wider than that.
+//
+// Frames, never time: the shots are the picture at rest (editor.screenshot settles).
+
+function assert(cond, msg) {
+    if (!cond) throw new Error("assert failed: " + msg);
+    console.log("ok: " + msg);
+}
+function J(x) { return JSON.stringify(x); }
+
+var SHOWROOM = "@JAH_BLOOM_SHOWROOM@";
+var W = 960, H = 540;
+var kHaloReach = 0.30 * W;          // px: wider than the ladder's measured reach
+var kStep = 8;                      // the hot-pixel grid, px
+
+var proj = project.create("Bloom Showroom " + Date.now());
+assert(proj.length > 10, "project.create");
+var imported = project.importArchive(SHOWROOM);
+assert(imported && imported.guid, "importArchive(Showroom 2)");
+assert(project.open(imported.guid) === true, "project.open(Showroom 2)");
+editor.frame(60);
+assert(world.override({ id: "bloom", value: 1 }).value === 1, "bloom is on");
+world.postFx({ bloomAmount: 1 });
+var fx = world.postFx();
+console.log("postFx: threshold " + fx.bloomThreshold + " knee " + fx.bloomKnee +
+            " multiplier " + fx.exposureMultiplier);
+
+// The two ends of every row.
+var ends = [];
+for (var y = 0; y < H; ++y) {
+    ends.push({ x: 0.5 / W, y: (y + 0.5) / H });
+    ends.push({ x: (W - 0.5) / W, y: (y + 0.5) / H });
+}
+var on = editor.screenshot("bloom_showroom_on.png", W, H, ends, "scene").probes;
+world.postFx({ bloomAmount: 0 });
+var off = editor.screenshot("bloom_showroom_off.png", W, H, ends, "scene").probes;
+world.postFx({ bloomAmount: 1 });
+assert(on.length === 2 * H && off.length === 2 * H, "both shots read both ends of every row");
+
+// The pixels bright enough to bloom.
+var grid = [];
+for (var gy = kStep / 2; gy < H; gy += kStep)
+    for (var gx = kStep / 2; gx < W; gx += kStep) grid.push({ x: gx / W, y: gy / H });
+var rad = editor.screenshot("bloom_showroom_radiance.png", W, H, grid, "plain", { radiance: true }).probes;
+var mult = fx.exposureMultiplier > 0 ? fx.exposureMultiplier : 1;
+var hot = [];
+for (var i = 0; i < rad.length; ++i) {
+    var r = rad[i].radiance;
+    if (Math.max(r.r, r.g, r.b) * mult >= fx.bloomThreshold)
+        hot.push({ x: rad[i].x * W, y: rad[i].y * H });
+}
+console.log("hot pixels (grid " + kStep + " px): " + hot.length);
+assert(hot.length > 0, "the scene has highlights that bloom (the control)");
+
+function nearHot(px, py) {
+    for (var k = 0; k < hot.length; ++k) {
+        var dx = hot[k].x - px, dy = hot[k].y - py;
+        if (dx * dx + dy * dy <= kHaloReach * kHaloReach) return true;
+    }
+    return false;
+}
+
+var checked = 0, exempt = 0, bad = [], worstFar = 0, worstAll = 0;
+for (var j = 0; j < on.length; ++j) {
+    var a = on[j], b = off[j];
+    var d = Math.max(Math.abs(a.r - b.r), Math.abs(a.g - b.g), Math.abs(a.b - b.b));
+    worstAll = Math.max(worstAll, d);
+    var px = a.x * W, py = a.y * H;
+    if (Math.floor(py) % 30 === 0)
+        console.log("  row " + Math.floor(py) + (px < W / 2 ? " left" : " right") + ": +" + d +
+                    (nearHot(px, py) ? " (inside a halo's reach)" : ""));
+    if (nearHot(px, py)) { ++exempt; continue; }
+    ++checked;
+    worstFar = Math.max(worstFar, d);
+    if (d > 2 && bad.length < 12) bad.push("(" + (px < W / 2 ? "left" : "right") + " row " + Math.floor(py) + ": +" + d + ")");
+}
+console.log("row ends: " + checked + " checked, " + exempt + " inside a halo's reach; worst outside " +
+            worstFar + " codes, worst anywhere " + worstAll);
+assert(checked >= 100, "the control: at least 100 row ends are outside every halo's reach (" + checked + ")");
+assert(worstFar <= 2, "no band: every row end outside a halo's reach is the bloomAmount 0 picture within 2 codes " +
+       "(worst " + worstFar + ")" + (bad.length ? " " + bad.join(" ") : ""));
+console.log("BLOOM_SHOWROOM_DONE");
