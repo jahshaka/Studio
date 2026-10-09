@@ -4,7 +4,8 @@
 #
 #   1. THE SELF-TEST, under the Khronos validation layer (the environment ctest
 #      sets). Fails on the process's exit code AND on any "Validation Error" in
-#      its output — the line that caught the stale depth buffer on resize. It
+#      its output — the line that caught the stale depth buffer on resize — AND
+#      unless the runner's validation line says the layer is live (H4). It
 #      renders FOUR POSES since lane FENCE-1 (two since 2026-09-18,
 #      ENGINE-SMALL-B item 5) and prints a sha256 line for each; this arm
 #      requires all four lines and requires each PAIR to DIFFER, which is what
@@ -52,6 +53,18 @@ if [ "$rc" -ne 0 ]; then
     exit "$rc"
 fi
 grep -m1 'engine-selftest: default scene' "$OUT/validation.log"
+
+# THE LAYER WAS REALLY THERE (TESTING-CLEANUP-2 H4). Everything above greps for
+# "Validation Error", which a run whose layer never loaded cannot print: the
+# runner's validation line must say the layer was asked for AND is live on the
+# device (Engine::validation: vkCmdDraw resolves into the layer's library).
+vline=$(grep -m1 '^engine-selftest: validation requested' "$OUT/validation.log")
+echo "${vline:-engine_selftest: (no validation line)}"
+case "$vline" in
+    "engine-selftest: validation requested yes active yes"*) ;;
+    *) echo "engine_selftest: the run was not under a live validation layer — it proves nothing"
+       exit 1 ;;
+esac
 
 # THE TWO POSES (ENGINE-SMALL-B item 5). Both lines must be there, and the two
 # hashes must differ: a viewport that accepted the second pose and ignored it

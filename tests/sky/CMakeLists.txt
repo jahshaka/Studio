@@ -53,7 +53,7 @@ jah_gpu_row(sky.env_layout CLASS engine COMMAND test_env_layout
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(sky.env_layout PROPERTIES
     TIMEOUT 120 LABELS "engine"
-    ENVIRONMENT "VK_INSTANCE_LAYERS=VK_LAYER_KHRONOS_validation"
+    ENVIRONMENT "VK_INSTANCE_LAYERS=VK_LAYER_KHRONOS_validation;JAH_EXPECT_VALIDATION=1"
     FAIL_REGULAR_EXPRESSION "Validation Error")
 
 # sky.aerial_perspective — THE AIR IS A MEDIUM UNDER THE REALISTIC SKY (lane

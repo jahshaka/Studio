@@ -34,6 +34,7 @@
 // before any verb, panel or document field is designed around it.
 #include "EnginePrivate.h"
 #include "jahshaka/engine/Engine.h"
+#include "../support/validationproof.h"
 
 #include <atomic>
 #include <chrono>
@@ -624,6 +625,10 @@ static void cacheKindsCase()
     auto engine = Engine::create(cfg, err);
     if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); ++failures; return; }
     View *v = engine->createOffscreenView("spike", 256, 256, Colour(0, 0, 0));
+    // THE LAYER IS REALLY THERE (H4): the row greps for "Validation Error", which an unlayered
+    // run never prints — so a run whose layer did not load must fail here, not pass clean.
+    // Read once a view exists: Ogre makes the Vulkan device with the first one.
+    CHECK(enginetest::validationProof(*engine), "the validation layer is live on the device");
     engine->setShadowMapBudget(2u);
     Room room = buildRoom(engine.get(), v, "roomKinds", 2, false);
     auto *scene = static_cast<jahshaka::engine::detail::OgreScene *>(room.scene);
