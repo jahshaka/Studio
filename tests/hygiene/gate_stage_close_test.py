@@ -23,6 +23,11 @@ scoped gate only when the diff touches its OWN subject.
     this build the shadow casters' gate rows run ONE process without the label, their `.churn` twins
     TEN with `stage-close` + `engine`.
 
+RED ON THE BASE (measured on VERDICT-1's dad5cd4ff, the base before this lane): `select` stops at case 1 with
+AttributeError — the base's Selection has no stage_close_subjects (a broad rule kept every stage-close row) and
+no --stage-close-tier-serial; `labels` finds 186 lines in 57 tracked files of tests/, scripts/ and docs/ saying
+the retired word, and the shadow casters' gate rows ran TEN processes with no `.churn` twin.
+
 Run: gate_stage_close_test.py <select|labels> <source-dir> <build-dir>
 """
 import importlib.util
