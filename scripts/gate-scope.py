@@ -5,6 +5,8 @@
     scripts/gate-scope.sh <base>..<tip> --resume [...]          # --run, only the rows with no record at the tip
     scripts/gate-scope.sh --files path [path ...]
     scripts/gate-scope.sh --solo <suite> [...] [--times 3]     # the flake protocol, logged
+    scripts/gate-scope.sh --attribute <row>[,<row>...] --batch <tag> --lanes <lane>:<worktree>:<tip> [...]
+                                                               # a batch red, re-run 3x on each lane's OWN tip
     scripts/gate-scope.sh --record-times                       # gate-times.txt from the run log
     scripts/gate-scope.sh --merge-tier [-j N] | --merge-tier-serial | --nightly-tier | --gate-jobs
 
@@ -18,7 +20,7 @@ path and one reason per selected row, estimates the wall time from THE RUN LOG (
 A RUN IS A GATE, AND THE BOX RUNS ONE AT A TIME (GATE-COST-1, SPECS/audits/GATE_COST_2026-10-09.md):
 `--run` (scoped, a fallback, `--fork-tier`, `--targets-only`) queues for THE GATE SLOT
 (scripts/vram_tokens.py; FIFO, no bound, its position printed) and holds it to its last process;
-`--solo` never takes it. Inside it: the `hygiene` rows first, as their own CPU phase (P8); the GPU
+`--solo` and `--attribute` never take it. Inside it: the `hygiene` rows first, as their own CPU phase (P8); the GPU
 rows; a row that got no admission re-queued at the end (P5); the timing rows serial on ONE whole-card
 hold (P2); the verdict; then the target rows on the same display and card (P9). `--resume` runs only
 the rows with no record at the tip (P6); a gate whose display dies stops and says so (P6).
@@ -41,13 +43,14 @@ starts at the merge's d-build parent (own_base), and what came in is the batch g
 ONE GATE PER BATCH (BATCH-GATE-1; docs/TESTING_GATE.md §3c): builders run their named acceptance tests
 + their subject suite; the lead stacks the ready lanes on d-build as ONE candidate
 (`scripts/lead/merge-dbuild-lane.sh batch`) and runs ONE scoped gate on `d-build..candidate` — the
-candidate's merges have lane tips as second parents, so the union range scopes as a plain range.
-The `--joint` union this replaced is gone.
+candidate's merges have lane tips as second parents, so the union range scopes as a plain range. A
+red row is attributed by `--attribute`: 3 solo runs per lane on that lane's OWN tip; a row red on no
+lane's tip is red on the COMBINATION. The `--joint` union this replaced is gone.
 Tiers are contracts: the selection printed here is what runs, nothing
 hand-picked out of it; a red a later tier finds that this selection missed is a defect of
 this tool, fixed here and added to tests/hygiene/gate_selection_cases.json.
 """
-import argparse, json, os, re, subprocess, sys, collections
+import argparse, json, os, re, subprocess, sys, collections, time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import gate_graph                                   # noqa: E402  the build graph, symbols, CMake
@@ -1909,6 +1912,118 @@ def select(paths, rng, build, jobs, graph=None, inv=None, quiet_graph=False):
     return S
 
 
+def attribute(row_args, lane_specs, tag, times, tier):
+    """THE BATCH RED, ATTRIBUTED (BATCH-GATE-1; docs/TESTING_GATE.md §3c). A batch candidate's gate went
+    red on <rows>: each row runs `times` times SOLO in each lane's OWN worktree at its exact tip (the
+    lanes' built trees), every run a logged retry at THAT tip (`reason: attribute:<tag>`, the lane's
+    name in `lanes`). The whole card is held ONCE for the batch (P2) — never the gate slot (a solo is
+    small). Prints one table `row | lane | n/times red | the first failing check` and per row the lanes
+    whose own tip reproduces it; a row red on NO lane's own tip is red on the COMBINATION — said, for
+    the lead to read. Returns the exit code (0 = the table was printed; 4 = a lane's tree is unusable;
+    64 = usage)."""
+    rows = []
+    for arg in row_args or []:
+        for r in arg.split(","):
+            r = r.split(" :: ", 1)[0].strip()       # a pool arm is attributed by its row
+            if r and r not in rows:
+                rows.append(r)
+    if not rows or not lane_specs or not tag:
+        sys.stderr.write("gate-scope --attribute: give the red rows, --batch <tag> and "
+                         "--lanes <lane>:<worktree>:<tip> [...]\n")
+        return 64
+    lanes, bad = [], []
+    for spec in lane_specs:
+        name, _, rest = spec.partition(":")
+        wt, _, tip = rest.rpartition(":")
+        if not (name and wt and tip):
+            bad.append(f"{spec}: not <lane>:<worktree>:<tip>"); continue
+        wt = os.path.abspath(os.path.expanduser(wt))
+        build = os.path.join(wt, "build-linux")
+        head = gate_runlog._git(["rev-parse", "HEAD"], cwd=wt)
+        want = gate_runlog._git(["rev-parse", "--verify", "-q", tip + "^{commit}"], cwd=wt)
+        if not os.path.isdir(build):
+            bad.append(f"{name}: no built tree at {build}")
+        elif not want or head != want:
+            # THE EXACT-TIP RULE: a record says which tree ran; a worktree moved past the batch's tip is
+            # another tree
+            bad.append(f"{name}: {wt} is at {head[:9] or '?'}, not the batch's tip {tip[:9]}")
+        else:
+            problem = gate_runlog.fork_pin_problem(root=wt)
+            if problem:
+                bad.append(f"{name}: {problem.splitlines()[0]}")
+            else:
+                lanes.append((name, wt, build, head))
+    if bad:
+        for b in bad: sys.stderr.write(f"gate-scope --attribute: REFUSED — {b}\n")
+        return 4
+    reason = f"attribute:{tag}"
+    print(f"gate-scope --attribute (batch {tag}): {len(rows)} row(s) x {len(lanes)} lane(s) x {times} solo run(s), "
+          f"each on the lane's own tip; the whole card held once, never the gate slot")
+    gate_runlog.on_signals()
+    card, env = gate_runlog._vram().hold_card(f"attribute {tag}: {','.join(rows)[:80]}", log=sys.stdout)
+    if not card and not env.get("JAH_VRAM_HELD"):
+        env["JAH_VRAM_ALL"] = "1"      # no hold (the drain timed out): every admission takes the card
+    table = []
+    try:
+        for row in rows:
+            rx = "^" + re.escape(row) + "$"
+            for name, wt, build, head in lanes:
+                reds, first = 0, None
+                for _ in range(times):
+                    t0 = time.time()
+                    rc = gate_runlog.run_ctest(
+                        f"ctest -j1 --timeout 900 --output-on-failure --no-tests=error -R '{rx}'", build, tier, [name],
+                        1, reasons={row: reason}, retry=True, env=env, whole_card=False, root=wt)
+                    if rc == gate_runlog.DISPLAY_LOST or rc < 0 or rc > 128:
+                        print(f"\n=== ATTRIBUTION ABORTED at {row} on {name} (exit {rc}): the display died or ctest "
+                              f"was killed — the table below is partial ===")
+                        table.append((row, name, None, reds, times, "ABORTED"))
+                        raise _AttributionAborted()
+                    if rc != 0:
+                        reds += 1
+                        if first is None:
+                            first = _attribution_fail_line(row, head, reason, t0) or f"exit {rc}"
+                table.append((row, name, head, reds, times, first))
+    except _AttributionAborted:
+        pass
+    finally:
+        gate_runlog._vram().release(card)
+    print(f"\n=== ATTRIBUTION (batch {tag}) ===")
+    print("row | lane | red | the first failing check")
+    for row, name, head, reds, n, first in table:
+        print(f"{row} | {name} | {reds}/{n} red | {first or '-'}")
+    for row in rows:
+        mine = [(name, reds, n) for r, name, _, reds, n, first in table if r == row and first != "ABORTED"]
+        guilty = [f"{name} ({reds}/{n} red on its own tip)" for name, reds, n in mine if reds]
+        if len(mine) < len(lanes):
+            print(f"=> {row}: INCOMPLETE — not every lane ran")
+        elif guilty:
+            print(f"=> {row}: {', '.join(guilty)} — that lane drops out; the rest are RE-GATED as a new candidate")
+        else:
+            print(f"=> {row}: COMBINATION — red on no lane's own tip ({len(mine)} lane(s), {times}/{times} green "
+                  f"each): the lanes together make it; the lead reads it")
+    return 0
+
+
+class _AttributionAborted(Exception):
+    pass
+
+
+def _attribution_fail_line(row, head, reason, since):
+    """The first failing check of the newest attribution run of `row` at `head` (its record's failLine)."""
+    d = gate_runlog.log_dir()
+    best = None
+    for f in sorted(os.listdir(d)) if os.path.isdir(d) else []:
+        if head[:9] not in f or not f.endswith(".jsonl"): continue
+        for line in open(os.path.join(d, f), errors="replace"):
+            try: r = json.loads(line)
+            except ValueError: continue
+            if (r.get("suite") == row and r.get("arm") is None and r.get("reason") == reason
+                    and (r.get("tip") or {}).get("studio") == head and r.get("verdict") != "PASS"):
+                best = r.get("failLine") or f"{r.get('verdict')} ({r.get('status')})"
+    return best
+
+
 def run_target_step(target_cmd, build, lane, log_range, labels, reasons, exclude=None):
     """THE TARGET STEP (GATE-COST-1 P9; TARGET-STEP-DISPLAY-1, ledger §1851): the selection's target
     rows, -j1, run-log tier `target`, AFTER the gating verdict and INSIDE the gate — on the gate's own
@@ -1950,6 +2065,13 @@ def main():
     ap.add_argument("--merge-tier", action="store_true",
                     help="print the MERGE tier's ctest command (at -j) and exit — the one source "
                          "docs/TESTING_GATE.md quotes instead of a copy of the -LE set")
+    ap.add_argument("--attribute", metavar="ROW[,ROW...]", action="append", default=None,
+                    help="a BATCH red (BATCH-GATE-1): run each row --times times solo on each lane's OWN tip "
+                         "(--lanes), print the attribution table; never takes the gate slot")
+    ap.add_argument("--lanes", metavar="LANE:WORKTREE:TIP", nargs="+", default=None,
+                    help="with --attribute: the batch's lanes, each its worktree (built) and its exact Studio tip")
+    ap.add_argument("--batch", metavar="TAG", default=None,
+                    help="with --attribute: the batch tag the records' reason names (`attribute:<tag>`)")
     ap.add_argument("--fork-tier", action="store_true",
                     help="a range that moves the fork pin: run the MERGE tier (logged as tier `fork`) — §7b rule 4's "
                          "one full tier per bump, at the merge into d-build; ci_gate_check requires it")
@@ -1974,7 +2096,7 @@ def main():
         sys.stderr.write("gate-scope: --joint is retired (BATCH-GATE-1) — the batch gate IS the joint gate: stack the "
                          "lanes as one candidate with\n  scripts/lead/merge-dbuild-lane.sh batch <tag> "
                          "<lane>:<studio tip>:<irisgl tip> [...]\nand gate `d-build..candidate` once (the command it "
-                         "prints)\n")
+                         "prints); a red is attributed with `gate-scope.sh --attribute`\n")
         sys.exit(2)
     a = ap.parse_args()
     if a.resume:
@@ -1989,6 +2111,11 @@ def main():
         print(merge_tier_serial()); return
     if a.nightly_tier:
         print(nightly_tier()); return
+    if a.attribute:
+        # each lane's OWN worktree and build (--lanes), never this checkout's
+        sys.exit(attribute(a.attribute, a.lanes, a.batch, a.times, a.tier or "scoped"))
+    if a.lanes or a.batch:
+        ap.error("--lanes / --batch go with --attribute")
     build = resolve_build(a.build)
     # THE BUILT FORK MUST BE THE PIN (TESTING-DEBTS-1 T12): a run on an install built from another
     # fork commit is void (stale media) — refused before a suite runs, with the lines that fix it.
