@@ -35,7 +35,8 @@ failures=0
 # 1. THE SOURCES. thirdparty/qtawesome is the one copy; a QtAwesome*.cpp/.h
 #    anywhere else is a fork of vendored code by another name.
 #    FIRST-PARTY PATHS ONLY (GATE-COST-1 P8; GATE-COST-2): src and irisgl WITHOUT irisgl's
-#    SUBMODULES (irisgl/.gitmodules — vendored code pinned from elsewhere) and .git; the
+#    SUBMODULES (irisgl/.gitmodules — vendored code pinned from elsewhere), its git-ignored
+#    build output (the Ogre install) and .git; the
 #    in-tree vendored dirs (meshoptimizer-clusterlod, the *-patches stacks) are walked.
 #    tests/hygiene/first_party.sh says why.
 . "$(dirname "$0")/first_party.sh"

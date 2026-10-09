@@ -548,6 +548,12 @@ def main(source, build):
                             text=True).stdout.split()
     intree = [d_ for d_ in ("irisgl/thirdparty/meshoptimizer-clusterlod", "irisgl/thirdparty/assimp-patches")
               if os.path.isdir(os.path.join(source, d_))]
+    allpruned = subprocess.run(["bash", "-c", f". {lib}; pruned_paths irisgl"], cwd=source, capture_output=True,
+                               text=True).stdout.split()
+    inst = "irisgl/thirdparty/ogre-next-install"
+    check(not os.path.isdir(os.path.join(source, inst)) or (inst in allpruned and
+                                                              not any(w == inst or w.startswith(inst + "/") for w in walked)),
+          "the Ogre install (git-ignored build output) is pruned too (F5)")
     check(gm and sorted(pruned) == sorted("irisgl/" + x for x in gm)
           and not any(w == p_ or w.startswith(p_ + "/") for w in walked for p_ in pruned)
           and all(d_ in walked for d_ in intree),

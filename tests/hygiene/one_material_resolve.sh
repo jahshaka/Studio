@@ -34,7 +34,8 @@ failures=0
 
 # FIRST-PARTY PATHS ONLY (GATE-COST-1 P8; GATE-COST-2): src and irisgl WITHOUT irisgl's SUBMODULES
 # (irisgl/.gitmodules: assimp, bullet3, zip, the Ogre fork, meshoptimizer — vendored code pinned from
-# elsewhere, which cannot name an iris:: type) and .git. The in-tree vendored dirs
+# elsewhere, which cannot name an iris:: type), its git-ignored build output (the Ogre install,
+# build-ogre.sh's product) and .git. The in-tree vendored dirs
 # (meshoptimizer-clusterlod, the *-patches stacks) ARE read. tests/hygiene/first_party.sh says why.
 . "$(dirname "$0")/first_party.sh"
 mapfile -t IRISGL_OWN < <(first_party_paths irisgl)
