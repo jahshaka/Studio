@@ -2103,12 +2103,12 @@ def main():
         cl = gate_runlog.contention_list()
         for s in a.solo:
             if cl is None:
-                print(f"gate-scope --solo: the contention list {gate_runlog.contention_file()} is unreadable — "
+                print(f"gate-scope --solo: the defect registry {gate_runlog.defects_file()} is unreadable — "
                       f"the merge refusal will not accept these retries until it is back")
             elif s in cl:
                 print(f"gate-scope --solo: {s} is contention-class ({cl[s][:100]}): {a.times}/{a.times} PASS clears its red")
             else:
-                print(f"gate-scope --solo: {s} is NOT in the contention class ({gate_runlog.contention_file()}): "
+                print(f"gate-scope --solo: {s} is NOT in the contention class ({gate_runlog.defects_file()}): "
                       f"the retries are logged, and its red still needs a recorded verdict "
                       f"(scripts/ci-gate-check.sh <range> --verdict \"{s}=<text>\")")
         # SOLO ON THE CARD, ONE DRAIN PER BATCH (G1+G2; GATE-COST-1 P2): the whole batch holds every VRAM

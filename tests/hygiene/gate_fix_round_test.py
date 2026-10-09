@@ -6,8 +6,8 @@ The merge refusal (scripts/ci_gate_check.py) used to key every record on the EXA
 fix re-ran the lane's whole selection (45.9 % of all suite-time since 09-28). It now takes, for a row
 with no record at the tip, the newest record of that row at an earlier commit A of the lane — when
 the scoped selection of A..tip does not reach the row and the fork pin did not move. Proved on
-RECORDED lanes of this clone against a PRIVATE run log (JAH_RUN_LOG_DIR) and a PRIVATE contention
-list (JAH_CONTENTION_FILE):
+RECORDED lanes of this clone against a PRIVATE run log (JAH_RUN_LOG_DIR) and a PRIVATE defect
+registry (JAH_DEFECTS_FILE):
 
   1. D11-LIBRARY-SCALE's review fix 4 (5ba5abcce: src/ui/controls/librarymodel.cpp only) after its
      fix 3 (1e21df220): the lane's rows green at 1e21df220 and the fix's own selection green at
@@ -63,9 +63,15 @@ def main(source, build):
     if missing: return 1
     pin = lambda c: sha(f"{c}:irisgl")
     scratch = tempfile.mkdtemp(prefix="gate-fix-round-")
-    contention = os.path.join(scratch, "contention.json")
-    json.dump({"suites": {}}, open(contention, "w"))
-    os.environ["JAH_CONTENTION_FILE"] = contention
+    registry = os.path.join(scratch, "defects.json")
+    os.environ["JAH_DEFECTS_FILE"] = registry
+
+    def register(rows):
+        """THE DEFECT REGISTRY (TESTING_V3 §1.5): FIXTURE-1, registered for the rows the verdicts answer."""
+        json.dump({"defects": [{"id": "FIXTURE-1", "rows": sorted(rows), "kind": "defect", "cause": "the fixture's",
+                                "first_seen": {"tip": "0" * 9, "pin": "0" * 9, "run": "20261009T120000-000000000"},
+                                "state": "open", "recheck": "2099-12-31", "found_by": "lane"}]}, open(registry, "w"))
+    register(["(none yet)"])
 
     import copy
     import gate_graph
@@ -144,6 +150,7 @@ def main(source, build):
     check(bool(cand), "fixture: a row of the lane that %s..%s does not reach (%d)" % (T0, B, len(cand)))
     if cand:
         k = cand[0]
+        register([k[0]])
         fresh()
         put(lane_need, "PASS", "2026-01-01T09:00:00", T0)                 # the lane's gate at T0
         put([x for x in lane_need if x != k], "PASS", "2026-01-01T10:00:00", A)  # a later round at A...

@@ -6,7 +6,7 @@ q_runlog.py + q_refine.py) as ONE command over the run log's directories (testin
 read recursively; a record later than the week's end is not read):
 
     scripts/gate-report.py <runs dir> [<runs dir> ...] [--week <date | date>T<hh:mm>] [--ref <integration ref>]
-                           [--carried] [--contention <file>]
+                           [--carried] [--defects <file>] [--contention <frozen list>]
 
   --week   the seven days ENDING at that moment (a bare date: the end of that day; default: now)
   --ref    the integration line a tip "landed" on, for the carried reds (default d-build; the Studio repo
@@ -37,7 +37,6 @@ import ci_gate_check  # noqa: E402  (the door)
 GATE_TIERS = ("scoped", "scoped-fallback", "scoped-tier", "fork", "joint")
 FULL_ROWS = 400
 ALONE_SIB = 0.2
-DISPLAY_DEATH = re.compile(r"Malformed resolution|display", re.I)      # rows killed by a dead display: not a red
 
 
 def when(r):
@@ -125,7 +124,7 @@ def preflight_verdicts(R, contention):
             last_gate = max((r["_t"] for r in gate_reds), default=None)
             all_solos = [r for r in idx[(t, v.get("suite"), v.get("arm"))]
                          if r.get("retry") and last_gate is not None and r["_t"] > last_gate]
-            ok, why = ci_gate_check.door(text, reds, all_solos)
+            ok, why, _ = ci_gate_check.door(text, reds, all_solos, v.get("arm") or v.get("suite"), DEFECTS)
             if not ok:
                 out["THE DOOR (VERDICT-1 U1, every rule incl. the class token)"].append(tag + (why[:70],))
     return V, kinds_c, out
@@ -171,8 +170,7 @@ def carried(R, repo, ref):
     for (t, s, a), rs in idx.items():
         if not t or a: continue
         rs = [r for r in rs if r["_t"] and r.get("tier") in GATE_TIERS and r.get("gating", True)]
-        reds = [r for r in rs if r.get("verdict") not in ("PASS", "NOADMIT", "NOTRUN") and not r.get("retry")
-                and not DISPLAY_DEATH.search((r.get("failLine") or "") + (r.get("status") or ""))]
+        reds = [r for r in rs if r.get("verdict") not in ("PASS", "NOADMIT", "NOTRUN") and not r.get("retry")]
         if not reds: continue
         last = max(r["_t"] for r in reds)
         if any(x > last for x in vt.get((t, s, a), [])): continue
@@ -191,6 +189,7 @@ def _lanes(r):
 
 
 CONT = set()
+DEFECTS = {}
 
 
 def main():
@@ -199,16 +198,23 @@ def main():
     ap.add_argument("--week", default=None)
     ap.add_argument("--ref", default="d-build")
     ap.add_argument("--carried", action="store_true")
-    ap.add_argument("--contention", default=None, help="the contention list (default: <first dir>/../contention.json)")
+    ap.add_argument("--defects", default=None, help="the defect registry (default: testing/defects.json)")
+    ap.add_argument("--contention", default=None,
+                    help="a FROZEN contention list ({suites: {...}}) for the carried query's 3/3 solo clearance instead "
+                         "of the registry's nondeterminism rows (to reproduce a past read, e.g. the preflight's)")
     a = ap.parse_args()
     end = parse_end(a.week)
     start = end - datetime.timedelta(days=7)
     R = read(a.dirs, end)
-    cfile = a.contention or os.path.join(os.path.dirname(os.path.abspath(a.dirs[0]).rstrip("/")), "contention.json")
-    try:
-        CONT.update(json.load(open(cfile)).get("suites", {}).keys())
-    except (OSError, ValueError, AttributeError):
-        print(f"(no contention list at {cfile}: the carried query reads no 3/3 solo clearance)")
+    if a.defects: os.environ["JAH_DEFECTS_FILE"] = a.defects
+    reg, why = ci_gate_check.gate_runlog.defects_load()
+    if reg is None:
+        print(f"(the defect registry is unusable: {why} — the door's column reads an empty registry)")
+    DEFECTS.update(reg or {})
+    if a.contention:
+        CONT.update(json.load(open(a.contention)).get("suites", {}).keys())
+    else:
+        CONT.update(ci_gate_check.gate_runlog.contention_of(DEFECTS).keys())
     print(f"GATE REPORT  week {start.isoformat(timespec='minutes')} .. {end.isoformat(timespec='minutes')}  "
           f"records read {len(R)} (to the week's end) from {', '.join(a.dirs)}")
 
@@ -220,6 +226,7 @@ def main():
     by = collections.defaultdict(lambda: [0, 0.0])
     for g in GW:
         by[g["tier"]][0] += 1; by[g["tier"]][1] += g["h"]
+    print(f"  summed gate wall (every non-retry run, rc tiers included): {sum(g['h'] for g in GW):.1f} h")
     print("  by kind: " + "  ".join(f"{t} {n} ({hh:.1f} h)" for t, (n, hh) in sorted(by.items(), key=lambda kv: -kv[1][0])))
     alone = [g for g in full if g["sib"] < ALONE_SIB]
     shared = [g for g in full if g["sib"] >= ALONE_SIB]
@@ -253,7 +260,7 @@ def main():
             for x in xs: print("      ", x)
     merged, out = carried(R, ci_gate_check.gate_runlog.ROOT, a.ref)
     tot = sum(len(v) for v in out.values())
-    print(f"\n== 6. carried reds (open reds on never-landed tips of MERGED lanes; display deaths excluded; ref {a.ref}) ==")
+    print(f"\n== 6. carried reds (open reds on never-landed tips of MERGED lanes; no pattern drops; ref {a.ref}) ==")
     print(f"  merged lanes {len(merged)}  carried reds {tot}  on tips {len({x[0] for v in out.values() for x in v})}  "
           f"lanes {len(out)}")
     for ln, xs in sorted(out.items(), key=lambda kv: -len(kv[1])):
@@ -261,6 +268,19 @@ def main():
                                                      dict(collections.Counter(x[2] for x in xs))))
         if a.carried:
             for x in xs: print("        ", x)
+    print("\n== 6b. the defect registry ==")
+    if DEFECTS:
+        for fld in ("kind", "found_by"):
+            print(f"  by {fld}: " + "  ".join(f"{k} {n}" for k, n in collections.Counter(e[fld] for e in DEFECTS.values()).most_common()))
+        print("  by state: " + "  ".join(f"{k} {n}" for k, n in collections.Counter(
+            ci_gate_check.gate_runlog.defect_state(e) for e in DEFECTS.values()).most_common()))
+    else:
+        print("  (empty)")
+    bt = collections.defaultdict(set)
+    for r in wk_all:
+        if r.get("batch"): bt[r["batch"]].add(r.get("run"))
+    print(f"  batch tags in the week: {len(bt)}; runs per batch (re-gates): "
+          + ("  ".join(f"{b} {len(rs)}" for b, rs in sorted(bt.items())) or "-"))
     st = [g for g in GW if g["tier"] == "stage"]
     st_rows = [r for r in wk if r.get("tier") == "stage" and not r.get("retry")]
     print(f"\n== 7. stage-close rows ==\n  stage runs {len(st)}  rows {len(st_rows)}  {sum(g['h'] for g in st):.1f} h  reds "

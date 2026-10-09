@@ -4,19 +4,21 @@ GATE-LOG-1; ONE_PICTURE_SPEC H1/H2; docs/TESTING_GATE.md §4). Toy run logs only
 JAH_RUN_LOG_DIR; a PRIVATE contention list, JAH_CONTENTION_FILE; a PRIVATE token dir, JAH_VRAM_DIR) — no GPU,
 no display. One script, five rows:
 
-  verdict_door      U1/U3 + the lead's addendum: real:<id> is CHECKED (`fixed` needs the row's PASS at the tip,
-                    `pre-existing` a recorded solo red at the base; a ticket named alone clears nothing — a CRASH
-                    never); contention: only on a LISTED row whose red shows a measured competitor, with 3/3 solo;
-                    FAIL + text with 2/3 solo -> "solos below 3/3"; LOST + environmental -> refused; xid-read: only
-                    when the record's journal was unreadable, its window covering the red; CRASH with an xid in the
-                    record + contention: -> refused; NOADMIT / NOTRUN never cleared; the CLI prints
-                    `VERDICT REFUSED <row>: <why>`
+  verdict_door      U1/U3, TESTING_V3 §1.4: real:<id> must be REGISTERED for the row and PROVED (a PASS at the tip;
+                    the red reproduced by a solo at the base = KNOWN RED: a merge passes, a push / stage close
+                    refuses; a nondeterminism id clears by 3/3); contention: only for an open nondeterminism row
+                    whose red's COMPETITOR CENSUS shows competition (never the gate's own queue or drain), with 3/3;
+                    solos below 3/3 red; 'environmental' / ENOSPC / a dead display never verdicts; xid-read: only
+                    when the journal was unreadable; an xid in the record takes real: only; NOADMIT / NOTRUN never
+                    cleared; the CLI prints `VERDICT REFUSED <row>: <why>`
   noadmit_pool      U2: a toy pool whose every arm is NOADMIT records NOADMIT (and is re-queued as a never-ran
                     row); a mixed one records FAIL with its NOADMIT arms named
-  carried_red       U4: lane X red at tip A, the lane rebased to tip B with no re-run -> refused (`OPEN RED carried
+  carried_red       U4 (only a lane's OWN records, `lanes == [lane]`, no batch tag): lane X red at tip A, the lane rebased to tip B with no re-run -> refused (`OPEN RED carried
                     from <A>`); re-run green at B -> accepted; a verdict at A -> accepted; BATCH-GATE-1's `lanes`
                     list is read too; a schema-1 (historic) red is not carried (forward only)
-  contention_shape  U5: an entry missing `date` or `recheck` -> the judge refuses to load the list (exit 2)
+  contention_shape  U5 / TESTING_V3 §1.5: a defect-registry entry missing a field, with a bad kind/state/date/found_by,
+                    or a duplicate id -> the judge refuses to load the registry (exit 2); the contention class is
+                    its open nondeterminism subset
   log_schema2       C: a toy run's records carry schema 2, slot_wait_s, drain_s, hold_s, box.queue_depth, box.mem,
                     xid (from vram_tokens' supervise through kernel_xid, end to end); gate-report.py prints the
                     table on the toy log and, on the archive, the preflight's numbers (87 gates, 58 verdicts, 6
@@ -35,6 +37,25 @@ import time
 RANGE = "51e9f2c49..3756b2f18"          # VIEWS-DEPTH-1 (ci_gate_check_test's): photon.view + the smoke pair
 ROWS = ["api.contract", "app.startup_quiet", "photon.view"]
 FAILURES = []
+
+
+ENROLLED = {"enrolled": {"by": "lead", "rate": "3 in 200 (fixture)", "census": {"other_ctests": 2}, "date": "2026-10-09"}}
+
+
+def defect(i, rows, kind="defect", **kw):
+    if kind == "nondeterminism" and "uses" not in kw and "enrolled" not in kw:
+        kw = dict(ENROLLED, **kw)
+    return dict({"id": i, "rows": rows, "kind": kind, "cause": "the fixture's (this test only)", "state": "open",
+                 "first_seen": {"tip": "0" * 9, "pin": "0" * 9, "run": "20261009T120000-000000000"},
+                 "recheck": "2099-12-31", "found_by": "lane"}, **kw)
+
+
+FIXTURE_DEFECTS = [defect("FIXTURE-1", ROWS + ["test_engine"]), defect("VIEWS-XID-1", ["photon.view"]),
+                   defect("BUDGET-7", ["photon.view"]), defect("RETIRED-1", ["photon.view"], state="retired"),
+                   defect("OTHER-ROW-1", ["api.contract"]), defect("NONDET-SOLO-1", ["photon.view"], "nondeterminism",
+                                                                    state="retired")]
+NONDET = defect("NONDET-FIXTURE-1", ["photon.view"], "nondeterminism")
+BUSY = {"census": {"gpu_apps": [], "other_ctests": 2, "builds": 0, "psi10_mem": 0.0, "psi10_io": 0.0}}
 
 
 def check(ok, what):
@@ -58,21 +79,27 @@ class Env:
     def git(self, *a):
         return subprocess.run(["git"] + list(a), cwd=self.source, capture_output=True, text=True).stdout.strip()
 
-    def contention(self, suites):
-        path = os.path.join(self.scratch, "contention-%d.json" % len(os.listdir(self.scratch)))
-        json.dump({"suites": suites or {}}, open(path, "w"))
-        os.environ["JAH_CONTENTION_FILE"] = path
+    def registry(self, entries):
+        """A PRIVATE defect registry (TESTING_V3 §1.5), JAH_DEFECTS_FILE."""
+        path = os.path.join(self.scratch, "defects-%d.json" % len(os.listdir(self.scratch)))
+        json.dump({"defects": entries}, open(path, "w"))
+        os.environ["JAH_DEFECTS_FILE"] = path
+        d, _ = self.rl.defects_load()
+        return d
+
+    def contention(self, ignored=None):
+        self.defects = self.registry(FIXTURE_DEFECTS)
 
     def fresh(self, listed=False):
         os.environ["JAH_RUN_LOG_DIR"] = tempfile.mkdtemp(dir=self.scratch)
-        self.contention({"photon.view": {"reason": "the fixture's contention row", "date": "2026-10-09",
-                                         "recheck": "never (a fixture)"}} if listed else None)
+        self.defects = self.registry(FIXTURE_DEFECTS + ([NONDET] if listed else []))
 
-    def put(self, suites, verdict, ts, tip=None, retry=False, lane="lane-x", schema=2, **extra):
+    def put(self, suites, verdict, ts, tip=None, retry=False, lane="lane-x", schema=2, tier="scoped", **extra):
         t = tip or self.tip
+        ig = self.pin if t == self.tip else self.git("rev-parse", "%s:irisgl" % t)
         self.rl.append_records([dict({"schema": schema, "suite": s, "arm": None, "verdict": verdict, "ts": ts,
-                                      "retry": retry, "lane": lane, "gating": True, "tier": "scoped",
-                                      "tip": {"studio": t, "studio_dirty": False, "irisgl": self.pin,
+                                      "retry": retry, "lane": lane, "gating": True, "tier": tier,
+                                      "tip": {"studio": t, "studio_dirty": False, "irisgl": ig,
                                               "irisgl_dirty": False}}, **extra) for s in suites], "scoped", t)
 
     def verdict(self, suite, text, ts, tip=None):
@@ -88,9 +115,9 @@ class Env:
                            env=dict(os.environ))
         return p.returncode, p.stdout + p.stderr
 
-    def judge(self, recs, listed=False, base=None):
-        cont = {"photon.view": "x"} if listed else {}
-        return self.cgc.judge(("photon.view", None), recs, cont, base_recs=base)
+    def judge(self, recs, listed=False, base=None, defects=None):
+        d = defects or {e["id"]: e for e in FIXTURE_DEFECTS + ([NONDET] if listed else [])}
+        return self.cgc.judge(("photon.view", None), recs, d, base_recs=base)
 
 
 def rec(verdict, ts, retry=False, **kw):
@@ -106,50 +133,92 @@ def case_verdict_door(E):
     red = rec("FAIL", T % "10:00")
     fixpass = rec("PASS", T % "10:30")
     base_solo = [rec("FAIL", T % "09:00", retry=True)]
-    st, why = E.judge([red, vrec("real:VIEWS-XID-1", T % "11:00")])
-    check(st == "red" and "names a ticket only" in why, "FAIL + real:<id> alone (a ticket named) -> refused (%s)" % why[:90])
+    # real:<id> — a REGISTERED fact, proved
+    st, why = E.judge([red, vrec("real:NOT-REGISTERED-9 fixed", T % "11:00")])
+    check(st == "red" and "not in the defect registry" in why, "real:<id> not in the registry -> refused (%s)" % why[:90])
+    st, why = E.judge([red, fixpass, vrec("real:OTHER-ROW-1 fixed", T % "11:00")])
+    check(st == "red" and "registered for" in why, "real:<id> registered for another row -> refused (%s)" % why[:90])
+    st, why = E.judge([red, fixpass, vrec("real:RETIRED-1 fixed", T % "11:00")])
+    check(st == "red" and "RETIRED" in why, "real:<a retired id> -> refused (%s)" % why[:80])
     st, why = E.judge([red, vrec("real:VIEWS-XID-1 fixed in abc123", T % "11:00")])
-    check(st == "red" and "no PASS record of the row at the tip" in why,
-          "FAIL + real:<id> fixed, no PASS at the tip -> refused (%s)" % why[:90])
-    st, why = E.judge([red, fixpass, vrec("real:VIEWS-XID-1 fixed in abc123", T % "11:00")])
-    check(st == "green", "FAIL + real:<id> fixed + its row PASS at the tip after the red -> green (%s: %s)" % (st, why[:80]))
-    st, why = E.judge([red, vrec("real:VIEWS-XID-1 pre-existing on d-build", T % "11:00")], base=[])
-    check(st == "red" and "BASE" in why, "FAIL + real:<id> pre-existing, no solo red at the base -> refused (%s)" % why[:90])
-    st, why = E.judge([red, vrec("real:VIEWS-XID-1 pre-existing on d-build", T % "11:00")], base=base_solo)
-    check(st == "green", "...with the red reproduced by a recorded solo at the base -> green (%s)" % why[:80])
-    st, why = E.judge([red, vrec("the reader looked at it and it is fine", T % "11:00")])
-    check(st == "red" and why.startswith("VERDICT REFUSED") and "class token" in why,
-          "FAIL + plain text -> VERDICT REFUSED, naming the class-token rule (%s)" % why[:110])
-    solos = [rec(v, T % ("10:%02d" % (10 + i)), retry=True) for i, v in enumerate(("PASS", "FAIL", "PASS"))]
-    st, why = E.judge([red] + solos + [vrec("real:VIEWS-XID-1 fixed", T % "11:00")])
-    check(st == "red" and "solos below 3/3" in why, "FAIL + text, 2/3 solo -> red 'solos below 3/3' (%s)" % why[:100])
-    st, why = E.judge([red] + solos[:2] + [vrec("contention: load 14 beside two gates", T % "11:00")], listed=True)
-    check(st == "red" and "solos below 3/3" in why, "...listed or not: a contention-listed row too (%s)" % why[:90])
+    check(st == "red" and "naming a ticket clears nothing" in why,
+          "real:<registered id> with no proof (no PASS at the tip, no red on the base) -> refused (%s)" % why[:90])
+    st, why = E.judge([red, fixpass, vrec("real:VIEWS-XID-1", T % "11:00")])
+    check(st == "green", "real:<registered id> + its row PASS at the tip after the red -> green (%s: %s)" % (st, why[:70]))
+    st, why = E.judge([rec("FAIL", T % "10:00", failLine="FAIL: crash at frame 12"),
+                       vrec("real:VIEWS-XID-1", T % "11:00")], base=[rec("CRASH", T % "09:00", retry=True)])
+    check(st == "red" and "not the SAME red" in why, "KNOWN RED needs the SAME verdict class on the base: a base CRASH "
+          "does not make a lane FAIL known (%s)" % why[:90])
+    st, why = E.judge([rec("FAIL", T % "10:00", failLine="FAIL: thumbnail 12 px off"), vrec("real:VIEWS-XID-1", T % "11:00")],
+                      base=[rec("FAIL", T % "09:00", retry=True, failLine="FAIL: the panel has 3 rows")])
+    check(st == "red" and "not the SAME red" in why, "...and the same masked failLine: another assertion is not known (%s)"
+          % why[:80])
+    st, why = E.judge([rec("FAIL", T % "10:00", failLine="FAIL: thumbnail 12 px off"), vrec("real:VIEWS-XID-1", T % "11:00")],
+                      base=[rec("FAIL", T % "09:00", retry=True, failLine="FAIL: thumbnail 14 px off")])
+    check(st == "known", "...the same class and failLine (numbers masked) on the base -> KNOWN RED (%s)" % why[:70])
+    st, why = E.judge([red, vrec("real:VIEWS-XID-1", T % "11:00")], base=base_solo)
+    check(st == "known" and "KNOWN RED" in why, "real:<registered id> + the red reproduced by a solo at the base -> KNOWN "
+          "RED (%s: %s)" % (st, why[:70]))
+    nd = {e["id"]: e for e in FIXTURE_DEFECTS + [NONDET]}
     ok3 = [rec("PASS", T % ("10:%02d" % (10 + i)), retry=True) for i in range(3)]
-    busy = rec("FAIL", T % "10:00", box={"other_ctests": 2, "queue_depth": 0})
-    st, why = E.judge([red] + ok3 + [vrec("contention: load 14 beside two gates", T % "11:00")])
-    check(st == "red" and "not listed" in why, "contention: on an UNLISTED row -> refused, 3/3 or not (%s)" % why[:90])
+    st, why = E.judge([red] + ok3 + [vrec("real:NONDET-FIXTURE-1 enrolled", T % "11:00")], defects=nd)
+    check(st == "green" and "3/3" in why, "real:<an enrolled nondeterminism id> + 3/3 solo -> green (%s)" % why[:80])
+    tip = E.tip
+    nr = defect("NOTREPRO-1", ["photon.view"], "nondeterminism", uses=1, suspects=["lane-x"], census={"other_ctests": 1},
+                first_seen={"tip": tip[:9], "pin": "0" * 9, "run": "20261009T120000-" + tip[:9]})
+    one = {"NOTREPRO-1": nr}
+    st, why = E.cgc.judge(("photon.view", None), [red] + ok3 + [vrec("real:NOTREPRO-1", T % "11:00")], one, tip_sha=tip)
+    check(st == "green", "a SINGLE-USE NOT REPRODUCED entry clears its own merge's red by 3/3 (%s)" % why[:70])
+    st, why = E.cgc.judge(("photon.view", None), [red] + ok3 + [vrec("real:NOTREPRO-1", T % "11:00")], one, tip_sha="b" * 40)
+    check(st == "red" and "SINGLE-USE" in why, "...and never a red at another tip (a later merge, a push) (%s)" % why[:80])
+    check(not E.rl.contention_of(one), "...and it is never the contention class (only an ENROLLED entry is)")
+    old = {"OLD-1": defect("OLD-1", ["photon.view"], recheck="2026-01-01")}
+    st, why = E.cgc.judge(("photon.view", None), [red, fixpass, vrec("real:OLD-1", T % "11:00")], old)
+    check(st == "red" and "past its recheck" in why, "an entry past its recheck DATE is refused until re-verdicted (%s)"
+          % why[:80])
+    oldnd = {"OLD-2": defect("OLD-2", ["photon.view"], "nondeterminism", recheck="2026-01-01")}
+    check(not E.rl.contention_of(oldnd), "...and a nondeterminism entry past its recheck leaves the contention class")
+    st, why = E.judge([red, vrec("the reader looked at it and it is fine", T % "11:00")])
+    check(st == "red" and why.startswith("VERDICT REFUSED") and "nothing accepts prose" in why,
+          "plain text -> VERDICT REFUSED, nothing accepts prose (%s)" % why[:110])
+    for word in ("environmental: beside four gates", "ENOSPC on /tmp", "the display died under it"):
+        st, why = E.judge([red, fixpass, vrec("real:VIEWS-XID-1 — " + word, T % "11:00")])
+        check(st == "red" and "never verdicts" in why, "'%s' is never a verdict, even beside a token (%s)" % (word, why[:60]))
+    solos = [rec(v, T % ("10:%02d" % (10 + i)), retry=True) for i, v in enumerate(("PASS", "FAIL", "PASS"))]
+    st, why = E.judge([red, fixpass] + solos + [vrec("real:VIEWS-XID-1", T % "11:00")])
+    check(st == "red" and "solos below 3/3" in why, "FAIL + a token, 2/3 solo -> red 'solos below 3/3' (%s)" % why[:100])
+    # contention: — a nondeterminism row, a competitor census, 3/3
+    busy = rec("FAIL", T % "10:00", box=BUSY)
+    st, why = E.judge([busy] + ok3 + [vrec("contention: load 14 beside two gates", T % "11:00")])
+    check(st == "red" and "has none" in why, "contention: on a row with no nondeterminism entry -> refused (%s)" % why[:90])
     st, why = E.judge([red] + ok3 + [vrec("contention: load 14 beside two gates", T % "11:00")], listed=True)
-    check(st == "red" and "MEASURED competitor" in why, "contention: on a listed row whose red shows no measured competitor "
-          "-> refused (%s)" % why[:90])
-    for name, r in (("box.other_ctests", busy), ("box.queue_depth", rec("FAIL", T % "10:00", box={"queue_depth": 1})),
-                    ("drain_s", rec("FAIL", T % "10:00", drain_s=40.0))):
-        st, why = E.judge([r] + ok3 + [vrec("contention: load 14 beside two gates", T % "11:00")], listed=True)
-        check(st == "green" and "3/3" in why, "contention: + a listed row + %s in the red + 3/3 solo -> green (%s)"
-              % (name, why[:80]))
+    check(st == "red" and "COMPETITOR CENSUS" in why, "contention: on a listed row whose red has no census -> refused (%s)"
+          % why[:80])
+    own = rec("FAIL", T % "10:00", box={"queue_depth": 3, "census": {"gpu_apps": [], "other_ctests": 0, "builds": 0,
+                                                                   "psi10_mem": 0.0, "psi10_io": 0.0}}, drain_s=40.0)
+    st, why = E.judge([own] + ok3 + [vrec("contention: the queue and the drain", T % "11:00")], listed=True)
+    check(st == "red" and "COMPETITOR CENSUS" in why, "...the gate's own queue and drain are never competition (%s)" % why[:70])
+    for name, c in (("a GPU process outside the gate", {"gpu_apps": [{"pid": 7, "name": "Jahshaka", "mib": 2800}]}),
+                    ("sibling ctests", {"other_ctests": 2}), ("a build", {"builds": 3}), ("memory pressure", {"psi10_mem": 22.0}),
+                    ("IO pressure", {"psi10_io": 40.0})):
+        r = rec("FAIL", T % "10:00", box={"census": dict({"gpu_apps": [], "other_ctests": 0, "builds": 0, "psi10_mem": 0.0,
+                                                          "psi10_io": 0.0}, **c)})
+        st, why = E.judge([r] + ok3 + [vrec("contention: measured", T % "11:00")], listed=True)
+        check(st == "green" and "3/3" in why, "contention: + a listed row + %s in the census + 3/3 solo -> green" % name)
     st, why = E.judge([busy, vrec("contention: load 14 beside two gates", T % "11:00")], listed=True)
     check(st == "red" and "3/3 solo" in why, "contention: with no solos -> refused (%s)" % why[:100])
     st, _ = E.judge([busy, vrec("contention: load 14 beside two gates", T % "10:05")] + ok3, listed=True)
     check(st == "green", "...and once its 3/3 solos run after it, the same verdict clears it (written before them)")
+    # LOST / OOM / CRASH
     lost = rec("LOST", T % "14:20", xid=None)
     st, why = E.judge([lost, vrec("environmental: a device loss beside four gates, no Xid", T % "15:00")])
-    check(st == "red" and "never environmental" in why, "LOST + environmental -> refused, the sentence naming the rule (%s)"
-          % why[:110])
-    st, why = E.judge([lost, vrec("SPEED-CPU lead verdict: no Xid in dmesg", T % "15:00")])
-    check(st == "red" and "xid-read" in why, "LOST + any other text -> refused (%s)" % why[:100])
+    check(st == "red" and "never verdicts" in why, "LOST + environmental -> refused (%s)" % why[:100])
+    st, why = E.judge([lost, vrec("contention: four gates", T % "15:00")] + [rec("PASS", T % ("14:3%d" % i), retry=True)
+                                                                         for i in range(3)], listed=True)
+    check(st == "red" and "never contention" in why, "LOST + contention: -> refused (%s)" % why[:90])
     st, why = E.judge([lost, vrec("xid-read:2026-10-09T14:00..14:30 none", T % "15:00")])
-    check(st == "red" and "journal was read" in why, "LOST + xid-read: when the record's journal WAS read -> refused "
-          "(the Xid would be in the record) (%s)" % why[:100])
+    check(st == "red" and "journal was read" in why, "LOST + xid-read: when the record's journal WAS read -> refused (%s)"
+          % why[:90])
     lostu = rec("LOST", T % "14:20", xid=None, journal_unreadable=True)
     st, why = E.judge([lostu, vrec("xid-read:2026-10-09T14:00..14:30 none", T % "15:00")])
     check(st == "green" and "xid-read" in why, "LOST + journal_unreadable + xid-read:<a window covering it> -> green (%s)"
@@ -158,43 +227,68 @@ def case_verdict_door(E):
     check(st == "red" and "does not cover" in why, "...a window that misses it -> refused (%s)" % why[:100])
     for cls in ("OOM", "CRASH"):
         r = rec(cls, T % "14:20")
-        st, why = E.judge([r, vrec("real:BUDGET-7 a class under-counted", T % "15:00")])
-        check(st == "red" and "ticket" in why, "%s + a ticket named alone -> refused (a CRASH is never cleared by a "
-              "ticket alone) (%s)" % (cls, why[:70]))
-        st, _ = E.judge([r, rec("PASS", T % "14:40"), vrec("real:BUDGET-7 fixed", T % "15:00")])
-        check(st == "green", "%s + real:<id> fixed + a PASS at the tip -> green" % cls)
-    xr = rec("CRASH", T % "14:20",
-             xid={"pid": 4242, "window": "2026-10-09T14:10:00+02:00..2026-10-09T14:20:00+02:00", "lines": ["NVRM: Xid 109"]},
-             box={"other_ctests": 3})
-    st, why = E.judge([xr, vrec("contention: four gates on the card", T % "15:00")] + [
-        rec("PASS", T % ("14:3%d" % i), retry=True) for i in range(3)], listed=True)
-    check(st == "red" and "DEFECT by law" in why, "CRASH + an xid in the record + contention: (3/3 solo, listed, a "
-          "competitor) -> refused (%s)" % why[:100])
+        st, why = E.judge([r, vrec("real:BUDGET-7", T % "15:00")])
+        check(st == "red" and "naming a ticket" in why, "%s + a registered id with no proof -> refused (%s)" % (cls, why[:60]))
+        st, _ = E.judge([r, rec("PASS", T % "14:40"), vrec("real:BUDGET-7", T % "15:00")])
+        check(st == "green", "%s + real:<registered id> + a PASS at the tip -> green" % cls)
+    xr = rec("CRASH", T % "14:20", box=BUSY,
+             xid={"pid": 4242, "window": "2026-10-09T14:10:00+02:00..2026-10-09T14:20:00+02:00", "lines": ["NVRM: Xid 109"]})
+    xok3 = [rec("PASS", T % ("14:3%d" % i), retry=True) for i in range(3)]
+    st, why = E.judge([xr, vrec("contention: four gates on the card", T % "15:00")] + xok3, listed=True)
+    check(st == "red" and "DEFECT by law" in why, "CRASH + an xid in the record + contention: -> refused (%s)" % why[:80])
     st, why = E.judge([xr, vrec("xid-read:2026-10-09T14:00..14:30 none", T % "15:00")])
-    check(st == "red" and "real:<defect id>" in why, "...and xid-read: on it -> refused too (only real:<id>)")
-    st, _ = E.judge([xr, rec("PASS", T % "14:40"), vrec("real:VIEWS-XID-1 fixed", T % "15:00")])
-    check(st == "green", "...real:<id> fixed + a PASS at the tip -> green")
-    st, why = E.judge([xr] + [rec("PASS", T % ("14:3%d" % i), retry=True) for i in range(3)], listed=True)
-    check(st == "red" and "DEFECT" in why, "an xid red on a contention-listed row is not cleared by 3/3 solo (%s)" % why[:80])
-    st, why = E.judge([rec("CRASH", T % "14:20")] + [rec("PASS", T % ("14:3%d" % i), retry=True) for i in range(3)],
-                      listed=True)
-    check(st == "red" and "never cleared by solos" in why, "a CRASH on a contention-listed row: no solo clearance (%s)"
-          % why[:90])
+    check(st == "red" and "real:<registered id>" in why, "...and xid-read: on it -> refused too (only real:<id>)")
+    st, _ = E.judge([xr, rec("PASS", T % "14:40"), vrec("real:VIEWS-XID-1", T % "15:00")])
+    check(st == "green", "...real:<registered id> + a PASS at the tip -> green")
+    st, why = E.judge([xr] + xok3, listed=True)
+    check(st == "red" and "DEFECT" in why, "an xid red on a contention row is not cleared by 3/3 solo (%s)" % why[:80])
+    st, why = E.judge([rec("CRASH", T % "14:20", box=BUSY)] + xok3, listed=True)
+    check(st == "red" and "never cleared by solos" in why, "a CRASH on a contention row: no solo clearance (%s)" % why[:80])
     for na in ("NOADMIT", "NOTRUN"):
-        st, _ = E.judge([rec(na, T % "10:00"), vrec("real:VIEWS-XID-1 fixed", T % "11:00")])
+        st, _ = E.judge([rec(na, T % "10:00"), vrec("real:VIEWS-XID-1", T % "11:00")])
         check(st == "missing", "%s + any verdict -> never cleared (missing)" % na)
-    # the CLI: a refused verdict is printed as `VERDICT REFUSED <row>: <why>` and the range stays refused
+    # the CLI: VERDICT REFUSED printed; a KNOWN RED passes a merge and refuses a push
     E.fresh()
     E.put(ROWS[:2], "PASS", "2026-01-01T10:00:00")
     E.put(ROWS[2:], "FAIL", "2026-01-01T10:00:01")
     rc, out = E.run("--verdict", "photon.view=looked fine to the reader")
     check(rc == 1 and "VERDICT REFUSED photon.view:" in out, "the CLI prints VERDICT REFUSED <row>: <why> and "
           "refuses (%d)" % rc)
-    rc, out = E.run("--verdict", "photon.view=real:FIXTURE-1 fixed")
-    check(rc == 1 and "VERDICT REFUSED photon.view:" in out, "...real:<id> fixed with no PASS at the tip -> refused (%d)" % rc)
+    rc, out = E.run("--verdict", "photon.view=real:FIXTURE-1")
+    check(rc == 1 and "VERDICT REFUSED photon.view:" in out, "...real:<id> with no proof -> refused (%d)" % rc)
     E.put(ROWS[2:], "FAIL", "2026-01-01T09:00:00", tip=E.git("rev-parse", "51e9f2c49"), retry=True)
-    rc, out = E.run("--verdict", "photon.view=real:FIXTURE-1 pre-existing on the base")
-    check(rc == 0, "...real:<id> pre-existing with a recorded solo red at the RANGE'S BASE -> accepted (%d)" % rc)
+    rc, out = E.run()
+    check(rc == 0 and "KNOWN RED photon.view" in out, "...the red reproduced by a recorded solo at the RANGE'S BASE -> "
+          "KNOWN RED: the merge passes it (%d)" % rc)
+    for mode in ("push", "stage-close"):
+        rc, out = E.run("--mode", mode)
+        check(rc == 1 and "KNOWN RED" in out, "...and a %s refuses it: never push on a red (%d)" % (mode, rc))
+    # N5: a lane-tool PASS (tier `lane`) never answers a row for the judge
+    E.fresh()
+    E.put(ROWS[:2], "PASS", "2026-01-01T10:00:00")
+    E.put(ROWS[2:], "PASS", "2026-01-01T10:00:00", tier="lane")
+    rc, out = E.run()
+    check(rc == 1 and "no record" in out, "a lane-tool PASS (tier lane) does not answer a row the gate never ran (%d)" % rc)
+    # the abort's droppedRed: 3/3 solo, whatever else answered it
+    E.fresh()
+    E.put(ROWS, "PASS", "2026-01-01T10:00:00")
+    E.rl.append_records([{"schema": 2, "kind": "abort", "suite": "(abort)", "arm": None, "verdict": "ABORT",
+                          "ts": "2026-01-01T10:30:00", "droppedRed": ["photon.view"],
+                          "tip": {"studio": E.tip, "studio_dirty": False, "irisgl": E.pin, "irisgl_dirty": False}}],
+                        "scoped", E.tip)
+    E.put(ROWS[2:], "PASS", "2026-01-01T10:40:00")
+    rc, out = E.run()
+    check(rc == 1 and "DROPPED RED" in out, "a row the abort dropped RED stays red after a quiet PASS (%d)" % rc)
+    for k in range(3): E.put(ROWS[2:], "PASS", "2026-01-01T10:5%d:00" % k, retry=True)
+    rc, out = E.run()
+    check(rc == 0, "...until 3/3 solo PASS after the abort (%d)" % rc)
+    # overrides: the push refuses a candidate whose records carry any
+    E.fresh()
+    E.put(ROWS, "PASS", "2026-01-01T10:00:00", overrides=["JAH_GATE_SLOT=0"])
+    rc, out = E.run()
+    rc2, out2 = E.run("--mode", "push")
+    check(rc == 0 and rc2 == 1 and "OVERRIDES" in out2, "a merge reads overrides; a push refuses a candidate carrying "
+          "any (%d, %d)" % (rc, rc2))
 
 
 def case_noadmit_pool(E):
@@ -244,7 +338,7 @@ def case_carried_red(E):
     E.put(ROWS, "PASS", "2026-01-01T10:00:00")
     E.put(["test_engine"], "FAIL", "2026-01-01T09:00:00", tip=A)
     E.put(["test_engine"], "FAIL", "2026-01-01T08:00:00", tip=E.git("rev-parse", "51e9f2c49"), retry=True)
-    rc, out = E.run("--verdict", "test_engine=real:FIXTURE-1 pre-existing: the old tip's red, reproduced on the base")
+    rc, out = E.run("--verdict", "test_engine=real:FIXTURE-1 the old tip's red, reproduced on the base")
     vfiles = [f for f in os.listdir(os.environ["JAH_RUN_LOG_DIR"]) if "-verdict-aaaaaaaaa" in f]
     check(rc == 0 and vfiles, "...a verdict at A (recorded AT A) -> accepted (%d, %s)" % (rc, vfiles))
     rc, out = E.run()
@@ -256,9 +350,16 @@ def case_carried_red(E):
     check(rc == 1 and "VERDICT REFUSED test_engine" in out, "...a verdict at A that fails the door -> refused (%d)" % rc)
     E.fresh()
     E.put(ROWS, "PASS", "2026-01-01T10:00:00")
-    E.put(["test_engine"], "FAIL", "2026-01-01T09:00:00", tip=A, lane=None, lanes=["lane-y", "lane-x"])
+    E.put(["test_engine"], "FAIL", "2026-01-01T09:00:00", tip=A, lane=None, lanes=["lane-x"])
     rc, out = E.run()
-    check(rc == 1 and "OPEN RED carried" in out, "BATCH-GATE-1's `lanes` list is read as well as `lane` (%d)" % rc)
+    check(rc == 1 and "OPEN RED carried" in out, "BATCH-GATE-1's `lanes == [lane-x]` carries like `lane` (%d)" % rc)
+    for name, kw in (("a batch's record (lanes [lane-y, lane-x])", {"lanes": ["lane-y", "lane-x"]}),
+                     ("a record with a `batch` tag", {"lanes": ["lane-x"], "batch": "batch-a"})):
+        E.fresh()
+        E.put(ROWS, "PASS", "2026-01-01T10:00:00")
+        E.put(["test_engine"], "FAIL", "2026-01-01T09:00:00", tip=A, lane=None, **kw)
+        rc, out = E.run()
+        check(rc == 0 and "OPEN RED" not in out, "%s never carries to a lane (%d)" % (name, rc))
     E.fresh()
     E.put(ROWS, "PASS", "2026-01-01T10:00:00")
     E.put(["test_engine"], "FAIL", "2026-01-01T09:00:00", tip=A, lane="another-lane")
@@ -273,29 +374,52 @@ def case_carried_red(E):
 
 
 def case_contention_shape(E):
+    """THE REGISTRY'S SHAPE (TESTING_V3 §1.5) — the contention class is its nondeterminism subset."""
     E.fresh()
     E.put(ROWS, "PASS", "2026-01-01T10:00:00")
-    for miss in ("date", "recheck", "reason"):
-        e = {"reason": "r", "date": "2026-10-09", "recheck": "after P1 lands: solo 3x"}
+    for miss in ("first_seen", "recheck", "kind", "found_by", "rows", "cause", "state"):
+        e = defect("SHAPE-1", ["photon.view"])
         del e[miss]
-        E.contention({"photon.view": e})
+        E.registry([e])
         rc, out = E.run()
         check(rc == 2 and "without the shape" in out and miss in out,
-              "an entry missing `%s` -> the judge refuses to load the list, exit 2 (%d)" % (miss, rc))
-    E.contention({"photon.view": "a reason as a bare string (the old shape)"})
+              "an entry missing `%s` -> the judge refuses to load the registry, exit 2 (%d)" % (miss, rc))
+    for name, e in (("a kind outside the five", defect("SHAPE-1", ["x"], "flake")),
+                    ("a state outside open|fixed{tip}|retired", defect("SHAPE-1", ["x"], state="closed")),
+                    ("first_seen.run without a date", defect("SHAPE-1", ["x"], first_seen={"tip": "a", "pin": "b", "run": "last week"})),
+                    ("found_by outside read|gate|owner|lane", defect("SHAPE-1", ["x"], found_by="agent")),
+                    ("a recheck that is not a DATE", defect("SHAPE-1", ["x"], recheck="after P1 lands")),
+                    ("a nondeterminism entry neither single-use nor enrolled",
+                     defect("SHAPE-1", ["x"], "nondeterminism", enrolled=None)),
+                    ("a NOT REPRODUCED entry without suspects / census",
+                     defect("SHAPE-1", ["x"], "nondeterminism", uses=1))):
+        E.registry([e])
+        rc, out = E.run()
+        check(rc == 2 and "without the shape" in out, "%s -> refused (%d)" % (name, rc))
+    E.registry([defect("DUP-1", ["x"]), defect("DUP-1", ["y"])])
     rc, out = E.run()
-    check(rc == 2 and "not an object" in out, "an entry in the old string shape -> refused (%d)" % rc)
-    E.contention({"photon.view": {"reason": "r", "date": "last week", "recheck": "x"}})
+    check(rc == 2 and "duplicate" in out, "a duplicate id -> refused (%d)" % rc)
+    E.registry([defect("SHAPE-1", ["photon.view"], state={"fixed": {"tip": "abc"}}), NONDET])
     rc, out = E.run()
-    check(rc == 2 and "YYYY-MM-DD" in out, "an undated entry (a date that is not YYYY-MM-DD) -> refused (%d)" % rc)
-    E.contention({"photon.view": {"reason": "r", "date": "2026-10-09", "recheck": "after P1 lands: solo 3x"}})
-    rc, out = E.run()
-    check(rc == 0, "a list whose every entry has {reason, date, recheck} loads (%d)" % rc)
-    live = os.path.join(E.rl.workspace_root(), "testing", "contention.json")
-    if os.path.exists(live):
-        os.environ["JAH_CONTENTION_FILE"] = live
-        s, why = E.rl.contention_load()
-        print("  (the workspace's live list %s: %s)" % (live, "loads, %d entries" % len(s) if s is not None else why[:160]))
+    check(rc == 0, "a registry whose every entry has the shape loads (%d)" % rc)
+    # BATCH-GATE-1's pending entries (testing/defects.pending/<id>.json) are read with the registry
+    pend = E.rl.defects_pending_dir()
+    os.makedirs(pend, exist_ok=True)
+    json.dump(defect("PENDING-1", ["api.contract"]), open(os.path.join(pend, "PENDING-1.json"), "w"))
+    d, why = E.rl.defects_load()
+    check(d is not None and "PENDING-1" in d, "a pending entry (defects.pending/<id>.json) is ingested (%s)" % why)
+    json.dump(defect("NONDET-FIXTURE-1", ["x"]), open(os.path.join(pend, "DUP.json"), "w"))
+    d, why = E.rl.defects_load()
+    check(d is None and "duplicate" in (why or ""), "...a pending id that collides with the registry's -> refused")
+    import shutil
+    shutil.rmtree(pend)
+    cl = E.rl.contention_list()
+    check(list(cl or {}) == ["photon.view"] and "NONDET-FIXTURE-1" in cl["photon.view"],
+          "the contention class = the open nondeterminism entries (%s)" % cl)
+    live = E.rl.defects_file.__globals__["workspace_root"]()
+    for f in ("contention.json", "defects.json"):
+        print("  (the workspace's testing/%s: %s)" % (f, "present" if os.path.exists(os.path.join(live, "testing", f))
+                                                     else "absent"))
 
 
 def case_log_schema2(E):
@@ -344,6 +468,11 @@ def case_log_schema2(E):
     check(set(mem) == {"psi10", "swap_used_mb", "builds"} and (not sys.platform.startswith("linux") or (
         isinstance(mem["psi10"], float) and isinstance(mem["builds"], int))), "box.mem = {psi10, swap_used_mb, builds} (%s)"
           % mem)
+    cen = (one.get("box") or {}).get("census") or {}
+    check(set(cen) == {"gpu_apps", "other_ctests", "builds", "psi10_mem", "psi10_io"}
+          and (not sys.platform.startswith("linux") or isinstance(cen["builds"], int)),
+          "box.census = the competitor census {gpu_apps (outside the gate), other_ctests, builds, psi10_mem, psi10_io} (%s)"
+          % {k: (v if k != "gpu_apps" else (len(v) if v is not None else None)) for k, v in cen.items()})
     check("xid" in one and one["xid"] is None and "journal_unreadable" not in one, "a row with no fault carries xid: null")
     R = E.rl._Run("scoped", "verdict-test", 1, None, None, None, False, {}, False, None)
     R.sampler.stop()
