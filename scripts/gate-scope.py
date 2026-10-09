@@ -2214,7 +2214,8 @@ def main():
                          "docs/TESTING_GATE.md quotes instead of a copy of the -LE set")
     ap.add_argument("--attribute", metavar="ROW[,ROW...]", action="append", default=None,
                     help="a BATCH red (BATCH-GATE-1): run each row --times times solo on each lane's OWN tip "
-                         "(--lanes), print the attribution table; never takes the gate slot")
+                         "(--lanes), print the attribution table; a whole-card hold, so it takes the gate slot "
+                         "first (GATE-COST-2)")
     ap.add_argument("--lanes", metavar="LANE:WORKTREE:TIP", nargs="+", default=None,
                     help="with --attribute: the batch's lanes, each its worktree (built) and its exact Studio tip")
     ap.add_argument("--candidate", metavar="RC_TREE:TIP", default=None,
