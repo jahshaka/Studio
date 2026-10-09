@@ -222,6 +222,9 @@ def _real(m, row, reds, solos, defects, tip_recs, base_recs, tip_sha=None, mode=
         return False, (f"real:{did} is a nondeterminism entry — a {'/'.join(hard) or 'red with an Xid'} takes only a "
                        f"`kind: defect` entry (a crash, a loss, an Xid is never nondeterminism)"), False
     if e["kind"] == "nondeterminism":
+        if gate_runlog.single_use(e) and mode != "merge":
+            return False, (f"real:{did} is a SINGLE-USE NOT REPRODUCED entry: it clears the merge that registered it, "
+                           f"never a {mode}"), False
         if gate_runlog.single_use(e):
             at = (e.get("first_seen") or {}).get("tip") or ""
             if not (tip_sha and at and tip_sha.startswith(at)):
@@ -229,7 +232,7 @@ def _real(m, row, reds, solos, defects, tip_recs, base_recs, tip_sha=None, mode=
                                f"that registered it; a later red needs the lead's `defect enrol` (a measured rate and "
                                f"the census) or its own verdict"), False
         if _solos_ok(solos):
-            return True, f"real:{did} (nondeterminism, {len(solos)}/{len(solos)} solo PASS)", False
+            return True, f"real:{did} (nondeterminism, {len(solos)}/{len(solos)} solo PASS)", "nondet"
         return False, f"real:{did} is a nondeterminism entry: it clears only by 3/3 solo PASS after the red", False
     last = max(_when(r) for r in reds)
     red_shas = {_sha(r) for r in reds}
@@ -249,7 +252,7 @@ def _real(m, row, reds, solos, defects, tip_recs, base_recs, tip_sha=None, mode=
     if same:
         return True, (f"real:{did} KNOWN RED (the same {lane_red.get('verdict')}"
                       f"{' — ' + masked(lane_red.get('failLine'))[:60] if lane_red.get('failLine') else ''} reproduced by a "
-                      f"recorded solo at the base)"), True
+                      f"recorded solo at the base)"), "known"
     other = [r for r in (base_recs or []) if r.get("kind") != "verdict" and r.get("retry")
              and r.get("verdict") not in ("PASS",) + NEVER_RAN]
     if other:
@@ -260,7 +263,7 @@ def _real(m, row, reds, solos, defects, tip_recs, base_recs, tip_sha=None, mode=
                    f"same red reproduced by a recorded solo at the BASE proves it — naming a ticket clears nothing"), False
 
 
-def door(text, reds, solos, row, defects=None, tip_recs=None, base_recs=None, tip_sha=None):
+def door(text, reds, solos, row, defects=None, tip_recs=None, base_recs=None, tip_sha=None, mode="merge"):
     """(ok, why, known) — may this verdict text clear these reds (the open reds logged before it)?
     `solos`: the solo retries after the reds' last gate red (any time — a verdict may be written before its
     solos run); `row`: the row (or pool.arm) name; `defects`: the loaded registry; `tip_recs` / `base_recs`:
@@ -275,7 +278,7 @@ def door(text, reds, solos, row, defects=None, tip_recs=None, base_recs=None, ti
     contention = gate_runlog.contention_of(defects)
     xid = [r for r in reds if r.get("xid")]
     if xid:
-        if real: return _real(real, row, reds, solos, defects, tip_recs, base_recs, tip_sha)
+        if real: return _real(real, row, reds, solos, defects, tip_recs, base_recs, tip_sha, mode)
         x = xid[-1]["xid"]
         return False, (f"the red carries an Xid from the row's own process (pid {x.get('pid')}, "
                        f"{x.get('window')}) — a DEFECT by law: only real:<registered id> clears it"), False
@@ -286,7 +289,7 @@ def door(text, reds, solos, row, defects=None, tip_recs=None, base_recs=None, ti
     hard = kinds & set(HARD)
     if hard:
         cls = "/".join(sorted(hard))
-        if real: return _real(real, row, reds, solos, defects, tip_recs, base_recs, tip_sha)
+        if real: return _real(real, row, reds, solos, defects, tip_recs, base_recs, tip_sha, mode)
         w = _xid_window(text)
         if w:
             if not all(r.get("journal_unreadable") for r in reds if r.get("verdict") in HARD):
@@ -299,7 +302,7 @@ def door(text, reds, solos, row, defects=None, tip_recs=None, base_recs=None, ti
                            f"does not cover the {cls} at {last.isoformat(timespec='minutes')}"), False
         return False, (f"a verdict on a {cls} is real:<registered id> (or xid-read:<window> when the journal was "
                        f"unreadable) — a {cls} is never contention"), False
-    if real: return _real(real, row, reds, solos, defects, tip_recs, base_recs, tip_sha)
+    if real: return _real(real, row, reds, solos, defects, tip_recs, base_recs, tip_sha, mode)
     if CONTENTION_TOKEN.search(text):
         if row not in contention:
             return False, ("contention: clears only a row with an OPEN dated `nondeterminism` entry in the defect "
@@ -311,20 +314,22 @@ def door(text, reds, solos, row, defects=None, tip_recs=None, base_recs=None, ti
                            f"own queue or drain) — the red at {_when(bare[-1]).isoformat(timespec='minutes')} shows none"), False
         if _solos_ok(solos):
             return True, (f"contention: ({contention[row]['id']}; {census_of([r for r in reds if not r.get('retry')][-1])[0]}) "
-                          f"with {spass}/{len(solos)} solo PASS"), False
+                          f"with {spass}/{len(solos)} solo PASS"), "nondet"
         return False, f"contention: needs 3/3 solo PASS after the red ({spass}/{len(solos)}) — gate-scope.sh --solo <row>", False
     return False, ("a verdict carries a registered fact: real:<id> (in testing/defects.json, proved by a PASS at the tip "
                    "or the red reproduced on the base) or contention: (a nondeterminism row, a competitor census, 3/3 "
                    "solo) — nothing accepts prose"), False
 
 
-def judge(key, recs, defects, tip_recs=None, base_recs=None, tip_sha=None):
-    """(state, why) for one row/arm: state 'green' | 'known' | 'missing' | 'red'.
+def judge(key, recs, defects, tip_recs=None, base_recs=None, tip_sha=None, mode="merge"):
+    """(state, why) for one row/arm: state 'green' | 'known' | 'nondet' | 'missing' | 'red'.
 
     `defects`: the loaded registry (gate_runlog.defects_load()); its open `nondeterminism` entries are the
     contention class. `tip_recs` / `base_recs`: the row's records at the range's tip and base (the door's
     proofs; `tip_recs` defaults to `recs`). 'known' = KNOWN RED (a registered defect reproduced on the base):
-    a merge passes it, a push or a stage close refuses it.
+    a merge passes it, a push or a stage close refuses it. 'nondet' = cleared as nondeterminism (an enrolled /
+    single-use entry, `contention:`, the class's 3/3): a merge passes it, a push or stage close re-asks 3/3 solo at
+    the candidate. `mode` (merge | push | stage-close): a single-use entry never clears outside a merge.
 
     A run that never happened (NOADMIT; NOTRUN) is no run: a row with only those is MISSING, which no verdict
     clears. A VERDICT is per row and timestamped: it clears only the reds logged BEFORE it, and only through
@@ -347,15 +352,17 @@ def judge(key, recs, defects, tip_recs=None, base_recs=None, tip_sha=None):
         last_gate = max((_when(r) for r in pending if not r.get("retry")), default=None)
         solos = [r for r in runs if r.get("retry") and last_gate is not None and _when(r) > last_gate]
         ok, why, kn = door(v.get("text"), pending, solos, row, defects,
-                           tip_recs=recs if tip_recs is None else tip_recs, base_recs=base_recs, tip_sha=tip_sha)
+                           tip_recs=recs if tip_recs is None else tip_recs, base_recs=base_recs, tip_sha=tip_sha,
+                           mode=mode)
         if ok:
-            cleared, accepted, refused, known = tv, (v, why), None, known or kn
+            cleared, accepted, refused = tv, (v, why), None
+            known = "known" if "known" in (known, kn) else (kn or known)
         else:
             refused = (v, why)
     open_reds = [r for r in reds if cleared is None or _when(r) > cleared]
     if not open_reds:
         v, why = accepted
-        return ("known" if known else "green"), f"recorded verdict ({why}): " + (v.get("text") or "")[:120]
+        return (known or "green"), f"recorded verdict ({why}): " + (v.get("text") or "")[:120]
     if refused is not None:
         return "red", f"VERDICT REFUSED: {refused[1]} — the verdict read: " + (refused[0].get("text") or "")[:100]
     reds = open_reds
@@ -387,7 +394,7 @@ def judge(key, recs, defects, tip_recs=None, base_recs=None, tip_sha=None):
                        "the gate, no sibling ctest, no build, no pressure): the solos do not clear it")
     if len(solos) < SOLO_NEEDED:
         return "red", f"contention-class: {len(solos)}/{SOLO_NEEDED} solo PASS after its gate red (the law is 3/3)"
-    return "green", (f"contention-class ({gate_runlog.contention_of(defects).get(row, gate_runlog.contention_of(defects).get(name))['id']}; "
+    return "nondet", (f"contention-class ({gate_runlog.contention_of(defects).get(row, gate_runlog.contention_of(defects).get(name))['id']}; "
                      f"{census_of(gate_reds[-1])[0]}), {len(solos)}/{len(solos)} solo PASS after the red")
 
 
@@ -496,6 +503,7 @@ def record_verdicts(pairs, tip_sha, pin):
 
 
 MODES = ("merge", "push", "stage-close")
+PASSING = ("green", "known", "nondet")    # judge() states a merge accepts (known / nondet are re-asked at a push)
 
 
 def check(rng, build, gs=None, verdicts=None, mode="merge", lane=None):
@@ -559,10 +567,11 @@ def check(rng, build, gs=None, verdicts=None, mode="merge", lane=None):
         tip_fork = fork_pin(gs, pin)
         have_earlier = [c for c in earlier if got[c]]
         for k in need:
-            ctx = dict(tip_recs=got[tip_sha].get(k, []), base_recs=got.get(base_sha, {}).get(k, []), tip_sha=tip_sha)
+            ctx = dict(tip_recs=got[tip_sha].get(k, []), base_recs=got.get(base_sha, {}).get(k, []), tip_sha=tip_sha,
+                       mode=mode)
             st, why = judge(k, got[tip_sha].get(k, []), defects, **ctx)
             src = tip_sha
-            if st in ("green", "known") and have_earlier:
+            if st in PASSING and have_earlier:
                 if reach is None:
                     reach = Reach(gs, build, tip_sha, tip_fork)
                 for c in have_earlier:
@@ -592,7 +601,7 @@ def check(rng, build, gs=None, verdicts=None, mode="merge", lane=None):
                     if cst == "missing": continue
                     st, src = cst, c
                     why = (f"re-used from {c[:9]} ({c[:9]}..{tip_sha[:9]} does not reach it)"
-                           + (f"; {cwhy}" if cwhy else "")) if cst in ("green", "known") else \
+                           + (f"; {cwhy}" if cwhy else "")) if cst in PASSING else \
                           (f"red at {c[:9]}, the newest run of it on the lane ({c[:9]}..{tip_sha[:9]} does not reach "
                            f"it; answer it there): {cwhy}")
                     break
@@ -615,13 +624,13 @@ def check(rng, build, gs=None, verdicts=None, mode="merge", lane=None):
         for t, recs in lane_records(lanes, {tip_sha, base_sha, *earlier}).items():
             for k, rs in recs.items():
                 cst, cwhy = judge(k, rs, defects, tip_recs=got[tip_sha].get(k, []),
-                                  base_recs=got.get(base_sha, {}).get(k, []), tip_sha=tip_sha)
+                                  base_recs=got.get(base_sha, {}).get(k, []), tip_sha=tip_sha, mode=mode)
                 if cst != "red": continue
                 last = max(_when(r) for r in rs if r.get("kind") != "verdict" and r.get("verdict") != "PASS")
                 at_tip = got[tip_sha].get(k, [])
                 later = [r for r in at_tip if r.get("kind") != "verdict" and r.get("verdict") not in NEVER_RAN
                          and _when(r) > last]
-                if later and judge(k, at_tip, defects, tip_sha=tip_sha)[0] in ("green", "known"): continue
+                if later and judge(k, at_tip, defects, tip_sha=tip_sha, mode=mode)[0] in PASSING: continue
                 carried[(t, k)] = cwhy
         return out
 
@@ -664,16 +673,24 @@ def check(rng, build, gs=None, verdicts=None, mode="merge", lane=None):
     red = [f"{label(k)}: {why}" for k, (st, why, _) in judged.items() if st == "red"]
     if mode != "merge":
         red += [f"{label(k)}: KNOWN RED — {judged[k][1]} (a {mode} never passes a red)" for k in known]
+        # F4: a row cleared as NONDETERMINISM must be 3/3 green AT THE CANDIDATE for a push / stage close
+        for k in need:
+            if judged[k][0] != "nondet": continue
+            solos = sorted((r for r in got_now.get(tip_sha, {}).get(k, []) if r.get("retry")), key=_when)[-SOLO_NEEDED:]
+            if not _solos_ok(solos):
+                red.append(f"{label(k)}: cleared as nondeterminism ({judged[k][1][:80]}) but not 3/3 solo green at the "
+                           f"candidate {tip_sha[:9]} ({sum(1 for r in solos if r.get('verdict') == 'PASS')}/{len(solos)}) "
+                           f"— a {mode} re-asks it there")
         # every law switch is written into the records as `overrides`: a push / stage close refuses a candidate
         # whose records carry any (TESTING_V3 §1.2)
         ov = sorted({str(o) for rs in got_now.get(tip_sha, {}).values() for r in rs for o in (r.get("overrides") or [])})
         if ov:
             red.append(f"OVERRIDES in the candidate's records ({', '.join(ov[:6])}) — a {mode} refuses them")
     cleared = [f"{label(k)}: {why}" for k, (st, why, src) in judged.items()
-               if st == "green" and why and src == tip_sha]
+               if st in ("green", "nondet") and why and src == tip_sha]
     reused = {}
     for k, (st, _, src) in judged.items():
-        if st in ("green", "known") and src != tip_sha: reused[src] = reused.get(src, 0) + 1
+        if st in PASSING and src != tip_sha: reused[src] = reused.get(src, 0) + 1
     reasons = []
     if missing: reasons.append(f"{len(missing)} of {len(need)} row(s) of {what} have no record at {tip_sha[:9]} "
                                f"(nor a re-usable one earlier on the lane): {missing[:8]}")

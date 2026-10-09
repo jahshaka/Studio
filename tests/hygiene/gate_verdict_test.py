@@ -171,13 +171,17 @@ def case_verdict_door(E):
     nd = {e["id"]: e for e in FIXTURE_DEFECTS + [NONDET]}
     ok3 = [rec("PASS", T % ("10:%02d" % (10 + i)), retry=True) for i in range(3)]
     st, why = E.judge([red] + ok3 + [vrec("real:NONDET-FIXTURE-1 enrolled", T % "11:00")], defects=nd)
-    check(st == "green" and "3/3" in why, "real:<an enrolled nondeterminism id> + 3/3 solo -> green (%s)" % why[:80])
+    check(st == "nondet" and "3/3" in why, "real:<an enrolled nondeterminism id> + 3/3 solo -> cleared as nondeterminism "
+          "(%s)" % why[:80])
     tip = E.tip
     nr = defect("NOTREPRO-1", ["photon.view"], "nondeterminism", uses=1, suspects=["lane-x"], census={"other_ctests": 1},
                 first_seen={"tip": tip[:9], "pin": "0" * 9, "run": "20261009T120000-" + tip[:9]})
     one = {"NOTREPRO-1": nr}
     st, why = E.cgc.judge(("photon.view", None), [red] + ok3 + [vrec("real:NOTREPRO-1", T % "11:00")], one, tip_sha=tip)
-    check(st == "green", "a SINGLE-USE NOT REPRODUCED entry clears its own merge's red by 3/3 (%s)" % why[:70])
+    check(st == "nondet", "a SINGLE-USE NOT REPRODUCED entry clears its own merge's red by 3/3 (%s)" % why[:70])
+    st, why = E.cgc.judge(("photon.view", None), [red] + ok3 + [vrec("real:NOTREPRO-1", T % "11:00")], one, tip_sha=tip,
+                          mode="push")
+    check(st == "red" and "never a push" in why, "F4: ...never a push, even at the sha that registered it (%s)" % why[:70])
     st, why = E.cgc.judge(("photon.view", None), [red] + ok3 + [vrec("real:NOTREPRO-1", T % "11:00")], one, tip_sha="b" * 40)
     check(st == "red" and "SINGLE-USE" in why, "...and never a red at another tip (a later merge, a push) (%s)" % why[:80])
     check(not E.rl.contention_of(one), "...and it is never the contention class (only an ENROLLED entry is)")
@@ -219,11 +223,12 @@ def case_verdict_door(E):
         r = rec("FAIL", T % "10:00", box={"census": dict({"gpu_apps": [], "other_ctests": 0, "builds": 0, "psi10_mem": 0.0,
                                                           "psi10_io": 0.0}, **c)})
         st, why = E.judge([r] + ok3 + [vrec("contention: measured", T % "11:00")], listed=True)
-        check(st == "green" and "3/3" in why, "contention: + a listed row + %s in the census + 3/3 solo -> green" % name)
+        check(st == "nondet" and "3/3" in why, "contention: + a listed row + %s in the census + 3/3 solo -> cleared as "
+              "nondeterminism" % name)
     st, why = E.judge([busy, vrec("contention: load 14 beside two gates", T % "11:00")], listed=True)
     check(st == "red" and "3/3 solo" in why, "contention: with no solos -> refused (%s)" % why[:100])
     st, _ = E.judge([busy, vrec("contention: load 14 beside two gates", T % "10:05")] + ok3, listed=True)
-    check(st == "green", "...and once its 3/3 solos run after it, the same verdict clears it (written before them)")
+    check(st == "nondet", "...and once its 3/3 solos run after it, the same verdict clears it (written before them)")
     # LOST / OOM / CRASH
     lost = rec("LOST", T % "14:20", xid=None)
     st, why = E.judge([lost, vrec("environmental: a device loss beside four gates, no Xid", T % "15:00")])
@@ -288,6 +293,22 @@ def case_verdict_door(E):
     for mode in ("push", "stage-close"):
         rc, out = E.run("--mode", mode)
         check(rc == 1 and "KNOWN RED" in out, "...and a %s refuses it: never push on a red (%d)" % (mode, rc))
+    # F4: a row cleared as NONDETERMINISM must be 3/3 solo green AT THE CANDIDATE for a push (patched judge: every
+    # row "nondet", no solo at the tip)
+    E.fresh()
+    E.put(ROWS, "PASS", "2026-01-01T10:00:00")
+    real_judge = E.cgc.judge
+    E.cgc.judge = lambda *a, **k: ("nondet", "cleared as nondeterminism (the patched fixture)")
+    try:
+        ok_m, _ = E.cgc.check(RANGE, E.build, mode="merge")
+        ok_p, why_p = E.cgc.check(RANGE, E.build, mode="push")
+        for k in range(3): E.put(ROWS, "PASS", "2026-01-01T11:0%d:00" % k, retry=True)
+        ok_p3, _ = E.cgc.check(RANGE, E.build, mode="push")
+    finally:
+        E.cgc.judge = real_judge
+    check(ok_m and not ok_p and any("not 3/3 solo green at the candidate" in w for w in why_p) and ok_p3,
+          "F4: a nondeterminism-cleared row passes a merge, is re-asked 3/3 at the push candidate (refused with 0/0, "
+          "accepted with 3/3) (%s, %s, %s)" % (ok_m, ok_p, ok_p3))
     # N5: a lane-tool PASS (tier `lane`) never answers a row for the judge
     E.fresh()
     E.put(ROWS[:2], "PASS", "2026-01-01T10:00:00")
