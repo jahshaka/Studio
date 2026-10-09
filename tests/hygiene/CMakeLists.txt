@@ -176,6 +176,17 @@ if(Python3_Interpreter_FOUND)
                      "${CMAKE_SOURCE_DIR}" "${CMAKE_BINARY_DIR}")
     set_tests_properties(gate.fix_round PROPERTIES TIMEOUT 600 LABELS "hygiene")
     jah_no_display(gate.fix_round)
+    # gate.cost — HOW GATES SHARE THE BOX (GATE-COST-1; SPECS/audits/GATE_COST_2026-10-09.md): one gate at
+    # a time on the box-wide slot (FIFO, the position printed), a NOADMIT row re-queued in the same run and
+    # recorded once, each row's record written as it ends (a killed ctest keeps what it finished; --resume
+    # runs the rest), a dead display stops the run with its verdict line, the hygiene rows' CPU phase before
+    # any GPU row, the whole card held once per timing phase and by the target step. A toy ctest project,
+    # a private token directory, run log and fake X server (~15 s).
+    add_test(NAME gate.cost
+             COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/gate_cost_test.py"
+                     "${CMAKE_SOURCE_DIR}" "${CMAKE_BINARY_DIR}")
+    set_tests_properties(gate.cost PROPERTIES TIMEOUT 180 LABELS "hygiene")
+    jah_no_display(gate.cost)
 endif()
 
 # source.member_init — UNINIT-SWEEP-1: every scalar, pointer and enum member of ours
