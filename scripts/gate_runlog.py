@@ -71,16 +71,6 @@ def lane_list(lane):
     return out
 
 
-def record_lanes(r):
-    """The lanes a record names: `lanes` (the list, since BATCH-GATE-1), else the one `lane` string the
-    records written before it carry — the run log is history, and its readers read all of it."""
-    v = r.get("lanes")
-    if isinstance(v, list):
-        return [str(x) for x in v]
-    old = r.get("lane")
-    return [old] if old else []
-
-
 def check_tier(tier):
     if tier not in TIERS:
         raise ValueError(f"gate_runlog: tier '{tier}' is not one of {', '.join(TIERS)} (testing/runs/README.md)")
@@ -1230,7 +1220,7 @@ def trend_series(days=30, suites=None):
             if v is None:
                 continue
             key = (r["suite"], tkey, _condition(r))
-            e = acc.setdefault(key, {}).setdefault(tip, {"ts": r.get("ts") or "", "lane": "+".join(record_lanes(r)) or "?", "v": []})
+            e = acc.setdefault(key, {}).setdefault(tip, {"ts": r.get("ts") or "", "lane": "+".join(r.get("lanes") or []) or "?", "v": []})
             e["ts"] = min(e["ts"], r.get("ts") or e["ts"])
             e["v"].append(v)
     out = {}
