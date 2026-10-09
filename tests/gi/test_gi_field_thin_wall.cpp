@@ -50,7 +50,7 @@
 //      target sample count K is derived from (K = ceil((2 sigma / e)^2), e the
 //      wall's trilinear edge uncertainty 1 - ((n-1)/n)^2: the converged mean's
 //      two-sigma error inside what the store itself can resolve).
-//   2. THE SAME SET NOT ROTATED (JAHSHAKA_GI_FIELD_STATIC): its reading does not move
+//   2. THE SAME SET NOT ROTATED (the arm gi.fieldStatic): its reading does not move
 //      from integration to integration - that is the aliasing, stated as a number.
 //   3. CONVERGENCE at the shipped K and budget 1: the frames until the field owes
 //      nothing (K frames, printed), the converged reading inside part 1's bar, and at
@@ -376,11 +376,10 @@ struct Noise { double mean = 0, sd = 0; int n = 0; };
 static Noise sampleNoise(Fixture &f, double lat, int k)
 {
     Noise out;
-    char buf[16];
-    std::snprintf(buf, sizeof(buf), "%d", k);
-    ::setenv("JAHSHAKA_GI_FIELD_SAMPLES", buf, 1);
+    // the arm is latched by buildWith's own frames, before the build reads it
+    f.e->setArm("gi.fieldSamples", double(k));
     buildWith(f, lat, 0.4, 0.4, 1, 0);
-    ::unsetenv("JAHSHAKA_GI_FIELD_SAMPLES");
+    f.e->setArm("gi.fieldSamples", 0.0);
     std::vector<double> v;
     Reading prev = readProbe(f, lat, 0.4, 0.4, true);
     if (prev.ok && prev.count >= 1.0) v.push_back(prev.ratio * prev.count);
@@ -474,15 +473,15 @@ static int runAlias(Fixture &f)
                          { "1", true, 0.0, {} } };
     const int M = 48;
     for (NoiseArm &a : arms) {
-        ::setenv("JAHSHAKA_GI_FIELD_RAYS", a.rays, 1);
-        if (a.fixed) ::setenv("JAHSHAKA_GI_FIELD_STATIC", "1", 1);
+        f.e->setArm("gi.fieldRays", std::atof(a.rays));
+        if (a.fixed) f.e->setArm("gi.fieldStatic", 1.0);
         a.n = sampleNoise(f, a.lat, M);
-        ::unsetenv("JAHSHAKA_GI_FIELD_STATIC");
+        f.e->setArm("gi.fieldStatic", 0.0);
         std::printf("   %s ray%s a texel, %s set, lateral %.3f: %d integrations, mean %.3f of the truth, "
                     "sigma %.3f\n", a.rays, a.rays[0] == '1' ? "" : "s", a.fixed ? "STATIC" : "rotated",
                     a.lat, a.n.n, a.n.mean, a.n.sd);
     }
-    ::unsetenv("JAHSHAKA_GI_FIELD_RAYS");
+    f.e->setArm("gi.fieldRays", 0.0);
     const double sigma1 = std::max(arms[0].n.sd, std::max(arms[1].n.sd, arms[2].n.sd));
     const double sigma2 = arms[3].n.sd;
     for (int i = 0; i < 3; ++i)
@@ -540,10 +539,10 @@ static int runAlias(Fixture &f)
                  "(the frame-to-frame variance at rest is 0)");
 
     // ---- 4. 1 RAY AGAINST 2 RAYS, and the cost -------------------------------
-    ::setenv("JAHSHAKA_GI_FIELD_RAYS", "2", 1);
+    f.e->setArm("gi.fieldRays", 2.0);
     buildConverged(f, lat, 0.4, 0.4);
     const Reading two = readProbe(f, lat, 0.4, 0.4);
-    ::unsetenv("JAHSHAKA_GI_FIELD_RAYS");
+    f.e->setArm("gi.fieldRays", 0.0);
     buildConverged(f, lat, 0.4, 0.4);
     const Reading one = readProbe(f, lat, 0.4, 0.4);
     const double K = double(st.ifdTargetSamples);
@@ -568,10 +567,10 @@ static int runAlias(Fixture &f)
         f.view->setScene(nullptr);
         f.view->setScene(room);
         enginetest::leakroom::build(room, f.view, 0.2f);
+        f.e->setArm("gi.fieldSamples", 17.0);   // latched by the frames below, read by the build
         render(f.e, 4);
-        ::setenv("JAHSHAKA_GI_FIELD_SAMPLES", "17", 1);
         const bool built = room->setGlobalIllumination(fieldGi(1));
-        ::unsetenv("JAHSHAKA_GI_FIELD_SAMPLES");
+        f.e->setArm("gi.fieldSamples", 0.0);
         std::printf("   the room: GI %s (%s), field %s, %d probes\n", built ? "built" : "REFUSED", f.e->lastError().c_str(),
                     room->giStatus().ifdBound ? "bound" : "UNBOUND", room->giStatus().ifdProbes);
         // Every probe's samples out of its own refining mean (read after each whole
