@@ -2330,7 +2330,11 @@ def main():
             print("\n=== target tests: none selected ==="); return
         labels = {n: t["labels"] for n, t in inv.items()}
         run_target_step(target_cmd, build, lane, log_range, labels, selected_targets, exclude=(gate("targets"), done_rows())[1])
+        # F8: --targets-only --resume owes the dropped reds their solos too (the targets themselves never gate)
+        src = owed_solo_pass(labels)
         gate_runlog.trend_at_gate_end(tier="target", lane=lane)
+        if src:
+            sys.exit(src)
         return
     if a.run:
         labels = {n: t["labels"] for n, t in inv.items()}

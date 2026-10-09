@@ -471,6 +471,11 @@ def main(source, build):
     check(len(solo_) == 3 and all(c["tier"] == "solo" and "chain_face_target" in c["cmd"] for c in solo_)
           and out.index("dropped reds' solos") < out.index("GATE VERDICT"),
           "...and re-runs the dropped red as a SOLO, 3x, tier solo, before the verdict (#9)")
+    calls.clear()
+    code, out = gs_main(files + ["--run", "--targets-only", "--resume"])
+    solo_ = [c for c in calls if c.get("retry")]
+    check(len(solo_) == 3 and all(c["tier"] == "solo" for c in solo_),
+          "--targets-only --resume runs the owed dropped red's solos too (F8; %d)" % len(solo_))
     g.gate_runlog.owed_solos = lambda *a: []
     calls.clear()
     g.gate_runlog.run_ctest = lambda *a, **k: (calls.append(1), rl.DISPLAY_LOST)[1]
