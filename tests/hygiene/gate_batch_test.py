@@ -452,8 +452,10 @@ def run(source, scripts, merge, scratch, rl, build_dir):
     p = subprocess.run([sys.executable, os.path.join(scripts, "gate-scope.py")] + (a3[:i3] + a3[i3 + 2:] if i3 >= 0 else a3),
                        capture_output=True, text=True, env=aenv)
     check(p.returncode == 64 and "--control" in p.stderr, "gate-scope --attribute without --control: refused (required)")
+    # A SIBLING GATE HOLDS THE SLOT for 6 s: an attribution is a whole-card hold, so it QUEUES behind it (GATE-COST-2
+    # #1: a drain out of the slot starved the gate in it) and runs when the sibling is done
     holder = subprocess.Popen([sys.executable, os.path.join(scripts, "vram_tokens.py"), "gate", "--label", "a-sibling-gate",
-                               "--", "sleep", "120"], env=aenv, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                               "--", "sleep", "6"], env=aenv, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     time.sleep(1.5)
     args = [x if x != ":NN" else ":97" for x in (acmd[0].split("gate-scope.py", 1)[1].split() if acmd else [])]
     t0 = time.time()
@@ -465,8 +467,10 @@ def run(source, scripts, merge, scratch, rl, build_dir):
     aout = p.stdout + p.stderr
     print("\n".join("     | " + l for l in aout.splitlines() if l.startswith(("row", "=>", "==="))))
     check(p.returncode == 3, "the attribution exits 3: a COMBINATION DEFECT refuses the batch (exit %d)" % p.returncode)
-    check("gate-slot" not in aout and took < 100 and aout.count("vram: the whole card") == 1,
-          "...it never took the gate slot (another gate held it throughout; %.0f s) and held the card ONCE" % took)
+    check("gate-slot: queued at position 1" in aout and "a-sibling-gate" in aout and "gate-slot: taken" in aout
+          and took < 100 and aout.count("vram: the whole card") == 1,
+          "...it queued for the gate slot behind the sibling gate, took it (a whole-card hold: GATE-COST-2) and held "
+          "the card ONCE (%.0f s)" % took)
     check("row.x | lane-h | 3/3 red | FAIL: BREAKS_X is in this tree" in aout and "row.x | lane-i | 0/3 red | -" in aout
           and "=> row.x: NAMED lane-h (3/3 red on its own tip)" in aout, "row.x: NAMED lane-h, its first failing check")
     check("row.z | lane-h | ABSENT" in aout and "=> row.z: NAMED lane-i (3/3" in aout and "lane-h (" not in
@@ -546,6 +550,27 @@ def run(source, scripts, merge, scratch, rl, build_dir):
         if os.path.exists(sock): break
     open(os.path.join(x11, ".X97-lock"), "w").write("%10d\n" % fake_x.pid)
     p7, p5 = only("row.noadmit"), only("row.base")
+    # GATE-COST-2 F1: an attribution whose whole-card drain times out (a token held elsewhere) still runs in the
+    # whole-card mode — the tool's JAH_VRAM_ALL — and says so: a drain-timeout record and `fallback` on every run.
+    # RED ON BASE (measured 2026-10-10, this file against the merge a327e3260's scripts, before F1): this check
+    # FAILS (the hold returned [slot], `not card` missed the timeout: no record, no fallback); green at F1.
+    blocker = subprocess.Popen([sys.executable, os.path.join(scripts, "vram_tokens.py"), "admit", "1", "--label",
+                                "f1-blocker", "--", "sleep", "60"], env=aenv, stdout=subprocess.DEVNULL,
+                               stderr=subprocess.DEVNULL)
+    time.sleep(1.0)
+    fdir = os.path.join(scratch, "runs-f1")
+    out_ = list(args); i_ = out_.index("--attribute"); out_[i_ + 1] = "row.x"
+    pf = subprocess.run([sys.executable, os.path.join(scripts, "gate-scope.py")] + out_, capture_output=True, text=True,
+                        env=dict(aenv, JAH_RUN_LOG_DIR=fdir, JAH_VRAM_PHASE_WAIT="1"))
+    blocker.kill(); blocker.wait()
+    frecs = [json.loads(l) for f in (sorted(os.listdir(fdir)) if os.path.isdir(fdir) else [])
+             for l in open(os.path.join(fdir, f))]
+    runs_f = [r for r in frecs if not r.get("kind")]
+    check(runs_f and all(r.get("fallback") == "drain-timeout" for r in runs_f)
+          and any(r.get("kind") == "drain-timeout" and r.get("fallback") == "drain-timeout" for r in frecs)
+          and not any(o.startswith("JAH_VRAM_ALL") for r in runs_f for o in r.get("overrides", [])),
+          "an attribution whose drain times out: a drain-timeout record, `fallback` on its %d run(s), JAH_VRAM_ALL "
+          "never an override (GATE-COST-2 F1)" % len(runs_f))
     fake_x.kill(); fake_x.wait()
     check(p7.returncode == 7, "an attribution left INCOMPLETE (row.noadmit alone) exits 7 (exit %d)" % p7.returncode)
     check(p5.returncode == 5, "a d-build defect alone (row.base) exits 5 (exit %d)" % p5.returncode)
