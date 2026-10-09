@@ -15,10 +15,18 @@
 //                                           rays against the fixture's boxes, exact geometry).
 //
 // MODES (argv[1]):
-//   share      gi.far_sun_share   — the wall in cascade 3 (camera 40 m) reads >= 0.90 of the closed
-//                                   form, and the near camera (12 m) within 10 % of the far one.
-//   clutter    gi.far_sun_clutter — forty small black boxes on the floor: the ratio to the closed
-//                                   form (which counts them) within 10 % of the clean arm's.
+//   share      gi.far_sun_share   — ONE claim: the sunlit floor's bounce into a self-shaded wall, the
+//                                   wall in cascade 3 (camera 40 m), equals the HEMISPHERICAL LAW
+//                                   within 10 % (0.90-1.10), and the near camera (12 m) agrees
+//                                   within 10 %. The law the store holds: rho I cos DA(cos, r) -
+//                                   here 0.5 x 3.0 x 0.875 x DA(0.875, 1) = 0.898; on the static
+//                                   Bistro 0.216 x 1.0 x 0.875 x 0.816 (the sun's colour) x 0.743
+//                                   = 0.114 (a camera pixel is NOT the law: it carries the lobe's
+//                                   view term, 1.27x at Bistro's ORCA view). Wall points h >= 4 m.
+//   clutter    gi.far_sun_clutter — the Bistro's dilution: sixty grey raised slabs (lit tops, dark
+//                                   undersides) in front of the wall; the ratio to the closed form
+//                                   (which counts every face of them) within 0.90-1.10 of the clean
+//                                   arm's.
 //   contrast   gi.store_contrast  — a black floor patch beside the sunlit grey floor, both in
 //                                   cascade 3: what a gather ray reads at the black patch is
 //                                   < 0.15 of what it reads on the sunlit grey (the store's own
@@ -134,6 +142,41 @@ double sunlitFloorFraction(const Vec3 &p, const std::vector<Box> &boxes, int n =
             if (sunlit(Vec3(h.x, h.y + 1e-3f, h.z), boxes)) ++lit;
         }
     return total ? double(lit) / double(total) : 0.0;
+}
+
+/// THE CLOSED FORM, GENERAL (C.3: lit clutter): the cosine-weighted mean over p's hemisphere about +x
+/// of the radiance the first face hit stores - rho I cos DA(cos) where the face is grey ("floor") and
+/// sunlit, 0 elsewhere (the walls are black, there is no sky). E/pi(p) is exactly this mean.
+double expectedEoverPi(const Vec3 &p, const std::vector<Box> &boxes, int n = 160)
+{
+    double sum = 0.0;
+    unsigned total = 0u;
+    for (int i = 0; i < n; ++i)
+        for (int j = 0; j < n; ++j) {
+            const double u1 = (i + 0.5) / n, u2 = (j + 0.5) / n;
+            const double r = std::sqrt(u1), ph = 2.0 * kPi * u2;
+            const Vec3 d(float(std::sqrt(1.0 - u1)), float(r * std::cos(ph)), float(r * std::sin(ph)));
+            ++total;
+            float t;
+            const int k = nearest(p, d, boxes, t);
+            if (k < 0 || !boxes[size_t(k)].floor) continue;
+            const Vec3 h(p.x + d.x * t, p.y + d.y * t, p.z + d.z * t);
+            // the face hit: the slab boundary the point lies on
+            const enginetest::AnalyticBox &b = boxes[size_t(k)].b;
+            Vec3 nrmF(0.0f, 0.0f, 0.0f);
+            const float e = 1e-3f;
+            if (std::fabs(h.y - b.mx.y) < e) nrmF.y = 1.0f;
+            else if (std::fabs(h.y - b.mn.y) < e) nrmF.y = -1.0f;
+            else if (std::fabs(h.x - b.mx.x) < e) nrmF.x = 1.0f;
+            else if (std::fabs(h.x - b.mn.x) < e) nrmF.x = -1.0f;
+            else if (std::fabs(h.z - b.mx.z) < e) nrmF.z = 1.0f;
+            else nrmF.z = -1.0f;
+            const double c = nrmF.x * kToSun.x + nrmF.y * kToSun.y + nrmF.z * kToSun.z;
+            if (!(c > 0.0)) continue;
+            if (!sunlit(Vec3(h.x + nrmF.x * e, h.y + nrmF.y * e, h.z + nrmF.z * e), boxes)) continue;
+            sum += double(kFloorAlbedo) * double(kSunIntensity) * c * enginetest::disneyDiffuseAlbedo(c, 1.0);
+        }
+    return total ? sum / double(total) : 0.0;
 }
 
 /// The floor's stored radiance under the sun: rho x I x cos x the diffuse lobe's albedo
@@ -308,7 +351,9 @@ double gatheredAt(const GatherStatus &g, const Vec3 &cam, const Vec3 &target, co
 std::vector<Vec3> wallPoints()
 {
     std::vector<Vec3> p;
-    for (float h : { 2.0f, 4.0f, 6.0f, 8.0f })
+    // h >= 4 m: the strip at the wall's foot (h = 2 m reads 1.30-1.33 on both routes) is
+    // sky-energy-1's leaky shadow strip, its own lane - not what this suite measures.
+    for (float h : { 4.0f, 6.0f, 8.0f })
         for (float z : { -4.0f, 0.0f, 4.0f }) p.push_back(Vec3(0.01f, h, z));
     return p;
 }
@@ -331,7 +376,8 @@ double shareRatio(Fixture &f, const Vec3 &cam, const char *label, bool verbose =
     for (const Vec3 &p : wallPoints()) {
         const double a = gatheredAt(lit, cam, kTarget, p), b = gatheredAt(dark, cam, kTarget, p);
         if (a < 0.0 || b < 0.0) continue;
-        const double expect = L * sunlitFloorFraction(p, f.boxes);
+        const double expect = expectedEoverPi(p, f.boxes);
+        (void)L;
         if (verbose)
             std::printf("     %s  wall (%.1f, %.1f): gathered %.5f (dark %.5f), closed form %.5f -> %.3f\n",
                         label, double(p.y), double(p.z), a, b, expect, expect > 0 ? (a - b) / expect : 0.0);
@@ -367,24 +413,27 @@ int modeShare(Fixture &f, bool clutter)
         printCascades(f.s);
         const double near = shareRatio(f, kNearCam, "NEAR");
         printCascades(f.s);
-        CHECK_MSG(far >= 0.90, "THE FAR SUNLIT HIT: the wall in cascade 3 reads %.3f of the closed form (bar 0.90)",
-                  far);
+        CHECK_MSG(far >= 0.90 && far <= 1.10,
+                  "THE FAR SUNLIT HIT: the sunlit floor's bounce into the self-shaded wall, the wall in cascade 3, "
+                  "reads %.3f of the hemispherical law (bar 0.90-1.10)", far);
         CHECK_MSG(far > 0.0 && near > 0.0 && std::fabs(near / far - 1.0) <= 0.10,
                   "NEAR AND FAR AGREE: the near camera reads %.3f against the far %.3f (bar +-10 %%)", near, far);
         return 0;
     }
     const double clean = shareRatio(f, kFarCam, "CLEAN  ", false);
-    // FORTY SMALL BLACK BOXES on the floor in front of the wall (0.3-0.6 m, a fixed scatter):
-    // street clutter. The closed form counts them (they occlude the floor and shade it).
+    // STREET CLUTTER, THE BISTRO'S SHAPE: GREY and LIT tops over DARK undersides - sixty raised
+    // grey slabs (table and seat tops, 0.3-0.6 m square, 5 cm thick, 0.4-0.8 m up, a fixed
+    // scatter) in front of the wall. The closed form counts every face of them: the lit tops
+    // and sun-facing sides add light, the undersides are dark, the floor under them shaded.
     unsigned seed = 12345u;
     const auto rnd = [&]() { seed = seed * 1664525u + 1013904223u; return float(seed >> 8) / float(1u << 24); };
-    for (int i = 0; i < 40; ++i) {
+    for (int i = 0; i < 60; ++i) {
         const float sz = 0.3f + 0.3f * rnd();
-        const Vec3 c(0.8f + 10.4f * rnd(), sz * 0.5f, -9.0f + 18.0f * rnd());
-        addBox(f, c, Vec3(sz, sz, sz), f.black, false);
+        const Vec3 c(0.8f + 10.4f * rnd(), 0.4f + 0.4f * rnd(), -9.0f + 18.0f * rnd());
+        addBox(f, c, Vec3(sz, 0.05f, sz), f.grey, true);
     }
     const double cluttered = shareRatio(f, kFarCam, "CLUTTER", false);
-    CHECK_MSG(clean > 0.0 && cluttered > 0.0 && std::fabs(cluttered / clean - 1.0) <= 0.10,
+    CHECK_MSG(clean > 0.0 && cluttered > 0.0 && cluttered / clean >= 0.90 && cluttered / clean <= 1.10,
               "STREET CLUTTER IS COUNTED AS WHAT IT IS: the cluttered canyon reads %.3f of its closed form against "
               "the clean %.3f (bar +-10 %%)", cluttered, clean);
     return 0;
