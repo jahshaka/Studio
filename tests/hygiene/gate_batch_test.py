@@ -22,7 +22,8 @@ its diff is empty):
      on an inherited DISPLAY (--display :NN is required, :60-:99 with an X lock) and prints the command; run,
      the attribution names a lane by ANY red solo on its own tip, says ABSENT where a lane's build lacks the
      row (never blames it), leaves a NOADMIT cell INCOMPLETE, calls a row red only at the candidate a
-     COMBINATION DEFECT (exit 3), one red at d-build's tip (the --control) a D-BUILD DEFECT naming nobody,
+     COMBINATION DEFECT (exit 3), one red at d-build's tip (the --control: the base build rc-base, which must be AT d-build's tip) a
+     D-BUILD DEFECT naming nobody,
      and one green everywhere NOT REPRODUCED; the whole card is held once and
      the gate slot is never taken (a held slot does not stop it); records: `lanes`, tier, reason, retry;
      a lane worktree off its tip is refused; a stale candidate (d-build moved) is refused at batch-land;
@@ -353,12 +354,20 @@ def run(source, scripts, merge, scratch, rl):
           and "SCRIPTING_REGEN=0" in open(os.path.join(lead, "batch-t4.state")).read(),
           "equal pins -> accepted, P = d-build's pin, the scoped gate, no regeneration (exit %d)" % rc)
     T4 = rc_tree("t4", sc4, ic4, pin_now); toy_build(T4)
-    # d-build's own built tree, the CONTROL (TESTING_V3_SPEC §1.3.2): its irisgl at the pin, row.base broken there
-    subprocess.run(["git", "clone", "-q", fork, os.path.join(D, "irisgl", "thirdparty", "ogre-next")], env=genv, check=True)
-    git(os.path.join(D, "irisgl", "thirdparty", "ogre-next"), "checkout", "-q", pin_now)
-    write(os.path.join(D, "BASE_BROKEN"), "1\n"); toy_build(D)
     open(judge_mode, "w").write("row.x,row.combo,row.flake,row.z,row.noadmit,row.base")
     s4 = dbuild()
+    # THE CONTROL is the BASE BUILD rc-base (TESTING_V3_SPEC §1.3.2), never $D: absent or behind d-build -> refused
+    rc, out = mscript("batch-land", "t4")
+    check(rc == 6 and "rc-base is behind d-build" in out and "--attribute" not in out,
+          "no rc-base at d-build's tip: the attribution is refused with the reason (exit %d)" % rc)
+    RB = os.path.join(M, ".claude", "worktrees", "rc-base")
+    git(M, "worktree", "add", "-q", "--detach", RB, sbase)
+    rc, out = mscript("batch-land", "t4")
+    check(rc == 6 and f"is at {sbase}" in out and "rc-base is behind d-build" in out,
+          "rc-base BEHIND d-build (at the toy's first commit): refused, naming both tips (exit %d)" % rc)
+    git(RB, "checkout", "-q", "--detach", s4[0])
+    clone_irisgl(RB, None, git(os.path.join(D, "irisgl"), "rev-parse", "HEAD"), pin_now)
+    write(os.path.join(RB, "BASE_BROKEN"), "1\n"); toy_build(RB)
     rc, out = mscript("batch-land", "t4", "--verdict", "row.flake=a toy verdict", DISPLAY=":0")
     calls = open(judge_log).read().splitlines()
     check(rc == 6 and dbuild() == s4 and refs("batch-t4") == (sc4, ic4),
@@ -368,7 +377,7 @@ def run(source, scripts, merge, scratch, rl):
     check(len(acmd) == 1 and "no --display" in acmd[0] and not os.path.exists(os.path.join(lead, "attribute-batch-t4.log")),
           "...with DISPLAY=:0 inherited and no --display it RUNS NOTHING and prints the command")
     check(acmd and "row.base,row.combo,row.flake,row.noadmit,row.x,row.z" in acmd[0] and "--batch t4" in acmd[0]
-          and f"--candidate {T4}:{sc4}" in acmd[0] and f"--control {D}:{s4[0]}" in acmd[0]
+          and f"--candidate {T4}:{sc4}" in acmd[0] and f"--control {RB}:{s4[0]}" in acmd[0]
           and all(f"{n}:{lanes4[n][0]}:{lanes4[n][1]}" in acmd[0] for n in lanes4),
           "...the command: the red rows, the tag, the candidate and d-build (the control), every lane's worktree and tip")
     rc, out = mscript("batch-land", "t4", "--display", ":0")
@@ -401,7 +410,7 @@ def run(source, scripts, merge, scratch, rl):
     check("=> row.combo: COMBINATION DEFECT" in aout and "row.combo | CANDIDATE | 3/3 red" in aout,
           "row.combo: green on each lane, red at the candidate -> COMBINATION DEFECT")
     check("=> row.flake: NOT REPRODUCED" in aout, "row.flake: green everywhere -> NOT REPRODUCED (the verdict door)")
-    check("row.base | CONTROL d-build | 3/3 red" in aout and "=> row.base: D-BUILD DEFECT" in aout
+    check("row.base | CONTROL rc-base | 3/3 red" in aout and "=> row.base: D-BUILD DEFECT" in aout
           and "NAMED" not in [l for l in aout.splitlines() if l.startswith("=> row.base")][0],
           "row.base: red on d-build's own tip -> a D-BUILD DEFECT, naming nobody")
     check("row.noadmit | lane-h | INCOMPLETE" in aout and "=> row.noadmit: INCOMPLETE" in aout,
@@ -410,13 +419,13 @@ def run(source, scripts, merge, scratch, rl):
     for f in sorted(os.listdir(runs)) if os.path.isdir(runs) else []:
         recs += [json.loads(l) for l in open(os.path.join(runs, f))]
     tips = {lanes4["lane-h"][1]: ["lane-h"], lanes4["lane-i"][1]: ["lane-i"], sc4: ["lane-h", "lane-i"],
-            s4[0]: ["d-build"]}
+            s4[0]: ["rc-base"]}
     check(len(recs) == 66 and all(r.get("reason") == "attribute:t4" and r.get("retry") is True
                                   and r.get("tier") == "scoped" for r in recs),
           "66 records (6 rows x 4 trees x 3, less row.z where it is absent), each `reason: attribute:t4`, a retry, tier "
           "`scoped` (%d)" % len(recs))
     check(all(r["lanes"] == tips.get(r["tip"]["studio"]) for r in recs) and "lane" not in recs[0],
-          "...each at ITS tree's own tip; `lanes` = that lane (d-build's: d-build), the candidate's = the batch's "
+          "...each at ITS tree's own tip; `lanes` = that lane (the control's: rc-base), the candidate's = the batch's "
           "list; no `lane` string")
     git(lanes4["lane-i"][0], "commit", "-q", "--allow-empty", "-m", "lane-i moved on")
     p = subprocess.run([sys.executable, os.path.join(scripts, "gate-scope.py")] + args, capture_output=True,

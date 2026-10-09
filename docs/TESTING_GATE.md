@@ -381,13 +381,13 @@ JAH_GATE_TIER=scoped JAH_GATE_RANGE=<d-build>..<candidate> JAH_GATE_LANES=<lane>
     setsid nohup ~/Developer/scripts/lead/rc-gate.sh batch-<tag> <candidate> > /tmp/jah-lead/rc-batch-<tag>.out 2>&1 < /dev/null & disown
 #   (JAH_GATE_TIER=fork when the candidate moved the fork pin: gate-scope's --fork-tier, the whole tier) — a fresh
 #   tree, the four hashes, the slot taken once, `gate-scope.py <range> --run` inside it (the card per phase)
-~/Developer/scripts/lead/merge-dbuild-lane.sh batch-land <tag> [--build <rc build>] [--display :NN] [--verdict "<row>=<text>" ...]
+~/Developer/scripts/lead/merge-dbuild-lane.sh batch-land <tag> [--build <rc build>] [--display :NN] [--control-tree <dir>] [--verdict "<row>=<text>" ...]
 #   d-build's judge, UNCHANGED: ci_gate_check.py d-build..candidate --build <the candidate's build> — green:
 #   d-build fast-forwarded to the candidate in both repos (irisgl first), the HASHES line; a stale candidate (d-build
 #   moved since `batch`) is refused; red: nothing moves and the red rows are ATTRIBUTED on the rig display NAMED by
 #   --display (:60-:99, its X lock present; the environment's DISPLAY is never read) — without it, the command:
 DISPLAY=:NN scripts/gate-scope.sh --attribute <row>[,<row>...] --batch <tag> --candidate <rc tree>:<candidate> \
-    --control <d-build tree>:<d-build tip> --lanes <lane>:<worktree>:<tip> [...]
+    --control <rc-base>:<d-build tip> --lanes <lane>:<worktree>:<tip> [...]
 ```
 **THE GENERATED FILE.** `docs/SCRIPTING.md` is `--dump-api-docs`'s output and `api.contract`
 byte-compares it: two lanes' versions cannot merge as text. When more than one lane touched it (or it
@@ -402,8 +402,9 @@ first, or rebase the other on it). P ≠ d-build's pin = the candidate moves the
 
 **THE ATTRIBUTION.** Each red row runs 3x `--solo`-style in each lane's OWN worktree at its exact
 batch tip (the lanes' built trees; a worktree moved past its tip is refused), 3x at the CANDIDATE
-(its rc tree) and 3x at every CONTROL (`--control`, several allowed: d-build's built tree at its tip,
-TESTING_V3_SPEC §1.3.2); the whole card is taken once through `hold_card()` — whatever the card's
+(its rc tree) and 3x at every CONTROL (`--control`, several allowed; batch-land's is the BASE BUILD
+`rc-base`, `--control-tree` to move it — built at d-build's tip, refused with the reason when it is
+behind; never `$D`, the merge target, which has no binary; TESTING_V3_SPEC §1.3.2); the whole card is taken once through `hold_card()` — whatever the card's
 admission demands, it never assumes the gate slot is free. One table `row | tree | n/3 red | the first
 failing check`; the records carry `reason: attribute:<tag>`, retry, and in `lanes` that lane (the
 candidate's: the batch's list). Only REAL verdicts count: a run that never got its admission
