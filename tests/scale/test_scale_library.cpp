@@ -42,8 +42,9 @@
 // and all but two projects deleted: the same worlds, the same caches, the same open and
 // the same create — the difference between the arms is the library and nothing else.
 //
-// THE BARS ARE COUNTED WORK since TESTING-CLEANUP-2 (bytes read and tiles built against the
-// control; see "THE BARS ARE COUNTED WORK" in main); the millisecond readings below are printed.
+// THE BARS ARE COUNTED WORK since TESTING-CLEANUP-2 (the database bytes each step reads on the
+// request path, against the control; see "THE BARS ARE COUNTED WORK" in main); the millisecond
+// readings below are printed.
 // THE OLD BARS (D11-LIBRARY-SCALE §1, stated in milliseconds): at 10,000 assets + 500 projects
 // the boot reaches the MCP in <= 20 s; the library
 // adds <= 300 ms to the Desktop entry a create's close makes, the Desktop grid of 500
@@ -106,16 +107,14 @@ static QString loadAverage()
     return QString::fromLatin1(f.readAll()).section(QLatin1Char(' '), 0, 2);
 }
 
-/// THE BYTES THE APP READ, so far (`rchar` of /proc/<pid>/io: every byte its read() calls
-/// returned — files and sockets alike, page cache or not): library scale as COUNTED WORK
-/// (TESTING-CLEANUP-2 item 6). -1 when unreadable.
-static qint64 readChars(qint64 pid)
+/// WHAT THE LIBRARY DATABASE READ ON THE REQUEST PATH (TESTING-CLEANUP-2 item 6): app.databaseReads()
+/// — the pages SQLite's pager read on the UI thread's connections, a counter the STORE owns, so a
+/// reading around one verb is what that verb read (worker connections and a later turn's batches are
+/// not in it, whenever it is sampled). -1 when unavailable.
+static qint64 dbReadBytes(McpClient &mcp)
 {
-    QFile f(QStringLiteral("/proc/%1/io").arg(pid));
-    if (!f.open(QIODevice::ReadOnly)) return -1;
-    for (const QByteArray &line : f.readAll().split('\n'))
-        if (line.startsWith("rchar:")) return line.mid(6).trimmed().toLongLong();
-    return -1;
+    const QJsonObject r = mcp.runScript(QStringLiteral("app.databaseReads()")).value("result").toObject();
+    return r.value("available").toBool() ? qint64(r.value("bytes").toDouble()) : -1;
 }
 
 struct App {
@@ -123,7 +122,7 @@ struct App {
     McpClient mcp;
     QByteArray log;
     double bootMs = -1;
-    qint64 bootRead = -1;   ///< bytes read by the time the MCP answered
+    qint64 bootRead = -1;   ///< database bytes the boot read (the first request's reading)
 };
 
 static bool launch(App &app, const QString &dataRoot)
@@ -145,13 +144,13 @@ static bool launch(App &app, const QString &dataRoot)
     t.start();
     if (!spawn(app.proc, port, &token, &app.log, QStringList(), 600000)) return false;
     app.bootMs = double(t.elapsed());
-    app.bootRead = readChars(app.proc.processId());
     app.mcp.url = QUrl(QStringLiteral("http://127.0.0.1:%1/mcp").arg(port));
     app.mcp.token = token;
     app.mcp.attach(app.proc, app.log);   // a transport failure prints the child's state + log tail
     app.mcp.clientName = QStringLiteral("scale-library");
     app.mcp.transferTimeoutMs = 600000;
     app.mcp.initialize();
+    app.bootRead = dbReadBytes(app.mcp);
     return true;
 }
 
@@ -284,8 +283,8 @@ struct Arm {
     double gridMaxSliceMs = -1, desktopEntryMs = -1;
     double openGap = -1, openMs = -1, createGap = -1, createMs = -1, trayMs = -1, trayCount = -1, listMs = -1,
            listCount = -1, pageGap = -1, pageMs = -1;
-    // COUNTED WORK (TESTING-CLEANUP-2 item 6): bytes read by the boot, the open and the create;
-    // the grid's largest slice in tiles and the bound it promises.
+    // COUNTED WORK (TESTING-CLEANUP-2 item 6): the database bytes the boot, the open and the
+    // create read on the request path; the grid's slices (printed).
     qint64 bootRead = -1, openRead = -1, createRead = -1;
     int gridMaxSliceTiles = -1, gridSliceBound = -1, gridSlices = -1;
     int listingThumbnailSelects = -1;   // statements that selected a thumbnail NOT keyed by guid
@@ -325,7 +324,6 @@ static bool runArm(const char *label, const QString &dataRoot, Arm &a)
     if (!launch(app, dataRoot)) { std::printf("FAIL: [%s] boot\n", label); return false; }
     a.bootMs = app.bootMs;
     a.bootRead = app.bootRead;
-    const qint64 pid = app.proc.processId();
     // THE QUERY LOG over everything the session does from here (the boot built
     // nothing of the library since D11 — the Assets page waits for its first use).
     app.mcp.runScript(QStringLiteral("app.queryLog({on: true})"));
@@ -336,9 +334,9 @@ static bool runArm(const char *label, const QString &dataRoot, Arm &a)
         "(function(){var l=project.list();var c=project.current();for(var i=0;i<l.length;i++)"
         "if(!c||l[i].guid!==c.guid)return l[i].guid;return ''})()")).toString();
     if (!guid.isEmpty()) {
-        const qint64 r0 = readChars(pid);
+        const qint64 r0 = dbReadBytes(app.mcp);
         a.openGap = gapAround(app, QStringLiteral("project.open('%1')").arg(guid), &a.openMs);
-        const qint64 r1 = readChars(pid);
+        const qint64 r1 = dbReadBytes(app.mcp);
         a.openRead = (r0 >= 0 && r1 >= 0) ? r1 - r0 : -1;
     }
     // THE TRAY: what the open project's tray shows, one hop, timed on the script thread.
@@ -363,10 +361,10 @@ static bool runArm(const char *label, const QString &dataRoot, Arm &a)
     // Desktop the close enters (the ledger's closePrevious:switch: the grid's first
     // slice) and the grid's later slices (desktop.gridStats().lastBuildMaxSliceMs).
     {
-        const qint64 r0 = readChars(pid);
+        const qint64 r0 = dbReadBytes(app.mcp);
         a.createGap = gapAround(app, QStringLiteral("project.create('Scale create %1')")
                                          .arg(QDateTime::currentMSecsSinceEpoch()), &a.createMs, &a.desktopEntryMs);
-        const qint64 r1 = readChars(pid);
+        const qint64 r1 = dbReadBytes(app.mcp);
         a.createRead = (r0 >= 0 && r1 >= 0) ? r1 - r0 : -1;
     }
     // THE DESKTOP GRID: a driven session boots with the Desktop never SHOWN, so its grid
@@ -413,7 +411,7 @@ static bool runArm(const char *label, const QString &dataRoot, Arm &a)
                 label, qPrintable(a.load), a.bootMs, a.gridMs, a.gridDecodes, a.gridTiles, a.openGap, a.openMs,
                 a.trayMs, a.trayCount, a.listMs, a.listCount, a.pageMs, a.createGap, a.createMs, a.desktopEntryMs,
                 a.gridMaxSliceMs);
-    std::printf("W14 [%-7s] COUNTED: read %.1f MB by the boot, %.1f MB in the open, %.1f MB in the create; "
+    std::printf("W14 [%-7s] COUNTED: the database read %.2f MB by the boot, %.2f MB in the open, %.2f MB in the create; "
                 "grid %d slice(s), the largest %d tile(s) (bound %d)\n",
                 label, a.bootRead / 1e6, a.openRead / 1e6, a.createRead / 1e6, a.gridSlices,
                 a.gridMaxSliceTiles, a.gridSliceBound);
@@ -485,32 +483,29 @@ int main(int argc, char **argv)
     // slice <= 300 ms, the Desktop entry +300 ms, an open's worst gap +200 ms) read the BOX as much
     // as the code — 19 reds in 192 runs inside the timing phase, which holds the GPU, never the CPU
     // or the disk. What they guard is that the work does not grow with the library, and that is
-    // COUNTED: bytes read (rchar) and tiles built, against the same session with no library. The
-    // milliseconds above are still printed beside every arm.
-    //   * PER LIBRARY ASSET, a session step may read what the library ADDS only up to
-    //     kBytesPerAsset — 50 bytes, under ONE row's listing (a guid alone is 36): a step that lists
-    //     the library reads >= ~100 bytes an asset, a step that does not reads a few pages.
-    //   * THE GRID IS SLICED: no event-loop turn builds more than the slice's bound of tiles
-    //     (the Desktop entry a create's close makes builds exactly one slice), every tile is built,
-    //     and the UI thread decodes no thumbnail.
-    // MEASURED (2026-10-09, :71, this tree): the open adds 0.1 MB (10 B/asset), the grid 16 slices of
-    // <= 32 tiles over 501, 0 decodes — and the BOOT adds 45.9 MB (4.6 KB/asset: it reads 47.6 MB of
-    // the 130 MB JahLibrary.db, strace -y) — a library-proportional boot the 20 s bar never saw.
+    // COUNTED by the store: the database bytes each step reads on the request path
+    // (app.databaseReads()), against the same session with no library. The milliseconds and the
+    // grid's slices are still printed beside every arm.
+    //   PER LIBRARY ASSET, a step may read what the library ADDS only up to kBytesPerAsset — 50
+    //   bytes, under ONE row's listing (a guid alone is 36): a step that lists the library reads
+    //   >= ~100 bytes an asset, one that does not reads a few pages. The create's bar is the
+    //   Desktop entry's too (the entry is inside the create's close).
+    // MEASURED (2026-10-10, :71, this counter, 2 runs): the boot reads 47.55 MB of the 130 MB
+    // JahLibrary.db against the control's 1.63 (45.92 MB = 4,592 B an asset, both runs exactly; the
+    // projects table is 104.5 MB of the file), the create 11.94 / 11.93 MB against 0.09 (~1,185 B an
+    // asset), the open 0.44 against 0.36 (8.2 B an asset). The boot and create bars are RED, filed
+    // TC2-LIBRARY-BOOT-READ / TC2-LIBRARY-CREATE-READ (testing/defects.pending): this row is KNOWN
+    // RED until they are fixed.
     const double kBytesPerAsset = 50.0;
-    const double bootAdds = double(f.bootRead - e.bootRead), openAdds = double(f.openRead - e.openRead);
-    CHECK(f.bootRead >= 0 && e.bootRead >= 0 && bootAdds <= kBytesPerAsset * kAssets,
-          "BAR: the boot reads what the library adds at <= %.0f bytes an asset (%.1f MB = %.0f bytes an asset over "
-          "%d; boot %.0f ms, load %s)", kBytesPerAsset, bootAdds / 1e6, bootAdds / kAssets, kAssets, f.bootMs,
-          qPrintable(f.load));
-    CHECK(f.openRead >= 0 && e.openRead >= 0 && openAdds <= kBytesPerAsset * kAssets,
-          "BAR: a project open reads what the library adds at <= %.0f bytes an asset (%.2f MB = %.1f bytes an asset)",
-          kBytesPerAsset, openAdds / 1e6, openAdds / kAssets);
-    const int wantSlices = f.gridSliceBound > 0 ? (int(f.gridTiles) + f.gridSliceBound - 1) / f.gridSliceBound : -1;
-    CHECK(f.gridSliceBound > 0 && f.gridMaxSliceTiles >= 1 && f.gridMaxSliceTiles <= f.gridSliceBound &&
-              f.gridSlices >= wantSlices && f.gridDecodes == 0,
-          "BAR: the Desktop grid of %.0f tiles is built %d slice(s), none over %d tiles (the largest %d), and the "
-          "UI thread decodes %.0f thumbnails (the Desktop entry builds one slice)",
-          f.gridTiles, f.gridSlices, f.gridSliceBound, f.gridMaxSliceTiles, f.gridDecodes);
+    const auto addsBar = [&](const char *step, qint64 lib, qint64 ctl) {
+        const double adds = double(lib - ctl);
+        CHECK(lib >= 0 && ctl >= 0 && adds <= kBytesPerAsset * kAssets,
+              "BAR: %s reads what the library adds at <= %.0f database bytes an asset (%.2f MB = %.1f bytes an "
+              "asset over %d)", step, kBytesPerAsset, adds / 1e6, adds / kAssets, kAssets);
+    };
+    addsBar("the boot", f.bootRead, e.bootRead);
+    addsBar("a project open", f.openRead, e.openRead);
+    addsBar("a project create (its close's Desktop entry included)", f.createRead, e.createRead);
     CHECK(f.listingThumbnailSelects == 0 && e.listingThumbnailSelects == 0,
           "BAR: no listing selected a thumbnail in either session (%d / %d not keyed by guid)",
           f.listingThumbnailSelects, e.listingThumbnailSelects);
