@@ -373,15 +373,19 @@ verdicts of a week, 6 clearing solos below 3/3 by prose, 2 LOSTs called environm
 never-ran pools recorded FAIL).** `ci_gate_check.py` accepts registered facts, never prose; `--verdict "<row>=<text>"`
 keeps its syntax and the text is parsed:
 - **`real:<ID>`** — `<ID>` is in THE DEFECT REGISTRY (`testing/defects.json`, below) for this row, not retired, not
-  past its recheck date, and PROVED: a PASS record of the row at the tip after the red (the fix), or the SAME red —
+  past its recheck date, and PROVED: a PASS record of the row at a LATER sha than the red (the fix — a PASS at the
+  red's own sha is the same code passing once: nondeterminism, 3/3 solo), or the SAME red — the same status text too,
   the same verdict class and the same failLine with its numbers masked — reproduced by a recorded solo at the
   range's base (a d-build commit): the row is then **KNOWN RED** — `--mode merge` passes it, `--mode push` and
   `--mode stage-close` refuse it (never push on a red). A ticket named alone clears nothing; a CRASH never.
-  A `nondeterminism` id clears by 3/3 solo PASS — a SINGLE-USE (NOT REPRODUCED) one only at the tip that registered it.
+  A `nondeterminism` id clears a FAIL/TIMEOUT by 3/3 solo PASS (never a LOST/OOM/CRASH or an Xid red: those take a
+  `kind: defect` entry) — a SINGLE-USE (NOT REPRODUCED) one only in the merge that registered it, never a push. A
+  nondeterminism clearance passes a merge; a push or stage close re-asks 3/3 solo green AT THE CANDIDATE.
 - **`contention:<evidence>`** (FAIL / TIMEOUT only) — the row has an ENROLLED, open `nondeterminism` entry within its
   recheck date (the contention class), the red's **competitor census** (`box.census`) shows real competition — a GPU
-  process outside the gate, a sibling ctest, a build, memory or IO pressure ≥ 10 % avg10; NEVER the gate's own queue
-  or drain — AND 3/3 solo PASS after the red (the solos may run after the verdict). The class's own 3/3 clearance
+  process of ours outside the gate, one whose exe is not in the idle baseline `testing/box-baseline.json`, or any
+  above its `vram_floor_mb`; a sibling ctest; a build outside the gate's tree; memory or IO pressure ≥ 10 % avg10;
+  NEVER the gate's own queue or drain, never the idle desktop — AND 3/3 solo PASS after the red (the solos may run after the verdict). The class's own 3/3 clearance
   (no verdict) needs the same census.
 - **LOST / OOM / CRASH** — `real:<ID>` only; `xid-read:<journal window>` ONLY when the record says
   `journal_unreadable` (else the Xid would be in the record), the window covering the red. A red whose record
