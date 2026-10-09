@@ -671,8 +671,18 @@ def gpu_apps(own_root=None):
     return out
 
 
+_MAIN_TREE = []
+
+
 def main_tree():
-    """The Studio repo's MAIN tree (the parent of the git common dir — the same for every worktree)."""
+    """The Studio repo's MAIN tree (the parent of the git common dir — the same for every worktree). Read once per
+    process (one git call, never one per GPU app)."""
+    if _MAIN_TREE: return _MAIN_TREE[0]
+    _MAIN_TREE.append(_main_tree())
+    return _MAIN_TREE[0]
+
+
+def _main_tree():
     try:
         cd = subprocess.run(["git", "rev-parse", "--path-format=absolute", "--git-common-dir"],
                             cwd=ROOT, capture_output=True, text=True).stdout.strip()
