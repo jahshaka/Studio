@@ -106,6 +106,13 @@ struct McpClient
     QString lastTransportError;
     int transportFailures = 0;
 
+    /// A CASE THAT PROVOKES A TRANSPORT FAILURE ON PURPOSE (app.shutdown_order proves the transfer
+    /// timeout reports itself) sets this on ITS client: the failure is still counted and kept, but
+    /// printed as `expected(transport): …` — never the `FAIL(transport): …` a run log records as the
+    /// row's first failing line (TESTING-CLEANUP-2 P10g: the shutdown_order reds were recorded as
+    /// "414 ms vs 0.4 s", which was this provoked line, not the check that failed).
+    bool transportFailureExpected = false;
+
     /// THE APP THIS CLIENT TALKS TO (TEST-SELECTOR-1 H1, plan 9ax HARNESS-EXIT-1): the harness
     /// holds the QProcess and the log the suite keeps of it, so a transport failure says HOW the
     /// child is — running, or gone with which exit code / status / error — and prints the last
@@ -218,9 +225,14 @@ struct McpClient
             return {};
         }
         ++transportFailures;
-        std::printf("FAIL(transport): %s\n", qUtf8Printable(lastTransportError));
-        std::fflush(stdout);
-        childReport();
+        if (transportFailureExpected) {
+            std::printf("expected(transport): %s\n", qUtf8Printable(lastTransportError));
+            std::fflush(stdout);
+        } else {
+            std::printf("FAIL(transport): %s\n", qUtf8Printable(lastTransportError));
+            std::fflush(stdout);
+            childReport();
+        }
         // NOT an empty object: a caller reading .value("ok") still fails, and
         // now the object it read says why.
         return QJsonObject{ { "ok", false },
@@ -293,18 +305,6 @@ struct McpClient
     int integer(const QString &script) { return value(script).toInt(); }
 };
 
-/// WHAT THE APP SAID ABOUT ITS OWN UI THREAD, printed when a measurement of
-/// that thread fails.
-///
-/// `spawn` below merges the child's stdout and stderr, and nothing after the
-/// boot token ever reads them again — so every responsiveness red this tree
-/// has had threw away the app's own account of the block. The app prints
-/// `[heartbeat] UI thread blocked N ms (stage: ...)` for every gap past
-/// 400 ms and, past two seconds, the WATCHDOG MAKES THE BLOCKED THREAD PRINT
-/// ITS OWN BACKTRACE (services/mainthreadwatchdog.h). That backtrace WAS
-/// produced in the avatar.responsive red of 2026-09-15 and discarded with the
-/// pipe; a lane was then spent guessing at the block (ledger 459). It costs a
-/// `readAll()` per poll to keep it.
 /// THE LAYOUT READ: the main window, its columns and its docks, as one string — what a layout
 /// change (a space switch, a window resize, a tray drag) moves.
 static const char *const kLayoutProbe =
@@ -349,6 +349,18 @@ inline QString settle(McpClient &mcp, const QString &probe = QString::fromLatin1
     return last;
 }
 
+/// WHAT THE APP SAID ABOUT ITS OWN UI THREAD, printed when a measurement of
+/// that thread fails.
+///
+/// `spawn` below merges the child's stdout and stderr, and nothing after the
+/// boot token ever reads them again — so every responsiveness red this tree
+/// has had threw away the app's own account of the block. The app prints
+/// `[heartbeat] UI thread blocked N ms (stage: ...)` for every gap past
+/// 400 ms and, past two seconds, the WATCHDOG MAKES THE BLOCKED THREAD PRINT
+/// ITS OWN BACKTRACE (services/mainthreadwatchdog.h). That backtrace WAS
+/// produced in the avatar.responsive red of 2026-09-15 and discarded with the
+/// pipe; a lane was then spent guessing at the block (ledger 459). It costs a
+/// `readAll()` per poll to keep it.
 ///
 /// `log` is what the suite drained out of the QProcess, and `from` is the
 /// offset the MEASURED WINDOW began at — without it the print carries the
