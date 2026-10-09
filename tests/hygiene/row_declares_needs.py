@@ -28,6 +28,8 @@ is read through its source, tests/**/<binary>.cpp, found by the binary's name.)
 hand-typed one, a bad word, a declared pool, an undeclared pool, a selftest row, a headless row)
 and fails unless exactly the wrong rows are named — a toy row without the words is red.
 
+RED ON BASE (a5ab3a057): 0 of the 122 app rows carried a declaration — every one is named.
+
 Usage: row_declares_needs.py --build <dir> --ctest <ctest> --app <Jahshaka> [--self-test]
 """
 import io
@@ -49,7 +51,10 @@ TIERS = ("low", "medium", "high", "epic")
 PIXEL_VERBS = ("editor.screenshot(", "player.screenshot(", "camera.screenshot(", "vr.eyeScreenshot(",
                "editor.presentedFrame(", "capture.lastFrame(")
 PIXEL_TOOLS = ("xwd", "--engine-selftest", "readPixels")     # a harness reading the screen / the hashes
-GI_VERBS = ("world.photon(", "world.gi(", "world.setPhotonView(", "world.giStatus(", "world.giVoxelStats(")
+GI_VERBS = ("world.photon(", "world.gi(", "world.setPhotonView(", "world.giStatus(", "world.giVoxelStats(",
+            "world.mode(", "world.override(", "world.setPlanarReflections(", "world.postFx(",
+            "world.refreshGi(", "world.photonView(")
+MCP_PIXEL = '"screenshot"'   # the MCP server's screenshot TOOL, named by a C++ harness
 SCRIPT_RX = re.compile(r"\.(js|js\.in|sh|py)$")
 NAMED_JS = re.compile(r"[\w./${}@-]+\.js(?:\.in)?")
 UNSET = "<document>"   # `TIER document`: both variables `unset:` — the process honours each scene's own tier
@@ -115,6 +120,8 @@ def reads_picture(files):
         for v in PIXEL_VERBS + GI_VERBS:
             if v in text:
                 return "%s in %s" % (v.rstrip("("), os.path.basename(f))
+        if f.endswith(".cpp") and MCP_PIXEL in text:
+            return "the MCP screenshot tool in %s" % os.path.basename(f)
         if f.endswith((".sh", ".py", ".cpp")):
             for v in PIXEL_TOOLS:
                 if re.search(r"(^|[^\w-])%s\b" % re.escape(v), text):
