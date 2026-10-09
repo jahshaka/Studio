@@ -49,6 +49,12 @@ by a recorded solo at the base = KNOWN RED: `--mode merge` passes it, `--mode pu
 CARRIES ITS OPEN REDS from the lane's OWN records (`lanes == [<lane>]`) at any other tip (`OPEN RED carried from
 <tip>`); batch records never carry. A registry entry without its shape makes the judge unusable (exit 2).
 
+THE STAGE-CLOSE JUDGE (STAGE-CLOSE-1; docs/TESTING_GATE.md §1d): `--stage-close <tip>` judges EVERY
+`stage-close` row of the build (STAGE_CLOSE_LABELS: the rows the MERGE and PUSH tiers leave out) at the tip in
+mode stage-close — a push and a stage close are REFUSED while one is red, a KNOWN RED, a nondeterminism
+clearance without 3/3 solo green at the tip, carries an override, or has no record there (no re-use from
+another commit). A red stage-close row blocks: a fix, or a verdict through the door.
+
 Exit 0 accepted, 1 refused, 2 unusable (no defect registry or an entry without its shape, an unresolvable range).
 """
 import argparse
@@ -766,9 +772,71 @@ def check(rng, build, gs=None, verdicts=None, mode="merge", lane=None):
     return not (missing or red or carried), reasons
 
 
+def check_stage_close(tip, build, gs=None, verdicts=None):
+    """(ok, reasons): EVERY stage-close row of `build`'s inventory judged at `tip` in mode stage-close (the
+    stage-close judge; the door, the registry and the candidate's 3/3 as check() reads them)."""
+    gs = gs or load_gs()
+    defects, problem = gate_runlog.defects_load()
+    if defects is None:
+        return None, [f"{problem} — the door cannot check a verdict without it (JAH_DEFECTS_FILE overrides)"]
+    repo = os.path.dirname(HERE)          # the tip is this checkout's commit (a build dir may rebind gs.ROOT)
+    tip_sha = _git(["rev-parse", tip], repo)
+    if not tip_sha:
+        return None, [f"cannot resolve {tip}"]
+    pin = _git(["rev-parse", f"{tip_sha}:irisgl"], repo)
+    inv = gs.load_inventory(build)
+    need = [(n, None) for n in sorted(inv) if inv[n]["labels"] & gs.STAGE_CLOSE_LABELS]
+    if not need:
+        return None, [f"{build} registers no stage-close row — not the build of a tree with the batch"]
+
+    def judge_all():
+        got = records_by_tip({tip_sha: pin or None})[tip_sha]
+        return got, {k: judge(k, got.get(k, []), defects, tip_recs=got.get(k, []), tip_sha=tip_sha,
+                              mode="stage-close") for k in need}
+    got, judged = judge_all()
+    if verdicts:
+        pairs = [(k, verdicts[k[0]]) for k in need if k[0] in verdicts and judged[k][0] == "red"]
+        for name in verdicts:
+            if not any(k[0] == name for k, _ in pairs):
+                print(f"ci-gate-check: no verdict recorded for {name} — a verdict answers a red stage-close row only")
+        if pairs:
+            path = record_verdicts(pairs, tip_sha, pin or "")
+            print(f"ci-gate-check: recorded {len(pairs)} verdict(s) at {tip_sha[:9]} -> {path}")
+            got, judged = judge_all()
+    for k in need:
+        st, why = judged[k]
+        print(f"ci-gate-check: stage-close row {k[0]}: {st}" + (f" — {why}" if why else ""))
+        if st == "red" and why.startswith("VERDICT REFUSED: "):
+            print(f"VERDICT REFUSED {k[0]}: {why[len('VERDICT REFUSED: '):]}")
+    missing = [k[0] for k, (st, _) in judged.items() if st == "missing"]
+    red = [f"{k[0]}: {why}" for k, (st, why) in judged.items() if st == "red"]
+    red += [f"{k[0]}: KNOWN RED — {why} (a stage close never passes a red)" for k, (st, why) in judged.items()
+            if st == "known"]
+    for k, (st, why) in judged.items():
+        if st != "nondet": continue
+        solos = sorted((r for r in got.get(k, []) if r.get("retry")), key=_when)[-SOLO_NEEDED:]
+        if not _solos_ok(solos):
+            red.append(f"{k[0]}: cleared as nondeterminism ({why[:80]}) but not 3/3 solo green at {tip_sha[:9]}")
+    ov = sorted({str(o) for rs in got.values() for r in rs for o in (r.get("overrides") or [])})
+    if ov:
+        red.append(f"OVERRIDES in the tip's records ({', '.join(ov[:6])}) — a stage close refuses them")
+    reasons = []
+    if missing:
+        reasons.append(f"{len(missing)} of {len(need)} stage-close row(s) have no record at {tip_sha[:9]}: {missing[:10]} "
+                       f"— run the batch: scripts/gate-scope.sh --stage-close-tier --run (or rc-gate.sh with "
+                       f"JAH_GATE_TIER=stage-close)")
+    for r in red[:20]: reasons.append("RED " + r)
+    if not (missing or red):
+        reasons.append(f"the stage-close rows: {len(need)} green at {tip_sha[:9]}")
+    return not (missing or red), reasons
+
+
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("range")
+    ap.add_argument("range", nargs="?")
+    ap.add_argument("--stage-close", metavar="TIP", default=None,
+                    help="THE STAGE-CLOSE JUDGE: refuse (exit 1) while any stage-close row is red or unrecorded at TIP "
+                         "(a push, a stage close)")
     ap.add_argument("--build", default="build-linux")
     ap.add_argument("--mode", default="merge", choices=MODES,
                     help="merge: a KNOWN RED passes; push / stage-close: it refuses (never push on a red)")
@@ -788,6 +856,15 @@ def main():
             k, v = pair.split("=", 1)
             verdicts[k.strip()] = v.strip()
     gs = load_gs()
+    if a.stage_close:
+        ok, reasons = check_stage_close(a.stage_close, gs.resolve_build(a.build), gs, verdicts=verdicts)
+        if ok is None:
+            for r in reasons: print("ci-gate-check: UNUSABLE — " + r)
+            sys.exit(2)
+        for r in reasons: print(("ci-gate-check: " if ok else "ci-gate-check: STAGE CLOSE / PUSH REFUSED — ") + r)
+        sys.exit(0 if ok else 1)
+    if not a.range:
+        ap.error("give a range (base..tip), or --stage-close <tip>")
     ok, reasons = check(a.range, gs.resolve_build(a.build), gs, verdicts=verdicts, mode=a.mode, lane=a.lane)
     if ok is None:
         for r in reasons: print("ci-gate-check: UNUSABLE — " + r)

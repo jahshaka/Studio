@@ -12,9 +12,9 @@ reshape followed.
 | Tier | What runs | When | Who runs it |
 |---|---|---|---|
 | **SCOPED** | the suites `scripts/gate-scope.sh <base>..<tip>` selects from the touched paths | ONE gate per BATCH of ready lanes, on `d-build..candidate` (§3c) — a builder runs its named acceptance tests + its subject suite, not a gate | the lead (`merge-dbuild-lane.sh batch` → `rc-gate.sh`), or gate-runner with the selection |
-| **MERGE** | TWO PHASES (TEST-SELECTOR-1): the parallel phase `python3 scripts/gate-scope.py --merge-tier [-j N]` prints (every row but the `timing` ones), then the serial phase `--merge-tier-serial` prints (the `timing` rows at -j1, each taking the whole GPU — inside the parallel phase they waited holding the admission's turnstile and stalled every admission on the box). The parallel phase is `ctest -j4 --timeout 120 --output-on-failure -LE` over `gate-scope.py`'s `NIGHTLY_LABELS` ∪ `TARGET_LABELS` ∪ {`timing`} (today: every `nightly` row — §1d —, the ASan shader-cache attack `shadercache-attack`, and the target tests `photon-target` and `scale-target`, §1b/§1c; the benches' `--smoke` rows, label `benchmark-smoke`, DO run). The set lives in the script ONLY; this doc never copies it (`source.gate_scope_rules` case 9 fails on a literal `-LE` list here), and neither may a script — `scripts/lead/rc-gate.sh` must run what `--merge-tier` prints. `--timeout 120` is the default for rows that set none; the box runs ONE gate at a time (§4c, the gate slot) — there is no lower width "while another lane's gate is live". **Measured (D6B-GATE-SHAPE, 2026-09-27): 56.7 min at -j4 beside other lanes' gates, 36.6 min simulated on the audit's quieter durations — the reshape's ~30 min goal (and its lane's ≤ 35 min bar) was NOT reached; §5 has the before/after pair and why** | a lane whose scope falls back (see §3), any merge the lead wants covered wider, and — while the full gate is under moratorium — the gate before a push | gate-runner |
-| **PUSH** | the MERGE tier + the `--engine-selftest` sha256 lines — **FOUR of them since lane FENCE-1**: `pose 1`, `pose 2`, `pose B1 (rays)`, `pose B2 (no rays)`. Poses 1-2 are the default scene at the PLAIN grade; pose pair B is a purpose-built fixture (glossy floor, cascade crossing, emissive 3.0, mirror pillar) at the VIEWPORT grade, which is the only grade that carries the SSR prepass and therefore the ray tier. Quote all four. (The moratorium of 2026-09-09 lifted 2026-09-10 with the cleanup: the four nightly suites are NIGHTLY, not push, unless the batch touched their subject) | once per BATCH of merged lanes, before a push | gate-runner |
-| **NIGHTLY** | `python3 scripts/gate-scope.py --nightly-tier` — every `nightly` row, `-j1` (§1d): the benches' `--assert` rows, shadercache.container_asan, **open.crash_soak** (OPEN-FRAMES-1: the async-open teardown repro twelve times under glibc's malloc checks; read one failure as "run it again", three as a regression of the open's slice-boundary drive), the minutes-of-one-process sweeps (atom.cluster_cut, atom.cluster_crack, gi.chain_converge_scenes), vr.frame_budget, and the `<suite>.timing` millisecond rows (§4) | once a day / before a tag, on a quiet box, and whenever a batch touched a nightly row's subject | the lead |
+| **MERGE** | TWO PHASES (TEST-SELECTOR-1): the parallel phase `python3 scripts/gate-scope.py --merge-tier [-j N]` prints (every row but the `timing` ones), then the serial phase `--merge-tier-serial` prints (the `timing` rows at -j1, each taking the whole GPU — inside the parallel phase they waited holding the admission's turnstile and stalled every admission on the box). The parallel phase is `ctest -j4 --timeout 120 --output-on-failure -LE` over `gate-scope.py`'s `STAGE_CLOSE_LABELS` ∪ `TARGET_LABELS` ∪ {`timing`} (today: every `stage-close` row — §1d —, the ASan shader-cache attack `shadercache-attack`, and the target tests `photon-target` and `scale-target`, §1b/§1c; the benches' `--smoke` rows, label `benchmark-smoke`, DO run). The set lives in the script ONLY; this doc never copies it (`source.gate_scope_rules` case 9 fails on a literal `-LE` list here), and neither may a script — `scripts/lead/rc-gate.sh` must run what `--merge-tier` prints. `--timeout 120` is the default for rows that set none; the box runs ONE gate at a time (§4c, the gate slot) — there is no lower width "while another lane's gate is live". **Measured (D6B-GATE-SHAPE, 2026-09-27): 56.7 min at -j4 beside other lanes' gates, 36.6 min simulated on the audit's quieter durations — the reshape's ~30 min goal (and its lane's ≤ 35 min bar) was NOT reached; §5 has the before/after pair and why** | a lane whose scope falls back (see §3), any merge the lead wants covered wider, and — while the full gate is under moratorium — the gate before a push | gate-runner |
+| **PUSH** | the MERGE tier + the `--engine-selftest` sha256 lines — **FOUR of them since lane FENCE-1**: `pose 1`, `pose 2`, `pose B1 (rays)`, `pose B2 (no rays)`. Poses 1-2 are the default scene at the PLAIN grade; pose pair B is a purpose-built fixture (glossy floor, cascade crossing, emissive 3.0, mirror pillar) at the VIEWPORT grade, which is the only grade that carries the SSR prepass and therefore the ray tier. Quote all four. (The moratorium of 2026-09-09 lifted 2026-09-10 with the cleanup. The `stage-close` rows are not push rows: the lead runs the STAGE-CLOSE batch before every push, below) | once per BATCH of merged lanes, before a push | gate-runner |
+| **STAGE-CLOSE** | THE BATCH OF THE ROWS THE MERGE AND PUSH TIERS LEAVE OUT (§1d; lane STAGE-CLOSE-1): `python3 scripts/gate-scope.py --stage-close-tier --run` (or `JAH_GATE_TIER=stage-close scripts/lead/rc-gate.sh <tag>`) — ONE gate in the slot, two phases: every `stage-close` row without `quiet-box` (the minutes-of-one-process sweeps atom.cluster_cut, atom.cluster_crack, gi.chain_converge_scenes; samples.mirror_room_boots; gpu.cutout_soak and the shadow casters' `.churn` twins; shadercache.container_asan) at the gate's width, then every `quiet-box` / `timing` one — the benches' `--assert` rows, gi.gather_cost, vr.frame_budget, **open.crash_soak** (OPEN-FRAMES-1: the async-open teardown repro twelve times under glibc's malloc checks; read one failure as "run it again", three as a regression of the open's slice-boundary drive) and the `<suite>.timing` millisecond rows (§4) — at `-j1` on ONE hold of the whole card (`--stage-close-tier` / `--stage-close-tier-serial` print the two lines; the run-log tier is `stage-close`) | at every stage close and before every push — started by the lead, never by a timer | the lead |
 
 Tiers are contracts: nobody hand-picks suites out of one. A lane says which tier it ran and
 its selection; the lead's merge audit reads that line.
@@ -109,28 +109,54 @@ blob another bake producer made is STALE and the fixture row re-bakes it in plac
 fixture row to any selection naming a row that reads a shell; a row whose shell is missing or stale
 FAILS and says how to bake it — no row measures a smaller asset in its place.
 
-### 1d. THE NIGHTLY LABELS — `nightly` and `quiet-box` (lane D6B-GATE-SHAPE)
+### 1d. THE STAGE-CLOSE ROWS — `stage-close` and `quiet-box` (lanes D6B-GATE-SHAPE, STAGE-CLOSE-1)
 
-`benchmark` used to double as the nightly marker, so rows that are not benchmarks at all
-(open.crash_soak, gi.gather_cost) carried it. Two labels say it now, both read by
-`gate-scope.py` alone:
+THE STAGE-CLOSE ROWS — run by the lead as ONE batch, in the gate slot, at every stage close and
+before every push; never by a timer (the owner, 2026-10-09: the daily run the label was first
+named after never existed — no such tier ever ran and its timer was never installed — while its
+rows rode every scoped gate a broad rule reached: 437 runs, 15.4 h in a week). Two labels, read
+by `gate-scope.py` alone:
 
-- **`nightly`** — the row leaves the MERGE and PUSH tiers (`NIGHTLY_LABELS`) and runs in the
-  nightly tier. It is either MINUTES OF ONE PROCESS whose push-time guard lives elsewhere
-  (atom.cluster_cut 141 s and atom.cluster_crack 136 s — the bake's sweeps; gi.chain_converge_scenes
-  80 s, whose claim gi.chain_converge holds at every push) or a measurement.
-  **A `nightly` row still rides the SCOPED gate of its own subject**: a change to the bake
-  (irisgl/import) selects the cluster suites, a GI change the converge sweep — the move was
-  made only after the scope rules could see them (the audit's condition, S2).
-- **`quiet-box`**, beside `nightly` on every row that MEASURES — the wall-clock benchmarks,
+- **`stage-close`** — the row leaves the MERGE and PUSH tiers (`STAGE_CLOSE_LABELS`) and runs in
+  the STAGE-CLOSE batch (§1, `--stage-close-tier`). It is MINUTES OF ONE PROCESS whose push-time
+  guard lives elsewhere (atom.cluster_cut 141 s and atom.cluster_crack 136 s — the bake's sweeps;
+  gi.chain_converge_scenes 80 s, whose claim gi.chain_converge holds at every push;
+  samples.mirror_room_boots, ten boots; gpu.cutout_soak), a CHURN TWIN (shadow.cutout_caster.churn
+  and shadow.two_sided_caster.churn: the gate rows' script in ten processes — the gate rows
+  themselves run one), or a measurement.
+  **A `stage-close` row rides a SCOPED gate ONLY through its OWN subject** (`SUBJECT_ONLY_LABELS`):
+  a rule of `STAGE_CLOSE_SUBJECTS` names it, or the change is in its own test directory
+  (`tests/<its dir>/`: its source, script or registration). A broad rule that reaches it — the
+  engine family, every app row, a header's readers, a `tests/support` helper — leaves it for the
+  batch, and the selection prints it by name ("left for the stage-close batch"). A catch such a
+  row would have made on a lane waits for the stage close (accepted, 2026-10-09). The subject
+  rules (`gate-scope.sh --stage-close-rules` prints them):
+
+  | a change to | still selects |
+  |---|---|
+  | `irisgl/import/` (the cluster-DAG bake), `irisgl/thirdparty/meshoptimizer*` | atom.cluster_cut, atom.cluster_crack |
+  | Photon: `irisgl/engine/src/photon/`, `OgreGi`, `OgrePhotonView`, the voxel gather, `OgreVoxelReaderParity`, the surface cache, `irisgl/engine/media/Photon/`; the fork's VCT / irradiance-field code and media | gi.chain_converge_scenes, samples.mirror_room_boots |
+  | the Mirror Room sample, `OgrePlanar`, the screen-probe gather | samples.mirror_room_boots |
+  | shadow / caster: `OgreShadow`, `OgreAtomCasterPass`, the Hlms shadow/caster media; the fork's `OgreHlmsPbs.cpp` and its shadow/caster pieces | gpu.cutout_soak, shadow.cutout_caster.churn, shadow.two_sided_caster.churn |
+
+  Once selected, a stage-close row GATES like any row (the label is NOT in
+  `SCOPE_EXCLUDED_LABELS`, which means "never gating").
+  **A STAGE-CLOSE RED BLOCKS.** `scripts/ci_gate_check.py --stage-close <tip> --build <the tip's build>`
+  refuses (exit 1) while any `stage-close` row is red at the tip or has no record there — the merge
+  refusal's flake law and its "no record = refused", over the whole label, no re-use from another
+  commit; a red is answered by a fix, a recorded verdict (`--verdict "<row>=<text>"`) or, for the
+  contention class, 3/3 solo. rc-gate.sh runs it after the batch and `push.sh` refuses a push on it.
+- **`quiet-box`**, beside `stage-close` on every row that MEASURES — the wall-clock benchmarks,
   gi.gather_cost (the GPU clock), vr.frame_budget, and the `<suite>.timing` rows (§4) — and on
-  open.crash_soak (twelve RUN_SERIAL processes read probabilistically: a scoped gate that ran
-  it would stop for minutes). A scoped
-  gate NEVER runs these (it shares the box with other lanes by construction); they are also
-  the rows the GPU-timing lock is for.
+  open.crash_soak (twelve RUN_SERIAL processes read probabilistically). A scoped gate NEVER runs
+  these (no subject rule names one); in the batch they run `-j1` on one hold of the whole card,
+  after the other rows.
 
 `source.gate_scope_rules` case 12 holds the split (a change to test_open_responsive.cpp scopes
-open.responsive and not open.responsive.timing; `--nightly-tier` names `nightly`).
+open.responsive and not open.responsive.timing); `gate.stage_close_select` holds the subject-only
+selection, the batch's two phases and the refusal of the retired tier flag;
+`gate.stage_close_labels` holds the rename (no retired label or word in tests/, scripts/, docs/)
+and the shadow casters' split. The run log's archive keeps the old tier name on its old records.
 
 ## 2. Every gate, regardless of tier
 
@@ -169,8 +195,8 @@ zero and stays there.
 
 THE PRINCIPLE (TESTING_V2 T3; PHOTON_ATOM_CONTRACT §7b rule 1): a lane runs everything its
 change CAN REACH and nothing it cannot — read from the build and the diff, never guessed — and
-the full tiers stay where the process needs them (a stage close, a fork pin bump, nightly, the
-phase's push). `-j N` / `--jobs N` sets the ctest parallelism (default `GATE_JOBS`); the printed command,
+the full tiers stay where the process needs them (a stage close and its stage-close batch, a fork
+pin bump, the phase's push). `-j N` / `--jobs N` sets the ctest parallelism (default `GATE_JOBS`); the printed command,
 the wall estimate and a fallback's MERGE tier all follow it.
 
 ```
@@ -264,7 +290,7 @@ TESTING-DEBTS-1); the estimate line counts which source each cost came from).
 **THE RUN LOG (TESTING_V2 T8).** `--run` (its tier `scoped`, or `scoped-fallback` / `scoped-tier` when a scoped gate ran the whole tier), `--solo` and the rc-gate tiers
 (`scripts/gate_runlog.py run --tier <t> -- <ctest line>`) append one JSON record per row and per
 pool arm to `<workspace>/testing/runs/<date>-<tier>-<tip>.jsonl` — the tier one of
-`gate_runlog.TIERS` (scoped, scoped-fallback, scoped-tier, target, merge, stage, nightly, push, smoke,
+`gate_runlog.TIERS` (scoped, scoped-fallback, scoped-tier, target, merge, stage, stage-close, push, smoke,
 fork; any other name is refused before the run): verdict (PASS | FAIL | CRASH | TIMEOUT | NOTRUN |
 NOADMIT | OOM | LOST, §4b), retries, wall seconds, a target's value, the selection reason, the
 tree's three shas, `lanes` (the LIST of lanes the gated tree carries — a batch candidate's every
@@ -286,7 +312,7 @@ recorded lane diffs (`tests/hygiene/gate_selection_cases.json`: D's last ten lan
 with each verdict's evidence) against the current build's graph: every REAL red must be selected,
 no lane may fall back, a fork bump must select the tier by rule, the audit's S1/S2 subjects select
 their suites, and the graph's precision holds (a compiled row whose executable does not contain
-the file is NOT selected). **A red that a stage, nightly or push tier finds and that a lane's
+the file is NOT selected). **A red that a stage, stage-close or push tier finds and that a lane's
 scoped selection missed is a SELECTOR DEFECT: it is fixed in `gate-scope.py` and added to the
 cases file** — never answered with a wider rule "to be safe". `source.gate_scope_rules` guards the
 tool's own traps (the empty inventory, `--build .`, the targets' split, the fallback's -j).
@@ -297,7 +323,7 @@ candidate's tree: it prints the selection and every reason, runs it, writes the 
 non-zero on any gating red (target tests report, never gate, and run after the verdict as their own
 step). (2) `source.testing_rules` (label `hygiene`) lints the rules the tree can show: R1
 every measuring row (`.timing`, `.benchmark`, `JAHSHAKA_TIMING_BARS=1`) inside the GPU lock; R2
-every `nightly` row priced in `scripts/gate-times.txt`; R3 no copied `ctest -LE` tier outside
+every `stage-close` row priced in `scripts/gate-times.txt`; R3 no copied `ctest -LE` tier outside
 `gate-scope.py`; R4 no `RUN_SERIAL` without a comment naming its reason (or the GPU lock); R5 every
 app/lint row reachable from a subject (an API module its script or harness calls, a rule's
 directory, a tree file it runs). (3) THE MERGE REFUSAL: `scripts/ci-gate-check.sh <range>` exits 1
@@ -559,31 +585,31 @@ admission, so ctest's TIMEOUT (budget + 30 s + the wait's bound) is only the bac
 row never runs short; a wait past the bound is the run log's NOADMIT (never ran — the box's queue,
 not the row's code), and a row stopped by its own budget is a TIMEOUT.
 
-**THE MILLISECOND BARS ARE NIGHTLY: counts at push, milliseconds on a quiet box** (D6B-GATE-SHAPE;
+**THE MILLISECOND BARS ARE STAGE-CLOSE ROWS: counts at push, milliseconds in the batch's quiet-box phase** (D6B-GATE-SHAPE;
 audit §5). A wall-clock bar reads the box as much as the code, and the GPU lock does not exclude
 the CPU load of a -j4 gate (open.responsive's 300 ms frame bar read 605 ms cold on a UI thread
 that was not blocked). So a suite with such a bar is TWO ROWS OVER ONE BINARY: the push row
 asserts every count, structure and picture claim and PRINTS each millisecond reading
-(`time: within|OVER: …`); `<suite>.timing` (labels `nightly;quiet-box`, the lock) runs the same
+(`time: within|OVER: …`); `<suite>.timing` (labels `stage-close;quiet-box`, the lock) runs the same
 binary with `JAHSHAKA_TIMING_BARS=1` and asserts them (`tests/support/timingbars.h`,
 `JAH_TIMING_CHECK`; for a `--script` suite, `jah_timing_script()` generates the armed copy). Rows:
 open.responsive, archive.responsive, avatar.responsive, chain.hzb, engine.gpu_cull,
 gi.field_follows, ui.properties_filter, ui.components, meshbake.cards, app.update_check,
 app.shutdown_order, vr.warmup, scripting.e2e.editor_controls. Nothing was deleted: a bar that
-reds only on a loaded box is read nightly, never widened.
+reds only on a loaded box is read in the stage-close batch, never widened.
 
 **THE SERIAL FAMILIES** (D6B-GATE-SHAPE; audit R1/R2). RUN_SERIAL stops EVERY other suite of the
 gate while one runs (54 rows, 1,487 s of the audit's 3,125 s gate, 48 % of its wall with one row
 running). A group that must not overlap EACH OTHER takes a `RESOURCE_LOCK` instead, and a COST
 above every measured row so its chain starts first and overlaps the gate:
 `monado` — the sixteen rows that start a Monado runtime (the fourteen of the push tier plus
-the nightly vr.frame_budget and vr.warmup.timing) (each runner's IPC socket lives in its
+the stage-close vr.frame_budget and vr.warmup.timing) (each runner's IPC socket lives in its
 own XDG_RUNTIME_DIR, so the "one socket" reason was void; vr.eye_grade captures the compositor
 with `xwd -id` and therefore runs on ITS OWN Xvfb, displays 241-299); `gi_chain` — the
 cascade-chain rows (their VRAM reason was measured false). `threading` — the four compile halves of tests/threading (mode / mode_serial / gi_resolve /
 gi_resolve_serial; GATE-SPEED-1: they were RUN_SERIAL; their claim is a byte compare, the verdict
 is in their CMake). RUN_SERIAL remains only where the audit kept it (app.input_keys,
-app.watchdog_stall, gi.field_scroll, newproject_stall.timing, and the nightly benches).
+app.watchdog_stall, gi.field_scroll, newproject_stall.timing, and the stage-close benches).
 
 ## 4b. THE VRAM BUDGET — box-wide tokens (lane GATE-ADMIT-1, 2026-09-27)
 
@@ -821,8 +847,8 @@ samples.session 37, workflow_grid 36, reopen_fidelity 36, shadercache.app 36.
 | 11 RUN_SERIAL islands | 410 | pure wall time |
 
 At `-j4` the floor is 572 + 410 ≈ 16 min by construction. The cleanup lane
-(SPECS/TEST_GATE_AUDIT.md, steps 1-8) moves the benchmark to a 15 s smoke + nightly,
-restructures and moves the cache attacks nightly, folds 14 duplicate sample boots into
+(SPECS/TEST_GATE_AUDIT.md, steps 1-8) moves the benchmark to a 15 s smoke + a stage-close row,
+restructures and moves the cache attacks to the stage-close batch, folds 14 duplicate sample boots into
 `samples.cleanstart`, merges the three xdotool drivers, fixes the port-8751 collision that
 makes `-j4` unsafe, and trims timeouts to 6× measured. Projection: ~9 min for the full gate at
 `-j4`, ~5 min for MERGE. The multi-script runner this section once
@@ -836,7 +862,7 @@ scheduled as "phase 2" is built: §8 (the pools).
 - **Lead**: audits the lane (diff, `~/Developer/scripts/platform-audit.sh`), stacks the ready lanes
   as ONE candidate (`merge-dbuild-lane.sh batch`), runs ONE gate on it (`rc-gate.sh`, §3c), lands
   it (`batch-land`) or attributes its reds, pushes at a sensible batch (irisgl first), and runs
-  the stage-close and nightly rows.
+  the STAGE-CLOSE batch at every stage close and before every push.
 - **gate-runner**: runs the tier it is given, never picks, restores what it touched, kills
   only its own pids.
 

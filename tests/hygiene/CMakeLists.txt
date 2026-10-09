@@ -233,6 +233,22 @@ if(Python3_Interpreter_FOUND)
                      "${CMAKE_SOURCE_DIR}" "${CMAKE_BINARY_DIR}")
     set_tests_properties(gate.log_schema2 PROPERTIES TIMEOUT 180 LABELS "hygiene")
     jah_no_display(gate.log_schema2)
+    # gate.stage_close_select / gate.stage_close_labels — THE STAGE-CLOSE ROWS (STAGE-CLOSE-1; TESTING_GATE §1d):
+    # a `stage-close` row rides a scoped gate only through its own subject (STAGE_CLOSE_SUBJECTS, its own
+    # test dir) — never a broad rule; the batch (`--stage-close-tier`, two phases) selects every such row
+    # and no other; the retired tier flag is refused by name (a toy inventory and a toy ctest project,
+    # ~2 s). The labels row: the retired word is gone from tests/, scripts/, docs/, and the shadow
+    # casters' gate rows run one process while their `.churn` twins run ten, labelled stage-close.
+    add_test(NAME gate.stage_close_select
+             COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/gate_stage_close_test.py" select
+                     "${CMAKE_SOURCE_DIR}" "${CMAKE_BINARY_DIR}")
+    set_tests_properties(gate.stage_close_select PROPERTIES TIMEOUT 120 LABELS "hygiene")
+    jah_no_display(gate.stage_close_select)
+    add_test(NAME gate.stage_close_labels
+             COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/gate_stage_close_test.py" labels
+                     "${CMAKE_SOURCE_DIR}" "${CMAKE_BINARY_DIR}")
+    set_tests_properties(gate.stage_close_labels PROPERTIES TIMEOUT 120 LABELS "hygiene")
+    jah_no_display(gate.stage_close_labels)
 endif()
 
 # source.member_init — UNINIT-SWEEP-1: every scalar, pointer and enum member of ours

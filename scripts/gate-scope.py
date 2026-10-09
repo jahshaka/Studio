@@ -142,8 +142,8 @@ AREA_RULES = [
     # display-free shell scripts, well under a second.
     # `atom` and `compute` (D6B-GATE-SHAPE; audit S2): irisgl/import/meshbake.cpp carries the
     # cluster-DAG bake, and atom.cluster_cut / atom.cluster_crack / engine.lod_rule_parity are
-    # its only guards — stage-close-labelled or not, a change to the bake selects them (§1 of
-    # docs/TESTING_GATE.md: a `stage-close` row still rides the scoped gate of its own subject).
+    # its only guards (the two cluster sweeps are `stage-close` rows: they ride a bake change through
+    # STAGE_CLOSE_SUBJECTS below, never through this rule's directories — docs/TESTING_GATE.md §1d).
     (r"^irisgl/import/",
      ["importer", "importasync", "meshbake", "avatar", "skeletal", "assetdelete", "assetgc",
       "assetmeta", "assetmigrate", "assetpaths", "assets", "samples", "thumbnails", "hygiene",
@@ -293,21 +293,59 @@ AREA_RULES = [
 # Cheap smoke suites always added when src/ or irisgl/ moved (a boot that renders + the
 # contract of the scripting surface), ~15 s together.
 ALWAYS_ON_CODE = ["app.startup_quiet", "api.contract"]
-# THE STAGE-CLOSE TIER (D6B-GATE-SHAPE; audit §8 — `benchmark` used to be overloaded as this
-# marker, so open.crash_soak and gi.gather_cost carried a label that said the wrong thing).
-#   `stage-close`     — every row the MERGE and PUSH tiers leave out: minutes of one process whose
-#                   push-time guard lives elsewhere, or a millisecond bar that needs a quiet box.
+# THE STAGE-CLOSE ROWS (STAGE-CLOSE-1; D6B-GATE-SHAPE before it, under a daily-run name for a tier
+# that never once ran — the owner, 2026-10-09: there is no such build). Two labels, read here alone:
+#   `stage-close` — the row leaves the MERGE and PUSH tiers and runs in THE STAGE-CLOSE BATCH
+#                   (`--stage-close-tier`): one batch in the gate slot, started BY THE LEAD at every
+#                   stage close and before every push (rc-gate.sh JAH_GATE_TIER=stage-close), never
+#                   by a timer. Minutes of one process whose push-time guard lives elsewhere, a churn
+#                   twin (ten processes of a one-process gate row), or a millisecond bar.
 #   `quiet-box`   — beside `stage-close` on the rows that MEASURE (the wall-clock benchmarks, the
-#                   `<suite>.timing` millisecond rows, a GPU clock). A scoped gate never runs
-#                   them: it shares the box with other lanes by construction.
-# A `stage-close` row WITHOUT `quiet-box` still rides the scoped gate of its own subject — it is
-# that change's guard (atom.cluster_cut for a bake change: audit §3c's condition for the move).
+#                   `<suite>.timing` millisecond rows, a GPU clock): never in a scoped gate (it
+#                   shares the box by construction), and in the batch at -j1 on the whole card.
+# A `stage-close` row WITHOUT `quiet-box` rides a scoped gate ONLY when the diff touches ITS OWN
+# SUBJECT: a rule of STAGE_CLOSE_SUBJECTS names it, or the change is in its own test directory
+# (Selection.stage_close_subjects). A broad rule (the engine family, every app row, a header's
+# readers) that reaches it leaves it for the batch — a catch it would have made waits for the stage
+# close (the owner accepted that, 2026-10-09).
 # Anchored in the -LE: `shadercache` alone would drop the product-contract cache suites (code
 # review 2026-09-10). `--timeout 120` is ctest's DEFAULT for the rows that set no TIMEOUT — a
 # hang costs 2 min, not 25.
 STAGE_CLOSE_LABELS = {"stage-close", "shadercache-attack"}
-# Never selected by a scoped gate (the shader-cache attack is minutes under ASan).
+# Never selected by a scoped gate (the shader-cache attack is minutes under ASan). A row selected
+# WITHOUT these labels is a gating row of that gate (ci_gate_check, --joint read this set).
 SCOPE_EXCLUDED_LABELS = {"quiet-box", "shadercache-attack"}
+# Selected by a scoped gate only through its own subject (STAGE_CLOSE_SUBJECTS, its own test dir);
+# once selected it gates like any row. NOT in SCOPE_EXCLUDED_LABELS on purpose: that set means
+# "never gating", and a subject-selected stage-close row is that change's guard.
+SUBJECT_ONLY_LABELS = {"stage-close"}
+QUIET_BOX_LABEL = "quiet-box"
+
+# THE STAGE-CLOSE SUBJECTS (STAGE-CLOSE-1 U2; the audit's condition S2): path regex -> the
+# `stage-close` rows a change to that path reaches DIRECTLY. Matched against every touched path,
+# and — for a fork pin bump — against every fork file as `irisgl/thirdparty/ogre-next/<file>`. A
+# quiet-box row is never named here. `gate-scope.py --stage-close-rules` prints the table.
+_FORK = r"irisgl/thirdparty/ogre-next/"
+STAGE_CLOSE_SUBJECTS = [
+    # THE BAKE'S SWEEPS: the cluster-DAG bake (irisgl/import: meshbake.cpp, clusterlod.cpp) and the
+    # library it calls (meshoptimizer, its clusterlod patch stack).
+    (r"^irisgl/(import/|thirdparty/meshoptimizer)", ["atom.cluster_cut", "atom.cluster_crack"]),
+    # THE CONVERGE SWEEP and THE BOOT DETERMINISM: Photon (the voxel chain, the irradiance field, the
+    # GI driver, the surface cache it reads) — mirror_room_boots' one real catch (PHOTON-I-1, ledger
+    # §1623) was the GI rest rule — and the fork's VCT / irradiance-field code and media.
+    (r"^(irisgl/engine/(src/(photon/|OgreGi\.|OgrePhotonView\.|(Ogre)?GpuVoxelGather\.|OgreVoxelReaderParity\.|"
+     r"(Ogre)?SurfaceCache\.)|media/Photon/)|" + _FORK +
+     r"(Components/Hlms/Pbs/(src|include)/Vct/|Samples/Media/(VCT|Compute/Algorithms/IrradianceFields)/))",
+     ["gi.chain_converge_scenes", "samples.mirror_room_boots"]),
+    # THE MIRROR ROOM'S OWN PICTURE: the sample, the planar reflections, the screen-probe gather.
+    (r"^(scenes/Mirror Room\.zip$|irisgl/engine/src/(OgrePlanar|OgreScreenProbeGather|ScreenProbeGather)\.)",
+     ["samples.mirror_room_boots"]),
+    # THE CASTER SOAKS: the shadow and caster code (ours and the fork's Pbs caster) — the soak and
+    # the ten-process churn twins of the shadow casters' gate rows.
+    (r"^(irisgl/engine/(src/(OgreShadow|OgreAtomCasterPass)\.|media/Hlms/.*([Ss]hadow|[Cc]aster))|" + _FORK +
+     r"(Components/Hlms/Pbs/src/OgreHlmsPbs\.cpp$|Samples/Media/Hlms/(Common|Pbs)/.*([Ss]hadow|[Cc]aster)))",
+     ["gpu.cutout_soak", "shadow.cutout_caster.churn", "shadow.two_sided_caster.churn"]),
+]
 
 # TARGET TESTS (PHOTON phase A, A1 §0; the label's ONE definition lives here).
 #
@@ -366,11 +404,23 @@ def merge_tier_serial():
             f'-LE "^({STAGE_CLOSE_LABEL_RE})$"')
 
 
-# The STAGE-CLOSE tier: every `stage-close` row, one at a time (they are minutes of one process or a
-# measurement that wants the box), on a quiet box, by the lead.
-def stage_close_tier():
-    rx = "|".join(sorted(re.escape(l) for l in STAGE_CLOSE_LABELS))
-    return f'ctest -j1 --output-on-failure -L "^({rx})$"'
+# THE STAGE-CLOSE BATCH (STAGE-CLOSE-1 U4; docs/TESTING_GATE.md §1d): every `stage-close` row (and
+# the shader-cache attack), in TWO phases like the MERGE tier — the minutes-of-one-process rows and
+# the churn twins at the gate's width, then every `quiet-box` or `timing` row at -j1 on ONE hold of
+# the whole card. ctest ANDs repeated -L filters. Started by the lead (rc-gate.sh, or
+# `gate-scope.sh --stage-close-tier --run`), never by a timer.
+_STAGE_CLOSE_RX = "|".join(sorted(re.escape(l) for l in STAGE_CLOSE_LABELS))
+_QUIET_RX = "|".join(sorted(re.escape(l) for l in (QUIET_BOX_LABEL, TIMING_LABEL)))
+
+
+def stage_close_tier(jobs=GATE_JOBS):
+    """The stage-close batch's PARALLEL phase (its second phase is stage_close_tier_serial())."""
+    return f'ctest -j{jobs} --output-on-failure -L "^({_STAGE_CLOSE_RX})$" -LE "^({_QUIET_RX})$"'
+
+
+def stage_close_tier_serial():
+    """The stage-close batch's QUIET-BOX phase: the measuring rows, one at a time, on the whole card."""
+    return f'ctest -j1 --output-on-failure -L "^({_STAGE_CLOSE_RX})$" -L "^({_QUIET_RX})$"'
 
 
 def sh(cmd, cwd=None):
@@ -897,10 +947,18 @@ class Selection:
             for e in t["exes"]: self.exe_rows[e].append(n)
         self.row_names = set(inv)
         self._visited = set()
+        # THE STAGE-CLOSE ROWS' ORIGINS (STAGE-CLOSE-1 U2): the directly touched path each
+        # `stage-close` row was reached from, read by stage_close_subjects() after the walk
+        self._origin = None
+        self.sc_origins = collections.defaultdict(set)
+        self.stage_close_left = {}         # row -> the broad reason that reached it, left for the batch
 
     # -- adding rows -----------------------------------------------------------------------
     def add(self, suites, why):
         for s in suites:
+            r0 = s.split("::", 1)[0]
+            if r0 in self.inv and self.inv[r0]["labels"] & SUBJECT_ONLY_LABELS:
+                self.sc_origins[r0].add(self._origin)
             if "::" in s:
                 row, arm = s.split("::", 1)
                 if row in self.inv and row not in self.whole:
@@ -985,10 +1043,36 @@ class Selection:
         self.add(hit, f"{why}: its command line runs it")
         return hit
 
+    def stage_close_subjects(self, paths):
+        """U2 (STAGE-CLOSE-1): a `stage-close` row stays in a scoped selection only when the change
+        touches ITS OWN SUBJECT — a touched path in its own test directory (tests/<its dir>/: its
+        source, its script, its registration) or a STAGE_CLOSE_SUBJECTS rule naming it. Every other
+        reach (an area rule's directories, the engine family, every app row, a header's readers, a
+        tests/support helper) leaves it in stage_close_left, for the batch. Then the subject rules
+        ADD the rows they name (a broad rule need not have reached them)."""
+        for n in [n for n in self.selected if self.inv[n]["labels"] & SUBJECT_ONLY_LABELS]:
+            d = "tests/" + self.inv[n]["dir"] + "/"
+            if any(o and o.startswith(d) for o in self.sc_origins.get(n, ())):
+                continue
+            self.stage_close_left[n] = self.selected.pop(n)
+            self.whole.discard(n)
+            self.arms.pop(n, None)
+        reached = list(paths)
+        if self.fork_bump and self.fork_bump.get("files"):
+            reached += [_FORK + f for f in self.fork_bump["files"]]
+        for p in reached:
+            for pat, rows in STAGE_CLOSE_SUBJECTS:
+                if not re.match(pat, p): continue
+                named = [r for r in rows if r in self.inv and not (self.inv[r]["labels"] & SCOPE_EXCLUDED_LABELS)]
+                for r in named:
+                    self.stage_close_left.pop(r, None)
+                self.add(named, f"{p}: stage-close subject rule {pat[:60]}{'…' if len(pat) > 60 else ''}")
+
     # -- the path walk ---------------------------------------------------------------------
     def path(self, p, depth=0, via=None):
         """Select for one reached path. `via` names why a path is reached indirectly (a symbol,
         a CMake command); a directly touched path has via=None."""
+        if depth == 0: self._origin = p
         key = (p, depth > 0)
         if key in self._visited: return
         self._visited.add(key)
@@ -1907,6 +1991,7 @@ def select(paths, rng, build, jobs, graph=None, inv=None, quiet_graph=False):
     S = Selection(inv, graph, app_exe, Revs(rng), jobs)
     for p in paths:
         S.path(p)
+    S.stage_close_subjects(paths)
     if S.code_moved: S.add(ALWAYS_ON_CODE, "code moved: smoke + contract")
     if graph is not None: graph.save_syms()
     return S
@@ -2169,6 +2254,14 @@ def run_target_step(target_cmd, build, lane, log_range, labels, reasons, exclude
 
 
 def main():
+    # A TIER FLAG THIS TOOL DOES NOT RUN is refused by name, never parsed as a range (STAGE-CLOSE-1: the
+    # batch of the rows that leave the MERGE and PUSH tiers is `--stage-close-tier`; no alias is kept)
+    for x in sys.argv[1:]:
+        if re.match(r"^--[a-z-]+-tier(-serial)?$", x) and x not in (
+                "--merge-tier", "--merge-tier-serial", "--fork-tier", "--stage-close-tier", "--stage-close-tier-serial"):
+            sys.stderr.write(f"gate-scope: {x} is not a tier this tool runs — the rows the MERGE and PUSH tiers leave "
+                             f"out run as the stage-close batch: --stage-close-tier (docs/TESTING_GATE.md §1d)\n")
+            sys.exit(2)
     ap = argparse.ArgumentParser()
     ap.add_argument("range", nargs="?", help="git range base..tip (Studio repo)")
     ap.add_argument("--files", nargs="*", help="explicit touched paths instead of a range")
@@ -2216,7 +2309,15 @@ def main():
                     help="print the MERGE tier's SERIAL phase (its timing rows at -j1, run after --merge-tier's "
                          "parallel phase) and exit")
     ap.add_argument("--stage-close-tier", action="store_true",
-                    help="print the STAGE-CLOSE tier's ctest command (every `stage-close` row, -j1) and exit")
+                    help="THE STAGE-CLOSE BATCH (the lead's, at every stage close and before every push): print "
+                         "its parallel phase (at -j) and exit; with --run, run both phases in the gate slot "
+                         "(run-log tier `stage-close`; the quiet-box/timing phase -j1 on one whole-card hold)")
+    ap.add_argument("--stage-close-tier-serial", action="store_true",
+                    help="print the stage-close batch's quiet-box phase (every `quiet-box`/`timing` stage-close "
+                         "row, -j1, the whole card) and exit")
+    ap.add_argument("--stage-close-rules", action="store_true",
+                    help="print STAGE_CLOSE_SUBJECTS (which paths still bring which stage-close rows into a "
+                         "scoped gate) and exit")
     ap.add_argument("--gate-jobs", action="store_true",
                     help="print GATE_JOBS, the gate's parallel width (rc-gate.sh reads it), and exit")
     ap.add_argument("--resume", action="store_true",
@@ -2246,8 +2347,14 @@ def main():
         print(merge_tier(a.jobs)); return
     if a.merge_tier_serial:
         print(merge_tier_serial()); return
-    if a.stage_close_tier:
-        print(stage_close_tier()); return
+    if a.stage_close_tier_serial:
+        print(stage_close_tier_serial()); return
+    if a.stage_close_rules:
+        for pat, rows in STAGE_CLOSE_SUBJECTS:
+            print(f"{pat}\n    -> {' '.join(rows)}")
+        return
+    if a.stage_close_tier and not a.run:
+        print(stage_close_tier(a.jobs)); return
     gate_runlog.BATCH = a.batch            # `batch: <tag>` on every record (a candidate's gate, an attribution)
     if a.attribute:
         # each lane's OWN worktree and build (--lanes), never this checkout's
@@ -2299,6 +2406,23 @@ def main():
         print(f"gate-scope --resume: {len(got)} row(s) already have a record at this tip")
         return got
 
+    if a.stage_close_tier:
+        # THE STAGE-CLOSE BATCH (U4): the slot once, both phases, each row recorded as it ends
+        sc_lane = gate_runlog.lane_list(a.lane) or ["stage-close"]
+        sc_tier = a.tier or "stage-close"
+        labels = {n: t["labels"] for n, t in load_inventory(build).items()}
+        print(f"{stage_close_tier(a.jobs)}\n{stage_close_tier_serial()}")
+        gate("stage-close"); skip = done_rows()
+        t0 = __import__("time").time()
+        rc = lost(gate_runlog.run_ctest(stage_close_tier(a.jobs), build, sc_tier, sc_lane, a.jobs, reasons={},
+                                        labels=labels, exclude=skip))
+        print("\n=== the quiet-box phase: every measuring stage-close row, -j1, the whole card held once ===")
+        rc = lost(gate_runlog.run_ctest(stage_close_tier_serial(), build, sc_tier, sc_lane, 1, reasons={},
+                                        labels=labels, exclude=skip, whole_card=True)) or rc
+        print("\n=== GATE VERDICT: %s (exit %d) — the stage-close batch, %.0f s wall ===" % (
+            "GREEN" if rc == 0 else "RED", rc, __import__("time").time() - t0))
+        gate_runlog.trend_at_gate_end()
+        sys.exit(rc)
     lane = gate_runlog.lane_list(a.lane) or [gate_runlog._git(["rev-parse", "--abbrev-ref", "HEAD"])]
     # the run log records the range by sha (HEAD moves; the record must not)
     log_range = a.range
@@ -2361,7 +2485,7 @@ def main():
     inv, selected = S.inv, S.selected
 
     # The quiet-box measurements never ride a scoped gate (see STAGE_CLOSE_LABELS). A `stage-close`
-    # row without `quiet-box` stays: its subject changed, and it is that change's guard.
+    # row without `quiet-box` is here only through its own subject (select(): stage_close_subjects).
     quiet = [n for n in selected if inv[n]["labels"] & SCOPE_EXCLUDED_LABELS]
     for n in quiet: selected.pop(n)
     # TARGET TESTS ARE SPLIT OUT, NOT DROPPED (see TARGET_LABELS).
@@ -2459,7 +2583,10 @@ def main():
         run_tier("fallback"); return
     if S.skipped_ubiquitous:
         print(f"\n(modules called by >40% of scripts select nothing on their own: {sorted(S.skipped_ubiquitous)})")
-    if quiet: print(f"\n(quiet-box measurements left out: {sorted(quiet)})")
+    if quiet: print(f"\n(quiet-box measurements left out — the stage-close batch's: {sorted(quiet)})")
+    if S.stage_close_left:
+        print(f"\n(stage-close rows a broad rule reached, left for the stage-close batch — no subject rule "
+              f"names them and their own test dir did not move: {sorted(S.stage_close_left)})")
     if targets:
         print(f"\nTARGET TESTS (label {'/'.join(sorted(TARGET_LABELS))}) — they RUN and PRINT their "
               f"value, and they do NOT decide this gate:")

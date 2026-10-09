@@ -76,10 +76,13 @@ THE FOUR CASES, and each one is a rule of the tool rather than a number:
       the avatar import/switch select their `*.responsive` harnesses. Each FAILED before
       (measured by the audit: OgreChain.cpp selected 415 suites and no tests/atom row).
 
-  12. THE STAGE-CLOSE LABELS SAY WHAT THEY MEAN (D6B-GATE-SHAPE; audit §8). `stage-close` leaves
-      the MERGE/PUSH tiers; `quiet-box` beside it keeps a MEASUREMENT out of every scoped
-      gate. A change to test_open_responsive.cpp selects open.responsive (the counts) and
-      NOT open.responsive.timing (its millisecond bars); `--stage-close-tier` names `stage-close`.
+  12. THE STAGE-CLOSE LABELS SAY WHAT THEY MEAN (D6B-GATE-SHAPE; audit §8; STAGE-CLOSE-1).
+      `stage-close` leaves the MERGE/PUSH tiers for the lead's stage-close batch; `quiet-box`
+      beside it keeps a MEASUREMENT out of every scoped gate. A change to
+      test_open_responsive.cpp selects open.responsive (the counts) and NOT
+      open.responsive.timing (its millisecond bars); `--stage-close-tier` names `stage-close`
+      and `--stage-close-tier-serial` runs the measuring rows at -j1 (the subject-only
+      selection itself: gate.stage_close_select).
 
 Run: gate_scope_rules.py <source-dir> <build-dir>
 """
@@ -342,8 +345,11 @@ def main(source, build):
     check("open.responsive" in chosen and "open.responsive.timing" not in chosen,
           "the push row is scoped, its quiet-box millisecond twin is not")
     code, out, err = run([tool, "--stage-close-tier"], source)
-    check(code == 0 and "-L " in out and "stage-close" in plain(out) and "-j1" in out,
-          "`--stage-close-tier` prints the stage-close tier (%r)" % out.strip())
+    check(code == 0 and "-L " in out and "stage-close" in plain(out) and "quiet-box" in plain(out),
+          "`--stage-close-tier` prints the stage-close batch's parallel phase (%r)" % out.strip())
+    code, out, err = run([tool, "--stage-close-tier-serial"], source)
+    check(code == 0 and "stage-close" in plain(out) and "quiet-box" in plain(out) and " -j1 " in out,
+          "`--stage-close-tier-serial` prints its quiet-box phase at -j1 (%r)" % out.strip())
 
     # 13. THE TREND CHECK (TEST-1): `gate_runlog.py trend` names the first tip of a step and not a spike.
     sys.path.insert(0, os.path.join(source, "scripts"))
