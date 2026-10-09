@@ -387,7 +387,7 @@ JAH_GATE_TIER=scoped JAH_GATE_RANGE=<d-build>..<candidate> JAH_GATE_LANES=<lane>
 #   moved since `batch`) is refused; red: nothing moves and the red rows are ATTRIBUTED on the rig display NAMED by
 #   --display (:60-:99, its X lock present; the environment's DISPLAY is never read) — without it, the command:
 DISPLAY=:NN scripts/gate-scope.sh --attribute <row>[,<row>...] --batch <tag> --candidate <rc tree>:<candidate> \
-    --lanes <lane>:<worktree>:<tip> [...]
+    --control <d-build tree>:<d-build tip> --lanes <lane>:<worktree>:<tip> [...]
 ```
 **THE GENERATED FILE.** `docs/SCRIPTING.md` is `--dump-api-docs`'s output and `api.contract`
 byte-compares it: two lanes' versions cannot merge as text. When more than one lane touched it (or it
@@ -401,13 +401,16 @@ P; the candidate pins P (diverging fork lines cannot be one gated tree — land 
 first, or rebase the other on it). P ≠ d-build's pin = the candidate moves the pin = the full tier.
 
 **THE ATTRIBUTION.** Each red row runs 3x `--solo`-style in each lane's OWN worktree at its exact
-batch tip (the lanes' built trees; a worktree moved past its tip is refused) AND 3x at the CANDIDATE
-(its rc tree: the control); the whole card is taken once through `hold_card()` — whatever the card's
+batch tip (the lanes' built trees; a worktree moved past its tip is refused), 3x at the CANDIDATE
+(its rc tree) and 3x at every CONTROL (`--control`, several allowed: d-build's built tree at its tip,
+TESTING_V3_SPEC §1.3.2); the whole card is taken once through `hold_card()` — whatever the card's
 admission demands, it never assumes the gate slot is free. One table `row | tree | n/3 red | the first
 failing check`; the records carry `reason: attribute:<tag>`, retry, and in `lanes` that lane (the
 candidate's: the batch's list). Only REAL verdicts count: a run that never got its admission
 (NOADMIT) or never ran leaves its cell INCOMPLETE — the lane is neither named nor cleared until it
 ran. A row a lane's build does not register is ABSENT there and never blames it. Per row:
+- red on a CONTROL (d-build's own tip) = a D-BUILD DEFECT: it names nobody and is registered as
+  d-build's (exit 5);
 - a lane is NAMED when ANY of its solos is red (the flake law: one red run is a red, never outvoted)
   — it DROPS OUT and the rest are RE-GATED as a new candidate (a new tag — the exact-tip rule stands:
   no prefix records);

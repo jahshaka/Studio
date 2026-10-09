@@ -6,7 +6,7 @@
     scripts/gate-scope.sh --files path [path ...]
     scripts/gate-scope.sh --solo <suite> [...] [--times 3]     # the flake protocol, logged
     scripts/gate-scope.sh --attribute <row>[,<row>...] --batch <tag> --candidate <rc tree>:<tip> \
-                          --lanes <lane>:<worktree>:<tip> [...]   # a batch red: 3x on each lane's OWN tip + the candidate
+        --control <d-build tree>:<tip> --lanes <lane>:<worktree>:<tip> [...]  # a batch red: 3x per lane, candidate, control
     scripts/gate-scope.sh --record-times                       # gate-times.txt from the run log
     scripts/gate-scope.sh --merge-tier [-j N] | --merge-tier-serial | --nightly-tier | --gate-jobs
 
@@ -1912,22 +1912,25 @@ def select(paths, rng, build, jobs, graph=None, inv=None, quiet_graph=False):
     return S
 
 
-def attribute(row_args, lane_specs, tag, times, tier, candidate=None):
+def attribute(row_args, lane_specs, tag, times, tier, candidate=None, controls=None):
     """THE BATCH RED, ATTRIBUTED (BATCH-GATE-1; docs/TESTING_GATE.md §3c). A batch candidate's gate went
     red on <rows>: each row runs `times` times SOLO in each lane's OWN worktree at its exact batch tip (the
-    lanes' built trees) AND at the CANDIDATE's tip (its rc tree: the control), every run a logged retry at
+    lanes' built trees), at the CANDIDATE's tip (its rc tree) and at every --control tree (d-build's tip:
+    TESTING_V3_SPEC §1.3.2), every run a logged retry at
     THAT tip (`reason: attribute:<tag>`, the tree's name in `lanes`). The whole card is held ONCE for the
     attribution through hold_card() — which takes whatever the card's admission demands (it never
     assumes the gate slot is free). Only REAL verdicts count: a run that never got its admission
     (NOADMIT) or never ran (NOTRUN) leaves its cell INCOMPLETE — the lane is neither named nor cleared.
     A row the lane's build does not REGISTER is ABSENT there (never run, never blamed). Per row:
-      * a lane is NAMED when ANY of its solos is red (the flake law: one red run is a red) — it drops out;
+      * red on a --control tip (any solo) = a D-BUILD DEFECT: the row is red without any lane — it names
+        nobody and is registered as d-build's (exit 5 when no combination defect);
+      * else a lane is NAMED when ANY of its solos is red (the flake law: one red run is a red) — it drops out;
       * else red at the candidate (any solo) and green on every lane's own tip = a COMBINATION DEFECT:
         a real interaction, the batch is REFUSED (exit 3);
       * else green at the candidate = NOT REPRODUCED: a flake, answered at the verdict door
         (ci-gate-check --verdict; a contention-class row by these 3/3 solos at the candidate tip).
-    Returns 0 (table printed, no combination defect), 3 (a combination defect), 4 (a tree is unusable),
-    64 (usage)."""
+    Returns 0 (table printed, no defect), 3 (a combination defect), 5 (a d-build defect, no combination
+    defect), 4 (a tree is unusable), 64 (usage)."""
     rows = []
     for arg in row_args or []:
         for r in arg.split(","):
@@ -1939,7 +1942,11 @@ def attribute(row_args, lane_specs, tag, times, tier, candidate=None):
                          "--lanes <lane>:<worktree>:<tip> [...]\n")
         return 64
     trees, bad = [], []
-    for spec, is_cand in [(s, False) for s in lane_specs] + [("candidate:" + candidate, True)]:
+    specs = [(s, False) for s in lane_specs] + [("candidate:" + candidate, True)]
+    for c in controls or []:
+        tree = c.rpartition(":")[0]
+        specs.append((f"{os.path.basename(os.path.normpath(tree)) or 'control'}:{c}", "control"))
+    for spec, is_cand in specs:
         name, _, rest = spec.partition(":")
         wt, _, tip = rest.rpartition(":")
         if not (name and wt and tip):
@@ -1970,6 +1977,7 @@ def attribute(row_args, lane_specs, tag, times, tier, candidate=None):
         for b in bad: sys.stderr.write(f"gate-scope --attribute: REFUSED — {b}\n")
         return 4
     lanes = [t for t in trees if not t[5]]
+    ctrls = [t for t in trees if t[5] == "control"]
     reason = f"attribute:{tag}"
     print(f"gate-scope --attribute (batch {tag}): {len(rows)} row(s) x ({len(lanes)} lane(s) + the candidate) x "
           f"{times} solo run(s), each on its own tip; the whole card held once (hold_card), never a gate")
@@ -1989,7 +1997,7 @@ def attribute(row_args, lane_specs, tag, times, tier, candidate=None):
                 for _ in range(times):
                     rc = gate_runlog.run_ctest(
                         f"ctest -j1 --timeout 900 --output-on-failure --no-tests=error -R '{rx}'", build, tier,
-                        [t[0] for t in lanes] if is_cand else [name], 1, reasons={row: reason}, retry=True, env=env, whole_card=False, root=wt)
+                        [t[0] for t in lanes] if is_cand is True else [name], 1, reasons={row: reason}, retry=True, env=env, whole_card=False, root=wt)
                     if rc == gate_runlog.DISPLAY_LOST or rc < 0 or rc > 128:
                         cells[(row, name)] = ("ABORTED", reds, real, f"exit {rc}")
                         print(f"\n=== ATTRIBUTION ABORTED at {row} on {name} (exit {rc}): the display died or ctest "
@@ -2015,11 +2023,11 @@ def attribute(row_args, lane_specs, tag, times, tier, candidate=None):
         gate_runlog._vram().release(card)
     print(f"\n=== ATTRIBUTION (batch {tag}) ===")
     print("row | tree | red | the first failing check")
-    defect = False
+    defect, based = False, False
     for row in rows:
-        for name, *_ in trees:
+        for name, *rest in trees:
             st, reds, real, first = cells.get((row, name), ("ABORTED", 0, 0, None))
-            who = name if name != "candidate" else "CANDIDATE"
+            who = "CANDIDATE" if rest[-1] is True else (f"CONTROL {name}" if rest[-1] == "control" else name)
             if st == "ABSENT":
                 print(f"{row} | {who} | ABSENT | the row is not registered in this build")
             elif st in ("INCOMPLETE", "ABORTED"):
@@ -2029,10 +2037,16 @@ def attribute(row_args, lane_specs, tag, times, tier, candidate=None):
         lc = [(n, cells.get((row, n), ("ABORTED", 0, 0, None))) for n, *_ in lanes]
         cc = cells.get((row, "candidate"), ("ABORTED", 0, 0, None))
         named = [f"{n} ({c[1]}/{c[2]} red on its own tip)" for n, c in lc if c[1] > 0]
-        if named:
+        ctl = [(t[0], cells.get((row, t[0]), ("ABORTED", 0, 0, None))) for t in ctrls]
+        red_ctl = [f"{n} ({c[1]}/{c[2]})" for n, c in ctl if c[1] > 0]
+        if red_ctl:
+            based = True
+            print(f"=> {row}: D-BUILD DEFECT — red on the control {', '.join(red_ctl)} without any lane: it names "
+                  f"nobody; register it as d-build's defect")
+        elif named:
             print(f"=> {row}: NAMED {', '.join(named)} — any red solo names a lane; it drops out and the rest are "
                   f"RE-GATED as a new candidate")
-        elif any(c[0] in ("INCOMPLETE", "ABORTED") for _, c in lc) or cc[0] in ("INCOMPLETE", "ABORTED"):
+        elif any(c[0] in ("INCOMPLETE", "ABORTED") for _, c in lc + ctl) or cc[0] in ("INCOMPLETE", "ABORTED"):
             print(f"=> {row}: INCOMPLETE — a cell never got its runs (NOADMIT / NOTRUN / aborted): no lane is named "
                   f"or cleared until it ran; re-run the attribution")
         elif cc[0] == "ABSENT":
@@ -2044,7 +2058,7 @@ def attribute(row_args, lane_specs, tag, times, tier, candidate=None):
         else:
             print(f"=> {row}: NOT REPRODUCED — green at the candidate {cc[2]}/{cc[2]} and on every lane's own tip: a "
                   f"flake; answer it at the verdict door (ci-gate-check --verdict; the contention class by these solos)")
-    return 3 if defect else 0
+    return 3 if defect else (5 if based else 0)
 
 
 class _AttributionAborted(Exception):
@@ -2116,6 +2130,9 @@ def main():
     ap.add_argument("--candidate", metavar="RC_TREE:TIP", default=None,
                     help="with --attribute: the candidate's rc tree and tip — the CONTROL (red there and green on every "
                          "lane = a combination defect; green there = not reproduced)")
+    ap.add_argument("--control", metavar="TREE:TIP", nargs="+", default=None,
+                    help="with --attribute: CONTROL trees (d-build's built tree at its tip; several allowed) — a row red "
+                         "on one names nobody and is a d-build defect")
     ap.add_argument("--batch", metavar="TAG", default=None,
                     help="with --attribute: the batch tag the records' reason names (`attribute:<tag>`)")
     ap.add_argument("--fork-tier", action="store_true",
@@ -2159,9 +2176,9 @@ def main():
         print(nightly_tier()); return
     if a.attribute:
         # each lane's OWN worktree and build (--lanes), never this checkout's
-        sys.exit(attribute(a.attribute, a.lanes, a.batch, a.times, a.tier or "scoped", a.candidate))
-    if a.lanes or a.batch or a.candidate:
-        ap.error("--lanes / --batch / --candidate go with --attribute")
+        sys.exit(attribute(a.attribute, a.lanes, a.batch, a.times, a.tier or "scoped", a.candidate, a.control))
+    if a.lanes or a.batch or a.candidate or a.control:
+        ap.error("--lanes / --batch / --candidate / --control go with --attribute")
     build = resolve_build(a.build)
     # THE BUILT FORK MUST BE THE PIN (TESTING-DEBTS-1 T12): a run on an install built from another
     # fork commit is void (stale media) — refused before a suite runs, with the lines that fix it.
