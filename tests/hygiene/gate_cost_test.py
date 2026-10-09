@@ -61,6 +61,8 @@ cmake_minimum_required(VERSION 3.20)
 project(toy NONE)
 enable_testing()
 set(T "$ENV{TOYDIR}")
+# the toy's BUILT_FROM (GATE-COST-2 F4): every build writes it, from the stamp the test chose
+add_custom_target(toy_built_from ALL COMMAND ${CMAKE_COMMAND} -E copy "$ENV{TOYSTAMP}" "${CMAKE_BINARY_DIR}/BUILT_FROM")
 add_test(NAME lint.one COMMAND sh -c "sleep 1; echo lint.one >> ${T}/order")
 set_tests_properties(lint.one PROPERTIES LABELS "hygiene")
 add_test(NAME gpu.a COMMAND sh -c "echo gpu.a >> ${T}/order; echo ok")
@@ -106,8 +108,13 @@ def main(source, build):
     os.environ["JAH_KERNEL_JOURNAL"] = journal
     os.environ.update(JAH_VRAM_DIR=os.path.join(scratch, "vram"), JAH_VRAM_TOKENS="3", JAH_VRAM_WAIT="5",
                       JAH_RUN_LOG_DIR=os.path.join(scratch, "runs"), TOYDIR=state, JAH_GATE_REQUEUE="2")
+    stampsrc = os.path.join(scratch, "stamp")
+    with open(stampsrc, "w") as f:
+        f.write("studio=%s\nirisgl=%s\ndirty=0\n" % ("c" * 40, "d" * 40))    # the clean tip below
+    os.environ["TOYSTAMP"] = stampsrc
     open(os.path.join(toy, "CMakeLists.txt"), "w").write(TOY.replace("${VT}", vt))
     r = subprocess.run(["cmake", "-S", toy, "-B", tb], capture_output=True, text=True)
+    r = r if r.returncode else subprocess.run(["cmake", "--build", tb], capture_output=True, text=True)
     if r.returncode != 0:
         print(r.stdout[-2000:], r.stderr[-2000:])
         check(False, "the toy ctest project configures"); return 1
@@ -322,7 +329,7 @@ def main(source, build):
     import xml.etree.ElementTree as ET
     outs = {tc.get("name"): (tc.find("system-out").text or "") if tc.find("system-out") is not None else ""
             for tc in ET.parse(junit).getroot().iter("testcase")}
-    R = rl._Run("scoped", "gate-cost-test", 3, None, None, None, False, LABELS, False, None)
+    R = rl._Run("scoped", "gate-cost-test", 3, None, None, None, False, LABELS, False, None, build=tb)
     R.sampler.stop()
     skip = ("ts", "run", "box", "seconds", "wallSeconds", "retries")
     same, n = True, 0
@@ -420,6 +427,8 @@ def main(source, build):
     real = (g.gate_runlog.run_ctest, g.gate_runlog.fork_pin_problem, g.gate_runlog.recorded_rows)
     g.gate_runlog.run_ctest = fake_run
     g.gate_runlog.fork_pin_problem = lambda *a, **k: None
+    real_pb = g.gate_runlog.prebuild
+    g.gate_runlog.prebuild = lambda *a, **k: None     # never a build of the tree under test from inside its gate
     g.gate_runlog.recorded_rows = lambda *a: {"gi.chain_face"}
     real_owed = g.gate_runlog.owed_solos
     g.gate_runlog.owed_solos = lambda *a: []
@@ -475,6 +484,7 @@ def main(source, build):
           "a ctest killed under the gate (137) ends it there: no timing phase, no target step (F4; exit %r)" % code)
     g.gate_runlog.run_ctest, g.gate_runlog.fork_pin_problem, g.gate_runlog.recorded_rows = real
     g.gate_runlog.owed_solos = real_owed
+    g.gate_runlog.prebuild = real_pb
     os.environ.pop("JAH_GATE_SLOT_HELD", None)
 
     # ---- 9. GATE-COST-2: whole-card holds in the slot, the drain timeout, the prune list, the ingest wait --
@@ -580,6 +590,37 @@ def main(source, build):
     check(rl.stale_build(dict(clean, built=rl.built_from(tb))) == "built from a DIRTY tree",
           "a build made from a dirty tree is never the tip's")
     os.unlink(os.path.join(tb, "BUILT_FROM"))
+    reset()
+    rc, out = run("^gpu\\.a$")
+    got = cgc.records_by_tip({clean["studio"]: clean["irisgl"]})
+    check("no BUILT_FROM stamp" in out and ("gpu.a", None) not in got[clean["studio"]],
+          "a build with NO stamp is never the tip's run either (F4a: forward-only)")
+    # F4b: the gate's no-op build refreshes the stamp (and a failed one refuses the run)
+    pb = rl.prebuild(tb)
+    check(pb is None and rl.built_from(tb) and rl.built_from(tb)["studio"] == "c" * 40,
+          "the gate's no-op build rebuilds what is stale and writes BUILT_FROM before any row (F4b)")
+    broken = os.path.join(scratch, "broken")
+    os.makedirs(broken)
+    open(os.path.join(broken, "CMakeLists.txt"), "w").write(
+        "cmake_minimum_required(VERSION 3.20)\nproject(b NONE)\nadd_custom_target(fail ALL COMMAND false)\n")
+    subprocess.run(["cmake", "-S", broken, "-B", os.path.join(broken, "b")], capture_output=True)
+    pb = rl.prebuild(os.path.join(broken, "b"))
+    check(pb and "REFUSING TO RUN" in pb and "FAILED" in pb, "a failed no-op build refuses the run (F4b)")
+    # F4c: an untracked file in a tracked dir makes the build dirty
+    gitd = os.path.join(scratch, "repo")
+    os.makedirs(os.path.join(gitd, "irisgl"))
+    for d_ in (gitd, os.path.join(gitd, "irisgl")):
+        subprocess.run(["git", "init", "-q", d_]); open(os.path.join(d_, "a.txt"), "w").write("a")
+        subprocess.run(["git", "-C", d_, "add", "a.txt"], capture_output=True)
+        subprocess.run(["git", "-C", d_, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "a"],
+                       capture_output=True)
+    open(os.path.join(gitd, "irisgl", "new_piece.any"), "w").write("x")
+    out2 = os.path.join(scratch, "BF2")
+    subprocess.run(["cmake", f"-DSRC={gitd}", f"-DOUT={out2}", "-P", os.path.join(source, "cmake", "BuiltFrom.cmake")],
+                   capture_output=True)
+    check("dirty=1" in open(out2).read(), "an untracked new file in a tracked dir is a DIRTY build (F4c)")
+    with open(os.path.join(tb, "BUILT_FROM"), "w") as f:
+        f.write(open(stampsrc).read())
 
     # ---- 11. GATE-COST-2 #10-#12: overrides on every record; hash moves and trend steps are records; tiers ----
     print("11. overrides, hash-move / trend-step records, the lane and solo tiers")

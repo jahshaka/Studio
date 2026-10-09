@@ -277,15 +277,39 @@ def built_from(build):
 
 
 def stale_build(shas):
-    """None when the record's build is its tip's; else why not — the built commits differ from the tip's, or
-    the build was made from a dirty tree. A record without `built` is not judged (no stamp)."""
+    """None when the record's build is its tip's; else why not — the built commits differ from the tip's, the
+    build was made from a dirty tree, or it carries NO stamp (F4: forward-only — a record whose build was not
+    stamped is never the tip's run; every gate's no-op build writes the stamp before its rows)."""
     b = (shas or {}).get("built")
     if not b:
-        return None
+        return "built from an UNKNOWN commit (no BUILT_FROM stamp)"
     if b.get("dirty"):
         return "built from a DIRTY tree"
     if b.get("studio") != shas.get("studio") or b.get("irisgl") != shas.get("irisgl"):
         return "built from studio %s / irisgl %s, not the tip" % ((b.get("studio") or "?")[:9], (b.get("irisgl") or "?")[:9])
+    return None
+
+
+def prebuild(build, jobs=None):
+    """THE GATE'S NO-OP BUILD (GATE-COST-2 F4): before any row, `cmake --build <build>` — seconds when nothing
+    changed — rebuilds whatever is stale (a reverted edit, a `--target` build's leftovers) and refreshes
+    BUILT_FROM, so the binaries match HEAD's sources by construction. At the box's priority and a width the
+    memory law allows (JAH_GATE_BUILD_JOBS, default 3). Returns None when it built (or the dir is not a CMake
+    build), else the refusal text — a failed no-op build never gates."""
+    if not os.path.isfile(os.path.join(build, "CMakeCache.txt")):
+        return None
+    jobs = jobs or os.environ.get("JAH_GATE_BUILD_JOBS", "3")
+    log = os.path.join(build, "gate-prebuild.log")
+    t0 = time.time()
+    with open(log, "w") as out:
+        rc = subprocess.run(["nice", "-n", "19", "ionice", "-c", "3", "cmake", "--build", build, "-j", str(jobs)],
+                            stdout=out, stderr=subprocess.STDOUT).returncode
+    tail = open(log, errors="replace").read().splitlines()[-6:]
+    if rc != 0:
+        return ("REFUSING TO RUN: the gate's no-op build of %s FAILED (exit %d; %s):\n  %s"
+                % (build, rc, log, "\n  ".join(tail)))
+    print("=== the no-op build: %.0f s (%s) — the binaries are HEAD's, BUILT_FROM refreshed ===" % (time.time() - t0, log))
+    sys.stdout.flush()
     return None
 
 
@@ -869,9 +893,7 @@ class _Run:
         self.overrides = law_overrides(env, tool_set=("JAH_VRAM_ALL",) if fallback else ())
         # WHAT THE BINARIES WERE BUILT FROM rides every record (GATE-COST-2 #8): the refusal never counts a
         # record of a stale build as the tip's run
-        b = built_from(build) if build else None
-        if b:
-            self.shas["built"] = b
+        self.shas["built"] = built_from(build) if build else None
         self.box0 = {"jobs": jobs, "display": (env or os.environ).get("DISPLAY"), "gpu_clocks": gpu_clocks(),
                      "other_ctests": other_ctests(), "host": os.uname().nodename}
         self.run_id = f"{datetime.datetime.now().strftime('%Y%m%dT%H%M%S')}-{self.shas['studio'][:9]}"
@@ -1598,6 +1620,9 @@ def main():
         # alternation carries `|`, so it must reach the shell as ONE string); several = an argv
         line = cmd[0] if len(cmd) == 1 else shlex.join(cmd)
         # A `run` IS A GATE (GATE-COST-1 P1): one at a time, box-wide — it queues for the slot first
+        bad = prebuild(build)
+        if bad:
+            sys.stderr.write(bad + "\n"); sys.exit(5)
         on_signals()
         slot = None
         try:

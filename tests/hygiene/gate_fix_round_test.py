@@ -88,7 +88,9 @@ def main(source, build):
         s = revs.get(at, at)
         gate_runlog.append_records([{"suite": k[0], "arm": k[1], "verdict": verdict, "ts": ts, "retry": False,
                                      "tip": {"studio": s, "studio_dirty": False, "irisgl": pin(s),
-                                             "irisgl_dirty": False}} for k in keys], "scoped", s)
+                                             "irisgl_dirty": False,
+                                             "built": {"studio": s, "irisgl": pin(s), "dirty": False}}}
+                                    for k in keys], "scoped", s)
 
     def run(rng, *extra):
         p = subprocess.run([tool, rng, "--build", build] + list(extra), capture_output=True, text=True,
@@ -190,6 +192,8 @@ def main(source, build):
     real_rc, real_fpp = g.gate_runlog.run_ctest, g.gate_runlog.fork_pin_problem
     g.gate_runlog.run_ctest = fake_run
     g.gate_runlog.fork_pin_problem = lambda *a, **k: None
+    real_pb = g.gate_runlog.prebuild
+    g.gate_runlog.prebuild = lambda *a, **k: None     # never a build of the tree under test from inside its gate
     old_vram = os.environ.get("JAH_VRAM_DIR")
     os.environ["JAH_VRAM_DIR"] = os.path.join(scratch, "vram")     # the slot and the card: a private queue
     held = os.environ.pop("JAH_GATE_SLOT_HELD", None)
@@ -223,6 +227,7 @@ def main(source, build):
           "--targets-only: the targets run alone under the run log's `target` tier, read 8, and exit 0 (%r, %r)"
           % (code, calls))
     g.gate_runlog.run_ctest, g.gate_runlog.fork_pin_problem = real_rc, real_fpp
+    g.gate_runlog.prebuild = real_pb
     os.environ.pop("JAH_GATE_SLOT_HELD", None)
     if held is not None: os.environ["JAH_GATE_SLOT_HELD"] = held
     if old_vram is None: os.environ.pop("JAH_VRAM_DIR", None)

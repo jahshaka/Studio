@@ -8,14 +8,17 @@
 # every build target of the project, so a build that fails or is stopped never refreshes it, and a
 # `--target <one>` build does not either (the stamp then reads stale, which only ever costs a no-op build).
 # scripts/gate_runlog.py copies it into each record (`tip.built`); ci_gate_check.py treats a record whose
-# built studio/irisgl sha is not the tip's — or was built dirty — as studio_dirty (never the tip's run).
+# built studio/irisgl sha is not the tip's — or was built dirty, untracked files included, or carries no
+# stamp at all — as studio_dirty (never the tip's run). Every gate first runs a no-op `cmake --build`
+# (gate_runlog.prebuild): a stale binary or a `--target` build's leftovers are rebuilt and the stamp is fresh.
 #
 # Two modes: included from the top CMakeLists (defines the target), and run as a script (-P) by the target.
 if(CMAKE_SCRIPT_MODE_FILE)
     function(_jah_head dir out_sha out_dirty)
         execute_process(COMMAND git rev-parse HEAD WORKING_DIRECTORY "${dir}" OUTPUT_VARIABLE sha
                         OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET RESULT_VARIABLE rc)
-        execute_process(COMMAND git status --porcelain --untracked-files=no --ignore-submodules=dirty
+        # untracked files count (F4c): an untracked new Hlms piece or source is in the build and in no commit
+        execute_process(COMMAND git status --porcelain --untracked-files=normal --ignore-submodules=dirty
                         WORKING_DIRECTORY "${dir}" OUTPUT_VARIABLE st OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
         if(NOT rc EQUAL 0)
             set(sha "unknown")

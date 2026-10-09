@@ -57,7 +57,9 @@ def main(source, build):
     def put(suites, verdict, ts, t=tip, dirty=False, retry=False, ig=pin, ig_dirty=False):
         gate_runlog.append_records([{"suite": s, "arm": None, "verdict": verdict, "ts": ts, "retry": retry,
                                      "tip": {"studio": t, "studio_dirty": dirty, "irisgl": ig,
-                                             "irisgl_dirty": ig_dirty}} for s in suites], "scoped", t)
+                                             "irisgl_dirty": ig_dirty,
+                                             "built": {"studio": t, "irisgl": ig, "dirty": False}}}
+                                    for s in suites], "scoped", t)
 
     rows = ["api.contract", "app.startup_quiet", "photon.view"]
 

@@ -2030,6 +2030,11 @@ def main():
         if bad:
             sys.stderr.write("gate-scope: " + bad + "\n")
             sys.exit(4)
+        # THE NO-OP BUILD FIRST (GATE-COST-2 F4): the rows run on HEAD's binaries, BUILT_FROM fresh — or not at all
+        bad = gate_runlog.prebuild(build)
+        if bad:
+            sys.stderr.write("gate-scope: " + bad + "\n")
+            sys.exit(5)
     slot, owed = [], []
 
     def gate(what):
