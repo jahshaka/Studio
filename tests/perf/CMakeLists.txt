@@ -95,7 +95,7 @@ set_tests_properties(perf.epic_steady_state PROPERTIES
 #     compares. It used to be RUN_SERIAL, which reaches only inside one ctest
 #     (lane D6B-GATE-SHAPE; audit §4 R3).
 #   * `perf` label only — NOT `benchmark`: it has no baseline file and nothing
-#     to re-record, so it belongs in the merge tier rather than the nightly one.
+#     to re-record, so it belongs in the merge tier rather than the stage-close one.
 #   * TIMEOUT 600: 420 rendered frames of the Mirror Room at Epic plus the
 #     archive import. MEASURED at 15.8-16.3 s over five runs, so the timeout is
 #     ~37x it — the room a contended box needs, and far below the class of
@@ -230,7 +230,7 @@ set_tests_properties(perf.capture_off_is_free PROPERTIES
 
 # FRESH HOMES (PROJECT-NAMES-1). A project name is unique in a library now (project.create
 # refuses a taken one), so a row that creates a project in a home nothing wipes went red on its
-# SECOND run in the same tree (an rc tree's solo retries, build-linux, the nightly) — and every
+# SECOND run in the same tree (an rc tree's solo retries, build-linux, a stage close) — and every
 # such home grew without bound (ui.column_law's held 66 'ColumnLaw' projects). Each row below
 # creates projects; its home is wiped at the start of every run (WARM: the shader caches stay).
 if(TEST perf.offscreen_isolation)

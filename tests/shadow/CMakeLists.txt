@@ -114,7 +114,7 @@ jah_gpu_row(shadow.two_sided_caster CLASS app
 set_tests_properties(shadow.two_sided_caster PROPERTIES LABELS "engine" TIMEOUT 900)
 # gpu.cutout_soak — 5,000 frames of cut-outs (plain on a cube and a sphere, the live graph
 # cut-out the hang was found on, the screenshot path, a pinned and a free clock), then 5,000 of
-# the Tornado sample, under the Khronos validation layer. MINUTES OF ONE PROCESS: nightly; its
+# the Tornado sample, under the Khronos validation layer. MINUTES OF ONE PROCESS: a stage-close row; its
 # push-time guard is shadow.cutout_caster's ten processes.
 jah_gpu_row(gpu.cutout_soak CLASS app
          COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/scripts/gpu_cutout_soak.sh
@@ -125,7 +125,7 @@ jah_gpu_row(gpu.cutout_soak CLASS app
                  ${CMAKE_CURRENT_BINARY_DIR}/gpu.cutout_soak
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(gpu.cutout_soak PROPERTIES
-    LABELS "engine;nightly" TIMEOUT 1800
+    LABELS "engine;stage-close" TIMEOUT 1800
     ENVIRONMENT "VK_LOADER_LAYERS_ENABLE=VK_LAYER_KHRONOS_validation"
     PASS_REGULAR_EXPRESSION "gpu_cutout_soak: PASS"
     FAIL_REGULAR_EXPRESSION "Validation Error;DEVICE WAS LOST;assert failed")

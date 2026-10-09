@@ -411,7 +411,7 @@ def needed_rows(gs, S):
     inv = S.inv
     gating = lambda n: not (inv[n]["labels"] & (gs.SCOPE_EXCLUDED_LABELS | gs.TARGET_LABELS))
     if S.fallback or S.full_tier or S.fork_bump:
-        rows = [n for n, t in inv.items() if not (t["labels"] & (gs.NIGHTLY_LABELS | gs.TARGET_LABELS))]
+        rows = [n for n, t in inv.items() if not (t["labels"] & (gs.STAGE_CLOSE_LABELS | gs.TARGET_LABELS))]
         what = ("the MERGE tier (the fork pin moved: §7b rule 4's one full tier, `--fork-tier`)" if S.fork_bump
                 and not (S.fallback or S.full_tier) else
                 "the MERGE tier (%s)" % ("fallback" if S.fallback else "by rule"))

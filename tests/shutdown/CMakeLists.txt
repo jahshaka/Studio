@@ -23,7 +23,7 @@ jah_gpu_row(app.shutdown_order CLASS app COMMAND test_shutdown_order
 set_tests_properties(app.shutdown_order PROPERTIES
     ENVIRONMENT "HOME=${_order_home};JAHSHAKA_DATA_ROOT=${_order_home}/.local/share/Jahshaka"
     TIMEOUT 300 LABELS "shutdown")  # 6x measured (D6B fix round F1; spikes/d6b-gate-shape/f1-timeouts.txt)
-# app.shutdown_order.timing — the client's 900 ms bar, nightly (lane D6B-GATE-SHAPE; audit §5
+# app.shutdown_order.timing — the client's 900 ms bar, stage-close (lane D6B-GATE-SHAPE; audit §5
 # FIX-TIME): the same binary with JAHSHAKA_TIMING_BARS=1, quiet box, the GPU-timing lock.
 set(_order_timing_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-order-timing)
 file(MAKE_DIRECTORY ${_order_timing_home}/run)
@@ -31,7 +31,7 @@ jah_gpu_exclusive_test(NAME app.shutdown_order.timing CLASS app RUN_TIMEOUT 120 
          WORKING_DIRECTORY ${_order_timing_home}/run)
 set_tests_properties(app.shutdown_order.timing PROPERTIES
     ENVIRONMENT "HOME=${_order_timing_home};JAHSHAKA_DATA_ROOT=${_order_timing_home}/.local/share/Jahshaka;JAHSHAKA_TIMING_BARS=1"
-    LABELS "shutdown;nightly;quiet-box")
+    LABELS "shutdown;stage-close;quiet-box")
 
 # app.watchdog_stall — Lane 5: a 3 s UI-thread block produces exactly one
 # [warn] and a non-empty stack OF THE UI THREAD; a 100 ms block produces none.
@@ -70,7 +70,7 @@ jah_tsan_blocked(app.shutdown_order app.shutdown_order.timing app.watchdog_stall
 
 # FRESH HOMES (PROJECT-NAMES-1). A project name is unique in a library now (project.create
 # refuses a taken one), so a row that creates a project in a home nothing wipes went red on its
-# SECOND run in the same tree (an rc tree's solo retries, build-linux, the nightly) — and every
+# SECOND run in the same tree (an rc tree's solo retries, build-linux, a stage close) — and every
 # such home grew without bound (ui.column_law's held 66 'ColumnLaw' projects). Each row below
 # creates projects; its home is wiped at the start of every run (WARM: the shader caches stay).
 if(TEST app.shutdown_order)

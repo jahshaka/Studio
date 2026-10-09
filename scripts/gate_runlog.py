@@ -48,10 +48,10 @@ SCHEMA = 2      # 2 (VERDICT-1 + GATE-LOG-1): xid, noadmit_arms, slot_wait_s, dr
 # documents the same list. gate-scope.sh writes the first three (`scoped`; `scoped-fallback` = a
 # scoped gate that fell back to the whole tier; `scoped-tier` = the tier by rule, a fork pin) and
 # `target` (GATE-SPEED-1: the target tests' own step, after the gating verdict — reported, never
-# gating); rc-gate.sh writes JAH_GATE_TIER (merge by default: stage, nightly, push, smoke — the
+# gating); rc-gate.sh writes JAH_GATE_TIER (merge by default: stage, stage-close, push, smoke — the
 # owner's smoke rc —, fork; scoped for a BATCH candidate, BATCH-GATE-1). `joint` is gone with
 # `--joint` (BATCH-GATE-1: the batch gate is the joint gate); its old records stay readable.
-TIERS = ("scoped", "scoped-fallback", "scoped-tier", "target", "merge", "stage", "nightly", "push",
+TIERS = ("scoped", "scoped-fallback", "scoped-tier", "target", "merge", "stage", "stage-close", "push",
          "smoke", "fork")
 
 

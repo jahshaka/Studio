@@ -80,7 +80,7 @@ if (!after.enabled || after.tier !== "epic")
 console.log("newproject_stall: project.create took " + createMs + " ms (budget " +
             kBudgetMs + " ms)");
 
-// THE MILLISECOND BAR IS NIGHTLY (TESTING-DEBTS-1 T10, D6B-GATE-SHAPE's pattern): measured on the
+// THE MILLISECOND BAR IS STAGE-CLOSE (TESTING-DEBTS-1 T10, D6B-GATE-SHAPE's pattern): measured on the
 // base 2026-09-28, solo on a box with two sibling lanes, 704 / 686 / 1407 ms — a wall-clock reading
 // of whatever else the box does. threading.newproject_stall.timing runs a copy of this script with
 // JAH_TIMING_BARS defined (jah_timing_script), on the quiet box under the GPU-timing lock; here the

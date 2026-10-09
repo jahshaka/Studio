@@ -146,7 +146,7 @@ if(Python3_Interpreter_FOUND)
     set_tests_properties(gate.selection PROPERTIES TIMEOUT 300 LABELS "hygiene")
     jah_no_display(gate.selection)
     # source.testing_rules — THE TESTING RULES A LINT CAN READ (MODULAR-GATE-1, T6; §7b):
-    # R1 every measuring row is inside the GPU lock; R2 every nightly row is priced; R3 no
+    # R1 every measuring row is inside the GPU lock; R2 every stage-close row is priced; R3 no
     # copied `ctest -LE` tier; R4 no RUN_SERIAL without its verdict; R5 every app/lint row has a
     # subject that selects it. Each rule is first fed a violation (a lint that cannot fail
     # guards nothing).

@@ -164,7 +164,7 @@ int main(int argc, char **argv)
     // character, one setClipStates per character per frame, streamed bones ==
     // characters x piece-local bones) are structural facts that hold under any
     // load. `--smoke` is what the merge gate runs; `--assert` keeps the
-    // dispersion bound and stays nightly.
+    // dispersion bound and stays stage-close.
     bool assertMode = false, quick = false, noShare = false, smoke = false;
     int characters = 4;
     std::string recordPath, note;

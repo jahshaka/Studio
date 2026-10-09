@@ -10,7 +10,7 @@
 // all. The renderer's per-frame recycling then never runs for the length of the
 // install, and the process came out of it with a corrupt heap: 9 crashes in 12
 // runs of the minimal repro, 0 in 12 once the boundary rendered the frame
-// itself (the soak suite beside this one is that measurement, kept nightly).
+// itself (the soak suite beside this one is that measurement, kept stage-close).
 //
 // SO THIS IS THE DETERMINISTIC HALF, and it is deliberately NOT a crash test:
 // it drives an open with a pump that renders NOTHING — no editor.frame

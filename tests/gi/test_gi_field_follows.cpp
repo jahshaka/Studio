@@ -341,7 +341,7 @@ int main() {
                     recs.size(), worstMs, followRows, followProbes, worstFollowMs, worstFollowGpu,
                     worstCascadeMs, worstCascadeGpu);
         CHECK(followRows > 0, "the re-integration is filed as its own monitor row");
-        // The frame-time bars are NIGHTLY (lane D6B-GATE-SHAPE; tests/support/timingbars.h):
+        // The frame-time bars are STAGE-CLOSE (lane D6B-GATE-SHAPE; tests/support/timingbars.h):
         // a frame's wall clock reads a -j4 gate's CPU load too (this bar reddened under it).
         // gi.field_follows.timing arms them on a quiet box, under the GPU-timing lock.
         JAH_TIMING_CHECK("gi.field_follows", worstMs < kTierBudgetMs,

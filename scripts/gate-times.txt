@@ -2,7 +2,7 @@
 # (D6B-GATE-SHAPE, 2026-09-27: the after-run at 58b216b46, -j4 beside three other lanes; the rows it lost to the box's load carry their solo re-run seconds)
 # Fix round F1's thirteen rows carry their WORST measured run (the one their 6x timeout is set from:
 #   spikes/d6b-gate-shape/f1-timeouts.txt).
-# The NIGHTLY rows (fix round F4) — never in a MERGE run, so their seconds come from elsewhere:
+# The STAGE-CLOSE rows (fix round F4) — never in a MERGE run, so their seconds come from elsewhere:
 #   app.shutdown_order.timing 46.81  <- its push row's worst gate run (same binary)
 #   app.update_check.timing 1.07  <- its D6B dev run
 #   archive.responsive.timing 79.57  <- its push row's worst gate run (same binary)
@@ -17,12 +17,12 @@
 #   gi.gather_cost 33.04  <- the worst recorded run (spikes/)
 #   meshbake.cards.timing 0.78  <- its D6B dev run
 #   gpu.cutout_soak 268.44  <- its first scoped gate run (CUTOUT-CASTER-1, 2026-10-06, -j4 beside other lanes)
-#   open.crash_soak 114.30  <- a recorded nightly run (spikes/)
+#   open.crash_soak 114.30  <- a recorded stage-close run (spikes/)
 #   open.responsive.timing 281.33  <- its push row's worst gate run (same binary)
 #   rigperf.benchmark 100.00  <- NO recorded run: its 600 s budget / 6
-#   scenegraph.benchmark 283.84  <- a recorded nightly run (spikes/)
+#   scenegraph.benchmark 283.84  <- a recorded stage-close run (spikes/)
 #   scripting.e2e.editor_controls.timing 71.87  <- its D6B dev run
-#   shadercache.container_asan 247.95  <- a recorded nightly run (spikes/)
+#   shadercache.container_asan 247.95  <- a recorded stage-close run (spikes/)
 #   ui.components.timing 2.97  <- its D6B dev run
 #   threading.newproject_stall.timing 14.72  <- its TESTING-DEBTS-1 dev run (the fixture: a wipe)
 #   ui.properties_filter.timing 0.73  <- its D6B dev run

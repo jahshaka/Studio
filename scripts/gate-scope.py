@@ -8,11 +8,11 @@
     scripts/gate-scope.sh --attribute <row>[,<row>...] --batch <tag> --candidate <rc tree>:<tip> \
         --control <rc-base>:<d-build tip> --display :NN --lanes <lane>:<worktree>:<tip> [...]   # a batch red
     scripts/gate-scope.sh --record-times                       # gate-times.txt from the run log
-    scripts/gate-scope.sh --merge-tier [-j N] | --merge-tier-serial | --nightly-tier | --gate-jobs
+    scripts/gate-scope.sh --merge-tier [-j N] | --merge-tier-serial | --stage-close-tier | --gate-jobs
 
 A lane runs everything its change can reach and nothing it cannot — read from the build and
 the diff, never guessed — and the full tiers stay where the process needs them (a stage
-close, a fork pin bump, nightly, the phase's push: PHOTON_ATOM_CONTRACT §7b). The tool turns a
+close, a fork pin bump, stage-close, the phase's push: PHOTON_ATOM_CONTRACT §7b). The tool turns a
 git range into an exact `ctest -R '^(a|b|c)$'` selection with one rationale line per touched
 path and one reason per selected row, estimates the wall time from THE RUN LOG (T8), and
 `--run` writes every row's verdict into the run log (scripts/gate_runlog.py) as the row ends.
@@ -142,8 +142,8 @@ AREA_RULES = [
     # display-free shell scripts, well under a second.
     # `atom` and `compute` (D6B-GATE-SHAPE; audit S2): irisgl/import/meshbake.cpp carries the
     # cluster-DAG bake, and atom.cluster_cut / atom.cluster_crack / engine.lod_rule_parity are
-    # its only guards — nightly-labelled or not, a change to the bake selects them (§1 of
-    # docs/TESTING_GATE.md: a `nightly` row still rides the scoped gate of its own subject).
+    # its only guards — stage-close-labelled or not, a change to the bake selects them (§1 of
+    # docs/TESTING_GATE.md: a `stage-close` row still rides the scoped gate of its own subject).
     (r"^irisgl/import/",
      ["importer", "importasync", "meshbake", "avatar", "skeletal", "assetdelete", "assetgc",
       "assetmeta", "assetmigrate", "assetpaths", "assets", "samples", "thumbnails", "hygiene",
@@ -293,19 +293,19 @@ AREA_RULES = [
 # Cheap smoke suites always added when src/ or irisgl/ moved (a boot that renders + the
 # contract of the scripting surface), ~15 s together.
 ALWAYS_ON_CODE = ["app.startup_quiet", "api.contract"]
-# THE NIGHTLY TIER (D6B-GATE-SHAPE; audit §8 — `benchmark` used to be overloaded as this
+# THE STAGE-CLOSE TIER (D6B-GATE-SHAPE; audit §8 — `benchmark` used to be overloaded as this
 # marker, so open.crash_soak and gi.gather_cost carried a label that said the wrong thing).
-#   `nightly`     — every row the MERGE and PUSH tiers leave out: minutes of one process whose
+#   `stage-close`     — every row the MERGE and PUSH tiers leave out: minutes of one process whose
 #                   push-time guard lives elsewhere, or a millisecond bar that needs a quiet box.
-#   `quiet-box`   — beside `nightly` on the rows that MEASURE (the wall-clock benchmarks, the
+#   `quiet-box`   — beside `stage-close` on the rows that MEASURE (the wall-clock benchmarks, the
 #                   `<suite>.timing` millisecond rows, a GPU clock). A scoped gate never runs
 #                   them: it shares the box with other lanes by construction.
-# A `nightly` row WITHOUT `quiet-box` still rides the scoped gate of its own subject — it is
+# A `stage-close` row WITHOUT `quiet-box` still rides the scoped gate of its own subject — it is
 # that change's guard (atom.cluster_cut for a bake change: audit §3c's condition for the move).
 # Anchored in the -LE: `shadercache` alone would drop the product-contract cache suites (code
 # review 2026-09-10). `--timeout 120` is ctest's DEFAULT for the rows that set no TIMEOUT — a
 # hang costs 2 min, not 25.
-NIGHTLY_LABELS = {"nightly", "shadercache-attack"}
+STAGE_CLOSE_LABELS = {"stage-close", "shadercache-attack"}
 # Never selected by a scoped gate (the shader-cache attack is minutes under ASan).
 SCOPE_EXCLUDED_LABELS = {"quiet-box", "shadercache-attack"}
 
@@ -333,7 +333,7 @@ SCOPE_EXCLUDED_LABELS = {"quiet-box", "shadercache-attack"}
 # part that closes a wall writes its bar and removes the label from that row.
 TARGET_LABELS = {"photon-target", "scale-target"}
 
-NIGHTLY_LABEL_RE = "|".join(sorted(re.escape(l) for l in NIGHTLY_LABELS | TARGET_LABELS))
+STAGE_CLOSE_LABEL_RE = "|".join(sorted(re.escape(l) for l in STAGE_CLOSE_LABELS | TARGET_LABELS))
 # THE GATE'S PARALLEL WIDTH — THE ONE CONSTANT (GATE-SPEED-1 item 9). Every gate's parallel phase
 # (the scoped selection, the MERGE tier, a fallback, a batch candidate's), rc-gate.sh's ctest width
 # (`gate-scope.py --gate-jobs`) and the merge refusal's re-selection read THIS; the docs name it
@@ -357,19 +357,19 @@ TIMING_LABEL = "timing"
 def merge_tier(jobs=GATE_JOBS):
     """The MERGE tier's PARALLEL phase (its second phase is merge_tier_serial())."""
     return (f'ctest -j{jobs} --timeout 120 --output-on-failure '
-            f'-LE "^({NIGHTLY_LABEL_RE}|{TIMING_LABEL})$"')
+            f'-LE "^({STAGE_CLOSE_LABEL_RE}|{TIMING_LABEL})$"')
 
 
 def merge_tier_serial():
     """The MERGE tier's SERIAL phase: its timing rows, one at a time, after the parallel phase."""
     return (f'ctest -j1 --timeout 120 --output-on-failure -L "^{TIMING_LABEL}$" '
-            f'-LE "^({NIGHTLY_LABEL_RE})$"')
+            f'-LE "^({STAGE_CLOSE_LABEL_RE})$"')
 
 
-# The NIGHTLY tier: every `nightly` row, one at a time (they are minutes of one process or a
+# The STAGE-CLOSE tier: every `stage-close` row, one at a time (they are minutes of one process or a
 # measurement that wants the box), on a quiet box, by the lead.
-def nightly_tier():
-    rx = "|".join(sorted(re.escape(l) for l in NIGHTLY_LABELS))
+def stage_close_tier():
+    rx = "|".join(sorted(re.escape(l) for l in STAGE_CLOSE_LABELS))
     return f'ctest -j1 --output-on-failure -L "^({rx})$"'
 
 
@@ -2215,8 +2215,8 @@ def main():
     ap.add_argument("--merge-tier-serial", action="store_true",
                     help="print the MERGE tier's SERIAL phase (its timing rows at -j1, run after --merge-tier's "
                          "parallel phase) and exit")
-    ap.add_argument("--nightly-tier", action="store_true",
-                    help="print the NIGHTLY tier's ctest command (every `nightly` row, -j1) and exit")
+    ap.add_argument("--stage-close-tier", action="store_true",
+                    help="print the STAGE-CLOSE tier's ctest command (every `stage-close` row, -j1) and exit")
     ap.add_argument("--gate-jobs", action="store_true",
                     help="print GATE_JOBS, the gate's parallel width (rc-gate.sh reads it), and exit")
     ap.add_argument("--resume", action="store_true",
@@ -2246,8 +2246,8 @@ def main():
         print(merge_tier(a.jobs)); return
     if a.merge_tier_serial:
         print(merge_tier_serial()); return
-    if a.nightly_tier:
-        print(nightly_tier()); return
+    if a.stage_close_tier:
+        print(stage_close_tier()); return
     gate_runlog.BATCH = a.batch            # `batch: <tag>` on every record (a candidate's gate, an attribution)
     if a.attribute:
         # each lane's OWN worktree and build (--lanes), never this checkout's
@@ -2360,10 +2360,10 @@ def main():
     S = select(paths, a.range if not a.files else None, build, a.jobs)
     inv, selected = S.inv, S.selected
 
-    # The quiet-box measurements never ride a scoped gate (see NIGHTLY_LABELS). A `nightly`
+    # The quiet-box measurements never ride a scoped gate (see STAGE_CLOSE_LABELS). A `stage-close`
     # row without `quiet-box` stays: its subject changed, and it is that change's guard.
-    nightly = [n for n in selected if inv[n]["labels"] & SCOPE_EXCLUDED_LABELS]
-    for n in nightly: selected.pop(n)
+    quiet = [n for n in selected if inv[n]["labels"] & SCOPE_EXCLUDED_LABELS]
+    for n in quiet: selected.pop(n)
     # TARGET TESTS ARE SPLIT OUT, NOT DROPPED (see TARGET_LABELS).
     targets = sorted(n for n in selected if inv[n]["labels"] & TARGET_LABELS)
     selected_targets = {n: selected.pop(n) for n in targets}
@@ -2384,7 +2384,7 @@ def main():
     serial = sum(cost(n) for n in par_names if inv[n]["serial"])
     timing_s = sum(cost(n) for n in timing)
     wall = max((est - timing_s) / float(a.jobs), serial) + timing_s + 5
-    tier_rows = [n for n, t in inv.items() if not (t["labels"] & (NIGHTLY_LABELS | TARGET_LABELS))]
+    tier_rows = [n for n, t in inv.items() if not (t["labels"] & (STAGE_CLOSE_LABELS | TARGET_LABELS))]
     tier_est = sum(costs.get(n, 10.0) for n in tier_rows)
 
     def ctest_for(suites, jobs):
@@ -2459,7 +2459,7 @@ def main():
         run_tier("fallback"); return
     if S.skipped_ubiquitous:
         print(f"\n(modules called by >40% of scripts select nothing on their own: {sorted(S.skipped_ubiquitous)})")
-    if nightly: print(f"\n(quiet-box / nightly measurements left out: {sorted(nightly)})")
+    if quiet: print(f"\n(quiet-box measurements left out: {sorted(quiet)})")
     if targets:
         print(f"\nTARGET TESTS (label {'/'.join(sorted(TARGET_LABELS))}) — they RUN and PRINT their "
               f"value, and they do NOT decide this gate:")

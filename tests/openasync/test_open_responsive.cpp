@@ -58,7 +58,7 @@ using namespace mcpharness;
 
 #define CHECK(cond, msg) do { if (cond) std::printf("ok:   %s\n", msg); else { std::printf("FAIL: %s\n", msg); ++failures; } } while (0)
 
-/// THE MILLISECOND ARMS ARE NIGHTLY (lane D6B-GATE-SHAPE; tests/support/timingbars.h).
+/// THE MILLISECOND ARMS ARE STAGE-CLOSE (lane D6B-GATE-SHAPE; tests/support/timingbars.h).
 /// The UI-gap budgets, the frame budgets, the watchdog's 2,000 ms stall trigger, the two
 /// regression CEILINGS (kColdCeilingMs, kSampleCeilingMs) and the exit budget below are
 /// readings of the BOX as much as of the open. THE CEILINGS LEFT THE PUSH ROW TOO
@@ -75,7 +75,7 @@ using namespace mcpharness;
 /// (open.responsive) asserts the COUNTS — the open loads the world, the app answers
 /// while it is in flight, no model is parsed on the UI thread, the create rebuilds no
 /// grid and leaves one tile per project, the ledgers, the quit — and PRINTS each
-/// millisecond reading; `open.responsive.timing` (nightly, quiet box, the GPU lock)
+/// millisecond reading; `open.responsive.timing` (stage-close, quiet box, the GPU lock)
 /// runs the same binary with the bars armed. A bar that reds only on a loaded box is
 /// read there, never widened here.
 static const bool gTimingBars = jahtest::timingBarsArmed();

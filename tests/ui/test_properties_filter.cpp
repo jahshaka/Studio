@@ -514,7 +514,7 @@ int main(int argc, char **argv)
         turn();
         const double worldMs = typeCost(Tab::World, QStringLiteral("ssr"));
         std::printf("      keystroke: world %.3f ms, mesh selection %.3f ms\n", worldMs, meshMs);
-        // THE 5 ms BARS ARE NIGHTLY (lane D6B-GATE-SHAPE; tests/support/timingbars.h): a
+        // THE 5 ms BARS ARE STAGE-CLOSE (lane D6B-GATE-SHAPE; tests/support/timingbars.h): a
         // keystroke's wall clock reads the box's load too. ui.properties_filter.timing arms
         // them on a quiet box; this row prints them (the no-rebuild claim is the counts above).
         JAH_TIMING_CHECK("ui.properties_filter", worldMs < 5.0,

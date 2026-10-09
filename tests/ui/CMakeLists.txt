@@ -596,12 +596,12 @@ add_test(NAME ui.components COMMAND test_components
 set_tests_properties(ui.components PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "ui")
 jah_no_display(ui.components)
-# ui.components.timing — the pick's half-millisecond bar, nightly (lane D6B-GATE-SHAPE; audit
+# ui.components.timing — the pick's half-millisecond bar, stage-close (lane D6B-GATE-SHAPE; audit
 # §5 FIX-TIME): the same binary with JAHSHAKA_TIMING_BARS=1, quiet box, the GPU-timing lock.
 jah_gpu_exclusive_test(NAME ui.components.timing CLASS none RUN_TIMEOUT 300 COMMAND test_components
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(ui.components.timing PROPERTIES
-    ENVIRONMENT "QT_QPA_PLATFORM=offscreen;JAHSHAKA_TIMING_BARS=1" LABELS "ui;nightly;quiet-box")
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen;JAHSHAKA_TIMING_BARS=1" LABELS "ui;stage-close;quiet-box")
 jah_no_display(ui.components.timing)
 jah_no_display(ui.selection_cost)
 
@@ -1108,12 +1108,12 @@ add_test(NAME ui.properties_filter COMMAND test_properties_filter
 set_tests_properties(ui.properties_filter PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "ui")
 jah_no_display(ui.properties_filter)
-# ui.properties_filter.timing — the keystroke's 5 ms bars, nightly (lane D6B-GATE-SHAPE;
+# ui.properties_filter.timing — the keystroke's 5 ms bars, stage-close (lane D6B-GATE-SHAPE;
 # audit §5 F17 FIX-TIME): the same binary with JAHSHAKA_TIMING_BARS=1, quiet box, the lock.
 jah_gpu_exclusive_test(NAME ui.properties_filter.timing CLASS none RUN_TIMEOUT 120 COMMAND test_properties_filter
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(ui.properties_filter.timing PROPERTIES
-    ENVIRONMENT "QT_QPA_PLATFORM=offscreen;JAHSHAKA_TIMING_BARS=1" LABELS "ui;nightly;quiet-box")
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen;JAHSHAKA_TIMING_BARS=1" LABELS "ui;stage-close;quiet-box")
 jah_no_display(ui.properties_filter.timing)
 
 
@@ -1714,7 +1714,7 @@ jah_no_display(ui.new_project_dialog)
 
 # FRESH HOMES (PROJECT-NAMES-1). A project name is unique in a library now (project.create
 # refuses a taken one), so a row that creates a project in a home nothing wipes went red on its
-# SECOND run in the same tree (an rc tree's solo retries, build-linux, the nightly) — and every
+# SECOND run in the same tree (an rc tree's solo retries, build-linux, a stage close) — and every
 # such home grew without bound (ui.column_law's held 66 'ColumnLaw' projects). Each row below
 # creates projects; its home is wiped at the start of every run (WARM: the shader caches stay).
 if(TEST ui.column_law)
