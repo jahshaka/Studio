@@ -709,8 +709,10 @@ def supervise(argv, held, label, on_end=None):
     tracker.stop()
     if on_end:
         on_end()
-    if rc != 0 and not os.environ.get("JAH_KERNEL_JOURNAL") and sys.platform.startswith("linux"):
-        time.sleep(1.0)      # journald's ingest of the ring (run_pool.py: why one second is enough)
+    if not os.environ.get("JAH_KERNEL_JOURNAL") and sys.platform.startswith("linux"):
+        # journald's ingest of the ring (run_pool.py: why one second is enough) — on EVERY row, green
+        # too (GATE-COST-2, the band-aid audit's #13: a fault on a passing row must not be read too early)
+        time.sleep(1.0)
     xids = kernel_xid.kernel_xids(t0 - 1, tracker.pids)
     if xids is None:
         sys.stderr.write("vram: %s (%s)\n" % (kernel_xid.FINDING, label))

@@ -547,9 +547,9 @@ A pool (`run_pool.py`) reads the same way per app process and turns the arm runn
 second into `ARM <pool>.<arm> CRASH <ms> xid <n> …` (a process's verdicts are printed once, after
 that read). An unreadable journal is a printed FINDING in every user, never a red of every row: the
 ONE row that reds for it is `devprocess.kernel_journal` (tooling; it names the fix — the user joins
-`adm`). After a red exit the read waits 1 s: the Xid is logged at the fault, seconds before the
-process ends (the fence wait until DEVICE_LOST measured 10-11 s), so only journald's millisecond
-ingest is left. (`tests/support/no_xid_run.sh`, photon.view's own wrapper, is deleted: every row
+`adm`). After EVERY row — green too (GATE-COST-2; a fault on a passing row must not be read before
+journald has it) — the read waits 1 s: the Xid is logged at the fault, seconds before the process
+ends (the fence wait until DEVICE_LOST measured 10-11 s), so only journald's millisecond ingest is left. (`tests/support/no_xid_run.sh`, photon.view's own wrapper, is deleted: every row
 has it now.)
 
 **THE MEASUREMENT** (`~/Developer/spikes/gate-admit-1/`, 12 tokens then): two MERGE tiers at -j4
