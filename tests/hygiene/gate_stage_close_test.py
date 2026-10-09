@@ -18,7 +18,7 @@ scoped gate only when the diff touches its OWN subject.
     7. THE STAGE-CLOSE JUDGE (ci_gate_check.py --stage-close <tip>) refuses a push / stage close while a
        stage-close row has no record at the tip or is red (a prose verdict is refused by the door; a later
        green run at the tip does not erase the red), and accepts when every row is green (a private run log
-       and an empty defect registry, the toy build).
+       and an empty defect registry; this build's stage-close rows).
   labels — the tree: no retired label or word (OLD below) in tests/, scripts/ or docs/ (git ls-files); and in
     this build the shadow casters' gate rows run ONE process without the label, their `.churn` twins
     TEN with `stage-close` + `engine`.
@@ -71,7 +71,7 @@ TOY_INV = {
 }
 
 
-def select_cases(source):
+def select_cases(source, build):
     gs = load_gs(source)
 
     def sel(paths):
@@ -154,8 +154,11 @@ def select_cases(source):
         check(not (m & (p1 | p2)) and {"plain", "push.timing"} <= m,
               "the MERGE tier runs none of them, and still runs the plain and push-timing rows (%s)" % sorted(m))
 
-        print("7. THE STAGE-CLOSE JUDGE blocks a push / stage close (ci_gate_check.py --stage-close, the toy build)")
-        judge_cases(source, b, scratch, sorted(p1 | p2))
+        print("7. THE STAGE-CLOSE JUDGE blocks a push / stage close (ci_gate_check.py --stage-close, this build's rows)")
+        inv = gs.load_inventory(build)
+        sc_rows = sorted(n for n, t in inv.items() if t["labels"] & gs.STAGE_CLOSE_LABELS)
+        check(len(sc_rows) > 20, "this build registers the stage-close rows (%d)" % len(sc_rows))
+        judge_cases(source, build, scratch, sc_rows)
     finally:
         shutil.rmtree(scratch, ignore_errors=True)
 
@@ -170,8 +173,9 @@ def select_cases(source):
           "`--stage-close-tier -j 3` prints the batch's parallel phase (%r)" % r.stdout.strip())
 
 
-def judge_cases(source, toy_build, scratch, rows):
+def judge_cases(source, build, scratch, rows):
     tip = subprocess.run(["git", "rev-parse", "HEAD"], cwd=source, capture_output=True, text=True).stdout.strip()
+    base = subprocess.run(["git", "rev-parse", "HEAD~1"], cwd=source, capture_output=True, text=True).stdout.strip()
     pin = subprocess.run(["git", "rev-parse", "HEAD:irisgl"], cwd=source, capture_output=True, text=True).stdout.strip()
     logs = os.path.join(scratch, "runs"); os.makedirs(logs)
     reg = os.path.join(scratch, "defects.json"); open(reg, "w").write(json.dumps({"defects": []}))
@@ -183,15 +187,18 @@ def judge_cases(source, toy_build, scratch, rows):
                                 "tip": {"studio": tip, "irisgl": pin, "studio_dirty": False, "irisgl_dirty": False}}) + "\n")
 
     def judge(*extra):
-        r = subprocess.run([sys.executable, os.path.join(source, "scripts", "ci_gate_check.py"), "--stage-close", tip,
-                            "--build", toy_build] + list(extra), cwd=source, capture_output=True, text=True, env=env)
+        r = subprocess.run([sys.executable, os.path.join(source, "scripts", "ci_gate_check.py"), base + ".." + tip,
+                            "--stage-close", "--build", build] + list(extra), cwd=source, capture_output=True,
+                           text=True, env=env)
         return r.returncode, r.stdout + r.stderr
+    rc, out = judge("--mode", "merge")
+    check(rc == 2 and "never merge" in out, "--stage-close with --mode merge is refused, never ignored (exit %d)" % rc)
     rc, out = judge()
     check(rc == 1 and "no record" in out, "no record at the tip: REFUSED (exit %d)" % rc)
     for n in rows:
         rec(n, "PASS", "2026-10-09T10:00:00+00:00")
     rc, out = judge()
-    check(rc == 0 and "%d green" % len(rows) in out, "every stage-close row green: accepted (exit %d)" % rc)
+    check(rc == 0 and "%d row(s) green" % len(rows) in out, "every stage-close row green: accepted (exit %d)" % rc)
     rec(rows[0], "FAIL", "2026-10-09T11:00:00+00:00")
     rc, out = judge()
     check(rc == 1 and "RED " + rows[0] in out, "one red stage-close row BLOCKS (exit %d)" % rc)
@@ -224,9 +231,8 @@ def label_cases(source, build):
     import gate_graph
     raw = gate_graph.ctest_inventory(build)[0]
     tests = {t["name"]: t for t in json.loads(raw).get("tests", [])}
-    if "shadow.cutout_caster" not in tests:
-        print("  (skip: the shadow rows are not registered in this build)")
-        return
+    check("shadow.cutout_caster" in tests, "the shadow casters' rows are registered in this build (a build without them "
+          "cannot prove the split)")
     for row in ("shadow.cutout_caster", "shadow.two_sided_caster"):
         for name, runs, want in ((row, "1", False), (row + ".churn", "10", True)):
             t = tests.get(name)
@@ -244,7 +250,7 @@ def main():
         print(__doc__); return 2
     mode, source, build = sys.argv[1], os.path.abspath(sys.argv[2]), os.path.abspath(sys.argv[3])
     if mode == "select":
-        select_cases(source)
+        select_cases(source, build)
     else:
         label_cases(source, build)
     name = "gate.stage_close_" + ("select" if mode == "select" else "labels")

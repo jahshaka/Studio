@@ -141,11 +141,14 @@ by `gate-scope.py` alone:
 
   Once selected, a stage-close row GATES like any row (the label is NOT in
   `SCOPE_EXCLUDED_LABELS`, which means "never gating").
-  **A STAGE-CLOSE RED BLOCKS.** `scripts/ci_gate_check.py --stage-close <tip> --build <the tip's build>`
-  refuses (exit 1) while any `stage-close` row is red at the tip or has no record there — the merge
-  refusal's flake law and its "no record = refused", over the whole label, no re-use from another
-  commit; a red is answered by a fix, a recorded verdict (`--verdict "<row>=<text>"`) or, for the
-  contention class, 3/3 solo. rc-gate.sh runs it after the batch and `push.sh` refuses a push on it.
+  **A STAGE-CLOSE RED BLOCKS.** `scripts/ci_gate_check.py <base>..<tip> --stage-close [--mode push]
+  --build <a build of the tip>` is the judge's SELECTION of every `stage-close` row (not the range's scoped
+  rows), judged by the one judge in mode stage-close (or push): the door (a proved `real:<id>` clears through
+  the Prover against the base), the aborts, a nondeterminism clearance re-asked 3/3 at the tip, the
+  overrides — refused (exit 1) while one is red, a KNOWN RED or unrecorded; `--mode merge` beside it is
+  refused, never ignored. rc-gate.sh runs it after the batch (base = the last pushed main) and `push.sh`
+  refuses a push on it (base = the previous pushed sha).
+
 - **`quiet-box`**, beside `stage-close` on every row that MEASURES — the wall-clock benchmarks,
   gi.gather_cost (the GPU clock), vr.frame_budget, and the `<suite>.timing` rows (§4) — and on
   open.crash_soak (twelve RUN_SERIAL processes read probabilistically). A scoped gate NEVER runs
