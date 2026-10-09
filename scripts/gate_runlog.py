@@ -262,6 +262,30 @@ def tree_shas():
             "irisgl_dirty": i_dirty}
 
 
+def built_from(build):
+    """What <build> was BUILT from (GATE-COST-2 #8): {studio, irisgl, dirty} read from <build>/BUILT_FROM,
+    which every build writes as its last step (cmake/BuiltFrom.cmake), or None (a build dir without the
+    stamp: a toy project, a tree built before the stamp existed)."""
+    try:
+        kv = dict(l.split("=", 1) for l in open(os.path.join(build, "BUILT_FROM")).read().splitlines() if "=" in l)
+    except OSError:
+        return None
+    return {"studio": kv.get("studio", ""), "irisgl": kv.get("irisgl", ""), "dirty": kv.get("dirty") == "1"}
+
+
+def stale_build(shas):
+    """None when the record's build is its tip's; else why not — the built commits differ from the tip's, or
+    the build was made from a dirty tree. A record without `built` is not judged (no stamp)."""
+    b = (shas or {}).get("built")
+    if not b:
+        return None
+    if b.get("dirty"):
+        return "built from a DIRTY tree"
+    if b.get("studio") != shas.get("studio") or b.get("irisgl") != shas.get("irisgl"):
+        return "built from studio %s / irisgl %s, not the tip" % ((b.get("studio") or "?")[:9], (b.get("irisgl") or "?")[:9])
+    return None
+
+
 def fork_pin_problem(root=None):
     """THE BUILT FORK MUST BE THE PIN (TESTING-DEBTS-1 T12). None when the ogre-next checkout AND
     the install (`<install>/BUILT_FROM`, written by irisgl/scripts/build-ogre.sh; the install is
@@ -729,7 +753,7 @@ def recorded_rows(shas=None):
             except ValueError: continue
             t = r.get("tip") or {}
             if (t.get("studio") == shas["studio"] and t.get("irisgl") == shas["irisgl"] and not t.get("studio_dirty")
-                    and not t.get("irisgl_dirty") and r.get("kind") != "verdict" and r.get("arm") is None
+                    and not t.get("irisgl_dirty") and not stale_build(t) and r.get("kind") != "verdict" and r.get("arm") is None
                     and r.get("verdict") not in ("NOADMIT", "NOTRUN") and not r.get("kind")):
                 out.add(r.get("suite"))
                 newest[r.get("suite")] = max(newest.get(r.get("suite"), ""), r.get("ts") or "")
@@ -769,10 +793,15 @@ def _verbose(cmd):
 class _Run:
     """One run_ctest() call: the context its phases share (one run id, one sampler, one guard)."""
 
-    def __init__(self, tier, lane, jobs, reasons, gating, rng, retry, labels, echo, env):
+    def __init__(self, tier, lane, jobs, reasons, gating, rng, retry, labels, echo, env, build=None):
         self.tier, self.lane, self.reasons, self.gating, self.rng = tier, lane, reasons or {}, gating, rng
         self.retry, self.labels, self.echo, self.env = retry, labels or {}, echo, env
         self.shas = tree_shas()
+        # WHAT THE BINARIES WERE BUILT FROM rides every record (GATE-COST-2 #8): the refusal never counts a
+        # record of a stale build as the tip's run
+        b = built_from(build) if build else None
+        if b:
+            self.shas["built"] = b
         self.box0 = {"jobs": jobs, "display": (env or os.environ).get("DISPLAY"), "gpu_clocks": gpu_clocks(),
                      "other_ctests": other_ctests(), "host": os.uname().nodename}
         self.run_id = f"{datetime.datetime.now().strftime('%Y%m%dT%H%M%S')}-{self.shas['studio'][:9]}"
@@ -957,7 +986,11 @@ def run_ctest(cmd, cwd, tier, lane, jobs, reasons=None, gating=None, rng=None, r
     if env is not None and os.environ.get("JAH_GATE_SLOT_HELD"):
         # a row of this gate that starts a gate of its own (a selector test) must never queue behind it
         env = dict(env, JAH_GATE_SLOT_HELD=os.environ["JAH_GATE_SLOT_HELD"])
-    R = _Run(tier, lane, jobs, reasons, gating, rng, retry, labels, echo, env)
+    R = _Run(tier, lane, jobs, reasons, gating, rng, retry, labels, echo, env, build=cwd)
+    stale = stale_build(R.shas)
+    if stale:
+        R.say(f"=== STALE BUILD: {cwd} was {stale} ({R.shas['studio'][:9]}) — its records will NOT count as the tip's "
+              f"run (ci_gate_check); `cmake --build` first (a no-op build refreshes BUILT_FROM) ===")
     why = R.guard.dead()
     if why:
         ABORTED = f"=== GATE ABORTED before its first row: {why} — nothing ran, nothing recorded ==="

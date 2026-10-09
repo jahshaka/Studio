@@ -26,6 +26,8 @@ box's own queue, log or displays:
      a record (requeued: k), still never-ran to the refusal; a drain timeout prints and records the holders
      with their age; an abort is one `kind: abort` record and --resume re-runs a row it dropped red; the
      lints prune exactly irisgl/.gitmodules; a green row waits for journald before its Xid read;
+  10. THE STALE-BUILD HOLE: every build stamps BUILT_FROM last; a record carries it; a stale or dirty build's
+     record is never the tip's run (the refusal, --resume). The admission's journal is a file here (#7);
   8. THE SLOT UNDER STRESS: a dead waiter's ticket is reaped; eight gates at once hold it one at a time;
      a SIGKILLed gate's ctest and rows die within 15 s and the slot is free; a killed ctest ends a gate.
 
@@ -516,6 +518,38 @@ def main(source, build):
     p_ = subprocess.run([sys.executable, vt, "admit", "1", "--", "true"], env=env_x, capture_output=True, text=True)
     check(p_.returncode == 0 and time.monotonic() - t0 >= 1.0,
           "a GREEN row waits for journald's ingest before its Xid read (%.2f s)" % (time.monotonic() - t0))
+
+    # ---- 10. GATE-COST-2 #8: what the binaries were built from rides every record ------------------------
+    print("10. the stale-build hole")
+    stamp = os.path.join(scratch, "BUILT_FROM")
+    subprocess.run(["cmake", f"-DSRC={source}", f"-DOUT={stamp}", "-P", os.path.join(source, "cmake", "BuiltFrom.cmake")],
+                   capture_output=True)
+    head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=source, capture_output=True, text=True).stdout.strip()
+    b = rl.built_from(scratch)
+    check(b and b["studio"] == head and len(b["irisgl"]) == 40,
+          "the build's last step writes BUILT_FROM: the studio HEAD (%s) and irisgl's" % (b or {}).get("studio", "?")[:9])
+    reset()
+    with open(os.path.join(tb, "BUILT_FROM"), "w") as f:
+        f.write("studio=%s\nirisgl=%s\ndirty=0\n" % ("0" * 40, clean["irisgl"]))
+    rc, out = run("^gpu\\.a$")
+    rec = [r for r in records() if r["suite"] == "gpu.a"]
+    check(rc == 0 and "STALE BUILD" in out and rec and rec[0]["tip"].get("built", {}).get("studio") == "0" * 40,
+          "a run on a build made from another commit says STALE BUILD and its record carries `tip.built`")
+    import ci_gate_check as cgc
+    got = cgc.records_by_tip({clean["studio"]: clean["irisgl"]})
+    check(("gpu.a", None) not in got[clean["studio"]] and "gpu.a" not in rl.recorded_rows(clean),
+          "the refusal and --resume never count a stale build's record as the tip's run")
+    with open(os.path.join(tb, "BUILT_FROM"), "w") as f:
+        f.write("studio=%s\nirisgl=%s\ndirty=0\n" % (clean["studio"], clean["irisgl"]))
+    rc, out = run("^gpu\\.a$")
+    got = cgc.records_by_tip({clean["studio"]: clean["irisgl"]})
+    check(rc == 0 and "STALE" not in out and len(got[clean["studio"]].get(("gpu.a", None), [])) == 1,
+          "a build made from the tip counts (one record: the fresh one)")
+    with open(os.path.join(tb, "BUILT_FROM"), "w") as f:
+        f.write("studio=%s\nirisgl=%s\ndirty=1\n" % (clean["studio"], clean["irisgl"]))
+    check(rl.stale_build(dict(clean, built=rl.built_from(tb))) == "built from a DIRTY tree",
+          "a build made from a dirty tree is never the tip's")
+    os.unlink(os.path.join(tb, "BUILT_FROM"))
 
     shutil.rmtree(scratch, ignore_errors=True)
     if FAILURES:

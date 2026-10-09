@@ -296,7 +296,11 @@ every `nightly` row priced in `scripts/gate-times.txt`; R3 no copied `ctest -LE`
 `gate-scope.py`; R4 no `RUN_SERIAL` without a comment naming its reason (or the GPU lock); R5 every
 app/lint row reachable from a subject (an API module its script or harness calls, a rule's
 directory, a tree file it runs). (3) THE MERGE REFUSAL: `scripts/ci-gate-check.sh <range>` exits 1
-with the reason unless the run log answers every row and arm the range selects, on a clean tree,
+with the reason unless the run log answers every row and arm the range selects, on a clean tree
+BUILT FROM THAT COMMIT (GATE-COST-2: every build writes `<build>/BUILT_FROM` — the studio and irisgl
+commits and whether either was dirty — as its last step, `cmake/BuiltFrom.cmake`; each record carries it
+as `tip.built`, a gate on a stale build prints `STALE BUILD`, and a record built from another commit or a
+dirty tree is never the tip's run — a no-op `cmake --build` refreshes the stamp),
 under the flake law (§4) — at the range's tip, or, for a row the last fix round did not reach, at
 an earlier commit of the lane (§3b). It prints, per row, the commit its record came from. A hook
 or a CI job calls it; `gate.ci_check` and `gate.fix_round` prove it.
