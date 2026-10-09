@@ -103,7 +103,7 @@ def _when(r):
 
 
 NEVER_RAN = ("NOADMIT", "NOTRUN")
-MEASURING = {"timing", "quiet-box"}    # the labels of rows that measure time or GPU budget (TESTING_GATE §4)
+MEASURING = {"timing", "quiet-box", "perf"}   # labels of rows that measure time or GPU budget (TESTING_GATE §4; perf: tests/perf)
 
 
 def judge(key, recs, contention):
