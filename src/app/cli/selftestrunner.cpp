@@ -22,6 +22,7 @@ For more information see the LICENSE file
 #include <QFileInfo>
 #include <QImage>
 #include <QSize>
+#include <QStringList>
 #include <QThread>
 #include <QWidget>
 
@@ -275,6 +276,19 @@ int runEngineSelftest(MainWindow &window, QApplication &app, const QString &outP
     }
     std::fprintf(stderr, "engine-selftest: default scene: %d nodes, ground %d vertices\n",
                  countNodes(scene->getRootNode()) - 1, groundMesh->numVerts);
+
+    // THE VALIDATION LAYER'S PROOF (TESTING-CLEANUP-2 H4; Engine::validation). One line, read by
+    // app.engine_selftest_validation (tests/app/engine_selftest.sh): a layered run whose layer
+    // never loaded prints no "Validation Error" and would otherwise read as clean.
+    if (const auto eng = EngineHost::instance().engine()) {
+        const jahshaka::engine::ValidationStatus v = eng->validation();
+        QStringList layers;
+        for (const std::string &l : v.layers) layers << QString::fromStdString(l);
+        std::fprintf(stderr, "engine-selftest: validation requested %s active %s (vkCmdDraw -> %s; layers: %s)\n",
+                     v.requested ? "yes" : "no", v.active ? "yes" : "no",
+                     v.drawEntry.empty() ? "no Vulkan device" : v.drawEntry.c_str(),
+                     layers.isEmpty() ? "none" : qPrintable(layers.join(QStringLiteral(", "))));
+    }
 
     // THE SUN CONTACT ARM (PHOTON-RAYS-1): `JAHSHAKA_SELFTEST_SUN_CONTACT` turns
     // world.sunContact on for the default scene and for fixture B, so the four

@@ -83,4 +83,20 @@ var after = engine.arms();
 for (var j = 0; j < after.length; ++j)
     assert(after[j].value === after[j]["default"], after[j].name + " is back at its default");
 
+// engine.validation() — THE VALIDATION LAYER'S PROOF (TESTING-CLEANUP-2 H4), its NEGATIVE half: this
+// pool runs WITHOUT the layer, so the readout must say so (the layered arms — pool.vr_validation,
+// pool.capture_validation, the selftest's validation row — assert the positive half).
+var v = engine.validation();
+console.log("engine.validation() -> " + JSON.stringify(v));
+// (the layer list is read by index: it is array-like)
+assert(typeof v.requested === "boolean" && typeof v.active === "boolean" && v.layers !== undefined &&
+       typeof v.layers.length === "number" && typeof v.drawEntry === "string",
+       "engine.validation() answers {requested, active, layers, drawEntry}");
+assert(v.requested === false && v.active === false,
+       "an unlayered run reads requested false, active false");
+assert(v.drawEntry.length > 0 && v.drawEntry.indexOf("VkLayer_khronos_validation") < 0,
+       "...its vkCmdDraw resolves into the driver/loader, not the layer: " + v.drawEntry);
+var layered = false;
+for (var k = 0; k < v.layers.length; ++k) if (String(v.layers[k]).indexOf("khronos_validation") >= 0) layered = true;
+assert(!layered, "...and no validation layer library is loaded: " + JSON.stringify(v.layers));
 console.log("engine_arms: PASS");
