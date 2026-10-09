@@ -6,9 +6,9 @@
 #      sets). Fails on the process's exit code AND on any "Validation Error" in
 #      its output — the line that caught the stale depth buffer on resize — AND
 #      unless the runner's validation line says the layer is live (H4). It
-#      renders FOUR POSES since lane FENCE-1 (two since 2026-09-18,
-#      ENGINE-SMALL-B item 5) and prints a sha256 line for each; this arm
-#      requires all four lines and requires each PAIR to DIFFER, which is what
+#      renders SIX POSES since TESTING-CLEANUP-2 H5 (four since lane FENCE-1,
+#      two since ENGINE-SMALL-B item 5) and prints a sha256 line for each; this
+#      arm requires all six lines and requires each PAIR to DIFFER, which is what
 #      says the second pose's camera move took and that the ray tier moved a
 #      pixel of a fixture built to show it. The VALUES are not asserted here —
 #      they are the hand-taken A/B of the hash law (docs/TESTING_GATE.md §7), and
@@ -116,6 +116,24 @@ if [ "$pose1" = "$b1" ] || [ "$pose2" = "$b1" ] || [ "$pose1" = "$b2" ] || [ "$p
     echo "                 did not reach the screen (pose1=$pose1 pose2=$pose2 B1=$b1 B2=$b2)"
     exit 1
 fi
+
+# ---- THE TWO POSES IN MOTION (TESTING-CLEANUP-2 H5) --------------------------
+# A MOTION pose (the default scene mid-walk, 30 fixed-clock frames, no settle) and a
+# MOVER pose (fixture B, rays on, a sphere mid-move, no settle): six lines now. Each
+# must be there, a picture, and not the still pose it starts from.
+motion=$(sed -n 's/^engine-selftest: pose motion sha256 \([0-9a-f]*\) .*/\1/p' "$OUT/validation.log" | head -1)
+mover=$(sed -n 's/^engine-selftest: pose mover sha256 \([0-9a-f]*\) .*/\1/p' "$OUT/validation.log" | head -1)
+if [ -z "$motion" ] || [ -z "$mover" ]; then
+    echo "engine_selftest: the self-test did not report the motion and mover poses (motion='$motion' mover='$mover')"
+    grep 'engine-selftest' "$OUT/validation.log" | tail -10
+    exit 1
+fi
+if [ "$motion" = "$pose2" ] || [ "$mover" = "$b1" ] || [ "$mover" = "$b2" ]; then
+    echo "engine_selftest: a pose in motion hashes as a still one (motion=$motion pose2=$pose2 mover=$mover B1=$b1 B2=$b2)"
+    exit 1
+fi
+echo "engine_selftest: pose motion       $motion"
+echo "engine_selftest: pose mover        $mover"
 
 JAHSHAKA_SELFTEST_BREAK_GROUND=1 \
     "$BIN" --engine-selftest "$OUT/selftest_broken_ground.png" > "$OUT/broken_ground.log" 2>&1

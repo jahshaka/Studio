@@ -23,10 +23,10 @@ For more information see the LICENSE file
 #include <QImage>
 #include <QSize>
 #include <QStringList>
-#include <QThread>
 #include <QWidget>
 
 #include "bridge/enginehost.h"
+#include "viewport/enginerenderdriver.h"
 #include "irisgl/document/assets/mesh.h"
 #include "irisgl/document/scenegraph/meshnode.h"
 #include "irisgl/document/scenegraph/scene.h"
@@ -220,6 +220,23 @@ editor.frame(300);
 
 /// Part two: the rays come off and the picture settles again. A separate
 /// evaluation because the screenshot between them is the RUNNER's.
+/// THE MOVER (TESTING-CLEANUP-2 H5): after B2, the rays back on and settled, then a glossy
+/// sphere moved 0.1 m a frame for 30 frames on the fixed clock; the runner shoots mid-move.
+const char *const kFixtureMoverScript = R"JS(
+if (world.rayTracing("auto") !== "auto") throw new Error("world.rayTracing(auto) refused");
+editor.frame(120);
+var mover = scene.addPrimitive("sphere", { position: { x: -3, y: 0.6, z: 3 } });
+if (!mover) throw new Error("the mover sphere was not added");
+if (!material.set(mover, { baseColor: "#e04020", metallic: 0.0, roughness: 0.15 }))
+    throw new Error("the mover's material was refused");
+editor.frame(30);
+for (var i = 1; i <= 30; ++i) {
+    node.transform(mover, { position: { x: -3 + 0.1 * i, y: 0.6, z: 3 } });
+    editor.frame(1);
+}
+"ok"
+)JS";
+
 const char *const kFixtureBNoRaysScript = R"JS(
 if (world.rayTracing("off") !== "off") throw new Error("world.rayTracing(off) refused");
 editor.frame(300);
@@ -236,6 +253,14 @@ int runEngineSelftest(MainWindow &window, QApplication &app, const QString &outP
     if (const auto eng = EngineHost::instance().engine()) asyncAtStart = eng->asyncShaderStats();
     window.show();
     app.processEvents();
+    // THE SELFTEST OWNS THE LOOP (TESTING-CLEANUP-2 H5). Every frame it hashes is a frame IT asked
+    // for, on the fixed clock: the render driver's own timer is stopped for the whole run, so an
+    // event-loop turn (a resize delivered, a fixture step ended) can never slip a wall-clock frame
+    // between two counted ones. (The pumps below used to be 40 x processEvents + msleep(16) and 12 x
+    // the same — how many frames the driver drew in them was the box's business; §1771/§1830's B1/B2
+    // nondeterminism under load is that.)
+    EngineRenderDriver *selftestDriver = EngineHost::instance().driver();
+    if (selftestDriver) selftestDriver->stop();
 
     QString why;
     if (!window.enterEditorOnNewScene(why)) {
@@ -330,7 +355,7 @@ int runEngineSelftest(MainWindow &window, QApplication &app, const QString &outP
         std::fprintf(stderr, "engine-selftest: GATHER-OFF ARM - world.gi({gather:false})\n");
     }
 
-    // Pump the render loop for ~30 frames (the driver ticks every 16 ms).
+    // Forty frames on the fixed clock, the resizes delivered between them.
     QElapsedTimer clock;
     clock.start();
     // Resize twice on the way (the layout does this to the viewport in real use):
@@ -344,8 +369,8 @@ int runEngineSelftest(MainWindow &window, QApplication &app, const QString &outP
                            widgetAfterFirst  = window.viewport()->asWidget()->size(); }
         if (frame == 35) { afterSecondResize = window.viewport()->renderTargetSize();
                            widgetAfterSecond = window.viewport()->asWidget()->size(); }
-        app.processEvents(QEventLoop::AllEvents, 50);
-        QThread::msleep(16);
+        app.processEvents();                                   // the resize, delivered
+        window.viewport()->renderFrames(1, 1.0f / 60.0f);      // ONE frame, one clock step
     }
     app.processEvents();
 
@@ -515,6 +540,37 @@ int runEngineSelftest(MainWindow &window, QApplication &app, const QString &outP
         return 1;
     }
 
+    // ---- THE MOTION POSE (TESTING-CLEANUP-2 H5) -----------------------------
+    // Poses 1 and 2 are pictures AT REST; every per-frame path the renderer runs while the camera
+    // MOVES (the cascade scroll mid-step, the field's follow, a temporal history that has not
+    // converged) is invisible to both. So a WALK: from pose 2's place, 0.1 m along -x per frame for
+    // 60 frames on the fixed clock, the shot taken mid-walk at frame 30 with NO settle — a picture
+    // in motion, deterministic because every frame before it is a counted, fixed-step frame.
+    const QString motionPng = taggedPath(outPng, QStringLiteral("motion"));
+    for (int step = 1; step <= 30; ++step) {
+        EditorCameraPose walk;
+        walk.position = iris::Vec3(5.0f - 0.1f * float(step), 5.0f, 14.0f);
+        walk.hasPosition = true;
+        walk.lookAt = iris::Vec3(-2.0f - 0.1f * float(step), 0.5f, -3.0f);
+        walk.hasLookAt = true;
+        window.viewport()->setCameraPose(walk);
+        window.viewport()->renderFrames(1, 1.0f / 60.0f);
+    }
+    QImage imgMotion = window.viewport()->takeScreenshot(256, 256);
+    if (imgMotion.isNull() || !imgMotion.save(motionPng, "PNG")) {
+        std::fprintf(stderr, "engine-selftest: could not take or save the motion pose (%s)\n",
+                     qPrintable(motionPng));
+        return 1;
+    }
+    const QString hashMotion = fileSha256(motionPng);
+    std::fprintf(stderr, "engine-selftest: pose motion sha256 %s (%s)\n",
+                 qPrintable(hashMotion), qPrintable(motionPng));
+    if (!isPicture(imgMotion) || hashMotion == hash2) {
+        std::fprintf(stderr, "engine-selftest: the motion pose is %s\n",
+                     !isPicture(imgMotion) ? "the CLEAR COLOUR" : "pose 2's picture — the walk did not take");
+        return 1;
+    }
+
     // ---- POSE PAIR B (lane FENCE-1) ---------------------------------------
     // See kFixtureBScript's header for what the fixture is and why each element
     // of it is there. It runs LAST and writes its own files, so it cannot move
@@ -547,8 +603,8 @@ int runEngineSelftest(MainWindow &window, QApplication &app, const QString &outP
     // gets a window of a stated size, and the size is part of the fence.
     window.resize(1280, 800);
     for (int frame = 0; frame < 12; ++frame) {
-        app.processEvents(QEventLoop::AllEvents, 50);
-        QThread::msleep(16);
+        app.processEvents();
+        window.viewport()->renderFrames(1, 1.0f / 60.0f);
     }
     std::fprintf(stderr, "engine-selftest: fixture B renders at %dx%d (window 1280x800)\n",
                  window.viewport()->renderTargetSize().width(),
@@ -613,6 +669,30 @@ int runEngineSelftest(MainWindow &window, QApplication &app, const QString &outP
     const QString hashB2 = fileSha256(b2Png);
     std::fprintf(stderr, "engine-selftest: pose B2 (no rays) sha256 %s (%s)\n",
                  qPrintable(hashB2), qPrintable(b2Png));
+
+    // ---- THE MOVER POSE (TESTING-CLEANUP-2 H5) ------------------------------
+    // B1/B2 are a still fixture: the moving-object paths (the march's object motion, the trace's
+    // mover branches, the velocity a history reprojects by) never run in either. Rays back on and
+    // settled on the fixed clock, then a glossy sphere crosses the floor 0.1 m per frame for 30
+    // frames and the VIEWPORT-grade shot is taken mid-move, no settle.
+    if (!runFixtureStep(kFixtureMoverScript, "mover")) return 1;
+    app.processEvents();
+    const QString moverPng = taggedPath(outPng, QStringLiteral("mover"));
+    QImage imgMover = window.viewport()->takeScreenshot(256, 256,
+                                                        IEditorViewport::ScreenshotGrade::Viewport);
+    if (imgMover.isNull() || !imgMover.save(moverPng, "PNG")) {
+        std::fprintf(stderr, "engine-selftest: could not take or save the mover pose (%s)\n",
+                     qPrintable(moverPng));
+        return 1;
+    }
+    const QString hashMover = fileSha256(moverPng);
+    std::fprintf(stderr, "engine-selftest: pose mover sha256 %s (%s)\n",
+                 qPrintable(hashMover), qPrintable(moverPng));
+    if (!isPicture(imgMover) || hashMover == hashB1) {
+        std::fprintf(stderr, "engine-selftest: the mover pose is %s\n",
+                     !isPicture(imgMover) ? "the CLEAR COLOUR" : "B1's picture — the sphere did not reach it");
+        return 1;
+    }
 
     // HOW MUCH THE RAYS MOVED, in pixels and codes. The hashes say "different";
     // this says whether the difference is a reflection or a rounding, which is
