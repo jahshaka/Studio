@@ -37,7 +37,7 @@ jah_gpu_row(shadow.cache_kinds CLASS engine COMMAND test_shadow_spike cachekinds
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(shadow.cache_kinds PROPERTIES
     TIMEOUT 120 LABELS "engine"
-    ENVIRONMENT "VK_INSTANCE_LAYERS=VK_LAYER_KHRONOS_validation"
+    ENVIRONMENT "VK_INSTANCE_LAYERS=VK_LAYER_KHRONOS_validation;JAH_EXPECT_VALIDATION=1"
     FAIL_REGULAR_EXPRESSION "Validation Error;from Undefined to a read-only layout")
 
 # THE GATE SUITE (SHADOW_TOOLING_SPEC.md §7): the budget, the derivation, the

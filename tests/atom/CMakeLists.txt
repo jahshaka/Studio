@@ -202,7 +202,7 @@ if(Vulkan_FOUND AND JAH_ATOM_GLSLANG AND OGRE_NEXT_VULKAN_RS_LIB)
                  WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
         set_tests_properties(engine.atom_parity_validation PROPERTIES
             TIMEOUT 120 LABELS "engine"
-            ENVIRONMENT "ATOM_PARITY_QUICK=1;VK_INSTANCE_LAYERS=VK_LAYER_KHRONOS_validation;JAH_ATOM_EXPECT_VALIDATION=1"
+            ENVIRONMENT "ATOM_PARITY_QUICK=1;VK_INSTANCE_LAYERS=VK_LAYER_KHRONOS_validation;JAH_EXPECT_VALIDATION=1"
             FAIL_REGULAR_EXPRESSION "Validation Error;Validation Warning")
     endif()
     # engine.atom_draw — THE VISIBILITY BUFFER AS THE PRODUCT'S OPAQUE PATH (ATOM
@@ -312,21 +312,21 @@ if(Vulkan_FOUND AND JAH_ATOM_GLSLANG AND OGRE_NEXT_VULKAN_RS_LIB)
     endif()
     # UNDER THE VALIDATION LAYER, failing on any report: our recorder's barriers and the
     # provider's restoration are what the layer reads. Each asserts the layer is ACTIVE
-    # (JAH_ATOM_EXPECT_VALIDATION: vkCmdDraw must resolve into the layer's library), so a
+    # (JAH_EXPECT_VALIDATION: Engine::validation — vkCmdDraw must resolve into the layer's library), so a
     # machine without the layer cannot read as green.
     if(EXISTS "/usr/share/vulkan/explicit_layer.d/VkLayer_khronos_validation.json")
         jah_gpu_row(engine.atom_negative_control_validation CLASS engine COMMAND test_atom_negative_control
                  WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
         set_tests_properties(engine.atom_negative_control_validation PROPERTIES
             TIMEOUT 120 LABELS "engine"
-            ENVIRONMENT "VK_INSTANCE_LAYERS=VK_LAYER_KHRONOS_validation;JAH_ATOM_EXPECT_VALIDATION=1"
+            ENVIRONMENT "VK_INSTANCE_LAYERS=VK_LAYER_KHRONOS_validation;JAH_EXPECT_VALIDATION=1"
             FAIL_REGULAR_EXPRESSION "Validation Error;Validation Warning")
         if(EXISTS "${_lvp_icd}")
             add_test(NAME engine.atom_negative_control_validation_lavapipe COMMAND test_atom_negative_control
                      WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
             set_tests_properties(engine.atom_negative_control_validation_lavapipe PROPERTIES
                 TIMEOUT 120 LABELS "engine"
-                ENVIRONMENT "VK_INSTANCE_LAYERS=VK_LAYER_KHRONOS_validation;VK_ICD_FILENAMES=${_lvp_icd};JAH_ATOM_EXPECT_VALIDATION=1"
+                ENVIRONMENT "VK_INSTANCE_LAYERS=VK_LAYER_KHRONOS_validation;VK_ICD_FILENAMES=${_lvp_icd};JAH_EXPECT_VALIDATION=1"
                 FAIL_REGULAR_EXPRESSION "Validation Error;Validation Warning")
         endif()
     endif()

@@ -46,7 +46,7 @@
 #include "EnginePrivate.h"
 #include "GpuScene.h"
 #include "HlmsAtom.h"
-#include "validation_probe.h"
+#include "../support/validationproof.h"
 
 #include <Compositor/OgreCompositorManager2.h>
 #include <Compositor/OgreCompositorNodeDef.h>
@@ -502,7 +502,7 @@ int main()
     Ogre::HlmsManager *hm = root.getHlmsManager();
     auto *atom = dynamic_cast<HlmsAtom *>(hm->getHlms(HlmsAtom::kType));
     CHECK(atom != nullptr, "HlmsAtom is registered beside HlmsPbs (HLMS_USER0)");
-    CHECK(atomtest::validationProbe(), "the validation layer is ACTIVE when the entry asks for it");
+    CHECK(enginetest::validationProof(*engine), "the validation layer is ACTIVE when the entry asks for it");
     if (!atom) return 1;
 
     // ---- the textures (single mip, magnified) --------------------------------

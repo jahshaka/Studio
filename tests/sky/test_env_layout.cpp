@@ -41,6 +41,7 @@
 //      the frames AFTER a convolution that sample the cube.
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
+#include "../support/validationproof.h"
 
 #include <cmath>
 #include <cstdio>
@@ -84,8 +85,13 @@ int main()
     cfg.logFile = "test-env-layout-ogre.log";
     auto engine = Engine::create(cfg, err);
     if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }
-
     View *view = engine->createOffscreenView("env", 128, 128, Colour(0, 0, 0));
+    // THE LAYER IS REALLY THERE (H4): the row's "Validation Error" grep reads nothing from a run
+    // whose layer never loaded. Read once a view exists: Ogre makes the Vulkan device with it.
+    if (!enginetest::validationProof(*engine)) {
+        std::printf("FAIL: the validation layer was asked for and is not live on the device\n");
+        return 1;
+    }
     Scene *s = engine->createScene("env");
     if (!view || !s) { std::printf("FAIL: view/scene\n"); return 1; }
     view->setScene(s);

@@ -491,6 +491,22 @@ jah_add_pool(vr_session TIER document   CLASS vr LABELS scripting
     ENV "${JAH_TEST_DISPLAY_ENV}"
     PROPS RESOURCE_LOCK monado COST ${JAH_COST_MONADO} SKIP_RETURN_CODE 77)
 
+# ---- THE VR SESSION UNDER THE KHRONOS VALIDATION LAYER (TESTING-CLEANUP-2 H4): the stereo path —
+# the session, the eye swapchains, the per-eye workspaces — had never run under the layer in a
+# gate. One app process (`--vr`, the shared Monado session's shape), layered by the loader; the
+# FIRST arm proves the layer is live (engine.validation()), then the session verbs run under it;
+# any "Validation Error" in the process's output fails the row.
+if(EXISTS "/usr/share/vulkan/explicit_layer.d/VkLayer_khronos_validation.json")
+    jah_pool_arm(vr_validation validation_proof ${CMAKE_SOURCE_DIR}/tests/scripting/scripts/e2e_validation_proof.js 5 FIRST)
+    jah_pool_arm(vr_validation verbs_session ${CMAKE_SOURCE_DIR}/tests/scripting/scripts/e2e_vr_session_verbs.js 39)
+    jah_add_pool(vr_validation TIER epic CLASS vr LABELS scripting
+        LAUNCHER "${CMAKE_CURRENT_SOURCE_DIR}/run_vr_app.sh" --launch "${JAH_MONADO_MANIFEST}" --
+        APP_ARGS --vr
+        ENV "${JAH_TEST_DISPLAY_ENV}" "VK_LOADER_LAYERS_ENABLE=VK_LAYER_KHRONOS_validation"
+        PROPS RESOURCE_LOCK monado COST ${JAH_COST_MONADO} SKIP_RETURN_CODE 77
+              FAIL_REGULAR_EXPRESSION "Validation Error")
+endif()
+
 get_property(_vr_rows DIRECTORY PROPERTY TESTS)
 foreach(_t IN LISTS _vr_rows)
     set_property(TEST ${_t} APPEND PROPERTY LABELS vr)
