@@ -664,9 +664,10 @@ def gpu_apps(own_root=None):
         if _descends_from(pid, roots): continue
         name = os.path.basename(f[1])[:40]
         try: exe = os.path.realpath(os.readlink(f"/proc/{pid}/exe"))
-        except OSError: exe = None
-        out.append({"pid": pid, "name": name, "exe": exe, "mib": int(f[2]) if f[2].isdigit() else None,
-                    "ours": _ours(pid, name)})
+        except OSError: exe = None          # exited, or not ours to read: UNKNOWN — recorded, never counted
+        rec = {"pid": pid, "name": name, "exe": exe, "mib": int(f[2]) if f[2].isdigit() else None, "ours": _ours(pid, name)}
+        if exe is None: rec["unknown"] = True
+        out.append(rec)
     return out
 
 
@@ -696,7 +697,7 @@ def _ours(pid, name):
     if name == "Jahshaka" or name.startswith(("test_", "bench_")):
         return True
     try:
-        if "/jahshaka/" in os.readlink(f"/proc/{pid}/exe"):
+        if ours_exe(os.path.realpath(os.readlink(f"/proc/{pid}/exe"))):
             return True
     except OSError:
         pass
@@ -768,7 +769,7 @@ def census(own_root=None, mem=None, ctests=None):
     apps = gpu_apps(own_root)
     base = box_baseline()
     comp = None if apps is None else [a for a in apps if a.get("ours") or (
-        base is not None and (a.get("exe") not in base[0] or (a.get("mib") or 0) >= base[1]))]
+        base is not None and not a.get("unknown") and (a.get("exe") not in base[0] or (a.get("mib") or 0) >= base[1]))]
     return {"gpu_apps": apps, "gpu_competitors": comp,
             "baseline": baseline_file() if base is not None else "MISSING: only our own GPU processes counted",
             "other_ctests": oc, "builds": builds_outside(own_root), "psi10_mem": m.get("psi10"), "psi10_io": _psi("io")}

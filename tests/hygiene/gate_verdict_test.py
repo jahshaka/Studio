@@ -570,6 +570,26 @@ def case_log_schema2(E):
           "box.census = the competitor census {gpu_apps, gpu_competitors (ours / off the idle baseline / over the floor), "
           "baseline, other_ctests, builds (outside the gate), psi10_mem, psi10_io} (%s)"
           % {k: (v if k != "gpu_apps" else (len(v) if v is not None else None)) for k, v in cen.items()})
+    # ROUND 2: whose GPU process and whose build — our trees by path, an unreadable exe never counted, a gate in the
+    # MAIN tree still sees every sibling worktree's build
+    m = E.rl.main_tree()
+    check(E.rl.ours_exe(os.path.join(m, ".claude", "worktrees", "x", "build-linux", "bin", "Jahshaka"))
+          and E.rl.ours_exe(os.path.join(m, "build-linux", "tests", "test_engine"))
+          and not E.rl.ours_exe(os.path.join(os.path.expanduser("~"), "jahshaka", "bin", "tool"))
+          and not E.rl.ours_exe(os.path.join(os.path.dirname(m), "x", "jahshaka", "chrome")),
+          "ours = a binary under <main>/.claude/worktrees/ or <main>/build-linux, never a '/jahshaka/' string match")
+    real_root, real_apps = E.rl.ROOT, E.rl.gpu_apps
+    try:
+        E.rl.ROOT = m
+        check(E.rl._own_tree(os.path.join(m, "build-linux")) and not E.rl._own_tree(
+            os.path.join(m, ".claude", "worktrees", "lane-x", "build-linux")),
+              "a gate in the MAIN tree excludes its own builds, never a sibling worktree's")
+        E.rl.gpu_apps = lambda *a: [{"pid": 1, "name": "gone", "exe": None, "mib": 900, "ours": False, "unknown": True}]
+        c = E.rl.census(None, {"psi10": 0.0, "builds": 0}, 0)
+        check(c["gpu_competitors"] == [], "an exe that cannot be read is recorded `unknown` and never counted (%s)"
+              % c["gpu_competitors"])
+    finally:
+        E.rl.ROOT, E.rl.gpu_apps = real_root, real_apps
     check("xid" in one and one["xid"] is None and "journal_unreadable" not in one, "a row with no fault carries xid: null")
     R = E.rl._Run("scoped", "verdict-test", 1, None, None, None, False, {}, False, None)
     R.sampler.stop()
