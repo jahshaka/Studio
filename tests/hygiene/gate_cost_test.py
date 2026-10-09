@@ -632,15 +632,36 @@ def main(source, build):
     got = cgc.records_by_tip({clean["studio"]: clean["irisgl"]})
     check("no BUILT_FROM stamp" in out and ("gpu.a", None) not in got[clean["studio"]],
           "a build with NO stamp is never the tip's run either (F4a: forward-only)")
-    # F4b: the gate's no-op build refreshes the stamp (and a failed one refuses the run)
+    # F4b: the gate's no-op build refreshes the stamp (and a failed one refuses the run) — and it is never a
+    # silent FULL build (round 2, B): a tree with no stamp, or ninja -n past 50 edges, is refused
     pb = rl.prebuild(tb)
-    check(pb is None and rl.built_from(tb) and rl.built_from(tb)["studio"] == "c" * 40,
-          "the gate's no-op build rebuilds what is stale and writes BUILT_FROM before any row (F4b)")
+    check(pb and "build the tree first" in pb and "no BUILT_FROM" in pb,
+          "a tree that was never built (no stamp) is refused with the command that builds it (round 2, B)")
+    with open(os.path.join(tb, "BUILT_FROM"), "w") as f:
+        f.write("studio=0\nirisgl=0\ndirty=0\n")
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        pb = rl.prebuild(tb)
+    check(pb is None and rl.built_from(tb) and rl.built_from(tb)["studio"] == "c" * 40
+          and "the no-op build before any row" in buf.getvalue(),
+          "the gate's no-op build says so, rebuilds what is stale and writes BUILT_FROM before any row (F4b)")
+    many = os.path.join(scratch, "many")
+    os.makedirs(many)
+    open(os.path.join(many, "CMakeLists.txt"), "w").write(
+        "cmake_minimum_required(VERSION 3.20)\nproject(m NONE)\nset(outs)\nforeach(i RANGE 60)\n"
+        "  add_custom_command(OUTPUT o${i} COMMAND ${CMAKE_COMMAND} -E touch o${i})\n  list(APPEND outs o${i})\n"
+        "endforeach()\nadd_custom_target(all_o ALL DEPENDS ${outs})\n")
+    subprocess.run(["cmake", "-G", "Ninja", "-S", many, "-B", os.path.join(many, "b")], capture_output=True)
+    open(os.path.join(many, "b", "BUILT_FROM"), "w").write("studio=0\nirisgl=0\ndirty=0\n")
+    pb = rl.prebuild(os.path.join(many, "b"))
+    check(pb and "more than 50" in pb and not os.path.exists(os.path.join(many, "b", "o1")),
+          "a tree far from built (ninja -n: 61 edges) is refused, nothing built (round 2, B)")
     broken = os.path.join(scratch, "broken")
     os.makedirs(broken)
     open(os.path.join(broken, "CMakeLists.txt"), "w").write(
         "cmake_minimum_required(VERSION 3.20)\nproject(b NONE)\nadd_custom_target(fail ALL COMMAND false)\n")
     subprocess.run(["cmake", "-S", broken, "-B", os.path.join(broken, "b")], capture_output=True)
+    open(os.path.join(broken, "b", "BUILT_FROM"), "w").write("studio=0\nirisgl=0\ndirty=0\n")
     pb = rl.prebuild(os.path.join(broken, "b"))
     check(pb and "REFUSING TO RUN" in pb and "FAILED" in pb, "a failed no-op build refuses the run (F4b)")
     # F4c: an untracked file in a tracked dir makes the build dirty

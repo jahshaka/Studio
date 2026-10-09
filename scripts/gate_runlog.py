@@ -290,17 +290,41 @@ def stale_build(shas):
     return None
 
 
+PREBUILD_MAX_EDGES = 50
+
+
 def prebuild(build, jobs=None):
     """THE GATE'S NO-OP BUILD (GATE-COST-2 F4): before any row, `cmake --build <build>` — seconds when nothing
     changed — rebuilds whatever is stale (a reverted edit, a `--target` build's leftovers) and refreshes
     BUILT_FROM, so the binaries match HEAD's sources by construction. At the box's priority and a width the
     memory law allows (JAH_GATE_BUILD_JOBS, default 3). Returns None when it built (or the dir is not a CMake
     build), else the refusal text — a failed no-op build never gates."""
-    if not os.path.isfile(os.path.join(build, "CMakeCache.txt")):
+    cache = os.path.join(build, "CMakeCache.txt")
+    if not os.path.isfile(cache):
         return None
-    jobs = jobs or os.environ.get("JAH_GATE_BUILD_JOBS", "3")
+    cmd = "nice -n 19 ionice -c 3 cmake --build %s -j %s" % (build, jobs or os.environ.get("JAH_GATE_BUILD_JOBS", "3"))
+    # NEVER A SILENT FULL BUILD (round 2, B): a tree that was never built (no stamp, no app binary) or that is
+    # far from built (ninja -n: more than PREBUILD_MAX_EDGES) is refused with the command that builds it — the
+    # gate's build is the no-op one, seconds, not a lane's build under the gate's name
+    first = "REFUSING TO RUN: %s is not a built tree — build the tree first: %s" % (build, cmd)
+    if not os.path.isfile(os.path.join(build, "BUILT_FROM")):
+        return first + "  (no BUILT_FROM stamp)"
+    try:
+        project = re.search(r"^CMAKE_PROJECT_NAME:\w+=(.*)$", open(cache).read(), re.M)
+    except OSError:
+        project = None
+    if project and project.group(1).strip() == "Jahshaka" and not os.path.exists(os.path.join(build, "bin", "Jahshaka")):
+        return first + "  (no bin/Jahshaka)"
+    if os.path.isfile(os.path.join(build, "build.ninja")):
+        r = subprocess.run(["ninja", "-C", build, "-n"], capture_output=True, text=True)
+        edges = [l for l in r.stdout.splitlines() if re.match(r"^\[\d+/\d+\]", l)]
+        if len(edges) > PREBUILD_MAX_EDGES:
+            return first + "  (ninja -n: %d edges to rebuild, more than %d)" % (len(edges), PREBUILD_MAX_EDGES)
     log = os.path.join(build, "gate-prebuild.log")
+    print("=== the no-op build before any row: %s (log %s) ===" % (cmd, log))
+    sys.stdout.flush()
     t0 = time.time()
+    jobs = jobs or os.environ.get("JAH_GATE_BUILD_JOBS", "3")
     with open(log, "w") as out:
         rc = subprocess.run(["nice", "-n", "19", "ionice", "-c", "3", "cmake", "--build", build, "-j", str(jobs)],
                             stdout=out, stderr=subprocess.STDOUT).returncode
