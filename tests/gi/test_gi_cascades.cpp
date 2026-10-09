@@ -689,6 +689,7 @@ int main()
                                                          Vec3(0.0f, 1.0f, 6.0f)));
         CHECK(scene->setGlobalIllumination(cascadeGi()), "the chain is up around the prop");
         render(e, 8);
+        enginetest::settleVoxelReadings(e, scene);   // the voxel read-back lands frames late
         st = scene->giStatus();
         const int near = st.cascades[0].items;
         const float step = st.cascades[0].step;
@@ -698,6 +699,7 @@ int main()
                                                              Vec3(x, 1.0f, 6.0f)));
             render(e, 1);
         }
+        enginetest::settleVoxelReadings(e, scene);   // the voxel read-back lands frames late
         st = scene->giStatus();
         const int far = st.cascades[0].items;
         std::printf("   cascade 0 items: %d beside the prop -> %d %.0f m away\n",
@@ -1230,6 +1232,7 @@ int main()
                   caps[ci] ? "the chain builds under an instance budget"
                            : "the chain builds with no budget (the shipped arm)");
             render(e, 6);
+            enginetest::settleVoxelReadings(e, scene);   // the voxel read-back lands frames late
             const GiStatus st = scene->giStatus();
             if (st.cascades.empty()) { CHECK(false, "the chain is up at this cap"); continue; }
             std::printf("   cap %-4d :", caps[ci]);

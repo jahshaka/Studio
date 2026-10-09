@@ -28,6 +28,25 @@ namespace enginetest {
 
 using namespace jahshaka::engine;
 
+/// THE VOXEL READ-BACK LANDS A FEW FRAMES LATE (VOXEL-READOUT-1): a cascade's
+/// `items`, `attached`, `voxelLevels`, `voxelTriangles`, `voxelRecords` and
+/// `voxelOverflow` are a read-back of its gather that nothing waits for. A suite
+/// that judges them renders frames until every cascade's reading describes its
+/// newest gather (`voxelReadingGather == voxelGathers`). Returns the frames it
+/// rendered, -1 if `maxFrames` passed first.
+inline int settleVoxelReadings(Engine *e, Scene *s, int maxFrames = 64)
+{
+    for (int f = 0;; ++f) {
+        const GiStatus st = s->giStatus();
+        bool current = true;
+        for (const GiStatus::CascadeStatus &c : st.cascades)
+            current = current && c.voxelReadingGather == c.voxelGathers;
+        if (current) return f;
+        if (f >= maxFrames) return -1;
+        e->renderOneFrame();
+    }
+}
+
 /// The deleted addTestCube's exact geometry (OgreEngine buildCubeV2): a unit
 /// cube, 24 vertices, positions + per-face normals, no uvs.
 inline MeshData unitCubeMesh()

@@ -702,6 +702,7 @@ static void sectionD(Engine *engine)
     gi.cascadeSet[1] = GiParams::GiCascadeDesc{ 60.0f, 64, 0.0f };
     CHECK(s->setGlobalIllumination(gi), "the cascade chain builds over the room");
     frames(8);
+    enginetest::settleVoxelReadings(engine, s);   // the voxel read-back lands frames late
     GiStatus st = s->giStatus();
     if (st.cascades.empty()) { CHECK(false, "the chain exists"); return; }
     const int items0 = st.cascades[0].items;
@@ -713,6 +714,7 @@ static void sectionD(Engine *engine)
     // The play-time promotion: no rebuild, exactly as in the single arm (O3).
     s->setNodeMovable(mover, true, MobilityChange::Soft);
     frames(4);
+    enginetest::settleVoxelReadings(engine, s);   // the voxel read-back lands frames late
     st = s->giStatus();
     CHECK(st.rebuilds == rebuilds0, "a SOFT promotion under cascades costs no rebuild at all");
     CHECK(st.cascades[0].rebuilds == c0rebuilds, "...and no cascade re-voxelisation either");
@@ -727,6 +729,7 @@ static void sectionD(Engine *engine)
         enginetest::testCameraLookAt(v, Vec3(x, 3.0f, 9.0f), Vec3(x, 0.5f, 0.0f));
         frames(1);
     }
+    enginetest::settleVoxelReadings(engine, s);   // the voxel read-back lands frames late
     st = s->giStatus();
     std::printf("   after %.1f m of walking: cascade 0 rebuilt %llu time(s), items %d\n",
                 12.0f * step0 * 0.15f, st.cascades[0].rebuilds - c0rebuilds, st.cascades[0].items);

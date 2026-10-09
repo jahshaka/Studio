@@ -1748,6 +1748,28 @@ jah_gpu_row(gi.voxel_feed CLASS engine COMMAND test_gi_voxel_feed
 set_tests_properties(gi.voxel_feed PROPERTIES
     TIMEOUT 120 LABELS "engine" RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
 
+# gi.readout_async — THE VOXEL READ-BACK NEVER WAITS FOR THE DEVICE
+# (VOXEL-READOUT-1, fork 9ff05ca5d). Over a 120-frame walk that keeps the cascades
+# re-voxelising: no read-back request submits the queue (the sentry, 0), giStatus
+# stays under 1 ms, the feed's readings land, and the newest gather's reading lands
+# within 6 frames once the walk stops. In the gi_chain family like every cascade suite.
+add_executable(test_gi_readout_async test_gi_readout_async.cpp)
+set_target_properties(test_gi_readout_async PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_readout_async PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_readout_async PRIVATE JahshakaEngine)
+add_dependencies(test_gi_readout_async JahshakaEngineMedia)
+jah_gpu_row(gi.readout_async CLASS engine COMMAND test_gi_readout_async
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.readout_async PROPERTIES
+    TIMEOUT 120 LABELS "engine" RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
+
 # gi.env_cone — THE ONE ENVIRONMENT'S CONE LOOKUP, MEASURED (PHOTON-ENV-1).
 # jahEnvCone reads the GGX-prefiltered sky chain as equal-solid-angle cells (7, or
 # 19 for a wide cone, CONE-ENV-EDGE-1); this suite measures it against a

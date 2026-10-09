@@ -172,6 +172,7 @@ int main()
 
     CHECK(scene->setGlobalIllumination(cascadeGi()), "the cascade chain is built");
     render(e, 10);
+    enginetest::settleVoxelReadings(e, scene);   // the voxel read-back lands frames late
     GiStatus st = scene->giStatus();
     CHECK(st.cascades.size() >= 2, ("the chain has " + std::to_string(st.cascades.size()) + " cascades").c_str());
 
@@ -216,6 +217,7 @@ int main()
     CHECK(scene->attachMesh(nBare, meshBare, mat), "and attached");
     enginetest::setNodePosition(scene, nBare, Vec3(1.5f, 1.5f, 0.0f));
     render(e, 10);
+    enginetest::settleVoxelReadings(e, scene);   // the voxel read-back lands frames late
     GiStatus withBare = scene->giStatus();
     const long long expectWithBare = expectTris + (long long)(bare.indices.size() / 3);
     CHECK(withBare.cascades[0].voxelTriangles == expectWithBare,
@@ -241,6 +243,7 @@ int main()
     enginetest::testCameraLookAt(view, Vec3(0.0f, 3.0f, 6.0f), Vec3(0.0f, 0.5f, 0.0f));
     render(e, 24);
 
+    enginetest::settleVoxelReadings(e, scene);   // the voxel read-back lands frames late
     GiStatus again = scene->giStatus();
     std::printf("   cascade 0 rebuilds: %llu -> %llu\n", buildsBefore, again.cascades[0].rebuilds);
     CHECK(again.cascades[0].rebuilds > buildsBefore,
@@ -293,6 +296,7 @@ int main()
     render(e, 16);
     enginetest::testCameraLookAt(view, Vec3(0.0f, 3.0f, 6.0f), Vec3(0.0f, 0.5f, 0.0f));
     render(e, 24);
+    enginetest::settleVoxelReadings(e, scene);   // the voxel read-back lands frames late
     GiStatus refused = scene->giStatus();
     std::printf("   refused build: triangles %lld, dispatches %lld, rebuilds %llu\n",
                 refused.cascades[0].voxelTriangles, refused.cascades[0].voxelDispatches,
@@ -306,6 +310,7 @@ int main()
     unsetenv("JAH_VCT_REFUSE_GEOMETRY");
     scene->refreshGlobalIllumination();
     render(e, 16);
+    enginetest::settleVoxelReadings(e, scene);   // the voxel read-back lands frames late
     CHECK(scene->giStatus().cascades[0].voxelTriangles == 0 ||
               scene->giStatus().cascades[0].voxelTriangles == expectWithBare,
           "and the refusal is not sticky beyond the hook");

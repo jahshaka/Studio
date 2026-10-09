@@ -275,6 +275,7 @@ int main()
     // ---- 1 + 2. THE CHAIN, AND THE REFERENCE ------------------------------------
     CHECK(scene->setGlobalIllumination(chainGi(GiQuality::High)), "the High chain built");
     for (int i = 0; i < 8; ++i) e->renderOneFrame();
+    enginetest::settleVoxelReadings(e, scene);   // the voxel read-back lands frames late
     GiStatus st = scene->giStatus();
     CHECK(st.cascades.size() == 4, "the chain has four cascades");
     if (st.cascades.size() != 4) { std::printf("FAIL: no chain\n"); return 1; }
@@ -307,6 +308,7 @@ int main()
     scene->setNodeVisible(nearSmall, false);
     for (Inst &in : fixture) if (in.node == nearSmall) in.visible = false;
     for (int i = 0; i < 8; ++i) e->renderOneFrame();
+    enginetest::settleVoxelReadings(e, scene);   // the voxel read-back lands frames late
     GiStatus hidden = scene->giStatus();
     CHECK(hidden.cascades.size() == 4, "the chain survived the hide");
     if (hidden.cascades.size() == 4) {
@@ -327,6 +329,7 @@ int main()
           "a from-scratch rebuild of the chain (the Medium tier) over the still scene");
     for (int i = 0; i < 8; ++i) e->renderOneFrame();
     const GpuSceneStatus after = scene->gpuSceneStatus();
+    enginetest::settleVoxelReadings(e, scene);   // the voxel read-back lands frames late
     const GiStatus med = scene->giStatus();
     std::printf("   gpu scene copy runs %llu -> %llu, writes %llu -> %llu, rebuilds %llu -> %llu\n",
                 before.copyRuns, after.copyRuns, before.writes, after.writes,
