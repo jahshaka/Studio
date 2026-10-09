@@ -1598,9 +1598,9 @@ static int caseLightingIndirect()
 // the card is below the pixel at EVERY sample of both walls (a bias, not
 // noise). The 8-bit term's 0.00196 absolute was hiding exactly that. So the
 // turned wall is its own row, `gi.cone_integrator_parity_offaxis` (label
-// photon-target: it runs, prints `target:` and does not decide a gate), and
-// the owner of the card's cone frame deletes the label when the off-axis frame
-// agrees; the axis-aligned wall keeps gating at the unwidened bar.
+// photon-target until TESTING-CLEANUP-2 H6c promoted it: the off-axis frame agrees now —
+// 0.0000 at 3/3 runs — so it gates at its bar); the axis-aligned wall keeps gating at the
+// unwidened bar.
 static int caseConeParity(bool offAxisTarget)
 {
     const unsigned kPx = 256u;
@@ -1883,6 +1883,15 @@ static int caseConeParity(bool offAxisTarget)
     std::printf("target: %.4f (bar 0.0000) the wall turned 30 degrees: the card's indirect beyond "
                 "1 %% + the stores' half-quanta of the pixel's, as a fraction of the value%s\n",
                 std::max(0.0, worstOffAxis), worstOffAxis <= 0.0 ? " -- MET" : "");
+    // PROMOTED (TESTING-CLEANUP-2 H6c, the lead's decision on §1851's candidates): green 3/3 at
+    // a5ab3a057+ on :71 (0.0000 every run), so the off-axis row GATES now — the bar, unchanged,
+    // is an assertion in that row (before it only printed: a gating row that cannot fail
+    // would prove nothing).
+    if (offAxisTarget && worstOffAxis > 0.0) {
+        std::printf("FAIL: the wall turned 30 degrees: the card's indirect is %.4f beyond 1 %% + the "
+                    "stores' half-quanta of the pixel's (bar 0)\n", worstOffAxis);
+        ++failures;
+    }
     return failures ? 1 : 0;
 }
 
