@@ -71,7 +71,8 @@ THE CONTRACT
     gate — a `--solo` batch, an attribution, a timing phase run by hand — queues for the slot FIFO with
     the gates before it drains the card. (Out of the slot, its drain kept the turnstile up to 3600 s
     while the gate in the slot NOADMITted every row at 900 s: the audit's 62-of-70 "turnstile-queued"
-    cause.) Per-row admissions (`admit`, a pool's app, a hand run, gpu-exclusive.sh) never take it, nor
+    cause.) So does `admit all` (gpu-exclusive.sh: a timing row run outside a gate), inside the admission's
+    own bound. Per-row admissions of k tokens (`admit <k>`, a pool's app, a hand run) never take it, nor
     does a build. A process already inside a gate (JAH_GATE_SLOT_HELD) never queues again.
     JAH_GATE_SLOT=0 turns the slot off. The waiting line is re-printed every 10 min with the holder's
     AGE, and `status` prints every holder's age, so a hung holder is visible.
@@ -409,7 +410,7 @@ def slot_held_valid(value=None):
     return any(t[1] == pid for t in gate_queue())
 
 
-def _queue_for_slot(label, log):
+def _queue_for_slot(label, log, wait=None):
     """The FIFO wait itself: the slot's fd once this process is the head, None when the slot is off or
     already this process's. Leaves the environment alone (hold_card hands JAH_GATE_SLOT_HELD to its
     phase's rows only)."""
@@ -429,6 +430,10 @@ def _queue_for_slot(label, log):
         ahead = [t for t in gate_queue() if t[0] < seq]
         if not ahead:
             break
+        if wait is not None and time.monotonic() - t0 > wait:
+            os.close(fd)                     # out of the queue: the ticket dies with its fd
+            raise AdmitTimeout("NOADMIT vram: the gate slot was not free within %.0f s (held by %s)%s"
+                               % (wait, _label_of(ahead[0][2]), (" — " + label) if label else ""))
         if any(t[1] == os.getpid() for t in ahead):
             # this very process already holds (or waits for) the slot: never queue behind yourself
             os.close(fd)
@@ -586,11 +591,25 @@ def main(argv):
         return 64
     if not label:
         label = os.path.basename(rest[0]) + (" " + " ".join(os.path.basename(a) for a in rest[1:3]) if len(rest) > 1 else "")
+    # `admit all` IS A WHOLE-CARD HOLD (gpu-exclusive.sh: a timing row run outside a gate): it takes the gate
+    # slot like every other (GATE-COST-2) — inside the admission's own bound, so a hand-run timing row queues
+    # behind a gate (NOADMIT past the bound) instead of draining the card under it. Inside a gate the slot is
+    # the gate's (JAH_GATE_SLOT_HELD); nested or with admission off there is nothing to drain.
+    slot, t_slot = None, time.monotonic()
     try:
-        held = acquire(k, label)
+        if argv[1] == "all" and token_count() > 0 and not os.environ.get("JAH_VRAM_HELD"):
+            slot = _queue_for_slot(label + " (admit all)", sys.stderr, wait=wait_bound())
+        slot_wait = time.monotonic() - t_slot
+        held = acquire(k, label, wait=max(0.0, wait_bound() - slot_wait))
     except AdmitTimeout as e:
+        if slot is not None:
+            os.close(slot)
         sys.stderr.write(str(e) + " — the command did not run\n")
         return EX_TEMPFAIL
+    global LAST_WAIT_S
+    LAST_WAIT_S += slot_wait                 # the queue, slot and drain, is never the row's time
+    if slot is not None:
+        os.environ["JAH_GATE_SLOT_HELD"] = str(os.getpid())   # the row's own processes are inside it
     if timing:
         # THE WAIT IS NOT THE ROW'S TIME (LOCK-WAIT-1): one line, read by the run log as lockWaitS
         sys.stderr.write("gpu-lock: waited %.1f s\n" % LAST_WAIT_S)

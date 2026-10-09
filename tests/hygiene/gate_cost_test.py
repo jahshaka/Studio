@@ -564,6 +564,19 @@ def main(source, build):
           and all(d_ in walked for d_ in intree),
           "the lints prune exactly irisgl/.gitmodules' paths (%d) and walk the in-tree vendored dirs (%s)"
           % (len(gm), ", ".join(os.path.basename(d_) for d_ in intree)))
+    # `admit all` (gpu-exclusive.sh, a timing row run by hand) is a whole-card hold: it takes the slot inside
+    # its own bound — behind a gate it waits, past the bound it is NOADMIT, never a drain under the gate
+    gh = subprocess.Popen([sys.executable, vt, "gate", "--label", "GA", "--", "sleep", "4"],
+                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    time.sleep(0.8)
+    pa = subprocess.run([sys.executable, vt, "admit", "all", "--timing", "--", "true"], capture_output=True, text=True,
+                        env=dict(os.environ, JAH_VRAM_WAIT="1"))
+    pb_ = subprocess.run([sys.executable, vt, "admit", "all", "--timing", "--", "true"], capture_output=True, text=True,
+                         env=dict(os.environ, JAH_VRAM_WAIT="30"))
+    gh.wait()
+    check(pa.returncode == 75 and "gate slot was not free" in pa.stderr and pb_.returncode == 0
+          and "queued at position 1" in pb_.stderr,
+          "`admit all` takes the slot like every whole-card hold: NOADMIT past its bound behind a gate, else it waits")
     env_x = {k: v for k, v in os.environ.items() if k != "JAH_KERNEL_JOURNAL"}
     t0 = time.monotonic()
     p_ = subprocess.run([sys.executable, vt, "admit", "1", "--", "true"], env=env_x, capture_output=True, text=True)

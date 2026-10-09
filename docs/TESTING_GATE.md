@@ -586,8 +586,9 @@ A gate run is `gate-scope.sh --run` (scoped, a fallback, `--fork-tier`, `--joint
 `--targets-only`, `--resume`) and `gate_runlog.py run` (the rc tiers; `scripts/gpu-admit.sh gate
 -- <command>` holds the slot across a whole script that runs several). **A WHOLE-CARD HOLD ALWAYS TAKES
 IT** (GATE-COST-2): a `--solo` batch, an attribution, a timing phase run by hand — anything that drains
-the card through `hold_card()` — queues FIFO with the gates first. Per-row admissions never take it (an
-`admit`, a pool's app, a lane's own hand run, `gpu-exclusive.sh`), nor does a build. The waiting gate
+the card through `hold_card()`, and `admit all` (`gpu-exclusive.sh`: a timing row run outside a gate, inside
+the admission's own 900 s bound — NOADMIT past it) — queues FIFO with the gates first. Per-row admissions of
+k tokens never take it (an `admit <k>`, a pool's app, a lane's own hand run), nor does a build. The waiting gate
 prints `gate-slot: queued at position <p> (<p> ahead) behind <holder>, holding it for <age>` (again
 whenever the position moves, and every 10 min) and `gate-slot: taken after <s> s in the queue`; the
 queue is FIFO and has NO bound (a gate never gives up for the slot). `scripts/gpu-admit.sh status`
