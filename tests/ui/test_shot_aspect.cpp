@@ -145,12 +145,12 @@ int main(int argc, char **argv)
     // framing hold, 1300 well below it — the two sides of the one policy that
     // makes the window's shape matter to a free camera at all.
     mcp.runScript(QStringLiteral("app.resizeWindow(1900, 1060)"));
-    settleShot(mcp);
+    CHECK(settleToSize(mcp, 1900, 1060), "the window reached 1900 x 1060 and the viewport's target its widget");
     const QJsonObject before = readObject(mcp, QStringLiteral("editor.viewportState()"));
     mcp.runScript(QStringLiteral("editor.screenshot('%1', 640, 480)").arg(shotPath("wide.png")));
 
     mcp.runScript(QStringLiteral("app.resizeWindow(1300, 1060)"));
-    settleShot(mcp);
+    CHECK(settleToSize(mcp, 1300, 1060), "the window reached 1300 x 1060 and the viewport's target its widget");
     const QJsonObject after = readObject(mcp, QStringLiteral("editor.viewportState()"));
     const double aspectBefore = before.value("height").toDouble() > 0
         ? before.value("width").toDouble() / before.value("height").toDouble() : 0.0;
