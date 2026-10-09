@@ -107,7 +107,8 @@ struct McpClient
     int transportFailures = 0;
 
     /// A CASE THAT PROVOKES A TRANSPORT FAILURE ON PURPOSE (app.shutdown_order proves the transfer
-    /// timeout reports itself) sets this on ITS client: the failure is still counted and kept, but
+    /// timeout reports itself) sets this on ITS client (one used for nothing after it: a client that
+    /// failed sends no further request, see post()): the failure is still counted and kept, but
     /// printed as `expected(transport): …` — never the `FAIL(transport): …` a run log records as the
     /// row's first failing line (TESTING-CLEANUP-2 P10g: the shutdown_order reds were recorded as
     /// "414 ms vs 0.4 s", which was this provoked line, not the check that failed).
@@ -173,6 +174,18 @@ struct McpClient
     QJsonObject post(const QJsonObject &body, const QString &what = QString(),
                      ReplyPolicy policy = ReplyRequired)
     {
+        // ONE TRANSPORT FAILURE ENDS THE CLIENT (TESTING-CLEANUP-2 fix round): after it the app is
+        // dead or wedged, and every later request used to wait out its own 90 s budget — a suite
+        // after a device loss spent ~1,100 s sending into nothing before ctest killed it. Later
+        // requests are NOT sent: each answers the failure object at once, naming the first failure
+        // (no further FAIL(transport) line: the first one is the row's failing line).
+        if (transportFailures > 0) {
+            const QString label = what.isEmpty() ? body.value("method").toString() : what;
+            return QJsonObject{ { "ok", false },
+                                { "error", QStringLiteral("not sent — the transport already failed: %1 (%2)")
+                                               .arg(lastTransportError, label) },
+                                { "transport", QStringLiteral("not sent after an earlier transport failure") } };
+        }
         QNetworkRequest request(url);
         request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
         request.setRawHeader("Authorization", "Bearer " + token.toUtf8());

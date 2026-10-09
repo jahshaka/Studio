@@ -38,6 +38,7 @@ For more information see the LICENSE file
 #include <unistd.h>
 
 #include "jahshaka/engine/Engine.h"
+#include "services/forcedexit.h"
 #include "services/jahlog.h"
 
 namespace devicelossend {
@@ -92,6 +93,12 @@ inline void endNow(jahshaka::engine::GpuFault fault, const std::string &engineTe
     std::fflush(stderr);
 
     if (sessionHasAUser()) {
+        // THE DIALOG IS BOUNDED (TESTING-CLEANUP-2, TC2-DEVICE-LOST-HANG): a modal box nobody answers
+        // — an app spawned on a rig display, a user who walked away — held a dead session alive
+        // (~1,100 s measured, after this function's FATAL line). The session is over either way, so
+        // the box gets a minute and then the forced exit every other forced end takes (86).
+        forcedexit::arm(60, oom ? "the out-of-memory dialog was not answered in 60 s"
+                                : "the device-loss dialog was not answered in 60 s");
         QMessageBox::critical(
             nullptr, QStringLiteral("Jahshaka"),
             oom ? QStringLiteral("The graphics card ran out of memory.\n\n"

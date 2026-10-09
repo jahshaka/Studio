@@ -81,3 +81,22 @@ if(TEST app.shutdown_order.timing)
     jah_fresh_home_fixture(app.shutdown_order.timing.fresh_home appShutdownOrderTimingFreshHome "${CMAKE_CURRENT_BINARY_DIR}/e2e-home-order-timing" WARM LABELS "shutdown")
     set_property(TEST app.shutdown_order.timing APPEND PROPERTY FIXTURES_REQUIRED appShutdownOrderTimingFreshHome)
 endif()
+
+# app.device_loss_end — the device-loss end's dialog is BOUNDED (TESTING-CLEANUP-2 fix round,
+# TC2-DEVICE-LOST-HANG): a child that ends with nobody to answer its box exits 86 through the
+# forced-exit watchdog inside 120 s (src/services/forcedexit.h). Offscreen, no engine, no display.
+find_package(Qt6 REQUIRED COMPONENTS Widgets)
+add_executable(test_device_loss_end test_device_loss_end.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/jahlog.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/settingsstore.cpp)
+set_target_properties(test_device_loss_end PROPERTIES CXX_STANDARD 17 AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+target_include_directories(test_device_loss_end PRIVATE ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/irisgl ${CMAKE_SOURCE_DIR}/irisgl/engine/include)
+target_link_libraries(test_device_loss_end PRIVATE IrisGL Qt6::Widgets)
+add_test(NAME app.device_loss_end COMMAND test_device_loss_end
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set(_dle_home ${CMAKE_CURRENT_BINARY_DIR}/device-loss-end-home)
+set_tests_properties(app.device_loss_end PROPERTIES TIMEOUT 180 LABELS "shutdown"
+    ENVIRONMENT "HOME=${_dle_home};JAHSHAKA_DATA_ROOT=${_dle_home}/.local/share/Jahshaka")
+jah_no_display(app.device_loss_end)
