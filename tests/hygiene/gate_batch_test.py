@@ -77,6 +77,7 @@ add_test(NAME row.combo COMMAND sh -c "if [ -e '@WT@/BREAKS_X' ] && [ -e '@WT@/B
 add_test(NAME row.flake COMMAND sh -c "echo ok")
 add_test(NAME row.noadmit COMMAND sh -c "if [ -e '@WT@/BREAKS_X' ]; then echo 'NOADMIT vram: no admission for 2 tokens within 1 s (0 of 3 free at the last look) - row.noadmit'; exit 75; fi; echo ok")
 add_test(NAME row.base COMMAND sh -c "if [ -e '@WT@/BASE_BROKEN' ]; then echo 'FAIL: broken on d-build already'; exit 1; fi; echo ok")
+add_test(NAME row.ctl COMMAND sh -c "if [ -e '@WT@/BASE_BROKEN' ]; then echo 'NOADMIT vram: no admission for 2 tokens within 1 s (0 of 3 free at the last look) - row.ctl'; exit 75; elif [ -e '@WT@/BREAKS_X' ]; then echo 'FAIL: ctl'; exit 1; fi; echo ok")
 if(EXISTS "@WT@/HAS_Z")
   add_test(NAME row.z COMMAND sh -c "echo 'FAIL: z is broken'; exit 1")
 endif()
@@ -102,19 +103,24 @@ def main(source, build):
     if not have: return 1
     scratch = tempfile.mkdtemp(prefix="gate-batch-test-")
     try:
-        return run(source, scripts, merge, scratch, rl)
+        return run(source, scripts, merge, scratch, rl, build)
     finally:
         shutil.rmtree(scratch, ignore_errors=True)
 
 
-def run(source, scripts, merge, scratch, rl):
+def run(source, scripts, merge, scratch, rl, build_dir):
     gcfg = os.path.join(scratch, "gitconfig")
     open(gcfg, "w").write("[user]\n\tname = jahshaka\n\temail = jahshaka@gmail.com\n[init]\n\tdefaultBranch = main\n"
                           "[protocol \"file\"]\n\tallow = always\n[uploadpack]\n\tallowAnySHA1InWant = true\n"
                           "[advice]\n\tdetachedHead = false\n")
-    genv = dict(os.environ, GIT_CONFIG_GLOBAL=gcfg, GIT_CONFIG_NOSYSTEM="1", GIT_AUTHOR_NAME="jahshaka",
-                GIT_AUTHOR_EMAIL="jahshaka@gmail.com", GIT_COMMITTER_NAME="jahshaka",
-                GIT_COMMITTER_EMAIL="jahshaka@gmail.com")
+    # the toy's own commits take jahshaka from the toy's git config; NO GIT_AUTHOR_* is exported anywhere, and the
+    # merge script runs under a config naming someone else — what it commits must carry jahshaka by its own hand
+    for k in ("GIT_AUTHOR_NAME", "GIT_AUTHOR_EMAIL", "GIT_COMMITTER_NAME", "GIT_COMMITTER_EMAIL"):
+        os.environ.pop(k, None)
+    genv = dict(os.environ, GIT_CONFIG_GLOBAL=gcfg, GIT_CONFIG_NOSYSTEM="1")
+    gcfg2 = os.path.join(scratch, "gitconfig-other")
+    open(gcfg2, "w").write(open(gcfg).read().replace("name = jahshaka", "name = not-jahshaka")
+                           .replace("email = jahshaka@gmail.com", "email = other@example.com"))
 
     def git(cwd, *args):
         r = subprocess.run(["git", "-C", cwd] + list(args), capture_output=True, text=True, env=genv)
@@ -212,7 +218,7 @@ def run(source, scripts, merge, scratch, rl):
     lead = os.path.join(scratch, "lead")
     judge_log, judge_mode = os.path.join(scratch, "judge.log"), os.path.join(scratch, "judge.mode")
     x11 = os.path.join(scratch, "x11"); os.makedirs(x11)
-    menv = dict(genv, JAH_FPC_MAIN=M, JAH_LEAD_SCRATCH=lead, JAH_FPC_FORK_CLONE=os.path.join(ig, "thirdparty", "ogre-next"),
+    menv = dict(genv, GIT_CONFIG_GLOBAL=gcfg2, JAH_FPC_MAIN=M, JAH_LEAD_SCRATCH=lead, JAH_FPC_FORK_CLONE=os.path.join(ig, "thirdparty", "ogre-next"),
                 JAH_FPC_FORK_REMOTE=fork, JAH_FPC_CHANGES=changes, TOY_JUDGE_LOG=judge_log, TOY_JUDGE_MODE=judge_mode,
                 JAH_X11_ROOT=x11)
 
@@ -267,12 +273,26 @@ def run(source, scripts, merge, scratch, rl):
         check("JAH_GATE_TIER=fork" in out and f"JAH_GATE_RANGE={sbase}..{sc}" in out
               and "JAH_GATE_LANES=lane-a,lane-b,lane-c" in out and f"rc-gate.sh batch-t1 {sc}" in out,
               "...the ONE gate command: rc-gate.sh on the candidate, d-build..candidate, the fork tier, the lanes")
-    # what rc-gate.sh does after its build: the candidate's binary regenerates the file (a stand-in here)
-    T1 = rc_tree("t1", sc, ic); os.makedirs(os.path.join(T1, "build-linux"))
-    dump = os.path.join(scratch, "dump.sh")
-    write(dump, "#!/bin/sh\nprintf 'verbs regenerated from the registry\\n' > \"$1\"\n"); os.chmod(dump, 0o755)
-    rc, out = mscript("batch-scripting", "t1", T1, JAH_DUMP_API_DOCS=dump)
-    new = out.split("REGENERATED ", 1)[1].split()[0] if "REGENERATED " in out else ""
+    for l in ("lane-a", "lane-b", "lane-c"):
+        mc = git(D, "rev-parse", f"{sc}~{['lane-c', 'lane-b', 'lane-a'].index(l)}")
+        check(git(D, "log", "-1", "--format=%an <%ae>", mc) == "jahshaka <jahshaka@gmail.com>",
+              f"...the candidate's merge of {l} is authored jahshaka though the caller's git config names someone else")
+    # RC-GATE'S OWN regenerate-and-rebuild branch (`rc-gate.sh batch-t1 --scripting <rc tree>`), with THIS build's real
+    # binary: the rc tree's build-linux is a configured (toy) build dir whose bin/ is the real one
+    T1 = rc_tree("t1", sc, ic)
+    toy_build(T1)
+    os.symlink(os.path.join(os.path.abspath(build_dir), "bin"), os.path.join(T1, "build-linux", "bin"))
+    rcg = os.path.join(os.path.dirname(merge), "rc-gate.sh")
+    p = subprocess.run(["bash", rcg, "batch-t1", "--scripting", T1], capture_output=True, text=True,
+                       env=dict(menv), timeout=300)
+    rst = open(os.path.join(lead, "rc-batch-t1-scripting.state")).read() if os.path.exists(
+        os.path.join(lead, "rc-batch-t1-scripting.state")) else ""
+    log = open(os.path.join(lead, "rc-batch-t1-scripting.log")).read() if os.path.exists(
+        os.path.join(lead, "rc-batch-t1-scripting.log")) else ""
+    new = log.split("REGENERATED ", 1)[1].split()[0] if "REGENERATED " in log else ""
+    check(p.returncode == 0 and "SCRIPTING.md regenerated at" in rst and "rebuilt at" in rst,
+          "rc-gate --scripting: the real binary's --dump-api-docs differed, the file was committed and the tree "
+          "REBUILT (exit %d; %s)" % (p.returncode, rst.strip().splitlines()[-2:] if rst else p.stdout[-200:]))
     check(rc == 0 and new and refs("batch-t1")[0] == new and git(D, "rev-parse", f"{new}^") == sc,
           "batch-scripting: the regenerated file is ONE commit on top of the candidate, and batch-t1 names it (%s)"
           % out.strip()[-80:])
@@ -280,14 +300,17 @@ def run(source, scripts, merge, scratch, rl):
         check(git(D, "log", "-1", "--format=%an|%s", new) == "jahshaka|SCRIPTING.md regenerated at batch t1",
               "...authored jahshaka, its message names the batch")
         check(f"SC={new}" in open(os.path.join(lead, "batch-t1.state")).read(), "...and the state's candidate is it")
+        check(git(D, "show", f"{new}:docs/SCRIPTING.md").strip() == open(os.path.join(source, "docs", "SCRIPTING.md")).read().strip(),
+              "...its SCRIPTING.md is the REAL generator's output (byte-equal to this tree's checked-in file)")
     open(judge_mode, "w").write("green")
     rc, out = mscript("batch-land", "t1")
     calls = open(judge_log).read().splitlines() if os.path.exists(judge_log) else []
     check(calls == [f"{sbase}..{new} --build {T1}/build-linux"], "batch-land: ONE judge run, on d-build..<the "
           "regenerated candidate>, with the rc tree's build (%s)" % calls)
     check(rc == 0 and dbuild() == (new, ic), "...green -> d-build fast-forwarded to it in both repos (exit %d)" % rc)
-    check(git(D, "show", "HEAD:docs/SCRIPTING.md") == "verbs regenerated from the registry",
-          "...and d-build's SCRIPTING.md is the REGENERATED one, not either lane's text")
+    check(git(D, "show", "HEAD:docs/SCRIPTING.md") not in ("verbs vb", "verbs vc") and dbuild()[0] == new,
+          "...and d-build's SCRIPTING.md is the REGENERATED one, not either lane's text (batch-land ran check-trailers "
+          "on that commit)")
     check(git(ig, "rev-parse", "refs/heads/d-build") == ic, "...the main tree's irisgl d-build ref follows")
     check("HASHES" in out and "READY TO PUSH" in out, "...the HASHES line and the push line are printed")
 
@@ -354,12 +377,12 @@ def run(source, scripts, merge, scratch, rl):
           and "SCRIPTING_REGEN=0" in open(os.path.join(lead, "batch-t4.state")).read(),
           "equal pins -> accepted, P = d-build's pin, the scoped gate, no regeneration (exit %d)" % rc)
     T4 = rc_tree("t4", sc4, ic4, pin_now); toy_build(T4)
-    open(judge_mode, "w").write("row.x,row.combo,row.flake,row.z,row.noadmit,row.base")
+    open(judge_mode, "w").write("row.x,row.combo,row.flake,row.z,row.noadmit,row.base,row.ctl")
     s4 = dbuild()
     # THE CONTROL is the BASE BUILD rc-base (TESTING_V3_SPEC §1.3.2), never $D: absent or behind d-build -> refused
     rc, out = mscript("batch-land", "t4")
-    check(rc == 6 and "rc-base is behind d-build" in out and "--attribute" not in out,
-          "no rc-base at d-build's tip: the attribution is refused with the reason (exit %d)" % rc)
+    check(rc == 6 and "no control tree at" in out and "--attribute" not in out,
+          "no rc-base: the attribution is refused with the reason (exit %d)" % rc)
     RB = os.path.join(M, ".claude", "worktrees", "rc-base")
     git(M, "worktree", "add", "-q", "--detach", RB, sbase)
     rc, out = mscript("batch-land", "t4")
@@ -367,6 +390,9 @@ def run(source, scripts, merge, scratch, rl):
           "rc-base BEHIND d-build (at the toy's first commit): refused, naming both tips (exit %d)" % rc)
     git(RB, "checkout", "-q", "--detach", s4[0])
     clone_irisgl(RB, None, git(os.path.join(D, "irisgl"), "rev-parse", "HEAD"), pin_now)
+    os.makedirs(os.path.join(RB, "build-linux"), exist_ok=True); shutil.rmtree(os.path.join(RB, "build-linux"))
+    rc, out = mscript("batch-land", "t4")
+    check(rc == 6 and "has no build-linux" in out, "rc-base at d-build's tip but UNBUILT: refused (exit %d)" % rc)
     write(os.path.join(RB, "BASE_BROKEN"), "1\n"); toy_build(RB)
     rc, out = mscript("batch-land", "t4", "--verdict", "row.flake=a toy verdict", DISPLAY=":0")
     calls = open(judge_log).read().splitlines()
@@ -376,27 +402,49 @@ def run(source, scripts, merge, scratch, rl):
     acmd = [l for l in out.splitlines() if "--attribute" in l]
     check(len(acmd) == 1 and "no --display" in acmd[0] and not os.path.exists(os.path.join(lead, "attribute-batch-t4.log")),
           "...with DISPLAY=:0 inherited and no --display it RUNS NOTHING and prints the command")
-    check(acmd and "row.base,row.combo,row.flake,row.noadmit,row.x,row.z" in acmd[0] and "--batch t4" in acmd[0]
+    check(acmd and "row.base,row.combo,row.ctl,row.flake,row.noadmit,row.x,row.z" in acmd[0] and "--display :NN" in acmd[0] and "--batch t4" in acmd[0]
           and f"--candidate {T4}:{sc4}" in acmd[0] and f"--control {RB}:{s4[0]}" in acmd[0]
           and all(f"{n}:{lanes4[n][0]}:{lanes4[n][1]}" in acmd[0] for n in lanes4),
           "...the command: the red rows, the tag, the candidate and d-build (the control), every lane's worktree and tip")
     rc, out = mscript("batch-land", "t4", "--display", ":0")
     check(rc == 64 and "not a rig display" in out, "--display :0 is refused (exit %d)" % rc)
-    rc, out = mscript("batch-land", "t4", "--display", ":97")
-    check(rc == 64 and "has no X server" in out, "--display :97 with no X lock is refused (exit %d)" % rc)
+    rc, out = mscript("batch-land", "t4", "--display", ":96")
+    check(rc == 64 and "has no X server" in out, "--display :96 with no X lock is refused (exit %d)" % rc)
+    # a live (fake) X server on :97 — the display the attribution is TOLD to use
+    os.makedirs(os.path.join(x11, ".X11-unix"))
+    sock = os.path.join(x11, ".X11-unix", "X97")
+    fake_x = subprocess.Popen([sys.executable, "-c", "import socket,time,sys\ns=socket.socket(socket.AF_UNIX)\n"
+                               "s.bind(sys.argv[1])\ns.listen(16)\nwhile True:\n    c, _ = s.accept(); c.close()", sock])
+    for _ in range(50):
+        if os.path.exists(sock): break
+        time.sleep(0.1)
+    open(os.path.join(x11, ".X97-lock"), "w").write("%10d\n" % fake_x.pid)
     # the attribution itself, with the gate slot HELD by another gate the whole time
     runs = os.path.join(scratch, "runs"); vdir = os.path.join(scratch, "vram")
+    pend = os.path.join(scratch, "defects.pending")
     aenv = dict(os.environ, JAH_RUN_LOG_DIR=runs, JAH_VRAM_DIR=vdir, JAH_VRAM_TOKENS="3", JAH_VRAM_WAIT="5",
-                OGRE_PREFIX=install, JAH_GATE_REQUEUE="0")
+                OGRE_PREFIX=install, JAH_GATE_REQUEUE="0", JAH_X11_ROOT=x11, JAH_DEFECTS_PENDING_DIR=pend,
+                DISPLAY=":0")      # inherited and WRONG: the attribution must use --display only
+    for bad_args, why in ((["--display", ":0"], "not a rig display"), (["--display", ":96"], "has no X server")):
+        a2 = [x if x != ":NN" else bad_args[1] for x in (acmd[0].split("gate-scope.py", 1)[1].split() if acmd else [])]
+        p = subprocess.run([sys.executable, os.path.join(scripts, "gate-scope.py")] + a2, capture_output=True,
+                           text=True, env=aenv)
+        check(p.returncode == 64 and why in p.stderr, f"gate-scope --attribute {bad_args[1]}: refused ({why})")
+    a3 = [x for x in (acmd[0].split("gate-scope.py", 1)[1].split() if acmd else [])]
+    i3 = a3.index("--control") if "--control" in a3 else -1
+    p = subprocess.run([sys.executable, os.path.join(scripts, "gate-scope.py")] + (a3[:i3] + a3[i3 + 2:] if i3 >= 0 else a3),
+                       capture_output=True, text=True, env=aenv)
+    check(p.returncode == 64 and "--control" in p.stderr, "gate-scope --attribute without --control: refused (required)")
     holder = subprocess.Popen([sys.executable, os.path.join(scripts, "vram_tokens.py"), "gate", "--label", "a-sibling-gate",
                                "--", "sleep", "120"], env=aenv, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     time.sleep(1.5)
-    args = acmd[0].split("gate-scope.py", 1)[1].split() if acmd else []
+    args = [x if x != ":NN" else ":97" for x in (acmd[0].split("gate-scope.py", 1)[1].split() if acmd else [])]
     t0 = time.time()
     p = subprocess.run([sys.executable, os.path.join(scripts, "gate-scope.py")] + args, capture_output=True,
                        text=True, env=aenv)
     took = time.time() - t0
     holder.kill(); holder.wait()
+    fake_x.kill(); fake_x.wait()
     aout = p.stdout + p.stderr
     print("\n".join("     | " + l for l in aout.splitlines() if l.startswith(("row", "=>", "==="))))
     check(p.returncode == 3, "the attribution exits 3: a COMBINATION DEFECT refuses the batch (exit %d)" % p.returncode)
@@ -410,6 +458,19 @@ def run(source, scripts, merge, scratch, rl):
     check("=> row.combo: COMBINATION DEFECT" in aout and "row.combo | CANDIDATE | 3/3 red" in aout,
           "row.combo: green on each lane, red at the candidate -> COMBINATION DEFECT")
     check("=> row.flake: NOT REPRODUCED" in aout, "row.flake: green everywhere -> NOT REPRODUCED (the verdict door)")
+    check("=> row.ctl: INCOMPLETE — a CONTROL" in aout and "row.ctl | lane-h | 3/3 red" in aout,
+          "row.ctl: the control NOADMIT while lane-h is red -> INCOMPLETE, nobody named (the baseline first)")
+    pending = {}
+    for f in sorted(os.listdir(pend)) if os.path.isdir(pend) else []:
+        pending[f] = json.load(open(os.path.join(pend, f)))
+    kinds = {e["rows"][0]: e["kind"] for e in pending.values()}
+    check(kinds == {"row.combo": "combination", "row.base": "defect", "row.flake": "nondeterminism"},
+          "REGISTERED, not printed: one testing/defects.pending/<id>.json per finding (%s)" % kinds)
+    check(all(set(e) == {"id", "rows", "kind", "cause", "first_seen", "state", "found_by"} and e["state"] == "open"
+              and e["found_by"] == "gate" and set(e["first_seen"]) == {"tip", "pin", "run"} and e["first_seen"]["run"]
+              for e in pending.values()), "...each in the §1.5 schema: state open, found_by gate, first_seen {tip, pin, run}")
+    check(all(e["first_seen"]["tip"] == (s4[0] if e["kind"] == "defect" else sc4) for e in pending.values()),
+          "...first seen at the candidate (a d-build defect: at d-build's tip)")
     check("row.base | CONTROL rc-base | 3/3 red" in aout and "=> row.base: D-BUILD DEFECT" in aout
           and "NAMED" not in [l for l in aout.splitlines() if l.startswith("=> row.base")][0],
           "row.base: red on d-build's own tip -> a D-BUILD DEFECT, naming nobody")
@@ -420,9 +481,9 @@ def run(source, scripts, merge, scratch, rl):
         recs += [json.loads(l) for l in open(os.path.join(runs, f))]
     tips = {lanes4["lane-h"][1]: ["lane-h"], lanes4["lane-i"][1]: ["lane-i"], sc4: ["lane-h", "lane-i"],
             s4[0]: ["rc-base"]}
-    check(len(recs) == 66 and all(r.get("reason") == "attribute:t4" and r.get("retry") is True
+    check(len(recs) == 78 and all(r.get("reason") == "attribute:t4" and r.get("retry") is True
                                   and r.get("tier") == "scoped" for r in recs),
-          "66 records (6 rows x 4 trees x 3, less row.z where it is absent), each `reason: attribute:t4`, a retry, tier "
+          "78 records (7 rows x 4 trees x 3, less row.z where it is absent), each `reason: attribute:t4`, a retry, tier "
           "`scoped` (%d)" % len(recs))
     check(all(r["lanes"] == tips.get(r["tip"]["studio"]) for r in recs) and "lane" not in recs[0],
           "...each at ITS tree's own tip; `lanes` = that lane (the control's: rc-base), the candidate's = the batch's "
