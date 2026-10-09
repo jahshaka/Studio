@@ -430,14 +430,17 @@ def run(source, scripts, merge, scratch, rl, build_dir):
     sock = os.path.join(x11, ".X11-unix", "X97")
     fake_x = subprocess.Popen([sys.executable, "-c", "import socket,time,sys\ns=socket.socket(socket.AF_UNIX)\n"
                                "s.bind(sys.argv[1])\ns.listen(16)\nwhile True:\n    c, _ = s.accept(); c.close()", sock])
-    while not os.path.exists(sock):          # the server's socket is the event (no clock bound)
-        time.sleep(0.05)
+    while not os.path.exists(sock) and fake_x.poll() is None:   # the server's socket is the event; LIVE: a
+        time.sleep(0.05)                                         # dead server fails the check, never a hang
+    check(os.path.exists(sock), "the fake X server is listening")
     open(os.path.join(x11, ".X97-lock"), "w").write("%10d\n" % fake_x.pid)
     # the attribution itself, with the gate slot HELD by another gate the whole time
     runs = os.path.join(scratch, "runs"); vdir = os.path.join(scratch, "vram")
     reg = os.path.join(scratch, "registry"); os.makedirs(reg)
     json.dump({"defects": []}, open(os.path.join(reg, "defects.json"), "w"))
     pend = os.path.join(reg, "defects.pending")      # next to the registry, as VERDICT-1's reader looks for it
+    # JAH_VRAM_WAIT=5: the admission bound of this test's PRIVATE token universe — row.noadmit's NOADMIT is under
+    # test; never a guess at how long the box takes
     aenv = dict(os.environ, JAH_RUN_LOG_DIR=runs, JAH_VRAM_DIR=vdir, JAH_VRAM_TOKENS="3", JAH_VRAM_WAIT="5",
                 OGRE_PREFIX=install, JAH_GATE_REQUEUE="0", JAH_X11_ROOT=x11, JAH_DEFECTS_FILE=os.path.join(reg, "defects.json"),
                 DISPLAY=":0")      # inherited and WRONG: the attribution must use --display only
@@ -457,7 +460,7 @@ def run(source, scripts, merge, scratch, rl, build_dir):
     # first — a fixed hold raced them under load)
     rel = os.path.join(scratch, "sibling.release")
     holder = subprocess.Popen([sys.executable, os.path.join(scripts, "vram_tokens.py"), "gate", "--label", "a-sibling-gate",
-                               "--", "sh", "-c", f"while [ ! -e {rel} ]; do sleep 0.05; done"], env=aenv,
+                               "--", "sh", "-c", f"while [ ! -e {rel} ] && kill -0 {os.getpid()} 2>/dev/null; do sleep 0.05; done"], env=aenv,
                               stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
     for line in holder.stdout:
         if "gate-slot: taken" in line: break
@@ -553,8 +556,9 @@ def run(source, scripts, merge, scratch, rl, build_dir):
     fake_x = subprocess.Popen([sys.executable, "-c", "import socket,time,sys,os\nos.path.exists(sys.argv[1]) and "
                                "os.unlink(sys.argv[1])\ns=socket.socket(socket.AF_UNIX)\ns.bind(sys.argv[1])\n"
                                "s.listen(16)\nwhile True:\n    c, _ = s.accept(); c.close()", sock])
-    while not os.path.exists(sock):          # the server's socket is the event (no clock bound)
-        time.sleep(0.05)
+    while not os.path.exists(sock) and fake_x.poll() is None:   # the server's socket is the event; LIVE: a
+        time.sleep(0.05)                                         # dead server fails the check, never a hang
+    check(os.path.exists(sock), "the fake X server is listening")
     open(os.path.join(x11, ".X97-lock"), "w").write("%10d\n" % fake_x.pid)
     p7, p5 = only("row.noadmit"), only("row.base")
     # GATE-COST-2 F1: an attribution whose whole-card drain times out (a token held elsewhere) still runs in the
@@ -563,11 +567,13 @@ def run(source, scripts, merge, scratch, rl, build_dir):
     # FAILS (the hold returned [slot], `not card` missed the timeout: no record, no fallback); green at F1.
     relb = os.path.join(scratch, "f1-blocker.release")
     blocker = subprocess.Popen([sys.executable, os.path.join(scripts, "vram_tokens.py"), "admit", "1", "--label",
-                                "f1-blocker", "--", "sh", "-c", f"while [ ! -e {relb} ]; do sleep 0.05; done"], env=aenv,
+                                "f1-blocker", "--", "sh", "-c", f"while [ ! -e {relb} ] && kill -0 {os.getpid()} 2>/dev/null; do sleep 0.05; done"], env=aenv,
                                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    while "f1-blocker" not in subprocess.run([sys.executable, os.path.join(scripts, "vram_tokens.py"), "status"],
-                                             capture_output=True, text=True, env=aenv).stdout:
-        time.sleep(0.05)                     # the blocker's token is HELD: the event the drain must time out on
+    held_ = lambda: "f1-blocker" in subprocess.run([sys.executable, os.path.join(scripts, "vram_tokens.py"), "status"],
+                                                   capture_output=True, text=True, env=aenv).stdout
+    while not held_() and blocker.poll() is None:   # the blocker's token is HELD: the event the drain times out on
+        time.sleep(0.05)
+    check(held_(), "the F1 blocker holds its token (alive)")
     fdir = os.path.join(scratch, "runs-f1")
     out_ = list(args); i_ = out_.index("--attribute"); out_[i_ + 1] = "row.x"
     pf = subprocess.run([sys.executable, os.path.join(scripts, "gate-scope.py")] + out_, capture_output=True, text=True,

@@ -112,6 +112,8 @@ def main(source, build):
     journal = os.path.join(scratch, "journal.txt")
     open(journal, "w").close()
     os.environ["JAH_KERNEL_JOURNAL"] = journal
+    # JAH_VRAM_WAIT=5: the admission bound of this test's PRIVATE token universe (3 tokens) — a NOADMIT under
+    # test (section 2's rows print their own NOADMIT); never a guess at how long the box takes
     os.environ.update(JAH_VRAM_DIR=os.path.join(scratch, "vram"), JAH_VRAM_TOKENS="3", JAH_VRAM_WAIT="5",
                       JAH_RUN_LOG_DIR=os.path.join(scratch, "runs"), TOYDIR=state, JAH_GATE_REQUEUE="2")
     stampsrc = os.path.join(scratch, "stamp")
@@ -158,10 +160,16 @@ def main(source, build):
                 break
         return "".join(got)
 
-    def wait_until(pred):
-        """Poll a condition the code under test makes true (a file, a record, a process gone) — no clock bound."""
+    def wait_until(pred, producer=None):
+        """Poll a condition the code under test makes true (a file, a record, a process gone) — no clock bound,
+        but LIVE: when its producer (a process or a thread) is gone before the condition holds, give up at once
+        and return False (the caller checks it), never hang to the row's TIMEOUT."""
         while not pred():
+            if producer is not None and (not producer.is_alive() if hasattr(producer, "is_alive")
+                                         else producer.poll() is not None):
+                return pred()
             time.sleep(0.05)
+        return True
 
     def run(rx, jobs=1, **kw):
         cmd = f"ctest -j{jobs} --timeout 60 --output-on-failure --no-tests=error -R '{rx}'"
@@ -178,7 +186,7 @@ def main(source, build):
     reset()
     rel1 = os.path.join(scratch, "g1.release")
     g1 = spawn([sys.executable, vt, "gate", "--label", "G1", "--", "sh", "-c",
-                f"while [ ! -e {rel1} ]; do sleep 0.05; done; echo g1 >> {state}/order"])
+                f"while [ ! -e {rel1} ] && kill -0 {os.getpid()} 2>/dev/null; do sleep 0.05; done; echo g1 >> {state}/order"])
     o1 = wait_line(g1, "gate-slot: taken")
     g2 = spawn([sys.executable, os.path.join(scripts, "gate_runlog.py"), "run", "--tier", "scoped",
                 "--lane", "G2", "--build", tb, "--", f"ctest -j1 --output-on-failure -R '^gpu\\.a$'"],
@@ -206,7 +214,7 @@ def main(source, build):
     # a per-row admission never takes it
     relh = os.path.join(scratch, "h.release")
     holder = spawn([sys.executable, vt, "gate", "--label", "H", "--", "sh", "-c",
-                    f"while [ ! -e {relh} ]; do sleep 0.05; done"])
+                    f"while [ ! -e {relh} ] && kill -0 {os.getpid()} 2>/dev/null; do sleep 0.05; done"])
     wait_line(holder, "gate-slot: taken")
     p = subprocess.run([sys.executable, vt, "admit", "1", "--", "true"], capture_output=True, text=True)
     check(p.returncode == 0 and "gate-slot" not in p.stderr, "a plain admission (a hand run) never takes the slot")
@@ -240,7 +248,7 @@ def main(source, build):
     res = {}
     t = threading.Thread(target=lambda: res.update(r=run("^(lint\\.one|gpu\\.a|gpu\\.b|gpu\\.slow)$")))
     t.start()
-    wait_until(lambda: "gpu.slow" in order())
+    check(wait_until(lambda: "gpu.slow" in order(), t), "the run reached gpu.slow (its producer alive)")
     me = os.getpid()
     ctests = [p for p in rl._descendants(me)
               if open(f"/proc/{p}/cmdline", "rb").read().split(b"\0")[0].endswith(b"ctest")]
@@ -277,7 +285,7 @@ def main(source, build):
     fake_x = subprocess.Popen([sys.executable, "-c",
                                "import socket,time,sys\ns=socket.socket(socket.AF_UNIX)\ns.bind(sys.argv[1])\n"
                                "s.listen(16)\nwhile True: time.sleep(1)", sock])
-    wait_until(lambda: os.path.exists(sock))
+    check(wait_until(lambda: os.path.exists(sock), fake_x), "the fake X server is listening")
     open(os.path.join(xroot, ".X77-lock"), "w").write("%10d\n" % fake_x.pid)
     os.environ["JAH_X11_ROOT"] = xroot
     os.environ["TOY_SLOW"] = "30"
@@ -287,7 +295,8 @@ def main(source, build):
     t = threading.Thread(target=lambda: res.update(r=run("^(lint\\.one|gpu\\.a|gpu\\.wait|gpu\\.slow)$", jobs=3, env=env)))
     t.start()
     # the death comes once gpu.wait and gpu.slow run and gpu.a's record is written (events, no clock)
-    wait_until(lambda: {"gpu.wait", "gpu.slow"} <= set(order()) and any(r["suite"] == "gpu.a" for r in records()))
+    check(wait_until(lambda: {"gpu.wait", "gpu.slow"} <= set(order()) and any(r["suite"] == "gpu.a" for r in records()), t),
+          "the run reached gpu.wait and gpu.slow with gpu.a recorded (its producer alive)")
     fake_x.kill(); fake_x.wait()
     open(os.path.join(state, "go"), "w").close()       # gpu.wait ends RED after the display died
     t.join()
@@ -381,7 +390,7 @@ def main(source, build):
     print("7. the slot: reaping, the race, a killed gate")
     relh = os.path.join(scratch, "h7.release")
     holder = spawn([sys.executable, vt, "gate", "--label", "H", "--", "sh", "-c",
-                    f"while [ ! -e {relh} ]; do sleep 0.05; done"])
+                    f"while [ ! -e {relh} ] && kill -0 {os.getpid()} 2>/dev/null; do sleep 0.05; done"])
     wait_line(holder, "gate-slot: taken")
     waiter = spawn([sys.executable, vt, "gate", "--label", "W", "--", "true"])
     wait_line(waiter, "gate-slot: queued at position")
@@ -406,7 +415,7 @@ def main(source, build):
     gk = subprocess.Popen([sys.executable, os.path.join(scripts, "gate_runlog.py"), "run", "--tier", "scoped",
                            "--lane", "GK", "--build", tb, "--", "ctest -j1 -R '^gpu\\.slow$'"], cwd=source,
                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    wait_until(lambda: "gpu.slow" in order())
+    check(wait_until(lambda: "gpu.slow" in order(), gk), "the gate GK reached gpu.slow (alive)")
     tree = rl._descendants(gk.pid)
     gk.kill(); gk.wait()
     def running(p_):
@@ -548,9 +557,10 @@ def main(source, build):
            "labels": ["timing"], "fallback": "drain-timeout"}
     st_t, why_t = cgc.judge(("time.card", None), [tim], {})
     st_p, _ = cgc.judge(("gpu.a", None), [dict(tim, suite="gpu.a", labels=[])], {})
-    check(st_t == "missing" and "fallback" in why_t and st_p == "green",
-          "ci_gate_check refuses a timing row's record carried by a fallback (re-run it), never another row's (%s / %s)"
-          % (st_t, st_p))
+    st_f, _ = cgc.judge(("perf.x", None), [dict(tim, suite="perf.x", labels=["perf"])], {})
+    check(st_t == "missing" and "fallback" in why_t and st_p == "green" and st_f == "missing",
+          "ci_gate_check refuses a timing or perf row's record carried by a fallback (re-run it), never another row's "
+          "(%s / %s / %s)" % (st_t, st_f, st_p))
     g.gate_runlog.run_ctest, g.gate_runlog.fork_pin_problem, g.gate_runlog.recorded_rows = real
     g.gate_runlog.owed_solos = real_owed
     g.gate_runlog.prebuild = real_pb
@@ -570,8 +580,8 @@ def main(source, build):
     relhand = os.path.join(scratch, "hand.release")
     hand = spawn([sys.executable, "-c", "import sys, os, time; sys.path.insert(0, sys.argv[1]); import vram_tokens as v;"
                   " fds, env = v.hold_card('hand phase'); print('HELD', env.get('JAH_GATE_SLOT_HELD'),"
-                  " env.get('JAH_VRAM_HELD'), flush=True)\nwhile not os.path.exists(sys.argv[2]): time.sleep(0.05)\n"
-                  "v.release(fds)", scripts, relhand])
+                  " env.get('JAH_VRAM_HELD'), flush=True)\nwhile not os.path.exists(sys.argv[2]) and os.path.exists('/proc/' + sys.argv[3]): time.sleep(0.05)\n"
+                  "v.release(fds)", scripts, relhand, str(os.getpid())])
     first = [l for l in wait_line(hand, "HELD").splitlines() if l.startswith("HELD")][0]
     q = vt_mod.gate_queue()
     other = spawn([sys.executable, vt, "gate", "--label", "G9", "--", "true"])
@@ -586,10 +596,11 @@ def main(source, build):
     reset()
     relb = os.path.join(scratch, "blocker.release")
     blocker = subprocess.Popen([sys.executable, vt, "admit", "1", "--label", "blocker", "--", "sh", "-c",
-                                f"while [ ! -e {relb} ]; do sleep 0.05; done"],
+                                f"while [ ! -e {relb} ] && kill -0 {os.getpid()} 2>/dev/null; do sleep 0.05; done"],
                                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    wait_until(lambda: "HELD by" in subprocess.run([sys.executable, vt, "status"], capture_output=True,
-                                                   text=True).stdout.split("vram:")[0])
+    check(wait_until(lambda: "HELD by" in subprocess.run([sys.executable, vt, "status"], capture_output=True,
+                                                         text=True).stdout.split("vram:")[0], blocker),
+          "the blocker holds its token (alive)")
     os.environ["JAH_VRAM_PHASE_WAIT"] = "1"
     buf = io.StringIO()
     with contextlib.redirect_stdout(buf):
@@ -634,10 +645,12 @@ def main(source, build):
     # (the 1 s JAH_VRAM_WAIT below is the BOUND UNDER TEST — the admission's own — never a guess at timing)
     relga = os.path.join(scratch, "ga.release")
     gh = spawn([sys.executable, vt, "gate", "--label", "GA", "--", "sh", "-c",
-                f"while [ ! -e {relga} ]; do sleep 0.05; done"])
+                f"while [ ! -e {relga} ] && kill -0 {os.getpid()} 2>/dev/null; do sleep 0.05; done"])
     wait_line(gh, "gate-slot: taken")
     pa = subprocess.run([sys.executable, vt, "admit", "all", "--timing", "--", "true"], capture_output=True, text=True,
                         env=dict(os.environ, JAH_VRAM_WAIT="1"))
+    # 900 = the admission's production bound (vram_tokens' default) on this test's PRIVATE slot: under test is
+    # that it WAITS behind the gate within its bound, released by the event below
     pbp = spawn([sys.executable, vt, "admit", "all", "--timing", "--", "true"], env=dict(os.environ, JAH_VRAM_WAIT="900"))
     ob = wait_line(pbp, "gate-slot: queued at position 1")
     open(relga, "w").close(); gh.communicate()
@@ -648,9 +661,10 @@ def main(source, build):
     # ...and INSIDE a gate (its rows inherit the gate's live pid) it never queues behind its own gate (round 2, E)
     relge = os.path.join(scratch, "ge.release")
     gh = spawn([sys.executable, vt, "gate", "--label", "GE", "--", "sh", "-c",
-                f"while [ ! -e {relge} ]; do sleep 0.05; done"])
+                f"while [ ! -e {relge} ] && kill -0 {os.getpid()} 2>/dev/null; do sleep 0.05; done"])
     wait_line(gh, "gate-slot: taken")
     # the gate still HOLDS while this runs (it is released only after): a queue here could never end
+    # 900 = the production bound on the PRIVATE slot (it must never be reached: inside the gate nothing queues)
     pi = subprocess.run([sys.executable, vt, "admit", "all", "--timing", "--", "true"], capture_output=True, text=True,
                         env=dict(os.environ, JAH_VRAM_WAIT="900", JAH_GATE_SLOT_HELD=str(gh.pid)))
     open(relge, "w").close(); gh.communicate()
