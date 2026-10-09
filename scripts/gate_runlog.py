@@ -789,15 +789,21 @@ def recorded_rows(shas=None):
     return out
 
 
+SOLO_OWED = 3          # the solos a dropped red needs strictly after its abort (the flake law's 3/3)
+
+
 def owed_solos(shas=None):
-    """[suite] an abort at this tip dropped RED and no SOLO retry has answered since (GATE-COST-2 #9): such a
-    row re-runs as a solo — 3x, tier `solo`, retry — never as a plain row in the next pass (a plain green
-    after a dropped red would be a retry hiding a red). The abort record keeps `droppedRed` for the judge."""
+    """[suite] an abort at this tip dropped RED and fewer than SOLO_OWED solo retries have run STRICTLY AFTER
+    it (GATE-COST-2 #9, fix round F3): such a row re-runs as a solo — 3x, tier `solo`, retry — never as a plain
+    row in the next pass (a plain green after a dropped red would be a retry hiding a red). An interrupted solo
+    pass (one or two runs) leaves it owed; a solo in the abort's own second does not count (records are
+    stamped to the second: it cannot be shown to be after). The abort record keeps `droppedRed` for the judge,
+    which demands the 3/3."""
     shas = shas or tree_shas()
     owed = dropped_red(shas)
     if not owed:
         return []
-    last_solo, d = {}, log_dir()
+    after, d = {}, log_dir()
     for f in os.listdir(d):
         if not f.endswith(".jsonl") or shas["studio"][:9] not in f:
             continue
@@ -806,10 +812,9 @@ def owed_solos(shas=None):
             except ValueError: continue
             if r.get("retry") and not r.get("kind") and r.get("suite") in owed \
                     and (r.get("tip") or {}).get("studio") == shas["studio"]:
-                last_solo[r["suite"]] = max(last_solo.get(r["suite"], ""), r.get("ts") or "")
-    # a solo in the abort's own second counts as after it (records are stamped to the second, and a solo
-    # is a later run than the one that aborted)
-    return sorted(n for n, at in owed.items() if last_solo.get(n, "") < at)
+                if (r.get("ts") or "") > owed[r["suite"]]:
+                    after[r["suite"]] = after.get(r["suite"], 0) + 1
+    return sorted(n for n in owed if after.get(n, 0) < SOLO_OWED)
 
 
 def _listed_rows(cmd, cwd, env):

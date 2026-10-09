@@ -284,12 +284,17 @@ def main(source, build):
     check(rl.owed_solos(clean) == ["gpu.wait"] and "gpu.a" in done_,
           "the row the abort dropped RED is OWED A SOLO (#9: never the ordinary pass), whatever older record it has")
     open(os.path.join(state, "go"), "w").close()
+    time.sleep(1.1)                            # strictly after the abort's second (records are stamped to it)
+    owed_after = []
     for _ in range(3):
         buf = io.StringIO()
         with contextlib.redirect_stdout(buf):
             rl.run_ctest("ctest -j1 --timeout 60 -R '^gpu\\.wait$'", tb, "solo", "gate-cost-test", 1, retry=True,
                          labels=LABELS)
+        owed_after.append(rl.owed_solos(clean))
     solos = [r for r in records() if r["suite"] == "gpu.wait" and r.get("retry") and r["tier"] == "solo"]
+    check(owed_after[:2] == [["gpu.wait"], ["gpu.wait"]],
+          "an interrupted solo pass (1 or 2 of 3) leaves the dropped red OWED (F3; %r)" % owed_after[:2])
     check(len(solos) == 3 and rl.owed_solos(clean) == [] and ab[0].get("droppedRed") == ["gpu.wait"],
           "three solo retries (tier solo) answer it; the abort record keeps droppedRed for the judge (%d solo(s), "
           "owed %r)" % (len(solos), rl.owed_solos(clean)))
