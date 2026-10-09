@@ -42,6 +42,7 @@
 #include "irisgl/document/scenegraph/scene.h"
 
 #include "services/worldmodes.h"
+#include "services/testtier.h"
 #include "jahshaka/engine/Types.h"
 
 #include "../support/documentgraph.h"
@@ -559,6 +560,50 @@ static void testTierTexts()
     }
 }
 
+// THE TEST-TIER SWITCH NEVER WRITES A PINNED ROW (TEST-NEEDS-1 fix rounds F3 + round 2). RED (by
+// construction, the lead's round-2 read) at
+// fd22dbc66 (the restore went through the Rows' get/set and counted any machinery pin): (a) an
+// auto field (giDdgi -1) under a giMode pin came back concrete; (b) a giBounces pin alone kept
+// Photon ON in a process whose list does not name it.
+static void testTestTierPins()
+{
+    testtier::set(QStringLiteral("low"));
+    qputenv(testtier::kNeedsEnvVar, "none");
+    {   // (a) giMode pinned to vct, the field auto: both survive the switch, raw
+        iris::ScenePtr s = freshScene();
+        worldmodes::setMode(s, worldmodes::Mode::Epic);
+        worldmodes::setRowValue(s, QStringLiteral("giMode"), 1, true);
+        s->giDdgi = -1;
+        const int bounces = s->giNumBounces;
+        worldmodes::applyTestTier(s);
+        CHECK(giMode(s) == 1 && s->worldOverrides.contains(QStringLiteral("giMode")),
+              "test tier: a giMode pin stays (the field and the pin) under NEEDS none");
+        CHECK(s->giDdgi == -1, "test tier: the auto field (giDdgi -1) is restored RAW, never concrete");
+        CHECK(s->giNumBounces == bounces, "test tier: the machinery fields come back as the document had them");
+    }
+    {   // (b) a machinery pin alone does not keep Photon on
+        iris::ScenePtr s = freshScene();
+        worldmodes::setMode(s, worldmodes::Mode::Epic);
+        worldmodes::setRowValue(s, QStringLiteral("giBounces"), 2, true);
+        worldmodes::applyTestTier(s);
+        CHECK(!worldmodes::photonEnabled(s), "test tier: a giBounces pin does not keep Photon ON (NEEDS none)");
+        CHECK(s->worldOverrides.contains(QStringLiteral("giBounces")) && giBounces(s) == 2,
+              "test tier: ...and the giBounces pin itself stays");
+    }
+    {   // NEEDS photon: Photon on at the mode's own tier; an unpinned bloom off, a pinned one stays
+        qputenv(testtier::kNeedsEnvVar, "photon");
+        iris::ScenePtr s = freshScene();
+        worldmodes::setMode(s, worldmodes::Mode::Epic);
+        worldmodes::setRowValue(s, QStringLiteral("bloom"), 1, true);
+        worldmodes::applyTestTier(s);
+        CHECK(worldmodes::photonEnabled(s) && worldmodes::photonTier(s) == worldmodes::PhotonTier::Low,
+              "test tier: NEEDS photon runs Photon at the mode's own tier (Low)");
+        CHECK(s->bloomEnabled, "test tier: a pinned bloom stays ON though not named");
+    }
+    qunsetenv(testtier::kNeedsEnvVar);
+    testtier::set(QString());
+}
+
 int main(int argc, char **argv)
 {
     QGuiApplication app(argc, argv);
@@ -574,6 +619,7 @@ int main(int argc, char **argv)
     testNewSceneDefault();
     testTierReapply();
     testTierTexts();
+    testTestTierPins();
 
     std::printf(failures ? "\nFAILED: %d check(s)\n" : "\nALL CHECKS PASSED\n", failures);
     return failures ? 1 : 0;

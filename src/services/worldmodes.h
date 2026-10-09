@@ -445,8 +445,8 @@ void setMode(const iris::ScenePtr &scene, Mode m);
 /// switchable feature JAHSHAKA_TEST_NEEDS does not name OFF — Photon, bloom, SSAO, SMAA, the
 /// planar mirrors (TEST-NEEDS-1; WORLD-MODE-1 began it with the first two) — and Photon ON at
 /// the tier's own Photon tier when it is named. A pinned row is the document's and stays — the
-/// switch writes neither it nor its backing field (a pin on any Photon row leaves Photon as the
-/// document has it). A no-op in a process with no test tier.
+/// switch writes neither it nor its backing field (a pin on the `photon` row or giMode leaves
+/// Photon as the document has it). A no-op in a process with no test tier.
 void applyTestTier(const iris::ScenePtr &scene);
 
 /// The row's tier value for `m`, or the row's current value when m == Custom.
