@@ -33,6 +33,10 @@ box's own queue, log or displays:
   8. THE SLOT UNDER STRESS: a dead waiter's ticket is reaped; eight gates at once hold it one at a time;
      a SIGKILLed gate's ctest and rows die within 15 s and the slot is free; a killed ctest ends a gate.
 
+RED ON BASE (measured 2026-10-09: this file run against a5ab3a057's scripts): 3 FAIL — the per-try NOADMIT
+records (x2) and the abort record — then a crash in section 4 (gate_runlog has no owed_solos): sections 5-11
+cannot start. At the GATE-COST-2 tip: 70 ok, 0 FAIL.
+
 Run: gate_cost_test.py <source-dir> <build-dir>   (the build dir is not read; ctest is found on PATH)
 """
 import contextlib
