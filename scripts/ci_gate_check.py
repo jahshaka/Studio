@@ -681,7 +681,9 @@ def check(rng, build, gs=None, verdicts=None, mode="merge", lane=None):
                          and _when(r) > last]
                 # ROUND 2: a lane tip that DESCENDS from the checked tip holds a red newer than the tip's code — a
                 # tip PASS is pre-bug and answers nothing (the same ancestry rule as the fix's proof)
-                if later and not prover.ancestor(tip_sha, t) \
+                # ROUND 3 (U4): a tip PASS answers a carried red only when the tip DESCENDS from the red's tip and the
+                # range REACHES the row (the Prover) — a rebased-away tip or one that descends from the checked tip carries
+                if later and prover(t, tip_sha, k) \
                         and judge(k, at_tip, defects, tip_sha=tip_sha, mode=mode, proves=prover)[0] in PASSING: continue
                 carried[(t, k)] = cwhy
         return out

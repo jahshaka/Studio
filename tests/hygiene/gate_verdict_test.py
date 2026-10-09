@@ -415,7 +415,16 @@ def case_carried_red(E):
           "lane X red at tip A, rebased to B with no re-run -> refused, OPEN RED carried (%d)" % rc)
     E.put(["test_engine"], "PASS", "2026-01-01T11:00:00", gating=True)
     rc, out = E.run()
-    check(rc == 0 and "OPEN RED" not in out, "...re-run green at B -> accepted (%d)" % rc)
+    check(rc == 1 and "OPEN RED carried" in out, "ROUND 3 (U4): ...a green re-run at B does NOT answer a red at a "
+          "REBASED-AWAY tip (A is not B's ancestor: no proof the fix reached it) (%d)" % rc)
+    # ...but at a tip that DESCENDS from the red's and whose range REACHES the row, the re-run answers it
+    t0 = E.git("rev-parse", "51e9f2c49^")
+    E.fresh()
+    E.put(ROWS, "PASS", "2026-01-01T10:00:00")
+    E.put(["photon.view"], "FAIL", "2026-01-01T09:00:00", tip=t0)
+    rc, out = E.run()
+    check(rc == 0 and "OPEN RED" not in out, "a carried red at an ANCESTOR whose range to the tip reaches the row is "
+          "answered by the tip's later green (%d)" % rc)
     # ROUND 2: a lane tip that DESCENDS from the checked tip (a5ab3a057 descends from 3756b2f18) holds a red the tip's
     # older code never had to answer — the tip's PASS is pre-bug and clears nothing
     E.fresh()
