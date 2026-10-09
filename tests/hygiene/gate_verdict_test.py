@@ -4,11 +4,13 @@ GATE-LOG-1; ONE_PICTURE_SPEC H1/H2; docs/TESTING_GATE.md §4). Toy run logs only
 JAH_RUN_LOG_DIR; a PRIVATE contention list, JAH_CONTENTION_FILE; a PRIVATE token dir, JAH_VRAM_DIR) — no GPU,
 no display. One script, five rows:
 
-  verdict_door      U1/U3: FAIL + real:<id> -> green; FAIL + plain text -> VERDICT REFUSED; FAIL + text with 2/3
-                    solo -> "solos below 3/3"; contention: + 3/3 solo -> green, + no solos -> refused; LOST +
-                    environmental -> refused; LOST + xid-read:<window covering it> -> green, a window that misses
-                    it -> refused; CRASH with an xid in the record + contention: -> refused, + real:<id> -> green;
-                    NOADMIT / NOTRUN never cleared; the CLI prints `VERDICT REFUSED <row>: <why>`
+  verdict_door      U1/U3 + the lead's addendum: real:<id> is CHECKED (`fixed` needs the row's PASS at the tip,
+                    `pre-existing` a recorded solo red at the base; a ticket named alone clears nothing — a CRASH
+                    never); contention: only on a LISTED row whose red shows a measured competitor, with 3/3 solo;
+                    FAIL + text with 2/3 solo -> "solos below 3/3"; LOST + environmental -> refused; xid-read: only
+                    when the record's journal was unreadable, its window covering the red; CRASH with an xid in the
+                    record + contention: -> refused; NOADMIT / NOTRUN never cleared; the CLI prints
+                    `VERDICT REFUSED <row>: <why>`
   noadmit_pool      U2: a toy pool whose every arm is NOADMIT records NOADMIT (and is re-queued as a never-ran
                     row); a mixed one records FAIL with its NOADMIT arms named
   carried_red       U4: lane X red at tip A, the lane rebased to tip B with no re-run -> refused (`OPEN RED carried
@@ -86,9 +88,9 @@ class Env:
                            env=dict(os.environ))
         return p.returncode, p.stdout + p.stderr
 
-    def judge(self, recs, listed=False):
+    def judge(self, recs, listed=False, base=None):
         cont = {"photon.view": "x"} if listed else {}
-        return self.cgc.judge(("photon.view", None), recs, cont)
+        return self.cgc.judge(("photon.view", None), recs, cont, base_recs=base)
 
 
 def rec(verdict, ts, retry=False, **kw):
@@ -100,58 +102,86 @@ def vrec(text, ts):
 
 
 def case_verdict_door(E):
-    red = rec("FAIL", "2026-10-09T10:00:00+02:00")
-    st, why = E.judge([red, vrec("real:VIEWS-XID-1 fixed in abc123", "2026-10-09T11:00:00+02:00")])
-    check(st == "green", "FAIL + real:<defect id> -> green (%s: %s)" % (st, why[:80]))
-    st, why = E.judge([red, vrec("the reader looked at it and it is fine", "2026-10-09T11:00:00+02:00")])
+    T = "2026-10-09T%s:00+02:00"
+    red = rec("FAIL", T % "10:00")
+    fixpass = rec("PASS", T % "10:30")
+    base_solo = [rec("FAIL", T % "09:00", retry=True)]
+    st, why = E.judge([red, vrec("real:VIEWS-XID-1", T % "11:00")])
+    check(st == "red" and "names a ticket only" in why, "FAIL + real:<id> alone (a ticket named) -> refused (%s)" % why[:90])
+    st, why = E.judge([red, vrec("real:VIEWS-XID-1 fixed in abc123", T % "11:00")])
+    check(st == "red" and "no PASS record of the row at the tip" in why,
+          "FAIL + real:<id> fixed, no PASS at the tip -> refused (%s)" % why[:90])
+    st, why = E.judge([red, fixpass, vrec("real:VIEWS-XID-1 fixed in abc123", T % "11:00")])
+    check(st == "green", "FAIL + real:<id> fixed + its row PASS at the tip after the red -> green (%s: %s)" % (st, why[:80]))
+    st, why = E.judge([red, vrec("real:VIEWS-XID-1 pre-existing on d-build", T % "11:00")], base=[])
+    check(st == "red" and "BASE" in why, "FAIL + real:<id> pre-existing, no solo red at the base -> refused (%s)" % why[:90])
+    st, why = E.judge([red, vrec("real:VIEWS-XID-1 pre-existing on d-build", T % "11:00")], base=base_solo)
+    check(st == "green", "...with the red reproduced by a recorded solo at the base -> green (%s)" % why[:80])
+    st, why = E.judge([red, vrec("the reader looked at it and it is fine", T % "11:00")])
     check(st == "red" and why.startswith("VERDICT REFUSED") and "class token" in why,
           "FAIL + plain text -> VERDICT REFUSED, naming the class-token rule (%s)" % why[:110])
-    solos = [rec(v, "2026-10-09T10:%02d:00+02:00" % (10 + i), retry=True) for i, v in enumerate(("PASS", "FAIL", "PASS"))]
-    st, why = E.judge([red] + solos + [vrec("real:VIEWS-XID-1 a real defect", "2026-10-09T11:00:00+02:00")])
+    solos = [rec(v, T % ("10:%02d" % (10 + i)), retry=True) for i, v in enumerate(("PASS", "FAIL", "PASS"))]
+    st, why = E.judge([red] + solos + [vrec("real:VIEWS-XID-1 fixed", T % "11:00")])
     check(st == "red" and "solos below 3/3" in why, "FAIL + text, 2/3 solo -> red 'solos below 3/3' (%s)" % why[:100])
-    st, why = E.judge([red] + solos[:2] + [vrec("contention: load 14 beside two gates", "2026-10-09T11:00:00+02:00")],
-                      listed=True)
+    st, why = E.judge([red] + solos[:2] + [vrec("contention: load 14 beside two gates", T % "11:00")], listed=True)
     check(st == "red" and "solos below 3/3" in why, "...listed or not: a contention-listed row too (%s)" % why[:90])
-    ok3 = [rec("PASS", "2026-10-09T10:%02d:00+02:00" % (10 + i), retry=True) for i in range(3)]
-    st, why = E.judge([red] + ok3 + [vrec("contention: load 14 beside two gates", "2026-10-09T09:00:00+02:00"),
-                                     vrec("contention: load 14 beside two gates", "2026-10-09T11:00:00+02:00")])
-    check(st == "green" and "3/3" in why, "FAIL + contention: with 3/3 solo PASS after the red -> green (%s)" % why[:90])
-    st, why = E.judge([red, vrec("contention: load 14 beside two gates", "2026-10-09T11:00:00+02:00")])
-    check(st == "red" and "3/3 solo" in why, "FAIL + contention: with no solos -> refused (%s)" % why[:100])
-    st, _ = E.judge([red, vrec("contention: load 14 beside two gates", "2026-10-09T10:05:00+02:00")] + ok3)
+    ok3 = [rec("PASS", T % ("10:%02d" % (10 + i)), retry=True) for i in range(3)]
+    busy = rec("FAIL", T % "10:00", box={"other_ctests": 2, "queue_depth": 0})
+    st, why = E.judge([red] + ok3 + [vrec("contention: load 14 beside two gates", T % "11:00")])
+    check(st == "red" and "not listed" in why, "contention: on an UNLISTED row -> refused, 3/3 or not (%s)" % why[:90])
+    st, why = E.judge([red] + ok3 + [vrec("contention: load 14 beside two gates", T % "11:00")], listed=True)
+    check(st == "red" and "MEASURED competitor" in why, "contention: on a listed row whose red shows no measured competitor "
+          "-> refused (%s)" % why[:90])
+    for name, r in (("box.other_ctests", busy), ("box.queue_depth", rec("FAIL", T % "10:00", box={"queue_depth": 1})),
+                    ("drain_s", rec("FAIL", T % "10:00", drain_s=40.0))):
+        st, why = E.judge([r] + ok3 + [vrec("contention: load 14 beside two gates", T % "11:00")], listed=True)
+        check(st == "green" and "3/3" in why, "contention: + a listed row + %s in the red + 3/3 solo -> green (%s)"
+              % (name, why[:80]))
+    st, why = E.judge([busy, vrec("contention: load 14 beside two gates", T % "11:00")], listed=True)
+    check(st == "red" and "3/3 solo" in why, "contention: with no solos -> refused (%s)" % why[:100])
+    st, _ = E.judge([busy, vrec("contention: load 14 beside two gates", T % "10:05")] + ok3, listed=True)
     check(st == "green", "...and once its 3/3 solos run after it, the same verdict clears it (written before them)")
-    lost = rec("LOST", "2026-10-09T14:20:00+02:00")
-    st, why = E.judge([lost, vrec("environmental: a device loss beside four gates, no Xid", "2026-10-09T15:00:00+02:00")])
+    lost = rec("LOST", T % "14:20", xid=None)
+    st, why = E.judge([lost, vrec("environmental: a device loss beside four gates, no Xid", T % "15:00")])
     check(st == "red" and "never environmental" in why, "LOST + environmental -> refused, the sentence naming the rule (%s)"
           % why[:110])
-    st, why = E.judge([lost, vrec("SPEED-CPU lead verdict: no Xid in dmesg", "2026-10-09T15:00:00+02:00")])
+    st, why = E.judge([lost, vrec("SPEED-CPU lead verdict: no Xid in dmesg", T % "15:00")])
     check(st == "red" and "xid-read" in why, "LOST + any other text -> refused (%s)" % why[:100])
-    st, why = E.judge([lost, vrec("xid-read:2026-10-09T14:00..14:30 none", "2026-10-09T15:00:00+02:00")])
-    check(st == "green" and "xid-read" in why, "LOST + xid-read:<a window covering it> -> green (%s)" % why[:90])
-    st, why = E.judge([lost, vrec("xid-read:2026-10-09T08:00..08:30 none", "2026-10-09T15:00:00+02:00")])
-    check(st == "red" and "does not cover" in why, "LOST + xid-read:<a window that misses it> -> refused (%s)" % why[:100])
+    st, why = E.judge([lost, vrec("xid-read:2026-10-09T14:00..14:30 none", T % "15:00")])
+    check(st == "red" and "journal was read" in why, "LOST + xid-read: when the record's journal WAS read -> refused "
+          "(the Xid would be in the record) (%s)" % why[:100])
+    lostu = rec("LOST", T % "14:20", xid=None, journal_unreadable=True)
+    st, why = E.judge([lostu, vrec("xid-read:2026-10-09T14:00..14:30 none", T % "15:00")])
+    check(st == "green" and "xid-read" in why, "LOST + journal_unreadable + xid-read:<a window covering it> -> green (%s)"
+          % why[:90])
+    st, why = E.judge([lostu, vrec("xid-read:2026-10-09T08:00..08:30 none", T % "15:00")])
+    check(st == "red" and "does not cover" in why, "...a window that misses it -> refused (%s)" % why[:100])
     for cls in ("OOM", "CRASH"):
-        st, _ = E.judge([rec(cls, "2026-10-09T14:20:00+02:00"), vrec("real:BUDGET-7 a class under-counted",
-                                                                       "2026-10-09T15:00:00+02:00")])
-        check(st == "green", "%s + real:<id> -> green" % cls)
-    xr = rec("CRASH", "2026-10-09T14:20:00+02:00",
-             xid={"pid": 4242, "window": "2026-10-09T14:10:00+02:00..2026-10-09T14:20:00+02:00", "lines": ["NVRM: Xid 109"]})
-    st, why = E.judge([xr, vrec("contention: four gates on the card", "2026-10-09T15:00:00+02:00")] + [
-        rec("PASS", "2026-10-09T14:3%d:00+02:00" % i, retry=True) for i in range(3)], listed=True)
-    check(st == "red" and "DEFECT by law" in why, "CRASH + an xid in the record + contention: (3/3 solo, listed) -> "
-          "refused (%s)" % why[:100])
-    st, why = E.judge([xr, vrec("xid-read:2026-10-09T14:00..14:30 none", "2026-10-09T15:00:00+02:00")])
+        r = rec(cls, T % "14:20")
+        st, why = E.judge([r, vrec("real:BUDGET-7 a class under-counted", T % "15:00")])
+        check(st == "red" and "ticket" in why, "%s + a ticket named alone -> refused (a CRASH is never cleared by a "
+              "ticket alone) (%s)" % (cls, why[:70]))
+        st, _ = E.judge([r, rec("PASS", T % "14:40"), vrec("real:BUDGET-7 fixed", T % "15:00")])
+        check(st == "green", "%s + real:<id> fixed + a PASS at the tip -> green" % cls)
+    xr = rec("CRASH", T % "14:20",
+             xid={"pid": 4242, "window": "2026-10-09T14:10:00+02:00..2026-10-09T14:20:00+02:00", "lines": ["NVRM: Xid 109"]},
+             box={"other_ctests": 3})
+    st, why = E.judge([xr, vrec("contention: four gates on the card", T % "15:00")] + [
+        rec("PASS", T % ("14:3%d" % i), retry=True) for i in range(3)], listed=True)
+    check(st == "red" and "DEFECT by law" in why, "CRASH + an xid in the record + contention: (3/3 solo, listed, a "
+          "competitor) -> refused (%s)" % why[:100])
+    st, why = E.judge([xr, vrec("xid-read:2026-10-09T14:00..14:30 none", T % "15:00")])
     check(st == "red" and "real:<defect id>" in why, "...and xid-read: on it -> refused too (only real:<id>)")
-    st, _ = E.judge([xr, vrec("real:VIEWS-XID-1", "2026-10-09T15:00:00+02:00")])
-    check(st == "green", "...real:<id> on it -> green")
-    st, why = E.judge([xr] + [rec("PASS", "2026-10-09T14:3%d:00+02:00" % i, retry=True) for i in range(3)], listed=True)
+    st, _ = E.judge([xr, rec("PASS", T % "14:40"), vrec("real:VIEWS-XID-1 fixed", T % "15:00")])
+    check(st == "green", "...real:<id> fixed + a PASS at the tip -> green")
+    st, why = E.judge([xr] + [rec("PASS", T % ("14:3%d" % i), retry=True) for i in range(3)], listed=True)
     check(st == "red" and "DEFECT" in why, "an xid red on a contention-listed row is not cleared by 3/3 solo (%s)" % why[:80])
-    st, why = E.judge([rec("CRASH", "2026-10-09T14:20:00+02:00")] + [rec("PASS", "2026-10-09T14:3%d:00+02:00" % i,
-                                                                         retry=True) for i in range(3)], listed=True)
+    st, why = E.judge([rec("CRASH", T % "14:20")] + [rec("PASS", T % ("14:3%d" % i), retry=True) for i in range(3)],
+                      listed=True)
     check(st == "red" and "never cleared by solos" in why, "a CRASH on a contention-listed row: no solo clearance (%s)"
           % why[:90])
     for na in ("NOADMIT", "NOTRUN"):
-        st, _ = E.judge([rec(na, "2026-10-09T10:00:00+02:00"), vrec("real:VIEWS-XID-1", "2026-10-09T11:00:00+02:00")])
+        st, _ = E.judge([rec(na, T % "10:00"), vrec("real:VIEWS-XID-1 fixed", T % "11:00")])
         check(st == "missing", "%s + any verdict -> never cleared (missing)" % na)
     # the CLI: a refused verdict is printed as `VERDICT REFUSED <row>: <why>` and the range stays refused
     E.fresh()
@@ -160,8 +190,11 @@ def case_verdict_door(E):
     rc, out = E.run("--verdict", "photon.view=looked fine to the reader")
     check(rc == 1 and "VERDICT REFUSED photon.view:" in out, "the CLI prints VERDICT REFUSED <row>: <why> and "
           "refuses (%d)" % rc)
-    rc, out = E.run("--verdict", "photon.view=real:FIXTURE-1 the fixture's red")
-    check(rc == 0, "...a later real:<id> verdict on the same red is accepted (%d)" % rc)
+    rc, out = E.run("--verdict", "photon.view=real:FIXTURE-1 fixed")
+    check(rc == 1 and "VERDICT REFUSED photon.view:" in out, "...real:<id> fixed with no PASS at the tip -> refused (%d)" % rc)
+    E.put(ROWS[2:], "FAIL", "2026-01-01T09:00:00", tip=E.git("rev-parse", "51e9f2c49"), retry=True)
+    rc, out = E.run("--verdict", "photon.view=real:FIXTURE-1 pre-existing on the base")
+    check(rc == 0, "...real:<id> pre-existing with a recorded solo red at the RANGE'S BASE -> accepted (%d)" % rc)
 
 
 def case_noadmit_pool(E):
@@ -210,7 +243,8 @@ def case_carried_red(E):
     E.fresh()
     E.put(ROWS, "PASS", "2026-01-01T10:00:00")
     E.put(["test_engine"], "FAIL", "2026-01-01T09:00:00", tip=A)
-    rc, out = E.run("--verdict", "test_engine=real:FIXTURE-1 the old tip's red, answered")
+    E.put(["test_engine"], "FAIL", "2026-01-01T08:00:00", tip=E.git("rev-parse", "51e9f2c49"), retry=True)
+    rc, out = E.run("--verdict", "test_engine=real:FIXTURE-1 pre-existing: the old tip's red, reproduced on the base")
     vfiles = [f for f in os.listdir(os.environ["JAH_RUN_LOG_DIR"]) if "-verdict-aaaaaaaaa" in f]
     check(rc == 0 and vfiles, "...a verdict at A (recorded AT A) -> accepted (%d, %s)" % (rc, vfiles))
     rc, out = E.run()
@@ -310,7 +344,12 @@ def case_log_schema2(E):
     check(set(mem) == {"psi10", "swap_used_mb", "builds"} and (not sys.platform.startswith("linux") or (
         isinstance(mem["psi10"], float) and isinstance(mem["builds"], int))), "box.mem = {psi10, swap_used_mb, builds} (%s)"
           % mem)
-    check("xid" in one and one["xid"] is None, "a row with no fault carries xid: null")
+    check("xid" in one and one["xid"] is None and "journal_unreadable" not in one, "a row with no fault carries xid: null")
+    R = E.rl._Run("scoped", "verdict-test", 1, None, None, None, False, {}, False, None)
+    R.sampler.stop()
+    ur = R.records("s.three", "Failed", 1.0, time.time(), (0, 0, 0), "vram: " + E.kx.FINDING + " (s.three)\nboom", {})
+    check(ur[0].get("journal_unreadable") is True and ur[0]["xid"] is None,
+          "a row whose journal was unreadable records journal_unreadable (the one case xid-read: may answer)")
     check((two.get("xid") or {}).get("pid") == xid["pid"] and (two.get("xid") or {}).get("window") == xid["window"],
           "a row whose output carries the Xid records it (%s)" % two.get("xid"))
     # gate-report.py: the table on the toy log, and the preflight's numbers on the archive

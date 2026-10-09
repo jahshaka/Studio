@@ -372,14 +372,18 @@ not a gate.
 **THE VERDICT DOOR (lane VERDICT-1, 2026-10-09; ONE_PICTURE_SPEC H1/H2; the preflight measured 58 verdicts of a
 week, 6 clearing solos below 3/3 by prose, 2 LOSTs called environmental with no journal read, 13 never-ran pools
 recorded FAIL).** `ci_gate_check.py`'s `judge()` parses a verdict's TEXT; `--verdict "<row>=<text>"` keeps its syntax.
-A verdict clears the open reds logged before it ONLY when:
-- **FAIL / TIMEOUT**: the text carries `real:<DEFECT-ID>` (the defect, filed — fixed, with the commit), or
-  `contention:<evidence>` AND the row reached **3/3 solo PASS after the red** (the solos may run after the verdict);
-- **LOST / OOM / CRASH**: the text carries `real:<DEFECT-ID>` or `xid-read:<journal window>` — the window the reader
-  read, covering the red (`xid-read:2026-10-09T14:00..14:30 none`); `environmental` on a LOST and any other text are
-  refused;
-- **a red whose record carries an `xid`** (an Xid from a pid of the row's own process tree — the run log's `xid`
-  field): ONLY `real:<DEFECT-ID>` — never environmental (CLAUDE.md);
+A verdict clears the open reds logged before it ONLY when its token is CHECKED against the run log (never trusted):
+- **`real:<DEFECT-ID> fixed`** — a PASS record of the row AT THE TIP after the red; **`real:<DEFECT-ID> pre-existing`**
+  — the same red REPRODUCED ON THE BASE by a recorded solo (`gate-scope.sh --solo <row>` on the base tree). A ticket
+  named alone clears nothing — a CRASH is never cleared by naming a ticket;
+- **`contention:<evidence>`** (FAIL / TIMEOUT only) — ONLY for a row with a dated entry in `contention.json`, whose red
+  record shows a MEASURED competitor (`box.other_ctests > 0`, `box.queue_depth > 0`, or a whole-card drain
+  `drain_s > 0`), AND 3/3 solo PASS after the red (the solos may run after the verdict); an unlisted row: never;
+- **`xid-read:<journal window>`** (LOST / OOM / CRASH) — ONLY when the record carries no xid BECAUSE the journal was
+  unreadable (`journal_unreadable`), the window covering the red (`xid-read:2026-10-09T14:00..14:30 none`);
+  `environmental` on a LOST and any other text are refused;
+- **a red whose record carries an `xid`** (an Xid from a pid of the row's own process tree): ONLY a checked
+  `real:<DEFECT-ID>` — never environmental (CLAUDE.md);
 - **solos below 3/3 are NEVER cleared by text**, listed or not (2/3, 1/1, 0/3: fix it or run `--solo` to 3/3);
 - NOADMIT / NOTRUN never ran: no verdict clears them (unchanged).
 A refused verdict prints `VERDICT REFUSED <row>: <why>` (the rule named) and the row stays red. The contention list's

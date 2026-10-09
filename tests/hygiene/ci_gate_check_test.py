@@ -84,7 +84,7 @@ def main(source, build):
     # (VERDICT-1's door: with solos after the red, a verdict clears it only at 3/3 — gate.verdict_door)
     put(rows[2:], "PASS", "2026-01-01T10:06:00", retry=True)
     put(rows[2:], "PASS", "2026-01-01T10:07:00", retry=True)
-    rc, out = run(RANGE, "--verdict", "photon.view=real:FIXTURE-1 the fixture's red, read by the test")
+    rc, out = run(RANGE, "--verdict", "photon.view=real:FIXTURE-1 fixed, the fixture's red, read by the test")
     check(rc == 0 and "recorded verdict" in out, "the same red with a recorded verdict -> accepted (%d)" % rc)
     vfiles = [f for f in os.listdir(os.environ["JAH_RUN_LOG_DIR"]) if "-verdict-" in f]
     vrec = [json.loads(l) for f in vfiles for l in open(os.path.join(os.environ["JAH_RUN_LOG_DIR"], f))]
@@ -104,8 +104,9 @@ def main(source, build):
     fresh(unlisted)
     put(rows[:1], "PASS", "2026-01-01T10:00:00")
     put(rows[1:], "FAIL", "2026-01-01T10:00:01")
-    rc, out = run(RANGE, "--verdict", "app.startup_quiet=real:FIXTURE-1 first verdict", "--verdict",
-                  "photon.view=real:FIXTURE-2 second verdict")
+    put(rows[1:], "PASS", "2026-01-01T10:30:00")            # the fix's PASS at the tip (the checked real: token)
+    rc, out = run(RANGE, "--verdict", "app.startup_quiet=real:FIXTURE-1 fixed first verdict", "--verdict",
+                  "photon.view=real:FIXTURE-2 fixed second verdict")
     vrec = [json.loads(l) for f in os.listdir(os.environ["JAH_RUN_LOG_DIR"]) if "-verdict-" in f
             for l in open(os.path.join(os.environ["JAH_RUN_LOG_DIR"], f))]
     check(rc == 0 and sorted(r["suite"] for r in vrec) == ["app.startup_quiet", "photon.view"],
@@ -114,8 +115,9 @@ def main(source, build):
     fresh(unlisted)
     put(rows[:1], "PASS", "2026-01-01T10:00:00")
     put(rows[1:], "FAIL", "2026-01-01T10:00:01")
-    rc, out = run(RANGE, "--verdict", "app.startup_quiet=real:FIXTURE-1 first verdict",
-                  "photon.view=real:FIXTURE-2 second verdict")
+    put(rows[1:], "PASS", "2026-01-01T10:30:00")
+    rc, out = run(RANGE, "--verdict", "app.startup_quiet=real:FIXTURE-1 fixed first verdict",
+                  "photon.view=real:FIXTURE-2 fixed second verdict")
     check(rc == 0, "...and so does one --verdict with two pairs (%d)" % rc)
 
     # ---- a row that never ran (NOADMIT) is MISSING, which no verdict clears ------------------------

@@ -191,6 +191,9 @@ _XID_ARM = re.compile(r"^\s*ARM\s+(\S+)\s+CRASH\b.*?\bxid (\d+) \(the kernel's G
                       r"(\d\d:\d\d:\d\d)\)")
 
 
+_UNREADABLE = re.compile(r"kernel journal is unreadable")
+
+
 def xid_of(text, day=None):
     """(the row's xid, {arm: its xid}) from a row's output — each None / absent when no fault."""
     row, window, arms = None, None, {}
@@ -926,6 +929,10 @@ class _Run:
         if bline: row["budget"] = bline
         xid, arm_xid = xid_of(text, datetime.date.fromtimestamp(t_end).isoformat())
         row["xid"] = xid
+        # the door's `xid-read:` is for THIS case only: no xid because the journal could not be read
+        # (kernel_xid.FINDING, printed by supervise and by the pool runner) — journal_unreadable
+        unreadable = bool(_UNREADABLE.search(text or ""))
+        if unreadable: row["journal_unreadable"] = True
         noadmit = [a for a, av, _ in arms if av == "NOADMIT"]
         if v != "PASS" and v != "NOADMIT" and noadmit:
             row["noadmit_arms"] = noadmit
@@ -942,6 +949,7 @@ class _Run:
             ar = self.reasons.get(f"{name}::{arm.split('.', 1)[-1]}", base["reason"])
             rec = dict(base, arm=arm, verdict=av, status=av, seconds=s, targets=None, reason=ar,
                        xid=arm_xid.get(arm))
+            if unreadable: rec["journal_unreadable"] = True
             if arm in arm_mem: rec["mem"] = arm_mem[arm]
             rec.update(arm_find.get(arm, {}))
             recs.append(rec)
