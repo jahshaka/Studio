@@ -33,6 +33,7 @@
 // No GL, no Ogre, no QWidget — so it is testable headless with an offscreen
 // View (tests/player). EnginePlayerView wraps it.
 #include "irisgl/core/math/mat4.h"
+#include <functional>
 #include <memory>
 #include <QElapsedTimer>
 #include <QImage>
@@ -143,6 +144,9 @@ public:
     /// The VR mode as it stands, WITHOUT creating one: the read every state
     /// verb makes, on every box, with no runtime.
     const PlayerVr *vrIfAny() const { return mVr.get(); }
+    /// The VR interaction step, run in step() after the wearer's and before
+    /// the mirror's sync (IPlayerHost::setVrInteractionStep).
+    void setVrInteractionStep(std::function<void()> step) { mVrInteractionStep = std::move(step); }
     bool isPlaying() const;
     void play();
     void stop();
@@ -171,6 +175,7 @@ private:
     iris::ScenePtr mDocument;
     PlayBack *mPlayback = nullptr;
     std::unique_ptr<PlayerVr> mVr;
+    std::function<void()> mVrInteractionStep;
     /// What the play camera was before the player took it over — restored by
     /// end(). The LENS is in here beside the transform because spawnFrom can
     /// change it (a piloted camera's angle is not the explorer's), and an

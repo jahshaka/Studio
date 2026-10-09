@@ -276,6 +276,8 @@ public:
     /// The editor's VR preview (VR_SPEC §5 phase 4) — see IEditorViewport.
     void setVrPreviewStep(std::function<void()> step) override { mVrPreviewStep = std::move(step); }
     bool vrPreview() const override { return bool(mVrPreviewStep); }
+    void setVrInteractionStep(std::function<void()> step) override
+    { mVrInteractionStep = std::move(step); }
     void setVrPreviewEnds(std::function<void()> ends) override
     { mVrPreviewEnds = std::move(ends); }
     /// The video recorder's view (VIDEO-REC-1) — see IEditorViewport.
@@ -790,6 +792,7 @@ private:
     /// setVrPreviewStep). Installed by the VR module for the life of a session;
     /// not persisted — a session does not survive a restart.
     std::function<void()> mVrPreviewStep;
+    std::function<void()> mVrInteractionStep;   ///< see IEditorViewport
     /// ...and "this preview cannot continue here" (finding 1; MIRROR-LIVE-1):
     /// called from clearScene() while the engine scene is still alive, and from
     /// end() when the page it is hosted on is left.

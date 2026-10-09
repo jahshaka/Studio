@@ -66,6 +66,7 @@ public:
     Q_INVOKABLE bool proxies(const QVariant &on = QVariant());
     Q_INVOKABLE bool move(const QVariantMap &intent = QVariantMap());
     Q_INVOKABLE QVariantMap proxyPose(const QString &hand);
+    Q_INVOKABLE QVariantMap nodePose(const QString &id);
     Q_INVOKABLE bool inject(const QVariant &hand, const QVariantMap &state = QVariantMap());
     Q_INVOKABLE bool haptic(const QVariant &hand, double amplitude = 1.0,
                             double seconds = 0.05);
@@ -157,13 +158,12 @@ private:
     /// from the constructor.
     void installInteraction();
     /// Installs or removes the interaction on the session's edge. Called from
-    /// the driver's tick AND from every verb, because a script run stops the
+    /// the host's tick AND from every verb, because a script run stops the
     /// tick (see the implementation's note).
     void syncInteractionSession();
-    /// ONE INTERACTION FRAME, from the driver's own tick — beside the proxies,
-    /// and for the same reason they are there: a session may belong to the
-    /// editor's preview or to the Player, and this is the one place above both
-    /// that runs once per rendered frame.
+    /// ONE INTERACTION FRAME, inside the tick of whichever host owns the
+    /// session (the editor viewport or the Player — the hooks the constructor
+    /// installs), after the frame's wait and before that host's mirror sync.
     void stepInteraction();
     /// "left"/"right" -> a VrHand; the DOMINANT hand when the caller said
     /// nothing at all, and `*ok = false` for anything else (which the verbs

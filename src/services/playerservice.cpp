@@ -186,6 +186,18 @@ bool PlayerService::moveVr(const flystep::Keys &keys, float seconds)
     return mHost && mHost->movePlayerVr(keys, seconds);
 }
 
+void PlayerService::setHost(IPlayerHost *host)
+{
+    mHost = host;
+    if (mHost) mHost->setVrInteractionStep(mVrInteractionStep);
+}
+
+void PlayerService::setVrInteractionStep(std::function<void()> step)
+{
+    mVrInteractionStep = std::move(step);
+    if (mHost) mHost->setVrInteractionStep(mVrInteractionStep);
+}
+
 bool PlayerService::holdVr(const flystep::Keys &keys)
 {
     return mHost && mHost->holdPlayerVr(keys);

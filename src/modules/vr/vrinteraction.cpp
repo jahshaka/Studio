@@ -189,6 +189,10 @@ void VrInteraction::begin()
     // ...AND THE NEXT SESSION'S FIRST BIND IS ITS OWN FIRST BIND, not a re-bind
     // of the last one's (item 5): the seed is per session, like `mPrev` itself.
     mProfileSeeded = false;
+    // ...AND THE POSE SERIAL THE LAST STEP READ IS THE LAST SESSION'S: a
+    // readiness wait on `stepPoseSerial > 0` must not pass on it (F4).
+    mStepPoseSerial = 0;
+    mHeldTurn = 0.0f;
     mHover = Hover();
     mTurnArmed = true;
     mMemo = PickMemo();
@@ -207,6 +211,7 @@ void VrInteraction::end()
     // the viewport's very next frame.
     armGizmo(dominantHand(), false);
     mInstalled = false;
+    mHeldTurn = 0.0f;
     mHover = Hover();
     mMemo = PickMemo();
     mRefreshed = false;
@@ -1180,8 +1185,39 @@ bool VrInteraction::turn(float degrees)
     if (!engine) return false;
     const vrorigin::Rig out = vrgrab::turnedAboutHead(rig, head, degrees);
     engine->setVrOrigin(toEngine(out.position), out.yaw);
+    carryHeld(rig, out);
     ++mTurns;
     return true;
+}
+
+// WHAT THE HAND HOLDS RIDES THE RIG THE HAND STANDS ON (VR-REORDER-1's fix
+// round). The stick's walk and turn run AFTER this step's gesture follow, and a
+// rig moved between the frame's wait and its render re-composes the located
+// hands on the spot (Engine::setVrOrigin) — so without this the wand would be
+// drawn on the moved rig and the thing in it one rig step behind. The members
+// (and a far grab's filtered virtual hand) are carried by the same rigid move
+// O' * O^-1 the engine applies to the hands; the next follow recomputes them
+// from the hand anyway. A hand under injection is world space by contract and
+// is not carried by the rig (the engine leaves it alone too), so neither is
+// what it holds.
+void VrInteraction::carryHeld(const vrorigin::Rig &from, const vrorigin::Rig &to)
+{
+    if (!mGesture.active) return;
+    if (handState(mGesture.hand).fromInjection) return;
+    const iris::Quat turn = iris::Quat::fromAxisAndAngle(iris::Vec3(0.0f, 1.0f, 0.0f),
+                                                         to.yaw - from.yaw);
+    auto carry = [&](iris::Vec3 &p, iris::Quat &q) {
+        p = to.position + turn.rotatedVector(p - from.position);
+        q = turn * q;
+    };
+    for (const Member &m : mGesture.members) {
+        if (!m.node) continue;
+        iris::Vec3 p = m.node->getGlobalPosition();
+        iris::Quat q = m.node->getGlobalRotation();
+        carry(p, q);
+        m.node->setGlobalPosRot(p, q);
+    }
+    if (mGesture.far) carry(mGesture.handNow.position, mGesture.handNow.rotation);
 }
 
 bool VrInteraction::fly(float stickX, float stickY, float seconds, bool boost,
@@ -1217,8 +1253,10 @@ bool VrInteraction::fly(float stickX, float stickY, float seconds, bool boost,
     if (delta.isNull()) return false;
     Engine *engine = engineNow();
     if (!engine) return false;
+    const vrorigin::Rig from = rig;
     rig.position += delta;
     engine->setVrOrigin(toEngine(rig.position), rig.yaw);
+    carryHeld(from, rig);
     return true;
 }
 
@@ -1719,6 +1757,9 @@ void VrInteraction::step(float seconds)
             if (vrgrab::snapTurnRearmed(o.stickX)) mTurnArmed = true;
         }
     }
+    // A SCRIPT'S HELD TURN (`vr.move({hold:true, turnDegrees})`): the same
+    // turn() the stick makes, every frame, at this place in the step.
+    if (std::fabs(mHeldTurn) > 1e-4f) turn(mHeldTurn);
 
     // ---- THE DOMINANT STICK'S THROW: TELEPORT (§6 row L4) ----------------
     //

@@ -422,6 +422,10 @@ public:
     /// `VrStatus::poseSerial` as the last step() read it (0 before any step):
     /// the host half of the pose-order contract (VR-REORDER-1).
     unsigned long long stepPoseSerial() const { return mStepPoseSerial; }
+    /// A turn of the wearer, in degrees, made by every step from now on — the
+    /// stick's own turn() at its place in the step — until set back to 0
+    /// (`vr.move({hold:true, turnDegrees})`; reset at begin()).
+    void setHeldTurn(float degrees) { mHeldTurn = degrees; }
     /// WHAT THE WEARER'S GIZMO IS DOING (`vr.gizmo()`): {armed, mode, handle,
     /// dragging, scale, toleranceDegrees, eye, drags, commits}. `handle` is the
     /// name of the handle under the aim ray RIGHT NOW — the answer a press
@@ -594,6 +598,8 @@ private:
     /// The D5-reduced set a grab carries, primary first.
     QList<iris::SceneNodePtr> grabTargets(const iris::SceneNodePtr &under) const;
     /// The rig as the ENGINE holds it, and whether there is one at all.
+    /// Carries the held members by a rig move made inside the step (see the .cpp).
+    void carryHeld(const vrorigin::Rig &from, const vrorigin::Rig &to);
     bool rigNow(vrorigin::Rig &rig, iris::Vec3 &headPosition, iris::Quat &headRotation) const;
     /// The engine right now, or null (see Deps::engine).
     jahshaka::engine::Engine *engineNow() const;
@@ -707,6 +713,7 @@ private:
     /// THE POSE THE LAST STEP READ (VrStatus::poseSerial at the step), for the
     /// pose-order contract `vr.state().stepPoseSerial` reports (VR-REORDER-1).
     unsigned long long mStepPoseSerial = 0;
+    float mHeldTurn = 0.0f;   ///< setHeldTurn()
     /// The gizmo's own counters: drags begun, drags committed, modes cycled.
     unsigned long long mGizmoDrags = 0, mGizmoCommits = 0, mGizmoModes = 0;
     /// The teleport's: throws armed, throws taken, throws refused or cancelled.

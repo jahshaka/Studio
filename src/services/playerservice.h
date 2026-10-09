@@ -50,7 +50,10 @@ public:
 
     /// Wired by the shell once the player backend exists; null in headless
     /// runs (and in the document-only stand-in sessions).
-    void setHost(IPlayerHost *host) { mHost = host; }
+    void setHost(IPlayerHost *host);
+    /// The VR interaction step for the Player's tick, kept here so a host
+    /// attached later still gets it (IPlayerHost::setVrInteractionStep).
+    void setVrInteractionStep(std::function<void()> step);
     bool isAvailable() const { return mHost != nullptr; }
 
     /// Is the player's scene RUNNING right now?
@@ -137,6 +140,7 @@ signals:
 
 private:
     IPlayerHost *mHost = nullptr;
+    std::function<void()> mVrInteractionStep;
     std::function<bool()> mShowSpace;
     QString mLastError;
 };

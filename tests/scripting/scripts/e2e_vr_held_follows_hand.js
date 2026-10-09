@@ -77,9 +77,17 @@ assert(im.grabbing === true && im.far === false && im.nodes === 1,
 // THE OFFSET AT THE GRAB, measured on the first frame the step has followed.
 s = nextFrame(s.renderedPoseSerial);
 s = nextFrame(s.renderedPoseSerial);
+/// WHAT IS DRAWN, ON BOTH SIDES (VR-REORDER-1's fix round): the cube's ENGINE
+/// node (vr.nodePose) in the frame of the wand's (vr.proxyPose), both read back
+/// out of the engine after the same rendered frame. The document's node
+/// (node.info) cannot see a frame of lag between the document and the picture:
+/// before the interaction step ran inside the host's tick, the document was
+/// right and the DRAWN cube was one hand-move behind the drawn wand — measured
+/// RED_ON_BASE m on this row, against the 1 cm step.
 function offsetNow(st) {
-    var p = node.info(cube).position;
-    return intoFrame(st.hands.right.rotation, sub(p, st.hands.right));
+    var p = vr.nodePose(cube), w = vr.proxyPose("right");
+    if (!p.drawn || !w.drawn) throw new Error("the cube or the wand is not drawn");
+    return intoFrame(w.rotation, sub(p, w));
 }
 var start = offsetNow(s);
 console.log("      the cube in the hand's frame at the grab: " + JSON.stringify(start));
@@ -93,7 +101,7 @@ for (var i = 0; i < 60; ++i) {
     // ONE CENTIMETRE OF THE WEARER, between two ticks, alternating sides.
     vr.move({ right: (i % 2) === 0, left: (i % 2) === 1, seconds: stepSeconds });
     s = nextFrame(s.renderedPoseSerial);
-    // THE SAME TICK'S CUBE AND HAND: `vr.state()` and `node.info` are two
+    // THE SAME TICK'S CUBE AND HAND: `vr.state()` and `vr.nodePose` are two
     // verbs, and a tick may run between them — a pair whose serial moved under
     // it is read again (bounded) rather than compared across two frames.
     var off = offsetNow(s), again = vr.state(), tries = 0;

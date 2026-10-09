@@ -60,6 +60,7 @@ public:
     QVariantMap playerVrReport() const override;
     bool movePlayerVr(const flystep::Keys &keys, float seconds) override;
     bool holdPlayerVr(const flystep::Keys &keys) override;
+    void setVrInteractionStep(std::function<void()> step) override;
     bool recenterPlayerVr() override;
 
     EnginePlayerScene *playerScene() const { return mScene.get(); }

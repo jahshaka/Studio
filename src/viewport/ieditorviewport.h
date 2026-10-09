@@ -1319,6 +1319,12 @@ public:
     /// A null `step` clears the whole arrangement and the camera has its fly
     /// keys back.
     virtual void setVrPreviewStep(std::function<void()> step) { Q_UNUSED(step); }
+    /// THE VR INTERACTION STEP, IN THIS HOST'S TICK (VR-REORDER-1's fix round):
+    /// the grabs, the gizmo drag, the ray and teleport run AFTER the frame's
+    /// wait and the wearer's own step and BEFORE the mirror's sync, so what
+    /// they move reaches the engine on the frame that draws the hand that moved
+    /// it. Installed by the VR module; null clears it.
+    virtual void setVrInteractionStep(std::function<void()> step) { Q_UNUSED(step); }
     virtual bool vrPreview() const { return false; }
     /// "THIS PREVIEW CANNOT CONTINUE HERE" — the two ways that happens
     /// (VR-4-FIX finding 1; lane MIRROR-LIVE-1 added the second).

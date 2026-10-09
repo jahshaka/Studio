@@ -36,6 +36,8 @@ For more information see the LICENSE file
 #include "viewport/scenepicker.h"
 #include "services/framemonitor.h"
 
+#include <QPointer>
+
 using namespace jahshaka::engine;
 
 namespace {
@@ -246,18 +248,35 @@ View *desktopViewOf(Engine *e, View *eyes)
 VrApi::VrApi(ScriptHost &host, const StudioContext &moduleHost)
     : ApiModule(host), moduleHost(moduleHost)
 {
-    // THE PROXIES FOLLOW THE DRIVER'S OWN TICK, because they belong to ANY
-    // session — including the Player's, whose page the editor viewport is not
-    // syncing at all. The editor preview's own per-frame step is installed on
-    // the VIEWPORT instead (IEditorViewport::setVrPreviewStep), which is the
-    // only place that also runs on a scripted `editor.frame()`.
-    //
-    // Pushing a status twice in a frame costs nothing: it is a store, and the
-    // mirror reads it once when it syncs.
-    if (moduleHost.engine && moduleHost.engine->driver())
-        connect(moduleHost.engine->driver(), &EngineRenderDriver::beforeFrame, this,
-                [this] { pushProxies(); stepInteraction(); });
+    // THE PROXIES' STATUS rides the same hook as the interaction (below): they
+    // belong to ANY session — the Player's too — and the push has to land
+    // before the mirror's sync of that host's tick. Pushing a status twice in
+    // a frame costs nothing: it is a store, and the mirror reads it once.
     installInteraction();
+    // THE INTERACTION STEPS INSIDE THE HOST'S OWN TICK (VR-REORDER-1's fix
+    // round), not in a driver slot of its own: after the frame's wait and the
+    // wearer's step, BEFORE the host's mirror sync — so what it moves (a held
+    // node, a gizmo drag) reaches the engine on the frame that draws the hand
+    // that moved it, and no slot-connection order is load-bearing. One host
+    // runs it per frame: the Player's tick while the Player hosts the session,
+    // the editor viewport's otherwise (which also covers a script's
+    // `editor.frame()`).
+    // Guarded (QPointer): a host may outlive this object if shutdown() never ran.
+    const QPointer<VrApi> self(this);
+    if (moduleHost.viewport)
+        moduleHost.viewport->setVrInteractionStep([self] {
+            if (self && !self->interaction.playerHosted()) {
+                self->pushProxies();
+                self->stepInteraction();
+            }
+        });
+    if (PlayerService *player = moduleHost.services ? moduleHost.services->player : nullptr)
+        player->setVrInteractionStep([self] {
+            if (self && self->interaction.playerHosted()) {
+                self->pushProxies();
+                self->stepInteraction();
+            }
+        });
 }
 
 QVector<VerbInfo> VrApi::verbs() const
@@ -410,7 +429,7 @@ QVector<VerbInfo> VrApi::verbs() const
           "runtime offers hand tracking and no controller answers, from the palm joint. POSES "
           "ONLY — no buttons are read anywhere in this build.",
           Needs::Engine },
-        { "move", "vr.move({forward?, back?, left?, right?, up?, down?, boost?, seconds?, hold?}) -> bool",
+        { "move", "vr.move({forward?, back?, left?, right?, up?, down?, boost?, seconds?, hold?, turnDegrees?}) -> bool",
           "MOVES THE WEARER of the editor's VR preview, exactly as holding the editor's fly "
           "keys would: along the HEAD's level heading for forward/back and the horizontal "
           "beside it for left/right, along the world's up for up/down, at the editor's own fly "
@@ -424,7 +443,8 @@ QVector<VerbInfo> VrApi::verbs() const
           "keyboard's held keys are read) moves the wearer by them at the fly speed, until "
           "`vr.move({hold: true})` with no direction lets go; `seconds` is ignored, and the "
           "hold ends with the session. It is how a suite drives the in-frame rig move a "
-          "wearer's held keys make.\n\n"
+          "wearer's held keys make. With `hold`, `turnDegrees` also turns the wearer by that "
+          "many degrees every frame, through the stick's own turn (0 stops it).\n\n"
           "IT MOVES WHOEVER IS IN THE HEADSET (the CRUD of `player.vrMove`, which this verb "
           "replaced): the editor's VR preview when that is what is running, and the PLAYER's VR "
           "mode when the run owns the session — one gesture, one verb, whichever host started "
@@ -449,6 +469,15 @@ QVector<VerbInfo> VrApi::verbs() const
           "\"wand\" otherwise, empty with no proxy node — read whether or not this frame located the "
           "hand (the profile picks the mesh, the pose only shows it); `modelKey` is that model's seed key and "
           "`modelTriangles` the triangles uploaded from its bake.",
+          Needs::Engine },
+        { "nodePose", "vr.nodePose(id) -> {drawn, x, y, z, rotation, yaw}",
+          "WHERE A DOCUMENT NODE IS ACTUALLY DRAWN — the world pose of its ENGINE node, read back "
+          "out of the engine's scene graph, as against `node.info(id)` which is the document's "
+          "word (VR-REORDER-1's fix round). The two differ for exactly as long as the mirror has "
+          "not pushed the document's latest transform; read beside `vr.proxyPose` after a frame, "
+          "it is how a suite asserts that a held object is drawn with the hand of its own frame. "
+          "`drawn` is false when the node does not exist or has no engine node (and the pose is "
+          "then all zeros).",
           Needs::Engine },
         { "end", "vr.end() -> bool",
           "Ends the session and puts everything back — the mirror, the stereo view, the "
@@ -678,11 +707,11 @@ QVector<VerbInfo> VrApi::verbs() const
           "and turn. So a gesture from a script is `inject` then `step`, as many times as it "
           "has frames — press, step, read, release, step, read — and nothing about the code "
           "under it knows it is not being worn.\n\n"
-          "WHY A SCRIPT HAS TO STEP IT AT ALL. The render driver steps the interaction once "
-          "per rendered frame, but it STANDS DOWN while an injection is armed (any hand whose "
-          "sample carries `fromInjection`): a driver tick stepping a script's held stick again "
-          "would integrate it twice and turn the wearer twice per flick. And a script run "
-          "holds the render loop still anyway (SCRIPTING_LIVE_SPEC §3.1). With no session "
+          "WHY A SCRIPT HAS TO STEP IT AT ALL. Every frame's host tick (the driver's, and a "
+          "script's `editor.frame()`) steps the interaction once, but it STANDS DOWN while an "
+          "injection is armed (any hand whose sample carries `fromInjection`): a frame stepping "
+          "a script's held stick again would integrate it twice and turn the wearer twice per "
+          "flick. With no session "
           "there is no VR loop in the process at all, which is exactly the case every headless "
           "gesture gate runs in.\n\n"
           "`seconds` is the frame this step charges, defaulting to 1/90 — a headset's own "
@@ -1111,6 +1140,9 @@ bool VrApi::shutdown()
     // engine host or services pointer is reachable from this object any more).
     if (moduleHost.engine && moduleHost.engine->driver())
         disconnect(moduleHost.engine->driver(), nullptr, this, nullptr);
+    if (moduleHost.viewport) moduleHost.viewport->setVrInteractionStep(nullptr);
+    if (PlayerService *player = moduleHost.services ? moduleHost.services->player : nullptr)
+        player->setVrInteractionStep(nullptr);
     moduleHost = StudioContext();
     shutDown = true;
     return ended;
@@ -1171,7 +1203,7 @@ void VrApi::pushProxies()
 bool VrApi::move(const QVariantMap &intent)
 {
     static const QStringList known = { "forward", "back", "left", "right",
-                                       "up", "down", "boost", "seconds", "hold" };
+                                       "up", "down", "boost", "seconds", "hold", "turnDegrees" };
     for (auto it = intent.constBegin(); it != intent.constEnd(); ++it)
         if (!known.contains(it.key()))
             return fail(QStringLiteral("vr.move: unknown key '%1' — known keys are %2")
@@ -1190,6 +1222,8 @@ bool VrApi::move(const QVariantMap &intent)
     // per-frame path the keyboard takes, on the driver's tick after the
     // frame's wait — until a hold with no direction lets go.
     if (intent.value(QStringLiteral("hold")).toBool()) {
+        // ...AND A HELD TURN, which is the interaction's (the stick's turn()).
+        interaction.setHeldTurn(float(intent.value(QStringLiteral("turnDegrees"), 0.0).toDouble()));
         if (editor.hold(keys)) return true;
         PlayerService *player = moduleHost.services ? moduleHost.services->player : nullptr;
         if (player && player->holdVr(keys)) return true;
@@ -1215,6 +1249,26 @@ bool VrApi::move(const QVariantMap &intent)
 /// than remembering what was pushed is the whole value: a lag, a missed frame
 /// or a mirror that stopped syncing all show up as a difference from
 /// `vr.state().hands`, and nothing else in the editor can see that.
+QVariantMap VrApi::nodePose(const QString &id)
+{
+    Vec3 position;
+    Quat rotation;
+    bool drawn = false;
+    SceneMirror *mirror = moduleHost.viewport ? moduleHost.viewport->sceneMirror() : nullptr;
+    Scene *scene = moduleHost.viewport ? moduleHost.viewport->engineScene() : nullptr;
+    const iris::ScenePtr doc = moduleHost.viewport ? moduleHost.viewport->getScene() : iris::ScenePtr();
+    if (mirror && scene && doc) {
+        if (const iris::SceneNodePtr node = scriptmod::findNodeByGuid(doc->getRootNode(), id)) {
+            const NodeId engineNode = mirror->engineNode(node.get());
+            drawn = engineNode && scene->nodeWorldPose(engineNode, position, rotation);
+        }
+    }
+    QVariantMap out = vrnames::pose(position, rotation, drawn);
+    out.remove(QStringLiteral("valid"));
+    out[QStringLiteral("drawn")] = drawn;
+    return out;
+}
+
 QVariantMap VrApi::proxyPose(const QString &hand)
 {
     QVariantMap out;
@@ -1807,15 +1861,10 @@ void VrApi::stepInteraction()
                               ? float(double(interactionClock.nsecsElapsed()) * 1e-9)
                               : -1.0f;
     interactionClock.restart();
-    // THE POSE BEFORE THE STEP (lane VR-REORDER-1). The hosts that own a frame
-    // wait in their own step (EngineSceneViewport::syncFrame after the document
-    // clock, PlayerVr::step after the run's). THIS SLOT IS CONNECTED AFTER
-    // THEIRS — the editor viewport and the Player view are built in the shell's
-    // setupViewPort, the modules (this object) after them — and that order is
-    // load-bearing: the hosts' wearer fly has moved the rig (and so re-composed
-    // the located hands) before the grabs, the gizmo drag, the ray and teleport
-    // below read them (vr.held_follows_hand's held-keys arms). The call here is
-    // then nothing (once per frame); it waits only for a frame no host stepped.
+    // THE POSE BEFORE THE STEP (lane VR-REORDER-1). This runs inside the
+    // host's tick, after the host's own wait and wearer step (the hook the
+    // constructor installs), so this call is normally nothing — once per
+    // frame; it waits only for a frame whose host did not.
     if (Engine *e = engine()) {
         framemonitor::Stage waitStage("host.vr_wait");
         e->vrWaitFrame();

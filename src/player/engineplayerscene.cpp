@@ -271,6 +271,9 @@ void EnginePlayerScene::step(float dt, int width, int height)
     // word on where the camera is belongs to the person wearing the headset.
     // A frame with no session costs one pointer test.
     if (mVr) mVr->step(dt >= 0.0f ? dt : wall, renderCamera());
+    // ...AND THE VR INTERACTION (the Player's locomotion), on the same pose and
+    // before the sync below, so what it moves is this frame's (VR-REORDER-1).
+    if (const std::function<void()> interact = mVrInteractionStep) interact();
 
     cam->setAspectRatio(height > 0 ? float(width) / float(height) : 1.0f);
     if (mMirror) {

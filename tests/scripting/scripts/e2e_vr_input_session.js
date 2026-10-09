@@ -460,7 +460,11 @@ assert(dist2(headAfter, headBefore) < posBudget,
 // wobbles that head on the runtime's display clock (run_vr_app.sh starts it with
 // no SIMULATED_ROTATE). Its own turn between the two reads grows with the WALL
 // TIME the frames between them took: a quiet run reads 0.1-0.7 degrees, a loaded
-// one read 10-14 (the gate's reds), and a budget measured over a separate
+// one read 10-14 (the gate's reds: the run log holds 11 of them, the worst
+// "delta -40.38, budget 2.00" = the 30-degree turn plus 10.4 degrees of the
+// head's OWN wobble, all on or before 2026-10-04 14:09, none since this
+// subtraction landed at 6e6b865fb — the turn itself was always exact, the
+// rig's yaw assert above reads it to 1e-3), and a budget measured over a separate
 // two-frame control at another moment bounded neither. So the head's tracking-
 // space yaw (world yaw less the rig's) is read at both ends and subtracted: what
 // is left is the turn the RIG gave the wearer's facing, exact whatever the load.

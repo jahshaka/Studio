@@ -390,6 +390,11 @@ QVariantMap EnginePlayerView::playerVrReport() const
     return out;
 }
 
+void EnginePlayerView::setVrInteractionStep(std::function<void()> step)
+{
+    if (mScene) mScene->setVrInteractionStep(std::move(step));
+}
+
 bool EnginePlayerView::holdPlayerVr(const flystep::Keys &keys)
 {
     return mScene && mScene->vrIfAny() && mScene->vr()->hold(keys);

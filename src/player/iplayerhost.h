@@ -32,6 +32,8 @@ For more information see the LICENSE file
 
 #include "viewport/flystep.h"
 
+#include <functional>
+
 class IPlayerHost
 {
 public:
@@ -97,6 +99,10 @@ public:
     virtual bool movePlayerVr(const flystep::Keys &keys, float seconds) = 0;
     /// Holds the fly keys for every frame's step (`vr.move({hold:true})`).
     virtual bool holdPlayerVr(const flystep::Keys &keys) = 0;
+    /// The VR interaction step, run inside the Player's own tick after the
+    /// wearer's step and before the mirror's sync (see IEditorViewport::
+    /// setVrInteractionStep). Null clears it.
+    virtual void setVrInteractionStep(std::function<void()> step) = 0;
     /// "I am standing here, facing this way": re-places the rig on the play
     /// camera at the next located pose. False when no session is running.
     virtual bool recenterPlayerVr() = 0;
