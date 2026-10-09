@@ -353,9 +353,50 @@ def _defect_problems(e):
     return bad
 
 
-def defects_load():
-    """({id: entry}, None) — or (None, why) when the registry cannot be read or ANY entry lacks its shape
-    (refused whole: the door does not read a registry it cannot trust)."""
+def defects_quarantine_dir():
+    return os.path.join(os.path.dirname(defects_file()), "defects.quarantine")
+
+
+def _quarantine(name, entry, why, src=None, log=sys.stderr):
+    """A malformed entry or pending file is QUARANTINED, never silent and never fatal to the rest: a pending file is
+    MOVED to testing/defects.quarantine/ (the registry file's own bad entry is COPIED there — the tracked file is the
+    lead's to edit), its reason in a `<name>.why` sidecar, and `REGISTRY: <file> quarantined: <why>` printed."""
+    q = defects_quarantine_dir()
+    safe = re.sub(r"[^A-Za-z0-9_.-]", "_", name)[:80] or "entry"
+    try:
+        os.makedirs(q, exist_ok=True)
+        dest = os.path.join(q, safe if safe.endswith(".json") else safe + ".json")
+        if src:
+            os.replace(src, dest)
+        elif not os.path.exists(dest):
+            with open(dest, "w") as f:
+                json.dump(entry, f, indent=1, sort_keys=True)
+        with open(dest[:-5] + ".why", "w") as f:
+            f.write(why + "\n")
+    except OSError as e:
+        why += f" (and it could not be quarantined: {e})"
+    if log is not None:
+        log.write(f"REGISTRY: {src or name} quarantined: {why}\n")
+        log.flush()
+
+
+def defects_quarantined():
+    """[(file, why)] of every quarantined entry — a FINDING for the lead's `status` until it is fixed or removed."""
+    q = defects_quarantine_dir()
+    out = []
+    if os.path.isdir(q):
+        for f in sorted(os.listdir(q)):
+            if f.endswith(".json"):
+                try: why = open(os.path.join(q, f[:-5] + ".why")).read().strip()
+                except OSError: why = "?"
+                out.append((os.path.join(q, f), why))
+    return out
+
+
+def defects_load(log=sys.stderr):
+    """({id: entry}, None) — or (None, why) when the registry FILE itself cannot be read. A malformed entry (or a
+    malformed / unreadable pending file, or a duplicate id) is QUARANTINED (_quarantine) and the rest loads — one bad
+    file never disables the door; every quarantined file is printed as a REGISTRY finding on each load."""
     path = defects_file()
     try:
         d = json.load(open(path))
@@ -364,25 +405,30 @@ def defects_load():
     lst = d.get("defects") if isinstance(d, dict) else None
     if not isinstance(lst, list):
         return None, f"the defect registry {path} has no `defects` list"
+    items = [(e, None) for e in lst]
     pend = defects_pending_dir()
     if os.path.isdir(pend):
         for f in sorted(os.listdir(pend)):
             if not f.endswith(".json"): continue
+            fp = os.path.join(pend, f)
             try:
-                lst = lst + [json.load(open(os.path.join(pend, f)))]
+                items.append((json.load(open(fp)), fp))
             except (OSError, ValueError) as e:
-                return None, f"the pending defect {os.path.join(pend, f)} is unreadable ({e.__class__.__name__})"
-    out, bad = {}, []
-    for k, e in enumerate(lst):
+                _quarantine(f, None, f"unreadable ({e.__class__.__name__})", src=fp, log=log)
+    out = {}
+    for k, (e, src) in enumerate(items):
         probs = _defect_problems(e)
-        name = (e.get("id") if isinstance(e, dict) else None) or f"#{k}"
+        name = (e.get("id") if isinstance(e, dict) else None) or f"entry-{k}"
         if not probs and name in out: probs = ["a duplicate id"]
         if probs:
-            bad.append(f"{name}: {', '.join(probs)}"); continue
+            _quarantine(os.path.basename(src) if src else f"{name}", e,
+                        f"{name}: {', '.join(probs)} (TESTING_V3 §1.5's shape)", src=src, log=log)
+            continue
         out[name] = e
-    if bad:
-        return None, (f"the defect registry {path} has {len(bad)} entr{'y' if len(bad) == 1 else 'ies'} without the shape "
-                      f"{{{', '.join(DEFECT_FIELDS)}}} (TESTING_V3 §1.5): " + "; ".join(bad[:6]))
+    q = defects_quarantined()
+    if q and log is not None:
+        log.write(f"REGISTRY: FINDING — {len(q)} quarantined entr{'y' if len(q) == 1 else 'ies'} in "
+                  f"{defects_quarantine_dir()} (fix and return them, or delete them)\n")
     return out, None
 
 

@@ -16,9 +16,10 @@ no display. One script, five rows:
   carried_red       U4 (only a lane's OWN records, `lanes == [lane]`, no batch tag): lane X red at tip A, the lane rebased to tip B with no re-run -> refused (`OPEN RED carried
                     from <A>`); re-run green at B -> accepted; a verdict at A -> accepted; BATCH-GATE-1's `lanes`
                     list is read too; a schema-1 (historic) red is not carried (forward only)
-  contention_shape  U5 / TESTING_V3 §1.5: a defect-registry entry missing a field, with a bad kind/state/date/found_by,
-                    or a duplicate id -> the judge refuses to load the registry (exit 2); the contention class is
-                    its open nondeterminism subset
+  contention_shape  U5 / TESTING_V3 §1.5: a malformed registry entry or pending file (a missing field, a bad
+                    kind/state/date/found_by, unreadable, a duplicate id) is QUARANTINED (moved / copied to
+                    defects.quarantine/ with a .why, printed) and the rest loads; an unreadable registry file ->
+                    exit 2; pending entries ingested; the contention class is the enrolled nondeterminism subset
   log_schema2       C: a toy run's records carry schema 2, slot_wait_s, drain_s, hold_s, box.queue_depth, box.mem,
                     xid (from vram_tokens' supervise through kernel_xid, end to end); gate-report.py prints the
                     table on the toy log and, on the archive, the preflight's numbers (87 gates, 58 verdicts, 6
@@ -374,52 +375,75 @@ def case_carried_red(E):
 
 
 def case_contention_shape(E):
-    """THE REGISTRY'S SHAPE (TESTING_V3 §1.5) — the contention class is its nondeterminism subset."""
+    """THE REGISTRY'S SHAPE (TESTING_V3 §1.5) — a malformed entry is QUARANTINED, the rest loads (one bad file never
+    disables the door); the contention class is the enrolled nondeterminism subset."""
+    import shutil
     E.fresh()
-    E.put(ROWS, "PASS", "2026-01-01T10:00:00")
-    for miss in ("first_seen", "recheck", "kind", "found_by", "rows", "cause", "state"):
-        e = defect("SHAPE-1", ["photon.view"])
-        del e[miss]
-        E.registry([e])
-        rc, out = E.run()
-        check(rc == 2 and "without the shape" in out and miss in out,
-              "an entry missing `%s` -> the judge refuses to load the registry, exit 2 (%d)" % (miss, rc))
-    for name, e in (("a kind outside the five", defect("SHAPE-1", ["x"], "flake")),
-                    ("a state outside open|fixed{tip}|retired", defect("SHAPE-1", ["x"], state="closed")),
-                    ("first_seen.run without a date", defect("SHAPE-1", ["x"], first_seen={"tip": "a", "pin": "b", "run": "last week"})),
-                    ("found_by outside read|gate|owner|lane", defect("SHAPE-1", ["x"], found_by="agent")),
-                    ("a recheck that is not a DATE", defect("SHAPE-1", ["x"], recheck="after P1 lands")),
-                    ("a nondeterminism entry neither single-use nor enrolled",
-                     defect("SHAPE-1", ["x"], "nondeterminism", enrolled=None)),
-                    ("a NOT REPRODUCED entry without suspects / census",
-                     defect("SHAPE-1", ["x"], "nondeterminism", uses=1))):
-        E.registry([e])
-        rc, out = E.run()
-        check(rc == 2 and "without the shape" in out, "%s -> refused (%d)" % (name, rc))
-    E.registry([defect("DUP-1", ["x"]), defect("DUP-1", ["y"])])
-    rc, out = E.run()
-    check(rc == 2 and "duplicate" in out, "a duplicate id -> refused (%d)" % rc)
-    E.registry([defect("SHAPE-1", ["photon.view"], state={"fixed": {"tip": "abc"}}), NONDET])
-    rc, out = E.run()
-    check(rc == 0, "a registry whose every entry has the shape loads (%d)" % rc)
-    # BATCH-GATE-1's pending entries (testing/defects.pending/<id>.json) are read with the registry
+    E.put(ROWS[:2], "PASS", "2026-01-01T10:00:00")
+    E.put(ROWS[2:], "FAIL", "2026-01-01T10:00:01")
+    E.put(ROWS[2:], "PASS", "2026-01-01T10:30:00")
+    good = defect("GOOD-1", ["photon.view"])
+    q = lambda: E.rl.defects_quarantine_dir()
+    cases = [("missing `%s`" % m, m, {k: v for k, v in defect("SHAPE-1", ["photon.view"]).items() if k != m})
+             for m in ("first_seen", "recheck", "kind", "found_by", "rows", "cause", "state")]
+    cases += [("a kind outside the five", "kind", defect("SHAPE-1", ["x"], "flake")),
+              ("a state outside open|fixed{tip}|retired", "state", defect("SHAPE-1", ["x"], state="closed")),
+              ("first_seen.run without a date", "first_seen", defect("SHAPE-1", ["x"], first_seen={"tip": "a", "pin": "b",
+                                                                                                    "run": "last week"})),
+              ("found_by outside read|gate|owner|lane", "found_by", defect("SHAPE-1", ["x"], found_by="agent")),
+              ("a recheck that is not a DATE", "recheck", defect("SHAPE-1", ["x"], recheck="after P1 lands")),
+              ("a nondeterminism entry neither single-use nor enrolled", "enrolled",
+               defect("SHAPE-1", ["x"], "nondeterminism", enrolled=None)),
+              ("a NOT REPRODUCED entry without suspects / census", "suspects", defect("SHAPE-1", ["x"], "nondeterminism",
+                                                                                      uses=1))]
+    for name, word, bad in cases:
+        shutil.rmtree(q(), ignore_errors=True)
+        E.registry([bad, good])
+        rc, out = E.run("--verdict", "photon.view=real:GOOD-1")
+        files = os.listdir(q()) if os.path.isdir(q()) else []
+        check(rc == 0 and "REGISTRY:" in out and "quarantined" in out and word in out and any(f.endswith(".why") for f in files),
+              "%s -> QUARANTINED (printed, a .why sidecar), the rest loads and the door works (%d, %s)" % (name, rc, files))
+    shutil.rmtree(q(), ignore_errors=True)
+    E.registry([defect("DUP-1", ["x"]), defect("DUP-1", ["y"]), good])
+    d, _ = E.rl.defects_load(log=None)
+    check(d is not None and "DUP-1" in d and d["DUP-1"]["rows"] == ["x"] and "GOOD-1" in d,
+          "a duplicate id: the second is quarantined, the first and the rest load")
+    # BATCH-GATE-1's pending entries (testing/defects.pending/<id>.json): ingested; a bad one MOVED to quarantine
+    shutil.rmtree(q(), ignore_errors=True)
+    E.registry([good, NONDET])
     pend = E.rl.defects_pending_dir()
     os.makedirs(pend, exist_ok=True)
     json.dump(defect("PENDING-1", ["api.contract"]), open(os.path.join(pend, "PENDING-1.json"), "w"))
-    d, why = E.rl.defects_load()
-    check(d is not None and "PENDING-1" in d, "a pending entry (defects.pending/<id>.json) is ingested (%s)" % why)
-    json.dump(defect("NONDET-FIXTURE-1", ["x"]), open(os.path.join(pend, "DUP.json"), "w"))
-    d, why = E.rl.defects_load()
-    check(d is None and "duplicate" in (why or ""), "...a pending id that collides with the registry's -> refused")
-    import shutil
-    shutil.rmtree(pend)
+    json.dump(defect("PENDING-2", ["api.contract"], kind="flake"), open(os.path.join(pend, "PENDING-2.json"), "w"))
+    open(os.path.join(pend, "PENDING-3.json"), "w").write("{ not json")
+    json.dump(defect("GOOD-1", ["api.contract"]), open(os.path.join(pend, "PENDING-4.json"), "w"))
+    import io
+    buf = io.StringIO()
+    d, _ = E.rl.defects_load(log=buf)
+    left = sorted(os.listdir(pend))
+    qd = sorted(os.listdir(q()))
+    check(d is not None and "PENDING-1" in d and "GOOD-1" in d and d["GOOD-1"]["rows"] == ["photon.view"]
+          and "PENDING-2" not in d, "a good pending entry is ingested; a bad one, an unreadable one and a colliding id are "
+          "not (%s)" % sorted(d or {}))
+    check(left == ["PENDING-1.json"] and {"PENDING-2.json", "PENDING-3.json", "PENDING-4.json"} <= set(qd)
+          and "REGISTRY: " in buf.getvalue() and "FINDING" in buf.getvalue(),
+          "...the bad pending files are MOVED to defects.quarantine/ with their .why, printed, and a FINDING line (%s / %s)"
+          % (left, qd))
+    check(len(E.rl.defects_quarantined()) == 3, "defects_quarantined() lists them for the lead's status (%d)"
+          % len(E.rl.defects_quarantined()))
+    shutil.rmtree(pend); shutil.rmtree(q(), ignore_errors=True)
+    path = os.path.join(E.scratch, "broken.json")
+    open(path, "w").write("{ not json")
+    os.environ["JAH_DEFECTS_FILE"] = path
+    rc, out = E.run()
+    check(rc == 2 and "defect registry" in out, "the registry FILE itself unreadable -> the judge is unusable, exit 2 (%d)" % rc)
+    E.registry([defect("SHAPE-1", ["photon.view"], state={"fixed": {"tip": "abc"}}), NONDET])
     cl = E.rl.contention_list()
     check(list(cl or {}) == ["photon.view"] and "NONDET-FIXTURE-1" in cl["photon.view"],
-          "the contention class = the open nondeterminism entries (%s)" % cl)
-    live = E.rl.defects_file.__globals__["workspace_root"]()
+          "the contention class = the enrolled open nondeterminism entries (%s)" % cl)
+    live = os.path.join(E.rl.workspace_root(), "testing")
     for f in ("contention.json", "defects.json"):
-        print("  (the workspace's testing/%s: %s)" % (f, "present" if os.path.exists(os.path.join(live, "testing", f))
-                                                     else "absent"))
+        print("  (the workspace's testing/%s: %s)" % (f, "present" if os.path.exists(os.path.join(live, f)) else "absent"))
 
 
 def case_log_schema2(E):
