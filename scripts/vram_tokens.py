@@ -110,6 +110,7 @@ POLL_S = 0.1
 LAST_WAIT_S = 0.0        # the last acquire()'s wait, seconds (the --timing line reads it)
 _T_ACQ = 0.0             # when the last acquire() began (monotonic)
 LAST_DRAIN_TIMEOUT = None   # hold_card()'s last drain timeout: {label, waitS, why, holders} (GATE-COST-2)
+LAST_SLOT_WAIT_S = 0.0   # the last _queue_for_slot()'s wait in the gate queue, seconds (0 when it did not queue)
 
 
 class AdmitTimeout(Exception):
@@ -413,7 +414,9 @@ def slot_held_valid(value=None):
 def _queue_for_slot(label, log, wait=None):
     """The FIFO wait itself: the slot's fd once this process is the head, None when the slot is off or
     already this process's. Leaves the environment alone (hold_card hands JAH_GATE_SLOT_HELD to its
-    phase's rows only)."""
+    phase's rows only). Sets LAST_SLOT_WAIT_S (the queue's wait; 0 when it did not queue)."""
+    global LAST_SLOT_WAIT_S
+    LAST_SLOT_WAIT_S = 0.0
     if os.environ.get("JAH_GATE_SLOT_HELD"):
         if slot_held_valid():
             _say(log, "gate-slot: already held by this gate (pid %s) — %s" % (os.environ["JAH_GATE_SLOT_HELD"], label))
@@ -445,6 +448,7 @@ def _queue_for_slot(label, log, wait=None):
             last, said = len(ahead), time.monotonic()
         time.sleep(SLOT_POLL_S)
     os.set_inheritable(fd, True)
+    LAST_SLOT_WAIT_S = time.monotonic() - t0
     _say(log, "gate-slot: taken%s — %s" % ((" after %.0f s in the queue" % (time.monotonic() - t0)) if last else "", label))
     return fd
 

@@ -2001,12 +2001,22 @@ def attribute(row_args, lane_specs, tag, times, tier, candidate=None, controls=N
     reason = f"attribute:{tag}"
     print(f"gate-scope --attribute (batch {tag}): {len(rows)} row(s) x ({len(lanes)} lane(s) + the candidate + "
           f"{len(ctrls)} control(s)) x {times} solo run(s), each on its own tip, display {display}; the whole card "
-          f"held once (hold_card), never a gate")
+          f"held once (hold_card: the gate slot first, GATE-COST-2)")
     gate_runlog.on_signals()
-    card, env = gate_runlog._vram().hold_card(f"attribute {tag}: {','.join(rows)[:80]}", log=sys.stdout)
+    vt = gate_runlog._vram()
+    card, env = vt.hold_card(f"attribute {tag}: {','.join(rows)[:80]}", log=sys.stdout)
     env = dict(env, DISPLAY=display)
-    if not card and not env.get("JAH_VRAM_HELD"):
-        env["JAH_VRAM_ALL"] = "1"      # no hold (the drain timed out): every admission takes the card
+    print(f"gate-scope --attribute: the slot waited {vt.LAST_SLOT_WAIT_S:.0f} s, the card drained in "
+          f"{vt.LAST_WAIT_S:.0f} s")
+    # F1 (GATE-COST-2 at the rebase): a hold whose drain timed out returns the SLOT only (card == [slot]), so
+    # "no card" is not the test — the drain record is. Then: the phase record, the tool's JAH_VRAM_ALL (every
+    # admission takes the card itself) and `fallback: drain-timeout` on every run, never an override
+    fallback = None
+    if vt.LAST_DRAIN_TIMEOUT and not env.get("JAH_VRAM_HELD"):
+        gate_runlog.phase_record("drain-timeout", tier, tag, None, gate_runlog.tree_shas(), fallback="drain-timeout",
+                                 **vt.LAST_DRAIN_TIMEOUT)
+        env["JAH_VRAM_ALL"] = "1"
+        fallback = "drain-timeout"
     cells = {}                          # (row, name) -> (state, reds, real runs, first failing check, last record)
     try:
         for row in rows:
@@ -2020,7 +2030,7 @@ def attribute(row_args, lane_specs, tag, times, tier, candidate=None, controls=N
                     rc = gate_runlog.run_ctest(
                         f"ctest -j1 --timeout 900 --output-on-failure --no-tests=error -R '{rx}'", build, tier,
                         [t[0] for t in lanes] if kind == "candidate" else [name], 1, reasons={row: reason},
-                        retry=True, env=env, whole_card=False, root=wt)
+                        retry=True, env=env, whole_card=False, root=wt, fallback=fallback)
                     if rc == gate_runlog.DISPLAY_LOST or rc < 0 or rc > 128:
                         cells[(row, name)] = ("ABORTED", reds, real, f"exit {rc}", last)
                         print(f"\n=== ATTRIBUTION ABORTED at {row} on {name} (exit {rc}): the display died or ctest "
