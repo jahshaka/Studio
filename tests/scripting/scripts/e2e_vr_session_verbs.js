@@ -150,11 +150,10 @@ editor.frame(4);
 assert(vr.state().proxies === true, "...and back on in the state");
 
 // ---- THE WEARER'S HANDS ARE DRAWN WHERE THEY ARE THIS FRAME ---------------
-// (VR-4-FIX finding 4.) The runtime does not locate the hands until the frame
-// is already being rendered — inside renderOneFrame, after every host tick has
-// run — so a marker positioned from the host's own tick necessarily draws the
-// frame before last's pose (measured at two frames, ~22 ms at 90 Hz). The
-// session places the proxy nodes itself now, between the locate and the draw.
+// (VR-4-FIX finding 4.) A marker positioned from a host-side copy of a pose
+// draws an older one (measured at two frames, ~22 ms at 90 Hz, before the
+// engine took it over). The session places the proxy nodes itself, from the
+// hands its wait located, as the last thing before the render.
 //
 // `vr.proxyPose` is where the marker ACTUALLY IS (read back out of the scene
 // graph); `vr.state().hands` is what the runtime reported. The measurement is

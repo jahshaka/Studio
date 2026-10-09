@@ -336,6 +336,21 @@ set_tests_properties(vr.pose_order PROPERTIES
     RESOURCE_LOCK monado COST ${JAH_COST_MONADO}
     SKIP_RETURN_CODE 77
     ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}HOME=${_vr_order_home};JAHSHAKA_DATA_ROOT=${_vr_order_home}/.local/share/Jahshaka;JAH_VR_RUNNER_EVENTS=1")
+# vr.held_keys (the fix round): HELD fly keys move the rig INSIDE the tick, between the wait and
+# the render — the path vr.held_follows_hand (a walk between ticks) never enters. Head, hand,
+# proxy, held cube (the editor's preview) and play camera (the Player) agree on every frame.
+set(_vr_keys_home "${CMAKE_CURRENT_BINARY_DIR}/vr-keys-home")
+jah_gpu_row(vr.held_keys CLASS vr
+         COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/run_vr_app.sh"
+                 "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" "${JAH_MONADO_MANIFEST}"
+                 "${CMAKE_SOURCE_DIR}/tests/scripting/scripts/e2e_vr_held_keys.js"
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(vr.held_keys PROPERTIES
+    LABELS "scripting"
+    TIMEOUT 300
+    RESOURCE_LOCK monado COST ${JAH_COST_MONADO}
+    SKIP_RETURN_CODE 77
+    ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}HOME=${_vr_keys_home};JAHSHAKA_DATA_ROOT=${_vr_keys_home}/.local/share/Jahshaka;JAH_VR_RUNNER_EVENTS=1")
 set(_vr_held_home "${CMAKE_CURRENT_BINARY_DIR}/vr-held-home")
 jah_gpu_row(vr.held_follows_hand CLASS vr
          COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/run_vr_app.sh"
@@ -569,6 +584,10 @@ endif()
 if(TEST vr.pose_order)
     jah_fresh_home_fixture(vr.pose_order.fresh_home vrPoseOrderFreshHome "${CMAKE_CURRENT_BINARY_DIR}/vr-order-home" WARM LABELS "scripting;vr")
     set_property(TEST vr.pose_order APPEND PROPERTY FIXTURES_REQUIRED vrPoseOrderFreshHome)
+endif()
+if(TEST vr.held_keys)
+    jah_fresh_home_fixture(vr.held_keys.fresh_home vrHeldKeysFreshHome "${CMAKE_CURRENT_BINARY_DIR}/vr-keys-home" WARM LABELS "scripting;vr")
+    set_property(TEST vr.held_keys APPEND PROPERTY FIXTURES_REQUIRED vrHeldKeysFreshHome)
 endif()
 if(TEST vr.held_follows_hand)
     jah_fresh_home_fixture(vr.held_follows_hand.fresh_home vrHeldFollowsHandFreshHome "${CMAKE_CURRENT_BINARY_DIR}/vr-held-home" WARM LABELS "scripting;vr")

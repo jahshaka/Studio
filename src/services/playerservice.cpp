@@ -186,6 +186,11 @@ bool PlayerService::moveVr(const flystep::Keys &keys, float seconds)
     return mHost && mHost->movePlayerVr(keys, seconds);
 }
 
+bool PlayerService::holdVr(const flystep::Keys &keys)
+{
+    return mHost && mHost->holdPlayerVr(keys);
+}
+
 bool PlayerService::recenterVr() { return mHost && mHost->recenterPlayerVr(); }
 
 QVariantMap PlayerService::vrReport() const

@@ -95,6 +95,8 @@ public:
     /// Moves the wearer as the fly keys would, for `seconds` at the player's
     /// fly speed. False when no session is running.
     virtual bool movePlayerVr(const flystep::Keys &keys, float seconds) = 0;
+    /// Holds the fly keys for every frame's step (`vr.move({hold:true})`).
+    virtual bool holdPlayerVr(const flystep::Keys &keys) = 0;
     /// "I am standing here, facing this way": re-places the rig on the play
     /// camera at the next located pose. False when no session is running.
     virtual bool recenterPlayerVr() = 0;

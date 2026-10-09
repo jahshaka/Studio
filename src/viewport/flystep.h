@@ -43,6 +43,17 @@ struct Keys
     bool up = false, down = false, boost = false;
 
     bool any() const { return forward || back || left || right || up || down; }
+    /// Either set held: what two sources of the same keys (the keyboard and a
+    /// script's `vr.move({hold:true})`) hold together.
+    Keys operator|(const Keys &o) const
+    {
+        Keys k;
+        k.forward = forward || o.forward; k.back = back || o.back;
+        k.left = left || o.left;          k.right = right || o.right;
+        k.up = up || o.up;                k.down = down || o.down;
+        k.boost = boost || o.boost;
+        return k;
+    }
 };
 
 /// Shift's multiplier on the fly speed (the editor's, shared).

@@ -270,6 +270,7 @@ bool EditorVrPreview::end()
     const auto engine = mEngine.lock();
     mOwnsSession = false;
     mPlacePending = false;
+    mHeld = flystep::Keys();
     if (engine) {
         engine->setVrMirrorView(nullptr);
         if (engine->vrStatus().active) engine->endVrSession();
@@ -353,6 +354,7 @@ void EditorVrPreview::step()
         // editor's camera stays dead for the rest of the run.
         mOwnsSession = false;
         mPlacePending = false;
+        mHeld = flystep::Keys();
         engine->setVrMirrorView(nullptr);
         release();
         return;
@@ -377,8 +379,11 @@ void EditorVrPreview::step()
     // (EngineSceneViewport::syncFrame), which is what makes this the only thing
     // the gesture moves: two things must not both move the wearer, and the rig
     // is the one that keeps their feet on the room's floor.
-    if (!mViewport || !mViewport->flying()) return;
-    const flystep::Keys keys = keysFrom(mViewport->heldFlyKeys());
+    // ...and whatever a script holds (hold()), on the same step.
+    const flystep::Keys keys =
+        ((mViewport && mViewport->flying()) ? keysFrom(mViewport->heldFlyKeys())
+                                            : flystep::Keys()) | mHeld;
+    if (!keys.any()) return;
     const iris::Vec3 delta = vrorigin::flyDelta(headRot, keys, wearerSpeed(),
                                                 vrorigin::frameSeconds(wall));
     if (delta.isNull()) return;
@@ -409,6 +414,14 @@ bool EditorVrPreview::move(const flystep::Keys &keys, float seconds)
     vrorigin::Rig rig = rigOf(st);      // whatever the ENGINE holds, absorb included
     rig.position += delta;
     applyRig(rig);
+    return true;
+}
+
+bool EditorVrPreview::hold(const flystep::Keys &keys)
+{
+    const auto engine = mEngine.lock();
+    if (!mOwnsSession || !engine || !engine->vrStatus().active) return false;
+    mHeld = keys;
     return true;
 }
 

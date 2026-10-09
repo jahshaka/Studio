@@ -96,6 +96,8 @@ public:
     bool toggleVr();
     /// Moves the wearer as the fly keys would, for `seconds`.
     bool moveVr(const flystep::Keys &keys, float seconds);
+    /// Holds the fly keys for every frame's step until a hold with none.
+    bool holdVr(const flystep::Keys &keys);
     /// "I am standing here, facing this way."
     bool recenterVr();
     /// What player.state().vr reports; answerable in every session.

@@ -34,6 +34,7 @@ For more information see the LICENSE file
 #include "viewport/enginerenderdriver.h"
 #include "viewport/ieditorviewport.h"
 #include "viewport/scenepicker.h"
+#include "services/framemonitor.h"
 
 using namespace jahshaka::engine;
 
@@ -409,7 +410,7 @@ QVector<VerbInfo> VrApi::verbs() const
           "runtime offers hand tracking and no controller answers, from the palm joint. POSES "
           "ONLY — no buttons are read anywhere in this build.",
           Needs::Engine },
-        { "move", "vr.move({forward?, back?, left?, right?, up?, down?, boost?, seconds?}) -> bool",
+        { "move", "vr.move({forward?, back?, left?, right?, up?, down?, boost?, seconds?, hold?}) -> bool",
           "MOVES THE WEARER of the editor's VR preview, exactly as holding the editor's fly "
           "keys would: along the HEAD's level heading for forward/back and the horizontal "
           "beside it for left/right, along the world's up for up/down, at the editor's own fly "
@@ -418,6 +419,12 @@ QVector<VerbInfo> VrApi::verbs() const
           "and their pitch and roll are never touched.\n\n"
           "The same call the held keys make each frame, which is what lets a script, an MCP "
           "session or a suite walk a wearer through a world with no keyboard in the room.\n\n"
+          "`hold: true` HOLDS the named keys instead of stepping them: from then on every "
+          "frame's own fly step (the driver's tick, after the frame's wait, exactly where the "
+          "keyboard's held keys are read) moves the wearer by them at the fly speed, until "
+          "`vr.move({hold: true})` with no direction lets go; `seconds` is ignored, and the "
+          "hold ends with the session. It is how a suite drives the in-frame rig move a "
+          "wearer's held keys make.\n\n"
           "IT MOVES WHOEVER IS IN THE HEADSET (the CRUD of `player.vrMove`, which this verb "
           "replaced): the editor's VR preview when that is what is running, and the PLAYER's VR "
           "mode when the run owns the session — one gesture, one verb, whichever host started "
@@ -1164,7 +1171,7 @@ void VrApi::pushProxies()
 bool VrApi::move(const QVariantMap &intent)
 {
     static const QStringList known = { "forward", "back", "left", "right",
-                                       "up", "down", "boost", "seconds" };
+                                       "up", "down", "boost", "seconds", "hold" };
     for (auto it = intent.constBegin(); it != intent.constEnd(); ++it)
         if (!known.contains(it.key()))
             return fail(QStringLiteral("vr.move: unknown key '%1' — known keys are %2")
@@ -1179,6 +1186,15 @@ bool VrApi::move(const QVariantMap &intent)
     keys.boost   = intent.value(QStringLiteral("boost")).toBool();
     // ONE 1/60 s STEP BY DEFAULT — the motion one frame of held keys makes, so
     // a script calling this in a loop walks at the rate a wearer walks at.
+    // HELD, NOT STEPPED: the keys stay down for every frame's fly step — the
+    // per-frame path the keyboard takes, on the driver's tick after the
+    // frame's wait — until a hold with no direction lets go.
+    if (intent.value(QStringLiteral("hold")).toBool()) {
+        if (editor.hold(keys)) return true;
+        PlayerService *player = moduleHost.services ? moduleHost.services->player : nullptr;
+        if (player && player->holdVr(keys)) return true;
+        return refuse(QStringLiteral("vr.move: nobody is in VR to hold the keys for"));
+    }
     const double seconds = intent.value(QStringLiteral("seconds"), 1.0 / 60.0).toDouble();
     if (seconds < 0.0) return fail(QStringLiteral("vr.move: seconds must not be negative"));
     if (editor.move(keys, float(seconds))) return true;
@@ -1793,11 +1809,17 @@ void VrApi::stepInteraction()
     interactionClock.restart();
     // THE POSE BEFORE THE STEP (lane VR-REORDER-1). The hosts that own a frame
     // wait in their own step (EngineSceneViewport::syncFrame after the document
-    // clock, PlayerVr::step after the run's); this slot may be connected ahead
-    // of theirs, so it asks too — once per frame, the second call is nothing —
-    // and the grabs, the gizmo drag, the ray and teleport below read the pose
-    // the frame that follows renders.
-    if (Engine *e = engine()) e->vrWaitFrame();
+    // clock, PlayerVr::step after the run's). THIS SLOT IS CONNECTED AFTER
+    // THEIRS — the editor viewport and the Player view are built in the shell's
+    // setupViewPort, the modules (this object) after them — and that order is
+    // load-bearing: the hosts' wearer fly has moved the rig (and so re-composed
+    // the located hands) before the grabs, the gizmo drag, the ray and teleport
+    // below read them (vr.held_follows_hand's held-keys arms). The call here is
+    // then nothing (once per frame); it waits only for a frame no host stepped.
+    if (Engine *e = engine()) {
+        framemonitor::Stage waitStage("host.vr_wait");
+        e->vrWaitFrame();
+    }
     interaction.step(seconds);
 }
 

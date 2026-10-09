@@ -17,6 +17,7 @@ For more information see the LICENSE file
 #include "player/playermousecontroller.h"
 #include "services/vrworld.h"
 #include "viewport/cameraspeed.h"
+#include "services/framemonitor.h"
 
 using namespace jahshaka::engine;
 
@@ -155,6 +156,7 @@ void PlayerVr::end()
     }
     mOwnsSession = false;
     mPlacePending = false;
+    mHeld = flystep::Keys();
     restoreMirrorView();
     mCamera.clear();
     mDocument.clear();
@@ -179,8 +181,9 @@ void PlayerVr::armPlacement(const jahshaka::engine::VrStatus &st)
 {
     mPlacePending = true;
     // The next locate is the first one that can use the rig this object holds
-    // (the host pushes before the frame, the engine composes inside it), so it
-    // is the first whose head can be paired with that rig.
+    // (a rig pushed after this frame's wait is re-composed at once, one pushed
+    // between frames at the next wait), so it is the first whose head can be
+    // paired with that rig — one frame conservative inside the tick.
     mPlaceAfterRendered = st.rendered + 1ull;
 }
 
@@ -209,7 +212,10 @@ void PlayerVr::step(float dt, const iris::CameraNodePtr &camera)
     // stepped (EnginePlayerScene::step calls this after PlayBack::update), so
     // this frame's wait and locate run now and the head read below is the one
     // the frame renders. Once per frame; a no-op when another host waited.
-    engine->vrWaitFrame();
+    {
+        framemonitor::Stage waitStage("host.vr_wait");   // where the tick blocks
+        engine->vrWaitFrame();
+    }
     const VrStatus st = engine->vrStatus();
     if (!st.active) {
         // ENDED FROM SOMEWHERE ELSE — `vr.end()` from a script, a device lost
@@ -218,6 +224,7 @@ void PlayerVr::step(float dt, const iris::CameraNodePtr &camera)
         // View) has to go back or the Player page stays blank for ever.
         mOwnsSession = false;
         mPlacePending = false;
+        mHeld = flystep::Keys();
         engine->setVrMirrorView(nullptr);
         restoreMirrorView();
         // ...AND THE LOCOMOTION LATCH GOES WITH IT (the Fable read of
@@ -248,11 +255,12 @@ void PlayerVr::step(float dt, const iris::CameraNodePtr &camera)
         // own offset from the middle of their room.
         applyRig(vrorigin::placedOn(rigOf(st), head, headRot, mStartPos, mStartRot));
         mPlacePending = false;
-        // NO CAMERA WRITE ON THIS FRAME, deliberately: the rig has just been
-        // chosen so that the head lands on the camera, and the pose above is
-        // the one measured BEFORE it. Writing it would move the camera to where
-        // the wearer was standing a frame ago, which is the jump the placement
-        // exists to avoid. The next frame's pose carries the rig.
+        // NO CAMERA WRITE ON THIS FRAME, deliberately. `head` above is the pose
+        // measured BEFORE the placement; vrStatus() read now is already
+        // re-composed through the new rig (the placement ran after this frame's
+        // wait), i.e. on the camera the placement aimed at — so a write is at
+        // best a no-op, and writing the stale `head` is the jump the placement
+        // exists to avoid. The next frame's step writes the camera.
         return;
     }
 
@@ -266,7 +274,8 @@ void PlayerVr::step(float dt, const iris::CameraNodePtr &camera)
     // write below, which is what makes the rig the one thing that moves the
     // wearer. Two things must not both move them, and the rig is the one that
     // keeps their feet on the room's floor.
-    const iris::Vec3 delta = vrorigin::flyDelta(headRot, PlayerMouseController::heldFlyKeys(),
+    const iris::Vec3 delta = vrorigin::flyDelta(headRot,
+                                                PlayerMouseController::heldFlyKeys() | mHeld,
                                                 wearerSpeed(), vrorigin::frameSeconds(dt));
     if (!delta.isNull()) {
         vrorigin::Rig rig = rigOf(st);      // whatever the ENGINE holds, absorb included
@@ -319,6 +328,13 @@ bool PlayerVr::move(const flystep::Keys &keys, float seconds)
     vrorigin::Rig rig = rigOf(st);      // whatever the ENGINE holds, absorb included
     rig.position += delta;
     applyRig(rig);
+    return true;
+}
+
+bool PlayerVr::hold(const flystep::Keys &keys)
+{
+    if (!isActive()) return false;
+    mHeld = keys;
     return true;
 }
 

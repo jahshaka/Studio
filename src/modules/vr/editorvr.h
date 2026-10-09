@@ -112,6 +112,11 @@ public:
     /// `vr.move` is the one verb over this and the Player's own move (the CRUD
     /// of `player.vrMove`, VR input stage 1). False when no session is running.
     bool move(const flystep::Keys &keys, float seconds);
+    /// HELD FROM A SCRIPT (`vr.move({hold:true, ...})`): these keys are held
+    /// for every frame's fly step from now on — the step the fly keys make, on
+    /// the driver's tick, after the frame's wait — until a hold with no
+    /// direction. Gone with the session. False when no session is running.
+    bool hold(const flystep::Keys &keys);
 
     /// What this object is doing, for `vr.state().preview`.
     QVariantMap report() const;
@@ -151,6 +156,7 @@ private:
     QPointer<EngineRenderDriver> mDriver;
     bool mOwnsSession = false;
     bool mPlacePending = false;
+    flystep::Keys mHeld;    ///< a script's held keys (hold())
     unsigned long long mPlaceAfterRendered = 0ull;
     /// ONE RENDER PIPELINE FOR VR (the owner, 2026-09-17): when the desktop
     /// mirrors an eye, the editor's own on-screen View stops drawing and the

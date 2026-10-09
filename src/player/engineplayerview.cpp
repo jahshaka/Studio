@@ -390,6 +390,11 @@ QVariantMap EnginePlayerView::playerVrReport() const
     return out;
 }
 
+bool EnginePlayerView::holdPlayerVr(const flystep::Keys &keys)
+{
+    return mScene && mScene->vrIfAny() && mScene->vr()->hold(keys);
+}
+
 bool EnginePlayerView::movePlayerVr(const flystep::Keys &keys, float seconds)
 {
     return mScene && mScene->vrIfAny() && mScene->vr()->move(keys, seconds);

@@ -136,6 +136,9 @@ public:
     /// script, an MCP session and the suite walk the wearer through a world
     /// with no keyboard in the room. False when no session is running.
     bool move(const flystep::Keys &keys, float seconds);
+    /// HELD FROM A SCRIPT (`vr.move({hold:true, ...})`): held for every frame's
+    /// fly step until a hold with no direction; gone with the session.
+    bool hold(const flystep::Keys &keys);
 
     /// TAKE ME BACK TO WHERE VR BEGAN — the product gesture, and the only one
     /// that means anything (lead review F2): the wearer's head is re-placed
@@ -185,6 +188,7 @@ private:
     jahshaka::engine::View *mMirrorView = nullptr;
     /// Waiting to place the rig (at begin, and at every recenter).
     bool mPlacePending = false;
+    flystep::Keys mHeld;    ///< a script's held keys (hold())
     /// (WHEN the Player's View stops drawing is the ENGINE's answer since lane
     /// MIRROR-LIVE-1 — it is the only party that knows whether the runtime
     /// asked for a picture this frame. This object names the view and reads
@@ -200,13 +204,12 @@ private:
     /// exactly the difference. Measured, and it is not subtle — a recentre
     /// after a 75 m fly threw the wearer 75 m past the target.
     ///
-    /// PLUS ONE, AND FROM A VERB THAT IS ONE FRAME CONSERVATIVE. Inside the
-    /// frame loop `rendered + 1` is exact: the host pushes before the frame and
-    /// the engine composes inside it, so the next locate is the first that can
-    /// be paired. A verb arriving BETWEEN frames pushes nothing (it only arms),
-    /// so its `+1` waits for a locate that would already have been pairable —
-    /// one frame of latency on a teleport nobody can perceive, in exchange for
-    /// one rule instead of two.
+    /// PLUS ONE, ONE FRAME CONSERVATIVE. `rendered` moves at the render, after
+    /// the frame's wait: a rig pushed between the wait and the render is
+    /// re-composed at once and one pushed between frames is composed at the
+    /// next wait, so the first locate after `rendered + 1` can always be paired
+    /// with the rig this object holds — one frame of latency on a teleport
+    /// nobody can perceive, in exchange for one rule instead of two.
     unsigned long long mPlaceAfterRendered = 0ull;
     /// This object started the session that is running (so it is this object's
     /// to end, and its half to put back when it goes away).
