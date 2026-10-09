@@ -345,6 +345,29 @@ def case_verdict_door(E):
     rc, out = E.run(rng="51e9f2c49..%s" % x)
     check(bool(c1 and x) and rc == 1 and "photon.view" in out and "OPEN red at %s" % c1[:9] in out,
           "F-A: red at C1, a green re-run at an EMPTY commit X on it -> refused, no verdict passes it silently (%d)" % rc)
+    # ROUND 4: ONE STRAY FILE proves nothing either — Y = C1 + a root file no rule owns (the selector FALLS BACK): red at
+    # C1, green at Y -> refused (before: a fallback read as ALL on the proving side)
+    idx = os.path.join(E.scratch, "stray.index")
+    genv = dict(env, GIT_INDEX_FILE=idx)
+    blob = subprocess.run(["git", "hash-object", "-w", "--stdin"], cwd=E.source, input="stray\n", capture_output=True,
+                          text=True).stdout.strip()
+    subprocess.run(["git", "read-tree", tree], cwd=E.source, env=genv, check=True)
+    subprocess.run(["git", "update-index", "--add", "--cacheinfo", "100644,%s,stray_verdict_test.bin" % blob],
+                   cwd=E.source, env=genv, check=True)
+    tree2 = subprocess.run(["git", "write-tree"], cwd=E.source, env=genv, capture_output=True, text=True).stdout.strip()
+    y = subprocess.run(["git", "commit-tree", tree2, "-p", c1, "-m", "verdict test: one stray file"], cwd=E.source,
+                       capture_output=True, text=True, env=env).stdout.strip()
+    gs = E.cgc.load_gs()
+    R = E.cgc.Reach(gs, E.build, y, "")
+    check(R.between(c1, y, unreadable=set()) == set() and R.between(c1, y) is E.cgc.Reach.ALL,
+          "a FALLBACK range reaches nothing when proving, everything when re-using")
+    prover4 = E.cgc.Prover(gs, E.build, lambda: R)
+    st, why = E.cgc.judge(("photon.view", None), [rec("FAIL", T % "09:30", tip={"studio": c1}),
+                                                  rec("PASS", T % "10:00", tip={"studio": y}),
+                                                  vrec("real:FIXTURE-1", T % "11:00")],
+                          {e["id"]: e for e in FIXTURE_DEFECTS}, proves=prover4)
+    check(bool(y) and st == "red" and "REACHES" in why, "ROUND 4: red at C1, green at Y (one stray file, the selector "
+          "falls back) + real:<id> -> refused (%s)" % why[:80])
     # N5: a lane-tool PASS (tier `lane`) never answers a row for the judge
     E.fresh()
     E.put(ROWS[:2], "PASS", "2026-01-01T10:00:00")

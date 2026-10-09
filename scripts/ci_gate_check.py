@@ -483,8 +483,12 @@ class Reach:
         try:
             S = self.gs.select(self.gs.touched_paths(rng), rng, self.build, self.gs.GATE_JOBS, graph=self.graph,
                                inv=self.copy.deepcopy(self.inv0), quiet_graph=True)
-            if S.fallback or S.full_tier or S.fork_bump:
+            if S.full_tier or S.fork_bump:
                 reach = Reach.ALL
+            elif S.fallback:
+                # ROUND 4: a fallback is a path NO rule owns — for re-use that is ALL (no re-use across it); for PROVING
+                # a fix it reaches NOTHING (one stray file must not "prove" a fix for every red)
+                reach = Reach.ALL if unreadable is Reach.ALL else set()
             else:
                 subsets = S.arm_subsets()
                 reach = set()
