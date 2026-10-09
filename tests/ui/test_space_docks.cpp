@@ -41,7 +41,6 @@ For more information see the LICENSE file
 #include <QHash>
 #include <QJsonArray>
 #include <QJsonDocument>
-#include <QThread>
 
 using namespace mcpharness;
 
@@ -69,13 +68,6 @@ QJsonObject readObject(McpClient &mcp, const QString &expression)
         return {};
     }
     return QJsonDocument::fromJson(reply.value("result").toString().toUtf8()).object();
-}
-
-/// The layout settles between requests, not inside one.
-void settle(McpClient &mcp)
-{
-    QThread::msleep(800);
-    mcp.runScript(QStringLiteral("true"));
 }
 
 struct DockReading {

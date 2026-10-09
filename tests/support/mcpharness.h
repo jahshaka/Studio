@@ -305,6 +305,50 @@ struct McpClient
 /// produced in the avatar.responsive red of 2026-09-15 and discarded with the
 /// pipe; a lane was then spent guessing at the block (ledger 459). It costs a
 /// `readAll()` per poll to keep it.
+/// THE LAYOUT READ: the main window, its columns and its docks, as one string — what a layout
+/// change (a space switch, a window resize, a tray drag) moves.
+static const char *const kLayoutProbe =
+    "JSON.stringify([app.window(), app.columns(), app.docks()])";
+
+/// SETTLE BY READING, NEVER BY SLEEPING (TESTING-CLEANUP-2 P10a; trap 7: settle by count, read
+/// until the value stops moving). A layout change lands over a few turns of the app's event loop
+/// — posted LayoutRequests, the X server's ConfigureNotify, a dock's deferred restore — and the
+/// five copies of `settle()` this replaces each slept 800 ms and hoped (ui.column_law 5 FAIL in
+/// 211 runs, ui.window_minimum a 120 s TIMEOUT at 7x starvation). This reads `probe` once per MCP
+/// request — every request is at least one whole turn of the app's event loop, and with `frames`
+/// above 0 the read first steps that many frames on the fixed clock (`editor.frame`) — until
+/// `stableReads` consecutive reads answer the same, bounded by `maxReads` COUNTED reads. Returns
+/// the settled reading (empty when the probe failed); a layout that never stops moving says so in
+/// an info line and the caller's next assertion reads the moving value.
+inline QString settle(McpClient &mcp, const QString &probe = QString::fromLatin1(kLayoutProbe),
+                      int frames = 0, int stableReads = 3, int maxReads = 200)
+{
+    const QString script = frames > 0
+        ? QStringLiteral("editor.frame(%1); %2").arg(frames).arg(probe)
+        : probe;
+    QString last;
+    int same = 0;
+    for (int reads = 1; reads <= maxReads; ++reads) {
+        const QJsonObject r = mcp.runScript(script);
+        if (!r.value("ok").toBool()) {
+            std::printf("info: settle: the probe failed on read %d: %s\n", reads,
+                        QJsonDocument(r).toJson(QJsonDocument::Compact).constData());
+            std::fflush(stdout);
+            return QString();
+        }
+        const QJsonValue v = r.value("result");
+        const QString now = v.isString() ? v.toString()
+                                         : QString::fromUtf8(QJsonDocument(QJsonArray{ v }).toJson(QJsonDocument::Compact));
+        same = (reads > 1 && now == last) ? same + 1 : 0;
+        last = now;
+        if (same + 1 >= stableReads) return last;
+    }
+    std::printf("info: settle: the layout was STILL MOVING after %d reads: %s\n", maxReads,
+                qUtf8Printable(oneLine(last)));
+    std::fflush(stdout);
+    return last;
+}
+
 ///
 /// `log` is what the suite drained out of the QProcess, and `from` is the
 /// offset the MEASURED WINDOW began at — without it the print carries the

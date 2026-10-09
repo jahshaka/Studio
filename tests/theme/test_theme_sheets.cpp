@@ -28,7 +28,6 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QSettings>
-#include <QThread>
 
 #include "ui/style/stylesheet.h"
 
@@ -77,10 +76,12 @@ QJsonArray readArray(McpClient &mcp, const QString &expression)
     return QJsonDocument::fromJson(reply.value("result").toString().toUtf8()).array();
 }
 
-void settle(McpClient &mcp, int ms = 800)
+/// The layout and the dialogs on screen, read until they stop moving (mcpharness::settle): a page
+/// or a dialog has painted and laid out once the reading is the same three requests running.
+void settlePage(McpClient &mcp)
 {
-    QThread::msleep(ms);
-    mcp.runScript(QStringLiteral("true"));
+    mcpharness::settle(mcp, QStringLiteral(
+        "JSON.stringify([app.window(), app.columns(), app.docks(), app.dialogs()])"));
 }
 
 /// One stop of the tour: every widget alive, every raw sheet accounted for.
@@ -160,38 +161,38 @@ int main(int argc, char **argv)
               "the default theme is Qlementine Dark");
 
         int themeOwned = 0;
-        settle(mcp, 1500);
+        settlePage(mcp);
         walkQlementine(mcp, QStringLiteral("desktop (boot)"), &themeOwned);
 
         CHECK(mcp.runScript(QStringLiteral("project.create('ThemeSheets')")).value("ok").toBool(),
               "a project is open (editor, player and materials need one)");
-        settle(mcp, 1500);
+        settlePage(mcp);
         mcp.runScript(QStringLiteral("app.space('desktop')"));
-        settle(mcp);
+        settlePage(mcp);
         walkQlementine(mcp, QStringLiteral("desktop (project)"), &themeOwned);
 
         mcp.runScript(QStringLiteral("app.space('editor')"));
         mcp.runScript(QStringLiteral("editor.tray({tab: 'assets'})"));
-        settle(mcp, 1500);
+        settlePage(mcp);
         walkQlementine(mcp, QStringLiteral("editor / tray assets"), &themeOwned);
         mcp.runScript(QStringLiteral("editor.tray({tab: 'console'})"));
-        settle(mcp);
+        settlePage(mcp);
         walkQlementine(mcp, QStringLiteral("editor / tray console"), &themeOwned);
         // a selection populates the property panels (blades, value rows)
         mcp.runScript(QStringLiteral(
             "var r = editor.outlinerRows(); if (r.length) editor.select(r[r.length - 1].id); true"));
-        settle(mcp);
+        settlePage(mcp);
         walkQlementine(mcp, QStringLiteral("editor / selection"), &themeOwned);
 
         for (const char *space : { "materials", "assets", "avatar", "player", "publish" }) {
             const QJsonObject switched =
                 mcp.runScript(QStringLiteral("app.space('%1')").arg(QLatin1String(space)));
             CHECK(switched.value("ok").toBool(), QStringLiteral("%1 page opens").arg(space));
-            settle(mcp, 1200);
+            settlePage(mcp);
             walkQlementine(mcp, QString::fromLatin1(space), &themeOwned);
         }
         mcp.runScript(QStringLiteral("app.space('desktop')"));
-        settle(mcp);
+        settlePage(mcp);
 
         const QJsonArray dialogs = readArray(mcp, QStringLiteral("app.dialogs()"));
         CHECK(dialogs.size() >= 10, QStringLiteral("app.dialogs() lists the app's dialogs (%1)")
@@ -201,10 +202,10 @@ int main(int argc, char **argv)
             const QJsonObject opened =
                 readObject(mcp, QStringLiteral("app.dialog('%1')").arg(name));
             CHECK(opened.value("open").toBool(), QStringLiteral("dialog %1 opens").arg(name));
-            settle(mcp, 500);
+            settlePage(mcp);
             walkQlementine(mcp, QStringLiteral("dialog ") + name, &themeOwned);
             mcp.runScript(QStringLiteral("app.dialog('%1', false)").arg(name));
-            settle(mcp, 300);
+            settlePage(mcp);
             // AND A SECOND TIME, after the first has painted and closed. The
             // sample browser rebuilt its content on every open and tore the
             // old content down with a qDeleteAll over a snapshot of its
@@ -218,9 +219,9 @@ int main(int argc, char **argv)
                 readObject(mcp, QStringLiteral("app.dialog('%1')").arg(name));
             CHECK(again.value("open").toBool() && jahshaka.state() == QProcess::Running,
                   QStringLiteral("dialog %1 opens a SECOND time in the same session").arg(name));
-            settle(mcp, 300);
+            settlePage(mcp);
             mcp.runScript(QStringLiteral("app.dialog('%1', false)").arg(name));
-            settle(mcp, 300);
+            settlePage(mcp);
         }
         CHECK(jahshaka.state() == QProcess::Running, "the app survived every dialog opened twice");
         CHECK(themeOwned > 0, "the walk sees the theme's own chrome sheets (it is really walking)");
@@ -242,9 +243,9 @@ int main(int argc, char **argv)
         const QJsonObject theme = readObject(mcp, QStringLiteral("app.theme()"));
         CHECK(theme.value("classic").toBool(), "the persisted Classic choice took effect");
         mcp.runScript(QStringLiteral("project.create('ThemeSheetsClassic')"));
-        settle(mcp, 1500);
+        settlePage(mcp);
         mcp.runScript(QStringLiteral("app.space('editor')"));
-        settle(mcp, 1200);
+        settlePage(mcp);
 
         const QJsonObject walk = readObject(mcp, QStringLiteral("app.styleSheets({full: true})"));
         CHECK(walk.value("styled").toInt() > 100,
