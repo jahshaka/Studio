@@ -159,6 +159,8 @@ private:
     qint64 mStampMs = 0;       ///< …and what those writes cost the UI thread
     std::atomic<bool> mRunning{false};
     std::atomic<bool> mAborted{false};
+    /// Hashed and parked by the test hold (JAHSHAKA_SEED_HOLD) until finishNow (UI thread).
+    bool mHeld = false;
 };
 
 #endif // MATERIALPRESETSEEDER_H

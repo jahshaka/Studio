@@ -33,12 +33,13 @@ var PRESET_MAP = "@SOURCE_DIR@/app/content/materials/presets/wood/wood_planks_03
 var MAP_NAME = PRESET_MAP.split("/").pop();
 var WOOD = "Wood PBR";
 
-// ---- the race, deliberately not waited for -------------------------------
-// No poll and no pause before this: the script's first verbs run while the
-// seeder's worker is still hashing (measured: 780 ms of hashing before its
-// first import, 3.4 s wall for the whole seed). The count is asserted because
-// a test that stopped racing would still pass every assertion below while
-// proving nothing at all.
+// ---- the race, HELD OPEN -----------------------------------------------------
+// The seed runs under JAHSHAKA_SEED_HOLD: it hashes, then parks until a user door's
+// finishNow releases it (into the stand-down). Left to its own timing the race was the
+// startup gate's — the gate pumps events while it compiles, and once it grew the whole
+// seed finished inside the splash (ASYNC-SHADERS-1: 20 of 20 bundles before this line).
+// The count is still asserted because a test that stopped racing would still pass every
+// assertion below while proving nothing at all.
 // THE PRESETS ARE PLATFORM ROWS (ASSETS-HOME-1): counted by reserved guid.
 function platformBundles() {
     var n = 0;
