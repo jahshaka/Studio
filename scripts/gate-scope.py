@@ -313,7 +313,7 @@ ALWAYS_ON_CODE = ["app.startup_quiet", "api.contract"]
 # hang costs 2 min, not 25.
 STAGE_CLOSE_LABELS = {"stage-close", "shadercache-attack"}
 # Never selected by a scoped gate (the shader-cache attack is minutes under ASan). A row selected
-# WITHOUT these labels is a gating row of that gate (ci_gate_check, --joint read this set).
+# WITHOUT these labels is a gating row of that gate (ci_gate_check reads this set).
 SCOPE_EXCLUDED_LABELS = {"quiet-box", "shadercache-attack"}
 # Selected by a scoped gate only through its own subject (STAGE_CLOSE_SUBJECTS, its own test dir);
 # once selected it gates like any row. NOT in SCOPE_EXCLUDED_LABELS on purpose: that set means
