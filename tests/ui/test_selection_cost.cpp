@@ -55,6 +55,7 @@ For more information see the LICENSE file
 #include <QApplication>
 #include "ui/controls/accordionbladewidget.h"
 #include <QElapsedTimer>
+#include "../support/timingbars.h"
 #include <QEvent>
 #include <QFocusFrame>
 #include <QScrollArea>
@@ -348,7 +349,7 @@ int main(int argc, char **argv)
                     firstAvg * 1000.0, lastAvg * 1000.0, kTurnRatioFloorMs * 1000.0,
                     firstAvg > 0 ? lastAvg / firstAvg : 0.0);
     } else {
-        CHECK(lastAvg <= 1.5 * firstAvg,
+        JAH_TIMING_CHECK("ui.selection_cost", lastAvg <= 1.5 * firstAvg,
               QStringLiteral("cost: the last 50 switches cost no more than 1.5x the first 50 "
                              "(%1 ms -> %2 ms)")
                   .arg(firstAvg, 0, 'f', 2).arg(lastAvg, 0, 'f', 2).toUtf8().constData());
@@ -356,7 +357,7 @@ int main(int argc, char **argv)
     // A generous ceiling, ~10x the measured cost of a healthy run on the
     // development box: this catches a switch that became slow OUTRIGHT (rather
     // than progressively) without turning into a machine-speed assertion.
-    CHECK(total < 60000.0, "cost: 200 switches finish well inside a minute");
+    JAH_TIMING_CHECK("ui.selection_cost", total < 60000.0, "cost: 200 switches finish well inside a minute");
 
     CHECK(endObjects <= warmObjects,
           "growth: the panel's object population does not grow across 200 switches");
@@ -420,7 +421,7 @@ int main(int argc, char **argv)
                         filteredFirst * 1000.0, filteredLast * 1000.0, kRatioFloorMs * 1000.0,
                         filteredFirst > 0 ? filteredLast / filteredFirst : 0.0);
         } else {
-            CHECK(filteredLast <= 1.5 * filteredFirst,
+            JAH_TIMING_CHECK("ui.selection_cost", filteredLast <= 1.5 * filteredFirst,
                   QStringLiteral("cost: under a live filter the last 50 switches cost no more "
                                  "than 1.5x the first 50 (%1 ms -> %2 ms)")
                       .arg(filteredFirst, 0, 'f', 3).arg(filteredLast, 0, 'f', 3)
@@ -894,11 +895,11 @@ int main(int argc, char **argv)
                     "type-change (mesh->light) %.2f ms mean / %.2f median / %.2f worst\n",
                     sameType[0], sameType[2], sameType[1],
                     typeChange[0], typeChange[2], typeChange[1]);
-        CHECK(sameType[2] <= kFrameMs90,
+        JAH_TIMING_CHECK("ui.selection_cost", sameType[2] <= kFrameMs90,
               QStringLiteral("pick: a same-type pick fits inside a 90 Hz frame (%1 ms median, "
                              "bound %2)").arg(sameType[2], 0, 'f', 2)
                   .arg(kFrameMs90, 0, 'f', 1).toUtf8().constData());
-        CHECK(typeChange[2] <= kFrameMs90,
+        JAH_TIMING_CHECK("ui.selection_cost", typeChange[2] <= kFrameMs90,
               QStringLiteral("pick: a type-change pick fits inside a 90 Hz frame (%1 ms median, "
                              "bound %2)").arg(typeChange[2], 0, 'f', 2)
                   .arg(kFrameMs90, 0, 'f', 1).toUtf8().constData());
@@ -973,13 +974,13 @@ int main(int argc, char **argv)
 
         std::printf("  PICK BY SCENE SIZE: %d nodes %.2f ms, %d nodes %.2f ms, %d nodes %.2f ms\n",
                     int(nodes.size()) + 1, base, n1k, at1k, n10k, at10k);
-        CHECK(at1k <= kFrameMs90 && at10k <= kFrameMs90,
+        JAH_TIMING_CHECK("ui.selection_cost", at1k <= kFrameMs90 && at10k <= kFrameMs90,
               QStringLiteral("size: a pick fits inside a 90 Hz frame at 1k (%1 ms) and 10k (%2 ms) "
                              "nodes").arg(at1k, 0, 'f', 2).arg(at10k, 0, 'f', 2).toUtf8().constData());
         // INDEPENDENCE, as a shape: 3x of the small-scene median (or 1 ms,
         // whichever is larger — a sub-millisecond baseline is all timer noise
         // on a loaded box) rather than a second millisecond budget.
-        CHECK(at10k <= qMax(1.0, 3.0 * base),
+        JAH_TIMING_CHECK("ui.selection_cost", at10k <= qMax(1.0, 3.0 * base),
               QStringLiteral("size: ...and it does not grow with the scene (%1 ms at 10k vs %2 ms "
                              "at %3 nodes)").arg(at10k, 0, 'f', 2).arg(base, 0, 'f', 2)
                   .arg(int(nodes.size()) + 1).toUtf8().constData());
