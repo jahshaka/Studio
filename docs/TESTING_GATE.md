@@ -524,8 +524,9 @@ xwd, readPixels, --engine-selftest in a harness) or drive Photon (world.photon/g
 giStatus/giVoxelStats) — unless its claim IS the picture with every feature off (a "GI off"
 claim), which it states: `NEEDS NONE NEEDS_WHY "<the claim>"` (the lint prints every one).
 
-**THE APP'S TOKENS ARE THE DECLARATION'S** (`JAH_VRAM_TOKENS_BY_NEEDS`): `low` 1; `medium` 1;
-`high` 2; `epic` + photon 3, without 2; `document` 3 (per-pid peaks in vram_tokens.cmake).
+**THE APP'S TOKENS ARE THE DECLARATION'S** (`JAH_VRAM_TOKENS_BY_NEEDS`): `low` 2; `medium` 2;
+`high` 2; `epic` + photon 3, without 2; `document` 3 — measured per pid and additive on the card
+(the numbers in vram_tokens.cmake).
 **THE WINDOW IS ITS OWN DECLARATION**: `TEST_WINDOW` boots a windowed script run at 1280x720
 (JAHSHAKA_TEST_WINDOW); a tier never implies it, so a row that gained a tier kept the screen-sized
 window its bars were measured at. The rows TEST-TIER-1 measured at Low carry it.

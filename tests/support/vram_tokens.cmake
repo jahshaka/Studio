@@ -34,8 +34,8 @@ set(JAH_VRAM_TOKENS_VR 3)
 # is `<tier>:<photon|none>` — Photon is the one switchable feature that moves the process by
 # gigabytes (the voxel cascades, the field, the probes and cards); bloom/SSAO/SMAA/planar ride
 # the chain's own targets.
-#   low:*            1  TEST-TIER-1's Low boot: 280 MiB at boot, 468 peak, per pid
-#   medium:photon    1  Photon Medium: four 64^3 cascades + the field
+#   low:*            2  a Low process peaks at 1,461-1,491 MiB (below): 1.37 tokens
+#   medium:*         2  Photon Medium (four 64^3 cascades + the field) peaks at 1,587-1,655 MiB
 #   high:photon      2  the hybrid at 128^3 near
 #   epic:photon      3  the audit's 2-3.6 GB for the gather family at Epic (GATE-ADMIT-1's
 #                       two-tier run); the old flat `app 2` was median 2,000 / p90 2,270 / max
@@ -54,13 +54,17 @@ set(JAH_VRAM_TOKENS_VR 3)
 #   epic photon      median 2,292 / max 2,532 MiB (56 processes: gi.one_writer, the pcc and
 #                    lattice rows, the lifecycle harnesses, the atom rows, all-five rows)
 #   document         median 2,226 / max 2,610 MiB (pool.gi_verbs, pool.atom, cleanstart Showroom 2)
-# Per pid that is ~1.35 tokens at Low/Medium against a lookup of 1: the token (1,090 MiB) was
-# calibrated on the SUM of a full gate's processes (GATE-ADMIT-1), where the per-process floor
-# the driver reports is not additive, and Low has run at 1 since TEST-TIER-1 with no OOM red.
+# ADDITIVE, MEASURED (2026-10-10, four processes booted at once on one Xvfb, each admitted through
+# gpu-admit like a row, a hold script; the card's memory.used minus the idle baseline at steady
+# state, corrected by every other process's own change; spikes/test-needs-1/conc-*.json):
+#   4 x low NONE       card +1,944 MiB against a per-pid sum of 1,888
+#   4 x medium photon  card +2,617 MiB against a per-pid sum of 2,592
+# The card total IS the per-pid sum (within 3 %), so a process's per-pid peak is what it costs:
+# Low and Medium peak over 1 token (1,090) and take 2 = ceil(1,491 / 1,090) and ceil(1,655 / 1,090).
 # Epic+photon / document peak at 2.3-2.6 GB: over 2 tokens (2,180), under 3 — hence 3.
 set(JAH_VRAM_TOKENS_BY_NEEDS
-    low:none=1 low:photon=1
-    medium:none=1 medium:photon=1
+    low:none=2 low:photon=2
+    medium:none=2 medium:photon=2
     high:none=2 high:photon=2
     epic:none=2 epic:photon=3
     document=3)

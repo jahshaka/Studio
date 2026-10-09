@@ -1,4 +1,6 @@
-# gate.tokens_by_needs — THE TOKEN LOOKUP RETURNS 1/1/2/3 BY DECLARATION (TEST-NEEDS-1). A toy:
+# gate.tokens_by_needs — THE TOKEN LOOKUP RETURNS 2/2/2/3 BY DECLARATION (TEST-NEEDS-1; the brief's
+# 1/1/2/3 corrected by the measurement in vram_tokens.cmake: a Low/Medium process peaks over 1 token
+# and the card adds per process). A toy:
 # tests/support/vram_tokens.cmake included ALONE (the file the gate's rows are registered
 # through), the lookup asked for the four headline declarations and the edges, and the
 # validation proved to REFUSE a row without its words (each refusal a child `cmake -P` that
@@ -27,17 +29,16 @@ macro(expect _class _want)
         math(EXPR _fails "${_fails} + 1")
     endif()
 endmacro()
-# the four headline declarations (the brief's table: low/NONE 1, medium+photon 1, high+photon 2,
-# epic+photon 3)
-expect(app 1 TIER low NEEDS NONE)
-expect(app 1 TIER medium NEEDS photon)
+# the four headline declarations (measured: low/NONE 2, medium+photon 2, high+photon 2, epic+photon 3)
+expect(app 2 TIER low NEEDS NONE)
+expect(app 2 TIER medium NEEDS photon)
 expect(app 2 TIER high NEEDS photon)
 expect(app 3 TIER epic NEEDS photon)
 # Photon decides, the chain words do not; NONE is the tier's chain without Photon
 expect(app 3 TIER epic NEEDS photon bloom ssao smaa planar)
-expect(app 1 TIER low NEEDS photon)
+expect(app 2 TIER low NEEDS photon)
 expect(app 2 TIER epic NEEDS bloom planar)
-expect(app 1 TIER medium NEEDS NONE)
+expect(app 2 TIER medium NEEDS NONE)
 # the document's own tier: no test tier, no NEEDS, the product's Epic
 expect(app 3 TIER document)
 # the other classes take no declaration
