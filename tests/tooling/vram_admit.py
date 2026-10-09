@@ -194,11 +194,14 @@ def hold(name, k, nframes=60 * 120):
 
 
 def wait_holds(pid, k):
-    for _ in range(400):
-        if len(held_by_pid(tok).get(pid, ())) == k:
-            return held_by_pid(tok)[pid]
+    """THE HOLD IS AN EVENT, NOT A TIMEOUT (GATE-COST-2): wait until the kernel's lock table shows the k tokens
+    held by `pid` — no bound of its own (the row's TIMEOUT is the only one); 4 s of polling gave up under
+    IO pressure (PSI full 62 %) and the checks below then read an empty hold."""
+    while True:
+        got = held_by_pid(tok).get(pid, set())
+        if len(got) == k:
+            return got
         time.sleep(0.01)
-    return held_by_pid(tok).get(pid, set())
 
 
 A = hold("A", 2); a = wait_holds(A.pid, 2)
@@ -207,9 +210,7 @@ check(a == {0, 1} and b == {2}, "A(2) holds %s, B(1) holds %s — the lowest fre
 # The holder is the row's WHOLE process tree (fake.sh's `sleep` inherited the fds, as an app
 # spawned by a suite would): SIGKILL the group, as ctest's timeout kill does.
 os.killpg(A.pid, signal.SIGKILL); A.wait()
-for _ in range(400):
-    if A.pid not in held_by_pid(tok):
-        break
+while A.pid in held_by_pid(tok):            # the release is the kernel's event: wait for it, no bound
     time.sleep(0.01)
 check(A.pid not in held_by_pid(tok), "SIGKILL on A's process tree: the kernel released its tokens")
 C = hold("C", 1); c = wait_holds(C.pid, 1)
@@ -236,10 +237,9 @@ print("5. the bounded wait")
 tok = os.path.join(D, "tok5"); ev = os.path.join(D, "events5")
 full = subprocess.Popen([ADMIT, "4", "--", FAKE, "full", frames(60 * 120), ev], env=env_for(tok, 4),
                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
-for _ in range(400):
-    if len(held_by_pid(tok).get(full.pid, ())) == 4:
-        break
+while len(held_by_pid(tok).get(full.pid, ())) != 4:     # the full hold is an event: wait for it, no bound
     time.sleep(0.01)
+check(len(held_by_pid(tok).get(full.pid, ())) == 4, "the full row holds all 4 tokens before the bounded waiter asks")
 r5 = r = subprocess.run([ADMIT, "1", "--", FAKE, "never", frames(1), ev], env=env_for(tok, 4, JAH_VRAM_WAIT=1),
                    stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
 check(r.returncode == 75 and "never" not in open(ev).read(),
@@ -262,13 +262,12 @@ p = subprocess.run([ADMIT, "1", "--", "sh", "-c", "kill -KILL $$"], env=env_for(
                    stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
 check(p.returncode == -signal.SIGKILL and "Traceback" not in p.stderr,
       "a row killed by SIGKILL reads to ctest as SIGKILL, no traceback (%d)" % p.returncode)
-mark = os.path.join(D, "term6")
-p = subprocess.Popen([ADMIT, "1", "--", "sh", "-c", "trap 'echo got > %s; exit 3' TERM; while :; do sleep 0.05; done" % mark],
-                     env=env_for(tok, 12), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-for _ in range(400):
-    if len(held_by_pid(tok).get(p.pid, ())) == 1: break
+mark, ready = os.path.join(D, "term6"), os.path.join(D, "term6.ready")
+p = subprocess.Popen([ADMIT, "1", "--", "sh", "-c", "trap 'echo got > %s; exit 3' TERM; touch %s; while :; do sleep 0.05; done"
+                      % (mark, ready)], env=env_for(tok, 12), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+# the row's trap is SET (it says so) and the token is held: events, no bound (GATE-COST-2: no wall clock)
+while not (os.path.exists(ready) and len(held_by_pid(tok).get(p.pid, ())) == 1):
     time.sleep(0.01)
-time.sleep(0.3)
 p.send_signal(signal.SIGTERM); p.wait()
 check(os.path.exists(mark) and p.returncode == 3, "a SIGTERM to the admission reaches the row (rc %d)" % p.returncode)
 # THE KERNEL'S WORD (H4): an Xid line from the row's pid — or a GRANDCHILD's, as an app spawned by a
