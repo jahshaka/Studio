@@ -33,6 +33,10 @@
 #   vr.frame_budget 129.68  <- the before-run at 51e9f2c49
 #   vr.warmup.timing 49.73  <- its push row's worst gate run (same binary)
 #   vr.warmup.timing.fresh_home 0.01  <- a wipe
+#   capture.first_recording.timing 32.00  <- TESTING-CLEANUP-2 dev run after admission (2026-10-09)
+#   capture.offline_unique.timing 101.00  <- TESTING-CLEANUP-2 dev run after admission (2026-10-09)
+#   ui.selection_cost.timing 5.12  <- its push row's dev run (same binary, TESTING-CLEANUP-2)
+#   pool.vr_validation 253.38 / pool.capture_validation 219.32  <- TESTING-CLEANUP-2 dev runs (new layered pools)
 # gi.budget: its gate seconds include the GPU lock's flock WAIT (458 s once) — the run itself is ~9 s.
 # SUITE-POOL-1 (2026-09-27): the 142 pooled rows, app.create_loop (+ its fixture) and atom.error_bound deleted;
 #   the 17 pool rows + pool.runner from the run log (2026-09-27-scoped-b6a088bfe.jsonl, -j4, alone on the box).
@@ -89,6 +93,8 @@ cameras.exposure 8.96
 cameras.lens 0.03
 cameras.pip 3.92
 cameras.play_routing 1.97
+capture.first_recording.timing 32.00
+capture.offline_unique.timing 101.00
 chain.hzb 3.1
 chain.hzb.timing 1.84
 claude.chat 3.24
@@ -350,6 +356,7 @@ pool.assets_import 64.48
 pool.atom 49.73
 pool.avatar_anim 20.43
 pool.cameras 31.66
+pool.capture_validation 219.32
 pool.doc 14.68
 pool.doc_assets 12.63
 pool.editor 71.66
@@ -362,6 +369,7 @@ pool.shading 57.20
 pool.shading_live 73.79
 pool.vr_noruntime 22.49
 pool.vr_session 79.21
+pool.vr_validation 253.38
 pool.world_light 124.60
 pool.world_sky 127.90
 preview.lifecycle 3.26
@@ -568,6 +576,7 @@ ui.properties_tabs 0.54
 ui.properties_width 1.19
 ui.property_anim 0.03
 ui.selection_cost 8.64
+ui.selection_cost.timing 5.12
 ui.shot_aspect 27.25
 ui.show_walk 0.33
 ui.space_docks 60.62

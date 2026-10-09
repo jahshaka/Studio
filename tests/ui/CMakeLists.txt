@@ -551,6 +551,15 @@ add_test(NAME ui.selection_cost COMMAND test_selection_cost
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(ui.selection_cost PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "ui")
+# ui.selection_cost.timing — its MILLISECOND half (TESTING-CLEANUP-2 P10e; tests/support/timingbars.h):
+# the 1.5x first-50/last-50 ratios, the minute ceiling, the 90 Hz pick bars and the pick-by-scene-size
+# ratio, armed (JAHSHAKA_TIMING_BARS=1) on the quiet box under the GPU-timing lock. The row above keeps
+# every COUNT (the object population, the retired rows, the mounts) and prints each millisecond bar.
+jah_gpu_exclusive_test(NAME ui.selection_cost.timing CLASS none RUN_TIMEOUT 120 COMMAND test_selection_cost
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(ui.selection_cost.timing PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen;JAHSHAKA_TIMING_BARS=1" LABELS "ui;stage-close;quiet-box")
+jah_no_display(ui.selection_cost.timing)
 
 # THE STAGED ICONS, REACHABLE FROM A TEST BINARY (COMPONENTS-1). Every icon in
 # this app is resolved against applicationDirPath (IrisUtils::getAbsoluteAssetPath)
