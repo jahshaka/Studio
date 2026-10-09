@@ -121,16 +121,28 @@ int main(int argc, char **argv)
                                .value("result").toInt();
         CHECK(mcp.runScript(QStringLiteral("editor.importAssets(%1)").arg(batchJs)).value("ok").toBool(),
               "threaded import batch started");
-        QThread::msleep(700);   // let the batch get properly mid-flight
-
-        // Prove the quit really lands MID-batch: not every file is in yet.
-        const QJsonObject progress = mcp.runScript(QStringLiteral(
-            "assets.list({scope:'store'}).filter(function(a){return a.type=='object'}).length"));
-        const int imported = progress.value("result").toInt() - before;
-        std::printf("info: objects imported when the quit was issued: %d of %d\n",
-                    imported, int(batch.size()));
-        CHECK(progress.value("ok").toBool() && imported < batch.size(),
-              "the batch is still mid-flight at quit time");
+        // MID-FLIGHT BY COUNT, NOT BY CLOCK (TESTING-CLEANUP-2 P10b): the quit goes out the first
+        // time the store holds at least one of the batch's objects — the batch is really running —
+        // and the check below proves it has not finished. It used to sleep 700 ms and hope: on a
+        // starved box the batch had not reached its first object yet, or had finished (4 FAIL in
+        // 206 runs). Each poll is one MCP request (a turn of the app's event loop, where the
+        // finished imports land); the bound is a COUNT of polls, each request still under the
+        // client's transfer timeout.
+        const QString countJs = QStringLiteral(
+            "assets.list({scope:'store'}).filter(function(a){return a.type=='object'}).length");
+        QJsonObject progress;
+        int imported = 0, polls = 0;
+        for (; polls < 20000; ++polls) {
+            progress = mcp.runScript(countJs);
+            if (!progress.value("ok").toBool()) break;
+            imported = progress.value("result").toInt() - before;
+            if (imported >= 1) break;
+        }
+        std::printf("info: objects imported when the quit was issued: %d of %d (after %d polls)\n",
+                    imported, int(batch.size()), polls + 1);
+        CHECK(progress.value("ok").toBool() && imported >= 1,
+              "the batch is running at quit time (its first object is in the store)");
+        CHECK(imported < batch.size(), "the batch is still mid-flight at quit time");
 
         quitAndAssertExit(jahshaka, mcp, "quit-during-import");
     }
