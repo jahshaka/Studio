@@ -178,7 +178,7 @@ def main(source, build):
     time.sleep(0.8)
     p = subprocess.run([sys.executable, vt, "admit", "1", "--", "true"], capture_output=True, text=True, timeout=30)
     check(p.returncode == 0 and "gate-slot" not in p.stderr, "a plain admission (a hand run) never takes the slot")
-    os.environ["JAH_GATE_SLOT_HELD"] = "1"
+    os.environ["JAH_GATE_SLOT_HELD"] = str(holder.pid)     # the live holder's pid: what a gate's rows inherit
     check(vt_mod.gate_slot("nested", log=io.StringIO()) is None, "a process already inside a gate never queues again")
     os.environ.pop("JAH_GATE_SLOT_HELD")
     holder.terminate(); holder.wait()
@@ -625,6 +625,22 @@ def main(source, build):
     check(len(ts_) == 1 and ts_[0]["row"] == "gi.x" and ts_[0]["target"] == "cost #"
           and ts_[0]["delta"] == {"before": 1.0, "after": 2.0, "rel": 100.0},
           "a trend step is a `kind: trend-step` record {row, target, delta}")
+    ov = rl.law_overrides({"JAH_GATE_SLOT_HELD": "999999999", "JAH_VRAM_DIR": "/tmp/jah-vram"})
+    ov_dir = rl.law_overrides({"JAH_VRAM_DIR": "/somewhere/else"})
+    check(ov == ["JAH_GATE_SLOT_HELD=999999999 (no live holder)"] and ov_dir == ["JAH_VRAM_DIR=/somewhere/else"]
+          and any(o.startswith("JAH_VRAM_DIR=") for o in r_["overrides"]),
+          "a hand-set JAH_GATE_SLOT_HELD naming no live holder, and a private JAH_VRAM_DIR, are overrides (F6: %r %r)"
+          % (ov, ov_dir))
+    held_fd = vt_mod._take_ticket("F6 holder")[1]
+    ok_live = not rl.law_overrides({"JAH_GATE_SLOT_HELD": str(os.getpid())})
+    os.close(held_fd)
+    os.environ["JAH_GATE_SLOT_HELD"] = "999999999"
+    q_out = io.StringIO()
+    fd_ = vt_mod.gate_slot("F6 bypass", log=q_out)
+    check(ok_live and fd_ is not None and "names no live holder" in q_out.getvalue(),
+          "...a gate's own live pid is not; a stale value does not bypass the slot — it queues (F6)")
+    if fd_ is not None: os.close(fd_)
+    os.environ.pop("JAH_GATE_SLOT_HELD", None)
     ok_t = True
     for t_ in ("lane", "solo"):
         try: rl.check_tier(t_)

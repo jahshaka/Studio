@@ -565,7 +565,9 @@ def _vram():
 # A --verdict is a lawful act through the door, never an override.
 LAW_SWITCHES = ("JAH_GATE_SLOT", "JAH_VRAM_TOKENS", "JAH_VRAM_ALL", "JAH_JUDGE_READ", "JAH_VRAM_WAIT",
                 "JAH_VRAM_PHASE_WAIT", "JAH_GATE_REQUEUE", "JAH_DISPLAY_POLL_S", "JAH_KERNEL_JOURNAL",
-                "JAH_VRAM_PROC_LOCKS")
+                "JAH_VRAM_PROC_LOCKS",
+                # F6: a private token universe is admission off for the box; a hand-set slot holder bypasses it
+                "JAH_VRAM_DIR", "JAH_GATE_SLOT_HELD")
 
 
 def law_overrides(env=None, tool_set=()):
@@ -582,6 +584,14 @@ def law_overrides(env=None, tool_set=()):
             continue
         if k == "JAH_GATE_SLOT" and v.strip() != "0":
             continue
+        if k == "JAH_VRAM_DIR" and os.path.normpath(v) == "/tmp/jah-vram":
+            continue
+        if k == "JAH_GATE_SLOT_HELD":
+            # F6: a gate's rows inherit it from the gate (a live ticket holder); any other value is a hand-set
+            # bypass of the slot
+            if _vram().slot_held_valid(v):
+                continue
+            v = v + " (no live holder)"
         out.append(f"{k}={v}")
     return out
 

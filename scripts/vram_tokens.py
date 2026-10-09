@@ -398,13 +398,29 @@ def gate_slot(label="", log=sys.stderr):
     return fd
 
 
+def slot_held_valid(value=None):
+    """Whether JAH_GATE_SLOT_HELD (or `value`) names a LIVE pid that holds a ticket in this token dir's queue
+    (GATE-COST-2 F6): a gate's own pid, inherited by its rows. A hand-set or stale value is not a holder."""
+    v = os.environ.get("JAH_GATE_SLOT_HELD") if value is None else value
+    try:
+        pid = int(v)
+    except (TypeError, ValueError):
+        return False
+    return any(t[1] == pid for t in gate_queue())
+
+
 def _queue_for_slot(label, log):
     """The FIFO wait itself: the slot's fd once this process is the head, None when the slot is off or
     already this process's. Leaves the environment alone (hold_card hands JAH_GATE_SLOT_HELD to its
     phase's rows only)."""
     if os.environ.get("JAH_GATE_SLOT_HELD"):
-        _say(log, "gate-slot: already held by this gate (pid %s) — %s" % (os.environ["JAH_GATE_SLOT_HELD"], label))
-        return None
+        if slot_held_valid():
+            _say(log, "gate-slot: already held by this gate (pid %s) — %s" % (os.environ["JAH_GATE_SLOT_HELD"], label))
+            return None
+        # F6: a JAH_GATE_SLOT_HELD that names no live ticket holder is no holder — queue like anyone (the
+        # records name it as an override)
+        _say(log, "gate-slot: JAH_GATE_SLOT_HELD=%s names no live holder — queueing — %s"
+             % (os.environ["JAH_GATE_SLOT_HELD"], label))
     if not slot_enabled():
         return None
     seq, fd = _take_ticket(label)
