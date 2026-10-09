@@ -187,6 +187,18 @@ if(Python3_Interpreter_FOUND)
                      "${CMAKE_SOURCE_DIR}" "${CMAKE_BINARY_DIR}")
     set_tests_properties(gate.cost PROPERTIES TIMEOUT 180 LABELS "hygiene")
     jah_no_display(gate.cost)
+    # gate.batch — ONE GATE PER BATCH OF LANES (BATCH-GATE-1; TESTING_GATE §3c): the lead's
+    # `merge-dbuild-lane.sh batch` stacks the ready lanes as ONE candidate on its own branches (a conflict, or
+    # diverging fork pins, refuses the whole batch and moves nothing), `batch-land` runs the judge once on
+    # d-build..candidate and fast-forwards both repos on green; a red is attributed by `gate-scope.sh
+    # --attribute` (3 solo runs per lane on its own tip; red on none = the combination); records carry
+    # `lanes` as a list; `--joint` refuses. A toy repo pair, a private run log and token dir (~20 s).
+    # The merge script is the lead's (<workspace>/scripts/lead/; JAH_MERGE_SCRIPT overrides).
+    add_test(NAME gate.batch
+             COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/gate_batch_test.py"
+                     "${CMAKE_SOURCE_DIR}" "${CMAKE_BINARY_DIR}")
+    set_tests_properties(gate.batch PROPERTIES TIMEOUT 180 LABELS "hygiene")
+    jah_no_display(gate.batch)
 endif()
 
 # source.member_init — UNINIT-SWEEP-1: every scalar, pointer and enum member of ours
