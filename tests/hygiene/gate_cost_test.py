@@ -250,8 +250,12 @@ def main(source, build):
     t.start()
     check(wait_until(lambda: "gpu.slow" in order(), t), "the run reached gpu.slow (its producer alive)")
     me = os.getpid()
-    ctests = [p for p in rl._descendants(me)
-              if open(f"/proc/{p}/cmdline", "rb").read().split(b"\0")[0].endswith(b"ctest")]
+    def argv0(p_):
+        try:                                     # a process may exit between the listing and the read (the run's
+            return open(f"/proc/{p_}/cmdline", "rb").read().split(b"\0")[0]   # own short-lived samplers do)
+        except OSError:
+            return b""
+    ctests = [p for p in rl._descendants(me) if argv0(p).endswith(b"ctest")]
     for p in ctests + [p for c in ctests for p in rl._descendants(c)]:
         try: os.kill(p, signal.SIGKILL)
         except OSError: pass
