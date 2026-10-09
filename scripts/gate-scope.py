@@ -6,7 +6,7 @@
     scripts/gate-scope.sh --files path [path ...]
     scripts/gate-scope.sh --solo <suite> [...] [--times 3]     # the flake protocol, logged
     scripts/gate-scope.sh --attribute <row>[,<row>...] --batch <tag> --candidate <rc tree>:<tip> \
-        --control <d-build tree>:<tip> --lanes <lane>:<worktree>:<tip> [...]  # a batch red: 3x per lane, candidate, control
+        --control <rc-base>:<d-build tip> --display :NN --lanes <lane>:<worktree>:<tip> [...]   # a batch red
     scripts/gate-scope.sh --record-times                       # gate-times.txt from the run log
     scripts/gate-scope.sh --merge-tier [-j N] | --merge-tier-serial | --nightly-tier | --gate-jobs
 
@@ -1912,41 +1912,57 @@ def select(paths, rng, build, jobs, graph=None, inv=None, quiet_graph=False):
     return S
 
 
-def attribute(row_args, lane_specs, tag, times, tier, candidate=None, controls=None):
-    """THE BATCH RED, ATTRIBUTED (BATCH-GATE-1; docs/TESTING_GATE.md §3c). A batch candidate's gate went
-    red on <rows>: each row runs `times` times SOLO in each lane's OWN worktree at its exact batch tip (the
-    lanes' built trees), at the CANDIDATE's tip (its rc tree) and at every --control tree (d-build's tip:
-    TESTING_V3_SPEC §1.3.2), every run a logged retry at
-    THAT tip (`reason: attribute:<tag>`, the tree's name in `lanes`). The whole card is held ONCE for the
-    attribution through hold_card() — which takes whatever the card's admission demands (it never
-    assumes the gate slot is free). Only REAL verdicts count: a run that never got its admission
-    (NOADMIT) or never ran (NOTRUN) leaves its cell INCOMPLETE — the lane is neither named nor cleared.
-    A row the lane's build does not REGISTER is ABSENT there (never run, never blamed). Per row:
-      * red on a --control tip (any solo) = a D-BUILD DEFECT: the row is red without any lane — it names
-        nobody and is registered as d-build's (exit 5 when no combination defect);
-      * else a lane is NAMED when ANY of its solos is red (the flake law: one red run is a red) — it drops out;
-      * else red at the candidate (any solo) and green on every lane's own tip = a COMBINATION DEFECT:
-        a real interaction, the batch is REFUSED (exit 3);
-      * else green at the candidate = NOT REPRODUCED: a flake, answered at the verdict door
-        (ci-gate-check --verdict; a contention-class row by these 3/3 solos at the candidate tip).
-    Returns 0 (table printed, no defect), 3 (a combination defect), 5 (a d-build defect, no combination
-    defect), 4 (a tree is unusable), 64 (usage)."""
+ATTR_DEFECT_COMBINATION, ATTR_INCOMPLETE, ATTR_DEFECT_DBUILD = 3, 7, 5
+
+
+def attribute(row_args, lane_specs, tag, times, tier, candidate=None, controls=None, display=None):
+    """THE BATCH RED, ATTRIBUTED (BATCH-GATE-1; docs/TESTING_GATE.md §3c; TESTING_V3_SPEC §1.3.2). A batch
+    candidate's gate went red on <rows>: each row runs `times` times SOLO in each lane's OWN worktree at its exact
+    batch tip (the lanes' built trees), at the CANDIDATE's tip (its rc tree) and at every CONTROL (the base build
+    rc-base at d-build's tip), every run a logged retry at THAT tip (`reason: attribute:<tag>`; `lanes` = the
+    lane, the candidate's = the batch's list, a control's = its tree's name). The display is NAMED (`display`,
+    :60-:99 with its X lock) and the environment's DISPLAY is never read. The whole card is held ONCE for the
+    attribution through hold_card() — whatever the card's admission demands (it never assumes the gate slot is
+    free). Only REAL verdicts count: a run that never got its admission (NOADMIT) or never ran (NOTRUN) leaves its
+    cell INCOMPLETE. A row a tree's build does not REGISTER is ABSENT there (never run, never blamed). Per row, IN
+    THIS ORDER:
+      1. a control cell INCOMPLETE/ABORTED -> the row is INCOMPLETE (nothing is named without its baseline);
+      2. red on a control (any solo) = a D-BUILD DEFECT: it names nobody (kind `defect`, registered);
+      3. a lane is NAMED when ANY of its solos is red (the flake law: one red run is a red) — it drops out;
+      4. any other cell INCOMPLETE/ABORTED -> INCOMPLETE;
+      5. red at the candidate and green on every lane = a COMBINATION DEFECT (kind `combination`, registered):
+         the batch is REFUSED;
+      6. green at the candidate too = NOT REPRODUCED (kind `nondeterminism`, registered): the verdict door.
+    Every registered finding is written as <workspace>/testing/defects.pending/<id>.json (TESTING_V3_SPEC §1.5's
+    schema; VERDICT-1's registry ingests it). Returns 0 (no defect, complete), 3 (a combination defect), 7 (an
+    INCOMPLETE or aborted attribution), 5 (a d-build defect only), 4 (a tree is unusable), 64 (usage)."""
     rows = []
     for arg in row_args or []:
         for r in arg.split(","):
             r = r.split(" :: ", 1)[0].strip()       # a pool arm is attributed by its row
             if r and r not in rows:
                 rows.append(r)
-    if not rows or not lane_specs or not tag or not candidate:
-        sys.stderr.write("gate-scope --attribute: give the red rows, --batch <tag>, --candidate <rc tree>:<tip> and "
-                         "--lanes <lane>:<worktree>:<tip> [...]\n")
+    if not rows or not lane_specs or not tag or not candidate or not controls or not display:
+        sys.stderr.write("gate-scope --attribute: give the red rows, --batch <tag>, --candidate <rc tree>:<tip>, "
+                         "--control <base build>:<d-build tip> (required: a red names nobody without its baseline), "
+                         "--display :NN and --lanes <lane>:<worktree>:<tip> [...]\n")
         return 64
-    trees, bad = [], []
-    specs = [(s, False) for s in lane_specs] + [("candidate:" + candidate, True)]
-    for c in controls or []:
+    # THE DISPLAY IS NAMED, NEVER INHERITED (the lead's shell carries the owner's :0)
+    m = re.match(r"^:([6-9][0-9])$", display)
+    xroot = os.environ.get("JAH_X11_ROOT", "/tmp")
+    if not m:
+        sys.stderr.write(f"gate-scope --attribute: REFUSED — --display {display} is not a rig display (:60-:99)\n")
+        return 64
+    if not os.path.exists(os.path.join(xroot, f".X{m.group(1)}-lock")):
+        sys.stderr.write(f"gate-scope --attribute: REFUSED — --display {display} has no X server "
+                         f"(no {os.path.join(xroot, f'.X{m.group(1)}-lock')})\n")
+        return 64
+    specs = [(s, "lane") for s in lane_specs] + [("candidate:" + candidate, "candidate")]
+    for c in controls:
         tree = c.rpartition(":")[0]
         specs.append((f"{os.path.basename(os.path.normpath(tree)) or 'control'}:{c}", "control"))
-    for spec, is_cand in specs:
+    trees, bad = [], []
+    for spec, kind in specs:
         name, _, rest = spec.partition(":")
         wt, _, tip = rest.rpartition(":")
         if not (name and wt and tip):
@@ -1972,40 +1988,45 @@ def attribute(row_args, lane_specs, tag, times, tier, candidate=None, controls=N
             if not names:
                 bad.append(f"{name}: {build} lists no ctest rows (ctest --show-only exit {irc})")
             else:
-                trees.append((name, wt, build, head, names, is_cand))
+                trees.append((name, wt, build, head, names, kind))
     if bad:
         for b in bad: sys.stderr.write(f"gate-scope --attribute: REFUSED — {b}\n")
         return 4
-    lanes = [t for t in trees if not t[5]]
+    lanes = [t for t in trees if t[5] == "lane"]
     ctrls = [t for t in trees if t[5] == "control"]
+    cand = [t for t in trees if t[5] == "candidate"][0]
     reason = f"attribute:{tag}"
-    print(f"gate-scope --attribute (batch {tag}): {len(rows)} row(s) x ({len(lanes)} lane(s) + the candidate) x "
-          f"{times} solo run(s), each on its own tip; the whole card held once (hold_card), never a gate")
+    print(f"gate-scope --attribute (batch {tag}): {len(rows)} row(s) x ({len(lanes)} lane(s) + the candidate + "
+          f"{len(ctrls)} control(s)) x {times} solo run(s), each on its own tip, display {display}; the whole card "
+          f"held once (hold_card), never a gate")
     gate_runlog.on_signals()
     card, env = gate_runlog._vram().hold_card(f"attribute {tag}: {','.join(rows)[:80]}", log=sys.stdout)
+    env = dict(env, DISPLAY=display)
     if not card and not env.get("JAH_VRAM_HELD"):
         env["JAH_VRAM_ALL"] = "1"      # no hold (the drain timed out): every admission takes the card
-    cells = {}                          # (row, name) -> (state, reds, real runs, first failing check)
+    cells = {}                          # (row, name) -> (state, reds, real runs, first failing check, last record)
     try:
         for row in rows:
             rx = "^" + re.escape(row) + "$"
-            for name, wt, build, head, names, is_cand in trees:
+            for name, wt, build, head, names, kind in trees:
                 if row not in names:
-                    cells[(row, name)] = ("ABSENT", 0, 0, None); continue
+                    cells[(row, name)] = ("ABSENT", 0, 0, None, None); continue
                 seen = len(_attribution_records(row, head, reason))
-                reds, real, first, never = 0, 0, None, []
+                reds, real, first, never, last = 0, 0, None, [], None
                 for _ in range(times):
                     rc = gate_runlog.run_ctest(
                         f"ctest -j1 --timeout 900 --output-on-failure --no-tests=error -R '{rx}'", build, tier,
-                        [t[0] for t in lanes] if is_cand is True else [name], 1, reasons={row: reason}, retry=True, env=env, whole_card=False, root=wt)
+                        [t[0] for t in lanes] if kind == "candidate" else [name], 1, reasons={row: reason},
+                        retry=True, env=env, whole_card=False, root=wt)
                     if rc == gate_runlog.DISPLAY_LOST or rc < 0 or rc > 128:
-                        cells[(row, name)] = ("ABORTED", reds, real, f"exit {rc}")
+                        cells[(row, name)] = ("ABORTED", reds, real, f"exit {rc}", last)
                         print(f"\n=== ATTRIBUTION ABORTED at {row} on {name} (exit {rc}): the display died or ctest "
                               f"was killed — the table below is partial ===")
                         raise _AttributionAborted()
                     recs = _attribution_records(row, head, reason)
                     new, seen = recs[seen:], len(recs)
                     v = new[-1].get("verdict") if new else None
+                    if new: last = new[-1]
                     if v is None or v in ("NOADMIT", "NOTRUN"):
                         never.append(v or f"no record (exit {rc})")      # never ran: no verdict
                         continue
@@ -2014,55 +2035,91 @@ def attribute(row_args, lane_specs, tag, times, tier, candidate=None, controls=N
                         reds += 1
                         if first is None:
                             first = new[-1].get("failLine") or f"{v} ({new[-1].get('status')})"
-                state = "RAN" if real == times else "INCOMPLETE"
-                cells[(row, name)] = (state, reds, real, first if real == times or reds else
-                                      f"{times - real} run(s) never ran ({', '.join(map(str, never))})")
+                cells[(row, name)] = ("RAN" if real == times else "INCOMPLETE", reds, real,
+                                      first if real == times or reds else
+                                      f"{times - real} run(s) never ran ({', '.join(map(str, never))})", last)
     except _AttributionAborted:
         pass
     finally:
         gate_runlog._vram().release(card)
     print(f"\n=== ATTRIBUTION (batch {tag}) ===")
     print("row | tree | red | the first failing check")
-    defect, based = False, False
+    out = {"combination": False, "defect": False, "incomplete": False}
+    nil = ("ABORTED", 0, 0, None, None)
+    unfinished = ("INCOMPLETE", "ABORTED")
     for row in rows:
         for name, *rest in trees:
-            st, reds, real, first = cells.get((row, name), ("ABORTED", 0, 0, None))
-            who = "CANDIDATE" if rest[-1] is True else (f"CONTROL {name}" if rest[-1] == "control" else name)
+            st, reds, real, first, _ = cells.get((row, name), nil)
+            who = {"candidate": "CANDIDATE", "control": f"CONTROL {name}"}.get(rest[-1], name)
             if st == "ABSENT":
                 print(f"{row} | {who} | ABSENT | the row is not registered in this build")
-            elif st in ("INCOMPLETE", "ABORTED"):
+            elif st in unfinished:
                 print(f"{row} | {who} | {st} {reds}/{real} red of {real} that ran | {first or '-'}")
             else:
                 print(f"{row} | {who} | {reds}/{real} red | {first or '-'}")
-        lc = [(n, cells.get((row, n), ("ABORTED", 0, 0, None))) for n, *_ in lanes]
-        cc = cells.get((row, "candidate"), ("ABORTED", 0, 0, None))
+        lc = [(t[0], cells.get((row, t[0]), nil)) for t in lanes]
+        ctl = [(t, cells.get((row, t[0]), nil)) for t in ctrls]
+        cc = cells.get((row, cand[0]), nil)
         named = [f"{n} ({c[1]}/{c[2]} red on its own tip)" for n, c in lc if c[1] > 0]
-        ctl = [(t[0], cells.get((row, t[0]), ("ABORTED", 0, 0, None))) for t in ctrls]
-        red_ctl = [f"{n} ({c[1]}/{c[2]})" for n, c in ctl if c[1] > 0]
-        if red_ctl:
-            based = True
-            print(f"=> {row}: D-BUILD DEFECT — red on the control {', '.join(red_ctl)} without any lane: it names "
-                  f"nobody; register it as d-build's defect")
+        if any(c[0] in unfinished for _, c in ctl):
+            out["incomplete"] = True
+            print(f"=> {row}: INCOMPLETE — a CONTROL never got its runs: no lane is named without the baseline; "
+                  f"re-run the attribution")
+        elif any(c[1] > 0 for _, c in ctl):
+            out["defect"] = True
+            t, c = [(t, c) for t, c in ctl if c[1] > 0][0]
+            path = _register(tag, "defect", row, t[3], c[4],
+                             f"red on d-build's own tip ({t[0]}: {c[1]}/{c[2]}; {c[3] or '-'}) — no lane makes it")
+            print(f"=> {row}: D-BUILD DEFECT — red on the control {t[0]} ({c[1]}/{c[2]}) without any lane: it names "
+                  f"nobody; registered {path}")
         elif named:
             print(f"=> {row}: NAMED {', '.join(named)} — any red solo names a lane; it drops out and the rest are "
                   f"RE-GATED as a new candidate")
-        elif any(c[0] in ("INCOMPLETE", "ABORTED") for _, c in lc + ctl) or cc[0] in ("INCOMPLETE", "ABORTED"):
-            print(f"=> {row}: INCOMPLETE — a cell never got its runs (NOADMIT / NOTRUN / aborted): no lane is named "
-                  f"or cleared until it ran; re-run the attribution")
-        elif cc[0] == "ABSENT":
-            print(f"=> {row}: INCOMPLETE — the candidate's build does not register it")
+        elif any(c[0] in unfinished for _, c in lc) or cc[0] in unfinished or cc[0] == "ABSENT":
+            out["incomplete"] = True
+            print(f"=> {row}: INCOMPLETE — a cell never got its runs (NOADMIT / NOTRUN / aborted, or the candidate "
+                  f"lacks the row): no lane is named or cleared until it ran; re-run the attribution")
         elif cc[1] > 0:
-            defect = True
+            out["combination"] = True
+            path = _register(tag, "combination", row, cand[3], cc[4],
+                             f"red at the candidate ({cc[1]}/{cc[2]}; {cc[3] or '-'}) and green on every lane's own "
+                             f"tip and on d-build's")
             print(f"=> {row}: COMBINATION DEFECT — red at the candidate ({cc[1]}/{cc[2]}) and green on every lane's own "
-                  f"tip that has it: the batch is REFUSED; file the defect of the combination")
+                  f"tip: the batch is REFUSED; registered {path}")
         else:
-            print(f"=> {row}: NOT REPRODUCED — green at the candidate {cc[2]}/{cc[2]} and on every lane's own tip: a "
-                  f"flake; answer it at the verdict door (ci-gate-check --verdict; the contention class by these solos)")
-    return 3 if defect else (5 if based else 0)
+            path = _register(tag, "nondeterminism", row, cand[3], cc[4],
+                             f"red in batch {tag}'s gate; green {cc[2]}/{cc[2]} at the candidate, on every lane and "
+                             f"on d-build in the attribution")
+            print(f"=> {row}: NOT REPRODUCED — green at the candidate {cc[2]}/{cc[2]} and everywhere else: a "
+                  f"nondeterminism, registered {path}; it passes the verdict door with these solos recorded")
+    if out["combination"]: return ATTR_DEFECT_COMBINATION
+    if out["incomplete"]: return ATTR_INCOMPLETE
+    if out["defect"]: return ATTR_DEFECT_DBUILD
+    return 0
+
+
+def _register(tag, kind, row, tip, rec, cause):
+    """A finding REGISTERED, never printed only (TESTING_V3_SPEC §1.5): <workspace>/testing/defects.pending/<id>.json
+    (JAH_DEFECTS_PENDING_DIR moves it), {id, rows, kind, cause, first_seen {tip, pin, run}, state: open,
+    found_by: gate}. VERDICT-1's registry (testing/defects.json) ingests the pending files. Returns the path."""
+    d = os.environ.get("JAH_DEFECTS_PENDING_DIR") or os.path.join(gate_runlog.workspace_root(), "testing",
+                                                                  "defects.pending")
+    os.makedirs(d, exist_ok=True)
+    did = re.sub(r"[^A-Za-z0-9._-]+", "-", f"{tag}-{kind}-{row}")
+    t = (rec or {}).get("tip") or {}
+    entry = {"id": did, "rows": [row], "kind": kind, "cause": cause,
+             "first_seen": {"tip": tip, "pin": t.get("fork") or "", "run": (rec or {}).get("run") or ""},
+             "state": "open", "found_by": "gate"}
+    path = os.path.join(d, did + ".json")
+    with open(path, "w") as f:
+        json.dump(entry, f, indent=1, sort_keys=True)
+        f.write("\n")
+    return path
 
 
 class _AttributionAborted(Exception):
     pass
+
 
 
 def _attribution_records(row, head, reason):
@@ -2133,6 +2190,9 @@ def main():
     ap.add_argument("--control", metavar="TREE:TIP", nargs="+", default=None,
                     help="with --attribute: CONTROL trees (d-build's built tree at its tip; several allowed) — a row red "
                          "on one names nobody and is a d-build defect")
+    ap.add_argument("--display", metavar=":NN", default=None,
+                    help="with --attribute (REQUIRED): the rig display, :60-:99 with its X lock — the environment's "
+                         "DISPLAY is never read")
     ap.add_argument("--batch", metavar="TAG", default=None,
                     help="with --attribute: the batch tag the records' reason names (`attribute:<tag>`)")
     ap.add_argument("--fork-tier", action="store_true",
@@ -2176,9 +2236,10 @@ def main():
         print(nightly_tier()); return
     if a.attribute:
         # each lane's OWN worktree and build (--lanes), never this checkout's
-        sys.exit(attribute(a.attribute, a.lanes, a.batch, a.times, a.tier or "scoped", a.candidate, a.control))
-    if a.lanes or a.batch or a.candidate or a.control:
-        ap.error("--lanes / --batch / --candidate / --control go with --attribute")
+        sys.exit(attribute(a.attribute, a.lanes, a.batch, a.times, a.tier or "scoped", a.candidate, a.control,
+                           a.display))
+    if a.lanes or a.batch or a.candidate or a.control or a.display:
+        ap.error("--lanes / --batch / --candidate / --control / --display go with --attribute")
     build = resolve_build(a.build)
     # THE BUILT FORK MUST BE THE PIN (TESTING-DEBTS-1 T12): a run on an install built from another
     # fork commit is void (stale media) — refused before a suite runs, with the lines that fix it.
