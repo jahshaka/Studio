@@ -422,10 +422,23 @@ int main(int argc, char *argv[])
     // named defect (services/livecompiles.h, SHADER-WARM-2).
     if (auto engine = EngineHost::instance().engine()) {
         livecompiles::arm([weak = std::weak_ptr<jahshaka::engine::Engine>(engine)]() {
-            unsigned compiled = 0, cached = 0, expected = 0;
-            if (auto e = weak.lock()) e->shaderBuildProgress(compiled, cached, expected);
-            return compiled;
+            auto e = weak.lock();
+            if (!e) return 0u;
+            // ONLY WHAT A FRAME WAITED FOR (ASYNC-SHADERS-1): the shaders compiled off the
+            // background compiler's threads, ONE counter read once. It used to be compiled -
+            // compiledInBackground, two loads that a service-thread compile could land between
+            // (the difference dipped by one and came back: a phantom live compile, measured as
+            // shader.sample_opens_quiet's "1 shader(s)" under load).
+            return e->asyncShaderStats().compiledInForeground;
         });
+        // AFTER THE STARTUP GATE, THE EDITOR COMPILES IN THE BACKGROUND (ASYNC-SHADERS-1):
+        // an interactive session's view never waits for a shader outside an open's dialog.
+        // A scripted run, an MCP session (the suites and the rig drive the app through it)
+        // and the engine selftest keep every frame a complete picture: their pixel reads
+        // must never meet a placeholder (app.sky_swap_presented did). A session asks for
+        // the background path with app.setAsyncShaders(true); the selftest asserts it drew
+        // no placeholder.
+        livecompiles::setAsyncPolicy(!cli.isScriptRun() && cli.selftestPng.isEmpty() && !cli.mcpServe);
     }
     // From now on any NEW compile burst (a scene open, a material edit) is
     // written to disk a few seconds after it settles, so a crash costs at most

@@ -14,10 +14,12 @@ For more information see the LICENSE file
 #include <QAction>
 #include <QActionGroup>
 #include <QHBoxLayout>
+#include <QLabel>
 #include <QMainWindow>
 #include <QMenu>
 #include <QSlider>
 #include <QSpinBox>
+#include <QTimer>
 #include <QToolBar>
 #include <QToolButton>
 #include <QWidgetAction>
@@ -229,6 +231,35 @@ void EditorToolbar::build(const Deps &deps)
     QWidget* empty = new QWidget();
     empty->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
     toolBar->addWidget(empty);
+
+    // "COMPILING SHADERS (N)" (ASYNC-SHADERS-1). After a project is open no compile
+    // freezes the window: the engine builds a new shader in the background and the object
+    // draws a grey placeholder meanwhile — this says how many are still on their way. It
+    // reads two atomics four times a second and is visible only while N > 0. Its action is
+    // `shaderCompiles` in editor.toolbar (visible + the text as its tooltip).
+    {
+        QLabel *label = new QLabel;
+        label->setObjectName(QStringLiteral("shaderCompileIndicator"));
+        QAction *indicator = toolBar->addWidget(label);
+        indicator->setObjectName(QStringLiteral("actionShaderCompiles"));
+        indicator->setVisible(false);
+        if (deps.pendingShaders) {
+            QTimer *poll = new QTimer(label);
+            poll->setInterval(250);
+            connect(poll, &QTimer::timeout, label, [label, indicator, pending = deps.pendingShaders]() {
+                const unsigned n = pending();
+                if (n > 0) {
+                    const QString text = tr("Compiling shaders (%1)").arg(n);
+                    if (label->text() != text) {
+                        label->setText(text);
+                        indicator->setToolTip(text);
+                    }
+                }
+                if (indicator->isVisible() != (n > 0)) indicator->setVisible(n > 0);
+            });
+            poll->start();
+        }
+    }
 
 	QAction *actionExport = new QAction;
 	actionExport->setObjectName(QStringLiteral("actionExport"));

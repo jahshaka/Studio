@@ -38,6 +38,11 @@ struct State
     int                       windows = 0;    ///< open sanctioned windows
     std::atomic<unsigned>     observed{ 0 };  ///< the total at the last check
     std::atomic<unsigned>     live{ 0 };      ///< compiles counted as live (defects)
+    /// ASYNC-SHADERS-1: the editor's view compiles in the BACKGROUND outside a window
+    /// (the engine's compile service; a placeholder draws until a shader lands). On for an
+    /// interactive session, off for a scripted run (its frames are deterministic pictures)
+    /// unless the script asks (app.setAsyncShaders).
+    bool                      asyncPolicy = false;
 };
 
 inline State &state()
@@ -74,6 +79,18 @@ inline void arm(std::function<unsigned()> total)
     s.armed = true;
 }
 inline bool armed() { return state().armed; }
+
+/// THE COMPILE MODE OF THE EDITOR'S VIEW (ASYNC-SHADERS-1). Startup and an open compile
+/// BLOCKING (the splash, the open's dialog: the sanctioned windows); after that a view
+/// compiles in the background and never freezes the window. The viewport applies this to
+/// its view before every frame it draws.
+inline void setAsyncPolicy(bool on) { state().asyncPolicy = on; }
+inline bool asyncPolicy() { return state().asyncPolicy; }
+inline bool asyncNow()
+{
+    const State &s = state();
+    return s.asyncPolicy && s.armed && s.windows == 0;
+}
 
 /// A window in which compiling on the UI thread is the contract (a compile dialog is up,
 /// an open is in flight). Entering it settles what came before; leaving it keeps what
