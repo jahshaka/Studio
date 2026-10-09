@@ -1933,8 +1933,9 @@ def attribute(row_args, lane_specs, tag, times, tier, candidate=None, controls=N
       5. red at the candidate and green on every lane = a COMBINATION DEFECT (kind `combination`, registered):
          the batch is REFUSED;
       6. green at the candidate too = NOT REPRODUCED (kind `nondeterminism`, registered): the verdict door.
-    Every registered finding is written as <workspace>/testing/defects.pending/<id>.json (TESTING_V3_SPEC §1.5's
-    schema; VERDICT-1's registry ingests it). Returns 0 (no defect, complete), 3 (a combination defect), 7 (an
+    Every registered finding is written as <workspace>/testing/defects.pending/<id>.json in TESTING_V3_SPEC §1.5's
+    FULL schema (recheck, expires; uses/suspects/census for NOT REPRODUCED) — VERDICT-1's reader refuses the whole
+    registry on one malformed entry. Returns 0 (no defect, complete), 3 (a combination defect), 7 (an
     INCOMPLETE or aborted attribution), 5 (a d-build defect only), 4 (a tree is unusable), 64 (usage)."""
     rows = []
     for arg in row_args or []:
@@ -2089,7 +2090,7 @@ def attribute(row_args, lane_specs, tag, times, tier, candidate=None, controls=N
         else:
             path = _register(tag, "nondeterminism", row, cand[3], cc[4],
                              f"red in batch {tag}'s gate; green {cc[2]}/{cc[2]} at the candidate, on every lane and "
-                             f"on d-build in the attribution")
+                             f"on d-build in the attribution", suspects=[t[0] for t in lanes])
             print(f"=> {row}: NOT REPRODUCED — green at the candidate {cc[2]}/{cc[2]} and everywhere else: a "
                   f"nondeterminism, registered {path}; it passes the verdict door with these solos recorded")
     if out["combination"]: return ATTR_DEFECT_COMBINATION
@@ -2098,18 +2099,30 @@ def attribute(row_args, lane_specs, tag, times, tier, candidate=None, controls=N
     return 0
 
 
-def _register(tag, kind, row, tip, rec, cause):
-    """A finding REGISTERED, never printed only (TESTING_V3_SPEC §1.5): <workspace>/testing/defects.pending/<id>.json
-    (JAH_DEFECTS_PENDING_DIR moves it), {id, rows, kind, cause, first_seen {tip, pin, run}, state: open,
-    found_by: gate}. VERDICT-1's registry (testing/defects.json) ingests the pending files. Returns the path."""
-    d = os.environ.get("JAH_DEFECTS_PENDING_DIR") or os.path.join(gate_runlog.workspace_root(), "testing",
-                                                                  "defects.pending")
+def _register(tag, kind, row, tip, rec, cause, suspects=None):
+    """A finding REGISTERED, never printed only (TESTING_V3_SPEC §1.5): <registry dir>/defects.pending/<id>.json — the
+    registry dir is that of testing/defects.json (JAH_DEFECTS_FILE moves it; JAH_DEFECTS_PENDING_DIR moves the
+    pending dir alone), in the FULL schema VERDICT-1's reader requires (it refuses the whole registry on one malformed
+    entry): {id, rows, kind, cause, first_seen {tip, pin, run}, state: open, found_by: gate, recheck (a DATE: the
+    next day — the next batch — for NOT REPRODUCED, +7 days for a combination / d-build defect), expires (= recheck)},
+    and for NOT REPRODUCED the single-use fields {uses: 1, suspects: [the batch's lanes], census: {from the record}}.
+    Returns the path."""
+    import datetime as _dt
+    reg = os.environ.get("JAH_DEFECTS_FILE") or os.path.join(gate_runlog.workspace_root(), "testing", "defects.json")
+    d = os.environ.get("JAH_DEFECTS_PENDING_DIR") or os.path.join(os.path.dirname(reg), "defects.pending")
     os.makedirs(d, exist_ok=True)
     did = re.sub(r"[^A-Za-z0-9._-]+", "-", f"{tag}-{kind}-{row}")
-    t = (rec or {}).get("tip") or {}
+    rec = rec or {}
+    t = rec.get("tip") or {}
+    today = _dt.date.today()
+    recheck = (today + _dt.timedelta(days=1 if kind == "nondeterminism" else 7)).isoformat()
     entry = {"id": did, "rows": [row], "kind": kind, "cause": cause,
-             "first_seen": {"tip": tip, "pin": t.get("fork") or "", "run": (rec or {}).get("run") or ""},
-             "state": "open", "found_by": "gate"}
+             "first_seen": {"tip": tip, "pin": t.get("fork") or "", "run": rec.get("run") or ""},
+             "state": "open", "found_by": "gate", "recheck": recheck, "expires": recheck}
+    if kind == "nondeterminism":
+        box = rec.get("box") or {}
+        entry.update(uses=1, suspects=list(suspects or []),
+                     census=box.get("census") if isinstance(box.get("census"), dict) else dict(box))
     path = os.path.join(d, did + ".json")
     with open(path, "w") as f:
         json.dump(entry, f, indent=1, sort_keys=True)
