@@ -88,6 +88,10 @@ public:
     /// underneath a commit (services/libraryreset.h). One process-wide
     /// counter, moved in exactly the two places `mRunning` is.
     static bool anyRunning();
+    /// HOW MANY FILES THE RUNNERS OF THIS PROCESS COMMITTED (ok), counted on the UI thread as each
+    /// lands — editor.waitForImported's subject (TESTING-CLEANUP-2: a suite that must act while a
+    /// batch is mid-flight waits for its first commit by count, never by clock).
+    static int committedFiles();
 
     /// Shutdown-grade cancel: cancel PLUS abandon — the worker stops waiting
     /// for the UI thread (the commit hop gives up within one slice), skips
