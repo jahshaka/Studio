@@ -469,7 +469,7 @@ def contention_list():
     return {r: f"{e['id']}: {e['cause']} [{defect_date(e)}; recheck: {e['recheck']}]" for r, e in contention_of(d).items()}
 
 
-def record_lanes(r):
+def lanes_of(r):
     """The lanes a record belongs to: BATCH-GATE-1's `lanes` list (forward only — a record without it belongs to no
     lane for the judge)."""
     v = r.get("lanes")
@@ -480,7 +480,7 @@ def own_lane(r):
     """The lane a record is a LANE'S OWN record of (`lanes == [<lane>]`, no `batch` tag), else None — the only
     records a rebase carries reds from (TESTING_V3 §1.4: batch records never carry)."""
     if r.get("batch"): return None
-    v = record_lanes(r)
+    v = lanes_of(r)
     return v[0] if len(v) == 1 else None
 
 

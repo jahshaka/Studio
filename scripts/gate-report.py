@@ -188,7 +188,7 @@ def carried(R, repo, ref):
 
 def _lanes(r):
     """`lanes` through the one reader; a schema-1 ARCHIVE record's `lane` string (the past only)."""
-    v = set(ci_gate_check.gate_runlog.record_lanes(r))
+    v = set(ci_gate_check.gate_runlog.lanes_of(r))
     if not v and (r.get("schema") or 1) < 2 and isinstance(r.get("lane"), str) and r["lane"]:
         v = {r["lane"]}
     return v
