@@ -204,7 +204,7 @@ def _sha(r):
     return (r.get("tip") or {}).get("studio")
 
 
-def _real(m, row, reds, solos, defects, tip_recs, base_recs, tip_sha=None, mode="merge"):
+def _real(m, row, reds, solos, defects, tip_recs, base_recs, tip_sha=None, mode="merge", proves=None, key=None):
     """`real:<ID>` checked: (ok, why, kind) — kind None | "known" (KNOWN RED) | "nondet" (cleared as nondeterminism:
     a push / stage close re-asks it 3/3 at the candidate)."""
     did = m.group(1)
@@ -239,11 +239,11 @@ def _real(m, row, reds, solos, defects, tip_recs, base_recs, tip_sha=None, mode=
     later = [r for r in (tip_recs or []) if r.get("kind") != "verdict" and r.get("verdict") == "PASS" and _when(r) > last]
     # F1: THE FIX IS PROVED AT ANOTHER SHA — a PASS at the red's own sha is the same code passing once (nondeterminism:
     # 3/3 solo, never "fixed")
-    if any(_sha(r) not in red_shas for r in later):
-        return True, f"real:{did} fixed (a PASS of the row at a later sha than the red)", False
-    if later:
-        return False, (f"real:{did}: the only PASS after the red is at the red's OWN sha — the same code passing once "
-                       f"proves no fix; a fix is a PASS at a later sha (or the red reproduced on the base)"), False
+    # ROUND 2 F1: the proving PASS is at a sha DESCENDED from every red's sha whose range from it REACHES the row
+    # (`proves`, the caller's Prover); without that context nothing is proved here
+    good = [r for r in later if proves is not None and all(proves(rs, _sha(r), key or (row, None)) for rs in red_shas)]
+    if good:
+        return True, f"real:{did} fixed (a PASS at {(_sha(good[-1]) or '')[:9]}, a later sha that reaches the row)", False
     # KNOWN RED: the SAME red on the base — the same verdict class and the same masked failLine (a lane that turns a
     # base FAIL into a CRASH, or another assertion, is not "known")
     lane_red = sorted(reds, key=_when)[-1]
@@ -256,6 +256,10 @@ def _real(m, row, reds, solos, defects, tip_recs, base_recs, tip_sha=None, mode=
                       f"recorded solo at the base)"), "known"
     other = [r for r in (base_recs or []) if r.get("kind") != "verdict" and r.get("retry")
              and r.get("verdict") not in ("PASS",) + NEVER_RAN]
+    if later and not other:
+        return False, (f"real:{did}: no PASS after the red is at a later sha that REACHES the row (a descendant of the "
+                       f"red's sha whose change selects it) — the same code passing again proves no fix (3/3 solo is "
+                       f"nondeterminism)"), False
     if other:
         return False, (f"real:{did}: the base's solo red is not the SAME red ({other[-1].get('verdict')} "
                        f"'{masked(other[-1].get('failLine') or other[-1].get('status'))[:50]}' vs the lane's "
@@ -265,7 +269,8 @@ def _real(m, row, reds, solos, defects, tip_recs, base_recs, tip_sha=None, mode=
                    f"same red reproduced by a recorded solo at the BASE proves it — naming a ticket clears nothing"), False
 
 
-def door(text, reds, solos, row, defects=None, tip_recs=None, base_recs=None, tip_sha=None, mode="merge"):
+def door(text, reds, solos, row, defects=None, tip_recs=None, base_recs=None, tip_sha=None, mode="merge", proves=None,
+         key=None):
     """(ok, why, known) — may this verdict text clear these reds (the open reds logged before it)?
     `solos`: the solo retries after the reds' last gate red (any time — a verdict may be written before its
     solos run); `row`: the row (or pool.arm) name; `defects`: the loaded registry; `tip_recs` / `base_recs`:
@@ -280,7 +285,7 @@ def door(text, reds, solos, row, defects=None, tip_recs=None, base_recs=None, ti
     contention = gate_runlog.contention_of(defects)
     xid = [r for r in reds if r.get("xid")]
     if xid:
-        if real: return _real(real, row, reds, solos, defects, tip_recs, base_recs, tip_sha, mode)
+        if real: return _real(real, row, reds, solos, defects, tip_recs, base_recs, tip_sha, mode, proves, key)
         x = xid[-1]["xid"]
         return False, (f"the red carries an Xid from the row's own process (pid {x.get('pid')}, "
                        f"{x.get('window')}) — a DEFECT by law: only real:<registered id> clears it"), False
@@ -291,7 +296,7 @@ def door(text, reds, solos, row, defects=None, tip_recs=None, base_recs=None, ti
     hard = kinds & set(HARD)
     if hard:
         cls = "/".join(sorted(hard))
-        if real: return _real(real, row, reds, solos, defects, tip_recs, base_recs, tip_sha, mode)
+        if real: return _real(real, row, reds, solos, defects, tip_recs, base_recs, tip_sha, mode, proves, key)
         w = _xid_window(text)
         if w:
             if not all(r.get("journal_unreadable") for r in reds if r.get("verdict") in HARD):
@@ -304,7 +309,7 @@ def door(text, reds, solos, row, defects=None, tip_recs=None, base_recs=None, ti
                            f"does not cover the {cls} at {last.isoformat(timespec='minutes')}"), False
         return False, (f"a verdict on a {cls} is real:<registered id> (or xid-read:<window> when the journal was "
                        f"unreadable) — a {cls} is never contention"), False
-    if real: return _real(real, row, reds, solos, defects, tip_recs, base_recs, tip_sha, mode)
+    if real: return _real(real, row, reds, solos, defects, tip_recs, base_recs, tip_sha, mode, proves, key)
     if CONTENTION_TOKEN.search(text):
         if row not in contention:
             return False, ("contention: clears only a row with an OPEN dated `nondeterminism` entry in the defect "
@@ -323,7 +328,7 @@ def door(text, reds, solos, row, defects=None, tip_recs=None, base_recs=None, ti
                    "solo) — nothing accepts prose"), False
 
 
-def judge(key, recs, defects, tip_recs=None, base_recs=None, tip_sha=None, mode="merge"):
+def judge(key, recs, defects, tip_recs=None, base_recs=None, tip_sha=None, mode="merge", proves=None):
     """(state, why) for one row/arm: state 'green' | 'known' | 'nondet' | 'missing' | 'red'.
 
     `defects`: the loaded registry (gate_runlog.defects_load()); its open `nondeterminism` entries are the
@@ -355,7 +360,7 @@ def judge(key, recs, defects, tip_recs=None, base_recs=None, tip_sha=None, mode=
         solos = [r for r in runs if r.get("retry") and last_gate is not None and _when(r) > last_gate]
         ok, why, kn = door(v.get("text"), pending, solos, row, defects,
                            tip_recs=recs if tip_recs is None else tip_recs, base_recs=base_recs, tip_sha=tip_sha,
-                           mode=mode)
+                           mode=mode, proves=proves, key=key)
         if ok:
             cleared, accepted, refused = tv, (v, why), None
             known = "known" if "known" in (known, kn) else (kn or known)
@@ -461,32 +466,62 @@ class Reach:
         self.cache = {}
 
     def of(self, a, a_fork):
-        if a in self.cache: return self.cache[a]
-        reach = Reach.ALL
+        """What <a>..<the tip> reaches — for RE-USE: anything unreadable reaches everything (no re-use across it)."""
         if a_fork and a_fork == self.tip_fork:
-            rng = f"{a}..{self.tip}"
-            try:
-                S = self.gs.select(self.gs.touched_paths(rng), rng, self.build, self.gs.GATE_JOBS, graph=self.graph,
-                                   inv=self.copy.deepcopy(self.inv0), quiet_graph=True)
-                if not (S.fallback or S.full_tier or S.fork_bump):
-                    subsets = S.arm_subsets()
-                    reach = set()
-                    for n in S.selected:
-                        reach.add((n, None))
-                        pool = S.inv[n].get("pool")
-                        if n in subsets:
-                            reach |= {(n, f"{pool}.{arm}") for arm in subsets[n]}
-                        elif pool:
-                            reach.add((n, "*"))      # the whole pool: every arm
-            except SystemExit:
-                reach = Reach.ALL                    # an unreadable or empty range: nothing is re-used
-        self.cache[a] = reach
+            return self.between(a, self.tip, unreadable=Reach.ALL)
+        return Reach.ALL
+
+    def between(self, a, b, unreadable=ALL):
+        """What the scoped selection of <a>..<b> reaches: a set of keys, or ALL (a fork pin change, a fallback, the
+        tier by rule). `unreadable`: the answer for a range the selector cannot read or that selects nothing —
+        ALL for re-use (the safe side there), an empty set for PROVING a fix (the safe side there)."""
+        if (a, b) in self.cache: return self.cache[(a, b)]
+        rng = f"{a}..{b}"
+        reach = unreadable
+        try:
+            S = self.gs.select(self.gs.touched_paths(rng), rng, self.build, self.gs.GATE_JOBS, graph=self.graph,
+                               inv=self.copy.deepcopy(self.inv0), quiet_graph=True)
+            if S.fallback or S.full_tier or S.fork_bump:
+                reach = Reach.ALL
+            else:
+                subsets = S.arm_subsets()
+                reach = set()
+                for n in S.selected:
+                    reach.add((n, None))
+                    pool = S.inv[n].get("pool")
+                    if n in subsets:
+                        reach |= {(n, f"{pool}.{arm}") for arm in subsets[n]}
+                    elif pool:
+                        reach.add((n, "*"))      # the whole pool: every arm
+        except SystemExit:
+            reach = unreadable
+        self.cache[(a, b)] = reach
         return reach
 
     @staticmethod
     def reaches(reach, key):
         if reach is Reach.ALL: return True
         return key in reach or (key[1] is not None and (key[0], "*") in reach)
+
+
+class Prover:
+    """ROUND 2 F1: may a PASS at <b> prove the fix of a red at <a>? Only when <a> is an ANCESTOR of <b> and the scoped
+    selection of <a>..<b> REACHES the row — a PASS at a commit that does not touch the row (a docs-only or empty
+    commit, the red's own sha) is the same code passing again: nondeterminism, 3/3 solo."""
+
+    def __init__(self, gs, build, reach_fn):
+        self.gs, self.build, self.reach_fn, self.anc = gs, build, reach_fn, {}
+
+    def ancestor(self, a, b):
+        if (a, b) not in self.anc:
+            self.anc[(a, b)] = subprocess.run(["git", "merge-base", "--is-ancestor", a, b], cwd=self.gs.ROOT,
+                                              capture_output=True).returncode == 0
+        return self.anc[(a, b)]
+
+    def __call__(self, red_sha, pass_sha, key):
+        if not red_sha or not pass_sha or red_sha == pass_sha: return False
+        if not self.ancestor(red_sha, pass_sha): return False
+        return Reach.reaches(self.reach_fn().between(red_sha, pass_sha, unreadable=set()), key)
 
 
 def record_verdicts(pairs, tip_sha, pin):
@@ -539,6 +574,13 @@ def check(rng, build, gs=None, verdicts=None, mode="merge", lane=None):
         pins[base_sha] = _git(["rev-parse", f"{base_sha}:irisgl"], gs.ROOT) or None
     reach = None
 
+    def get_reach():
+        nonlocal reach
+        if reach is None:
+            reach = Reach(gs, build, tip_sha, fork_pin(gs, pin))
+        return reach
+    prover = Prover(gs, build, get_reach)
+
     def dropped(k, st, why, at):
         """GATE-COST-2's abort record: a row it dropped RED needs 3/3 solo PASS after the abort, whatever else
         answered it (the re-run is a solo, never a quiet answer)."""
@@ -570,7 +612,7 @@ def check(rng, build, gs=None, verdicts=None, mode="merge", lane=None):
         have_earlier = [c for c in earlier if got[c]]
         for k in need:
             ctx = dict(tip_recs=got[tip_sha].get(k, []), base_recs=got.get(base_sha, {}).get(k, []), tip_sha=tip_sha,
-                       mode=mode)
+                       mode=mode, proves=prover)
             st, why = judge(k, got[tip_sha].get(k, []), defects, **ctx)
             src = tip_sha
             if st in PASSING and have_earlier:
@@ -626,13 +668,17 @@ def check(rng, build, gs=None, verdicts=None, mode="merge", lane=None):
         for t, recs in lane_records(lanes, {tip_sha, base_sha, *earlier}).items():
             for k, rs in recs.items():
                 cst, cwhy = judge(k, rs, defects, tip_recs=got[tip_sha].get(k, []),
-                                  base_recs=got.get(base_sha, {}).get(k, []), tip_sha=tip_sha, mode=mode)
+                                  base_recs=got.get(base_sha, {}).get(k, []), tip_sha=tip_sha, mode=mode,
+                                  proves=prover)
                 if cst != "red": continue
                 last = max(_when(r) for r in rs if r.get("kind") != "verdict" and r.get("verdict") != "PASS")
                 at_tip = got[tip_sha].get(k, [])
                 later = [r for r in at_tip if r.get("kind") != "verdict" and r.get("verdict") not in NEVER_RAN
                          and _when(r) > last]
-                if later and judge(k, at_tip, defects, tip_sha=tip_sha, mode=mode)[0] in PASSING: continue
+                # ROUND 2: a lane tip that DESCENDS from the checked tip holds a red newer than the tip's code — a
+                # tip PASS is pre-bug and answers nothing (the same ancestry rule as the fix's proof)
+                if later and not prover.ancestor(tip_sha, t) \
+                        and judge(k, at_tip, defects, tip_sha=tip_sha, mode=mode, proves=prover)[0] in PASSING: continue
                 carried[(t, k)] = cwhy
         return out
 

@@ -186,7 +186,15 @@ def main(source, build):
               "%s red at %s (the fix does not reach it), green at the tip -> REFUSED; %s, which the fix reaches, "
               "is answered by the tip (%d)" % (k[0], A, some_fix[0], rc))
         rc, out = run(lane, "--verdict", f"{k[0]}=real:FIXTURE-1 fixed: the fixture's red (green at the tip)")
-        check(rc == 0, "...its verdict (recorded at %s) answers it (%d)" % (A, rc))
+        check(rc == 1 and "REACHES" in out, "...a 'fix' proved by the tip's PASS is REFUSED: %s..%s does not reach %s, so "
+              "the tip's green is the same code passing again (ROUND 2 F1) (%d)" % (A, B, k[0], rc))
+        gate_runlog.append_records([{"suite": k[0], "arm": None, "verdict": "FAIL", "ts": "2026-01-01T10:30:00",
+                                     "retry": True, "tip": {"studio": revs[BASE], "studio_dirty": False,
+                                                            "irisgl": pin(revs[BASE]), "irisgl_dirty": False}}],
+                                   "scoped", revs[BASE])
+        rc, out = run(lane, "--verdict", f"{k[0]}=real:FIXTURE-1 the same red on the base")
+        if rc: print("\n".join(l for l in out.splitlines() if "REFUSED" in l or "OPEN" in l)[:1500])
+        check(rc == 0, "...the same red reproduced on the base (KNOWN RED) answers it at %s (%d)" % (A, rc))
 
     # ---- 5. the targets never set the exit code ------------------------------------------------------
     spec = importlib.util.spec_from_file_location("gate_scope_t", os.path.join(scripts, "gate-scope.py"))

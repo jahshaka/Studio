@@ -118,7 +118,9 @@ class Env:
 
     def judge(self, recs, listed=False, base=None, defects=None):
         d = defects or {e["id"]: e for e in FIXTURE_DEFECTS + ([NONDET] if listed else [])}
-        return self.cgc.judge(("photon.view", None), recs, d, base_recs=base)
+        # a stub history for the toy shas: every different sha descends and reaches (the real Prover is tested apart)
+        return self.cgc.judge(("photon.view", None), recs, d, base_recs=base,
+                              proves=lambda a, b, k: bool(a and b and a != b))
 
 
 def rec(verdict, ts, retry=False, **kw):
@@ -135,6 +137,23 @@ def case_verdict_door(E):
     red = rec("FAIL", T % "10:00", tip=RED_SHA)
     fixpass = rec("PASS", T % "10:30", tip=FIX_SHA)             # the fix: a PASS at a LATER sha than the red
     base_solo = [rec("FAIL", T % "09:00", retry=True)]
+    # ROUND 2 F1: THE PROVER — the proving PASS is at a sha DESCENDED from the red's whose range REACHES the row (real
+    # history: a docs-only commit reaches nothing; this lane's first commit reaches the gate rows)
+    gs = E.cgc.load_gs()
+    prover = E.cgc.Prover(gs, E.build, lambda R=[]: R[0] if R else (R.append(E.cgc.Reach(gs, E.build, E.tip, "")) or R[0]))
+    docs, docs_p = E.git("rev-parse", "c37fed3b7"), E.git("rev-parse", "c37fed3b7^")
+    lane0, lane1 = E.git("rev-parse", "a5ab3a057"), E.git("rev-parse", "0e7ee6eb6")
+    check(not prover(docs_p, docs, ("api.contract", None)), "the empty/docs-only commit case: a PASS at a commit whose "
+          "change touches no row proves no fix (c37fed3b7, docs/TESTING.md)")
+    check(prover(lane0, lane1, ("gate.ci_check", None)), "a PASS at a descendant whose change reaches the row proves it")
+    check(not prover(lane1, lane0, ("gate.ci_check", None)), "a PASS at an ANCESTOR of the red (pre-bug code) proves nothing")
+    check(not prover(lane0, lane0, ("gate.ci_check", None)), "a PASS at the red's own sha proves nothing")
+    st, why = E.cgc.judge(("api.contract", None), [rec("FAIL", T % "10:00", suite="api.contract", tip={"studio": docs_p}),
+                                                   rec("PASS", T % "10:30", suite="api.contract", tip={"studio": docs}),
+                                                   vrec("real:OTHER-ROW-1", T % "11:00")],
+                          {e["id"]: e for e in FIXTURE_DEFECTS}, proves=prover)
+    check(st == "red" and "REACHES" in why, "real:<id> + a green re-run at a docs-only commit after the red -> refused "
+          "(%s)" % why[:90])
     # real:<id> — a REGISTERED fact, proved
     st, why = E.judge([red, vrec("real:NOT-REGISTERED-9 fixed", T % "11:00")])
     check(st == "red" and "not in the defect registry" in why, "real:<id> not in the registry -> refused (%s)" % why[:90])
@@ -146,7 +165,7 @@ def case_verdict_door(E):
     check(st == "red" and "naming a ticket clears nothing" in why,
           "real:<registered id> with no proof (no PASS at the tip, no red on the base) -> refused (%s)" % why[:90])
     st, why = E.judge([red, rec("PASS", T % "10:30", tip=RED_SHA), vrec("real:VIEWS-XID-1", T % "11:00")])
-    check(st == "red" and "red's OWN sha" in why, "F1: real:<registered id> + a PASS at the red's OWN sha -> refused (the "
+    check(st == "red" and "REACHES" in why, "F1: real:<registered id> + a PASS at the red's OWN sha -> refused (the "
           "same code passing once proves no fix) (%s)" % why[:80])
     st, why = E.judge([red, fixpass, vrec("real:VIEWS-XID-1", T % "11:00")])
     check(st == "green", "real:<registered id> + its row PASS at a LATER sha than the red -> green (%s: %s)" % (st, why[:70]))
@@ -380,6 +399,14 @@ def case_carried_red(E):
     E.put(["test_engine"], "PASS", "2026-01-01T11:00:00", gating=True)
     rc, out = E.run()
     check(rc == 0 and "OPEN RED" not in out, "...re-run green at B -> accepted (%d)" % rc)
+    # ROUND 2: a lane tip that DESCENDS from the checked tip (a5ab3a057 descends from 3756b2f18) holds a red the tip's
+    # older code never had to answer — the tip's PASS is pre-bug and clears nothing
+    E.fresh()
+    E.put(ROWS + ["test_engine"], "PASS", "2026-01-01T11:00:00")
+    E.put(["test_engine"], "FAIL", "2026-01-01T09:00:00", tip=E.git("rev-parse", "a5ab3a057"))
+    rc, out = E.run()
+    check(rc == 1 and "OPEN RED carried" in out, "a red at a lane tip that DESCENDS from the checked tip is not cleared by "
+          "the tip's (pre-bug) PASS (%d)" % rc)
     E.fresh()
     E.put(ROWS, "PASS", "2026-01-01T10:00:00")
     E.put(["test_engine"], "FAIL", "2026-01-01T09:00:00", tip=A)
