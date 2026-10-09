@@ -2061,6 +2061,10 @@ def main():
             return None
         got = gate_runlog.recorded_rows()
         print(f"gate-scope --resume: {len(got)} row(s) already have a record at this tip")
+        red = sorted(gate_runlog.dropped_red(gate_runlog.tree_shas()))
+        if red:
+            print(f"gate-scope --resume: {len(red)} row(s) an abort dropped RED are re-run (the abort record stays): "
+                  f"{' '.join(red[:12])}")
         return got
 
     if a.joint:
@@ -2113,10 +2117,16 @@ def main():
                       f"(scripts/ci-gate-check.sh <range> --verdict \"{s}=<text>\")")
         # SOLO ON THE CARD, ONE DRAIN PER BATCH (G1+G2; GATE-COST-1 P2): the whole batch holds every VRAM
         # token once and each run's admissions are nested on it, so no sibling lane's GPU row runs beside
-        # any of them — and the card drains once, not once per run. A solo batch never takes the gate slot.
+        # any of them — and the card drains once, not once per run. A WHOLE-CARD HOLD TAKES THE GATE SLOT
+        # (GATE-COST-2): the batch queues FIFO with the gates before it drains (hold_card does it), so its drain
+        # never starves the gate in the slot into NOADMIT.
         gate_runlog.on_signals()
         card, env = gate_runlog._vram().hold_card(f"{lane} --solo {' '.join(a.solo)[:80]}", log=sys.stdout)
-        if not card and not env.get("JAH_VRAM_HELD"):
+        drained = gate_runlog._vram().LAST_DRAIN_TIMEOUT
+        if drained:
+            gate_runlog.phase_record("drain-timeout", a.tier or "scoped", lane, log_range, gate_runlog.tree_shas(),
+                                     **drained)
+        if not env.get("JAH_VRAM_HELD"):
             env["JAH_VRAM_ALL"] = "1"      # no hold (the drain timed out): every admission of a run takes the card
         try:
             for s in a.solo:

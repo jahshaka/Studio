@@ -680,13 +680,47 @@ def on_signals():
         except (OSError, ValueError): pass        # not the main thread (a test drives run_ctest from one)
 
 
+def phase_record(kind, tier, lane, rng, shas, **fields):
+    """ONE RECORD ABOUT A RUN, NOT A ROW (GATE-COST-2): `kind: drain-timeout` (a whole-card hold that never
+    drained: the holders and their age) or `kind: abort` (the rows a dead display dropped). Its suite is
+    `@<kind>`, which no selection ever names, so the refusal reads nothing from it; the reports do.
+    Returns the file it went to."""
+    now = datetime.datetime.now().astimezone().isoformat(timespec="seconds")
+    rec = dict(fields, schema=SCHEMA, kind=kind, suite="@" + kind, arm=None, verdict=kind.upper(), tier=tier,
+               lane=lane, range=rng, tip=shas, ts=now, source="run", gating=False, retry=False)
+    try:
+        return append_records([rec], tier, shas["studio"])
+    except (OSError, ValueError, KeyError):
+        return None
+
+
+def dropped_red(shas):
+    """{suite: the abort record's ts} of the rows an abort at this tip dropped RED (status not Passed)."""
+    out, d = {}, log_dir()
+    if not os.path.isdir(d):
+        return out
+    for f in os.listdir(d):
+        if not f.endswith(".jsonl") or shas["studio"][:9] not in f:
+            continue
+        for line in open(os.path.join(d, f), errors="replace"):
+            try: r = json.loads(line)
+            except ValueError: continue
+            if r.get("kind") == "abort" and (r.get("tip") or {}).get("studio") == shas["studio"]:
+                for n in r.get("droppedRed") or []:
+                    out[n] = max(out.get(n, ""), r.get("ts") or "")
+    return out
+
+
 def recorded_rows(shas=None):
     """{suite} with a record that RAN at this tree (studio and irisgl shas, neither dirty) — what
-    `gate-scope.sh --resume` does not run again. NOADMIT/NOTRUN are no run (ci_gate_check's rule)."""
+    `gate-scope.sh --resume` does not run again. NOADMIT/NOTRUN are no run (ci_gate_check's rule), and
+    a row an ABORT dropped red after its newest record is not recorded either (GATE-COST-2: it is re-run;
+    the abort record stays)."""
     shas = shas or tree_shas()
     out, d = set(), log_dir()
     if shas.get("studio_dirty") or not os.path.isdir(d):
         return out
+    newest = {}
     for f in os.listdir(d):
         if not f.endswith(".jsonl") or shas["studio"][:9] not in f:
             continue
@@ -696,8 +730,12 @@ def recorded_rows(shas=None):
             t = r.get("tip") or {}
             if (t.get("studio") == shas["studio"] and t.get("irisgl") == shas["irisgl"] and not t.get("studio_dirty")
                     and not t.get("irisgl_dirty") and r.get("kind") != "verdict" and r.get("arm") is None
-                    and r.get("verdict") not in ("NOADMIT", "NOTRUN")):
+                    and r.get("verdict") not in ("NOADMIT", "NOTRUN") and not r.get("kind")):
                 out.add(r.get("suite"))
+                newest[r.get("suite")] = max(newest.get(r.get("suite"), ""), r.get("ts") or "")
+    for n, at in dropped_red(shas).items():
+        if n in out and newest.get(n, "") <= at:
+            out.discard(n)
     return out
 
 
@@ -741,6 +779,7 @@ class _Run:
         self.sampler = LoadSampler(); self.sampler.start()
         self.guard = DisplayGuard(env)
         self.recorded, self.dropped, self.path, self.dead = 0, [], None, None
+        self.running = set()          # rows started and not ended (the abort record's inFlight)
 
     def say(self, text):
         if self.echo:
@@ -848,11 +887,13 @@ class _Run:
             m = _START.match(ln)
             if m:
                 starts[m.group(1)] = {"other_ctests": other_ctests(p.pid), "gpu_clocks": gpu_clocks()}
+                self.running.add(m.group(1))
                 continue
             m = _RESULT.match(ln)
             if not m:
                 continue
             name, status, secs = m.group(1), m.group(2), float(m.group(3))
+            self.running.discard(name)
             idm = _RESULT_ID.match(ln)
             i = idm.group(1) if idm else ""
             text = "\n".join(buf.pop(i, []))
@@ -866,7 +907,10 @@ class _Run:
                 if not self.dead:
                     self.dead = why
                     _kill_tree(p.pid)
-                self.dropped.append(name)
+                d_ = {"suite": name, "status": status.strip("* "), "verdict": verdict_of(status)}
+                if d_["verdict"] != "PASS" and fail_line(text):
+                    d_["failLine"] = fail_line(text)
+                self.dropped.append(d_)
                 continue
             recs = self.records(name, status, secs, time.time(), os.getloadavg(), text, starts.get(name) or {})
             v = recs[0]["verdict"]
@@ -927,9 +971,13 @@ def run_ctest(cmd, cwd, tier, lane, jobs, reasons=None, gating=None, rng=None, r
     card = []
     if whole_card and not (env or os.environ).get("JAH_VRAM_HELD"):
         card, held_env = _vram().hold_card(f"{lane} {tier} phase", log=sys.stdout)
-        if card:
-            # THE CALLER'S ENVIRONMENT OVER THE HELD COPY (F5): JAH_POOL_ARMS and the rest survive the hold
-            env = dict(held_env, **(env or {}), JAH_VRAM_HELD=held_env["JAH_VRAM_HELD"])
+        # THE CALLER'S ENVIRONMENT OVER THE HELD COPY (F5): JAH_POOL_ARMS and the rest survive the hold; the
+        # hold's own two keys (the card, the slot a whole-card hold takes: GATE-COST-2) go over it
+        env = dict(held_env, **(env or {}), **{k: held_env[k] for k in ("JAH_VRAM_HELD", "JAH_GATE_SLOT_HELD")
+                                               if k in held_env})
+        drained = _vram().LAST_DRAIN_TIMEOUT
+        if drained:
+            phase_record("drain-timeout", tier, lane, rng, tree_shas(), **drained)
     phases = [(cmd, None)]
     if rows is not None:
         skip = [r for r in rows if r in exclude]
@@ -983,9 +1031,18 @@ def run_ctest(cmd, cwd, tier, lane, jobs, reasons=None, gating=None, rng=None, r
     if R.path and echo:
         print(f"\nrun log: {R.recorded} record(s) -> {R.path}")
     if R.dead:
+        # THE ABORT LEAVES A RECORD (GATE-COST-2, the band-aid audit's #5): one `kind: abort` record naming every
+        # row that ended after the death with its status and FAIL line — no row's record (the refusal reads it
+        # as nothing: suite "@abort"), but a red among them is never only a stdout line: --resume re-runs a
+        # row dropped red even if it has an older record, and the abort record stays.
+        reds_ = [d_ for d_ in R.dropped if d_["verdict"] != "PASS"]
+        R.path = phase_record("abort", tier, lane, rng, R.shas, why=R.dead, dropped=R.dropped,
+                              droppedRed=[d_["suite"] for d_ in reds_], inFlight=sorted(R.running),
+                              run=R.run_id) or R.path
         ABORTED = (f"=== GATE ABORTED: {R.dead} — the run was stopped; {R.recorded} record(s) were written before "
-                   f"it, {len(R.dropped)} row(s) that ended after it were NOT recorded ({' '.join(R.dropped[:8])}); "
-                   f"on a live display: scripts/gate-scope.sh <range> --run --resume ===")
+                   f"it, {len(R.dropped)} row(s) that ended after it were NOT recorded ({len(reds_)} of them red: "
+                   f"{' '.join(d_['suite'] for d_ in reds_[:8])}) — the abort record lists them; on a live display: "
+                   f"scripts/gate-scope.sh <range> --run --resume ===")
         R.say(ABORTED)
         return DISPLAY_LOST
     return rc or (8 if reds or held else 0)

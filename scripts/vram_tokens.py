@@ -66,13 +66,21 @@ THE CONTRACT
     NO bound: a waiting gate prints `gate-slot: queued at position <p> behind <holder>` (again when the
     position moves) and runs when its turn comes. The ticket fd is the GATE PROCESS's (not its
     ctest's): the gate's ctest tree dies with it (gate_runlog: PDEATHSIG, a reaper, its signal
-    handlers), so the slot is free the moment the gate is gone. (`gate` exec's its command with it.) Small things never take
-    it: a single-row `--solo` batch, a lane's own hand run, a build, `admit`. A process already inside
-    a gate (JAH_GATE_SLOT_HELD) never queues again. JAH_GATE_SLOT=0 turns the slot off.
+    handlers), so the slot is free the moment the gate is gone. (`gate` exec's its command with it.)
+    A WHOLE-CARD HOLD ALWAYS TAKES IT (GATE-COST-2, the band-aid audit's #2): hold_card() outside a
+    gate — a `--solo` batch, an attribution, a timing phase run by hand — queues for the slot FIFO with
+    the gates before it drains the card. (Out of the slot, its drain kept the turnstile up to 3600 s
+    while the gate in the slot NOADMITted every row at 900 s: the audit's 62-of-70 "turnstile-queued"
+    cause.) Per-row admissions (`admit`, a pool's app, a hand run, gpu-exclusive.sh) never take it, nor
+    does a build. A process already inside a gate (JAH_GATE_SLOT_HELD) never queues again.
+    JAH_GATE_SLOT=0 turns the slot off. The waiting line is re-printed every 10 min with the holder's
+    AGE, and `status` prints every holder's age, so a hung holder is visible.
   * THE WHOLE CARD ONCE PER PHASE (GATE-COST-1 P2; the audit's §3f: 278 per-row drains in 38 h,
     17.0 h of whole-card drain or hold): the serial timing phase, a `--solo` batch and the target step
     take EVERY token once (`hold_card()`), and their rows run nested on it (JAH_VRAM_HELD — the path
-    above): one drain per phase instead of one per row. Nothing shares the card while a timing row
+    above): one drain per phase instead of one per row. A drain past JAH_VRAM_PHASE_WAIT (3600 s) prints
+    `status()` — every holder, its label and its AGE — and leaves LAST_DRAIN_TIMEOUT for the caller's
+    `kind: drain-timeout` run-log record (gate_runlog); the phase then runs with per-row admission. Nothing shares the card while a timing row
     measures — now true for the whole phase — and each row still prints its `gpu-lock: waited` line.
 
 Usage:
@@ -99,6 +107,8 @@ import time
 EX_TEMPFAIL = 75
 POLL_S = 0.1
 LAST_WAIT_S = 0.0        # the last acquire()'s wait, seconds (the --timing line reads it)
+_T_ACQ = 0.0             # when the last acquire() began (monotonic)
+LAST_DRAIN_TIMEOUT = None   # hold_card()'s last drain timeout: {label, waitS, why, holders} (GATE-COST-2)
 
 
 class AdmitTimeout(Exception):
@@ -190,8 +200,9 @@ def acquire(k, label="", wait=None, log=sys.stderr):
     """Take k tokens (all or nothing, lowest free indices first). Returns the token fds,
     inheritable, which the caller keeps open for exactly the life of the GPU process. Raises
     AdmitTimeout past the wait bound, holding nothing."""
-    global LAST_WAIT_S
+    global LAST_WAIT_S, _T_ACQ
     LAST_WAIT_S = 0.0
+    _T_ACQ = time.monotonic()
     n = token_count()
     if n <= 0 or k <= 0:
         return []
@@ -364,17 +375,40 @@ def _take_ticket(label):
     return seq, fd
 
 
+SLOT_REPRINT_S = 600.0
+
+
+def _age(path):
+    """How long ago a ticket or token was taken (its file was written at the take), as text."""
+    try:
+        s = max(0.0, time.time() - os.stat(path).st_mtime)
+    except OSError:
+        return "?"
+    return "%dh%02dm" % (s // 3600, s % 3600 // 60) if s >= 3600 else "%dm%02ds" % (s // 60, s % 60)
+
+
 def gate_slot(label="", log=sys.stderr):
     """Queue for THE GATE SLOT (FIFO, no bound) and return its fd once this gate is the head —
     inheritable across an exec (the `gate` command), never handed to a ctest; closing it gives it up. None when the
-    slot is off (JAH_GATE_SLOT=0) or this process is already inside a gate (JAH_GATE_SLOT_HELD)."""
+    slot is off (JAH_GATE_SLOT=0) or this process is already inside a gate (JAH_GATE_SLOT_HELD).
+    The process is marked as inside a gate (JAH_GATE_SLOT_HELD) from here on."""
+    fd = _queue_for_slot(label, log)
+    if fd is not None:
+        os.environ["JAH_GATE_SLOT_HELD"] = str(os.getpid())
+    return fd
+
+
+def _queue_for_slot(label, log):
+    """The FIFO wait itself: the slot's fd once this process is the head, None when the slot is off or
+    already this process's. Leaves the environment alone (hold_card hands JAH_GATE_SLOT_HELD to its
+    phase's rows only)."""
     if os.environ.get("JAH_GATE_SLOT_HELD"):
         _say(log, "gate-slot: already held by this gate (pid %s) — %s" % (os.environ["JAH_GATE_SLOT_HELD"], label))
         return None
     if not slot_enabled():
         return None
     seq, fd = _take_ticket(label)
-    t0, last = time.monotonic(), None
+    t0, last, said = time.monotonic(), None, time.monotonic()
     while True:
         ahead = [t for t in gate_queue() if t[0] < seq]
         if not ahead:
@@ -384,13 +418,12 @@ def gate_slot(label="", log=sys.stderr):
             os.close(fd)
             _say(log, "gate-slot: already held by this process (pid %d) — %s" % (os.getpid(), label))
             return None
-        if len(ahead) != last:
-            _say(log, "gate-slot: queued at position %d (%d gate(s) ahead) behind %s — waiting for the slot, no bound — %s"
-                 % (len(ahead), len(ahead), _label_of(ahead[0][2]), label))
-            last = len(ahead)
+        if len(ahead) != last or time.monotonic() - said >= SLOT_REPRINT_S:
+            _say(log, "gate-slot: queued at position %d (%d ahead) behind %s, holding it for %s — waiting for the slot, "
+                 "no bound — %s" % (len(ahead), len(ahead), _label_of(ahead[0][2]), _age(ahead[0][2]), label))
+            last, said = len(ahead), time.monotonic()
         time.sleep(SLOT_POLL_S)
     os.set_inheritable(fd, True)
-    os.environ["JAH_GATE_SLOT_HELD"] = str(os.getpid())
     _say(log, "gate-slot: taken%s — %s" % ((" after %.0f s in the queue" % (time.monotonic() - t0)) if last else "", label))
     return fd
 
@@ -407,20 +440,35 @@ def hold_card(label="", log=sys.stderr, wait=None):
     environment the phase's rows run in (JAH_VRAM_HELD: each row's own admission runs on these
     tokens at once — the nested path of acquire()). Returns (fds, env); the caller keeps the fds
     open for the phase and releases them after it. Already admitted, or admission off: ([], env).
-    A drain past JAH_VRAM_PHASE_WAIT (3600 s) is said and the phase runs as before, each row
-    asking for its own tokens."""
+    A WHOLE-CARD HOLD TAKES THE GATE SLOT FIRST (GATE-COST-2): outside a gate it queues FIFO with the
+    gates (no bound) and the slot's fd is the LAST of the returned fds — released with them; the env
+    carries JAH_GATE_SLOT_HELD for the phase's rows. A drain past JAH_VRAM_PHASE_WAIT (3600 s) prints
+    status() (the holders and their AGE), records it in LAST_DRAIN_TIMEOUT (the caller's run-log
+    record) and the phase runs as before, each row asking for its own tokens — still inside the slot."""
+    global LAST_DRAIN_TIMEOUT
+    LAST_DRAIN_TIMEOUT = None
     env = dict(os.environ)
     n = token_count()
     if os.environ.get("JAH_VRAM_HELD") or n <= 0:
         return [], env
+    slot = _queue_for_slot(label + " (whole card)", log)
+    if slot is not None:
+        env["JAH_GATE_SLOT_HELD"] = str(os.getpid())
     try:
         fds = acquire(n, label, wait=phase_wait() if wait is None else wait, log=log)
     except AdmitTimeout as e:
-        _say(log, "vram: %s — the phase runs with per-row admission instead" % e)
-        return [], env
+        import io
+        st = io.StringIO()
+        status(st)
+        holders = [l for l in st.getvalue().splitlines() if " HELD by " in l]
+        LAST_DRAIN_TIMEOUT = {"label": label, "waitS": round(time.monotonic() - _T_ACQ, 1), "why": str(e),
+                              "holders": holders}
+        _say(log, "vram: %s — the phase runs with per-row admission instead. The card's holders now:\n%s"
+             % (e, st.getvalue().rstrip()))
+        return ([slot] if slot is not None else []), env
     _say(log, "vram: the whole card (%d tokens) held for the phase, drained in %.1f s — %s" % (n, LAST_WAIT_S, label))
     env["JAH_VRAM_HELD"] = str(n)
-    return fds, env
+    return fds + ([slot] if slot is not None else []), env
 
 
 def status(out=sys.stdout):
@@ -440,7 +488,7 @@ def status(out=sys.stdout):
                         label = f.read(200).strip()
                 except OSError:
                     label = ""
-                out.write("%s HELD by %s\n" % (os.path.basename(path), label or "?"))
+                out.write("%s HELD by %s for %s\n" % (os.path.basename(path), label or "?", _age(path)))
             continue
         if not os.path.exists(path):
             out.write("%s free (never used)\n" % os.path.basename(path))
@@ -453,7 +501,7 @@ def status(out=sys.stdout):
             else:
                 held += 1
                 label = os.pread(fd, 200, 0).decode("utf-8", "replace").strip()
-                out.write("%s HELD by %s\n" % (os.path.basename(path), label or "?"))
+                out.write("%s HELD by %s for %s\n" % (os.path.basename(path), label or "?", _age(path)))
         finally:
             os.close(fd)
     out.write("vram: %d of %d tokens held (%s)\n" % (held, n, token_dir()))
@@ -461,7 +509,8 @@ def status(out=sys.stdout):
     if not q:
         out.write("gate-slot: nobody holds it\n")      # (never the word " free": a token count greps for it)
     for i, (seq, pid, path) in enumerate(q):
-        out.write("gate-slot: %s %s (ticket %d)\n" % ("HELD by" if i == 0 else "queued %d:" % i, _label_of(path), seq))
+        out.write("gate-slot: %s %s (ticket %d, for %s)\n"
+                  % ("HELD by" if i == 0 else "queued %d:" % i, _label_of(path), seq, _age(path)))
     return held
 
 

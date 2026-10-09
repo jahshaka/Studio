@@ -22,6 +22,10 @@ box's own queue, log or displays:
      their rows run nested on it (`already admitted by the parent`); gate-scope runs the target step
      AFTER the verdict line, inside the gate, on whole_card; the caller's JAH_POOL_ARMS survives a hold;
   7. P6's CLAIM: the per-row records equal the old junit path's, record for record (six rows);
+  9. GATE-COST-2: a whole-card hold outside a gate takes the slot (and --solo with it); every NOADMIT try is
+     a record (requeued: k), still never-ran to the refusal; a drain timeout prints and records the holders
+     with their age; an abort is one `kind: abort` record and --resume re-runs a row it dropped red; the
+     lints prune exactly irisgl/.gitmodules; a green row waits for journald before its Xid read;
   8. THE SLOT UNDER STRESS: a dead waiter's ticket is reaped; eight gates at once hold it one at a time;
      a SIGKILLed gate's ctest and rows die within 15 s and the slot is free; a killed ctest ends a gate.
 
@@ -58,6 +62,7 @@ set_tests_properties(lint.one PROPERTIES LABELS "hygiene")
 add_test(NAME gpu.a COMMAND sh -c "echo gpu.a >> ${T}/order; echo ok")
 add_test(NAME gpu.b COMMAND sh -c "echo gpu.b >> ${T}/order; echo ok")
 add_test(NAME gpu.slow COMMAND sh -c "echo gpu.slow >> ${T}/order; sleep \${TOY_SLOW:-0}; echo ok")
+add_test(NAME gpu.wait COMMAND sh -c "echo gpu.wait >> ${T}/order; while [ ! -e ${T}/go ]; do sleep 0.05; done; echo 'FAIL: the window it drew'; exit 1")
 add_test(NAME gpu.noadmit_once COMMAND sh -c "if [ -e ${T}/na ]; then echo ok; else touch ${T}/na; echo 'NOADMIT vram: no admission for 2 tokens within 1 s (0 of 3 free at the last look) - gpu.noadmit_once'; exit 75; fi")
 add_test(NAME gpu.noadmit_always COMMAND sh -c "echo 'NOADMIT vram: no admission for 2 tokens within 1 s (0 of 3 free at the last look) - gpu.noadmit_always'; exit 75")
 add_test(NAME time.card COMMAND sh -c "python3 ${VT} status > ${T}/card.time; python3 ${VT} admit 1 -- true 2>> ${T}/card.time; echo ARMS=\$JAH_POOL_ARMS >> ${T}/card.time")
@@ -219,6 +224,10 @@ def main(source, build):
     # ---- 4. P6: a dead display stops the run --------------------------------------------------------
     print("4. a dead display")
     reset()
+    open(os.path.join(state, "go"), "w").close()
+    run("^gpu\\.wait$")                     # an older record of gpu.wait at this tip (red: it fails by design)
+    os.unlink(os.path.join(state, "go"))
+    open(os.path.join(state, "order"), "w").close()
     xroot = os.path.join(scratch, "x11")
     os.makedirs(os.path.join(xroot, ".X11-unix"))
     sock = os.path.join(xroot, ".X11-unix", "X77")
@@ -231,22 +240,34 @@ def main(source, build):
     open(os.path.join(xroot, ".X77-lock"), "w").write("%10d\n" % fake_x.pid)
     os.environ["JAH_X11_ROOT"] = xroot
     os.environ["TOY_SLOW"] = "30"
+    os.environ["JAH_DISPLAY_POLL_S"] = "60"     # only the row-end check sees the death: gpu.wait ENDS after it
     env = dict(os.environ, DISPLAY=":77")
     res = {}
-    t = threading.Thread(target=lambda: res.update(r=run("^(lint\\.one|gpu\\.a|gpu\\.slow)$", env=env)))
+    t = threading.Thread(target=lambda: res.update(r=run("^(lint\\.one|gpu\\.a|gpu\\.wait|gpu\\.slow)$", jobs=3, env=env)))
     t.start()
     deadline = time.time() + 40
-    while "gpu.slow" not in order() and time.time() < deadline:
+    while not {"gpu.wait", "gpu.slow"} <= set(order()) and time.time() < deadline:
         time.sleep(0.2)
     fake_x.kill(); fake_x.wait()
-    t.join(60)
-    os.environ.pop("TOY_SLOW")
+    open(os.path.join(state, "go"), "w").close()       # gpu.wait ends RED after the display died
+    t.join(90)
+    os.environ.pop("TOY_SLOW"); os.environ.pop("JAH_DISPLAY_POLL_S")
     rc, out = res.get("r", (None, ""))
-    got = {r["suite"] for r in records()}
+    got = {r["suite"] for r in records() if not r.get("kind")}
     check(rc == rl.DISPLAY_LOST and "GATE ABORTED" in out and "is gone" in out and rl.ABORTED,
           "the X server dies under a run -> it stops, DISPLAY_LOST, the abort line says why (rc %r)" % rc)
-    check("gpu.slow" not in got and {"lint.one", "gpu.a"} <= got,
-          "rows that ended before the death are recorded, the row that ended after it is not (%s)" % sorted(got))
+    runs_ = [r for r in records() if r["suite"] == "gpu.wait" and not r.get("kind")]
+    check(len(runs_) == 1 and {"lint.one", "gpu.a"} <= got and "gpu.slow" not in got,
+          "rows that ended before the death are recorded, the rows that ended after it are not (%s)" % sorted(got))
+    ab = [r for r in records() if r.get("kind") == "abort"]
+    check(len(ab) == 1 and ab[0]["suite"] == "@abort" and "is gone" in ab[0].get("why", "")
+          and [d_["suite"] for d_ in ab[0].get("dropped", [])] == ["gpu.wait"] and ab[0].get("droppedRed") == ["gpu.wait"]
+          and ab[0]["dropped"][0].get("failLine") == "FAIL: the window it drew" and ab[0].get("inFlight") == ["gpu.slow"],
+          "the abort is ONE `kind: abort` record: the row that ended RED after the death with its status and FAIL "
+          "line, the row still running (%r)" % ({k: ab[0].get(k) for k in ("dropped", "inFlight")} if ab else None))
+    done_ = rl.recorded_rows(clean)
+    check("gpu.wait" not in done_ and "gpu.a" in done_,
+          "--resume re-runs the row the abort dropped RED although it has an older record at the tip; the others stay done")
     rc, out = run("^gpu\\.a$", env=env)
     check(rc == rl.DISPLAY_LOST and "before its first row" in out, "a run on a display already dead refuses to start")
     os.environ.pop("JAH_X11_ROOT")
@@ -383,8 +404,8 @@ def main(source, build):
     seen = []
     g.gate_runlog.run_ctest = lambda *a, **k: (seen.append(bool(mine())), 0)[1]
     code, out = gs_main(["--solo", "gi.chain_face", "--times", "2", "--build", build, "--lane", "gate-cost-test"])
-    check(code == 0 and seen == [False, False] and "gate-slot" not in out and not mine(),
-          "--solo never takes the slot (%r)" % seen)
+    check(code == 0 and seen == [True, True] and "gate-slot: taken" in out and not mine(),
+          "--solo (a whole-card hold) takes the slot for its batch and gives it back (%r)" % seen)
     g.gate_runlog.run_ctest = lambda *a, **k: (calls.append(dict(k, tier=a[2], held=bool(mine()))), 0)[1]
     code, out = gs_main(files + ["--run"])
     gating = [c for c in calls if c["tier"] != "target"]
@@ -415,6 +436,75 @@ def main(source, build):
           "a ctest killed under the gate (137) ends it there: no timing phase, no target step (F4; exit %r)" % code)
     g.gate_runlog.run_ctest, g.gate_runlog.fork_pin_problem, g.gate_runlog.recorded_rows = real
     os.environ.pop("JAH_GATE_SLOT_HELD", None)
+
+    # ---- 9. GATE-COST-2: whole-card holds in the slot, the drain timeout, the prune list, the ingest wait --
+    print("9. whole-card holds, the drain timeout, the prune list, the Xid ingest")
+    os.environ.pop("JAH_GATE_SLOT_HELD", None)
+    # the gate-scope runs above took the slot in THIS process and never gave it back (main() owns it to its
+    # exit): close those tickets, so this process stops being the slot's holder
+    for fd_ in os.listdir("/proc/self/fd"):
+        try:
+            if "/gate-queue/" in os.readlink(f"/proc/self/fd/{fd_}"): os.close(int(fd_))
+        except OSError:
+            pass
+    vt_mod.gate_queue()                          # reaps them
+    hand = subprocess.Popen([sys.executable, "-c", "import sys, time; sys.path.insert(0, sys.argv[1]); import vram_tokens as v;"
+                             " fds, env = v.hold_card('hand phase'); print('HELD', env.get('JAH_GATE_SLOT_HELD'),"
+                             " env.get('JAH_VRAM_HELD'), flush=True); time.sleep(3); v.release(fds)", scripts],
+                            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+    first = hand.stdout.readline()
+    while first and not first.startswith("HELD"):
+        first = hand.stdout.readline()
+    q = vt_mod.gate_queue()
+    other = subprocess.Popen([sys.executable, vt, "gate", "--label", "G9", "--", "true"], stdout=subprocess.PIPE,
+                             stderr=subprocess.STDOUT, text=True)
+    time.sleep(1.5)
+    waiting = other.poll() is None
+    hand.wait(timeout=30)
+    o9 = other.communicate(timeout=30)[0]
+    check(first.split()[1:3] == [str(hand.pid), "3"] and any(t_[1] == hand.pid for t_ in q) and waiting
+          and "queued at position" in o9 and "holding it for" in o9 and other.returncode == 0,
+          "a whole-card hold outside a gate takes the slot (%r); a gate asking meanwhile queues behind it, the "
+          "holder's age shown, and runs after it" % first.strip())
+    reset()
+    blocker = subprocess.Popen([sys.executable, vt, "admit", "1", "--label", "blocker", "--", "sleep", "20"],
+                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    time.sleep(1.0)
+    os.environ["JAH_VRAM_PHASE_WAIT"] = "1"
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        rc = rl.run_ctest("ctest -j1 --timeout 60 --output-on-failure -L '^timing$'", tb, "scoped", "gate-cost-test", 1,
+                          labels=LABELS)
+    os.environ.pop("JAH_VRAM_PHASE_WAIT")
+    blocker.terminate(); blocker.wait()
+    dt = [r for r in records() if r.get("kind") == "drain-timeout"]
+    check(rc == 0 and len(dt) == 1 and dt[0]["suite"] == "@drain-timeout" and any("blocker" in h and " for " in h
+                                                                                for h in dt[0].get("holders", []))
+          and "HELD by" in buf.getvalue(),
+          "a drain past JAH_VRAM_PHASE_WAIT prints the holders with their age and writes a `kind: drain-timeout` "
+          "record naming them (%r)" % (dt[0].get("holders") if dt else None))
+    for q_ in ("longest", "load-reds", "trend", "times"):
+        p_ = subprocess.run([sys.executable, os.path.join(scripts, "gate_runlog.py"), q_], capture_output=True, text=True)
+        check(p_.returncode == 0, "gate_runlog.py %s reads a log holding run records (rc %d)" % (q_, p_.returncode))
+    lib = os.path.join(source, "tests", "hygiene", "first_party.sh")
+    gm = subprocess.run(["git", "config", "-f", os.path.join(source, "irisgl", ".gitmodules"), "--get-regexp",
+                         r"\.path$"], capture_output=True, text=True).stdout.split()[1::2]
+    pruned = subprocess.run(["bash", "-c", f". {lib}; submodule_paths irisgl"], cwd=source, capture_output=True,
+                            text=True).stdout.split()
+    walked = subprocess.run(["bash", "-c", f". {lib}; first_party_paths irisgl"], cwd=source, capture_output=True,
+                            text=True).stdout.split()
+    intree = [d_ for d_ in ("irisgl/thirdparty/meshoptimizer-clusterlod", "irisgl/thirdparty/assimp-patches")
+              if os.path.isdir(os.path.join(source, d_))]
+    check(gm and sorted(pruned) == sorted("irisgl/" + x for x in gm)
+          and not any(w == p_ or w.startswith(p_ + "/") for w in walked for p_ in pruned)
+          and all(d_ in walked for d_ in intree),
+          "the lints prune exactly irisgl/.gitmodules' paths (%d) and walk the in-tree vendored dirs (%s)"
+          % (len(gm), ", ".join(os.path.basename(d_) for d_ in intree)))
+    env_x = {k: v for k, v in os.environ.items() if k != "JAH_KERNEL_JOURNAL"}
+    t0 = time.monotonic()
+    p_ = subprocess.run([sys.executable, vt, "admit", "1", "--", "true"], env=env_x, capture_output=True, text=True)
+    check(p_.returncode == 0 and time.monotonic() - t0 >= 1.0,
+          "a GREEN row waits for journald's ingest before its Xid read (%.2f s)" % (time.monotonic() - t0))
 
     shutil.rmtree(scratch, ignore_errors=True)
     if FAILURES:

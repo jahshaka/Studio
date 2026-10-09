@@ -388,8 +388,13 @@ own admissions run nested on it (`already admitted by the parent`; each timing r
 its `gpu-lock: waited` line, 0 s). One drain per phase instead of one per row — 278 per-row drains
 in 38 h, the union of whole-card drain or hold 17.0 of ~27 active hours (the audit's §3f) — and
 nothing shares the card while any row of the phase measures. A solo retry is therefore solo on the
-GPU too (a drain past `JAH_VRAM_PHASE_WAIT`, 3600 s, falls back to `JAH_VRAM_ALL=1`: every
-admission of the solo run takes the whole card itself).
+GPU too. **A WHOLE-CARD HOLD ALWAYS TAKES THE GATE SLOT (GATE-COST-2):** outside a gate it queues for
+the slot (§4c) FIFO with the gates before it drains — a drain out of the slot kept the admission's
+turnstile up to an hour while the gate in the slot NOADMITted every row at 900 s (the audit's
+62-of-70 turnstile-queued NOADMITs; the band-aid audit's #2). A drain past `JAH_VRAM_PHASE_WAIT`
+(3600 s) prints the card's holders with their AGE, writes a `kind: drain-timeout` record into the
+run log (suite `@drain-timeout`: the holders, the wait) and the phase runs with per-row admission
+(a solo run: `JAH_VRAM_ALL=1`, every admission takes the whole card itself).
 
 **THE LOCK LIST IS THE TIMING LIST** (`JAH_GPU_EXCLUSIVE_SUITES`, `tests/CMakeLists.txt`,
 registered by `jah_gpu_exclusive_test()`, whose `RUN_TIMEOUT` is the suite's own budget and
@@ -564,11 +569,14 @@ FAILs — and their solos and verdicts — came from gates beside gates.
 **THE RULE.** A GATE RUN holds THE GATE SLOT for its whole run; the box runs one at a time.
 A gate run is `gate-scope.sh --run` (scoped, a fallback, `--fork-tier`, `--joint --run`,
 `--targets-only`, `--resume`) and `gate_runlog.py run` (the rc tiers; `scripts/gpu-admit.sh gate
--- <command>` holds the slot across a whole script that runs several). Small things NEVER take it:
-a `--solo` batch, a lane's own hand run, an `admit`, a build. The waiting gate prints
-`gate-slot: queued at position <p> (<p> gate(s) ahead) behind <holder>` (again whenever the position
-moves) and `gate-slot: taken after <s> s in the queue`; the queue is FIFO and has NO bound (a gate
-never gives up for the slot). `scripts/gpu-admit.sh status` names the holder and the queue.
+-- <command>` holds the slot across a whole script that runs several). **A WHOLE-CARD HOLD ALWAYS TAKES
+IT** (GATE-COST-2): a `--solo` batch, an attribution, a timing phase run by hand — anything that drains
+the card through `hold_card()` — queues FIFO with the gates first. Per-row admissions never take it (an
+`admit`, a pool's app, a lane's own hand run, `gpu-exclusive.sh`), nor does a build. The waiting gate
+prints `gate-slot: queued at position <p> (<p> ahead) behind <holder>, holding it for <age>` (again
+whenever the position moves, and every 10 min) and `gate-slot: taken after <s> s in the queue`; the
+queue is FIFO and has NO bound (a gate never gives up for the slot). `scripts/gpu-admit.sh status`
+names the holder, the queue and every token holder with its AGE — a hung holder is visible.
 **Mechanism** (`scripts/vram_tokens.py`): each waiter flocks its own ticket
 `/tmp/jah-vram/gate-queue/<seq>.<pid>` (made locked under a private name, then renamed in); the
 lowest live ticket is the holder (a ticket is numbered AND renamed in under the counter's lock, so
@@ -603,13 +611,19 @@ killed gate. A gate on a local display `:N` reads its X server's pid from `/tmp/
 start and checks, at every row's end and every 2 s, that the same pid lives, still owns the lock (a
 display NUMBER is reused) and accepts a connection; when it does not, the run's process tree is
 stopped, no row that ended after the death is recorded, and the gate ends with
-`=== GATE ABORTED: <why> …` and `=== GATE VERDICT: ABORTED …` (exit 6). A run on a display already
+`=== GATE ABORTED: <why> …` and `=== GATE VERDICT: ABORTED …` (exit 6). THE ABORT IS A RECORD
+(GATE-COST-2): one `kind: abort` record (suite `@abort`) names every row that ended after the death
+with its status and FAIL line, and the rows still running at it (`inFlight`); the refusal reads nothing from it, and `--resume` re-runs a row the
+abort dropped RED even when it has an older record at the tip — the abort record stays beside the
+re-run. A run on a display already
 dead refuses to start. (634 garbage records in the audit's window came from gates that kept running
 6-12 min after their Xvfb died.) A ctest killed by a signal ends the run the same way: what it
 finished is recorded, nothing else starts — no timing phase and no target step: the gate ends with
 `GATE VERDICT: ABORTED` (exit 128 + the signal).
 
-Guard: `gate.cost` (tests/hygiene/gate_cost_test.py; the slot's FIFO, `--solo` outside it, the reaped
+Guard: `gate.cost` (tests/hygiene/gate_cost_test.py; the slot's FIFO, every whole-card hold in it, a
+NOADMIT record per try, the drain-timeout record, the abort record and the resume of its reds, the
+lints' prune list = .gitmodules, the Xid ingest wait on a green row, the reaped
 dead waiter, eight racing gates, a SIGKILLed gate's tree and slot, the in-run re-queue, the killed-ctest
 records and --resume, a killed ctest ending the gate, the dead display, the CPU phase, the whole-card
 phases with the caller's environment, and the per-row records equal to the old junit path's).
