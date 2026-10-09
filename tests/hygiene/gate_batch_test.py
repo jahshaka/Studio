@@ -367,6 +367,11 @@ def run(source, scripts, merge, scratch, rl, build_dir):
     check(rc == 5 and "two fork lines" in out and g1[:9] in out and g2[:9] in out,
           "g1 and g2, BOTH descending from d-build's pin, diverge from each other: refused, exit 5 (exit %d)" % rc)
     check(stray("t3b", ["lane-g1", "lane-g2"]) == [], "...no stray ref")
+    _, _, _, spg3 = lane("lane-g3", {"src/g3.txt": "g\n"}, None, pin=g1)
+    rc, out = mscript("batch", "t3c", spg3)
+    check(rc == 5 and "not on the fork's jahshaka branch" in out,
+          "ONE lane on g1 (a descendant of d-build's pin, OFF the fork's jahshaka branch): refused (exit %d)" % rc)
+    check(stray("t3c", ["lane-g3"]) == [], "...no stray ref")
 
     # ---- 4. a red, attributed -----------------------------------------------------------------------------
     print("4. a red batch, attributed")
@@ -431,9 +436,11 @@ def run(source, scripts, merge, scratch, rl, build_dir):
     open(os.path.join(x11, ".X97-lock"), "w").write("%10d\n" % fake_x.pid)
     # the attribution itself, with the gate slot HELD by another gate the whole time
     runs = os.path.join(scratch, "runs"); vdir = os.path.join(scratch, "vram")
-    pend = os.path.join(scratch, "defects.pending")
+    reg = os.path.join(scratch, "registry"); os.makedirs(reg)
+    json.dump({"defects": []}, open(os.path.join(reg, "defects.json"), "w"))
+    pend = os.path.join(reg, "defects.pending")      # next to the registry, as VERDICT-1's reader looks for it
     aenv = dict(os.environ, JAH_RUN_LOG_DIR=runs, JAH_VRAM_DIR=vdir, JAH_VRAM_TOKENS="3", JAH_VRAM_WAIT="5",
-                OGRE_PREFIX=install, JAH_GATE_REQUEUE="0", JAH_X11_ROOT=x11, JAH_DEFECTS_PENDING_DIR=pend,
+                OGRE_PREFIX=install, JAH_GATE_REQUEUE="0", JAH_X11_ROOT=x11, JAH_DEFECTS_FILE=os.path.join(reg, "defects.json"),
                 DISPLAY=":0")      # inherited and WRONG: the attribution must use --display only
     for bad_args, why in ((["--display", ":0"], "not a rig display"), (["--display", ":96"], "has no X server")):
         a2 = [x if x != ":NN" else bad_args[1] for x in (acmd[0].split("gate-scope.py", 1)[1].split() if acmd else [])]
@@ -476,9 +483,34 @@ def run(source, scripts, merge, scratch, rl, build_dir):
     kinds = {e["rows"][0]: e["kind"] for e in pending.values()}
     check(kinds == {"row.combo": "combination", "row.base": "defect", "row.flake": "nondeterminism"},
           "REGISTERED, not printed: one testing/defects.pending/<id>.json per finding (%s)" % kinds)
-    check(all(set(e) == {"id", "rows", "kind", "cause", "first_seen", "state", "found_by"} and e["state"] == "open"
-              and e["found_by"] == "gate" and set(e["first_seen"]) == {"tip", "pin", "run"} and e["first_seen"]["run"]
-              for e in pending.values()), "...each in the §1.5 schema: state open, found_by gate, first_seen {tip, pin, run}")
+    base_keys = {"id", "rows", "kind", "cause", "first_seen", "state", "found_by", "recheck", "expires"}
+    check(all(set(e) == (base_keys | ({"uses", "suspects", "census"} if e["kind"] == "nondeterminism" else set()))
+              and e["state"] == "open" and e["found_by"] == "gate" and set(e["first_seen"]) == {"tip", "pin", "run"}
+              and all(e["first_seen"].values()) and len(e["recheck"]) == 10 for e in pending.values()),
+          "...each in the FULL §1.5 schema: state open, found_by gate, first_seen {tip, pin, run}, recheck/expires dates; "
+          "NOT REPRODUCED also uses, suspects, census")
+    nr = [e for e in pending.values() if e["kind"] == "nondeterminism"]
+    check(nr and nr[0]["uses"] == 1 and nr[0]["suspects"] == ["lane-h", "lane-i"] and isinstance(nr[0]["census"], dict),
+          "...NOT REPRODUCED: uses 1, the batch's lanes as suspects, the record's census")
+    # VERDICT-1's reader refuses the WHOLE registry on one malformed entry: every pending file must load through it
+    import importlib.util
+    v1 = os.environ.get("JAH_VERDICT1_RUNLOG") or os.path.join(rl.workspace_root(), "jahshaka", ".claude", "worktrees",
+                                                               "verdict-1", "scripts", "gate_runlog.py")
+    loader = rl if hasattr(rl, "defects_load") else None
+    if loader is None and os.path.isfile(v1):
+        spec = importlib.util.spec_from_file_location("v1_gate_runlog", v1)
+        loader = importlib.util.module_from_spec(spec); spec.loader.exec_module(loader)
+    if loader is None or not hasattr(loader, "defects_load"):
+        check(False, f"VERDICT-1's defects_load is reachable (this tree's gate_runlog, or {v1})")
+    else:
+        old = os.environ.get("JAH_DEFECTS_FILE"); os.environ["JAH_DEFECTS_FILE"] = os.path.join(reg, "defects.json")
+        try:
+            got, why = loader.defects_load()
+        finally:
+            if old is None: os.environ.pop("JAH_DEFECTS_FILE", None)
+            else: os.environ["JAH_DEFECTS_FILE"] = old
+        check(got is not None and set(got) == set(e["id"] for e in pending.values()),
+              "...and every pending file LOADS through VERDICT-1's defects_load (%s)" % (why or sorted(got or {})))
     check(all(e["first_seen"]["tip"] == (s4[0] if e["kind"] == "defect" else sc4) for e in pending.values()),
           "...first seen at the candidate (a d-build defect: at d-build's tip)")
     check("row.base | CONTROL rc-base | 3/3 red" in aout and "=> row.base: D-BUILD DEFECT" in aout

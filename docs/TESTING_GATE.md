@@ -396,8 +396,8 @@ the candidate and BEFORE its gate, runs `merge-dbuild-lane.sh batch-scripting <t
 candidate's own binary regenerates the file, a difference is committed onto `batch-<tag>` ("SCRIPTING.md
 regenerated at batch <tag>", author jahshaka), the tree is rebuilt and THAT sha is gated and landed.
 **THE FORK FREEZE** (owner decision 4; TESTING_V3_SPEC §1.3.2). Every lane's fork pin (and d-build's)
-is printed; the batch carries ONE pin P — d-build's, or the one bump it carries (a pin descending from
-d-build's) — and EVERY lane must pin exactly P: a lane on any other pin, an ancestor included, is
+is printed; the batch carries ONE pin P — d-build's, or a DESCENDANT of it on the fork's `jahshaka`
+branch (then a fork-tier batch) — and EVERY lane must pin exactly P: a lane on any other pin, an ancestor included, is
 REFUSED BY NAME ("re-pin <lane> to <P>") and the lead has it re-pinned before the cut; two pins that
 are two fork lines refuse the batch (exit 5). P ≠ d-build's pin = the candidate moves the pin = the
 full tier.
@@ -425,8 +425,11 @@ not register is ABSENT there and never blames it. Per row, IN THIS ORDER:
 6. green at the candidate too = NOT REPRODUCED (kind `nondeterminism`): it passes the verdict door with
    its solos recorded — a contention-class row by its 3/3 at the candidate tip, any other by `--verdict`.
 Findings 2, 5 and 6 are REGISTERED, never only printed: one `<workspace>/testing/defects.pending/<id>.json`
-each in TESTING_V3_SPEC §1.5's schema (`{id, rows, kind, cause, first_seen {tip, pin, run}, state: open,
-found_by: gate}`), which VERDICT-1's registry (`testing/defects.json`) ingests. Exit codes: 3 a
+each in TESTING_V3_SPEC §1.5's FULL schema (`{id, rows, kind, cause, first_seen {tip, pin, run}, state: open,
+found_by: gate, recheck, expires}` — recheck a DATE: the next day for NOT REPRODUCED, +7 days for a
+defect; NOT REPRODUCED also `uses: 1, suspects: [the batch's lanes], census`), which VERDICT-1's registry
+(`testing/defects.json`) ingests — its reader refuses the whole registry on one malformed entry, and
+gate.batch loads every pending file through it. Exit codes: 3 a
 combination defect, else 7 an INCOMPLETE or aborted attribution, else 5 a d-build defect, else 0; 4 an
 unusable tree, 64 usage. Every commit the batch tooling writes (the candidate's merges, the regenerated
 SCRIPTING.md) is authored jahshaka by the script itself, and batch-land runs check-trailers on the
