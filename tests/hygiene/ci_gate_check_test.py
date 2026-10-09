@@ -46,7 +46,8 @@ def main(source, build):
     scratch = tempfile.mkdtemp(prefix="ci-check-")
     listed = os.path.join(scratch, "contention.json")
     unlisted = os.path.join(scratch, "contention-empty.json")
-    json.dump({"suites": {"photon.view": "the fixture's contention-class row (this test only)"}}, open(listed, "w"))
+    json.dump({"suites": {"photon.view": {"reason": "the fixture's contention-class row (this test only)",
+                                          "date": "2026-10-09", "recheck": "never (a fixture)"}}}, open(listed, "w"))
     json.dump({"suites": {}}, open(unlisted, "w"))
 
     def run(rng=RANGE, *extra):

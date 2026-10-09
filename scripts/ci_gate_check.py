@@ -251,10 +251,9 @@ def check(rng, build, gs=None, verdicts=None):
     """(ok, reasons) for a range. `verdicts`: {row or pool.arm: text} recorded for those rows first
     (per row, timestamped; a row that is not red now is refused as a verdict, said out loud)."""
     gs = gs or load_gs()
-    contention = gate_runlog.contention_list()
+    contention, problem = gate_runlog.contention_load()
     if contention is None:
-        return None, [f"the contention list {gate_runlog.contention_file()} is missing or unreadable — the refusal "
-                      f"cannot apply the flake law without it (JAH_CONTENTION_FILE overrides)"]
+        return None, [f"{problem} — the refusal cannot apply the flake law without it (JAH_CONTENTION_FILE overrides)"]
     base, tip = rng.split("..", 1)
     tip_sha = subprocess.run(["git", "rev-parse", tip], cwd=gs.ROOT, capture_output=True, text=True).stdout.strip()
     if not tip_sha:

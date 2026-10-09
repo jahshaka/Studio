@@ -229,14 +229,55 @@ def contention_file():
     return os.environ.get("JAH_CONTENTION_FILE") or os.path.join(workspace_root(), "testing", "contention.json")
 
 
-def contention_list():
-    """{suite or arm: why}, or None when the file cannot be read."""
+CONTENTION_FIELDS = ("reason", "date", "recheck")
+_DATE = re.compile(r"^\d{4}-\d\d-\d\d$")
+
+
+def contention_load():
+    """({suite or arm: {reason, date, recheck}}, None) — or (None, why) when the file cannot be read
+    or ANY entry lacks its shape (VERDICT-1 U5): every entry carries the verdict's `reason`, the
+    `date` it was given (YYYY-MM-DD) and the `recheck` that re-opens it. A list with one bad entry
+    is refused whole: the flake law is not applied from a list nobody can date."""
+    path = contention_file()
     try:
-        d = json.load(open(contention_file()))
-    except (OSError, ValueError):
-        return None
+        d = json.load(open(path))
+    except (OSError, ValueError) as e:
+        return None, f"the contention list {path} is missing or unreadable ({e.__class__.__name__})"
     s = d.get("suites") if isinstance(d, dict) else None
-    return dict(s) if isinstance(s, dict) else None
+    if not isinstance(s, dict):
+        return None, f"the contention list {path} has no `suites` object"
+    bad = []
+    for name, e in s.items():
+        if not isinstance(e, dict):
+            bad.append(f"{name}: not an object {{reason, date, recheck}}"); continue
+        miss = [f for f in CONTENTION_FIELDS if not (isinstance(e.get(f), str) and e.get(f).strip())]
+        if miss:
+            bad.append(f"{name}: missing {', '.join(miss)}"); continue
+        if not _DATE.match(e["date"].strip()):
+            bad.append(f"{name}: date '{e['date']}' is not YYYY-MM-DD")
+    if bad:
+        return None, (f"the contention list {path} has {len(bad)} entr{'y' if len(bad) == 1 else 'ies'} without "
+                      f"the shape {{reason, date, recheck}} (VERDICT-1 U5): " + "; ".join(bad[:6]))
+    return dict(s), None
+
+
+def contention_list():
+    """{suite or arm: its reason (one line)}, or None when the file cannot be read or an entry lacks
+    its shape (contention_load says why)."""
+    s, _ = contention_load()
+    return None if s is None else {k: f"{v['reason']} [{v['date']}; recheck: {v['recheck']}]" for k, v in s.items()}
+
+
+def record_lanes(r):
+    """The lane names a record belongs to: BATCH-GATE-1's `lanes` list, or the single `lane` string
+    (both shapes are read, so VERDICT-1 and BATCH-GATE-1 merge in either order)."""
+    v = r.get("lanes")
+    if isinstance(v, list):
+        return {x for x in v if isinstance(x, str) and x}
+    if isinstance(v, str) and v:
+        return {v}
+    v = r.get("lane")
+    return {v} if isinstance(v, str) and v else set()
 
 
 def _git(args, cwd=None):
