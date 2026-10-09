@@ -494,15 +494,9 @@ def run(source, scripts, merge, scratch, rl, build_dir):
           "...NOT REPRODUCED: uses 1, the batch's lanes as suspects, the record's census")
     # VERDICT-1's reader QUARANTINES a malformed entry (the finding never reaches the door): every pending file must
     # load through it
-    import importlib.util
-    v1 = os.environ.get("JAH_VERDICT1_RUNLOG") or os.path.join(rl.workspace_root(), "jahshaka", ".claude", "worktrees",
-                                                               "verdict-1", "scripts", "gate_runlog.py")
-    loader = rl if hasattr(rl, "defects_load") else None
-    if loader is None and os.path.isfile(v1):
-        spec = importlib.util.spec_from_file_location("v1_gate_runlog", v1)
-        loader = importlib.util.module_from_spec(spec); spec.loader.exec_module(loader)
-    if loader is None or not hasattr(loader, "defects_load"):
-        check(False, f"VERDICT-1's defects_load is reachable (this tree's gate_runlog, or {v1})")
+    loader = rl
+    if not hasattr(loader, "defects_load"):
+        check(False, "VERDICT-1's defects_load is in this tree's gate_runlog")
     else:
         old = os.environ.get("JAH_DEFECTS_FILE"); os.environ["JAH_DEFECTS_FILE"] = os.path.join(reg, "defects.json")
         try:
