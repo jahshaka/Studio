@@ -183,9 +183,7 @@ def carried(R, repo, ref):
 
 
 def _lanes(r):
-    v = r.get("lanes")
-    if isinstance(v, list): return {x for x in v if x}
-    return {r["lane"]} if r.get("lane") else set()
+    return set(ci_gate_check.gate_runlog.record_lanes(r))      # the one reader of `lane` / `lanes`
 
 
 CONT = set()

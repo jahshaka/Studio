@@ -248,7 +248,8 @@ def _real(m, row, reds, solos, defects, tip_recs, base_recs, tip_sha=None, mode=
     # base FAIL into a CRASH, or another assertion, is not "known")
     lane_red = sorted(reds, key=_when)[-1]
     same = [r for r in (base_recs or []) if r.get("kind") != "verdict" and r.get("retry")
-            and r.get("verdict") == lane_red.get("verdict") and masked(r.get("failLine")) == masked(lane_red.get("failLine"))]
+            and r.get("verdict") == lane_red.get("verdict") and masked(r.get("failLine")) == masked(lane_red.get("failLine"))
+            and masked(r.get("status")) == masked(lane_red.get("status"))]
     if same:
         return True, (f"real:{did} KNOWN RED (the same {lane_red.get('verdict')}"
                       f"{' — ' + masked(lane_red.get('failLine'))[:60] if lane_red.get('failLine') else ''} reproduced by a "
@@ -257,8 +258,9 @@ def _real(m, row, reds, solos, defects, tip_recs, base_recs, tip_sha=None, mode=
              and r.get("verdict") not in ("PASS",) + NEVER_RAN]
     if other:
         return False, (f"real:{did}: the base's solo red is not the SAME red ({other[-1].get('verdict')} "
-                       f"'{masked(other[-1].get('failLine'))[:50]}' vs the lane's {lane_red.get('verdict')} "
-                       f"'{masked(lane_red.get('failLine'))[:50]}') — not known"), False
+                       f"'{masked(other[-1].get('failLine') or other[-1].get('status'))[:50]}' vs the lane's "
+                       f"{lane_red.get('verdict')} '{masked(lane_red.get('failLine') or lane_red.get('status'))[:50]}') "
+                       f"— not known"), False
     return False, (f"real:{did} is registered, but neither a PASS of the row at the tip after the red (the fix) nor the "
                    f"same red reproduced by a recorded solo at the BASE proves it — naming a ticket clears nothing"), False
 
@@ -537,14 +539,14 @@ def check(rng, build, gs=None, verdicts=None, mode="merge", lane=None):
         pins[base_sha] = _git(["rev-parse", f"{base_sha}:irisgl"], gs.ROOT) or None
     reach = None
 
-    def dropped(k, st, why):
+    def dropped(k, st, why, at):
         """GATE-COST-2's abort record: a row it dropped RED needs 3/3 solo PASS after the abort, whatever else
         answered it (the re-run is a solo, never a quiet answer)."""
-        for ab in ABORTS.get(tip_sha, []):
+        for ab in ABORTS.get(at, []):
             names = ab.get("droppedRed") or []
             names = [x if isinstance(x, str) else (x or {}).get("row") for x in names]
             if k[0] in names or (k[1] and k[1] in names):
-                after = [r for r in got_now[tip_sha].get(k, []) if r.get("retry") and _when(r) > _when(ab)]
+                after = [r for r in got_now.get(at, {}).get(k, []) if r.get("retry") and _when(r) > _when(ab)]
                 if not _solos_ok(after):
                     return "red", (f"DROPPED RED by the abort at {(ab.get('ts') or '')[:16]} — needs 3/3 solo PASS after "
                                    f"it ({sum(1 for r in after if r.get('verdict') == 'PASS')}/{len(after)})")
@@ -605,7 +607,7 @@ def check(rng, build, gs=None, verdicts=None, mode="merge", lane=None):
                           (f"red at {c[:9]}, the newest run of it on the lane ({c[:9]}..{tip_sha[:9]} does not reach "
                            f"it; answer it there): {cwhy}")
                     break
-            st, why = dropped(k, st, why)
+            st, why = dropped(k, st, why, src)
             out[k] = (st, why, src)
         # U4: THE LANE'S OTHER TIPS (a rebase, a superseded fix round): an open red there that the
         # current tip never re-ran (a later record of the same row+arm at the tip that passes) and no
@@ -683,7 +685,8 @@ def check(rng, build, gs=None, verdicts=None, mode="merge", lane=None):
                            f"— a {mode} re-asks it there")
         # every law switch is written into the records as `overrides`: a push / stage close refuses a candidate
         # whose records carry any (TESTING_V3 §1.2)
-        ov = sorted({str(o) for rs in got_now.get(tip_sha, {}).values() for r in rs for o in (r.get("overrides") or [])})
+        srcs = {tip_sha} | {src for (_, _, src) in judged.values()}
+        ov = sorted({str(o) for c in srcs for rs in got_now.get(c, {}).values() for r in rs for o in (r.get("overrides") or [])})
         if ov:
             red.append(f"OVERRIDES in the candidate's records ({', '.join(ov[:6])}) — a {mode} refuses them")
     cleared = [f"{label(k)}: {why}" for k, (st, why, src) in judged.items()

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""gate.verdict_* — THE JUDGE'S FOUR DOORS, the list's shape and the record's new fields (lane VERDICT-1 +
+"""gate.verdict_* — THE JUDGE'S FOUR DOORS, the defect registry's shape and the record's new fields (lane VERDICT-1 +
 GATE-LOG-1; ONE_PICTURE_SPEC H1/H2; docs/TESTING_GATE.md §4). Toy run logs only (a PRIVATE run log,
-JAH_RUN_LOG_DIR; a PRIVATE contention list, JAH_CONTENTION_FILE; a PRIVATE token dir, JAH_VRAM_DIR) — no GPU,
+JAH_RUN_LOG_DIR; a PRIVATE defect registry, JAH_DEFECTS_FILE; a PRIVATE token dir, JAH_VRAM_DIR) — no GPU,
 no display. One script, five rows:
 
   verdict_door      U1/U3, TESTING_V3 §1.4: real:<id> must be REGISTERED for the row and PROVED (a PASS at the tip;
