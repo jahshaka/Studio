@@ -4,7 +4,7 @@ GATE-LOG-1; ONE_PICTURE_SPEC H1/H2; docs/TESTING_GATE.md §4). Toy run logs only
 JAH_RUN_LOG_DIR; a PRIVATE defect registry, JAH_DEFECTS_FILE; a PRIVATE token dir, JAH_VRAM_DIR) — no GPU,
 no display. One script, five rows:
 
-  verdict_door      U1/U3, TESTING_V3 §1.4: real:<id> must be REGISTERED for the row and PROVED (a PASS at the tip;
+  verdict_door      U1/U3, TESTING_V3 §1.4: real:<id> must be REGISTERED for the row and PROVED (a PASS at a later sha that reaches the row;
                     the red reproduced by a solo at the base = KNOWN RED: a merge passes, a push / stage close
                     refuses; a nondeterminism id clears by 3/3); contention: only for an open nondeterminism row
                     whose red's COMPETITOR CENSUS shows competition (never the gate's own queue or drain), with 3/3;
@@ -163,7 +163,7 @@ def case_verdict_door(E):
     check(st == "red" and "RETIRED" in why, "real:<a retired id> -> refused (%s)" % why[:80])
     st, why = E.judge([red, vrec("real:VIEWS-XID-1 fixed in abc123", T % "11:00")])
     check(st == "red" and "naming a ticket clears nothing" in why,
-          "real:<registered id> with no proof (no PASS at the tip, no red on the base) -> refused (%s)" % why[:90])
+          "real:<registered id> with no proof (no PASS at a later sha that reaches the row, no red on the base) -> refused (%s)" % why[:90])
     st, why = E.judge([red, rec("PASS", T % "10:30", tip=RED_SHA), vrec("real:VIEWS-XID-1", T % "11:00")])
     check(st == "red" and "REACHES" in why, "F1: real:<registered id> + a PASS at the red's OWN sha -> refused (the "
           "same code passing once proves no fix) (%s)" % why[:80])

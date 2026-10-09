@@ -42,7 +42,7 @@ MISSING, which no verdict clears. scripts/lead/merge-dbuild-lane.sh calls this
 and refuses the merge on a failure; its own `--verdict` passes through here.
 
 THE VERDICT DOOR (TESTING_V3_SPEC §1.4; VERDICT-1; door() below): a verdict clears a red only by a REGISTERED FACT
-— `real:<ID>` (in testing/defects.json for this row; proved by the row's PASS at the tip, or by the red reproduced
+— `real:<ID>` (in testing/defects.json for this row; proved by a PASS at a later sha that reaches the row, or by the SAME red reproduced
 by a recorded solo at the base = KNOWN RED: `--mode merge` passes it, `--mode push|stage-close` refuses it),
 `contention:` (an open nondeterminism row whose red's competitor census shows competition, 3/3 solo), `xid-read:`
 (a LOST/OOM/CRASH whose journal was unreadable). A refused verdict prints `VERDICT REFUSED <row>: <why>`. A REBASE
@@ -152,8 +152,9 @@ HARD = ("LOST", "OOM", "CRASH")          # never cleared by solos, never by `con
 
 # THE VERDICT DOOR (TESTING_V3_SPEC §1.4; lane VERDICT-1 + the lead's band-aid addendum): a verdict clears an open red
 # only by a REGISTERED FACT, every token CHECKED against the run log and the defect registry (testing/defects.json):
-#   real:<ID>          <ID> EXISTS in the registry and its `rows` hold this row, and EITHER a PASS record of the row at
-#                      the tip after the red proves the fix, OR the same red is REPRODUCED ON THE BASE (a recorded solo
+#   real:<ID>          <ID> EXISTS in the registry and its `rows` hold this row, and EITHER a PASS of the row at a
+#                      LATER sha THAT REACHES THE ROW (a descendant of the red's sha whose change selects it) proves
+#                      the fix, OR the same red is REPRODUCED ON THE BASE (a recorded solo
 #                      red at the range's base, a d-build commit) — then the row is KNOWN RED: a merge may pass, a push
 #                      or a stage close may not. An `nondeterminism` entry (NOT REPRODUCED) clears by 3/3 solo PASS.
 #   contention:<...>   FAIL/TIMEOUT only; the row has an OPEN `nondeterminism` entry (the contention class), the red's
@@ -265,7 +266,7 @@ def _real(m, row, reds, solos, defects, tip_recs, base_recs, tip_sha=None, mode=
                        f"'{masked(other[-1].get('failLine') or other[-1].get('status'))[:50]}' vs the lane's "
                        f"{lane_red.get('verdict')} '{masked(lane_red.get('failLine') or lane_red.get('status'))[:50]}') "
                        f"— not known"), False
-    return False, (f"real:{did} is registered, but neither a PASS of the row at the tip after the red (the fix) nor the "
+    return False, (f"real:{did} is registered, but neither a PASS at a later sha that reaches the row (the fix) nor the "
                    f"same red reproduced by a recorded solo at the BASE proves it — naming a ticket clears nothing"), False
 
 
@@ -323,8 +324,8 @@ def door(text, reds, solos, row, defects=None, tip_recs=None, base_recs=None, ti
             return True, (f"contention: ({contention[row]['id']}; {census_of([r for r in reds if not r.get('retry')][-1])[0]}) "
                           f"with {spass}/{len(solos)} solo PASS"), "nondet"
         return False, f"contention: needs 3/3 solo PASS after the red ({spass}/{len(solos)}) — gate-scope.sh --solo <row>", False
-    return False, ("a verdict carries a registered fact: real:<id> (in testing/defects.json, proved by a PASS at the tip "
-                   "or the red reproduced on the base) or contention: (a nondeterminism row, a competitor census, 3/3 "
+    return False, ("a verdict carries a registered fact: real:<id> (in testing/defects.json, proved by a PASS at a "
+                   "later sha that reaches the row, or the same red reproduced on the base) or contention: (a nondeterminism row, a competitor census, 3/3 "
                    "solo) — nothing accepts prose"), False
 
 

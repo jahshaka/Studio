@@ -373,8 +373,9 @@ verdicts of a week, 6 clearing solos below 3/3 by prose, 2 LOSTs called environm
 never-ran pools recorded FAIL).** `ci_gate_check.py` accepts registered facts, never prose; `--verdict "<row>=<text>"`
 keeps its syntax and the text is parsed:
 - **`real:<ID>`** — `<ID>` is in THE DEFECT REGISTRY (`testing/defects.json`, below) for this row, not retired, not
-  past its recheck date, and PROVED: a PASS record of the row at a LATER sha than the red (the fix — a PASS at the
-  red's own sha is the same code passing once: nondeterminism, 3/3 solo), or the SAME red — the same status text too,
+  past its recheck date, and PROVED: a PASS record of the row at a later sha that REACHES the row (a descendant of the
+  red's sha whose change the selector maps to the row — a PASS at the red's own sha, at an ancestor, or after a
+  docs-only / empty commit is the same code passing again: nondeterminism, 3/3 solo), or the SAME red — the same status text too,
   the same verdict class and the same failLine with its numbers masked — reproduced by a recorded solo at the
   range's base (a d-build commit): the row is then **KNOWN RED** — `--mode merge` passes it, `--mode push` and
   `--mode stage-close` refuse it (never push on a red). A ticket named alone clears nothing; a CRASH never.
@@ -400,7 +401,8 @@ A refused verdict prints `VERDICT REFUSED <row>: <why>` (the rule named) and the
 **A REBASE CARRIES ITS OPEN REDS (VERDICT-1 U4).** The judge reads, for a lane's tip, the lane's OWN records
 (`lanes == [<lane>]`, no `batch` tag; `--lane`, else the tip's records, else the branch) at any other tip, ancestor or
 not, and refuses the tip while a red there has no later green record of the same row+arm at the tip and no verdict
-through the door: `OPEN RED carried from <old tip>: <row>`. Batch records never carry. `--verdict` records the answer
+through the door: `OPEN RED carried from <old tip>: <row>` (a red at a lane tip that DESCENDS from the checked tip
+is never answered by the tip's PASS: that code predates it). Batch records never carry. `--verdict` records the answer
 AT the old tip. Forward only: schema-2 records; the historic cases are `scripts/gate-report.py --carried`.
 
 **THE DEFECT REGISTRY (TESTING_V3 §1.5) — `testing/defects.json`, owned by VERDICT-1's reader
