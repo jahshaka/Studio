@@ -45,12 +45,13 @@ import time
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SCHEMA = 1
 # THE TIER NAMES (TESTING-DEBTS-1 T11) — the only ones a record may carry; testing/runs/README.md
-# documents the same list. gate-scope.sh writes the first four (`scoped`; `scoped-fallback` = a
-# scoped gate that fell back to the whole tier; `scoped-tier` = the tier by rule, a fork pin;
-# `joint` = --joint) and `target` (GATE-SPEED-1: the target tests' own step, after the gating
-# verdict — reported, never gating); rc-gate.sh writes JAH_GATE_TIER (merge by default: stage,
-# nightly, push, smoke — the owner's smoke rc —, fork).
-TIERS = ("scoped", "scoped-fallback", "scoped-tier", "joint", "target", "merge", "stage", "nightly", "push",
+# documents the same list. gate-scope.sh writes the first three (`scoped`; `scoped-fallback` = a
+# scoped gate that fell back to the whole tier; `scoped-tier` = the tier by rule, a fork pin) and
+# `target` (GATE-SPEED-1: the target tests' own step, after the gating verdict — reported, never
+# gating); rc-gate.sh writes JAH_GATE_TIER (merge by default: stage, nightly, push, smoke — the
+# owner's smoke rc —, fork; scoped for a BATCH candidate, BATCH-GATE-1). `joint` is gone with
+# `--joint` (BATCH-GATE-1: the batch gate is the joint gate); its old records stay readable.
+TIERS = ("scoped", "scoped-fallback", "scoped-tier", "target", "merge", "stage", "nightly", "push",
          "smoke", "fork")
 
 

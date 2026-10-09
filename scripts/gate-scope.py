@@ -16,7 +16,7 @@ path and one reason per selected row, estimates the wall time from THE RUN LOG (
 `--run` writes every row's verdict into the run log (scripts/gate_runlog.py) as the row ends.
 
 A RUN IS A GATE, AND THE BOX RUNS ONE AT A TIME (GATE-COST-1, SPECS/audits/GATE_COST_2026-10-09.md):
-`--run` (scoped, a fallback, `--fork-tier`, `--joint`, `--targets-only`) queues for THE GATE SLOT
+`--run` (scoped, a fallback, `--fork-tier`, `--targets-only`) queues for THE GATE SLOT
 (scripts/vram_tokens.py; FIFO, no bound, its position printed) and holds it to its last process;
 `--solo` never takes it. Inside it: the `hygiene` rows first, as their own CPU phase (P8); the GPU
 rows; a row that got no admission re-queued at the end (P5); the timing rows serial on ONE whole-card
@@ -36,7 +36,14 @@ Build files are read by what their changed commands name. The FALLBACK to the ME
 only for a path with no rule, no symbol and no graph owner. A fork pin bump selects by the FORK
 DIFF'S reach (FORK_FAMILIES); its one full tier runs at the merge into d-build (`--fork-tier`,
 which ci_gate_check requires). THE RANGE IS THE LANE'S OWN: across a forward merge the scope
-starts at the merge's d-build parent (own_base), and what came in is the joint suites'. Tiers are contracts: the selection printed here is what runs, nothing
+starts at the merge's d-build parent (own_base), and what came in is the batch gate's.
+
+ONE GATE PER BATCH (BATCH-GATE-1; docs/TESTING_GATE.md §3c): builders run their named acceptance tests
++ their subject suite; the lead stacks the ready lanes on d-build as ONE candidate
+(`scripts/lead/merge-dbuild-lane.sh batch`) and runs ONE scoped gate on `d-build..candidate` — the
+candidate's merges have lane tips as second parents, so the union range scopes as a plain range.
+The `--joint` union this replaced is gone.
+Tiers are contracts: the selection printed here is what runs, nothing
 hand-picked out of it; a red a later tier finds that this selection missed is a defect of
 this tool, fixed here and added to tests/hygiene/gate_selection_cases.json.
 """
@@ -325,7 +332,7 @@ TARGET_LABELS = {"photon-target", "scale-target"}
 
 NIGHTLY_LABEL_RE = "|".join(sorted(re.escape(l) for l in NIGHTLY_LABELS | TARGET_LABELS))
 # THE GATE'S PARALLEL WIDTH — THE ONE CONSTANT (GATE-SPEED-1 item 9). Every gate's parallel phase
-# (the scoped selection, the MERGE tier, a fallback, the joint union), rc-gate.sh's ctest width
+# (the scoped selection, the MERGE tier, a fallback, a batch candidate's), rc-gate.sh's ctest width
 # (`gate-scope.py --gate-jobs`) and the merge refusal's re-selection read THIS; the docs name it
 # instead of quoting a number. Changing the box's width is this one line — and an owner decision
 # (PHOTON_ATOM_CONTRACT §7b rule 3; the gate-speed audit's replay: -j6 21.7 min against -j4's 31.0
@@ -472,7 +479,7 @@ def irisgl_pair(base, tip):
 
 def touched_paths(rng):
     """Files changed in the Studio range, plus the irisgl submodule's own diff (prefixed) — the
-    LANE'S OWN change (scope_range: what forward merges carried in is the joint suites' business)."""
+    LANE'S OWN change (scope_range: what forward merges carried in is the batch gate's business)."""
     rng = scope_range(rng)[0]
     files = [l for l in sh(f"git diff --name-only {rng}").splitlines() if l]
     if not files:
@@ -886,14 +893,11 @@ class Selection:
         for n, t in inv.items():
             for e in t["exes"]: self.exe_rows[e].append(n)
         self.row_names = set(inv)
-        self.owned = set()
         self._visited = set()
 
     # -- adding rows -----------------------------------------------------------------------
     def add(self, suites, why):
         for s in suites:
-            if why.startswith("tests/"):
-                self.owned.add(s.split("::", 1)[0])     # the lane's own guard (--joint)
             if "::" in s:
                 row, arm = s.split("::", 1)
                 if row in self.inv and row not in self.whole:
@@ -1905,47 +1909,6 @@ def select(paths, rng, build, jobs, graph=None, inv=None, quiet_graph=False):
     return S
 
 
-def joint(range_a, range_b, build, jobs):
-    """THE JOINT SUITES (TESTING_V2 T4, the simple form): two lanes that touched one file family
-    are merged on the UNION of their selections, and the rows BOTH select — the shared map in
-    practice: the subjects both changes reach — are named, because a combination is what neither
-    lane's own gate could see. Returns a dict (the --json form)."""
-    graph = gate_graph.NinjaGraph.load(build)
-    inv0 = load_inventory(build)
-    import copy as _copy
-    out = {}
-    sels = []
-    for rng in (range_a, range_b):
-        S = select(touched_paths(rng), rng, build, jobs, graph=graph, inv=_copy.deepcopy(inv0), quiet_graph=True)
-        sels.append(S)
-    A, B = sels
-    whole = bool(A.fallback or A.full_tier or B.fallback or B.full_tier)
-    gating = lambda n: not (inv0[n]["labels"] & (SCOPE_EXCLUDED_LABELS | TARGET_LABELS))
-    sa = {n for n in A.selected if gating(n)}
-    sb = {n for n in B.selected if gating(n)}
-    shared_paths = sorted(set(touched_paths(range_a)) & set(touched_paths(range_b)))
-    # THE JOINT ROWS: the lanes' OWN guards (the rows their test-side changes selected: a test
-    # source, a script, a registration) that the OTHER lane's change also reaches. Each guard
-    # passed on its own lane's tree; the merge is the first tree where the other change is in it.
-    # (Plain "selected by both" is the engine's whole reach for two engine lanes — hundreds of
-    # rows that say nothing about the combination.)
-    own = lambda S: {n for n in S.owned if n in S.selected}
-    both = sorted((own(A) & sb) | (own(B) & sa))
-    union = sorted(sa | sb)
-    ser = [n for n in union if TIMING_LABEL in inv0[n]["labels"]]
-    par = [n for n in union if n not in ser]
-    out = {"ranges": [range_a, range_b], "shared_paths": shared_paths, "joint": both,
-           "union": union, "whole_tier": whole,
-           "command": merge_tier(jobs) if whole else
-           ("ctest -j%d --timeout 120 --output-on-failure --no-tests=error -R '^(%s)$'"
-            % (jobs, "|".join(re.escape(n) for n in par)) if par else ""),
-           # the timing rows of the union: their own serial phase after it (W1)
-           "serial_command": merge_tier_serial() if whole else
-           ("ctest -j1 --timeout 120 --output-on-failure --no-tests=error -R '^(%s)$'"
-            % "|".join(re.escape(n) for n in ser) if ser else "")}
-    return out
-
-
 def run_target_step(target_cmd, build, lane, log_range, labels, reasons, exclude=None):
     """THE TARGET STEP (GATE-COST-1 P9; TARGET-STEP-DISPLAY-1, ledger §1851): the selection's target
     rows, -j1, run-log tier `target`, AFTER the gating verdict and INSIDE the gate — on the gate's own
@@ -1973,10 +1936,12 @@ def main():
     ap.add_argument("-j", "--jobs", type=int, default=GATE_JOBS,
                     help=f"ctest parallelism of the parallel phase (default GATE_JOBS = {GATE_JOBS}, the one constant)")
     ap.add_argument("--json", action="store_true")
-    ap.add_argument("--lane", default=None, help="the lane/stage name the run log records (default: the branch)")
+    ap.add_argument("--lane", action="append", default=None,
+                    help="the record's `lanes` (default: the branch): repeat it or give a comma-separated list — a "
+                         "batch candidate's gate names every lane in it (BATCH-GATE-1)")
     ap.add_argument("--tier", default=None, choices=gate_runlog.TIERS,
                     help="the run log's tier name (default: scoped; scoped-fallback / scoped-tier when a scoped "
-                         "gate runs the whole tier; joint for --joint)")
+                         "gate runs the whole tier)")
     ap.add_argument("--record-times", action="store_true",
                     help="refresh scripts/gate-times.txt from the run log (median PASS seconds, 14 days)")
     ap.add_argument("--solo", metavar="SUITE", nargs="+",
@@ -1985,9 +1950,6 @@ def main():
     ap.add_argument("--merge-tier", action="store_true",
                     help="print the MERGE tier's ctest command (at -j) and exit — the one source "
                          "docs/TESTING_GATE.md quotes instead of a copy of the -LE set")
-    ap.add_argument("--joint", nargs=2, metavar=("RANGE_A", "RANGE_B"),
-                    help="the joint suites of two lanes merged together: the union of both selections, "
-                         "naming the rows BOTH select (the shared map) and the paths both touched")
     ap.add_argument("--fork-tier", action="store_true",
                     help="a range that moves the fork pin: run the MERGE tier (logged as tier `fork`) — §7b rule 4's "
                          "one full tier per bump, at the merge into d-build; ci_gate_check requires it")
@@ -2007,6 +1969,13 @@ def main():
     tg.add_argument("--targets-only", action="store_true",
                     help="with --run: run ONLY the selection's target tests (-j1, run-log tier `target`), in the "
                          "foreground; reported, exit 0 whatever they read — the step --run starts by itself")
+    if "--joint" in sys.argv[1:]:
+        # RETIRED (BATCH-GATE-1): the union of two lanes' selections is what a batch candidate's ONE gate runs
+        sys.stderr.write("gate-scope: --joint is retired (BATCH-GATE-1) — the batch gate IS the joint gate: stack the "
+                         "lanes as one candidate with\n  scripts/lead/merge-dbuild-lane.sh batch <tag> "
+                         "<lane>:<studio tip>:<irisgl tip> [...]\nand gate `d-build..candidate` once (the command it "
+                         "prints)\n")
+        sys.exit(2)
     a = ap.parse_args()
     if a.resume:
         a.run = True
@@ -2037,7 +2006,8 @@ def main():
         it in THIS process to its end (the ctest trees below die with it: gate_runlog F2)."""
         if not slot:
             gate_runlog.on_signals()
-            fd = gate_runlog._vram().gate_slot(f"{a.lane or os.path.basename(gate_runlog.ROOT)} {what}", log=sys.stdout)
+            who = "+".join(gate_runlog.lane_list(a.lane)) or os.path.basename(gate_runlog.ROOT)
+            fd = gate_runlog._vram().gate_slot(f"{who} {what}", log=sys.stdout)
             slot.append(fd)
         return None
 
@@ -2063,33 +2033,7 @@ def main():
         print(f"gate-scope --resume: {len(got)} row(s) already have a record at this tip")
         return got
 
-    if a.joint:
-        J = joint(a.joint[0], a.joint[1], build, a.jobs)
-        if a.json:
-            print(json.dumps(J, indent=1)); return
-        print(f"gate-scope --joint: {a.joint[0]}  +  {a.joint[1]}")
-        print(f"\npaths BOTH changes touched ({len(J['shared_paths'])}):")
-        for p in J["shared_paths"]: print(f"  {p}")
-        print(f"\nTHE JOINT ROWS — each lane's own guards that the other lane's change also reaches (the "
-              f"shared map; the combination neither lane's gate saw) ({len(J['joint'])}):")
-        for n in J["joint"]: print(f"  {n}")
-        print(f"\nthe merge gate = the UNION of both selections: "
-              + ("the MERGE tier (one side selects it)" if J["whole_tier"] else f"{len(J['union'])} row(s)"))
-        print(f"\n{J['command']}\n{J['serial_command']}")
-        if a.run and (J["command"] or J["serial_command"]):
-            lane = a.lane or "joint"
-            why = {n: ("joint: both" if n in J["joint"] else "joint: union") for n in J["union"]}
-            gate("joint"); skip = done_rows()
-            labels = {n: t["labels"] for n, t in load_inventory(build).items()}
-            rc = lost(gate_runlog.run_ctest(J["command"], build, a.tier or "joint", lane, a.jobs, reasons=why,
-                                            labels=labels, exclude=skip)) if J["command"] else 0
-            if J["serial_command"]:
-                rc = lost(gate_runlog.run_ctest(J["serial_command"], build, a.tier or "joint", lane, 1, reasons=why,
-                                                labels=labels, exclude=skip, whole_card=True)) or rc
-            gate_runlog.trend_at_gate_end()
-            sys.exit(rc)
-        return
-    lane = a.lane or gate_runlog._git(["rev-parse", "--abbrev-ref", "HEAD"])
+    lane = gate_runlog.lane_list(a.lane) or [gate_runlog._git(["rev-parse", "--abbrev-ref", "HEAD"])]
     # the run log records the range by sha (HEAD moves; the record must not)
     log_range = a.range
     if a.range and ".." in a.range:
@@ -2115,7 +2059,7 @@ def main():
         # token once and each run's admissions are nested on it, so no sibling lane's GPU row runs beside
         # any of them — and the card drains once, not once per run. A solo batch never takes the gate slot.
         gate_runlog.on_signals()
-        card, env = gate_runlog._vram().hold_card(f"{lane} --solo {' '.join(a.solo)[:80]}", log=sys.stdout)
+        card, env = gate_runlog._vram().hold_card(f"{'+'.join(lane)} --solo {' '.join(a.solo)[:80]}", log=sys.stdout)
         if not card and not env.get("JAH_VRAM_HELD"):
             env["JAH_VRAM_ALL"] = "1"      # no hold (the drain timed out): every admission of a run takes the card
         try:
@@ -2136,13 +2080,13 @@ def main():
     own_rng, incoming, fwd = scope_range(a.range) if a.range and not a.files else (a.range, None, [])
     if fwd and not a.json:
         # THE LANE IS GATED ON ITS OWN DIFF (T1): what the forward merges carried in is the
-        # siblings' change, gated on their own lanes — the combination is the joint suites'.
+        # siblings' change, gated in their own batch — the combination is the batch gate's.
         short = lambda r: "..".join(x[:9] for x in r.split(".."))
         print(f"gate-scope: {len(fwd)} forward merge(s) in {a.range} — the lane's OWN change is "
               f"{short(own_rng)} (from the newest one's second parent {fwd[0][1][:9]})")
         if incoming:
-            print(f"  what came in through them ({short(incoming)}) is NOT this gate's: the joint suites are\n"
-                  f"  scripts/gate-scope.sh --joint {short(own_rng)} {short(incoming)}")
+            print(f"  what came in through them ({short(incoming)}) is NOT this gate's: the combination is the batch "
+                  f"gate's (scripts/lead/merge-dbuild-lane.sh batch)")
     if fwd:
         log_range = "..".join(x[:9] for x in own_rng.split(".."))
 
