@@ -2927,6 +2927,10 @@ IEditorViewport::GiStatusInfo EngineSceneViewport::giStatus() const
         for (int n : c.voxelLevels) ci.voxelLevels.append(n);
         ci.voxelTriangles = qint64(c.voxelTriangles);
         ci.voxelDispatches = qint64(c.voxelDispatches);
+        ci.lightsInRange = c.lightsInRange;
+        ci.lightsInjected = c.lightsInjected;
+        ci.lightCapacity = c.lightCapacity;
+        ci.lightsOverBudget = c.lightsOverBudget;
         out.cascades.append(ci);
     }
     out.cascadeFullRebuilds = quint64(st.cascadeFullRebuilds);
@@ -2959,6 +2963,8 @@ IEditorViewport::GiStatusInfo EngineSceneViewport::giStatus() const
     out.cards.captureMs         = double(st.cards.captureMs);
     out.cards.cardRecords       = int(st.cards.cardRecords);
     out.cards.instanceSlots     = int(st.cards.instanceSlots);
+    out.cards.lightsInRange     = int(st.cards.lightsInRange);
+    out.cards.lightsDropped     = int(st.cards.lightsDropped);
     // THE RAY-QUERY TIER (PHOTON_SPEC §7 R1). A separate engine reading, not a
     // member of GiStatus: the tier is a geometry service, and GI is only its
     // first consumer.

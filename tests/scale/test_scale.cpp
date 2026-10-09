@@ -327,6 +327,8 @@ static int voxelScrollMain()
 //   C  EVERY CASCADE: lamps on a line at growing distances; each cascade's lightsInRange equals
 //                 the analytic count (range sphere vs the cascade's box from its status), injected
 //                 = min(in range, the budget), over = the rest — on every cascade.
+//   E  ONE UNIT: 16 dim point fillers + an area light delivering their sum: the area light
+//                 enters and moves the digest; a spot aimed away from the box is culled by its cone.
 //   D  THE CARDS (where rays run): 64 dim fillers FIRST, then the KEY: the floor's card radiance
 //                 moves with the key (the old first-64 dropped it), cards.lightsDropped = 1.
 // ===========================================================================
@@ -485,6 +487,78 @@ static void lightListArms(Env &env)
         REQUIRE(anyOver > 0, "C: the outer cascade's overflow is REPORTED (%d over)", anyOver);
     }
 
+    // ---- E: one unit for every type; the spot's cone ---------------------------
+    // 16 dim point fillers inside cascade 0 (its budget, 16), then ONE 2 x 1 m AREA light
+    // whose irradiance delivered to the box equals the fillers' sum (each filler delivers
+    // I / d_f^2, the area light I r^2 / (r^2 + d_f^2), d_f = half the box's half-extent):
+    // it must ENTER (one filler goes over the budget) and its bounce must move the voxels.
+    // Two spots 7 m off the box's +x and -x faces, range 8 (both spheres reach the box),
+    // both aimed +x: the one aimed AWAY lights nothing in it and is CULLED, the one aimed
+    // AT it is counted (and, the dimmest at the box, goes over the budget).
+    {
+        fixture();
+        const float fillerI = 0.05f;
+        for (int i = 0; i < 16; ++i) lamp(QStringLiteral("efill%1").arg(i), fillerPos(i), fillerI, 4.0f);
+        env.doc->getRootNode()->applyStaticDefaults();
+        setCamera(env, eye, at);
+        settle();
+        const GiStatus g0 = env.scene->giStatus();
+        REQUIRE(!g0.cascades.empty(), "E: the chain is built");
+        if (g0.cascades.empty()) return;
+        const float half = g0.cascades[0].halfSize;
+        const float dF = 0.5f * half;
+        const float rectW = 2.0f, rectH = 1.0f;
+        const float r2 = rectW * rectH / 3.14159265f;
+        const float areaI = 16.0f * fillerI / (dF * dF) * (r2 + dF * dF) / r2;
+        auto area = iris::LightNode::create();
+        area->setLightType(iris::LightType::Area);
+        area->setName(QStringLiteral("area"));
+        area->setLocalPos(iris::Vec3(0.0f, 2.0f, -1.5f));
+        env.doc->getRootNode()->addChild(area);
+        area->setPropertyValue(QStringLiteral("intensity"), areaI);
+        area->setPropertyValue(QStringLiteral("distance"), 10.0f);
+        area->setPropertyValue(QStringLiteral("rectWidth"), rectW);
+        area->setPropertyValue(QStringLiteral("rectHeight"), rectH);
+        area->shadowMap->shadowType = iris::ShadowMapType::None;
+        auto spot = [&](const QString &name, float x) {
+            auto l = iris::LightNode::create();
+            l->setLightType(iris::LightType::Spot);
+            l->setName(name);
+            l->setLocalPos(iris::Vec3(x, g0.cascades[0].centre.y, g0.cascades[0].centre.z));
+            // a light shines along its -Y (the document convention): a +90 degree roll aims it +x
+            l->setLocalRot(iris::Quat::fromEulerAngles(0.0f, 0.0f, 90.0f));
+            env.doc->getRootNode()->addChild(l);
+            l->setPropertyValue(QStringLiteral("intensity"), 0.5f);
+            l->setPropertyValue(QStringLiteral("distance"), 8.0f);
+            l->setPropertyValue(QStringLiteral("spotCutOff"), 30.0f);
+            l->shadowMap->shadowType = iris::ShadowMapType::None;
+        };
+        // 7 m outside the box's +x / -x faces (inside the 8 m range).
+        spot(QStringLiteral("spotAway"), g0.cascades[0].centre.x + half + 7.0f);
+        spot(QStringLiteral("spotAt"), g0.cascades[0].centre.x - half - 7.0f);
+        env.doc->getRootNode()->applyStaticDefaults();
+        settle();
+        const GiStatus st = env.scene->giStatus();
+        const GiVoxelStats on = env.scene->giVoxelStats(0);
+        area->setPropertyValue(QStringLiteral("intensity"), 0.0f);
+        area->markChanged(iris::NodeChange::Params);
+        settle();
+        const GiVoxelStats off = env.scene->giVoxelStats(0);
+        const GiStatus::CascadeStatus &c = st.cascades[0];
+        std::printf("   E: 16 fillers (%.2f) + a 2 x 1 m area light (%.3f, the fillers' sum at d_f %.2f m) + two "
+                    "spots: cascade 0 in range %d, injected %d, over %d (budget %d) | digest area on %s off %s\n",
+                    double(fillerI), double(areaI), double(dF), c.lightsInRange, c.lightsInjected,
+                    c.lightsOverBudget, c.lightCapacity, on.lightDigest.c_str(), off.lightDigest.c_str());
+        REQUIRE(c.lightsInRange == 18,
+                "E: the fillers, the area light and the spot aimed AT the box reach cascade 0; the spot aimed "
+                "AWAY is culled by its cone (%d in range, 18 expected)", c.lightsInRange);
+        REQUIRE(c.lightsInjected == c.lightCapacity && c.lightsOverBudget == c.lightsInRange - c.lightCapacity,
+                "E: the budget fills and the rest are counted (%d injected of %d, %d over)", c.lightsInjected,
+                c.lightsInRange, c.lightsOverBudget);
+        REQUIRE(on.available && off.available && on.lightDigest != off.lightDigest,
+                "E: the area light, ranked in the point lights' unit, ENTERS the voxels: its toggle moves the digest");
+    }
+
     // ---- D: the cards (they run where rays run) ---------------------------------
     {
         fixture();
@@ -495,7 +569,31 @@ static void lightListArms(Env &env)
         settle();
         for (int f = 0; f < 600 && env.scene->giStatus().cards.queueLength > 0; ++f) frame(env, 1);
         frame(env, 30);
-        const CardCacheStatus c0 = env.scene->giStatus().cards;
+        CardCacheStatus c0 = env.scene->giStatus().cards;
+        // A FULL RELIGHT PASS (not the last batch, which depends on which cards it held):
+        // a radiance change (the key 6 -> 6.01) stales every resident card's direct half;
+        // the pass's reading is the largest batch box's — the one holding the floor card,
+        // whose capture volume holds every lamp — over the frames until every card relit.
+        unsigned passInRange = 0u, passDropped = 0u;
+        if (c0.built) {
+            const unsigned long long rel0 = c0.relights;
+            const unsigned resident = c0.cardsResident;
+            key->setPropertyValue(QStringLiteral("intensity"), 6.01f);
+            key->markChanged(iris::NodeChange::Params);
+            for (int f = 0; f < 600; ++f) {
+                frame(env, 1);
+                const CardCacheStatus s = env.scene->giStatus().cards;
+                if (s.relitLastFrame > 0 && s.lightsInRange >= passInRange) {
+                    passInRange = s.lightsInRange;
+                    passDropped = s.lightsDropped;
+                }
+                if (s.relights - rel0 >= resident && s.queueLength == 0) break;
+            }
+            frame(env, 30);
+            c0 = env.scene->giStatus().cards;
+            std::printf("   D: the full relight pass: %llu relights of %u resident cards\n",
+                        (unsigned long long)(c0.relights - rel0), resident);
+        }
         if (!c0.built) {
             std::printf("   D: no card cache on this machine (cards run where rays run): the arm is skipped\n");
         } else {
@@ -510,11 +608,11 @@ static void lightListArms(Env &env)
             const bool okOff = env.scene->readCardAt(Vec3(0.0f, 0.1f, -1.5f), Vec3(0, 1, 0), off) && off.ok;
             std::printf("   D: 64 dim fillers + the key: cards lights in range %u, dropped %u | the floor's card "
                         "under the key: radiance (red) key on %.5f off %.5f (read %d/%d, lit %d/%d)\n",
-                        c0.lightsInRange, c0.lightsDropped, double(on.radiance[0]), double(off.radiance[0]),
+                        passInRange, passDropped, double(on.radiance[0]), double(off.radiance[0]),
                         int(okOn), int(okOff), int(on.lit), int(off.lit));
-            REQUIRE(c0.lightsInRange == 65u && c0.lightsDropped == 1u,
-                    "D: 65 lights reach the relit cards, the relight's 64 hold all but one, counted (%u, %u)",
-                    c0.lightsInRange, c0.lightsDropped);
+            REQUIRE(passInRange == 65u && passDropped == 1u,
+                    "D: over a full relight pass 65 lights reach the relit cards, the relight's 64 hold all but "
+                    "one, counted (%u, %u)", passInRange, passDropped);
             REQUIRE(okOn && okOff && on.radiance[0] > 2.0f * off.radiance[0] + 1e-4f,
                     "D: the key, the 65th light in memory order and the brightest, lights the floor's card");
         }

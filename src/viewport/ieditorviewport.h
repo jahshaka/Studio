@@ -810,6 +810,12 @@ public:
             /// How many compute dispatches that rebuild cost — the MATERIAL-COUNT
             /// half of its bill (fork ad452604a+155a56bf8+0338ca7f2+c4c80b5f7 (was 0065); engine GiStatus::CascadeStatus).
             qint64    voxelDispatches = 0;
+            /// THE CASCADE'S LIGHTS (P1C-LIGHT-LIST; engine GiStatus::CascadeStatus): in
+            /// range of its box, injected, its BUDGET (<= 128), and the ones over it.
+            int       lightsInRange = 0;
+            int       lightsInjected = 0;
+            int       lightCapacity = 0;
+            int       lightsOverBudget = 0;
         };
         QVector<CascadeInfo> cascades;
         /// Whole-chain rebuilds the teleport guards forced, and cascade
@@ -865,6 +871,9 @@ public:
             double   captureMs = 0.0;
             /// Phase 4's tables, as maintained (nothing binds them yet).
             int      cardRecords = 0, instanceSlots = 0;
+            /// THE RELIGHT'S LIGHTS (P1C-LIGHT-LIST; CardCacheStatus): in range of the
+            /// last relight batch's box, and the ones over the job's 64 (dropped).
+            int      lightsInRange = 0, lightsDropped = 0;
         } cards;
         /// THE HARDWARE RAY-QUERY TIER (SPECS/PHOTON_SPEC.md §7 R1) — what the
         /// renderer HOLDS, reported here because it is read beside the GI
