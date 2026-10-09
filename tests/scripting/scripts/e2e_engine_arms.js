@@ -3,7 +3,11 @@
 // Engine::arms: the registry that replaced the ray tier's per-frame environment
 // doors (JAH_R5_NO_MOTION, JAH_R7_NO_POSED, JAH_R6_NO_ALPHA, JAH_R7_EDGE_CLASSES,
 // JAH_R5_MONO_EYES, JAH_RQ_REFIT) and the per-frame JAHSHAKA_GATHER_NO_TEMPORAL,
-// JAHSHAKA_ATOM_DECODE_OFF, JAHSHAKA_CARD_FOOTPRINT_K and JAHSHAKA_GI_FIELD_NO_SCROLL doors.
+// JAHSHAKA_ATOM_DECODE_OFF, JAHSHAKA_CARD_FOOTPRINT_K and JAHSHAKA_GI_FIELD_NO_SCROLL doors,
+// and (TESTING-CLEANUP-2 H8f) the GI and Atom test doors read per frame, pass or build:
+// JAH_GI_CASCADE_FAULT(_POST), JAHSHAKA_GI_NO_REBUILD_SETTLE, JAHSHAKA_GI_FIELD_RAYS /
+// _SAMPLES / _STATIC, JAH_VCT_REFUSE_GEOMETRY, JAHSHAKA_ATOM_DISCRIMINATE,
+// JAHSHAKA_HIT_WORLD_LIGHTS and JAHSHAKA_HIT_VCT_SPECULAR.
 // What a harness relies on, asserted:
 //   * the table: every arm listed with its default = the shipped picture, its
 //     range and a sentence of what it changes;
@@ -30,7 +34,10 @@ var EXPECTED = { "reflect.motion": 1, "reflect.posed": 1, "reflect.alphaTested":
                  "gather.filterRadius": 0, "gather.restOff": 0, "gather.restFrames": 0,
                  "gather.restSeed": 0, "gather.ageView": 0, "gather.freezeFrame": 0,
                  "gather.youngFrames": 0, "gather.youngReach": 0, "gather.validationOff": 0,
-                 "gather.crossStrata": 0 };
+                 "gather.crossStrata": 0,
+                 "gi.cascadeFault": -1, "gi.cascadeFaultPost": -1, "gi.rebuildSettle": 1,
+                 "gi.fieldRays": 0, "gi.fieldSamples": 0, "gi.fieldStatic": 0, "gi.refuseGeometry": 0,
+                 "atom.discriminate": 0, "atom.hitWorldLights": 0, "atom.hitVctSpecular": 1 };
 
 var guid = project.create("Engine Arms " + Date.now());
 assert(guid.length > 10, "project.create -> " + guid);
@@ -75,4 +82,5 @@ try {
 var after = engine.arms();
 for (var j = 0; j < after.length; ++j)
     assert(after[j].value === after[j]["default"], after[j].name + " is back at its default");
+
 console.log("engine_arms: PASS");
