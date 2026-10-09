@@ -25,7 +25,7 @@
 // The table below is GENERATED from the .mtl (scenes/tools/demo_mtl_table.py <mtl> <textures> --js),
 // keyed by the diffuse map's name: that is the identity a placed node keeps back to its MTL row.
 var SRC = "@SRC@", OUT = "@OUT@";
-var DEMO_SHOT_W = 0, DEMO_SHOT_H = 0, DEMO_PLAN = false, DEMO_EV = 2.0, DEMO_WB = 7500;   // 0 = 1920 x 1080
+var DEMO_SHOT_W = 0, DEMO_SHOT_H = 0, DEMO_PLAN = false, DEMO_EV = 2.0, DEMO_WB = 8500, GLASS_MODE = 2;   // 0 = 1920 x 1080
 var J = JSON.stringify;
 function fail(m) { throw new Error("san miguel: " + m); }
 function log() { console.log(Array.prototype.join.call(arguments, " ")); }
@@ -106,7 +106,8 @@ function colourOf(v) {        // material.get's colour -> {r,g,b} in 0..1
     if (v.r !== undefined) return {r: v.r > 1 ? v.r / 255 : v.r, g: v.g > 1 ? v.g / 255 : v.g, b: v.b > 1 ? v.b / 255 : v.b};
     return {r: 1, g: 1, b: 1};
 }
-var stats = {meshes: 0, mapped: 0, untextured: 0, unmatched: 0, cutouts: 0, normals: 0, metals: 0, glass: 0};
+var seenMaps = {};
+var stats = {distinctMaps: 0, tableMaps: Object.keys(MTL_MAPS).length, meshes: 0, mapped: 0, untextured: 0, unmatched: 0, cutouts: 0, normals: 0, metals: 0, glass: 0};
 var unmatched = {}, whiteSeen = 0, byUntex = {};
 var rows = scene.nodes({subtree: root});
 for (var i = 0; i < rows.length; ++i) {
@@ -120,6 +121,7 @@ for (var i = 0; i < rows.length; ++i) {
     var t = key ? MTL_MAPS[key] : null;
     if (t) {
         stats.mapped++;
+        if (!seenMaps[key]) { seenMaps[key] = 1; stats.distinctMaps++; }
         set.roughness = t.r;
         set.metallic = 0.0;
         normal = t.n || null;
@@ -152,7 +154,12 @@ for (var i = 0; i < rows.length; ++i) {
     // d < 1 (material_041, Kd = Ks = 1, d 0.5: the tumblers, carafes and window panes) is clear glass.
     // Translucent at the MTL's own coverage reads as the reference's clear glassware; the Glass mode
     // (a reflection-only surface) photographed as opaque white jugs in this courtyard's bright sky.
-    if (glass) { set.alphaMode = 2; set.alpha = 0.25; set.roughness = 0.05; stats.glass++; }
+    // Glass: alpha-blended (Translucent) at a low coverage, a polished surface, F0 = the dielectric 0.04
+    // (ior 1.5). NOT the Refractive mode: with it this scene's open drew VUID-vkCmdDrawIndexed-None-06886
+    // (depth writes on in a read-only-depth render pass) under the validation layer, and Translucent
+    // opens clean (DEMO-SCENES-1 report).
+    if (glass) { set.alphaMode = GLASS_MODE; set.alpha = 0.15; set.baseColor = [0.9, 0.9, 0.9]; set.roughness = 0.02;
+                 set.ior = 1.5; set.refractionStrength = 0.35; stats.glass++; }
     if (metal) stats.metals++;
     if (set.baseColor) set.baseColor = "#" + set.baseColor.map(function (x) {
         var s = Math.round(srgb(Math.max(0, Math.min(1, x))) * 255).toString(16); return s.length < 2 ? "0" + s : s; }).join("");
@@ -167,7 +174,7 @@ log("polish", J(stats), "unmatched", J(unmatched).substring(0, 800), "untextured
 // A directional light's rotation x is its tilt FROM STRAIGHT DOWN toward -Z (x 0 = noon overhead,
 // measured: x 40 -> direction (0, -0.77, -0.64)), y turns that about the vertical. So the
 // elevation E above the horizon is x = 90 - E.
-var SUN_ELEVATION = 42, SUN_AZIMUTH = -70;   // light travelling toward +X, along the courtyard
+var SUN_ELEVATION = 50, SUN_AZIMUTH = -60;   // high enough to put sun on the courtyard floor, as the reference shows
 var sun = world.sunLight();
 if (!sun) fail("the Basic template brought no sun");
 node.transform(sun, {rotation: {x: 90 - SUN_ELEVATION, y: SUN_AZIMUTH, z: 0}});
@@ -175,7 +182,8 @@ log("sun", J(world.sun()));
 world.shadows({enabled: true});
 // EXPOSURE: 0 EV is the grade for a SUNLIT grey card; the courtyard is mostly in the shade of its own
 // arcades, which a photographer opens up by about two stops (the reference is exposed for the shade).
-// WHITE BALANCE: light in the shade is the blue sky's (about 7500 K); the film is balanced for it, as a
+// WHITE BALANCE: light in the shade is the blue sky's (7500 K and up) and the walls are pale lavender
+// plaster; the film is balanced warm (8500 K) for the reference's warm afternoon, as a
 // photographer would, or the whole courtyard reads cold blue.
 world.postFx({exposureEv: DEMO_EV, whiteTemperature: DEMO_WB});
 
@@ -183,8 +191,9 @@ world.postFx({exposureEv: DEMO_EV, whiteTemperature: DEMO_WB});
 world.mode({mode: "high"});
 world.photon({enabled: true, tier: "high"});
 var VIEWS = [
-    {name: "first", position: {x: 8.0, y: 1.7, z: 1.0},  lookAt: {x: 20.0, y: 1.8, z: 10.0}},
-    {name: "walk1", position: {x: 21.0, y: 1.7, z: 0.5}, lookAt: {x: 9.0, y: 2.0, z: 9.0}},
+    // the reference's pose: under the north arcade, along it, the courtyard on the left
+    {name: "first", position: {x: 16.0, y: 1.7, z: -2.3}, lookAt: {x: 6.0, y: 1.3, z: -0.8}},
+    {name: "walk1", position: {x: 11.0, y: 1.6, z: -2.6}, lookAt: {x: 20.0, y: 2.4, z: 8.0}},
     {name: "walk2", position: {x: 14.0, y: 1.6, z: 10.0}, lookAt: {x: 14.0, y: 4.0, z: -1.0}}
 ];
 if (DEMO_PLAN) VIEWS.push({name: "plan", position: {x: 12.0, y: 70.0, z: 12.0}, lookAt: {x: 12.0, y: 0.0, z: 1.4}});
@@ -194,8 +203,8 @@ if (project.save() !== true) fail("save failed");
 timing.totalMs = Date.now() - tAll;
 
 if (DEMO_PLAN) {      // diagnostics: what surfaces sit where the shots read dark
-    var probes = [[21, 1.7, 0.5, -1, 0.0, 0.25], [21, 1.7, 0.5, -1, 0.1, 0.6], [21, 1.7, 0.5, -0.3, 0.0, 1],
-                  [8, 1.7, 1, 1, 0.0, 0.2], [8, 1.7, 1, 1, 0.1, 0.8]];
+    var probes = [[9, 1.6, -2.5, 0, -1, 0], [12, 1.6, 4, 0, -1, 0], [16, 1.6, 6, 0, -1, 0], [18, 1.6, 3, 0, -1, 0],
+                  [14, 1.6, 8, 0, -1, 0], [10, 1.6, 6, 0, -1, 0], [9, 1.6, -2.5, 1, 0.1, 1]];
     for (var p = 0; p < probes.length; ++p) {
         var q = probes[p];
         var hits = scene.raycast({x: q[0], y: q[1], z: q[2]}, {x: q[3], y: q[4], z: q[5]}, {maxDistance: 60});
