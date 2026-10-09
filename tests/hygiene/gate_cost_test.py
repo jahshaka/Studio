@@ -529,6 +529,28 @@ def main(source, build):
     code, out = gs_main(files + ["--run"])
     check(code == 137 and "GATE ABORTED: ctest was killed" in out and len(calls) == 1,
           "a ctest killed under the gate (137) ends it there: no timing phase, no target step (F4; exit %r)" % code)
+    # a finding registered while the whole-card drain had timed out carries `fallback` (the pending-defect file).
+    # RED ON BASE (1ceb5cde9, measured): _register takes no fallback (TypeError); the judge called the timing
+    # row's fallback record green.
+    reg_dir = os.path.join(scratch, "registry")
+    os.makedirs(reg_dir, exist_ok=True)
+    old_df = os.environ.get("JAH_DEFECTS_FILE"); os.environ["JAH_DEFECTS_FILE"] = os.path.join(reg_dir, "defects.json")
+    try:
+        pth = g._register("t9", "defect", "row.q", "c" * 40, {}, "a cause", fallback="drain-timeout")
+        pth2 = g._register("t9", "combination", "row.r", "c" * 40, {}, "a cause")
+    finally:
+        if old_df is None: os.environ.pop("JAH_DEFECTS_FILE", None)
+        else: os.environ["JAH_DEFECTS_FILE"] = old_df
+    check(json.load(open(pth)).get("fallback") == "drain-timeout" and "fallback" not in json.load(open(pth2)),
+          "a pending-defect file carries `fallback` when its runs had no whole-card hold, and only then")
+    # the judge: a MEASURING row's record with a fallback is not evidence — the row re-runs; any other row's is
+    tim = {"suite": "time.card", "arm": None, "verdict": "PASS", "ts": "2026-10-10T01:00:00+02:00",
+           "labels": ["timing"], "fallback": "drain-timeout"}
+    st_t, why_t = cgc.judge(("time.card", None), [tim], {})
+    st_p, _ = cgc.judge(("gpu.a", None), [dict(tim, suite="gpu.a", labels=[])], {})
+    check(st_t == "missing" and "fallback" in why_t and st_p == "green",
+          "ci_gate_check refuses a timing row's record carried by a fallback (re-run it), never another row's (%s / %s)"
+          % (st_t, st_p))
     g.gate_runlog.run_ctest, g.gate_runlog.fork_pin_problem, g.gate_runlog.recorded_rows = real
     g.gate_runlog.owed_solos = real_owed
     g.gate_runlog.prebuild = real_pb

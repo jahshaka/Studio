@@ -581,6 +581,10 @@ def run(source, scripts, merge, scratch, rl, build_dir):
           and not any(o.startswith("JAH_VRAM_ALL") for r in runs_f for o in r.get("overrides", [])),
           "an attribution whose drain times out: a drain-timeout record, `fallback` on its %d run(s), JAH_VRAM_ALL "
           "never an override (GATE-COST-2 F1)" % len(runs_f))
+    check("FALLBACK: drain-timeout" in pf.stdout and "row.x | lane-h |" in pf.stdout
+          and all("fallback: drain-timeout" in l for l in pf.stdout.splitlines() if l.startswith("row.x | ")),
+          "...and the attribution TABLE says it where the lead reads: a FALLBACK line and the fallback on every cell")
+    # (red on base 1ceb5cde9: the table had no FALLBACK line and no fallback column)
     fake_x.kill(); fake_x.wait()
     check(p7.returncode == 7, "an attribution left INCOMPLETE (row.noadmit alone) exits 7 (exit %d)" % p7.returncode)
     check(p5.returncode == 5, "a d-build defect alone (row.base) exits 5 (exit %d)" % p5.returncode)

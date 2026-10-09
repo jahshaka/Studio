@@ -2056,7 +2056,12 @@ def attribute(row_args, lane_specs, tag, times, tier, candidate=None, controls=N
     finally:
         gate_runlog._vram().release(card)
     print(f"\n=== ATTRIBUTION (batch {tag}) ===")
-    print("row | tree | red | the first failing check")
+    fb = f" | fallback: {fallback}" if fallback else ""
+    if fallback:
+        # GATE-COST-2 round: visible WHERE THE LEAD READS — the drain timed out, the runs were not under one
+        # whole-card hold: a timing row's cell here is not a measurement
+        print(f"FALLBACK: {fallback} — the whole-card drain timed out; every run took the card itself (JAH_VRAM_ALL)")
+    print("row | tree | red | the first failing check" + (" | fallback" if fallback else ""))
     out = {"combination": False, "defect": False, "incomplete": False}
     nil = ("ABORTED", 0, 0, None, None)
     unfinished = ("INCOMPLETE", "ABORTED")
@@ -2065,11 +2070,11 @@ def attribute(row_args, lane_specs, tag, times, tier, candidate=None, controls=N
             st, reds, real, first, _ = cells.get((row, name), nil)
             who = {"candidate": "CANDIDATE", "control": f"CONTROL {name}"}.get(rest[-1], name)
             if st == "ABSENT":
-                print(f"{row} | {who} | ABSENT | the row is not registered in this build")
+                print(f"{row} | {who} | ABSENT | the row is not registered in this build{fb}")
             elif st in unfinished:
-                print(f"{row} | {who} | {st} {reds}/{real} red of {real} that ran | {first or '-'}")
+                print(f"{row} | {who} | {st} {reds}/{real} red of {real} that ran | {first or '-'}{fb}")
             else:
-                print(f"{row} | {who} | {reds}/{real} red | {first or '-'}")
+                print(f"{row} | {who} | {reds}/{real} red | {first or '-'}{fb}")
         lc = [(t[0], cells.get((row, t[0]), nil)) for t in lanes]
         ctl = [(t, cells.get((row, t[0]), nil)) for t in ctrls]
         cc = cells.get((row, cand[0]), nil)
@@ -2082,7 +2087,7 @@ def attribute(row_args, lane_specs, tag, times, tier, candidate=None, controls=N
             out["defect"] = True
             t, c = [(t, c) for t, c in ctl if c[1] > 0][0]
             path = _register(tag, "defect", row, t[3], c[4],
-                             f"red on d-build's own tip ({t[0]}: {c[1]}/{c[2]}; {c[3] or '-'}) — no lane makes it")
+                             f"red on d-build's own tip ({t[0]}: {c[1]}/{c[2]}; {c[3] or '-'}) — no lane makes it", fallback=fallback)
             print(f"=> {row}: D-BUILD DEFECT — red on the control {t[0]} ({c[1]}/{c[2]}) without any lane: it names "
                   f"nobody; registered {path}")
         elif named:
@@ -2096,13 +2101,13 @@ def attribute(row_args, lane_specs, tag, times, tier, candidate=None, controls=N
             out["combination"] = True
             path = _register(tag, "combination", row, cand[3], cc[4],
                              f"red at the candidate ({cc[1]}/{cc[2]}; {cc[3] or '-'}) and green on every lane's own "
-                             f"tip and on d-build's")
+                             f"tip and on d-build's", fallback=fallback)
             print(f"=> {row}: COMBINATION DEFECT — red at the candidate ({cc[1]}/{cc[2]}) and green on every lane's own "
                   f"tip: the batch is REFUSED; registered {path}")
         else:
             path = _register(tag, "nondeterminism", row, cand[3], cc[4],
                              f"red in batch {tag}'s gate; green {cc[2]}/{cc[2]} at the candidate, on every lane and "
-                             f"on d-build in the attribution", suspects=[t[0] for t in lanes])
+                             f"on d-build in the attribution", suspects=[t[0] for t in lanes], fallback=fallback)
             print(f"=> {row}: NOT REPRODUCED — green at the candidate {cc[2]}/{cc[2]} and everywhere else: a "
                   f"nondeterminism, registered {path}; it passes the verdict door with these solos recorded")
     if out["combination"]: return ATTR_DEFECT_COMBINATION
@@ -2111,14 +2116,15 @@ def attribute(row_args, lane_specs, tag, times, tier, candidate=None, controls=N
     return 0
 
 
-def _register(tag, kind, row, tip, rec, cause, suspects=None):
+def _register(tag, kind, row, tip, rec, cause, suspects=None, fallback=None):
     """A finding REGISTERED, never printed only (TESTING_V3_SPEC §1.5): <registry dir>/defects.pending/<id>.json — the
     registry dir is that of testing/defects.json (JAH_DEFECTS_FILE moves it; JAH_DEFECTS_PENDING_DIR moves the
     pending dir alone), in the FULL schema VERDICT-1's reader requires (it QUARANTINES a malformed entry — the finding
     would never reach the door): {id, rows, kind, cause, first_seen {tip, pin, run}, state: open, found_by: gate, recheck (a DATE: the
     next day — the next batch — for NOT REPRODUCED, +7 days for a combination / d-build defect), expires (= recheck)},
     and for NOT REPRODUCED the single-use fields {uses: 1, suspects: [the batch's lanes], census: {from the record}}.
-    Returns the path."""
+    A finding made while the whole-card drain had timed out carries `fallback` (GATE-COST-2: the reader sees the
+    runs were not under one whole-card hold). Returns the path."""
     import datetime as _dt
     reg = os.environ.get("JAH_DEFECTS_FILE") or os.path.join(gate_runlog.workspace_root(), "testing", "defects.json")
     d = os.environ.get("JAH_DEFECTS_PENDING_DIR") or os.path.join(os.path.dirname(reg), "defects.pending")
@@ -2135,6 +2141,8 @@ def _register(tag, kind, row, tip, rec, cause, suspects=None):
         box = rec.get("box") or {}
         entry.update(uses=1, suspects=list(suspects or []),
                      census=box.get("census") if isinstance(box.get("census"), dict) else dict(box))
+    if fallback:
+        entry["fallback"] = fallback
     path = os.path.join(d, did + ".json")
     with open(path, "w") as f:
         json.dump(entry, f, indent=1, sort_keys=True)

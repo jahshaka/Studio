@@ -103,6 +103,7 @@ def _when(r):
 
 
 NEVER_RAN = ("NOADMIT", "NOTRUN")
+MEASURING = {"timing", "quiet-box"}    # the labels of rows that measure time or GPU budget (TESTING_GATE §4)
 
 
 def judge(key, recs, contention):
@@ -111,10 +112,15 @@ def judge(key, recs, contention):
     A run that never happened (NOADMIT: the admission's bound; NOTRUN) is no run: a row with only
     those is MISSING, which no verdict clears. A VERDICT is per row and timestamped: it clears
     only the reds logged BEFORE it — a red after it needs its own answer (the merge read's D4)."""
-    runs = sorted((r for r in recs if r.get("kind") != "verdict" and r.get("verdict") not in NEVER_RAN), key=_when)
+    # GATE-COST-2: a MEASURING row's record that ran without its whole-card hold (`fallback`) is no evidence
+    unheld = lambda r: r.get("fallback") and set(r.get("labels") or ()) & MEASURING
+    runs = sorted((r for r in recs if r.get("kind") != "verdict" and r.get("verdict") not in NEVER_RAN
+                   and not unheld(r)), key=_when)
     verdicts = sorted((r for r in recs if r.get("kind") == "verdict"), key=_when)
     if not runs:
         never = [r.get("verdict") for r in recs if r.get("verdict") in NEVER_RAN]
+        if any(unheld(r) for r in recs):
+            return "missing", "measured under a fallback (no whole-card hold) — not evidence: re-run it"
         return "missing", "never run at the tip" + (f" ({never[-1]}: it never ran)" if never else "")
     reds = [r for r in runs if r.get("verdict") != "PASS"]
     if not reds:
