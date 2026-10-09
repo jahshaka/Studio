@@ -1888,7 +1888,10 @@ set_tests_properties(scripting.e2e.preset_seed_boot PROPERTIES
 #
 # Its OWN fresh data root: it seeds and imports, and it must not move the
 # censuses the two arms above compare. A window (the seeder is started by
-# MainWindow) and JAHSHAKA_SEED_PRESETS=1, like the boot arm.
+# MainWindow) and JAHSHAKA_SEED_PRESETS=1, like the boot arm. JAHSHAKA_SEED_HOLD=1
+# makes the race DETERMINISTIC (ASYNC-SHADERS-1): the seed parks after hashing until the
+# user's import stands it down — its timing was the startup gate's, and a longer gate let
+# the whole seed finish inside the splash.
 set(_prHome ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-preset_seed_race)
 configure_file(scripts/e2e_preset_seed_race.js.in
                ${CMAKE_CURRENT_BINARY_DIR}/e2e_preset_seed_race.js @ONLY)
@@ -1899,7 +1902,7 @@ jah_gpu_row(scripting.e2e.preset_seed_race CLASS app
                  --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_preset_seed_race.js
          WORKING_DIRECTORY ${_prHome}/run)
 set_tests_properties(scripting.e2e.preset_seed_race PROPERTIES
-    ENVIRONMENT "HOME=${_prHome};JAHSHAKA_DATA_ROOT=${_prHome}/.local/share/Jahshaka;JAHSHAKA_SEED_PRESETS=1"
+    ENVIRONMENT "HOME=${_prHome};JAHSHAKA_DATA_ROOT=${_prHome}/.local/share/Jahshaka;JAHSHAKA_SEED_PRESETS=1;JAHSHAKA_SEED_HOLD=1"
     FIXTURES_REQUIRED presetSeedRaceHome
     LABELS "scripting"
     TIMEOUT 300)

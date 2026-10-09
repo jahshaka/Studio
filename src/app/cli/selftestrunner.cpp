@@ -229,6 +229,10 @@ editor.frame(300);
 
 int runEngineSelftest(MainWindow &window, QApplication &app, const QString &outPng)
 {
+    // The background compiler's counts BEFORE the selftest's own frames: the startup gate's
+    // tier sweep draws placeholders on purpose (it builds them), in its own scenes.
+    jahshaka::engine::AsyncShaderStats asyncAtStart;
+    if (const auto eng = EngineHost::instance().engine()) asyncAtStart = eng->asyncShaderStats();
     window.show();
     app.processEvents();
 
@@ -643,6 +647,18 @@ int runEngineSelftest(MainWindow &window, QApplication &app, const QString &outP
         }
         std::fprintf(stderr, "engine-selftest: pose B1 == B2, and this machine has no ray query — "
                              "that is the correct answer, not a failure\n");
+    }
+    // THE PICTURES ARE COMPLETE (ASYNC-SHADERS-1): no frame of the selftest drew the background
+    // compiler's placeholder or skipped a draw for a shader still building. Its views compile
+    // inside the frame (they never turn View::setAsyncShaders on), so anything else here means
+    // a placeholder could reach a hash.
+    if (const auto eng = EngineHost::instance().engine()) {
+        const jahshaka::engine::AsyncShaderStats a = eng->asyncShaderStats();
+        const unsigned long long ph = a.placeholderDraws - asyncAtStart.placeholderDraws;
+        const unsigned long long skips = a.pendingSkips - asyncAtStart.pendingSkips;
+        std::fprintf(stderr, "engine-selftest: placeholder draws %llu, pending skips %llu (%s)\n",
+                     ph, skips, ph == 0 && skips == 0 ? "PASS" : "FAIL");
+        if (ph != 0 || skips != 0) return 1;
     }
     return 0;
 }

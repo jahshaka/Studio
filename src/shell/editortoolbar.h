@@ -59,6 +59,9 @@ public:
         std::function<void(const QString &, const QString &)> toast;
         /// The editor is the active space (the snap keys act only there).
         std::function<bool()> editorActive;
+        /// Shaders the engine's background compiler has not landed yet (ASYNC-SHADERS-1):
+        /// the "Compiling shaders (N)" indicator, shown while it is above 0.
+        std::function<unsigned()> pendingShaders;
     };
     void build(const Deps &deps);
 

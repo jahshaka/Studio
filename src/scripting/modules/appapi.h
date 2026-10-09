@@ -42,6 +42,9 @@ public:
     Q_INVOKABLE bool blockUiThread(int ms);
     Q_INVOKABLE QVariantMap shaderCache();
     Q_INVOKABLE bool clearShaderCache();
+    Q_INVOKABLE QVariantMap asyncShaders();
+    Q_INVOKABLE QVariantMap setAsyncShaders(bool on);
+    Q_INVOKABLE QVariantMap waitForAsyncShaders();
     Q_INVOKABLE bool saveShaderCache();
     Q_INVOKABLE bool flushShaderCache(int budgetMs = 20000);
     Q_INVOKABLE QVariantMap engineErrors(bool reset = false);
