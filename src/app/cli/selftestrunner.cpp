@@ -544,7 +544,7 @@ int runEngineSelftest(MainWindow &window, QApplication &app, const QString &outP
     // Poses 1 and 2 are pictures AT REST; every per-frame path the renderer runs while the camera
     // MOVES (the cascade scroll mid-step, the field's follow, a temporal history that has not
     // converged) is invisible to both. So a WALK: from pose 2's place, 0.1 m along -x per frame for
-    // 60 frames on the fixed clock, the shot taken mid-walk at frame 30 with NO settle — a picture
+    // 30 frames on the fixed clock, the shot taken at the 30th with NO settle — a picture
     // in motion, deterministic because every frame before it is a counted, fixed-step frame.
     const QString motionPng = taggedPath(outPng, QStringLiteral("motion"));
     for (int step = 1; step <= 30; ++step) {
