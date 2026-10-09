@@ -29,7 +29,6 @@
 #include "../support/mcpharness.h"
 
 #include <QJsonDocument>
-#include <QThread>
 
 using namespace mcpharness;
 
@@ -49,14 +48,6 @@ QJsonObject readObject(McpClient &mcp, const QString &expression)
         return {};
     }
     return QJsonDocument::fromJson(reply.value("result").toString().toUtf8()).object();
-}
-
-/// The layout settles between requests, not inside one: give the window a
-/// couple of event-loop turns after a space switch before measuring it.
-void settle(McpClient &mcp)
-{
-    QThread::msleep(800);
-    mcp.runScript(QStringLiteral("true"));
 }
 
 }   // namespace
