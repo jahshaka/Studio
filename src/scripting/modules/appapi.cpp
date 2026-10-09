@@ -234,6 +234,39 @@ QVector<VerbInfo> AppApi::verbs() const
           "property carrying a unique name (a render target's, a probe's), which is exactly how "
           "the 2026-09-14 editor crash happened while the field was eight bits wide.",
           Needs::Engine },
+        { "asyncShaders", "app.asyncShaders() -> {policy, active, running, threads, pending, completed, "
+                          "failed, placeholderDraws, pendingSkips, captureDeferredDraws, heldFrames, "
+                          "holeyPresented, compiledInBackground}",
+          "THE BACKGROUND SHADER COMPILER (ASYNC-SHADERS-1). After a project is open the editor's "
+          "view never waits for a shader: a permutation it has not built yet goes to the engine's "
+          "compile service (its own low-priority threads) and the object draws with a neutral grey "
+          "placeholder — its own geometry, lit and shadowed like the scene — until the shader "
+          "lands. policy says whether this session uses it (on for an interactive session, off for a "
+          "scripted run unless the script turned it on); active whether the view compiles in the "
+          "background RIGHT NOW (false during startup and inside an open's or a dialog's compile "
+          "window, which stay blocking). pending is the editor's 'Compiling shaders (N)': submitted "
+          "and not landed yet. placeholderDraws / pendingSkips are running totals of draws made with "
+          "the placeholder / skipped because not even the placeholder was built, in the VIEWS (the "
+          "editor's view, its mirrors and inset); captureDeferredDraws counts the draws of surface-cache "
+          "captures that met a shader still building — those batches are discarded and retried, so a card "
+          "never holds the grey; heldFrames counts frames NOT presented because they drew a hole (an "
+          "object with neither its shader nor a placeholder yet, e.g. right after a tier change: the window "
+          "keeps the last complete picture), holeyPresented the frames with a hole that were presented "
+          "anyway (a hold longer than four seconds, or before the view had shown anything); "
+          "compiledInBackground counts shaders compiled on the service's threads, which is why they "
+          "are not live compiles (app.shaderCache().liveCompiles).",
+          Needs::Engine },
+        { "setAsyncShaders", "app.setAsyncShaders(on) -> app.asyncShaders()",
+          "Turns the background compile policy on or off for this session (see app.asyncShaders). A "
+          "scripted run starts with it off so every frame it draws is a complete picture; a test of "
+          "the background path turns it on.",
+          Needs::Engine },
+        { "waitForAsyncShaders", "app.waitForAsyncShaders() -> app.asyncShaders()",
+          "Blocks until nothing is pending, publishing every shader as it lands (the next frame then "
+          "draws the real materials). For tests and for anything that must hand over a finished "
+          "picture; never call it on an interactive path — it is the wait the service exists to "
+          "remove.",
+          Needs::Engine },
         { "clearShaderCache", "app.clearShaderCache() -> bool",
           "Deletes every cached shader artifact. The running session is unaffected (its shaders are "
           "already in memory); the NEXT launch is cold. Our r.InvalidateCachedShaders — the same "
@@ -838,6 +871,40 @@ QVariantMap AppApi::shaderCache()
     m["renderableCacheCapacity"] = s.renderableCacheCapacity;
     m["liveCompiles"]            = livecompiles::live();
     return m;
+}
+
+QVariantMap AppApi::asyncShaders()
+{
+    QVariantMap m;
+    m["policy"] = livecompiles::asyncPolicy();
+    m["active"] = livecompiles::asyncNow();
+    auto engine = EngineHost::instance().engine();
+    if (!engine) { m["running"] = false; return m; }
+    const jahshaka::engine::AsyncShaderStats s = engine->asyncShaderStats();
+    m["running"]              = s.running;
+    m["threads"]              = s.threads;
+    m["pending"]              = s.pending;
+    m["completed"]            = QVariant::fromValue(qulonglong(s.completed));
+    m["failed"]               = QVariant::fromValue(qulonglong(s.failed));
+    m["placeholderDraws"]     = QVariant::fromValue(qulonglong(s.placeholderDraws));
+    m["pendingSkips"]         = QVariant::fromValue(qulonglong(s.pendingSkips));
+    m["captureDeferredDraws"] = QVariant::fromValue(qulonglong(s.captureDeferredDraws));
+    m["heldFrames"]           = QVariant::fromValue(qulonglong(s.heldFrames));
+    m["holeyPresented"]       = QVariant::fromValue(qulonglong(s.holeyPresented));
+    m["compiledInBackground"] = s.compiledInBackground;
+    return m;
+}
+
+QVariantMap AppApi::setAsyncShaders(bool on)
+{
+    livecompiles::setAsyncPolicy(on);
+    return asyncShaders();
+}
+
+QVariantMap AppApi::waitForAsyncShaders()
+{
+    if (auto engine = EngineHost::instance().engine()) engine->waitForAsyncShaders();
+    return asyncShaders();
 }
 
 bool AppApi::clearShaderCache()

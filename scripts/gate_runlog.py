@@ -20,8 +20,13 @@ scripts — rc-gate.sh — and anyone running a whole tier):
 
 `run` streams ctest's output through (the caller still sees and may redirect every line),
 samples the load average every 2 s and the box (sibling ctests, the GPU's clocks) at EACH SUITE'S
-START (ctest's `Start N: <name>` line), adds `--output-junit` to read each suite's own output
-(`target:` lines, the pools' `ARM <name> PASS|FAIL|CRASH` lines) and exits with ctest's exit code. `import` turns an existing ctest output log into records marked
+START (ctest's `Start N: <name>` line), runs ctest -V to read each suite's own output (`target:`
+lines, the pools' `ARM <name> PASS|FAIL|CRASH` lines) and WRITES EACH ROW'S RECORDS WHEN THE ROW ENDS
+(GATE-COST-1 P6: a killed run keeps every row it finished), and exits with ctest's exit code. A
+`run` is a GATE: it holds THE GATE SLOT for its whole run (scripts/vram_tokens.py, one gate at a time
+box-wide, FIFO), runs the `hygiene` rows first as their own CPU phase (P8), re-queues a row that got
+no admission at the end of the run (P5), and stops — DISPLAY_LOST, the abort line — when its
+display dies (P6). `import` turns an existing ctest output log into records marked
 `"source": "import"` (the before-run logs of a lane that predates the log).
 """
 import argparse
@@ -36,7 +41,6 @@ import sys
 import tempfile
 import threading
 import time
-import xml.etree.ElementTree as ET
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SCHEMA = 1
@@ -372,18 +376,6 @@ class LoadSampler(threading.Thread):
         return round(sum(v) / len(v), 2) if v else None
 
 
-def _junit_outputs(path):
-    out = {}
-    try:
-        root = ET.parse(path).getroot()
-    except (OSError, ET.ParseError):
-        return out
-    for tc in root.iter("testcase"):
-        so = tc.find("system-out")
-        out[tc.get("name")] = so.text if so is not None and so.text else ""
-    return out
-
-
 def _mem_of(text):
     """A pool row's `mem` field: the largest boot footprint over its processes, or None."""
     mem = None
@@ -486,109 +478,517 @@ def _prior_counts(path):
     return counts
 
 
-def append_records(records, tier, tip):
+def append_records(records, tier, tip, _cache={}):
+    """Append records to the run log's file for (tier, tip). `retries` counts the earlier records of
+    the same (suite, arm) in that file; the count is cached per file and re-read whenever the file
+    grew by someone else's hand (a per-row writer appends hundreds of times per run)."""
     path = _file_for(check_tier(tier), tip)
     os.makedirs(os.path.dirname(path), exist_ok=True)
-    prior = _prior_counts(path)
+    try: size = os.path.getsize(path)
+    except OSError: size = 0
+    hit = _cache.get(path)
+    prior = hit[1] if hit and hit[0] == size else _prior_counts(path)
     with open(path, "a") as f:
         for r in records:
             k = (r["suite"], r.get("arm"))
             r["retries"] = prior.get(k, 0)
             prior[k] = r["retries"] + 1
             f.write(json.dumps(r, sort_keys=True) + "\n")
+    _cache[path] = (os.path.getsize(path), prior)
     return path
 
 
-def run_ctest(cmd, cwd, tier, lane, jobs, reasons=None, gating=None, rng=None, retry=False,
-              labels=None, echo=True, env=None):
-    """Run a ctest command line (a string, as gate-scope prints it), stream its output, and
-    append one record per suite (+ per arm) to the run log. Returns ctest's exit code."""
-    check_tier(tier)       # before the run, never after an hour of it
-    reasons = reasons or {}
-    junit = tempfile.NamedTemporaryFile(prefix="gate-junit-", suffix=".xml", delete=False).name
-    full = (f"{cmd} --output-junit {junit} "
-            f"--test-output-size-passed 262144 --test-output-size-failed 262144")
-    shas = tree_shas()
-    box0 = {"jobs": jobs, "display": os.environ.get("DISPLAY"), "gpu_clocks": gpu_clocks(),
-            "other_ctests": other_ctests(), "host": os.uname().nodename}
-    sampler = LoadSampler(); sampler.start()
-    run_id = f"{datetime.datetime.now().strftime('%Y%m%dT%H%M%S')}-{shas['studio'][:9]}"
-    seen, starts = [], {}
-    p = subprocess.Popen(full, cwd=cwd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                         text=True, bufsize=1, errors="replace", env=env)
-    for line in p.stdout:
-        if echo:
-            sys.stdout.write(line); sys.stdout.flush()
-        m = _START.match(line.rstrip("\n"))
-        if m:
-            starts[m.group(1)] = {"other_ctests": other_ctests(p.pid), "gpu_clocks": gpu_clocks()}
-            continue
-        m = _RESULT.match(line.rstrip("\n"))
-        if m:
-            seen.append((m.group(1), m.group(2), float(m.group(3)), time.time(), os.getloadavg()))
-    rc = p.wait()
-    sampler.stop()
-    outputs = _junit_outputs(junit)
-    try: os.unlink(junit)
+# ---- THE PER-ROW RUN (GATE-COST-1 P5/P6/P8; SPECS/audits/GATE_COST_2026-10-09.md) -----------------
+# EACH ROW'S RECORD IS WRITTEN WHEN THE ROW ENDS (P6). The records used to be written after ctest
+# exited, from its junit file (`p.wait()` first): the oomd kill of 2026-10-09 09:24 took 303 finished
+# rows of rc-smoke16a with it, 11.7 h of gate wall in all. ctest runs with -V now and every line a row
+# prints arrives prefixed with its test number (`45: …`); the runner keeps each row's own lines
+# (ctest's preamble — the command, the directory, the environment, the timeout — dropped) and turns
+# them into the row's records at its result line, appended at once. The stream the caller sees is
+# the one --output-on-failure printed: the result lines, and a red row's output after its line.
+OUTPUT_CAP = 262144          # bytes of a row's output kept (the head — ctest's own truncation was)
+_VLINE = re.compile(r"^(\d+): ?(.*)$")
+_VNOISE = re.compile(r"^(test \d+|UpdateCTestConfiguration .*|Constructing a list of tests|Done constructing a list "
+                     r"of tests|Updating test list for fixtures|Added \d+ tests? to meet fixture requirements|"
+                     r"Checking test dependency graph(\.\.\.| end))\s*$")
+_PREAMBLE = re.compile(r"^(Test command: |Working Directory: |Environment variables: ?$|Environment variable "
+                       r"modifications: ?$|Test timeout computed to be: )")
+_RESULT_ID = re.compile(r"^\s*\d+/\d+\s+Test\s+#(\d+):")
+TIMING_LABEL = "timing"      # gate-scope.py's: a row that measures (the serial phase)
+CPU_LABEL = "hygiene"        # P8: the lint and selector rows — their own CPU phase, first
+DISPLAY_LOST = 6             # the exit code of a run that stopped because its display died (P6)
+ABORTED = None               # the abort line of the last run_ctest() that stopped, else None
+
+
+def _vram():
+    """scripts/vram_tokens.py — the box's one admission (the tokens, the gate slot)."""
+    here = os.path.dirname(os.path.abspath(__file__))
+    if here not in sys.path:
+        sys.path.insert(0, here)
+    import vram_tokens
+    return vram_tokens
+
+
+def requeue_times():
+    """P5: how many times a row that got no admission is re-queued inside the same run (JAH_GATE_REQUEUE)."""
+    try:
+        return max(0, int(os.environ.get("JAH_GATE_REQUEUE", "2")))
+    except ValueError:
+        return 2
+
+
+class DisplayGuard:
+    """THE GATE'S DISPLAY (P6): a gate whose X server died used to keep "running" — every row after
+    it failed at engine create ("Malformed resolution string"), 634 such records in the audit's
+    window. Read at the start of a run: the local display's server pid (its lock file) and its
+    socket; at every row's end and every 2 s the same pid must be alive, still own the lock (a
+    display NUMBER is reused the moment it is free) and accept a connection. A DISPLAY that is not
+    a local `:N`, or none (the Mac, a headless run), is not guarded. JAH_X11_ROOT moves /tmp (a test)."""
+
+    def __init__(self, env=None):
+        d = (env if env is not None else os.environ).get("DISPLAY") or ""
+        m = re.match(r"^:(\d+)(?:\.\d+)?$", d)
+        root = os.environ.get("JAH_X11_ROOT", "/tmp")
+        self.display, self.active, self.pid = d, False, None
+        if not m:
+            return
+        self.lock = os.path.join(root, ".X%s-lock" % m.group(1))
+        self.sock = os.path.join(root, ".X11-unix", "X%s" % m.group(1))
+        self.pid = self._lock_pid()
+        self.active = True
+
+    def _lock_pid(self):
+        try:
+            return int(open(self.lock).read().split()[0])
+        except (OSError, ValueError, IndexError):
+            return None
+
+    def dead(self):
+        """None while the display lives, else why it is gone."""
+        if not self.active:
+            return None
+        if self.pid is None:
+            return "no X server owns %s (no %s)" % (self.display, self.lock)
+        try:
+            os.kill(self.pid, 0)
+        except ProcessLookupError:
+            return "the X server of %s (pid %d) is gone" % (self.display, self.pid)
+        except PermissionError:
+            pass
+        if self._lock_pid() != self.pid:
+            return "%s now belongs to another server (lock pid %s, not %d)" % (self.display, self._lock_pid(), self.pid)
+        import socket
+        s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        s.settimeout(2.0)
+        try:
+            s.connect(self.sock)
+        except OSError as e:
+            return "%s refuses a connection (%s)" % (self.display, e.strerror or e)
+        finally:
+            s.close()
+        return None
+
+
+def _descendants(pid):
+    kids = {}
+    for d in os.listdir("/proc"):
+        if d.isdigit():
+            pp = _ppid(int(d))
+            if pp: kids.setdefault(pp, []).append(int(d))
+    out, todo = [], [pid]
+    while todo:
+        p = todo.pop()
+        for c in kids.get(p, []):
+            out.append(c); todo.append(c)
+    return out
+
+
+def _kill_tree(pid):
+    """SIGTERM the run's whole process tree — ctest is its own process group (ctest itself dies of a
+    SIGTERM and ORPHANS its rows: measured), so the group and every descendant still parented to it —
+    and SIGKILL what is left 15 s later. The timer is NOT a daemon: a gate that is exiting waits for it
+    rather than leave the rows running (the merge read's worth-a-look 1)."""
+    import signal
+    procs = [pid] + _descendants(pid)
+
+    def hit(sig):
+        try: os.killpg(pid, sig)
+        except OSError: pass
+        for p in procs:
+            try: os.kill(p, sig)
+            except OSError: pass
+    hit(signal.SIGTERM)
+    t = threading.Timer(15.0, hit, args=(signal.SIGKILL,)); t.daemon = False; t.start()
+    return t
+
+
+# THE ctest TREE DIES WITH ITS GATE (GATE-COST-1 F2, the merge read): a gate process that dies — oomd, a
+# kill, a timeout — used to leave its ctest running, unrecorded, and the lane's own --resume queued
+# behind the orphan. ctest starts in its OWN process group with PR_SET_PDEATHSIG = SIGTERM (it dies with
+# the gate), and a REAPER — a tiny detached process that outlives a SIGKILLed gate — kills the group
+# (SIGTERM, then SIGKILL 15 s later) the moment the gate's pid is gone, since ctest's SIGTERM orphans its
+# rows. A gate that is signalled (SIGTERM/SIGINT/SIGHUP: on_signals()) stops the tree itself and releases
+# its slot and tokens on the way out. Neither the slot nor the tokens are inherited by ctest: they are
+# the gate process's, so they are free the moment the gate is gone.
+_REAPER = r"""
+import os, sys, time, signal
+gate, grp = int(sys.argv[1]), int(sys.argv[2])
+def alive(pid):
+    try: os.kill(pid, 0); return True
+    except ProcessLookupError: return False
+    except PermissionError: return True
+def group():
+    try: os.killpg(grp, 0); return True
+    except OSError: return False
+while alive(gate) and group(): time.sleep(1.0)
+if group():
+    try: os.killpg(grp, signal.SIGTERM)
     except OSError: pass
-    recs = []
-    for name, status, secs, t_end, load in seen:
-        targets, arms = _suite_facts(outputs.get(name, ""))
-        # THE BOX AT THIS SUITE'S START (TEST-SELECTOR-1 L1): the gate's first second said nothing
-        # about a suite that started an hour later beside two other gates
-        at = starts.get(name) or {}
-        base = {"schema": SCHEMA, "run": run_id, "ts": datetime.datetime.fromtimestamp(t_end).astimezone().isoformat(timespec="seconds"),
-                "suite": name, "tier": tier, "lane": lane, "range": rng, "tip": shas,
-                "reason": reasons.get(name, tier), "gating": (gating(name) if gating else True),
-                "retry": retry, "labels": sorted((labels or {}).get(name, [])),
-                "box": dict(box0, gpu_clocks=at.get("gpu_clocks", box0["gpu_clocks"]),
-                            other_ctests=at.get("other_ctests", box0["other_ctests"]),
+    for _ in range(15):
+        time.sleep(1.0)
+        if not group(): break
+    try: os.killpg(grp, signal.SIGKILL)
+    except OSError: pass
+"""
+
+
+def _child_setup():
+    """In ctest's child, before exec: its own process group, and SIGTERM when the gate dies."""
+    os.setpgrp()
+    try:
+        import ctypes
+        ctypes.CDLL(None, use_errno=True).prctl(1, 15)      # PR_SET_PDEATHSIG, SIGTERM
+    except (OSError, AttributeError):
+        pass
+
+
+class GateSignal(BaseException):
+    """A gate was told to stop (SIGTERM/SIGINT/SIGHUP): the runs below stop their trees on the way out."""
+    def __init__(self, sig):
+        super().__init__(sig); self.sig = sig
+
+
+def on_signals():
+    """THE GATE'S OWN SIGNALS (F2): turn SIGTERM/SIGINT/SIGHUP into GateSignal, so every `finally` on the
+    way out runs — the phase stops its ctest tree, the run releases its tokens, the process its slot."""
+    import signal
+
+    def raise_(sig, _frame):
+        raise GateSignal(sig)
+    for sig in (signal.SIGTERM, signal.SIGINT, signal.SIGHUP):
+        try: signal.signal(sig, raise_)
+        except (OSError, ValueError): pass        # not the main thread (a test drives run_ctest from one)
+
+
+def recorded_rows(shas=None):
+    """{suite} with a record that RAN at this tree (studio and irisgl shas, neither dirty) — what
+    `gate-scope.sh --resume` does not run again. NOADMIT/NOTRUN are no run (ci_gate_check's rule)."""
+    shas = shas or tree_shas()
+    out, d = set(), log_dir()
+    if shas.get("studio_dirty") or not os.path.isdir(d):
+        return out
+    for f in os.listdir(d):
+        if not f.endswith(".jsonl") or shas["studio"][:9] not in f:
+            continue
+        for line in open(os.path.join(d, f), errors="replace"):
+            try: r = json.loads(line)
+            except ValueError: continue
+            t = r.get("tip") or {}
+            if (t.get("studio") == shas["studio"] and t.get("irisgl") == shas["irisgl"] and not t.get("studio_dirty")
+                    and not t.get("irisgl_dirty") and r.get("kind") != "verdict" and r.get("arm") is None
+                    and r.get("verdict") not in ("NOADMIT", "NOTRUN")):
+                out.add(r.get("suite"))
+    return out
+
+
+def _listed_rows(cmd, cwd, env):
+    """(the rows a ctest command line selects — the fixture setups it pulls in included — in ctest's
+    order, the subset that takes part in a FIXTURE), or (None, set()) if it cannot list. Read from
+    `<cmd> --show-only=json-v1`."""
+    r = subprocess.run(f"{cmd} --show-only=json-v1", cwd=cwd, shell=True, capture_output=True, text=True, env=env,
+                       errors="replace")
+    try:
+        tests = json.loads(r.stdout).get("tests", [])
+    except ValueError:
+        return None, set()
+    rows, fx = [], set()
+    for t in tests:
+        props = {p_["name"]: p_["value"] for p_ in t.get("properties", [])}
+        rows.append(t["name"])
+        if any(props.get(k) for k in ("FIXTURES_SETUP", "FIXTURES_CLEANUP", "FIXTURES_REQUIRED")):
+            fx.add(t["name"])
+    return rows, fx
+
+
+def _verbose(cmd):
+    """(the command with -V instead of --output-on-failure, whether it asked for the red output)."""
+    toks = cmd.split(" ")
+    oof = "--output-on-failure" in toks
+    toks = [t for t in toks if t != "--output-on-failure"]
+    return " ".join(toks[:1] + ["-V"] + toks[1:]), oof
+
+
+class _Run:
+    """One run_ctest() call: the context its phases share (one run id, one sampler, one guard)."""
+
+    def __init__(self, tier, lane, jobs, reasons, gating, rng, retry, labels, echo, env):
+        self.tier, self.lane, self.reasons, self.gating, self.rng = tier, lane, reasons or {}, gating, rng
+        self.retry, self.labels, self.echo, self.env = retry, labels or {}, echo, env
+        self.shas = tree_shas()
+        self.box0 = {"jobs": jobs, "display": (env or os.environ).get("DISPLAY"), "gpu_clocks": gpu_clocks(),
+                     "other_ctests": other_ctests(), "host": os.uname().nodename}
+        self.run_id = f"{datetime.datetime.now().strftime('%Y%m%dT%H%M%S')}-{self.shas['studio'][:9]}"
+        self.sampler = LoadSampler(); self.sampler.start()
+        self.guard = DisplayGuard(env)
+        self.recorded, self.dropped, self.path, self.dead = 0, [], None, None
+
+    def say(self, text):
+        if self.echo:
+            sys.stdout.write(text + "\n"); sys.stdout.flush()
+
+    def records(self, name, status, secs, t_end, load, text, at):
+        """The row's record and its arms' — the fields run_ctest has always written."""
+        targets, arms = _suite_facts(text)
+        base = {"schema": SCHEMA, "run": self.run_id,
+                "ts": datetime.datetime.fromtimestamp(t_end).astimezone().isoformat(timespec="seconds"),
+                "suite": name, "tier": self.tier, "lane": self.lane, "range": self.rng, "tip": self.shas,
+                "reason": self.reasons.get(name, self.tier), "gating": (self.gating(name) if self.gating else True),
+                "retry": self.retry, "labels": sorted(self.labels.get(name, [])),
+                "box": dict(self.box0, gpu_clocks=at.get("gpu_clocks", self.box0["gpu_clocks"]),
+                            other_ctests=at.get("other_ctests", self.box0["other_ctests"]),
                             load=[round(x, 2) for x in load],
-                            load_mean=sampler.mean(t_end - secs, t_end)),
+                            load_mean=self.sampler.mean(t_end - secs, t_end)),
                 "source": "run"}
-        v, st, bline = row_verdict(status, outputs.get(name, ""), arms)
-        wait = lock_wait(outputs.get(name, ""))
-        twait = token_wait(outputs.get(name, ""))
+        v, st, bline = row_verdict(status, text, arms)
+        wait, twait = lock_wait(text), token_wait(text)
         # a timing row's lock line and its admission line are the SAME wait: subtract it once
         queued = wait if wait is not None else twait
         row = dict(base, arm=None, verdict=v, status=st,
-                   seconds=(round(max(0.0, secs - queued), 2) if queued is not None else secs),
-                   targets=targets)
-        if wait is not None:
-            row["lockWaitS"] = wait
-        if twait is not None:
-            row["tokenWaitS"] = twait
-        if queued is not None:
-            row["wallSeconds"] = secs
+                   seconds=(round(max(0.0, secs - queued), 2) if queued is not None else secs), targets=targets)
+        if wait is not None: row["lockWaitS"] = wait
+        if twait is not None: row["tokenWaitS"] = twait
+        if queued is not None: row["wallSeconds"] = secs
         if v != "PASS":
-            fl = fail_line(outputs.get(name, ""))
-            if fl:
-                row["failLine"] = fl
-        if bline:
-            row["budget"] = bline
-        mem = _mem_of(outputs.get(name, ""))
-        if mem is not None:
-            row["mem"] = mem
-        leak = _leaks_of(outputs.get(name, ""))
-        if leak is not None:
-            row["leak"] = leak
-        recs.append(row)
-        arm_mem = _arm_mems(outputs.get(name, ""))
-        arm_find = _arm_findings(outputs.get(name, ""))
-        for arm, v, s in arms:
+            fl = fail_line(text)
+            if fl: row["failLine"] = fl
+        if bline: row["budget"] = bline
+        mem = _mem_of(text)
+        if mem is not None: row["mem"] = mem
+        leak = _leaks_of(text)
+        if leak is not None: row["leak"] = leak
+        recs = [row]
+        arm_mem, arm_find = _arm_mems(text), _arm_findings(text)
+        for arm, av, s in arms:
             # an arm's reason: the selector's for that arm (`<row>::<arm>`), else its row's
-            ar = reasons.get(f"{name}::{arm.split('.', 1)[-1]}", base["reason"])
-            rec = dict(base, arm=arm, verdict=v, status=v, seconds=s, targets=None,
-                       reason=ar)
-            if arm in arm_mem:
-                rec["mem"] = arm_mem[arm]
+            ar = self.reasons.get(f"{name}::{arm.split('.', 1)[-1]}", base["reason"])
+            rec = dict(base, arm=arm, verdict=av, status=av, seconds=s, targets=None, reason=ar)
+            if arm in arm_mem: rec["mem"] = arm_mem[arm]
             rec.update(arm_find.get(arm, {}))
             recs.append(rec)
-    if recs:
-        path = append_records(recs, tier, shas["studio"])
-        if echo:
-            print(f"\nrun log: {len(recs)} record(s) -> {path}")
-    return rc
+        return recs
+
+    def phase(self, cmd, cwd, env, final):
+        """Run one ctest line; each row's records are appended as it ends. A row that never got its
+        admission (P5: NOADMIT, or a pool whose every arm was) is HELD BACK unless `final`, and
+        returned to be re-queued. Returns (rc, reds, held)."""
+        vcmd, oof = _verbose(cmd)
+        linux = sys.platform.startswith("linux")
+        # `exec`: the shell BECOMES ctest, so the group leader and the PDEATHSIG are ctest's own
+        p = subprocess.Popen("exec " + vcmd, cwd=cwd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                             text=True, bufsize=1, errors="replace", env=env,
+                             preexec_fn=_child_setup if linux else None, start_new_session=not linux)
+        reaper = subprocess.Popen([sys.executable, "-c", _REAPER, str(os.getpid()), str(p.pid)],
+                                  stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                                  start_new_session=True, close_fds=True)
+        stop = threading.Event()
+        try:
+            return self._stream(p, oof, final, stop)
+        finally:
+            stop.set()
+            if p.poll() is None:                 # an exception or a signal on the way out: never an orphan
+                _kill_tree(p.pid)
+                try: p.wait(timeout=20)
+                except subprocess.TimeoutExpired: pass
+            reaper.poll()
+
+    def _stream(self, p, oof, final, stop):
+
+        def watch():
+            while not stop.wait(2.0):
+                why = self.guard.dead()
+                if why and not self.dead:
+                    self.dead = why
+                    _kill_tree(p.pid)
+                    return
+        if self.guard.active:
+            threading.Thread(target=watch, daemon=True).start()
+        buf, size, pre, starts, reds, held = {}, {}, {}, {}, [], []
+        for line in p.stdout:
+            ln = line.rstrip("\n")
+            m = _VLINE.match(ln)
+            if m:
+                i, txt = m.group(1), m.group(2)
+                st = pre.get(i, True)          # True: the preamble; "env": inside its environment list
+                if st:
+                    if txt.startswith("Test timeout computed to be: "):
+                        pre[i] = False; continue
+                    if _PREAMBLE.match(txt):
+                        pre[i] = "env" if txt.startswith("Environment variable") else True; continue
+                    if st == "env" and txt.startswith(" "):
+                        continue
+                    pre[i] = False
+                if size.get(i, 0) < OUTPUT_CAP:
+                    buf.setdefault(i, []).append(txt)
+                    size[i] = size.get(i, 0) + len(txt) + 1
+                continue
+            if _VNOISE.match(ln):
+                continue
+            if self.echo:
+                sys.stdout.write(line); sys.stdout.flush()
+            m = _START.match(ln)
+            if m:
+                starts[m.group(1)] = {"other_ctests": other_ctests(p.pid), "gpu_clocks": gpu_clocks()}
+                continue
+            m = _RESULT.match(ln)
+            if not m:
+                continue
+            name, status, secs = m.group(1), m.group(2), float(m.group(3))
+            idm = _RESULT_ID.match(ln)
+            i = idm.group(1) if idm else ""
+            text = "\n".join(buf.pop(i, []))
+            pre.pop(i, None); size.pop(i, None)
+            ok = verdict_of(status) == "PASS"
+            if not ok and oof and self.echo and text:
+                sys.stdout.write(text + "\n"); sys.stdout.flush()
+            # NEVER A RECORD AGAINST A DEAD DISPLAY (P6): the row ended after the server did, or at it
+            why = self.dead or self.guard.dead()
+            if why:
+                if not self.dead:
+                    self.dead = why
+                    _kill_tree(p.pid)
+                self.dropped.append(name)
+                continue
+            recs = self.records(name, status, secs, time.time(), os.getloadavg(), text, starts.get(name) or {})
+            v = recs[0]["verdict"]
+            arms = recs[1:]
+            never = v == "NOADMIT" or (v != "PASS" and arms and all(a["verdict"] == "NOADMIT" for a in arms))
+            if never and not final:
+                held.append(name)
+                continue
+            if v != "PASS":
+                reds.append(name)
+            self.path = append_records(recs, self.tier, self.shas["studio"])
+            self.recorded += len(recs)
+        rc = p.wait()
+        return rc, reds, held
+
+
+def run_ctest(cmd, cwd, tier, lane, jobs, reasons=None, gating=None, rng=None, retry=False,
+              labels=None, echo=True, env=None, exclude=None, whole_card=None):
+    """Run a ctest command line (a string, as gate-scope prints it), stream its output, and append
+    each row's records (+ its arms') to the run log AS THE ROW ENDS. Returns ctest's exit code — 0
+    when every row's last run passed — or DISPLAY_LOST when the display died (ABORTED says why).
+
+      * P8: the rows labelled `hygiene` (the lints and the selector's own rows: no display, no GPU)
+        run FIRST, as their own CPU phase, at the same -j, before any GPU row starts;
+      * P5: a row that got no admission within its wait is re-queued at the end of the run (normal
+        admission, after the other rows), up to requeue_times(); only its last try is recorded;
+      * P6: `exclude` = rows not to run (gate-scope --resume: those with a record at the tip); the
+        ctest tree dies with the gate (F2: _child_setup, the reaper, on_signals);
+      * P2: `whole_card` — the run takes EVERY VRAM token once and its rows run nested on them (one
+        drain for the phase, not one per row); None = when every row it selects is a `timing` row
+        (the serial phase, however it was started)."""
+    global ABORTED
+    ABORTED = None
+    check_tier(tier)       # before the run, never after an hour of it
+    if env is not None and os.environ.get("JAH_GATE_SLOT_HELD"):
+        # a row of this gate that starts a gate of its own (a selector test) must never queue behind it
+        env = dict(env, JAH_GATE_SLOT_HELD=os.environ["JAH_GATE_SLOT_HELD"])
+    R = _Run(tier, lane, jobs, reasons, gating, rng, retry, labels, echo, env)
+    why = R.guard.dead()
+    if why:
+        ABORTED = f"=== GATE ABORTED before its first row: {why} — nothing ran, nothing recorded ==="
+        R.say(ABORTED); R.sampler.stop()
+        return DISPLAY_LOST
+    scratch = tempfile.mkdtemp(prefix="gate-rows-")
+
+    def listfile(name, rows):
+        path = os.path.join(scratch, name)
+        with open(path, "w") as f:
+            f.write("".join(r + "\n" for r in rows))
+        return path
+    exclude = set(exclude or ())
+    rows, fixtures = _listed_rows(cmd, cwd, env) if (exclude or labels) else (None, set())
+    if whole_card is None:
+        # the serial phase however it was started: a `-L "^timing$"` line (the fixtures it pulls in — a
+        # fresh_home setup — carry no label), or rows that are all `timing`
+        whole_card = bool(re.search(r"""-L\s+["']?\^?%s\$?["']?(\s|$)""" % TIMING_LABEL, cmd)) or (
+            bool(rows) and all(TIMING_LABEL in (labels or {}).get(r, ()) for r in rows))
+    card = []
+    if whole_card and not (env or os.environ).get("JAH_VRAM_HELD"):
+        card, held_env = _vram().hold_card(f"{lane} {tier} phase", log=sys.stdout)
+        if card:
+            # THE CALLER'S ENVIRONMENT OVER THE HELD COPY (F5): JAH_POOL_ARMS and the rest survive the hold
+            env = dict(held_env, **(env or {}), JAH_VRAM_HELD=held_env["JAH_VRAM_HELD"])
+    phases = [(cmd, None)]
+    if rows is not None:
+        skip = [r for r in rows if r in exclude]
+        # a row in a FIXTURE stays with its partners in the GPU phase: excluded there, ctest would pull a
+        # setup back in and run it twice (the merge read's worth-a-look 3; none is labelled hygiene today)
+        cpu = [r for r in rows if r not in exclude and r not in fixtures and CPU_LABEL in (labels or {}).get(r, ())]
+        gpu = [r for r in rows if r not in exclude and r not in cpu]
+        if skip:
+            R.say(f"=== --resume: {len(skip)} of {len(rows)} row(s) already have a record at this tip; "
+                  f"running the other {len(rows) - len(skip)} ===")
+        phases = []
+        if cpu:
+            phases.append((f"{cmd} --tests-from-file {listfile('cpu', cpu)}",
+                           f"the CPU phase: {len(cpu)} lint/selector row(s), before any GPU row"))
+        if gpu:
+            out = skip + cpu
+            phases.append((f"{cmd} --exclude-from-file {listfile('done', out)}" if out else cmd,
+                           f"the GPU phase: {len(gpu)} row(s)" if cpu else None))
+    rc, reds, held = 0, [], []
+    try:
+        for c, title in phases:
+            if title: R.say(f"\n=== {title} ===")
+            prc, preds, pheld = R.phase(c, cwd, env, final=requeue_times() == 0)
+            if R.dead: break
+            reds += preds; held += pheld
+            if prc and not preds and not pheld: rc = rc or prc       # ctest's own error, no red row
+            if prc < 0 or prc > 128:
+                # ctest itself was killed (a signal; through the shell, 128 + it): what it finished is
+                # recorded; nothing else starts
+                R.say(f"\n=== ctest was killed (signal {-prc if prc < 0 else prc - 128}): the rows it finished are in the run log; the rest "
+                      f"never ran — scripts/gate-scope.sh <range> --resume runs them ===")
+                held = []
+                break
+        n = requeue_times()
+        for k in range(1, n + 1):
+            if not held or R.dead: break
+            R.say(f"\n=== re-queued {len(held)} row(s) that got no admission (try {k + 1} of {n + 1}, normal "
+                  f"admission, after the other rows): {' '.join(held[:12])}{' …' if len(held) > 12 else ''} ===")
+            prc, preds, pheld = R.phase(f"{cmd} --tests-from-file {listfile('requeue%d' % k, held)}", cwd, env,
+                                        final=k == n)
+            if R.dead: break
+            reds += preds; held = pheld
+            if prc and not preds and not pheld: rc = rc or prc
+    finally:
+        R.sampler.stop()
+        for fd in card:
+            try: os.close(fd)
+            except OSError: pass
+        import shutil
+        shutil.rmtree(scratch, ignore_errors=True)
+    if R.path and echo:
+        print(f"\nrun log: {R.recorded} record(s) -> {R.path}")
+    if R.dead:
+        ABORTED = (f"=== GATE ABORTED: {R.dead} — the run was stopped; {R.recorded} record(s) were written before "
+                   f"it, {len(R.dropped)} row(s) that ended after it were NOT recorded ({' '.join(R.dropped[:8])}); "
+                   f"on a live display: scripts/gate-scope.sh <range> --run --resume ===")
+        R.say(ABORTED)
+        return DISPLAY_LOST
+    return rc or (8 if reds or held else 0)
 
 
 def inventory_labels(build):
@@ -1015,7 +1415,19 @@ def main():
         # one argument = a command string exactly as gate-scope.py --merge-tier prints it (its -LE
         # alternation carries `|`, so it must reach the shell as ONE string); several = an argv
         line = cmd[0] if len(cmd) == 1 else shlex.join(cmd)
-        sys.exit(run_ctest(line, build, a.tier, lane, jobs, labels=inventory_labels(build)))
+        # A `run` IS A GATE (GATE-COST-1 P1): one at a time, box-wide — it queues for the slot first
+        on_signals()
+        slot = None
+        try:
+            slot = _vram().gate_slot(f"{lane} {a.tier} (gate_runlog run)", log=sys.stdout)
+            rc = run_ctest(line, build, a.tier, lane, jobs, labels=inventory_labels(build))
+        except GateSignal as e:
+            print(f"\n=== GATE ABORTED: signal {e.sig} — the ctest tree was stopped, the slot and the card released ===")
+            rc = 128 + e.sig
+        finally:
+            if slot is not None:
+                os.close(slot)
+        sys.exit(rc)
     if a.cmd == "import":
         import_log(a.log, a.tier, a.tip, a.lane, a.jobs); return
     if a.cmd == "longest":

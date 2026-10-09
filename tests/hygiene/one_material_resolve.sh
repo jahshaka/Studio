@@ -32,12 +32,22 @@ cd "$ROOT" || { echo "source.one_material_resolve: no such root $ROOT"; exit 1; 
 
 failures=0
 
+# FIRST-PARTY PATHS ONLY (GATE-COST-1 P8): src and irisgl WITHOUT irisgl/thirdparty — the
+# vendored submodules (assimp, bullet3, zip, the Ogre fork: 6,300 C++ files, 104 MB in a
+# lane tree) cannot name an iris:: type, and reading them twice per run on the USB-stick
+# root under `ionice -c 3` beside three gates stalled this 1 s row past its 60 s budget
+# (SPECS/audits/GATE_COST_2026-10-09.md §2). Every other irisgl directory is read.
+OWN=(src irisgl/*.h)
+for d in irisgl/*/; do
+    case "$d" in irisgl/thirdparty/) ;; *) OWN+=("${d%/}") ;; esac
+done
+
 # A material pointer handed to QVariant::fromValue. The names are the ones this
 # tree uses for a material: `material`, `mat`, `m`, and the two typedefs
 # spelled out. A JSON `definition`/`shaderDefinition` is NOT one of them and is
 # what the Shader-flavoured AssetMaterial legitimately carries.
 hits=$(grep -rnE 'QVariant::fromValue\([[:space:]]*(iris::(Material|PbrMaterial)Ptr\(|(material|mat|m|pbr|newMaterial)[[:space:]]*\))' \
-           src irisgl --include=*.cpp --include=*.h \
+           "${OWN[@]}" --include=*.cpp --include=*.h \
        | grep -v '^tests/' || true)
 
 if [ -n "$hits" ]; then
@@ -54,7 +64,7 @@ fi
 
 # ...and the reader that used to do it must stay gone. If anything asks an
 # Asset for a MaterialPtr again, the mismatch is back whatever the writers do.
-readers=$(grep -rn 'value<iris::MaterialPtr>()' src irisgl --include=*.cpp --include=*.h || true)
+readers=$(grep -rn 'value<iris::MaterialPtr>()' "${OWN[@]}" --include=*.cpp --include=*.h || true)
 if [ -n "$readers" ]; then
     echo "source.one_material_resolve: FAIL — a QVariant is being read back as a material"
     echo "$readers" | sed 's/^/    /'

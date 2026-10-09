@@ -18,9 +18,10 @@ list (JAH_CONTENTION_FILE):
      nothing at 684e0f7aa -> REFUSED, "no re-use across" (a pin change invalidates every earlier record);
   4. a row green at 0dba35f9e and RED at the later 1e21df220 (neither reached by the fix) -> REFUSED: the
      later red blocks the older green; `--verdict` records its answer AT 1e21df220 -> accepted;
-  5. THE TARGETS NEVER SET THE EXIT CODE: gate-scope's `--run` returns the gating phases' code and only
-     STARTS the target step (it does not run it inline); `--targets-only` runs the targets under the
-     run log's `target` tier and exits 0 when they fail;
+  5. THE TARGETS NEVER SET THE EXIT CODE: gate-scope's `--run` returns the gating phases' code; the
+     target step runs AFTER the verdict line, inside the gate (GATE-COST-1 P9: the gate's display, the
+     whole card) and its red does not change the exit; `--no-targets` skips it; `--targets-only` runs
+     the targets under the run log's `target` tier and exits 0 when they fail;
   and the run log's three fixes: L1 other_ctests excludes the gate's OWN process tree, L2 an
   admission's `vram: admitted … after <s> s` is the row's tokenWaitS (and leaves its seconds), L3 a
   red row records its first FAIL line.
@@ -179,7 +180,7 @@ def main(source, build):
     spec = importlib.util.spec_from_file_location("gate_scope_t", os.path.join(scripts, "gate-scope.py"))
     g = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(g)
-    calls, started = [], []
+    calls = []
 
     def fake_run(cmd, cwd, tier, lane_, jobs, reasons=None, gating=None, **kw):
         is_target = "chain_face_target" in cmd.replace("\\", "")
@@ -189,7 +190,9 @@ def main(source, build):
     real_rc, real_fpp = g.gate_runlog.run_ctest, g.gate_runlog.fork_pin_problem
     g.gate_runlog.run_ctest = fake_run
     g.gate_runlog.fork_pin_problem = lambda *a, **k: None
-    g.start_target_step = lambda a, b: started.append(1)
+    old_vram = os.environ.get("JAH_VRAM_DIR")
+    os.environ["JAH_VRAM_DIR"] = os.path.join(scratch, "vram")     # the slot and the card: a private queue
+    held = os.environ.pop("JAH_GATE_SLOT_HELD", None)
 
     def gs_main(argv):
         sys.argv = ["gate-scope.py"] + argv
@@ -204,32 +207,26 @@ def main(source, build):
 
     files = ["--files", "tests/gi/test_gi_chain_face.cpp", "--build", build, "--lane", "gate-fix-round-test"]
     code, out = gs_main(files + ["--run"])
-    check(code == 0 and calls and not any(t for _, t in calls),
-          "--run: the gating phases' exit (0) is the gate's; no target ran inline (%r, %r)" % (code, calls))
-    check(started == [1] and "GATE VERDICT: GREEN" in out, "...the verdict is printed and the target step STARTED after it")
-    calls.clear(); started.clear()
+    gating = [c for c in calls if c[0] != "target"]
+    check(code == 0 and gating and not any(t for _, t in gating) and calls[-1] == ("target", True),
+          "--run: the gating phases' exit (0) is the gate's, though the target step after them read 8 (%r, %r)"
+          % (code, calls))
+    check("GATE VERDICT: GREEN" in out and out.index("GATE VERDICT") < out.index("target tests exited 8"),
+          "...the verdict is printed BEFORE the target step runs")
+    calls.clear()
     code, out = gs_main(files + ["--run", "--no-targets"])
-    check(code == 0 and not started, "--no-targets: the target step is not started (%r)" % code)
+    check(code == 0 and calls and not any(c[0] == "target" for c in calls),
+          "--no-targets: the target step does not run (%r)" % code)
     calls.clear()
     code, out = gs_main(files + ["--run", "--targets-only"])
     check(code in (0, None) and calls == [("target", True)] and "exited 8" in out,
           "--targets-only: the targets run alone under the run log's `target` tier, read 8, and exit 0 (%r, %r)"
           % (code, calls))
-    # F2: the detached step writes its pid file, and the next --run stops its GROUP before it starts
-    fake_step = ["sh", "-c", "sleep 120 & sleep 120; :", "gate-scope.py", "--targets-only"]
-    pid = g._launch_target_step(fake_step, build)
-    import time
-    time.sleep(0.5)
-    pidfile = os.path.join(build, g.TARGET_PIDFILE)
-    check(os.path.isfile(pidfile) and open(pidfile).read().split()[0] == str(pid),
-          "the target step's launch writes <build>/%s with its pid (%d)" % (g.TARGET_PIDFILE, pid))
-    members = subprocess.run(["pgrep", "-g", str(pid)], capture_output=True, text=True).stdout.split()
-    code, out = gs_main(files + ["--run", "--no-targets"])
-    time.sleep(0.5)
-    left = subprocess.run(["pgrep", "-g", str(pid)], capture_output=True, text=True).stdout.split()
-    check(len(members) >= 2 and not left and f"process group {pid}" in out and not os.path.exists(pidfile),
-          "...and the next --run stops the WHOLE group (%d members before, %d after) and says so" % (len(members), len(left)))
     g.gate_runlog.run_ctest, g.gate_runlog.fork_pin_problem = real_rc, real_fpp
+    os.environ.pop("JAH_GATE_SLOT_HELD", None)
+    if held is not None: os.environ["JAH_GATE_SLOT_HELD"] = held
+    if old_vram is None: os.environ.pop("JAH_VRAM_DIR", None)
+    else: os.environ["JAH_VRAM_DIR"] = old_vram
 
     # ---- L1 / L2 / L3: the run log -------------------------------------------------------------------
     d = fresh()
@@ -237,12 +234,13 @@ def main(source, build):
     open(fake, "w").write(
         "#!/usr/bin/env python3\n"
         "import sys\n"
-        "j = sys.argv[sys.argv.index('--output-junit') + 1]\n"
-        "print('      Start  1: s.one'); print('1/2 Test  #1: s.one ..........   Passed   10.00 sec')\n"
-        "print('      Start  2: s.two'); print('2/2 Test  #2: s.two ..........***Failed    5.00 sec')\n"
-        "open(j, 'w').write('<testsuite><testcase name=\"s.one\"><system-out>vram: admitted with 2 tokens 3,4 after 4.0 s"
-        " — s.one\\nok: fine</system-out></testcase><testcase name=\"s.two\"><system-out>ok: a\\nFAILED: 2 check(s)\\n"
-        "FAIL: the first assertion\\nFAIL: the second</system-out></testcase></testsuite>')\n")
+        "assert '-V' in sys.argv\n"     # the runner reads every row's own lines from ctest -V (GATE-COST-1 P6)
+        "print('      Start  1: s.one'); print('1: Test command: /bin/true'); print('1: Test timeout computed to be: 60')\n"
+        "print('1: vram: admitted with 2 tokens 3,4 after 4.0 s — s.one'); print('1: ok: fine')\n"
+        "print('1/2 Test  #1: s.one ..........   Passed   10.00 sec')\n"
+        "print('      Start  2: s.two'); print('2: ok: a'); print('2: FAILED: 2 check(s)')\n"
+        "print('2: FAIL: the first assertion'); print('2: FAIL: the second')\n"
+        "print('2/2 Test  #2: s.two ..........***Failed    5.00 sec')\n")
     os.chmod(fake, 0o755)
     gate_runlog.run_ctest(fake, scratch, "scoped", "gate-fix-round-test", 1, echo=False)
     recs = {}

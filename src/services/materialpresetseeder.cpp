@@ -91,6 +91,12 @@ void MaterialPresetSeeder::finishNow()
 {
     if (!mRunning.load()) return;
     requestAbort();
+    // A HELD SEED (JAHSHAKA_SEED_HOLD) is released INTO the abort: it resumes, finds it was
+    // stood down, and ends through its own path (importMapsThenRows' abort exit).
+    if (mHeld) {
+        mHeld = false;
+        importMapsThenRows();
+    }
     // The runner's own bounded join, which pumps the queued commits so the
     // batch drains cleanly rather than being left half-committed.
     if (mRunner) mRunner->waitForDone(5000);
@@ -114,6 +120,16 @@ void MaterialPresetSeeder::hashMapsOnWorker(const QStringList &presetNames)
     QMetaObject::invokeMethod(this, [this, prepared, ms]() {
         mHashMs = ms;
         mPrepared = prepared;
+        // THE TEST HOLD (JAHSHAKA_SEED_HOLD, scripting.e2e.preset_seed_race only): the seed
+        // waits here, hashed and not yet importing, until a user door's finishNow releases it
+        // — the race that test needs, made deterministic. Without it the seed's timing is the
+        // startup gate's: the gate pumps events after each compile, and the seed finished
+        // inside the splash once the gate grew (ASYNC-SHADERS-1, measured 20 of 20 bundles
+        // before the script's first verb).
+        if (!mAborted.load() && qEnvironmentVariableIsSet("JAHSHAKA_SEED_HOLD")) {
+            mHeld = true;
+            return;
+        }
         importMapsThenRows();
     }, Qt::QueuedConnection);
 }
