@@ -294,9 +294,9 @@ set(JAH_GPU_EXCLUSIVE_SUITES
     vr.warmup.timing scripting.e2e.editor_controls.timing
     # TESTING-DEBTS-1 T10: the first create's 1000 ms bar (the push row keeps the counts).
     threading.newproject_stall.timing
-    # TESTING-CLEANUP-2 P10f: the recorder's millisecond bars
+    # TESTING-CLEANUP-2 P10e/P10f: the selection's and the recorder's millisecond bars
     # (the gating row/pool arms keep the counts and print the milliseconds).
-    capture.first_recording.timing capture.offline_unique.timing
+    ui.selection_cost.timing capture.first_recording.timing capture.offline_unique.timing
     # D1-SCALE-FIXTURES: the scale rows that print GPU or frame milliseconds or the UI
     # thread's gaps (tests/scale/CMakeLists.txt) — measurements by design, so a sibling's
     # GPU work inside their window would print someone else's number.

@@ -59,7 +59,7 @@ foreach(_arm first_recording offline_unique)
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     set_tests_properties(capture.${_arm}.timing PROPERTIES
         ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
-        LABELS "scripting;capture;nightly;quiet-box")
+        LABELS "scripting;capture;stage-close;quiet-box")
 endforeach()
 
 # pool.capture_validation — THE RECORDER UNDER THE KHRONOS VALIDATION LAYER (TESTING-CLEANUP-2 H4):
