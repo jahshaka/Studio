@@ -362,6 +362,35 @@ inline QString settle(McpClient &mcp, const QString &probe = QString::fromLatin1
     return last;
 }
 
+/// SETTLE ON THE REQUESTED SIZE (TESTING-CLEANUP-2 fix round): after app.resizeWindow(w, h) the
+/// layout is done when the WINDOW is w x h and the editor viewport's render target is the size of
+/// its widget — a state the read names, not three reads that happened to agree. Reads (each one MCP
+/// request, `frames` stepped on the fixed clock first) until it holds, bounded by `maxReads`.
+/// Returns whether it held; the last reading is printed when it did not.
+inline bool settleToSize(McpClient &mcp, int width, int height, int frames = 3, int maxReads = 200)
+{
+    const QString script = QStringLiteral(
+        "editor.frame(%1); (function () { var w = app.window(), v = editor.viewportState();"
+        " return JSON.stringify({ w: w.width, h: w.height, tw: v.width, th: v.height,"
+        " ww: v.windowW, wh: v.windowH }); })()").arg(qMax(1, frames));
+    QJsonObject last;
+    for (int reads = 1; reads <= maxReads; ++reads) {
+        const QJsonObject r = mcp.runScript(script);
+        if (!r.value("ok").toBool()) {
+            std::printf("info: settleToSize: the read failed on read %d\n", reads);
+            return false;
+        }
+        last = QJsonDocument::fromJson(r.value("result").toString().toUtf8()).object();
+        const int tw = last.value("tw").toInt(), th = last.value("th").toInt();
+        if (last.value("w").toInt() == width && last.value("h").toInt() == height && tw > 0 && th > 0 &&
+            tw == last.value("ww").toInt() && th == last.value("wh").toInt())
+            return true;
+    }
+    std::printf("info: settleToSize(%d x %d): not reached after %d reads: %s\n", width, height, maxReads,
+                QJsonDocument(last).toJson(QJsonDocument::Compact).constData());
+    return false;
+}
+
 /// WHAT THE APP SAID ABOUT ITS OWN UI THREAD, printed when a measurement of
 /// that thread fails.
 ///
