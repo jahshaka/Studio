@@ -284,7 +284,7 @@ set(JAH_GPU_EXCLUSIVE_SUITES
     gi.field_scroll gi.rt_reflect_cost
     # D6B-GATE-SHAPE (audit §4 R3): timing ratios that sat under RUN_SERIAL only.
     mirror.scale perf.epic_steady_state perf.drag_mirror_room perf.capture_off_is_free
-    # the nightly timing rows: the wall-clock benchmark, the stereo frame budget, and the
+    # the stage-close timing rows: the wall-clock benchmark, the stereo frame budget, and the
     # millisecond halves of the suites whose counts stay at push (tests/support/timingbars.h;
     # audit §5 — F17's seven and the six beside them).
     scenegraph.benchmark rigperf.benchmark gi.gather_cost vr.frame_budget
@@ -531,7 +531,7 @@ endfunction()
 
 # jah_timing_script(<in.js> <out.js>) — THE MILLISECOND BARS OF AN E2E SCRIPT, ARMED (lane
 # D6B-GATE-SHAPE; tests/support/timingbars.h is the C++ half). A `--script` run cannot read its
-# environment, so the nightly `<suite>.timing` row runs a generated copy of the script whose
+# environment, so the stage-close `<suite>.timing` row runs a generated copy of the script whose
 # first line defines JAH_TIMING_BARS; the push-tier row runs the script itself, where the
 # variable is undefined and a millisecond bar only PRINTS its reading. The copy is rewritten at
 # configure time and the source is a configure dependency, so the two never drift.
@@ -813,7 +813,7 @@ add_subdirectory(sockets)
 add_subdirectory(threading)
 # The scene-graph BENCHMARK GATE (SCENEGRAPH_SPEC §6) — the measurement suite
 # that exists BEFORE the swap, so v1 has a recorded baseline to be judged
-# against. Labels `nightly;quiet-box`: minutes, not seconds; the MERGE tier skips it.
+# against. Labels `stage-close;quiet-box`: minutes, not seconds; the MERGE tier skips it.
 add_subdirectory(benchmarks)
 # THE SCALE SUITES (lane D1-SCALE-FIXTURES): phase E's measuring stick — one
 # `scale.*` suite per wall W1-W14, label `scale-target` (printed, never gating).

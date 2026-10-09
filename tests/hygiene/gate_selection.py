@@ -239,9 +239,9 @@ def runlog_cases(source):
     # name outside it is refused before a run (never an hour of records under a stray name)
     print("  the run log's tier names: %s" % ", ".join(rl.TIERS))
     check(set(rl.TIERS) == {"scoped", "scoped-fallback", "scoped-tier", "target", "merge", "stage",
-                            "nightly", "push", "smoke", "fork", "lane", "solo"},
+                            "stage-close", "push", "smoke", "fork", "lane", "solo"},
           "the tier names are exactly the documented twelve (GATE-SPEED-1 added target and smoke; BATCH-GATE-1 "
-          "retired joint; GATE-COST-2 added lane and solo)")
+          "retired joint; STAGE-CLOSE-1 stage-close for nightly; GATE-COST-2 lane and solo)")
     gsrc = open(os.path.join(source, "scripts", "gate-scope.py")).read()
     lits = set(re.findall(r'a\.tier or \(?"([a-z-]+)"', gsrc)) | set(re.findall(r'else "(scoped-[a-z]+)"', gsrc)) \
         | set(re.findall(r'run_ctest\(target_cmd, build, "([a-z-]+)"', gsrc))
@@ -391,7 +391,7 @@ def main(source, build):
     cases = json.load(open(os.path.join(source, "tests", "hygiene", "gate_selection_cases.json")))
     inv0 = gs.load_inventory(build)
     costs = gs.load_costs()
-    tier_rows = [n for n, t in inv0.items() if not (t["labels"] & (gs.NIGHTLY_LABELS | gs.TARGET_LABELS))]
+    tier_rows = [n for n, t in inv0.items() if not (t["labels"] & (gs.STAGE_CLOSE_LABELS | gs.TARGET_LABELS))]
     tier_s = sum(costs.get(n, 10.0) for n in tier_rows)
 
     # every name a case asks for must be a row this build registers, or a pool's arm written

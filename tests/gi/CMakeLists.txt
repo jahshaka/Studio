@@ -819,12 +819,12 @@ jah_gpu_row(gi.field_follows CLASS engine COMMAND test_gi_field_follows
 # renders a frame at a time.
 set_tests_properties(gi.field_follows PROPERTIES TIMEOUT 120 LABELS "engine" RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
 # gi.field_follows.timing — the walk's frame-time bars (no frame over the tier's 16.7 ms),
-# nightly (lane D6B-GATE-SHAPE; audit §5 F17 FIX-TIME): the same binary with
+# stage-close (lane D6B-GATE-SHAPE; audit §5 F17 FIX-TIME): the same binary with
 # JAHSHAKA_TIMING_BARS=1, quiet box, the GPU-timing lock.
 jah_gpu_exclusive_test(NAME gi.field_follows.timing CLASS engine RUN_TIMEOUT 300 COMMAND test_gi_field_follows
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.field_follows.timing PROPERTIES
-    ENVIRONMENT "JAHSHAKA_TIMING_BARS=1" LABELS "engine;nightly;quiet-box")
+    ENVIRONMENT "JAHSHAKA_TIMING_BARS=1" LABELS "engine;stage-close;quiet-box")
 set_property(TEST gi.field_follows.timing APPEND PROPERTY RESOURCE_LOCK gi_chain)
 # gi.socket_camera — THE GI FOLLOWS A SOCKETED CAMERA (GI-SOCKET-CAM-1): a View
 # camera riding a node (setCameraNode, the Player's avatar camera) reports an
@@ -1465,8 +1465,8 @@ set_tests_properties(gi.gather PROPERTIES TIMEOUT 180 LABELS "engine")
 
 # THE COST, at the resolution the spec's budget table is stated at.
 #
-# LABELLED `nightly;quiet-box`, RUN_SERIAL AND IN THE GPU-TIMING LOCK, BECAUSE IT READS
-# THE GPU'S CLOCK. The MERGE and PUSH tiers exclude `nightly` by construction and a
+# LABELLED `stage-close;quiet-box`, RUN_SERIAL AND IN THE GPU-TIMING LOCK, BECAUSE IT READS
+# THE GPU'S CLOCK. The MERGE and PUSH tiers exclude `stage-close` by construction and a
 # scoped gate never runs `quiet-box`, and they must: this rig's GPU idles at 210 of 3105 MHz under Xvfb unless the
 # clocks are locked by hand, so a GPU-time number taken inside a -j4 gate is
 # not a measurement. The suite PRINTS its milliseconds and asserts only a
@@ -1475,7 +1475,7 @@ set_tests_properties(gi.gather PROPERTIES TIMEOUT 180 LABELS "engine")
 jah_gpu_exclusive_test(NAME gi.gather_cost CLASS engine RUN_TIMEOUT 900 COMMAND test_gi_gather
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.gather_cost PROPERTIES
-                     LABELS "nightly;quiet-box" RUN_SERIAL TRUE
+                     LABELS "stage-close;quiet-box" RUN_SERIAL TRUE
                      ENVIRONMENT "JAH_GATHER_COST=1")
 
 # ...and the picture a machine WITHOUT ray queries draws, which this lane may
@@ -2222,7 +2222,7 @@ set_tests_properties(gi.cone_skip PROPERTIES TIMEOUT 180 LABELS "engine" RESOURC
 
 # FRESH HOMES (PROJECT-NAMES-1). A project name is unique in a library now (project.create
 # refuses a taken one), so a row that creates a project in a home nothing wipes went red on its
-# SECOND run in the same tree (an rc tree's solo retries, build-linux, the nightly) — and every
+# SECOND run in the same tree (an rc tree's solo retries, build-linux, a stage close) — and every
 # such home grew without bound (ui.column_law's held 66 'ColumnLaw' projects). Each row below
 # creates projects; its home is wiped at the start of every run (WARM: the shader caches stay).
 if(TEST photon.view)

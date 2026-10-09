@@ -43,15 +43,15 @@ import threading
 import time
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-SCHEMA = 1
+SCHEMA = 2      # 2 (VERDICT-1 + GATE-LOG-1): xid, noadmit_arms, slot_wait_s, drain_s, hold_s, box.mem, box.queue_depth
 # THE TIER NAMES (TESTING-DEBTS-1 T11) — the only ones a record may carry; testing/runs/README.md
 # documents the same list. gate-scope.sh writes the first three (`scoped`; `scoped-fallback` = a
 # scoped gate that fell back to the whole tier; `scoped-tier` = the tier by rule, a fork pin) and
 # `target` (GATE-SPEED-1: the target tests' own step, after the gating verdict — reported, never
-# gating); rc-gate.sh writes JAH_GATE_TIER (merge by default: stage, nightly, push, smoke — the
+# gating); rc-gate.sh writes JAH_GATE_TIER (merge by default: stage, stage-close, push, smoke — the
 # owner's smoke rc —, fork; scoped for a BATCH candidate, BATCH-GATE-1). `joint` is gone with
 # `--joint` (BATCH-GATE-1: the batch gate is the joint gate); its old records stay readable.
-TIERS = ("scoped", "scoped-fallback", "scoped-tier", "target", "merge", "stage", "nightly", "push",
+TIERS = ("scoped", "scoped-fallback", "scoped-tier", "target", "merge", "stage", "stage-close", "push",
          "smoke", "fork", "lane", "solo")
 # GATE-COST-2 #12: `lane` — a lane tool's own runs, recorded under the lane's name (the batch and push
 # judgement ignores it); `solo` — a --solo batch's retries (gate-scope's default for --solo, and the solo
@@ -198,6 +198,49 @@ def budget_verdict(text):
     return ("OOM", oom) if oom else (None, None)
 
 
+# THE Xid IN THE RECORD (VERDICT-1 U3): scripts/vram_tokens.py's supervise() reads the kernel journal
+# through scripts/kernel_xid.py after every admitted row and prints `XID <n> from pid <p> of the row
+# <label> — …: <the kernel's line>` per fault from the row's OWN process tree, then `XID-WINDOW
+# <start>..<end> <label>`; tests/support/run_pool.py turns an arm whose process faulted into `ARM
+# <pool>.<arm> CRASH <ms> xid <n> (the kernel's GPU fault from pid <p> at HH:MM:SS)`. The record
+# carries `xid: null | {pid, window, lines[]}` — a red with an xid is a DEFECT by law (CLAUDE.md:
+# never environmental), and ci_gate_check's verdict door accepts only `real:<defect id>` on it.
+_XID_ROW = re.compile(r"^\s*(?:\|\s*)*XID (\d+) from pid (\d+) of the row .*?: (.*)$")
+_XID_WINDOW = re.compile(r"^\s*(?:\|\s*)*XID-WINDOW (\S+\.\.\S+)")
+_XID_ARM = re.compile(r"^\s*ARM\s+(\S+)\s+CRASH\b.*?\bxid (\d+) \(the kernel's GPU fault from pid (\d+) at "
+                      r"(\d\d:\d\d:\d\d)\)")
+
+
+_UNREADABLE = re.compile(r"kernel journal is unreadable")
+
+
+def xid_of(text, day=None):
+    """(the row's xid, {arm: its xid}) from a row's output — each None / absent when no fault."""
+    row, window, arms = None, None, {}
+    day = day or datetime.date.today().isoformat()
+    for line in (text or "").splitlines():
+        m = _XID_ROW.match(line)
+        if m:
+            if row is None: row = {"pid": int(m.group(2)), "window": None, "lines": []}
+            row["lines"].append(m.group(3).strip()[:300]); continue
+        m = _XID_WINDOW.match(line)
+        if m:
+            window = m.group(1); continue
+        m = _XID_ARM.match(line)
+        if m:
+            at = f"{day}T{m.group(4)}"
+            arms[m.group(1)] = {"pid": int(m.group(3)), "window": f"{at}..{at}",
+                                "lines": [line.strip()[:300]]}
+    if row is not None:
+        row["window"] = window
+    for a in arms.values():
+        if window: a["window"] = window
+    if row is None and arms:
+        first = next(iter(arms.values()))
+        row = {"pid": first["pid"], "window": first["window"], "lines": [l for a in arms.values() for l in a["lines"]]}
+    return row, arms
+
+
 def row_verdict(status, text, arms):
     """(verdict, status, budget line|None) of a row from ctest's status and its output: NOADMIT
     (never ran), else OOM / LOST for a red that carries the budget texts, else ctest's class."""
@@ -205,6 +248,11 @@ def row_verdict(status, text, arms):
     na = noadmit_line(text) if v == "FAIL" else None
     if na and not arms:
         return "NOADMIT", na, None
+    # VERDICT-1 U2: A POOL WHOSE EVERY ARM GOT NO ADMISSION NEVER RAN — NOADMIT, never FAIL (13 such
+    # pools were recorded FAIL in the audit week, and 4 of them were cleared by a verdict's prose); a
+    # pool with a MIX stays FAIL, its NOADMIT arms named on the row (`noadmit_arms`)
+    if v != "PASS" and arms and all(a[1] == "NOADMIT" for a in arms):
+        return "NOADMIT", na or ("every arm NOADMIT (%d): the pool never ran" % len(arms)), None
     if v == "FAIL":
         if any(_RUNTIMEOUT.match(l) for l in (text or "").splitlines()):
             v = "TIMEOUT"
@@ -241,22 +289,202 @@ def log_dir():
     return os.environ.get("JAH_RUN_LOG_DIR") or os.path.join(workspace_root(), "testing", "runs")
 
 
-# THE CONTENTION CLASS IS DATA (TEST-SELECTOR-1 L2; audit §8: it was prose in three docs the tools
-# could not read): <workspace>/testing/contention.json, {"suites": {<suite or pool.arm>: <verdict>}}.
-# ci_gate_check's flake law (3/3 solo after a red) and `gate-scope.sh --solo` read it; a suite joins
-# it by a recorded verdict, never by convenience.
-def contention_file():
-    return os.environ.get("JAH_CONTENTION_FILE") or os.path.join(workspace_root(), "testing", "contention.json")
+# THE DEFECT REGISTRY (TESTING_V3_SPEC §1.5; lane VERDICT-1): <workspace>/testing/defects.json — what "known" means.
+# {"defects": [{id, rows, kind, cause, first_seen {tip, pin, run}, state, recheck, found_by, ...}]}:
+#   kind      defect | nondeterminism | selector | box | combination
+#   state     "open" | {"fixed": {"tip": <sha>}} | "retired"
+#   recheck   a DATE (YYYY-MM-DD) the judge enforces: an entry past it is refused until re-verdicted
+#   found_by  read | gate | owner | lane
+# and, on a nondeterminism entry, ONE of:
+#   uses: 1, suspects: [lanes], census {...}   a NOT REPRODUCED entry (attribution): SINGLE-USE — it clears only
+#                                              reds at first_seen.tip (the merge that registered it), never again
+#   enrolled {by, rate, census, date}          a STANDING entry (the lead's explicit `defect enrol`, with a measured
+#                                              rate and the census): the contention class
+# PENDING entries: BATCH-GATE-1 writes testing/defects.pending/<id>.json (one entry each); this reader ingests them
+# with the registry (one namespace, the same shape).
+# Read by the verdict door (`real:<id>` must name an entry whose `rows` hold the row), by the push tier and
+# the stage-close judge (KNOWN RED), and by gate-report.py. THE CONTENTION CLASS IS ITS SUBSET `kind:
+# nondeterminism`, state open (there is no separate file: contention.json is gone, forward only). Written
+# by `lane.sh defect add` (the lead, PROCESS-1 — against this schema) and by the tools.
+DEFECT_KINDS = ("defect", "nondeterminism", "selector", "box", "combination")
+FOUND_BY = ("read", "gate", "owner", "lane")
+DEFECT_FIELDS = ("id", "rows", "kind", "cause", "first_seen", "state", "recheck", "found_by")
+_RUN_DATE = re.compile(r"^(\d{4})(\d\d)(\d\d)T")
+_DATE = re.compile(r"^\d{4}-\d\d-\d\d$")
+
+
+def defects_file():
+    return os.environ.get("JAH_DEFECTS_FILE") or os.path.join(workspace_root(), "testing", "defects.json")
+
+
+def defects_pending_dir():
+    return os.path.join(os.path.dirname(defects_file()), "defects.pending")
+
+
+def recheck_past(e, today=None):
+    """True when an entry's recheck DATE has passed (the judge refuses it until it is re-verdicted)."""
+    today = today or datetime.date.today().isoformat()
+    return str(e.get("recheck")) < today
+
+
+def single_use(e):
+    """A NOT REPRODUCED entry: it clears reds only at the tip that registered it."""
+    return e.get("kind") == "nondeterminism" and e.get("uses") is not None
+
+
+def defect_state(e):
+    """'open' | 'fixed' | 'retired' of a registry entry."""
+    st = e.get("state")
+    return "fixed" if isinstance(st, dict) and "fixed" in st else st
+
+
+def defect_date(e):
+    """The date an entry was first seen (YYYY-MM-DD, from first_seen.run's stamp), or None."""
+    m = _RUN_DATE.match(str((e.get("first_seen") or {}).get("run") or ""))
+    return f"{m.group(1)}-{m.group(2)}-{m.group(3)}" if m else None
+
+
+def _defect_problems(e):
+    if not isinstance(e, dict): return ["not an object"]
+    bad = [f"missing {f}" for f in DEFECT_FIELDS if e.get(f) in (None, "", [], {})]
+    if bad: return bad
+    if not (isinstance(e["rows"], list) and all(isinstance(x, str) and x for x in e["rows"])):
+        bad.append("rows is not a list of row names")
+    if e["kind"] not in DEFECT_KINDS: bad.append(f"kind '{e['kind']}' is not one of {'|'.join(DEFECT_KINDS)}")
+    if e["found_by"] not in FOUND_BY: bad.append(f"found_by '{e['found_by']}' is not one of {'|'.join(FOUND_BY)}")
+    fs = e["first_seen"]
+    if not (isinstance(fs, dict) and all(isinstance(fs.get(k), str) and fs.get(k) for k in ("tip", "pin", "run"))):
+        bad.append("first_seen is not {tip, pin, run}")
+    elif not defect_date(e):
+        bad.append(f"first_seen.run '{fs['run']}' carries no date (<yyyymmddThhmmss>-<tip>)")
+    if not _DATE.match(str(e["recheck"])):
+        bad.append(f"recheck '{e['recheck']}' is not a DATE (YYYY-MM-DD; the judge enforces it)")
+    if e["kind"] == "nondeterminism":
+        if e.get("uses") is not None:
+            if e.get("uses") != 1 or not isinstance(e.get("suspects"), list) or not isinstance(e.get("census"), dict):
+                bad.append("a NOT REPRODUCED entry carries uses: 1, suspects: [lanes] and its census")
+        elif not (isinstance(e.get("enrolled"), dict) and all(e["enrolled"].get(k) for k in ("by", "rate", "census", "date"))):
+            bad.append("a nondeterminism entry is either single-use (uses: 1, suspects, census) or ENROLLED by the lead "
+                       "(enrolled {by, rate, census, date})")
+    st = e["state"]
+    if not (st in ("open", "retired") or (isinstance(st, dict) and isinstance((st.get("fixed") or {}).get("tip"), str)
+                                           and st["fixed"]["tip"])):
+        bad.append("state is not open | {fixed: {tip}} | retired")
+    return bad
+
+
+def defects_quarantine_dir():
+    return os.path.join(os.path.dirname(defects_file()), "defects.quarantine")
+
+
+def _quarantine(name, entry, why, src=None, log=sys.stderr):
+    """A malformed entry or pending file is QUARANTINED, never silent and never fatal to the rest: a pending file is
+    MOVED to testing/defects.quarantine/ (the registry file's own bad entry is COPIED there — the tracked file is the
+    lead's to edit), its reason in a `<name>.why` sidecar, and `REGISTRY: <file> quarantined: <why>` printed."""
+    q = defects_quarantine_dir()
+    safe = re.sub(r"[^A-Za-z0-9_.-]", "_", name)[:80] or "entry"
+    try:
+        os.makedirs(q, exist_ok=True)
+        dest = os.path.join(q, safe if safe.endswith(".json") else safe + ".json")
+        if src:
+            os.replace(src, dest)
+        elif not os.path.exists(dest):
+            with open(dest, "w") as f:
+                json.dump(entry, f, indent=1, sort_keys=True)
+        with open(dest[:-5] + ".why", "w") as f:
+            f.write(why + "\n")
+    except OSError as e:
+        why += f" (and it could not be quarantined: {e})"
+    if log is not None:
+        log.write(f"REGISTRY: {src or name} quarantined: {why}\n")
+        log.flush()
+
+
+def defects_quarantined():
+    """[(file, why)] of every quarantined entry — a FINDING for the lead's `status` until it is fixed or removed."""
+    q = defects_quarantine_dir()
+    out = []
+    if os.path.isdir(q):
+        for f in sorted(os.listdir(q)):
+            if f.endswith(".json"):
+                try: why = open(os.path.join(q, f[:-5] + ".why")).read().strip()
+                except OSError: why = "?"
+                out.append((os.path.join(q, f), why))
+    return out
+
+
+def defects_load(log=sys.stderr):
+    """({id: entry}, None) — or (None, why) when the registry FILE itself cannot be read. A malformed entry (or a
+    malformed / unreadable pending file, or a duplicate id) is QUARANTINED (_quarantine) and the rest loads — one bad
+    file never disables the door; every quarantined file is printed as a REGISTRY finding on each load."""
+    path = defects_file()
+    try:
+        d = json.load(open(path))
+    except (OSError, ValueError) as e:
+        return None, f"the defect registry {path} is missing or unreadable ({e.__class__.__name__})"
+    lst = d.get("defects") if isinstance(d, dict) else None
+    if not isinstance(lst, list):
+        return None, f"the defect registry {path} has no `defects` list"
+    items = [(e, None) for e in lst]
+    pend = defects_pending_dir()
+    if os.path.isdir(pend):
+        for f in sorted(os.listdir(pend)):
+            if not f.endswith(".json"): continue
+            fp = os.path.join(pend, f)
+            try:
+                items.append((json.load(open(fp)), fp))
+            except (OSError, ValueError) as e:
+                _quarantine(f, None, f"unreadable ({e.__class__.__name__})", src=fp, log=log)
+    out = {}
+    for k, (e, src) in enumerate(items):
+        probs = _defect_problems(e)
+        name = (e.get("id") if isinstance(e, dict) else None) or f"entry-{k}"
+        if not probs and name in out: probs = ["a duplicate id"]
+        if probs:
+            _quarantine(os.path.basename(src) if src else f"{name}", e,
+                        f"{name}: {', '.join(probs)} (TESTING_V3 §1.5's shape)", src=src, log=log)
+            continue
+        out[name] = e
+    q = defects_quarantined()
+    if q and log is not None:
+        log.write(f"REGISTRY: FINDING — {len(q)} quarantined entr{'y' if len(q) == 1 else 'ies'} in "
+                  f"{defects_quarantine_dir()} (fix and return them, or delete them)\n")
+    return out, None
+
+
+def contention_of(defects):
+    """THE CONTENTION CLASS: {row: its STANDING entry} — open, ENROLLED `nondeterminism` entries whose recheck
+    date has not passed (a single-use NOT REPRODUCED entry is never the class)."""
+    out = {}
+    for e in (defects or {}).values():
+        if (e["kind"] == "nondeterminism" and defect_state(e) == "open" and e.get("enrolled")
+                and not recheck_past(e)):
+            for r in e["rows"]:
+                out.setdefault(r, e)
+    return out
 
 
 def contention_list():
-    """{suite or arm: why}, or None when the file cannot be read."""
-    try:
-        d = json.load(open(contention_file()))
-    except (OSError, ValueError):
-        return None
-    s = d.get("suites") if isinstance(d, dict) else None
-    return dict(s) if isinstance(s, dict) else None
+    """{row: one line} of the contention class (the registry's open nondeterminism entries), or None when the
+    registry cannot be read (defects_load says why) — gate-scope.sh --solo's reader."""
+    d, _ = defects_load()
+    if d is None: return None
+    return {r: f"{e['id']}: {e['cause']} [{defect_date(e)}; recheck: {e['recheck']}]" for r, e in contention_of(d).items()}
+
+
+def lanes_of(r):
+    """The lanes a record belongs to: BATCH-GATE-1's `lanes` list (forward only — a record without it belongs to no
+    lane for the judge)."""
+    v = r.get("lanes")
+    return [x for x in v if isinstance(x, str) and x] if isinstance(v, list) else []
+
+
+def own_lane(r):
+    """The lane a record is a LANE'S OWN record of (`lanes == [<lane>]`, no `batch` tag), else None — the only
+    records a rebase carries reds from (TESTING_V3 §1.4: batch records never carry)."""
+    if r.get("batch"): return None
+    v = lanes_of(r)
+    return v[0] if len(v) == 1 else None
 
 
 def _git(args, cwd=None):
@@ -451,6 +679,215 @@ def other_ctests(own_root=None):
         return len([p for p in r.stdout.split() if not _descends_from(int(p), roots)])
     except OSError:
         return None
+
+
+_BUILD_COMMS = ("ninja", "cmake", "make", "gmake")
+
+
+def box_mem():
+    """GATE-LOG-1: the memory pressure a row started under — `psi10` (/proc/pressure/memory, `some`
+    avg10, %), `swap_used_mb`, `builds` (ninja/cmake/make processes on the box). Each None where the
+    box cannot say (macOS)."""
+    out = {"psi10": None, "swap_used_mb": None, "builds": None}
+    try:
+        for line in open("/proc/pressure/memory"):
+            if line.startswith("some"):
+                out["psi10"] = float(dict(kv.split("=") for kv in line.split()[1:])["avg10"])
+    except (OSError, ValueError, KeyError):
+        pass
+    try:
+        mi = {}
+        for line in open("/proc/meminfo"):
+            k, _, v = line.partition(":")
+            mi[k] = int(v.split()[0])
+        out["swap_used_mb"] = round((mi["SwapTotal"] - mi["SwapFree"]) / 1024.0, 1)
+    except (OSError, ValueError, KeyError, IndexError):
+        pass
+    try:
+        n = 0
+        for d in os.listdir("/proc"):
+            if not d.isdigit(): continue
+            try:
+                with open(f"/proc/{d}/comm") as f:
+                    if f.read().strip() in _BUILD_COMMS: n += 1
+            except OSError:
+                continue
+        out["builds"] = n
+    except OSError:
+        pass
+    return out
+
+
+def queue_depth():
+    """GATE-LOG-1: the gates WAITING for the box's gate slot now (its holder not counted), or None
+    when the queue cannot be read."""
+    try:
+        return max(0, len(_vram().gate_queue()) - 1)
+    except Exception:          # noqa: BLE001 — a reading, never a reason for a gate to fail
+        return None
+
+
+def _psi(kind):
+    try:
+        for line in open(f"/proc/pressure/{kind}"):
+            if line.startswith("some"):
+                return float(dict(kv.split("=") for kv in line.split()[1:])["avg10"])
+    except (OSError, ValueError, KeyError):
+        pass
+    return None
+
+
+def gpu_apps(own_root=None):
+    """[{pid, name, mib, ours}] of the GPU processes OUTSIDE this gate's process tree (nvidia-smi
+    --query-compute-apps), or None when nvidia-smi cannot say (macOS, no driver). `ours` = a process of OUR stack
+    (the Jahshaka binary, a test_/bench_ binary, anything run from a jahshaka tree, an Xvfb client)."""
+    try:
+        r = subprocess.run(["nvidia-smi", "--query-compute-apps=pid,process_name,used_memory",
+                            "--format=csv,noheader,nounits"], capture_output=True, text=True, timeout=10)
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    if r.returncode != 0: return None
+    roots = {os.getpid()} | ({own_root} if own_root else set())
+    out = []
+    for line in r.stdout.splitlines():
+        f = [x.strip() for x in line.split(",")]
+        if len(f) < 3 or not f[0].isdigit(): continue
+        pid = int(f[0])
+        if _descends_from(pid, roots): continue
+        name = os.path.basename(f[1])[:40]
+        try: exe = os.path.realpath(os.readlink(f"/proc/{pid}/exe"))
+        except OSError: exe = None          # exited, or not ours to read: UNKNOWN — recorded, never counted
+        rec = {"pid": pid, "name": name, "exe": exe, "mib": int(f[2]) if f[2].isdigit() else None, "ours": _ours(pid, name)}
+        if exe is None: rec["unknown"] = True
+        out.append(rec)
+    return out
+
+
+_MAIN_TREE = []
+
+
+def main_tree():
+    """The Studio repo's MAIN tree (the parent of the git common dir — the same for every worktree). Read once per
+    process (one git call, never one per GPU app)."""
+    if _MAIN_TREE: return _MAIN_TREE[0]
+    _MAIN_TREE.append(_main_tree())
+    return _MAIN_TREE[0]
+
+
+def _main_tree():
+    try:
+        cd = subprocess.run(["git", "rev-parse", "--path-format=absolute", "--git-common-dir"],
+                            cwd=ROOT, capture_output=True, text=True).stdout.strip()
+        if cd: return os.path.realpath(os.path.dirname(cd))
+    except OSError:
+        pass
+    return os.path.realpath(ROOT)
+
+
+def _under(path, root):
+    return bool(path) and (path == root or path.startswith(root.rstrip(os.sep) + os.sep))
+
+
+def ours_exe(exe):
+    """A binary of OUR trees: a lane / rc worktree (<main>/.claude/worktrees/) or the main tree's build
+    (<main>/build-linux) — never a match on the string "/jahshaka/" (the home directory carries it)."""
+    m = main_tree()
+    return _under(exe, os.path.join(m, ".claude", "worktrees")) or _under(exe, os.path.join(m, "build-linux"))
+
+
+def _ours(pid, name):
+    if name == "Jahshaka" or name.startswith(("test_", "bench_")):
+        return True
+    try:
+        if ours_exe(os.path.realpath(os.readlink(f"/proc/{pid}/exe"))):
+            return True
+    except OSError:
+        pass
+    try:
+        env = open(f"/proc/{pid}/environ", "rb").read().split(b"\0")
+        disp = [e[8:].decode("ascii", "replace") for e in env if e.startswith(b"DISPLAY=")]
+        return bool(disp) and disp[0] not in ("", ":0", ":0.0")     # a client of a rig Xvfb, never the desktop's
+    except OSError:
+        return False
+
+
+# THE COMPETITOR CENSUS (TESTING_V3 §1.4/§1.6; the merge read's F3): what ELSE competed when a row started — the
+# one thing a `contention:` verdict may stand on. A GPU competitor is a process of OURS outside the gate's tree, a
+# process whose exe is NOT in the box's IDLE BASELINE (testing/box-baseline.json `desktop`, written by the lead with
+# nvidia-smi on the idle desktop: the browser, the terminal, the editor are not competition), or ANY process above
+# the baseline's `vram_floor_mb` — without the baseline only our own processes count, and the census says so. Builds are those OUTSIDE the gate
+# (not its descendants, not run from its tree). Never the gate's own queue or drain.
+CENSUS_PSI = 10.0           # avg10 % of memory or IO pressure that counts as a competitor
+VRAM_FLOOR_MIB = 512
+
+
+def baseline_file():
+    return os.environ.get("JAH_BOX_BASELINE") or os.path.join(workspace_root(), "testing", "box-baseline.json")
+
+
+def box_baseline():
+    """({idle desktop exe}, vram floor MiB), or None when there is no readable baseline."""
+    try:
+        d = json.load(open(baseline_file()))
+        return {os.path.realpath(x) for x in d["desktop"]}, int(d.get("vram_floor_mb") or VRAM_FLOOR_MIB)
+    except (OSError, ValueError, KeyError, TypeError, AttributeError):
+        return None
+
+
+def _own_tree(path):
+    """Is `path` inside the gate's OWN tree — this worktree (ROOT), but not a sibling worktree nested under the main
+    tree's .claude/worktrees/ (a gate in the main tree must still see every lane's build)?"""
+    root = os.path.realpath(ROOT)
+    if not _under(path, root): return False
+    return not _under(path, os.path.join(root, ".claude", "worktrees"))
+
+
+def builds_outside(own_root=None):
+    """ninja/cmake/make processes that are NOT the gate's own (its descendants, or run from its own tree)."""
+    roots = {os.getpid()} | ({own_root} if own_root else set())
+    n = 0
+    try:
+        procs = [d for d in os.listdir("/proc") if d.isdigit()]
+    except OSError:
+        return None
+    for d in procs:
+        try:
+            with open(f"/proc/{d}/comm") as f:
+                if f.read().strip() not in _BUILD_COMMS: continue
+            if _descends_from(int(d), roots): continue
+            try:
+                if _own_tree(os.path.realpath(os.readlink(f"/proc/{d}/cwd"))): continue
+            except OSError:
+                pass
+            n += 1
+        except OSError:
+            continue
+    return n
+
+
+def census(own_root=None, mem=None, ctests=None):
+    m = mem or box_mem()
+    oc = other_ctests(own_root) if ctests is None else ctests
+    apps = gpu_apps(own_root)
+    base = box_baseline()
+    comp = None if apps is None else [a for a in apps if a.get("ours") or (
+        base is not None and not a.get("unknown") and (a.get("exe") not in base[0] or (a.get("mib") or 0) >= base[1]))]
+    return {"gpu_apps": apps, "gpu_competitors": comp,
+            "baseline": baseline_file() if base is not None else "MISSING: only our own GPU processes counted",
+            "other_ctests": oc, "builds": builds_outside(own_root), "psi10_mem": m.get("psi10"), "psi10_io": _psi("io")}
+
+
+def competitors(c):
+    """The census's competitors as words ([] = none measured)."""
+    c = c or {}
+    out = []
+    if c.get("gpu_competitors"): out.append("%d GPU process(es) competing (%s)" % (
+        len(c["gpu_competitors"]), ", ".join(f"{a['name']}:{a['pid']}" for a in c["gpu_competitors"][:3])))
+    if (c.get("other_ctests") or 0) > 0: out.append(f"{c['other_ctests']} sibling ctest(s)")
+    if (c.get("builds") or 0) > 0: out.append(f"{c['builds']} build process(es) outside the gate")
+    for k in ("psi10_mem", "psi10_io"):
+        if (c.get(k) or 0) >= CENSUS_PSI: out.append(f"{k.split('_')[1]} pressure {c[k]} %")
+    return out
 
 
 class LoadSampler(threading.Thread):
@@ -944,12 +1381,28 @@ class _Run:
         # record of a stale build as the tip's run
         self.shas["built"] = built_from(build) if build else None
         self.box0 = {"jobs": jobs, "display": (env or os.environ).get("DISPLAY"), "gpu_clocks": gpu_clocks(),
-                     "other_ctests": other_ctests(), "host": os.uname().nodename}
+                     "other_ctests": other_ctests(), "host": os.uname().nodename, "mem": box_mem()}
+        sw = os.environ.get("JAH_GATE_SLOT_WAIT_S") if os.environ.get("JAH_GATE_SLOT_HELD") else None
+        try: self.slot_wait = float(sw) if sw is not None else None
+        except ValueError: self.slot_wait = None
         self.run_id = f"{datetime.datetime.now().strftime('%Y%m%dT%H%M%S')}-{self.shas['studio'][:9]}"
         self.sampler = LoadSampler(); self.sampler.start()
         self.guard = DisplayGuard(env)
         self.recorded, self.dropped, self.path, self.dead = 0, [], None, None
         self.running = set()          # rows started and not ended (the abort record's inFlight)
+
+    def costs(self, t_end):
+        """GATE-LOG-1: {slot_wait_s, drain_s, hold_s} of a record ending at t_end — the gate's wait for
+        the slot (None outside a slot), the phase's whole-card drain and how long the card had been
+        held at the row's end (None when the row ran with per-row admission)."""
+        e = self.env or os.environ
+        drain = held = None
+        try:
+            if e.get("JAH_VRAM_DRAIN_S") is not None: drain = float(e["JAH_VRAM_DRAIN_S"])
+            if e.get("JAH_VRAM_HELD_AT") is not None: held = round(max(0.0, t_end - float(e["JAH_VRAM_HELD_AT"])), 1)
+        except ValueError:
+            pass
+        return {"slot_wait_s": self.slot_wait, "drain_s": drain, "hold_s": held}
 
     def say(self, text):
         if self.echo:
@@ -967,8 +1420,13 @@ class _Run:
                 "box": dict(self.box0, gpu_clocks=at.get("gpu_clocks", self.box0["gpu_clocks"]),
                             other_ctests=at.get("other_ctests", self.box0["other_ctests"]),
                             load=[round(x, 2) for x in load],
-                            load_mean=self.sampler.mean(t_end - secs, t_end)),
+                            load_mean=self.sampler.mean(t_end - secs, t_end),
+                            mem=at.get("mem", self.box0.get("mem")), queue_depth=at.get("queue_depth"),
+                            census=at.get("census")),
                 "source": "run"}
+        # GATE-LOG-1: where the gate's wall went that was not a row's — the slot queue, the phase's
+        # drain and hold of the whole card, the queue behind this gate at the row's start
+        base.update(self.costs(t_end))
         if BATCH: base["batch"] = BATCH        # a batch candidate's gate or attribution: never a lane's own record
         v, st, bline = row_verdict(status, text, arms)
         wait, twait = lock_wait(text), token_wait(text)
@@ -983,6 +1441,17 @@ class _Run:
             fl = fail_line(text)
             if fl: row["failLine"] = fl
         if bline: row["budget"] = bline
+        xid, arm_xid = xid_of(text, datetime.date.fromtimestamp(t_end).isoformat())
+        row["xid"] = xid
+        # the door's `xid-read:` is for THIS case only: no xid because the journal could not be read
+        # (kernel_xid.FINDING, printed by supervise and by the pool runner) — journal_unreadable
+        unreadable = bool(_UNREADABLE.search(text or ""))
+        if unreadable: row["journal_unreadable"] = True
+        noadmit = [a for a, av, _ in arms if av == "NOADMIT"]
+        if v != "PASS" and v != "NOADMIT" and noadmit:
+            row["noadmit_arms"] = noadmit
+            if "failLine" not in row:
+                row["failLine"] = f"NOADMIT arm(s), never ran: {' '.join(noadmit[:12])}"
         mem = _mem_of(text)
         if mem is not None: row["mem"] = mem
         leak = _leaks_of(text)
@@ -992,7 +1461,9 @@ class _Run:
         for arm, av, s in arms:
             # an arm's reason: the selector's for that arm (`<row>::<arm>`), else its row's
             ar = self.reasons.get(f"{name}::{arm.split('.', 1)[-1]}", base["reason"])
-            rec = dict(base, arm=arm, verdict=av, status=av, seconds=s, targets=None, reason=ar)
+            rec = dict(base, arm=arm, verdict=av, status=av, seconds=s, targets=None, reason=ar,
+                       xid=arm_xid.get(arm))
+            if unreadable: rec["journal_unreadable"] = True
             if arm in arm_mem: rec["mem"] = arm_mem[arm]
             rec.update(arm_find.get(arm, {}))
             recs.append(rec)
@@ -1059,7 +1530,9 @@ class _Run:
                 sys.stdout.write(line); sys.stdout.flush()
             m = _START.match(ln)
             if m:
-                starts[m.group(1)] = {"other_ctests": other_ctests(p.pid), "gpu_clocks": gpu_clocks()}
+                bm, oc = box_mem(), other_ctests(p.pid)
+                starts[m.group(1)] = {"other_ctests": oc, "gpu_clocks": gpu_clocks(),
+                                      "mem": bm, "queue_depth": queue_depth(), "census": census(p.pid, bm, oc)}
                 self.running.add(m.group(1))
                 continue
             m = _RESULT.match(ln)
@@ -1160,9 +1633,12 @@ def run_ctest(cmd, cwd, tier, lane, jobs, reasons=None, gating=None, rng=None, r
     if whole_card and not (env or os.environ).get("JAH_VRAM_HELD"):
         card, held_env = _vram().hold_card(f"{'+'.join(lane_list(lane))} {tier} phase", log=sys.stdout)
         # THE CALLER'S ENVIRONMENT OVER THE HELD COPY (F5): JAH_POOL_ARMS and the rest survive the hold; the
-        # hold's own two keys (the card, the slot a whole-card hold takes: GATE-COST-2) go over it
-        env = dict(held_env, **(env or {}), **{k: held_env[k] for k in ("JAH_VRAM_HELD", "JAH_GATE_SLOT_HELD")
+        # hold's own keys (the card, its drain and hold start — GATE-LOG-1 —, the slot a whole-card hold takes:
+        # GATE-COST-2) go over it
+        env = dict(held_env, **(env or {}), **{k: held_env[k] for k in ("JAH_VRAM_HELD", "JAH_GATE_SLOT_HELD",
+                                                                         "JAH_VRAM_DRAIN_S", "JAH_VRAM_HELD_AT")
                                                if k in held_env})
+        R.env = env                # GATE-LOG-1: the phase's records read its drain and hold from here
         drained = _vram().LAST_DRAIN_TIMEOUT
         if drained:
             phase_record("drain-timeout", tier, lane, rng, tree_shas(), fallback="drain-timeout", **drained)

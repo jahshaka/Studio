@@ -55,11 +55,11 @@ using namespace mcpharness;
 
 #define CHECK(cond, msg) do { if (cond) std::printf("ok:   %s\n", msg); else { std::printf("FAIL: %s\n", msg); ++failures; } } while (0)
 
-/// THE UI-GAP BUDGETS ARE NIGHTLY (lane D6B-GATE-SHAPE; tests/support/timingbars.h): a
+/// THE UI-GAP BUDGETS ARE STAGE-CLOSE (lane D6B-GATE-SHAPE; tests/support/timingbars.h): a
 /// wall-clock gap reads the box's load as much as the archiver. The push row
 /// (archive.responsive) asserts the round trip, the manifest, the cancel, the quit and
 /// that the probe measured every operation, and PRINTS each gap against its budget;
-/// archive.responsive.timing (nightly, quiet box, the GPU lock) arms the budgets.
+/// archive.responsive.timing (stage-close, quiet box, the GPU lock) arms the budgets.
 static const bool gTimingBars = jahtest::timingBarsArmed();
 #define TIMING_CHECK(cond, msg) JAH_TIMING_CHECK("archive.responsive", cond, msg)
 
@@ -573,7 +573,7 @@ int main(int argc, char **argv)
     // thread, the bytes / payload / zip are a worker's, and the verb waits with
     // the event loop turning. A 10 ms probe (the heartbeat's floor) watches it.
     // PUSH asserts COUNTS — the write ran on a worker, the UI thread ticked
-    // during it; NIGHTLY asserts the gap: the export may add at most ONE FRAME's
+    // during it; the stage-close row asserts the gap: the export may add at most ONE FRAME's
     // budget (16.7 ms at 60 fps) to the worst gap the same app has rendering
     // with nothing in flight (the control, same probe, same second).
     {

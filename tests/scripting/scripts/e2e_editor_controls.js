@@ -1106,7 +1106,7 @@ assert(cost.totalMs >= cost.setViewport.ms + cost.setHierarchy.ms,
 // lane, of which 5.2 was re-showing blades that had not changed and 1.7 three
 // synchronous timeline repaints; the two SET consumers, untouched by that
 // work, are 0.011 ms of the total).
-// THE FRAME BAR IS NIGHTLY (lane D6B-GATE-SHAPE): a wall-clock reading of a -j4 gate's box.
+// THE FRAME BAR IS STAGE-CLOSE (lane D6B-GATE-SHAPE): a wall-clock reading of a -j4 gate's box.
 // scripting.e2e.editor_controls.timing runs a copy of this script with JAH_TIMING_BARS
 // defined (tests/CMakeLists.txt, jah_timing_script); here it prints. The structural half
 // just below ("attaches NO blades") is this row's guard of the same claim.

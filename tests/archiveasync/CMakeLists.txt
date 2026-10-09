@@ -6,7 +6,7 @@
 # reproduces the world, and a cancelled import leaves no orphan project — and
 # that quitting mid-archive still terminates cleanly (shutdownArchives).
 # AND (EXPORT-THREAD-1) the share file: assets.exportBundle of a 200-entry pack is written on
-# a worker (the verb reports it) while the UI thread keeps ticking; the nightly row holds the
+# a worker (the verb reports it) while the UI thread keeps ticking; the stage-close row holds the
 # gap to the control + one frame (16.7 ms). Qt6::Gui: the suite paints the pack's pictures.
 find_package(Qt6 REQUIRED COMPONENTS Core Gui Network)
 # ZipHelper joins the sources so the suite can READ what the archiver wrote
@@ -32,7 +32,7 @@ jah_gpu_row(archive.responsive CLASS app COMMAND test_archive_responsive
 set_tests_properties(archive.responsive PROPERTIES
     ENVIRONMENT "HOME=${_archive_home};JAHSHAKA_DATA_ROOT=${_archive_home}/.local/share/Jahshaka"
     TIMEOUT 300 LABELS "archive")
-# archive.responsive.timing — THE UI-GAP BUDGETS, nightly (lane D6B-GATE-SHAPE; audit §5,
+# archive.responsive.timing — THE UI-GAP BUDGETS, stage-close (lane D6B-GATE-SHAPE; audit §5,
 # FIX-TIME): the same binary with JAHSHAKA_TIMING_BARS=1, on a quiet box, under the
 # GPU-timing lock; the push row above asserts everything else and prints the gaps.
 set(_archive_timing_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-archive-timing)
@@ -41,7 +41,7 @@ jah_gpu_exclusive_test(NAME archive.responsive.timing CLASS app RUN_TIMEOUT 300 
          WORKING_DIRECTORY ${_archive_timing_home}/run)
 set_tests_properties(archive.responsive.timing PROPERTIES
     ENVIRONMENT "HOME=${_archive_timing_home};JAHSHAKA_DATA_ROOT=${_archive_timing_home}/.local/share/Jahshaka;JAHSHAKA_TIMING_BARS=1"
-    LABELS "archive;nightly;quiet-box")
+    LABELS "archive;stage-close;quiet-box")
 
 # The race lane (scripts/sanitize.sh tsan): the threaded export/import runner
 # plus its cancel path. Same wall-clock caveat as open.responsive.
@@ -49,7 +49,7 @@ jah_tsan_blocked(archive.responsive archive.responsive.timing)   # spawns the ap
 
 # FRESH HOMES (PROJECT-NAMES-1). A project name is unique in a library now (project.create
 # refuses a taken one), so a row that creates a project in a home nothing wipes went red on its
-# SECOND run in the same tree (an rc tree's solo retries, build-linux, the nightly) — and every
+# SECOND run in the same tree (an rc tree's solo retries, build-linux, a stage close) — and every
 # such home grew without bound (ui.column_law's held 66 'ColumnLaw' projects). Each row below
 # creates projects; its home is wiped at the start of every run (WARM: the shader caches stay).
 if(TEST archive.responsive)

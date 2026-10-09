@@ -110,7 +110,8 @@ POLL_S = 0.1
 LAST_WAIT_S = 0.0        # the last acquire()'s wait, seconds (the --timing line reads it)
 _T_ACQ = 0.0             # when the last acquire() began (monotonic)
 LAST_DRAIN_TIMEOUT = None   # hold_card()'s last drain timeout: {label, waitS, why, holders} (GATE-COST-2)
-LAST_SLOT_WAIT_S = 0.0   # the last _queue_for_slot()'s wait in the gate queue, seconds (0 when it did not queue)
+LAST_SLOT_WAIT_S = None  # the last queue wait for the gate slot, seconds (GATE-LOG-1: the run log's slot_wait_s;
+                         # None when it did not queue — held already or off)
 
 
 class AdmitTimeout(Exception):
@@ -393,10 +394,13 @@ def gate_slot(label="", log=sys.stderr):
     """Queue for THE GATE SLOT (FIFO, no bound) and return its fd once this gate is the head —
     inheritable across an exec (the `gate` command), never handed to a ctest; closing it gives it up. None when the
     slot is off (JAH_GATE_SLOT=0) or this process is already inside a gate (JAH_GATE_SLOT_HELD).
-    The process is marked as inside a gate (JAH_GATE_SLOT_HELD) from here on."""
+    The process is marked as inside a gate (JAH_GATE_SLOT_HELD) from here on, and the queue's wait is
+    RETURNED to the run log (GATE-LOG-1: every record of this gate carries it as slot_wait_s — through the
+    module and JAH_GATE_SLOT_WAIT_S, which the gate's own run_ctest() reads)."""
     fd = _queue_for_slot(label, log)
     if fd is not None:
         os.environ["JAH_GATE_SLOT_HELD"] = str(os.getpid())
+        os.environ["JAH_GATE_SLOT_WAIT_S"] = str(LAST_SLOT_WAIT_S)
     return fd
 
 
@@ -414,9 +418,9 @@ def slot_held_valid(value=None):
 def _queue_for_slot(label, log, wait=None):
     """The FIFO wait itself: the slot's fd once this process is the head, None when the slot is off or
     already this process's. Leaves the environment alone (hold_card hands JAH_GATE_SLOT_HELD to its
-    phase's rows only). Sets LAST_SLOT_WAIT_S (the queue's wait; 0 when it did not queue)."""
+    phase's rows only). Sets LAST_SLOT_WAIT_S (the queue's wait; None when it did not queue)."""
     global LAST_SLOT_WAIT_S
-    LAST_SLOT_WAIT_S = 0.0
+    LAST_SLOT_WAIT_S = None
     if os.environ.get("JAH_GATE_SLOT_HELD"):
         if slot_held_valid():
             _say(log, "gate-slot: already held by this gate (pid %s) — %s" % (os.environ["JAH_GATE_SLOT_HELD"], label))
@@ -451,8 +455,8 @@ def _queue_for_slot(label, log, wait=None):
             last, said = len(ahead), time.monotonic()
         time.sleep(SLOT_POLL_S)
     os.set_inheritable(fd, True)
-    LAST_SLOT_WAIT_S = time.monotonic() - t0
-    _say(log, "gate-slot: taken%s — %s" % ((" after %.0f s in the queue" % (time.monotonic() - t0)) if last else "", label))
+    LAST_SLOT_WAIT_S = round(time.monotonic() - t0, 1)
+    _say(log, "gate-slot: taken%s — %s" % ((" after %.0f s in the queue" % LAST_SLOT_WAIT_S) if last else "", label))
     return fd
 
 
@@ -496,6 +500,10 @@ def hold_card(label="", log=sys.stderr, wait=None):
         return ([slot] if slot is not None else []), env
     _say(log, "vram: the whole card (%d tokens) held for the phase, drained in %.1f s — %s" % (n, LAST_WAIT_S, label))
     env["JAH_VRAM_HELD"] = str(n)
+    # GATE-LOG-1: the phase's drain and the moment its hold began — each record of the phase carries
+    # drain_s and hold_s (the hold so far at the row's end; the phase's last row reads the whole hold)
+    env["JAH_VRAM_DRAIN_S"] = "%.1f" % LAST_WAIT_S
+    env["JAH_VRAM_HELD_AT"] = "%.3f" % time.time()
     return fds + ([slot] if slot is not None else []), env
 
 
@@ -763,6 +771,8 @@ def supervise(argv, held, label, on_end=None):
         for t, n, pid, line in xids:
             sys.stderr.write("XID %d from pid %d of the row %s — THE GPU FAULTED (never environmental): %s\n"
                              % (n, pid, label, line))
+        # VERDICT-1 U3: the journal window this read covered — the run log's `xid.window`
+        sys.stderr.write("XID-WINDOW %s %s\n" % (kernel_xid.window(t0 - 1, time.time()), label))
     sys.stderr.flush()
     if rc < 0:
         sys.stderr.write("row-exit: %s died of signal %d\n" % (label, -rc)); sys.stderr.flush()

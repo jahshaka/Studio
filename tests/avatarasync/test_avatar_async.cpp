@@ -64,11 +64,11 @@ using namespace mcpharness;
 
 #define CHECK(cond, msg) do { if (cond) std::printf("ok:   %s\n", msg); else { std::printf("FAIL: %s\n", msg); ++failures; } } while (0)
 
-/// THE MILLISECOND BARS ARE NIGHTLY (lane D6B-GATE-SHAPE; tests/support/timingbars.h):
+/// THE MILLISECOND BARS ARE STAGE-CLOSE (lane D6B-GATE-SHAPE; tests/support/timingbars.h):
 /// "the verb returned in < 1,000 ms" and the UI-gap budgets read the box's load as much
 /// as the threading. The push row (avatar.responsive) asserts the job started, the app
 /// answered while it was in flight, the UI thread ticked, the result and each avatar's
-/// animations, and PRINTS the milliseconds; avatar.responsive.timing (nightly, quiet
+/// animations, and PRINTS the milliseconds; avatar.responsive.timing (stage-close, quiet
 /// box, the GPU lock) arms the bars.
 static const bool gTimingBars = jahtest::timingBarsArmed();
 #define TIMING_CHECK(cond, msg) JAH_TIMING_CHECK("avatar.responsive", cond, msg)

@@ -6,8 +6,8 @@ The merge refusal (scripts/ci_gate_check.py) used to key every record on the EXA
 fix re-ran the lane's whole selection (45.9 % of all suite-time since 09-28). It now takes, for a row
 with no record at the tip, the newest record of that row at an earlier commit A of the lane — when
 the scoped selection of A..tip does not reach the row and the fork pin did not move. Proved on
-RECORDED lanes of this clone against a PRIVATE run log (JAH_RUN_LOG_DIR) and a PRIVATE contention
-list (JAH_CONTENTION_FILE):
+RECORDED lanes of this clone against a PRIVATE run log (JAH_RUN_LOG_DIR) and a PRIVATE defect
+registry (JAH_DEFECTS_FILE):
 
   1. D11-LIBRARY-SCALE's review fix 4 (5ba5abcce: src/ui/controls/librarymodel.cpp only) after its
      fix 3 (1e21df220): the lane's rows green at 1e21df220 and the fix's own selection green at
@@ -63,9 +63,15 @@ def main(source, build):
     if missing: return 1
     pin = lambda c: sha(f"{c}:irisgl")
     scratch = tempfile.mkdtemp(prefix="gate-fix-round-")
-    contention = os.path.join(scratch, "contention.json")
-    json.dump({"suites": {}}, open(contention, "w"))
-    os.environ["JAH_CONTENTION_FILE"] = contention
+    registry = os.path.join(scratch, "defects.json")
+    os.environ["JAH_DEFECTS_FILE"] = registry
+
+    def register(rows):
+        """THE DEFECT REGISTRY (TESTING_V3 §1.5): FIXTURE-1, registered for the rows the verdicts answer."""
+        json.dump({"defects": [{"id": "FIXTURE-1", "rows": sorted(rows), "kind": "defect", "cause": "the fixture's",
+                                "first_seen": {"tip": "0" * 9, "pin": "0" * 9, "run": "20261009T120000-000000000"},
+                                "state": "open", "recheck": "2099-12-31", "found_by": "lane"}]}, open(registry, "w"))
+    register(["(none yet)"])
 
     import copy
     import gate_graph
@@ -146,6 +152,7 @@ def main(source, build):
     check(bool(cand), "fixture: a row of the lane that %s..%s does not reach (%d)" % (T0, B, len(cand)))
     if cand:
         k = cand[0]
+        register([k[0]])
         fresh()
         put(lane_need, "PASS", "2026-01-01T09:00:00", T0)                 # the lane's gate at T0
         put([x for x in lane_need if x != k], "PASS", "2026-01-01T10:00:00", A)  # a later round at A...
@@ -154,7 +161,12 @@ def main(source, build):
         rc, out = run(lane)
         check(rc == 1 and f"red at {revs[A][:9]}" in out and k[0] in out,
               "%s green at %s, RED at the later %s, nothing at the tip -> REFUSED (%d)" % (k[0], T0, A, rc))
-        rc, out = run(lane, "--verdict", f"{k[0]}=the fixture's red, answered where it happened")
+        # VERDICT-1's checked door: a pre-existing defect is proved by its red reproduced on the base (a solo)
+        gate_runlog.append_records([{"suite": k[0], "arm": None, "verdict": "FAIL", "ts": "2026-01-01T10:30:00",
+                                     "retry": True, "tip": {"studio": revs[BASE], "studio_dirty": False,
+                                                            "irisgl": pin(revs[BASE]), "irisgl_dirty": False}}],
+                                   "scoped", revs[BASE])
+        rc, out = run(lane, "--verdict", f"{k[0]}=real:FIXTURE-1 pre-existing: the fixture's red, answered where it happened")
         vfiles = [f for f in os.listdir(os.environ["JAH_RUN_LOG_DIR"]) if "-verdict-" in f]
         if rc != 0:
             print("\n".join(l for l in out.splitlines() if "REFUSED" in l)[:2000])
@@ -175,8 +187,16 @@ def main(source, build):
               and not any(l.startswith(f"ci-gate-check: RED {some_fix[0]}:") for l in out.splitlines()),
               "%s red at %s (the fix does not reach it), green at the tip -> REFUSED; %s, which the fix reaches, "
               "is answered by the tip (%d)" % (k[0], A, some_fix[0], rc))
-        rc, out = run(lane, "--verdict", f"{k[0]}=read: the fixture's red")
-        check(rc == 0, "...its verdict (recorded at %s) answers it (%d)" % (A, rc))
+        rc, out = run(lane, "--verdict", f"{k[0]}=real:FIXTURE-1 fixed: the fixture's red (green at the tip)")
+        check(rc == 1 and "REACHES" in out, "...a 'fix' proved by the tip's PASS is REFUSED: %s..%s does not reach %s, so "
+              "the tip's green is the same code passing again (ROUND 2 F1) (%d)" % (A, B, k[0], rc))
+        gate_runlog.append_records([{"suite": k[0], "arm": None, "verdict": "FAIL", "ts": "2026-01-01T10:30:00",
+                                     "retry": True, "tip": {"studio": revs[BASE], "studio_dirty": False,
+                                                            "irisgl": pin(revs[BASE]), "irisgl_dirty": False}}],
+                                   "scoped", revs[BASE])
+        rc, out = run(lane, "--verdict", f"{k[0]}=real:FIXTURE-1 the same red on the base")
+        if rc: print("\n".join(l for l in out.splitlines() if "REFUSED" in l or "OPEN" in l)[:1500])
+        check(rc == 0, "...the same red reproduced on the base (KNOWN RED) answers it at %s (%d)" % (A, rc))
 
     # ---- 5. the targets never set the exit code ------------------------------------------------------
     spec = importlib.util.spec_from_file_location("gate_scope_t", os.path.join(scripts, "gate-scope.py"))

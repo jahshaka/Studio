@@ -252,7 +252,7 @@ int main()
                 res.instances, ref.survivors.size(), res.requestMs);
     CHECK(res.survivors == unsigned(got.size()), "the count the GPU wrote is the list's length");
     CHECK(got == ref.survivors, "the survivor set is the CPU cull's, instance by instance");
-    // The host-time bars are NIGHTLY (lane D6B-GATE-SHAPE; tests/support/timingbars.h):
+    // The host-time bars are STAGE-CLOSE (lane D6B-GATE-SHAPE; tests/support/timingbars.h):
     // engine.gpu_cull.timing arms them on a quiet box; the counts above are this row's.
     JAH_TIMING_CHECK("engine.gpu_cull", res.requestMs < 1.0,
                      "the host's whole share of a request is under a millisecond");
