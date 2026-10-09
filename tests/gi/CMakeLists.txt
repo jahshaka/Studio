@@ -826,6 +826,25 @@ jah_gpu_exclusive_test(NAME gi.field_follows.timing CLASS engine RUN_TIMEOUT 300
 set_tests_properties(gi.field_follows.timing PROPERTIES
     ENVIRONMENT "JAHSHAKA_TIMING_BARS=1" LABELS "engine;nightly;quiet-box")
 set_property(TEST gi.field_follows.timing APPEND PROPERTY RESOURCE_LOCK gi_chain)
+# gi.socket_camera — THE GI FOLLOWS A SOCKETED CAMERA (GI-SOCKET-CAM-1): a View
+# camera riding a node (setCameraNode, the Player's avatar camera) reports an
+# identity LOCAL pose; the GI tracking and the particle camera must read its
+# WORLD position. The node walks 30 m; cascade 0 re-centres on it.
+add_executable(test_gi_socket_camera test_gi_socket_camera.cpp)
+set_target_properties(test_gi_socket_camera PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_socket_camera PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_socket_camera PRIVATE JahshakaEngine)
+add_dependencies(test_gi_socket_camera JahshakaEngineMedia)
+jah_gpu_row(gi.socket_camera CLASS engine COMMAND test_gi_socket_camera
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.socket_camera PROPERTIES TIMEOUT 120 LABELS "engine" RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
 # gi.field_scroll — THE IRRADIANCE FIELD SCROLLS (PHOTON-WRITER-1, FIELD-SCROLL):
 # a cascade-0 step keeps the probes that stay in the field's toroidal window byte
 # for byte and integrates only the planes that entered; three steps out and back
