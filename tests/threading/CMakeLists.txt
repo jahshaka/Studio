@@ -209,7 +209,7 @@ jah_fresh_home_fixture(threading.freshhome.import_soak threading_home_import_soa
 # PER-ITERATION BUDGETS with 30 s of headroom each, and a soak that a parallel
 # schedule can starve inside a 30 s budget would be reporting a real defect.
 # What it cost was a serial island of 12 s per gate.
-jah_gpu_row(threading.import_soak CLASS app TIER epic NEEDS photon
+jah_gpu_row(threading.import_soak CLASS app TIER low NEEDS NONE NEEDS_WHY "the import hang, the script switches Photon off itself"
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
                  --script ${CMAKE_CURRENT_BINARY_DIR}/import_soak.js
          WORKING_DIRECTORY ${_thr_home_soak}/run)

@@ -73,7 +73,7 @@ file(MAKE_DIRECTORY ${_sockets_home}/run)
 set(JAHSHAKA_SOCKETS_RIG "${CMAKE_SOURCE_DIR}/tests/avatar/fixtures/rig2.glb")
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_sockets.js.in
                ${CMAKE_CURRENT_BINARY_DIR}/e2e_sockets.js @ONLY)
-jah_gpu_row(sockets.e2e CLASS app TIER epic NEEDS photon
+jah_gpu_row(sockets.e2e CLASS app TIER low NEEDS NONE NEEDS_WHY "socket verbs, camera.screenshot returns a shot (no picture claim)"
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_sockets.js
          WORKING_DIRECTORY ${_sockets_home}/run)
 set_tests_properties(sockets.e2e PROPERTIES

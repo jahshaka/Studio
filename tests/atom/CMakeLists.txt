@@ -377,7 +377,7 @@ set(JAH_OCCLUSION_SHOWROOM "${CMAKE_SOURCE_DIR}/scenes/Showroom 2.zip")
 configure_file(scripts/atom_occlusion.js.in ${CMAKE_CURRENT_BINARY_DIR}/atom_occlusion.js @ONLY)
 set(_occl_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-atom_occlusion)
 jah_fresh_home_fixture(atom.occlusion_exact_app.fresh_home atomOcclusionHome "${_occl_home}" LABELS "scripting")
-jah_gpu_row(atom.occlusion_exact_app CLASS app TIER epic NEEDS photon
+jah_gpu_row(atom.occlusion_exact_app CLASS app TIER epic NEEDS photon bloom ssao smaa planar
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/atom_occlusion.js
          WORKING_DIRECTORY ${_occl_home}/run)
 set_tests_properties(atom.occlusion_exact_app PROPERTIES

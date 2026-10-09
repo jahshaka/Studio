@@ -1557,7 +1557,7 @@ target_compile_definitions(test_shot_aspect PRIVATE
     JAHSHAKA_BINARY="$<TARGET_FILE:${CMAKE_PROJECT_NAME}>")
 set(_shot_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-shot-aspect)
 file(MAKE_DIRECTORY ${_shot_home}/run)
-jah_gpu_row(ui.shot_aspect CLASS app TIER epic NEEDS photon COMMAND test_shot_aspect
+jah_gpu_row(ui.shot_aspect CLASS app TIER low NEEDS NONE NEEDS_WHY "an offscreen shot is a function of pose and shot size: two window shapes, one boot, identical bytes (no feature claim)" COMMAND test_shot_aspect
          WORKING_DIRECTORY ${_shot_home}/run)
 set_tests_properties(ui.shot_aspect PROPERTIES
     ENVIRONMENT "HOME=${_shot_home};JAHSHAKA_DATA_ROOT=${_shot_home}/.local/share/Jahshaka"
