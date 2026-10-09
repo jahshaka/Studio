@@ -444,6 +444,52 @@ def other_ctests(own_root=None):
         return None
 
 
+_BUILD_COMMS = ("ninja", "cmake", "make", "gmake")
+
+
+def box_mem():
+    """GATE-LOG-1: the memory pressure a row started under — `psi10` (/proc/pressure/memory, `some`
+    avg10, %), `swap_used_mb`, `builds` (ninja/cmake/make processes on the box). Each None where the
+    box cannot say (macOS)."""
+    out = {"psi10": None, "swap_used_mb": None, "builds": None}
+    try:
+        for line in open("/proc/pressure/memory"):
+            if line.startswith("some"):
+                out["psi10"] = float(dict(kv.split("=") for kv in line.split()[1:])["avg10"])
+    except (OSError, ValueError, KeyError):
+        pass
+    try:
+        mi = {}
+        for line in open("/proc/meminfo"):
+            k, _, v = line.partition(":")
+            mi[k] = int(v.split()[0])
+        out["swap_used_mb"] = round((mi["SwapTotal"] - mi["SwapFree"]) / 1024.0, 1)
+    except (OSError, ValueError, KeyError, IndexError):
+        pass
+    try:
+        n = 0
+        for d in os.listdir("/proc"):
+            if not d.isdigit(): continue
+            try:
+                with open(f"/proc/{d}/comm") as f:
+                    if f.read().strip() in _BUILD_COMMS: n += 1
+            except OSError:
+                continue
+        out["builds"] = n
+    except OSError:
+        pass
+    return out
+
+
+def queue_depth():
+    """GATE-LOG-1: the gates WAITING for the box's gate slot now (its holder not counted), or None
+    when the queue cannot be read."""
+    try:
+        return max(0, len(_vram().gate_queue()) - 1)
+    except Exception:          # noqa: BLE001 — a reading, never a reason for a gate to fail
+        return None
+
+
 class LoadSampler(threading.Thread):
     def __init__(self, period=2.0):
         super().__init__(daemon=True)
@@ -822,11 +868,27 @@ class _Run:
         self.retry, self.labels, self.echo, self.env = retry, labels or {}, echo, env
         self.shas = tree_shas()
         self.box0 = {"jobs": jobs, "display": (env or os.environ).get("DISPLAY"), "gpu_clocks": gpu_clocks(),
-                     "other_ctests": other_ctests(), "host": os.uname().nodename}
+                     "other_ctests": other_ctests(), "host": os.uname().nodename, "mem": box_mem()}
+        sw = os.environ.get("JAH_GATE_SLOT_WAIT_S") if os.environ.get("JAH_GATE_SLOT_HELD") else None
+        try: self.slot_wait = float(sw) if sw is not None else None
+        except ValueError: self.slot_wait = None
         self.run_id = f"{datetime.datetime.now().strftime('%Y%m%dT%H%M%S')}-{self.shas['studio'][:9]}"
         self.sampler = LoadSampler(); self.sampler.start()
         self.guard = DisplayGuard(env)
         self.recorded, self.dropped, self.path, self.dead = 0, [], None, None
+
+    def costs(self, t_end):
+        """GATE-LOG-1: {slot_wait_s, drain_s, hold_s} of a record ending at t_end — the gate's wait for
+        the slot (None outside a slot), the phase's whole-card drain and how long the card had been
+        held at the row's end (None when the row ran with per-row admission)."""
+        e = self.env or os.environ
+        drain = held = None
+        try:
+            if e.get("JAH_VRAM_DRAIN_S") is not None: drain = float(e["JAH_VRAM_DRAIN_S"])
+            if e.get("JAH_VRAM_HELD_AT") is not None: held = round(max(0.0, t_end - float(e["JAH_VRAM_HELD_AT"])), 1)
+        except ValueError:
+            pass
+        return {"slot_wait_s": self.slot_wait, "drain_s": drain, "hold_s": held}
 
     def say(self, text):
         if self.echo:
@@ -843,8 +905,12 @@ class _Run:
                 "box": dict(self.box0, gpu_clocks=at.get("gpu_clocks", self.box0["gpu_clocks"]),
                             other_ctests=at.get("other_ctests", self.box0["other_ctests"]),
                             load=[round(x, 2) for x in load],
-                            load_mean=self.sampler.mean(t_end - secs, t_end)),
+                            load_mean=self.sampler.mean(t_end - secs, t_end),
+                            mem=at.get("mem", self.box0.get("mem")), queue_depth=at.get("queue_depth")),
                 "source": "run"}
+        # GATE-LOG-1: where the gate's wall went that was not a row's — the slot queue, the phase's
+        # drain and hold of the whole card, the queue behind this gate at the row's start
+        base.update(self.costs(t_end))
         v, st, bline = row_verdict(status, text, arms)
         wait, twait = lock_wait(text), token_wait(text)
         # a timing row's lock line and its admission line are the SAME wait: subtract it once
@@ -941,7 +1007,8 @@ class _Run:
                 sys.stdout.write(line); sys.stdout.flush()
             m = _START.match(ln)
             if m:
-                starts[m.group(1)] = {"other_ctests": other_ctests(p.pid), "gpu_clocks": gpu_clocks()}
+                starts[m.group(1)] = {"other_ctests": other_ctests(p.pid), "gpu_clocks": gpu_clocks(),
+                                      "mem": box_mem(), "queue_depth": queue_depth()}
                 continue
             m = _RESULT.match(ln)
             if not m:
@@ -1023,7 +1090,9 @@ def run_ctest(cmd, cwd, tier, lane, jobs, reasons=None, gating=None, rng=None, r
         card, held_env = _vram().hold_card(f"{lane} {tier} phase", log=sys.stdout)
         if card:
             # THE CALLER'S ENVIRONMENT OVER THE HELD COPY (F5): JAH_POOL_ARMS and the rest survive the hold
-            env = dict(held_env, **(env or {}), JAH_VRAM_HELD=held_env["JAH_VRAM_HELD"])
+            env = dict(held_env, **(env or {}), JAH_VRAM_HELD=held_env["JAH_VRAM_HELD"],
+                       JAH_VRAM_DRAIN_S=held_env["JAH_VRAM_DRAIN_S"], JAH_VRAM_HELD_AT=held_env["JAH_VRAM_HELD_AT"])
+            R.env = env            # GATE-LOG-1: the phase's records read its drain and hold from here
     phases = [(cmd, None)]
     if rows is not None:
         skip = [r for r in rows if r in exclude]

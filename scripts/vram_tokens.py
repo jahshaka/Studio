@@ -99,6 +99,7 @@ import time
 EX_TEMPFAIL = 75
 POLL_S = 0.1
 LAST_WAIT_S = 0.0        # the last acquire()'s wait, seconds (the --timing line reads it)
+LAST_SLOT_WAIT_S = None  # the last gate_slot()'s queue wait, seconds (GATE-LOG-1: the run log's slot_wait_s)
 
 
 class AdmitTimeout(Exception):
@@ -368,6 +369,7 @@ def gate_slot(label="", log=sys.stderr):
     """Queue for THE GATE SLOT (FIFO, no bound) and return its fd once this gate is the head —
     inheritable across an exec (the `gate` command), never handed to a ctest; closing it gives it up. None when the
     slot is off (JAH_GATE_SLOT=0) or this process is already inside a gate (JAH_GATE_SLOT_HELD)."""
+    global LAST_SLOT_WAIT_S
     if os.environ.get("JAH_GATE_SLOT_HELD"):
         _say(log, "gate-slot: already held by this gate (pid %s) — %s" % (os.environ["JAH_GATE_SLOT_HELD"], label))
         return None
@@ -391,7 +393,11 @@ def gate_slot(label="", log=sys.stderr):
         time.sleep(SLOT_POLL_S)
     os.set_inheritable(fd, True)
     os.environ["JAH_GATE_SLOT_HELD"] = str(os.getpid())
-    _say(log, "gate-slot: taken%s — %s" % ((" after %.0f s in the queue" % (time.monotonic() - t0)) if last else "", label))
+    # GATE-LOG-1: the wait is RETURNED to the run log (every record of this gate carries it as
+    # slot_wait_s) — through the module and the environment the gate's own run_ctest() reads
+    LAST_SLOT_WAIT_S = round(time.monotonic() - t0, 1)
+    os.environ["JAH_GATE_SLOT_WAIT_S"] = str(LAST_SLOT_WAIT_S)
+    _say(log, "gate-slot: taken%s — %s" % ((" after %.0f s in the queue" % LAST_SLOT_WAIT_S) if last else "", label))
     return fd
 
 
@@ -420,6 +426,10 @@ def hold_card(label="", log=sys.stderr, wait=None):
         return [], env
     _say(log, "vram: the whole card (%d tokens) held for the phase, drained in %.1f s — %s" % (n, LAST_WAIT_S, label))
     env["JAH_VRAM_HELD"] = str(n)
+    # GATE-LOG-1: the phase's drain and the moment its hold began — each record of the phase carries
+    # drain_s and hold_s (the hold so far at the row's end; the phase's last row reads the whole hold)
+    env["JAH_VRAM_DRAIN_S"] = "%.1f" % LAST_WAIT_S
+    env["JAH_VRAM_HELD_AT"] = "%.3f" % time.time()
     return fds, env
 
 
