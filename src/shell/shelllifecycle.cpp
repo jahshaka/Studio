@@ -273,9 +273,10 @@ void ShellLifecycle::stopBackgroundWork()
     // exit than a headless process orphaning a "loading" dialog.
     std::thread([]() {
         std::this_thread::sleep_for(std::chrono::seconds(20));
-        qWarning("shutdown watchdog: teardown exceeded 20s — forcing process exit");
+        qWarning("shutdown watchdog: teardown exceeded 20s — forcing process exit (code %d)",
+                 ShellLifecycle::kForcedExitCode);
         std::fflush(nullptr);
-        std::_Exit(0);
+        std::_Exit(ShellLifecycle::kForcedExitCode);
     }).detach();
 
     // The library's background bake rebuild (FORWARD-ONLY-1 D1): joined here,
@@ -344,10 +345,11 @@ void ShellLifecycle::stopBackgroundWork()
         // crash, and the settings are already saved by now. Stop here, on
         // purpose and on the record: a logged forced exit beats both a
         // zombie and a crash.
-        qWarning("shutdown: background workers did not stop in time — forcing a clean "
-                 "process exit now (settings are saved; no teardown race)");
+        qWarning("shutdown watchdog: background workers did not stop in time — forcing the "
+                 "process exit now (code %d; settings are saved; no teardown race)",
+                 ShellLifecycle::kForcedExitCode);
         std::fflush(nullptr);
-        std::_Exit(0);
+        std::_Exit(ShellLifecycle::kForcedExitCode);
     }
 
     // STEP 3 of the shutdown order: StudioModule::shutdown() on every module,
