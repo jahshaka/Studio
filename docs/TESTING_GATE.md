@@ -376,30 +376,45 @@ exception.) The lead's per-lane merge (`merge-dbuild-lane.sh <lane> …`) still 
 #   THE PIN CHECK, the dry merges of both repos against the RUNNING candidate (lane 1 on d-build, lane 2 on d-build +
 #   lane 1, …) — any conflict refuses the whole batch, naming the lane and the files, and nothing moves; then the
 #   candidate on branches batch-<tag> ($D, $D/irisgl; never d-build), fork-pin-check.sh on its irisgl tip, and it
-#   prints THE ONE gate command:
+#   prints THE ONE gate command (a refusal at any point removes every ref the run made):
 JAH_GATE_TIER=scoped JAH_GATE_RANGE=<d-build>..<candidate> JAH_GATE_LANES=<lane>,<lane> \
     setsid nohup ~/Developer/scripts/lead/rc-gate.sh batch-<tag> <candidate> > /tmp/jah-lead/rc-batch-<tag>.out 2>&1 < /dev/null & disown
 #   (JAH_GATE_TIER=fork when the candidate moved the fork pin: gate-scope's --fork-tier, the whole tier) — a fresh
 #   tree, the four hashes, the slot taken once, `gate-scope.py <range> --run` inside it (the card per phase)
-~/Developer/scripts/lead/merge-dbuild-lane.sh batch-land <tag> [--build <rc build>] [--verdict "<row>=<text>" ...]
+~/Developer/scripts/lead/merge-dbuild-lane.sh batch-land <tag> [--build <rc build>] [--display :NN] [--verdict "<row>=<text>" ...]
 #   d-build's judge, UNCHANGED: ci_gate_check.py d-build..candidate --build <the candidate's build> — green:
-#   d-build fast-forwarded to the candidate in both repos (irisgl first), the HASHES line; red: nothing moves and
-#   the red rows are ATTRIBUTED (on DISPLAY; else the command is printed):
-DISPLAY=:NN scripts/gate-scope.sh --attribute <row>[,<row>...] --batch <tag> --lanes <lane>:<worktree>:<tip> [...]
+#   d-build fast-forwarded to the candidate in both repos (irisgl first), the HASHES line; a stale candidate (d-build
+#   moved since `batch`) is refused; red: nothing moves and the red rows are ATTRIBUTED on the rig display NAMED by
+#   --display (:60-:99, its X lock present; the environment's DISPLAY is never read) — without it, the command:
+DISPLAY=:NN scripts/gate-scope.sh --attribute <row>[,<row>...] --batch <tag> --candidate <rc tree>:<candidate> \
+    --lanes <lane>:<worktree>:<tip> [...]
 ```
+**THE GENERATED FILE.** `docs/SCRIPTING.md` is `--dump-api-docs`'s output and `api.contract`
+byte-compares it: two lanes' versions cannot merge as text. When more than one lane touched it (or it
+conflicted), `batch` records `SCRIPTING_REGEN=1` in the batch's state; `rc-gate.sh`, after building
+the candidate and BEFORE its gate, runs `merge-dbuild-lane.sh batch-scripting <tag> <rc tree>`: the
+candidate's own binary regenerates the file, a difference is committed onto `batch-<tag>` ("SCRIPTING.md
+regenerated at batch <tag>", author jahshaka), the tree is rebuilt and THAT sha is gated and landed.
 **THE FORK FREEZE.** Every lane's fork pin (and d-build's) is printed; the batch is REFUSED unless
 they are equal or each is an ancestor (in the fork clone, `git merge-base --is-ancestor`) of ONE pin
 P; the candidate pins P (diverging fork lines cannot be one gated tree — land the pin-bumping lane
 first, or rebase the other on it). P ≠ d-build's pin = the candidate moves the pin = the full tier.
 
 **THE ATTRIBUTION.** Each red row runs 3x `--solo`-style in each lane's OWN worktree at its exact
-batch tip (the lanes' built trees; a worktree moved past its tip is refused), the whole card held
-once for the attribution, never the slot. One table `row | lane | n/3 red | the first failing check`;
-the records carry `reason: attribute:<tag>` and that lane in `lanes`. A row red on a lane's own tip
-names that lane: it DROPS OUT and the rest are RE-GATED as a new candidate (a new tag — the
-exact-tip rule stands: no prefix records). A row red on NO lane's own tip is red on the
-COMBINATION — the table says so and the lead reads it. A contention-class red takes `--solo` 3/3
-in the rc tree; any other red a `--verdict`, as for any gate.
+batch tip (the lanes' built trees; a worktree moved past its tip is refused) AND 3x at the CANDIDATE
+(its rc tree: the control); the whole card is taken once through `hold_card()` — whatever the card's
+admission demands, it never assumes the gate slot is free. One table `row | tree | n/3 red | the first
+failing check`; the records carry `reason: attribute:<tag>`, retry, and in `lanes` that lane (the
+candidate's: the batch's list). Only REAL verdicts count: a run that never got its admission
+(NOADMIT) or never ran leaves its cell INCOMPLETE — the lane is neither named nor cleared until it
+ran. A row a lane's build does not register is ABSENT there and never blames it. Per row:
+- a lane is NAMED when ANY of its solos is red (the flake law: one red run is a red, never outvoted)
+  — it DROPS OUT and the rest are RE-GATED as a new candidate (a new tag — the exact-tip rule stands:
+  no prefix records);
+- red at the candidate and green on every lane's own tip = a COMBINATION DEFECT: a real interaction,
+  the batch is REFUSED and the defect filed (exit 3);
+- green at the candidate too = NOT REPRODUCED: a flake, answered at the verdict door — a
+  contention-class row by its 3/3 solos at the candidate tip, any other by a recorded `--verdict`.
 
 The judge needs no change: `ci_gate_check.py` keys records on the exact Studio sha + its irisgl pin,
 and d-build fast-forwards to the gated candidate in both repos. The queue rules (a pin-bumping
