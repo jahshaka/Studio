@@ -12,6 +12,7 @@ For more information see the LICENSE file
 #include "irisgl/core/math/quat.h"
 #include "irisgl/core/math/vec.h"
 #include "scripting/modules/editorapi.h"
+#include "services/import/importbatchrunner.h"
 
 #include <QKeySequence>
 #include <QKeyEvent>
@@ -957,6 +958,17 @@ QVector<VerbInfo> EditorApi::verbs() const
         { "endBatch", "editor.endBatch() -> bool",
           "Closes the macro opened by editor.beginBatch().",
           Needs::Document },
+        { "waitForImported", "editor.waitForImported(count, maxTurns=200000) -> {committed, running, reached, turns}",
+          "Turns the event loop until this process's import runners have COMMITTED `count` files in "
+          "all (editor.importState().committed counts them; finished files land on the UI thread, so "
+          "the wait is in event-loop turns, never a clock), or until no import is running, or after "
+          "`maxTurns` turns. Answers the count, whether a batch is still running and whether `count` "
+          "was reached. What a script that must act mid-batch waits on (import.shutdown).",
+          Needs::Window },
+        { "importState", "editor.importState() -> {committed, running}",
+          "This process's import runners: the files they have committed so far, and whether one is "
+          "running now.",
+          Needs::Window },
         { "importAssets", "editor.importAssets([paths]) -> bool",
           "Starts the interactive THREADED import of the given files — the same ImportBatchRunner + progress dialog the project panel's Import button and drops use — and returns once the batch has started (it does not wait). It does NOT open the import-settings dialog a person's drop gets (a script cannot answer a modal question): every file imports with the identity record. To import a model at a chosen scale, unit or orientation, pass them: assets.import(path, {scale, units, axes, ...}). assets.importFile is the synchronous, dialog-free verb.",
           Needs::Window },
@@ -3324,6 +3336,26 @@ bool EditorApi::endBatch()
     host.undoStack->endMacro();
     --mBatchDepth;
     return true;
+}
+
+QVariantMap EditorApi::importState()
+{
+    return { { QStringLiteral("committed"), ImportBatchRunner::committedFiles() },
+             { QStringLiteral("running"), ImportBatchRunner::anyRunning() } };
+}
+
+QVariantMap EditorApi::waitForImported(int count, int maxTurns)
+{
+    int turns = 0;
+    while (ImportBatchRunner::committedFiles() < count && ImportBatchRunner::anyRunning() &&
+           turns < qMax(1, maxTurns)) {
+        QCoreApplication::processEvents(QEventLoop::AllEvents | QEventLoop::WaitForMoreEvents);
+        ++turns;
+    }
+    QVariantMap out = importState();
+    out.insert(QStringLiteral("reached"), ImportBatchRunner::committedFiles() >= count);
+    out.insert(QStringLiteral("turns"), turns);
+    return out;
 }
 
 bool EditorApi::importAssets(const QVariant &paths)
