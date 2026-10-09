@@ -1957,8 +1957,8 @@ def run_target_step(target_cmd, build, lane, log_range, labels, reasons, exclude
           % "/".join(sorted(TARGET_LABELS)))
     trc = gate_runlog.run_ctest(target_cmd, build, "target", lane, 1, reasons=reasons, rng=log_range,
                                 labels=labels, gating=lambda n: False, whole_card=True, exclude=exclude)
-    if trc == gate_runlog.DISPLAY_LOST:
-        print("=== target tests STOPPED: the display died — NOT part of any gate's verdict ===")
+    if trc == gate_runlog.DISPLAY_LOST or trc < 0 or trc > 128:
+        print("=== target tests STOPPED (the display died, or their ctest was killed) — NOT part of any gate's verdict ===")
     else:
         print("=== target tests exited %d — NOT part of any gate's verdict ===" % trc)
 
@@ -2042,11 +2042,17 @@ def main():
         return None
 
     def lost(rc):
-        """A run whose display died (P6) ends the gate here, with its verdict line."""
+        """A run whose display died (P6) — or whose ctest was KILLED (a signal; 128 + it through a shell:
+        F4) — ends the gate here, with its verdict line: no timing phase, no target step after it."""
         if rc == gate_runlog.DISPLAY_LOST:
             print("\n=== GATE VERDICT: ABORTED — the display died; nothing after it ran and no row was recorded "
                   "against it; re-run with --resume on a live display ===")
             sys.exit(gate_runlog.DISPLAY_LOST)
+        if rc < 0 or rc > 128:
+            sig = -rc if rc < 0 else rc - 128
+            print(f"\n=== GATE ABORTED: ctest was killed (signal {sig}); the rows it finished are recorded ===\n"
+                  f"=== GATE VERDICT: ABORTED — nothing after it ran; re-run with --resume ===")
+            sys.exit(128 + sig)
         return rc
 
     def done_rows():
