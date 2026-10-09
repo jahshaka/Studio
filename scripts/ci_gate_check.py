@@ -41,13 +41,22 @@ re-checks; it clears only the reds logged before it. A row that never ran (NOADM
 MISSING, which no verdict clears. scripts/lead/merge-dbuild-lane.sh calls this
 and refuses the merge on a failure; its own `--verdict` passes through here.
 
-Exit 0 accepted, 1 refused, 2 unusable (no contention list, an unresolvable range).
+THE VERDICT DOOR (VERDICT-1 U1/U3; TESTING_GATE §4): a verdict's text is parsed — `real:<DEFECT-ID>`, `contention:`
+(FAIL/TIMEOUT, with 3/3 solo PASS after the red), `xid-read:<journal window>` (LOST/OOM/CRASH, covering the red); a
+red whose record carries an `xid` takes `real:` only; solos below 3/3 are never cleared by text. A refused verdict
+prints `VERDICT REFUSED <row>: <why>`. A REBASE CARRIES ITS OPEN REDS (U4): every schema-2 record of the lane's name
+(`lane` or `lanes`) at any other tip is read, and an open red there refuses the tip (`OPEN RED carried from <tip>`)
+until the row runs green at the tip or a verdict at that tip passes the door. THE LIST'S SHAPE (U5): an entry
+without {reason, date, recheck} makes the list unusable (exit 2).
+
+Exit 0 accepted, 1 refused, 2 unusable (no contention list or one without its shape, an unresolvable range).
 """
 import argparse
 import datetime
 import importlib.util
 import json
 import os
+import re
 import subprocess
 import sys
 
@@ -130,6 +139,84 @@ def _when(r):
 
 
 NEVER_RAN = ("NOADMIT", "NOTRUN")
+HARD = ("LOST", "OOM", "CRASH")          # the classes that are never cleared without a defect id or a journal read
+
+# THE VERDICT DOOR (VERDICT-1 U1; ONE_PICTURE_SPEC H1): a verdict's TEXT is parsed for a class token.
+#   real:<DEFECT-ID>          the red is a real defect (filed; fixed, with the commit) — e.g. real:VIEWS-XID-1
+#   contention:<evidence>     a FAIL/TIMEOUT the box caused — and only once the row reached 3/3 solo PASS
+#   xid-read:<window>         a LOST/OOM/CRASH whose kernel journal the reader READ over that window
+#                             (e.g. xid-read:2026-10-09T14:00..14:30 none) and found no Xid of the row
+DEFECT_ID = re.compile(r"\breal:\s*([A-Z][A-Z0-9]*(?:-[A-Z0-9]+)*-\d+[a-z]?)\b")
+CONTENTION_TOKEN = re.compile(r"\bcontention:\s*\S")
+XID_READ = re.compile(r"\bxid-read:\s*(\d{4}-\d\d-\d\dT\d\d:\d\d(?::\d\d)?(?:[+-]\d\d:?\d\d)?)\.\."
+                      r"((?:\d{4}-\d\d-\d\dT)?\d\d:\d\d(?::\d\d)?(?:[+-]\d\d:?\d\d)?)")
+ENVIRONMENTAL = re.compile(r"\benvironment(al)?\b", re.I)
+
+
+def _xid_window(text):
+    """(start, end) datetimes of a verdict's `xid-read:<start>..<end>` (an end without a date takes
+    the start's), or None when the text carries no readable window."""
+    m = XID_READ.search(text or "")
+    if not m: return None
+    try:
+        a = datetime.datetime.fromisoformat(m.group(1))
+        b_txt = m.group(2) if "T" in m.group(2) else f"{m.group(1).split('T')[0]}T{m.group(2)}"
+        b = datetime.datetime.fromisoformat(b_txt)
+    except ValueError:
+        return None
+    a = a if a.tzinfo else a.astimezone()
+    b = b if b.tzinfo else b.astimezone()
+    return (a, b) if b >= a else None
+
+
+def door(text, reds, solos):
+    """(ok, why) — may this verdict text clear these reds (the open reds logged before it)? `solos`:
+    the solo retries after the reds' last gate red (any time — a `contention:` verdict may be
+    written before its solos run). The rules, in order (each refusal names its rule):
+      0. a red whose record carries an Xid from the row's own process tree is a DEFECT by law: only
+         `real:<id>` clears it;
+      1. solos below 3/3 are NEVER cleared by text, listed or not;
+      2. LOST / OOM / CRASH: `real:<id>` or `xid-read:<window>` (the window must cover the red);
+         a text calling a LOST environmental is refused;
+      3. FAIL / TIMEOUT: `real:<id>`, or `contention:` with 3/3 solo PASS after the red."""
+    text = text or ""
+    kinds = {r.get("verdict") for r in reds}
+    real = DEFECT_ID.search(text)
+    xid = [r for r in reds if r.get("xid")]
+    if xid:
+        if real: return True, f"real:{real.group(1)} (an Xid in the record: a defect)"
+        x = xid[-1]["xid"]
+        return False, (f"the red carries an Xid from the row's own process (pid {x.get('pid')}, "
+                       f"{x.get('window')}) — a DEFECT by law, never environmental: only real:<defect id> clears it")
+    spass = sum(1 for r in solos if r.get("verdict") == "PASS")
+    if solos and (len(solos) < SOLO_NEEDED or spass < len(solos)):
+        return False, (f"solos below 3/3 ({spass}/{len(solos)} solo PASS after the red) are never cleared by text, "
+                       f"listed or not — run --solo to 3/3, or fix it")
+    hard = kinds & set(HARD)
+    if hard:
+        cls = "/".join(sorted(hard))
+        if "LOST" in hard and ENVIRONMENTAL.search(text):
+            return False, (f"a LOST is never environmental (ONE_PICTURE H1): the verdict on a {cls} carries "
+                           f"real:<defect id> or xid-read:<journal window>")
+        if real: return True, f"real:{real.group(1)}"
+        w = _xid_window(text)
+        if w:
+            last = max(_when(r) for r in reds)
+            first = min(_when(r) for r in reds)
+            if w[0] <= last and first - datetime.timedelta(hours=1) <= w[1]:
+                return True, f"xid-read:{w[0].isoformat(timespec='minutes')}..{w[1].isoformat(timespec='minutes')}"
+            return False, (f"the xid-read window {w[0].isoformat(timespec='minutes')}..{w[1].isoformat(timespec='minutes')} "
+                           f"does not cover the {cls} at {last.isoformat(timespec='minutes')}")
+        return False, (f"a verdict on a {cls} carries real:<defect id> or xid-read:<journal window> (the window "
+                       f"the reader read, e.g. xid-read:2026-10-09T14:00..14:30 none) — no other text clears it")
+    if real: return True, f"real:{real.group(1)}"
+    if CONTENTION_TOKEN.search(text):
+        if spass >= SOLO_NEEDED:
+            return True, f"contention: with {spass}/{len(solos)} solo PASS"
+        return False, (f"contention: needs the row's 3/3 solo PASS after the red ({spass}/{len(solos)}) — "
+                       f"gate-scope.sh --solo <row>")
+    return False, ("a verdict on a FAIL/TIMEOUT carries a class token: real:<defect id> (fixed, with the commit) or "
+                   "contention:<evidence> with 3/3 solo PASS — any other text clears nothing")
 
 
 def judge(key, recs, contention):
@@ -137,7 +224,9 @@ def judge(key, recs, contention):
 
     A run that never happened (NOADMIT: the admission's bound; NOTRUN) is no run: a row with only
     those is MISSING, which no verdict clears. A VERDICT is per row and timestamped: it clears
-    only the reds logged BEFORE it — a red after it needs its own answer (the merge read's D4)."""
+    only the reds logged BEFORE it — a red after it needs its own answer (the merge read's D4) —
+    and only through THE DOOR (door() above): a refused verdict leaves its reds open, and the why
+    begins `VERDICT REFUSED: `."""
     runs = sorted((r for r in recs if r.get("kind") != "verdict" and r.get("verdict") not in NEVER_RAN), key=_when)
     verdicts = sorted((r for r in recs if r.get("kind") == "verdict"), key=_when)
     if not runs:
@@ -146,21 +235,44 @@ def judge(key, recs, contention):
     reds = [r for r in runs if r.get("verdict") != "PASS"]
     if not reds:
         return "green", ""
-    last_verdict = _when(verdicts[-1]) if verdicts else None
-    open_reds = [r for r in reds if last_verdict is None or _when(r) > last_verdict]
+    # the verdicts in time order: each one that passes the door clears the reds logged before it
+    cleared, accepted, refused = None, None, None
+    for v in verdicts:
+        tv = _when(v)
+        pending = [r for r in reds if _when(r) < tv and (cleared is None or _when(r) > cleared)]
+        if not pending: continue
+        last_gate = max((_when(r) for r in pending if not r.get("retry")), default=None)
+        solos = [r for r in runs if r.get("retry") and last_gate is not None and _when(r) > last_gate]
+        ok, why = door(v.get("text"), pending, solos)
+        if ok:
+            cleared, accepted, refused = tv, (v, why), None
+        else:
+            refused = (v, why)
+    open_reds = [r for r in reds if cleared is None or _when(r) > cleared]
     if not open_reds:
-        return "green", "recorded verdict: " + (verdicts[-1].get("text") or "")[:120]
+        v, why = accepted
+        return "green", f"recorded verdict ({why}): " + (v.get("text") or "")[:120]
+    if refused is not None:
+        return "red", f"VERDICT REFUSED: {refused[1]} — the verdict read: " + (refused[0].get("text") or "")[:100]
     reds = open_reds
     name, arm = key
     listed = name in contention or (arm and arm in contention)
     gate_reds = [r for r in reds if not r.get("retry")]
     last_gate_red = max((_when(r) for r in gate_reds), default=None)
     solos = [r for r in runs if r.get("retry") and (last_gate_red is None or _when(r) > last_gate_red)
-             and (last_verdict is None or _when(r) > last_verdict)]
+             and (cleared is None or _when(r) > cleared)]
     solo_reds = [r for r in solos if r.get("verdict") != "PASS"]
+    hard = sorted({r.get("verdict") for r in reds} & set(HARD))
+    xid = [r for r in reds if r.get("xid")]
+    if xid:
+        return "red", (f"{reds[-1].get('verdict')} with an Xid from the row's own process (pid "
+                       f"{xid[-1]['xid'].get('pid')}) — a DEFECT by law: needs a verdict real:<defect id>")
     if not listed:
         return "red", (f"{reds[-1].get('verdict')} and not in the contention class — needs a recorded verdict"
                        + (f" ({len(solos) - len(solo_reds)}/{len(solos)} solo PASS do not clear it)" if solos else ""))
+    if hard:
+        return "red", (f"{'/'.join(hard)} on a contention-class row: a {'/'.join(hard)} is never cleared by solos — "
+                       f"needs a verdict real:<defect id> or xid-read:<journal window>")
     if solo_reds:
         return "red", (f"contention-class, but a SOLO retry went red ({len(solos) - len(solo_reds)}/{len(solos)}): "
                        f"not contention — needs a recorded verdict")

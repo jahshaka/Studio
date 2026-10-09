@@ -152,7 +152,7 @@ def main(source, build):
         rc, out = run(lane)
         check(rc == 1 and f"red at {revs[A][:9]}" in out and k[0] in out,
               "%s green at %s, RED at the later %s, nothing at the tip -> REFUSED (%d)" % (k[0], T0, A, rc))
-        rc, out = run(lane, "--verdict", f"{k[0]}=the fixture's red, answered where it happened")
+        rc, out = run(lane, "--verdict", f"{k[0]}=real:FIXTURE-1 the fixture's red, answered where it happened")
         vfiles = [f for f in os.listdir(os.environ["JAH_RUN_LOG_DIR"]) if "-verdict-" in f]
         if rc != 0:
             print("\n".join(l for l in out.splitlines() if "REFUSED" in l)[:2000])
@@ -173,7 +173,7 @@ def main(source, build):
               and not any(l.startswith(f"ci-gate-check: RED {some_fix[0]}:") for l in out.splitlines()),
               "%s red at %s (the fix does not reach it), green at the tip -> REFUSED; %s, which the fix reaches, "
               "is answered by the tip (%d)" % (k[0], A, some_fix[0], rc))
-        rc, out = run(lane, "--verdict", f"{k[0]}=read: the fixture's red")
+        rc, out = run(lane, "--verdict", f"{k[0]}=real:FIXTURE-1 read: the fixture's red")
         check(rc == 0, "...its verdict (recorded at %s) answers it (%d)" % (A, rc))
 
     # ---- 5. the targets never set the exit code ------------------------------------------------------
