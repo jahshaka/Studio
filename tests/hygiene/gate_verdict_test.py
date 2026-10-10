@@ -647,6 +647,28 @@ def batch_range_cases(E):
                                             lambda a_, b_: 5, lambda a_, b_, k: False)
     check(len(got) == 3 and a == "far" and all(r.get("_proofFrom") == "far" for r in got) and "far's solos" in why,
           "(2) the proof found: A's solos tagged with A, the why names A")
+    # read 1 I3: an all-green A, or an A that never ran it, is named for what it is (never "nondeterminism")
+    _, _, why = E.cgc.ancestor_base_proof(("photon.view", None), "B", {"g": [rec("PASS", T % "08:00", retry=True)] * 3},
+                                          lambda a_, b_: True, lambda a_, b_: 1, lambda a_, b_, k: False)
+    _, _, why2 = E.cgc.ancestor_base_proof(("photon.view", None), "B", {"n": [rec("NOADMIT", T % "08:00", retry=True)] * 3},
+                                           lambda a_, b_: True, lambda a_, b_: 1, lambda a_, b_, k: False)
+    check("green: no red to prove" in why and "never ran it" in why2 and "nondeterminism" not in why + why2,
+          "(2, read 1 I3) an all-green A: 'no red to prove'; NOADMIT-only: 'never ran it' (%s | %s)" % (why, why2))
+    # read 1 I2 (the lead's rule): the base holds a gate PASS of the row -> the proof does NOT travel (a red at the
+    # candidate is a regression); and a GREEN row never reads or prints the base proof
+    E.fresh()
+    solos(base, "08", batch="t2d")
+    E.put(["photon.view"], "PASS", T % "09:00", tip=b)
+    E.put(["photon.view"], "FAIL", T % "11:00", tip=tt, failLine=FL)
+    E.verdict("photon.view", "real:VIEWS-XID-1", T % "12:00", tip=tt)
+    rc, out = E.run(rng="%s..%s" % (b, tt))
+    check(rc == 1 and "base proof for" not in out and "KNOWN RED photon.view" not in out,
+          "(2, read 1 I2) a base with a gate PASS of the row is its own evidence: the proof does not travel (rc %d)" % rc)
+    E.fresh()
+    solos(base, "08", batch="t2d")
+    E.put(["photon.view"], "PASS", T % "11:00", tip=tt)
+    rc, out = E.run(rng="%s..%s" % (b, tt))
+    check(rc == 0 and "base proof for" not in out, "(2, read 1 I3) a green row never reads nor prints a base proof (rc %d)" % rc)
     # read 1 F1: A STAGE-CLOSE ROW THE SELECTOR SET ASIDE IS STILL REACHED — A..base touching an app source (every app
     # row's dependency, not gi.chain_converge_scenes' own subject) reaches that stage-close row for the travel and for
     # re-use (Reach.of); the proving side is unchanged. RED ON f980d8ced: not reached (the set-aside row was invisible)
@@ -661,7 +683,6 @@ def batch_range_cases(E):
     check(bool(dep) and E.cgc.Reach.reaches(trav, key) and E.cgc.Reach.reaches(R.of(g30, "fork"), key),
           "(2, read 1 F1) a dependency-only change to a stage-close row between A and the base refuses the travel, and the "
           "re-use arm does not re-use across it (%s)" % (key in (trav or set()) if trav is not E.cgc.Reach.ALL else "ALL"))
-
 
 
 def registry_id_cases(E):
