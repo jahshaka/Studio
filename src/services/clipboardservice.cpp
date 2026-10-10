@@ -515,10 +515,11 @@ ClipboardPasteResult ClipboardService::paste(const ClipboardPasteOptions &option
     }
 
     // A PASTE FROM ANOTHER LIBRARY LANDS MODEL ROWS WITH NO BAKE (the bake is derived data, never
-    // in the envelope): built here like every import builds them (MeshBakeStore::bakeLanded,
-    // TC2-BUNDLE-NO-BAKE) — before a pasted node can be read with no geometry. A paste inside one
-    // library imports nothing and builds nothing.
-    MeshBakeStore::bakeLanded(result.imported);
+    // in the envelope): built like every import builds them (TC2-BUNDLE-NO-BAKE) — but OFF THIS
+    // THREAD (STAGE-CLOSE-TRIAGE-1 F3): the nodes are placed now, with no geometry, and the geometry
+    // arrives when the bake lands (MeshBakeStore::bakeLandedAsync; SceneEditService swaps it in).
+    // A paste inside one library imports nothing and builds nothing.
+    MeshBakeStore::bakeLandedAsync(result.imported);
 
     if (nodeItems.isEmpty()) {                    // an Assets-page paste is done
         if (!result.imported.isEmpty()) emit assetsImported(result.imported);

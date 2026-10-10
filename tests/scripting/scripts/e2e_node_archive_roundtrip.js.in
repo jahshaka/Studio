@@ -76,15 +76,18 @@ console.log("gc -> " + J(gc).slice(0, 400));
 
 // ---- the import: the node's assets and the node come back ---------------------------
 project.create("archive target " + Date.now());
-// THE IMPORT BAKED WHAT IT BROUGHT — scoped to THIS import: the library-wide dry run is read before
-// and after it, and the import may add nothing that wants a bake. (Its absolute count is the pool's:
-// an earlier arm's row left wanting a bake is that arm's claim, never this one's.)
+// THE IMPORT BAKES WHAT IT BROUGHT — scoped to THIS import: the library-wide dry run is read before
+// and after it, and once its bakes land the import has added nothing that wants a bake. (Its absolute
+// count is the pool's: an earlier arm's row left wanting a bake is that arm's claim, never this one's.)
 var wantingBefore = assets.bakeAll({ dryRun: true });
 var guid = assets.import(file);
 assert(guid && guid.length > 10, "assets.import(the node's archive) -> " + guid);
-var wanting = assets.bakeAll({ dryRun: true });
-assert(wanting.needed === wantingBefore.needed,
-       "the import baked the model it brought (bakeAll dry run before " + J(wantingBefore) + ", after " + J(wanting) + ")");
+// THE IMPORT DOES NOT WAIT FOR ITS BAKE (STAGE-CLOSE-TRIAGE-1 F3): the model's bake is still on its
+// worker when the verb returns (its commit is queued to this thread, which this script holds); the
+// node is placed at once and its geometry arrives when the bake lands, which the pixels below prove.
+var pendingAtImport = assets.pendingBakes();
+console.log("bakes in flight when the import returned: " + pendingAtImport);
+assert(pendingAtImport > 0, "the import returned before its model's bake (" + pendingAtImport + " in flight)");
 var meta = assets.metadata(guid);
 assert(meta.type === "object", "the file lands as ONE object tile (" + meta.type + ")");
 textures.forEach(function (t) {
@@ -93,6 +96,16 @@ textures.forEach(function (t) {
 
 var nodeId = assets.addToScene(guid, { position: { x: -2, y: 3, z: 0 } });
 assert(nodeId && nodeId.length > 10, "assets.addToScene(the imported tile) -> " + nodeId);
+// (addToScene's own placement may pump this thread, so whether the bake landed before or after the
+// node exists is the box's timing — printed, never asserted; either way the pixels below need it.)
+console.log("bakes in flight once the node was placed: " + assets.pendingBakes());
+var landGuard = 0;
+while (assets.pendingBakes() > 0 && landGuard++ < 600) editor.frame(1, 1 / 60);
+console.log("the bake landed after " + landGuard + " frame(s)");
+assert(assets.pendingBakes() === 0, "the import's bake landed (" + assets.pendingBakes() + " still in flight)");
+var wanting = assets.bakeAll({ dryRun: true });
+assert(wanting.needed === wantingBefore.needed,
+       "the import baked the model it brought (bakeAll dry run before " + J(wantingBefore) + ", after " + J(wanting) + ")");
 var meshId = null;
 scene.nodes().forEach(function (n) {
     if (meshId === null && n.type === "mesh" && (n.id === nodeId || n.parent === nodeId)) meshId = n.id;

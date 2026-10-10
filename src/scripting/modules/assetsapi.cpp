@@ -499,6 +499,12 @@ QVector<VerbInfo> AssetsApi::verbs() const
           "Assets are baked lazily on first open too, so this is the bulk/explicit form — the button beside "
           "Preferences \u2192 Assets\u2019 storage cleanup.",
           Needs::Document },
+        { "pendingBakes", "assets.pendingBakes() -> number",
+          "How many model bakes an import started and has not yet committed. An import that lands catalog "
+          "rows (a share file through assets.import, a paste from another library) RETURNS BEFORE ITS BAKE: "
+          "the bake is built on a worker and committed when it lands, and a node placed meanwhile shows its "
+          "geometry then. 0 = every import's geometry is in. Wait in frames (editor.frame) until it reads 0.",
+          Needs::Document },
     };
 }
 
@@ -2191,6 +2197,11 @@ QVariantMap AssetsApi::reimport(const QString &guid, const QVariantMap &options)
     out["swappedNodes"] = swapped;
     if (host.isEngineReady()) refreshThumbnail(guid);
     return out;
+}
+
+int AssetsApi::pendingBakes()
+{
+    return MeshBakeStore::pendingBakeCount();
 }
 
 QVariantMap AssetsApi::bakeAll(const QVariantMap &options)

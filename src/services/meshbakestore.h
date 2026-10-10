@@ -44,6 +44,7 @@ For more information see the LICENSE file
 #include <memory>
 #include <functional>
 
+class QObject;
 class QTemporaryDir;
 #include "irisgl/import/importsettings.h"
 
@@ -262,14 +263,40 @@ iris::BakedClipPtr ensureClip(const QString &sourcePath);
 /// this thread pumps. True when a current bake exists afterwards.
 bool ensureFresh(const QString &sourcePath, const QString &assetGuid = QString());
 
-/// THE ROWS AN IMPORT JUST LANDED, BAKED (TC2-BUNDLE-NO-BAKE, 2026-10-10): every model (and clip)
-/// row among `guids` whose bake is stale or absent is built from the store's source on a worker
-/// while this (the database) thread pumps, then committed — what an asset import and a project
-/// archive import already do, for the imports that land CATALOG ROWS (a share file, a paste from
-/// another library). Without it such a row is placed with no geometry ("has no current mesh
-/// bake") unless some other row of the library happened to hold a bake of the same content.
-/// Returns how many bakes failed (each logged by name). Database thread.
-int bakeLanded(const QStringList &guids);
+/// THE ROWS AN IMPORT JUST LANDED, BAKED — OFF THE UI THREAD (TC2-BUNDLE-NO-BAKE; async since
+/// STAGE-CLOSE-TRIAGE-1 F3): every model (and clip) row among `guids` whose bake is stale or absent
+/// is built from the store's source on a worker and committed on this (the database) thread when it
+/// lands — the imports that land CATALOG ROWS (a share file, a paste from another library). It
+/// RETURNS AT ONCE: the caller places its nodes now, with no geometry, and the geometry arrives when
+/// the bake lands (the landed listeners below swap it in; the scene reader does not report a model
+/// whose bake is in flight as missing). It used to pump this thread for the whole bake with user
+/// input held back — a large model froze the editor's input for seconds on a paste. Returns how many
+/// bakes were started (0: every row was already fresh). Database thread.
+int bakeLandedAsync(const QStringList &guids);
+
+/// One model's rebuild, asynchronously — `ensureFresh` for a caller that can wait: when the bake of
+/// (`sourcePath`, `assetGuid`) is stale or absent, it is built on a worker and committed here, and
+/// `landed(fresh)` runs on `context`'s thread afterwards (never when `context` is gone). Returns false
+/// when nothing was started (already fresh, or no source to build from: `landed` is NOT called).
+bool ensureFreshAsync(const QString &sourcePath, const QString &assetGuid, QObject *context,
+                      std::function<void(bool fresh)> landed);
+
+/// True while an async bake of this model file (bakeLandedAsync / ensureFreshAsync) has not
+/// committed. Database thread.
+bool bakePending(const QString &sourcePath);
+/// How many async bakes are in flight (the `assets.pendingBakes` verb). Database thread.
+int pendingBakeCount();
+
+/// A row whose model just became readable, or whose bake failed.
+struct LandedBake
+{
+    QString assetGuid;
+    QString path;
+    bool ok = true;
+};
+/// Called on the database thread after every async commit, with the rows that landed (the live
+/// scene swaps their geometry in: SceneEditService). `context` scopes the listener's life.
+void addLandedListener(QObject *context, std::function<void(const QVector<LandedBake> &)> listener);
 
 /// THE CURRENT BAKE of a library row's source, by the row's type: a clip row's
 /// clip bake, any other model row's model bake. Empty when there is none.

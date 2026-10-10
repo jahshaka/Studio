@@ -229,6 +229,8 @@ public:
     /// an undo of an earlier structural edit restores a node holding the OLD
     /// mesh pointer.
     int refreshAssetMeshes(const QString &meshGuid, const QString &sourcePath);
+    /// True when a live mesh node was placed from this library row (its meshPath).
+    bool usesAsset(const QString &meshGuid) const;
     /// Instantiates a stored object asset (drag-drop / assets.addToScene).
     void addMaterialMesh(const QString &path, bool ignore, iris::Vec3 position,
                          const QString &guid, const QString &assetName,

@@ -129,6 +129,38 @@ SceneEditService::SceneEditService(Database *db,
       db(db), project(project), undo(undo), selection(selection),
       viewport(viewport), sceneProvider(std::move(sceneProvider))
 {
+    // A MODEL WHOSE BAKE LANDED AFTER ITS NODES WERE PLACED (STAGE-CLOSE-TRIAGE-1 F3): a paste
+    // from another library and a share-file import bake on a worker and return at once, so a node
+    // can stand in the scene with no geometry until the bake commits. Then the geometry is swapped
+    // in — the reimport's own walk — and a bake that FAILED is the model.missing issue the reader
+    // would have raised (it did not: the bake was in flight).
+    MeshBakeStore::addLandedListener(this, [this](const QVector<MeshBakeStore::LandedBake> &rows) {
+        QStringList failed;
+        for (const MeshBakeStore::LandedBake &row : rows) {
+            if (row.ok) {
+                refreshAssetMeshes(row.assetGuid, row.path);
+            } else if (usesAsset(row.assetGuid)) {
+                if (!failed.contains(row.path)) failed.append(row.path);
+            }
+        }
+        if (!failed.isEmpty()) SceneIssues::instance().raiseMissingModels(failed);
+    });
+}
+
+bool SceneEditService::usesAsset(const QString &meshGuid) const
+{
+    const iris::ScenePtr live = scene();
+    if (meshGuid.isEmpty() || !live || !live->getRootNode()) return false;
+    std::function<bool(const iris::SceneNodePtr &)> walk = [&](const iris::SceneNodePtr &node) {
+        if (!node) return false;
+        if (node->getSceneNodeType() == iris::SceneNodeType::Mesh
+            && node.staticCast<iris::MeshNode>()->meshPath == meshGuid)
+            return true;
+        for (const iris::SceneNodePtr &child : node->children())
+            if (walk(child)) return true;
+        return false;
+    };
+    return walk(live->getRootNode());
 }
 
 void SceneEditService::notifyNodeInserted(const iris::SceneNodePtr &node) { emit nodeInserted(node); }

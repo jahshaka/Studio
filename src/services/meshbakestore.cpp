@@ -28,6 +28,8 @@ For more information see the LICENSE file
 #include <QtConcurrent/QtConcurrentRun>
 #include <QThreadPool>
 #include <QThread>
+#include <QFuture>
+#include <QPointer>
 
 #include "data/database/database.h"
 #include "data/constants.h"
@@ -737,6 +739,18 @@ int rebuildPumped(const QVector<BakeJob> &jobs, const std::function<void(int, in
 
 namespace {
 QFuture<void> sBackground;
+// THE ASYNC BAKES (STAGE-CLOSE-TRIAGE-1 F3). Everything here but the worker's runBake loop is the
+// database thread's: the pending map, the listeners, the commits.
+QHash<QString, int> sPending;                       ///< model file -> async bakes in flight over it
+int sPendingJobs = 0;
+quint64 sAsyncEpoch = 0;                            ///< moved by stopBackgroundRebuild: a reset or shutdown
+QList<QFuture<QVector<BakeResult>>> sAsyncFutures;  ///< joined by stopBackgroundRebuild
+struct Listener
+{
+    QPointer<QObject> context;
+    std::function<void(const QVector<LandedBake> &)> fn;
+};
+QVector<Listener> sListeners;
 std::atomic<bool> sBackgroundStop { false };
 QThreadPool *backgroundPool()
 {
@@ -808,6 +822,13 @@ void stopBackgroundRebuild()
 {
     sBackgroundStop.store(true);
     if (sBackground.isValid() && !sBackground.isFinished()) sBackground.waitForFinished();
+    // THE ASYNC BAKES TOO (a reset, a shutdown): joined, and their commits — still queued to this
+    // thread — dropped by the epoch, so nothing lands in a library that is no longer the one they
+    // were planned against.
+    ++sAsyncEpoch;
+    for (QFuture<QVector<BakeResult>> &future : sAsyncFutures)
+        if (!future.isFinished()) future.waitForFinished();
+    sAsyncFutures.clear();
 }
 
 bool backgroundRebuildRunning()
@@ -909,18 +930,113 @@ bool ensureFresh(const QString &sourcePath, const QString &assetGuid)
     return isFresh(conn, root, sourcePath, assetGuid);
 }
 
-int bakeLanded(const QStringList &guids)
+namespace {
+
+/// Bakes `jobs` on a worker; commits them on the database thread when they land, tells the
+/// listeners which of `targets` landed, then calls `done(failed)`.
+void bakeAsync(const QVector<BakeJob> &jobs, const QVector<LandedBake> &targets,
+               std::function<void(int failed)> done)
+{
+    for (const BakeJob &job : jobs) ++sPending[job.path];
+    sPendingJobs += jobs.size();
+    const quint64 epoch = sAsyncEpoch;
+    QFuture<QVector<BakeResult>> future = QtConcurrent::run([jobs]() {
+        QVector<BakeResult> results;
+        results.reserve(jobs.size());
+        for (const BakeJob &job : jobs) results.append(runBake(job));
+        return results;
+    });
+    sAsyncFutures.removeIf([](const QFuture<QVector<BakeResult>> &f) { return f.isFinished(); });
+    sAsyncFutures.append(future);
+    future.then(QCoreApplication::instance(), [jobs, targets, done, epoch](QVector<BakeResult> results) {
+        for (const BakeJob &job : jobs)
+            if (--sPending[job.path] <= 0) sPending.remove(job.path);
+        sPendingJobs -= jobs.size();
+        // A RESET OR SHUTDOWN SINCE THE START: the library these were planned against is gone;
+        // nothing is committed (the staged temps go with the results).
+        if (epoch != sAsyncEpoch) {
+            for (BakeResult &result : results) {
+                QVector<AssetCas::Staged> leftover{ result.staged };
+                AssetCas::discardStaged(leftover);
+            }
+            return;
+        }
+        QSqlDatabase conn = QSqlDatabase::database();
+        const QString root = AssetStorePaths::root();
+        int failed = 0;
+        QSet<QString> failedPaths;
+        for (int i = 0; i < results.size(); ++i) {
+            QString error;
+            if (!commitBake(conn, root, results[i], &error)) {
+                ++failed;
+                failedPaths.insert(jobs.at(i).path);
+                irisLog(QStringLiteral("mesh bake: '%1' could not be baked (%2)")
+                            .arg(QFileInfo(jobs.at(i).path).fileName(), error));
+            }
+        }
+        clear();
+        QVector<LandedBake> landed = targets;
+        for (LandedBake &row : landed) row.ok = !failedPaths.contains(row.path);
+        for (int i = 0; i < sListeners.size();) {
+            if (!sListeners[i].context) { sListeners.removeAt(i); continue; }
+            sListeners[i].fn(landed);
+            ++i;
+        }
+        if (done) done(failed);
+    });
+}
+}   // namespace
+
+int bakeLandedAsync(const QStringList &guids)
 {
     if (guids.isEmpty()) return 0;
     QSqlDatabase conn = QSqlDatabase::database();
     const QString root = AssetStorePaths::root();
     const QSet<QString> only(guids.cbegin(), guids.cend());
     QVector<BakeJob> jobs;
+    QVector<LandedBake> targets;
     for (const BakeTarget &target : modelBakesNeeded(conn, root, &only)) {
         BakeJob job = prepareBake(conn, root, target);
-        if (!job.path.isEmpty()) jobs.append(job);
+        if (job.path.isEmpty()) continue;
+        jobs.append(job);
+        targets.append({ target.assetGuid, target.path, true });
     }
-    return rebuildPumped(jobs, std::function<void(int, int)>());
+    if (jobs.isEmpty()) return 0;
+    bakeAsync(jobs, targets, std::function<void(int)>());
+    return jobs.size();
+}
+
+bool ensureFreshAsync(const QString &sourcePath, const QString &assetGuid, QObject *context,
+                      std::function<void(bool fresh)> landed)
+{
+    QSqlDatabase conn = QSqlDatabase::database();
+    const QString root = AssetStorePaths::root();
+    if (sourcePath.isEmpty() || isFresh(conn, root, sourcePath, assetGuid)) return false;
+    const QVector<BakeJob> jobs = staleJobsFor(conn, root, { sourcePath });
+    if (jobs.isEmpty()) return false;   // no source on disk: the model stays missing
+    QPointer<QObject> guard(context);
+    bakeAsync(jobs, { { assetGuid, sourcePath, true } },
+              [guard, landed, sourcePath, assetGuid](int) {
+                  if (!guard || !landed) return;
+                  landed(isFresh(QSqlDatabase::database(), AssetStorePaths::root(), sourcePath,
+                                 assetGuid));
+              });
+    return true;
+}
+
+bool bakePending(const QString &sourcePath)
+{
+    return sPending.contains(sourcePath);
+}
+
+int pendingBakeCount()
+{
+    return sPendingJobs;
+}
+
+void addLandedListener(QObject *context, std::function<void(const QVector<LandedBake> &)> listener)
+{
+    sListeners.append({ QPointer<QObject>(context), std::move(listener) });
 }
 
 QStringList modelSourcesNeedingBake(QSqlDatabase conn, const QString &root)

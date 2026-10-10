@@ -1898,9 +1898,17 @@ void SceneReader::extractAssetsFromAssimpScene(QString filePath, const QString &
         // gone or from another build. The open reports it (a `model.missing`
         // scene issue, ProjectService::missingModels) and the nodes that use
         // it load without geometry.
-        if (!missingModelPaths.contains(filePath)) missingModelPaths.append(filePath);
-        irisLog(QStringLiteral("scene reader: '%1' has no current mesh bake — the model is missing "
-                               "from this open (re-import it)").arg(QFileInfo(filePath).fileName()));
+        // ...UNLESS ITS BAKE IS BEING BUILT (STAGE-CLOSE-TRIAGE-1 F3): a paste or a share-file import
+        // returns before its bake lands, and a node placed meanwhile gets its geometry when it does
+        // (SceneEditService's landed listener; a failed bake raises the issue there).
+        if (MeshBakeStore::bakePending(filePath)) {
+            irisLog(QStringLiteral("scene reader: '%1' is being baked — its geometry arrives when the "
+                                   "bake lands").arg(QFileInfo(filePath).fileName()));
+        } else {
+            if (!missingModelPaths.contains(filePath)) missingModelPaths.append(filePath);
+            irisLog(QStringLiteral("scene reader: '%1' has no current mesh bake — the model is missing "
+                                   "from this open (re-import it)").arg(QFileInfo(filePath).fileName()));
+        }
 
         meshes.insert(cacheKey, meshList);
         assimpScenes.insert(cacheKey);
