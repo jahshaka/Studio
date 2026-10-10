@@ -19,6 +19,8 @@ function J(x) { return JSON.stringify(x); }
 var RIG = "@SOURCE_DIR@/tests/skeletal/fixtures/mixamo_tpose.fbx";   // skinned, NO clip in the file
 var RIG_TINY = "@SOURCE_DIR@/tests/avatar/fixtures/rig2_tiny.glb";
 var QUAD = "@SOURCE_DIR@/tests/importer/fixtures/scaled_two_meshes.glb";
+var RIG_SCALED = "@SOURCE_DIR@/tests/avatar/fixtures/rig2_giant.glb";               // the envelope's rig
+var MEMBERED = "@SOURCE_DIR@/tests/importer/fixtures/material_workflows.glb";       // nodes name a Mesh member
 
 /// Every store row whose content is `oid` goes, and the store's unreferenced bytes: the library no
 /// longer holds the model, so a paste of it imports rows and must BAKE.
@@ -31,6 +33,30 @@ function forgetContent(oid) {
     assets.gc({ dryRun: false });
 }
 function engineErrors() { return app.engineErrors(true).recorded; }
+/// The mesh nodes at or under `id` (the scene's own parent links).
+function meshNodesUnder(id) {
+    var nodes = scene.nodes(), under = {}, out = [];
+    under[id] = true;
+    var grew = true;
+    while (grew) {
+        grew = false;
+        nodes.forEach(function (n) { if (!under[n.id] && under[n.parent]) { under[n.id] = true; grew = true; } });
+    }
+    nodes.forEach(function (n) { if (under[n.id] && n.type === "mesh") out.push(n.id); });
+    return out;
+}
+function allGraphStatic(id) {
+    var ids = meshNodesUnder(id);
+    return ids.length > 0 && ids.every(function (m) { return node.mobility(m).graphStatic === true; });
+}
+function skeletalClipCount() {
+    var n = 0;
+    scene.nodes().forEach(function (x) { anim.list(x.id).forEach(function (a) { if (a.skeletal) ++n; }); });
+    return n;
+}
+function sameSize(a, b) {
+    return Math.abs(a.x - b.x) < 1e-3 && Math.abs(a.y - b.y) < 1e-3 && Math.abs(a.z - b.z) < 1e-3;
+}
 function geometry(id) { return scene.bounds({ nodes: [id] }).nodes; }
 function land() {
     assets.holdBakes(false);
@@ -81,6 +107,7 @@ assert(engineErrors() === 0, "no engine error at the landing (the static/dynamic
 var flat = importAndPlace(RIG_TINY, { skeleton: false, clips: false });
 assert(flat.nodeId, "rig2.glb placed WITHOUT its skeleton: " + J(flat));
 editor.frame(40, 1 / 60);   // settled: a static mesh is static
+assert(allGraphStatic(flat.nodeId), "P1b's precondition: the placed static model IS graph-static before the reimport");
 var rigged0 = scene.rigStats().rigged;
 var re = assets.reimport(flat.assetGuid, { skeleton: true, clips: false });
 assert(re.swappedNodes >= 1, "the reimport swapped the skinned mesh into the placed node: " + J(re));
@@ -101,5 +128,27 @@ var redone = null;
 scene.nodes().forEach(function (n) { if (n.id === quadNode) redone = n.id; });
 assert(redone !== null, "the redone node is the pasted one");
 assert(geometry(quadNode) >= 1, "F4: the redone node has the geometry that landed while it was undone");
+editor.frame(40, 1 / 60);   // the settle
+assert(allGraphStatic(quadNode), "F4: ...and it is graph-STATIC after the redo and the settle (the content completed after the classification)");
 assert(engineErrors() === 0, "no engine error");
+
+// ---- THE ENVELOPE: a paste carries the import record (read 4) -----------------------------------
+// A rig imported at scale 2 with no clips, and a model whose nodes name its MESH MEMBER (the record
+// lives on the Object row: the member-to-object edge must ride the closure), each pasted foreign:
+// the landing bakes under the record they were imported with — the same bounds, the same clips.
+[{ path: RIG_SCALED, options: { scale: 2, clips: false }, what: "the scaled clip-less rig" },
+ { path: MEMBERED, options: { scale: 2 }, what: "the scaled model named through its member" }].forEach(function (c) {
+    var placed = importAndPlace(c.path, c.options);
+    editor.frame(3, 1 / 60);
+    var before = scene.bounds({ nodes: [placed.nodeId] });
+    var clipsBefore = skeletalClipCount();
+    var pastedId = pasteForeign(placed);
+    land();
+    var after = scene.bounds({ nodes: [pastedId] });
+    assert(after.nodes === before.nodes && sameSize(after.size, before.size),
+           c.what + ": the pasted copy has the SAME bounds (" + J(before.size) + " vs " + J(after.size) + ")");
+    assert(skeletalClipCount() === clipsBefore,
+           c.what + ": ...and the same skeletal clips (" + clipsBefore + " vs " + skeletalClipCount() + ")");
+    node.remove(pastedId);
+});
 console.log("bundle_landing: ALL OK");
