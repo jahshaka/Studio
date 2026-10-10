@@ -193,6 +193,10 @@ endfunction()
 # THE TIMEOUT POLICY (TEST_GATE_AUDIT.md §3, applied across tests/ 2026-09-09).
 #
 # Every row's TIMEOUT is 6x its measured seconds with a floor, and nothing else.
+# THE STATISTIC (lead decision, TESTING-CLEANUP-2B fix round, 2026-10-10): "measured" is the run log's QUIET MEDIAN
+# (PASS runs with no sibling ctest), and the TIMEOUT is never below the QUIET WORST measured UNDER THE SLOT (runs since
+# 2026-10-09 18:00 — one gate at a time, the honest regime): max(6 x quiet median, slot-era worst), rounded up to 10 s.
+# Never a contended worst (before the slot a "worst" was another lane's load), never the median alone.
 # It used to be whatever number felt safe when the row was written: 25 suites
 # sat between 38x and 173x of their measured time and a hundred more above that,
 # with 600 s and 900 s ceilings on suites that take one second. That is not

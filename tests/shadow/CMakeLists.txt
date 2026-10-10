@@ -100,7 +100,8 @@ set_tests_properties(shadow.helper_casters PROPERTIES TIMEOUT 120 LABELS "engine
 # script in TEN processes (shadow_casters.sh's last argument), labels `stage-close` + `engine`, in the
 # stage-close batch beside gpu.cutout_soak and in a scoped gate only through a shadow/caster change
 # (gate-scope.py STAGE_CLOSE_SUBJECTS). 80 runs / 8.84 h in a week of gates, 0 red ever, before the split.
-# THE TIMEOUTS ARE 6x THE QUIET WORST (tests/CMakeLists.txt's policy), from the run-log ARCHIVE's quietest ten-process
+# THE TIMEOUTS ARE max(6x THE QUIET MEDIAN, THE SLOT-ERA WORST) (tests/CMakeLists.txt's policy); set here (before that
+# statistic was decided) as 6x the run-log ARCHIVE's quietest ten-process
 # runs: cutout 454 s, two-sided 427 s (45.4 / 42.7 s a process). The one-process gate rows: 6 x 45.4 -> 272, 6 x 42.7 ->
 # 256. The ten-process .churn twins: 6 x 349 -> 2100 and 6 x 320 -> 1950 (the run log's quiet ten-process worst
 # 349 / 320 s). Measured alone in the slot on 2026-10-09 at load 14-18 (NOT quiet): cutout 124 / 179 / 84 s, two-sided

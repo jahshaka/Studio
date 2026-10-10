@@ -77,9 +77,11 @@ jah_gpu_row(app.startup_quiet CLASS app TIER document
                  "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>"
                  "${CMAKE_CURRENT_SOURCE_DIR}/startup_quiet.js"
          WORKING_DIRECTORY ${_sq_home}/run)
+# TESTING-CLEANUP-2B: TIMEOUT 320 = the slot-era worst 311.4 s (9 PASS runs since 2026-10-09 18:00), above 6 x the
+# quiet median 30.1 s = 190 — the policy's max (tests/CMakeLists.txt); 300 sat below its own slot-era worst.
 set_tests_properties(app.startup_quiet PROPERTIES
     ENVIRONMENT "HOME=${_sq_home};JAHSHAKA_DATA_ROOT=${_sq_home}/.local/share/Jahshaka"
-    TIMEOUT 300
+    TIMEOUT 320
     LABELS "app")
 
 # app.test_needs_boot — A TEST PROCESS BOOTS WHAT ITS ROW NEEDS (TEST-NEEDS-1; services/testtier.h,
@@ -137,11 +139,12 @@ jah_gpu_row(app.shader_gate_warm CLASS app TIER document
                  "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>"
                  "${CMAKE_CURRENT_SOURCE_DIR}/startup_quiet.js"
          WORKING_DIRECTORY ${_sgw_home}/run)
-# TESTING-CLEANUP-2B item 2: TIMEOUT 480 = 6 x the run log's quiet median 79.5 s (48 quiet PASS runs since 2026-10-01, worst 705.9 s);
-# declared 350 was below the policy, honest only with the +900 s widening (now deleted).
+# TESTING-CLEANUP-2B: TIMEOUT 710 = the slot-era worst 705.9 s (8 PASS runs since 2026-10-09 18:00), above 6 x the
+# quiet median 80.2 s (49 quiet PASS runs since 2026-10-01) = 490 — the policy's max (tests/CMakeLists.txt). Declared
+# 350 was honest only with the +900 s widening (now deleted). The 706 s run is 9x the median: a finding for the triage.
 set_tests_properties(app.shader_gate_warm PROPERTIES
     ENVIRONMENT "HOME=${_sgw_home};JAHSHAKA_DATA_ROOT=${_sgw_home}/.local/share/Jahshaka"
-    TIMEOUT 480   # 6x the measured 57.6 s (three arms x two boots; spikes/testing-debts-1/t7-run1.log)
+    TIMEOUT 710
     LABELS "app")
 
 # app.input_keys — EVERY INPUT-SYNTHESIS ASSERTION THE EDITOR HAS, ON ONE BOOT.
