@@ -683,6 +683,12 @@ def batch_range_cases(E):
     check(bool(dep) and E.cgc.Reach.reaches(trav, key) and E.cgc.Reach.reaches(R.of(g30, "fork"), key),
           "(2, read 1 F1) a dependency-only change to a stage-close row between A and the base refuses the travel, and the "
           "re-use arm does not re-use across it (%s)" % (key in (trav or set()) if trav is not E.cgc.Reach.ALL else "ALL"))
+    # read 2 F1: THE PROVING SIDE counts the set-aside row too — a fix of gi.chain_converge_scenes landing outside its
+    # test dir (an app source) PROVES it (the Prover reaches it across `dep`); the empty-set side of a fallback stays.
+    # RED ON 8e57285b6: not reached -> "an OPEN red at c that c..tip does not reach" at a push / stage close
+    prover2 = E.cgc.Prover(gs, E.build, lambda: R)
+    check(bool(dep) and prover2(g30, dep, key) and E.cgc.Reach.reaches(R.between(g30, dep, unreadable=set()), key),
+          "(2, read 2 F1) the Prover reaches the set-aside stage-close row across the same dependency-only change")
 
 
 def registry_id_cases(E):

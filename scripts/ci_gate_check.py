@@ -674,12 +674,12 @@ class Reach:
                         reach |= {(n, f"{pool}.{arm}") for arm in subsets[n]}
                     elif pool:
                         reach.add((n, "*"))      # the whole pool: every arm
-                if unreadable is Reach.ALL:
-                    # A STAGE-CLOSE ROW THE SELECTOR SET ASIDE WAS STILL REACHED (TESTING-CLEANUP-2D read 1 F1): gate-scope
-                    # pops a stage-close row reached by anything but its own subject into stage_close_left (the batch runs
-                    # it) — for RE-USE and for a TRAVELLING base proof that is a reach all the same (every arm with it)
-                    for n in getattr(S, "stage_close_left", None) or {}:
-                        reach |= {(n, None), (n, "*")}
+                # A STAGE-CLOSE ROW THE SELECTOR SET ASIDE WAS STILL REACHED (TESTING-CLEANUP-2D read 1 F1, read 2 F1): gate-
+                # scope pops a stage-close row reached by a rule or the graph — anything but its own subject — into
+                # stage_close_left for COST only (the batch runs it); unlike a fallback it WAS reached, so it is a reach on
+                # EVERY side: for re-use, for a travelling base proof, and for PROVING a fix (every arm with it)
+                for n in getattr(S, "stage_close_left", None) or {}:
+                    reach |= {(n, None), (n, "*")}
         except SystemExit:
             reach = unreadable
         self.cache[ck] = reach
