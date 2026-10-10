@@ -90,13 +90,14 @@ int finalizeAppExit(int rc)
 
 namespace {
 
-// THE TEST TIER'S WINDOW (TEST-TIER-1, services/testtier.h): a windowed script
-// run whose process has a test tier boots at 1280x720 instead of the screen's
-// size — the chain's render targets follow the window. What app.resizeWindow
-// does, before the first frame; an arm that needs another size resizes itself.
+// THE TEST WINDOW (TEST-TIER-1, services/testtier.h): a windowed script run whose row
+// declares it (JAHSHAKA_TEST_WINDOW=1280x720 — its own declaration since TEST-NEEDS-1, never
+// implied by the tier) boots at 1280x720 instead of the screen's size — the chain's render
+// targets follow the window. What app.resizeWindow does, before the first frame; an arm that
+// needs another size resizes itself.
 void applyTestTierWindow(MainWindow &window, QApplication &app, bool headless)
 {
-    if (headless || !testtier::active()) return;
+    if (headless || !testtier::testWindow()) return;
     if (window.isFullScreen() || window.isMaximized()) window.showNormal();
     window.resize(testtier::kWindowWidth, testtier::kWindowHeight);
     app.processEvents();

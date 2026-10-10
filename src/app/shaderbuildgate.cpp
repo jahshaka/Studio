@@ -37,9 +37,10 @@ using namespace jahshaka::engine;
 namespace {
 
 /// Puts `doc` on the World a new scene of this process is born with: Epic (the product), or
-/// the process's test tier with what it does not NEED switched off (TEST-TIER-1, WORLD-MODE-1:
-/// worldmodes::applyTestTier, the same call MainWindow::setScene makes) — the state the
-/// warm-up must compile for.
+/// the process's test tier with every switchable feature its JAHSHAKA_TEST_NEEDS does not name
+/// off (TEST-TIER-1, TEST-NEEDS-1: worldmodes::applyTestTier, the same call MainWindow::setScene
+/// makes) — the state the warm-up must compile for, so a test process neither compiles in its
+/// test what the warm-up skipped nor warms what it never draws. (WORLD-MODE-1's shape.)
 void applyBornWorld(const iris::ScenePtr &doc)
 {
     if (testtier::active()) worldmodes::applyTestTier(doc);

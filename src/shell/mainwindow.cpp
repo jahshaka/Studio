@@ -1383,8 +1383,8 @@ void MainWindow::setScene(QSharedPointer<iris::Scene> scene)
     // that asked for one puts EVERY scene it binds on that World Mode — new or
     // opened, after the reader, through the call world.mode makes — before the
     // viewport below hands it to the engine, so the Epic chain is never built.
-    // A process with none (the product) keeps the scene's own tier. Photon and bloom are
-    // switched off unless JAHSHAKA_TEST_NEEDS names them (worldmodes::applyTestTier).
+    // A process with none (the product) keeps the scene's own tier. Every switchable
+    // feature JAHSHAKA_TEST_NEEDS does not name is switched off (worldmodes::applyTestTier).
     if (scene && testtier::active()) worldmodes::applyTestTier(scene);
 
     this->scene = scene;

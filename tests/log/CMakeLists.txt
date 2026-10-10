@@ -48,14 +48,13 @@ jah_no_display(log.core)
 # reachable X display), and takes its OWN HOME so the library DB is fresh.
 set(_le_home ${CMAKE_CURRENT_BINARY_DIR}/log-events-home)
 file(MAKE_DIRECTORY ${_le_home}/run)
-jah_gpu_row(log.events CLASS app TIER low
+jah_gpu_row(log.events CLASS app TIER low NEEDS NONE TEST_WINDOW
          COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/log_events.sh"
                  "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>"
                  "${CMAKE_CURRENT_SOURCE_DIR}/e2e_log_events.js"
          WORKING_DIRECTORY ${_le_home}/run)
 set_tests_properties(log.events PROPERTIES
-    # JAHSHAKA_TEST_TIER=low (TEST-TIER-1): no claim here needs the shipped picture — the same verdict and ok count at Low (spikes/test-tier-1/solo-okcount.txt)
-    ENVIRONMENT "HOME=${_le_home};JAHSHAKA_DATA_ROOT=${_le_home}/.local/share/Jahshaka;JAHSHAKA_TEST_TIER=low"
+    ENVIRONMENT "HOME=${_le_home};JAHSHAKA_DATA_ROOT=${_le_home}/.local/share/Jahshaka"
     TIMEOUT 240
     LABELS "log")
 
@@ -67,14 +66,16 @@ set_tests_properties(log.events PROPERTIES
 # cleanly on the NULL render system instead of crashing.
 set(_lg_home ${CMAKE_CURRENT_BINARY_DIR}/log-engine-home)
 file(MAKE_DIRECTORY ${_lg_home}/run)
-jah_gpu_row(log.engine CLASS app TIER low
+# TIER epic NEEDS photon (TEST-NEEDS-1, the lead's lifecycle rule): its claim is the engine's startup
+# path (the Ogre log listener, the device rows) — Photon on, as the product boots; TEST_WINDOW keeps
+# the 1280x720 window TEST-TIER-1 measured it at.
+jah_gpu_row(log.engine CLASS app TIER epic NEEDS photon TEST_WINDOW
          COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/log_engine.sh"
                  "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>"
                  "${CMAKE_CURRENT_SOURCE_DIR}/e2e_log_engine.js"
          WORKING_DIRECTORY ${_lg_home}/run)
 set_tests_properties(log.engine PROPERTIES
-    # JAHSHAKA_TEST_TIER=low (TEST-TIER-1): no claim here needs the shipped picture — the same verdict and ok count at Low (spikes/test-tier-1/solo-okcount.txt)
-    ENVIRONMENT "HOME=${_lg_home};JAHSHAKA_DATA_ROOT=${_lg_home}/.local/share/Jahshaka;JAHSHAKA_TEST_TIER=low"
+    ENVIRONMENT "HOME=${_lg_home};JAHSHAKA_DATA_ROOT=${_lg_home}/.local/share/Jahshaka"
     TIMEOUT 300
     LABELS "log")
 
@@ -90,7 +91,7 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     if(JAH_LOGPERF_CURL AND JAH_LOGPERF_JQ)
         set(_lp_home ${CMAKE_CURRENT_BINARY_DIR}/log-perf-home)
         file(MAKE_DIRECTORY ${_lp_home}/run)
-        jah_gpu_row(log.perf CLASS app
+        jah_gpu_row(log.perf CLASS app TIER low NEEDS NONE
                  COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/log_perf.sh"
                          "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>"
                          "${CMAKE_CURRENT_SOURCE_DIR}/e2e_log_perf.js"

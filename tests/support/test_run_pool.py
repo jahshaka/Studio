@@ -140,7 +140,7 @@ tierapp = tempfile.NamedTemporaryFile("w", suffix=".py", delete=False)
 tierapp.write(r'''#!/usr/bin/env python3
 import os, sys
 a = sys.argv; pool = a[a.index("--pool") + 1]
-tier = a[a.index("--test-tier") + 1] if "--test-tier" in a else "document"
+tier = os.environ.get("JAHSHAKA_TEST_TIER") or "document"
 print("POOL-MEM %s gpuPoolUsed=%d textures=40 tier=%s" % (pool, 300 if tier == "low" else 1445, tier), flush=True)
 for i, e in enumerate(a[a.index("--scripts") + 1].split(",")):
     n = e.split("=", 1)[0]
@@ -156,8 +156,10 @@ os.chmod(tierapp.name, 0o755)
 def tiered(t, curve):
     arms_ = []
     for i in range(len(curve)): arms_ += ["--arm", "a%d" % (i + 1), "x.js", "30"]
-    return run([sys.executable, driver, "--pool", "tiered", "--app", tierapp.name, "--tier", t] + arms_,
-               {"JAH_POOL_ARMS": "", "TIER_CURVE": ",".join(str(x) for x in curve)})
+    # the declaration rides the row's environment (jah_add_pool TIER + NEEDS), never an argument
+    return run([sys.executable, driver, "--pool", "tiered", "--app", tierapp.name] + arms_,
+               {"JAH_POOL_ARMS": "", "TIER_CURVE": ",".join(str(x) for x in curve),
+                "JAHSHAKA_TEST_TIER": t, "JAHSHAKA_TEST_NEEDS": "none" if t == "low" else "photon"})
 def findings(out, word):
     return [l.split(" (process")[0] for l in out.splitlines() if l.startswith(word + " ")]
 mems, outs = {}, {}
@@ -167,7 +169,7 @@ for t, curve in (("low", [320, 480, 500, 520, 540]), ("epic", [1445, 1445, 1445]
     show(out3)
     outs[t] = out3
     mems[t] = [l for l in out3.splitlines() if l.startswith("MEM tiered ")]
-    check(rc3 == 0, "--tier %s: the pool runs" % t)
+    check(rc3 == 0, "TIER %s: the pool runs" % t)
 arm_mems = [l for l in outs["low"].splitlines() if l.startswith("MEM tiered.")]
 check(arm_mems == ["MEM tiered.a%d gpuPoolUsed=%d textures=40" % (i + 1, mb)
                    for i, mb in enumerate([320, 480, 500, 520, 540])],
@@ -194,12 +196,12 @@ os.unlink(tierapp.name)
 mems = {t: [l for l in v if not l.startswith("MEM tiered.")] for t, v in mems.items()}
 check(len(mems["low"]) == 1 and mems["low"][0].startswith("MEM tiered gpuPoolUsed=300 textures=40 processMiB=")
       and mems["low"][0].endswith("tier=low"),
-      "TIER low: every process gets --test-tier low, and the boot's MEM line is printed once (%s)" % mems["low"])
-check(len(mems["epic"]) == 1 and mems["epic"][0].endswith("tier=document") and "gpuPoolUsed=1445" in mems["epic"][0],
-      "TIER epic: no --test-tier is passed (the document's own tier) (%s)" % mems["epic"])
-rc4, out4 = run([sys.executable, driver, "--pool", "x", "--app", "true", "--tier", "medium",
+      "TIER low: every process boots the row's JAHSHAKA_TEST_TIER, and the boot's MEM line is printed once (%s)" % mems["low"])
+check(len(mems["epic"]) == 1 and mems["epic"][0].endswith("tier=epic") and "gpuPoolUsed=1445" in mems["epic"][0],
+      "TIER epic: the process boots the row's declared Epic (%s)" % mems["epic"])
+rc4, out4 = run([sys.executable, driver, "--pool", "x", "--app", "true", "--tier", "low",
                  "--arm", "a", "x.js", "30"])
-check(rc4 == 2 and "--tier" in out4, "a TIER the driver does not know is refused (exit %d)" % rc4)
+check(rc4 == 2 and "--tier" in out4, "the driver takes no --tier: the declaration is the row's environment (exit %d)" % rc4)
 # ...and the run log reads the field (scripts/gate_runlog.py, the `mem` of a pool's row).
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(driver)))), "scripts"))
 import gate_runlog

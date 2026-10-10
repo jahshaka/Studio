@@ -2173,7 +2173,7 @@ configure_file(${CMAKE_CURRENT_SOURCE_DIR}/scripts/photon_view.js.in
 # half is the kernel's: like every GPU row since TEST-SELECTOR-1 H4, the admission
 # (scripts/vram_tokens.py) reds the row on any NVRM Xid line from its process tree since
 # the launch (scripts/kernel_xid.py reads the journal, no sudo).
-jah_gpu_row(photon.view CLASS app
+jah_gpu_row(photon.view CLASS app TIER epic NEEDS photon bloom ssao smaa planar
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
                  --script ${CMAKE_CURRENT_BINARY_DIR}/photon_view.js
          WORKING_DIRECTORY ${_photon_view_home}/run)

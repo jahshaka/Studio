@@ -49,6 +49,6 @@ pair() {
 }
 
 pair epic
-pair low JAHSHAKA_TEST_TIER=low
+pair low JAHSHAKA_TEST_TIER=low JAHSHAKA_TEST_NEEDS=none
 pair norays JAHSHAKA_NO_RAY_QUERY=1
 exit $fail

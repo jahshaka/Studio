@@ -18,10 +18,11 @@ prints one line per arm; this driver owns what the app cannot:
     environment (so `JAH_POOL_ARMS=gi_verbs.gi_status ctest -R '^pool\\.gi_verbs$'`
     is the solo retry of one arm, through the real row). A pool the variable does
     not name runs every arm; `<pool>` alone names the whole pool.
-  * THE TIER (TEST-TIER-1). `--tier low` starts every process with `--test-tier low`
-    (every scene it binds on the Low World Mode, the window 1280x720 — services/testtier.h);
-    `--tier epic` (the default) passes nothing, so each scene keeps its own tier — the
-    pixel pools. At every boot the app prints `POOL-MEM <pool> gpuPoolUsed=<MB>
+  * THE TIER (TEST-TIER-1, TEST-NEEDS-1). The pool's declaration (`TIER` + `NEEDS`,
+    tests/support/vram_tokens.cmake) rides the ROW'S ENVIRONMENT — JAHSHAKA_TEST_TIER and
+    JAHSHAKA_TEST_NEEDS reach every process this driver starts, which boots that World Mode
+    with only the named features on (services/testtier.h); the driver passes no tier of its
+    own. At every boot the app prints `POOL-MEM <pool> gpuPoolUsed=<MB>
     textures=<MB> tier=<t>` (app.memoryStats / app.textureMemory); this driver prints it as
     `MEM <pool> gpuPoolUsed=<MB> textures=<MB> processMiB=<MiB> tier=<t>`, the last figure
     the process's own nvidia-smi line, and the run log (scripts/gate_runlog.py) records it on
@@ -58,7 +59,7 @@ prints one line per arm; this driver owns what the app cannot:
 
 Usage:
   run_pool.py --pool <name> --app <Jahshaka> [--headless] [--arms a,b] [--baseline <js>]
-              [--boot-budget <s>] [--tier low|epic] [--vram-tokens <k>] --arm <name> <script> <budget-s> [--arm ...]
+              [--boot-budget <s>] [--vram-tokens <k>] --arm <name> <script> <budget-s> [--arm ...]
               [-- <extra app args>]
 
 --baseline <js>: the pool's own baseline script, run by the app after EVERY arm, green
@@ -83,7 +84,6 @@ ARM_END = re.compile(r"^ARM (\S+)\.(\S+) (PASS|FAIL) (\d+)(?: (.*))?$")
 BASELINE_LOST = re.compile(r"^POOL-BASELINE-LOST (\S+)\.(\S+) (.*)$")
 POOL_MEM = re.compile(r"^POOL-MEM (\S+) (.*?) tier=(\S+)\s*$")
 ARM_MEM = re.compile(r"^POOL-MEM (\S+)\.(\S+) gpuPoolUsed=(\d+) textures=(\d+)\s*$")
-TIERS = ("low", "epic")
 
 
 def usage(msg):
@@ -93,7 +93,7 @@ def usage(msg):
 
 def parse(argv):
     opt = {"pool": None, "app": None, "headless": False, "arms": None,
-           "boot": 300.0, "list": [], "extra": [], "baseline": None, "tier": "epic", "vram": 0}
+           "boot": 300.0, "list": [], "extra": [], "baseline": None, "vram": 0}
     i = 0
     while i < len(argv):
         a = argv[i]
@@ -106,10 +106,6 @@ def parse(argv):
             opt["app"] = argv[i + 1]; i += 2
         elif a == "--baseline":
             opt["baseline"] = argv[i + 1]; i += 2
-        elif a == "--tier":
-            opt["tier"] = argv[i + 1]; i += 2
-            if opt["tier"] not in TIERS:
-                usage("--tier: '%s' is not one of %s" % (opt["tier"], ", ".join(TIERS)))
         elif a == "--headless":
             opt["headless"] = True; i += 1
         elif a == "--arms":
@@ -299,8 +295,6 @@ def main():
         cmd = [opt["app"], "--scripts", spec, "--pool", pool]
         if opt["headless"]:
             cmd.append("--headless")
-        if opt["tier"] != "epic":
-            cmd += ["--test-tier", opt["tier"]]
         if opt["baseline"]:
             cmd += ["--pool-baseline", opt["baseline"]]
         cmd += opt["extra"]

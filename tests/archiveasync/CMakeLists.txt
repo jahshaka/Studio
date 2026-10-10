@@ -27,7 +27,7 @@ target_compile_definitions(test_archive_responsive PRIVATE
 
 set(_archive_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-archive)
 file(MAKE_DIRECTORY ${_archive_home}/run)
-jah_gpu_row(archive.responsive CLASS app COMMAND test_archive_responsive
+jah_gpu_row(archive.responsive CLASS app TIER epic NEEDS photon COMMAND test_archive_responsive
          WORKING_DIRECTORY ${_archive_home}/run)
 set_tests_properties(archive.responsive PROPERTIES
     ENVIRONMENT "HOME=${_archive_home};JAHSHAKA_DATA_ROOT=${_archive_home}/.local/share/Jahshaka"
@@ -37,7 +37,7 @@ set_tests_properties(archive.responsive PROPERTIES
 # GPU-timing lock; the push row above asserts everything else and prints the gaps.
 set(_archive_timing_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-archive-timing)
 file(MAKE_DIRECTORY ${_archive_timing_home}/run)
-jah_gpu_exclusive_test(NAME archive.responsive.timing CLASS app RUN_TIMEOUT 300 COMMAND test_archive_responsive
+jah_gpu_exclusive_test(NAME archive.responsive.timing CLASS app TIER epic NEEDS photon RUN_TIMEOUT 300 COMMAND test_archive_responsive
          WORKING_DIRECTORY ${_archive_timing_home}/run)
 set_tests_properties(archive.responsive.timing PROPERTIES
     ENVIRONMENT "HOME=${_archive_timing_home};JAHSHAKA_DATA_ROOT=${_archive_timing_home}/.local/share/Jahshaka;JAHSHAKA_TIMING_BARS=1"

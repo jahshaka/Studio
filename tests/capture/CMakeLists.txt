@@ -38,7 +38,7 @@ jah_pool_arm(capture offline_unique ${CMAKE_CURRENT_SOURCE_DIR}/scripts/capture_
 set(SOURCE_DIR ${CMAKE_SOURCE_DIR})
 configure_file(scripts/capture_offline_video.js.in ${CMAKE_CURRENT_BINARY_DIR}/capture_offline_video.js @ONLY)
 jah_pool_arm(capture offline_video ${CMAKE_CURRENT_BINARY_DIR}/capture_offline_video.js 30)
-jah_add_pool(capture TIER epic LABELS scripting capture)
+jah_add_pool(capture TIER document   LABELS scripting capture)
 
 # capture.faststart — the fast-start step (src/modules/capture/mp4faststart.cpp) on SYNTHETIC
 # files: the 32-bit table shifted, a shift past 4 GiB widened to co64, a co64 table, an

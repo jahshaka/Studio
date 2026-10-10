@@ -356,7 +356,7 @@ configure_file(scripts/atom_lod_switch.js.in ${CMAKE_CURRENT_BINARY_DIR}/atom_lo
 jah_fresh_home_fixture(atom.lod_switch.fixture atomLodSwitchHome "${_lod_switch_home}" THEN "$<TARGET_FILE:test_mesh_bake>" "--write-standin" "${LOD_STANDIN}" LABELS "scripting")
 # The stand-in is written on the CPU (an .obj), so the fixture boots no Vulkan (GATE-ADMIT-1: no VRAM tokens).
 jah_no_display(atom.lod_switch.fixture)
-jah_gpu_row(atom.lod_switch CLASS app
+jah_gpu_row(atom.lod_switch CLASS app TIER epic NEEDS photon
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
                  --script ${CMAKE_CURRENT_BINARY_DIR}/atom_lod_switch.js
          WORKING_DIRECTORY ${_lod_switch_home}/run)
@@ -377,7 +377,7 @@ set(JAH_OCCLUSION_SHOWROOM "${CMAKE_SOURCE_DIR}/scenes/Showroom 2.zip")
 configure_file(scripts/atom_occlusion.js.in ${CMAKE_CURRENT_BINARY_DIR}/atom_occlusion.js @ONLY)
 set(_occl_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-atom_occlusion)
 jah_fresh_home_fixture(atom.occlusion_exact_app.fresh_home atomOcclusionHome "${_occl_home}" LABELS "scripting")
-jah_gpu_row(atom.occlusion_exact_app CLASS app
+jah_gpu_row(atom.occlusion_exact_app CLASS app TIER epic NEEDS photon bloom ssao smaa planar
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/atom_occlusion.js
          WORKING_DIRECTORY ${_occl_home}/run)
 set_tests_properties(atom.occlusion_exact_app PROPERTIES
