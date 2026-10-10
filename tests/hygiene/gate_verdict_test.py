@@ -189,6 +189,22 @@ def case_verdict_door(E):
     st, why = E.judge([rec("FAIL", T % "10:00", failLine="FAIL: thumbnail 12 px off"), vrec("real:VIEWS-XID-1", T % "11:00")],
                       base=[rec("FAIL", T % "09:00", retry=True, failLine="FAIL: thumbnail 14 px off")])
     check(st == "known", "...the same class and failLine (numbers masked) on the base -> KNOWN RED (%s)" % why[:70])
+    # TESTING-CLEANUP-2C item 1: THE TREE ROOT IS NOT THE FAILURE. Batch C2 refused three KNOWN RED verdicts whose lines
+    # differed only by the tree root (rc-batch-C2 vs rc-base-d4991c754). RED ON 314770a52: "not the SAME red".
+    W_ = "/home/jahshaka/Developer/jahshaka/.claude/worktrees/"
+    msg = "FAIL: the data root and the working directory must be inside %s/build-linux/tests/scripting/e2e-home-clip_ref"
+    st, why = E.judge([rec("FAIL", T % "10:00", failLine=msg % (W_ + "rc-batch-C2")), vrec("real:VIEWS-XID-1", T % "11:00")],
+                      base=[rec("FAIL", T % "09:00", retry=True, failLine=msg % ("/mnt/work/Developer/jahshaka/.claude/worktrees/"
+                                                                                      "rc-base-d4991c754"))])
+    check(st == "known", "the same failure under two tree roots (rc-batch-C2 / rc-base-<sha>, two spellings of the root) "
+          "is the SAME red -> KNOWN RED (%s: %s)" % (st, why[:80]))
+    st, why = E.judge([rec("FAIL", T % "10:00", failLine=msg % (W_ + "rc-batch-C2")), vrec("real:VIEWS-XID-1", T % "11:00")],
+                      base=[rec("FAIL", T % "09:00", retry=True,
+                                failLine=(msg % (W_ + "rc-base-d4991c754")).replace("clip_ref", "tex_ref"))])
+    check(st == "red" and "not the SAME red" in why, "...a different file INSIDE the tree stays a different red (%s)" % why[:70])
+    check(E.cgc.masked("open /tmp/jah-lead/rc-C2.state: /tmp/a/.local/share/Jahshaka/x.db") ==
+          E.cgc.masked("open /tmp/jah-rc9/rc-C2.state: /home/u/.local/share/Jahshaka/x.db"),
+          "/tmp/jah-* and a data root are one token each (%s)" % E.cgc.masked("open /tmp/jah-lead/rc-C2.state"))
     st, why = E.judge([red, vrec("real:VIEWS-XID-1", T % "11:00")], base=base_solo)
     check(st == "known" and "KNOWN RED" in why, "real:<registered id> + the red reproduced by a solo at the base -> KNOWN "
           "RED (%s: %s)" % (st, why[:70]))
