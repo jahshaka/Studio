@@ -14,7 +14,7 @@
 // Phase A: off — nothing bound, no probes.
 // Phase B: plain VCT — VCT bound, still no probes.
 // Phase C: the hybrid — probeCount == the pccGrid product, and pccBound.
-// Phase F: the voxel reading (VOXEL-READOUT-1) - voxelReadingGather catches voxelGathers in frames.
+// Phase F: the voxel reading (VOXEL-READOUT-1) - voxelReadingGather catches voxelGathers within a derived frame bound.
 
 function assert(cond, msg) {
     if (!cond) throw new Error("assert failed: " + msg);
@@ -317,10 +317,25 @@ assert(st.pccBound === true && st.probeCount > 0,
 // gather that counted them, and nothing waits for the device, so they land a few
 // frames after it. voxelGathers counts the cascade's gathers and
 // voxelReadingGather is the one those numbers describe: never ahead of it, and
-// once the scene holds still it catches up in FRAMES (the engine's frames in
-// flight + the frame head that requests it; 16 is slack, never a clock).
-var cs = st.cascades;
+// once the scene holds still it catches up in FRAMES, never a clock. THE BOUND,
+// derived: the rebuilds still pending (at most one per frame) + 1 frame head that
+// requests the readout + Ogre's mDynamicBufferMultiplier (3) frames in flight.
+// First settle the gathers, as gi.readout_async does: frame until the chain's
+// gathers + pending rebuilds stop moving.
+var lastG = -1;
+for (var s = 0; s < 64; ++s) {
+    var g = 0, gcs = world.giStatus().cascades;
+    for (var n = 0; n < gcs.length; ++n) g += gcs[n].voxelGathers + gcs[n].pending;
+    if (g === lastG) break;
+    lastG = g;
+    editor.frame(1);
+}
+var cs = world.giStatus().cascades;
 assert(cs.length > 0, "the Epic chain has cascades");
+var pendingNow = 0;
+for (var p = 0; p < cs.length; ++p) pendingNow += cs[p].pending;
+var kFramesInFlight = 3;   // Ogre's mDynamicBufferMultiplier
+var bound = pendingNow + 1 + kFramesInFlight;
 var sane = true;
 for (var i = 0; i < cs.length; ++i)
     sane = sane && typeof cs[i].voxelGathers === "number" && typeof cs[i].voxelReadingGather === "number" &&
@@ -328,13 +343,15 @@ for (var i = 0; i < cs.length; ++i)
 assert(sane, "every cascade reports voxelGathers >= 1 and a voxelReadingGather never ahead of it: " +
              JSON.stringify(cs.map(function (c) { return [c.voxelReadingGather, c.voxelGathers]; })));
 var caught = -1;
-for (var f = 0; f <= 16 && caught < 0; ++f) {
+for (var f = 0; f <= bound && caught < 0; ++f) {
     var cur = world.giStatus().cascades, all = cur.length > 0;
     for (var k = 0; k < cur.length; ++k) all = all && cur[k].voxelReadingGather === cur[k].voxelGathers;
     if (all) caught = f; else editor.frame(1);
 }
-console.log("the voxel readings caught their newest gather after " + caught + " frame(s)");
-assert(caught >= 0, "every cascade's reading catches up with its newest gather (voxelReadingGather === voxelGathers) within 16 frames");
+console.log("the voxel readings caught their newest gather after " + caught + " frame(s) (bound " + bound +
+            " = " + pendingNow + " pending + 1 frame head + " + kFramesInFlight + " in flight)");
+assert(caught >= 0, "every cascade's reading catches up with its newest gather (voxelReadingGather === voxelGathers) within " +
+                    bound + " frames");
 
 // ---- teardown ------------------------------------------------------------
 assert(world.gi({ mode: "off" }), "world.gi(off) again");

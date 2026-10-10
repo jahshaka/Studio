@@ -16,11 +16,12 @@
 // The rows, over 120 frames of a camera walk that keeps the cascades re-voxelising:
 //  1. THE SENTRY: no read-back request submitted the queue (voxelReadoutFlushes, the
 //     request's own before/after reading of Ogre's current command buffer) - 0.
-//  2. giStatus never waits, STRUCTURALLY: the renderer's current command buffer
-//     (Engine::queueSubmissionTag) is the same before and after every giStatus call.
-//     A read-back that waits for the device on Vulkan must submit first, and a
-//     submit begins a new command buffer - so an unmoved tag is a call that neither
-//     submitted nor drained. No clock: the law counts frames, never time.
+//  2. giStatus never submits, STRUCTURALLY: the renderer's current command buffer
+//     (Engine::queueSubmissionTag) is the same before and after every giStatus call,
+//     so no call submitted or committed a command buffer (the old on-demand accurate
+//     readout did). The tag does NOT see a blocking map of an already-submitted
+//     ticket: rows 1 and 3 (the sentry, the landed readings) cover that. No clock:
+//     the law counts frames, never time.
 //  3. The feed was ACTIVE and the readings LAND: gathers ran, the reading's gather
 //     serial advanced, and once the walk stops every cascade's reading describes
 //     its newest gather within kLandFrames frames (1 frame head to request it + up
@@ -123,7 +124,7 @@ int main()
 
     CHECK(flushes == 0, "THE SENTRY: no voxel read-back request submitted the queue mid-frame (0 flushes)");
     CHECK(statusUnknown == 0, "the submission tag is readable (the Vulkan renderer) on every giStatus call");
-    CHECK(statusSubmits == 0, ("giStatus never waits: the queue's command buffer is unchanged across all " +
+    CHECK(statusSubmits == 0, ("giStatus never submits: the queue's command buffer is unchanged across all " +
                                std::to_string(statusCalls) + " calls of the walk (" +
                                std::to_string(statusSubmits) + " moved it)").c_str());
     CHECK(gathers - gathers0 >= 8, "the feed was ACTIVE: the walk re-voxelised (>= 8 gathers)");
