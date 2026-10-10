@@ -669,6 +669,7 @@ scripting.e2e.assets_scope 8.33  quiet n=37
 scripting.e2e.assets_scope.fresh_home 0.00  quiet n=40
 scripting.e2e.clip_ref 7.19  quiet n=23
 scripting.e2e.clip_ref.fresh_home 0.01  quiet n=13
+scripting.e2e.clipboard_budget 8.62  STAGE-CLOSE-TRIAGE-1 round 7: n=4 solo on :72 (8.56 / 8.62 / 8.65 / 8.65 s, 2026-10-10)
 scripting.e2e.editor_controls.timing 60.35  all n=2
 scripting.e2e.lattice_placement 124.62  quiet n=45
 scripting.e2e.material_bundle 10.06  quiet n=39
