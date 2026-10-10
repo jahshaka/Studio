@@ -36,6 +36,7 @@ On a box without the lead's tooling (no <workspace>/scripts/lead/merge-dbuild-la
 Run: gate_batch_test.py <source-dir> <build-dir>
 """
 import json
+import re
 import os
 import shutil
 import subprocess
@@ -496,6 +497,9 @@ def run(source, scripts, merge, scratch, rl, build_dir):
     for f in sorted(os.listdir(pend)) if os.path.isdir(pend) else []:
         pending[f] = json.load(open(os.path.join(pend, f)))
     kinds = {e["rows"][0]: e["kind"] for e in pending.values()}
+    # TESTING-CLEANUP-2B item 14: the attribution names its entries <BATCH>-<ROW-UPPER>-<n> (red on base: <tag>-<kind>-<row>)
+    check(all(re.fullmatch(r"[A-Z0-9]+(?:-[A-Z0-9]+)*-\d+", e["id"]) for e in pending.values()),
+          "the registered ids are one scheme, <BATCH>-<ROW-UPPER>-<n> (%s)" % sorted(e["id"] for e in pending.values()))
     check(kinds == {"row.combo": "combination", "row.base": "defect", "row.flake": "nondeterminism"},
           "REGISTERED, not printed: one testing/defects.pending/<id>.json per finding (%s)" % kinds)
     base_keys = {"id", "rows", "kind", "cause", "first_seen", "state", "found_by", "recheck", "expires"}

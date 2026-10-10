@@ -136,6 +136,7 @@ def vrec(text, ts):
 
 
 def case_verdict_door(E):
+    registry_id_cases(E)
     T = "2026-10-09T%s:00+02:00"
     RED_SHA, FIX_SHA = {"studio": "a" * 40}, {"studio": "f" * 40}
     red = rec("FAIL", T % "10:00", tip=RED_SHA)
@@ -398,6 +399,47 @@ def case_verdict_door(E):
     rc2, out2 = E.run("--mode", "push")
     check(rc == 0 and rc2 == 1 and "OVERRIDES" in out2, "a merge reads overrides; a push refuses a candidate carrying "
           "any (%d, %d)" % (rc, rc2))
+
+
+def registry_id_cases(E):
+    """TESTING-CLEANUP-2B item 14. (1) `real:<id>` is any token and the REGISTRY is the grammar: an id the attribution
+    registered with lowercase, dots and no number reaches the registry lookup. RED ON BASE (b0a3b1f3c): the pattern
+    ([A-Z…]-<n>) matched nothing in `real:A2-defect-scripting.e2e.clip_ref`, so the verdict was prose and refused.
+    (2) The attribution's ids are ONE scheme, <BATCH>-<ROW-UPPER>-<n>, and an OPEN entry of the same kind for the row is
+    REUSED (the new sighting a recheck), never a second entry. RED ON BASE: `B2-defect-<row>` beside `A2-defect-<row>`."""
+    m = E.cgc.DEFECT_ID.search("real:A2-defect-scripting.e2e.clip_ref the fixture's red")
+    check(m and m.group(1) == "A2-defect-scripting.e2e.clip_ref", "real:<any token> is parsed whole (%s)" % (m and m.group(1)))
+    ok, why, _ = E.cgc._real(m, "scripting.e2e.clip_ref", [], [], {}, [], [])
+    check(not ok and "not in the defect registry" in why, "...and LOOKED UP in the registry: unknown there, refused there")
+    reg_e = {"A2-defect-scripting.e2e.clip_ref": {"id": "A2-defect-scripting.e2e.clip_ref", "rows": ["other.row"],
+                                                  "state": "open", "recheck": "2099-12-31"}}
+    ok, why, _ = E.cgc._real(m, "scripting.e2e.clip_ref", [], [], reg_e, [], [])
+    check(not ok and "registered for ['other.row']" in why, "...a registered id reaches the entry's own checks (%s)" % why[:70])
+    gs = E.cgc.load_gs()
+    d = tempfile.mkdtemp(dir=E.scratch)
+    old = {k: os.environ.get(k) for k in ("JAH_DEFECTS_FILE", "JAH_DEFECTS_PENDING_DIR")}
+    os.environ["JAH_DEFECTS_FILE"] = os.path.join(d, "defects.json")
+    os.environ.pop("JAH_DEFECTS_PENDING_DIR", None)
+    json.dump({"defects": []}, open(os.environ["JAH_DEFECTS_FILE"], "w"))
+    try:
+        rec_ = {"tip": {"fork": "f" * 40}, "run": "20261010T100000-" + "a" * 9}
+        p1 = gs._register("A2", "defect", "scripting.e2e.clip_ref", "a" * 40, rec_, "red on d-build")
+        p2 = gs._register("B2", "defect", "scripting.e2e.clip_ref", "b" * 40, dict(rec_, run="20261010T120000-" + "b" * 9),
+                          "red on d-build again")
+        p3 = gs._register("B2", "defect", "pool.editor_view", "b" * 40, rec_, "another row")
+        files = sorted(os.listdir(os.path.join(d, "defects.pending")))
+        e1 = json.load(open(p1))
+        check(os.path.basename(p1) == "A2-SCRIPTING-E2E-CLIP-REF-1.json" and p2 == p1
+              and files == ["A2-SCRIPTING-E2E-CLIP-REF-1.json", "B2-POOL-EDITOR-VIEW-1.json"]
+              and [r["batch"] for r in e1.get("rechecks", [])] == ["B2"] and os.path.basename(p3).startswith("B2-POOL"),
+              "the attribution's ids are <BATCH>-<ROW-UPPER>-<n>, and an open entry for the row is reused with the new "
+              "sighting as a recheck — never a second entry (%s)" % files)
+        got, why = E.rl.defects_load()
+        check(got is not None and "A2-SCRIPTING-E2E-CLIP-REF-1" in got, "...and the reused entry still loads (%s)" % why)
+    finally:
+        for k, v in old.items():
+            if v is None: os.environ.pop(k, None)
+            else: os.environ[k] = v
 
 
 def case_noadmit_pool(E):

@@ -171,7 +171,10 @@ HARD = ("LOST", "OOM", "CRASH")          # never cleared by solos, never by `con
 #   xid-read:<window>  LOST/OOM/CRASH whose record says journal_unreadable (else the Xid would be in the record).
 # A red whose record carries an `xid` takes `real:` only. Solos below 3/3 are red. `environmental`, ENOSPC and a dead
 # display are never verdicts. Nothing accepts prose.
-DEFECT_ID = re.compile(r"\breal:\s*([A-Z][A-Z0-9]*(?:-[A-Z0-9]+)*-\d+[a-z]?)\b")
+# `real:<id>` names ANY token (TESTING-CLEANUP-2B item 14): the REGISTRY is the grammar — _real looks the token up and
+# refuses an id it does not hold. A pattern of its own (it was [A-Z…]-<n>) could not name the ids the attribution
+# itself registered (lowercase, dots, no number), so every KNOWN RED verdict on them fell through to prose and was refused.
+DEFECT_ID = re.compile(r"\breal:\s*([^\s,;()\[\]]+?)[.:]?(?=[\s,;()\[\]]|$)")
 CONTENTION_TOKEN = re.compile(r"\bcontention:\s*\S")
 XID_READ = re.compile(r"\bxid-read:\s*(\d{4}-\d\d-\d\dT\d\d:\d\d(?::\d\d)?(?:[+-]\d\d:?\d\d)?)\.\."
                       r"((?:\d{4}-\d\d-\d\dT)?\d\d:\d\d(?::\d\d)?(?:[+-]\d\d:?\d\d)?)")
