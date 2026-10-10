@@ -27,7 +27,7 @@ set_tests_properties(app.shutdown_order PROPERTIES
 # FIX-TIME): the same binary with JAHSHAKA_TIMING_BARS=1, quiet box, the GPU-timing lock.
 set(_order_timing_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-order-timing)
 file(MAKE_DIRECTORY ${_order_timing_home}/run)
-jah_gpu_exclusive_test(NAME app.shutdown_order.timing CLASS app TIER epic NEEDS photon RUN_TIMEOUT 120 COMMAND test_shutdown_order
+jah_gpu_exclusive_test(NAME app.shutdown_order.timing CLASS app TIER epic NEEDS photon bloom ssao smaa planar RUN_TIMEOUT 120 COMMAND test_shutdown_order
          WORKING_DIRECTORY ${_order_timing_home}/run)
 set_tests_properties(app.shutdown_order.timing PROPERTIES
     ENVIRONMENT "HOME=${_order_timing_home};JAHSHAKA_DATA_ROOT=${_order_timing_home}/.local/share/Jahshaka;JAHSHAKA_TIMING_BARS=1"

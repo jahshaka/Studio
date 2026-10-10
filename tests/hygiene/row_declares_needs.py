@@ -169,7 +169,9 @@ def needs_error(value):
     return None
 
 
-def check(listing, app, out, harnesses=frozenset()):
+def check(listing, app, out, harnesses):
+    """`harnesses` is REQUIRED (gpu_rows_closure.read_harnesses): without the build's record every
+    harness-spawned row would classify as no app and pass undeclared."""
     bad = []
     in_scope = 0
     by_decl = {}
@@ -249,6 +251,7 @@ def self_test(app, out):
             v.append("JAHSHAKA_TEST_NEEDS=set:" + needs)
         return [{"name": "ENVIRONMENT_MODIFICATION", "value": v}]
     admit = ["/x/scripts/gpu-admit.sh", "1", "--label"]
+    harness = "/x/build-linux/tests/toy/test_toy_harness"
     pool = ["/usr/bin/python3", "/x/tests/support/run_pool.py", "--vram-tokens", "1", "--app", app]
     synthetic = {"tests": [
         {"name": "toy.declared", "command": admit + ["toy.declared:app", "--", app, "--script", "x.js"],
@@ -279,14 +282,19 @@ def self_test(app, out):
          "properties": mod("epic", "photon")},
         {"name": "toy.selftest", "command": admit + ["toy.selftest:selftest", "--", app, "--engine-selftest", "o.png"]},
         {"name": "toy.headless", "command": [app, "--headless", "--script", "x.js"]},
+        # a C++ harness that spawns the app (named in the harness record): it declares like the app
+        {"name": "toy.harness_declared", "command": admit + ["toy.harness_declared:app", "--", harness],
+         "properties": mod("low", "none")},
+        {"name": "toy.harness_undeclared", "command": admit + ["toy.harness_undeclared:app", "--", harness]},
     ]}
     buf = io.StringIO()
     try:
-        named = sorted(set(b[0] for b in check(synthetic, app, buf)))
+        named = sorted(set(b[0] for b in check(synthetic, app, buf, {"test_toy_harness"})))
     finally:
         os.unlink(PIXEL_TOY)
     want = sorted(["toy.undeclared", "toy.tier_only", "toy.typed", "toy.bad_word", "toy.none_plus",
-                   "toy.pool_undeclared", "toy.half_document", "toy.none_reads_pixels"])
+                   "toy.pool_undeclared", "toy.half_document", "toy.none_reads_pixels",
+                   "toy.harness_undeclared"])
     ok = named == want
     out.write("row_declares_needs --self-test: named %s (want %s): %s\n" % (named, want, "ok" if ok else "FAIL"))
     if not ok:

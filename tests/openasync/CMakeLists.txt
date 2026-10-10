@@ -67,7 +67,7 @@ set_tests_properties(open.responsive PROPERTIES
 # Its own home, so the stage-close run and a lane's push-row run never share a library.
 set(_open_timing_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-open-timing)
 file(MAKE_DIRECTORY ${_open_timing_home}/run)
-jah_gpu_exclusive_test(NAME open.responsive.timing CLASS app TIER epic NEEDS photon RUN_TIMEOUT 1740 COMMAND test_open_responsive
+jah_gpu_exclusive_test(NAME open.responsive.timing CLASS app TIER epic NEEDS photon bloom ssao smaa planar RUN_TIMEOUT 1740 COMMAND test_open_responsive
          WORKING_DIRECTORY ${_open_timing_home}/run)
 set_tests_properties(open.responsive.timing PROPERTIES
     ENVIRONMENT "HOME=${_open_timing_home};JAHSHAKA_DATA_ROOT=${_open_timing_home}/.local/share/Jahshaka;JAHSHAKA_TIMING_BARS=1"

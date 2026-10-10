@@ -221,7 +221,7 @@ set_tests_properties(threading.import_soak PROPERTIES
 jah_fresh_home_fixture(threading.freshhome.newproject_stall threading_home_newproject_stall "${_thr_home_stall}" LABELS "threading")
 
 # The push row: the counts, no lock (its millisecond bar is the .timing twin's, below).
-jah_gpu_row(threading.newproject_stall CLASS app TIER epic NEEDS photon
+jah_gpu_row(threading.newproject_stall CLASS app TIER epic NEEDS photon bloom ssao smaa planar
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
                  --script ${CMAKE_CURRENT_BINARY_DIR}/newproject_stall.js
          WORKING_DIRECTORY ${_thr_home_stall}/run)
@@ -242,7 +242,7 @@ jah_timing_script(${CMAKE_CURRENT_SOURCE_DIR}/newproject_stall.js.in
                   ${CMAKE_CURRENT_BINARY_DIR}/newproject_stall.timing.js)
 jah_fresh_home_fixture(threading.freshhome.newproject_stall_timing threading_home_newproject_stall_timing
                        "${_thr_home_stall_t}" LABELS "threading;stage-close")
-jah_gpu_exclusive_test(NAME threading.newproject_stall.timing CLASS app TIER epic NEEDS photon RUN_TIMEOUT 300
+jah_gpu_exclusive_test(NAME threading.newproject_stall.timing CLASS app TIER epic NEEDS photon bloom ssao smaa planar RUN_TIMEOUT 300
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
                  --script ${CMAKE_CURRENT_BINARY_DIR}/newproject_stall.timing.js
          WORKING_DIRECTORY ${_thr_home_stall_t}/run)
