@@ -20,6 +20,7 @@
 #include <QNetworkReply>
 #include <QNetworkRequest>
 #include <QProcess>
+#include <QProcessEnvironment>
 #include <QSettings>
 #include <QStandardPaths>
 #include <QTcpServer>
@@ -363,8 +364,9 @@ inline QString settle(McpClient &mcp, const QString &probe = QString::fromLatin1
 }
 
 /// SETTLE ON THE REQUESTED SIZE (TESTING-CLEANUP-2 fix round): after app.resizeWindow(w, h) the
-/// layout is done when the WINDOW is w x h and the editor viewport's render target is the size of
-/// its widget — a state the read names, not three reads that happened to agree. Reads (each one MCP
+/// layout is done when the WINDOW is w x h (logical) and the editor viewport's render target is the
+/// size of its widget (both in PIXELS: the widget's logical rect times its devicePixelRatio) — a
+/// state the read names, not three reads that happened to agree. Reads (each one MCP
 /// request, `frames` stepped on the fixed clock first) until it holds, bounded by `maxReads`.
 /// Returns whether it held; the last reading is printed when it did not.
 inline bool settleToSize(McpClient &mcp, int width, int height, int frames = 3, int maxReads = 200)
@@ -372,7 +374,7 @@ inline bool settleToSize(McpClient &mcp, int width, int height, int frames = 3, 
     const QString script = QStringLiteral(
         "editor.frame(%1); (function () { var w = app.window(), v = editor.viewportState();"
         " return JSON.stringify({ w: w.width, h: w.height, tw: v.width, th: v.height,"
-        " ww: v.windowW, wh: v.windowH }); })()").arg(qMax(1, frames));
+        " ww: v.windowW, wh: v.windowH, dpr: v.devicePixelRatio || 1 }); })()").arg(qMax(1, frames));
     QJsonObject last;
     for (int reads = 1; reads <= maxReads; ++reads) {
         const QJsonObject r = mcp.runScript(script);
@@ -381,9 +383,12 @@ inline bool settleToSize(McpClient &mcp, int width, int height, int frames = 3, 
             return false;
         }
         last = QJsonDocument::fromJson(r.value("result").toString().toUtf8()).object();
+        // the render target is in PIXELS, the widget rect in LOGICAL units: compared in pixels
         const int tw = last.value("tw").toInt(), th = last.value("th").toInt();
+        const double dpr = last.value("dpr").toDouble(1.0);
+        const int pw = qRound(last.value("ww").toInt() * dpr), ph = qRound(last.value("wh").toInt() * dpr);
         if (last.value("w").toInt() == width && last.value("h").toInt() == height && tw > 0 && th > 0 &&
-            tw == last.value("ww").toInt() && th == last.value("wh").toInt())
+            tw == pw && th == ph)
             return true;
     }
     std::printf("info: settleToSize(%d x %d): not reached after %d reads: %s\n", width, height, maxReads,
@@ -461,6 +466,15 @@ inline bool spawn(QProcess &jahshaka, quint16 port, QString *tokenOut, QByteArra
                   const QStringList &extraArgs = QStringList(), int bootBudgetMs = 120000)
 {
     jahshaka.setProcessChannelMode(QProcess::MergedChannels);
+    // NOBODY ANSWERS A DIALOG ON A RIG (TESTING-CLEANUP-2): a spawned --mcp-port app counts as "a
+    // session with a user" to the device-loss end, whose box would hold a dead app for its 60 s bound
+    // and end it 86. A harness's app ends at once with the device-loss code (3) instead.
+    {
+        QProcessEnvironment env = jahshaka.processEnvironment();
+        if (env.isEmpty()) env = QProcessEnvironment::systemEnvironment();
+        env.insert(QStringLiteral("JAHSHAKA_NO_DEVICE_LOSS_DIALOG"), QStringLiteral("1"));
+        jahshaka.setProcessEnvironment(env);
+    }
     jahshaka.start(QStringLiteral(JAHSHAKA_BINARY),
                    QStringList{ QStringLiteral("--mcp-port=%1").arg(port) } + extraArgs);
     if (!jahshaka.waitForStarted(15000)) return false;

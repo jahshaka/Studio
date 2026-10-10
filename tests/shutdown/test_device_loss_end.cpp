@@ -16,10 +16,14 @@ For more information see the LICENSE file
 // ctest killed it. The box is bounded now: unanswered for 60 s, the process takes the forced exit
 // every other forced end takes (services/forcedexit.h: the `shutdown watchdog:` line, code 86).
 //
-// THE CLAIM, in a child process (this binary with --child, a QApplication offscreen and no
-// --script: devicelossend's "a user is in front of it"): endNow(DeviceLost) prints its FATAL line,
-// shows the box, nobody answers, and the process exits 86 naming the dialog — inside 120 s.
-// RED ON THE BASE (a5ab3a057): the child never exits; the parent kills it at 120 s.
+// THE CLAIMS, in child processes (this binary with --child, a QApplication offscreen and no
+// --script: devicelossend's "a user is in front of it"):
+//   RIG — with JAHSHAKA_NO_DEVICE_LOSS_DIALOG=1 (what the harness's spawn() and run_pool.py set):
+//         no box, exit 3 at once, no watchdog line;
+//   USER — endNow(DeviceLost) prints its FATAL line, shows the box, nobody answers, and the process
+//         exits 86 naming the dialog — inside 120 s.
+// RED WITHOUT THE BOUND (measured 2026-10-10: the arm compiled out): the USER child never exits;
+// the parent kills it at 120 s.
 #include "viewport/devicelossend.h"
 
 #include <QApplication>
@@ -39,30 +43,50 @@ int main(int argc, char **argv)
     }
     QCoreApplication app(argc, argv);
     int failures = 0;
-    QProcess child;
-    child.setProcessChannelMode(QProcess::MergedChannels);
-    QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
-    env.insert(QStringLiteral("QT_QPA_PLATFORM"), QStringLiteral("offscreen"));
-    env.remove(QStringLiteral("JAHSHAKA_NO_DEVICE_LOSS_DIALOG"));
-    child.setProcessEnvironment(env);
-    QElapsedTimer t;
-    t.start();
-    child.start(QCoreApplication::applicationFilePath(), { QStringLiteral("--child") });
-    const bool ended = child.waitForFinished(120000);
-    const QByteArray out = child.readAll();
-    std::printf("---- the child ----\n%s\n-------------------\n", out.constData());
-    if (!ended) { child.kill(); child.waitForFinished(5000); }
     const auto check = [&](bool ok, const char *what) {
         std::printf("%s %s\n", ok ? "ok:  " : "FAIL:", what);
         if (!ok) ++failures;
     };
-    check(ended, "the unanswered device-loss session ENDS (inside 120 s)");
-    check(out.contains("FATAL: the graphics device was lost; ending the session."), "...after its FATAL line");
-    check(ended && child.exitStatus() == QProcess::NormalExit && child.exitCode() == forcedexit::kCode,
-          "...with the forced exit's code 86");
+    // One child per path: the RIG (JAHSHAKA_NO_DEVICE_LOSS_DIALOG=1, what tests/support's spawn()
+    // and run_pool.py set) and the USER (no variable: the box, bounded at 60 s).
+    const auto runChild = [&](bool rig, QByteArray &out, QProcess::ExitStatus &status, int &code, qint64 &ms) {
+        QProcess child;
+        child.setProcessChannelMode(QProcess::MergedChannels);
+        QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
+        env.insert(QStringLiteral("QT_QPA_PLATFORM"), QStringLiteral("offscreen"));
+        if (rig) env.insert(QStringLiteral("JAHSHAKA_NO_DEVICE_LOSS_DIALOG"), QStringLiteral("1"));
+        else env.remove(QStringLiteral("JAHSHAKA_NO_DEVICE_LOSS_DIALOG"));
+        child.setProcessEnvironment(env);
+        QElapsedTimer t;
+        t.start();
+        child.start(QCoreApplication::applicationFilePath(), { QStringLiteral("--child") });
+        const bool ended = child.waitForFinished(120000);
+        out = child.readAll();
+        ms = t.elapsed();
+        if (!ended) { child.kill(); child.waitForFinished(5000); }
+        status = child.exitStatus();
+        code = ended ? child.exitCode() : -1;
+        std::printf("---- the %s child (%lld ms, exit %d) ----\n%s\n-------------------\n", rig ? "RIG" : "USER",
+                    static_cast<long long>(ms), code, out.constData());
+        return ended;
+    };
+    QByteArray out;
+    QProcess::ExitStatus status;
+    int code = 0;
+    qint64 ms = 0;
+    // 1. THE RIG: no box, the device-loss code (3) at once.
+    bool ended = runChild(true, out, status, code, ms);
+    check(ended && ms < 30000, "RIG: a harness's app with a lost device ends AT ONCE (no dialog wait)");
+    check(out.contains("FATAL: the graphics device was lost; ending the session."), "RIG: ...after its FATAL line");
+    check(ended && status == QProcess::NormalExit && code == 3, "RIG: ...with the device-loss code 3");
+    check(!out.contains("shutdown watchdog:"), "RIG: ...and no watchdog fired");
+    // 2. THE USER: the box shown, nobody answers, the 60 s bound ends it with the forced exit (86).
+    ended = runChild(false, out, status, code, ms);
+    check(ended, "USER: the unanswered device-loss session ENDS (inside 120 s)");
+    check(out.contains("FATAL: the graphics device was lost; ending the session."), "USER: ...after its FATAL line");
+    check(ended && status == QProcess::NormalExit && code == forcedexit::kCode, "USER: ...with the forced exit's code 86");
     check(out.contains("shutdown watchdog: the device-loss dialog was not answered in 60 s"),
-          "...and the watchdog's line naming the unanswered dialog");
-    std::printf("info: ended after %lld ms, exit code %d\n", static_cast<long long>(t.elapsed()), child.exitCode());
+          "USER: ...and the watchdog's line naming the unanswered dialog");
     std::printf(failures ? "FAILED: %d check(s)\n" : "ALL CHECKS PASSED\n", failures);
     return failures ? 1 : 0;
 }
