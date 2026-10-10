@@ -209,13 +209,16 @@ def case_verdict_door(E):
     # MISSING; a parent still missing leaves it missing; a parent outside the judged set is judged for it. RED ON
     # 9eb5343e2: no resolver — the inspector stayed MISSING, which no verdict clears.
     nr_ = {("insp", None): [{"suite": "insp", "verdict": "NOTRUN", "notRunBecause": ["par"], "ts": T % "10:05"}]}
+    resolve_ = getattr(E.cgc, "resolve_not_run", None)
+    check(resolve_ is not None, "ci_gate_check has the Not Run resolver")
+    resolve_ = resolve_ or (lambda *a: None)          # absent (a base before F3): the cases below read red, not a crash
     for pst_, want in (("red", "red"), ("known", "known"), ("missing", "missing")):
         out_ = {("insp", None): ("missing", "never run", "t"), ("par", None): (pst_, "why", "t")}
-        E.cgc.resolve_not_run(out_, nr_, lambda pk: ("red", "x"), "t")
+        resolve_(out_, nr_, lambda pk: ("red", "x"), "t")
         check(out_[("insp", None)][0] == want and (want == "missing" or "its parent par" in out_[("insp", None)][1]),
               "an inspector Not Run because its parent is %s -> %s (%s)" % (pst_, want, out_[("insp", None)][1][:70]))
     out_ = {("insp", None): ("missing", "never run", "t")}
-    E.cgc.resolve_not_run(out_, nr_, lambda pk: ("known", "judged for it"), "t")
+    resolve_(out_, nr_, lambda pk: ("known", "judged for it"), "t")
     check(out_[("insp", None)][0] == "known", "...a parent outside the judged set is judged for it (%s)" % out_[("insp", None)][0])
     # FIX ROUND 3 F2: masked() never over-masks. RED ON 9eb5343e2 (the reader's measurements): two in-tree homes read as
     # one red, the owner's real data root read as a test home, and the unanchored prefix ate `a=` / `FAIL:`.

@@ -236,6 +236,8 @@ def main(source, build):
 
     # FIX ROUND 3 F3: `fixture_setup` means a home WIPE; a real run that also sets up a fixture is `run_fixture` and stays
     # a gating row (R1, the estimate, max_rows). RED ON 9eb5343e2: the two threading parents read as wipes.
+    if not hasattr(gs, "_is_wipe"):
+        gs._is_wipe = lambda cmd: False                  # a base before F3: the checks below read red, not a crash
     check(gs._is_wipe(["sh", "/s/tests/support/fresh_home.sh", "--warm", "/h"]) and gs._is_wipe(["sh", "-c", "rm -rf /h"])
           and not gs._is_wipe(["/s/scripts/gpu-admit.sh", "2", "--", "/b/bin/Jahshaka", "--script", "x.js"]),
           "a fixture setup is a WIPE only when its command is fresh_home.sh / freshhome.cmake / sh -c rm -rf")
