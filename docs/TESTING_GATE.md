@@ -408,7 +408,7 @@ the one GPU adds no capacity (§4c). The lever left is ONE gate per BATCH of lan
 **Builders** run their NAMED ACCEPTANCE TESTS + their SUBJECT SUITE (the brief names both), by hand,
 never a gate — no slot:
 ```
-DISPLAY=:NN nice -n 19 ionice -c 3 ctest --test-dir build-linux -R '^(<the named tests>|<the subject suite>)$' --output-on-failure
+DISPLAY=:NN nice -n 19 ctest --test-dir build-linux -R '^(<the named tests>|<the subject suite>)$' --output-on-failure
 ```
 (a tooling lane — a change to the gate's own scripts — still runs its own scoped gate, the lead's
 exception.) The lead's per-lane merge (`merge-dbuild-lane.sh <lane> …`) still judges a single lane.
