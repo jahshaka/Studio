@@ -294,7 +294,7 @@ def run(source, scripts, merge, scratch, rl, build_dir):
     os.symlink(os.path.join(os.path.abspath(build_dir), "bin"), os.path.join(T1, "build-linux", "bin"))
     rcg = os.path.join(os.path.dirname(merge), "rc-gate.sh")
     p = subprocess.run(["bash", rcg, "batch-t1", "--scripting", T1], capture_output=True, text=True,
-                       env=dict(menv), timeout=300)
+                       env=dict(menv))
     rst = open(os.path.join(lead, "rc-batch-t1-scripting.state")).read() if os.path.exists(
         os.path.join(lead, "rc-batch-t1-scripting.state")) else ""
     log = open(os.path.join(lead, "rc-batch-t1-scripting.log")).read() if os.path.exists(
@@ -430,15 +430,17 @@ def run(source, scripts, merge, scratch, rl, build_dir):
     sock = os.path.join(x11, ".X11-unix", "X97")
     fake_x = subprocess.Popen([sys.executable, "-c", "import socket,time,sys\ns=socket.socket(socket.AF_UNIX)\n"
                                "s.bind(sys.argv[1])\ns.listen(16)\nwhile True:\n    c, _ = s.accept(); c.close()", sock])
-    for _ in range(50):
-        if os.path.exists(sock): break
-        time.sleep(0.1)
+    while not os.path.exists(sock) and fake_x.poll() is None:   # the server's socket is the event; LIVE: a
+        time.sleep(0.05)                                         # dead server fails the check, never a hang
+    check(os.path.exists(sock), "the fake X server is listening")
     open(os.path.join(x11, ".X97-lock"), "w").write("%10d\n" % fake_x.pid)
     # the attribution itself, with the gate slot HELD by another gate the whole time
     runs = os.path.join(scratch, "runs"); vdir = os.path.join(scratch, "vram")
     reg = os.path.join(scratch, "registry"); os.makedirs(reg)
     json.dump({"defects": []}, open(os.path.join(reg, "defects.json"), "w"))
     pend = os.path.join(reg, "defects.pending")      # next to the registry, as VERDICT-1's reader looks for it
+    # JAH_VRAM_WAIT=5: the admission bound of this test's PRIVATE token universe — row.noadmit's NOADMIT is under
+    # test; never a guess at how long the box takes
     aenv = dict(os.environ, JAH_RUN_LOG_DIR=runs, JAH_VRAM_DIR=vdir, JAH_VRAM_TOKENS="3", JAH_VRAM_WAIT="5",
                 OGRE_PREFIX=install, JAH_GATE_REQUEUE="0", JAH_X11_ROOT=x11, JAH_DEFECTS_FILE=os.path.join(reg, "defects.json"),
                 DISPLAY=":0")      # inherited and WRONG: the attribution must use --display only
@@ -452,21 +454,34 @@ def run(source, scripts, merge, scratch, rl, build_dir):
     p = subprocess.run([sys.executable, os.path.join(scripts, "gate-scope.py")] + (a3[:i3] + a3[i3 + 2:] if i3 >= 0 else a3),
                        capture_output=True, text=True, env=aenv)
     check(p.returncode == 64 and "--control" in p.stderr, "gate-scope --attribute without --control: refused (required)")
+    # A SIBLING GATE HOLDS THE SLOT, OPEN-ENDED: an attribution is a whole-card hold, so it QUEUES behind it
+    # (GATE-COST-2 #1: a drain out of the slot starved the gate in it). EVENTS, NEVER THE CLOCK: the sibling is
+    # released only when the attribution has printed its queue line (git + ctest --show-only on four trees come
+    # first — a fixed hold raced them under load)
+    rel = os.path.join(scratch, "sibling.release")
     holder = subprocess.Popen([sys.executable, os.path.join(scripts, "vram_tokens.py"), "gate", "--label", "a-sibling-gate",
-                               "--", "sleep", "120"], env=aenv, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    time.sleep(1.5)
+                               "--", "sh", "-c", f"while [ ! -e {rel} ] && kill -0 {os.getpid()} 2>/dev/null; do sleep 0.05; done"], env=aenv,
+                              stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+    for line in holder.stdout:
+        if "gate-slot: taken" in line: break
     args = [x if x != ":NN" else ":97" for x in (acmd[0].split("gate-scope.py", 1)[1].split() if acmd else [])]
-    t0 = time.time()
-    p = subprocess.run([sys.executable, os.path.join(scripts, "gate-scope.py")] + args, capture_output=True,
-                       text=True, env=aenv)
-    took = time.time() - t0
-    holder.kill(); holder.wait()
+    ap_ = subprocess.Popen([sys.executable, os.path.join(scripts, "gate-scope.py")] + args, stdout=subprocess.PIPE,
+                           stderr=subprocess.STDOUT, text=True, env=aenv)
+    head_ = []
+    for line in ap_.stdout:
+        head_.append(line)
+        if "gate-slot: queued at position" in line: break
+    open(rel, "w").close(); holder.communicate()
+    p = subprocess.CompletedProcess(ap_.args, None, "".join(head_) + ap_.communicate()[0], "")
+    p.returncode = ap_.returncode
     fake_x.kill(); fake_x.wait()
     aout = p.stdout + p.stderr
     print("\n".join("     | " + l for l in aout.splitlines() if l.startswith(("row", "=>", "==="))))
     check(p.returncode == 3, "the attribution exits 3: a COMBINATION DEFECT refuses the batch (exit %d)" % p.returncode)
-    check("gate-slot" not in aout and took < 100 and aout.count("vram: the whole card") == 1,
-          "...it never took the gate slot (another gate held it throughout; %.0f s) and held the card ONCE" % took)
+    check("gate-slot: queued at position 1" in aout and "a-sibling-gate" in aout and "gate-slot: taken" in aout
+          and aout.count("vram: the whole card") == 1,
+          "...it queued for the gate slot behind the sibling gate, took it (a whole-card hold: GATE-COST-2) and held "
+          "the card ONCE")
     check("row.x | lane-h | 3/3 red | FAIL: BREAKS_X is in this tree" in aout and "row.x | lane-i | 0/3 red | -" in aout
           and "=> row.x: NAMED lane-h (3/3 red on its own tip)" in aout, "row.x: NAMED lane-h, its first failing check")
     check("row.z | lane-h | ABSENT" in aout and "=> row.z: NAMED lane-i (3/3" in aout and "lane-h (" not in
@@ -494,15 +509,9 @@ def run(source, scripts, merge, scratch, rl, build_dir):
           "...NOT REPRODUCED: uses 1, the batch's lanes as suspects, the record's census")
     # VERDICT-1's reader QUARANTINES a malformed entry (the finding never reaches the door): every pending file must
     # load through it
-    import importlib.util
-    v1 = os.environ.get("JAH_VERDICT1_RUNLOG") or os.path.join(rl.workspace_root(), "jahshaka", ".claude", "worktrees",
-                                                               "verdict-1", "scripts", "gate_runlog.py")
-    loader = rl if hasattr(rl, "defects_load") else None
-    if loader is None and os.path.isfile(v1):
-        spec = importlib.util.spec_from_file_location("v1_gate_runlog", v1)
-        loader = importlib.util.module_from_spec(spec); spec.loader.exec_module(loader)
-    if loader is None or not hasattr(loader, "defects_load"):
-        check(False, f"VERDICT-1's defects_load is reachable (this tree's gate_runlog, or {v1})")
+    loader = rl
+    if not hasattr(loader, "defects_load"):
+        check(False, "VERDICT-1's defects_load is in this tree's gate_runlog")
     else:
         old = os.environ.get("JAH_DEFECTS_FILE"); os.environ["JAH_DEFECTS_FILE"] = os.path.join(reg, "defects.json")
         try:
@@ -541,11 +550,41 @@ def run(source, scripts, merge, scratch, rl, build_dir):
     fake_x = subprocess.Popen([sys.executable, "-c", "import socket,time,sys,os\nos.path.exists(sys.argv[1]) and "
                                "os.unlink(sys.argv[1])\ns=socket.socket(socket.AF_UNIX)\ns.bind(sys.argv[1])\n"
                                "s.listen(16)\nwhile True:\n    c, _ = s.accept(); c.close()", sock])
-    for _ in range(50):
-        time.sleep(0.1)
-        if os.path.exists(sock): break
+    while not os.path.exists(sock) and fake_x.poll() is None:   # the server's socket is the event; LIVE: a
+        time.sleep(0.05)                                         # dead server fails the check, never a hang
+    check(os.path.exists(sock), "the fake X server is listening")
     open(os.path.join(x11, ".X97-lock"), "w").write("%10d\n" % fake_x.pid)
     p7, p5 = only("row.noadmit"), only("row.base")
+    # GATE-COST-2 F1: an attribution whose whole-card drain times out (a token held elsewhere) still runs in the
+    # whole-card mode — the tool's JAH_VRAM_ALL — and says so: a drain-timeout record and `fallback` on every run.
+    # RED ON BASE (measured 2026-10-10, this file against the merge a327e3260's scripts, before F1): this check
+    # FAILS (the hold returned [slot], `not card` missed the timeout: no record, no fallback); green at F1.
+    relb = os.path.join(scratch, "f1-blocker.release")
+    blocker = subprocess.Popen([sys.executable, os.path.join(scripts, "vram_tokens.py"), "admit", "1", "--label",
+                                "f1-blocker", "--", "sh", "-c", f"while [ ! -e {relb} ] && kill -0 {os.getpid()} 2>/dev/null; do sleep 0.05; done"], env=aenv,
+                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    held_ = lambda: "f1-blocker" in subprocess.run([sys.executable, os.path.join(scripts, "vram_tokens.py"), "status"],
+                                                   capture_output=True, text=True, env=aenv).stdout
+    while not held_() and blocker.poll() is None:   # the blocker's token is HELD: the event the drain times out on
+        time.sleep(0.05)
+    check(held_(), "the F1 blocker holds its token (alive)")
+    fdir = os.path.join(scratch, "runs-f1")
+    out_ = list(args); i_ = out_.index("--attribute"); out_[i_ + 1] = "row.x"
+    pf = subprocess.run([sys.executable, os.path.join(scripts, "gate-scope.py")] + out_, capture_output=True, text=True,
+                        env=dict(aenv, JAH_RUN_LOG_DIR=fdir, JAH_VRAM_PHASE_WAIT="1"))
+    open(relb, "w").close(); blocker.wait()
+    frecs = [json.loads(l) for f in (sorted(os.listdir(fdir)) if os.path.isdir(fdir) else [])
+             for l in open(os.path.join(fdir, f))]
+    runs_f = [r for r in frecs if not r.get("kind")]
+    check(runs_f and all(r.get("fallback") == "drain-timeout" for r in runs_f)
+          and any(r.get("kind") == "drain-timeout" and r.get("fallback") == "drain-timeout" for r in frecs)
+          and not any(o.startswith("JAH_VRAM_ALL") for r in runs_f for o in r.get("overrides", [])),
+          "an attribution whose drain times out: a drain-timeout record, `fallback` on its %d run(s), JAH_VRAM_ALL "
+          "never an override (GATE-COST-2 F1)" % len(runs_f))
+    check("FALLBACK: drain-timeout" in pf.stdout and "row.x | lane-h |" in pf.stdout
+          and all("fallback: drain-timeout" in l for l in pf.stdout.splitlines() if l.startswith("row.x | ")),
+          "...and the attribution TABLE says it where the lead reads: a FALLBACK line and the fallback on every cell")
+    # (red on base 1ceb5cde9: the table had no FALLBACK line and no fallback column)
     fake_x.kill(); fake_x.wait()
     check(p7.returncode == 7, "an attribution left INCOMPLETE (row.noadmit alone) exits 7 (exit %d)" % p7.returncode)
     check(p5.returncode == 5, "a d-build defect alone (row.base) exits 5 (exit %d)" % p5.returncode)

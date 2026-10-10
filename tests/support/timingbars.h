@@ -1,4 +1,4 @@
-// THE MILLISECOND BARS ARE NIGHTLY (lane D6B-GATE-SHAPE; docs/TESTING_GATE.md §4,
+// THE MILLISECOND BARS ARE STAGE-CLOSE (lane D6B-GATE-SHAPE; docs/TESTING_GATE.md §4,
 // SPECS/audits/GATE_SUITES_AUDIT_2026-09-26.md §5).
 //
 // A bar stated in milliseconds of wall clock or GPU time reads the BOX, not only the
@@ -11,7 +11,7 @@
 //   * the push-tier row runs every COUNT, structure and picture assertion, and PRINTS
 //     each millisecond bar's reading ("time: within/OVER ...") without deciding on it;
 //   * `<suite>.timing` runs the same binary with JAHSHAKA_TIMING_BARS=1, which ARMS
-//     the millisecond bars. It is labelled `nightly;quiet-box` (never a scoped gate,
+//     the millisecond bars. It is labelled `stage-close;quiet-box` (never a scoped gate,
 //     never the MERGE/PUSH tier) and registered through the GPU-timing lock.
 // Nothing is deleted: every bar is asserted where the box can answer it.
 #pragma once

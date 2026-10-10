@@ -1,0 +1,21 @@
+{
+ "about": "FROZEN for gate.log_schema2: the contention list's sixteen names as PREFLIGHT-TESTING-1 read them (2026-10-09 17:30) — gate-report.py's carried query over the archive reproduces the preflight's 44 with it, whatever the live list becomes.",
+ "suites": {
+  "app.engine_selftest_validation": "Vulkan swapchain-semaphore flake under display contention (CLAUDE.md gate law; TESTING_GATE §4)",
+  "app.input_keys": "key/gesture arrival on a private Xvfb under load (TESTING_GATE §4)",
+  "app.watchdog_stall": "a >2 s cold-cache BOOT stall from shader compilation before its own (GATE_AND_RIG, SS1 2026-09-13)",
+  "threading.newproject_stall": "the first create < 1 s at 1.8x headroom, contention-sensitive (GATE_AND_RIG, lane-texwait)",
+  "threading.newproject_stall.timing": "the nightly twin of the 1000 ms bar (TESTING_GATE §4, TESTING-DEBTS-1)",
+  "scenegraph.benchmark": "a wall-clock benchmark (TESTING_GATE §4)",
+  "shadergraph.bake_output": "a 150 ms CPU bar read 153 ms beside three sibling gates, 3/3 solo (GATE_AND_RIG, STUDIO-SMALL-B 2026-09-21)",
+  "claude.chat": "reapStaleChild's transient empty /proc read under a fork-heavy gate, 3/3 solo (GATE_AND_RIG 2026-09-09)",
+  "scripting.e2e.space_switch": "SEGV inside Ogre's texture multi-load worker, solo-green (GATE_AND_RIG; OGRE_UPSTREAM_ISSUES 2026-09-08)",
+  "scripting.e2e.sun_light": "the same texture-worker class under a 3-lane load, solo-green (GATE_AND_RIG 2026-09-09)",
+  "scripting.e2e.reflection_map": "the GI/VRAM contention class; gate red solo green is cache state after a rebuild (GATE_AND_RIG 2026-09-11)",
+  "ui.media_lazy": "SEGV in pipewire during QAudioOutput enumeration after ~167 app suites, 3/3 solo (GATE_AND_RIG 2026-09-08)",
+  "ui.material_panel": "combo count under -j4 load, 4/4 solo (GATE_AND_RIG, probeshadow gate 2026-09-10)",
+  "gi.budget": "a GPU-budget row, the GI/VRAM contention class (TESTING_GATE §4)",
+  "vr.session": "the VR shutdown-crash class: repeated 3/3 solo greens beside sibling gates (stage closes, 2026-09-29/30); the crash itself is VR-TEARDOWN-1 (plan 9bu)",
+  "vr.input_session": "the same VR shutdown-crash class: 3/3 solo at the fog-and-sky rc (ledger §1551) and TEST-SELECTOR-1's gate; the crash is VR-TEARDOWN-1 (plan 9bu)"
+ }
+}

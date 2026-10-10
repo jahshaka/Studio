@@ -236,7 +236,7 @@ jah_gpu_row(material.live_roundtrip CLASS app
 set_tests_properties(material.live_roundtrip PROPERTIES LABELS "scripting" TIMEOUT 600)
 # EDITOR_SHORTCUTS_SPEC §5: the verbs behind the Unreal-style editor controls.
 jah_pool_arm(editor_view editor_controls ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_editor_controls.js 30)
-# scripting.e2e.editor_controls.timing — the per-selection 11 ms frame bar, nightly (lane
+# scripting.e2e.editor_controls.timing — the per-selection 11 ms frame bar, stage-close (lane
 # D6B-GATE-SHAPE; audit §5 F17 FIX-TIME): a generated copy of the script with the bar armed
 # (jah_timing_script), its own home, quiet box, the GPU-timing lock.
 set(_ect_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-editor_controls-timing)
@@ -248,7 +248,7 @@ jah_gpu_exclusive_test(NAME scripting.e2e.editor_controls.timing CLASS app RUN_T
     WORKING_DIRECTORY ${_ect_home}/run)
 set_tests_properties(scripting.e2e.editor_controls.timing PROPERTIES
     ENVIRONMENT "HOME=${_ect_home};JAHSHAKA_DATA_ROOT=${_ect_home}/.local/share/Jahshaka"
-    LABELS "scripting;nightly;quiet-box")
+    LABELS "scripting;stage-close;quiet-box")
 # smoke S15: every rotation ring clickable from every camera, asked through
 # editor.gizmoHitTest in the REAL viewport (gizmo.ring_pick covers the geometry
 # document-side).
@@ -1252,12 +1252,12 @@ set_tests_properties(gi.pcc_mirror.ray_tier PROPERTIES
 # default scene and Showroom 2 at High (PHOTON-WRITER-1 SWEEPS-3; the room half is
 # gi.chain_converge): from a perturbed history a second sweep changes no byte of
 # any cascade's light (world.giVoxelStats's lightDigest). Fresh home per run.
-# NIGHTLY (lane D6B-GATE-SHAPE; audit §3c, verdict NIGHTLY): 80 s for the claim gi.chain_converge
+# STAGE-CLOSE (lane D6B-GATE-SHAPE; audit §3c, verdict STAGE-CLOSE): 80 s for the claim gi.chain_converge
 # (9 s) holds at every push; an engine change still selects it in its own scoped gate.
 set(JAH_CONVERGE_SHOWROOM "${CMAKE_SOURCE_DIR}/scenes/Showroom 2.zip")
 configure_file(scripts/gi_chain_converge_scenes.js.in ${CMAKE_CURRENT_BINARY_DIR}/gi_chain_converge_scenes.js @ONLY)
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-chain_converge_scenes)
-jah_fresh_home_fixture(gi.chain_converge_scenes.fresh_home chain_converge_scenes_home "${_home}" LABELS "scripting;nightly")
+jah_fresh_home_fixture(gi.chain_converge_scenes.fresh_home chain_converge_scenes_home "${_home}" LABELS "scripting;stage-close")
 file(MAKE_DIRECTORY ${_home}/run)
 jah_gpu_row(gi.chain_converge_scenes CLASS app
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/gi_chain_converge_scenes.js
@@ -1265,7 +1265,7 @@ jah_gpu_row(gi.chain_converge_scenes CLASS app
 set_tests_properties(gi.chain_converge_scenes PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
     FIXTURES_REQUIRED chain_converge_scenes_home
-    LABELS "scripting;nightly"
+    LABELS "scripting;stage-close"
     TIMEOUT 600)
 
 # ANIMATION CLIPS AS A LIBRARY TYPE (ModelTypes::Animation): the import that
@@ -1954,7 +1954,7 @@ jah_add_pool(atom TIER epic LABELS scripting)
 
 # FRESH HOMES (PROJECT-NAMES-1). A project name is unique in a library now (project.create
 # refuses a taken one), so a row that creates a project in a home nothing wipes went red on its
-# SECOND run in the same tree (an rc tree's solo retries, build-linux, the nightly) — and every
+# SECOND run in the same tree (an rc tree's solo retries, build-linux, a stage close) — and every
 # such home grew without bound (ui.column_law's held 66 'ColumnLaw' projects). Each row below
 # creates projects; its home is wiped at the start of every run (WARM: the shader caches stay).
 if(TEST scripting.e2e.texture_missing)

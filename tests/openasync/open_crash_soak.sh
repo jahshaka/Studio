@@ -12,7 +12,7 @@
 # malloc/free; MALLOC_PERTURB_ fills freed memory so a use-after-free reads
 # poison instead of plausible data).
 #
-# WHY IT IS NIGHTLY AND NOT A MERGE GATE: on the BASE it is probabilistic — 9
+# WHY IT IS STAGE-CLOSE AND NOT A MERGE GATE: on the BASE it is probabilistic — 9
 # failures in 12 runs when the install ran with no frames, and the same code
 # passed 3 runs in 12. A suite that fails one run in four is not a gate. Its
 # value is the OTHER number: 0 in 12 with the fix, repeatedly, and any

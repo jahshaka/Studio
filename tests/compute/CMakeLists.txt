@@ -26,12 +26,12 @@ add_dependencies(test_gpu_cull JahshakaEngineMedia)
 jah_gpu_row(engine.gpu_cull CLASS engine COMMAND test_gpu_cull
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(engine.gpu_cull PROPERTIES TIMEOUT 300 LABELS "engine")
-# engine.gpu_cull.timing — its millisecond bar(s), nightly (lane D6B-GATE-SHAPE; audit §5 F17
+# engine.gpu_cull.timing — its millisecond bar(s), stage-close (lane D6B-GATE-SHAPE; audit §5 F17
 # FIX-TIME): the same binary with JAHSHAKA_TIMING_BARS=1, quiet box, the GPU-timing lock.
 jah_gpu_exclusive_test(NAME engine.gpu_cull.timing CLASS engine RUN_TIMEOUT 300 COMMAND test_gpu_cull
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(engine.gpu_cull.timing PROPERTIES
-    ENVIRONMENT "JAHSHAKA_TIMING_BARS=1" LABELS "engine;nightly;quiet-box")
+    ENVIRONMENT "JAHSHAKA_TIMING_BARS=1" LABELS "engine;stage-close;quiet-box")
 
 # engine.lod_rule_parity — the quality currency's C++ half against its GLSL half,
 # over 10,000 evaluations of the REAL cull shader on the device.
@@ -87,12 +87,12 @@ add_dependencies(test_hzb JahshakaEngineMedia)
 jah_gpu_row(chain.hzb CLASS engine COMMAND test_hzb
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(chain.hzb PROPERTIES TIMEOUT 120 LABELS "engine")
-# chain.hzb.timing — its millisecond bar(s), nightly (lane D6B-GATE-SHAPE; audit §5 F17
+# chain.hzb.timing — its millisecond bar(s), stage-close (lane D6B-GATE-SHAPE; audit §5 F17
 # FIX-TIME): the same binary with JAHSHAKA_TIMING_BARS=1, quiet box, the GPU-timing lock.
 jah_gpu_exclusive_test(NAME chain.hzb.timing CLASS engine RUN_TIMEOUT 180 COMMAND test_hzb
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(chain.hzb.timing PROPERTIES
-    ENVIRONMENT "JAHSHAKA_TIMING_BARS=1" LABELS "engine;nightly;quiet-box")
+    ENVIRONMENT "JAHSHAKA_TIMING_BARS=1" LABELS "engine;stage-close;quiet-box")
 
 # engine.voxel_reader_parity — THE ONE VOXEL READER (PHOTON-READER-1): the same
 # cones through the same bound cascade chain, marched by a FRAGMENT program and

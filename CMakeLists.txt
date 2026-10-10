@@ -1147,3 +1147,7 @@ if((WIN32 OR (UNIX AND NOT APPLE)) AND CMAKE_BUILD_TYPE STREQUAL "Release")
     set(CMAKE_PROJECT_VERSION "0.9.0")
     include(${CMAKE_SOURCE_DIR}/deploy/installer/config.cmake)
 endif()
+
+# LAST: <build>/BUILT_FROM, the commits this build was made from, written after every other target
+# (GATE-COST-2 #8 — the run log's records carry it; cmake/BuiltFrom.cmake says why).
+include(BuiltFrom)

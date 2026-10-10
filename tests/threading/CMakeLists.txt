@@ -231,7 +231,7 @@ set_tests_properties(threading.newproject_stall PROPERTIES
     TIMEOUT 300   # the lock's RUN_TIMEOUT kept (measured 16.6-45.7 s solo: 6x = 275)
     LABELS "threading")
 
-# threading.newproject_stall.timing — the first create's 1000 ms bar, nightly (TESTING-DEBTS-1 T10,
+# threading.newproject_stall.timing — the first create's 1000 ms bar, stage-close (TESTING-DEBTS-1 T10,
 # D6B-GATE-SHAPE's pattern): the push row above keeps the counts (GI armed, restored, no
 # texture-wait timeout) and prints the milliseconds; this generated copy (jah_timing_script) asserts
 # them, on its own virgin home, the quiet box and the GPU-timing lock. The push row's lock and
@@ -241,7 +241,7 @@ set(_thr_home_stall_t ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-threading_newproject_
 jah_timing_script(${CMAKE_CURRENT_SOURCE_DIR}/newproject_stall.js.in
                   ${CMAKE_CURRENT_BINARY_DIR}/newproject_stall.timing.js)
 jah_fresh_home_fixture(threading.freshhome.newproject_stall_timing threading_home_newproject_stall_timing
-                       "${_thr_home_stall_t}" LABELS "threading;nightly")
+                       "${_thr_home_stall_t}" LABELS "threading;stage-close")
 jah_gpu_exclusive_test(NAME threading.newproject_stall.timing CLASS app RUN_TIMEOUT 300
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
                  --script ${CMAKE_CURRENT_BINARY_DIR}/newproject_stall.timing.js
@@ -249,7 +249,7 @@ jah_gpu_exclusive_test(NAME threading.newproject_stall.timing CLASS app RUN_TIME
 set_tests_properties(threading.newproject_stall.timing PROPERTIES
     ENVIRONMENT "HOME=${_thr_home_stall_t};JAHSHAKA_DATA_ROOT=${_thr_home_stall_t}/.local/share/Jahshaka"
     FIXTURES_REQUIRED threading_home_newproject_stall_timing
-    LABELS "threading;nightly;quiet-box" RUN_SERIAL TRUE)
+    LABELS "threading;stage-close;quiet-box" RUN_SERIAL TRUE)
 
 # threading.texture_wait_watchdog — the give-up path itself, under the engine's
 # JAH_TEXTURE_WAIT_FAULT hook (the script's header says why a hook is the only
