@@ -300,10 +300,11 @@ AREA_RULES = [
 # A TOOLING-ONLY DIFF SELECTS NO PRODUCT ROW (TESTING_V3_SPEC §1.3.4; the owner 2026-10-10: "why do we still have
 # 1 hour gates?" — batch A's three runner lanes selected 636 rows, 57 min). A change that touches NOTHING the
 # product binary is built from cannot change the product rows' answers: running them re-proves the runner, not the
-# product, and the runner is proved by its own rows. PRODUCT_INPUT is that set, a FILE RULE (never a hand-pick):
-# the sources (src/, irisgl/ but its docs), the shipped content (app/, scenes/), the vendored code (thirdparty/),
-# the build files (the top CMakeLists.txt, cmake/, .gitmodules), the installer and the extras. A diff with ONE such
-# path is a product diff and takes the whole union below, exactly as before. A diff with none is TOOLING-ONLY:
+# product, and the runner is proved by its own rows. The rule FAILS CLOSED (fix round D): NON_PRODUCT lists the
+# paths that are NOT product inputs — scripts/, tests/, docs/, testing/, .claude/, irisgl/docs/, any *.md — and EVERY
+# other path is product (src/, irisgl/, app/, scenes/, thirdparty/, the build files, a top-level directory nobody
+# has classified yet). A diff with ONE product path takes the whole union below, exactly as before. A diff with none
+# is TOOLING-ONLY:
 #   * a path of the runner itself (TOOLING_OWN: scripts/, tests/hygiene/, tests/tooling/, testing/) selects the
 #     `hygiene` and `tooling` rows (the lints and the runner's own suites, display-free) plus what its area rule
 #     names among the non-app, non-compiled rows (a script's own self-test, e.g. pool.runner for vram_tokens) and
@@ -313,8 +314,7 @@ AREA_RULES = [
 #     reader for a registration);
 #   * docs and the like select what they always did (nothing; TESTING_GATE.md its guard);
 #   * the smoke pair (ALWAYS_ON_CODE) is the PRODUCT's smoke: no product path moved, so it does not ride.
-PRODUCT_INPUT = re.compile(r"^(src/|irisgl/(?!docs/|[^/]+\.md$)|app/|scenes/|thirdparty/|cmake/|extras/|deploy/|"
-                           r"CMakeLists\.txt$|\.gitmodules$)")
+NON_PRODUCT = re.compile(r"^(scripts/|tests/|docs/|testing/|\.claude/|irisgl/docs/)|\.md$")
 TOOLING_OWN = re.compile(r"^(scripts/|tests/(hygiene|tooling)/|testing/)")
 # A RUNNER'S OWN SELF-TEST THAT BOOTS THE APP (it is the tool's test, not a product row): selected by name in a
 # tooling-only diff, where the area rules' directories pick only lint/script rows. pool.runner drives the pool
@@ -326,7 +326,7 @@ TOOL_SELF_TESTS = [
 
 def product_paths(paths):
     """The touched paths the product is built from (§1.3.4): one of them makes the diff a product diff."""
-    return [p for p in paths if PRODUCT_INPUT.match(p)]
+    return [p for p in paths if not NON_PRODUCT.search(p)]
 
 
 # Cheap smoke suites always added when src/ or irisgl/ moved (a boot that renders + the
@@ -1381,7 +1381,7 @@ class Selection:
         if depth == 0: self.rationale.append((p, "; ".join(notes)))
 
     def tooling_path(self, p):
-        """A path of the runner in a TOOLING-ONLY diff (§1.3.4; PRODUCT_INPUT above): the tools' own rows — the
+        """A path of the runner in a TOOLING-ONLY diff (§1.3.4; NON_PRODUCT above): the tools' own rows — the
         `hygiene` and `tooling` rows, what the path's area rule names among the non-app, non-compiled rows, and
         every row whose command runs the file. Never a product row."""
         self._origin = p
@@ -2769,7 +2769,7 @@ def main():
           + ("" if S.graph else "   [NO BUILD GRAPH: compiled rows by directory rules]"))
     for p, why in S.rationale: print(f"  {p}\n      -> {why}")
     if S.tooling_only:
-        print("\nTOOLING-ONLY DIFF (TESTING_V3 §1.3.4): no touched path is a product input (gate-scope.py PRODUCT_INPUT) "
+        print("\nTOOLING-ONLY DIFF (TESTING_V3 §1.3.4): every touched path is NON_PRODUCT (gate-scope.py) "
               "— the hygiene label + the tools' rows + the rows whose declaration or command changed; no product row, "
               "no smoke pair")
 
