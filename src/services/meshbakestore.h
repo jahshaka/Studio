@@ -149,9 +149,11 @@ struct BakeTarget
 /// Every (model file, owning row) pair in the store with no fresh bake, one
 /// entry per DISTINCT set of import settings over one object. `onlyGuids`
 /// non-null restricts the sweep to rows with those guids (an archive import
-/// bakes what IT brought, not the rest of the library).
+/// bakes what IT brought, not the rest of the library). `allRows` non-null receives EVERY row over a
+/// present model file the query saw, before the by-content dedupe (fresh or not).
 QVector<BakeTarget> modelBakesNeeded(QSqlDatabase conn, const QString &root,
-                                     const QSet<QString> *onlyGuids = nullptr);
+                                     const QSet<QString> *onlyGuids = nullptr,
+                                     QVector<BakeTarget> *allRows = nullptr);
 
 // --- A bake as three steps, for a caller that owns the threading ------------
 //

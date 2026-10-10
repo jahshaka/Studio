@@ -552,7 +552,7 @@ bool bakeSource(QSqlDatabase conn, const QString &root, const QString &sourcePat
 }
 
 QVector<BakeTarget> modelBakesNeeded(QSqlDatabase conn, const QString &root,
-                                     const QSet<QString> *onlyGuids)
+                                     const QSet<QString> *onlyGuids, QVector<BakeTarget> *allRows)
 {
     QVector<BakeTarget> out;
     // ONE CACHE GENERATION FOR THE WHOLE PLAN (I7): the lookups below run inside this statement's
@@ -601,6 +601,7 @@ QVector<BakeTarget> modelBakesNeeded(QSqlDatabase conn, const QString &root,
         }
         if (path.isEmpty()) continue;   // offline/purged object, already judged
         const QString guid = query.value(3).toString();
+        if (allRows) allRows->append({ path, guid, query.value(4).toInt() == static_cast<int>(ModelTypes::Animation) });
         if (query.value(4).toInt() == static_cast<int>(ModelTypes::Animation)) {
             const QString key = oid + QStringLiteral("|clip");
             if (seen.contains(key)) continue;
@@ -1047,14 +1048,21 @@ int bakeLandedAsync(const QStringList &guids)
     const QString root = AssetStorePaths::root();
     const QSet<QString> only(guids.cbegin(), guids.cend());
     QVector<BakeJob> jobs;
-    QVector<LandedBake> targets;
-    for (const BakeTarget &target : modelBakesNeeded(conn, root, &only)) {
+    QVector<BakeTarget> rows;   // EVERY landed row over a model file, before the by-content dedupe
+    for (const BakeTarget &target : modelBakesNeeded(conn, root, &only, &rows)) {
         BakeJob job = prepareBake(conn, root, target);
         if (job.path.isEmpty()) continue;
         jobs.append(job);
-        targets.append({ target.assetGuid, target.path, true });
     }
     if (jobs.isEmpty()) return 0;
+    // THE TARGETS ARE EVERY ROW OVER A BAKED FILE (F6), not the one row the dedupe kept: two objects
+    // of a pack sharing one model are two rows over one bake, and the second one's nodes need their
+    // geometry swapped in too.
+    QSet<QString> baking;
+    for (const BakeJob &job : jobs) baking.insert(job.path);
+    QVector<LandedBake> targets;
+    for (const BakeTarget &row : rows)
+        if (baking.contains(row.path)) targets.append({ row.assetGuid, row.path, true });
     bakeAsync(jobs, targets, std::function<void(int)>());
     return jobs.size();
 }
