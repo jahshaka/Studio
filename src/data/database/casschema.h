@@ -32,7 +32,12 @@ namespace CasSchema
 //     no home, so it is WIPED once; from 5 on a bump REBUILDS the catalog from
 //     the user's storages' sidecars (services/librarygeneration.h) and wipes
 //     only what is not storage. Bump whenever stored data is read differently.
-inline constexpr int kUserVersion = 5;
+// 6 = TC2-LIBRARY-CREATE-READ: the covering `idx_projects_tiles` replaces the
+//     bare `desktop` index (Database::createIndexes). A generation-5 library
+//     keeps the dead index and would build the new one on the UI thread at its
+//     first boot, so it is RESET once instead (the storages rebuilt from their
+//     sidecars, projects cleared — librarygeneration.h; forward-only).
+inline constexpr int kUserVersion = 6;
 
 /// The generation this process COMPARES a library against at startup
 /// (services/librarygeneration.h): kUserVersion, or — for the format-bump suite
