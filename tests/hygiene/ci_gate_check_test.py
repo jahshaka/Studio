@@ -43,7 +43,9 @@ def check(ok, what):
 
 def main(source, build):
     tool = os.path.join(source, "scripts", "ci-gate-check.sh")
-    rows = ["api.contract", "app.startup_quiet", "photon.view"]
+    # the rows RANGE selects (a tests-only diff, TESTING_V3 §1.3.4: photon.view alone — the smoke pair it used to
+    # carry no longer rides, so records for it were noise)
+    rows = ["photon.view"]
     base = subprocess.run(["git", "rev-parse", "51e9f2c49"], cwd=source, capture_output=True, text=True).stdout.strip()
     base_pin = subprocess.run(["git", "rev-parse", "51e9f2c49:irisgl"], cwd=source, capture_output=True,
                               text=True).stdout.strip()
@@ -96,18 +98,17 @@ def main(source, build):
     fresh(unlisted)
     rc, out = run()
     check(rc == 1 and "no record" in out, "nothing run -> refused, and says which rows (%d)" % rc)
-    put(rows[:2], "PASS", "2026-01-01T10:00:00")
-    put(rows[2:], "FAIL", "2026-01-01T10:00:01")
+    put(rows, "FAIL", "2026-01-01T10:00:01")
     rc, out = run()
     check(rc == 1 and "photon.view" in out and "needs a verdict" in out,
           "a verdict-less red -> refused, naming it and what it needs (%d)" % rc)
-    put(rows[2:], "PASS", "2026-01-01T10:05:00", retry=True)
+    put(rows, "PASS", "2026-01-01T10:05:00", retry=True)
     rc, out = run()
     check(rc == 1 and "needs a verdict" in out,
           "...and ONE solo PASS does not erase it (the audit's L2: latest-wins is gone) (%d)" % rc)
     # (VERDICT-1's door: with solos after the red, a verdict clears it only at 3/3 — gate.verdict_door)
-    put(rows[2:], "PASS", "2026-01-01T10:06:00", retry=True)
-    put(rows[2:], "PASS", "2026-01-01T10:07:00", retry=True)
+    put(rows, "PASS", "2026-01-01T10:06:00", retry=True)
+    put(rows, "PASS", "2026-01-01T10:07:00", retry=True)
     # (a PASS at the red's own sha proves no fix — F1; this red is NOT REPRODUCED by its 3/3: a single-use entry)
     rc, out = run(RANGE, "--verdict", "photon.view=real:NOTREPRO-FIXTURE-1 the fixture's red, read by the test")
     check(rc == 0 and "recorded verdict" in out, "the same red with a recorded verdict -> accepted (%d)" % rc)
@@ -117,7 +118,7 @@ def main(source, build):
           and "read by the test" in vrec[0]["text"], "...and the verdict is a record in the run log (%s)" % vfiles)
     rc, out = run()
     check(rc == 0, "...which a later check reads without the flag (%d)" % rc)
-    put(rows[2:], "FAIL", "2099-01-01T10:00:00")
+    put(rows, "FAIL", "2099-01-01T10:00:00")
     rc, out = run()
     check(rc == 1 and "needs a verdict" in out,
           "a red logged AFTER the verdict is not cleared by it (D4: per row, timestamped) (%d)" % rc)
@@ -151,35 +152,31 @@ def main(source, build):
 
     # ---- a row that never ran (NOADMIT) is MISSING, which no verdict clears ------------------------
     fresh(unlisted)
-    put(rows[:2], "PASS", "2026-01-01T10:00:00")
-    put(rows[2:], "NOADMIT", "2026-01-01T10:00:01")
+    put(rows, "NOADMIT", "2026-01-01T10:00:01")
     rc, out = run(RANGE, "--verdict", "photon.view=it waited too long")
     check(rc == 1 and "no record" in out and "no verdict recorded for photon.view" in out,
           "a NOADMIT row is missing and a verdict cannot clear it (%d)" % rc)
 
     # ---- the law, a CONTENTION-CLASS row ----------------------------------------------------------
     fresh(listed)
-    put(rows[:2], "PASS", "2026-01-01T10:00:00")
-    put(rows[2:], "FAIL", "2026-01-01T10:00:01")
-    for k in range(3): put(rows[2:], "PASS", "2026-01-01T10:0%d:00" % (5 + k), retry=True)
+    put(rows, "FAIL", "2026-01-01T10:00:01")
+    for k in range(3): put(rows, "PASS", "2026-01-01T10:0%d:00" % (5 + k), retry=True)
     rc, out = run()
     check(rc == 1 and "competitor census" in out, "a contention-class red whose census shows no competition is not "
           "cleared by 3/3 solo (TESTING_V3 §1.4) (%d)" % rc)
     fresh(listed)
-    put(rows[:2], "PASS", "2026-01-01T10:00:00")
-    put(rows[2:], "FAIL", "2026-01-01T10:00:01", box=busy)
-    put(rows[2:], "PASS", "2026-01-01T10:05:00", retry=True)
-    put(rows[2:], "PASS", "2026-01-01T10:06:00", retry=True)
+    put(rows, "FAIL", "2026-01-01T10:00:01", box=busy)
+    put(rows, "PASS", "2026-01-01T10:05:00", retry=True)
+    put(rows, "PASS", "2026-01-01T10:06:00", retry=True)
     rc, out = run()
     check(rc == 1 and "2/3" in out, "a contention-class red with 2/3 solo PASS -> refused (%d)" % rc)
-    put(rows[2:], "PASS", "2026-01-01T10:07:00", retry=True)
+    put(rows, "PASS", "2026-01-01T10:07:00", retry=True)
     rc, out = run()
     check(rc == 0 and "3/3 solo PASS" in out, "...3/3 -> accepted, and says why (%d)" % rc)
     fresh(listed)
-    put(rows[:2], "PASS", "2026-01-01T10:00:00")
-    put(rows[2:], "FAIL", "2026-01-01T10:00:01", box=busy)
+    put(rows, "FAIL", "2026-01-01T10:00:01", box=busy)
     for k, v in enumerate(("PASS", "FAIL", "PASS")):
-        put(rows[2:], v, "2026-01-01T10:0%d:00" % (5 + k), retry=True)
+        put(rows, v, "2026-01-01T10:0%d:00" % (5 + k), retry=True)
     rc, out = run()
     check(rc == 1 and "SOLO retry went red" in out, "a contention-class red whose solo retries read 2/3 -> refused "
           "(not contention: a verdict) (%d)" % rc)
