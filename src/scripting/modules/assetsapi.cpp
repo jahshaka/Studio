@@ -506,6 +506,11 @@ QVector<VerbInfo> AssetsApi::verbs() const
           "the bake is built on a worker and committed when it lands, and a node placed meanwhile shows its "
           "geometry then. 0 = every import's geometry is in. Wait in frames (editor.frame) until it reads 0.",
           Needs::Document },
+        { "bakesRunning", "assets.bakesRunning() -> number",
+          "How many of the import bakes assets.pendingBakes counts a worker is baking RIGHT NOW (it has started "
+          "the job). A suite that ends its run DURING a bake (the quit-cancels-the-bake row) waits in frames "
+          "until this reads 1 or more, so its quit lands inside the job rather than before the worker began it.",
+          Needs::Document },
         { "bakeState", "assets.bakeState(guid) -> {source, fresh, pending}",
           "THIS ROW's model bake: `source` the store file the row's content is, `fresh` true when the row has "
           "a current bake under its own import settings (the bake an open reads), `pending` true while an "
@@ -2217,6 +2222,11 @@ QVariantMap AssetsApi::reimport(const QString &guid, const QVariantMap &options)
 int AssetsApi::pendingBakes()
 {
     return MeshBakeStore::pendingBakeCount();
+}
+
+int AssetsApi::bakesRunning()
+{
+    return MeshBakeStore::runningBakeCount();
 }
 
 QVariantMap AssetsApi::bakeState(const QString &guid)

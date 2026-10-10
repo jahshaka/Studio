@@ -785,6 +785,9 @@ std::atomic<quint64> sAsyncEpoch { 0 };
 /// THE IN-FLIGHT JOBS' CANCEL FLAG (F5): every async worker started under it reads it inside its bake
 /// (MeshBake's cancel points); stopBackgroundRebuild raises it and installs a fresh one for later bakes.
 std::shared_ptr<std::atomic<bool>> sAsyncCancel = std::make_shared<std::atomic<bool>>(false);
+/// How many async jobs are INSIDE runBake right now (a worker that has started its bake) — what a suite
+/// that quits during a bake waits for (assets.bakesRunning), so its quit lands inside the job.
+std::atomic<int> sAsyncRunning { 0 };
 QList<QFuture<QVector<BakeResult>>> sAsyncFutures;  ///< joined by stopBackgroundRebuild
 struct Listener
 {
@@ -852,6 +855,14 @@ void startBackgroundRebuild()
             auto result = std::make_shared<BakeResult>(runBake(job, &sBackgroundStop));
             QMetaObject::invokeMethod(QCoreApplication::instance(), [result, root]() {
                 QString error;
+                // A CANCEL IS NOT A FAILURE (read 5): a reset or a quit stopped the job — the next
+                // library open's sweep builds it again. Said as what it is.
+                if (result->error == QStringLiteral("cancelled")) {
+                    QVector<AssetCas::Staged> leftover{ result->staged };
+                    AssetCas::discardStaged(leftover);
+                    irisLog(QStringLiteral("mesh bake: a background rebuild was cancelled (a reset or a quit)"));
+                    return;
+                }
                 if (!commitBake(QSqlDatabase::database(), root, *result, &error))
                     irisLog(QStringLiteral("mesh bake: background rebuild failed (%1)").arg(error));
             }, Qt::QueuedConnection);
@@ -1003,7 +1014,9 @@ void bakeAsync(const QVector<BakeJob> &jobs, const QVector<LandedBake> &targets,
             // A RESET OR SHUTDOWN STOPS THE WORKER BETWEEN JOBS (F5), like the background sweep —
             // and INSIDE the job in flight, at MeshBake's cancel points (the flag below).
             if (sAsyncEpoch.load() != epoch || cancel->load()) break;
+            ++sAsyncRunning;
             results.append(runBake(job, cancel.get()));
+            --sAsyncRunning;
         }
         return results;
     });
@@ -1172,6 +1185,11 @@ bool bakePending(const QString &sourcePath)
 int pendingBakeCount()
 {
     return sPendingJobs;
+}
+
+int runningBakeCount()
+{
+    return sAsyncRunning.load();
 }
 
 void addLandedListener(QObject *context, std::function<void(const QVector<LandedBake> &)> listener)

@@ -21,4 +21,11 @@ assets.list({ scope: "store" }).forEach(function (row) {
 assets.gc({ dryRun: false });
 var back = assets.import(file);
 console.log("QUIT_IMPORTED " + (back ? 1 : 0) + " pending " + assets.pendingBakes());
+// THE QUIT LANDS INSIDE THE JOB (read 5): wait for the worker to have STARTED the bake — a quit
+// before the pool picked the task up stops the worker between jobs, and there is no "cancelled" line
+// to see. A POLL, not frames: this run is headless (no editor.frame), and the worker runs on its own
+// thread whatever this one does; bounded by a count, never a clock.
+var polls = 0;
+while (assets.bakesRunning() === 0 && assets.pendingBakes() > 0 && polls++ < 50000000) { }
+console.log("QUIT_RUNNING " + assets.bakesRunning());
 console.log("QUIT_END");

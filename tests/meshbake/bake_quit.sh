@@ -34,6 +34,7 @@ PY
 rc=$?
 check $rc "the run ends 0 with a bake in flight (code $rc; 86 = the forced exit)"
 grep -q "QUIT_IMPORTED 1 pending [1-9]" quit.log; check $? "the share-file import returned with its bake pending"
+grep -q "QUIT_RUNNING [1-9]" quit.log; check $? "the run ended while the worker was INSIDE the bake"
 grep -q "QUIT_END" quit.log; check $? "the script ran to its end"
 grep -qE "mesh bake: .*cancelled" quit.log; check $? "the bake in flight was CANCELLED inside its job"
 grep -q "forcing process exit" quit.log; [ $? -ne 0 ]; check $? "no forced exit"

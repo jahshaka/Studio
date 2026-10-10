@@ -299,6 +299,9 @@ QString modelSourceFor(QSqlDatabase conn, const QString &root, const QString &gu
 
 /// How many async bakes are in flight (the `assets.pendingBakes` verb). Database thread.
 int pendingBakeCount();
+/// How many of them a worker is baking RIGHT NOW (inside runBake; the `assets.bakesRunning` verb). Any
+/// thread.
+int runningBakeCount();
 /// THE TEST HOLD (the `assets.holdBakes` verb): while on, a finished async bake is NOT committed — it
 /// stays pending — and releasing the hold commits everything held, in order. A suite uses it to act
 /// inside the window between a placement and its landing deterministically. Database thread.
