@@ -390,6 +390,32 @@ def door(text, reds, solos, row, defects=None, tip_recs=None, base_recs=None, ti
                    "solo) — nothing accepts prose"), False
 
 
+def resolve_not_run(out, tip_recs, judge_parent, tip_sha):
+    """A ROW NOT RUN BECAUSE ITS PARENT FAILED IS ANSWERED BY THE PARENT (TESTING-CLEANUP-2B fix round 3 F3). An
+    inspector whose run fixture's parent went red is ctest's "Not Run" — NOTRUN, no run, so MISSING, which no verdict
+    clears, and a --solo of it re-runs the red parent first: a KNOWN RED parent would block every merge selecting its
+    inspector. The runner names the parent on the record (`notRunBecause`); a MISSING row whose newest such record names
+    parents takes the WORST parent state at the tip (the parent's verdict covers both). A parent still MISSING leaves it
+    MISSING (--resume runs both). `out`: {key: (state, why, src)}, updated in place; `tip_recs`: {key: [records]};
+    `judge_parent(key)` -> (state, why) for a parent not in `out`."""
+    order = ["red", "missing", "known", "nondet", "green"]
+    for k in list(out):
+        if out[k][0] != "missing" or k[1]:
+            continue
+        nr = [r for r in tip_recs.get(k, []) if r.get("verdict") == "NOTRUN" and r.get("notRunBecause")]
+        if not nr:
+            continue
+        pst = []
+        for pn in sorted(nr, key=_when)[-1]["notRunBecause"]:
+            pk = (pn, None)
+            pst.append((pn,) + (tuple(out[pk][:2]) if pk in out else tuple(judge_parent(pk))))
+        worst = min(pst, key=lambda t: order.index(t[1]) if t[1] in order else 0)
+        if worst[1] == "missing":
+            continue
+        out[k] = (worst[1], f"not run: its parent {worst[0]} is {worst[1]} — answered by the parent's record and verdict "
+                            f"({(worst[2] or '')[:100]})", tip_sha)
+
+
 def judge(key, recs, defects, tip_recs=None, base_recs=None, tip_sha=None, mode="merge", proves=None):
     """(state, why) for one row/arm: state 'green' | 'known' | 'nondet' | 'missing' | 'red'.
 
@@ -742,6 +768,10 @@ def check(rng, build, gs=None, verdicts=None, mode="merge", lane=None, stage_clo
                     break
             st, why = dropped(k, st, why, src)
             out[k] = (st, why, src)
+        resolve_not_run(out, got[tip_sha], lambda pk: judge(pk, got[tip_sha].get(pk, []), defects,
+                                                            tip_recs=got[tip_sha].get(pk, []),
+                                                            base_recs=got.get(base_sha, {}).get(pk, []),
+                                                            tip_sha=tip_sha, mode=mode, proves=prover), tip_sha)
         # U4: THE LANE'S OTHER TIPS (a rebase, a superseded fix round): an open red there that the
         # current tip never re-ran (a later record of the same row+arm at the tip that passes) and no
         # accepted verdict answered is carried to this tip

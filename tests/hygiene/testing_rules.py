@@ -234,6 +234,15 @@ def main(source, build):
     bad = r5_bad(inv, rule_dirs, gs.api_modules(), tracked, gs.script_modules, harness)
     check(not bad, "R5 every app/lint row has a subject that selects it (%d without: %s)" % (len(bad), bad[:10]))
 
+    # FIX ROUND 3 F3: `fixture_setup` means a home WIPE; a real run that also sets up a fixture is `run_fixture` and stays
+    # a gating row (R1, the estimate, max_rows). RED ON 9eb5343e2: the two threading parents read as wipes.
+    check(gs._is_wipe(["sh", "/s/tests/support/fresh_home.sh", "--warm", "/h"]) and gs._is_wipe(["sh", "-c", "rm -rf /h"])
+          and not gs._is_wipe(["/s/scripts/gpu-admit.sh", "2", "--", "/b/bin/Jahshaka", "--script", "x.js"]),
+          "a fixture setup is a WIPE only when its command is fresh_home.sh / freshhome.cmake / sh -c rm -rf")
+    runfx = [n for n in ("threading.newproject_stall", "threading.import_soak") if n in inv]
+    check(runfx and all(inv[n].get("run_fixture") and not inv[n].get("fixture_setup") for n in runfx)
+          and not [n for n, t in inv.items() if t.get("fixture_setup") and t.get("app")],
+          "the threading parents are RUN fixtures (gating rows), and no app row reads as a wipe (%s)" % runfx)
     raw, rc = gs.gate_graph.ctest_inventory(build)
     bad = r6_bad(json.loads(raw or "{}").get("tests", [])) if rc == 0 else ["ctest --show-only failed (%d)" % rc]
     check(not bad, "R6 a row that DEPENDS on another row's run requires a fixture that run sets up %s" % bad[:8])
