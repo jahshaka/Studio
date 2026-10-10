@@ -2374,11 +2374,49 @@ def _register(tag, kind, row, tip, rec, cause, suspects=None, fallback=None):
     reg = os.environ.get("JAH_DEFECTS_FILE") or os.path.join(gate_runlog.workspace_root(), "testing", "defects.json")
     d = os.environ.get("JAH_DEFECTS_PENDING_DIR") or os.path.join(os.path.dirname(reg), "defects.pending")
     os.makedirs(d, exist_ok=True)
-    did = re.sub(r"[^A-Za-z0-9._-]+", "-", f"{tag}-{kind}-{row}")
     rec = rec or {}
     t = rec.get("tip") or {}
     today = _dt.date.today()
     recheck = (today + _dt.timedelta(days=1 if kind == "nondeterminism" else 7)).isoformat()
+    seen = {"tip": tip, "pin": t.get("fork") or "", "run": rec.get("run") or "", "batch": tag}
+    # ONE ENTRY PER ROW AND KIND (item 14): an OPEN entry of this kind for this row — in the registry or pending — is
+    # REUSED: the new sighting is added as a recheck (rechecks[], the recheck date moved on), never a second entry
+    # (batch B2 registered B2-defect-* duplicates of the A2 entries)
+    known = []
+    try:
+        for e in (json.load(open(reg)).get("defects") or []):
+            known.append((e, reg))
+    except (OSError, ValueError, AttributeError):
+        pass
+    for fn in sorted(os.listdir(d)):
+        if fn.endswith(".json"):
+            try: known.append((json.load(open(os.path.join(d, fn))), os.path.join(d, fn)))
+            except (OSError, ValueError): pass
+    # (A NOT REPRODUCED entry is single-use AT ITS BATCH by design — uses: 1 at first_seen.tip — so it is never reused:
+    # a reused one could not clear the new batch's red.)
+    for e, src in ([] if kind == "nondeterminism" else known):
+        if (isinstance(e, dict) and e.get("kind") == kind and row in (e.get("rows") or [])
+                and gate_runlog.defect_state(e) == "open"):
+            e.setdefault("rechecks", []).append(seen)
+            e["recheck"] = max(e.get("recheck") or recheck, recheck)
+            if "expires" in e: e["expires"] = max(e["expires"], recheck)
+            if src == reg:
+                doc = json.load(open(reg))
+                doc["defects"] = [e if x.get("id") == e["id"] else x for x in doc.get("defects") or []]
+                with open(reg, "w") as f:
+                    json.dump(doc, f, indent=1, sort_keys=True); f.write("\n")
+            else:
+                with open(src, "w") as f:
+                    json.dump(e, f, indent=1, sort_keys=True); f.write("\n")
+            return src
+    # THE ID SCHEME (item 14): <BATCH>-<ROW, upper, every non-alnum a dash>-<n> — e.g. A2-SCRIPTING-E2E-CLIP-REF-1,
+    # n the next free number for that prefix: one scheme the lead reads (the kind is the entry's field, not its name)
+    stem = re.sub(r"[^A-Z0-9]+", "-", f"{tag}-{row}".upper()).strip("-")
+    used = {e.get("id") for e, _ in known if isinstance(e, dict)}
+    n = 1
+    while f"{stem}-{n}" in used or os.path.exists(os.path.join(d, f"{stem}-{n}.json")):
+        n += 1
+    did = f"{stem}-{n}"
     entry = {"id": did, "rows": [row], "kind": kind, "cause": cause,
              "first_seen": {"tip": tip, "pin": t.get("fork") or "", "run": rec.get("run") or ""},
              "state": "open", "found_by": "gate", "recheck": recheck, "expires": recheck}
