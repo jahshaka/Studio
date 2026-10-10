@@ -143,8 +143,10 @@ ClipboardCopyResult ClipboardService::publish(const Envelope &envelope, int item
     ClipboardCopyResult result;
     const QByteArray payload = envelope.toText();
     if (qint64(payload.size()) > clipboardformat::kMaxPayloadBytes) {
-        result.error = QStringLiteral("payload too large (%1 MB)")
-                           .arg(payload.size() / (1024.0 * 1024.0), 0, 'f', 1);
+        // Said like the floor's refusal: the limit, and that nothing was copied (read 8 I4).
+        result.error = QStringLiteral("payload too large (%1 MB over the %2 MB limit) — nothing was copied")
+                           .arg(payload.size() / (1024.0 * 1024.0), 0, 'f', 1)
+                           .arg(clipboardformat::kMaxPayloadBytes / (1024 * 1024));
         return result;
     }
     backend->setPayload(payload);
