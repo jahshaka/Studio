@@ -57,8 +57,8 @@ whole thing would exclude the correct assertions from pass/fail as well. The row
 today (2026-09-28) are five: `gi.chain_face_target`, `gi.field_follows_energy`,
 `gi.cone_corner_target`, `gi.cone_integrator_parity_offaxis` and `gi.sealed_room_chain_target`
 (SEALED-ROOM-LEAK-1: 12/255 against 2). DAG-LOCK-1 took the label off
-the DAG's displacement-lock row (the stand-in 0 of 22 groups over, worst 1.39x) — it gates now, and
-TESTING-CLEANUP-2B renamed it `atom.dag_bound` (no `_target` on a gating row).
+`atom.dag_bound_target` (the DAG's displacement lock: the stand-in 0 of 22 groups over, worst
+1.39x) — it gates now.
 D6B-GATE-SHAPE took the label off three that had gone green (3/3 on the rig):
 `gi.volume_edge_spec_target` (0.0000 / 0.0011 against 0.05), `gi.gather_reference_target`
 (worst 0.969 against 1.00 +- 0.05) and `gi.gather_plane_target` (1.000) — they gate now.
@@ -572,7 +572,7 @@ shares the GPU while it measures; everything else shares the GPU within the budg
 lane (debug-runner) wraps every `perf.capture` run the same way.** The wrapper is
 `scripts/gpu-exclusive.sh [--run-timeout <s>] [--label <row:class>] <command…>` = `vram_tokens.py
 admit all --timing`: the turnstile keeps the queue behind a waiting timing row (a stream of small
-requests cannot starve it — OUTSIDE a gate: inside one the gate's rows pass the turnstile, see below), a bounded 900 s wait (`NOADMIT vram: …`, exit 75, the command never
+requests cannot starve it), a bounded 900 s wait (`NOADMIT vram: …`, exit 75, the command never
 runs), the command exec'd in place so a ctest timeout still kills the suite itself and the tokens
 die with it. (Until TEST-SELECTOR-1 it was a separate `flock` that excluded only the OTHER timing
 rows: gi.rt_reflect_cost and gi.field_scroll went red beside sibling GPU rows — plan 9ab.)
@@ -593,7 +593,7 @@ run log (suite `@drain-timeout`: the holders, the wait) and the phase runs with 
 
 **THE LOCK LIST IS THE TIMING LIST** (`JAH_GPU_EXCLUSIVE_SUITES`, `tests/CMakeLists.txt`,
 registered by `jah_gpu_exclusive_test()`, whose `RUN_TIMEOUT` is the suite's own budget and
-whose TIMEOUT is that + 30 s — the admission's wait is outside it, below; configure fails if a listed suite is
+whose TIMEOUT is that + 30 s + the admission's 900 s bound; configure fails if a listed suite is
 registered any other way). A suite is on it because it asserts milliseconds, a ratio of milliseconds or a frame
 budget — never for a flake history: the six members that measured no time LEFT it
 (app.engine_selftest_validation, claude.chat, ui.media_lazy, scripting.e2e.space_switch /
@@ -662,14 +662,7 @@ The owner's instance, the desktop and any app started by hand without the helper
 slow, and blind to what a process allocates next; the token count is the contract, tuned by
 measurement). An acquirer takes the TURNSTILE, reads the free tokens from `/proc/locks` and locks
 the k LOWEST only when k are free — all or nothing, never hold-and-wait, and a 3-token row at the
-head of the queue is not starved by 1-token rows behind it — EXCEPT BY A GATE (TESTING-CLEANUP-2B fix round 2/3): a
-row of the gate holding the slot owns the card, so it does not wait behind a turnstile someone else holds; it scans the
-tokens itself (re-scanning while enough are free — a sibling row of the same gate scanning at once is a race, not a
-shortage; bounded by attempts) and is admitted, NOADMIT only when the free tokens are truly short, the line naming the
-request ahead ("a row of this gate: …" or the foreign pid and label). A waiter at the turnstile DURING a gate can
-therefore be starved until the gate ends, by construction: every gate and every class-2 measurement queues at the SLOT,
-so such a waiter is unslotted (`JAH_GATE_SLOT=0`, a hand `gpu-admit.sh` run, an old tree's script) and its wait is
-bounded by the gate (and by its own `JAH_VRAM_WAIT`). The command is EXEC'D IN PLACE with
+head of the queue is not starved by 1-token rows behind it. The command is EXEC'D IN PLACE with
 the token fds inherited: the pid ctest started is the suite, and the tokens are freed when it and
 everything it spawned exit, for any reason (a crash, a ctest timeout kill). A nested admission
 (`JAH_VRAM_HELD` in the environment) runs on its parent's tokens. A wait prints ONE line —
@@ -751,19 +744,11 @@ mcp.e2e, …) is `CLASS app` — the app it starts is the process that holds the
 drop-in for `add_test(NAME … COMMAND …)`); `jah_gpu_exclusive_test(NAME … CLASS <class> …)` (a
 timing row holds the GPU lock FIRST, then its tokens: the lock for exclusivity, the tokens for
 memory); `jah_add_pool(<pool> [CLASS vr] [TIER …])` — the pool's tokens are taken by
-`run_pool.py --vram-tokens <k>` ONCE for the pool's whole run (every app process, a restart included, inherits
-them — TESTING-CLEANUP-2B F-C1: a token taken between two processes no longer turns the pool's remaining arms NOADMIT; a `HEADLESS` pool takes none). A row that boots no Vulkan is a plain `add_test` with
-`jah_no_display()`. **The wait never eats a row's budget, and the TIMEOUT a site declares is the row's whole
-bound** (TESTING-CLEANUP-2B; `tests/cmake/vram_rows.cmake`): every registered row carries `RESOURCE_GROUPS
-vram:<k>` and the build names its resource spec (`CTEST_RESOURCE_SPEC_FILE`: one `vram` resource, the box's
-token count), so ctest — a gate, a tier, a hand run — never STARTS a row whose tokens its own running rows hold,
-and the clock starts with the row. Only a process outside the ctest (a hand-run app holding tokens) can still
-take a row's tokens — and INSIDE A GATE the row's admission then does not wait at all: it exits 75 (NOADMIT,
-never ran) and the gate re-queues it at its end (P5); a final try still short stays NOADMIT, which the judge
-reads as MISSING (re-run it), never a skip (`vram_tokens.row_wait_bound`). Outside a gate a hand run waits as
-before (its wait subtracted from its seconds, `tokenWaitS`; a TIMEOUT that ends the wait is recorded NOADMIT). (Until 2026-10-10 every GPU
-row's TIMEOUT carried a hidden +900 s for the wait, and rows ran past their own budget unseen — the shadow churn
-twins 1,008 / 1,159 s against 900.)
+`run_pool.py --vram-tokens <k>` once per APP PROCESS (a restart re-takes them; the driver holds
+none; a `HEADLESS` pool takes none). A row that boots no Vulkan is a plain `add_test` with
+`jah_no_display()`. **The wait never eats a row's budget**: it happens before the command starts,
+and every registered row's TIMEOUT is its own budget plus the 900 s bound, added once by the
+helper at the end of the row's directory — never typed at a site.
 
 **THE CLOSURE.** `source.gpu_rows_closure` (hygiene) reads what ctest will run
 (`ctest --show-only=json-v1`): every row whose command or environment names an Ogre-linked
