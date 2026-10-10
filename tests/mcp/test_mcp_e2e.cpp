@@ -934,7 +934,9 @@ int main(int argc, char **argv)
               "JSON.stringify(world.get().fog)" },
             { "world.gi (pinned row + plain field)", "world.gi({bounces: 1, updateBudget: 7})",
               "JSON.stringify({gi: world.get().gi, pin: world.settings().giBounces.source})" },
-            { "world.gi (tier)", "world.gi({tier: 'low'})",
+            // a tier DIFFERENT from the one the process booted with (the row declares TIER low;
+            // writing the booted tier changes nothing): low -> medium, anything else -> low
+            { "world.gi (tier)", "world.gi({tier: world.photon().tier === 'low' ? 'medium' : 'low'})",
               "JSON.stringify({gi: world.get().gi, tier: world.photon().tier})" },
             { "world.sky", "world.sky('gradient', {top: '#123456', offset: 0.3})",
               "JSON.stringify(world.get().sky)" },
