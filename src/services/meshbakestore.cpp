@@ -829,6 +829,8 @@ void stopBackgroundRebuild()
     for (QFuture<QVector<BakeResult>> &future : sAsyncFutures)
         if (!future.isFinished()) future.waitForFinished();
     sAsyncFutures.clear();
+    // A test hold left on: its parked commits are released into the moved epoch, which discards them.
+    holdCommits(false);
 }
 
 bool backgroundRebuildRunning()
@@ -932,6 +934,11 @@ bool ensureFresh(const QString &sourcePath, const QString &assetGuid)
 
 namespace {
 
+bool sCommitHold = false;
+QVector<std::function<void()>> sHeldCommits;
+void landAsync(const QVector<BakeJob> &jobs, const QVector<LandedBake> &targets,
+               const std::function<void(int)> &done, quint64 epoch, QVector<BakeResult> results);
+
 /// Bakes `jobs` on a worker; commits them on the database thread when they land, tells the
 /// listeners which of `targets` landed, then calls `done(failed)`.
 void bakeAsync(const QVector<BakeJob> &jobs, const QVector<LandedBake> &targets,
@@ -949,6 +956,23 @@ void bakeAsync(const QVector<BakeJob> &jobs, const QVector<LandedBake> &targets,
     sAsyncFutures.removeIf([](const QFuture<QVector<BakeResult>> &f) { return f.isFinished(); });
     sAsyncFutures.append(future);
     future.then(QCoreApplication::instance(), [jobs, targets, done, epoch](QVector<BakeResult> results) {
+        landAsync(jobs, targets, done, epoch, std::move(results));
+    });
+}
+
+void landAsync(const QVector<BakeJob> &jobs, const QVector<LandedBake> &targets,
+               const std::function<void(int)> &done, quint64 epoch, QVector<BakeResult> results)
+{
+    // THE TEST HOLD (assets.holdBakes): the finished bake waits here, uncommitted and still pending,
+    // until the hold is released — so a suite can place and SAVE inside the window deterministically.
+    if (sCommitHold) {
+        auto held = std::make_shared<QVector<BakeResult>>(std::move(results));
+        sHeldCommits.append([jobs, targets, done, epoch, held]() {
+            landAsync(jobs, targets, done, epoch, std::move(*held));
+        });
+        return;
+    }
+    {
         for (const BakeJob &job : jobs)
             if (--sPending[job.path] <= 0) sPending.remove(job.path);
         sPendingJobs -= jobs.size();
@@ -983,7 +1007,7 @@ void bakeAsync(const QVector<BakeJob> &jobs, const QVector<LandedBake> &targets,
             ++i;
         }
         if (done) done(failed);
-    });
+    }
 }
 }   // namespace
 
@@ -1022,6 +1046,15 @@ bool ensureFreshAsync(const QString &sourcePath, const QString &assetGuid, QObje
                                  assetGuid));
               });
     return true;
+}
+
+void holdCommits(bool on)
+{
+    sCommitHold = on;
+    if (on) return;
+    const QVector<std::function<void()>> held = std::move(sHeldCommits);
+    sHeldCommits.clear();
+    for (const std::function<void()> &land : held) land();
 }
 
 bool bakePending(const QString &sourcePath)

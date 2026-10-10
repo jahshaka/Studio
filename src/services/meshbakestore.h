@@ -286,6 +286,10 @@ bool ensureFreshAsync(const QString &sourcePath, const QString &assetGuid, QObje
 bool bakePending(const QString &sourcePath);
 /// How many async bakes are in flight (the `assets.pendingBakes` verb). Database thread.
 int pendingBakeCount();
+/// THE TEST HOLD (the `assets.holdBakes` verb): while on, a finished async bake is NOT committed — it
+/// stays pending — and releasing the hold commits everything held, in order. A suite uses it to act
+/// inside the window between a placement and its landing deterministically. Database thread.
+void holdCommits(bool on);
 
 /// A row whose model just became readable, or whose bake failed.
 struct LandedBake

@@ -59,6 +59,7 @@ namespace { void regenerateGuids(const iris::SceneNodePtr &root,
 #include "irisgl/document/animation/animation.h"
 #include "irisgl/document/animation/keyframeset.h"
 #include "irisgl/document/animation/keyframeanimation.h"
+#include "irisgl/document/animation/skeletalanimation.h"
 
 #include "commands/addscenenodecommand.h"
 #include "commands/changematerialcommand.h"
@@ -135,6 +136,13 @@ SceneEditService::SceneEditService(Database *db,
     // in — the reimport's own walk — and a bake that FAILED is the model.missing issue the reader
     // would have raised (it did not: the bake was in flight).
     MeshBakeStore::addLandedListener(this, [this](const QVector<MeshBakeStore::LandedBake> &rows) {
+        // THE CLIPS FIRST: a skinned node placed while its bake was in flight holds placeholder clips
+        // (SceneReader::getSkeletalAnimation) — bound now, before its geometry arrives, so the rig
+        // attaches with its clips as a synchronous import's would.
+        QSet<QString> landedGuids;
+        for (const MeshBakeStore::LandedBake &row : rows)
+            if (row.ok) landedGuids.insert(row.assetGuid);
+        if (!landedGuids.isEmpty()) rebindPendingClips(landedGuids);
         QStringList failed;
         for (const MeshBakeStore::LandedBake &row : rows) {
             if (row.ok) {
@@ -145,6 +153,45 @@ SceneEditService::SceneEditService(Database *db,
         }
         if (!failed.isEmpty()) SceneIssues::instance().raiseMissingModels(failed);
     });
+}
+
+int SceneEditService::rebindPendingClips(const QSet<QString> &assetGuids)
+{
+    const iris::ScenePtr live = scene();
+    if (assetGuids.isEmpty() || !live || !live->getRootNode()) return 0;
+    // The SAME resolution an open or a synchronous placement runs (SceneReader::getSkeletalAnimation):
+    // one reader for the whole walk, so a model's bake is read once however many clips name it.
+    SceneReader reader;
+    reader.setDatabaseHandle(db);
+    reader.setProject(project);
+    reader.setLibrarySource();
+    int bound = 0;
+    std::function<void(const iris::SceneNodePtr &)> walk = [&](const iris::SceneNodePtr &node) {
+        if (!node) return;
+        QList<iris::AnimationPtr> anims = node->getAnimations();
+        if (node->getAnimation() && !anims.contains(node->getAnimation())) anims.append(node->getAnimation());
+        bool changed = false;
+        for (const iris::AnimationPtr &anim : anims) {
+            if (!anim || !anim->hasSkeletalAnimation()) continue;
+            const iris::SkeletalAnimationPtr skel = anim->getSkeletalAnimation();
+            // A PLACEHOLDER: a reference with no keys and no source (a read clip always has its source).
+            if (!skel->source.isEmpty() || !skel->boneAnimations.isEmpty()
+                || !assetGuids.contains(skel->assetGuid))
+                continue;
+            if (const iris::SkeletalAnimationPtr real =
+                    reader.getSkeletalAnimation(skel->assetGuid, skel->name, node->getName())) {
+                anim->setSkeletalAnimation(real);
+                changed = true;
+                ++bound;
+            }
+        }
+        // The clip set changed under the node: the mirror re-reads its clips (and the subtree's rig).
+        if (changed) node->notifyChangedSubtree(iris::NodeChange::Content);
+        for (const iris::SceneNodePtr &child : node->children()) walk(child);
+    };
+    walk(live->getRootNode());
+    SceneIssues::instance().raiseMissingClips(reader.missingClips());
+    return bound;
 }
 
 bool SceneEditService::usesAsset(const QString &meshGuid) const

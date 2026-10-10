@@ -505,6 +505,12 @@ QVector<VerbInfo> AssetsApi::verbs() const
           "the bake is built on a worker and committed when it lands, and a node placed meanwhile shows its "
           "geometry then. 0 = every import's geometry is in. Wait in frames (editor.frame) until it reads 0.",
           Needs::Document },
+        { "holdBakes", "assets.holdBakes(on) -> bool",
+          "A TEST HOLD on the import bakes assets.pendingBakes counts: while on, a bake that finished on its "
+          "worker is NOT committed (it stays pending, its nodes stay without geometry); holdBakes(false) commits "
+          "everything held, in order. For a suite that acts inside the window between a placement and its "
+          "landing (a save, a reopen) without racing the worker. Returns the hold's new state.",
+          Needs::Document },
     };
 }
 
@@ -2202,6 +2208,12 @@ QVariantMap AssetsApi::reimport(const QString &guid, const QVariantMap &options)
 int AssetsApi::pendingBakes()
 {
     return MeshBakeStore::pendingBakeCount();
+}
+
+bool AssetsApi::holdBakes(bool on)
+{
+    MeshBakeStore::holdCommits(on);
+    return on;
 }
 
 QVariantMap AssetsApi::bakeAll(const QVariantMap &options)

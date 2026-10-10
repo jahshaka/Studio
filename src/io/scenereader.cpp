@@ -1981,6 +1981,20 @@ iris::SkeletalAnimationPtr SceneReader::getSkeletalAnimation(const QString &asse
         // ONE CAUSE, ONE ISSUE: a model with no bake is already `model.missing`
         // (the extraction above recorded it); its own clips say nothing more.
         if (missingModelPaths.contains(path)) return iris::SkeletalAnimationPtr();
+        // THE BAKE IS IN FLIGHT (STAGE-CLOSE-TRIAGE-1 fix round 3): a paste or a share-file import
+        // returned before its bake landed. The REFERENCE is kept — a placeholder clip carrying
+        // {assetGuid, name} and no keys, marked by its empty `source` — so a save before the landing
+        // writes the reference unchanged, and the landing re-binds the real clip in its place
+        // (SceneEditService's landed listener, the same resolution as here). A clip is also a mobility
+        // driver (rule 1), so the node does not settle into the static graph class while it waits.
+        if (MeshBakeStore::bakePending(path)) {
+            auto placeholder = iris::SkeletalAnimation::create();
+            placeholder->name = animName;
+            placeholder->assetGuid = assetGuid;
+            irisLog(QStringLiteral("scene reader: the clip '%1' on '%2' waits for its model's bake — "
+                                   "bound when it lands").arg(animName, nodeName));
+            return placeholder;
+        }
         return miss(QStringLiteral("the asset has no current bake holding its clips"));
     }
 

@@ -910,6 +910,10 @@ jah_pool_arm(assets_import import_render ${CMAKE_CURRENT_BINARY_DIR}/e2e_import_
 # collected, the file re-imports as one object tile that renders its own map. Engine up.
 configure_file(scripts/e2e_node_archive_roundtrip.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_node_archive_roundtrip.js @ONLY)
 jah_pool_arm(assets_import node_archive_roundtrip ${CMAKE_CURRENT_BINARY_DIR}/e2e_node_archive_roundtrip.js 12)
+# assets_import.bundle_pending_clips — a skinned node placed while its share-file bake is pending keeps
+# its clip references through a save, and the landing binds the real clips (STAGE-CLOSE-TRIAGE-1).
+configure_file(scripts/e2e_bundle_pending_clips.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_bundle_pending_clips.js @ONLY)
+jah_pool_arm(assets_import bundle_pending_clips ${CMAKE_CURRENT_BINARY_DIR}/e2e_bundle_pending_clips.js 12)
 
 # assets_import.bundle_export_{texture,material,pack,sky} — JAF-EXPORTS-1: the Assets tray's exports
 # are the share file (assets.exportBundle, one entry or a pack); each kind's file re-imports into

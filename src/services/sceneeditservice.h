@@ -27,6 +27,7 @@ For more information see the LICENSE file
 
 #include "irisgl/core/math/vec.h"
 #include <QObject>
+#include <QSet>
 
 #include <optional>
 #include <QString>
@@ -231,6 +232,9 @@ public:
     int refreshAssetMeshes(const QString &meshGuid, const QString &sourcePath);
     /// True when a live mesh node was placed from this library row (its meshPath).
     bool usesAsset(const QString &meshGuid) const;
+    /// Binds the real clips in place of the placeholders a placement made while these assets'
+    /// bakes were in flight (SceneReader::getSkeletalAnimation). Returns how many were bound.
+    int rebindPendingClips(const QSet<QString> &assetGuids);
     /// Instantiates a stored object asset (drag-drop / assets.addToScene).
     void addMaterialMesh(const QString &path, bool ignore, iris::Vec3 position,
                          const QString &guid, const QString &assetName,
