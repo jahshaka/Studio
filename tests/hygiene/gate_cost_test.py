@@ -789,6 +789,32 @@ def main(source, build):
           and "FOREIGN-WAITER" in r3.stderr,
           "...and a row truly short is NOADMIT naming the foreign request ahead (exit %d: %s)"
           % (r3.returncode, (r3.stderr.strip().splitlines() or [""])[-1][:160]))
+    # FIX ROUND 3 F4: SIBLING ROWS OF ONE GATE ARE NOT FOREIGN, AND A LOST SCAN RACE IS NOT A SHORTAGE. A process of the
+    # gate (its JAH_GATE_SLOT_HELD = the gate's) holds the turnstile; three gate rows ask for one token each AT ONCE, five
+    # rounds: every row is admitted (three tokens free), and the line names "a row of this gate", never "foreign".
+    # RED ON 9eb5343e2: the rows past the turnstile picked the same lowest token and the losers were NOADMIT, the sibling
+    # named as a foreign request.
+    relgw3, relsib = os.path.join(scratch, "gw3.release"), os.path.join(scratch, "sib.release")
+    gw3 = spawn([sys.executable, vt, "gate", "--label", "GW3", "--", "sh", "-c",
+                 f"while [ ! -e {relgw3} ] && kill -0 {os.getpid()} 2>/dev/null; do sleep 0.05; done"], env=benv)
+    wait_line(gw3, "gate-slot: taken")
+    g3env = dict(benv, JAH_VRAM_WAIT="900", JAH_GATE_SLOT_HELD=str(gw3.pid))
+    sib = spawn([sys.executable, "-c", "import fcntl,os,sys,time\nfd=os.open(sys.argv[1],os.O_RDWR|os.O_CREAT)\n"
+                 "fcntl.flock(fd,fcntl.LOCK_EX)\nprint('SIBHELD',flush=True)\n"
+                 "while not os.path.exists(sys.argv[2]): time.sleep(0.02)",
+                 os.path.join(os.environ["JAH_VRAM_DIR"], "turnstile"), relsib], env=g3env)
+    wait_line(sib, "SIBHELD")
+    outs = []
+    for _ in range(5):
+        ps_ = [subprocess.Popen([sys.executable, vt, "admit", "1", "--label", "SIBROW", "--", "sleep", "0.3"],
+                                stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=g3env) for _ in range(3)]
+        outs += [(p_.wait(), p_.communicate()[1]) for p_ in ps_]
+    open(relsib, "w").close(); sib.communicate()
+    open(relgw3, "w").close(); gw3.communicate()
+    bad_ = [e for rc_, e in outs if rc_ != 0]
+    check(not bad_ and all("a row of this gate" in e and "foreign" not in e for _, e in outs),
+          "three rows of one gate asking at once past a sibling's turnstile: 15/15 admitted, the holder named a row of "
+          "this gate (%d NOADMIT%s)" % (len(bad_), (": " + bad_[0].strip().splitlines()[-1][:120]) if bad_ else ""))
     # TESTING-CLEANUP-2B item 13: THE SLOT IS BY PRIORITY, NOT ARRIVAL (0 smoke, 1 gate, 2 measurement). Counted by the
     # ORDER the commands ran in (each appends its name), never a clock. RED ON BASE (b0a3b1f3c): FIFO — the gate ran
     # third, behind both measurements, and nothing yielded.
