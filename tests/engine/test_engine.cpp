@@ -4928,7 +4928,7 @@ void vr_view_policy_keeps_the_project_and_drops_what_has_no_per_eye_form() {
     applyVrViewPolicy(eye);
 
     // ---- what has no per-eye form yet --------------------------------------
-    CHECK_MSG(!eye.bloom, "bloom is dropped (one fixed 256x256 ladder holds one picture)");
+    CHECK_MSG(!eye.bloom, "bloom is dropped (the grade reads one bloom texture for both eyes)");
     CHECK_MSG(!eye.ssao, "SSAO is dropped (its passes are not per layer)");
     CHECK_MSG(eye.smaaPreset < 0, "SMAA is dropped (its passes are not per layer)");
     CHECK_MSG(!eye.ssrScreenMarch, "the screen-space march is dropped (the rays run per layer)");

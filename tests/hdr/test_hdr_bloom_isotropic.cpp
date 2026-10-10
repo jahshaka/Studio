@@ -23,8 +23,9 @@
 //
 // THE ARMS
 //   A  CONTROL: the hot spot is there and it blooms (a halo of real size).
-//   B  ISOTROPIC: the halo's half-width at half its peak excess, along the row
-//      through the hot spot and along the column, agree within 10 %. The base
+//   B  ISOTROPIC: the halo's half-width at half its peak excess on each of the
+//      four sides (right, left, down, up) agree within 10 % (max/min), and its
+//      reach on every side sits in a bar from the lane's measurement. The base
 //      measured the row's at the frame's edge and the column's at ~12 px.
 //   C  NO BAND: at both ends of the hot spot's row the bloomed picture equals
 //      the bloom-off picture within one code (the base: +34).
@@ -215,12 +216,30 @@ int main()
           "(min %.1f)", std::min({ pr, pl, pd, pu }));
 
     // ---- B  ISOTROPIC -------------------------------------------------------
+    // Each of the FOUR sides on its own: an average of left with right (or up
+    // with down) would pass a halo shifted half a texel to one side.
     {
-        const double h = 0.5 * (hr + hl), v = 0.5 * (hd + hu);
-        const double rel = std::fabs(h - v) / std::max(h, v);
-        CHECK(rel <= 0.10,
-              "B: the halo is as wide as it is tall — half-width at half peak %.1f px across, "
-              "%.1f px down (%.1f %% apart, bar 10 %%)", h, v, 100.0 * rel);
+        const double hMax = std::max({ hr, hl, hd, hu }), hMin = std::min({ hr, hl, hd, hu });
+        const double ratio = hMax / std::max(1e-9, hMin);
+        CHECK(ratio <= 1.10,
+              "B: the halo is as wide as it is tall — the four half-widths at half peak "
+              "(right %.1f left %.1f down %.1f up %.1f px) agree, max/min %.3f (bar 1.10)",
+              hr, hl, hd, hu, ratio);
+    }
+    // REACH (the last pixel at >= 1 code), every side. The lane measured 283 px
+    // across and 267 down (the column has only 270 px to its edge). The bar is
+    // that +-20 %: [214, 340]. A ladder one level shorter or longer moves the
+    // widest level - which sets the tail - by 2x (~140 or ~560 px), and the
+    // base's band reached the row's edge (480) but only 41 px down; +-20 %
+    // tolerates driver rounding of a 1-code tail and catches every one of those.
+    {
+        constexpr int kReachMin = 214, kReachMax = 340;
+        const int rr = reach(right), rl = reach(left), rd = reach(down), ru = reach(up);
+        const bool inBar = std::min({ rr, rl, rd, ru }) >= kReachMin &&
+                           std::max({ rr, rl, rd, ru }) <= kReachMax;
+        CHECK(inBar,
+              "B: the halo reaches as far every way — reach right %d left %d down %d up %d px "
+              "(bar [%d, %d], the lane's 283 / 267 +-20 %%)", rr, rl, rd, ru, kReachMin, kReachMax);
     }
 
     // ---- C  NO BAND ---------------------------------------------------------

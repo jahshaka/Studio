@@ -13,6 +13,13 @@
 // A halo is a disc; a band is a row. The disc's reach is the ladder's (measured by
 // hdr.bloom_isotropic at 960 wide: a saturated hot spot's halo stays >= 1 code out to
 // ~1/4 of the width); kHaloReach is set wider than that.
+// THE SECOND BAR (worstAll): that exemption is wide (Showroom 2 has ~76 hot grid points and
+// it skips ~928 of the 1080 row ends), so a band or a widened halo on an exempt row would
+// pass it. EVERY row end - bar the ones sitting on a hot point itself (within kCoreReach,
+// where the highlight's own core legitimately moves) - must also be the bloomAmount 0
+// picture within kWorstAllBar codes. The lane measured worst-anywhere 1 code; the base's
+// band measured 40 (its band rows +19..+38). The bar is 4: three codes of headroom over the
+// lane for a halo tail's driver rounding, and a band's weakest row (+19) is ~5x over it.
 //
 // Frames, never time: the shots are the picture at rest (editor.screenshot settles).
 
@@ -26,6 +33,8 @@ var SHOWROOM = "@JAH_BLOOM_SHOWROOM@";
 var W = 960, H = 540;
 var kHaloReach = 0.30 * W;          // px: wider than the ladder's measured reach
 var kStep = 8;                      // the hot-pixel grid, px
+var kCoreReach = 2 * kStep;         // px: a row end this close to a hot point is ON the highlight
+var kWorstAllBar = 4;               // codes, every row end not on a highlight (see THE SECOND BAR)
 
 var proj = project.create("Bloom Showroom " + Date.now());
 assert(proj.length > 10, "project.create");
@@ -66,20 +75,27 @@ for (var i = 0; i < rad.length; ++i) {
 console.log("hot pixels (grid " + kStep + " px): " + hot.length);
 assert(hot.length > 0, "the scene has highlights that bloom (the control)");
 
-function nearHot(px, py) {
+function withinOfHot(px, py, radius) {
     for (var k = 0; k < hot.length; ++k) {
         var dx = hot[k].x - px, dy = hot[k].y - py;
-        if (dx * dx + dy * dy <= kHaloReach * kHaloReach) return true;
+        if (dx * dx + dy * dy <= radius * radius) return true;
     }
     return false;
 }
+function nearHot(px, py) { return withinOfHot(px, py, kHaloReach); }
 
-var checked = 0, exempt = 0, bad = [], worstFar = 0, worstAll = 0;
+var checked = 0, exempt = 0, onCore = 0, bad = [], badAll = [], worstFar = 0, worstAll = 0;
 for (var j = 0; j < on.length; ++j) {
     var a = on[j], b = off[j];
     var d = Math.max(Math.abs(a.r - b.r), Math.abs(a.g - b.g), Math.abs(a.b - b.b));
-    worstAll = Math.max(worstAll, d);
     var px = a.x * W, py = a.y * H;
+    if (withinOfHot(px, py, kCoreReach)) {
+        ++onCore;
+    } else {
+        worstAll = Math.max(worstAll, d);
+        if (d > kWorstAllBar && badAll.length < 12)
+            badAll.push("(" + (px < W / 2 ? "left" : "right") + " row " + Math.floor(py) + ": +" + d + ")");
+    }
     if (Math.floor(py) % 30 === 0)
         console.log("  row " + Math.floor(py) + (px < W / 2 ? " left" : " right") + ": +" + d +
                     (nearHot(px, py) ? " (inside a halo's reach)" : ""));
@@ -89,8 +105,11 @@ for (var j = 0; j < on.length; ++j) {
     if (d > 2 && bad.length < 12) bad.push("(" + (px < W / 2 ? "left" : "right") + " row " + Math.floor(py) + ": +" + d + ")");
 }
 console.log("row ends: " + checked + " checked, " + exempt + " inside a halo's reach; worst outside " +
-            worstFar + " codes, worst anywhere " + worstAll);
+            worstFar + " codes, worst anywhere " + worstAll + " (" + onCore + " on a highlight's core, not counted)");
 assert(checked >= 100, "the control: at least 100 row ends are outside every halo's reach (" + checked + ")");
 assert(worstFar <= 2, "no band: every row end outside a halo's reach is the bloomAmount 0 picture within 2 codes " +
        "(worst " + worstFar + ")" + (bad.length ? " " + bad.join(" ") : ""));
+assert(worstAll <= kWorstAllBar, "no band or widened halo anywhere: every row end not on a highlight's core is the " +
+       "bloomAmount 0 picture within " + kWorstAllBar + " codes (worst " + worstAll + ")" +
+       (badAll.length ? " " + badAll.join(" ") : ""));
 console.log("BLOOM_SHOWROOM_DONE");
