@@ -12,14 +12,22 @@
 # jah_phys <path> — the physical spelling (no symlinks, no . or ..); the path need not exist yet.
 # Python's os.path.realpath, not `realpath -m`: -m is GNU coreutils only (macOS's realpath has no -m,
 # and BSD realpath fails on a missing tail); realpath() is non-strict on both, like -m.
-jah_phys() { python3 -I -c 'import os,sys; print(os.path.realpath(sys.argv[1]))' "$1"; }
+# An EMPTY argument is refused (status 1, no output), as `realpath -m ""` refused it: realpath() would
+# answer the CWD, and `jah_inside "" "$HOME"` would then pass where it must not.
+jah_phys() {
+    [ -n "$1" ] || return 1
+    python3 -I -c 'import os,sys; print(os.path.realpath(sys.argv[1]))' "$1"
+}
 
 # jah_same_path <a> <b> — the two name the same place.
-jah_same_path() { [ "$(jah_phys "$1")" = "$(jah_phys "$2")" ]; }
+jah_same_path() {
+    _ja="$(jah_phys "$1")" || return 1; _jb="$(jah_phys "$2")" || return 1
+    [ "$_ja" = "$_jb" ]
+}
 
 # jah_inside <path> <dir> — <path> is <dir> or below it (both resolved).
 jah_inside() {
-    _jp="$(jah_phys "$1")"; _jd="$(jah_phys "$2")"
+    _jp="$(jah_phys "$1")" || return 1; _jd="$(jah_phys "$2")" || return 1
     case "$_jp" in "$_jd"|"$_jd"/*) return 0 ;; esac
     return 1
 }
