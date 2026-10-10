@@ -1580,11 +1580,12 @@ foreach(_clip clipboard_xproject clipboard_assets)
     jah_pool_arm(doc_assets ${_clip} ${CMAKE_CURRENT_BINARY_DIR}/e2e_${_clip}.js 5 HEADLESS)
 endforeach()
 
-# scripting.e2e.clipboard_budget — THE COPY'S REFUSALS (STAGE-CLOSE-TRIAGE-1 round 7, read 7 F2/F3):
-# a row whose stored JSON is over the inline budget refuses clipboard.copy / clipboard.cut BY NAME
-# (the clipboard unchanged, nothing deleted); a budget under its 64 KB floor refuses every copy with
-# that reason. A ROW of its own, not a doc_assets arm: the budget is a SETTING the process reads from
-# its data root's jahsettings.ini, seeded per process by the shell half. Two --headless processes.
+# scripting.e2e.clipboard_budget — THE COPY UNDER THE INLINE BUDGET (STAGE-CLOSE-TRIAGE-1 rounds 7-8):
+# a row's node tree is never budgeted (a 600-part model copies under a 64 KB budget, its file by
+# reference, and pastes into a foreign library with the source's node count); a budget under its
+# 64 KB floor refuses copy and cut with that reason (nothing deleted). A ROW of its own, not a
+# doc_assets arm: the budget is a SETTING the process reads from its data root's jahsettings.ini,
+# seeded per process by the shell half. Three --headless processes.
 set(_cbud_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-clipboard_budget)
 file(MAKE_DIRECTORY ${_cbud_home}/run)
 add_test(NAME scripting.e2e.clipboard_budget
@@ -1594,8 +1595,8 @@ add_test(NAME scripting.e2e.clipboard_budget
 set_tests_properties(scripting.e2e.clipboard_budget PROPERTIES
     ENVIRONMENT "HOME=${_cbud_home}"
     LABELS "scripting"
-    # TIMEOUT 120: the policy's floor (tests/CMakeLists.txt) — 6x the measured 8.65 s (n=4, 8.56-8.65 s,
-    # 2026-10-10, solo on :72, the gate slot free) is 52 s, under it.
+    # TIMEOUT 120: the policy's floor (tests/CMakeLists.txt) — 6x the measured 13.35 s (n=4, 13.33-13.86 s,
+    # 2026-10-11, three processes, solo on :72, the gate slot free) is 80 s, under it.
     TIMEOUT 120)
 set_property(TEST scripting.e2e.clipboard_budget APPEND PROPERTY ENVIRONMENT_MODIFICATION
              "JAHSHAKA_DATA_ROOT=unset:")

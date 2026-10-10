@@ -169,13 +169,13 @@ int main(int argc, char **argv)
     }
     CHECK(same, "every described row equals fetchAsset's fields and the per-node edges");
 
-    // ---- THE ROW BLOBS ARE SPENT FIRST (round 6, the lead's design call) -----------------------
-    // A row blob is the one payload with no fallback (a file is found again by its oid; an omitted
-    // blob nowhere), so describe charges every blob of the closure before any file. (a) A Mesh
-    // member whose model file nearly fills the budget, walked BEFORE its Object: the Object's node
-    // tree still travels, the file goes by oid. (b) A blob that does not fit even so refuses the
-    // whole describe by name — never an entry without its blob (the old blobOmitted flag, its
-    // envelope key and the resolver's arm are deleted: unreachable under this rule).
+    // ---- A ROW'S BLOB IS THE ROW (round 8, the lead's rule) ------------------------------------
+    // A row blob is never charged to the inline budget and always travels (it has no fallback: a
+    // file is found again by its oid, a blob nowhere); the budget bounds FILES. (a) A Mesh member
+    // whose model file nearly fills the budget, walked BEFORE its Object: the Object's node tree
+    // travels AND the file still inlines (tree + file > the budget: the tree is not charged). (b) A budget smaller than the tree itself: the tree still
+    // travels whole, the file by oid, no refusal (the clipboard's 64 KB floor is the service's, and
+    // scripting.e2e.clipboard_budget drives it).
     {
         const QString object = newGuid(), mesh = newGuid();
         const QByteArray tree(64 * 1024, 'N');
@@ -198,20 +198,20 @@ int main(int argc, char **argv)
         tight.storeRoot = store.path();
         tight.includeRowBlobs = true;
         tight.inlineLimitBytes = 128 * 1024;
-        QString error;
-        const auto out = assetclosure::describe({ mesh, object }, &db, tight, nullptr, nullptr, nullptr, &error);
-        CHECK(error.isEmpty() && out.size() == 2, "the member-first closure is described (%s)", qPrintable(error));
+        const auto out = assetclosure::describe({ mesh, object }, &db, tight);
+        CHECK(out.size() == 2, "the member-first closure is described");
         CHECK(out.value(object).blob == tree, "the Object's node tree travels although its member was walked first");
-        CHECK(out.value(mesh).files.size() == 1 && out.value(mesh).files.first().inlineData.isEmpty()
+        CHECK(out.value(mesh).files.size() == 1 && out.value(mesh).files.first().inlineData.size() == 120 * 1024
                   && out.value(mesh).files.first().oid == oid,
-              "the member's 120 KB file, which no longer fits after the blob, travels by its oid");
+              "the member's 120 KB file still inlines in the 128 KB budget: the 64 KB tree was NOT charged");
         CHECK(!out.value(object).properties.isEmpty(), "the Object's import record rides with it");
 
         tight.inlineLimitBytes = 4096;
-        error.clear();
-        const auto refused = assetclosure::describe({ mesh, object }, &db, tight, nullptr, nullptr, nullptr, &error);
-        CHECK(refused.isEmpty() && error.contains(QStringLiteral("edge_model.glb")),
-              "a node tree over the whole budget refuses the describe BY NAME: %s", qPrintable(error));
+        const auto small = assetclosure::describe({ mesh, object }, &db, tight);
+        CHECK(small.size() == 2 && small.value(object).blob == tree,
+              "a budget smaller than the node tree (4 KB < 64 KB): the tree still travels whole");
+        CHECK(small.value(mesh).files.size() == 1 && small.value(mesh).files.first().inlineData.isEmpty(),
+              "...and the file, which does not fit, goes by its oid");
 
         // the envelope's text carries no trace of the deleted flag
         clipboardformat::Envelope env;
