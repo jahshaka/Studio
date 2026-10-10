@@ -14,11 +14,16 @@
 #
 # Two modes: included from the top CMakeLists (defines the target), and run as a script (-P) by the target.
 if(CMAKE_SCRIPT_MODE_FILE)
+    # _jah_head(<dir> <out sha> <out dirty> [<pathspec>...]): the extra pathspecs narrow the dirty check
     function(_jah_head dir out_sha out_dirty)
         execute_process(COMMAND git rev-parse HEAD WORKING_DIRECTORY "${dir}" OUTPUT_VARIABLE sha
                         OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET RESULT_VARIABLE rc)
         # untracked files count (F4c): an untracked new Hlms piece or source is in the build and in no commit
-        execute_process(COMMAND git status --porcelain --untracked-files=normal --ignore-submodules=dirty
+        set(spec "")
+        if(ARGN)
+            set(spec -- . ${ARGN})
+        endif()
+        execute_process(COMMAND git status --porcelain --untracked-files=normal --ignore-submodules=dirty ${spec}
                         WORKING_DIRECTORY "${dir}" OUTPUT_VARIABLE st OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
         if(NOT rc EQUAL 0)
             set(sha "unknown")
@@ -31,7 +36,11 @@ if(CMAKE_SCRIPT_MODE_FILE)
         endif()
     endfunction()
     _jah_head("${SRC}" studio sdirty)
-    _jah_head("${SRC}/irisgl" irisgl idirty)
+    # THE ASSIMP SUBMODULE IS NEVER DIRT: its patch stack (thirdparty/assimp-patches) is applied at configure,
+    # so a configured tree reads ` m` or ` M thirdparty/assimp` by construction (CLAUDE.md: "the applied stack,
+    # NOT dirt"). Read as dirt it stamped every build dirty=1 and the judge dropped a whole batch as STALE.
+    # Only that path is excluded: any other change in irisgl (a source, another submodule) still reads dirty.
+    _jah_head("${SRC}/irisgl" irisgl idirty ":(exclude)thirdparty/assimp")
     if(sdirty OR idirty)
         set(dirty 1)
     else()
