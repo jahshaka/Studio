@@ -27,6 +27,12 @@ import tempfile
 
 RANGE = "51e9f2c49..3756b2f18"
 FORK_RANGE = "1775e79f0..684e0f7aa"     # contact-occlusion-1: a pin bump inside the lane
+# TWO RED ROWS FOR THE REPEATED --verdict CASES (TESTING-CLEANUP-2B item 1): RANGE is a tests-only diff, so under
+# TESTING_V3 §1.3.4 it selects photon.view alone (the product smoke pair no longer rides a tooling-only diff).
+# This one-commit range (TESTING-CLEANUP-2 read 3 F1: two test scripts) selects exactly two rows, both of which run
+# the file their own command names.
+RANGE2 = "b04d14f8d..f40399a76"
+ROWS2 = ["app.sky_swap_presented", "log.perf"]
 FAILURES = []
 
 
@@ -56,7 +62,7 @@ def main(source, build):
                    if kind == "nondeterminism" else {}),
                 "first_seen": {"tip": "0" * 9, "pin": "0" * 9, "run": "20261009T120000-000000000"},
                 "recheck": "2099-12-31", "found_by": "lane"}
-    fixtures = [entry("FIXTURE-1", rows), entry("FIXTURE-2", rows),
+    fixtures = [entry("FIXTURE-1", rows + ROWS2), entry("FIXTURE-2", rows + ROWS2),
                 dict(entry("NOTREPRO-FIXTURE-1", ["photon.view"], "nondeterminism"), uses=1, suspects=["ci-check"],
                      census={"other_ctests": 1}, first_seen={"tip": tip[:9], "pin": "0" * 9,
                                                              "run": "20261009T120000-" + tip[:9]})]
@@ -120,23 +126,27 @@ def main(source, build):
           "a verdict for a row that is not red is refused, said out loud (%d)" % rc)
 
     # ---- a REPEATED --verdict records every verdict (the form merge-dbuild-lane.sh builds) -------
+    tip2 = subprocess.run(["git", "rev-parse", RANGE2.split("..")[1]], cwd=source, capture_output=True,
+                          text=True).stdout.strip()
+    base2 = subprocess.run(["git", "rev-parse", RANGE2.split("..")[0]], cwd=source, capture_output=True,
+                           text=True).stdout.strip()
+    pin2, base2_pin = (subprocess.run(["git", "rev-parse", r + ":irisgl"], cwd=source, capture_output=True,
+                                      text=True).stdout.strip() for r in (tip2, base2))
     fresh(unlisted)
-    put(rows[:1], "PASS", "2026-01-01T10:00:00")
-    put(rows[1:], "FAIL", "2026-01-01T10:00:01")
-    put(rows[1:], "FAIL", "2026-01-01T09:00:00", t=base, ig=base_pin, retry=True)   # the same red on the base: KNOWN
-    rc, out = run(RANGE, "--verdict", "app.startup_quiet=real:FIXTURE-1 fixed first verdict", "--verdict",
-                  "photon.view=real:FIXTURE-2 fixed second verdict")
+    put(ROWS2, "FAIL", "2026-01-01T10:00:01", t=tip2, ig=pin2)
+    put(ROWS2, "FAIL", "2026-01-01T09:00:00", t=base2, ig=base2_pin, retry=True)   # the same red on the base: KNOWN
+    rc, out = run(RANGE2, "--verdict", "%s=real:FIXTURE-1 fixed first verdict" % ROWS2[0], "--verdict",
+                  "%s=real:FIXTURE-2 fixed second verdict" % ROWS2[1])
     vrec = [json.loads(l) for f in os.listdir(os.environ["JAH_RUN_LOG_DIR"]) if "-verdict-" in f
             for l in open(os.path.join(os.environ["JAH_RUN_LOG_DIR"], f))]
-    check(rc == 0 and sorted(r["suite"] for r in vrec) == ["app.startup_quiet", "photon.view"],
+    check(rc == 0 and sorted(r["suite"] for r in vrec) == sorted(ROWS2),
           "two repeated --verdict flags record BOTH verdicts and the lane is accepted (%d, %s)"
           % (rc, sorted(r["suite"] for r in vrec)))
     fresh(unlisted)
-    put(rows[:1], "PASS", "2026-01-01T10:00:00")
-    put(rows[1:], "FAIL", "2026-01-01T10:00:01")
-    put(rows[1:], "FAIL", "2026-01-01T09:00:00", t=base, ig=base_pin, retry=True)
-    rc, out = run(RANGE, "--verdict", "app.startup_quiet=real:FIXTURE-1 fixed first verdict",
-                  "photon.view=real:FIXTURE-2 fixed second verdict")
+    put(ROWS2, "FAIL", "2026-01-01T10:00:01", t=tip2, ig=pin2)
+    put(ROWS2, "FAIL", "2026-01-01T09:00:00", t=base2, ig=base2_pin, retry=True)
+    rc, out = run(RANGE2, "--verdict", "%s=real:FIXTURE-1 fixed first verdict" % ROWS2[0],
+                  "%s=real:FIXTURE-2 fixed second verdict" % ROWS2[1])
     check(rc == 0, "...and so does one --verdict with two pairs (%d)" % rc)
 
     # ---- a row that never ran (NOADMIT) is MISSING, which no verdict clears ------------------------
