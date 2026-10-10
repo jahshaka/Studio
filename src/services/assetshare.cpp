@@ -37,6 +37,7 @@ For more information see the LICENSE file
 #include "irisgl/core/irisutils.h"
 #include "services/assetstorepaths.h"
 #include "services/clipboardresolver.h"
+#include "services/meshbakestore.h"
 
 namespace {
 
@@ -282,6 +283,16 @@ ImportResult importBundle(Database *db, Project *project, const QString &path)
     ClipboardResolver resolver(db, project);
     const ClipboardResolveReport report = resolver.apply(envelope);
     if (!report.error.isEmpty()) return fail(report.error);
+
+    // THE IMPORT BAKES WHAT IT BRINGS (TC2-BUNDLE-NO-BAKE): a model row the file landed has its
+    // source in the store and no bake — the bake is derived data, never carried — and the scene
+    // only ever reads bakes. Built here, on a worker while this thread pumps, before the caller
+    // can place the row. (In a library that already held a bake of the same content under
+    // another row this finds it fresh and builds nothing — which is how a pool hid the miss.)
+    const int bakeFailures = MeshBakeStore::bakeLanded(report.imported);
+    if (bakeFailures)
+        qWarning("assetshare: %d model(s) of '%s' could not be baked", bakeFailures,
+                 qUtf8Printable(QFileInfo(path).fileName()));
 
     // EVERY ENTRY the file is about (a pack names several), in its order.
     for (const clipboardformat::ClipItem &item : envelope.items) {

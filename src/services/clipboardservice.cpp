@@ -32,6 +32,7 @@ For more information see the LICENSE file
 #include "services/assetcas.h"
 #include "services/assetclosure.h"
 #include "services/assetstorepaths.h"
+#include "services/meshbakestore.h"
 #include "services/sceneeditservice.h"
 #include "services/selectionservice.h"
 #include "services/undoservice.h"
@@ -512,6 +513,12 @@ ClipboardPasteResult ClipboardService::paste(const ClipboardPasteOptions &option
         if (!result.imported.isEmpty()) emit assetsImported(result.imported);
         return result;
     }
+
+    // A PASTE FROM ANOTHER LIBRARY LANDS MODEL ROWS WITH NO BAKE (the bake is derived data, never
+    // in the envelope): built here like every import builds them (MeshBakeStore::bakeLanded,
+    // TC2-BUNDLE-NO-BAKE) — before a pasted node can be read with no geometry. A paste inside one
+    // library imports nothing and builds nothing.
+    MeshBakeStore::bakeLanded(result.imported);
 
     if (nodeItems.isEmpty()) {                    // an Assets-page paste is done
         if (!result.imported.isEmpty()) emit assetsImported(result.imported);

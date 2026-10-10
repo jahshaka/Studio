@@ -262,6 +262,15 @@ iris::BakedClipPtr ensureClip(const QString &sourcePath);
 /// this thread pumps. True when a current bake exists afterwards.
 bool ensureFresh(const QString &sourcePath, const QString &assetGuid = QString());
 
+/// THE ROWS AN IMPORT JUST LANDED, BAKED (TC2-BUNDLE-NO-BAKE, 2026-10-10): every model (and clip)
+/// row among `guids` whose bake is stale or absent is built from the store's source on a worker
+/// while this (the database) thread pumps, then committed — what an asset import and a project
+/// archive import already do, for the imports that land CATALOG ROWS (a share file, a paste from
+/// another library). Without it such a row is placed with no geometry ("has no current mesh
+/// bake") unless some other row of the library happened to hold a bake of the same content.
+/// Returns how many bakes failed (each logged by name). Database thread.
+int bakeLanded(const QStringList &guids);
+
 /// THE CURRENT BAKE of a library row's source, by the row's type: a clip row's
 /// clip bake, any other model row's model bake. Empty when there is none.
 /// Database thread. The shape AssetMetadata::setBakePathResolver takes — the app

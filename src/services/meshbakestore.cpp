@@ -900,6 +900,20 @@ bool ensureFresh(const QString &sourcePath, const QString &assetGuid)
     return isFresh(conn, root, sourcePath, assetGuid);
 }
 
+int bakeLanded(const QStringList &guids)
+{
+    if (guids.isEmpty()) return 0;
+    QSqlDatabase conn = QSqlDatabase::database();
+    const QString root = AssetStorePaths::root();
+    const QSet<QString> only(guids.cbegin(), guids.cend());
+    QVector<BakeJob> jobs;
+    for (const BakeTarget &target : modelBakesNeeded(conn, root, &only)) {
+        BakeJob job = prepareBake(conn, root, target);
+        if (!job.path.isEmpty()) jobs.append(job);
+    }
+    return rebuildPumped(jobs, std::function<void(int, int)>());
+}
+
 QStringList modelSourcesNeedingBake(QSqlDatabase conn, const QString &root)
 {
     QStringList out;

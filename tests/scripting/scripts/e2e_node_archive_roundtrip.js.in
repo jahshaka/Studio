@@ -30,6 +30,9 @@ var file = app.dataRoot().root + "/node_archive_roundtrip.jbundle";
 var source = project.create("archive source " + Date.now());
 var placed = assets.importAndPlace(FIXTURE);
 assert(placed.nodeId && placed.assetGuid, "a textured model placed: " + J(placed));
+// (its source CONTENT, read while the row exists — the sweep below removes every holder of it)
+var sourceOid = assets.importSettings(placed.assetGuid).sourceOid;
+assert(typeof sourceOid === "string" && sourceOid.length > 10, "the model's source content: " + sourceOid);
 var sourceRows = assets.list({ scope: "project" }).filter(function (r) {
     return r.type !== "object" || r.guid === placed.assetGuid;
 }).filter(function (r) { return r.name !== "Tile.png"; });
@@ -54,6 +57,20 @@ sourceRows.forEach(function (row) {
 sourceRows.forEach(function (row) {
     assert(gone(row.guid), "the library no longer holds " + row.type + " '" + row.name + "'");
 });
+// THE LIBRARY IS EMPTY OF THE CONTENT, not only of this arm's rows (TC2-BUNDLE-NO-BAKE): a mesh
+// bake is keyed on the CONTENT and its import settings, so ANY other library row over the same
+// .glb — an earlier arm of this pool imported the same fixture — keeps a fresh bake in the store
+// and a re-import that baked nothing still placed with geometry. That is how the pool hid the
+// defect (red 3/3 solo, green in the pool). Every row whose source is this content goes too.
+function holdersOfContent() {
+    return assets.list({ scope: "store", type: "object" }).filter(function (row) {
+        try { return assets.importSettings(row.guid).sourceOid === sourceOid; } catch (e) { return false; }
+    });
+}
+holdersOfContent().forEach(function (row) {
+    assets.remove(row.guid, { keepShared: false, force: true });
+});
+assert(holdersOfContent().length === 0, "no library row holds the model's content any more");
 var gc = assets.gc({ dryRun: false });
 console.log("gc -> " + J(gc).slice(0, 400));
 
@@ -61,6 +78,9 @@ console.log("gc -> " + J(gc).slice(0, 400));
 project.create("archive target " + Date.now());
 var guid = assets.import(file);
 assert(guid && guid.length > 10, "assets.import(the node's archive) -> " + guid);
+// THE IMPORT BAKED WHAT IT BROUGHT: nothing in the library is left wanting a bake.
+var wanting = assets.bakeAll({ dryRun: true });
+assert(wanting.needed === 0, "the import baked the model it brought (bakeAll dry run: " + J(wanting) + ")");
 var meta = assets.metadata(guid);
 assert(meta.type === "object", "the file lands as ONE object tile (" + meta.type + ")");
 textures.forEach(function (t) {
