@@ -207,9 +207,28 @@ def _solos_ok(solos):
     return len(solos) >= SOLO_NEEDED and all(r.get("verdict") == "PASS" for r in solos)
 
 
+# THE PATHS A FAILURE NAMES ARE THE TREE'S, NOT THE FAILURE'S (TESTING-CLEANUP-2C item 1): a failLine that embeds its tree
+# root ("…must be inside /…/rc-batch-C2/build-linux/tests/…") must read the same at the base's tree (rc-base-<sha>) — batch
+# C2 refused three KNOWN RED verdicts whose masked lines were identical up to the root. Each prefix below is ONE token;
+# what follows it (the path INSIDE the tree) stays, so a different file is still a different failure.
+_P = r"[^\s'\"`(),;]*"
+_PATH_MASKS = [
+    (re.compile(_P + r"/\.claude/worktrees/[^/\s'\"`(),;]+"), "<tree>"),            # any worktree (lane, rc, rc-base)
+    (re.compile(r"(?:/home/[^/\s]+|/mnt/work)/Developer(?:\.usb)?/jahshaka(?![\w.-])"), "<tree>"),  # the main tree
+    (re.compile(r"/tmp/jah-[^/\s'\"`(),;]*"), "<jah-tmp>"),                           # /tmp/jah-* (lead + rig scratch)
+    (re.compile(_P + r"/\.local/share/Jahshaka"), "<data-root>"),                     # a data root (a home's)
+]
+
+
 def masked(line):
-    """A failLine with its numbers masked — the same failure reads the same at base and tip."""
-    return re.sub(r"\d+(\.\d+)?", "#", (line or "").strip())
+    """A failLine with its tree paths and numbers masked — the same failure reads the same at base and tip: every path
+    under a tree root (a `.claude/worktrees/<name>`, the main tree), /tmp/jah-* and a data root is one token
+    (_PATH_MASKS), then every number is `#`. A different failure (another message, another file in the tree) stays
+    different."""
+    t = (line or "").strip()
+    for rx, tok in _PATH_MASKS:
+        t = rx.sub(tok, t)
+    return re.sub(r"\d+(\.\d+)?", "#", t)
 
 
 def _sha(r):
