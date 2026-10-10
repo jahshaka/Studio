@@ -670,6 +670,16 @@ def batch_range_cases(E):
     rc, out = E.run(rng="%s..%s" % (b, tt))
     check(rc == 1 and "base proof for" not in out and "KNOWN RED photon.view" not in out,
           "(2, read 1 I2) a base with a gate PASS of the row is its own evidence: the proof does not travel (rc %d)" % rc)
+    # read 2 I1: a base holding only NOADMIT / NOTRUN records of the row has NO run of it — the proof still travels
+    E.fresh()
+    solos(base, "08", batch="t2d")
+    E.put(["photon.view"], "NOADMIT", T % "09:00", tip=b)
+    E.put(["photon.view"], "NOTRUN", T % "09:01", tip=b, retry=True)
+    E.put(["photon.view"], "FAIL", T % "11:00", tip=tt, failLine=FL)
+    E.verdict("photon.view", "real:VIEWS-XID-1", T % "12:00", tip=tt)
+    rc, out = E.run(rng="%s..%s" % (b, tt))
+    check(rc == 0 and "the base's proof is %s's solos" % base[:9] in out,
+          "(2, read 2 I1) a base with only NOADMIT / NOTRUN records of the row falls through to the ancestor (rc %d)" % rc)
     E.fresh()
     solos(base, "08", batch="t2d")
     E.put(["photon.view"], "PASS", T % "11:00", tip=tt)
