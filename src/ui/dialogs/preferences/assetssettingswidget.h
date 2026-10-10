@@ -21,6 +21,7 @@ For more information see the LICENSE file
 // the online/offline status with Reconnect. All actions run through AssetStoreService / AssetGc — the same
 // implementations behind the assets.setStoreRoot/storeStatus/gc verbs.
 
+#include <QVariantMap>
 #include <QWidget>
 
 class QLabel;
@@ -56,6 +57,8 @@ protected:
 
 private:
     void applyRoot(const QString &path, bool move);
+    /// The labels from a status read on the worker (refresh()).
+    void applyStatus(const QVariantMap &status);
 
     SettingsManager *mSettings;
     Database *mDb = nullptr;
@@ -63,6 +66,7 @@ private:
     QLabel *mRoot;
     QLabel *mFreeSpace;
     QLabel *mStatus;
+    int mRefreshGeneration = 0;   ///< the newest refresh(); an older read that lands is dropped
 };
 
 #endif // ASSETSSETTINGSWIDGET_H
