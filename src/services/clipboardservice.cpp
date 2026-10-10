@@ -195,6 +195,11 @@ ClipboardCopyResult ClipboardService::copyNodes(const QList<iris::SceneNodePtr> 
     assetclosure::Options options;
     options.inlineLimitBytes = inlineLimitBytes();
     options.storeRoot = AssetStorePaths::root();
+    // A NODE PASTE CARRIES THE SAME CLOSURE A SHARE FILE DOES (read 4; the portability rule): every
+    // row with its catalog blob and properties — the import record among them — so a paste into a
+    // library that has never seen the model lands rows the landing bakes with the record they
+    // were imported under, not identity. (The byte budget stays the clipboard's.)
+    options.includeRowBlobs = true;
     if (project) options.projectGuid = project->getProjectGuid();
     int inlined = 0, referenced = 0;
     envelope.assets = assetclosure::describe(assetclosure::forNodes(nodeObjects, db), db,
@@ -322,7 +327,14 @@ QStringList neededGuids(const ClipItem &item, const Envelope &envelope)
         seen.insert(guid);
         out << guid;
         const auto entry = envelope.assets.constFind(guid);
-        if (entry != envelope.assets.constEnd()) frontier << entry->dependencies;
+        if (entry != envelope.assets.constEnd()) {
+            frontier << entry->dependencies;
+            // THE MEMBER'S OBJECT (read 4): a Mesh member's import record lives on its Object row,
+            // which the closure carries (assetclosure's member-to-object edge) — a paste that landed
+            // the member without it re-baked the model at identity.
+            if (!entry->parent.isEmpty() && envelope.assets.contains(entry->parent))
+                frontier << entry->parent;
+        }
     }
     return out;
 }

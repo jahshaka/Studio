@@ -47,10 +47,28 @@ QStringList expandThroughCatalog(const QStringList &seeds, Database *db)
         const QStringList level = frontier;
         frontier.clear();
         const QHash<QString, QStringList> edges = db->fetchDependencyEdges(level);
+        // THE MEMBER-TO-OBJECT EDGE (STAGE-CLOSE-TRIAGE-1 read 4): a model's Mesh member row keeps
+        // its import record on its OBJECT row (MeshBakeStore::importRecordForGuid walks `parent`),
+        // and a node names the member. The dependency table points object -> members only, so a
+        // closure seeded from a node lost the object, and a paste re-baked the member at identity
+        // (a scale/unit override, clips:false, skeleton:false all dropped). A member's parent rides
+        // the closure when it is an Object tile — never a project folder, which `parent` also names.
+        QHash<QString, QString> objectParent;
+        for (const AssetRecord &row : db->fetchAssetHeaders(level)) {
+            if (row.parent.isEmpty()) continue;
+            objectParent.insert(row.guid, row.parent);
+        }
+        QStringList parents;
+        for (const QString &p : objectParent) if (!parents.contains(p)) parents << p;
+        QSet<QString> objects;
+        for (const AssetRecord &row : db->fetchAssetHeaders(parents))
+            if (row.type == static_cast<int>(ModelTypes::Object)) objects.insert(row.guid);
         for (const QString &guid : level) {
             // Self first, as fetchAssetGUIDAndDependencies(guid) answered.
             push(guid);
             for (const QString &dep : edges.value(guid)) push(dep);
+            const QString parent = objectParent.value(guid);
+            if (objects.contains(parent)) push(parent);
         }
     }
     return out;
