@@ -752,17 +752,25 @@ void EditorPage::copySelection()
     // space keeps its own payload shape for one release (§2.2 `graph` items are
     // P2) — its own edit target, not a second clipboard.
     if (!mServices || !mServices->clipboard || !mServices->selection) return;
-    const auto result = mServices->clipboard->copyNodes(mServices->selection->selectedSet());
-    if (result.ok())
-        mShell->showViewportToast(tr("Copy"), tr("%1 object(s) copied").arg(result.items));
+    const auto selected = mServices->selection->selectedSet();
+    if (selected.isEmpty()) return;   // nothing selected: the previous clipboard stays, nothing to say
+    const auto result = mServices->clipboard->copyNodes(selected);
+    // A REFUSED COPY IS SAID (read 7 F1): the verb's own sentence names the row (a node tree over
+    // the inline budget, a budget under its floor) — silence would let the next Ctrl+V paste the
+    // OLD clipboard.
+    mShell->showViewportToast(tr("Copy"), result.ok() ? tr("%1 object(s) copied").arg(result.items)
+                                                      : result.error);
 }
 
 void EditorPage::cutSelection()
 {
     if (!mServices || !mServices->clipboard || !mServices->selection) return;
-    const auto result = mServices->clipboard->cutNodes(mServices->selection->selectedSet());
-    if (result.ok())
-        mShell->showViewportToast(tr("Cut"), tr("%1 object(s) cut").arg(result.copy.items));
+    const auto selected = mServices->selection->selectedSet();
+    if (selected.isEmpty()) return;
+    const auto result = mServices->clipboard->cutNodes(selected);
+    // A refused cut deletes nothing and says why (read 7 F1, as copySelection).
+    mShell->showViewportToast(tr("Cut"), result.ok() ? tr("%1 object(s) cut").arg(result.copy.items)
+                                                     : result.error);
 }
 
 void EditorPage::paste()
