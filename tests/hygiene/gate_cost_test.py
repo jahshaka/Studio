@@ -526,6 +526,44 @@ def main(source, build):
     check(len(solo_) == 3 and all(c.get("fallback") == "drain-timeout" for c in solo_) and dtr
           and dtr[-1].get("fallback") == "drain-timeout",
           "the dropped reds' solos on a drain timeout: a drain-timeout record and `fallback` on every run (round 2, C/D)")
+    # TESTING-CLEANUP-2B item 15 (1): A YIELD'S RE-HOLD IS A NEW HOLD. Between runs the solo batch yields to a gate and
+    # re-holds (a --solo batch, 3 runs); the re-drain's own outcome decides the runs after it. (a) a clean first hold whose re-drain TIMES OUT:
+    # the runs after the yield carry `fallback` and JAH_VRAM_ALL and a drain-timeout record is written; (b) a first hold
+    # that timed out and a CLEAN re-drain: the runs after it carry neither. RED ON 74740b0de: the callers kept the FIRST
+    # hold's fallback — (a) ran per-row admission unstamped with no record, (b) stayed stamped.
+    real_yield = vt_mod.yield_card
+    for first_to, re_to in ((False, True), (True, False)):
+        ycount = [0]
+
+        def hold_(label, log=None, wait=None, first_to=first_to):
+            vt_mod.LAST_DRAIN_TIMEOUT = ({"label": label, "waitS": 1.0, "why": "first", "holders": []} if first_to
+                                         else None)
+            e_ = {k: v for k, v in os.environ.items() if k not in ("JAH_VRAM_HELD", "JAH_VRAM_ALL")}
+            if not first_to: e_["JAH_VRAM_HELD"] = "3"
+            return [], e_
+
+        def yield_(card, env, label="", log=None, cls=2, re_to=re_to):
+            ycount[0] += 1
+            if ycount[0] != 2:                   # nothing outranks it: the same hold
+                return card, env
+            vt_mod.LAST_DRAIN_TIMEOUT = ({"label": label, "waitS": 2.0, "why": "re-drain", "holders": []} if re_to
+                                         else None)
+            e_ = {k: v for k, v in os.environ.items() if k not in ("JAH_VRAM_HELD", "JAH_VRAM_ALL")}
+            if not re_to: e_["JAH_VRAM_HELD"] = "3"
+            return [], e_
+        vt_mod.hold_card, vt_mod.yield_card = hold_, yield_
+        n_dt = len([r for r in records() if r.get("kind") == "drain-timeout" and "re-drain" in str(r.get("why"))])
+        calls.clear()
+        gs_main(["--solo", "gi.chain_face", "--times", "3", "--build", build, "--lane", "gate-cost-test"])
+        vt_mod.hold_card, vt_mod.yield_card = real_hold, real_yield
+        solo_ = [c for c in calls if c.get("retry")]
+        fbs = [c.get("fallback") for c in solo_]
+        alls = [(c.get("env") or {}).get("JAH_VRAM_ALL") for c in solo_]
+        n_dt2 = len([r for r in records() if r.get("kind") == "drain-timeout" and "re-drain" in str(r.get("why"))])
+        want = [None, "drain-timeout", "drain-timeout"] if re_to else ["drain-timeout", None, None]
+        check(fbs == want and alls == [("1" if f else None) for f in want] and (n_dt2 - n_dt) == (1 if re_to else 0),
+              "(%s) a yield's re-hold decides the runs after it: fallback %s, JAH_VRAM_ALL %s, re-drain records %d"
+              % ("a" if re_to else "b", fbs, alls, n_dt2 - n_dt))
     calls.clear()
     code, out = gs_main(files + ["--run", "--targets-only", "--resume"])
     solo_ = [c for c in calls if c.get("retry")]
@@ -698,6 +736,171 @@ def main(source, build):
     open(relge, "w").close(); gh.communicate()
     check(pi.returncode == 0 and "queued" not in pi.stderr and "already held by this gate" in pi.stderr,
           "`admit all` inside a gate takes the card while the gate holds the slot, never queueing behind it")
+    # TESTING-CLEANUP-2B fix C: INSIDE A GATE A ROW'S ADMISSION NEVER WAITS. Every token of this private universe is held
+    # by a process OUTSIDE the gate; a row of the gate (it inherits the gate's live pid) asks for one with the production
+    # bound (900) and must exit 75 at once — NOADMIT, re-queued by the gate — never wait inside its own TIMEOUT. The
+    # same ask outside the gate waits (it reaches the waiting line). RED ON BASE (b0a3b1f3c): the row waited up to 900 s.
+    relgw, relhold = os.path.join(scratch, "gw.release"), os.path.join(scratch, "hold.release")
+    benv = {k: v for k, v in os.environ.items() if k not in ("JAH_GATE_SLOT_HELD", "JAH_VRAM_HELD")}
+    holder = spawn([sys.executable, vt, "admit", "3", "--label", "OUTSIDE", "--", "sh", "-c",
+                    f"echo HOLDING; while [ ! -e {relhold} ] && kill -0 {os.getpid()} 2>/dev/null; do sleep 0.05; done"],
+                   env=benv)
+    wait_line(holder, "HOLDING")
+    gw = spawn([sys.executable, vt, "gate", "--label", "GW", "--", "sh", "-c",
+                f"while [ ! -e {relgw} ] && kill -0 {os.getpid()} 2>/dev/null; do sleep 0.05; done"], env=benv)
+    wait_line(gw, "gate-slot: taken")
+    pin_ = subprocess.run([sys.executable, vt, "admit", "1", "--label", "ROW", "--", "true"], capture_output=True,
+                          text=True, env=dict(benv, JAH_VRAM_WAIT="900", JAH_GATE_SLOT_HELD=str(gw.pid),
+                                                               CTEST_RESOURCE_GROUP_COUNT="1", CTEST_RESOURCE_GROUP_0="vram"))
+    pout = spawn([sys.executable, vt, "admit", "1", "--label", "HAND", "--", "true"], env=dict(benv, JAH_VRAM_WAIT="900"))
+    ow = wait_line(pout, "vram: waiting")
+    open(relhold, "w").close(); holder.communicate()
+    ow += pout.communicate()[0]
+    open(relgw, "w").close(); gw.communicate()
+    check(pin_.returncode == 75 and "NOADMIT" in pin_.stderr and "vram: admitted" not in pin_.stderr
+          and pout.returncode == 0 and "vram: waiting" in ow,
+          "inside a gate a short admission is NOADMIT at once (exit %d), outside one it waits (exit %d)"
+          % (pin_.returncode, pout.returncode))
+    # TESTING-CLEANUP-2C item 2: A GATE ROW OWNS THE CARD. A FOREIGN request (outside the gate) waits at the turnstile for
+    # all three tokens while one is held elsewhere; a gate row asking for ONE token (two are free) is ADMITTED — and one
+    # asking for three (truly short) is NOADMIT naming the foreign request ahead. RED ON 314770a52: the one-token row was
+    # refused "within 0 s (2 free, queued behind another request)" — batch C2 lost four rows that way.
+    relh2, relgw2 = os.path.join(scratch, "h2.release"), os.path.join(scratch, "gw2.release")
+    h2 = spawn([sys.executable, vt, "admit", "1", "--label", "ONE-HELD", "--", "sh", "-c",
+                f"echo HOLDING; while [ ! -e {relh2} ] && kill -0 {os.getpid()} 2>/dev/null; do sleep 0.05; done"], env=benv)
+    wait_line(h2, "HOLDING")
+    fw = spawn([sys.executable, vt, "admit", "3", "--label", "FOREIGN-WAITER", "--", "true"],
+               env=dict(benv, JAH_VRAM_WAIT="900"))
+    wait_line(fw, "vram: waiting")                      # it holds the turnstile while it waits (the head keeps it)
+    gw2 = spawn([sys.executable, vt, "gate", "--label", "GW2", "--", "sh", "-c",
+                 f"while [ ! -e {relgw2} ] && kill -0 {os.getpid()} 2>/dev/null; do sleep 0.05; done"], env=benv)
+    wait_line(gw2, "gate-slot: taken")
+    genv = dict(benv, JAH_VRAM_WAIT="900", JAH_GATE_SLOT_HELD=str(gw2.pid), CTEST_RESOURCE_GROUP_COUNT="1",
+                CTEST_RESOURCE_GROUP_0="vram")
+    r1 = subprocess.run([sys.executable, vt, "admit", "1", "--label", "GATE-ROW-1", "--", "true"], capture_output=True,
+                        text=True, env=genv)
+    r3 = subprocess.run([sys.executable, vt, "admit", "3", "--label", "GATE-ROW-3", "--", "true"], capture_output=True,
+                        text=True, env=genv)
+    # THE LANDING SPLIT: the no-wait is for a row ctest SCHEDULED by its tokens (CTEST_RESOURCE_GROUP_COUNT >= 1); a gate
+    # row of a build with no RESOURCE_GROUPS keeps the wait (its rows are not serialised by tokens among themselves).
+    old_env = {k: os.environ.get(k) for k in ("JAH_GATE_SLOT_HELD", "CTEST_RESOURCE_GROUP_COUNT", "CTEST_RESOURCE_GROUP_0")}
+    os.environ["JAH_GATE_SLOT_HELD"] = str(gw2.pid)
+    os.environ["CTEST_RESOURCE_GROUP_COUNT"] = "0"; b0 = vt_mod.row_wait_bound()
+    os.environ["CTEST_RESOURCE_GROUP_COUNT"] = "1"; os.environ["CTEST_RESOURCE_GROUP_0"] = "cpu"
+    bx = vt_mod.row_wait_bound()            # fix round 4 item 5: a group of another resource type is not the card's
+    os.environ["CTEST_RESOURCE_GROUP_0"] = "vram"; b1 = vt_mod.row_wait_bound()
+    for k_, v_ in old_env.items():
+        if v_ is None: os.environ.pop(k_, None)
+        else: os.environ[k_] = v_
+    check(b0 > 0 and bx > 0 and b1 == 0, "inside a gate the try-once bound is for a row ctest scheduled by its VRAM "
+          "tokens only (unscheduled %s s, a `cpu` group %s s, a `vram` group %s s)" % (b0, bx, b1))
+    open(relh2, "w").close(); h2.communicate(); fw.communicate()
+    open(relgw2, "w").close(); gw2.communicate()
+    check(r1.returncode == 0 and "NOADMIT" not in r1.stderr and "foreign request" in r1.stderr
+          and "FOREIGN-WAITER" in r1.stderr,
+          "inside a gate a row with enough free tokens is ADMITTED past a foreign waiter at the turnstile (exit %d: %s)"
+          % (r1.returncode, (r1.stderr.strip().splitlines() or [""])[-1][:120]))
+    check(r3.returncode == 75 and "NOADMIT" in r3.stderr and "ahead at the turnstile: pid" in r3.stderr
+          and "FOREIGN-WAITER" in r3.stderr,
+          "...and a row truly short is NOADMIT naming the foreign request ahead (exit %d: %s)"
+          % (r3.returncode, (r3.stderr.strip().splitlines() or [""])[-1][:160]))
+    # FIX ROUND 3 F4: SIBLING ROWS OF ONE GATE ARE NOT FOREIGN, AND A LOST SCAN RACE IS NOT A SHORTAGE. A process of the
+    # gate (its JAH_GATE_SLOT_HELD = the gate's) holds the turnstile; three gate rows ask for one token each AT ONCE, five
+    # rounds: every row is admitted (three tokens free), and the line names "a row of this gate", never "foreign".
+    # RED ON 9eb5343e2: the rows past the turnstile picked the same lowest token and the losers were NOADMIT, the sibling
+    # named as a foreign request.
+    relgw3, relsib = os.path.join(scratch, "gw3.release"), os.path.join(scratch, "sib.release")
+    gw3 = spawn([sys.executable, vt, "gate", "--label", "GW3", "--", "sh", "-c",
+                 f"while [ ! -e {relgw3} ] && kill -0 {os.getpid()} 2>/dev/null; do sleep 0.05; done"], env=benv)
+    wait_line(gw3, "gate-slot: taken")
+    g3env = dict(benv, JAH_VRAM_WAIT="900", JAH_GATE_SLOT_HELD=str(gw3.pid), CTEST_RESOURCE_GROUP_COUNT="1",
+                 CTEST_RESOURCE_GROUP_0="vram")
+    sib = spawn([sys.executable, "-c", "import fcntl,os,sys,time\nfd=os.open(sys.argv[1],os.O_RDWR|os.O_CREAT)\n"
+                 "fcntl.flock(fd,fcntl.LOCK_EX)\nprint('SIBHELD',flush=True)\n"
+                 "while not os.path.exists(sys.argv[2]): time.sleep(0.02)",
+                 os.path.join(os.environ["JAH_VRAM_DIR"], "turnstile"), relsib], env=g3env)
+    wait_line(sib, "SIBHELD")
+    outs = []
+    for _ in range(5):
+        ps_ = [subprocess.Popen([sys.executable, vt, "admit", "1", "--label", "SIBROW", "--", "sleep", "0.3"],
+                                stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=g3env) for _ in range(3)]
+        outs += [(p_.wait(), p_.communicate()[1]) for p_ in ps_]
+    open(relsib, "w").close(); sib.communicate()
+    open(relgw3, "w").close(); gw3.communicate()
+    bad_ = [e for rc_, e in outs if rc_ != 0]
+    check(not bad_ and all("a row of this gate" in e and "foreign" not in e for _, e in outs),
+          "three rows of one gate asking at once past a sibling's turnstile: 15/15 admitted, the holder named a row of "
+          "this gate (%d NOADMIT%s)" % (len(bad_), (": " + bad_[0].strip().splitlines()[-1][:120]) if bad_ else ""))
+    # TESTING-CLEANUP-2B item 13: THE SLOT IS BY PRIORITY, NOT ARRIVAL (0 smoke, 1 gate, 2 measurement). Counted by the
+    # ORDER the commands ran in (each appends its name), never a clock. RED ON BASE (b0a3b1f3c): FIFO — the gate ran
+    # third, behind both measurements, and nothing yielded.
+    prio = os.path.join(scratch, "prio.order")
+    def ran(name): return ["sh", "-c", f"echo {name} >> {prio}"]
+    relp = os.path.join(scratch, "prio.release")
+    hp = spawn([sys.executable, vt, "gate", "--class", "1", "--label", "HOLDER", "--", "sh", "-c",
+                f"while [ ! -e {relp} ] && kill -0 {os.getpid()} 2>/dev/null; do sleep 0.05; done"])
+    wait_line(hp, "gate-slot: taken")
+    m1 = spawn([sys.executable, vt, "gate", "--class", "2", "--label", "M1 measurement", "--"] + ran("M1"))
+    wait_line(m1, "gate-slot: queued at position")
+    m2 = spawn([sys.executable, vt, "gate", "--class", "2", "--label", "M2 measurement", "--"] + ran("M2"))
+    wait_line(m2, "gate-slot: queued at position")
+    g1 = spawn([sys.executable, vt, "gate", "--class", "1", "--label", "G gate", "--"] + ran("G"))
+    og = wait_line(g1, "gate-slot: queued at position")
+    st_ = subprocess.run([sys.executable, vt, "status"], capture_output=True, text=True).stdout
+    open(relp, "w").close(); hp.communicate()
+    for p_ in (g1, m1, m2): p_.communicate()
+    order = open(prio).read().split()
+    check(order == ["G", "M1", "M2"] and "queued at position 1 (1 ahead)" in og,
+          "(a) a gate asked behind two measurements is served first, at position 1 behind the holder (%s)" % order)
+    sl = [l for l in st_.splitlines() if l.startswith("gate-slot:")]
+    check(len(sl) == 4 and "HELD by" in sl[0] and "HOLDER" in sl[0] and "class 1" in sl[0] and "G gate" in sl[1] and "M1" in sl[2]
+          and "class 2" in sl[3], "`status` prints the holder, then the queue in serving order with each class (%s)" % sl)
+    # (b) a measurement holding the card YIELDS between its rows to a gate that asks, and resumes after it
+    os.unlink(prio)
+    ybuf = io.StringIO()
+    card_b, env_b = vt_mod.hold_card("Mb measurement", log=ybuf)
+    same = vt_mod.yield_card(card_b, env_b, "Mb", log=ybuf)
+    check(same == (card_b, env_b) and "YIELDING" not in ybuf.getvalue(),
+          "(b) with nothing waiting a measurement keeps its hold between rows")
+    gb = spawn([sys.executable, vt, "gate", "--class", "1", "--label", "Gb gate", "--"] + ran("Gb"))
+    wait_line(gb, "gate-slot: queued at position")
+    open(prio, "a").write("row1\n")
+    card_b, env_b = vt_mod.yield_card(card_b, env_b, "Mb", log=ybuf)
+    open(prio, "a").write("row2\n")
+    gb.communicate()
+    held_b = any(t_[1] == os.getpid() and t_[4] for t_ in vt_mod.gate_queue())
+    vt_mod.release(card_b)
+    order = open(prio).read().split()
+    check(order == ["row1", "Gb", "row2"] and held_b and "YIELDING" in ybuf.getvalue()
+          and "resumed after the yield" in ybuf.getvalue(),
+          "(b) ...and between two rows it yields to a waiting gate, which runs, then resumes holding (%s)" % order)
+    # (c) nothing queued: the asker takes the free slot at once
+    pc = subprocess.run([sys.executable, vt, "gate", "--class", "2", "--label", "Mc", "--", "true"],
+                        capture_output=True, text=True)
+    check(pc.returncode == 0 and "gate-slot: taken" in pc.stderr and "queued at position" not in pc.stderr,
+          "(c) a free slot is taken at once by whoever asks, a measurement included")
+    # (d) THE OLD-TICKET TRANSITION (item 15 (5)): a tree whose scripts predate item 13 writes `<seq>.<pid>` tickets. A live
+    # one (its flock held) is read as a CLASS-1 HOLDER when no new-format ticket holds — so a new asker, even a gate,
+    # never takes the slot beside an old holder; when the old ticket dies, the new asker takes the slot. Counted by
+    # the order the commands ran in, never a clock.
+    qd = os.path.join(os.environ["JAH_VRAM_DIR"], "gate-queue"); os.makedirs(qd, exist_ok=True)
+    relo, oldord = os.path.join(scratch, "old.release"), os.path.join(scratch, "old.order")
+    oldh = spawn([sys.executable, "-c", "import fcntl,os,sys,time\nfd=os.open(sys.argv[1],os.O_RDWR|os.O_CREAT)\n"
+                  "fcntl.flock(fd,fcntl.LOCK_EX)\nprint('OLDHELD',flush=True)\n"
+                  "while not os.path.exists(sys.argv[2]): time.sleep(0.05)\n"
+                  "open(sys.argv[3],'a').write('OLD\\n')",
+                  os.path.join(qd, "999.%d" % os.getpid()), relo, oldord])
+    wait_line(oldh, "OLDHELD")
+    oq = [t_ for t_ in vt_mod.gate_queue() if t_[2].endswith("999.%d" % os.getpid())]
+    check(oq and oq[0][3] == 1 and oq[0][4] is True,
+          "(d) a live OLD-format ticket reads as a class-1 HOLDER (%s)" % [(t_[3], t_[4]) for t_ in oq])
+    gn = spawn([sys.executable, vt, "gate", "--class", "1", "--label", "NEW gate", "--", "sh", "-c", f"echo NEW >> {oldord}"])
+    on = wait_line(gn, "gate-slot: queued at position")
+    open(relo, "w").close(); oldh.communicate(); gn.communicate()
+    try: os.unlink(os.path.join(qd, "999.%d" % os.getpid()))
+    except OSError: pass
+    check(open(oldord).read().split() == ["OLD", "NEW"] and "queued at position" in on,
+          "(d) ...a new gate queues behind it and runs only after the old holder is gone (%s)" % open(oldord).read().split())
     # the ingest wait is an EVENT the admission performs on every row: observed, not timed — supervise() of a
     # green row, in this process, with the journal real and time.sleep recorded
     import types
@@ -901,6 +1104,53 @@ def main(source, build):
         try: rl.check_tier(t_)
         except ValueError: ok_t = False
     check(ok_t and "lane" in rl.TIERS and "solo" in rl.TIERS, "the tiers `lane` and `solo` are names a record may carry")
+
+    # TESTING-CLEANUP-2B fix round 3 F3: A ROW NOT RUN BECAUSE ITS PARENT FAILED. A toy run fixture: `parent` sets up
+    # `run` (and requires the home wipe), `insp` requires both. (a) the parent FAILS: the inspector's record is NOTRUN
+    # naming its parent (`notRunBecause`) — the judge resolves it to the parent (gate.verdict_door); (b) the parent is
+    # NOADMIT on its first try: the inspector is HELD with it and re-queued, and both PASS on the re-queue. RED ON
+    # 9eb5343e2: no notRunBecause, and the inspector's NOTRUN was recorded as a red and never re-queued.
+    fx = os.path.join(scratch, "fx"); fsrc, fb = os.path.join(fx, "s"), os.path.join(fx, "b"); os.makedirs(fsrc)
+    flag, mode_ = os.path.join(fx, "first.done"), os.path.join(fx, "mode")
+    open(os.path.join(fsrc, "CMakeLists.txt"), "w").write(f"""cmake_minimum_required(VERSION 3.20)
+project(fx NONE)
+enable_testing()
+add_test(NAME fx.wipe COMMAND true)
+set_tests_properties(fx.wipe PROPERTIES FIXTURES_SETUP fx_home)
+add_test(NAME fx.parent COMMAND sh -c "if [ \\"$(cat {mode_})\\" = fail ]; then echo 'FAIL: the parent broke'; exit 1; fi; if [ ! -e {flag} ]; then touch {flag}; echo 'NOADMIT vram: no admission for 2 tokens within 0 s (0 of 3 free at the last look)'; exit 75; fi; echo ok")
+set_tests_properties(fx.parent PROPERTIES FIXTURES_SETUP fx_run FIXTURES_REQUIRED fx_home)
+add_test(NAME fx.parent.inspector COMMAND true)
+set_tests_properties(fx.parent.inspector PROPERTIES FIXTURES_REQUIRED "fx_home;fx_run" DEPENDS fx.parent)
+""")
+    r_ = subprocess.run(["cmake", "-S", fsrc, "-B", fb], capture_output=True, text=True)
+    check(r_.returncode == 0, "the fixture toy configures")
+    fxlog = os.path.join(scratch, "runs-fx")
+    old_log = os.environ.get("JAH_RUN_LOG_DIR"); os.environ["JAH_RUN_LOG_DIR"] = fxlog
+    try:
+        def fxrecs():
+            return [json.loads(l) for f in (sorted(os.listdir(fxlog)) if os.path.isdir(fxlog) else [])
+                    for l in open(os.path.join(fxlog, f))]
+        open(mode_, "w").write("fail")
+        with contextlib.redirect_stdout(io.StringIO()):
+            rl.run_ctest("ctest -j1 --timeout 60 --output-on-failure -R '^fx\\.parent\\.inspector$'", fb, "solo",
+                         "gate-cost-test", 1, retry=True)
+        ins = [r for r in fxrecs() if r["suite"] == "fx.parent.inspector"]
+        check(ins and ins[-1]["verdict"] == "NOTRUN" and ins[-1].get("notRunBecause") == ["fx.parent"],
+              "(a) a solo of the inspector runs its parent first; the parent red -> the inspector NOTRUN naming it (%s)"
+              % [(r["verdict"], r.get("notRunBecause")) for r in ins])
+        shutil.rmtree(fxlog, ignore_errors=True)
+        open(mode_, "w").write("admit")
+        with contextlib.redirect_stdout(io.StringIO()):
+            rc_fx = rl.run_ctest("ctest -j1 --timeout 60 --output-on-failure -R '^fx\\.parent(\\.inspector)?$'", fb,
+                                 "scoped", "gate-cost-test", 1, env=dict(os.environ, JAH_GATE_REQUEUE="1"))
+        seq = [(r["suite"], r["verdict"]) for r in fxrecs() if r["suite"] != "fx.wipe"]
+        check(rc_fx == 0 and seq == [("fx.parent", "NOADMIT"), ("fx.parent.inspector", "NOTRUN"),
+                                     ("fx.parent", "PASS"), ("fx.parent.inspector", "PASS")],
+              "(b) a parent NOADMIT on its first try takes its Not Run inspector into the re-queue; both PASS there "
+              "(rc %d, %s)" % (rc_fx, seq))
+    finally:
+        if old_log is None: os.environ.pop("JAH_RUN_LOG_DIR", None)
+        else: os.environ["JAH_RUN_LOG_DIR"] = old_log
 
     shutil.rmtree(scratch, ignore_errors=True)
     if FAILURES:

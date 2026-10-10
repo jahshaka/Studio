@@ -31,8 +31,9 @@ CXX_EXT = (".cpp", ".cc", ".cxx", ".c", ".h", ".hh", ".hpp", ".hxx", ".inl", ".m
 HEADER_EXT = (".h", ".hh", ".hpp", ".hxx", ".inl", ".ipp")
 _CACHE_VERSION = 5
 # the nm cache's own version: bumped whenever what a cached entry means changes (2: the refusal
-# of H1 — no entry may hold an nm failure's empty tables)
-SYMS_VERSION = 2
+# of H1 — no entry may hold an nm failure's empty tables; 3: TESTING-CLEANUP-2B H8b — an EMPTY member
+# whose nm SUCCEEDED is an answer and is cached: only a failed nm is never one, and that raises)
+SYMS_VERSION = 3
 
 
 def _split_ninja(s):
@@ -149,9 +150,7 @@ class NinjaGraph:
             with open(os.path.join(self.build, ".gate-scope-syms.pickle"), "rb") as f:
                 data = pickle.load(f)
             if isinstance(data, dict) and data.get("version") == SYMS_VERSION:
-                self._syms = {k: v for k, v in data["syms"].items()
-                              if not (k[1] is False and v[1][0] == frozenset() and v[1][1] == frozenset()
-                                      and k[0] in self._member_set())}
+                self._syms = dict(data["syms"])
         except Exception:
             self._syms = {}
 
@@ -329,8 +328,12 @@ class NinjaGraph:
         if not member:
             u &= self.libdefs()
         v = (frozenset(d), frozenset(u), init)
-        if member and not d and not u:
-            return v                       # never cache an empty member: re-read it next time
+        # AN EMPTY MEMBER IS AN ANSWER (TESTING-CLEANUP-2B H8b). A member whose nm SUCCEEDED with no symbols
+        # (bullet's btThreadSupportWin32.cpp.o on Linux: its code is #ifdef'd out; six such members in a
+        # tree) was never cached, so every closure_static re-ran nm on it — 366 nm processes for ONE
+        # selection of an engine file, every run, the bulk of source.gate_scope_rules' 21 TIMEOUTs and
+        # gate.selection's 304 s on a loaded disk. An nm FAILURE never reaches this line (it raises above),
+        # so nothing here can persist a failure as an empty table — the case the rule was written for.
         self._syms[k] = (mt, v)
         self._syms_dirty = True
         return v
@@ -492,17 +495,53 @@ def ctest_inventory(build):
     of a gate still running in that dir (the suites audit proved it, GATE_AND_RIG) — and the
     selector's own guards list the inventory from inside a gate. The copy answers the same
     (backtraces and commands are absolute paths) and leaves the build dir's log alone.
-    Returns (stdout, returncode)."""
+    Returns (stdout, returncode).
+
+    ONE LISTING PER BUILD STATE (TESTING-CLEANUP-2B H8b): the listing is cached in the build dir
+    (.gate-scope-inventory.json), keyed on the build dir's spelling, every CTestTestfile.cmake's mtime and size
+    and the mtime of ninja's log (a build changes which commands exist: ctest leaves out the command of an
+    executable that is not built yet). source.gate_scope_rules alone ran 34 selections a run, each one copying
+    the tree and running ctest."""
+    import hashlib
+    import json as _json
     import shutil
     import tempfile
+    files = []
+    for dp, _, fs in os.walk(build):
+        if "CTestTestfile.cmake" in fs:
+            f = os.path.join(dp, "CTestTestfile.cmake")
+            try:
+                st = os.stat(f)
+            except OSError:
+                continue
+            files.append((os.path.relpath(dp, build), st.st_mtime_ns, st.st_size))
+    files.sort()
+    try:
+        nl = os.stat(os.path.join(build, ".ninja_log")).st_mtime_ns
+    except OSError:
+        nl = 0
+    key = hashlib.sha256(repr((_CACHE_VERSION, os.path.abspath(build), nl, files)).encode()).hexdigest()
+    cache = os.path.join(build, ".gate-scope-inventory.json")
+    try:
+        with open(cache) as fh:
+            c = _json.load(fh)
+        if c.get("key") == key:
+            return c["stdout"], 0
+    except (OSError, ValueError, KeyError):
+        pass
     tmp = tempfile.mkdtemp(prefix="gate-inventory-")
     try:
-        for dp, _, fs in os.walk(build):
-            if "CTestTestfile.cmake" in fs:
-                rel = os.path.relpath(dp, build)
-                os.makedirs(os.path.join(tmp, rel), exist_ok=True)
-                shutil.copy2(os.path.join(dp, "CTestTestfile.cmake"), os.path.join(tmp, rel, "CTestTestfile.cmake"))
+        for rel, _, _ in files:
+            os.makedirs(os.path.join(tmp, rel), exist_ok=True)
+            shutil.copy2(os.path.join(build, rel, "CTestTestfile.cmake"), os.path.join(tmp, rel, "CTestTestfile.cmake"))
         r = subprocess.run(["ctest", "--show-only=json-v1"], cwd=tmp, capture_output=True, text=True)
+        if r.returncode == 0 and r.stdout.strip():
+            try:
+                with open(cache + ".tmp", "w") as fh:
+                    _json.dump({"key": key, "stdout": r.stdout}, fh)
+                os.replace(cache + ".tmp", cache)
+            except OSError:
+                pass
         return r.stdout, r.returncode
     finally:
         shutil.rmtree(tmp, ignore_errors=True)

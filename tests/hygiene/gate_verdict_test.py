@@ -136,6 +136,7 @@ def vrec(text, ts):
 
 
 def case_verdict_door(E):
+    registry_id_cases(E)
     T = "2026-10-09T%s:00+02:00"
     RED_SHA, FIX_SHA = {"studio": "a" * 40}, {"studio": "f" * 40}
     red = rec("FAIL", T % "10:00", tip=RED_SHA)
@@ -188,6 +189,66 @@ def case_verdict_door(E):
     st, why = E.judge([rec("FAIL", T % "10:00", failLine="FAIL: thumbnail 12 px off"), vrec("real:VIEWS-XID-1", T % "11:00")],
                       base=[rec("FAIL", T % "09:00", retry=True, failLine="FAIL: thumbnail 14 px off")])
     check(st == "known", "...the same class and failLine (numbers masked) on the base -> KNOWN RED (%s)" % why[:70])
+    # TESTING-CLEANUP-2C item 1: THE TREE ROOT IS NOT THE FAILURE. Batch C2 refused three KNOWN RED verdicts whose lines
+    # differed only by the tree root (rc-batch-C2 vs rc-base-d4991c754). RED ON 314770a52: "not the SAME red".
+    W_ = "/home/jahshaka/Developer/jahshaka/.claude/worktrees/"
+    msg = "FAIL: the data root and the working directory must be inside %s/build-linux/tests/scripting/e2e-home-clip_ref"
+    st, why = E.judge([rec("FAIL", T % "10:00", failLine=msg % (W_ + "rc-batch-C2")), vrec("real:VIEWS-XID-1", T % "11:00")],
+                      base=[rec("FAIL", T % "09:00", retry=True, failLine=msg % ("/mnt/work/Developer/jahshaka/.claude/worktrees/"
+                                                                                      "rc-base-d4991c754"))])
+    check(st == "known", "the same failure under two tree roots (rc-batch-C2 / rc-base-<sha>, two spellings of the root) "
+          "is the SAME red -> KNOWN RED (%s: %s)" % (st, why[:80]))
+    st, why = E.judge([rec("FAIL", T % "10:00", failLine=msg % (W_ + "rc-batch-C2")), vrec("real:VIEWS-XID-1", T % "11:00")],
+                      base=[rec("FAIL", T % "09:00", retry=True,
+                                failLine=(msg % (W_ + "rc-base-d4991c754")).replace("clip_ref", "tex_ref"))])
+    check(st == "red" and "not the SAME red" in why, "...a different file INSIDE the tree stays a different red (%s)" % why[:70])
+    check(E.cgc.masked("open /tmp/jah-lead/rc-C2.state: /home/a/.local/share/Jahshaka/x.db") ==
+          E.cgc.masked("open /tmp/jah-rc9/rc-C2.state: /home/u/.local/share/Jahshaka/x.db"),
+          "/tmp/jah-* and a data root are one token each (%s)" % E.cgc.masked("open /tmp/jah-lead/rc-C2.state"))
+    # FIX ROUND 3 F3: A ROW NOT RUN BECAUSE ITS PARENT FAILED takes the parent's state (one verdict covers both), never
+    # MISSING; a parent still missing leaves it missing; a parent outside the judged set is judged for it. RED ON
+    # 9eb5343e2: no resolver — the inspector stayed MISSING, which no verdict clears.
+    nr_ = {("insp", None): [{"suite": "insp", "verdict": "NOTRUN", "notRunBecause": ["par"], "ts": T % "10:05"}]}
+    resolve_ = getattr(E.cgc, "resolve_not_run", None)
+    check(resolve_ is not None, "ci_gate_check has the Not Run resolver")
+    resolve_ = resolve_ or (lambda *a: None)          # absent (a base before F3): the cases below read red, not a crash
+    for pst_, want in (("red", "red"), ("known", "known"), ("missing", "missing"), ("nondet", "missing"),
+                       ("green", "missing")):
+        out_ = {("insp", None): ("missing", "never run", "t"), ("par", None): (pst_, "why", "t")}
+        resolve_(out_, nr_, lambda pk: ("red", "x"), "t")
+        check(out_[("insp", None)][0] == want and (want == "missing" or "its parent par" in out_[("insp", None)][1]),
+              "an inspector Not Run because its parent is %s -> %s (%s)" % (pst_, want, out_[("insp", None)][1][:70]))
+    out_ = {("insp", None): ("missing", "never run", "t")}
+    resolve_(out_, nr_, lambda pk: ("known", "judged for it"), "t")
+    check(out_[("insp", None)][0] == "known", "...a parent outside the judged set is judged for it (%s)" % out_[("insp", None)][0])
+    # FIX ROUND 4 item 1: a green / nondet parent leaves the inspector MISSING (its assertion never ran — rows above), and
+    # only the NEWEST record overall counts: an older parent-Not-Run beside a newer bare Not Run resolves nothing.
+    # RED ON b77ab5abc: nondet -> nondet, green -> green, and the older record resolved.
+    nr2 = {("insp", None): [nr_[("insp", None)][0], {"suite": "insp", "verdict": "NOTRUN", "ts": T % "10:09"}]}
+    out_ = {("insp", None): ("missing", "never run", "t"), ("par", None): ("red", "why", "t")}
+    resolve_(out_, nr2, lambda pk: ("red", "x"), "t")
+    check(out_[("insp", None)][0] == "missing", "...an older parent-Not-Run under a newer bare Not Run resolves nothing (%s)"
+          % out_[("insp", None)][0])
+    # FIX ROUND 4 item 2: the ATTRIBUTION's cell of a Not Run inspector is its parent's red, never "never ran"
+    gs4 = E.cgc.load_gs()
+    cr = getattr(gs4, "_cell_run", None)
+    check(cr is not None and cr({"verdict": "NOTRUN", "notRunBecause": ["par"], "run": None}, "a" * 40)[0] == "red"
+          and cr({"verdict": "NOTRUN", "run": None}, "a" * 40)[0] == "never"
+          and cr({"verdict": "PASS"}, "a" * 40)[0] == "pass",
+          "an attribution run of a Not Run inspector is its PARENT's red (a bare Not Run never ran)")
+    # FIX ROUND 3 F2: masked() never over-masks. RED ON 9eb5343e2 (the reader's measurements): two in-tree homes read as
+    # one red, the owner's real data root read as a test home, and the unanchored prefix ate `a=` / `FAIL:`.
+    mk, Wt = E.cgc.masked, "/home/jahshaka/Developer/jahshaka/.claude/worktrees/rc-batch-C2"
+    check(mk(Wt + "/build-linux/tests/scripting/e2e-home-clip_ref/.local/share/Jahshaka/lib.db missing")
+          != mk(Wt + "/build-linux/tests/scripting/e2e-home-tex_ref/.local/share/Jahshaka/lib.db missing"),
+          "two in-tree homes stay two reds (%s)" % mk(Wt + "/b/e2e-home-clip_ref/.local/share/Jahshaka/lib.db"))
+    check(mk("wrote /home/jahshaka/.local/share/Jahshaka/lib.db") != mk("wrote " + Wt + "/b/tests/x/home/.local/share/Jahshaka/lib.db"),
+          "the owner's real data root never reads as a test home (%s)" % mk("wrote /home/jahshaka/.local/share/Jahshaka/lib.db"))
+    check(mk("wrote /home/jahshaka/.local/share/Jahshaka/lib.db") != mk("wrote /tmp/tmp.Xy12/.local/share/Jahshaka/lib.db"),
+          "fix round 4 item 4: a user's data root and a /tmp home are different tokens (%s / %s)"
+          % (mk("/home/u/.local/share/Jahshaka/x"), mk("/tmp/t/.local/share/Jahshaka/x")))
+    check(mk("cmp a=" + Wt + "/x.png") != mk("cmp b=" + Wt + "/x.png") and mk("FAIL:" + Wt + "/a.png") != mk("WARN:" + Wt + "/a.png"),
+          "a mask starts where a path starts: `a=`/`b=` and `FAIL:`/`WARN:` stay (%s)" % mk("cmp a=" + Wt + "/x.png"))
     st, why = E.judge([red, vrec("real:VIEWS-XID-1", T % "11:00")], base=base_solo)
     check(st == "known" and "KNOWN RED" in why, "real:<registered id> + the red reproduced by a solo at the base -> KNOWN "
           "RED (%s: %s)" % (st, why[:70]))
@@ -223,6 +284,50 @@ def case_verdict_door(E):
     solos = [rec(v, T % ("10:%02d" % (10 + i)), retry=True) for i, v in enumerate(("PASS", "FAIL", "PASS"))]
     st, why = E.judge([red, fixpass] + solos + [vrec("real:VIEWS-XID-1", T % "11:00")])
     check(st == "red" and "solos below 3/3" in why, "FAIL + a token, 2/3 solo -> red 'solos below 3/3' (%s)" % why[:100])
+    # TESTING-CLEANUP-2C (the lead's item 4): THE SOLO RULE IS FOR A CLAIM OF NONDETERMINISM. A registered DEFECT whose
+    # solos are 3/3 RED at the candidate and whose base solos show the same red is KNOWN RED — batch C2's attribution
+    # recorded exactly that for five rows and the door refused all five ("solos below 3/3 (0/3)") before reading the
+    # base. RED ON 314770a52: refused 'solos below 3/3'. Mixed solos (2/3 above) stay refused; a nondeterminism claim
+    # (contention:, or a real:<nondeterminism entry>) with 0/3 green solos stays refused.
+    fl = "FAIL: the data root must be inside /home/jahshaka/Developer/jahshaka/.claude/worktrees/rc-batch-C2/x"
+    red3 = [rec("FAIL", T % ("10:%02d" % (10 + i)), retry=True, failLine=fl) for i in range(3)]
+    base3 = [rec("FAIL", T % ("09:%02d" % (10 + i)), retry=True, failLine=fl.replace("rc-batch-C2", "rc-base-d4991c754"))
+             for i in range(3)]
+    st, why = E.judge([rec("FAIL", T % "10:00", failLine=fl)] + red3 + [vrec("real:VIEWS-XID-1", T % "11:00")], base=base3)
+    check(st == "known", "a real:<defect> with 3/3 RED solos at the candidate and the same red 3/3 at the base -> KNOWN RED, "
+          "the red solos its evidence (%s: %s)" % (st, why[:90]))
+    # FIX ROUND 3 F1: EVERY pending red must be the base's red, and the base's solos must ALL be red. RED ON 9eb5343e2
+    # (the reader's probes F/G/C): a CRASH or another assertion among the candidate's solos passed as KNOWN RED (only
+    # the newest red was compared), and a base with 1 red + 2 green solos made a KNOWN RED.
+    crash_mid = [red3[0], rec("CRASH", T % "10:11", retry=True, status="Exception: SegFault"), red3[2]]
+    st, why = E.judge([rec("FAIL", T % "10:00", failLine=fl)] + crash_mid + [vrec("real:VIEWS-XID-1", T % "11:00")], base=base3)
+    check(st == "red" and "not every pending red" in why, "(F) a CRASH among the solos (not the newest) -> not KNOWN RED "
+          "(%s)" % why[:90])
+    other_mid = [red3[0], rec("FAIL", T % "10:11", retry=True, failLine="FAIL: another assertion 3"), red3[2]]
+    st, why = E.judge([rec("FAIL", T % "10:00", failLine=fl)] + other_mid + [vrec("real:VIEWS-XID-1", T % "11:00")], base=base3)
+    check(st == "red" and "not every pending red" in why, "(G) another assertion among the solos -> not KNOWN RED (%s)" % why[:90])
+    st, why = E.judge([rec("FAIL", T % "10:00", failLine=fl)] + red3 + [vrec("real:VIEWS-XID-1", T % "11:00")],
+                      base=[base3[0], rec("PASS", T % "09:11", retry=True), rec("PASS", T % "09:12", retry=True)])
+    check(st == "red" and "nondeterminism on the base" in why, "(C) a base with 1 red + 2 green solos is nondeterminism "
+          "on the base, not a KNOWN RED (%s)" % why[:90])
+    # FIX ROUND 4 item 6: a base whose solos flip class (FAIL, CRASH, FAIL) is not one known red — all-CRASH candidate solos
+    # do not pass on its one CRASH (RED ON b77ab5abc: KNOWN RED); and the count names each pending red once
+    crash3 = [rec("CRASH", T % ("10:%02d" % (10 + i)), retry=True, status="Exception: SegFault") for i in range(3)]
+    flip = [base3[0], rec("CRASH", T % "09:11", retry=True, status="Exception: SegFault"), base3[2]]
+    st, why = E.judge([rec("FAIL", T % "10:00", failLine=fl)] + crash3 + [vrec("real:VIEWS-XID-1", T % "11:00")], base=flip)
+    check(st == "red" and "flip class" in why, "(J) a base flipping FAIL/CRASH is not one KNOWN RED (%s)" % why[:80])
+    st, why = E.judge([rec("FAIL", T % "10:00", failLine=fl)] + red3 + [vrec("real:VIEWS-XID-1", T % "11:00")], base=base3)
+    check(st == "known" and "the 4 pending red(s)" in why, "(K) one gate red + 3 red solos count as 4 pending reds (%s)"
+          % why[-90:])
+    st, why = E.judge([rec("FAIL", T % "10:00", failLine=fl)] + red3 + [vrec("real:VIEWS-XID-1", T % "11:00")])
+    check(st == "red" and "solos below" not in why, "...with no base record it is refused by the KNOWN RED door, not the "
+          "solo rule (%s)" % why[:90])
+    st, why = E.judge([red] + red3 + [vrec("contention: load 14 beside two gates", T % "11:00")], listed=True)
+    check(st == "red" and "solos below 3/3" in why, "a contention: claim with 0/3 green solos -> refused 'solos below "
+          "3/3' (%s)" % why[:80])
+    st, why = E.judge([red] + red3 + [vrec("real:NONDET-FIXTURE-1", T % "11:00")], listed=True)
+    check(st == "red" and "3/3 solo PASS" in why, "a real:<nondeterminism entry> with 0/3 green solos -> refused (%s)"
+          % why[:90])
     # contention: — a nondeterminism row, a competitor census, 3/3
     busy = rec("FAIL", T % "10:00", box=BUSY)
     st, why = E.judge([busy] + ok3 + [vrec("contention: load 14 beside two gates", T % "11:00")])
@@ -400,6 +505,116 @@ def case_verdict_door(E):
           "any (%d, %d)" % (rc, rc2))
 
 
+def registry_id_cases(E):
+    """TESTING-CLEANUP-2B item 14. (1) `real:<id>` is any token and the REGISTRY is the grammar: an id the attribution
+    registered with lowercase, dots and no number reaches the registry lookup. RED ON BASE (b0a3b1f3c): the pattern
+    ([A-Z…]-<n>) matched nothing in `real:A2-defect-scripting.e2e.clip_ref`, so the verdict was prose and refused.
+    (2) The attribution's ids are ONE scheme, <BATCH>-<ROW-UPPER>-<n>, and an OPEN entry of the same kind for the row is
+    REUSED (the new sighting a recheck), never a second entry. RED ON BASE: `B2-defect-<row>` beside `A2-defect-<row>`."""
+    m = E.cgc.DEFECT_ID.search("real:A2-defect-scripting.e2e.clip_ref the fixture's red")
+    check(m and m.group(1) == "A2-defect-scripting.e2e.clip_ref", "real:<any token> is parsed whole (%s)" % (m and m.group(1)))
+    ok, why, _ = E.cgc._real(m, "scripting.e2e.clip_ref", [], [], {}, [], [])
+    check(not ok and "not in the defect registry" in why, "...and LOOKED UP in the registry: unknown there, refused there")
+    reg_e = {"A2-defect-scripting.e2e.clip_ref": {"id": "A2-defect-scripting.e2e.clip_ref", "rows": ["other.row"],
+                                                  "state": "open", "recheck": "2099-12-31"}}
+    ok, why, _ = E.cgc._real(m, "scripting.e2e.clip_ref", [], [], reg_e, [], [])
+    check(not ok and "registered for ['other.row']" in why, "...a registered id reaches the entry's own checks (%s)" % why[:70])
+    gs = E.cgc.load_gs()
+    d = tempfile.mkdtemp(dir=E.scratch)
+    old = {k: os.environ.get(k) for k in ("JAH_DEFECTS_FILE", "JAH_DEFECTS_PENDING_DIR")}
+    os.environ["JAH_DEFECTS_FILE"] = os.path.join(d, "defects.json")
+    os.environ.pop("JAH_DEFECTS_PENDING_DIR", None)
+    json.dump({"defects": []}, open(os.environ["JAH_DEFECTS_FILE"], "w"))
+    try:
+        rec_ = {"tip": {"fork": "f" * 40}, "run": "20261010T100000-" + "a" * 9}
+        p1 = gs._register("A2", "defect", "scripting.e2e.clip_ref", "a" * 40, rec_, "red on d-build")
+        b1 = open(p1, "rb").read()
+        p2 = gs._register("B2", "defect", "scripting.e2e.clip_ref", "b" * 40, dict(rec_, run="20261010T120000-" + "b" * 9),
+                          "red on d-build again")
+        p3 = gs._register("B2", "defect", "pool.editor_view", "b" * 40, rec_, "another row")
+        pend = os.path.join(d, "defects.pending")
+        files = sorted(os.listdir(pend))
+        rc1 = json.load(open(p2))
+        check(os.path.basename(p1) == "A2-SCRIPTING-E2E-CLIP-REF-1.json"
+              and os.path.basename(p2) == "A2-SCRIPTING-E2E-CLIP-REF-1.recheck.json"
+              and files == ["A2-SCRIPTING-E2E-CLIP-REF-1.json", "A2-SCRIPTING-E2E-CLIP-REF-1.recheck.json",
+                            "B2-POOL-EDITOR-VIEW-1.json"]
+              and [r["batch"] for r in rc1.get("sightings", [])] == ["B2"] and os.path.basename(p3).startswith("B2-POOL"),
+              "the attribution's ids are <BATCH>-<ROW-UPPER>-<n>, and an open entry for the row is reused — the new "
+              "sighting a RECHECK FILE, never a second entry (%s)" % files)
+        # TESTING-CLEANUP-2B item 15 (2): REUSE NEVER REWRITES AN ENTRY (the pending entry and testing/defects.json are
+        # both tracked; a sighting that moved `recheck` forward stood in for the re-verdict the door demands). RED ON
+        # 74740b0de: the entry was re-serialised with rechecks[] and a later recheck.
+        check(open(p1, "rb").read() == b1, "...the reused PENDING entry's bytes are untouched (its recheck the lead's)")
+        got, why = E.rl.defects_load()
+        check(got is not None and "A2-SCRIPTING-E2E-CLIP-REF-1" in got
+              and [x["batch"] for x in got["A2-SCRIPTING-E2E-CLIP-REF-1"].get("sightings", [])] == ["B2"]
+              and not any(k.endswith(".recheck") for k in got) and not os.path.isdir(os.path.join(d, "defects.quarantine")),
+              "...the reader loads the entry with the recheck file's sightings attached, never the file as an entry (%s)" % why)
+        # registry-sourced reuse: an OPEN entry in defects.json PAST its recheck — the sighting is a recheck file, the
+        # tracked registry's bytes unchanged, and the entry is still past its date (the door still wants the re-verdict)
+        regd = {"defects": [
+            {"id": "SC1-OLD-ROW-1", "rows": ["old.row"], "kind": "defect", "cause": "c", "state": "open",
+             "found_by": "gate", "first_seen": {"tip": "e" * 40, "pin": "f" * 40, "run": "20260101T000000-" + "e" * 9}, "recheck": "2026-01-01",
+             "expires": "2026-01-01"},
+            {"id": "SC1-FIXED-ROW-1", "rows": ["fixed.row"], "kind": "defect", "cause": "c",
+             "state": {"fixed": {"tip": "f" * 40}}, "found_by": "gate", "first_seen": {"tip": "e" * 40, "pin": "f" * 40, "run": "20260101T000000-" + "e" * 9},
+             "recheck": "2099-01-01", "expires": "2099-01-01"},
+            {"id": "SC1-RET-ROW-1", "rows": ["ret.row"], "kind": "defect", "cause": "c", "state": "retired",
+             "found_by": "gate", "first_seen": {"tip": "e" * 40, "pin": "f" * 40, "run": "20260101T000000-" + "e" * 9}, "recheck": "2099-01-01",
+             "expires": "2099-01-01"}]}
+        json.dump(regd, open(os.environ["JAH_DEFECTS_FILE"], "w"), indent=1)
+        rb = open(os.environ["JAH_DEFECTS_FILE"], "rb").read()
+        p4 = gs._register("C3", "defect", "old.row", "c" * 40, rec_, "seen again")
+        check(os.path.basename(p4) == "SC1-OLD-ROW-1.recheck.json"
+              and open(os.environ["JAH_DEFECTS_FILE"], "rb").read() == rb,
+              "a registry-sourced reuse writes <id>.recheck.json and leaves the tracked defects.json byte-identical (%s)"
+              % os.path.basename(p4))
+        got, _ = E.rl.defects_load()
+        check(got and E.rl.recheck_past(got["SC1-OLD-ROW-1"]) and len(got["SC1-OLD-ROW-1"].get("sightings", [])) == 1,
+              "...and the entry stays PAST its recheck: a sighting never stands in for the lead's re-verdict")
+        p5 = gs._register("C3", "defect", "old.row", "c" * 40, rec_, "and again")
+        check(p5 == p4 and len(json.load(open(p5))["sightings"]) == 2, "a second sighting APPENDS to the same recheck file")
+        # fixed / retired: never reused — a new sighting is a NEW finding
+        p6 = gs._register("C3", "defect", "fixed.row", "c" * 40, rec_, "back")
+        p7 = gs._register("C3", "defect", "ret.row", "c" * 40, rec_, "back")
+        check(os.path.basename(p6) == "C3-FIXED-ROW-1.json" and os.path.basename(p7) == "C3-RET-ROW-1.json",
+              "a FIXED or RETIRED entry is never reused: a new entry each (%s, %s)"
+              % (os.path.basename(p6), os.path.basename(p7)))
+        # the -2 increment: the -1 of the stem exists but is not reusable (another kind) -> -2
+        p8 = gs._register("C3", "combination", "fixed.row", "c" * 40, rec_, "a combination")
+        check(os.path.basename(p8) == "C3-FIXED-ROW-2.json", "the next free number of the stem: -2 (%s)" % os.path.basename(p8))
+        # NOT REPRODUCED is never reused: two sightings, two single-use entries
+        n1 = gs._register("C3", "nondeterminism", "nd.row", "c" * 40, rec_, "flake", suspects=["l1"])
+        n2 = gs._register("C3", "nondeterminism", "nd.row", "c" * 40, rec_, "flake", suspects=["l1"])
+        check(os.path.basename(n1) == "C3-ND-ROW-1.json" and os.path.basename(n2) == "C3-ND-ROW-2.json"
+              and json.load(open(n2)).get("uses") == 1,
+              "a NOT REPRODUCED entry is never reused (single-use): %s, %s" % (os.path.basename(n1), os.path.basename(n2)))
+        # (4) THE NUMBERING LOCK: eight registrations of one new row at once (eight processes) take eight
+        # DIFFERENT numbers... of one entry: the first registers it, the other seven are its recheck sightings
+        code = ("import importlib.util,sys; sp=importlib.util.spec_from_file_location('gsx', sys.argv[1]); "
+                "g=importlib.util.module_from_spec(sp); sp.loader.exec_module(g); "
+                "print(g._register('D4', sys.argv[2], 'race.row', 'd'*40, {}, 'race'))")
+        gsp = os.path.join(E.source, "scripts", "gate-scope.py")
+        ps = [subprocess.Popen([sys.executable, "-c", code, gsp, "defect"], stdout=subprocess.PIPE, text=True)
+              for _ in range(8)]
+        outs = [os.path.basename(p_.communicate()[0].strip()) for p_ in ps]
+        rcd = json.load(open(os.path.join(pend, "D4-RACE-ROW-1.recheck.json")))
+        check(sorted(outs).count("D4-RACE-ROW-1.json") == 1 and outs.count("D4-RACE-ROW-1.recheck.json") == 7
+              and len(rcd["sightings"]) == 7 and not os.path.exists(os.path.join(pend, "D4-RACE-ROW-2.json")),
+              "eight registrations at once: ONE entry and seven sightings, no second number, no lost write (%s)"
+              % sorted(set(outs)))
+        ps = [subprocess.Popen([sys.executable, "-c", code, gsp, "nondeterminism"], stdout=subprocess.PIPE, text=True)
+              for _ in range(6)]
+        outs = sorted(os.path.basename(p_.communicate()[0].strip()) for p_ in ps)
+        check(outs == ["D4-RACE-ROW-%d.json" % k for k in (2, 3, 4, 5, 6, 7)],
+              "six single-use registrations at once take six DIFFERENT numbers (%s)" % outs)
+    finally:
+        for k, v in old.items():
+            if v is None: os.environ.pop(k, None)
+            else: os.environ[k] = v
+
+
 def case_noadmit_pool(E):
     os.environ["JAH_RUN_LOG_DIR"] = d = tempfile.mkdtemp(dir=E.scratch)
     R = E.rl._Run("scoped", "verdict-test", 2, None, None, None, False, {}, False, None)
@@ -408,11 +623,28 @@ def case_noadmit_pool(E):
     recs = R.records("pool.toy", "Failed", 1.0, time.time(), (0, 0, 0), allna, {})
     check(recs[0]["verdict"] == "NOADMIT" and all(r["verdict"] == "NOADMIT" for r in recs[1:]),
           "an all-NOADMIT pool records NOADMIT (never ran), never FAIL (%s)" % [r["verdict"] for r in recs])
+    # TESTING-CLEANUP-2B item 2: no row's TIMEOUT covers the admission wait any more, so a row whose TIMEOUT ends
+    # while it is STILL WAITING for its tokens never ran: NOADMIT, never a TIMEOUT charged to its code; a row that
+    # was admitted and then ran out of time stays TIMEOUT. RED ON BASE (b0a3b1f3c): the first read TIMEOUT.
+    waiting = "vram: waiting for 2 tokens, 0 free — toy.row:app\n"
+    r0 = R.records("toy.row", "Timeout", 120.0, time.time(), (0, 0, 0), waiting, {})[0]
+    check(r0["verdict"] == "NOADMIT" and "never ran" in r0["status"],
+          "a row whose TIMEOUT ended its admission wait records NOADMIT (%s: %s)" % (r0["verdict"], r0["status"][:80]))
+    r1 = R.records("toy.row", "Timeout", 120.0, time.time(), (0, 0, 0),
+                   waiting + "vram: admitted with 2 tokens 0,1 after 30.0 s — toy.row:app\nrunning\n", {})[0]
+    check(r1["verdict"] == "TIMEOUT" and r1.get("tokenWaitS") == 30.0,
+          "...an admitted row that then ran out of time is its own TIMEOUT, the wait recorded (%s, %s)"
+          % (r1["verdict"], r1.get("tokenWaitS")))
     mixed = "ARM toy.a PASS 10\nARM toy.b NOADMIT 0\nARM toy.c NOADMIT 0\n"
     recs = R.records("pool.toy", "Failed", 1.0, time.time(), (0, 0, 0), mixed, {})
-    check(recs[0]["verdict"] == "FAIL" and recs[0].get("noadmit_arms") == ["toy.b", "toy.c"]
-          and "toy.b" in (recs[0].get("failLine") or ""),
-          "a mixed pool records FAIL with its NOADMIT arms named (%s, %s)" % (recs[0]["verdict"], recs[0].get("noadmit_arms")))
+    check(recs[0]["verdict"] == "NOADMIT" and recs[0].get("noadmit_arms") == ["toy.b", "toy.c"],
+          "a pool whose only non-PASS arms never ran is NOADMIT, its never-ran arms named (TESTING-CLEANUP-2B F-C1; "
+          "was FAIL) (%s, %s)" % (recs[0]["verdict"], recs[0].get("noadmit_arms")))
+    realmix = "ARM toy.a FAIL 10\nARM toy.b NOADMIT 0\n"
+    recs = R.records("pool.toy", "Failed", 1.0, time.time(), (0, 0, 0), realmix, {})
+    check(recs[0]["verdict"] == "FAIL" and recs[0].get("noadmit_arms") == ["toy.b"],
+          "a pool with a REAL red beside a NOADMIT arm stays FAIL, its NOADMIT arm named (%s, %s)"
+          % (recs[0]["verdict"], recs[0].get("noadmit_arms")))
     # the re-queue (GATE-COST-1 P5) treats it as a never-ran row: re-run once; EVERY try is a record (GATE-COST-2 #2:
     # requeued 0 and 1), each NOADMIT — never-ran to the judge
     fake = os.path.join(E.scratch, "fake_pool_ctest.sh")
@@ -432,6 +664,24 @@ def case_noadmit_pool(E):
     check(rc != 0 and [(r["verdict"], r.get("requeued")) for r in row] == [("NOADMIT", 0), ("NOADMIT", 1)],
           "...re-queued as a never-ran row, one NOADMIT record per try (rc %s, %s)"
           % (rc, [(r["verdict"], r.get("requeued")) for r in row]))
+    # TESTING-CLEANUP-2B delta F-C1: a pool whose ONLY non-PASS arms never ran is re-queued like a row (red on base:
+    # recorded FAIL once, never re-run); a pool with a real FAIL beside a NOADMIT arm stays the red it is
+    for f_ in os.listdir(d): os.unlink(os.path.join(d, f_))
+    for name, second, want in (("pool.part", "PASS 9", [("NOADMIT", 0), ("NOADMIT", 1)]),     # final try: MISSING
+                               ("pool.real", "FAIL 9", [("FAIL", None)])):
+        open(fake, "w").write("#!/bin/sh\n"
+                              "echo '      Start  1: %s'\n"
+                              "echo '1: ARM toy.a %s'\n"
+                              "echo '1: ARM toy.b NOADMIT 0'\n"
+                              "echo '1/1 Test  #1: %s ..........***Failed    0.10 sec'\n" % (name, second, name))
+        os.environ["JAH_GATE_REQUEUE"] = "1"
+        try:
+            E.rl.run_ctest(fake, E.scratch, "scoped", "verdict-test", 1, labels={name: ["app"]}, echo=False)
+        finally:
+            del os.environ["JAH_GATE_REQUEUE"]
+        got = [json.loads(l) for f in os.listdir(d) for l in open(os.path.join(d, f))]
+        row = [(r["verdict"], r.get("requeued")) for r in got if r["suite"] == name and r["arm"] is None]
+        check(row == want, "%s (toy.a %s, toy.b NOADMIT): %s (%s)" % (name, second.split()[0], want, row))
 
 
 def case_carried_red(E):
@@ -652,6 +902,21 @@ def case_log_schema2(E):
     ur = R.records("s.three", "Failed", 1.0, time.time(), (0, 0, 0), "vram: " + E.kx.FINDING + " (s.three)\nboom", {})
     check(ur[0].get("journal_unreadable") is True and ur[0]["xid"] is None,
           "a row whose journal was unreadable records journal_unreadable (the one case xid-read: may answer)")
+    # TESTING-CLEANUP-2B item 8 (H8c's run-log flag): a row whose app took the shutdown watchdog's _Exit(86) carries
+    # forced_exit: 86 and the line's why — green or red; a row that ended in order carries no such field.
+    # RED ON BASE (b0a3b1f3c): the record had no forced_exit field (KeyError-free None: the check below read None).
+    wd = ("shutdown watchdog: background workers still running 5 s after exit — forcing process exit (code 86)")
+    funnel = "[2026.10.10-02.11.13.448][    0]app: Error: " + wd       # the log funnel's stderr mirror of the same exit
+    one = R.records("s.five", "Passed", 1.0, time.time(), (0, 0, 0), "PASS: ok\n" + funnel + "\n" + wd, {})[0]
+    check(one.get("forced_exit") == 86 and "forced_exits" not in one,
+          "ONE forced exit printed twice (the funnel's mirror + the plain line) counts once (fix round E; red: 2)")
+    fx = R.records("s.four", "Passed", 1.0, time.time(), (0, 0, 0),
+                   "PASS: ok\n" + funnel + "\n" + wd + "\n| " + funnel + "\n| " + wd, {})[0]
+    check(fx.get("forced_exit") == 86 and "background workers" in (fx.get("forced_exit_why") or "")
+          and fx.get("forced_exits") == 2 and fx.get("verdict") == "PASS",
+          "a green row whose app forced its exit records forced_exit 86, the why and the count (%s %s %s)"
+          % (fx.get("forced_exit"), fx.get("forced_exit_why"), fx.get("forced_exits")))
+    check("forced_exit" not in ur[0], "a row whose app ended in order records no forced_exit")
     check((two.get("xid") or {}).get("pid") == xid["pid"] and (two.get("xid") or {}).get("window") == xid["window"],
           "a row whose output carries the Xid records it (%s)" % two.get("xid"))
     # gate-report.py: the table on the toy log, and the preflight's numbers on the archive
@@ -659,6 +924,8 @@ def case_log_schema2(E):
     p = subprocess.run([sys.executable, rep, d, "--ref", "HEAD"], capture_output=True, text=True)
     check(p.returncode == 0 and "TABLE gates" in p.stdout and "slot wait 0.0 h over 1 gate(s)" in p.stdout,
           "gate-report.py prints the weekly table on a toy log, reading its schema-2 fields (%d)" % p.returncode)
+    check("== 9. forced exits" in p.stdout and "| forced exits " in p.stdout,
+          "gate-report.py counts the forced exits (section 9 and the TABLE line)")
     # the stack read's F2: a stage close (tier `stage-close`) is counted in section 7, and a lane tool's own run
     # (tier `lane`, GATE-COST-2) never enters the gate wall
     d2 = tempfile.mkdtemp(dir=E.scratch)
@@ -700,11 +967,13 @@ CASES = {"verdict_door": case_verdict_door, "noadmit_pool": case_noadmit_pool, "
 
 def main(case, source, build):
     E = Env(source, build)
-    if not E.tip:
-        check(False, "the recorded tip 3756b2f18 is in this clone")
-    else:
-        CASES[case](E)
-    subprocess.run(["rm", "-rf", E.scratch])
+    try:
+        if not E.tip:
+            check(False, "the recorded tip 3756b2f18 is in this clone")
+        else:
+            CASES[case](E)
+    finally:            # a case that CRASHES leaves no scratch in /tmp either (three leaked on 2026-10-10)
+        subprocess.run(["rm", "-rf", E.scratch])
     if FAILURES:
         print("gate.%s: FAILED (%d)" % (case, len(FAILURES))); return 1
     print("gate.%s: PASSED" % case); return 0

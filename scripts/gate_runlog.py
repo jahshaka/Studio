@@ -81,6 +81,8 @@ def check_tier(tier):
 
 # `      Start  45: gi.foo` — ctest prints it as a suite starts (the box is sampled there, L1)
 _START = re.compile(r"^\s*Start\s+\d+:\s+(\S+)\s*$")
+# ctest's line for a row it will not run because a fixture setup or DEPENDS row failed (printed right after its Start)
+_FAILED_DEPS = re.compile(r"^\s*Failed test dependencies:\s+(.+?)\s*$")
 # `  12/653 Test  #45: gi.foo ..........   Passed   12.34 sec`
 _RESULT = re.compile(r"^\s*\d+/\d+\s+Test\s+#\d+:\s+(\S+)\s+\.*\s*(.*?)\s+([\d.]+)\s+sec\s*$")
 # The pools' arm lines (SUITE-POOL-1's runner, tests/support/run_pool.py): `ARM-BEGIN <pool>.<arm>`
@@ -129,6 +131,26 @@ _RUNTIMEOUT = re.compile(r"^\s*(?:\|\s*)*timeout: sending signal \S+ to command"
 _TOKENWAIT = re.compile(r"^\s*(?:\|\s*)*vram: admitted with \d+ tokens? \S* ?after ([0-9.]+) s")
 
 
+# THE FORCED EXIT (TESTING-CLEANUP-2 H8c; src/services/forcedexit.h): every path that ends the app with _Exit because
+# an orderly end cannot be trusted — the shutdown watchdog, the worker-reap refusal, the unanswered device-loss end —
+# prints ONE line `shutdown watchdog: <why> — forcing process exit (code 86)` and exits 86. A row whose output carries
+# it is recorded with `forced_exit: <code>` and the first `forced_exit_why` (`forced_exits: <n>` when a pool's
+# processes took it more than once) — PASS or red: a green row whose app could not end in order is a finding, and
+# gate-report counts them. (Before H8c the same path exited 0 and nothing anywhere said so.)
+# ONE LINE PER FORCED EXIT (fix round E): forcedexit::now writes the line twice — through the log funnel (an Error,
+# which the funnel mirrors to stderr with its `[time][thread]app: Error:` prefix) and once plain with fprintf — so only
+# the PLAIN line (at the start of the output line, after ctest's `N:` and the pool's `|` prefixes) is counted.
+_FORCED = re.compile(r"^\s*(?:\d+:\s*)?(?:\|\s*)*shutdown watchdog: (.*?) — forcing process exit \(code (\d+)\)")
+
+
+def forced_exit(text):
+    """(code, why, count) of the forced-exit lines in a row's output, or None when the app ended in order."""
+    hits = [m for m in (_FORCED.match(l) for l in (text or "").splitlines()) if m]
+    if not hits:
+        return None
+    return int(hits[0].group(2)), hits[0].group(1)[:200], len(hits)
+
+
 def token_wait(text):
     """The summed admission waits of a row's output (seconds), or None when it never waited."""
     total, seen = 0.0, False
@@ -170,6 +192,28 @@ def lock_wait(text):
             try: return float(m.group(1))
             except ValueError: return None
     return None
+
+
+# A ROW THAT TIMED OUT STILL WAITING FOR ITS ADMISSION NEVER RAN (TESTING-CLEANUP-2B item 2): the admission's wait is
+# no longer covered by a widened TIMEOUT — inside a gate ctest schedules the rows by their tokens (RESOURCE_GROUPS,
+# tests/cmake/vram_rows.cmake), so only a process OUTSIDE the gate (a hand-run app holding tokens) can make a row
+# wait, and if the row's declared TIMEOUT ends while it is still waiting its code never started. That is NOADMIT —
+# re-queued like any (P5) — never a TIMEOUT charged to the row. Read from the admission's own lines: a `vram:
+# waiting` / `gate-slot: queued` line with no `vram: admitted` / `already admitted` / `gpu-lock: waited` after it.
+_WAITING = re.compile(r"^\s*(?:\|\s*)*((?:vram: waiting for \d+ tokens?|gate-slot: queued)\b.*?)\s*$")
+_ADMITTED = re.compile(r"^\s*(?:\|\s*)*(?:vram: admitted with|vram: already admitted|gpu-lock: waited|gate-slot: already held)")
+
+
+def unadmitted_wait(text):
+    """The admission's waiting line when the row's output ends still waiting (never admitted), else None."""
+    waiting = None
+    for line in (text or "").splitlines():
+        m = _WAITING.match(line)
+        if m:
+            waiting = waiting or m.group(1)[:300]
+        elif waiting and _ADMITTED.match(line):
+            waiting = None
+    return waiting
 
 
 def noadmit_line(text):
@@ -253,6 +297,16 @@ def row_verdict(status, text, arms):
     # pool with a MIX stays FAIL, its NOADMIT arms named on the row (`noadmit_arms`)
     if v != "PASS" and arms and all(a[1] == "NOADMIT" for a in arms):
         return "NOADMIT", na or ("every arm NOADMIT (%d): the pool never ran" % len(arms)), None
+    # ...AND A POOL WHOSE ONLY NON-PASS ARMS NEVER RAN is NOADMIT too (TESTING-CLEANUP-2B delta F-C1): its red is "not
+    # admitted", never its code's — re-queued like a row, MISSING to the judge on a final try (its NOADMIT arms are
+    # named on the row); a mix with a real FAIL / CRASH / TIMEOUT stays the red it is
+    if v != "PASS" and arms and any(a[1] == "NOADMIT" for a in arms) and all(a[1] in ("NOADMIT", "PASS") for a in arms):
+        na_ = [a[0] for a in arms if a[1] == "NOADMIT"]
+        return "NOADMIT", na or ("arm(s) NOADMIT, never ran: %s" % " ".join(na_[:12])), None
+    if v == "TIMEOUT" and not arms:
+        w = unadmitted_wait(text)
+        if w:
+            return "NOADMIT", "NOADMIT vram: the row's TIMEOUT ended its admission wait — it never ran (%s)" % w, None
     if v == "FAIL":
         if any(_RUNTIMEOUT.match(l) for l in (text or "").splitlines()):
             v = "TIMEOUT"
@@ -317,6 +371,12 @@ def defects_file():
     return os.environ.get("JAH_DEFECTS_FILE") or os.path.join(workspace_root(), "testing", "defects.json")
 
 
+# A SIGHTING OF AN OPEN ENTRY (gate-scope's _register, item 15) is <pending>/<id>.recheck.json — {id, sightings: [...]},
+# never a rewrite of the (tracked) entry: defects_load attaches the sightings to the entry (`sightings`, in memory, for the
+# reader) and never reads the file as an entry; the entry's `recheck` stays the lead's.
+RECHECK_SUFFIX = ".recheck.json"
+
+
 def defects_pending_dir():
     return os.path.join(os.path.dirname(defects_file()), "defects.pending")
 
@@ -367,7 +427,7 @@ def _defect_problems(e):
             bad.append("a nondeterminism entry is either single-use (uses: 1, suspects, census) or ENROLLED by the lead "
                        "(enrolled {by, rate, census, date})")
     st = e["state"]
-    if not (st in ("open", "retired") or (isinstance(st, dict) and isinstance((st.get("fixed") or {}).get("tip"), str)
+    if not (st in ("open", "retired") or (isinstance(st, dict) and isinstance(st.get("fixed"), dict) and isinstance(st["fixed"].get("tip"), str)
                                            and st["fixed"]["tip"])):
         bad.append("state is not open | {fixed: {tip}} | retired")
     return bad
@@ -426,11 +486,20 @@ def defects_load(log=sys.stderr):
     if not isinstance(lst, list):
         return None, f"the defect registry {path} has no `defects` list"
     items = [(e, None) for e in lst]
+    rechecks = []
     pend = defects_pending_dir()
     if os.path.isdir(pend):
         for f in sorted(os.listdir(pend)):
             if not f.endswith(".json"): continue
             fp = os.path.join(pend, f)
+            if f.endswith(RECHECK_SUFFIX):
+                try:
+                    rc_ = json.load(open(fp))
+                    if not isinstance(rc_, dict) or not isinstance(rc_.get("sightings"), list): raise ValueError
+                    rechecks.append((rc_, fp))
+                except (OSError, ValueError) as e:
+                    _quarantine(f, None, f"an unreadable recheck file ({e.__class__.__name__})", src=fp, log=log)
+                continue
             try:
                 items.append((json.load(open(fp)), fp))
             except (OSError, ValueError) as e:
@@ -445,6 +514,13 @@ def defects_load(log=sys.stderr):
                         f"{name}: {', '.join(probs)} (TESTING_V3 §1.5's shape)", src=src, log=log)
             continue
         out[name] = e
+    for rc_, fp in rechecks:
+        e = out.get(rc_.get("id"))
+        if e is None:
+            if log is not None:
+                log.write(f"REGISTRY: FINDING — {os.path.basename(fp)} names no loaded entry ({rc_.get('id')})\n")
+            continue
+        e["sightings"] = list(e.get("sightings") or []) + rc_["sightings"]
     q = defects_quarantined()
     if q and log is not None:
         log.write(f"REGISTRY: FINDING — {len(q)} quarantined entr{'y' if len(q) == 1 else 'ies'} in "
@@ -1451,10 +1527,14 @@ class _Run:
         unreadable = bool(_UNREADABLE.search(text or ""))
         if unreadable: row["journal_unreadable"] = True
         noadmit = [a for a, av, _ in arms if av == "NOADMIT"]
-        if v != "PASS" and v != "NOADMIT" and noadmit:
+        if v != "PASS" and noadmit:
             row["noadmit_arms"] = noadmit
             if "failLine" not in row:
                 row["failLine"] = f"NOADMIT arm(s), never ran: {' '.join(noadmit[:12])}"
+        fx = forced_exit(text)
+        if fx:
+            row["forced_exit"], row["forced_exit_why"] = fx[0], fx[1]
+            if fx[2] > 1: row["forced_exits"] = fx[2]
         mem = _mem_of(text)
         if mem is not None: row["mem"] = mem
         leak = _leaks_of(text)
@@ -1509,6 +1589,7 @@ class _Run:
         if self.guard.active:
             threading.Thread(target=watch, daemon=True).start()
         buf, size, pre, starts, reds, held = {}, {}, {}, {}, [], []
+        failed_deps, last_start = {}, None
         for line in p.stdout:
             ln = line.rstrip("\n")
             m = _VLINE.match(ln)
@@ -1531,8 +1612,13 @@ class _Run:
                 continue
             if self.echo:
                 sys.stdout.write(line); sys.stdout.flush()
+            m = _FAILED_DEPS.match(ln)
+            if m and last_start:
+                failed_deps[last_start] = m.group(1).split()
+                continue
             m = _START.match(ln)
             if m:
+                last_start = m.group(1)
                 bm, oc = box_mem(), other_ctests(p.pid)
                 starts[m.group(1)] = {"other_ctests": oc, "gpu_clocks": gpu_clocks(),
                                       "mem": bm, "queue_depth": queue_depth(), "census": census(p.pid, bm, oc)}
@@ -1564,6 +1650,20 @@ class _Run:
             recs = self.records(name, status, secs, time.time(), os.getloadavg(), text, starts.get(name) or {})
             v = recs[0]["verdict"]
             arms = recs[1:]
+            # A ROW NOT RUN BECAUSE ITS PARENT FAILED (TESTING-CLEANUP-2B fix round 3 F3): the record names the parent
+            # (`notRunBecause`) — the judge resolves it to the parent's state (one verdict covers both, never MISSING) —
+            # and when every such parent was HELD in this phase (NOADMIT, re-queued), the row is re-queued with it
+            deps_ = failed_deps.pop(name, None)
+            if v == "NOTRUN" and deps_:
+                for r_ in recs: r_["notRunBecause"] = deps_
+                if not final and all(d_ in held for d_ in deps_):
+                    if attempt:
+                        for r_ in recs: r_["requeued"] = attempt
+                    self.path = append_records(recs, self.tier, self.shas["studio"])
+                    self.recorded += len(recs)
+                    held.append(name)
+                    continue
+            # (a pool whose only non-PASS arms never ran is NOADMIT already: row_verdict, TESTING-CLEANUP-2B F-C1)
             never = v == "NOADMIT" or (v != "PASS" and arms and all(a["verdict"] == "NOADMIT" for a in arms))
             if attempt or (never and not final):
                 for r_ in recs: r_["requeued"] = attempt       # the try: 0 = the first run, k = the k-th re-queue
@@ -2159,7 +2259,9 @@ def main():
         on_signals()
         slot = None
         try:
-            slot = _vram().gate_slot(f"{'+'.join(lane)} {a.tier} (gate_runlog run)", log=sys.stdout)
+            # the slot's class (item 13): a lane's own runs (tier lane / solo) are measurements, every other tier a gate
+            slot = _vram().gate_slot(f"{'+'.join(lane)} {a.tier} (gate_runlog run)", log=sys.stdout,
+                                     cls=2 if a.tier in ("lane", "solo") else (0 if a.tier == "smoke" else 1))
             rc = run_ctest(line, build, a.tier, lane, jobs, labels=inventory_labels(build))
         except GateSignal as e:
             print(f"\n=== GATE ABORTED: signal {e.sig} — the ctest tree was stopped, the slot and the card released ===")

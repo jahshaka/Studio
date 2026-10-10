@@ -278,21 +278,29 @@ set_tests_properties(threading.texture_wait_watchdog PROPERTIES
 # row did not have, so a -R of the inspector alone read the PREVIOUS run's logs; now
 # the wipe runs first and an inspector without its run fails on the empty directory
 # instead of passing on a stale one).
+# TESTING-CLEANUP-2C item 3: AND FIXTURES_REQUIRED on its parent's RUN fixture (the parent is that fixture's
+# FIXTURES_SETUP): a `--solo` / `-R` of the inspector alone used to run the home wipe and then grep an EMPTY directory
+# ("no logs — did the run happen?", batch C2: 0/3 solo); now ctest runs the parent first, in the same home. The cost,
+# stated: when the parent run FAILS, ctest does not run its fixture's dependents — the inspector reads "Not Run"
+# beside the parent's red instead of grepping a crashed run's logs (the logs stay in the home for the triage).
+# source.testing_rules R6 guards the shape: a row that DEPENDS on another row requires a fixture that row sets up.
 add_test(NAME threading.import_soak.no_groupless_texture
          COMMAND ${CMAKE_COMMAND} -DLOG_DIR=${_thr_home_soak}/run/logs
                  -P ${CMAKE_SOURCE_DIR}/tests/threading/nogrouplesstexture.cmake)
 set_tests_properties(threading.import_soak.no_groupless_texture PROPERTIES
-    DEPENDS threading.import_soak FIXTURES_REQUIRED threading_home_import_soak
+    DEPENDS threading.import_soak FIXTURES_REQUIRED "threading_home_import_soak;threading_run_import_soak"
     LABELS "threading" TIMEOUT 60)
 
 add_test(NAME threading.newproject_stall.no_groupless_texture
          COMMAND ${CMAKE_COMMAND} -DLOG_DIR=${_thr_home_stall}/run/logs
                  -P ${CMAKE_SOURCE_DIR}/tests/threading/nogrouplesstexture.cmake)
 set_tests_properties(threading.newproject_stall.no_groupless_texture PROPERTIES
-    DEPENDS threading.newproject_stall FIXTURES_REQUIRED threading_home_newproject_stall
+    DEPENDS threading.newproject_stall FIXTURES_REQUIRED "threading_home_newproject_stall;threading_run_newproject_stall"
     LABELS "threading" TIMEOUT 60)
 
 # Same toolchain quarantine as threading.mode: the real binary cannot start
 # under GCC 15's libtsan.
 jah_tsan_blocked(threading.import_soak threading.newproject_stall
                  threading.texture_wait_watchdog)
+set_property(TEST threading.import_soak APPEND PROPERTY FIXTURES_SETUP threading_run_import_soak)   # its inspector's run (item 3 above)
+set_property(TEST threading.newproject_stall APPEND PROPERTY FIXTURES_SETUP threading_run_newproject_stall)   # its inspector's run (item 3 above)
