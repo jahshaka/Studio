@@ -25,7 +25,19 @@ console.log("QUIT_IMPORTED " + (back ? 1 : 0) + " pending " + assets.pendingBake
 // before the pool picked the task up stops the worker between jobs, and there is no "cancelled" line
 // to see. A POLL, not frames: this run is headless (no editor.frame), and the worker runs on its own
 // thread whatever this one does; bounded by a count, never a clock.
+// kMaxPolls (read 6 I4): measured, the bake is already running at the FIRST check (0 polls in 5 runs,
+// 2026-10-10); a poll is two verb calls, 181 us in this Debug build (200,000 in 36.2 s), so 100,000
+// polls end a never-started bake in a named FAIL after ~18 s, well inside the row's 80 s TIMEOUT
+// (the import before it is ~13 s).
+var kMaxPolls = 100000;
 var polls = 0;
-while (assets.bakesRunning() === 0 && assets.pendingBakes() > 0 && polls++ < 50000000) { }
+while (assets.bakesRunning() === 0 && assets.pendingBakes() > 0 && polls < kMaxPolls) ++polls;
+console.log("QUIT_POLLS " + polls);
+// A NAMED RED, never ctest's TIMEOUT (read 6 I4): the bound is a COUNT of polls.
+if (assets.bakesRunning() === 0) {
+    if (assets.pendingBakes() > 0)
+        throw new Error("the bake never started (" + polls + " polls; the worker never picked the job up)");
+    throw new Error("the bake finished before the quit could land inside it (" + polls + " polls)");
+}
 console.log("QUIT_RUNNING " + assets.bakesRunning());
 console.log("QUIT_END");
