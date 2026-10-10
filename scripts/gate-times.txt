@@ -54,6 +54,7 @@ atom.cluster_crack 62.28  quiet n=20
 atom.cluster_cut 39.73  quiet n=19
 atom.coverage_trace 190.97  slot-era quiet n=4 (TC2B item 7's TIMEOUT sample)
 atom.dag_bound 4.67  the run log's atom.dag_bound_target (quiet n=32): the same row, renamed by TESTING-CLEANUP-2B item 5
+atom.dag_bound_target 4.67  the run log's atom.dag_bound_target (quiet n=32): the same row, renamed by TESTING-CLEANUP-2B item 5 (the pre-rename name; the CMake half deletes this line)
 atom.dag_bound_bar 18.70  quiet n=30
 atom.dag_chain_validate 12.07  quiet n=44
 atom.decode_exact 41.09  quiet n=46
