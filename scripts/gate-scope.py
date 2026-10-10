@@ -350,10 +350,12 @@ ALWAYS_ON_CODE = ["app.startup_quiet", "api.contract"]
 # Anchored in the -LE: `shadercache` alone would drop the product-contract cache suites (code
 # review 2026-09-10). `--timeout 120` is ctest's DEFAULT for the rows that set no TIMEOUT — a
 # hang costs 2 min, not 25.
-STAGE_CLOSE_LABELS = {"stage-close", "shadercache-attack"}
-# Never selected by a scoped gate (the shader-cache attack is minutes under ASan). A row selected
-# WITHOUT these labels is a gating row of that gate (ci_gate_check reads this set).
-SCOPE_EXCLUDED_LABELS = {"quiet-box", "shadercache-attack"}
+# (TESTING-CLEANUP-2B item 11: shadercache.container_asan's own attack label — a second way of
+# saying "not in the merge tier" — is retired; the row is a `stage-close` row like every minutes-long one.)
+STAGE_CLOSE_LABELS = {"stage-close"}
+# Never selected by a scoped gate. A row selected WITHOUT these labels is a gating row of that gate
+# (ci_gate_check reads this set).
+SCOPE_EXCLUDED_LABELS = {"quiet-box"}
 # Selected by a scoped gate only through its own subject (STAGE_CLOSE_SUBJECTS, its own test dir);
 # once selected it gates like any row. NOT in SCOPE_EXCLUDED_LABELS on purpose: that set means
 # "never gating", and a subject-selected stage-close row is that change's guard.
@@ -384,6 +386,9 @@ STAGE_CLOSE_SUBJECTS = [
     (r"^(irisgl/engine/(src/(OgreShadow|OgreAtomCasterPass)\.|media/Hlms/.*([Ss]hadow|[Cc]aster))|" + _FORK +
      r"(Components/Hlms/Pbs/src/OgreHlmsPbs\.cpp$|Samples/Media/Hlms/(Common|Pbs)/.*([Ss]hadow|[Cc]aster)))",
      ["gpu.cutout_soak", "shadow.cutout_caster.churn", "shadow.two_sided_caster.churn"]),
+    # THE SHADER CACHE'S CONTAINER UNDER ASAN (TESTING-CLEANUP-2B item 11): the cache container's reader and writer
+    # (a corrupt file must never read past a buffer it sized from a number in the file).
+    (r"^irisgl/engine/src/OgreShaderCache\.", ["shadercache.container_asan"]),
 ]
 
 # TARGET TESTS (PHOTON phase A, A1 §0; the label's ONE definition lives here).

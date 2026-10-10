@@ -12,7 +12,7 @@ scoped gate only when the diff touches its OWN subject.
     3. a change in the row's OWN test directory keeps it; a tests/support helper does not;
     4. a quiet-box row is never selected by a subject rule; no subject rule names one;
     5. the stage-close batch (both printed phases, run through a toy ctest project) selects every
-       `stage-close` / `shadercache-attack` row and no other, the quiet-box and timing ones only in the
+       `stage-close` row and no other, the quiet-box and timing ones only in the
        -j1 phase; the MERGE tier selects none of them;
     6. the retired tier flag is refused, and the refusal names `--stage-close-tier`.
     7. THE STAGE-CLOSE JUDGE (ci_gate_check.py --stage-close <tip>) refuses a push / stage close while a
@@ -134,7 +134,7 @@ def select_cases(source, build):
     scratch = tempfile.mkdtemp(prefix="stage-close-test-")
     try:
         rows = {"sc.long": "stage-close;engine", "sc.quiet": "stage-close;quiet-box", "sc.timing": "stage-close;quiet-box;timing",
-                "sc.attack": "shadercache-attack", "plain": "engine", "push.timing": "engine;timing",
+                "sc.asan": "shadercache;stage-close", "plain": "engine", "push.timing": "engine;timing",
                 "tgt": "photon-target", "q.only": "quiet-box"}
         cm = ["cmake_minimum_required(VERSION 3.20)", "project(toy NONE)", "enable_testing()"]
         for n, l in rows.items():
@@ -152,7 +152,7 @@ def select_cases(source, build):
             out = subprocess.run(argv + ["--show-only=json-v1"], cwd=b, capture_output=True, text=True).stdout
             return {t["name"] for t in json.loads(out or "{}").get("tests", [])}
         p1, p2 = listed(gs.stage_close_tier(4)), listed(gs.stage_close_tier_serial())
-        check(p1 == {"sc.long", "sc.attack"}, "the parallel phase: the minutes-of-one-process rows (%s)" % sorted(p1))
+        check(p1 == {"sc.long", "sc.asan"}, "the parallel phase: the minutes-of-one-process rows (%s)" % sorted(p1))
         check(p2 == {"sc.quiet", "sc.timing"}, "the -j1 phase: the quiet-box and timing stage-close rows (%s)" % sorted(p2))
         check(" -j1 " in gs.stage_close_tier_serial() and not (p1 & p2), "...at -j1, no row in both phases")
         m = listed(gs.merge_tier(4)) | listed(gs.merge_tier_serial())
@@ -232,6 +232,19 @@ def label_cases(source, build):
             pass
     check(len(files) > 100 and not hits, "%d tracked files, none says %r (%s)" % (len(files), OLD, hits[:8]))
 
+    # TESTING-CLEANUP-2B item 11: shadercache.container_asan is a stage-close row; its own retired label is gone.
+    # RED ON BASE (b0a3b1f3c): it carried its own attack label and no `stage-close`.
+    ATTACK = "shadercache" + "-attack"
+    left = []
+    for f in files:
+        if f.endswith(("CMakeLists.txt", ".cmake", ".py")):
+            try:
+                left += ["%s:%d" % (f, k) for k, line in enumerate(open(os.path.join(source, f), errors="replace"), 1)
+                         if ATTACK in line]
+            except (IsADirectoryError, FileNotFoundError):
+                pass
+    check(not left, "the retired label %r is set and read nowhere (%s)" % (ATTACK, left[:6]))
+
     print("2. the shadow casters' split (this build's registrations)")
     sys.path.insert(0, os.path.join(source, "scripts"))
     import gate_graph
@@ -249,6 +262,11 @@ def label_cases(source, build):
             cmd = t.get("command", [])
             check(cmd[-1:] == [runs] and ("stage-close" in labels) == want and "engine" in labels,
                   "%s runs %s process(es), labels %s" % (name, cmd[-1] if cmd else "?", sorted(labels)))
+    t = tests.get("shadercache.container_asan")
+    if t is not None:      # an ASan build registers it (JAHSHAKA_ASAN, every lane tree's configure)
+        labels = set({p["name"]: p["value"] for p in t.get("properties", [])}.get("LABELS", []))
+        check(labels == {"shadercache", "stage-close"}, "shadercache.container_asan is a stage-close row (%s)"
+              % sorted(labels))
 
 
 def main():

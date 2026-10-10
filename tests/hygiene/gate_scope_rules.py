@@ -268,7 +268,7 @@ def main(source, build):
 
     # 9. THE TIER DOC QUOTES THE SCRIPT, NEVER A COPY OF ITS SET (POST-C-FIXES-1).
     # docs/TESTING_GATE.md's MERGE row carried a literal
-    # -LE "^(benchmark|shadercache-attack)$" that went stale the day TARGET_LABELS
+    # -LE "^(benchmark|<the shader-cache attack label>)$" that went stale the day TARGET_LABELS
     # joined the tier (it never named photon-target). The set lives in
     # gate-scope.py alone; the doc names `--merge-tier`, which prints the command.
     import re as _re
@@ -283,7 +283,7 @@ def main(source, build):
           "...and it names `gate-scope.py --merge-tier` as the tier's command")
     code, out, err = run([tool, "--merge-tier", "-j", "2"], source)
     check(code == 0 and out.strip().startswith("ctest -j2 ") and "photon-target" in plain(out)
-          and "stage-close" in plain(out) and "shadercache-attack" in plain(out)
+          and "stage-close" in plain(out)
           and "benchmark" not in plain(out),
           "`--merge-tier -j 2` prints the MERGE tier at -j2 with every excluded label (%r)" % out.strip())
     code, out, err = run([tool, "--files", "docs/TESTING_GATE.md", "--build", build], source)
