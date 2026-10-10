@@ -760,6 +760,35 @@ def main(source, build):
           and pout.returncode == 0 and "vram: waiting" in ow,
           "inside a gate a short admission is NOADMIT at once (exit %d), outside one it waits (exit %d)"
           % (pin_.returncode, pout.returncode))
+    # TESTING-CLEANUP-2C item 2: A GATE ROW OWNS THE CARD. A FOREIGN request (outside the gate) waits at the turnstile for
+    # all three tokens while one is held elsewhere; a gate row asking for ONE token (two are free) is ADMITTED — and one
+    # asking for three (truly short) is NOADMIT naming the foreign request ahead. RED ON 314770a52: the one-token row was
+    # refused "within 0 s (2 free, queued behind another request)" — batch C2 lost four rows that way.
+    relh2, relgw2 = os.path.join(scratch, "h2.release"), os.path.join(scratch, "gw2.release")
+    h2 = spawn([sys.executable, vt, "admit", "1", "--label", "ONE-HELD", "--", "sh", "-c",
+                f"echo HOLDING; while [ ! -e {relh2} ] && kill -0 {os.getpid()} 2>/dev/null; do sleep 0.05; done"], env=benv)
+    wait_line(h2, "HOLDING")
+    fw = spawn([sys.executable, vt, "admit", "3", "--label", "FOREIGN-WAITER", "--", "true"],
+               env=dict(benv, JAH_VRAM_WAIT="900"))
+    wait_line(fw, "vram: waiting")                      # it holds the turnstile while it waits (the head keeps it)
+    gw2 = spawn([sys.executable, vt, "gate", "--label", "GW2", "--", "sh", "-c",
+                 f"while [ ! -e {relgw2} ] && kill -0 {os.getpid()} 2>/dev/null; do sleep 0.05; done"], env=benv)
+    wait_line(gw2, "gate-slot: taken")
+    genv = dict(benv, JAH_VRAM_WAIT="900", JAH_GATE_SLOT_HELD=str(gw2.pid))
+    r1 = subprocess.run([sys.executable, vt, "admit", "1", "--label", "GATE-ROW-1", "--", "true"], capture_output=True,
+                        text=True, env=genv)
+    r3 = subprocess.run([sys.executable, vt, "admit", "3", "--label", "GATE-ROW-3", "--", "true"], capture_output=True,
+                        text=True, env=genv)
+    open(relh2, "w").close(); h2.communicate(); fw.communicate()
+    open(relgw2, "w").close(); gw2.communicate()
+    check(r1.returncode == 0 and "NOADMIT" not in r1.stderr and "foreign request" in r1.stderr
+          and "FOREIGN-WAITER" in r1.stderr,
+          "inside a gate a row with enough free tokens is ADMITTED past a foreign waiter at the turnstile (exit %d: %s)"
+          % (r1.returncode, (r1.stderr.strip().splitlines() or [""])[-1][:120]))
+    check(r3.returncode == 75 and "NOADMIT" in r3.stderr and "ahead at the turnstile: pid" in r3.stderr
+          and "FOREIGN-WAITER" in r3.stderr,
+          "...and a row truly short is NOADMIT naming the foreign request ahead (exit %d: %s)"
+          % (r3.returncode, (r3.stderr.strip().splitlines() or [""])[-1][:160]))
     # TESTING-CLEANUP-2B item 13: THE SLOT IS BY PRIORITY, NOT ARRIVAL (0 smoke, 1 gate, 2 measurement). Counted by the
     # ORDER the commands ran in (each appends its name), never a clock. RED ON BASE (b0a3b1f3c): FIFO — the gate ran
     # third, behind both measurements, and nothing yielded.

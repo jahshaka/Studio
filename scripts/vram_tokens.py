@@ -211,6 +211,28 @@ def lock_key(st):
     return "%02x:%02x:%d" % (os.major(st.st_dev), os.minor(st.st_dev), st.st_ino)
 
 
+def lock_holder(path):
+    """'pid <p> (<label>)' of the process holding `path`'s flock, read from /proc/locks (None: unheld, or no table).
+    The label is the holder's `--label` argument, else its command line (200 chars)."""
+    try:
+        key = lock_key(os.stat(path))
+        with open(os.environ.get("JAH_VRAM_PROC_LOCKS", "/proc/locks")) as f:
+            for line in f:
+                p = line.split()
+                if len(p) >= 6 and p[1] == "FLOCK" and p[5].lower() == key:
+                    pid = p[4]
+                    try:
+                        argv = open("/proc/%s/cmdline" % pid, "rb").read().split(b"\0")
+                        argv = [a.decode(errors="replace") for a in argv if a]
+                    except OSError:
+                        argv = []
+                    lab = argv[argv.index("--label") + 1] if "--label" in argv[:-1] else " ".join(argv)[:200]
+                    return "pid %s (%s)" % (pid, lab or "?")
+    except OSError:
+        return None
+    return None
+
+
 def _free_count(n):
     f = _free_indices(n)
     return None if f is None else len(f)
@@ -250,10 +272,24 @@ def acquire(k, label="", wait=None, log=sys.stderr):
     t0 = time.monotonic()
     deadline = t0 + wait
     waited = False
+    # A GATE ROW OWNS THE CARD (TESTING-CLEANUP-2C item 2): inside a gate (a live slot, no JAH_VRAM_ALL) the admission
+    # tries ONCE — and a FOREIGN request waiting at the turnstile (a sibling's frozen ctest, a hand run outside the gate)
+    # must not refuse it while enough tokens are free: batch C2 lost four rows to "NOADMIT … within 0 s (9 free, queued
+    # behind another request)". So a gate row skips a turnstile someone else holds and scans the tokens itself (each
+    # token is its own flock, all-or-nothing: no double hold); NOADMIT only when tokens are truly short, naming the
+    # foreign request (pid, label) that sat ahead.
+    gate_row = wait <= 0 and not os.environ.get("JAH_VRAM_ALL") and bool(os.environ.get("JAH_GATE_SLOT_HELD")) \
+        and slot_held_valid()
+    ahead = None
     turnstile = _open(os.path.join(d, "turnstile"))
     try:
         # 1. THE TURNSTILE: one acquirer scans at a time, and the head of the queue keeps it.
         while not _try_lock(turnstile):
+            if gate_row:
+                ahead = lock_holder(os.path.join(d, "turnstile")) or "a request (unnamed)"
+                _say(log, "vram: a gate row owns the card — the turnstile is held by a foreign request (%s); "
+                     "scanning the tokens without it%s" % (ahead, (" — " + label) if label else ""))
+                break
             if not waited:
                 f = _free_count(n)
                 _say(log, "vram: waiting for %d tokens, %s free (queued behind another request)%s"
@@ -294,7 +330,9 @@ def acquire(k, label="", wait=None, log=sys.stderr):
                 waited = True
             if time.monotonic() > deadline:
                 raise AdmitTimeout("NOADMIT vram: no admission for %d tokens within %.0f s (%d of %d free at "
-                                   "the last look)%s" % (k, wait, free, n, (" — " + label) if label else ""))
+                                   "the last look)%s%s" % (k, wait, free, n,
+                                                           ("; ahead at the turnstile: " + ahead) if ahead else "",
+                                                           (" — " + label) if label else ""))
             time.sleep(POLL_S)
     finally:
         os.close(turnstile)
