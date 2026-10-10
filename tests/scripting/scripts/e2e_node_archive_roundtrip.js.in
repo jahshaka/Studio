@@ -30,6 +30,9 @@ var file = app.dataRoot().root + "/node_archive_roundtrip.jbundle";
 var source = project.create("archive source " + Date.now());
 var placed = assets.importAndPlace(FIXTURE);
 assert(placed.nodeId && placed.assetGuid, "a textured model placed: " + J(placed));
+// (its source CONTENT, read while the row exists — the sweep below removes every holder of it)
+var sourceOid = assets.importSettings(placed.assetGuid).sourceOid;
+assert(typeof sourceOid === "string" && sourceOid.length > 10, "the model's source content: " + sourceOid);
 var sourceRows = assets.list({ scope: "project" }).filter(function (r) {
     return r.type !== "object" || r.guid === placed.assetGuid;
 }).filter(function (r) { return r.name !== "Tile.png"; });
@@ -54,13 +57,54 @@ sourceRows.forEach(function (row) {
 sourceRows.forEach(function (row) {
     assert(gone(row.guid), "the library no longer holds " + row.type + " '" + row.name + "'");
 });
+// THE LIBRARY IS EMPTY OF THE CONTENT, not only of this arm's rows (TC2-BUNDLE-NO-BAKE): a mesh
+// bake is keyed on the CONTENT and its import settings, so ANY other library row over the same
+// .glb — an earlier arm of this pool imported the same fixture — keeps a fresh bake in the store
+// and a re-import that baked nothing still placed with geometry. That is how the pool hid the
+// defect (red 3/3 solo, green in the pool). Every row whose source is this content goes too.
+function holdersOfContent() {
+    return assets.list({ scope: "store", type: "object" }).filter(function (row) {
+        try { return assets.importSettings(row.guid).sourceOid === sourceOid; } catch (e) { return false; }
+    });
+}
+holdersOfContent().forEach(function (row) {
+    assets.remove(row.guid, { keepShared: false, force: true });
+});
+assert(holdersOfContent().length === 0, "no library row holds the model's content any more");
 var gc = assets.gc({ dryRun: false });
 console.log("gc -> " + J(gc).slice(0, 400));
 
 // ---- the import: the node's assets and the node come back ---------------------------
 project.create("archive target " + Date.now());
+// THE IMPORT BAKES WHAT IT BROUGHT — THIS row's own bake (assets.bakeState), never a library-wide
+// count: a count's delta reads 0 when the sweep commits some other stale row meanwhile (-1 +1).
+// THE IMPORT DOES NOT WAIT FOR ITS BAKE (STAGE-CLOSE-TRIAGE-1 F3) and the node is placed at once:
+// its geometry arrives when the bake LANDS (SceneEditService's landed listener -> refreshAssetMeshes).
+// The commit is HELD (assets.holdBakes) so the placement is made before the landing on every box
+// (addToScene pumps this thread, and an unheld bake of this small model lands inside it).
+assert(assets.holdBakes(true) === true, "the bake commit is held");
+/// Every row the library lists, the store's and the open project's.
+function everyRow() {
+    var seen = {}, out = [];
+    ["store", "project"].forEach(function (scope) {
+        assets.list({ scope: scope }).forEach(function (r) { if (!seen[r.guid]) { seen[r.guid] = true; out.push(r); } });
+    });
+    return out;
+}
+var rowsBefore = {};
+everyRow().forEach(function (r) { rowsBefore[r.guid] = true; });
 var guid = assets.import(file);
+// THE MODEL ROWS THIS IMPORT LANDED — each one's OWN bake is the claim (assets.bakeState), never a
+// library-wide count. (The object tile names its model through a member row of its own.)
+var modelRows = everyRow().filter(function (r) {
+    return !rowsBefore[r.guid] && assets.bakeState(r.guid).source !== "";
+});
+assert(modelRows.length >= 1, "the import landed its model row(s): " + J(modelRows.map(function (r) { return r.type + " " + r.name; })));
+modelRows.forEach(function (r) {
+    assert(assets.bakeState(r.guid).pending === true, "the " + r.type + " row '" + r.name + "' has its bake pending (held)");
+});
 assert(guid && guid.length > 10, "assets.import(the node's archive) -> " + guid);
+assert(assets.pendingBakes() > 0, "the import returned before its model's bake (" + assets.pendingBakes() + " in flight)");
 var meta = assets.metadata(guid);
 assert(meta.type === "object", "the file lands as ONE object tile (" + meta.type + ")");
 textures.forEach(function (t) {
@@ -69,6 +113,21 @@ textures.forEach(function (t) {
 
 var nodeId = assets.addToScene(guid, { position: { x: -2, y: 3, z: 0 } });
 assert(nodeId && nodeId.length > 10, "assets.addToScene(the imported tile) -> " + nodeId);
+editor.frame(3, 1 / 60);
+assert(assets.pendingBakes() > 0, "the bake is still pending (held)");
+var heldBounds = scene.bounds({ nodes: [nodeId] });
+assert(heldBounds.nodes === 0, "the node stands with NO geometry before the landing: " + J(heldBounds));
+assets.holdBakes(false);
+var landGuard = 0;
+while (assets.pendingBakes() > 0 && landGuard++ < 600) editor.frame(1, 1 / 60);
+assert(assets.pendingBakes() === 0, "the import's bake landed (" + assets.pendingBakes() + " still in flight)");
+var landedBounds = scene.bounds({ nodes: [nodeId] });
+assert(landedBounds.nodes >= 1, "the landing swapped the geometry into the PLACED node: " + J(landedBounds));
+modelRows.forEach(function (r) {
+    var state = assets.bakeState(r.guid);
+    assert(state.fresh === true && state.pending === false,
+           "the import baked the model it brought (the " + r.type + " row '" + r.name + "': " + J(state) + ")");
+});
 var meshId = null;
 scene.nodes().forEach(function (n) {
     if (meshId === null && n.type === "mesh" && (n.id === nodeId || n.parent === nodeId)) meshId = n.id;

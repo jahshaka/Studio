@@ -42,6 +42,7 @@ For more information see the LICENSE file
 #include "services/materialbundle.h"
 #include "services/assettray.h"
 #include "services/assetstorepaths.h"
+#include "services/testtier.h"
 #include "services/meshbakestore.h"
 #include "irisgl/document/assets/mesh.h"
 #include "irisgl/document/assets/vertexbuffer.h"
@@ -498,6 +499,31 @@ QVector<VerbInfo> AssetsApi::verbs() const
           "DRY RUN BY DEFAULT: reports how many assets would be baked without writing anything. "
           "Assets are baked lazily on first open too, so this is the bulk/explicit form — the button beside "
           "Preferences \u2192 Assets\u2019 storage cleanup.",
+          Needs::Document },
+        { "pendingBakes", "assets.pendingBakes() -> number",
+          "How many model bakes an import started and has not yet committed. An import that lands catalog "
+          "rows (a share file through assets.import, a paste from another library) RETURNS BEFORE ITS BAKE: "
+          "the bake is built on a worker and committed when it lands, and a node placed meanwhile shows its "
+          "geometry then. 0 = every import's geometry is in. Wait in frames (editor.frame) until it reads 0.",
+          Needs::Document },
+        { "bakesRunning", "assets.bakesRunning() -> number",
+          "How many of the import bakes assets.pendingBakes counts a worker is baking RIGHT NOW (it has started "
+          "the job). A suite that ends its run DURING a bake (the quit-cancels-the-bake row) waits in frames "
+          "until this reads 1 or more, so its quit lands inside the job rather than before the worker began it.",
+          Needs::Document },
+        { "bakeState", "assets.bakeState(guid) -> {source, fresh, pending}",
+          "THIS ROW's model bake: `source` the store file the row's content is, `fresh` true when the row has "
+          "a current bake under its own import settings (the bake an open reads), `pending` true while an "
+          "import's bake of that file is in flight (assets.pendingBakes). Per row, never a library count: an "
+          "import that baked nothing reads fresh=false here whatever the rest of the library holds.",
+          Needs::Document },
+        { "holdBakes", "assets.holdBakes(on) -> bool",
+          "A TEST HOLD on the import bakes assets.pendingBakes counts: while on, a bake that finished on its "
+          "worker is NOT committed (it stays pending, its nodes stay without geometry); holdBakes(false) commits "
+          "everything held, in order. For a suite that acts inside the window between a placement and its "
+          "landing (a save, a reopen) without racing the worker. Returns the hold's new state. REFUSED (throws) "
+          "outside a test process — one booted with a test tier — and released by the pool runner after "
+          "every arm.",
           Needs::Document },
     };
 }
@@ -2191,6 +2217,46 @@ QVariantMap AssetsApi::reimport(const QString &guid, const QVariantMap &options)
     out["swappedNodes"] = swapped;
     if (host.isEngineReady()) refreshThumbnail(guid);
     return out;
+}
+
+int AssetsApi::pendingBakes()
+{
+    return MeshBakeStore::pendingBakeCount();
+}
+
+int AssetsApi::bakesRunning()
+{
+    return MeshBakeStore::runningBakeCount();
+}
+
+QVariantMap AssetsApi::bakeState(const QString &guid)
+{
+    QVariantMap out;
+    if (!host.db) { fail("assets: not available in this session"); return out; }
+    if (host.db->fetchAsset(guid).guid.isEmpty()) {
+        fail(QStringLiteral("assets.bakeState: no asset with guid '%1'").arg(guid));
+        return out;
+    }
+    QSqlDatabase conn = QSqlDatabase::database();
+    const QString root = AssetStorePaths::root();
+    const QString source = MeshBakeStore::modelSourceFor(conn, root, guid);
+    out.insert(QStringLiteral("source"), source);
+    out.insert(QStringLiteral("fresh"), !source.isEmpty() && MeshBakeStore::isFresh(conn, root, source, guid));
+    out.insert(QStringLiteral("pending"), !source.isEmpty() && MeshBakeStore::bakePending(source));
+    return out;
+}
+
+bool AssetsApi::holdBakes(bool on)
+{
+    // A TEST INSTRUMENT, REFUSED OUTSIDE A TEST PROCESS (read 4): a hold left on stalls every import's
+    // geometry for the session. Only a process booted with a test tier (--test-tier /
+    // JAHSHAKA_TEST_TIER, which every ctest row that boots the app declares) may hold the bakes.
+    if (!testtier::active())
+        return fail(QStringLiteral("assets.holdBakes: a test instrument — only a process booted with a "
+                                   "test tier (--test-tier / %1) may hold the import bakes")
+                        .arg(QLatin1String(testtier::kEnvVar)));
+    MeshBakeStore::holdCommits(on);
+    return on;
 }
 
 QVariantMap AssetsApi::bakeAll(const QVariantMap &options)

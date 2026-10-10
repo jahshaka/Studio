@@ -366,10 +366,12 @@ mcp.e2e 55.52  quiet n=50
 mcp.e2e.fresh_home 0.01  quiet n=59
 meshbake.archive_bakes 53.08  quiet n=43
 meshbake.archive_bakes.fresh_home 0.01  quiet n=4
+meshbake.async_landing 0.05  STAGE-CLOSE-TRIAGE-1 dev runs (4 solo, median 0.05, 2026-10-10)
 meshbake.cards 0.71  quiet n=32
 meshbake.cards.timing 1.25  all n=2
 meshbake.hemisphere_winding 0.26  quiet n=32
 meshbake.primitives_baked 0.93  quiet n=32
+meshbake.quit_during_bake 13.31  STAGE-CLOSE-TRIAGE-1 dev runs (4 solo, median 13.31, 2026-10-10)
 meshbake.rebake_generation 0.06  quiet n=32
 meshbake.roundtrip 0.65  quiet n=32
 meshbake.sdf 0.97  quiet n=32
@@ -427,6 +429,8 @@ pool.assets_import::bundle_export_material 0.77  quiet n=53
 pool.assets_import::bundle_export_pack 0.94  quiet n=52
 pool.assets_import::bundle_export_sky 0.88  quiet n=8
 pool.assets_import::bundle_export_texture 1.04  quiet n=53
+pool.assets_import::bundle_landing 1.62  STAGE-CLOSE-TRIAGE-1 median of 3 tip pool runs at 26aa007fc (1599 / 1618 / 1646 ms; spikes/stage-close-triage-1/audit5/pool_arm{1,2,3}.log, 2026-10-10)
+pool.assets_import::bundle_pending_clips 1.19  STAGE-CLOSE-TRIAGE-1 median of 3 tip pool runs at 26aa007fc (1178 / 1190 / 1220 ms; spikes/stage-close-triage-1/audit5/pool_arm{1,2,3}.log, 2026-10-10)
 pool.assets_import::desktops 4.14  quiet n=50
 pool.assets_import::import_dialog 0.80  quiet n=53
 pool.assets_import::import_render 1.53  quiet n=52
@@ -504,6 +508,7 @@ pool.doc_assets::export_raw 0.11  quiet n=38
 pool.doc_assets::export_web 0.15  quiet n=38
 pool.doc_assets::folders 0.22  quiet n=37
 pool.doc_assets::glb_textures 0.19  quiet n=38
+pool.doc_assets::hold_refused 0.01  STAGE-CLOSE-TRIAGE-1 dev run (2026-10-10)
 pool.doc_assets::image_material 0.31  quiet n=37
 pool.doc_assets::import_pipeline 0.05  quiet n=39
 pool.doc_assets::import_settings 0.17  quiet n=38
@@ -664,6 +669,7 @@ scripting.e2e.assets_scope 8.33  quiet n=37
 scripting.e2e.assets_scope.fresh_home 0.00  quiet n=40
 scripting.e2e.clip_ref 7.19  quiet n=23
 scripting.e2e.clip_ref.fresh_home 0.01  quiet n=13
+scripting.e2e.clipboard_budget 13.35  STAGE-CLOSE-TRIAGE-1 round 8: n=4 solo on :72 (13.33 / 13.35 / 13.50 / 13.86 s, 2026-10-11)
 scripting.e2e.editor_controls.timing 60.35  all n=2
 scripting.e2e.lattice_placement 124.62  quiet n=45
 scripting.e2e.material_bundle 10.06  quiet n=39

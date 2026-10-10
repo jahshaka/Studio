@@ -63,7 +63,11 @@ void restoreStatic(const iris::SceneNodePtr &node, const StaticState &state)
         // TOP-DOWN, which the pre-order walk already is: a node can only be made
         // static once its parent is (rule 2), and this is the order that lets a
         // whole restored branch come back rather than only its root.
-        n->_applyStaticHint(state.hints[i]);
+        //
+        // A HINT THE NODE CAN NO LONGER HOLD is restored as dynamic, not asked for: a mesh node that
+        // was captured static and comes back with no mesh (its bake not landed yet) is ineligible,
+        // and asking would log the lights/particles refusal text about a node that is neither.
+        n->_applyStaticHint(state.hints[i] && n->isStaticEligible());
         ++i;
     });
 }

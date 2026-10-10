@@ -193,6 +193,34 @@ set_tests_properties(meshbake.rebake_generation PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen;HOME=${_bake_home}/meshbake.rebake_generation;JAHSHAKA_DATA_ROOT=${_bake_home}/meshbake.rebake_generation/.local/share/Jahshaka"
     TIMEOUT 120 LABELS "meshbake")
 
+# meshbake.async_landing — the import bakes' landing in process (STAGE-CLOSE-TRIAGE-1 rounds 3-4):
+# F5 the cancel points, F6 every row over the baked file, F7 a dropped landing calls back with its
+# reason, F8 a landing into a moved store is refused.
+add_test(NAME meshbake.async_landing COMMAND sh "${JAH_FRESH_HOME}" "${_bake_home}/meshbake.async_landing" -- $<TARGET_FILE:test_mesh_bake> --async-landing
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+# TIMEOUT 120: the policy (tests/CMakeLists.txt): max(6 x measured, the 120 s floor) — the sample n=4,
+# 0.04 / 0.04 / 0.05 / 0.05 s (median 0.05 s), 2026-10-10 solo, d8c9a04+: 6x = 0.3 s, under the floor.
+set_tests_properties(meshbake.async_landing PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen;HOME=${_bake_home}/meshbake.async_landing;JAHSHAKA_DATA_ROOT=${_bake_home}/meshbake.async_landing/.local/share/Jahshaka"
+    TIMEOUT 120 LABELS "meshbake")
+
+# meshbake.quit_during_bake — F5: a run that ends with an import's bake in flight cancels it inside
+# its job and exits 0 (bake_quit.sh; the app, headless, its own data root).
+set(_quit_home ${CMAKE_CURRENT_BINARY_DIR}/quit-during-bake-home)
+file(MAKE_DIRECTORY ${_quit_home}/run)
+add_test(NAME meshbake.quit_during_bake
+         COMMAND sh "${JAH_FRESH_HOME}" --warm "${_quit_home}" --
+                 bash "${CMAKE_CURRENT_SOURCE_DIR}/bake_quit.sh" "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" --headless
+         WORKING_DIRECTORY ${_quit_home}/run)
+# TIMEOUT 120: the policy (tests/CMakeLists.txt): max(6 x measured, the 120 s floor) — the sample n=4,
+# 13.40 / 13.21 / 13.36 / 13.31 s (median 13.3 s), 2026-10-10 solo on :72 (slot-era runs since: 13.24 s):
+# 6x = 80 s, under the floor. Most of it is the dense model's SYNCHRONOUS import bake before the claim.
+set_tests_properties(meshbake.quit_during_bake PROPERTIES
+    ENVIRONMENT "HOME=${_quit_home}" TIMEOUT 120 LABELS "meshbake")
+set_property(TEST meshbake.quit_during_bake APPEND PROPERTY ENVIRONMENT_MODIFICATION
+             "JAHSHAKA_DATA_ROOT=unset:")
+jah_no_display(meshbake.quit_during_bake)
+
 add_test(NAME meshbake.hemisphere_winding COMMAND sh "${JAH_FRESH_HOME}" "${_bake_home}/meshbake.hemisphere_winding" -- $<TARGET_FILE:test_mesh_bake> --hemisphere-winding
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(meshbake.hemisphere_winding PROPERTIES
@@ -213,6 +241,7 @@ jah_no_display(bake.determinism)
 
 jah_no_display(meshbake.primitives_baked)
 jah_no_display(meshbake.rebake_generation)
+jah_no_display(meshbake.async_landing)   # in-process, offscreen, no engine (read 6 delivery: source.gpu_rows_closure)
 jah_no_display(meshbake.hemisphere_winding)
 
 jah_no_display(meshbake.roundtrip)

@@ -308,11 +308,12 @@ bool VideoRecorder::start(const Options &options, QString *why)
 
     // ---- the encoder: H.264 into MPEG-4, or no recording at all --------------
     QMediaFormat format(QMediaFormat::MPEG4);
-    // QT'S ENCODER PROBE: its FIRST call in a process enumerates the encoders
-    // (~0.7 s, measured in VIDEO-REC-2 — the "585 ms first click" of
-    // VIDEO-REC-1). Made by the process's first project open/create, behind its
-    // progress (services/encoderprobe.h; never at boot: app.startup_quiet's Lane
-    // 6a guard), so here it is a lookup. Timed: `probeMs`.
+    // QT'S ENCODER PROBE: its FIRST call in a process constructs the FFmpeg
+    // backend. Left to itself the backend CHECKS a vdpau/cuda/vaapi/qsv/vulkan
+    // context each (~0.7 s measured, SC1-NEWPROJECT-STALL); the app names the one
+    // backend from the engine's adapter (services/mediahardware.h), so it checks
+    // nothing (~20-35 ms). Made HERE, by the session's first recording request —
+    // a project open/create is media-free (app.startup_quiet guards it). Timed: `probeMs`.
     QElapsedTimer probeTimer;
     probeTimer.start();
     const bool haveH264 = options.fault != QLatin1String("noEncoder") &&
@@ -749,6 +750,9 @@ QVariantMap VideoRecorder::status() const
     if (encoderName.isEmpty() && mState == State::Recording) encoderName = spyName(&hardware);
     m["encoder"] = encoderName;
     m["hardwareEncoder"] = hardware;
+    // The hardware backend the app named for Qt Multimedia from the engine's adapter
+    // (services/mediahardware.h); empty when none was named.
+    m["hardwareBackend"] = qEnvironmentVariable("QT_FFMPEG_ENCODING_HW_DEVICE_TYPES");
     m["width"] = kWidth;
     m["height"] = kHeight;
     m["fps"] = kFps;

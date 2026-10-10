@@ -82,14 +82,16 @@ Database *ShellLifecycle::openLibrary()
 		mDb->createAllTables();
 	}
 	// THE TILE CACHE READS BY GUID (D11-LIBRARY-SCALE): listings carry no
-	// thumbnail, so the cache's batches read the pictures a view paints from
-	// here, on this thread; a thumbnail written anywhere drops the cached tile.
+	// thumbnail, so the cache's batches read the pictures a view paints — ON ITS
+	// POOL, through a read connection of their own to this file (TC2-LIBRARY-
+	// CREATE-READ); a thumbnail written anywhere drops the cached tile.
 	Database *db = mDb;
-	TileCache::instance().setSource(TileCache::Kind::Asset, [db](const QStringList &guids) {
-		return db ? db->fetchAssetThumbnailBytes(guids) : QHash<QString, QByteArray>();
+	const QString libraryFile = mDb->filePath();
+	TileCache::instance().setSource(TileCache::Kind::Asset, [libraryFile](const QStringList &guids) {
+		return Database::readThumbnailBytes(libraryFile, Database::ThumbnailTable::Assets, guids);
 	});
-	TileCache::instance().setSource(TileCache::Kind::Project, [db](const QStringList &guids) {
-		return db ? db->fetchProjectThumbnailBytes(guids) : QHash<QString, QByteArray>();
+	TileCache::instance().setSource(TileCache::Kind::Project, [libraryFile](const QStringList &guids) {
+		return Database::readThumbnailBytes(libraryFile, Database::ThumbnailTable::Projects, guids);
 	});
 	Database::setAssetThumbnailWritten([](const QString &guid) {
 		TileCache::instance().invalidate(TileCache::Kind::Asset, guid);

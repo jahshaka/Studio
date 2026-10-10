@@ -10,6 +10,9 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "data/database/database.h"
+#include <QMutex>
+#include <QMutexLocker>
+#include <atomic>
 #include "data/database/casschema.h"
 #include "data/constants.h"
 #include "irisgl/irisglfwd.h"
@@ -284,7 +287,10 @@ bool isWriteStatement(const QString &sql)
 namespace {
 struct QueryLogState
 {
-    bool on = false;
+    // ANY THREAD NOTES (TC2-LIBRARY-CREATE-READ): the tile cache's by-guid reads run on its pool
+    // (Database::readThumbnailBytes), so the log is guarded.
+    std::atomic<bool> on { false };
+    QMutex lock;
     int statements = 0;
     QHash<QString, Database::QueryLogEntry> entries;   // by name + sql
 };
@@ -303,6 +309,7 @@ Database::GuidHook &thumbnailWrittenHook()
 void Database::setQueryLog(bool on)
 {
     QueryLogState &log = queryLogState();
+    QMutexLocker locked(&log.lock);
     log.on = on;
     if (on) { log.statements = 0; log.entries.clear(); }
 }
@@ -334,6 +341,7 @@ static void noteQuery(const QString &name, const QString &sql)
 {
     QueryLogState &log = queryLogState();
     if (!log.on) return;
+    QMutexLocker locked(&log.lock);
     ++log.statements;
     const QString key = name + QLatin1Char('\x1f') + sql;
     auto it = log.entries.find(key);
@@ -349,11 +357,17 @@ static void noteQuery(const QString &name, const QString &sql)
 
 QVector<Database::QueryLogEntry> Database::queryLogEntries()
 {
-    const auto &entries = queryLogState().entries;
-    return QVector<QueryLogEntry>(entries.cbegin(), entries.cend());
+    QueryLogState &log = queryLogState();
+    QMutexLocker locked(&log.lock);
+    return QVector<QueryLogEntry>(log.entries.cbegin(), log.entries.cend());
 }
 
-int Database::queryLogStatements() { return queryLogState().statements; }
+int Database::queryLogStatements()
+{
+    QueryLogState &log = queryLogState();
+    QMutexLocker locked(&log.lock);
+    return log.statements;
+}
 
 void Database::setAssetThumbnailWritten(GuidHook hook) { thumbnailWrittenHook() = std::move(hook); }
 
@@ -1024,7 +1038,14 @@ void Database::createIndexes()
         "CREATE INDEX IF NOT EXISTS idx_assets_project_guid ON assets (project_guid)",
         "CREATE INDEX IF NOT EXISTS idx_assets_view_filter_listed ON assets (view_filter, listed)",
         "CREATE INDEX IF NOT EXISTS idx_assets_collection ON assets (collection)",
-        "CREATE INDEX IF NOT EXISTS idx_projects_desktop ON projects (desktop)",
+        // THE DESKTOP'S TILE COLUMNS, COVERING (TC2-LIBRARY-CREATE-READ, 2026-10-10; replaces the
+        // bare `desktop` index): a project row carries its scene and its ~190 KB thumbnail, so each
+        // row fills a leaf page of its own and ANY scan of the table — the tile listing, the name
+        // rule's `WHERE guid IS NOT ?` — read one 4 KB page per project (2 MB a statement at 500
+        // projects, measured). Every such listing (kProjectTileColumns, nextFreeProjectName,
+        // fetchProjectGuids) is answered from this index alone: 66 KB.
+        "CREATE INDEX IF NOT EXISTS idx_projects_tiles ON projects "
+        "(desktop, last_written, name, guid, desktop_x, desktop_y, slider_row, slider_index)",
     };
     for (const char *statement : kIndexes) {
         QSqlQuery index;
@@ -1429,9 +1450,45 @@ static QHash<QString, QByteArray> fetchThumbnailBytes(Database *db, const char *
     return out;
 }
 
-QHash<QString, QByteArray> Database::fetchAssetThumbnailBytes(const QStringList &guids)
+QHash<QString, QByteArray> Database::readThumbnailBytes(const QString &dbPath, ThumbnailTable table,
+                                                       const QStringList &guids)
 {
-    return fetchThumbnailBytes(this, "assets", guids, QStringLiteral("fetchAssetThumbnailBytes"));
+    QHash<QString, QByteArray> out;
+    if (guids.isEmpty() || dbPath.isEmpty()) return out;
+    const bool projects = table == ThumbnailTable::Projects;
+    const QString name = projects ? QStringLiteral("fetchProjectThumbnailBytes")
+                                  : QStringLiteral("fetchAssetThumbnailBytes");
+    {
+        ScopedConnection scoped(Constants::DB_DRIVER, QStringLiteral("TileRead"), dbPath);
+        scoped.db.setConnectOptions(QStringLiteral("QSQLITE_OPEN_READONLY;QSQLITE_BUSY_TIMEOUT=5000"));
+        if (!scoped.db.open()) {
+            irisLog(QStringLiteral("tile read: cannot open %1 (%2)").arg(dbPath, scoped.db.lastError().text()));
+            return out;
+        }
+        QStringList marks;
+        marks.reserve(guids.size());
+        for (int i = 0; i < guids.size(); ++i) marks << QStringLiteral("?");
+        QSqlQuery query(scoped.db);
+        query.prepare(QStringLiteral("SELECT guid, thumbnail FROM %1 WHERE guid IN (%2)")
+                          .arg(projects ? QStringLiteral("projects") : QStringLiteral("assets"),
+                               marks.join(QLatin1Char(','))));
+        for (const QString &guid : guids) query.addBindValue(guid);
+        noteQuery(name, query.lastQuery());
+        if (!query.exec()) {
+            irisLog(QStringLiteral("tile read: %1 failed (%2)").arg(name, query.lastError().text()));
+            return out;
+        }
+        while (query.next()) {
+            const QByteArray bytes = query.value(1).toByteArray();
+            if (!bytes.isEmpty()) out.insert(query.value(0).toString(), bytes);
+        }
+    }
+    return out;
+}
+
+QString Database::filePath() const
+{
+    return db.databaseName();
 }
 
 QHash<QString, QByteArray> Database::fetchProjectThumbnailBytes(const QStringList &guids)
@@ -2225,24 +2282,6 @@ AssetRecord Database::fetchAsset(const QString &guid)
     }
 
     return AssetRecord();
-}
-
-QStringList Database::fetchLibraryAssetGuids()
-{
-    QSqlQuery query;
-    // THE USER'S STORAGES: Assets, the Materials module's, the Avatar module's.
-    // LIBRARY LISTING: unlisted rows are excluded. This feeds the store's
-    // "missing content" count, which is a report about the LIBRARY the user
-    // can see; an unlisted row's content is the pinning project's business.
-    query.prepare("SELECT guid FROM assets WHERE view_filter IN (?, ?, ?) AND listed = 1");
-    query.addBindValue(static_cast<int>(assethome::StoredAssets));
-    query.addBindValue(static_cast<int>(assethome::StoredMaterialsLibrary));
-    query.addBindValue(static_cast<int>(assethome::StoredAvatarLibrary));
-    executeAndCheckQuery(query, "FetchLibraryAssetGuids");
-
-    QStringList guids;
-    while (query.next()) guids << query.value(0).toString();
-    return guids;
 }
 
 QVector<Database::AssetThumbnailState> Database::fetchAssetThumbnailStates(bool missingOnly)
@@ -3525,18 +3564,33 @@ static QString inMarks(int n)
     return marks.join(QLatin1Char(','));
 }
 
-QHash<QString, QStringList> Database::fetchDependencyEdges(const QStringList &dependers)
+QHash<QString, QStringList> Database::fetchDependencyEdges(const QStringList &dependers,
+                                                         bool withMemberObjects)
 {
     // The same edges fetchAssetGUIDAndDependencies answers one depender at a
     // time — dependees that are catalog rows — in each depender's own order.
+    // With `withMemberObjects`, a UNION ALL appends each Mesh member's Object
+    // row after the dependencies (SQLite returns the first SELECT's rows first),
+    // so a closure walk stays ONE statement per level (D11-LIBRARY-SCALE §3.6).
     QHash<QString, QStringList> out;
     for (int at = 0; at < dependers.size(); at += kInChunk) {
         const QStringList chunk = dependers.mid(at, kInChunk);
         QSqlQuery query;
-        query.prepare(QStringLiteral("SELECT D.depender, assets.guid FROM dependencies D "
+        QString sql = QStringLiteral("SELECT D.depender, assets.guid FROM dependencies D "
                                      "INNER JOIN assets ON D.dependee = assets.guid "
-                                     "WHERE D.depender IN (%1)").arg(inMarks(int(chunk.size()))));
+                                     "WHERE D.depender IN (%1)").arg(inMarks(int(chunk.size())));
+        if (withMemberObjects)
+            sql += QStringLiteral(" UNION ALL SELECT M.guid, M.parent FROM assets M "
+                                  "INNER JOIN assets O ON O.guid = M.parent "
+                                  "WHERE M.guid IN (%1) AND M.type = ? AND O.type = ?")
+                       .arg(inMarks(int(chunk.size())));
+        query.prepare(sql);
         for (const QString &guid : chunk) query.addBindValue(guid);
+        if (withMemberObjects) {
+            for (const QString &guid : chunk) query.addBindValue(guid);
+            query.addBindValue(static_cast<int>(ModelTypes::Mesh));
+            query.addBindValue(static_cast<int>(ModelTypes::Object));
+        }
         if (!executeAndCheckQuery(query, "fetchDependencyEdges")) continue;
         while (query.next()) out[query.value(0).toString()].append(query.value(1).toString());
     }

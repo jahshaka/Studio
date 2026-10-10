@@ -38,7 +38,10 @@ add_executable(test_asset_delete test_asset_delete.cpp
     ${CMAKE_SOURCE_DIR}/src/services/vrworld.cpp
     ${CMAKE_SOURCE_DIR}/src/io/assetiobase.cpp
     ${CMAKE_SOURCE_DIR}/src/data/constants.cpp
-    ${CMAKE_SOURCE_DIR}/src/data/settingsstore.cpp)
+    ${CMAKE_SOURCE_DIR}/src/data/settingsstore.cpp
+    # the store's status: the missing-content report's library predicate (case 10)
+    ${CMAKE_SOURCE_DIR}/src/services/assetstore.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/settingsmanager.cpp)
 set_target_properties(test_asset_delete PROPERTIES AUTOMOC ON)
 target_include_directories(test_asset_delete PRIVATE
     ${CMAKE_SOURCE_DIR}

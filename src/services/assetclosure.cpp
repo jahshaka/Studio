@@ -46,7 +46,14 @@ QStringList expandThroughCatalog(const QStringList &seeds, Database *db)
     while (!frontier.isEmpty()) {
         const QStringList level = frontier;
         frontier.clear();
-        const QHash<QString, QStringList> edges = db->fetchDependencyEdges(level);
+        // THE MEMBER-TO-OBJECT EDGE (STAGE-CLOSE-TRIAGE-1 reads 4-5): a model's Mesh member keeps its
+        // import record on its OBJECT row (MeshBakeStore::importRecordForGuid walks `parent`), and a
+        // node names the member; the dependency table points object -> members only, so a closure
+        // seeded from a node lost the record and a paste re-baked the member at identity. The
+        // Object rides — for a Mesh member ONLY: a model's texture rows hang under the Object too,
+        // and a texture a material borrowed from model A must not drag model A into every copy.
+        // In the level's one statement (fetchDependencyEdges' withMemberObjects).
+        const QHash<QString, QStringList> edges = db->fetchDependencyEdges(level, true);
         for (const QString &guid : level) {
             // Self first, as fetchAssetGUIDAndDependencies(guid) answered.
             push(guid);
@@ -99,6 +106,9 @@ QMap<QString, clipboardformat::ClipAsset> describe(const QStringList &guids, Dat
     for (const AssetRecord &row : db->fetchAssetHeaders(wanted)) headers.insert(row.guid, row);
     const QHash<QString, QStringList> edges = db->fetchDependencyEdges(wanted);
 
+    // ---- ONE PASS, in walk order. THE ROW'S BLOB IS THE ROW (round 8, the lead's rule): never budgeted,
+    // it always travels — a model of tens of thousands of parts copies like any other. The budget bounds
+    // the FILE payloads only; a file that does not fit goes by reference (its oid).
     for (const QString &guid : wanted) {
         const auto found = headers.constFind(guid);
         if (found == headers.constEnd()) continue;      // a guid this catalog does not know
@@ -111,9 +121,9 @@ QMap<QString, clipboardformat::ClipAsset> describe(const QStringList &guids, Dat
         asset.type = scriptmod::assetTypeName(record.type);
         asset.parent = record.parent;
         asset.dependencies = edges.value(guid);
+        bool anyInlined = false, anyReferenced = false;
         if (options.includeRowBlobs) db->fetchAssetRowBlobs(guid, &asset.blob, &asset.properties);
 
-        bool anyInlined = false, anyReferenced = false;
         for (const auto &entry : content.filesForAsset(guid, record.name)) {
             clipboardformat::ClipFile file;
             file.role = entry.role;

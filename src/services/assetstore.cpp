@@ -24,6 +24,7 @@ For more information see the LICENSE file
 #include "data/settingsmanager.h"
 #include "irisgl/core/logger.h"
 #include "services/assetcas.h"
+#include "data/assethomekind.h"
 #include "services/assetstorepaths.h"
 #include "services/filewriteatomic.h"
 
@@ -68,51 +69,67 @@ bool AssetStoreService::online()
     return QDir(AssetStorePaths::root()).exists();
 }
 
-int AssetStoreService::missingCount(Database *db)
+int AssetStoreService::missingCount(QSqlDatabase conn, const QString &root)
 {
-    if (!db || !online()) return 0;
-    const QString root = AssetStorePaths::root();
-    QSqlDatabase conn = QSqlDatabase::database();
-    if (!conn.isOpen()) return 0;
+    if (!conn.isOpen() || !QDir(root).exists()) return 0;
 
     // Keyed on the CAS, not on the retired per-guid view (deep audit 2026-09,
     // area 6): an asset is "missing from this store" when the catalog records
     // bytes for it and NONE of those objects are on disk. A row with no
     // asset_files at all (a DB-only asset — a material definition, a folder
-    // row) never had files and is not missing.
-    int missing = 0;
-    for (const QString &guid : db->fetchLibraryAssetGuids()) {
-        QSqlQuery q(conn);
-        q.prepare("SELECT AF.oid, F.ext FROM asset_files AF "
-                  "LEFT JOIN files F ON AF.oid = F.oid WHERE AF.asset_guid = ?");
-        q.addBindValue(guid);
-        if (!q.exec()) continue;
+    // row) never had files and is not missing (the inner join drops it).
+    // THE USER'S STORAGES, LISTED (Assets, the Materials module's, the Avatar
+    // module's): an unlisted row's content is the pinning project's business.
+    // ONE statement on `conn`, any thread's connection (STAGE-CLOSE-TRIAGE-1 F2).
+    QSqlQuery q(conn);
+    q.prepare("SELECT A.guid, AF.oid, F.ext FROM assets A "
+              "JOIN asset_files AF ON AF.asset_guid = A.guid "
+              "LEFT JOIN files F ON AF.oid = F.oid "
+              "WHERE A.view_filter IN (?, ?, ?) AND A.listed = 1 ORDER BY A.guid");
+    q.addBindValue(static_cast<int>(assethome::StoredAssets));
+    q.addBindValue(static_cast<int>(assethome::StoredMaterialsLibrary));
+    q.addBindValue(static_cast<int>(assethome::StoredAvatarLibrary));
+    if (!q.exec()) return 0;
 
-        bool recorded = false, present = false;
-        while (q.next()) {
-            recorded = true;
-            if (QFileInfo::exists(AssetStorePaths::objectPathIn(
-                    root, q.value(0).toString(), q.value(1).toString()))) {
-                present = true;
-                break;
-            }
+    int missing = 0;
+    QString current;
+    bool present = false;
+    while (q.next()) {
+        const QString guid = q.value(0).toString();
+        if (guid != current) {
+            if (!current.isEmpty() && !present) ++missing;
+            current = guid;
+            present = false;
         }
-        if (recorded && !present) ++missing;
+        if (!present
+            && QFileInfo::exists(AssetStorePaths::objectPathIn(root, q.value(1).toString(),
+                                                               q.value(2).toString())))
+            present = true;
     }
+    if (!current.isEmpty() && !present) ++missing;
     return missing;
 }
 
 QVariantMap AssetStoreService::status(Database *db)
 {
+    if (!db) {
+        const QString root = AssetStorePaths::root();
+        return { { "root", root }, { "online", QDir(root).exists() }, { "missing", 0 } };
+    }
+    return statusOn(QSqlDatabase::database(), AssetStorePaths::root());
+}
+
+QVariantMap AssetStoreService::statusOn(QSqlDatabase conn, const QString &root)
+{
     QVariantMap out;
-    const QString root = AssetStorePaths::root();
+    const bool isOnline = QDir(root).exists();
     out["root"] = root;
-    out["online"] = online();
-    out["missing"] = missingCount(db);
+    out["online"] = isOnline;
+    out["missing"] = missingCount(conn, root);
 
     QString storeId;
     int formatVersion = 0;
-    if (online() && AssetCas::readStoreInfo(root, &storeId, &formatVersion)) {
+    if (isOnline && AssetCas::readStoreInfo(root, &storeId, &formatVersion)) {
         out["storeId"] = storeId;
         out["formatVersion"] = formatVersion;
     }

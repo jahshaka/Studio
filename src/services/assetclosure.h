@@ -51,9 +51,9 @@ namespace assetclosure {
 
 struct Options
 {
-    /// Total inline budget across the whole payload, in bytes. Files are
-    /// inlined in walk order while the budget lasts; the rest travel as oids.
-    /// 0 = never inline (pure Unreal: references only).
+    /// THE INLINE FILE BUDGET, in bytes: the files' inline bytes, spent in walk order; a file that
+    /// does not fit goes by reference (its oid). Row blobs are never charged to it (they always
+    /// travel). The clipboard's setting has a minimum of 64 KB (ClipboardService::kMinInlineLimitBytes).
     qint64 inlineLimitBytes = 4 * 1024 * 1024;
     /// The project whose PIN decides which version of an asset travels — copy
     /// semantics: what the source project renders with is what is copied.
@@ -88,6 +88,12 @@ struct DeferredRead
 
 /// Describe `guids` as envelope entries, inlining bytes while the budget
 /// lasts. `inlinedOut`/`referencedOut` (optional) count the two outcomes.
+///
+/// A ROW'S BLOB IS THE ROW (STAGE-CLOSE-TRIAGE-1 round 8, the lead's rule): with `includeRowBlobs`
+/// every row's `asset` blob (an Object's node tree, a material's whole content) and `properties`
+/// always travel and are NEVER charged to the budget — a blob has no fallback (a file is found again
+/// by its id in the local or a sibling store, a blob nowhere), and a model of tens of thousands of
+/// parts must copy. The budget bounds the FILE payloads only.
 ///
 /// `deferredOut`, when given, turns the inlining into a LIST: every file the
 /// budget admits is appended there instead of being read, and its

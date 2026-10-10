@@ -328,6 +328,7 @@ set(SRCS
     src/shell/shellactions.cpp
     src/shell/shellservices.cpp
     src/services/projectrunner.cpp
+    src/services/mediahardware.cpp
     src/services/scenetemplatebuilder.cpp
     src/modules/moduleregistry.cpp
     src/services/sceneopenrunner.cpp
@@ -364,7 +365,6 @@ set(SRCS
     src/services/videoutils.cpp
     src/services/livetextures.cpp
     src/services/livevideo.cpp
-    src/services/encoderprobe.cpp
     src/services/assetservice.h
     src/services/projectservice.cpp
     src/services/materialpreviewservice.cpp

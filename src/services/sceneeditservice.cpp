@@ -59,6 +59,7 @@ namespace { void regenerateGuids(const iris::SceneNodePtr &root,
 #include "irisgl/document/animation/animation.h"
 #include "irisgl/document/animation/keyframeset.h"
 #include "irisgl/document/animation/keyframeanimation.h"
+#include "irisgl/document/animation/skeletalanimation.h"
 
 #include "commands/addscenenodecommand.h"
 #include "commands/changematerialcommand.h"
@@ -129,6 +130,152 @@ SceneEditService::SceneEditService(Database *db,
       db(db), project(project), undo(undo), selection(selection),
       viewport(viewport), sceneProvider(std::move(sceneProvider))
 {
+    // A MODEL WHOSE BAKE LANDED AFTER ITS NODES WERE PLACED (STAGE-CLOSE-TRIAGE-1 F3): a paste
+    // from another library and a share-file import bake on a worker and return at once, so a node
+    // can stand in the scene with no geometry until the bake commits. Then the geometry is swapped
+    // in — the reimport's own walk — and a bake that FAILED is the model.missing issue the reader
+    // would have raised (it did not: the bake was in flight).
+    MeshBakeStore::addLandedListener(this, [this](const QVector<MeshBakeStore::LandedBake> &rows) {
+        // BY SOURCE FILE, NOT BY ROW (F6): a model file is recorded under the Object row AND its Mesh
+        // member row, and a node names whichever its fragment named — so the landing completes every
+        // node still waiting on content whose bake is now current (completeLandedContent: the clips
+        // first, then the geometry), whatever row it names.
+        QSet<QString> failedPaths;
+        bool anyLanded = false;
+        for (const MeshBakeStore::LandedBake &row : rows) {
+            if (row.ok) anyLanded = true;
+            else failedPaths.insert(row.path);
+        }
+        const iris::ScenePtr live = scene();
+        const iris::SceneNodePtr root = live ? live->getRootNode() : iris::SceneNodePtr();
+        const int completed = (anyLanded && root) ? completeLandedContent(root) : 0;
+        QStringList failed;
+        if (!failedPaths.isEmpty() && root) {
+            for (const QString &path : waitingSources(root))
+                if (failedPaths.contains(path) && !failed.contains(path)) failed.append(path);
+        }
+        irisLog(QStringLiteral("mesh bake landed: %1 row(s); %2 clip(s) and mesh(es) completed; %3 failed in use")
+                    .arg(rows.size()).arg(completed).arg(failed.size()));
+        if (!failed.isEmpty()) SceneIssues::instance().raiseMissingModels(failed);
+    });
+}
+
+QStringList SceneEditService::waitingSources(const iris::SceneNodePtr &root) const
+{
+    QStringList out;
+    if (!root || !db) return out;
+    SceneReader resolver;   // the reader's own resolution (item 7)
+    resolver.setDatabaseHandle(db);
+    resolver.setProject(project);
+    std::function<void(const iris::SceneNodePtr &)> walk = [&](const iris::SceneNodePtr &node) {
+        if (!node) return;
+        if (node->getSceneNodeType() == iris::SceneNodeType::Mesh) {
+            const auto meshNode = node.staticCast<iris::MeshNode>();
+            if (meshNode->getMesh().isNull() && !meshNode->meshPath.isEmpty()
+                && !meshNode->meshPath.startsWith(QLatin1Char(':'))) {
+                const QString path = resolver.resolveAssetPath(meshNode->meshPath);
+                if (!path.isEmpty() && !out.contains(path)) out.append(path);
+            }
+        }
+        for (const iris::SceneNodePtr &child : node->children()) walk(child);
+    };
+    walk(root);
+    return out;
+}
+
+int SceneEditService::rebindPendingClips(const QSet<QString> &assetGuids, const iris::SceneNodePtr &under)
+{
+    const iris::ScenePtr live = scene();
+    const iris::SceneNodePtr start = under ? under : (live ? live->getRootNode() : iris::SceneNodePtr());
+    if (assetGuids.isEmpty() || !start) return 0;
+    // The SAME resolution an open or a synchronous placement runs (SceneReader::getSkeletalAnimation):
+    // one reader for the whole walk, so a model's bake is read once however many clips name it.
+    SceneReader reader;   // the open's mode, as completeLandedContent resolves (item 7)
+    reader.setDatabaseHandle(db);
+    reader.setProject(project);
+    int bound = 0;
+    std::function<void(const iris::SceneNodePtr &)> walk = [&](const iris::SceneNodePtr &node) {
+        if (!node) return;
+        QList<iris::AnimationPtr> anims = node->getAnimations();
+        if (node->getAnimation() && !anims.contains(node->getAnimation())) anims.append(node->getAnimation());
+        bool changed = false;
+        for (const iris::AnimationPtr &anim : anims) {
+            if (!anim || !anim->hasSkeletalAnimation()) continue;
+            const iris::SkeletalAnimationPtr skel = anim->getSkeletalAnimation();
+            // A PLACEHOLDER: a reference with no keys and no source (a read clip always has its source).
+            if (!skel->source.isEmpty() || !skel->boneAnimations.isEmpty()
+                || !assetGuids.contains(skel->assetGuid))
+                continue;
+            if (const iris::SkeletalAnimationPtr real =
+                    reader.getSkeletalAnimation(skel->assetGuid, skel->name, node->getName())) {
+                anim->setSkeletalAnimation(real);
+                changed = true;
+                ++bound;
+            }
+        }
+        // The clip set changed under the node: the mirror re-reads its clips (and the subtree's rig).
+        if (changed) node->notifyChangedSubtree(iris::NodeChange::Content);
+        for (const iris::SceneNodePtr &child : node->children()) walk(child);
+    };
+    walk(start);
+    SceneIssues::instance().raiseMissingClips(reader.missingClips());
+    return bound;
+}
+
+int SceneEditService::completeLandedContent(const iris::SceneNodePtr &root)
+{
+    if (!root || !db) return 0;
+    // A SUBTREE THAT (RE)ENTERS THE SCENE AFTER ITS BAKE LANDED (F4): the landing walked the LIVE
+    // scene, and a node held by an undo command at that moment (paste -> undo before the landing ->
+    // redo) comes back as it left — no geometry, placeholder clips. It is resolved against the store
+    // here, at insertion, exactly as the landing would have: the clips first, then the meshes. A
+    // model whose bake is STILL in flight is left for its landing.
+    // THE READER'S RESOLUTION (item 7): the same function the reader decided "pending" through, in
+    // the open's mode (the project's pin, falling back to the library source — a paste pins what it
+    // lands, so the two answer the same object).
+    SceneReader resolver;
+    resolver.setDatabaseHandle(db);
+    resolver.setProject(project);
+    QHash<QString, QString> sourceOf;   // asset guid -> its store file
+    const auto source = [&](const QString &guid) {
+        auto it = sourceOf.constFind(guid);
+        if (it == sourceOf.constEnd()) it = sourceOf.insert(guid, resolver.resolveAssetPath(guid));
+        return it.value();
+    };
+    QSet<QString> clipGuids;
+    QVector<iris::SceneNodePtr> meshless;
+    std::function<void(const iris::SceneNodePtr &)> walk = [&](const iris::SceneNodePtr &node) {
+        if (!node) return;
+        QList<iris::AnimationPtr> anims = node->getAnimations();
+        if (node->getAnimation()) anims.append(node->getAnimation());
+        for (const iris::AnimationPtr &anim : anims) {
+            if (!anim || !anim->hasSkeletalAnimation()) continue;
+            const iris::SkeletalAnimationPtr skel = anim->getSkeletalAnimation();
+            if (skel->source.isEmpty() && skel->boneAnimations.isEmpty() && !skel->assetGuid.isEmpty()) {
+                const QString path = source(skel->assetGuid);
+                if (!path.isEmpty() && !MeshBakeStore::bakePending(path)) clipGuids.insert(skel->assetGuid);
+            }
+        }
+        if (node->getSceneNodeType() == iris::SceneNodeType::Mesh) {
+            const auto meshNode = node.staticCast<iris::MeshNode>();
+            if (meshNode->getMesh().isNull() && !meshNode->meshPath.isEmpty()
+                && !meshNode->meshPath.startsWith(QLatin1Char(':')))
+                meshless.append(node);
+        }
+        for (const iris::SceneNodePtr &child : node->children()) walk(child);
+    };
+    walk(root);
+    int completed = rebindPendingClips(clipGuids, root);
+    for (const iris::SceneNodePtr &node : meshless) {
+        const auto meshNode = node.staticCast<iris::MeshNode>();
+        const QString path = source(meshNode->meshPath);
+        if (path.isEmpty() || MeshBakeStore::bakePending(path)) continue;
+        const iris::BakedModelPtr baked = MeshBakeStore::load(path, meshNode->meshPath);
+        if (!baked || meshNode->meshIndex < 0 || meshNode->meshIndex >= baked->meshes.size()) continue;
+        meshNode->setMesh(baked->meshes.at(meshNode->meshIndex));
+        ++completed;
+    }
+    return completed;
 }
 
 void SceneEditService::notifyNodeInserted(const iris::SceneNodePtr &node) { emit nodeInserted(node); }

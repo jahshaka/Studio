@@ -914,6 +914,15 @@ jah_pool_arm(assets_import import_render ${CMAKE_CURRENT_BINARY_DIR}/e2e_import_
 # collected, the file re-imports as one object tile that renders its own map. Engine up.
 configure_file(scripts/e2e_node_archive_roundtrip.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_node_archive_roundtrip.js @ONLY)
 jah_pool_arm(assets_import node_archive_roundtrip ${CMAKE_CURRENT_BINARY_DIR}/e2e_node_archive_roundtrip.js 12)
+# assets_import.bundle_pending_clips — a skinned node placed while its share-file bake is pending keeps
+# its clip references through a save, and the landing binds the real clips (STAGE-CLOSE-TRIAGE-1).
+configure_file(scripts/e2e_bundle_pending_clips.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_bundle_pending_clips.js @ONLY)
+jah_pool_arm(assets_import bundle_pending_clips ${CMAKE_CURRENT_BINARY_DIR}/e2e_bundle_pending_clips.js 2)
+# assets_import.bundle_landing — an import's bake landing on nodes placed before it: a skinned rig with no
+# clip (no static/dynamic attach throw), a reimport that turns a model skinned, paste -> undo -> land ->
+# redo, a cross-library paste held then landed (STAGE-CLOSE-TRIAGE-1 fix round 3: P1, F1, F4).
+configure_file(scripts/e2e_bundle_landing.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_bundle_landing.js @ONLY)
+jah_pool_arm(assets_import bundle_landing ${CMAKE_CURRENT_BINARY_DIR}/e2e_bundle_landing.js 2)
 
 # assets_import.bundle_export_{texture,material,pack,sky} — JAF-EXPORTS-1: the Assets tray's exports
 # are the share file (assets.exportBundle, one entry or a pack); each kind's file re-imports into
@@ -1565,9 +1574,38 @@ foreach(_clip clipboard_xproject clipboard_assets)
     configure_file(scripts/e2e_${_clip}.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_${_clip}.js @ONLY)
 endforeach()
 jah_pool_arm(doc_assets clipboard ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_clipboard.js 1 HEADLESS)
+# doc_assets.hold_refused — assets.holdBakes refuses in a process with no test tier (this pool has none).
+jah_pool_arm(doc_assets hold_refused ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_hold_refused.js 1 HEADLESS)
 foreach(_clip clipboard_xproject clipboard_assets)
     jah_pool_arm(doc_assets ${_clip} ${CMAKE_CURRENT_BINARY_DIR}/e2e_${_clip}.js 5 HEADLESS)
 endforeach()
+
+# scripting.e2e.clipboard_budget — THE COPY UNDER THE INLINE BUDGET (STAGE-CLOSE-TRIAGE-1 rounds 7-8):
+# a row's node tree is never budgeted (a 600-part model copies under a 64 KB budget, its file by
+# reference, and pastes into a foreign library with the source's node count); a budget under its
+# 64 KB floor refuses copy and cut with that reason (nothing deleted). A ROW of its own, not a
+# doc_assets arm: the budget is a SETTING the process reads from its data root's jahsettings.ini,
+# seeded per process by the shell half. Three --headless processes.
+set(_cbud_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-clipboard_budget)
+file(MAKE_DIRECTORY ${_cbud_home}/run)
+# THE COMMAND: the one fresh-home implementation wipes the home every run (no hand-kept rm list), and
+# `--headless` stands VISIBLY on the command line (gate-scope reads a row as a headless script from its
+# command; every one of the script's three processes is --headless, the flag forwarded to each) — so
+# a change to the copy, the floor or the paste selects this row (read 8 F1).
+add_test(NAME scripting.e2e.clipboard_budget
+         COMMAND sh "${JAH_FRESH_HOME}" --warm "${_cbud_home}" --
+                 bash ${CMAKE_CURRENT_SOURCE_DIR}/clipboard_budget.sh $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --headless
+                 ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_clipboard_budget.js
+         WORKING_DIRECTORY ${_cbud_home}/run)
+set_tests_properties(scripting.e2e.clipboard_budget PROPERTIES
+    ENVIRONMENT "HOME=${_cbud_home}"
+    LABELS "scripting"
+    # TIMEOUT 120: the policy's floor (tests/CMakeLists.txt) — 6x the measured 13.35 s (n=4, 13.33-13.86 s,
+    # 2026-10-11, three processes, solo on :72, the gate slot free) is 80 s, under it.
+    TIMEOUT 120)
+set_property(TEST scripting.e2e.clipboard_budget APPEND PROPERTY ENVIRONMENT_MODIFICATION
+             "JAHSHAKA_DATA_ROOT=unset:")
+jah_no_display(scripting.e2e.clipboard_budget)
 
 # THE DUAL IMAGE ON A CURVED MIRROR (lane SSR-2; the owner's push #35 smoke).
 # The script's own header says why this lives here and not in tests/ssr: the

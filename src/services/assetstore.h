@@ -24,6 +24,7 @@ For more information see the LICENSE file
 // assets.storeRoot/setStoreRoot/storeStatus verbs and the Preferences →
 // Assets page both call (API-first: one implementation).
 
+#include <QSqlDatabase>
 #include <QString>
 #include <QVariantMap>
 
@@ -53,6 +54,10 @@ public:
     /// missing alone. storeId/formatVersion come from the root's store.json
     /// when it has one.
     static QVariantMap status(Database *db);
+    /// The same report for `root`, read through `conn` — ANY thread's connection (the Preferences
+    /// page reads it on a worker through its own read-only connection, STAGE-CLOSE-TRIAGE-1 F2: the
+    /// missing count stats every library asset's objects). Touches no Database object.
+    static QVariantMap statusOn(QSqlDatabase conn, const QString &root);
 
     /// Change the store root. Empty path = back to the default AppData root.
     /// moveContents: copy the current store's contents into the new root
@@ -68,7 +73,7 @@ public:
                         SettingsManager *settings, Database *db, QString *errorOut);
 
 private:
-    static int missingCount(Database *db);
+    static int missingCount(QSqlDatabase conn, const QString &root);
     static bool copyStoreContents(const QString &fromRoot, const QString &toRoot,
                                   QString *errorOut);
     /// Write (or keep) store.json at the ACTIVE root and remember its id.

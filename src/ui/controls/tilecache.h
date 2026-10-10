@@ -36,9 +36,9 @@ class QThreadPool;
 /// column) and asks this cache for each tile it PAINTS: a hit is the tile-sized
 /// picture; a miss answers a null pixmap (the panel paints its placeholder) and
 /// queues the guid. The queue is drained in small batches, one per event-loop
-/// turn: the BYTES are read on the UI thread (the Database's thread) by ONE
-/// `WHERE guid IN (...)` per batch through the kind's Source, the DECODE and the
-/// scale to the tile run on the cache's own thread pool, and `tileReady` names
+/// turn: the BYTES are read by ONE `WHERE guid IN (...)` per batch through the
+/// kind's Source and DECODED and scaled to the tile, both on the cache's own
+/// thread pool (the read moved off the UI thread: TC2-LIBRARY-CREATE-READ), and `tileReady` names
 /// every guid whose picture landed. So a view over 10,000 assets reads and
 /// decodes the ~50 tiles it shows, never the library.
 ///
@@ -46,7 +46,7 @@ class QThreadPool;
 /// tiles at Normal and ~7,000 Library tiles). A guid with no thumbnail, or bytes
 /// that do not decode, is remembered as MISSING so a repaint does not re-queue it;
 /// `invalidate` forgets both (a thumbnail was rebuilt, a project re-saved).
-/// UI thread only (QPixmap, and the Sources read the UI thread's connection).
+/// UI thread only (QPixmap) — except the Sources, which the pool calls.
 class TileCache : public QObject
 {
     Q_OBJECT
@@ -64,8 +64,9 @@ public:
         int cornerRadius = 0;
     };
 
-    /// The bytes of `guids` (absent = no thumbnail). Called on the UI thread with
-    /// at most kBatch guids.
+    /// The bytes of `guids` (absent = no thumbnail). Called ON THE CACHE'S POOL, with
+    /// at most kBatch guids, possibly two batches at once: it opens its own read
+    /// connection (Database::readThumbnailBytes) and touches nothing of the UI thread's.
     using Source = std::function<QHash<QString, QByteArray>(const QStringList &guids)>;
 
     static constexpr int kBatch = 48;
@@ -121,6 +122,7 @@ private:
         Request request;
         QByteArray png;
         QImage tile;
+        bool sourced = false;   ///< the Source answered bytes for it
     };
 
     static QString keyOf(Kind kind, const QString &guid, const Spec &spec);

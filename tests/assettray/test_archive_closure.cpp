@@ -32,11 +32,13 @@ For more information see the LICENSE file
 #include <QTemporaryDir>
 #include <QUuid>
 #include <cstdio>
+#include <limits>
 
 #include "data/database/database.h"
 #include "data/project.h"
 #include "export/exportcontentsource.h"
 #include "services/assetcas.h"
+#include "io/clipboardformat.h"
 #include "services/assetclosure.h"
 
 static int failures = 0;
@@ -127,7 +129,10 @@ int main(int argc, char **argv)
     assetclosure::Options options;
     options.storeRoot = store.path();
     options.includeRowBlobs = true;
-    options.inlineLimitBytes = 0;
+    // AN UNBOUNDED BUDGET (the share file's): the store holds no files, so nothing is read for one, and
+    // every row blob — counted against the budget since read 5 — rides, which "the same answer"
+    // below compares.
+    options.inlineLimitBytes = std::numeric_limits<qint64>::max();
     Database::setQueryLog(true);
     const int files0 = CasContentSource::statements();
     const auto described = assetclosure::describe(closure, &db, options);
@@ -163,6 +168,57 @@ int main(int argc, char **argv)
                 && it->dependencies == db.fetchAssetGUIDAndDependencies(guid, false);
     }
     CHECK(same, "every described row equals fetchAsset's fields and the per-node edges");
+
+    // ---- A ROW'S BLOB IS THE ROW (round 8, the lead's rule) ------------------------------------
+    // A row blob is never charged to the inline budget and always travels (it has no fallback: a
+    // file is found again by its oid, a blob nowhere); the budget bounds FILES. (a) A Mesh member
+    // whose model file nearly fills the budget, walked BEFORE its Object: the Object's node tree
+    // travels AND the file still inlines (tree + file > the budget: the tree is not charged). (b) A budget smaller than the tree itself: the tree still
+    // travels whole, the file by oid, no refusal (the clipboard's 64 KB floor is the service's, and
+    // scripting.e2e.clipboard_budget drives it).
+    {
+        const QString object = newGuid(), mesh = newGuid();
+        const QByteArray tree(64 * 1024, 'N');
+        db.createAssetEntry(object, QStringLiteral("edge_model.glb"), static_cast<int>(ModelTypes::Object), QString(),
+                            assethome::assets(), assethome::Origin::Import, QString(), QString(), thumb,
+                            QByteArray("{\"import\":{\"settings\":{\"scale\":2}}}"), QByteArray(), tree);
+        db.createAssetEntry(mesh, QStringLiteral("edge_model.mesh"), static_cast<int>(ModelTypes::Mesh), object,
+                            assethome::assets(), assethome::Origin::Import, QString(), QString(), thumb,
+                            QByteArray(), QByteArray(), QByteArray());
+        db.createDependency(int(ModelTypes::Object), int(ModelTypes::Mesh), object, mesh);
+        // the member's model file: 120 KB of a 128 KB budget
+        QTemporaryDir src;
+        const QString big = src.filePath(QStringLiteral("edge_model.glb"));
+        { QFile f(big); f.open(QIODevice::WriteOnly); f.write(QByteArray(120 * 1024, 'G')); }
+        QString oid, err;
+        CHECK(AssetCas::ingestFile(QSqlDatabase::database(), store.path(), big, mesh, QStringLiteral("source"),
+                                   QStringLiteral("edge_model.glb"), &oid, &err),
+              "the member's model file is in the store (%s)", qPrintable(err));
+        assetclosure::Options tight;
+        tight.storeRoot = store.path();
+        tight.includeRowBlobs = true;
+        tight.inlineLimitBytes = 128 * 1024;
+        const auto out = assetclosure::describe({ mesh, object }, &db, tight);
+        CHECK(out.size() == 2, "the member-first closure is described");
+        CHECK(out.value(object).blob == tree, "the Object's node tree travels although its member was walked first");
+        CHECK(out.value(mesh).files.size() == 1 && out.value(mesh).files.first().inlineData.size() == 120 * 1024
+                  && out.value(mesh).files.first().oid == oid,
+              "the member's 120 KB file still inlines in the 128 KB budget: the 64 KB tree was NOT charged");
+        CHECK(!out.value(object).properties.isEmpty(), "the Object's import record rides with it");
+
+        tight.inlineLimitBytes = 4096;
+        const auto small = assetclosure::describe({ mesh, object }, &db, tight);
+        CHECK(small.size() == 2 && small.value(object).blob == tree,
+              "a budget smaller than the node tree (4 KB < 64 KB): the tree still travels whole");
+        CHECK(small.value(mesh).files.size() == 1 && small.value(mesh).files.first().inlineData.isEmpty(),
+              "...and the file, which does not fit, goes by its oid");
+
+        // the envelope's text carries no trace of the deleted flag
+        clipboardformat::Envelope env;
+        env.assets = out;
+        CHECK(!env.toText().contains("blobOmitted"),
+              "the envelope's text has no blobOmitted key");
+    }
 
     db.closeDatabase();
     QFile::remove(dbPath);

@@ -1114,15 +1114,20 @@ void SceneHierarchyWidget::sceneTreeCustomContextMenu(const QPoint& pos)
         // (the World row is gone), so Copy and Cut are unconditional.
         menu.addSeparator();
         action = new QAction(QIcon(), tr("Copy"), this);
-        connect(action, &QAction::triggered, this, [clip, targets]() {
-            clip->copyNodes(targets);
+        connect(action, &QAction::triggered, this, [this, clip, targets]() {
+            // A refused copy is said (read 7 F1): the row it names, as the editor's chord does.
+            const auto result = clip->copyNodes(targets);
+            if (!result.ok() && !result.error.isEmpty() && shell)
+                shell->showViewportToast(tr("Copy"), result.error);
         });
         menu.addAction(action);
 
         if (node->isRemovable()) {
             action = new QAction(QIcon(), tr("Cut"), this);
-            connect(action, &QAction::triggered, this, [clip, targets]() {
-                clip->cutNodes(targets);
+            connect(action, &QAction::triggered, this, [this, clip, targets]() {
+                const auto result = clip->cutNodes(targets);
+                if (!result.ok() && !result.error.isEmpty() && shell)
+                    shell->showViewportToast(tr("Cut"), result.error);
             });
             menu.addAction(action);
         }

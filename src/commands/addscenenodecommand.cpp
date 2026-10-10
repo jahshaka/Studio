@@ -68,6 +68,12 @@ void AddSceneNodeCommand::redo()
     // the subtree actually had, exactly that (scripting audit F3).
     if (staticState.isEmpty()) sceneNode->applyStaticDefaults();
     else structuralundo::restoreStatic(sceneNode, staticState);
+    // CONTENT THAT LANDED WHILE THE SUBTREE WAS OUT OF THE SCENE (STAGE-CLOSE-TRIAGE-1 F4): an
+    // import's bake that committed while an undo held this node. AFTER the classification above, so
+    // the mesh's arrival (MeshNode::setMesh re-derives the class on a presence flip) has the last
+    // word: restored first, a hint captured while the node had no mesh would demote it again, and no
+    // settle re-promotes a demotion that was not a transform write.
+    if (services && services->sceneEdit) services->sceneEdit->completeLandedContent(sceneNode);
     // THE FIRST CAMERA ADDED TAKES THE SHOT (PLAYER-SPAWN-1 rule 2, owner
     // 2026-09-17: "unless a camera node is present"). The rule itself is the
     // document's — Scene::armCameraIfNoneActive, which refuses when anything is

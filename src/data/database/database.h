@@ -540,9 +540,6 @@ public:
     /// THE SAME LISTING for any home that is not a project's: Assets (the grid
     /// above), the Materials module's storage, the Avatar module's.
     QVector<AssetRecord> fetchAssetsInHome(assethome::Kind home, int type = -1);
-    /// Guids of the listed rows of the user's STORAGES (Assets, Materials,
-    /// Avatars) — the store's "missing content" report.
-    QStringList fetchLibraryAssetGuids();
     /// One catalog row as a maintenance sweep needs it: what it IS and whether
     /// it has a picture — and not one byte more.
     struct AssetThumbnailState
@@ -694,8 +691,17 @@ public:
     /// THE TILE CACHE'S BY-GUID READS (ui/controls/tilecache.h): the thumbnail
     /// bytes of at most one batch of guids, one bound IN (...) each. The only
     /// queries that select a thumbnail for more than one row.
-    QHash<QString, QByteArray> fetchAssetThumbnailBytes(const QStringList &guids);
-    QHash<QString, QByteArray> fetchProjectThumbnailBytes(const QStringList &guids);
+    QHash<QString, QByteArray> fetchProjectThumbnailBytes(const QStringList &guids);   ///< one project's, on this thread
+    /// THE TILE CACHE'S READ, OFF THE UI THREAD (TC2-LIBRARY-CREATE-READ, 2026-10-10): the same one
+    /// bound `SELECT guid, thumbnail ... WHERE guid IN (...)` on a READ-ONLY connection of its own to
+    /// `dbPath`, opened and closed on the CALLING thread — the tile cache's pool calls it, so the
+    /// bytes of a Desktop of 500 projects (~190 KB a picture) are never read on the UI thread.
+    /// Logged in the query log under the old names (fetchAssetThumbnailBytes / fetchProjectThumbnailBytes).
+    enum class ThumbnailTable { Assets, Projects };
+    static QHash<QString, QByteArray> readThumbnailBytes(const QString &dbPath, ThumbnailTable table,
+                                                         const QStringList &guids);
+    /// The library file this connection opened (what readThumbnailBytes is handed).
+    QString filePath() const;
     QByteArray fetchAssetData(const QString &guid) const;
 
     QStringList fetchFolderNameByParent(const QString &guid);
@@ -708,7 +714,11 @@ public:
     /// many dependers in one statement per chunk (depender -> its dependees, in
     /// its own order); the closure's rows WITHOUT a BLOB; and one row's two JSON
     /// BLOBs, read when that asset is written out.
-    QHash<QString, QStringList> fetchDependencyEdges(const QStringList &dependers);
+    /// `withMemberObjects`: each depender that is a MESH MEMBER also answers its OBJECT row (its
+    /// `parent`, when that row is an Object) after its dependencies — the member-to-object edge a
+    /// closure needs (the member's import record lives on the Object), in the SAME statement.
+    QHash<QString, QStringList> fetchDependencyEdges(const QStringList &dependers,
+                                                     bool withMemberObjects = false);
     QVector<AssetRecord> fetchAssetHeaders(const QStringList &guids);
     bool fetchAssetRowBlobs(const QString &guid, QByteArray *asset, QByteArray *properties);
     QVector<DependencyRecord> fetchAssetDependencies(const AssetRecord &record);

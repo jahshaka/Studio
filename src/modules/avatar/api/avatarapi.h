@@ -310,9 +310,14 @@ private:
     /// catalog's) thread — what both the sync and the async load are given.
     avatar::AvatarPreviewModel::SubjectSource subjectSourceFor(const QString &modelPath,
                                                                const QString &rowName,
-                                                               const QString &modelGuid);
+                                                               const QString &modelGuid,
+                                                               bool rebuild = true);
+    /// The async open: announces the job, rebuilds a stale bake off this thread
+    /// (MeshBakeStore::ensureFreshAsync), then startPreviewParse.
     void startPreviewLoad(const QString &modelPath, const QString &rowName,
-                          const QString &modelGuid = QString());
+                          const QString &modelGuid = QString(), bool bakeTried = false);
+    void startPreviewParse(const QString &modelPath, const QString &rowName,
+                           const QString &modelGuid);
     void endJob(bool cancelled, const QString &error, const QVariantMap &result = QVariantMap());
 
     /// loadClip's halves, shared with spawn's `clips` option.

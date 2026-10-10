@@ -2695,8 +2695,12 @@ void AvatarApi::finishImport(bool cancelled)
 }
 
 void AvatarApi::startPreviewLoad(const QString &modelPath, const QString &rowName,
-                                 const QString &modelGuid)
+                                 const QString &modelGuid, bool bakeTried)
 {
+    if (bakeTried) {
+        startPreviewParse(modelPath, rowName, modelGuid);
+        return;
+    }
     mJob.running = true;
     mJob.stage = QStringLiteral("preview");
     mJob.kind = QStringLiteral("open");
@@ -2708,6 +2712,31 @@ void AvatarApi::startPreviewLoad(const QString &modelPath, const QString &rowNam
     emit busyStarted(QStringLiteral("Loading %1").arg(rowName), false);
     emit busyStage(QStringLiteral("preview"), 0, 0);
 
+    // A STALE OR ABSENT BAKE IS REBUILT OFF THIS THREAD FIRST (STAGE-CLOSE-TRIAGE-1 F3): the job is
+    // already announced, the bake runs on a worker and commits here, and the preview parse starts
+    // when it lands — it used to pump this thread for the whole bake with user input held back. A
+    // newer open moves the epoch; the superseded rebuild then starts nothing.
+    const quint64 bakeEpoch = mLoadEpoch;
+    if (MeshBakeStore::ensureFreshAsync(modelPath, modelGuid, this,
+            [this, bakeEpoch, modelPath, rowName, modelGuid](bool, const QString &dropped) {
+                if (bakeEpoch != mLoadEpoch) return;
+                // A LANDING THAT WAS DROPPED (a reset, a shutdown, a moved store) ENDS THE JOB with
+                // its reason (F7) — the busy dialog never waits on a commit that will not come.
+                if (!dropped.isEmpty()) {
+                    const QString why = QStringLiteral("'%1' could not be previewed: %2").arg(rowName, dropped);
+                    record(QStringLiteral("avatar.open: ") + why);
+                    endJob(false, why);
+                    return;
+                }
+                startPreviewLoad(modelPath, rowName, modelGuid, /*bakeTried*/ true);
+            }))
+        return;
+    startPreviewParse(modelPath, rowName, modelGuid);
+}
+
+void AvatarApi::startPreviewParse(const QString &modelPath, const QString &rowName,
+                                  const QString &modelGuid)
+{
     // THE SWITCH OFF THE UI THREAD (AV1: it was an owner-measured 1.5 s parse;
     // since SHIPPED-BAKES-1 it is the character's BAKE read and its fragment
     // build). It reads nothing of this object, so it runs on a pool thread
@@ -2749,7 +2778,7 @@ void AvatarApi::startPreviewLoad(const QString &modelPath, const QString &rowNam
     // connections are per-thread); the worker reads the bake and builds the
     // fragment (the same split the mesh prewarm uses). Never a parse.
     const avatar::AvatarPreviewModel::SubjectSource source =
-        subjectSourceFor(modelPath, rowName, modelGuid);
+        subjectSourceFor(modelPath, rowName, modelGuid, /*rebuild*/ false);
     // THE TEST HOLD (avatar.responsive case 7): with
     // JAHSHAKA_TEST_AVATAR_HOLD_FILE naming a file, the worker does not finish
     // while that file exists (capped at 60 s), so a suite can make edits INSIDE
@@ -2768,7 +2797,8 @@ void AvatarApi::startPreviewLoad(const QString &modelPath, const QString &rowNam
 
 avatar::AvatarPreviewModel::SubjectSource AvatarApi::subjectSourceFor(const QString &modelPath,
                                                                       const QString &rowName,
-                                                                      const QString &modelGuid)
+                                                                      const QString &modelGuid,
+                                                                      bool rebuild)
 {
     avatar::AvatarPreviewModel::SubjectSource source;
     source.path = modelPath;
@@ -2778,9 +2808,12 @@ avatar::AvatarPreviewModel::SubjectSource AvatarApi::subjectSourceFor(const QStr
     source.xf = MeshBakeStore::transformFor(modelPath, modelGuid);
     if (host.db)
         source.definition = QJsonDocument::fromJson(host.db->fetchAssetData(modelGuid)).object();
-    // A STALE BAKE IS REBUILT FROM ITS SOURCE first (on a worker, this thread
-    // pumping) — the model is never parsed in its place (SHIPPED-BAKES-1).
-    MeshBakeStore::ensureFresh(modelPath, modelGuid);
+    // A STALE BAKE IS REBUILT FROM ITS SOURCE first — the model is never parsed
+    // in its place (SHIPPED-BAKES-1). The SYNCHRONOUS open (a script's
+    // avatar.open without `async`) owes its caller a loaded subject, so it waits
+    // here on a worker, this thread pumping; the async open (the page) already
+    // rebuilt it off this thread (startPreviewLoad) and passes rebuild = false.
+    if (rebuild) MeshBakeStore::ensureFresh(modelPath, modelGuid);
     source.plan = MeshBakeStore::planFor(modelPath, modelGuid);
     return source;
 }

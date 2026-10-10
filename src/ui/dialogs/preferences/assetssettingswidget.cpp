@@ -15,12 +15,16 @@ For more information see the LICENSE file
 #include <QDir>
 #include <QFileDialog>
 #include <QFormLayout>
+#include <QFutureWatcher>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLocale>
 #include <QMessageBox>
 #include <QPushButton>
+#include <QShowEvent>
 #include <QStorageInfo>
+#include <QUuid>
+#include <QtConcurrent/QtConcurrentRun>
 #include <QVBoxLayout>
 
 #include <QSqlDatabase>
@@ -93,21 +97,65 @@ AssetsSettingsWidget::AssetsSettingsWidget(SettingsManager *settings, Database *
     connect(cleanButton, &QPushButton::clicked, this, &AssetsSettingsWidget::cleanUpStorage);
     connect(bakeButton, &QPushButton::clicked, this, &AssetsSettingsWidget::bakeAllModels);
 
-    refresh();
+    // No refresh() here: the status is read when the page is shown (showEvent).
+}
+
+void AssetsSettingsWidget::showEvent(QShowEvent *event)
+{
+    refresh();   // labels only — no row is mounted or deleted (the show-walk trap does not apply)
+    QWidget::showEvent(event);
 }
 
 void AssetsSettingsWidget::refresh()
 {
+    // THE STATUS IS READ ON A WORKER (STAGE-CLOSE-TRIAGE-1 F2): the missing count stats every library
+    // asset's objects and QStorageInfo asks the store's drive (a sleeping or network disk blocks) — at
+    // every show of this page. The worker reads through its OWN read-only connection to the library file
+    // (the catalog is per thread; Database::readThumbnailBytes' pattern); the labels are set when it
+    // lands. A refresh that lands after a newer one started is dropped.
     const QString root = AssetStorePaths::root();
     mRoot->setText(QDir::toNativeSeparators(root));
+    mFreeSpace->setText(QStringLiteral("…"));
+    mStatus->setText(QStringLiteral("reading…"));
 
-    const QVariantMap st = AssetStoreService::status(mDb);
-    if (st["online"].toBool()) {
-        QStorageInfo storage(root);
-        mFreeSpace->setText(storage.isValid()
-            ? QLocale().formattedDataSize(storage.bytesAvailable())
+    const QString dbPath = mDb ? QSqlDatabase::database().databaseName() : QString();
+    const int generation = ++mRefreshGeneration;
+    auto *watcher = new QFutureWatcher<QVariantMap>(this);
+    connect(watcher, &QFutureWatcher<QVariantMap>::finished, this, [this, watcher, generation]() {
+        watcher->deleteLater();
+        if (generation == mRefreshGeneration) applyStatus(watcher->result());
+    });
+    watcher->setFuture(QtConcurrent::run([root, dbPath]() {
+        QVariantMap st;
+        const QString name = QStringLiteral("StoreStatus-%1")
+                                 .arg(QUuid::createUuid().toString(QUuid::WithoutBraces));
+        {
+            QSqlDatabase conn = QSqlDatabase::addDatabase(QStringLiteral("QSQLITE"), name);
+            if (!dbPath.isEmpty()) {
+                conn.setDatabaseName(dbPath);
+                conn.setConnectOptions(QStringLiteral("QSQLITE_OPEN_READONLY;QSQLITE_BUSY_TIMEOUT=5000"));
+                conn.open();
+            }
+            st = AssetStoreService::statusOn(conn, root);
+            if (conn.isOpen()) conn.close();
+        }
+        QSqlDatabase::removeDatabase(name);
+        if (st.value(QStringLiteral("online")).toBool()) {
+            const QStorageInfo storage(root);
+            if (storage.isValid()) st.insert(QStringLiteral("bytesAvailable"), storage.bytesAvailable());
+        }
+        return st;
+    }));
+}
+
+void AssetsSettingsWidget::applyStatus(const QVariantMap &st)
+{
+    const QString root = st.value(QStringLiteral("root")).toString();
+    if (st.value(QStringLiteral("online")).toBool()) {
+        mFreeSpace->setText(st.contains(QStringLiteral("bytesAvailable"))
+            ? QLocale().formattedDataSize(st.value(QStringLiteral("bytesAvailable")).toLongLong())
             : QStringLiteral("—"));
-        const int missing = st["missing"].toInt();
+        const int missing = st.value(QStringLiteral("missing")).toInt();
         mStatus->setText(missing > 0
             ? QStringLiteral("online — %1 library asset(s) have no folder in this store").arg(missing)
             : QStringLiteral("online"));

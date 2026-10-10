@@ -1,0 +1,187 @@
+// assets_import.bundle_landing — THE LANDING OF AN IMPORT'S BAKE, case by case (STAGE-CLOSE-TRIAGE-1
+// fix round 3). A cross-library paste returns before its bake commits (MeshBakeStore::bakeLandedAsync);
+// the commit is HELD (assets.holdBakes) so every placement below is made before its landing.
+//
+//   P1  a SKINNED model with no clip, pasted and left 40 frames (past the mirror's static settle),
+//       then landed: no engine error (Ogre's "Object is static while Node isn't"), the rig attached.
+//   P1b a reimport that turns a settled static model SKINNED: no engine error, the rig attached.
+//   F4  paste -> UNDO before the landing -> land -> REDO: the node comes back WITH its geometry.
+//   F1  a cross-library paste: no geometry while held, geometry after the landing.
+
+function assert(cond, msg) {
+    if (!cond) throw new Error("assert failed: " + msg);
+    console.log("ok: " + msg);
+}
+function J(x) { return JSON.stringify(x); }
+// EACH CASE ITS OWN CONTENT, used by no other arm of this pool: a bake is keyed on the content, and a
+// row of an earlier arm (in a project this arm cannot see from the store scope) holding a fresh bake of
+// the same bytes would make the paste find it fresh and bake nothing.
+var RIG = "@SOURCE_DIR@/tests/skeletal/fixtures/mixamo_tpose.fbx";   // skinned, NO clip in the file
+var RIG_TINY = "@SOURCE_DIR@/tests/avatar/fixtures/rig2_tiny.glb";
+var QUAD = "@SOURCE_DIR@/tests/importer/fixtures/scaled_two_meshes.glb";
+var RIG_SCALED = "@SOURCE_DIR@/tests/avatar/fixtures/rig2_giant.glb";               // the envelope's rig
+var MEMBERED = "@SOURCE_DIR@/tests/importer/fixtures/material_workflows.glb";       // nodes name a Mesh member
+var TEXTURED = "@SOURCE_DIR@/tests/importer/fixtures/textured_pbr_quad.glb";        // model A of the edge row
+
+/// Every store row whose content is `oid` goes, and the store's unreferenced bytes: the library no
+/// longer holds the model, so a paste of it imports rows and must BAKE.
+function forgetContent(oid) {
+    assets.list({ scope: "store" }).forEach(function (row) {
+        var o = null;
+        try { o = assets.importSettings(row.guid).sourceOid; } catch (e) { }
+        if (o === oid) assets.remove(row.guid, { keepShared: false, force: true });
+    });
+    assets.gc({ dryRun: false });
+}
+function engineErrors() { return app.engineErrors(true).recorded; }
+/// The mesh nodes at or under `id` (the scene's own parent links).
+function meshNodesUnder(id) {
+    var nodes = scene.nodes(), under = {}, out = [];
+    under[id] = true;
+    var grew = true;
+    while (grew) {
+        grew = false;
+        nodes.forEach(function (n) { if (!under[n.id] && under[n.parent]) { under[n.id] = true; grew = true; } });
+    }
+    nodes.forEach(function (n) { if (under[n.id] && n.type === "mesh") out.push(n.id); });
+    return out;
+}
+function allGraphStatic(id) {
+    var ids = meshNodesUnder(id);
+    return ids.length > 0 && ids.every(function (m) { return node.mobility(m).graphStatic === true; });
+}
+function skeletalClipCount() {
+    var n = 0;
+    scene.nodes().forEach(function (x) { anim.list(x.id).forEach(function (a) { if (a.skeletal) ++n; }); });
+    return n;
+}
+function sameSize(a, b) {
+    return Math.abs(a.x - b.x) < 1e-3 && Math.abs(a.y - b.y) < 1e-3 && Math.abs(a.z - b.z) < 1e-3;
+}
+function geometry(id) { return scene.bounds({ nodes: [id] }).nodes; }
+function land() {
+    assets.holdBakes(false);
+    var guard = 0;
+    while (assets.pendingBakes() > 0 && guard++ < 600) editor.frame(1, 1 / 60);
+    assert(assets.pendingBakes() === 0, "the bake landed after " + guard + " frame(s)");
+    editor.frame(3, 1 / 60);
+}
+/// Copies a placed model, takes its content out of the library, and pastes it back with the bake held.
+function pasteForeign(placed) {
+    var oid = assets.importSettings(placed.assetGuid).sourceOid;
+    assert(clipboard.copy(placed.nodeId).items === 1, "the placed model is copied");
+    node.remove(placed.nodeId);
+    forgetContent(oid);
+    assert(assets.holdBakes(true) === true, "the bake commit is held");
+    var pasted = clipboard.paste();
+    assert(pasted.pasted.length === 1 && pasted.imported.length >= 1,
+           "the paste lands its rows from the payload: " + J({ pasted: pasted.pasted, imported: pasted.imported }));
+    assert(assets.pendingBakes() > 0, "and returns with its bake pending (" + assets.pendingBakes() + ")");
+    return pasted.pasted[0];
+}
+
+/// Imports `path` under `options` and places it: {assetGuid, nodeId}.
+function importAndPlace(path, options) {
+    var guid = assets.import(path, options || {});
+    assert(guid && guid.length > 10, "assets.import(" + path.split("/").pop() + ", " + J(options || {}) + ") -> " + guid);
+    var id = assets.addToScene(guid, { position: { x: 0, y: 0, z: 0 } });
+    assert(id && id.length > 10, "placed -> " + id);
+    return { assetGuid: guid, nodeId: id };
+}
+
+project.create("bundle landing " + Date.now());
+engineErrors();
+
+// ---- P1: a skinned model with no clip, placed before its bake lands --------------------------
+var rig = importAndPlace(RIG);
+assert(rig.nodeId && rig.assetGuid, "a skinned model with no clip placed: " + J(rig));
+editor.frame(2, 1 / 60);
+var rigNode = pasteForeign(rig);
+assert(geometry(rigNode) === 0, "the pasted rig has no geometry while its bake is held");
+editor.frame(40, 1 / 60);   // past kStaticSettleFrames: a meshless node is not static-eligible (P1a)
+land();
+assert(geometry(rigNode) >= 1, "the landing gave the rig its geometry");
+assert(scene.rigStats().rigged >= 1, "and its skinned item is ATTACHED (rigged " + scene.rigStats().rigged + ")");
+assert(engineErrors() === 0, "no engine error at the landing (the static/dynamic attach refusal)");
+
+// ---- P1b: a reimport that turns a settled static model skinned -------------------------------
+var flat = importAndPlace(RIG_TINY, { skeleton: false, clips: false });
+assert(flat.nodeId, "rig2.glb placed WITHOUT its skeleton: " + J(flat));
+editor.frame(40, 1 / 60);   // settled: a static mesh is static
+assert(allGraphStatic(flat.nodeId), "P1b's precondition: the placed static model IS graph-static before the reimport");
+var rigged0 = scene.rigStats().rigged;
+var re = assets.reimport(flat.assetGuid, { skeleton: true, clips: false });
+assert(re.swappedNodes >= 1, "the reimport swapped the skinned mesh into the placed node: " + J(re));
+editor.frame(3, 1 / 60);
+assert(scene.rigStats().rigged > rigged0, "its skinned item is ATTACHED (" + rigged0 + " -> " + scene.rigStats().rigged + ")");
+assert(engineErrors() === 0, "no engine error when a static node turned skinned");
+
+// ---- F4 + F1: paste -> undo before the landing -> land -> redo ----------------------------------
+var quad = importAndPlace(QUAD);
+assert(quad.nodeId, "a static model placed: " + J(quad));
+var quadNode = pasteForeign(quad);
+assert(geometry(quadNode) === 0, "F1: the pasted node stands with NO geometry while its bake is held");
+assert(editor.undo() === true, "the paste is undone before the landing");
+land();
+assert(editor.redo() === true, "the paste is redone after the landing");
+editor.frame(3, 1 / 60);
+var redone = null;
+scene.nodes().forEach(function (n) { if (n.id === quadNode) redone = n.id; });
+assert(redone !== null, "the redone node is the pasted one");
+assert(geometry(quadNode) >= 1, "F4: the redone node has the geometry that landed while it was undone");
+editor.frame(40, 1 / 60);   // the settle
+assert(allGraphStatic(quadNode), "F4: ...and it is graph-STATIC after the redo and the settle (the content completed after the classification)");
+assert(engineErrors() === 0, "no engine error");
+
+// ---- THE ENVELOPE: a paste carries the import record (read 4) -----------------------------------
+// A rig imported at scale 2 with no clips, and a model whose nodes name its MESH MEMBER (the record
+// lives on the Object row: the member-to-object edge must ride the closure), each pasted foreign:
+// the landing bakes under the record they were imported with — the same bounds, the same clips.
+[{ path: RIG_SCALED, options: { scale: 2, clips: false }, what: "the scaled clip-less rig" },
+ { path: MEMBERED, options: { scale: 2 }, what: "the scaled model named through its member" }].forEach(function (c) {
+    var placed = importAndPlace(c.path, c.options);
+    editor.frame(3, 1 / 60);
+    var before = scene.bounds({ nodes: [placed.nodeId] });
+    var clipsBefore = skeletalClipCount();
+    var pastedId = pasteForeign(placed);
+    land();
+    var after = scene.bounds({ nodes: [pastedId] });
+    assert(after.nodes === before.nodes && sameSize(after.size, before.size),
+           c.what + ": the pasted copy has the SAME bounds (" + J(before.size) + " vs " + J(after.size) + ")");
+    assert(skeletalClipCount() === clipsBefore,
+           c.what + ": ...and the same skeletal clips (" + clipsBefore + " vs " + skeletalClipCount() + ")");
+    node.remove(pastedId);
+});
+// ---- THE EDGE IS A MESH MEMBER'S ONLY (read 5) -------------------------------------------------
+// A cube whose material borrows a TEXTURE that came out of model A: its copy carries the texture,
+// never model A (its Object, Mesh member and model file) — a texture row hangs under A's Object too.
+var A = assets.import(TEXTURED);
+assert(A && A.length > 10, "model A imported");
+var borrowed = null;
+// (an import's texture is a MEMBER of its Object, named by its dependency edges — the closure walks
+// the object's edges down to its members, so a texture is one of model A's dependencies)
+function textureOf(guid, depth) {
+    var found = null;
+    assets.dependencies(guid).forEach(function (d) {
+        if (found !== null) return;
+        var t = null;
+        try { t = assets.metadata(d).type; } catch (e) { }
+        if (t === "texture") found = d;
+        else if (depth > 0) found = textureOf(d, depth - 1);
+    });
+    return found;
+}
+borrowed = textureOf(A, 2);
+assert(borrowed !== null, "model A's base-colour texture is a library row: " + borrowed);
+var cube = scene.addPrimitive("Cube", { position: { x: 4, y: 0, z: 0 } });
+assert(material.set(cube, { baseColorMap: borrowed }) === true, "the cube's material uses A's texture");
+assert(clipboard.copy(cube).items === 1, "the cube is copied");
+var payload = JSON.parse(clipboard.text());
+var carried = Object.keys(payload.assets);
+assert(carried.indexOf(borrowed) >= 0, "the closure carries the texture");
+var models = carried.filter(function (g) {
+    var t = payload.assets[g].type; return t === "object" || t === "mesh";
+});
+assert(carried.indexOf(A) < 0 && models.length === 0,
+       "...and NOT model A (no object or mesh row): " + J(carried.map(function (g) { return payload.assets[g].type; })));
+console.log("bundle_landing: ALL OK");

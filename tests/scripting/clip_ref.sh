@@ -36,10 +36,13 @@ case "$HOME" in
     */e2e-home-clip_ref) ;;
     *) echo "FAIL: refusing to run outside the suite's scratch HOME ($HOME)"; exit 1 ;;
 esac
-case "$JAHSHAKA_DATA_ROOT:$PWD" in
-    "$HOME"/*:"$HOME"/run) ;;
-    *) echo "FAIL: the data root and the working directory must be inside $HOME"; exit 1 ;;
-esac
+# both sides resolved: HOME and the data root arrive in the configured spelling, $PWD is the
+# kernel's physical one (tests/support/samepath.sh — the root is a symlink on the owner's box)
+. "$(dirname "$0")/../support/samepath.sh"
+if ! jah_inside "$JAHSHAKA_DATA_ROOT" "$HOME" || jah_same_path "$JAHSHAKA_DATA_ROOT" "$HOME" \
+   || ! jah_same_path "$PWD" "$HOME/run"; then
+    echo "FAIL: the data root and the working directory must be inside $HOME"; exit 1
+fi
 R1="$JAHSHAKA_DATA_ROOT"
 R2="$HOME/relocated/Jahshaka"
 LOC="$HOME/Documents/Jahshaka"

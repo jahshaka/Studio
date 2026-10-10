@@ -123,13 +123,16 @@ public:
     /// — the by-name fallback plan item 15c deleted.
     void setLibrarySource() { useAlternativeLocation = true; }
 
+public:
     /// Pin-world byte resolution (ASSET_PIPELINE_SPEC §3.1.5, phase 4):
     /// project loads resolve guid → project pin → CAS object; library-source
     /// reads (useAlternativeLocation) resolve guid → library source. No
     /// folder-by-recorded-name resolution of any kind (plan item 15c).
+    /// PUBLIC (STAGE-CLOSE-TRIAGE-1 read 4, item 7): the ONE resolution of a node's model file —
+    /// the reader decides a bake is pending through it, and the landing (SceneEditService::
+    /// completeLandedContent / waitingSources) finds the nodes it completes through it.
     QString resolveAssetPath(const QString &guid);
 
-public:
     iris::ScenePtr readScene(const QString &projectPath,
                              const QByteArray &sceneBlob,
                              EditorData **editorData = nullptr);

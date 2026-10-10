@@ -74,6 +74,7 @@
 #include "services/assetcas.h"
 #include "services/assetdelete.h"
 #include "services/assetstorepaths.h"
+#include "services/assetstore.h"
 #include "services/imagematerial.h"
 #include "services/materialbundle.h"
 
@@ -498,8 +499,36 @@ int main(int argc, char **argv)
         for (const auto &row : db.fetchAssetsForAssetView()) if (row.guid == shared) tile = true;
         CHECK(!tile, "... and it stops being a library tile");
         CHECK(db.countAssetPins(shared) == 2, "... with both pins intact");
-        CHECK(!db.fetchLibraryAssetGuids().contains(shared),
-              "... and out of the library guid scan too");
+
+        // THE MISSING-CONTENT REPORT IS ABOUT THE LIBRARY THE USER SEES (the predicate
+        // Database::fetchLibraryAssetGuids used to carry, now AssetStoreService::missingCount's one
+        // statement): a LISTED storage row whose bytes are gone is missing; an unlisted one is the
+        // pinning project's business, never the store's report.
+        {
+            const QString probeSrc = scratchDir.filePath("missing-probe.png");
+            {
+                QFile f(probeSrc);
+                CHECK(f.open(QIODevice::WriteOnly), "the probe's unique bytes written");
+                f.write(QByteArrayLiteral("missing-content-probe-") + QByteArray::number(qint64(&f)));
+            }
+            const QString probe = db.createAssetEntry(
+                "guid-missing-probe", "missing-probe.png", static_cast<int>(ModelTypes::Texture),
+                QString(), assethome::assets(), assethome::Origin::Import, QString(), QString(),
+                QByteArray(), QByteArray(), QByteArray(), QByteArray());
+            QString probeOid, pe;
+            CHECK(AssetCas::ingestFile(conn, storeRoot, probeSrc, probe, "source", "missing-probe.png",
+                                       &probeOid, &pe), "the probe has content");
+            const auto missing = [&]() {
+                return AssetStoreService::statusOn(conn, storeRoot).value("missing").toInt();
+            };
+            const int before = missing();
+            CHECK(QFile::remove(AssetStorePaths::objectPathIn(storeRoot, probeOid, "png")),
+                  "the probe's object is taken out of the store");
+            CHECK(missing() == before + 1, "a LISTED storage row with no bytes is missing (statusOn)");
+            CHECK(db.setAssetListed(probe, false), "the probe is UNLISTED (the row stays)");
+            CHECK(countWhere("assets", "guid", probe) == 1, "... the row is still there");
+            CHECK(missing() == before, "an UNLISTED row is out of the store's missing report (statusOn)");
+        }
 
         // Re-listing, the other direction: an import of the same content
         // brings the row back (services/import — asserted here at the write

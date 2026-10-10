@@ -61,6 +61,10 @@
 #include <cmath>
 #include <vector>
 #include <QTemporaryDir>
+#include <QSet>
+#include <atomic>
+#include <QEventLoop>
+#include <QThread>
 #include <QBuffer>
 #include <cstdio>
 #include <functional>
@@ -68,6 +72,8 @@
 
 #include "assimp/Importer.hpp"
 #include "assimp/scene.h"
+#include "assimp/ProgressHandler.hpp"
+#include "assimp/postprocess.h"
 
 #include "data/database/database.h"
 #include "data/project.h"
@@ -2889,6 +2895,162 @@ static void clipBake()
     }
 }
 
+
+// ---------------------------------------------------------------------------
+// 18. THE IMPORT BAKES' LANDING — `meshbake.async_landing` (STAGE-CLOSE-TRIAGE-1 rounds 3-4)
+// ---------------------------------------------------------------------------
+//
+// In process, against a real fixture store: the bake an import lands off the UI thread.
+//   F5  a cancelled bake stops at its cancel points: the parse (assimp's progress handler), and
+//       runBake before the write and the stage — invalid model, error "cancelled", nothing staged;
+//   F6  the landing names EVERY row over the baked file (the Object AND its Mesh member), not the
+//       one row the by-content dedupe kept;
+//   F7  a landing dropped by a reset/shutdown (the epoch) still calls `done` with its reason —
+//       what ends the avatar module's busy job;
+//   F8  a landing whose store root moved while the worker staged is refused, with its reason.
+static void asyncLanding()
+{
+    QTemporaryDir home;
+    QTemporaryDir storeRoot;
+    QTemporaryDir otherRoot;
+    if (!home.isValid() || !storeRoot.isValid() || !otherRoot.isValid()) {
+        std::printf("FAIL: could not create the fixture store\n");
+        ++failures;
+        return;
+    }
+    AssetStorePaths::setRootOverride(storeRoot.path());
+    Database db;
+    CHECK_LOUD(db.initializeDatabase(QDir(home.path()).filePath("assets.db")), "fixture database opened");
+    db.createAllTables();
+    QSqlDatabase conn = QSqlDatabase::database();
+    AssetCas::ensureCasSchema(conn);
+
+    Project project;
+    AssetImportService service(&db, &project);
+    ImportRequest request;
+    request.sourcePath = fixture(QStringLiteral("tests/importer/fixtures/scaled_two_meshes.glb"));
+    const ImportResult imported = service.import(request);
+    CHECK_LOUD(imported.ok() && !imported.meshGuid.isEmpty(), "the fixture imported (an Object and a Mesh member)");
+    if (!imported.ok()) { AssetStorePaths::setRootOverride(QString()); return; }
+    const QString source = AssetCas::resolveSource(conn, storeRoot.path(), imported.assetGuid);
+    CHECK_LOUD(MeshBakeStore::isFresh(conn, storeRoot.path(), source, imported.assetGuid), "its bake is current");
+
+    // A STALE BAKE: the bake rows go (every owner), so a landing has something to build.
+    const auto dropBakes = [&]() {
+        QSqlQuery q(conn);
+        q.exec(QStringLiteral("DELETE FROM asset_files WHERE role = 'bake'"));
+        MeshBakeStore::clear();
+    };
+    const auto pumpUntilLanded = [&]() {
+        for (int i = 0; i < 6000 && MeshBakeStore::pendingBakeCount() > 0; ++i) {
+            QCoreApplication::processEvents(QEventLoop::AllEvents, 5);
+            QThread::msleep(1);
+        }
+        QCoreApplication::processEvents();
+    };
+    QObject context;
+    QVector<MeshBakeStore::LandedBake> landed;
+    MeshBakeStore::addLandedListener(&context, [&](const QVector<MeshBakeStore::LandedBake> &rows) {
+        landed += rows;
+    });
+
+    // ---- F5: the cancel points ------------------------------------------------------------
+    {
+        // THE PARSE'S CANCEL POINT IS ASSIMP'S OWN (patch 0010): an Importer whose progress handler
+        // answers false aborts after the format's read — before any post-processing step — frees the
+        // partial scene and names the cancel. Driven directly, so the check cannot pass through the
+        // mesh cancel point behind it.
+        {
+            struct Refuse : Assimp::ProgressHandler
+            {
+                int calls = 0;
+                bool Update(float) override { ++calls; return false; }
+            };
+            Assimp::Importer importer;
+            auto *refuse = new Refuse;   // the importer owns it
+            importer.SetProgressHandler(refuse);
+            const aiScene *scene = importer.ReadFile(source.toStdString(),
+                                                     aiProcess_Triangulate | aiProcess_GenSmoothNormals |
+                                                     aiProcess_JoinIdenticalVertices);
+            const QString why = QString::fromStdString(importer.GetErrorString());
+            CHECK_LOUD(!scene && why.contains(QStringLiteral("cancelled")),
+                       qUtf8Printable(QStringLiteral("F5: a progress handler answering false CANCELS assimp's "
+                                                     "import — no scene, the reason named ('%1')").arg(why)));
+            CHECK_LOUD(refuse->calls <= 3,
+                       qUtf8Printable(QStringLiteral("F5: ...at the first cancel point after the read, not after "
+                                                     "every post-processing step (%1 Update call(s))").arg(refuse->calls)));
+        }
+        std::atomic<bool> cancel { true };
+        const iris::MeshBake::Model model =
+            iris::MeshBake::buildFromFile(source, QStringLiteral("fp"), QString(), iris::ImportTransform(), &cancel);
+        CHECK_LOUD(!model.valid, "F5: a bake cancelled before its parse answers an invalid model");
+        std::atomic<bool> go { false };
+        const iris::MeshBake::Model whole =
+            iris::MeshBake::buildFromFile(source, QStringLiteral("fp"), QString(), iris::ImportTransform(), &go);
+        CHECK_LOUD(whole.valid, "F5: ...and the same bake with the flag down is whole (a cancel point changes nothing)");
+        const QVector<MeshBakeStore::BakeJob> jobs = MeshBakeStore::staleJobsFor(conn, storeRoot.path(), { source });
+        dropBakes();
+        const QVector<MeshBakeStore::BakeJob> stale = MeshBakeStore::staleJobsFor(conn, storeRoot.path(), { source });
+        CHECK_LOUD(!stale.isEmpty(), "F5: with its bake rows gone the model has a rebuild job");
+        if (!stale.isEmpty()) {
+            const MeshBakeStore::BakeResult r = MeshBakeStore::runBake(stale.first(), &cancel);
+            CHECK_LOUD(r.error == QStringLiteral("cancelled") && r.path.isEmpty() && r.staged.srcPath.isEmpty(),
+                       qUtf8Printable(QStringLiteral("F5: runBake under a raised flag answers 'cancelled' and stages "
+                                                     "nothing (error '%1')").arg(r.error)));
+        }
+        Q_UNUSED(jobs);
+    }
+
+    // ---- F6: every row over the baked file --------------------------------------------------
+    landed.clear();
+    const int started = MeshBakeStore::bakeLandedAsync({ imported.assetGuid, imported.meshGuid });
+    CHECK_LOUD(started == 1, qUtf8Printable(QStringLiteral("F6: ONE bake for the two rows over one content "
+                                                           "and settings (started %1)").arg(started)));
+    pumpUntilLanded();
+    QSet<QString> rowsLanded;
+    for (const auto &row : landed) if (row.ok) rowsLanded.insert(row.assetGuid);
+    CHECK_LOUD(rowsLanded.contains(imported.assetGuid) && rowsLanded.contains(imported.meshGuid),
+               qUtf8Printable(QStringLiteral("F6: the landing names BOTH rows, the Object and its Mesh member "
+                                             "(%1 row(s) landed)").arg(rowsLanded.size())));
+    CHECK_LOUD(MeshBakeStore::isFresh(conn, storeRoot.path(), source, imported.assetGuid), "F6: ...and the bake is current");
+
+    // ---- F7: a landing dropped by the epoch still says so -------------------------------------
+    dropBakes();
+    bool called = false, fresh = true;
+    QString dropped;
+    const bool began = MeshBakeStore::ensureFreshAsync(source, imported.assetGuid, &context,
+        [&](bool f, const QString &why) { called = true; fresh = f; dropped = why; });
+    CHECK_LOUD(began, "F7: a stale model's rebuild began asynchronously");
+    MeshBakeStore::stopBackgroundRebuild();   // a reset / a shutdown: the epoch moves
+    pumpUntilLanded();
+    CHECK_LOUD(called && !fresh && dropped.contains(QStringLiteral("reset")),
+               qUtf8Printable(QStringLiteral("F7: the dropped landing still called back, not fresh, with its reason "
+                                             "('%1')").arg(dropped)));
+    CHECK_LOUD(!MeshBakeStore::isFresh(conn, storeRoot.path(), source, imported.assetGuid),
+               "F7: ...and committed nothing");
+
+    // ---- F8: the store root moved while the worker staged ------------------------------------
+    landed.clear();
+    called = false; dropped.clear();
+    const bool began8 = MeshBakeStore::ensureFreshAsync(source, imported.assetGuid, &context,
+        [&](bool f, const QString &why) { called = true; fresh = f; dropped = why; });
+    CHECK_LOUD(began8, "F8: a rebuild began under the store root (its job staged into that root)");
+    AssetStorePaths::setRootOverride(otherRoot.path());   // the store moves before the landing
+    pumpUntilLanded();
+    AssetStorePaths::setRootOverride(storeRoot.path());
+    CHECK_LOUD(called && dropped.contains(QStringLiteral("store moved")),
+               qUtf8Printable(QStringLiteral("F8: the landing into a moved store is refused with its reason ('%1')")
+                                  .arg(dropped)));
+    bool failedRow = false;
+    for (const auto &row : landed) if (!row.ok) failedRow = true;
+    CHECK_LOUD(failedRow, "F8: ...and the landed listeners are told the rows failed");
+    CHECK_LOUD(!MeshBakeStore::isFresh(conn, storeRoot.path(), source, imported.assetGuid),
+               "F8: ...and nothing was committed into either root");
+
+    MeshBakeStore::stopBackgroundRebuild();
+    AssetStorePaths::setRootOverride(QString());
+}
+
 int main(int argc, char **argv)
 {
     QCoreApplication app(argc, argv);
@@ -2959,6 +3121,13 @@ int main(int argc, char **argv)
     if (argc > 1 && QString::fromLocal8Bit(argv[1]) == QStringLiteral("--determinism")) {
         std::printf("== 15. the bake does not depend on its threads ==\n");
         bakeDeterminism();
+        if (failures) std::printf("FAILED: %d of %d check(s)\n", failures, checks);
+        else          std::printf("ALL %d CHECKS PASSED\n", checks);
+        return failures ? 1 : 0;
+    }
+    if (argc > 1 && QString::fromLocal8Bit(argv[1]) == QStringLiteral("--async-landing")) {
+        std::printf("== 18. the import bakes' landing ==\n");
+        asyncLanding();
         if (failures) std::printf("FAILED: %d of %d check(s)\n", failures, checks);
         else          std::printf("ALL %d CHECKS PASSED\n", checks);
         return failures ? 1 : 0;

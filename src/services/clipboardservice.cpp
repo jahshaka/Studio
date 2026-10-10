@@ -32,6 +32,7 @@ For more information see the LICENSE file
 #include "services/assetcas.h"
 #include "services/assetclosure.h"
 #include "services/assetstorepaths.h"
+#include "services/meshbakestore.h"
 #include "services/sceneeditservice.h"
 #include "services/selectionservice.h"
 #include "services/undoservice.h"
@@ -48,6 +49,17 @@ namespace {
 /// content id and the resolver finds the bytes, or reports them missing.
 constexpr qint64 kDefaultInlineLimit = 4 * 1024 * 1024;
 const char *kInlineLimitSetting = "clipboard/inlineLimitBytes";
+
+/// THE FILE BUDGET'S FLOOR (STAGE-CLOSE-TRIAGE-1 rounds 7-8): the budget bounds the inline FILE bytes
+/// (row blobs always travel, unbudgeted) and is never below 64 KB; a setting below the floor is
+/// REFUSED with its reason at the copy, never silently raised.
+QString budgetBelowFloor(qint64 limit)
+{
+    if (limit >= ClipboardService::kMinInlineLimitBytes) return QString();
+    return QStringLiteral("the clipboard's inline file budget (clipboard/inlineLimitBytes = %1 bytes) "
+                          "is below its 64 KB minimum — nothing was copied")
+        .arg(limit);
+}
 
 } // namespace
 
@@ -88,15 +100,9 @@ iris::ScenePtr ClipboardService::scene() const
 qint64 ClipboardService::inlineLimitBytes() const
 {
     if (auto *settings = SettingsManager::getDefaultManager())
-        return qMax(qint64(0), settings->getValue(QLatin1String(kInlineLimitSetting),
-                                                  qint64(kDefaultInlineLimit)).toLongLong());
+        return settings->getValue(QLatin1String(kInlineLimitSetting), qint64(kDefaultInlineLimit))
+            .toLongLong();
     return kDefaultInlineLimit;
-}
-
-void ClipboardService::setInlineLimitBytes(qint64 bytes)
-{
-    if (auto *settings = SettingsManager::getDefaultManager())
-        settings->setValue(QLatin1String(kInlineLimitSetting), qMax(qint64(0), bytes));
 }
 
 QString ClipboardService::storeId() const
@@ -137,8 +143,13 @@ ClipboardCopyResult ClipboardService::publish(const Envelope &envelope, int item
     ClipboardCopyResult result;
     const QByteArray payload = envelope.toText();
     if (qint64(payload.size()) > clipboardformat::kMaxPayloadBytes) {
-        result.error = QStringLiteral("payload too large (%1 MB)")
-                           .arg(payload.size() / (1024.0 * 1024.0), 0, 'f', 1);
+        // Said like the floor's refusal: the limit, and that nothing was copied (read 8 I4).
+        // The number is the EXCESS (read 9): how far over the limit, one decimal, at least 0.1.
+        const double overMiB = qMax(0.1, double(qint64(payload.size()) - clipboardformat::kMaxPayloadBytes)
+                                             / (1024.0 * 1024.0));
+        result.error = QStringLiteral("payload too large (%1 MB over the %2 MB limit) — nothing was copied")
+                           .arg(overMiB, 0, 'f', 1)
+                           .arg(clipboardformat::kMaxPayloadBytes / (1024 * 1024));
         return result;
     }
     backend->setPayload(payload);
@@ -193,7 +204,14 @@ ClipboardCopyResult ClipboardService::copyNodes(const QList<iris::SceneNodePtr> 
 
     assetclosure::Options options;
     options.inlineLimitBytes = inlineLimitBytes();
+    result.error = budgetBelowFloor(options.inlineLimitBytes);
+    if (!result.error.isEmpty()) return result;
     options.storeRoot = AssetStorePaths::root();
+    // A NODE PASTE CARRIES THE SAME CLOSURE A SHARE FILE DOES (read 4; the portability rule): every
+    // row with its catalog blob and properties — the import record among them — so a paste into a
+    // library that has never seen the model lands rows the landing bakes with the record they
+    // were imported under, not identity. (The byte budget stays the clipboard's.)
+    options.includeRowBlobs = true;
     if (project) options.projectGuid = project->getProjectGuid();
     int inlined = 0, referenced = 0;
     envelope.assets = assetclosure::describe(assetclosure::forNodes(nodeObjects, db), db,
@@ -231,6 +249,8 @@ ClipboardCopyResult ClipboardService::copyAssets(const QStringList &guids)
 
     assetclosure::Options options;
     options.inlineLimitBytes = inlineLimitBytes();
+    result.error = budgetBelowFloor(options.inlineLimitBytes);
+    if (!result.error.isEmpty()) return result;
     options.storeRoot = AssetStorePaths::root();
     // A TILE carries its catalog row (name, type, placement, blob, properties):
     // pasting one into a library that has never seen the guid has to produce a
@@ -321,7 +341,14 @@ QStringList neededGuids(const ClipItem &item, const Envelope &envelope)
         seen.insert(guid);
         out << guid;
         const auto entry = envelope.assets.constFind(guid);
-        if (entry != envelope.assets.constEnd()) frontier << entry->dependencies;
+        if (entry != envelope.assets.constEnd()) {
+            frontier << entry->dependencies;
+            // THE MEMBER'S OBJECT (read 4): a Mesh member's import record lives on its Object row,
+            // which the closure carries (assetclosure's member-to-object edge) — a paste that landed
+            // the member without it re-baked the model at identity.
+            if (!entry->parent.isEmpty() && envelope.assets.contains(entry->parent))
+                frontier << entry->parent;
+        }
     }
     return out;
 }
@@ -512,6 +539,13 @@ ClipboardPasteResult ClipboardService::paste(const ClipboardPasteOptions &option
         if (!result.imported.isEmpty()) emit assetsImported(result.imported);
         return result;
     }
+
+    // A PASTE FROM ANOTHER LIBRARY LANDS MODEL ROWS WITH NO BAKE (the bake is derived data, never
+    // in the envelope): built like every import builds them (TC2-BUNDLE-NO-BAKE) — but OFF THIS
+    // THREAD (STAGE-CLOSE-TRIAGE-1 F3): the nodes are placed now, with no geometry, and the geometry
+    // arrives when the bake lands (MeshBakeStore::bakeLandedAsync; SceneEditService swaps it in).
+    // A paste inside one library imports nothing and builds nothing.
+    MeshBakeStore::bakeLandedAsync(result.imported);
 
     if (nodeItems.isEmpty()) {                    // an Assets-page paste is done
         if (!result.imported.isEmpty()) emit assetsImported(result.imported);

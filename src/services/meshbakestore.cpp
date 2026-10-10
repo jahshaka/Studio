@@ -20,6 +20,7 @@ For more information see the LICENSE file
 #include <QHash>
 #include <QSet>
 #include <QMutex>
+#include <QUuid>
 #include <QSqlQuery>
 #include <QTemporaryDir>
 #include <memory>
@@ -27,6 +28,8 @@ For more information see the LICENSE file
 #include <QtConcurrent/QtConcurrentRun>
 #include <QThreadPool>
 #include <QThread>
+#include <QFuture>
+#include <QPointer>
 
 #include "data/database/database.h"
 #include "data/constants.h"
@@ -42,6 +45,34 @@ namespace
 QMutex sLock;
 int sScopeDepth = 0;
 QHash<QString, iris::BakedModelPtr> sCache;
+/// THE CACHES' GENERATION (STAGE-CLOSE-TRIAGE-1 F8): bumped by clear(). A lookup reads the catalog
+/// OUTSIDE the locks (the boot sweep does it on its worker), so a commit's clear() on the UI thread can
+/// land between that read and the lookup's insert — which would then plant the pre-commit answer (an
+/// old settings hash, a missing bake) for the rest of the session. A lookup inserts only when the
+/// generation it started under is still current. The settings cache is guarded by clear() bumping it
+/// under the lock the insert checks; the model cache (sCache) is correct by ORDER — the bump precedes
+/// sCache.clear(), so any insert after that clear sees the new generation. A lookup INSIDE a plan's
+/// pinned snapshot starts under the plan's generation, not its own (PinGeneration, I7).
+std::atomic<quint64> sCacheGeneration { 0 };
+/// A PLAN'S PINNED GENERATION (I7): set for the life of a plan whose lookups run inside one
+/// still-stepping statement (modelBakesNeeded, staleJobsFor). Per thread: the sweep plans on its
+/// worker while the UI thread looks up on its own.
+thread_local bool tGenerationPinned = false;
+thread_local quint64 tPinnedGeneration = 0;
+struct PinGeneration
+{
+    bool outer = !tGenerationPinned;
+    PinGeneration()
+    {
+        if (outer) { tGenerationPinned = true; tPinnedGeneration = sCacheGeneration.load(); }
+    }
+    ~PinGeneration() { if (outer) tGenerationPinned = false; }
+};
+/// The generation a lookup starts under: the plan's pinned one inside a plan, else now.
+quint64 lookupGeneration()
+{
+    return tGenerationPinned ? tPinnedGeneration : sCacheGeneration.load();
+}
 
 
 /// The sha256 a store object's file name IS. Empty for anything that is not a
@@ -222,6 +253,7 @@ QPair<QString, iris::ImportTransform> resolveSettings(QSqlDatabase conn, const Q
                                                      const QString &assetGuid)
 {
     const QString key = sourcePath + QLatin1Char('|') + assetGuid;
+    const quint64 generation = lookupGeneration();
     {
         QMutexLocker locked(&sSettingsLock);
         const auto hit = sSettingsCache.constFind(key);
@@ -244,7 +276,7 @@ QPair<QString, iris::ImportTransform> resolveSettings(QSqlDatabase conn, const Q
         out.second = parsed.transform(declared);
     }
     QMutexLocker locked(&sSettingsLock);
-    sSettingsCache.insert(key, out);
+    if (sCacheGeneration.load() == generation) sSettingsCache.insert(key, out);
     return out;
 }
 }   // namespace
@@ -332,6 +364,7 @@ iris::PrewarmItem planFor(const QString &sourcePath, const QString &assetGuid)
 iris::BakedModelPtr load(const QString &sourcePath, const QString &assetGuid)
 {
     if (sourcePath.isEmpty()) return iris::BakedModelPtr();
+    const quint64 generation = lookupGeneration();
     // KEYED BY (path, settings): identical bytes imported twice under different
     // settings are two different geometries and must not share a cache slot.
     const QString cacheKey =
@@ -357,7 +390,7 @@ iris::BakedModelPtr load(const QString &sourcePath, const QString &assetGuid)
     QMutexLocker locked(&sLock);
     // Negative results are cached too: a model with no bake must not re-query
     // the catalog for every mesh node that references it.
-    if (sScopeDepth > 0) sCache.insert(cacheKey, result);
+    if (sScopeDepth > 0 && sCacheGeneration.load() == generation) sCache.insert(cacheKey, result);
     return result;
 }
 
@@ -378,6 +411,7 @@ void clear()
 {
     {
         QMutexLocker locked(&sSettingsLock);
+        sCacheGeneration.fetch_add(1);
         sSettingsCache.clear();
     }
     QMutexLocker locked(&sLock);
@@ -518,9 +552,15 @@ bool bakeSource(QSqlDatabase conn, const QString &root, const QString &sourcePat
 }
 
 QVector<BakeTarget> modelBakesNeeded(QSqlDatabase conn, const QString &root,
-                                     const QSet<QString> *onlyGuids)
+                                     const QSet<QString> *onlyGuids, QVector<BakeTarget> *allRows)
 {
     QVector<BakeTarget> out;
+    // ONE CACHE GENERATION FOR THE WHOLE PLAN (I7): the lookups below run inside this statement's
+    // still-stepping SELECT, whose WAL read snapshot is pinned until it finishes — a lookup that
+    // sampled the generation AFTER a commit's clear() would still read the pre-commit snapshot and
+    // plant it as current. Sampled once, here, before the statement, every insert the plan makes
+    // is dropped if any clear() happened since.
+    const PinGeneration pinned;
     // Every recorded file whose DISPLAY NAME is a model, with the ROW that
     // names it — one entry per distinct (content, import settings) pair, since
     // that pair is what a bake is keyed on. Deduplicating by content alone
@@ -561,6 +601,7 @@ QVector<BakeTarget> modelBakesNeeded(QSqlDatabase conn, const QString &root,
         }
         if (path.isEmpty()) continue;   // offline/purged object, already judged
         const QString guid = query.value(3).toString();
+        if (allRows) allRows->append({ path, guid, query.value(4).toInt() == static_cast<int>(ModelTypes::Animation) });
         if (query.value(4).toInt() == static_cast<int>(ModelTypes::Animation)) {
             const QString key = oid + QStringLiteral("|clip");
             if (seen.contains(key)) continue;
@@ -592,8 +633,9 @@ BakeJob prepareBake(QSqlDatabase conn, const QString &root, const BakeTarget &ta
     return job;
 }
 
-BakeResult runBake(const BakeJob &job)
+BakeResult runBake(const BakeJob &job, const std::atomic<bool> *cancel)
 {
+    const auto cancelled = [cancel]() { return cancel && cancel->load(); };
     BakeResult out;
     out.sourceOid = job.sourceOid;
     if (job.path.isEmpty()) { out.error = QStringLiteral("not a store object"); return out; }
@@ -614,14 +656,19 @@ BakeResult runBake(const BakeJob &job)
     } else {
         iris::MeshBake::Model model = iris::MeshBake::buildFromFile(
             job.path, iris::MeshBake::fingerprintFor(job.sourceOid, job.settings), dir->path(),
-            job.transform);
+            job.transform, cancel);
+        if (cancelled()) { out.error = QStringLiteral("cancelled"); return out; }
         if (!model.valid) {
             out.error = QStringLiteral("could not parse '%1' for baking").arg(QFileInfo(job.path).fileName());
             return out;
         }
         path = QDir(dir->path()).filePath(iris::MeshBake::fileNameFor(job.sourceOid, job.settings));
+        // CANCEL POINTS (F5) before the write and before the store's stage: a cancelled bake writes
+        // and stages nothing.
+        if (cancelled()) { out.error = QStringLiteral("cancelled"); return out; }
         if (!iris::MeshBake::write(path, model, &out.error)) return out;
     }
+    if (cancelled()) { out.error = QStringLiteral("cancelled"); return out; }
     out.dir = dir;
     out.path = path;
     // The store's half of the write, here and not on the database thread:
@@ -658,6 +705,7 @@ bool commitBake(QSqlDatabase conn, const QString &root, BakeResult &result, QStr
 QVector<BakeJob> staleJobsFor(QSqlDatabase conn, const QString &root, const QStringList &paths)
 {
     QVector<BakeJob> jobs;
+    const PinGeneration pinned;   // the lookups run inside `rows`' pinned snapshot (I7)
     QSet<QString> seen;   // "<oid>|<settingsHash>"
     for (const QString &path : paths) {
         const QString oid = oidFromStorePath(root, path);
@@ -727,6 +775,26 @@ int rebuildPumped(const QVector<BakeJob> &jobs, const std::function<void(int, in
 
 namespace {
 QFuture<void> sBackground;
+// THE ASYNC BAKES (STAGE-CLOSE-TRIAGE-1 F3). Everything here but the worker's runBake loop is the
+// database thread's: the pending map, the listeners, the commits.
+QHash<QString, int> sPending;                       ///< model file -> async bakes in flight over it
+int sPendingJobs = 0;
+/// Moved by stopBackgroundRebuild (a reset, a shutdown). ATOMIC: the async worker reads it between jobs
+/// and stops there (STAGE-CLOSE-TRIAGE-1 F5); the continuation drops a landing whose epoch moved.
+std::atomic<quint64> sAsyncEpoch { 0 };
+/// THE IN-FLIGHT JOBS' CANCEL FLAG (F5): every async worker started under it reads it inside its bake
+/// (MeshBake's cancel points); stopBackgroundRebuild raises it and installs a fresh one for later bakes.
+std::shared_ptr<std::atomic<bool>> sAsyncCancel = std::make_shared<std::atomic<bool>>(false);
+/// How many async jobs are INSIDE runBake right now (a worker that has started its bake) — what a suite
+/// that quits during a bake waits for (assets.bakesRunning), so its quit lands inside the job.
+std::atomic<int> sAsyncRunning { 0 };
+QList<QFuture<QVector<BakeResult>>> sAsyncFutures;  ///< joined by stopBackgroundRebuild
+struct Listener
+{
+    QPointer<QObject> context;
+    std::function<void(const QVector<LandedBake> &)> fn;
+};
+QVector<Listener> sListeners;
 std::atomic<bool> sBackgroundStop { false };
 QThreadPool *backgroundPool()
 {
@@ -748,23 +816,53 @@ void startBackgroundRebuild()
     if (qEnvironmentVariableIsSet("JAHSHAKA_BAKE_SWEEP")
         && qEnvironmentVariableIntValue("JAHSHAKA_BAKE_SWEEP") == 0)
         return;
-    QSqlDatabase conn = QSqlDatabase::database();
+    const QSqlDatabase main = QSqlDatabase::database();
+    if (!main.isOpen()) return;
+    const QString dbPath = main.databaseName();
     const QString root = AssetStorePaths::root();
-    QVector<BakeJob> jobs;
-    for (const BakeTarget &target : modelBakesNeeded(conn, root)) {
-        if (!QFileInfo::exists(target.path)) continue;
-        BakeJob job = prepareBake(conn, root, target);
-        if (!job.path.isEmpty()) jobs.append(job);
-    }
-    if (jobs.isEmpty()) return;
-    irisLog(QStringLiteral("mesh bake: rebuilding %1 stale bake(s) in the background").arg(jobs.size()));
     sBackgroundStop.store(false);
-    sBackground = QtConcurrent::run(backgroundPool(), [jobs, root]() {
+    // THE SWEEP IS PLANNED ON THE WORKER TOO (TC2-LIBRARY-BOOT-READ, 2026-10-10): the plan reads
+    // every model file of the library and every row naming it (modelBakesNeeded: 22.6 MB of a
+    // 10k-asset library's 130 MB database, measured) — it ran on the UI thread inside the main
+    // window's constructor, at every boot, to find nothing stale. The catalog is per thread, so
+    // the worker reads through its OWN read connection to the same file; only the commits come
+    // back to this (the database) thread, as before.
+    sBackground = QtConcurrent::run(backgroundPool(), [dbPath, root]() {
+        QVector<BakeJob> jobs;
+        {
+            const QString name = QStringLiteral("BakeSweep-%1")
+                                     .arg(QUuid::createUuid().toString(QUuid::WithoutBraces));
+            {
+                QSqlDatabase conn = QSqlDatabase::addDatabase(QStringLiteral("QSQLITE"), name);
+                conn.setDatabaseName(dbPath);
+                conn.setConnectOptions(QStringLiteral("QSQLITE_OPEN_READONLY;QSQLITE_BUSY_TIMEOUT=5000"));
+                if (conn.open()) {
+                    for (const BakeTarget &target : modelBakesNeeded(conn, root)) {
+                        if (sBackgroundStop.load()) break;
+                        if (!QFileInfo::exists(target.path)) continue;
+                        BakeJob job = prepareBake(conn, root, target);
+                        if (!job.path.isEmpty()) jobs.append(job);
+                    }
+                    conn.close();
+                }
+            }
+            QSqlDatabase::removeDatabase(name);
+        }
+        if (jobs.isEmpty() || sBackgroundStop.load()) return;
+        irisLog(QStringLiteral("mesh bake: rebuilding %1 stale bake(s) in the background").arg(jobs.size()));
         for (const BakeJob &job : jobs) {
             if (sBackgroundStop.load()) return;
-            auto result = std::make_shared<BakeResult>(runBake(job));
+            auto result = std::make_shared<BakeResult>(runBake(job, &sBackgroundStop));
             QMetaObject::invokeMethod(QCoreApplication::instance(), [result, root]() {
                 QString error;
+                // A CANCEL IS NOT A FAILURE (read 5): a reset or a quit stopped the job — the next
+                // library open's sweep builds it again. Said as what it is.
+                if (result->error == QStringLiteral("cancelled")) {
+                    QVector<AssetCas::Staged> leftover{ result->staged };
+                    AssetCas::discardStaged(leftover);
+                    irisLog(QStringLiteral("mesh bake: a background rebuild was cancelled (a reset or a quit)"));
+                    return;
+                }
                 if (!commitBake(QSqlDatabase::database(), root, *result, &error))
                     irisLog(QStringLiteral("mesh bake: background rebuild failed (%1)").arg(error));
             }, Qt::QueuedConnection);
@@ -776,6 +874,20 @@ void stopBackgroundRebuild()
 {
     sBackgroundStop.store(true);
     if (sBackground.isValid() && !sBackground.isFinished()) sBackground.waitForFinished();
+    // THE ASYNC BAKES TOO (a reset, a shutdown). The epoch moves FIRST: each worker stops between
+    // jobs on it (F5), so the join below waits for the job IN FLIGHT only — never the rest of a
+    // multi-model paste — and every landing still queued to this thread is dropped by it (its
+    // `done` told why: F7), so nothing lands in a library that is no longer the one it was planned
+    // against. The job IN FLIGHT stops too, at its next cancel point (the parse's progress handler,
+    // between meshes, before each stage task, before the write and the stage): the join is short.
+    ++sAsyncEpoch;
+    sAsyncCancel->store(true);   // the job in flight stops at its next cancel point
+    sAsyncCancel = std::make_shared<std::atomic<bool>>(false);
+    for (QFuture<QVector<BakeResult>> &future : sAsyncFutures)
+        if (!future.isFinished()) future.waitForFinished();
+    sAsyncFutures.clear();
+    // A test hold left on: its parked commits are released into the moved epoch, which discards them.
+    holdCommits(false);
 }
 
 bool backgroundRebuildRunning()
@@ -875,6 +987,214 @@ bool ensureFresh(const QString &sourcePath, const QString &assetGuid)
     if (jobs.isEmpty()) return false;   // no source on disk: the model stays missing
     rebuildPumped(jobs, std::function<void(int, int)>());
     return isFresh(conn, root, sourcePath, assetGuid);
+}
+
+namespace {
+
+bool sCommitHold = false;
+QVector<std::function<void()>> sHeldCommits;
+/// `done(failed, dropped)`: `dropped` names why NOTHING was committed (a reset or shutdown moved the
+/// epoch, the store moved), empty when the landing ran.
+using DoneFn = std::function<void(int failed, const QString &dropped)>;
+void landAsync(const QVector<BakeJob> &jobs, const QVector<LandedBake> &targets,
+               const DoneFn &done, quint64 epoch, QVector<BakeResult> results);
+
+/// Bakes `jobs` on a worker; commits them on the database thread when they land, tells the
+/// listeners which of `targets` landed, then calls `done(failed)`.
+void bakeAsync(const QVector<BakeJob> &jobs, const QVector<LandedBake> &targets, DoneFn done)
+{
+    for (const BakeJob &job : jobs) ++sPending[job.path];
+    sPendingJobs += jobs.size();
+    const quint64 epoch = sAsyncEpoch.load();
+    const std::shared_ptr<std::atomic<bool>> cancel = sAsyncCancel;
+    QFuture<QVector<BakeResult>> future = QtConcurrent::run([jobs, epoch, cancel]() {
+        QVector<BakeResult> results;
+        results.reserve(jobs.size());
+        for (const BakeJob &job : jobs) {
+            // A RESET OR SHUTDOWN STOPS THE WORKER BETWEEN JOBS (F5), like the background sweep —
+            // and INSIDE the job in flight, at MeshBake's cancel points (the flag below).
+            if (sAsyncEpoch.load() != epoch || cancel->load()) break;
+            ++sAsyncRunning;
+            results.append(runBake(job, cancel.get()));
+            --sAsyncRunning;
+        }
+        return results;
+    });
+    sAsyncFutures.removeIf([](const QFuture<QVector<BakeResult>> &f) { return f.isFinished(); });
+    sAsyncFutures.append(future);
+    future.then(QCoreApplication::instance(), [jobs, targets, done, epoch](QVector<BakeResult> results) {
+        landAsync(jobs, targets, done, epoch, std::move(results));
+    });
+}
+
+void landAsync(const QVector<BakeJob> &jobs, const QVector<LandedBake> &targets,
+               const DoneFn &done, quint64 epoch, QVector<BakeResult> results)
+{
+    // THE TEST HOLD (assets.holdBakes): the finished bake waits here, uncommitted and still pending,
+    // until the hold is released — so a suite can place and SAVE inside the window deterministically.
+    if (sCommitHold) {
+        auto held = std::make_shared<QVector<BakeResult>>(std::move(results));
+        sHeldCommits.append([jobs, targets, done, epoch, held]() {
+            landAsync(jobs, targets, done, epoch, std::move(*held));
+        });
+        return;
+    }
+    {
+        for (const BakeJob &job : jobs)
+            if (--sPending[job.path] <= 0) sPending.remove(job.path);
+        sPendingJobs -= jobs.size();
+        // NOTHING IS COMMITTED when the library or the store these were planned against is gone —
+        // a reset or shutdown moved the epoch, or the store root moved while the worker staged into
+        // the old one (F8: the commit would record objects that are not in the active store). The
+        // staged temps go with the results, and `done` is TOLD (F7: a caller waiting on the landing
+        // — the avatar module's busy job — ends with the reason instead of waiting forever).
+        const QString root = AssetStorePaths::root();
+        QString dropped;
+        if (epoch != sAsyncEpoch.load())
+            dropped = QStringLiteral("the library was reset or closed while its bake was running");
+        else if (!jobs.isEmpty() && jobs.first().storeRoot != root)
+            dropped = QStringLiteral("the asset store moved while its bake was running — import it again");
+        if (!dropped.isEmpty()) {
+            for (BakeResult &result : results) {
+                QVector<AssetCas::Staged> leftover{ result.staged };
+                AssetCas::discardStaged(leftover);
+            }
+            irisLog(QStringLiteral("mesh bake: %1 bake(s) not committed: %2").arg(jobs.size()).arg(dropped));
+            QVector<LandedBake> lost = targets;
+            for (LandedBake &row : lost) row.ok = false;
+            for (int i = 0; i < sListeners.size();) {
+                if (!sListeners[i].context) { sListeners.removeAt(i); continue; }
+                sListeners[i].fn(lost);
+                ++i;
+            }
+            if (done) done(jobs.size(), dropped);
+            return;
+        }
+        QSqlDatabase conn = QSqlDatabase::database();
+        int failed = 0;
+        QSet<QString> failedPaths;
+        for (int i = 0; i < results.size(); ++i) {
+            QString error;
+            if (!commitBake(conn, root, results[i], &error)) {
+                ++failed;
+                failedPaths.insert(jobs.at(i).path);
+                irisLog(QStringLiteral("mesh bake: '%1' could not be baked (%2)")
+                            .arg(QFileInfo(jobs.at(i).path).fileName(), error));
+            }
+        }
+        clear();
+        QVector<LandedBake> landed = targets;
+        for (LandedBake &row : landed) row.ok = !failedPaths.contains(row.path);
+        for (int i = 0; i < sListeners.size();) {
+            if (!sListeners[i].context) { sListeners.removeAt(i); continue; }
+            sListeners[i].fn(landed);
+            ++i;
+        }
+        if (done) done(failed, QString());
+    }
+}
+}   // namespace
+
+int bakeLandedAsync(const QStringList &guids)
+{
+    if (guids.isEmpty()) return 0;
+    // THE ROWS WERE JUST WRITTEN: the caches may still hold what a removed row of the same guid and
+    // content answered (a paste re-lands a deleted row under its original guid), and a plan from
+    // those stale settings bakes a variant no lookup of the new row will ever ask for. Measured: a
+    // pasted rig planned under the old row's settings hash, committed, and the landing then found no
+    // bake for the row's own. The landed rows carry their import record — the closure a paste and a
+    // share file carry includes each row's properties and a member's Object row (assetclosure) — so
+    // the plan below reads the settings the model was imported under.
+    clear();
+    QSqlDatabase conn = QSqlDatabase::database();
+    const QString root = AssetStorePaths::root();
+    const QSet<QString> only(guids.cbegin(), guids.cend());
+    QVector<BakeJob> jobs;
+    QVector<BakeTarget> rows;   // EVERY landed row over a model file, before the by-content dedupe
+    for (const BakeTarget &target : modelBakesNeeded(conn, root, &only, &rows)) {
+        BakeJob job = prepareBake(conn, root, target);
+        if (job.path.isEmpty()) continue;
+        jobs.append(job);
+    }
+    if (jobs.isEmpty()) return 0;
+    // THE TARGETS ARE EVERY ROW OVER A BAKED FILE (F6), not the one row the dedupe kept: two objects
+    // of a pack sharing one model are two rows over one bake, and the second one's nodes need their
+    // geometry swapped in too.
+    QSet<QString> baking;
+    for (const BakeJob &job : jobs) baking.insert(job.path);
+    QVector<LandedBake> targets;
+    for (const BakeTarget &row : rows)
+        if (baking.contains(row.path)) targets.append({ row.assetGuid, row.path, true });
+    irisLog(QStringLiteral("mesh bake: %1 import bake(s) started for %2 landed row(s)")
+                .arg(jobs.size()).arg(targets.size()));
+    bakeAsync(jobs, targets, DoneFn());
+    return jobs.size();
+}
+
+bool ensureFreshAsync(const QString &sourcePath, const QString &assetGuid, QObject *context,
+                      std::function<void(bool fresh, const QString &dropped)> landed)
+{
+    QSqlDatabase conn = QSqlDatabase::database();
+    const QString root = AssetStorePaths::root();
+    if (sourcePath.isEmpty() || isFresh(conn, root, sourcePath, assetGuid)) return false;
+    const QVector<BakeJob> jobs = staleJobsFor(conn, root, { sourcePath });
+    if (jobs.isEmpty()) return false;   // no source on disk: the model stays missing
+    QPointer<QObject> guard(context);
+    bakeAsync(jobs, { { assetGuid, sourcePath, true } },
+              [guard, landed, sourcePath, assetGuid](int, const QString &dropped) {
+                  if (!guard || !landed) return;
+                  if (!dropped.isEmpty()) { landed(false, dropped); return; }
+                  landed(isFresh(QSqlDatabase::database(), AssetStorePaths::root(), sourcePath,
+                                 assetGuid), QString());
+              });
+    return true;
+}
+
+void holdCommits(bool on)
+{
+    sCommitHold = on;
+    if (on) return;
+    const QVector<std::function<void()>> held = std::move(sHeldCommits);
+    sHeldCommits.clear();
+    for (const std::function<void()> &land : held) land();
+}
+
+QString modelSourceFor(QSqlDatabase conn, const QString &root, const QString &guid)
+{
+    QSqlQuery query(conn);
+    query.prepare("SELECT AF.name, AF.oid, F.ext FROM asset_files AF LEFT JOIN files F ON AF.oid = F.oid "
+                  "WHERE AF.asset_guid = ? AND AF.role <> ? ORDER BY AF.rowid");
+    query.addBindValue(guid);
+    query.addBindValue(iris::MeshBake::casRole());
+    if (!query.exec()) return QString();
+    while (query.next()) {
+        if (!Constants::MODEL_EXTS.contains(QFileInfo(query.value(0).toString()).suffix().toLower()))
+            continue;
+        const QString path = AssetStorePaths::objectPathIn(root, query.value(1).toString(),
+                                                           query.value(2).toString());
+        if (QFileInfo::exists(path)) return path;
+    }
+    return QString();
+}
+
+bool bakePending(const QString &sourcePath)
+{
+    return sPending.contains(sourcePath);
+}
+
+int pendingBakeCount()
+{
+    return sPendingJobs;
+}
+
+int runningBakeCount()
+{
+    return sAsyncRunning.load();
+}
+
+void addLandedListener(QObject *context, std::function<void(const QVector<LandedBake> &)> listener)
+{
+    sListeners.append({ QPointer<QObject>(context), std::move(listener) });
 }
 
 QStringList modelSourcesNeedingBake(QSqlDatabase conn, const QString &root)
