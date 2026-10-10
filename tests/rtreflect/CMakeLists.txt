@@ -213,7 +213,10 @@ add_dependencies(test_reflect_lod_pop JahshakaEngineMedia)
 target_link_libraries(test_reflect_lod_pop PRIVATE IrisGL JahshakaEngine Qt6::Gui Qt6::OpenGL)
 jah_gpu_row(gi.reflect_lod_pop CLASS engine COMMAND test_reflect_lod_pop
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(gi.reflect_lod_pop PROPERTIES TIMEOUT 600 LABELS "photon-target"
+# TESTING-CLEANUP-2B item 7 (2026-10-10, RE-MEASURED ALONE: 3 runs, each its own whole-card hold under the slot,
+# gpu-exclusive.sh class 2, the box otherwise idle; seconds = ctest's, the admission wait outside them): 52.8 / 56.9 / 52.2 s,
+# median 52.8 -> 6x = 320; slot-era worst 56.9 s (these runs) -> TIMEOUT 320 (was 600).
+set_tests_properties(gi.reflect_lod_pop PROPERTIES TIMEOUT 320 LABELS "photon-target"
                      ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
 # THE COST, at the resolution the bar is stated at. Same binary, same fixture
