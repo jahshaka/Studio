@@ -43,15 +43,35 @@ import threading
 import time
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-SCHEMA = 1
+SCHEMA = 2      # 2 (VERDICT-1 + GATE-LOG-1): xid, noadmit_arms, slot_wait_s, drain_s, hold_s, box.mem, box.queue_depth
 # THE TIER NAMES (TESTING-DEBTS-1 T11) — the only ones a record may carry; testing/runs/README.md
-# documents the same list. gate-scope.sh writes the first four (`scoped`; `scoped-fallback` = a
-# scoped gate that fell back to the whole tier; `scoped-tier` = the tier by rule, a fork pin;
-# `joint` = --joint) and `target` (GATE-SPEED-1: the target tests' own step, after the gating
-# verdict — reported, never gating); rc-gate.sh writes JAH_GATE_TIER (merge by default: stage,
-# nightly, push, smoke — the owner's smoke rc —, fork).
-TIERS = ("scoped", "scoped-fallback", "scoped-tier", "joint", "target", "merge", "stage", "nightly", "push",
-         "smoke", "fork")
+# documents the same list. gate-scope.sh writes the first three (`scoped`; `scoped-fallback` = a
+# scoped gate that fell back to the whole tier; `scoped-tier` = the tier by rule, a fork pin) and
+# `target` (GATE-SPEED-1: the target tests' own step, after the gating verdict — reported, never
+# gating); rc-gate.sh writes JAH_GATE_TIER (merge by default: stage, stage-close, push, smoke — the
+# owner's smoke rc —, fork; scoped for a BATCH candidate, BATCH-GATE-1). `joint` is gone with
+# `--joint` (BATCH-GATE-1: the batch gate is the joint gate); its old records stay readable.
+TIERS = ("scoped", "scoped-fallback", "scoped-tier", "target", "merge", "stage", "stage-close", "push",
+         "smoke", "fork", "lane", "solo")
+# GATE-COST-2 #12: `lane` — a lane tool's own runs, recorded under the lane's name (the batch and push
+# judgement ignores it); `solo` — a --solo batch's retries (gate-scope's default for --solo, and the solo
+# re-run of a row an abort dropped red).
+
+
+def lane_list(lane):
+    """THE RECORD'S `lanes` (BATCH-GATE-1): the batch's lanes as a LIST — a gate on a batch candidate
+    is every lane's gate at once; the single-lane case is a one-element list. Takes a name, a
+    comma-separated string, or a list of either; empty parts are dropped."""
+    if lane is None:
+        return []
+    parts = lane if isinstance(lane, (list, tuple)) else [lane]
+    out = []
+    for p in parts:
+        for n in str(p).split(","):
+            n = n.strip()
+            if n and n not in out:
+                out.append(n)
+    return out
 
 
 def check_tier(tier):
@@ -178,6 +198,49 @@ def budget_verdict(text):
     return ("OOM", oom) if oom else (None, None)
 
 
+# THE Xid IN THE RECORD (VERDICT-1 U3): scripts/vram_tokens.py's supervise() reads the kernel journal
+# through scripts/kernel_xid.py after every admitted row and prints `XID <n> from pid <p> of the row
+# <label> — …: <the kernel's line>` per fault from the row's OWN process tree, then `XID-WINDOW
+# <start>..<end> <label>`; tests/support/run_pool.py turns an arm whose process faulted into `ARM
+# <pool>.<arm> CRASH <ms> xid <n> (the kernel's GPU fault from pid <p> at HH:MM:SS)`. The record
+# carries `xid: null | {pid, window, lines[]}` — a red with an xid is a DEFECT by law (CLAUDE.md:
+# never environmental), and ci_gate_check's verdict door accepts only `real:<defect id>` on it.
+_XID_ROW = re.compile(r"^\s*(?:\|\s*)*XID (\d+) from pid (\d+) of the row .*?: (.*)$")
+_XID_WINDOW = re.compile(r"^\s*(?:\|\s*)*XID-WINDOW (\S+\.\.\S+)")
+_XID_ARM = re.compile(r"^\s*ARM\s+(\S+)\s+CRASH\b.*?\bxid (\d+) \(the kernel's GPU fault from pid (\d+) at "
+                      r"(\d\d:\d\d:\d\d)\)")
+
+
+_UNREADABLE = re.compile(r"kernel journal is unreadable")
+
+
+def xid_of(text, day=None):
+    """(the row's xid, {arm: its xid}) from a row's output — each None / absent when no fault."""
+    row, window, arms = None, None, {}
+    day = day or datetime.date.today().isoformat()
+    for line in (text or "").splitlines():
+        m = _XID_ROW.match(line)
+        if m:
+            if row is None: row = {"pid": int(m.group(2)), "window": None, "lines": []}
+            row["lines"].append(m.group(3).strip()[:300]); continue
+        m = _XID_WINDOW.match(line)
+        if m:
+            window = m.group(1); continue
+        m = _XID_ARM.match(line)
+        if m:
+            at = f"{day}T{m.group(4)}"
+            arms[m.group(1)] = {"pid": int(m.group(3)), "window": f"{at}..{at}",
+                                "lines": [line.strip()[:300]]}
+    if row is not None:
+        row["window"] = window
+    for a in arms.values():
+        if window: a["window"] = window
+    if row is None and arms:
+        first = next(iter(arms.values()))
+        row = {"pid": first["pid"], "window": first["window"], "lines": [l for a in arms.values() for l in a["lines"]]}
+    return row, arms
+
+
 def row_verdict(status, text, arms):
     """(verdict, status, budget line|None) of a row from ctest's status and its output: NOADMIT
     (never ran), else OOM / LOST for a red that carries the budget texts, else ctest's class."""
@@ -185,6 +248,11 @@ def row_verdict(status, text, arms):
     na = noadmit_line(text) if v == "FAIL" else None
     if na and not arms:
         return "NOADMIT", na, None
+    # VERDICT-1 U2: A POOL WHOSE EVERY ARM GOT NO ADMISSION NEVER RAN — NOADMIT, never FAIL (13 such
+    # pools were recorded FAIL in the audit week, and 4 of them were cleared by a verdict's prose); a
+    # pool with a MIX stays FAIL, its NOADMIT arms named on the row (`noadmit_arms`)
+    if v != "PASS" and arms and all(a[1] == "NOADMIT" for a in arms):
+        return "NOADMIT", na or ("every arm NOADMIT (%d): the pool never ran" % len(arms)), None
     if v == "FAIL":
         if any(_RUNTIMEOUT.match(l) for l in (text or "").splitlines()):
             v = "TIMEOUT"
@@ -198,7 +266,7 @@ def verdict_of(status):
     s = status.lower()
     if "passed" in s: return "PASS"
     if "timeout" in s: return "TIMEOUT"
-    if "not run" in s or "disabled" in s: return "NOTRUN"
+    if "not run" in s or "disabled" in s or "skipped" in s: return "NOTRUN"   # SKIP_RETURN_CODE: it did not run
     if "exception" in s or "segfault" in s or "abort" in s or "signal" in s: return "CRASH"
     return "FAIL"
 
@@ -221,22 +289,202 @@ def log_dir():
     return os.environ.get("JAH_RUN_LOG_DIR") or os.path.join(workspace_root(), "testing", "runs")
 
 
-# THE CONTENTION CLASS IS DATA (TEST-SELECTOR-1 L2; audit §8: it was prose in three docs the tools
-# could not read): <workspace>/testing/contention.json, {"suites": {<suite or pool.arm>: <verdict>}}.
-# ci_gate_check's flake law (3/3 solo after a red) and `gate-scope.sh --solo` read it; a suite joins
-# it by a recorded verdict, never by convenience.
-def contention_file():
-    return os.environ.get("JAH_CONTENTION_FILE") or os.path.join(workspace_root(), "testing", "contention.json")
+# THE DEFECT REGISTRY (TESTING_V3_SPEC §1.5; lane VERDICT-1): <workspace>/testing/defects.json — what "known" means.
+# {"defects": [{id, rows, kind, cause, first_seen {tip, pin, run}, state, recheck, found_by, ...}]}:
+#   kind      defect | nondeterminism | selector | box | combination
+#   state     "open" | {"fixed": {"tip": <sha>}} | "retired"
+#   recheck   a DATE (YYYY-MM-DD) the judge enforces: an entry past it is refused until re-verdicted
+#   found_by  read | gate | owner | lane
+# and, on a nondeterminism entry, ONE of:
+#   uses: 1, suspects: [lanes], census {...}   a NOT REPRODUCED entry (attribution): SINGLE-USE — it clears only
+#                                              reds at first_seen.tip (the merge that registered it), never again
+#   enrolled {by, rate, census, date}          a STANDING entry (the lead's explicit `defect enrol`, with a measured
+#                                              rate and the census): the contention class
+# PENDING entries: BATCH-GATE-1 writes testing/defects.pending/<id>.json (one entry each); this reader ingests them
+# with the registry (one namespace, the same shape).
+# Read by the verdict door (`real:<id>` must name an entry whose `rows` hold the row), by the push tier and
+# the stage-close judge (KNOWN RED), and by gate-report.py. THE CONTENTION CLASS IS ITS SUBSET `kind:
+# nondeterminism`, state open (there is no separate file: contention.json is gone, forward only). Written
+# by `lane.sh defect add` (the lead, PROCESS-1 — against this schema) and by the tools.
+DEFECT_KINDS = ("defect", "nondeterminism", "selector", "box", "combination")
+FOUND_BY = ("read", "gate", "owner", "lane")
+DEFECT_FIELDS = ("id", "rows", "kind", "cause", "first_seen", "state", "recheck", "found_by")
+_RUN_DATE = re.compile(r"^(\d{4})(\d\d)(\d\d)T")
+_DATE = re.compile(r"^\d{4}-\d\d-\d\d$")
+
+
+def defects_file():
+    return os.environ.get("JAH_DEFECTS_FILE") or os.path.join(workspace_root(), "testing", "defects.json")
+
+
+def defects_pending_dir():
+    return os.path.join(os.path.dirname(defects_file()), "defects.pending")
+
+
+def recheck_past(e, today=None):
+    """True when an entry's recheck DATE has passed (the judge refuses it until it is re-verdicted)."""
+    today = today or datetime.date.today().isoformat()
+    return str(e.get("recheck")) < today
+
+
+def single_use(e):
+    """A NOT REPRODUCED entry: it clears reds only at the tip that registered it."""
+    return e.get("kind") == "nondeterminism" and e.get("uses") is not None
+
+
+def defect_state(e):
+    """'open' | 'fixed' | 'retired' of a registry entry."""
+    st = e.get("state")
+    return "fixed" if isinstance(st, dict) and "fixed" in st else st
+
+
+def defect_date(e):
+    """The date an entry was first seen (YYYY-MM-DD, from first_seen.run's stamp), or None."""
+    m = _RUN_DATE.match(str((e.get("first_seen") or {}).get("run") or ""))
+    return f"{m.group(1)}-{m.group(2)}-{m.group(3)}" if m else None
+
+
+def _defect_problems(e):
+    if not isinstance(e, dict): return ["not an object"]
+    bad = [f"missing {f}" for f in DEFECT_FIELDS if e.get(f) in (None, "", [], {})]
+    if bad: return bad
+    if not (isinstance(e["rows"], list) and all(isinstance(x, str) and x for x in e["rows"])):
+        bad.append("rows is not a list of row names")
+    if e["kind"] not in DEFECT_KINDS: bad.append(f"kind '{e['kind']}' is not one of {'|'.join(DEFECT_KINDS)}")
+    if e["found_by"] not in FOUND_BY: bad.append(f"found_by '{e['found_by']}' is not one of {'|'.join(FOUND_BY)}")
+    fs = e["first_seen"]
+    if not (isinstance(fs, dict) and all(isinstance(fs.get(k), str) and fs.get(k) for k in ("tip", "pin", "run"))):
+        bad.append("first_seen is not {tip, pin, run}")
+    elif not defect_date(e):
+        bad.append(f"first_seen.run '{fs['run']}' carries no date (<yyyymmddThhmmss>-<tip>)")
+    if not _DATE.match(str(e["recheck"])):
+        bad.append(f"recheck '{e['recheck']}' is not a DATE (YYYY-MM-DD; the judge enforces it)")
+    if e["kind"] == "nondeterminism":
+        if e.get("uses") is not None:
+            if e.get("uses") != 1 or not isinstance(e.get("suspects"), list) or not isinstance(e.get("census"), dict):
+                bad.append("a NOT REPRODUCED entry carries uses: 1, suspects: [lanes] and its census")
+        elif not (isinstance(e.get("enrolled"), dict) and all(e["enrolled"].get(k) for k in ("by", "rate", "census", "date"))):
+            bad.append("a nondeterminism entry is either single-use (uses: 1, suspects, census) or ENROLLED by the lead "
+                       "(enrolled {by, rate, census, date})")
+    st = e["state"]
+    if not (st in ("open", "retired") or (isinstance(st, dict) and isinstance((st.get("fixed") or {}).get("tip"), str)
+                                           and st["fixed"]["tip"])):
+        bad.append("state is not open | {fixed: {tip}} | retired")
+    return bad
+
+
+def defects_quarantine_dir():
+    return os.path.join(os.path.dirname(defects_file()), "defects.quarantine")
+
+
+def _quarantine(name, entry, why, src=None, log=sys.stderr):
+    """A malformed entry or pending file is QUARANTINED, never silent and never fatal to the rest: a pending file is
+    MOVED to testing/defects.quarantine/ (the registry file's own bad entry is COPIED there — the tracked file is the
+    lead's to edit), its reason in a `<name>.why` sidecar, and `REGISTRY: <file> quarantined: <why>` printed."""
+    q = defects_quarantine_dir()
+    safe = re.sub(r"[^A-Za-z0-9_.-]", "_", name)[:80] or "entry"
+    try:
+        os.makedirs(q, exist_ok=True)
+        dest = os.path.join(q, safe if safe.endswith(".json") else safe + ".json")
+        if src:
+            os.replace(src, dest)
+        elif not os.path.exists(dest):
+            with open(dest, "w") as f:
+                json.dump(entry, f, indent=1, sort_keys=True)
+        with open(dest[:-5] + ".why", "w") as f:
+            f.write(why + "\n")
+    except OSError as e:
+        why += f" (and it could not be quarantined: {e})"
+    if log is not None:
+        log.write(f"REGISTRY: {src or name} quarantined: {why}\n")
+        log.flush()
+
+
+def defects_quarantined():
+    """[(file, why)] of every quarantined entry — a FINDING for the lead's `status` until it is fixed or removed."""
+    q = defects_quarantine_dir()
+    out = []
+    if os.path.isdir(q):
+        for f in sorted(os.listdir(q)):
+            if f.endswith(".json"):
+                try: why = open(os.path.join(q, f[:-5] + ".why")).read().strip()
+                except OSError: why = "?"
+                out.append((os.path.join(q, f), why))
+    return out
+
+
+def defects_load(log=sys.stderr):
+    """({id: entry}, None) — or (None, why) when the registry FILE itself cannot be read. A malformed entry (or a
+    malformed / unreadable pending file, or a duplicate id) is QUARANTINED (_quarantine) and the rest loads — one bad
+    file never disables the door; every quarantined file is printed as a REGISTRY finding on each load."""
+    path = defects_file()
+    try:
+        d = json.load(open(path))
+    except (OSError, ValueError) as e:
+        return None, f"the defect registry {path} is missing or unreadable ({e.__class__.__name__})"
+    lst = d.get("defects") if isinstance(d, dict) else None
+    if not isinstance(lst, list):
+        return None, f"the defect registry {path} has no `defects` list"
+    items = [(e, None) for e in lst]
+    pend = defects_pending_dir()
+    if os.path.isdir(pend):
+        for f in sorted(os.listdir(pend)):
+            if not f.endswith(".json"): continue
+            fp = os.path.join(pend, f)
+            try:
+                items.append((json.load(open(fp)), fp))
+            except (OSError, ValueError) as e:
+                _quarantine(f, None, f"unreadable ({e.__class__.__name__})", src=fp, log=log)
+    out = {}
+    for k, (e, src) in enumerate(items):
+        probs = _defect_problems(e)
+        name = (e.get("id") if isinstance(e, dict) else None) or f"entry-{k}"
+        if not probs and name in out: probs = ["a duplicate id"]
+        if probs:
+            _quarantine(os.path.basename(src) if src else f"{name}", e,
+                        f"{name}: {', '.join(probs)} (TESTING_V3 §1.5's shape)", src=src, log=log)
+            continue
+        out[name] = e
+    q = defects_quarantined()
+    if q and log is not None:
+        log.write(f"REGISTRY: FINDING — {len(q)} quarantined entr{'y' if len(q) == 1 else 'ies'} in "
+                  f"{defects_quarantine_dir()} (fix and return them, or delete them)\n")
+    return out, None
+
+
+def contention_of(defects):
+    """THE CONTENTION CLASS: {row: its STANDING entry} — open, ENROLLED `nondeterminism` entries whose recheck
+    date has not passed (a single-use NOT REPRODUCED entry is never the class)."""
+    out = {}
+    for e in (defects or {}).values():
+        if (e["kind"] == "nondeterminism" and defect_state(e) == "open" and e.get("enrolled")
+                and not recheck_past(e)):
+            for r in e["rows"]:
+                out.setdefault(r, e)
+    return out
 
 
 def contention_list():
-    """{suite or arm: why}, or None when the file cannot be read."""
-    try:
-        d = json.load(open(contention_file()))
-    except (OSError, ValueError):
-        return None
-    s = d.get("suites") if isinstance(d, dict) else None
-    return dict(s) if isinstance(s, dict) else None
+    """{row: one line} of the contention class (the registry's open nondeterminism entries), or None when the
+    registry cannot be read (defects_load says why) — gate-scope.sh --solo's reader."""
+    d, _ = defects_load()
+    if d is None: return None
+    return {r: f"{e['id']}: {e['cause']} [{defect_date(e)}; recheck: {e['recheck']}]" for r, e in contention_of(d).items()}
+
+
+def lanes_of(r):
+    """The lanes a record belongs to: BATCH-GATE-1's `lanes` list (forward only — a record without it belongs to no
+    lane for the judge)."""
+    v = r.get("lanes")
+    return [x for x in v if isinstance(x, str) and x] if isinstance(v, list) else []
+
+
+def own_lane(r):
+    """The lane a record is a LANE'S OWN record of (`lanes == [<lane>]`, no `batch` tag), else None — the only
+    records a rebase carries reds from (TESTING_V3 §1.4: batch records never carry)."""
+    if r.get("batch"): return None
+    v = lanes_of(r)
+    return v[0] if len(v) == 1 else None
 
 
 def _git(args, cwd=None):
@@ -248,18 +496,93 @@ def _git(args, cwd=None):
         return ""
 
 
-def tree_shas():
-    studio = _git(["rev-parse", "HEAD"])
-    irisgl = _git(["rev-parse", "HEAD"], cwd=os.path.join(ROOT, "irisgl"))
-    fork = _git(["rev-parse", "HEAD"], cwd=os.path.join(ROOT, "irisgl", "thirdparty", "ogre-next"))
+def tree_shas(root=None):
+    """The tree that ran — this checkout's, or `root`'s (a batch's attribution runs each lane's solos
+    in THAT lane's worktree: its records must carry the lane's own tip)."""
+    root = root or ROOT
+    studio = _git(["rev-parse", "HEAD"], cwd=root)
+    irisgl = _git(["rev-parse", "HEAD"], cwd=os.path.join(root, "irisgl"))
+    fork = _git(["rev-parse", "HEAD"], cwd=os.path.join(root, "irisgl", "thirdparty", "ogre-next"))
     # THE TREE THAT RAN: Studio's own files AND irisgl's (an uncommitted engine edit gates green
     # and is never committed otherwise — the second Fable read, F1). irisgl's vendored submodules'
     # CONTENT is ignored: assimp's applied patch stack is configure-time state, not dirt.
-    s_dirty = bool(_git(["status", "--porcelain", "--untracked-files=no", "--ignore-submodules=dirty"]))
+    s_dirty = bool(_git(["status", "--porcelain", "--untracked-files=no", "--ignore-submodules=dirty"], cwd=root))
     i_dirty = bool(_git(["status", "--porcelain", "--untracked-files=no", "--ignore-submodules=dirty"],
-                        cwd=os.path.join(ROOT, "irisgl")))
+                        cwd=os.path.join(root, "irisgl")))
     return {"studio": studio, "irisgl": irisgl, "fork": fork, "studio_dirty": s_dirty or i_dirty,
             "irisgl_dirty": i_dirty}
+
+
+def built_from(build):
+    """What <build> was BUILT from (GATE-COST-2 #8): {studio, irisgl, dirty} read from <build>/BUILT_FROM,
+    which every build writes as its last step (cmake/BuiltFrom.cmake), or None (a build dir without the
+    stamp: a toy project, a tree built before the stamp existed)."""
+    try:
+        kv = dict(l.split("=", 1) for l in open(os.path.join(build, "BUILT_FROM")).read().splitlines() if "=" in l)
+    except OSError:
+        return None
+    return {"studio": kv.get("studio", ""), "irisgl": kv.get("irisgl", ""), "dirty": kv.get("dirty") == "1"}
+
+
+def stale_build(shas):
+    """None when the record's build is its tip's; else why not — the built commits differ from the tip's, the
+    build was made from a dirty tree, or it carries NO stamp (F4: forward-only — a record whose build was not
+    stamped is never the tip's run; every gate's no-op build writes the stamp before its rows)."""
+    b = (shas or {}).get("built")
+    if not b:
+        return "built from an UNKNOWN commit (no BUILT_FROM stamp)"
+    if b.get("dirty"):
+        return "built from a DIRTY tree"
+    if b.get("studio") != shas.get("studio") or b.get("irisgl") != shas.get("irisgl"):
+        return "built from studio %s / irisgl %s, not the tip" % ((b.get("studio") or "?")[:9], (b.get("irisgl") or "?")[:9])
+    return None
+
+
+PREBUILD_MAX_EDGES = 50
+
+
+def prebuild(build, jobs=None):
+    """THE GATE'S NO-OP BUILD (GATE-COST-2 F4): before any row, `cmake --build <build>` — seconds when nothing
+    changed — rebuilds whatever is stale (a reverted edit, a `--target` build's leftovers) and refreshes
+    BUILT_FROM, so the binaries match HEAD's sources by construction. At the box's priority and a width the
+    memory law allows (JAH_GATE_BUILD_JOBS, default 3). Returns None when it built (or the dir is not a CMake
+    build), else the refusal text — a failed no-op build never gates."""
+    cache = os.path.join(build, "CMakeCache.txt")
+    if not os.path.isfile(cache):
+        return None
+    cmd = "nice -n 19 ionice -c 3 cmake --build %s -j %s" % (build, jobs or os.environ.get("JAH_GATE_BUILD_JOBS", "3"))
+    # NEVER A SILENT FULL BUILD (round 2, B): a tree that was never built (no stamp, no app binary) or that is
+    # far from built (ninja -n: more than PREBUILD_MAX_EDGES) is refused with the command that builds it — the
+    # gate's build is the no-op one, seconds, not a lane's build under the gate's name
+    first = "REFUSING TO RUN: %s is not a built tree — build the tree first: %s" % (build, cmd)
+    if not os.path.isfile(os.path.join(build, "BUILT_FROM")):
+        return first + "  (no BUILT_FROM stamp)"
+    try:
+        project = re.search(r"^CMAKE_PROJECT_NAME:\w+=(.*)$", open(cache).read(), re.M)
+    except OSError:
+        project = None
+    if project and project.group(1).strip() == "Jahshaka" and not os.path.exists(os.path.join(build, "bin", "Jahshaka")):
+        return first + "  (no bin/Jahshaka)"
+    if os.path.isfile(os.path.join(build, "build.ninja")):
+        r = subprocess.run(["ninja", "-C", build, "-n"], capture_output=True, text=True)
+        edges = [l for l in r.stdout.splitlines() if re.match(r"^\[\d+/\d+\]", l)]
+        if len(edges) > PREBUILD_MAX_EDGES:
+            return first + "  (ninja -n: %d edges to rebuild, more than %d)" % (len(edges), PREBUILD_MAX_EDGES)
+    log = os.path.join(build, "gate-prebuild.log")
+    print("=== the no-op build before any row: %s (log %s) ===" % (cmd, log))
+    sys.stdout.flush()
+    t0 = time.time()
+    jobs = jobs or os.environ.get("JAH_GATE_BUILD_JOBS", "3")
+    with open(log, "w") as out:
+        rc = subprocess.run(["nice", "-n", "19", "ionice", "-c", "3", "cmake", "--build", build, "-j", str(jobs)],
+                            stdout=out, stderr=subprocess.STDOUT).returncode
+    tail = open(log, errors="replace").read().splitlines()[-6:]
+    if rc != 0:
+        return ("REFUSING TO RUN: the gate's no-op build of %s FAILED (exit %d; %s):\n  %s"
+                % (build, rc, log, "\n  ".join(tail)))
+    print("=== the no-op build: %.0f s (%s) — the binaries are HEAD's, BUILT_FROM refreshed ===" % (time.time() - t0, log))
+    sys.stdout.flush()
+    return None
 
 
 def fork_pin_problem(root=None):
@@ -356,6 +679,215 @@ def other_ctests(own_root=None):
         return len([p for p in r.stdout.split() if not _descends_from(int(p), roots)])
     except OSError:
         return None
+
+
+_BUILD_COMMS = ("ninja", "cmake", "make", "gmake")
+
+
+def box_mem():
+    """GATE-LOG-1: the memory pressure a row started under — `psi10` (/proc/pressure/memory, `some`
+    avg10, %), `swap_used_mb`, `builds` (ninja/cmake/make processes on the box). Each None where the
+    box cannot say (macOS)."""
+    out = {"psi10": None, "swap_used_mb": None, "builds": None}
+    try:
+        for line in open("/proc/pressure/memory"):
+            if line.startswith("some"):
+                out["psi10"] = float(dict(kv.split("=") for kv in line.split()[1:])["avg10"])
+    except (OSError, ValueError, KeyError):
+        pass
+    try:
+        mi = {}
+        for line in open("/proc/meminfo"):
+            k, _, v = line.partition(":")
+            mi[k] = int(v.split()[0])
+        out["swap_used_mb"] = round((mi["SwapTotal"] - mi["SwapFree"]) / 1024.0, 1)
+    except (OSError, ValueError, KeyError, IndexError):
+        pass
+    try:
+        n = 0
+        for d in os.listdir("/proc"):
+            if not d.isdigit(): continue
+            try:
+                with open(f"/proc/{d}/comm") as f:
+                    if f.read().strip() in _BUILD_COMMS: n += 1
+            except OSError:
+                continue
+        out["builds"] = n
+    except OSError:
+        pass
+    return out
+
+
+def queue_depth():
+    """GATE-LOG-1: the gates WAITING for the box's gate slot now (its holder not counted), or None
+    when the queue cannot be read."""
+    try:
+        return max(0, len(_vram().gate_queue()) - 1)
+    except Exception:          # noqa: BLE001 — a reading, never a reason for a gate to fail
+        return None
+
+
+def _psi(kind):
+    try:
+        for line in open(f"/proc/pressure/{kind}"):
+            if line.startswith("some"):
+                return float(dict(kv.split("=") for kv in line.split()[1:])["avg10"])
+    except (OSError, ValueError, KeyError):
+        pass
+    return None
+
+
+def gpu_apps(own_root=None):
+    """[{pid, name, mib, ours}] of the GPU processes OUTSIDE this gate's process tree (nvidia-smi
+    --query-compute-apps), or None when nvidia-smi cannot say (macOS, no driver). `ours` = a process of OUR stack
+    (the Jahshaka binary, a test_/bench_ binary, anything run from a jahshaka tree, an Xvfb client)."""
+    try:
+        r = subprocess.run(["nvidia-smi", "--query-compute-apps=pid,process_name,used_memory",
+                            "--format=csv,noheader,nounits"], capture_output=True, text=True, timeout=10)
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    if r.returncode != 0: return None
+    roots = {os.getpid()} | ({own_root} if own_root else set())
+    out = []
+    for line in r.stdout.splitlines():
+        f = [x.strip() for x in line.split(",")]
+        if len(f) < 3 or not f[0].isdigit(): continue
+        pid = int(f[0])
+        if _descends_from(pid, roots): continue
+        name = os.path.basename(f[1])[:40]
+        try: exe = os.path.realpath(os.readlink(f"/proc/{pid}/exe"))
+        except OSError: exe = None          # exited, or not ours to read: UNKNOWN — recorded, never counted
+        rec = {"pid": pid, "name": name, "exe": exe, "mib": int(f[2]) if f[2].isdigit() else None, "ours": _ours(pid, name)}
+        if exe is None: rec["unknown"] = True
+        out.append(rec)
+    return out
+
+
+_MAIN_TREE = []
+
+
+def main_tree():
+    """The Studio repo's MAIN tree (the parent of the git common dir — the same for every worktree). Read once per
+    process (one git call, never one per GPU app)."""
+    if _MAIN_TREE: return _MAIN_TREE[0]
+    _MAIN_TREE.append(_main_tree())
+    return _MAIN_TREE[0]
+
+
+def _main_tree():
+    try:
+        cd = subprocess.run(["git", "rev-parse", "--path-format=absolute", "--git-common-dir"],
+                            cwd=ROOT, capture_output=True, text=True).stdout.strip()
+        if cd: return os.path.realpath(os.path.dirname(cd))
+    except OSError:
+        pass
+    return os.path.realpath(ROOT)
+
+
+def _under(path, root):
+    return bool(path) and (path == root or path.startswith(root.rstrip(os.sep) + os.sep))
+
+
+def ours_exe(exe):
+    """A binary of OUR trees: a lane / rc worktree (<main>/.claude/worktrees/) or the main tree's build
+    (<main>/build-linux) — never a match on the string "/jahshaka/" (the home directory carries it)."""
+    m = main_tree()
+    return _under(exe, os.path.join(m, ".claude", "worktrees")) or _under(exe, os.path.join(m, "build-linux"))
+
+
+def _ours(pid, name):
+    if name == "Jahshaka" or name.startswith(("test_", "bench_")):
+        return True
+    try:
+        if ours_exe(os.path.realpath(os.readlink(f"/proc/{pid}/exe"))):
+            return True
+    except OSError:
+        pass
+    try:
+        env = open(f"/proc/{pid}/environ", "rb").read().split(b"\0")
+        disp = [e[8:].decode("ascii", "replace") for e in env if e.startswith(b"DISPLAY=")]
+        return bool(disp) and disp[0] not in ("", ":0", ":0.0")     # a client of a rig Xvfb, never the desktop's
+    except OSError:
+        return False
+
+
+# THE COMPETITOR CENSUS (TESTING_V3 §1.4/§1.6; the merge read's F3): what ELSE competed when a row started — the
+# one thing a `contention:` verdict may stand on. A GPU competitor is a process of OURS outside the gate's tree, a
+# process whose exe is NOT in the box's IDLE BASELINE (testing/box-baseline.json `desktop`, written by the lead with
+# nvidia-smi on the idle desktop: the browser, the terminal, the editor are not competition), or ANY process above
+# the baseline's `vram_floor_mb` — without the baseline only our own processes count, and the census says so. Builds are those OUTSIDE the gate
+# (not its descendants, not run from its tree). Never the gate's own queue or drain.
+CENSUS_PSI = 10.0           # avg10 % of memory or IO pressure that counts as a competitor
+VRAM_FLOOR_MIB = 512
+
+
+def baseline_file():
+    return os.environ.get("JAH_BOX_BASELINE") or os.path.join(workspace_root(), "testing", "box-baseline.json")
+
+
+def box_baseline():
+    """({idle desktop exe}, vram floor MiB), or None when there is no readable baseline."""
+    try:
+        d = json.load(open(baseline_file()))
+        return {os.path.realpath(x) for x in d["desktop"]}, int(d.get("vram_floor_mb") or VRAM_FLOOR_MIB)
+    except (OSError, ValueError, KeyError, TypeError, AttributeError):
+        return None
+
+
+def _own_tree(path):
+    """Is `path` inside the gate's OWN tree — this worktree (ROOT), but not a sibling worktree nested under the main
+    tree's .claude/worktrees/ (a gate in the main tree must still see every lane's build)?"""
+    root = os.path.realpath(ROOT)
+    if not _under(path, root): return False
+    return not _under(path, os.path.join(root, ".claude", "worktrees"))
+
+
+def builds_outside(own_root=None):
+    """ninja/cmake/make processes that are NOT the gate's own (its descendants, or run from its own tree)."""
+    roots = {os.getpid()} | ({own_root} if own_root else set())
+    n = 0
+    try:
+        procs = [d for d in os.listdir("/proc") if d.isdigit()]
+    except OSError:
+        return None
+    for d in procs:
+        try:
+            with open(f"/proc/{d}/comm") as f:
+                if f.read().strip() not in _BUILD_COMMS: continue
+            if _descends_from(int(d), roots): continue
+            try:
+                if _own_tree(os.path.realpath(os.readlink(f"/proc/{d}/cwd"))): continue
+            except OSError:
+                pass
+            n += 1
+        except OSError:
+            continue
+    return n
+
+
+def census(own_root=None, mem=None, ctests=None):
+    m = mem or box_mem()
+    oc = other_ctests(own_root) if ctests is None else ctests
+    apps = gpu_apps(own_root)
+    base = box_baseline()
+    comp = None if apps is None else [a for a in apps if a.get("ours") or (
+        base is not None and not a.get("unknown") and (a.get("exe") not in base[0] or (a.get("mib") or 0) >= base[1]))]
+    return {"gpu_apps": apps, "gpu_competitors": comp,
+            "baseline": baseline_file() if base is not None else "MISSING: only our own GPU processes counted",
+            "other_ctests": oc, "builds": builds_outside(own_root), "psi10_mem": m.get("psi10"), "psi10_io": _psi("io")}
+
+
+def competitors(c):
+    """The census's competitors as words ([] = none measured)."""
+    c = c or {}
+    out = []
+    if c.get("gpu_competitors"): out.append("%d GPU process(es) competing (%s)" % (
+        len(c["gpu_competitors"]), ", ".join(f"{a['name']}:{a['pid']}" for a in c["gpu_competitors"][:3])))
+    if (c.get("other_ctests") or 0) > 0: out.append(f"{c['other_ctests']} sibling ctest(s)")
+    if (c.get("builds") or 0) > 0: out.append(f"{c['builds']} build process(es) outside the gate")
+    for k in ("psi10_mem", "psi10_io"):
+        if (c.get(k) or 0) >= CENSUS_PSI: out.append(f"{k.split('_')[1]} pressure {c[k]} %")
+    return out
 
 
 class LoadSampler(threading.Thread):
@@ -518,6 +1050,7 @@ TIMING_LABEL = "timing"      # gate-scope.py's: a row that measures (the serial 
 CPU_LABEL = "hygiene"        # P8: the lint and selector rows — their own CPU phase, first
 DISPLAY_LOST = 6             # the exit code of a run that stopped because its display died (P6)
 ABORTED = None               # the abort line of the last run_ctest() that stopped, else None
+BATCH = None                 # the batch tag every record of this process carries (`batch`, TESTING_V3 §1.6), else none
 
 
 def _vram():
@@ -527,6 +1060,46 @@ def _vram():
         sys.path.insert(0, here)
     import vram_tokens
     return vram_tokens
+
+
+# THE LAW SWITCHES (GATE-COST-2 #10, fix round F2): an environment A HUMAN set that changes how a gate admits,
+# waits or judges. Every record of a run carries the ones in force as `overrides: [names]` (empty when none);
+# the push judge (VERDICT-1) refuses a candidate whose records carry any. What the TOOLS set is not an
+# override: the JAH_VRAM_ALL a --solo batch sets after its whole-card drain timed out is recorded as
+# `fallback: drain-timeout` on every record of that run instead (and a timing row's record carrying a
+# fallback is not a measurement: the judge refuses it until the row re-runs under a real whole-card hold).
+# A --verdict is a lawful act through the door, never an override.
+LAW_SWITCHES = ("JAH_GATE_SLOT", "JAH_VRAM_TOKENS", "JAH_VRAM_ALL", "JAH_JUDGE_READ", "JAH_VRAM_WAIT",
+                "JAH_VRAM_PHASE_WAIT", "JAH_GATE_REQUEUE", "JAH_DISPLAY_POLL_S", "JAH_KERNEL_JOURNAL",
+                "JAH_VRAM_PROC_LOCKS",
+                # F6: a private token universe is admission off for the box; a hand-set slot holder bypasses it
+                "JAH_VRAM_DIR", "JAH_GATE_SLOT_HELD")
+
+
+def law_overrides(env=None, tool_set=()):
+    """[NAME=value …] of the law switches set in `env` (default os.environ), minus `tool_set` — the switches
+    the tools set themselves for this run (its `fallback` says why). JAH_VRAM_TOKENS counts only when it is
+    not the default 11; JAH_GATE_SLOT only when it turns the slot off."""
+    env = os.environ if env is None else env
+    out = []
+    for k in LAW_SWITCHES:
+        v = env.get(k)
+        if v is None or k in tool_set:
+            continue
+        if k == "JAH_VRAM_TOKENS" and v.strip() == "11":
+            continue
+        if k == "JAH_GATE_SLOT" and v.strip() != "0":
+            continue
+        if k == "JAH_VRAM_DIR" and os.path.normpath(v) == "/tmp/jah-vram":
+            continue
+        if k == "JAH_GATE_SLOT_HELD":
+            # F6: a gate's rows inherit it from the gate (a live ticket holder); any other value is a hand-set
+            # bypass of the slot
+            if _vram().slot_held_valid(v):
+                continue
+            v = v + " (no live holder)"
+        out.append(f"{k}={v}")
+    return out
 
 
 def requeue_times():
@@ -680,9 +1253,44 @@ def on_signals():
         except (OSError, ValueError): pass        # not the main thread (a test drives run_ctest from one)
 
 
+def phase_record(kind, tier, lane, rng, shas, **fields):
+    """ONE RECORD ABOUT A RUN, NOT A ROW (GATE-COST-2): `kind: drain-timeout` (a whole-card hold that never
+    drained: the holders and their age) or `kind: abort` (the rows a dead display dropped). Its suite is
+    `@<kind>`, which no selection ever names, so the refusal reads nothing from it; the reports do.
+    Returns the file it went to."""
+    now = datetime.datetime.now().astimezone().isoformat(timespec="seconds")
+    rec = dict(fields, schema=SCHEMA, kind=kind, suite="@" + kind, arm=None, verdict=kind.upper(), tier=tier,
+               lanes=lane_list(lane), range=rng, tip=shas, ts=now, source="run", gating=False, retry=False,
+               overrides=law_overrides())
+    if BATCH:
+        rec["batch"] = BATCH
+    try:
+        return append_records([rec], tier, shas["studio"])
+    except (OSError, ValueError, KeyError):
+        return None
+
+
+def dropped_red(shas):
+    """{suite: the abort record's ts} of the rows an abort at this tip dropped RED (status not Passed)."""
+    out, d = {}, log_dir()
+    if not os.path.isdir(d):
+        return out
+    for f in os.listdir(d):
+        if not f.endswith(".jsonl") or shas["studio"][:9] not in f:
+            continue
+        for line in open(os.path.join(d, f), errors="replace"):
+            try: r = json.loads(line)
+            except ValueError: continue
+            if r.get("kind") == "abort" and (r.get("tip") or {}).get("studio") == shas["studio"]:
+                for n in r.get("droppedRed") or []:
+                    out[n] = max(out.get(n, ""), r.get("ts") or "")
+    return out
+
+
 def recorded_rows(shas=None):
     """{suite} with a record that RAN at this tree (studio and irisgl shas, neither dirty) — what
-    `gate-scope.sh --resume` does not run again. NOADMIT/NOTRUN are no run (ci_gate_check's rule)."""
+    `gate-scope.sh --resume` does not run again. NOADMIT/NOTRUN are no run (ci_gate_check's rule). A row an
+    ABORT dropped red is gate-scope's to re-run as a SOLO (owed_solos), never in the ordinary pass."""
     shas = shas or tree_shas()
     out, d = set(), log_dir()
     if shas.get("studio_dirty") or not os.path.isdir(d):
@@ -695,10 +1303,41 @@ def recorded_rows(shas=None):
             except ValueError: continue
             t = r.get("tip") or {}
             if (t.get("studio") == shas["studio"] and t.get("irisgl") == shas["irisgl"] and not t.get("studio_dirty")
-                    and not t.get("irisgl_dirty") and r.get("kind") != "verdict" and r.get("arm") is None
-                    and r.get("verdict") not in ("NOADMIT", "NOTRUN")):
+                    and not t.get("irisgl_dirty") and not stale_build(t) and r.get("kind") != "verdict" and r.get("arm") is None
+                    and r.get("verdict") not in ("NOADMIT", "NOTRUN") and not r.get("kind")):
                 out.add(r.get("suite"))
     return out
+
+
+SOLO_OWED = 3          # the solos a dropped red needs strictly after its abort (the flake law's 3/3)
+
+
+def owed_solos(shas=None):
+    """[suite] an abort at this tip dropped RED and fewer than SOLO_OWED solo retries have run STRICTLY AFTER
+    it (GATE-COST-2 #9, fix round F3): such a row re-runs as a solo — 3x, tier `solo`, retry — never as a plain
+    row in the next pass (a plain green after a dropped red would be a retry hiding a red). An interrupted solo
+    pass (one or two runs) leaves it owed; a solo in the abort's own second does not count (records are
+    stamped to the second: it cannot be shown to be after). The abort record keeps `droppedRed` for the judge,
+    which demands the 3/3."""
+    shas = shas or tree_shas()
+    owed = dropped_red(shas)
+    if not owed:
+        return []
+    after, d = {}, log_dir()
+    for f in os.listdir(d):
+        if not f.endswith(".jsonl") or shas["studio"][:9] not in f:
+            continue
+        for line in open(os.path.join(d, f), errors="replace"):
+            try: r = json.loads(line)
+            except ValueError: continue
+            # a solo is a ROW's record that RAN (as recorded_rows counts): never a pool's arm records, never
+            # a held NOADMIT try (round 2, A)
+            if r.get("retry") and not r.get("kind") and r.get("suite") in owed and r.get("arm") is None \
+                    and r.get("verdict") not in ("NOADMIT", "NOTRUN") \
+                    and (r.get("tip") or {}).get("studio") == shas["studio"]:
+                if (r.get("ts") or "") > owed[r["suite"]]:
+                    after[r["suite"]] = after.get(r["suite"], 0) + 1
+    return sorted(n for n in owed if after.get(n, 0) < SOLO_OWED)
 
 
 def _listed_rows(cmd, cwd, env):
@@ -731,16 +1370,42 @@ def _verbose(cmd):
 class _Run:
     """One run_ctest() call: the context its phases share (one run id, one sampler, one guard)."""
 
-    def __init__(self, tier, lane, jobs, reasons, gating, rng, retry, labels, echo, env):
-        self.tier, self.lane, self.reasons, self.gating, self.rng = tier, lane, reasons or {}, gating, rng
+    def __init__(self, tier, lane, jobs, reasons, gating, rng, retry, labels, echo, env, root=None, build=None,
+                 fallback=None):
+        self.tier, self.lanes, self.reasons, self.gating, self.rng = tier, lane_list(lane), reasons or {}, gating, rng
         self.retry, self.labels, self.echo, self.env = retry, labels or {}, echo, env
-        self.shas = tree_shas()
+        self.shas = tree_shas() if root is None else tree_shas(root)
+        self.fallback = fallback
+        self.overrides = law_overrides(env, tool_set=("JAH_VRAM_ALL",) if fallback else ())
+        # WHAT THE BINARIES WERE BUILT FROM rides every record (GATE-COST-2 #8): the refusal never counts a
+        # record of a stale build as the tip's run
+        self.shas["built"] = built_from(build) if build else None
         self.box0 = {"jobs": jobs, "display": (env or os.environ).get("DISPLAY"), "gpu_clocks": gpu_clocks(),
-                     "other_ctests": other_ctests(), "host": os.uname().nodename}
+                     "other_ctests": other_ctests(), "host": os.uname().nodename, "mem": box_mem()}
+        # the gate's queue wait for the slot: a gate's own environment, or the env a whole-card hold handed this
+        # run (hold_card exports it when IT took the slot: a --solo batch, a dropped-red solo)
+        e_ = env or os.environ
+        sw = e_.get("JAH_GATE_SLOT_WAIT_S") if e_.get("JAH_GATE_SLOT_HELD") else None
+        try: self.slot_wait = float(sw) if sw is not None else None
+        except ValueError: self.slot_wait = None
         self.run_id = f"{datetime.datetime.now().strftime('%Y%m%dT%H%M%S')}-{self.shas['studio'][:9]}"
         self.sampler = LoadSampler(); self.sampler.start()
         self.guard = DisplayGuard(env)
         self.recorded, self.dropped, self.path, self.dead = 0, [], None, None
+        self.running = set()          # rows started and not ended (the abort record's inFlight)
+
+    def costs(self, t_end):
+        """GATE-LOG-1: {slot_wait_s, drain_s, hold_s} of a record ending at t_end — the gate's wait for
+        the slot (None outside a slot), the phase's whole-card drain and how long the card had been
+        held at the row's end (None when the row ran with per-row admission)."""
+        e = self.env or os.environ
+        drain = held = None
+        try:
+            if e.get("JAH_VRAM_DRAIN_S") is not None: drain = float(e["JAH_VRAM_DRAIN_S"])
+            if e.get("JAH_VRAM_HELD_AT") is not None: held = round(max(0.0, t_end - float(e["JAH_VRAM_HELD_AT"])), 1)
+        except ValueError:
+            pass
+        return {"slot_wait_s": self.slot_wait, "drain_s": drain, "hold_s": held}
 
     def say(self, text):
         if self.echo:
@@ -751,14 +1416,21 @@ class _Run:
         targets, arms = _suite_facts(text)
         base = {"schema": SCHEMA, "run": self.run_id,
                 "ts": datetime.datetime.fromtimestamp(t_end).astimezone().isoformat(timespec="seconds"),
-                "suite": name, "tier": self.tier, "lane": self.lane, "range": self.rng, "tip": self.shas,
+                "suite": name, "tier": self.tier, "lanes": self.lanes, "range": self.rng, "tip": self.shas,
                 "reason": self.reasons.get(name, self.tier), "gating": (self.gating(name) if self.gating else True),
-                "retry": self.retry, "labels": sorted(self.labels.get(name, [])),
+                "retry": self.retry, "labels": sorted(self.labels.get(name, [])), "overrides": self.overrides,
+                **({"fallback": self.fallback} if self.fallback else {}),
                 "box": dict(self.box0, gpu_clocks=at.get("gpu_clocks", self.box0["gpu_clocks"]),
                             other_ctests=at.get("other_ctests", self.box0["other_ctests"]),
                             load=[round(x, 2) for x in load],
-                            load_mean=self.sampler.mean(t_end - secs, t_end)),
+                            load_mean=self.sampler.mean(t_end - secs, t_end),
+                            mem=at.get("mem", self.box0.get("mem")), queue_depth=at.get("queue_depth"),
+                            census=at.get("census")),
                 "source": "run"}
+        # GATE-LOG-1: where the gate's wall went that was not a row's — the slot queue, the phase's
+        # drain and hold of the whole card, the queue behind this gate at the row's start
+        base.update(self.costs(t_end))
+        if BATCH: base["batch"] = BATCH        # a batch candidate's gate or attribution: never a lane's own record
         v, st, bline = row_verdict(status, text, arms)
         wait, twait = lock_wait(text), token_wait(text)
         # a timing row's lock line and its admission line are the SAME wait: subtract it once
@@ -772,6 +1444,17 @@ class _Run:
             fl = fail_line(text)
             if fl: row["failLine"] = fl
         if bline: row["budget"] = bline
+        xid, arm_xid = xid_of(text, datetime.date.fromtimestamp(t_end).isoformat())
+        row["xid"] = xid
+        # the door's `xid-read:` is for THIS case only: no xid because the journal could not be read
+        # (kernel_xid.FINDING, printed by supervise and by the pool runner) — journal_unreadable
+        unreadable = bool(_UNREADABLE.search(text or ""))
+        if unreadable: row["journal_unreadable"] = True
+        noadmit = [a for a, av, _ in arms if av == "NOADMIT"]
+        if v != "PASS" and v != "NOADMIT" and noadmit:
+            row["noadmit_arms"] = noadmit
+            if "failLine" not in row:
+                row["failLine"] = f"NOADMIT arm(s), never ran: {' '.join(noadmit[:12])}"
         mem = _mem_of(text)
         if mem is not None: row["mem"] = mem
         leak = _leaks_of(text)
@@ -781,13 +1464,15 @@ class _Run:
         for arm, av, s in arms:
             # an arm's reason: the selector's for that arm (`<row>::<arm>`), else its row's
             ar = self.reasons.get(f"{name}::{arm.split('.', 1)[-1]}", base["reason"])
-            rec = dict(base, arm=arm, verdict=av, status=av, seconds=s, targets=None, reason=ar)
+            rec = dict(base, arm=arm, verdict=av, status=av, seconds=s, targets=None, reason=ar,
+                       xid=arm_xid.get(arm))
+            if unreadable: rec["journal_unreadable"] = True
             if arm in arm_mem: rec["mem"] = arm_mem[arm]
             rec.update(arm_find.get(arm, {}))
             recs.append(rec)
         return recs
 
-    def phase(self, cmd, cwd, env, final):
+    def phase(self, cmd, cwd, env, final, attempt=0):
         """Run one ctest line; each row's records are appended as it ends. A row that never got its
         admission (P5: NOADMIT, or a pool whose every arm was) is HELD BACK unless `final`, and
         returned to be re-queued. Returns (rc, reds, held)."""
@@ -802,7 +1487,7 @@ class _Run:
                                   start_new_session=True, close_fds=True)
         stop = threading.Event()
         try:
-            return self._stream(p, oof, final, stop)
+            return self._stream(p, oof, final, stop, attempt)
         finally:
             stop.set()
             if p.poll() is None:                 # an exception or a signal on the way out: never an orphan
@@ -811,10 +1496,11 @@ class _Run:
                 except subprocess.TimeoutExpired: pass
             reaper.poll()
 
-    def _stream(self, p, oof, final, stop):
+    def _stream(self, p, oof, final, stop, attempt=0):
 
         def watch():
-            while not stop.wait(2.0):
+            # every 2 s (JAH_DISPLAY_POLL_S: a test widens it to prove the row-end check alone)
+            while not stop.wait(float(os.environ.get("JAH_DISPLAY_POLL_S", "2.0"))):
                 why = self.guard.dead()
                 if why and not self.dead:
                     self.dead = why
@@ -847,12 +1533,16 @@ class _Run:
                 sys.stdout.write(line); sys.stdout.flush()
             m = _START.match(ln)
             if m:
-                starts[m.group(1)] = {"other_ctests": other_ctests(p.pid), "gpu_clocks": gpu_clocks()}
+                bm, oc = box_mem(), other_ctests(p.pid)
+                starts[m.group(1)] = {"other_ctests": oc, "gpu_clocks": gpu_clocks(),
+                                      "mem": bm, "queue_depth": queue_depth(), "census": census(p.pid, bm, oc)}
+                self.running.add(m.group(1))
                 continue
             m = _RESULT.match(ln)
             if not m:
                 continue
             name, status, secs = m.group(1), m.group(2), float(m.group(3))
+            self.running.discard(name)
             idm = _RESULT_ID.match(ln)
             i = idm.group(1) if idm else ""
             text = "\n".join(buf.pop(i, []))
@@ -866,13 +1556,24 @@ class _Run:
                 if not self.dead:
                     self.dead = why
                     _kill_tree(p.pid)
-                self.dropped.append(name)
+                d_ = {"suite": name, "status": status.strip("* "), "verdict": verdict_of(status)}
+                if d_["verdict"] != "PASS" and fail_line(text):
+                    d_["failLine"] = fail_line(text)
+                self.dropped.append(d_)
                 continue
             recs = self.records(name, status, secs, time.time(), os.getloadavg(), text, starts.get(name) or {})
             v = recs[0]["verdict"]
             arms = recs[1:]
             never = v == "NOADMIT" or (v != "PASS" and arms and all(a["verdict"] == "NOADMIT" for a in arms))
+            if attempt or (never and not final):
+                for r_ in recs: r_["requeued"] = attempt       # the try: 0 = the first run, k = the k-th re-queue
             if never and not final:
+                # EVERY HELD TRY IS A RECORD (GATE-COST-2, the band-aid audit's #1): verdict NOADMIT with its
+                # try number — never-ran to the refusal (ci_gate_check NEVER_RAN), counted by the reports. The
+                # row is re-queued at the end of the run; only a final try can be anything but NOADMIT.
+                recs[0]["verdict"] = "NOADMIT"
+                self.path = append_records(recs, self.tier, self.shas["studio"])
+                self.recorded += len(recs)
                 held.append(name)
                 continue
             if v != "PASS":
@@ -884,7 +1585,7 @@ class _Run:
 
 
 def run_ctest(cmd, cwd, tier, lane, jobs, reasons=None, gating=None, rng=None, retry=False,
-              labels=None, echo=True, env=None, exclude=None, whole_card=None):
+              labels=None, echo=True, env=None, exclude=None, whole_card=None, root=None, fallback=None):
     """Run a ctest command line (a string, as gate-scope prints it), stream its output, and append
     each row's records (+ its arms') to the run log AS THE ROW ENDS. Returns ctest's exit code — 0
     when every row's last run passed — or DISPLAY_LOST when the display died (ABORTED says why).
@@ -897,14 +1598,21 @@ def run_ctest(cmd, cwd, tier, lane, jobs, reasons=None, gating=None, rng=None, r
         ctest tree dies with the gate (F2: _child_setup, the reaper, on_signals);
       * P2: `whole_card` — the run takes EVERY VRAM token once and its rows run nested on them (one
         drain for the phase, not one per row); None = when every row it selects is a `timing` row
-        (the serial phase, however it was started)."""
+        (the serial phase, however it was started);
+      * `lane`: the record's `lanes` — one name, a comma-separated list or a list (lane_list);
+      * `root`: the tree whose shas the records carry (default this checkout; BATCH-GATE-1's
+        attribution runs a lane's solos in that lane's worktree)."""
     global ABORTED
     ABORTED = None
     check_tier(tier)       # before the run, never after an hour of it
     if env is not None and os.environ.get("JAH_GATE_SLOT_HELD"):
         # a row of this gate that starts a gate of its own (a selector test) must never queue behind it
         env = dict(env, JAH_GATE_SLOT_HELD=os.environ["JAH_GATE_SLOT_HELD"])
-    R = _Run(tier, lane, jobs, reasons, gating, rng, retry, labels, echo, env)
+    R = _Run(tier, lane, jobs, reasons, gating, rng, retry, labels, echo, env, root=root, build=cwd, fallback=fallback)
+    stale = stale_build(R.shas)
+    if stale:
+        R.say(f"=== STALE BUILD: {cwd} was {stale} ({R.shas['studio'][:9]}) — its records will NOT count as the tip's "
+              f"run (ci_gate_check); `cmake --build` first (a no-op build refreshes BUILT_FROM) ===")
     why = R.guard.dead()
     if why:
         ABORTED = f"=== GATE ABORTED before its first row: {why} — nothing ran, nothing recorded ==="
@@ -926,10 +1634,18 @@ def run_ctest(cmd, cwd, tier, lane, jobs, reasons=None, gating=None, rng=None, r
             bool(rows) and all(TIMING_LABEL in (labels or {}).get(r, ()) for r in rows))
     card = []
     if whole_card and not (env or os.environ).get("JAH_VRAM_HELD"):
-        card, held_env = _vram().hold_card(f"{lane} {tier} phase", log=sys.stdout)
-        if card:
-            # THE CALLER'S ENVIRONMENT OVER THE HELD COPY (F5): JAH_POOL_ARMS and the rest survive the hold
-            env = dict(held_env, **(env or {}), JAH_VRAM_HELD=held_env["JAH_VRAM_HELD"])
+        card, held_env = _vram().hold_card(f"{'+'.join(lane_list(lane))} {tier} phase", log=sys.stdout)
+        # THE CALLER'S ENVIRONMENT OVER THE HELD COPY (F5): JAH_POOL_ARMS and the rest survive the hold; the
+        # hold's own keys (the card, its drain and hold start — GATE-LOG-1 —, the slot a whole-card hold takes:
+        # GATE-COST-2) go over it
+        env = dict(held_env, **(env or {}), **{k: held_env[k] for k in ("JAH_VRAM_HELD", "JAH_GATE_SLOT_HELD",
+                                                                         "JAH_VRAM_DRAIN_S", "JAH_VRAM_HELD_AT")
+                                               if k in held_env})
+        R.env = env                # GATE-LOG-1: the phase's records read its drain and hold from here
+        drained = _vram().LAST_DRAIN_TIMEOUT
+        if drained:
+            phase_record("drain-timeout", tier, lane, rng, tree_shas(), fallback="drain-timeout", **drained)
+            R.fallback = "drain-timeout"           # every record of this run: not a whole-card measurement
     phases = [(cmd, None)]
     if rows is not None:
         skip = [r for r in rows if r in exclude]
@@ -969,7 +1685,7 @@ def run_ctest(cmd, cwd, tier, lane, jobs, reasons=None, gating=None, rng=None, r
             R.say(f"\n=== re-queued {len(held)} row(s) that got no admission (try {k + 1} of {n + 1}, normal "
                   f"admission, after the other rows): {' '.join(held[:12])}{' …' if len(held) > 12 else ''} ===")
             prc, preds, pheld = R.phase(f"{cmd} --tests-from-file {listfile('requeue%d' % k, held)}", cwd, env,
-                                        final=k == n)
+                                        final=k == n, attempt=k)
             if R.dead: break
             reds += preds; held = pheld
             if prc and not preds and not pheld: rc = rc or prc
@@ -983,9 +1699,18 @@ def run_ctest(cmd, cwd, tier, lane, jobs, reasons=None, gating=None, rng=None, r
     if R.path and echo:
         print(f"\nrun log: {R.recorded} record(s) -> {R.path}")
     if R.dead:
+        # THE ABORT LEAVES A RECORD (GATE-COST-2, the band-aid audit's #5): one `kind: abort` record naming every
+        # row that ended after the death with its status and FAIL line — no row's record (the refusal reads it
+        # as nothing: suite "@abort"), but a red among them is never only a stdout line: --resume re-runs a
+        # row dropped red even if it has an older record, and the abort record stays.
+        reds_ = [d_ for d_ in R.dropped if d_["verdict"] != "PASS"]
+        R.path = phase_record("abort", tier, lane, rng, R.shas, why=R.dead, dropped=R.dropped,
+                              droppedRed=[d_["suite"] for d_ in reds_], inFlight=sorted(R.running),
+                              run=R.run_id, **({"fallback": R.fallback} if R.fallback else {})) or R.path
         ABORTED = (f"=== GATE ABORTED: {R.dead} — the run was stopped; {R.recorded} record(s) were written before "
-                   f"it, {len(R.dropped)} row(s) that ended after it were NOT recorded ({' '.join(R.dropped[:8])}); "
-                   f"on a live display: scripts/gate-scope.sh <range> --run --resume ===")
+                   f"it, {len(R.dropped)} row(s) that ended after it were NOT recorded ({len(reds_)} of them red: "
+                   f"{' '.join(d_['suite'] for d_ in reds_[:8])}) — the abort record lists them; on a live display: "
+                   f"scripts/gate-scope.sh <range> --run --resume ===")
         R.say(ABORTED)
         return DISPLAY_LOST
     return rc or (8 if reds or held else 0)
@@ -1012,7 +1737,7 @@ def import_log(path, tier, tip, lane, jobs=None, reason=None):
         m = _RESULT.match(line.rstrip("\n"))
         if not m: continue
         recs.append({"schema": SCHEMA, "run": f"import-{os.path.basename(path)}", "ts": None,
-                     "suite": m.group(1), "arm": None, "tier": tier, "lane": lane, "range": None,
+                     "suite": m.group(1), "arm": None, "tier": tier, "lanes": lane_list(lane), "range": None,
                      "tip": {"studio": tip}, "reason": reason or f"imported from {path}",
                      "gating": True, "retry": False, "labels": [],
                      "verdict": verdict_of(m.group(2)), "status": m.group(2).strip("* "),
@@ -1197,7 +1922,7 @@ def trend_series(days=30, suites=None):
             if v is None:
                 continue
             key = (r["suite"], tkey, _condition(r))
-            e = acc.setdefault(key, {}).setdefault(tip, {"ts": r.get("ts") or "", "lane": r.get("lane") or "?", "v": []})
+            e = acc.setdefault(key, {}).setdefault(tip, {"ts": r.get("ts") or "", "lane": "+".join(r.get("lanes") or []) or "?", "v": []})
             e["ts"] = min(e["ts"], r.get("ts") or e["ts"])
             e["v"].append(v)
     out = {}
@@ -1307,7 +2032,7 @@ def trend_steps(rows, anc=None, k=TREND_K, window=TREND_WINDOW, min_n=TREND_MIN,
     return out
 
 
-def query_trend(days=30, suites=None, tip=None, k=TREND_K, quiet_ok=False):
+def query_trend(days=30, suites=None, tip=None, k=TREND_K, quiet_ok=False, record=None):
     """Prints every step (or, with `tip`, the steps whose first tip is `tip` plus where each of `suites`
     stands at it). Returns the number of steps printed."""
     series = trend_series(days, suites)
@@ -1322,6 +2047,12 @@ def query_trend(days=30, suites=None, tip=None, k=TREND_K, quiet_ok=False):
             rel = (s["after"] / s["before"] - 1.0) * 100 if s["before"] else float("inf")
             good = f", last in band {s['good'][:9]}" if s.get("good") else ""
             sib = "".join(f"; sibling {rows[j][1][:9]} ({rows[j][2]})" for j in s.get("siblings") or [])
+            if record:
+                # A TREND STEP IS A RECORD (GATE-COST-2 #11), not only a line: (tier, lane) of the gate that saw it
+                phase_record("trend-step", record[0], record[1], None, tree_shas(), row=suite, target=tkey,
+                             delta={"before": s["before"], "after": s["after"],
+                                    "rel": None if rel == float("inf") else round(rel, 2)},
+                             step=s["kind"], condition=str(cond), firstTip=t)
             lines.append(f"  {s['kind']:11s} {suite:34s} {s['before']:.4g} -> {s['after']:.4g} ({rel:+.0f} %, "
                          f"band +-{s['band']:.3g}; read {', '.join(f'{x:.4g}' for x in s['readings'])}) "
                          f"first at {t[:9]} ({lane}, {ts[:16]}{good}{sib}) [{cond}] {tkey}")
@@ -1362,14 +2093,14 @@ def promotions(days=30, tip=None):
     return out
 
 
-def trend_at_gate_end(tip=None):
+def trend_at_gate_end(tip=None, tier=None, lane=None):
     """THE GATE'S TREND LINE (TEST-1): every gate prints, after its verdict, the target lines whose
     reading at THIS tip left its history's band — the day a step lands it is one UNCONFIRMED reading —
     and a PROMOTE line for every target line green at its last PROMOTE_AFTER tips, this one the newest.
     A report: it never changes an exit code and never raises."""
     try:
         tip = tip or tree_shas()["studio"]
-        query_trend(30, None, tip)
+        query_trend(30, None, tip, record=(tier, lane) if tier else None)
         for suite, key in promotions(30, tip):
             print(f"PROMOTE {suite} {key}    (green at its last {PROMOTE_AFTER} tips; information only)")
     except Exception as e:             # a report must never break the gate it reports on
@@ -1381,13 +2112,14 @@ def main():
     sub = ap.add_subparsers(dest="cmd", required=True)
     r = sub.add_parser("run", help="run a ctest command and log every suite")
     r.add_argument("--tier", required=True, choices=TIERS)
-    r.add_argument("--lane", default=None)
+    r.add_argument("--lane", action="append", default=None,
+                   help="the record's lanes: repeat it or give a comma-separated list (a batch's lanes)")
     r.add_argument("--jobs", type=int, default=None)
     r.add_argument("--build", default="build-linux")
     r.add_argument("ctest", nargs=argparse.REMAINDER)
     i = sub.add_parser("import", help="records from an existing ctest output log")
     i.add_argument("log"); i.add_argument("--tier", required=True, choices=TIERS); i.add_argument("--tip", required=True)
-    i.add_argument("--lane", default=None); i.add_argument("--jobs", type=int, default=None)
+    i.add_argument("--lane", action="append", default=None); i.add_argument("--jobs", type=int, default=None)
     t = sub.add_parser("times", help="median PASS seconds per suite from the log")
     t.add_argument("--days", type=int, default=14)
     q = sub.add_parser("longest", help="the longest suites/arms by median PASS seconds")
@@ -1395,10 +2127,15 @@ def main():
     q2 = sub.add_parser("load-reds", help="red in a gate, green solo at the same tip")
     q2.add_argument("--days", type=int, default=7)
     q4 = sub.add_parser("clocks", help="the GPU's clock state now (exit 3 when it reads locked)")
+    hm = sub.add_parser("hash-move", help="record a selftest hash that moved off its record (kind: hash-move)")
+    hm.add_argument("--tier", required=True, choices=TIERS); hm.add_argument("--lane", default=None)
+    hm.add_argument("--pose", required=True); hm.add_argument("--old", required=True); hm.add_argument("--new", required=True)
     q3 = sub.add_parser("trend", help="steps in the target rows' readings across tips (non-gating)")
     q3.add_argument("--days", type=int, default=30); q3.add_argument("--k", type=float, default=TREND_K)
     q3.add_argument("--tip", default=None, help="only the steps whose first tip is this sha")
     q3.add_argument("--suite", action="append", default=None)
+    q3.add_argument("--record", nargs=2, metavar=("TIER", "LANE"), default=None,
+                    help="also write every step as a `kind: trend-step` record under TIER/LANE")
     a = ap.parse_args()
     if a.cmd == "run":
         cmd = a.ctest[1:] if a.ctest and a.ctest[0] == "--" else a.ctest
@@ -1408,7 +2145,7 @@ def main():
             sys.stderr.write(bad + "\n"); sys.exit(4)
         build = a.build if os.path.isabs(a.build) else os.path.join(os.getcwd(), a.build) \
             if os.path.isdir(os.path.join(os.getcwd(), a.build)) else os.path.join(ROOT, a.build)
-        lane = a.lane or _git(["rev-parse", "--abbrev-ref", "HEAD"])
+        lane = lane_list(a.lane) or [_git(["rev-parse", "--abbrev-ref", "HEAD"])]
         jobs = a.jobs
         if jobs is None:
             m = re.search(r"-j\s*(\d+)", " ".join(cmd)); jobs = int(m.group(1)) if m else None
@@ -1416,10 +2153,13 @@ def main():
         # alternation carries `|`, so it must reach the shell as ONE string); several = an argv
         line = cmd[0] if len(cmd) == 1 else shlex.join(cmd)
         # A `run` IS A GATE (GATE-COST-1 P1): one at a time, box-wide — it queues for the slot first
+        bad = prebuild(build)
+        if bad:
+            sys.stderr.write(bad + "\n"); sys.exit(5)
         on_signals()
         slot = None
         try:
-            slot = _vram().gate_slot(f"{lane} {a.tier} (gate_runlog run)", log=sys.stdout)
+            slot = _vram().gate_slot(f"{'+'.join(lane)} {a.tier} (gate_runlog run)", log=sys.stdout)
             rc = run_ctest(line, build, a.tier, lane, jobs, labels=inventory_labels(build))
         except GateSignal as e:
             print(f"\n=== GATE ABORTED: signal {e.sig} — the ctest tree was stopped, the slot and the card released ===")
@@ -1435,7 +2175,14 @@ def main():
     if a.cmd == "load-reds":
         query_load_reds(a.days); return
     if a.cmd == "trend":
-        query_trend(a.days, a.suite, a.tip, a.k); return
+        if a.record:
+            check_tier(a.record[0])
+        query_trend(a.days, a.suite, a.tip, a.k, record=tuple(a.record) if a.record else None); return
+    if a.cmd == "hash-move":
+        # A HASH MOVE IS A RECORD (GATE-COST-2 #11): rc-gate.sh writes one per pose that left its record
+        path = phase_record("hash-move", a.tier, a.lane or _git(["rev-parse", "--abbrev-ref", "HEAD"]), None,
+                            tree_shas(), pose=a.pose, old=a.old, new=a.new)
+        print(f"hash-move: pose {a.pose} {a.old[:12]} -> {a.new[:12]} recorded -> {path}"); return
     if a.cmd == "clocks":
         # THE STAGE CLOSE'S CLOCK CHECK (plan 9cl CLOCK-TRAP-1): a card left locked after a run
         # reads `locked?` (idle and not clocking down); rc-gate.sh prints this and reds on exit 3.

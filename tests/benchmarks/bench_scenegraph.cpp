@@ -725,7 +725,7 @@ int main(int argc, char **argv)
     // static tags land, did a frame render" — which is three CHECKs that cost
     // fifteen seconds and do not care how loaded the box is. The dispersion
     // bounds and the baseline comparison stay where they belong: on a quiet box,
-    // nightly, under --assert.
+    // stage-close, under --assert.
     bool smoke = false;
 
     for (int i = 1; i < argc; ++i) {

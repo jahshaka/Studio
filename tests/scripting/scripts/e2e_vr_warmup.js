@@ -101,7 +101,7 @@ assert(after.compiledThisRun === warmed.compiledThisRun,
 // measured 13-19 ms of work per shown frame (plus this rig's 10-18 ms present
 // copy) and a pre-warm-up first frame of 890-1,180 ms: four times clear of
 // both, so a loaded box cannot red it and the defect cannot pass it.
-// AND IT IS NIGHTLY (lane D6B-GATE-SHAPE): vr.warmup.timing runs a copy of this script with
+// AND IT IS STAGE-CLOSE (lane D6B-GATE-SHAPE): vr.warmup.timing runs a copy of this script with
 // JAH_TIMING_BARS defined (tests/CMakeLists.txt, jah_timing_script); here it prints.
 var worstOk = worstMs < 250;
 var worstMsg = "and none of them hitched: worst " + worstMs + " ms (the same frame cost " +

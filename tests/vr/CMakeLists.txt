@@ -355,21 +355,21 @@ foreach(_arm warmup warmup_control)
         FIXTURES_REQUIRED vr${_arm}FreshHome
         ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}HOME=${_vr_warm_home};JAHSHAKA_DATA_ROOT=${_vr_warm_home}/.local/share/Jahshaka")
 endforeach()
-# vr.warmup.timing — the warmed arm's 250 ms worst-frame bar, nightly (lane D6B-GATE-SHAPE;
+# vr.warmup.timing — the warmed arm's 250 ms worst-frame bar, stage-close (lane D6B-GATE-SHAPE;
 # audit §5 F17 FIX-TIME). The COUNT (no compile on a shown frame) is vr.warmup's at push; this
 # is a generated copy of the same script with the bar armed (jah_timing_script), on its own
 # wiped home (the bar means something only cold, like the count), quiet box, the GPU lock.
 set(_vr_warm_timing_home "${CMAKE_CURRENT_BINARY_DIR}/vr-warmup-timing-home")
 jah_timing_script("${CMAKE_SOURCE_DIR}/tests/scripting/scripts/e2e_vr_warmup.js"
                   "${CMAKE_CURRENT_BINARY_DIR}/e2e_vr_warmup.timing.js")
-jah_fresh_home_fixture(vr.warmup.timing.fresh_home vrwarmuptimingFreshHome "${_vr_warm_timing_home}" LABELS "scripting;nightly;quiet-box")
+jah_fresh_home_fixture(vr.warmup.timing.fresh_home vrwarmuptimingFreshHome "${_vr_warm_timing_home}" LABELS "scripting;stage-close;quiet-box")
 jah_gpu_exclusive_test(NAME vr.warmup.timing CLASS vr TIER epic NEEDS photon bloom ssao smaa planar RUN_TIMEOUT 600
     COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/run_vr_app.sh"
             "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" "${JAH_MONADO_MANIFEST}"
             "${CMAKE_CURRENT_BINARY_DIR}/e2e_vr_warmup.timing.js"
     WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(vr.warmup.timing PROPERTIES
-    LABELS "scripting;nightly;quiet-box"
+    LABELS "scripting;stage-close;quiet-box"
     SKIP_RETURN_CODE 77
     FIXTURES_REQUIRED vrwarmuptimingFreshHome
     ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}HOME=${_vr_warm_timing_home};JAHSHAKA_DATA_ROOT=${_vr_warm_timing_home}/.local/share/Jahshaka")
@@ -385,7 +385,7 @@ set_property(TEST vr.warmup.timing APPEND PROPERTY RESOURCE_LOCK monado)
 # ledger wants and asserts only the rig-independent one — no frame over three
 # times the run's own median. Its header says why a red against 11.1 ms on an
 # Xvfb rig with free clocks would be a red about the rig.
-# NIGHTLY and in the GPU-timing lock (lane D6B-GATE-SHAPE; audit §3c/R3, verdict NIGHTLY):
+# STAGE-CLOSE and in the GPU-timing lock (lane D6B-GATE-SHAPE; audit §3c/R3, verdict STAGE-CLOSE):
 # 105 s of two capture bundles whose one assertion is a timing ratio — a measurement,
 # so `quiet-box` too: no scoped gate runs it on a shared box.
 set(_vr_budget_home "${CMAKE_CURRENT_BINARY_DIR}/vr-budget-home")
@@ -410,7 +410,7 @@ jah_gpu_exclusive_test(NAME vr.frame_budget CLASS vr TIER epic NEEDS photon bloo
                  "$<TARGET_FILE:test_vr_frame_budget>" "${JAH_VR_BUDGET_DIR}"
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(vr.frame_budget PROPERTIES
-    LABELS "scripting;nightly;quiet-box"
+    LABELS "scripting;stage-close;quiet-box"
     SKIP_RETURN_CODE 77
     # JAHSHAKA_PERF_ROOT is what lets the script's `out` land in the suite's own
     # scratch: a capture's `out` is confined to the capture root, and the
@@ -498,7 +498,7 @@ endforeach()
 
 # FRESH HOMES (PROJECT-NAMES-1). A project name is unique in a library now (project.create
 # refuses a taken one), so a row that creates a project in a home nothing wipes went red on its
-# SECOND run in the same tree (an rc tree's solo retries, build-linux, the nightly) — and every
+# SECOND run in the same tree (an rc tree's solo retries, build-linux, a stage close) — and every
 # such home grew without bound (ui.column_law's held 66 'ColumnLaw' projects). Each row below
 # creates projects; its home is wiped at the start of every run (WARM: the shader caches stay).
 if(TEST vr.no_picture_start)

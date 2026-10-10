@@ -97,7 +97,7 @@ int main(int argc, char **argv)
         std::printf("info: the short-budget request gave up after %lld ms: %s\n",
                     static_cast<long long>(tookMs),
                     QJsonDocument(late).toJson(QJsonDocument::Compact).constData());
-        // The 900 ms bar is NIGHTLY (lane D6B-GATE-SHAPE; tests/support/timingbars.h):
+        // The 900 ms bar is STAGE-CLOSE (lane D6B-GATE-SHAPE; tests/support/timingbars.h):
         // app.shutdown_order.timing arms it on a quiet box; the "no reply within" error
         // below is this row's proof that the request gave up at its timeout.
         JAH_TIMING_CHECK("app.shutdown_order", tookMs < 900,

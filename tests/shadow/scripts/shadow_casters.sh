@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # shadow.cutout_caster / shadow.two_sided_caster (CUTOUT-CASTER-1): runs shadow_casters.js.in
-# RUNS times, each in its own process with a fresh data root (the cut-out's shadow used to be
-# solid, absent or a GPU hang FROM RUN TO RUN: one process proves nothing about the next), and
-# reads the frame pairs.
+# RUNS times, each in its own process with a fresh data root, and reads the frame pairs. The gate
+# rows run ONE process (the claim); their `.churn` twins run TEN (STAGE-CLOSE-1 U3: the cut-out's
+# shadow used to be solid, absent or a GPU hang FROM RUN TO RUN — one process proves nothing about
+# the next — and that churn is the stage-close batch's, beside gpu.cutout_soak).
 # usage: shadow_casters.sh <cutout|twosided> <app> <script.js.in> <fixture.png> <workdir> <runs>
 set -u
 WHAT="$1"; APP="$2"; SCRIPT_IN="$3"; FIXTURE="$4"; WORK="$5"; RUNS="$6"

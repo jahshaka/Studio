@@ -1003,7 +1003,7 @@ static int costMain(Engine *e)
     }
     // THE NUMBER IS PRINTED, NOT GATED — and that is a gate-system decision,
     // not modesty (fix round, H2). A GPU-TIME assertion belongs to the
-    // nightly tier and nowhere else: this rig's GPU idles at 210 of 3105 MHz
+    // stage-close tier and nowhere else: this rig's GPU idles at 210 of 3105 MHz
     // under Xvfb unless the clocks are LOCKED (the PHOTON-E2 fact), and a
     // fifteen-fold spread on 0.13 ms sits exactly on the spec's 2.0 ms
     // estimate. So this entry carries the `benchmark` label (out of the MERGE

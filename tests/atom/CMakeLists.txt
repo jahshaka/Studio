@@ -98,17 +98,17 @@ add_dependencies(far_blas_measure JahshakaEngineMedia)
 # from 40 (eye, tolerance) pairs, monotone refinement, and the format's round trip
 # and refusal — over every shipped mesh the bake gives a DAG, the 20k sphere and
 # the 40 m bar. Document-side: no engine boots, no display.
-# NIGHTLY (lane D6B-GATE-SHAPE; audit §3c, verdict NIGHTLY): 141 s of one process, the bake's
-# sweep over every shipped mesh. It left the PUSH tier only after the scope fix (audit S2):
-# a change to the bake (irisgl/import) or the engine selects it in its own scoped gate —
-# label `nightly` without `quiet-box` rides that gate (scripts/gate-scope.py).
+# A STAGE-CLOSE ROW (lane D6B-GATE-SHAPE; audit §3c; STAGE-CLOSE-1): 141 s of one process, the bake's
+# sweep over every shipped mesh — it runs in the stage-close batch, and rides a scoped gate ONLY through
+# its own subject: a change to the bake (irisgl/import, meshoptimizer: gate-scope.py STAGE_CLOSE_SUBJECTS)
+# or to tests/atom itself. An engine change no longer selects it (a broad rule leaves it for the batch).
 add_executable(test_atom_cluster_cut test_atom_cluster_cut.cpp ${_cluster_fixture_sources})
 jah_cluster_target(test_atom_cluster_cut)
 add_test(NAME atom.cluster_cut COMMAND test_atom_cluster_cut
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(atom.cluster_cut PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
-    TIMEOUT 600 LABELS "meshbake;nightly")
+    TIMEOUT 600 LABELS "meshbake;stage-close")
 jah_no_display(atom.cluster_cut)
 
 # atom.cluster_crack — THE CUT, RENDERED (B2 §3): the uploaded stream checked
@@ -118,8 +118,9 @@ jah_no_display(atom.cluster_cut)
 # the 40 m bar's triangle numbers against the chain. Draws through the TEST
 # HARNESS (cluster_draw.*, route B2) — the product draws no cut in stage 2 — so it
 # reaches EnginePrivate.h and links Ogre, as tests/shadow's spike does.
-# NIGHTLY (lane D6B-GATE-SHAPE; audit §3c, verdict NIGHTLY): 136 s of a harness draw of a cut
-# the product does not draw (Types.h). Scope-selected by a bake or engine change (audit S2).
+# A STAGE-CLOSE ROW (lane D6B-GATE-SHAPE; audit §3c; STAGE-CLOSE-1): 136 s of a harness draw of a cut
+# the product does not draw (Types.h). Scope-selected by a bake change or a tests/atom change only
+# (STAGE_CLOSE_SUBJECTS); an engine change leaves it for the stage-close batch.
 add_executable(test_atom_cluster_crack test_atom_cluster_crack.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/cluster_draw.cpp ${_cluster_fixture_sources})
 jah_cluster_target(test_atom_cluster_crack)
@@ -133,7 +134,7 @@ jah_gpu_row(atom.cluster_crack CLASS engine COMMAND test_atom_cluster_crack
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(atom.cluster_crack PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
-    TIMEOUT 600 LABELS "engine;nightly")
+    TIMEOUT 600 LABELS "engine;stage-close")
 
 # ---------------------------------------------------------------------------
 # ATOM stage 3 — THE PARITY GRID and THE NEGATIVE CONTROL (lane ATOM-S3-PARITY;

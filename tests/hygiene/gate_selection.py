@@ -238,9 +238,10 @@ def runlog_cases(source):
     # T11: THE TIER NAMES — the one list, every literal the gate scripts write is in it, and a
     # name outside it is refused before a run (never an hour of records under a stray name)
     print("  the run log's tier names: %s" % ", ".join(rl.TIERS))
-    check(set(rl.TIERS) == {"scoped", "scoped-fallback", "scoped-tier", "joint", "target", "merge", "stage",
-                            "nightly", "push", "smoke", "fork"},
-          "the tier names are exactly the documented eleven (GATE-SPEED-1 added target and smoke)")
+    check(set(rl.TIERS) == {"scoped", "scoped-fallback", "scoped-tier", "target", "merge", "stage",
+                            "stage-close", "push", "smoke", "fork", "lane", "solo"},
+          "the tier names are exactly the documented twelve (GATE-SPEED-1 added target and smoke; BATCH-GATE-1 "
+          "retired joint; STAGE-CLOSE-1 added stage-close; GATE-COST-2 lane and solo)")
     gsrc = open(os.path.join(source, "scripts", "gate-scope.py")).read()
     lits = set(re.findall(r'a\.tier or \(?"([a-z-]+)"', gsrc)) | set(re.findall(r'else "(scoped-[a-z]+)"', gsrc)) \
         | set(re.findall(r'run_ctest\(target_cmd, build, "([a-z-]+)"', gsrc))
@@ -336,22 +337,6 @@ def nm_refusal(source, build):
               % (p.returncode, p.stderr.strip().splitlines()[-1:] if p.stderr.strip() else ""))
 
 
-def joint_case(gs, build, cases):
-    """THE JOINT SUITES (T4): ATOM-CLUSTER-CUT and ATOM-OCCLUSION-1 both changed the id pass
-    (OgreAtomIdPass.cpp, the cull's compute pieces). Merged together, the union must hold every
-    real red of both lanes, and the joint rows must carry each lane's own id-pass guards."""
-    print("\njoint (ATOM-CLUSTER-CUT + ATOM-OCCLUSION-1, the id pass):")
-    lanes = {c["lane"]: c for c in cases["lanes"]}
-    a, b = lanes["ATOM-CLUSTER-CUT"], lanes["ATOM-OCCLUSION-1"]
-    J = gs.joint(a["range"], b["range"], build, 4)
-    check("irisgl/engine/src/OgreAtomIdPass.cpp" in J["shared_paths"], "both touched the id pass (%d shared paths)"
-          % len(J["shared_paths"]))
-    for m in a["must"] + b["must"]:
-        check(J["whole_tier"] or m in J["union"], "the union holds %s" % m)
-    for m in ("atom.cluster_crack", "atom.occlusion_exact", "engine.atom_draw", "engine.atom_parity"):
-        check(m in J["joint"], "the joint rows carry %s (%d joint of %d)" % (m, len(J["joint"]), len(J["union"])))
-
-
 def own_range_case(gs):
     """T1 IN A SCRATCH REPO (the merge read's replay): the lane's own diff across forward merges of
     d-build AND an internal fix branch merged into the lane. d-build: base0 -> dA -> dB -> dC; the
@@ -406,7 +391,7 @@ def main(source, build):
     cases = json.load(open(os.path.join(source, "tests", "hygiene", "gate_selection_cases.json")))
     inv0 = gs.load_inventory(build)
     costs = gs.load_costs()
-    tier_rows = [n for n, t in inv0.items() if not (t["labels"] & (gs.NIGHTLY_LABELS | gs.TARGET_LABELS))]
+    tier_rows = [n for n, t in inv0.items() if not (t["labels"] & (gs.STAGE_CLOSE_LABELS | gs.TARGET_LABELS))]
     tier_s = sum(costs.get(n, 10.0) for n in tier_rows)
 
     # every name a case asks for must be a row this build registers, or a pool's arm written
@@ -495,7 +480,6 @@ def main(source, build):
     gone_cases(gs, graph, build, inv0)
     hunk_cases(gs, graph, build, inv0, cases)
     nm_refusal(source, build)
-    joint_case(gs, build, cases)
     own_range_case(gs)
     print("\n  the MERGE tier: %d rows, ~%.0f suite-seconds" % (len(tier_rows), tier_s))
     if FAILURES:

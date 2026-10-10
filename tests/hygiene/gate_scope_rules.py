@@ -62,7 +62,7 @@ THE FOUR CASES, and each one is a rule of the tool rather than a number:
 
   9. THE TIER DOC QUOTES THE SCRIPT (POST-C-FIXES-1): docs/TESTING_GATE.md carries
      no literal `-LE` label list — it names `gate-scope.py --merge-tier`, which
-     prints the MERGE tier from NIGHTLY_LABELS | TARGET_LABELS — and an edit to
+     prints the MERGE tier from STAGE_CLOSE_LABELS | TARGET_LABELS — and an edit to
      the doc selects this guard.
 
   10. A SUITE REGISTERED THROUGH A HELPER FUNCTION (jah_gpu_exclusive_test)
@@ -76,10 +76,13 @@ THE FOUR CASES, and each one is a rule of the tool rather than a number:
       the avatar import/switch select their `*.responsive` harnesses. Each FAILED before
       (measured by the audit: OgreChain.cpp selected 415 suites and no tests/atom row).
 
-  12. THE NIGHTLY LABELS SAY WHAT THEY MEAN (D6B-GATE-SHAPE; audit §8). `nightly` leaves
-      the MERGE/PUSH tiers; `quiet-box` beside it keeps a MEASUREMENT out of every scoped
-      gate. A change to test_open_responsive.cpp selects open.responsive (the counts) and
-      NOT open.responsive.timing (its millisecond bars); `--nightly-tier` names `nightly`.
+  12. THE STAGE-CLOSE LABELS SAY WHAT THEY MEAN (D6B-GATE-SHAPE; audit §8; STAGE-CLOSE-1).
+      `stage-close` leaves the MERGE/PUSH tiers for the lead's stage-close batch; `quiet-box`
+      beside it keeps a MEASUREMENT out of every scoped gate. A change to
+      test_open_responsive.cpp selects open.responsive (the counts) and NOT
+      open.responsive.timing (its millisecond bars); `--stage-close-tier` names `stage-close`
+      and `--stage-close-tier-serial` runs the measuring rows at -j1 (the subject-only
+      selection itself: gate.stage_close_select).
 
 Run: gate_scope_rules.py <source-dir> <build-dir>
 """
@@ -218,8 +221,8 @@ def main(source, build):
     for line in out2.splitlines():
         if line.startswith("ctest -j") and "-LE" in line:
             merge = line
-    check("photon-target" in plain(merge) and "nightly" in plain(merge),
-          "the MERGE tier's -LE carries photon-target beside the nightly labels")
+    check("photon-target" in plain(merge) and "stage-close" in plain(merge),
+          "the MERGE tier's -LE carries photon-target beside the stage-close labels")
 
     # 7. THE FALLBACK HONOURS -j (DEVPROCESS-1 item 2). A lane beside other live
     # lanes runs `-j 2`; the fallback to the MERGE tier used to print and RUN a
@@ -275,7 +278,7 @@ def main(source, build):
           "...and it names `gate-scope.py --merge-tier` as the tier's command")
     code, out, err = run([tool, "--merge-tier", "-j", "2"], source)
     check(code == 0 and out.strip().startswith("ctest -j2 ") and "photon-target" in plain(out)
-          and "nightly" in plain(out) and "shadercache-attack" in plain(out)
+          and "stage-close" in plain(out) and "shadercache-attack" in plain(out)
           and "benchmark" not in plain(out),
           "`--merge-tier -j 2` prints the MERGE tier at -j2 with every excluded label (%r)" % out.strip())
     code, out, err = run([tool, "--files", "docs/TESTING_GATE.md", "--build", build], source)
@@ -331,7 +334,7 @@ def main(source, build):
             check(code == 0 and not doc.get("fallback") and suite in chosen,
                   "%s selects %s (%d suites selected)" % (path, suite, len(chosen)))
 
-    # 12. THE NIGHTLY LABELS (D6B-GATE-SHAPE).
+    # 12. THE STAGE-CLOSE LABELS (D6B-GATE-SHAPE).
     code, out, err = run([tool, "--files", "tests/openasync/test_open_responsive.cpp",
                           "--build", build, "--json"], source)
     try:
@@ -341,9 +344,12 @@ def main(source, build):
     chosen = set(doc.get("suites", [])) | set(doc.get("targets", []))
     check("open.responsive" in chosen and "open.responsive.timing" not in chosen,
           "the push row is scoped, its quiet-box millisecond twin is not")
-    code, out, err = run([tool, "--nightly-tier"], source)
-    check(code == 0 and "-L " in out and "nightly" in plain(out) and "-j1" in out,
-          "`--nightly-tier` prints the nightly tier (%r)" % out.strip())
+    code, out, err = run([tool, "--stage-close-tier"], source)
+    check(code == 0 and "-L " in out and "stage-close" in plain(out) and "quiet-box" in plain(out),
+          "`--stage-close-tier` prints the stage-close batch's parallel phase (%r)" % out.strip())
+    code, out, err = run([tool, "--stage-close-tier-serial"], source)
+    check(code == 0 and "stage-close" in plain(out) and "quiet-box" in plain(out) and " -j1 " in out,
+          "`--stage-close-tier-serial` prints its quiet-box phase at -j1 (%r)" % out.strip())
 
     # 13. THE TREND CHECK (TEST-1): `gate_runlog.py trend` names the first tip of a step and not a spike.
     sys.path.insert(0, os.path.join(source, "scripts"))
@@ -441,6 +447,40 @@ def main(source, build):
               "only here %s, only there %s)" % (len(s1), len(s2), sorted(s1 - s2)[:5], sorted(s2 - s1)[:5]))
     finally:
         shutil.rmtree(foreign, ignore_errors=True)
+
+    # 15. A SYMLINKED ROOT IS THE SAME TREE (SYMLINK-ROOT-1, the box's /home/jahshaka/Developer ->
+    # /mnt/work/Developer move): the build graph names files under the spelling the tree was CONFIGURED
+    # with; python's getcwd()/realpath() return the resolved one, so a run reached through the other
+    # spelling read "not in the build graph" for every file and fell back to path rules (528 rows against
+    # 457). The tree reached as configured, resolved, and through a fresh symlink — scripts, cwd and
+    # --build all spelled that way, `--build .` from inside the build dir included — selects the same rows.
+    link = tempfile.mkdtemp(prefix="gate-scope-link-")
+    try:
+        os.symlink(os.path.realpath(source), os.path.join(link, "tree"))
+        os.symlink(os.path.realpath(build), os.path.join(link, "build"))
+        files = ["--files", "irisgl/engine/src/OgreFrameMonitor.cpp", "src/scripting/modules/perfapi.cpp", "--json"]
+        forms = {"as configured": (source, build),
+                 "resolved": (os.path.realpath(source), os.path.realpath(build)),
+                 "through a symlink": (os.path.join(link, "tree"), os.path.join(link, "build"))}
+        sel = {}
+        for name, (src, bld) in forms.items():
+            for how, args, cwd in (("absolute", ["--build", bld], src), ("`--build .`", ["--build", "."], bld)):
+                c, o, e = run([os.path.join(src, "scripts", "gate-scope.py")] + files + args, cwd)
+                try:
+                    d = json.loads(o)
+                except ValueError:
+                    d = {}
+                sel[name + ", " + how] = (c, set(d.get("suites", [])) | set(d.get("targets", [])),
+                                          "not in the build graph" in o + e)
+        ref = sel["as configured, absolute"][1]
+        for k, (c, s, missed) in sel.items():
+            check(c == 0 and ref and s == ref and not missed,
+                  "the tree %s (%s) selects the same %d rows through the graph (exit %d, %d rows%s; "
+                  "only here %s, only there %s)" % (k.split(", ")[0], k.split(", ")[1], len(ref), c, len(s),
+                                                    ", NOT IN THE BUILD GRAPH" if missed else "",
+                                                    sorted(ref - s)[:5], sorted(s - ref)[:5]))
+    finally:
+        shutil.rmtree(link, ignore_errors=True)
 
     if FAILURES:
         print("source.gate_scope_rules: FAILED (%d)" % len(FAILURES))

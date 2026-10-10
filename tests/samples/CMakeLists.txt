@@ -74,12 +74,12 @@ set_tests_properties(samples.session PROPERTIES
 # samples.mirror_room_boots — REFLECT-STATE-1: the Mirror Room sample's picture is ONE picture
 # across boots (ATOM-DECODE-CLASS-1 recorded two). Ten boots, each on a virgin data root, the
 # scene's offscreen picture after 600 fixed-clock frames, byte-identical (the runner:
-# scripts/mirror_room_boots.sh). 251 s measured (25 s a boot): NIGHTLY.
+# scripts/mirror_room_boots.sh). 251 s measured (25 s a boot): STAGE-CLOSE.
 jah_gpu_row(samples.mirror_room_boots CLASS app TIER document
          COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/scripts/mirror_room_boots.sh $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
                  ${CMAKE_CURRENT_SOURCE_DIR}/scripts/mirror_room_boot.js.in ${CMAKE_CURRENT_BINARY_DIR}/mirror-room-boots 10
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
-set_tests_properties(samples.mirror_room_boots PROPERTIES LABELS "scripting;nightly" TIMEOUT 1800)
+set_tests_properties(samples.mirror_room_boots PROPERTIES LABELS "scripting;stage-close" TIMEOUT 1800)
 
 # samples.archive_fidelity.Tornado — LIVE-PERSIST-1: the SHIPPED Tornado archive, opened on a clean
 # machine (a virgin data root, HOME and XDG_CACHE_HOME — no piece cache anywhere), keeps its live

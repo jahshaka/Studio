@@ -98,13 +98,13 @@ set_tests_properties(meshbake.cards PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen;HOME=${_bake_home};JAHSHAKA_DATA_ROOT=${_bake_home}/.local/share/Jahshaka"
     TIMEOUT 120 LABELS "meshbake")
 # meshbake.cards.timing — the bake's two wall-clock bars (the 4x-triangles-not-4x-time
-# ratio and the 4,000 ms ceiling), nightly (lane D6B-GATE-SHAPE; audit §5 FIX-TIME):
+# ratio and the 4,000 ms ceiling), stage-close (lane D6B-GATE-SHAPE; audit §5 FIX-TIME):
 # the same binary with JAHSHAKA_TIMING_BARS=1, quiet box, the GPU-timing lock.
 jah_gpu_exclusive_test(NAME meshbake.cards.timing CLASS none RUN_TIMEOUT 180 COMMAND test_mesh_bake --cards
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(meshbake.cards.timing PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen;HOME=${_bake_home};JAHSHAKA_DATA_ROOT=${_bake_home}/.local/share/Jahshaka;JAHSHAKA_TIMING_BARS=1"
-    LABELS "meshbake;nightly;quiet-box")
+    LABELS "meshbake;stage-close;quiet-box")
 
 # THE LOD BOUND'S PHYSICS BAR (ATOM-LOD-BOUND-1) — `atom.lod_bound_bar`. Every
 # level of the shipped primitives, the Stanford dragon and a scan stand-in (a floor,
@@ -262,7 +262,7 @@ set_tests_properties(meshbake.shipped_bakes PROPERTIES
 
 # FRESH HOMES (PROJECT-NAMES-1). A project name is unique in a library now (project.create
 # refuses a taken one), so a row that creates a project in a home nothing wipes went red on its
-# SECOND run in the same tree (an rc tree's solo retries, build-linux, the nightly) — and every
+# SECOND run in the same tree (an rc tree's solo retries, build-linux, a stage close) — and every
 # such home grew without bound (ui.column_law's held 66 'ColumnLaw' projects). Each row below
 # creates projects; its home is wiped at the start of every run (WARM: the shader caches stay).
 if(TEST meshbake.archive_bakes)

@@ -1427,7 +1427,7 @@ static void surfaceCards()
         CHECK_LOUD(covered,
                    "the same surface reads the same coverage at every density — the raster's "
                    "ceiling does not buy its bound with coverage");
-        // Both wall-clock bars are NIGHTLY (lane D6B-GATE-SHAPE; tests/support/timingbars.h):
+        // Both wall-clock bars are STAGE-CLOSE (lane D6B-GATE-SHAPE; tests/support/timingbars.h):
         // meshbake.cards.timing arms them on a quiet box; this row asserts the coverage.
         JAH_TIMING_CHECK("meshbake.cards", bounded,
                    "and the cost stops tracking the triangle count: 4x the triangles is less "

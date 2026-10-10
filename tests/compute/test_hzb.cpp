@@ -386,7 +386,7 @@ int main()
     if (bestMs >= 0.0f) {
         std::printf("   HZB GPU cost at 1920x1080: %.4f ms (best of %u measured frames)\n",
                     bestMs, measuredFrames);
-        // A GPU-TIME bar: NIGHTLY (lane D6B-GATE-SHAPE; tests/support/timingbars.h) —
+        // A GPU-TIME bar: STAGE-CLOSE (lane D6B-GATE-SHAPE; tests/support/timingbars.h) —
         // chain.hzb.timing arms it on a quiet box under the GPU-timing lock.
         JAH_TIMING_CHECK("chain.hzb", bestMs < 0.3f,
                          "the pyramid costs less than 0.3 ms at 1920x1080");

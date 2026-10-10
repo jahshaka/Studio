@@ -27,7 +27,7 @@ jah_gpu_row(avatar.responsive CLASS app TIER epic NEEDS photon COMMAND test_avat
 set_tests_properties(avatar.responsive PROPERTIES
     ENVIRONMENT "HOME=${_avatar_async_home};JAHSHAKA_DATA_ROOT=${_avatar_async_home}/.local/share/Jahshaka"
     TIMEOUT 360 LABELS "avatar")
-# avatar.responsive.timing — THE MILLISECOND BARS, nightly (lane D6B-GATE-SHAPE; audit §5,
+# avatar.responsive.timing — THE MILLISECOND BARS, stage-close (lane D6B-GATE-SHAPE; audit §5,
 # F17 FIX-TIME): the same binary with JAHSHAKA_TIMING_BARS=1 on a quiet box, under the
 # GPU-timing lock; the push row asserts the rest and prints the readings.
 set(_avatar_async_timing_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-avatar-async-timing)
@@ -36,7 +36,7 @@ jah_gpu_exclusive_test(NAME avatar.responsive.timing CLASS app TIER epic NEEDS p
          WORKING_DIRECTORY ${_avatar_async_timing_home}/run)
 set_tests_properties(avatar.responsive.timing PROPERTIES
     ENVIRONMENT "HOME=${_avatar_async_timing_home};JAHSHAKA_DATA_ROOT=${_avatar_async_timing_home}/.local/share/Jahshaka;JAHSHAKA_TIMING_BARS=1"
-    LABELS "avatar;nightly;quiet-box")
+    LABELS "avatar;stage-close;quiet-box")
 
 # Spawns the app (and therefore a Vulkan driver): neither sanitizer lane can
 # take it — same reason import.shutdown and archive.responsive are blocked.
@@ -44,7 +44,7 @@ jah_tsan_blocked(avatar.responsive avatar.responsive.timing)
 
 # FRESH HOMES (PROJECT-NAMES-1). A project name is unique in a library now (project.create
 # refuses a taken one), so a row that creates a project in a home nothing wipes went red on its
-# SECOND run in the same tree (an rc tree's solo retries, build-linux, the nightly) — and every
+# SECOND run in the same tree (an rc tree's solo retries, build-linux, a stage close) — and every
 # such home grew without bound (ui.column_law's held 66 'ColumnLaw' projects). Each row below
 # creates projects; its home is wiped at the start of every run (WARM: the shader caches stay).
 if(TEST avatar.responsive)

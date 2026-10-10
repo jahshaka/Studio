@@ -7,8 +7,8 @@ box's own queue, log or displays:
 
   1. P1 ONE GATE AT A TIME: a gate holds the slot; a second gate (`gate_runlog.py run`, what rc-gate
      runs) prints its queue position and runs only after the first is gone; a third waits behind both
-     (FIFO); `--solo` and a plain admission never take the slot; gate-scope's --run takes it once and
-     hands its fd to every phase;
+     (FIFO); a plain admission never takes the slot (a --solo batch, a whole-card hold, does: section 9);
+     gate-scope's --run takes it once and holds it through every phase;
   2. P5 NOADMIT RE-QUEUED IN-RUN: a row that got no admission is re-run at the end of the same run and
      recorded ONCE (its passing run); a row that never gets one is recorded once, as NOADMIT, after
      its JAH_GATE_REQUEUE tries — and the run is red;
@@ -22,16 +22,30 @@ box's own queue, log or displays:
      their rows run nested on it (`already admitted by the parent`); gate-scope runs the target step
      AFTER the verdict line, inside the gate, on whole_card; the caller's JAH_POOL_ARMS survives a hold;
   7. P6's CLAIM: the per-row records equal the old junit path's, record for record (six rows);
+  9. GATE-COST-2: a whole-card hold outside a gate takes the slot (and --solo with it); every NOADMIT try is
+     a record (requeued: k), still never-ran to the refusal; a drain timeout prints and records the holders
+     with their age; an abort is one `kind: abort` record and --resume re-runs a row it dropped red; the
+     lints prune exactly irisgl/.gitmodules; a green row waits for journald before its Xid read;
+  10. THE STALE-BUILD HOLE: every build stamps BUILT_FROM last; a record carries it; a stale or dirty build's
+     record is never the tip's run (the refusal, --resume). The admission's journal is a file here (#7);
+  11. every record's `overrides`; hash moves and trend steps as records; the tiers lane and solo; a row an
+     abort dropped red is owed a SOLO (3x, tier solo), never the ordinary pass;
   8. THE SLOT UNDER STRESS: a dead waiter's ticket is reaped; eight gates at once hold it one at a time;
      a SIGKILLed gate's ctest and rows die within 15 s and the slot is free; a killed ctest ends a gate.
+
+RED ON BASE (measured 2026-10-09: this file run against a5ab3a057's scripts): 3 FAIL — the per-try NOADMIT
+records (x2) and the abort record — then a crash in section 4 (gate_runlog has no owed_solos): sections 5-11
+cannot start. At the GATE-COST-2 tip: 70 ok, 0 FAIL.
 
 Run: gate_cost_test.py <source-dir> <build-dir>   (the build dir is not read; ctest is found on PATH)
 """
 import contextlib
+import datetime
 import importlib.util
 import io
 import json
 import os
+import re
 import shutil
 import signal
 import subprocess
@@ -53,11 +67,14 @@ cmake_minimum_required(VERSION 3.20)
 project(toy NONE)
 enable_testing()
 set(T "$ENV{TOYDIR}")
+# the toy's BUILT_FROM (GATE-COST-2 F4): every build writes it, from the stamp the test chose
+add_custom_target(toy_built_from ALL COMMAND ${CMAKE_COMMAND} -E copy "$ENV{TOYSTAMP}" "${CMAKE_BINARY_DIR}/BUILT_FROM")
 add_test(NAME lint.one COMMAND sh -c "sleep 1; echo lint.one >> ${T}/order")
 set_tests_properties(lint.one PROPERTIES LABELS "hygiene")
 add_test(NAME gpu.a COMMAND sh -c "echo gpu.a >> ${T}/order; echo ok")
 add_test(NAME gpu.b COMMAND sh -c "echo gpu.b >> ${T}/order; echo ok")
 add_test(NAME gpu.slow COMMAND sh -c "echo gpu.slow >> ${T}/order; sleep \${TOY_SLOW:-0}; echo ok")
+add_test(NAME gpu.wait COMMAND sh -c "echo gpu.wait >> ${T}/order; while [ ! -e ${T}/go ]; do sleep 0.05; done; echo 'FAIL: the window it drew'; exit 1")
 add_test(NAME gpu.noadmit_once COMMAND sh -c "if [ -e ${T}/na ]; then echo ok; else touch ${T}/na; echo 'NOADMIT vram: no admission for 2 tokens within 1 s (0 of 3 free at the last look) - gpu.noadmit_once'; exit 75; fi")
 add_test(NAME gpu.noadmit_always COMMAND sh -c "echo 'NOADMIT vram: no admission for 2 tokens within 1 s (0 of 3 free at the last look) - gpu.noadmit_always'; exit 75")
 add_test(NAME time.card COMMAND sh -c "python3 ${VT} status > ${T}/card.time; python3 ${VT} admit 1 -- true 2>> ${T}/card.time; echo ARMS=\$JAH_POOL_ARMS >> ${T}/card.time")
@@ -89,10 +106,23 @@ def main(source, build):
     for d in (toy, state):
         os.makedirs(d)
     vt = os.path.join(scripts, "vram_tokens.py")
+    # THE JOURNAL IS A FILE HERE (GATE-COST-2 #7): every admission's Xid read runs `journalctl -k` with its own
+    # 30 s bound (scripts/kernel_xid.py), which on a loaded box alone tripped this test's 30 s bound on an
+    # `admit` — the test measured the journal, not the slot. JAH_KERNEL_JOURNAL is the admission's test source.
+    journal = os.path.join(scratch, "journal.txt")
+    open(journal, "w").close()
+    os.environ["JAH_KERNEL_JOURNAL"] = journal
+    # JAH_VRAM_WAIT=5: the admission bound of this test's PRIVATE token universe (3 tokens) — a NOADMIT under
+    # test (section 2's rows print their own NOADMIT); never a guess at how long the box takes
     os.environ.update(JAH_VRAM_DIR=os.path.join(scratch, "vram"), JAH_VRAM_TOKENS="3", JAH_VRAM_WAIT="5",
                       JAH_RUN_LOG_DIR=os.path.join(scratch, "runs"), TOYDIR=state, JAH_GATE_REQUEUE="2")
+    stampsrc = os.path.join(scratch, "stamp")
+    with open(stampsrc, "w") as f:
+        f.write("studio=%s\nirisgl=%s\ndirty=0\n" % ("c" * 40, "d" * 40))    # the clean tip below
+    os.environ["TOYSTAMP"] = stampsrc
     open(os.path.join(toy, "CMakeLists.txt"), "w").write(TOY.replace("${VT}", vt))
     r = subprocess.run(["cmake", "-S", toy, "-B", tb], capture_output=True, text=True)
+    r = r if r.returncode else subprocess.run(["cmake", "--build", tb], capture_output=True, text=True)
     if r.returncode != 0:
         print(r.stdout[-2000:], r.stderr[-2000:])
         check(False, "the toy ctest project configures"); return 1
@@ -116,6 +146,31 @@ def main(source, build):
         try: return open(os.path.join(state, "order")).read().split()
         except OSError: return []
 
+    def spawn(argv, **kw):
+        """A child whose merged stdout+stderr the test reads line by line (its events)."""
+        return subprocess.Popen(argv, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, **kw)
+
+    def wait_line(proc, needle):
+        """Read `proc`'s output until a line holds `needle` — the event; no bound of its own (the row's TIMEOUT
+        is the only one). Returns what was read."""
+        got = []
+        for line in proc.stdout:
+            got.append(line)
+            if needle in line:
+                break
+        return "".join(got)
+
+    def wait_until(pred, producer=None):
+        """Poll a condition the code under test makes true (a file, a record, a process gone) — no clock bound,
+        but LIVE: when its producer (a process or a thread) is gone before the condition holds, give up at once
+        and return False (the caller checks it), never hang to the row's TIMEOUT."""
+        while not pred():
+            if producer is not None and (not producer.is_alive() if hasattr(producer, "is_alive")
+                                         else producer.poll() is not None):
+                return pred()
+            time.sleep(0.05)
+        return True
+
     def run(rx, jobs=1, **kw):
         cmd = f"ctest -j{jobs} --timeout 60 --output-on-failure --no-tests=error -R '{rx}'"
         buf = io.StringIO()
@@ -124,64 +179,67 @@ def main(source, build):
         return rc, buf.getvalue()
 
     # ---- 1. P1: one gate at a time, FIFO, no bound ------------------------------------------------
+    # EVENTS, NEVER THE CLOCK (GATE-COST-2 round: the law — tests count events): each gate is started only after
+    # the one before printed its queue line (its TICKET orders the queue), the holder holds until the test
+    # releases it, and nothing is bounded but the row's own TIMEOUT
     print("1. the gate slot")
     reset()
-    t0 = time.time()
-    g1 = subprocess.Popen([sys.executable, vt, "gate", "--label", "G1", "--", "sh", "-c",
-                           f"sleep 3; date +%s.%N > {state}/g1.end"], stdout=subprocess.PIPE,
-                          stderr=subprocess.STDOUT, text=True)
-    time.sleep(0.8)
-    g2 = subprocess.Popen([sys.executable, os.path.join(scripts, "gate_runlog.py"), "run", "--tier", "scoped",
-                           "--lane", "G2", "--build", tb, "--", f"ctest -j1 --output-on-failure -R '^gpu\\.a$'"],
-                          cwd=source, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
-                          env=dict(os.environ, JAH_RUN_LOG_DIR=os.path.join(scratch, "runs-g2")))
-    time.sleep(0.8)
-    g3 = subprocess.Popen([sys.executable, vt, "gate", "--label", "G3", "--", "sh", "-c",
-                           f"date +%s.%N > {state}/g3.start"], stdout=subprocess.PIPE,
-                          stderr=subprocess.STDOUT, text=True)
-    time.sleep(0.8)
+    rel1 = os.path.join(scratch, "g1.release")
+    g1 = spawn([sys.executable, vt, "gate", "--label", "G1", "--", "sh", "-c",
+                f"while [ ! -e {rel1} ] && kill -0 {os.getpid()} 2>/dev/null; do sleep 0.05; done; echo g1 >> {state}/order"])
+    o1 = wait_line(g1, "gate-slot: taken")
+    g2 = spawn([sys.executable, os.path.join(scripts, "gate_runlog.py"), "run", "--tier", "scoped",
+                "--lane", "G2", "--build", tb, "--", f"ctest -j1 --output-on-failure -R '^gpu\\.a$'"],
+               cwd=source, env=dict(os.environ, JAH_RUN_LOG_DIR=os.path.join(scratch, "runs-g2")))
+    o2 = wait_line(g2, "gate-slot: queued at position")
+    g3 = spawn([sys.executable, vt, "gate", "--label", "G3", "--", "sh", "-c", f"echo g3 >> {state}/order"])
+    o3 = wait_line(g3, "gate-slot: queued at position")
     st = subprocess.run([sys.executable, vt, "status"], capture_output=True, text=True).stdout
-    o1, o2, o3 = (p.communicate(timeout=120)[0] for p in (g1, g2, g3))
-    g1_end = float(open(os.path.join(state, "g1.end")).read())
-    g3_start = float(open(os.path.join(state, "g3.start")).read())
+    open(rel1, "w").close()                    # the holder's release: the one event the queue waits for
+    o1, o2, o3 = (o + p_.communicate()[0] for o, p_ in ((o1, g1), (o2, g2), (o3, g3)))
+    tickets = [int(re.search(r"gate-slot: queued ticket (\d+)", o).group(1)) for o in (o1, o2, o3)]
     g2_recs = [json.loads(l) for f in os.listdir(os.path.join(scratch, "runs-g2"))
                for l in open(os.path.join(scratch, "runs-g2", f))] if os.path.isdir(os.path.join(scratch, "runs-g2")) else []
+    g2_rows = [r for r in g2_recs if not r.get("kind")]
     check("gate-slot: taken" in o1 and "HELD by" in st and "G1" in st.split("HELD by", 1)[1].splitlines()[0],
           "the first gate takes the slot and `status` names it the holder")
+    check(tickets[0] < tickets[1] < tickets[2], "the three tickets are in the order the gates asked (%r)" % tickets)
     check("queued at position 1" in o2 and "behind" in o2 and "G1" in o2.split("queued at position 1", 1)[1].splitlines()[0],
           "the second gate (gate_runlog.py run) prints its position (1) and whom it waits behind")
     check("queued at position 2" in o3, "the third prints position 2 (FIFO: behind the holder and the second)")
-    check(g2.returncode == 0 and len(g2_recs) == 1 and g2_recs[0]["verdict"] == "PASS",
-          "the second gate runs its row after the wait (rc %r, %d record(s))" % (g2.returncode, len(g2_recs)))
-    ts2 = max((time.mktime(time.strptime(r["ts"][:19], "%Y-%m-%dT%H:%M:%S")) for r in g2_recs), default=0)
-    check(ts2 + 1 >= int(g1_end) and g3_start >= g1_end, "nothing ran before the holder was gone "
-          "(holder ended %.1f s in; the third started %.1f s in)" % (g1_end - t0, g3_start - t0))
-    check(time.time() - t0 < 60, "the queue has no 900 s bound and no stall (%.0f s)" % (time.time() - t0))
-    # small things never take it
-    holder = subprocess.Popen([sys.executable, vt, "gate", "--label", "H", "--", "sleep", "20"],
-                              stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    time.sleep(0.8)
-    p = subprocess.run([sys.executable, vt, "admit", "1", "--", "true"], capture_output=True, text=True, timeout=30)
+    check(g2.returncode == 0 and len(g2_rows) == 1 and g2_rows[0]["verdict"] == "PASS",
+          "the second gate runs its row after the wait (rc %r, %d record(s))" % (g2.returncode, len(g2_rows)))
+    check(order() == ["g1", "gpu.a", "g3"], "nothing ran before the holder was gone: the order of the work is the "
+          "order of the tickets (%r)" % order())
+    # a per-row admission never takes it
+    relh = os.path.join(scratch, "h.release")
+    holder = spawn([sys.executable, vt, "gate", "--label", "H", "--", "sh", "-c",
+                    f"while [ ! -e {relh} ] && kill -0 {os.getpid()} 2>/dev/null; do sleep 0.05; done"])
+    wait_line(holder, "gate-slot: taken")
+    p = subprocess.run([sys.executable, vt, "admit", "1", "--", "true"], capture_output=True, text=True)
     check(p.returncode == 0 and "gate-slot" not in p.stderr, "a plain admission (a hand run) never takes the slot")
-    os.environ["JAH_GATE_SLOT_HELD"] = "1"
+    os.environ["JAH_GATE_SLOT_HELD"] = str(holder.pid)     # the live holder's pid: what a gate's rows inherit
     check(vt_mod.gate_slot("nested", log=io.StringIO()) is None, "a process already inside a gate never queues again")
     os.environ.pop("JAH_GATE_SLOT_HELD")
-    holder.terminate(); holder.wait()
+    open(relh, "w").close(); holder.communicate()
 
     # ---- 2. P5: NOADMIT re-queued in the same run, recorded once ---------------------------------
     print("2. NOADMIT re-queued in-run")
     reset()
     rc, out = run("^(gpu\\.a|gpu\\.noadmit_once)$")
-    recs = [r for r in records() if r["suite"] == "gpu.noadmit_once"]
-    check(rc == 0 and len(recs) == 1 and recs[0]["verdict"] == "PASS" and "re-queued 1 row" in out,
-          "a row with no admission is re-queued at the end of the run and recorded ONCE, its passing run "
-          "(rc %r, %r)" % (rc, [r["verdict"] for r in recs]))
+    recs = [(r["verdict"], r.get("requeued")) for r in records() if r["suite"] == "gpu.noadmit_once"]
+    check(rc == 0 and recs == [("NOADMIT", 0), ("PASS", 1)] and "re-queued 1 row" in out,
+          "a row with no admission is re-queued at the end of the run; EVERY try is a record — the held one NOADMIT "
+          "requeued 0, the passing one requeued 1 (rc %r, %r)" % (rc, recs))
     reset()
     rc, out = run("^(gpu\\.a|gpu\\.noadmit_always)$")
-    recs = [r for r in records() if r["suite"] == "gpu.noadmit_always"]
-    check(rc != 0 and len(recs) == 1 and recs[0]["verdict"] == "NOADMIT" and out.count("re-queued 1 row") == 2,
-          "a row that never gets one is tried 1 + JAH_GATE_REQUEUE (2) times and recorded once, NOADMIT, the run red "
-          "(rc %r, %r, %d re-queue(s))" % (rc, [r["verdict"] for r in recs], out.count("re-queued 1 row")))
+    recs = [(r["verdict"], r.get("requeued")) for r in records() if r["suite"] == "gpu.noadmit_always"]
+    check(rc != 0 and recs == [("NOADMIT", 0), ("NOADMIT", 1), ("NOADMIT", 2)] and out.count("re-queued 1 row") == 2,
+          "a row that never gets one is tried 1 + JAH_GATE_REQUEUE (2) times, one NOADMIT record per try, the run red "
+          "(rc %r, %r)" % (rc, recs))
+    import ci_gate_check as cgc
+    st_, why_ = cgc.judge(("gpu.noadmit_always", None), [r for r in records() if r["suite"] == "gpu.noadmit_always"], {})
+    check(st_ == "missing", "...and the refusal still reads them as never-ran (%s: %s)" % (st_, why_))
 
     # ---- 3. P6: a killed ctest keeps what it finished; the rest runs on resume --------------------
     print("3. per-row records and resume")
@@ -190,16 +248,18 @@ def main(source, build):
     res = {}
     t = threading.Thread(target=lambda: res.update(r=run("^(lint\\.one|gpu\\.a|gpu\\.b|gpu\\.slow)$")))
     t.start()
-    deadline = time.time() + 40
-    while "gpu.slow" not in order() and time.time() < deadline:
-        time.sleep(0.2)
+    check(wait_until(lambda: "gpu.slow" in order(), t), "the run reached gpu.slow (its producer alive)")
     me = os.getpid()
-    ctests = [p for p in rl._descendants(me)
-              if open(f"/proc/{p}/cmdline", "rb").read().split(b"\0")[0].endswith(b"ctest")]
+    def argv0(p_):
+        try:                                     # a process may exit between the listing and the read (the run's
+            return open(f"/proc/{p_}/cmdline", "rb").read().split(b"\0")[0]   # own short-lived samplers do)
+        except OSError:
+            return b""
+    ctests = [p for p in rl._descendants(me) if argv0(p).endswith(b"ctest")]
     for p in ctests + [p for c in ctests for p in rl._descendants(c)]:
         try: os.kill(p, signal.SIGKILL)
         except OSError: pass
-    t.join(60)
+    t.join()
     os.environ.pop("TOY_SLOW")
     finished = [n for n in order() if n != "gpu.slow"]
     got = {r["suite"] for r in records()}
@@ -219,34 +279,76 @@ def main(source, build):
     # ---- 4. P6: a dead display stops the run --------------------------------------------------------
     print("4. a dead display")
     reset()
+    open(os.path.join(state, "go"), "w").close()
+    run("^gpu\\.wait$")                     # an older record of gpu.wait at this tip (red: it fails by design)
+    os.unlink(os.path.join(state, "go"))
+    open(os.path.join(state, "order"), "w").close()
     xroot = os.path.join(scratch, "x11")
     os.makedirs(os.path.join(xroot, ".X11-unix"))
     sock = os.path.join(xroot, ".X11-unix", "X77")
     fake_x = subprocess.Popen([sys.executable, "-c",
                                "import socket,time,sys\ns=socket.socket(socket.AF_UNIX)\ns.bind(sys.argv[1])\n"
                                "s.listen(16)\nwhile True: time.sleep(1)", sock])
-    for _ in range(50):
-        if os.path.exists(sock): break
-        time.sleep(0.1)
+    check(wait_until(lambda: os.path.exists(sock), fake_x), "the fake X server is listening")
     open(os.path.join(xroot, ".X77-lock"), "w").write("%10d\n" % fake_x.pid)
     os.environ["JAH_X11_ROOT"] = xroot
     os.environ["TOY_SLOW"] = "30"
+    os.environ["JAH_DISPLAY_POLL_S"] = "60"     # only the row-end check sees the death: gpu.wait ENDS after it
     env = dict(os.environ, DISPLAY=":77")
     res = {}
-    t = threading.Thread(target=lambda: res.update(r=run("^(lint\\.one|gpu\\.a|gpu\\.slow)$", env=env)))
+    t = threading.Thread(target=lambda: res.update(r=run("^(lint\\.one|gpu\\.a|gpu\\.wait|gpu\\.slow)$", jobs=3, env=env)))
     t.start()
-    deadline = time.time() + 40
-    while "gpu.slow" not in order() and time.time() < deadline:
-        time.sleep(0.2)
+    # the death comes once gpu.wait and gpu.slow run and gpu.a's record is written (events, no clock)
+    check(wait_until(lambda: {"gpu.wait", "gpu.slow"} <= set(order()) and any(r["suite"] == "gpu.a" for r in records()), t),
+          "the run reached gpu.wait and gpu.slow with gpu.a recorded (its producer alive)")
     fake_x.kill(); fake_x.wait()
-    t.join(60)
-    os.environ.pop("TOY_SLOW")
+    open(os.path.join(state, "go"), "w").close()       # gpu.wait ends RED after the display died
+    t.join()
+    os.environ.pop("TOY_SLOW"); os.environ.pop("JAH_DISPLAY_POLL_S")
     rc, out = res.get("r", (None, ""))
-    got = {r["suite"] for r in records()}
+    got = {r["suite"] for r in records() if not r.get("kind")}
     check(rc == rl.DISPLAY_LOST and "GATE ABORTED" in out and "is gone" in out and rl.ABORTED,
           "the X server dies under a run -> it stops, DISPLAY_LOST, the abort line says why (rc %r)" % rc)
-    check("gpu.slow" not in got and {"lint.one", "gpu.a"} <= got,
-          "rows that ended before the death are recorded, the row that ended after it is not (%s)" % sorted(got))
+    runs_ = [r for r in records() if r["suite"] == "gpu.wait" and not r.get("kind")]
+    check(len(runs_) == 1 and {"lint.one", "gpu.a"} <= got and "gpu.slow" not in got,
+          "rows that ended before the death are recorded, the rows that ended after it are not (%s)" % sorted(got))
+    ab = [r for r in records() if r.get("kind") == "abort"]
+    check(len(ab) == 1 and ab[0]["suite"] == "@abort" and "is gone" in ab[0].get("why", "")
+          and [d_["suite"] for d_ in ab[0].get("dropped", [])] == ["gpu.wait"] and ab[0].get("droppedRed") == ["gpu.wait"]
+          and ab[0]["dropped"][0].get("failLine") == "FAIL: the window it drew" and ab[0].get("inFlight") == ["gpu.slow"],
+          "the abort is ONE `kind: abort` record: the row that ended RED after the death with its status and FAIL "
+          "line, the row still running (%r)" % ({k: ab[0].get(k) for k in ("dropped", "inFlight")} if ab else None))
+    done_ = rl.recorded_rows(clean)
+    check(rl.owed_solos(clean) == ["gpu.wait"] and "gpu.a" in done_,
+          "the row the abort dropped RED is OWED A SOLO (#9: never the ordinary pass), whatever older record it has")
+    open(os.path.join(state, "go"), "w").close()
+    # strictly after the abort's second (records are stamped to it): wait for the stamp to move past it
+    wait_until(lambda: datetime.datetime.now().astimezone().isoformat(timespec="seconds") > ab[0]["ts"])
+    owed_after = []
+    for _ in range(3):
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            rl.run_ctest("ctest -j1 --timeout 60 -R '^gpu\\.wait$'", tb, "solo", "gate-cost-test", 1, retry=True,
+                         labels=LABELS)
+        owed_after.append(rl.owed_solos(clean))
+    solos = [r for r in records() if r["suite"] == "gpu.wait" and r.get("retry") and r["tier"] == "solo"]
+    check(owed_after[:2] == [["gpu.wait"], ["gpu.wait"]],
+          "an interrupted solo pass (1 or 2 of 3) leaves the dropped red OWED (F3; %r)" % owed_after[:2])
+    # a pool dropped red: its ARM records and a held NOADMIT try are not solos (round 2, A)
+    later = (datetime.datetime.now().astimezone() + datetime.timedelta(seconds=2)).isoformat(timespec="seconds")
+    rl.phase_record("abort", "scoped", "gate-cost-test", None, clean, why="test", dropped=[],
+                    droppedRed=["pool.p"], inFlight=[])
+    pool_recs = []
+    for arm in (None, "p.one", "p.two"):
+        pool_recs.append({"suite": "pool.p", "arm": arm, "verdict": "PASS", "retry": True, "ts": later, "tip": clean})
+    pool_recs.append({"suite": "pool.p", "arm": None, "verdict": "NOADMIT", "retry": True, "ts": later, "tip": clean})
+    rl.append_records(pool_recs, "solo", clean["studio"])
+    check("pool.p" in rl.owed_solos(clean),
+          "a pool's arm records and a held NOADMIT try never count as its solos (one row solo + two arms + a NOADMIT "
+          "leave it owed)")
+    check(len(solos) == 3 and "gpu.wait" not in rl.owed_solos(clean) and ab[0].get("droppedRed") == ["gpu.wait"],
+          "three solo retries (tier solo) answer it; the abort record keeps droppedRed for the judge (%d solo(s), "
+          "owed %r)" % (len(solos), rl.owed_solos(clean)))
     rc, out = run("^gpu\\.a$", env=env)
     check(rc == rl.DISPLAY_LOST and "before its first row" in out, "a run on a display already dead refuses to start")
     os.environ.pop("JAH_X11_ROOT")
@@ -271,7 +373,7 @@ def main(source, build):
     import xml.etree.ElementTree as ET
     outs = {tc.get("name"): (tc.find("system-out").text or "") if tc.find("system-out") is not None else ""
             for tc in ET.parse(junit).getroot().iter("testcase")}
-    R = rl._Run("scoped", "gate-cost-test", 3, None, None, None, False, LABELS, False, None)
+    R = rl._Run("scoped", "gate-cost-test", 3, None, None, None, False, LABELS, False, None, build=tb)
     R.sampler.stop()
     skip = ("ts", "run", "box", "seconds", "wallSeconds", "retries")
     same, n = True, 0
@@ -290,25 +392,25 @@ def main(source, build):
 
     # ---- 7. the slot under stress: a dead waiter, a race, a killed gate -----------------------------
     print("7. the slot: reaping, the race, a killed gate")
-    holder = subprocess.Popen([sys.executable, vt, "gate", "--label", "H", "--", "sleep", "30"],
-                              stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    time.sleep(0.8)
-    waiter = subprocess.Popen([sys.executable, vt, "gate", "--label", "W", "--", "true"],
-                              stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    time.sleep(0.8)
+    relh = os.path.join(scratch, "h7.release")
+    holder = spawn([sys.executable, vt, "gate", "--label", "H", "--", "sh", "-c",
+                    f"while [ ! -e {relh} ] && kill -0 {os.getpid()} 2>/dev/null; do sleep 0.05; done"])
+    wait_line(holder, "gate-slot: taken")
+    waiter = spawn([sys.executable, vt, "gate", "--label", "W", "--", "true"])
+    wait_line(waiter, "gate-slot: queued at position")
     before = [t[1] for t in vt_mod.gate_queue()]
     waiter.kill(); waiter.wait()
     qdir = os.path.join(os.environ["JAH_VRAM_DIR"], "gate-queue")
     after = [t[1] for t in vt_mod.gate_queue()]
     check(waiter.pid in before and waiter.pid not in after and not any(n.endswith(".%d" % waiter.pid) for n in os.listdir(qdir)),
           "a dead waiter's ticket is reaped by the next reader (queue %s -> %s)" % (before, after))
-    holder.terminate(); holder.wait()
+    open(relh, "w").close(); holder.communicate()
     # F3: eight gates asked at once — never two inside the critical section
     crit = os.path.join(state, "crit")
     racers = [subprocess.Popen([sys.executable, vt, "gate", "--label", "R%d" % i, "--", "sh", "-c",
                                 f"mkdir {crit} 2>/dev/null || echo DOUBLE >> {state}/race; sleep 0.2; rmdir {crit}"],
                                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL) for i in range(8)]
-    for r_ in racers: r_.wait(timeout=60)
+    for r_ in racers: r_.wait()
     check(not os.path.exists(os.path.join(state, "race")),
           "eight gates asking at once hold the slot one at a time (the ticket is renamed in under the counter's lock)")
     # F2: a gate SIGKILLed mid-run — its ctest and rows die within 15 s, the slot is free
@@ -317,25 +419,21 @@ def main(source, build):
     gk = subprocess.Popen([sys.executable, os.path.join(scripts, "gate_runlog.py"), "run", "--tier", "scoped",
                            "--lane", "GK", "--build", tb, "--", "ctest -j1 -R '^gpu\\.slow$'"], cwd=source,
                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    deadline = time.time() + 40
-    while "gpu.slow" not in order() and time.time() < deadline:
-        time.sleep(0.2)
+    check(wait_until(lambda: "gpu.slow" in order(), gk), "the gate GK reached gpu.slow (alive)")
     tree = rl._descendants(gk.pid)
     gk.kill(); gk.wait()
-    t_kill = time.time()
     def running(p_):
         try:                                     # a process may vanish between any two reads
             return open(f"/proc/{p_}/stat").read().rsplit(")", 1)[1].split()[0] != "Z"
         except (OSError, IndexError):
             return False
-    while time.time() - t_kill < 20 and any(running(p_) for p_ in tree):
-        time.sleep(0.5)
-    left = [p_ for p_ in tree if running(p_)]
+    # the tree's death is the reaper's event (SIGTERM, SIGKILL 15 s later — its own clock, not the test's):
+    # wait for it, no bound; a reaper that never kills hangs this row to its TIMEOUT, which is the red
+    wait_until(lambda: not any(running(p_) for p_ in tree))
     os.environ.pop("TOY_SLOW")
     stt = subprocess.run([sys.executable, vt, "status"], capture_output=True, text=True).stdout
-    check(tree and not left and time.time() - t_kill < 20 and "nobody holds it" in stt,
-          "a SIGKILLed gate: its ctest and its rows (%d processes) die within %.0f s and the slot is free"
-          % (len(tree), time.time() - t_kill))
+    check(tree and "nobody holds it" in stt,
+          "a SIGKILLed gate: its ctest and its rows (%d processes) die and the slot is free" % len(tree))
 
     # ---- 8. P2/P9: the whole card once per phase ---------------------------------------------------
     print("8. the whole card")
@@ -369,7 +467,11 @@ def main(source, build):
     real = (g.gate_runlog.run_ctest, g.gate_runlog.fork_pin_problem, g.gate_runlog.recorded_rows)
     g.gate_runlog.run_ctest = fake_run
     g.gate_runlog.fork_pin_problem = lambda *a, **k: None
+    real_pb = g.gate_runlog.prebuild
+    g.gate_runlog.prebuild = lambda *a, **k: None     # never a build of the tree under test from inside its gate
     g.gate_runlog.recorded_rows = lambda *a: {"gi.chain_face"}
+    real_owed = g.gate_runlog.owed_solos
+    g.gate_runlog.owed_solos = lambda *a: []
 
     def gs_main(argv):
         sys.argv = ["gate-scope.py"] + argv
@@ -383,8 +485,8 @@ def main(source, build):
     seen = []
     g.gate_runlog.run_ctest = lambda *a, **k: (seen.append(bool(mine())), 0)[1]
     code, out = gs_main(["--solo", "gi.chain_face", "--times", "2", "--build", build, "--lane", "gate-cost-test"])
-    check(code == 0 and seen == [False, False] and "gate-slot" not in out and not mine(),
-          "--solo never takes the slot (%r)" % seen)
+    check(code == 0 and seen == [True, True] and "gate-slot: taken" in out and not mine(),
+          "--solo (a whole-card hold) takes the slot for its batch and gives it back (%r)" % seen)
     g.gate_runlog.run_ctest = lambda *a, **k: (calls.append(dict(k, tier=a[2], held=bool(mine()))), 0)[1]
     code, out = gs_main(files + ["--run"])
     gating = [c for c in calls if c["tier"] != "target"]
@@ -399,10 +501,37 @@ def main(source, build):
               % len(gating))
     calls.clear()
     g.gate_runlog.run_ctest = fake_run
+    g.gate_runlog.owed_solos = lambda *a: ["gi.chain_face_target"]
     code, out = gs_main(files + ["--resume"])
-    check(code == 0 and calls and all(c.get("exclude") == {"gi.chain_face"} for c in calls),
-          "--resume runs the gate with the tip's recorded rows excluded from every phase (%r)"
-          % [(c["tier"], c.get("exclude")) for c in calls])
+    plain = [c for c in calls if not c.get("retry")]
+    solo_ = [c for c in calls if c.get("retry")]
+    check(code == 0 and plain and all(c.get("exclude") == {"gi.chain_face", "gi.chain_face_target"} for c in plain),
+          "--resume runs the gate with the tip's recorded rows AND the owed dropped red excluded from every ordinary "
+          "phase (%r)" % [(c["tier"], c.get("exclude")) for c in plain])
+    check(len(solo_) == 3 and all(c["tier"] == "solo" and "chain_face_target" in c["cmd"] for c in solo_)
+          and out.index("dropped reds' solos") < out.index("GATE VERDICT"),
+          "...and re-runs the dropped red as a SOLO, 3x, tier solo, before the verdict (#9)")
+    # round 2, C: the dropped reds' solos whose drain times out write the phase record and run with the fallback
+    real_hold = g.gate_runlog._vram().hold_card
+
+    def timed_out_hold(label, log=None, wait=None):
+        vt_mod.LAST_DRAIN_TIMEOUT = {"label": label, "waitS": 1.0, "why": "test", "holders": ["token.00 HELD by x"]}
+        return [], {k: v for k, v in os.environ.items() if k != "JAH_VRAM_HELD"}
+    vt_mod.hold_card = timed_out_hold
+    calls.clear()
+    code, out = gs_main(files + ["--resume"])
+    vt_mod.hold_card = real_hold
+    solo_ = [c for c in calls if c.get("retry")]
+    dtr = [r for r in records() if r.get("kind") == "drain-timeout" and r.get("tier") == "solo"]
+    check(len(solo_) == 3 and all(c.get("fallback") == "drain-timeout" for c in solo_) and dtr
+          and dtr[-1].get("fallback") == "drain-timeout",
+          "the dropped reds' solos on a drain timeout: a drain-timeout record and `fallback` on every run (round 2, C/D)")
+    calls.clear()
+    code, out = gs_main(files + ["--run", "--targets-only", "--resume"])
+    solo_ = [c for c in calls if c.get("retry")]
+    check(len(solo_) == 3 and all(c["tier"] == "solo" for c in solo_),
+          "--targets-only --resume runs the owed dropped red's solos too (F8; %d)" % len(solo_))
+    g.gate_runlog.owed_solos = lambda *a: []
     calls.clear()
     g.gate_runlog.run_ctest = lambda *a, **k: (calls.append(1), rl.DISPLAY_LOST)[1]
     code, out = gs_main(files + ["--run"])
@@ -413,8 +542,324 @@ def main(source, build):
     code, out = gs_main(files + ["--run"])
     check(code == 137 and "GATE ABORTED: ctest was killed" in out and len(calls) == 1,
           "a ctest killed under the gate (137) ends it there: no timing phase, no target step (F4; exit %r)" % code)
+    # a finding registered while the whole-card drain had timed out carries `fallback` (the pending-defect file).
+    # RED ON BASE (1ceb5cde9, measured): _register takes no fallback (TypeError); the judge called the timing
+    # row's fallback record green.
+    reg_dir = os.path.join(scratch, "registry")
+    os.makedirs(reg_dir, exist_ok=True)
+    old_df = os.environ.get("JAH_DEFECTS_FILE"); os.environ["JAH_DEFECTS_FILE"] = os.path.join(reg_dir, "defects.json")
+    try:
+        pth = g._register("t9", "defect", "row.q", "c" * 40, {}, "a cause", fallback="drain-timeout")
+        pth2 = g._register("t9", "combination", "row.r", "c" * 40, {}, "a cause")
+    finally:
+        if old_df is None: os.environ.pop("JAH_DEFECTS_FILE", None)
+        else: os.environ["JAH_DEFECTS_FILE"] = old_df
+    check(json.load(open(pth)).get("fallback") == "drain-timeout" and "fallback" not in json.load(open(pth2)),
+          "a pending-defect file carries `fallback` when its runs had no whole-card hold, and only then")
+    # the judge: a MEASURING row's record with a fallback is not evidence — the row re-runs; any other row's is
+    tim = {"suite": "time.card", "arm": None, "verdict": "PASS", "ts": "2026-10-10T01:00:00+02:00",
+           "labels": ["timing"], "fallback": "drain-timeout"}
+    st_t, why_t = cgc.judge(("time.card", None), [tim], {})
+    st_p, _ = cgc.judge(("gpu.a", None), [dict(tim, suite="gpu.a", labels=[])], {})
+    st_f, _ = cgc.judge(("perf.x", None), [dict(tim, suite="perf.x", labels=["perf"])], {})
+    check(st_t == "missing" and "fallback" in why_t and st_p == "green" and st_f == "missing",
+          "ci_gate_check refuses a timing or perf row's record carried by a fallback (re-run it), never another row's "
+          "(%s / %s / %s)" % (st_t, st_f, st_p))
     g.gate_runlog.run_ctest, g.gate_runlog.fork_pin_problem, g.gate_runlog.recorded_rows = real
+    g.gate_runlog.owed_solos = real_owed
+    g.gate_runlog.prebuild = real_pb
     os.environ.pop("JAH_GATE_SLOT_HELD", None)
+
+    # ---- 9. GATE-COST-2: whole-card holds in the slot, the drain timeout, the prune list, the ingest wait --
+    print("9. whole-card holds, the drain timeout, the prune list, the Xid ingest")
+    os.environ.pop("JAH_GATE_SLOT_HELD", None)
+    # the gate-scope runs above took the slot in THIS process and never gave it back (main() owns it to its
+    # exit): close those tickets, so this process stops being the slot's holder
+    for fd_ in os.listdir("/proc/self/fd"):
+        try:
+            if "/gate-queue/" in os.readlink(f"/proc/self/fd/{fd_}"): os.close(int(fd_))
+        except OSError:
+            pass
+    vt_mod.gate_queue()                          # reaps them
+    # GATE-LOG-1 x GATE-COST-2 (the stack read's F1): a whole-card hold that QUEUED for the slot hands its wait to
+    # the runs of its phase — a --solo batch's records carry slot_wait_s, never None after a real queue
+    relq = os.path.join(scratch, "q.release")
+    qh = spawn([sys.executable, vt, "gate", "--label", "QH", "--", "sh", "-c",
+                f"while [ ! -e {relq} ] && kill -0 {os.getpid()} 2>/dev/null; do sleep 0.05; done"])
+    wait_line(qh, "gate-slot: taken")
+    got_ = {}
+    th = threading.Thread(target=lambda: got_.update(r=vt_mod.hold_card("solo-like", log=io.StringIO())))
+    th.start()
+    check(wait_until(lambda: any(t_[1] == os.getpid() for t_ in vt_mod.gate_queue()), th),
+          "the solo-like hold queued behind the holder")
+    open(relq, "w").close(); qh.communicate(); th.join()
+    card_q, env_q = got_["r"]
+    reset()
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        rl.run_ctest("ctest -j1 --timeout 60 -R '^gpu\\.a$'", tb, "solo", "gate-cost-test", 1, retry=True, env=env_q,
+                     whole_card=False)
+    vt_mod.release(card_q)
+    rq = [r for r in records() if r["suite"] == "gpu.a"]
+    check(env_q.get("JAH_GATE_SLOT_WAIT_S") not in (None, "None") and rq
+          and rq[0].get("slot_wait_s") == float(env_q["JAH_GATE_SLOT_WAIT_S"]),
+          "a --solo-like hold that queued for the slot: its run's records carry slot_wait_s (%r)"
+          % (rq[0].get("slot_wait_s") if rq else None))
+    relhand = os.path.join(scratch, "hand.release")
+    hand = spawn([sys.executable, "-c", "import sys, os, time; sys.path.insert(0, sys.argv[1]); import vram_tokens as v;"
+                  " fds, env = v.hold_card('hand phase'); print('HELD', env.get('JAH_GATE_SLOT_HELD'),"
+                  " env.get('JAH_VRAM_HELD'), flush=True)\nwhile not os.path.exists(sys.argv[2]) and os.path.exists('/proc/' + sys.argv[3]): time.sleep(0.05)\n"
+                  "v.release(fds)", scripts, relhand, str(os.getpid())])
+    first = [l for l in wait_line(hand, "HELD").splitlines() if l.startswith("HELD")][0]
+    q = vt_mod.gate_queue()
+    other = spawn([sys.executable, vt, "gate", "--label", "G9", "--", "true"])
+    o9 = wait_line(other, "gate-slot: queued at position")
+    waiting = other.poll() is None
+    open(relhand, "w").close(); hand.communicate()
+    o9 += other.communicate()[0]
+    check(first.split()[1:3] == [str(hand.pid), "3"] and any(t_[1] == hand.pid for t_ in q) and waiting
+          and "queued at position" in o9 and "holding it for" in o9 and other.returncode == 0,
+          "a whole-card hold outside a gate takes the slot (%r); a gate asking meanwhile queues behind it, the "
+          "holder's age shown, and runs after it" % first.strip())
+    reset()
+    relb = os.path.join(scratch, "blocker.release")
+    blocker = subprocess.Popen([sys.executable, vt, "admit", "1", "--label", "blocker", "--", "sh", "-c",
+                                f"while [ ! -e {relb} ] && kill -0 {os.getpid()} 2>/dev/null; do sleep 0.05; done"],
+                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    check(wait_until(lambda: "HELD by" in subprocess.run([sys.executable, vt, "status"], capture_output=True,
+                                                         text=True).stdout.split("vram:")[0], blocker),
+          "the blocker holds its token (alive)")
+    os.environ["JAH_VRAM_PHASE_WAIT"] = "1"
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        rc = rl.run_ctest("ctest -j1 --timeout 60 --output-on-failure -L '^timing$'", tb, "scoped", "gate-cost-test", 1,
+                          labels=LABELS)
+    os.environ.pop("JAH_VRAM_PHASE_WAIT")
+    open(relb, "w").close(); blocker.wait()
+    dt = [r for r in records() if r.get("kind") == "drain-timeout"]
+    tc = [r for r in records() if r["suite"] == "time.card"]
+    check(tc and all(r.get("fallback") == "drain-timeout" for r in tc),
+          "every record of the phase whose drain timed out carries `fallback: drain-timeout` (F2; not a measurement)")
+    check(rc == 0 and len(dt) == 1 and dt[0]["suite"] == "@drain-timeout" and dt[0].get("fallback") == "drain-timeout" and any("blocker" in h and " for " in h
+                                                                                for h in dt[0].get("holders", []))
+          and "HELD by" in buf.getvalue(),
+          "a drain past JAH_VRAM_PHASE_WAIT prints the holders with their age and writes a `kind: drain-timeout` "
+          "record naming them (%r)" % (dt[0].get("holders") if dt else None))
+    for q_ in ("longest", "load-reds", "trend", "times"):
+        p_ = subprocess.run([sys.executable, os.path.join(scripts, "gate_runlog.py"), q_], capture_output=True, text=True)
+        check(p_.returncode == 0, "gate_runlog.py %s reads a log holding run records (rc %d)" % (q_, p_.returncode))
+    lib = os.path.join(source, "tests", "hygiene", "first_party.sh")
+    gm = subprocess.run(["git", "config", "-f", os.path.join(source, "irisgl", ".gitmodules"), "--get-regexp",
+                         r"\.path$"], capture_output=True, text=True).stdout.split()[1::2]
+    pruned = subprocess.run(["bash", "-c", f". {lib}; submodule_paths irisgl"], cwd=source, capture_output=True,
+                            text=True).stdout.split()
+    walked = subprocess.run(["bash", "-c", f". {lib}; first_party_paths irisgl"], cwd=source, capture_output=True,
+                            text=True).stdout.split()
+    intree = [d_ for d_ in ("irisgl/thirdparty/meshoptimizer-clusterlod", "irisgl/thirdparty/assimp-patches")
+              if os.path.isdir(os.path.join(source, d_))]
+    allpruned = subprocess.run(["bash", "-c", f". {lib}; pruned_paths irisgl"], cwd=source, capture_output=True,
+                               text=True).stdout.split()
+    inst = "irisgl/thirdparty/ogre-next-install"
+    check(not os.path.isdir(os.path.join(source, inst)) or (inst in allpruned and
+                                                              not any(w == inst or w.startswith(inst + "/") for w in walked)),
+          "the Ogre install (git-ignored build output) is pruned too (F5)")
+    check(gm and sorted(pruned) == sorted("irisgl/" + x for x in gm)
+          and not any(w == p_ or w.startswith(p_ + "/") for w in walked for p_ in pruned)
+          and all(d_ in walked for d_ in intree),
+          "the lints prune exactly irisgl/.gitmodules' paths (%d) and walk the in-tree vendored dirs (%s)"
+          % (len(gm), ", ".join(os.path.basename(d_) for d_ in intree)))
+    # `admit all` (gpu-exclusive.sh, a timing row run by hand) is a whole-card hold: it takes the slot inside
+    # its own bound — behind a gate it waits, past the bound it is NOADMIT, never a drain under the gate
+    # (the 1 s JAH_VRAM_WAIT below is the BOUND UNDER TEST — the admission's own — never a guess at timing)
+    relga = os.path.join(scratch, "ga.release")
+    gh = spawn([sys.executable, vt, "gate", "--label", "GA", "--", "sh", "-c",
+                f"while [ ! -e {relga} ] && kill -0 {os.getpid()} 2>/dev/null; do sleep 0.05; done"])
+    wait_line(gh, "gate-slot: taken")
+    pa = subprocess.run([sys.executable, vt, "admit", "all", "--timing", "--", "true"], capture_output=True, text=True,
+                        env=dict(os.environ, JAH_VRAM_WAIT="1"))
+    # 900 = the admission's production bound (vram_tokens' default) on this test's PRIVATE slot: under test is
+    # that it WAITS behind the gate within its bound, released by the event below
+    pbp = spawn([sys.executable, vt, "admit", "all", "--timing", "--", "true"], env=dict(os.environ, JAH_VRAM_WAIT="900"))
+    ob = wait_line(pbp, "gate-slot: queued at position 1")
+    open(relga, "w").close(); gh.communicate()
+    ob += pbp.communicate()[0]
+    check(pa.returncode == 75 and "gate slot was not free" in pa.stderr and pbp.returncode == 0
+          and "queued at position 1" in ob,
+          "`admit all` takes the slot like every whole-card hold: NOADMIT past its bound behind a gate, else it waits")
+    # ...and INSIDE a gate (its rows inherit the gate's live pid) it never queues behind its own gate (round 2, E)
+    relge = os.path.join(scratch, "ge.release")
+    gh = spawn([sys.executable, vt, "gate", "--label", "GE", "--", "sh", "-c",
+                f"while [ ! -e {relge} ] && kill -0 {os.getpid()} 2>/dev/null; do sleep 0.05; done"])
+    wait_line(gh, "gate-slot: taken")
+    # the gate still HOLDS while this runs (it is released only after): a queue here could never end
+    # 900 = the production bound on the PRIVATE slot (it must never be reached: inside the gate nothing queues)
+    pi = subprocess.run([sys.executable, vt, "admit", "all", "--timing", "--", "true"], capture_output=True, text=True,
+                        env=dict(os.environ, JAH_VRAM_WAIT="900", JAH_GATE_SLOT_HELD=str(gh.pid)))
+    open(relge, "w").close(); gh.communicate()
+    check(pi.returncode == 0 and "queued" not in pi.stderr and "already held by this gate" in pi.stderr,
+          "`admit all` inside a gate takes the card while the gate holds the slot, never queueing behind it")
+    # the ingest wait is an EVENT the admission performs on every row: observed, not timed — supervise() of a
+    # green row, in this process, with the journal real and time.sleep recorded
+    import types
+    slept, real_time = [], vt_mod.time
+    old_j = os.environ.pop("JAH_KERNEL_JOURNAL")
+    vt_mod.time = types.SimpleNamespace(sleep=lambda s_: slept.append(s_), time=time.time, monotonic=time.monotonic)
+    try:
+        rc_g = vt_mod.supervise(["true"], [], "green-row")
+    finally:
+        vt_mod.time = real_time
+        os.environ["JAH_KERNEL_JOURNAL"] = old_j
+    check(rc_g == 0 and 1.0 in slept, "a GREEN row waits for journald's ingest before its Xid read (%r)" % slept)
+
+    # ---- 10. GATE-COST-2 #8: what the binaries were built from rides every record ------------------------
+    print("10. the stale-build hole")
+    stamp = os.path.join(scratch, "BUILT_FROM")
+    subprocess.run(["cmake", f"-DSRC={source}", f"-DOUT={stamp}", "-P", os.path.join(source, "cmake", "BuiltFrom.cmake")],
+                   capture_output=True)
+    head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=source, capture_output=True, text=True).stdout.strip()
+    b = rl.built_from(scratch)
+    check(b and b["studio"] == head and len(b["irisgl"]) == 40,
+          "the build's last step writes BUILT_FROM: the studio HEAD (%s) and irisgl's" % (b or {}).get("studio", "?")[:9])
+    reset()
+    with open(os.path.join(tb, "BUILT_FROM"), "w") as f:
+        f.write("studio=%s\nirisgl=%s\ndirty=0\n" % ("0" * 40, clean["irisgl"]))
+    rc, out = run("^gpu\\.a$")
+    rec = [r for r in records() if r["suite"] == "gpu.a"]
+    check(rc == 0 and "STALE BUILD" in out and rec and rec[0]["tip"].get("built", {}).get("studio") == "0" * 40,
+          "a run on a build made from another commit says STALE BUILD and its record carries `tip.built`")
+    import ci_gate_check as cgc
+    got = cgc.records_by_tip({clean["studio"]: clean["irisgl"]})
+    check(("gpu.a", None) not in got[clean["studio"]] and "gpu.a" not in rl.recorded_rows(clean),
+          "the refusal and --resume never count a stale build's record as the tip's run")
+    with open(os.path.join(tb, "BUILT_FROM"), "w") as f:
+        f.write("studio=%s\nirisgl=%s\ndirty=0\n" % (clean["studio"], clean["irisgl"]))
+    rc, out = run("^gpu\\.a$")
+    got = cgc.records_by_tip({clean["studio"]: clean["irisgl"]})
+    check(rc == 0 and "STALE" not in out and len(got[clean["studio"]].get(("gpu.a", None), [])) == 1,
+          "a build made from the tip counts (one record: the fresh one)")
+    with open(os.path.join(tb, "BUILT_FROM"), "w") as f:
+        f.write("studio=%s\nirisgl=%s\ndirty=1\n" % (clean["studio"], clean["irisgl"]))
+    check(rl.stale_build(dict(clean, built=rl.built_from(tb))) == "built from a DIRTY tree",
+          "a build made from a dirty tree is never the tip's")
+    os.unlink(os.path.join(tb, "BUILT_FROM"))
+    reset()
+    rc, out = run("^gpu\\.a$")
+    got = cgc.records_by_tip({clean["studio"]: clean["irisgl"]})
+    check("no BUILT_FROM stamp" in out and ("gpu.a", None) not in got[clean["studio"]],
+          "a build with NO stamp is never the tip's run either (F4a: forward-only)")
+    # F4b: the gate's no-op build refreshes the stamp (and a failed one refuses the run) — and it is never a
+    # silent FULL build (round 2, B): a tree with no stamp, or ninja -n past 50 edges, is refused
+    pb = rl.prebuild(tb)
+    check(pb and "build the tree first" in pb and "no BUILT_FROM" in pb,
+          "a tree that was never built (no stamp) is refused with the command that builds it (round 2, B)")
+    with open(os.path.join(tb, "BUILT_FROM"), "w") as f:
+        f.write("studio=0\nirisgl=0\ndirty=0\n")
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        pb = rl.prebuild(tb)
+    check(pb is None and rl.built_from(tb) and rl.built_from(tb)["studio"] == "c" * 40
+          and "the no-op build before any row" in buf.getvalue(),
+          "the gate's no-op build says so, rebuilds what is stale and writes BUILT_FROM before any row (F4b)")
+    many = os.path.join(scratch, "many")
+    os.makedirs(many)
+    open(os.path.join(many, "CMakeLists.txt"), "w").write(
+        "cmake_minimum_required(VERSION 3.20)\nproject(m NONE)\nset(outs)\nforeach(i RANGE 60)\n"
+        "  add_custom_command(OUTPUT o${i} COMMAND ${CMAKE_COMMAND} -E touch o${i})\n  list(APPEND outs o${i})\n"
+        "endforeach()\nadd_custom_target(all_o ALL DEPENDS ${outs})\n")
+    subprocess.run(["cmake", "-G", "Ninja", "-S", many, "-B", os.path.join(many, "b")], capture_output=True)
+    open(os.path.join(many, "b", "BUILT_FROM"), "w").write("studio=0\nirisgl=0\ndirty=0\n")
+    pb = rl.prebuild(os.path.join(many, "b"))
+    check(pb and "more than 50" in pb and not os.path.exists(os.path.join(many, "b", "o1")),
+          "a tree far from built (ninja -n: 61 edges) is refused, nothing built (round 2, B)")
+    broken = os.path.join(scratch, "broken")
+    os.makedirs(broken)
+    open(os.path.join(broken, "CMakeLists.txt"), "w").write(
+        "cmake_minimum_required(VERSION 3.20)\nproject(b NONE)\nadd_custom_target(fail ALL COMMAND false)\n")
+    subprocess.run(["cmake", "-S", broken, "-B", os.path.join(broken, "b")], capture_output=True)
+    open(os.path.join(broken, "b", "BUILT_FROM"), "w").write("studio=0\nirisgl=0\ndirty=0\n")
+    pb = rl.prebuild(os.path.join(broken, "b"))
+    check(pb and "REFUSING TO RUN" in pb and "FAILED" in pb, "a failed no-op build refuses the run (F4b)")
+    # F4c: an untracked file in a tracked dir makes the build dirty
+    gitd = os.path.join(scratch, "repo")
+    os.makedirs(os.path.join(gitd, "irisgl"))
+    for d_ in (gitd, os.path.join(gitd, "irisgl")):
+        subprocess.run(["git", "init", "-q", d_]); open(os.path.join(d_, "a.txt"), "w").write("a")
+        subprocess.run(["git", "-C", d_, "add", "a.txt"], capture_output=True)
+        subprocess.run(["git", "-C", d_, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "a"],
+                       capture_output=True)
+    open(os.path.join(gitd, "irisgl", "new_piece.any"), "w").write("x")
+    out2 = os.path.join(scratch, "BF2")
+    subprocess.run(["cmake", f"-DSRC={gitd}", f"-DOUT={out2}", "-P", os.path.join(source, "cmake", "BuiltFrom.cmake")],
+                   capture_output=True)
+    check("dirty=1" in open(out2).read(), "an untracked new file in a tracked dir is a DIRTY build (F4c)")
+    with open(os.path.join(tb, "BUILT_FROM"), "w") as f:
+        f.write(open(stampsrc).read())
+
+    # ---- 11. GATE-COST-2 #10-#12: overrides on every record; hash moves and trend steps are records; tiers ----
+    print("11. overrides, hash-move / trend-step records, the lane and solo tiers")
+    reset()
+    rc, out = run("^gpu\\.a$")
+    r_ = [r for r in records() if r["suite"] == "gpu.a"][0]
+    check("JAH_VRAM_TOKENS=3" in r_.get("overrides", []) and any(o.startswith("JAH_KERNEL_JOURNAL=") for o in r_["overrides"])
+          and rl.law_overrides({}) == [] and rl.law_overrides({"JAH_GATE_SLOT": "1", "JAH_VRAM_TOKENS": "11"}) == []
+          and rl.law_overrides({"JAH_GATE_SLOT": "0", "JAH_JUDGE_READ": "x", "JAH_VRAM_ALL": "1"})
+          == ["JAH_GATE_SLOT=0", "JAH_VRAM_ALL=1", "JAH_JUDGE_READ=x"],
+          "every record carries the law switches in force for its run as `overrides` (%r)" % r_.get("overrides"))
+    reset()
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        rl.run_ctest("ctest -j1 --timeout 60 -R '^gpu\\.a$'", tb, "solo", "gate-cost-test", 1, retry=True,
+                     env=dict(os.environ, JAH_VRAM_ALL="1"), fallback="drain-timeout")
+    fr = [r for r in records() if r["suite"] == "gpu.a"]
+    check(fr and fr[0].get("fallback") == "drain-timeout" and not any(o.startswith("JAH_VRAM_ALL") for o in fr[0]["overrides"]),
+          "a JAH_VRAM_ALL the TOOL set after a drain timeout is `fallback: drain-timeout`, not an override (F2: %r)"
+          % fr[0].get("overrides") if fr else None)
+    vpath = cgc.record_verdicts([(("gpu.a", None), "read: x")], clean["studio"], clean["irisgl"])
+    vrec = [json.loads(l) for l in open(vpath)][-1]
+    check("overrides" not in vrec, "a --verdict is a lawful act through the door, never an override (F2)")
+    p_ = subprocess.run([sys.executable, os.path.join(scripts, "gate_runlog.py"), "hash-move", "--tier", "smoke",
+                         "--lane", "rc-x", "--pose", "B1", "--old", "a" * 64, "--new", "b" * 64],
+                        capture_output=True, text=True, cwd=source)
+    hm = [r for r in records() if r.get("kind") == "hash-move"]
+    check(p_.returncode == 0 and len(hm) == 1 and hm[0]["pose"] == "B1" and hm[0]["new"] == "b" * 64
+          and hm[0]["suite"] == "@hash-move",
+          "a hash move is a `kind: hash-move` record {pose, old, new} (gate_runlog.py hash-move)")
+    real_ts, real_st, real_anc = rl.trend_series, rl.trend_steps, rl.tip_ancestry
+    rl.trend_series = lambda *a, **k: {("gi.x", "cost #", "unlocked/solo"): [("2026-10-09T10:00", clean["studio"], "l",
+                                                                               2.0, 1)]}
+    rl.trend_steps = lambda rows, anc=None, **k: [{"i": 0, "kind": "STEP", "before": 1.0, "after": 2.0, "band": 0.1,
+                                                   "readings": [2.0]}]
+    rl.tip_ancestry = lambda *a: None
+    try:
+        with contextlib.redirect_stdout(io.StringIO()):
+            rl.query_trend(30, None, None, record=("scoped", "gate-cost-test"))
+    finally:
+        rl.trend_series, rl.trend_steps, rl.tip_ancestry = real_ts, real_st, real_anc
+    ts_ = [r for r in records() if r.get("kind") == "trend-step"]
+    check(len(ts_) == 1 and ts_[0]["row"] == "gi.x" and ts_[0]["target"] == "cost #"
+          and ts_[0]["delta"] == {"before": 1.0, "after": 2.0, "rel": 100.0},
+          "a trend step is a `kind: trend-step` record {row, target, delta}")
+    ov = rl.law_overrides({"JAH_GATE_SLOT_HELD": "999999999", "JAH_VRAM_DIR": "/tmp/jah-vram"})
+    ov_dir = rl.law_overrides({"JAH_VRAM_DIR": "/somewhere/else"})
+    check(ov == ["JAH_GATE_SLOT_HELD=999999999 (no live holder)"] and ov_dir == ["JAH_VRAM_DIR=/somewhere/else"]
+          and any(o.startswith("JAH_VRAM_DIR=") for o in r_["overrides"]),
+          "a hand-set JAH_GATE_SLOT_HELD naming no live holder, and a private JAH_VRAM_DIR, are overrides (F6: %r %r)"
+          % (ov, ov_dir))
+    held_fd = vt_mod._take_ticket("F6 holder")[1]
+    ok_live = not rl.law_overrides({"JAH_GATE_SLOT_HELD": str(os.getpid())})
+    os.close(held_fd)
+    os.environ["JAH_GATE_SLOT_HELD"] = "999999999"
+    q_out = io.StringIO()
+    fd_ = vt_mod.gate_slot("F6 bypass", log=q_out)
+    check(ok_live and fd_ is not None and "names no live holder" in q_out.getvalue(),
+          "...a gate's own live pid is not; a stale value does not bypass the slot — it queues (F6)")
+    if fd_ is not None: os.close(fd_)
+    os.environ.pop("JAH_GATE_SLOT_HELD", None)
+    ok_t = True
+    for t_ in ("lane", "solo"):
+        try: rl.check_tier(t_)
+        except ValueError: ok_t = False
+    check(ok_t and "lane" in rl.TIERS and "solo" in rl.TIERS, "the tiers `lane` and `solo` are names a record may carry")
 
     shutil.rmtree(scratch, ignore_errors=True)
     if FAILURES:

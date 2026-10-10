@@ -34,9 +34,9 @@ python3 scripts/gate-scope.py --merge-tier-serial
 | tier | what | when |
 |---|---|---|
 | SCOPED | what `gate-scope.sh` selects for your diff, as ctest rows and pool ARMS | every lane, on its own change |
-| MERGE | every row except the nightly/target labels | a stage close, a fork pin bump, a fallback |
+| MERGE | every row except the stage-close/target labels | a stage close, a fork pin bump, a fallback |
 | PUSH | MERGE + the four `--engine-selftest` hash lines | once per phase, before the push |
-| NIGHTLY | the wall-clock/GPU-budget bars and soaks (label `nightly`) | once a day on a quiet box |
+| STAGE-CLOSE | the wall-clock/GPU-budget bars and soaks (label `stage-close`), `gate-scope.py --stage-close-tier` | one batch in the gate slot, started by the lead at every stage close and before every push |
 
 ## 2. How a test is shaped
 
@@ -215,13 +215,13 @@ The engine has no wall clock: it steps a fixed 1/60 s per frame. A test waits fo
 stepping frames (`editor.frame(n)`) and reading until the value stops moving — never by
 sleeping a number of milliseconds and hoping. A test that measures time warms up first (the
 first seconds of a process are the shader-compile storm), runs under the GPU lock, and its
-millisecond bars run nightly; the per-merge tiers assert counts. The `<ms>` on an ARM line is
+millisecond bars run in the stage-close batch; the per-merge tiers assert counts. The `<ms>` on an ARM line is
 a report for the scheduler, never an assertion.
 
 ## 7. The run log and the merge refusal
 
 **Every gate leaves a record.** Whatever runs a gate — `scripts/gate-scope.sh <range> --run`,
-its solo retries (`--solo <suite>`), the joint suites, and the stage, nightly and push tiers
+its solo retries (`--solo <suite>`), a batch red's attribution (`--attribute`), and the stage, stage-close and push tiers
 (`scripts/gate_runlog.py run --tier <tier> -- <ctest …>`) — appends one JSON line per ctest row
 to `~/Developer/testing/runs/<date>-<tier>-<tip>.jsonl`, and ONE MORE PER ARM of every pool it
 ran, read from the pool's `ARM <pool>.<arm> PASS|FAIL|CRASH|TIMEOUT <ms>` lines (an arm that
@@ -337,7 +337,7 @@ path it named — it gets a rule.
   directory's area includes that family. It runs. If the reason is wrong, that is a defect in
   the selector — report it, do not skip the test.
 - **Expected test missing:** run it yourself as well (`DISPLAY=:NN ctest -R '^name$'`) and
-  report the missing selection. If a later tier (a stage close, nightly) goes red on a test your
+  report the missing selection. If a later tier (a stage close, the stage-close batch) goes red on a test your
   selection did not include, that is a **selector defect**: it is fixed in
   `scripts/gate-scope.py` and your lane's diff becomes a new case in
   `tests/hygiene/gate_selection_cases.json`, which the `gate.selection` test replays on every
@@ -345,10 +345,10 @@ path it named — it gets a rule.
 
 ### Two lanes that touched the same files
 
-When two lanes that changed the same file family merge, the lead runs
-`scripts/gate-scope.sh --joint <rangeA> <rangeB> --run`: the union of both selections, with each
-lane's own tests that the other lane's change also reaches named apart — the combination neither
-gate saw. You do not run it for your own lane.
+There is no joint run for you to do: the lead gates ready lanes TOGETHER as one batch candidate
+(`docs/TESTING_GATE.md` §3c), so two lanes on one file family are gated on the tree that holds both.
+You run your brief's named acceptance tests and your subject suite; a batch red is attributed to
+the lane whose own tip makes it.
 
 ### A red in your gate
 

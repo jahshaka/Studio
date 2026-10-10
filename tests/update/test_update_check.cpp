@@ -73,7 +73,7 @@ int main(int argc, char **argv)
     const qint64 returnedAfterMs = timer.elapsed();
     std::printf("info: checkForUpdate() returned in %lld ms\n",
                 static_cast<long long>(returnedAfterMs));
-    // The millisecond bars are NIGHTLY (lane D6B-GATE-SHAPE; tests/support/timingbars.h):
+    // The millisecond bars are STAGE-CLOSE (lane D6B-GATE-SHAPE; tests/support/timingbars.h):
     // app.update_check.timing arms them on a quiet box. What stays here is load-proof —
     // a check in flight when the verb returned, the TimeoutError inside the pump's 10 s
     // (Qt's own default is 30 s), and a timeout that never fires EARLY (> 500 ms).

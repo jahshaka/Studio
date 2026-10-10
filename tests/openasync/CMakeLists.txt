@@ -36,7 +36,7 @@ target_compile_definitions(test_open_responsive PRIVATE
 
 set(_open_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-open)
 file(MAKE_DIRECTORY ${_open_home}/run)
-# THE PUSH ROW ASSERTS THE COUNTS, THE NIGHTLY ROW THE MILLISECONDS (lane D6B-GATE-SHAPE;
+# THE PUSH ROW ASSERTS THE COUNTS, THE STAGE-CLOSE ROW THE MILLISECONDS (lane D6B-GATE-SHAPE;
 # audit §5, verdict FIX-TIME): open.responsive runs every count, structure and ledger
 # assertion and prints each UI-gap / frame / watchdog reading — the cold and per-sample ceilings
 # and the exit budget too, since GATE-SPEED-1 (39 of its 41 reds on disk were the cold
@@ -63,15 +63,15 @@ set_tests_properties(open.responsive PROPERTIES
     # 1740: 6x the worst measured run (281 s, -j4 beside other lanes; D6B fix round F1 —
     # the lock used to add 900 s on top of 400, so leaving it cut the budget below 3x).
     TIMEOUT 1740 LABELS "openasync")
-# open.responsive.timing — the millisecond bars (nightly; `quiet-box`: never a scoped gate).
-# Its own home, so the nightly run and a lane's push-row run never share a library.
+# open.responsive.timing — the millisecond bars (stage-close; `quiet-box`: never a scoped gate).
+# Its own home, so the stage-close run and a lane's push-row run never share a library.
 set(_open_timing_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-open-timing)
 file(MAKE_DIRECTORY ${_open_timing_home}/run)
 jah_gpu_exclusive_test(NAME open.responsive.timing CLASS app TIER epic NEEDS photon RUN_TIMEOUT 1740 COMMAND test_open_responsive
          WORKING_DIRECTORY ${_open_timing_home}/run)
 set_tests_properties(open.responsive.timing PROPERTIES
     ENVIRONMENT "HOME=${_open_timing_home};JAHSHAKA_DATA_ROOT=${_open_timing_home}/.local/share/Jahshaka;JAHSHAKA_TIMING_BARS=1"
-    LABELS "openasync;nightly;quiet-box")
+    LABELS "openasync;stage-close;quiet-box")
 
 # The race lane (scripts/sanitize.sh tsan): a threaded open racing a main-thread
 # heartbeat is exactly what TSan is for. Note the 500 ms gap budget above is a
@@ -104,8 +104,8 @@ jah_tsan_blocked(open.frames)   # spawns the app: see jah_tsan_blocked
 
 # open.crash_soak — the crash itself, N times, under glibc's heap checks.
 #
-# NIGHTLY (labels `nightly;quiet-box`, D6B-GATE-SHAPE — it was labelled `benchmark` when that
-# label doubled as the nightly marker): out of the MERGE and PUSH tiers (`gate-scope.py
+# STAGE-CLOSE (labels `stage-close;quiet-box`, D6B-GATE-SHAPE — it was labelled `benchmark` when that
+# label doubled as the stage-close marker): out of the MERGE and PUSH tiers (`gate-scope.py
 # --merge-tier`) AND out of every scoped gate — twelve RUN_SERIAL engine processes read
 # probabilistically would stop a lane's scoped gate for minutes and ask for re-runs.
 #
@@ -120,12 +120,12 @@ jah_gpu_row(open.crash_soak CLASS app TIER epic NEEDS photon
                  ${CMAKE_SOURCE_DIR}/scenes
                  ${CMAKE_CURRENT_BINARY_DIR}/soak 12)
 set_tests_properties(open.crash_soak PROPERTIES
-    TIMEOUT 900 RUN_SERIAL TRUE LABELS "nightly;quiet-box")
+    TIMEOUT 900 RUN_SERIAL TRUE LABELS "stage-close;quiet-box")
 jah_tsan_blocked(open.crash_soak)
 
 # FRESH HOMES (PROJECT-NAMES-1). A project name is unique in a library now (project.create
 # refuses a taken one), so a row that creates a project in a home nothing wipes went red on its
-# SECOND run in the same tree (an rc tree's solo retries, build-linux, the nightly) — and every
+# SECOND run in the same tree (an rc tree's solo retries, build-linux, a stage close) — and every
 # such home grew without bound (ui.column_law's held 66 'ColumnLaw' projects). Each row below
 # creates projects; its home is wiped at the start of every run (WARM: the shader caches stay).
 if(TEST open.responsive)
