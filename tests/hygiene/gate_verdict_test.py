@@ -652,6 +652,16 @@ def case_log_schema2(E):
     ur = R.records("s.three", "Failed", 1.0, time.time(), (0, 0, 0), "vram: " + E.kx.FINDING + " (s.three)\nboom", {})
     check(ur[0].get("journal_unreadable") is True and ur[0]["xid"] is None,
           "a row whose journal was unreadable records journal_unreadable (the one case xid-read: may answer)")
+    # TESTING-CLEANUP-2B item 8 (H8c's run-log flag): a row whose app took the shutdown watchdog's _Exit(86) carries
+    # forced_exit: 86 and the line's why — green or red; a row that ended in order carries no such field.
+    # RED ON BASE (b0a3b1f3c): the record had no forced_exit field (KeyError-free None: the check below read None).
+    wd = ("shutdown watchdog: background workers still running 5 s after exit — forcing process exit (code 86)")
+    fx = R.records("s.four", "Passed", 1.0, time.time(), (0, 0, 0), "PASS: ok\n" + wd + "\n" + wd, {})[0]
+    check(fx.get("forced_exit") == 86 and "background workers" in (fx.get("forced_exit_why") or "")
+          and fx.get("forced_exits") == 2 and fx.get("verdict") == "PASS",
+          "a green row whose app forced its exit records forced_exit 86, the why and the count (%s %s %s)"
+          % (fx.get("forced_exit"), fx.get("forced_exit_why"), fx.get("forced_exits")))
+    check("forced_exit" not in ur[0], "a row whose app ended in order records no forced_exit")
     check((two.get("xid") or {}).get("pid") == xid["pid"] and (two.get("xid") or {}).get("window") == xid["window"],
           "a row whose output carries the Xid records it (%s)" % two.get("xid"))
     # gate-report.py: the table on the toy log, and the preflight's numbers on the archive
@@ -659,6 +669,8 @@ def case_log_schema2(E):
     p = subprocess.run([sys.executable, rep, d, "--ref", "HEAD"], capture_output=True, text=True)
     check(p.returncode == 0 and "TABLE gates" in p.stdout and "slot wait 0.0 h over 1 gate(s)" in p.stdout,
           "gate-report.py prints the weekly table on a toy log, reading its schema-2 fields (%d)" % p.returncode)
+    check("== 9. forced exits" in p.stdout and "| forced exits " in p.stdout,
+          "gate-report.py counts the forced exits (section 9 and the TABLE line)")
     # the stack read's F2: a stage close (tier `stage-close`) is counted in section 7, and a lane tool's own run
     # (tier `lane`, GATE-COST-2) never enters the gate wall
     d2 = tempfile.mkdtemp(dir=E.scratch)
