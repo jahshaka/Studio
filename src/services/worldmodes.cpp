@@ -2042,7 +2042,8 @@ void applyTestTier(const iris::ScenePtr &scene)
     // The RAW fields, never the Rows' get/set: a giDdgi of -1 (auto) read through its row comes
     // back concrete, and a save would then keep the concrete value.
     struct KeptPhoton {
-        iris::GiMode mode; iris::GiQuality quality; int ddgi, bounces, probeSize, tier;
+        iris::GiMode mode{}; iris::GiQuality quality{};
+        int ddgi = 0, bounces = 0, probeSize = 0, tier = 0;
         QJsonObject pins;
     } kept { scene->giMode, scene->giQuality, scene->giDdgi, scene->giNumBounces,
              scene->giProbeCaptureSize, scene->giTier, {} };
@@ -2085,7 +2086,7 @@ void applyTestTier(const iris::ScenePtr &scene)
     // with it) is the document's choice and stays — the same rule setMode keeps. SSAO is 0 in
     // every column already (SSAO-DOUBLE-1: every tier is a GI tier), so `ssao` matters only for
     // a scene that pinned it.
-    struct Feature { const char *need; const char *rowId; int off; };
+    struct Feature { const char *need = nullptr; const char *rowId = nullptr; int off = 0; };
     static const Feature kFeatures[] = {
         { "bloom",  "bloom",        0 },
         { "ssao",   "ssao",         0 },
