@@ -2252,12 +2252,8 @@ def attribute(row_args, lane_specs, tag, times, tier, candidate=None, controls=N
     # F1 (GATE-COST-2 at the rebase): a hold whose drain timed out returns the SLOT only (card == [slot]), so
     # "no card" is not the test — the drain record is. Then: the phase record, the tool's JAH_VRAM_ALL (every
     # admission takes the card itself) and `fallback: drain-timeout` on every run, never an override
-    fallback = None
-    if vt.LAST_DRAIN_TIMEOUT and not env.get("JAH_VRAM_HELD"):
-        gate_runlog.phase_record("drain-timeout", tier, tag, None, gate_runlog.tree_shas(), fallback="drain-timeout",
-                                 **vt.LAST_DRAIN_TIMEOUT)
-        env["JAH_VRAM_ALL"] = "1"
-        fallback = "drain-timeout"
+    env, fallback = _hold_state(vt, env, tier, tag, None)
+    fallback_any = fallback             # the summary + _register: did ANY hold of this run time out (item 15)
     cells = {}                          # (row, name) -> (state, reds, real runs, first failing check, last record)
     try:
         for row in rows:
@@ -2271,7 +2267,11 @@ def attribute(row_args, lane_specs, tag, times, tier, candidate=None, controls=N
                     # A MEASUREMENT YIELDS TO A GATE BETWEEN ITS RUNS (item 13): its cells so far are recorded
                     card_y, env_y = vt.yield_card(card, env, f"attribute {tag}", sys.stdout)
                     if card_y is not card:
-                        card, env = card_y, dict(env_y, DISPLAY=display, **({"JAH_VRAM_ALL": "1"} if fallback else {}))
+                        # THE RE-HOLD IS A NEW HOLD (item 15): its own drain decides the fallback — a re-drain that
+                        # timed out runs the rest with JAH_VRAM_ALL + the stamp + its phase record; a clean one, without
+                        card = card_y
+                        env, fallback = _hold_state(vt, dict(env_y, DISPLAY=display), tier, tag, None)
+                        fallback_any = fallback_any or fallback
                     rc = gate_runlog.run_ctest(
                         f"ctest -j1 --timeout 900 --output-on-failure --no-tests=error -R '{rx}'", build, tier,
                         [t[0] for t in lanes] if kind == "candidate" else [name], 1, reasons={row: reason},
@@ -2301,12 +2301,13 @@ def attribute(row_args, lane_specs, tag, times, tier, candidate=None, controls=N
     finally:
         gate_runlog._vram().release(card)
     print(f"\n=== ATTRIBUTION (batch {tag}) ===")
-    fb = f" | fallback: {fallback}" if fallback else ""
-    if fallback:
+    fb = f" | fallback: {fallback_any}" if fallback_any else ""
+    if fallback_any:
         # GATE-COST-2 round: visible WHERE THE LEAD READS — the drain timed out, the runs were not under one
         # whole-card hold: a timing row's cell here is not a measurement
-        print(f"FALLBACK: {fallback} — the whole-card drain timed out; every run took the card itself (JAH_VRAM_ALL)")
-    print("row | tree | red | the first failing check" + (" | fallback" if fallback else ""))
+        print(f"FALLBACK: {fallback_any} — a whole-card drain timed out (the first hold or a re-hold after a "
+              f"yield); the runs under it took the card themselves (JAH_VRAM_ALL), each record stamped `fallback`")
+    print("row | tree | red | the first failing check" + (" | fallback" if fallback_any else ""))
     out = {"combination": False, "defect": False, "incomplete": False}
     nil = ("ABORTED", 0, 0, None, None)
     unfinished = ("INCOMPLETE", "ABORTED")
@@ -2332,7 +2333,7 @@ def attribute(row_args, lane_specs, tag, times, tier, candidate=None, controls=N
             out["defect"] = True
             t, c = [(t, c) for t, c in ctl if c[1] > 0][0]
             path = _register(tag, "defect", row, t[3], c[4],
-                             f"red on d-build's own tip ({t[0]}: {c[1]}/{c[2]}; {c[3] or '-'}) — no lane makes it", fallback=fallback)
+                             f"red on d-build's own tip ({t[0]}: {c[1]}/{c[2]}; {c[3] or '-'}) — no lane makes it", fallback=fallback_any)
             print(f"=> {row}: D-BUILD DEFECT — red on the control {t[0]} ({c[1]}/{c[2]}) without any lane: it names "
                   f"nobody; registered {path}")
         elif named:
@@ -2346,19 +2347,36 @@ def attribute(row_args, lane_specs, tag, times, tier, candidate=None, controls=N
             out["combination"] = True
             path = _register(tag, "combination", row, cand[3], cc[4],
                              f"red at the candidate ({cc[1]}/{cc[2]}; {cc[3] or '-'}) and green on every lane's own "
-                             f"tip and on d-build's", fallback=fallback)
+                             f"tip and on d-build's", fallback=fallback_any)
             print(f"=> {row}: COMBINATION DEFECT — red at the candidate ({cc[1]}/{cc[2]}) and green on every lane's own "
                   f"tip: the batch is REFUSED; registered {path}")
         else:
             path = _register(tag, "nondeterminism", row, cand[3], cc[4],
                              f"red in batch {tag}'s gate; green {cc[2]}/{cc[2]} at the candidate, on every lane and "
-                             f"on d-build in the attribution", suspects=[t[0] for t in lanes], fallback=fallback)
+                             f"on d-build in the attribution", suspects=[t[0] for t in lanes], fallback=fallback_any)
             print(f"=> {row}: NOT REPRODUCED — green at the candidate {cc[2]}/{cc[2]} and everywhere else: a "
                   f"nondeterminism, registered {path}; it passes the verdict door with these solos recorded")
     if out["combination"]: return ATTR_DEFECT_COMBINATION
     if out["incomplete"]: return ATTR_INCOMPLETE
     if out["defect"]: return ATTR_DEFECT_DBUILD
     return 0
+
+
+def _hold_state(vt, env, tier, lane, rng):
+    """THE FALLBACK OF THE HOLD JUST TAKEN — the first hold_card of a --solo / --attribute run AND every re-hold after a
+    yield_card (item 15: the re-hold drains again, and a re-drain that times out returns the SLOT only, with no
+    JAH_VRAM_HELD — the callers used to keep the FIRST hold's fallback, so the rows after the yield ran on per-row
+    admission with no JAH_VRAM_ALL, no stamp and no phase record, and a clean re-drain stayed stamped). Reads
+    vt.LAST_DRAIN_TIMEOUT (hold_card resets it on every call): a timeout -> the phase record, the TOOL's JAH_VRAM_ALL
+    (every admission takes the card itself — a fallback, never an override, F2) and "drain-timeout"; else (env, None)
+    with no JAH_VRAM_ALL of ours. Returns (env, fallback|None); env is a copy."""
+    env = dict(env)
+    d = vt.LAST_DRAIN_TIMEOUT
+    if not d or env.get("JAH_VRAM_HELD"):
+        return env, None
+    gate_runlog.phase_record("drain-timeout", tier, lane, rng, gate_runlog.tree_shas(), fallback="drain-timeout", **d)
+    env["JAH_VRAM_ALL"] = "1"
+    return env, "drain-timeout"
 
 
 def _register(tag, kind, row, tip, rec, cause, suspects=None, fallback=None):
@@ -2369,50 +2387,77 @@ def _register(tag, kind, row, tip, rec, cause, suspects=None, fallback=None):
     next day — the next batch — for NOT REPRODUCED, +7 days for a combination / d-build defect), expires (= recheck)},
     and for NOT REPRODUCED the single-use fields {uses: 1, suspects: [the batch's lanes], census: {from the record}}.
     A finding made while the whole-card drain had timed out carries `fallback` (GATE-COST-2: the reader sees the
-    runs were not under one whole-card hold). Returns the path."""
-    import datetime as _dt
+    runs were not under one whole-card hold). A sighting of a row that already has an OPEN entry of the kind is a
+    RECHECK FILE, <pending>/<id>.recheck.json (item 15) — never a rewrite of the entry. Returns the path written.
+    ONE REGISTRATION AT A TIME (item 15): the pending dir's flock is held across the scan, the numbering and the write,
+    so two attributions at once never take one number (nor both miss each other's entry)."""
+    import fcntl
     reg = os.environ.get("JAH_DEFECTS_FILE") or os.path.join(gate_runlog.workspace_root(), "testing", "defects.json")
     d = os.environ.get("JAH_DEFECTS_PENDING_DIR") or os.path.join(os.path.dirname(reg), "defects.pending")
     os.makedirs(d, exist_ok=True)
+    lk = os.open(d, os.O_RDONLY)                # the DIRECTORY's flock: no lock file lands in the tracked dir
+    try:
+        fcntl.flock(lk, fcntl.LOCK_EX)
+        return _register_locked(d, reg, tag, kind, row, tip, rec, cause, suspects, fallback)
+    finally:
+        os.close(lk)                            # the close releases the flock
+
+
+def _write_json(path, doc):
+    """Whole or not at all: a reader never sees half a file (tmp + rename in the same dir)."""
+    tmp = path + ".tmp-%d" % os.getpid()
+    with open(tmp, "w") as f:
+        json.dump(doc, f, indent=1, sort_keys=True)
+        f.write("\n")
+    os.replace(tmp, path)
+
+
+def _register_locked(d, reg, tag, kind, row, tip, rec, cause, suspects, fallback):
+    import datetime as _dt
     rec = rec or {}
     t = rec.get("tip") or {}
     today = _dt.date.today()
     recheck = (today + _dt.timedelta(days=1 if kind == "nondeterminism" else 7)).isoformat()
-    seen = {"tip": tip, "pin": t.get("fork") or "", "run": rec.get("run") or "", "batch": tag}
+    seen = {"tip": tip, "pin": t.get("fork") or "", "run": rec.get("run") or "", "batch": tag, "cause": cause,
+            "date": today.isoformat()}
+    if fallback:
+        seen["fallback"] = fallback
     # ONE ENTRY PER ROW AND KIND (item 14): an OPEN entry of this kind for this row — in the registry or pending — is
-    # REUSED: the new sighting is added as a recheck (rechecks[], the recheck date moved on), never a second entry
-    # (batch B2 registered B2-defect-* duplicates of the A2 entries)
+    # REUSED, never a second entry (batch B2 registered B2-defect-* duplicates of the A2 entries)
     known = []
     try:
         for e in (json.load(open(reg)).get("defects") or []):
-            known.append((e, reg))
+            known.append(e)
     except (OSError, ValueError, AttributeError):
         pass
     for fn in sorted(os.listdir(d)):
-        if fn.endswith(".json"):
-            try: known.append((json.load(open(os.path.join(d, fn))), os.path.join(d, fn)))
+        if fn.endswith(".json") and not fn.endswith(gate_runlog.RECHECK_SUFFIX):
+            try: known.append(json.load(open(os.path.join(d, fn))))
             except (OSError, ValueError): pass
-    # (A NOT REPRODUCED entry is single-use AT ITS BATCH by design — uses: 1 at first_seen.tip — so it is never reused:
-    # a reused one could not clear the new batch's red.)
-    for e, src in ([] if kind == "nondeterminism" else known):
+    # REUSE NEVER REWRITES THE ENTRY (item 15): both testing/defects.json and the pending entries are TRACKED, and a
+    # sighting that moved `recheck` forward would silently stand in for the re-verdict the door (`_real`) demands of an
+    # entry past its date. The sighting goes to <pending>/<id>.recheck.json (appended, the entry's own bytes and its
+    # `recheck` untouched — the lead re-verdicts); the reader attaches the file's sightings to the entry.
+    # Never reused: a NOT REPRODUCED entry (single-use at its batch by design — uses: 1 at first_seen.tip — it could
+    # not clear the new batch's red), and a fixed or retired one (state != open: a new sighting is a NEW finding).
+    for e in ([] if kind == "nondeterminism" else known):
         if (isinstance(e, dict) and e.get("kind") == kind and row in (e.get("rows") or [])
-                and gate_runlog.defect_state(e) == "open"):
-            e.setdefault("rechecks", []).append(seen)
-            e["recheck"] = max(e.get("recheck") or recheck, recheck)
-            if "expires" in e: e["expires"] = max(e["expires"], recheck)
-            if src == reg:
-                doc = json.load(open(reg))
-                doc["defects"] = [e if x.get("id") == e["id"] else x for x in doc.get("defects") or []]
-                with open(reg, "w") as f:
-                    json.dump(doc, f, indent=1, sort_keys=True); f.write("\n")
-            else:
-                with open(src, "w") as f:
-                    json.dump(e, f, indent=1, sort_keys=True); f.write("\n")
-            return src
+                and gate_runlog.defect_state(e) == "open" and e.get("id")):
+            rp = os.path.join(d, e["id"] + gate_runlog.RECHECK_SUFFIX)
+            try:
+                doc = json.load(open(rp))
+                if not isinstance(doc, dict) or not isinstance(doc.get("sightings"), list):
+                    raise ValueError
+            except (OSError, ValueError):
+                doc = {"id": e["id"], "sightings": []}
+            doc["id"] = e["id"]
+            doc["sightings"].append(dict(seen, recheck_proposed=recheck))
+            _write_json(rp, doc)
+            return rp
     # THE ID SCHEME (item 14): <BATCH>-<ROW, upper, every non-alnum a dash>-<n> — e.g. A2-SCRIPTING-E2E-CLIP-REF-1,
     # n the next free number for that prefix: one scheme the lead reads (the kind is the entry's field, not its name)
     stem = re.sub(r"[^A-Z0-9]+", "-", f"{tag}-{row}".upper()).strip("-")
-    used = {e.get("id") for e, _ in known if isinstance(e, dict)}
+    used = {e.get("id") for e in known if isinstance(e, dict)}
     n = 1
     while f"{stem}-{n}" in used or os.path.exists(os.path.join(d, f"{stem}-{n}.json")):
         n += 1
@@ -2427,9 +2472,7 @@ def _register(tag, kind, row, tip, rec, cause, suspects=None, fallback=None):
     if fallback:
         entry["fallback"] = fallback
     path = os.path.join(d, did + ".json")
-    with open(path, "w") as f:
-        json.dump(entry, f, indent=1, sort_keys=True)
-        f.write("\n")
+    _write_json(path, entry)
     return path
 
 
@@ -2611,14 +2654,8 @@ def main():
         """A solo batch's whole card (hold_card: the slot first outside a gate), and on a drain timeout the
         phase record + the tool's fallback (round 2, C — both solo paths): (fds, env, fallback|None)."""
         card_, env_ = gate_runlog._vram().hold_card(label, log=sys.stdout)
-        drained_ = gate_runlog._vram().LAST_DRAIN_TIMEOUT
-        if not drained_ or env_.get("JAH_VRAM_HELD"):
-            return card_, env_, None
-        gate_runlog.phase_record("drain-timeout", a.tier or "solo", lane, log_range, gate_runlog.tree_shas(),
-                                 fallback="drain-timeout", **drained_)
-        # every admission of a run takes the card itself; the TOOL set it — a fallback, never an override (F2)
-        env_["JAH_VRAM_ALL"] = "1"
-        return card_, env_, "drain-timeout"
+        env_, fb_ = _hold_state(gate_runlog._vram(), env_, a.tier or "solo", lane, log_range)
+        return card_, env_, fb_
 
     def gate(what):
         """THE GATE SLOT (P1), once per gate run: queue (class 1, no bound, the position printed), then hold
@@ -2729,7 +2766,8 @@ def main():
                     # A MEASUREMENT YIELDS TO A GATE BETWEEN ITS RUNS (item 13: the slot is by priority)
                     card, env_y = gate_runlog._vram().yield_card(card, env, f"{'+'.join(lane)} --solo", sys.stdout)
                     if env_y is not env:
-                        env = dict(env_y, **({"JAH_VRAM_ALL": "1"} if fallback else {}))
+                        # THE RE-HOLD IS A NEW HOLD (item 15): its drain decides the fallback, as solo_card's did
+                        env, fallback = _hold_state(gate_runlog._vram(), env_y, a.tier or "solo", lane, log_range)
                     rx = "^" + re.escape(s) + "$"
                     r = lost(gate_runlog.run_ctest(
                         f"ctest -j1 --timeout 900 --output-on-failure --no-tests=error -R '{rx}'",

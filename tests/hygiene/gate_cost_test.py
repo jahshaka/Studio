@@ -526,6 +526,44 @@ def main(source, build):
     check(len(solo_) == 3 and all(c.get("fallback") == "drain-timeout" for c in solo_) and dtr
           and dtr[-1].get("fallback") == "drain-timeout",
           "the dropped reds' solos on a drain timeout: a drain-timeout record and `fallback` on every run (round 2, C/D)")
+    # TESTING-CLEANUP-2B item 15 (1): A YIELD'S RE-HOLD IS A NEW HOLD. Between runs the solo batch yields to a gate and
+    # re-holds (a --solo batch, 3 runs); the re-drain's own outcome decides the runs after it. (a) a clean first hold whose re-drain TIMES OUT:
+    # the runs after the yield carry `fallback` and JAH_VRAM_ALL and a drain-timeout record is written; (b) a first hold
+    # that timed out and a CLEAN re-drain: the runs after it carry neither. RED ON 74740b0de: the callers kept the FIRST
+    # hold's fallback — (a) ran per-row admission unstamped with no record, (b) stayed stamped.
+    real_yield = vt_mod.yield_card
+    for first_to, re_to in ((False, True), (True, False)):
+        ycount = [0]
+
+        def hold_(label, log=None, wait=None, first_to=first_to):
+            vt_mod.LAST_DRAIN_TIMEOUT = ({"label": label, "waitS": 1.0, "why": "first", "holders": []} if first_to
+                                         else None)
+            e_ = {k: v for k, v in os.environ.items() if k not in ("JAH_VRAM_HELD", "JAH_VRAM_ALL")}
+            if not first_to: e_["JAH_VRAM_HELD"] = "3"
+            return [], e_
+
+        def yield_(card, env, label="", log=None, cls=2, re_to=re_to):
+            ycount[0] += 1
+            if ycount[0] != 2:                   # nothing outranks it: the same hold
+                return card, env
+            vt_mod.LAST_DRAIN_TIMEOUT = ({"label": label, "waitS": 2.0, "why": "re-drain", "holders": []} if re_to
+                                         else None)
+            e_ = {k: v for k, v in os.environ.items() if k not in ("JAH_VRAM_HELD", "JAH_VRAM_ALL")}
+            if not re_to: e_["JAH_VRAM_HELD"] = "3"
+            return [], e_
+        vt_mod.hold_card, vt_mod.yield_card = hold_, yield_
+        n_dt = len([r for r in records() if r.get("kind") == "drain-timeout" and "re-drain" in str(r.get("why"))])
+        calls.clear()
+        gs_main(["--solo", "gi.chain_face", "--times", "3", "--build", build, "--lane", "gate-cost-test"])
+        vt_mod.hold_card, vt_mod.yield_card = real_hold, real_yield
+        solo_ = [c for c in calls if c.get("retry")]
+        fbs = [c.get("fallback") for c in solo_]
+        alls = [(c.get("env") or {}).get("JAH_VRAM_ALL") for c in solo_]
+        n_dt2 = len([r for r in records() if r.get("kind") == "drain-timeout" and "re-drain" in str(r.get("why"))])
+        want = [None, "drain-timeout", "drain-timeout"] if re_to else ["drain-timeout", None, None]
+        check(fbs == want and alls == [("1" if f else None) for f in want] and (n_dt2 - n_dt) == (1 if re_to else 0),
+              "(%s) a yield's re-hold decides the runs after it: fallback %s, JAH_VRAM_ALL %s, re-drain records %d"
+              % ("a" if re_to else "b", fbs, alls, n_dt2 - n_dt))
     calls.clear()
     code, out = gs_main(files + ["--run", "--targets-only", "--resume"])
     solo_ = [c for c in calls if c.get("retry")]

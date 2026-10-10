@@ -473,7 +473,15 @@ each in TESTING_V3_SPEC §1.5's FULL schema (`{id, rows, kind, cause, first_seen
 found_by: gate, recheck, expires}` — recheck a DATE: the next day for NOT REPRODUCED, +7 days for a
 defect; NOT REPRODUCED also `uses: 1, suspects: [the batch's lanes], census`), which VERDICT-1's registry
 (`testing/defects.json`) ingests — its reader quarantines a malformed entry (it never reaches the door), and
-gate.batch loads every pending file through it. Exit codes: 3 a
+gate.batch loads every pending file through it. **ONE ENTRY PER ROW AND KIND, AND A SIGHTING NEVER REWRITES IT**
+(TESTING-CLEANUP-2B items 14-15): ids are `<BATCH>-<ROW-UPPER>-<n>` (n the next free number of the stem); a row that
+already has an OPEN entry of the kind (registry or pending) gets no second entry — the new sighting is appended to
+`testing/defects.pending/<id>.recheck.json` (`{id, sightings: [{tip, pin, run, batch, cause, date, recheck_proposed}]}`)
+and the entry itself — `testing/defects.json` and the pending files are TRACKED — is never re-serialised: its `recheck`
+stays the lead's, so a sighting never stands in for the re-verdict the door demands of an entry past its date. The reader
+attaches the sightings to the entry (`sightings`), never reads the file as an entry. Never reused: a NOT REPRODUCED entry
+(single-use at its batch) and a fixed or retired one (a new sighting is a new finding). Registrations hold the pending
+directory's flock across the scan, the numbering and the write: two attributions at once never take one number. Exit codes: 3 a
 combination defect, else 7 an INCOMPLETE or aborted attribution, else 5 a d-build defect, else 0; 4 an
 unusable tree, 64 usage. Every commit the batch tooling writes (the candidate's merges, the regenerated
 SCRIPTING.md) is authored jahshaka by the script itself, and batch-land runs check-trailers on the
@@ -818,6 +826,16 @@ holder that holds across rows (`--solo`, `--attribute`) checks the queue between
 stay). `gpu-admit.sh gate --class N --label …` names the class; without it the label decides (`rc-<tag> smoke` -> 0,
 anything else -> 1). A measurement loop of `gpu-exclusive.sh` runs yields between its runs by construction (each run
 asks again at class 2).
+**WHAT THE CLASS RULE COSTS, ACCEPTED** (the owner's rule, TESTING-CLEANUP-2B item 15): (1) a class-2 waiter can
+STARVE under a steady run of gates — every gate that asks while it waits is served first, with no bound on how many;
+(2) `admit all` (`gpu-exclusive.sh`) is not starved forever: its wait is bounded by the admission's `wait_bound`
+(`JAH_VRAM_WAIT`, 900 s by default) and past it the run is NOADMIT (exit 75, never ran) — a measurement loop that must
+wait out a gate batch sets a longer `JAH_VRAM_WAIT`; (3) a lane's own tier run (`gate_runlog.py run --tier lane|solo`)
+is ONE ctest process holding the slot for its whole run — one ctest cannot yield between its rows — so a gate that asks
+behind it waits at most that one lane run, never more (keep such runs to one row, as item 7's re-measures do). **A
+YIELD'S RE-HOLD IS A NEW HOLD**: after `yield_card` the re-drain's own outcome decides the runs after it — a re-drain
+that times out writes its `drain-timeout` record and runs the rest with `JAH_VRAM_ALL` and the `fallback` stamp, a
+clean one without (`gate-scope.py _hold_state`, both the `--solo` and `--attribute` paths; gate.cost case (a)/(b)).
 **Mechanism** (`scripts/vram_tokens.py`): each waiter flocks its own ticket
 `/tmp/jah-vram/gate-queue/<seq>.<pid>.c<class>` (made locked under a private name, then renamed in); the
 holder's ticket is renamed `….held` when it takes the slot — under the counter's lock, and only when no ticket
