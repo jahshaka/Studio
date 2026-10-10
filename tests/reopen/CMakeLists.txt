@@ -11,10 +11,12 @@ file(MAKE_DIRECTORY ${_home}/run)
 jah_gpu_row(scene.reopen_fidelity CLASS app TIER document
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/reopen_fidelity.js
          WORKING_DIRECTORY ${_home}/run)
+# TESTING-CLEANUP-2B item 2: TIMEOUT 450 = 6 x the run log's quiet median 74.0 s (44 quiet PASS runs since 2026-10-01, worst 232.0 s);
+# declared 300 was below the policy, honest only with the +900 s widening (now deleted).
 set_tests_properties(scene.reopen_fidelity PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
     LABELS "scripting"
-    TIMEOUT 300)
+    TIMEOUT 450)
 
 # FRESH HOMES (PROJECT-NAMES-1). A project name is unique in a library now (project.create
 # refuses a taken one), so a row that creates a project in a home nothing wipes went red on its

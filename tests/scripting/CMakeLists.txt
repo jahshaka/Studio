@@ -175,10 +175,12 @@ jah_gpu_row(scripting.e2e.lattice_placement CLASS app TIER epic NEEDS photon
          COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
                  $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_lattice_placement.js
          WORKING_DIRECTORY ${_home}/run)
+# TESTING-CLEANUP-2B item 2: TIMEOUT 750 = 6 x the run log's quiet median 124.6 s (45 quiet PASS runs since 2026-10-01, worst 272.1 s);
+# declared 400 was below the policy, honest only with the +900 s widening (now deleted).
 set_tests_properties(scripting.e2e.lattice_placement PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
     LABELS "scripting"
-    TIMEOUT 400)
+    TIMEOUT 750)
 # HLMS_ADOPTION_SPEC P1 (§3.5): the five cheap PBS knobs — clear coat + coat
 # roughness, the curated BRDF picker, receive-shadows, emissive-as-lightmap —
 # plus the generic enum row they forced (alphaMode rides it now too). Asserts
@@ -342,10 +344,12 @@ jah_gpu_row(scripting.e2e.shadow_cache_probes CLASS app TIER epic NEEDS photon
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script
                  ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_shadow_cache_probes.js
          WORKING_DIRECTORY ${_scHome}/run)
+# TESTING-CLEANUP-2B item 2: TIMEOUT 290 = 6 x the run log's quiet median 46.7 s (47 quiet PASS runs since 2026-10-01, worst 207.0 s);
+# declared 240 was below the policy, honest only with the +900 s widening (now deleted).
 set_tests_properties(scripting.e2e.shadow_cache_probes PROPERTIES
     ENVIRONMENT "HOME=${_scHome};JAHSHAKA_DATA_ROOT=${_scHome}/.local/share/Jahshaka"
     FIXTURES_REQUIRED shadowCacheProbesFreshHome
-    LABELS "scripting" TIMEOUT 240)
+    LABELS "scripting" TIMEOUT 290)
 # THE LIT VOLUME (REFLECTIONS_ADOPTION_SPEC P1a/P1d, re-scoped by owner decision
 # D8 2026-09-13): the AUTOMATIC fit and the volumes world.giStatus() reports —
 # the only surface left, now that the bounds rows, the Fit button and
@@ -1216,11 +1220,13 @@ file(MAKE_DIRECTORY ${_home}/run)
 jah_gpu_row(scripting.e2e.tray_panel CLASS app TIER low NEEDS NONE
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_tray_panel.js
          WORKING_DIRECTORY ${_home}/run)
+# TESTING-CLEANUP-2B item 2: TIMEOUT 550 = 6 x the run log's quiet median 90.4 s (46 quiet PASS runs since 2026-10-01, worst 268.9 s);
+# declared 300 was below the policy, honest only with the +900 s widening (now deleted).
 set_tests_properties(scripting.e2e.tray_panel PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
     FIXTURES_REQUIRED tray_panel_home
     LABELS "scripting"
-    TIMEOUT 300)
+    TIMEOUT 550)
 
 # gi.one_writer — ONE WRITER PER VOXEL VOLUME (PHOTON-WRITER-1): a drag and a
 # lamp moving while the camera walks, on Showroom 2, read against the engine's
@@ -1717,12 +1723,14 @@ file(MAKE_DIRECTORY ${_mtHome}/run)
 jah_gpu_row(scripting.e2e.material_tabs CLASS app TIER low NEEDS NONE
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_material_tabs.js
          WORKING_DIRECTORY ${_mtHome}/run)
+# TESTING-CLEANUP-2B item 2: TIMEOUT 310 = 6 x the run log's quiet median 50.5 s (51 quiet PASS runs since 2026-10-01, worst 316.6 s);
+# declared 300 was below the policy, honest only with the +900 s widening (now deleted).
 set_tests_properties(scripting.e2e.material_tabs PROPERTIES
     ENVIRONMENT "HOME=${_mtHome};JAHSHAKA_DATA_ROOT=${_mtHome}/.local/share/Jahshaka"
     FIXTURES_REQUIRED materialTabsHome
     FIXTURES_SETUP materialTabsSession
     LABELS "scripting"
-    TIMEOUT 300)
+    TIMEOUT 310)
 
 # ...and a SECOND process on the same home: the tab set is persisted in the
 # app's settings, and only a relaunch can prove it is read back.

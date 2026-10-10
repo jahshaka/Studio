@@ -81,9 +81,11 @@ set(_theme_sheets_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-theme-sheets)
 file(MAKE_DIRECTORY ${_theme_sheets_home}/run)
 jah_gpu_row(theme.sheets CLASS app TIER low NEEDS NONE COMMAND test_theme_sheets
          WORKING_DIRECTORY ${_theme_sheets_home}/run)
+# TESTING-CLEANUP-2B item 2: TIMEOUT 430 = 6 x the run log's quiet median 71.1 s (43 quiet PASS runs since 2026-10-01, worst 196.7 s);
+# declared 300 was below the policy, honest only with the +900 s widening (now deleted).
 set_tests_properties(theme.sheets PROPERTIES
     ENVIRONMENT "HOME=${_theme_sheets_home};JAHSHAKA_DATA_ROOT=${_theme_sheets_home}/.local/share/Jahshaka"
-    TIMEOUT 300 LABELS "ui")
+    TIMEOUT 430 LABELS "ui")
 jah_tsan_blocked(theme.sheets)   # spawns the app
 jah_lsan_blocked(theme.sheets)   # spawns the app
 

@@ -137,9 +137,11 @@ jah_gpu_row(app.shader_gate_warm CLASS app TIER document
                  "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>"
                  "${CMAKE_CURRENT_SOURCE_DIR}/startup_quiet.js"
          WORKING_DIRECTORY ${_sgw_home}/run)
+# TESTING-CLEANUP-2B item 2: TIMEOUT 480 = 6 x the run log's quiet median 79.5 s (48 quiet PASS runs since 2026-10-01, worst 705.9 s);
+# declared 350 was below the policy, honest only with the +900 s widening (now deleted).
 set_tests_properties(app.shader_gate_warm PROPERTIES
     ENVIRONMENT "HOME=${_sgw_home};JAHSHAKA_DATA_ROOT=${_sgw_home}/.local/share/Jahshaka"
-    TIMEOUT 350   # 6x the measured 57.6 s (three arms x two boots; spikes/testing-debts-1/t7-run1.log)
+    TIMEOUT 480   # 6x the measured 57.6 s (three arms x two boots; spikes/testing-debts-1/t7-run1.log)
     LABELS "app")
 
 # app.input_keys — EVERY INPUT-SYNTHESIS ASSERTION THE EDITOR HAS, ON ONE BOOT.

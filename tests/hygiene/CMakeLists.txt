@@ -345,8 +345,10 @@ jah_no_display(source.row_declares_needs)
 # gate.tokens_by_needs — TEST-NEEDS-1: the token lookup (tests/support/vram_tokens.cmake, included
 # alone) returns 2/2/2/3 for low NONE / medium photon / high photon / epic photon, and refuses a
 # declaration that is missing a word or names one it does not know. A toy: no build needed.
+# TESTING-CLEANUP-2B: and the declared TIMEOUT is the row's whole bound (a toy project through
+# tests/cmake/vram_rows.cmake, configured and run in its build dir, BIN).
 add_test(NAME gate.tokens_by_needs
-         COMMAND ${CMAKE_COMMAND} -DSRC=${CMAKE_SOURCE_DIR}/tests
+         COMMAND ${CMAKE_COMMAND} -DSRC=${CMAKE_SOURCE_DIR}/tests -DBIN=${CMAKE_CURRENT_BINARY_DIR}
                  -P "${CMAKE_CURRENT_SOURCE_DIR}/tokens_by_needs.cmake")
 set_tests_properties(gate.tokens_by_needs PROPERTIES TIMEOUT 60 LABELS "hygiene")
 jah_no_display(gate.tokens_by_needs)

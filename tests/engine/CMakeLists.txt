@@ -45,6 +45,9 @@ function(jahshaka_engine_test target)
 endfunction()
 
 jahshaka_engine_test(test_engine)
+# TESTING-CLEANUP-2B item 2: TIMEOUT 240 = 6 x the run log's quiet median 39.1 s (40 quiet PASS runs since 2026-10-01, worst 46.7 s);
+# declared 120 was below the policy, honest only with the +900 s widening (now deleted).
+set_tests_properties(test_engine PROPERTIES TIMEOUT 240)
 target_link_libraries(test_engine PRIVATE JahshakaEngine)
 
 # THE HEADLESS BOOT (SPECS/SCENEGRAPH_SPEC.md §3b): EngineConfig::headless, i.e.
@@ -260,8 +263,10 @@ if(JAHSHAKA_ASAN)
     # LeakSanitizer is OFF: the only leaks it finds (6 allocations, ~4 KB) are inside
     # libdbus-1, reached from the Vulkan loader's Mesa device-select layer — not ours.
     # Use-after-free / overflow detection is the point here and stays on.
+    # TESTING-CLEANUP-2B item 2: TIMEOUT 430 = 6 x the run log's quiet median 71.1 s (40 quiet PASS runs since 2026-10-01, worst 88.4 s);
+    # declared 420 was below the policy, honest only with the +900 s widening (now deleted).
     set_tests_properties(test_engine_asan PROPERTIES
-        ENVIRONMENT "${JAH_ASAN_ENGINE_OPTIONS}" TIMEOUT 420)  # 6x measured (D6B fix round F1; spikes/d6b-gate-shape/f1-timeouts.txt)
+        ENVIRONMENT "${JAH_ASAN_ENGINE_OPTIONS}" TIMEOUT 430)
     target_compile_options(test_engine_asan PRIVATE -fsanitize=address -fno-omit-frame-pointer)
     target_link_options(test_engine_asan PRIVATE -fsanitize=address)
 endif()
