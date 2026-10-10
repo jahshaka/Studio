@@ -5,9 +5,12 @@
 # never the forced exit 86. Asserted: the import returned with its bake pending, the session log says
 # the bake was cancelled, the run's code is 0 and its log carries the close bracket.
 #
-# usage: bake_quit.sh <jahshaka-binary>      cwd = the row's fresh home's run dir (tests/support/fresh_home.sh wipes it)
+# usage: bake_quit.sh <jahshaka-binary> --headless      cwd = the row's fresh home's run dir (fresh_home.sh wipes it)
+#   (`--headless` is forwarded to the app; the row's command carries it so the selector classes the row as
+#   the headless script it is — read 9)
 set -u
-BIN="$1"
+BIN="$1"; MODEFLAG="${2:-}"
+[ "$MODEFLAG" = "--headless" ] || { echo "FAIL: usage: bake_quit.sh <bin> --headless"; exit 2; }
 HERE="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$PWD/quit-root"
 mkdir -p "$ROOT"
@@ -29,7 +32,7 @@ with open(sys.argv[1], "w") as f:
             b, c, d = a + 1, a + n + 1, a + n + 2
             f.write("f %d %d %d\nf %d %d %d\n" % (a, c, b, b, c, d))
 PY
-"$BIN" --headless --data-root "$ROOT" --script "$HERE/bake_quit.js" > quit.log 2>&1
+"$BIN" "$MODEFLAG" --data-root "$ROOT" --script "$HERE/bake_quit.js" > quit.log 2>&1
 rc=$?
 check $rc "the run ends 0 with a bake in flight (code $rc; 86 = the forced exit)"
 grep -q "QUIT_IMPORTED 1 pending [1-9]" quit.log; check $? "the share-file import returned with its bake pending"
