@@ -22,6 +22,7 @@
 //
 // Widgets only: no document, no database, no display (offscreen QPA).
 
+#include <atomic>
 #include <QApplication>
 #include <QBuffer>
 #include <QHash>
@@ -285,7 +286,8 @@ int main(int argc, char **argv)
         seen.thumbnail.clear();
         rows.append(seen);      // the cache holds this project at this size: a hit
         library.insert(seen.guid, saved);
-        int sourcedGuids = 0;
+        // The Source runs on the cache's pool, two batches may overlap: the count is atomic.
+        std::atomic<int> sourcedGuids { 0 };
         TileCache::instance().setSource(TileCache::Kind::Project, [&](const QStringList &guids) {
             sourcedGuids += int(guids.size());
             QHash<QString, QByteArray> out;

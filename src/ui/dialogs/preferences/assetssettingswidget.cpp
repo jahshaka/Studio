@@ -20,6 +20,7 @@ For more information see the LICENSE file
 #include <QLocale>
 #include <QMessageBox>
 #include <QPushButton>
+#include <QShowEvent>
 #include <QStorageInfo>
 #include <QVBoxLayout>
 
@@ -93,7 +94,13 @@ AssetsSettingsWidget::AssetsSettingsWidget(SettingsManager *settings, Database *
     connect(cleanButton, &QPushButton::clicked, this, &AssetsSettingsWidget::cleanUpStorage);
     connect(bakeButton, &QPushButton::clicked, this, &AssetsSettingsWidget::bakeAllModels);
 
-    refresh();
+    // No refresh() here: the status is read when the page is shown (showEvent).
+}
+
+void AssetsSettingsWidget::showEvent(QShowEvent *event)
+{
+    refresh();   // labels only — no row is mounted or deleted (the show-walk trap does not apply)
+    QWidget::showEvent(event);
 }
 
 void AssetsSettingsWidget::refresh()

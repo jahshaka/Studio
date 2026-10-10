@@ -694,8 +694,17 @@ public:
     /// THE TILE CACHE'S BY-GUID READS (ui/controls/tilecache.h): the thumbnail
     /// bytes of at most one batch of guids, one bound IN (...) each. The only
     /// queries that select a thumbnail for more than one row.
-    QHash<QString, QByteArray> fetchAssetThumbnailBytes(const QStringList &guids);
-    QHash<QString, QByteArray> fetchProjectThumbnailBytes(const QStringList &guids);
+    QHash<QString, QByteArray> fetchProjectThumbnailBytes(const QStringList &guids);   ///< one project's, on this thread
+    /// THE TILE CACHE'S READ, OFF THE UI THREAD (TC2-LIBRARY-CREATE-READ, 2026-10-10): the same one
+    /// bound `SELECT guid, thumbnail ... WHERE guid IN (...)` on a READ-ONLY connection of its own to
+    /// `dbPath`, opened and closed on the CALLING thread — the tile cache's pool calls it, so the
+    /// bytes of a Desktop of 500 projects (~190 KB a picture) are never read on the UI thread.
+    /// Logged in the query log under the old names (fetchAssetThumbnailBytes / fetchProjectThumbnailBytes).
+    enum class ThumbnailTable { Assets, Projects };
+    static QHash<QString, QByteArray> readThumbnailBytes(const QString &dbPath, ThumbnailTable table,
+                                                         const QStringList &guids);
+    /// The library file this connection opened (what readThumbnailBytes is handed).
+    QString filePath() const;
     QByteArray fetchAssetData(const QString &guid) const;
 
     QStringList fetchFolderNameByParent(const QString &guid);

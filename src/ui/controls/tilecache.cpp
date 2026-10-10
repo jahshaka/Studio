@@ -202,25 +202,17 @@ void TileCache::flush()
         if (!guids.contains(r.guid)) guids.append(r.guid);
     }
 
-    QHash<QString, QByteArray> bytes;
-    const auto source = mSources.constFind(int(kind));
-    if (source != mSources.constEnd() && *source) bytes = (*source)(guids);
-    mSourced += bytes.size();
-
+    // THE READ IS THE POOL'S TOO (TC2-LIBRARY-CREATE-READ, 2026-10-10): the batch's bytes are read
+    // by the kind's Source ON THE WORKER, beside the decode — a Desktop of 500 projects read ~95 MB of
+    // full-size PNGs on the UI thread, a slice per turn, inside every create that entered it. A kind
+    // with no Source answers every guid missing.
+    const auto found = mSources.constFind(int(kind));
+    const Source source = found != mSources.constEnd() ? *found : Source();
     QVector<Decoded> jobs;
     jobs.reserve(batch.size());
-    for (const Request &r : batch) {
-        const QByteArray png = bytes.value(r.guid);
-        if (png.isEmpty()) {
-            mQueued.remove(r.key);
-            mMissing.insert(r.key);
-            continue;
-        }
-        jobs.append({ r, png, QImage() });
-    }
-    // The next batch reads on the next turn, while this one decodes.
+    for (const Request &r : batch) jobs.append({ r, QByteArray(), QImage(), false });
+    // The next batch reads on the next turn, while this one reads and decodes.
     if (!mQueue.isEmpty()) scheduleFlush();
-    if (jobs.isEmpty()) return;
 
     ++mInFlight;
     auto *watcher = new QFutureWatcher<QVector<Decoded>>(this);
@@ -229,10 +221,14 @@ void TileCache::flush()
         --mInFlight;
         land(watcher->result());
     });
-    watcher->setFuture(QtConcurrent::run(mPool, [jobs]() mutable {
+    watcher->setFuture(QtConcurrent::run(mPool, [jobs, guids, source]() mutable {
+        const QHash<QString, QByteArray> bytes = source ? source(guids) : QHash<QString, QByteArray>();
         for (Decoded &job : jobs) {
+            job.png = bytes.value(job.request.guid);
+            job.sourced = !job.png.isEmpty();
             QImage full;
-            if (full.loadFromData(job.png, "PNG")) job.tile = tileImageFor(full, job.request.spec);
+            if (job.sourced && full.loadFromData(job.png, "PNG"))
+                job.tile = tileImageFor(full, job.request.spec);
             job.png.clear();
         }
         return jobs;
@@ -242,6 +238,10 @@ void TileCache::flush()
 void TileCache::land(const QVector<Decoded> &batch)
 {
     QVector<QPair<Kind, QString>> ready;
+    QSet<QString> sourced;   // rows read, by guid (a guid asked at two specs is one row)
+    for (const Decoded &job : batch)
+        if (job.sourced) sourced.insert(job.request.guid);
+    mSourced += int(sourced.size());
     for (const Decoded &job : batch) {
         mQueued.remove(job.request.key);
         if (job.tile.isNull()) {

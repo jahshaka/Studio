@@ -125,7 +125,7 @@ int main(int argc, char **argv)
         QStringList names;
         while (q.next()) names << q.value(0).toString();
         for (const char *want : { "idx_assets_parent", "idx_assets_project_guid", "idx_assets_view_filter_listed",
-                                  "idx_assets_collection", "idx_projects_desktop" })
+                                  "idx_assets_collection", "idx_projects_tiles" })
             CHECK(names.contains(QString::fromLatin1(want)), "the schema carries %s", want);
         CHECK(planUses(QStringLiteral("SELECT guid FROM assets WHERE project_guid = 'x'"), QStringLiteral("idx_assets_project_guid")),
               "a project_guid predicate is planned on its index");
@@ -134,7 +134,7 @@ int main(int argc, char **argv)
               "the tray's parent/project predicate is planned on an index");
         CHECK(planUses(QStringLiteral("SELECT guid FROM assets WHERE collection = 3"), QStringLiteral("idx_assets_collection")),
               "a drawer predicate is planned on its index");
-        CHECK(planUses(QStringLiteral("SELECT guid FROM projects WHERE desktop = 2"), QStringLiteral("idx_projects_desktop")),
+        CHECK(planUses(QStringLiteral("SELECT guid FROM projects WHERE desktop = 2"), QStringLiteral("idx_projects_tiles")),
               "a desktop predicate is planned on its index");
     }
 
@@ -248,8 +248,12 @@ int main(int argc, char **argv)
     delete proxyTester;
 
     // ---- THE TILES, BY GUID, OFF THE UI THREAD (§3.1) ------------------------
-    TileCache::instance().setSource(TileCache::Kind::Asset,
-                                    [&db](const QStringList &g) { return db.fetchAssetThumbnailBytes(g); });
+    // The Source runs on the cache's POOL (TC2-LIBRARY-CREATE-READ): it reads through its own
+    // connection to the file, exactly as the shell installs it.
+    const QString libraryFile = db.filePath();
+    TileCache::instance().setSource(TileCache::Kind::Asset, [libraryFile](const QStringList &g) {
+        return Database::readThumbnailBytes(libraryFile, Database::ThumbnailTable::Assets, g);
+    });
     Database::setAssetThumbnailWritten([](const QString &guid) {
         TileCache::instance().invalidate(TileCache::Kind::Asset, guid);
     });

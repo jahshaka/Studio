@@ -20,6 +20,7 @@ For more information see the LICENSE file
 #include <QHash>
 #include <QSet>
 #include <QMutex>
+#include <QUuid>
 #include <QSqlQuery>
 #include <QTemporaryDir>
 #include <memory>
@@ -748,18 +749,40 @@ void startBackgroundRebuild()
     if (qEnvironmentVariableIsSet("JAHSHAKA_BAKE_SWEEP")
         && qEnvironmentVariableIntValue("JAHSHAKA_BAKE_SWEEP") == 0)
         return;
-    QSqlDatabase conn = QSqlDatabase::database();
+    const QSqlDatabase main = QSqlDatabase::database();
+    if (!main.isOpen()) return;
+    const QString dbPath = main.databaseName();
     const QString root = AssetStorePaths::root();
-    QVector<BakeJob> jobs;
-    for (const BakeTarget &target : modelBakesNeeded(conn, root)) {
-        if (!QFileInfo::exists(target.path)) continue;
-        BakeJob job = prepareBake(conn, root, target);
-        if (!job.path.isEmpty()) jobs.append(job);
-    }
-    if (jobs.isEmpty()) return;
-    irisLog(QStringLiteral("mesh bake: rebuilding %1 stale bake(s) in the background").arg(jobs.size()));
     sBackgroundStop.store(false);
-    sBackground = QtConcurrent::run(backgroundPool(), [jobs, root]() {
+    // THE SWEEP IS PLANNED ON THE WORKER TOO (TC2-LIBRARY-BOOT-READ, 2026-10-10): the plan reads
+    // every model file of the library and every row naming it (modelBakesNeeded: 22.6 MB of a
+    // 10k-asset library's 130 MB database, measured) — it ran on the UI thread inside the main
+    // window's constructor, at every boot, to find nothing stale. The catalog is per thread, so
+    // the worker reads through its OWN read connection to the same file; only the commits come
+    // back to this (the database) thread, as before.
+    sBackground = QtConcurrent::run(backgroundPool(), [dbPath, root]() {
+        QVector<BakeJob> jobs;
+        {
+            const QString name = QStringLiteral("BakeSweep-%1")
+                                     .arg(QUuid::createUuid().toString(QUuid::WithoutBraces));
+            {
+                QSqlDatabase conn = QSqlDatabase::addDatabase(QStringLiteral("QSQLITE"), name);
+                conn.setDatabaseName(dbPath);
+                conn.setConnectOptions(QStringLiteral("QSQLITE_OPEN_READONLY;QSQLITE_BUSY_TIMEOUT=5000"));
+                if (conn.open()) {
+                    for (const BakeTarget &target : modelBakesNeeded(conn, root)) {
+                        if (sBackgroundStop.load()) break;
+                        if (!QFileInfo::exists(target.path)) continue;
+                        BakeJob job = prepareBake(conn, root, target);
+                        if (!job.path.isEmpty()) jobs.append(job);
+                    }
+                    conn.close();
+                }
+            }
+            QSqlDatabase::removeDatabase(name);
+        }
+        if (jobs.isEmpty() || sBackgroundStop.load()) return;
+        irisLog(QStringLiteral("mesh bake: rebuilding %1 stale bake(s) in the background").arg(jobs.size()));
         for (const BakeJob &job : jobs) {
             if (sBackgroundStop.load()) return;
             auto result = std::make_shared<BakeResult>(runBake(job));

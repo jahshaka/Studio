@@ -47,6 +47,13 @@ private slots:
     void cleanUpStorage();
     void bakeAllModels();
 
+protected:
+    /// THE STORE'S STATUS IS READ WHEN THE PAGE IS SHOWN (TC2-LIBRARY-BOOT-READ): the Preferences
+    /// dialog is built with the main window, and a status read in the constructor walked every
+    /// library asset's files on the UI thread at every boot (46 MB of a 10k-asset library) for a
+    /// page nobody had opened.
+    void showEvent(QShowEvent *event) override;
+
 private:
     void applyRoot(const QString &path, bool move);
 
