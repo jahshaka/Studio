@@ -252,6 +252,20 @@ def case_verdict_door(E):
     st, why = E.judge([rec("FAIL", T % "10:00", failLine=fl)] + red3 + [vrec("real:VIEWS-XID-1", T % "11:00")], base=base3)
     check(st == "known", "a real:<defect> with 3/3 RED solos at the candidate and the same red 3/3 at the base -> KNOWN RED, "
           "the red solos its evidence (%s: %s)" % (st, why[:90]))
+    # FIX ROUND 3 F1: EVERY pending red must be the base's red, and the base's solos must ALL be red. RED ON 9eb5343e2
+    # (the reader's probes F/G/C): a CRASH or another assertion among the candidate's solos passed as KNOWN RED (only
+    # the newest red was compared), and a base with 1 red + 2 green solos made a KNOWN RED.
+    crash_mid = [red3[0], rec("CRASH", T % "10:11", retry=True, status="Exception: SegFault"), red3[2]]
+    st, why = E.judge([rec("FAIL", T % "10:00", failLine=fl)] + crash_mid + [vrec("real:VIEWS-XID-1", T % "11:00")], base=base3)
+    check(st == "red" and "not every pending red" in why, "(F) a CRASH among the solos (not the newest) -> not KNOWN RED "
+          "(%s)" % why[:90])
+    other_mid = [red3[0], rec("FAIL", T % "10:11", retry=True, failLine="FAIL: another assertion 3"), red3[2]]
+    st, why = E.judge([rec("FAIL", T % "10:00", failLine=fl)] + other_mid + [vrec("real:VIEWS-XID-1", T % "11:00")], base=base3)
+    check(st == "red" and "not every pending red" in why, "(G) another assertion among the solos -> not KNOWN RED (%s)" % why[:90])
+    st, why = E.judge([rec("FAIL", T % "10:00", failLine=fl)] + red3 + [vrec("real:VIEWS-XID-1", T % "11:00")],
+                      base=[base3[0], rec("PASS", T % "09:11", retry=True), rec("PASS", T % "09:12", retry=True)])
+    check(st == "red" and "nondeterminism on the base" in why, "(C) a base with 1 red + 2 green solos is nondeterminism "
+          "on the base, not a KNOWN RED (%s)" % why[:90])
     st, why = E.judge([rec("FAIL", T % "10:00", failLine=fl)] + red3 + [vrec("real:VIEWS-XID-1", T % "11:00")])
     check(st == "red" and "solos below" not in why, "...with no base record it is refused by the KNOWN RED door, not the "
           "solo rule (%s)" % why[:90])
