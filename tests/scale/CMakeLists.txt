@@ -195,9 +195,13 @@ set_tests_properties(atom.decode_exact PROPERTIES TIMEOUT 480 LABELS "engine"
 # landing, a 2,000-frame walk with teleports, a DAG mesh released and re-added, a new mesh
 # added and released, the cut's budget forced small twice) with the decode's discriminator
 # on: no frame fails more than 0.5 % of what the id pass covered. A pixel suite (no time
-# measured, frames counted): never the GPU lock. 212 s measured; the timeout is 6x that.
+# measured, frames counted): never the GPU lock.
+# TESTING-CLEANUP-2B item 7 (2026-10-10, RE-MEASURED ALONE: 3 runs, each its own whole-card hold under the slot,
+# gpu-exclusive.sh class 2, the box otherwise idle; seconds = ctest's, the admission wait outside them): 192.4 / 190.8 / 190.4 s,
+# median 190.8 -> 6x = 1150; slot-era worst 241.5 s (8 PASS since 2026-10-09 18:00) -> TIMEOUT 1150 (was 1300,
+# 6x a 212 s read).
 jah_gpu_row(atom.coverage_trace CLASS engine TOKENS 2 COMMAND test_scale --coverage-trace WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(atom.coverage_trace PROPERTIES TIMEOUT 1300 LABELS "engine"
+set_tests_properties(atom.coverage_trace PROPERTIES TIMEOUT 1150 LABELS "engine"
                      ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
 # W14 — the real binary over MCP, the UI thread's gaps: locked (open.responsive's class).
