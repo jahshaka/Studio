@@ -430,8 +430,8 @@ pool.assets_import::bundle_export_material 0.77  quiet n=53
 pool.assets_import::bundle_export_pack 0.94  quiet n=52
 pool.assets_import::bundle_export_sky 0.88  quiet n=8
 pool.assets_import::bundle_export_texture 1.04  quiet n=53
-pool.assets_import::bundle_landing 6.09  STAGE-CLOSE-TRIAGE-1 dev run (one pool run, -j2 beside a sibling, 2026-10-10)
-pool.assets_import::bundle_pending_clips 4.13  STAGE-CLOSE-TRIAGE-1 dev run (one pool run, -j2 beside a sibling, 2026-10-10)
+pool.assets_import::bundle_landing 1.71  STAGE-CLOSE-TRIAGE-1 solo pool run at 043236729+ (2026-10-10)
+pool.assets_import::bundle_pending_clips 1.28  STAGE-CLOSE-TRIAGE-1 solo pool run at 043236729+ (2026-10-10)
 pool.assets_import::desktops 4.14  quiet n=50
 pool.assets_import::import_dialog 0.80  quiet n=53
 pool.assets_import::import_render 1.53  quiet n=52

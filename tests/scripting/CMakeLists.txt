@@ -913,12 +913,12 @@ jah_pool_arm(assets_import node_archive_roundtrip ${CMAKE_CURRENT_BINARY_DIR}/e2
 # assets_import.bundle_pending_clips — a skinned node placed while its share-file bake is pending keeps
 # its clip references through a save, and the landing binds the real clips (STAGE-CLOSE-TRIAGE-1).
 configure_file(scripts/e2e_bundle_pending_clips.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_bundle_pending_clips.js @ONLY)
-jah_pool_arm(assets_import bundle_pending_clips ${CMAKE_CURRENT_BINARY_DIR}/e2e_bundle_pending_clips.js 12)
+jah_pool_arm(assets_import bundle_pending_clips ${CMAKE_CURRENT_BINARY_DIR}/e2e_bundle_pending_clips.js 2)
 # assets_import.bundle_landing — an import's bake landing on nodes placed before it: a skinned rig with no
 # clip (no static/dynamic attach throw), a reimport that turns a model skinned, paste -> undo -> land ->
 # redo, a cross-library paste held then landed (STAGE-CLOSE-TRIAGE-1 fix round 3: P1, F1, F4).
 configure_file(scripts/e2e_bundle_landing.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_bundle_landing.js @ONLY)
-jah_pool_arm(assets_import bundle_landing ${CMAKE_CURRENT_BINARY_DIR}/e2e_bundle_landing.js 12)
+jah_pool_arm(assets_import bundle_landing ${CMAKE_CURRENT_BINARY_DIR}/e2e_bundle_landing.js 2)
 
 # assets_import.bundle_export_{texture,material,pack,sky} — JAF-EXPORTS-1: the Assets tray's exports
 # are the share file (assets.exportBundle, one entry or a pack); each kind's file re-imports into
