@@ -49,8 +49,30 @@ QHash<QString, iris::BakedModelPtr> sCache;
 /// OUTSIDE the locks (the boot sweep does it on its worker), so a commit's clear() on the UI thread can
 /// land between that read and the lookup's insert — which would then plant the pre-commit answer (an
 /// old settings hash, a missing bake) for the rest of the session. A lookup inserts only when the
-/// generation it started under is still current; clear() bumps it under the lock the insert checks.
+/// generation it started under is still current. The settings cache is guarded by clear() bumping it
+/// under the lock the insert checks; the model cache (sCache) is correct by ORDER — the bump precedes
+/// sCache.clear(), so any insert after that clear sees the new generation. A lookup INSIDE a plan's
+/// pinned snapshot starts under the plan's generation, not its own (PinGeneration, I7).
 std::atomic<quint64> sCacheGeneration { 0 };
+/// A PLAN'S PINNED GENERATION (I7): set for the life of a plan whose lookups run inside one
+/// still-stepping statement (modelBakesNeeded, staleJobsFor). Per thread: the sweep plans on its
+/// worker while the UI thread looks up on its own.
+thread_local bool tGenerationPinned = false;
+thread_local quint64 tPinnedGeneration = 0;
+struct PinGeneration
+{
+    bool outer = !tGenerationPinned;
+    PinGeneration()
+    {
+        if (outer) { tGenerationPinned = true; tPinnedGeneration = sCacheGeneration.load(); }
+    }
+    ~PinGeneration() { if (outer) tGenerationPinned = false; }
+};
+/// The generation a lookup starts under: the plan's pinned one inside a plan, else now.
+quint64 lookupGeneration()
+{
+    return tGenerationPinned ? tPinnedGeneration : sCacheGeneration.load();
+}
 
 
 /// The sha256 a store object's file name IS. Empty for anything that is not a
@@ -231,7 +253,7 @@ QPair<QString, iris::ImportTransform> resolveSettings(QSqlDatabase conn, const Q
                                                      const QString &assetGuid)
 {
     const QString key = sourcePath + QLatin1Char('|') + assetGuid;
-    const quint64 generation = sCacheGeneration.load();
+    const quint64 generation = lookupGeneration();
     {
         QMutexLocker locked(&sSettingsLock);
         const auto hit = sSettingsCache.constFind(key);
@@ -342,7 +364,7 @@ iris::PrewarmItem planFor(const QString &sourcePath, const QString &assetGuid)
 iris::BakedModelPtr load(const QString &sourcePath, const QString &assetGuid)
 {
     if (sourcePath.isEmpty()) return iris::BakedModelPtr();
-    const quint64 generation = sCacheGeneration.load();
+    const quint64 generation = lookupGeneration();
     // KEYED BY (path, settings): identical bytes imported twice under different
     // settings are two different geometries and must not share a cache slot.
     const QString cacheKey =
@@ -533,6 +555,12 @@ QVector<BakeTarget> modelBakesNeeded(QSqlDatabase conn, const QString &root,
                                      const QSet<QString> *onlyGuids)
 {
     QVector<BakeTarget> out;
+    // ONE CACHE GENERATION FOR THE WHOLE PLAN (I7): the lookups below run inside this statement's
+    // still-stepping SELECT, whose WAL read snapshot is pinned until it finishes — a lookup that
+    // sampled the generation AFTER a commit's clear() would still read the pre-commit snapshot and
+    // plant it as current. Sampled once, here, before the statement, every insert the plan makes
+    // is dropped if any clear() happened since.
+    const PinGeneration pinned;
     // Every recorded file whose DISPLAY NAME is a model, with the ROW that
     // names it — one entry per distinct (content, import settings) pair, since
     // that pair is what a bake is keyed on. Deduplicating by content alone
@@ -670,6 +698,7 @@ bool commitBake(QSqlDatabase conn, const QString &root, BakeResult &result, QStr
 QVector<BakeJob> staleJobsFor(QSqlDatabase conn, const QString &root, const QStringList &paths)
 {
     QVector<BakeJob> jobs;
+    const PinGeneration pinned;   // the lookups run inside `rows`' pinned snapshot (I7)
     QSet<QString> seen;   // "<oid>|<settingsHash>"
     for (const QString &path : paths) {
         const QString oid = oidFromStorePath(root, path);
