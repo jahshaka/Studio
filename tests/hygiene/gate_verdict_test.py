@@ -623,6 +623,21 @@ def batch_range_cases(E):
                                             lambda a_, b_: 5, lambda a_, b_, k: False)
     check(len(got) == 3 and a == "far" and all(r.get("_proofFrom") == "far" for r in got) and "far's solos" in why,
           "(2) the proof found: A's solos tagged with A, the why names A")
+    # read 1 F1: A STAGE-CLOSE ROW THE SELECTOR SET ASIDE IS STILL REACHED — A..base touching an app source (every app
+    # row's dependency, not gi.chain_converge_scenes' own subject) reaches that stage-close row for the travel and for
+    # re-use (Reach.of); the proving side is unchanged. RED ON f980d8ced: not reached (the set-aside row was invisible)
+    g30 = E.git("rev-parse", "30f4ad2d0")
+    dep = commit(tree_plus(E.git("rev-parse", "30f4ad2d0^{tree}"), "src/app/crashhandler.cpp",
+                           E.git("show", "30f4ad2d0:src/app/crashhandler.cpp") + "\n// a dependency-only change\n"), g30,
+                 "batch-range test: an app dependency change")
+    gs = E.cgc.load_gs()
+    R = E.cgc.Reach(gs, E.build, dep, "fork")
+    key = ("gi.chain_converge_scenes", None)
+    trav = R.between(g30, dep, unreadable=E.cgc.Reach.ALL)
+    check(bool(dep) and E.cgc.Reach.reaches(trav, key) and E.cgc.Reach.reaches(R.of(g30, "fork"), key),
+          "(2, read 1 F1) a dependency-only change to a stage-close row between A and the base refuses the travel, and the "
+          "re-use arm does not re-use across it (%s)" % (key in (trav or set()) if trav is not E.cgc.Reach.ALL else "ALL"))
+
 
 
 def registry_id_cases(E):
