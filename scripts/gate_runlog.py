@@ -189,6 +189,28 @@ def lock_wait(text):
     return None
 
 
+# A ROW THAT TIMED OUT STILL WAITING FOR ITS ADMISSION NEVER RAN (TESTING-CLEANUP-2B item 2): the admission's wait is
+# no longer covered by a widened TIMEOUT — inside a gate ctest schedules the rows by their tokens (RESOURCE_GROUPS,
+# tests/cmake/vram_rows.cmake), so only a process OUTSIDE the gate (a hand-run app holding tokens) can make a row
+# wait, and if the row's declared TIMEOUT ends while it is still waiting its code never started. That is NOADMIT —
+# re-queued like any (P5) — never a TIMEOUT charged to the row. Read from the admission's own lines: a `vram:
+# waiting` / `gate-slot: queued` line with no `vram: admitted` / `already admitted` / `gpu-lock: waited` after it.
+_WAITING = re.compile(r"^\s*(?:\|\s*)*((?:vram: waiting for \d+ tokens?|gate-slot: queued)\b.*?)\s*$")
+_ADMITTED = re.compile(r"^\s*(?:\|\s*)*(?:vram: admitted with|vram: already admitted|gpu-lock: waited|gate-slot: already held)")
+
+
+def unadmitted_wait(text):
+    """The admission's waiting line when the row's output ends still waiting (never admitted), else None."""
+    waiting = None
+    for line in (text or "").splitlines():
+        m = _WAITING.match(line)
+        if m:
+            waiting = waiting or m.group(1)[:300]
+        elif waiting and _ADMITTED.match(line):
+            waiting = None
+    return waiting
+
+
 def noadmit_line(text):
     for line in (text or "").splitlines():
         m = _NOADMIT.match(line)
@@ -270,6 +292,10 @@ def row_verdict(status, text, arms):
     # pool with a MIX stays FAIL, its NOADMIT arms named on the row (`noadmit_arms`)
     if v != "PASS" and arms and all(a[1] == "NOADMIT" for a in arms):
         return "NOADMIT", na or ("every arm NOADMIT (%d): the pool never ran" % len(arms)), None
+    if v == "TIMEOUT" and not arms:
+        w = unadmitted_wait(text)
+        if w:
+            return "NOADMIT", "NOADMIT vram: the row's TIMEOUT ended its admission wait — it never ran (%s)" % w, None
     if v == "FAIL":
         if any(_RUNTIMEOUT.match(l) for l in (text or "").splitlines()):
             v = "TIMEOUT"

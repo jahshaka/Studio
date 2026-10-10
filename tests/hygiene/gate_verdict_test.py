@@ -408,6 +408,18 @@ def case_noadmit_pool(E):
     recs = R.records("pool.toy", "Failed", 1.0, time.time(), (0, 0, 0), allna, {})
     check(recs[0]["verdict"] == "NOADMIT" and all(r["verdict"] == "NOADMIT" for r in recs[1:]),
           "an all-NOADMIT pool records NOADMIT (never ran), never FAIL (%s)" % [r["verdict"] for r in recs])
+    # TESTING-CLEANUP-2B item 2: no row's TIMEOUT covers the admission wait any more, so a row whose TIMEOUT ends
+    # while it is STILL WAITING for its tokens never ran: NOADMIT, never a TIMEOUT charged to its code; a row that
+    # was admitted and then ran out of time stays TIMEOUT. RED ON BASE (b0a3b1f3c): the first read TIMEOUT.
+    waiting = "vram: waiting for 2 tokens, 0 free — toy.row:app\n"
+    r0 = R.records("toy.row", "Timeout", 120.0, time.time(), (0, 0, 0), waiting, {})[0]
+    check(r0["verdict"] == "NOADMIT" and "never ran" in r0["status"],
+          "a row whose TIMEOUT ended its admission wait records NOADMIT (%s: %s)" % (r0["verdict"], r0["status"][:80]))
+    r1 = R.records("toy.row", "Timeout", 120.0, time.time(), (0, 0, 0),
+                   waiting + "vram: admitted with 2 tokens 0,1 after 30.0 s — toy.row:app\nrunning\n", {})[0]
+    check(r1["verdict"] == "TIMEOUT" and r1.get("tokenWaitS") == 30.0,
+          "...an admitted row that then ran out of time is its own TIMEOUT, the wait recorded (%s, %s)"
+          % (r1["verdict"], r1.get("tokenWaitS")))
     mixed = "ARM toy.a PASS 10\nARM toy.b NOADMIT 0\nARM toy.c NOADMIT 0\n"
     recs = R.records("pool.toy", "Failed", 1.0, time.time(), (0, 0, 0), mixed, {})
     check(recs[0]["verdict"] == "FAIL" and recs[0].get("noadmit_arms") == ["toy.b", "toy.c"]
