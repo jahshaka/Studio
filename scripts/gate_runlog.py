@@ -135,12 +135,15 @@ _TOKENWAIT = re.compile(r"^\s*(?:\|\s*)*vram: admitted with \d+ tokens? \S* ?aft
 # it is recorded with `forced_exit: <code>` and the first `forced_exit_why` (`forced_exits: <n>` when a pool's
 # processes took it more than once) — PASS or red: a green row whose app could not end in order is a finding, and
 # gate-report counts them. (Before H8c the same path exited 0 and nothing anywhere said so.)
-_FORCED = re.compile(r"shutdown watchdog: (.*?) — forcing process exit \(code (\d+)\)")
+# ONE LINE PER FORCED EXIT (fix round E): forcedexit::now writes the line twice — through the log funnel (an Error,
+# which the funnel mirrors to stderr with its `[time][thread]app: Error:` prefix) and once plain with fprintf — so only
+# the PLAIN line (at the start of the output line, after ctest's `N:` and the pool's `|` prefixes) is counted.
+_FORCED = re.compile(r"^\s*(?:\d+:\s*)?(?:\|\s*)*shutdown watchdog: (.*?) — forcing process exit \(code (\d+)\)")
 
 
 def forced_exit(text):
     """(code, why, count) of the forced-exit lines in a row's output, or None when the app ended in order."""
-    hits = [m for m in (_FORCED.search(l) for l in (text or "").splitlines()) if m]
+    hits = [m for m in (_FORCED.match(l) for l in (text or "").splitlines()) if m]
     if not hits:
         return None
     return int(hits[0].group(2)), hits[0].group(1)[:200], len(hits)
