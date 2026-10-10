@@ -47,13 +47,15 @@ jah_add_pool(capture TIER document   LABELS scripting capture)
 # caches, like the pool), on the quiet box under the GPU-timing lock. The pool's arms keep every
 # count and print these readings. RUN_TIMEOUT = 6x the measured run after the admission
 # (2026-10-09 on :71: first_recording 32 s, offline_unique 101 s).
+# TIER document, as the `capture` pool whose arms these scripts are: a bar measures the boot its
+# pool counts on (the recording view takes the scene's own chain at its own tier).
 set(_cap_timing_first_recording 200)
 set(_cap_timing_offline_unique 610)
 foreach(_arm first_recording offline_unique)
     jah_timing_script(${CMAKE_CURRENT_SOURCE_DIR}/scripts/capture_${_arm}.js
                       ${CMAKE_CURRENT_BINARY_DIR}/capture_${_arm}.timing.js)
     set(_home ${CMAKE_CURRENT_BINARY_DIR}/capture-timing-home-${_arm})
-    jah_gpu_exclusive_test(NAME capture.${_arm}.timing CLASS app RUN_TIMEOUT ${_cap_timing_${_arm}}
+    jah_gpu_exclusive_test(NAME capture.${_arm}.timing CLASS app TIER document RUN_TIMEOUT ${_cap_timing_${_arm}}
         COMMAND sh "${JAH_FRESH_HOME}" --warm "${_home}" --
                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/capture_${_arm}.timing.js
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
@@ -66,10 +68,11 @@ endforeach()
 # the recording view's chain, the NV12 job and the readback ring had never run under the layer in
 # a gate. Its FIRST arm proves the layer is live (engine.validation()); then a basic recording runs
 # under it; any "Validation Error" in the process's output fails the row.
+# TIER epic with every NEEDS word: the layer is only worth what it sees — the whole shipped chain.
 if(EXISTS "/usr/share/vulkan/explicit_layer.d/VkLayer_khronos_validation.json")
     jah_pool_arm(capture_validation validation_proof ${CMAKE_SOURCE_DIR}/tests/scripting/scripts/e2e_validation_proof.js 5 FIRST)
     jah_pool_arm(capture_validation record_basic ${CMAKE_CURRENT_SOURCE_DIR}/scripts/capture_record_basic.js 20)
-    jah_add_pool(capture_validation TIER epic LABELS scripting capture
+    jah_add_pool(capture_validation TIER epic NEEDS photon bloom ssao smaa planar LABELS scripting capture
         ENV "VK_LOADER_LAYERS_ENABLE=VK_LAYER_KHRONOS_validation"
         PROPS FAIL_REGULAR_EXPRESSION "Validation Error")
 endif()

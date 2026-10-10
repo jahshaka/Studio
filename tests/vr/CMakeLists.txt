@@ -496,10 +496,11 @@ jah_add_pool(vr_session TIER document   CLASS vr LABELS scripting
 # gate. One app process (`--vr`, the shared Monado session's shape), layered by the loader; the
 # FIRST arm proves the layer is live (engine.validation()), then the session verbs run under it;
 # any "Validation Error" in the process's output fails the row.
+# TIER epic with every NEEDS word: the layer is only worth what it sees — the whole shipped chain.
 if(EXISTS "/usr/share/vulkan/explicit_layer.d/VkLayer_khronos_validation.json")
     jah_pool_arm(vr_validation validation_proof ${CMAKE_SOURCE_DIR}/tests/scripting/scripts/e2e_validation_proof.js 5 FIRST)
     jah_pool_arm(vr_validation verbs_session ${CMAKE_SOURCE_DIR}/tests/scripting/scripts/e2e_vr_session_verbs.js 39)
-    jah_add_pool(vr_validation TIER epic CLASS vr LABELS scripting
+    jah_add_pool(vr_validation TIER epic NEEDS photon bloom ssao smaa planar CLASS vr LABELS scripting
         LAUNCHER "${CMAKE_CURRENT_SOURCE_DIR}/run_vr_app.sh" --launch "${JAH_MONADO_MANIFEST}" --
         APP_ARGS --vr
         ENV "${JAH_TEST_DISPLAY_ENV}" "VK_LOADER_LAYERS_ENABLE=VK_LAYER_KHRONOS_validation"
