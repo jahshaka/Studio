@@ -147,7 +147,13 @@ def row_wait_bound():
     admitted late, then killed, read as a TIMEOUT of its code). So inside a gate (a live JAH_GATE_SLOT_HELD) the
     admission tries ONCE: short, it exits 75 (NOADMIT, never ran) and the gate re-queues the row at its end (P5); a
     final try that is still short stays NOADMIT — MISSING to the judge, which a re-run answers, never a skip.
-    Outside a gate (a hand run) the bound is JAH_VRAM_WAIT's, as before."""
+    Outside a gate (a hand run) the bound is JAH_VRAM_WAIT's, as before.
+    THE ONE EXCEPTION INSIDE THE SLOT (delta F-C2, decided): a `--solo` batch or an `--attribute` run whose whole-card
+    drain timed out falls back to JAH_VRAM_ALL=1 (each admission takes the whole card itself) while holding the slot;
+    its cells are a measurement's own runs, not a gate's rows re-queued at its end, so they keep the wait — without it
+    every cell of that path failed at once and the attribution read INCOMPLETE."""
+    if os.environ.get("JAH_VRAM_ALL"):
+        return wait_bound()
     if os.environ.get("JAH_GATE_SLOT_HELD") and slot_held_valid():
         return 0.0
     return wait_bound()

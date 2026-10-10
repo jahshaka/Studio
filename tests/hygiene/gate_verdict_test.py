@@ -422,9 +422,14 @@ def case_noadmit_pool(E):
           % (r1["verdict"], r1.get("tokenWaitS")))
     mixed = "ARM toy.a PASS 10\nARM toy.b NOADMIT 0\nARM toy.c NOADMIT 0\n"
     recs = R.records("pool.toy", "Failed", 1.0, time.time(), (0, 0, 0), mixed, {})
-    check(recs[0]["verdict"] == "FAIL" and recs[0].get("noadmit_arms") == ["toy.b", "toy.c"]
-          and "toy.b" in (recs[0].get("failLine") or ""),
-          "a mixed pool records FAIL with its NOADMIT arms named (%s, %s)" % (recs[0]["verdict"], recs[0].get("noadmit_arms")))
+    check(recs[0]["verdict"] == "NOADMIT" and recs[0].get("noadmit_arms") == ["toy.b", "toy.c"],
+          "a pool whose only non-PASS arms never ran is NOADMIT, its never-ran arms named (TESTING-CLEANUP-2B F-C1; "
+          "was FAIL) (%s, %s)" % (recs[0]["verdict"], recs[0].get("noadmit_arms")))
+    realmix = "ARM toy.a FAIL 10\nARM toy.b NOADMIT 0\n"
+    recs = R.records("pool.toy", "Failed", 1.0, time.time(), (0, 0, 0), realmix, {})
+    check(recs[0]["verdict"] == "FAIL" and recs[0].get("noadmit_arms") == ["toy.b"],
+          "a pool with a REAL red beside a NOADMIT arm stays FAIL, its NOADMIT arm named (%s, %s)"
+          % (recs[0]["verdict"], recs[0].get("noadmit_arms")))
     # the re-queue (GATE-COST-1 P5) treats it as a never-ran row: re-run once; EVERY try is a record (GATE-COST-2 #2:
     # requeued 0 and 1), each NOADMIT — never-ran to the judge
     fake = os.path.join(E.scratch, "fake_pool_ctest.sh")
@@ -444,6 +449,24 @@ def case_noadmit_pool(E):
     check(rc != 0 and [(r["verdict"], r.get("requeued")) for r in row] == [("NOADMIT", 0), ("NOADMIT", 1)],
           "...re-queued as a never-ran row, one NOADMIT record per try (rc %s, %s)"
           % (rc, [(r["verdict"], r.get("requeued")) for r in row]))
+    # TESTING-CLEANUP-2B delta F-C1: a pool whose ONLY non-PASS arms never ran is re-queued like a row (red on base:
+    # recorded FAIL once, never re-run); a pool with a real FAIL beside a NOADMIT arm stays the red it is
+    for f_ in os.listdir(d): os.unlink(os.path.join(d, f_))
+    for name, second, want in (("pool.part", "PASS 9", [("NOADMIT", 0), ("NOADMIT", 1)]),     # final try: MISSING
+                               ("pool.real", "FAIL 9", [("FAIL", None)])):
+        open(fake, "w").write("#!/bin/sh\n"
+                              "echo '      Start  1: %s'\n"
+                              "echo '1: ARM toy.a %s'\n"
+                              "echo '1: ARM toy.b NOADMIT 0'\n"
+                              "echo '1/1 Test  #1: %s ..........***Failed    0.10 sec'\n" % (name, second, name))
+        os.environ["JAH_GATE_REQUEUE"] = "1"
+        try:
+            E.rl.run_ctest(fake, E.scratch, "scoped", "verdict-test", 1, labels={name: ["app"]}, echo=False)
+        finally:
+            del os.environ["JAH_GATE_REQUEUE"]
+        got = [json.loads(l) for f in os.listdir(d) for l in open(os.path.join(d, f))]
+        row = [(r["verdict"], r.get("requeued")) for r in got if r["suite"] == name and r["arm"] is None]
+        check(row == want, "%s (toy.a %s, toy.b NOADMIT): %s (%s)" % (name, second.split()[0], want, row))
 
 
 def case_carried_red(E):

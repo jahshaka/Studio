@@ -419,8 +419,8 @@ endfunction()
 # add_test() through the VRAM budget — the ONE way a row that boots Vulkan is registered
 # (source.gpu_rows_closure fails a Vulkan row that is not). Like jah_gpu_exclusive_test, the
 # wrapper is applied at registration: a TARGET name as the first COMMAND word becomes
-# $<TARGET_FILE:...>. A pool is not registered here: its tokens are taken per APP PROCESS by
-# run_pool.py (jah_add_pool), so a restart re-takes them and the driver holds none.
+# $<TARGET_FILE:...>. A pool is not registered here: run_pool.py (jah_add_pool) takes its tokens ONCE for the
+# pool's whole run and every app process it starts inherits them (TESTING-CLEANUP-2B F-C1: the unit is the pool).
 function(jah_gpu_row _row)
     cmake_parse_arguments(G "TEST_WINDOW" "CLASS;TIER;TOKENS;WORKING_DIRECTORY;NEEDS_WHY" "NEEDS;COMMAND" ${ARGN})
     if(NOT G_CLASS OR NOT G_COMMAND)
@@ -673,8 +673,8 @@ function(jah_add_pool pool)
     endif()
     set(_want engine)
     set(_modeflag)
-    # THE VRAM BUDGET (GATE-ADMIT-1): run_pool.py takes the class's tokens once per APP PROCESS
-    # (a restart re-takes them; the driver itself holds none). A HEADLESS pool boots the NULL
+    # THE VRAM BUDGET (GATE-ADMIT-1): run_pool.py takes the class's tokens ONCE for the pool's whole run
+    # (every app process, a restart included, inherits them; TESTING-CLEANUP-2B F-C1). A HEADLESS pool boots the NULL
     # render system and takes none. CLASS defaults to app; a VR pool says `CLASS vr`. An app
     # pool's tokens are its declaration's (jah_vram_tokens, TEST-NEEDS-1).
     if(NOT P_CLASS)

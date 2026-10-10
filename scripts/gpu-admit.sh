@@ -12,7 +12,7 @@
 # at a time, box-wide; `gpu-admit.sh gate [--label <text>] -- <command>` runs a whole gate under the slot —
 # queued FIFO with no bound, the command exec'd holding it; gate-scope.sh --run and gate_runlog.py run take it
 # themselves). The implementation is scripts/vram_tokens.py
-# (run_pool.py imports the same code to take a pool's tokens once per app process).
+# (run_pool.py imports the same code to take a pool's tokens once for the pool's whole run).
 # THE DESKTOP ROUTE BY DEFAULT (VR-SETTING-1): the app's Start in VR preference is ON by default, so
 # every run admitted here gets JAHSHAKA_VR=0 unless the caller set JAHSHAKA_VR itself (empty included:
 # `JAHSHAKA_VR=` lets the preference decide). A VR run passes `--vr`, which wins over the environment.

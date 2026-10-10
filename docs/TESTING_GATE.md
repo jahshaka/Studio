@@ -736,8 +736,8 @@ mcp.e2e, …) is `CLASS app` — the app it starts is the process that holds the
 drop-in for `add_test(NAME … COMMAND …)`); `jah_gpu_exclusive_test(NAME … CLASS <class> …)` (a
 timing row holds the GPU lock FIRST, then its tokens: the lock for exclusivity, the tokens for
 memory); `jah_add_pool(<pool> [CLASS vr] [TIER …])` — the pool's tokens are taken by
-`run_pool.py --vram-tokens <k>` once per APP PROCESS (a restart re-takes them; the driver holds
-none; a `HEADLESS` pool takes none). A row that boots no Vulkan is a plain `add_test` with
+`run_pool.py --vram-tokens <k>` ONCE for the pool's whole run (every app process, a restart included, inherits
+them — TESTING-CLEANUP-2B F-C1: a token taken between two processes no longer turns the pool's remaining arms NOADMIT; a `HEADLESS` pool takes none). A row that boots no Vulkan is a plain `add_test` with
 `jah_no_display()`. **The wait never eats a row's budget, and the TIMEOUT a site declares is the row's whole
 bound** (TESTING-CLEANUP-2B; `tests/cmake/vram_rows.cmake`): every registered row carries `RESOURCE_GROUPS
 vram:<k>` and the build names its resource spec (`CTEST_RESOURCE_SPEC_FILE`: one `vram` resource, the box's

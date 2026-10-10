@@ -41,6 +41,7 @@ Run: gate_cost_test.py <source-dir> <build-dir>   (the build dir is not read; ct
 """
 import contextlib
 import datetime
+import glob
 import importlib.util
 import io
 import json
@@ -722,6 +723,56 @@ def main(source, build):
           and pout.returncode == 0 and "vram: waiting" in ow,
           "inside a gate a short admission is NOADMIT at once (exit %d), outside one it waits (exit %d)"
           % (pin_.returncode, pout.returncode))
+    # TESTING-CLEANUP-2B delta F-C1: A POOL HOLDS ITS TOKENS FOR ITS WHOLE RUN. A stand-in app: process 1's arm `a`
+    # starts a THIEF that asks for 2 of this universe's 3 tokens (outside any gate, it waits for them), then dies
+    # mid-arm; the driver restarts and process 2's arm `b` reports whether the thief got in BETWEEN the processes.
+    # RED ON BASE (b0a3b1f3c): the driver released the tokens with process 1, the thief took them, and arm b ran
+    # after it ("thief yes"); inside a gate the re-acquire now fails at once, so every remaining arm went NOADMIT.
+    rp = os.path.join(source, "tests", "support", "run_pool.py")
+    pdir = os.path.join(scratch, "pooltok"); os.makedirs(pdir)
+    papp = os.path.join(pdir, "app.py")
+    open(papp, "w").write(r'''#!/usr/bin/env python3
+import os, sys, subprocess, signal
+a = sys.argv; spec = a[a.index("--scripts") + 1]; pool = a[a.index("--pool") + 1]; d = os.environ["POOLDIR"]
+for e in spec.split(","):
+    n = e.split("=", 1)[0]
+    print("ARM-BEGIN %s.%s" % (pool, n), flush=True)
+    if n == "a":
+        env = {k: v for k, v in os.environ.items() if k not in ("JAH_VRAM_HELD", "JAH_GATE_SLOT_HELD")}
+        env["JAH_VRAM_WAIT"] = "600"     # the bound under test is the POOL's hold, never this wait
+        t = subprocess.Popen([sys.executable, os.environ["VT"], "admit", "2", "--label", "THIEF", "--", "sh", "-c",
+                              "echo got > " + os.path.join(d, "thief.ran")], env=env, start_new_session=True, stdin=subprocess.DEVNULL,
+                             stdout=subprocess.DEVNULL, stderr=open(os.path.join(d, "thief.err"), "w"))
+        open(os.path.join(d, "thief.pid"), "w").write(str(t.pid))
+        import fcntl, time
+        ts = open(os.path.join(os.environ["JAH_VRAM_DIR"], "turnstile"), "a")
+        while t.poll() is None:         # the thief is QUEUED on the pool's tokens (it holds the turnstile): the event
+            try:
+                fcntl.flock(ts, fcntl.LOCK_EX | fcntl.LOCK_NB); fcntl.flock(ts, fcntl.LOCK_UN); time.sleep(0.02)
+            except OSError:
+                break
+        os.kill(os.getpid(), signal.SIGSEGV)
+    if n == "b":
+        print("thief %s" % ("yes" if os.path.exists(os.path.join(d, "thief.ran")) else "no"), flush=True)
+    print("ARM %s.%s PASS 1" % (pool, n), flush=True)
+''')
+    os.chmod(papp, 0o755)
+    penv = {k: v for k, v in os.environ.items() if k not in ("JAH_VRAM_HELD", "JAH_GATE_SLOT_HELD", "JAH_POOL_ARMS")}
+    penv.update(POOLDIR=pdir, VT=vt, JAH_VRAM_WAIT="60")
+    pr = subprocess.run([sys.executable, rp, "--pool", "tok", "--app", papp, "--vram-tokens", "2", "--boot-budget", "30",
+                         "--arm", "a", "x.js", "30", "--arm", "b", "x.js", "30"], cwd=pdir, env=penv,
+                        capture_output=True, text=True)
+    tp = int(open(os.path.join(pdir, "thief.pid")).read())
+    while os.path.exists("/proc/%d" % tp) and not os.path.exists(os.path.join(pdir, "thief.ran")):
+        time.sleep(0.02)                # after the pool: the thief is admitted (the pool's tokens came back)
+    plog2 = "".join(open(f_).read() for f_ in sorted(glob.glob(os.path.join(pdir, "pool-logs", "tok-process2*.log"))))
+    check("thief no" in plog2 and "ARM tok.b PASS" in pr.stdout and "POOL tok RESTART 1" in pr.stdout
+          and os.path.exists(os.path.join(pdir, "thief.ran")),
+          "a pool holds its tokens across a restart: nobody takes them between its processes (%s; %s; restarts %d; "
+          "the thief after the pool: %s)"
+          % ([l for l in plog2.splitlines() if l.startswith("thief")], [l for l in pr.stdout.splitlines()
+                                                                         if l.startswith("ARM tok.b")],
+             pr.stdout.count("POOL tok RESTART "), os.path.exists(os.path.join(pdir, "thief.ran"))))
     # the ingest wait is an EVENT the admission performs on every row: observed, not timed — supervise() of a
     # green row, in this process, with the journal real and time.sleep recorded
     import types
