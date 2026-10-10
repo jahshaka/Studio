@@ -308,11 +308,12 @@ bool VideoRecorder::start(const Options &options, QString *why)
 
     // ---- the encoder: H.264 into MPEG-4, or no recording at all --------------
     QMediaFormat format(QMediaFormat::MPEG4);
-    // QT'S ENCODER PROBE: its FIRST call in a process enumerates the encoders
-    // (~0.7 s, measured in VIDEO-REC-2 — the "585 ms first click" of
-    // VIDEO-REC-1). Made by the process's first project open/create, behind its
-    // progress (services/encoderprobe.h; never at boot: app.startup_quiet's Lane
-    // 6a guard), so here it is a lookup. Timed: `probeMs`.
+    // QT'S ENCODER PROBE: its FIRST call in a process constructs the FFmpeg
+    // backend, whose hardware-context check opens a vdpau/cuda/vaapi/qsv/vulkan
+    // context each (~0.7 s measured, SC1-NEWPROJECT-STALL). It is made HERE, by the
+    // session's first recording request, and nowhere else (lead decision
+    // 2026-10-10: a project open/create is media-free; app.startup_quiet guards
+    // it); every later start is a lookup. Timed: `probeMs`.
     QElapsedTimer probeTimer;
     probeTimer.start();
     const bool haveH264 = options.fault != QLatin1String("noEncoder") &&

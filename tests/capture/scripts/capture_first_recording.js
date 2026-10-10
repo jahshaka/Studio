@@ -4,9 +4,10 @@
 // cause: Qt's encoder probe (the first QMediaFormat::supportedVideoCodecs(Encode) of a process,
 // ~0.7 s); the recorder's view and its NV12 job compiled (cold cache) or loaded (warm) on its first
 // frames too. The startup shader gate draws that very view (recordingview::create, armed every
-// frame) behind the splash, and the first project open makes the probe behind its progress, so the
-// first recording's start, warm-up and first recorded frames compile and load ZERO shaders and the
-// click is a lookup.
+// frame) behind the splash, so the first recording's start, warm-up and first recorded frames
+// compile and load ZERO shaders. THE PROBE IS THE FIRST RECORDING'S (lead decision 2026-10-10,
+// SC1-NEWPROJECT-STALL): a project open/create is media-free, so the FIRST click pays Qt's probe
+// (printed) and every later click is a lookup — the millisecond bars below are on the SECOND click.
 // FIRST in the pool: the claim is about the process's first recording.
 
 function assert(cond, msg) {
@@ -48,11 +49,17 @@ assert(sc1.liveCompiles === sc0.liveCompiles, "and no live compile was reported"
 // never drew would still have to LOAD its programs (the NV12 job) on its first frames.
 assert(sc1.loadedThisRun === sc0.loadedThisRun, "nor loaded one from the cache: " +
        (sc1.loadedThisRun - sc0.loadedThisRun));
-// THE ENCODER PROBE (the real 585 ms): never at boot (app.startup_quiet's Lane 6a guard) but in the
-// process's FIRST project open/create, behind its progress — so after project.create above, the first
-// click's probe is a lookup and the click itself costs well under 50 ms of UI time.
-timingBar(first.probeMs < 20, "Qt's encoder probe was made by the project open: " + first.probeMs.toFixed(2) + " ms");
-timingBar(first.startMs < 50, "the first record click after an open costs under 50 ms of UI time: " +
-          first.startMs.toFixed(1) + " ms");
+// THE ENCODER PROBE (the real 585 ms): made by THIS first click (never at boot, never by a project
+// open/create — app.startup_quiet guards both); printed above. Every later click is a lookup:
 assert(capture.stop({ wait: true, timeoutMs: 30000 }) !== null && capture.status().state === "done", "finished");
+var st2 = capture.start({ path: app.dataRoot().root + "/capture-first/second.mp4" });
+assert(st2 !== null, "the second recording starts " + app.lastError());
+var second = capture.status();
+console.log("the second click: " + second.startMs.toFixed(1) + " ms of UI time, Qt's encoder probe " + second.probeMs.toFixed(2) + " ms");
+timingBar(second.probeMs < 20, "the second click's encoder probe is a lookup: " + second.probeMs.toFixed(2) + " ms");
+timingBar(second.startMs < 50, "a record click after the first costs under 50 ms of UI time: " +
+          second.startMs.toFixed(1) + " ms");
+guard = 0;
+while (capture.status().frames < 3 && guard++ < 200) editor.frame(1, 1 / 60);
+assert(capture.stop({ wait: true, timeoutMs: 30000 }) !== null && capture.status().state === "done", "the second finished");
 console.log("capture.first_recording: PASS");

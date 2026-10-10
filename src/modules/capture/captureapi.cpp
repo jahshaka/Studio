@@ -128,8 +128,9 @@ QVector<VerbInfo> CaptureApi::verbs() const
           "`clipSeconds` (= `elapsed`) is the video recorded and `wallSeconds` the wall time since "
           "the start (frozen at the stop) — an offline recording's clip runs slower than the wall; "
           "`startMs` is the start's own UI-thread time and `probeMs` the part of it Qt's encoder probe took "
-          "(the process's FIRST probe enumerates the machine's encoders, ~0.7 s; the first project open "
-          "makes it behind its progress). "
+          "(the process's FIRST probe constructs the FFmpeg backend and checks the machine's hardware "
+          "contexts, ~0.7 s, and it is made by the session's first recording — no open or create touches "
+          "Qt Multimedia). "
           "`heldTicks` counts the frames an offline recording held back (a render-loop tick held, or an "
           "editor.frame that waited) for its encoder or a video texture's stepped frame, `ringWaits` "
           "the frames it waited for a readback ticket and `worstRingWaitMs` the longest such wait.",
