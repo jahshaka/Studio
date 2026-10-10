@@ -43,6 +43,7 @@
 api.contract 2.81
 app.cli_options 0.01
 app.data_root 28.82
+app.device_loss_end 60.04
 app.engine_selftest_validation 107.60
 app.first_launch 0.01
 app.input_keys 66.81
