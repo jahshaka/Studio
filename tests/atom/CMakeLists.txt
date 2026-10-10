@@ -266,7 +266,9 @@ if(Vulkan_FOUND AND JAH_ATOM_GLSLANG AND OGRE_NEXT_VULKAN_RS_LIB)
     set_tests_properties(shadow.atom_cut PROPERTIES TIMEOUT 60 LABELS "engine")   # 7.5 s measured solo x 6, rounded up
     jah_gpu_row(shadow.atom_parity CLASS engine COMMAND test_shadow_atom_cut --parity
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-    set_tests_properties(shadow.atom_parity PROPERTIES TIMEOUT 60 LABELS "engine")   # 7-9 s measured solo x 6, rounded up
+    # TESTING-CLEANUP-2B item 2: TIMEOUT 120 = 6 x the run log's quiet median 18.8 s (44 quiet PASS runs since 2026-10-01, worst 32.2 s);
+    # declared 60 was below the policy, honest only with the +900 s widening (now deleted).
+    set_tests_properties(shadow.atom_parity PROPERTIES TIMEOUT 120 LABELS "engine")
     # shadow.caster_first_frame — CASTER-USES-1: eight views of the world render their first
     # frame together (> 64 caster maps for the scene's one stats ring): every map recorded.
     jah_gpu_row(shadow.caster_first_frame CLASS engine COMMAND test_shadow_atom_cut --first-frame
@@ -381,9 +383,11 @@ jah_fresh_home_fixture(atom.occlusion_exact_app.fresh_home atomOcclusionHome "${
 jah_gpu_row(atom.occlusion_exact_app CLASS app TIER epic NEEDS photon bloom ssao smaa planar
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/atom_occlusion.js
          WORKING_DIRECTORY ${_occl_home}/run)
+# TESTING-CLEANUP-2B item 2: TIMEOUT 1020 = 6 x the run log's quiet median 169.9 s (40 quiet PASS runs since 2026-10-01, worst 366.2 s);
+# declared 480 was below the policy, honest only with the +900 s widening (now deleted).
 set_tests_properties(atom.occlusion_exact_app PROPERTIES
     FIXTURES_REQUIRED atomOcclusionHome
-    TIMEOUT 480 LABELS "scripting"
+    TIMEOUT 1020 LABELS "scripting"
     ENVIRONMENT "HOME=${_occl_home};JAHSHAKA_DATA_ROOT=${_occl_home}/.local/share/Jahshaka")
 
 # atom.dag_chain_validate — DAG-CHAIN-VALIDATE-1 (ATOM-SHADOWS-1's F1): Scene::createMesh

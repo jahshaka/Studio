@@ -47,8 +47,11 @@ target_include_directories(test_style_contracts PRIVATE
 # (a right-click must raise a menu, never activate).
 find_package(Qt6 REQUIRED COMPONENTS Test)
 target_link_libraries(test_style_contracts PRIVATE Qt6::Widgets Qt6::Test qlementine)
+# Its data root is wiped per run (TESTING-CLEANUP-2 H8e): the startup theme path it asserts wants a
+# root with no appearance/theme key, and a root nothing wipes holds whatever the last run wrote.
 set(_style_contracts_root ${CMAKE_CURRENT_BINARY_DIR}/style-contracts-root)
-add_test(NAME theme.style_contracts COMMAND test_style_contracts
+add_test(NAME theme.style_contracts
+         COMMAND sh "${JAH_FRESH_HOME}" "${_style_contracts_root}" -- $<TARGET_FILE:test_style_contracts>
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(theme.style_contracts PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen;JAHSHAKA_DATA_ROOT=${_style_contracts_root}"
@@ -78,9 +81,11 @@ set(_theme_sheets_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-theme-sheets)
 file(MAKE_DIRECTORY ${_theme_sheets_home}/run)
 jah_gpu_row(theme.sheets CLASS app TIER low NEEDS NONE COMMAND test_theme_sheets
          WORKING_DIRECTORY ${_theme_sheets_home}/run)
+# TESTING-CLEANUP-2B item 2: TIMEOUT 430 = 6 x the run log's quiet median 71.1 s (43 quiet PASS runs since 2026-10-01, worst 196.7 s);
+# declared 300 was below the policy, honest only with the +900 s widening (now deleted).
 set_tests_properties(theme.sheets PROPERTIES
     ENVIRONMENT "HOME=${_theme_sheets_home};JAHSHAKA_DATA_ROOT=${_theme_sheets_home}/.local/share/Jahshaka"
-    TIMEOUT 300 LABELS "ui")
+    TIMEOUT 430 LABELS "ui")
 jah_tsan_blocked(theme.sheets)   # spawns the app
 jah_lsan_blocked(theme.sheets)   # spawns the app
 

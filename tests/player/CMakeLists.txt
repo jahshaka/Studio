@@ -64,6 +64,10 @@ target_link_libraries(test_editor_player_parity PRIVATE IrisGL JahshakaEngine Qt
 add_dependencies(test_editor_player_parity JahshakaEngineMedia)
 jah_gpu_row(player.editor_parity CLASS engine COMMAND ${CMAKE_BINARY_DIR}/bin/test_editor_player_parity
          WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+# TESTING-CLEANUP-2B item 7, re-based after read 4 (2026-10-10; the sample per tests/CMakeLists.txt's policy — the run
+# log's SLOT-ERA quiet PASS runs, since 2026-10-09 18:00, taken as the gate runs the row): WARM, n=5 — gate
+# records 5.7 / 5.7 / 7.0 / 6.3 s and this lane's 8.1 s solo (15:25, 2 builds on the box); median 6.3 -> 6x = 40, under
+# the 120 s FLOOR; slot-era worst 8.1 -> TIMEOUT 120 (unchanged).
 set_tests_properties(player.editor_parity PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "mirror")
 
 # ---- player.playback_routing (A1.6) --------------------------------------

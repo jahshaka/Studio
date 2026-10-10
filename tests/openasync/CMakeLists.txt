@@ -45,29 +45,27 @@ file(MAKE_DIRECTORY ${_open_home}/run)
 # under the GPU-timing lock. The push row measures no time, so it left the lock.
 jah_gpu_row(open.responsive CLASS app TIER epic NEEDS photon COMMAND test_open_responsive
          WORKING_DIRECTORY ${_open_home}/run)
-# TIMEOUT 400, from the MEASUREMENT and not from an estimate. OPEN-ASSIMP-1
-# added the seven remaining shipped samples (import + a synchronous open each,
-# plus a reopen and an in-flight case); it was first widened to 600 on a "~95 s"
-# guess the numbers did not support. Measured on this box: 21 s warm solo, 40 s
-# COLD solo (home wiped, all eight archives imported and their bakes built) and
-# 37-60 s inside a -j2 scoped gate. Six times the WORST of those is 360 s, above
-# the 300 s floor, so the floor is not enough for the work added — 400 is the
-# next value this tree uses.
-#
-# RE-MEASURED with OPEN-COVER-2b's streaming arm in (2026-09-21, this box): 66 s
-# solo on a cold-ish home, 38 s inside a -j2 scoped gate on a warm one. The arm
-# adds two creates, an asynchronous create and one Showroom 2 open, each with
-# its own control measurement and settle — about 45 s solo. 400 still stands.
+# TESTING-CLEANUP-2B item 7, re-based after read 4 (2026-10-10; the sample per tests/CMakeLists.txt's policy — the run
+# log's SLOT-ERA quiet PASS runs, since 2026-10-09 18:00, taken as the gate runs the row): COLD, n=5 — four gate
+# records (scoped-tier/smoke, 04:16-11:23: 138.0 / 125.4 / 233.1 / 147.4 s; load 8-23, 0-4 builds beside them) and this
+# lane's first solo run in its home (208.6 s, 14:18, load 22.7 with 7 builds on the box); median 147.4 -> 6x = 890;
+# slot-era worst 233.1 -> TIMEOUT 890 (was 1740, 6x a contended -j4 worst). Its two warm repeats (79.8 s, a sibling
+# ctest beside them) are not the sample.
 set_tests_properties(open.responsive PROPERTIES
     ENVIRONMENT "HOME=${_open_home};JAHSHAKA_DATA_ROOT=${_open_home}/.local/share/Jahshaka"
-    # 1740: 6x the worst measured run (281 s, -j4 beside other lanes; D6B fix round F1 —
-    # the lock used to add 900 s on top of 400, so leaving it cut the budget below 3x).
-    TIMEOUT 1740 LABELS "openasync")
+    # 890 — the item-7 note above the row.
+    TIMEOUT 890 LABELS "openasync")
 # open.responsive.timing — the millisecond bars (stage-close; `quiet-box`: never a scoped gate).
 # Its own home, so the stage-close run and a lane's push-row run never share a library.
 set(_open_timing_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-open-timing)
 file(MAKE_DIRECTORY ${_open_timing_home}/run)
-jah_gpu_exclusive_test(NAME open.responsive.timing CLASS app TIER epic NEEDS photon bloom ssao smaa planar RUN_TIMEOUT 1740 COMMAND test_open_responsive
+# TESTING-CLEANUP-2B item 7, re-based after read 4 (2026-10-10; the sample per tests/CMakeLists.txt's policy — the run
+# log's SLOT-ERA quiet PASS runs, since 2026-10-09 18:00, taken as the gate runs the row): COLD, n=1 — the only
+# cold PASS run (148.7 s, 14:08, its home's first run, load 7.1, 2 builds on the box); median 148.7 -> 6x = 900;
+# slot-era worst 148.7 -> RUN_TIMEOUT 900 (was 1740; ctest's TIMEOUT is RUN_TIMEOUT + 30). Its two warm repeats in the
+# same home (74.5 s with the tree dirty, 73.3 s) are not the sample; a run that went red on the ms bars (192.2 s) beside
+# the builder's own CPU work was discarded. One cold sample: the next cold PASS runs re-price it.
+jah_gpu_exclusive_test(NAME open.responsive.timing CLASS app TIER epic NEEDS photon bloom ssao smaa planar RUN_TIMEOUT 900 COMMAND test_open_responsive
          WORKING_DIRECTORY ${_open_timing_home}/run)
 set_tests_properties(open.responsive.timing PROPERTIES
     ENVIRONMENT "HOME=${_open_timing_home};JAHSHAKA_DATA_ROOT=${_open_timing_home}/.local/share/Jahshaka;JAHSHAKA_TIMING_BARS=1"
