@@ -106,6 +106,7 @@ public:
     Q_INVOKABLE QVariantMap bakeAll(const QVariantMap &options = QVariantMap());
     Q_INVOKABLE int pendingBakes();
     Q_INVOKABLE bool holdBakes(bool on);
+    Q_INVOKABLE QVariantMap bakeState(const QString &guid);
 
 private:
     /// The Assets page, or null with the refusal already thrown.

@@ -505,6 +505,12 @@ QVector<VerbInfo> AssetsApi::verbs() const
           "the bake is built on a worker and committed when it lands, and a node placed meanwhile shows its "
           "geometry then. 0 = every import's geometry is in. Wait in frames (editor.frame) until it reads 0.",
           Needs::Document },
+        { "bakeState", "assets.bakeState(guid) -> {source, fresh, pending}",
+          "THIS ROW's model bake: `source` the store file the row's content is, `fresh` true when the row has "
+          "a current bake under its own import settings (the bake an open reads), `pending` true while an "
+          "import's bake of that file is in flight (assets.pendingBakes). Per row, never a library count: an "
+          "import that baked nothing reads fresh=false here whatever the rest of the library holds.",
+          Needs::Document },
         { "holdBakes", "assets.holdBakes(on) -> bool",
           "A TEST HOLD on the import bakes assets.pendingBakes counts: while on, a bake that finished on its "
           "worker is NOT committed (it stays pending, its nodes stay without geometry); holdBakes(false) commits "
@@ -2208,6 +2214,23 @@ QVariantMap AssetsApi::reimport(const QString &guid, const QVariantMap &options)
 int AssetsApi::pendingBakes()
 {
     return MeshBakeStore::pendingBakeCount();
+}
+
+QVariantMap AssetsApi::bakeState(const QString &guid)
+{
+    QVariantMap out;
+    if (!host.db) { fail("assets: not available in this session"); return out; }
+    if (host.db->fetchAsset(guid).guid.isEmpty()) {
+        fail(QStringLiteral("assets.bakeState: no asset with guid '%1'").arg(guid));
+        return out;
+    }
+    QSqlDatabase conn = QSqlDatabase::database();
+    const QString root = AssetStorePaths::root();
+    const QString source = MeshBakeStore::modelSourceFor(conn, root, guid);
+    out.insert(QStringLiteral("source"), source);
+    out.insert(QStringLiteral("fresh"), !source.isEmpty() && MeshBakeStore::isFresh(conn, root, source, guid));
+    out.insert(QStringLiteral("pending"), !source.isEmpty() && MeshBakeStore::bakePending(source));
+    return out;
 }
 
 bool AssetsApi::holdBakes(bool on)
