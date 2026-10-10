@@ -2347,7 +2347,7 @@ static int dagBar(const QString &name, const iris::MeshPtr &mesh, bool standin, 
     // DISPLACEMENT LOCK (clusterdag::build — a removed vertex or a lost facet past 2x
     // its group's own error, or an island bigger than the group's error, is locked
     // and the whole DAG rebuilt; the stand-in converges in 6 builds). Before it the
-    // stand-in's groups read 24 of 30 over. Gated by `--target` (atom.dag_bound_target,
+    // stand-in's groups read 24 of 30 over. Gated by `--target` (atom.dag_bound,
     // no longer a photon-target: the row gates) — the dense reference (a) is the
     // other row's, which it keeps for the price.
     std::printf("target: %s DAG (b) %d of %d groups over 2x/2.5x clusterlod's error, worst x %.2f (bar 0)%s\n",
@@ -2554,7 +2554,7 @@ static void boundBar()
     CHECK_LOUD(chained >= 10, "the subject list really does carry chained meshes");
 }
 
-/// `atom.dag_bound_bar` (and, with `target`, `atom.dag_bound_target`): the bound
+/// `atom.dag_bound_bar` (and, with `target`, `atom.dag_bound`): the bound
 /// bar's subjects, their CLUSTER DAG's groups (dagBar).
 static void dagBoundBar(bool target)
 {
