@@ -108,7 +108,9 @@ class NinjaGraph:
         dl = os.path.join(build, ".ninja_deps")
         if not os.path.isfile(bn):
             return None
-        key = (_CACHE_VERSION, os.path.getmtime(bn), os.path.getmtime(dl) if os.path.exists(dl) else 0)
+        # the spelling is part of the key: nodes are joined onto it, and another spelling of the same dir
+        # (a symlinked root) must not reuse a graph whose nodes answer only to the first
+        key = (_CACHE_VERSION, build, os.path.getmtime(bn), os.path.getmtime(dl) if os.path.exists(dl) else 0)
         cache = os.path.join(build, ".gate-scope-graph.pickle")
         try:
             with open(cache, "rb") as f:

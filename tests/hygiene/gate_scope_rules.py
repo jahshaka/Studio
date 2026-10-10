@@ -448,6 +448,40 @@ def main(source, build):
     finally:
         shutil.rmtree(foreign, ignore_errors=True)
 
+    # 15. A SYMLINKED ROOT IS THE SAME TREE (SYMLINK-ROOT-1, the box's /home/jahshaka/Developer ->
+    # /mnt/work/Developer move): the build graph names files under the spelling the tree was CONFIGURED
+    # with; python's getcwd()/realpath() return the resolved one, so a run reached through the other
+    # spelling read "not in the build graph" for every file and fell back to path rules (528 rows against
+    # 457). The tree reached as configured, resolved, and through a fresh symlink — scripts, cwd and
+    # --build all spelled that way, `--build .` from inside the build dir included — selects the same rows.
+    link = tempfile.mkdtemp(prefix="gate-scope-link-")
+    try:
+        os.symlink(os.path.realpath(source), os.path.join(link, "tree"))
+        os.symlink(os.path.realpath(build), os.path.join(link, "build"))
+        files = ["--files", "irisgl/engine/src/OgreFrameMonitor.cpp", "src/scripting/modules/perfapi.cpp", "--json"]
+        forms = {"as configured": (source, build),
+                 "resolved": (os.path.realpath(source), os.path.realpath(build)),
+                 "through a symlink": (os.path.join(link, "tree"), os.path.join(link, "build"))}
+        sel = {}
+        for name, (src, bld) in forms.items():
+            for how, args, cwd in (("absolute", ["--build", bld], src), ("`--build .`", ["--build", "."], bld)):
+                c, o, e = run([os.path.join(src, "scripts", "gate-scope.py")] + files + args, cwd)
+                try:
+                    d = json.loads(o)
+                except ValueError:
+                    d = {}
+                sel[name + ", " + how] = (c, set(d.get("suites", [])) | set(d.get("targets", [])),
+                                          "not in the build graph" in o + e)
+        ref = sel["as configured, absolute"][1]
+        for k, (c, s, missed) in sel.items():
+            check(c == 0 and ref and s == ref and not missed,
+                  "the tree %s (%s) selects the same %d rows through the graph (exit %d, %d rows%s; "
+                  "only here %s, only there %s)" % (k.split(", ")[0], k.split(", ")[1], len(ref), c, len(s),
+                                                    ", NOT IN THE BUILD GRAPH" if missed else "",
+                                                    sorted(ref - s)[:5], sorted(s - ref)[:5]))
+    finally:
+        shutil.rmtree(link, ignore_errors=True)
+
     if FAILURES:
         print("source.gate_scope_rules: FAILED (%d)" % len(FAILURES))
         return 1

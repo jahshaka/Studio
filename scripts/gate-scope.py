@@ -572,21 +572,41 @@ def resolve_build(arg):
     cands = [arg] if os.path.isabs(arg) else [os.path.abspath(arg), os.path.join(ROOT, arg)]
     for c in cands:
         if os.path.isfile(os.path.join(c, "CTestTestfile.cmake")):
+            c = _cache_spelling(c, "CMAKE_CACHEFILE_DIR") or c
             bind_root(c)
             return c
     return cands[-1]          # nothing configured: keep the documented resolution for the error
 
 
-def build_source_dir(build):
-    """The source tree a build dir was configured from (CMakeCache's CMAKE_HOME_DIRECTORY), or None."""
+def _cache_value(build, key):
+    """A CMakeCache.txt entry of `build`, exactly as spelled there, or None."""
     try:
         for line in open(os.path.join(build, "CMakeCache.txt"), errors="replace"):
-            if line.startswith("CMAKE_HOME_DIRECTORY:"):
-                d = line.split("=", 1)[1].strip()
-                return os.path.realpath(d) if os.path.isdir(d) else None
+            if line.startswith(key + ":"):
+                return line.split("=", 1)[1].strip()
     except OSError:
         pass
     return None
+
+
+def _cache_spelling(build, key="CMAKE_CACHEFILE_DIR"):
+    """THE BUILD'S OWN SPELLING OF A DIRECTORY (SYMLINK-ROOT-1). A build graph names files under the spelling
+    the tree was CONFIGURED with — never resolved through symlinks — so a directory reached by another
+    spelling of the same inode (the box's /home/jahshaka/Developer -> /mnt/work/Developer; python's getcwd()
+    and realpath() return the resolved one) is respelled the configured way. None when the cache does not
+    name it or names something that is not the same directory."""
+    d = _cache_value(build, key)
+    if not d or not os.path.isdir(d):
+        return None
+    if key == "CMAKE_CACHEFILE_DIR" and os.path.realpath(d) != os.path.realpath(build):
+        return None
+    return os.path.normpath(d)
+
+
+def build_source_dir(build):
+    """The source tree a build dir was configured from (CMakeCache's CMAKE_HOME_DIRECTORY), AS SPELLED THERE —
+    never realpath'd: the build graph's nodes carry that spelling, and a resolved one misses every file."""
+    return _cache_spelling(build, "CMAKE_HOME_DIRECTORY")
 
 
 def bind_root(build):
@@ -599,8 +619,10 @@ def bind_root(build):
     read). The RULES stay the running script's — which is what a judge is for — and the facts are
     the build's tree's: one range and one build select the same rows from any checkout."""
     global ROOT, TIMES_FILE
+    # Adopted whenever it differs TEXTUALLY (SYMLINK-ROOT-1): the same tree reached through a symlink is
+    # still a different spelling, and the graph only answers to the build's own one.
     src = build_source_dir(build)
-    if not src or os.path.realpath(src) == os.path.realpath(ROOT):
+    if not src or src == ROOT:
         return
     ROOT = src
     TIMES_FILE = os.path.join(ROOT, "scripts", "gate-times.txt")
