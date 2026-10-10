@@ -49,6 +49,14 @@ rm -rf root-cli root-env root-wins root-project
 
 check() { if [ "$1" = "0" ]; then echo "ok:   $2"; else echo "FAIL: $2"; fail=1; fi }
 
+# Every path the app reports is compared with its expected place RESOLVED ON BOTH SIDES
+# (tests/support/samepath.sh): the app answers in the kernel's physical spelling (applicationDirPath()
+# reads /proc/self/exe), the suite's argv/HOME arrive in the configured one, and the owner's box root is
+# a symlink — a string match of the two redded "where it has always been" 3/3 on a correct product.
+. "$(dirname "$0")/../support/samepath.sh"
+is_path()   { jah_same_path "$(jah_logged "$1" "$2")" "$3"; }   # <log> <KEY> <expected path>
+is_inside() { jah_inside    "$(jah_logged "$1" "$2")" "$3"; }   # <log> <KEY> <expected dir>
+
 # The shared settings file, as it is right now. It may not exist (a clean build
 # tree); "does not exist" is a state to preserve exactly as much as any other.
 if [ -f "$SHARED_INI" ]; then
@@ -75,17 +83,17 @@ run_and_report
 "$BIN" --headless --data-root "$ROOT1" --script report.js > run1.log 2>&1
 rc=$?
 check $rc "--data-root run exits 0"
-grep -q "ROOT=$ROOT1" run1.log
+is_path run1.log ROOT "$ROOT1"
 check $? "app.dataRoot().root is the directory that was asked for"
 grep -q "OVERRIDDEN=true" run1.log
 check $? "app.dataRoot().overridden is true"
-grep -q "SETTINGS=$ROOT1/jahsettings.ini" run1.log
+is_path run1.log SETTINGS "$ROOT1/jahsettings.ini"
 check $? "the SETTINGS FILE moved under the data root (HOME= cannot do this)"
-grep -q "DB=$ROOT1/" run1.log
+is_inside run1.log DB "$ROOT1" && ! is_path run1.log DB "$ROOT1"
 check $? "the library database is under the data root"
-grep -q "STORE=$ROOT1/AssetStore" run1.log
+is_path run1.log STORE "$ROOT1/AssetStore"
 check $? "the asset store is under the data root"
-grep -q "PROJECTS=$ROOT1" run1.log
+is_inside run1.log PROJECTS "$ROOT1"
 check $? "the PROJECTS root is under the data root too (rig hygiene, smoke S-extra2)"
 test -f "$ROOT1/jahsettings.ini"
 check $? "...and the settings file was really written there"
@@ -104,15 +112,15 @@ check $? "the settings file beside the binary is untouched ($BEFORE)"
 ROOT2="$PWD/root-env"
 JAHSHAKA_DATA_ROOT="$ROOT2" "$BIN" --headless --script report.js > run2.log 2>&1
 check $? "JAHSHAKA_DATA_ROOT run exits 0"
-grep -q "ROOT=$ROOT2" run2.log
+is_path run2.log ROOT "$ROOT2"
 check $? "JAHSHAKA_DATA_ROOT alone chooses the root"
-grep -q "SETTINGS=$ROOT2/jahsettings.ini" run2.log
+is_path run2.log SETTINGS "$ROOT2/jahsettings.ini"
 check $? "...and the settings file follows it too"
 
 ROOT3="$PWD/root-wins"
 JAHSHAKA_DATA_ROOT="$ROOT2" "$BIN" --headless --data-root "$ROOT3" --script report.js > run3.log 2>&1
 check $? "both-given run exits 0"
-grep -q "ROOT=$ROOT3" run3.log
+is_path run3.log ROOT "$ROOT3"
 check $? "--data-root wins over JAHSHAKA_DATA_ROOT"
 
 # ---- 5b: A PROJECT REALLY LANDS THERE --------------------------------------
@@ -129,7 +137,7 @@ console.log("PATH=" + project.current().folder);
 JS
 "$BIN" --headless --data-root "$ROOT4" --script makeproject.js > run5.log 2>&1
 check $? "a project-creating run with --data-root exits 0"
-grep -q "PATH=$ROOT4/Projects/" run5.log
+is_inside run5.log PATH "$ROOT4/Projects" && ! is_path run5.log PATH "$ROOT4/Projects"
 check $? "project.create writes its folder UNDER the data root"
 PGUID="$(grep '^GUID=' run5.log | head -1 | cut -d= -f2)"
 test -n "$PGUID" && test -d "$ROOT4/Projects/$PGUID"
@@ -147,9 +155,9 @@ if [ -f "$SHARED_INI" ]; then cp -p "$SHARED_INI" shared.ini.bak; fi
 check $? "un-overridden run exits 0"
 grep -q "OVERRIDDEN=false" run4.log
 check $? "with no override, app.dataRoot().overridden is false"
-grep -q "SETTINGS=$BINDIR/jahsettings.ini" run4.log
+is_path run4.log SETTINGS "$BINDIR/jahsettings.ini"
 check $? "with no override the settings file is where it has always been (Debug: beside the binary)"
-grep -q "PROJECTS=$HOME/Documents" run4.log
+is_inside run4.log PROJECTS "$HOME/Documents"
 check $? "with no override the projects root is the historical Documents folder (nothing moved)"
 
 if [ -f shared.ini.bak ]; then
