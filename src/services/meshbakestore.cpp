@@ -43,6 +43,12 @@ namespace
 QMutex sLock;
 int sScopeDepth = 0;
 QHash<QString, iris::BakedModelPtr> sCache;
+/// THE CACHES' GENERATION (STAGE-CLOSE-TRIAGE-1 F8): bumped by clear(). A lookup reads the catalog
+/// OUTSIDE the locks (the boot sweep does it on its worker), so a commit's clear() on the UI thread can
+/// land between that read and the lookup's insert — which would then plant the pre-commit answer (an
+/// old settings hash, a missing bake) for the rest of the session. A lookup inserts only when the
+/// generation it started under is still current; clear() bumps it under the lock the insert checks.
+std::atomic<quint64> sCacheGeneration { 0 };
 
 
 /// The sha256 a store object's file name IS. Empty for anything that is not a
@@ -223,6 +229,7 @@ QPair<QString, iris::ImportTransform> resolveSettings(QSqlDatabase conn, const Q
                                                      const QString &assetGuid)
 {
     const QString key = sourcePath + QLatin1Char('|') + assetGuid;
+    const quint64 generation = sCacheGeneration.load();
     {
         QMutexLocker locked(&sSettingsLock);
         const auto hit = sSettingsCache.constFind(key);
@@ -245,7 +252,7 @@ QPair<QString, iris::ImportTransform> resolveSettings(QSqlDatabase conn, const Q
         out.second = parsed.transform(declared);
     }
     QMutexLocker locked(&sSettingsLock);
-    sSettingsCache.insert(key, out);
+    if (sCacheGeneration.load() == generation) sSettingsCache.insert(key, out);
     return out;
 }
 }   // namespace
@@ -333,6 +340,7 @@ iris::PrewarmItem planFor(const QString &sourcePath, const QString &assetGuid)
 iris::BakedModelPtr load(const QString &sourcePath, const QString &assetGuid)
 {
     if (sourcePath.isEmpty()) return iris::BakedModelPtr();
+    const quint64 generation = sCacheGeneration.load();
     // KEYED BY (path, settings): identical bytes imported twice under different
     // settings are two different geometries and must not share a cache slot.
     const QString cacheKey =
@@ -358,7 +366,7 @@ iris::BakedModelPtr load(const QString &sourcePath, const QString &assetGuid)
     QMutexLocker locked(&sLock);
     // Negative results are cached too: a model with no bake must not re-query
     // the catalog for every mesh node that references it.
-    if (sScopeDepth > 0) sCache.insert(cacheKey, result);
+    if (sScopeDepth > 0 && sCacheGeneration.load() == generation) sCache.insert(cacheKey, result);
     return result;
 }
 
@@ -379,6 +387,7 @@ void clear()
 {
     {
         QMutexLocker locked(&sSettingsLock);
+        sCacheGeneration.fetch_add(1);
         sSettingsCache.clear();
     }
     QMutexLocker locked(&sLock);
