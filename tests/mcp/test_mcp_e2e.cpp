@@ -58,6 +58,7 @@
 #include <QNetworkReply>
 #include <QNetworkRequest>
 #include <QProcess>
+#include <QProcessEnvironment>
 #include <QTcpServer>
 #include <QTimer>
 #include <cstdio>
@@ -158,6 +159,11 @@ int main(int argc, char **argv)
     // carries the token line we must parse.
     QProcess jahshaka;
     jahshaka.setProcessChannelMode(QProcess::MergedChannels);
+    {   // a device loss ends a rig's app at once (exit 3), never through the user's dialog bound
+        QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
+        env.insert(QStringLiteral("JAHSHAKA_NO_DEVICE_LOSS_DIALOG"), QStringLiteral("1"));
+        jahshaka.setProcessEnvironment(env);
+    }
     jahshaka.start(QStringLiteral(JAHSHAKA_BINARY),
                    { QStringLiteral("--mcp-port=%1").arg(port) });
     if (!jahshaka.waitForStarted(15000)) {
@@ -928,7 +934,9 @@ int main(int argc, char **argv)
               "JSON.stringify(world.get().fog)" },
             { "world.gi (pinned row + plain field)", "world.gi({bounces: 1, updateBudget: 7})",
               "JSON.stringify({gi: world.get().gi, pin: world.settings().giBounces.source})" },
-            { "world.gi (tier)", "world.gi({tier: 'low'})",
+            // a tier DIFFERENT from the one the process booted with (the row declares TIER low;
+            // writing the booted tier changes nothing): low -> medium, anything else -> low
+            { "world.gi (tier)", "world.gi({tier: world.photon().tier === 'low' ? 'medium' : 'low'})",
               "JSON.stringify({gi: world.get().gi, tier: world.photon().tier})" },
             { "world.sky", "world.sky('gradient', {top: '#123456', offset: 0.3})",
               "JSON.stringify(world.get().sky)" },

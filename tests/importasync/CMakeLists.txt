@@ -78,7 +78,7 @@ target_compile_definitions(test_import_shutdown PRIVATE
 
 set(_shutdown_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-shutdown)
 file(MAKE_DIRECTORY ${_shutdown_home}/run)
-jah_gpu_row(import.shutdown CLASS app COMMAND test_import_shutdown
+jah_gpu_row(import.shutdown CLASS app TIER epic NEEDS photon COMMAND test_import_shutdown
          WORKING_DIRECTORY ${_shutdown_home}/run)
 set_tests_properties(import.shutdown PROPERTIES
     ENVIRONMENT "HOME=${_shutdown_home};JAHSHAKA_DATA_ROOT=${_shutdown_home}/.local/share/Jahshaka"

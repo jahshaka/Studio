@@ -3,7 +3,11 @@
 // Engine::arms: the registry that replaced the ray tier's per-frame environment
 // doors (JAH_R5_NO_MOTION, JAH_R7_NO_POSED, JAH_R6_NO_ALPHA, JAH_R7_EDGE_CLASSES,
 // JAH_R5_MONO_EYES, JAH_RQ_REFIT) and the per-frame JAHSHAKA_GATHER_NO_TEMPORAL,
-// JAHSHAKA_ATOM_DECODE_OFF, JAHSHAKA_CARD_FOOTPRINT_K and JAHSHAKA_GI_FIELD_NO_SCROLL doors.
+// JAHSHAKA_ATOM_DECODE_OFF, JAHSHAKA_CARD_FOOTPRINT_K and JAHSHAKA_GI_FIELD_NO_SCROLL doors,
+// and (TESTING-CLEANUP-2 H8f) the GI and Atom test doors read per frame, pass or build:
+// JAH_GI_CASCADE_FAULT(_POST), JAHSHAKA_GI_NO_REBUILD_SETTLE, JAHSHAKA_GI_FIELD_RAYS /
+// _SAMPLES / _STATIC, JAH_VCT_REFUSE_GEOMETRY, JAHSHAKA_ATOM_DISCRIMINATE,
+// JAHSHAKA_HIT_WORLD_LIGHTS and JAHSHAKA_HIT_VCT_SPECULAR.
 // What a harness relies on, asserted:
 //   * the table: every arm listed with its default = the shipped picture, its
 //     range and a sentence of what it changes;
@@ -30,7 +34,10 @@ var EXPECTED = { "reflect.motion": 1, "reflect.posed": 1, "reflect.alphaTested":
                  "gather.filterRadius": 0, "gather.restOff": 0, "gather.restFrames": 0,
                  "gather.restSeed": 0, "gather.ageView": 0, "gather.freezeFrame": 0,
                  "gather.youngFrames": 0, "gather.youngReach": 0, "gather.validationOff": 0,
-                 "gather.crossStrata": 0 };
+                 "gather.crossStrata": 0,
+                 "gi.cascadeFault": -1, "gi.cascadeFaultPost": -1, "gi.rebuildSettle": 1,
+                 "gi.fieldRays": 0, "gi.fieldSamples": 0, "gi.fieldStatic": 0, "gi.refuseGeometry": 0,
+                 "atom.discriminate": 0, "atom.hitWorldLights": 0, "atom.hitVctSpecular": 1 };
 
 var guid = project.create("Engine Arms " + Date.now());
 assert(guid.length > 10, "project.create -> " + guid);
@@ -75,4 +82,21 @@ try {
 var after = engine.arms();
 for (var j = 0; j < after.length; ++j)
     assert(after[j].value === after[j]["default"], after[j].name + " is back at its default");
+
+// engine.validation() — THE VALIDATION LAYER'S PROOF (TESTING-CLEANUP-2 H4), its NEGATIVE half: this
+// pool runs WITHOUT the layer, so the readout must say so (the layered arms — pool.vr_validation,
+// pool.capture_validation, the selftest's validation row — assert the positive half).
+var v = engine.validation();
+console.log("engine.validation() -> " + JSON.stringify(v));
+// (the layer list is read by index: it is array-like)
+assert(typeof v.requested === "boolean" && typeof v.active === "boolean" && v.layers !== undefined &&
+       typeof v.layers.length === "number" && typeof v.drawEntry === "string",
+       "engine.validation() answers {requested, active, layers, drawEntry}");
+assert(v.requested === false && v.active === false,
+       "an unlayered run reads requested false, active false");
+assert(v.drawEntry.length > 0 && v.drawEntry.indexOf("VkLayer_khronos_validation") < 0,
+       "...its vkCmdDraw resolves into the driver/loader, not the layer: " + v.drawEntry);
+var layered = false;
+for (var k = 0; k < v.layers.length; ++k) if (String(v.layers[k]).indexOf("khronos_validation") >= 0) layered = true;
+assert(!layered, "...and no validation layer library is loaded: " + JSON.stringify(v.layers));
 console.log("engine_arms: PASS");

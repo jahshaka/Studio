@@ -23,6 +23,11 @@ function soak(frames, tag) {
     console.log("SOAK " + tag + " " + frames + " frames");
 }
 
+// THE LAYER IS REALLY THERE (TESTING-CLEANUP-2 H4): a soak whose layer never loaded prints no
+// "Validation Error" and would read as clean.
+var v = engine.validation();
+console.log("validation " + J(v));
+assert(v.requested && v.active, "the validation layer was asked for and is live on the device");
 assert(project.create("Cutout Soak", { template: "basic" }).length > 10, "project.create");
 var cube = scene.addPrimitive("cube", { position: { x: -1.2, y: 1, z: 0 } });
 var sphere = scene.addPrimitive("sphere", { position: { x: 1.2, y: 1, z: 0 } });

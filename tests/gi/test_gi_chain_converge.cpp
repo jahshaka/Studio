@@ -393,7 +393,7 @@ int main(int argc, char **argv)
     // AND THE DEFECT ITSELF, so this case proves what it guards rather than
     // asserting a number that happens to pass: with the rule stood down the SAME
     // walk must visibly move the picture (measured 13.00/255 here).
-    ::setenv("JAHSHAKA_GI_NO_REBUILD_SETTLE", "1", 1);
+    e->setArm("gi.rebuildSettle", 0.0);
     Image beforeBare;
     scene->refreshGiLighting(false);
     shot(beforeBare);
@@ -405,7 +405,7 @@ int main(int argc, char **argv)
     shot(afterBare);
     const float bareDelta = worstDiff(beforeBare, afterBare);
     const long long bareSettles = scene->giStatus().chainSettles;
-    ::unsetenv("JAHSHAKA_GI_NO_REBUILD_SETTLE");
+    e->setArm("gi.rebuildSettle", 1.0);
     std::printf("   with the settle stood down: %.2f/255 (settles %lld -> %lld)\n",
                 bareDelta, settledAt, bareSettles);
     CHECK(bareSettles == settledAt, "the diagnostic really does stand the settle down");

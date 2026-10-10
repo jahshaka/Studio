@@ -95,6 +95,15 @@ add_test(NAME source.one_material_resolve
 set_tests_properties(source.one_material_resolve PROPERTIES TIMEOUT 60 LABELS "hygiene")
 jah_no_display(source.one_material_resolve)
 
+# source.photon_never_pinned — WORLD-MODE-1: the `photon` World row is never a pin (each
+# World Mode runs Photon at its own name and re-picking snaps it back); the reader deletes
+# a stored one. See the script's header.
+add_test(NAME source.photon_never_pinned
+         COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/photon_never_pinned.sh"
+                 "${CMAKE_SOURCE_DIR}")
+set_tests_properties(source.photon_never_pinned PROPERTIES TIMEOUT 60 LABELS "hygiene")
+jah_no_display(source.photon_never_pinned)
+
 # source.material_page_identity — LEGACY-CONVERT-CRUD fix round: the Materials
 # page takes on a material in ONE place, after its graph has loaded. Five tile
 # handlers used to write the page's saving identity BEFORE the read, so a
@@ -319,6 +328,28 @@ add_test(NAME source.gpu_rows_closure
                  --app "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" --self-test)
 set_tests_properties(source.gpu_rows_closure PROPERTIES TIMEOUT 120 LABELS "hygiene")
 jah_no_display(source.gpu_rows_closure)
+
+# source.row_declares_needs — TEST-NEEDS-1: every row that starts the app declares the World Mode
+# it boots and the switchable features it keeps (TIER + NEEDS on jah_gpu_row / jah_add_pool;
+# tests/support/vram_tokens.cmake). Read from what ctest will RUN (the closure's detector): an
+# app row without both `set:` entries, with a bad word, or with JAHSHAKA_TEST_TIER/NEEDS typed
+# into its ENVIRONMENT or `--test-tier` on its command fails, named with its CMakeLists line;
+# --self-test proves a toy row without the words is named.
+add_test(NAME source.row_declares_needs
+         COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/row_declares_needs.py"
+                 --build "${CMAKE_BINARY_DIR}" --ctest "${CMAKE_CTEST_COMMAND}"
+                 --app "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" --self-test)
+set_tests_properties(source.row_declares_needs PROPERTIES TIMEOUT 120 LABELS "hygiene")
+jah_no_display(source.row_declares_needs)
+
+# gate.tokens_by_needs — TEST-NEEDS-1: the token lookup (tests/support/vram_tokens.cmake, included
+# alone) returns 2/2/2/3 for low NONE / medium photon / high photon / epic photon, and refuses a
+# declaration that is missing a word or names one it does not know. A toy: no build needed.
+add_test(NAME gate.tokens_by_needs
+         COMMAND ${CMAKE_COMMAND} -DSRC=${CMAKE_SOURCE_DIR}/tests
+                 -P "${CMAKE_CURRENT_SOURCE_DIR}/tokens_by_needs.cmake")
+set_tests_properties(gate.tokens_by_needs PROPERTIES TIMEOUT 60 LABELS "hygiene")
+jah_no_display(gate.tokens_by_needs)
 
 # source.no_fixed_gi_volume — D4-PHOTON-TIERS: the single scene-fitted voxel volume
 # stays deleted end to end, and nothing reads its document keys (giCascades,

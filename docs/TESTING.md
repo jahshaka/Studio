@@ -102,19 +102,21 @@ solo retry: JAH_POOL_ARMS=gi_verbs.gi_bounds ctest -R '^pool\.gi_verbs$'
   `JAH_POOL_ARMS=p.a,p.b ctest -R '^pool\.(p|q)$'`;
 - the run log (§7) records one line per arm from the driver's `ARM` lines — the one channel.
 
-**THE POOL'S TIER** (lane TEST-TIER-1). Every engine-up pool declares one,
-`jah_add_pool(<pool> TIER low|epic …)`, and it is the PROCESS's, never the document's:
+**THE POOL'S DECLARATION** (lanes TEST-TIER-1, TEST-NEEDS-1; `docs/TESTING_GATE.md` §4b). Every
+engine-up pool — like every row that starts the app — declares what its process boots,
+`jah_add_pool(<pool> TIER <low|medium|high|epic> NEEDS <photon bloom ssao smaa planar…>|NONE …)` or
+`TIER document`, and it is the PROCESS's, never the document's:
 
-- `TIER low` — the process runs `--test-tier low` (`services/testtier.h`): every scene it binds,
-  a new one and an opened one (after its reader), is put on the Low World Mode through the call
-  `world.mode` makes, and the window boots 1280x720. For arms whose claims are verbs, UI state,
-  counts, open/close, thumbnails — nothing that needs the shipped picture. `app.testTier()`
-  reads it (`"low"`).
-- `TIER epic` — no test tier: a new scene is the product's Epic, an opened scene keeps the tier
-  it saved (`app.testTier()` is `""`). For an arm that asserts a picture, GI, Atom, or a
-  number measured at the shipped tier.
+- `TIER low NEEDS NONE` — JAHSHAKA_TEST_TIER=low / JAHSHAKA_TEST_NEEDS=none (`services/testtier.h`):
+  every scene it binds, a new one and an opened one (after its reader), is put on the Low World
+  Mode through the call `world.mode` makes, every switchable feature off, and (`TEST_WINDOW`,
+  its own declaration) the window boots 1280x720. For arms whose claims are verbs, UI state, counts — nothing that reads the picture.
+  `app.testTier()` reads it (`{tier: "low", needs: []}`).
+- `TIER document` — no test tier: a new scene is the product's Epic, an opened scene keeps the
+  tier it saved (`app.testTier().tier` is `""`). For an arm that asserts a picture, GI, Atom, a
+  number measured at the shipped tier, or a World row the document saved.
 
-An arm that needs Epic lives in an Epic pool — MOVE it, never mix (a Low pool must never host a
+An arm that needs more than its pool keeps MOVES to a pool that keeps it — never mix (a Low pool must never host a
 GI assertion: the irradiance field and the chain differ by tier). At every boot the pool prints
 `MEM <pool> gpuPoolUsed=<MB> textures=<MB> processMiB=<MiB> tier=<t>` — the boot footprint
 through `app.memoryStats`/`app.textureMemory` and the process's own `nvidia-smi` line — and the
@@ -387,10 +389,15 @@ and `JAHSHAKA_GI_FIELD_NO_SCROLL`. Each is a registered arm now (`Engine::setArm
 of the next frame; `Engine::arms()` / `engine.arms()` list them with their defaults):
 `rayquery.tlasRefit`, `reflect.motion`, `reflect.monoEyes`, `reflect.alphaTested`,
 `reflect.posed`, `reflect.edgeClasses`, `gather.temporal`, `atom.decode`, `cards.footprintTexels`,
-`gi.fieldScroll`. Still environment reads on a per-frame or per-pass path (not converted, listed
-for the next lane): `JAHSHAKA_ATOM_DISCRIMINATE`, `JAHSHAKA_HIT_WORLD_LIGHTS`,
-`JAHSHAKA_HIT_VCT_SPECULAR` (HlmsAtom, per pass preparation) and `JAHSHAKA_GI_NO_REBUILD_SETTLE`
-(OgreGi, per frame). A new measuring switch is a row in that table
+`gi.fieldScroll`. TESTING-CLEANUP-2 (H8f) converted the last ones read on a per-frame, per-pass or
+per-build path, and deleted them: `JAH_GI_CASCADE_FAULT` / `_POST` -> `gi.cascadeFault` /
+`gi.cascadeFaultPost` (-1 = none, else the cascade that throws), `JAHSHAKA_GI_NO_REBUILD_SETTLE` ->
+`gi.rebuildSettle` (0 = off), `JAHSHAKA_GI_FIELD_RAYS` / `_SAMPLES` / `_STATIC` -> `gi.fieldRays` /
+`gi.fieldSamples` / `gi.fieldStatic` (read at the field's build: set the arm, step a frame, then
+build), `JAH_VCT_REFUSE_GEOMETRY` -> `gi.refuseGeometry`, `JAHSHAKA_ATOM_DISCRIMINATE` ->
+`atom.discriminate` (1 codes, 2 the chart), `JAHSHAKA_HIT_WORLD_LIGHTS` -> `atom.hitWorldLights`
+(1 off, 2 all), `JAHSHAKA_HIT_VCT_SPECULAR` -> `atom.hitVctSpecular` (0 = compiled out). What
+remains below is read ONCE (a boot or session latch). A new measuring switch is a row in that table
 (OgreFrameMonitor.cpp `kArms`), never a `getenv`. `scripts/perf-ab.py` drives the arms.
 
 | Switch | Read in | Reader | What it does |
@@ -401,17 +408,9 @@ for the next lane): `JAHSHAKA_ATOM_DISCRIMINATE`, `JAHSHAKA_HIT_WORLD_LIGHTS`,
 | `JAHSHAKA_HLMS_DEBUG_DIR` | OgreEngine.cpp | app/shader_gate_warm.sh, docs/SCRIPTING.md | dumps the generated Hlms shaders |
 | `JAHSHAKA_ATOM_DRAW_OFF` | OgreScene.cpp | the `--engine-selftest` hash A/B (no script can reach the selftest) | the Atom split off: every item through PBS |
 | `JAHSHAKA_ATOM_OCCLUSION_OFF` | OgreScene.cpp | the `--engine-selftest` hash A/B | the id pass frustum-only |
-| `JAHSHAKA_ATOM_DISCRIMINATE` | HlmsAtom.cpp | scale | a colour code per failed decode term instead of the discard |
 | `JAHSHAKA_ATOM_TRACE` | OgreGpuScene.cpp | scale | the GPU scene's per-frame trace lines |
-| `JAHSHAKA_HIT_WORLD_LIGHTS`, `JAHSHAKA_HIT_VCT_SPECULAR` | HlmsAtom.cpp | gi.hit_shade | the hit decode's light list / VCT specular arms |
 | `JAHSHAKA_RAY_DENY_STORAGE_FORMAT` | OgreRayQuery.cpp | gi.rt_reflect | refuses a storage format (the fallback path) |
 | `JAH_ORTHO_POSTFX` | OgreView.cpp | ssr.e2e | post effects on an orthographic view |
-| `JAH_GI_CASCADE_FAULT`, `JAH_GI_CASCADE_FAULT_POST` | OgreGi.cpp | gi.cascades | a cascade build throws before / after the placement moves |
-| `JAH_VCT_REFUSE_GEOMETRY` | OgreGi.cpp | gi.voxel_resident | the voxeliser reads no geometry (an empty volume must build) |
-| `JAHSHAKA_GI_FIELD_RAYS` | OgreGi.cpp | gi.field_thin_wall | the field's rays per depth texel |
-| `JAHSHAKA_GI_FIELD_SAMPLES` | OgreGi.cpp | gi.field_thin_wall | the field's sample target per texel |
-| `JAHSHAKA_GI_FIELD_STATIC` | OgreGi.cpp | gi.field_thin_wall | the field's rays NOT rotated per frame (the fixed-set arm) |
-| `JAHSHAKA_GI_NO_REBUILD_SETTLE` | OgreGi.cpp | gi.chain_converge | the rebuild settle off (paired arm) |
 | `JAH_TEXTURE_CACHE`, `JAH_TEXTURE_MULTILOAD`, `JAH_TEXTURE_SYNC_LOAD` | OgreEngine.cpp, OgreMaterials.cpp | scripts/threading/texture-ab.sh | the texture-load A/B arms |
 | `JAH_TEXTURE_WAIT_MS`, `JAH_TEXTURE_WAIT_FAULT`, `JAH_TEXTURE_DRAIN_ADVANCE_MS` | OgreEngine.cpp | threading.texture_wait_watchdog, app.* verbs (docs/SCRIPTING.md) | the texture wait budget and its fault hook |
 | `JAHSHAKA_VR_TEST_INJECT`, `JAHSHAKA_VR_TEST_NO_ACTIONS` | EnginePrivate.h, OgreVrSession.cpp | vr.session, the VR session scripts | injected controllers / an action-set refusal |

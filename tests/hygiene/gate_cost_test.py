@@ -720,6 +720,47 @@ def main(source, build):
     b = rl.built_from(scratch)
     check(b and b["studio"] == head and len(b["irisgl"]) == 40,
           "the build's last step writes BUILT_FROM: the studio HEAD (%s) and irisgl's" % (b or {}).get("studio", "?")[:9])
+    # THE APPLIED ASSIMP STACK IS NOT DIRT: a toy studio/irisgl pair whose irisgl carries a thirdparty/assimp
+    # submodule moved off its gitlink (` M thirdparty/assimp`, what the configure-time patch stack leaves) stamps
+    # dirty=0; an edit anywhere else in irisgl still stamps dirty=1.
+    toy = os.path.join(scratch, "stamp-toy")
+    tgit = ["git", "-c", "user.name=t", "-c", "user.email=t@t", "-c", "protocol.file.allow=always"]
+    def tg(cwd, *a):
+        return subprocess.run(tgit + list(a), cwd=cwd, capture_output=True, text=True)
+    for d in ("assimp", "studio"):
+        os.makedirs(os.path.join(toy, d))
+        tg(os.path.join(toy, d), "init", "-q")
+        with open(os.path.join(toy, d, "f.txt"), "w") as f:
+            f.write("1\n")
+        tg(os.path.join(toy, d), "add", "f.txt"); tg(os.path.join(toy, d), "commit", "-qm", "1")
+    irisgl_toy = os.path.join(toy, "studio", "irisgl")
+    os.makedirs(irisgl_toy)
+    tg(irisgl_toy, "init", "-q")
+    with open(os.path.join(irisgl_toy, "src.cpp"), "w") as f:
+        f.write("int x;\n")
+    tg(irisgl_toy, "add", "src.cpp")
+    tg(irisgl_toy, "submodule", "add", "-q", os.path.join(toy, "assimp"), "thirdparty/assimp")
+    tg(irisgl_toy, "commit", "-qm", "1")
+    sub = os.path.join(irisgl_toy, "thirdparty", "assimp")
+    with open(os.path.join(sub, "f.txt"), "w") as f:
+        f.write("patched\n")
+    tg(sub, "commit", "-qam", "the applied stack")          # the submodule's HEAD moves: ` M thirdparty/assimp`
+    with open(os.path.join(toy, "studio", ".gitignore"), "w") as f:
+        f.write("irisgl/\n")
+    tg(os.path.join(toy, "studio"), "add", ".gitignore"); tg(os.path.join(toy, "studio"), "commit", "-qm", "2")
+    toystamp = os.path.join(toy, "BUILT_FROM")
+    def toy_dirty():
+        subprocess.run(["cmake", "-DSRC=" + os.path.join(toy, "studio"), "-DOUT=" + toystamp, "-P",
+                        os.path.join(source, "cmake", "BuiltFrom.cmake")], capture_output=True)
+        return (rl.built_from(toy) or {}).get("dirty")
+    moved = " M thirdparty/assimp" in tg(irisgl_toy, "status", "--porcelain", "--ignore-submodules=dirty").stdout
+    d_stack = toy_dirty()
+    with open(os.path.join(irisgl_toy, "src.cpp"), "a") as f:
+        f.write("int y;\n")
+    d_edit = toy_dirty()
+    check(moved and d_stack is False and d_edit is True,
+          "the applied assimp stack (` M thirdparty/assimp`) stamps dirty=0; an irisgl edit beside it stamps "
+          "dirty=1 (moved=%s, stack=%r, edit=%r)" % (moved, d_stack, d_edit))
     reset()
     with open(os.path.join(tb, "BUILT_FROM"), "w") as f:
         f.write("studio=%s\nirisgl=%s\ndirty=0\n" % ("0" * 40, clean["irisgl"]))

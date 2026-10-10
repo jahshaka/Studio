@@ -725,7 +725,7 @@ int main()
         const GiStatus::CascadeStatus c0 = st.cascades[0];
         const float step = c0.step;
         const float x0 = c0.centre.x;
-        setenv("JAH_GI_CASCADE_FAULT", "0", 1);
+        e->setArm("gi.cascadeFault", 0.0);   // latched at the next frame's top
         view->setCamera(enginetest::testCameraDescLookAt(Vec3(x0 + 1.5f * step, 2.0f, 6.0f),
                                                          Vec3(x0 + 1.5f * step, 1.0f, 0.0f)));
         render(e, 1);
@@ -739,7 +739,7 @@ int main()
               "AND THE CASCADE KEEPS THE PLACEMENT ITS VOXELS ARE FOR (the revert path)");
         CHECK(bad.cascades[0].pending != 0, "...with the rebuild still owed");
         CHECK(scene->giStatus().vctBound, "...and the chain still bound and rendering");
-        unsetenv("JAH_GI_CASCADE_FAULT");
+        e->setArm("gi.cascadeFault", -1.0);
         render(e, 1);
         st = scene->giStatus();
         std::printf("   after the fault is cleared: rebuilds %llu, centre %.2f, pending %d\n",
@@ -1147,7 +1147,7 @@ int main()
         // A material edit: every cascade now owes a rebuild in place.
         fp.albedo = Colour(0.9f, 0.2f, 0.2f);
         CHECK(scene->setPbrMaterial(fmat, fp), "a material edit dirties every cascade");
-        setenv("JAH_GI_CASCADE_FAULT_POST", "0", 1);
+        e->setArm("gi.cascadeFaultPost", 0.0);
         scene->refreshGlobalIllumination();
         render(e, 2);
         const GiStatus bad = scene->giStatus();
@@ -1160,7 +1160,7 @@ int main()
               "...and the chain is still up and still bound");
         Image live;
         CHECK(view->readPixels(live), "...and the scene still renders (no dangling voxeliser)");
-        unsetenv("JAH_GI_CASCADE_FAULT_POST");
+        e->setArm("gi.cascadeFaultPost", -1.0);
         render(e, 24);
         const GiStatus healed = scene->giStatus();
         unsigned long long after13 = 0, before13 = 0;

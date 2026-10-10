@@ -33,6 +33,14 @@ QVector<VerbInfo> EngineApi::verbs() const
           "current frame reads, its `default` (the shipped picture), its `min`/`max` and `what` it "
           "changes, with the suite that measures it.",
           Needs::Engine },
+        { "validation", "engine.validation() -> {requested, active, layers, drawEntry}",
+          "THE VALIDATION LAYER'S PROOF. `requested`: the process environment asked the Vulkan "
+          "loader for the Khronos validation layer (VK_INSTANCE_LAYERS or VK_LOADER_LAYERS_ENABLE). "
+          "`active`: the engine's device really runs through it — its vkCmdDraw resolves into the "
+          "layer's library (`drawEntry` names the library it resolves into). `layers`: every Vulkan "
+          "layer library the process loaded. A script run under the layer asserts `requested && "
+          "active`: a layer that never loaded reports no error and reads as a clean run.",
+          Needs::Engine },
     };
 }
 
@@ -70,4 +78,17 @@ QVariantList EngineApi::arms()
                                    { QStringLiteral("max"), a.maxValue },
                                    { QStringLiteral("what"), QString::fromStdString(a.what) } });
     return out;
+}
+
+QVariantMap EngineApi::validation()
+{
+    auto engine = EngineHost::instance().engine();
+    if (!engine) { fail(QStringLiteral("engine.validation: no engine in this session")); return {}; }
+    const jahshaka::engine::ValidationStatus v = engine->validation();
+    QVariantList layers;
+    for (const std::string &l : v.layers) layers.push_back(QString::fromStdString(l));
+    return { { QStringLiteral("requested"), v.requested },
+             { QStringLiteral("active"), v.active },
+             { QStringLiteral("layers"), layers },
+             { QStringLiteral("drawEntry"), QString::fromStdString(v.drawEntry) } };
 }

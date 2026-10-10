@@ -375,8 +375,8 @@ QVector<VerbInfo> WorldApi::verbs() const
           Needs::Document },
         { "photon", "world.photon({enabled, tier}) -> {enabled, tier, custom, deviations, technique, quality, ddgi, bounces, row, updateBudget}",
           "PHOTON — realtime global illumination, as one switch and one quality dial. This is the surface the World panel shows and the shortest way to say what a scene should look like; world.gi is the same model with every individual knob exposed, and world.settings()/world.override are the same model again as registry rows. "
-          "'enabled' true|false turns it on and off. Off is the renderer's GI mode set to off and nothing else — no second flag to disagree with it — and the tier is remembered, so turning it back on restores the quality you had. 'tier' is low|medium|high|epic: low voxelizes what is around the camera in two coarse steps and feeds the irradiance field from it, which REPLACES the cone-traced diffuse with probe-stored bounce that cannot leak through walls; medium does the same at twice the resolution; high adds a grid of parallax-corrected reflection probes captured in HDR with shadows; epic adds three light bounces. Every tier builds the camera-centred CASCADE CHAIN, so the bounce follows you through a world of any size. (No tier reserves dynamic probes: that column was deleted on 2026-09-12 — moving things are reflected every frame by screen-space reflections and planar mirrors, never by re-capturing probes.) New scenes are born epic. "
-          "Called with no argument it reads. 'custom' is true when a setting you pinned deviates from what the tier would give it, and 'deviations' names those settings — the tier is still the tier, your pin still wins, and world.clearOverride({id}) hands one back (ids: giMode, giQuality, giDdgi, giBounces, photon). 'technique', 'quality', 'ddgi' and 'bounces' are what the tier and your pins RESOLVED to, in world.gi's spelling, and 'row' is the tier's own column set {technique, quality, ddgi, bounces} before any pin — the effective table row, so a script can see tier against resolution. "
+          "'enabled' true|false turns it on and off. Off is the renderer's GI mode set to off and nothing else — no second flag to disagree with it — and the tier is remembered, so turning it back on restores the quality you had. 'tier' is low|medium|high|epic: low voxelizes what is around the camera in two coarse steps and feeds the irradiance field from it, which REPLACES the cone-traced diffuse with probe-stored bounce that cannot leak through walls; medium does the same at twice the resolution; high adds a grid of parallax-corrected reflection probes captured in HDR with shadows; epic adds three light bounces. Every tier builds the camera-centred CASCADE CHAIN, so the bounce follows you through a world of any size. (No tier reserves dynamic probes: that column was deleted on 2026-09-12 — moving things are reflected every frame by screen-space reflections and planar mirrors, never by re-capturing probes.) New scenes are born epic. Each World Mode runs Photon at the same name (world.mode({mode:\"high\"}) puts Photon on at high); setting a different tier or turning Photon off here makes world.mode() read \"custom\", and re-picking any World Mode snaps Photon back to that mode's tier — Photon is never pinned against the World Mode. "
+          "Called with no argument it reads. 'custom' is true when a setting you pinned deviates from what the tier would give it, and 'deviations' names those settings — the tier is still the tier, your pin still wins, and world.clearOverride({id}) hands one back (ids: giMode, giQuality, giDdgi, giBounces). 'technique', 'quality', 'ddgi' and 'bounces' are what the tier and your pins RESOLVED to, in world.gi's spelling, and 'row' is the tier's own column set {technique, quality, ddgi, bounces} before any pin — the effective table row, so a script can see tier against resolution. "
           "Writes are undoable as one step, exactly like world.mode.",
           Needs::Document },
         { "refreshGi", "world.refreshGi() -> bool",
@@ -585,13 +585,13 @@ QVector<VerbInfo> WorldApi::verbs() const
           "Reads the current world settings.",
           Needs::Document },
         { "mode", "world.mode({mode}) -> string",
-          "The scene's World Mode — the scalability tier every quality row resolves through: low, medium, high, epic, or custom (no tier; the individual settings are the truth). Called with no argument it reads the current mode; with {mode: \"high\"} it applies that tier, writing each row's tier value into the scene EXCEPT rows the user pinned with world.override (pins survive mode switches). Returns the resulting mode. Undoable — one step for the whole tier, however many rows it rewrote.",
+          "The scene's World Mode — the scalability tier every quality row resolves through: low, medium, high, epic, or custom (no tier; the individual settings are the truth). Each mode runs Photon at the same name; the read answers \"custom\" also while Photon has left the picked mode's tier (world.photon set another tier or turned it off) — the pick is kept, and picking any mode again snaps Photon back. Called with no argument it reads the current mode; with {mode: \"high\"} it applies that tier, writing each row's tier value into the scene EXCEPT rows the user pinned with world.override (pins survive mode switches). Returns the resulting mode. Undoable — one step for the whole tier, however many rows it rewrote.",
           Needs::Document },
         { "settings", "world.settings() -> { rowId: {value, valueId, label, source, tierValue, available} }",
-          "Every World Mode row and its RESOLVED value. 'source' is \"override\" (pinned by the user), \"mode\" (from the tier) or \"custom\" (no tier is applied). 'valueId' is the script-facing spelling the override verb takes; 'tierValue' is what the current mode would give the row; 'available' is false for rows declared but not yet implemented by the renderer.",
+          "Every World Mode row and its RESOLVED value. 'source' is \"override\" (pinned by the user), \"mode\" (the row holds the picked mode's value) or \"custom\" (no tier is applied, or the row was moved off its tier value — the photon row after world.photon picked another tier). 'valueId' is the script-facing spelling the override verb takes; 'tierValue' is what the picked mode gives the row; 'available' is false for rows declared but not yet implemented by the renderer.",
           Needs::Document },
         { "override", "world.override({id, value}) -> object",
-          "Pins one quality row to a value, whatever the mode says: world.override({id: \"msaa\", value: \"4x\"}). Values may be given as the row's id spelling (\"4x\", \"vct\", \"off\") or as the raw number. The pin survives mode switches until world.clearOverride drops it. Returns the row's new state, as in world.settings(). Undoable.",
+          "Pins one quality row to a value, whatever the mode says: world.override({id: \"msaa\", value: \"4x\"}). Values may be given as the row's id spelling (\"4x\", \"vct\", \"off\") or as the raw number. The pin survives mode switches until world.clearOverride drops it — except the 'photon' row, which is never pinned: it is set, and the next World Mode pick snaps it back to the mode's tier. Returns the row's new state, as in world.settings(). Undoable.",
           Needs::Document },
         { "clearOverride", "world.clearOverride({id}) -> object",
           "Drops one pinned row and puts the current mode's value back. Returns the row's new state. Undoable.",
@@ -2681,7 +2681,7 @@ QVariantMap WorldApi::setPlanarReflections(const QVariantMap &params)
             // In Custom mode there is no tier to fall back to, so the sentinel
             // goes back into the field itself.
             worldmodes::clearOverride(scene, QStringLiteral("planarBudget"));
-            if (worldmodes::mode(scene) == worldmodes::Mode::Custom)
+            if (worldmodes::pickedMode(scene) == worldmodes::Mode::Custom)
                 scene->planarReflectionBudget = -1;
         } else {
             bool ok = false;
@@ -2693,7 +2693,7 @@ QVariantMap WorldApi::setPlanarReflections(const QVariantMap &params)
             }
             if (b < 0) {
                 worldmodes::clearOverride(scene, QStringLiteral("planarBudget"));
-                if (worldmodes::mode(scene) == worldmodes::Mode::Custom)
+                if (worldmodes::pickedMode(scene) == worldmodes::Mode::Custom)
                     scene->planarReflectionBudget = -1;
             } else {
                 // setRowValue writes the field AND records the pin, so the value
@@ -3057,7 +3057,8 @@ QVariantMap WorldApi::get()
 QVariantMap WorldApi::rowState(const iris::ScenePtr &scene, const worldmodes::Row &r)
 {
     const int value = worldmodes::resolved(scene, r);
-    const worldmodes::Mode m = worldmodes::mode(scene);
+    // The PICKED mode's column (WORLD-MODE-1): what the row returns to on a re-pick.
+    const worldmodes::Mode m = worldmodes::pickedMode(scene);
     return QVariantMap{
         { "value", value },
         { "valueId", worldmodes::valueId(r, value) },

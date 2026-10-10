@@ -37,7 +37,7 @@ jah_gpu_row(shadow.cache_kinds CLASS engine COMMAND test_shadow_spike cachekinds
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(shadow.cache_kinds PROPERTIES
     TIMEOUT 120 LABELS "engine"
-    ENVIRONMENT "VK_INSTANCE_LAYERS=VK_LAYER_KHRONOS_validation"
+    ENVIRONMENT "VK_INSTANCE_LAYERS=VK_LAYER_KHRONOS_validation;JAH_EXPECT_VALIDATION=1"
     FAIL_REGULAR_EXPRESSION "Validation Error;from Undefined to a read-only layout")
 
 # THE GATE SUITE (SHADOW_TOOLING_SPEC.md §7): the budget, the derivation, the
@@ -107,7 +107,7 @@ set_tests_properties(shadow.helper_casters PROPERTIES TIMEOUT 120 LABELS "engine
 # 144 / 80 / 129 s — ~34 s of each the shutdown waiting on the shader-cache write under the box's I/O load. In the
 # first stage-close batch the churn twins took 1008 / 1159 s, over the old TIMEOUT 900: they passed only through
 # _jah_vram_widen_timeout's hidden +900 s on every gpu row (tests/CMakeLists.txt), a band-aid for part B.
-jah_gpu_row(shadow.cutout_caster CLASS app
+jah_gpu_row(shadow.cutout_caster CLASS app TIER epic NEEDS photon bloom ssao smaa planar
          COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/scripts/shadow_casters.sh cutout
                  $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
                  ${CMAKE_CURRENT_SOURCE_DIR}/scripts/shadow_casters.js.in
@@ -115,7 +115,7 @@ jah_gpu_row(shadow.cutout_caster CLASS app
                  ${CMAKE_CURRENT_BINARY_DIR}/shadow.cutout_caster 1
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(shadow.cutout_caster PROPERTIES LABELS "engine" TIMEOUT 272)
-jah_gpu_row(shadow.two_sided_caster CLASS app
+jah_gpu_row(shadow.two_sided_caster CLASS app TIER epic NEEDS photon bloom ssao smaa planar
          COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/scripts/shadow_casters.sh twosided
                  $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
                  ${CMAKE_CURRENT_SOURCE_DIR}/scripts/shadow_casters.js.in
@@ -123,7 +123,7 @@ jah_gpu_row(shadow.two_sided_caster CLASS app
                  ${CMAKE_CURRENT_BINARY_DIR}/shadow.two_sided_caster 1
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(shadow.two_sided_caster PROPERTIES LABELS "engine" TIMEOUT 256)
-jah_gpu_row(shadow.cutout_caster.churn CLASS app
+jah_gpu_row(shadow.cutout_caster.churn CLASS app TIER epic NEEDS photon bloom ssao smaa planar
          COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/scripts/shadow_casters.sh cutout
                  $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
                  ${CMAKE_CURRENT_SOURCE_DIR}/scripts/shadow_casters.js.in
@@ -131,7 +131,7 @@ jah_gpu_row(shadow.cutout_caster.churn CLASS app
                  ${CMAKE_CURRENT_BINARY_DIR}/shadow.cutout_caster.churn 10
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(shadow.cutout_caster.churn PROPERTIES LABELS "engine;stage-close" TIMEOUT 2100)
-jah_gpu_row(shadow.two_sided_caster.churn CLASS app
+jah_gpu_row(shadow.two_sided_caster.churn CLASS app TIER epic NEEDS photon bloom ssao smaa planar
          COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/scripts/shadow_casters.sh twosided
                  $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
                  ${CMAKE_CURRENT_SOURCE_DIR}/scripts/shadow_casters.js.in
@@ -143,7 +143,7 @@ set_tests_properties(shadow.two_sided_caster.churn PROPERTIES LABELS "engine;sta
 # cut-out the hang was found on, the screenshot path, a pinned and a free clock), then 5,000 of
 # the Tornado sample, under the Khronos validation layer. MINUTES OF ONE PROCESS: a stage-close row; its
 # push-time guard is shadow.cutout_caster (one process), its churn the `.churn` twins above.
-jah_gpu_row(gpu.cutout_soak CLASS app
+jah_gpu_row(gpu.cutout_soak CLASS app TIER epic NEEDS photon bloom ssao smaa planar
          COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/scripts/gpu_cutout_soak.sh
                  $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
                  ${CMAKE_CURRENT_SOURCE_DIR}/scripts/gpu_cutout_soak.js.in

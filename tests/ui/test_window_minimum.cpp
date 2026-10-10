@@ -37,7 +37,6 @@ For more information see the LICENSE file
 #include "../support/mcpharness.h"
 
 #include <QJsonDocument>
-#include <QThread>
 
 using namespace mcpharness;
 
@@ -61,12 +60,6 @@ QJsonObject readObject(McpClient &mcp, const QString &expression)
         return {};
     }
     return QJsonDocument::fromJson(reply.value("result").toString().toUtf8()).object();
-}
-
-void settle(McpClient &mcp)
-{
-    QThread::msleep(800);
-    mcp.runScript(QStringLiteral("true"));
 }
 
 }   // namespace

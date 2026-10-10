@@ -25,7 +25,7 @@ set_tests_properties(perf.pacing PROPERTIES
 # it asserts on.
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-offscreen_isolation)
 file(MAKE_DIRECTORY ${_home}/run)
-jah_gpu_row(perf.offscreen_isolation CLASS app
+jah_gpu_row(perf.offscreen_isolation CLASS app TIER low NEEDS NONE NEEDS_WHY "a readback must not redraw the editor view: a counter around a screenshot (no picture claim)"
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
                  --script ${CMAKE_CURRENT_SOURCE_DIR}/offscreen_isolation.js
          WORKING_DIRECTORY ${_home}/run)
@@ -64,7 +64,7 @@ set(_ess_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-epic_steady_state)
 # (tests/support/fresh_home.sh through jah_fresh_home_fixture).
 jah_fresh_home_fixture(perf.freshhome.epic_steady_state perf_home_epic_steady_state "${_ess_home}" LABELS "perf")
 
-jah_gpu_exclusive_test(NAME perf.epic_steady_state CLASS app RUN_TIMEOUT 300
+jah_gpu_exclusive_test(NAME perf.epic_steady_state CLASS app TIER epic NEEDS photon bloom ssao smaa planar RUN_TIMEOUT 300
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
                  --script ${CMAKE_CURRENT_BINARY_DIR}/epic_steady_state.js
          WORKING_DIRECTORY ${_ess_home}/run)
@@ -106,7 +106,7 @@ set(_drag_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-drag_mirror_room)
 
 jah_fresh_home_fixture(perf.freshhome.drag_mirror_room perf_home_drag_mirror_room "${_drag_home}" LABELS "perf")
 
-jah_gpu_exclusive_test(NAME perf.drag_mirror_room CLASS app RUN_TIMEOUT 600
+jah_gpu_exclusive_test(NAME perf.drag_mirror_room CLASS app TIER epic NEEDS photon bloom ssao smaa planar RUN_TIMEOUT 600
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
                  --script ${CMAKE_CURRENT_BINARY_DIR}/drag_mirror_room.js
          WORKING_DIRECTORY ${_drag_home}/run)
@@ -144,7 +144,7 @@ set(_hide_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-hide_soak)
 
 jah_fresh_home_fixture(perf.freshhome.hide_soak perf_home_hide_soak "${_hide_home}" LABELS "perf")
 
-jah_gpu_row(perf.hide_soak CLASS app
+jah_gpu_row(perf.hide_soak CLASS app TIER epic NEEDS photon bloom ssao smaa planar
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
                  --script ${CMAKE_CURRENT_BINARY_DIR}/hide_soak.js
          WORKING_DIRECTORY ${_hide_home}/run)
@@ -195,7 +195,7 @@ target_compile_definitions(test_capture_bundle PRIVATE
     JAHSHAKA_BINARY="$<TARGET_FILE:${CMAKE_PROJECT_NAME}>"
     JAH_TEST_SCRIPT="${CMAKE_CURRENT_BINARY_DIR}/capture_bundle.js"
     JAH_TEST_BUNDLE="${JAH_TEST_BUNDLE}")
-jah_gpu_row(perf.capture_bundle CLASS app COMMAND test_capture_bundle
+jah_gpu_row(perf.capture_bundle CLASS app TIER low NEEDS NONE COMMAND test_capture_bundle
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(perf.capture_bundle PROPERTIES
     LABELS "perf"
@@ -217,7 +217,7 @@ file(MAKE_DIRECTORY ${_off_home}/run)
 # absolute number would — but a sibling measurement sharing the GPU can still make one
 # window of 60 frames twice the other's for reasons that have nothing to do with the
 # monitor.
-jah_gpu_exclusive_test(NAME perf.capture_off_is_free CLASS app RUN_TIMEOUT 300
+jah_gpu_exclusive_test(NAME perf.capture_off_is_free CLASS app TIER low NEEDS NONE RUN_TIMEOUT 300
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
                  --script ${CMAKE_CURRENT_BINARY_DIR}/capture_off_is_free.js
          WORKING_DIRECTORY ${_off_home}/run)

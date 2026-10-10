@@ -77,7 +77,7 @@ target_link_libraries(test_shader_cache_app PRIVATE Qt6::Core)
 target_compile_definitions(test_shader_cache_app PRIVATE
     JAHSHAKA_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
     JAHSHAKA_BINARY="$<TARGET_FILE:${CMAKE_PROJECT_NAME}>")
-jah_gpu_row(shadercache.app CLASS app COMMAND test_shader_cache_app
+jah_gpu_row(shadercache.app CLASS app TIER document   COMMAND test_shader_cache_app
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(shadercache.app PROPERTIES TIMEOUT 600 LABELS "shadercache")
 
@@ -93,7 +93,7 @@ target_link_libraries(test_live_compiles PRIVATE Qt6::Core)
 target_compile_definitions(test_live_compiles PRIVATE
     JAHSHAKA_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
     JAHSHAKA_BINARY="$<TARGET_FILE:${CMAKE_PROJECT_NAME}>")
-jah_gpu_row(shader.live_compiles CLASS app COMMAND test_live_compiles
+jah_gpu_row(shader.live_compiles CLASS app TIER epic NEEDS photon bloom ssao smaa planar COMMAND test_live_compiles
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(shader.live_compiles PROPERTIES TIMEOUT 600 LABELS "shadercache")
 
@@ -107,7 +107,7 @@ target_link_libraries(test_async_after_open PRIVATE Qt6::Core Qt6::Gui)
 target_compile_definitions(test_async_after_open PRIVATE
     JAHSHAKA_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
     JAHSHAKA_BINARY="$<TARGET_FILE:${CMAKE_PROJECT_NAME}>")
-jah_gpu_row(shader.async_after_open CLASS app COMMAND test_async_after_open
+jah_gpu_row(shader.async_after_open CLASS app TIER epic NEEDS photon bloom ssao smaa planar COMMAND test_async_after_open
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(shader.async_after_open PROPERTIES TIMEOUT 1200 LABELS "shadercache")
 
@@ -120,7 +120,7 @@ target_link_libraries(test_sample_opens_quiet PRIVATE Qt6::Core)
 target_compile_definitions(test_sample_opens_quiet PRIVATE
     JAHSHAKA_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
     JAHSHAKA_BINARY="$<TARGET_FILE:${CMAKE_PROJECT_NAME}>")
-jah_gpu_row(shader.sample_opens_quiet CLASS app COMMAND test_sample_opens_quiet
+jah_gpu_row(shader.sample_opens_quiet CLASS app TIER document   COMMAND test_sample_opens_quiet
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(shader.sample_opens_quiet PROPERTIES TIMEOUT 1800 LABELS "shadercache")
 
@@ -133,7 +133,7 @@ target_link_libraries(test_async_soak PRIVATE Qt6::Core)
 target_compile_definitions(test_async_soak PRIVATE
     JAHSHAKA_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
     JAHSHAKA_BINARY="$<TARGET_FILE:${CMAKE_PROJECT_NAME}>")
-jah_gpu_row(shader.async_soak CLASS app COMMAND test_async_soak
+jah_gpu_row(shader.async_soak CLASS app TIER epic NEEDS photon bloom ssao smaa planar COMMAND test_async_soak
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(shader.async_soak PROPERTIES TIMEOUT 1200 LABELS "shadercache")
 

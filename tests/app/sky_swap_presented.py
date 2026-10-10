@@ -103,7 +103,9 @@ class App:
     def __init__(self, binary, outdir, display):
         self.log_path = os.path.join(outdir, "app.log")
         self.log = open(self.log_path, "wb")
-        env = dict(os.environ, DISPLAY=display, QT_QPA_PLATFORM="xcb")
+        # JAHSHAKA_NO_DEVICE_LOSS_DIALOG: a device loss on the rig exits 3 at once (no modal dialog),
+        # as every spawn()-launched app does (tests/support/mcpharness.h).
+        env = dict(os.environ, DISPLAY=display, QT_QPA_PLATFORM="xcb", JAHSHAKA_NO_DEVICE_LOSS_DIALOG="1")
         # cwd = the binary's directory: media resolves from there (CLAUDE.md)
         self.proc = subprocess.Popen([binary, "--mcp-port=0"], stdout=self.log, stderr=subprocess.STDOUT,
                                      env=env, cwd=os.path.dirname(binary))

@@ -345,7 +345,7 @@ int main()
     const auto walk = [&](bool noScroll, const char *rays) {
         Arm arm;
         if (noScroll) e->setArm("gi.fieldScroll", 0.0);
-        if (rays) ::setenv("JAHSHAKA_GI_FIELD_RAYS", rays, 1);
+        if (rays) e->setArm("gi.fieldRays", std::atof(rays));
         GiParams offGi; offGi.mode = GiMode::Off;
         scene->setGlobalIllumination(offGi);
         render(e, 2);
@@ -402,13 +402,13 @@ int main()
                 arm.scrollCpu = std::max(arm.scrollCpu, w.ms);
             }
         if (noScroll) e->setArm("gi.fieldScroll", 1.0);
-        if (rays) ::unsetenv("JAHSHAKA_GI_FIELD_RAYS");
+        if (rays) e->setArm("gi.fieldRays", 0.0);
         return arm;
     };
     const Arm scrolled = walk(false, nullptr);
     const Arm replaced = walk(true, nullptr);
     // THE STEP FRAME AT TWO RAYS A TEXEL (PHOTON-FIELD-ROTATE-1): the same walk with
-    // the field's rays doubled (`JAHSHAKA_GI_FIELD_RAYS`, the setting the deleted
+    // the field's rays doubled (the arm `gi.fieldRays`, the setting the deleted
     // kIfdRaysPerPixel = 2 shipped), for the step cost's ratio in this process.
     const Arm twoRays = walk(false, "2");
     const float returnDiff = worstDiff(scrolled.back, replaced.back);

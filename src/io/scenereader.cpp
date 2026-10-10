@@ -695,6 +695,8 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
     // tier derivation for a document without `giTier`).
     {
         scene->worldOverrides = sceneObj.value("worldOverrides").toObject();
+        // The Photon row is never pinned (WORLD-MODE-1): a `photon` pin is deleted on read.
+        scene->worldOverrides.remove(worldmodes::photonRowId());
         const QString m = sceneObj.value("worldMode").toString().trimmed().toLower();
         bool ok = false;
         const auto mode = worldmodes::modeFromName(m, &ok);

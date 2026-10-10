@@ -10,6 +10,7 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "app/cli/scriptrunner.h"
+#include "services/forcedexit.h"
 
 #include <cstdio>
 #include <cstdlib>
@@ -72,14 +73,14 @@ int finalizeAppExit(int rc)
     // The engine borrows Qt's X display: release it before QApplication goes away.
     EngineHost::instance().shutdown();
     if (!QThreadPool::globalInstance()->waitForDone(5000)) {
-        qWarning("shutdown: background workers still running 5s after exit — "
-                 "forcing process exit (code %d)", rc);
-        // The session log's close bracket is worth having even on the forced
-        // path: an absent one is the signal that the session died, and this
-        // exit is not a death.
+        // A FORCED END, NOT THE RUN'S OWN CODE (TESTING-CLEANUP-2 H8c): this used to _Exit(rc) — a
+        // run whose workers hung read as its clean 0. The forced exit's line goes into the session
+        // log, the close bracket follows it, then exit 86 (services/forcedexit.h).
+        JAH_LOG(JahLog::app, Error,
+                QStringLiteral("shutdown watchdog: background workers still running 5 s after exit "
+                               "(the run's own code was %1)").arg(rc));
         JahLog::stop(QStringLiteral("forced exit: background workers hung"));
-        std::fflush(nullptr);
-        std::_Exit(rc);
+        forcedexit::now("background workers still running 5 s after exit");
     }
     // THE CLOSE BRACKET (SESSION_LOG_SPEC §3.9) plus the session summary. This
     // is the choke point every ordinary exit passes through — the window close
@@ -90,13 +91,14 @@ int finalizeAppExit(int rc)
 
 namespace {
 
-// THE TEST TIER'S WINDOW (TEST-TIER-1, services/testtier.h): a windowed script
-// run whose process has a test tier boots at 1280x720 instead of the screen's
-// size — the chain's render targets follow the window. What app.resizeWindow
-// does, before the first frame; an arm that needs another size resizes itself.
+// THE TEST WINDOW (TEST-TIER-1, services/testtier.h): a windowed script run whose row
+// declares it (JAHSHAKA_TEST_WINDOW=1280x720 — its own declaration since TEST-NEEDS-1, never
+// implied by the tier) boots at 1280x720 instead of the screen's size — the chain's render
+// targets follow the window. What app.resizeWindow does, before the first frame; an arm that
+// needs another size resizes itself.
 void applyTestTierWindow(MainWindow &window, QApplication &app, bool headless)
 {
-    if (headless || !testtier::active()) return;
+    if (headless || !testtier::testWindow()) return;
     if (window.isFullScreen() || window.isMaximized()) window.showNormal();
     window.resize(testtier::kWindowWidth, testtier::kWindowHeight);
     app.processEvents();

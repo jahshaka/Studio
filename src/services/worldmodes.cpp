@@ -10,6 +10,7 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "services/worldmodes.h"
+#include "services/testtier.h"
 
 #include "irisgl/document/scenegraph/scene.h"
 #include "jahshaka/engine/Types.h"
@@ -725,29 +726,17 @@ QVector<Row> buildRows()
                       { QStringLiteral("medium"), QStringLiteral("Medium"), 2 },
                       { QStringLiteral("high"),   QStringLiteral("High"),   3 },
                       { QStringLiteral("epic"),   QStringLiteral("Epic"),   4 } };
-        // THE WORLD MODE'S OPINION ABOUT PHOTON:
-        //   Low/Medium  -> Photon off
-        //   High        -> Photon Low
-        //   Epic        -> Photon Epic
-        //
-        // World High STAYS on Photon Low, and that is a re-decision and not
-        // inertia (PHOTON_SPEC E2 (4) asks for one). The column was written
-        // when Photon Low WAS Instant Radiosity at low quality — a CPU ray
-        // trace from one light. Low is now two camera-centred voxel cascades at
-        // 64^3 with the irradiance field on, which is a different technique with
-        // the same intent: the cheapest thing that still bounces light
-        // everywhere. Moving World High to `off` would take bounced light away
-        // from every scene on that mode, and moving it up to Medium would put a
-        // 64^3 scene-fitted volume and its probes on a tier whose whole meaning
-        // is "not the expensive one". So the mapping is unchanged and what it
-        // buys is better.
-        r.tier[0] = 0; r.tier[1] = 0; r.tier[2] = 1; r.tier[3] = 4;
+        // THE IDENTITY (owner, 2026-10-09; WORLD-MODE-1): each World Mode runs Photon at the
+        // same name. Photon Off is reachable only from Photon's own switch, and a Photon tier
+        // that differs from the column makes the World Mode read Custom (worldmodes::mode).
+        r.tier[0] = 1; r.tier[1] = 2; r.tier[2] = 3; r.tier[3] = 4;
         // GENERATED from the two tables (photonTierSummary): this text used to
         // say "Medium voxelizes at twice the resolution" while both tiers were
         // 64 (render audit A5).
         r.cost = QStringLiteral("Photon — realtime global illumination: light that bounces off "
                                 "surfaces and colours everything it lands on, recomputed live "
-                                "instead of baked. What each tier actually runs — ") +
+                                "instead of baked. Each World Mode runs Photon at the same name. "
+                                "What each tier actually runs — ") +
                  photonTierSummary() +
                  QStringLiteral(" Every knob a tier sets is still reachable one by one under "
                                 "Advanced, and anything you set there stays set.");
@@ -1931,11 +1920,23 @@ QStringList modeNames()
              QStringLiteral("high"), QStringLiteral("epic") };
 }
 
-Mode mode(const iris::ScenePtr &scene)
+Mode pickedMode(const iris::ScenePtr &scene)
 {
     if (!scene) return Mode::Custom;
     const int m = scene->worldMode;
     return (m >= 0 && m <= 3) ? Mode(m) : Mode::Custom;
+}
+
+Mode mode(const iris::ScenePtr &scene)
+{
+    // THE HONEST ANSWER (WORLD-MODE-1, owner 2026-10-09): the picked mode, unless Photon
+    // has left that mode's column (its own dropdown moved it, or it was switched off) —
+    // the document keeps the pick; the Custom is computed, never stored.
+    const Mode m = pickedMode(scene);
+    if (m == Mode::Custom) return Mode::Custom;
+    const Row *photon = row(photonRowId());
+    if (photon && resolved(scene, *photon) != photon->tier[int(m)]) return Mode::Custom;
+    return m;
 }
 
 int tierValue(const Row &r, Mode m, const iris::ScenePtr &scene)
@@ -1959,7 +1960,7 @@ int resolved(const iris::ScenePtr &scene, const Row &r)
     // current tier's value, else Epic's as the documented shape of the row.
     int v = 0;
     if (overrideValue(scene, r.id, v)) return v;
-    const Mode m = mode(scene);
+    const Mode m = pickedMode(scene);
     return m == Mode::Custom ? r.tier[3] : r.tier[int(m)];
 }
 
@@ -1970,7 +1971,22 @@ QString source(const iris::ScenePtr &scene, const Row &r)
     // A row NO TIER RESOLVES was never set by a mode, so saying "mode" would be
     // a claim about a dial that does not own it (EXPOSURE-1).
     if (r.tierSpace == TierSpace::None) return QStringLiteral("custom");
-    return mode(scene) == Mode::Custom ? QStringLiteral("custom") : QStringLiteral("mode");
+    // "mode" only while the row HOLDS its column (WORLD-MODE-1): a row the Photon dropdown,
+    // a Photon switch or a sibling setter moved off the picked mode's value is custom.
+    // A PHOTON-TIERED row (the machinery under Photon) answers exactly as photonDeviations
+    // does — one rule for the `*` marker and the Photon section's Custom: with Photon OFF
+    // there is nothing to deviate from (the off picture is the mode's own state for these
+    // rows; the `photon` row itself carries the Custom), and with Photon on a row is custom
+    // iff its rendered value leaves the Photon tier's column.
+    if (r.tierSpace == TierSpace::Photon) {
+        if (photonRowIds().contains(r.id))
+            return photonDeviations(scene).contains(r.label) ? QStringLiteral("custom")
+                                                             : QStringLiteral("mode");
+    }
+    const Mode m = pickedMode(scene);
+    if (m == Mode::Custom) return QStringLiteral("custom");
+    return resolved(scene, r) == tierValue(r, m, scene) ? QStringLiteral("mode")
+                                                        : QStringLiteral("custom");
 }
 
 namespace {
@@ -2007,6 +2023,13 @@ void setMode(const iris::ScenePtr &scene, Mode m)
     if (!scene) return;
     scene->worldMode = int(m);
     if (m == Mode::Custom) return;   // no tier to write through
+    // THE IDENTITY COVERS THE TECHNIQUE (WORLD-MODE-1 fix round, owner: "switching World Mode
+    // back resets Photon to what matches it"): a Photon Technique pinned under Advanced
+    // (giMode, e.g. VCT under Epic) would survive the `photon` row's setPhoton below, which
+    // honours a non-off giMode pin — the selector would read Epic while Photon reads Custom.
+    // A World Mode pick drops that pin, so the row writes the mode's own technique; a Photon
+    // edit after the pick makes the mode Custom again as before.
+    scene->worldOverrides.remove(QStringLiteral("giMode"));
     for (const Row &r : rows()) {
         // A Photon-tiered row is written by the `photon` row (which IS in this
         // loop and honours the same pins) — never twice, and never from the
@@ -2017,12 +2040,93 @@ void setMode(const iris::ScenePtr &scene, Mode m)
     }
 }
 
+void applyTestTier(const iris::ScenePtr &scene)
+{
+    if (!scene || !testtier::active()) return;
+    const Mode m = modeFromName(testtier::name());
+    // A PINNED ROW STAYS (below) — setMode included. setMode skips every pinned World row, but
+    // it drops a giMode pin (a World Mode pick resets the technique — WORLD-MODE-1's identity),
+    // and its `photon` row writes through setPhoton, whose OFF drops a giMode pin too (the
+    // product's rule: "off, but pinned to VCT" renders nothing). Under a test tier
+    // the pin is the document's choice and must survive the bind AND a later save (measured: a
+    // giMode pin reopened at Medium/Low came back unpinned, test_needs_boot's pin case), so the
+    // Photon fields and their pins are put back exactly as the document had them.
+    // A PIN THAT DECIDES WHETHER PHOTON RUNS is one on giMode (the technique field IS the
+    // on/off switch; the `photon` row itself is never pinned — WORLD-MODE-1): only it is what
+    // setPhoton(false) writes over (giMode, giTier). A pin on a machinery row (giQuality, giDdgi, giBounces, giProbeSize)
+    // says how Photon runs WHEN it runs — setPhoton honours it either way — so it never keeps
+    // Photon on in a row that did not name it.
+    const bool photonPinned = scene->worldOverrides.contains(QStringLiteral("giMode"));
+    // The RAW fields, never the Rows' get/set: a giDdgi of -1 (auto) read through its row comes
+    // back concrete, and a save would then keep the concrete value.
+    struct KeptPhoton {
+        iris::GiMode mode = {}; iris::GiQuality quality = {};
+        int ddgi = 0, bounces = 0, probeSize = 0, tier = 0;
+        QJsonObject pins;
+    } kept = { scene->giMode, scene->giQuality, scene->giDdgi, scene->giNumBounces,
+               scene->giProbeCaptureSize, scene->giTier, {} };
+    if (photonPinned) {
+        for (const QString &id : photonRowIds())
+            if (scene->worldOverrides.contains(id)) kept.pins.insert(id, scene->worldOverrides.value(id));
+    }
+    setMode(scene, m);
+    if (photonPinned) {
+        scene->giMode = kept.mode;
+        scene->giQuality = kept.quality;
+        scene->giDdgi = kept.ddgi;
+        scene->giNumBounces = kept.bounces;
+        scene->giProbeCaptureSize = kept.probeSize;
+        scene->giTier = kept.tier;
+        for (auto it = kept.pins.constBegin(); it != kept.pins.constEnd(); ++it)
+            scene->worldOverrides.insert(it.key(), it.value());
+    }
+    // A TEST PASSES WHAT IT NEEDS (owner rule; WORLD-MODE-1 + TEST-NEEDS-1): a test-tier process
+    // boots every switchable feature its JAHSHAKA_TEST_NEEDS does not name OFF, so a row boots
+    // exactly the picture its claim names and holds no VRAM for the rest.
+    //
+    // PHOTON: off unless named; named, it runs at the World Mode's own Photon tier (`TIER medium
+    // NEEDS photon` is Photon Medium, on a mode whose column says Off too) — the identity of
+    // WORLD-MODE-1, which makes this write the column's own value.
+    //
+    // A PINNED ROW STAYS (the lane's one rule for the switch): it never writes a row the scene
+    // pinned, nor that row's backing field. Photon's switch writes giMode and giTier (and setPhoton
+    // OFF drops a giMode pin, which a save would then lose), so a pin on giMode leaves Photon
+    // exactly as the document has it; a machinery pin rides setPhoton.
+    if (photonPinned) {
+        // the document's choice
+    } else if (!testtier::needs(QStringLiteral("photon"))) {
+        setPhoton(scene, false, photonTier(scene));
+    } else if (m != Mode::Custom) {
+        setPhoton(scene, true, PhotonTier(int(m)));
+    }
+    // THE FOUR CHAIN FEATURES: each word switches ONE World row to its Off value (the value
+    // every Low column holds). A row the scene PINNED (world.override, an Advanced edit saved
+    // with it) is the document's choice and stays — the same rule setMode keeps. SSAO is 0 in
+    // every column already (SSAO-DOUBLE-1: every tier is a GI tier), so `ssao` matters only for
+    // a scene that pinned it.
+    struct Feature { const char *need = nullptr; const char *rowId = nullptr; int off = 0; };
+    static const Feature kFeatures[] = {
+        { "bloom",  "bloom",        0 },
+        { "ssao",   "ssao",         0 },
+        { "smaa",   "smaa",        -1 },
+        { "planar", "planarBudget", 0 },
+    };
+    for (const Feature &f : kFeatures) {
+        const QString rowId = QLatin1String(f.rowId);
+        if (testtier::needs(QLatin1String(f.need)) || scene->worldOverrides.contains(rowId)) continue;
+        setRowValue(scene, rowId, f.off, false);
+    }
+}
+
 bool setRowValue(const iris::ScenePtr &scene, const QString &id, int value, bool recordOverride)
 {
     if (!scene) return false;
     const Row *r = row(id);
     if (!r || !validate(*r, value)) return false;
     writeField(scene, *r, value);
+    // THE PHOTON ROW IS NEVER PINNED (WORLD-MODE-1): re-picking a World Mode must snap Photon
+    // back to the mode's column, so a set of it is an edit, never a pin.
+    if (id == photonRowId()) return true;
     // A row with no backing field can ONLY be remembered as a pin, so an
     // explicit set of one always records (it is a deliberate user choice —
     // unlike setMode's sweep, which never touches those rows).
@@ -2033,6 +2137,7 @@ bool setRowValue(const iris::ScenePtr &scene, const QString &id, int value, bool
 void pinRowValue(const iris::ScenePtr &scene, const QString &id, int value)
 {
     if (!scene || !row(id)) return;
+    if (id == photonRowId()) return;   // never pinned (WORLD-MODE-1, setRowValue)
     scene->worldOverrides.insert(id, value);
 }
 
@@ -2041,7 +2146,7 @@ bool clearOverride(const iris::ScenePtr &scene, const QString &id)
     if (!scene || !scene->worldOverrides.contains(id)) return false;
     scene->worldOverrides.remove(id);
     const Row *r = row(id);
-    const Mode m = mode(scene);
+    const Mode m = pickedMode(scene);
     // A Photon-tiered row falls back through the PHOTON tier, and it does so via
     // setPhoton rather than a bare field write: the technique row doubles as the
     // on/off switch, so writing its tier value directly would switch GI back on

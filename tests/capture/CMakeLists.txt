@@ -38,7 +38,44 @@ jah_pool_arm(capture offline_unique ${CMAKE_CURRENT_SOURCE_DIR}/scripts/capture_
 set(SOURCE_DIR ${CMAKE_SOURCE_DIR})
 configure_file(scripts/capture_offline_video.js.in ${CMAKE_CURRENT_BINARY_DIR}/capture_offline_video.js @ONLY)
 jah_pool_arm(capture offline_video ${CMAKE_CURRENT_BINARY_DIR}/capture_offline_video.js 30)
-jah_add_pool(capture TIER epic LABELS scripting capture)
+jah_add_pool(capture TIER document   LABELS scripting capture)
+
+# capture.first_recording.timing / capture.offline_unique.timing — THE RECORDER'S MILLISECOND BARS
+# (TESTING-CLEANUP-2 P10f; tests/support/timingbars.h's rule): the first click's 50 ms and the
+# encoder probe's 20 ms, and the readback ring's 100 ms worst UI-thread wait, ARMED in a
+# jah_timing_script copy of each arm's script, each its own process on its own wiped home (warm
+# caches, like the pool), on the quiet box under the GPU-timing lock. The pool's arms keep every
+# count and print these readings. RUN_TIMEOUT = 6x the measured run after the admission
+# (2026-10-09 on :71: first_recording 32 s, offline_unique 101 s).
+# TIER document, as the `capture` pool whose arms these scripts are: a bar measures the boot its
+# pool counts on (the recording view takes the scene's own chain at its own tier).
+set(_cap_timing_first_recording 200)
+set(_cap_timing_offline_unique 610)
+foreach(_arm first_recording offline_unique)
+    jah_timing_script(${CMAKE_CURRENT_SOURCE_DIR}/scripts/capture_${_arm}.js
+                      ${CMAKE_CURRENT_BINARY_DIR}/capture_${_arm}.timing.js)
+    set(_home ${CMAKE_CURRENT_BINARY_DIR}/capture-timing-home-${_arm})
+    jah_gpu_exclusive_test(NAME capture.${_arm}.timing CLASS app TIER document RUN_TIMEOUT ${_cap_timing_${_arm}}
+        COMMAND sh "${JAH_FRESH_HOME}" --warm "${_home}" --
+                $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/capture_${_arm}.timing.js
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+    set_tests_properties(capture.${_arm}.timing PROPERTIES
+        ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
+        LABELS "scripting;capture;stage-close;quiet-box")
+endforeach()
+
+# pool.capture_validation — THE RECORDER UNDER THE KHRONOS VALIDATION LAYER (TESTING-CLEANUP-2 H4):
+# the recording view's chain, the NV12 job and the readback ring had never run under the layer in
+# a gate. Its FIRST arm proves the layer is live (engine.validation()); then a basic recording runs
+# under it; any "Validation Error" in the process's output fails the row.
+# TIER epic with every NEEDS word: the layer is only worth what it sees — the whole shipped chain.
+if(EXISTS "/usr/share/vulkan/explicit_layer.d/VkLayer_khronos_validation.json")
+    jah_pool_arm(capture_validation validation_proof ${CMAKE_SOURCE_DIR}/tests/scripting/scripts/e2e_validation_proof.js 5 FIRST)
+    jah_pool_arm(capture_validation record_basic ${CMAKE_CURRENT_SOURCE_DIR}/scripts/capture_record_basic.js 20)
+    jah_add_pool(capture_validation TIER epic NEEDS photon bloom ssao smaa planar LABELS scripting capture
+        ENV "VK_LOADER_LAYERS_ENABLE=VK_LAYER_KHRONOS_validation"
+        PROPS FAIL_REGULAR_EXPRESSION "Validation Error")
+endif()
 
 # capture.faststart — the fast-start step (src/modules/capture/mp4faststart.cpp) on SYNTHETIC
 # files: the 32-bit table shifted, a shift past 4 GiB widened to co64, a co64 table, an

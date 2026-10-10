@@ -16,6 +16,7 @@ For more information see the LICENSE file
 #include "services/services.h"
 #include "services/projectservice.h"
 #include "scripting/modules/appapi.h"
+#include <QJsonArray>
 #include <QImage>
 #include "scripting/modules/moduleshared.h"
 
@@ -42,6 +43,7 @@ For more information see the LICENSE file
 #include "irisgl/document/scenegraph/scene.h"
 #include "data/settingsmanager.h"
 #include "data/database/database.h"
+#include "data/database/databasereads.h"
 #include "scripting/mcp/mcplog.h"
 #include "services/jahlog.h"
 #include "services/apppaths.h"
@@ -161,6 +163,15 @@ QVector<VerbInfo> AppApi::verbs() const
           "page, an open and a create at 10,000 assets. {on:true} starts the log EMPTY, {on:false} "
           "stops it (the read still answers what was logged); no argument only reads. Off by "
           "default; the cost while on is one hash lookup per statement.",
+          Needs::Document },
+        { "databaseReads", "app.databaseReads() -> {pages, pageSize, bytes, available, why}",
+          "WHAT THE LIBRARY DATABASE READ ON THE REQUEST PATH (data/database/databasereads.h): the "
+          "pages SQLite's own pager read from the file on the UI thread's default connection since "
+          "it opened (`bytes` = pages x pageSize) — SQLite counts them anyway; nothing runs until "
+          "this verb asks. Worker connections are not counted, so a reading taken before and after "
+          "one verb is what that verb read, whenever it is taken. scale.library's counted bars read "
+          "it. `available` false (zeros, `why` says) where the Qt driver carries its own SQLite, "
+          "which this build may not call into.",
           Needs::Document },
         { "heartbeat", "app.heartbeat(intervalMs=250) -> bool",
           "Starts (or, with 0, stops) a main-thread heartbeat probe: a timer that ticks on the UI thread and "
@@ -669,18 +680,21 @@ QVector<VerbInfo> AppApi::verbs() const
           "setting gave THIS run, and is 'off' for a --script run unless it was started with "
           "--script-live.",
           Needs::Document },
-        { "testTier", "app.testTier() -> string",
-          "THE PROCESS'S TEST TIER (TEST-TIER-1): the World Mode ('low', 'medium', 'high', "
-          "'epic') this process puts EVERY scene it binds on — a new scene or an opened one, "
-          "after the reader, through the same call world.mode makes, so rows the scene pinned "
-          "with world.override survive — or '' when the process has none and each scene keeps "
-          "its own tier (the product's behaviour: new scenes start Epic, an opened scene at "
-          "what it saved). Set per PROCESS by `--test-tier <mode>` or JAHSHAKA_TEST_TIER (the "
-          "flag wins); a windowed script run under a test tier also boots its window at "
-          "1280x720. It exists for test processes whose claims need no shipped picture — "
-          "verbs, UI state, counts — so they do not each hold the Epic chain's ~1.5 GB of VRAM; "
-          "a pixel test runs with none. Reads only: it cannot be changed from a script, and "
-          "world.mode still switches the open scene as usual.",
+        { "testTier", "app.testTier() -> {tier, needs, window}",
+          "THE PROCESS'S TEST TIER AND WHAT IT NEEDS (TEST-TIER-1, TEST-NEEDS-1). `tier` is the "
+          "World Mode ('low', 'medium', 'high', 'epic') this process puts EVERY scene it binds "
+          "on — a new scene or an opened one, after the reader, through the same call world.mode "
+          "makes, so rows the scene pinned with world.override survive — or '' when the process "
+          "has none and each scene keeps its own tier (the product's behaviour). `needs` is the "
+          "list of switchable features the process keeps ('photon', 'bloom', 'ssao', 'smaa', "
+          "'planar'; [] for 'none'): every one it does not name is switched OFF on each bound "
+          "scene (a pinned row stays), and a named Photon runs at the tier's own Photon tier. Set "
+          "per PROCESS by `--test-tier <mode>` or JAHSHAKA_TEST_TIER (the flag wins) and "
+          "JAHSHAKA_TEST_NEEDS (space-separated; the app refuses an unknown word); every ctest "
+          "row that starts the app declares both (TIER + NEEDS). `window` is '1280x720' when the "
+          "row also declares the test window (JAHSHAKA_TEST_WINDOW; a windowed script run then "
+          "boots at that size), else '' (the screen-sized boot). Reads only: it cannot be changed from a "
+          "script, and world.mode still switches the open scene as usual.",
           Needs::Document },
         { "window", "app.window() -> {x, y, width, height, minWidth, minHeight, visible, fullScreen, fits, screen:{name, width, height, availWidth, availHeight}}",
           "The main window's geometry and the screen it is on, in pixels — the coordinates a rig "
@@ -771,6 +785,16 @@ QVariantMap AppApi::queryLog(const QVariantMap &options)
              { QStringLiteral("statements"), Database::queryLogStatements() },
              { QStringLiteral("byName"), byName },
              { QStringLiteral("thumbnailSelects"), thumbs } };
+}
+
+QVariantMap AppApi::databaseReads()
+{
+    const databasereads::Stats r = databasereads::read();
+    return { { QStringLiteral("pages"), r.pages },
+             { QStringLiteral("pageSize"), r.pageSize },
+             { QStringLiteral("bytes"), r.pages * qint64(r.pageSize) },
+             { QStringLiteral("available"), r.available },
+             { QStringLiteral("why"), r.why } };
 }
 
 QVariantMap AppApi::openStats(const QVariantMap &options)
@@ -1360,9 +1384,18 @@ QVariantMap AppApi::mcpLogging(const QVariantMap &options)
     return out;
 }
 
-QString AppApi::testTier()
+QVariantMap AppApi::testTier()
 {
-    return testtier::name();
+    QVariantMap out;
+    out[QStringLiteral("tier")] = testtier::name();
+    QStringList needs;
+    if (testtier::active())
+        for (const QString &w : testtier::needs())
+            if (w != QLatin1String(testtier::kNoNeeds)) needs << w;
+    out[QStringLiteral("needs")] = QJsonArray::fromStringList(needs);
+    out[QStringLiteral("window")] = testtier::testWindow()
+        ? QStringLiteral("%1x%2").arg(testtier::kWindowWidth).arg(testtier::kWindowHeight) : QString();
+    return out;
 }
 
 QVariantMap AppApi::window()

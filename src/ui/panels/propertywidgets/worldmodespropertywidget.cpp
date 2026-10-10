@@ -70,9 +70,11 @@ void WorldModesPropertyWidget::build()
     rowControls.clear();
 
     // The tier. "Custom" is only ever shown, never chosen: it is what a scene
-    // is before anyone picks a mode, and what the reader gives a document
-    // written before World Modes existed. The entry is added and removed by
-    // refreshRows(), which is also where it is selected.
+    // is before anyone picks a mode, and what worldmodes::mode answers while
+    // Photon has left the picked mode's tier (WORLD-MODE-1). The entry is added
+    // and removed by refreshRows(), which is also where it is selected — so
+    // picking the mode the scene was on is an index change from Custom, and
+    // currentIndexChanged fires the reset.
     modeSelector = this->addComboBox("World Mode");
     for (const QString &n : worldmodes::modeNames()) modeSelector->addItem(titled(n));
     PropertyRows::identify(modeSelector, QStringLiteral("world.mode"),
@@ -81,7 +83,9 @@ void WorldModesPropertyWidget::build()
     modeSelector->setToolTip(
         QStringLiteral("One scalability tier for the whole scene. Picking a mode sets every row "
                        "below to that tier's value, except rows you have changed yourself — those "
-                       "stay pinned until you reset them."));
+                       "stay pinned until you reset them. Photon runs at the mode's own name; "
+                       "changing it in the Photon section reads Custom here, and picking a mode "
+                       "again puts Photon back."));
     connect(modeSelector, QOverload<int>::of(&ComboBoxWidget::currentIndexChanged),
             this, &WorldModesPropertyWidget::onModeChanged);
 
@@ -197,6 +201,7 @@ void WorldModesPropertyWidget::refreshRows()
     if (!scene || !modeSelector) return;
     loading = true;
 
+    // The HONEST mode (WORLD-MODE-1): Custom while Photon has left the picked tier.
     const worldmodes::Mode currentMode = worldmodes::mode(scene);
     const QStringList names = worldmodes::modeNames();
     if (QComboBox *box = modeSelector->getWidget()) {

@@ -13,8 +13,8 @@
 //   1. quit DURING a many-file import batch  -> process exits bounded
 //   2. quit right AFTER a batch completes    -> process exits bounded
 // The contract asserted is the hard one: the process is GONE within
-// kExitBudgetMs of app.quit(), exit code 0 (a logged forced exit also
-// returns the real code — better than a zombie, and still bounded).
+// kExitBudgetMs of app.quit(), exit code 0 — a forced exit (the shutdown
+// watchdog, code 86) is a red here, never a pass.
 #include "../support/mcpharness.h"
 #include <QCoreApplication>
 #include <QDir>
@@ -32,7 +32,6 @@
 #include <QSettings>
 #include <QStandardPaths>
 #include <QTcpServer>
-#include <QThread>
 #include <cstdio>
 
 static int failures = 0;
@@ -114,23 +113,25 @@ int main(int argc, char **argv)
 
         CHECK(mcp.runScript(QStringLiteral("project.create('shutdown_during')")).value("ok").toBool(),
               "project created (during-case)");
-        // The scratch store persists across runs, so mid-flight is measured
-        // as a DELTA against the pre-import object count.
-        const int before = mcp.runScript(QStringLiteral(
-            "assets.list({scope:'store'}).filter(function(a){return a.type=='object'}).length"))
-                               .value("result").toInt();
-        CHECK(mcp.runScript(QStringLiteral("editor.importAssets(%1)").arg(batchJs)).value("ok").toBool(),
-              "threaded import batch started");
-        QThread::msleep(700);   // let the batch get properly mid-flight
-
-        // Prove the quit really lands MID-batch: not every file is in yet.
-        const QJsonObject progress = mcp.runScript(QStringLiteral(
-            "assets.list({scope:'store'}).filter(function(a){return a.type=='object'}).length"));
-        const int imported = progress.value("result").toInt() - before;
-        std::printf("info: objects imported when the quit was issued: %d of %d\n",
-                    imported, int(batch.size()));
-        CHECK(progress.value("ok").toBool() && imported < batch.size(),
-              "the batch is still mid-flight at quit time");
+        // MID-FLIGHT BY COUNT, NOT BY CLOCK (TESTING-CLEANUP-2 P10b): ONE script starts the batch and
+        // waits for its FIRST commit with editor.waitForImported (event-loop turns inside the app,
+        // never a clock and never a poll of the library from here), then the quit goes out. It used
+        // to sleep 700 ms and hope: on a starved box the batch had not reached its first object yet,
+        // or had finished (4 FAIL in 206 runs).
+        const QJsonObject wait = mcp.runScript(QStringLiteral(
+            "(function () { var c0 = editor.importState().committed;"
+            " if (!editor.importAssets(%1)) return { started: false };"
+            " var w = editor.waitForImported(c0 + 1);"
+            " return { started: true, committed: w.committed - c0, running: w.running, reached: w.reached,"
+            " turns: w.turns }; })()").arg(batchJs));
+        const QJsonObject w = wait.value("result").toObject();
+        CHECK(wait.value("ok").toBool() && w.value("started").toBool(), "threaded import batch started");
+        const int imported = w.value("committed").toInt();
+        std::printf("info: files committed when the quit was issued: %d of %d (after %d event-loop turns)\n",
+                    imported, int(batch.size()), w.value("turns").toInt());
+        CHECK(w.value("reached").toBool() && imported >= 1,
+              "the batch is running at quit time (its first file is committed)");
+        CHECK(w.value("running").toBool() && imported < batch.size(), "the batch is still mid-flight at quit time");
 
         quitAndAssertExit(jahshaka, mcp, "quit-during-import");
     }
@@ -154,24 +155,18 @@ int main(int argc, char **argv)
 
         CHECK(mcp.runScript(QStringLiteral("project.create('shutdown_after')")).value("ok").toBool(),
               "project created (after-case)");
-        // Small batch, then WAIT for it to finish before quitting. Counted as
-        // a delta: the scratch store carries rows from earlier runs.
-        const QString countJs = QStringLiteral(
-            "assets.list({scope:'store'}).filter(function(a){return a.type=='object'}).length");
-        const int before = mcp.runScript(countJs).value("result").toInt();
+        // Small batch, then WAIT for it to finish before quitting — by count, in the app's own
+        // event-loop turns (editor.waitForImported), not a 1 s poll and a 2 s sleep.
         const QString smallJs = QStringLiteral("['%1','%2']").arg(batch.at(0), batch.at(1));
-        CHECK(mcp.runScript(QStringLiteral("editor.importAssets(%1)").arg(smallJs)).value("ok").toBool(),
-              "small import batch started");
-        bool done = false;
-        QElapsedTimer timer;
-        timer.start();
-        while (timer.elapsed() < 90000) {
-            const QJsonObject r = mcp.runScript(countJs);
-            if (r.value("ok").toBool() && r.value("result").toInt() - before >= 2) { done = true; break; }
-            QThread::msleep(1000);
-        }
-        CHECK(done, "import batch completed before the quit");
-        QThread::msleep(2000);   // let completion tails start
+        const QJsonObject wait = mcp.runScript(QStringLiteral(
+            "(function () { var c0 = editor.importState().committed;"
+            " if (!editor.importAssets(%1)) return { started: false };"
+            " var w = editor.waitForImported(c0 + 2);"
+            " return { started: true, committed: w.committed - c0, reached: w.reached }; })()").arg(smallJs));
+        const QJsonObject w = wait.value("result").toObject();
+        CHECK(wait.value("ok").toBool() && w.value("started").toBool(), "small import batch started");
+        CHECK(w.value("reached").toBool() && w.value("committed").toInt() >= 2,
+              "import batch completed before the quit");
 
         quitAndAssertExit(jahshaka, mcp, "quit-after-import");
     }
