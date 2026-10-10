@@ -35,7 +35,10 @@ QVector<VerbInfo> ClipboardApi::verbs() const
           "also copied is dropped (it travels with its ancestor) and the World root is never "
           "copied. The ASSET CLOSURE travels too: every mesh, texture, IES profile, skeletal clip "
           "and avatar definition the objects reference, with its bytes inline while they fit "
-          "`clipboard/inlineLimitBytes` (4 MB) and by content id above it. Not an undo entry. "
+          "`clipboard/inlineLimitBytes` (4 MB) and by content id above it. Each row's own stored JSON "
+          "(a model's node tree, a material) is charged to that budget FIRST — it has no content id to "
+          "travel by — and a row whose JSON does not fit even so REFUSES the copy by name (the error "
+          "names the asset; the previous clipboard stays). Not an undo entry. "
           "Copying nothing leaves the previous clipboard alone and returns items: 0.",
           Needs::Document },
         { "cut", "clipboard.cut(id | [id]) -> {items, removed: [id], skipped: [id]}",
@@ -66,7 +69,10 @@ QVector<VerbInfo> ClipboardApi::verbs() const
           "against the items that will actually land, so a paste that lands nothing imports "
           "nothing and pins nothing. An asset that fails to IMPORT (a store write that failed) "
           "sets `error`, joins `missing`, and refuses the items that needed it rather than "
-          "letting them paste over a guid that resolves to nothing.",
+          "letting them paste over a guid that resolves to nothing. A paste INSIDE ONE LIBRARY imports "
+          "nothing but PINS every row it uses that the library already holds (a model's Object among "
+          "them) into the target project — listed in `pinned` — so that project's export carries "
+          "them like anything placed there.",
           Needs::Document },
         { "contents", "clipboard.contents() -> {format, version, app, source: {storeId, "
                       "sameLibrary}, items: [{kind, name}], assets: {total, inlined, referenced}}",
