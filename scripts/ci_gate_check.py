@@ -608,14 +608,15 @@ def ancestor_base_proof(key, base_sha, solos_at, is_ancestor, distance, reaches)
     at the base only when every one is red (green beside red is nondeterminism) and `reaches(A, base, key)` is False (the
     caller's range answers ALL for anything unreadable: the proof does not travel). The records come back tagged
     `_proofFrom: A` (the door's why names it); refusals return ([], None, why)."""
-    cands = [a for a, rs in solos_at.items() if rs and a != base_sha and is_ancestor(a, base_sha)]
+    # A CANDIDATE HOLDS A RUN (read 2 I2): a sha whose solos are all NOADMIT / NOTRUN never ran the row — no run, the same
+    # rule as at the base — so it is not the one hop and never hides an older ancestor's red
+    ran = {a: [r for r in rs if r.get("verdict") not in NEVER_RAN] for a, rs in solos_at.items()}
+    cands = [a for a, rs in ran.items() if rs and a != base_sha and is_ancestor(a, base_sha)]
     if not cands:
         return [], None, "no ancestor of the base holds solos of the row"
-    a = min(cands, key=lambda s: (distance(s, base_sha), -max(_when(r).timestamp() for r in solos_at[s])))
-    sol = [r for r in solos_at[a] if r.get("verdict") not in NEVER_RAN]
+    a = min(cands, key=lambda s: (distance(s, base_sha), -max(_when(r).timestamp() for r in ran[s])))
+    sol = ran[a]
     green = sum(1 for r in sol if r.get("verdict") == "PASS")
-    if not sol:
-        return [], None, f"{a[:9]} (the nearest ancestor with solos) never ran it (its solos are NOADMIT / NOTRUN only)"
     if green == len(sol):
         return [], None, f"{a[:9]}'s solos are green: no red to prove"
     if green:

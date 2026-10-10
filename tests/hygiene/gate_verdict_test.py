@@ -650,10 +650,16 @@ def batch_range_cases(E):
     # read 1 I3: an all-green A, or an A that never ran it, is named for what it is (never "nondeterminism")
     _, _, why = E.cgc.ancestor_base_proof(("photon.view", None), "B", {"g": [rec("PASS", T % "08:00", retry=True)] * 3},
                                           lambda a_, b_: True, lambda a_, b_: 1, lambda a_, b_, k: False)
-    _, _, why2 = E.cgc.ancestor_base_proof(("photon.view", None), "B", {"n": [rec("NOADMIT", T % "08:00", retry=True)] * 3},
-                                           lambda a_, b_: True, lambda a_, b_: 1, lambda a_, b_, k: False)
-    check("green: no red to prove" in why and "never ran it" in why2 and "nondeterminism" not in why + why2,
-          "(2, read 1 I3) an all-green A: 'no red to prove'; NOADMIT-only: 'never ran it' (%s | %s)" % (why, why2))
+    check("green: no red to prove" in why and "nondeterminism" not in why,
+          "(2, read 1 I3) an all-green A: 'no red to prove' (%s)" % why)
+    # read 2 I2: an attribution at A1 that never got admission (NOADMIT / NOTRUN only) is no run — it does not hide the
+    # older A2's 3/3 red (RED ON 8e57285b6: A1 was the one hop and refused "never ran it")
+    got, a, why2 = E.cgc.ancestor_base_proof(("photon.view", None), "B",
+                                             {"A1": [rec("NOADMIT", T % "08:30", retry=True), rec("NOTRUN", T % "08:31", retry=True)],
+                                              "A2": [rec("FAIL", T % "08:00", retry=True)] * 3},
+                                             lambda a_, b_: True, lambda a_, b_: {"A1": 1, "A2": 2}[a_], lambda a_, b_, k: False)
+    check(a == "A2" and len(got) == 3, "(2, read 2 I2) an ancestor that never ran the row does not hide an older ancestor's "
+          "3/3 red (%s: %s)" % (a, why2))
     # read 1 I2 (the lead's rule): the base holds a gate PASS of the row -> the proof does NOT travel (a red at the
     # candidate is a regression); and a GREEN row never reads or prints the base proof
     E.fresh()
