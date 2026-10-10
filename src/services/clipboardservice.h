@@ -118,9 +118,9 @@ public:
                      ClipboardBackend *backend = nullptr, QObject *parent = nullptr);
     ~ClipboardService() override;
 
-    /// The inline payload budget, in bytes (`clipboard/inlineLimitBytes`, default 4 MB): row
-    /// blobs first, then files; files that do not fit go by reference. Minimum 64 KB — a copy
-    /// under a smaller setting is refused with that reason. Read from the settings on every copy
+    /// The inline FILE budget, in bytes (`clipboard/inlineLimitBytes`, default 4 MB): files inline
+    /// while they fit, then by reference; a row's own blob always travels and is never charged.
+    /// Minimum 64 KB — a copy under a smaller setting is refused with that reason. Read from the settings on every copy
     /// so a change takes effect without a restart.
     static constexpr qint64 kMinInlineLimitBytes = 64 * 1024;
     qint64 inlineLimitBytes() const;

@@ -50,13 +50,13 @@ namespace {
 constexpr qint64 kDefaultInlineLimit = 4 * 1024 * 1024;
 const char *kInlineLimitSetting = "clipboard/inlineLimitBytes";
 
-/// THE BUDGET'S FLOOR (STAGE-CLOSE-TRIAGE-1 round 7, read 7 F3): "references only" (0) is not a
-/// number for a budget whose row blobs must ride — every copy carrying a model or a material would
-/// refuse. A setting below the floor is REFUSED with its reason at the copy, never silently raised.
+/// THE FILE BUDGET'S FLOOR (STAGE-CLOSE-TRIAGE-1 rounds 7-8): the budget bounds the inline FILE bytes
+/// (row blobs always travel, unbudgeted) and is never below 64 KB; a setting below the floor is
+/// REFUSED with its reason at the copy, never silently raised.
 QString budgetBelowFloor(qint64 limit)
 {
     if (limit >= ClipboardService::kMinInlineLimitBytes) return QString();
-    return QStringLiteral("the clipboard's inline payload budget (clipboard/inlineLimitBytes = %1 bytes) "
+    return QStringLiteral("the clipboard's inline file budget (clipboard/inlineLimitBytes = %1 bytes) "
                           "is below its 64 KB minimum — nothing was copied")
         .arg(limit);
 }
@@ -209,13 +209,8 @@ ClipboardCopyResult ClipboardService::copyNodes(const QList<iris::SceneNodePtr> 
     options.includeRowBlobs = true;
     if (project) options.projectGuid = project->getProjectGuid();
     int inlined = 0, referenced = 0;
-    QString overBudget;
     envelope.assets = assetclosure::describe(assetclosure::forNodes(nodeObjects, db), db,
-                                             options, &inlined, &referenced, nullptr, &overBudget);
-    // A ROW BLOB THAT DOES NOT FIT IS REFUSED BY NAME (round 6): the payload would otherwise carry
-    // an entry the receiving library cannot land (a blob has no fallback); what was on the
-    // clipboard before stays.
-    if (!overBudget.isEmpty()) { result.error = overBudget; return result; }
+                                             options, &inlined, &referenced);
 
     result = publish(envelope, envelope.items.size());
     result.inlined = inlined;
@@ -258,13 +253,8 @@ ClipboardCopyResult ClipboardService::copyAssets(const QStringList &guids)
     options.includeRowBlobs = true;
     if (project) options.projectGuid = project->getProjectGuid();
     int inlined = 0, referenced = 0;
-    QString overBudget;
     envelope.assets = assetclosure::describe(assetclosure::expand(seeds, db), db,
-                                             options, &inlined, &referenced, nullptr, &overBudget);
-    // A ROW BLOB THAT DOES NOT FIT IS REFUSED BY NAME (round 6): the payload would otherwise carry
-    // an entry the receiving library cannot land (a blob has no fallback); what was on the
-    // clipboard before stays.
-    if (!overBudget.isEmpty()) { result.error = overBudget; return result; }
+                                             options, &inlined, &referenced);
 
     result = publish(envelope, envelope.items.size());
     result.inlined = inlined;

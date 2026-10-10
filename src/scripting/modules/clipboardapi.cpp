@@ -36,10 +36,9 @@ QVector<VerbInfo> ClipboardApi::verbs() const
           "copied. The ASSET CLOSURE travels too: every mesh, texture, IES profile, skeletal clip "
           "and avatar definition the objects reference, with its bytes inline while they fit "
           "`clipboard/inlineLimitBytes` (4 MB, minimum 64 KB: a smaller setting refuses the copy) and by "
-          "content id above it. Each row's own stored JSON "
-          "(a model's node tree, a material) is charged to that budget FIRST — it has no content id to "
-          "travel by — and a row whose JSON does not fit even so REFUSES the copy by name (the error "
-          "names the asset; the previous clipboard stays). Not an undo entry. "
+          "content id above it. Each row's own stored JSON (a model's node tree, a material) ALWAYS travels "
+          "and is never charged to that budget — it has no content id to travel by — so a model of any "
+          "size copies; the budget bounds the files only. Not an undo entry. "
           "Copying nothing leaves the previous clipboard alone and returns items: 0.",
           Needs::Document },
         { "cut", "clipboard.cut(id | [id]) -> {items, removed: [id], skipped: [id]}",

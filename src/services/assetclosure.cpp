@@ -82,8 +82,7 @@ QStringList expand(const QStringList &seeds, Database *db)
 QMap<QString, clipboardformat::ClipAsset> describe(const QStringList &guids, Database *db,
                                                     const Options &options,
                                                     int *inlinedOut, int *referencedOut,
-                                                    QVector<DeferredRead> *deferredOut,
-                                                    QString *errorOut)
+                                                    QVector<DeferredRead> *deferredOut)
 {
     QMap<QString, clipboardformat::ClipAsset> out;
     int inlined = 0, referenced = 0;
@@ -107,34 +106,9 @@ QMap<QString, clipboardformat::ClipAsset> describe(const QStringList &guids, Dat
     for (const AssetRecord &row : db->fetchAssetHeaders(wanted)) headers.insert(row.guid, row);
     const QHash<QString, QStringList> edges = db->fetchDependencyEdges(wanted);
 
-    // ---- THE BLOB PASS (round 6): every row blob first, in walk order ----------------------------
-    QHash<QString, QPair<QByteArray, QByteArray>> rowBlobs;   // guid -> (asset blob, properties)
-    if (options.includeRowBlobs) {
-        for (const QString &guid : wanted) {
-            const auto found = headers.constFind(guid);
-            if (found == headers.constEnd()) continue;
-            QByteArray blob, properties;
-            db->fetchAssetRowBlobs(guid, &blob, &properties);
-            const qint64 blobSize = blob.size();
-            if (blobSize > budget) {
-                if (errorOut)
-                    *errorOut = QStringLiteral("'%1' (%2) does not fit the copy: its row (%3 KB) is over "
-                                               "the inline budget (%4 KB left of %5 KB) — nothing was copied")
-                                    .arg(found->name, scriptmod::assetTypeName(found->type))
-                                    .arg((blobSize + 1023) / 1024)
-                                    .arg(qMax<qint64>(0, budget) / 1024)
-                                    .arg(options.inlineLimitBytes / 1024);
-                if (inlinedOut) *inlinedOut = 0;
-                if (referencedOut) *referencedOut = 0;
-                if (deferredOut) deferredOut->clear();
-                return {};
-            }
-            budget -= blobSize;
-            rowBlobs.insert(guid, qMakePair(blob, properties));
-        }
-    }
-
-    // ---- THE FILE PASS: what the blobs left, in walk order -----------------------------------
+    // ---- ONE PASS, in walk order. THE ROW'S BLOB IS THE ROW (round 8, the lead's rule): never budgeted,
+    // it always travels — a model of tens of thousands of parts copies like any other. The budget bounds
+    // the FILE payloads only; a file that does not fit goes by reference (its oid).
     for (const QString &guid : wanted) {
         const auto found = headers.constFind(guid);
         if (found == headers.constEnd()) continue;      // a guid this catalog does not know
@@ -148,11 +122,7 @@ QMap<QString, clipboardformat::ClipAsset> describe(const QStringList &guids, Dat
         asset.parent = record.parent;
         asset.dependencies = edges.value(guid);
         bool anyInlined = false, anyReferenced = false;
-        if (options.includeRowBlobs) {
-            const auto blobs = rowBlobs.value(guid);
-            asset.blob = blobs.first;
-            asset.properties = blobs.second;
-        }
+        if (options.includeRowBlobs) db->fetchAssetRowBlobs(guid, &asset.blob, &asset.properties);
 
         for (const auto &entry : content.filesForAsset(guid, record.name)) {
             clipboardformat::ClipFile file;
