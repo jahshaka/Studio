@@ -1071,6 +1071,12 @@ void landAsync(const QVector<BakeJob> &jobs, const QVector<LandedBake> &targets,
 int bakeLandedAsync(const QStringList &guids)
 {
     if (guids.isEmpty()) return 0;
+    // THE ROWS WERE JUST WRITTEN: the caches may still hold what a removed row of the same guid and
+    // content answered (a paste re-lands a deleted row under its original guid, with the import
+    // record the payload carries), and a plan from the stale settings bakes a variant no lookup of
+    // the new row will ever ask for. Measured: a pasted rig planned under the old row's settings
+    // hash, committed, and the landing then found no bake for the row's own.
+    clear();
     QSqlDatabase conn = QSqlDatabase::database();
     const QString root = AssetStorePaths::root();
     const QSet<QString> only(guids.cbegin(), guids.cend());
@@ -1090,6 +1096,8 @@ int bakeLandedAsync(const QStringList &guids)
     QVector<LandedBake> targets;
     for (const BakeTarget &row : rows)
         if (baking.contains(row.path)) targets.append({ row.assetGuid, row.path, true });
+    irisLog(QStringLiteral("mesh bake: %1 import bake(s) started for %2 landed row(s)")
+                .arg(jobs.size()).arg(targets.size()));
     bakeAsync(jobs, targets, DoneFn());
     return jobs.size();
 }
@@ -1120,6 +1128,24 @@ void holdCommits(bool on)
     const QVector<std::function<void()>> held = std::move(sHeldCommits);
     sHeldCommits.clear();
     for (const std::function<void()> &land : held) land();
+}
+
+QString modelSourceFor(QSqlDatabase conn, const QString &root, const QString &guid)
+{
+    QSqlQuery query(conn);
+    query.prepare("SELECT AF.name, AF.oid, F.ext FROM asset_files AF LEFT JOIN files F ON AF.oid = F.oid "
+                  "WHERE AF.asset_guid = ? AND AF.role <> ? ORDER BY AF.rowid");
+    query.addBindValue(guid);
+    query.addBindValue(iris::MeshBake::casRole());
+    if (!query.exec()) return QString();
+    while (query.next()) {
+        if (!Constants::MODEL_EXTS.contains(QFileInfo(query.value(0).toString()).suffix().toLower()))
+            continue;
+        const QString path = AssetStorePaths::objectPathIn(root, query.value(1).toString(),
+                                                           query.value(2).toString());
+        if (QFileInfo::exists(path)) return path;
+    }
+    return QString();
 }
 
 bool bakePending(const QString &sourcePath)

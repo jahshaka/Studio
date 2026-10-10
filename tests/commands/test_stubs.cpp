@@ -57,6 +57,8 @@ void SceneEditService::notifyNodeInserted(const iris::SceneNodePtr &) {}
 void SceneEditService::notifyNodeRemoved(const iris::SceneNodePtr &) {}
 void SceneEditService::notifyHierarchyChanged() {}
 void SceneEditService::notifyTransformChanged() {}
+// No store in this suite: nothing ever lands, so a reinstated subtree has nothing to complete.
+int SceneEditService::completeLandedContent(const iris::SceneNodePtr &) { return 0; }
 
 SceneFragment SceneEditService::captureFragment(const iris::SceneNodePtr &node) const
 {

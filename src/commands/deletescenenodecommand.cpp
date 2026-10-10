@@ -64,6 +64,9 @@ void DeleteSceneNodeCommand::undo()
     auto restored = structuralundo::reinstate(services, parentNode, sceneNode, snapshot, position);
     if (!restored) return;
     sceneNode = restored;
+    // CONTENT THAT LANDED WHILE THE SUBTREE WAS OUT OF THE SCENE (STAGE-CLOSE-TRIAGE-1 F4), before
+    // the classification below: an import's bake that committed while an undo held this node.
+    if (services && services->sceneEdit) services->sceneEdit->completeLandedContent(sceneNode);
     if (staticState.isEmpty()) sceneNode->applyStaticDefaults();
     else structuralundo::restoreStatic(sceneNode, staticState);
     if (!unarmedCameraGuid.isEmpty())

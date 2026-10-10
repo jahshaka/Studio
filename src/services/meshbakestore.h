@@ -287,6 +287,11 @@ bool ensureFreshAsync(const QString &sourcePath, const QString &assetGuid, QObje
 /// True while an async bake of this model file (bakeLandedAsync / ensureFreshAsync) has not
 /// committed. Database thread.
 bool bakePending(const QString &sourcePath);
+/// THE ROW'S MODEL FILE: the store object among `guid`'s files whose name is a model (Constants::
+/// MODEL_EXTS), never a bake — what the row's bake is keyed on. AssetCas::resolveSource answers the
+/// row's FIRST file, which for an object tile can be one of its textures. Empty when there is none.
+QString modelSourceFor(QSqlDatabase conn, const QString &root, const QString &guid);
+
 /// How many async bakes are in flight (the `assets.pendingBakes` verb). Database thread.
 int pendingBakeCount();
 /// THE TEST HOLD (the `assets.holdBakes` verb): while on, a finished async bake is NOT committed — it

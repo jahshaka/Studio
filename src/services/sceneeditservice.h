@@ -230,11 +230,17 @@ public:
     /// an undo of an earlier structural edit restores a node holding the OLD
     /// mesh pointer.
     int refreshAssetMeshes(const QString &meshGuid, const QString &sourcePath);
-    /// True when a live mesh node was placed from this library row (its meshPath).
-    bool usesAsset(const QString &meshGuid) const;
+    /// The model files the mesh nodes under `root` that still have NO geometry name (their rows'
+    /// model sources) — the nodes a landing or a failed bake is about.
+    QStringList waitingSources(const iris::SceneNodePtr &root) const;
     /// Binds the real clips in place of the placeholders a placement made while these assets'
     /// bakes were in flight (SceneReader::getSkeletalAnimation). Returns how many were bound.
-    int rebindPendingClips(const QSet<QString> &assetGuids);
+    int rebindPendingClips(const QSet<QString> &assetGuids,
+                           const iris::SceneNodePtr &under = iris::SceneNodePtr());
+    /// A subtree (re)entering the scene — an undo's redo, a delete's undo — gets the content whose
+    /// bake landed while it was out of the scene: its placeholder clips bound and its geometry set,
+    /// as the landing would have done. Returns how many clips and meshes it completed.
+    int completeLandedContent(const iris::SceneNodePtr &root);
     /// Instantiates a stored object asset (drag-drop / assets.addToScene).
     void addMaterialMesh(const QString &path, bool ignore, iris::Vec3 position,
                          const QString &guid, const QString &assetName,
