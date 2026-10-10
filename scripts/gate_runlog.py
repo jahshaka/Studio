@@ -369,6 +369,12 @@ def defects_file():
     return os.environ.get("JAH_DEFECTS_FILE") or os.path.join(workspace_root(), "testing", "defects.json")
 
 
+# A SIGHTING OF AN OPEN ENTRY (gate-scope's _register, item 15) is <pending>/<id>.recheck.json — {id, sightings: [...]},
+# never a rewrite of the (tracked) entry: defects_load attaches the sightings to the entry (`sightings`, in memory, for the
+# reader) and never reads the file as an entry; the entry's `recheck` stays the lead's.
+RECHECK_SUFFIX = ".recheck.json"
+
+
 def defects_pending_dir():
     return os.path.join(os.path.dirname(defects_file()), "defects.pending")
 
@@ -419,7 +425,7 @@ def _defect_problems(e):
             bad.append("a nondeterminism entry is either single-use (uses: 1, suspects, census) or ENROLLED by the lead "
                        "(enrolled {by, rate, census, date})")
     st = e["state"]
-    if not (st in ("open", "retired") or (isinstance(st, dict) and isinstance((st.get("fixed") or {}).get("tip"), str)
+    if not (st in ("open", "retired") or (isinstance(st, dict) and isinstance(st.get("fixed"), dict) and isinstance(st["fixed"].get("tip"), str)
                                            and st["fixed"]["tip"])):
         bad.append("state is not open | {fixed: {tip}} | retired")
     return bad
@@ -478,11 +484,20 @@ def defects_load(log=sys.stderr):
     if not isinstance(lst, list):
         return None, f"the defect registry {path} has no `defects` list"
     items = [(e, None) for e in lst]
+    rechecks = []
     pend = defects_pending_dir()
     if os.path.isdir(pend):
         for f in sorted(os.listdir(pend)):
             if not f.endswith(".json"): continue
             fp = os.path.join(pend, f)
+            if f.endswith(RECHECK_SUFFIX):
+                try:
+                    rc_ = json.load(open(fp))
+                    if not isinstance(rc_, dict) or not isinstance(rc_.get("sightings"), list): raise ValueError
+                    rechecks.append((rc_, fp))
+                except (OSError, ValueError) as e:
+                    _quarantine(f, None, f"an unreadable recheck file ({e.__class__.__name__})", src=fp, log=log)
+                continue
             try:
                 items.append((json.load(open(fp)), fp))
             except (OSError, ValueError) as e:
@@ -497,6 +512,13 @@ def defects_load(log=sys.stderr):
                         f"{name}: {', '.join(probs)} (TESTING_V3 §1.5's shape)", src=src, log=log)
             continue
         out[name] = e
+    for rc_, fp in rechecks:
+        e = out.get(rc_.get("id"))
+        if e is None:
+            if log is not None:
+                log.write(f"REGISTRY: FINDING — {os.path.basename(fp)} names no loaded entry ({rc_.get('id')})\n")
+            continue
+        e["sightings"] = list(e.get("sightings") or []) + rc_["sightings"]
     q = defects_quarantined()
     if q and log is not None:
         log.write(f"REGISTRY: FINDING — {len(q)} quarantined entr{'y' if len(q) == 1 else 'ies'} in "
