@@ -7,7 +7,7 @@
     scripts/gate-scope.sh --solo <suite> [...] [--times 3]     # the flake protocol, logged
     scripts/gate-scope.sh --attribute <row>[,<row>...] --batch <tag> --candidate <rc tree>:<tip> \
         --control <rc-base>:<d-build tip> --display :NN --lanes <lane>:<worktree>:<tip> [...]   # a batch red
-    scripts/gate-scope.sh --record-times                       # gate-times.txt from the run log
+    scripts/gate-scope.sh --record-times | --price-check [--build <dir>]   # the prices: re-priced / checked
     scripts/gate-scope.sh --merge-tier [-j N] | --merge-tier-serial | --stage-close-tier | --gate-jobs
 
 A lane runs everything its change can reach and nothing it cannot — read from the build and
@@ -19,7 +19,7 @@ path and one reason per selected row, estimates the wall time from THE RUN LOG (
 
 A RUN IS A GATE, AND THE BOX RUNS ONE AT A TIME (GATE-COST-1, SPECS/audits/GATE_COST_2026-10-09.md):
 `--run` (scoped, a fallback, `--fork-tier`, `--targets-only`) queues for THE GATE SLOT
-(scripts/vram_tokens.py; FIFO, no bound, its position printed) and holds it to its last process;
+(scripts/vram_tokens.py; by class — a gate before a measurement —, no bound, its position printed) and holds it to its last process;
 `--solo` and `--attribute` take it too — a whole-card hold always does (GATE-COST-2) — and a per-row
 admission never does. Before anything, the no-op build (gate_runlog.prebuild: HEAD's binaries, BUILT_FROM
 fresh). Inside it: the `hygiene` rows first, as their own CPU phase (P8); the GPU
@@ -289,8 +289,45 @@ AREA_RULES = [
     # THE VRAM BUDGET's helper (GATE-ADMIT-1): its tooling suite (devprocess.vram_admit), the
     # pool driver's own test that imports it (pool.runner, tests/app) and the closure (hygiene).
     (r"^scripts/(gpu-admit|vram_tokens)", ["tooling", "app", "hygiene"], []),
-    (r"^scripts/", [], []),
+    # EVERY OTHER SCRIPT IS THE RUNNER'S TOO (TESTING-CLEANUP-2B item 4, H8a): ci_gate_check.py / ci-gate-check.sh (the
+    # judge: gate.ci_check, gate.verdict_door, …), kernel_xid.py (devprocess.kernel_journal, gate.cost),
+    # check-trailers.sh (gate.batch), sanitize.sh and its lsan/tsan suppressions (the source lints) selected NO row —
+    # a change to the judge gated on nothing. Their tests are the hygiene and tooling rows (display-free, the CPU
+    # phase). In a tooling-only diff (§1.3.4) the same paths take Selection.tooling_path.
+    (r"^scripts/", ["hygiene", "tooling"], []),
 ]
+
+# A TOOLING-ONLY DIFF SELECTS NO PRODUCT ROW (TESTING_V3_SPEC §1.3.4; the owner 2026-10-10: "why do we still have
+# 1 hour gates?" — batch A's three runner lanes selected 636 rows, 57 min). A change that touches NOTHING the
+# product binary is built from cannot change the product rows' answers: running them re-proves the runner, not the
+# product, and the runner is proved by its own rows. The rule FAILS CLOSED (fix round D): NON_PRODUCT lists the
+# paths that are NOT product inputs — scripts/, tests/, docs/, testing/, .claude/, irisgl/docs/, any *.md — and EVERY
+# other path is product (src/, irisgl/, app/, scenes/, thirdparty/, the build files, a top-level directory nobody
+# has classified yet). A diff with ONE product path takes the whole union below, exactly as before. A diff with none
+# is TOOLING-ONLY:
+#   * a path of the runner itself (TOOLING_OWN: scripts/, tests/hygiene/, tests/tooling/, testing/) selects the
+#     `hygiene` and `tooling` rows (the lints and the runner's own suites, display-free) plus what its area rule
+#     names among the non-app, non-compiled rows (a script's own self-test, e.g. pool.runner for vram_tokens) and
+#     every row whose COMMAND runs the file;
+#   * any other path — a test's source, a test CMakeLists, a shared test helper — goes through the ordinary walk:
+#     what it reaches IS the rows whose declaration or command changed (the graph for a test source, the CMake
+#     reader for a registration);
+#   * docs and the like select what they always did (nothing; TESTING_GATE.md its guard);
+#   * the smoke pair (ALWAYS_ON_CODE) is the PRODUCT's smoke: no product path moved, so it does not ride.
+NON_PRODUCT = re.compile(r"^(scripts/|tests/|docs/|testing/|\.claude/|irisgl/docs/)|\.md$")
+TOOLING_OWN = re.compile(r"^(scripts/|tests/(hygiene|tooling)/|testing/)")
+# A RUNNER'S OWN SELF-TEST THAT BOOTS THE APP (it is the tool's test, not a product row): selected by name in a
+# tooling-only diff, where the area rules' directories pick only lint/script rows. pool.runner drives the pool
+# runner (tests/support/run_pool.py), which takes its tokens through vram_tokens.py.
+TOOL_SELF_TESTS = [
+    (r"^scripts/(gpu-admit|vram_tokens)", ["pool.runner"]),
+]
+
+
+def product_paths(paths):
+    """The touched paths the product is built from (§1.3.4): one of them makes the diff a product diff."""
+    return [p for p in paths if not NON_PRODUCT.search(p)]
+
 
 # Cheap smoke suites always added when src/ or irisgl/ moved (a boot that renders + the
 # contract of the scripting surface), ~15 s together.
@@ -629,6 +666,15 @@ def bind_root(build):
     gate_runlog.ROOT = src
 
 
+def _is_wipe(cmd):
+    """A fixture setup's command is a home WIPE: tests/support/fresh_home.sh, tests/samples/freshhome.cmake, or an
+    `sh -c "rm -rf …"` (the three forms tests/CMakeLists.txt's fresh-home section names)."""
+    cmd = list(cmd or [])
+    if any(str(c).endswith(("fresh_home.sh", "freshhome.cmake")) for c in cmd):
+        return True
+    return len(cmd) > 2 and os.path.basename(str(cmd[0])) == "sh" and cmd[1] == "-c" and "rm -rf" in str(cmd[2])
+
+
 def load_inventory(build):
     # listed from a copy of the CTestTestfile tree: a listing in the build dir itself truncates
     # the LastTest.log of a gate running there (gate_graph.ctest_inventory)
@@ -733,7 +779,12 @@ def load_inventory(build):
             "sites": sites,
             "serial": bool(props.get("RUN_SERIAL")),
             "env": list(props.get("ENVIRONMENT", []) or []),
-            "fixture_setup": bool(props.get("FIXTURES_SETUP")),
+            # A HOME WIPE vs A RUN FIXTURE (TESTING-CLEANUP-2B fix round 3 F3): `fixture_setup` means a fixture's
+            # WIPE (fresh_home.sh, samples' freshhome.cmake, an `sh -c "rm -rf …"`) — ~10 ms, never a gating row; a
+            # real run that ALSO sets up a fixture (threading.newproject_stall for its inspector, material_tabs for
+            # its relaunch) is `run_fixture` and stays a gating row (R1, the estimate, max_rows)
+            "fixture_setup": bool(props.get("FIXTURES_SETUP")) and _is_wipe(cmd),
+            "run_fixture": bool(props.get("FIXTURES_SETUP")) and not _is_wipe(cmd),
             "labels": set(props.get("LABELS", []) or []),
             "kind": "other", "exes": set(),
         }
@@ -760,25 +811,104 @@ def classify_rows(inv, graph, build):
 TIMES_FILE = os.path.join(ROOT, "scripts", "gate-times.txt")
 
 
-def record_times():
-    """Refresh scripts/gate-times.txt from THE RUN LOG (T8): each suite's median PASS seconds
-    over the last 14 days of gate runs, every tier and lane — never one gate's output."""
-    times = gate_runlog.median_times(days=14)
-    if not times:
-        sys.stderr.write(f"gate-scope: the run log ({gate_runlog.log_dir()}) holds no PASS record "
-                         f"in the last 14 days — nothing to record\n")
-        sys.exit(2)
-    old = {}
-    if os.path.exists(TIMES_FILE):
-        for line in open(TIMES_FILE):
-            p = line.split()
-            if len(p) == 2 and not line.startswith("#"): old[p[0]] = p[1]
+# THE PRICES (TESTING-CLEANUP-2B item 6). scripts/gate-times.txt prices EVERY row of the MERGE and STAGE-CLOSE
+# tiers (a gate's estimate, the stage-close batch's plan, ctest's COST order): one line per row, `<row> <seconds>
+# <source>`, the source NAMED — `quiet n=<k>` (the median of the row's PASS runs with no sibling ctest, >= 3 of
+# them: THE price), `all n=<k>` (fewer quiet runs: the median of every PASS run), `fixture` (a home wipe), or the
+# text a hand-priced line carried. The run log read is testing/runs AND testing/runs-archive, from PRICE_SINCE:
+# before GATE-SPEED-1's L2 (2026-10-01 13:10) a record's seconds still held its admission wait. `--price-check`
+# is the self-check: it lists every tier row without a price and fails while one is (source.testing_rules R2).
+PRICE_SINCE = "2026-10-01T13:10"
+
+
+def parse_times(path=None):
+    """row -> (seconds, source text) from gate-times.txt (a data line: `<row> <seconds> [<source>…]`)."""
+    out = {}
+    try:
+        for line in open(path or TIMES_FILE):
+            if line.startswith("#"): continue
+            parts = line.split(None, 2)
+            if len(parts) >= 2:
+                try: out[parts[0]] = (float(parts[1]), parts[2].strip() if len(parts) > 2 else "")
+                except ValueError: pass
+    except OSError:
+        pass
+    return out
+
+
+def run_log_prices(since=PRICE_SINCE):
+    """row -> (median PASS seconds, 'quiet n=<k>' | 'all n=<k>') over the run log and its archive since `since`.
+    The quiet median when >= gate_runlog.QUIET_MIN quiet runs exist (box.other_ctests == 0), else every run's."""
+    import glob, statistics
+    d = gate_runlog.log_dir()
+    files = glob.glob(os.path.join(d, "*.jsonl")) + glob.glob(os.path.join(os.path.dirname(d), "runs-archive", "**",
+                                                                           "*.jsonl"), recursive=True)
+    acc = collections.defaultdict(list)
+    for f in files:
+        for line in open(f, errors="replace"):
+            try: r = json.loads(line)
+            except ValueError: continue
+            if r.get("verdict") != "PASS" or r.get("seconds") is None or r.get("kind") or (r.get("ts") or "") < since:
+                continue
+            k = r["suite"] if not r.get("arm") else f"{r['suite']}::{r['arm'].split('.', 1)[-1]}"
+            acc[k].append((r["seconds"], (r.get("box") or {}).get("other_ctests") == 0))
+    out = {}
+    for k, v in acc.items():
+        q = [x for x, quiet in v if quiet]
+        if len(q) >= gate_runlog.QUIET_MIN:
+            out[k] = (statistics.median(q), f"quiet n={len(q)}")
+        else:
+            out[k] = (statistics.median([x for x, _ in v]), f"all n={len(v)}")
+    return out
+
+
+def tier_rows(inv):
+    """The rows the MERGE and STAGE-CLOSE tiers run: every registered row but the target tests."""
+    return sorted(n for n, t in inv.items() if not (t["labels"] & TARGET_LABELS))
+
+
+def unpriced(inv, prices=None):
+    prices = parse_times() if prices is None else prices
+    return [n for n in tier_rows(inv) if n not in prices]
+
+
+def record_times(build):
+    """Re-price scripts/gate-times.txt (item 6's rule above) for every tier row of `build`'s registration: the run
+    log's price where the row has PASS runs, else the line it had, else a fixture's wipe; a row with none of these
+    is left unpriced — `--price-check` names it."""
+    inv = load_inventory(build)
+    log = run_log_prices()
+    old = parse_times()
+    rows = tier_rows(inv)
+    out, kinds = {}, collections.Counter()
+    for n in rows:
+        if n in log:
+            out[n] = log[n]; kinds[log[n][1].split()[0]] += 1
+        elif n in old:
+            out[n] = old[n]; kinds["kept"] += 1
+        elif inv[n].get("fixture_setup"):
+            out[n] = (0.01, "fixture (a home wipe; no PASS record)"); kinds["fixture"] += 1
+    # a pool's ARMS keep their own prices (`<pool>::<arm>`: a partial pool's estimate sums them)
+    for k, v in list(log.items()) + [kv for kv in old.items() if kv[0] not in log]:
+        r_, _, arm = k.partition("::")
+        if arm and r_ in inv and arm in inv[r_]["arms"]:
+            out[k] = v; kinds["arm"] += 1
+    head = [l for l in open(TIMES_FILE) if l.startswith("#")] if os.path.exists(TIMES_FILE) else []
     with open(TIMES_FILE, "w") as f:
-        f.write("# suite seconds — the run log's median PASS time over 14 days "
-                "(gate-scope.sh --record-times; testing/runs/README.md)\n")
-        for n in sorted(set(old) | set(times)):
-            f.write(f"{n} {times[n]:.2f}\n" if n in times else f"{n} {old[n]}\n")
-    print(f"recorded {len(times)} suite times from the run log into {os.path.relpath(TIMES_FILE, ROOT)}")
+        f.writelines(head)
+        for n in sorted(out):
+            sec, src = out[n]
+            f.write(f"{n} {sec:.2f}  {src}\n" if src else f"{n} {sec:.2f}\n")
+    gone = sorted(set(old) - set(out))
+    n_rows = sum(1 for n in out if "::" not in n)
+    print(f"priced {n_rows} of {len(rows)} tier rows (+{len(out) - n_rows} pool-arm prices) into "
+          f"{os.path.relpath(TIMES_FILE, ROOT)}: "
+          + ", ".join(f"{k} {v}" for k, v in kinds.most_common())
+          + (f"; dropped {len(gone)} line(s) that are no row of this build: {' '.join(gone[:12])}" if gone else ""))
+    left = unpriced(inv, out)
+    if left:
+        print(f"UNPRICED ({len(left)}): " + " ".join(left))
+    return 1 if left else 0
 
 
 COST_SOURCE = {}   # suite -> "quiet" | "all" (the run log's median, gate_runlog.median_times) | "file"
@@ -788,12 +918,8 @@ def load_costs():
     """Per-suite seconds: scripts/gate-times.txt overlaid with the run log's medians (fresher; the
     quiet-box median where >= 3 records ran with no sibling ctest). COST_SOURCE says which."""
     costs = {}
-    if os.path.exists(TIMES_FILE):
-        for line in open(TIMES_FILE):
-            if line.startswith("#"): continue
-            parts = line.split()
-            if len(parts) == 2:
-                costs[parts[0]] = float(parts[1]); COST_SOURCE[parts[0]] = "file"
+    for n, (sec, _src) in parse_times().items():
+        costs[n] = sec; COST_SOURCE[n] = "file"
     costs.update(gate_runlog.median_times(days=14, sources=COST_SOURCE))
     return costs
 
@@ -976,6 +1102,7 @@ class Selection:
         self._origin = None
         self.sc_origins = collections.defaultdict(set)
         self.stage_close_left = {}         # row -> the broad reason that reached it, left for the batch
+        self.tooling_only = False          # §1.3.4: no touched path is a product input (select() decides)
 
     # -- adding rows -----------------------------------------------------------------------
     def add(self, suites, why):
@@ -1266,6 +1393,23 @@ class Selection:
                 self.fallback.append(f"{tag}: no rule, no symbol, no graph owner")
                 notes.append("NO RULE, no symbol, no graph owner → merge tier")
         if depth == 0: self.rationale.append((p, "; ".join(notes)))
+
+    def tooling_path(self, p):
+        """A path of the runner in a TOOLING-ONLY diff (§1.3.4; NON_PRODUCT above): the tools' own rows — the
+        `hygiene` and `tooling` rows, what the path's area rule names among the non-app, non-compiled rows, and
+        every row whose command runs the file. Never a product row."""
+        self._origin = p
+        why = f"{p}: a tooling-only diff (TESTING_V3 §1.3.4) — the runner's own rows"
+        before = set(self.selected)
+        self.expand(["hygiene", "tooling"], [], why)
+        r = self.rules_for(p, why, kinds={"other"})
+        for pat, rows in TOOL_SELF_TESTS:
+            if re.match(pat, p): self.add(rows, why + " [its self-test]")
+        hit = self.argv_rows(p, why)
+        n = len(set(self.selected) - before)
+        self.rationale.append((p, f"TOOLING-ONLY (no product input in the diff): the hygiene + tooling rows"
+                                  + (f", {r} (lint/script rows)" if r else "")
+                                  + (f", {len(hit)} row(s) that run it" if hit else "") + f" — {n} new row(s)"))
 
     def fork_pins(self):
         """(old, new) ogre-next commits the range's irisgl ends pin, or (None, None)."""
@@ -2013,10 +2157,14 @@ def select(paths, rng, build, jobs, graph=None, inv=None, quiet_graph=False):
         for t in inv.values():
             if t["kind"] == "compiled": t["kind"] = "other"     # the rules' dirs pick them, as before
     S = Selection(inv, graph, app_exe, Revs(rng), jobs)
+    S.tooling_only = bool(paths) and not product_paths(paths)
     for p in paths:
-        S.path(p)
+        if S.tooling_only and TOOLING_OWN.match(p):
+            S.tooling_path(p)
+        else:
+            S.path(p)
     S.stage_close_subjects(paths)
-    if S.code_moved: S.add(ALWAYS_ON_CODE, "code moved: smoke + contract")
+    if S.code_moved and not S.tooling_only: S.add(ALWAYS_ON_CODE, "code moved: smoke + contract")
     if graph is not None: graph.save_syms()
     return S
 
@@ -2118,12 +2266,8 @@ def attribute(row_args, lane_specs, tag, times, tier, candidate=None, controls=N
     # F1 (GATE-COST-2 at the rebase): a hold whose drain timed out returns the SLOT only (card == [slot]), so
     # "no card" is not the test — the drain record is. Then: the phase record, the tool's JAH_VRAM_ALL (every
     # admission takes the card itself) and `fallback: drain-timeout` on every run, never an override
-    fallback = None
-    if vt.LAST_DRAIN_TIMEOUT and not env.get("JAH_VRAM_HELD"):
-        gate_runlog.phase_record("drain-timeout", tier, tag, None, gate_runlog.tree_shas(), fallback="drain-timeout",
-                                 **vt.LAST_DRAIN_TIMEOUT)
-        env["JAH_VRAM_ALL"] = "1"
-        fallback = "drain-timeout"
+    env, fallback = _hold_state(vt, env, tier, tag, None)
+    fallback_any = fallback             # the summary + _register: did ANY hold of this run time out (item 15)
     cells = {}                          # (row, name) -> (state, reds, real runs, first failing check, last record)
     try:
         for row in rows:
@@ -2134,6 +2278,14 @@ def attribute(row_args, lane_specs, tag, times, tier, candidate=None, controls=N
                 seen = len(_attribution_records(row, head, reason))
                 reds, real, first, never, last = 0, 0, None, [], None
                 for _ in range(times):
+                    # A MEASUREMENT YIELDS TO A GATE BETWEEN ITS RUNS (item 13): its cells so far are recorded
+                    card_y, env_y = vt.yield_card(card, env, f"attribute {tag}", sys.stdout)
+                    if card_y is not card:
+                        # THE RE-HOLD IS A NEW HOLD (item 15): its own drain decides the fallback — a re-drain that
+                        # timed out runs the rest with JAH_VRAM_ALL + the stamp + its phase record; a clean one, without
+                        card = card_y
+                        env, fallback = _hold_state(vt, dict(env_y, DISPLAY=display), tier, tag, None)
+                        fallback_any = fallback_any or fallback
                     rc = gate_runlog.run_ctest(
                         f"ctest -j1 --timeout 900 --output-on-failure --no-tests=error -R '{rx}'", build, tier,
                         [t[0] for t in lanes] if kind == "candidate" else [name], 1, reasons={row: reason},
@@ -2147,14 +2299,15 @@ def attribute(row_args, lane_specs, tag, times, tier, candidate=None, controls=N
                     new, seen = recs[seen:], len(recs)
                     v = new[-1].get("verdict") if new else None
                     if new: last = new[-1]
-                    if v is None or v in ("NOADMIT", "NOTRUN"):
-                        never.append(v or f"no record (exit {rc})")      # never ran: no verdict
+                    kind_, why_ = _cell_run(new[-1] if new else None, head, rc)
+                    if kind_ == "never":
+                        never.append(why_)                                # never ran: no verdict
                         continue
                     real += 1
-                    if v != "PASS":
+                    if kind_ == "red":
                         reds += 1
                         if first is None:
-                            first = new[-1].get("failLine") or f"{v} ({new[-1].get('status')})"
+                            first = why_
                 cells[(row, name)] = ("RAN" if real == times else "INCOMPLETE", reds, real,
                                       first if real == times or reds else
                                       f"{times - real} run(s) never ran ({', '.join(map(str, never))})", last)
@@ -2163,12 +2316,13 @@ def attribute(row_args, lane_specs, tag, times, tier, candidate=None, controls=N
     finally:
         gate_runlog._vram().release(card)
     print(f"\n=== ATTRIBUTION (batch {tag}) ===")
-    fb = f" | fallback: {fallback}" if fallback else ""
-    if fallback:
+    fb = f" | fallback: {fallback_any}" if fallback_any else ""
+    if fallback_any:
         # GATE-COST-2 round: visible WHERE THE LEAD READS — the drain timed out, the runs were not under one
         # whole-card hold: a timing row's cell here is not a measurement
-        print(f"FALLBACK: {fallback} — the whole-card drain timed out; every run took the card itself (JAH_VRAM_ALL)")
-    print("row | tree | red | the first failing check" + (" | fallback" if fallback else ""))
+        print(f"FALLBACK: {fallback_any} — a whole-card drain timed out (the first hold or a re-hold after a "
+              f"yield); the runs under it took the card themselves (JAH_VRAM_ALL), each record stamped `fallback`")
+    print("row | tree | red | the first failing check" + (" | fallback" if fallback_any else ""))
     out = {"combination": False, "defect": False, "incomplete": False}
     nil = ("ABORTED", 0, 0, None, None)
     unfinished = ("INCOMPLETE", "ABORTED")
@@ -2194,7 +2348,7 @@ def attribute(row_args, lane_specs, tag, times, tier, candidate=None, controls=N
             out["defect"] = True
             t, c = [(t, c) for t, c in ctl if c[1] > 0][0]
             path = _register(tag, "defect", row, t[3], c[4],
-                             f"red on d-build's own tip ({t[0]}: {c[1]}/{c[2]}; {c[3] or '-'}) — no lane makes it", fallback=fallback)
+                             f"red on d-build's own tip ({t[0]}: {c[1]}/{c[2]}; {c[3] or '-'}) — no lane makes it", fallback=fallback_any)
             print(f"=> {row}: D-BUILD DEFECT — red on the control {t[0]} ({c[1]}/{c[2]}) without any lane: it names "
                   f"nobody; registered {path}")
         elif named:
@@ -2208,19 +2362,36 @@ def attribute(row_args, lane_specs, tag, times, tier, candidate=None, controls=N
             out["combination"] = True
             path = _register(tag, "combination", row, cand[3], cc[4],
                              f"red at the candidate ({cc[1]}/{cc[2]}; {cc[3] or '-'}) and green on every lane's own "
-                             f"tip and on d-build's", fallback=fallback)
+                             f"tip and on d-build's", fallback=fallback_any)
             print(f"=> {row}: COMBINATION DEFECT — red at the candidate ({cc[1]}/{cc[2]}) and green on every lane's own "
                   f"tip: the batch is REFUSED; registered {path}")
         else:
             path = _register(tag, "nondeterminism", row, cand[3], cc[4],
                              f"red in batch {tag}'s gate; green {cc[2]}/{cc[2]} at the candidate, on every lane and "
-                             f"on d-build in the attribution", suspects=[t[0] for t in lanes], fallback=fallback)
+                             f"on d-build in the attribution", suspects=[t[0] for t in lanes], fallback=fallback_any)
             print(f"=> {row}: NOT REPRODUCED — green at the candidate {cc[2]}/{cc[2]} and everywhere else: a "
                   f"nondeterminism, registered {path}; it passes the verdict door with these solos recorded")
     if out["combination"]: return ATTR_DEFECT_COMBINATION
     if out["incomplete"]: return ATTR_INCOMPLETE
     if out["defect"]: return ATTR_DEFECT_DBUILD
     return 0
+
+
+def _hold_state(vt, env, tier, lane, rng):
+    """THE FALLBACK OF THE HOLD JUST TAKEN — the first hold_card of a --solo / --attribute run AND every re-hold after a
+    yield_card (item 15: the re-hold drains again, and a re-drain that times out returns the SLOT only, with no
+    JAH_VRAM_HELD — the callers used to keep the FIRST hold's fallback, so the rows after the yield ran on per-row
+    admission with no JAH_VRAM_ALL, no stamp and no phase record, and a clean re-drain stayed stamped). Reads
+    vt.LAST_DRAIN_TIMEOUT (hold_card resets it on every call): a timeout -> the phase record, the TOOL's JAH_VRAM_ALL
+    (every admission takes the card itself — a fallback, never an override, F2) and "drain-timeout"; else (env, None)
+    with no JAH_VRAM_ALL of ours. Returns (env, fallback|None); env is a copy."""
+    env = dict(env)
+    d = vt.LAST_DRAIN_TIMEOUT
+    if not d or env.get("JAH_VRAM_HELD"):
+        return env, None
+    gate_runlog.phase_record("drain-timeout", tier, lane, rng, gate_runlog.tree_shas(), fallback="drain-timeout", **d)
+    env["JAH_VRAM_ALL"] = "1"
+    return env, "drain-timeout"
 
 
 def _register(tag, kind, row, tip, rec, cause, suspects=None, fallback=None):
@@ -2231,16 +2402,81 @@ def _register(tag, kind, row, tip, rec, cause, suspects=None, fallback=None):
     next day — the next batch — for NOT REPRODUCED, +7 days for a combination / d-build defect), expires (= recheck)},
     and for NOT REPRODUCED the single-use fields {uses: 1, suspects: [the batch's lanes], census: {from the record}}.
     A finding made while the whole-card drain had timed out carries `fallback` (GATE-COST-2: the reader sees the
-    runs were not under one whole-card hold). Returns the path."""
-    import datetime as _dt
+    runs were not under one whole-card hold). A sighting of a row that already has an OPEN entry of the kind is a
+    RECHECK FILE, <pending>/<id>.recheck.json (item 15) — never a rewrite of the entry. Returns the path written.
+    ONE REGISTRATION AT A TIME (item 15): the pending dir's flock is held across the scan, the numbering and the write,
+    so two attributions at once never take one number (nor both miss each other's entry)."""
+    import fcntl
     reg = os.environ.get("JAH_DEFECTS_FILE") or os.path.join(gate_runlog.workspace_root(), "testing", "defects.json")
     d = os.environ.get("JAH_DEFECTS_PENDING_DIR") or os.path.join(os.path.dirname(reg), "defects.pending")
     os.makedirs(d, exist_ok=True)
-    did = re.sub(r"[^A-Za-z0-9._-]+", "-", f"{tag}-{kind}-{row}")
+    lk = os.open(d, os.O_RDONLY)                # the DIRECTORY's flock: no lock file lands in the tracked dir
+    try:
+        fcntl.flock(lk, fcntl.LOCK_EX)
+        return _register_locked(d, reg, tag, kind, row, tip, rec, cause, suspects, fallback)
+    finally:
+        os.close(lk)                            # the close releases the flock
+
+
+def _write_json(path, doc):
+    """Whole or not at all: a reader never sees half a file (tmp + rename in the same dir)."""
+    tmp = path + ".tmp-%d" % os.getpid()
+    with open(tmp, "w") as f:
+        json.dump(doc, f, indent=1, sort_keys=True)
+        f.write("\n")
+    os.replace(tmp, path)
+
+
+def _register_locked(d, reg, tag, kind, row, tip, rec, cause, suspects, fallback):
+    import datetime as _dt
     rec = rec or {}
     t = rec.get("tip") or {}
     today = _dt.date.today()
     recheck = (today + _dt.timedelta(days=1 if kind == "nondeterminism" else 7)).isoformat()
+    seen = {"tip": tip, "pin": t.get("fork") or "", "run": rec.get("run") or "", "batch": tag, "cause": cause,
+            "date": today.isoformat()}
+    if fallback:
+        seen["fallback"] = fallback
+    # ONE ENTRY PER ROW AND KIND (item 14): an OPEN entry of this kind for this row — in the registry or pending — is
+    # REUSED, never a second entry (batch B2 registered B2-defect-* duplicates of the A2 entries)
+    known = []
+    try:
+        for e in (json.load(open(reg)).get("defects") or []):
+            known.append(e)
+    except (OSError, ValueError, AttributeError):
+        pass
+    for fn in sorted(os.listdir(d)):
+        if fn.endswith(".json") and not fn.endswith(gate_runlog.RECHECK_SUFFIX):
+            try: known.append(json.load(open(os.path.join(d, fn))))
+            except (OSError, ValueError): pass
+    # REUSE NEVER REWRITES THE ENTRY (item 15): both testing/defects.json and the pending entries are TRACKED, and a
+    # sighting that moved `recheck` forward would silently stand in for the re-verdict the door (`_real`) demands of an
+    # entry past its date. The sighting goes to <pending>/<id>.recheck.json (appended, the entry's own bytes and its
+    # `recheck` untouched — the lead re-verdicts); the reader attaches the file's sightings to the entry.
+    # Never reused: a NOT REPRODUCED entry (single-use at its batch by design — uses: 1 at first_seen.tip — it could
+    # not clear the new batch's red), and a fixed or retired one (state != open: a new sighting is a NEW finding).
+    for e in ([] if kind == "nondeterminism" else known):
+        if (isinstance(e, dict) and e.get("kind") == kind and row in (e.get("rows") or [])
+                and gate_runlog.defect_state(e) == "open" and e.get("id")):
+            rp = os.path.join(d, e["id"] + gate_runlog.RECHECK_SUFFIX)
+            try:
+                doc = json.load(open(rp))
+                if not isinstance(doc, dict) or not isinstance(doc.get("sightings"), list):
+                    raise ValueError
+            except (OSError, ValueError):
+                doc = {"id": e["id"], "sightings": []}
+            doc["id"] = e["id"]
+            doc["sightings"].append(dict(seen, recheck_proposed=recheck))
+            _write_json(rp, doc)
+            return rp
+    # THE ID SCHEME (item 14): <BATCH>-<ROW, upper, every non-alnum a dash>-<n> — e.g. A2-SCRIPTING-E2E-CLIP-REF-1,
+    # n the next free number for that prefix: one scheme the lead reads (the kind is the entry's field, not its name)
+    stem = re.sub(r"[^A-Z0-9]+", "-", f"{tag}-{row}".upper()).strip("-")
+    used = {e.get("id") for e in known if isinstance(e, dict)}
+    n = 1
+    while f"{stem}-{n}" in used or os.path.exists(os.path.join(d, f"{stem}-{n}.json")):
+        n += 1
+    did = f"{stem}-{n}"
     entry = {"id": did, "rows": [row], "kind": kind, "cause": cause,
              "first_seen": {"tip": tip, "pin": t.get("fork") or "", "run": rec.get("run") or ""},
              "state": "open", "found_by": "gate", "recheck": recheck, "expires": recheck}
@@ -2251,15 +2487,46 @@ def _register(tag, kind, row, tip, rec, cause, suspects=None, fallback=None):
     if fallback:
         entry["fallback"] = fallback
     path = os.path.join(d, did + ".json")
-    with open(path, "w") as f:
-        json.dump(entry, f, indent=1, sort_keys=True)
-        f.write("\n")
+    _write_json(path, entry)
     return path
 
 
 class _AttributionAborted(Exception):
     pass
 
+
+
+def _cell_run(rec, head, rc=None):
+    """One attribution run's outcome from its newest record: ("never", why) | ("pass", "") | ("red", the first failing
+    check). NOT RUN BECAUSE ITS PARENT FAILED IN THIS RUN (fix round 4, item 2) is the PARENT's outcome — a red whose
+    check is the parent's — never "never ran" (that left the cell INCOMPLETE and the attribution exit 7 for as long as
+    the parent stayed red, hiding the parent's own outcome)."""
+    v = rec.get("verdict") if rec else None
+    parents = rec.get("notRunBecause") if v == "NOTRUN" else None
+    if parents:
+        pr = _run_record(parents[0], head, rec.get("run"))
+        return "red", (f"not run: its parent {parents[0]} failed"
+                       + (f" — {pr.get('failLine') or pr.get('verdict')}" if pr else ""))
+    if v is None or v in ("NOADMIT", "NOTRUN"):
+        return "never", v or f"no record (exit {rc})"
+    if v != "PASS":
+        return "red", rec.get("failLine") or f"{v} ({rec.get('status')})"
+    return "pass", ""
+
+
+def _run_record(row, head, run):
+    """`row`'s own record of one run (`run` id) at `head`, or None — the parent a Not Run inspector names."""
+    if not run:
+        return None
+    d = gate_runlog.log_dir()
+    for f in sorted(os.listdir(d)) if os.path.isdir(d) else []:
+        if head[:9] not in f or not f.endswith(".jsonl"): continue
+        for line in open(os.path.join(d, f), errors="replace"):
+            try: r = json.loads(line)
+            except ValueError: continue
+            if r.get("suite") == row and r.get("arm") is None and r.get("run") == run:
+                return r
+    return None
 
 
 def _attribution_records(row, head, reason):
@@ -2320,7 +2587,11 @@ def main():
                     help="the run log's tier name (default: scoped; scoped-fallback / scoped-tier when a scoped "
                          "gate runs the whole tier)")
     ap.add_argument("--record-times", action="store_true",
-                    help="refresh scripts/gate-times.txt from the run log (median PASS seconds, 14 days)")
+                    help="re-price scripts/gate-times.txt: every tier row of --build, the run log's (and its archive's) "
+                         "quiet median PASS seconds, the source named on each line")
+    ap.add_argument("--price-check", action="store_true",
+                    help="the prices' self-check: list every MERGE / STAGE-CLOSE tier row of --build with no line in "
+                         "scripts/gate-times.txt; exit 1 while one is")
     ap.add_argument("--solo", metavar="SUITE", nargs="+",
                     help="the flake protocol: run each suite alone --times times, logged as retries")
     ap.add_argument("--times", type=int, default=3)
@@ -2384,8 +2655,13 @@ def main():
         a.run = True
     if a.gate_jobs:
         print(GATE_JOBS); return
-    if a.record_times:
-        record_times(); return
+    if a.record_times or a.price_check:
+        b_ = resolve_build(a.build)
+        if a.record_times:
+            sys.exit(record_times(b_))
+        left = unpriced(load_inventory(b_))
+        print(f"gate-times.txt: {len(left)} unpriced tier row(s)" + (": " + " ".join(left) if left else " — clean"))
+        sys.exit(1 if left else 0)
     if a.merge_tier:
         print(merge_tier(a.jobs)); return
     if a.merge_tier_serial:
@@ -2426,22 +2702,16 @@ def main():
         """A solo batch's whole card (hold_card: the slot first outside a gate), and on a drain timeout the
         phase record + the tool's fallback (round 2, C — both solo paths): (fds, env, fallback|None)."""
         card_, env_ = gate_runlog._vram().hold_card(label, log=sys.stdout)
-        drained_ = gate_runlog._vram().LAST_DRAIN_TIMEOUT
-        if not drained_ or env_.get("JAH_VRAM_HELD"):
-            return card_, env_, None
-        gate_runlog.phase_record("drain-timeout", a.tier or "solo", lane, log_range, gate_runlog.tree_shas(),
-                                 fallback="drain-timeout", **drained_)
-        # every admission of a run takes the card itself; the TOOL set it — a fallback, never an override (F2)
-        env_["JAH_VRAM_ALL"] = "1"
-        return card_, env_, "drain-timeout"
+        env_, fb_ = _hold_state(gate_runlog._vram(), env_, a.tier or "solo", lane, log_range)
+        return card_, env_, fb_
 
     def gate(what):
-        """THE GATE SLOT (P1), once per gate run: queue (FIFO, no bound, the position printed), then hold
+        """THE GATE SLOT (P1), once per gate run: queue (class 1, no bound, the position printed), then hold
         it in THIS process to its end (the ctest trees below die with it: gate_runlog F2)."""
         if not slot:
             gate_runlog.on_signals()
             who = "+".join(gate_runlog.lane_list(a.lane)) or os.path.basename(gate_runlog.ROOT)
-            fd = gate_runlog._vram().gate_slot(f"{who} {what}", log=sys.stdout)
+            fd = gate_runlog._vram().gate_slot(f"{who} {what}", log=sys.stdout, cls=1)
             slot.append(fd)
         return None
 
@@ -2534,13 +2804,18 @@ def main():
         # SOLO ON THE CARD, ONE DRAIN PER BATCH (G1+G2; GATE-COST-1 P2): the whole batch holds every VRAM
         # token once and each run's admissions are nested on it, so no sibling lane's GPU row runs beside
         # any of them — and the card drains once, not once per run. A WHOLE-CARD HOLD TAKES THE GATE SLOT
-        # (GATE-COST-2): the batch queues FIFO with the gates before it drains (hold_card does it), so its drain
+        # (GATE-COST-2): the batch queues (class 2, behind any waiting gate, and yields to one between runs) before it drains (hold_card does it), so its drain
         # never starves the gate in the slot into NOADMIT.
         gate_runlog.on_signals()
         card, env, fallback = solo_card(f"{'+'.join(lane)} --solo {' '.join(a.solo)[:80]}")
         try:
             for s in a.solo:
                 for _ in range(a.times):
+                    # A MEASUREMENT YIELDS TO A GATE BETWEEN ITS RUNS (item 13: the slot is by priority)
+                    card, env_y = gate_runlog._vram().yield_card(card, env, f"{'+'.join(lane)} --solo", sys.stdout)
+                    if env_y is not env:
+                        # THE RE-HOLD IS A NEW HOLD (item 15): its drain decides the fallback, as solo_card's did
+                        env, fallback = _hold_state(gate_runlog._vram(), env_y, a.tier or "solo", lane, log_range)
                     rx = "^" + re.escape(s) + "$"
                     r = lost(gate_runlog.run_ctest(
                         f"ctest -j1 --timeout 900 --output-on-failure --no-tests=error -R '{rx}'",
@@ -2615,7 +2890,7 @@ def main():
                           "arms": {r: {arm: S.arms[r][arm] for arm in subsets[r]} for r in subsets},
                           "pool_arms_env": pool_env,
                           "rationale": [{"path": p, "why": w} for p, w in S.rationale],
-                          "graph": S.graph is not None,
+                          "graph": S.graph is not None, "tooling_only": S.tooling_only,
                           "estimated_seconds": est, "estimated_wall": wall,
                           "tier_rows": len(tier_rows), "tier_estimated_seconds": tier_est,
                           "command": merge_tier(a.jobs) if whole_tier else cmd,
@@ -2625,6 +2900,10 @@ def main():
     print(f"gate-scope: {len(paths)} touched path(s)"
           + ("" if S.graph else "   [NO BUILD GRAPH: compiled rows by directory rules]"))
     for p, why in S.rationale: print(f"  {p}\n      -> {why}")
+    if S.tooling_only:
+        print("\nTOOLING-ONLY DIFF (TESTING_V3 §1.3.4): every touched path is NON_PRODUCT (gate-scope.py) "
+              "— the hygiene label + the tools' rows + the rows whose declaration or command changed; no product row, "
+              "no smoke pair")
 
     def run_both(tier_name):
         """The MERGE tier, both phases (parallel, then the timing rows serial); the worse exit code."""

@@ -18,7 +18,7 @@ gate with < 0.2 sibling ctests on average is alone); solos; NOADMIT (records, an
 NOADMIT — recorded FAIL before VERDICT-1 U2, NOADMIT since); TIMEOUT by family; the verdicts, their red classes
 and what the verdict door (scripts/ci_gate_check.py door()) and the two preflight rules would refuse; the
 carried reds (open reds left on a never-landed tip of a lane that merged — VERDICT-1 U4's report; forward, the
-merge refusal carries them); the stage-close rows' runs; the slot / drain / hold hours (schema 2 records).
+merge refusal carries them); the stage-close rows' runs; the slot / drain / hold hours (schema 2 records); the forced exits (code 86, TESTING-CLEANUP-2 H8c).
 Section 1 and the per-week rows read the week; the verdicts, the NOADMIT pools and the carried reds read every
 record up to the week's end (the log the judge reads)."""
 import argparse
@@ -309,10 +309,16 @@ def main():
     psi = [m.get("psi10") for m in mem if m.get("psi10") is not None]
     print(f"  queue depth at row start: max {max(q) if q else '-'}   memory psi10 max {max(psi) if psi else '-'}   "
           f"rows started beside a build {sum(1 for m in mem if (m.get('builds') or 0) > 0)}")
+    # THE FORCED EXITS (TESTING-CLEANUP-2 H8c; gate_runlog.forced_exit): rows whose app ended through the shutdown
+    # watchdog's _Exit(86) instead of in order — green or red, each one a finding
+    fx = [r for r in wk if r.get("forced_exit") is not None]
+    print(f"\n== 9. forced exits (the shutdown watchdog, code 86; week, every row) ==\n  {len(fx)} record(s), "
+          f"{sum(1 for r in fx if r.get('verdict') == 'PASS')} of them green: " +
+          "  ".join(f"{k} {n}" for k, n in collections.Counter(r.get("suite") or "?" for r in fx).most_common(12)))
     print(f"\nTABLE gates {len(full)} | verdicts {len(V)} | refusable(H2 solos<3/3) "
           f"{len(ref.get('H2: solos below 3/3 cleared by text', []))} | door refuses "
           f"{len(ref.get('THE DOOR (VERDICT-1 U1, every rule incl. the class token)', []))} | NOADMIT pools {len(hole)} | "
-          f"carried {tot}")
+          f"carried {tot} | forced exits {len(fx)}")
 
 
 if __name__ == "__main__":

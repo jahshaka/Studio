@@ -13,7 +13,7 @@ reshape followed.
 |---|---|---|---|
 | **SCOPED** | the suites `scripts/gate-scope.sh <base>..<tip>` selects from the touched paths | ONE gate per BATCH of ready lanes, on `d-build..candidate` (§3c) — a builder runs its named acceptance tests + its subject suite, not a gate | the lead (`merge-dbuild-lane.sh batch` → `rc-gate.sh`), or gate-runner with the selection |
 | **MERGE** | TWO PHASES (TEST-SELECTOR-1): the parallel phase `python3 scripts/gate-scope.py --merge-tier [-j N]` prints (every row but the `timing` ones), then the serial phase `--merge-tier-serial` prints (the `timing` rows at -j1, each taking the whole GPU — inside the parallel phase they waited holding the admission's turnstile and stalled every admission on the box). The parallel phase is `ctest -j4 --timeout 120 --output-on-failure -LE` over `gate-scope.py`'s `STAGE_CLOSE_LABELS` ∪ `TARGET_LABELS` ∪ {`timing`} (today: every `stage-close` row — §1d —, the ASan shader-cache attack `shadercache-attack`, and the target tests `photon-target` and `scale-target`, §1b/§1c; the benches' `--smoke` rows, label `benchmark-smoke`, DO run). The set lives in the script ONLY; this doc never copies it (`source.gate_scope_rules` case 9 fails on a literal `-LE` list here), and neither may a script — `scripts/lead/rc-gate.sh` must run what `--merge-tier` prints. `--timeout 120` is the default for rows that set none; the box runs ONE gate at a time (§4c, the gate slot) — there is no lower width "while another lane's gate is live". **Measured (D6B-GATE-SHAPE, 2026-09-27): 56.7 min at -j4 beside other lanes' gates, 36.6 min simulated on the audit's quieter durations — the reshape's ~30 min goal (and its lane's ≤ 35 min bar) was NOT reached; §5 has the before/after pair and why** | a lane whose scope falls back (see §3), any merge the lead wants covered wider, and — while the full gate is under moratorium — the gate before a push | gate-runner |
-| **PUSH** | the MERGE tier + the `--engine-selftest` sha256 lines — **FOUR of them since lane FENCE-1**: `pose 1`, `pose 2`, `pose B1 (rays)`, `pose B2 (no rays)`. Poses 1-2 are the default scene at the PLAIN grade; pose pair B is a purpose-built fixture (glossy floor, cascade crossing, emissive 3.0, mirror pillar) at the VIEWPORT grade, which is the only grade that carries the SSR prepass and therefore the ray tier. Quote all four. (The moratorium of 2026-09-09 lifted 2026-09-10 with the cleanup. The `stage-close` rows are not push rows: the lead runs the STAGE-CLOSE batch before every push, below) | once per BATCH of merged lanes, before a push | gate-runner |
+| **PUSH** | the MERGE tier + the `--engine-selftest` sha256 lines — **SIX of them since TESTING-CLEANUP-2 (H5)**: `pose 1`, `pose 2`, `pose motion`, `pose B1 (rays)`, `pose B2 (no rays)`, `pose mover` (§7). Poses 1-2 are the default scene at the PLAIN grade, `motion` the same scene mid-walk; pose pair B is a purpose-built fixture (glossy floor, cascade crossing, emissive 3.0, mirror pillar) at the VIEWPORT grade, which is the only grade that carries the SSR prepass and therefore the ray tier, `mover` the fixture with a sphere crossing it. Quote all six. (The moratorium of 2026-09-09 lifted 2026-09-10 with the cleanup. The `stage-close` rows are not push rows: the lead runs the STAGE-CLOSE batch before every push, below) | once per BATCH of merged lanes, before a push | gate-runner |
 | **STAGE-CLOSE** | THE BATCH OF THE ROWS THE MERGE AND PUSH TIERS LEAVE OUT (§1d; lane STAGE-CLOSE-1): `python3 scripts/gate-scope.py --stage-close-tier --run` (or `JAH_GATE_TIER=stage-close scripts/lead/rc-gate.sh <tag>`) — ONE gate in the slot, two phases: every `stage-close` row without `quiet-box` (the minutes-of-one-process sweeps atom.cluster_cut, atom.cluster_crack, gi.chain_converge_scenes; samples.mirror_room_boots; gpu.cutout_soak and the shadow casters' `.churn` twins; shadercache.container_asan) at the gate's width, then every `quiet-box` / `timing` one — the benches' `--assert` rows, gi.gather_cost, vr.frame_budget, **open.crash_soak** (OPEN-FRAMES-1: the async-open teardown repro twelve times under glibc's malloc checks; read one failure as "run it again", three as a regression of the open's slice-boundary drive) and the `<suite>.timing` millisecond rows (§4) — at `-j1` on ONE hold of the whole card (`--stage-close-tier` / `--stage-close-tier-serial` print the two lines; the run-log tier is `stage-close`) | at every stage close and before every push — started by the lead, never by a timer | the lead |
 
 Tiers are contracts: nobody hand-picks suites out of one. A lane says which tier it ran and
@@ -408,7 +408,7 @@ the one GPU adds no capacity (§4c). The lever left is ONE gate per BATCH of lan
 **Builders** run their NAMED ACCEPTANCE TESTS + their SUBJECT SUITE (the brief names both), by hand,
 never a gate — no slot:
 ```
-DISPLAY=:NN nice -n 19 ionice -c 3 ctest --test-dir build-linux -R '^(<the named tests>|<the subject suite>)$' --output-on-failure
+DISPLAY=:NN nice -n 19 ctest --test-dir build-linux -R '^(<the named tests>|<the subject suite>)$' --output-on-failure
 ```
 (a tooling lane — a change to the gate's own scripts — still runs its own scoped gate, the lead's
 exception.) The lead's per-lane merge (`merge-dbuild-lane.sh <lane> …`) still judges a single lane.
@@ -424,7 +424,7 @@ exception.) The lead's per-lane merge (`merge-dbuild-lane.sh <lane> …`) still 
 JAH_GATE_TIER=scoped JAH_GATE_RANGE=<d-build>..<candidate> JAH_GATE_LANES=<lane>,<lane> \
     setsid nohup ~/Developer/scripts/lead/rc-gate.sh batch-<tag> <candidate> > /tmp/jah-lead/rc-batch-<tag>.out 2>&1 < /dev/null & disown
 #   (JAH_GATE_TIER=fork when the candidate moved the fork pin: gate-scope's --fork-tier, the whole tier) — a fresh
-#   tree, the four hashes, the slot taken once, `gate-scope.py <range> --run` inside it (the card per phase)
+#   tree, the six hashes, the slot taken once, `gate-scope.py <range> --run` inside it (the card per phase)
 ~/Developer/scripts/lead/merge-dbuild-lane.sh batch-land <tag> [--build <rc build>] [--display :NN] [--control-tree <dir>] [--verdict "<row>=<text>" ...]
 #   d-build's judge, UNCHANGED: ci_gate_check.py d-build..candidate --build <the candidate's build> — green:
 #   d-build fast-forwarded to the candidate in both repos (irisgl first), the HASHES line; a stale candidate (d-build
@@ -473,7 +473,15 @@ each in TESTING_V3_SPEC §1.5's FULL schema (`{id, rows, kind, cause, first_seen
 found_by: gate, recheck, expires}` — recheck a DATE: the next day for NOT REPRODUCED, +7 days for a
 defect; NOT REPRODUCED also `uses: 1, suspects: [the batch's lanes], census`), which VERDICT-1's registry
 (`testing/defects.json`) ingests — its reader quarantines a malformed entry (it never reaches the door), and
-gate.batch loads every pending file through it. Exit codes: 3 a
+gate.batch loads every pending file through it. **ONE ENTRY PER ROW AND KIND, AND A SIGHTING NEVER REWRITES IT**
+(TESTING-CLEANUP-2B items 14-15): ids are `<BATCH>-<ROW-UPPER>-<n>` (n the next free number of the stem); a row that
+already has an OPEN entry of the kind (registry or pending) gets no second entry — the new sighting is appended to
+`testing/defects.pending/<id>.recheck.json` (`{id, sightings: [{tip, pin, run, batch, cause, date, recheck_proposed}]}`)
+and the entry itself — `testing/defects.json` and the pending files are TRACKED — is never re-serialised: its `recheck`
+stays the lead's, so a sighting never stands in for the re-verdict the door demands of an entry past its date. The reader
+attaches the sightings to the entry (`sightings`), never reads the file as an entry. Never reused: a NOT REPRODUCED entry
+(single-use at its batch) and a fixed or retired one (a new sighting is a new finding). Registrations hold the pending
+directory's flock across the scan, the numbering and the write: two attributions at once never take one number. Exit codes: 3 a
 combination defect, else 7 an INCOMPLETE or aborted attribution, else 5 a d-build defect, else 0; 4 an
 unusable tree, 64 usage. Every commit the batch tooling writes (the candidate's merges, the regenerated
 SCRIPTING.md) is authored jahshaka by the script itself, and batch-land runs check-trailers on the
@@ -793,16 +801,38 @@ A gate run is `gate-scope.sh --run` (scoped, a fallback, `--fork-tier`,
 -- <command>` holds the slot across a whole script that runs several). **A WHOLE-CARD HOLD ALWAYS TAKES
 IT** (GATE-COST-2): a `--solo` batch, an `--attribute` run, a timing phase run by hand — anything that drains
 the card through `hold_card()`, and `admit all` (`gpu-exclusive.sh`: a timing row run outside a gate, inside
-the admission's own 900 s bound — NOADMIT past it) — queues FIFO with the gates first. Per-row admissions of
+the admission's own 900 s bound — NOADMIT past it) — queues for it at class 2, behind any waiting gate. Per-row admissions of
 k tokens never take it (an `admit <k>`, a pool's app, a lane's own hand run), nor does a build. The waiting gate
 prints `gate-slot: queued at position <p> (<p> ahead) behind <holder>, holding it for <age>` (again
 whenever the position moves, and every 10 min) and `gate-slot: taken after <s> s in the queue`; the
-queue is FIFO and has NO bound (a gate never gives up for the slot). `scripts/gpu-admit.sh status`
-names the holder, the queue and every token holder with its AGE — a hung holder is visible.
+queue has NO bound (a gate never gives up for the slot). `scripts/gpu-admit.sh status`
+names the holder, the queue in serving order with each CLASS, and every token holder with its AGE — a hung holder
+is visible.
+**THE SLOT IS BY PRIORITY, NOT ARRIVAL** (TESTING-CLEANUP-2B item 13; the owner 2026-10-10: "the gate needs to run,
+not wait for everything else"). Classes: **0** the owner's smoke rc, **1** a gate (rc-gate's tiers, `gate-scope.py
+--run`, `gate_runlog.py run`), **2** a lane's measurement (`gpu-exclusive.sh`, `--solo`, `--attribute`, a whole-card hold
+by hand, `gate_runlog.py run --tier lane|solo`). A waiter of a lower class is served before every waiting higher one
+(by ticket inside a class) and never displaces the holder; a free slot is taken at once by whoever asks. A class-2
+holder that holds across rows (`--solo`, `--attribute`) checks the queue between rows and YIELDS to a waiting class
+0/1 (`yield_card`: the card and the slot given up, re-asked at its class, resumed at its next row — its recorded runs
+stay). `gpu-admit.sh gate --class N --label …` names the class; without it the label decides (`rc-<tag> smoke` -> 0,
+anything else -> 1). A measurement loop of `gpu-exclusive.sh` runs yields between its runs by construction (each run
+asks again at class 2).
+**WHAT THE CLASS RULE COSTS, ACCEPTED** (the owner's rule, TESTING-CLEANUP-2B item 15): (1) a class-2 waiter can
+STARVE under a steady run of gates — every gate that asks while it waits is served first, with no bound on how many;
+(2) `admit all` (`gpu-exclusive.sh`) is not starved forever: its wait is bounded by the admission's `wait_bound`
+(`JAH_VRAM_WAIT`, 900 s by default) and past it the run is NOADMIT (exit 75, never ran) — a measurement loop that must
+wait out a gate batch sets a longer `JAH_VRAM_WAIT`; (3) a lane's own tier run (`gate_runlog.py run --tier lane|solo`)
+is ONE ctest process holding the slot for its whole run — one ctest cannot yield between its rows — so a gate that asks
+behind it waits at most that one lane run, never more (keep such runs to one row, as item 7's re-measures do). **A
+YIELD'S RE-HOLD IS A NEW HOLD**: after `yield_card` the re-drain's own outcome decides the runs after it — a re-drain
+that times out writes its `drain-timeout` record and runs the rest with `JAH_VRAM_ALL` and the `fallback` stamp, a
+clean one without (`gate-scope.py _hold_state`, both the `--solo` and `--attribute` paths; gate.cost case (a)/(b)).
 **Mechanism** (`scripts/vram_tokens.py`): each waiter flocks its own ticket
-`/tmp/jah-vram/gate-queue/<seq>.<pid>` (made locked under a private name, then renamed in); the
-lowest live ticket is the holder (a ticket is numbered AND renamed in under the counter's lock, so
-two gates never both find no lower ticket); a dead waiter's ticket is reaped by the next reader. The
+`/tmp/jah-vram/gate-queue/<seq>.<pid>.c<class>` (made locked under a private name, then renamed in); the
+holder's ticket is renamed `….held` when it takes the slot — under the counter's lock, and only when no ticket
+is held and no waiter outranks it (a lower class, or the same class and an earlier ticket), so two askers never
+both take it; a dead waiter's or holder's ticket is reaped by the next reader. The
 slot and a phase's tokens belong to the GATE PROCESS, never to its ctest, and THE ctest TREE DIES WITH
 THE GATE: ctest runs in its own process group with PR_SET_PDEATHSIG (SIGTERM), a detached reaper
 kills that group the moment the gate's pid is gone (ctest's own SIGTERM orphans its rows — measured),
@@ -936,28 +966,39 @@ scheduled as "phase 2" is built: §8 (the pools).
 - **gate-runner**: runs the tier it is given, never picks, restores what it touched, kills
   only its own pids.
 
-## 7. The four selftest hashes (lane FENCE-1, PHOTON phase A)
+## 7. The six selftest hashes (lane FENCE-1, PHOTON phase A; MOTION and MOVER since TESTING-CLEANUP-2 H5)
 
-`./build-linux/bin/Jahshaka --engine-selftest out.png` prints FOUR `sha256` lines and writes
-four files. They are the cheapest early warning in the tree — seconds, one process — and a
-push quotes all four.
+`./build-linux/bin/Jahshaka --engine-selftest out.png` prints SIX `sha256` lines and writes
+six files. They are the cheapest early warning in the tree — seconds, one process — and a
+push quotes all six. Every frame before every shot is a COUNTED frame on the fixed 1/60 s clock
+(`renderFrames(n, 1/60)`; H5 replaced the runner's two wall-clock pumps, the candidate cause of
+B1/B2's old nondeterminism, §1771/§1830).
 
-| line | file | what it fences | grade |
+| line (in print order) | file | what it fences | grade |
 |---|---|---|---|
 | `pose 1` | `out.png` | the default scene from the camera that has never moved | Plain |
 | `pose 2` | `out.pose2.png` | the same scene after the camera moves +5 m in x, turns, and settles 240 frames — the cascade scroll, the field's follow, the settle | Plain |
+| `pose motion` | `out.motion.png` | a WALK from pose 2's place, 0.1 m per frame for 30 frames, the shot at the 30th with NO settle — the per-frame paths of a moving camera (the cascade scroll mid-step, an unconverged history) | Plain |
 | `pose B1 (rays)` | `out.B1.png` | fixture B **with** the ray tier | Viewport |
 | `pose B2 (no rays)` | `out.B2.png` | the same fixture after `world.rayTracing("off")` | Viewport |
+| `pose mover` | `out.mover.png` | rays back on and settled, then a glossy sphere crossing the floor 0.1 m per frame for 30 frames, the shot mid-move — the moving-object paths (the march's object motion, the trace's mover branches, the reprojection velocity) | Viewport |
 
-At Studio `fence-1` (2026-09-22), five consecutive runs on the rig (Xvfb `:NN`
-`1920x1080x24`, `--data-root`; run 1 cache-cold, runs 2-5 warm) printed identical numbers:
+The record lives in `testing/HASHES_OF_RECORD` (the lead's; one line per landing that moved
+one). TESTING-CLEANUP-2 measured the six 5/5 cold on the rig (Xvfb `:NN` `1920x1080x24`,
+`--data-root`), and TESTING-CLEANUP-2B re-read them at its tip:
 
 ```
-pose 1        777eb2f12a15811a75a0fda1e7c746acbf07a030fca69e658c3132ebc3ffa7be
-pose 2        c2c2b19f6c95351fbe6163b2036256fb240054e176dff87afe0e014fdf241d74
-pose B1 rays  78349e56270c69fbb393c86507c38a209571b519f04229c035cd3e5b819be023
-pose B2 none  541dce5a0f285cc84268011b837b3fcb28514dea138b282d142de797c70951a0
+pose 1        87b9d5b37d91fbf7158cca7fe73127bc661c65296db703e4ac9c9f65990cb05c
+pose 2        e10ed7139c0764da8ec5e9c4da525b14c348ed67829ff98ac5daa0f544b9a7de
+pose motion   e0e1bb6a323990df76a77e8b1175638f868aa5da681a173384f9dd0c4ecc7476
+pose B1 rays  8e425c516f9f11eca1f11c77669c148d647a07f976ab0892949f889ed24123bd
+pose B2 none  244ff98ed7745b33546b3006c62252c08e04f941f4ac862094460afc2f364f23
+pose mover    32734538ec9ed24ba5aefdc596a05e21a9ceb2c43d5194c4a28be2ccb34ad5b4
 ```
+
+The runner refuses a degenerate fence: pose 2 equal to pose 1 (the camera move did not take), the
+motion pose equal to pose 2 (the walk did not take), the mover equal to B1 (the sphere did not reach
+the shot), any of them the clear colour — and B1 != B2 whenever the machine has ray queries.
 
 **WHY FIXTURE B EXISTS.** The default scene has no reflective pixel, no cascade crossing, no
 emissive above 1.0 and nothing ray-traced, so no PHOTON defect and no PHOTON regression can

@@ -187,8 +187,9 @@ the gate on a Vulkan row registered any other way, naming its CMakeLists line.
   `VK_ERROR_OUT_OF_DEVICE_MEMORY`. Gate at `-j4` whoever else is gating; there is no `-j2`
   rule. `scripts/gpu-admit.sh status` shows who holds what. A long hand-started app run on a
   box where gates are running takes its tokens too: `scripts/gpu-admit.sh 2 -- ./Jahshaka …`.
-- **Priority.** Builds, ctest and hand-started app instances run under
-  `nice -n 19 ionice -c 3`; a person's live app always wins the CPU.
+- **Priority.** Builds run under `nice -n 19 ionice -c 3`; ctest and hand-started app instances
+  under `nice -n 19` ONLY (IONICE-1: the root disk's mq-deadline ages an idle-class read 10 s, and
+  a 0.1 s script under `ionice -c 3` took 60 s). A person's live app always wins the CPU.
 
 ## 5. Reading a red
 
@@ -414,3 +415,4 @@ remains below is read ONCE (a boot or session latch). A new measuring switch is 
 | `JAH_TEXTURE_CACHE`, `JAH_TEXTURE_MULTILOAD`, `JAH_TEXTURE_SYNC_LOAD` | OgreEngine.cpp, OgreMaterials.cpp | scripts/threading/texture-ab.sh | the texture-load A/B arms |
 | `JAH_TEXTURE_WAIT_MS`, `JAH_TEXTURE_WAIT_FAULT`, `JAH_TEXTURE_DRAIN_ADVANCE_MS` | OgreEngine.cpp | threading.texture_wait_watchdog, app.* verbs (docs/SCRIPTING.md) | the texture wait budget and its fault hook |
 | `JAHSHAKA_VR_TEST_INJECT`, `JAHSHAKA_VR_TEST_NO_ACTIONS` | EnginePrivate.h, OgreVrSession.cpp | vr.session, the VR session scripts | injected controllers / an action-set refusal |
+| `JAH_ASYNC_SHADER_THREADS` | OgreEngine.cpp | **NONE in the tree** (TESTING-CLEANUP-2B's sweep, 2026-10-10: ASYNC-SHADERS-1's override of `EngineConfig::asyncShaderThreads`) | the background shader compiler's thread count — by this section's rule a switch with no reader is deleted: the engine lane that owns it does (a product file, not a tooling lane's) |

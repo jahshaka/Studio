@@ -788,6 +788,78 @@
     "gi.overlay",
     "gi.probe_inputs"
    ]
+  },
+  {
+   "case": "H8a scripts/ci_gate_check.py beside a product file selects its tests (TESTING-CLEANUP-2B item 4; red on base: no row)",
+   "files": [
+    "src/services/vrworld.cpp",
+    "scripts/ci_gate_check.py"
+   ],
+   "must": [
+    "gate.ci_check",
+    "gate.verdict_door"
+   ]
+  },
+  {
+   "case": "H8a scripts/ci-gate-check.sh beside a product file selects its tests (TESTING-CLEANUP-2B item 4; red on base: no row)",
+   "files": [
+    "src/services/vrworld.cpp",
+    "scripts/ci-gate-check.sh"
+   ],
+   "must": [
+    "gate.ci_check"
+   ]
+  },
+  {
+   "case": "H8a scripts/kernel_xid.py beside a product file selects its tests (TESTING-CLEANUP-2B item 4; red on base: no row)",
+   "files": [
+    "src/services/vrworld.cpp",
+    "scripts/kernel_xid.py"
+   ],
+   "must": [
+    "devprocess.kernel_journal",
+    "gate.cost"
+   ]
+  },
+  {
+   "case": "H8a scripts/check-trailers.sh beside a product file selects its tests (TESTING-CLEANUP-2B item 4; red on base: no row)",
+   "files": [
+    "src/services/vrworld.cpp",
+    "scripts/check-trailers.sh"
+   ],
+   "must": [
+    "gate.batch"
+   ]
+  },
+  {
+   "case": "H8a scripts/lsan.supp beside a product file selects its tests (TESTING-CLEANUP-2B item 4; red on base: no row)",
+   "files": [
+    "src/services/vrworld.cpp",
+    "scripts/lsan.supp"
+   ],
+   "must": [
+    "source.testing_rules"
+   ]
+  },
+  {
+   "case": "H8a scripts/tsan.supp beside a product file selects its tests (TESTING-CLEANUP-2B item 4; red on base: no row)",
+   "files": [
+    "src/services/vrworld.cpp",
+    "scripts/tsan.supp"
+   ],
+   "must": [
+    "source.testing_rules"
+   ]
+  },
+  {
+   "case": "H8a scripts/sanitize.sh beside a product file selects its tests (TESTING-CLEANUP-2B item 4; red on base: no row)",
+   "files": [
+    "src/services/vrworld.cpp",
+    "scripts/sanitize.sh"
+   ],
+   "must": [
+    "source.testing_rules"
+   ]
   }
  ],
  "hunks": [

@@ -12,12 +12,16 @@
 # Every timing suite is registered through this (jah_gpu_exclusive_test, tests/CMakeLists.txt),
 # and so is every measurement run by hand (`scripts/gpu-exclusive.sh ./Jahshaka --script m.js`).
 #
+# A MEASUREMENT IS CLASS 2 IN THE GATE SLOT (TESTING-CLEANUP-2B item 13): `admit all` queues behind every waiting gate
+# and the owner's smoke; a loop of these runs yields to a gate between its runs (each run asks again).
+#
 # THE WAIT IS NOT THE ROW'S TIME (LOCK-WAIT-1): the admission's wait is printed as ONE line,
 # `gpu-lock: waited <s> s`, which the run log records per row as `lockWaitS` and subtracts from
 # the row's seconds; a wait past the bound (JAH_VRAM_WAIT, 900 s) prints `NOADMIT vram: …`, exits
 # 75 and never runs the command. With `--run-timeout <s>` (what jah_gpu_exclusive_test passes: the
 # row's own budget) THE ROW'S CLOCK STARTS AFTER THE ADMISSION — timeout(1) enforces it from there,
-# and ctest's TIMEOUT is only the backstop (budget + the wait's bound). The command runs as the
+# and ctest's TIMEOUT is only the backstop (budget + 30 s; inside a gate the timing phase holds the
+# whole card, so the row's admission does not wait — tests/cmake/vram_rows.cmake). The command runs as the
 # admission's child with the token fds inherited: the tokens die with the pair, whatever ends it,
 # and the kernel's word on the row (an Xid) is read after it (scripts/kernel_xid.py).
 #

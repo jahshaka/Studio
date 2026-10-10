@@ -171,7 +171,10 @@ HARD = ("LOST", "OOM", "CRASH")          # never cleared by solos, never by `con
 #   xid-read:<window>  LOST/OOM/CRASH whose record says journal_unreadable (else the Xid would be in the record).
 # A red whose record carries an `xid` takes `real:` only. Solos below 3/3 are red. `environmental`, ENOSPC and a dead
 # display are never verdicts. Nothing accepts prose.
-DEFECT_ID = re.compile(r"\breal:\s*([A-Z][A-Z0-9]*(?:-[A-Z0-9]+)*-\d+[a-z]?)\b")
+# `real:<id>` names ANY token (TESTING-CLEANUP-2B item 14): the REGISTRY is the grammar — _real looks the token up and
+# refuses an id it does not hold. A pattern of its own (it was [A-Z…]-<n>) could not name the ids the attribution
+# itself registered (lowercase, dots, no number), so every KNOWN RED verdict on them fell through to prose and was refused.
+DEFECT_ID = re.compile(r"\breal:\s*([^\s,;()\[\]]+?)[.:]?(?=[\s,;()\[\]]|$)")
 CONTENTION_TOKEN = re.compile(r"\bcontention:\s*\S")
 XID_READ = re.compile(r"\bxid-read:\s*(\d{4}-\d\d-\d\dT\d\d:\d\d(?::\d\d)?(?:[+-]\d\d:?\d\d)?)\.\."
                       r"((?:\d{4}-\d\d-\d\dT)?\d\d:\d\d(?::\d\d)?(?:[+-]\d\d:?\d\d)?)")
@@ -204,9 +207,39 @@ def _solos_ok(solos):
     return len(solos) >= SOLO_NEEDED and all(r.get("verdict") == "PASS" for r in solos)
 
 
+# THE PATHS A FAILURE NAMES ARE THE TREE'S, NOT THE FAILURE'S (TESTING-CLEANUP-2C item 1): a failLine that embeds its tree
+# root ("…must be inside /…/rc-batch-C2/build-linux/tests/…") must read the same at the base's tree (rc-base-<sha>) — batch
+# C2 refused three KNOWN RED verdicts whose masked lines were identical up to the root. Each prefix below is ONE token;
+# what follows it (the path INSIDE the tree) stays, so a different file is still a different failure.
+_D = r"""[^/\s'"`(),;=:]"""                     # a path component's character (a delimiter ends the path)
+_START = r"""(?<![^\s'"`(),;=:])"""             # a path STARTS at the line's start or after a delimiter (fix round 3
+                                                #  F2: an unanchored prefix ate glued text — a=<p> read as b=<p>)
+_PATH_MASKS = [
+    # any worktree (lane, rc, rc-base): the path up to and including its name
+    (re.compile(_START + r"(?:/" + _D + r"+)+?/\.claude/worktrees/" + _D + r"+"), "<tree>"),
+    # the main tree under either spelling (never jahshaka-old: the next character is not a name's)
+    (re.compile(_START + r"(?:/home/" + _D + r"+|/mnt/work)/Developer(?:\.usb)?/jahshaka(?![\w.-])"), "<tree>"),
+    # /tmp/jah-* (lead + rig scratch)
+    (re.compile(_START + r"/tmp/jah-" + _D + r"*"), "<jah-tmp>"),
+    # a data root OUTSIDE a tree — a user's home or a /tmp scratch home; a home INSIDE a tree was masked to <tree>/…
+    # above and keeps its own name (e2e-home-clip_ref and e2e-home-tex_ref stay two reds — fix round 3 F2)
+    # (fix round 4, item 4: a user's home and a /tmp scratch home are DIFFERENT tokens — a regression that writes the
+    # owner's real data root never reads as a scratch home's red)
+    (re.compile(_START + r"/home/" + _D + r"+/\.local/share/Jahshaka(?![\w.-])"), "<home-data-root>"),
+    (re.compile(_START + r"/tmp/" + _D + r"+/\.local/share/Jahshaka(?![\w.-])"), "<tmp-data-root>"),
+]
+
+
 def masked(line):
-    """A failLine with its numbers masked — the same failure reads the same at base and tip."""
-    return re.sub(r"\d+(\.\d+)?", "#", (line or "").strip())
+    """A failLine with its tree paths and numbers masked — the same failure reads the same at base and tip: every path
+    under a tree root (a `.claude/worktrees/<name>`, the main tree), /tmp/jah-* and a data root OUTSIDE a tree (a user's
+    or a /tmp home; an in-tree home keeps its name) is one token, each matched only where a path STARTS
+    (_PATH_MASKS), then every number is `#`. A different failure (another message, another file in the tree) stays
+    different."""
+    t = (line or "").strip()
+    for rx, tok in _PATH_MASKS:
+        t = rx.sub(tok, t)
+    return re.sub(r"\d+(\.\d+)?", "#", t)
 
 
 def _sha(r):
@@ -254,15 +287,36 @@ def _real(m, row, reds, solos, defects, tip_recs, base_recs, tip_sha=None, mode=
     if good:
         return True, f"real:{did} fixed (a PASS at {(_sha(good[-1]) or '')[:9]}, a later sha that reaches the row)", False
     # KNOWN RED: the SAME red on the base — the same verdict class and the same masked failLine (a lane that turns a
-    # base FAIL into a CRASH, or another assertion, is not "known")
+    # base FAIL into a CRASH, or another assertion, is not "known"). EVERY PENDING RED (TESTING-CLEANUP-2B fix round 3,
+    # F1): the gate's red AND each red solo after it must match a base solo red — the newest alone let a CRASH or another
+    # assertion among the solos pass — and the base's solos must ALL be red: a base with green solos beside its red is
+    # nondeterminism on the base, not a known red.
+    def _sig(r):
+        return (r.get("verdict"), masked(r.get("failLine")), masked(r.get("status")))
     lane_red = sorted(reds, key=_when)[-1]
-    same = [r for r in (base_recs or []) if r.get("kind") != "verdict" and r.get("retry")
-            and r.get("verdict") == lane_red.get("verdict") and masked(r.get("failLine")) == masked(lane_red.get("failLine"))
-            and masked(r.get("status")) == masked(lane_red.get("status"))]
-    if same:
+    pending = list(reds) + [r for r in (solos or []) if r.get("verdict") not in ("PASS",) + NEVER_RAN
+                            and not any(r is x for x in reds)]      # `reds` may already hold the solos: count each once
+    base_solos = [r for r in (base_recs or []) if r.get("kind") != "verdict" and r.get("retry")
+                  and r.get("verdict") not in NEVER_RAN]
+    base_reds = [r for r in base_solos if r.get("verdict") != "PASS"]
+    base_sigs = {_sig(r) for r in base_reds}
+    odd = [r for r in pending if _sig(r) not in base_sigs]
+    # ONE RED ON THE BASE (fix round 4, item 6): a base whose own solos flip class (FAIL / CRASH) is not one known red —
+    # every pending red matching SOME base red would let an all-CRASH candidate through on one CRASH base solo
+    base_classes = sorted({r.get("verdict") for r in base_reds})
+    if base_reds and len(base_classes) > 1:
+        return False, (f"real:{did}: the base's solos flip class ({'/'.join(base_classes)}) — not one KNOWN RED"), False
+    if base_reds and len(base_reds) == len(base_solos) and not odd:
         return True, (f"real:{did} KNOWN RED (the same {lane_red.get('verdict')}"
-                      f"{' — ' + masked(lane_red.get('failLine'))[:60] if lane_red.get('failLine') else ''} reproduced by a "
-                      f"recorded solo at the base)"), "known"
+                      f"{' — ' + masked(lane_red.get('failLine'))[:60] if lane_red.get('failLine') else ''} — every one of "
+                      f"the {len(pending)} pending red(s) reproduced by the base's {len(base_reds)} red solo(s))"), "known"
+    if base_reds and len(base_reds) < len(base_solos) and not odd:
+        return False, (f"real:{did}: the base's solos are {len(base_reds)} red / {len(base_solos) - len(base_reds)} "
+                       f"green — nondeterminism on the base, not a KNOWN RED"), False
+    if base_reds and odd and any(_sig(r) in base_sigs for r in pending):
+        o = odd[-1]
+        return False, (f"real:{did}: not every pending red is the base's red — {o.get('verdict')} "
+                       f"'{masked(o.get('failLine') or o.get('status'))[:50]}' among them is not — not known"), False
     other = [r for r in (base_recs or []) if r.get("kind") != "verdict" and r.get("retry")
              and r.get("verdict") not in ("PASS",) + NEVER_RAN]
     if later and not other:
@@ -299,7 +353,15 @@ def door(text, reds, solos, row, defects=None, tip_recs=None, base_recs=None, ti
         return False, (f"the red carries an Xid from the row's own process (pid {x.get('pid')}, "
                        f"{x.get('window')}) — a DEFECT by law: only real:<registered id> clears it"), False
     spass = sum(1 for r in solos if r.get("verdict") == "PASS")
-    if solos and not _solos_ok(solos):
+    # THE SOLO RULE IS FOR A CLAIM OF NONDETERMINISM (TESTING-CLEANUP-2C, the lead's item 4): solos below 3/3 refuse
+    # prose, a contention: claim and a nondeterminism entry (which must SHOW 3/3 green) — but a real:<id> of a DEFECT
+    # whose solos are ALL red is the defect reproducing, and its proof is the SAME red on the base's solos (_real's
+    # KNOWN RED) or a PASS at a later sha that reaches the row: the red solos are its evidence, not a refusal. Batch C2's
+    # attribution recorded 3/3 red at the candidate and at the base for five rows and the door refused every
+    # `real:C2-defect-<row>` here, before the KNOWN RED door could read the base. MIXED solos (some green, some red) are
+    # nondeterminism by definition and stay refused for any verdict.
+    all_red = bool(solos) and spass == 0
+    if solos and not _solos_ok(solos) and not (real and all_red):
         return False, (f"solos below 3/3 ({spass}/{len(solos)} solo PASS after the red) are red — never cleared by "
                        f"text, listed or not"), False
     hard = kinds & set(HARD)
@@ -335,6 +397,36 @@ def door(text, reds, solos, row, defects=None, tip_recs=None, base_recs=None, ti
     return False, ("a verdict carries a registered fact: real:<id> (in testing/defects.json, proved by a PASS at a "
                    "later sha that reaches the row, or the same red reproduced on the base) or contention: (a nondeterminism row, a competitor census, 3/3 "
                    "solo) — nothing accepts prose"), False
+
+
+def resolve_not_run(out, tip_recs, judge_parent, tip_sha):
+    """A ROW NOT RUN BECAUSE ITS PARENT FAILED IS ANSWERED BY THE PARENT (TESTING-CLEANUP-2B fix round 3 F3). An
+    inspector whose run fixture's parent went red is ctest's "Not Run" — NOTRUN, no run, so MISSING, which no verdict
+    clears, and a --solo of it re-runs the red parent first: a KNOWN RED parent would block every merge selecting its
+    inspector. The runner names the parent on the record (`notRunBecause`); a MISSING row whose newest such record names
+    parents takes the WORST parent state at the tip when that state is RED or KNOWN (the parent's verdict covers both);
+    a green / nondet / missing parent leaves it MISSING (its own assertion never ran; --resume / --solo run both). `out`: {key: (state, why, src)}, updated in place; `tip_recs`: {key: [records]};
+    `judge_parent(key)` -> (state, why) for a parent not in `out`."""
+    order = ["red", "missing", "known", "nondet", "green"]
+    for k in list(out):
+        if out[k][0] != "missing" or k[1]:
+            continue
+        # THE NEWEST RECORD OVERALL (fix round 4, item 1): an older parent-Not-Run beside a newer bare Not Run resolves
+        # nothing
+        runs_ = sorted((r for r in tip_recs.get(k, []) if r.get("kind") != "verdict"), key=_when)
+        if not runs_ or runs_[-1].get("verdict") != "NOTRUN" or not runs_[-1].get("notRunBecause"):
+            continue
+        pst = []
+        for pn in runs_[-1]["notRunBecause"]:
+            pk = (pn, None)
+            pst.append((pn,) + (tuple(out[pk][:2]) if pk in out else tuple(judge_parent(pk))))
+        worst = min(pst, key=lambda t: order.index(t[1]) if t[1] in order else 0)
+        # ONLY A RED OR A KNOWN RED PARENT ANSWERS IT (fix round 4, item 1): a green / nondet parent means the inspector's
+        # own assertion never ran at the tip — it stays MISSING (a --solo of it runs the parent first)
+        if worst[1] not in ("red", "known"):
+            continue
+        out[k] = (worst[1], f"not run: its parent {worst[0]} is {worst[1]} — answered by the parent's record and verdict "
+                            f"({(worst[2] or '')[:100]})", tip_sha)
 
 
 def judge(key, recs, defects, tip_recs=None, base_recs=None, tip_sha=None, mode="merge", proves=None):
@@ -689,6 +781,10 @@ def check(rng, build, gs=None, verdicts=None, mode="merge", lane=None, stage_clo
                     break
             st, why = dropped(k, st, why, src)
             out[k] = (st, why, src)
+        resolve_not_run(out, got[tip_sha], lambda pk: judge(pk, got[tip_sha].get(pk, []), defects,
+                                                            tip_recs=got[tip_sha].get(pk, []),
+                                                            base_recs=got.get(base_sha, {}).get(pk, []),
+                                                            tip_sha=tip_sha, mode=mode, proves=prover), tip_sha)
         # U4: THE LANE'S OTHER TIPS (a rebase, a superseded fix round): an open red there that the
         # current tip never re-ran (a later record of the same row+arm at the tip that passes) and no
         # accepted verdict answered is carried to this tip
