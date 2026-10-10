@@ -573,6 +573,30 @@ def batch_range_cases(E):
     rc, out = E.run(rng="%s..%s" % (base, x))
     check(rc == 0, "(1) a verdict recorded at the earlier commit itself still answers its red (rc %d)" % rc)
 
+    # read 1 I1 (a): a tip verdict stamped BEFORE C1's red clears nothing there — C1's reds after it stay open
+    E.fresh()
+    solos(base, "09")
+    E.put(["photon.view"], "FAIL", T % "09:40", tip=x, failLine=FL)
+    for i in range(3):
+        E.put(["photon.view"], "FAIL", T % ("09:4%d" % (i + 1)), tip=x, retry=True, failLine=FL)
+    E.verdict("photon.view", "real:VIEWS-XID-1", T % "09:50", tip=x)
+    E.put(["photon.view"], "FAIL", T % "10:00", tip=c1, failLine=FL)
+    solos(c1, "10")
+    rc, out = E.run(rng="%s..%s" % (base, x))
+    check(rc == 1 and "OPEN red at %s" % c1[:9] in out,
+          "(1, read 1 I1a) a tip verdict stamped BEFORE C1's red clears nothing at C1 (rc %d)" % rc)
+    # read 1 I1 (b): a verdict at C1 does not answer the TIP's reds (only the tip's verdicts reach down, never up)
+    E.fresh()
+    solos(base, "09")
+    E.put(["photon.view"], "FAIL", T % "10:00", tip=c1, failLine=FL)
+    solos(c1, "10")
+    E.put(["photon.view"], "FAIL", T % "11:00", tip=x, failLine=FL)
+    solos(x, "11")
+    E.verdict("photon.view", "real:VIEWS-XID-1", T % "12:00", tip=c1)
+    rc, out = E.run(rng="%s..%s" % (base, x))
+    check(rc == 1 and "row photon.view <- %s (the tip): red" % x[:9] in out,
+          "(1, read 1 I1b) a verdict recorded at C1 does not answer the tip's reds (rc %d)" % rc)
+
     # ---- (2) the base's proof travels: A = 51e9f2c49 (the solos), B = A + one docs file (the base), Tt = the VIEWS-DEPTH-1
     # tree + the same docs file on B (B..Tt selects photon.view; A..B is docs-only: reaches no product row)
     a_tree = E.git("rev-parse", "51e9f2c49^{tree}")
