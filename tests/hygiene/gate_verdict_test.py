@@ -668,7 +668,12 @@ def case_log_schema2(E):
     # forced_exit: 86 and the line's why — green or red; a row that ended in order carries no such field.
     # RED ON BASE (b0a3b1f3c): the record had no forced_exit field (KeyError-free None: the check below read None).
     wd = ("shutdown watchdog: background workers still running 5 s after exit — forcing process exit (code 86)")
-    fx = R.records("s.four", "Passed", 1.0, time.time(), (0, 0, 0), "PASS: ok\n" + wd + "\n" + wd, {})[0]
+    funnel = "[2026.10.10-02.11.13.448][    0]app: Error: " + wd       # the log funnel's stderr mirror of the same exit
+    one = R.records("s.five", "Passed", 1.0, time.time(), (0, 0, 0), "PASS: ok\n" + funnel + "\n" + wd, {})[0]
+    check(one.get("forced_exit") == 86 and "forced_exits" not in one,
+          "ONE forced exit printed twice (the funnel's mirror + the plain line) counts once (fix round E; red: 2)")
+    fx = R.records("s.four", "Passed", 1.0, time.time(), (0, 0, 0),
+                   "PASS: ok\n" + funnel + "\n" + wd + "\n| " + funnel + "\n| " + wd, {})[0]
     check(fx.get("forced_exit") == 86 and "background workers" in (fx.get("forced_exit_why") or "")
           and fx.get("forced_exits") == 2 and fx.get("verdict") == "PASS",
           "a green row whose app forced its exit records forced_exit 86, the why and the count (%s %s %s)"
