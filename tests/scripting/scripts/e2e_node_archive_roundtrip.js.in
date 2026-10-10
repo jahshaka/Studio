@@ -76,11 +76,15 @@ console.log("gc -> " + J(gc).slice(0, 400));
 
 // ---- the import: the node's assets and the node come back ---------------------------
 project.create("archive target " + Date.now());
+// THE IMPORT BAKED WHAT IT BROUGHT — scoped to THIS import: the library-wide dry run is read before
+// and after it, and the import may add nothing that wants a bake. (Its absolute count is the pool's:
+// an earlier arm's row left wanting a bake is that arm's claim, never this one's.)
+var wantingBefore = assets.bakeAll({ dryRun: true });
 var guid = assets.import(file);
 assert(guid && guid.length > 10, "assets.import(the node's archive) -> " + guid);
-// THE IMPORT BAKED WHAT IT BROUGHT: nothing in the library is left wanting a bake.
 var wanting = assets.bakeAll({ dryRun: true });
-assert(wanting.needed === 0, "the import baked the model it brought (bakeAll dry run: " + J(wanting) + ")");
+assert(wanting.needed === wantingBefore.needed,
+       "the import baked the model it brought (bakeAll dry run before " + J(wantingBefore) + ", after " + J(wanting) + ")");
 var meta = assets.metadata(guid);
 assert(meta.type === "object", "the file lands as ONE object tile (" + meta.type + ")");
 textures.forEach(function (t) {
