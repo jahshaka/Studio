@@ -403,7 +403,7 @@ def main():
     ap.add_argument("--out", default=None)
     ap.add_argument("--top", type=int, default=40, help="rows printed per table (the frame rows always)")
     ap.add_argument("--full-priority", action="store_true",
-                    help="no nice/ionice (only when the lead's brief says the measurement needs it)")
+                    help="no nice (only when the lead's brief says the measurement needs it)")
     ap.add_argument("--dry-run", action="store_true", help="write the driver and print the command; run nothing")
     a = ap.parse_args()
     if len(a.arm) != 2 or a.arm[0][0] == a.arm[1][0]:
@@ -432,7 +432,9 @@ def main():
     if os.access(SCOPED, os.X_OK):
         cmd += [SCOPED, "40G", "--"]
     if not a.full_priority:
-        cmd += ["nice", "-n", "19", "ionice", "-c", "3"]
+        # nice only, NO ionice (IONICE-1, 2026-10-09): the root disk's mq-deadline ages an idle-class
+        # read 10 s, so an app under `ionice -c 3` starved a 0.1 s script to 60 s — builds keep -c 3
+        cmd += ["nice", "-n", "19"]
     cmd += [os.path.join(ROOT, "scripts", "gpu-exclusive.sh"), "--label", "perf-ab " + a.fixture]
     if a.lock_clocks != "none":
         cmd += ["--lock-clocks", a.lock_clocks]

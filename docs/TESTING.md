@@ -187,8 +187,9 @@ the gate on a Vulkan row registered any other way, naming its CMakeLists line.
   `VK_ERROR_OUT_OF_DEVICE_MEMORY`. Gate at `-j4` whoever else is gating; there is no `-j2`
   rule. `scripts/gpu-admit.sh status` shows who holds what. A long hand-started app run on a
   box where gates are running takes its tokens too: `scripts/gpu-admit.sh 2 -- ./Jahshaka …`.
-- **Priority.** Builds, ctest and hand-started app instances run under
-  `nice -n 19 ionice -c 3`; a person's live app always wins the CPU.
+- **Priority.** Builds run under `nice -n 19 ionice -c 3`; ctest and hand-started app instances
+  under `nice -n 19` ONLY (IONICE-1: the root disk's mq-deadline ages an idle-class read 10 s, and
+  a 0.1 s script under `ionice -c 3` took 60 s). A person's live app always wins the CPU.
 
 ## 5. Reading a red
 
