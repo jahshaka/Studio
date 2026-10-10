@@ -1588,8 +1588,13 @@ endforeach()
 # seeded per process by the shell half. Three --headless processes.
 set(_cbud_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-clipboard_budget)
 file(MAKE_DIRECTORY ${_cbud_home}/run)
+# THE COMMAND: the one fresh-home implementation wipes the home every run (no hand-kept rm list), and
+# `--headless` stands VISIBLY on the command line (gate-scope reads a row as a headless script from its
+# command; every one of the script's three processes is --headless, the flag forwarded to each) — so
+# a change to the copy, the floor or the paste selects this row (read 8 F1).
 add_test(NAME scripting.e2e.clipboard_budget
-         COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/clipboard_budget.sh $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
+         COMMAND sh "${JAH_FRESH_HOME}" --warm "${_cbud_home}" --
+                 bash ${CMAKE_CURRENT_SOURCE_DIR}/clipboard_budget.sh $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --headless
                  ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_clipboard_budget.js
          WORKING_DIRECTORY ${_cbud_home}/run)
 set_tests_properties(scripting.e2e.clipboard_budget PROPERTIES

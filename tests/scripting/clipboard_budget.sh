@@ -6,12 +6,14 @@
 # copy and cut with that reason (nothing deleted). Three --headless processes, each with its own data
 # root whose jahsettings.ini carries the budget — the setting the app reads on every copy.
 #
-# usage: clipboard_budget.sh <jahshaka-binary> <script.js>      cwd = a scratch run dir
+# usage: clipboard_budget.sh <jahshaka-binary> --headless <script.js>   cwd = the row's fresh home's run dir
+#   (`--headless` is forwarded to every process; the row's command carries it so the selector sees a
+#   headless script row — the home is wiped by tests/support/fresh_home.sh before this runs)
 set -u
-BIN="$1"; JS="$2"
+BIN="$1"; MODEFLAG="$2"; JS="$3"
+[ "$MODEFLAG" = "--headless" ] || { echo "FAIL: usage: clipboard_budget.sh <bin> --headless <js>"; exit 2; }
 fail=0
 check() { if [ "$1" = "0" ]; then echo "ok:   $2"; else echo "FAIL: $2"; fail=1; fi }
-rm -rf root-a root-b root-floor budget_parts.obj copy.js paste.js floor.js paste-prefix.js copy.log paste.log floor.log
 # A MODEL OF 600 PARTS, padded past the budget: its Object row's node tree is ~2.2 MB (never budgeted),
 # its FILE ~100 KB (over the 64 KB budget: it goes by reference).
 python3 -I - "$PWD/budget_parts.obj" <<'PY'
@@ -29,7 +31,7 @@ seed() {   # $1 = data root, $2 = budget in bytes
 }
 run() {    # $1 = mode, $2 = data root, $3 = extra script prefix file (or empty)
     { echo "var MODE = \"$1\";"; echo "var MODEL = \"$PWD/budget_parts.obj\";"; [ -n "$3" ] && cat "$3"; cat "$JS"; } > "$1.js"
-    "$BIN" --headless --data-root "$2" --script "$1.js" > "$1.log" 2>&1
+    "$BIN" "$MODEFLAG" --data-root "$2" --script "$1.js" > "$1.log" 2>&1
 }
 seed "$PWD/root-a" 65536
 run copy "$PWD/root-a" ""
