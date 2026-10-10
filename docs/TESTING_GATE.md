@@ -572,7 +572,7 @@ shares the GPU while it measures; everything else shares the GPU within the budg
 lane (debug-runner) wraps every `perf.capture` run the same way.** The wrapper is
 `scripts/gpu-exclusive.sh [--run-timeout <s>] [--label <row:class>] <command…>` = `vram_tokens.py
 admit all --timing`: the turnstile keeps the queue behind a waiting timing row (a stream of small
-requests cannot starve it), a bounded 900 s wait (`NOADMIT vram: …`, exit 75, the command never
+requests cannot starve it — OUTSIDE a gate: inside one the gate's rows pass the turnstile, see below), a bounded 900 s wait (`NOADMIT vram: …`, exit 75, the command never
 runs), the command exec'd in place so a ctest timeout still kills the suite itself and the tokens
 die with it. (Until TEST-SELECTOR-1 it was a separate `flock` that excluded only the OTHER timing
 rows: gi.rt_reflect_cost and gi.field_scroll went red beside sibling GPU rows — plan 9ab.)
@@ -662,7 +662,14 @@ The owner's instance, the desktop and any app started by hand without the helper
 slow, and blind to what a process allocates next; the token count is the contract, tuned by
 measurement). An acquirer takes the TURNSTILE, reads the free tokens from `/proc/locks` and locks
 the k LOWEST only when k are free — all or nothing, never hold-and-wait, and a 3-token row at the
-head of the queue is not starved by 1-token rows behind it. The command is EXEC'D IN PLACE with
+head of the queue is not starved by 1-token rows behind it — EXCEPT BY A GATE (TESTING-CLEANUP-2B fix round 2/3): a
+row of the gate holding the slot owns the card, so it does not wait behind a turnstile someone else holds; it scans the
+tokens itself (re-scanning while enough are free — a sibling row of the same gate scanning at once is a race, not a
+shortage; bounded by attempts) and is admitted, NOADMIT only when the free tokens are truly short, the line naming the
+request ahead ("a row of this gate: …" or the foreign pid and label). A waiter at the turnstile DURING a gate can
+therefore be starved until the gate ends, by construction: every gate and every class-2 measurement queues at the SLOT,
+so such a waiter is unslotted (`JAH_GATE_SLOT=0`, a hand `gpu-admit.sh` run, an old tree's script) and its wait is
+bounded by the gate (and by its own `JAH_VRAM_WAIT`). The command is EXEC'D IN PLACE with
 the token fds inherited: the pid ctest started is the suite, and the tokens are freed when it and
 everything it spawned exit, for any reason (a crash, a ctest timeout kill). A nested admission
 (`JAH_VRAM_HELD` in the environment) runs on its parent's tokens. A wait prints ONE line —

@@ -211,9 +211,14 @@ def lock_key(st):
     return "%02x:%02x:%d" % (os.major(st.st_dev), os.minor(st.st_dev), st.st_ino)
 
 
+GATE_SCAN_TRIES = 50      # a gate row's re-scans past the turnstile while enough tokens are free (F4)
+
+
 def lock_holder(path):
-    """'pid <p> (<label>)' of the process holding `path`'s flock, read from /proc/locks (None: unheld, or no table).
-    The label is the holder's `--label` argument, else its command line (200 chars)."""
+    """'pid <p> (<label>)' of the process holding `path`'s flock, read from /proc/locks (None: unheld, or no table) —
+    and, when that process is a row of THIS gate (its JAH_GATE_SLOT_HELD is ours), 'a row of this gate: pid <p> (…)'
+    (fix round 3 F4: a sibling row in its scan is not a foreign request). The label is the holder's `--label`, else a
+    SHORT one: its program's name and first argument."""
     try:
         key = lock_key(os.stat(path))
         with open(os.environ.get("JAH_VRAM_PROC_LOCKS", "/proc/locks")) as f:
@@ -226,8 +231,21 @@ def lock_holder(path):
                         argv = [a.decode(errors="replace") for a in argv if a]
                     except OSError:
                         argv = []
-                    lab = argv[argv.index("--label") + 1] if "--label" in argv[:-1] else " ".join(argv)[:200]
-                    return "pid %s (%s)" % (pid, lab or "?")
+                    if "--label" in argv[:-1]:
+                        lab = argv[argv.index("--label") + 1]
+                    else:
+                        lab = " ".join([os.path.basename(a) for a in argv[:1]] + [os.path.basename(a) for a in argv[1:2]])
+                    lab = (lab or "?")[:60]
+                    mine = os.environ.get("JAH_GATE_SLOT_HELD")
+                    try:
+                        env = open("/proc/%s/environ" % pid, "rb").read().split(b"\0")
+                        theirs = next((e[len(b"JAH_GATE_SLOT_HELD="):].decode() for e in env
+                                       if e.startswith(b"JAH_GATE_SLOT_HELD=")), None)
+                    except OSError:
+                        theirs = None
+                    if mine and theirs == mine:
+                        return "a row of this gate: pid %s (%s)" % (pid, lab)
+                    return "pid %s (%s)" % (pid, lab)
     except OSError:
         return None
     return None
@@ -278,6 +296,7 @@ def acquire(k, label="", wait=None, log=sys.stderr):
     # behind another request)". So a gate row skips a turnstile someone else holds and scans the tokens itself (each
     # token is its own flock, all-or-nothing: no double hold); NOADMIT only when tokens are truly short, naming the
     # foreign request (pid, label) that sat ahead.
+    scans = 0
     gate_row = wait <= 0 and not os.environ.get("JAH_VRAM_ALL") and bool(os.environ.get("JAH_GATE_SLOT_HELD")) \
         and slot_held_valid()
     ahead = None
@@ -287,8 +306,9 @@ def acquire(k, label="", wait=None, log=sys.stderr):
         while not _try_lock(turnstile):
             if gate_row:
                 ahead = lock_holder(os.path.join(d, "turnstile")) or "a request (unnamed)"
-                _say(log, "vram: a gate row owns the card — the turnstile is held by a foreign request (%s); "
-                     "scanning the tokens without it%s" % (ahead, (" — " + label) if label else ""))
+                _say(log, "vram: a gate row owns the card — the turnstile is held by %s; scanning the tokens without "
+                     "it%s" % (ahead if ahead.startswith("a row of this gate") else "a foreign request (%s)" % ahead,
+                               (" — " + label) if label else ""))
                 break
             if not waited:
                 f = _free_count(n)
@@ -325,6 +345,13 @@ def acquire(k, label="", wait=None, log=sys.stderr):
             for fd in got:
                 os.close(fd)        # closing the fd drops its flock: nothing is held while waiting
             free = len(view) if view is not None else len(got)
+            # A GATE ROW PAST THE TURNSTILE RE-SCANS WHILE ENOUGH TOKENS ARE FREE (fix round 3 F4): two rows of one gate
+            # scanning at once pick the same lowest free tokens and the second loses the race — not a shortage. Bounded
+            # by ATTEMPTS (GATE_SCAN_TRIES), never a clock; NOADMIT only when the view itself is short.
+            if gate_row and view is not None and len(view) >= k and scans < GATE_SCAN_TRIES:
+                scans += 1
+                time.sleep(0.005)
+                continue
             if not waited:
                 _say(log, "vram: waiting for %d tokens, %d free%s" % (k, free, (" — " + label) if label else ""))
                 waited = True
