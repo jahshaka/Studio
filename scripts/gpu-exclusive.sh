@@ -12,6 +12,9 @@
 # Every timing suite is registered through this (jah_gpu_exclusive_test, tests/CMakeLists.txt),
 # and so is every measurement run by hand (`scripts/gpu-exclusive.sh ./Jahshaka --script m.js`).
 #
+# A MEASUREMENT IS CLASS 2 IN THE GATE SLOT (TESTING-CLEANUP-2B item 13): `admit all` queues behind every waiting gate
+# and the owner's smoke; a loop of these runs yields to a gate between its runs (each run asks again).
+#
 # THE WAIT IS NOT THE ROW'S TIME (LOCK-WAIT-1): the admission's wait is printed as ONE line,
 # `gpu-lock: waited <s> s`, which the run log records per row as `lockWaitS` and subtracts from
 # the row's seconds; a wait past the bound (JAH_VRAM_WAIT, 900 s) prints `NOADMIT vram: …`, exits

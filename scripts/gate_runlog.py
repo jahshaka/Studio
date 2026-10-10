@@ -2216,7 +2216,9 @@ def main():
         on_signals()
         slot = None
         try:
-            slot = _vram().gate_slot(f"{'+'.join(lane)} {a.tier} (gate_runlog run)", log=sys.stdout)
+            # the slot's class (item 13): a lane's own runs (tier lane / solo) are measurements, every other tier a gate
+            slot = _vram().gate_slot(f"{'+'.join(lane)} {a.tier} (gate_runlog run)", log=sys.stdout,
+                                     cls=2 if a.tier in ("lane", "solo") else (0 if a.tier == "smoke" else 1))
             rc = run_ctest(line, build, a.tier, lane, jobs, labels=inventory_labels(build))
         except GateSignal as e:
             print(f"\n=== GATE ABORTED: signal {e.sig} — the ctest tree was stopped, the slot and the card released ===")

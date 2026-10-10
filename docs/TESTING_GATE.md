@@ -801,16 +801,28 @@ A gate run is `gate-scope.sh --run` (scoped, a fallback, `--fork-tier`,
 -- <command>` holds the slot across a whole script that runs several). **A WHOLE-CARD HOLD ALWAYS TAKES
 IT** (GATE-COST-2): a `--solo` batch, an `--attribute` run, a timing phase run by hand — anything that drains
 the card through `hold_card()`, and `admit all` (`gpu-exclusive.sh`: a timing row run outside a gate, inside
-the admission's own 900 s bound — NOADMIT past it) — queues FIFO with the gates first. Per-row admissions of
+the admission's own 900 s bound — NOADMIT past it) — queues for it at class 2, behind any waiting gate. Per-row admissions of
 k tokens never take it (an `admit <k>`, a pool's app, a lane's own hand run), nor does a build. The waiting gate
 prints `gate-slot: queued at position <p> (<p> ahead) behind <holder>, holding it for <age>` (again
 whenever the position moves, and every 10 min) and `gate-slot: taken after <s> s in the queue`; the
-queue is FIFO and has NO bound (a gate never gives up for the slot). `scripts/gpu-admit.sh status`
-names the holder, the queue and every token holder with its AGE — a hung holder is visible.
+queue has NO bound (a gate never gives up for the slot). `scripts/gpu-admit.sh status`
+names the holder, the queue in serving order with each CLASS, and every token holder with its AGE — a hung holder
+is visible.
+**THE SLOT IS BY PRIORITY, NOT ARRIVAL** (TESTING-CLEANUP-2B item 13; the owner 2026-10-10: "the gate needs to run,
+not wait for everything else"). Classes: **0** the owner's smoke rc, **1** a gate (rc-gate's tiers, `gate-scope.py
+--run`, `gate_runlog.py run`), **2** a lane's measurement (`gpu-exclusive.sh`, `--solo`, `--attribute`, a whole-card hold
+by hand, `gate_runlog.py run --tier lane|solo`). A waiter of a lower class is served before every waiting higher one
+(by ticket inside a class) and never displaces the holder; a free slot is taken at once by whoever asks. A class-2
+holder that holds across rows (`--solo`, `--attribute`) checks the queue between rows and YIELDS to a waiting class
+0/1 (`yield_card`: the card and the slot given up, re-asked at its class, resumed at its next row — its recorded runs
+stay). `gpu-admit.sh gate --class N --label …` names the class; without it the label decides (`rc-<tag> smoke` -> 0,
+anything else -> 1). A measurement loop of `gpu-exclusive.sh` runs yields between its runs by construction (each run
+asks again at class 2).
 **Mechanism** (`scripts/vram_tokens.py`): each waiter flocks its own ticket
-`/tmp/jah-vram/gate-queue/<seq>.<pid>` (made locked under a private name, then renamed in); the
-lowest live ticket is the holder (a ticket is numbered AND renamed in under the counter's lock, so
-two gates never both find no lower ticket); a dead waiter's ticket is reaped by the next reader. The
+`/tmp/jah-vram/gate-queue/<seq>.<pid>.c<class>` (made locked under a private name, then renamed in); the
+holder's ticket is renamed `….held` when it takes the slot — under the counter's lock, and only when no ticket
+is held and no waiter outranks it (a lower class, or the same class and an earlier ticket), so two askers never
+both take it; a dead waiter's or holder's ticket is reaped by the next reader. The
 slot and a phase's tokens belong to the GATE PROCESS, never to its ctest, and THE ctest TREE DIES WITH
 THE GATE: ctest runs in its own process group with PR_SET_PDEATHSIG (SIGTERM), a detached reaper
 kills that group the moment the gate's pid is gone (ctest's own SIGTERM orphans its rows — measured),
