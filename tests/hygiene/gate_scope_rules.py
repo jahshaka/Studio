@@ -84,6 +84,11 @@ THE FOUR CASES, and each one is a rule of the tool rather than a number:
       and `--stage-close-tier-serial` runs the measuring rows at -j1 (the subject-only
       selection itself: gate.stage_close_select).
 
+THE ROW'S OWN COST (TESTING-CLEANUP-2B item 3, H8b). It runs ~34 selections a run. RED ON BASE (b0a3b1f3c): 21 of
+250 runs TIMED OUT at 120 s (median 44 s, p90 113 s) — one selection of an engine source spawned 366 `nm`
+processes every run (an empty archive member was never cached, gate_graph._nm); measured on the M.2 at load 15:
+161 s beside gate.selection, 35 s alone. After the fix: 25-28 s at the same load (an engine source 13 s -> 1.2 s).
+
 Run: gate_scope_rules.py <source-dir> <build-dir>
 """
 
