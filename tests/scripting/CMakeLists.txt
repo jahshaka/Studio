@@ -233,6 +233,17 @@ jah_gpu_row(material.live_roundtrip CLASS app TIER epic NEEDS photon
                  ${CMAKE_CURRENT_BINARY_DIR}/material-live-roundtrip
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(material.live_roundtrip PROPERTIES LABELS "scripting" TIMEOUT 600)
+# scripting.e2e.photon_pin_read — WORLD-MODE-1 (brief §2): the scene READER drops a stored `photon`
+# pin. Two processes: a scene saved at Epic with Photon Low gets `worldOverrides.photon = 1` written
+# into its blob by hand; the reopen reads no pin, an honest Custom, and a re-pick that moves Photon;
+# the next save carries no `photon` key. TIER document: the claim is about the document's own World
+# state, which a test tier would rewrite on open before the claim could read it.
+jah_gpu_row(scripting.e2e.photon_pin_read CLASS app TIER document
+         COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/scripts/photon_pin_read.sh $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
+                 ${CMAKE_CURRENT_SOURCE_DIR}/scripts/photon_pin_read.js.in
+                 ${CMAKE_CURRENT_BINARY_DIR}/photon-pin-read
+         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(scripting.e2e.photon_pin_read PROPERTIES LABELS "scripting" TIMEOUT 600)
 # EDITOR_SHORTCUTS_SPEC §5: the verbs behind the Unreal-style editor controls.
 jah_pool_arm(editor_view editor_controls ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_editor_controls.js 30)
 # scripting.e2e.editor_controls.timing — the per-selection 11 ms frame bar, nightly (lane

@@ -1973,6 +1973,16 @@ QString source(const iris::ScenePtr &scene, const Row &r)
     if (r.tierSpace == TierSpace::None) return QStringLiteral("custom");
     // "mode" only while the row HOLDS its column (WORLD-MODE-1): a row the Photon dropdown,
     // a Photon switch or a sibling setter moved off the picked mode's value is custom.
+    // A PHOTON-TIERED row (the machinery under Photon) answers exactly as photonDeviations
+    // does — one rule for the `*` marker and the Photon section's Custom: with Photon OFF
+    // there is nothing to deviate from (the off picture is the mode's own state for these
+    // rows; the `photon` row itself carries the Custom), and with Photon on a row is custom
+    // iff its rendered value leaves the Photon tier's column.
+    if (r.tierSpace == TierSpace::Photon) {
+        if (photonRowIds().contains(r.id))
+            return photonDeviations(scene).contains(r.label) ? QStringLiteral("custom")
+                                                             : QStringLiteral("mode");
+    }
     const Mode m = pickedMode(scene);
     if (m == Mode::Custom) return QStringLiteral("custom");
     return resolved(scene, r) == tierValue(r, m, scene) ? QStringLiteral("mode")
@@ -2013,6 +2023,13 @@ void setMode(const iris::ScenePtr &scene, Mode m)
     if (!scene) return;
     scene->worldMode = int(m);
     if (m == Mode::Custom) return;   // no tier to write through
+    // THE IDENTITY COVERS THE TECHNIQUE (WORLD-MODE-1 fix round, owner: "switching World Mode
+    // back resets Photon to what matches it"): a Photon Technique pinned under Advanced
+    // (giMode, e.g. VCT under Epic) would survive the `photon` row's setPhoton below, which
+    // honours a non-off giMode pin — the selector would read Epic while Photon reads Custom.
+    // A World Mode pick drops that pin, so the row writes the mode's own technique; a Photon
+    // edit after the pick makes the mode Custom again as before.
+    scene->worldOverrides.remove(QStringLiteral("giMode"));
     for (const Row &r : rows()) {
         // A Photon-tiered row is written by the `photon` row (which IS in this
         // loop and honours the same pins) — never twice, and never from the
@@ -2028,8 +2045,9 @@ void applyTestTier(const iris::ScenePtr &scene)
     if (!scene || !testtier::active()) return;
     const Mode m = modeFromName(testtier::name());
     // A PINNED ROW STAYS (below) — setMode included. setMode skips every pinned World row, but
-    // its `photon` row writes through setPhoton, and OFF drops a giMode pin (the product's rule
-    // for a user picking a mode: "off, but pinned to VCT" renders nothing). Under a test tier
+    // it drops a giMode pin (a World Mode pick resets the technique — WORLD-MODE-1's identity),
+    // and its `photon` row writes through setPhoton, whose OFF drops a giMode pin too (the
+    // product's rule: "off, but pinned to VCT" renders nothing). Under a test tier
     // the pin is the document's choice and must survive the bind AND a later save (measured: a
     // giMode pin reopened at Medium/Low came back unpinned, test_needs_boot's pin case), so the
     // Photon fields and their pins are put back exactly as the document had them.
@@ -2042,11 +2060,11 @@ void applyTestTier(const iris::ScenePtr &scene)
     // The RAW fields, never the Rows' get/set: a giDdgi of -1 (auto) read through its row comes
     // back concrete, and a save would then keep the concrete value.
     struct KeptPhoton {
-        iris::GiMode mode{}; iris::GiQuality quality{};
+        iris::GiMode mode = {}; iris::GiQuality quality = {};
         int ddgi = 0, bounces = 0, probeSize = 0, tier = 0;
         QJsonObject pins;
-    } kept { scene->giMode, scene->giQuality, scene->giDdgi, scene->giNumBounces,
-             scene->giProbeCaptureSize, scene->giTier, {} };
+    } kept = { scene->giMode, scene->giQuality, scene->giDdgi, scene->giNumBounces,
+               scene->giProbeCaptureSize, scene->giTier, {} };
     if (photonPinned) {
         for (const QString &id : photonRowIds())
             if (scene->worldOverrides.contains(id)) kept.pins.insert(id, scene->worldOverrides.value(id));

@@ -479,6 +479,37 @@ static void testPhotonOverrideReadsCustom()
     CHECK(worldmodes::mode(s) == worldmodes::Mode::High && msaa &&
               worldmodes::source(s, *msaa) == QLatin1String("override"),
           "photon_override_reads_custom: a pinned msaa leaves the mode High (source 'override')");
+
+    // THE IDENTITY COVERS THE TECHNIQUE (fix round): a Photon Technique pinned under Advanced
+    // (VCT under Epic, whose column is the hybrid) is dropped by a World Mode re-pick.
+    const worldmodes::Row *tech = worldmodes::row(QStringLiteral("giMode"));
+    worldmodes::setMode(s, worldmodes::Mode::Epic);
+    CHECK(worldmodes::setRowValue(s, QStringLiteral("giMode"), 1, true) && giMode(s) == 1 &&
+              s->worldOverrides.contains(QStringLiteral("giMode")) && worldmodes::photonCustom(s),
+          "technique_repick: VCT pinned under Epic (the Photon section reads Custom)");
+    worldmodes::setMode(s, worldmodes::Mode::Epic);
+    CHECK(!s->worldOverrides.contains(QStringLiteral("giMode")) && giMode(s) == 2 &&
+              !worldmodes::photonCustom(s) && worldmodes::mode(s) == worldmodes::Mode::Epic,
+          "technique_repick: re-picking Epic drops the pin and snaps the technique to the hybrid");
+    CHECK(tech && worldmodes::source(s, *tech) == QLatin1String("mode"),
+          "technique_repick: ...and the technique row reads source 'mode'");
+    worldmodes::setRowValue(s, QStringLiteral("giMode"), 1, true);
+    CHECK(worldmodes::photonCustom(s) && tech && worldmodes::source(s, *tech) == QLatin1String("override"),
+          "technique_repick: a technique edit AFTER the pick is a deviation again");
+
+    // PHOTON OFF IS NOT A MACHINERY DEVIATION (fix round): the photon row carries the Custom;
+    // the technique row agrees with photonDeviations (empty while Photon is off).
+    worldmodes::setMode(s, worldmodes::Mode::Epic);
+    worldmodes::setPhoton(s, false, worldmodes::photonTier(s));
+    CHECK(worldmodes::photonDeviations(s).isEmpty() && tech &&
+              worldmodes::source(s, *tech) == QLatin1String("mode") &&
+              photon && worldmodes::source(s, *photon) == QLatin1String("custom"),
+          "photon_off_source: Photon off — the technique row reads 'mode' (no deviation), the photon row 'custom'");
+    for (const QString &id : worldmodes::photonRowIds()) {
+        const worldmodes::Row *r = worldmodes::row(id);
+        CHECK(r && worldmodes::source(s, *r) == QLatin1String("mode"),
+              qPrintable(QStringLiteral("photon_off_source: %1 reads 'mode' with Photon off").arg(id)));
+    }
 }
 
 // ---------------------------------------------------------------------------

@@ -96,8 +96,10 @@ assert(world.photon().tier === "medium", "world.gi's tier key drives the same di
 // The row is SET, never pinned (WORLD-MODE-1): each World Mode runs Photon at
 // its own name, so a pick must always be able to snap it back.
 var row = world.override({ id: "photon", value: "high" });
-assert(row.valueId === "high" && row.source !== "override",
-       "world.override({id:'photon'}) sets the dial without a pin: " + J([row.valueId, row.source]));
+// The scene is on Epic (a new scene, no test tier), so High off Epic's column reads custom.
+assert(row.valueId === "high" && row.source === "custom" && world.mode() === "custom",
+       "world.override({id:'photon'}) sets the dial without a pin, off the column = custom: " +
+       J([row.valueId, row.source, world.mode()]));
 assert(world.photon().tier === "high", "and the dial followed");
 
 // An unknown tier is refused, catchably, and changes nothing.

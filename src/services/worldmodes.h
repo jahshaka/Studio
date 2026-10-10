@@ -446,7 +446,8 @@ Mode mode(const iris::ScenePtr &scene);
 Mode pickedMode(const iris::ScenePtr &scene);
 /// Applies a tier: writes each row's tier value into its backing field, EXCEPT
 /// rows present in scene->worldOverrides (overrides survive mode switches). The
-/// `photon` row is never pinned, so a re-pick always snaps Photon to the column.
+/// `photon` row is never pinned and a pick DROPS a Photon Technique (giMode) pin, so a
+/// re-pick always snaps Photon — tier and technique — to the mode's column (WORLD-MODE-1).
 void setMode(const iris::ScenePtr &scene, Mode m);
 /// THE PROCESS'S TEST TIER on a scene (services/testtier.h): setMode to the tier, then every
 /// switchable feature JAHSHAKA_TEST_NEEDS does not name OFF — Photon, bloom, SSAO, SMAA, the

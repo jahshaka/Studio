@@ -65,6 +65,16 @@ assert(tier === "" ? reopened === "medium" : atTier(reopened),
        "an OPENED scene " + (tier === "" ? "keeps the tier it saved (Medium)"
                                          : "is put on the test tier '" + tier + "' after its reader")
        + " (got " + J(reopened) + ")");
+// ...and its PHOTON: with no test tier the document's own (on, Medium — the identity of the mode
+// it saved at); under a test tier on iff the list names it, at the test tier's own Photon tier.
+var rp = world.photon();
+if (tier === "")
+    assert(rp.enabled === true && rp.tier === "medium",
+           "the OPENED scene keeps the Photon it saved: on at Medium (got " + J([rp.enabled, rp.tier]) + ")");
+else
+    assert(rp.enabled === (needs.indexOf("photon") >= 0) && (!rp.enabled || rp.tier === tier),
+           "the OPENED scene's Photon is " + (needs.indexOf("photon") >= 0 ? "on at '" + tier + "'" : "off")
+           + " after its reader (got " + J([rp.enabled, rp.tier]) + ")");
 
 // ---- 4. the window ------------------------------------------------------------------
 var w = app.window();
