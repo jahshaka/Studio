@@ -317,6 +317,9 @@ def main():
             remaining = []
             break
         env = dict(os.environ)
+        # NOBODY ANSWERS A DIALOG HERE (TESTING-CLEANUP-2): a device loss ends a pool's app at once
+        # (exit 3), never through the user's 60 s dialog bound (src/viewport/devicelossend.h).
+        env["JAHSHAKA_NO_DEVICE_LOSS_DIALOG"] = "1"
         if tokens:
             env["JAH_VRAM_HELD"] = str(len(tokens))
         started = time.monotonic()
