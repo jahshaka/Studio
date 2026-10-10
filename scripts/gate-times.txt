@@ -325,6 +325,7 @@ mirror.document_to_engine 21.51
 mirror.grid_floor 3.05
 mirror.ground_horizon 2.58
 mirror.scale 3.58
+mirror.settle_incremental 70.92
 mirror.skinned_outline 2.79
 mirror.sun_night 4.56
 mirror.vr_proxies 2.81

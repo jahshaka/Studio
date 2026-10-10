@@ -378,8 +378,13 @@ int main(int argc, char **argv)
                 if (++done >= count) break;
             }
         };
+        // The settle is INCREMENTAL (kStaticSettleNodesPerSync visits a sync),
+        // so a quiet spell is the settle window plus as many syncs as the walk
+        // needs — driven until it reports done, never a guessed frame count.
         auto settle = [&]() {
             for (quint32 i = 0; i < SceneMirror::kStaticSettleFrames + 2; ++i) b.mirror->sync();
+            for (int guard = 0; b.mirror->staticSettleInProgress() && guard < 100000; ++guard)
+                b.mirror->sync();
         };
         nudge(1); b.mirror->sync(); settle();
         const quint64 settled0 = iris::graph::staticNodeCount();

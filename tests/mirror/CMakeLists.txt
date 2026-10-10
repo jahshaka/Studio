@@ -91,6 +91,31 @@ jah_gpu_exclusive_test(NAME mirror.scale CLASS engine RUN_TIMEOUT 300 COMMAND te
 set_tests_properties(mirror.scale PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "mirror")
 
+# mirror.settle_incremental — the static re-promotion after a settle is a
+# BOUNDED walk spread over syncs (SceneMirror::kStaticSettleNodesPerSync,
+# MIRROR-SETTLE-1) and lands exactly the one-shot applyStaticDefaults' answer:
+# two identical 50,000-node documents, one settled each way, compared node for
+# node (graph class + hint), plus an interrupted settle. Counts only — the
+# milliseconds it prints are for the reader, so it is a plain GPU row.
+add_executable(test_mirror_settle test_mirror_settle.cpp
+    ${CMAKE_SOURCE_DIR}/irisgl/mirror/scenemirror.cpp)
+set_target_properties(test_mirror_settle PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH "${OGRE_NEXT_PREFIX}/lib" INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_include_directories(test_mirror_settle PRIVATE ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/irisgl
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
+target_compile_definitions(test_mirror_settle PRIVATE
+    JAHSHAKA_SOURCE_DIR="${CMAKE_SOURCE_DIR}" JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_mirror_settle PRIVATE IrisGL JahshakaEngine Qt6::Gui Qt6::OpenGL)
+add_dependencies(test_mirror_settle JahshakaEngineMedia)
+jah_gpu_row(mirror.settle_incremental CLASS engine COMMAND test_mirror_settle
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(mirror.settle_incremental PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 300 LABELS "mirror")
+
 # mirror.dirty_equals_full — THE DIFFERENTIAL TEST of the dirty-set mirror
 # (SPECS/DIRTY_SET_MIRROR_SPEC.md §7.1). For every class of mutation the
 # document supports: make the change, run the DIRTY sync that ships, then run
