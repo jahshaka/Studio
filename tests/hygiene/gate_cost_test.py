@@ -751,7 +751,7 @@ def main(source, build):
     wait_line(gw, "gate-slot: taken")
     pin_ = subprocess.run([sys.executable, vt, "admit", "1", "--label", "ROW", "--", "true"], capture_output=True,
                           text=True, env=dict(benv, JAH_VRAM_WAIT="900", JAH_GATE_SLOT_HELD=str(gw.pid),
-                                                               CTEST_RESOURCE_GROUP_COUNT="1"))
+                                                               CTEST_RESOURCE_GROUP_COUNT="1", CTEST_RESOURCE_GROUP_0="vram"))
     pout = spawn([sys.executable, vt, "admit", "1", "--label", "HAND", "--", "true"], env=dict(benv, JAH_VRAM_WAIT="900"))
     ow = wait_line(pout, "vram: waiting")
     open(relhold, "w").close(); holder.communicate()
@@ -775,22 +775,25 @@ def main(source, build):
     gw2 = spawn([sys.executable, vt, "gate", "--label", "GW2", "--", "sh", "-c",
                  f"while [ ! -e {relgw2} ] && kill -0 {os.getpid()} 2>/dev/null; do sleep 0.05; done"], env=benv)
     wait_line(gw2, "gate-slot: taken")
-    genv = dict(benv, JAH_VRAM_WAIT="900", JAH_GATE_SLOT_HELD=str(gw2.pid), CTEST_RESOURCE_GROUP_COUNT="1")
+    genv = dict(benv, JAH_VRAM_WAIT="900", JAH_GATE_SLOT_HELD=str(gw2.pid), CTEST_RESOURCE_GROUP_COUNT="1",
+                CTEST_RESOURCE_GROUP_0="vram")
     r1 = subprocess.run([sys.executable, vt, "admit", "1", "--label", "GATE-ROW-1", "--", "true"], capture_output=True,
                         text=True, env=genv)
     r3 = subprocess.run([sys.executable, vt, "admit", "3", "--label", "GATE-ROW-3", "--", "true"], capture_output=True,
                         text=True, env=genv)
     # THE LANDING SPLIT: the no-wait is for a row ctest SCHEDULED by its tokens (CTEST_RESOURCE_GROUP_COUNT >= 1); a gate
     # row of a build with no RESOURCE_GROUPS keeps the wait (its rows are not serialised by tokens among themselves).
-    old_env = {k: os.environ.get(k) for k in ("JAH_GATE_SLOT_HELD", "CTEST_RESOURCE_GROUP_COUNT")}
+    old_env = {k: os.environ.get(k) for k in ("JAH_GATE_SLOT_HELD", "CTEST_RESOURCE_GROUP_COUNT", "CTEST_RESOURCE_GROUP_0")}
     os.environ["JAH_GATE_SLOT_HELD"] = str(gw2.pid)
     os.environ["CTEST_RESOURCE_GROUP_COUNT"] = "0"; b0 = vt_mod.row_wait_bound()
-    os.environ["CTEST_RESOURCE_GROUP_COUNT"] = "1"; b1 = vt_mod.row_wait_bound()
+    os.environ["CTEST_RESOURCE_GROUP_COUNT"] = "1"; os.environ["CTEST_RESOURCE_GROUP_0"] = "cpu"
+    bx = vt_mod.row_wait_bound()            # fix round 4 item 5: a group of another resource type is not the card's
+    os.environ["CTEST_RESOURCE_GROUP_0"] = "vram"; b1 = vt_mod.row_wait_bound()
     for k_, v_ in old_env.items():
         if v_ is None: os.environ.pop(k_, None)
         else: os.environ[k_] = v_
-    check(b0 > 0 and b1 == 0, "inside a gate the try-once bound is for a ctest-scheduled row only (unscheduled %s s, "
-          "scheduled %s s)" % (b0, b1))
+    check(b0 > 0 and bx > 0 and b1 == 0, "inside a gate the try-once bound is for a row ctest scheduled by its VRAM "
+          "tokens only (unscheduled %s s, a `cpu` group %s s, a `vram` group %s s)" % (b0, bx, b1))
     open(relh2, "w").close(); h2.communicate(); fw.communicate()
     open(relgw2, "w").close(); gw2.communicate()
     check(r1.returncode == 0 and "NOADMIT" not in r1.stderr and "foreign request" in r1.stderr
@@ -810,7 +813,8 @@ def main(source, build):
     gw3 = spawn([sys.executable, vt, "gate", "--label", "GW3", "--", "sh", "-c",
                  f"while [ ! -e {relgw3} ] && kill -0 {os.getpid()} 2>/dev/null; do sleep 0.05; done"], env=benv)
     wait_line(gw3, "gate-slot: taken")
-    g3env = dict(benv, JAH_VRAM_WAIT="900", JAH_GATE_SLOT_HELD=str(gw3.pid), CTEST_RESOURCE_GROUP_COUNT="1")
+    g3env = dict(benv, JAH_VRAM_WAIT="900", JAH_GATE_SLOT_HELD=str(gw3.pid), CTEST_RESOURCE_GROUP_COUNT="1",
+                 CTEST_RESOURCE_GROUP_0="vram")
     sib = spawn([sys.executable, "-c", "import fcntl,os,sys,time\nfd=os.open(sys.argv[1],os.O_RDWR|os.O_CREAT)\n"
                  "fcntl.flock(fd,fcntl.LOCK_EX)\nprint('SIBHELD',flush=True)\n"
                  "while not os.path.exists(sys.argv[2]): time.sleep(0.02)",

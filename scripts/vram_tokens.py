@@ -166,11 +166,15 @@ def row_wait_bound():
 
 def ctest_scheduled():
     """True when this process is (a child of) a ctest row scheduled by its RESOURCE_GROUPS (CTEST_RESOURCE_GROUP_COUNT
-    >= 1, exported by ctest under a resource spec)."""
+    >= 1 and group 0 of type `vram`, exported by ctest under a resource spec)."""
     try:
-        return int(os.environ.get("CTEST_RESOURCE_GROUP_COUNT", "0") or 0) >= 1
+        if int(os.environ.get("CTEST_RESOURCE_GROUP_COUNT", "0") or 0) < 1:
+            return False
     except ValueError:
         return False
+    # BOUND TO THE TOKEN SCHEDULING (fix round 4, item 5): the group must be a `vram` group (tests/cmake/vram_rows.cmake's
+    # resource) — another resource type ctest schedules says nothing about the card
+    return "vram" in os.environ.get("CTEST_RESOURCE_GROUP_0", "").split(",")
 
 
 def _open(path):
