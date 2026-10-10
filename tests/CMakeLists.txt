@@ -193,6 +193,16 @@ endfunction()
 # THE TIMEOUT POLICY (TEST_GATE_AUDIT.md §3, applied across tests/ 2026-09-09).
 #
 # Every row's TIMEOUT is 6x its measured seconds with a floor, and nothing else.
+# THE STATISTIC (lead decision, TESTING-CLEANUP-2B fix round, 2026-10-10): "measured" is the run log's QUIET MEDIAN
+# (PASS runs with no sibling ctest), and the TIMEOUT is never below the QUIET WORST measured UNDER THE SLOT (runs since
+# 2026-10-09 18:00 — one gate at a time, the honest regime): max(6 x quiet median, slot-era worst), rounded up to 10 s.
+# Never a contended worst (before the slot a "worst" was another lane's load), never the median alone.
+# THE SAMPLE (lead, TESTING-CLEANUP-2B fix round after read 4): the median is over the run log's SLOT-ERA quiet PASS runs
+# (the archive, testing/runs — a lane's own re-measure is a set of records IN it, never a replacement for it), and only
+# runs taken the way the GATE runs the row: a row the gate runs COLD (a fresh rc tree's home: open.responsive,
+# open.responsive.timing — their homes keep the shader cache, so only a tree's first run is cold) is measured on its
+# cold runs; warm repeats in one home are not its sample. Each TIMEOUT comment names the sample: n, the median, the
+# slot-era worst, cold/warm, the date, and what was on the box.
 # It used to be whatever number felt safe when the row was written: 25 suites
 # sat between 38x and 173x of their measured time and a hundred more above that,
 # with 600 s and 900 s ceilings on suites that take one second. That is not
@@ -331,12 +341,12 @@ set(JAH_GPU_EXCLUSIVE_SUITES
 # tokens are its declaration's).
 include(${CMAKE_CURRENT_SOURCE_DIR}/support/vram_tokens.cmake)
 set(JAH_GPU_ADMIT "${CMAKE_SOURCE_DIR}/scripts/gpu-admit.sh")
-# The admission wait's bound (JAH_VRAM_WAIT in the helper). The wait happens BEFORE the command
-# starts but inside ctest's clock, so every registered row's TIMEOUT is its own budget PLUS this
-# bound, added ONCE, here (at the end of the row's directory, after its site set its TIMEOUT) —
-# never typed at a site. A row that sets no TIMEOUT gets the gates' --timeout 120 plus the bound.
-set(JAH_VRAM_WAIT_S 900)
-set(JAH_DEFAULT_ROW_TIMEOUT 120)
+# THE ADMISSION OUTSIDE THE ROW'S CLOCK (TESTING-CLEANUP-2B; tests/cmake/vram_rows.cmake says how): every
+# registered row is scheduled by ctest on its tokens (RESOURCE_GROUPS vram:<k> against this build's resource
+# spec), so a gate's rows never wait for each other inside their TIMEOUT — and the TIMEOUT a site declares is
+# the row's whole bound. (The +900 s every GPU row's TIMEOUT used to carry for the wait is gone.)
+include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/vram_rows.cmake)
+jah_vram_resource_spec()
 
 # THE BOOT DECLARATION ON THE ROW (TEST-NEEDS-1): JAHSHAKA_TEST_TIER / JAHSHAKA_TEST_NEEDS as
 # `set:` ENVIRONMENT_MODIFICATION entries, appended at the end of the row's directory (after the
@@ -395,16 +405,6 @@ function(_jah_test_boot_declared _who _class _tier _cmd _out)
     endif()
 endfunction()
 
-# The deferred half: at the end of the row's directory (after every set_tests_properties of the
-# site), its TIMEOUT += the admission wait's bound.
-function(_jah_vram_widen_timeout _row)
-    get_test_property(${_row} TIMEOUT _t)
-    if(NOT _t)
-        set(_t ${JAH_DEFAULT_ROW_TIMEOUT})
-    endif()
-    math(EXPR _t "${_t} + ${JAH_VRAM_WAIT_S}")
-    set_tests_properties(${_row} PROPERTIES TIMEOUT ${_t})
-endfunction()
 # THE TIMING PHASE (TEST-SELECTOR-1, W1): every timing row carries the label `timing`, appended at
 # the end of its directory (after the site's own set_tests_properties(... LABELS ...), which
 # replaces the list) — the gates run these rows as their own serial phase after the parallel one
@@ -418,11 +418,6 @@ function(_jah_timing_label _row)
     list(REMOVE_DUPLICATES _l)
     set_tests_properties(${_row} PROPERTIES LABELS "${_l}")
 endfunction()
-function(_jah_vram_register _row _class _k)
-    set_property(GLOBAL APPEND PROPERTY JAH_GPU_ROWS "${_row}|${_class}|${_k}")
-    cmake_language(EVAL CODE "cmake_language(DEFER CALL _jah_vram_widen_timeout [[${_row}]])")
-endfunction()
-
 # jah_gpu_row(<row> CLASS app|selftest|engine|vr [TIER <tier> NEEDS <features…>|NONE [NEEDS_WHY "<claim>"] [TEST_WINDOW]] [TOKENS <k>]
 #             COMMAND <exe-or-target> [args...] [WORKING_DIRECTORY <dir>])
 # CLASS app|vr REQUIRES TIER + NEEDS (tests/support/vram_tokens.cmake): the row's process boots that
@@ -430,8 +425,8 @@ endfunction()
 # add_test() through the VRAM budget — the ONE way a row that boots Vulkan is registered
 # (source.gpu_rows_closure fails a Vulkan row that is not). Like jah_gpu_exclusive_test, the
 # wrapper is applied at registration: a TARGET name as the first COMMAND word becomes
-# $<TARGET_FILE:...>. A pool is not registered here: its tokens are taken per APP PROCESS by
-# run_pool.py (jah_add_pool), so a restart re-takes them and the driver holds none.
+# $<TARGET_FILE:...>. A pool is not registered here: run_pool.py (jah_add_pool) takes its tokens ONCE for the
+# pool's whole run and every app process it starts inherits them (TESTING-CLEANUP-2B F-C1: the unit is the pool).
 function(jah_gpu_row _row)
     cmake_parse_arguments(G "TEST_WINDOW" "CLASS;TIER;TOKENS;WORKING_DIRECTORY;NEEDS_WHY" "NEEDS;COMMAND" ${ARGN})
     if(NOT G_CLASS OR NOT G_COMMAND)
@@ -502,8 +497,9 @@ function(jah_gpu_exclusive_test)
         set(_wd WORKING_DIRECTORY "${G_WORKING_DIRECTORY}")
     endif()
     # --run-timeout: the row's own budget, enforced by the wrapper from AFTER the admission —
-    # LOCK-WAIT-1; ctest's TIMEOUT is only the backstop (budget + 30 s, + the admission's bound,
-    # added once by _jah_vram_register like every GPU row).
+    # LOCK-WAIT-1; ctest's TIMEOUT is the backstop: the budget + 30 s (timeout(1)'s kill grace and the
+    # admission's own start). Inside a gate a timing row runs on the phase's whole-card hold (nested: no
+    # wait) and ctest schedules it on every token (RESOURCE_GROUPS, vram_rows.cmake).
     add_test(NAME ${G_NAME} COMMAND "${JAH_GPU_EXCLUSIVE}" --run-timeout ${G_RUN_TIMEOUT}
              --label ${G_NAME}:${G_CLASS} "${_exe}" ${G_COMMAND} ${_wd})
     math(EXPR _timeout "${G_RUN_TIMEOUT} + 30")
@@ -683,8 +679,8 @@ function(jah_add_pool pool)
     endif()
     set(_want engine)
     set(_modeflag)
-    # THE VRAM BUDGET (GATE-ADMIT-1): run_pool.py takes the class's tokens once per APP PROCESS
-    # (a restart re-takes them; the driver itself holds none). A HEADLESS pool boots the NULL
+    # THE VRAM BUDGET (GATE-ADMIT-1): run_pool.py takes the class's tokens ONCE for the pool's whole run
+    # (every app process, a restart included, inherits them; TESTING-CLEANUP-2B F-C1). A HEADLESS pool boots the NULL
     # render system and takes none. CLASS defaults to app; a VR pool says `CLASS vr`. An app
     # pool's tokens are its declaration's (jah_vram_tokens, TEST-NEEDS-1).
     if(NOT P_CLASS)

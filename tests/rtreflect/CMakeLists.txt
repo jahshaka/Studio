@@ -213,7 +213,11 @@ add_dependencies(test_reflect_lod_pop JahshakaEngineMedia)
 target_link_libraries(test_reflect_lod_pop PRIVATE IrisGL JahshakaEngine Qt6::Gui Qt6::OpenGL)
 jah_gpu_row(gi.reflect_lod_pop CLASS engine COMMAND test_reflect_lod_pop
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(gi.reflect_lod_pop PROPERTIES TIMEOUT 600 LABELS "photon-target"
+# TESTING-CLEANUP-2B item 7, re-based after read 4 (2026-10-10; the sample per tests/CMakeLists.txt's policy — the run
+# log's SLOT-ERA quiet PASS runs, since 2026-10-09 18:00, taken as the gate runs the row): WARM, n=2 — this
+# lane's solo runs 52.8 s (14:58, load 4.3) and 56.9 s (15:07, load 6.7, 2 builds on the box); no gate record since the
+# slot (a photon-target row); median 54.8 -> 6x = 330; slot-era worst 56.9 -> TIMEOUT 330 (was 600).
+set_tests_properties(gi.reflect_lod_pop PROPERTIES TIMEOUT 330 LABELS "photon-target"
                      ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
 # THE COST, at the resolution the bar is stated at. Same binary, same fixture

@@ -36,13 +36,14 @@ prints one line per arm; this driver owns what the app cannot:
     excluded) is `LEAK <pool> +<MB> over <n> arms`. And an arm whose figure passes 3x its
     process's boot is `OVER <pool>.<arm> gpuPoolUsed=<MB> tier=<t> boot=<MB>` (a pixel claim
     wrongly in a Low pool). All three are findings, never a red (the first runs decide).
-  * THE VRAM BUDGET (lane GATE-ADMIT-1; docs/TESTING_GATE.md §4b). `--vram-tokens <k>`: before
-    every app process the driver takes k box-wide VRAM tokens (scripts/vram_tokens.py — the
-    same flock files as scripts/gpu-admit.sh), all or nothing, waiting (one `vram: waiting …`
-    line) rather than letting the card over-fill; the app inherits them and they are released
-    when it ends, so a restart re-takes them and the driver holds none between processes. The
-    wait is BEFORE the process starts, outside every arm's budget; a wait past its bound makes
-    every remaining arm `NOADMIT` (the helper's line as why), never a run on a full card.
+  * THE VRAM BUDGET (lane GATE-ADMIT-1; docs/TESTING_GATE.md §4b). `--vram-tokens <k>`: the POOL
+    holds k box-wide VRAM tokens (scripts/vram_tokens.py — the same flock files as
+    scripts/gpu-admit.sh) for its WHOLE run, taken once before its first process and inherited by
+    every app process it starts (a restart included); released when the pool ends (TESTING-CLEANUP-2B
+    delta F-C1: per process, a token taken by someone else between process N and N+1 turned every
+    remaining arm NOADMIT — inside a gate the admission no longer waits — and a partly-NOADMIT pool
+    read as a red; the honest unit is the pool). All or nothing; short of them the pool never ran:
+    every arm `NOADMIT` (the helper's line as why), the row NOADMIT, re-queued by the gate.
   * THE KERNEL'S WORD (GPU_LOSS_AUDIT_2026-09-27 B: a device loss is not always a red arm). After
     each process ends, the driver reads the kernel journal since its launch (`journalctl -k`,
     readable by the adm group, never sudo) and a `NVRM: Xid` line from THAT process's pid turns
@@ -288,6 +289,15 @@ def main():
     remaining = list(arms)
     process = 0
     restarts = 0
+    # THE POOL'S TOKENS, ONCE (see THE VRAM BUDGET above): held to the pool's end, every process inherits them
+    try:
+        tokens = vram_tokens.acquire(opt["vram"], "pool.%s" % pool, log=sys.stdout)
+    except vram_tokens.AdmitTimeout as e:
+        say("pool: %s — %s" % (pool, e))
+        for n, _, _ in remaining:
+            settle(n, "NOADMIT", 0, "never ran: %s" % e, now=True)
+        remaining = []
+        tokens = []
 
     while remaining:
         process += 1
@@ -304,18 +314,7 @@ def main():
         plog = open(logname, "w")
         say("pool: %s process %d output -> %s" % (pool, process, os.path.abspath(logname)))
         boot = []
-        # THE VRAM BUDGET: this process's tokens, taken BEFORE it starts (outside every budget)
-        # and inherited by it; released below when it has ended. A restart re-takes them.
-        try:
-            tokens = vram_tokens.acquire(opt["vram"], "pool.%s process %d" % (pool, process),
-                                         log=sys.stdout)
-        except vram_tokens.AdmitTimeout as e:
-            plog.close()
-            say("pool: %s — %s" % (pool, e))
-            for n, _, _ in remaining:
-                settle(n, "NOADMIT", 0, "never ran: %s" % e, now=True)
-            remaining = []
-            break
+        # THE VRAM BUDGET: the pool's tokens (taken once, above), inherited by this process
         env = dict(os.environ)
         # NOBODY ANSWERS A DIALOG HERE (TESTING-CLEANUP-2): a device loss ends a pool's app at once
         # (exit 3), never through the user's 60 s dialog bound (src/viewport/devicelossend.h).
@@ -407,7 +406,6 @@ def main():
                 deadline = current_t0 + budget.get(current, opt["boot"])
                 continue
         rc = proc.wait()
-        vram_tokens.release(tokens)
         t.join(timeout=5)
         step, leak = curve_findings(curve)
         pts = " ".join("%s=%d" % (a, mb) for a, mb in curve)
@@ -454,6 +452,7 @@ def main():
             say("POOL %s RESTART %d — the process ended with %d arm(s) left (%s); restarting from %s"
                 % (pool, restarts, len(remaining), how, remaining[0][0]))
 
+    vram_tokens.release(tokens)       # the pool's tokens end with the pool (its fds would die with the driver anyway)
     say("")
     say("POOL %s VERDICTS (%d process(es), %d restart(s))" % (pool, process, restarts))
     bad = []

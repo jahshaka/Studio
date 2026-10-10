@@ -88,8 +88,9 @@ int main(int argc, char **argv)
         // The APP keeps its ordinary budget on purpose: only the CLIENT gives
         // up early, which is the situation being reproduced.
         slow.scriptTimeoutMs = 30000;
-        std::printf("info: the FAIL(transport) line that follows is THIS case's, "
-                    "deliberately provoked — the checks under it are the verdict\n");
+        // PROVOKED, and printed as such: `expected(transport): …`, never a FAIL line the run log
+        // would record as this row's failure (P10g) — the checks under it are the verdict.
+        slow.transportFailureExpected = true;
         QElapsedTimer t;
         t.start();
         const QJsonObject late = slow.runScript(QStringLiteral("app.blockUiThread(1000)"));

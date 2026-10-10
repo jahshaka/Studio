@@ -286,7 +286,7 @@ check("vram: admitted with 2 tokens 0,1" in out,
 check(log.count("tokens-held [0, 1] held-env 2") == 5,
       "every arm's app process holds exactly its 2 tokens, inherited (%d of 5 arms)" % log.count("tokens-held [0, 1] held-env 2"))
 check(out.count("POOL vram RESTART ") == 1 and len(glob.glob("pool-logs/vram-process*.log")) == 2,
-      "the crash restarted the process once, and the restart RE-TOOK the tokens (both processes held 0,1)")
+      "the crash restarted the process once, and the restart INHERITED the pool's tokens (both processes held 0,1)")
 check(v.get("vram.xid", ("", ""))[0] == "CRASH" and v["vram.xid"][1].startswith("xid 13"),
       "a kernel Xid from the pool's pid is the running arm's `CRASH xid 13` (%s)" % (v.get("vram.xid"),))
 check(all(v.get("vram." + n, ("",))[0] == "PASS" for n in ("t1", "t2", "t3")),
@@ -294,7 +294,7 @@ check(all(v.get("vram." + n, ("",))[0] == "PASS" for n in ("t1", "t2", "t3")),
 check(v.get("vram.crash", ("",))[0] == "CRASH", "the crash arm is still its own CRASH")
 check(not verdicts.twice, "every arm's verdict is ONE `ARM` line, the Xid override included (twice: %s)" % verdicts.twice)
 held_after = subprocess.run([admit, "status"], env=e, stdout=subprocess.PIPE, text=True).stdout
-check("vram: 0 of 12 tokens held" in held_after, "after the pool ends no token is held (the driver keeps none)")
+check("vram: 0 of 12 tokens held" in held_after, "after the pool ends no token is held (the pool's hold ended with it)")
 # an unreadable journal is a RED, never a silent pass
 okapp = os.path.join(vdir, "okapp.py")
 with open(okapp, "w") as f:

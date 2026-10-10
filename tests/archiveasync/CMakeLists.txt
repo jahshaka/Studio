@@ -29,9 +29,11 @@ set(_archive_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-archive)
 file(MAKE_DIRECTORY ${_archive_home}/run)
 jah_gpu_row(archive.responsive CLASS app TIER epic NEEDS photon COMMAND test_archive_responsive
          WORKING_DIRECTORY ${_archive_home}/run)
+# TESTING-CLEANUP-2B item 2: TIMEOUT 460 = 6 x the run log's quiet median 75.1 s (42 quiet PASS runs since 2026-10-01, worst 546.5 s);
+# declared 300 was below the policy, honest only with the +900 s widening (now deleted).
 set_tests_properties(archive.responsive PROPERTIES
     ENVIRONMENT "HOME=${_archive_home};JAHSHAKA_DATA_ROOT=${_archive_home}/.local/share/Jahshaka"
-    TIMEOUT 300 LABELS "archive")
+    TIMEOUT 460 LABELS "archive")
 # archive.responsive.timing — THE UI-GAP BUDGETS, stage-close (lane D6B-GATE-SHAPE; audit §5,
 # FIX-TIME): the same binary with JAHSHAKA_TIMING_BARS=1, on a quiet box, under the
 # GPU-timing lock; the push row above asserts everything else and prints the gaps.
