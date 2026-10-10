@@ -589,6 +589,59 @@ def run(source, scripts, merge, scratch, rl, build_dir):
           and all("fallback: drain-timeout" in l for l in pf.stdout.splitlines() if l.startswith("row.x | ")),
           "...and the attribution TABLE says it where the lead reads: a FALLBACK line and the fallback on every cell")
     # (red on base 1ceb5cde9: the table had no FALLBACK line and no fallback column)
+    # TESTING-CLEANUP-2B item 15 (1), THE --attribute COPY (read 4 F3): a YIELD'S RE-HOLD IS A NEW HOLD. The attribution
+    # holds the card cleanly; a class-1 gate asks; at its next run the attribution yields, the gate runs, and while it
+    # holds the slot a blocker outside any gate takes a token — so the attribution's RE-drain times out (phase wait 1 s).
+    # The runs before the yield carry no fallback, the runs after it carry `fallback: drain-timeout`, one drain-timeout
+    # record is written for the re-hold, and the finding it registers (row.combo, a COMBINATION) carries the run's
+    # sticky fallback. RED ON 74740b0de: the callers kept the FIRST hold's (none) — no stamp, no record after the yield.
+    ydir, yreg = os.path.join(scratch, "runs-yield"), os.path.join(scratch, "registry-yield")
+    os.makedirs(yreg)
+    json.dump({"defects": []}, open(os.path.join(yreg, "defects.json"), "w"))
+    yenv = dict(aenv, JAH_RUN_LOG_DIR=ydir, JAH_VRAM_PHASE_WAIT="1", PYTHONUNBUFFERED="1",
+                JAH_DEFECTS_FILE=os.path.join(yreg, "defects.json"))
+    out_ = list(args); i_ = out_.index("--attribute"); out_[i_ + 1] = "row.combo"
+    pa = subprocess.Popen([sys.executable, os.path.join(scripts, "gate-scope.py")] + out_, stdout=subprocess.PIPE,
+                          stderr=subprocess.STDOUT, text=True, env=yenv)
+    alines = []
+    for l_ in pa.stdout:                    # the hold is the event (the card drained), never a clock
+        alines.append(l_)
+        if "the card drained" in l_: break
+    gstart, grel, brel = (os.path.join(scratch, n) for n in ("y-gate.started", "y-gate.release", "y-block.release"))
+    gq = subprocess.Popen([sys.executable, os.path.join(scripts, "vram_tokens.py"), "gate", "--class", "1", "--label",
+                           "Y gate", "--", "sh", "-c", f"touch {gstart}; while [ ! -e {grel} ] && kill -0 {os.getpid()} "
+                           f"2>/dev/null; do sleep 0.05; done"], env=aenv, stdout=subprocess.DEVNULL,
+                          stderr=subprocess.DEVNULL)
+    while not os.path.exists(gstart) and gq.poll() is None and pa.poll() is None:   # the gate RUNS: the yield happened
+        time.sleep(0.05)
+    benv = {k: v for k, v in aenv.items() if k not in ("JAH_GATE_SLOT_HELD", "JAH_VRAM_HELD")}
+    yb = subprocess.Popen([sys.executable, os.path.join(scripts, "vram_tokens.py"), "admit", "1", "--label", "y-blocker",
+                           "--", "sh", "-c", f"while [ ! -e {brel} ] && kill -0 {os.getpid()} 2>/dev/null; do sleep 0.05; done"],
+                          env=benv, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    while "y-blocker" not in subprocess.run([sys.executable, os.path.join(scripts, "vram_tokens.py"), "status"],
+                                            capture_output=True, text=True, env=aenv).stdout and yb.poll() is None:
+        time.sleep(0.05)
+    open(grel, "w").close(); gq.wait()
+    for l_ in pa.stdout:                    # the re-drain times out: then the blocker goes (the rest can be admitted)
+        alines.append(l_)
+        if "per-row admission instead" in l_: break
+    open(brel, "w").close(); yb.wait()
+    alines += pa.stdout.readlines(); pa.wait()
+    aout_y = "".join(alines)
+    yrecs = [json.loads(l) for f in (sorted(os.listdir(ydir)) if os.path.isdir(ydir) else []) for l in open(os.path.join(ydir, f))]
+    yruns = sorted((r for r in yrecs if not r.get("kind")), key=lambda r: r.get("ts") or "")
+    fbs = [r.get("fallback") for r in yruns]
+    k_ = fbs.index("drain-timeout") if "drain-timeout" in fbs else -1
+    ypend = [json.load(open(os.path.join(yreg, "defects.pending", f))) for f in
+             (sorted(os.listdir(os.path.join(yreg, "defects.pending"))) if os.path.isdir(os.path.join(yreg, "defects.pending")) else [])]
+    check("YIELDING" in aout_y and k_ > 0 and all(f is None for f in fbs[:k_]) and all(f == "drain-timeout" for f in fbs[k_:])
+          and len([r for r in yrecs if r.get("kind") == "drain-timeout"]) == 1,
+          "--attribute: the re-hold after a yield decides the runs after it — %d unstamped, then %d stamped, one "
+          "re-drain record (%s)" % (max(k_, 0), len(fbs) - max(k_, 0), fbs))
+    check("FALLBACK: drain-timeout" in aout_y and any(e.get("kind") == "combination" and e.get("fallback") == "drain-timeout"
+                                                       for e in ypend),
+          "...and the table's FALLBACK line and the registered finding carry the run's sticky fallback (%s)"
+          % [(e.get("id"), e.get("fallback")) for e in ypend])
     fake_x.kill(); fake_x.wait()
     check(p7.returncode == 7, "an attribution left INCOMPLETE (row.noadmit alone) exits 7 (exit %d)" % p7.returncode)
     check(p5.returncode == 5, "a d-build defect alone (row.base) exits 5 (exit %d)" % p5.returncode)
