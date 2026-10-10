@@ -289,7 +289,12 @@ AREA_RULES = [
     # THE VRAM BUDGET's helper (GATE-ADMIT-1): its tooling suite (devprocess.vram_admit), the
     # pool driver's own test that imports it (pool.runner, tests/app) and the closure (hygiene).
     (r"^scripts/(gpu-admit|vram_tokens)", ["tooling", "app", "hygiene"], []),
-    (r"^scripts/", [], []),
+    # EVERY OTHER SCRIPT IS THE RUNNER'S TOO (TESTING-CLEANUP-2B item 4, H8a): ci_gate_check.py / ci-gate-check.sh (the
+    # judge: gate.ci_check, gate.verdict_door, …), kernel_xid.py (devprocess.kernel_journal, gate.cost),
+    # check-trailers.sh (gate.batch), sanitize.sh and its lsan/tsan suppressions (the source lints) selected NO row —
+    # a change to the judge gated on nothing. Their tests are the hygiene and tooling rows (display-free, the CPU
+    # phase). In a tooling-only diff (§1.3.4) the same paths take Selection.tooling_path.
+    (r"^scripts/", ["hygiene", "tooling"], []),
 ]
 
 # A TOOLING-ONLY DIFF SELECTS NO PRODUCT ROW (TESTING_V3_SPEC §1.3.4; the owner 2026-10-10: "why do we still have
