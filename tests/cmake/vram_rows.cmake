@@ -16,10 +16,11 @@
 #      run alike, never STARTS a row whose tokens its own running rows hold. ctest's clock starts at the
 #      start, so a gate's rows never wait for each other inside their TIMEOUT.
 #   2. ACROSS PROCESSES (a builder's hand-run app holding tokens beside the gate): the flock admission stays
-#      (vram_tokens.py; nothing inside ctest can see another process). Such a wait is printed
-#      (`vram: waiting … / vram: admitted … after <s> s`) and the run log subtracts it from the row's seconds
-#      (tokenWaitS); a row whose TIMEOUT ends while it is STILL WAITING never ran — the run log records it
-#      NOADMIT (gate_runlog.row_verdict), never a TIMEOUT of its code.
+#      (vram_tokens.py; nothing inside ctest can see another process). Inside a gate it does NOT wait
+#      (vram_tokens.row_wait_bound): short, the row exits 75 at once — NOADMIT, re-queued at the gate's end (P5),
+#      MISSING to the judge if still short — so no second of another process's hold is charged to the row's
+#      TIMEOUT. Outside a gate a hand run waits as before; a TIMEOUT that ends such a wait is recorded NOADMIT
+#      (gate_runlog.unadmitted_wait), never a TIMEOUT of its code.
 # gate.tokens_by_needs proves the declared TIMEOUT is the effective one and that the spec serialises rows by
 # their tokens (a toy project through this file).
 
