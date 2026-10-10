@@ -2718,8 +2718,16 @@ void AvatarApi::startPreviewLoad(const QString &modelPath, const QString &rowNam
     // newer open moves the epoch; the superseded rebuild then starts nothing.
     const quint64 bakeEpoch = mLoadEpoch;
     if (MeshBakeStore::ensureFreshAsync(modelPath, modelGuid, this,
-            [this, bakeEpoch, modelPath, rowName, modelGuid](bool) {
+            [this, bakeEpoch, modelPath, rowName, modelGuid](bool, const QString &dropped) {
                 if (bakeEpoch != mLoadEpoch) return;
+                // A LANDING THAT WAS DROPPED (a reset, a shutdown, a moved store) ENDS THE JOB with
+                // its reason (F7) — the busy dialog never waits on a commit that will not come.
+                if (!dropped.isEmpty()) {
+                    const QString why = QStringLiteral("'%1' could not be previewed: %2").arg(rowName, dropped);
+                    record(QStringLiteral("avatar.open: ") + why);
+                    endJob(false, why);
+                    return;
+                }
                 startPreviewLoad(modelPath, rowName, modelGuid, /*bakeTried*/ true);
             }))
         return;

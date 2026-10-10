@@ -773,7 +773,9 @@ QFuture<void> sBackground;
 // database thread's: the pending map, the listeners, the commits.
 QHash<QString, int> sPending;                       ///< model file -> async bakes in flight over it
 int sPendingJobs = 0;
-quint64 sAsyncEpoch = 0;                            ///< moved by stopBackgroundRebuild: a reset or shutdown
+/// Moved by stopBackgroundRebuild (a reset, a shutdown). ATOMIC: the async worker reads it between jobs
+/// and stops there (STAGE-CLOSE-TRIAGE-1 F5); the continuation drops a landing whose epoch moved.
+std::atomic<quint64> sAsyncEpoch { 0 };
 QList<QFuture<QVector<BakeResult>>> sAsyncFutures;  ///< joined by stopBackgroundRebuild
 struct Listener
 {
@@ -852,9 +854,11 @@ void stopBackgroundRebuild()
 {
     sBackgroundStop.store(true);
     if (sBackground.isValid() && !sBackground.isFinished()) sBackground.waitForFinished();
-    // THE ASYNC BAKES TOO (a reset, a shutdown): joined, and their commits — still queued to this
-    // thread — dropped by the epoch, so nothing lands in a library that is no longer the one they
-    // were planned against.
+    // THE ASYNC BAKES TOO (a reset, a shutdown). The epoch moves FIRST: each worker stops between
+    // jobs on it (F5), so the join below waits for the job IN FLIGHT only — never the rest of a
+    // multi-model paste — and every landing still queued to this thread is dropped by it (its
+    // `done` told why: F7), so nothing lands in a library that is no longer the one it was planned
+    // against. (A single job has no cancel point: MeshBake::buildFromFile runs to its end.)
     ++sAsyncEpoch;
     for (QFuture<QVector<BakeResult>> &future : sAsyncFutures)
         if (!future.isFinished()) future.waitForFinished();
@@ -966,21 +970,27 @@ namespace {
 
 bool sCommitHold = false;
 QVector<std::function<void()>> sHeldCommits;
+/// `done(failed, dropped)`: `dropped` names why NOTHING was committed (a reset or shutdown moved the
+/// epoch, the store moved), empty when the landing ran.
+using DoneFn = std::function<void(int failed, const QString &dropped)>;
 void landAsync(const QVector<BakeJob> &jobs, const QVector<LandedBake> &targets,
-               const std::function<void(int)> &done, quint64 epoch, QVector<BakeResult> results);
+               const DoneFn &done, quint64 epoch, QVector<BakeResult> results);
 
 /// Bakes `jobs` on a worker; commits them on the database thread when they land, tells the
 /// listeners which of `targets` landed, then calls `done(failed)`.
-void bakeAsync(const QVector<BakeJob> &jobs, const QVector<LandedBake> &targets,
-               std::function<void(int failed)> done)
+void bakeAsync(const QVector<BakeJob> &jobs, const QVector<LandedBake> &targets, DoneFn done)
 {
     for (const BakeJob &job : jobs) ++sPending[job.path];
     sPendingJobs += jobs.size();
-    const quint64 epoch = sAsyncEpoch;
-    QFuture<QVector<BakeResult>> future = QtConcurrent::run([jobs]() {
+    const quint64 epoch = sAsyncEpoch.load();
+    QFuture<QVector<BakeResult>> future = QtConcurrent::run([jobs, epoch]() {
         QVector<BakeResult> results;
         results.reserve(jobs.size());
-        for (const BakeJob &job : jobs) results.append(runBake(job));
+        for (const BakeJob &job : jobs) {
+            // A RESET OR SHUTDOWN STOPS THE WORKER BETWEEN JOBS (F5), like the background sweep.
+            if (sAsyncEpoch.load() != epoch) break;
+            results.append(runBake(job));
+        }
         return results;
     });
     sAsyncFutures.removeIf([](const QFuture<QVector<BakeResult>> &f) { return f.isFinished(); });
@@ -991,7 +1001,7 @@ void bakeAsync(const QVector<BakeJob> &jobs, const QVector<LandedBake> &targets,
 }
 
 void landAsync(const QVector<BakeJob> &jobs, const QVector<LandedBake> &targets,
-               const std::function<void(int)> &done, quint64 epoch, QVector<BakeResult> results)
+               const DoneFn &done, quint64 epoch, QVector<BakeResult> results)
 {
     // THE TEST HOLD (assets.holdBakes): the finished bake waits here, uncommitted and still pending,
     // until the hold is released — so a suite can place and SAVE inside the window deterministically.
@@ -1006,17 +1016,34 @@ void landAsync(const QVector<BakeJob> &jobs, const QVector<LandedBake> &targets,
         for (const BakeJob &job : jobs)
             if (--sPending[job.path] <= 0) sPending.remove(job.path);
         sPendingJobs -= jobs.size();
-        // A RESET OR SHUTDOWN SINCE THE START: the library these were planned against is gone;
-        // nothing is committed (the staged temps go with the results).
-        if (epoch != sAsyncEpoch) {
+        // NOTHING IS COMMITTED when the library or the store these were planned against is gone —
+        // a reset or shutdown moved the epoch, or the store root moved while the worker staged into
+        // the old one (F8: the commit would record objects that are not in the active store). The
+        // staged temps go with the results, and `done` is TOLD (F7: a caller waiting on the landing
+        // — the avatar module's busy job — ends with the reason instead of waiting forever).
+        const QString root = AssetStorePaths::root();
+        QString dropped;
+        if (epoch != sAsyncEpoch.load())
+            dropped = QStringLiteral("the library was reset or closed while its bake was running");
+        else if (!jobs.isEmpty() && jobs.first().storeRoot != root)
+            dropped = QStringLiteral("the asset store moved while its bake was running — import it again");
+        if (!dropped.isEmpty()) {
             for (BakeResult &result : results) {
                 QVector<AssetCas::Staged> leftover{ result.staged };
                 AssetCas::discardStaged(leftover);
             }
+            irisLog(QStringLiteral("mesh bake: %1 bake(s) not committed: %2").arg(jobs.size()).arg(dropped));
+            QVector<LandedBake> lost = targets;
+            for (LandedBake &row : lost) row.ok = false;
+            for (int i = 0; i < sListeners.size();) {
+                if (!sListeners[i].context) { sListeners.removeAt(i); continue; }
+                sListeners[i].fn(lost);
+                ++i;
+            }
+            if (done) done(jobs.size(), dropped);
             return;
         }
         QSqlDatabase conn = QSqlDatabase::database();
-        const QString root = AssetStorePaths::root();
         int failed = 0;
         QSet<QString> failedPaths;
         for (int i = 0; i < results.size(); ++i) {
@@ -1036,7 +1063,7 @@ void landAsync(const QVector<BakeJob> &jobs, const QVector<LandedBake> &targets,
             sListeners[i].fn(landed);
             ++i;
         }
-        if (done) done(failed);
+        if (done) done(failed, QString());
     }
 }
 }   // namespace
@@ -1063,12 +1090,12 @@ int bakeLandedAsync(const QStringList &guids)
     QVector<LandedBake> targets;
     for (const BakeTarget &row : rows)
         if (baking.contains(row.path)) targets.append({ row.assetGuid, row.path, true });
-    bakeAsync(jobs, targets, std::function<void(int)>());
+    bakeAsync(jobs, targets, DoneFn());
     return jobs.size();
 }
 
 bool ensureFreshAsync(const QString &sourcePath, const QString &assetGuid, QObject *context,
-                      std::function<void(bool fresh)> landed)
+                      std::function<void(bool fresh, const QString &dropped)> landed)
 {
     QSqlDatabase conn = QSqlDatabase::database();
     const QString root = AssetStorePaths::root();
@@ -1077,10 +1104,11 @@ bool ensureFreshAsync(const QString &sourcePath, const QString &assetGuid, QObje
     if (jobs.isEmpty()) return false;   // no source on disk: the model stays missing
     QPointer<QObject> guard(context);
     bakeAsync(jobs, { { assetGuid, sourcePath, true } },
-              [guard, landed, sourcePath, assetGuid](int) {
+              [guard, landed, sourcePath, assetGuid](int, const QString &dropped) {
                   if (!guard || !landed) return;
+                  if (!dropped.isEmpty()) { landed(false, dropped); return; }
                   landed(isFresh(QSqlDatabase::database(), AssetStorePaths::root(), sourcePath,
-                                 assetGuid));
+                                 assetGuid), QString());
               });
     return true;
 }

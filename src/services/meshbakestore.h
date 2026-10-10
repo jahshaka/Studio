@@ -278,10 +278,11 @@ int bakeLandedAsync(const QStringList &guids);
 
 /// One model's rebuild, asynchronously — `ensureFresh` for a caller that can wait: when the bake of
 /// (`sourcePath`, `assetGuid`) is stale or absent, it is built on a worker and committed here, and
-/// `landed(fresh)` runs on `context`'s thread afterwards (never when `context` is gone). Returns false
+/// `landed(fresh, dropped)` runs on `context`'s thread afterwards (never when `context` is gone);
+/// `dropped` names why nothing was committed (a reset, a shutdown, a moved store), else empty. Returns false
 /// when nothing was started (already fresh, or no source to build from: `landed` is NOT called).
 bool ensureFreshAsync(const QString &sourcePath, const QString &assetGuid, QObject *context,
-                      std::function<void(bool fresh)> landed);
+                      std::function<void(bool fresh, const QString &dropped)> landed);
 
 /// True while an async bake of this model file (bakeLandedAsync / ensureFreshAsync) has not
 /// committed. Database thread.
