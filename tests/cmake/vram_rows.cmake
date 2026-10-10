@@ -31,6 +31,13 @@ if(NOT CMAKE_MATCH_1)
     message(FATAL_ERROR "vram_rows.cmake: cannot read the default token count from scripts/vram_tokens.py")
 endif()
 set(JAH_VRAM_TOKEN_COUNT ${CMAKE_MATCH_1})
+# THE SPEC IS SIZED AS THE RUNTIME COUNTS (TESTING-CLEANUP-2B fix round 4, item 5): vram_tokens.token_count() honours
+# JAH_VRAM_TOKENS, so the spec does too — a box or a test universe configured with fewer tokens never has ctest
+# schedule more than the admission can grant (its rows would NOADMIT each other inside a gate). Configure and run
+# with the same JAH_VRAM_TOKENS.
+if(DEFINED ENV{JAH_VRAM_TOKENS} AND "$ENV{JAH_VRAM_TOKENS}" MATCHES "^[1-9][0-9]*$")
+    set(JAH_VRAM_TOKEN_COUNT $ENV{JAH_VRAM_TOKENS})
+endif()
 unset(_jah_vt_src)
 unset(_jah_vt_m)
 
