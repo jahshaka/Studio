@@ -5,12 +5,11 @@
 # never the forced exit 86. Asserted: the import returned with its bake pending, the session log says
 # the bake was cancelled, the run's code is 0 and its log carries the close bracket.
 #
-# usage: bake_quit.sh <jahshaka-binary>      cwd = a scratch run dir
+# usage: bake_quit.sh <jahshaka-binary>      cwd = the row's fresh home's run dir (tests/support/fresh_home.sh wipes it)
 set -u
 BIN="$1"
 HERE="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$PWD/quit-root"
-rm -rf "$ROOT" quit.log dense.obj dense.jbundle
 mkdir -p "$ROOT"
 fail=0
 check() { if [ "$1" = "0" ]; then echo "ok:   $2"; else echo "FAIL: $2"; fail=1; fi }

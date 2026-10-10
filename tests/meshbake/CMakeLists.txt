@@ -208,7 +208,8 @@ set_tests_properties(meshbake.async_landing PROPERTIES
 set(_quit_home ${CMAKE_CURRENT_BINARY_DIR}/quit-during-bake-home)
 file(MAKE_DIRECTORY ${_quit_home}/run)
 add_test(NAME meshbake.quit_during_bake
-         COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/bake_quit.sh" "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>"
+         COMMAND sh "${JAH_FRESH_HOME}" --warm "${_quit_home}" --
+                 bash "${CMAKE_CURRENT_SOURCE_DIR}/bake_quit.sh" "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>"
          WORKING_DIRECTORY ${_quit_home}/run)
 # TIMEOUT 80: 6x the measured median (13.40 / 13.21 / 13.36 / 13.31 s, 2026-10-10 solo; median 13.3 s
 # -> 80 s) rounded up to 10 s. Most of it is the dense model's SYNCHRONOUS import bake before the claim.
