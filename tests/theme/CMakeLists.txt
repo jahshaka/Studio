@@ -47,8 +47,11 @@ target_include_directories(test_style_contracts PRIVATE
 # (a right-click must raise a menu, never activate).
 find_package(Qt6 REQUIRED COMPONENTS Test)
 target_link_libraries(test_style_contracts PRIVATE Qt6::Widgets Qt6::Test qlementine)
+# Its data root is wiped per run (TESTING-CLEANUP-2 H8e): the startup theme path it asserts wants a
+# root with no appearance/theme key, and a root nothing wipes holds whatever the last run wrote.
 set(_style_contracts_root ${CMAKE_CURRENT_BINARY_DIR}/style-contracts-root)
-add_test(NAME theme.style_contracts COMMAND test_style_contracts
+add_test(NAME theme.style_contracts
+         COMMAND sh "${JAH_FRESH_HOME}" "${_style_contracts_root}" -- $<TARGET_FILE:test_style_contracts>
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(theme.style_contracts PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen;JAHSHAKA_DATA_ROOT=${_style_contracts_root}"
