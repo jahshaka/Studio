@@ -64,6 +64,9 @@ target_link_libraries(test_editor_player_parity PRIVATE IrisGL JahshakaEngine Qt
 add_dependencies(test_editor_player_parity JahshakaEngineMedia)
 jah_gpu_row(player.editor_parity CLASS engine COMMAND ${CMAKE_BINARY_DIR}/bin/test_editor_player_parity
          WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+# TESTING-CLEANUP-2B item 7 (2026-10-10, RE-MEASURED ALONE: 3 runs, each its own whole-card hold under the slot,
+# gpu-exclusive.sh class 2, the box otherwise idle; seconds = ctest's, the admission wait outside them): 8.1 / 5.1 / 5.1 s,
+# median 5.1 -> 6x = 40, under the 120 s FLOOR; slot-era worst 8.1 s -> TIMEOUT 120 (unchanged: the floor).
 set_tests_properties(player.editor_parity PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "mirror")
 
 # ---- player.playback_routing (A1.6) --------------------------------------
