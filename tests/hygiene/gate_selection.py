@@ -205,7 +205,7 @@ def hunk_cases(gs, graph, build, inv0, cases):
 
 def tooling_cases(gs, graph, build, inv0):
     """TESTING_V3 §1.3.4 (TESTING-CLEANUP-2B item 1): A TOOLING-ONLY DIFF SELECTS NO PRODUCT ROW. A diff with no
-    PRODUCT_INPUT path selects the hygiene + tooling rows, the runner's own self-test and the rows whose declaration
+    product path (gate-scope.py NON_PRODUCT is the list of the paths that are NOT; everything else is) selects the hygiene + tooling rows, the runner's own self-test and the rows whose declaration
     or command changed — never an app or compiled product row, never the smoke pair; ONE product path makes it a
     product diff and the selection is the whole union again.
     RED ON BASE (b0a3b1f3c): no such rule — scripts/vram_tokens.py alone selected 9 product rows (tests/app's
@@ -246,9 +246,9 @@ def tooling_cases(gs, graph, build, inv0):
                             "irisgl/README.md"]) == []
           and len(gs.product_paths(["irisgl/engine/src/OgreGi.cpp", "app/content/x.obj", "CMakeLists.txt",
                                     "cmake/IncludeOgre.cmake", "scenes/Tornado.zip", "thirdparty/qlementine/x.h",
-                                    "irisgl/thirdparty/ogre-next", ".gitmodules"])) == 8,
-          "PRODUCT_INPUT: the sources, content, vendored code and build files are product; docs, scripts and the "
-          "hygiene tests are not")
+                                    "irisgl/thirdparty/ogre-next", ".gitmodules", "newtopdir/tool.cpp"])) == 9,
+          "the rule fails CLOSED: the sources, content, vendored code, build files AND a new top-level directory "
+          "nobody classified are product; docs, scripts and tests are not")
 
 
 def runlog_cases(source):
