@@ -292,6 +292,38 @@ AREA_RULES = [
     (r"^scripts/", [], []),
 ]
 
+# A TOOLING-ONLY DIFF SELECTS NO PRODUCT ROW (TESTING_V3_SPEC §1.3.4; the owner 2026-10-10: "why do we still have
+# 1 hour gates?" — batch A's three runner lanes selected 636 rows, 57 min). A change that touches NOTHING the
+# product binary is built from cannot change the product rows' answers: running them re-proves the runner, not the
+# product, and the runner is proved by its own rows. PRODUCT_INPUT is that set, a FILE RULE (never a hand-pick):
+# the sources (src/, irisgl/ but its docs), the shipped content (app/, scenes/), the vendored code (thirdparty/),
+# the build files (the top CMakeLists.txt, cmake/, .gitmodules), the installer and the extras. A diff with ONE such
+# path is a product diff and takes the whole union below, exactly as before. A diff with none is TOOLING-ONLY:
+#   * a path of the runner itself (TOOLING_OWN: scripts/, tests/hygiene/, tests/tooling/, testing/) selects the
+#     `hygiene` and `tooling` rows (the lints and the runner's own suites, display-free) plus what its area rule
+#     names among the non-app, non-compiled rows (a script's own self-test, e.g. pool.runner for vram_tokens) and
+#     every row whose COMMAND runs the file;
+#   * any other path — a test's source, a test CMakeLists, a shared test helper — goes through the ordinary walk:
+#     what it reaches IS the rows whose declaration or command changed (the graph for a test source, the CMake
+#     reader for a registration);
+#   * docs and the like select what they always did (nothing; TESTING_GATE.md its guard);
+#   * the smoke pair (ALWAYS_ON_CODE) is the PRODUCT's smoke: no product path moved, so it does not ride.
+PRODUCT_INPUT = re.compile(r"^(src/|irisgl/(?!docs/|[^/]+\.md$)|app/|scenes/|thirdparty/|cmake/|extras/|deploy/|"
+                           r"CMakeLists\.txt$|\.gitmodules$)")
+TOOLING_OWN = re.compile(r"^(scripts/|tests/(hygiene|tooling)/|testing/)")
+# A RUNNER'S OWN SELF-TEST THAT BOOTS THE APP (it is the tool's test, not a product row): selected by name in a
+# tooling-only diff, where the area rules' directories pick only lint/script rows. pool.runner drives the pool
+# runner (tests/support/run_pool.py), which takes its tokens through vram_tokens.py.
+TOOL_SELF_TESTS = [
+    (r"^scripts/(gpu-admit|vram_tokens)", ["pool.runner"]),
+]
+
+
+def product_paths(paths):
+    """The touched paths the product is built from (§1.3.4): one of them makes the diff a product diff."""
+    return [p for p in paths if PRODUCT_INPUT.match(p)]
+
+
 # Cheap smoke suites always added when src/ or irisgl/ moved (a boot that renders + the
 # contract of the scripting surface), ~15 s together.
 ALWAYS_ON_CODE = ["app.startup_quiet", "api.contract"]
@@ -976,6 +1008,7 @@ class Selection:
         self._origin = None
         self.sc_origins = collections.defaultdict(set)
         self.stage_close_left = {}         # row -> the broad reason that reached it, left for the batch
+        self.tooling_only = False          # §1.3.4: no touched path is a product input (select() decides)
 
     # -- adding rows -----------------------------------------------------------------------
     def add(self, suites, why):
@@ -1266,6 +1299,23 @@ class Selection:
                 self.fallback.append(f"{tag}: no rule, no symbol, no graph owner")
                 notes.append("NO RULE, no symbol, no graph owner → merge tier")
         if depth == 0: self.rationale.append((p, "; ".join(notes)))
+
+    def tooling_path(self, p):
+        """A path of the runner in a TOOLING-ONLY diff (§1.3.4; PRODUCT_INPUT above): the tools' own rows — the
+        `hygiene` and `tooling` rows, what the path's area rule names among the non-app, non-compiled rows, and
+        every row whose command runs the file. Never a product row."""
+        self._origin = p
+        why = f"{p}: a tooling-only diff (TESTING_V3 §1.3.4) — the runner's own rows"
+        before = set(self.selected)
+        self.expand(["hygiene", "tooling"], [], why)
+        r = self.rules_for(p, why, kinds={"other"})
+        for pat, rows in TOOL_SELF_TESTS:
+            if re.match(pat, p): self.add(rows, why + " [its self-test]")
+        hit = self.argv_rows(p, why)
+        n = len(set(self.selected) - before)
+        self.rationale.append((p, f"TOOLING-ONLY (no product input in the diff): the hygiene + tooling rows"
+                                  + (f", {r} (lint/script rows)" if r else "")
+                                  + (f", {len(hit)} row(s) that run it" if hit else "") + f" — {n} new row(s)"))
 
     def fork_pins(self):
         """(old, new) ogre-next commits the range's irisgl ends pin, or (None, None)."""
@@ -2013,10 +2063,14 @@ def select(paths, rng, build, jobs, graph=None, inv=None, quiet_graph=False):
         for t in inv.values():
             if t["kind"] == "compiled": t["kind"] = "other"     # the rules' dirs pick them, as before
     S = Selection(inv, graph, app_exe, Revs(rng), jobs)
+    S.tooling_only = bool(paths) and not product_paths(paths)
     for p in paths:
-        S.path(p)
+        if S.tooling_only and TOOLING_OWN.match(p):
+            S.tooling_path(p)
+        else:
+            S.path(p)
     S.stage_close_subjects(paths)
-    if S.code_moved: S.add(ALWAYS_ON_CODE, "code moved: smoke + contract")
+    if S.code_moved and not S.tooling_only: S.add(ALWAYS_ON_CODE, "code moved: smoke + contract")
     if graph is not None: graph.save_syms()
     return S
 
@@ -2615,7 +2669,7 @@ def main():
                           "arms": {r: {arm: S.arms[r][arm] for arm in subsets[r]} for r in subsets},
                           "pool_arms_env": pool_env,
                           "rationale": [{"path": p, "why": w} for p, w in S.rationale],
-                          "graph": S.graph is not None,
+                          "graph": S.graph is not None, "tooling_only": S.tooling_only,
                           "estimated_seconds": est, "estimated_wall": wall,
                           "tier_rows": len(tier_rows), "tier_estimated_seconds": tier_est,
                           "command": merge_tier(a.jobs) if whole_tier else cmd,
@@ -2625,6 +2679,10 @@ def main():
     print(f"gate-scope: {len(paths)} touched path(s)"
           + ("" if S.graph else "   [NO BUILD GRAPH: compiled rows by directory rules]"))
     for p, why in S.rationale: print(f"  {p}\n      -> {why}")
+    if S.tooling_only:
+        print("\nTOOLING-ONLY DIFF (TESTING_V3 §1.3.4): no touched path is a product input (gate-scope.py PRODUCT_INPUT) "
+              "— the hygiene label + the tools' rows + the rows whose declaration or command changed; no product row, "
+              "no smoke pair")
 
     def run_both(tier_name):
         """The MERGE tier, both phases (parallel, then the timing rows serial); the worse exit code."""
