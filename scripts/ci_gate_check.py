@@ -321,7 +321,15 @@ def door(text, reds, solos, row, defects=None, tip_recs=None, base_recs=None, ti
         return False, (f"the red carries an Xid from the row's own process (pid {x.get('pid')}, "
                        f"{x.get('window')}) — a DEFECT by law: only real:<registered id> clears it"), False
     spass = sum(1 for r in solos if r.get("verdict") == "PASS")
-    if solos and not _solos_ok(solos):
+    # THE SOLO RULE IS FOR A CLAIM OF NONDETERMINISM (TESTING-CLEANUP-2C, the lead's item 4): solos below 3/3 refuse
+    # prose, a contention: claim and a nondeterminism entry (which must SHOW 3/3 green) — but a real:<id> of a DEFECT
+    # whose solos are ALL red is the defect reproducing, and its proof is the SAME red on the base's solos (_real's
+    # KNOWN RED) or a PASS at a later sha that reaches the row: the red solos are its evidence, not a refusal. Batch C2's
+    # attribution recorded 3/3 red at the candidate and at the base for five rows and the door refused every
+    # `real:C2-defect-<row>` here, before the KNOWN RED door could read the base. MIXED solos (some green, some red) are
+    # nondeterminism by definition and stay refused for any verdict.
+    all_red = bool(solos) and spass == 0
+    if solos and not _solos_ok(solos) and not (real and all_red):
         return False, (f"solos below 3/3 ({spass}/{len(solos)} solo PASS after the red) are red — never cleared by "
                        f"text, listed or not"), False
     hard = kinds & set(HARD)

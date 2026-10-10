@@ -645,6 +645,15 @@ def run(source, scripts, merge, scratch, rl, build_dir):
     fake_x.kill(); fake_x.wait()
     check(p7.returncode == 7, "an attribution left INCOMPLETE (row.noadmit alone) exits 7 (exit %d)" % p7.returncode)
     check(p5.returncode == 5, "a d-build defect alone (row.base) exits 5 (exit %d)" % p5.returncode)
+    # TESTING-CLEANUP-2C (the lead's item 4): A SECOND ATTRIBUTION OF THE SAME RED REUSES THE OPEN ENTRY — batch C2's
+    # attribution registered C2-defect-<row> beside the open A2 entries of the same rows. The re-run above (row.base
+    # alone, the same registry) writes a sighting on the first run's entry, never a second entry.
+    pf_ = sorted(os.listdir(pend))
+    base_ids = [f for f in pf_ if "ROW-BASE" in f]
+    check(base_ids == ["T4-ROW-BASE-1.json", "T4-ROW-BASE-1.recheck.json"]
+          and json.load(open(os.path.join(pend, "T4-ROW-BASE-1.recheck.json")))["sightings"][0]["batch"] == "t4",
+          "a second attribution of row.base's d-build defect REUSES the open entry: a recheck sighting, no second entry "
+          "(%s)" % base_ids)
     git(lanes4["lane-i"][0], "commit", "-q", "--allow-empty", "-m", "lane-i moved on")
     p = subprocess.run([sys.executable, os.path.join(scripts, "gate-scope.py")] + args, capture_output=True,
                        text=True, env=aenv)

@@ -240,6 +240,27 @@ def case_verdict_door(E):
     solos = [rec(v, T % ("10:%02d" % (10 + i)), retry=True) for i, v in enumerate(("PASS", "FAIL", "PASS"))]
     st, why = E.judge([red, fixpass] + solos + [vrec("real:VIEWS-XID-1", T % "11:00")])
     check(st == "red" and "solos below 3/3" in why, "FAIL + a token, 2/3 solo -> red 'solos below 3/3' (%s)" % why[:100])
+    # TESTING-CLEANUP-2C (the lead's item 4): THE SOLO RULE IS FOR A CLAIM OF NONDETERMINISM. A registered DEFECT whose
+    # solos are 3/3 RED at the candidate and whose base solos show the same red is KNOWN RED — batch C2's attribution
+    # recorded exactly that for five rows and the door refused all five ("solos below 3/3 (0/3)") before reading the
+    # base. RED ON 314770a52: refused 'solos below 3/3'. Mixed solos (2/3 above) stay refused; a nondeterminism claim
+    # (contention:, or a real:<nondeterminism entry>) with 0/3 green solos stays refused.
+    fl = "FAIL: the data root must be inside /home/jahshaka/Developer/jahshaka/.claude/worktrees/rc-batch-C2/x"
+    red3 = [rec("FAIL", T % ("10:%02d" % (10 + i)), retry=True, failLine=fl) for i in range(3)]
+    base3 = [rec("FAIL", T % ("09:%02d" % (10 + i)), retry=True, failLine=fl.replace("rc-batch-C2", "rc-base-d4991c754"))
+             for i in range(3)]
+    st, why = E.judge([rec("FAIL", T % "10:00", failLine=fl)] + red3 + [vrec("real:VIEWS-XID-1", T % "11:00")], base=base3)
+    check(st == "known", "a real:<defect> with 3/3 RED solos at the candidate and the same red 3/3 at the base -> KNOWN RED, "
+          "the red solos its evidence (%s: %s)" % (st, why[:90]))
+    st, why = E.judge([rec("FAIL", T % "10:00", failLine=fl)] + red3 + [vrec("real:VIEWS-XID-1", T % "11:00")])
+    check(st == "red" and "solos below" not in why, "...with no base record it is refused by the KNOWN RED door, not the "
+          "solo rule (%s)" % why[:90])
+    st, why = E.judge([red] + red3 + [vrec("contention: load 14 beside two gates", T % "11:00")], listed=True)
+    check(st == "red" and "solos below 3/3" in why, "a contention: claim with 0/3 green solos -> refused 'solos below "
+          "3/3' (%s)" % why[:80])
+    st, why = E.judge([red] + red3 + [vrec("real:NONDET-FIXTURE-1", T % "11:00")], listed=True)
+    check(st == "red" and "3/3 solo PASS" in why, "a real:<nondeterminism entry> with 0/3 green solos -> refused (%s)"
+          % why[:90])
     # contention: — a nondeterminism row, a competitor census, 3/3
     busy = rec("FAIL", T % "10:00", box=BUSY)
     st, why = E.judge([busy] + ok3 + [vrec("contention: load 14 beside two gates", T % "11:00")])
