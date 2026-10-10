@@ -896,7 +896,10 @@ set_tests_properties(gi.field_thin_wall PROPERTIES TIMEOUT 240 LABELS "engine" R
 # of one whole-field integration at 1 and 2 rays in one process.
 jah_gpu_row(gi.field_alias CLASS engine COMMAND test_gi_field_thin_wall alias
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(gi.field_alias PROPERTIES TIMEOUT 900 LABELS "engine" RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
+# TESTING-CLEANUP-2B item 7 (2026-10-10, RE-MEASURED ALONE: 3 runs, each its own whole-card hold under the slot,
+# gpu-exclusive.sh class 2, the box otherwise idle; seconds = ctest's, the admission wait outside them): 70.7 / 67.6 / 68.0 s,
+# median 68.0 -> 6x = 410; slot-era worst 115.1 s (9 PASS since 2026-10-09 18:00) -> TIMEOUT 410 (was 900).
+set_tests_properties(gi.field_alias PROPERTIES TIMEOUT 410 LABELS "engine" RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
 # THE FIELD'S LEAK FIX SURVIVES THE MOVE ONTO A CASCADE (PHOTON_SPEC E1's bar,
 # promoted from the PHOTON-S2 spike harness): a sealed room with a lamp outside
 # it, four wall thicknesses, measured with the scene-fitted single volume and
