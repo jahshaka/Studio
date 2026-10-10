@@ -666,6 +666,15 @@ def bind_root(build):
     gate_runlog.ROOT = src
 
 
+def _is_wipe(cmd):
+    """A fixture setup's command is a home WIPE: tests/support/fresh_home.sh, tests/samples/freshhome.cmake, or an
+    `sh -c "rm -rf …"` (the three forms tests/CMakeLists.txt's fresh-home section names)."""
+    cmd = list(cmd or [])
+    if any(str(c).endswith(("fresh_home.sh", "freshhome.cmake")) for c in cmd):
+        return True
+    return len(cmd) > 2 and os.path.basename(str(cmd[0])) == "sh" and cmd[1] == "-c" and "rm -rf" in str(cmd[2])
+
+
 def load_inventory(build):
     # listed from a copy of the CTestTestfile tree: a listing in the build dir itself truncates
     # the LastTest.log of a gate running there (gate_graph.ctest_inventory)
@@ -770,7 +779,12 @@ def load_inventory(build):
             "sites": sites,
             "serial": bool(props.get("RUN_SERIAL")),
             "env": list(props.get("ENVIRONMENT", []) or []),
-            "fixture_setup": bool(props.get("FIXTURES_SETUP")),
+            # A HOME WIPE vs A RUN FIXTURE (TESTING-CLEANUP-2B fix round 3 F3): `fixture_setup` means a fixture's
+            # WIPE (fresh_home.sh, samples' freshhome.cmake, an `sh -c "rm -rf …"`) — ~10 ms, never a gating row; a
+            # real run that ALSO sets up a fixture (threading.newproject_stall for its inspector, material_tabs for
+            # its relaunch) is `run_fixture` and stays a gating row (R1, the estimate, max_rows)
+            "fixture_setup": bool(props.get("FIXTURES_SETUP")) and _is_wipe(cmd),
+            "run_fixture": bool(props.get("FIXTURES_SETUP")) and not _is_wipe(cmd),
             "labels": set(props.get("LABELS", []) or []),
             "kind": "other", "exes": set(),
         }

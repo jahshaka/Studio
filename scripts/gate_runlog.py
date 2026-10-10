@@ -81,6 +81,8 @@ def check_tier(tier):
 
 # `      Start  45: gi.foo` — ctest prints it as a suite starts (the box is sampled there, L1)
 _START = re.compile(r"^\s*Start\s+\d+:\s+(\S+)\s*$")
+# ctest's line for a row it will not run because a fixture setup or DEPENDS row failed (printed right after its Start)
+_FAILED_DEPS = re.compile(r"^\s*Failed test dependencies:\s+(.+?)\s*$")
 # `  12/653 Test  #45: gi.foo ..........   Passed   12.34 sec`
 _RESULT = re.compile(r"^\s*\d+/\d+\s+Test\s+#\d+:\s+(\S+)\s+\.*\s*(.*?)\s+([\d.]+)\s+sec\s*$")
 # The pools' arm lines (SUITE-POOL-1's runner, tests/support/run_pool.py): `ARM-BEGIN <pool>.<arm>`
@@ -1587,6 +1589,7 @@ class _Run:
         if self.guard.active:
             threading.Thread(target=watch, daemon=True).start()
         buf, size, pre, starts, reds, held = {}, {}, {}, {}, [], []
+        failed_deps, last_start = {}, None
         for line in p.stdout:
             ln = line.rstrip("\n")
             m = _VLINE.match(ln)
@@ -1609,8 +1612,13 @@ class _Run:
                 continue
             if self.echo:
                 sys.stdout.write(line); sys.stdout.flush()
+            m = _FAILED_DEPS.match(ln)
+            if m and last_start:
+                failed_deps[last_start] = m.group(1).split()
+                continue
             m = _START.match(ln)
             if m:
+                last_start = m.group(1)
                 bm, oc = box_mem(), other_ctests(p.pid)
                 starts[m.group(1)] = {"other_ctests": oc, "gpu_clocks": gpu_clocks(),
                                       "mem": bm, "queue_depth": queue_depth(), "census": census(p.pid, bm, oc)}
@@ -1642,6 +1650,19 @@ class _Run:
             recs = self.records(name, status, secs, time.time(), os.getloadavg(), text, starts.get(name) or {})
             v = recs[0]["verdict"]
             arms = recs[1:]
+            # A ROW NOT RUN BECAUSE ITS PARENT FAILED (TESTING-CLEANUP-2B fix round 3 F3): the record names the parent
+            # (`notRunBecause`) — the judge resolves it to the parent's state (one verdict covers both, never MISSING) —
+            # and when every such parent was HELD in this phase (NOADMIT, re-queued), the row is re-queued with it
+            deps_ = failed_deps.pop(name, None)
+            if v == "NOTRUN" and deps_:
+                for r_ in recs: r_["notRunBecause"] = deps_
+                if not final and all(d_ in held for d_ in deps_):
+                    if attempt:
+                        for r_ in recs: r_["requeued"] = attempt
+                    self.path = append_records(recs, self.tier, self.shas["studio"])
+                    self.recorded += len(recs)
+                    held.append(name)
+                    continue
             # (a pool whose only non-PASS arms never ran is NOADMIT already: row_verdict, TESTING-CLEANUP-2B F-C1)
             never = v == "NOADMIT" or (v != "PASS" and arms and all(a["verdict"] == "NOADMIT" for a in arms))
             if attempt or (never and not final):

@@ -1089,6 +1089,53 @@ def main(source, build):
         except ValueError: ok_t = False
     check(ok_t and "lane" in rl.TIERS and "solo" in rl.TIERS, "the tiers `lane` and `solo` are names a record may carry")
 
+    # TESTING-CLEANUP-2B fix round 3 F3: A ROW NOT RUN BECAUSE ITS PARENT FAILED. A toy run fixture: `parent` sets up
+    # `run` (and requires the home wipe), `insp` requires both. (a) the parent FAILS: the inspector's record is NOTRUN
+    # naming its parent (`notRunBecause`) — the judge resolves it to the parent (gate.verdict_door); (b) the parent is
+    # NOADMIT on its first try: the inspector is HELD with it and re-queued, and both PASS on the re-queue. RED ON
+    # 9eb5343e2: no notRunBecause, and the inspector's NOTRUN was recorded as a red and never re-queued.
+    fx = os.path.join(scratch, "fx"); fsrc, fb = os.path.join(fx, "s"), os.path.join(fx, "b"); os.makedirs(fsrc)
+    flag, mode_ = os.path.join(fx, "first.done"), os.path.join(fx, "mode")
+    open(os.path.join(fsrc, "CMakeLists.txt"), "w").write(f"""cmake_minimum_required(VERSION 3.20)
+project(fx NONE)
+enable_testing()
+add_test(NAME fx.wipe COMMAND true)
+set_tests_properties(fx.wipe PROPERTIES FIXTURES_SETUP fx_home)
+add_test(NAME fx.parent COMMAND sh -c "if [ \\"$(cat {mode_})\\" = fail ]; then echo 'FAIL: the parent broke'; exit 1; fi; if [ ! -e {flag} ]; then touch {flag}; echo 'NOADMIT vram: no admission for 2 tokens within 0 s (0 of 3 free at the last look)'; exit 75; fi; echo ok")
+set_tests_properties(fx.parent PROPERTIES FIXTURES_SETUP fx_run FIXTURES_REQUIRED fx_home)
+add_test(NAME fx.parent.inspector COMMAND true)
+set_tests_properties(fx.parent.inspector PROPERTIES FIXTURES_REQUIRED "fx_home;fx_run" DEPENDS fx.parent)
+""")
+    r_ = subprocess.run(["cmake", "-S", fsrc, "-B", fb], capture_output=True, text=True)
+    check(r_.returncode == 0, "the fixture toy configures")
+    fxlog = os.path.join(scratch, "runs-fx")
+    old_log = os.environ.get("JAH_RUN_LOG_DIR"); os.environ["JAH_RUN_LOG_DIR"] = fxlog
+    try:
+        def fxrecs():
+            return [json.loads(l) for f in (sorted(os.listdir(fxlog)) if os.path.isdir(fxlog) else [])
+                    for l in open(os.path.join(fxlog, f))]
+        open(mode_, "w").write("fail")
+        with contextlib.redirect_stdout(io.StringIO()):
+            rl.run_ctest("ctest -j1 --timeout 60 --output-on-failure -R '^fx\\.parent\\.inspector$'", fb, "solo",
+                         "gate-cost-test", 1, retry=True)
+        ins = [r for r in fxrecs() if r["suite"] == "fx.parent.inspector"]
+        check(ins and ins[-1]["verdict"] == "NOTRUN" and ins[-1].get("notRunBecause") == ["fx.parent"],
+              "(a) a solo of the inspector runs its parent first; the parent red -> the inspector NOTRUN naming it (%s)"
+              % [(r["verdict"], r.get("notRunBecause")) for r in ins])
+        shutil.rmtree(fxlog, ignore_errors=True)
+        open(mode_, "w").write("admit")
+        with contextlib.redirect_stdout(io.StringIO()):
+            rc_fx = rl.run_ctest("ctest -j1 --timeout 60 --output-on-failure -R '^fx\\.parent(\\.inspector)?$'", fb,
+                                 "scoped", "gate-cost-test", 1, env=dict(os.environ, JAH_GATE_REQUEUE="1"))
+        seq = [(r["suite"], r["verdict"]) for r in fxrecs() if r["suite"] != "fx.wipe"]
+        check(rc_fx == 0 and seq == [("fx.parent", "NOADMIT"), ("fx.parent.inspector", "NOTRUN"),
+                                     ("fx.parent", "PASS"), ("fx.parent.inspector", "PASS")],
+              "(b) a parent NOADMIT on its first try takes its Not Run inspector into the re-queue; both PASS there "
+              "(rc %d, %s)" % (rc_fx, seq))
+    finally:
+        if old_log is None: os.environ.pop("JAH_RUN_LOG_DIR", None)
+        else: os.environ["JAH_RUN_LOG_DIR"] = old_log
+
     shutil.rmtree(scratch, ignore_errors=True)
     if FAILURES:
         print("gate.cost: FAILED (%d)" % len(FAILURES)); return 1
