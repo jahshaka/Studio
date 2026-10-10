@@ -276,15 +276,30 @@ def _real(m, row, reds, solos, defects, tip_recs, base_recs, tip_sha=None, mode=
     if good:
         return True, f"real:{did} fixed (a PASS at {(_sha(good[-1]) or '')[:9]}, a later sha that reaches the row)", False
     # KNOWN RED: the SAME red on the base — the same verdict class and the same masked failLine (a lane that turns a
-    # base FAIL into a CRASH, or another assertion, is not "known")
+    # base FAIL into a CRASH, or another assertion, is not "known"). EVERY PENDING RED (TESTING-CLEANUP-2B fix round 3,
+    # F1): the gate's red AND each red solo after it must match a base solo red — the newest alone let a CRASH or another
+    # assertion among the solos pass — and the base's solos must ALL be red: a base with green solos beside its red is
+    # nondeterminism on the base, not a known red.
+    def _sig(r):
+        return (r.get("verdict"), masked(r.get("failLine")), masked(r.get("status")))
     lane_red = sorted(reds, key=_when)[-1]
-    same = [r for r in (base_recs or []) if r.get("kind") != "verdict" and r.get("retry")
-            and r.get("verdict") == lane_red.get("verdict") and masked(r.get("failLine")) == masked(lane_red.get("failLine"))
-            and masked(r.get("status")) == masked(lane_red.get("status"))]
-    if same:
+    pending = list(reds) + [r for r in (solos or []) if r.get("verdict") not in ("PASS",) + NEVER_RAN]
+    base_solos = [r for r in (base_recs or []) if r.get("kind") != "verdict" and r.get("retry")
+                  and r.get("verdict") not in NEVER_RAN]
+    base_reds = [r for r in base_solos if r.get("verdict") != "PASS"]
+    base_sigs = {_sig(r) for r in base_reds}
+    odd = [r for r in pending if _sig(r) not in base_sigs]
+    if base_reds and len(base_reds) == len(base_solos) and not odd:
         return True, (f"real:{did} KNOWN RED (the same {lane_red.get('verdict')}"
-                      f"{' — ' + masked(lane_red.get('failLine'))[:60] if lane_red.get('failLine') else ''} reproduced by a "
-                      f"recorded solo at the base)"), "known"
+                      f"{' — ' + masked(lane_red.get('failLine'))[:60] if lane_red.get('failLine') else ''} — every one of "
+                      f"the {len(pending)} pending red(s) reproduced by the base's {len(base_reds)} red solo(s))"), "known"
+    if base_reds and len(base_reds) < len(base_solos) and not odd:
+        return False, (f"real:{did}: the base's solos are {len(base_reds)} red / {len(base_solos) - len(base_reds)} "
+                       f"green — nondeterminism on the base, not a KNOWN RED"), False
+    if base_reds and odd and any(_sig(r) in base_sigs for r in pending):
+        o = odd[-1]
+        return False, (f"real:{did}: not every pending red is the base's red — {o.get('verdict')} "
+                       f"'{masked(o.get('failLine') or o.get('status'))[:50]}' among them is not — not known"), False
     other = [r for r in (base_recs or []) if r.get("kind") != "verdict" and r.get("retry")
              and r.get("verdict") not in ("PASS",) + NEVER_RAN]
     if later and not other:
