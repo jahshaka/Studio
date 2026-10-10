@@ -213,4 +213,7 @@ set_tests_properties(scale.library.fixture PROPERTIES TIMEOUT ${SCALE_T_LIBRARY_
 jah_gpu_exclusive_test(NAME scale.library CLASS app TIER low NEEDS NONE RUN_TIMEOUT ${SCALE_T_LIBRARY} COMMAND test_scale_library
                        WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 # W14 IS CLOSED (D11-LIBRARY-SCALE): its row is a BAR, not a target.
-set_tests_properties(scale.library PROPERTIES LABELS "scale" FIXTURES_REQUIRED scale_library_template)
+# SKIP (77), SAID, where the counted bars cannot count: app.databaseReads is unavailable when the Qt
+# SQL driver carries its own SQLite (the Qt installer's macOS/Windows builds; databasereads.h).
+set_tests_properties(scale.library PROPERTIES LABELS "scale" FIXTURES_REQUIRED scale_library_template
+                     SKIP_RETURN_CODE 77)

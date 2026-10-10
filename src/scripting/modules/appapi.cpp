@@ -43,6 +43,7 @@ For more information see the LICENSE file
 #include "irisgl/document/scenegraph/scene.h"
 #include "data/settingsmanager.h"
 #include "data/database/database.h"
+#include "data/database/databasereads.h"
 #include "scripting/mcp/mcplog.h"
 #include "services/jahlog.h"
 #include "services/apppaths.h"
@@ -163,13 +164,14 @@ QVector<VerbInfo> AppApi::verbs() const
           "stops it (the read still answers what was logged); no argument only reads. Off by "
           "default; the cost while on is one hash lookup per statement.",
           Needs::Document },
-        { "databaseReads", "app.databaseReads() -> {pages, pageSize, bytes, available}",
-          "WHAT THE LIBRARY DATABASE READ ON THE REQUEST PATH, counted by the store (data/database/"
-          "database.h requestPathReads): the pages SQLite's pager read from the file on the UI "
-          "thread's connections since the process began (`bytes` = pages x pageSize). Worker "
-          "connections are not counted, so a reading taken before and after one verb is what that "
-          "verb read synchronously, whenever it is taken. scale.library's counted bars read it. "
-          "`available` false (zeros) when the driver's status call is missing.",
+        { "databaseReads", "app.databaseReads() -> {pages, pageSize, bytes, available, why}",
+          "WHAT THE LIBRARY DATABASE READ ON THE REQUEST PATH (data/database/databasereads.h): the "
+          "pages SQLite's own pager read from the file on the UI thread's default connection since "
+          "it opened (`bytes` = pages x pageSize) — SQLite counts them anyway; nothing runs until "
+          "this verb asks. Worker connections are not counted, so a reading taken before and after "
+          "one verb is what that verb read, whenever it is taken. scale.library's counted bars read "
+          "it. `available` false (zeros, `why` says) where the Qt driver carries its own SQLite, "
+          "which this build may not call into.",
           Needs::Document },
         { "heartbeat", "app.heartbeat(intervalMs=250) -> bool",
           "Starts (or, with 0, stops) a main-thread heartbeat probe: a timer that ticks on the UI thread and "
@@ -787,11 +789,12 @@ QVariantMap AppApi::queryLog(const QVariantMap &options)
 
 QVariantMap AppApi::databaseReads()
 {
-    const Database::ReadStats r = Database::requestPathReads();
+    const databasereads::Stats r = databasereads::read();
     return { { QStringLiteral("pages"), r.pages },
              { QStringLiteral("pageSize"), r.pageSize },
              { QStringLiteral("bytes"), r.pages * qint64(r.pageSize) },
-             { QStringLiteral("available"), r.available } };
+             { QStringLiteral("available"), r.available },
+             { QStringLiteral("why"), r.why } };
 }
 
 QVariantMap AppApi::openStats(const QVariantMap &options)

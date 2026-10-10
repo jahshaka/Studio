@@ -225,16 +225,6 @@ public:
     static bool queryLogOn();
     static QVector<QueryLogEntry> queryLogEntries();
     static int queryLogStatements();
-
-    // ---- THE REQUEST PATH'S READS (TESTING-CLEANUP-2, scale.library's counted bars) ----------
-    // Pages the library database's connections on the UI THREAD read from the file (SQLite's own
-    // pager: SQLITE_DBSTATUS_CACHE_MISS, a counter the store owns — the default connection's live
-    // count plus every UI-thread ScopedConnection's, banked when it closes). Worker connections are
-    // not in it: what a verb reads synchronously is, and a background pool's later batches are not,
-    // so a reading taken around one verb does not depend on when it is taken. `pageSize` is the
-    // file's (PRAGMA page_size); 0/0 when SQLite's status call is unavailable.
-    struct ReadStats { qint64 pages = 0; int pageSize = 0; bool available = false; };
-    static ReadStats requestPathReads();
     /// The classifier, public for the suites: does `sql` select a thumbnail
     /// column, and is its WHERE keyed by guid?
     static void classifyQuery(const QString &sql, bool *selectsThumbnail, bool *byGuid);

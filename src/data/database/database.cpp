@@ -34,10 +34,6 @@ For more information see the LICENSE file
 #include <QObject>
 #include <QRegularExpression>
 #include <QUuid>
-#include <QCoreApplication>
-#include <QSqlDriver>
-#include <QThread>
-#include <dlfcn.h>
 
 #include <algorithm>
 #include <atomic>
@@ -62,54 +58,6 @@ namespace
 // Order matters in the destructor: close, then drop OUR handle (a live copy
 // is what makes removeDatabase print "connection is still in use"), then
 // unregister.
-// THE PAGER'S READ COUNT of one connection (Database::requestPathReads). SQLite is the Qt driver's
-// own library, already loaded in the process: its status call is found at run time, so nothing
-// here links SQLite (every target that compiles this file would have to).
-using SqliteDbStatusFn = int (*)(void *, int, int *, int *, int);
-SqliteDbStatusFn sqliteDbStatus()
-{
-    // The Qt driver plugin is loaded RTLD_LOCAL, so its SQLite is not in the global scope: ask the
-    // already-loaded library by name (RTLD_NOLOAD — never a second copy), the global scope last.
-    // Resolved on first success only: a call before the driver plugin is loaded finds nothing
-    // and must not remember that.
-    static std::atomic<SqliteDbStatusFn> cached{ nullptr };
-    if (SqliteDbStatusFn known = cached.load()) return known;
-    const SqliteDbStatusFn fn = []() -> SqliteDbStatusFn {
-        for (const char *lib : { "libsqlite3.so.0", "libsqlite3.so", "libsqlite3.dylib",
-                                 "/usr/lib/libsqlite3.dylib" }) {
-            if (void *h = dlopen(lib, RTLD_LAZY | RTLD_NOLOAD)) {
-                void *sym = dlsym(h, "sqlite3_db_status");
-                dlclose(h);   // NOLOAD took a reference; the plugin keeps the library loaded
-                if (sym) return reinterpret_cast<SqliteDbStatusFn>(sym);
-            }
-        }
-        return reinterpret_cast<SqliteDbStatusFn>(dlsym(RTLD_DEFAULT, "sqlite3_db_status"));
-    }();
-    if (fn) cached.store(fn);
-    return fn;
-}
-qint64 pagerReadsOf(const QSqlDatabase &db)
-{
-    SqliteDbStatusFn fn = sqliteDbStatus();
-    if (!fn || !db.isOpen() || !db.driver()) return 0;
-    const QVariant h = db.driver()->handle();
-    if (!h.isValid() || qstrcmp(h.typeName(), "sqlite3*") != 0) return 0;
-    void *handle = *static_cast<void *const *>(h.constData());
-    if (!handle) return 0;
-    int cur = 0, high = 0;
-    constexpr int kCacheMiss = 8;    // SQLITE_DBSTATUS_CACHE_MISS (sqlite3.h: 8, a stable public constant)
-    return fn(handle, kCacheMiss, &cur, &high, 0) == 0 ? qint64(cur) : 0;
-}
-bool onUiThread()
-{
-    return QCoreApplication::instance() && QThread::currentThread() == QCoreApplication::instance()->thread();
-}
-std::atomic<qint64> &bankedUiThreadReads()
-{
-    static std::atomic<qint64> pages{0};
-    return pages;
-}
-
 class ScopedConnection
 {
 public:
@@ -123,7 +71,6 @@ public:
 
     ~ScopedConnection()
     {
-        if (db.isOpen() && onUiThread()) bankedUiThreadReads() += pagerReadsOf(db);
         if (db.isOpen()) db.close();
         db = QSqlDatabase();
         QSqlDatabase::removeDatabase(name);
@@ -407,25 +354,6 @@ QVector<Database::QueryLogEntry> Database::queryLogEntries()
 }
 
 int Database::queryLogStatements() { return queryLogState().statements; }
-
-Database::ReadStats Database::requestPathReads()
-{
-    ReadStats out;
-    out.available = sqliteDbStatus() != nullptr;
-    if (!out.available) return out;
-    out.pages = bankedUiThreadReads().load();
-    const QSqlDatabase main = QSqlDatabase::database(QLatin1String(QSqlDatabase::defaultConnection), false);
-    if (main.isOpen()) {
-        out.pages += pagerReadsOf(main);
-        static int pageSize = 0;
-        if (pageSize == 0) {
-            QSqlQuery q(main);
-            if (q.exec(QStringLiteral("PRAGMA page_size")) && q.next()) pageSize = q.value(0).toInt();
-        }
-        out.pageSize = pageSize;
-    }
-    return out;
-}
 
 void Database::setAssetThumbnailWritten(GuidHook hook) { thumbnailWrittenHook() = std::move(hook); }
 

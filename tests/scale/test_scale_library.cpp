@@ -74,6 +74,7 @@
 
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
 
 using namespace mcpharness;
 
@@ -111,9 +112,11 @@ static QString loadAverage()
 /// — the pages SQLite's pager read on the UI thread's connections, a counter the STORE owns, so a
 /// reading around one verb is what that verb read (worker connections and a later turn's batches are
 /// not in it, whenever it is sampled). -1 when unavailable.
+static QString gDbReadsWhy;   ///< why the counter is unavailable, when it is
 static qint64 dbReadBytes(McpClient &mcp)
 {
     const QJsonObject r = mcp.runScript(QStringLiteral("app.databaseReads()")).value("result").toObject();
+    if (!r.value("available").toBool()) gDbReadsWhy = r.value("why").toString();
     return r.value("available").toBool() ? qint64(r.value("bytes").toDouble()) : -1;
 }
 
@@ -324,6 +327,14 @@ static bool runArm(const char *label, const QString &dataRoot, Arm &a)
     if (!launch(app, dataRoot)) { std::printf("FAIL: [%s] boot\n", label); return false; }
     a.bootMs = app.bootMs;
     a.bootRead = app.bootRead;
+    if (a.bootRead < 0) {
+        // NEVER A SILENT PASS: the counted bars cannot count here, so the row SKIPS (77) and says why.
+        std::printf("SKIP: app.databaseReads is unavailable on this build (%s) — scale.library's counted "
+                    "bars cannot be measured here\n", qPrintable(gDbReadsWhy));
+        std::fflush(stdout);
+        quit(app);
+        std::exit(77);
+    }
     // THE QUERY LOG over everything the session does from here (the boot built
     // nothing of the library since D11 — the Assets page waits for its first use).
     app.mcp.runScript(QStringLiteral("app.queryLog({on: true})"));

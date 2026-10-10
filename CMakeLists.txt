@@ -472,6 +472,7 @@ set(SRCS
     src/ui/dialogs/importsettingsdialog.cpp
     src/ui/panels/timeline/createanimationwidget.cpp 
     src/data/database/database.cpp 
+    src/data/database/databasereads.cpp
     src/data/database/projectdatabase.cpp 
     src/data/guidmanager.cpp 
     src/commands/transformscenenodecommand.cpp 
@@ -1126,6 +1127,13 @@ if(USE_BREAKPAD)
 endif(USE_BREAKPAD)
 
 target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE ${LIBS})
+# app.databaseReads (TESTING-CLEANUP-2): the SYSTEM SQLite, called directly — it answers only where
+# the Qt SQL driver is linked to this same library (src/data/database/databasereads.h).
+find_package(SQLite3 QUIET)
+if(SQLite3_FOUND)
+    target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE SQLite::SQLite3)
+    target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE JAH_HAVE_SQLITE3=1)
+endif()
 target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE JAHSHAKA_VERSION="${JAHSHAKA_VERSION}")
 
 # A6: these two warning classes are undefined behaviour, not style - keep them fixed.
