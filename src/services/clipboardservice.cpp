@@ -50,6 +50,17 @@ namespace {
 constexpr qint64 kDefaultInlineLimit = 4 * 1024 * 1024;
 const char *kInlineLimitSetting = "clipboard/inlineLimitBytes";
 
+/// THE BUDGET'S FLOOR (STAGE-CLOSE-TRIAGE-1 round 7, read 7 F3): "references only" (0) is not a
+/// number for a budget whose row blobs must ride — every copy carrying a model or a material would
+/// refuse. A setting below the floor is REFUSED with its reason at the copy, never silently raised.
+QString budgetBelowFloor(qint64 limit)
+{
+    if (limit >= ClipboardService::kMinInlineLimitBytes) return QString();
+    return QStringLiteral("the clipboard's inline payload budget (clipboard/inlineLimitBytes = %1 bytes) "
+                          "is below its 64 KB minimum — nothing was copied")
+        .arg(limit);
+}
+
 } // namespace
 
 ClipboardService::ClipboardService(Database *database, Project *proj,
@@ -89,15 +100,9 @@ iris::ScenePtr ClipboardService::scene() const
 qint64 ClipboardService::inlineLimitBytes() const
 {
     if (auto *settings = SettingsManager::getDefaultManager())
-        return qMax(qint64(0), settings->getValue(QLatin1String(kInlineLimitSetting),
-                                                  qint64(kDefaultInlineLimit)).toLongLong());
+        return settings->getValue(QLatin1String(kInlineLimitSetting), qint64(kDefaultInlineLimit))
+            .toLongLong();
     return kDefaultInlineLimit;
-}
-
-void ClipboardService::setInlineLimitBytes(qint64 bytes)
-{
-    if (auto *settings = SettingsManager::getDefaultManager())
-        settings->setValue(QLatin1String(kInlineLimitSetting), qMax(qint64(0), bytes));
 }
 
 QString ClipboardService::storeId() const
@@ -194,6 +199,8 @@ ClipboardCopyResult ClipboardService::copyNodes(const QList<iris::SceneNodePtr> 
 
     assetclosure::Options options;
     options.inlineLimitBytes = inlineLimitBytes();
+    result.error = budgetBelowFloor(options.inlineLimitBytes);
+    if (!result.error.isEmpty()) return result;
     options.storeRoot = AssetStorePaths::root();
     // A NODE PASTE CARRIES THE SAME CLOSURE A SHARE FILE DOES (read 4; the portability rule): every
     // row with its catalog blob and properties — the import record among them — so a paste into a
@@ -242,6 +249,8 @@ ClipboardCopyResult ClipboardService::copyAssets(const QStringList &guids)
 
     assetclosure::Options options;
     options.inlineLimitBytes = inlineLimitBytes();
+    result.error = budgetBelowFloor(options.inlineLimitBytes);
+    if (!result.error.isEmpty()) return result;
     options.storeRoot = AssetStorePaths::root();
     // A TILE carries its catalog row (name, type, placement, blob, properties):
     // pasting one into a library that has never seen the guid has to produce a

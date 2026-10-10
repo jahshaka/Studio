@@ -51,9 +51,10 @@ namespace assetclosure {
 
 struct Options
 {
-    /// Total inline budget across the whole payload, in bytes. Files are
-    /// inlined in walk order while the budget lasts; the rest travel as oids.
-    /// 0 = never inline (pure Unreal: references only).
+    /// THE INLINE PAYLOAD BUDGET, in bytes: ONE number bounding the payload — the row blobs are
+    /// charged first (a row that does not fit refuses the describe), then the files in walk
+    /// order; a file that does not fit goes by reference (its oid). The clipboard's setting has a
+    /// minimum of 64 KB (ClipboardService::kMinInlineLimitBytes).
     qint64 inlineLimitBytes = 4 * 1024 * 1024;
     /// The project whose PIN decides which version of an asset travels — copy
     /// semantics: what the source project renders with is what is copied.
