@@ -863,11 +863,13 @@ CASES = {"verdict_door": case_verdict_door, "noadmit_pool": case_noadmit_pool, "
 
 def main(case, source, build):
     E = Env(source, build)
-    if not E.tip:
-        check(False, "the recorded tip 3756b2f18 is in this clone")
-    else:
-        CASES[case](E)
-    subprocess.run(["rm", "-rf", E.scratch])
+    try:
+        if not E.tip:
+            check(False, "the recorded tip 3756b2f18 is in this clone")
+        else:
+            CASES[case](E)
+    finally:            # a case that CRASHES leaves no scratch in /tmp either (three leaked on 2026-10-10)
+        subprocess.run(["rm", "-rf", E.scratch])
     if FAILURES:
         print("gate.%s: FAILED (%d)" % (case, len(FAILURES))); return 1
     print("gate.%s: PASSED" % case); return 0

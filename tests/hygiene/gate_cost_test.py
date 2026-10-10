@@ -808,6 +808,28 @@ def main(source, build):
                         capture_output=True, text=True)
     check(pc.returncode == 0 and "gate-slot: taken" in pc.stderr and "queued at position" not in pc.stderr,
           "(c) a free slot is taken at once by whoever asks, a measurement included")
+    # (d) THE OLD-TICKET TRANSITION (item 15 (5)): a tree whose scripts predate item 13 writes `<seq>.<pid>` tickets. A live
+    # one (its flock held) is read as a CLASS-1 HOLDER when no new-format ticket holds — so a new asker, even a gate,
+    # never takes the slot beside an old holder; when the old ticket dies, the new asker takes the slot. Counted by
+    # the order the commands ran in, never a clock.
+    qd = os.path.join(os.environ["JAH_VRAM_DIR"], "gate-queue"); os.makedirs(qd, exist_ok=True)
+    relo, oldord = os.path.join(scratch, "old.release"), os.path.join(scratch, "old.order")
+    oldh = spawn([sys.executable, "-c", "import fcntl,os,sys,time\nfd=os.open(sys.argv[1],os.O_RDWR|os.O_CREAT)\n"
+                  "fcntl.flock(fd,fcntl.LOCK_EX)\nprint('OLDHELD',flush=True)\n"
+                  "while not os.path.exists(sys.argv[2]): time.sleep(0.05)\n"
+                  "open(sys.argv[3],'a').write('OLD\\n')",
+                  os.path.join(qd, "999.%d" % os.getpid()), relo, oldord])
+    wait_line(oldh, "OLDHELD")
+    oq = [t_ for t_ in vt_mod.gate_queue() if t_[2].endswith("999.%d" % os.getpid())]
+    check(oq and oq[0][3] == 1 and oq[0][4] is True,
+          "(d) a live OLD-format ticket reads as a class-1 HOLDER (%s)" % [(t_[3], t_[4]) for t_ in oq])
+    gn = spawn([sys.executable, vt, "gate", "--class", "1", "--label", "NEW gate", "--", "sh", "-c", f"echo NEW >> {oldord}"])
+    on = wait_line(gn, "gate-slot: queued at position")
+    open(relo, "w").close(); oldh.communicate(); gn.communicate()
+    try: os.unlink(os.path.join(qd, "999.%d" % os.getpid()))
+    except OSError: pass
+    check(open(oldord).read().split() == ["OLD", "NEW"] and "queued at position" in on,
+          "(d) ...a new gate queues behind it and runs only after the old holder is gone (%s)" % open(oldord).read().split())
     # the ingest wait is an EVENT the admission performs on every row: observed, not timed — supervise() of a
     # green row, in this process, with the journal real and time.sleep recorded
     import types
