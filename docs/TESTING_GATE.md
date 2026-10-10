@@ -57,8 +57,8 @@ whole thing would exclude the correct assertions from pass/fail as well. The row
 today (2026-09-28) are five: `gi.chain_face_target`, `gi.field_follows_energy`,
 `gi.cone_corner_target`, `gi.cone_integrator_parity_offaxis` and `gi.sealed_room_chain_target`
 (SEALED-ROOM-LEAK-1: 12/255 against 2). DAG-LOCK-1 took the label off
-`atom.dag_bound_target` (the DAG's displacement lock: the stand-in 0 of 22 groups over, worst
-1.39x) — it gates now.
+the DAG's displacement-lock row (the stand-in 0 of 22 groups over, worst 1.39x) — it gates now, and
+TESTING-CLEANUP-2B renamed it `atom.dag_bound` (no `_target` on a gating row).
 D6B-GATE-SHAPE took the label off three that had gone green (3/3 on the rig):
 `gi.volume_edge_spec_target` (0.0000 / 0.0011 against 0.05), `gi.gather_reference_target`
 (worst 0.969 against 1.00 +- 0.05) and `gi.gather_plane_target` (1.000) — they gate now.
