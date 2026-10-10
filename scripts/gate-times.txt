@@ -1,604 +1,910 @@
-# suite seconds — the run log's median PASS time (refresh: scripts/gate-scope.sh --record-times, which reads ~/Developer/testing/runs; no ctest-log argument)
-# (D6B-GATE-SHAPE, 2026-09-27: the after-run at 58b216b46, -j4 beside three other lanes; the rows it lost to the box's load carry their solo re-run seconds)
-# Fix round F1's thirteen rows carry their WORST measured run (the one their 6x timeout is set from:
-#   spikes/d6b-gate-shape/f1-timeouts.txt).
-# The STAGE-CLOSE rows (fix round F4) — never in a MERGE run, so their seconds come from elsewhere:
-#   app.shutdown_order.timing 46.81  <- its push row's worst gate run (same binary)
-#   app.update_check.timing 1.07  <- its D6B dev run
-#   archive.responsive.timing 79.57  <- its push row's worst gate run (same binary)
-#   atom.cluster_crack 135.80  <- the audit's gate (2026-09-26; the larger)
-#   atom.cluster_cut 140.60  <- the audit's gate (2026-09-26; the larger)
-#   avatar.responsive.timing 58.59  <- its push row's worst gate run (same binary)
-#   chain.hzb.timing 1.84  <- its D6B dev run
-#   engine.gpu_cull.timing 62.82  <- its D6B dev run
-#   gi.chain_converge_scenes 116.59  <- the before-run at 51e9f2c49
-#   gi.chain_converge_scenes.fresh_home 0.00  <- the before-run at 51e9f2c49
-#   gi.field_follows.timing 12.58  <- its push row's worst gate run (same binary)
-#   gi.gather_cost 33.04  <- the worst recorded run (spikes/)
-#   meshbake.cards.timing 0.78  <- its D6B dev run
-#   gpu.cutout_soak 268.44  <- its first scoped gate run (CUTOUT-CASTER-1, 2026-10-06, -j4 beside other lanes)
-#   open.crash_soak 114.30  <- a recorded stage-close run (spikes/)
-#   open.responsive.timing 281.33  <- its push row's worst gate run (same binary)
-#   rigperf.benchmark 100.00  <- NO recorded run: its 600 s budget / 6
-#   scenegraph.benchmark 283.84  <- a recorded stage-close run (spikes/)
-#   scripting.e2e.editor_controls.timing 71.87  <- its D6B dev run
-#   shadercache.container_asan 247.95  <- a recorded stage-close run (spikes/)
-#   shadow.cutout_caster.churn 349.39  <- the ten-process shadow.cutout_caster's run-log median before the split (STAGE-CLOSE-1)
-#   shadow.two_sided_caster.churn 272.42  <- the ten-process shadow.two_sided_caster's run-log median before the split
-#   shadow.cutout_caster 123.96  <- the median of three one-process runs alone in the slot (STAGE-CLOSE-1, load 14-18)
-#   shadow.two_sided_caster 129.16  <- the same
-#   ui.components.timing 2.97  <- its D6B dev run
-#   threading.newproject_stall.timing 14.72  <- its TESTING-DEBTS-1 dev run (the fixture: a wipe)
-#   ui.properties_filter.timing 0.73  <- its D6B dev run
-#   vr.frame_budget 129.68  <- the before-run at 51e9f2c49
-#   vr.warmup.timing 49.73  <- its push row's worst gate run (same binary)
-#   vr.warmup.timing.fresh_home 0.01  <- a wipe
-#   capture.first_recording.timing 32.00  <- TESTING-CLEANUP-2 dev run after admission (2026-10-09)
-#   capture.offline_unique.timing 101.00  <- TESTING-CLEANUP-2 dev run after admission (2026-10-09)
-#   ui.selection_cost.timing 5.12  <- its push row's dev run (same binary, TESTING-CLEANUP-2)
-#   pool.vr_validation 253.38 / pool.capture_validation 219.32  <- TESTING-CLEANUP-2 dev runs (new layered pools)
-# gi.budget: its gate seconds include the GPU lock's flock WAIT (458 s once) — the run itself is ~9 s.
-# SUITE-POOL-1 (2026-09-27): the 142 pooled rows, app.create_loop (+ its fixture) and atom.error_bound deleted;
-#   the 17 pool rows + pool.runner from the run log (2026-09-27-scoped-b6a088bfe.jsonl, -j4, alone on the box).
-api.contract 2.81
-app.cli_options 0.01
-app.data_root 28.82
-app.device_loss_end 60.04
-app.engine_selftest_validation 107.60
-app.first_launch 0.01
-app.input_keys 66.81
-app.play_select 35.27
-app.reset_library 71.16
-app.shutdown_order 46.80
-app.shutdown_order.timing 46.81
-app.startup_quiet 36.43
-app.update_check 1.13
-app.update_check.timing 1.07
-app.watchdog_stall 56.85
-archive.responsive 59.84
-archive.responsive.timing 79.57
-assets.cas 0.21
-assets.delete_roundtrip 0.12
-assets.engine 5.79
-assets.gc 0.12
-assets.metadata 0.1
-assets.paths 0.08
-assets.seed_restamp 0.07
-assets.torn_write 0.05
-assets.tray 0.43
-atom.cluster_crack 135.80
-atom.cluster_cut 140.60
-atom.dag_bound_bar 17.84
-atom.decode_exact 61.22
-atom.dolly_gate 33.86
-atom.lod_bound_bar 4.49
-atom.lod_switch 257.40
-atom.lod_switch.fixture 0.05
-atom.occlusion_exact 15.4
-atom.occlusion_exact_app 88.26
-atom.occlusion_exact_app.fresh_home 0.01
-audio.peaks 0.86
-avatar.assets 0.14
-avatar.document 0.1
-avatar.locomotion 0.23
-avatar.locomotion_mirror 1.93
-avatar.movement 0.35
-avatar.possession 0.35
-avatar.preview 4.66
-avatar.responsive 52.86
-avatar.responsive.timing 58.59
-bake.determinism 68.38
-cameras.body 4.03
-cameras.document 0.07
-cameras.exposure 8.96
-cameras.lens 0.03
-cameras.pip 3.92
-cameras.play_routing 1.97
-capture.first_recording.timing 32.00
-capture.offline_unique.timing 101.00
-chain.hzb 3.1
-chain.hzb.timing 1.84
-claude.chat 3.24
-commands.db_batch 0.12
-commands.pin_asset 0.06
-commands.preset_copy 0.06
-commands.structural_undo 0.07
-commands.undo_clear_cost 0.25
-decals.engine 8.66
-defaults.exposure_plane 3.22
-defaults.primitive_table 0.23
-desktops.db 0.08
-desktops.grid_layout 0.09
-desktops.slider_model 0.0
-devprocess.gpu_lock 1.28
-distortion.engine 2.54
-distortion.engine_asan 13.91
-document.characterisation 0.11
-document.dirty_list 0.15
-document.light_defaults 0.07
-document.material_defaults 0.04
-document.mobility 0.08
-document.movement_epoch 0.06
-document.no_silent_setters 0.04
-document.physics_restart 0.12
-document.reader_defaults 0.02
-document.simulation_clock 0.01
-document.sky_write 0.08
-drawers.db 0.18
-engine.atom_draw 105.97
-engine.atom_negative_control_validation 3.2
-engine.atom_negative_control_validation_lavapipe 8.93
-engine.atom_parity 98.32
-engine.atom_parity_validation 7.24
-engine.error_pump 1.49
-engine.frame_catch 2.11
-engine.gi_scan 4.12
-engine.gpu_cull 64.16
-engine.gpu_cull.timing 62.82
-engine.gpu_scene 2.54
-engine.headless 0.05
-engine.lod_hysteresis 2.13
-engine.lod_rule_parity 4.59
-engine.particles_pfx2 2.7
-engine.particles_pfx2_asan 19.14
-engine.planar 4.12
-engine.planar_asan 14.21
-engine.voxel_reader_parity 5.53
-engine.window 3.41
-export.embed 1.33
-export.raw 0.01
-export.walkers 0.18
-export.web 0.11
-gi.ambient 3.41
-gi.atlas_keeps_voxels 14.08
-gi.boot_textures 10.15
-gi.budget 458.41
-gi.card_blend 5.3
-gi.card_budget 2.11
-gi.card_capture 4.93
-gi.card_clouds 8.38
-gi.card_lighting 2.84
-gi.card_lighting_indirect 6.33
-gi.card_read_parity 10.83
-gi.card_shadow 5.72
-gi.card_view 14.57
-gi.card_view_batch 2.92
-gi.cards_mover_shadow 9.99
-gi.cascade_bounce_bindings 8.79
-gi.cascade_determinism 8.08
-gi.cascade_dirty 5.97
-gi.cascade_lod 6.72
-gi.cascades 17.72
-gi.cascades_asan 40.47
-gi.chain_converge 17.04
-gi.chain_converge_scenes 116.59
-gi.chain_converge_scenes.fresh_home 0.00
-gi.chain_face 19.04
-gi.cliff 4.04
-gi.coalesce 7.26
-gi.cone_integrator_parity 6.07
-gi.ddgi 18.44
-gi.ddgi_ambient 9.4
-gi.ddgi_edge 4.92
-gi.drag_cadence 13.7
-gi.drag_mover 6.07
-gi.env_cone 10.26
-gi.env_one 12.37
-gi.env_ray_match 7.0
-gi.far_blas 7.64
-gi.field_alias 149.90
-gi.field_follows 12.58
-gi.field_follows.timing 12.58
-gi.field_scroll 15.55
-gi.field_thin_wall 45.93
-gi.gather 32.64
-gi.gather_cards 75.45
-gi.gather_cost 33.04
-gi.gather_deterministic 15.64
-gi.gather_edge 17.48
-gi.gather_glass 16.92
-gi.gather_letterbox 13.26
-gi.gather_motion 12.7
-gi.gather_nest 19.45
-gi.gather_norays 4.71
-gi.gather_plane 25.86
-gi.gather_plane_target 24.51
-gi.gather_plane_weight 17.39
-gi.gather_reference 19.24
-gi.gather_reference_target 23.87
-gi.gather_sky 11.46
-gi.gather_stable 21.18
-gi.gather_trace 9.84
-gi.hidden_volume 6.31
-gi.hit_shade 23.55
-gi.hit_voxel 6.7
-gi.leak_room 15.21
-gi.material_swap 7.51
-gi.mobility 14.16
-gi.modes 6.06
-gi.one_writer 47.82
-gi.one_writer.fresh_home 0.03
-gi.overlay 4.57
-gi.pcc_bounds 8.36
-gi.pcc_mirror 12.28
-gi.pcc_mirror.ray_tier 64.83
-gi.pcc_mirror.ray_tier.fresh_home 0.09
-gi.pcc_second_scene 5.2
-gi.pcc_stability 9.33
-gi.probe_gate 16.86
-gi.probe_inputs 21.27
-gi.probe_open 15.31
-gi.probe_visibility 6.72
-gi.rayquery 3.06
-gi.rayquery_asan 15.38
-gi.rayquery_norays 1.6
-gi.reenable 10.33
-gi.reflect_motion 7.64
-gi.reflect_motion_norays 5.16
-gi.rt_reflect 10.98
-gi.rt_reflect_asan 35.24
-gi.rt_reflect_cost 6.25
-gi.rt_reflect_format_lavapipe 3.74
-gi.rt_reflect_format_refused_lavapipe 1.19
-gi.rt_reflect_hitres 6.94
-gi.rt_reflect_lamp 4.33
-gi.rt_reflect_lamp_clip 3.96
-gi.rt_reflect_norays 3.11
-gi.scene_switch 10.39
-gi.settle_partial 11.99
-gi.skin_rays 2.86
-gi.skin_rays_mirror 8.95
-gi.skin_rays_norays 2.17
-gi.sky_light 19.64
-gi.stream_edit 9.42
-gi.sun_contact 2.75
-gi.sun_contact_both 4.57
-gi.sun_contact_legs 2.1
-gi.sun_contact_norays 2.52
-gi.tiers 0.1
-gi.volume_edge 3.95
-gi.volume_edge_spec_target 2.57
-gi.voxel_coverage 65.85
-gi.voxel_emissive 9.09
-gi.voxel_feed 4.62
-gi.voxel_lab 1.9
-gi.voxel_resident 6.55
-gizmo.drag_frame 0.16
-gizmo.group_transform 0.09
-gizmo.overlay 2.08
-gizmo.plane_handles 0.1
-gizmo.ring_pick 0.3
-gizmo.scale_lock 0.06
-gizmo.screen_size 0.12
-gpu.cutout_soak 268.44
-hdr.bloom_amount 2.2
-hdr.bloom_amount_asan 11.8
-hdr.dither 2.49
-hdr.dither_asan 11.59
-hdr.drag_stable 14.9
-hdr.drag_stable_asan 26.05
-hdr.meter 11.6
-hdr.meter_asan 20.43
-import.async 0.35
-import.shutdown 42.66
-importer.animation 0.08
-importer.extent 0.21
-importer.fbx 0.01
-importer.glb 0.83
-importer.materials 4.09
-importer.meshformats 2.66
-importer.security 0.15
-importer.texture_guids 0.07
-input.actions 0.02
-input.alt_orbit 0.06
-input.axis_view_lock 0.06
-input.fly_controls 0.57
-lights.falloff 1.94
-lights.hygiene 4.1
-lights.icons 3.22
-lights.masks 3.41
-lights.sealed_room 2.96
-lights.secondary_directional 2.97
-lights.shadows 16.17
-log.core 0.6
-log.engine 36.38
-log.events 28.4
-log.perf 53.12
-looks.engine 2.64
-looks.engine_asan 13.38
-materialpreview.engine 4.27
-materials.bundle 0.06
-materials.members 0.08
-math.parity 24.01
-mcp.e2e 52.89
-mcp.e2e.fresh_home 0.01
-meshbake.cards 0.76
-meshbake.cards.timing 0.78
-meshbake.hemisphere_winding 0.18
-meshbake.primitives_baked 0.59
-meshbake.rebake_generation 0.08
-meshbake.roundtrip 0.26
-meshbake.sdf 1.01
-meshbake.shadow_vao_alias 1.73
-mirror.dirty_equals_full 1.39
-mirror.document_to_engine 21.51
-mirror.grid_floor 3.05
-mirror.ground_horizon 2.58
-mirror.scale 3.58
-mirror.skinned_outline 2.79
-mirror.sun_night 4.56
-mirror.vr_proxies 2.81
-open.crash_soak 114.30
-open.frames 42.18
-open.responsive 281.30
-open.responsive.timing 281.33
-particles.document_to_engine 1.89
-particles.fire_shape 1.65
-perf.capture_bundle 59.02
-perf.capture_off_is_free 37.47
-perf.drag_mirror_room 49.92
-perf.epic_steady_state 40.34
-perf.freshhome.drag_mirror_room 0.02
-perf.freshhome.epic_steady_state 0.01
-perf.freshhome.hide_soak 0.01
-perf.hide_soak 56.54
-perf.offscreen_isolation 23.08
-perf.pacing 0.0
-photon.view 72.95
-picking.document 0.12
-picking.fov_cap 2.33
-pieces.mirror 4.23
-pieces.spike 3.31
-player.editor_parity 17.82
-player.engine 3.86
-player.playback_routing 0.04
-player.vr 0.01
-pool.assets_import 64.48
-pool.atom 49.73
-pool.avatar_anim 20.43
-pool.cameras 31.66
-pool.capture_validation 219.32
-pool.doc 14.68
-pool.doc_assets 12.63
-pool.editor 71.66
-pool.editor_view 87.77
-pool.gi_movers 62.65
-pool.gi_verbs 48.37
-pool.player 96.17
-pool.runner 19.88
-pool.shading 57.20
-pool.shading_live 73.79
-pool.vr_noruntime 22.49
-pool.vr_session 79.21
-pool.vr_validation 253.38
-pool.world_light 124.60
-pool.world_sky 127.90
-preview.lifecycle 3.26
-rigperf.benchmark 100.00
-rigperf.smoke 2.56
-samples.cleanstart.Matcaps 53.02
-samples.cleanstart.Mirror_Room 57.07
-samples.cleanstart.Particles 57.41
-samples.cleanstart.Physics 51.1
-samples.cleanstart.Showroom 55.15
-samples.cleanstart.Showroom_2 53.47
-samples.cleanstart.Skeletal_Animation 55.87
-samples.cleanstart.World_Background 55.71
-samples.freshhome.Matcaps 0.14
-samples.freshhome.Mirror_Room 0.01
-samples.freshhome.Particles 0.01
-samples.freshhome.Physics 0.01
-samples.freshhome.Showroom 0.01
-samples.freshhome.Showroom_2 0.01
-samples.freshhome.Skeletal_Animation 0.01
-samples.freshhome.World_Background 0.45
-samples.freshhome.session 0.01
-samples.mirror_room_boots 251.27
-samples.session 161.00
-scale.occlusion 98.60
-scene.reopen_fidelity 64.71
-scenegraph.benchmark 283.84
-scenegraph.smoke 15.32
-scripting.e2e.animation_assets 26.75
-scripting.e2e.animation_assets.fresh_home 0.77
-scripting.e2e.animation_assets_import 4.51
-scripting.e2e.animation_assets_import.fresh_home 0.01
-scripting.e2e.assets_scope 8.61
-scripting.e2e.assets_scope.fresh_home 0.11
-scripting.e2e.editor_controls.timing 71.87
-scripting.e2e.lattice_placement 104.5
-scripting.e2e.material_bundle 10.88
-scripting.e2e.material_bundle.fresh_home 0.01
-scripting.e2e.material_bundle_import 3.71
-scripting.e2e.material_bundle_import.fresh_home 0.01
-scripting.e2e.material_share 10.28
-scripting.e2e.material_share.fresh_home 0.76
-scripting.e2e.material_share_import 3.63
-scripting.e2e.material_share_import.fresh_home 0.03
-scripting.e2e.material_tabs 173.80
-scripting.e2e.material_tabs.fresh_home 0.01
-scripting.e2e.material_tabs.relaunch 10.57
-scripting.e2e.ogre_ports 70.25
-scripting.e2e.one_asset 9.56
-scripting.e2e.one_asset.fresh_home 0.02
-scripting.e2e.perf_capture_frames 28.96
-scripting.e2e.player_bounce 32.4
-scripting.e2e.player_no_editor 32.47
-scripting.e2e.preset_apply 13.69
-scripting.e2e.preset_apply.fresh_home 0.01
-scripting.e2e.preset_edit 13.07
-scripting.e2e.preset_edit.fresh_home 0.01
-scripting.e2e.preset_seed_boot 34.0
-scripting.e2e.preset_seed_boot.fresh_home 0.01
-scripting.e2e.preset_seed_boot.user_first 25.1
-scripting.e2e.preset_seed_race 34.77
-scripting.e2e.preset_seed_race.fresh_home 0.03
-scripting.e2e.ray_row_norays 21.08
-scripting.e2e.shadow_cache_probes 46.04
-scripting.e2e.shadow_cache_probes.fresh_home 0.01
-scripting.e2e.shipped_assets 13.41
-scripting.e2e.sky_swap_transient 47.78
-scripting.e2e.sky_swap_transient.fresh_home 0.09
-scripting.e2e.ssr_mirror 72.14
-scripting.e2e.store_root 3.74
-scripting.e2e.store_root.fresh_home 0.34
-scripting.e2e.texture_missing 29.53
-scripting.e2e.thumbnails_order 20.51
-scripting.e2e.thumbnails_order.fresh_home 0.01
-scripting.e2e.tray_panel 87.64
-scripting.e2e.tray_panel.fresh_home 0.01
-scripting.engine 0.79
-scripting.freshhome.ogre_ports 0.21
-scripting.live 28.33
-scripting.live_off 29.46
-services.animation_undo 0.05
-services.clipboard 0.1
-services.core 0.04
-services.looks 0.03
-services.memory 0.13
-services.ogre_samples 0.02
-services.scene_stats 0.07
-services.selection_set 0.06
-shadercache.app 89.71
-shadercache.container 120.00
-shadercache.container_asan 247.95
-shadercache.warmup 2.45
-shadercache.warmup_pass 2.13
-shadergraph.ao_removed 0.06
-shadergraph.asset_widget_db 0.07
-shadergraph.bake_output 1.64
-shadergraph.baker_parity 0.35
-shadergraph.emitter_parity 6.86
-shadergraph.emitter_pieces 0.24
-shadergraph.fuzzy_search 0.0
-shadergraph.node_regressions 1.67
-shadergraph.panel_migration 0.16
-shadergraph.pbr_evaluator 3.23
-shadergraph.selection 0.08
-shadow.atlas_binding 2.57
-shadow.atlas_rebuilds 4.51
-shadow.cache_kinds 6.54
-shadow.cutout_caster 123.96
-shadow.cutout_caster.churn 349.39
-shadow.layout 0.01
-shadow.two_sided_caster 129.16
-shadow.two_sided_caster.churn 272.42
-shortcuts.registry 0.02
-skeletal.clip_extract 0.09
-skeletal.cpu_skinning 2.21
-skeletal.gpu_clips 2.08
-skeletal.gpu_parity 17.13
-skeletal.library_import 0.07
-skeletal.multi_avatar 0.07
-skeletal.rig_translation 2.58
-skeletal.share 0.05
-skeletal.share_asan 0.09
-skeletal.union_rig 0.1
-sky.aerial_perspective 4.07
-sky.env_layout 3.11
-sky.sun_transmittance 1.55
-sky.sun_transmittance_asan 11.81
-sockets.document 0.06
-sockets.e2e 58.57
-sockets.render 2.0
-sockets.tags 0.09
-source.bake_key_guard 0.05
-source.db_pointers_initialised 0.02
-source.gate_scope_rules 5.2
-source.material_page_identity 0.0
-source.member_init 13.93
-source.no_glsl_path 0.15
-source.no_raw_transaction 0.02
-source.notices_coverage 0.03
-source.one_fonticons 0.06
-source.one_material_resolve 1.53
-source.one_readfile 0.01
-source.panel_rows_guarded 0.03
-source.settings_keys 0.22
-ssr.edge 3.15
-ssr.engine 13.29
-ssr.engine_asan 33.45
-ssr.rings 2.78
-test_engine 37.05
-test_engine_asan 68.30
-test_engine_recreate 7.89
-theme.manager 0.1
-theme.no_raw_sheets 0.08
-theme.sheets 78.04
-theme.style_contracts 0.04
-threading.freshhome.gi_resolve 0.43
-threading.freshhome.gi_resolve_serial 0.01
-threading.freshhome.import_soak 0.01
-threading.freshhome.mode 0.43
-threading.freshhome.mode_serial 0.01
-threading.freshhome.newproject_stall 0.01
-threading.freshhome.newproject_stall_timing 0.01
-threading.freshhome.texture_wait_watchdog 0.01
-threading.gi_resolve 30.89
-threading.gi_resolve_pixels 0.01
-threading.gi_resolve_serial 52.33
-threading.import_soak 21.99
-threading.import_soak.no_groupless_texture 0.01
-threading.mode 43.09
-threading.mode_pixels 0.01
-threading.mode_serial 58.17
-threading.newproject_stall 24.83
-threading.newproject_stall.no_groupless_texture 0.01
-threading.newproject_stall.timing 14.72
-threading.staging_race 2.35
-threading.texture_wait_watchdog 38.03
-thumbnails.engine 3.44
-thumbnails.shader 2.7
-thumbnails.studio_env 4.12
-thumbnails.sweep 0.06
-ui.column_law 40.28
-ui.components 2.78
-ui.components.timing 2.97
-ui.db_handles 0.15
-ui.dock_state 0.09
-ui.drag_owner 0.02
-ui.engine_view_winid 2.06
-ui.hierarchy_root 0.07
-ui.import_dialog 0.08
-ui.light_channels 0.02
-ui.material_drag 37.44
-ui.material_panel 0.32
-ui.mcp_prefs 0.05
-ui.media_lazy 1.87
-ui.new_project_dialog 0.03
-ui.panel_lifetime 0.13
-ui.panel_undo 0.34
-ui.photon_panel 2.97
-ui.presets_favorites 0.02
-ui.project_tile 2.67
-ui.properties_filter 0.85
-ui.properties_filter.timing 0.73
-ui.properties_tabs 0.54
-ui.properties_width 1.19
-ui.property_anim 0.03
-ui.selection_cost 8.64
-ui.selection_cost.timing 5.12
-ui.shot_aspect 27.25
-ui.show_walk 0.33
-ui.space_docks 60.62
-ui.toast 0.52
-ui.tree_multiselect 0.08
-ui.tree_reselect 0.07
-ui.tree_scroll 0.08
-ui.vr_panel 0.09
-ui.window_minimum 47.2
-vr.eye_grade 259.71
-vr.frame_budget 129.68
-vr.gather_stereo 86.93
-vr.grab_maths 0.0
-vr.input_session 50.4
-vr.mirror_live 73.64
-vr.no_picture_start 61.77
-vr.session 75.88
-vr.session_undithered 7.12
-vr.warmup 32.8
-vr.warmup.fresh_home 0.01
-vr.warmup.timing 49.73
-vr.warmup.timing.fresh_home 0.01
-vr.warmup_control 48.15
-vr.warmup_control.fresh_home 0.03
+# suite seconds source — THE PRICE OF EVERY TIER ROW (TESTING-CLEANUP-2B item 6; scripts/gate-scope.py "THE PRICES").
+# One line per row of the MERGE and STAGE-CLOSE tiers (and per pool ARM, <pool>::<arm>): <row> <seconds> <source>.
+# The source is NAMED: "quiet n=K" = the median of the row's PASS runs with no sibling ctest (>= 3 of them) — THE
+# price; "all n=K" = fewer quiet runs, the median of every PASS run; "fixture" = a home wipe; any other text = a
+# hand price and where it came from. Read from testing/runs + testing/runs-archive since 2026-10-01 13:10 (before
+# GATE-SPEED-1's L2 a record's seconds held its admission wait). Re-price: scripts/gate-scope.sh --record-times
+# [--build <dir>]; the self-check: --price-check (source.testing_rules R2 fails an unpriced tier row).
+api.contract 3.65  quiet n=58
+app.cli_options 0.00  quiet n=23
+app.data_root 18.32  quiet n=46
+app.data_root.fresh_home 0.01  quiet n=3
+app.device_loss_end 60.08  all n=2
+app.engine_selftest_validation 43.43  quiet n=46
+app.first_launch 0.01  quiet n=25
+app.help_exits 0.30  quiet n=46
+app.input_keys 49.40  quiet n=57
+app.input_keys.fresh_home 0.01  quiet n=15
+app.library_generation 11.10  quiet n=47
+app.library_generation.fresh_home 0.01  quiet n=4
+app.library_keep 29.81  quiet n=19
+app.library_keep.fresh_home 0.01  quiet n=4
+app.play_select 29.08  quiet n=55
+app.play_select.fresh_home 0.01  quiet n=14
+app.reset_library 41.53  quiet n=47
+app.reset_library.fresh_home 0.01  quiet n=4
+app.shader_gate_warm 79.54  quiet n=48
+app.shutdown_order 38.28  quiet n=41
+app.shutdown_order.fresh_home 0.01  quiet n=4
+app.shutdown_order.timing 43.30  all n=2
+app.shutdown_order.timing.fresh_home 0.01  quiet n=4
+app.sky_swap_presented 134.37  quiet n=26
+app.sky_swap_presented.fresh_home 0.02  quiet n=7
+app.start_in_vr 19.86  quiet n=23
+app.startup_quiet 29.96  quiet n=54
+app.startup_quiet.fresh_home 0.01  quiet n=7
+app.test_needs_boot 56.22  all n=2
+app.update_check 0.97  quiet n=25
+app.update_check.timing 1.54  all n=2
+app.watchdog_stall 39.98  quiet n=45
+archive.closure 0.11  quiet n=33
+archive.responsive 75.44  quiet n=43
+archive.responsive.fresh_home 0.01  quiet n=4
+archive.responsive.timing 68.25  all n=2
+archive.responsive.timing.fresh_home 0.02  quiet n=3
+assets.cas 0.08  quiet n=33
+assets.delete_roundtrip 0.08  quiet n=33
+assets.engine 2.81  quiet n=45
+assets.gc 0.15  quiet n=33
+assets.metadata 0.06  quiet n=32
+assets.paths 0.05  quiet n=34
+assets.torn_write 0.03  quiet n=32
+assets.tray 0.19  quiet n=33
+atom.cluster_crack 62.28  quiet n=20
+atom.cluster_cut 39.73  quiet n=19
+atom.coverage_trace 181.25  quiet n=41
+atom.dag_bound 4.67  the run log's atom.dag_bound_target (quiet n=32): the same row, renamed by TESTING-CLEANUP-2B item 5
+atom.dag_bound_bar 18.70  quiet n=30
+atom.dag_chain_validate 12.07  quiet n=44
+atom.decode_exact 41.09  quiet n=46
+atom.dolly_gate 27.89  quiet n=40
+atom.lod_bound_bar 11.36  quiet n=30
+atom.lod_switch 237.65  quiet n=43
+atom.lod_switch.fixture 0.05  quiet n=52
+atom.occlusion_exact 11.19  quiet n=45
+atom.occlusion_exact_app 169.94  quiet n=40
+atom.occlusion_exact_app.fresh_home 0.01  quiet n=56
+atom.two_sided 3.22  quiet n=44
+atom.words_still 2.04  quiet n=42
+audio.peaks 0.83  quiet n=24
+avatar.assets 0.09  quiet n=47
+avatar.document 0.08  quiet n=47
+avatar.locomotion 0.20  quiet n=47
+avatar.locomotion_mirror 1.48  quiet n=44
+avatar.movement 0.27  quiet n=47
+avatar.possession 0.09  quiet n=47
+avatar.preview 2.96  quiet n=42
+avatar.responsive 48.07  quiet n=41
+avatar.responsive.fresh_home 0.01  quiet n=4
+avatar.responsive.timing 52.95  all n=2
+avatar.responsive.timing.fresh_home 0.02  quiet n=3
+bake.determinism 64.78  quiet n=32
+bundle.writer 21.13  quiet n=24
+cameras.body 1.57  quiet n=48
+cameras.document 0.05  quiet n=48
+cameras.exposure 4.31  quiet n=47
+cameras.lens 0.03  quiet n=48
+cameras.pip 1.96  quiet n=46
+cameras.play_routing 1.48  quiet n=48
+capture.faststart 0.01  quiet n=3
+capture.first_recording.timing 32.00  hand: TESTING-CLEANUP-2 dev run after admission (2026-10-09) (no PASS run in the log)
+capture.offline_unique.timing 101.00  hand: TESTING-CLEANUP-2 dev run after admission (2026-10-09) (no PASS run in the log)
+chain.hzb 1.73  quiet n=43
+chain.hzb.timing 2.34  all n=2
+claude.chat 3.29  quiet n=24
+cloud_2d.budget 1.81  quiet n=35
+cloud_2d.energy 4.70  quiet n=45
+cloud_2d.shape 5.63  quiet n=44
+commands.db_batch 0.24  quiet n=47
+commands.pin_asset 0.04  quiet n=30
+commands.preset_copy 0.04  quiet n=30
+commands.structural_undo 0.05  quiet n=46
+commands.undo_clear_cost 0.57  quiet n=48
+decals.engine 4.46  quiet n=43
+defaults.exposure_plane 2.44  quiet n=44
+defaults.primitive_table 0.39  quiet n=38
+desktops.db 0.05  quiet n=33
+desktops.grid_layout 0.06  quiet n=27
+desktops.slider_model 0.00  quiet n=24
+devprocess.gpu_lock 8.02  quiet n=31
+devprocess.harness_exit 0.01  quiet n=51
+devprocess.kernel_journal 0.01  quiet n=29
+devprocess.vram_admit 11.93  quiet n=25
+distortion.engine 1.63  quiet n=43
+distortion.engine_asan 9.51  quiet n=44
+document.cascade_set_reader 0.00  quiet n=25
+document.characterisation 0.08  quiet n=47
+document.color_json 0.03  quiet n=9
+document.dirty_list 0.09  quiet n=46
+document.light_defaults 0.05  quiet n=47
+document.material_defaults 0.03  quiet n=46
+document.mobility 0.05  quiet n=47
+document.movement_epoch 0.03  quiet n=47
+document.no_silent_setters 0.03  quiet n=36
+document.physics_restart 0.09  quiet n=46
+document.physics_writeback 1.25  quiet n=24
+document.reader_defaults 0.02  quiet n=36
+document.simulation_clock 0.01  quiet n=25
+document.sky_write 0.04  quiet n=46
+drawers.db 0.04  quiet n=32
+engine.atom_draw 36.36  quiet n=39
+engine.atom_negative_control_validation 2.56  quiet n=43
+engine.atom_negative_control_validation_lavapipe 3.58  quiet n=42
+engine.atom_parity 36.78  quiet n=37
+engine.atom_parity_validation 3.31  quiet n=44
+engine.descriptor_pools 3.90  quiet n=43
+engine.error_pump 1.18  quiet n=44
+engine.frame_catch 1.39  quiet n=44
+engine.gi_scan 2.38  quiet n=43
+engine.gpu_cull 27.72  quiet n=39
+engine.gpu_cull.timing 26.07  all n=2
+engine.gpu_scene 1.62  quiet n=43
+engine.headless 0.02  quiet n=44
+engine.lod_hysteresis 1.61  quiet n=44
+engine.lod_rule_parity 5.19  quiet n=44
+engine.media_check 2.01  quiet n=41
+engine.oom_is_not_loss 2.64  quiet n=45
+engine.particles_pfx2 1.94  quiet n=42
+engine.particles_pfx2_asan 11.59  quiet n=41
+engine.planar 1.97  quiet n=39
+engine.planar_asan 10.52  quiet n=39
+engine.tlas_compute 2.39  quiet n=44
+engine.voxel_reader_parity 3.33  quiet n=40
+engine.window 1.86  quiet n=43
+export.embed 1.42  quiet n=24
+export.raw 0.01  quiet n=23
+export.walkers 0.06  quiet n=45
+export.web 0.08  quiet n=45
+gate.batch 25.13  quiet n=5
+gate.carried_red 17.75  quiet n=3
+gate.ci_check 15.75  quiet n=58
+gate.contention_shape 10.56  quiet n=3
+gate.cost 29.19  quiet n=6
+gate.fix_round 32.30  quiet n=57
+gate.log_schema2 5.25  quiet n=3
+gate.noadmit_pool 0.42  quiet n=3
+gate.selection 70.28  quiet n=55
+gate.stage_close_labels 0.25  quiet n=3
+gate.stage_close_select 2.34  quiet n=3
+gate.tokens_by_needs 0.10  all n=2
+gate.verdict_door 12.53  quiet n=3
+gi.ambient 1.96  quiet n=41
+gi.area_energy 5.29  quiet n=29
+gi.atlas_keeps_voxels 7.26  quiet n=41
+gi.boot_textures 3.75  quiet n=41
+gi.budget 5.66  quiet n=47
+gi.card_blend 3.25  quiet n=40
+gi.card_budget 2.17  quiet n=42
+gi.card_capture 3.09  quiet n=42
+gi.card_clouds 3.56  quiet n=43
+gi.card_light_trigger 2.61  quiet n=42
+gi.card_lighting 2.48  quiet n=42
+gi.card_lighting_indirect 3.66  quiet n=43
+gi.card_read_parity 3.26  quiet n=41
+gi.card_shadow 4.63  quiet n=41
+gi.card_view 8.05  quiet n=42
+gi.card_view_batch 1.96  quiet n=42
+gi.cards_mover_shadow 5.02  quiet n=40
+gi.cascade_bounce_bindings 2.79  quiet n=48
+gi.cascade_determinism 3.08  quiet n=46
+gi.cascade_dirty 2.72  quiet n=46
+gi.cascade_lod 2.64  quiet n=44
+gi.cascades 7.85  quiet n=43
+gi.cascades_asan 23.23  quiet n=41
+gi.chain_converge 9.21  quiet n=46
+gi.chain_converge_scenes 96.34  quiet n=20
+gi.chain_converge_scenes.fresh_home 0.01  quiet n=30
+gi.chain_face 7.27  quiet n=42
+gi.cliff 6.66  quiet n=40
+gi.coalesce 5.28  quiet n=44
+gi.cone_emitter 3.47  quiet n=40
+gi.cone_integrator_parity 3.47  quiet n=42
+gi.cone_integrator_parity_offaxis 2.20  quiet n=12
+gi.cone_skip 5.68  quiet n=19
+gi.contact_occlusion 36.30  quiet n=40
+gi.ddgi 10.32  quiet n=41
+gi.ddgi_ambient 5.05  quiet n=42
+gi.ddgi_edge 3.70  quiet n=42
+gi.drag_cadence 6.04  quiet n=46
+gi.drag_mover 3.16  quiet n=47
+gi.env_cone 5.17  quiet n=42
+gi.env_one 6.95  quiet n=40
+gi.env_ray_match 5.21  quiet n=43
+gi.far_blas 3.86  quiet n=43
+gi.field_alias 71.39  quiet n=44
+gi.field_edge 8.02  quiet n=29
+gi.field_follows 6.14  quiet n=45
+gi.field_follows.timing 5.91  all n=2
+gi.field_scroll 12.66  quiet n=45
+gi.field_thin_wall 30.59  quiet n=45
+gi.flythrough_noise.Leak 120.24  quiet n=3
+gi.flythrough_noise.Open 343.68  quiet n=4
+gi.flythrough_noise.Showroom2 345.63  quiet n=4
+gi.gather 14.92  quiet n=38
+gi.gather_adaptive_fair 3.00  quiet n=31
+gi.gather_cards 61.01  quiet n=42
+gi.gather_cost 30.02  all n=2
+gi.gather_deterministic 8.71  quiet n=41
+gi.gather_edge 9.11  quiet n=42
+gi.gather_glass 6.52  quiet n=40
+gi.gather_letterbox 7.15  quiet n=41
+gi.gather_motion 5.78  quiet n=46
+gi.gather_nest 9.11  quiet n=43
+gi.gather_norays 2.58  quiet n=40
+gi.gather_plane 17.34  quiet n=41
+gi.gather_plane_target 17.21  quiet n=40
+gi.gather_plane_weight 12.98  quiet n=42
+gi.gather_reference 15.43  quiet n=41
+gi.gather_reference_target 15.46  quiet n=41
+gi.gather_sky 7.03  quiet n=43
+gi.gather_stable 11.09  quiet n=47
+gi.gather_trace 5.38  quiet n=42
+gi.hidden_volume 8.46  quiet n=41
+gi.hit_offscreen_lights 2.17  quiet n=43
+gi.hit_planar 6.21  quiet n=42
+gi.hit_shade 15.64  quiet n=40
+gi.hit_voxel 4.74  quiet n=41
+gi.hit_voxel_view 4.43  quiet n=41
+gi.id_depth 4.81  quiet n=37
+gi.id_depth_rays 4.60  quiet n=34
+gi.lamp_falloff 5.39  quiet n=36
+gi.leak_room 6.00  quiet n=41
+gi.material_swap 2.69  quiet n=44
+gi.mobility 7.45  quiet n=41
+gi.modes 3.48  quiet n=41
+gi.one_writer 46.36  quiet n=45
+gi.one_writer.fresh_home 0.01  quiet n=52
+gi.overlay 2.25  quiet n=42
+gi.pcc_bounds 7.11  quiet n=41
+gi.pcc_mirror 9.22  quiet n=41
+gi.pcc_mirror.ray_tier 53.60  quiet n=44
+gi.pcc_mirror.ray_tier.fresh_home 0.01  quiet n=50
+gi.pcc_second_scene 3.47  quiet n=41
+gi.pcc_stability 6.01  quiet n=41
+gi.probe_gate 8.26  quiet n=41
+gi.probe_inputs 11.39  quiet n=44
+gi.probe_nan 5.64  quiet n=41
+gi.probe_open 8.14  quiet n=42
+gi.probe_visibility 3.33  quiet n=41
+gi.ray_levels 3.31  quiet n=36
+gi.rayquery 1.77  quiet n=40
+gi.rayquery_asan 9.73  quiet n=41
+gi.rayquery_norays 1.25  quiet n=43
+gi.reenable 4.07  quiet n=41
+gi.reflect_fog 10.50  quiet n=38
+gi.reflect_fog_norays 4.86  quiet n=37
+gi.reflect_motion 5.75  quiet n=42
+gi.reflect_motion_norays 4.67  quiet n=43
+gi.reflect_mover 34.39  quiet n=40
+gi.region_replace 5.36  quiet n=42
+gi.rt_alpha_tested 17.91  quiet n=43
+gi.rt_reflect 4.92  quiet n=40
+gi.rt_reflect_asan 16.07  quiet n=41
+gi.rt_reflect_cost 2.85  quiet n=45
+gi.rt_reflect_format_lavapipe 1.39  quiet n=41
+gi.rt_reflect_format_refused_lavapipe 0.99  quiet n=41
+gi.rt_reflect_hitres 4.54  quiet n=43
+gi.rt_reflect_lamp 3.47  quiet n=42
+gi.rt_reflect_lamp_clip 3.05  quiet n=43
+gi.rt_reflect_norays 2.06  quiet n=42
+gi.scene_switch 6.00  quiet n=41
+gi.settle_partial 7.45  quiet n=42
+gi.skin_rays 1.88  quiet n=41
+gi.skin_rays_mirror 4.83  quiet n=40
+gi.skin_rays_norays 1.52  quiet n=42
+gi.sky_light 4.60  quiet n=44
+gi.socket_camera 4.48  quiet n=4
+gi.speckle 59.75  quiet n=10
+gi.stream_edit 3.94  quiet n=40
+gi.sun_contact 1.92  quiet n=43
+gi.sun_contact_both 3.30  quiet n=42
+gi.sun_contact_legs 1.96  quiet n=41
+gi.sun_contact_norays 1.80  quiet n=43
+gi.tiers 0.06  quiet n=45
+gi.volume_edge 2.12  quiet n=42
+gi.volume_edge_spec_target 2.11  quiet n=42
+gi.voxel_coverage 44.23  quiet n=42
+gi.voxel_emissive 6.75  quiet n=39
+gi.voxel_feed 3.03  quiet n=40
+gi.voxel_lab 1.45  quiet n=34
+gi.voxel_resident 4.72  quiet n=45
+gizmo.drag_frame 0.11  quiet n=46
+gizmo.group_transform 0.06  quiet n=46
+gizmo.overlay 1.60  quiet n=44
+gizmo.plane_handles 0.07  quiet n=46
+gizmo.ring_pick 0.24  quiet n=46
+gizmo.scale_lock 0.04  quiet n=46
+gizmo.screen_size 0.08  quiet n=46
+gpu.cutout_soak 292.31  all n=30
+hdr.bloom_amount 1.66  quiet n=44
+hdr.bloom_amount_asan 9.21  quiet n=42
+hdr.display_encode 1.88  quiet n=40
+hdr.dither 1.56  quiet n=42
+hdr.dither_asan 9.30  quiet n=39
+hdr.drag_stable 7.69  quiet n=41
+hdr.drag_stable_asan 18.48  quiet n=41
+hdr.meter 9.95  quiet n=43
+hdr.meter_asan 21.39  quiet n=41
+import.async 0.28  quiet n=31
+import.shutdown 33.63  quiet n=43
+import.shutdown.fresh_home 0.01  quiet n=4
+importer.animation 0.07  quiet n=44
+importer.extent 0.20  quiet n=45
+importer.fbx 0.01  quiet n=23
+importer.glb 0.66  quiet n=46
+importer.materials 1.77  quiet n=40
+importer.meshformats 1.76  quiet n=42
+importer.security 0.11  quiet n=46
+importer.texture_guids 0.07  quiet n=32
+input.actions 0.01  quiet n=24
+input.alt_orbit 0.04  quiet n=44
+input.axis_view_lock 0.04  quiet n=44
+input.fly_controls 0.54  quiet n=44
+library.model 7.33  quiet n=33
+lights.falloff 1.46  quiet n=43
+lights.hygiene 2.03  quiet n=43
+lights.icons 1.74  quiet n=45
+lights.masks 1.79  quiet n=44
+lights.sealed_room 1.60  quiet n=41
+lights.secondary_directional 1.74  quiet n=43
+lights.shadows 11.92  quiet n=41
+log.core 0.45  quiet n=42
+log.engine 15.75  quiet n=46
+log.engine.fresh_home 0.02  quiet n=3
+log.events 9.40  quiet n=49
+log.events.fresh_home 0.02  quiet n=3
+log.perf 39.55  quiet n=42
+log.perf.fresh_home 0.01  quiet n=3
+looks.engine 1.73  quiet n=43
+looks.engine_asan 9.59  quiet n=42
+material.live_roundtrip 85.25  quiet n=7
+materialpreview.engine 2.55  quiet n=46
+materials.bundle 0.04  quiet n=33
+materials.members 0.06  quiet n=33
+math.parity 20.37  quiet n=23
+mcp.e2e 55.52  quiet n=50
+mcp.e2e.fresh_home 0.01  quiet n=59
+meshbake.archive_bakes 53.08  quiet n=43
+meshbake.archive_bakes.fresh_home 0.01  quiet n=4
+meshbake.cards 0.71  quiet n=32
+meshbake.cards.timing 1.25  all n=2
+meshbake.hemisphere_winding 0.26  quiet n=32
+meshbake.primitives_baked 0.93  quiet n=32
+meshbake.rebake_generation 0.06  quiet n=32
+meshbake.roundtrip 0.65  quiet n=32
+meshbake.sdf 0.97  quiet n=32
+meshbake.shadow_vao_alias 1.36  quiet n=45
+meshbake.shipped_bakes 46.33  quiet n=43
+meshbake.shipped_bakes.fresh_home 0.01  quiet n=4
+mirror.cull_twin 3.36  quiet n=45
+mirror.dirty_equals_full 1.12  quiet n=44
+mirror.document_to_engine 9.72  quiet n=43
+mirror.grid_floor 1.66  quiet n=43
+mirror.ground_plane 1.91  quiet n=44
+mirror.scale 1.85  quiet n=48
+mirror.skinned_outline 1.38  quiet n=44
+mirror.sun_night 2.98  quiet n=45
+mirror.vr_proxies 1.79  quiet n=46
+open.crash_soak 448.94  all n=2
+open.frames 38.81  quiet n=41
+open.frames.fresh_home 0.01  quiet n=4
+open.responsive 191.84  quiet n=40
+open.responsive.fresh_home 0.01  quiet n=4
+open.responsive.timing 281.33  hand: its push row's worst gate run (same binary) (no PASS run in the log)
+open.responsive.timing.fresh_home 0.01  quiet n=4
+particles.document_to_engine 1.49  quiet n=43
+particles.fire_shape 1.45  quiet n=45
+perf.capture_bundle 64.69  quiet n=42
+perf.capture_bundle.capture_bundle.fresh_home 0.01  quiet n=4
+perf.capture_bundle.capture_quit.fresh_home 0.01  quiet n=4
+perf.capture_off_is_free 23.08  quiet n=45
+perf.capture_off_is_free.fresh_home 0.01  quiet n=7
+perf.drag_mirror_room 33.49  quiet n=47
+perf.epic_steady_state 34.57  quiet n=45
+perf.freshhome.drag_mirror_room 0.01  quiet n=94
+perf.freshhome.epic_steady_state 0.01  quiet n=94
+perf.freshhome.hide_soak 0.01  quiet n=53
+perf.hide_soak 59.19  quiet n=48
+perf.offscreen_isolation 21.27  quiet n=42
+perf.offscreen_isolation.fresh_home 0.01  quiet n=4
+perf.pacing 0.00  quiet n=37
+photon.tiers 0.05  quiet n=45
+photon.view 102.64  quiet n=44
+photon.view.fresh_home 0.01  quiet n=4
+picking.document 0.07  quiet n=45
+picking.fov_cap 1.54  quiet n=44
+picking.trimesh_index 28.90  quiet n=18
+pieces.live_paths 1.31  quiet n=12
+pieces.mirror 1.83  quiet n=46
+pieces.spike 1.77  quiet n=43
+player.editor_parity 5.71  quiet n=43
+player.engine 2.04  quiet n=43
+player.playback_routing 0.03  quiet n=37
+player.vr 0.00  quiet n=38
+pool.assets_import 43.45  quiet n=49
+pool.assets_import::assets_page 4.16  quiet n=50
+pool.assets_import::bundle_export_material 0.77  quiet n=53
+pool.assets_import::bundle_export_pack 0.94  quiet n=52
+pool.assets_import::bundle_export_sky 0.88  quiet n=8
+pool.assets_import::bundle_export_texture 1.04  quiet n=53
+pool.assets_import::desktops 4.14  quiet n=50
+pool.assets_import::import_dialog 0.80  quiet n=53
+pool.assets_import::import_render 1.53  quiet n=52
+pool.assets_import::node_archive_roundtrip 1.19  quiet n=52
+pool.assets_import::sample_names 5.97  quiet n=3
+pool.assets_import::sample_open 14.55  quiet n=49
+pool.atom 64.70  quiet n=47
+pool.atom::atom_draw 2.93  quiet n=45
+pool.atom::atom_lods 25.59  quiet n=47
+pool.atom::view 12.96  quiet n=46
+pool.avatar_anim 13.21  quiet n=49
+pool.avatar_anim::avatar 2.52  quiet n=49
+pool.avatar_anim::rig_stats 0.29  quiet n=46
+pool.avatar_anim::skinning 1.23  quiet n=49
+pool.cameras 15.70  quiet n=47
+pool.cameras::axis_lock 0.68  quiet n=45
+pool.cameras::e2e 1.76  quiet n=48
+pool.cameras::lens 1.00  quiet n=48
+pool.cameras::pilot 0.48  quiet n=48
+pool.cameras::pip_rebuild 0.77  quiet n=45
+pool.cameras::postfx 1.66  quiet n=47
+pool.capture 144.28  quiet n=3
+pool.capture::abandon 3.43  quiet n=3
+pool.capture::failure 2.21  quiet n=3
+pool.capture::first_recording 3.97  quiet n=3
+pool.capture::helpers_switch 5.78  quiet n=3
+pool.capture::offline_unique 72.93  quiet n=3
+pool.capture::offline_video 6.63  quiet n=3
+pool.capture::record_basic 8.41  quiet n=3
+pool.capture::ui 6.47  quiet n=3
+pool.capture_validation 47.09  all n=2
+pool.capture_validation::record_basic 9.77  all n=2
+pool.capture_validation::validation_proof 0.02  all n=2
+pool.doc 14.28  quiet n=46
+pool.doc::ai_surface 0.17  quiet n=42
+pool.doc::ambience 0.96  quiet n=10
+pool.doc::anim 0.20  quiet n=42
+pool.doc::avatar_verbs 0.96  quiet n=42
+pool.doc::components 0.19  quiet n=41
+pool.doc::default_floor 0.57  quiet n=45
+pool.doc::drawers 0.02  quiet n=43
+pool.doc::graph_edit 0.10  quiet n=41
+pool.doc::introspection 0.18  quiet n=44
+pool.doc::light_bindings 0.23  quiet n=42
+pool.doc::locomotion 0.29  quiet n=42
+pool.doc::looks 0.32  quiet n=41
+pool.doc::mannequin 0.66  quiet n=42
+pool.doc::memory 1.31  quiet n=44
+pool.doc::metadata 0.06  quiet n=42
+pool.doc::mobility 0.38  quiet n=42
+pool.doc::multiselect 0.43  quiet n=41
+pool.doc::multiselect_edit 0.34  quiet n=43
+pool.doc::node_rename 0.18  quiet n=41
+pool.doc::ogre_samples 0.01  quiet n=43
+pool.doc::photon 0.54  quiet n=42
+pool.doc::project_name_rules 0.67  quiet n=4
+pool.doc::refusals 0.14  quiet n=43
+pool.doc::scale_lock 0.19  quiet n=43
+pool.doc::scene_bounds 0.14  quiet n=41
+pool.doc::scene_query 0.15  quiet n=40
+pool.doc::static_semantics 0.45  quiet n=42
+pool.doc::tier_table_atom 0.09  quiet n=40
+pool.doc::window_fits 0.00  quiet n=43
+pool.doc::world_modes 0.46  quiet n=41
+pool.doc::world_reach 0.19  quiet n=42
+pool.doc_assets 12.21  quiet n=38
+pool.doc_assets::asset_delete 0.68  quiet n=40
+pool.doc_assets::avatar_assets 1.06  quiet n=37
+pool.doc_assets::blend_verbs 0.01  quiet n=37
+pool.doc_assets::clipboard 0.25  quiet n=39
+pool.doc_assets::clipboard_assets 0.13  quiet n=38
+pool.doc_assets::clipboard_xproject 0.43  quiet n=39
+pool.doc_assets::decals 0.16  quiet n=38
+pool.doc_assets::export_raw 0.11  quiet n=38
+pool.doc_assets::export_web 0.15  quiet n=38
+pool.doc_assets::folders 0.22  quiet n=37
+pool.doc_assets::glb_textures 0.19  quiet n=38
+pool.doc_assets::image_material 0.31  quiet n=37
+pool.doc_assets::import_pipeline 0.05  quiet n=39
+pool.doc_assets::import_settings 0.17  quiet n=38
+pool.doc_assets::live_textures 0.19  quiet n=38
+pool.doc_assets::material_refusal 0.10  quiet n=37
+pool.doc_assets::mesh_roundtrip 0.20  quiet n=38
+pool.doc_assets::node_export 0.18  quiet n=40
+pool.doc_assets::pinned_reopen 0.27  quiet n=38
+pool.doc_assets::selection_verbs 0.01  quiet n=37
+pool.doc_assets::uv_tiling 0.14  quiet n=37
+pool.doc_assets::video 1.08  quiet n=38
+pool.doc_assets::video_texture 0.85  quiet n=38
+pool.editor 29.02  quiet n=46
+pool.editor::add_primitive 0.55  quiet n=46
+pool.editor::build_scene 1.67  quiet n=46
+pool.editor::fragments 0.65  quiet n=45
+pool.editor::image_plane 0.32  quiet n=43
+pool.editor::material_drop 5.02  quiet n=43
+pool.editor::new_scene 4.76  quiet n=46
+pool.editor::physics 1.39  quiet n=45
+pool.editor::primitives 0.89  quiet n=44
+pool.editor::tier 0.92  quiet n=44
+pool.editor::undo_macro 1.63  quiet n=45
+pool.editor_view 123.87  quiet n=50
+pool.editor_view::capture_steps 27.44  quiet n=6
+pool.editor_view::close_shot 7.98  quiet n=8
+pool.editor_view::editor_controls 21.70  quiet n=50
+pool.editor_view::engine_arms 0.59  quiet n=24
+pool.editor_view::full_surface 5.31  quiet n=50
+pool.editor_view::gizmo_rings 12.06  quiet n=45
+pool.editor_view::hierarchy_visibility 7.60  quiet n=48
+pool.editor_view::multiselect_outline 12.95  quiet n=45
+pool.editor_view::play_select 5.64  quiet n=48
+pool.editor_view::presentation_state 9.21  quiet n=46
+pool.editor_view::render_stats 4.65  quiet n=49
+pool.editor_view::scene_issues 7.64  quiet n=49
+pool.gi_movers 70.56  quiet n=46
+pool.gi_movers::dirty_mirror 6.39  quiet n=46
+pool.gi_movers::drag_mover 3.68  quiet n=46
+pool.gi_movers::mobility_play 9.48  quiet n=46
+pool.gi_movers::movable_lamp_rest 10.96  quiet n=46
+pool.gi_movers::ray_row 8.12  quiet n=44
+pool.gi_movers::ssr_march 3.50  quiet n=44
+pool.gi_movers::surface_cards 1.14  quiet n=44
+pool.gi_verbs 269.25  quiet n=48
+pool.gi_verbs::contact_band 68.15  quiet n=46
+pool.gi_verbs::field_every_tier 15.48  quiet n=46
+pool.gi_verbs::gather_default 10.06  quiet n=46
+pool.gi_verbs::gather_row 1.07  quiet n=45
+pool.gi_verbs::gi_bounds 5.83  quiet n=47
+pool.gi_verbs::gi_ddgi 6.69  quiet n=45
+pool.gi_verbs::gi_status 18.72  quiet n=47
+pool.gi_verbs::gi_voxel_store 6.05  quiet n=47
+pool.gi_verbs::offscreen_contract 26.76  quiet n=45
+pool.gi_verbs::page_gi 10.19  quiet n=46
+pool.gi_verbs::pcc_budget 21.69  quiet n=46
+pool.gi_verbs::planar_records 16.44  quiet n=48
+pool.gi_verbs::probe_nan_view 8.19  quiet n=47
+pool.gi_verbs::ssr_off_ray_tier 4.81  quiet n=46
+pool.gi_verbs::tier 1.08  quiet n=46
+pool.player 38.31  quiet n=50
+pool.player::fixed_clock 5.97  quiet n=49
+pool.player::play_fly 0.74  quiet n=44
+pool.player::player_verbs 1.09  quiet n=50
+pool.player::possession 3.39  quiet n=48
+pool.player::scene_switch_after_play 1.93  quiet n=44
+pool.player::space_switch 14.38  quiet n=47
+pool.runner 39.30  quiet n=48
+pool.shading 85.23  quiet n=46
+pool.shading::bake_pipeline 3.93  quiet n=44
+pool.shading::custom_piece 2.49  quiet n=45
+pool.shading::detail_layers 5.33  quiet n=47
+pool.shading::live_material_apply 3.57  quiet n=14
+pool.shading::material_preview 4.63  quiet n=47
+pool.shading::pbr_materials 6.19  quiet n=47
+pool.shading::pbs_knobs 5.98  quiet n=44
+pool.shading::shader_time 3.76  quiet n=14
+pool.shading::shading_model 7.91  quiet n=45
+pool.shading::workflow_grid 3.55  quiet n=47
+pool.shading::workflows 9.39  quiet n=44
+pool.shading_live 104.54  quiet n=44
+pool.shading_live::cube_shade 42.03  quiet n=44
+pool.shading_live::duplicate_material 1.34  quiet n=44
+pool.shading_live::live_texture_pixels 6.31  quiet n=42
+pool.shading_live::particles 14.35  quiet n=45
+pool.shading_live::reflection_map 11.74  quiet n=44
+pool.shading_live::shader_thumbnail 0.98  quiet n=42
+pool.vr_noruntime 12.77  quiet n=49
+pool.vr_noruntime::player_vr 0.28  quiet n=48
+pool.vr_noruntime::vr_gizmo 0.41  quiet n=48
+pool.vr_noruntime::vr_hands 0.34  quiet n=48
+pool.vr_noruntime::vr_input_headless 1.06  quiet n=49
+pool.vr_noruntime::vr_teleport 0.42  quiet n=49
+pool.vr_noruntime::vr_verbs 0.75  quiet n=47
+pool.vr_session 103.05  quiet n=48
+pool.vr_session::photon_view 6.76  quiet n=49
+pool.vr_session::player_session 20.73  quiet n=49
+pool.vr_session::sample_open 8.61  quiet n=48
+pool.vr_session::verbs_session 37.17  quiet n=48
+pool.vr_validation 74.02  all n=2
+pool.vr_validation::validation_proof 0.02  all n=2
+pool.vr_validation::verbs_session 33.62  all n=2
+pool.world_light 242.26  quiet n=45
+pool.world_light::light_masks 11.02  quiet n=43
+pool.world_light::screenshot_grades 69.41  quiet n=44
+pool.world_light::shadow_fit_receivers 99.94  quiet n=27
+pool.world_light::sun_contact 10.86  quiet n=42
+pool.world_light::sun_light 33.09  quiet n=43
+pool.world_sky 179.19  quiet n=47
+pool.world_sky::clouds_2d 40.64  quiet n=45
+pool.world_sky::default_ground 51.77  quiet n=45
+pool.world_sky::height_fog 11.48  quiet n=44
+pool.world_sky::planar 10.86  quiet n=44
+pool.world_sky::sky_ibl_churn 19.22  quiet n=45
+pool.world_sky::sky_name_recycle 6.12  quiet n=43
+pool.world_sky::world_rows_follow 0.89  quiet n=43
+pool.world_sky::world_vr 7.17  quiet n=43
+preview.lifecycle 1.86  quiet n=45
+rigperf.benchmark 2.04  all n=2
+rigperf.smoke 1.47  quiet n=49
+samples.archive_fidelity.Tornado 48.59  quiet n=6
+samples.cleanstart.Matcaps 47.78  quiet n=50
+samples.cleanstart.Mirror_Room 46.42  quiet n=50
+samples.cleanstart.Particles 52.59  quiet n=46
+samples.cleanstart.Physics 45.01  quiet n=45
+samples.cleanstart.Showroom 43.67  quiet n=45
+samples.cleanstart.Showroom_2 41.44  quiet n=48
+samples.cleanstart.Skeletal_Animation 45.50  quiet n=44
+samples.cleanstart.Tornado 46.08  quiet n=18
+samples.cleanstart.World_Background 55.08  quiet n=46
+samples.freshhome.Matcaps 0.01  quiet n=54
+samples.freshhome.Mirror_Room 0.01  quiet n=54
+samples.freshhome.Particles 0.01  quiet n=54
+samples.freshhome.Physics 0.01  quiet n=54
+samples.freshhome.Showroom 0.01  quiet n=54
+samples.freshhome.Showroom_2 0.01  quiet n=54
+samples.freshhome.Skeletal_Animation 0.01  quiet n=54
+samples.freshhome.Tornado 0.01  quiet n=25
+samples.freshhome.World_Background 0.01  quiet n=54
+samples.freshhome.session 0.01  quiet n=54
+samples.mirror_room_boots 322.06  quiet n=31
+samples.session 84.45  quiet n=47
+scale.cpu_walks 15.07  quiet n=46
+scale.gpu_coverage 11.99  quiet n=25
+scale.library 43.00  quiet n=46
+scale.library.fixture 0.06  quiet n=101
+scale.occlusion 45.24  quiet n=44
+scale.shadow_cut 27.18  quiet n=48
+scene.reopen_fidelity 74.07  quiet n=45
+scene.reopen_fidelity.fresh_home 0.01  quiet n=4
+scenegraph.benchmark 283.84  hand: a recorded stage-close run (spikes/) (no PASS run in the log)
+scenegraph.smoke 9.43  quiet n=47
+scripting.e2e.animation_assets 13.91  quiet n=39
+scripting.e2e.animation_assets.fresh_home 0.01  quiet n=39
+scripting.e2e.animation_assets_import 4.61  quiet n=37
+scripting.e2e.animation_assets_import.fresh_home 0.01  quiet n=39
+scripting.e2e.assets_scope 8.33  quiet n=37
+scripting.e2e.assets_scope.fresh_home 0.00  quiet n=40
+scripting.e2e.clip_ref 7.19  quiet n=23
+scripting.e2e.clip_ref.fresh_home 0.01  quiet n=13
+scripting.e2e.editor_controls.timing 60.35  all n=2
+scripting.e2e.lattice_placement 124.62  quiet n=45
+scripting.e2e.material_bundle 10.06  quiet n=39
+scripting.e2e.material_bundle.fresh_home 0.01  quiet n=40
+scripting.e2e.material_bundle_import 4.13  quiet n=37
+scripting.e2e.material_bundle_import.fresh_home 0.01  quiet n=40
+scripting.e2e.material_share 9.46  quiet n=40
+scripting.e2e.material_share.fresh_home 0.01  quiet n=40
+scripting.e2e.material_share_import 4.37  quiet n=37
+scripting.e2e.material_share_import.fresh_home 0.01  quiet n=40
+scripting.e2e.material_tabs 50.50  quiet n=51
+scripting.e2e.material_tabs.fresh_home 0.01  quiet n=51
+scripting.e2e.material_tabs.relaunch 6.22  quiet n=47
+scripting.e2e.ogre_ports 68.21  quiet n=46
+scripting.e2e.one_asset 7.40  quiet n=37
+scripting.e2e.one_asset.fresh_home 0.00  quiet n=42
+scripting.e2e.perf_capture_frames 25.00  quiet n=41
+scripting.e2e.perf_capture_frames.fresh_home 0.01  quiet n=4
+scripting.e2e.photon_pin_read 52.83  all n=2
+scripting.e2e.player_bounce 27.89  quiet n=47
+scripting.e2e.player_no_editor 19.13  quiet n=48
+scripting.e2e.preset_apply 10.99  quiet n=37
+scripting.e2e.preset_apply.fresh_home 0.01  quiet n=41
+scripting.e2e.preset_edit 9.66  quiet n=35
+scripting.e2e.preset_edit.fresh_home 0.01  quiet n=40
+scripting.e2e.preset_seed_boot 26.67  quiet n=44
+scripting.e2e.preset_seed_boot.fresh_home 0.01  quiet n=53
+scripting.e2e.preset_seed_boot.user_first 8.39  quiet n=52
+scripting.e2e.preset_seed_race 35.17  quiet n=45
+scripting.e2e.preset_seed_race.fresh_home 0.01  quiet n=50
+scripting.e2e.pump_defer 30.92  quiet n=18
+scripting.e2e.pump_defer.fresh_home 0.02  quiet n=4
+scripting.e2e.ray_row_norays 23.59  quiet n=40
+scripting.e2e.shadow_cache_probes 46.73  quiet n=47
+scripting.e2e.shadow_cache_probes.fresh_home 0.01  quiet n=51
+scripting.e2e.shipped_assets 11.82  quiet n=47
+scripting.e2e.shipped_assets.fresh_home 0.01  quiet n=13
+scripting.e2e.sky_swap_transient 37.57  quiet n=47
+scripting.e2e.sky_swap_transient.fresh_home 0.01  quiet n=52
+scripting.e2e.ssr_mirror 58.87  quiet n=44
+scripting.e2e.store_root 3.76  quiet n=38
+scripting.e2e.store_root.fresh_home 0.01  quiet n=40
+scripting.e2e.tex_ref 9.96  quiet n=21
+scripting.e2e.tex_ref.fresh_home 0.01  quiet n=13
+scripting.e2e.texture_missing 26.12  quiet n=46
+scripting.e2e.texture_missing.fresh_home 0.02  quiet n=4
+scripting.e2e.thumbnails_order 28.34  quiet n=43
+scripting.e2e.thumbnails_order.fresh_home 0.01  quiet n=51
+scripting.e2e.tray_panel 90.41  quiet n=46
+scripting.e2e.tray_panel.fresh_home 0.01  quiet n=53
+scripting.engine 0.67  quiet n=34
+scripting.freshhome.ogre_ports 0.01  quiet n=53
+scripting.live 10.56  quiet n=49
+scripting.live_off 11.39  quiet n=49
+services.animation_undo 0.03  quiet n=46
+services.clipboard 0.08  quiet n=29
+services.core 0.03  quiet n=28
+services.looks 0.02  quiet n=28
+services.memory 0.10  quiet n=46
+services.ogre_samples 0.01  quiet n=25
+services.scene_stats 0.04  quiet n=46
+services.selection_set 0.04  quiet n=46
+settings.store 0.56  quiet n=12
+shader.async_after_open 74.82  all n=8
+shader.async_soak 104.91  quiet n=3
+shader.live_compiles 91.32  quiet n=18
+shader.sample_opens_quiet 184.97  quiet n=4
+shadercache.app 83.66  quiet n=44
+shadercache.container 50.78  quiet n=40
+shadercache.container_asan 344.68  all n=2
+shadercache.engine_pipelines 11.27  quiet n=36
+shadercache.warmup 1.60  quiet n=46
+shadercache.warmup_pass 1.73  quiet n=45
+shadergraph.ao_removed 0.04  quiet n=31
+shadergraph.asset_widget_db 0.04  quiet n=31
+shadergraph.bake_output 1.56  quiet n=32
+shadergraph.baker_parity 0.28  quiet n=31
+shadergraph.emitter_parity 3.14  quiet n=47
+shadergraph.emitter_pieces 0.19  quiet n=40
+shadergraph.fuzzy_search 0.00  quiet n=24
+shadergraph.node_regressions 1.40  quiet n=32
+shadergraph.panel_migration 0.12  quiet n=32
+shadergraph.pbr_evaluator 2.60  quiet n=32
+shadergraph.selection 0.06  quiet n=31
+shadow.atlas_binding 1.76  quiet n=44
+shadow.atlas_rebuilds 2.38  quiet n=39
+shadow.atom_cut 8.61  quiet n=46
+shadow.atom_parity 18.84  quiet n=44
+shadow.cache_kinds 4.38  quiet n=42
+shadow.caster_first_frame 8.71  quiet n=46
+shadow.cutout_caster 376.77  quiet n=8
+shadow.cutout_caster.churn 758.71  all n=2
+shadow.helper_casters 1.55  quiet n=26
+shadow.layout 0.01  quiet n=44
+shadow.stock_lod 1.99  quiet n=42
+shadow.two_sided_caster 319.13  quiet n=8
+shadow.two_sided_caster.churn 658.36  all n=2
+shell.contract 0.02  quiet n=24
+shortcuts.registry 0.02  quiet n=24
+skeletal.clip_extract 0.05  quiet n=45
+skeletal.cpu_skinning 1.58  quiet n=44
+skeletal.gpu_clips 1.52  quiet n=44
+skeletal.gpu_parity 10.31  quiet n=43
+skeletal.library_import 0.05  quiet n=45
+skeletal.multi_avatar 0.04  quiet n=45
+skeletal.rig_translation 1.46  quiet n=44
+skeletal.share 0.02  quiet n=43
+skeletal.share_asan 0.04  quiet n=43
+skeletal.union_rig 0.05  quiet n=45
+sky.aerial_perspective 2.50  quiet n=43
+sky.atmosphere 3.42  quiet n=41
+sky.env_layout 1.90  quiet n=43
+sky.sun_transmittance 1.39  quiet n=43
+sky.sun_transmittance_asan 8.79  quiet n=42
+sockets.document 0.05  quiet n=47
+sockets.e2e 40.63  quiet n=46
+sockets.e2e.fresh_home 0.01  quiet n=4
+sockets.render 1.53  quiet n=47
+sockets.tags 0.05  quiet n=48
+source.assimp_import_only 0.13  quiet n=58
+source.bake_key_guard 0.04  quiet n=57
+source.db_pointers_initialised 0.02  quiet n=58
+source.fork_stamp 0.12  quiet n=57
+source.gate_scope_rules 50.52  quiet n=55
+source.gpu_rows_closure 10.04  quiet n=52
+source.material_page_identity 0.01  quiet n=58
+source.member_init 9.64  quiet n=60
+source.no_fixed_gi_volume 0.08  quiet n=58
+source.no_glsl_path 0.10  quiet n=57
+source.no_raw_transaction 0.01  quiet n=59
+source.notices_coverage 0.02  quiet n=58
+source.one_fonticons 0.05  quiet n=58
+source.one_material_resolve 0.20  quiet n=63
+source.one_readfile 0.01  quiet n=58
+source.panel_rows_guarded 0.03  quiet n=58
+source.photon_never_pinned 0.09  all n=2
+source.row_declares_needs 0.35  all n=2
+source.settings_keys 0.21  quiet n=58
+source.shell_boundaries 0.26  quiet n=58
+source.testing_rules 0.57  quiet n=56
+ssr.edge 1.92  quiet n=40
+ssr.engine 5.82  quiet n=39
+ssr.engine_asan 19.66  quiet n=39
+ssr.rings 1.73  quiet n=38
+test_engine 39.14  quiet n=40
+test_engine_asan 71.07  quiet n=40
+test_engine_recreate 4.18  quiet n=44
+theme.manager 0.08  quiet n=25
+theme.no_raw_sheets 0.05  quiet n=35
+theme.sheets 70.88  quiet n=44
+theme.sheets.fresh_home 0.01  quiet n=4
+theme.style_contracts 0.03  quiet n=26
+threading.freshhome.gi_resolve 0.01  quiet n=52
+threading.freshhome.gi_resolve_serial 0.01  quiet n=52
+threading.freshhome.import_soak 0.01  quiet n=50
+threading.freshhome.mode 0.01  quiet n=51
+threading.freshhome.mode_serial 0.01  quiet n=51
+threading.freshhome.newproject_stall 0.01  quiet n=50
+threading.freshhome.newproject_stall_timing 0.01  quiet n=25
+threading.freshhome.texture_wait_watchdog 0.01  quiet n=46
+threading.gi_resolve 40.99  quiet n=50
+threading.gi_resolve_pixels 0.01  quiet n=47
+threading.gi_resolve_serial 51.52  quiet n=49
+threading.import_soak 42.59  quiet n=50
+threading.import_soak.no_groupless_texture 0.01  quiet n=48
+threading.mode 46.92  quiet n=50
+threading.mode_pixels 0.01  quiet n=48
+threading.mode_serial 54.19  quiet n=50
+threading.newproject_stall 38.65  quiet n=50
+threading.newproject_stall.no_groupless_texture 0.01  quiet n=48
+threading.newproject_stall.timing 14.72  hand: its TESTING-DEBTS-1 dev run (the fixture: a wipe) (no PASS run in the log)
+threading.staging_race 1.63  quiet n=47
+threading.texture_wait_watchdog 23.25  quiet n=44
+thumbnails.engine 1.90  quiet n=42
+thumbnails.shader 1.76  quiet n=45
+thumbnails.studio_env 1.97  quiet n=43
+thumbnails.sweep 0.09  quiet n=46
+ui.column_law 30.65  quiet n=46
+ui.column_law.fresh_home 0.01  quiet n=4
+ui.components 1.95  quiet n=46
+ui.components.timing 2.35  all n=2
+ui.db_handles 0.12  quiet n=47
+ui.dock_state 0.08  quiet n=25
+ui.drag_owner 0.02  quiet n=23
+ui.engine_view_winid 1.58  quiet n=42
+ui.hierarchy_root 0.05  quiet n=47
+ui.import_dialog 0.07  quiet n=28
+ui.light_channels 0.02  quiet n=23
+ui.material_drag 28.78  quiet n=45
+ui.material_drag.fresh_home 0.01  quiet n=4
+ui.material_panel 0.25  quiet n=29
+ui.mcp_prefs 0.04  quiet n=25
+ui.media_lazy 0.95  quiet n=28
+ui.new_project_dialog 0.03  quiet n=25
+ui.panel_lifetime 0.09  quiet n=46
+ui.panel_undo 0.22  quiet n=46
+ui.photon_panel 2.92  quiet n=46
+ui.presets_favorites 0.02  quiet n=32
+ui.project_tile 2.23  quiet n=25
+ui.properties_filter 0.59  quiet n=45
+ui.properties_filter.timing 1.15  all n=2
+ui.properties_tabs 0.40  quiet n=46
+ui.properties_width 0.96  quiet n=46
+ui.property_anim 0.02  quiet n=28
+ui.selection_cost 5.36  quiet n=49
+ui.selection_cost.timing 5.12  hand: its push row's dev run (same binary, TESTING-CLEANUP-2) (no PASS run in the log)
+ui.shot_aspect 25.29  quiet n=50
+ui.shot_aspect.fresh_home 0.01  quiet n=4
+ui.show_walk 0.24  quiet n=46
+ui.space_docks 50.32  quiet n=45
+ui.space_docks.fresh_home 0.01  quiet n=4
+ui.toast 0.51  quiet n=23
+ui.tree_multiselect 0.06  quiet n=47
+ui.tree_reselect 0.06  quiet n=47
+ui.tree_scroll 0.06  quiet n=47
+ui.vr_panel 0.05  quiet n=46
+ui.window_minimum 37.05  quiet n=42
+ui.window_minimum.fresh_home 0.01  quiet n=4
+vr.eye_grade 137.48  quiet n=41
+vr.eye_grade.fresh_home 0.01  quiet n=3
+vr.frame_budget 127.59  all n=2
+vr.frame_budget.fresh_home 0.01  quiet n=4
+vr.gather_stereo 77.24  quiet n=43
+vr.grab_maths 0.00  quiet n=43
+vr.input_session 44.02  quiet n=54
+vr.input_session.fresh_home 0.01  quiet n=3
+vr.mirror_live 53.86  quiet n=46
+vr.mirror_live.fresh_home 0.01  quiet n=3
+vr.no_picture_start 51.09  quiet n=49
+vr.no_picture_start.fresh_home 0.01  quiet n=3
+vr.session 63.49  quiet n=44
+vr.session_undithered 6.51  quiet n=45
+vr.start_broken 34.51  quiet n=19
+vr.start_broken.fresh_home 0.01  quiet n=3
+vr.start_press 43.46  quiet n=11
+vr.start_press.fresh_home 0.01  quiet n=3
+vr.start_recovery 33.76  quiet n=21
+vr.start_recovery.fresh_home 0.01  quiet n=3
+vr.warmup 39.03  quiet n=44
+vr.warmup.fresh_home 0.01  quiet n=48
+vr.warmup.timing 41.75  all n=2
+vr.warmup.timing.fresh_home 0.01  all n=2
+vr.warmup_control 38.88  quiet n=43
+vr.warmup_control.fresh_home 0.01  quiet n=48

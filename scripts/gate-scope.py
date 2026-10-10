@@ -7,7 +7,7 @@
     scripts/gate-scope.sh --solo <suite> [...] [--times 3]     # the flake protocol, logged
     scripts/gate-scope.sh --attribute <row>[,<row>...] --batch <tag> --candidate <rc tree>:<tip> \
         --control <rc-base>:<d-build tip> --display :NN --lanes <lane>:<worktree>:<tip> [...]   # a batch red
-    scripts/gate-scope.sh --record-times                       # gate-times.txt from the run log
+    scripts/gate-scope.sh --record-times | --price-check [--build <dir>]   # the prices: re-priced / checked
     scripts/gate-scope.sh --merge-tier [-j N] | --merge-tier-serial | --stage-close-tier | --gate-jobs
 
 A lane runs everything its change can reach and nothing it cannot — read from the build and
@@ -797,25 +797,104 @@ def classify_rows(inv, graph, build):
 TIMES_FILE = os.path.join(ROOT, "scripts", "gate-times.txt")
 
 
-def record_times():
-    """Refresh scripts/gate-times.txt from THE RUN LOG (T8): each suite's median PASS seconds
-    over the last 14 days of gate runs, every tier and lane — never one gate's output."""
-    times = gate_runlog.median_times(days=14)
-    if not times:
-        sys.stderr.write(f"gate-scope: the run log ({gate_runlog.log_dir()}) holds no PASS record "
-                         f"in the last 14 days — nothing to record\n")
-        sys.exit(2)
-    old = {}
-    if os.path.exists(TIMES_FILE):
-        for line in open(TIMES_FILE):
-            p = line.split()
-            if len(p) == 2 and not line.startswith("#"): old[p[0]] = p[1]
+# THE PRICES (TESTING-CLEANUP-2B item 6). scripts/gate-times.txt prices EVERY row of the MERGE and STAGE-CLOSE
+# tiers (a gate's estimate, the stage-close batch's plan, ctest's COST order): one line per row, `<row> <seconds>
+# <source>`, the source NAMED — `quiet n=<k>` (the median of the row's PASS runs with no sibling ctest, >= 3 of
+# them: THE price), `all n=<k>` (fewer quiet runs: the median of every PASS run), `fixture` (a home wipe), or the
+# text a hand-priced line carried. The run log read is testing/runs AND testing/runs-archive, from PRICE_SINCE:
+# before GATE-SPEED-1's L2 (2026-10-01 13:10) a record's seconds still held its admission wait. `--price-check`
+# is the self-check: it lists every tier row without a price and fails while one is (source.testing_rules R2).
+PRICE_SINCE = "2026-10-01T13:10"
+
+
+def parse_times(path=None):
+    """row -> (seconds, source text) from gate-times.txt (a data line: `<row> <seconds> [<source>…]`)."""
+    out = {}
+    try:
+        for line in open(path or TIMES_FILE):
+            if line.startswith("#"): continue
+            parts = line.split(None, 2)
+            if len(parts) >= 2:
+                try: out[parts[0]] = (float(parts[1]), parts[2].strip() if len(parts) > 2 else "")
+                except ValueError: pass
+    except OSError:
+        pass
+    return out
+
+
+def run_log_prices(since=PRICE_SINCE):
+    """row -> (median PASS seconds, 'quiet n=<k>' | 'all n=<k>') over the run log and its archive since `since`.
+    The quiet median when >= gate_runlog.QUIET_MIN quiet runs exist (box.other_ctests == 0), else every run's."""
+    import glob, statistics
+    d = gate_runlog.log_dir()
+    files = glob.glob(os.path.join(d, "*.jsonl")) + glob.glob(os.path.join(os.path.dirname(d), "runs-archive", "**",
+                                                                           "*.jsonl"), recursive=True)
+    acc = collections.defaultdict(list)
+    for f in files:
+        for line in open(f, errors="replace"):
+            try: r = json.loads(line)
+            except ValueError: continue
+            if r.get("verdict") != "PASS" or r.get("seconds") is None or r.get("kind") or (r.get("ts") or "") < since:
+                continue
+            k = r["suite"] if not r.get("arm") else f"{r['suite']}::{r['arm'].split('.', 1)[-1]}"
+            acc[k].append((r["seconds"], (r.get("box") or {}).get("other_ctests") == 0))
+    out = {}
+    for k, v in acc.items():
+        q = [x for x, quiet in v if quiet]
+        if len(q) >= gate_runlog.QUIET_MIN:
+            out[k] = (statistics.median(q), f"quiet n={len(q)}")
+        else:
+            out[k] = (statistics.median([x for x, _ in v]), f"all n={len(v)}")
+    return out
+
+
+def tier_rows(inv):
+    """The rows the MERGE and STAGE-CLOSE tiers run: every registered row but the target tests."""
+    return sorted(n for n, t in inv.items() if not (t["labels"] & TARGET_LABELS))
+
+
+def unpriced(inv, prices=None):
+    prices = parse_times() if prices is None else prices
+    return [n for n in tier_rows(inv) if n not in prices]
+
+
+def record_times(build):
+    """Re-price scripts/gate-times.txt (item 6's rule above) for every tier row of `build`'s registration: the run
+    log's price where the row has PASS runs, else the line it had, else a fixture's wipe; a row with none of these
+    is left unpriced — `--price-check` names it."""
+    inv = load_inventory(build)
+    log = run_log_prices()
+    old = parse_times()
+    rows = tier_rows(inv)
+    out, kinds = {}, collections.Counter()
+    for n in rows:
+        if n in log:
+            out[n] = log[n]; kinds[log[n][1].split()[0]] += 1
+        elif n in old:
+            out[n] = old[n]; kinds["kept"] += 1
+        elif inv[n].get("fixture_setup"):
+            out[n] = (0.01, "fixture (a home wipe; no PASS record)"); kinds["fixture"] += 1
+    # a pool's ARMS keep their own prices (`<pool>::<arm>`: a partial pool's estimate sums them)
+    for k, v in list(log.items()) + [kv for kv in old.items() if kv[0] not in log]:
+        r_, _, arm = k.partition("::")
+        if arm and r_ in inv and arm in inv[r_]["arms"]:
+            out[k] = v; kinds["arm"] += 1
+    head = [l for l in open(TIMES_FILE) if l.startswith("#")] if os.path.exists(TIMES_FILE) else []
     with open(TIMES_FILE, "w") as f:
-        f.write("# suite seconds — the run log's median PASS time over 14 days "
-                "(gate-scope.sh --record-times; testing/runs/README.md)\n")
-        for n in sorted(set(old) | set(times)):
-            f.write(f"{n} {times[n]:.2f}\n" if n in times else f"{n} {old[n]}\n")
-    print(f"recorded {len(times)} suite times from the run log into {os.path.relpath(TIMES_FILE, ROOT)}")
+        f.writelines(head)
+        for n in sorted(out):
+            sec, src = out[n]
+            f.write(f"{n} {sec:.2f}  {src}\n" if src else f"{n} {sec:.2f}\n")
+    gone = sorted(set(old) - set(out))
+    n_rows = sum(1 for n in out if "::" not in n)
+    print(f"priced {n_rows} of {len(rows)} tier rows (+{len(out) - n_rows} pool-arm prices) into "
+          f"{os.path.relpath(TIMES_FILE, ROOT)}: "
+          + ", ".join(f"{k} {v}" for k, v in kinds.most_common())
+          + (f"; dropped {len(gone)} line(s) that are no row of this build: {' '.join(gone[:12])}" if gone else ""))
+    left = unpriced(inv, out)
+    if left:
+        print(f"UNPRICED ({len(left)}): " + " ".join(left))
+    return 1 if left else 0
 
 
 COST_SOURCE = {}   # suite -> "quiet" | "all" (the run log's median, gate_runlog.median_times) | "file"
@@ -825,12 +904,8 @@ def load_costs():
     """Per-suite seconds: scripts/gate-times.txt overlaid with the run log's medians (fresher; the
     quiet-box median where >= 3 records ran with no sibling ctest). COST_SOURCE says which."""
     costs = {}
-    if os.path.exists(TIMES_FILE):
-        for line in open(TIMES_FILE):
-            if line.startswith("#"): continue
-            parts = line.split()
-            if len(parts) == 2:
-                costs[parts[0]] = float(parts[1]); COST_SOURCE[parts[0]] = "file"
+    for n, (sec, _src) in parse_times().items():
+        costs[n] = sec; COST_SOURCE[n] = "file"
     costs.update(gate_runlog.median_times(days=14, sources=COST_SOURCE))
     return costs
 
@@ -2379,7 +2454,11 @@ def main():
                     help="the run log's tier name (default: scoped; scoped-fallback / scoped-tier when a scoped "
                          "gate runs the whole tier)")
     ap.add_argument("--record-times", action="store_true",
-                    help="refresh scripts/gate-times.txt from the run log (median PASS seconds, 14 days)")
+                    help="re-price scripts/gate-times.txt: every tier row of --build, the run log's (and its archive's) "
+                         "quiet median PASS seconds, the source named on each line")
+    ap.add_argument("--price-check", action="store_true",
+                    help="the prices' self-check: list every MERGE / STAGE-CLOSE tier row of --build with no line in "
+                         "scripts/gate-times.txt; exit 1 while one is")
     ap.add_argument("--solo", metavar="SUITE", nargs="+",
                     help="the flake protocol: run each suite alone --times times, logged as retries")
     ap.add_argument("--times", type=int, default=3)
@@ -2443,8 +2522,13 @@ def main():
         a.run = True
     if a.gate_jobs:
         print(GATE_JOBS); return
-    if a.record_times:
-        record_times(); return
+    if a.record_times or a.price_check:
+        b_ = resolve_build(a.build)
+        if a.record_times:
+            sys.exit(record_times(b_))
+        left = unpriced(load_inventory(b_))
+        print(f"gate-times.txt: {len(left)} unpriced tier row(s)" + (": " + " ".join(left) if left else " — clean"))
+        sys.exit(1 if left else 0)
     if a.merge_tier:
         print(merge_tier(a.jobs)); return
     if a.merge_tier_serial:
