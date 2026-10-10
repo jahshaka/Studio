@@ -11,6 +11,7 @@ For more information see the LICENSE file
 
 #include "app/cli/scriptrunner.h"
 #include "services/forcedexit.h"
+#include "services/meshbakestore.h"
 
 #include <cstdio>
 #include <cstdlib>
@@ -69,6 +70,12 @@ int finalizeAppExit(int rc)
     // be spent finishing a seed nobody is waiting for — and a forced exit is
     // how a session log loses its close bracket.
     MaterialPresetSeeder::instance().requestAbort();
+
+    // THE BAKES TOO (STAGE-CLOSE-TRIAGE-1 F5): the library sweep and an import's async bakes stop
+    // between jobs and the one in flight is joined here — the window-close path does the same
+    // (ShellLifecycle) — so a run that ends during a multi-model paste waits one job, never the rest
+    // of it and never the pool's 5 s forced exit for work nobody will commit.
+    MeshBakeStore::stopBackgroundRebuild();
 
     // The engine borrows Qt's X display: release it before QApplication goes away.
     EngineHost::instance().shutdown();
