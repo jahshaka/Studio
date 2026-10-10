@@ -55,14 +55,15 @@ if(JAHSHAKA_ASAN)
     # LeakSanitizer off for the same reason tests/engine turns it off: the only
     # leaks it finds are inside libdbus-1, reached from the Vulkan loader's
     # device-select layer. Use-after-free / overflow detection is the point.
-    # LABEL `shadercache-attack`, NOT `shadercache` (TEST_GATE_AUDIT.md §5
-    # step 7). The merge tier excludes this label; it used to exclude
-    # `shadercache`, which took shadercache.app, .warmup and .warmup_pass — 35 s
-    # of real product contract — down with the 572 s twin. This row is the only
-    # one that costs minutes, so it is the only one that carries the label.
+    # A STAGE-CLOSE ROW (TESTING-CLEANUP-2B item 11; docs/TESTING_GATE.md §1d): minutes of one ASan process
+    # (56 engine cycles, 18 of them re-seeds; the run log's stage-close runs 225 / 465 s), so it leaves the
+    # MERGE and PUSH tiers for the stage-close batch like every such row, and rides a scoped gate only
+    # through its own subject (tests/shadercache, or the cache container: gate-scope.py STAGE_CLOSE_SUBJECTS).
+    # Its own attack label — a second spelling of "not in the merge tier" — is retired; the row
+    # keeps `shadercache` (its family: shadercache.app, .warmup and .warmup_pass stay in the merge tier).
     set_tests_properties(shadercache.container_asan PROPERTIES
         ENVIRONMENT "${JAH_ASAN_ENGINE_OPTIONS}"
-        TIMEOUT 1500 LABELS "shadercache;shadercache-attack")
+        TIMEOUT 1500 LABELS "shadercache;stage-close")
 endif()
 
 # The application-level contract: the verbs, --clear-shader-cache, and the
