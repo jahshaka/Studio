@@ -2949,6 +2949,8 @@ IEditorViewport::GiStatusInfo EngineSceneViewport::giStatus() const
         ci.lightsInjected = c.lightsInjected;
         ci.lightCapacity = c.lightCapacity;
         ci.lightsOverBudget = c.lightsOverBudget;
+        ci.voxelGathers = qint64(c.voxelGathers);
+        ci.voxelReadingGather = qint64(c.voxelReadingGather);
         out.cascades.append(ci);
     }
     out.cascadeFullRebuilds = quint64(st.cascadeFullRebuilds);

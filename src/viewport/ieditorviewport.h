@@ -816,6 +816,12 @@ public:
             int       lightsInjected = 0;
             int       lightCapacity = 0;
             int       lightsOverBudget = 0;
+            /// WHEN items/attached/voxelLevels/voxelTriangles WERE TAKEN
+            /// (VOXEL-READOUT-1): they are a read-back that lands frames after its
+            /// gather. voxelGathers counts this cascade's gathers, and
+            /// voxelReadingGather is the one the numbers describe (equal = newest).
+            qint64    voxelGathers = 0;
+            qint64    voxelReadingGather = 0;
         };
         QVector<CascadeInfo> cascades;
         /// Whole-chain rebuilds the teleport guards forced, and cascade

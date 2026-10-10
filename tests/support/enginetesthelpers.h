@@ -33,7 +33,8 @@ using namespace jahshaka::engine;
 /// `voxelOverflow` are a read-back of its gather that nothing waits for. A suite
 /// that judges them renders frames until every cascade's reading describes its
 /// newest gather (`voxelReadingGather == voxelGathers`). Returns the frames it
-/// rendered, -1 if `maxFrames` passed first.
+/// rendered, -1 if `maxFrames` passed first - which every caller asserts against
+/// (`>= 0`): a reading that never landed must say so, not fail later as a stale count.
 inline int settleVoxelReadings(Engine *e, Scene *s, int maxFrames = 64)
 {
     for (int f = 0;; ++f) {

@@ -225,7 +225,8 @@ int main()
         CHECK(during != 0, "an object arrives while the arm is waiting");
         enginetest::setNodePosition(scene, during, Vec3(2.0f, 1.0f, 0.0f));
         render(e, 24);
-        enginetest::settleVoxelReadings(e, scene);   // the voxel read-back lands frames late
+        CHECK(enginetest::settleVoxelReadings(e, scene) >= 0,   // the voxel read-back lands frames late
+              "the voxel read-back landed: every cascade's reading is its newest gather's");
         const GiStatus o = scene->giStatus();
         unsigned long long total = 0;
         for (const auto &c : o.cascades) total += c.rebuilds;

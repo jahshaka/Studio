@@ -1857,9 +1857,11 @@ set_tests_properties(gi.voxel_feed PROPERTIES JAHSHAKA_TEST_FRAMES 38)
 
 # gi.readout_async — THE VOXEL READ-BACK NEVER WAITS FOR THE DEVICE
 # (VOXEL-READOUT-1, fork 9ff05ca5d). Over a 120-frame walk that keeps the cascades
-# re-voxelising: no read-back request submits the queue (the sentry, 0), giStatus
-# stays under 1 ms, the feed's readings land, and the newest gather's reading lands
-# within 6 frames once the walk stops. In the gi_chain family like every cascade suite.
+# re-voxelising: no read-back request submits the queue (the sentry, 0), no giStatus
+# call submits it either (Engine::queueSubmissionTag unchanged across every call - a
+# structural no-wait check, no clock), the feed's readings land, and the newest
+# gather's reading lands within 6 frames once the walk stops. In the gi_chain family
+# like every cascade suite.
 add_executable(test_gi_readout_async test_gi_readout_async.cpp)
 set_target_properties(test_gi_readout_async PROPERTIES
     AUTOMOC OFF AUTOUIC OFF AUTORCC OFF

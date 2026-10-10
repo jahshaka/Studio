@@ -14,6 +14,7 @@
 // Phase A: off — nothing bound, no probes.
 // Phase B: plain VCT — VCT bound, still no probes.
 // Phase C: the hybrid — probeCount == the pccGrid product, and pccBound.
+// Phase F: the voxel reading (VOXEL-READOUT-1) - voxelReadingGather catches voxelGathers in frames.
 
 function assert(cond, msg) {
     if (!cond) throw new Error("assert failed: " + msg);
@@ -310,6 +311,30 @@ assert(st.requestedMode === "vct_pcc_hybrid", "the Epic tier selects the VCT+PCC
 assert(st.mode === "vct_pcc_hybrid", "...and the renderer is running it");
 assert(st.pccBound === true && st.probeCount > 0,
        "...with a real probe grid bound to the PBR shader, not a silent fallback");
+
+// ---- phase F: THE VOXEL READING IS A READ-BACK (VOXEL-READOUT-1) ----------
+// A cascade's items/attached/voxelLevels/voxelTriangles are read back from the
+// gather that counted them, and nothing waits for the device, so they land a few
+// frames after it. voxelGathers counts the cascade's gathers and
+// voxelReadingGather is the one those numbers describe: never ahead of it, and
+// once the scene holds still it catches up in FRAMES (the engine's frames in
+// flight + the frame head that requests it; 16 is slack, never a clock).
+var cs = st.cascades;
+assert(cs.length > 0, "the Epic chain has cascades");
+var sane = true;
+for (var i = 0; i < cs.length; ++i)
+    sane = sane && typeof cs[i].voxelGathers === "number" && typeof cs[i].voxelReadingGather === "number" &&
+           cs[i].voxelGathers >= 1 && cs[i].voxelReadingGather <= cs[i].voxelGathers;
+assert(sane, "every cascade reports voxelGathers >= 1 and a voxelReadingGather never ahead of it: " +
+             JSON.stringify(cs.map(function (c) { return [c.voxelReadingGather, c.voxelGathers]; })));
+var caught = -1;
+for (var f = 0; f <= 16 && caught < 0; ++f) {
+    var cur = world.giStatus().cascades, all = cur.length > 0;
+    for (var k = 0; k < cur.length; ++k) all = all && cur[k].voxelReadingGather === cur[k].voxelGathers;
+    if (all) caught = f; else editor.frame(1);
+}
+console.log("the voxel readings caught their newest gather after " + caught + " frame(s)");
+assert(caught >= 0, "every cascade's reading catches up with its newest gather (voxelReadingGather === voxelGathers) within 16 frames");
 
 // ---- teardown ------------------------------------------------------------
 assert(world.gi({ mode: "off" }), "world.gi(off) again");
