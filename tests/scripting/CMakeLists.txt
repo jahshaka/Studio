@@ -1568,6 +1568,8 @@ foreach(_clip clipboard_xproject clipboard_assets)
     configure_file(scripts/e2e_${_clip}.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_${_clip}.js @ONLY)
 endforeach()
 jah_pool_arm(doc_assets clipboard ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_clipboard.js 1 HEADLESS)
+# doc_assets.hold_refused — assets.holdBakes refuses in a process with no test tier (this pool has none).
+jah_pool_arm(doc_assets hold_refused ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_hold_refused.js 1 HEADLESS)
 foreach(_clip clipboard_xproject clipboard_assets)
     jah_pool_arm(doc_assets ${_clip} ${CMAKE_CURRENT_BINARY_DIR}/e2e_${_clip}.js 5 HEADLESS)
 endforeach()

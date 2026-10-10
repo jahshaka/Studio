@@ -393,6 +393,12 @@ int runScriptPool(MainWindow &window, QApplication &app, const QString &scripts,
             armLine(" %s\n", failure.simplified().toUtf8());
         }
 
+        // THE BAKE HOLD IS RELEASED after every arm, green or red (STAGE-CLOSE-TRIAGE-1 read 4): an
+        // arm that throws between assets.holdBakes(true) and (false) would otherwise leave every later
+        // arm's import bake uncommitted — reds charged to innocent arms. Released here, before the
+        // baseline closes the arm's project, so a held landing still finds the nodes it was for.
+        MeshBakeStore::holdCommits(false);
+
         // THE POOL'S OWN BASELINE FIRST (--pool-baseline), after every arm,
         // green or red: what a family's arms change in the process and cannot
         // put back on a red path (a throw skips a script's own tail). Its

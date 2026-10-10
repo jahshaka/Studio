@@ -42,6 +42,7 @@ For more information see the LICENSE file
 #include "services/materialbundle.h"
 #include "services/assettray.h"
 #include "services/assetstorepaths.h"
+#include "services/testtier.h"
 #include "services/meshbakestore.h"
 #include "irisgl/document/assets/mesh.h"
 #include "irisgl/document/assets/vertexbuffer.h"
@@ -515,7 +516,9 @@ QVector<VerbInfo> AssetsApi::verbs() const
           "A TEST HOLD on the import bakes assets.pendingBakes counts: while on, a bake that finished on its "
           "worker is NOT committed (it stays pending, its nodes stay without geometry); holdBakes(false) commits "
           "everything held, in order. For a suite that acts inside the window between a placement and its "
-          "landing (a save, a reopen) without racing the worker. Returns the hold's new state.",
+          "landing (a save, a reopen) without racing the worker. Returns the hold's new state. REFUSED (throws) "
+          "outside a test process — one booted with a test tier — and released by the pool runner after "
+          "every arm.",
           Needs::Document },
     };
 }
@@ -2235,6 +2238,13 @@ QVariantMap AssetsApi::bakeState(const QString &guid)
 
 bool AssetsApi::holdBakes(bool on)
 {
+    // A TEST INSTRUMENT, REFUSED OUTSIDE A TEST PROCESS (read 4): a hold left on stalls every import's
+    // geometry for the session. Only a process booted with a test tier (--test-tier /
+    // JAHSHAKA_TEST_TIER, which every ctest row that boots the app declares) may hold the bakes.
+    if (!testtier::active())
+        return fail(QStringLiteral("assets.holdBakes: a test instrument — only a process booted with a "
+                                   "test tier (--test-tier / %1) may hold the import bakes")
+                        .arg(QLatin1String(testtier::kEnvVar)));
     MeshBakeStore::holdCommits(on);
     return on;
 }
