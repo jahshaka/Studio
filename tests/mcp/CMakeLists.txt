@@ -40,8 +40,10 @@ file(MAKE_DIRECTORY ${_home}/run)
 jah_fresh_home_fixture(mcp.e2e.fresh_home mcpFreshHome "${_home}" LABELS "mcp")
 jah_gpu_row(mcp.e2e CLASS app TIER low NEEDS NONE NEEDS_WHY "the MCP tools answer, the screenshot tool returns an image (no picture claim)" COMMAND test_mcp_e2e
          WORKING_DIRECTORY ${_home}/run)
+# TESTING-CLEANUP-2B item 2: TIMEOUT 340 = 6 x the run log's quiet median 55.7 s (49 quiet PASS runs since 2026-10-01, worst 151.8 s);
+# declared 240 was below the policy, honest only with the +900 s widening (now deleted).
 set_tests_properties(mcp.e2e PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
     FIXTURES_REQUIRED mcpFreshHome
     LABELS "mcp"
-    TIMEOUT 240)
+    TIMEOUT 340)

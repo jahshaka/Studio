@@ -79,7 +79,9 @@ jah_gpu_row(samples.mirror_room_boots CLASS app TIER document
          COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/scripts/mirror_room_boots.sh $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
                  ${CMAKE_CURRENT_SOURCE_DIR}/scripts/mirror_room_boot.js.in ${CMAKE_CURRENT_BINARY_DIR}/mirror-room-boots 10
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
-set_tests_properties(samples.mirror_room_boots PROPERTIES LABELS "scripting;stage-close" TIMEOUT 1800)
+# TESTING-CLEANUP-2B item 2: TIMEOUT 1940 = 6 x the run log's quiet median 322.1 s (31 quiet PASS runs since 2026-10-01, worst 838.8 s);
+# declared 1800 was below the policy, honest only with the +900 s widening (now deleted).
+set_tests_properties(samples.mirror_room_boots PROPERTIES LABELS "scripting;stage-close" TIMEOUT 1940)
 
 # samples.archive_fidelity.Tornado — LIVE-PERSIST-1: the SHIPPED Tornado archive, opened on a clean
 # machine (a virgin data root, HOME and XDG_CACHE_HOME — no piece cache anywhere), keeps its live

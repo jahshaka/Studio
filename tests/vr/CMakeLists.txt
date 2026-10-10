@@ -216,9 +216,11 @@ jah_gpu_row(vr.mirror_live CLASS vr TIER epic NEEDS photon
                  "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" "${JAH_MONADO_MANIFEST}"
                  "${CMAKE_SOURCE_DIR}/tests/scripting/scripts/e2e_vr_mirror_live.js"
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+# TESTING-CLEANUP-2B item 2: TIMEOUT 330 = 6 x the run log's quiet median 53.9 s (46 quiet PASS runs since 2026-10-01, worst 168.6 s);
+# declared 300 was below the policy, honest only with the +900 s widening (now deleted).
 set_tests_properties(vr.mirror_live PROPERTIES
     LABELS "scripting"
-    TIMEOUT 300
+    TIMEOUT 330
     RESOURCE_LOCK monado COST ${JAH_COST_MONADO}
     SKIP_RETURN_CODE 77
     ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}HOME=${_vr_mirror_home};JAHSHAKA_DATA_ROOT=${_vr_mirror_home}/.local/share/Jahshaka;JAHSHAKA_VR_TEST_BLINK_EVERY=30;JAHSHAKA_VR_TEST_BLINK_FRAMES=12")

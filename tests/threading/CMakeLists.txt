@@ -96,11 +96,13 @@ jah_gpu_row(threading.mode_serial CLASS app TIER epic NEEDS photon bloom ssao sm
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
                  --script ${CMAKE_CURRENT_BINARY_DIR}/mode.js
          WORKING_DIRECTORY ${_thr_home_ser}/run)
+# TESTING-CLEANUP-2B item 2: TIMEOUT 330 = 6 x the run log's quiet median 54.2 s (50 quiet PASS runs since 2026-10-01, worst 141.6 s);
+# declared 300 was below the policy, honest only with the +900 s widening (now deleted).
 set_tests_properties(threading.mode_serial PROPERTIES
     ENVIRONMENT "HOME=${_thr_home_ser};JAHSHAKA_DATA_ROOT=${_thr_home_ser}/.local/share/Jahshaka;JAHSHAKA_SCENE_THREADS=1"
     FIXTURES_REQUIRED threading_home_mode_serial
     FIXTURES_SETUP threading_shot_serial
-    LABELS "threading" RESOURCE_LOCK threading COST ${JAH_COST_THREADING} TIMEOUT 300)
+    LABELS "threading" RESOURCE_LOCK threading COST ${JAH_COST_THREADING} TIMEOUT 330)
 
 add_test(NAME threading.mode_pixels
          COMMAND ${CMAKE_COMMAND} -E compare_files
@@ -147,21 +149,25 @@ jah_gpu_row(threading.gi_resolve CLASS app TIER epic NEEDS photon bloom ssao sma
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
                  --script ${CMAKE_CURRENT_BINARY_DIR}/gi_resolve.js
          WORKING_DIRECTORY ${_gir_home_par}/run)
+# TESTING-CLEANUP-2B item 2: TIMEOUT 250 = 6 x the run log's quiet median 41.0 s (50 quiet PASS runs since 2026-10-01, worst 185.6 s);
+# declared 240 was below the policy, honest only with the +900 s widening (now deleted).
 set_tests_properties(threading.gi_resolve PROPERTIES
     ENVIRONMENT "HOME=${_gir_home_par};JAHSHAKA_DATA_ROOT=${_gir_home_par}/.local/share/Jahshaka"
     FIXTURES_REQUIRED threading_home_gi_resolve
     FIXTURES_SETUP threading_shot_gi_parallel
-    LABELS "threading" RESOURCE_LOCK threading COST ${JAH_COST_THREADING} TIMEOUT 240)
+    LABELS "threading" RESOURCE_LOCK threading COST ${JAH_COST_THREADING} TIMEOUT 250)
 
 jah_gpu_row(threading.gi_resolve_serial CLASS app TIER epic NEEDS photon bloom ssao smaa planar
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
                  --script ${CMAKE_CURRENT_BINARY_DIR}/gi_resolve.js
          WORKING_DIRECTORY ${_gir_home_ser}/run)
+# TESTING-CLEANUP-2B item 2: TIMEOUT 310 = 6 x the run log's quiet median 51.5 s (49 quiet PASS runs since 2026-10-01, worst 131.3 s);
+# declared 240 was below the policy, honest only with the +900 s widening (now deleted).
 set_tests_properties(threading.gi_resolve_serial PROPERTIES
     ENVIRONMENT "HOME=${_gir_home_ser};JAHSHAKA_DATA_ROOT=${_gir_home_ser}/.local/share/Jahshaka;JAHSHAKA_SCENE_THREADS=1"
     FIXTURES_REQUIRED threading_home_gi_resolve_serial
     FIXTURES_SETUP threading_shot_gi_serial
-    LABELS "threading" RESOURCE_LOCK threading COST ${JAH_COST_THREADING} TIMEOUT 240)
+    LABELS "threading" RESOURCE_LOCK threading COST ${JAH_COST_THREADING} TIMEOUT 310)
 
 add_test(NAME threading.gi_resolve_pixels
          COMMAND ${CMAKE_COMMAND} -E compare_files

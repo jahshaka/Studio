@@ -2093,7 +2093,9 @@ target_link_libraries(test_gi_speckle PRIVATE JahshakaEngine)
 add_dependencies(test_gi_speckle JahshakaEngineMedia)
 jah_gpu_row(gi.speckle CLASS engine TOKENS 2 COMMAND test_gi_speckle
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(gi.speckle PROPERTIES TIMEOUT 180 LABELS "engine")
+# TESTING-CLEANUP-2B item 2: TIMEOUT 360 = 6 x the run log's quiet median 59.8 s (10 quiet PASS runs since 2026-10-01, worst 62.8 s);
+# declared 180 was below the policy, honest only with the +900 s widening (now deleted).
+set_tests_properties(gi.speckle PROPERTIES TIMEOUT 360 LABELS "engine")
 # gi.hit_offscreen_lights (D3-HIT-SHADE-2): THE WORLD LIGHT LIST — a point lamp and
 # a spot whose ranges touch no frustum light a mover's hit seen in a mirror as its
 # raster shows them (2 %), and with the list switched off in the same process the
@@ -2177,8 +2179,10 @@ jah_gpu_row(photon.view CLASS app TIER epic NEEDS photon bloom ssao smaa planar
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
                  --script ${CMAKE_CURRENT_BINARY_DIR}/photon_view.js
          WORKING_DIRECTORY ${_photon_view_home}/run)
+# TESTING-CLEANUP-2B item 2: TIMEOUT 620 = 6 x the run log's quiet median 102.6 s (44 quiet PASS runs since 2026-10-01, worst 323.7 s);
+# declared 400 was below the policy, honest only with the +900 s widening (now deleted).
 set_tests_properties(photon.view PROPERTIES
-    TIMEOUT 400 LABELS "scripting"
+    TIMEOUT 620 LABELS "scripting"
     ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}HOME=${_photon_view_home};JAHSHAKA_DATA_ROOT=${_photon_view_home}/.local/share/Jahshaka")
 
 # gi.probe_nan — PROBE-NAN-1 (D4-PHOTON-TIERS): a point light of intensity 20 at 0.3 m over

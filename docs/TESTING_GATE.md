@@ -585,7 +585,7 @@ run log (suite `@drain-timeout`: the holders, the wait) and the phase runs with 
 
 **THE LOCK LIST IS THE TIMING LIST** (`JAH_GPU_EXCLUSIVE_SUITES`, `tests/CMakeLists.txt`,
 registered by `jah_gpu_exclusive_test()`, whose `RUN_TIMEOUT` is the suite's own budget and
-whose TIMEOUT is that + 30 s + the admission's 900 s bound; configure fails if a listed suite is
+whose TIMEOUT is that + 30 s — the admission's wait is outside it, below; configure fails if a listed suite is
 registered any other way). A suite is on it because it asserts milliseconds, a ratio of milliseconds or a frame
 budget — never for a flake history: the six members that measured no time LEFT it
 (app.engine_selftest_validation, claude.chat, ui.media_lazy, scripting.e2e.space_switch /
@@ -738,9 +738,15 @@ timing row holds the GPU lock FIRST, then its tokens: the lock for exclusivity, 
 memory); `jah_add_pool(<pool> [CLASS vr] [TIER …])` — the pool's tokens are taken by
 `run_pool.py --vram-tokens <k>` once per APP PROCESS (a restart re-takes them; the driver holds
 none; a `HEADLESS` pool takes none). A row that boots no Vulkan is a plain `add_test` with
-`jah_no_display()`. **The wait never eats a row's budget**: it happens before the command starts,
-and every registered row's TIMEOUT is its own budget plus the 900 s bound, added once by the
-helper at the end of the row's directory — never typed at a site.
+`jah_no_display()`. **The wait never eats a row's budget, and the TIMEOUT a site declares is the row's whole
+bound** (TESTING-CLEANUP-2B; `tests/cmake/vram_rows.cmake`): every registered row carries `RESOURCE_GROUPS
+vram:<k>` and the build names its resource spec (`CTEST_RESOURCE_SPEC_FILE`: one `vram` resource, the box's
+token count), so ctest — a gate, a tier, a hand run — never STARTS a row whose tokens its own running rows hold,
+and the clock starts with the row. Only a process outside the ctest (a hand-run app holding tokens) can still
+make a row wait; its `vram: admitted … after <s> s` is subtracted from the row's seconds (`tokenWaitS`), and a row
+whose TIMEOUT ends while it is still waiting never ran: the run log records NOADMIT. (Until 2026-10-10 every GPU
+row's TIMEOUT carried a hidden +900 s for the wait, and rows ran past their own budget unseen — the shadow churn
+twins 1,008 / 1,159 s against 900.)
 
 **THE CLOSURE.** `source.gpu_rows_closure` (hygiene) reads what ctest will run
 (`ctest --show-only=json-v1`): every row whose command or environment names an Ogre-linked

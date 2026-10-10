@@ -31,8 +31,11 @@ THE CONTRACT
     timeout kill or a SIGKILL frees them (the child dies with the admission: PR_SET_PDEATHSIG).
     Nothing durable is written (the file bytes are only a label for a reader).
   * THE WAIT IS BOUNDED (JAH_VRAM_WAIT seconds, default 900, the same bound as the GPU lock) and
-    it happens BEFORE the command starts; the CMake helpers add the bound to the row's TIMEOUT
-    once, so a wait never eats a row's own budget. An expired wait exits 75 (EX_TEMPFAIL) and
+    it happens BEFORE the command starts. It is no longer in any row's TIMEOUT (TESTING-CLEANUP-2B:
+    the +900 s widening is gone): inside a gate ctest schedules the rows by their tokens
+    (RESOURCE_GROUPS against the build's resource spec, tests/cmake/vram_rows.cmake), so a gate's rows
+    never wait here for each other; a wait here is another process's tokens, and a row whose TIMEOUT
+    ends while still waiting is recorded NOADMIT by the run log (gate_runlog.unadmitted_wait). An expired wait exits 75 (EX_TEMPFAIL) and
     never runs the command. A wait prints ONE line, `vram: waiting for <k> tokens, <n> free`,
     and a closing `vram: admitted …` line with the tokens it got, so the triage sees it.
   * nvidia-smi is NOT consulted (racy, slow, and blind to what a process will allocate next):
