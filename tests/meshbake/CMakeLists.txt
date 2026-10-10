@@ -194,9 +194,10 @@ set_tests_properties(meshbake.rebake_generation PROPERTIES
 # reason, F8 a landing into a moved store is refused.
 add_test(NAME meshbake.async_landing COMMAND test_mesh_bake --async-landing
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+# TIMEOUT 10: 6x the measured median (0.04 / 0.04 / 0.05 / 0.05 s, 2026-10-10, d8c9a04+) rounded up to 10 s.
 set_tests_properties(meshbake.async_landing PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen;HOME=${_bake_home};JAHSHAKA_DATA_ROOT=${_bake_home}/.local/share/Jahshaka"
-    TIMEOUT 120 LABELS "meshbake")
+    TIMEOUT 10 LABELS "meshbake")
 
 # meshbake.quit_during_bake — F5: a run that ends with an import's bake in flight cancels it inside
 # its job and exits 0 (bake_quit.sh; the app, headless, its own data root).
@@ -205,8 +206,10 @@ file(MAKE_DIRECTORY ${_quit_home}/run)
 add_test(NAME meshbake.quit_during_bake
          COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/bake_quit.sh" "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>"
          WORKING_DIRECTORY ${_quit_home}/run)
+# TIMEOUT 80: 6x the measured median (13.40 / 13.21 / 13.36 / 13.31 s, 2026-10-10 solo; median 13.3 s
+# -> 80 s) rounded up to 10 s. Most of it is the dense model's SYNCHRONOUS import bake before the claim.
 set_tests_properties(meshbake.quit_during_bake PROPERTIES
-    ENVIRONMENT "HOME=${_quit_home}" TIMEOUT 300 LABELS "meshbake")
+    ENVIRONMENT "HOME=${_quit_home}" TIMEOUT 80 LABELS "meshbake")
 set_property(TEST meshbake.quit_during_bake APPEND PROPERTY ENVIRONMENT_MODIFICATION
              "JAHSHAKA_DATA_ROOT=unset:")
 jah_no_display(meshbake.quit_during_bake)

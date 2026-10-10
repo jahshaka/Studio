@@ -37,6 +37,8 @@
 #   capture.offline_unique.timing 101.00  <- TESTING-CLEANUP-2 dev run after admission (2026-10-09)
 #   ui.selection_cost.timing 5.12  <- its push row's dev run (same binary, TESTING-CLEANUP-2)
 #   pool.vr_validation 253.38 / pool.capture_validation 219.32  <- TESTING-CLEANUP-2 dev runs (new layered pools)
+#   meshbake.async_landing 0.05  <- STAGE-CLOSE-TRIAGE-1 dev runs (4 solo, median 0.05, 2026-10-10)
+#   meshbake.quit_during_bake 13.31  <- STAGE-CLOSE-TRIAGE-1 dev runs (4 solo, median 13.31, 2026-10-10)
 # gi.budget: its gate seconds include the GPU lock's flock WAIT (458 s once) — the run itself is ~9 s.
 # SUITE-POOL-1 (2026-09-27): the 142 pooled rows, app.create_loop (+ its fixture) and atom.error_bound deleted;
 #   the 17 pool rows + pool.runner from the run log (2026-09-27-scoped-b6a088bfe.jsonl, -j4, alone on the box).
@@ -312,10 +314,12 @@ materials.members 0.08
 math.parity 24.01
 mcp.e2e 52.89
 mcp.e2e.fresh_home 0.01
+meshbake.async_landing 0.05
 meshbake.cards 0.76
 meshbake.cards.timing 0.78
 meshbake.hemisphere_winding 0.18
 meshbake.primitives_baked 0.59
+meshbake.quit_during_bake 13.31
 meshbake.rebake_generation 0.08
 meshbake.roundtrip 0.26
 meshbake.sdf 1.01
