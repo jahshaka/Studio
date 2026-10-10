@@ -10,7 +10,7 @@
 # for any reason. A wait past JAH_VRAM_WAIT (900 s) exits 75 and never runs the command.
 # `scripts/gpu-admit.sh status` lists the holders and THE GATE SLOT's holder and queue (GATE-COST-1 P1: one gate
 # at a time, box-wide; `gpu-admit.sh gate [--label <text>] -- <command>` runs a whole gate under the slot —
-# queued FIFO with no bound, the command exec'd holding it; gate-scope.sh --run and gate_runlog.py run take it
+# queued BY CLASS (`--class 0|1|2`: smoke, gate, measurement — TESTING-CLEANUP-2B item 13; else read from the label) with no bound, the command exec'd holding it; gate-scope.sh --run and gate_runlog.py run take it
 # themselves). The implementation is scripts/vram_tokens.py
 # (run_pool.py imports the same code to take a pool's tokens once for the pool's whole run).
 # THE DESKTOP ROUTE BY DEFAULT (VR-SETTING-1): the app's Start in VR preference is ON by default, so

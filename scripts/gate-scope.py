@@ -19,7 +19,7 @@ path and one reason per selected row, estimates the wall time from THE RUN LOG (
 
 A RUN IS A GATE, AND THE BOX RUNS ONE AT A TIME (GATE-COST-1, SPECS/audits/GATE_COST_2026-10-09.md):
 `--run` (scoped, a fallback, `--fork-tier`, `--targets-only`) queues for THE GATE SLOT
-(scripts/vram_tokens.py; FIFO, no bound, its position printed) and holds it to its last process;
+(scripts/vram_tokens.py; by class — a gate before a measurement —, no bound, its position printed) and holds it to its last process;
 `--solo` and `--attribute` take it too — a whole-card hold always does (GATE-COST-2) — and a per-row
 admission never does. Before anything, the no-op build (gate_runlog.prebuild: HEAD's binaries, BUILT_FROM
 fresh). Inside it: the `hygiene` rows first, as their own CPU phase (P8); the GPU
@@ -2268,6 +2268,10 @@ def attribute(row_args, lane_specs, tag, times, tier, candidate=None, controls=N
                 seen = len(_attribution_records(row, head, reason))
                 reds, real, first, never, last = 0, 0, None, [], None
                 for _ in range(times):
+                    # A MEASUREMENT YIELDS TO A GATE BETWEEN ITS RUNS (item 13): its cells so far are recorded
+                    card_y, env_y = vt.yield_card(card, env, f"attribute {tag}", sys.stdout)
+                    if card_y is not card:
+                        card, env = card_y, dict(env_y, DISPLAY=display, **({"JAH_VRAM_ALL": "1"} if fallback else {}))
                     rc = gate_runlog.run_ctest(
                         f"ctest -j1 --timeout 900 --output-on-failure --no-tests=error -R '{rx}'", build, tier,
                         [t[0] for t in lanes] if kind == "candidate" else [name], 1, reasons={row: reason},
@@ -2579,12 +2583,12 @@ def main():
         return card_, env_, "drain-timeout"
 
     def gate(what):
-        """THE GATE SLOT (P1), once per gate run: queue (FIFO, no bound, the position printed), then hold
+        """THE GATE SLOT (P1), once per gate run: queue (class 1, no bound, the position printed), then hold
         it in THIS process to its end (the ctest trees below die with it: gate_runlog F2)."""
         if not slot:
             gate_runlog.on_signals()
             who = "+".join(gate_runlog.lane_list(a.lane)) or os.path.basename(gate_runlog.ROOT)
-            fd = gate_runlog._vram().gate_slot(f"{who} {what}", log=sys.stdout)
+            fd = gate_runlog._vram().gate_slot(f"{who} {what}", log=sys.stdout, cls=1)
             slot.append(fd)
         return None
 
@@ -2677,13 +2681,17 @@ def main():
         # SOLO ON THE CARD, ONE DRAIN PER BATCH (G1+G2; GATE-COST-1 P2): the whole batch holds every VRAM
         # token once and each run's admissions are nested on it, so no sibling lane's GPU row runs beside
         # any of them — and the card drains once, not once per run. A WHOLE-CARD HOLD TAKES THE GATE SLOT
-        # (GATE-COST-2): the batch queues FIFO with the gates before it drains (hold_card does it), so its drain
+        # (GATE-COST-2): the batch queues (class 2, behind any waiting gate, and yields to one between runs) before it drains (hold_card does it), so its drain
         # never starves the gate in the slot into NOADMIT.
         gate_runlog.on_signals()
         card, env, fallback = solo_card(f"{'+'.join(lane)} --solo {' '.join(a.solo)[:80]}")
         try:
             for s in a.solo:
                 for _ in range(a.times):
+                    # A MEASUREMENT YIELDS TO A GATE BETWEEN ITS RUNS (item 13: the slot is by priority)
+                    card, env_y = gate_runlog._vram().yield_card(card, env, f"{'+'.join(lane)} --solo", sys.stdout)
+                    if env_y is not env:
+                        env = dict(env_y, **({"JAH_VRAM_ALL": "1"} if fallback else {}))
                     rx = "^" + re.escape(s) + "$"
                     r = lost(gate_runlog.run_ctest(
                         f"ctest -j1 --timeout 900 --output-on-failure --no-tests=error -R '{rx}'",

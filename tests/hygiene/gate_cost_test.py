@@ -722,6 +722,54 @@ def main(source, build):
           and pout.returncode == 0 and "vram: waiting" in ow,
           "inside a gate a short admission is NOADMIT at once (exit %d), outside one it waits (exit %d)"
           % (pin_.returncode, pout.returncode))
+    # TESTING-CLEANUP-2B item 13: THE SLOT IS BY PRIORITY, NOT ARRIVAL (0 smoke, 1 gate, 2 measurement). Counted by the
+    # ORDER the commands ran in (each appends its name), never a clock. RED ON BASE (b0a3b1f3c): FIFO — the gate ran
+    # third, behind both measurements, and nothing yielded.
+    prio = os.path.join(scratch, "prio.order")
+    def ran(name): return ["sh", "-c", f"echo {name} >> {prio}"]
+    relp = os.path.join(scratch, "prio.release")
+    hp = spawn([sys.executable, vt, "gate", "--class", "1", "--label", "HOLDER", "--", "sh", "-c",
+                f"while [ ! -e {relp} ] && kill -0 {os.getpid()} 2>/dev/null; do sleep 0.05; done"])
+    wait_line(hp, "gate-slot: taken")
+    m1 = spawn([sys.executable, vt, "gate", "--class", "2", "--label", "M1 measurement", "--"] + ran("M1"))
+    wait_line(m1, "gate-slot: queued at position")
+    m2 = spawn([sys.executable, vt, "gate", "--class", "2", "--label", "M2 measurement", "--"] + ran("M2"))
+    wait_line(m2, "gate-slot: queued at position")
+    g1 = spawn([sys.executable, vt, "gate", "--class", "1", "--label", "G gate", "--"] + ran("G"))
+    og = wait_line(g1, "gate-slot: queued at position")
+    st_ = subprocess.run([sys.executable, vt, "status"], capture_output=True, text=True).stdout
+    open(relp, "w").close(); hp.communicate()
+    for p_ in (g1, m1, m2): p_.communicate()
+    order = open(prio).read().split()
+    check(order == ["G", "M1", "M2"] and "queued at position 1 (1 ahead)" in og,
+          "(a) a gate asked behind two measurements is served first, at position 1 behind the holder (%s)" % order)
+    sl = [l for l in st_.splitlines() if l.startswith("gate-slot:")]
+    check(len(sl) == 4 and "HELD by" in sl[0] and "HOLDER" in sl[0] and "class 1" in sl[0] and "G gate" in sl[1] and "M1" in sl[2]
+          and "class 2" in sl[3], "`status` prints the holder, then the queue in serving order with each class (%s)" % sl)
+    # (b) a measurement holding the card YIELDS between its rows to a gate that asks, and resumes after it
+    os.unlink(prio)
+    ybuf = io.StringIO()
+    card_b, env_b = vt_mod.hold_card("Mb measurement", log=ybuf)
+    same = vt_mod.yield_card(card_b, env_b, "Mb", log=ybuf)
+    check(same == (card_b, env_b) and "YIELDING" not in ybuf.getvalue(),
+          "(b) with nothing waiting a measurement keeps its hold between rows")
+    gb = spawn([sys.executable, vt, "gate", "--class", "1", "--label", "Gb gate", "--"] + ran("Gb"))
+    wait_line(gb, "gate-slot: queued at position")
+    open(prio, "a").write("row1\n")
+    card_b, env_b = vt_mod.yield_card(card_b, env_b, "Mb", log=ybuf)
+    open(prio, "a").write("row2\n")
+    gb.communicate()
+    held_b = any(t_[1] == os.getpid() and t_[4] for t_ in vt_mod.gate_queue())
+    vt_mod.release(card_b)
+    order = open(prio).read().split()
+    check(order == ["row1", "Gb", "row2"] and held_b and "YIELDING" in ybuf.getvalue()
+          and "resumed after the yield" in ybuf.getvalue(),
+          "(b) ...and between two rows it yields to a waiting gate, which runs, then resumes holding (%s)" % order)
+    # (c) nothing queued: the asker takes the free slot at once
+    pc = subprocess.run([sys.executable, vt, "gate", "--class", "2", "--label", "Mc", "--", "true"],
+                        capture_output=True, text=True)
+    check(pc.returncode == 0 and "gate-slot: taken" in pc.stderr and "queued at position" not in pc.stderr,
+          "(c) a free slot is taken at once by whoever asks, a measurement included")
     # the ingest wait is an EVENT the admission performs on every row: observed, not timed — supervise() of a
     # green row, in this process, with the journal real and time.sleep recorded
     import types
