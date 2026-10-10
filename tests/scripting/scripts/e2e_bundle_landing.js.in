@@ -158,8 +158,20 @@ assert(engineErrors() === 0, "no engine error");
 var A = assets.import(TEXTURED);
 assert(A && A.length > 10, "model A imported");
 var borrowed = null;
-assets.list({ scope: "store", type: "texture" }).concat(assets.list({ scope: "project", type: "texture" }))
-    .forEach(function (r) { if (borrowed === null && r.name === "quad_base.png") borrowed = r.guid; });
+// (an import's texture is a MEMBER of its Object, named by its dependency edges — the closure walks
+// the object's edges down to its members, so a texture is one of model A's dependencies)
+function textureOf(guid, depth) {
+    var found = null;
+    assets.dependencies(guid).forEach(function (d) {
+        if (found !== null) return;
+        var t = null;
+        try { t = assets.metadata(d).type; } catch (e) { }
+        if (t === "texture") found = d;
+        else if (depth > 0) found = textureOf(d, depth - 1);
+    });
+    return found;
+}
+borrowed = textureOf(A, 2);
 assert(borrowed !== null, "model A's base-colour texture is a library row: " + borrowed);
 var cube = scene.addPrimitive("Cube", { position: { x: 4, y: 0, z: 0 } });
 assert(material.set(cube, { baseColorMap: borrowed }) === true, "the cube's material uses A's texture");
