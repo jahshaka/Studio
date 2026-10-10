@@ -223,7 +223,10 @@ _PATH_MASKS = [
     (re.compile(_START + r"/tmp/jah-" + _D + r"*"), "<jah-tmp>"),
     # a data root OUTSIDE a tree — a user's home or a /tmp scratch home; a home INSIDE a tree was masked to <tree>/…
     # above and keeps its own name (e2e-home-clip_ref and e2e-home-tex_ref stay two reds — fix round 3 F2)
-    (re.compile(_START + r"(?:/home/" + _D + r"+|/tmp/" + _D + r"+)/\.local/share/Jahshaka(?![\w.-])"), "<data-root>"),
+    # (fix round 4, item 4: a user's home and a /tmp scratch home are DIFFERENT tokens — a regression that writes the
+    # owner's real data root never reads as a scratch home's red)
+    (re.compile(_START + r"/home/" + _D + r"+/\.local/share/Jahshaka(?![\w.-])"), "<home-data-root>"),
+    (re.compile(_START + r"/tmp/" + _D + r"+/\.local/share/Jahshaka(?![\w.-])"), "<tmp-data-root>"),
 ]
 
 
@@ -291,12 +294,18 @@ def _real(m, row, reds, solos, defects, tip_recs, base_recs, tip_sha=None, mode=
     def _sig(r):
         return (r.get("verdict"), masked(r.get("failLine")), masked(r.get("status")))
     lane_red = sorted(reds, key=_when)[-1]
-    pending = list(reds) + [r for r in (solos or []) if r.get("verdict") not in ("PASS",) + NEVER_RAN]
+    pending = list(reds) + [r for r in (solos or []) if r.get("verdict") not in ("PASS",) + NEVER_RAN
+                            and not any(r is x for x in reds)]      # `reds` may already hold the solos: count each once
     base_solos = [r for r in (base_recs or []) if r.get("kind") != "verdict" and r.get("retry")
                   and r.get("verdict") not in NEVER_RAN]
     base_reds = [r for r in base_solos if r.get("verdict") != "PASS"]
     base_sigs = {_sig(r) for r in base_reds}
     odd = [r for r in pending if _sig(r) not in base_sigs]
+    # ONE RED ON THE BASE (fix round 4, item 6): a base whose own solos flip class (FAIL / CRASH) is not one known red —
+    # every pending red matching SOME base red would let an all-CRASH candidate through on one CRASH base solo
+    base_classes = sorted({r.get("verdict") for r in base_reds})
+    if base_reds and len(base_classes) > 1:
+        return False, (f"real:{did}: the base's solos flip class ({'/'.join(base_classes)}) — not one KNOWN RED"), False
     if base_reds and len(base_reds) == len(base_solos) and not odd:
         return True, (f"real:{did} KNOWN RED (the same {lane_red.get('verdict')}"
                       f"{' — ' + masked(lane_red.get('failLine'))[:60] if lane_red.get('failLine') else ''} — every one of "
@@ -395,22 +404,26 @@ def resolve_not_run(out, tip_recs, judge_parent, tip_sha):
     inspector whose run fixture's parent went red is ctest's "Not Run" — NOTRUN, no run, so MISSING, which no verdict
     clears, and a --solo of it re-runs the red parent first: a KNOWN RED parent would block every merge selecting its
     inspector. The runner names the parent on the record (`notRunBecause`); a MISSING row whose newest such record names
-    parents takes the WORST parent state at the tip (the parent's verdict covers both). A parent still MISSING leaves it
-    MISSING (--resume runs both). `out`: {key: (state, why, src)}, updated in place; `tip_recs`: {key: [records]};
+    parents takes the WORST parent state at the tip when that state is RED or KNOWN (the parent's verdict covers both);
+    a green / nondet / missing parent leaves it MISSING (its own assertion never ran; --resume / --solo run both). `out`: {key: (state, why, src)}, updated in place; `tip_recs`: {key: [records]};
     `judge_parent(key)` -> (state, why) for a parent not in `out`."""
     order = ["red", "missing", "known", "nondet", "green"]
     for k in list(out):
         if out[k][0] != "missing" or k[1]:
             continue
-        nr = [r for r in tip_recs.get(k, []) if r.get("verdict") == "NOTRUN" and r.get("notRunBecause")]
-        if not nr:
+        # THE NEWEST RECORD OVERALL (fix round 4, item 1): an older parent-Not-Run beside a newer bare Not Run resolves
+        # nothing
+        runs_ = sorted((r for r in tip_recs.get(k, []) if r.get("kind") != "verdict"), key=_when)
+        if not runs_ or runs_[-1].get("verdict") != "NOTRUN" or not runs_[-1].get("notRunBecause"):
             continue
         pst = []
-        for pn in sorted(nr, key=_when)[-1]["notRunBecause"]:
+        for pn in runs_[-1]["notRunBecause"]:
             pk = (pn, None)
             pst.append((pn,) + (tuple(out[pk][:2]) if pk in out else tuple(judge_parent(pk))))
         worst = min(pst, key=lambda t: order.index(t[1]) if t[1] in order else 0)
-        if worst[1] == "missing":
+        # ONLY A RED OR A KNOWN RED PARENT ANSWERS IT (fix round 4, item 1): a green / nondet parent means the inspector's
+        # own assertion never ran at the tip — it stays MISSING (a --solo of it runs the parent first)
+        if worst[1] not in ("red", "known"):
             continue
         out[k] = (worst[1], f"not run: its parent {worst[0]} is {worst[1]} — answered by the parent's record and verdict "
                             f"({(worst[2] or '')[:100]})", tip_sha)

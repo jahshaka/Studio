@@ -202,7 +202,7 @@ def case_verdict_door(E):
                       base=[rec("FAIL", T % "09:00", retry=True,
                                 failLine=(msg % (W_ + "rc-base-d4991c754")).replace("clip_ref", "tex_ref"))])
     check(st == "red" and "not the SAME red" in why, "...a different file INSIDE the tree stays a different red (%s)" % why[:70])
-    check(E.cgc.masked("open /tmp/jah-lead/rc-C2.state: /tmp/a/.local/share/Jahshaka/x.db") ==
+    check(E.cgc.masked("open /tmp/jah-lead/rc-C2.state: /home/a/.local/share/Jahshaka/x.db") ==
           E.cgc.masked("open /tmp/jah-rc9/rc-C2.state: /home/u/.local/share/Jahshaka/x.db"),
           "/tmp/jah-* and a data root are one token each (%s)" % E.cgc.masked("open /tmp/jah-lead/rc-C2.state"))
     # FIX ROUND 3 F3: A ROW NOT RUN BECAUSE ITS PARENT FAILED takes the parent's state (one verdict covers both), never
@@ -212,7 +212,8 @@ def case_verdict_door(E):
     resolve_ = getattr(E.cgc, "resolve_not_run", None)
     check(resolve_ is not None, "ci_gate_check has the Not Run resolver")
     resolve_ = resolve_ or (lambda *a: None)          # absent (a base before F3): the cases below read red, not a crash
-    for pst_, want in (("red", "red"), ("known", "known"), ("missing", "missing")):
+    for pst_, want in (("red", "red"), ("known", "known"), ("missing", "missing"), ("nondet", "missing"),
+                       ("green", "missing")):
         out_ = {("insp", None): ("missing", "never run", "t"), ("par", None): (pst_, "why", "t")}
         resolve_(out_, nr_, lambda pk: ("red", "x"), "t")
         check(out_[("insp", None)][0] == want and (want == "missing" or "its parent par" in out_[("insp", None)][1]),
@@ -220,6 +221,21 @@ def case_verdict_door(E):
     out_ = {("insp", None): ("missing", "never run", "t")}
     resolve_(out_, nr_, lambda pk: ("known", "judged for it"), "t")
     check(out_[("insp", None)][0] == "known", "...a parent outside the judged set is judged for it (%s)" % out_[("insp", None)][0])
+    # FIX ROUND 4 item 1: a green / nondet parent leaves the inspector MISSING (its assertion never ran — rows above), and
+    # only the NEWEST record overall counts: an older parent-Not-Run beside a newer bare Not Run resolves nothing.
+    # RED ON b77ab5abc: nondet -> nondet, green -> green, and the older record resolved.
+    nr2 = {("insp", None): [nr_[("insp", None)][0], {"suite": "insp", "verdict": "NOTRUN", "ts": T % "10:09"}]}
+    out_ = {("insp", None): ("missing", "never run", "t"), ("par", None): ("red", "why", "t")}
+    resolve_(out_, nr2, lambda pk: ("red", "x"), "t")
+    check(out_[("insp", None)][0] == "missing", "...an older parent-Not-Run under a newer bare Not Run resolves nothing (%s)"
+          % out_[("insp", None)][0])
+    # FIX ROUND 4 item 2: the ATTRIBUTION's cell of a Not Run inspector is its parent's red, never "never ran"
+    gs4 = E.cgc.load_gs()
+    cr = getattr(gs4, "_cell_run", None)
+    check(cr is not None and cr({"verdict": "NOTRUN", "notRunBecause": ["par"], "run": None}, "a" * 40)[0] == "red"
+          and cr({"verdict": "NOTRUN", "run": None}, "a" * 40)[0] == "never"
+          and cr({"verdict": "PASS"}, "a" * 40)[0] == "pass",
+          "an attribution run of a Not Run inspector is its PARENT's red (a bare Not Run never ran)")
     # FIX ROUND 3 F2: masked() never over-masks. RED ON 9eb5343e2 (the reader's measurements): two in-tree homes read as
     # one red, the owner's real data root read as a test home, and the unanchored prefix ate `a=` / `FAIL:`.
     mk, Wt = E.cgc.masked, "/home/jahshaka/Developer/jahshaka/.claude/worktrees/rc-batch-C2"
@@ -228,6 +244,9 @@ def case_verdict_door(E):
           "two in-tree homes stay two reds (%s)" % mk(Wt + "/b/e2e-home-clip_ref/.local/share/Jahshaka/lib.db"))
     check(mk("wrote /home/jahshaka/.local/share/Jahshaka/lib.db") != mk("wrote " + Wt + "/b/tests/x/home/.local/share/Jahshaka/lib.db"),
           "the owner's real data root never reads as a test home (%s)" % mk("wrote /home/jahshaka/.local/share/Jahshaka/lib.db"))
+    check(mk("wrote /home/jahshaka/.local/share/Jahshaka/lib.db") != mk("wrote /tmp/tmp.Xy12/.local/share/Jahshaka/lib.db"),
+          "fix round 4 item 4: a user's data root and a /tmp home are different tokens (%s / %s)"
+          % (mk("/home/u/.local/share/Jahshaka/x"), mk("/tmp/t/.local/share/Jahshaka/x")))
     check(mk("cmp a=" + Wt + "/x.png") != mk("cmp b=" + Wt + "/x.png") and mk("FAIL:" + Wt + "/a.png") != mk("WARN:" + Wt + "/a.png"),
           "a mask starts where a path starts: `a=`/`b=` and `FAIL:`/`WARN:` stay (%s)" % mk("cmp a=" + Wt + "/x.png"))
     st, why = E.judge([red, vrec("real:VIEWS-XID-1", T % "11:00")], base=base_solo)
@@ -291,6 +310,15 @@ def case_verdict_door(E):
                       base=[base3[0], rec("PASS", T % "09:11", retry=True), rec("PASS", T % "09:12", retry=True)])
     check(st == "red" and "nondeterminism on the base" in why, "(C) a base with 1 red + 2 green solos is nondeterminism "
           "on the base, not a KNOWN RED (%s)" % why[:90])
+    # FIX ROUND 4 item 6: a base whose solos flip class (FAIL, CRASH, FAIL) is not one known red — all-CRASH candidate solos
+    # do not pass on its one CRASH (RED ON b77ab5abc: KNOWN RED); and the count names each pending red once
+    crash3 = [rec("CRASH", T % ("10:%02d" % (10 + i)), retry=True, status="Exception: SegFault") for i in range(3)]
+    flip = [base3[0], rec("CRASH", T % "09:11", retry=True, status="Exception: SegFault"), base3[2]]
+    st, why = E.judge([rec("FAIL", T % "10:00", failLine=fl)] + crash3 + [vrec("real:VIEWS-XID-1", T % "11:00")], base=flip)
+    check(st == "red" and "flip class" in why, "(J) a base flipping FAIL/CRASH is not one KNOWN RED (%s)" % why[:80])
+    st, why = E.judge([rec("FAIL", T % "10:00", failLine=fl)] + red3 + [vrec("real:VIEWS-XID-1", T % "11:00")], base=base3)
+    check(st == "known" and "the 4 pending red(s)" in why, "(K) one gate red + 3 red solos count as 4 pending reds (%s)"
+          % why[-90:])
     st, why = E.judge([rec("FAIL", T % "10:00", failLine=fl)] + red3 + [vrec("real:VIEWS-XID-1", T % "11:00")])
     check(st == "red" and "solos below" not in why, "...with no base record it is refused by the KNOWN RED door, not the "
           "solo rule (%s)" % why[:90])

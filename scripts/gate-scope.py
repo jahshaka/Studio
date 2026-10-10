@@ -2299,14 +2299,15 @@ def attribute(row_args, lane_specs, tag, times, tier, candidate=None, controls=N
                     new, seen = recs[seen:], len(recs)
                     v = new[-1].get("verdict") if new else None
                     if new: last = new[-1]
-                    if v is None or v in ("NOADMIT", "NOTRUN"):
-                        never.append(v or f"no record (exit {rc})")      # never ran: no verdict
+                    kind_, why_ = _cell_run(new[-1] if new else None, head, rc)
+                    if kind_ == "never":
+                        never.append(why_)                                # never ran: no verdict
                         continue
                     real += 1
-                    if v != "PASS":
+                    if kind_ == "red":
                         reds += 1
                         if first is None:
-                            first = new[-1].get("failLine") or f"{v} ({new[-1].get('status')})"
+                            first = why_
                 cells[(row, name)] = ("RAN" if real == times else "INCOMPLETE", reds, real,
                                       first if real == times or reds else
                                       f"{times - real} run(s) never ran ({', '.join(map(str, never))})", last)
@@ -2493,6 +2494,39 @@ def _register_locked(d, reg, tag, kind, row, tip, rec, cause, suspects, fallback
 class _AttributionAborted(Exception):
     pass
 
+
+
+def _cell_run(rec, head, rc=None):
+    """One attribution run's outcome from its newest record: ("never", why) | ("pass", "") | ("red", the first failing
+    check). NOT RUN BECAUSE ITS PARENT FAILED IN THIS RUN (fix round 4, item 2) is the PARENT's outcome — a red whose
+    check is the parent's — never "never ran" (that left the cell INCOMPLETE and the attribution exit 7 for as long as
+    the parent stayed red, hiding the parent's own outcome)."""
+    v = rec.get("verdict") if rec else None
+    parents = rec.get("notRunBecause") if v == "NOTRUN" else None
+    if parents:
+        pr = _run_record(parents[0], head, rec.get("run"))
+        return "red", (f"not run: its parent {parents[0]} failed"
+                       + (f" — {pr.get('failLine') or pr.get('verdict')}" if pr else ""))
+    if v is None or v in ("NOADMIT", "NOTRUN"):
+        return "never", v or f"no record (exit {rc})"
+    if v != "PASS":
+        return "red", rec.get("failLine") or f"{v} ({rec.get('status')})"
+    return "pass", ""
+
+
+def _run_record(row, head, run):
+    """`row`'s own record of one run (`run` id) at `head`, or None — the parent a Not Run inspector names."""
+    if not run:
+        return None
+    d = gate_runlog.log_dir()
+    for f in sorted(os.listdir(d)) if os.path.isdir(d) else []:
+        if head[:9] not in f or not f.endswith(".jsonl"): continue
+        for line in open(os.path.join(d, f), errors="replace"):
+            try: r = json.loads(line)
+            except ValueError: continue
+            if r.get("suite") == row and r.get("arm") is None and r.get("run") == run:
+                return r
+    return None
 
 
 def _attribution_records(row, head, reason):
