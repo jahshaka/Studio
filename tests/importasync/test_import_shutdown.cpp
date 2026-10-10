@@ -13,8 +13,8 @@
 //   1. quit DURING a many-file import batch  -> process exits bounded
 //   2. quit right AFTER a batch completes    -> process exits bounded
 // The contract asserted is the hard one: the process is GONE within
-// kExitBudgetMs of app.quit(), exit code 0 (a logged forced exit also
-// returns the real code — better than a zombie, and still bounded).
+// kExitBudgetMs of app.quit(), exit code 0 — a forced exit (the shutdown
+// watchdog, code 86) is a red here, never a pass.
 #include "../support/mcpharness.h"
 #include <QCoreApplication>
 #include <QDir>

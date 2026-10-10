@@ -225,7 +225,7 @@ public:
     /// the window closes (CLEANUP-1 item 2, ShellLifecycle::stopBackgroundWork).
     ///
     /// A module's workers run on the SAME global thread pool the shell waits
-    /// on, and that wait is bounded at 3 s with `std::_Exit(0)` behind it. A
+    /// on, and that wait is bounded at 3 s with a forced exit (86) behind it. A
     /// module whose abort lives in shutdown() — which runs AFTER that wait — is
     /// therefore never asked to stop before the process can be taken away from
     /// it: the avatar module's import runner kept parsing for twelve seconds
