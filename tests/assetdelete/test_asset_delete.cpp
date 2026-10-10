@@ -498,8 +498,6 @@ int main(int argc, char **argv)
         for (const auto &row : db.fetchAssetsForAssetView()) if (row.guid == shared) tile = true;
         CHECK(!tile, "... and it stops being a library tile");
         CHECK(db.countAssetPins(shared) == 2, "... with both pins intact");
-        CHECK(!db.fetchLibraryAssetGuids().contains(shared),
-              "... and out of the library guid scan too");
 
         // Re-listing, the other direction: an import of the same content
         // brings the row back (services/import — asserted here at the write

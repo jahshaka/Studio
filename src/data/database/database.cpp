@@ -2284,24 +2284,6 @@ AssetRecord Database::fetchAsset(const QString &guid)
     return AssetRecord();
 }
 
-QStringList Database::fetchLibraryAssetGuids()
-{
-    QSqlQuery query;
-    // THE USER'S STORAGES: Assets, the Materials module's, the Avatar module's.
-    // LIBRARY LISTING: unlisted rows are excluded. This feeds the store's
-    // "missing content" count, which is a report about the LIBRARY the user
-    // can see; an unlisted row's content is the pinning project's business.
-    query.prepare("SELECT guid FROM assets WHERE view_filter IN (?, ?, ?) AND listed = 1");
-    query.addBindValue(static_cast<int>(assethome::StoredAssets));
-    query.addBindValue(static_cast<int>(assethome::StoredMaterialsLibrary));
-    query.addBindValue(static_cast<int>(assethome::StoredAvatarLibrary));
-    executeAndCheckQuery(query, "FetchLibraryAssetGuids");
-
-    QStringList guids;
-    while (query.next()) guids << query.value(0).toString();
-    return guids;
-}
-
 QVector<Database::AssetThumbnailState> Database::fetchAssetThumbnailStates(bool missingOnly)
 {
     QSqlQuery query;

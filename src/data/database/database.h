@@ -542,7 +542,6 @@ public:
     QVector<AssetRecord> fetchAssetsInHome(assethome::Kind home, int type = -1);
     /// Guids of the listed rows of the user's STORAGES (Assets, Materials,
     /// Avatars) — the store's "missing content" report.
-    QStringList fetchLibraryAssetGuids();
     /// One catalog row as a maintenance sweep needs it: what it IS and whether
     /// it has a picture — and not one byte more.
     struct AssetThumbnailState
