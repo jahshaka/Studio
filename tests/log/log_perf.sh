@@ -71,7 +71,9 @@ cleanup() {
 }
 trap cleanup EXIT
 
-"$BIN" --mcp-port="$PORT" --log-dir "$TLOGDIR" > "$APPLOG" 2>&1 &
+# JAHSHAKA_NO_DEVICE_LOSS_DIALOG: a device loss on the rig exits 3 at once (no modal dialog),
+# as every spawn()-launched app does (tests/support/mcpharness.h).
+JAHSHAKA_NO_DEVICE_LOSS_DIALOG=1 "$BIN" --mcp-port="$PORT" --log-dir "$TLOGDIR" > "$APPLOG" 2>&1 &
 APP_PID=$!
 
 # THE PORT IS READ BACK, NOT ASSUMED (TEST_GATE_AUDIT.md §4.1). This suite and
