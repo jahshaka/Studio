@@ -234,6 +234,7 @@ jah_no_display(bake.determinism)
 
 jah_no_display(meshbake.primitives_baked)
 jah_no_display(meshbake.rebake_generation)
+jah_no_display(meshbake.async_landing)   # in-process, offscreen, no engine (read 6 delivery: source.gpu_rows_closure)
 jah_no_display(meshbake.hemisphere_winding)
 
 jah_no_display(meshbake.roundtrip)
