@@ -145,7 +145,7 @@ def main(source, build):
     # The SCOPED command, with its pool-arm prefix when arms are selected (`JAH_POOL_ARMS='…' ctest
     # -j…`). The first cut matched only a bare `ctest -j` line, so it compared the TARGET rows'
     # command whenever the scoped one carried the prefix — and read "" once the selection had no
-    # target row (DAG-LOCK-1 took atom.dag_bound_target's label off).
+    # target row (DAG-LOCK-1 took atom.dag_bound's label off).
     def ctest_line(text):
         for line in text.splitlines():
             if re.match(r"^(JAH_POOL_ARMS='[^']*' )?ctest -j", line):

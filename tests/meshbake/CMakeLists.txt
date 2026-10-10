@@ -68,15 +68,19 @@ if(NOT EXISTS ${CMAKE_CURRENT_BINARY_DIR}/app)
     file(CREATE_LINK ${CMAKE_SOURCE_DIR}/app ${CMAKE_CURRENT_BINARY_DIR}/app SYMBOLIC)
 endif()
 
-set(_bake_home ${CMAKE_CURRENT_BINARY_DIR}/bake-home)
-file(MAKE_DIRECTORY ${_bake_home})
-add_test(NAME meshbake.roundtrip COMMAND test_mesh_bake
+# EACH ROW ITS OWN HOME, WIPED PER RUN (TESTING-CLEANUP-2 H8e). The rows below used to share ONE
+# `bake-home` that nothing wiped, and they run in parallel: nine rows seeding, baking and reaping
+# one library and one store at once, and every run inheriting what the last one left. Each row now
+# runs through fresh_home.sh on `bake-homes/<row>` (its HOME and its data root), so a row reads only
+# what it wrote, this run.
+set(_bake_home ${CMAKE_CURRENT_BINARY_DIR}/bake-homes)
+add_test(NAME meshbake.roundtrip COMMAND sh "${JAH_FRESH_HOME}" "${_bake_home}/meshbake.roundtrip" -- $<TARGET_FILE:test_mesh_bake>
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 # HOME is redirected so the fixture store and settings can never address the
 # developer's real library, and the store root is overridden inside the test
 # on top of that.
 set_tests_properties(meshbake.roundtrip PROPERTIES
-    ENVIRONMENT "QT_QPA_PLATFORM=offscreen;HOME=${_bake_home};JAHSHAKA_DATA_ROOT=${_bake_home}/.local/share/Jahshaka"
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen;HOME=${_bake_home}/meshbake.roundtrip;JAHSHAKA_DATA_ROOT=${_bake_home}/meshbake.roundtrip/.local/share/Jahshaka"
     TIMEOUT 120 LABELS "meshbake")
 
 # ---------------------------------------------------------------------------
@@ -92,18 +96,18 @@ set_tests_properties(meshbake.roundtrip PROPERTIES
 # SURFACE CARDS (SURFACE-CACHE phase 1). Its own test name because it is its
 # own claim — the card GENERATOR's policy and coverage against the shipped
 # meshes — and because it prints a bake-time table the assessment lacked.
-add_test(NAME meshbake.cards COMMAND test_mesh_bake --cards
+add_test(NAME meshbake.cards COMMAND sh "${JAH_FRESH_HOME}" "${_bake_home}/meshbake.cards" -- $<TARGET_FILE:test_mesh_bake> --cards
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(meshbake.cards PROPERTIES
-    ENVIRONMENT "QT_QPA_PLATFORM=offscreen;HOME=${_bake_home};JAHSHAKA_DATA_ROOT=${_bake_home}/.local/share/Jahshaka"
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen;HOME=${_bake_home}/meshbake.cards;JAHSHAKA_DATA_ROOT=${_bake_home}/meshbake.cards/.local/share/Jahshaka"
     TIMEOUT 120 LABELS "meshbake")
 # meshbake.cards.timing — the bake's two wall-clock bars (the 4x-triangles-not-4x-time
 # ratio and the 4,000 ms ceiling), stage-close (lane D6B-GATE-SHAPE; audit §5 FIX-TIME):
 # the same binary with JAHSHAKA_TIMING_BARS=1, quiet box, the GPU-timing lock.
-jah_gpu_exclusive_test(NAME meshbake.cards.timing CLASS none RUN_TIMEOUT 180 COMMAND test_mesh_bake --cards
+jah_gpu_exclusive_test(NAME meshbake.cards.timing CLASS none RUN_TIMEOUT 180 COMMAND sh "${JAH_FRESH_HOME}" "${_bake_home}/meshbake.cards.timing" -- $<TARGET_FILE:test_mesh_bake> --cards
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(meshbake.cards.timing PROPERTIES
-    ENVIRONMENT "QT_QPA_PLATFORM=offscreen;HOME=${_bake_home};JAHSHAKA_DATA_ROOT=${_bake_home}/.local/share/Jahshaka;JAHSHAKA_TIMING_BARS=1"
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen;HOME=${_bake_home}/meshbake.cards.timing;JAHSHAKA_DATA_ROOT=${_bake_home}/meshbake.cards.timing/.local/share/Jahshaka;JAHSHAKA_TIMING_BARS=1"
     LABELS "meshbake;stage-close;quiet-box")
 
 # THE LOD BOUND'S PHYSICS BAR (ATOM-LOD-BOUND-1) — `atom.lod_bound_bar`. Every
@@ -119,10 +123,10 @@ set_tests_properties(meshbake.cards.timing PROPERTIES
 # inside its stored bound under an 8x-dense re-measure, and the bound-versus-quadric ratio
 # table — the evidence AT-A5 was missing — is printed. A regression check, not an independent
 # derivation (the dense re-measure walks the same exact removed vertices).
-add_test(NAME atom.lod_bound_bar COMMAND test_mesh_bake --bound-bar
+add_test(NAME atom.lod_bound_bar COMMAND sh "${JAH_FRESH_HOME}" "${_bake_home}/atom.lod_bound_bar" -- $<TARGET_FILE:test_mesh_bake> --bound-bar
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(atom.lod_bound_bar PROPERTIES
-    ENVIRONMENT "QT_QPA_PLATFORM=offscreen;HOME=${_bake_home};JAHSHAKA_DATA_ROOT=${_bake_home}/.local/share/Jahshaka"
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen;HOME=${_bake_home}/atom.lod_bound_bar;JAHSHAKA_DATA_ROOT=${_bake_home}/atom.lod_bound_bar/.local/share/Jahshaka"
     TIMEOUT 120 LABELS "meshbake")
 jah_no_display(atom.lod_bound_bar)
 
@@ -131,30 +135,30 @@ jah_no_display(atom.lod_bound_bar)
 # samples against whole grids, the per-facet reference pattern, the island caps, no
 # margin). (b) at most 2x clusterlod's own error (2.5x where an island dropped) and
 # (c) on the stand-in no dropped island bigger than its group's error are GATED by the
-# row `atom.dag_bound_target` — a BAR since DAG-LOCK-1 gave the DAG's build the chain's
+# row `atom.dag_bound` — a BAR since DAG-LOCK-1 gave the DAG's build the chain's
 # displacement lock (it was a photon-target row until then; the stand-in read 24 of 30
 # groups over 2.5x without the lock).
-add_test(NAME atom.dag_bound_bar COMMAND test_mesh_bake --dag-bar
+add_test(NAME atom.dag_bound_bar COMMAND sh "${JAH_FRESH_HOME}" "${_bake_home}/atom.dag_bound_bar" -- $<TARGET_FILE:test_mesh_bake> --dag-bar
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(atom.dag_bound_bar PROPERTIES
-    ENVIRONMENT "QT_QPA_PLATFORM=offscreen;HOME=${_bake_home};JAHSHAKA_DATA_ROOT=${_bake_home}/.local/share/Jahshaka"
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen;HOME=${_bake_home}/atom.dag_bound_bar;JAHSHAKA_DATA_ROOT=${_bake_home}/atom.dag_bound_bar/.local/share/Jahshaka"
     TIMEOUT 180 LABELS "meshbake")
 jah_no_display(atom.dag_bound_bar)
-add_test(NAME atom.dag_bound_target COMMAND test_mesh_bake --dag-bar --target
+add_test(NAME atom.dag_bound COMMAND sh "${JAH_FRESH_HOME}" "${_bake_home}/atom.dag_bound" -- $<TARGET_FILE:test_mesh_bake> --dag-bar --target
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(atom.dag_bound_target PROPERTIES
-    ENVIRONMENT "QT_QPA_PLATFORM=offscreen;HOME=${_bake_home};JAHSHAKA_DATA_ROOT=${_bake_home}/.local/share/Jahshaka"
+set_tests_properties(atom.dag_bound PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen;HOME=${_bake_home}/atom.dag_bound;JAHSHAKA_DATA_ROOT=${_bake_home}/atom.dag_bound/.local/share/Jahshaka"
     TIMEOUT 900 LABELS "meshbake")
-jah_no_display(atom.dag_bound_target)
+jah_no_display(atom.dag_bound)
 
 # THE SIGNED DISTANCE FIELD (ATOM P2 / SUB-S5-SDF) — `meshbake.sdf`. The zero
 # crossing against level 0's real surface, the sign inside and outside, the
 # resolution's tie to the chain's honesty, the format round trip, and the refusal
 # for a skinned mesh.
-add_test(NAME meshbake.sdf COMMAND test_mesh_bake --sdf
+add_test(NAME meshbake.sdf COMMAND sh "${JAH_FRESH_HOME}" "${_bake_home}/meshbake.sdf" -- $<TARGET_FILE:test_mesh_bake> --sdf
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(meshbake.sdf PROPERTIES
-    ENVIRONMENT "QT_QPA_PLATFORM=offscreen;HOME=${_bake_home};JAHSHAKA_DATA_ROOT=${_bake_home}/.local/share/Jahshaka"
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen;HOME=${_bake_home}/meshbake.sdf;JAHSHAKA_DATA_ROOT=${_bake_home}/meshbake.sdf/.local/share/Jahshaka"
     TIMEOUT 120 LABELS "meshbake")
 
 # ATOM P2 — THE SEED AND WHAT IT OWES (the design's §2.3 acceptance).
@@ -177,22 +181,22 @@ set_tests_properties(meshbake.sdf PROPERTIES
 #   meshbake.hemisphere_winding HEMISPHERE-CAP-1, as a property of EVERY shipped
 #                               mesh: no face may be wound against its own declared
 #                               vertex normals (the cap's 32 were).
-add_test(NAME meshbake.primitives_baked COMMAND test_mesh_bake --primitives-baked
+add_test(NAME meshbake.primitives_baked COMMAND sh "${JAH_FRESH_HOME}" "${_bake_home}/meshbake.primitives_baked" -- $<TARGET_FILE:test_mesh_bake> --primitives-baked
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(meshbake.primitives_baked PROPERTIES
-    ENVIRONMENT "QT_QPA_PLATFORM=offscreen;HOME=${_bake_home};JAHSHAKA_DATA_ROOT=${_bake_home}/.local/share/Jahshaka"
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen;HOME=${_bake_home}/meshbake.primitives_baked;JAHSHAKA_DATA_ROOT=${_bake_home}/meshbake.primitives_baked/.local/share/Jahshaka"
     TIMEOUT 120 LABELS "meshbake")
 
-add_test(NAME meshbake.rebake_generation COMMAND test_mesh_bake --rebake-generation
+add_test(NAME meshbake.rebake_generation COMMAND sh "${JAH_FRESH_HOME}" "${_bake_home}/meshbake.rebake_generation" -- $<TARGET_FILE:test_mesh_bake> --rebake-generation
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(meshbake.rebake_generation PROPERTIES
-    ENVIRONMENT "QT_QPA_PLATFORM=offscreen;HOME=${_bake_home};JAHSHAKA_DATA_ROOT=${_bake_home}/.local/share/Jahshaka"
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen;HOME=${_bake_home}/meshbake.rebake_generation;JAHSHAKA_DATA_ROOT=${_bake_home}/meshbake.rebake_generation/.local/share/Jahshaka"
     TIMEOUT 120 LABELS "meshbake")
 
-add_test(NAME meshbake.hemisphere_winding COMMAND test_mesh_bake --hemisphere-winding
+add_test(NAME meshbake.hemisphere_winding COMMAND sh "${JAH_FRESH_HOME}" "${_bake_home}/meshbake.hemisphere_winding" -- $<TARGET_FILE:test_mesh_bake> --hemisphere-winding
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(meshbake.hemisphere_winding PROPERTIES
-    ENVIRONMENT "QT_QPA_PLATFORM=offscreen;HOME=${_bake_home};JAHSHAKA_DATA_ROOT=${_bake_home}/.local/share/Jahshaka"
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen;HOME=${_bake_home}/meshbake.hemisphere_winding;JAHSHAKA_DATA_ROOT=${_bake_home}/meshbake.hemisphere_winding/.local/share/Jahshaka"
     TIMEOUT 120 LABELS "meshbake")
 
 # THE BAKE DOES NOT DEPEND ON ITS THREADS (IMPORT-SPEED-1) — `bake.determinism`.
@@ -200,10 +204,10 @@ set_tests_properties(meshbake.hemisphere_winding PROPERTIES
 # hardware's threads with ordered reductions; the claim that the OUTPUT is the
 # serial one is this suite: a multi-mesh model and the Stanford dragon baked on 1
 # thread and on every thread (twice) give byte-identical blobs.
-add_test(NAME bake.determinism COMMAND test_mesh_bake --determinism
+add_test(NAME bake.determinism COMMAND sh "${JAH_FRESH_HOME}" "${_bake_home}/bake.determinism" -- $<TARGET_FILE:test_mesh_bake> --determinism
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(bake.determinism PROPERTIES
-    ENVIRONMENT "QT_QPA_PLATFORM=offscreen;HOME=${_bake_home};JAHSHAKA_DATA_ROOT=${_bake_home}/.local/share/Jahshaka"
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen;HOME=${_bake_home}/bake.determinism;JAHSHAKA_DATA_ROOT=${_bake_home}/bake.determinism/.local/share/Jahshaka"
     TIMEOUT 480 LABELS "meshbake")
 jah_no_display(bake.determinism)
 
