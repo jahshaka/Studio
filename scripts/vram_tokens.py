@@ -151,12 +151,26 @@ def row_wait_bound():
     THE ONE EXCEPTION INSIDE THE SLOT (delta F-C2, decided): a `--solo` batch or an `--attribute` run whose whole-card
     drain timed out falls back to JAH_VRAM_ALL=1 (each admission takes the whole card itself) while holding the slot;
     its cells are a measurement's own runs, not a gate's rows re-queued at its end, so they keep the wait — without it
-    every cell of that path failed at once and the attribution read INCOMPLETE."""
+    every cell of that path failed at once and the attribution read INCOMPLETE.
+    ONLY A ROW CTEST SCHEDULED BY ITS TOKENS (the landing split, 2026-10-10): the no-wait rests on ctest's scheduling,
+    so it applies only to a row ctest started under a resource spec with RESOURCE_GROUPS — ctest exports
+    CTEST_RESOURCE_GROUP_COUNT >= 1 to exactly such a row (and its children: gpu-admit, the app). A row of a build
+    whose registration carries no RESOURCE_GROUPS (a tree before tests/cmake/vram_rows.cmake) is not scheduled by
+    tokens, so its rows could exceed the card among themselves: it keeps the wait, as before."""
     if os.environ.get("JAH_VRAM_ALL"):
         return wait_bound()
-    if os.environ.get("JAH_GATE_SLOT_HELD") and slot_held_valid():
+    if os.environ.get("JAH_GATE_SLOT_HELD") and slot_held_valid() and ctest_scheduled():
         return 0.0
     return wait_bound()
+
+
+def ctest_scheduled():
+    """True when this process is (a child of) a ctest row scheduled by its RESOURCE_GROUPS (CTEST_RESOURCE_GROUP_COUNT
+    >= 1, exported by ctest under a resource spec)."""
+    try:
+        return int(os.environ.get("CTEST_RESOURCE_GROUP_COUNT", "0") or 0) >= 1
+    except ValueError:
+        return False
 
 
 def _open(path):
