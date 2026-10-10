@@ -8,7 +8,10 @@ function st() { return app.asyncShaders(); }
 function live() { return app.shaderCache().liveCompiles; }
 var r = { phases: [], frames: [] };
 app.setAsyncShaders(true);
-project.create("async after open", { template: "basic" });
+// ONE NAME PER LAUNCH: the warm launch shares the cold one's home (that is its shader cache) and so its
+// library, and a library refuses a second project of the same name — the fixed name made the warm
+// launch die at this line, "both launches reported" red 3/3 (A2-defect-shader.async_after_open).
+project.create("async after open " + (OUTDIR.indexOf("/warm") >= 0 ? "warm" : "cold"), { template: "basic" });
 editor.frame(120);
 var sphere = scene.addPrimitive("Sphere", { position: [0, 1, 0] });
 editor.frame(120);
