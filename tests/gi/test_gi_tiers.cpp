@@ -19,8 +19,9 @@
 //   3. PINS           — an Advanced edit deviates, survives a tier switch, is
 //                       reported as a deviation, and can be handed back;
 //   4. THE WORLD MODE — one owner: applying a World Mode drives the Photon row
-//                       and NOT the five rows underneath it, and Low/Medium/
-//                       High resolve to what they always did;
+//                       and NOT the five rows underneath it; each mode runs
+//                       Photon at the same name, Photon is never pinned, and a
+//                       Photon off its column reads Custom (WORLD-MODE-1);
 //   5. NEW SCENES     — born Realtime-Epic (owner decision D2), through the
 //                       same path MainWindow::createDefaultScene uses;
 //   6. MIGRATION      — the five pre-tier shipped samples' REAL serialized GI
@@ -42,6 +43,7 @@
 #include "irisgl/document/scenegraph/scene.h"
 
 #include "services/worldmodes.h"
+#include "services/testtier.h"
 #include "jahshaka/engine/Types.h"
 
 #include "../support/documentgraph.h"
@@ -378,37 +380,147 @@ static void testPins()
 static void testWorldModeOwnership()
 {
     std::printf("\n-- 4. one owner --\n");
-    // The three lower World Modes must resolve to exactly what they resolved to
-    // before the unification, or every scene on them would change when this
-    // landed: Low and Medium had GI off, High had Instant Radiosity at low
-    // quality. Epic is the one column that moves (owner decision D2).
-    struct Want { worldmodes::Mode mode; int giMode, giQuality, ddgi, bounces, dynamic; const char *name; };
+    // THE IDENTITY (owner 2026-10-09, WORLD-MODE-1): each World Mode runs Photon
+    // at the same name; the machinery rows follow the PHOTON column of that name.
+    struct Want { worldmodes::Mode mode; int giMode, giQuality, ddgi, bounces; const char *name; };
     const Want wants[] = {
-        { worldmodes::Mode::Low,    0, 0, 0, 1, 0, "World Low leaves GI off, as it always did" },
-        { worldmodes::Mode::Medium, 0, 1, 0, 1, 0, "World Medium leaves GI off, as it always did" },
-        { worldmodes::Mode::High,   1, 0, 1, 1, 0, "World High is Photon Low: VCT, two cascades at 64^3, the field on" },
-        { worldmodes::Mode::Epic,   2, 3, 1, 3, 0, "World Epic is Photon Epic: the hybrid, the epic row, the field, 3 bounces" },
+        { worldmodes::Mode::Low,    1, 0, 1, 1, "World Low is Photon Low: VCT, two cascades at 64^3, the field on" },
+        { worldmodes::Mode::Medium, 1, 1, 1, 1, "World Medium is Photon Medium: VCT 64^3, the field on" },
+        { worldmodes::Mode::High,   2, 2, 1, 1, "World High is Photon High: the hybrid at 128^3, the field on" },
+        { worldmodes::Mode::Epic,   2, 3, 1, 3, "World Epic is Photon Epic: the hybrid, the epic row, the field, 3 bounces" },
     };
     for (const Want &w : wants) {
         auto s = freshScene();
         worldmodes::setMode(s, w.mode);
-        CHECK(giMode(s) == w.giMode && giDdgi(s) == w.ddgi, w.name);
-        if (w.giMode != 0) CHECK(giQuality(s) == w.giQuality && giBounces(s) == w.bounces,
-                                 "  ... and its quality and bounces");
+        CHECK(giMode(s) == w.giMode && giDdgi(s) == w.ddgi && giQuality(s) == w.giQuality &&
+                  giBounces(s) == w.bounces, w.name);
     }
 
-    // A pinned Photon dial survives a World Mode switch like any other pin —
-    // this is what keeps a migrated sample rendering as it was serialized.
+    // THE PHOTON ROW IS NEVER PINNED: a set of it writes through and records
+    // nothing, so the next World Mode pick snaps it back to that mode's column.
     auto s = freshScene();
     worldmodes::setMode(s, worldmodes::Mode::Epic);
-    CHECK(worldmodes::setRowValue(s, worldmodes::photonRowId(), 2), "pin the Photon dial to Medium");
+    CHECK(worldmodes::setRowValue(s, worldmodes::photonRowId(), 2), "set the Photon dial to Medium");
     CHECK(giMode(s) == 1 && giQuality(s) == 1 && giDdgi(s) == 1 && giBounces(s) == 1,
-          "the pin resolved Medium through (VCT, medium, DDGI-fed, 1 bounce)");
+          "the set resolved Medium through (VCT, medium, DDGI-fed, 1 bounce)");
+    CHECK(!s->worldOverrides.contains(worldmodes::photonRowId()), "and recorded NO pin");
     worldmodes::setMode(s, worldmodes::Mode::Low);
-    CHECK(giMode(s) == 1 && giQuality(s) == 1,
-          "and World Low did NOT switch it off — the pin won");
+    CHECK(worldmodes::photonEnabled(s) && worldmodes::photonTier(s) == PhotonTier::Low,
+          "World Low then snapped Photon to Low — the World Mode owns the dial");
     CHECK(s->antiAliasing == 2 && s->shadowResolution == 512,
           "while the unpinned world rows followed Low");
+    worldmodes::pinRowValue(s, worldmodes::photonRowId(), 4);
+    CHECK(!s->worldOverrides.contains(worldmodes::photonRowId()), "pinRowValue refuses the photon row");
+    CHECK(!worldmodes::clearOverride(s, worldmodes::photonRowId()),
+          "and clearOverride(photon) has nothing to drop");
+}
+
+// ---------------------------------------------------------------------------
+// 4b. THE IDENTITY AND THE HONEST CUSTOM (WORLD-MODE-1, the brief's named checks)
+// ---------------------------------------------------------------------------
+static void testWorldModePhotonIdentity()
+{
+    std::printf("\n-- 4b. world_mode_photon_identity --\n");
+    for (int i = 0; i < 4; ++i) {
+        const worldmodes::Mode m = worldmodes::Mode(i);
+        auto s = freshScene();
+        worldmodes::setMode(s, m);
+        CHECK(worldmodes::photonEnabled(s) && worldmodes::photonTier(s) == PhotonTier(i),
+              qPrintable(QStringLiteral("world_mode_photon_identity: World %1 runs Photon %1")
+                             .arg(worldmodes::modeName(m))));
+        CHECK(worldmodes::mode(s) == m && worldmodes::pickedMode(s) == m &&
+                  !worldmodes::photonCustom(s),
+              qPrintable(QStringLiteral("world_mode_photon_identity: %1 reads %1, not Custom")
+                             .arg(worldmodes::modeName(m))));
+        // Every World-tier row the mode wrote holds its column, so none says custom
+        // (the `*`-free, honest source after a plain pick).
+        QStringList off;
+        for (const worldmodes::Row &r : worldmodes::rows())
+            if (r.tierSpace != worldmodes::TierSpace::None &&
+                worldmodes::source(s, r) != QLatin1String("mode"))
+                off << r.id;
+        CHECK(off.isEmpty(), qPrintable(QStringLiteral("world_mode_photon_identity: every tiered row "
+                                                       "reads source 'mode' at %1 (off: %2)")
+                                            .arg(worldmodes::modeName(m), off.join(QLatin1Char(',')))));
+    }
+}
+
+static void testPhotonOverrideReadsCustom()
+{
+    std::printf("\n-- 4c. photon_override_reads_custom --\n");
+    const worldmodes::Row *photon = worldmodes::row(worldmodes::photonRowId());
+    auto s = freshScene();
+    worldmodes::setMode(s, worldmodes::Mode::Epic);
+    worldmodes::setPhoton(s, true, PhotonTier::High);
+    CHECK(worldmodes::mode(s) == worldmodes::Mode::Custom,
+          "photon_override_reads_custom: Epic with Photon High reads Custom");
+    CHECK(worldmodes::pickedMode(s) == worldmodes::Mode::Epic && s->worldMode == 3,
+          "photon_override_reads_custom: the PICK is still Epic (worldMode is not rewritten)");
+    CHECK(photon && worldmodes::source(s, *photon) == QLatin1String("custom"),
+          "photon_override_reads_custom: the photon row's source is 'custom'");
+    CHECK(photon && worldmodes::tierValue(*photon, worldmodes::pickedMode(s), s) == 4,
+          "photon_override_reads_custom: its tierValue is still Epic's column");
+    worldmodes::setPhoton(s, false, worldmodes::photonTier(s));
+    CHECK(worldmodes::mode(s) == worldmodes::Mode::Custom,
+          "photon_override_reads_custom: Photon OFF under Epic reads Custom too");
+    worldmodes::setMode(s, worldmodes::Mode::Epic);
+    CHECK(worldmodes::photonEnabled(s) && worldmodes::photonTier(s) == PhotonTier::Epic &&
+              worldmodes::mode(s) == worldmodes::Mode::Epic,
+          "photon_override_reads_custom: re-picking Epic resets Photon to Epic and reads Epic");
+    CHECK(worldmodes::setRowValue(s, worldmodes::photonRowId(), 2, true) &&
+              !s->worldOverrides.contains(worldmodes::photonRowId()),
+          "photon_override_reads_custom: setRowValue(photon, 2, record) inserts no pin");
+    CHECK(worldmodes::mode(s) == worldmodes::Mode::Custom && worldmodes::photonTier(s) == PhotonTier::Medium,
+          "photon_override_reads_custom: ... and that set reads Custom at Medium");
+    // A PIN on another row is not Custom: it is marked `override`, the mode stays.
+    worldmodes::setMode(s, worldmodes::Mode::High);
+    worldmodes::setRowValue(s, QStringLiteral("msaa"), 8);
+    const worldmodes::Row *msaa = worldmodes::row(QStringLiteral("msaa"));
+    CHECK(worldmodes::mode(s) == worldmodes::Mode::High && msaa &&
+              worldmodes::source(s, *msaa) == QLatin1String("override"),
+          "photon_override_reads_custom: a pinned msaa leaves the mode High (source 'override')");
+
+    // THE IDENTITY COVERS THE TECHNIQUE (fix round): a Photon Technique pinned under Advanced
+    // (VCT under Epic, whose column is the hybrid) is dropped by a World Mode re-pick.
+    const worldmodes::Row *tech = worldmodes::row(QStringLiteral("giMode"));
+    worldmodes::setMode(s, worldmodes::Mode::Epic);
+    CHECK(worldmodes::setRowValue(s, QStringLiteral("giMode"), 1, true) && giMode(s) == 1 &&
+              s->worldOverrides.contains(QStringLiteral("giMode")) && worldmodes::photonCustom(s),
+          "technique_repick: VCT pinned under Epic (the Photon section reads Custom)");
+    worldmodes::setMode(s, worldmodes::Mode::Epic);
+    CHECK(!s->worldOverrides.contains(QStringLiteral("giMode")) && giMode(s) == 2 &&
+              !worldmodes::photonCustom(s) && worldmodes::mode(s) == worldmodes::Mode::Epic,
+          "technique_repick: re-picking Epic drops the pin and snaps the technique to the hybrid");
+    CHECK(tech && worldmodes::source(s, *tech) == QLatin1String("mode"),
+          "technique_repick: ...and the technique row reads source 'mode'");
+    worldmodes::setRowValue(s, QStringLiteral("giMode"), 1, true);
+    CHECK(worldmodes::photonCustom(s) && tech && worldmodes::source(s, *tech) == QLatin1String("override"),
+          "technique_repick: a technique edit AFTER the pick is a deviation again");
+
+    // PHOTON OFF IS NOT A MACHINERY DEVIATION (fix round): the photon row carries the Custom;
+    // the technique row agrees with photonDeviations (empty while Photon is off).
+    worldmodes::setMode(s, worldmodes::Mode::Epic);
+    worldmodes::setPhoton(s, false, worldmodes::photonTier(s));
+    CHECK(worldmodes::photonDeviations(s).isEmpty() && tech &&
+              worldmodes::source(s, *tech) == QLatin1String("mode") &&
+              photon && worldmodes::source(s, *photon) == QLatin1String("custom"),
+          "photon_off_source: Photon off — the technique row reads 'mode' (no deviation), the photon row 'custom'");
+    for (const QString &id : worldmodes::photonRowIds()) {
+        const worldmodes::Row *r = worldmodes::row(id);
+        CHECK(r && worldmodes::source(s, *r) == QLatin1String("mode"),
+              qPrintable(QStringLiteral("photon_off_source: %1 reads 'mode' with Photon off").arg(id)));
+    }
+    // THE ORDERING under a PICKED Custom (no World Mode): a Photon-tiered row answers through
+    // photonDeviations BEFORE source()'s picked-Custom fallback, so a machinery row holding its
+    // Photon tier's column reads 'mode' while the World-tiered photon row reads 'custom'.
+    worldmodes::setMode(s, worldmodes::Mode::Epic);
+    worldmodes::setMode(s, worldmodes::Mode::Custom);
+    const worldmodes::Row *quality = worldmodes::row(QStringLiteral("giQuality"));
+    CHECK(worldmodes::pickedMode(s) == worldmodes::Mode::Custom && worldmodes::photonEnabled(s) &&
+              !worldmodes::photonCustom(s) && quality &&
+              worldmodes::source(s, *quality) == QLatin1String("mode") &&
+              photon && worldmodes::source(s, *photon) == QLatin1String("custom"),
+          "custom_pick_order: picked Custom — giQuality on its Photon column reads 'mode', the photon row 'custom'");
 }
 
 // ---------------------------------------------------------------------------
@@ -447,12 +559,11 @@ static void testTierReapply()
         s->giDdgi = 0;
         s->giTier = int(PhotonTier::Medium);
         s->worldMode = int(worldmodes::Mode::Epic);
-        s->worldOverrides.insert(worldmodes::photonRowId(), 2);
         worldmodes::setPhoton(s, worldmodes::photonEnabled(s), worldmodes::photonTier(s));
         CHECK(giMode(s) == 1 && giQuality(s) == 1 && giDdgi(s) == 1 && giBounces(s) == 1,
               "Skeletal/World Background: the re-applied Medium tier turns the field on, nothing else moves");
-        CHECK(!worldmodes::photonCustom(s) && s->worldOverrides.value(worldmodes::photonRowId()).toInt() == 2,
-              "reads as Medium (not Custom), dial pin kept");
+        CHECK(!worldmodes::photonCustom(s) && worldmodes::mode(s) == worldmodes::Mode::Custom,
+              "the Photon tier reads Medium (not Custom), and the World Mode reads Custom (Medium under Epic)");
         // The same shape with the field PINNED off keeps it off — a pin is a pin.
         s->giDdgi = 0;
         s->worldOverrides.insert(QStringLiteral("giDdgi"), 0);
@@ -559,6 +670,50 @@ static void testTierTexts()
     }
 }
 
+// THE TEST-TIER SWITCH NEVER WRITES A PINNED ROW (TEST-NEEDS-1 fix rounds F3 + round 2). RED (by
+// construction, the lead's round-2 read) at
+// fd22dbc66 (the restore went through the Rows' get/set and counted any machinery pin): (a) an
+// auto field (giDdgi -1) under a giMode pin came back concrete; (b) a giBounces pin alone kept
+// Photon ON in a process whose list does not name it.
+static void testTestTierPins()
+{
+    testtier::set(QStringLiteral("low"));
+    qputenv(testtier::kNeedsEnvVar, "none");
+    {   // (a) giMode pinned to vct, the field auto: both survive the switch, raw
+        iris::ScenePtr s = freshScene();
+        worldmodes::setMode(s, worldmodes::Mode::Epic);
+        worldmodes::setRowValue(s, QStringLiteral("giMode"), 1, true);
+        s->giDdgi = -1;
+        const int bounces = s->giNumBounces;
+        worldmodes::applyTestTier(s);
+        CHECK(giMode(s) == 1 && s->worldOverrides.contains(QStringLiteral("giMode")),
+              "test tier: a giMode pin stays (the field and the pin) under NEEDS none");
+        CHECK(s->giDdgi == -1, "test tier: the auto field (giDdgi -1) is restored RAW, never concrete");
+        CHECK(s->giNumBounces == bounces, "test tier: the machinery fields come back as the document had them");
+    }
+    {   // (b) a machinery pin alone does not keep Photon on
+        iris::ScenePtr s = freshScene();
+        worldmodes::setMode(s, worldmodes::Mode::Epic);
+        worldmodes::setRowValue(s, QStringLiteral("giBounces"), 2, true);
+        worldmodes::applyTestTier(s);
+        CHECK(!worldmodes::photonEnabled(s), "test tier: a giBounces pin does not keep Photon ON (NEEDS none)");
+        CHECK(s->worldOverrides.contains(QStringLiteral("giBounces")) && giBounces(s) == 2,
+              "test tier: ...and the giBounces pin itself stays");
+    }
+    {   // NEEDS photon: Photon on at the mode's own tier; an unpinned bloom off, a pinned one stays
+        qputenv(testtier::kNeedsEnvVar, "photon");
+        iris::ScenePtr s = freshScene();
+        worldmodes::setMode(s, worldmodes::Mode::Epic);
+        worldmodes::setRowValue(s, QStringLiteral("bloom"), 1, true);
+        worldmodes::applyTestTier(s);
+        CHECK(worldmodes::photonEnabled(s) && worldmodes::photonTier(s) == worldmodes::PhotonTier::Low,
+              "test tier: NEEDS photon runs Photon at the mode's own tier (Low)");
+        CHECK(s->bloomEnabled, "test tier: a pinned bloom stays ON though not named");
+    }
+    qunsetenv(testtier::kNeedsEnvVar);
+    testtier::set(QString());
+}
+
 int main(int argc, char **argv)
 {
     QGuiApplication app(argc, argv);
@@ -571,9 +726,12 @@ int main(int argc, char **argv)
     testSwitch();
     testPins();
     testWorldModeOwnership();
+    testWorldModePhotonIdentity();
+    testPhotonOverrideReadsCustom();
     testNewSceneDefault();
     testTierReapply();
     testTierTexts();
+    testTestTierPins();
 
     std::printf(failures ? "\nFAILED: %d check(s)\n" : "\nALL CHECKS PASSED\n", failures);
     return failures ? 1 : 0;

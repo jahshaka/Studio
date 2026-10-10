@@ -176,7 +176,7 @@ set_tests_properties(vr.gather_stereo PROPERTIES
 # that stopped because nothing was enabled, and the session that was stopped
 # with nobody noticing — in the app, through the Player page and the real driver.
 set(_vr_nopic_home "${CMAKE_CURRENT_BINARY_DIR}/vr-nopicture-home")
-jah_gpu_row(vr.no_picture_start CLASS vr
+jah_gpu_row(vr.no_picture_start CLASS vr TIER epic NEEDS photon
          COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/run_vr_app.sh"
                  "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" "${JAH_MONADO_MANIFEST}"
                  "${CMAKE_SOURCE_DIR}/tests/scripting/scripts/e2e_vr_no_picture_start.js")
@@ -211,7 +211,7 @@ set_tests_properties(vr.no_picture_start PROPERTIES
 # is a doff; ONE frame is a reprojection hiccup, and the hysteresis that tells
 # them apart is `vr.session`'s case.
 set(_vr_mirror_home "${CMAKE_CURRENT_BINARY_DIR}/vr-mirror-live-home")
-jah_gpu_row(vr.mirror_live CLASS vr
+jah_gpu_row(vr.mirror_live CLASS vr TIER epic NEEDS photon
          COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/run_vr_app.sh"
                  "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" "${JAH_MONADO_MANIFEST}"
                  "${CMAKE_SOURCE_DIR}/tests/scripting/scripts/e2e_vr_mirror_live.js"
@@ -229,7 +229,7 @@ set_tests_properties(vr.mirror_live PROPERTIES
 # -> the editor stays, the dialog says so; a NEW runtime process -> Try again
 # reconnects. All against the runner's PRIVATE Monado (run_vr_app.sh's events).
 set(_vr_start_home "${CMAKE_CURRENT_BINARY_DIR}/vr-start-home")
-jah_gpu_row(vr.start_recovery CLASS vr
+jah_gpu_row(vr.start_recovery CLASS vr TIER epic NEEDS photon
          COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/run_vr_app.sh"
                  "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" "${JAH_MONADO_MANIFEST}"
                  "${CMAKE_CURRENT_SOURCE_DIR}/vr_start.js"
@@ -246,7 +246,7 @@ set_tests_properties(vr.start_recovery PROPERTIES
 # private runtime answers, and the press that succeeds must close the dialog and
 # clear the failure record (at the base the session came up under it).
 set(_vr_press_home "${CMAKE_CURRENT_BINARY_DIR}/vr-start-press-home")
-jah_gpu_row(vr.start_press CLASS vr
+jah_gpu_row(vr.start_press CLASS vr TIER epic NEEDS photon
          COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/run_vr_app.sh"
                  "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" "${JAH_MONADO_MANIFEST}"
                  "${CMAKE_CURRENT_SOURCE_DIR}/vr_start_press.js"
@@ -263,7 +263,7 @@ set_tests_properties(vr.start_press PROPERTIES
 file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/broken-openxr-runtime.json"
      "{ \"file_format_version\": \"1.0.0\", \"runtime\": { \"name\": \"Broken\", \"library_path\": \"/nonexistent/libopenxr_broken.so\" } }\n")
 set(_vr_broken_home "${CMAKE_CURRENT_BINARY_DIR}/vr-start-broken-home")
-jah_gpu_row(vr.start_broken CLASS vr
+jah_gpu_row(vr.start_broken CLASS vr TIER epic NEEDS photon
          COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/run_vr_app.sh"
                  "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" "${CMAKE_CURRENT_BINARY_DIR}/broken-openxr-runtime.json"
                  "${CMAKE_CURRENT_SOURCE_DIR}/vr_start_broken.js"
@@ -296,7 +296,7 @@ set_tests_properties(vr.start_broken PROPERTIES
 # real interaction profile bound, so an injection can never fool a smoke on a
 # real headset.
 set(_vr_input_home "${CMAKE_CURRENT_BINARY_DIR}/vr-input-home")
-jah_gpu_row(vr.input_session CLASS vr
+jah_gpu_row(vr.input_session CLASS vr TIER low NEEDS NONE
          COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/run_vr_app.sh"
                  "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" "${JAH_MONADO_MANIFEST}"
                  "${CMAKE_SOURCE_DIR}/tests/scripting/scripts/e2e_vr_input_session.js"
@@ -342,7 +342,7 @@ foreach(_arm warmup warmup_control)
         set(_vr_warm_script "${CMAKE_SOURCE_DIR}/tests/scripting/scripts/e2e_vr_warmup_control.js")
     endif()
     jah_fresh_home_fixture(vr.${_arm}.fresh_home vr${_arm}FreshHome "${_vr_warm_home}" LABELS "scripting")
-    jah_gpu_row(vr.${_arm} CLASS vr
+    jah_gpu_row(vr.${_arm} CLASS vr TIER epic NEEDS photon bloom ssao smaa planar
              COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/run_vr_app.sh"
                      "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" "${JAH_MONADO_MANIFEST}"
                      "${_vr_warm_script}"
@@ -363,7 +363,7 @@ set(_vr_warm_timing_home "${CMAKE_CURRENT_BINARY_DIR}/vr-warmup-timing-home")
 jah_timing_script("${CMAKE_SOURCE_DIR}/tests/scripting/scripts/e2e_vr_warmup.js"
                   "${CMAKE_CURRENT_BINARY_DIR}/e2e_vr_warmup.timing.js")
 jah_fresh_home_fixture(vr.warmup.timing.fresh_home vrwarmuptimingFreshHome "${_vr_warm_timing_home}" LABELS "scripting;stage-close;quiet-box")
-jah_gpu_exclusive_test(NAME vr.warmup.timing CLASS vr RUN_TIMEOUT 600
+jah_gpu_exclusive_test(NAME vr.warmup.timing CLASS vr TIER epic NEEDS photon bloom ssao smaa planar RUN_TIMEOUT 600
     COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/run_vr_app.sh"
             "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" "${JAH_MONADO_MANIFEST}"
             "${CMAKE_CURRENT_BINARY_DIR}/e2e_vr_warmup.timing.js"
@@ -403,7 +403,7 @@ target_link_libraries(test_vr_frame_budget PRIVATE Qt6::Core)
 # It renders 2 x (240 settle + 200 recorded) stereo frames at 10.26 Mpx and imports
 # Showroom 2 on the way, on a rig whose present copy is 10-27 ms a frame: this is the
 # longest VR suite there is (run budget 900 s; the lock's wait rides on top).
-jah_gpu_exclusive_test(NAME vr.frame_budget CLASS vr RUN_TIMEOUT 900
+jah_gpu_exclusive_test(NAME vr.frame_budget CLASS vr TIER epic NEEDS photon bloom ssao smaa planar RUN_TIMEOUT 900
          COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/run_vr_budget.sh"
                  "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" "${JAH_MONADO_MANIFEST}"
                  "${CMAKE_CURRENT_BINARY_DIR}/vr_frame_budget.js"
@@ -447,7 +447,7 @@ set_target_properties(test_vr_eye_grade PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 target_link_libraries(test_vr_eye_grade PRIVATE Qt6::Gui)
 
-jah_gpu_row(vr.eye_grade CLASS vr
+jah_gpu_row(vr.eye_grade CLASS vr TIER epic NEEDS photon bloom ssao smaa planar
          COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/run_vr_eye_grade.sh"
                  "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" "${JAH_MONADO_MANIFEST}"
                  "${CMAKE_CURRENT_BINARY_DIR}/eye_grade.js"
@@ -485,11 +485,28 @@ jah_pool_arm(vr_session player_session ${CMAKE_SOURCE_DIR}/tests/scripting/scrip
 jah_pool_arm(vr_session verbs_session ${CMAKE_SOURCE_DIR}/tests/scripting/scripts/e2e_vr_session_verbs.js 39)
 jah_pool_arm(vr_session photon_view ${CMAKE_SOURCE_DIR}/tests/scripting/scripts/e2e_vr_photon_view.js 9)
 jah_pool_arm(vr_session sample_open ${CMAKE_CURRENT_SOURCE_DIR}/vr_sample_open.js 9)
-jah_add_pool(vr_session TIER epic CLASS vr LABELS scripting
+jah_add_pool(vr_session TIER document   CLASS vr LABELS scripting
     LAUNCHER "${CMAKE_CURRENT_SOURCE_DIR}/run_vr_app.sh" --launch "${JAH_MONADO_MANIFEST}" --
     APP_ARGS --vr
     ENV "${JAH_TEST_DISPLAY_ENV}"
     PROPS RESOURCE_LOCK monado COST ${JAH_COST_MONADO} SKIP_RETURN_CODE 77)
+
+# ---- THE VR SESSION UNDER THE KHRONOS VALIDATION LAYER (TESTING-CLEANUP-2 H4): the stereo path —
+# the session, the eye swapchains, the per-eye workspaces — had never run under the layer in a
+# gate. One app process (`--vr`, the shared Monado session's shape), layered by the loader; the
+# FIRST arm proves the layer is live (engine.validation()), then the session verbs run under it;
+# any "Validation Error" in the process's output fails the row.
+# TIER epic with every NEEDS word: the layer is only worth what it sees — the whole shipped chain.
+if(EXISTS "/usr/share/vulkan/explicit_layer.d/VkLayer_khronos_validation.json")
+    jah_pool_arm(vr_validation validation_proof ${CMAKE_SOURCE_DIR}/tests/scripting/scripts/e2e_validation_proof.js 5 FIRST)
+    jah_pool_arm(vr_validation verbs_session ${CMAKE_SOURCE_DIR}/tests/scripting/scripts/e2e_vr_session_verbs.js 39)
+    jah_add_pool(vr_validation TIER epic NEEDS photon bloom ssao smaa planar CLASS vr LABELS scripting
+        LAUNCHER "${CMAKE_CURRENT_SOURCE_DIR}/run_vr_app.sh" --launch "${JAH_MONADO_MANIFEST}" --
+        APP_ARGS --vr
+        ENV "${JAH_TEST_DISPLAY_ENV}" "VK_LOADER_LAYERS_ENABLE=VK_LAYER_KHRONOS_validation"
+        PROPS RESOURCE_LOCK monado COST ${JAH_COST_MONADO} SKIP_RETURN_CODE 77
+              FAIL_REGULAR_EXPRESSION "Validation Error")
+endif()
 
 get_property(_vr_rows DIRECTORY PROPERTY TESTS)
 foreach(_t IN LISTS _vr_rows)

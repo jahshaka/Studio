@@ -127,6 +127,21 @@ int main(int argc, char *argv[])
             }
             testtier::set(worldmodes::modeName(m));
         }
+        // ...AND WHAT IT NEEDS (TEST-NEEDS-1): JAHSHAKA_TEST_NEEDS names the switchable
+        // features the process keeps (testtier::switchable(); `none` = none of them). A list
+        // the app cannot honour — an unknown word, `none` beside another, a list with no tier
+        // to apply it to — is refused here, never silently booted as something else.
+        const QStringList needs = testtier::needs();
+        if (!needs.isEmpty()) {
+            QString err = testtier::needsError(needs);
+            if (err.isEmpty() && !testtier::active())
+                err = QStringLiteral("a needs list applies to a test tier, and there is none "
+                                     "(--test-tier / %1)").arg(QLatin1String(testtier::kEnvVar));
+            if (!err.isEmpty()) {
+                std::fprintf(stderr, "Jahshaka: %s: %s\n", testtier::kNeedsEnvVar, qPrintable(err));
+                return 2;
+            }
+        }
     }
     cli.applyPlatformPolicy();
     // WHETHER A PERSON IS LOOKING AT THIS PROCESS, recorded once for everything

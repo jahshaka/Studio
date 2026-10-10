@@ -608,6 +608,74 @@ int main(int argc, char **argv)
         modes.setSceneView(nullptr);
     }
 
+    // ---- THE WORLD MODE READS CUSTOM WHILE PHOTON DEVIATES (WORLD-MODE-1) ----
+    // Owner 2026-10-09: each World Mode runs Photon at the same name; the Photon
+    // dropdown may move it, the World Modes selector then reads Custom, and
+    // picking a World Mode again snaps Photon back — one undo step, and the undo
+    // restores the Custom. The selector listens on currentIndexChanged, and the
+    // Custom entry is its own index, so re-picking the SAME mode the scene was on
+    // is a real index change.
+    {
+        QUndoStack stack;
+        UndoService undo(&stack);
+        StudioServices services;
+        services.undo = &undo;
+        auto world = iris::Scene::create();
+        worldmodes::setMode(world, worldmodes::Mode::Epic);
+        WorldGiPropertyWidget gi;
+        WorldModesPropertyWidget modes;
+        gi.setServices(&services);
+        modes.setServices(&services);
+        gi.setScene(world);
+        modes.setScene(world);
+        // The sibling refresh the properties panel wires (SceneNodePropertiesWidget).
+        QObject::connect(&gi, &WorldGiPropertyWidget::worldSettingsChanged,
+                         [&]() { modes.setScene(world); });
+        pump();
+        const auto selector = [&]() -> QComboBox * {
+            for (ComboBoxWidget *c : modes.findChildren<ComboBoxWidget *>())
+                for (QLabel *l : c->findChildren<QLabel *>())
+                    if (l->text() == QStringLiteral("World Mode")) return c->getWidget();
+            return nullptr;
+        };
+        QComboBox *mode = selector();
+        CHECK(mode && mode->currentText() == QStringLiteral("Epic") && mode->count() == 4,
+              "world modes panel: an Epic scene's selector reads Epic (no Custom entry)");
+        QComboBox *tier = gi.findChildren<ComboBoxWidget *>().value(0)
+                              ? gi.findChildren<ComboBoxWidget *>().value(0)->getWidget() : nullptr;
+        if (tier) tier->setCurrentIndex(2);   // Photon High, from Photon's own dropdown
+        pump();
+        CHECK(worldmodes::photonTier(world) == worldmodes::PhotonTier::High && world->worldMode == 3,
+              "world modes panel: the Photon dropdown moved Photon to High (the pick stays Epic)");
+        mode = selector();
+        CHECK(mode && mode->currentText() == QStringLiteral("Custom") && mode->count() == 5,
+              qPrintable(QStringLiteral("world modes panel: the selector reads Custom while Photon "
+                                        "deviates (reads '%1')").arg(mode ? mode->currentText() : QString())));
+        const int before = stack.count();
+        if (mode) mode->setCurrentIndex(3);   // Epic, picked from Custom
+        pump();
+        mode = selector();
+        CHECK(worldmodes::photonEnabled(world) && worldmodes::photonTier(world) == worldmodes::PhotonTier::Epic,
+              "world modes panel: picking Epic from Custom fires the reset (Photon back to Epic)");
+        CHECK(mode && mode->currentText() == QStringLiteral("Epic") && mode->count() == 4,
+              "world modes panel: and the selector reads Epic again");
+        CHECK(stack.count() == before + 1, "world modes panel: the reset is ONE undo step");
+        stack.undo();
+        pump();
+        mode = selector();
+        CHECK(worldmodes::photonTier(world) == worldmodes::PhotonTier::High &&
+                  mode && mode->currentText() == QStringLiteral("Custom"),
+              "world modes panel: undo restores Photon High and the selector's Custom");
+        // Photon OFF from its own switch reads Custom too.
+        stack.redo();
+        pump();
+        if (auto *sw = box(gi.findChildren<CheckBoxWidget *>().value(0))) sw->setChecked(false);
+        pump();
+        mode = selector();
+        CHECK(!worldmodes::photonEnabled(world) && mode && mode->currentText() == QStringLiteral("Custom"),
+              "world modes panel: Photon switched off reads Custom");
+    }
+
     std::printf(failures ? "\nFAILED: %d check(s)\n" : "\nALL CHECKS PASSED\n", failures);
     return failures ? 1 : 0;
 }

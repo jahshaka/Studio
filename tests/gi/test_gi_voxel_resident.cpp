@@ -41,7 +41,7 @@
 //      (`Scene::giVoxelStats`, which flushes the render system and downloads the
 //      light volume and the voxeliser's OWN emissive store): every field exactly
 //      equal, so a device address read in a different frame cannot move a voxel.
-//   5. A REFUSED SCENE BUILDS AND DOES NOT CRASH. `JAH_VCT_REFUSE_GEOMETRY` makes
+//   5. A REFUSED SCENE BUILDS AND DOES NOT CRASH. the arm `gi.refuseGeometry` makes
 //      the voxeliser refuse every (mesh, level, submesh) — the state a device with
 //      NO buffer device addresses is in for the whole scene, and the state a mesh
 //      without a float3 position or with an unaligned stride is in for itself.
@@ -287,7 +287,8 @@ int main()
     // ---- 5. A REFUSED SCENE BUILDS AND DOES NOT CRASH -------------------
     // Every row refused = the no-buffer-device-address state for the whole scene.
     // Reaching the end of this case at all is most of the assertion.
-    setenv("JAH_VCT_REFUSE_GEOMETRY", "1", 1);
+    e->setArm("gi.refuseGeometry", 1.0);
+    render(e, 1);   // the arm is latched at a frame's top; the refresh's build reads it
     scene->refreshGlobalIllumination();
     enginetest::testCameraLookAt(view, Vec3(400.0f, 3.0f, 406.0f), Vec3(400.0f, 0.5f, 400.0f));
     render(e, 16);
@@ -303,7 +304,8 @@ int main()
           ("and reports no geometry and no dispatch (" +
            std::to_string(refused.cascades[0].voxelTriangles) + " triangles, " +
            std::to_string(refused.cascades[0].voxelDispatches) + " dispatches)").c_str());
-    unsetenv("JAH_VCT_REFUSE_GEOMETRY");
+    e->setArm("gi.refuseGeometry", 0.0);
+    render(e, 1);
     scene->refreshGlobalIllumination();
     render(e, 16);
     CHECK(scene->giStatus().cascades[0].voxelTriangles == 0 ||

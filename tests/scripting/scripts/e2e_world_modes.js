@@ -111,7 +111,9 @@ assert(s.giCards.valueId === "off", "Low turns the surface cache off (no ray tie
 assert(s.ssao.valueId === "off", "Low turns ambient occlusion off");
 assert(s.refractions.valueId === "off", "Low turns refractions off");
 assert(s.shadowResolution.value === 512, "Low sets a 512 shadow atlas: " + s.shadowResolution.value);
-assert(s.giMode.valueId === "off", "Low turns GI off: " + s.giMode.valueId);
+assert(s.photon.valueId === "low" && s.giMode.valueId === "vct",
+       "Low runs Photon Low — each World Mode runs Photon at the same name (WORLD-MODE-1): " +
+       s.photon.valueId + " / " + s.giMode.valueId);
 assert(s.msaa.source === "mode", "an untouched row reports source 'mode'");
 // The invariant: the backing field IS the resolved value, so every existing
 // reader (SceneMirror, the serializer, the old verbs) sees the same number.
@@ -269,6 +271,34 @@ assert(world.settings().exposureMetering.valueId === "spot" &&
 world.mode({ mode: "high" });
 world.clearOverride({ id: "exposureMetering" });
 world.postFx({ exposureMeterLow: 10 });
+
+// ---- THE IDENTITY AND THE HONEST CUSTOM (WORLD-MODE-1, owner 2026-10-09) ----
+// Each World Mode runs Photon at the same name; Photon's own dial may move it, the
+// mode then READS custom (the pick is kept), and picking any mode snaps it back.
+world.mode({ mode: "high" });
+assert(world.photon().enabled === true && world.photon().tier === "high",
+       "world.mode({mode:'high'}) runs Photon High: " + JSON.stringify(world.photon().tier));
+world.photon({ tier: "low" });
+assert(world.mode() === "custom" && world.get().mode === "custom",
+       "world.photon({tier:'low'}) under High: world.mode() reads 'custom' (" + world.mode() + ")");
+var ph = world.settings().photon;
+assert(ph.source === "custom" && ph.valueId === "low" && ph.tierValue === 3,
+       "the photon row reads source 'custom' at low, its tierValue still High's column: " +
+       ph.source + " / " + ph.valueId + " / " + ph.tierValue);
+assert(world.settings().msaa.source === "override",
+       "a pinned row elsewhere is still an override, not custom");
+assert(world.mode({ mode: "high" }) === "high" && world.photon().tier === "high",
+       "re-picking High snaps Photon back to High and reads 'high'");
+world.photon({ enabled: false });
+assert(world.mode() === "custom", "Photon off under High reads 'custom' too");
+world.mode({ mode: "high" });
+assert(world.photon().enabled === true && world.mode() === "high", "and a re-pick turns it back on");
+// The photon row is set, never pinned: world.override writes it, and the next pick wins.
+var po = world.override({ id: "photon", value: "medium" });
+assert(po.source === "custom" && world.mode() === "custom",
+       "world.override on the photon row sets Medium without a pin (source " + po.source + ")");
+world.mode({ mode: "high" });
+assert(world.photon().tier === "high", "and the next World Mode pick snaps it back to High");
 
 // ---- serialization round-trip ----------------------------------------------
 assert(world.get().mode === "high", "world.get() reports the mode too");

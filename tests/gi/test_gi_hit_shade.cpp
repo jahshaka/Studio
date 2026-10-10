@@ -64,6 +64,14 @@
 
 using namespace jahshaka::engine;
 
+/// The hit decode's light-list arm (`atom.hitWorldLights`) for an arm table's word:
+/// none = shipped (0), "off" = 1, "all" = 2.
+static double worldArm(const char *word)
+{
+    if (!word) return 0.0;
+    return std::strcmp(word, "off") == 0 ? 1.0 : std::strcmp(word, "all") == 0 ? 2.0 : 0.0;
+}
+
 static int failures = 0;
 #define CHECK(cond, msg)                                                        \
     do {                                                                        \
@@ -1310,7 +1318,7 @@ static int gatherArm(Engine *e)
 // red SPOT aimed at the crate. The MOVER crate's hits are the decode's (a record
 // each); its reflection must be its RASTER (seen from the reflected camera, where
 // both lamps are on screen and clustered) within arm (a)'s 2 %. The same process
-// then reads the list OFF (JAHSHAKA_HIT_WORLD_LIGHTS=off, the picture before the
+// then reads the list OFF (the arm atom.hitWorldLights = 1, the picture before the
 // lane): the reflection falls to the lamp-OFF raster.
 static int offscreenLightsMain(Engine *e)
 {
@@ -1389,9 +1397,9 @@ static int offscreenLightsMain(Engine *e)
     // The counters are read back several frames late: read after a MIRROR shot.
     const RayQueryStatus st = s->rayQueryStatus();
     const ImageF rOn = shot(false);
-    setenv("JAHSHAKA_HIT_WORLD_LIGHTS", "off", 1);
+    e->setArm("atom.hitWorldLights", 1.0);   // off
     const ImageF mListOff = shot(true);
-    unsetenv("JAHSHAKA_HIT_WORLD_LIGHTS");
+    e->setArm("atom.hitWorldLights", 0.0);
     lampsOn(false);
     const ImageF rOff = shot(false);
     lampsOn(true);
@@ -1867,10 +1875,8 @@ static int costMain(Engine *e)
             fx.ssr = arms[a].epic ? 2 : 1;
             view->setPostFx(fx);
             for (int i = 0; i < 30; ++i) s->setNodeVisible(movers[size_t(i)], i < arms[a].movers);
-            if (arms[a].v->world) setenv("JAHSHAKA_HIT_WORLD_LIGHTS", arms[a].v->world, 1);
-            else unsetenv("JAHSHAKA_HIT_WORLD_LIGHTS");
-            if (arms[a].v->spec) setenv("JAHSHAKA_HIT_VCT_SPECULAR", arms[a].v->spec, 1);
-            else unsetenv("JAHSHAKA_HIT_VCT_SPECULAR");
+            e->setArm("atom.hitWorldLights", worldArm(arms[a].v->world));
+            e->setArm("atom.hitVctSpecular", arms[a].v->spec && std::strcmp(arms[a].v->spec, "0") == 0 ? 0.0 : 1.0);
             render(e, 40);
             std::vector<FrameRecord> drop;
             e->takeFrameRecords(drop);
@@ -1888,8 +1894,8 @@ static int costMain(Engine *e)
         }
     }
     e->setFrameMonitor(MonitorLevel::Off);
-    unsetenv("JAHSHAKA_HIT_WORLD_LIGHTS");
-    unsetenv("JAHSHAKA_HIT_VCT_SPECULAR");
+    e->setArm("atom.hitWorldLights", 0.0);
+    e->setArm("atom.hitVctSpecular", 1.0);
     std::printf("    arm                                          frame GPU ms   decode GPU ms   write-back GPU ms   "
                 "records   decode ns/record   (frames)\n");
     for (int a = 0; a < kArms; ++a) {
@@ -1970,8 +1976,7 @@ static int costLampsMain(Engine *e)
     for (int round = 0; round < 4; ++round)
         for (int a = 0; a < 4; ++a) {
             lit(arms[a].lamps);
-            if (arms[a].world) setenv("JAHSHAKA_HIT_WORLD_LIGHTS", arms[a].world, 1);
-            else unsetenv("JAHSHAKA_HIT_WORLD_LIGHTS");
+            e->setArm("atom.hitWorldLights", worldArm(arms[a].world));
             render(e, 40);
             std::vector<FrameRecord> drop;
             e->takeFrameRecords(drop);
@@ -1982,7 +1987,7 @@ static int costLampsMain(Engine *e)
                     if (p.pass == "Jahshaka hit decode" && p.gpuMs >= 0.0f) { sum[a] += p.gpuMs; ++n[a]; }
             rec[a] = s->rayQueryStatus().hitRecords;
         }
-    unsetenv("JAHSHAKA_HIT_WORLD_LIGHTS");
+    e->setArm("atom.hitWorldLights", 0.0);
     e->setFrameMonitor(MonitorLevel::Off);
     for (int a = 0; a < 4; ++a)
         std::printf("    %-40s decode %.4f ms (%d samples), %llu records\n", arms[a].name, n[a] ? sum[a] / n[a] : -1.0,

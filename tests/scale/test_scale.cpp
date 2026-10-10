@@ -2293,7 +2293,7 @@ static int occlusionPyramidMain(int w, int h)
 // ===========================================================================
 // atom.coverage_trace — ATOM-BLACK-FRAMES-1: THE 10k WORLD NEVER RENDERS A FRAME WITHOUT ITS
 // ATOM SURFACE. D1's world at ~200 buckets (atom.decode_exact's deterministic config), the
-// decode's DISCRIMINATOR on (JAHSHAKA_ATOM_DISCRIMINATE, HlmsAtom::preparePassHash): every
+// decode's DISCRIMINATOR on (the arm `atom.discriminate`, HlmsAtom::preparePassHash): every
 // pixel a bucket draw reaches is painted — code 0 where every validity term holds, else the
 // code of the FIRST term that failed (800.Atom_piece_ps.any, AtomDeclDecode) — and every
 // frame read back: the id image says which pixels the id pass COVERED, the picture what the
@@ -2323,12 +2323,12 @@ struct CodeChart {
 static constexpr int kCodes = 17;
 static bool learnChart(Env &env, CodeChart &chart)
 {
-    setenv("JAHSHAKA_ATOM_DISCRIMINATE", "2", 1);
+    env.engine->setArm("atom.discriminate", 2.0);   // latched by the frames below
     frame(env, 64);
     Image img;
     std::vector<uint32_t> ids;
     const bool read = env.view->readPixels(img) && img.width && readIdsAt(env, ids);
-    setenv("JAHSHAKA_ATOM_DISCRIMINATE", "1", 1);
+    env.engine->setArm("atom.discriminate", 1.0);
     if (!read) return false;
     const unsigned W = img.width, H = img.height;
     auto key = [](const unsigned char *px) { return uint32_t(px[0]) | uint32_t(px[1]) << 8 | uint32_t(px[2]) << 16; };
@@ -2412,7 +2412,6 @@ static int coverageTraceMain()
     setenv("JAHSHAKA_NO_DITHER", "1", 1);
     setenv("JAHSHAKA_NO_RAY_QUERY", "1", 1);
     setenv("JAHSHAKA_ATOM_TRACE", "1", 1);
-    setenv("JAHSHAKA_ATOM_DISCRIMINATE", "1", 1);
     auto knob = [](const char *name, int dflt) { return std::getenv(name) ? std::atoi(std::getenv(name)) : dflt; };
     const int walkFrames = knob("JAH_TRACE_FRAMES", 2000);
     const int landingFrames = knob("JAH_TRACE_LANDING", 600);
@@ -2434,6 +2433,7 @@ static int coverageTraceMain()
     WorldSpec spec = denseWorld();
     spec.materials = 1;
     if (!bootWorld(env, w, "test-atom-coverage-trace-ogre.log", spec)) return 1;
+    env.engine->setArm("atom.discriminate", 1.0);   // the decode's codes from the first frame on
     env.doc->exposureMode = iris::ExposureMode::Manual;
     worldmodes::setMode(env.doc, worldmodes::Mode::High);
     worldmodes::setPhoton(env.doc, false, worldmodes::PhotonTier::High);
@@ -2617,7 +2617,7 @@ static int coverageTraceMain()
     // scene's entry and its DAG, as the walk's setMesh(null) arm always did.
     REQUIRE(removeChildReleased, "removeChild alone releases the GPU scene's mesh entry (\"mesh released\" "
             "in the trace after every item of the mesh left the document)");
-    unsetenv("JAHSHAKA_ATOM_DISCRIMINATE");
+    env.engine->setArm("atom.discriminate", 0.0);
     unsetenv("JAHSHAKA_ATOM_TRACE");
     shutdown(env);
     return failures ? 1 : 0;

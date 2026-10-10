@@ -78,7 +78,7 @@ jah_fresh_home_fixture(threading.freshhome.mode threading_home_mode "${_thr_home
 
 jah_fresh_home_fixture(threading.freshhome.mode_serial threading_home_mode_serial "${_thr_home_ser}" LABELS "threading")
 
-jah_gpu_row(threading.mode CLASS app
+jah_gpu_row(threading.mode CLASS app TIER epic NEEDS photon bloom ssao smaa planar
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
                  --script ${CMAKE_CURRENT_BINARY_DIR}/mode.js
          WORKING_DIRECTORY ${_thr_home_par}/run)
@@ -92,7 +92,7 @@ set_tests_properties(threading.mode PROPERTIES
 # (src/bridge/sceneworkerthreads.h:52-56) — pinning it to 1 gives the editor
 # scene one worker, which is exactly the condition under which Ogre takes the
 # serial compile branch (OgreRenderQueue.cpp:388 needs > 1).
-jah_gpu_row(threading.mode_serial CLASS app
+jah_gpu_row(threading.mode_serial CLASS app TIER epic NEEDS photon bloom ssao smaa planar
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
                  --script ${CMAKE_CURRENT_BINARY_DIR}/mode.js
          WORKING_DIRECTORY ${_thr_home_ser}/run)
@@ -143,7 +143,7 @@ jah_fresh_home_fixture(threading.freshhome.gi_resolve_serial threading_home_gi_r
 # RESOURCE_LOCK threading on both halves (threading.gi_resolve and threading.gi_resolve_serial),
 # for the mode pair's reason and verdict above: each opens a project at Epic and compiles a few
 # dozen shaders (not a timing gate) — never beside another compile half of this file.
-jah_gpu_row(threading.gi_resolve CLASS app
+jah_gpu_row(threading.gi_resolve CLASS app TIER epic NEEDS photon bloom ssao smaa planar
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
                  --script ${CMAKE_CURRENT_BINARY_DIR}/gi_resolve.js
          WORKING_DIRECTORY ${_gir_home_par}/run)
@@ -153,7 +153,7 @@ set_tests_properties(threading.gi_resolve PROPERTIES
     FIXTURES_SETUP threading_shot_gi_parallel
     LABELS "threading" RESOURCE_LOCK threading COST ${JAH_COST_THREADING} TIMEOUT 240)
 
-jah_gpu_row(threading.gi_resolve_serial CLASS app
+jah_gpu_row(threading.gi_resolve_serial CLASS app TIER epic NEEDS photon bloom ssao smaa planar
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
                  --script ${CMAKE_CURRENT_BINARY_DIR}/gi_resolve.js
          WORKING_DIRECTORY ${_gir_home_ser}/run)
@@ -209,7 +209,7 @@ jah_fresh_home_fixture(threading.freshhome.import_soak threading_home_import_soa
 # PER-ITERATION BUDGETS with 30 s of headroom each, and a soak that a parallel
 # schedule can starve inside a 30 s budget would be reporting a real defect.
 # What it cost was a serial island of 12 s per gate.
-jah_gpu_row(threading.import_soak CLASS app
+jah_gpu_row(threading.import_soak CLASS app TIER low NEEDS NONE NEEDS_WHY "the import hang, the script switches Photon off itself"
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
                  --script ${CMAKE_CURRENT_BINARY_DIR}/import_soak.js
          WORKING_DIRECTORY ${_thr_home_soak}/run)
@@ -221,7 +221,7 @@ set_tests_properties(threading.import_soak PROPERTIES
 jah_fresh_home_fixture(threading.freshhome.newproject_stall threading_home_newproject_stall "${_thr_home_stall}" LABELS "threading")
 
 # The push row: the counts, no lock (its millisecond bar is the .timing twin's, below).
-jah_gpu_row(threading.newproject_stall CLASS app
+jah_gpu_row(threading.newproject_stall CLASS app TIER epic NEEDS photon bloom ssao smaa planar
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
                  --script ${CMAKE_CURRENT_BINARY_DIR}/newproject_stall.js
          WORKING_DIRECTORY ${_thr_home_stall}/run)
@@ -242,7 +242,7 @@ jah_timing_script(${CMAKE_CURRENT_SOURCE_DIR}/newproject_stall.js.in
                   ${CMAKE_CURRENT_BINARY_DIR}/newproject_stall.timing.js)
 jah_fresh_home_fixture(threading.freshhome.newproject_stall_timing threading_home_newproject_stall_timing
                        "${_thr_home_stall_t}" LABELS "threading;stage-close")
-jah_gpu_exclusive_test(NAME threading.newproject_stall.timing CLASS app RUN_TIMEOUT 300
+jah_gpu_exclusive_test(NAME threading.newproject_stall.timing CLASS app TIER epic NEEDS photon bloom ssao smaa planar RUN_TIMEOUT 300
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
                  --script ${CMAKE_CURRENT_BINARY_DIR}/newproject_stall.timing.js
          WORKING_DIRECTORY ${_thr_home_stall_t}/run)
@@ -261,7 +261,7 @@ set(_thr_home_wd ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-threading_texture_wait_wat
 
 jah_fresh_home_fixture(threading.freshhome.texture_wait_watchdog threading_home_texture_wait_watchdog "${_thr_home_wd}" LABELS "threading")
 
-jah_gpu_row(threading.texture_wait_watchdog CLASS app
+jah_gpu_row(threading.texture_wait_watchdog CLASS app TIER low NEEDS NONE
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
                  --script ${CMAKE_CURRENT_BINARY_DIR}/texture_wait_watchdog.js
          WORKING_DIRECTORY ${_thr_home_wd}/run)

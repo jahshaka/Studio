@@ -223,9 +223,9 @@ assert(byTier.low.chain[byTier.low.chain.length - 1].stepCells !== 16,
 // The World mode -> Photon tier mapping, by name rather than by ordinal.
 var worldMap = {};
 for (var wi = 0; wi < tiers.world.length; ++wi) worldMap[tiers.world[wi].mode] = tiers.world[wi].photon;
-assert(worldMap.low === "off" && worldMap.medium === "off" &&
-       worldMap.high === "low" && worldMap.epic === "epic",
-       "World Low/Medium leave Photon off, High selects Photon Low, Epic selects Epic");
+assert(worldMap.low === "low" && worldMap.medium === "medium" &&
+       worldMap.high === "high" && worldMap.epic === "epic",
+       "each World Mode runs Photon at the same name (WORLD-MODE-1, owner 2026-10-09)");
 
 // ---- THE ATOM COLUMN NAMES THE CURRENCY IT FEEDS ----------------------------
 //

@@ -46,7 +46,7 @@
 
 #include <vulkan/vulkan.h>
 
-#include "validation_probe.h"
+#include "../support/validationproof.h"
 
 #include <cstdio>
 #include <algorithm>
@@ -510,8 +510,8 @@ int main()
           "the engine's CompositorPassProvider is installed (registerHlms)");
     if (!provider) return 1;
 
-    // THE POSITIVE CONTROL for the validation entries (validation_probe.h).
-    CHECK(atomtest::validationProbe(), "the validation layer is ACTIVE when the entry asks for it");
+    // THE POSITIVE CONTROL for the validation entries (tests/support/validationproof.h).
+    CHECK(enginetest::validationProof(*engine), "the validation layer is ACTIVE when the entry asks for it");
 
     Ours ours;
     const bool built = createOurs(device, ours);

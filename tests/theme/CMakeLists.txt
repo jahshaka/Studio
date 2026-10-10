@@ -76,7 +76,7 @@ target_compile_definitions(test_theme_sheets PRIVATE
     JAHSHAKA_BINARY="$<TARGET_FILE:${CMAKE_PROJECT_NAME}>")
 set(_theme_sheets_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-theme-sheets)
 file(MAKE_DIRECTORY ${_theme_sheets_home}/run)
-jah_gpu_row(theme.sheets CLASS app COMMAND test_theme_sheets
+jah_gpu_row(theme.sheets CLASS app TIER low NEEDS NONE COMMAND test_theme_sheets
          WORKING_DIRECTORY ${_theme_sheets_home}/run)
 set_tests_properties(theme.sheets PROPERTIES
     ENVIRONMENT "HOME=${_theme_sheets_home};JAHSHAKA_DATA_ROOT=${_theme_sheets_home}/.local/share/Jahshaka"

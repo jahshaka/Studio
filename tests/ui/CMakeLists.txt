@@ -551,6 +551,17 @@ add_test(NAME ui.selection_cost COMMAND test_selection_cost
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(ui.selection_cost PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "ui")
+# ui.selection_cost.timing — its MILLISECOND half (TESTING-CLEANUP-2 P10e; tests/support/timingbars.h):
+# the 1.5x first-50/last-50 ratios, the minute ceiling, the 90 Hz pick bars and the pick-by-scene-size
+# ratio, armed (JAHSHAKA_TIMING_BARS=1) on the quiet box under the GPU-timing lock. The row above keeps
+# every COUNT (the object population, the retired rows, the mounts) and prints each millisecond bar.
+# RUN_TIMEOUT 31 = 6x the measured run under the lock (5.12 s, quiet box): the twin runs exactly the
+# base row's stages (one binary, the bars armed), so nothing in it justifies more.
+jah_gpu_exclusive_test(NAME ui.selection_cost.timing CLASS none RUN_TIMEOUT 31 COMMAND test_selection_cost
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(ui.selection_cost.timing PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen;JAHSHAKA_TIMING_BARS=1" LABELS "ui;stage-close;quiet-box")
+jah_no_display(ui.selection_cost.timing)
 
 # THE STAGED ICONS, REACHABLE FROM A TEST BINARY (COMPONENTS-1). Every icon in
 # this app is resolved against applicationDirPath (IrisUtils::getAbsoluteAssetPath)
@@ -1464,7 +1475,7 @@ target_compile_definitions(test_column_law PRIVATE
     JAHSHAKA_BINARY="$<TARGET_FILE:${CMAKE_PROJECT_NAME}>")
 set(_columns_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-columns)
 file(MAKE_DIRECTORY ${_columns_home}/run)
-jah_gpu_row(ui.column_law CLASS app COMMAND test_column_law
+jah_gpu_row(ui.column_law CLASS app TIER low NEEDS NONE COMMAND test_column_law
          WORKING_DIRECTORY ${_columns_home}/run)
 set_tests_properties(ui.column_law PROPERTIES
     ENVIRONMENT "HOME=${_columns_home};JAHSHAKA_DATA_ROOT=${_columns_home}/.local/share/Jahshaka"
@@ -1488,7 +1499,7 @@ target_compile_definitions(test_space_docks PRIVATE
     JAHSHAKA_BINARY="$<TARGET_FILE:${CMAKE_PROJECT_NAME}>")
 set(_space_docks_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-space-docks)
 file(MAKE_DIRECTORY ${_space_docks_home}/run)
-jah_gpu_row(ui.space_docks CLASS app COMMAND test_space_docks
+jah_gpu_row(ui.space_docks CLASS app TIER low NEEDS NONE COMMAND test_space_docks
          WORKING_DIRECTORY ${_space_docks_home}/run)
 set_tests_properties(ui.space_docks PROPERTIES
     ENVIRONMENT "HOME=${_space_docks_home};JAHSHAKA_DATA_ROOT=${_space_docks_home}/.local/share/Jahshaka"
@@ -1511,7 +1522,7 @@ target_compile_definitions(test_window_minimum PRIVATE
     JAHSHAKA_BINARY="$<TARGET_FILE:${CMAKE_PROJECT_NAME}>")
 set(_winmin_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-window-minimum)
 file(MAKE_DIRECTORY ${_winmin_home}/run)
-jah_gpu_row(ui.window_minimum CLASS app COMMAND test_window_minimum
+jah_gpu_row(ui.window_minimum CLASS app TIER low NEEDS NONE COMMAND test_window_minimum
          WORKING_DIRECTORY ${_winmin_home}/run)
 set_tests_properties(ui.window_minimum PROPERTIES
     ENVIRONMENT "HOME=${_winmin_home};JAHSHAKA_DATA_ROOT=${_winmin_home}/.local/share/Jahshaka"
@@ -1539,7 +1550,7 @@ target_compile_definitions(test_material_drag PRIVATE
     JAHSHAKA_BINARY="$<TARGET_FILE:${CMAKE_PROJECT_NAME}>")
 set(_matdrag_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-material-drag)
 file(MAKE_DIRECTORY ${_matdrag_home}/run)
-jah_gpu_row(ui.material_drag CLASS app COMMAND test_material_drag
+jah_gpu_row(ui.material_drag CLASS app TIER low NEEDS NONE COMMAND test_material_drag
          WORKING_DIRECTORY ${_matdrag_home}/run)
 set_tests_properties(ui.material_drag PROPERTIES
     ENVIRONMENT "HOME=${_matdrag_home};JAHSHAKA_DATA_ROOT=${_matdrag_home}/.local/share/Jahshaka"
@@ -1557,7 +1568,7 @@ target_compile_definitions(test_shot_aspect PRIVATE
     JAHSHAKA_BINARY="$<TARGET_FILE:${CMAKE_PROJECT_NAME}>")
 set(_shot_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-shot-aspect)
 file(MAKE_DIRECTORY ${_shot_home}/run)
-jah_gpu_row(ui.shot_aspect CLASS app COMMAND test_shot_aspect
+jah_gpu_row(ui.shot_aspect CLASS app TIER low NEEDS NONE NEEDS_WHY "an offscreen shot is a function of pose and shot size: two window shapes, one boot, identical bytes (no feature claim)" COMMAND test_shot_aspect
          WORKING_DIRECTORY ${_shot_home}/run)
 set_tests_properties(ui.shot_aspect PROPERTIES
     ENVIRONMENT "HOME=${_shot_home};JAHSHAKA_DATA_ROOT=${_shot_home}/.local/share/Jahshaka"

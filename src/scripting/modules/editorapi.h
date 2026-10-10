@@ -151,6 +151,8 @@ public:
     Q_INVOKABLE bool beginBatch();
     Q_INVOKABLE bool endBatch();
     Q_INVOKABLE bool importAssets(const QVariant &paths);
+    Q_INVOKABLE QVariantMap importState();
+    Q_INVOKABLE QVariantMap waitForImported(int count, int maxTurns = 200000);
 
 private:
     /// What `cameraSpeed` answers with, read or written: the dial, its factor,

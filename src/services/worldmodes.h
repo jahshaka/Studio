@@ -436,11 +436,26 @@ QString    modeName(Mode m);            ///< "custom" | "low" | "medium" | "high
 Mode       modeFromName(const QString &name, bool *ok = nullptr);
 QStringList modeNames();                ///< low, medium, high, epic (Custom is not pickable)
 
-/// The scene's tier.
+/// The scene's tier AS IT RENDERS: the picked mode, or Custom when none is picked OR the
+/// Photon row has left the picked mode's column (WORLD-MODE-1, owner 2026-10-09: each World
+/// Mode runs Photon at the same name; Photon's own dropdown or switch moving it reads
+/// Custom). What the panel's selector, world.mode() and world.get().mode report.
 Mode mode(const iris::ScenePtr &scene);
+/// The PICKED tier — scene->worldMode as a Mode, Custom for -1 — the column a caller falls
+/// back to (clearOverride, a row's tierValue, source()). Never moved by a Photon edit.
+Mode pickedMode(const iris::ScenePtr &scene);
 /// Applies a tier: writes each row's tier value into its backing field, EXCEPT
-/// rows present in scene->worldOverrides (overrides survive mode switches).
+/// rows present in scene->worldOverrides (overrides survive mode switches). The
+/// `photon` row is never pinned and a pick DROPS a Photon Technique (giMode) pin, so a
+/// re-pick always snaps Photon — tier and technique — to the mode's column (WORLD-MODE-1).
 void setMode(const iris::ScenePtr &scene, Mode m);
+/// THE PROCESS'S TEST TIER on a scene (services/testtier.h): setMode to the tier, then every
+/// switchable feature JAHSHAKA_TEST_NEEDS does not name OFF — Photon, bloom, SSAO, SMAA, the
+/// planar mirrors (TEST-NEEDS-1; WORLD-MODE-1 began it with the first two) — and Photon ON at
+/// the tier's own Photon tier when it is named. A pinned row is the document's and stays — the
+/// switch writes neither it nor its backing field (a pin on giMode leaves Photon as the
+/// document has it; the `photon` row is never pinned). A no-op in a process with no test tier.
+void applyTestTier(const iris::ScenePtr &scene);
 
 /// The row's tier value for `m`, or the row's current value when m == Custom.
 int tierValue(const Row &r, Mode m, const iris::ScenePtr &scene);
@@ -458,6 +473,9 @@ QString source(const iris::ScenePtr &scene, const Row &r);
 bool setRowValue(const iris::ScenePtr &scene, const QString &id, int value,
                  bool recordOverride = true);
 
+/// The `photon` row is NEVER recorded as a pin (WORLD-MODE-1): a set of it writes through
+/// and returns true, and the World Mode keeps the power to snap it back.
+///
 /// Records a pin for a value the caller has ALREADY written to the backing
 /// field. This is the path the pre-existing setters take (world.setAntiAliasing,
 /// world.setShadowResolution, the World > Anti-Aliasing and World > Shadows

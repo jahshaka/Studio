@@ -18,7 +18,7 @@ target_compile_definitions(test_shutdown_order PRIVATE
 
 set(_order_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-order)
 file(MAKE_DIRECTORY ${_order_home}/run)
-jah_gpu_row(app.shutdown_order CLASS app COMMAND test_shutdown_order
+jah_gpu_row(app.shutdown_order CLASS app TIER epic NEEDS photon COMMAND test_shutdown_order
          WORKING_DIRECTORY ${_order_home}/run)
 set_tests_properties(app.shutdown_order PROPERTIES
     ENVIRONMENT "HOME=${_order_home};JAHSHAKA_DATA_ROOT=${_order_home}/.local/share/Jahshaka"
@@ -27,7 +27,7 @@ set_tests_properties(app.shutdown_order PROPERTIES
 # FIX-TIME): the same binary with JAHSHAKA_TIMING_BARS=1, quiet box, the GPU-timing lock.
 set(_order_timing_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-order-timing)
 file(MAKE_DIRECTORY ${_order_timing_home}/run)
-jah_gpu_exclusive_test(NAME app.shutdown_order.timing CLASS app RUN_TIMEOUT 120 COMMAND test_shutdown_order
+jah_gpu_exclusive_test(NAME app.shutdown_order.timing CLASS app TIER epic NEEDS photon bloom ssao smaa planar RUN_TIMEOUT 120 COMMAND test_shutdown_order
          WORKING_DIRECTORY ${_order_timing_home}/run)
 set_tests_properties(app.shutdown_order.timing PROPERTIES
     ENVIRONMENT "HOME=${_order_timing_home};JAHSHAKA_DATA_ROOT=${_order_timing_home}/.local/share/Jahshaka;JAHSHAKA_TIMING_BARS=1"
@@ -47,7 +47,7 @@ target_compile_definitions(test_watchdog_stall PRIVATE
 set(_watchdog_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-watchdog)
 file(MAKE_DIRECTORY ${_watchdog_home}/run)
 # DEVPROCESS-1: registered through the GPU-timing lock; TIMEOUT = RUN_TIMEOUT + the lock's 900 s wait.
-jah_gpu_exclusive_test(NAME app.watchdog_stall CLASS app RUN_TIMEOUT 300 COMMAND test_watchdog_stall
+jah_gpu_exclusive_test(NAME app.watchdog_stall CLASS app TIER low NEEDS NONE RUN_TIMEOUT 300 COMMAND test_watchdog_stall
          WORKING_DIRECTORY ${_watchdog_home}/run)
 # RUN_SERIAL: this is a pure TIMING gate — it blocks the UI thread for 3 s and
 # for 100 ms and asserts the watchdog counted exactly one stall and exactly
@@ -81,3 +81,22 @@ if(TEST app.shutdown_order.timing)
     jah_fresh_home_fixture(app.shutdown_order.timing.fresh_home appShutdownOrderTimingFreshHome "${CMAKE_CURRENT_BINARY_DIR}/e2e-home-order-timing" WARM LABELS "shutdown")
     set_property(TEST app.shutdown_order.timing APPEND PROPERTY FIXTURES_REQUIRED appShutdownOrderTimingFreshHome)
 endif()
+
+# app.device_loss_end — the device-loss end's dialog is BOUNDED (TESTING-CLEANUP-2 fix round,
+# TC2-DEVICE-LOST-HANG): a child that ends with nobody to answer its box exits 86 through the
+# forced-exit watchdog inside 120 s (src/services/forcedexit.h). Offscreen, no engine, no display.
+find_package(Qt6 REQUIRED COMPONENTS Widgets)
+add_executable(test_device_loss_end test_device_loss_end.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/jahlog.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/settingsstore.cpp)
+set_target_properties(test_device_loss_end PROPERTIES CXX_STANDARD 17 AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+target_include_directories(test_device_loss_end PRIVATE ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/irisgl ${CMAKE_SOURCE_DIR}/irisgl/engine/include)
+target_link_libraries(test_device_loss_end PRIVATE IrisGL Qt6::Widgets)
+add_test(NAME app.device_loss_end COMMAND test_device_loss_end
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set(_dle_home ${CMAKE_CURRENT_BINARY_DIR}/device-loss-end-home)
+set_tests_properties(app.device_loss_end PROPERTIES TIMEOUT 180 LABELS "shutdown"
+    ENVIRONMENT "HOME=${_dle_home};JAHSHAKA_DATA_ROOT=${_dle_home}/.local/share/Jahshaka")
+jah_no_display(app.device_loss_end)

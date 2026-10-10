@@ -224,7 +224,7 @@ set(_archive_home ${CMAKE_CURRENT_BINARY_DIR}/archive-bakes-home)
 file(MAKE_DIRECTORY ${_archive_home}/run)
 set(SOURCE_DIR ${CMAKE_SOURCE_DIR})
 configure_file(archive/archive_bakes_import.js.in ${CMAKE_CURRENT_BINARY_DIR}/archive_bakes_import.js @ONLY)
-jah_gpu_row(meshbake.archive_bakes CLASS app
+jah_gpu_row(meshbake.archive_bakes CLASS app TIER low NEEDS NONE
          COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/archive/archive_bakes.sh"
                  "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>"
                  "${CMAKE_CURRENT_BINARY_DIR}/archive_bakes_import.js"
@@ -246,7 +246,7 @@ set_tests_properties(meshbake.archive_bakes PROPERTIES
 set(_shipped_home ${CMAKE_CURRENT_BINARY_DIR}/shipped-bakes-home)
 file(MAKE_DIRECTORY ${_shipped_home}/run)
 configure_file(shipped/shipped_bakes_run1.js.in ${CMAKE_CURRENT_BINARY_DIR}/shipped_bakes_run1.js @ONLY)
-jah_gpu_row(meshbake.shipped_bakes CLASS vr
+jah_gpu_row(meshbake.shipped_bakes CLASS vr TIER low NEEDS NONE
          COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/shipped/shipped_bakes.sh"
                  "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>"
                  "${CMAKE_CURRENT_BINARY_DIR}/shipped_bakes_run1.js"

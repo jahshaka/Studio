@@ -19,6 +19,9 @@ For more information see the LICENSE file
 // measuring doors that were environment reads inside per-frame engine code, so two
 // arms of an A/B are two verb calls in ONE process — what scripts/perf-ab.py drives.
 // Nothing in the product sets an arm: every default is the shipped picture.
+//
+// engine.validation() — THE VALIDATION LAYER'S PROOF (TESTING-CLEANUP-2 H4; Engine::validation):
+// a script that runs under the Khronos validation layer asserts the layer is really live.
 
 #include <QVariantList>
 #include <QVariantMap>
@@ -36,6 +39,7 @@ public:
 
     Q_INVOKABLE QVariant arm(const QString &name, const QVariant &value = QVariant());
     Q_INVOKABLE QVariantList arms();
+    Q_INVOKABLE QVariantMap validation();
 };
 
 #endif // SCRIPTING_ENGINEAPI_H

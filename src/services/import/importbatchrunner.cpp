@@ -53,7 +53,14 @@ namespace {
 /// Every runner that is between start() and its worker's last line. See
 /// ImportBatchRunner::anyRunning().
 std::atomic<int> sActiveRunners { 0 };
+/// Every file a runner of this process COMMITTED (ok), counted on the UI thread as it lands.
+std::atomic<int> sCommittedFiles { 0 };
 }   // namespace
+
+int ImportBatchRunner::committedFiles()
+{
+    return sCommittedFiles.load();
+}
 
 bool ImportBatchRunner::anyRunning()
 {
@@ -167,6 +174,7 @@ void ImportBatchRunner::runBatch()
                 // their warnings.
                 AssetImportService::logImportRecord(prepared->request, result,
                                                     fileClock->elapsed());
+                if (result.ok()) ++sCommittedFiles;
                 emit fileFinished(i, prepared->request, result);          // direct: UI thread
             }
             hopDone->release();

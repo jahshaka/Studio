@@ -39,7 +39,7 @@ foreach(SAMPLE IN LISTS _samples)
     # The setup fixture wipes and recreates the directory before the test runs.
     jah_fresh_home_fixture(samples.freshhome.${_slug} samples_home_${_slug} "${_home}" LABELS "scripting")
 
-    jah_gpu_row(samples.cleanstart.${_slug} CLASS app
+    jah_gpu_row(samples.cleanstart.${_slug} CLASS app TIER document
              COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
                      --script ${CMAKE_CURRENT_BINARY_DIR}/cleanstart_${_slug}.js
              WORKING_DIRECTORY ${_home}/run)
@@ -61,7 +61,7 @@ configure_file(scripts/session.js.in ${CMAKE_CURRENT_BINARY_DIR}/session.js @ONL
 set(_shome ${CMAKE_CURRENT_BINARY_DIR}/home-session)
 file(MAKE_DIRECTORY ${_shome}/run)
 jah_fresh_home_fixture(samples.freshhome.session samples_home_session "${_shome}" LABELS "scripting")
-jah_gpu_row(samples.session CLASS app
+jah_gpu_row(samples.session CLASS app TIER epic NEEDS photon
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
                  --script ${CMAKE_CURRENT_BINARY_DIR}/session.js
          WORKING_DIRECTORY ${_shome}/run)
@@ -75,7 +75,7 @@ set_tests_properties(samples.session PROPERTIES
 # across boots (ATOM-DECODE-CLASS-1 recorded two). Ten boots, each on a virgin data root, the
 # scene's offscreen picture after 600 fixed-clock frames, byte-identical (the runner:
 # scripts/mirror_room_boots.sh). 251 s measured (25 s a boot): STAGE-CLOSE.
-jah_gpu_row(samples.mirror_room_boots CLASS app
+jah_gpu_row(samples.mirror_room_boots CLASS app TIER document
          COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/scripts/mirror_room_boots.sh $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
                  ${CMAKE_CURRENT_SOURCE_DIR}/scripts/mirror_room_boot.js.in ${CMAKE_CURRENT_BINARY_DIR}/mirror-room-boots 10
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
@@ -87,7 +87,7 @@ set_tests_properties(samples.mirror_room_boots PROPERTIES LABELS "scripting;stag
 # cut-out, and the torn silhouette at tornado.jpg's camera (detached flaps + see-through, the mean
 # of four pinned shader times) is within 25 % of the reference still and 10 % of the in-memory scene
 # make_tornado.js builds. The archive that shipped before this lane opens smooth: 0 px / 0.00x.
-jah_gpu_row(samples.archive_fidelity.Tornado CLASS app
+jah_gpu_row(samples.archive_fidelity.Tornado CLASS app TIER document
          COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/scripts/archive_fidelity.sh $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
                  ${CMAKE_CURRENT_SOURCE_DIR}/scripts/archive_fidelity_tornado.js.in
                  ${CMAKE_SOURCE_DIR}/scenes/Tornado.zip

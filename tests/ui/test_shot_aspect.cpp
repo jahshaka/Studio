@@ -40,7 +40,6 @@ For more information see the LICENSE file
 #include <QDir>
 #include <QImage>
 #include <QJsonDocument>
-#include <QThread>
 
 using namespace mcpharness;
 
@@ -61,10 +60,14 @@ QJsonObject readObject(McpClient &mcp, const QString &expression)
     return QJsonDocument::fromJson(reply.value("result").toString().toUtf8()).object();
 }
 
-void settle(McpClient &mcp)
+/// The layout AND the viewport's size (its render target follows on the next frames): read
+/// until both stop moving, three frames stepped per read (mcpharness::settle).
+void settleShot(McpClient &mcp)
 {
-    QThread::msleep(800);
-    mcp.runScript(QStringLiteral("editor.frame(3)"));
+    mcpharness::settle(mcp, QStringLiteral(
+        "(function () { var v = editor.viewportState();"
+        " return JSON.stringify([app.window(), app.columns(), app.docks(), v.width, v.height]); })()"),
+        3);
 }
 
 /// Pixels that differ between two same-sized images (-1 = not comparable).
@@ -133,7 +136,7 @@ int main(int argc, char **argv)
         "})()"));
     const QString cube = built.value("cube").toString();
     CHECK(!cube.isEmpty(), "a project with a selected cube and a fixed camera");
-    settle(mcp);
+    settleShot(mcp);
 
     // ---- 1. the same pose, two window shapes, one picture -------------------
     // Both shapes are SET, not inherited: the window's geometry is saved on
@@ -142,12 +145,12 @@ int main(int argc, char **argv)
     // framing hold, 1300 well below it — the two sides of the one policy that
     // makes the window's shape matter to a free camera at all.
     mcp.runScript(QStringLiteral("app.resizeWindow(1900, 1060)"));
-    settle(mcp);
+    CHECK(settleToSize(mcp, 1900, 1060), "the window reached 1900 x 1060 and the viewport's target its widget");
     const QJsonObject before = readObject(mcp, QStringLiteral("editor.viewportState()"));
     mcp.runScript(QStringLiteral("editor.screenshot('%1', 640, 480)").arg(shotPath("wide.png")));
 
     mcp.runScript(QStringLiteral("app.resizeWindow(1300, 1060)"));
-    settle(mcp);
+    CHECK(settleToSize(mcp, 1300, 1060), "the window reached 1300 x 1060 and the viewport's target its widget");
     const QJsonObject after = readObject(mcp, QStringLiteral("editor.viewportState()"));
     const double aspectBefore = before.value("height").toDouble() > 0
         ? before.value("width").toDouble() / before.value("height").toDouble() : 0.0;
@@ -175,7 +178,7 @@ int main(int argc, char **argv)
         "})()").arg(cube));
     const QString camId = cam.value("cam").toString();
     CHECK(!camId.isEmpty(), "a 2.39 camera that constrains its aspect, piloted, cube selected");
-    settle(mcp);   // frames: the gizmo's pixel frame is set on each
+    settleShot(mcp);   // frames: the gizmo's pixel frame is set on each
     // ...and the two pick paths a click takes, through their verbs: a pick ray
     // (the drop point is pickAt's) and the gizmo's pixel test. Both used to
     // set the camera's aspect from the widget; a letterboxed picture is not a

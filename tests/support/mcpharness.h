@@ -20,6 +20,7 @@
 #include <QNetworkReply>
 #include <QNetworkRequest>
 #include <QProcess>
+#include <QProcessEnvironment>
 #include <QSettings>
 #include <QStandardPaths>
 #include <QTcpServer>
@@ -106,6 +107,14 @@ struct McpClient
     QString lastTransportError;
     int transportFailures = 0;
 
+    /// A CASE THAT PROVOKES A TRANSPORT FAILURE ON PURPOSE (app.shutdown_order proves the transfer
+    /// timeout reports itself) sets this on ITS client (one used for nothing after it: a client that
+    /// failed sends no further request, see post()): the failure is still counted and kept, but
+    /// printed as `expected(transport): …` — never the `FAIL(transport): …` a run log records as the
+    /// row's first failing line (TESTING-CLEANUP-2 P10g: the shutdown_order reds were recorded as
+    /// "414 ms vs 0.4 s", which was this provoked line, not the check that failed).
+    bool transportFailureExpected = false;
+
     /// THE APP THIS CLIENT TALKS TO (TEST-SELECTOR-1 H1, plan 9ax HARNESS-EXIT-1): the harness
     /// holds the QProcess and the log the suite keeps of it, so a transport failure says HOW the
     /// child is — running, or gone with which exit code / status / error — and prints the last
@@ -166,6 +175,18 @@ struct McpClient
     QJsonObject post(const QJsonObject &body, const QString &what = QString(),
                      ReplyPolicy policy = ReplyRequired)
     {
+        // ONE TRANSPORT FAILURE ENDS THE CLIENT (TESTING-CLEANUP-2 fix round): after it the app is
+        // dead or wedged, and every later request used to wait out its own 90 s budget — a suite
+        // after a device loss spent ~1,100 s sending into nothing before ctest killed it. Later
+        // requests are NOT sent: each answers the failure object at once, naming the first failure
+        // (no further FAIL(transport) line: the first one is the row's failing line).
+        if (transportFailures > 0) {
+            const QString label = what.isEmpty() ? body.value("method").toString() : what;
+            return QJsonObject{ { "ok", false },
+                                { "error", QStringLiteral("not sent — the transport already failed: %1 (%2)")
+                                               .arg(lastTransportError, label) },
+                                { "transport", QStringLiteral("not sent after an earlier transport failure") } };
+        }
         QNetworkRequest request(url);
         request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
         request.setRawHeader("Authorization", "Bearer " + token.toUtf8());
@@ -218,9 +239,14 @@ struct McpClient
             return {};
         }
         ++transportFailures;
-        std::printf("FAIL(transport): %s\n", qUtf8Printable(lastTransportError));
-        std::fflush(stdout);
-        childReport();
+        if (transportFailureExpected) {
+            std::printf("expected(transport): %s\n", qUtf8Printable(lastTransportError));
+            std::fflush(stdout);
+        } else {
+            std::printf("FAIL(transport): %s\n", qUtf8Printable(lastTransportError));
+            std::fflush(stdout);
+            childReport();
+        }
         // NOT an empty object: a caller reading .value("ok") still fails, and
         // now the object it read says why.
         return QJsonObject{ { "ok", false },
@@ -293,6 +319,83 @@ struct McpClient
     int integer(const QString &script) { return value(script).toInt(); }
 };
 
+/// THE LAYOUT READ: the main window, its columns and its docks, as one string — what a layout
+/// change (a space switch, a window resize, a tray drag) moves.
+static const char *const kLayoutProbe =
+    "JSON.stringify([app.window(), app.columns(), app.docks()])";
+
+/// SETTLE BY READING, NEVER BY SLEEPING (TESTING-CLEANUP-2 P10a; trap 7: settle by count, read
+/// until the value stops moving). A layout change lands over a few turns of the app's event loop
+/// — posted LayoutRequests, the X server's ConfigureNotify, a dock's deferred restore — and the
+/// five copies of `settle()` this replaces each slept 800 ms and hoped (ui.column_law 5 FAIL in
+/// 211 runs, ui.window_minimum a 120 s TIMEOUT at 7x starvation). This reads `probe` once per MCP
+/// request — every request is at least one whole turn of the app's event loop, and with `frames`
+/// above 0 the read first steps that many frames on the fixed clock (`editor.frame`) — until
+/// `stableReads` consecutive reads answer the same, bounded by `maxReads` COUNTED reads. Returns
+/// the settled reading (empty when the probe failed); a layout that never stops moving says so in
+/// an info line and the caller's next assertion reads the moving value.
+inline QString settle(McpClient &mcp, const QString &probe = QString::fromLatin1(kLayoutProbe),
+                      int frames = 0, int stableReads = 3, int maxReads = 200)
+{
+    const QString script = frames > 0
+        ? QStringLiteral("editor.frame(%1); %2").arg(frames).arg(probe)
+        : probe;
+    QString last;
+    int same = 0;
+    for (int reads = 1; reads <= maxReads; ++reads) {
+        const QJsonObject r = mcp.runScript(script);
+        if (!r.value("ok").toBool()) {
+            std::printf("info: settle: the probe failed on read %d: %s\n", reads,
+                        QJsonDocument(r).toJson(QJsonDocument::Compact).constData());
+            std::fflush(stdout);
+            return QString();
+        }
+        const QJsonValue v = r.value("result");
+        const QString now = v.isString() ? v.toString()
+                                         : QString::fromUtf8(QJsonDocument(QJsonArray{ v }).toJson(QJsonDocument::Compact));
+        same = (reads > 1 && now == last) ? same + 1 : 0;
+        last = now;
+        if (same + 1 >= stableReads) return last;
+    }
+    std::printf("info: settle: the layout was STILL MOVING after %d reads: %s\n", maxReads,
+                qUtf8Printable(oneLine(last)));
+    std::fflush(stdout);
+    return last;
+}
+
+/// SETTLE ON THE REQUESTED SIZE (TESTING-CLEANUP-2 fix round): after app.resizeWindow(w, h) the
+/// layout is done when the WINDOW is w x h (logical) and the editor viewport's render target is the
+/// size of its widget (both in PIXELS: the widget's logical rect times its devicePixelRatio) — a
+/// state the read names, not three reads that happened to agree. Reads (each one MCP
+/// request, `frames` stepped on the fixed clock first) until it holds, bounded by `maxReads`.
+/// Returns whether it held; the last reading is printed when it did not.
+inline bool settleToSize(McpClient &mcp, int width, int height, int frames = 3, int maxReads = 200)
+{
+    const QString script = QStringLiteral(
+        "editor.frame(%1); (function () { var w = app.window(), v = editor.viewportState();"
+        " return JSON.stringify({ w: w.width, h: w.height, tw: v.width, th: v.height,"
+        " ww: v.windowW, wh: v.windowH, dpr: v.devicePixelRatio || 1 }); })()").arg(qMax(1, frames));
+    QJsonObject last;
+    for (int reads = 1; reads <= maxReads; ++reads) {
+        const QJsonObject r = mcp.runScript(script);
+        if (!r.value("ok").toBool()) {
+            std::printf("info: settleToSize: the read failed on read %d\n", reads);
+            return false;
+        }
+        last = QJsonDocument::fromJson(r.value("result").toString().toUtf8()).object();
+        // the render target is in PIXELS, the widget rect in LOGICAL units: compared in pixels
+        const int tw = last.value("tw").toInt(), th = last.value("th").toInt();
+        const double dpr = last.value("dpr").toDouble(1.0);
+        const int pw = qRound(last.value("ww").toInt() * dpr), ph = qRound(last.value("wh").toInt() * dpr);
+        if (last.value("w").toInt() == width && last.value("h").toInt() == height && tw > 0 && th > 0 &&
+            tw == pw && th == ph)
+            return true;
+    }
+    std::printf("info: settleToSize(%d x %d): not reached after %d reads: %s\n", width, height, maxReads,
+                QJsonDocument(last).toJson(QJsonDocument::Compact).constData());
+    return false;
+}
+
 /// WHAT THE APP SAID ABOUT ITS OWN UI THREAD, printed when a measurement of
 /// that thread fails.
 ///
@@ -363,6 +466,15 @@ inline bool spawn(QProcess &jahshaka, quint16 port, QString *tokenOut, QByteArra
                   const QStringList &extraArgs = QStringList(), int bootBudgetMs = 120000)
 {
     jahshaka.setProcessChannelMode(QProcess::MergedChannels);
+    // NOBODY ANSWERS A DIALOG ON A RIG (TESTING-CLEANUP-2): a spawned --mcp-port app counts as "a
+    // session with a user" to the device-loss end, whose box would hold a dead app for its 60 s bound
+    // and end it 86. A harness's app ends at once with the device-loss code (3) instead.
+    {
+        QProcessEnvironment env = jahshaka.processEnvironment();
+        if (env.isEmpty()) env = QProcessEnvironment::systemEnvironment();
+        env.insert(QStringLiteral("JAHSHAKA_NO_DEVICE_LOSS_DIALOG"), QStringLiteral("1"));
+        jahshaka.setProcessEnvironment(env);
+    }
     jahshaka.start(QStringLiteral(JAHSHAKA_BINARY),
                    QStringList{ QStringLiteral("--mcp-port=%1").arg(port) } + extraArgs);
     if (!jahshaka.waitForStarted(15000)) return false;

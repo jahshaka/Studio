@@ -1,0 +1,34 @@
+// scripting.e2e.photon_pin_read — THE READER DROPS A `photon` PIN (WORLD-MODE-1, brief §2; stage
+// @STAGE@ of photon_pin_read.sh). The photon World row is never a pin: each World Mode runs Photon
+// at its own name and a re-pick must snap it back. A document that carries
+// `worldOverrides: {photon: 1}` (written by hand between the stages — no build of ours writes one)
+// must open with NO pin, an honest mode, and a re-pick that moves Photon.
+function assert(cond, msg) {
+    if (!cond) throw new Error("assert failed: " + msg);
+    console.log("ok: " + msg);
+}
+function J(x) { return JSON.stringify(x); }
+var STAGE = "@STAGE@", NAME = "PhotonPinRead";
+
+if (STAGE === "author") {
+    var guid = project.create(NAME);
+    assert(guid.length > 10, "project.create " + NAME);
+    assert(world.mode() === "epic", "a new scene is on Epic (no test tier: TIER document)");
+    world.photon({ tier: "low" });
+    assert(world.mode() === "custom" && world.photon().tier === "low",
+           "Photon Low under Epic reads custom (" + world.mode() + ")");
+    assert(world.settings().photon.source === "custom", "...the photon row's source is custom, not a pin");
+    assert(project.save() === true, "project.save");
+} else {
+    assert(project.open(NAME) === true, "project.open of the scene whose blob now pins photon");
+    var st = world.settings(), p = world.photon();
+    console.log("reopened: mode " + world.mode() + " photon " + J([p.enabled, p.tier]) + " source " + st.photon.source);
+    assert(st.photon.source !== "override", "the reader dropped the photon pin (source " + st.photon.source + ")");
+    assert(world.mode() === "custom" && p.enabled === true && p.tier === "low" && st.photon.source === "custom",
+           "the mode is honest: Epic picked, Photon Low → custom (" + world.mode() + ", " + p.tier + ")");
+    assert(world.mode({ mode: "epic" }) === "epic" && world.photon().tier === "epic",
+           "re-picking Epic snaps Photon to Epic — no pin held it (" + world.photon().tier + ")");
+    assert(world.photon({ tier: "low" }).tier === "low", "back to Photon Low for the save");
+    assert(project.save() === true, "project.save (the writer re-writes worldOverrides)");
+}
+console.log("photon_pin_read: " + STAGE + " PASS");

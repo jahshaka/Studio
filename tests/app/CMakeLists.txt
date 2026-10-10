@@ -72,7 +72,7 @@ set_tests_properties(app.engine_selftest_validation PROPERTIES
 # runs on whatever Xvfb the gate uses.
 set(_sq_home ${CMAKE_CURRENT_BINARY_DIR}/startup-quiet-home)
 file(MAKE_DIRECTORY ${_sq_home}/run)
-jah_gpu_row(app.startup_quiet CLASS app
+jah_gpu_row(app.startup_quiet CLASS app TIER document
          COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/startup_quiet.sh"
                  "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>"
                  "${CMAKE_CURRENT_SOURCE_DIR}/startup_quiet.js"
@@ -82,20 +82,43 @@ set_tests_properties(app.startup_quiet PROPERTIES
     TIMEOUT 300
     LABELS "app")
 
+# app.test_needs_boot — A TEST PROCESS BOOTS WHAT ITS ROW NEEDS (TEST-NEEDS-1; services/testtier.h,
+# worldmodes::applyTestTier). Three boots of one home under their own JAHSHAKA_TEST_TIER /
+# JAHSHAKA_TEST_NEEDS — `high photon` (Photon High, bloom/SSAO/SMAA/planar off), `low none`
+# (everything switchable off), `epic photon bloom` (both on, the rest off) — each asserting a NEW
+# scene and an OPENED one saved with everything on, and app.testTier() naming the declaration;
+# then the refusals (an unknown word, `none` beside another, a list with no tier: exit 2). The
+# row's own declaration is its heaviest boot (the tokens it must hold).
+set(_tnb_home ${CMAKE_CURRENT_BINARY_DIR}/test-needs-boot-home)
+file(MAKE_DIRECTORY ${_tnb_home}/run)
+jah_gpu_row(app.test_needs_boot CLASS app TIER epic NEEDS photon bloom
+         COMMAND sh ${JAH_FRESH_HOME} --warm ${_tnb_home} --
+                 bash "${CMAKE_CURRENT_SOURCE_DIR}/test_needs_boot.sh"
+                 "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>"
+                 "${CMAKE_CURRENT_SOURCE_DIR}/test_needs_boot.js"
+         WORKING_DIRECTORY ${_tnb_home}/run)
+set_tests_properties(app.test_needs_boot PROPERTIES
+    ENVIRONMENT "HOME=${_tnb_home};JAHSHAKA_DATA_ROOT=${_tnb_home}/.local/share/Jahshaka"
+    TIMEOUT 300
+    LABELS "app")
+
 # app.start_in_vr — THE VR PREFERENCES (VR-START-1): Start in VR (on) and the headset runtime (WiVRn);
 # a policy refusal opens no OpenXR runtime and ends in the editor plus one notice or dialog.
 # Three boots of one fresh home (start_in_vr.sh). `JAHSHAKA_VR=` (empty) keeps the tests/ walk
 # from adding JAHSHAKA_VR=0: this row is the one that lets the preference decide.
 set(_siv_home ${CMAKE_CURRENT_BINARY_DIR}/start-in-vr-home)
 file(MAKE_DIRECTORY ${_siv_home}/run)
-jah_gpu_row(app.start_in_vr CLASS app
+# TIER epic NEEDS photon (TEST-NEEDS-1, the lead's lifecycle rule): three boots that end in the
+# editor after a refused VR start — the engine's startup path with Photon on, as the product boots;
+# TEST_WINDOW keeps the 1280x720 window TEST-TIER-1 measured it at.
+jah_gpu_row(app.start_in_vr CLASS app TIER epic NEEDS photon TEST_WINDOW
          COMMAND sh ${JAH_FRESH_HOME} --warm ${_siv_home} --
                  bash "${CMAKE_CURRENT_SOURCE_DIR}/start_in_vr.sh"
                  "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>"
                  "${CMAKE_CURRENT_SOURCE_DIR}/start_in_vr.js"
          WORKING_DIRECTORY ${_siv_home}/run)
 set_tests_properties(app.start_in_vr PROPERTIES
-    ENVIRONMENT "HOME=${_siv_home};JAHSHAKA_DATA_ROOT=${_siv_home}/.local/share/Jahshaka;JAHSHAKA_VR=;JAHSHAKA_TEST_TIER=low"
+    ENVIRONMENT "HOME=${_siv_home};JAHSHAKA_DATA_ROOT=${_siv_home}/.local/share/Jahshaka;JAHSHAKA_VR="
     TIMEOUT 300
     LABELS "app")
 
@@ -108,7 +131,7 @@ set_tests_properties(app.start_in_vr PROPERTIES
 # (JAHSHAKA_TEST_TIER=low: the gate warms the born tier) and rays off (JAHSHAKA_NO_RAY_QUERY=1).
 set(_sgw_home ${CMAKE_CURRENT_BINARY_DIR}/shader-gate-warm-home)
 file(MAKE_DIRECTORY ${_sgw_home}/run)
-jah_gpu_row(app.shader_gate_warm CLASS app
+jah_gpu_row(app.shader_gate_warm CLASS app TIER document
          COMMAND sh ${JAH_FRESH_HOME} --warm ${_sgw_home} --
                  bash "${CMAKE_CURRENT_SOURCE_DIR}/shader_gate_warm.sh"
                  "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>"
@@ -154,7 +177,7 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
         # it back; two suites both naming 8751 is what made -j4 unsafe
         # (TEST_GATE_AUDIT.md §4.1).
         # DEVPROCESS-1: registered through the GPU-timing lock; TIMEOUT = RUN_TIMEOUT + the lock's 900 s wait.
-        jah_gpu_exclusive_test(NAME app.input_keys CLASS app TIER low RUN_TIMEOUT 600
+        jah_gpu_exclusive_test(NAME app.input_keys CLASS app TIER low NEEDS NONE TEST_WINDOW RUN_TIMEOUT 600
                  COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/input_keys.sh"
                          "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" 0
                  WORKING_DIRECTORY ${_ik_home}/run)
@@ -163,8 +186,7 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
         # fixed sleeps between them, and a loaded box stretches every one of
         # them. 600 s against a ~40 s measured run.
         set_tests_properties(app.input_keys PROPERTIES
-            # JAHSHAKA_TEST_TIER=low (TEST-TIER-1): no claim here needs the shipped picture — the same verdict and ok count at Low (spikes/test-tier-1/solo-okcount.txt)
-            ENVIRONMENT "HOME=${_ik_home};JAHSHAKA_DATA_ROOT=${_ik_home}/.local/share/Jahshaka;JAHSHAKA_TEST_TIER=low"
+            ENVIRONMENT "HOME=${_ik_home};JAHSHAKA_DATA_ROOT=${_ik_home}/.local/share/Jahshaka"
             RUN_SERIAL TRUE
             LABELS "app")
     else()
@@ -187,7 +209,7 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     if(JAH_XDOTOOL AND JAH_CURL AND JAH_JQ AND JAH_XVFB)
         set(_ps_home ${CMAKE_CURRENT_BINARY_DIR}/play-select-home)
         file(MAKE_DIRECTORY ${_ps_home}/run)
-        jah_gpu_exclusive_test(NAME app.play_select CLASS app TIER low RUN_TIMEOUT 400
+        jah_gpu_exclusive_test(NAME app.play_select CLASS app TIER low NEEDS NONE TEST_WINDOW RUN_TIMEOUT 400
                  COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/play_select.sh"
                          "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" 0
                  WORKING_DIRECTORY ${_ps_home}/run)
@@ -195,8 +217,7 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
         # of synthesised gestures with fixed sleeps between them, every one of
         # which a loaded box stretches. 400 s against a ~50 s measured run.
         set_tests_properties(app.play_select PROPERTIES
-            # JAHSHAKA_TEST_TIER=low (TEST-TIER-1): no claim here needs the shipped picture — the same verdict and ok count at Low (spikes/test-tier-1/solo-okcount.txt)
-            ENVIRONMENT "HOME=${_ps_home};JAHSHAKA_DATA_ROOT=${_ps_home}/.local/share/Jahshaka;JAHSHAKA_TEST_TIER=low"
+            ENVIRONMENT "HOME=${_ps_home};JAHSHAKA_DATA_ROOT=${_ps_home}/.local/share/Jahshaka"
             LABELS "app")
     else()
         message(STATUS "app.play_select skipped: needs xdotool, curl, jq and Xvfb")
@@ -274,7 +295,7 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     if(JAH_XWD AND JAH_XDPYINFO AND JAH_XVFB)
         set(_ssp_home ${CMAKE_CURRENT_BINARY_DIR}/sky-swap-presented-home)
         file(MAKE_DIRECTORY ${_ssp_home}/run)
-        jah_gpu_row(app.sky_swap_presented CLASS app
+        jah_gpu_row(app.sky_swap_presented CLASS app TIER epic NEEDS photon bloom ssao smaa planar
                  COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/sky_swap_presented.py"
                          "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" "${_ssp_home}/out"
                  WORKING_DIRECTORY ${_ssp_home}/run)

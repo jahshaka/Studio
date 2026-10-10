@@ -35,6 +35,7 @@ public:
     Q_INVOKABLE QVariantList openTimings();
     Q_INVOKABLE QVariantMap openStats(const QVariantMap &options = QVariantMap());
     Q_INVOKABLE QVariantMap queryLog(const QVariantMap &options = QVariantMap());
+    Q_INVOKABLE QVariantMap databaseReads();
     Q_INVOKABLE bool heartbeat(int intervalMs = 250);
     Q_INVOKABLE QVariantMap heartbeatStats();
     Q_INVOKABLE QVariantMap watchdogStats();
@@ -73,8 +74,8 @@ public:
     Q_INVOKABLE QVariantMap libraryGeneration();
     Q_INVOKABLE QVariantMap resetLibrary(const QVariantMap &options = QVariantMap());
     Q_INVOKABLE QVariantMap mcpLogging(const QVariantMap &options = QVariantMap());
-    /// The process's test tier ("" = none; services/testtier.h).
-    Q_INVOKABLE QString testTier();
+    /// The process's test tier ("" = none) and its needs list (services/testtier.h).
+    Q_INVOKABLE QVariantMap testTier();
     Q_INVOKABLE QVariantMap window();
     Q_INVOKABLE QVariantMap resizeWindow(int width, int height);
     Q_INVOKABLE QVariantMap columns();
