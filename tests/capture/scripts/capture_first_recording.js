@@ -5,9 +5,9 @@
 // ~0.7 s); the recorder's view and its NV12 job compiled (cold cache) or loaded (warm) on its first
 // frames too. The startup shader gate draws that very view (recordingview::create, armed every
 // frame) behind the splash, so the first recording's start, warm-up and first recorded frames
-// compile and load ZERO shaders. THE PROBE IS THE FIRST RECORDING'S (lead decision 2026-10-10,
-// SC1-NEWPROJECT-STALL): a project open/create is media-free, so the FIRST click pays Qt's probe
-// (printed) and every later click is a lookup — the millisecond bars below are on the SECOND click.
+// compile and load ZERO shaders. The probe is THIS click's (a project open/create is media-free:
+// app.startup_quiet), and it is cheap because the app names Qt Multimedia's ONE hardware backend
+// from the engine's adapter (services/mediahardware.h: the unnamed check cost 731 ms).
 // FIRST in the pool: the claim is about the process's first recording.
 
 function assert(cond, msg) {
@@ -49,17 +49,19 @@ assert(sc1.liveCompiles === sc0.liveCompiles, "and no live compile was reported"
 // never drew would still have to LOAD its programs (the NV12 job) on its first frames.
 assert(sc1.loadedThisRun === sc0.loadedThisRun, "nor loaded one from the cache: " +
        (sc1.loadedThisRun - sc0.loadedThisRun));
+// THE NAMED BACKEND IS THE ONE THE ENCODER USES: on an NVIDIA adapter the app names cuda, and Qt still
+// opens NVENC (a named list that silently fell back to libx264 would pass every bar here).
+console.log("encoder " + first.encoder + " (hardware " + first.hardwareEncoder + "), backend named: '" +
+            first.hardwareBackend + "'");
+assert(typeof first.hardwareBackend === "string" && first.hardwareBackend.length > 0,
+       "the app named Qt Multimedia's hardware backend from the adapter: " + first.hardwareBackend);
+if (first.hardwareBackend === "cuda")
+    assert(first.encoder === "h264_nvenc" && first.hardwareEncoder === true,
+           "on the NVIDIA adapter the encoder is NVENC: " + first.encoder);
 // THE ENCODER PROBE (the real 585 ms): made by THIS first click (never at boot, never by a project
-// open/create — app.startup_quiet guards both); printed above. Every later click is a lookup:
+// open/create), and cheap because the backend is named — the first click costs well under 50 ms.
+timingBar(first.probeMs < 20, "Qt's encoder probe on the first click: " + first.probeMs.toFixed(2) + " ms");
+timingBar(first.startMs < 50, "the first record click after an open costs under 50 ms of UI time: " +
+          first.startMs.toFixed(1) + " ms");
 assert(capture.stop({ wait: true, timeoutMs: 30000 }) !== null && capture.status().state === "done", "finished");
-var st2 = capture.start({ path: app.dataRoot().root + "/capture-first/second.mp4" });
-assert(st2 !== null, "the second recording starts " + app.lastError());
-var second = capture.status();
-console.log("the second click: " + second.startMs.toFixed(1) + " ms of UI time, Qt's encoder probe " + second.probeMs.toFixed(2) + " ms");
-timingBar(second.probeMs < 20, "the second click's encoder probe is a lookup: " + second.probeMs.toFixed(2) + " ms");
-timingBar(second.startMs < 50, "a record click after the first costs under 50 ms of UI time: " +
-          second.startMs.toFixed(1) + " ms");
-guard = 0;
-while (capture.status().frames < 3 && guard++ < 200) editor.frame(1, 1 / 60);
-assert(capture.stop({ wait: true, timeoutMs: 30000 }) !== null && capture.status().state === "done", "the second finished");
 console.log("capture.first_recording: PASS");

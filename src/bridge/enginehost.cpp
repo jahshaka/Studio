@@ -13,6 +13,7 @@
 #include "bridge/enginethumbnailrenderer.h"
 
 #include <QTimer>
+#include "services/mediahardware.h"
 
 #include <QCoreApplication>
 #include <QGuiApplication>
@@ -414,6 +415,9 @@ bool EngineHost::start(QString &error)
                           cfg.headless ? QStringLiteral("true (NULL render system)")
                                        : QStringLiteral("false"));
         JahLog::writeHeaderBlock(QStringLiteral("=== DEVICE ==="), rows);
+        // Qt Multimedia's hardware backend, named from this adapter before anything media-related
+        // is constructed (services/mediahardware.h: the unnamed check cost 731 ms).
+        mediahardware::pinFor(dev.vendor);
     }
     return true;
 }

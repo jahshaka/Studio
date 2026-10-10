@@ -328,6 +328,7 @@ set(SRCS
     src/shell/shellactions.cpp
     src/shell/shellservices.cpp
     src/services/projectrunner.cpp
+    src/services/mediahardware.cpp
     src/services/scenetemplatebuilder.cpp
     src/modules/moduleregistry.cpp
     src/services/sceneopenrunner.cpp
