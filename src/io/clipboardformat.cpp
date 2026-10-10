@@ -137,7 +137,6 @@ QByteArray Envelope::toText() const
                 obj[QStringLiteral("blob")] = QString::fromUtf8(asset.blob.toBase64());
             if (!asset.properties.isEmpty())
                 obj[QStringLiteral("properties")] = QString::fromUtf8(asset.properties.toBase64());
-            if (asset.blobOmitted) obj[QStringLiteral("blobOmitted")] = true;
             assetsObj[it.key()] = obj;
         }
         root[QStringLiteral("assets")] = assetsObj;
@@ -233,7 +232,6 @@ Envelope Envelope::fromText(const QByteArray &text, QString *error, qint64 maxBy
         if (!blob.isEmpty()) asset.blob = QByteArray::fromBase64(blob.toUtf8());
         const QString properties = obj.value(QStringLiteral("properties")).toString();
         if (!properties.isEmpty()) asset.properties = QByteArray::fromBase64(properties.toUtf8());
-        asset.blobOmitted = obj.value(QStringLiteral("blobOmitted")).toBool(false);
         envelope.assets.insert(asset.guid, asset);
     }
 

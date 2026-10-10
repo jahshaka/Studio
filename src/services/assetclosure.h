@@ -89,6 +89,14 @@ struct DeferredRead
 /// Describe `guids` as envelope entries, inlining bytes while the budget
 /// lasts. `inlinedOut`/`referencedOut` (optional) count the two outcomes.
 ///
+/// THE ROW BLOBS ARE SPENT FIRST (STAGE-CLOSE-TRIAGE-1 round 6, the lead's design call): a row's
+/// `asset` blob (an Object's node tree, a material's whole content) is the ONE payload with no
+/// fallback — a file is found again by its id in the local or a sibling store, an omitted blob is
+/// found nowhere. So with `includeRowBlobs` every blob of the closure is charged to the budget in
+/// a pass of its own, BEFORE any file; the files then share what is left. A blob that does not fit
+/// even so is an ERROR: the answer is empty and `errorOut` names the row ("nothing was copied") —
+/// never an entry without its blob.
+///
 /// `deferredOut`, when given, turns the inlining into a LIST: every file the
 /// budget admits is appended there instead of being read, and its
 /// `inlineData` stays empty until the share file's writer reads it
@@ -99,7 +107,8 @@ QMap<QString, clipboardformat::ClipAsset> describe(const QStringList &guids, Dat
                                                    const Options &options,
                                                    int *inlinedOut = nullptr,
                                                    int *referencedOut = nullptr,
-                                                   QVector<DeferredRead> *deferredOut = nullptr);
+                                                   QVector<DeferredRead> *deferredOut = nullptr,
+                                                   QString *errorOut = nullptr);
 
 } // namespace assetclosure
 

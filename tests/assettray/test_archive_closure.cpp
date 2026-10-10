@@ -38,6 +38,7 @@ For more information see the LICENSE file
 #include "data/project.h"
 #include "export/exportcontentsource.h"
 #include "services/assetcas.h"
+#include "io/clipboardformat.h"
 #include "services/assetclosure.h"
 
 static int failures = 0;
@@ -168,30 +169,55 @@ int main(int argc, char **argv)
     }
     CHECK(same, "every described row equals fetchAsset's fields and the per-node edges");
 
-    // ---- THE ROW BLOB IS SPENT FROM THE BUDGET (read 5) ----------------------------------------
-    // A model whose Object row's node tree is larger than the inline budget travels by guid: its blob
-    // is not carried (blobOmitted), its import record (properties) still is, and it counts as
-    // referenced. A budget that fits carries it.
+    // ---- THE ROW BLOBS ARE SPENT FIRST (round 6, the lead's design call) -----------------------
+    // A row blob is the one payload with no fallback (a file is found again by its oid; an omitted
+    // blob nowhere), so describe charges every blob of the closure before any file. (a) A Mesh
+    // member whose model file nearly fills the budget, walked BEFORE its Object: the Object's node
+    // tree still travels, the file goes by oid. (b) A blob that does not fit even so refuses the
+    // whole describe by name — never an entry without its blob (the old blobOmitted flag, its
+    // envelope key and the resolver's arm are deleted: unreachable under this rule).
     {
-        const QString bigModel = newGuid();
-        const QByteArray bigTree(64 * 1024, 'N');
-        db.createAssetEntry(bigModel, QStringLiteral("big_model.glb"), static_cast<int>(ModelTypes::Object), QString(),
+        const QString object = newGuid(), mesh = newGuid();
+        const QByteArray tree(64 * 1024, 'N');
+        db.createAssetEntry(object, QStringLiteral("edge_model.glb"), static_cast<int>(ModelTypes::Object), QString(),
                             assethome::assets(), assethome::Origin::Import, QString(), QString(), thumb,
-                            QByteArray("{\"import\":{\"settings\":{\"scale\":2}}}"), QByteArray(), bigTree);
+                            QByteArray("{\"import\":{\"settings\":{\"scale\":2}}}"), QByteArray(), tree);
+        db.createAssetEntry(mesh, QStringLiteral("edge_model.mesh"), static_cast<int>(ModelTypes::Mesh), object,
+                            assethome::assets(), assethome::Origin::Import, QString(), QString(), thumb,
+                            QByteArray(), QByteArray(), QByteArray());
+        db.createDependency(int(ModelTypes::Object), int(ModelTypes::Mesh), object, mesh);
+        // the member's model file: 120 KB of a 128 KB budget
+        QTemporaryDir src;
+        const QString big = src.filePath(QStringLiteral("edge_model.glb"));
+        { QFile f(big); f.open(QIODevice::WriteOnly); f.write(QByteArray(120 * 1024, 'G')); }
+        QString oid, err;
+        CHECK(AssetCas::ingestFile(QSqlDatabase::database(), store.path(), big, mesh, QStringLiteral("source"),
+                                   QStringLiteral("edge_model.glb"), &oid, &err),
+              "the member's model file is in the store (%s)", qPrintable(err));
         assetclosure::Options tight;
         tight.storeRoot = store.path();
         tight.includeRowBlobs = true;
-        tight.inlineLimitBytes = 4096;
-        int inl = 0, ref = 0;
-        const auto over = assetclosure::describe({ bigModel }, &db, tight, &inl, &ref);
-        CHECK(over.contains(bigModel) && over.value(bigModel).blob.isEmpty() && over.value(bigModel).blobOmitted,
-              "a model whose node tree is over the inline budget travels WITHOUT its blob (blobOmitted)");
-        CHECK(!over.value(bigModel).properties.isEmpty(), "...its import record still rides");
-        CHECK(ref == 1 && inl == 0, "...and it counts as referenced (%d referenced, %d inlined)", ref, inl);
         tight.inlineLimitBytes = 128 * 1024;
-        const auto fits = assetclosure::describe({ bigModel }, &db, tight);
-        CHECK(fits.value(bigModel).blob == bigTree && !fits.value(bigModel).blobOmitted,
-              "a budget that fits carries the whole node tree");
+        QString error;
+        const auto out = assetclosure::describe({ mesh, object }, &db, tight, nullptr, nullptr, nullptr, &error);
+        CHECK(error.isEmpty() && out.size() == 2, "the member-first closure is described (%s)", qPrintable(error));
+        CHECK(out.value(object).blob == tree, "the Object's node tree travels although its member was walked first");
+        CHECK(out.value(mesh).files.size() == 1 && out.value(mesh).files.first().inlineData.isEmpty()
+                  && out.value(mesh).files.first().oid == oid,
+              "the member's 120 KB file, which no longer fits after the blob, travels by its oid");
+        CHECK(!out.value(object).properties.isEmpty(), "the Object's import record rides with it");
+
+        tight.inlineLimitBytes = 4096;
+        error.clear();
+        const auto refused = assetclosure::describe({ mesh, object }, &db, tight, nullptr, nullptr, nullptr, &error);
+        CHECK(refused.isEmpty() && error.contains(QStringLiteral("edge_model.glb")),
+              "a node tree over the whole budget refuses the describe BY NAME: %s", qPrintable(error));
+
+        // the envelope's text carries no trace of the deleted flag
+        clipboardformat::Envelope env;
+        env.assets = out;
+        CHECK(!env.toText().contains("blobOmitted"),
+              "the envelope's text has no blobOmitted key");
     }
 
     db.closeDatabase();

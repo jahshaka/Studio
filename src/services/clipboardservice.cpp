@@ -202,8 +202,13 @@ ClipboardCopyResult ClipboardService::copyNodes(const QList<iris::SceneNodePtr> 
     options.includeRowBlobs = true;
     if (project) options.projectGuid = project->getProjectGuid();
     int inlined = 0, referenced = 0;
+    QString overBudget;
     envelope.assets = assetclosure::describe(assetclosure::forNodes(nodeObjects, db), db,
-                                             options, &inlined, &referenced);
+                                             options, &inlined, &referenced, nullptr, &overBudget);
+    // A ROW BLOB THAT DOES NOT FIT IS REFUSED BY NAME (round 6): the payload would otherwise carry
+    // an entry the receiving library cannot land (a blob has no fallback); what was on the
+    // clipboard before stays.
+    if (!overBudget.isEmpty()) { result.error = overBudget; return result; }
 
     result = publish(envelope, envelope.items.size());
     result.inlined = inlined;
@@ -244,8 +249,13 @@ ClipboardCopyResult ClipboardService::copyAssets(const QStringList &guids)
     options.includeRowBlobs = true;
     if (project) options.projectGuid = project->getProjectGuid();
     int inlined = 0, referenced = 0;
+    QString overBudget;
     envelope.assets = assetclosure::describe(assetclosure::expand(seeds, db), db,
-                                             options, &inlined, &referenced);
+                                             options, &inlined, &referenced, nullptr, &overBudget);
+    // A ROW BLOB THAT DOES NOT FIT IS REFUSED BY NAME (round 6): the payload would otherwise carry
+    // an entry the receiving library cannot land (a blob has no fallback); what was on the
+    // clipboard before stays.
+    if (!overBudget.isEmpty()) { result.error = overBudget; return result; }
 
     result = publish(envelope, envelope.items.size());
     result.inlined = inlined;

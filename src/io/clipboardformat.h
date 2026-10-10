@@ -125,10 +125,6 @@ struct ClipAsset
     QVector<ClipFile> files;
     QByteArray blob;          // the row's `asset` column (Object/Material rows)
     QByteArray properties;    // the row's `properties` column
-    /// The row HAS an `asset` blob that did not fit the inline budget (an Object row's node tree is
-    /// counted like every other byte): it travels by guid only — a library that does not know the
-    /// row cannot land it, and the resolver reports it missing rather than landing an empty shell.
-    bool blobOmitted = false;
 };
 
 /// One copied thing.
