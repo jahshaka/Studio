@@ -72,6 +72,8 @@
 
 #include "assimp/Importer.hpp"
 #include "assimp/scene.h"
+#include "assimp/ProgressHandler.hpp"
+#include "assimp/postprocess.h"
 
 #include "data/database/database.h"
 #include "data/project.h"
@@ -2954,10 +2956,34 @@ static void asyncLanding()
 
     // ---- F5: the cancel points ------------------------------------------------------------
     {
+        // THE PARSE'S CANCEL POINT IS ASSIMP'S OWN (patch 0010): an Importer whose progress handler
+        // answers false aborts after the format's read — before any post-processing step — frees the
+        // partial scene and names the cancel. Driven directly, so the check cannot pass through the
+        // mesh cancel point behind it.
+        {
+            struct Refuse : Assimp::ProgressHandler
+            {
+                int calls = 0;
+                bool Update(float) override { ++calls; return false; }
+            };
+            Assimp::Importer importer;
+            auto *refuse = new Refuse;   // the importer owns it
+            importer.SetProgressHandler(refuse);
+            const aiScene *scene = importer.ReadFile(source.toStdString(),
+                                                     aiProcess_Triangulate | aiProcess_GenSmoothNormals |
+                                                     aiProcess_JoinIdenticalVertices);
+            const QString why = QString::fromStdString(importer.GetErrorString());
+            CHECK_LOUD(!scene && why.contains(QStringLiteral("cancelled")),
+                       qUtf8Printable(QStringLiteral("F5: a progress handler answering false CANCELS assimp's "
+                                                     "import — no scene, the reason named ('%1')").arg(why)));
+            CHECK_LOUD(refuse->calls <= 3,
+                       qUtf8Printable(QStringLiteral("F5: ...at the first cancel point after the read, not after "
+                                                     "every post-processing step (%1 Update call(s))").arg(refuse->calls)));
+        }
         std::atomic<bool> cancel { true };
         const iris::MeshBake::Model model =
             iris::MeshBake::buildFromFile(source, QStringLiteral("fp"), QString(), iris::ImportTransform(), &cancel);
-        CHECK_LOUD(!model.valid, "F5: a bake cancelled before its parse answers an invalid model (the parse aborted)");
+        CHECK_LOUD(!model.valid, "F5: a bake cancelled before its parse answers an invalid model");
         std::atomic<bool> go { false };
         const iris::MeshBake::Model whole =
             iris::MeshBake::buildFromFile(source, QStringLiteral("fp"), QString(), iris::ImportTransform(), &go);
