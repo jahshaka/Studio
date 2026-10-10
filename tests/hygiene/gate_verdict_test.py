@@ -205,6 +205,16 @@ def case_verdict_door(E):
     check(E.cgc.masked("open /tmp/jah-lead/rc-C2.state: /tmp/a/.local/share/Jahshaka/x.db") ==
           E.cgc.masked("open /tmp/jah-rc9/rc-C2.state: /home/u/.local/share/Jahshaka/x.db"),
           "/tmp/jah-* and a data root are one token each (%s)" % E.cgc.masked("open /tmp/jah-lead/rc-C2.state"))
+    # FIX ROUND 3 F2: masked() never over-masks. RED ON 9eb5343e2 (the reader's measurements): two in-tree homes read as
+    # one red, the owner's real data root read as a test home, and the unanchored prefix ate `a=` / `FAIL:`.
+    mk, Wt = E.cgc.masked, "/home/jahshaka/Developer/jahshaka/.claude/worktrees/rc-batch-C2"
+    check(mk(Wt + "/build-linux/tests/scripting/e2e-home-clip_ref/.local/share/Jahshaka/lib.db missing")
+          != mk(Wt + "/build-linux/tests/scripting/e2e-home-tex_ref/.local/share/Jahshaka/lib.db missing"),
+          "two in-tree homes stay two reds (%s)" % mk(Wt + "/b/e2e-home-clip_ref/.local/share/Jahshaka/lib.db"))
+    check(mk("wrote /home/jahshaka/.local/share/Jahshaka/lib.db") != mk("wrote " + Wt + "/b/tests/x/home/.local/share/Jahshaka/lib.db"),
+          "the owner's real data root never reads as a test home (%s)" % mk("wrote /home/jahshaka/.local/share/Jahshaka/lib.db"))
+    check(mk("cmp a=" + Wt + "/x.png") != mk("cmp b=" + Wt + "/x.png") and mk("FAIL:" + Wt + "/a.png") != mk("WARN:" + Wt + "/a.png"),
+          "a mask starts where a path starts: `a=`/`b=` and `FAIL:`/`WARN:` stay (%s)" % mk("cmp a=" + Wt + "/x.png"))
     st, why = E.judge([red, vrec("real:VIEWS-XID-1", T % "11:00")], base=base_solo)
     check(st == "known" and "KNOWN RED" in why, "real:<registered id> + the red reproduced by a solo at the base -> KNOWN "
           "RED (%s: %s)" % (st, why[:70]))

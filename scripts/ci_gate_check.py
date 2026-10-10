@@ -211,18 +211,26 @@ def _solos_ok(solos):
 # root ("…must be inside /…/rc-batch-C2/build-linux/tests/…") must read the same at the base's tree (rc-base-<sha>) — batch
 # C2 refused three KNOWN RED verdicts whose masked lines were identical up to the root. Each prefix below is ONE token;
 # what follows it (the path INSIDE the tree) stays, so a different file is still a different failure.
-_P = r"[^\s'\"`(),;]*"
+_D = r"""[^/\s'"`(),;=:]"""                     # a path component's character (a delimiter ends the path)
+_START = r"""(?<![^\s'"`(),;=:])"""             # a path STARTS at the line's start or after a delimiter (fix round 3
+                                                #  F2: an unanchored prefix ate glued text — a=<p> read as b=<p>)
 _PATH_MASKS = [
-    (re.compile(_P + r"/\.claude/worktrees/[^/\s'\"`(),;]+"), "<tree>"),            # any worktree (lane, rc, rc-base)
-    (re.compile(r"(?:/home/[^/\s]+|/mnt/work)/Developer(?:\.usb)?/jahshaka(?![\w.-])"), "<tree>"),  # the main tree
-    (re.compile(r"/tmp/jah-[^/\s'\"`(),;]*"), "<jah-tmp>"),                           # /tmp/jah-* (lead + rig scratch)
-    (re.compile(_P + r"/\.local/share/Jahshaka"), "<data-root>"),                     # a data root (a home's)
+    # any worktree (lane, rc, rc-base): the path up to and including its name
+    (re.compile(_START + r"(?:/" + _D + r"+)+?/\.claude/worktrees/" + _D + r"+"), "<tree>"),
+    # the main tree under either spelling (never jahshaka-old: the next character is not a name's)
+    (re.compile(_START + r"(?:/home/" + _D + r"+|/mnt/work)/Developer(?:\.usb)?/jahshaka(?![\w.-])"), "<tree>"),
+    # /tmp/jah-* (lead + rig scratch)
+    (re.compile(_START + r"/tmp/jah-" + _D + r"*"), "<jah-tmp>"),
+    # a data root OUTSIDE a tree — a user's home or a /tmp scratch home; a home INSIDE a tree was masked to <tree>/…
+    # above and keeps its own name (e2e-home-clip_ref and e2e-home-tex_ref stay two reds — fix round 3 F2)
+    (re.compile(_START + r"(?:/home/" + _D + r"+|/tmp/" + _D + r"+)/\.local/share/Jahshaka(?![\w.-])"), "<data-root>"),
 ]
 
 
 def masked(line):
     """A failLine with its tree paths and numbers masked — the same failure reads the same at base and tip: every path
-    under a tree root (a `.claude/worktrees/<name>`, the main tree), /tmp/jah-* and a data root is one token
+    under a tree root (a `.claude/worktrees/<name>`, the main tree), /tmp/jah-* and a data root OUTSIDE a tree (a user's
+    or a /tmp home; an in-tree home keeps its name) is one token, each matched only where a path STARTS
     (_PATH_MASKS), then every number is `#`. A different failure (another message, another file in the tree) stays
     different."""
     t = (line or "").strip()
