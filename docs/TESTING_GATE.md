@@ -743,8 +743,10 @@ bound** (TESTING-CLEANUP-2B; `tests/cmake/vram_rows.cmake`): every registered ro
 vram:<k>` and the build names its resource spec (`CTEST_RESOURCE_SPEC_FILE`: one `vram` resource, the box's
 token count), so ctest — a gate, a tier, a hand run — never STARTS a row whose tokens its own running rows hold,
 and the clock starts with the row. Only a process outside the ctest (a hand-run app holding tokens) can still
-make a row wait; its `vram: admitted … after <s> s` is subtracted from the row's seconds (`tokenWaitS`), and a row
-whose TIMEOUT ends while it is still waiting never ran: the run log records NOADMIT. (Until 2026-10-10 every GPU
+take a row's tokens — and INSIDE A GATE the row's admission then does not wait at all: it exits 75 (NOADMIT,
+never ran) and the gate re-queues it at its end (P5); a final try still short stays NOADMIT, which the judge
+reads as MISSING (re-run it), never a skip (`vram_tokens.row_wait_bound`). Outside a gate a hand run waits as
+before (its wait subtracted from its seconds, `tokenWaitS`; a TIMEOUT that ends the wait is recorded NOADMIT). (Until 2026-10-10 every GPU
 row's TIMEOUT carried a hidden +900 s for the wait, and rows ran past their own budget unseen — the shadow churn
 twins 1,008 / 1,159 s against 900.)
 

@@ -698,6 +698,30 @@ def main(source, build):
     open(relge, "w").close(); gh.communicate()
     check(pi.returncode == 0 and "queued" not in pi.stderr and "already held by this gate" in pi.stderr,
           "`admit all` inside a gate takes the card while the gate holds the slot, never queueing behind it")
+    # TESTING-CLEANUP-2B fix C: INSIDE A GATE A ROW'S ADMISSION NEVER WAITS. Every token of this private universe is held
+    # by a process OUTSIDE the gate; a row of the gate (it inherits the gate's live pid) asks for one with the production
+    # bound (900) and must exit 75 at once — NOADMIT, re-queued by the gate — never wait inside its own TIMEOUT. The
+    # same ask outside the gate waits (it reaches the waiting line). RED ON BASE (b0a3b1f3c): the row waited up to 900 s.
+    relgw, relhold = os.path.join(scratch, "gw.release"), os.path.join(scratch, "hold.release")
+    benv = {k: v for k, v in os.environ.items() if k not in ("JAH_GATE_SLOT_HELD", "JAH_VRAM_HELD")}
+    holder = spawn([sys.executable, vt, "admit", "3", "--label", "OUTSIDE", "--", "sh", "-c",
+                    f"echo HOLDING; while [ ! -e {relhold} ] && kill -0 {os.getpid()} 2>/dev/null; do sleep 0.05; done"],
+                   env=benv)
+    wait_line(holder, "HOLDING")
+    gw = spawn([sys.executable, vt, "gate", "--label", "GW", "--", "sh", "-c",
+                f"while [ ! -e {relgw} ] && kill -0 {os.getpid()} 2>/dev/null; do sleep 0.05; done"], env=benv)
+    wait_line(gw, "gate-slot: taken")
+    pin_ = subprocess.run([sys.executable, vt, "admit", "1", "--label", "ROW", "--", "true"], capture_output=True,
+                          text=True, env=dict(benv, JAH_VRAM_WAIT="900", JAH_GATE_SLOT_HELD=str(gw.pid)))
+    pout = spawn([sys.executable, vt, "admit", "1", "--label", "HAND", "--", "true"], env=dict(benv, JAH_VRAM_WAIT="900"))
+    ow = wait_line(pout, "vram: waiting")
+    open(relhold, "w").close(); holder.communicate()
+    ow += pout.communicate()[0]
+    open(relgw, "w").close(); gw.communicate()
+    check(pin_.returncode == 75 and "NOADMIT" in pin_.stderr and "vram: admitted" not in pin_.stderr
+          and pout.returncode == 0 and "vram: waiting" in ow,
+          "inside a gate a short admission is NOADMIT at once (exit %d), outside one it waits (exit %d)"
+          % (pin_.returncode, pout.returncode))
     # the ingest wait is an EVENT the admission performs on every row: observed, not timed — supervise() of a
     # green row, in this process, with the journal real and time.sleep recorded
     import types

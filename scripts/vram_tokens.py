@@ -34,8 +34,9 @@ THE CONTRACT
     it happens BEFORE the command starts. It is no longer in any row's TIMEOUT (TESTING-CLEANUP-2B:
     the +900 s widening is gone): inside a gate ctest schedules the rows by their tokens
     (RESOURCE_GROUPS against the build's resource spec, tests/cmake/vram_rows.cmake), so a gate's rows
-    never wait here for each other; a wait here is another process's tokens, and a row whose TIMEOUT
-    ends while still waiting is recorded NOADMIT by the run log (gate_runlog.unadmitted_wait). An expired wait exits 75 (EX_TEMPFAIL) and
+    never wait here for each other; a short admission inside a gate is another process's tokens and
+    exits 75 at once (row_wait_bound: NOADMIT, re-queued by the gate); outside a gate a row whose
+    TIMEOUT ends while still waiting is recorded NOADMIT by the run log (gate_runlog.unadmitted_wait). An expired wait exits 75 (EX_TEMPFAIL) and
     never runs the command. A wait prints ONE line, `vram: waiting for <k> tokens, <n> free`,
     and a closing `vram: admitted …` line with the tokens it got, so the triage sees it.
   * nvidia-smi is NOT consulted (racy, slow, and blind to what a process will allocate next):
@@ -139,6 +140,19 @@ def wait_bound():
         return 900.0
 
 
+def row_wait_bound():
+    """THE ADMISSION NEVER WAITS INSIDE A GATE (TESTING-CLEANUP-2B fix C). Inside one gate ctest already schedules the
+    rows by their tokens (RESOURCE_GROUPS, tests/cmake/vram_rows.cmake), so a row that finds its tokens taken is
+    blocked by a process OUTSIDE the gate — and every second it waited was charged to the row's own TIMEOUT (a row
+    admitted late, then killed, read as a TIMEOUT of its code). So inside a gate (a live JAH_GATE_SLOT_HELD) the
+    admission tries ONCE: short, it exits 75 (NOADMIT, never ran) and the gate re-queues the row at its end (P5); a
+    final try that is still short stays NOADMIT — MISSING to the judge, which a re-run answers, never a skip.
+    Outside a gate (a hand run) the bound is JAH_VRAM_WAIT's, as before."""
+    if os.environ.get("JAH_GATE_SLOT_HELD") and slot_held_valid():
+        return 0.0
+    return wait_bound()
+
+
 def _open(path):
     # O_CLOEXEC off for tokens (they must survive exec); the turnstile is closed before exec.
     fd = os.open(path, os.O_RDWR | os.O_CREAT, 0o666)
@@ -224,7 +238,7 @@ def acquire(k, label="", wait=None, log=sys.stderr):
     if k > n:
         _say(log, "vram: %d tokens asked, the box has %d — taking all %d" % (k, n, n))
         k = n
-    wait = wait_bound() if wait is None else wait
+    wait = row_wait_bound() if wait is None else wait
     d = token_dir()
     os.makedirs(d, exist_ok=True)
     t0 = time.monotonic()
@@ -619,7 +633,7 @@ def main(argv):
         if argv[1] == "all" and token_count() > 0 and not os.environ.get("JAH_VRAM_HELD"):
             slot = _queue_for_slot(label + " (admit all)", sys.stderr, wait=wait_bound())
         slot_wait = time.monotonic() - t_slot
-        held = acquire(k, label, wait=max(0.0, wait_bound() - slot_wait))
+        held = acquire(k, label, wait=max(0.0, row_wait_bound() - slot_wait))
     except AdmitTimeout as e:
         if slot is not None:
             os.close(slot)
