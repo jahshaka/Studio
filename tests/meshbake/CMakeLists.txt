@@ -189,6 +189,28 @@ set_tests_properties(meshbake.rebake_generation PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen;HOME=${_bake_home};JAHSHAKA_DATA_ROOT=${_bake_home}/.local/share/Jahshaka"
     TIMEOUT 120 LABELS "meshbake")
 
+# meshbake.async_landing — the import bakes' landing in process (STAGE-CLOSE-TRIAGE-1 rounds 3-4):
+# F5 the cancel points, F6 every row over the baked file, F7 a dropped landing calls back with its
+# reason, F8 a landing into a moved store is refused.
+add_test(NAME meshbake.async_landing COMMAND test_mesh_bake --async-landing
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(meshbake.async_landing PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen;HOME=${_bake_home};JAHSHAKA_DATA_ROOT=${_bake_home}/.local/share/Jahshaka"
+    TIMEOUT 120 LABELS "meshbake")
+
+# meshbake.quit_during_bake — F5: a run that ends with an import's bake in flight cancels it inside
+# its job and exits 0 (bake_quit.sh; the app, headless, its own data root).
+set(_quit_home ${CMAKE_CURRENT_BINARY_DIR}/quit-during-bake-home)
+file(MAKE_DIRECTORY ${_quit_home}/run)
+add_test(NAME meshbake.quit_during_bake
+         COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/bake_quit.sh" "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>"
+         WORKING_DIRECTORY ${_quit_home}/run)
+set_tests_properties(meshbake.quit_during_bake PROPERTIES
+    ENVIRONMENT "HOME=${_quit_home}" TIMEOUT 300 LABELS "meshbake")
+set_property(TEST meshbake.quit_during_bake APPEND PROPERTY ENVIRONMENT_MODIFICATION
+             "JAHSHAKA_DATA_ROOT=unset:")
+jah_no_display(meshbake.quit_during_bake)
+
 add_test(NAME meshbake.hemisphere_winding COMMAND test_mesh_bake --hemisphere-winding
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(meshbake.hemisphere_winding PROPERTIES

@@ -633,8 +633,9 @@ BakeJob prepareBake(QSqlDatabase conn, const QString &root, const BakeTarget &ta
     return job;
 }
 
-BakeResult runBake(const BakeJob &job)
+BakeResult runBake(const BakeJob &job, const std::atomic<bool> *cancel)
 {
+    const auto cancelled = [cancel]() { return cancel && cancel->load(); };
     BakeResult out;
     out.sourceOid = job.sourceOid;
     if (job.path.isEmpty()) { out.error = QStringLiteral("not a store object"); return out; }
@@ -655,14 +656,19 @@ BakeResult runBake(const BakeJob &job)
     } else {
         iris::MeshBake::Model model = iris::MeshBake::buildFromFile(
             job.path, iris::MeshBake::fingerprintFor(job.sourceOid, job.settings), dir->path(),
-            job.transform);
+            job.transform, cancel);
+        if (cancelled()) { out.error = QStringLiteral("cancelled"); return out; }
         if (!model.valid) {
             out.error = QStringLiteral("could not parse '%1' for baking").arg(QFileInfo(job.path).fileName());
             return out;
         }
         path = QDir(dir->path()).filePath(iris::MeshBake::fileNameFor(job.sourceOid, job.settings));
+        // CANCEL POINTS (F5) before the write and before the store's stage: a cancelled bake writes
+        // and stages nothing.
+        if (cancelled()) { out.error = QStringLiteral("cancelled"); return out; }
         if (!iris::MeshBake::write(path, model, &out.error)) return out;
     }
+    if (cancelled()) { out.error = QStringLiteral("cancelled"); return out; }
     out.dir = dir;
     out.path = path;
     // The store's half of the write, here and not on the database thread:
@@ -776,6 +782,9 @@ int sPendingJobs = 0;
 /// Moved by stopBackgroundRebuild (a reset, a shutdown). ATOMIC: the async worker reads it between jobs
 /// and stops there (STAGE-CLOSE-TRIAGE-1 F5); the continuation drops a landing whose epoch moved.
 std::atomic<quint64> sAsyncEpoch { 0 };
+/// THE IN-FLIGHT JOBS' CANCEL FLAG (F5): every async worker started under it reads it inside its bake
+/// (MeshBake's cancel points); stopBackgroundRebuild raises it and installs a fresh one for later bakes.
+std::shared_ptr<std::atomic<bool>> sAsyncCancel = std::make_shared<std::atomic<bool>>(false);
 QList<QFuture<QVector<BakeResult>>> sAsyncFutures;  ///< joined by stopBackgroundRebuild
 struct Listener
 {
@@ -840,7 +849,7 @@ void startBackgroundRebuild()
         irisLog(QStringLiteral("mesh bake: rebuilding %1 stale bake(s) in the background").arg(jobs.size()));
         for (const BakeJob &job : jobs) {
             if (sBackgroundStop.load()) return;
-            auto result = std::make_shared<BakeResult>(runBake(job));
+            auto result = std::make_shared<BakeResult>(runBake(job, &sBackgroundStop));
             QMetaObject::invokeMethod(QCoreApplication::instance(), [result, root]() {
                 QString error;
                 if (!commitBake(QSqlDatabase::database(), root, *result, &error))
@@ -858,8 +867,11 @@ void stopBackgroundRebuild()
     // jobs on it (F5), so the join below waits for the job IN FLIGHT only — never the rest of a
     // multi-model paste — and every landing still queued to this thread is dropped by it (its
     // `done` told why: F7), so nothing lands in a library that is no longer the one it was planned
-    // against. (A single job has no cancel point: MeshBake::buildFromFile runs to its end.)
+    // against. The job IN FLIGHT stops too, at its next cancel point (the parse's progress handler,
+    // between meshes, before each stage task, before the write and the stage): the join is short.
     ++sAsyncEpoch;
+    sAsyncCancel->store(true);   // the job in flight stops at its next cancel point
+    sAsyncCancel = std::make_shared<std::atomic<bool>>(false);
     for (QFuture<QVector<BakeResult>> &future : sAsyncFutures)
         if (!future.isFinished()) future.waitForFinished();
     sAsyncFutures.clear();
@@ -983,13 +995,15 @@ void bakeAsync(const QVector<BakeJob> &jobs, const QVector<LandedBake> &targets,
     for (const BakeJob &job : jobs) ++sPending[job.path];
     sPendingJobs += jobs.size();
     const quint64 epoch = sAsyncEpoch.load();
-    QFuture<QVector<BakeResult>> future = QtConcurrent::run([jobs, epoch]() {
+    const std::shared_ptr<std::atomic<bool>> cancel = sAsyncCancel;
+    QFuture<QVector<BakeResult>> future = QtConcurrent::run([jobs, epoch, cancel]() {
         QVector<BakeResult> results;
         results.reserve(jobs.size());
         for (const BakeJob &job : jobs) {
-            // A RESET OR SHUTDOWN STOPS THE WORKER BETWEEN JOBS (F5), like the background sweep.
-            if (sAsyncEpoch.load() != epoch) break;
-            results.append(runBake(job));
+            // A RESET OR SHUTDOWN STOPS THE WORKER BETWEEN JOBS (F5), like the background sweep —
+            // and INSIDE the job in flight, at MeshBake's cancel points (the flag below).
+            if (sAsyncEpoch.load() != epoch || cancel->load()) break;
+            results.append(runBake(job, cancel.get()));
         }
         return results;
     });
@@ -1072,10 +1086,12 @@ int bakeLandedAsync(const QStringList &guids)
 {
     if (guids.isEmpty()) return 0;
     // THE ROWS WERE JUST WRITTEN: the caches may still hold what a removed row of the same guid and
-    // content answered (a paste re-lands a deleted row under its original guid, with the import
-    // record the payload carries), and a plan from the stale settings bakes a variant no lookup of
-    // the new row will ever ask for. Measured: a pasted rig planned under the old row's settings
-    // hash, committed, and the landing then found no bake for the row's own.
+    // content answered (a paste re-lands a deleted row under its original guid), and a plan from
+    // those stale settings bakes a variant no lookup of the new row will ever ask for. Measured: a
+    // pasted rig planned under the old row's settings hash, committed, and the landing then found no
+    // bake for the row's own. The landed rows carry their import record — the closure a paste and a
+    // share file carry includes each row's properties and a member's Object row (assetclosure) — so
+    // the plan below reads the settings the model was imported under.
     clear();
     QSqlDatabase conn = QSqlDatabase::database();
     const QString root = AssetStorePaths::root();

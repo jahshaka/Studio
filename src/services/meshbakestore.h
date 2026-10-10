@@ -41,6 +41,7 @@ For more information see the LICENSE file
 #include "irisgl/import/meshbake.h"
 #include "irisgl/import/meshprewarm.h"
 #include "services/assetcas.h"
+#include <atomic>
 #include <memory>
 #include <functional>
 
@@ -188,7 +189,9 @@ struct BakeResult
 };
 
 BakeJob prepareBake(QSqlDatabase conn, const QString &root, const BakeTarget &target);
-BakeResult runBake(const BakeJob &job);
+/// `cancel` (F5): when it reads true the bake stops at its next cancel point (MeshBake's, then
+/// before the write and the store's stage) and answers `error = "cancelled"`. Worker thread.
+BakeResult runBake(const BakeJob &job, const std::atomic<bool> *cancel = nullptr);
 /// Publishes `result` (or discards it on failure). False with `errorOut` set
 /// when the catalog write failed.
 bool commitBake(QSqlDatabase conn, const QString &root, BakeResult &result, QString *errorOut);
@@ -287,9 +290,11 @@ bool ensureFreshAsync(const QString &sourcePath, const QString &assetGuid, QObje
 /// True while an async bake of this model file (bakeLandedAsync / ensureFreshAsync) has not
 /// committed. Database thread.
 bool bakePending(const QString &sourcePath);
-/// THE ROW'S MODEL FILE: the store object among `guid`'s files whose name is a model (Constants::
-/// MODEL_EXTS), never a bake — what the row's bake is keyed on. AssetCas::resolveSource answers the
-/// row's FIRST file, which for an object tile can be one of its textures. Empty when there is none.
+/// THE ROW'S MODEL FILE: the store object among `guid`'s OWN files whose name is a model (Constants::
+/// MODEL_EXTS), never a bake — what the row's bake is keyed on (the assets.bakeState verb). Empty when
+/// the row records no model file of its own (a bundle's object tile names its model through its Mesh
+/// member). The scene's nodes resolve through SceneReader::resolveAssetPath instead — the reader's
+/// pending check and the landing share that one function.
 QString modelSourceFor(QSqlDatabase conn, const QString &root, const QString &guid);
 
 /// How many async bakes are in flight (the `assets.pendingBakes` verb). Database thread.
