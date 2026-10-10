@@ -510,6 +510,17 @@ static void testPhotonOverrideReadsCustom()
         CHECK(r && worldmodes::source(s, *r) == QLatin1String("mode"),
               qPrintable(QStringLiteral("photon_off_source: %1 reads 'mode' with Photon off").arg(id)));
     }
+    // THE ORDERING under a PICKED Custom (no World Mode): a Photon-tiered row answers through
+    // photonDeviations BEFORE source()'s picked-Custom fallback, so a machinery row holding its
+    // Photon tier's column reads 'mode' while the World-tiered photon row reads 'custom'.
+    worldmodes::setMode(s, worldmodes::Mode::Epic);
+    worldmodes::setMode(s, worldmodes::Mode::Custom);
+    const worldmodes::Row *quality = worldmodes::row(QStringLiteral("giQuality"));
+    CHECK(worldmodes::pickedMode(s) == worldmodes::Mode::Custom && worldmodes::photonEnabled(s) &&
+              !worldmodes::photonCustom(s) && quality &&
+              worldmodes::source(s, *quality) == QLatin1String("mode") &&
+              photon && worldmodes::source(s, *photon) == QLatin1String("custom"),
+          "custom_pick_order: picked Custom — giQuality on its Photon column reads 'mode', the photon row 'custom'");
 }
 
 // ---------------------------------------------------------------------------

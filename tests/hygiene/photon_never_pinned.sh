@@ -63,8 +63,8 @@ fi
 
 # 3. NOBODY inserts it by hand (first-party sources; tests may build a hostile document). Read
 #    across lines (an insert's arguments may wrap), and every WHOLE-MAP assignment of
-#    worldOverrides must be one of the known three, each with the reason it cannot carry a
-#    `photon` key:
+#    worldOverrides must be one of the known three — EXACTLY ONE in each of these files — each
+#    with the reason it cannot carry a `photon` key:
 #      src/io/scenereader.cpp        the reader — check 1: the key is removed on the next line
 #      src/commands/worldmodecommand.cpp  undo/redo restores a SNAPSHOT of scene->worldOverrides
 #                                    (capture, :23) — a copy of a map the setters and the reader
@@ -82,6 +82,7 @@ allowed = {"src/io/scenereader.cpp", "src/commands/worldmodecommand.cpp",
 ins = re.compile(r"worldOverrides\s*(?:\.\s*insert\s*\(|\[)([^;]*?)(?:;)", re.S)
 assign = re.compile(r"worldOverrides\s*=(?!=)")
 out = []
+seen = set()
 for root in roots:
     for d, _, files in os.walk(root):
         for f in files:
@@ -91,10 +92,18 @@ for root in roots:
             for m in ins.finditer(t):
                 if re.search(r'photonRowId\(\)|"photon"', m.group(1)):
                     out.append("%s:%d: a 'photon' pin written by hand" % (p, t.count("\n", 0, m.start()) + 1))
-            for m in assign.finditer(t):
+            hits = list(assign.finditer(t))
+            for m in hits:
                 line = t.count("\n", 0, m.start()) + 1
                 if p not in allowed:
                     out.append("%s:%d: a whole-map worldOverrides assignment outside the known three" % (p, line))
+            # EXACTLY ONE in each allowed file: a second assignment there is a new door the
+            # reason above does not cover.
+            if p in allowed and len(hits) != 1:
+                out.append("%s: %d whole-map worldOverrides assignments, want exactly 1" % (p, len(hits)))
+            seen.add(p)
+for p in sorted(allowed - seen):
+    out.append("%s: the allowed file is gone (update the list)" % p)
 print("\n".join(out))
 PYEOF
 )

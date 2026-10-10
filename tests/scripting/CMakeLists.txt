@@ -243,6 +243,7 @@ jah_gpu_row(scripting.e2e.photon_pin_read CLASS app TIER document
                  ${CMAKE_CURRENT_SOURCE_DIR}/scripts/photon_pin_read.js.in
                  ${CMAKE_CURRENT_BINARY_DIR}/photon-pin-read
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+# TIMEOUT 600 = the two inner stage bounds (photon_pin_read.sh: `timeout 300` a stage); 37-45 s measured.
 set_tests_properties(scripting.e2e.photon_pin_read PROPERTIES LABELS "scripting" TIMEOUT 600)
 # EDITOR_SHORTCUTS_SPEC §5: the verbs behind the Unreal-style editor controls.
 jah_pool_arm(editor_view editor_controls ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_editor_controls.js 30)
