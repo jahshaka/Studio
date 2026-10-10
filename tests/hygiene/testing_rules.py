@@ -10,8 +10,8 @@ here, each with its name in the failure line:
      `.benchmark`, a row whose environment arms JAHSHAKA_TIMING_BARS — runs through scripts/gpu-exclusive.sh (the GPU-timing lock, TESTING_GATE §4).
      tests/CMakeLists.txt's configure check proves the list's members are registered through the
      lock; this proves the other direction: nothing that measures is outside the list.
-  R2 EVERY NIGHTLY ROW IS PRICED. A `nightly` row has a cost in scripts/gate-times.txt (measured
-     or estimated): the nightly tier's length is planned from it.
+  R2 EVERY STAGE-CLOSE ROW IS PRICED. A `stage-close` row has a cost in scripts/gate-times.txt
+     (measured or estimated): the stage-close tier's length is planned from it.
   R3 NO COPIED TIER. No tracked file other than scripts/gate-scope.py carries a `ctest ... -LE`
      label set: the tiers are printed by `gate-scope.py --merge-tier` / `--nightly-tier`, and a
      copy goes stale (rc-gate.sh's did: it lacked scale-target and still named benchmark).
@@ -63,7 +63,7 @@ def r1_bad(inv):
 
 
 def r2_bad(inv, priced):
-    return sorted(n for n, t in inv.items() if "nightly" in t["labels"] and n not in priced)
+    return sorted(n for n, t in inv.items() if "stage-close" in t["labels"] and n not in priced)
 
 
 def r3_bad(name, text):
@@ -133,8 +133,8 @@ def the_rules_catch():
           and r1_bad({"y": row(["/b/y"], env=["JAHSHAKA_TIMING_BARS=1"])}) == ["y"]
           and not r1_bad({"y.timing.fresh_home": row(["/b/y"], fixture_setup=True)}),
           "R1 flags a measuring row outside the lock, not one inside it or a fixture's setup")
-    check(r2_bad({"n": row([], labels={"nightly"})}, set()) == ["n"] and not r2_bad({"n": row([], labels={"nightly"})}, {"n"}),
-          "R2 flags an unpriced nightly row")
+    check(r2_bad({"n": row([], labels={"stage-close"})}, set()) == ["n"] and not r2_bad({"n": row([], labels={"stage-close"})}, {"n"}),
+          "R2 flags an unpriced stage-close row")
     check(r3_bad("rc.sh", 'ctest -j4 -LE "^(nightly|photon-target)$"') == ["rc.sh:1"]
           and not r3_bad("rc.sh", 'TIER="$(python3 scripts/gate-scope.py --merge-tier)"'),
           "R3 flags a copied -LE tier, not the command that prints it")
@@ -170,7 +170,7 @@ def main(source, build):
         f = line.split()
         if len(f) == 2 and not line.startswith("#"): priced.add(f[0])
     bad = r2_bad(inv, priced)
-    check(not bad, "R2 every nightly row is priced in scripts/gate-times.txt %s" % bad[:8])
+    check(not bad, "R2 every stage-close row is priced in scripts/gate-times.txt %s" % bad[:8])
 
     files = subprocess.run(["git", "ls-files"], cwd=source, capture_output=True, text=True).stdout.split()
     bad = []

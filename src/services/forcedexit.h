@@ -20,6 +20,10 @@ For more information see the LICENSE file
 // loss end could block for ever on a modal box nobody would answer (a spawned app on a rig display:
 // alive ~1,100 s after "FATAL … ending the session", TC2-DEVICE-LOST-HANG).
 
+#include "services/jahlog.h"
+
+#include <QString>
+
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
@@ -33,6 +37,10 @@ constexpr int kCode = 86;
 /// Ends the process now: the line, then _Exit(86). Never returns.
 [[noreturn]] inline void now(const std::string &why)
 {
+    // THE SESSION LOG FIRST (the funnel every line takes: a forced end is a fact the log keeps, and
+    // a log whose close bracket is missing says why), then the console, then the exit.
+    JAH_LOG(JahLog::app, Error, QStringLiteral("shutdown watchdog: %1 — forcing process exit (code %2)")
+                                    .arg(QString::fromStdString(why)).arg(kCode));
     std::fprintf(stderr, "shutdown watchdog: %s — forcing process exit (code %d)\n", why.c_str(), kCode);
     std::fflush(nullptr);
     std::_Exit(kCode);

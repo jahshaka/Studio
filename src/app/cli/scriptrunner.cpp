@@ -10,6 +10,7 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "app/cli/scriptrunner.h"
+#include "services/forcedexit.h"
 
 #include <cstdio>
 #include <cstdlib>
@@ -72,14 +73,14 @@ int finalizeAppExit(int rc)
     // The engine borrows Qt's X display: release it before QApplication goes away.
     EngineHost::instance().shutdown();
     if (!QThreadPool::globalInstance()->waitForDone(5000)) {
-        qWarning("shutdown: background workers still running 5s after exit — "
-                 "forcing process exit (code %d)", rc);
-        // The session log's close bracket is worth having even on the forced
-        // path: an absent one is the signal that the session died, and this
-        // exit is not a death.
+        // A FORCED END, NOT THE RUN'S OWN CODE (TESTING-CLEANUP-2 H8c): this used to _Exit(rc) — a
+        // run whose workers hung read as its clean 0. The forced exit's line goes into the session
+        // log, the close bracket follows it, then exit 86 (services/forcedexit.h).
+        JAH_LOG(JahLog::app, Error,
+                QStringLiteral("shutdown watchdog: background workers still running 5 s after exit "
+                               "(the run's own code was %1)").arg(rc));
         JahLog::stop(QStringLiteral("forced exit: background workers hung"));
-        std::fflush(nullptr);
-        std::_Exit(rc);
+        forcedexit::now("background workers still running 5 s after exit");
     }
     // THE CLOSE BRACKET (SESSION_LOG_SPEC §3.9) plus the session summary. This
     // is the choke point every ordinary exit passes through — the window close
