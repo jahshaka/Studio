@@ -25,11 +25,24 @@ line a forward merge carried in), provided
   (b) the fork pin is the same at A and at the tip, and A..tip neither falls back nor is the tier by
       rule (a pin change invalidates every earlier record: §7b rule 4 stays);
 and that newest record decides: green re-uses it; red (with no verdict, or a contention red without
-its 3/3) refuses — a later red blocks the older green, and is answered where it happened
-(`--verdict` records it at that commit). A row the fix reaches needs its record at the tip, as before.
+its 3/3) refuses — a later red blocks the older green. A row the fix reaches needs its record at the tip, as before.
 Every row prints the commit its record came from. Before this lane the key was the EXACT tip, so
 every fix round re-ran the lane's whole selection: 45.9 % of all suite-time since 09-28 (the
 gate-speed audit's R1). A miss is a selector defect, which is already the law's answer.
+
+THE BATCH'S VERDICT COVERS THE BATCH'S RANGE (TESTING-CLEANUP-2D item 1): a verdict is per ROW per RANGE — the
+verdict records at the TIP are in scope for the same row's reds at every earlier commit of the range the judge reads
+(the lane tips the attribution ran solos at), through the same door, the same proof and the same timestamp rule (a
+verdict clears only reds logged before it); a verdict recorded at that earlier commit itself still counts. `--verdict`
+still records a verdict where the red is open (else at the carried tip).
+
+THE BASE'S PROOF TRAVELS WHILE NOTHING REACHES THE ROW (TESTING-CLEANUP-2D item 2): KNOWN RED is the same red on the
+BASE's recorded solos; when the base holds NO RUN of the row at all (a gate PASS there is the base's own evidence: a red
+at the candidate is then a regression, never known), the solos at the NEAREST ancestor A of the base that has
+them (by ancestry; one hop, records under the same filters) prove it at the base — only when A's solos are ALL red and
+A..base does NOT reach the row, where an unreadable, fallback, tree-equal or fork-pin-changing range counts as
+reaching everything (Reach.ALL: the proof does not travel) — a stage-close row the selector set aside for the batch
+included. The why names A; the proof is read only when the door reaches it.
 
 A range that MOVES THE FORK PIN needs the whole MERGE tier at the tip (§7b rule 4: the one full
 tier per bump, `gate-scope.sh <range> --run --fork-tier`; the lane's own gates select by the fork
@@ -249,6 +262,8 @@ def _sha(r):
 def _real(m, row, reds, solos, defects, tip_recs, base_recs, tip_sha=None, mode="merge", proves=None, key=None):
     """`real:<ID>` checked: (ok, why, kind) — kind None | "known" (KNOWN RED) | "nondet" (cleared as nondeterminism:
     a push / stage close re-asks it 3/3 at the candidate)."""
+    if callable(base_recs):          # the base's proof, computed only here (TESTING-CLEANUP-2D read 1 F2)
+        base_recs = base_recs()
     did = m.group(1)
     e = (defects or {}).get(did)
     if e is None:
@@ -307,9 +322,12 @@ def _real(m, row, reds, solos, defects, tip_recs, base_recs, tip_sha=None, mode=
     if base_reds and len(base_classes) > 1:
         return False, (f"real:{did}: the base's solos flip class ({'/'.join(base_classes)}) — not one KNOWN RED"), False
     if base_reds and len(base_reds) == len(base_solos) and not odd:
+        frm = base_reds[0].get("_proofFrom")
         return True, (f"real:{did} KNOWN RED (the same {lane_red.get('verdict')}"
                       f"{' — ' + masked(lane_red.get('failLine'))[:60] if lane_red.get('failLine') else ''} — every one of "
-                      f"the {len(pending)} pending red(s) reproduced by the base's {len(base_reds)} red solo(s))"), "known"
+                      f"the {len(pending)} pending red(s) reproduced by the base's {len(base_reds)} red solo(s)"
+                      + (f"; the base's proof is {frm[:9]}'s solos; {frm[:9]}..the base does not reach the row" if frm else "")
+                      + ")"), "known"
     if base_reds and len(base_reds) < len(base_solos) and not odd:
         return False, (f"real:{did}: the base's solos are {len(base_reds)} red / {len(base_solos) - len(base_reds)} "
                        f"green — nondeterminism on the base, not a KNOWN RED"), False
@@ -557,6 +575,59 @@ def fork_pin(gs, irisgl_sha):
     return _FORK_PINS[irisgl_sha]
 
 
+def solo_index(base_sha, root):
+    """{key: {sha: [solo records]}} — ONE pass over the run log (TESTING-CLEANUP-2D read 1 F2: every caller shares it;
+    it used to re-read the log per row on the carried path) indexing every clean sha's SOLO records (a retry run, no
+    `kind`) of every row, under records_by_tip's filters (a clean tree, not a stale build, irisgl at THAT sha's pin —
+    resolved in `root`, the selector's tree (I5) —, never a lane-tool record); the base itself excluded."""
+    out = {}
+    d = gate_runlog.log_dir()
+    if not os.path.isdir(d): return out
+    pins = {}
+    for f in sorted(os.listdir(d)):
+        if not f.endswith(".jsonl"): continue
+        for line in open(os.path.join(d, f), errors="replace"):
+            try: r = json.loads(line)
+            except ValueError: continue
+            if r.get("kind") or not r.get("retry") or r.get("tier") == "lane": continue
+            t = r.get("tip") or {}
+            sha = t.get("studio")
+            if not sha or sha == base_sha or t.get("studio_dirty") or t.get("irisgl_dirty"): continue
+            if gate_runlog.stale_build(t): continue
+            if sha not in pins:
+                pins[sha] = _git(["rev-parse", f"{sha}:irisgl"], root)
+            if pins[sha] and t.get("irisgl") != pins[sha]: continue
+            out.setdefault((r.get("suite"), r.get("arm")), {}).setdefault(sha, []).append(r)
+    return out
+
+
+def ancestor_base_proof(key, base_sha, solos_at, is_ancestor, distance, reaches):
+    """THE BASE'S PROOF TRAVELS WHILE NOTHING REACHES THE ROW (TESTING-CLEANUP-2D item 2): (records, A, note). `solos_at`:
+    {sha: [solo records of the row]}; the NEAREST sha (by ancestry from the base: `distance`, ties by the newest record)
+    that is an ANCESTOR of the base is the one candidate — one hop, never an older one behind it. Its solos prove the row
+    at the base only when every one is red (green beside red is nondeterminism) and `reaches(A, base, key)` is False (the
+    caller's range answers ALL for anything unreadable: the proof does not travel). The records come back tagged
+    `_proofFrom: A` (the door's why names it); refusals return ([], None, why)."""
+    # A CANDIDATE HOLDS A RUN (read 2 I2): a sha whose solos are all NOADMIT / NOTRUN never ran the row — no run, the same
+    # rule as at the base — so it is not the one hop and never hides an older ancestor's red
+    ran = {a: [r for r in rs if r.get("verdict") not in NEVER_RAN] for a, rs in solos_at.items()}
+    cands = [a for a, rs in ran.items() if rs and a != base_sha and is_ancestor(a, base_sha)]
+    if not cands:
+        return [], None, "no ancestor of the base holds solos of the row"
+    a = min(cands, key=lambda s: (distance(s, base_sha), -max(_when(r).timestamp() for r in ran[s])))
+    sol = ran[a]
+    green = sum(1 for r in sol if r.get("verdict") == "PASS")
+    if green == len(sol):
+        return [], None, f"{a[:9]}'s solos are green: no red to prove"
+    if green:
+        return [], None, (f"{a[:9]} (the nearest ancestor with solos) has {green} green of {len(sol)} — nondeterminism, "
+                          f"never a base proof")
+    if reaches(a, base_sha, key):
+        return [], None, f"{a[:9]}..{base_sha[:9]} reaches the row (or cannot be read) — {a[:9]}'s solos prove nothing here"
+    return ([dict(r, _proofFrom=a) for r in sol], a,
+            f"the base's proof is {a[:9]}'s solos; {a[:9]}..{base_sha[:9]} does not reach the row")
+
+
 class Reach:
     """What the scoped selection of <A>..<tip> reaches, per earlier commit A (computed once each, on
     one build graph and one inventory). ALL = every row: a fork pin change, a fallback, the tier by
@@ -604,6 +675,12 @@ class Reach:
                         reach |= {(n, f"{pool}.{arm}") for arm in subsets[n]}
                     elif pool:
                         reach.add((n, "*"))      # the whole pool: every arm
+                # A STAGE-CLOSE ROW THE SELECTOR SET ASIDE WAS STILL REACHED (TESTING-CLEANUP-2D read 1 F1, read 2 F1): gate-
+                # scope pops a stage-close row reached by a rule or the graph — anything but its own subject — into
+                # stage_close_left for COST only (the batch runs it); unlike a fallback it WAS reached, so it is a reach on
+                # EVERY side: for re-use, for a travelling base proof, and for PROVING a fix (every arm with it)
+                for n in getattr(S, "stage_close_left", None) or {}:
+                    reach |= {(n, None), (n, "*")}
         except SystemExit:
             reach = unreadable
         self.cache[ck] = reach
@@ -723,6 +800,42 @@ def check(rng, build, gs=None, verdicts=None, mode="merge", lane=None, stage_clo
         return st, why
 
     got_now = {}
+    anc = {}                # TESTING-CLEANUP-2D item 2: {key: (records, A, note)} — the ancestor proof, read once per check
+    anc_solos = []          # the second pass over the log, lazily, once
+
+    dist = {}               # rev-list distance A..base, per A (read 1 F2)
+
+    def _distance(a, b):
+        if a not in dist:
+            dist[a] = int(_git(["rev-list", "--count", f"{a}..{b}"], gs.ROOT) or 10 ** 9)
+        return dist[a]
+
+    def base_of(k, got):
+        """THE BASE'S PROOF for one row (TESTING-CLEANUP-2D item 2) — the ONE helper every base_recs reads. The base's own
+        records when it holds ANY run of the row (the lead's rule, read 1 I2: a gate PASS at the base is the base's own
+        evidence — a red at the candidate is then a regression, never known — and its solos are the proof); only a base
+        with NO run of the row looks to the nearest ancestor (ancestor_base_proof). LAZY (read 1 F2): a callable the door
+        calls only when it reaches the KNOWN RED proof (_real) — a green row never reads the archive, never prints."""
+        own = got.get(base_sha, {}).get(k, [])
+        if any(r.get("kind") != "verdict" and r.get("verdict") not in NEVER_RAN for r in own):
+            return own
+
+        def proof():
+            if k not in anc:
+                if not anc_solos:
+                    anc_solos.append(solo_index(base_sha, gs.ROOT))
+                anc[k] = ancestor_base_proof(
+                    k, base_sha, anc_solos[0].get(k, {}), prover.ancestor, _distance,
+                    lambda a, b, key: Reach.reaches(get_reach().between(a, b, unreadable=Reach.ALL), key))
+                if anc[k][1] or anc[k][2] != "no ancestor of the base holds solos of the row":
+                    print(f"ci-gate-check: base proof for {label(k)}: {anc[k][2]}")
+            return own + anc[k][0]
+        return proof
+
+    def with_batch_verdicts(recs, k, got):
+        """THE BATCH'S VERDICT COVERS THE BATCH (TESTING-CLEANUP-2D item 1): an earlier commit's records of the row plus
+        the verdict records at the TIP — the door and its timestamp rule decide what they clear."""
+        return list(recs) + [v for v in got[tip_sha].get(k, []) if v.get("kind") == "verdict" and v not in recs]
 
     def judge_all():
         """{key: (state, why, source sha)} — the tip's records first, then (for a row the tip has no
@@ -739,7 +852,7 @@ def check(rng, build, gs=None, verdicts=None, mode="merge", lane=None, stage_clo
         tip_fork = fork_pin(gs, pin)
         have_earlier = [c for c in earlier if got[c]]
         for k in need:
-            ctx = dict(tip_recs=got[tip_sha].get(k, []), base_recs=got.get(base_sha, {}).get(k, []), tip_sha=tip_sha,
+            ctx = dict(tip_recs=got[tip_sha].get(k, []), base_recs=base_of(k, got), tip_sha=tip_sha,
                        mode=mode, proves=prover)
             st, why = judge(k, got[tip_sha].get(k, []), defects, **ctx)
             src = tip_sha
@@ -753,7 +866,7 @@ def check(rng, build, gs=None, verdicts=None, mode="merge", lane=None, stage_clo
                         break
                     recs = got[c].get(k, [])
                     if not recs: continue
-                    cst, cwhy = judge(k, recs, defects, **ctx)
+                    cst, cwhy = judge(k, with_batch_verdicts(recs, k, got), defects, **ctx)
                     if cst == "red":
                         st, src = "red", c
                         why = (f"an OPEN red at {c[:9]} that {c[:9]}..{tip_sha[:9]} does not reach — the green at the "
@@ -771,7 +884,7 @@ def check(rng, build, gs=None, verdicts=None, mode="merge", lane=None, stage_clo
                         break
                     recs = got[c].get(k, [])
                     if not recs: continue
-                    cst, cwhy = judge(k, recs, defects, **ctx)
+                    cst, cwhy = judge(k, with_batch_verdicts(recs, k, got), defects, **ctx)
                     if cst == "missing": continue
                     st, src = cst, c
                     why = (f"re-used from {c[:9]} ({c[:9]}..{tip_sha[:9]} does not reach it)"
@@ -783,7 +896,7 @@ def check(rng, build, gs=None, verdicts=None, mode="merge", lane=None, stage_clo
             out[k] = (st, why, src)
         resolve_not_run(out, got[tip_sha], lambda pk: judge(pk, got[tip_sha].get(pk, []), defects,
                                                             tip_recs=got[tip_sha].get(pk, []),
-                                                            base_recs=got.get(base_sha, {}).get(pk, []),
+                                                            base_recs=base_of(pk, got),
                                                             tip_sha=tip_sha, mode=mode, proves=prover), tip_sha)
         # U4: THE LANE'S OTHER TIPS (a rebase, a superseded fix round): an open red there that the
         # current tip never re-ran (a later record of the same row+arm at the tip that passes) and no
@@ -802,7 +915,7 @@ def check(rng, build, gs=None, verdicts=None, mode="merge", lane=None, stage_clo
         for t, recs in lane_records(lanes, {tip_sha, base_sha, *earlier}).items():
             for k, rs in recs.items():
                 cst, cwhy = judge(k, rs, defects, tip_recs=got[tip_sha].get(k, []),
-                                  base_recs=got.get(base_sha, {}).get(k, []), tip_sha=tip_sha, mode=mode,
+                                  base_recs=base_of(k, got), tip_sha=tip_sha, mode=mode,
                                   proves=prover)
                 if cst != "red": continue
                 last = max(_when(r) for r in rs if r.get("kind") != "verdict" and r.get("verdict") != "PASS")

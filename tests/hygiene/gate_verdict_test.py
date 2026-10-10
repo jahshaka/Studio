@@ -137,6 +137,7 @@ def vrec(text, ts):
 
 def case_verdict_door(E):
     registry_id_cases(E)
+    batch_range_cases(E)
     T = "2026-10-09T%s:00+02:00"
     RED_SHA, FIX_SHA = {"studio": "a" * 40}, {"studio": "f" * 40}
     red = rec("FAIL", T % "10:00", tip=RED_SHA)
@@ -503,6 +504,207 @@ def case_verdict_door(E):
     rc2, out2 = E.run("--mode", "push")
     check(rc == 0 and rc2 == 1 and "OVERRIDES" in out2, "a merge reads overrides; a push refuses a candidate carrying "
           "any (%d, %d)" % (rc, rc2))
+
+
+def batch_range_cases(E):
+    """TESTING-CLEANUP-2D. (1) THE BATCH'S VERDICT COVERS THE BATCH'S RANGE: a KNOWN RED accepted at the tip is accepted
+    at an earlier commit of the range whose solo reds carry no verdict record (the tip's verdicts are in scope there);
+    a red of ANOTHER signature at that commit is still refused. RED ON 30f4ad2d0: 'an OPEN red at <c1> ... needs a
+    verdict through the door'. (2) THE BASE'S PROOF TRAVELS WHILE NOTHING REACHES THE ROW: a registered red with no
+    solos at the base is KNOWN when the nearest ancestor A of the base has 3/3 red solos of the same signature and
+    A..base does not reach the row (the why names A); refused when A's solos are not all red, when A..base reaches the
+    row, when A is not an ancestor, and when A..base is tree-equal (unreadable: ALL). RED ON 30f4ad2d0: refused, 'neither
+    a PASS ... nor the same red reproduced by a recorded solo at the BASE'."""
+    T = "2026-10-09T%s:00+02:00"
+    FL = "FAIL: the depth pre-pass drew 12 px off"
+    env = dict(os.environ, GIT_AUTHOR_NAME="jahshaka", GIT_AUTHOR_EMAIL="jahshaka@gmail.com",
+               GIT_COMMITTER_NAME="jahshaka", GIT_COMMITTER_EMAIL="jahshaka@gmail.com")
+
+    def commit(tree, parent, msg):
+        return subprocess.run(["git", "commit-tree", tree, "-p", parent, "-m", msg], cwd=E.source, capture_output=True,
+                              text=True, env=env).stdout.strip()
+
+    def tree_plus(base_tree, path, text):
+        idx = os.path.join(E.scratch, "bt-%d.index" % len(os.listdir(E.scratch)))
+        genv = dict(env, GIT_INDEX_FILE=idx)
+        blob = subprocess.run(["git", "hash-object", "-w", "--stdin"], cwd=E.source, input=text, capture_output=True,
+                              text=True).stdout.strip()
+        subprocess.run(["git", "read-tree", base_tree], cwd=E.source, env=genv, check=True)
+        subprocess.run(["git", "update-index", "--add", "--cacheinfo", "100644,%s,%s" % (blob, path)], cwd=E.source,
+                       env=genv, check=True)
+        return subprocess.run(["git", "write-tree"], cwd=E.source, env=genv, capture_output=True, text=True).stdout.strip()
+
+    base = E.git("rev-parse", "51e9f2c49")
+    tip_tree = E.git("rev-parse", "3756b2f18^{tree}")
+
+    def solos(tip, t0, verdicts=("FAIL", "FAIL", "FAIL"), fl=FL, batch=None):
+        for i, v in enumerate(verdicts):
+            extra = {"failLine": fl} if v == "FAIL" else ({"status": "Exception: SegFault"} if v == "CRASH" else {})
+            if batch:       # an attribution's solo: the batch's record (never a lane's own: it never carries, U4)
+                extra.update(batch=batch)
+            E.put(["photon.view"], v, T % ("%s:%02d" % (t0, i)), tip=tip, retry=True, **extra)
+
+    # ---- (1) the batch's verdict covers the batch: C1 = a lane commit, X = an empty commit on it (C1..X reaches nothing)
+    c1 = commit(tip_tree, base, "batch-range test C1")
+    x = commit(tip_tree, c1, "batch-range test X (empty)")
+    for variant in ("same", "crash"):
+        E.fresh()
+        solos(base, "09")
+        E.put(["photon.view"], "FAIL", T % "10:00", tip=c1, failLine=FL)
+        solos(c1, "10", ("FAIL", "CRASH", "FAIL") if variant == "crash" else ("FAIL", "FAIL", "FAIL"))
+        E.put(["photon.view"], "FAIL", T % "11:00", tip=x, failLine=FL)
+        solos(x, "11")
+        E.verdict("photon.view", "real:VIEWS-XID-1", T % "12:00", tip=x)
+        rc, out = E.run(rng="%s..%s" % (base, x))
+        if variant == "same":
+            check(bool(c1 and x) and rc == 0 and "KNOWN RED photon.view" in out and "OPEN red at" not in out,
+                  "(1) a KNOWN RED at the tip is KNOWN at the batch's earlier commit C1 too: the tip's verdict covers C1's "
+                  "3/3 red solos (rc %d; %s)" % (rc, [l for l in out.splitlines() if "photon.view" in l][:1]))
+        else:
+            check(rc == 1 and "OPEN red at %s" % c1[:9] in out and "not every pending red" in out,
+                  "(1) ...but a CRASH among C1's solos (another signature) is still refused there (rc %d)" % rc)
+    # a verdict recorded at C1 itself (an older lane delivery) keeps working
+    E.fresh()
+    solos(base, "09")
+    E.put(["photon.view"], "FAIL", T % "10:00", tip=c1, failLine=FL)
+    solos(c1, "10")
+    E.verdict("photon.view", "real:VIEWS-XID-1", T % "10:30", tip=c1)
+    E.put(["photon.view"], "PASS", T % "11:00", tip=x)
+    rc, out = E.run(rng="%s..%s" % (base, x))
+    check(rc == 0, "(1) a verdict recorded at the earlier commit itself still answers its red (rc %d)" % rc)
+
+    # read 1 I1 (a): a tip verdict stamped BEFORE C1's red clears nothing there — C1's reds after it stay open
+    E.fresh()
+    solos(base, "09")
+    E.put(["photon.view"], "FAIL", T % "09:40", tip=x, failLine=FL)
+    for i in range(3):
+        E.put(["photon.view"], "FAIL", T % ("09:4%d" % (i + 1)), tip=x, retry=True, failLine=FL)
+    E.verdict("photon.view", "real:VIEWS-XID-1", T % "09:50", tip=x)
+    E.put(["photon.view"], "FAIL", T % "10:00", tip=c1, failLine=FL)
+    solos(c1, "10")
+    rc, out = E.run(rng="%s..%s" % (base, x))
+    check(rc == 1 and "OPEN red at %s" % c1[:9] in out,
+          "(1, read 1 I1a) a tip verdict stamped BEFORE C1's red clears nothing at C1 (rc %d)" % rc)
+    # read 1 I1 (b): a verdict at C1 does not answer the TIP's reds (only the tip's verdicts reach down, never up)
+    E.fresh()
+    solos(base, "09")
+    E.put(["photon.view"], "FAIL", T % "10:00", tip=c1, failLine=FL)
+    solos(c1, "10")
+    E.put(["photon.view"], "FAIL", T % "11:00", tip=x, failLine=FL)
+    solos(x, "11")
+    E.verdict("photon.view", "real:VIEWS-XID-1", T % "12:00", tip=c1)
+    rc, out = E.run(rng="%s..%s" % (base, x))
+    check(rc == 1 and "row photon.view <- %s (the tip): red" % x[:9] in out,
+          "(1, read 1 I1b) a verdict recorded at C1 does not answer the tip's reds (rc %d)" % rc)
+
+    # ---- (2) the base's proof travels: A = 51e9f2c49 (the solos), B = A + one docs file (the base), Tt = the VIEWS-DEPTH-1
+    # tree + the same docs file on B (B..Tt selects photon.view; A..B is docs-only: reaches no product row)
+    a_tree = E.git("rev-parse", "51e9f2c49^{tree}")
+    b = commit(tree_plus(a_tree, "docs/batch_range_test_note.md", "a note\n"), base, "batch-range test B (docs only)")
+    tt = commit(tree_plus(tip_tree, "docs/batch_range_test_note.md", "a note\n"), b, "batch-range test T")
+    b0 = commit(a_tree, base, "batch-range test B0 (tree-equal)")
+    t0 = commit(tip_tree, b0, "batch-range test T0")
+    # Br = A + photon.view's own script (A..Br reaches the row); Tr = the VIEWS-DEPTH-1 tree on Br
+    br = commit(tree_plus(a_tree, "tests/gi/scripts/photon_view.js.in", "// reaches\n"), base, "batch-range test Br")
+    tr = commit(tip_tree, br, "batch-range test Tr")
+    other = commit(a_tree, E.git("rev-parse", "3756b2f18"), "batch-range test: not an ancestor of B")
+
+    def item2(base_sha, tip_sha, a_sha, verdicts=("FAIL", "FAIL", "FAIL")):
+        E.fresh()
+        solos(a_sha, "08", verdicts, batch="t2d")
+        E.put(["photon.view"], "FAIL", T % "11:00", tip=tip_sha, failLine=FL)
+        E.verdict("photon.view", "real:VIEWS-XID-1", T % "12:00", tip=tip_sha)
+        return E.run(rng="%s..%s" % (base_sha, tip_sha))
+
+    rc, out = item2(b, tt, base)
+    check(bool(b and tt) and rc == 0 and "KNOWN RED photon.view" in out and "the base's proof is %s's solos" % base[:9] in out,
+          "(2) no solo at the base B; A = B's parent has 3/3 red of the signature and A..B is docs-only -> KNOWN, the why "
+          "names A (rc %d; %s)" % (rc, [l for l in out.splitlines() if "base proof" in l or "KNOWN RED photon" in l][:2]))
+    rc, out = item2(b, tt, base, ("FAIL", "PASS", "FAIL"))
+    check(rc == 1 and "nondeterminism, never a base proof" in out,
+          "(2) refused when A's solos are not all red (rc %d)" % rc)
+    rc, out = item2(b0, t0, base)
+    check(bool(b0 and t0) and rc == 1 and "reaches the row (or cannot be read)" in out,
+          "(2) refused when A..base is TREE-EQUAL (the selector cannot read it: ALL, the proof does not travel) (rc %d)" % rc)
+    rc, out = item2(br, tr, base)
+    check(bool(br and tr) and rc == 1 and "reaches the row (or cannot be read)" in out,
+          "(2) refused when A..base REACHES the row (photon.view's own script changes between A and the base) (rc %d)" % rc)
+    rc, out = item2(b, tt, other)
+    check(bool(other) and rc == 1 and "KNOWN RED photon.view" not in out,
+          "(2) refused when the sha with the solos is NOT an ancestor of the base (rc %d)" % rc)
+    # the helper alone: the nearest ancestor is the one candidate (one hop) — an all-red OLDER ancestor behind a mixed
+    # nearer one proves nothing; an unreadable range (ALL) refuses
+    S = {"near": [rec("FAIL", T % "09:00", retry=True), rec("PASS", T % "09:01", retry=True)],
+         "far": [rec("FAIL", T % "08:00", retry=True)] * 3}
+    dist = {"near": 1, "far": 5}
+    got, a, why = E.cgc.ancestor_base_proof(("photon.view", None), "B", S, lambda a_, b_: True,
+                                            lambda a_, b_: dist[a_], lambda a_, b_, k: False)
+    check(got == [] and a is None and "near" in why, "(2) one hop: the nearest ancestor decides, never an older one behind it")
+    got, a, why = E.cgc.ancestor_base_proof(("photon.view", None), "B", {"far": S["far"]}, lambda a_, b_: True,
+                                            lambda a_, b_: 5, lambda a_, b_, k: E.cgc.Reach.reaches(E.cgc.Reach.ALL, k))
+    check(got == [] and "reaches the row" in why, "(2) an unreadable range (Reach.ALL) refuses")
+    got, a, why = E.cgc.ancestor_base_proof(("photon.view", None), "B", {"far": S["far"]}, lambda a_, b_: True,
+                                            lambda a_, b_: 5, lambda a_, b_, k: False)
+    check(len(got) == 3 and a == "far" and all(r.get("_proofFrom") == "far" for r in got) and "far's solos" in why,
+          "(2) the proof found: A's solos tagged with A, the why names A")
+    # read 1 I3: an all-green A, or an A that never ran it, is named for what it is (never "nondeterminism")
+    _, _, why = E.cgc.ancestor_base_proof(("photon.view", None), "B", {"g": [rec("PASS", T % "08:00", retry=True)] * 3},
+                                          lambda a_, b_: True, lambda a_, b_: 1, lambda a_, b_, k: False)
+    check("green: no red to prove" in why and "nondeterminism" not in why,
+          "(2, read 1 I3) an all-green A: 'no red to prove' (%s)" % why)
+    # read 2 I2: an attribution at A1 that never got admission (NOADMIT / NOTRUN only) is no run — it does not hide the
+    # older A2's 3/3 red (RED ON 8e57285b6: A1 was the one hop and refused "never ran it")
+    got, a, why2 = E.cgc.ancestor_base_proof(("photon.view", None), "B",
+                                             {"A1": [rec("NOADMIT", T % "08:30", retry=True), rec("NOTRUN", T % "08:31", retry=True)],
+                                              "A2": [rec("FAIL", T % "08:00", retry=True)] * 3},
+                                             lambda a_, b_: True, lambda a_, b_: {"A1": 1, "A2": 2}[a_], lambda a_, b_, k: False)
+    check(a == "A2" and len(got) == 3, "(2, read 2 I2) an ancestor that never ran the row does not hide an older ancestor's "
+          "3/3 red (%s: %s)" % (a, why2))
+    # read 1 I2 (the lead's rule): the base holds a gate PASS of the row -> the proof does NOT travel (a red at the
+    # candidate is a regression); and a GREEN row never reads or prints the base proof
+    E.fresh()
+    solos(base, "08", batch="t2d")
+    E.put(["photon.view"], "PASS", T % "09:00", tip=b)
+    E.put(["photon.view"], "FAIL", T % "11:00", tip=tt, failLine=FL)
+    E.verdict("photon.view", "real:VIEWS-XID-1", T % "12:00", tip=tt)
+    rc, out = E.run(rng="%s..%s" % (b, tt))
+    check(rc == 1 and "base proof for" not in out and "KNOWN RED photon.view" not in out,
+          "(2, read 1 I2) a base with a gate PASS of the row is its own evidence: the proof does not travel (rc %d)" % rc)
+    # read 2 I1: a base holding only NOADMIT / NOTRUN records of the row has NO run of it — the proof still travels
+    E.fresh()
+    solos(base, "08", batch="t2d")
+    E.put(["photon.view"], "NOADMIT", T % "09:00", tip=b)
+    E.put(["photon.view"], "NOTRUN", T % "09:01", tip=b, retry=True)
+    E.put(["photon.view"], "FAIL", T % "11:00", tip=tt, failLine=FL)
+    E.verdict("photon.view", "real:VIEWS-XID-1", T % "12:00", tip=tt)
+    rc, out = E.run(rng="%s..%s" % (b, tt))
+    check(rc == 0 and "the base's proof is %s's solos" % base[:9] in out,
+          "(2, read 2 I1) a base with only NOADMIT / NOTRUN records of the row falls through to the ancestor (rc %d)" % rc)
+    E.fresh()
+    solos(base, "08", batch="t2d")
+    E.put(["photon.view"], "PASS", T % "11:00", tip=tt)
+    rc, out = E.run(rng="%s..%s" % (b, tt))
+    check(rc == 0 and "base proof for" not in out, "(2, read 1 I3) a green row never reads nor prints a base proof (rc %d)" % rc)
+    # read 1 F1: A STAGE-CLOSE ROW THE SELECTOR SET ASIDE IS STILL REACHED — A..base touching an app source (every app
+    # row's dependency, not gi.chain_converge_scenes' own subject) reaches that stage-close row for the travel and for
+    # re-use (Reach.of); the proving side is unchanged. RED ON f980d8ced: not reached (the set-aside row was invisible)
+    g30 = E.git("rev-parse", "30f4ad2d0")
+    dep = commit(tree_plus(E.git("rev-parse", "30f4ad2d0^{tree}"), "src/app/crashhandler.cpp",
+                           E.git("show", "30f4ad2d0:src/app/crashhandler.cpp") + "\n// a dependency-only change\n"), g30,
+                 "batch-range test: an app dependency change")
+    gs = E.cgc.load_gs()
+    R = E.cgc.Reach(gs, E.build, dep, "fork")
+    key = ("gi.chain_converge_scenes", None)
+    trav = R.between(g30, dep, unreadable=E.cgc.Reach.ALL)
+    check(bool(dep) and E.cgc.Reach.reaches(trav, key) and E.cgc.Reach.reaches(R.of(g30, "fork"), key),
+          "(2, read 1 F1) a dependency-only change to a stage-close row between A and the base refuses the travel, and the "
+          "re-use arm does not re-use across it (%s)" % (key in (trav or set()) if trav is not E.cgc.Reach.ALL else "ALL"))
+    # read 2 F1: THE PROVING SIDE counts the set-aside row too — a fix of gi.chain_converge_scenes landing outside its
+    # test dir (an app source) PROVES it (the Prover reaches it across `dep`); the empty-set side of a fallback stays.
+    # RED ON 8e57285b6: not reached -> "an OPEN red at c that c..tip does not reach" at a push / stage close
+    prover2 = E.cgc.Prover(gs, E.build, lambda: R)
+    check(bool(dep) and prover2(g30, dep, key) and E.cgc.Reach.reaches(R.between(g30, dep, unreadable=set()), key),
+          "(2, read 2 F1) the Prover reaches the set-aside stage-close row across the same dependency-only change")
 
 
 def registry_id_cases(E):
