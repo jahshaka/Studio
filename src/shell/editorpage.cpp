@@ -755,9 +755,9 @@ void EditorPage::copySelection()
     const auto selected = mServices->selection->selectedSet();
     if (selected.isEmpty()) return;   // nothing selected: the previous clipboard stays, nothing to say
     const auto result = mServices->clipboard->copyNodes(selected);
-    // A REFUSED COPY IS SAID (read 7 F1): the verb's own sentence names the row (a node tree over
-    // the inline budget, a budget under its floor) — silence would let the next Ctrl+V paste the
-    // OLD clipboard.
+    // A REFUSED COPY IS SAID (read 7 F1): the service's own sentence says why — a file budget under
+    // its 64 KB floor, or a payload over the clipboard's 64 MB ceiling — and silence would let the
+    // next Ctrl+V paste the OLD clipboard.
     mShell->showViewportToast(tr("Copy"), result.ok() ? tr("%1 object(s) copied").arg(result.items)
                                                       : result.error);
 }
