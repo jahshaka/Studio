@@ -75,6 +75,10 @@ int finalizeAppExit(int rc)
     // between jobs and the one in flight is joined here — the window-close path does the same
     // (ShellLifecycle) — so a run that ends during a multi-model paste waits one job, never the rest
     // of it and never the pool's 5 s forced exit for work nobody will commit.
+    // FROM HERE THE TEARDOWN IS BOUNDED (as ShellLifecycle arms it on the window path): the join has
+    // no timeout of its own, and a bake that never ends must end the run as exit 86 with its line in
+    // the log — never at ctest's TIMEOUT with nothing said.
+    forcedexit::arm(20, "teardown exceeded 20s (a bake join or the engine shutdown)");
     MeshBakeStore::stopBackgroundRebuild();
 
     // The engine borrows Qt's X display: release it before QApplication goes away.
