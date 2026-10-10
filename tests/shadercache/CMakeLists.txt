@@ -22,7 +22,10 @@ target_link_libraries(test_shader_cache PRIVATE JahshakaEngine)
 add_dependencies(test_shader_cache JahshakaEngineMedia)
 jah_gpu_row(shadercache.container CLASS engine COMMAND test_shader_cache
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(shadercache.container PROPERTIES TIMEOUT 720 LABELS "shadercache")
+# TESTING-CLEANUP-2B item 7 (2026-10-10, RE-MEASURED ALONE: 3 runs, each its own whole-card hold under the slot,
+# gpu-exclusive.sh class 2, the box otherwise idle; seconds = ctest's, the admission wait outside them): 41.9 / 41.3 / 42.8 s,
+# median 41.9 -> 6x = 260; slot-era worst 87.7 s (8 PASS since 2026-10-09 18:00) -> TIMEOUT 260 (was 720).
+set_tests_properties(shadercache.container PROPERTIES TIMEOUT 260 LABELS "shadercache")
 # A pipeline the engine builds lazily reaches the disk (PIPELINE-CACHE-1 fix round):
 # three engine processes against one directory, the driver's own disk cache off so
 # the pipeline layer is the only thing that can make the third one warm.
