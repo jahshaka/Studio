@@ -3,7 +3,7 @@
 PHOTON_ATOM_CONTRACT §7b "the rules are source.* lint suites").
 
 A rule a lead enforces by reading diffs does not scale to a team; a rule a lint enforces does.
-Five of §7b's rules are facts of the tree and the build's registration, so they are checked
+Five of §7b's rules (and R6, TESTING-CLEANUP-2C's) are facts of the tree and the build's registration, so they are checked
 here, each with its name in the failure line:
 
   R1 TIMING INSIDE THE LOCK. Every row that measures time — a `<suite>.timing` twin, a
@@ -29,11 +29,18 @@ here, each with its name in the failure line:
      groups do not count: they are catch-alls, and S1's harnesses hid inside them). A lint or
      script row must run a file of the tree (touching it selects the row) or sit in a directory a
      rule names.
+  R6 A ROW THAT READS ANOTHER ROW'S RUN REQUIRES IT (TESTING-CLEANUP-2C item 3). A row that DEPENDS on another
+     registered row (an inspector of the run's logs, a relaunch that reads the session a run left) also
+     FIXTURES_REQUIRES a fixture that row SETS UP, so `-R <row>` / `--solo <row>` runs the parent first in the same
+     home — DEPENDS only orders a run that already selected both. RED ON 314770a52:
+     threading.{import_soak,newproject_stall}.no_groupless_texture (batch C2: the twin 0/3 solo, "no logs — did the
+     run happen?").
 
 Run: testing_rules.py <source-dir> <build-dir>
 """
 import glob
 import importlib.util
+import json
 import os
 import re
 import subprocess
@@ -129,6 +136,23 @@ def r5_bad(inv, rule_dirs, api_mods, tracked, script_modules, harness_mods):
     return bad
 
 
+def _list(v):
+    return [v] if isinstance(v, str) else list(v or [])
+
+
+def r6_bad(tests):
+    """[`row (DEPENDS parent)`] for every row that DEPENDS on a registered row whose FIXTURES_SETUP it does not require.
+    `tests`: ctest's json-v1 `tests` list."""
+    props = {t["name"]: {p["name"]: p["value"] for p in t.get("properties", [])} for t in tests}
+    bad = []
+    for n, P in sorted(props.items()):
+        req = set(_list(P.get("FIXTURES_REQUIRED")))
+        for d in _list(P.get("DEPENDS")):
+            if d in props and not (set(_list(props[d].get("FIXTURES_SETUP"))) & req):
+                bad.append("%s (DEPENDS %s)" % (n, d))
+    return bad
+
+
 def the_rules_catch():
     """Each rule, fed one violation and its correction: a lint that cannot fail guards nothing."""
     print("the rules catch (synthetic inputs):")
@@ -156,6 +180,11 @@ def the_rules_catch():
     check(r5_bad({"h": row(["/b/h"])}, set(), {"avatar"}, set(), lambda s: set(), {}) == ["h"]
           and not r5_bad({"h": row(["/b/h"])}, set(), {"avatar"}, set(), lambda s: set(), {"h": {"avatar"}}),
           "R5 flags an app row nothing selects (a harness's own verbs clear it)")
+    T = lambda name, **p: {"name": name, "properties": [{"name": k, "value": v} for k, v in p.items()]}
+    check(r6_bad([T("a"), T("a.twin", DEPENDS=["a"], FIXTURES_REQUIRED=["home_a"])]) == ["a.twin (DEPENDS a)"]
+          and not r6_bad([T("a", FIXTURES_SETUP=["run_a"]), T("a.twin", DEPENDS=["a"], FIXTURES_REQUIRED=["home_a", "run_a"])])
+          and not r6_bad([T("w", FIXTURES_SETUP="home"), T("r", DEPENDS=["w"], FIXTURES_REQUIRED="home")]),
+          "R6 flags a row that DEPENDS on a run it does not require (a fixture the run sets up clears it)")
 
 
 def main(source, build):
@@ -204,6 +233,10 @@ def main(source, build):
     harness = gs.Selection(inv, graph, os.path.join(build, "bin", "Jahshaka"), gs.Revs(None), 4).mods
     bad = r5_bad(inv, rule_dirs, gs.api_modules(), tracked, gs.script_modules, harness)
     check(not bad, "R5 every app/lint row has a subject that selects it (%d without: %s)" % (len(bad), bad[:10]))
+
+    raw, rc = gs.gate_graph.ctest_inventory(build)
+    bad = r6_bad(json.loads(raw or "{}").get("tests", [])) if rc == 0 else ["ctest --show-only failed (%d)" % rc]
+    check(not bad, "R6 a row that DEPENDS on another row's run requires a fixture that run sets up %s" % bad[:8])
 
     if FAILURES:
         print("source.testing_rules: FAILED (%d)" % len(FAILURES))
