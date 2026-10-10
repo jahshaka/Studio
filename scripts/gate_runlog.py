@@ -295,6 +295,12 @@ def row_verdict(status, text, arms):
     # pool with a MIX stays FAIL, its NOADMIT arms named on the row (`noadmit_arms`)
     if v != "PASS" and arms and all(a[1] == "NOADMIT" for a in arms):
         return "NOADMIT", na or ("every arm NOADMIT (%d): the pool never ran" % len(arms)), None
+    # ...AND A POOL WHOSE ONLY NON-PASS ARMS NEVER RAN is NOADMIT too (TESTING-CLEANUP-2B delta F-C1): its red is "not
+    # admitted", never its code's — re-queued like a row, MISSING to the judge on a final try (its NOADMIT arms are
+    # named on the row); a mix with a real FAIL / CRASH / TIMEOUT stays the red it is
+    if v != "PASS" and arms and any(a[1] == "NOADMIT" for a in arms) and all(a[1] in ("NOADMIT", "PASS") for a in arms):
+        na_ = [a[0] for a in arms if a[1] == "NOADMIT"]
+        return "NOADMIT", na or ("arm(s) NOADMIT, never ran: %s" % " ".join(na_[:12])), None
     if v == "TIMEOUT" and not arms:
         w = unadmitted_wait(text)
         if w:
@@ -1497,7 +1503,7 @@ class _Run:
         unreadable = bool(_UNREADABLE.search(text or ""))
         if unreadable: row["journal_unreadable"] = True
         noadmit = [a for a, av, _ in arms if av == "NOADMIT"]
-        if v != "PASS" and v != "NOADMIT" and noadmit:
+        if v != "PASS" and noadmit:
             row["noadmit_arms"] = noadmit
             if "failLine" not in row:
                 row["failLine"] = f"NOADMIT arm(s), never ran: {' '.join(noadmit[:12])}"
@@ -1614,6 +1620,7 @@ class _Run:
             recs = self.records(name, status, secs, time.time(), os.getloadavg(), text, starts.get(name) or {})
             v = recs[0]["verdict"]
             arms = recs[1:]
+            # (a pool whose only non-PASS arms never ran is NOADMIT already: row_verdict, TESTING-CLEANUP-2B F-C1)
             never = v == "NOADMIT" or (v != "PASS" and arms and all(a["verdict"] == "NOADMIT" for a in arms))
             if attempt or (never and not final):
                 for r_ in recs: r_["requeued"] = attempt       # the try: 0 = the first run, k = the k-th re-queue
