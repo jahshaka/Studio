@@ -33,3 +33,6 @@ build-web/
 /.claude/worktrees/
 /.claude/scratch/
 __pycache__/
+
+# an agent's Xvfb pidfile lives in the worktree root (the rig law): never dirt, never committed
+*.pid
