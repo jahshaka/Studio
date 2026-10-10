@@ -325,6 +325,11 @@ SLOT_POLL_S = 1.0
 # A ticket: <seq>.<pid>.c<class>, and <seq>.<pid>.c<class>.held once its process HOLDS the slot (renamed under the
 # queue's counter lock, its flock kept — the lock lives on the inode).
 _TICKET = re.compile(r"^(\d+)\.(\d+)\.c(\d)(\.held)?$")
+# A ticket of the FIFO slot before item 13 (<seq>.<pid>), asked by a tree whose scripts predate it: read as a class-1
+# gate, and the lowest such ticket as HOLDING (that is what its own reader believes) — so a new asker never takes the
+# slot beside an old holder. (The other way round cannot be closed: an old reader does not see these tickets — every
+# tree that runs a gate takes the new scripts at once.)
+_OLD_TICKET = re.compile(r"^(\d+)\.(\d+)$")
 
 # THE SLOT IS BY PRIORITY, NOT ARRIVAL (TESTING-CLEANUP-2B item 13; the owner 2026-10-10: "the gate needs to run, not
 # wait for everything else"). Three classes:
@@ -384,18 +389,27 @@ def gate_queue():
         names = os.listdir(_queue_dir())
     except OSError:
         return q
+    old = []
     for n in names:
         m = _TICKET.match(n)
-        if not m:
+        mo = None if m else _OLD_TICKET.match(n)
+        if not m and not mo:
             continue
         path = os.path.join(_queue_dir(), n)
         if _ticket_alive(path):
-            q.append((int(m.group(1)), int(m.group(2)), path, int(m.group(3)), bool(m.group(4))))
+            if m:
+                q.append((int(m.group(1)), int(m.group(2)), path, int(m.group(3)), bool(m.group(4))))
+            else:
+                old.append((int(mo.group(1)), int(mo.group(2)), path, 1, False))
         else:
             try:
                 os.unlink(path)
             except OSError:
                 pass
+    if old:
+        old.sort()
+        old[0] = old[0][:4] + (not any(t[4] for t in q),)
+        q += old
     return sorted(q, key=lambda t: (not t[4], t[3], t[0]))
 
 
