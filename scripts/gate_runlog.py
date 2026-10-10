@@ -129,6 +129,23 @@ _RUNTIMEOUT = re.compile(r"^\s*(?:\|\s*)*timeout: sending signal \S+ to command"
 _TOKENWAIT = re.compile(r"^\s*(?:\|\s*)*vram: admitted with \d+ tokens? \S* ?after ([0-9.]+) s")
 
 
+# THE FORCED EXIT (TESTING-CLEANUP-2 H8c; src/services/forcedexit.h): every path that ends the app with _Exit because
+# an orderly end cannot be trusted — the shutdown watchdog, the worker-reap refusal, the unanswered device-loss end —
+# prints ONE line `shutdown watchdog: <why> — forcing process exit (code 86)` and exits 86. A row whose output carries
+# it is recorded with `forced_exit: <code>` and the first `forced_exit_why` (`forced_exits: <n>` when a pool's
+# processes took it more than once) — PASS or red: a green row whose app could not end in order is a finding, and
+# gate-report counts them. (Before H8c the same path exited 0 and nothing anywhere said so.)
+_FORCED = re.compile(r"shutdown watchdog: (.*?) — forcing process exit \(code (\d+)\)")
+
+
+def forced_exit(text):
+    """(code, why, count) of the forced-exit lines in a row's output, or None when the app ended in order."""
+    hits = [m for m in (_FORCED.search(l) for l in (text or "").splitlines()) if m]
+    if not hits:
+        return None
+    return int(hits[0].group(2)), hits[0].group(1)[:200], len(hits)
+
+
 def token_wait(text):
     """The summed admission waits of a row's output (seconds), or None when it never waited."""
     total, seen = 0.0, False
@@ -1455,6 +1472,10 @@ class _Run:
             row["noadmit_arms"] = noadmit
             if "failLine" not in row:
                 row["failLine"] = f"NOADMIT arm(s), never ran: {' '.join(noadmit[:12])}"
+        fx = forced_exit(text)
+        if fx:
+            row["forced_exit"], row["forced_exit_why"] = fx[0], fx[1]
+            if fx[2] > 1: row["forced_exits"] = fx[2]
         mem = _mem_of(text)
         if mem is not None: row["mem"] = mem
         leak = _leaks_of(text)
