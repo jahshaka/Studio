@@ -164,15 +164,16 @@ QStringList SceneEditService::waitingSources(const iris::SceneNodePtr &root) con
 {
     QStringList out;
     if (!root || !db) return out;
-    QSqlDatabase conn = QSqlDatabase::database();
-    const QString store = AssetStorePaths::root();
+    SceneReader resolver;   // the reader's own resolution (item 7)
+    resolver.setDatabaseHandle(db);
+    resolver.setProject(project);
     std::function<void(const iris::SceneNodePtr &)> walk = [&](const iris::SceneNodePtr &node) {
         if (!node) return;
         if (node->getSceneNodeType() == iris::SceneNodeType::Mesh) {
             const auto meshNode = node.staticCast<iris::MeshNode>();
             if (meshNode->getMesh().isNull() && !meshNode->meshPath.isEmpty()
                 && !meshNode->meshPath.startsWith(QLatin1Char(':'))) {
-                const QString path = MeshBakeStore::modelSourceFor(conn, store, meshNode->meshPath);
+                const QString path = resolver.resolveAssetPath(meshNode->meshPath);
                 if (!path.isEmpty() && !out.contains(path)) out.append(path);
             }
         }
@@ -189,10 +190,9 @@ int SceneEditService::rebindPendingClips(const QSet<QString> &assetGuids, const 
     if (assetGuids.isEmpty() || !start) return 0;
     // The SAME resolution an open or a synchronous placement runs (SceneReader::getSkeletalAnimation):
     // one reader for the whole walk, so a model's bake is read once however many clips name it.
-    SceneReader reader;
+    SceneReader reader;   // the open's mode, as completeLandedContent resolves (item 7)
     reader.setDatabaseHandle(db);
     reader.setProject(project);
-    reader.setLibrarySource();
     int bound = 0;
     std::function<void(const iris::SceneNodePtr &)> walk = [&](const iris::SceneNodePtr &node) {
         if (!node) return;
@@ -230,12 +230,16 @@ int SceneEditService::completeLandedContent(const iris::SceneNodePtr &root)
     // redo) comes back as it left — no geometry, placeholder clips. It is resolved against the store
     // here, at insertion, exactly as the landing would have: the clips first, then the meshes. A
     // model whose bake is STILL in flight is left for its landing.
-    QSqlDatabase conn = QSqlDatabase::database();
-    const QString store = AssetStorePaths::root();
+    // THE READER'S RESOLUTION (item 7): the same function the reader decided "pending" through, in
+    // the open's mode (the project's pin, falling back to the library source — a paste pins what it
+    // lands, so the two answer the same object).
+    SceneReader resolver;
+    resolver.setDatabaseHandle(db);
+    resolver.setProject(project);
     QHash<QString, QString> sourceOf;   // asset guid -> its store file
     const auto source = [&](const QString &guid) {
         auto it = sourceOf.constFind(guid);
-        if (it == sourceOf.constEnd()) it = sourceOf.insert(guid, MeshBakeStore::modelSourceFor(conn, store, guid));
+        if (it == sourceOf.constEnd()) it = sourceOf.insert(guid, resolver.resolveAssetPath(guid));
         return it.value();
     };
     QSet<QString> clipGuids;
