@@ -169,7 +169,7 @@ def needs_error(value):
     return None
 
 
-def check(listing, app, out):
+def check(listing, app, out, harnesses=frozenset()):
     bad = []
     in_scope = 0
     by_decl = {}
@@ -184,7 +184,7 @@ def check(listing, app, out):
             bad.append((t["name"], "types %s into its ENVIRONMENT — declare TIER/NEEDS on the registration" % "/".join(typed), where))
         if "--test-tier" in words:
             bad.append((t["name"], "passes --test-tier on its command — declare TIER/NEEDS on the registration", where))
-        vulkan, _registered, why = closure.classify(t, app)
+        vulkan, _registered, why = closure.classify(t, app, harnesses)
         if not vulkan or not why.startswith("APP "):
             continue
         if closure.admitted_class(words) == "selftest":
@@ -319,7 +319,17 @@ def main(argv):
     if r.returncode != 0:
         print("row_declares_needs: ctest --show-only failed: %s" % r.stderr.decode()[-400:])
         return 1
-    if check(json.loads(r.stdout), app, sys.stdout):
+    # the app-spawning harnesses, read once from the build's compile commands (the closure's reader)
+    try:
+        harnesses = closure.read_harnesses(args["--build"], app)
+    except (OSError, ValueError) as e:
+        print("row_declares_needs: cannot read %s/compile_commands.json: %s" % (args["--build"], e))
+        return 1
+    if not harnesses:
+        print("row_declares_needs: no target in %s/compile_commands.json defines JAHSHAKA_BINARY as %s"
+              " — no harness would be seen" % (args["--build"], app))
+        return 1
+    if check(json.loads(r.stdout), app, sys.stdout, harnesses):
         fails += 1
     return 1 if fails else 0
 
