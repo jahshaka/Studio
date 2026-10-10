@@ -2826,7 +2826,7 @@ void AvatarApi::abortBackgroundWork()
 {
     // (a) NOTHING UNSAVED IS EVER DROPPED, and this is the first thing, because
     // everything after it can be taken away: the shell's pool wait is bounded
-    // at 3 s with std::_Exit(0) behind it, and a definition edit inside its
+    // at 3 s with a forced exit (86) behind it, and a definition edit inside its
     // 250 ms coalescing window used to be lost to exactly that exit.
     flushPersist("avatar.quit");
     // (b) Nothing an in-flight parse produces may be applied from here on: the
