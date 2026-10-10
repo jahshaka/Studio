@@ -6,11 +6,13 @@
 # while the kernel answers with the PHYSICAL one: ctest chdir()s into WORKING_DIRECTORY and bash's $PWD
 # is then getcwd() (/mnt/work/...), and the app's applicationDirPath() comes from /proc/self/exe. Five
 # rows compared the two spellings as strings and redded 3/3 on a correct product (A2-defect-*).
-# THE RULE: a path is compared with a path only after BOTH sides are resolved (realpath -m: symlinks
-# followed, a not-yet-existing tail kept) — never a string match of one spelling against another.
+# THE RULE: a path is compared with a path only after BOTH sides are resolved (symlinks followed, a
+# not-yet-existing tail kept) — never a string match of one spelling against another.
 
 # jah_phys <path> — the physical spelling (no symlinks, no . or ..); the path need not exist yet.
-jah_phys() { realpath -m -- "$1"; }
+# Python's os.path.realpath, not `realpath -m`: -m is GNU coreutils only (macOS's realpath has no -m,
+# and BSD realpath fails on a missing tail); realpath() is non-strict on both, like -m.
+jah_phys() { python3 -I -c 'import os,sys; print(os.path.realpath(sys.argv[1]))' "$1"; }
 
 # jah_same_path <a> <b> — the two name the same place.
 jah_same_path() { [ "$(jah_phys "$1")" = "$(jah_phys "$2")" ]; }
