@@ -896,10 +896,13 @@ set_tests_properties(gi.field_thin_wall PROPERTIES TIMEOUT 240 LABELS "engine" R
 # of one whole-field integration at 1 and 2 rays in one process.
 jah_gpu_row(gi.field_alias CLASS engine COMMAND test_gi_field_thin_wall alias
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-# TESTING-CLEANUP-2B item 7 (2026-10-10, RE-MEASURED ALONE: 3 runs, each its own whole-card hold under the slot,
-# gpu-exclusive.sh class 2, the box otherwise idle; seconds = ctest's, the admission wait outside them): 70.7 / 67.6 / 68.0 s,
-# median 68.0 -> 6x = 410; slot-era worst 115.1 s (9 PASS since 2026-10-09 18:00) -> TIMEOUT 410 (was 900).
-set_tests_properties(gi.field_alias PROPERTIES TIMEOUT 410 LABELS "engine" RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
+# TESTING-CLEANUP-2B item 7, re-based after read 4 (2026-10-10; the sample per tests/CMakeLists.txt's policy — the run
+# log's SLOT-ERA quiet PASS runs, since 2026-10-09 18:00, taken as the gate runs the row): WARM (an engine row: the
+# tree's shader cache as a gate has it), n=6 — 75.7 / 69.6 / 71.2 / 84.5 / 115.1 / 71.0 s (gate records 2026-10-09 23:44 -
+# 10-10 11:50; load 6-19, 0-2 builds beside them); median 73.4 -> 6x = 450; slot-era worst 115.1 (the smoke rc, 2 builds,
+# load 18.6) -> TIMEOUT 450 (was 900). This lane's three solos (70.7 / 67.6 / 68.0, a sibling ctest on the box) are records,
+# not quiet ones.
+set_tests_properties(gi.field_alias PROPERTIES TIMEOUT 450 LABELS "engine" RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
 # THE FIELD'S LEAK FIX SURVIVES THE MOVE ONTO A CASCADE (PHOTON_SPEC E1's bar,
 # promoted from the PHOTON-S2 spike harness): a sealed room with a lamp outside
 # it, four wall thicknesses, measured with the scene-fitted single volume and

@@ -196,10 +196,10 @@ set_tests_properties(atom.decode_exact PROPERTIES TIMEOUT 480 LABELS "engine"
 # added and released, the cut's budget forced small twice) with the decode's discriminator
 # on: no frame fails more than 0.5 % of what the id pass covered. A pixel suite (no time
 # measured, frames counted): never the GPU lock.
-# TESTING-CLEANUP-2B item 7 (2026-10-10, RE-MEASURED ALONE: 3 runs, each its own whole-card hold under the slot,
-# gpu-exclusive.sh class 2, the box otherwise idle; seconds = ctest's, the admission wait outside them): 192.4 / 190.8 / 190.4 s,
-# median 190.8 -> 6x = 1150; slot-era worst 241.5 s (8 PASS since 2026-10-09 18:00) -> TIMEOUT 1150 (was 1300,
-# 6x a 212 s read).
+# TESTING-CLEANUP-2B item 7, re-based after read 4 (2026-10-10; the sample per tests/CMakeLists.txt's policy — the run
+# log's SLOT-ERA quiet PASS runs, since 2026-10-09 18:00, taken as the gate runs the row): WARM, n=4 — gate
+# records 193.1 / 173.1 / 202.5 / 188.8 s (10-10 04:25 - 11:33; load 6-15, 0-2 builds beside them); median 191.0 ->
+# 6x = 1150; slot-era worst 241.5 (a scoped gate beside a sibling ctest, 2 builds, load 20.2) -> TIMEOUT 1150 (was 1300).
 jah_gpu_row(atom.coverage_trace CLASS engine TOKENS 2 COMMAND test_scale --coverage-trace WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(atom.coverage_trace PROPERTIES TIMEOUT 1150 LABELS "engine"
                      ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
