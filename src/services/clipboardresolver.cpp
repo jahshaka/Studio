@@ -279,8 +279,10 @@ ClipboardResolveReport ClipboardResolver::run(const Envelope &envelope, bool com
 
         // A row with files, none of which resolved, is MISSING (step 5). A row
         // with NO files at all is a DB-only asset (a material is its blob) and
-        // is perfectly importable.
-        if (!asset.files.isEmpty() && located.isEmpty()) {
+        // is perfectly importable. A row whose BLOB stayed behind the inline
+        // budget (blobOmitted) cannot be landed here either: it would be an
+        // empty shell of the row it names.
+        if ((!asset.files.isEmpty() && located.isEmpty()) || asset.blobOmitted) {
             ClipboardMissing missing;
             missing.guid = it.key();
             missing.name = asset.name;

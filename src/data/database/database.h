@@ -714,7 +714,11 @@ public:
     /// many dependers in one statement per chunk (depender -> its dependees, in
     /// its own order); the closure's rows WITHOUT a BLOB; and one row's two JSON
     /// BLOBs, read when that asset is written out.
-    QHash<QString, QStringList> fetchDependencyEdges(const QStringList &dependers);
+    /// `withMemberObjects`: each depender that is a MESH MEMBER also answers its OBJECT row (its
+    /// `parent`, when that row is an Object) after its dependencies — the member-to-object edge a
+    /// closure needs (the member's import record lives on the Object), in the SAME statement.
+    QHash<QString, QStringList> fetchDependencyEdges(const QStringList &dependers,
+                                                     bool withMemberObjects = false);
     QVector<AssetRecord> fetchAssetHeaders(const QStringList &guids);
     bool fetchAssetRowBlobs(const QString &guid, QByteArray *asset, QByteArray *properties);
     QVector<DependencyRecord> fetchAssetDependencies(const AssetRecord &record);

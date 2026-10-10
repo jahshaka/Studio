@@ -21,6 +21,7 @@ var RIG_TINY = "@SOURCE_DIR@/tests/avatar/fixtures/rig2_tiny.glb";
 var QUAD = "@SOURCE_DIR@/tests/importer/fixtures/scaled_two_meshes.glb";
 var RIG_SCALED = "@SOURCE_DIR@/tests/avatar/fixtures/rig2_giant.glb";               // the envelope's rig
 var MEMBERED = "@SOURCE_DIR@/tests/importer/fixtures/material_workflows.glb";       // nodes name a Mesh member
+var TEXTURED = "@SOURCE_DIR@/tests/importer/fixtures/textured_pbr_quad.glb";        // model A of the edge row
 
 /// Every store row whose content is `oid` goes, and the store's unreferenced bytes: the library no
 /// longer holds the model, so a paste of it imports rows and must BAKE.
@@ -151,4 +152,24 @@ assert(engineErrors() === 0, "no engine error");
            c.what + ": ...and the same skeletal clips (" + clipsBefore + " vs " + skeletalClipCount() + ")");
     node.remove(pastedId);
 });
+// ---- THE EDGE IS A MESH MEMBER'S ONLY (read 5) -------------------------------------------------
+// A cube whose material borrows a TEXTURE that came out of model A: its copy carries the texture,
+// never model A (its Object, Mesh member and model file) — a texture row hangs under A's Object too.
+var A = assets.import(TEXTURED);
+assert(A && A.length > 10, "model A imported");
+var borrowed = null;
+assets.list({ scope: "store", type: "texture" }).concat(assets.list({ scope: "project", type: "texture" }))
+    .forEach(function (r) { if (borrowed === null && r.name === "quad_base.png") borrowed = r.guid; });
+assert(borrowed !== null, "model A's base-colour texture is a library row: " + borrowed);
+var cube = scene.addPrimitive("Cube", { position: { x: 4, y: 0, z: 0 } });
+assert(material.set(cube, { baseColorMap: borrowed }) === true, "the cube's material uses A's texture");
+assert(clipboard.copy(cube).items === 1, "the cube is copied");
+var payload = JSON.parse(clipboard.text());
+var carried = Object.keys(payload.assets);
+assert(carried.indexOf(borrowed) >= 0, "the closure carries the texture");
+var models = carried.filter(function (g) {
+    var t = payload.assets[g].type; return t === "object" || t === "mesh";
+});
+assert(carried.indexOf(A) < 0 && models.length === 0,
+       "...and NOT model A (no object or mesh row): " + J(carried.map(function (g) { return payload.assets[g].type; })));
 console.log("bundle_landing: ALL OK");

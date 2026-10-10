@@ -3564,18 +3564,33 @@ static QString inMarks(int n)
     return marks.join(QLatin1Char(','));
 }
 
-QHash<QString, QStringList> Database::fetchDependencyEdges(const QStringList &dependers)
+QHash<QString, QStringList> Database::fetchDependencyEdges(const QStringList &dependers,
+                                                         bool withMemberObjects)
 {
     // The same edges fetchAssetGUIDAndDependencies answers one depender at a
     // time — dependees that are catalog rows — in each depender's own order.
+    // With `withMemberObjects`, a UNION ALL appends each Mesh member's Object
+    // row after the dependencies (SQLite returns the first SELECT's rows first),
+    // so a closure walk stays ONE statement per level (D11-LIBRARY-SCALE §3.6).
     QHash<QString, QStringList> out;
     for (int at = 0; at < dependers.size(); at += kInChunk) {
         const QStringList chunk = dependers.mid(at, kInChunk);
         QSqlQuery query;
-        query.prepare(QStringLiteral("SELECT D.depender, assets.guid FROM dependencies D "
+        QString sql = QStringLiteral("SELECT D.depender, assets.guid FROM dependencies D "
                                      "INNER JOIN assets ON D.dependee = assets.guid "
-                                     "WHERE D.depender IN (%1)").arg(inMarks(int(chunk.size()))));
+                                     "WHERE D.depender IN (%1)").arg(inMarks(int(chunk.size())));
+        if (withMemberObjects)
+            sql += QStringLiteral(" UNION ALL SELECT M.guid, M.parent FROM assets M "
+                                  "INNER JOIN assets O ON O.guid = M.parent "
+                                  "WHERE M.guid IN (%1) AND M.type = ? AND O.type = ?")
+                       .arg(inMarks(int(chunk.size())));
+        query.prepare(sql);
         for (const QString &guid : chunk) query.addBindValue(guid);
+        if (withMemberObjects) {
+            for (const QString &guid : chunk) query.addBindValue(guid);
+            query.addBindValue(static_cast<int>(ModelTypes::Mesh));
+            query.addBindValue(static_cast<int>(ModelTypes::Object));
+        }
         if (!executeAndCheckQuery(query, "fetchDependencyEdges")) continue;
         while (query.next()) out[query.value(0).toString()].append(query.value(1).toString());
     }

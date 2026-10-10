@@ -32,6 +32,7 @@ For more information see the LICENSE file
 #include <QTemporaryDir>
 #include <QUuid>
 #include <cstdio>
+#include <limits>
 
 #include "data/database/database.h"
 #include "data/project.h"
@@ -127,7 +128,10 @@ int main(int argc, char **argv)
     assetclosure::Options options;
     options.storeRoot = store.path();
     options.includeRowBlobs = true;
-    options.inlineLimitBytes = 0;
+    // AN UNBOUNDED BUDGET (the share file's): the store holds no files, so nothing is read for one, and
+    // every row blob — counted against the budget since read 5 — rides, which "the same answer"
+    // below compares.
+    options.inlineLimitBytes = std::numeric_limits<qint64>::max();
     Database::setQueryLog(true);
     const int files0 = CasContentSource::statements();
     const auto described = assetclosure::describe(closure, &db, options);
@@ -163,6 +167,32 @@ int main(int argc, char **argv)
                 && it->dependencies == db.fetchAssetGUIDAndDependencies(guid, false);
     }
     CHECK(same, "every described row equals fetchAsset's fields and the per-node edges");
+
+    // ---- THE ROW BLOB IS SPENT FROM THE BUDGET (read 5) ----------------------------------------
+    // A model whose Object row's node tree is larger than the inline budget travels by guid: its blob
+    // is not carried (blobOmitted), its import record (properties) still is, and it counts as
+    // referenced. A budget that fits carries it.
+    {
+        const QString bigModel = newGuid();
+        const QByteArray bigTree(64 * 1024, 'N');
+        db.createAssetEntry(bigModel, QStringLiteral("big_model.glb"), static_cast<int>(ModelTypes::Object), QString(),
+                            assethome::assets(), assethome::Origin::Import, QString(), QString(), thumb,
+                            QByteArray("{\"import\":{\"settings\":{\"scale\":2}}}"), QByteArray(), bigTree);
+        assetclosure::Options tight;
+        tight.storeRoot = store.path();
+        tight.includeRowBlobs = true;
+        tight.inlineLimitBytes = 4096;
+        int inl = 0, ref = 0;
+        const auto over = assetclosure::describe({ bigModel }, &db, tight, &inl, &ref);
+        CHECK(over.contains(bigModel) && over.value(bigModel).blob.isEmpty() && over.value(bigModel).blobOmitted,
+              "a model whose node tree is over the inline budget travels WITHOUT its blob (blobOmitted)");
+        CHECK(!over.value(bigModel).properties.isEmpty(), "...its import record still rides");
+        CHECK(ref == 1 && inl == 0, "...and it counts as referenced (%d referenced, %d inlined)", ref, inl);
+        tight.inlineLimitBytes = 128 * 1024;
+        const auto fits = assetclosure::describe({ bigModel }, &db, tight);
+        CHECK(fits.value(bigModel).blob == bigTree && !fits.value(bigModel).blobOmitted,
+              "a budget that fits carries the whole node tree");
+    }
 
     db.closeDatabase();
     QFile::remove(dbPath);

@@ -46,29 +46,18 @@ QStringList expandThroughCatalog(const QStringList &seeds, Database *db)
     while (!frontier.isEmpty()) {
         const QStringList level = frontier;
         frontier.clear();
-        const QHash<QString, QStringList> edges = db->fetchDependencyEdges(level);
-        // THE MEMBER-TO-OBJECT EDGE (STAGE-CLOSE-TRIAGE-1 read 4): a model's Mesh member row keeps
-        // its import record on its OBJECT row (MeshBakeStore::importRecordForGuid walks `parent`),
-        // and a node names the member. The dependency table points object -> members only, so a
-        // closure seeded from a node lost the object, and a paste re-baked the member at identity
-        // (a scale/unit override, clips:false, skeleton:false all dropped). A member's parent rides
-        // the closure when it is an Object tile — never a project folder, which `parent` also names.
-        QHash<QString, QString> objectParent;
-        for (const AssetRecord &row : db->fetchAssetHeaders(level)) {
-            if (row.parent.isEmpty()) continue;
-            objectParent.insert(row.guid, row.parent);
-        }
-        QStringList parents;
-        for (const QString &p : objectParent) if (!parents.contains(p)) parents << p;
-        QSet<QString> objects;
-        for (const AssetRecord &row : db->fetchAssetHeaders(parents))
-            if (row.type == static_cast<int>(ModelTypes::Object)) objects.insert(row.guid);
+        // THE MEMBER-TO-OBJECT EDGE (STAGE-CLOSE-TRIAGE-1 reads 4-5): a model's Mesh member keeps its
+        // import record on its OBJECT row (MeshBakeStore::importRecordForGuid walks `parent`), and a
+        // node names the member; the dependency table points object -> members only, so a closure
+        // seeded from a node lost the record and a paste re-baked the member at identity. The
+        // Object rides — for a Mesh member ONLY: a model's texture rows hang under the Object too,
+        // and a texture a material borrowed from model A must not drag model A into every copy.
+        // In the level's one statement (fetchDependencyEdges' withMemberObjects).
+        const QHash<QString, QStringList> edges = db->fetchDependencyEdges(level, true);
         for (const QString &guid : level) {
             // Self first, as fetchAssetGUIDAndDependencies(guid) answered.
             push(guid);
             for (const QString &dep : edges.value(guid)) push(dep);
-            const QString parent = objectParent.value(guid);
-            if (objects.contains(parent)) push(parent);
         }
     }
     return out;
@@ -129,9 +118,24 @@ QMap<QString, clipboardformat::ClipAsset> describe(const QStringList &guids, Dat
         asset.type = scriptmod::assetTypeName(record.type);
         asset.parent = record.parent;
         asset.dependencies = edges.value(guid);
-        if (options.includeRowBlobs) db->fetchAssetRowBlobs(guid, &asset.blob, &asset.properties);
-
         bool anyInlined = false, anyReferenced = false;
+        if (options.includeRowBlobs) {
+            db->fetchAssetRowBlobs(guid, &asset.blob, &asset.properties);
+            // THE ROW'S BLOB IS SPENT FROM THE SAME BUDGET (read 5): an Object row's `asset` column is
+            // the model's whole node tree, and a large model must not inflate a copy past the inline
+            // budget the files keep to. Over it, the row travels by guid (blobOmitted) — the resolver
+            // lands it only where the library already knows it. The `properties` (the import record,
+            // a few hundred bytes) always ride.
+            const qint64 blobSize = asset.blob.size();
+            if (blobSize > budget) {
+                asset.blob.clear();
+                asset.blobOmitted = true;
+                anyReferenced = true;
+            } else {
+                budget -= blobSize;
+            }
+        }
+
         for (const auto &entry : content.filesForAsset(guid, record.name)) {
             clipboardformat::ClipFile file;
             file.role = entry.role;
