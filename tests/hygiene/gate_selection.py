@@ -203,6 +203,54 @@ def hunk_cases(gs, graph, build, inv0, cases):
         check(not miss, "%s: selects %s (%d rows; missing %s)" % (c["case"][:60], c["must"], len(S.selected), miss))
 
 
+def tooling_cases(gs, graph, build, inv0):
+    """TESTING_V3 §1.3.4 (TESTING-CLEANUP-2B item 1): A TOOLING-ONLY DIFF SELECTS NO PRODUCT ROW. A diff with no
+    PRODUCT_INPUT path selects the hygiene + tooling rows, the runner's own self-test and the rows whose declaration
+    or command changed — never an app or compiled product row, never the smoke pair; ONE product path makes it a
+    product diff and the selection is the whole union again.
+    RED ON BASE (b0a3b1f3c): no such rule — scripts/vram_tokens.py alone selected 9 product rows (tests/app's
+    app rows through its area rule's `app` directory: app.input_keys, app.play_select, app.startup_quiet, …), a
+    test source alone added the product smoke pair (app.startup_quiet + api.contract), and batch A's range
+    (71ad53fd5..ca110eea3) without its two build files selected 71 rows / ~16 min at -j4 (61 / ~13 min now; the
+    WHOLE range is the MERGE tier either way: its top CMakeLists.txt include() is a product build file)."""
+    print("\ntooling-only diffs (TESTING_V3 §1.3.4):")
+    def sel(files):
+        return gs.select(files, None, build, 4, graph=graph, inv=copy.deepcopy(inv0), quiet_graph=True)
+    def product(S):
+        return sorted(n for n in S.selected if S.inv[n]["kind"] in ("app", "compiled")
+                      and not (S.inv[n]["labels"] & {"hygiene", "tooling"}) and n not in gs.TOOL_SELF_TESTS[0][1])
+    hyg = {n for n, t in inv0.items() if "hygiene" in t["labels"]}
+    S = sel(["scripts/gate-scope.py"])
+    check(S.tooling_only and not product(S) and hyg <= set(S.selected) and not S.fallback and not S.full_tier,
+          "scripts/gate-scope.py alone is TOOLING-ONLY: the hygiene label (%d rows), no product row (%s)"
+          % (len(hyg), product(S)[:6]))
+    S = sel(["scripts/vram_tokens.py"])
+    check(S.tooling_only and not product(S) and "pool.runner" in S.selected and "devprocess.vram_admit" in S.selected,
+          "scripts/vram_tokens.py alone: its own tests (pool.runner, devprocess.vram_admit), no product row (%s)"
+          % product(S)[:6])
+    S = sel(["tests/gi/test_gi_speckle.cpp"])
+    check(S.tooling_only and set(S.selected) == {"gi.speckle"},
+          "a test source alone selects its row and nothing else — no smoke pair (%s)" % sorted(S.selected)[:6])
+    S = sel(["tests/meshbake/CMakeLists.txt", "scripts/gate_runlog.py"])
+    mb = {n for n, t in inv0.items() if t["dir"] == "meshbake"}
+    check(S.tooling_only and mb <= set(S.selected) and "app.startup_quiet" not in S.selected,
+          "a test registration + a runner script: the declared rows (%d meshbake) + the hygiene label, no smoke pair"
+          % len(mb))
+    alone = set(sel(["src/services/vrworld.cpp"]).selected)
+    S = sel(["scripts/gate-scope.py", "src/services/vrworld.cpp"])
+    check(not S.tooling_only and alone <= set(S.selected) and "app.startup_quiet" in S.selected
+          and "pool.vr_session" in S.selected and "source.gate_scope_rules" in S.selected,
+          "ONE product path makes it a product diff: the whole union (vrworld.cpp's %d rows + the tool's) and the smoke "
+          "pair" % len(alone))
+    check(gs.product_paths(["irisgl/docs/OGRE_BUILD.md", "docs/TESTING.md", "scripts/x.py", "tests/hygiene/y.py",
+                            "irisgl/README.md"]) == []
+          and len(gs.product_paths(["irisgl/engine/src/OgreGi.cpp", "app/content/x.obj", "CMakeLists.txt",
+                                    "cmake/IncludeOgre.cmake", "scenes/Tornado.zip", "thirdparty/qlementine/x.h",
+                                    "irisgl/thirdparty/ogre-next", ".gitmodules"])) == 8,
+          "PRODUCT_INPUT: the sources, content, vendored code and build files are product; docs, scripts and the "
+          "hygiene tests are not")
+
+
 def runlog_cases(source):
     """THE RUN LOG'S VERDICT CLASSES (TESTING-DEBTS-1 T1) on fixed texts — FORK-OOM-1's two
     lines as the engine and the app print them: a red carrying the in-frame OOM line is OOM (the
@@ -476,6 +524,7 @@ def main(source, build):
         for m in c.get("must_not", []):
             check(not chosen(S, m), "%s: %s does NOT select %s (%s)" % (c["case"], c["files"][0], m,
                                                                          S.selected.get(m, "")))
+    tooling_cases(gs, graph, build, inv0)
     arm_cases(gs, graph, build, inv0)
     gone_cases(gs, graph, build, inv0)
     hunk_cases(gs, graph, build, inv0, cases)
