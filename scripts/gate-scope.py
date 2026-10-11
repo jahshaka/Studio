@@ -680,6 +680,27 @@ def _is_wipe(cmd):
     return len(cmd) > 2 and os.path.basename(str(cmd[0])) == "sh" and cmd[1] == "-c" and "rm -rf" in str(cmd[2])
 
 
+def _relocated(raw, build):
+    """THE INVENTORY OF A MOVED BUILD DIR (RUNNER-A2): ctest names the paths the build was CONFIGURED with (its
+    CMakeCache's CMAKE_CACHEFILE_DIR / CMAKE_HOME_DIRECTORY) — a build dir copied or renamed since (rc-base is
+    rc-batch-dfx1's renamed tree; a symlinked overlay of it) still names the old tree, and no row's command then matches
+    the graph's executables (every compiled row read as `other`: measured on rc-base, 619 other + 132 app, no compiled
+    row). The configured build dir is read as this build dir, the configured source root as ROOT (the tree the
+    selection reads)."""
+    roots = gate_graph.build_roots(build)
+    if not raw or not roots or not roots.get("build"):
+        return raw
+    here = os.path.abspath(build).rstrip("/")
+    if roots["build"] == here:
+        return raw
+    pairs = [(roots["build"], here)]
+    if roots.get("root") and roots["root"] != ROOT and not here.startswith(roots["root"] + "/"):
+        pairs.append((roots["root"], ROOT))
+    for old, new in pairs:                 # the build dir first: it sits inside the old root
+        raw = re.sub(re.escape(json.dumps(old)[1:-1]) + r'(?=[/"\\\s;:])', lambda m, n=json.dumps(new)[1:-1]: n, raw)
+    return raw
+
+
 def load_inventory(build):
     # listed from a copy of the CTestTestfile tree: a listing in the build dir itself truncates
     # the LastTest.log of a gate running there (gate_graph.ctest_inventory)
@@ -689,6 +710,7 @@ def load_inventory(build):
         raw, rc = gate_graph.ctest_inventory(build)
         if rc != 0:
             sys.stderr.write(f"gate-scope: ctest --show-only failed ({rc}) for {build}\n"); sys.exit(2)
+    raw = _relocated(raw, build)
     j = json.loads(raw or "{}")
     if not j.get("tests"):
         # See resolve_build: an unconfigured directory answers with an empty
