@@ -115,8 +115,8 @@ FAILS and says how to bake it — no row measures a smaller asset in its place.
 
 ### 1d. THE STAGE-CLOSE ROWS — `stage-close` and `quiet-box` (lanes D6B-GATE-SHAPE, STAGE-CLOSE-1)
 
-THE STAGE-CLOSE ROWS — run by the lead as ONE batch, in the gate slot, at every stage close and
-before every push; never by a timer (the owner, 2026-10-09: the daily run the label was first
+THE STAGE-CLOSE ROWS — run by the runner as ONE queue job (`runner.sh stage-close <tag>`, the card's slot) at every
+stage close on the lead's word, and by the ship; NEVER before a push (a push runs no row — the door over the records, RUNNER rule 4) and never by a timer (the owner, 2026-10-09: the daily run the label was first
 named after never existed — no such tier ever ran and its timer was never installed — while its
 rows rode every scoped gate a broad rule reached: 437 runs, 15.4 h in a week). Two labels, read
 by `gate-scope.py` alone:
@@ -430,9 +430,10 @@ first; the lane `merged`; its tree removed or made rc-base; the phases timed int
 
 ## 4. Flake protocol (the law in the refusal since TEST-SELECTOR-1)
 
-A red of a CONTENTION-CLASS suite is re-run SOLO 3× (`scripts/gate-scope.sh --solo <suite>`: each
-admission of a solo run takes the whole card, §4b); 3/3 green = environmental, with the evidence
-string in the report (host-load timing). ANY OTHER red needs a
+A red is ATTRIBUTED by the runner (`runner.sh merge`: the row re-run SOLO 3× at the candidate AND 3× at the parent
+(rc-base at d-build's tip), each solo taking the whole card, §4b): red at both = a d-build defect (registered, lands);
+red only at the candidate = the lane's (refused); green 3/3 at the candidate = not reproduced (recorded as such, lands).
+"Environmental" is not a verdict: an Xid from the row's pid is never environmental. ANY OTHER red needs a
 recorded verdict that passes THE VERDICT DOOR (below; VERDICT-1):
 `scripts/ci-gate-check.sh <range> --verdict "<row>=<text>" ...` writes it into the run log, per row and timestamped (it clears only the reds logged before it; a row that never ran — NOADMIT — is missing, which no verdict clears). THE MERGE REFUSAL
 APPLIES THIS (TEST-SELECTOR-1 L2/L3): `ci-gate-check.sh` refuses a merge while a selected row was
