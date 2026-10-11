@@ -62,6 +62,15 @@ editor.frame(6);
 // frame (G1), which files `vct.cascadeN` WORK rows and no `gi.rebuild` EVENT.
 // That is the whole point of the chain and the wrong thing for this suite to
 // depend on; a quality change is a from-scratch rebuild by definition.
+// THE ROW BOOTS PHOTON (DBUILD-FIX-1): the row declares TIER low NEEDS photon, so a GI arm runs
+// at Low quality and "medium" changes its shape. Under NEEDS NONE Photon was OFF and nothing here
+// could ever file a gi.* event (the row's 3/3 red) — asserted, so a declaration that drops Photon
+// again fails HERE with the reason, not as a missing event.
+var giBefore = world.giStatus();
+console.log("photon before the rebuild: cascades " + (giBefore.cascades ? giBefore.cascades.length : "none") +
+            ", engine " + JSON.stringify(perf.status().engine));
+assert(giBefore.cascades && giBefore.cascades.length > 0,
+       "Photon runs at the row's declaration (a GI arm to rebuild)");
 world.gi({ quality: "medium" });
 world.refreshGi();
 editor.frame(8);
