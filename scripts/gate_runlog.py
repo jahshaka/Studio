@@ -7,8 +7,8 @@ gate scripts themselves, never by hand, so the testing rules can be re-read agai
 (the owner, 2026-09-27: "log the tests as they run so we can streamline again based on fact").
 The field list is `testing/runs/README.md`; the one writer is `run_ctest()` below.
 
-As a library: gate-scope.py `--run` / `--solo` call run_ctest(). As a command (the tier
-scripts — rc-gate.sh — and anyone running a whole tier):
+As a library: gate-scope.py `--run` / `--solo` call run_ctest(). As a command (the runner's
+merge run, stage close and ship, and anyone running a whole tier):
 
     scripts/gate_runlog.py run --tier merge --lane rc-d --jobs 4 [--build build-linux] -- ctest -j4 ...
     scripts/gate_runlog.py import <ctest-output.log> --tier merge --tip <sha> --lane <name>
@@ -49,8 +49,8 @@ SCHEMA = 3      # 2 (VERDICT-1 + GATE-LOG-1): xid, noadmit_arms, slot_wait_s, dr
 # documents the same list. gate-scope.sh writes the first three (`scoped`; `scoped-fallback` = a
 # scoped gate that fell back to the whole tier; `scoped-tier` = the tier by rule, a fork pin) and
 # `target` (GATE-SPEED-1: the target tests' own step, after the gating verdict — reported, never
-# gating); rc-gate.sh writes JAH_GATE_TIER (merge by default: stage, stage-close, push, smoke — the
-# owner's smoke rc —, fork); the runner's merge run writes `merge`, its attribution `solo`. `joint` is gone.
+# gating); `stage`, `smoke` and `fork` are the deleted rc script's (old records keep them); the runner's merge run
+# writes `merge`, its attribution `solo`, the stage close `stage-close`, the ship `push` and `target`. `joint` is gone.
 TIERS = ("scoped", "scoped-fallback", "scoped-tier", "target", "merge", "stage", "stage-close", "push",
          "smoke", "fork", "lane", "solo")
 # GATE-COST-2 #12: `lane` — a lane tool's own runs, recorded under the lane's name; `solo` — a --solo batch's retries (gate-scope's default for --solo, and the solo
@@ -2334,7 +2334,7 @@ def main():
         query_trend(a.days, a.suite, a.tip, a.k, record=tuple(a.record) if a.record else None); return
     if a.cmd == "clocks":
         # THE STAGE CLOSE'S CLOCK CHECK (plan 9cl CLOCK-TRAP-1): a card left locked after a run
-        # reads `locked?` (idle and not clocking down); rc-gate.sh prints this and reds on exit 3.
+        # reads `locked?` (idle and not clocking down); the runner's close (merge run, stage close, ship) reads it as its `clocks` phase, a red on exit 3.
         st = gpu_clocks()
         print(json.dumps(st, sort_keys=True))
         sys.exit(3 if st.get("state") == "locked?" else 0)

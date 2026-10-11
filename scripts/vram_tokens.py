@@ -57,7 +57,7 @@ THE CONTRACT
     (/tmp/jah-gpu-clocks.lock: pid, label, spec) and restores them before the tokens go — a normal
     end, a non-zero exit, a forwarded SIGTERM/SIGINT/SIGHUP, a crash of the row. It restores ONLY a
     lock it recorded itself: a lock somebody else holds (a live owner's record) is neither taken
-    nor undone, and a lock nobody recorded is nobody's business here (rc-gate's close reports it).
+    nor undone, and a lock nobody recorded is nobody's business here (the runner's close reports it: the `clocks` phase).
     Locking needs `sudo -n nvidia-smi`; refused, the run says `gpu-clocks: NOT locked … provisional`.
 
   * ONE GATE AT A TIME, BOX-WIDE (GATE-COST-1 P1; SPECS/audits/GATE_COST_2026-10-09.md §3e: the same
@@ -436,8 +436,8 @@ _YIELD = re.compile(r"^(\d+)\.(\d+)\.yield$")
 
 # THE SLOT IS BY PRIORITY, NOT ARRIVAL (TESTING-CLEANUP-2B item 13; the owner 2026-10-10: "the gate needs to run, not
 # wait for everything else"). Three classes:
-#   0  the owner's smoke rc (rc-gate JAH_GATE_TIER=smoke)
-#   1  a GATE: a batch / end / push / stage-close / fork tier (rc-gate), a `gate-scope.py --run`, `gate_runlog.py run`
+#   0  the owner's smoke (a queue job of class 0)
+#   1  a GATE: a merge run, a stage close, a ship (runner.sh, one class-1 queue job), a `gate-scope.py --run`, `gate_runlog.py run`
 #   2  a lane's MEASUREMENT: gpu-exclusive.sh (`admit all`), `--solo` (the runner's attribution solos too), a whole-card hold run by hand
 # A waiter of a lower class number is served before every waiting higher one (by ticket inside a class); it never
 # displaces the HOLDER. A free slot is taken at once by whoever asks. A class-2 holder that holds the slot across rows
@@ -447,8 +447,8 @@ SLOT_CLASSES = {0: "smoke", 1: "gate", 2: "measurement"}
 
 
 def slot_class(label="", cls=None):
-    """The asker's class: the explicit one, else read from the label the caller gives (rc-gate's `rc-<tag> <tier>`:
-    `smoke` -> 0, any other rc tier -> 1); anything else a caller did not name is a gate (1)."""
+    """The asker's class: the explicit one, else read from the label the caller gives (a label naming
+    `smoke` -> 0); anything else a caller did not name is a gate (1)."""
     if cls is not None:
         return max(0, min(2, int(cls)))
     if re.search(r"(^|\s)smoke(\s|$)", label or ""):

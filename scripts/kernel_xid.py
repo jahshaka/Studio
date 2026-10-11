@@ -10,7 +10,7 @@ journal is read (`journalctl -k`, readable by the adm / systemd-journal group). 
     the row as its child, tracks the row's process tree, and after the row reads the Xids from any
     pid of that tree since the launch; a fault turns the row red with the kernel's lines;
   * tests/support/run_pool.py — per app process, the Xid's second mapped to the arm that ran;
-  * scripts/lead/rc-gate.sh — the Xids since the gate began (never since boot).
+  * scripts/lead/lib/runner/ship.py (`since <epoch>`) and the card queue's jobs — the Xids since the run began (never since boot).
 AN UNREADABLE JOURNAL IS A FINDING in every user (a printed line), never a red of every row: the
 one row that reds for it is devprocess.kernel_journal. macOS has no NVRM log (an empty answer).
 JAH_KERNEL_JOURNAL=<file> reads `journalctl -o short-unix` lines from a file instead (the tests).

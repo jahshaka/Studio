@@ -70,7 +70,7 @@ Environment:
   JAH_SAN_BUILD_ONLY=1  configure/build only, run nothing (the ship builds the tsan
                       lane under ionice, then runs it without: IONICE-1)
   JAH_SAN_BUILD_JOBS  the build width, an explicit override. Default: THE MEMORY
-                      LAW, rc-gate.sh's rule — 12 compile jobs box-wide divided by
+                      LAW — 12 compile jobs box-wide divided by
                       1 + the other live ninja processes, never below 2
   DISPLAY             not needed by either lane as it stands (both run only
                       offscreen suites). It becomes required the moment a suite
@@ -94,7 +94,7 @@ COMMON_CMAKE_ARGS=(
 
 die() { echo "sanitize: $*" >&2; exit 1; }
 
-# THE BUILD WIDTH (THE MEMORY LAW, DOCS/traps/GATE_AND_RIG.md; scripts/lead/rc-gate.sh's rule): the box's ~12 compile
+# THE BUILD WIDTH (THE MEMORY LAW, DOCS/traps/GATE_AND_RIG.md; the runner's rule): the box's ~12 compile
 # jobs are shared by every live build — max(2, 12 // (1 + n)) with n the other live `ninja` processes (two Debug builds
 # at -j$(nproc) took the box down on 2026-09-25). JAH_SAN_BUILD_JOBS overrides it.
 build_jobs() {

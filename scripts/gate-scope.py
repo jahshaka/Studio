@@ -330,7 +330,7 @@ ALWAYS_ON_CODE = ["app.startup_quiet", "api.contract"]
 # that never once ran — the owner, 2026-10-09: there is no such build). Two labels, read here alone:
 #   `stage-close` — the row leaves the MERGE and PUSH tiers and runs in THE STAGE-CLOSE BATCH
 #                   (`--stage-close-tier`): one batch in the gate slot, started BY THE LEAD at every
-#                   stage close and before every push (rc-gate.sh JAH_GATE_TIER=stage-close), never
+#                   stage close (`runner.sh stage-close`; the ship runs them too), never
 #                   by a timer. Minutes of one process whose push-time guard lives elsewhere, a churn
 #                   twin (ten processes of a one-process gate row), or a millisecond bar.
 #   `quiet-box`   — beside `stage-close` on the rows that MEASURE (the wall-clock benchmarks, the
@@ -411,7 +411,7 @@ TARGET_LABELS = {"photon-target", "scale-target"}
 
 STAGE_CLOSE_LABEL_RE = "|".join(sorted(re.escape(l) for l in STAGE_CLOSE_LABELS | TARGET_LABELS))
 # THE GATE'S PARALLEL WIDTH — THE ONE CONSTANT (GATE-SPEED-1 item 9). Every gate's parallel phase
-# (the scoped selection, the MERGE tier, a fallback, a merge run's), rc-gate.sh's ctest width
+# (the scoped selection, the MERGE tier, a fallback, a merge run's), the runner's ctest width
 # (`gate-scope.py --gate-jobs`) and the merge refusal's re-selection read THIS; the docs name it
 # instead of quoting a number. Changing the box's width is this one line — and an owner decision
 # (PHOTON_ATOM_CONTRACT §7b rule 3; the gate-speed audit's replay: -j6 21.7 min against -j4's 31.0
@@ -445,7 +445,7 @@ def merge_tier_serial():
 # THE STAGE-CLOSE BATCH (STAGE-CLOSE-1 U4; docs/TESTING_GATE.md §1d): every `stage-close` row (and
 # the shader-cache attack), in TWO phases like the MERGE tier — the minutes-of-one-process rows and
 # the churn twins at the gate's width, then every `quiet-box` or `timing` row at -j1 on ONE hold of
-# the whole card. ctest ANDs repeated -L filters. Started by the lead (rc-gate.sh, or
+# the whole card. ctest ANDs repeated -L filters. Started by the lead (`runner.sh stage-close`, or
 # `gate-scope.sh --stage-close-tier --run`), never by a timer.
 _STAGE_CLOSE_RX = "|".join(sorted(re.escape(l) for l in STAGE_CLOSE_LABELS))
 _QUIET_RX = "|".join(sorted(re.escape(l) for l in (QUIET_BOX_LABEL, TIMING_LABEL)))
@@ -2324,7 +2324,7 @@ def main():
                     help="print STAGE_CLOSE_SUBJECTS (which paths still bring which stage-close rows into a "
                          "scoped gate) and exit")
     ap.add_argument("--gate-jobs", action="store_true",
-                    help="print GATE_JOBS, the gate's parallel width (rc-gate.sh reads it), and exit")
+                    help="print GATE_JOBS, the gate's parallel width (the runner's merge run reads it), and exit")
     ap.add_argument("--resume", action="store_true",
                     help="--run, but only the rows with no record at this tip (a gate that was killed or lost its "
                          "display: the rows it finished are in the run log already)")

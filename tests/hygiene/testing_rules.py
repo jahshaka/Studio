@@ -17,7 +17,7 @@ here, each with its name in the failure line:
      724 tier rows had no price (the gate.* and source.* rows, the layered pools, the new gi/shadow rows).
   R3 NO COPIED TIER. No tracked file other than scripts/gate-scope.py carries a `ctest ... -LE`
      label set: the tiers are printed by `gate-scope.py --merge-tier` / `--stage-close-tier`, and a
-     copy goes stale (rc-gate.sh's did: it lacked scale-target and still named benchmark).
+     copy goes stale (the old rc script's did: it lacked scale-target and still named benchmark).
   R4 NO RUN_SERIAL WITHOUT ITS VERDICT. A RUN_SERIAL setting in a tests CMakeLists carries ITS
      row's reason: a comment naming RUN_SERIAL in the row's own block (the comments right above
      its registration through the setting), or a comment block naming RUN_SERIAL and the row, or

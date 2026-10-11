@@ -1299,8 +1299,8 @@ def main():
         sys.exit(2)
     for r in reasons: print(("ci-gate-check: " if ok else "ci-gate-check: REFUSED — ") + r)
     if not ok and a.stage_close:
-        print("ci-gate-check: run the stage-close batch at the tip (`scripts/gate-scope.sh --stage-close-tier --run`, or "
-              "rc-gate.sh with JAH_GATE_TIER=stage-close); a red answers to a fix or a verdict through the door")
+        print("ci-gate-check: run the stage close at the tip (`runner.sh stage-close <tag>`, or by hand "
+              "`scripts/gate-scope.sh --stage-close-tier --run`); a red answers to a fix or a verdict through the door")
         sys.exit(1)
     if not ok:
         print(f"ci-gate-check: run the FIX ROUND `scripts/gate-scope.sh <pre-fix tip>..{a.range.split('..', 1)[1]} --run` "

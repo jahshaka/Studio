@@ -20,9 +20,8 @@ The old batch layer and its hand tiers are gone (RUNNER-A6/A7B): every gate is a
 | **THE SHIP** | `runner.sh ship <tip> [--production]`: the deep gate — the full MERGE tier (`gate-scope.py --merge-tier` + `--merge-tier-serial`), every stage-close row, the target rows, hygiene, lsan, tsan, the six hashes, uncached, ONE job list deduped, one build; `--production` adds the Release build-only phase and the control (the last shipped build); then `runner.sh deploy` | on the owner's word | the lead |
 
 The MERGE tier's two phases remain the deep gate's definition (`gate-scope.py --merge-tier [-j N]` / `--merge-tier-serial`
-print them; the set lives in the script ONLY — `source.gate_scope_rules` case 9 fails on a literal `-LE` list here), and
-`scripts/lead/rc-gate.sh` still runs a hand tier (merge, stage, stage-close, push, smoke, fork) in a fresh tree when the lead
-asks for one. Rows are contracts: nobody hand-picks suites out of a selection.
+print them; the set lives in the script ONLY — `source.gate_scope_rules` case 9 fails on a literal `-LE` list here); the
+hand-launched rc tiers are deleted (RUNNER-A7B: every tier is a runner verb). Rows are contracts: nobody hand-picks suites out of a selection.
 
 ### 1b. TARGET TESTS — the `photon-target` label (PHOTON phase A, A1 §0; lane FENCE-1)
 
@@ -82,8 +81,8 @@ same pixel through a GREY mirror at L = 3.0 and at L = 0.8 and asserts the RATIO
 the store alone. Measured 1.255x unpatched / 3.745x patched.
 
 THE WIDTH IS ONE CONSTANT: `GATE_JOBS` in `scripts/gate-scope.py` (today **4**;
-`gate-scope.py --gate-jobs` prints it). The scoped gate (a batch candidate's), the MERGE tier, a
-fallback, the merge refusal's re-selection and `rc-gate.sh`'s ctest all read it; changing the box's
+`gate-scope.py --gate-jobs` prints it). The scoped gate, the MERGE tier, a
+fallback, the merge refusal's re-selection and the runner's merge run (`runner.sh merge`) all read it; changing the box's
 width is that one line and an owner decision (§7b rule 3). The gate-speed audit's scheduler replay
 (rc-smoke15a's durations, the registered locks and tokens) puts -j6 at 21.7 min against 31.0 at
 -j4, CPU contention unmeasured (`~/Developer/spikes/gate-speed-1/`). Every gate runs at
@@ -295,7 +294,7 @@ load under `testing/box-baseline.json`'s `quiet_load_max`; a record without a ce
 exist, else every record's (medians under sibling gates ran ~26 % high, TESTING-DEBTS-1); the estimate line counts
 which source each cost came from).
 
-**THE RUN LOG (TESTING_V2 T8).** `--run` (its tier `scoped`, or `scoped-fallback` / `scoped-tier` when a scoped gate ran the whole tier), `--solo` and the rc-gate tiers
+**THE RUN LOG (TESTING_V2 T8).** `--run` (its tier `scoped`, or `scoped-fallback` / `scoped-tier` when a scoped gate ran the whole tier), `--solo` and the runner's runs
 (`scripts/gate_runlog.py run --tier <t> -- <ctest line>`) append one JSON record per row and per
 pool arm to `<workspace>/testing/runs/<date>-<tier>-<tip>.jsonl` — the tier one of
 `gate_runlog.TIERS` (scoped, scoped-fallback, scoped-tier, target, merge, stage, stage-close, push, smoke,
@@ -308,7 +307,7 @@ holder) — the push judge refuses a candidate whose records carry any; a `--ver
 TOOLS set after a whole-card drain timed out is `fallback: drain-timeout` on every record of that run, and
 a timing, quiet-box or perf row's record carrying it is not a measurement (the judge refuses it: re-run). EVERY selftest
 hash and a trend step are RECORDS too (`kind: hash {pose, sha, move: same|moved|new, record, built}` — one per pose per
-tip and build, written by the lead's `rc-gate.sh` and the self-audit through `scripts/lead/lib/runner/records.py`,
+tip and build, written by the runner's merge run and ship and the self-audit through `scripts/lead/lib/runner/records.py`,
 RUNNER-A1; `kind: trend-step {row, target, delta}` written by the gate's trend and `gate_runlog.py trend --record <tier>
 <lane>`), beside `kind: abort` and `kind: drain-timeout` (§4c, §4); their suites start with `@`, which no selection
 names. SCHEMA 3 (RUNNER-A1): every row/arm record also carries the build's `config` (its CMakeCache: type, generator,
@@ -329,7 +328,7 @@ lane; one lane = a one-element list; `--lane a,b` or repeated), the box (load ov
 gates sampled AT THE SUITE'S START — ctest's `Start N:` line, TEST-SELECTOR-1 L1; -j, the display).
 `gpu_ms` is gone (TEST-SELECTOR-1 L4: no suite ever printed one — 0 of 38,269 records; a GPU time
 reaches the log as a target line, `target: <value> (bar <bar>) <what>`). The fields are `testing/runs/README.md`; the two
-standing queries are `scripts/gate_runlog.py longest`, `scripts/gate_runlog.py load-reds` and `scripts/gate_runlog.py trend` (TEST-1: every `target:` row as a series over tips; a STEP is a reading outside 3.5 x MAD of the trailing 10 tips it DESCENDS from, under one condition — clock locked or not, the GPU solo or shared — confirmed by the next two descendant readings all out of band on the same side; it names the first tip, its lane and the last in-band tip. Every gate prints it for its own tip after its verdict — `UNCONFIRMED` is a step's first day —, rc-gate.sh writes it to the state file and the d-build merge prints it in its summary. NON-GATING: a step gets the lead's verdict, as a red does).
+standing queries are `scripts/gate_runlog.py longest`, `scripts/gate_runlog.py load-reds` and `scripts/gate_runlog.py trend` (TEST-1: every `target:` row as a series over tips; a STEP is a reading outside 3.5 x MAD of the trailing 10 tips it DESCENDS from, under one condition — clock locked or not, the GPU solo or shared — confirmed by the next two descendant readings all out of band on the same side; it names the first tip, its lane and the last in-band tip. Every gate prints it for its own tip after its verdict — `UNCONFIRMED` is a step's first day —; the run's own log carries it. NON-GATING: a step gets the lead's verdict, as a red does).
 
 **THE BUILT FORK MUST BE THE PIN (TESTING-DEBTS-1 T12).** `irisgl/scripts/build-ogre.sh` writes
 `<install>/BUILT_FROM` (the ogre-next commit it built, `dirty` on a second line for a dirty
@@ -348,8 +347,8 @@ scoped selection missed is a SELECTOR DEFECT: it is fixed in `gate-scope.py` and
 cases file** — never answered with a wider rule "to be safe". `source.gate_scope_rules` guards the
 tool's own traps (the empty inventory, `--build .`, the targets' split, the fallback's -j).
 
-**ENFORCEMENT (T6; §7b "the rules are tooling, not text").** (1) THE ONE GATE before a merge is
-the BATCH's (§3c): `scripts/gate-scope.sh <d-build>..<candidate> --run`, run by `rc-gate.sh` on the
+**ENFORCEMENT (T6; §7b "the rules are tooling, not text").** (1) THE ONE RUN before a merge is
+the merge run's (§3c): `runner.sh merge <lane>` selects `<d-build>..<candidate>` and runs it on the
 candidate's tree: it prints the selection and every reason, runs it, writes the run log, and exits
 non-zero on any gating red (target tests report, never gate, and run after the verdict as their own
 step). (2) `source.testing_rules` (label `hygiene`) lints the rules the tree can show: R1
@@ -768,7 +767,7 @@ queue has NO bound (a gate never gives up for the slot). `scripts/gpu-admit.sh s
 names the holder, the queue in serving order with each CLASS, and every token holder with its AGE — a hung holder
 is visible.
 **THE SLOT IS BY PRIORITY, NOT ARRIVAL** (TESTING-CLEANUP-2B item 13; the owner 2026-10-10: "the gate needs to run,
-not wait for everything else"). Classes: **0** the owner's smoke rc, **1** a gate (rc-gate's tiers, `gate-scope.py
+not wait for everything else"). Classes: **0** the owner's smoke, **1** a gate (a merge run, a stage close, a ship, `gate-scope.py
 --run`, `gate_runlog.py run`), **2** a lane's measurement (`gpu-exclusive.sh`, `--solo`, a whole-card hold
 by hand, `gate_runlog.py run --tier lane|solo`). A waiter of a lower class is served before every waiting higher one
 (by ticket inside a class) and never displaces the holder; a free slot is taken at once by whoever asks. A class-2
@@ -786,7 +785,7 @@ the marked gate once the gate's rows in flight have given their tokens back, run
 lower-class ticket is left; the marked ticket keeps every other gate of its class behind it. `status` prints the holder
 `YIELDING at its next row`. **THE CARD QUEUE'S RECORD**: every GPU run is a job of the lead repo's
 `scripts/lead/runner.sh queue` (`testing/store/queue.sqlite`: kind, class, hold, pids, phases, wait, Xid read; the slot's
-tickets stay the lock) — the rc tiers (rc-gate.sh), a builder's rows (`lane-test.sh --self-audit`, deliver), and a
+tickets stay the lock) — the runner's runs (merge, stage close, ship), a builder's rows (`lane-test.sh --self-audit`, deliver), and a
 hand measurement (`gpu-exclusive.sh` outside a gate, hold or job: `admit all` opens a `measure` job itself, refused
 with exit 3 while the owner's instance runs from the main tree's `build-linux`).
 **WHAT THE CLASS RULE COSTS, ACCEPTED** (the owner's rule, TESTING-CLEANUP-2B item 15): (1) a class-2 waiter can

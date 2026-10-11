@@ -5,7 +5,7 @@ scripts/gate_runlog.py, scripts/gate-scope.py) against a toy ctest project confi
 token directory (JAH_VRAM_DIR), a PRIVATE run log (JAH_RUN_LOG_DIR) and a fake X server — never the
 box's own queue, log or displays:
 
-  1. P1 ONE GATE AT A TIME: a gate holds the slot; a second gate (`gate_runlog.py run`, what rc-gate
+  1. P1 ONE GATE AT A TIME: a gate holds the slot; a second gate (`gate_runlog.py run`, what a runner job
      runs) prints its queue position and runs only after the first is gone; a third waits behind both
      (FIFO); a plain admission never takes the slot (a --solo batch, a whole-card hold, does: section 9);
      gate-scope's --run takes it once and holds it through every phase;
@@ -458,7 +458,7 @@ def main(source, build):
     print("8. the whole card")
     reset()
     buf = io.StringIO()
-    with contextlib.redirect_stdout(buf):      # the serial phase as rc-gate starts it: -L, a fixture pulled in
+    with contextlib.redirect_stdout(buf):      # the serial phase as a runner job starts it: -L, a fixture pulled in
         rc = rl.run_ctest("ctest -j1 --timeout 60 --output-on-failure -L '^timing$'", tb, "scoped", "gate-cost-test", 1,
                           labels=LABELS, env=dict(os.environ, JAH_POOL_ARMS="p.x"))
     out = buf.getvalue()
@@ -1116,7 +1116,7 @@ for e in spec.split(","):
     vpath = cgc.record_verdicts([(("gpu.a", None), "read: x")], clean["studio"], clean["irisgl"])
     vrec = [json.loads(l) for l in open(vpath)][-1]
     check("overrides" not in vrec, "a --verdict is a lawful act through the door, never an override (F2)")
-    # (RUNNER-A1: the selftest hashes are `kind: hash` records of EVERY pose, written by the lead's rc-gate.sh and the
+    # (RUNNER-A1: the selftest hashes are `kind: hash` records of EVERY pose, written by the runner's merge run and ship and the
     # self-audit — scripts/lead/tests/runner_hashes_test.sh; gate_runlog.py's hash-move verb is deleted)
     p_ = subprocess.run([sys.executable, os.path.join(scripts, "gate_runlog.py"), "hash-move", "--tier", "smoke"],
                         capture_output=True, text=True, cwd=source)
