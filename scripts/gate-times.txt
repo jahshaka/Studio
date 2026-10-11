@@ -661,6 +661,7 @@ scale.occlusion 45.24  quiet n=44
 scale.shadow_cut 27.18  quiet n=48
 scene.reopen_fidelity 74.07  quiet n=45
 scene.reopen_fidelity.fresh_home 0.01  quiet n=4
+scenegraph.baseline 0.02  hand: MIRROR-SETTLE-1's runs of the compare alone, 2026-10-11 (0.018, 0.018, 0.017 s), n=3 median
 scenegraph.benchmark 283.84  hand: a recorded stage-close run (spikes/) (no PASS run in the log)
 scenegraph.smoke 9.43  quiet n=47
 scripting.e2e.animation_assets 13.91  quiet n=39

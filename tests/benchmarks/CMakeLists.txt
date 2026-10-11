@@ -68,7 +68,10 @@ target_link_libraries(bench_scenegraph PRIVATE IrisGL JahshakaEngine Qt6::Gui)
 add_dependencies(bench_scenegraph JahshakaEngineMedia)
 
 # DEVPROCESS-1: registered through the GPU-timing lock; TIMEOUT = RUN_TIMEOUT + the lock's 900 s wait.
+# THE PHYSICS BARS (MIRROR-SETTLE-1 fix round 3): --assert asserts the dispersion bars and the settle slice's bound
+# only, and records the result file scenegraph.baseline compares (bench_scenegraph.cpp, "TWO ROWS").
 jah_gpu_exclusive_test(NAME scenegraph.benchmark CLASS engine RUN_TIMEOUT 1200 COMMAND bench_scenegraph --assert
+         --record "${CMAKE_CURRENT_BINARY_DIR}/scenegraph-result.json"
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 # RUN_SERIAL: wall-clock measurements — a parallel ctest schedule distorts the
 # scale-1000/200 regress clause into random reds (2026-09-05 gate: the violating
@@ -78,7 +81,19 @@ jah_gpu_exclusive_test(NAME scenegraph.benchmark CLASS engine RUN_TIMEOUT 1200 C
 # before it is believed (gate protocol).
 set_tests_properties(scenegraph.benchmark PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "stage-close;quiet-box"
-    RUN_SERIAL TRUE)
+    RUN_SERIAL TRUE FIXTURES_SETUP scenegraph-result)
+
+# THE §6 TREND CHECK: the result file scenegraph.benchmark recorded against the committed baseline (28b91f49) —
+# two files, no engine, no display (jah_no_display: it boots nothing), red on any violated §6 clause. It reads the
+# quiet-box row's output, so it runs in the same phase; the fixture orders it after the run under any -j.
+# TIMEOUT (the policy, tests/CMakeLists.txt): max(6 x 0.018, 0.018) s -> the 120 s floor. Sample: n=3 runs of the
+# compare alone (0.018 / 0.018 / 0.017 s, median 0.018, worst 0.018), warm, 2026-10-11 08:3x, no sibling ctest.
+add_test(NAME scenegraph.baseline COMMAND bench_scenegraph --compare
+         "${CMAKE_CURRENT_SOURCE_DIR}/baseline-linux.json" "${CMAKE_CURRENT_BINARY_DIR}/scenegraph-result.json"
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(scenegraph.baseline PROPERTIES
+    LABELS "stage-close;quiet-box" FIXTURES_REQUIRED scenegraph-result TIMEOUT 120)
+jah_no_display(scenegraph.baseline)
 
 jah_gpu_row(scenegraph.smoke CLASS engine COMMAND bench_scenegraph --smoke
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/smoke")

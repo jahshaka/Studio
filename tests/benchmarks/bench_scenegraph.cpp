@@ -102,12 +102,29 @@
 // measurement itself — but only on this box, in this build type, quiet. A v1
 // comparison run while another worktree compiles is not evidence of anything.
 //
+// TWO ROWS, TWO QUESTIONS (MIRROR-SETTLE-1 fix round 3). This binary used to
+// answer both in one row, so a d-build regression against an old baseline kept
+// the physics bars from ever reading green:
+//   scenegraph.benchmark  `--assert --record <build>/scenegraph-result.json`:
+//                         the PHYSICS BARS — every metric exists, its cv/rcv
+//                         dispersion holds, the settle slice's worst stays
+//                         under kSettleSliceMaxMs — and the result file.
+//                         Nothing from the baseline is asserted here.
+//   scenegraph.baseline   `--compare baseline-linux.json <that result file>`:
+//                         the SCENEGRAPH_SPEC §6 TREND CHECK against the
+//                         recorded baseline (28b91f49), per metric, red on any
+//                         violated clause; no measurement of its own (ctest
+//                         fixture scenegraph-result orders it after the run).
+//   Whether a comparison with an old picture stands as a GATE under the
+//   forward-building law (tests guard physics and named behaviour) is the
+//   lead's question for the Engine Upgrade.
+//
 // MODES
-//   --assert            (default) run, print, assert stability + numbers exist.
-//   --record <file>     run and write the JSON baseline/result file.
-//   --compare <file>    load a baseline and print the §6 verdict per metric.
-//                       DISARMED: it reports, it cannot fail the run. v1's lane
-//                       flips kBaselineComparisonArmed (see below).
+//   --assert            (default) run, print, assert the physics bars.
+//   --record <file>     ...and write the JSON baseline/result file.
+//   --compare <baseline> <result>
+//                       no run: compare two files, print the §6 verdict per
+//                       metric, exit non-zero on a violated clause.
 //   --scales 1000,10000 override the scale list.
 //   --threads N         worker threads for each SCENE the sweep creates
 //                       (Engine::createScene). 0 = the engine default, which is
@@ -203,14 +220,12 @@ static constexpr double kCvMaxReparent  = 1.00;
 static constexpr double kSettleSliceMaxMs = 0.5;
 static constexpr double kRcvMaxReparent = 0.35;
 
-// THE V1 HOOK (SPECS/SCENEGRAPH_SPEC.md §6 acceptance) — ARMED by the v1 lane
-// that landed the handle layer, exactly as this comment promised. The gate now
-// enforces §6 verbatim:
+// THE §6 CLAUSES (SPECS/SCENEGRAPH_SPEC.md §6 acceptance), enforced by the row
+// scenegraph.baseline (compareFiles):
 //   * at scales >= kImproveFromScale, every a.* and b.* metric must IMPROVE
 //     (median lower than the baseline's) — §6 "(a) and (b) improve at 10k+";
 //   * at scale 1000, no metric may regress by more than kMaxRegressPct — §6
 //     "nothing regresses >10% at 1k".
-static constexpr bool   kBaselineComparisonArmed = true;
 // WHAT THE ARMED GATE SAYS TODAY (v1 lane, 2026-09-05), recorded here because a
 // red gate whose reason is not written down gets tuned by the next person who
 // meets it:
@@ -683,58 +698,85 @@ static bool writeResults(const std::string &path, const std::string &gpu,
     return true;
 }
 
-/// §6's acceptance, computed. Report-only until kBaselineComparisonArmed.
-static void compareToBaseline(const std::string &path)
+/// §6's acceptance, computed — the row scenegraph.baseline (MIRROR-SETTLE-1 fix round 3): a
+/// COMPARISON OF TWO FILES, the committed baseline and the result file scenegraph.benchmark
+/// recorded, with no measurement of its own. Returns the number of violated clauses (the exit code
+/// is non-zero on any), or -1 when a file cannot be read.
+static int compareFiles(const std::string &basePath, const std::string &resultPath)
 {
-    QFile f(QString::fromStdString(path));
-    if (!f.open(QIODevice::ReadOnly)) {
-        std::printf("note: no baseline at %s — comparison skipped\n", path.c_str());
-        return;
-    }
-    const QJsonObject base = QJsonDocument::fromJson(f.readAll()).object();
+    auto load = [](const std::string &path, QJsonObject &out) {
+        QFile f(QString::fromStdString(path));
+        if (!f.open(QIODevice::ReadOnly)) {
+            std::printf("FAIL: cannot read %s\n", path.c_str());
+            return false;
+        }
+        out = QJsonDocument::fromJson(f.readAll()).object();
+        if (out.value("metrics").toObject().isEmpty()) {
+            std::printf("FAIL: %s holds no metrics\n", path.c_str());
+            return false;
+        }
+        return true;
+    };
+    QJsonObject base, result;
+    if (!load(basePath, base) || !load(resultPath, result)) return -1;
     const QJsonObject bm = base.value("metrics").toObject();
-    std::printf("\n--- §6 comparison against %s (commit %s, %s)%s ---\n", path.c_str(),
+    const QJsonObject rm = result.value("metrics").toObject();
+    std::printf("\n--- §6 comparison: %s (commit %s, %s) vs %s (commit %s, %s) ---\n", basePath.c_str(),
                 base.value("commit").toString().toUtf8().constData(),
                 base.value("config").toObject().value("build_type").toString().toUtf8().constData(),
-                kBaselineComparisonArmed ? "" : "   [REPORT ONLY — not armed]");
-    int violations = 0;
-    for (const Metric &m : gMetrics) {
-        const QJsonObject byScale = bm.value(QString::fromStdString(m.id)).toObject();
-        const QJsonValue v = byScale.value(QString::number(m.scale));
-        if (!v.isObject()) continue;
-        const double b = v.toObject().value("median_ms").toDouble();
-        const double now = m.single >= 0.0 ? m.single : m.stats.median;
-        if (b <= 0.0) continue;
-        const double pct = (now - b) / b * 100.0;
-        const bool gated = m.id.compare(0, 2, "a.") == 0 || m.id.compare(0, 2, "b.") == 0;
-        // e.build_doc is EXEMPT from the regress clause — OWNER DECISION,
-        // 2026-09-06 (SCENEGRAPH_SPEC §6a): creating a real engine node per
-        // document node costs ~+17% at 1k over three member writes, end-to-end
-        // build+first_sync is flat-to-better, and "we are all in on ogre...
-        // accept the costs, we can streamline over time." The setParent
-        // depth-migration (~40% of the cost) is the recorded streamlining
-        // candidate. Every other metric keeps the full 10% clause.
-        const bool regressExempt = m.id == "e.build_doc";
-        const char *verdict = "     ";
-        if (gated && m.scale >= kImproveFromScale && pct >= 0.0) { verdict = "MUST-IMPROVE"; ++violations; }
-        else if (!regressExempt && m.scale < kImproveFromScale && pct > kMaxRegressPct) { verdict = "REGRESSED>10%"; ++violations; }
-        else if (regressExempt && pct > kMaxRegressPct) { verdict = "accepted-§6a"; }
-        std::printf("  %-28s scale=%-6d base=%9.3f now=%9.3f  %+7.1f%%  %s\n",
-                    m.id.c_str(), m.scale, b, now, pct, verdict);
+                resultPath.c_str(), result.value("commit").toString().toUtf8().constData(),
+                result.value("config").toObject().value("build_type").toString().toUtf8().constData());
+    int violations = 0, compared = 0;
+    for (auto it = rm.begin(); it != rm.end(); ++it) {
+        const std::string id = it.key().toStdString();
+        const QJsonObject nowByScale = it.value().toObject();
+        const QJsonObject baseByScale = bm.value(it.key()).toObject();
+        for (auto sc = nowByScale.begin(); sc != nowByScale.end(); ++sc) {
+            const QJsonValue v = baseByScale.value(sc.key());
+            if (!v.isObject()) continue;
+            const double b = v.toObject().value("median_ms").toDouble();
+            const double now = sc.value().toObject().value("median_ms").toDouble();
+            const int scale = sc.key().toInt();
+            if (b <= 0.0) continue;
+            ++compared;
+            const double pct = (now - b) / b * 100.0;
+            const bool gated = id.compare(0, 2, "a.") == 0 || id.compare(0, 2, "b.") == 0;
+            // e.build_doc is EXEMPT from the regress clause — OWNER DECISION,
+            // 2026-09-06 (SCENEGRAPH_SPEC §6a): creating a real engine node per
+            // document node costs ~+17% at 1k over three member writes, end-to-end
+            // build+first_sync is flat-to-better, and "we are all in on ogre...
+            // accept the costs, we can streamline over time." The setParent
+            // depth-migration (~40% of the cost) is the recorded streamlining
+            // candidate. Every other metric keeps the full 10% clause.
+            const bool regressExempt = id == "e.build_doc";
+            const char *verdict = "     ";
+            if (gated && scale >= kImproveFromScale && pct >= 0.0) { verdict = "MUST-IMPROVE"; ++violations; }
+            else if (!regressExempt && scale < kImproveFromScale && pct > kMaxRegressPct) { verdict = "REGRESSED>10%"; ++violations; }
+            else if (regressExempt && pct > kMaxRegressPct) { verdict = "accepted-§6a"; }
+            std::printf("  %-28s scale=%-6d base=%9.3f now=%9.3f  %+7.1f%%  %s\n",
+                        id.c_str(), scale, b, now, pct, verdict);
+            if (std::strcmp(verdict, "     ") != 0 && std::strcmp(verdict, "accepted-§6a") != 0)
+                std::printf("FAIL: %s@%d %s (base %.3f now %.3f, %+.1f%%)\n", id.c_str(), scale, verdict, b,
+                            now, pct);
+        }
     }
-    std::printf("--- %d violation(s) ---\n", violations);
-    if (kBaselineComparisonArmed) failures += violations;
+    if (compared == 0) {
+        std::printf("FAIL: no metric of %s is in the baseline\n", resultPath.c_str());
+        return -1;
+    }
+    std::printf("--- %d violation(s) over %d compared metric(s) ---\n", violations, compared);
+    return violations;
 }
 
 // ---------------------------------------------------------------------------
 
 int main(int argc, char **argv)
 {
-    std::string recordPath, comparePath;
+    std::string recordPath;
     std::string note = "recorded by tests/benchmarks/bench_scenegraph.cpp";
     std::vector<int> scales{1000, 10000, 50000};
+    std::string compareBase, compareResult;
     bool quick = false;
-    bool assertMode = true;
     // --smoke: the STRUCTURAL half of this benchmark, at the smallest scale,
     // with no timing verdict of any kind (TEST_GATE_AUDIT.md §3). The full
     // `--assert` run is five minutes and RUN_SERIAL, so a merge gate paid its
@@ -748,22 +790,29 @@ int main(int argc, char **argv)
 
     for (int i = 1; i < argc; ++i) {
         const std::string a = argv[i];
-        if (a == "--assert") assertMode = true;
-        else if (a == "--record" && i + 1 < argc) { recordPath = argv[++i]; assertMode = false; }
-        else if (a == "--compare" && i + 1 < argc) comparePath = argv[++i];
+        if (a == "--assert") {}   // the default: run, print, assert the physics bars
+        else if (a == "--record" && i + 1 < argc) recordPath = argv[++i];
+        else if (a == "--compare" && i + 2 < argc) { compareBase = argv[++i]; compareResult = argv[++i]; }
         else if (a == "--note" && i + 1 < argc) note = argv[++i];
         else if (a == "--quick") quick = true;
-        else if (a == "--smoke") { smoke = true; quick = true; assertMode = false; scales = {1000}; }
+        else if (a == "--smoke") { smoke = true; quick = true; scales = {1000}; }
         else if (a == "--threads" && i + 1 < argc) gWorkerThreads = unsigned(std::stoi(argv[++i]));
         else if (a == "--scales" && i + 1 < argc) {
             scales.clear();
             std::string list = argv[++i], cur;
             for (char c : list + ",") { if (c == ',') { if (!cur.empty()) scales.push_back(std::stoi(cur)); cur.clear(); } else cur += c; }
         } else if (a == "--help") {
-            std::printf("bench_scenegraph [--assert] [--smoke] [--record <file>] [--compare <file>] "
+            std::printf("bench_scenegraph [--assert] [--smoke] [--record <file>] [--compare <baseline> <result>] "
                         "[--scales 1000,10000,50000] [--quick] [--threads N] [--note <text>]\n");
             return 0;
         }
+    }
+
+    // THE BASELINE ROW (scenegraph.baseline): two files, no engine, no measurement.
+    if (!compareBase.empty()) {
+        const int v = compareFiles(compareBase, compareResult);
+        std::printf("\n%s\n", v == 0 ? "PASSED (0 violations)" : "FAILED");
+        return v == 0 ? 0 : 1;
     }
 
     qputenv("QT_QPA_PLATFORM", "offscreen");
@@ -1269,9 +1318,6 @@ int main(int argc, char **argv)
         std::snprintf(buf, sizeof buf, "%s@%d rcv %.3f <= %.2f", m.id.c_str(), m.scale, m.stats.rcv, rcvMax);
         CHECK(m.stats.rcv <= rcvMax, buf);
     }
-
-    if (!comparePath.empty()) compareToBaseline(comparePath);
-    else if (assertMode) compareToBaseline(BENCH_BASELINE_FILE);
 
     if (!recordPath.empty()) {
         std::string gpu = "unknown";
