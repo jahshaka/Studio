@@ -34,9 +34,23 @@
 //   s.settle_slice               the settle itself, its OWN series: every sync
 //                                that ran a settle slice while the scene went
 //                                from all-dynamic (a') back to settled, as
-//                                percentiles + max, bounded by kSettleSliceMaxMs
+//                                percentiles + max of the sync's THREAD CPU
+//                                TIME, the worst bounded by kSettleSliceMaxMs
 //                                (not by the cv/rcv bars — a settle is a
 //                                transient, not a steady state).
+//                                THE BOUND IS ON THE SETTLE'S COST PER SYNC: the
+//                                work a slice adds to a frame, which the calling
+//                                thread's CPU clock measures. Not on wall time:
+//                                the wall max of ~1,600 Debug syncs on a
+//                                non-realtime scheduler also counts preemptions
+//                                and page faults that are not the settle's work
+//                                (0.37-0.40 ms four runs, 0.52 once, p99 0.34),
+//                                so a wall bar has a floor flake rate by
+//                                construction. The WALL series is printed beside
+//                                it (s.settle_slice_wall, not asserted) so a
+//                                divergence shows in every record; the
+//                                frame-hitch question is the idle dispersion
+//                                bars' (wall, unchanged).
 //   s.settle_render              the render after each slice (reported, unbounded).
 //   u.unsettled_render           the COST OF NOT SETTLING: renderOneFrame alone
 //                                with every node dynamic (after a'), beside the
@@ -157,6 +171,7 @@
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <ctime>
 #include <functional>
 #include <map>
 #include <string>
@@ -1135,16 +1150,26 @@ int main(int argc, char **argv)
             // reach Ogre's static update there (notifyStaticDirty), so the
             // settle's whole price is the slice plus that render. Reported,
             // not bounded: the bound is the slice's (the mirror's own work).
-            std::vector<double> slices, renders;
+            // `slices` = the sync's THREAD CPU time (the bound); `walls` = its
+            // wall time at the same points (printed only).
+            auto threadCpuMs = []() {
+                timespec ts{};
+                clock_gettime(CLOCK_THREAD_CPUTIME_ID, &ts);
+                return double(ts.tv_sec) * 1e3 + double(ts.tv_nsec) * 1e-6;
+            };
+            std::vector<double> slices, walls, renders;
             int syncs = 0, worstAt = -1, over1 = 0;
             quint32 worstVisits = 0;
             double worstMs = -1.0;
             for (; syncs < 200000 && mirror.staticSettleInProgress(); ++syncs) {
                 const auto t0 = Clock::now();
+                const double c0 = threadCpuMs();
                 mirror.sync();
-                const double ms = msSince(t0);
+                const double ms = threadCpuMs() - c0;
+                const double wallMs = msSince(t0);
                 const bool slice = mirror.staticSettleVisits() > 0;
                 if (slice) {
+                    walls.push_back(wallMs);
                     if (ms > worstMs) {
                         worstMs = ms;
                         worstAt = int(slices.size());
@@ -1171,9 +1196,21 @@ int main(int argc, char **argv)
             const double med = percentile(sorted, 0.5), p95 = percentile(sorted, 0.95),
                          p99 = percentile(sorted, 0.99), mx = sorted.empty() ? 0.0 : sorted.back();
             std::printf("BENCH %-28s scale=%-6d n=%-4zu median_ms=%9.3f p95_ms=%9.3f p99_ms=%9.3f "
-                        "max_ms=%9.3f syncs=%d budget=%u worst_at=%d/%zu worst_visits=%u over_1ms=%d\n",
+                        "max_ms=%9.3f syncs=%d budget=%u worst_at=%d/%zu worst_visits=%u over_1ms=%d (thread CPU)\n",
                         "s.settle_slice", n, slices.size(), med, p95, p99, mx, syncs,
                         SceneMirror::kStaticSettleNodesPerSync, worstAt, slices.size(), worstVisits, over1);
+            {
+                std::vector<double> ws = walls;
+                std::sort(ws.begin(), ws.end());
+                const double wmx = ws.empty() ? 0.0 : ws.back();
+                std::printf("BENCH %-28s scale=%-6d n=%-4zu median_ms=%9.3f p99_ms=%9.3f max_ms=%9.3f (wall, "
+                            "not asserted)\n", "s.settle_slice_wall", n, ws.size(), percentile(ws, 0.5),
+                            percentile(ws, 0.99), wmx);
+                const std::string kw = "s.settle_slice_wall." + std::to_string(n);
+                gCounters[kw + ".median_ms"] = percentile(ws, 0.5);
+                gCounters[kw + ".p99_ms"] = percentile(ws, 0.99);
+                gCounters[kw + ".max_ms"] = wmx;
+            }
             const std::string k = "s.settle_slice." + std::to_string(n);
             gCounters[k + ".median_ms"] = med;
             gCounters[k + ".p99_ms"] = p99;
@@ -1184,7 +1221,7 @@ int main(int argc, char **argv)
             std::snprintf(buf, sizeof buf, "s.settle_slice@%d drained (%d syncs)", n, syncs);
             CHECK(!mirror.staticSettleInProgress() && !slices.empty(), buf);
             if (!smoke) {
-                std::snprintf(buf, sizeof buf, "s.settle_slice@%d worst slice %.3f ms <= %.1f ms", n, mx,
+                std::snprintf(buf, sizeof buf, "s.settle_slice@%d worst slice (thread CPU) %.3f ms <= %.1f ms", n, mx,
                               kSettleSliceMaxMs);
                 CHECK(mx <= kSettleSliceMaxMs, buf);
             }
