@@ -28,7 +28,33 @@
 //                                never free (audit F1: the mirror pushes every
 //                                node's transform and visibility every frame,
 //                                unconditionally) — which is the point.
-//   b.idle_sync                  the sync half of that tick.
+//   b.idle_sync                  the sync half of that tick. Measured AFTER the
+//                                mirror's static settle has drained: a settle
+//                                in flight is warm-up, not steady state.
+//   s.settle_slice               the settle itself, its OWN series: every sync
+//                                that ran a settle slice while the scene went
+//                                from all-dynamic (a') back to settled, as
+//                                percentiles + max of the sync's THREAD CPU
+//                                TIME, the worst bounded by kSettleSliceMaxMs
+//                                (not by the cv/rcv bars — a settle is a
+//                                transient, not a steady state).
+//                                THE BOUND IS ON THE SETTLE'S COST PER SYNC: the
+//                                work a slice adds to a frame, which the calling
+//                                thread's CPU clock measures. Not on wall time:
+//                                the wall max of ~1,600 Debug syncs on a
+//                                non-realtime scheduler also counts preemptions
+//                                and page faults that are not the settle's work
+//                                (0.37-0.40 ms four runs, 0.52 once, p99 0.34),
+//                                so a wall bar has a floor flake rate by
+//                                construction. The WALL series is printed beside
+//                                it (s.settle_slice_wall, not asserted) so a
+//                                divergence shows in every record; the
+//                                frame-hitch question is the idle dispersion
+//                                bars' (wall, unchanged).
+//   s.settle_render              the render after each slice (reported, unbounded).
+//   u.unsettled_render           the COST OF NOT SETTLING: renderOneFrame alone
+//                                with every node dynamic (after a'), beside the
+//                                settled render (b.idle_tick - b.idle_sync).
 //   b.render_stats               the engine's own RenderStats after ~90 idle
 //                                frames (frameMs/p95/draws/batches/triangles).
 //                                READ `draws` AS OGRE MEANS IT: with the Hlms
@@ -90,12 +116,29 @@
 // measurement itself — but only on this box, in this build type, quiet. A v1
 // comparison run while another worktree compiles is not evidence of anything.
 //
+// TWO ROWS, TWO QUESTIONS (MIRROR-SETTLE-1 fix round 3). This binary used to
+// answer both in one row, so a d-build regression against an old baseline kept
+// the physics bars from ever reading green:
+//   scenegraph.benchmark  `--assert --record <build>/scenegraph-result.json`:
+//                         the PHYSICS BARS — every metric exists, its cv/rcv
+//                         dispersion holds, the settle slice's worst stays
+//                         under kSettleSliceMaxMs — and the result file.
+//                         Nothing from the baseline is asserted here.
+//   scenegraph.baseline   `--compare baseline-linux.json <that result file>`:
+//                         the SCENEGRAPH_SPEC §6 TREND CHECK against the
+//                         recorded baseline (28b91f49), per metric, red on any
+//                         violated clause; no measurement of its own (ctest
+//                         fixture scenegraph-result orders it after the run).
+//   Whether a comparison with an old picture stands as a GATE under the
+//   forward-building law (tests guard physics and named behaviour) is the
+//   lead's question for the Engine Upgrade.
+//
 // MODES
-//   --assert            (default) run, print, assert stability + numbers exist.
-//   --record <file>     run and write the JSON baseline/result file.
-//   --compare <file>    load a baseline and print the §6 verdict per metric.
-//                       DISARMED: it reports, it cannot fail the run. v1's lane
-//                       flips kBaselineComparisonArmed (see below).
+//   --assert            (default) run, print, assert the physics bars.
+//   --record <file>     ...and write the JSON baseline/result file.
+//   --compare <baseline> <result>
+//                       no run: compare two files, print the §6 verdict per
+//                       metric, exit non-zero on a violated clause.
 //   --scales 1000,10000 override the scale list.
 //   --threads N         worker threads for each SCENE the sweep creates
 //                       (Engine::createScene). 0 = the engine default, which is
@@ -128,6 +171,7 @@
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <ctime>
 #include <functional>
 #include <map>
 #include <string>
@@ -183,16 +227,20 @@ static constexpr double kRcvMax = 0.25;   // 1.4826*MAD / median  (quiet-box wor
 // (c) and (d) alternate direction between iterations and get the fewest samples
 // (a single 50k reparent is ~5 s), so both of their bounds carry more headroom.
 static constexpr double kCvMaxReparent  = 1.00;
+// THE SETTLE SLICE'S OWN BOUND (MIRROR-SETTLE-1 fix round 1): a sync that runs
+// a slice of the static settle may cost at most 0.5 ms — 3 % of a 16.7 ms
+// frame — at every scale. SceneMirror::kStaticSettleNodesPerSync is derived
+// from it (scenemirror.h). The one millisecond bound in this file, and it is
+// a bound on the walk's slice, never on the scene's steady state.
+static constexpr double kSettleSliceMaxMs = 0.5;
 static constexpr double kRcvMaxReparent = 0.35;
 
-// THE V1 HOOK (SPECS/SCENEGRAPH_SPEC.md §6 acceptance) — ARMED by the v1 lane
-// that landed the handle layer, exactly as this comment promised. The gate now
-// enforces §6 verbatim:
+// THE §6 CLAUSES (SPECS/SCENEGRAPH_SPEC.md §6 acceptance), enforced by the row
+// scenegraph.baseline (compareFiles):
 //   * at scales >= kImproveFromScale, every a.* and b.* metric must IMPROVE
 //     (median lower than the baseline's) — §6 "(a) and (b) improve at 10k+";
 //   * at scale 1000, no metric may regress by more than kMaxRegressPct — §6
 //     "nothing regresses >10% at 1k".
-static constexpr bool   kBaselineComparisonArmed = true;
 // WHAT THE ARMED GATE SAYS TODAY (v1 lane, 2026-09-05), recorded here because a
 // red gate whose reason is not written down gets tuned by the next person who
 // meets it:
@@ -665,58 +713,85 @@ static bool writeResults(const std::string &path, const std::string &gpu,
     return true;
 }
 
-/// §6's acceptance, computed. Report-only until kBaselineComparisonArmed.
-static void compareToBaseline(const std::string &path)
+/// §6's acceptance, computed — the row scenegraph.baseline (MIRROR-SETTLE-1 fix round 3): a
+/// COMPARISON OF TWO FILES, the committed baseline and the result file scenegraph.benchmark
+/// recorded, with no measurement of its own. Returns the number of violated clauses (the exit code
+/// is non-zero on any), or -1 when a file cannot be read.
+static int compareFiles(const std::string &basePath, const std::string &resultPath)
 {
-    QFile f(QString::fromStdString(path));
-    if (!f.open(QIODevice::ReadOnly)) {
-        std::printf("note: no baseline at %s — comparison skipped\n", path.c_str());
-        return;
-    }
-    const QJsonObject base = QJsonDocument::fromJson(f.readAll()).object();
+    auto load = [](const std::string &path, QJsonObject &out) {
+        QFile f(QString::fromStdString(path));
+        if (!f.open(QIODevice::ReadOnly)) {
+            std::printf("FAIL: cannot read %s\n", path.c_str());
+            return false;
+        }
+        out = QJsonDocument::fromJson(f.readAll()).object();
+        if (out.value("metrics").toObject().isEmpty()) {
+            std::printf("FAIL: %s holds no metrics\n", path.c_str());
+            return false;
+        }
+        return true;
+    };
+    QJsonObject base, result;
+    if (!load(basePath, base) || !load(resultPath, result)) return -1;
     const QJsonObject bm = base.value("metrics").toObject();
-    std::printf("\n--- §6 comparison against %s (commit %s, %s)%s ---\n", path.c_str(),
+    const QJsonObject rm = result.value("metrics").toObject();
+    std::printf("\n--- §6 comparison: %s (commit %s, %s) vs %s (commit %s, %s) ---\n", basePath.c_str(),
                 base.value("commit").toString().toUtf8().constData(),
                 base.value("config").toObject().value("build_type").toString().toUtf8().constData(),
-                kBaselineComparisonArmed ? "" : "   [REPORT ONLY — not armed]");
-    int violations = 0;
-    for (const Metric &m : gMetrics) {
-        const QJsonObject byScale = bm.value(QString::fromStdString(m.id)).toObject();
-        const QJsonValue v = byScale.value(QString::number(m.scale));
-        if (!v.isObject()) continue;
-        const double b = v.toObject().value("median_ms").toDouble();
-        const double now = m.single >= 0.0 ? m.single : m.stats.median;
-        if (b <= 0.0) continue;
-        const double pct = (now - b) / b * 100.0;
-        const bool gated = m.id.compare(0, 2, "a.") == 0 || m.id.compare(0, 2, "b.") == 0;
-        // e.build_doc is EXEMPT from the regress clause — OWNER DECISION,
-        // 2026-09-06 (SCENEGRAPH_SPEC §6a): creating a real engine node per
-        // document node costs ~+17% at 1k over three member writes, end-to-end
-        // build+first_sync is flat-to-better, and "we are all in on ogre...
-        // accept the costs, we can streamline over time." The setParent
-        // depth-migration (~40% of the cost) is the recorded streamlining
-        // candidate. Every other metric keeps the full 10% clause.
-        const bool regressExempt = m.id == "e.build_doc";
-        const char *verdict = "     ";
-        if (gated && m.scale >= kImproveFromScale && pct >= 0.0) { verdict = "MUST-IMPROVE"; ++violations; }
-        else if (!regressExempt && m.scale < kImproveFromScale && pct > kMaxRegressPct) { verdict = "REGRESSED>10%"; ++violations; }
-        else if (regressExempt && pct > kMaxRegressPct) { verdict = "accepted-§6a"; }
-        std::printf("  %-28s scale=%-6d base=%9.3f now=%9.3f  %+7.1f%%  %s\n",
-                    m.id.c_str(), m.scale, b, now, pct, verdict);
+                resultPath.c_str(), result.value("commit").toString().toUtf8().constData(),
+                result.value("config").toObject().value("build_type").toString().toUtf8().constData());
+    int violations = 0, compared = 0;
+    for (auto it = rm.begin(); it != rm.end(); ++it) {
+        const std::string id = it.key().toStdString();
+        const QJsonObject nowByScale = it.value().toObject();
+        const QJsonObject baseByScale = bm.value(it.key()).toObject();
+        for (auto sc = nowByScale.begin(); sc != nowByScale.end(); ++sc) {
+            const QJsonValue v = baseByScale.value(sc.key());
+            if (!v.isObject()) continue;
+            const double b = v.toObject().value("median_ms").toDouble();
+            const double now = sc.value().toObject().value("median_ms").toDouble();
+            const int scale = sc.key().toInt();
+            if (b <= 0.0) continue;
+            ++compared;
+            const double pct = (now - b) / b * 100.0;
+            const bool gated = id.compare(0, 2, "a.") == 0 || id.compare(0, 2, "b.") == 0;
+            // e.build_doc is EXEMPT from the regress clause — OWNER DECISION,
+            // 2026-09-06 (SCENEGRAPH_SPEC §6a): creating a real engine node per
+            // document node costs ~+17% at 1k over three member writes, end-to-end
+            // build+first_sync is flat-to-better, and "we are all in on ogre...
+            // accept the costs, we can streamline over time." The setParent
+            // depth-migration (~40% of the cost) is the recorded streamlining
+            // candidate. Every other metric keeps the full 10% clause.
+            const bool regressExempt = id == "e.build_doc";
+            const char *verdict = "     ";
+            if (gated && scale >= kImproveFromScale && pct >= 0.0) { verdict = "MUST-IMPROVE"; ++violations; }
+            else if (!regressExempt && scale < kImproveFromScale && pct > kMaxRegressPct) { verdict = "REGRESSED>10%"; ++violations; }
+            else if (regressExempt && pct > kMaxRegressPct) { verdict = "accepted-§6a"; }
+            std::printf("  %-28s scale=%-6d base=%9.3f now=%9.3f  %+7.1f%%  %s\n",
+                        id.c_str(), scale, b, now, pct, verdict);
+            if (std::strcmp(verdict, "     ") != 0 && std::strcmp(verdict, "accepted-§6a") != 0)
+                std::printf("FAIL: %s@%d %s (base %.3f now %.3f, %+.1f%%)\n", id.c_str(), scale, verdict, b,
+                            now, pct);
+        }
     }
-    std::printf("--- %d violation(s) ---\n", violations);
-    if (kBaselineComparisonArmed) failures += violations;
+    if (compared == 0) {
+        std::printf("FAIL: no metric of %s is in the baseline\n", resultPath.c_str());
+        return -1;
+    }
+    std::printf("--- %d violation(s) over %d compared metric(s) ---\n", violations, compared);
+    return violations;
 }
 
 // ---------------------------------------------------------------------------
 
 int main(int argc, char **argv)
 {
-    std::string recordPath, comparePath;
+    std::string recordPath;
     std::string note = "recorded by tests/benchmarks/bench_scenegraph.cpp";
     std::vector<int> scales{1000, 10000, 50000};
+    std::string compareBase, compareResult;
     bool quick = false;
-    bool assertMode = true;
     // --smoke: the STRUCTURAL half of this benchmark, at the smallest scale,
     // with no timing verdict of any kind (TEST_GATE_AUDIT.md §3). The full
     // `--assert` run is five minutes and RUN_SERIAL, so a merge gate paid its
@@ -730,22 +805,29 @@ int main(int argc, char **argv)
 
     for (int i = 1; i < argc; ++i) {
         const std::string a = argv[i];
-        if (a == "--assert") assertMode = true;
-        else if (a == "--record" && i + 1 < argc) { recordPath = argv[++i]; assertMode = false; }
-        else if (a == "--compare" && i + 1 < argc) comparePath = argv[++i];
+        if (a == "--assert") {}   // the default: run, print, assert the physics bars
+        else if (a == "--record" && i + 1 < argc) recordPath = argv[++i];
+        else if (a == "--compare" && i + 2 < argc) { compareBase = argv[++i]; compareResult = argv[++i]; }
         else if (a == "--note" && i + 1 < argc) note = argv[++i];
         else if (a == "--quick") quick = true;
-        else if (a == "--smoke") { smoke = true; quick = true; assertMode = false; scales = {1000}; }
+        else if (a == "--smoke") { smoke = true; quick = true; scales = {1000}; }
         else if (a == "--threads" && i + 1 < argc) gWorkerThreads = unsigned(std::stoi(argv[++i]));
         else if (a == "--scales" && i + 1 < argc) {
             scales.clear();
             std::string list = argv[++i], cur;
             for (char c : list + ",") { if (c == ',') { if (!cur.empty()) scales.push_back(std::stoi(cur)); cur.clear(); } else cur += c; }
         } else if (a == "--help") {
-            std::printf("bench_scenegraph [--assert] [--smoke] [--record <file>] [--compare <file>] "
+            std::printf("bench_scenegraph [--assert] [--smoke] [--record <file>] [--compare <baseline> <result>] "
                         "[--scales 1000,10000,50000] [--quick] [--threads N] [--note <text>]\n");
             return 0;
         }
+    }
+
+    // THE BASELINE ROW (scenegraph.baseline): two files, no engine, no measurement.
+    if (!compareBase.empty()) {
+        const int v = compareFiles(compareBase, compareResult);
+        std::printf("\n%s\n", v == 0 ? "PASSED (0 violations)" : "FAILED");
+        return v == 0 ? 0 : 1;
     }
 
     qputenv("QT_QPA_PLATFORM", "offscreen");
@@ -1037,16 +1119,122 @@ int main(int argc, char **argv)
             addMetric("a.transform_update_all", n, st["a.transform_update_all"]);
         }
 
-        // (b) work per tick with NOTHING edited. Long enough (>= 90 frames) that
-        // Ogre's rolling FrameStats window describes idle frames and not the
-        // edit loops above.
+        // (u) THE COST OF NOT SETTLING. (a') moved EVERY node, and moving a
+        // static node demotes it (rule 4): the whole scene is SCENE_DYNAMIC
+        // now, and Ogre updates every dynamic node's transform and bounds every
+        // frame. Render alone (no sync, so the settle does not advance) — the
+        // number the settle's speed is worth.
         {
-            // Metric (a') above moved EVERY node, and moving a static node
-            // demotes it (rule 4) — so the static population has to be put
-            // back before the idle measurement, or (b) would measure a fully
-            // dynamic scene and report the win as zero.
-            const size_t remarked = applyStaticTags(s);
-            gCounters["static.nodes_idle." + std::to_string(n)] = double(remarked);
+            size_t dyn = 0;
+            for (const iris::SceneNodePtr &x : s.all) if (!x->isStaticInGraph()) ++dyn;
+            std::vector<double> r;
+            for (int i = 0; i < 5; ++i) engine->renderOneFrame();
+            for (int i = 0; i < (quick ? 20 : 60); ++i) {
+                const auto t0 = Clock::now();
+                engine->renderOneFrame();
+                r.push_back(msSince(t0));
+            }
+            const Stats us = computeStats(r);
+            std::printf("BENCH %-28s scale=%-6d n=%-4zu median_ms=%9.3f dynamic=%zu\n",
+                        "u.unsettled_render", n, us.n, us.median, dyn);
+            gCounters["u.unsettled_render." + std::to_string(n) + ".median_ms"] = us.median;
+            gCounters["u.unsettled_render." + std::to_string(n) + ".dynamic"] = double(dyn);
+        }
+
+        // (s) THE SETTLE, DRAINED AND MEASURED AS ITS OWN SERIES. The mirror
+        // re-promotes the scene once every node has been quiet for
+        // kStaticSettleFrames syncs, kStaticSettleNodesPerSync visits a sync.
+        // A suite warms up before it measures: (b) starts after this.
+        {
+            // `renders`: the frame AFTER each slice — the promotions it made
+            // reach Ogre's static update there (notifyStaticDirty), so the
+            // settle's whole price is the slice plus that render. Reported,
+            // not bounded: the bound is the slice's (the mirror's own work).
+            // `slices` = the sync's THREAD CPU time (the bound); `walls` = its
+            // wall time at the same points (printed only).
+            auto threadCpuMs = []() {
+                timespec ts{};
+                clock_gettime(CLOCK_THREAD_CPUTIME_ID, &ts);
+                return double(ts.tv_sec) * 1e3 + double(ts.tv_nsec) * 1e-6;
+            };
+            std::vector<double> slices, walls, renders;
+            int syncs = 0, worstAt = -1, over1 = 0;
+            quint32 worstVisits = 0;
+            double worstMs = -1.0;
+            for (; syncs < 200000 && mirror.staticSettleInProgress(); ++syncs) {
+                const auto t0 = Clock::now();
+                const double c0 = threadCpuMs();
+                mirror.sync();
+                const double ms = threadCpuMs() - c0;
+                const double wallMs = msSince(t0);
+                const bool slice = mirror.staticSettleVisits() > 0;
+                if (slice) {
+                    walls.push_back(wallMs);
+                    if (ms > worstMs) {
+                        worstMs = ms;
+                        worstAt = int(slices.size());
+                        worstVisits = mirror.staticSettleVisits();
+                    }
+                    if (ms > 1.0) ++over1;
+                    slices.push_back(ms);
+                }
+                const auto t1 = Clock::now();
+                engine->renderOneFrame();
+                if (slice) renders.push_back(msSince(t1));
+            }
+            {
+                std::vector<double> rs = renders;
+                std::sort(rs.begin(), rs.end());
+                std::printf("BENCH %-28s scale=%-6d n=%-4zu median_ms=%9.3f p99_ms=%9.3f max_ms=%9.3f\n",
+                            "s.settle_render", n, rs.size(), percentile(rs, 0.5), percentile(rs, 0.99),
+                            rs.empty() ? 0.0 : rs.back());
+                gCounters["s.settle_render." + std::to_string(n) + ".median_ms"] = percentile(rs, 0.5);
+                gCounters["s.settle_render." + std::to_string(n) + ".max_ms"] = rs.empty() ? 0.0 : rs.back();
+            }
+            std::vector<double> sorted = slices;
+            std::sort(sorted.begin(), sorted.end());
+            const double med = percentile(sorted, 0.5), p95 = percentile(sorted, 0.95),
+                         p99 = percentile(sorted, 0.99), mx = sorted.empty() ? 0.0 : sorted.back();
+            std::printf("BENCH %-28s scale=%-6d n=%-4zu median_ms=%9.3f p95_ms=%9.3f p99_ms=%9.3f "
+                        "max_ms=%9.3f syncs=%d budget=%u worst_at=%d/%zu worst_visits=%u over_1ms=%d (thread CPU)\n",
+                        "s.settle_slice", n, slices.size(), med, p95, p99, mx, syncs,
+                        SceneMirror::kStaticSettleNodesPerSync, worstAt, slices.size(), worstVisits, over1);
+            {
+                std::vector<double> ws = walls;
+                std::sort(ws.begin(), ws.end());
+                const double wmx = ws.empty() ? 0.0 : ws.back();
+                std::printf("BENCH %-28s scale=%-6d n=%-4zu median_ms=%9.3f p99_ms=%9.3f max_ms=%9.3f (wall, "
+                            "not asserted)\n", "s.settle_slice_wall", n, ws.size(), percentile(ws, 0.5),
+                            percentile(ws, 0.99), wmx);
+                const std::string kw = "s.settle_slice_wall." + std::to_string(n);
+                gCounters[kw + ".median_ms"] = percentile(ws, 0.5);
+                gCounters[kw + ".p99_ms"] = percentile(ws, 0.99);
+                gCounters[kw + ".max_ms"] = wmx;
+            }
+            const std::string k = "s.settle_slice." + std::to_string(n);
+            gCounters[k + ".median_ms"] = med;
+            gCounters[k + ".p99_ms"] = p99;
+            gCounters[k + ".max_ms"] = mx;
+            gCounters[k + ".slices"] = double(slices.size());
+            gCounters[k + ".syncs"] = double(syncs);
+            char buf[160];
+            std::snprintf(buf, sizeof buf, "s.settle_slice@%d drained (%d syncs)", n, syncs);
+            CHECK(!mirror.staticSettleInProgress() && !slices.empty(), buf);
+            // A new CHECK on a time here goes under this guard: --smoke asserts nothing about time.
+            if (!smoke) {
+                std::snprintf(buf, sizeof buf, "s.settle_slice@%d worst slice (thread CPU) %.3f ms <= %.1f ms", n, mx,
+                              kSettleSliceMaxMs);
+                CHECK(mx <= kSettleSliceMaxMs, buf);
+            }
+        }
+
+        // (b) work per tick with NOTHING edited, on the SETTLED scene. Long
+        // enough (>= 90 frames) that Ogre's rolling FrameStats window describes
+        // idle frames and not the edit loops above.
+        {
+            size_t settledStatic = 0;
+            for (const iris::SceneNodePtr &x : s.all) if (x->isStaticInGraph()) ++settledStatic;
+            gCounters["static.nodes_idle." + std::to_string(n)] = double(settledStatic);
             const LoopBudget bIdle{ 5, 90, quick ? 90 : 400, quick ? 400.0 : 2000.0 };
             auto st = runLoop(bIdle, [&](int, Recorder &rec) {
                 const auto t0 = Clock::now();
@@ -1058,6 +1246,9 @@ int main(int argc, char **argv)
             });
             addMetric("b.idle_sync", n, st["b.idle_sync"]);
             addMetric("b.idle_tick", n, st["b.idle_tick"]);
+            // The settled render, for (u)'s comparison: the idle tick minus its sync.
+            gCounters["b.settled_render." + std::to_string(n) + ".median_ms"] =
+                st["b.idle_tick"].median - st["b.idle_sync"].median;
 
             RenderStats rs;
             if (engine->renderStats(rs)) {
@@ -1165,9 +1356,6 @@ int main(int argc, char **argv)
         std::snprintf(buf, sizeof buf, "%s@%d rcv %.3f <= %.2f", m.id.c_str(), m.scale, m.stats.rcv, rcvMax);
         CHECK(m.stats.rcv <= rcvMax, buf);
     }
-
-    if (!comparePath.empty()) compareToBaseline(comparePath);
-    else if (assertMode) compareToBaseline(BENCH_BASELINE_FILE);
 
     if (!recordPath.empty()) {
         std::string gpu = "unknown";
