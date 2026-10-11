@@ -828,7 +828,7 @@
     "scripts/check-trailers.sh"
    ],
    "must": [
-    "gate.batch"
+    "gate.cost"
    ]
   },
   {

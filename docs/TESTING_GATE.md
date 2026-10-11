@@ -7,17 +7,22 @@ break, and the full run is a per-batch event. This file is the reference; `scrip
 carries the rules, and SPECS/audits/GATE_SUITES_AUDIT_2026-09-26.md is the audit the 2026-09-27
 reshape followed.
 
-## 1. The tiers
+## 1. The tiers — THE RUNNER (RUNNER-A6, 2026-10-11; the procedure: `~/Developer/DOCS/PROCESS.md`, the spec: `~/Developer/SPECS/TESTING_RUNNER_SPEC.md`)
 
-| Tier | What runs | When | Who runs it |
+The batch layer is gone (merge-dbuild-lane.sh, `lane.sh batch|push gate|go`, the scoped/fork rc runs). What runs, and when:
+
+| Run | What runs | When | Who |
 |---|---|---|---|
-| **SCOPED** | the suites `scripts/gate-scope.sh <base>..<tip>` selects from the touched paths | ONE gate per BATCH of ready lanes, on `d-build..candidate` (§3c) — a builder runs its named acceptance tests + its subject suite, not a gate | the lead (`merge-dbuild-lane.sh batch` → `rc-gate.sh`), or gate-runner with the selection |
-| **MERGE** | TWO PHASES (TEST-SELECTOR-1): the parallel phase `python3 scripts/gate-scope.py --merge-tier [-j N]` prints (every row but the `timing` ones), then the serial phase `--merge-tier-serial` prints (the `timing` rows at -j1, each taking the whole GPU — inside the parallel phase they waited holding the admission's turnstile and stalled every admission on the box). The parallel phase is `ctest -j4 --timeout 120 --output-on-failure -LE` over `gate-scope.py`'s `STAGE_CLOSE_LABELS` ∪ `TARGET_LABELS` ∪ {`timing`} (today: every `stage-close` row — §1d, shadercache.container_asan among them since TESTING-CLEANUP-2B retired its own label —, and the target tests `photon-target` and `scale-target`, §1b/§1c; the benches' `--smoke` rows, label `benchmark-smoke`, DO run). The set lives in the script ONLY; this doc never copies it (`source.gate_scope_rules` case 9 fails on a literal `-LE` list here), and neither may a script — `scripts/lead/rc-gate.sh` must run what `--merge-tier` prints. `--timeout 120` is the default for rows that set none; the box runs ONE gate at a time (§4c, the gate slot) — there is no lower width "while another lane's gate is live". **Measured (D6B-GATE-SHAPE, 2026-09-27): 56.7 min at -j4 beside other lanes' gates, 36.6 min simulated on the audit's quieter durations — the reshape's ~30 min goal (and its lane's ≤ 35 min bar) was NOT reached; §5 has the before/after pair and why** | a lane whose scope falls back (see §3), any merge the lead wants covered wider, and — while the full gate is under moratorium — the gate before a push | gate-runner |
-| **PUSH** | the MERGE tier + the `--engine-selftest` sha256 lines — **SIX of them since TESTING-CLEANUP-2 (H5)**: `pose 1`, `pose 2`, `pose motion`, `pose B1 (rays)`, `pose B2 (no rays)`, `pose mover` (§7). Poses 1-2 are the default scene at the PLAIN grade, `motion` the same scene mid-walk; pose pair B is a purpose-built fixture (glossy floor, cascade crossing, emissive 3.0, mirror pillar) at the VIEWPORT grade, which is the only grade that carries the SSR prepass and therefore the ray tier, `mover` the fixture with a sphere crossing it. Quote all six. (The moratorium of 2026-09-09 lifted 2026-09-10 with the cleanup. The `stage-close` rows are not push rows: the lead runs the STAGE-CLOSE batch before every push, below) | once per BATCH of merged lanes, before a push | gate-runner |
-| **STAGE-CLOSE** | THE BATCH OF THE ROWS THE MERGE AND PUSH TIERS LEAVE OUT (§1d; lane STAGE-CLOSE-1): `python3 scripts/gate-scope.py --stage-close-tier --run` (or `JAH_GATE_TIER=stage-close scripts/lead/rc-gate.sh <tag>`) — ONE gate in the slot, two phases: every `stage-close` row without `quiet-box` (the minutes-of-one-process sweeps atom.cluster_cut, atom.cluster_crack, gi.chain_converge_scenes; samples.mirror_room_boots; gpu.cutout_soak and the shadow casters' `.churn` twins; shadercache.container_asan) at the gate's width, then every `quiet-box` / `timing` one — the benches' `--assert` rows, gi.gather_cost, vr.frame_budget, **open.crash_soak** (OPEN-FRAMES-1: the async-open teardown repro twelve times under glibc's malloc checks; read one failure as "run it again", three as a regression of the open's slice-boundary drive) and the `<suite>.timing` millisecond rows (§4) — at `-j1` on ONE hold of the whole card (`--stage-close-tier` / `--stage-close-tier-serial` print the two lines; the run-log tier is `stage-close`) | at every stage close and before every push — started by the lead, never by a timer | the lead |
+| **THE LANE'S ROWS** | the brief's acceptance rows, the subject suite, the hygiene label, the six hashes — `lane-test.sh --self-audit` at the tip, through the card queue, recorded | while the lane is built; ONCE at its tip (nobody re-runs them: deliver checks the records) | the builder |
+| **THE MERGE RUN** | `runner.sh merge <lane>` (fired by `lane.sh read <lane> --ready`): `runner.sh select d-build..candidate` — every row the change REACHES (gate-scope's selection; a pin move: every row that reaches the fork) ∪ the brief's rows, minus the rows SERVED by rule 2 (a green record at an ancestor the range does not reach, the pin equal, the declaration and data unchanged) — as ONE class-1 queue job in the candidate's tree (the lane's own build when a fast-forward), the six hashes, `runner.sh judge --mode merge`; a red is ATTRIBUTED (3× solo at the candidate, the lane's tip and d-build's tip) | at every merge, no hand step | the runner |
+| **THE STAGE CLOSE** | `runner.sh stage-close <tag>`: every `stage-close` row (§1d) at d-build's tip as one class-1 job, the rows served where their inputs did not move, the quiet-box ones on a whole-card hold; the registry recheck; the judge in stage-close mode | on the lead's word, at a stage close | the lead |
+| **THE PUSH** | `runner.sh push <tip>`: the guards and the door in push mode over the store — NO rows | at a stage close or on the lead's word | the lead |
+| **THE SHIP** | `runner.sh ship <tip> [--production]`: the deep gate — the full MERGE tier (`gate-scope.py --merge-tier` + `--merge-tier-serial`), every stage-close row, the target rows, hygiene, lsan, tsan, the six hashes, uncached, ONE job list deduped, one build; `--production` adds the Release build-only phase and the control (the last shipped build); then `runner.sh deploy` | on the owner's word | the lead |
 
-Tiers are contracts: nobody hand-picks suites out of one. A lane says which tier it ran and
-its selection; the lead's merge audit reads that line.
+The MERGE tier's two phases remain the deep gate's definition (`gate-scope.py --merge-tier [-j N]` / `--merge-tier-serial`
+print them; the set lives in the script ONLY — `source.gate_scope_rules` case 9 fails on a literal `-LE` list here), and
+`scripts/lead/rc-gate.sh` still runs a hand tier (merge, stage, stage-close, push, smoke, fork) in a fresh tree when the lead
+asks for one. Rows are contracts: nobody hand-picks suites out of a selection.
 
 ### 1b. TARGET TESTS — the `photon-target` label (PHOTON phase A, A1 §0; lane FENCE-1)
 
@@ -408,96 +413,20 @@ A row the fix reaches needs its record at the tip. Every row prints its source
 (`row <name> <- <sha> (the tip)` or `... served from <sha>`); the summary counts both. Measured
 on this lane's own two rounds: `spikes/gate-speed-1/`.
 
-## 3c. ONE GATE PER BATCH (BATCH-GATE-1, 2026-10-09; the owner's question 3, spikes/preflight-testing-1)
+## 3c. THE MERGE RUN (RUNNER-A6, 2026-10-11) — the batch gate it replaces is DELETED
 
-MEASURED: in the week to 2026-10-09, 87 full-size gates = 26 first gates + 51 re-gates (36 after a fix
-round, 11 after a rebase, 4 at the same tip) + 10 rc; a lone full gate 0.61 h, and a second gate on
-the one GPU adds no capacity (§4c). The lever left is ONE gate per BATCH of lanes, not one per lane.
-
-**Builders** run their NAMED ACCEPTANCE TESTS + their SUBJECT SUITE (the brief names both), by hand,
-never a gate — no slot:
-```
-DISPLAY=:NN nice -n 19 ctest --test-dir build-linux -R '^(<the named tests>|<the subject suite>)$' --output-on-failure
-```
-(a tooling lane — a change to the gate's own scripts — still runs its own scoped gate, the lead's
-exception.) The lead's per-lane merge (`merge-dbuild-lane.sh <lane> …`) still judges a single lane.
-
-**The lead** stacks the ready lanes as ONE CANDIDATE and gates it once:
-```
-~/Developer/scripts/lead/merge-dbuild-lane.sh batch <tag> <lane>:<studio tip>:<irisgl tip> [...]   # in the lead's order
-#   every lane, before any ref moves: the judge-diff refusal (JAH_JUDGE_READ="<tip> <tip>" for a read one), check-trailers,
-#   THE PIN CHECK, the dry merges of both repos against the RUNNING candidate (lane 1 on d-build, lane 2 on d-build +
-#   lane 1, …) — any conflict refuses the whole batch, naming the lane and the files, and nothing moves; then the
-#   candidate on branches batch-<tag> ($D, $D/irisgl; never d-build), fork-pin-check.sh on its irisgl tip, and it
-#   prints THE ONE gate command (a refusal at any point removes every ref the run made):
-JAH_GATE_TIER=scoped JAH_GATE_RANGE=<d-build>..<candidate> JAH_GATE_LANES=<lane>,<lane> \
-    setsid nohup ~/Developer/scripts/lead/rc-gate.sh batch-<tag> <candidate> > /tmp/jah-lead/rc-batch-<tag>.out 2>&1 < /dev/null & disown
-#   (JAH_GATE_TIER=fork when the candidate moved the fork pin: gate-scope's --fork-tier, the whole tier) — a fresh
-#   tree, the six hashes, the slot taken once, `gate-scope.py <range> --run` inside it (the card per phase)
-~/Developer/scripts/lead/merge-dbuild-lane.sh batch-land <tag> [--build <rc build>] [--display :NN] [--control-tree <dir>] [--verdict "<row>=<text>" ...]
-#   d-build's judge, UNCHANGED: ci_gate_check.py d-build..candidate --build <the candidate's build> — green:
-#   d-build fast-forwarded to the candidate in both repos (irisgl first), the HASHES line; a stale candidate (d-build
-#   moved since `batch`) is refused; red: nothing moves and the red rows are ATTRIBUTED on the rig display NAMED by
-#   --display (:60-:99, its X lock present; the environment's DISPLAY is never read) — without it, the command:
-scripts/gate-scope.sh --attribute <row>[,<row>...] --batch <tag> --candidate <rc tree>:<candidate> \
-    --control <rc-base>:<d-build tip> --display :NN --lanes <lane>:<worktree>:<tip> [...]
-```
-**THE GENERATED FILE.** `docs/SCRIPTING.md` is `--dump-api-docs`'s output and `api.contract`
-byte-compares it: two lanes' versions cannot merge as text. When more than one lane touched it (or it
-conflicted), `batch` records `SCRIPTING_REGEN=1` in the batch's state; `rc-gate.sh`, after building
-the candidate and BEFORE its gate, runs `merge-dbuild-lane.sh batch-scripting <tag> <rc tree>`: the
-candidate's own binary regenerates the file, a difference is committed onto `batch-<tag>` ("SCRIPTING.md
-regenerated at batch <tag>", author jahshaka), the tree is rebuilt and THAT sha is gated and landed.
-**THE FORK FREEZE** (owner decision 4; TESTING_V3_SPEC §1.3.2). Every lane's fork pin (and d-build's)
-is printed; the batch carries ONE pin P — d-build's, or a DESCENDANT of it on the fork's `jahshaka`
-branch (then a fork-tier batch) — and EVERY lane must pin exactly P: a lane on any other pin, an ancestor included, is
-REFUSED BY NAME ("re-pin <lane> to <P>") and the lead has it re-pinned before the cut; two pins that
-are two fork lines refuse the batch (exit 5). P ≠ d-build's pin = the candidate moves the pin = the
-full tier.
-
-**THE ATTRIBUTION.** Each red row runs 3x `--solo`-style in each lane's OWN worktree at its exact
-batch tip (the lanes' built trees; a worktree moved past its tip is refused), 3x at the CANDIDATE
-(its rc tree) and 3x at every CONTROL — `--control` is REQUIRED (several allowed); batch-land's is the
-BASE BUILD `rc-base` (`--control-tree` moves it), refused plainly when it is missing, its HEAD is not
-d-build's tip, or it has no build-linux — never `$D`, the merge target, which has no binary
-(TESTING_V3_SPEC §1.3.2). `--display :NN` is REQUIRED too (:60-:99 with its X lock; the environment's
-DISPLAY is never read). The whole card is taken once through `hold_card()` — whatever the card's
-admission demands, it never assumes the gate slot is free. One table `row | tree | n/3 red | the first
-failing check`; the records carry `reason: attribute:<tag>`, retry, and in `lanes` that lane (the
-candidate's: the batch's list; a control's: its tree's name). Only REAL verdicts count: a run that
-never got its admission (NOADMIT) or never ran leaves its cell INCOMPLETE. A row a tree's build does
-not register is ABSENT there and never blames it. Per row, IN THIS ORDER:
-1. a CONTROL cell INCOMPLETE or aborted → the row is INCOMPLETE: nothing is named without its baseline;
-2. red on a CONTROL (d-build's own tip) = a D-BUILD DEFECT: it names nobody (kind `defect`);
-3. a lane is NAMED when ANY of its solos is red (the flake law: one red run is a red, never outvoted)
-   — it DROPS OUT and the rest are RE-GATED as a new candidate (a new tag — the exact-tip rule stands:
-   no prefix records);
-4. any other cell INCOMPLETE or aborted → INCOMPLETE (re-run the attribution);
-5. red at the candidate and green on every lane's own tip and on d-build's = a COMBINATION DEFECT
-   (kind `combination`): the batch is REFUSED;
-6. green at the candidate too = NOT REPRODUCED (kind `nondeterminism`): it passes the verdict door with
-   its solos recorded — a contention-class row by its 3/3 at the candidate tip, any other by `--verdict`.
-Findings 2, 5 and 6 are REGISTERED, never only printed: one entry of THE ONE REGISTRY `<workspace>/testing/defects.json`
-(RUNNER-A1: the pending directory is gone) each in TESTING_V3_SPEC §1.5's FULL schema (`{id, rows, kind, cause, first_seen {tip, pin, run}, state: open,
-found_by: gate, recheck, expires}` — recheck a DATE: the next day for NOT REPRODUCED, +7 days for a
-defect; NOT REPRODUCED also `uses: 1, suspects: [the batch's lanes], census`) — VERDICT-1's reader quarantines a
-malformed entry (it never reaches the door), and gate.batch loads every registered entry through it. **ONE ENTRY PER ROW
-AND KIND, AND A SIGHTING NEVER MOVES ITS FIELDS** (TESTING-CLEANUP-2B items 14-15): ids are `<BATCH>-<ROW-UPPER>-<n>` (n
-the next free number of the stem); a row that already has an OPEN entry of the kind gets no second entry — the new
-sighting is appended to the entry's `sightings` (`[{tip, pin, run, batch, cause, date, recheck_proposed}]`) and nothing
-else of it moves: its `recheck` stays the lead's, so a sighting never stands in for the re-verdict the door demands of an
-entry past its date. Never reused: a NOT REPRODUCED entry (single-use at its batch) and a fixed or retired one (a new
-sighting is a new finding). Registrations hold the registry directory's flock across the read, the numbering and the
-write (`lane.sh defect` takes the same lock): two writers at once never take one number nor lose an entry. Exit codes: 3 a
-combination defect, else 7 an INCOMPLETE or aborted attribution, else 5 a d-build defect, else 0; 4 an
-unusable tree, 64 usage. Every commit the batch tooling writes (the candidate's merges, the regenerated
-SCRIPTING.md) is authored jahshaka by the script itself, and batch-land runs check-trailers on the
-regenerated commit.
-
-The judge needs no change: `ci_gate_check.py` keys records on the exact Studio sha + its irisgl pin,
-and d-build fast-forwards to the gated candidate in both repos. The queue rules (a pin-bumping
-lane first, owed re-runs before a fresh tier) are the lead's, not tooling. Guard: `gate.batch`
-(tests/hygiene/gate_batch_test.py, a toy repo pair).
+One lane, one merge, no hand step: `lane.sh read <lane> --ready` fires `runner.sh merge <lane>` (`--no-merge`: only ready).
+The CPU checks (check-trailers as a command, platform-audit, the Qt linter, the bar/TIMEOUT/RUN_SERIAL scan — a changed line
+refuses until the lead's verdict record names it); the fork grouping (one pin move at a time, after the ready lanes at the old
+pin; `runner.sh rebase <lane>` moves a lane left behind); `runner.sh merge-tree` (a fast-forward in the lane's frozen tree, else
+a merge commit as objects, irisgl first); `runner.sh select`; the run as ONE class-1 job of the card queue (the measuring rows
+alone on a whole-card hold), the six hashes as records (an undeclared move refuses); `runner.sh judge --mode merge`; on a red
+THE ATTRIBUTION — each red row 3× solo at the candidate, at the lane's own tip and at d-build's tip (rc-base): red at d-build =
+a D-BUILD DEFECT (registered, `real:<id>`, the lane lands), red at the lane's tip = the lane's defect (refused), red only at
+the candidate = a COMBINATION DEFECT (kind `combination`, refused), green everywhere = NOT REPRODUCED (a single-use
+`nondeterminism` entry, the lane lands) — each a `kind: attribution` record; then THE LAND (d-build fast-forwarded, irisgl
+first; the lane `merged`; its tree removed or made rc-base; the phases timed into `testing/lanes/<lane>.merge.json`; the page
+`testing/lanes/reports/<lane>.md`; the ledger line drafted). Tested by the lead repo's `scripts/lead/tests/runner_pipeline_test.sh`.
 
 ## 4. Flake protocol (the law in the refusal since TEST-SELECTOR-1)
 
@@ -997,15 +926,12 @@ scheduled as "phase 2" is built: §8 (the pools).
 
 ## 6. Who does what
 
-- **Lane** (feature-/engine-builder): runs its NAMED acceptance tests + its subject suite (§3c),
-  never a gate (a tooling lane's own scoped gate is the lead's exception); reports what ran
-  and every failure's verdict.
-- **Lead**: audits the lane (diff, `~/Developer/scripts/platform-audit.sh`), stacks the ready lanes
-  as ONE candidate (`merge-dbuild-lane.sh batch`), runs ONE gate on it (`rc-gate.sh`, §3c), lands
-  it (`batch-land`) or attributes its reds, pushes at a sensible batch (irisgl first), and runs
-  the STAGE-CLOSE batch at every stage close and before every push.
-- **gate-runner**: runs the tier it is given, never picks, restores what it touched, kills
-  only its own pids.
+- **Lane** (feature-/engine-builder): runs its NAMED acceptance tests + its subject suite + the self-audit at its tip
+  (`lane-test.sh`, through the card queue, recorded); never a gate; reports what ran and every failure's verdict.
+- **Lead**: the brief, the design read, `lane.sh read <lane> --ready` (the runner merges), the verdicts the runner asks for,
+  the stage close and the push on its word, the ship on the owner's.
+- **The runner** (`~/Developer/scripts/lead/runner.sh`): the merge, the attribution, the land, the rebase of a lane left at an
+  old pin, the stage close, the ship and the deploy — every phase timed and recorded.
 
 ## 7. The six selftest hashes (lane FENCE-1, PHOTON phase A; MOTION and MOVER since TESTING-CLEANUP-2 H5)
 

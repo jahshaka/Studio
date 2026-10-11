@@ -196,20 +196,6 @@ if(Python3_Interpreter_FOUND)
                      "${CMAKE_SOURCE_DIR}" "${CMAKE_BINARY_DIR}")
     set_tests_properties(gate.cost PROPERTIES TIMEOUT 180 LABELS "hygiene")
     jah_no_display(gate.cost)
-    # gate.batch — ONE GATE PER BATCH OF LANES (BATCH-GATE-1; TESTING_GATE §3c): the lead's
-    # `merge-dbuild-lane.sh batch` stacks the ready lanes as ONE candidate on its own branches (a conflict, or
-    # diverging fork pins, refuses the whole batch and moves nothing), `batch-land` runs the judge once on
-    # d-build..candidate and fast-forwards both repos on green; a red is attributed by `gate-scope.sh
-    # --attribute` (3 solo runs per lane on its own tip; red on none = the combination); records carry
-    # `lanes` as a list; `--joint` refuses. A toy repo pair, a private run log and token dir (~20 s).
-    # The merge script is the LEAD'S (<workspace>/scripts/lead/merge-dbuild-lane.sh; JAH_MERGE_SCRIPT overrides):
-    # on a box without the lead repo the row prints `SKIP: lead tooling not present` and exits 77 — ctest reports
-    # it Skipped (the run log: NOTRUN), an honest absence, never a FAIL and never a silent pass.
-    add_test(NAME gate.batch
-             COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/gate_batch_test.py"
-                     "${CMAKE_SOURCE_DIR}" "${CMAKE_BINARY_DIR}")
-    set_tests_properties(gate.batch PROPERTIES TIMEOUT 180 LABELS "hygiene" SKIP_RETURN_CODE 77)
-    jah_no_display(gate.batch)
     # gate.verdict_door / noadmit_pool / carried_red / contention_shape / log_schema2 — THE JUDGE'S FOUR
     # DOORS (VERDICT-1 + GATE-LOG-1; ONE_PICTURE_SPEC H1/H2; TESTING_GATE §4): a verdict clears a red only
     # through a registered fact (real:<id> of testing/defects.json, proved at a later sha that reaches the row or

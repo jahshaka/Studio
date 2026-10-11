@@ -155,7 +155,6 @@ export.embed 1.42  quiet n=24
 export.raw 0.01  quiet n=23
 export.walkers 0.06  quiet n=45
 export.web 0.08  quiet n=45
-gate.batch 25.13  quiet n=5
 gate.carried_red 17.75  quiet n=3
 gate.ci_check 15.75  quiet n=58
 gate.contention_shape 10.56  quiet n=3
