@@ -67,6 +67,10 @@ Environment:
   JAH_BUILD_DIR       build dir the lsan lane uses            (default build-linux)
   JAH_TSAN_BUILD_DIR  build dir the tsan lane configures      (default build-tsan)
   JAH_SAN_NO_BUILD=1  skip the build step (run what is there)
+  JAH_SAN_BUILD_ONLY=1  configure/build only, run nothing (the ship builds the tsan
+                      lane under ionice, then runs it without: IONICE-1)
+  JAH_SAN_BUILD_JOBS  the build width (default nproc; THE MEMORY LAW: the box's
+                      ~12 compile jobs are shared by every live build)
   DISPLAY             not needed by either lane as it stands (both run only
                       offscreen suites). It becomes required the moment a suite
                       that starts Jahshaka rejoins a lane — and then it must be
@@ -118,9 +122,10 @@ run_lsan() {
     [ -f "$BUILD_DIR/CMakeCache.txt" ] || die "$BUILD_DIR is not configured (see docs/BUILDING_LINUX.md)"
     if [ -z "${JAH_SAN_NO_BUILD:-}" ]; then
         echo "sanitize: building $BUILD_DIR"
-        cmake --build "$BUILD_DIR" -j"$(nproc)" > "$BUILD_DIR/sanitize-lsan-build.log" 2>&1 \
+        cmake --build "$BUILD_DIR" -j"${JAH_SAN_BUILD_JOBS:-$(nproc)}" > "$BUILD_DIR/sanitize-lsan-build.log" 2>&1 \
             || { grep -E 'error:' "$BUILD_DIR/sanitize-lsan-build.log" | head -40; die "build failed (see $BUILD_DIR/sanitize-lsan-build.log)"; }
     fi
+    [ -n "${JAH_SAN_BUILD_ONLY:-}" ] && { echo "sanitize: built $BUILD_DIR (JAH_SAN_BUILD_ONLY)"; return 0; }
 
     # suppressions   only verified-external one-time allocations (scripts/lsan.supp).
     # exitcode=23    a leak fails its ctest entry; 23 keeps it distinct from a
@@ -175,10 +180,11 @@ run_tsan() {
                    test_memory_ownership test_staging_race)
     if [ -z "${JAH_SAN_NO_BUILD:-}" ]; then
         echo "sanitize: building ${targets[*]}"
-        cmake --build "$TSAN_BUILD_DIR" -j"$(nproc)" --target "${targets[@]}" \
+        cmake --build "$TSAN_BUILD_DIR" -j"${JAH_SAN_BUILD_JOBS:-$(nproc)}" --target "${targets[@]}" \
             > "$TSAN_BUILD_DIR/sanitize-tsan-build.log" 2>&1 \
             || { grep -E 'error:' "$TSAN_BUILD_DIR/sanitize-tsan-build.log" | head -40; die "build failed (see $TSAN_BUILD_DIR/sanitize-tsan-build.log)"; }
     fi
+    [ -n "${JAH_SAN_BUILD_ONLY:-}" ] && { echo "sanitize: built $TSAN_BUILD_DIR (JAH_SAN_BUILD_ONLY)"; return 0; }
 
     local logdir="$REPO_ROOT/$TSAN_BUILD_DIR/tsan-logs"
     rm -rf "$logdir"; mkdir -p "$logdir"
