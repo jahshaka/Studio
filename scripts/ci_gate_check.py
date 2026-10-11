@@ -846,8 +846,10 @@ def serve_key(key, server, cands, got, judge_at):
                                  f"unreadable range, or the selection budget spent)"))
         st, swhy = judge_at(key, got[a].get(key, []))
         if st in PASSING:
-            return ("served", a, st, f"served from {a[:9]} ({newest.get('tier')}, {newest.get('run') or '-'}; "
-                                     f"{a[:9]}..{server.tip[:9]} does not reach it)" + (f"; {swhy}" if swhy else ""))
+            where = (f"its record AT the candidate {a[:9]} (rule 1: tested once at its tip)" if a == server.tip else
+                     f"{a[:9]}..{server.tip[:9]} does not reach it")
+            return ("served", a, st, f"served from {a[:9]} ({newest.get('tier')}, {newest.get('run') or '-'}; {where})"
+                    + (f"; {swhy}" if swhy else ""))
         if st == "red":
             return ("red", a, f"red at {a[:9]}, and {a[:9]}..{server.tip[:9]} does not reach it (answer it there): {swhy}")
         first_why = first_why or f"{a[:9]}: {st} ({swhy})"
@@ -855,8 +857,11 @@ def serve_key(key, server, cands, got, judge_at):
 
 
 def candidates(gs, tip_sha, pins_of=None):
-    """[(A, A's irisgl pin, A's fork pin)] — every ANCESTOR of the tip (not the tip) holding a record in the run log,
-    newest first (topological), and the irisgl pin its records must carry."""
+    """[(A, A's irisgl pin, A's fork pin)] — THE TIP ITSELF and every ancestor of it holding a record in the run log,
+    newest first (topological: the tip first), and the irisgl pin its records must carry. THE TIP IS A CANDIDATE
+    (RUNNER-AUDIT-FIX-1 F4, rule 1): a clean, stamped, same-pin, non-measuring green record AT the candidate — the
+    builder's self-audit rows at its tip, which a fast-forward makes the candidate — is the row tested once at its tip;
+    C..C reaches nothing, and the same predicates (records_by_tip, row_never, record_why_not) decide."""
     have = set()
     d = gate_runlog.log_dir()
     if os.path.isdir(d):
@@ -865,7 +870,6 @@ def candidates(gs, tip_sha, pins_of=None):
             if f.endswith(".jsonl"):
                 with open(os.path.join(d, f), errors="replace") as fh:
                     have |= set(rx.findall(fh.read()))
-    have.discard(tip_sha)
     out = []
     for c in _git(["rev-list", "--topo-order", tip_sha], gs.ROOT).split():
         if c in have:
@@ -1194,8 +1198,10 @@ def plan(rng, build, gs=None, named=()):
     state, why}}, tip, base, what, selected: [the scoped selection's keys], universe: n}. The universe is the merge tier
     (tier_need); a row is RUN when the range B..C reaches it (gate-scope's selection: the graph, the symbols, the area
     rules; a pin move every fork-reaching row), when the lane's brief names it (`named`), or when it cannot be SERVED —
-    serve_key, the judge's own predicate, from the tip's ancestors (never C itself: a record there is a run, not a
-    serving)."""
+    and EVERY row of the universe, reached and named ones included, is first asked of serve_key, the judge's own
+    predicate, over C ITSELF and its ancestors (RUNNER-AUDIT-FIX-1 F4, rule 1: the builder's green record at the
+    candidate is the row tested once at its tip — never re-run; a reached row is served only from a record whose range
+    to C does not reach it, which for a reached row is C's own)."""
     gs = gs or load_gs()
     defects, problem = gate_runlog.defects_load()
     if defects is None:
@@ -1224,16 +1230,14 @@ def plan(rng, build, gs=None, named=()):
     sel_keys = set(scoped)
     reasons = {n: r for n, r in (S.selected or {}).items()}
     for k in universe:
-        if k in sel_keys:
-            run[k] = ("reached by " + rng + (f": {str(reasons.get(k[0]))[:120]}" if reasons.get(k[0]) else
-                                             (" (the fork pin moved: it reaches the fork)" if k[0] in server.fork else "")))
-            continue
-        if k[0] in named:
-            run[k] = "named by the lane's brief"
-            continue
         sv = serve_key(k, server, [(c, f) for c, _, f in cands], got,
                        lambda kk, recs: judge(kk, recs, defects, tip_sha=tip_sha))
-        if sv[0] == "served":
+        if sv[0] != "served" and k in sel_keys:
+            run[k] = ("reached by " + rng + (f": {str(reasons.get(k[0]))[:120]}" if reasons.get(k[0]) else
+                                             (" (the fork pin moved: it reaches the fork)" if k[0] in server.fork else "")))
+        elif sv[0] != "served" and k[0] in named:
+            run[k] = "named by the lane's brief"
+        elif sv[0] == "served":
             a = sv[1]
             newest = max((r for r in got[a].get(k, []) if r.get("kind") != "verdict"
                           and r.get("verdict") not in NEVER_RAN), key=_when)
