@@ -3881,36 +3881,48 @@ void sky_ambient_read_is_deferred_through_a_drag() {
     //     synchronous too, so the ambient lands in the capture frame exactly as
     //     it always did. This is the assertion that keeps every existing suite
     //     and every host's timing intact.
+    //     The lone sky sits BELOW the drag's ramp, so an ambient that stays on
+    //     it through the drag reads as behind every step, never as current.
     render(fx.e, 6);
-    REQUIRE(s->setSky(greySky(200)));
+    REQUIRE(s->setSky(greySky(60)));
     render(fx.e, 1);
     const float lone = band0();
-    std::printf("    a lone change (sRGB 200, linear %.4f): band0 %.4f after ONE frame\n",
-                double(linearOf(200)), double(lone));
-    CHECK_MSG(std::fabs(lone - linearOf(200)) < 0.02f,
+    std::printf("    a lone change (sRGB 60, linear %.4f): band0 %.4f after ONE frame\n",
+                double(linearOf(60)), double(lone));
+    CHECK_MSG(std::fabs(lone - linearOf(60)) < 0.02f,
               "a LONE sky change is still read in its own frame (band0 %.4f, expected %.4f)",
-              double(lone), double(linearOf(200)));
+              double(lone), double(linearOf(60)));
 
-    // (3) THE DRAG: a new sky every frame, on a RISING ramp so "behind" is a
-    //     number and not an impression. From the second capture on the read is
-    //     deferred, so the frame that captures step k reads step k-1's sky.
+    // (3) THE DRAG: a new sky every frame, on a RISING ramp that starts above
+    //     the lone sky, so every step's sky is a distinct number. The read
+    //     issued in the frame that captures step k is mapped in the NEXT frame
+    //     — at its top when the copy has finished by then, else forced by that
+    //     frame's capture — and its set lands in that next frame's capture
+    //     either way. So after the frame that captures step k the ambient is
+    //     EXACTLY step k-1's sky (the lone sky for step 0): N = 1 frame, by
+    //     construction and at any GPU/CPU speed ratio. Behind by one = the
+    //     deferral (no wait in the capture frame); never behind by two = the
+    //     ambient moves every frame of the gesture (DEFECT-TEST-ENGINE-ASAN-1:
+    //     a read that landed at the frame top while the next capture was
+    //     pending never swapped, which dropped a step on a quiet box and froze
+    //     the ambient for the whole drag under load).
     const int ramp[6] = { 110, 130, 150, 170, 190, 210 };
-    int lagged = 0;
     float lastRead = lone;
     for (int i = 0; i < 6; ++i) {
         REQUIRE(s->setSky(greySky(ramp[i])));
         render(fx.e, 1);
         const float now = band0();
-        const float want = linearOf(ramp[i]);
-        std::printf("    drag step %d (sRGB %3d, linear %.4f): band0 %.4f%s\n", i, ramp[i],
-                    double(want), double(now), now < want - 0.005f ? "  <- behind" : "");
-        CHECK_MSG(now > 0.0f, "the ambient never goes invalid during a drag (step %d)", i);
-        if (i > 0 && now < want - 0.005f) ++lagged;
+        const float want = linearOf(i == 0 ? 60 : ramp[i - 1]);   // one frame behind
+        std::printf("    drag step %d (sRGB %3d, linear %.4f): band0 %.4f, one frame behind "
+                    "is %.4f\n", i, ramp[i], double(linearOf(ramp[i])), double(now),
+                    double(want));
+        CHECK_MSG(std::fabs(now - want) < 0.005f,
+                  "a DRAG defers its read by exactly ONE frame: after capturing step %d (sky "
+                  "%.4f) the ambient reads %.4f, the previous step's sky is %.4f (current = "
+                  "the capture waited; older = a read that never landed)",
+                  i, double(linearOf(ramp[i])), double(now), double(want));
         lastRead = now;
     }
-    CHECK_MSG(lagged >= 4,
-              "a DRAG defers its readbacks: the ambient trails the sky it is capturing on "
-              "%d of the 5 steps after the first (the flush and the wait are gone)", lagged);
 
     // ...and it CATCHES UP the moment the gesture stops. The deferred read is a
     // frame-counter comparison on an asynchronous copy, so the frame it lands on
