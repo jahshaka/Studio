@@ -39,6 +39,9 @@
 //      written on EVERY sync, and a demoted prop elsewhere still comes back
 //      within SceneMirror::kStaticSettleMaxWaitSyncs + a rotation (counted in
 //      syncs), while the written node stays dynamic.
+//   9. JAH_MIRROR_VERIFY=full (every sync a full walk): a write still stamps
+//      its quiet clock and the prop re-promotes within kStaticSettleFrames +
+//      ceil(n / kStaticSettleNodesPerSync) + 8 syncs (read 2, F1).
 #include <QGuiApplication>
 
 #include <algorithm>
@@ -489,6 +492,52 @@ int main(int argc, char **argv)
               "a node written on every sync does not starve the settle (kStaticSettleMaxWaitSyncs)");
         CHECK(!spinner->isStaticInGraph(), "...and the node written on every sync stays dynamic");
         P.mirror->setSource(iris::ScenePtr());
+    }
+
+    // ---- 9: the verification mode stamps writes too ------------------------------
+    {
+        qputenv("JAH_MIRROR_VERIFY", "full");     // read by the mirror's constructor
+        Arm V;
+        V.target = engine->createScene("verifyfull");
+        V.doc = iris::Scene::create();
+        auto g = iris::SceneNode::create();
+        V.doc->getRootNode()->addChild(g);
+        const int count = 2000;
+        std::vector<iris::SceneNodePtr> props;
+        for (int i = 0; i < count; ++i) {
+            auto m = iris::MeshNode::create();
+            m->setMesh(gCube);
+            m->setMaterial(gMaterial);
+            m->setLocalPos(iris::Vec3(float(i % 50), 0.0f, float(i / 50)));
+            g->addChild(m);
+            props.push_back(m);
+        }
+        V.doc->getRootNode()->applyStaticDefaults();
+        V.mirror.reset(new SceneMirror(V.target));
+        qunsetenv("JAH_MIRROR_VERIFY");
+        V.mirror->setVerifierBudget(0);
+        V.mirror->setSource(V.doc);
+        V.mirror->sync();
+        for (int k = 0; V.mirror->staticSettleInProgress() && k < 100000; ++k) V.mirror->sync();
+        const iris::SceneNodePtr victim = props[size_t(count / 3)];
+        const bool settledBefore = victim->isStaticInGraph();
+        victim->setLocalPos(victim->getLocalPos() + iris::Vec3(0.0f, 0.5f, 0.0f));   // rule 4
+        const quint32 B = SceneMirror::kStaticSettleNodesPerSync;
+        const int nodes = count + 2;                                  // + the root and the group
+        const int bound = int(SceneMirror::kStaticSettleFrames) + int((quint32(nodes) + B - 1) / B) + 8;
+        int syncs = 0;
+        bool demoted = false;
+        for (; syncs < 20 * bound; ++syncs) {
+            V.mirror->sync();
+            if (!victim->isStaticInGraph()) demoted = true;
+            else if (demoted) break;
+        }
+        std::printf("    JAH_MIRROR_VERIFY=full: the written prop came back after %d syncs (bound %d)\n",
+                    syncs, bound);
+        CHECK(settledBefore && demoted, "verify=full: the write demoted the prop (and the scene had settled)");
+        CHECK(victim->isStaticInGraph() && syncs <= bound,
+              "verify=full: the write's quiet clock was stamped and the prop re-promoted (F1)");
+        V.mirror->setSource(iris::ScenePtr());
     }
 
     R.mirror->setSource(iris::ScenePtr());

@@ -1220,6 +1220,7 @@ int main(int argc, char **argv)
             char buf[160];
             std::snprintf(buf, sizeof buf, "s.settle_slice@%d drained (%d syncs)", n, syncs);
             CHECK(!mirror.staticSettleInProgress() && !slices.empty(), buf);
+            // A new CHECK on a time here goes under this guard: --smoke asserts nothing about time.
             if (!smoke) {
                 std::snprintf(buf, sizeof buf, "s.settle_slice@%d worst slice (thread CPU) %.3f ms <= %.1f ms", n, mx,
                               kSettleSliceMaxMs);
