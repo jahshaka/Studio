@@ -28,8 +28,10 @@ box's own queue, log or displays:
      lints prune exactly irisgl/.gitmodules; a green row waits for journald before its Xid read;
   10. THE STALE-BUILD HOLE: every build stamps BUILT_FROM last; a record carries it; a stale or dirty build's
      record is never the tip's run (the refusal, --resume). The admission's journal is a file here (#7);
-  11. every record's `overrides`; hash moves and trend steps as records; the tiers lane and solo; a row an
-     abort dropped red is owed a SOLO (3x, tier solo), never the ordinary pass;
+  11. every record's `overrides`; trend steps as records; the tiers lane and solo; a row an abort dropped red is
+     owed a SOLO (3x, tier solo), never the ordinary pass;
+  12. RUNNER-A1: the record complete — the build configuration, the row's declaration and data hash (the tree root
+     stripped: the same toy at another path keys the same), every unknown a null with its reason; quiet();
   8. THE SLOT UNDER STRESS: a dead waiter's ticket is reaped; eight gates at once hold it one at a time;
      a SIGKILLed gate's ctest and rows die within 15 s and the slot is free; a killed ctest ends a gate.
 
@@ -94,6 +96,11 @@ add_test(NAME id.stderr COMMAND sh -c "echo out; echo 'GPU out of memory (VK_ERR
 add_test(NAME id.arms COMMAND sh -c "echo 'ARM-BEGIN p.one'; echo 'ARM p.one PASS 120 ms'; echo 'ARM-BEGIN p.two'; echo 'MEM p.two gpuPoolUsed=10 textures=2'; echo 'ARM p.two FAIL 50 ms why'; echo 'ARM-BEGIN p.three'; echo 'MEM p gpuPoolUsed=100 textures=20 processMiB=300 tier=high'; exit 1")
 '''
 LABELS = {"lint.one": ["hygiene"], "time.card": ["timing"], "tgt.card": ["photon-target"]}
+# RUNNER-A1 (section 12): a row that NAMES a data file (the script) and an output it writes (absent until it runs)
+TOY_DATA = r'''
+add_test(NAME dat.row COMMAND sh ${CMAKE_SOURCE_DIR}/dat.sh ${CMAKE_BINARY_DIR}/dat-out.txt)
+set_tests_properties(dat.row PROPERTIES LABELS "hygiene" TIMEOUT 30 COST 3)
+'''
 
 
 def main(source, build):
@@ -121,7 +128,8 @@ def main(source, build):
     with open(stampsrc, "w") as f:
         f.write("studio=%s\nirisgl=%s\ndirty=0\n" % ("c" * 40, "d" * 40))    # the clean tip below
     os.environ["TOYSTAMP"] = stampsrc
-    open(os.path.join(toy, "CMakeLists.txt"), "w").write(TOY.replace("${VT}", vt))
+    open(os.path.join(toy, "CMakeLists.txt"), "w").write(TOY.replace("${VT}", vt) + TOY_DATA)
+    open(os.path.join(toy, "dat.sh"), "w").write('echo "dat ok" > "$1"\n')
     r = subprocess.run(["cmake", "-S", toy, "-B", tb], capture_output=True, text=True)
     r = r if r.returncode else subprocess.run(["cmake", "--build", tb], capture_output=True, text=True)
     if r.returncode != 0:
@@ -1094,7 +1102,7 @@ for e in spec.split(","):
         f.write(open(stampsrc).read())
 
     # ---- 11. GATE-COST-2 #10-#12: overrides on every record; hash moves and trend steps are records; tiers ----
-    print("11. overrides, hash-move / trend-step records, the lane and solo tiers")
+    print("11. overrides, trend-step records, the lane and solo tiers")
     reset()
     rc, out = run("^gpu\\.a$")
     r_ = [r for r in records() if r["suite"] == "gpu.a"][0]
@@ -1115,13 +1123,12 @@ for e in spec.split(","):
     vpath = cgc.record_verdicts([(("gpu.a", None), "read: x")], clean["studio"], clean["irisgl"])
     vrec = [json.loads(l) for l in open(vpath)][-1]
     check("overrides" not in vrec, "a --verdict is a lawful act through the door, never an override (F2)")
-    p_ = subprocess.run([sys.executable, os.path.join(scripts, "gate_runlog.py"), "hash-move", "--tier", "smoke",
-                         "--lane", "rc-x", "--pose", "B1", "--old", "a" * 64, "--new", "b" * 64],
+    # (RUNNER-A1: the selftest hashes are `kind: hash` records of EVERY pose, written by the lead's rc-gate.sh and the
+    # self-audit — scripts/lead/tests/runner_hashes_test.sh; gate_runlog.py's hash-move verb is deleted)
+    p_ = subprocess.run([sys.executable, os.path.join(scripts, "gate_runlog.py"), "hash-move", "--tier", "smoke"],
                         capture_output=True, text=True, cwd=source)
-    hm = [r for r in records() if r.get("kind") == "hash-move"]
-    check(p_.returncode == 0 and len(hm) == 1 and hm[0]["pose"] == "B1" and hm[0]["new"] == "b" * 64
-          and hm[0]["suite"] == "@hash-move",
-          "a hash move is a `kind: hash-move` record {pose, old, new} (gate_runlog.py hash-move)")
+    check(p_.returncode != 0 and not [r for r in records() if r.get("kind") == "hash-move"],
+          "gate_runlog.py has no hash-move verb any more (RUNNER-A1: the hashes are records of every pose, the lead's)")
     real_ts, real_st, real_anc = rl.trend_series, rl.trend_steps, rl.tip_ancestry
     rl.trend_series = lambda *a, **k: {("gi.x", "cost #", "unlocked/solo"): [("2026-10-09T10:00", clean["studio"], "l",
                                                                                2.0, 1)]}
@@ -1205,6 +1212,76 @@ set_tests_properties(fx.parent.inspector PROPERTIES FIXTURES_REQUIRED "fx_home;f
     finally:
         if old_log is None: os.environ.pop("JAH_RUN_LOG_DIR", None)
         else: os.environ["JAH_RUN_LOG_DIR"] = old_log
+
+    # ---- 12. RUNNER-A1: THE RECORD, COMPLETE; QUIET ----------------------------------------------------------------
+    print("12. the complete record (config, declaration, data hash, nulls with their reasons) and quiet")
+    reset()
+    rc, out = run("^(gpu\\.a|dat\\.row)$")
+    recs12 = {r["suite"]: r for r in records() if not r.get("kind")}
+    ga, dr = recs12.get("gpu.a") or {}, recs12.get("dat.row") or {}
+    check(rc == 0 and ga.get("schema") == 3 and dr.get("schema") == 3, "schema 3 (rc %d, %s)" % (rc, sorted(recs12)))
+    check(isinstance(dr.get("config"), dict) and len(dr["config"].get("hash") or "") == 64 and dr["config"] == ga.get("config"),
+          "every record carries the BUILD CONFIGURATION from the build's CMakeCache, one per run (%s)"
+          % (dr.get("config") or {}).get("generator"))
+    dd = dr.get("declaration") or {}
+    check(dd.get("labels") == ["hygiene"] and dd.get("timeout") == 30 and dd.get("tokens") == 0 and len(dd.get("hash") or "") == 64,
+          "...the row's DECLARATION: labels, TIMEOUT, tokens and a hash of every property and the command (%s)" % dd)
+    check(len(dr.get("data_hash") or "") == 64 and "data_hash" not in (dr.get("nulls") or {}),
+          "...the DATA HASH of the file its command names (dat.sh; the absent output it writes is not data)")
+    gn = ga.get("nulls") or {}
+    check(ga.get("data_hash") is None and "names no data file" in gn.get("data_hash", "")
+          and ga.get("tip", {}).get("built") and "built_from" not in gn and "no DISPLAY" in gn.get("display", ""),
+          "...a field that cannot be known is null WITH ITS REASON in `nulls` (gpu.a: %s)" % gn)
+    # P12: THE TREE ROOT IS STRIPPED — the same toy configured at another path keys the same; its data moving re-keys
+    # (two FRESH copies of the toy — earlier sections rewrite the first toy's CMakeLists)
+    facts = []
+    for where in ("here", os.path.join("else", "where")):
+        toy2, tb2 = os.path.join(scratch, where, "src"), os.path.join(scratch, where, "b")
+        os.makedirs(toy2)
+        open(os.path.join(toy2, "CMakeLists.txt"), "w").write(TOY.replace("${VT}", vt) + TOY_DATA)
+        open(os.path.join(toy2, "dat.sh"), "w").write('echo "dat ok" > "$1"\n')
+        cm2 = subprocess.run(["cmake", "-S", toy2, "-B", tb2], capture_output=True, text=True)
+        if cm2.returncode: print(cm2.stdout[-1500:], cm2.stderr[-1500:])
+        facts.append(rl.row_facts(tb2)[0])
+    f1, f2 = facts
+    check(f1.get("dat.row") and len(f1) == len(f2) and all(f1[k]["declaration"] == f2.get(k, {}).get("declaration") for k in f1)
+          and f1["dat.row"]["data_hash"] == f2["dat.row"]["data_hash"],
+          "the declaration and the data hash do not depend on WHERE the tree is (root-stripped, P12; %d rows)" % len(f1))
+    open(os.path.join(toy2, "dat.sh"), "a").write("# moved\n")
+    f3, _, _ = rl.row_facts(tb2)
+    check(f3["dat.row"]["data_hash"] != f1["dat.row"]["data_hash"] and f3["dat.row"]["declaration"] == f1["dat.row"]["declaration"],
+          "...the row's data file changing moves its data hash, not its declaration")
+    # QUIET = no sibling ctest, no build, no GPU competitor, the load under the box's figure; unknown is never quiet
+    base_f = os.path.join(scratch, "box-baseline.json")
+    json.dump({"desktop": [], "quiet_load_max": 12.0}, open(base_f, "w"))
+    old_b = os.environ.get("JAH_BOX_BASELINE"); os.environ["JAH_BOX_BASELINE"] = base_f
+    try:
+        def rq(builds=0, oc=0, comp=(), load=8.0, census=True):
+            return {"box": {"load_mean": load, "other_ctests": oc,
+                            "census": {"builds": builds, "other_ctests": oc, "gpu_competitors": list(comp)} if census else None}}
+        cases = [(rq(), True), (rq(builds=2, load=24.7), False), (rq(oc=1), False), (rq(comp=[{"pid": 1}]), False),
+                 (rq(load=12.5), False), (rq(census=False), False), (rq(load=None), False)]
+        got_q = [rl.quiet(r)[0] for r, _ in cases]
+        check(got_q == [w for _, w in cases] and "build" in rl.quiet(rq(builds=2))[1],
+              "quiet(): only a box with no sibling ctest, no build, no GPU competitor and the load under the figure; "
+              "an unknown is not quiet (%s)" % got_q)
+        json.dump({"desktop": []}, open(base_f, "w"))
+        check(rl.quiet(rq()) == (False, "no quiet load figure in %s" % base_f), "...no figure in the baseline: not quiet")
+        json.dump({"desktop": [], "quiet_load_max": 12.0}, open(base_f, "w"))
+        reset()
+        os.makedirs(os.environ["JAH_RUN_LOG_DIR"], exist_ok=True)
+        day = datetime.date.today().isoformat()
+        with open(os.path.join(os.environ["JAH_RUN_LOG_DIR"], f"{day}-scoped-ccccccccc.jsonl"), "w") as f:
+            for k in range(3):
+                f.write(json.dumps(dict(rq(), suite="q.row", verdict="PASS", seconds=1.0)) + "\n")
+                f.write(json.dumps(dict(rq(builds=3, load=30.0), suite="q.row", verdict="PASS", seconds=10.0)) + "\n")
+        src_ = {}
+        med = rl.median_times(1, sources=src_)
+        check(med.get("q.row") == 1.0 and src_.get("q.row") == "quiet",
+              "the medians are QUIET medians: the three runs beside a build (other_ctests 0) are not quiet (%s)" % med.get("q.row"))
+    finally:
+        if old_b is None: os.environ.pop("JAH_BOX_BASELINE", None)
+        else: os.environ["JAH_BOX_BASELINE"] = old_b
 
     shutil.rmtree(scratch, ignore_errors=True)
     if FAILURES:

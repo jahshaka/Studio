@@ -818,8 +818,8 @@ TIMES_FILE = os.path.join(ROOT, "scripts", "gate-times.txt")
 
 # THE PRICES (TESTING-CLEANUP-2B item 6). scripts/gate-times.txt prices EVERY row of the MERGE and STAGE-CLOSE
 # tiers (a gate's estimate, the stage-close batch's plan, ctest's COST order): one line per row, `<row> <seconds>
-# <source>`, the source NAMED — `quiet n=<k>` (the median of the row's PASS runs with no sibling ctest, >= 3 of
-# them: THE price), `all n=<k>` (fewer quiet runs: the median of every PASS run), `fixture` (a home wipe), or the
+# <source>`, the source NAMED — `quiet n=<k>` (the median of the row's PASS runs on a QUIET box — gate_runlog.quiet:
+# no sibling ctest, no build, no GPU competitor, the load under the box's figure —, >= 3 of them: THE price), `all n=<k>` (fewer quiet runs: the median of every PASS run), `fixture` (a home wipe), or the
 # text a hand-priced line carried. The run log read is testing/runs AND testing/runs-archive, from PRICE_SINCE:
 # before GATE-SPEED-1's L2 (2026-10-01 13:10) a record's seconds still held its admission wait. `--price-check`
 # is the self-check: it lists every tier row without a price and fails while one is (source.testing_rules R2).
@@ -843,12 +843,14 @@ def parse_times(path=None):
 
 def run_log_prices(since=PRICE_SINCE):
     """row -> (median PASS seconds, 'quiet n=<k>' | 'all n=<k>') over the run log and its archive since `since`.
-    The quiet median when >= gate_runlog.QUIET_MIN quiet runs exist (box.other_ctests == 0), else every run's."""
+    The quiet median when >= gate_runlog.QUIET_MIN quiet runs exist (gate_runlog.quiet: no sibling ctest, no build, no
+    GPU competitor, the load under the box's figure), else every run's."""
     import glob, statistics
     d = gate_runlog.log_dir()
     files = glob.glob(os.path.join(d, "*.jsonl")) + glob.glob(os.path.join(os.path.dirname(d), "runs-archive", "**",
                                                                            "*.jsonl"), recursive=True)
     acc = collections.defaultdict(list)
+    lm = gate_runlog.quiet_load_max()
     for f in files:
         for line in open(f, errors="replace"):
             try: r = json.loads(line)
@@ -856,10 +858,10 @@ def run_log_prices(since=PRICE_SINCE):
             if r.get("verdict") != "PASS" or r.get("seconds") is None or r.get("kind") or (r.get("ts") or "") < since:
                 continue
             k = r["suite"] if not r.get("arm") else f"{r['suite']}::{r['arm'].split('.', 1)[-1]}"
-            acc[k].append((r["seconds"], (r.get("box") or {}).get("other_ctests") == 0))
+            acc[k].append((r["seconds"], gate_runlog.quiet(r, lm)[0]))
     out = {}
     for k, v in acc.items():
-        q = [x for x, quiet in v if quiet]
+        q = [x for x, qt in v if qt]
         if len(q) >= gate_runlog.QUIET_MIN:
             out[k] = (statistics.median(q), f"quiet n={len(q)}")
         else:
@@ -921,7 +923,7 @@ COST_SOURCE = {}   # suite -> "quiet" | "all" (the run log's median, gate_runlog
 
 def load_costs():
     """Per-suite seconds: scripts/gate-times.txt overlaid with the run log's medians (fresher; the
-    quiet-box median where >= 3 records ran with no sibling ctest). COST_SOURCE says which."""
+    quiet median where >= 3 records ran on a quiet box, gate_runlog.quiet). COST_SOURCE says which."""
     costs = {}
     for n, (sec, _src) in parse_times().items():
         costs[n] = sec; COST_SOURCE[n] = "file"
@@ -933,7 +935,7 @@ def cost_sources(keys):
     """'<n> quiet, <n> all, <n> file, <n> assumed' over the keys an estimate summed."""
     c = {"quiet": 0, "all": 0, "file": 0, "assumed": 0}
     for k in keys: c[COST_SOURCE.get(k, "assumed")] += 1
-    return (f"costs: {c['quiet']} quiet-box medians (box.other_ctests == 0, >= 3 records), {c['all']} "
+    return (f"costs: {c['quiet']} quiet medians (gate_runlog.quiet, >= 3 records), {c['all']} "
             f"all-record medians, {c['file']} from gate-times.txt, {c['assumed']} assumed 10 s")
 
 

@@ -1062,7 +1062,7 @@ def case_log_schema2(E):
         for k in ("JAH_VRAM_TOKENS", "JAH_GATE_SLOT_HELD", "JAH_GATE_SLOT_WAIT_S"): os.environ.pop(k, None)
     recs = {r["suite"]: r for f in os.listdir(d) for r in map(json.loads, open(os.path.join(d, f)))}
     one, two = recs.get("s.one", {}), recs.get("s.two", {})
-    check(one.get("schema") == 2 and two.get("schema") == 2, "the records are schema 2")
+    check(one.get("schema") == 3 and two.get("schema") == 3, "the records are schema 3 (RUNNER-A1: config, declaration, data_hash, nulls)")
     check(one.get("slot_wait_s") == 12.5, "slot_wait_s = the slot's wait (%s)" % one.get("slot_wait_s"))
     check(isinstance(one.get("drain_s"), float) and isinstance(one.get("hold_s"), float) and one["hold_s"] >= 0,
           "drain_s / hold_s of the whole-card phase (%s / %s)" % (one.get("drain_s"), one.get("hold_s")))

@@ -43,7 +43,8 @@ import threading
 import time
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-SCHEMA = 2      # 2 (VERDICT-1 + GATE-LOG-1): xid, noadmit_arms, slot_wait_s, drain_s, hold_s, box.mem, box.queue_depth
+SCHEMA = 3      # 2 (VERDICT-1 + GATE-LOG-1): xid, noadmit_arms, slot_wait_s, drain_s, hold_s, box.mem, box.queue_depth;
+#                 3 (RUNNER-A1): config, declaration, data_hash and `nulls` {field: why} on every row/arm record
 # THE TIER NAMES (TESTING-DEBTS-1 T11) — the only ones a record may carry; testing/runs/README.md
 # documents the same list. gate-scope.sh writes the first three (`scoped`; `scoped-fallback` = a
 # scoped gate that fell back to the whole tier; `scoped-tier` = the tier by rule, a fork pin) and
@@ -930,6 +931,41 @@ def competitors(c):
     return out
 
 
+# QUIET (RUNNER-A1; TESTING_RUNNER_SPEC §3.1): a record ran on a QUIET box when NOTHING ELSE competed — no sibling ctest,
+# no build outside the gate, no GPU competitor, and the 1-min load over the row under the box's quiet figure
+# (testing/box-baseline.json `quiet_load_max`: the load a gate's OWN rows reach on this box with nothing beside them).
+# "quiet = no other ctest" alone (until 2026-10-11) counted the 211 records of push smoke1 that ran beside the sc-smoke1
+# build (census builds 1-7, load 20-36) as quiet medians. A record without a census, a load sample or a baseline is NOT
+# quiet — unknown is never quiet.
+def quiet_load_max():
+    """The baseline's quiet load figure, or None (no baseline, or none written)."""
+    try:
+        v = json.load(open(baseline_file())).get("quiet_load_max")
+        return float(v) if v is not None else None
+    except (OSError, ValueError, TypeError, AttributeError):
+        return None
+
+
+def quiet(r, load_max=None):
+    """(True, None) when record `r` ran on a quiet box, else (False, why)."""
+    b = (r or {}).get("box") or {}
+    c = b.get("census")
+    if not isinstance(c, dict):
+        return False, "no census"
+    oc = c.get("other_ctests", b.get("other_ctests"))
+    if oc is None: return False, "sibling ctests unknown"
+    if oc: return False, f"{oc} sibling ctest(s)"
+    if c.get("builds") is None: return False, "builds unknown"
+    if c["builds"]: return False, f"{c['builds']} build process(es) outside the gate"
+    if c.get("gpu_competitors") is None: return False, "GPU competitors unknown"
+    if c["gpu_competitors"]: return False, f"{len(c['gpu_competitors'])} GPU competitor(s)"
+    lm = load_max if load_max is not None else quiet_load_max()
+    if lm is None: return False, f"no quiet load figure in {baseline_file()}"
+    if b.get("load_mean") is None: return False, "no load sample"
+    if b["load_mean"] > lm: return False, f"load {b['load_mean']} over the quiet figure {lm}"
+    return True, None
+
+
 class LoadSampler(threading.Thread):
     def __init__(self, period=2.0):
         super().__init__(daemon=True)
@@ -1420,6 +1456,10 @@ class _Run:
         # WHAT THE BINARIES WERE BUILT FROM rides every record (GATE-COST-2 #8): the refusal never counts a
         # record of a stale build as the tip's run
         self.shas["built"] = built_from(build) if build else None
+        # WHAT EACH ROW WAS when it ran (RUNNER-A1): its declaration and data hash (root-stripped), the build's
+        # configuration — read once per run from the build's own inventory and CMakeCache
+        self.build = build
+        self.facts, self.config, self.config_why = row_facts(build) if build else ({}, None, "no build dir")
         self.box0 = {"jobs": jobs, "display": (env or os.environ).get("DISPLAY"), "gpu_clocks": gpu_clocks(),
                      "other_ctests": other_ctests(), "host": os.uname().nodename, "mem": box_mem()}
         # the gate's queue wait for the slot: a gate's own environment, or the env a whole-card hold handed this
@@ -1447,6 +1487,22 @@ class _Run:
             pass
         return {"slot_wait_s": self.slot_wait, "drain_s": drain, "hold_s": held}
 
+    def facts_of(self, name):
+        """{config, declaration, data_hash, nulls}: a field that cannot be known is None and `nulls` says why."""
+        f = self.facts.get(name)
+        nulls = {}
+        if f is None:
+            nulls["declaration"] = nulls["data_hash"] = ("the row is not in the build's ctest inventory" if self.facts
+                                                         else "no ctest inventory for the build")
+        elif f.get("data_hash") is None:
+            nulls["data_hash"] = f.get("data_why") or "no data hash"
+        if self.config is None: nulls["config"] = self.config_why
+        if not self.shas.get("built"):
+            nulls["built_from"] = "no BUILT_FROM stamp in the build" if self.build else "no build dir"
+        if not self.box0.get("display"): nulls["display"] = "no DISPLAY in the run's environment"
+        return {"config": self.config, "declaration": (f or {}).get("declaration"), "data_hash": (f or {}).get("data_hash"),
+                "nulls": nulls}
+
     def say(self, text):
         if self.echo:
             sys.stdout.write(text + "\n"); sys.stdout.flush()
@@ -1471,6 +1527,7 @@ class _Run:
         # drain and hold of the whole card, the queue behind this gate at the row's start
         base.update(self.costs(t_end))
         if BATCH: base["batch"] = BATCH        # a batch candidate's gate or attribution: never a lane's own record
+        base.update(self.facts_of(name))
         v, st, bline = row_verdict(status, text, arms)
         wait, twait = lock_wait(text), token_wait(text)
         # a timing row's lock line and its admission line are the SAME wait: subtract it once
@@ -1780,6 +1837,19 @@ def run_ctest(cmd, cwd, tier, lane, jobs, reasons=None, gating=None, rng=None, r
     return rc or (8 if reds or held else 0)
 
 
+def row_facts(build):
+    """({row: {labels, declaration, data_hash, data_why}}, config, config_why) of a build dir (gate_graph.row_facts and
+    build_config): what every record of a run in it carries."""
+    try:
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        import gate_graph
+        facts, _ = gate_graph.row_facts(build)
+        cfg, why = gate_graph.build_config(build)
+        return facts, cfg, why
+    except (OSError, ValueError) as e:
+        return {}, None, f"the build could not be read ({e.__class__.__name__})"
+
+
 def inventory_labels(build):
     """suite -> labels (listed from a copy of the CTestTestfile tree: gate_graph.ctest_inventory)."""
     try:
@@ -1820,13 +1890,14 @@ QUIET_MIN = 3
 def median_times(days=14, verdicts=("PASS",), sources=None):
     """suite -> median wall seconds over the run log's last `days` days (PASS rows by default:
     a red's time is its failure's, not the suite's). THE QUIET MEDIAN FIRST (TESTING-DEBTS-1 T8:
-    medians taken under sibling gates ran ~26 % high): a suite with >= QUIET_MIN records whose
-    `box.other_ctests == 0` is costed from those alone, else from every record. `sources`, a
-    dict, receives suite -> "quiet" | "all"."""
+    medians taken under sibling gates ran ~26 % high): a suite with >= QUIET_MIN QUIET records (quiet():
+    no sibling ctest, no build, no GPU competitor, the load under the box's figure) is costed from those
+    alone, else from every record. `sources`, a dict, receives suite -> "quiet" | "all"."""
     d = log_dir()
     cutoff = (datetime.date.today() - datetime.timedelta(days=days)).isoformat()
     acc = {}
     if not os.path.isdir(d): return {}
+    lm = quiet_load_max()
     for f in sorted(os.listdir(d)):
         if not f.endswith(".jsonl") or f[:10] < cutoff: continue
         for line in open(os.path.join(d, f)):
@@ -1835,11 +1906,10 @@ def median_times(days=14, verdicts=("PASS",), sources=None):
             if r.get("verdict") not in verdicts or r.get("seconds") is None: continue
             # an arm is costed as `<row>::<arm>` (gate-scope's key for a partial pool)
             k = r["suite"] if not r.get("arm") else f"{r['suite']}::{r['arm'].split('.', 1)[-1]}"
-            quiet = (r.get("box") or {}).get("other_ctests") == 0
-            acc.setdefault(k, []).append((r["seconds"], quiet))
+            acc.setdefault(k, []).append((r["seconds"], quiet(r, lm)[0]))
     out = {}
     for k, v in acc.items():
-        q = [x for x, quiet in v if quiet]
+        q = [x for x, qt in v if qt]
         use = q if len(q) >= QUIET_MIN else [x for x, _ in v]
         out[k] = statistics.median(use)
         if sources is not None: sources[k] = "quiet" if use is q else "all"
@@ -2191,9 +2261,6 @@ def main():
     q2 = sub.add_parser("load-reds", help="red in a gate, green solo at the same tip")
     q2.add_argument("--days", type=int, default=7)
     q4 = sub.add_parser("clocks", help="the GPU's clock state now (exit 3 when it reads locked)")
-    hm = sub.add_parser("hash-move", help="record a selftest hash that moved off its record (kind: hash-move)")
-    hm.add_argument("--tier", required=True, choices=TIERS); hm.add_argument("--lane", default=None)
-    hm.add_argument("--pose", required=True); hm.add_argument("--old", required=True); hm.add_argument("--new", required=True)
     q3 = sub.add_parser("trend", help="steps in the target rows' readings across tips (non-gating)")
     q3.add_argument("--days", type=int, default=30); q3.add_argument("--k", type=float, default=TREND_K)
     q3.add_argument("--tip", default=None, help="only the steps whose first tip is this sha")
@@ -2244,11 +2311,6 @@ def main():
         if a.record:
             check_tier(a.record[0])
         query_trend(a.days, a.suite, a.tip, a.k, record=tuple(a.record) if a.record else None); return
-    if a.cmd == "hash-move":
-        # A HASH MOVE IS A RECORD (GATE-COST-2 #11): rc-gate.sh writes one per pose that left its record
-        path = phase_record("hash-move", a.tier, a.lane or _git(["rev-parse", "--abbrev-ref", "HEAD"]), None,
-                            tree_shas(), pose=a.pose, old=a.old, new=a.new)
-        print(f"hash-move: pose {a.pose} {a.old[:12]} -> {a.new[:12]} recorded -> {path}"); return
     if a.cmd == "clocks":
         # THE STAGE CLOSE'S CLOCK CHECK (plan 9cl CLOCK-TRAP-1): a card left locked after a run
         # reads `locked?` (idle and not clocking down); rc-gate.sh prints this and reds on exit 3.

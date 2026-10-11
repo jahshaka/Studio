@@ -286,9 +286,11 @@ rule …`, `symbols [FogDesc, density] named by 7 file(s)`, `names 2 row(s)`, `t
 (vendored) enters our code through [...]`), then every selected row with its reason
 (`[relinks test_x]`, `symbol FogDesc`, `rule …`, `[module world]`) and the estimate (`N of M tier
 rows, ~S of ~T suite-seconds`, costs from THE RUN LOG's 14-day medians over
-`scripts/gate-times.txt` — a suite's QUIET median, of its PASS records whose `box.other_ctests == 0`,
-when >= 3 such exist, else every record's (medians under sibling gates ran ~26 % high,
-TESTING-DEBTS-1); the estimate line counts which source each cost came from).
+`scripts/gate-times.txt` — a suite's QUIET median, of its PASS records that ran on a QUIET box
+(`gate_runlog.quiet`, RUNNER-A1: no sibling ctest, no build outside the gate, no GPU competitor, and the row's 1-min
+load under `testing/box-baseline.json`'s `quiet_load_max`; a record without a census is not quiet), when >= 3 such
+exist, else every record's (medians under sibling gates ran ~26 % high, TESTING-DEBTS-1); the estimate line counts
+which source each cost came from).
 
 **THE RUN LOG (TESTING_V2 T8).** `--run` (its tier `scoped`, or `scoped-fallback` / `scoped-tier` when a scoped gate ran the whole tier), `--solo` and the rc-gate tiers
 (`scripts/gate_runlog.py run --tier <t> -- <ctest line>`) append one JSON record per row and per
@@ -301,10 +303,15 @@ Every record carries `overrides: [NAME=value …]`, the law switches a HUMAN set
 the wait and re-queue knobs, a fake journal, a private JAH_VRAM_DIR, a JAH_GATE_SLOT_HELD naming no live
 holder) — the push judge refuses a candidate whose records carry any; a `--verdict` is not one. What the
 TOOLS set after a whole-card drain timed out is `fallback: drain-timeout` on every record of that run, and
-a timing, quiet-box or perf row's record carrying it is not a measurement (the judge refuses it: re-run). A selftest hash that left its record and a trend
-step are RECORDS too (`kind: hash-move {pose, old, new}` via `gate_runlog.py hash-move`, `kind: trend-step
-{row, target, delta}` written by the gate's trend and `gate_runlog.py trend --record <tier> <lane>`), beside
-`kind: abort` and `kind: drain-timeout` (§4c, §4); their suites start with `@`, which no selection names.
+a timing, quiet-box or perf row's record carrying it is not a measurement (the judge refuses it: re-run). EVERY selftest
+hash and a trend step are RECORDS too (`kind: hash {pose, sha, move: same|moved|new, record, built}` — one per pose per
+tip and build, written by the lead's `rc-gate.sh` and the self-audit through `scripts/lead/lib/runner/records.py`,
+RUNNER-A1; `kind: trend-step {row, target, delta}` written by the gate's trend and `gate_runlog.py trend --record <tier>
+<lane>`), beside `kind: abort` and `kind: drain-timeout` (§4c, §4); their suites start with `@`, which no selection
+names. SCHEMA 3 (RUNNER-A1): every row/arm record also carries the build's `config` (its CMakeCache: type, generator,
+compiler, linker, options, a hash), the row's `declaration` (`{labels, timeout, tokens, run_serial, hash}` — the hash
+over every ctest property but COST and the command line, the tree root and the build dir as `<root>`/`<build>`), its
+`data_hash` (the files its command names, read where the build is) and `nulls` `{field: why}` for each it could not know.
 A row's record: verdict (PASS | FAIL | CRASH | TIMEOUT | NOTRUN |
 NOADMIT | OOM | LOST, §4b), retries, wall seconds, a target's value, the selection reason, the
 tree's three shas, `lanes` (the LIST of lanes the gated tree carries — a batch candidate's every

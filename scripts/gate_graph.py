@@ -547,6 +547,198 @@ def ctest_inventory(build):
         shutil.rmtree(tmp, ignore_errors=True)
 
 
+# -- THE ROW'S DECLARATION, ITS DATA, THE BUILD'S CONFIGURATION (RUNNER-A1; TESTING_RUNNER_SPEC §3.1) -----------------
+# Every run-log record carries what the row WAS when it ran: its declaration (ctest's properties and its command line) and
+# a hash of the data files its command names, so a later selection can tell "the row did not change" from "the row's
+# declaration or data moved" (§3.2). THE TREE ROOT IS STRIPPED (preflight 2, P12): ctest's command and WORKING_DIRECTORY
+# carry the worktree's path (rc-batch-dfx1/scripts/gpu-admit.sh, …/build-linux/tests/gi) — a raw hash would re-key every
+# row per tree. The paths are rewritten to `<root>` / `<build>` from the build's OWN CMakeCache (CMAKE_HOME_DIRECTORY,
+# CMAKE_CACHEFILE_DIR: a copied or moved build dir still names the tree it was configured in) and from the directory the
+# build sits in now; ctest_inventory's temporary copy (a row with no WORKING_DIRECTORY of its own defaults to the copy's
+# directory) is `<build>` too.
+_DECL_IGNORED = ("COST",)          # ctest's scheduling order: it changes what runs first, never what a row runs
+_INV_COPY = re.compile(r"[^\s\"'=;:]*/gate-inventory-[A-Za-z0-9_]+")
+_CONFIG_KEYS = ("CMAKE_BUILD_TYPE", "CMAKE_GENERATOR", "CMAKE_C_COMPILER", "CMAKE_CXX_COMPILER", "CMAKE_LINKER_TYPE",
+                "CMAKE_C_FLAGS", "CMAKE_CXX_FLAGS", "CMAKE_EXE_LINKER_FLAGS", "CMAKE_SHARED_LINKER_FLAGS",
+                "CMAKE_POSITION_INDEPENDENT_CODE", "CMAKE_JOB_POOL_LINK")
+
+
+def _cache_entries(build):
+    """{name: (type, value)} of <build>/CMakeCache.txt, or None without one."""
+    out = {}
+    try:
+        with open(os.path.join(build, "CMakeCache.txt"), errors="replace") as f:
+            for line in f:
+                m = re.match(r"^([A-Za-z_][A-Za-z0-9_.+-]*):([A-Z]+)=(.*)$", line.rstrip("\n"))
+                if m:
+                    out[m.group(1)] = (m.group(2), m.group(3))
+    except OSError:
+        return None
+    return out
+
+
+def build_roots(build, cache=None):
+    """{root, build, cur_root, cur_build}: the source root and build dir the build was CONFIGURED as (its CMakeCache —
+    what its CTestTestfiles name) and where they are NOW (the build dir given; its root = the same relative place), or
+    None without a CMakeCache."""
+    c = _cache_entries(build) if cache is None else cache
+    if not c:
+        return None
+    root = (c.get("CMAKE_HOME_DIRECTORY") or ("", ""))[1].rstrip("/")
+    bdir = (c.get("CMAKE_CACHEFILE_DIR") or ("", ""))[1].rstrip("/")
+    cur_build = os.path.abspath(build).rstrip("/")
+    cur_root = root
+    if root and bdir:
+        rel = os.path.relpath(bdir, root)
+        if not rel.startswith("..") and rel != "." and cur_build.endswith("/" + rel):
+            cur_root = cur_build[:-len(rel) - 1]
+    return {"root": root, "build": bdir or cur_build, "cur_root": cur_root, "cur_build": cur_build}
+
+
+def _prefixes(roots):
+    """[(prefix, token)] longest first: the build dirs before the roots they sit in."""
+    out = []
+    for k, tok in (("build", "<build>"), ("cur_build", "<build>"), ("root", "<root>"), ("cur_root", "<root>")):
+        p = (roots or {}).get(k)
+        if p and p != "/" and (p, tok) not in out:
+            out.append((p, tok))
+    return sorted(out, key=lambda x: -len(x[0]))
+
+
+def strip_roots(value, roots):
+    """`value` (a string, or lists / dicts of them) with the tree's and the build's paths as `<root>` / `<build>` and
+    the inventory's temporary copy as `<build>`."""
+    if isinstance(value, str):
+        s = _INV_COPY.sub("<build>", value)
+        for p, tok in _prefixes(roots):
+            s = re.sub(re.escape(p) + r"(?=/|$|[\s\"';:,=])", tok, s)
+        return s
+    if isinstance(value, list):
+        return [strip_roots(v, roots) for v in value]
+    if isinstance(value, dict):
+        return {k: strip_roots(v, roots) for k, v in value.items()}
+    return value
+
+
+def _sha256(data):
+    import hashlib
+    return hashlib.sha256(data).hexdigest()
+
+
+def _canon_json(v):
+    import json as _json
+    return _json.dumps(v, sort_keys=True, separators=(",", ":"))
+
+
+def declaration(test, roots):
+    """A ctest row's DECLARATION, the tree root stripped: {labels, timeout, tokens, run_serial, hash} — `hash` over
+    EVERY property but COST (scheduling only) and the whole command line, root-free; `tokens` = the VRAM tokens it
+    asks (`gpu-admit.sh <n>`, else its RESOURCE_GROUPS vram slots, else 0)."""
+    props = {p["name"]: p["value"] for p in test.get("properties", []) if p.get("name") not in _DECL_IGNORED}
+    cmd = test.get("command") or []
+    full = strip_roots({"command": cmd, "properties": props}, roots)
+    tokens = 0
+    if cmd and os.path.basename(cmd[0]) == "gpu-admit.sh" and len(cmd) > 1 and str(cmd[1]).isdigit():
+        tokens = int(cmd[1])
+    else:
+        for g in props.get("RESOURCE_GROUPS") or []:
+            for r_ in (g or {}).get("requirements") or []:
+                if r_.get(".type") == "vram":
+                    tokens += int(r_.get("slots") or 0)
+    return {"labels": sorted(props.get("LABELS") or []), "timeout": props.get("TIMEOUT"),
+            "tokens": tokens, "run_serial": bool(props.get("RUN_SERIAL")),
+            "hash": _sha256(_canon_json(full).encode())}
+
+
+def _is_elf(path):
+    try:
+        with open(path, "rb") as f:
+            return f.read(4) == b"\x7fELF"
+    except OSError:
+        return False
+
+
+def data_hash(test, roots, _memo=None):
+    """(sha256 | None, why | None, [the files hashed, root-stripped]) of THE DATA A ROW NAMES: every regular file on its
+    command line (an argument, or the value of `--opt=<path>`) inside the tree or the build — scripts, fixtures, samples,
+    configured copies — read where the build is NOW. Not data: an executable the build linked (ELF: BUILT_FROM keys the
+    artefact), a directory (named, never walked), a path outside the tree (the system's /usr/bin/bash), an absent path
+    in the build (an output the row writes). Absent = None with the reason: a named source-tree file that is not
+    there, or a command that names no data file."""
+    memo = {} if _memo is None else _memo
+    cur = {"<root>": (roots or {}).get("cur_root"), "<build>": (roots or {}).get("cur_build")}
+    named, missing = {}, []
+    for a in test.get("command") or []:
+        for part in [a] + ([a.split("=", 1)[1]] if a.startswith("-") and "=" in a else []):
+            if not part.startswith("/"):
+                continue
+            rel = strip_roots(part, roots)
+            if not (rel.startswith("<root>") or rel.startswith("<build>")):
+                continue
+            tok = "<build>" if rel.startswith("<build>") else "<root>"
+            if not cur[tok]:
+                continue
+            path = cur[tok] + rel[len(tok):]
+            if os.path.isdir(path):
+                continue
+            if not os.path.isfile(path):
+                # an absent path in the BUILD is what the row writes (its home, its picture), never its data; an
+                # absent path in the source tree is a real absence
+                if tok == "<root>":
+                    missing.append(rel)
+                continue
+            if path not in memo:
+                memo[path] = None if _is_elf(path) else _sha256(open(path, "rb").read())
+            if memo[path] is not None:
+                named[rel] = memo[path]
+    if missing:
+        return None, "named file(s) absent where the build is now: " + ", ".join(sorted(set(missing))[:4]), []
+    if not named:
+        return None, "the row names no data file (its command: an artefact, directories or system paths only)", []
+    return _sha256("".join(f"{k}\0{v}\n" for k, v in sorted(named.items())).encode()), None, sorted(named)
+
+
+def build_config(build, cache=None):
+    """(the BUILD CONFIGURATION from <build>/CMakeCache.txt — {build_type, generator, compiler, linker, flags, options,
+    hash}, None) or (None, why). `options` = every -D the configure line gave that the project does not declare
+    (cache type UNINITIALIZED: DISABLE_BREAKPAD, the linker and PIC switches) and every JAH_/ENABLE_/WITH_/USE_ cache
+    option; `hash` over all of it."""
+    c = _cache_entries(build) if cache is None else cache
+    if not c:
+        return None, f"no CMakeCache.txt in {build}"
+    keys = {k: v for k, (t, v) in c.items() if k in _CONFIG_KEYS or k.endswith("_FLAGS_" + (c.get("CMAKE_BUILD_TYPE") or ("", ""))[1].upper())}
+    opts = {k: v for k, (t, v) in c.items()
+            if (t == "UNINITIALIZED" or re.match(r"^(JAH|ENABLE|DISABLE|WITH|USE)_", k)) and k not in keys}
+    cfg = {"build_type": (c.get("CMAKE_BUILD_TYPE") or ("", ""))[1] or None,
+           "generator": (c.get("CMAKE_GENERATOR") or ("", ""))[1] or None,
+           "compiler": (c.get("CMAKE_CXX_COMPILER") or ("", ""))[1] or None,
+           "linker": (c.get("CMAKE_LINKER_TYPE") or ("", ""))[1] or None}
+    full = {"keys": keys, "options": opts}
+    cfg["options"] = opts
+    cfg["hash"] = _sha256(_canon_json(full).encode())
+    return cfg, None
+
+
+def row_facts(build):
+    """({row: {labels, declaration, data_hash, data_why}}, roots) for every ctest row of <build> (its inventory:
+    ctest_inventory, cached per build state), or ({}, None) when the build has none."""
+    import json as _json
+    cache = _cache_entries(build)
+    roots = build_roots(build, cache) if cache else None
+    try:
+        raw, _ = ctest_inventory(build)
+        tests = _json.loads(raw or "{}").get("tests", [])
+    except (OSError, ValueError):
+        return {}, roots
+    memo, out = {}, {}
+    for t in tests:
+        props = {p["name"]: p["value"] for p in t.get("properties", [])}
+        h, why, _ = data_hash(t, roots, memo)
+        out[t["name"]] = {"labels": props.get("LABELS", []) or [], "declaration": declaration(t, roots),
+                          "data_hash": h, "data_why": why}
+    return out, roots
+
+
 # -- C/C++ text ------------------------------------------------------------------------------
 _CXX_KEYWORDS = set("""
 alignas alignof and asm auto bool break case catch char char8_t char16_t char32_t class const
