@@ -858,18 +858,149 @@ def build_config(build, cache=None):
 
 
 _DECLARED_FROM = {}
+_RENDERING = ("app", "selftest", "engine", "vr")
+_LIBRARY = ("app", "vr", "headless")
+_CALL_KEYWORDS = {"CLASS", "TIER", "TOKENS", "WORKING_DIRECTORY", "NEEDS_WHY", "NEEDS", "COMMAND", "DATA", "TEST_WINDOW",
+                  "NAME", "RUN_TIMEOUT", "HEADLESS", "BASELINE", "LABELS", "ENV", "LAUNCHER", "APP_ARGS", "PROPS"}
 
 
-def declared_from(build):
-    """{row: JAH_DATA value | None} of another build's inventory (cached) — the declarations of a newer tree."""
-    key = os.path.abspath(build)
-    if key not in _DECLARED_FROM:
-        import json as _json
-        raw, _ = ctest_inventory(build)
-        _DECLARED_FROM[key] = {t["name"]: next((p["value"] for p in t.get("properties", [])
-                                                if p.get("name") == DATA_PROPERTY), None)
-                               for t in _json.loads(raw or "{}").get("tests", [])}
-    return _DECLARED_FROM[key]
+def declared_from(src, inventory=None, roots=None):
+    """{row: JAH_DATA value | None} — THE DECLARATIONS OF ANOTHER TREE laid over a build's rows: from a CONFIGURED build
+    (its inventory's JAH_DATA properties, exactly), or — `src` a SOURCE tree with no CMakeCache (the integration tree is
+    never configured) — from its CMake TEXT by declared_from_source over `inventory` (the build's own ctest json)."""
+    key = (os.path.abspath(src), id(inventory))
+    if key in _DECLARED_FROM:
+        return _DECLARED_FROM[key]
+    import json as _json
+    if os.path.isfile(os.path.join(src, "CMakeCache.txt")):
+        raw, _ = ctest_inventory(src)
+        out = {t["name"]: next((p["value"] for p in t.get("properties", []) if p.get("name") == DATA_PROPERTY), None)
+               for t in _json.loads(raw or "{}").get("tests", [])}
+    else:
+        out = declared_from_source(src, inventory or {}, roots)
+    _DECLARED_FROM[key] = out
+    return out
+
+
+def _cmake_list(text, var):
+    m = re.search(r"^\s*set\(\s*" + re.escape(var) + r"\s+([^)]*)\)", text, re.M)
+    return m.group(1).split() if m else []
+
+
+def _call_data(path, line, cache):
+    """The `DATA <sets…>` tokens of the macro CALL starting at <path>:<line> (the text up to its balanced paren)."""
+    if path not in cache:
+        try:
+            cache[path] = open(path, errors="replace").read().splitlines()
+        except OSError:
+            cache[path] = []
+    lines = cache[path]
+    if not (0 < line <= len(lines)):
+        return []
+    text, depth, started = "", 0, False
+    for l in lines[line - 1:line + 60]:
+        for ch in l.split("#", 1)[0] + "\n":
+            text += ch
+            if ch == "(":
+                depth += 1; started = True
+            elif ch == ")":
+                depth -= 1
+                if started and depth == 0:
+                    break
+        if started and depth == 0:
+            break
+    toks = re.findall(r'"[^"]*"|[^\s()]+', text)
+    out, on = [], False
+    for tk in toks:
+        bare = tk.strip('"')
+        if bare in _CALL_KEYWORDS:
+            on = bare == "DATA"; continue
+        if on:
+            out.append(bare)
+    return out
+
+
+def declared_from_source(src, inventory, roots=None):
+    """THE JAH_DATA DECLARATIONS FROM THE TREE'S CMAKE TEXT, without a configure (RUNNER-A2B follow-up): the rules of
+    tests/CMakeLists.txt's _jah_data and jah_data_pass, applied to a build's rows —
+      * a row's CLASS from its command line (gpu-admit.sh / gpu-exclusive.sh `--label <row>:<class>`; a pool's run_pool.py,
+        `--headless` or not): engine-media for a rendering class, library-template for app / vr / headless;
+      * the macro call's own `DATA` clause, read at the call site the inventory's backtrace names; a `${…}` it cannot
+        expand widens to the family's superset (`samples/${X}` -> `samples`: more reruns, never a wrong serving);
+      * a fresh-home wipe (tests/support/fresh_home.sh with FIXTURES_SETUP) is NONE;
+      * by directory: fixtures/<dir> where the source tree holds tests/<dir>/fixtures; `samples` for JAH_DATA_SAMPLE_DIRS;
+        NONE for an undeclared row of JAH_DATA_NONE_DIRS.
+    A tree whose tests/CMakeLists.txt has no jah_data_pass declares nothing ({}). Returns {row: "a;b" | None}."""
+    try:
+        top = open(os.path.join(src, "tests", "CMakeLists.txt"), errors="replace").read()
+    except OSError:
+        return {}
+    if "jah_data_pass" not in top:
+        return {}
+    sample_dirs, none_dirs = set(_cmake_list(top, "JAH_DATA_SAMPLE_DIRS")), set(_cmake_list(top, "JAH_DATA_NONE_DIRS"))
+    bt = inventory.get("backtraceGraph") or {}
+    files, nodes, commands = bt.get("files", []), bt.get("nodes", []), bt.get("commands", [])
+    croot = (roots or {}).get("root") or ""
+
+    def to_src(p):
+        if croot and (p == croot or p.startswith(croot + "/")):
+            return os.path.join(src, os.path.relpath(p, croot))
+        return p
+    cache, out = {}, {}
+    for t in inventory.get("tests", []):
+        props = {p["name"]: p["value"] for p in t.get("properties", [])}
+        cmd = [str(c) for c in (t.get("command") or [])]
+        fams = []
+        cls = None
+        # THE FRAMES (innermost first): (source file, line, the command that frame runs) — only a row the declaring
+        # macros REGISTERED carries their families (a row registered by plain add_test, whatever its command, does not)
+        frames, n = [], nodes[t["backtrace"]] if isinstance(t.get("backtrace"), int) and t["backtrace"] < len(nodes) else None
+        while n is not None:
+            if n.get("file") is not None and n["file"] < len(files):
+                c = commands[n["command"]].lower() if n.get("command") is not None and n["command"] < len(commands) else ""
+                frames.append((to_src(files[n["file"]]), n.get("line"), c))
+            n = nodes[n["parent"]] if "parent" in n else None
+        macro = next((c for _, _, c in frames if c in ("jah_gpu_row", "jah_gpu_exclusive_test", "jah_add_pool")), None)
+        wipe = any(c == "jah_fresh_home_fixture" for _, _, c in frames)
+        for i, c in enumerate(cmd if macro in ("jah_gpu_row", "jah_gpu_exclusive_test") else []):
+            if os.path.basename(c) in ("gpu-admit.sh", "gpu-exclusive.sh"):
+                j = cmd.index("--label", i) if "--label" in cmd[i:] else -1
+                if j > 0 and j + 1 < len(cmd) and ":" in cmd[j + 1]:
+                    cls = cmd[j + 1].rsplit(":", 1)[1]
+                break
+        if cls is None and macro == "jah_add_pool":
+            cls = "headless" if "--headless" in cmd else "app"
+        if cls in _RENDERING:
+            fams.append("engine-media")
+        if cls in _LIBRARY:
+            fams.append("library-template")
+        if wipe and macro is None:
+            fams.append("NONE")
+        # the call site's directory (the first frame in a tests/<dir>/ file) and the macro call's own DATA clause
+        tests_dir = os.path.join(src, "tests") + "/"
+        site = next(((f, l) for f, l, _ in frames if f.startswith(tests_dir) and os.path.dirname(f) != tests_dir.rstrip("/")),
+                    None)
+        if macro:
+            call = next(((f, l) for f, l, c in frames if c == macro and l), None)
+            for d in (_call_data(call[0], call[1], cache) if call else []):
+                fams.append("samples" if d.startswith("samples/") and "${" in d else d)
+        if site:
+            rel = os.path.relpath(os.path.dirname(site[0]), os.path.join(src, "tests"))
+            topd = rel.split("/", 1)[0]
+            add = []
+            if os.path.isdir(os.path.join(src, "tests", rel, "fixtures")):
+                add.append(f"fixtures/{rel}")
+            if topd in sample_dirs:
+                add.append("samples")
+            if not fams and not add and topd in none_dirs:
+                add.append("NONE")
+            fams += add
+        seen = []
+        for f in fams:
+            if f not in seen:
+                seen.append(f)
+        out[t["name"]] = ";".join(seen) or None
+    return out
 
 
 def row_facts(build, data_from=None):
@@ -881,13 +1012,15 @@ def row_facts(build, data_from=None):
     roots = build_roots(build, cache) if cache else None
     try:
         raw, _ = ctest_inventory(build)
-        tests = _json.loads(raw or "{}").get("tests", [])
+        inv = _json.loads(raw or "{}")
+        tests = inv.get("tests", [])
     except (OSError, ValueError):
         return {}, roots
     if data_from is None and os.environ.get("JAH_DATA_DECLARED_FROM"):
         # THE DECLARATIONS OF A NEWER TREE laid over this build's commands (a replay on a build configured before its
-        # tree declared its data: runner_select_test, data-audit's AFTER)
-        data_from = declared_from(os.environ["JAH_DATA_DECLARED_FROM"])
+        # tree declared its data: runner_select_test, data-audit's AFTER) — a configured build's, or a SOURCE tree's
+        # read from its CMake text (declared_from_source: no configure of the tree is ever needed)
+        data_from = declared_from(os.environ["JAH_DATA_DECLARED_FROM"], inv, roots)
     memo, out = {}, {}
     for t in tests:
         if data_from is not None and t.get("name") in data_from:
