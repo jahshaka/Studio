@@ -661,7 +661,8 @@ def _is_elf(path):
 # THE DATA EDGES (RUNNER-A2B; TESTING_RUNNER_SPEC v2.1 rule 2 "the row's data … unchanged"): every row's DATA SET — the files
 # it reads beside its executable — from three sources, in this order of truth:
 #   argument  a regular file on its command line (or `--opt=<path>`) inside the tree or the build: scripts, fixtures,
-#             configured copies (not an ELF the build linked: BUILT_FROM keys the artefact; not an output it writes);
+#             configured copies (not an ELF the build linked: BUILT_FROM keys the artefact; not an output it writes; not a
+#             wrapper of the HARNESS — HARNESS_DIRS: scripts/, tests/support/ — which never makes a row's data known);
 #   walked    a DIRECTORY argument inside the source tree, walked (every regular file, the VCS and cache dirs pruned) —
 #             never the tree root itself (a lint's whole-tree argument: the selector's source rules own those rows) and
 #             never a build dir;
@@ -677,6 +678,10 @@ DATA_SETS = {                                  # a named set -> the source-tree 
     "library-template": ("app/content", "app/templates"),
     "samples": ("scenes",),                    # every shipped sample (scenes/ beside the binary); samples/<name>: one
 }
+# THE HARNESS IS NOT DATA (the lead's read of RUNNER-A2B): a command-line path under these source-tree dirs is a wrapper of
+# the harness (scripts/gpu-admit.sh, scripts/gpu-exclusive.sh, tests/support/fresh_home.sh, run_pool.py …) — it never makes
+# a row's data known; the row's set is its real data arguments, its walked directories and its declared families only.
+HARNESS_DIRS = ("scripts/", "tests/support/")
 DATA_PRUNE = {".git", "__pycache__", ".cache", "build", "build-linux", "node_modules"}
 DATA_WALK_MAX = 20000                          # files one walked directory may hold before it is UNKNOWN (said, never cut)
 
@@ -769,6 +774,8 @@ def data_set(test, roots, _memo=None):
             if not cur[tok]:
                 continue
             path = cur[tok] + rel[len(tok):]
+            if tok == "<root>" and rel[len("<root>/"):].startswith(HARNESS_DIRS):
+                continue                     # a harness wrapper: never data
             if os.path.isdir(path):
                 # a DIRECTORY ARGUMENT: walked when it is a source dir (never the tree root, never a build dir)
                 if tok == "<root>" and rel not in ("<root>", "<root>/") and not any(
@@ -850,6 +857,21 @@ def build_config(build, cache=None):
     return cfg, None
 
 
+_DECLARED_FROM = {}
+
+
+def declared_from(build):
+    """{row: JAH_DATA value | None} of another build's inventory (cached) — the declarations of a newer tree."""
+    key = os.path.abspath(build)
+    if key not in _DECLARED_FROM:
+        import json as _json
+        raw, _ = ctest_inventory(build)
+        _DECLARED_FROM[key] = {t["name"]: next((p["value"] for p in t.get("properties", [])
+                                                if p.get("name") == DATA_PROPERTY), None)
+                               for t in _json.loads(raw or "{}").get("tests", [])}
+    return _DECLARED_FROM[key]
+
+
 def row_facts(build, data_from=None):
     """({row: {labels, declaration, data_hash, data_why, data_dirs, data_declared, data_count, data_sources}}, roots) for
     every ctest row of <build> (its inventory:
@@ -862,6 +884,10 @@ def row_facts(build, data_from=None):
         tests = _json.loads(raw or "{}").get("tests", [])
     except (OSError, ValueError):
         return {}, roots
+    if data_from is None and os.environ.get("JAH_DATA_DECLARED_FROM"):
+        # THE DECLARATIONS OF A NEWER TREE laid over this build's commands (a replay on a build configured before its
+        # tree declared its data: runner_select_test, data-audit's AFTER)
+        data_from = declared_from(os.environ["JAH_DATA_DECLARED_FROM"])
     memo, out = {}, {}
     for t in tests:
         if data_from is not None and t.get("name") in data_from:
