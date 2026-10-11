@@ -384,8 +384,8 @@ mirror.document_to_engine 9.72  quiet n=43
 mirror.grid_floor 1.66  quiet n=43
 mirror.ground_plane 1.91  quiet n=44
 mirror.scale 1.85  quiet n=48
-mirror.settle_incremental 67.49  hand: MIRROR-SETTLE-1's quiet runs at B=32, 2026-10-11 (68.19, 66.78 s), n=2 median
-mirror.settle_thumbnails 8.50  hand: MIRROR-SETTLE-1's runs at B=32, 2026-10-11 (8.51, 8.48 s net of the VRAM admission wait), n=2 median
+mirror.settle_incremental 70.24  hand: MIRROR-SETTLE-1's quiet runs at B=24, 2026-10-11 (71.59, 68.89 s), n=2 median
+mirror.settle_thumbnails 11.12  hand: MIRROR-SETTLE-1's runs at B=24, 2026-10-11 (11.03, 11.20 s), n=2 median
 mirror.skinned_outline 1.38  quiet n=44
 mirror.sun_night 2.98  quiet n=45
 mirror.vr_proxies 1.79  quiet n=46

@@ -42,6 +42,10 @@
 //   9. JAH_MIRROR_VERIFY=full (every sync a full walk): a write still stamps
 //      its quiet clock and the prop re-promotes within kStaticSettleFrames +
 //      ceil(n / kStaticSettleNodesPerSync) + 8 syncs (read 2, F1).
+//  10. THE NODE COUNT IS LIVE NODES (fix round 6): a demotion and its re-promotion
+//      move nodes between Ogre's dynamic and static pools and leave holes;
+//      Engine::memoryStats' simdNodes (live) is invariant across them while the
+//      pools' used slots (simdNodeSlots, the old stat) are not.
 #include <QGuiApplication>
 
 #include <algorithm>
@@ -538,6 +542,76 @@ int main(int argc, char **argv)
         CHECK(victim->isStaticInGraph() && syncs <= bound,
               "verify=full: the write's quiet clock was stamped and the prop re-promoted (F1)");
         V.mirror->setSource(iris::ScenePtr());
+    }
+
+    // ---- 10: the live node count is invariant under promotion ---------------------
+    {
+        Arm L;
+        L.target = engine->createScene("livecount");
+        L.doc = iris::Scene::create();
+        auto g = iris::SceneNode::create();
+        L.doc->getRootNode()->addChild(g);
+        std::vector<iris::SceneNodePtr> props;
+        for (int i = 0; i < 2000; ++i) {
+            auto m = iris::MeshNode::create();
+            m->setMesh(gCube);
+            m->setMaterial(gMaterial);
+            m->setLocalPos(iris::Vec3(float(i % 50), 0.0f, float(i / 50)));
+            g->addChild(m);
+            props.push_back(m);
+        }
+        L.doc->getRootNode()->applyStaticDefaults();
+        L.mirror.reset(new SceneMirror(L.target));
+        L.mirror->setVerifierBudget(0);
+        L.mirror->setSource(L.doc);
+        L.mirror->sync();
+        for (int k = 0; L.mirror->staticSettleInProgress() && k < 100000; ++k) L.mirror->sync();
+        // 50 NEW props, born dynamic and adopted (the document's placement pass is not
+        // run: the settle classifies them). Counted once they are in the engine, then
+        // counted again after the settle promoted them dynamic -> static: the same
+        // nodes, each moved once — a non-LIFO destroy in the dynamic level (a hole,
+        // still a used slot) and a new slot in the static one.
+        std::vector<iris::SceneNodePtr> fresh;
+        for (int i = 0; i < 50; ++i) {
+            auto m = iris::MeshNode::create();
+            m->setMesh(gCube);
+            m->setMaterial(gMaterial);
+            m->setLocalPos(iris::Vec3(float(i), 2.0f, 0.0f));
+            g->addChild(m);
+            fresh.push_back(m);
+        }
+        L.mirror->sync();
+        size_t dynamicFresh = 0;
+        for (const auto &m : fresh) if (!m->isStaticInGraph()) ++dynamicFresh;
+        MemoryStats a, b;
+        const bool gotA = engine->memoryStats(a);
+        for (int k = 0; L.mirror->staticSettleInProgress() && k < 100000; ++k) L.mirror->sync();
+        size_t back = 0;
+        for (const auto &m : fresh) if (m->isStaticInGraph()) ++back;
+        const bool gotB = engine->memoryStats(b);
+        // ...and 50 props REMOVED from the document, kept alive (an undo stack's hold:
+        // pool.doc's doc.memory arm): detached and demoted, never destroyed — the
+        // path that left the hole the arm's used-slot count read as a node.
+        std::vector<iris::SceneNodePtr> held;
+        for (size_t i = 0; i < 50; ++i) {
+            const iris::SceneNodePtr p = props[i * 37 % props.size()];
+            p->removeFromParent();
+            held.push_back(p);
+        }
+        L.mirror->sync();
+        for (int k = 0; L.mirror->staticSettleInProgress() && k < 100000; ++k) L.mirror->sync();
+        MemoryStats c;
+        const bool gotC = engine->memoryStats(c);
+        std::printf("    live nodes %u -> %u -> %u, used slots %u -> %u -> %u (50 new props: dynamic %zu, "
+                    "promoted %zu; then 50 removed, held)\n", a.simdNodes, b.simdNodes, c.simdNodes,
+                    a.simdNodeSlots, b.simdNodeSlots, c.simdNodeSlots, dynamicFresh, back);
+        CHECK(gotA && gotB && gotC && dynamicFresh == 50 && back == 50,
+              "50 new props were dynamic in the engine and the settle promoted them");
+        CHECK(b.simdNodes == a.simdNodes && c.simdNodes == b.simdNodes,
+              "memoryStats' simdNodes (LIVE nodes) is invariant under promotion and a held removal");
+        CHECK(b.simdNodeSlots != a.simdNodeSlots || c.simdNodeSlots != b.simdNodeSlots,
+              "...while the pools' used slots (the old stat) are not: they count the holes");
+        L.mirror->setSource(iris::ScenePtr());
     }
 
     R.mirror->setSource(iris::ScenePtr());
