@@ -344,27 +344,43 @@ def runlog_cases(source):
             if old_p is None: os.environ.pop("OGRE_PREFIX", None)
             else: os.environ["OGRE_PREFIX"] = old_p
 
-    # T8: THE QUIET MEDIAN — a suite with >= 3 PASS records on a box with no sibling ctest is
-    # costed from those alone; with fewer, from every record (a private log directory)
+    # T8: THE QUIET MEDIAN — a suite with >= 3 PASS records on a QUIET box is costed from those alone; with fewer, from
+    # every record (a private log directory). QUIET is gate_runlog.quiet (RUNNER-A1): the census A1's writer records —
+    # no sibling ctest, no build outside the gate, no GPU competitor — and the row's load under the box baseline's
+    # quiet_load_max (a private baseline here). "quiet = other_ctests == 0" alone is the OLD rule: a record with no
+    # sibling but a build beside it (A1's case: push smoke1 beside the sc-smoke1 build) is NOT quiet.
     import datetime, tempfile
     with tempfile.TemporaryDirectory() as d:
-        old = os.environ.get("JAH_RUN_LOG_DIR")
+        old = {k: os.environ.get(k) for k in ("JAH_RUN_LOG_DIR", "JAH_BOX_BASELINE")}
         os.environ["JAH_RUN_LOG_DIR"] = d
+        os.environ["JAH_BOX_BASELINE"] = os.path.join(d, "box-baseline.json")
+        with open(os.environ["JAH_BOX_BASELINE"], "w") as f:
+            json.dump({"desktop": [], "quiet_load_max": 12.0}, f)
+
+        def box(others, builds=0, load=8.0):
+            if others is None:
+                return {}
+            return {"other_ctests": others, "load_mean": load,
+                    "census": {"other_ctests": others, "builds": builds, "gpu_competitors": []}}
         try:
             with open(os.path.join(d, datetime.date.today().isoformat() + "-scoped-000000000.jsonl"), "w") as f:
-                for suite, secs, others in ([("x", 10, 0)] * 3 + [("x", 30, 3)] * 3 +
-                                            [("y", 10, 0)] * 2 + [("y", 30, 2)] * 3 + [("z", 20, None)]):
-                    f.write(json.dumps({"suite": suite, "arm": None, "verdict": "PASS", "seconds": secs,
-                                        "box": {"other_ctests": others}}) + "\n")
+                for suite, secs, b in ([("x", 10, box(0))] * 3 + [("x", 30, box(3))] * 3 +
+                                       [("y", 10, box(0))] * 2 + [("y", 30, box(2))] * 3 +
+                                       [("w", 10, box(0, builds=2))] * 3 + [("w", 30, box(0))] * 2 +
+                                       [("z", 20, box(None))]):
+                    f.write(json.dumps({"suite": suite, "arm": None, "verdict": "PASS", "seconds": secs, "box": b}) + "\n")
             src = {}
             med = rl.median_times(days=1, sources=src)
         finally:
-            if old is None: os.environ.pop("JAH_RUN_LOG_DIR", None)
-            else: os.environ["JAH_RUN_LOG_DIR"] = old
+            for k, v in old.items():
+                if v is None: os.environ.pop(k, None)
+                else: os.environ[k] = v
     check(med.get("x") == 10 and src.get("x") == "quiet", "3 quiet records -> the quiet median (%s %s)"
           % (med.get("x"), src.get("x")))
     check(med.get("y") == 30 and src.get("y") == "all", "2 quiet records -> every record's median (%s %s)"
           % (med.get("y"), src.get("y")))
+    check(med.get("w") == 10 and src.get("w") == "all", "3 records with no sibling ctest but a BUILD beside them are "
+          "not quiet (A1's rule): 2 quiet -> every record's median (%s %s)" % (med.get("w"), src.get("w")))
     check(med.get("z") == 20 and src.get("z") == "all", "no box field -> every record's median")
 
 
