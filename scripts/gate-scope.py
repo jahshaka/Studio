@@ -1142,6 +1142,24 @@ class Selection:
         self.tooling_only = False          # §1.3.4: no touched path is a product input (select() decides)
 
     # -- adding rows -----------------------------------------------------------------------
+    def data_edges(self, paths, facts):
+        """A CHANGED DATA FILE IS A CHANGED SOURCE (RUNNER-A2B): every row with a DATA EDGE to a touched path (a file it
+        names, a directory it walks, a set its CMake declares — gate_graph.data_set) runs; a path the data edges own is
+        no FALLBACK (no rule owned it, its readers do)."""
+        hit = gate_graph.data_rows(facts, paths)
+        owned = set()
+        for n, p in hit.items():
+            if n in self.inv:      # in a tooling-only diff too: a row whose OWN data moved is not the product's, it is the row's
+                self.add([n], f"{p}: a data edge (the row reads it)")
+            owned.add(p)
+        for p in paths:
+            if any(p == d or p.startswith(d + "/") for f in facts.values() for d in f.get("data_dirs") or ()):
+                owned.add(p)
+        if owned and self.fallback:
+            self.fallback = [e for e in self.fallback if e.split(":", 1)[0].split(" (via", 1)[0] not in owned]
+        if hit:
+            self.rationale.append((sorted(set(hit.values()))[0], f"DATA EDGES: {len(hit)} row(s) read the touched data"))
+
     def add(self, suites, why):
         for s in suites:
             r0 = s.split("::", 1)[0]
@@ -2177,6 +2195,21 @@ def header_included_by_dir(name, d):
     return False
 
 
+_DATA_FACTS = {}
+
+
+def data_facts(build):
+    """{row: {data_dirs, ...}} of the build's rows (gate_graph.row_facts: the DATA EDGES — RUNNER-A2B), once per build
+    state (the inventory's own cache key: a rebuild re-reads it)."""
+    key = os.path.abspath(build)
+    if key not in _DATA_FACTS:
+        try:
+            _DATA_FACTS[key] = gate_graph.row_facts(build)[0]
+        except (OSError, ValueError):
+            _DATA_FACTS[key] = {}
+    return _DATA_FACTS[key]
+
+
 def select(paths, rng, build, jobs, graph=None, inv=None, quiet_graph=False):
     """The whole selection as data (gate.selection replays call this in-process)."""
     inv = inv if inv is not None else load_inventory(build)
@@ -2200,6 +2233,7 @@ def select(paths, rng, build, jobs, graph=None, inv=None, quiet_graph=False):
             S.tooling_path(p)
         else:
             S.path(p)
+    S.data_edges(paths, data_facts(build))
     S.stage_close_subjects(paths)
     if S.code_moved and not S.tooling_only: S.add(ALWAYS_ON_CODE, "code moved: smoke + contract")
     if graph is not None: graph.save_syms()
