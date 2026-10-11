@@ -522,6 +522,12 @@ keeps its syntax and the text is parsed:
   the same verdict class and the same failLine with its numbers masked — reproduced by a recorded solo at the
   range's base (a d-build commit): the row is then **KNOWN RED** — `--mode merge` passes it, `--mode push` and
   `--mode stage-close` refuse it (never push on a red). A ticket named alone clears nothing; a CRASH never.
+  THE BATCH'S VERDICT COVERS THE BATCH'S RANGE (TESTING-CLEANUP-2D): a verdict recorded at the candidate answers the same
+  red at every commit of the range — the cross-commit loop and the re-use arm read it through the same door and the same
+  proof. THE PROOF TRAVELS: a base with NO run of the row takes the nearest ancestor with a run (by ancestry, one hop)
+  whose solos are all the same masked red, when ancestor..base does not reach the row — an unreadable, fallback,
+  tree-equal or fork-pin range reaches everything, and a set-aside stage-close row is reached on both sides; the door's
+  why names the ancestor.
   A `nondeterminism` id clears a FAIL/TIMEOUT by 3/3 solo PASS (never a LOST/OOM/CRASH or an Xid red: those take a
   `kind: defect` entry) — a SINGLE-USE (NOT REPRODUCED) one only in the merge that registered it, never a push. A
   nondeterminism clearance passes a merge; a push or stage close re-asks 3/3 solo green AT THE CANDIDATE.

@@ -613,7 +613,7 @@ def ancestor_base_proof(key, base_sha, solos_at, is_ancestor, distance, reaches)
     ran = {a: [r for r in rs if r.get("verdict") not in NEVER_RAN] for a, rs in solos_at.items()}
     cands = [a for a, rs in ran.items() if rs and a != base_sha and is_ancestor(a, base_sha)]
     if not cands:
-        return [], None, "no ancestor of the base holds solos of the row"
+        return [], None, "no ancestor of the base holds a run of the row"
     a = min(cands, key=lambda s: (distance(s, base_sha), -max(_when(r).timestamp() for r in ran[s])))
     sol = ran[a]
     green = sum(1 for r in sol if r.get("verdict") == "PASS")
@@ -827,7 +827,7 @@ def check(rng, build, gs=None, verdicts=None, mode="merge", lane=None, stage_clo
                 anc[k] = ancestor_base_proof(
                     k, base_sha, anc_solos[0].get(k, {}), prover.ancestor, _distance,
                     lambda a, b, key: Reach.reaches(get_reach().between(a, b, unreadable=Reach.ALL), key))
-                if anc[k][1] or anc[k][2] != "no ancestor of the base holds solos of the row":
+                if anc[k][1] or anc[k][2] != "no ancestor of the base holds a run of the row":
                     print(f"ci-gate-check: base proof for {label(k)}: {anc[k][2]}")
             return own + anc[k][0]
         return proof
