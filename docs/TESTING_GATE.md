@@ -844,6 +844,18 @@ holder that holds across rows (`--solo`, `--attribute`) checks the queue between
 stay). `gpu-admit.sh gate --class N --label …` names the class; without it the label decides (`rc-<tag> smoke` -> 0,
 anything else -> 1). A measurement loop of `gpu-exclusive.sh` runs yields between its runs by construction (each run
 asks again at class 2).
+**A CLASS-1 GATE YIELDS TO A CLASS-0 SMOKE AT ITS NEXT ROW** (RUNNER-A5; TESTING_RUNNER_SPEC rule 7, §3.3). A gate cannot
+give its slot up between rows (one ctest, the slot's fd in its holder), so the gate's next admission that finds a
+lower-class asker MARKS the gate's ticket (`<seq>.<pid>.yield`, reaped with it) and — a row ctest scheduled by its tokens —
+exits 75 at once (NOADMIT, re-queued by `gate_runlog` AFTER the yield, a try that only waited a yield out not counted);
+any other admission of the gate (the rc's selftest) waits the yield out holding nothing. The asker takes the slot beside
+the marked gate once the gate's rows in flight have given their tokens back, runs, and the gate resumes when no
+lower-class ticket is left; the marked ticket keeps every other gate of its class behind it. `status` prints the holder
+`YIELDING at its next row`. **THE CARD QUEUE'S RECORD**: every GPU run is a job of the lead repo's
+`scripts/lead/runner.sh queue` (`testing/store/queue.sqlite`: kind, class, hold, pids, phases, wait, Xid read; the slot's
+tickets stay the lock) — the rc tiers (rc-gate.sh), a builder's rows (`lane-test.sh --self-audit`, deliver), and a
+hand measurement (`gpu-exclusive.sh` outside a gate, hold or job: `admit all` opens a `measure` job itself, refused
+with exit 3 while the owner's instance runs from the main tree's `build-linux`).
 **WHAT THE CLASS RULE COSTS, ACCEPTED** (the owner's rule, TESTING-CLEANUP-2B item 15): (1) a class-2 waiter can
 STARVE under a steady run of gates — every gate that asks while it waits is served first, with no bound on how many;
 (2) `admit all` (`gpu-exclusive.sh`) is not starved forever: its wait is bounded by the admission's `wait_bound`

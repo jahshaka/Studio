@@ -32,6 +32,9 @@ box's own queue, log or displays:
      owed a SOLO (3x, tier solo), never the ordinary pass;
   12. RUNNER-A1: the record complete — the build configuration, the row's declaration and data hash (the tree root
      stripped: the same toy at another path keys the same), every unknown a null with its reason; quiet();
+  13. RUNNER-A5 THE YIELD: a class-1 gate (`gate_runlog.py run`) yields to a class-0 smoke at its next row — the row
+     in flight finishes, the next ones refuse (NOADMIT), the smoke runs, the gate re-queues them after it without
+     spending its JAH_GATE_REQUEUE try, and ends green; no yield mark outlives it;
   8. THE SLOT UNDER STRESS: a dead waiter's ticket is reaped; eight gates at once hold it one at a time;
      a SIGKILLed gate's ctest and rows die within 15 s and the slot is free; a killed ctest ends a gate.
 
@@ -94,6 +97,11 @@ add_test(NAME id.big COMMAND python3 -c "import sys; [print('line %d ' % i + 'x'
 add_test(NAME id.red COMMAND sh -c "echo 'ok: a'; echo 'FAIL: the first assertion'; echo 'FAIL: the second'; exit 1")
 add_test(NAME id.stderr COMMAND sh -c "echo out; echo 'GPU out of memory (VK_ERROR_OUT_OF_DEVICE_MEMORY; the device is NOT lost)' >&2; exit 1")
 add_test(NAME id.arms COMMAND sh -c "echo 'ARM-BEGIN p.one'; echo 'ARM p.one PASS 120 ms'; echo 'ARM-BEGIN p.two'; echo 'MEM p.two gpuPoolUsed=10 textures=2'; echo 'ARM p.two FAIL 50 ms why'; echo 'ARM-BEGIN p.three'; echo 'MEM p gpuPoolUsed=100 textures=20 processMiB=300 tier=high'; exit 1")
+# the YIELD rows (RUNNER-A5, section 13): each admits 1 token AS A ROW CTEST SCHEDULED BY TOKENS (the two variables ctest
+# exports under a resource spec — set in the row's own shell: ctest drops them without a spec), logs itself and holds until the test releases it (yrel.<row>) — an event, never a clock
+foreach(r a b c)
+  add_test(NAME yield.${r} COMMAND sh -c "CTEST_RESOURCE_GROUP_COUNT=1 CTEST_RESOURCE_GROUP_0=vram python3 ${VT} admit 1 --label yield.${r} -- sh -c 'echo yield.${r} >> ${T}/order; while [ ! -e ${T}/yrel.${r} ]; do sleep 0.05; done'")
+endforeach()
 '''
 LABELS = {"lint.one": ["hygiene"], "time.card": ["timing"], "tgt.card": ["photon-target"]}
 # RUNNER-A1 (section 12): a row that NAMES a data file (the script) and an output it writes (absent until it runs)
@@ -1282,6 +1290,60 @@ set_tests_properties(fx.parent.inspector PROPERTIES FIXTURES_REQUIRED "fx_home;f
     finally:
         if old_b is None: os.environ.pop("JAH_BOX_BASELINE", None)
         else: os.environ["JAH_BOX_BASELINE"] = old_b
+    # ---- 13. RUNNER-A5: A CLASS-1 GATE YIELDS TO A CLASS-0 SMOKE AT ITS NEXT ROW --------------------------------------
+    # The REAL gate (`gate_runlog.py run`: the slot at class 1, run_ctest) runs yield.a, b, c at -j1; while yield.a is in
+    # flight the owner's smoke (class 0) asks. The row in flight is never cut; the gate's next rows refuse (NOADMIT: the
+    # yield), the smoke takes the slot beside the marked gate once the gate's tokens are off the card, runs, and the gate
+    # re-queues its refused rows AFTER it — with JAH_GATE_REQUEUE=1, so the try that only waited the yield out is not the
+    # one try it has. Events only: each row and the smoke hold until the test releases them.
+    print("13. a class-1 gate yields to a class-0 smoke at its next row")
+    reset()
+
+    def yorder():
+        try: return open(os.path.join(state, "order")).read().split()
+        except OSError: return []
+    ylog = os.path.join(scratch, "runs-yield")
+    gy = spawn([sys.executable, os.path.join(scripts, "gate_runlog.py"), "run", "--tier", "scoped", "--lane", "GY",
+                "--build", tb, "--", "ctest -j1 --timeout 60 --output-on-failure -R '^yield\\.'"],
+               cwd=source, env=dict(os.environ, JAH_RUN_LOG_DIR=ylog, JAH_GATE_REQUEUE="1", JAH_VRAM_SLOT_POLL="0.05"))
+    check(wait_until(lambda: yorder() == ["yield.a"], gy), "the gate takes the slot and its first row is in flight")
+    srel = os.path.join(state, "srel")
+    sm = spawn([sys.executable, vt, "gate", "--class", "0", "--label", "SMOKE", "--", "sh", "-c",
+                f"echo smoke >> {state}/order; while [ ! -e {srel} ] && kill -0 {os.getpid()} 2>/dev/null; do sleep 0.05; done"],
+               env=dict(os.environ, JAH_VRAM_SLOT_POLL="0.05"))
+    so = wait_line(sm, "gate-slot: queued at position")
+    check("queued at position 1" in so and yorder() == ["yield.a"],
+          "the smoke (class 0) queues behind the gate while its row is in flight — the row is never cut")
+    open(os.path.join(state, "yrel.a"), "w").close()
+    check(wait_until(lambda: "smoke" in yorder(), sm), "the gate's next row yields: the smoke runs (%r)" % yorder())
+    st_ = subprocess.run([sys.executable, vt, "status"], capture_output=True, text=True).stdout
+    check(yorder() == ["yield.a", "smoke"] and "YIELDING at its next row" in st_ and "SMOKE" in st_,
+          "...and nothing of the gate starts while it holds; the status names the yielding gate (%r)" % yorder())
+    open(srel, "w").close()
+    so += sm.communicate()[0]
+    check(wait_until(lambda: "yield.b" in yorder(), gy), "the smoke done, the gate resumes its refused rows (%r)" % yorder())
+    for r in ("b", "c"):
+        wait_until(lambda: "yield." + r in yorder(), gy)
+        open(os.path.join(state, "yrel." + r), "w").close()
+    go = gy.communicate()[0]
+    recs_y = [json.loads(l) for f in sorted(os.listdir(ylog)) for l in open(os.path.join(ylog, f))] \
+        if os.path.isdir(ylog) else []
+    last = {}
+    for r in recs_y:
+        if not r.get("kind"): last[r["suite"]] = r["verdict"]
+    noadm = [r for r in recs_y if r.get("verdict") == "NOADMIT"]
+    check(gy.returncode == 0 and yorder() == ["yield.a", "smoke", "yield.b", "yield.c"]
+          and last == {"yield.a": "PASS", "yield.b": "PASS", "yield.c": "PASS"},
+          "the gate ends GREEN with every row run once, after the smoke (rc %r, order %r, last %r)"
+          % (gy.returncode, yorder(), last))
+    check(noadm and all("yields the card to SMOKE" in json.dumps(r) or r.get("requeued") is not None for r in noadm)
+          and "resumed after the yield" in go,
+          "...its refused tries are NOADMIT records of the yield, and the gate said it resumed (%d NOADMIT: %r)"
+          % (len(noadm), [(r["suite"], r.get("verdict"), r.get("requeued")) for r in recs_y if not r.get("kind")])
+          + ("" if "resumed after the yield" in go else " GATE OUTPUT: " + " | ".join(
+              l for l in go.splitlines() if "gate-slot" in l or "re-queued" in l or "yield" in l.lower())[:1500]))
+    check(not glob.glob(os.path.join(os.environ["JAH_VRAM_DIR"], "gate-queue", "*.yield")),
+          "no yield mark outlives the gate")
 
     shutil.rmtree(scratch, ignore_errors=True)
     if FAILURES:

@@ -1528,6 +1528,10 @@ class _Run:
         base.update(self.costs(t_end))
         if BATCH: base["batch"] = BATCH        # a batch candidate's gate or attribution: never a lane's own record
         base.update(self.facts_of(name))
+        # THE CARD QUEUE'S JOB (RUNNER-A5): a run inside a job of scripts/lead/lib/runner/queue.py names it — the job
+        # carries the run's pids, its wait, its phases and its Xid read; the record points at it
+        job = (self.env or {}).get("JAH_RUNNER_JOB") or os.environ.get("JAH_RUNNER_JOB")
+        if job: base["job"] = job
         v, st, bline = row_verdict(status, text, arms)
         wait, twait = lock_wait(text), token_wait(text)
         # a timing row's lock line and its admission line are the SAME wait: subtract it once
@@ -1800,9 +1804,26 @@ def run_ctest(cmd, cwd, tier, lane, jobs, reasons=None, gating=None, rng=None, r
                       f"never ran — scripts/gate-scope.sh <range> --resume runs them ===")
                 held = []
                 break
-        n = requeue_times()
-        for k in range(1, n + 1):
+        n, k = requeue_times(), 0
+        gate = (env or os.environ).get("JAH_GATE_SLOT_HELD")
+        while k < n:
+            k += 1
             if not held or R.dead: break
+            # A GATE YIELDS TO THE SMOKE AT ITS NEXT ROW (RUNNER-A5; vram_tokens.py's docstring): the rows it refused
+            # while a lower-class asker took the card are re-queued AFTER it — the whole card this phase held is given
+            # up for the wait and taken again, and a try that only waited a yield out is not one of the row's tries
+            vt = _vram()
+            mine = vt._held_ticket(int(gate)) if gate and gate.isdigit() else None
+            if mine is not None and (vt.outranker(int(gate)) is not None or vt._yielded(mine)):
+                had = bool(card)
+                vt.release(card); card = []
+                _w, _was = vt.yield_wait(int(gate), log=sys.stdout, label=f"{'+'.join(lane_list(lane))} {tier}")
+                n += 1
+                if had:
+                    card, held_env = vt.hold_card(f"{'+'.join(lane_list(lane))} {tier} phase", log=sys.stdout)
+                    env = dict(env or {}, **{k_: held_env[k_] for k_ in ("JAH_VRAM_HELD", "JAH_VRAM_DRAIN_S",
+                                                                         "JAH_VRAM_HELD_AT") if k_ in held_env})
+                    R.env = env
             R.say(f"\n=== re-queued {len(held)} row(s) that got no admission (try {k + 1} of {n + 1}, normal "
                   f"admission, after the other rows): {' '.join(held[:12])}{' …' if len(held) > 12 else ''} ===")
             prc, preds, pheld = R.phase(f"{cmd} --tests-from-file {listfile('requeue%d' % k, held)}", cwd, env,

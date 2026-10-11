@@ -80,6 +80,17 @@ THE CONTRACT
     does a build. A process already inside a gate (JAH_GATE_SLOT_HELD) never queues again.
     JAH_GATE_SLOT=0 turns the slot off. The waiting line is re-printed every 10 min with the holder's
     AGE, and `status` prints every holder's age, so a hung holder is visible.
+  * A GATE YIELDS TO THE SMOKE AT ITS NEXT ROW (RUNNER-A5; SPECS/TESTING_RUNNER_SPEC.md rule 7, §3.3: smoke 0 >
+    gate 1 > measurement 2, "a class-1 job yields to a class-0 smoke at its next row"). A class-2 hold already yields
+    between its runs (yield_card). A class-0/1 holder cannot give its slot up between rows — its rows run in a ctest it
+    does not schedule, and the slot's fd lives in its holder process — so the yield is a MARK on its ticket
+    (<seq>.<pid>.yield, reaped with the ticket): the gate's next admission that finds a lower-class asker in the queue
+    marks it and, as a row ctest scheduled by its tokens, exits 75 at once (NOADMIT: never ran — gate_runlog re-queues
+    it AFTER the yield, and such a try is not one of its JAH_GATE_REQUEUE tries); any other admission of the gate (the
+    rc's selftest) waits the yield out, holding nothing (yield_wait). A lower-class asker takes a slot whose every
+    holder is marked (its class beside the marked one), then waits for the marked gate's rows still in flight to give
+    their tokens back (the card drains to it), and runs; the gate resumes when no lower-class ticket is left. The marked
+    gate keeps its ticket: no other gate of its class or below slips in.
   * THE WHOLE CARD ONCE PER PHASE (GATE-COST-1 P2; the audit's §3f: 278 per-row drains in 38 h,
     17.0 h of whole-card drain or hold): the serial timing phase, a `--solo` batch and the target step
     take EVERY token once (`hold_card()`), and their rows run nested on it (JAH_VRAM_HELD — the path
@@ -97,6 +108,9 @@ Usage:
       --lock-clocks locks the GPU clocks for the row and restores them on every exit path.
   vram_tokens.py gate [--label <text>] -- <command> [args...]
       run <command> holding THE GATE SLOT (queued by class, no bound; `gate --class N`); scripts/gpu-admit.sh gate
+  vram_tokens.py yield-wait [--label <text>]
+      inside a gate (JAH_GATE_SLOT_HELD): wait while a lower-class asker holds or waits for the slot (the yield above);
+      prints `gate-slot: resumed after the yield` when it waited — a shell gate's retry point
   vram_tokens.py status                                              (who holds what, now)
 Python: `acquire(k, label)` -> [fds] (inheritable), `release(fds)`; run_pool.py uses these.
         `gate_slot(label)` -> fd|None (the slot, inheritable; close it to give it up);
@@ -290,6 +304,9 @@ def acquire(k, label="", wait=None, log=sys.stderr):
     n = token_count()
     if n <= 0 or k <= 0:
         return []
+    # RUNNER-A5: inside a class-0/1 gate that a lower-class asker outranks, this admission is the gate's next row: it
+    # yields (a ctest-scheduled row: NOADMIT now, re-queued after the yield; anything else: waits the yield out)
+    _gate_yield(label, log)
     if os.environ.get("JAH_VRAM_ALL") and k < n and not os.environ.get("JAH_VRAM_HELD"):
         _say(log, "vram: a solo run (JAH_VRAM_ALL) — taking all %d tokens, not %d — %s" % (n, k, label))
         k = n
@@ -404,7 +421,7 @@ def release(fds):
 
 
 # ---- THE GATE SLOT (GATE-COST-1 P1; the docstring's ONE GATE AT A TIME) ----------------------------
-SLOT_POLL_S = 1.0
+SLOT_POLL_S = float(os.environ.get("JAH_VRAM_SLOT_POLL") or 1.0)   # the queue's poll (a test's knob: smaller)
 # A ticket: <seq>.<pid>.c<class>, and <seq>.<pid>.c<class>.held once its process HOLDS the slot (renamed under the
 # queue's counter lock, its flock kept — the lock lives on the inode).
 _TICKET = re.compile(r"^(\d+)\.(\d+)\.c(\d)(\.held)?$")
@@ -413,6 +430,9 @@ _TICKET = re.compile(r"^(\d+)\.(\d+)\.c(\d)(\.held)?$")
 # slot beside an old holder. (The other way round cannot be closed: an old reader does not see these tickets — every
 # tree that runs a gate takes the new scripts at once.)
 _OLD_TICKET = re.compile(r"^(\d+)\.(\d+)$")
+# A HOLDER'S YIELD MARK (RUNNER-A5): <seq>.<pid>.yield beside a held class-0/1 ticket — written by the holder's own
+# admission when a lower-class asker waits; it lets that asker take the slot beside it (the docstring's THE YIELD)
+_YIELD = re.compile(r"^(\d+)\.(\d+)\.yield$")
 
 # THE SLOT IS BY PRIORITY, NOT ARRIVAL (TESTING-CLEANUP-2B item 13; the owner 2026-10-10: "the gate needs to run, not
 # wait for everything else"). Three classes:
@@ -472,8 +492,11 @@ def gate_queue():
         names = os.listdir(_queue_dir())
     except OSError:
         return q
-    old = []
+    old, marks = [], []
     for n in names:
+        if _YIELD.match(n):
+            marks.append(n)
+            continue
         m = _TICKET.match(n)
         mo = None if m else _OLD_TICKET.match(n)
         if not m and not mo:
@@ -493,6 +516,13 @@ def gate_queue():
         old.sort()
         old[0] = old[0][:4] + (not any(t[4] for t in q),)
         q += old
+    live = {"%012d.%d.yield" % (t[0], t[1]) for t in q if t[4]}
+    for n in marks:
+        if n not in live:                    # a yield mark outlives nothing: its ticket's holder is gone
+            try:
+                os.unlink(os.path.join(_queue_dir(), n))
+            except OSError:
+                pass
     return sorted(q, key=lambda t: (not t[4], t[3], t[0]))
 
 
@@ -528,7 +558,9 @@ def _try_take(seq, cls):
     try:
         fcntl.flock(cf, fcntl.LOCK_EX)
         q = gate_queue()
-        ahead = [t for t in q if t[4] or (t[3], t[0]) < (cls, seq)]
+        # a HOLDER is ahead unless it is marked as yielding and of a higher class number than this asker (RUNNER-A5)
+        ahead = [t for t in q if t[0] != seq and ((t[4] and not (t[3] > cls and _yielded(t)))
+                                                   or (not t[4] and (t[3], t[0]) < (cls, seq)))]
         if ahead:
             return False, ahead
         mine = [t for t in q if t[0] == seq]
@@ -617,9 +649,169 @@ def _queue_for_slot(label, log, wait=None, cls=None):
             last, said = len(ahead), time.monotonic()
         time.sleep(SLOT_POLL_S)
     os.set_inheritable(fd, True)
+    for t in gate_queue():
+        if t[4] and t[1] != os.getpid() and t[3] > cls and _yielded(t):
+            _drain_yielded(t, label, log)    # the marked gate's rows in flight give their tokens back first
     LAST_SLOT_WAIT_S = round(time.monotonic() - t0, 1)
     _say(log, "gate-slot: taken%s — %s" % ((" after %.0f s in the queue" % LAST_SLOT_WAIT_S) if last else "", label))
     return fd
+
+
+# ---- THE YIELD OF A GATE (RUNNER-A5; the docstring's A GATE YIELDS TO THE SMOKE AT ITS NEXT ROW) -------------------
+def _mark_path(t):
+    return os.path.join(_queue_dir(), "%012d.%d.yield" % (t[0], t[1]))
+
+
+def _yielded(t):
+    return os.path.exists(_mark_path(t))
+
+
+def _held_ticket(pid, q=None):
+    return next((t for t in (gate_queue() if q is None else q) if t[4] and t[1] == pid), None)
+
+
+def outranker(gate_pid=None, q=None):
+    """The live ticket that outranks the class-0/1 slot the gate `gate_pid` holds (default: JAH_GATE_SLOT_HELD) — a
+    waiter of a lower class number, or one holding the slot through this gate's yield; None when nothing does (or the
+    pid holds no slot, or holds it at class 2: a class-2 hold yields its own way, yield_card)."""
+    try:
+        pid = int(gate_pid if gate_pid is not None else os.environ.get("JAH_GATE_SLOT_HELD") or "")
+    except ValueError:
+        return None
+    q = gate_queue() if q is None else q
+    t = _held_ticket(pid, q)
+    if t is None or t[3] >= 2:
+        return None
+    return next((u for u in q if u[0] != t[0] and u[3] < t[3]), None)
+
+
+def _mark_yield(t, o):
+    try:
+        if not _yielded(t):
+            with open(_mark_path(t), "w") as f:
+                f.write("%d yields to %s\n" % (t[1], _label_of(o[2])))
+    except OSError:
+        pass
+
+
+def _token_holders(n=None):
+    """{token index: holder pid} from the kernel's lock table ({} without one)."""
+    n = token_count() if n is None else n
+    try:
+        with open(os.environ.get("JAH_VRAM_PROC_LOCKS", "/proc/locks")) as f:
+            held = {}
+            for line in f:
+                p = line.split()
+                if len(p) >= 6 and p[1] == "FLOCK":
+                    held[p[5].lower()] = int(p[4])
+    except (OSError, ValueError):
+        return {}
+    out = {}
+    for i, path in enumerate(_paths(n)):
+        try:
+            k = lock_key(os.stat(path))
+        except OSError:
+            continue
+        if k in held:
+            out[i] = held[k]
+    return out
+
+
+def _of_gate(pid, gate_pid):
+    """Whether process `pid` is inside the gate `gate_pid` (the gate itself, or its JAH_GATE_SLOT_HELD names it)."""
+    if pid == gate_pid:
+        return True
+    try:
+        env = open("/proc/%d/environ" % pid, "rb").read().split(b"\0")
+    except OSError:
+        return False
+    return ("JAH_GATE_SLOT_HELD=%d" % gate_pid).encode() in env
+
+
+def _drain_yielded(t, label, log):
+    """After taking the slot beside a marked gate: wait until no token is held by a process of that gate (its rows in
+    flight end on their own; nothing of it starts meanwhile — its next row exits 75)."""
+    said = False
+    while True:
+        mine = [i for i, p in _token_holders().items() if _of_gate(p, t[1])]
+        if not mine or _held_ticket(t[1]) is None:
+            break
+        if not said:
+            _say(log, "gate-slot: taken beside %s (it yields at its next row) — waiting for its %d token(s) in flight "
+                 "— %s" % (_label_of(t[2]), len(mine), label))
+            said = True
+        time.sleep(POLL_S)
+    if said:
+        _say(log, "gate-slot: the yielding gate's rows are off the card — %s" % label)
+
+
+def _gate_yield(label, log):
+    """An admission inside a class-0/1 gate that a lower-class asker outranks: mark the gate's ticket; a row ctest
+    scheduled by its tokens exits 75 at once (AdmitTimeout: NOADMIT, re-queued after the yield by gate_runlog); any
+    other admission of the gate waits the yield out (yield_wait) and goes on. Nothing when nothing outranks it; a mark
+    left from a finished yield is cleared."""
+    g = os.environ.get("JAH_GATE_SLOT_HELD")
+    if not g:
+        return
+    try:
+        pid = int(g)
+    except ValueError:
+        return
+    q = gate_queue()
+    t = _held_ticket(pid, q)
+    if t is None or t[3] >= 2:
+        return
+    o = outranker(pid, q)
+    if o is None:
+        if _yielded(t):
+            try:
+                os.unlink(_mark_path(t))
+            except OSError:
+                pass
+        return
+    _mark_yield(t, o)
+    if ctest_scheduled():
+        raise AdmitTimeout("NOADMIT vram: the gate yields the card to %s (class %d %s) at this row — re-queued after "
+                           "it%s" % (_label_of(o[2]), o[3], SLOT_CLASSES[o[3]], (" — " + label) if label else ""))
+    if os.environ.get("JAH_VRAM_HELD"):
+        # nested on a whole-card hold that ctest does not schedule: its HOLDER gives the card up at its own boundary
+        # (gate_runlog's re-queue); a wait here would hold that card under the asker until the row's TIMEOUT
+        return
+    yield_wait(pid, log, label)
+
+
+def yield_wait(gate_pid=None, log=sys.stderr, label=""):
+    """Inside the gate `gate_pid` (default JAH_GATE_SLOT_HELD): wait, holding nothing, while a lower-class asker waits
+    for or holds the slot; then clear the gate's mark. Returns (seconds waited, whether the gate had yielded) — a
+    re-queue that waited a yield out is not one of the row's tries (gate_runlog)."""
+    try:
+        pid = int(gate_pid if gate_pid is not None else os.environ.get("JAH_GATE_SLOT_HELD") or "")
+    except ValueError:
+        return 0.0, False
+    t0, said, t = time.monotonic(), False, None
+    while True:
+        q = gate_queue()
+        t = _held_ticket(pid, q)
+        o = outranker(pid, q) if t is not None else None
+        if o is None:
+            break
+        _mark_yield(t, o)
+        if not said:
+            _say(log, "gate-slot: YIELDED to %s (class %d %s) — this gate waits, holding no token, and resumes after "
+                 "it — %s" % (_label_of(o[2]), o[3], SLOT_CLASSES[o[3]], label))
+            said = True
+        time.sleep(SLOT_POLL_S)
+    was = said
+    if t is not None and _yielded(t):
+        was = True
+        try:
+            os.unlink(_mark_path(t))
+        except OSError:
+            pass
+    w = time.monotonic() - t0
+    if was:
+        _say(log, "gate-slot: resumed after the yield (%.1f s waited here) — %s" % (w, label))
+    return w, was
 
 
 def phase_wait():
@@ -736,9 +928,10 @@ def status(out=sys.stdout):
     if not q:
         out.write("gate-slot: nobody holds it\n")      # (never the word " free": a token count greps for it)
     for i, (seq, pid, path, cls, held) in enumerate(q):
-        out.write("gate-slot: %s %s (class %d %s, ticket %d, for %s)\n"
+        out.write("gate-slot: %s %s (class %d %s, ticket %d, for %s)%s\n"
                   % ("HELD by" if held else "queued %d:" % (i if q[0][4] else i + 1), _label_of(path), cls,
-                     SLOT_CLASSES[cls], seq, _age(path)))
+                     SLOT_CLASSES[cls], seq, _age(path),
+                     " YIELDING at its next row (RUNNER-A5)" if held and _yielded((seq, pid, path, cls, held)) else ""))
     return held
 
 
@@ -748,6 +941,10 @@ def main(argv):
         return 64
     if argv[0] == "status":
         status()
+        return 0
+    if argv[0] == "yield-wait":
+        label = argv[2] if argv[1:2] == ["--label"] and len(argv) > 2 else ""
+        yield_wait(label=label)
         return 0
     if argv[0] == "gate":
         # a whole gate under the slot (scripts/gpu-admit.sh gate): the command is EXEC'D with the
@@ -809,6 +1006,18 @@ def main(argv):
     # slot like every other (GATE-COST-2) — inside the admission's own bound, so a hand-run timing row queues
     # behind a gate (NOADMIT past the bound) instead of draining the card under it. Inside a gate the slot is
     # the gate's (JAH_GATE_SLOT_HELD); nested or with admission off there is nothing to drain.
+    global JOB
+    if argv[1] == "all" and token_count() > 0 and _queue_py() \
+            and not any(os.environ.get(k) for k in ("JAH_VRAM_HELD", "JAH_GATE_SLOT_HELD", "JAH_RUNNER_JOB")):
+        jrc, jid, jerr = _job("open", "--kind", "measure", "--class", "2", "--hold", "card", "--pid", os.getpid(),
+                              "--caller", "gpu-exclusive", "--label", label,
+                              "--tree", os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        if jrc == 3:
+            sys.stderr.write("vram: %s — the command did not run\n" % (jerr.splitlines()[-1] if jerr else "REFUSED"))
+            return 3
+        if jrc == 0 and jid.isdigit():
+            JOB = jid
+            os.environ["JAH_RUNNER_JOB"] = jid        # the run's own records name it
     slot, t_slot = None, time.monotonic()
     try:
         if argv[1] == "all" and token_count() > 0 and not os.environ.get("JAH_VRAM_HELD"):
@@ -819,9 +1028,16 @@ def main(argv):
         if slot is not None:
             os.close(slot)
         sys.stderr.write(str(e) + " — the command did not run\n")
+        _job_end(EX_TEMPFAIL, note=str(e))
         return EX_TEMPFAIL
     global LAST_WAIT_S
     LAST_WAIT_S += slot_wait                 # the queue, slot and drain, is never the row's time
+    # a run the card queue admitted itself (scripts/lead/lib/runner/queue.py: a measure job holds the card, this
+    # admission runs nested on it) carries the queue's wait in JAH_RUNNER_WAIT_S — once: its own children never see it
+    try:
+        LAST_WAIT_S += float(os.environ.pop("JAH_RUNNER_WAIT_S", "") or 0)
+    except ValueError:
+        pass
     if slot is not None:
         os.environ["JAH_GATE_SLOT_HELD"] = str(os.getpid())   # the row's own processes are inside it
     if timing:
@@ -830,6 +1046,8 @@ def main(argv):
         sys.stderr.flush()
     if held:
         os.environ["JAH_VRAM_HELD"] = str(len(held))
+    if JOB:
+        _job("start", JOB, "--wait", "%.3f" % LAST_WAIT_S)
     # THE ROW'S OWN BUDGET, from AFTER the admission (LOCK-WAIT-1): the queue is never charged to it.
     if run:
         rest = ["timeout", "--verbose", "-k", "15", run] + rest
@@ -849,6 +1067,51 @@ def main(argv):
         return supervise(rest, held, label, on_end=clocks_back)
     finally:
         clocks_back()
+
+
+# ---- A HAND MEASUREMENT IS A JOB OF THE CARD QUEUE (RUNNER-A5; SPECS/TESTING_RUNNER_SPEC.md rule 7, §3.3) ----------
+# `admit all` outside any gate, hold or job (scripts/gpu-exclusive.sh run by hand) records itself in the lead repo's job
+# table (scripts/lead/lib/runner/queue.py; JAH_RUNNER_QUEUE moves it; absent = nothing recorded, the Mac or a clean box):
+# a `measure` job, class 2, hold card — opened before the slot (an owner instance running from the main tree's
+# build-linux REFUSES it: exit 3), started at the admission with its wait, its pids and Xid read at the end, closed
+# with the exit. The admission itself is unchanged: exec'd in place, bounded by JAH_VRAM_WAIT, the row its child.
+JOB = None
+
+
+def _queue_py():
+    q = os.environ.get("JAH_RUNNER_QUEUE") or os.path.join(os.path.expanduser("~"), "Developer", "scripts", "lead",
+                                                             "lib", "runner", "queue.py")
+    return q if os.path.isfile(q) else None
+
+
+def _job(*args):
+    """(exit, stdout, stderr) of `queue.py <args>`; (1, '', why) when it cannot run — the job record never stops a run."""
+    import subprocess
+    q = _queue_py()
+    if not q:
+        return 1, "", "no queue"
+    try:
+        r = subprocess.run([sys.executable, "-I", "-B", q] + [str(a) for a in args], capture_output=True, text=True,
+                           timeout=120)
+        return r.returncode, r.stdout.strip(), r.stderr.strip()
+    except (OSError, subprocess.TimeoutExpired) as e:
+        return 1, "", str(e)
+
+
+def _job_end(rc, pids=None, xids=False, note=None):
+    """The job's pids, Xid read and exit (once)."""
+    global JOB
+    if not JOB:
+        return
+    jid, JOB = JOB, None
+    if pids:
+        _job("pid", jid, *sorted(pids), "--what", "the run")
+    if xids is not False:
+        if xids is None:
+            _job("xid", jid, "unreadable")
+        else:
+            _job("xid", jid, len(xids), *(["--lines", "\n".join(x[3] for x in xids[:8])] if xids else []))
+    _job("close", jid, rc, *(["--note", note] if note else []))
 
 
 def _smi(args):
@@ -973,6 +1236,7 @@ def supervise(argv, held, label, on_end=None):
         # VERDICT-1 U3: the journal window this read covered — the run log's `xid.window`
         sys.stderr.write("XID-WINDOW %s %s\n" % (kernel_xid.window(t0 - 1, time.time()), label))
     sys.stderr.flush()
+    _job_end((128 - rc) if rc < 0 else (1 if xids and rc == 0 else rc), pids=tracker.pids, xids=xids)
     if rc < 0:
         sys.stderr.write("row-exit: %s died of signal %d\n" % (label, -rc)); sys.stderr.flush()
         release(held)
