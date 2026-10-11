@@ -283,11 +283,6 @@ def main():
             ci_gate_check.gate_runlog.defect_state(e) for e in DEFECTS.values()).most_common()))
     else:
         print("  (empty)")
-    bt = collections.defaultdict(set)
-    for r in wk_all:
-        if r.get("batch"): bt[r["batch"]].add(r.get("run"))
-    print(f"  batch tags in the week: {len(bt)}; runs per batch (re-gates): "
-          + ("  ".join(f"{b} {len(rs)}" for b, rs in sorted(bt.items())) or "-"))
     STAGE = ("stage", "stage-close")        # STAGE-CLOSE-1's batches are tier `stage-close`
     st = [g for g in GW if g["tier"] in STAGE]
     st_rows = [r for r in wk if r.get("tier") in STAGE and not r.get("retry")]

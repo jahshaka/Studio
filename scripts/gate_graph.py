@@ -551,7 +551,7 @@ def ctest_inventory(build):
 # Every run-log record carries what the row WAS when it ran: its declaration (ctest's properties and its command line) and
 # a hash of the data files its command names, so a later selection can tell "the row did not change" from "the row's
 # declaration or data moved" (§3.2). THE TREE ROOT IS STRIPPED (preflight 2, P12): ctest's command and WORKING_DIRECTORY
-# carry the worktree's path (rc-batch-dfx1/scripts/gpu-admit.sh, …/build-linux/tests/gi) — a raw hash would re-key every
+# carry the worktree's path (rc-merge-<lane>/scripts/gpu-admit.sh, …/build-linux/tests/gi) — a raw hash would re-key every
 # row per tree. The paths are rewritten to `<root>` / `<build>` from the build's OWN CMakeCache (CMAKE_HOME_DIRECTORY,
 # CMAKE_CACHEFILE_DIR: a copied or moved build dir still names the tree it was configured in) and from the directory the
 # build sits in now; ctest_inventory's temporary copy (a row with no WORKING_DIRECTORY of its own defaults to the copy's

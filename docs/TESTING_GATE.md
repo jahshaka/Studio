@@ -9,7 +9,7 @@ reshape followed.
 
 ## 1. The tiers — THE RUNNER (RUNNER-A6, 2026-10-11; the procedure: `~/Developer/DOCS/PROCESS.md`, the spec: `~/Developer/SPECS/TESTING_RUNNER_SPEC.md`)
 
-The batch layer is gone (merge-dbuild-lane.sh, `lane.sh batch|push gate|go`, the scoped/fork rc runs). What runs, and when:
+The old batch layer and its hand tiers are gone (RUNNER-A6/A7B): every gate is a runner verb. What runs, and when:
 
 | Run | What runs | When | Who |
 |---|---|---|---|
@@ -151,8 +151,8 @@ by `gate-scope.py` alone:
   rows), judged by the one judge in mode stage-close (or push): the door (a proved `real:<id>` clears through
   the Prover against the base), the aborts, a nondeterminism clearance re-asked 3/3 at the tip, the
   overrides — refused (exit 1) while one is red, a KNOWN RED or unrecorded; `--mode merge` beside it is
-  refused, never ignored. rc-gate.sh runs it after the batch (base = the last pushed main) and `push.sh`
-  refuses a push on it (base = the previous pushed sha).
+  refused, never ignored. `runner.sh stage-close` runs it at a stage close and `runner.sh push` refuses a push on
+  it (base = the previous pushed sha).
 
 - **`quiet-box`**, beside `stage-close` on every row that MEASURES — the wall-clock benchmarks,
   gi.gather_cost (the GPU clock), vr.frame_budget, and the `<suite>.timing` rows (§4) — and on
@@ -218,8 +218,6 @@ scripts/gate-scope.sh <range> --run --targets-only  # the target step alone (a s
 scripts/gate-scope.sh <range> --json           # machine-readable: suites, reasons, rationale, command
 scripts/gate-scope.sh --files src/x.cpp ...    # a file list instead of a range (no diff: no symbols, no CMake reading)
 scripts/gate-scope.sh --solo <suite> [--times 3]   # the flake protocol (§4), each run logged as a retry
-scripts/gate-scope.sh --attribute <row>[,<row>...] --batch <tag> --lanes <lane>:<worktree>:<tip> [...]
-                                               # a batch red: each row 3x solo on each lane's OWN tip (§3c)
 scripts/gate-scope.sh --record-times           # scripts/gate-times.txt from the run log (median PASS s, 14 days)
 ```
 
@@ -270,9 +268,9 @@ archive's flag change (`meshoptimizer`) enters through its first-party callers (
 
 **The lane's own range, the fork, and the fallback** (TEST-SELECTOR-1). The range is the LANE'S
 OWN diff: across a forward merge (a merge whose second parent is on d-build's first-parent line) it
-starts at that merge's d-build parent, and what came in is the batch gate's (§3c); an
-internal branch merged into the lane is the lane's own change. A batch CANDIDATE (§3c) scopes as a
-plain range: its merges' second parents are lane tips, never on d-build's first-parent line. A fork pin bump
+starts at that merge's d-build parent, and what came in is its own merge's (§3c); an
+internal branch merged into the lane is the lane's own change. A merge run's candidate (§3c) scopes as a
+plain range: its merge's second parent is the lane's tip, never on d-build's first-parent line. A fork pin bump
 (`irisgl/thirdparty/ogre-next`) selects by the FORK DIFF'S reach: every built or staged fork file
 selects the engine's pixel family and every executable that extracts the engine; only what the
 engine never stages (other render systems, unstaged samples media, docs, HLSL/Metal twins) selects
@@ -369,10 +367,8 @@ under the flake law (§4) — at the range's tip, or, for a row the last fix rou
 an earlier commit of the lane (§3b). It prints, per row, the commit its record came from. A hook
 or a CI job calls it; `gate.ci_check` and `gate.fix_round` prove it.
 
-**THE JOINT SUITES ARE THE BATCH GATE (BATCH-GATE-1).** `--joint` is retired (it refuses and
-names `merge-dbuild-lane.sh batch`): lanes that touched one file family are gated TOGETHER on one
-candidate (§3c), whose scoped selection is the union of their reaches and whose tree is the
-combination neither lane alone could show.
+**THE JOINT SUITES ARE GONE.** `--joint` is retired (it refuses): every lane is merged on its own by
+`runner.sh merge` (§3c); a lane that touches the same files as another merges after it, on its tip.
 
 **Measured at the landing** (thirteen recorded diffs of D's last eleven lanes, costed with the
 per-row seconds of a -j4 MERGE-tier run; `spikes/modular-gate-1/table.md`): the five that FELL
@@ -387,16 +383,14 @@ lane's time rests on.
 
 ## 3b. Re-gating after a fix (2026-09-11, owner: "no double checking"; MECHANICAL since GATE-SPEED-1)
 
-UNDER THE BATCH GATE (§3c) a lane attributed a red drops out of its batch, fixes, and rides the
-next candidate; the reuse rule below is what the judge applies to every range, a candidate's
-included. A lane that gets a red FIXES, then runs THE FIX ROUND: `scripts/gate-scope.sh <pre-fix
-tip>..<post-fix tip> --run` — the scoped selection of the FIX's own diff, never the lane's whole
-selection again. After a forward merge of d-build into the lane, the fix round is `<merge
+UNDER THE RUNNER (§3c) a lane whose merge is refused fixes, and its next `read --ready` merges the new tip; the
+reuse rule below is what the judge applies to every range, a merge candidate's included. The fix round's rows are
+the scoped selection of the FIX's own diff (`runner.sh select` serves the rest), never the lane's whole selection
+again. After a forward merge of d-build into the lane, the fix round is `<merge
 commit>..<tip>` (the merge commit is the lane's own; a range across it scopes the whole lane again).
 A red the fix does not reach is answered where it happened: a recorded verdict, or `--solo` 3/3 for
-the contention class — a green re-run at a later commit does NOT answer it. The batch gate before the push is the full safety net. The lead's post-merge
-targeted run stays (owner decision): it catches a merge interaction at merge time instead of at
-the batch gate.
+the contention class — a green re-run at a later commit does NOT answer it. The merge run at the candidate catches
+a merge interaction at merge time; the ship is the deep gate.
 
 THE MERGE REFUSAL ACCEPTS IT, AND A GREEN HOLDS UNTIL A CHANGE REACHES THE ROW (`scripts/ci_gate_check.py`; GATE-SPEED-1's
 fix-round re-use made general by RUNNER-A2 — TESTING_RUNNER_SPEC v2.1 rule 2). For a row with no record at the tip it takes
@@ -420,7 +414,7 @@ A row the fix reaches needs its record at the tip. Every row prints its source
 (`row <name> <- <sha> (the tip)` or `... served from <sha>`); the summary counts both. Measured
 on this lane's own two rounds: `spikes/gate-speed-1/`.
 
-## 3c. THE MERGE RUN (RUNNER-A6, 2026-10-11) — the batch gate it replaces is DELETED
+## 3c. THE MERGE RUN (RUNNER-A6, 2026-10-11) — the batch layer it replaced is deleted
 
 One lane, one merge, no hand step: `lane.sh read <lane> --ready` fires `runner.sh merge <lane>` (`--no-merge`: only ready).
 The CPU checks (check-trailers as a command, platform-audit, the Qt linter, the bar/TIMEOUT/RUN_SERIAL scan — a changed line
@@ -445,7 +439,7 @@ recorded verdict that passes THE VERDICT DOOR (below; VERDICT-1):
 APPLIES THIS (TEST-SELECTOR-1 L2/L3): `ci-gate-check.sh` refuses a merge while a selected row was
 never run at the tip, a contention-class red lacks 3/3 solo PASS after it (a solo red means it is not
 contention: a verdict), or any other red lacks a verdict — one solo PASS erases nothing — and
-`scripts/lead/merge-dbuild-lane.sh` calls it before it merges. A
+`runner.sh merge` (through `runner.sh judge`) refuses on it. A
 `VK_ERROR_OUT_OF_DEVICE_MEMORY` red is NOT environmental since GATE-ADMIT-1 (§4b): the box admits
 by VRAM, so an OOM means the budget is wrong (a class under-counted, a row outside it) or an
 unadmitted process filled the card — the verdict names which (`scripts/gpu-admit.sh status` and
@@ -764,7 +758,7 @@ FAILs — and their solos and verdicts — came from gates beside gates.
 A gate run is `gate-scope.sh --run` (scoped, a fallback, `--fork-tier`,
 `--targets-only`, `--resume`) and `gate_runlog.py run` (the rc tiers; `scripts/gpu-admit.sh gate
 -- <command>` holds the slot across a whole script that runs several). **A WHOLE-CARD HOLD ALWAYS TAKES
-IT** (GATE-COST-2): a `--solo` batch, an `--attribute` run, a timing phase run by hand — anything that drains
+IT** (GATE-COST-2): a `--solo` batch, the runner's attribution solos, a timing phase run by hand — anything that drains
 the card through `hold_card()`, and `admit all` (`gpu-exclusive.sh`: a timing row run outside a gate, inside
 the admission's own 900 s bound — NOADMIT past it) — queues for it at class 2, behind any waiting gate. Per-row admissions of
 k tokens never take it (an `admit <k>`, a pool's app, a lane's own hand run), nor does a build. The waiting gate
@@ -775,10 +769,10 @@ names the holder, the queue in serving order with each CLASS, and every token ho
 is visible.
 **THE SLOT IS BY PRIORITY, NOT ARRIVAL** (TESTING-CLEANUP-2B item 13; the owner 2026-10-10: "the gate needs to run,
 not wait for everything else"). Classes: **0** the owner's smoke rc, **1** a gate (rc-gate's tiers, `gate-scope.py
---run`, `gate_runlog.py run`), **2** a lane's measurement (`gpu-exclusive.sh`, `--solo`, `--attribute`, a whole-card hold
+--run`, `gate_runlog.py run`), **2** a lane's measurement (`gpu-exclusive.sh`, `--solo`, a whole-card hold
 by hand, `gate_runlog.py run --tier lane|solo`). A waiter of a lower class is served before every waiting higher one
 (by ticket inside a class) and never displaces the holder; a free slot is taken at once by whoever asks. A class-2
-holder that holds across rows (`--solo`, `--attribute`) checks the queue between rows and YIELDS to a waiting class
+holder that holds across rows (`--solo`) checks the queue between rows and YIELDS to a waiting class
 0/1 (`yield_card`: the card and the slot given up, re-asked at its class, resumed at its next row — its recorded runs
 stay). `gpu-admit.sh gate --class N --label …` names the class; without it the label decides (`rc-<tag> smoke` -> 0,
 anything else -> 1). A measurement loop of `gpu-exclusive.sh` runs yields between its runs by construction (each run
@@ -804,7 +798,7 @@ is ONE ctest process holding the slot for its whole run — one ctest cannot yie
 behind it waits at most that one lane run, never more (keep such runs to one row, as item 7's re-measures do). **A
 YIELD'S RE-HOLD IS A NEW HOLD**: after `yield_card` the re-drain's own outcome decides the runs after it — a re-drain
 that times out writes its `drain-timeout` record and runs the rest with `JAH_VRAM_ALL` and the `fallback` stamp, a
-clean one without (`gate-scope.py _hold_state`, both the `--solo` and `--attribute` paths; gate.cost case (a)/(b)).
+clean one without (`gate-scope.py _hold_state`, the `--solo` path; gate.cost case (a)/(b)).
 **Mechanism** (`scripts/vram_tokens.py`): each waiter flocks its own ticket
 `/tmp/jah-vram/gate-queue/<seq>.<pid>.c<class>` (made locked under a private name, then renamed in); the
 holder's ticket is renamed `….held` when it takes the slot — under the counter's lock, and only when no ticket

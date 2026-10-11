@@ -28,9 +28,9 @@ is neither MEASURING nor a REGISTERED NONDETERMINISM. That newest record decides
 answered there. `--universe tier` (the runner's judge) asks EVERY merge-tier row this way, not only the range's scoped
 rows; a measuring row the range does not reach is not asked. Every row prints the commit its record came from.
 
-THE BATCH'S VERDICT COVERS THE BATCH'S RANGE (TESTING-CLEANUP-2D item 1): a verdict is per ROW per RANGE — the
-verdict records at the TIP are in scope for the same row's reds at every earlier commit of the range the judge reads
-(the lane tips the attribution ran solos at), through the same door, the same proof and the same timestamp rule (a
+A VERDICT COVERS ITS RANGE (TESTING-CLEANUP-2D item 1): a verdict is per ROW per RANGE — the verdict records at the
+TIP are in scope for the same row's reds at every earlier commit of the range the judge reads (the lane tip the
+attribution ran solos at), through the same door, the same proof and the same timestamp rule (a
 verdict clears only reds logged before it); a verdict recorded at that earlier commit itself still counts. `--verdict`
 still records a verdict where the red is open (else at the carried tip).
 
@@ -49,8 +49,8 @@ diff's reach). So does a selection that fell back or is the tier by rule.
 THE VERDICT IS PER ROW AND TIMESTAMPED: `--verdict "<row>=<text>" ...` records one `VERDICT` record
 per named red row into the run log (`<date>-verdict-<tip>.jsonl`, the same directory) and
 re-checks; it clears only the reds logged before it. A row that never ran (NOADMIT, NOTRUN) is
-MISSING, which no verdict clears. scripts/lead/merge-dbuild-lane.sh calls this
-and refuses the merge on a failure; its own `--verdict` passes through here.
+MISSING, which no verdict clears. `runner.sh judge` (scripts/lead/lib/runner/judge.py) calls this and the
+runner's merge refuses on a failure; the attribution's `real:<id>` verdicts are recorded through `--verdict`.
 
 THE VERDICT DOOR (TESTING_V3_SPEC §1.4; VERDICT-1; door() below): a verdict clears a red only by a REGISTERED FACT
 — `real:<ID>` (in testing/defects.json for this row; proved by a PASS at a later sha that reaches the row, or by the SAME red reproduced
@@ -58,7 +58,7 @@ by a recorded solo at the base = KNOWN RED: `--mode merge` passes it, `--mode pu
 `contention:` (an open nondeterminism row whose red's competitor census shows competition, 3/3 solo), `xid-read:`
 (a LOST/OOM/CRASH whose journal was unreadable). A refused verdict prints `VERDICT REFUSED <row>: <why>`. A REBASE
 CARRIES ITS OPEN REDS from the lane's OWN records (`lanes == [<lane>]`) at any other tip (`OPEN RED carried from
-<tip>`); batch records never carry. A registry entry without its shape makes the judge unusable (exit 2).
+<tip>`). A registry entry without its shape makes the judge unusable (exit 2).
 
 THE STAGE-CLOSE JUDGE (STAGE-CLOSE-1; docs/TESTING_GATE.md §1d): `<base>..<tip> --stage-close [--mode push]`
 is a SELECTION only — EVERY `stage-close` row of the build (STAGE_CLOSE_LABELS: the rows the MERGE and PUSH tiers
@@ -140,8 +140,7 @@ def complete_lane(r):
 
 def lane_records(lanes, skip):
     """VERDICT-1 U4 — A REBASE CARRIES ITS OPEN REDS: {tip: {(suite, arm): [records]}} of every gating
-    record that is a LANE'S OWN record of a lane in `lanes` (`lanes == [<lane>]`, no `batch` tag —
-    TESTING_V3 §1.4: batch records never carry) at ANY tip not in `skip`, ancestor or not, with every
+    record that is a LANE'S OWN record of a lane in `lanes` (`lanes == [<lane>]`) at ANY tip not in `skip`, ancestor or not, with every
     verdict record at those tips. Forward only: run records
     of schema >= 2 (written since this rule landed) — the historic cases are gate-report.py --carried."""
     out, verdicts = {}, {}
@@ -231,7 +230,7 @@ def _solos_ok(solos):
 
 
 # THE PATHS A FAILURE NAMES ARE THE TREE'S, NOT THE FAILURE'S (TESTING-CLEANUP-2C item 1): a failLine that embeds its tree
-# root ("…must be inside /…/rc-batch-C2/build-linux/tests/…") must read the same at the base's tree (rc-base-<sha>) — batch
+# root ("…must be inside /…/rc-merge-<lane>/build-linux/tests/…") must read the same at the base's tree (rc-base-<sha>) — batch
 # C2 refused three KNOWN RED verdicts whose masked lines were identical up to the root. Each prefix below is ONE token;
 # what follows it (the path INSIDE the tree) stays, so a different file is still a different failure.
 _D = r"""[^/\s'"`(),;=:]"""                     # a path component's character (a delimiter ends the path)
@@ -1025,8 +1024,8 @@ def check(rng, build, gs=None, verdicts=None, mode="merge", lane=None, stage_clo
             return own + anc[k][0]
         return proof
 
-    def with_batch_verdicts(recs, k, got):
-        """THE BATCH'S VERDICT COVERS THE BATCH (TESTING-CLEANUP-2D item 1): an earlier commit's records of the row plus
+    def with_range_verdicts(recs, k, got):
+        """A VERDICT COVERS ITS RANGE (TESTING-CLEANUP-2D item 1): an earlier commit's records of the row plus
         the verdict records at the TIP — the door and its timestamp rule decide what they clear."""
         return list(recs) + [v for v in got[tip_sha].get(k, []) if v.get("kind") == "verdict" and v not in recs]
 
@@ -1059,7 +1058,7 @@ def check(rng, build, gs=None, verdicts=None, mode="merge", lane=None, stage_clo
                         break
                     recs = got[c].get(k, [])
                     if not recs: continue
-                    cst, cwhy = judge(k, with_batch_verdicts(recs, k, got), defects, **ctx)
+                    cst, cwhy = judge(k, with_range_verdicts(recs, k, got), defects, **ctx)
                     if cst == "red":
                         st, src = "red", c
                         why = (f"an OPEN red at {c[:9]} that {c[:9]}..{tip_sha[:9]} does not reach — the green at the "
@@ -1069,7 +1068,7 @@ def check(rng, build, gs=None, verdicts=None, mode="merge", lane=None, stage_clo
                 # THE KEY (RUNNER-A2): the newest record of the row at an ancestor A whose WHOLE range A..tip does not
                 # reach it answers it — served when green, red until answered (serve_key; the one predicate select uses)
                 sv = serve_key(k, get_server(), [(c, f) for c, _, f in cands], got,
-                               lambda kk, recs: judge(kk, with_batch_verdicts(recs, kk, got), defects, **ctx))
+                               lambda kk, recs: judge(kk, with_range_verdicts(recs, kk, got), defects, **ctx))
                 if sv[0] == "served":
                     st, src, why = sv[2], sv[1], sv[3]
                 elif sv[0] == "red":
@@ -1087,7 +1086,7 @@ def check(rng, build, gs=None, verdicts=None, mode="merge", lane=None, stage_clo
         # accepted verdict answered is carried to this tip
         carried.clear()
         # THE LANE: named, else the lane the tip's (and the lane's earlier commits') OWN records name, else the
-        # tip's branch — only `lanes == [<lane>]` records carry (batch records never do)
+        # tip's branch — only `lanes == [<lane>]` records carry
         lanes = {lane} if lane else set()
         if not lanes:
             for c in [tip_sha] + earlier:
@@ -1268,7 +1267,7 @@ def main():
     ap.add_argument("--plan", action="store_true",
                     help="print the merge run's row set as JSON (`runner.sh select`): run (with reasons) and served")
     ap.add_argument("--named", action="append", default=[], help="(--plan) a row the lane's brief names: always run")
-    # action="extend": `--verdict a=x b=y` and `--verdict a=x --verdict b=y` (the form merge-dbuild-lane.sh
+    # action="extend": `--verdict a=x b=y` and `--verdict a=x --verdict b=y` (the form the runner
     # builds) both record EVERY verdict — with nargs="+" alone a repeated flag kept only the last one
     ap.add_argument("--verdict", nargs="+", action="extend", default=None, metavar="ROW=TEXT",
                     help="record a verdict per red row (`<row or pool.arm>=<the reader's text>`) in the run log, "
