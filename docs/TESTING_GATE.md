@@ -386,24 +386,26 @@ the contention class — a green re-run at a later commit does NOT answer it. Th
 targeted run stays (owner decision): it catches a merge interaction at merge time instead of at
 the batch gate.
 
-THE MERGE REFUSAL ACCEPTS IT (`scripts/ci_gate_check.py`; until GATE-SPEED-1 it keyed every record
-on the EXACT tip, so every fix round re-ran the whole selection — 45.9 % of all suite-time
-09-28..10-01, the gate-speed audit's R1). For a row with no record at the tip it takes the NEWEST
-record of that row at an earlier commit A of the lane (its own commits in base..tip; a d-build
-commit a forward merge carried in is not one), provided:
-- the scoped selection of `A..tip` does NOT include the row (a pool arm: does not include that arm)
-  — the same selector and the same reach, so a miss is a selector defect (§3), never a reason to
-  re-run "to be safe";
-- the fork pin is the same at A and at the tip, and `A..tip` neither falls back nor selects the
-  tier by rule — A FORK PIN CHANGE INVALIDATES EVERY EARLIER RECORD (§7b rule 4 stays);
-- that newest record decides: green is re-used; a red without its verdict (or a contention red
-  without its 3/3) REFUSES — a later red blocks an older green. `--verdict "<row>=<text>"`
-  records the answer at the commit where that red happened (repeatable: every `--verdict` counts).
+THE MERGE REFUSAL ACCEPTS IT, AND A GREEN HOLDS UNTIL A CHANGE REACHES THE ROW (`scripts/ci_gate_check.py`; GATE-SPEED-1's
+fix-round re-use made general by RUNNER-A2 — TESTING_RUNNER_SPEC v2.1 rule 2). For a row with no record at the tip it takes
+the NEWEST record of that row at ANY ANCESTOR A of the tip holding one (`serve_key`, THE ONE PREDICATE `runner.sh select`
+serves with; the integration-line exclusion is deleted), provided:
+- the selection of the WHOLE range `A..tip` (forward merges included) does NOT include the row (a pool arm: that arm); a
+  pin move reaches every row that reaches the fork by the graph; a fallback, the tier by rule or an unreadable range
+  reaches everything — the same selector, so a miss is a selector defect (§3), never a reason to re-run "to be safe";
+- the fork pin is the same at A and at the tip, OR the row does not reach the fork;
+- the record's `declaration` and `data_hash` equal the build's at the tip (a null is unknown, never equal: a record before
+  schema 3 serves nothing), its build was clean (BUILT_FROM), its tier admissible (a lane-tool record only when complete);
+- the row is not MEASURING (timing / quiet-box / perf) and not a REGISTERED NONDETERMINISM (an open entry);
+- that newest record decides: green is served; a red without its verdict (or a contention red without its 3/3) REFUSES —
+  a later red blocks an older green. `--verdict "<row>=<text>"` records the answer at the commit where that red happened.
+`--universe tier` (the runner's judge, `runner.sh judge`): EVERY merge-tier row must be green at the tip or served this
+way (an unreached measuring row is not asked); the default asks the range's scoped rows.
 THE FLAKE LAW ACROSS COMMITS: a row green at the tip is STILL refused while an earlier commit that
 the fix does not reach holds an open red of it — a verdict-less red, or a contention red without its
 3/3. A red at a commit the fix DOES reach is answered by the tip's run.
 A row the fix reaches needs its record at the tip. Every row prints its source
-(`row <name> <- <sha> (the tip)` or `... re-used from <sha>`); the summary counts both. Measured
+(`row <name> <- <sha> (the tip)` or `... served from <sha>`); the summary counts both. Measured
 on this lane's own two rounds: `spikes/gate-speed-1/`.
 
 ## 3c. ONE GATE PER BATCH (BATCH-GATE-1, 2026-10-09; the owner's question 3, spikes/preflight-testing-1)
@@ -548,7 +550,8 @@ keeps its syntax and the text is parsed:
 - **solos below 3/3 are red** — never cleared by text, listed or not. NOADMIT / NOTRUN never ran: nothing clears them.
 - **`environmental`, ENOSPC and a dead display are never verdicts** — the cause is a registered `box` defect or the
   run's abort record; a row an abort dropped RED (`droppedRed`) needs 3/3 solo PASS after it, whatever else answered it.
-- A lane-tool record (tier `lane`) never answers a row for the judge; `overrides` in the candidate's records refuse a
+- A lane-tool record (tier `lane`) answers a row for the judge only when it is COMPLETE — seconds, the census, labels and
+  the Xid read (RUNNER-A2; N5's blanket exclusion deleted); `overrides` in the candidate's records refuse a
   push or a stage close.
 A refused verdict prints `VERDICT REFUSED <row>: <why>` (the rule named) and the row stays red.
 

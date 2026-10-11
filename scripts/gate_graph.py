@@ -658,13 +658,16 @@ def _is_elf(path):
         return False
 
 
+EMPTY_DATA_HASH = _sha256(b"")
+
+
 def data_hash(test, roots, _memo=None):
     """(sha256 | None, why | None, [the files hashed, root-stripped]) of THE DATA A ROW NAMES: every regular file on its
     command line (an argument, or the value of `--opt=<path>`) inside the tree or the build — scripts, fixtures, samples,
     configured copies — read where the build is NOW. Not data: an executable the build linked (ELF: BUILT_FROM keys the
     artefact), a directory (named, never walked), a path outside the tree (the system's /usr/bin/bash), an absent path
-    in the build (an output the row writes). Absent = None with the reason: a named source-tree file that is not
-    there, or a command that names no data file."""
+    in the build (an output the row writes). A command that names no data file hashes the EMPTY set (EMPTY_DATA_HASH:
+    known, not unknown). Absent = None with the reason: a named source-tree file that is not there."""
     memo = {} if _memo is None else _memo
     cur = {"<root>": (roots or {}).get("cur_root"), "<build>": (roots or {}).get("cur_build")}
     named, missing = {}, []
@@ -693,8 +696,10 @@ def data_hash(test, roots, _memo=None):
                 named[rel] = memo[path]
     if missing:
         return None, "named file(s) absent where the build is now: " + ", ".join(sorted(set(missing))[:4]), []
+    # NO DATA FILE IS A KNOWN ANSWER (RUNNER-A2): the hash of the empty set — a null would read "unknown", and an unknown
+    # data hash never lets a green serve (rule 2), so a row whose command names only its artefact could never be served
     if not named:
-        return None, "the row names no data file (its command: an artefact, directories or system paths only)", []
+        return EMPTY_DATA_HASH, None, []
     return _sha256("".join(f"{k}\0{v}\n" for k, v in sorted(named.items())).encode()), None, sorted(named)
 
 

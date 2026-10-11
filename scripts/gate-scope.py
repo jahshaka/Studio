@@ -508,6 +508,12 @@ def integration_line(cwd=None):
     return line
 
 
+# THE WHOLE RANGE (RUNNER-A2): a SERVING asks "does anything in A..C reach the row" — every change between the record and
+# the tip, forward merges included — never "what is the lane's own change". ci_gate_check's serving sets this around its
+# selections; with it own_base answers the merge-base, whatever merges the range holds.
+WHOLE_RANGES = False
+
+
 def own_base(base, tip, cwd=None):
     """THE LANE'S OWN DIFF (TEST-SELECTOR-1 T1; audit ARCH_AUDIT_2026-09-30 testing-tooling T1).
 
@@ -526,7 +532,7 @@ def own_base(base, tip, cwd=None):
     is the safe side). Returns (own base sha, [(merge sha, its second parent)] of the forward merges
     seen, newest first) — or (base, []) when git cannot resolve the range (a replay's fake revisions)."""
     cwd = cwd or ROOT
-    key = (base, tip, cwd)
+    key = (base, tip, cwd, WHOLE_RANGES)
     if key in _OWN_BASE_CACHE: return _OWN_BASE_CACHE[key]
     b, t = _git_try(["rev-parse", "--verify", "-q", base + "^{commit}"], cwd), \
         _git_try(["rev-parse", "--verify", "-q", tip + "^{commit}"], cwd)
@@ -536,6 +542,8 @@ def own_base(base, tip, cwd=None):
         _OWN_BASE_CACHE[key] = (b, []); return _OWN_BASE_CACHE[key]
     mb = _git_try(["merge-base", b, t], cwd) or b
     own, fwd = mb, []
+    if WHOLE_RANGES:
+        _OWN_BASE_CACHE[key] = (own, []); return _OWN_BASE_CACHE[key]
     for line in (_git_try(["rev-list", "--first-parent", "--merges", "--parents", f"{mb}..{t}"], cwd) or "").splitlines():
         shas = line.split()
         if len(shas) < 3: continue
@@ -680,6 +688,27 @@ def _is_wipe(cmd):
     return len(cmd) > 2 and os.path.basename(str(cmd[0])) == "sh" and cmd[1] == "-c" and "rm -rf" in str(cmd[2])
 
 
+def _relocated(raw, build):
+    """THE INVENTORY OF A MOVED BUILD DIR (RUNNER-A2): ctest names the paths the build was CONFIGURED with (its
+    CMakeCache's CMAKE_CACHEFILE_DIR / CMAKE_HOME_DIRECTORY) — a build dir copied or renamed since (rc-base is
+    rc-batch-dfx1's renamed tree; a symlinked overlay of it) still names the old tree, and no row's command then matches
+    the graph's executables (every compiled row read as `other`: measured on rc-base, 619 other + 132 app, no compiled
+    row). The configured build dir is read as this build dir, the configured source root as ROOT (the tree the
+    selection reads)."""
+    roots = gate_graph.build_roots(build)
+    if not raw or not roots or not roots.get("build"):
+        return raw
+    here = os.path.abspath(build).rstrip("/")
+    if roots["build"] == here:
+        return raw
+    pairs = [(roots["build"], here)]
+    if roots.get("root") and roots["root"] != ROOT and not here.startswith(roots["root"] + "/"):
+        pairs.append((roots["root"], ROOT))
+    for old, new in pairs:                 # the build dir first: it sits inside the old root
+        raw = re.sub(re.escape(json.dumps(old)[1:-1]) + r'(?=[/"\\\s;:])', lambda m, n=json.dumps(new)[1:-1]: n, raw)
+    return raw
+
+
 def load_inventory(build):
     # listed from a copy of the CTestTestfile tree: a listing in the build dir itself truncates
     # the LastTest.log of a gate running there (gate_graph.ctest_inventory)
@@ -689,6 +718,7 @@ def load_inventory(build):
         raw, rc = gate_graph.ctest_inventory(build)
         if rc != 0:
             sys.stderr.write(f"gate-scope: ctest --show-only failed ({rc}) for {build}\n"); sys.exit(2)
+    raw = _relocated(raw, build)
     j = json.loads(raw or "{}")
     if not j.get("tests"):
         # See resolve_build: an unconfigured directory answers with an empty
