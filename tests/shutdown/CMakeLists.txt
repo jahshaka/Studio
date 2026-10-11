@@ -66,6 +66,7 @@ set_tests_properties(app.watchdog_stall PROPERTIES
 # The race lane (scripts/sanitize.sh tsan): teardown ordering and the watchdog
 # are pure thread-interaction contracts, and shutdown is where read-after-destroy
 # across threads traditionally hides.
+# TSan, run 2026-10-11 (RUNNER-A7A): red — TSAN-LOD-UPDATE-RACE, TSAN-BOOT-TOO-SLOW (testing/defects.json, recheck 2026-11-15)
 jah_tsan_blocked(app.shutdown_order app.shutdown_order.timing app.watchdog_stall)   # spawn the app
 
 # FRESH HOMES (PROJECT-NAMES-1). A project name is unique in a library now (project.create

@@ -47,6 +47,7 @@ set_tests_properties(archive.responsive.timing PROPERTIES
 
 # The race lane (scripts/sanitize.sh tsan): the threaded export/import runner
 # plus its cancel path. Same wall-clock caveat as open.responsive.
+# TSan, run 2026-10-11 (RUNNER-A7A): red — TSAN-LOD-UPDATE-RACE, TSAN-BOOT-TOO-SLOW (testing/defects.json, recheck 2026-11-15)
 jah_tsan_blocked(archive.responsive archive.responsive.timing)   # spawns the app: see jah_tsan_blocked
 
 # FRESH HOMES (PROJECT-NAMES-1). A project name is unique in a library now (project.create

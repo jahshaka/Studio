@@ -177,6 +177,7 @@ set_tests_properties(threading.gi_resolve_pixels PROPERTIES
     FIXTURES_REQUIRED "threading_shot_gi_parallel;threading_shot_gi_serial"
     LABELS "threading" TIMEOUT 60)
 
+# TSan, run 2026-10-11 (RUNNER-A7A): red — TSAN-LOD-UPDATE-RACE, TSAN-BOOT-TOO-SLOW (testing/defects.json, recheck 2026-11-15)
 jah_tsan_blocked(threading.gi_resolve threading.gi_resolve_serial)
 
 # The race lane again: all three of these drive the REAL Jahshaka binary, which
@@ -184,6 +185,7 @@ jah_tsan_blocked(threading.gi_resolve threading.gi_resolve_serial)
 # tests/CMakeLists.txt documents the upstream sanitizer bug). They are eligible
 # on subject and quarantined on toolchain — threading.staging_race is the member
 # that actually carries this program's coverage in the lane.
+# TSan, run 2026-10-11 (RUNNER-A7A): red — TSAN-LOD-UPDATE-RACE, TSAN-BOOT-TOO-SLOW (testing/defects.json, recheck 2026-11-15)
 jah_tsan_blocked(threading.mode threading.mode_serial)
 
 # threading.import_soak / threading.newproject_stall — THE TWO HANGS
@@ -306,6 +308,7 @@ set_tests_properties(threading.newproject_stall.no_groupless_texture PROPERTIES
 
 # Same toolchain quarantine as threading.mode: the real binary cannot start
 # under GCC 15's libtsan.
+# TSan, run 2026-10-11 (RUNNER-A7A): red — TSAN-LOD-UPDATE-RACE, TSAN-BOOT-TOO-SLOW, TSAN-GCC15-THREAD-REGISTRY (testing/defects.json, recheck 2026-11-15)
 jah_tsan_blocked(threading.import_soak threading.newproject_stall
                  threading.texture_wait_watchdog)
 set_property(TEST threading.import_soak APPEND PROPERTY FIXTURES_SETUP threading_run_import_soak)   # its inspector's run (item 3 above)

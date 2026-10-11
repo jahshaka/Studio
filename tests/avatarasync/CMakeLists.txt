@@ -40,6 +40,7 @@ set_tests_properties(avatar.responsive.timing PROPERTIES
 
 # Spawns the app (and therefore a Vulkan driver): neither sanitizer lane can
 # take it — same reason import.shutdown and archive.responsive are blocked.
+# TSan, run 2026-10-11 (RUNNER-A7A): red — TSAN-LOD-UPDATE-RACE, TSAN-BOOT-TOO-SLOW (testing/defects.json, recheck 2026-11-15)
 jah_tsan_blocked(avatar.responsive avatar.responsive.timing)
 
 # FRESH HOMES (PROJECT-NAMES-1). A project name is unique in a library now (project.create

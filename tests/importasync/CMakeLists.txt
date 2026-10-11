@@ -92,6 +92,7 @@ set_tests_properties(import.shutdown PROPERTIES
 # QUARANTINED there for now: the app cannot start at all under GCC 15's
 # libtsan (see jah_tsan_blocked in tests/CMakeLists.txt).
 jah_tsan_lane(import.async)
+# TSan, run 2026-10-11 (RUNNER-A7A): red — TSAN-LOD-UPDATE-RACE, TSAN-BOOT-TOO-SLOW (testing/defects.json, recheck 2026-11-15)
 jah_tsan_blocked(import.shutdown)
 
 # The leak lane (scripts/sanitize.sh lsan): in-process, no Vulkan, and it

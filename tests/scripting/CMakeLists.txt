@@ -508,6 +508,7 @@ jah_gpu_row(scripting.e2e.texture_missing CLASS app TIER low NEEDS NONE COMMAND 
 set_tests_properties(scripting.e2e.texture_missing PROPERTIES
     ENVIRONMENT "HOME=${_texmiss_home};JAHSHAKA_DATA_ROOT=${_texmiss_home}/.local/share/Jahshaka"
     TIMEOUT 300 LABELS "scripting")
+# TSan, run 2026-10-11 (RUNNER-A7A): red — TSAN-LOD-UPDATE-RACE, TSAN-BOOT-TOO-SLOW (testing/defects.json, recheck 2026-11-15)
 jah_tsan_blocked(scripting.e2e.texture_missing)   # spawns the app
 # LSan, run 2026-10-11 (RUNNER-A7A): red — LSAN-L1-MATERIAL-PROPERTIES (testing/defects.json, recheck 2026-11-15).
 # The row's harness ignores the app's exit code and LSan report: the app's own leak (L1) is what blocks it.
@@ -544,6 +545,7 @@ jah_gpu_row(scripting.e2e.pump_defer CLASS app TIER low NEEDS NONE COMMAND test_
 set_tests_properties(scripting.e2e.pump_defer PROPERTIES
     ENVIRONMENT "HOME=${_pumpdefer_home};JAHSHAKA_DATA_ROOT=${_pumpdefer_home}/.local/share/Jahshaka"
     TIMEOUT 300 LABELS "scripting")
+# TSan, run 2026-10-11 (RUNNER-A7A): red — TSAN-LOD-UPDATE-RACE, TSAN-BOOT-TOO-SLOW (testing/defects.json, recheck 2026-11-15)
 jah_tsan_blocked(scripting.e2e.pump_defer)   # spawns the app
 # LSan, run 2026-10-11 (RUNNER-A7A): red — LSAN-L1-MATERIAL-PROPERTIES (testing/defects.json, recheck 2026-11-15).
 # The row's harness ignores the app's exit code and LSan report: the app's own leak (L1) is what blocks it.

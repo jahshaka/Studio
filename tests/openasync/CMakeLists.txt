@@ -75,6 +75,7 @@ set_tests_properties(open.responsive.timing PROPERTIES
 # heartbeat is exactly what TSan is for. Note the 500 ms gap budget above is a
 # WALL-CLOCK assertion — under TSan's 5-15x slowdown it can legitimately fail
 # while proving no race; read the race reports, not the verdict.
+# TSan, run 2026-10-11 (RUNNER-A7A): red — TSAN-LOD-UPDATE-RACE, TSAN-BOOT-TOO-SLOW (testing/defects.json, recheck 2026-11-15)
 jah_tsan_blocked(open.responsive open.responsive.timing)   # spawns the app: see jah_tsan_blocked
 
 # open.frames — THE THREADED OPEN DRIVES ITS OWN FRAMES (lane OPEN-FRAMES-1).
@@ -98,6 +99,7 @@ jah_gpu_row(open.frames CLASS app TIER epic NEEDS photon
 set_tests_properties(open.frames PROPERTIES
     ENVIRONMENT "HOME=${_frames_home};JAHSHAKA_DATA_ROOT=${_frames_home}/.local/share/Jahshaka"
     TIMEOUT 300 LABELS "openasync")
+# TSan, run 2026-10-11 (RUNNER-A7A): red — TSAN-LOD-UPDATE-RACE, TSAN-BOOT-TOO-SLOW (testing/defects.json, recheck 2026-11-15)
 jah_tsan_blocked(open.frames)   # spawns the app: see jah_tsan_blocked
 
 # open.crash_soak — the crash itself, N times, under glibc's heap checks.
@@ -119,6 +121,7 @@ jah_gpu_row(open.crash_soak CLASS app TIER epic NEEDS photon
                  ${CMAKE_CURRENT_BINARY_DIR}/soak 12)
 set_tests_properties(open.crash_soak PROPERTIES
     TIMEOUT 900 RUN_SERIAL TRUE LABELS "stage-close;quiet-box")
+# TSan, run 2026-10-11 (RUNNER-A7A): red — TSAN-LOD-UPDATE-RACE, TSAN-BOOT-TOO-SLOW, TSAN-GCC15-THREAD-REGISTRY (testing/defects.json, recheck 2026-11-15)
 jah_tsan_blocked(open.crash_soak)
 
 # FRESH HOMES (PROJECT-NAMES-1). A project name is unique in a library now (project.create

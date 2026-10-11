@@ -86,6 +86,7 @@ jah_gpu_row(theme.sheets CLASS app TIER low NEEDS NONE COMMAND test_theme_sheets
 set_tests_properties(theme.sheets PROPERTIES
     ENVIRONMENT "HOME=${_theme_sheets_home};JAHSHAKA_DATA_ROOT=${_theme_sheets_home}/.local/share/Jahshaka"
     TIMEOUT 430 LABELS "ui")
+# TSan, run 2026-10-11 (RUNNER-A7A): red — TSAN-LOD-UPDATE-RACE, TSAN-BOOT-TOO-SLOW, TSAN-GCC15-THREAD-REGISTRY (testing/defects.json, recheck 2026-11-15)
 jah_tsan_blocked(theme.sheets)   # spawns the app
 # LSan, run 2026-10-11 (RUNNER-A7A): red — LSAN-L1-MATERIAL-PROPERTIES (testing/defects.json, recheck 2026-11-15).
 # The row's harness ignores the app's exit code and LSan report: the app's own leak (L1) is what blocks it.

@@ -1481,6 +1481,7 @@ jah_gpu_row(ui.column_law CLASS app TIER low NEEDS NONE COMMAND test_column_law
 set_tests_properties(ui.column_law PROPERTIES
     ENVIRONMENT "HOME=${_columns_home};JAHSHAKA_DATA_ROOT=${_columns_home}/.local/share/Jahshaka"
     TIMEOUT 300 LABELS "ui")
+# TSan, run 2026-10-11 (RUNNER-A7A): red — TSAN-LOD-UPDATE-RACE, TSAN-BOOT-TOO-SLOW (testing/defects.json, recheck 2026-11-15)
 jah_tsan_blocked(ui.column_law)   # spawns the app (GCC 15 libtsan, tests/CMakeLists.txt)
 # LSan, run 2026-10-11 (RUNNER-A7A): red — LSAN-L1-MATERIAL-PROPERTIES (testing/defects.json, recheck 2026-11-15).
 # The row's harness ignores the app's exit code and LSan report: the app's own leak (L1) is what blocks it.
@@ -1507,6 +1508,7 @@ jah_gpu_row(ui.space_docks CLASS app TIER low NEEDS NONE COMMAND test_space_dock
 set_tests_properties(ui.space_docks PROPERTIES
     ENVIRONMENT "HOME=${_space_docks_home};JAHSHAKA_DATA_ROOT=${_space_docks_home}/.local/share/Jahshaka"
     TIMEOUT 480 LABELS "ui")
+# TSan, run 2026-10-11 (RUNNER-A7A): red — TSAN-LOD-UPDATE-RACE, TSAN-BOOT-TOO-SLOW (testing/defects.json, recheck 2026-11-15)
 jah_tsan_blocked(ui.space_docks)   # spawns the app
 # LSan, run 2026-10-11 (RUNNER-A7A): red — LSAN-L1-MATERIAL-PROPERTIES (testing/defects.json, recheck 2026-11-15).
 # The row's harness ignores the app's exit code and LSan report: the app's own leak (L1) is what blocks it.
@@ -1532,6 +1534,7 @@ jah_gpu_row(ui.window_minimum CLASS app TIER low NEEDS NONE COMMAND test_window_
 set_tests_properties(ui.window_minimum PROPERTIES
     ENVIRONMENT "HOME=${_winmin_home};JAHSHAKA_DATA_ROOT=${_winmin_home}/.local/share/Jahshaka"
     TIMEOUT 300 LABELS "ui")
+# TSan, run 2026-10-11 (RUNNER-A7A): red — TSAN-LOD-UPDATE-RACE, TSAN-BOOT-TOO-SLOW (testing/defects.json, recheck 2026-11-15)
 jah_tsan_blocked(ui.window_minimum)   # spawns the app (GCC 15 libtsan, tests/CMakeLists.txt)
 # LSan, run 2026-10-11 (RUNNER-A7A): red — LSAN-L1-MATERIAL-PROPERTIES (testing/defects.json, recheck 2026-11-15).
 # The row's harness ignores the app's exit code and LSan report: the app's own leak (L1) is what blocks it.
@@ -1562,6 +1565,7 @@ jah_gpu_row(ui.material_drag CLASS app TIER low NEEDS NONE COMMAND test_material
 set_tests_properties(ui.material_drag PROPERTIES
     ENVIRONMENT "HOME=${_matdrag_home};JAHSHAKA_DATA_ROOT=${_matdrag_home}/.local/share/Jahshaka"
     TIMEOUT 240 LABELS "ui")
+# TSan, run 2026-10-11 (RUNNER-A7A): red — TSAN-LOD-UPDATE-RACE, TSAN-BOOT-TOO-SLOW (testing/defects.json, recheck 2026-11-15)
 jah_tsan_blocked(ui.material_drag)   # spawns the app
 # LSan, run 2026-10-11 (RUNNER-A7A): red — LSAN-L1-MATERIAL-PROPERTIES (testing/defects.json, recheck 2026-11-15).
 # The row's harness ignores the app's exit code and LSan report: the app's own leak (L1) is what blocks it.
@@ -1582,6 +1586,7 @@ jah_gpu_row(ui.shot_aspect CLASS app TIER low NEEDS NONE NEEDS_WHY "an offscreen
 set_tests_properties(ui.shot_aspect PROPERTIES
     ENVIRONMENT "HOME=${_shot_home};JAHSHAKA_DATA_ROOT=${_shot_home}/.local/share/Jahshaka"
     TIMEOUT 300 LABELS "ui")
+# TSan, run 2026-10-11 (RUNNER-A7A): red — TSAN-LOD-UPDATE-RACE, TSAN-BOOT-TOO-SLOW (testing/defects.json, recheck 2026-11-15)
 jah_tsan_blocked(ui.shot_aspect)   # spawns the app (GCC 15 libtsan, tests/CMakeLists.txt)
 # LSan, run 2026-10-11 (RUNNER-A7A): red — LSAN-L1-MATERIAL-PROPERTIES (testing/defects.json, recheck 2026-11-15).
 # The row's harness ignores the app's exit code and LSan report: the app's own leak (L1) is what blocks it.

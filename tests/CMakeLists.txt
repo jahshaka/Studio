@@ -105,6 +105,9 @@ set(JAH_ASAN_ENGINE_OPTIONS "ASAN_OPTIONS=detect_leaks=0:protect_shadow_gap=0")
 #       back into its lane is then a one-word edit. Nothing here is suppressed
 #       and nothing is hidden — a quarantined suite is a defect with a name.
 #
+#       Every lsan-blocked row was run once more 2026-10-11 (RUNNER-A7A): all red for these blockers, now
+#       registered (LSAN-L1..L4 in testing/defects.json; each call names its ids). The app-spawning rows' harnesses
+#       ignore the app's exit code and its report, so a green there proves nothing about the app.
 #       The leak blockers as of 2026-09-04, all found by this lane's first run:
 #         L1  iris::Material never frees its QList<Property*> — every material
 #             ever constructed leaks its ~19 properties (irisgl/document/
@@ -156,6 +159,11 @@ endfunction()
 #       registry rejecting a recycled pthread_t, it happens before the app ever
 #       reaches its event loop, and nothing in our code can work around it.
 #       Clang's TSan is the untried alternative (no clang on this box).
+#       MEASURED AGAIN 2026-10-11 (RUNNER-A7A, every row run once in build-tsan with lavapipe): the registry CHECK
+#       now fires in 4 of the 27 rows only; the app boots in the rest, and every boot reports a race in OUR
+#       engine's LOD update (irisgl/engine/src/OgreMesh.cpp lodUpdateImpl on the updateAllLodsThread workers), and
+#       none finishes inside its harness's boot wait or its TIMEOUT under TSan. Registered: TSAN-LOD-UPDATE-RACE,
+#       TSAN-GCC15-THREAD-REGISTRY, TSAN-BOOT-TOO-SLOW (testing/defects.json); each call below names its ids.
 function(jah_tsan_blocked)
     foreach(_t IN LISTS ARGV)
         set_property(TEST ${_t} APPEND PROPERTY LABELS tsan-blocked)
