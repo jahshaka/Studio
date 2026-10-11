@@ -69,8 +69,9 @@ Environment:
   JAH_SAN_NO_BUILD=1  skip the build step (run what is there)
   JAH_SAN_BUILD_ONLY=1  configure/build only, run nothing (the ship builds the tsan
                       lane under ionice, then runs it without: IONICE-1)
-  JAH_SAN_BUILD_JOBS  the build width (default nproc; THE MEMORY LAW: the box's
-                      ~12 compile jobs are shared by every live build)
+  JAH_SAN_BUILD_JOBS  the build width, an explicit override. Default: THE MEMORY
+                      LAW, rc-gate.sh's rule — 12 compile jobs box-wide divided by
+                      1 + the other live ninja processes, never below 2
   DISPLAY             not needed by either lane as it stands (both run only
                       offscreen suites). It becomes required the moment a suite
                       that starts Jahshaka rejoins a lane — and then it must be
@@ -92,6 +93,17 @@ COMMON_CMAKE_ARGS=(
 )
 
 die() { echo "sanitize: $*" >&2; exit 1; }
+
+# THE BUILD WIDTH (THE MEMORY LAW, DOCS/traps/GATE_AND_RIG.md; scripts/lead/rc-gate.sh's rule): the box's ~12 compile
+# jobs are shared by every live build — max(2, 12 // (1 + n)) with n the other live `ninja` processes (two Debug builds
+# at -j$(nproc) took the box down on 2026-09-25). JAH_SAN_BUILD_JOBS overrides it.
+build_jobs() {
+    if [ -n "${JAH_SAN_BUILD_JOBS:-}" ]; then echo "$JAH_SAN_BUILD_JOBS"; return; fi
+    local n j
+    n=$(pgrep -x ninja | wc -l)
+    j=$(( 12 / (1 + n) )); [ "$j" -ge 2 ] || j=2
+    echo "$j"
+}
 
 # ---------------------------------------------------------------------------
 # The leak lane.
@@ -121,8 +133,8 @@ run_lsan() {
 
     [ -f "$BUILD_DIR/CMakeCache.txt" ] || die "$BUILD_DIR is not configured (see docs/BUILDING_LINUX.md)"
     if [ -z "${JAH_SAN_NO_BUILD:-}" ]; then
-        echo "sanitize: building $BUILD_DIR"
-        cmake --build "$BUILD_DIR" -j"${JAH_SAN_BUILD_JOBS:-$(nproc)}" > "$BUILD_DIR/sanitize-lsan-build.log" 2>&1 \
+        echo "sanitize: building $BUILD_DIR at -j$(build_jobs)"
+        cmake --build "$BUILD_DIR" -j"$(build_jobs)" > "$BUILD_DIR/sanitize-lsan-build.log" 2>&1 \
             || { grep -E 'error:' "$BUILD_DIR/sanitize-lsan-build.log" | head -40; die "build failed (see $BUILD_DIR/sanitize-lsan-build.log)"; }
     fi
     [ -n "${JAH_SAN_BUILD_ONLY:-}" ] && { echo "sanitize: built $BUILD_DIR (JAH_SAN_BUILD_ONLY)"; return 0; }
@@ -179,8 +191,8 @@ run_tsan() {
                    test_archive_responsive test_shutdown_order test_watchdog_stall
                    test_memory_ownership test_staging_race)
     if [ -z "${JAH_SAN_NO_BUILD:-}" ]; then
-        echo "sanitize: building ${targets[*]}"
-        cmake --build "$TSAN_BUILD_DIR" -j"${JAH_SAN_BUILD_JOBS:-$(nproc)}" --target "${targets[@]}" \
+        echo "sanitize: building ${targets[*]} at -j$(build_jobs)"
+        cmake --build "$TSAN_BUILD_DIR" -j"$(build_jobs)" --target "${targets[@]}" \
             > "$TSAN_BUILD_DIR/sanitize-tsan-build.log" 2>&1 \
             || { grep -E 'error:' "$TSAN_BUILD_DIR/sanitize-tsan-build.log" | head -40; die "build failed (see $TSAN_BUILD_DIR/sanitize-tsan-build.log)"; }
     fi
