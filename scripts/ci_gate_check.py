@@ -80,6 +80,7 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import gate_runlog  # noqa: E402
+from gate_runlog import is_solo  # noqa: E402  (F1: the one solo predicate, tier `solo` or gate-scope's retry)
 
 SOLO_NEEDED = 3
 
@@ -320,7 +321,7 @@ def _real(m, row, reds, solos, defects, tip_recs, base_recs, tip_sha=None, mode=
     lane_red = sorted(reds, key=_when)[-1]
     pending = list(reds) + [r for r in (solos or []) if r.get("verdict") not in ("PASS",) + NEVER_RAN
                             and not any(r is x for x in reds)]      # `reds` may already hold the solos: count each once
-    base_solos = [r for r in (base_recs or []) if r.get("kind") != "verdict" and r.get("retry")
+    base_solos = [r for r in (base_recs or []) if r.get("kind") != "verdict" and is_solo(r)
                   and r.get("verdict") not in NEVER_RAN]
     base_reds = [r for r in base_solos if r.get("verdict") != "PASS"]
     base_sigs = {_sig(r) for r in base_reds}
@@ -344,7 +345,7 @@ def _real(m, row, reds, solos, defects, tip_recs, base_recs, tip_sha=None, mode=
         o = odd[-1]
         return False, (f"real:{did}: not every pending red is the base's red — {o.get('verdict')} "
                        f"'{masked(o.get('failLine') or o.get('status'))[:50]}' among them is not — not known"), False
-    other = [r for r in (base_recs or []) if r.get("kind") != "verdict" and r.get("retry")
+    other = [r for r in (base_recs or []) if r.get("kind") != "verdict" and is_solo(r)
              and r.get("verdict") not in ("PASS",) + NEVER_RAN]
     if later and not other:
         return False, (f"real:{did}: no PASS after the red is at a later sha that REACHES the row (a descendant of the "
@@ -412,13 +413,13 @@ def door(text, reds, solos, row, defects=None, tip_recs=None, base_recs=None, ti
         if row not in contention:
             return False, ("contention: clears only a row with an OPEN dated `nondeterminism` entry in the defect "
                            "registry — this row has none"), False
-        bare = [r for r in reds if not r.get("retry") and not census_of(r)]
+        bare = [r for r in reds if not is_solo(r) and not census_of(r)]
         if bare:
             return False, (f"contention: needs a COMPETITOR CENSUS showing real competition in the red's record (GPU "
                            f"processes outside the gate, sibling ctests, builds, memory/IO pressure — never the gate's "
                            f"own queue or drain) — the red at {_when(bare[-1]).isoformat(timespec='minutes')} shows none"), False
         if _solos_ok(solos):
-            return True, (f"contention: ({contention[row]['id']}; {census_of([r for r in reds if not r.get('retry')][-1])[0]}) "
+            return True, (f"contention: ({contention[row]['id']}; {census_of([r for r in reds if not is_solo(r)][-1])[0]}) "
                           f"with {spass}/{len(solos)} solo PASS"), "nondet"
         return False, f"contention: needs 3/3 solo PASS after the red ({spass}/{len(solos)}) — gate-scope.sh --solo <row>", False
     return False, ("a verdict carries a registered fact: real:<id> (in testing/defects.json, proved by a PASS at a "
@@ -489,8 +490,8 @@ def judge(key, recs, defects, tip_recs=None, base_recs=None, tip_sha=None, mode=
         tv = _when(v)
         pending = [r for r in reds if _when(r) < tv and (cleared is None or _when(r) > cleared)]
         if not pending: continue
-        last_gate = max((_when(r) for r in pending if not r.get("retry")), default=None)
-        solos = [r for r in runs if r.get("retry") and last_gate is not None and _when(r) > last_gate]
+        last_gate = max((_when(r) for r in pending if not is_solo(r)), default=None)
+        solos = [r for r in runs if is_solo(r) and last_gate is not None and _when(r) > last_gate]
         ok, why, kn = door(v.get("text"), pending, solos, row, defects,
                            tip_recs=recs if tip_recs is None else tip_recs, base_recs=base_recs, tip_sha=tip_sha,
                            mode=mode, proves=proves, key=key)
@@ -507,9 +508,9 @@ def judge(key, recs, defects, tip_recs=None, base_recs=None, tip_sha=None, mode=
         return "red", f"VERDICT REFUSED: {refused[1]} — the verdict read: " + (refused[0].get("text") or "")[:100]
     reds = open_reds
     listed = row in gate_runlog.contention_of(defects) or name in gate_runlog.contention_of(defects)
-    gate_reds = [r for r in reds if not r.get("retry")]
+    gate_reds = [r for r in reds if not is_solo(r)]
     last_gate_red = max((_when(r) for r in gate_reds), default=None)
-    solos = [r for r in runs if r.get("retry") and (last_gate_red is None or _when(r) > last_gate_red)
+    solos = [r for r in runs if is_solo(r) and (last_gate_red is None or _when(r) > last_gate_red)
              and (cleared is None or _when(r) > cleared)]
     solo_reds = [r for r in solos if r.get("verdict") != "PASS"]
     hard = sorted({r.get("verdict") for r in reds} & set(HARD))
@@ -586,7 +587,7 @@ def fork_pin(gs, irisgl_sha):
 
 def solo_index(base_sha, root):
     """{key: {sha: [solo records]}} — ONE pass over the run log (TESTING-CLEANUP-2D read 1 F2: every caller shares it;
-    it used to re-read the log per row on the carried path) indexing every clean sha's SOLO records (a retry run, no
+    it used to re-read the log per row on the carried path) indexing every clean sha's SOLO records (is_solo: tier solo or a retry run, no
     `kind`) of every row, under records_by_tip's filters (a clean tree, not a stale build, irisgl at THAT sha's pin —
     resolved in `root`, the selector's tree (I5) —, never a lane-tool record); the base itself excluded."""
     out = {}
@@ -598,7 +599,7 @@ def solo_index(base_sha, root):
         for line in open(os.path.join(d, f), errors="replace"):
             try: r = json.loads(line)
             except ValueError: continue
-            if r.get("kind") or not r.get("retry") or r.get("tier") == "lane": continue
+            if r.get("kind") or not is_solo(r) or r.get("tier") == "lane": continue
             t = r.get("tip") or {}
             sha = t.get("studio")
             if not sha or sha == base_sha or t.get("studio_dirty") or t.get("irisgl_dirty"): continue
@@ -845,8 +846,10 @@ def serve_key(key, server, cands, got, judge_at):
                                  f"unreadable range, or the selection budget spent)"))
         st, swhy = judge_at(key, got[a].get(key, []))
         if st in PASSING:
-            return ("served", a, st, f"served from {a[:9]} ({newest.get('tier')}, {newest.get('run') or '-'}; "
-                                     f"{a[:9]}..{server.tip[:9]} does not reach it)" + (f"; {swhy}" if swhy else ""))
+            where = (f"its record AT the candidate {a[:9]} (rule 1: tested once at its tip)" if a == server.tip else
+                     f"{a[:9]}..{server.tip[:9]} does not reach it")
+            return ("served", a, st, f"served from {a[:9]} ({newest.get('tier')}, {newest.get('run') or '-'}; {where})"
+                    + (f"; {swhy}" if swhy else ""))
         if st == "red":
             return ("red", a, f"red at {a[:9]}, and {a[:9]}..{server.tip[:9]} does not reach it (answer it there): {swhy}")
         first_why = first_why or f"{a[:9]}: {st} ({swhy})"
@@ -854,8 +857,11 @@ def serve_key(key, server, cands, got, judge_at):
 
 
 def candidates(gs, tip_sha, pins_of=None):
-    """[(A, A's irisgl pin, A's fork pin)] — every ANCESTOR of the tip (not the tip) holding a record in the run log,
-    newest first (topological), and the irisgl pin its records must carry."""
+    """[(A, A's irisgl pin, A's fork pin)] — THE TIP ITSELF and every ancestor of it holding a record in the run log,
+    newest first (topological: the tip first), and the irisgl pin its records must carry. THE TIP IS A CANDIDATE
+    (RUNNER-AUDIT-FIX-1 F4, rule 1): a clean, stamped, same-pin, non-measuring green record AT the candidate — the
+    builder's self-audit rows at its tip, which a fast-forward makes the candidate — is the row tested once at its tip;
+    C..C reaches nothing, and the same predicates (records_by_tip, row_never, record_why_not) decide."""
     have = set()
     d = gate_runlog.log_dir()
     if os.path.isdir(d):
@@ -864,7 +870,6 @@ def candidates(gs, tip_sha, pins_of=None):
             if f.endswith(".jsonl"):
                 with open(os.path.join(d, f), errors="replace") as fh:
                     have |= set(rx.findall(fh.read()))
-    have.discard(tip_sha)
     out = []
     for c in _git(["rev-list", "--topo-order", tip_sha], gs.ROOT).split():
         if c in have:
@@ -985,7 +990,7 @@ def check(rng, build, gs=None, verdicts=None, mode="merge", lane=None, stage_clo
             names = ab.get("droppedRed") or []
             names = [x if isinstance(x, str) else (x or {}).get("row") for x in names]
             if k[0] in names or (k[1] and k[1] in names):
-                after = [r for r in got_now.get(at, {}).get(k, []) if r.get("retry") and _when(r) > _when(ab)]
+                after = [r for r in got_now.get(at, {}).get(k, []) if is_solo(r) and _when(r) > _when(ab)]
                 if not _solos_ok(after):
                     return "red", (f"DROPPED RED by the abort at {(ab.get('ts') or '')[:16]} — needs 3/3 solo PASS after "
                                    f"it ({sum(1 for r in after if r.get('verdict') == 'PASS')}/{len(after)})")
@@ -1156,7 +1161,7 @@ def check(rng, build, gs=None, verdicts=None, mode="merge", lane=None, stage_clo
         # F4: a row cleared as NONDETERMINISM must be 3/3 green AT THE CANDIDATE for a push / stage close
         for k in need:
             if judged[k][0] != "nondet": continue
-            solos = sorted((r for r in got_now.get(tip_sha, {}).get(k, []) if r.get("retry")), key=_when)[-SOLO_NEEDED:]
+            solos = sorted((r for r in got_now.get(tip_sha, {}).get(k, []) if is_solo(r)), key=_when)[-SOLO_NEEDED:]
             if not _solos_ok(solos):
                 red.append(f"{label(k)}: cleared as nondeterminism ({judged[k][1][:80]}) but not 3/3 solo green at the "
                            f"candidate {tip_sha[:9]} ({sum(1 for r in solos if r.get('verdict') == 'PASS')}/{len(solos)}) "
@@ -1193,8 +1198,10 @@ def plan(rng, build, gs=None, named=()):
     state, why}}, tip, base, what, selected: [the scoped selection's keys], universe: n}. The universe is the merge tier
     (tier_need); a row is RUN when the range B..C reaches it (gate-scope's selection: the graph, the symbols, the area
     rules; a pin move every fork-reaching row), when the lane's brief names it (`named`), or when it cannot be SERVED —
-    serve_key, the judge's own predicate, from the tip's ancestors (never C itself: a record there is a run, not a
-    serving)."""
+    and EVERY row of the universe, reached and named ones included, is first asked of serve_key, the judge's own
+    predicate, over C ITSELF and its ancestors (RUNNER-AUDIT-FIX-1 F4, rule 1: the builder's green record at the
+    candidate is the row tested once at its tip — never re-run; a reached row is served only from a record whose range
+    to C does not reach it, which for a reached row is C's own)."""
     gs = gs or load_gs()
     defects, problem = gate_runlog.defects_load()
     if defects is None:
@@ -1223,16 +1230,14 @@ def plan(rng, build, gs=None, named=()):
     sel_keys = set(scoped)
     reasons = {n: r for n, r in (S.selected or {}).items()}
     for k in universe:
-        if k in sel_keys:
-            run[k] = ("reached by " + rng + (f": {str(reasons.get(k[0]))[:120]}" if reasons.get(k[0]) else
-                                             (" (the fork pin moved: it reaches the fork)" if k[0] in server.fork else "")))
-            continue
-        if k[0] in named:
-            run[k] = "named by the lane's brief"
-            continue
         sv = serve_key(k, server, [(c, f) for c, _, f in cands], got,
                        lambda kk, recs: judge(kk, recs, defects, tip_sha=tip_sha))
-        if sv[0] == "served":
+        if sv[0] != "served" and k in sel_keys:
+            run[k] = ("reached by " + rng + (f": {str(reasons.get(k[0]))[:120]}" if reasons.get(k[0]) else
+                                             (" (the fork pin moved: it reaches the fork)" if k[0] in server.fork else "")))
+        elif sv[0] != "served" and k[0] in named:
+            run[k] = "named by the lane's brief"
+        elif sv[0] == "served":
             a = sv[1]
             newest = max((r for r in got[a].get(k, []) if r.get("kind") != "verdict"
                           and r.get("verdict") not in NEVER_RAN), key=_when)
