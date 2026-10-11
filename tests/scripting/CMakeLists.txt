@@ -511,14 +511,27 @@ set_tests_properties(scripting.e2e.texture_missing PROPERTIES
 jah_tsan_blocked(scripting.e2e.texture_missing)   # spawns the app
 jah_lsan_blocked(scripting.e2e.texture_missing)   # spawns the app
 # scripting.e2e.pump_defer — a UI-thread operation's pump delivers no other work
-# (STUDIO-D1 fix round; services/uithreadwait.h): an MCP request sent while a
-# script's synchronous imports pump is answered after them, and the imports are
-# never held by a nested waitForScriptIdle (its 30 s ceiling). Two MCP clients.
-add_executable(test_pump_defer test_pump_defer.cpp)
-set_target_properties(test_pump_defer PROPERTIES CXX_STANDARD 17
+# (STUDIO-D1 fix round; services/uithreadwait.h). Arm 1, in-process: an MCP
+# request landing in a real operation's pump with no MCP dispatch running is
+# deferred, then answered. Arm 2, the app: two MCP clients, B asking while A's
+# imports run is answered after A, and A is never held by a nested
+# waitForScriptIdle (its 30 s ceiling).
+# Arm 1 (DBUILD-FIX-1) runs the REAL McpServer in-process inside a REAL UiThreadWait operation (the
+# deferral door no MCP client can reach: mBusy orders two clients whatever the pump does), so the
+# server and its log are linked here; its tools are stubbed in the test (the request is a ping).
+find_package(Qt6 REQUIRED COMPONENTS HttpServer Concurrent Widgets)
+add_executable(test_pump_defer test_pump_defer.cpp
+    ${CMAKE_SOURCE_DIR}/src/scripting/mcp/mcpserver.h   # AUTOMOC: the server's moc
+    ${CMAKE_SOURCE_DIR}/src/scripting/mcp/mcpserver.cpp
+    ${CMAKE_SOURCE_DIR}/src/scripting/mcp/mcplog.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/settingsmanager.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/settingsstore.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/constants.cpp)
+set_target_properties(test_pump_defer PROPERTIES AUTOMOC ON CXX_STANDARD 17
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-target_link_libraries(test_pump_defer PRIVATE Qt6::Core Qt6::Gui Qt6::Network)
-target_include_directories(test_pump_defer PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(test_pump_defer PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Network Qt6::HttpServer Qt6::Concurrent)
+target_include_directories(test_pump_defer PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/irisgl)
 target_compile_definitions(test_pump_defer PRIVATE
     JAHSHAKA_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
     JAHSHAKA_BINARY="$<TARGET_FILE:${CMAKE_PROJECT_NAME}>")
