@@ -222,7 +222,7 @@ a report for the scheduler, never an assertion.
 ## 7. The run log and the merge refusal
 
 **Every gate leaves a record.** Whatever runs a gate — `scripts/gate-scope.sh <range> --run`,
-its solo retries (`--solo <suite>`), a batch red's attribution (`--attribute`), and the stage, stage-close and push tiers
+its solo retries (`--solo <suite>`), the runner's merge run and attribution (`runner.sh merge`), and the hand tiers
 (`scripts/gate_runlog.py run --tier <tier> -- <ctest …>`) — appends one JSON line per ctest row
 to `~/Developer/testing/runs/<date>-<tier>-<tip>.jsonl`, and ONE MORE PER ARM of every pool it
 ran, read from the pool's `ARM <pool>.<arm> PASS|FAIL|CRASH|TIMEOUT <ms>` lines (an arm that

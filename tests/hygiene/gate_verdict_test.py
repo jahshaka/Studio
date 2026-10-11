@@ -13,7 +13,7 @@ no display. One script, five rows:
                     cleared; the CLI prints `VERDICT REFUSED <row>: <why>`
   noadmit_pool      U2: a toy pool whose every arm is NOADMIT records NOADMIT (and is re-queued as a never-ran
                     row); a mixed one records FAIL with its NOADMIT arms named
-  carried_red       U4 (only a lane's OWN records, `lanes == [lane]`, no batch tag): lane X red at tip A, the lane rebased to tip B with no re-run -> refused (`OPEN RED carried
+  carried_red       U4 (only a lane's OWN records, `lanes == [lane]`): lane X red at tip A, the lane rebased to tip B with no re-run -> refused (`OPEN RED carried
                     from <A>`); re-run green at B -> accepted; a verdict at A -> accepted; BATCH-GATE-1's `lanes`
                     list is read too; a schema-1 (historic) red is not carried (forward only)
   contention_shape  U5 / TESTING_V3 §1.5: a malformed registry entry or pending file (a missing field, a bad
@@ -191,15 +191,15 @@ def case_verdict_door(E):
                       base=[rec("FAIL", T % "09:00", retry=True, failLine="FAIL: thumbnail 14 px off")])
     check(st == "known", "...the same class and failLine (numbers masked) on the base -> KNOWN RED (%s)" % why[:70])
     # TESTING-CLEANUP-2C item 1: THE TREE ROOT IS NOT THE FAILURE. Batch C2 refused three KNOWN RED verdicts whose lines
-    # differed only by the tree root (rc-batch-C2 vs rc-base-d4991c754). RED ON 314770a52: "not the SAME red".
+    # differed only by the tree root (rc-merge-c2 vs rc-base-d4991c754). RED ON 314770a52: "not the SAME red".
     W_ = "/home/jahshaka/Developer/jahshaka/.claude/worktrees/"
     msg = "FAIL: the data root and the working directory must be inside %s/build-linux/tests/scripting/e2e-home-clip_ref"
-    st, why = E.judge([rec("FAIL", T % "10:00", failLine=msg % (W_ + "rc-batch-C2")), vrec("real:VIEWS-XID-1", T % "11:00")],
+    st, why = E.judge([rec("FAIL", T % "10:00", failLine=msg % (W_ + "rc-merge-c2")), vrec("real:VIEWS-XID-1", T % "11:00")],
                       base=[rec("FAIL", T % "09:00", retry=True, failLine=msg % ("/mnt/work/Developer/jahshaka/.claude/worktrees/"
                                                                                       "rc-base-d4991c754"))])
-    check(st == "known", "the same failure under two tree roots (rc-batch-C2 / rc-base-<sha>, two spellings of the root) "
+    check(st == "known", "the same failure under two tree roots (rc-merge-c2 / rc-base-<sha>, two spellings of the root) "
           "is the SAME red -> KNOWN RED (%s: %s)" % (st, why[:80]))
-    st, why = E.judge([rec("FAIL", T % "10:00", failLine=msg % (W_ + "rc-batch-C2")), vrec("real:VIEWS-XID-1", T % "11:00")],
+    st, why = E.judge([rec("FAIL", T % "10:00", failLine=msg % (W_ + "rc-merge-c2")), vrec("real:VIEWS-XID-1", T % "11:00")],
                       base=[rec("FAIL", T % "09:00", retry=True,
                                 failLine=(msg % (W_ + "rc-base-d4991c754")).replace("clip_ref", "tex_ref"))])
     check(st == "red" and "not the SAME red" in why, "...a different file INSIDE the tree stays a different red (%s)" % why[:70])
@@ -230,16 +230,9 @@ def case_verdict_door(E):
     resolve_(out_, nr2, lambda pk: ("red", "x"), "t")
     check(out_[("insp", None)][0] == "missing", "...an older parent-Not-Run under a newer bare Not Run resolves nothing (%s)"
           % out_[("insp", None)][0])
-    # FIX ROUND 4 item 2: the ATTRIBUTION's cell of a Not Run inspector is its parent's red, never "never ran"
-    gs4 = E.cgc.load_gs()
-    cr = getattr(gs4, "_cell_run", None)
-    check(cr is not None and cr({"verdict": "NOTRUN", "notRunBecause": ["par"], "run": None}, "a" * 40)[0] == "red"
-          and cr({"verdict": "NOTRUN", "run": None}, "a" * 40)[0] == "never"
-          and cr({"verdict": "PASS"}, "a" * 40)[0] == "pass",
-          "an attribution run of a Not Run inspector is its PARENT's red (a bare Not Run never ran)")
     # FIX ROUND 3 F2: masked() never over-masks. RED ON 9eb5343e2 (the reader's measurements): two in-tree homes read as
     # one red, the owner's real data root read as a test home, and the unanchored prefix ate `a=` / `FAIL:`.
-    mk, Wt = E.cgc.masked, "/home/jahshaka/Developer/jahshaka/.claude/worktrees/rc-batch-C2"
+    mk, Wt = E.cgc.masked, "/home/jahshaka/Developer/jahshaka/.claude/worktrees/rc-merge-c2"
     check(mk(Wt + "/build-linux/tests/scripting/e2e-home-clip_ref/.local/share/Jahshaka/lib.db missing")
           != mk(Wt + "/build-linux/tests/scripting/e2e-home-tex_ref/.local/share/Jahshaka/lib.db missing"),
           "two in-tree homes stay two reds (%s)" % mk(Wt + "/b/e2e-home-clip_ref/.local/share/Jahshaka/lib.db"))
@@ -290,9 +283,9 @@ def case_verdict_door(E):
     # recorded exactly that for five rows and the door refused all five ("solos below 3/3 (0/3)") before reading the
     # base. RED ON 314770a52: refused 'solos below 3/3'. Mixed solos (2/3 above) stay refused; a nondeterminism claim
     # (contention:, or a real:<nondeterminism entry>) with 0/3 green solos stays refused.
-    fl = "FAIL: the data root must be inside /home/jahshaka/Developer/jahshaka/.claude/worktrees/rc-batch-C2/x"
+    fl = "FAIL: the data root must be inside /home/jahshaka/Developer/jahshaka/.claude/worktrees/rc-merge-c2/x"
     red3 = [rec("FAIL", T % ("10:%02d" % (10 + i)), retry=True, failLine=fl) for i in range(3)]
-    base3 = [rec("FAIL", T % ("09:%02d" % (10 + i)), retry=True, failLine=fl.replace("rc-batch-C2", "rc-base-d4991c754"))
+    base3 = [rec("FAIL", T % ("09:%02d" % (10 + i)), retry=True, failLine=fl.replace("rc-merge-c2", "rc-base-d4991c754"))
              for i in range(3)]
     st, why = E.judge([rec("FAIL", T % "10:00", failLine=fl)] + red3 + [vrec("real:VIEWS-XID-1", T % "11:00")], base=base3)
     check(st == "known", "a real:<defect> with 3/3 RED solos at the candidate and the same red 3/3 at the base -> KNOWN RED, "
@@ -540,9 +533,9 @@ def batch_range_cases(E):
     def solos(tip, t0, verdicts=("FAIL", "FAIL", "FAIL"), fl=FL, batch=None):
         for i, v in enumerate(verdicts):
             extra = {"failLine": fl} if v == "FAIL" else ({"status": "Exception: SegFault"} if v == "CRASH" else {})
-            if batch:       # an attribution's solo: the batch's record (never a lane's own: it never carries, U4)
-                extra.update(batch=batch)
-            E.put(["photon.view"], v, T % ("%s:%02d" % (t0, i)), tip=tip, retry=True, **extra)
+            # an attribution's solo is never a lane's own record (it never carries, U4): `lanes: [attribution:<lane>]`
+            E.put(["photon.view"], v, T % ("%s:%02d" % (t0, i)), tip=tip, retry=True,
+                  **({"lane": "attribution:" + batch} if batch else {}), **extra)
 
     # ---- (1) the batch's verdict covers the batch: C1 = a lane commit, X = an empty commit on it (C1..X reaches nothing)
     c1 = commit(tip_tree, base, "batch-range test C1")
@@ -711,9 +704,8 @@ def registry_id_cases(E):
     """TESTING-CLEANUP-2B item 14. (1) `real:<id>` is any token and the REGISTRY is the grammar: an id the attribution
     registered with lowercase, dots and no number reaches the registry lookup. RED ON BASE (b0a3b1f3c): the pattern
     ([A-Z…]-<n>) matched nothing in `real:A2-defect-scripting.e2e.clip_ref`, so the verdict was prose and refused.
-    (2) The attribution's ids are ONE scheme, <BATCH>-<ROW-UPPER>-<n>, and an OPEN entry of the same kind for the row is
-    REUSED (the new sighting appended to the entry — RUNNER-A1: one file), never a second entry. RED ON BASE:
-    `B2-defect-<row>` beside `A2-defect-<row>`."""
+    (The batch attribution's own registration — gate-scope.py `_register` — is deleted with the batch layer, RUNNER-A7B:
+    the runner's merge registers through `lane.sh defect`.)"""
     m = E.cgc.DEFECT_ID.search("real:A2-defect-scripting.e2e.clip_ref the fixture's red")
     check(m and m.group(1) == "A2-defect-scripting.e2e.clip_ref", "real:<any token> is parsed whole (%s)" % (m and m.group(1)))
     ok, why, _ = E.cgc._real(m, "scripting.e2e.clip_ref", [], [], {}, [], [])
@@ -722,106 +714,6 @@ def registry_id_cases(E):
                                                   "state": "open", "recheck": "2099-12-31"}}
     ok, why, _ = E.cgc._real(m, "scripting.e2e.clip_ref", [], [], reg_e, [], [])
     check(not ok and "registered for ['other.row']" in why, "...a registered id reaches the entry's own checks (%s)" % why[:70])
-    gs = E.cgc.load_gs()
-    d = tempfile.mkdtemp(dir=E.scratch)
-    old = {k: os.environ.get(k) for k in ("JAH_DEFECTS_FILE",)}
-    os.environ["JAH_DEFECTS_FILE"] = regf = os.path.join(d, "defects.json")
-    json.dump({"defects": []}, open(regf, "w"))
-
-    def rid(w):
-        """`<id> (new) in <file>` -> ("new", id); `a sighting of <id> in <file>` -> ("sighting", id)."""
-        m_ = re.match(r"^(?:a sighting of (\S+)|(\S+) \(new\)) in ", w or "")
-        return (("sighting", m_.group(1)) if m_.group(1) else ("new", m_.group(2))) if m_ else (None, w)
-
-    def entries():
-        return {e["id"]: e for e in json.load(open(regf))["defects"]}
-    try:
-        rec_ = {"tip": {"fork": "f" * 40}, "run": "20261010T100000-" + "a" * 9}
-        p1 = rid(gs._register("A2", "defect", "scripting.e2e.clip_ref", "a" * 40, rec_, "red on d-build"))
-        e1 = {k: v for k, v in entries()["A2-SCRIPTING-E2E-CLIP-REF-1"].items()}
-        p2 = rid(gs._register("B2", "defect", "scripting.e2e.clip_ref", "b" * 40,
-                              dict(rec_, run="20261010T120000-" + "b" * 9), "red on d-build again"))
-        p3 = rid(gs._register("B2", "defect", "pool.editor_view", "b" * 40, rec_, "another row"))
-        ents = entries()
-        check(p1 == ("new", "A2-SCRIPTING-E2E-CLIP-REF-1") and p2 == ("sighting", "A2-SCRIPTING-E2E-CLIP-REF-1")
-              and p3 == ("new", "B2-POOL-EDITOR-VIEW-1") and sorted(ents) == ["A2-SCRIPTING-E2E-CLIP-REF-1", "B2-POOL-EDITOR-VIEW-1"]
-              and [r["batch"] for r in ents["A2-SCRIPTING-E2E-CLIP-REF-1"].get("sightings", [])] == ["B2"]
-              and not os.path.exists(os.path.join(d, "defects.pending")),
-              "the attribution's ids are <BATCH>-<ROW-UPPER>-<n> IN THE ONE REGISTRY (no pending directory), and an open "
-              "entry for the row is reused — the new sighting appended to its `sightings`, never a second entry (%s)"
-              % sorted(ents))
-        # TESTING-CLEANUP-2B item 15 (2): REUSE NEVER MOVES AN ENTRY'S OWN FIELDS (a sighting that moved `recheck` forward
-        # stood in for the re-verdict the door demands); RUNNER-A1: the sighting is part of the entry now, nothing else moves
-        check({k: v for k, v in ents["A2-SCRIPTING-E2E-CLIP-REF-1"].items() if k != "sightings"} == e1,
-              "...the reused entry's own fields are untouched (its recheck the lead's); only `sightings` grew")
-        got, why = E.rl.defects_load()
-        check(got is not None and "A2-SCRIPTING-E2E-CLIP-REF-1" in got
-              and [x["batch"] for x in got["A2-SCRIPTING-E2E-CLIP-REF-1"].get("sightings", [])] == ["B2"]
-              and not os.path.isdir(os.path.join(d, "defects.quarantine")),
-              "...the reader loads the entry with its sightings, nothing quarantined (%s)" % why)
-        # registry reuse of an OPEN entry PAST its recheck: the sighting is appended, the entry still past its date (the
-        # door still wants the re-verdict)
-        regd = {"defects": [
-            {"id": "SC1-OLD-ROW-1", "rows": ["old.row"], "kind": "defect", "cause": "c", "state": "open",
-             "found_by": "gate", "first_seen": {"tip": "e" * 40, "pin": "f" * 40, "run": "20260101T000000-" + "e" * 9}, "recheck": "2026-01-01",
-             "expires": "2026-01-01"},
-            {"id": "SC1-FIXED-ROW-1", "rows": ["fixed.row"], "kind": "defect", "cause": "c",
-             "state": {"fixed": {"tip": "f" * 40}}, "found_by": "gate", "first_seen": {"tip": "e" * 40, "pin": "f" * 40, "run": "20260101T000000-" + "e" * 9},
-             "recheck": "2099-01-01", "expires": "2099-01-01"},
-            {"id": "SC1-RET-ROW-1", "rows": ["ret.row"], "kind": "defect", "cause": "c", "state": "retired",
-             "found_by": "gate", "first_seen": {"tip": "e" * 40, "pin": "f" * 40, "run": "20260101T000000-" + "e" * 9}, "recheck": "2099-01-01",
-             "expires": "2099-01-01"}]}
-        json.dump(regd, open(regf, "w"), indent=1)
-        p4 = rid(gs._register("C3", "defect", "old.row", "c" * 40, rec_, "seen again"))
-        ents = entries()
-        check(p4 == ("sighting", "SC1-OLD-ROW-1") and ents["SC1-OLD-ROW-1"]["recheck"] == "2026-01-01"
-              and len(ents["SC1-OLD-ROW-1"]["sightings"]) == 1
-              and [ents[k] for k in ("SC1-FIXED-ROW-1", "SC1-RET-ROW-1")] == regd["defects"][1:],
-              "a registry reuse appends the sighting to the entry; its recheck and every other entry unchanged (%s)" % (p4,))
-        got, _ = E.rl.defects_load()
-        check(got and E.rl.recheck_past(got["SC1-OLD-ROW-1"]) and len(got["SC1-OLD-ROW-1"].get("sightings", [])) == 1,
-              "...and the entry stays PAST its recheck: a sighting never stands in for the lead's re-verdict")
-        p5 = rid(gs._register("C3", "defect", "old.row", "c" * 40, rec_, "and again"))
-        check(p5 == p4 and len(entries()["SC1-OLD-ROW-1"]["sightings"]) == 2, "a second sighting APPENDS to the same entry")
-        # fixed / retired: never reused — a new sighting is a NEW finding
-        p6 = rid(gs._register("C3", "defect", "fixed.row", "c" * 40, rec_, "back"))
-        p7 = rid(gs._register("C3", "defect", "ret.row", "c" * 40, rec_, "back"))
-        check(p6 == ("new", "C3-FIXED-ROW-1") and p7 == ("new", "C3-RET-ROW-1"),
-              "a FIXED or RETIRED entry is never reused: a new entry each (%s, %s)" % (p6, p7))
-        # the -2 increment: the -1 of the stem exists but is not reusable (another kind) -> -2
-        p8 = rid(gs._register("C3", "combination", "fixed.row", "c" * 40, rec_, "a combination"))
-        check(p8 == ("new", "C3-FIXED-ROW-2"), "the next free number of the stem: -2 (%s)" % (p8,))
-        # NOT REPRODUCED is never reused: two sightings, two single-use entries
-        n1 = rid(gs._register("C3", "nondeterminism", "nd.row", "c" * 40, rec_, "flake", suspects=["l1"]))
-        n2 = rid(gs._register("C3", "nondeterminism", "nd.row", "c" * 40, rec_, "flake", suspects=["l1"]))
-        check(n1 == ("new", "C3-ND-ROW-1") and n2 == ("new", "C3-ND-ROW-2") and entries()["C3-ND-ROW-2"].get("uses") == 1,
-              "a NOT REPRODUCED entry is never reused (single-use): %s, %s" % (n1, n2))
-        got, why = E.rl.defects_load()
-        check(got is not None and len(got) == 8 and not os.path.isdir(os.path.join(d, "defects.quarantine")),
-              "every registration LOADS through the door's reader, none quarantined (%d, %s)" % (len(got or {}), why))
-        # (4) THE NUMBERING LOCK: eight registrations of one new row at once (eight processes) take ONE number: the
-        # first registers it, the other seven are its sightings; no write lost (one file, read-modify-write under the lock)
-        code = ("import importlib.util,sys; sp=importlib.util.spec_from_file_location('gsx', sys.argv[1]); "
-                "g=importlib.util.module_from_spec(sp); sp.loader.exec_module(g); "
-                "print(g._register('D4', sys.argv[2], 'race.row', 'd'*40, {}, 'race'))")
-        gsp = os.path.join(E.source, "scripts", "gate-scope.py")
-        ps = [subprocess.Popen([sys.executable, "-c", code, gsp, "defect"], stdout=subprocess.PIPE, text=True)
-              for _ in range(8)]
-        outs = [rid(p_.communicate()[0].strip()) for p_ in ps]
-        ents = entries()
-        check(outs.count(("new", "D4-RACE-ROW-1")) == 1 and outs.count(("sighting", "D4-RACE-ROW-1")) == 7
-              and len(ents["D4-RACE-ROW-1"].get("sightings", [])) == 7 and "D4-RACE-ROW-2" not in ents,
-              "eight registrations at once: ONE entry and seven sightings, no second number, no lost write (%s)"
-              % sorted(set(outs)))
-        ps = [subprocess.Popen([sys.executable, "-c", code, gsp, "nondeterminism"], stdout=subprocess.PIPE, text=True)
-              for _ in range(6)]
-        outs = sorted(rid(p_.communicate()[0].strip())[1] for p_ in ps)
-        check(outs == ["D4-RACE-ROW-%d" % k for k in (2, 3, 4, 5, 6, 7)] and all(k in entries() for k in outs),
-              "six single-use registrations at once take six DIFFERENT numbers, every one in the file (%s)" % outs)
-    finally:
-        for k, v in old.items():
-            if v is None: os.environ.pop(k, None)
-            else: os.environ[k] = v
 
 
 def case_noadmit_pool(E):
@@ -941,8 +833,7 @@ def case_carried_red(E):
     rc, out = E.run()
     check(rc == 1 and "OPEN RED carried" in out, "`lanes == [lane-x]` carries (%d)"
           % rc)
-    for name, kw in (("a batch's record (lanes [lane-y, lane-x])", {"lanes": ["lane-y", "lane-x"]}),
-                     ("a record with a `batch` tag", {"lanes": ["lane-x"], "batch": "batch-a"})):
+    for name, kw in (("a record of several lanes (lanes [lane-y, lane-x])", {"lanes": ["lane-y", "lane-x"]}),):
         E.fresh()
         E.put(ROWS, "PASS", "2026-01-01T10:00:00")
         E.put(["test_engine"], "FAIL", "2026-01-01T09:00:00", tip=A, lane=None, **kw)

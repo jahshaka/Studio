@@ -126,7 +126,7 @@ def main(source, build):
     check(rc == 1 and "no verdict recorded for api.contract" in out,
           "a verdict for a row that is not red is refused, said out loud (%d)" % rc)
 
-    # ---- a REPEATED --verdict records every verdict (the form merge-dbuild-lane.sh builds) -------
+    # ---- a REPEATED --verdict records every verdict (the form the runner builds) -------
     tip2 = subprocess.run(["git", "rev-parse", RANGE2.split("..")[1]], cwd=source, capture_output=True,
                           text=True).stdout.strip()
     base2 = subprocess.run(["git", "rev-parse", RANGE2.split("..")[0]], cwd=source, capture_output=True,

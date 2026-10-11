@@ -7,8 +7,8 @@ gate scripts themselves, never by hand, so the testing rules can be re-read agai
 (the owner, 2026-09-27: "log the tests as they run so we can streamline again based on fact").
 The field list is `testing/runs/README.md`; the one writer is `run_ctest()` below.
 
-As a library: gate-scope.py `--run` / `--solo` call run_ctest(). As a command (the tier
-scripts — rc-gate.sh — and anyone running a whole tier):
+As a library: gate-scope.py `--run` / `--solo` call run_ctest(). As a command (the runner's
+merge run, stage close and ship, and anyone running a whole tier):
 
     scripts/gate_runlog.py run --tier merge --lane rc-d --jobs 4 [--build build-linux] -- ctest -j4 ...
     scripts/gate_runlog.py import <ctest-output.log> --tier merge --tip <sha> --lane <name>
@@ -49,19 +49,16 @@ SCHEMA = 3      # 2 (VERDICT-1 + GATE-LOG-1): xid, noadmit_arms, slot_wait_s, dr
 # documents the same list. gate-scope.sh writes the first three (`scoped`; `scoped-fallback` = a
 # scoped gate that fell back to the whole tier; `scoped-tier` = the tier by rule, a fork pin) and
 # `target` (GATE-SPEED-1: the target tests' own step, after the gating verdict — reported, never
-# gating); rc-gate.sh writes JAH_GATE_TIER (merge by default: stage, stage-close, push, smoke — the
-# owner's smoke rc —, fork; scoped for a BATCH candidate, BATCH-GATE-1). `joint` is gone with
-# `--joint` (BATCH-GATE-1: the batch gate is the joint gate); its old records stay readable.
+# gating); `stage`, `smoke` and `fork` are the deleted rc script's (old records keep them); the runner's merge run
+# writes `merge`, its attribution `solo`, the stage close `stage-close`, the ship `push` and `target`. `joint` is gone.
 TIERS = ("scoped", "scoped-fallback", "scoped-tier", "target", "merge", "stage", "stage-close", "push",
          "smoke", "fork", "lane", "solo")
-# GATE-COST-2 #12: `lane` — a lane tool's own runs, recorded under the lane's name (the batch and push
-# judgement ignores it); `solo` — a --solo batch's retries (gate-scope's default for --solo, and the solo
+# GATE-COST-2 #12: `lane` — a lane tool's own runs, recorded under the lane's name; `solo` — a --solo batch's retries (gate-scope's default for --solo, and the solo
 # re-run of a row an abort dropped red).
 
 
 def lane_list(lane):
-    """THE RECORD'S `lanes` (BATCH-GATE-1): the batch's lanes as a LIST — a gate on a batch candidate
-    is every lane's gate at once; the single-lane case is a one-element list. Takes a name, a
+    """THE RECORD'S `lanes`: the lanes as a LIST (the single-lane case is a one-element list). Takes a name, a
     comma-separated string, or a list of either; empty parts are dropped."""
     if lane is None:
         return []
@@ -514,16 +511,16 @@ def contention_list():
 
 
 def lanes_of(r):
-    """The lanes a record belongs to: BATCH-GATE-1's `lanes` list (forward only — a record without it belongs to no
-    lane for the judge)."""
+    """The lanes a record belongs to: its `lanes` list (forward only — a record without it belongs to no lane for the
+    judge)."""
     v = r.get("lanes")
     return [x for x in v if isinstance(x, str) and x] if isinstance(v, list) else []
 
 
 def own_lane(r):
-    """The lane a record is a LANE'S OWN record of (`lanes == [<lane>]`, no `batch` tag), else None — the only
-    records a rebase carries reds from (TESTING_V3 §1.4: batch records never carry)."""
-    if r.get("batch"): return None
+    """The lane a record is a LANE'S OWN record of (`lanes == [<lane>]`), else None — the only records a rebase
+    carries reds from. The runner's attribution records its solos as `lanes: ["attribution:<lane>"]`: never a lane's
+    own (they never carry)."""
     v = lanes_of(r)
     return v[0] if len(v) == 1 else None
 
@@ -1126,7 +1123,6 @@ TIMING_LABEL = "timing"      # gate-scope.py's: a row that measures (the serial 
 CPU_LABEL = "hygiene"        # P8: the lint and selector rows — their own CPU phase, first
 DISPLAY_LOST = 6             # the exit code of a run that stopped because its display died (P6)
 ABORTED = None               # the abort line of the last run_ctest() that stopped, else None
-BATCH = None                 # the batch tag every record of this process carries (`batch`, TESTING_V3 §1.6), else none
 
 
 def _vram():
@@ -1338,8 +1334,6 @@ def phase_record(kind, tier, lane, rng, shas, **fields):
     rec = dict(fields, schema=SCHEMA, kind=kind, suite="@" + kind, arm=None, verdict=kind.upper(), tier=tier,
                lanes=lane_list(lane), range=rng, tip=shas, ts=now, source="run", gating=False, retry=False,
                overrides=law_overrides())
-    if BATCH:
-        rec["batch"] = BATCH
     try:
         return append_records([rec], tier, shas["studio"])
     except (OSError, ValueError, KeyError):
@@ -1526,7 +1520,6 @@ class _Run:
         # GATE-LOG-1: where the gate's wall went that was not a row's — the slot queue, the phase's
         # drain and hold of the whole card, the queue behind this gate at the row's start
         base.update(self.costs(t_end))
-        if BATCH: base["batch"] = BATCH        # a batch candidate's gate or attribution: never a lane's own record
         base.update(self.facts_of(name))
         # THE CARD QUEUE'S JOB (RUNNER-A5): a run inside a job of scripts/lead/lib/runner/queue.py names it — the job
         # carries the run's pids, its wait, its phases and its Xid read; the record points at it
@@ -1725,7 +1718,7 @@ def run_ctest(cmd, cwd, tier, lane, jobs, reasons=None, gating=None, rng=None, r
         drain for the phase, not one per row); None = when every row it selects is a `timing` row
         (the serial phase, however it was started);
       * `lane`: the record's `lanes` — one name, a comma-separated list or a list (lane_list);
-      * `root`: the tree whose shas the records carry (default this checkout; BATCH-GATE-1's
+      * `root`: the tree whose shas the records carry (default this checkout; the
         attribution runs a lane's solos in that lane's worktree)."""
     global ABORTED
     ABORTED = None
@@ -2341,7 +2334,7 @@ def main():
         query_trend(a.days, a.suite, a.tip, a.k, record=tuple(a.record) if a.record else None); return
     if a.cmd == "clocks":
         # THE STAGE CLOSE'S CLOCK CHECK (plan 9cl CLOCK-TRAP-1): a card left locked after a run
-        # reads `locked?` (idle and not clocking down); rc-gate.sh prints this and reds on exit 3.
+        # reads `locked?` (idle and not clocking down); the runner's close (merge run, stage close, ship) reads it as its `clocks` phase, a red on exit 3.
         st = gpu_clocks()
         print(json.dumps(st, sort_keys=True))
         sys.exit(3 if st.get("state") == "locked?" else 0)

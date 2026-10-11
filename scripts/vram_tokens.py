@@ -57,7 +57,7 @@ THE CONTRACT
     (/tmp/jah-gpu-clocks.lock: pid, label, spec) and restores them before the tokens go — a normal
     end, a non-zero exit, a forwarded SIGTERM/SIGINT/SIGHUP, a crash of the row. It restores ONLY a
     lock it recorded itself: a lock somebody else holds (a live owner's record) is neither taken
-    nor undone, and a lock nobody recorded is nobody's business here (rc-gate's close reports it).
+    nor undone, and a lock nobody recorded is nobody's business here (the runner's close reports it: the `clocks` phase).
     Locking needs `sudo -n nvidia-smi`; refused, the run says `gpu-clocks: NOT locked … provisional`.
 
   * ONE GATE AT A TIME, BOX-WIDE (GATE-COST-1 P1; SPECS/audits/GATE_COST_2026-10-09.md §3e: the same
@@ -162,7 +162,7 @@ def row_wait_bound():
     admission tries ONCE: short, it exits 75 (NOADMIT, never ran) and the gate re-queues the row at its end (P5); a
     final try that is still short stays NOADMIT — MISSING to the judge, which a re-run answers, never a skip.
     Outside a gate (a hand run) the bound is JAH_VRAM_WAIT's, as before.
-    THE ONE EXCEPTION INSIDE THE SLOT (delta F-C2, decided): a `--solo` batch or an `--attribute` run whose whole-card
+    THE ONE EXCEPTION INSIDE THE SLOT (delta F-C2, decided): a `--solo` batch (or the runner's attribution solos) whose whole-card
     drain timed out falls back to JAH_VRAM_ALL=1 (each admission takes the whole card itself) while holding the slot;
     its cells are a measurement's own runs, not a gate's rows re-queued at its end, so they keep the wait — without it
     every cell of that path failed at once and the attribution read INCOMPLETE.
@@ -436,19 +436,19 @@ _YIELD = re.compile(r"^(\d+)\.(\d+)\.yield$")
 
 # THE SLOT IS BY PRIORITY, NOT ARRIVAL (TESTING-CLEANUP-2B item 13; the owner 2026-10-10: "the gate needs to run, not
 # wait for everything else"). Three classes:
-#   0  the owner's smoke rc (rc-gate JAH_GATE_TIER=smoke)
-#   1  a GATE: a batch / end / push / stage-close / fork tier (rc-gate), a `gate-scope.py --run`, `gate_runlog.py run`
-#   2  a lane's MEASUREMENT: gpu-exclusive.sh (`admit all`), `--solo`, `--attribute`, a whole-card hold run by hand
+#   0  the owner's smoke (a queue job of class 0)
+#   1  a GATE: a merge run, a stage close, a ship (runner.sh, one class-1 queue job), a `gate-scope.py --run`, `gate_runlog.py run`
+#   2  a lane's MEASUREMENT: gpu-exclusive.sh (`admit all`), `--solo` (the runner's attribution solos too), a whole-card hold run by hand
 # A waiter of a lower class number is served before every waiting higher one (by ticket inside a class); it never
 # displaces the HOLDER. A free slot is taken at once by whoever asks. A class-2 holder that holds the slot across rows
-# (--solo, --attribute) checks the queue between rows and YIELDS to a waiting class 0/1 (yield_slot / yield_card):
+# (--solo) checks the queue between rows and YIELDS to a waiting class 0/1 (yield_slot / yield_card):
 # it gives the slot (and the card) up, re-asks at its class and resumes where it was — its recorded runs stay.
 SLOT_CLASSES = {0: "smoke", 1: "gate", 2: "measurement"}
 
 
 def slot_class(label="", cls=None):
-    """The asker's class: the explicit one, else read from the label the caller gives (rc-gate's `rc-<tag> <tier>`:
-    `smoke` -> 0, any other rc tier -> 1); anything else a caller did not name is a gate (1)."""
+    """The asker's class: the explicit one, else read from the label the caller gives (a label naming
+    `smoke` -> 0); anything else a caller did not name is a gate (1)."""
     if cls is not None:
         return max(0, min(2, int(cls)))
     if re.search(r"(^|\s)smoke(\s|$)", label or ""):
@@ -626,8 +626,8 @@ def _queue_for_slot(label, log, wait=None, cls=None):
         return None
     cls = slot_class(label, cls)
     seq, fd = _take_ticket(label, cls)
-    # the ticket orders a class (by it): said once, so a reader orders gates by the queue's own tickets, never by
-    # when it happened to start them (GATE-COST-2: no wall clock)
+    # the ticket orders a class (by it) and is the LOCK, never a record: who waited, held and ran is the card queue's
+    # job table (scripts/lead/lib/runner/queue.py, RUNNER-A5); the line is for the run's own log
     _say(log, "gate-slot: queued ticket %d, class %d (%s) — %s" % (seq, cls, SLOT_CLASSES[cls], label))
     t0, last, said = time.monotonic(), None, time.monotonic()
     while True:
@@ -871,7 +871,7 @@ def outranked(cls=2):
 
 
 def yield_card(card, env, label="", log=sys.stderr, cls=2):
-    """BETWEEN ROWS of a class-2 hold (--solo, --attribute): when a gate or the smoke waits, give the card and the slot
+    """BETWEEN ROWS of a class-2 hold (--solo): when a gate or the smoke waits, give the card and the slot
     up, re-ask at this class (behind it) and return the new (card, env) — the caller resumes at its next row; what it
     already ran is recorded. Unchanged (card, env) when nothing outranks it (or it never held the slot itself)."""
     if not outranked(cls):
