@@ -2271,6 +2271,11 @@ def main():
                    help="the record's lanes: repeat it or give a comma-separated list (a batch's lanes)")
     r.add_argument("--jobs", type=int, default=None)
     r.add_argument("--build", default="build-linux")
+    # THE SHIP'S ONE JOB LIST (RUNNER-B2): its serial phase (the timing + quiet-box rows of both tiers, deduped) and its
+    # target rows are row LISTS, not label lines — the whole-card hold and the reported (never gating) rows are said
+    # here, as gate-scope.py says them to run_ctest itself
+    r.add_argument("--whole-card", action="store_true", help="the run holds the whole card once (the serial phase)")
+    r.add_argument("--reported", action="store_true", help="the rows report and never gate (the target rows)")
     r.add_argument("ctest", nargs=argparse.REMAINDER)
     i = sub.add_parser("import", help="records from an existing ctest output log")
     i.add_argument("log"); i.add_argument("--tier", required=True, choices=TIERS); i.add_argument("--tip", required=True)
@@ -2314,7 +2319,9 @@ def main():
             # the slot's class (item 13): a lane's own runs (tier lane / solo) are measurements, every other tier a gate
             slot = _vram().gate_slot(f"{'+'.join(lane)} {a.tier} (gate_runlog run)", log=sys.stdout,
                                      cls=2 if a.tier in ("lane", "solo") else (0 if a.tier == "smoke" else 1))
-            rc = run_ctest(line, build, a.tier, lane, jobs, labels=inventory_labels(build))
+            rc = run_ctest(line, build, a.tier, lane, jobs, labels=inventory_labels(build),
+                           whole_card=True if a.whole_card else None,
+                           gating=(lambda n: False) if a.reported else None)
         except GateSignal as e:
             print(f"\n=== GATE ABORTED: signal {e.sig} — the ctest tree was stopped, the slot and the card released ===")
             rc = 128 + e.sig
