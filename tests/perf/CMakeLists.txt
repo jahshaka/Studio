@@ -195,7 +195,13 @@ target_compile_definitions(test_capture_bundle PRIVATE
     JAHSHAKA_BINARY="$<TARGET_FILE:${CMAKE_PROJECT_NAME}>"
     JAH_TEST_SCRIPT="${CMAKE_CURRENT_BINARY_DIR}/capture_bundle.js"
     JAH_TEST_BUNDLE="${JAH_TEST_BUNDLE}")
-jah_gpu_row(perf.capture_bundle CLASS app TIER low NEEDS NONE COMMAND test_capture_bundle
+# NEEDS photon (DBUILD-FIX-1): the bundle's events.jsonl must carry a gi.rebuild, and the only gi.*
+# event the engine files is the VCT arm's rebuild (OgreGi.cpp, MonitorEventKind::GiRebuild). NEEDS
+# NONE switched Photon OFF (worldmodes::applyTestTier), where world.gi({quality}) writes a field
+# nothing renders and refreshGi is a no-op — the row was red 3/3 from TEST-NEEDS-1's declaration on.
+# TIER low keeps it cheap: Photon Low runs at Low quality, so the script's quality:"medium" is a
+# change of the arm's shape — a from-scratch rebuild (low:photon = 2 tokens, as low:none).
+jah_gpu_row(perf.capture_bundle CLASS app TIER low NEEDS photon COMMAND test_capture_bundle
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(perf.capture_bundle PROPERTIES
     LABELS "perf"

@@ -356,7 +356,7 @@ int main(int argc, char **argv)
         if (label == QLatin1String("capture.start")) startEvent = true;
     }
     CHECK(mark, "perf.mark is in events.jsonl");
-    CHECK(gi, "the GI refresh is in events.jsonl");
+    CHECK(gi, "the GI rebuild (a gi.* event) is in events.jsonl");
     CHECK(compile, "the shader compile is in events.jsonl");
     CHECK(toast, "the start toast is logged with its lifetime");
     CHECK(startEvent, "the capture's own start is an event, naming the bundle");

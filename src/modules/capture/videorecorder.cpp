@@ -11,12 +11,14 @@ For more information see the LICENSE file
 
 #include "modules/capture/videorecorder.h"
 
+#include <QCoreApplication>
 #include <QDateTime>
 #include <QDir>
 #include <QEventLoop>
 #include <QFile>
 #include <QFileInfo>
 #include <QImage>
+#include <QLibrary>
 #include <QLoggingCategory>
 #include <QMediaCaptureSession>
 #include <QMediaFormat>
@@ -155,12 +157,46 @@ void removeOffThread(const QStringList &paths)
     (void)QtConcurrent::run([live]() { for (const QString &p : live) QFile::remove(p); });
 }
 
+// ---- THE ENCODER BACKEND'S LIBRARIES, RESIDENT BEFORE THE FIRST CLICK ------------
+//
+// DBUILD-FIX-1, measured: the first QMediaFormat::supportedVideoCodecs(Encode) of a process
+// (the probe in start(), below) was ~20 ms, and nearly all of it was the dlopen of the FFmpeg
+// plugin and the shared objects it links (182 by ldd, ~80 not already in the app: libavcodec
+// and its codec libraries, libva, libpulse, …) — relocations and constructors, no ioctl, no
+// CUDA context. CPU work, so it stretches with the box: 20.3 ms median quiet, 37.5 ms beside a
+// 12-compile build, 69.68 ms in the stage-close gate. With the libraries resident the probe is
+// the backend's own construction: 0.66 ms median (n=20, max 1.01 beside 17 compiles). So the
+// libraries are loaded ONCE per process on a pool thread, off the click, once the event loop runs.
+//
+// A LOAD, NOT A CONSTRUCTION: nothing here creates Qt Multimedia's backend (no banner, no
+// hardware context, no second Vulkan device — app.startup_quiet's Lane 6a guard holds); the
+// click's probe still constructs it, named (services/mediahardware.h), and is still timed as
+// probeMs. Qt's own plugin loader later dlopens the same file, which is then a reference count.
+// QLibrary's destructor never unloads. Not found (another plugin layout, a deployed tree
+// without the FFmpeg backend): nothing happens, the click pays what it paid before.
+void preloadEncoderBackend()
+{
+    static bool asked = false;   // UI thread only
+    if (asked) return;
+    asked = true;
+    const QStringList dirs = QCoreApplication::libraryPaths();
+    (void)QtConcurrent::run([dirs]() {
+        for (const QString &dir : dirs) {
+            QLibrary plugin(dir + QStringLiteral("/multimedia/ffmpegmediaplugin"));
+            if (plugin.load()) return;
+        }
+    });
+}
+
 }   // namespace
 
 VideoRecorder::VideoRecorder(IEditorViewport *viewport, std::function<QString()> sceneName,
                              QObject *parent)
     : QObject(parent), mViewport(viewport), mSceneName(std::move(sceneName))
 {
+    // Posted, so the load starts once the event loop runs (after the window is built), never
+    // inside the constructor of whoever makes the recorder.
+    QTimer::singleShot(0, this, []() { preloadEncoderBackend(); });
     connect(&mFastStart, &QFutureWatcher<QString>::finished, this, [this]() {
         if (mState == State::Finishing && mFastStartRunning) publish(mFastStart.result(), true);
     });
@@ -312,8 +348,10 @@ bool VideoRecorder::start(const Options &options, QString *why)
     // backend. Left to itself the backend CHECKS a vdpau/cuda/vaapi/qsv/vulkan
     // context each (~0.7 s measured, SC1-NEWPROJECT-STALL); the app names the one
     // backend from the engine's adapter (services/mediahardware.h), so it checks
-    // nothing (~20-35 ms). Made HERE, by the session's first recording request —
-    // a project open/create is media-free (app.startup_quiet guards it). Timed: `probeMs`.
+    // nothing, and its libraries are already resident (preloadEncoderBackend, above):
+    // what is left is the backend's construction and its codec list (0.66 ms median measured).
+    // Made HERE, by the session's first recording request — a project open/create is
+    // media-free (app.startup_quiet guards it). Timed: `probeMs`.
     QElapsedTimer probeTimer;
     probeTimer.start();
     const bool haveH264 = options.fault != QLatin1String("noEncoder") &&
