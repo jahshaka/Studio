@@ -1382,6 +1382,15 @@ def recorded_rows(shas=None):
 SOLO_OWED = 3          # the solos a dropped red needs strictly after its abort (the flake law's 3/3)
 
 
+def is_solo(r):
+    """A SOLO RECORD — the ONE predicate every reader asks (RUNNER-AUDIT-FIX-1 F1). The record's TIER `solo` is the fact:
+    `run --tier solo` (the runner's attribution, 3x at the candidate, the lane's tip and the parent) writes it. `retry`
+    stays read for ONE writer only: gate-scope.py's --solo / dropped-red retries record under the CALLER's tier with
+    retry: true (gate-scope.py:2440, :2502) — a solo too. The door counted `retry` alone, so the attribution's solos were
+    no solos and every d-build defect / not-reproduced red it registered was refused."""
+    return r.get("tier") == "solo" or bool(r.get("retry"))
+
+
 def owed_solos(shas=None):
     """[suite] an abort at this tip dropped RED and fewer than SOLO_OWED solo retries have run STRICTLY AFTER
     it (GATE-COST-2 #9, fix round F3): such a row re-runs as a solo — 3x, tier `solo`, retry — never as a plain
@@ -1402,7 +1411,7 @@ def owed_solos(shas=None):
             except ValueError: continue
             # a solo is a ROW's record that RAN (as recorded_rows counts): never a pool's arm records, never
             # a held NOADMIT try (round 2, A)
-            if r.get("retry") and not r.get("kind") and r.get("suite") in owed and r.get("arm") is None \
+            if is_solo(r) and not r.get("kind") and r.get("suite") in owed and r.get("arm") is None \
                     and r.get("verdict") not in ("NOADMIT", "NOTRUN") \
                     and (r.get("tip") or {}).get("studio") == shas["studio"]:
                 if (r.get("ts") or "") > owed[r["suite"]]:
@@ -1962,8 +1971,8 @@ def query_load_reds(days=7):
         by_file.setdefault(r["_file"], []).append(r)
     for f, recs in sorted(by_file.items()):
         for r in recs:
-            if r.get("arm") or r.get("retry") or r.get("verdict") == "PASS": continue
-            solo = [x for x in recs if x["suite"] == r["suite"] and x.get("retry") and not x.get("arm")]
+            if r.get("arm") or is_solo(r) or r.get("verdict") == "PASS": continue
+            solo = [x for x in recs if x["suite"] == r["suite"] and is_solo(x) and not x.get("arm")]
             if solo and all(x["verdict"] == "PASS" for x in solo):
                 b = r.get("box", {})
                 print(f"{f[:10]} {r['suite']:45s} {r['verdict']:7s} load {b.get('load_mean')} "

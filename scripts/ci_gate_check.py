@@ -80,6 +80,7 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import gate_runlog  # noqa: E402
+from gate_runlog import is_solo  # noqa: E402  (F1: the one solo predicate, tier `solo` or gate-scope's retry)
 
 SOLO_NEEDED = 3
 
@@ -320,7 +321,7 @@ def _real(m, row, reds, solos, defects, tip_recs, base_recs, tip_sha=None, mode=
     lane_red = sorted(reds, key=_when)[-1]
     pending = list(reds) + [r for r in (solos or []) if r.get("verdict") not in ("PASS",) + NEVER_RAN
                             and not any(r is x for x in reds)]      # `reds` may already hold the solos: count each once
-    base_solos = [r for r in (base_recs or []) if r.get("kind") != "verdict" and r.get("retry")
+    base_solos = [r for r in (base_recs or []) if r.get("kind") != "verdict" and is_solo(r)
                   and r.get("verdict") not in NEVER_RAN]
     base_reds = [r for r in base_solos if r.get("verdict") != "PASS"]
     base_sigs = {_sig(r) for r in base_reds}
@@ -344,7 +345,7 @@ def _real(m, row, reds, solos, defects, tip_recs, base_recs, tip_sha=None, mode=
         o = odd[-1]
         return False, (f"real:{did}: not every pending red is the base's red — {o.get('verdict')} "
                        f"'{masked(o.get('failLine') or o.get('status'))[:50]}' among them is not — not known"), False
-    other = [r for r in (base_recs or []) if r.get("kind") != "verdict" and r.get("retry")
+    other = [r for r in (base_recs or []) if r.get("kind") != "verdict" and is_solo(r)
              and r.get("verdict") not in ("PASS",) + NEVER_RAN]
     if later and not other:
         return False, (f"real:{did}: no PASS after the red is at a later sha that REACHES the row (a descendant of the "
@@ -412,13 +413,13 @@ def door(text, reds, solos, row, defects=None, tip_recs=None, base_recs=None, ti
         if row not in contention:
             return False, ("contention: clears only a row with an OPEN dated `nondeterminism` entry in the defect "
                            "registry — this row has none"), False
-        bare = [r for r in reds if not r.get("retry") and not census_of(r)]
+        bare = [r for r in reds if not is_solo(r) and not census_of(r)]
         if bare:
             return False, (f"contention: needs a COMPETITOR CENSUS showing real competition in the red's record (GPU "
                            f"processes outside the gate, sibling ctests, builds, memory/IO pressure — never the gate's "
                            f"own queue or drain) — the red at {_when(bare[-1]).isoformat(timespec='minutes')} shows none"), False
         if _solos_ok(solos):
-            return True, (f"contention: ({contention[row]['id']}; {census_of([r for r in reds if not r.get('retry')][-1])[0]}) "
+            return True, (f"contention: ({contention[row]['id']}; {census_of([r for r in reds if not is_solo(r)][-1])[0]}) "
                           f"with {spass}/{len(solos)} solo PASS"), "nondet"
         return False, f"contention: needs 3/3 solo PASS after the red ({spass}/{len(solos)}) — gate-scope.sh --solo <row>", False
     return False, ("a verdict carries a registered fact: real:<id> (in testing/defects.json, proved by a PASS at a "
@@ -489,8 +490,8 @@ def judge(key, recs, defects, tip_recs=None, base_recs=None, tip_sha=None, mode=
         tv = _when(v)
         pending = [r for r in reds if _when(r) < tv and (cleared is None or _when(r) > cleared)]
         if not pending: continue
-        last_gate = max((_when(r) for r in pending if not r.get("retry")), default=None)
-        solos = [r for r in runs if r.get("retry") and last_gate is not None and _when(r) > last_gate]
+        last_gate = max((_when(r) for r in pending if not is_solo(r)), default=None)
+        solos = [r for r in runs if is_solo(r) and last_gate is not None and _when(r) > last_gate]
         ok, why, kn = door(v.get("text"), pending, solos, row, defects,
                            tip_recs=recs if tip_recs is None else tip_recs, base_recs=base_recs, tip_sha=tip_sha,
                            mode=mode, proves=proves, key=key)
@@ -507,9 +508,9 @@ def judge(key, recs, defects, tip_recs=None, base_recs=None, tip_sha=None, mode=
         return "red", f"VERDICT REFUSED: {refused[1]} — the verdict read: " + (refused[0].get("text") or "")[:100]
     reds = open_reds
     listed = row in gate_runlog.contention_of(defects) or name in gate_runlog.contention_of(defects)
-    gate_reds = [r for r in reds if not r.get("retry")]
+    gate_reds = [r for r in reds if not is_solo(r)]
     last_gate_red = max((_when(r) for r in gate_reds), default=None)
-    solos = [r for r in runs if r.get("retry") and (last_gate_red is None or _when(r) > last_gate_red)
+    solos = [r for r in runs if is_solo(r) and (last_gate_red is None or _when(r) > last_gate_red)
              and (cleared is None or _when(r) > cleared)]
     solo_reds = [r for r in solos if r.get("verdict") != "PASS"]
     hard = sorted({r.get("verdict") for r in reds} & set(HARD))
@@ -586,7 +587,7 @@ def fork_pin(gs, irisgl_sha):
 
 def solo_index(base_sha, root):
     """{key: {sha: [solo records]}} — ONE pass over the run log (TESTING-CLEANUP-2D read 1 F2: every caller shares it;
-    it used to re-read the log per row on the carried path) indexing every clean sha's SOLO records (a retry run, no
+    it used to re-read the log per row on the carried path) indexing every clean sha's SOLO records (is_solo: tier solo or a retry run, no
     `kind`) of every row, under records_by_tip's filters (a clean tree, not a stale build, irisgl at THAT sha's pin —
     resolved in `root`, the selector's tree (I5) —, never a lane-tool record); the base itself excluded."""
     out = {}
@@ -598,7 +599,7 @@ def solo_index(base_sha, root):
         for line in open(os.path.join(d, f), errors="replace"):
             try: r = json.loads(line)
             except ValueError: continue
-            if r.get("kind") or not r.get("retry") or r.get("tier") == "lane": continue
+            if r.get("kind") or not is_solo(r) or r.get("tier") == "lane": continue
             t = r.get("tip") or {}
             sha = t.get("studio")
             if not sha or sha == base_sha or t.get("studio_dirty") or t.get("irisgl_dirty"): continue
@@ -985,7 +986,7 @@ def check(rng, build, gs=None, verdicts=None, mode="merge", lane=None, stage_clo
             names = ab.get("droppedRed") or []
             names = [x if isinstance(x, str) else (x or {}).get("row") for x in names]
             if k[0] in names or (k[1] and k[1] in names):
-                after = [r for r in got_now.get(at, {}).get(k, []) if r.get("retry") and _when(r) > _when(ab)]
+                after = [r for r in got_now.get(at, {}).get(k, []) if is_solo(r) and _when(r) > _when(ab)]
                 if not _solos_ok(after):
                     return "red", (f"DROPPED RED by the abort at {(ab.get('ts') or '')[:16]} — needs 3/3 solo PASS after "
                                    f"it ({sum(1 for r in after if r.get('verdict') == 'PASS')}/{len(after)})")
@@ -1156,7 +1157,7 @@ def check(rng, build, gs=None, verdicts=None, mode="merge", lane=None, stage_clo
         # F4: a row cleared as NONDETERMINISM must be 3/3 green AT THE CANDIDATE for a push / stage close
         for k in need:
             if judged[k][0] != "nondet": continue
-            solos = sorted((r for r in got_now.get(tip_sha, {}).get(k, []) if r.get("retry")), key=_when)[-SOLO_NEEDED:]
+            solos = sorted((r for r in got_now.get(tip_sha, {}).get(k, []) if is_solo(r)), key=_when)[-SOLO_NEEDED:]
             if not _solos_ok(solos):
                 red.append(f"{label(k)}: cleared as nondeterminism ({judged[k][1][:80]}) but not 3/3 solo green at the "
                            f"candidate {tip_sha[:9]} ({sum(1 for r in solos if r.get('verdict') == 'PASS')}/{len(solos)}) "
