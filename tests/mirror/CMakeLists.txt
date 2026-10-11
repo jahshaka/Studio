@@ -115,8 +115,8 @@ add_dependencies(test_mirror_settle JahshakaEngineMedia)
 jah_gpu_row(mirror.settle_incremental CLASS engine COMMAND test_mirror_settle
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 # TIMEOUT (the policy, tests/CMakeLists.txt): max(6 x quiet median, slot-era worst) = max(6 x 70.24, 71.59) -> 430 s.
-# Sample: n=2 quiet PASS runs at B=24 (71.59, 68.89 s; median 70.24, worst 71.59), warm, 2026-10-11 12:4x, a sibling
-# tree's attribution run on the box (no VRAM wait in these seconds).
+# Sample: n=2 quiet PASS runs at B=24 (71.59, 68.89 s; median 70.24, worst 71.59), warm, 2026-10-11 12:4x, quiet box
+# (no VRAM wait in these seconds).
 set_tests_properties(mirror.settle_incremental PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 430 LABELS "mirror")
 
@@ -146,7 +146,7 @@ add_dependencies(test_mirror_settle_thumbs JahshakaEngineMedia)
 jah_gpu_row(mirror.settle_thumbnails CLASS engine COMMAND ${CMAKE_BINARY_DIR}/bin/test_mirror_settle_thumbs
          WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 # TIMEOUT (the policy): max(6 x 11.12, 11.20) = 67 s -> the 120 s floor. Sample: n=2 quiet PASS runs at B=24
-# (11.03, 11.20 s), warm, 2026-10-11 12:4x, a sibling tree's attribution run on the box.
+# (11.03, 11.20 s), warm, 2026-10-11 12:4x, quiet box.
 set_tests_properties(mirror.settle_thumbnails PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "mirror")
 
